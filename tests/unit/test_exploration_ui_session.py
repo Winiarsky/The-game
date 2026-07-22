@@ -37,7 +37,7 @@ from dnd_board_game.exploration import (
     build_crafting_source_registry,
     craft_temporary_item,
 )
-from dnd_board_game.hardware import LedColor
+from dnd_board_game.hardware import LedColor, LedRole
 from dnd_board_game.inventory import HandSlot, InventoryItem
 from dnd_board_game.llm import (
     GmClassifierProposal,
@@ -188,6 +188,42 @@ class FakeQuestionGmClient:
 
     def classify(self, request):  # noqa: ARG002
         raise AssertionError("Pytanie gracza nie powinno trafiać do klasyfikatora mechaniki.")
+
+
+class FakeWorldActionGmClient:
+    model = "fake-world-action-gm"
+
+    def analyze(self, request):
+        return GmDeclarationAnalysis.model_validate(
+            {
+                "analysis_type": "world_action",
+                "action_flow": "world_action",
+                "player_message": (
+                    "Struga spływa po murze z godnością godną królewskiego herbu. "
+                    "Wasza deklaracja o siekaniu goblinów niesie się jednak znacznie dalej — "
+                    "za bramą milkną głosy, po czym szczękają wyciągane ostrza. Subtelność właśnie umarła."
+                ),
+                "normalized_intent": "Głośna prowokacja goblinów pod murem.",
+                "reason": "Czynność nie otwiera bramy, ale natychmiast alarmuje strażników.",
+                "confidence": 1.0,
+                "immediate_effects": [
+                    {
+                        "type": "add_noise",
+                        "parameters": {"challenge_id": "closed_gate", "value": 3},
+                    },
+                    {
+                        "type": "add_complication",
+                        "parameters": {
+                            "challenge_id": "closed_gate",
+                            "value": "alarm_w_strażnicy",
+                        },
+                    },
+                ],
+            }
+        )
+
+    def classify(self, request):  # noqa: ARG002
+        raise AssertionError("Działanie w świecie nie powinno trafiać do klasyfikatora challenge.")
 
 
 class FakeHintGmClient:
@@ -379,6 +415,23 @@ def _start_gate_skirmish(session: ExplorationUiSession):
     return session.combat_state
 
 
+def _prepare_gate_encounter_setup(session: ExplorationUiSession) -> None:
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.state = replace(
+        session.state,
+        flags=set_scene_flag(session.state.flags, "gate_passed", True),
+    )
+    session.state_payload()
+    session.resolve_encounter_opening()
+    session.start_encounter_setup()
+    while session.encounter_setup_flow is not None and not session.encounter_setup_flow.completed:
+        if session.encounter_setup_flow.is_player_start_step:
+            position = session.encounter_setup_flow.remaining_player_start_positions()[0]
+            session.assign_encounter_player_start_position(position)
+        else:
+            session.confirm_encounter_setup_step()
+
+
 def _prepare_enemy_opportunity_preview(session: ExplorationUiSession):
     assert session.combat_state is not None
     while session.combat_state.initiative_order.current_actor.faction != Faction.ENEMY:
@@ -470,6 +523,23 @@ def test_exploration_ui_session_resolves_gate_challenge():
     assert state["active_challenge"] is None
     assert state["flow"]["stage"] == "interaction_result"
     assert state["exploration_setup"] is None
+
+
+def test_absurd_but_possible_world_action_gets_fictional_response_and_alerts_goblins() -> None:
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=FakeWorldActionGmClient(),
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+
+    state = session.submit_action("Sikam na mur i krzyczę, że rozsiekam gobliny!")
+
+    challenge_state = challenge_state_for(session.state, "closed_gate")
+    assert challenge_state.noise == 3
+    assert "alarm_w_strażnicy" in challenge_state.complications
+    assert state["pending"] is None
+    assert state["conversation"]["entries"][-1]["title"] == "Świat odpowiada"
+    assert "Subtelność właśnie umarła" in state["conversation"]["entries"][-1]["body"]
 
 
 def test_exploration_hazard_waits_for_manual_save_after_critical_failure() -> None:
@@ -745,6 +815,35 @@ def test_use_command_resolves_found_scene_source_and_previews_its_properties(tmp
         "sztywne",
     }
     assert state["pending"]["option"]["improvised_tool"]["source_id"] == source_id
+    assert client.requests[0].selected_use_source_id == source_id
+
+
+def test_use_command_accepts_full_actor_inventory_source_id_from_classifier(tmp_path):
+    source_id = "actor:rogue:item:thieves_tools"
+    proposal = _challenge_proposal(
+        selected_mechanic="use_item_check",
+        approach_label="Otwieranie zatartego zamka",
+        approach_tags=["lockpicking", "rusted_lock", "quiet"],
+        ability="dexterity",
+        skill="sleight_of_hand",
+        used_resource_ids=[source_id],
+    )
+    client = FakeUseSourceGmClient(proposal, source_id)
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=client,
+        session_id="use_actor_inventory_source_test",
+        observation_dir=tmp_path,
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+
+    state = session.submit_action(
+        "/uzyj używam narzędzi złodziejskich i próbuję otworzyć zardzewiały zamek"
+    )
+
+    assert state["pending"]["kind"] == "challenge"
+    assert state["pending"]["option"]["requires_item_ids"] == ["thieves_tools"]
+    assert state["pending"]["source_use"]["id"] == source_id
     assert client.requests[0].selected_use_source_id == source_id
 
 
@@ -1031,6 +1130,124 @@ def test_action_through_gap_routes_to_authored_observation_before_generic_classi
     assert state["pending"]["observation"]["thresholds"] == [10, 15, 20]
     assert client.requests == []
     assert not any("dc_policy" in message["body"] for message in state["messages"])
+
+
+def test_initiative_passively_moves_led_focus_between_actors_without_board_scan() -> None:
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _prepare_gate_encounter_setup(session)
+    session.finish_precombat_stealth()
+    board = FakeBoardConnection()
+    session.attach_board_connection(board, backend="simulator")
+
+    state = session.start_encounter_initiative()
+
+    first_prompt = session.encounter_initiative_flow.current_prompt
+    assert first_prompt is not None
+    assert board.led_calls[-1] == (
+        [first_prompt.actor.position.as_tuple()],
+        list(LedColor.ACTIVE_ACTOR),
+    )
+    assert session._current_board_scan_target().positions == ()
+
+    state = session.submit_encounter_initiative_roll(12)
+
+    second_prompt = session.encounter_initiative_flow.current_prompt
+    assert second_prompt is not None
+    assert second_prompt.actor.id != first_prompt.actor.id
+    assert board.led_calls[-2] == ("off", None)
+    assert board.led_calls[-1] == (
+        [second_prompt.actor.position.as_tuple()],
+        list(LedColor.ACTIVE_ACTOR),
+    )
+    assert state["encounter_initiative"]["current_prompt"]["actor_id"] == str(second_prompt.actor.id)
+
+
+def test_active_exploration_npc_does_not_claim_actor_led_focus() -> None:
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    board = FakeBoardConnection()
+    session.attach_board_connection(board, backend="simulator")
+    session.active_point_id = "wounded_scout"
+    point = session.active_point
+    assert point is not None
+
+    session._sync_board_leds()
+
+    target = session._current_board_scan_target()
+    assert target.positions == ()
+    assert target.feedback.frames == ()
+    assert all(frame.role != LedRole.ACTIVE_ACTOR for frame in target.feedback.frames)
+    assert not any(
+        positions == [position.as_tuple() for position in point.positions]
+        and color == list(LedColor.ACTIVE_ACTOR)
+        for positions, color in board.led_calls
+        if positions != "off"
+    )
+
+    selection = session.set_exploration_board_selection(True)
+
+    assert selection["active_point"]["id"] == "wounded_scout"
+    assert session._current_board_scan_target().positions
+
+
+def test_open_zone_interaction_only_passively_highlights_current_location() -> None:
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+
+    interaction_target = session._current_board_scan_target()
+
+    assert interaction_target.positions == ()
+    assert len(interaction_target.feedback.frames) == 1
+    assert interaction_target.feedback.frames[0].positions == (session.current_zone.marker_position,)
+
+    session.set_exploration_board_selection(True)
+    selection_target = session._current_board_scan_target()
+
+    assert session.current_zone.marker_position in selection_target.positions
+
+
+def test_precombat_stealth_moves_passive_led_focus_after_each_roll() -> None:
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _prepare_gate_encounter_setup(session)
+    board = FakeBoardConnection()
+    session.attach_board_connection(board, backend="simulator")
+    encounter = session.encounter_setup_flow.encounter
+    allies = tuple(actor for actor in encounter.actors if actor.faction == Faction.ALLY)
+
+    session._sync_board_leds()
+    assert board.led_calls[-1][0] == [allies[0].position.as_tuple()]
+
+    session.submit_precombat_stealth_roll(actor_id=str(allies[0].id), natural_roll=14)
+
+    assert board.led_calls[-2] == ("off", None)
+    assert board.led_calls[-1][0] == [allies[1].position.as_tuple()]
+    assert session._current_board_scan_target().positions == ()
+
+
+def test_exploration_roll_does_not_focus_selected_actor_on_party_token_board() -> None:
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=FakeGmClient(_challenge_proposal(progress_on_success=1)),
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    board = FakeBoardConnection()
+    session.attach_board_connection(board, backend="simulator")
+    actor = session.exploration.actors[1]
+    session.submit_action("Napieramy na bramę ramieniem.")
+
+    session.decide("accept", lead_actor_id=str(actor.id))
+
+    target = session._current_board_scan_target()
+    assert target.positions == ()
+    assert all(frame.role != LedRole.ACTIVE_ACTOR for frame in target.feedback.frames)
+
+    session.resolve_rolls({str(actor.id): 10})
+
+    assert all(
+        color != list(LedColor.ACTIVE_ACTOR)
+        for positions, color in board.led_calls
+        if positions != "off"
+    )
 
 
 def test_exact_gate_reconnaissance_grants_and_consumes_initiative_advantage(tmp_path):
@@ -1879,10 +2096,6 @@ def test_exploration_ui_session_pending_encounter_waits_for_ui_setup_not_board_c
 
 def test_exploration_ui_session_starts_with_map_setup_before_location_preview():
     session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
-    session.confirm_spell_preparation(
-        actor_id="cleric",
-        spell_ids=("healing_word", "bless_attack_bonus"),
-    )
     session.attach_board_connection(FakeBoardConnection(), backend="simulator")
 
     state = session.start_session()
@@ -1895,17 +2108,24 @@ def test_exploration_ui_session_starts_with_map_setup_before_location_preview():
     while session.exploration_setup_flow is not None:
         state = session.confirm_exploration_setup_step()
 
-    assert state["flow"]["stage"] == "location_preview"
+    assert state["flow"]["stage"] == "spell_preparation"
     assert state["exploration_setup"] is None
 
+    state = session.confirm_spell_preparation(
+        actor_id="cleric",
+        spell_ids=("healing_word", "bless_attack_bonus"),
+    )
 
-def test_exploration_ui_session_requires_spell_preparation_before_scenario_setup():
+    assert state["flow"]["stage"] == "location_preview"
+
+
+def test_exploration_ui_session_requires_spell_preparation_after_physical_setup():
     session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
     board = FakeBoardConnection()
 
     initial = session.state_payload()
 
-    assert initial["flow"]["stage"] == "spell_preparation"
+    assert initial["flow"]["stage"] == "waiting_for_board"
     assert initial["spell_preparation"]["current_actor_id"] == "cleric"
     cleric = initial["spell_preparation"]["actors"][0]
     assert cleric["preparation_limit"] == 2
@@ -1917,6 +2137,10 @@ def test_exploration_ui_session_requires_spell_preparation_before_scenario_setup
     }
 
     session.attach_board_connection(board, backend="simulator")
+    assert session.state_payload()["flow"]["stage"] == "ready_to_start"
+    session.start_session()
+    while session.exploration_setup_flow is not None:
+        session.confirm_exploration_setup_step()
     assert session.state_payload()["flow"]["stage"] == "spell_preparation"
 
     confirmed = session.confirm_spell_preparation(
@@ -1924,7 +2148,7 @@ def test_exploration_ui_session_requires_spell_preparation_before_scenario_setup
         spell_ids=("radiant_line", "healing_word"),
     )
 
-    assert confirmed["flow"]["stage"] == "ready_to_start"
+    assert confirmed["flow"]["stage"] == "location_preview"
     assert confirmed["spell_preparation"]["complete"] is True
     events = [
         __import__("json").loads(line)
@@ -2923,6 +3147,7 @@ def test_exploration_ui_session_crossbow_preview_shows_cart_half_cover() -> None
         "cover_sources": ["Rozbity wóz"],
         "ranged_in_melee": False,
         "ranged_threat_actor_ids": [],
+        "ranged_threats": [],
         "flanking": False,
         "flanking_ally_ids": [],
     }
@@ -2976,6 +3201,13 @@ def test_exploration_ui_session_crossbow_in_melee_requires_disadvantage_roll() -
     assert pending["attack_mode"] == "disadvantage"
     assert pending["positioning"]["ranged_in_melee"] is True
     assert pending["positioning"]["ranged_threat_actor_ids"] == ["goblin_b"]
+    assert pending["positioning"]["ranged_threats"] == [
+        {
+            "id": "goblin_b",
+            "name": goblin.name,
+            "position": [goblin.position.col, goblin.position.row],
+        }
+    ]
     assert any(
         modifier["label"] == "Atak dystansowy w zwarciu"
         for modifier in pending["active_modifiers"]
@@ -3185,6 +3417,7 @@ def test_exploration_ui_session_concentration_check_success_keeps_attack_bonus()
 
 def test_exploration_ui_session_cleric_area_spell_previews_line_and_consumes_slot():
     session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    session.ui_flow_stage = UiFlowStage.SPELL_PREPARATION
     session.confirm_spell_preparation(
         actor_id="cleric",
         spell_ids=("radiant_line", "healing_word"),
@@ -3196,9 +3429,26 @@ def test_exploration_ui_session_cleric_area_spell_previews_line_and_consumes_slo
     goblin = next(actor for actor in session.combat_state.actors if str(actor.id) == "goblin_b")
     session.combat_state = replace_actor(session.combat_state, replace(goblin, position=Coordinate(11, 6)))
 
-    selected = session.select_combat_attack_source("radiant_line")
+    cleric = session.combat_state.initiative_order.current_actor
+    opened = session.select_board_position(cleric.position)
+    area_option = next(
+        option
+        for option in opened["combat"]["context_menu"]["options"]
+        if option["id"] == "attack-source:radiant_line"
+    )
+    assert area_option["label"] == "Rzuć czar obszarowy: Smuga światła"
+    assert "linia 30 × 5 ft" in area_option["description"]
+
+    selected = session.confirm_combat_context_menu("attack-source:radiant_line")
 
     assert selected["combat"]["selected_attack_source_id"] == "radiant_line"
+    assert selected["combat"]["targeting"] == {
+        "active": True,
+        "source_id": "radiant_line",
+        "source_name": "Smuga światła",
+        "kind": "area",
+        "area_shape": "line",
+    }
     source_payload = next(source for source in selected["combat"]["available_attack_sources"] if source["id"] == "radiant_line")
     assert source_payload["mechanic"]["type"] == "AreaSpellAttack"
     assert source_payload["casting_kind"] == "leveled"
@@ -3215,10 +3465,20 @@ def test_exploration_ui_session_cleric_area_spell_previews_line_and_consumes_slo
     assert cantrip_payload["resource_label"] == "cantrip"
     assert [10, 6] in selected["combat"]["legal_area_positions"]
     assert selected["combat"]["legal_targets"] == []
+    legal_area_positions = {tuple(position) for position in selected["combat"]["legal_area_positions"]}
+    movement_only = next(
+        Coordinate(position["col"], position["row"])
+        for position in selected["combat"]["movement"]["destinations"]
+        if (position["col"], position["row"]) not in legal_area_positions
+        and (position["col"], position["row"]) != cleric.position.as_tuple()
+    )
+    with pytest.raises(ValueError, match="nie jest teraz aktywnym polem"):
+        session.select_board_position(movement_only)
 
-    pending = session.select_player_area_spell_at_position(Coordinate(10, 6))
+    pending = session.select_board_position(Coordinate(10, 6))
 
     area_spell = pending["combat"]["pending_area_spell"]
+    assert pending["combat"]["targeting"] is None
     assert area_spell["source"]["id"] == "radiant_line"
     assert [11, 6] in area_spell["area_positions"]
     assert [target["id"] for target in area_spell["targets"]] == ["goblin_b"]
@@ -3260,6 +3520,9 @@ def test_exploration_ui_session_rejects_unprepared_leveled_spell():
     assert radiant_line["prepared"] is False
     assert radiant_line["available"] is False
     assert radiant_line["unavailable_reason"] == "Czar nie został przygotowany."
+    cleric = session.combat_state.initiative_order.current_actor
+    opened = session.select_board_position(cleric.position)
+    assert "Nieprzygotowane czary są niedostępne: Smuga światła" in opened["combat"]["context_menu"]["notice"]
     with pytest.raises(ValueError, match="nie został przygotowany"):
         session.select_combat_attack_source("radiant_line")
 
@@ -3272,12 +3535,33 @@ def test_exploration_ui_session_sacred_flame_uses_enemy_save_instead_of_attack_r
         session.finish_combat_turn()
     session.encounter_rng = random.Random(0)
 
-    selected = session.select_combat_attack_source("sacred_flame")
+    cleric = session.combat_state.initiative_order.current_actor
+    opened = session.select_board_position(cleric.position)
+    sacred_flame_option = next(
+        option
+        for option in opened["combat"]["context_menu"]["options"]
+        if option["id"] == "attack-source:sacred_flame"
+    )
+    assert sacred_flame_option["label"] == "Rzuć czar na pojedynczy cel: Święty płomień"
+    selected = session.confirm_combat_context_menu("attack-source:sacred_flame")
+    assert selected["combat"]["targeting"]["kind"] == "single_target"
     target_position = next(actor.position for actor in session.combat_state.actors if str(actor.id) == "goblin_b")
-    pending = session.select_player_attack_target_at_position(target_position)
+    target = session._current_board_scan_target()
+    assert cleric.position in target.positions
+    assert target_position in target.positions
+    movement_only = next(
+        Coordinate(position["col"], position["row"])
+        for position in selected["combat"]["movement"]["destinations"]
+        if Coordinate(position["col"], position["row"]) not in target.positions
+    )
+    with pytest.raises(ValueError, match="nie jest teraz aktywnym polem"):
+        session.select_board_position(movement_only)
+
+    pending = session.select_board_position(target_position)
 
     assert pending["combat"]["pending_player_attack"]["source"]["save_ability"] == "dexterity"
     assert pending["combat"]["pending_player_attack"]["spell_save_dc"] == 13
+    assert pending["combat"]["targeting"] is None
 
     resolved = session.confirm_player_attack_target()
     goblin = next(actor for actor in resolved["combat"]["actors"] if actor["id"] == "goblin_b")
@@ -3566,6 +3850,8 @@ def test_exploration_ui_session_can_approach_and_then_open_remote_interaction() 
 
     assert approach["movement_cost_feet"] > 0
     assert approach["destination"] != [7, 8]
+    assert "Kliknięte pole obiektu: (7, 8)" in approach["description"]
+    assert f"faktyczne pole po ruchu: {tuple(approach['destination'])}" in approach["description"]
     assert "następnie interakcja" in approach["description"]
 
     approached = session.confirm_combat_context_menu("approach-interact:broken_cart")
@@ -4513,6 +4799,31 @@ def test_exploration_ui_session_rubble_action_only_appears_with_adjacent_enemy()
     )
 
     assert "interact:rubble_patch" in [option.id for option in with_enemy]
+
+
+def test_rubble_approach_option_names_diagonally_adjacent_target_and_disappears_without_one():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+    assert session.combat_state is not None
+    actor = replace(session.combat_state.initiative_order.current_actor, position=Coordinate(8, 6))
+    session.combat_state = replace_actor(session.combat_state, actor)
+    enemies = tuple(candidate for candidate in session.combat_state.actors if candidate.faction == Faction.ENEMY)
+    target = enemies[0]
+    session.combat_state = replace_actor(session.combat_state, replace(target, position=Coordinate(9, 6)))
+    for enemy in enemies[1:]:
+        session.combat_state = replace_actor(session.combat_state, replace(enemy, position=Coordinate(20, 15)))
+
+    with_target = session._combat_context_options(actor, Coordinate(11, 8))
+    approach = next(option for option in with_target if option.id == "approach-interact:rubble_patch")
+
+    assert "Aktualny cel:" in approach.description
+    assert target.name in approach.description
+    assert "obejmuje także skos" in approach.description
+
+    session.combat_state = replace_actor(session.combat_state, replace(target, position=Coordinate(20, 14)))
+    without_target = session._combat_context_options(actor, Coordinate(11, 8))
+
+    assert "approach-interact:rubble_patch" not in [option.id for option in without_target]
 
 
 def test_exploration_ui_session_rubble_interaction_penalizes_adjacent_enemy_attack():

@@ -137,6 +137,13 @@ def test_exploration_ui_renders_hazard_saving_throw_details() -> None:
     assert "Ryzyko obrażeń:" in javascript
 
 
+def test_encounter_stealth_ui_uses_defined_modifier_formatter() -> None:
+    _html, javascript, _stylesheet = _page_assets(_client())
+
+    assert "Modyfikator Stealth: ${signedNumber(Number(actor.modifier || 0))}" in javascript
+    assert "Modyfikator Stealth: ${signed(Number(actor.modifier || 0))}" not in javascript
+
+
 def test_exploration_ui_page_includes_session_log_panel():
     client = _client()
 
@@ -148,6 +155,63 @@ def test_exploration_ui_page_includes_session_log_panel():
     assert 'id="session-log-filter"' in html
     javascript = client.get("/static/exploration.js").get_data(as_text=True)
     assert "/api/session-log" in javascript
+
+
+def test_exploration_ui_page_uses_board_first_player_shell():
+    html, javascript, stylesheet = _page_assets(_client())
+
+    assert 'class="app-shell-header"' in html
+    assert 'id="app-mode-label"' in html
+    assert 'id="party-summary"' in html
+    assert 'id="board-connection-indicator"' in html
+    assert 'data-side-panel-tab="game"' in html
+    assert 'data-side-panel-tab="party"' in html
+    assert 'data-side-panel-tab="states"' in html
+    assert 'data-side-panel-tab="spells"' in html
+    assert 'data-side-panel-tab="inventory"' in html
+    assert 'data-side-panel-tab="developer"' in html
+    assert 'id="panel-actor-selector"' in html
+    assert 'id="actor-states"' in html
+    assert 'id="actor-spells"' in html
+    assert 'id="actor-inventory"' in html
+    assert 'id="board-disconnected-banner"' in html
+    assert 'id="board-fallback-panel"' in html
+    assert html.index('data-side-panel-content="developer"') < html.index('id="board-backend"')
+    assert html.index('data-side-panel-content="developer"') < html.index('id="session-log-panel"')
+    assert html.index('data-side-panel-content="developer"') < html.index('id="debug-payload"')
+    assert "function setSidePanelTab" in javascript
+    assert "function renderPartyShell" in javascript
+    assert "function renderBoardConnectionIndicator" in javascript
+    assert "function actorStatesHtml" in javascript
+    assert "function actorSpellsHtml" in javascript
+    assert "function actorInventoryPanelHtml" in javascript
+    assert "function combatHudConditionChips" in javascript
+    assert "chips.slice(0, 3)" in javascript
+    assert "function handleSidePanelTabKeydown" in javascript
+    assert "function cancelCurrentCombatStep" in javascript
+    assert "function retryBoardConnection" in javascript
+    assert "function toggleBoardFallback" in javascript
+    assert "function manualBoardSelect" in javascript
+    assert "'/api/board/select'" in javascript
+    assert "Boolean(board.connected)" in javascript
+    assert "--color-gold:" in stylesheet
+    assert ".party-summary-actor" in stylesheet
+    assert ".developer-warning" in stylesheet
+    assert ".panel-info-card.spell" in stylesheet
+    assert ".board-disconnected-banner" in stylesheet
+    assert ".board-fallback-panel" in stylesheet
+
+
+def test_exploration_ui_actor_payload_supports_on_demand_character_panels():
+    actor = _client().get("/api/state").get_json()["actors"][0]
+
+    assert actor["ac"] == 14
+    assert actor["speed_feet"] == 30
+    assert actor["temp_hp"] == 0
+    assert actor["proficiency_bonus"] == 2
+    assert actor["proficiencies"]["skills"] == ["athletics", "perception"]
+    assert actor["hands"]["main_hand"]["item_name"] == "Miecz"
+    assert actor["hands"]["off_hand"]["item_name"] == "Sztylet"
 
 
 def test_debug_challenge_opens_gate_interaction_without_setup_flow():
@@ -236,8 +300,11 @@ def test_exploration_ui_page_is_fiction_first_and_accepts_questions():
     assert html.index('id="scene-description-card"') < html.index('id="action-panel"')
     assert 'id="scene-conversation"' in html
     assert 'id="chat-stream"' in html
+    assert 'id="interaction-state-card"' in html
     assert 'id="pending-title"' in html
     assert html.index('id="chat-stream"') < html.index('id="pending-panel"') < html.index('id="chat-composer"')
+    assert html.index('id="pending-panel"') < html.index('id="roll-panel"') < html.index('id="result-panel"')
+    assert html.count('conversation-system-card') == 1
     assert '<h3>Propozycja MG</h3>' not in html
     assert "Co robicie lub o co pytacie?" in html
     assert "Napisz wiadomość do MG" in html
@@ -248,6 +315,11 @@ def test_exploration_ui_page_is_fiction_first_and_accepts_questions():
     assert "Wskazówki MG i mechanika sceny" not in javascript
     assert "sceneConversationHtml" in javascript
     assert "sceneIntroMessageHtml" in javascript
+    assert "conversationMetaHtml" in javascript
+    assert "updateInteractionStateCard" in javascript
+    assert "entries.splice(index, 1)" in javascript
+    assert "scrollChatToBottom" in javascript
+    assert "data-chat-scroll-bound" in javascript
     assert "waitingForGm" in javascript
     assert "leaveChatInstance" in javascript
     assert "resolveNpcTransition" in javascript
@@ -256,6 +328,10 @@ def test_exploration_ui_page_is_fiction_first_and_accepts_questions():
     assert ".scene-image" in stylesheet
     assert ".conversation-entry" in stylesheet
     assert ".conversation-system-card" in stylesheet
+    assert ".interaction-state-steps" in stylesheet
+    assert ".conversation-context-chip" in stylesheet
+    assert ".physical-roll-inputs" in stylesheet
+    assert "body.chat-instance-mode { height: 100vh; overflow: hidden; }" in stylesheet
     assert "function pendingTitle" in javascript
     assert "if (proposal.player_narration) lines.push" not in javascript
     assert ".chat-typing" in stylesheet
@@ -338,11 +414,11 @@ def test_exploration_ui_combat_turn_controls_remain_available_during_board_scan(
     assert 'id="page-title"' in html
     assert 'id="encounter-title"' in html
     assert "state.combat) return combatStartHtml()" in html
-    assert "inCombat ? 'Walka' : 'Eksploracja'" in html
+    assert "function currentModeLabel()" in html
+    assert "if (state.combat) return 'Walka'" in html
     assert "latestCombatMessageHtml()" in html
     assert "combatCurrentStepHtml" in html
     assert "combatPrimaryActionHtml" in html
-    assert "combatLastResultHtml" in html
     assert "combatActiveEffectsHtml" in html
     assert "combatAllEffectsHtml" in html
     assert "relevantCombatEffects" in html
@@ -389,7 +465,21 @@ def test_exploration_ui_combat_turn_controls_remain_available_during_board_scan(
     assert "combat-last-result" in html
     assert "combat-stage" in html
     assert "combat-action-card" in html
-    assert "Szczegóły walki" in html
+    assert "encounterProgressHtml" in html
+    assert "encounter-transition-shell" in html
+    assert "Przejście do walki" in html
+    assert "Nadchodzi starcie" in html
+    assert "combatInitiativeRibbonHtml" in html
+    assert "combatTurnHudHtml" in html
+    assert "combatHudConditionChips" in html
+    assert "combatPresentationPhase" in html
+    assert "combatPhaseStepsHtml" in html
+    assert "combatInterruptPresentation" in html
+    assert "initiative-ribbon" in html
+    assert "combat-turn-hud" in html
+    assert "combat-phase-steps" in html
+    assert "combat-interrupt-dialog" in html
+    assert "Pole walki, ostatni wynik i szczegóły" in html
     assert "Aktualny aktor" in html
     assert "Ostatni rezultat" in html
     assert "Aktywne efekty" in html
@@ -467,14 +557,24 @@ def test_exploration_ui_combat_turn_controls_remain_available_during_board_scan(
     assert "cancelCombatReady()" in html
     assert "pendingCombatReadyHtml" in html
     assert "pendingReadyAttackHtml" in html
-    assert ">Ready<" in html
-    assert ">Help<" in html
-    assert ">Dash<" in html
-    assert ">Unik<" in html
-    assert ">Odwrót<" in html
     assert "Atak okazyjny" in html
     assert "Wykonaj atak okazyjny" in html
-    assert "Potwierdź ruch mimo ryzyka" in html
+    assert "Rozstrzygnij atak okazyjny i wykonaj ruch" in html
+    assert "latestMessageWithTitle(state, 'Atak okazyjny')" in html
+    assert "Atak został już rozstrzygnięty" in html
+    assert "Przeczytałem — zakończ turę przeciwnika" in html
+    assert "enemy-attack-summary" in html
+    assert "Obrażenia: ${esc(damage)}" in html
+    assert "HP ${esc(target)}:" in html
+    assert "Przeczytałem — wróć do tury" in html
+    assert 'id="result-ack-button"' in html
+    assert "enemy-attack-result" in html
+    assert "rangedThreatWarningHtml" in html
+    assert "Przeciwnik nie musi być celem tego ataku" in html
+    assert "PRZECIWNIK POKONANY" in html
+    assert "Boolean(resultAck) && !state.combat" in html
+    assert "resultAck ? '' : combatMainPromptHtml" in html
+    assert "phase === 'result' && !resultAck" in html
     assert "enemyRollSummaryHtml" in html
     assert "enemyTurnIntentHtml" in html
     assert "Zamiar przeciwnika" in html
@@ -485,7 +585,39 @@ def test_exploration_ui_combat_turn_controls_remain_available_during_board_scan(
     assert "/api/combat/enemy-damage" not in html
     assert "confirmLocationPreview()" in html
     assert "/api/location/confirm-preview" in html
+    assert "/api/exploration/board-selection" in html
+    assert "{enabled: false}" in html
+    assert "{enabled: true}" in html
     assert "drugim kliknięciem" not in html
+
+
+def test_idle_player_turn_shows_only_board_scan_and_routes_actions_through_own_tile_menu():
+    client = _client()
+
+    _html, javascript, _stylesheet = _page_assets(client)
+    primary_action_source = javascript.split(
+        "function combatPrimaryActionHtml(combat, isAllyTurn, isEnemyTurn) {",
+        1,
+    )[1].split("function combatStabilizationHtml(combat) {", 1)[0]
+
+    idle_turn_source = primary_action_source.split(
+        "const movement = combat.movement || {remaining_feet: 0, destinations: []};",
+        1,
+    )[1]
+    assert 'onclick="scanBoard()">Skanuj planszę</button>' in idle_turn_source
+    assert "combatSourceButtonsHtml(combat)" not in idle_turn_source
+    assert "startCombatReady()" not in idle_turn_source
+    assert "startCombatHelp()" not in idle_turn_source
+    assert "useCombatDash()" not in idle_turn_source
+    assert "useCombatDodge()" not in idle_turn_source
+    assert "useCombatDisengage()" not in idle_turn_source
+    assert "finishCombatTurn()" not in idle_turn_source
+    assert "Kliknij pole ${actor.name || 'aktywnego bohatera'}" in javascript
+    assert "czary, akcje, ekwipunek i zakończenie tury" in javascript
+    assert "combat.context_menu.is_self_menu ? combatStabilizationHtml(combat)" in javascript
+    assert "combat.targeting.kind === 'area'" in javascript
+    assert "Pola ruchu są wyłączone" in javascript
+    assert "Celowanie: <b>${esc(targeting.source_name || '-')}</b>" in javascript
 
 
 def test_exploration_ui_session_log_endpoint_returns_events():
@@ -530,7 +662,7 @@ def test_exploration_ui_initial_payload_requires_spell_preparation_and_hides_act
 
     data = client.get("/api/state").get_json()
 
-    assert data["flow"]["stage"] == "spell_preparation"
+    assert data["flow"]["stage"] == "waiting_for_board"
     assert data["flow"]["can_start"] is False
     assert data["spell_preparation"]["current_actor_id"] == "cleric"
     assert data["active_challenge"] is None
@@ -635,10 +767,6 @@ def _resolve_enemy_turn_from_ui(client, board):
 
 def test_exploration_ui_start_preview_location_and_confirm_from_ui_updates_leds():
     session = _session(active=False)
-    session.confirm_spell_preparation(
-        actor_id="cleric",
-        spell_ids=("healing_word", "bless_attack_bonus"),
-    )
     board = FakeBoardConnection(clicks=[(9, 2), (9, 2)])
     session.attach_board_connection(board, backend="simulator")
     app = create_app(session)
@@ -651,6 +779,11 @@ def test_exploration_ui_start_preview_location_and_confirm_from_ui_updates_leds(
     assert started["flow"]["stage"] == "party_setup"
 
     started = _finish_map_setup(client)
+    assert started["flow"]["stage"] == "spell_preparation"
+    started = client.post(
+        "/api/spell-preparation/confirm",
+        json={"actor_id": "cleric", "spell_ids": ["healing_word", "bless_attack_bonus"]},
+    ).get_json()
     assert started["flow"]["stage"] == "location_preview"
     assert started["flow"]["preview_zone"] is None
     assert [zone["id"] for zone in started["flow"]["available_locations"]] == ["gate", "courtyard", "tower"]
@@ -673,16 +806,17 @@ def test_exploration_ui_start_preview_location_and_confirm_from_ui_updates_leds(
 
 def test_exploration_ui_blocked_visible_location_shows_locked_preview():
     session = _session(active=False)
-    session.confirm_spell_preparation(
-        actor_id="cleric",
-        spell_ids=("healing_word", "bless_attack_bonus"),
-    )
     board = FakeBoardConnection(clicks=[(9, 10)])
     session.attach_board_connection(board, backend="simulator")
     client = create_app(session).test_client()
 
     client.post("/api/start", json={})
-    _finish_map_setup(client)
+    setup = _finish_map_setup(client)
+    assert setup["flow"]["stage"] == "spell_preparation"
+    client.post(
+        "/api/spell-preparation/confirm",
+        json={"actor_id": "cleric", "spell_ids": ["healing_word", "bless_attack_bonus"]},
+    )
     preview = client.post("/api/board/scan", json={}).get_json()
 
     assert preview["flow"]["stage"] == "location_preview"
@@ -840,12 +974,17 @@ def test_exploration_ui_reset_endpoint_restores_state():
 
     assert response.status_code == 200
     data = response.get_json()
-    assert data["flow"]["stage"] == "spell_preparation"
+    assert data["flow"]["stage"] == "waiting_for_board"
     assert data["active_challenge"] is None
 
 
 def test_exploration_ui_confirms_spell_preparation_through_api():
-    client = _client(active=False)
+    session = _session(active=False)
+    session.attach_board_connection(FakeBoardConnection(), backend="simulator")
+    session.start_session()
+    while session.exploration_setup_flow is not None:
+        session.confirm_exploration_setup_step()
+    client = create_app(session).test_client()
 
     response = client.post(
         "/api/spell-preparation/confirm",
@@ -857,7 +996,7 @@ def test_exploration_ui_confirms_spell_preparation_through_api():
 
     assert response.status_code == 200
     data = response.get_json()
-    assert data["flow"]["stage"] == "waiting_for_board"
+    assert data["flow"]["stage"] == "location_preview"
     cleric = data["spell_preparation"]["actors"][0]
     assert cleric["confirmed"] is True
     assert {
@@ -1119,10 +1258,6 @@ def test_exploration_ui_starts_combat_after_setup_and_initiative():
 
 def test_exploration_ui_happy_path_returns_to_player_after_enemy_turns():
     session = _session(active=False)
-    session.confirm_spell_preparation(
-        actor_id="cleric",
-        spell_ids=("healing_word", "bless_attack_bonus"),
-    )
     board = FakeBoardConnection(clicks=[(9, 2)])
     session.attach_board_connection(board, backend="simulator")
     client = create_app(session).test_client()
@@ -1134,6 +1269,11 @@ def test_exploration_ui_happy_path_returns_to_player_after_enemy_turns():
     assert started["flow"]["stage"] == "party_setup"
 
     preview_ready = _finish_map_setup(client)
+    assert preview_ready["flow"]["stage"] == "spell_preparation"
+    preview_ready = client.post(
+        "/api/spell-preparation/confirm",
+        json={"actor_id": "cleric", "spell_ids": ["healing_word", "bless_attack_bonus"]},
+    ).get_json()
     assert preview_ready["flow"]["stage"] == "location_preview"
 
     preview = client.post("/api/board/scan", json={}).get_json()

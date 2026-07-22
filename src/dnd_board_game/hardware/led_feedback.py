@@ -15,6 +15,7 @@ class LedRole(StrEnum):
     DESTINATION = "destination"
     DIFFICULT_TERRAIN = "difficult_terrain"
     BLOCKING_TERRAIN = "blocking_terrain"
+    INTERACTIVE_OBJECT = "interactive_object"
     ALLY = "ally"
     ENEMY = "enemy"
 
@@ -44,8 +45,22 @@ DEFAULT_COLORS: dict[LedRole, tuple[int, int, int]] = {
     LedRole.DESTINATION: LedColor.MOVEMENT_DESTINATION,
     LedRole.DIFFICULT_TERRAIN: LedColor.DIFFICULT_TERRAIN,
     LedRole.BLOCKING_TERRAIN: LedColor.BLOCKING_TERRAIN,
+    LedRole.INTERACTIVE_OBJECT: LedColor.INTERACTIVE_OBJECT,
     LedRole.ALLY: LedColor.ALLY,
     LedRole.ENEMY: LedColor.ENEMY,
+}
+
+
+LED_ROLE_PRIORITY: dict[LedRole, int] = {
+    LedRole.MOVEMENT_RANGE: 10,
+    LedRole.DIFFICULT_TERRAIN: 20,
+    LedRole.ACTIVE_ACTOR: 25,
+    LedRole.INTERACTIVE_OBJECT: 30,
+    LedRole.SELECTED_PATH: 40,
+    LedRole.DESTINATION: 50,
+    LedRole.ALLY: 60,
+    LedRole.ENEMY: 60,
+    LedRole.BLOCKING_TERRAIN: 70,
 }
 
 
@@ -81,7 +96,7 @@ class BoardLedAdapter:
 
     def show_feedback(self, feedback: LedFeedback) -> None:
         updates: dict[tuple[int, int], tuple[int, int, int]] = {}
-        for frame in feedback.frames:
+        for frame in sorted(feedback.frames, key=lambda item: LED_ROLE_PRIORITY[item.role]):
             for position in frame.positions:
                 updates[position.as_tuple()] = frame.color
         if not updates:

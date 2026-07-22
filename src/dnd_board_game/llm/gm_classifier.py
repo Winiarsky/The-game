@@ -48,6 +48,7 @@ from dnd_board_game.exploration import (
     validate_source_property_query,
     visible_exploration_points,
     validate_crafting_draft,
+    validate_policy_exploration_effect,
 )
 from dnd_board_game.hardware import LedColor
 from dnd_board_game.rules import RollMode
@@ -70,6 +71,7 @@ class GmIntentType(StrEnum):
 
 class GmDeclarationAnalysisType(StrEnum):
     PLAUSIBLE = "plausible"
+    WORLD_ACTION = "world_action"
     NEEDS_CLARIFICATION = "needs_clarification"
     UNSUPPORTED = "unsupported"
     PLAYER_QUESTION = "player_question"
@@ -86,6 +88,7 @@ class GmConversationResponseKind(StrEnum):
 
 class GmActionFlow(StrEnum):
     CHALLENGE_ATTEMPT = "challenge_attempt"
+    WORLD_ACTION = "world_action"
     PREPARATION = "preparation"
     COMBINED = "combined"
     PLAYER_QUESTION = "player_question"
@@ -500,6 +503,7 @@ class GmClassifierRequest:
             "player_grounded_sources": [
                 {
                     "id": source.id,
+                    "reference_id": source.reference_id,
                     "kind": source.kind.value,
                     "label": source.label,
                     "properties": list(source.properties),
@@ -868,6 +872,9 @@ def validate_gm_declaration_analysis(
     if analysis.analysis_type == GmDeclarationAnalysisType.PLAYER_QUESTION:
         _validate_conversation_response(analysis, request)
         return analysis
+    if analysis.analysis_type == GmDeclarationAnalysisType.WORLD_ACTION:
+        _validate_world_action(analysis, request)
+        return analysis
     if analysis.action_flow in {
         GmActionFlow.UNSUPPORTED,
         GmActionFlow.NEEDS_CLARIFICATION,
@@ -890,6 +897,77 @@ def validate_gm_declaration_analysis(
     if unknown_resources:
         raise GmProposalValidationError("Drużyna nie ma zadeklarowanych zasobów: " + ", ".join(unknown_resources))
     return analysis
+
+
+def _validate_world_action(
+    analysis: GmDeclarationAnalysis,
+    request: GmClassifierRequest,
+) -> None:
+    if analysis.action_flow != GmActionFlow.WORLD_ACTION:
+        raise GmProposalValidationError("Działanie w świecie wymaga action_flow=world_action.")
+    if not analysis.player_message.strip():
+        raise GmProposalValidationError("Działanie w świecie wymaga narracyjnej odpowiedzi MG.")
+    if analysis.missing_requirements:
+        raise GmProposalValidationError("; ".join(analysis.missing_requirements))
+    unsupported_facts = tuple(
+        fact for fact in analysis.assumed_new_facts
+        if not _constructed_fact_is_grounded(fact, request)
+    )
+    if unsupported_facts:
+        raise GmProposalValidationError(
+            "Deklaracja zakłada nowe fakty spoza sceny: " + ", ".join(unsupported_facts)
+        )
+    unknown_resources = tuple(
+        resource for resource in _unknown_declared_resources(analysis, request)
+        if not _constructed_fact_is_grounded(resource, request)
+    )
+    if unknown_resources:
+        raise GmProposalValidationError(
+            "Drużyna nie ma zadeklarowanych zasobów: " + ", ".join(unknown_resources)
+        )
+    allowed_types = tuple(
+        effect_type
+        for effect_type in ("add_noise", "add_complication")
+        if effect_type in request.challenge.llm_policy.allowed_consequence_types
+    )
+    seen_effect_types: set[str] = set()
+    for index, effect in enumerate(analysis.immediate_effects):
+        if effect.type not in allowed_types:
+            raise GmProposalValidationError(
+                f"Natychmiastowa konsekwencja {effect.type} nie jest dozwolona w tym wyzwaniu."
+            )
+        if effect.type in seen_effect_types:
+            raise GmProposalValidationError(
+                f"Natychmiastowa konsekwencja {effect.type} może wystąpić tylko raz."
+            )
+        seen_effect_types.add(effect.type)
+        payload = effect.as_effect_payload()
+        try:
+            validate_policy_exploration_effect(
+                payload,
+                request.state,
+                allowed_effect_types=allowed_types,
+                field=f"world_action.immediate_effects[{index}]",
+            )
+        except ValueError as exc:
+            raise GmProposalValidationError(str(exc)) from exc
+        challenge_id = str(effect.parameters.get("challenge_id", "")).strip()
+        if challenge_id != request.challenge.id:
+            raise GmProposalValidationError(
+                "Natychmiastowa konsekwencja może zmieniać tylko aktywne wyzwanie."
+            )
+        if effect.type == "add_noise":
+            noise = effect.parameters.get("value")
+            if not isinstance(noise, int) or isinstance(noise, bool) or not 0 <= noise <= 3:
+                raise GmProposalValidationError(
+                    "Natychmiastowy hałas musi być liczbą całkowitą od 0 do 3."
+                )
+        if (
+            effect.type == "add_complication"
+            and str(effect.parameters.get("value", ""))
+            not in request.challenge.llm_policy.allowed_complications
+        ):
+            raise GmProposalValidationError("Niedozwolona natychmiastowa komplikacja sceny.")
 
 
 def _normalize_explicit_build_analysis(
@@ -1083,6 +1161,7 @@ def validate_gm_classifier_proposal(
     proposal = _ground_explicit_build_proposal(proposal, request)
     proposal = _ground_temporary_item_preparation(proposal, request)
     proposal = _ground_fixture_action_proposal(proposal, request)
+    proposal = _drop_noop_situational_modifiers(proposal)
     policy = request.challenge.llm_policy
     proposal = _ground_proposal_dc(proposal, policy)
     # General guards: LLM may only propose an interpretation for the active
@@ -1452,12 +1531,22 @@ def _validate_resources(
         for item in actor.inventory
         if item.available and item.quantity > 0
     }
+    actor_item_ids_by_source_id = {
+        f"actor:{actor.id}:item:{item.id}": item.id
+        for actor in request.actors
+        for item in actor.inventory
+        if item.available and item.quantity > 0
+    }
     resources_by_id = {resource.id: resource for resource in state.resources}
     resources_by_id.update({item.id: item.as_resource() for item in state.temporary_items if item.available})
     approach_tags = set(proposal.approach_tags)
     result: list[ExplorationResource] = []
     required_actor_items: list[str] = []
-    for resource_id in proposal.used_resource_ids:
+    for declared_resource_id in proposal.used_resource_ids:
+        resource_id = actor_item_ids_by_source_id.get(
+            declared_resource_id,
+            declared_resource_id,
+        )
         if resource_id in actor_item_ids:
             required_actor_items.append(resource_id)
             continue
@@ -1481,14 +1570,21 @@ def _validate_situational_modifiers(proposal: GmClassifierProposal) -> None:
         )
     seen: set[tuple[str, str]] = set()
     for modifier in proposal.situational_modifiers:
-        if modifier.modifier == 0 and modifier.roll_mode == RollMode.NORMAL:
-            raise GmProposalValidationError(
-                f"Modyfikator sytuacyjny {modifier.label} nie zmienia rzutu ani premii."
-            )
         key = (modifier.source.value, modifier.label.strip().lower())
         if key in seen:
             raise GmProposalValidationError(f"Powtórzony modyfikator sytuacyjny: {modifier.label}.")
         seen.add(key)
+
+
+def _drop_noop_situational_modifiers(proposal: GmClassifierProposal) -> GmClassifierProposal:
+    effective_modifiers = tuple(
+        modifier
+        for modifier in proposal.situational_modifiers
+        if modifier.modifier != 0 or modifier.roll_mode != RollMode.NORMAL
+    )
+    if effective_modifiers == proposal.situational_modifiers:
+        return proposal
+    return proposal.model_copy(update={"situational_modifiers": effective_modifiers})
 
 
 def _validate_improvised_tool(
@@ -2246,6 +2342,23 @@ class GmSceneSourceQuery(BaseModel):
             object.__setattr__(self, "requested_name", normalized_name or None)
 
 
+class GmWorldEffect(BaseModel):
+    """Immediate, policy-limited consequence of an action outside challenge resolution."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    type: str = Field(max_length=80)
+    parameters: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("type")
+    @classmethod
+    def _normalize_type(cls, value: str) -> str:
+        return value.strip().lower()
+
+    def as_effect_payload(self) -> dict[str, object]:
+        return {"type": self.type, "parameters": dict(self.parameters)}
+
+
 class GmDeclarationAnalysis(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -2269,6 +2382,7 @@ class GmDeclarationAnalysis(BaseModel):
     use_source_id: str | None = Field(default=None, max_length=240)
     action_target_source_id: str | None = Field(default=None, max_length=240)
     fixture_operation: FixtureOperation | None = None
+    immediate_effects: tuple[GmWorldEffect, ...] = Field(default=(), max_length=2)
 
     @field_validator(
         "declared_resources",
@@ -2285,6 +2399,7 @@ class GmDeclarationAnalysis(BaseModel):
         if self.action_flow is None:
             default_flow = {
                 GmDeclarationAnalysisType.PLAUSIBLE: GmActionFlow.CHALLENGE_ATTEMPT,
+                GmDeclarationAnalysisType.WORLD_ACTION: GmActionFlow.WORLD_ACTION,
                 GmDeclarationAnalysisType.NEEDS_CLARIFICATION: GmActionFlow.NEEDS_CLARIFICATION,
                 GmDeclarationAnalysisType.UNSUPPORTED: GmActionFlow.UNSUPPORTED,
                 GmDeclarationAnalysisType.PLAYER_QUESTION: GmActionFlow.PLAYER_QUESTION,

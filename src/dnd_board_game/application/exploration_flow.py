@@ -94,6 +94,7 @@ class ExplorationFlowService:
         board_backend: str,
         current_stage: ExplorationFlowStage,
         setup_steps: tuple[SetupStep, ...],
+        spell_preparation_pending: bool = False,
     ) -> StartSessionTransition | None:
         if not board_connected or board_backend not in {"simulator", "hardware"}:
             raise ValueError("Najpierw wybierz i zastosuj backend planszy: symulator albo hardware.")
@@ -109,9 +110,17 @@ class ExplorationFlowService:
                 board_message="Najpierw rozstaw widoczne elementy mapy i potwierdź kroki setupu.",
             )
         return StartSessionTransition(
-            stage=ExplorationFlowStage.LOCATION_PREVIEW,
+            stage=(
+                ExplorationFlowStage.SPELL_PREPARATION
+                if spell_preparation_pending
+                else ExplorationFlowStage.LOCATION_PREVIEW
+            ),
             setup_steps=(),
-            board_message="Wybierz jawny element sceny na planszy.",
+            board_message=(
+                "Fizyczny setup zakończony. Przygotuj czary przed rozpoczęciem eksploracji."
+                if spell_preparation_pending
+                else "Wybierz jawny element sceny na planszy."
+            ),
         )
 
     def finish_interaction(
@@ -181,6 +190,7 @@ class ExplorationFlowService:
         *,
         steps: tuple[SetupStep, ...],
         current_index: int,
+        spell_preparation_pending: bool = False,
     ) -> SetupStepTransition | None:
         if not steps or current_index >= len(steps):
             return None
@@ -190,12 +200,16 @@ class ExplorationFlowService:
             current_index=current_index if completed else current_index + 1,
             completed=completed,
             stage=(
-                ExplorationFlowStage.LOCATION_PREVIEW
+                ExplorationFlowStage.SPELL_PREPARATION
+                if completed and spell_preparation_pending
+                else ExplorationFlowStage.LOCATION_PREVIEW
                 if completed
                 else ExplorationFlowStage.PARTY_SETUP
             ),
             board_message=(
-                "Elementy mapy ustawione. Wybierz jawny element sceny na planszy."
+                "Elementy mapy ustawione. Przygotuj czary przed rozpoczęciem eksploracji."
+                if completed and spell_preparation_pending
+                else "Elementy mapy ustawione. Wybierz jawny element sceny na planszy."
                 if completed
                 else "Potwierdź kolejny element mapy."
             ),

@@ -83,6 +83,16 @@ bohater nie dotrze na zaplanowane pole, dalsza część intencji zostaje anulowa
 
 Panele web UI mogą pokazywać stan, koszty ruchu, cele i awaryjne kontrolki, ale nie powinny być podstawowym sposobem wyboru ruchu albo celu ataku w grywalnym przepływie.
 
+Gdy monitor jawnie oczekuje działania konkretnego aktora albo opisuje aktywnego NPC
+lub obiekt, jego pole otrzymuje pasywny focus LED. Focus nie uruchamia skanowania i
+nie wymaga kliknięcia planszy: zapisanie rzutu, zakończenie kroku albo zmiana
+aktywnego uczestnika gasi poprzednie wskazanie lub przenosi je na kolejny cel.
+
+Docelowa hierarchia informacji, widoki eksploracji, NPC, encountera i walki oraz
+kontrakt plansza–monitor są opisane w `docs/PLAYER_UI_DESIGN.md`. Koncepcyjne mockupy
+ustalają klimat dark fantasy, ale cyfrowe mapy i pozycje figurek nie są częścią
+docelowego layoutu: przestrzeń pozostaje domeną fizycznej planszy.
+
 ### Eksploracja zaczyna się od fikcji
 
 Po wejściu do lokacji gracze najpierw widzą ilustrację i opis sytuacji. Aplikacja
@@ -92,6 +102,17 @@ swobodnie zadeklarować działanie albo zadać MG pytanie o scenę.
 Pytanie o jawny fakt otrzymuje odpowiedź bez rzutu. Poszukiwanie albo przygotowanie
 może dopiero później prowadzić do testu, zasobu lub komplikacji. System nie może
 tworzyć przedmiotów i faktów tylko dlatego, że gracz o nie zapytał.
+
+MG odpowiada w fikcji także na działania dziwne, nieskuteczne albo nierozsądne.
+Jeżeli bohater może wykonać samą czynność, brak sensownego sposobu pokonania
+wyzwania nie jest błędem wejścia: świat reaguje narracyjnie, a oczywiste skutki,
+takie jak hałas lub dozwolona komplikacja, są stosowane natychmiast bez sztucznego
+rzutu. Skutki pozostają ograniczone polityką contentu i walidowane przez runtime.
+
+Teksty LLM powinny brzmieć jak żywy MG przy stole: obrazowo, zwięźle i z lekkim
+humorem sytuacyjnym w duchu D&D. Humor wynika z postaci i konsekwencji sceny; nie
+używa współczesnych memów, nie ośmiesza graczy i nie ujawnia technicznych flag,
+identyfikatorów ani progów mechaniki.
 
 Komenda wyszukiwania najpierw sprawdza konkretną nazwę w istniejących elementach
 sceny. Jeśli nazwanego przedmiotu nie ma, LLM może przełożyć potrzebną funkcję na
@@ -740,7 +761,7 @@ Jeżeli wybrany element ekwipunku ma pasującą flagę bonusu, może dodać efek
 
 Zasób sceny z `consume_on_use: true` jest jednorazowy. Silnik usuwa go dopiero po faktycznie wykonanym rzucie, także przy porażce. Sam wybór zasobu, korekta decyzji MG albo anulowanie próby nie zmieniają ekwipunku drużyny. Zasoby bez tej flagi, np. lina lub narzędzie wielokrotnego użytku, pozostają dostępne po próbie.
 
-Scenariusz pełni także rolę pojedynczego dnia przygody. Jeśli postać korzysta z przygotowywanych czarów, po wejściu do scenariusza i przed ustawieniem mapy wybiera listę na ten scenariusz, tak jak po zakończonym długim odpoczynku w D&D 5e. Ten etap jest generyczną mechaniką aktora, a nie implementacją konkretnej klasy; cantripy nie wchodzą do wyboru, a czary zawsze przygotowane nie zajmują limitu.
+Scenariusz pełni także rolę pojedynczego dnia przygody. Jeśli postać korzysta z przygotowywanych czarów, wybiera listę na ten scenariusz jako ostatni krok setupu: po podłączeniu planszy i ustawieniu mapy, ale przed wyborem pierwszej lokacji. Mechanicznie wybór nadal odpowiada przygotowaniu po zakończonym długim odpoczynku w D&D 5e. Ten etap jest generyczną mechaniką aktora, a nie implementacją konkretnej klasy; cantripy nie wchodzą do wyboru, a czary zawsze przygotowane nie zajmują limitu.
 
 Long rest odbywa się automatycznie bezpośrednio przed scenariuszem. Short rest jest decyzją drużyny podczas eksploracji: UI pokazuje godzinny koszt, bezpieczeństwo miejsca, jawne zagrożenie i zasoby możliwe do odzyskania. Po ukończeniu gracze wydają Hit Dice pojedynczo. Zagrożenie nie jest uniwersalnym losowym encounterem; wynika z contentu lokacji, np. odpoczynek przed bramą zwiększa hałas, a zawalone koszary zapewniają jedno bezpieczne miejsce odpoczynku.
 

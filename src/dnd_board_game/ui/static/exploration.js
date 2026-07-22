@@ -14,6 +14,10 @@ const slashCommands = Array.isArray(window.EXPLORATION_SLASH_COMMANDS) ? window.
 let filteredSlashCommands = [];
 let activeSlashCommandIndex = 0;
 let sidePanelOpen = localStorage.getItem('explorationSidePanelOpen') === 'true';
+let sidePanelTab = localStorage.getItem('explorationSidePanelTab') || 'game';
+let selectedPanelActorId = localStorage.getItem('explorationPanelActorId') || '';
+let boardFallbackEnabled = localStorage.getItem('explorationBoardFallback') === 'true';
+let boardConnectionNotice = '';
 
 function closeSlashCommandMenu() {
   const menu = document.getElementById('slash-command-menu');
@@ -104,9 +108,35 @@ function setSidePanelOpen(open) {
   const toggle = document.getElementById('side-panel-toggle');
   if (panel) panel.setAttribute('aria-hidden', sidePanelOpen ? 'false' : 'true');
   if (toggle) toggle.setAttribute('aria-expanded', sidePanelOpen ? 'true' : 'false');
+  if (sidePanelOpen && panel) window.requestAnimationFrame(() => panel.querySelector('[data-side-panel-tab].active')?.focus());
 }
 function toggleSidePanel() {
   setSidePanelOpen(!sidePanelOpen);
+}
+function setSidePanelTab(tab) {
+  const allowed = new Set(['game', 'party', 'states', 'spells', 'inventory', 'developer']);
+  sidePanelTab = allowed.has(tab) ? tab : 'game';
+  localStorage.setItem('explorationSidePanelTab', sidePanelTab);
+  document.querySelectorAll('[data-side-panel-tab]').forEach(button => {
+    const active = button.dataset.sidePanelTab === sidePanelTab;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+  document.querySelectorAll('[data-side-panel-content]').forEach(panel => {
+    panel.hidden = panel.dataset.sidePanelContent !== sidePanelTab;
+  });
+  renderPanelActorSelector();
+}
+function handleSidePanelTabKeydown(event) {
+  if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+  const tabs = Array.from(document.querySelectorAll('[data-side-panel-tab]'));
+  const current = tabs.indexOf(document.activeElement);
+  if (current < 0) return;
+  const direction = event.key === 'ArrowRight' ? 1 : -1;
+  const next = tabs[(current + direction + tabs.length) % tabs.length];
+  setSidePanelTab(next.dataset.sidePanelTab);
+  next.focus();
+  event.preventDefault();
 }
 function setBusy(message) {
   busy = Boolean(message);
@@ -122,7 +152,7 @@ function setBusy(message) {
     leaveButton.disabled = busy || unresolved;
   }
   document.querySelectorAll('button, textarea, input').forEach(el => {
-    if (el.closest('details.debug-panel')) return;
+    if (el.closest('.developer-panel')) return;
     if (el.dataset.allowBusy === 'true') return;
     el.disabled = busy;
   });
@@ -143,8 +173,15 @@ async function api(path, body, busyMessage) {
     }
     activeInteractionId = nextInteractionId;
     optimisticPlayerMessage = null;
-  if (path === '/api/rolls' && res.ok) {
+    if (path === '/api/rolls' && res.ok) {
       resultAck = state.flow && state.flow.stage === 'interaction_result' ? null : latestResultMessage(state);
+    } else if (path === '/api/combat/opportunity-movement/confirm' && res.ok) {
+      resultAck = latestMessageWithTitle(state, 'Atak okazyjny');
+    } else if (path === '/api/combat/player-damage' && res.ok) {
+      const damageResult = latestMessageWithTitle(state, 'Obrażenia');
+      resultAck = damageResult && damageResult.body.includes('Cel zostaje pokonany')
+        ? {title: 'PRZECIWNIK POKONANY', body: damageResult.body}
+        : null;
     } else if (path !== '/api/decision') {
       resultAck = null;
     }
@@ -171,10 +208,14 @@ function render() {
     activeInteractionId = interactionId;
     chatInstanceOpen = true;
   }
-  document.getElementById('page-title').textContent = inCombat ? 'Walka' : 'Eksploracja';
-  document.getElementById('encounter-title').textContent = inCombat ? 'Walka' : 'Zaczyna się encounter';
+  const modeLabel = currentModeLabel();
+  document.getElementById('app-mode-label').textContent = modeLabel;
+  document.getElementById('encounter-title').textContent = inCombat ? 'Walka' : 'Nadchodzi starcie';
   document.getElementById('scenario').textContent = state.scenario.name;
   document.getElementById('zone').textContent = state.current_zone.name;
+  document.getElementById('panel-zone-name').textContent = state.current_zone.name;
+  document.getElementById('scene-status-summary').innerHTML = sceneStatusSummaryHtml();
+  renderPartyShell();
   document.getElementById('challenge').textContent = state.active_challenge ? `${state.active_challenge.name}: ${state.active_challenge.current_progress}/${state.active_challenge.progress_required}, hałas ${state.active_challenge.noise}` : 'Brak';
   document.getElementById('visible-environment').innerHTML = visibleEnvironmentHtml();
   document.getElementById('resources').innerHTML = state.resources.map(r => {
@@ -193,6 +234,8 @@ function render() {
   finishScenarioButton.disabled = Boolean(state.combat) || ['spell_preparation','short_rest','scenario_complete'].includes(state.flow.stage);
   finishScenarioButton.textContent = state.flow.stage === 'scenario_complete' ? 'Scenariusz zakończony' : 'Zakończ scenariusz';
   renderBoardPanel();
+  renderBoardConnectionIndicator();
+  renderBoardFallback();
   document.getElementById('flow-panel').innerHTML = flowPanelHtml();
   const sceneHtml = sceneDescriptionHtml(state);
   document.getElementById('scene-description').innerHTML = sceneHtml;
@@ -206,7 +249,9 @@ function render() {
   document.getElementById('pending-accept-button').textContent = state.pending && state.pending.kind === 'source_selection' ? 'Wybierz' : state.pending && state.pending.kind === 'collection' ? 'Zabierz' : 'Akceptuj';
   document.getElementById('pending-reject-button').textContent = state.pending && state.pending.kind === 'source_selection' ? 'Nie wybieram' : 'Odrzuć';
   document.getElementById('lead-actor-choice').innerHTML = leadActorChoiceHtml();
-  document.getElementById('result').innerHTML = resultAck ? `<div class="result"><b>${esc(resultAck.title)}</b><br>${esc(resultAck.body)}</div>` : '';
+  document.getElementById('result').innerHTML = resultAck ? `<div class="interaction-result-summary"><b>${esc(resultAck.title)}</b><span>${esc(resultAck.body)}</span></div>` : '';
+  const resultAckButton = document.getElementById('result-ack-button');
+  if (resultAckButton) resultAckButton.textContent = state.combat ? 'Przeczytałem — wróć do tury' : 'Kontynuuj rozmowę';
   document.getElementById('encounter').innerHTML = encounterHtml();
   document.getElementById('travel-options').innerHTML = travelOptionsHtml();
   document.getElementById('point-options').innerHTML = pointOptionsHtml();
@@ -228,9 +273,225 @@ function render() {
   document.getElementById('action-title').textContent = state.active_point
     ? state.active_point.name
     : state.current_zone.name;
+  document.getElementById('conversation-meta').innerHTML = conversationMetaHtml();
   updateActivePanel();
+  scrollChatToBottom();
+}
+function scrollChatToBottom() {
   const chatStream = document.getElementById('chat-stream');
-  chatStream.scrollTop = chatStream.scrollHeight;
+  if (!chatStream) return;
+  const applyScroll = () => { chatStream.scrollTop = chatStream.scrollHeight; };
+  window.requestAnimationFrame(() => window.requestAnimationFrame(applyScroll));
+  chatStream.querySelectorAll('img:not([data-chat-scroll-bound])').forEach(image => {
+    image.dataset.chatScrollBound = 'true';
+    if (!image.complete) image.addEventListener('load', applyScroll, {once: true});
+  });
+}
+function currentModeLabel() {
+  if (state.combat) return 'Walka';
+  if (state.pending_encounter) return 'Początek encountera';
+  const stage = state.flow ? state.flow.stage : '';
+  if (stage === 'spell_preparation') return 'Przygotowanie czarów';
+  if (stage === 'short_rest') return 'Krótki odpoczynek';
+  if (stage === 'party_setup') return 'Przygotowanie planszy';
+  if (stage === 'location_preview') return 'Wybór lokacji';
+  if (stage === 'scenario_complete') return 'Koniec scenariusza';
+  if (state.active_point && state.active_point.npc) return 'Rozmowa';
+  return 'Eksploracja';
+}
+function sceneStatusSummaryHtml() {
+  const entries = state.scene_status || [];
+  if (!entries.length) return '<span class="muted">Brak zmian w scenie.</span>';
+  return entries.slice(0, 6).map(entry => `
+    <div class="panel-data-row">
+      <span>${esc(entry.label)}</span>
+      <strong>${esc(entry.value)}</strong>
+    </div>
+  `).join('') + (entries.length > 6 ? `<span class="muted">+${entries.length - 6} kolejnych wpisów</span>` : '');
+}
+function renderPartyShell() {
+  const actors = state.actors || [];
+  const summary = document.getElementById('party-summary');
+  const details = document.getElementById('party-details');
+  if (!summary || !details) return;
+  if (!actors.length) {
+    summary.innerHTML = '<span class="muted">Brak drużyny</span>';
+    details.innerHTML = '<span class="muted">Brak danych postaci.</span>';
+    renderPanelActorSelector();
+    return;
+  }
+  if (!actors.some(actor => String(actor.id) === selectedPanelActorId)) selectedPanelActorId = String(actors[0].id);
+  summary.innerHTML = actors.map(actor => partySummaryActorHtml(actor)).join('');
+  const actor = selectedPanelActor();
+  details.innerHTML = actor ? partyDetailActorHtml(actor) : '<span class="muted">Brak danych postaci.</span>';
+  document.getElementById('actor-states').innerHTML = actor ? actorStatesHtml(actor) : '<span class="muted">Brak danych postaci.</span>';
+  document.getElementById('actor-spells').innerHTML = actor ? actorSpellsHtml(actor) : '<span class="muted">Brak danych postaci.</span>';
+  document.getElementById('actor-inventory').innerHTML = actor ? actorInventoryPanelHtml(actor) : '<span class="muted">Brak danych postaci.</span>';
+  renderPanelActorSelector();
+}
+function selectedPanelActor() {
+  if (!state) return null;
+  const base = (state.actors || []).find(actor => String(actor.id) === selectedPanelActorId) || (state.actors || [])[0] || null;
+  if (!base) return null;
+  const combatActor = state.combat && (state.combat.actors || []).find(actor => String(actor.id) === String(base.id));
+  return combatActor ? {...base, ...combatActor} : base;
+}
+function selectPanelActor(actorId) {
+  selectedPanelActorId = String(actorId || '');
+  localStorage.setItem('explorationPanelActorId', selectedPanelActorId);
+  renderPartyShell();
+}
+function renderPanelActorSelector() {
+  const selector = document.getElementById('panel-actor-selector');
+  if (!selector) return;
+  const actorTabs = new Set(['party', 'states', 'spells', 'inventory']);
+  selector.hidden = !actorTabs.has(sidePanelTab);
+  if (selector.hidden || !state) return;
+  const actors = state.actors || [];
+  selector.innerHTML = `<span>Wybierz bohatera</span><div role="listbox" aria-label="Bohater">${actors.map(actor => `<button class="${String(actor.id) === selectedPanelActorId ? 'active' : ''}" data-allow-busy="true" onclick="selectPanelActor('${esc(actor.id)}')" aria-selected="${String(actor.id) === selectedPanelActorId ? 'true' : 'false'}">${esc(actor.name)}</button>`).join('')}</div>`;
+}
+function actorHealthTone(actor) {
+  const maximum = Math.max(1, Number(actor.max_hp || 1));
+  const ratio = Number(actor.hp || 0) / maximum;
+  if (ratio <= 0.25) return 'critical';
+  if (ratio <= 0.55) return 'wounded';
+  return 'healthy';
+}
+function actorConditionLabels(actor) {
+  return (actor.conditions || []).map(condition => condition.label || condition.condition || condition.id).filter(Boolean);
+}
+function partySummaryActorHtml(actor) {
+  const hp = Number(actor.hp || 0);
+  const maximum = Number(actor.max_hp || 0);
+  const percentage = maximum > 0 ? Math.max(0, Math.min(100, Math.round((hp / maximum) * 100))) : 0;
+  const conditions = actorConditionLabels(actor);
+  return `
+    <button class="party-summary-actor ${actorHealthTone(actor)}" data-allow-busy="true" onclick="openActorPanel('${esc(actor.id)}', 'party')" title="${esc(actor.name)}: ${hp}/${maximum} PW${conditions.length ? ` · ${esc(conditions.join(', '))}` : ''}">
+      <span class="party-summary-name">${esc(actor.name)}</span>
+      <span class="party-summary-hp"><i style="width:${percentage}%"></i></span>
+      ${conditions.length ? `<span class="party-summary-condition" aria-label="Aktywne stany">${conditions.length}</span>` : ''}
+    </button>
+  `;
+}
+function partyDetailActorHtml(actor) {
+  const hp = Number(actor.hp || 0);
+  const maximum = Number(actor.max_hp || 0);
+  const percentage = maximum > 0 ? Math.max(0, Math.min(100, Math.round((hp / maximum) * 100))) : 0;
+  const abilities = actor.ability_scores || {};
+  const resources = actor.resource_pools || [];
+  const hitDice = actor.hit_dice || [];
+  const features = actor.features || [];
+  return `
+    <article class="party-detail-card ${actorHealthTone(actor)}">
+      <div class="party-detail-heading"><strong>${esc(actor.name)}</strong><span>${hp}/${maximum} PW</span></div>
+      <div class="party-detail-hp" aria-label="${percentage}% punktów życia"><i style="width:${percentage}%"></i></div>
+      <div class="character-vitals"><span><b>KP</b>${esc(actor.ac ?? '-')}</span><span><b>Szybkość</b>${esc(actor.speed_feet ?? '-')} ft</span><span><b>Temp HP</b>${esc(actor.temp_hp || 0)}</span><span><b>Biegłość</b>${signedNumber(actor.proficiency_bonus || 0)}</span></div>
+      <div class="ability-grid">${['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'].map(ability => {
+        const score = abilities[ability] ?? 10;
+        return `<span><b>${esc(abilityAbbreviation(ability))}</b>${esc(score)} <small>${esc(signedNumber(Math.floor((Number(score) - 10) / 2)))}</small></span>`;
+      }).join('')}</div>
+      ${hitDice.length ? `<p class="party-detail-resources"><b>Kości Wytrzymałości:</b> ${hitDice.map(pool => `${esc(pool.remaining)}/${esc(pool.maximum)} k${esc(pool.die_sides)}`).join(' · ')}</p>` : ''}
+      ${resources.length ? `<div class="panel-card-list compact">${resources.map(pool => `<div class="panel-info-card"><b>${esc(pool.label)}</b><span>${esc(pool.current)}/${esc(pool.maximum)} · ${esc(recoveryLabel(pool.recovery))}</span></div>`).join('')}</div>` : ''}
+      ${features.length ? `<div class="character-features"><span class="panel-section-label">Cechy</span>${features.map(feature => `<div class="panel-info-card"><b>${esc(feature.label)}</b><span>${esc(feature.description || '')}</span></div>`).join('')}</div>` : ''}
+    </article>
+  `;
+}
+function abilityAbbreviation(ability) {
+  return ({strength:'SIŁ', dexterity:'ZRĘ', constitution:'KON', intelligence:'INT', wisdom:'MĄD', charisma:'CHA'})[ability] || String(ability).slice(0, 3).toUpperCase();
+}
+function recoveryLabel(recovery) {
+  return ({short_rest:'krótki odpoczynek', long_rest:'długi odpoczynek', scenario_end:'koniec scenariusza'})[recovery] || recovery || 'bez odnowienia';
+}
+function openActorPanel(actorId, tab = 'party') {
+  if (actorId) selectPanelActor(actorId);
+  setSidePanelTab(tab);
+  setSidePanelOpen(true);
+}
+function openPartyPanel() { openActorPanel(selectedPanelActorId, 'party'); }
+function actorStatesHtml(actor) {
+  const conditions = actor.conditions || [];
+  const effects = actor.effects || [];
+  const concentration = actor.concentration || null;
+  const lifeChips = combatActorChips(actor).filter(chip => !isTurnResourceChip(chip));
+  const cards = [];
+  conditions.forEach(condition => cards.push({
+    tone: 'danger',
+    label: condition.label || condition.condition || condition.id || 'Stan',
+    body: condition.description || condition.instruction || condition.source_label || 'Aktywny stan mechaniczny.',
+    meta: condition.expires || condition.save_label || '',
+  }));
+  effects.forEach(effect => cards.push({
+    tone: effectChipTone(effect.kind),
+    label: effect.label || effect.kind || 'Efekt',
+    body: effect.value_label || (effect.value === undefined ? 'Aktywny efekt.' : signedNumber(effect.value)),
+    meta: effect.expires || '',
+  }));
+  if (concentration) cards.push({tone: 'magic', label: `Koncentracja: ${concentration.label || '-'}`, body: concentration.value_label || 'Efekt wymaga koncentracji.', meta: concentration.expires || ''});
+  lifeChips.forEach(chip => {
+    if (cards.some(card => card.label === chip.label)) return;
+    cards.push({tone: chip.tone || 'neutral', label: chip.label, body: chip.title || 'Aktywny stan postaci.', meta: ''});
+  });
+  const globalEffects = state.active_effects || [];
+  return `
+    <div class="actor-panel-summary"><b>${esc(actor.name)}</b><span>${cards.length ? `${cards.length} aktywnych stanów i efektów` : 'Brak aktywnych stanów'}</span></div>
+    ${cards.length ? cards.map(card => `<article class="panel-info-card state ${esc(card.tone)}"><b>${esc(card.label)}</b><span>${esc(card.body)}</span>${card.meta ? `<small>${esc(card.meta)}</small>` : ''}</article>`).join('') : '<div class="panel-empty-state"><b>Wszystko w porządku</b><span>Postać nie ma aktywnych stanów ani efektów.</span></div>'}
+    ${globalEffects.length ? `<div class="panel-subsection"><span class="panel-section-label">Efekty scenariusza</span>${globalEffects.map(effect => `<article class="panel-info-card"><b>${esc(effect.label || 'Efekt')}</b><span>${esc(effect.value_label || '')}</span><small>${esc(effect.expires || '')}</small></article>`).join('')}</div>` : ''}
+  `;
+}
+function isTurnResourceChip(chip) {
+  const prefixes = ['Akcja ', 'Ataki ', 'Bonus ', 'Darmowa interakcja ', 'Reakcja ', 'Ruch '];
+  return prefixes.some(prefix => String((chip || {}).label || '').startsWith(prefix));
+}
+function actorSpellSourceMap() {
+  const sources = [];
+  if (state && state.combat) {
+    sources.push(...(state.combat.available_attack_sources || []), ...(state.combat.available_healing_sources || []), ...(state.combat.combat_actions || []));
+  }
+  const result = new Map();
+  sources.forEach(source => {
+    const id = String(source.id || source.source_id || '');
+    if (id) result.set(id, source);
+  });
+  return result;
+}
+function actorSpellsHtml(actor) {
+  const preparationActor = (((state.spell_preparation || {}).actors) || []).find(candidate => String(candidate.actor_id) === String(actor.id));
+  const preparationById = new Map(((preparationActor || {}).spells || []).map(spell => [String(spell.id), spell]));
+  const sourceById = actorSpellSourceMap();
+  const spellIds = actor.spell_ids || [];
+  const slots = (actor.spell_slots || []).filter(slot => Number(slot.maximum || 0) > 0);
+  const spellCards = spellIds.map(spellId => {
+    const prepared = preparationById.get(String(spellId));
+    const source = sourceById.get(String(spellId)) || {};
+    const level = prepared ? Number(prepared.level || 0) : Number(source.spell_level || 0);
+    const label = prepared?.label || source.name || source.label || identifierLabel(spellId);
+    const isPrepared = prepared ? Boolean(prepared.prepared || prepared.always_prepared) : level === 0;
+    const status = level === 0 ? 'Sztuczka · zawsze dostępna' : isPrepared ? `Poziom ${level} · przygotowany` : `Poziom ${level} · nieprzygotowany`;
+    return `<article class="panel-info-card spell${isPrepared ? ' prepared' : ' unavailable'}"><div><b>${esc(label)}</b><span>${esc(status)}</span></div>${source.concentration ? '<small>Koncentracja</small>' : ''}</article>`;
+  }).join('');
+  return `
+    <div class="actor-panel-summary"><b>${esc(actor.name)}</b><span>${spellIds.length ? `${spellIds.length} znanych czarów` : 'Nie zna czarów'}</span></div>
+    ${slots.length ? `<div class="spell-slot-list">${slots.map(slot => `<span><b>${esc(slot.level)}. poziom</b><i>${Array.from({length:Number(slot.maximum || 0)}, (_, index) => `<em class="${index < Number(slot.remaining || 0) ? 'available' : 'spent'}"></em>`).join('')}</i><small>${esc(slot.remaining)}/${esc(slot.maximum)}</small></span>`).join('')}</div>` : ''}
+    ${spellCards || '<div class="panel-empty-state"><b>Brak czarów</b><span>Ta postać nie ma obecnie listy czarów.</span></div>'}
+  `;
+}
+function identifierLabel(identifier) {
+  const text = String(identifier || '').replaceAll('_', ' ').trim();
+  return text ? text.charAt(0).toLocaleUpperCase('pl') + text.slice(1) : '-';
+}
+function actorInventoryPanelHtml(actor) {
+  const items = actor.inventory || [];
+  const hands = actor.hands || {};
+  const handLabel = hand => hand && hand.item_name ? hand.item_name : 'wolna';
+  return `
+    <div class="actor-panel-summary"><b>${esc(actor.name)}</b><span>${items.length} ${items.length === 1 ? 'przedmiot' : 'przedmiotów'}</span></div>
+    <div class="hands-summary"><span><b>Główna ręka</b>${esc(handLabel(hands.main_hand))}</span><span><b>Druga ręka</b>${esc(handLabel(hands.off_hand))}</span></div>
+    ${items.length ? items.map(item => {
+      const held = (item.held_in || []).map(hand => hand === 'main_hand' ? 'główna ręka' : hand === 'off_hand' ? 'druga ręka' : hand).join(', ');
+      const tags = [item.equipped ? 'wyposażony' : '', held, item.broken ? 'uszkodzony' : '', item.available === false ? 'niedostępny' : ''].filter(Boolean);
+      return `<article class="panel-info-card inventory${item.broken || item.available === false ? ' unavailable' : ''}"><div><b>${esc(item.name || identifierLabel(item.id))}${Number(item.quantity || 1) > 1 ? ` ×${esc(item.quantity)}` : ''}</b><span>${esc(item.description || identifierLabel(item.kind))}</span></div>${tags.length ? `<div class="panel-item-tags">${tags.map(tag => `<small>${esc(tag)}</small>`).join('')}</div>` : ''}${(item.properties || []).length ? `<p>${item.properties.map(property => `<span class="property-chip">${esc(identifierLabel(property))}</span>`).join('')}</p>` : ''}</article>`;
+    }).join('') : '<div class="panel-empty-state"><b>Pusty ekwipunek</b><span>Postać nie niesie żadnych przedmiotów.</span></div>'}
+  `;
 }
 function renderSnapshotPanel() {
   const snapshot = state.snapshot || {};
@@ -261,8 +522,75 @@ function renderBoardPanel() {
   document.getElementById('wled-url').value = board.wled_url || '';
   document.getElementById('scan-timeout').value = board.scan_timeout_s || 30;
 }
+function renderBoardConnectionIndicator() {
+  const indicator = document.getElementById('board-connection-indicator');
+  if (!indicator) return;
+  const board = state.board || {};
+  const backend = board.backend || 'none';
+  const connected = Boolean(board.connected);
+  indicator.classList.toggle('connected', connected);
+  indicator.classList.toggle('simulator', connected && backend === 'simulator');
+  const label = connected ? (backend === 'simulator' ? 'Symulator' : 'Plansza połączona') : 'Plansza rozłączona';
+  indicator.querySelector('span:last-child').textContent = label;
+  indicator.title = board.message || label;
+}
+function renderBoardFallback() {
+  const board = state.board || {};
+  const connected = Boolean(board.connected);
+  if (connected) boardConnectionNotice = '';
+  if (connected && boardFallbackEnabled) {
+    boardFallbackEnabled = false;
+    localStorage.removeItem('explorationBoardFallback');
+  }
+  const banner = document.getElementById('board-disconnected-banner');
+  const panel = document.getElementById('board-fallback-panel');
+  const toggle = document.getElementById('board-fallback-toggle');
+  const copy = document.getElementById('board-disconnected-copy');
+  if (banner) banner.hidden = connected;
+  if (panel) panel.hidden = connected || !boardFallbackEnabled;
+  if (toggle) toggle.textContent = boardFallbackEnabled ? 'Sterowanie awaryjne aktywne' : 'Tryb awaryjny';
+  if (copy) copy.textContent = boardConnectionNotice || (boardFallbackEnabled ? 'Sterowanie awaryjne jest aktywne. Właściwe połączenie można ponowić w dowolnym momencie.' : 'Możecie ponowić połączenie albo jawnie przejść na sterowanie awaryjne.');
+  document.body.classList.toggle('board-fallback-active', !connected && boardFallbackEnabled);
+  document.body.classList.toggle('board-disconnected', !connected);
+}
+async function retryBoardConnection() {
+  const board = state.board || {};
+  const backend = board.backend && board.backend !== 'none' ? board.backend : (board.configured_backend || 'hardware');
+  setBusy('Ponawiam połączenie z planszą...');
+  try {
+    const response = await fetch('/api/board/configure', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({backend, board_url: board.board_url || '', board_serial_port: board.board_serial_port || '', wled_url: board.wled_url || '', scan_timeout_s: Number(board.scan_timeout_s || 30)}),
+    });
+    const data = await response.json();
+    state = data.state || data;
+    boardConnectionNotice = response.ok ? '' : 'Nie udało się połączyć. Możecie spróbować ponownie albo kontynuować w trybie awaryjnym.';
+    render();
+  } catch (_error) {
+    boardConnectionNotice = 'Nie udało się połączyć. Możecie spróbować ponownie albo kontynuować w trybie awaryjnym.';
+    renderBoardFallback();
+  } finally {
+    setBusy('');
+  }
+}
+function toggleBoardFallback(force) {
+  boardFallbackEnabled = typeof force === 'boolean' ? force : !boardFallbackEnabled;
+  localStorage.setItem('explorationBoardFallback', boardFallbackEnabled ? 'true' : 'false');
+  renderBoardFallback();
+  if (boardFallbackEnabled) {
+    setSidePanelTab('game');
+    setSidePanelOpen(true);
+    window.requestAnimationFrame(() => document.getElementById('fallback-board-col')?.focus());
+  }
+}
+function manualBoardSelect() {
+  const col = Number(document.getElementById('fallback-board-col')?.value);
+  const row = Number(document.getElementById('fallback-board-row')?.value);
+  api('/api/board/select', {col, row}, `Wskazuję pole (${col}, ${row}) w trybie awaryjnym...`);
+}
 function esc(value) {
-  return String(value || '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
 }
 function activeEffectsHtml() {
   const effects = state.active_effects || [];
@@ -365,7 +693,7 @@ function flowPanelHtml() {
       <div class="start-panel"><div class="inner">
         <h2>Scenariusz zakończony</h2>
         <p>Efekty trwające do końca scenariusza zostały wygaszone.</p>
-        <p class="muted">Kliknij Reset, aby rozpocząć scenariusz od automatycznego long resta i przygotowania czarów.</p>
+        <p class="muted">Kliknij Reset, aby rozpocząć scenariusz od automatycznego long resta, konfiguracji planszy i setupu zakończonego przygotowaniem czarów.</p>
       </div></div>
     `;
   }
@@ -463,8 +791,10 @@ function spellPreparationHtml() {
   const alwaysPrepared = (actor.spells || []).filter(spell => spell.always_prepared);
   return `
     <div class="start-panel"><div class="inner">
+      <span class="eyebrow">OSTATNI KROK SETUPU</span>
       <h2>Przygotowanie czarów — ${esc(actor.actor_name)}</h2>
-      <p>Źródło: <b>${esc(actor.source_label)}</b>. Wybierz czary po zakończonym długim odpoczynku.</p>
+      <p>Mapa jest już przygotowana. Na zakończenie setupu wybierz czary po odbytym długim odpoczynku.</p>
+      <p>Źródło: <b>${esc(actor.source_label)}</b>.</p>
       <p><b>Wybrano:</b> <span id="spell-preparation-count">${esc(actor.selected_count)}</span>/${esc(actor.preparation_limit)}</p>
       <div class="status-list">
         ${selectable.map(spell => `
@@ -591,6 +921,14 @@ function sceneDescriptionHtml(state) {
 }
 function sceneConversationHtml() {
   const entries = [...((state.conversation && state.conversation.entries) || [])];
+  if (resultAck) {
+    for (let index = entries.length - 1; index >= 0; index -= 1) {
+      if (entries[index].title === resultAck.title && entries[index].body === resultAck.body) {
+        entries.splice(index, 1);
+        break;
+      }
+    }
+  }
   if (optimisticPlayerMessage) entries.push(optimisticPlayerMessage);
   const transition = state.pending_npc_transition;
   const transitionHtml = transition ? `
@@ -634,6 +972,21 @@ function sceneIntroMessageHtml() {
       ${descriptions.filter(Boolean).map(description => `<span>${esc(description)}</span>`).join('')}
     </div>
   `;
+}
+function conversationMetaHtml() {
+  const point = state.active_point || null;
+  const npc = point && point.npc ? point.npc : null;
+  if (!npc) return '<span class="conversation-context-chip neutral">Eksploracja swobodna</span>';
+  const runtime = npc.runtime_state || {};
+  const attitudeLabels = {hostile: 'wrogi', indifferent: 'obojętny', friendly: 'przyjazny'};
+  const attitude = attitudeLabels[runtime.attitude] || runtime.attitude || npc.current_state || 'nieznane';
+  const attitudeClass = ['hostile', 'indifferent', 'friendly'].includes(runtime.attitude) ? runtime.attitude : 'unknown';
+  const chips = [
+    `<span class="conversation-context-chip attitude-${attitudeClass}">Nastawienie: ${esc(attitude)}</span>`,
+  ];
+  if (runtime.physical_state) chips.push(`<span class="conversation-context-chip">${esc(runtime.physical_state)}</span>`);
+  if (runtime.emotional_state) chips.push(`<span class="conversation-context-chip">${esc(runtime.emotional_state)}</span>`);
+  return chips.join('');
 }
 function pendingHtml(pending) {
   if (!pending) return '';
@@ -1038,6 +1391,13 @@ function latestResultMessage(state) {
   }
   return messages[messages.length - 1] || null;
 }
+function latestMessageWithTitle(state, title) {
+  const messages = state.messages || [];
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    if (messages[i].title === title) return messages[i];
+  }
+  return messages[messages.length - 1] || null;
+}
 function travelOptionsHtml() {
   const zones = state.travel_options || [];
   if (!zones.length) return '<p>Brak dostępnych przejść z tej lokacji.</p>';
@@ -1071,20 +1431,52 @@ function encounterHtml() {
   const stealth = state.encounter_stealth;
   const initiative = state.encounter_initiative;
   const opening = encounter.opening || {};
-  const setupHtml = (!opening.required || opening.resolved) ? encounterSetupHtml(setup) : '';
-  const combatHtml = combatStartHtml();
+  const openingComplete = !opening.required || opening.resolved;
+  const setupComplete = Boolean(setup && setup.status === 'completed');
+  const stealthComplete = !stealth || stealth.completed;
+  let currentStepHtml = encounterOpeningHtml(opening);
+  if (openingComplete) currentStepHtml = encounterSetupHtml(setup);
+  if (setupComplete && !stealthComplete) currentStepHtml = encounterStealthHtml(setup, stealth);
+  if (setupComplete && stealthComplete) currentStepHtml = encounterInitiativeHtml(setup, initiative, stealth);
   return `
-    <p><b>${esc(encounter.name)}</b></p>
-    <p>${esc(encounter.description)}</p>
-    <p><b>Powód:</b> ${esc(encounter.reason)}</p>
-    <p><b>Scenariusz encountera:</b> ${esc(encounter.encounter_scenario)}</p>
-    ${encounterOpeningHtml(opening)}
-    ${setupHtml}
-    ${encounterStealthHtml(setup, stealth)}
-    ${encounterInitiativeHtml(setup, initiative, stealth)}
-    ${combatHtml}
-    ${state.combat ? '' : `<details class="debug-panel"><summary>Komenda awaryjna terminala</summary><pre>${esc(encounter.command)}</pre></details>`}
+    <div class="encounter-transition-shell">
+      <header class="encounter-transition-head">
+        <span class="panel-kicker">Przejście do walki</span>
+        <h2>${esc(encounter.name)}</h2>
+        <p>${esc(encounter.description)}</p>
+      </header>
+      ${encounterProgressHtml(opening, setup, stealth, initiative)}
+      <div class="encounter-transition-current">
+        ${currentStepHtml}
+      </div>
+      <details class="debug-panel encounter-technical-details">
+        <summary>Dane techniczne encountera</summary>
+        <p><b>Powód:</b> ${esc(encounter.reason)}</p>
+        <p><b>Scenariusz:</b> ${esc(encounter.encounter_scenario)}</p>
+        <pre>${esc(encounter.command)}</pre>
+      </details>
+    </div>
   `;
+}
+function encounterProgressHtml(opening, setup, stealth, initiative) {
+  const openingComplete = !opening.required || opening.resolved;
+  const setupComplete = Boolean(setup && setup.status === 'completed');
+  const stealthAvailable = Boolean(stealth);
+  const stealthComplete = !stealthAvailable || Boolean(stealth.completed);
+  const initiativeComplete = Boolean(initiative && initiative.status === 'completed');
+  let active = 'opening';
+  if (openingComplete) active = setupComplete ? (stealthComplete ? 'initiative' : 'stealth') : 'setup';
+  if (initiativeComplete) active = 'initiative';
+  const steps = [
+    {id: 'opening', label: 'Wejście', complete: openingComplete},
+    {id: 'setup', label: 'Plansza', complete: setupComplete},
+    {id: 'stealth', label: stealthAvailable ? 'Skradanie' : 'Skradanie opcj.', complete: setupComplete && stealthComplete},
+    {id: 'initiative', label: 'Inicjatywa', complete: initiativeComplete},
+  ];
+  return `<ol class="encounter-progress" aria-label="Przygotowanie do walki">${steps.map((step, index) => {
+    const classNames = [step.complete ? 'complete' : '', step.id === active && !step.complete ? 'active' : ''].filter(Boolean).join(' ');
+    return `<li class="${classNames}"><span>${step.complete ? '✓' : index + 1}</span><b>${esc(step.label)}</b></li>`;
+  }).join('')}</ol>`;
 }
 function encounterOpeningHtml(opening) {
   if (!opening.required) return '';
@@ -1116,8 +1508,6 @@ function encounterSetupHtml(setup) {
   const step = setup.current_step || {};
   const hasPositions = Boolean(step.has_positions);
   const requiresBoardAssignment = Boolean(step.requires_board_assignment);
-  const positions = (step.positions || []).map(pos => `(${pos[0]},${pos[1]})`).join(', ');
-  const availablePositions = (step.available_positions || step.positions || []).map(pos => `(${pos[0]},${pos[1]})`).join(', ');
   const assignmentButtons = (step.available_positions || []).map(pos =>
     `<button class="secondary" onclick="selectBoardPosition(${Number(pos[0])}, ${Number(pos[1])})">(${Number(pos[0])},${Number(pos[1])})</button>`
   ).join('');
@@ -1125,12 +1515,12 @@ function encounterSetupHtml(setup) {
     <div class="message">
       <b>Krok ${Number(setup.current_index) + 1}/${setup.step_count}: ${esc(step.label || '')}</b><br>
       ${esc(step.message || '')}
-      ${requiresBoardAssignment ? `<p><b>Aktualnie ustaw:</b> ${esc(step.assignment_actor_name || '-')}</p><p><b>Wolne pola:</b> ${esc(availablePositions || '-')}</p>` : ''}
-      ${hasPositions && !requiresBoardAssignment ? `<p><b>Kolor:</b> ${esc(step.color || '-')}</p><p><b>Pola:</b> ${esc(positions)}</p>` : ''}
+      ${requiresBoardAssignment ? `<p><b>Aktualnie ustaw:</b> ${esc(step.assignment_actor_name || '-')}</p><p>Wybierz jedno z podświetlonych wolnych pól na fizycznej planszy.</p>` : ''}
+      ${hasPositions && !requiresBoardAssignment ? `<p>Sprawdź pola podświetlone na planszy kolorem ${esc(step.color || 'wskazanym przez grę')}.</p>` : ''}
       ${!hasPositions ? '<p class="muted">Ten krok jest tylko instrukcją i nie podświetla pól na planszy.</p>' : ''}
     </div>
     ${requiresBoardAssignment
-      ? `<div class="row"><button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button>${assignmentButtons}</div><p class="muted">Postaw figurkę wskazanego bohatera na podświetlonym polu i uruchom skan. Przyciski pól są awaryjnym wyborem bez skanu planszy. Po ostatnim bohaterze gra przejdzie dalej.</p>`
+      ? `<div class="row"><button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button></div><p class="muted">Postaw figurkę wskazanego bohatera na podświetlonym polu i uruchom skan. Po ostatnim bohaterze gra przejdzie dalej.</p><details class="encounter-position-fallback"><summary>Awaryjny wybór bez skanu</summary><div class="row">${assignmentButtons}</div></details>`
       : '<button onclick="confirmEncounterSetup()">Potwierdź krok setupu</button>'}
   `;
 }
@@ -1147,7 +1537,7 @@ function encounterStealthHtml(setup, stealth) {
       const detected = (result.detected_by || []).map(item => item.actor_name).join(', ') || 'nikt';
       return `<div class="status-item"><b>${esc(actor.actor_name)}</b><span>Stealth ${Number(result.total)} — ukryty przed: ${esc(hidden)}; wykrywają: ${esc(detected)}.</span></div>`;
     }
-    return `<div class="status-item"><b>${esc(actor.actor_name)}</b><span>Modyfikator Stealth: ${signed(Number(actor.modifier || 0))}</span>${actor.can_attempt ? `<div class="row"><label>Wynik d20: <input id="precombat-stealth-${esc(actor.actor_id)}" type="number" min="1" max="20" value="10"></label><button onclick="submitPrecombatStealth('${esc(actor.actor_id)}')">Spróbuj się ukryć</button></div>` : ''}</div>`;
+    return `<div class="status-item"><b>${esc(actor.actor_name)}</b><span>Modyfikator Stealth: ${signedNumber(Number(actor.modifier || 0))}</span>${actor.can_attempt ? `<div class="row"><label>Wynik d20: <input id="precombat-stealth-${esc(actor.actor_id)}" type="number" min="1" max="20" value="10"></label><button onclick="submitPrecombatStealth('${esc(actor.actor_id)}')">Spróbuj się ukryć</button></div>` : ''}</div>`;
   }).join('');
   return `
     <div class="message"><b>Skradanie przed walką</b><br>${esc(stealth.instruction || '')}</div>
@@ -1191,15 +1581,24 @@ function combatStartHtml() {
   const actor = combat.current_actor || {};
   const isAllyTurn = actor.faction === 'ally';
   const isEnemyTurn = actor.faction === 'enemy';
+  const interrupt = combatInterruptPresentation(combat);
   return `
-    <div class="combat-stage">
-      ${combatCurrentStepHtml(combat, finished, isAllyTurn, isEnemyTurn)}
-      ${combatDroppedWeaponsHtml(combat)}
-      ${combatActiveEffectsHtml(combat)}
-      ${combatLastResultHtml()}
+    <div class="combat-shell${interrupt ? ' has-interrupt' : ''}">
+      ${combatInitiativeRibbonHtml(combat, order)}
+      ${combatTurnHudHtml(combat)}
+      <div class="combat-stage">
+        ${interrupt ? `<div class="combat-interrupt-banner"><span>Przerwanie</span><b>${esc(interrupt)}</b></div>` : ''}
+        ${combatCurrentStepHtml(combat, finished, isAllyTurn, isEnemyTurn, interrupt)}
+      </div>
     </div>
     <details class="combat-details">
-      <summary>Szczegóły walki</summary>
+      <summary>Pole walki, ostatni wynik i szczegóły</summary>
+      <section class="combat-section">
+        <h4>Ostatni rezultat</h4>
+        ${latestCombatMessageHtml()}
+      </section>
+      ${combatDroppedWeaponsHtml(combat)}
+      ${combatActiveEffectsHtml(combat)}
       <section class="combat-section">
         <h4>Aktualny aktor</h4>
         ${combatActorStatusHtml(combat)}
@@ -1226,6 +1625,61 @@ function combatStartHtml() {
     </details>
   `;
 }
+function combatInitiativeRibbonHtml(combat, order) {
+  const actors = combat.actors || [];
+  const actorById = new Map(actors.map(actor => [String(actor.id), actor]));
+  const entries = (order && order.length ? order : actors).map(entry => {
+    const id = String(entry.actor_id || entry.id || '');
+    const actor = actorById.get(id) || entry;
+    return {
+      id,
+      name: entry.actor_name || actor.name || '-',
+      total: entry.total === undefined ? null : entry.total,
+      faction: actor.faction || 'neutral',
+      defeated: Boolean(actor.defeated),
+    };
+  });
+  if (!entries.length) return '';
+  const currentId = String((combat.current_actor || {}).id || '');
+  return `
+    <div class="initiative-ribbon" aria-label="Kolejność inicjatywy">
+      <span class="initiative-ribbon-label">Inicjatywa</span>
+      <div class="initiative-ribbon-order">${entries.map(entry => `
+        <div class="initiative-actor ${esc(entry.faction)}${entry.id === currentId ? ' current' : ''}${entry.defeated ? ' defeated' : ''}"${entry.id === currentId ? ' aria-current="step"' : ''}>
+          <span>${esc(entry.name)}</span>${entry.total === null ? '' : `<b>${esc(entry.total)}</b>`}
+        </div>
+      `).join('')}</div>
+    </div>
+  `;
+}
+function combatTurnHudHtml(combat) {
+  const actor = combat.current_actor || {};
+  const hp = Math.max(0, Number(actor.hp || 0));
+  const maxHp = Math.max(1, Number(actor.max_hp === undefined || actor.max_hp === null ? actor.hp || 1 : actor.max_hp));
+  const hpPercent = Math.max(0, Math.min(100, Math.round((hp / maxHp) * 100)));
+  return `
+    <div class="combat-turn-hud ${esc(actor.faction || 'neutral')}">
+      <div class="combat-turn-identity">
+        <span>Aktywna tura · runda ${esc(combat.round_number || '-')}</span>
+        <b>${esc(actor.name || '-')}</b>
+      </div>
+      <div class="combat-hp" aria-label="Punkty życia ${esc(actorHpLabel(actor))}">
+        <span><b>HP ${esc(actorHpLabel(actor))}</b><small>KP ${esc(actorAcLabel(actor))}</small></span>
+        <i><em style="width:${hpPercent}%"></em></i>
+      </div>
+      <div class="combat-turn-resources">${combatMiniStatusHtml(combat)}</div>
+    </div>
+  `;
+}
+function combatInterruptPresentation(combat) {
+  if (combat.pending_ready_attack) return 'Przygotowana akcja czeka na decyzję';
+  if (combat.pending_enemy_opportunity_attack) return 'Możliwy atak okazyjny bohatera';
+  if (combat.pending_opportunity_movement) return 'Ruch może wywołać atak okazyjny';
+  if (combat.pending_concentration_check) return 'Obowiązkowy test koncentracji';
+  if (combat.death_save_required) return 'Obowiązkowy rzut śmierci';
+  if ((combat.condition_saves || []).length) return 'Obowiązkowy rzut obronny';
+  return '';
+}
 function combatDroppedWeaponsHtml(combat) {
   const dropped = combat.dropped_weapons || [];
   if (!dropped.length) return '';
@@ -1237,16 +1691,44 @@ function combatDroppedWeaponsHtml(combat) {
     </div>
   `;
 }
-function combatCurrentStepHtml(combat, finished, isAllyTurn, isEnemyTurn) {
+function combatCurrentStepHtml(combat, finished, isAllyTurn, isEnemyTurn, interrupt = '') {
+  const phase = combatPresentationPhase(combat, finished, isAllyTurn, isEnemyTurn);
   return `
-    <div class="combat-current-step">
-      ${combatMainPromptHtml(combat, finished, isAllyTurn, isEnemyTurn)}
-      ${combatMiniStatusHtml(combat)}
+    <div class="combat-current-step${interrupt ? ' combat-interrupt-dialog' : ''}${combat.enemy_turn_result ? ' enemy-attack-result' : ''}" data-stage="${esc(phase)}"${interrupt ? ' role="dialog" aria-modal="true" aria-label="Przerwanie walki"' : ''}>
+      ${combatPhaseStepsHtml(phase)}
+      ${resultAck ? '' : combatMainPromptHtml(combat, finished, isAllyTurn, isEnemyTurn)}
+      ${phase === 'result' && !resultAck ? `<div class="combat-inline-result">${latestCombatMessageHtml()}</div>` : ''}
       <div class="combat-action-card">
         ${finished ? '<button onclick="resolveCombatOutcome()">Zastosuj wynik walki</button>' : combatPrimaryActionHtml(combat, isAllyTurn, isEnemyTurn)}
       </div>
     </div>
   `;
+}
+function combatPresentationPhase(combat, finished, isAllyTurn, isEnemyTurn) {
+  if (resultAck) return 'result';
+  if (finished || combat.enemy_turn_result) return 'result';
+  if (combat.death_save_required || combat.pending_concentration_check || combat.pending_enemy_saving_throw || (combat.condition_saves || []).length) return 'roll';
+  const rollPending = [
+    combat.pending_player_attack,
+    combat.pending_area_spell,
+    combat.pending_enemy_opportunity_attack,
+    combat.pending_ready_attack,
+  ].find(pending => pending && (pending.stage === 'attack_roll' || pending.stage === 'damage_roll'));
+  if (rollPending || combat.pending_player_healing || combat.pending_combat_skill_check || combat.pending_combat_shove || combat.pending_combat_grapple) return 'roll';
+  if (combat.movement_preview || combat.pending_opportunity_movement || combat.enemy_turn_intent || combat.enemy_turn_preview || combat.pending_combat_interaction || combat.pending_combat_help || combat.pending_concentration_action || combat.pending_combat_ready) return 'preview';
+  if (combat.pending_player_attack || combat.pending_area_spell) return 'preview';
+  if (isEnemyTurn) return 'preview';
+  return 'choice';
+}
+function combatPhaseStepsHtml(activePhase) {
+  const phases = [
+    {id: 'choice', label: 'Wybór'},
+    {id: 'preview', label: 'Podgląd'},
+    {id: 'roll', label: 'Rzut'},
+    {id: 'result', label: 'Wynik'},
+  ];
+  const activeIndex = phases.findIndex(phase => phase.id === activePhase);
+  return `<div class="combat-phase-steps" aria-label="Przebieg decyzji">${phases.map((phase, index) => `<span class="${index < activeIndex ? 'complete' : ''}${index === activeIndex ? ' active' : ''}">${esc(phase.label)}</span>`).join('')}</div>`;
 }
 function combatMainPromptHtml(combat, finished, isAllyTurn, isEnemyTurn) {
   return `
@@ -1257,6 +1739,7 @@ function combatMainPromptHtml(combat, finished, isAllyTurn, isEnemyTurn) {
   `;
 }
 function combatPromptTitle(combat, finished, isAllyTurn, isEnemyTurn) {
+  if (resultAck) return resultAck.title || 'Wynik';
   if (finished) return 'Walka zakończona';
   const actor = combat.current_actor || {};
   if (combat.death_save_required) return `${actor.name || 'Bohater'}: rzut śmierci`;
@@ -1268,7 +1751,11 @@ function combatPromptTitle(combat, finished, isAllyTurn, isEnemyTurn) {
     if (combat.pending_ready_attack) return `Tura ${actor.name || 'przeciwnika'}: Ready`;
     if (combat.pending_enemy_opportunity_attack) return `Tura ${actor.name || 'przeciwnika'}: reakcja bohatera`;
     if (combat.pending_enemy_saving_throw) return `${(combat.pending_enemy_saving_throw.target || {}).name || 'Bohater'}: rzut obronny`;
-    if (combat.enemy_turn_result) return `Tura ${actor.name || 'przeciwnika'}: potwierdź wynik`;
+    if (combat.enemy_turn_result) {
+      const result = combat.enemy_turn_result;
+      const outcome = result.hit === true ? (result.critical ? 'TRAFIENIE KRYTYCZNE' : 'TRAFIENIE') : (result.hit === false ? 'PUDŁO' : 'WYNIK');
+      return `ATAK PRZECIWNIKA — ${outcome}`;
+    }
     if (combat.enemy_turn_intent) return `Tura ${actor.name || 'przeciwnika'}: zamiar`;
     if (combat.enemy_turn_preview) return `Tura ${actor.name || 'przeciwnika'}: potwierdź planszą`;
     return `Tura ${actor.name || 'przeciwnika'}: rozegraj zamiar`;
@@ -1286,6 +1773,11 @@ function combatPromptTitle(combat, finished, isAllyTurn, isEnemyTurn) {
       : `Tura ${actor.name || 'gracza'}: potwierdź obszar`;
   }
   if (isAllyTurn && combat.context_menu) return `Tura ${actor.name || 'gracza'}: wybierz akcję`;
+  if (isAllyTurn && combat.targeting) {
+    return combat.targeting.kind === 'area'
+      ? `Tura ${actor.name || 'gracza'}: wybierz obszar czaru`
+      : `Tura ${actor.name || 'gracza'}: wybierz cel`;
+  }
   if (isAllyTurn && combat.pending_opportunity_movement) return `Tura ${actor.name || 'gracza'}: atak okazyjny`;
   if (isAllyTurn && combat.pending_combat_help) return `Tura ${actor.name || 'gracza'}: Help`;
   if (isAllyTurn && combat.pending_combat_shove) return `Tura ${actor.name || 'gracza'}: Shove`;
@@ -1297,10 +1789,11 @@ function combatPromptTitle(combat, finished, isAllyTurn, isEnemyTurn) {
   if (isAllyTurn && combat.pending_combat_ready) return `Tura ${actor.name || 'gracza'}: Ready`;
   if (isAllyTurn && combat.pending_combat_interaction) return `Tura ${actor.name || 'gracza'}: wybierz interakcję`;
   if (isAllyTurn && combat.movement_preview) return `Tura ${actor.name || 'gracza'}: potwierdź ruch`;
-  if (isAllyTurn) return `Tura ${actor.name || 'gracza'}: wybierz ruch, cel albo obiekt`;
+  if (isAllyTurn) return `Tura ${actor.name || 'gracza'}: wybierz pole na planszy`;
   return `Tura ${actor.name || '-'}`;
 }
 function combatInstructionText(combat, finished, isAllyTurn, isEnemyTurn) {
+  if (resultAck) return resultAck.body || 'Przeczytaj wynik i potwierdź.';
   if (finished) return 'Zastosuj wynik walki, żeby wrócić do eksploracji.';
   const actor = combat.current_actor || {};
   if (combat.death_save_required) {
@@ -1330,7 +1823,14 @@ function combatInstructionText(combat, finished, isAllyTurn, isEnemyTurn) {
     if (combat.pending_enemy_saving_throw) {
       return combat.pending_enemy_saving_throw.instruction || 'Rzuć fizyczne d20 i wpisz naturalny wynik rzutu obronnego.';
     }
-    if (combat.enemy_turn_result) return 'Przeczytaj wynik tury przeciwnika i potwierdź go Enterem albo przyciskiem.';
+    if (combat.enemy_turn_result) {
+      const result = combat.enemy_turn_result;
+      const damage = result.damage === null || result.damage === undefined ? 0 : result.damage;
+      const hp = result.damage_result
+        ? ` HP celu: ${result.damage_result.hp_before} → ${result.damage_result.hp_after}.`
+        : '';
+      return `Silnik wykonał rzut przeciwnika automatycznie. Obrażenia: ${damage}.${hp} Dopiero potem potwierdź zakończenie jego tury.`;
+    }
     const intent = combat.enemy_turn_intent || null;
     if (intent) return `${intent.message || 'Przeciwnik deklaruje zamiar.'} Potwierdź, żeby przejść do wykonania na planszy.`;
     const preview = combat.enemy_turn_preview || null;
@@ -1345,6 +1845,13 @@ function combatInstructionText(combat, finished, isAllyTurn, isEnemyTurn) {
   if (!isAllyTurn) return 'Ten aktor nie ma automatycznych kontrolek w MVP. Możesz zakończyć turę.';
   if (combat.context_menu) {
     return 'Wybierz opcję strzałkami góra/dół i potwierdź Enterem. Escape wraca do wyboru pola.';
+  }
+  if (combat.targeting) {
+    const targeting = combat.targeting;
+    const choice = targeting.kind === 'area'
+      ? 'Kliknij podświetlony kierunek lub środek obszaru.'
+      : 'Kliknij podświetlonego przeciwnika.';
+    return `${targeting.source_name || 'Wybrany czar'} — ${targeting.kind === 'area' ? 'czar obszarowy' : 'pojedynczy cel'}. ${choice} Pola ruchu są wyłączone. Kliknij pole aktywnego bohatera, aby wrócić do menu.`;
   }
   if (combat.pending_opportunity_movement) {
     const pendingOpportunity = combat.pending_opportunity_movement;
@@ -1384,7 +1891,11 @@ function combatInstructionText(combat, finished, isAllyTurn, isEnemyTurn) {
     if (pending.stage === 'damage_roll') {
       return `Trafiono ${target.name || 'cel'}. Rzuć obrażenia ${pending.damage_instruction || source.damage_hint || ''} i wpisz wynik.`;
     }
-    return `Wybrano cel ${target.name || '-'}. Rzuć d20 na atak ${source.name || ''} i wpisz naturalny wynik.`;
+    const threats = ((pending.positioning || {}).ranged_threats || []);
+    const threatText = threats.length
+      ? ` Utrudnienie powoduje przeciwnik w zwarciu: ${threats.map(actor => `${actor.name} (${actor.position[0]},${actor.position[1]})`).join(', ')}.`
+      : '';
+    return `Wybrano cel ${target.name || '-'}. Rzuć d20 na atak ${source.name || ''} i wpisz naturalny wynik.${threatText}`;
   }
   const pendingHealing = combat.pending_player_healing || null;
   if (pendingHealing) {
@@ -1415,10 +1926,11 @@ function combatInstructionText(combat, finished, isAllyTurn, isEnemyTurn) {
       : '';
     return `Wybrano ruch na (${preview.destination[0]},${preview.destination[1]}). Uruchom skan i kliknij pole docelowe, żeby zatwierdzić.${draggedInstruction}`;
   }
-  if (actionUsed && remaining > 0) return `Akcja zużyta. Możesz jeszcze ruszyć się (${remaining} ft) albo zakończyć turę.`;
-  if (actionUsed) return 'Akcja zużyta. Możesz zakończyć turę.';
-  if (remaining > 0) return `Kliknij Skanuj planszę, a potem wybierz niebieskie pole ruchu, czerwony cel, turkusowego rannego sojusznika albo zielony obiekt.`;
-  return 'Ruch wykorzystany. Możesz zaatakować czerwony cel, uleczyć turkusowego sojusznika, użyć zielonego obiektu albo zakończyć turę.';
+  const selfActionHint = ` Kliknij pole ${actor.name || 'aktywnego bohatera'}, aby otworzyć jego czary, akcje, ekwipunek i zakończenie tury.`;
+  if (actionUsed && remaining > 0) return `Akcja zużyta. Możesz jeszcze ruszyć się (${remaining} ft).${selfActionHint}`;
+  if (actionUsed) return `Akcja zużyta.${selfActionHint}`;
+  if (remaining > 0) return `Kliknij Skanuj planszę, a potem wybierz niebieskie pole ruchu, czerwony cel, turkusowego rannego sojusznika albo zielony obiekt.${selfActionHint}`;
+  return `Ruch wykorzystany. Możesz wybrać cel albo obiekt.${selfActionHint}`;
 }
 function combatMiniStatusHtml(combat) {
   const actor = combat.current_actor || {};
@@ -1430,17 +1942,22 @@ function combatMiniStatusHtml(combat) {
   const reactionAvailable = !combat.turn_action || combat.turn_action.reaction_available !== false;
   const twoWeapon = combat.two_weapon || {};
   const objectInteractionAvailable = !combat.turn_action || combat.turn_action.object_interaction_available !== false;
-  const position = actor.position || ['-', '-'];
   return `
     <div class="combat-mini-status">
-      <span>Runda ${esc(combat.round_number || '-')}</span>
-      <span>${esc(actor.name || '-')}</span>
-      <span>HP ${esc(actorHpLabel(actor))} / AC ${esc(actorAcLabel(actor))}</span>
-      <span>Pole (${esc(position[0])},${esc(position[1])})</span>
-      ${actor.faction === 'ally' ? `<span>Akcja: ${actionUsed ? 'zużyta' : 'dostępna'}</span><span>Bonus: ${bonusActionUsed ? 'zużyta' : 'dostępna'}</span><span>Darmowa interakcja: ${objectInteractionAvailable ? 'dostępna' : 'zużyta'}</span><span>Reakcja: ${reactionAvailable ? 'dostępna' : 'zużyta'}</span><span>Ruch: ${esc(remaining)} ft${extraMovement > 0 ? ` (+${esc(extraMovement)} Dash)` : ''}${movement.speed_reduction === 'grappling' ? ` · Grapple ${esc(movement.base_speed_feet)}→${esc(movement.effective_speed_feet)} ft` : ''}</span>` : ''}
+      ${actor.faction === 'ally' ? `<span class="${actionUsed ? 'spent' : 'ready'}">Akcja <b>${actionUsed ? 'zużyta' : 'gotowa'}</b></span><span class="${bonusActionUsed ? 'spent' : 'ready'}">Bonus <b>${bonusActionUsed ? 'zużyty' : 'gotowy'}</b></span><span class="${objectInteractionAvailable ? 'ready' : 'spent'}">Interakcja <b>${objectInteractionAvailable ? 'gotowa' : 'zużyta'}</b></span><span class="${reactionAvailable ? 'ready' : 'spent'}">Reakcja <b>${reactionAvailable ? 'gotowa' : 'zużyta'}</b></span><span class="movement">Ruch <b>${esc(remaining)} ft${extraMovement > 0 ? ` +${esc(extraMovement)}` : ''}</b>${movement.speed_reduction === 'grappling' ? `<small>Grapple ${esc(movement.base_speed_feet)}→${esc(movement.effective_speed_feet)} ft</small>` : ''}</span>` : '<span class="enemy-turn">Tura przeciwnika</span>'}
     </div>
-    ${statusChipsHtml(combatActorChips(actor), 'Brak statusów aktywnego aktora.')}
+    ${statusChipsHtml(combatHudConditionChips(actor), '')}
   `;
+}
+function combatHudConditionChips(actor) {
+  const priority = {danger: 0, penalty: 1, magic: 2, defense: 3, offense: 4, ready: 5, neutral: 6};
+  const chips = combatActorChips(actor)
+    .filter(chip => !isTurnResourceChip(chip))
+    .map((chip, index) => ({...chip, _index: index}))
+    .sort((left, right) => (priority[left.tone] ?? 6) - (priority[right.tone] ?? 6) || left._index - right._index);
+  const visible = chips.slice(0, 3);
+  if (chips.length > visible.length) visible.push({label: `+${chips.length - visible.length}`, tone: 'more', title: 'Pokaż wszystkie stany i efekty.', panelTab: 'states', actorId: actor.id});
+  return visible;
 }
 function combatActorStatusHtml(combat) {
   const actor = combat.current_actor || {};
@@ -1568,6 +2085,7 @@ function statusChipsHtml(chips, emptyText) {
   return `<div class="status-chips">${items.map(chip => {
     const tone = chip.tone || 'neutral';
     const title = chip.title ? ` title="${esc(chip.title)}"` : '';
+    if (chip.panelTab) return `<button class="status-chip ${esc(tone)}" data-allow-busy="true" onclick="openActorPanel('${esc(chip.actorId || '')}', '${esc(chip.panelTab)}')"${title}>${esc(chip.label || '')}</button>`;
     return `<span class="status-chip ${esc(tone)}"${title}>${esc(chip.label || '')}</span>`;
   }).join('')}</div>`;
 }
@@ -1661,14 +2179,6 @@ function actorAcLabel(actor) {
   const equipmentBonus = Number(actor.equipment_ac_bonus || 0);
   return equipmentBonus > 0 ? `${ac} (${base} + ekwipunek ${equipmentBonus})` : `${ac}`;
 }
-function combatLastResultHtml() {
-  return `
-    <div class="combat-last-result">
-      <h4>Ostatni rezultat</h4>
-      ${latestCombatMessageHtml()}
-    </div>
-  `;
-}
 function latestCombatMessageHtml() {
   const combatTitles = new Set(['Atak', 'Obrażenia', 'Ruch', 'Koniec tury', 'Atak przeciwnika', 'Efekt przeciwnika', 'Obrażenia przeciwnika', 'Ruch przeciwnika', 'Tura przeciwnika', 'Rzut obronny', 'Atak okazyjny', 'Pomoc', 'Ready', 'Leczenie', 'Eliksir', 'Rzut śmierci', 'Stabilizacja']);
   const messages = state.messages || [];
@@ -1679,6 +2189,12 @@ function latestCombatMessageHtml() {
   return '<p class="combat-empty">Brak rezultatu w tej walce.</p>';
 }
 function combatPrimaryActionHtml(combat, isAllyTurn, isEnemyTurn) {
+  if (resultAck) {
+    return `
+      <div class="combat-result-ack"><b>${esc(resultAck.title || 'Wynik')}</b><p>${esc(resultAck.body || '')}</p></div>
+      <button data-allow-busy="true" onclick="ackResult()">Przeczytałem — wróć do tury</button>
+    `;
+  }
   if (combat.death_save_required) {
     const saves = (combat.current_actor && combat.current_actor.death_saves) || {};
     return `
@@ -1745,7 +2261,8 @@ function combatPrimaryActionHtml(combat, isAllyTurn, isEnemyTurn) {
     return '<p class="muted">Ten aktor nie ma automatycznych kontrolek w MVP.</p><button data-allow-busy="true" onclick="finishCombatTurn()">Zakończ turę</button>';
   }
   if (combat.context_menu) {
-    return combatContextMenuHtml(combat.context_menu);
+    const stabilization = combat.context_menu.is_self_menu ? combatStabilizationHtml(combat) : '';
+    return `${combatContextMenuHtml(combat.context_menu)}${stabilization}`;
   }
   if (combat.pending_opportunity_movement) {
     return pendingOpportunityMovementHtml(combat.pending_opportunity_movement);
@@ -1782,19 +2299,15 @@ function combatPrimaryActionHtml(combat, isAllyTurn, isEnemyTurn) {
   }
   const movement = combat.movement || {remaining_feet: 0, destinations: []};
   const preview = combat.movement_preview || null;
-  const actionUsed = combat.turn_action && combat.turn_action.action_use === 'action_used';
-  const stealth = combat.stealth || {};
+  const targeting = combat.targeting || null;
   return `
-    ${preview ? `<p>Potwierdź pole: (${esc(preview.destination[0])},${esc(preview.destination[1])}), koszt ${esc(preview.cost_feet)} ft.</p>` : `<p>Ruch dostępny: ${esc(movement.remaining_feet || 0)} ft.</p>`}
-    ${!actionUsed ? combatStabilizationHtml(combat) : ''}
+    ${targeting
+      ? `<p>Celowanie: <b>${esc(targeting.source_name || '-')}</b>. ${targeting.kind === 'area' ? 'Wybierz podświetlony obszar.' : 'Wybierz podświetlonego przeciwnika.'}</p>`
+      : preview
+        ? `<p>Potwierdź pole: (${esc(preview.destination[0])},${esc(preview.destination[1])}), koszt ${esc(preview.cost_feet)} ft.</p>`
+        : `<p>Ruch dostępny: ${esc(movement.remaining_feet || 0)} ft.</p>`}
     <div class="row">
       <button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button>
-      ${!actionUsed ? combatSourceButtonsHtml(combat) : ''}
-      ${!actionUsed ? '<button class="secondary" data-allow-busy="true" onclick="startCombatReady()">Ready</button><button class="secondary" data-allow-busy="true" onclick="startCombatHelp()">Help</button>' : ''}
-      ${!actionUsed && stealth.hide_available ? '<button class="secondary" data-allow-busy="true" onclick="startCombatHide()">Hide</button>' : ''}
-      ${!actionUsed && stealth.search_available ? '<button class="secondary" data-allow-busy="true" onclick="startCombatSearch()">Search</button>' : ''}
-      ${!actionUsed ? '<button class="secondary" data-allow-busy="true" onclick="useCombatDash()">Dash</button><button class="secondary" data-allow-busy="true" onclick="useCombatDodge()">Unik</button><button class="secondary" data-allow-busy="true" onclick="useCombatDisengage()">Odwrót</button>' : ''}
-      <button class="secondary" data-allow-busy="true" onclick="finishCombatTurn()">Zakończ turę</button>
     </div>
   `;
 }
@@ -2098,8 +2611,25 @@ function enemyTurnIntentHtml(intent) {
   `;
 }
 function enemyTurnResultHtml(result) {
+  const target = result.target_name || 'cel';
+  const hasAttack = result.hit !== null && result.hit !== undefined;
+  const outcome = hasAttack ? (result.hit ? (result.critical ? 'TRAFIENIE KRYTYCZNE' : 'TRAFIENIE') : 'PUDŁO') : 'BRAK ATAKU';
+  const damage = result.damage === null || result.damage === undefined ? 0 : result.damage;
+  const roll = result.natural_roll === null || result.natural_roll === undefined
+    ? ''
+    : `<p><b>Rzut:</b> d20 ${esc(d20RollResultText(result))}, razem ${esc(result.total)} — ${outcome}.</p>`;
+  const hp = result.damage_result
+    ? `<p><b>HP ${esc(target)}:</b> ${esc(result.damage_result.hp_before)} → ${esc(result.damage_result.hp_after)}${result.damage_result.defeated_by_damage ? ' — cel pokonany' : ''}.</p>`
+    : '';
   return `
-    <button data-allow-busy="true" onclick="confirmEnemyTurnResult()">Potwierdź wynik przeciwnika</button>
+    <div class="enemy-attack-summary">
+      <p><b>${esc(result.enemy_name || 'Przeciwnik')} → ${esc(target)}</b></p>
+      ${roll}
+      <p class="enemy-damage-value"><b>Obrażenia: ${esc(damage)}</b></p>
+      ${hp}
+    </div>
+    <p class="combat-warning"><b>Atak został już rozstrzygnięty.</b> Potwierdzenie poniżej tylko zamyka wynik i przechodzi dalej.</p>
+    <button data-allow-busy="true" onclick="confirmEnemyTurnResult()">Przeczytałem — zakończ turę przeciwnika</button>
   `;
 }
 function pendingEnemySavingThrowHtml(pending) {
@@ -2310,7 +2840,7 @@ function pendingOpportunityMovementHtml(pending) {
   return `
     <p>Ruch na (${esc(pending.destination[0])},${esc(pending.destination[1])}) prowokuje: ${esc(names)}.</p>
     <div class="row">
-      <button data-allow-busy="true" onclick="confirmOpportunityMovement()">Potwierdź ruch mimo ryzyka</button>
+      <button data-allow-busy="true" onclick="confirmOpportunityMovement()">Rozstrzygnij atak okazyjny i wykonaj ruch</button>
       <button class="secondary" data-allow-busy="true" onclick="cancelOpportunityMovement()">Anuluj ruch</button>
     </div>
   `;
@@ -2329,6 +2859,7 @@ function pendingOpportunityMovementDetailsHtml(pending) {
 function pendingPlayerAttackHtml(pending) {
   const target = pending.target || {};
   const source = pending.source || {};
+  const rangedThreatWarning = rangedThreatWarningHtml(pending);
   if (pending.stage === 'confirm_attack') {
     const modifierLabel = signedNumber(pending.attack_modifier || 0);
     if (source.save_ability) {
@@ -2344,6 +2875,7 @@ function pendingPlayerAttackHtml(pending) {
     }
     return `
       <p>Cel: ${esc(target.name || '-')} | AC ${esc(target.ac || '-')} | premia ${esc(modifierLabel)}</p>
+      ${rangedThreatWarning}
       <div class="row">
         <button data-allow-busy="true" onclick="confirmPlayerAttackTarget()">Potwierdź atak</button>
         <button class="secondary" data-allow-busy="true" onclick="cancelPlayerAttackTarget()">Anuluj wybór celu</button>
@@ -2363,12 +2895,19 @@ function pendingPlayerAttackHtml(pending) {
   }
   return `
     <p>${esc(pending.attack_instruction || 'Rzuć 1d20 i wpisz wynik.')}</p>
+    ${rangedThreatWarning}
     <div class="row">
       ${d20RollInputsHtml('combat-attack-natural-roll', pending.attack_mode)}
       <button onclick="submitPlayerAttackRoll()">Zapisz rzut</button>
       <button class="secondary" data-allow-busy="true" onclick="finishCombatTurn()">Zakończ turę</button>
     </div>
   `;
+}
+function rangedThreatWarningHtml(pending) {
+  const threats = (((pending || {}).positioning || {}).ranged_threats || []);
+  if (!threats.length) return '';
+  const names = threats.map(actor => `${actor.name} na (${actor.position[0]},${actor.position[1]})`).join(', ');
+  return `<p class="combat-warning"><b>Utrudnienie do ataku dystansowego:</b> ${esc(names)} znajduje się 5 ft od strzelca. Przeciwnik nie musi być celem tego ataku.</p>`;
 }
 function d20RollInputsHtml(baseId, mode) {
   const second = mode === 'advantage' || mode === 'disadvantage';
@@ -2504,7 +3043,7 @@ function combatContextMenuHtml(menu) {
     return `${heading}<button class="combat-context-option${selected ? ' selected' : ''}" data-allow-busy="true" onclick="confirmCombatContextMenu('${esc(option.id)}')" aria-current="${selected ? 'true' : 'false'}"><b>${esc(option.label)}</b><span>${esc(option.description || '')}</span></button>`;
   }).join('');
   return `
-    <p><b>${esc(menu.title || 'Dostępne akcje')}</b> · pole (${esc(menu.position ? menu.position[0] : '-')},${esc(menu.position ? menu.position[1] : '-')})</p>
+    <div class="combat-context-heading"><span>Wskazane pole na planszy</span><b>${esc(menu.title || 'Dostępne akcje')}</b></div>
     ${menu.notice ? `<p class="combat-warning"><b>Ograniczenie rozmiaru:</b> ${esc(menu.notice)}</p>` : ''}
     <div class="combat-context-menu">${rows}</div>
     <div class="row"><button data-allow-busy="true" onclick="confirmCombatContextMenu('')">Potwierdź</button><button class="secondary" data-allow-busy="true" onclick="cancelCombatContextMenu()">Anuluj</button></div>
@@ -2683,7 +3222,7 @@ function updateActivePanel() {
   const hasPendingDecision = state.pending && state.pending.stage === 'decision';
   const hasNpcTransition = Boolean(state.pending_npc_transition);
   const hasRolls = state.required_rolls && state.required_rolls.length > 0;
-  const hasResult = Boolean(resultAck);
+  const hasResult = Boolean(resultAck) && !state.combat;
   const hasEncounter = Boolean(state.pending_encounter);
   const interactionStage = stage === 'location_active' || stage === 'interaction_result';
   const chatMode = interactionStage && chatInstanceOpen && !hasEncounter && !state.combat;
@@ -2698,6 +3237,9 @@ function updateActivePanel() {
   document.getElementById('exploration-menu-panel').hidden = !menuMode;
   document.getElementById('pending-panel').hidden = !hasPendingDecision;
   document.getElementById('roll-panel').hidden = !hasRolls;
+  const interactionCard = document.getElementById('interaction-state-card');
+  interactionCard.hidden = !hasPendingDecision && !hasRolls && !hasResult;
+  updateInteractionStateCard(hasPendingDecision, hasRolls, hasResult);
   document.getElementById('action-panel').hidden = !chatMode;
   document.getElementById('scene-description-card').hidden = interactionStage || !document.getElementById('scene-description').innerHTML.trim();
   document.getElementById('chat-composer').hidden = stage !== 'location_active' || hasPendingDecision || hasNpcTransition || hasRolls || hasResult;
@@ -2711,11 +3253,29 @@ function updateActivePanel() {
     restButton.title = rest.unavailable_reason || '';
   }
 }
-function openChatInstance() {
-  chatInstanceOpen = true;
-  render();
+function updateInteractionStateCard(hasPendingDecision, hasRolls, hasResult) {
+  const activeStep = hasResult ? 'result' : hasRolls ? 'roll' : hasPendingDecision ? 'decision' : '';
+  const title = hasResult
+    ? (resultAck.title || 'Wynik')
+    : hasRolls
+      ? (state.pending && state.pending.stage === 'hazard_save' ? 'Rzut obronny' : 'Wykonaj fizyczny rzut')
+      : pendingTitle(state.pending);
+  const titleElement = document.getElementById('interaction-state-title');
+  if (titleElement) titleElement.textContent = title;
+  document.querySelectorAll('[data-interaction-step]').forEach(step => {
+    const order = {decision: 1, roll: 2, result: 3};
+    const stepName = step.dataset.interactionStep;
+    step.classList.toggle('active', stepName === activeStep);
+    step.classList.toggle('complete', activeStep && order[stepName] < order[activeStep]);
+  });
+  const card = document.getElementById('interaction-state-card');
+  if (card) card.dataset.stage = activeStep;
 }
-function leaveChatInstance() {
+async function openChatInstance() {
+  chatInstanceOpen = true;
+  await api('/api/exploration/board-selection', {enabled: false}, 'Otwieram interakcję...');
+}
+async function leaveChatInstance() {
   const stage = state.flow ? state.flow.stage : 'location_active';
   if (stage === 'interaction_result') {
     finishInteraction();
@@ -2723,7 +3283,7 @@ function leaveChatInstance() {
   }
   if ((state.pending && state.pending.stage) || (state.required_rolls || []).length) return;
   chatInstanceOpen = false;
-  render();
+  await api('/api/exploration/board-selection', {enabled: true}, 'Pokazuję dostępne pola...');
 }
 async function sendAction() {
   const input = document.getElementById('action');
@@ -2848,6 +3408,15 @@ function isAllyCombatTurnActive() {
 }
 async function scanBoard() {
   if (boardScanInFlight) return;
+  if (!Boolean((state.board || {}).connected)) {
+    if (!boardFallbackEnabled) toggleBoardFallback(true);
+    else {
+      setSidePanelTab('game');
+      setSidePanelOpen(true);
+      window.requestAnimationFrame(() => document.getElementById('fallback-board-col')?.focus());
+    }
+    return;
+  }
   const continuous = isAllyCombatTurnActive();
   if (continuous) playerTurnScanLoop = true;
   await scanBoardOnce();
@@ -3082,6 +3651,7 @@ function triggerPrimaryAction() {
     if (isVisible('encounter-panel')) {
     if (combat && combat.status === 'finished') { resolveCombatOutcome(); return true; }
     if (combat && combat.status === 'active') {
+      if (resultAck) { ackResult(); return true; }
       if (combat.context_menu) { confirmCombatContextMenu(''); return true; }
       if (combat.death_save_required) { submitDeathSave(); return true; }
       if (combat.pending_concentration_check) { submitConcentrationCheck(); return true; }
@@ -3147,6 +3717,23 @@ function triggerPrimaryAction() {
   }
   return false;
 }
+function cancelCurrentCombatStep() {
+  const combat = state && state.combat ? state.combat : null;
+  if (!combat) return false;
+  if (combat.context_menu) { cancelCombatContextMenu(); return true; }
+  if (combat.pending_opportunity_movement) { cancelOpportunityMovement(); return true; }
+  if (combat.pending_combat_help) { cancelCombatHelp(); return true; }
+  if (combat.pending_combat_shove) { cancelCombatShove(); return true; }
+  if (combat.pending_combat_grapple) { cancelCombatGrapple(); return true; }
+  if (combat.pending_combat_skill_check) { cancelCombatSkillCheck(); return true; }
+  if (combat.pending_concentration_action) { cancelConcentrationAction(); return true; }
+  if (combat.pending_combat_ready) { cancelCombatReady(); return true; }
+  if (combat.pending_combat_interaction) { cancelCombatInteraction(); return true; }
+  if (combat.pending_player_attack) { cancelPlayerAttackTarget(); return true; }
+  if (combat.pending_player_healing) { cancelPlayerHealing(); return true; }
+  if (combat.pending_area_spell) { cancelAreaSpell(); return true; }
+  return false;
+}
 document.addEventListener('keydown', event => {
   if (event.defaultPrevented) return;
   const target = event.target;
@@ -3157,14 +3744,21 @@ document.addEventListener('keydown', event => {
     event.preventDefault();
     return;
   }
-  if (combatMenu && !typing && event.key === 'Escape') {
-    cancelCombatContextMenu();
+  if (!typing && event.key.toLocaleLowerCase('pl') === 'i' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+    toggleSidePanel();
+    event.preventDefault();
+    return;
+  }
+  if (!typing && event.key === 'Escape') {
+    if (sidePanelOpen) setSidePanelOpen(false);
+    else if (!cancelCurrentCombatStep()) return;
     event.preventDefault();
     return;
   }
   if (event.key !== 'Enter') return;
   if (target && target.tagName === 'TEXTAREA' && event.shiftKey) return;
   if (target && target.closest && target.closest('details.debug-panel')) return;
+  if (target && target.closest && target.closest('button, a, summary')) return;
   if (triggerPrimaryAction()) {
     event.preventDefault();
   }
@@ -3177,4 +3771,5 @@ if (actionInput) {
   actionInput.addEventListener('blur', () => window.setTimeout(closeSlashCommandMenu, 100));
 }
 setSidePanelOpen(sidePanelOpen);
+setSidePanelTab(sidePanelTab);
 loadState();

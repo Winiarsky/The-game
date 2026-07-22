@@ -7,51 +7,170 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='exploration.css') }}">
 </head>
 <body>
-<button id="side-panel-toggle" class="side-panel-toggle" data-allow-busy="true" onclick="toggleSidePanel()" aria-controls="side-panel" aria-expanded="false" title="Panel boczny">☰</button>
+<header class="app-shell-header">
+  <div class="app-shell-context">
+    <span id="app-mode-label" class="mode-badge">Eksploracja</span>
+    <div class="app-shell-title">
+      <h1 id="page-title"><span id="scenario">Scenariusz</span></h1>
+      <p><span id="zone">Lokacja</span></p>
+    </div>
+  </div>
+  <div id="party-summary" class="party-summary" aria-label="Stan drużyny"></div>
+  <div class="app-shell-tools">
+    <div id="board-connection-indicator" class="board-connection-indicator" role="status">
+      <span class="connection-dot" aria-hidden="true"></span>
+      <span>Plansza</span>
+    </div>
+    <button id="side-panel-toggle" class="side-panel-toggle secondary" data-allow-busy="true" onclick="toggleSidePanel()" aria-controls="side-panel" aria-expanded="false" title="Otwórz informacje i ustawienia">
+      <span aria-hidden="true">☰</span><span class="side-panel-toggle-label">Menu</span>
+    </button>
+  </div>
+</header>
+<div id="board-disconnected-banner" class="board-disconnected-banner" role="status" hidden>
+  <div><b>Plansza rozłączona</b><span id="board-disconnected-copy">Możecie ponowić połączenie albo jawnie przejść na sterowanie awaryjne.</span></div>
+  <div class="row">
+    <button class="secondary" data-allow-busy="true" onclick="retryBoardConnection()">Ponów</button>
+    <button id="board-fallback-toggle" data-allow-busy="true" onclick="toggleBoardFallback()">Tryb awaryjny</button>
+  </div>
+</div>
 <div id="side-panel-scrim" class="side-panel-scrim" data-allow-busy="true" onclick="setSidePanelOpen(false)"></div>
 <main>
   <aside id="side-panel" aria-hidden="true">
     <div class="side-panel-head">
-      <h2 id="scenario">Scenariusz</h2>
+      <div><span class="panel-kicker">Panel gry</span><h2>Informacje</h2></div>
       <button class="side-panel-close" data-allow-busy="true" onclick="setSidePanelOpen(false)" aria-label="Zamknij panel">×</button>
     </div>
-    <div class="card"><b>Lokacja</b><div id="zone"></div></div>
-    <details class="card debug-panel">
-      <summary>Dane wyzwania (MG/debug)</summary>
-      <div id="challenge"></div>
-    </details>
-    <details class="card debug-panel">
-      <summary>Dane planszy (MG/debug)</summary>
-      <div id="visible-environment"></div>
-    </details>
-    <div class="card"><b>Zasoby</b><div id="resources"></div></div>
-    <div class="card"><b>Znalezione w tej lokacji</b><div id="discovered-sources"></div></div>
-    <div class="card">
-      <b>Plansza</b>
-      <div id="board-status" class="muted"></div>
-      <label>Tryb
-        <select id="board-backend">
-          <option value="none">brak</option>
-          <option value="simulator">symulator</option>
-          <option value="hardware">hardware</option>
-        </select>
-      </label>
-      <label>URL symulatora <input id="board-url" class="wide-input" value="http://127.0.0.1:5000"></label>
-      <label>Port hardware <input id="board-serial-port" class="wide-input" placeholder="/dev/ttyUSB0"></label>
-      <label>WLED URL <input id="wled-url" class="wide-input" placeholder="http://adres-wled"></label>
-      <label>Timeout skanu <input id="scan-timeout" type="number" min="1" max="120" value="30"></label>
-      <div class="row" style="margin-top:8px">
-        <button onclick="configureBoard()">Zastosuj</button>
-        <button class="secondary" onclick="scanBoard()">Skanuj planszę</button>
-        <button class="secondary" data-allow-busy="true" onclick="resetBoardScan()">Reset skanu</button>
+    <nav class="side-panel-tabs" aria-label="Sekcje panelu" onkeydown="handleSidePanelTabKeydown(event)">
+      <button class="side-panel-tab active" data-side-panel-tab="game" onclick="setSidePanelTab('game')" aria-selected="true">Gra</button>
+      <button class="side-panel-tab" data-side-panel-tab="party" onclick="setSidePanelTab('party')" aria-selected="false">Postać</button>
+      <button class="side-panel-tab" data-side-panel-tab="states" onclick="setSidePanelTab('states')" aria-selected="false">Stany</button>
+      <button class="side-panel-tab" data-side-panel-tab="spells" onclick="setSidePanelTab('spells')" aria-selected="false">Czary</button>
+      <button class="side-panel-tab" data-side-panel-tab="inventory" onclick="setSidePanelTab('inventory')" aria-selected="false">Ekwipunek</button>
+      <button class="side-panel-tab" data-side-panel-tab="developer" onclick="setSidePanelTab('developer')" aria-selected="false">Narzędzia</button>
+    </nav>
+    <div id="panel-actor-selector" class="panel-actor-selector" hidden></div>
+
+    <div class="side-panel-content" data-side-panel-content="game">
+      <section class="panel-section">
+        <span class="panel-section-label">Aktualna lokacja</span>
+        <strong id="panel-zone-name">Lokacja</strong>
+        <div id="scene-status-summary" class="panel-stack"></div>
+      </section>
+      <section class="panel-section">
+        <span class="panel-section-label">Zasoby</span>
+        <div id="resources" class="panel-stack"></div>
+      </section>
+      <section class="panel-section">
+        <span class="panel-section-label">Odkrycia w lokacji</span>
+        <div id="discovered-sources"></div>
+      </section>
+      <section class="panel-section">
+        <span class="panel-section-label">Aktywne efekty</span>
+        <div id="active-effects"></div>
+      </section>
+      <section id="board-fallback-panel" class="panel-section board-fallback-panel" hidden>
+        <span class="panel-section-label">Sterowanie awaryjne</span>
+        <p>Wskaż współrzędne pola odczytane z fizycznej planszy. Ten tryb zastępuje pojedyncze kliknięcie pola.</p>
+        <div class="row">
+          <label>Kolumna <input id="fallback-board-col" type="number" min="0" max="19" value="0"></label>
+          <label>Rząd <input id="fallback-board-row" type="number" min="0" max="29" value="0"></label>
+          <button data-allow-busy="true" onclick="manualBoardSelect()">Wskaż pole</button>
+        </div>
+        <button class="secondary board-fallback-exit" data-allow-busy="true" onclick="toggleBoardFallback(false)">Wyłącz tryb awaryjny</button>
+      </section>
+      <div class="panel-actions">
+        <button id="finish-scenario-button" class="secondary" onclick="finishScenario()">Zakończ scenariusz</button>
+      </div>
+      <div class="card panel-save-card" id="snapshot-panel">
+        <h3>Zapis gry</h3>
+        <div id="snapshot-status" class="muted"></div>
+        <div class="row panel-actions-row">
+          <button id="snapshot-save-button" class="secondary" data-allow-busy="true" onclick="saveSnapshot()">Zapisz</button>
+          <button id="snapshot-load-button" class="secondary" data-allow-busy="true" onclick="loadSnapshot()">Wczytaj</button>
+        </div>
       </div>
     </div>
-    <div class="card"><b>Aktywne efekty</b><div id="active-effects"></div></div>
-    <button id="finish-scenario-button" class="secondary" onclick="finishScenario()">Zakończ scenariusz</button>
-    <button class="secondary" onclick="resetSession()">Reset</button>
+
+    <div class="side-panel-content" data-side-panel-content="party" hidden>
+      <section class="panel-section">
+        <span class="panel-section-label">Karta postaci</span>
+        <div id="party-details" class="party-details"></div>
+      </section>
+    </div>
+
+    <div class="side-panel-content" data-side-panel-content="states" hidden>
+      <section class="panel-section">
+        <span class="panel-section-label">Stany i efekty</span>
+        <div id="actor-states" class="panel-card-list"></div>
+      </section>
+    </div>
+
+    <div class="side-panel-content" data-side-panel-content="spells" hidden>
+      <section class="panel-section">
+        <span class="panel-section-label">Czary i sloty</span>
+        <div id="actor-spells" class="panel-card-list"></div>
+      </section>
+    </div>
+
+    <div class="side-panel-content" data-side-panel-content="inventory" hidden>
+      <section class="panel-section">
+        <span class="panel-section-label">Ekwipunek</span>
+        <div id="actor-inventory" class="panel-card-list"></div>
+      </section>
+    </div>
+
+    <div class="side-panel-content developer-panel" data-side-panel-content="developer" hidden>
+      <div class="developer-warning">Tryb twórcy · dane techniczne nie są częścią widoku gracza.</div>
+      <details class="card debug-panel">
+        <summary>Dane wyzwania</summary>
+        <div id="challenge"></div>
+      </details>
+      <details class="card debug-panel">
+        <summary>Dane planszy</summary>
+        <div id="visible-environment"></div>
+      </details>
+      <details class="card debug-panel" open>
+        <summary>Połączenie z planszą</summary>
+        <div id="board-status" class="muted"></div>
+        <label>Tryb
+          <select id="board-backend">
+            <option value="none">brak</option>
+            <option value="simulator">symulator</option>
+            <option value="hardware">hardware</option>
+          </select>
+        </label>
+        <label>URL symulatora <input id="board-url" class="wide-input" value="http://127.0.0.1:5000"></label>
+        <label>Port hardware <input id="board-serial-port" class="wide-input" placeholder="/dev/ttyUSB0"></label>
+        <label>WLED URL <input id="wled-url" class="wide-input" placeholder="http://adres-wled"></label>
+        <label>Timeout skanu <input id="scan-timeout" type="number" min="1" max="120" value="30"></label>
+        <div class="row panel-actions-row">
+          <button onclick="configureBoard()">Zastosuj</button>
+          <button class="secondary" onclick="scanBoard()">Skanuj</button>
+          <button class="secondary" data-allow-busy="true" onclick="resetBoardScan()">Reset skanu</button>
+        </div>
+      </details>
+      <details class="card debug-panel">
+        <summary>Historia komunikatów</summary>
+        <div id="messages"></div>
+      </details>
+      <details class="card debug-panel" id="session-log-panel">
+        <summary>Log sesji</summary>
+        <div class="log-meta" id="session-log-meta"></div>
+        <div class="log-toolbar">
+          <label>Filtr event type <input id="session-log-filter" data-allow-busy="true" placeholder="np. ui_effect_applied" oninput="renderSessionLog()"></label>
+          <button class="secondary" data-allow-busy="true" onclick="refreshSessionLog()">Odśwież log</button>
+        </div>
+        <div id="session-log-events" class="muted">Log nie został jeszcze wczytany.</div>
+      </details>
+      <details class="card debug-panel">
+        <summary>Surowy payload</summary>
+        <pre id="debug-payload"></pre>
+      </details>
+      <button class="danger developer-reset" onclick="resetSession()">Resetuj sesję</button>
+    </div>
+    <div class="side-panel-keyboard-hint"><kbd>I</kbd> panel · <kbd>Esc</kbd> zamknij · <kbd>←</kbd><kbd>→</kbd> zakładki</div>
   </aside>
   <section>
-    <h1 id="page-title">Eksploracja</h1>
     <div id="status" class="status" hidden></div>
     <div class="card" id="flow-panel"></div>
     <div class="card scene-description" id="scene-description-card">
@@ -60,31 +179,47 @@
     </div>
     <div class="card scene-action" id="action-panel">
       <div class="chat-instance-head">
-        <div><span class="muted">Rozmowa z MG</span><h3 id="action-title">Co robicie lub o co pytacie?</h3></div>
+        <div>
+          <span class="muted">Rozmowa z MG</span>
+          <h3 id="action-title">Co robicie lub o co pytacie?</h3>
+          <div id="conversation-meta" class="conversation-meta"></div>
+        </div>
         <button id="leave-interaction-button" class="secondary" data-allow-busy="true" onclick="leaveChatInstance()">Opuść interakcję</button>
       </div>
       <div id="chat-stream">
         <div id="scene-conversation"></div>
         <div id="chat-typing" class="chat-typing" hidden><span></span><span></span><span></span></div>
-        <div id="result-panel" class="chat-resolution conversation-system-card">
-          <div id="result"></div>
-          <button onclick="ackResult()">Dalej</button>
-        </div>
-        <div id="pending-panel" class="chat-resolution conversation-system-card">
-          <b id="pending-title" class="conversation-system-title">Warunki próby</b>
-          <div id="pending"></div>
-          <div id="lead-actor-choice"></div>
-          <div class="row conversation-system-actions">
-            <button id="pending-accept-button" onclick="decision('accept')">Akceptuj</button>
-            <button id="pending-reject-button" class="danger" onclick="decision('reject')">Odrzuć</button>
-            <button class="secondary" onclick="decision('explain')">Wyjaśnij</button>
+        <div id="interaction-state-card" class="chat-resolution conversation-system-card interaction-state-card" aria-live="polite" hidden>
+          <div class="interaction-state-head">
+            <div>
+              <span class="interaction-state-kicker">Rozstrzygnięcie</span>
+              <b id="interaction-state-title" class="conversation-system-title">Warunki próby</b>
+            </div>
+            <div id="interaction-state-steps" class="interaction-state-steps" aria-label="Etap rozstrzygnięcia">
+              <span data-interaction-step="decision">1 · Decyzja</span>
+              <span data-interaction-step="roll">2 · Rzut</span>
+              <span data-interaction-step="result">3 · Wynik</span>
+            </div>
           </div>
-        </div>
-        <div id="roll-panel" class="chat-resolution conversation-system-card">
-          <b class="conversation-system-title">Rzuty</b>
-          <div id="roll-prompt"></div>
-          <div id="rolls"></div>
-          <button onclick="sendRolls()">Rozstrzygnij rzuty</button>
+          <section id="pending-panel" class="interaction-state-phase">
+            <b id="pending-title" class="sr-only">Warunki próby</b>
+            <div id="pending"></div>
+            <div id="lead-actor-choice"></div>
+            <div class="row conversation-system-actions">
+              <button id="pending-accept-button" onclick="decision('accept')">Akceptuj</button>
+              <button id="pending-reject-button" class="danger" onclick="decision('reject')">Odrzuć</button>
+              <button class="secondary" onclick="decision('explain')">Wyjaśnij</button>
+            </div>
+          </section>
+          <section id="roll-panel" class="interaction-state-phase">
+            <div id="roll-prompt"></div>
+            <div id="rolls" class="physical-roll-inputs"></div>
+            <button onclick="sendRolls()">Rozstrzygnij rzuty</button>
+          </section>
+          <section id="result-panel" class="interaction-state-phase">
+            <div id="result"></div>
+            <button id="result-ack-button" onclick="ackResult()">Kontynuuj rozmowę</button>
+          </section>
         </div>
       </div>
       <div id="chat-composer">
@@ -108,7 +243,7 @@
       <div id="menu-point-options"></div>
     </div>
     <div class="card" id="encounter-panel">
-      <h3 id="encounter-title">Zaczyna się encounter</h3>
+      <h3 id="encounter-title">Nadchodzi starcie</h3>
       <div id="encounter"></div>
     </div>
     <div class="card" id="travel-panel">
@@ -119,31 +254,6 @@
       <h3>Odkryte punkty</h3>
       <div id="point-options"></div>
     </div>
-    <details class="card debug-panel">
-      <summary>Historia komunikatów</summary>
-      <div id="messages"></div>
-    </details>
-    <div class="card" id="snapshot-panel">
-      <h3>Zapis gry</h3>
-      <div id="snapshot-status" class="muted"></div>
-      <div class="row" style="margin-top:8px">
-        <button id="snapshot-save-button" class="secondary" data-allow-busy="true" onclick="saveSnapshot()">Zapisz</button>
-        <button id="snapshot-load-button" class="secondary" data-allow-busy="true" onclick="loadSnapshot()">Wczytaj</button>
-      </div>
-    </div>
-    <details class="card debug-panel" id="session-log-panel">
-      <summary>Log sesji</summary>
-      <div class="log-meta" id="session-log-meta"></div>
-      <div class="log-toolbar">
-        <label>Filtr event type <input id="session-log-filter" data-allow-busy="true" placeholder="np. ui_effect_applied" oninput="renderSessionLog()"></label>
-        <button class="secondary" data-allow-busy="true" onclick="refreshSessionLog()">Odśwież log</button>
-      </div>
-      <div id="session-log-events" class="muted">Log nie został jeszcze wczytany.</div>
-    </details>
-    <details class="card debug-panel">
-      <summary>Debug payload</summary>
-      <pre id="debug-payload"></pre>
-    </details>
   </section>
 </main>
 <script>window.EXPLORATION_SLASH_COMMANDS = {{ slash_commands | tojson }};</script>

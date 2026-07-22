@@ -1246,7 +1246,7 @@ def _turn_options_led_feedback(board, state: CombatState, actor: Actor, source: 
             frames.append(LedFrame(targets, LedColor.LEGAL_ATTACK_TARGET, LedRole.DESTINATION))
         object_positions = tuple(sorted(object_positions_set - target_positions))
         if object_positions:
-            frames.append(LedFrame(object_positions, LedColor.INTERACTIVE_OBJECT, LedRole.DESTINATION))
+            frames.append(LedFrame(object_positions, LedColor.INTERACTIVE_OBJECT, LedRole.INTERACTIVE_OBJECT))
         if multi_option_positions:
             frames.append(LedFrame(multi_option_positions, LedColor.MULTI_OPTION_TILE, LedRole.DESTINATION))
     legal_target_positions = {target.position for target in legal_melee_targets(board, actor, state.actors)}
@@ -1284,14 +1284,14 @@ def _preview_led_feedback(preview) -> LedFeedback:
         if option.kind == TileOptionKind.ATTACK and option.attack_target is not None:
             return LedFeedback((LedFrame((option.attack_target.position,), LedColor.SELECTED_ATTACK_TARGET, LedRole.DESTINATION),))
         if option.kind == TileOptionKind.INTERACTION and option.interaction_object is not None:
-            return LedFeedback((LedFrame(option.interaction_object.positions, LedColor.INTERACTIVE_OBJECT, LedRole.DESTINATION),))
+            return LedFeedback((LedFrame(option.interaction_object.positions, LedColor.INTERACTIVE_OBJECT, LedRole.INTERACTIVE_OBJECT),))
         return LedFeedback((LedFrame((preview.clicked_position,), LedColor.MULTI_OPTION_TILE, LedRole.DESTINATION),))
     if preview.movement_range is not None:
         return movement_led_feedback(preview.movement_range, preview.movement_path)
     if preview.attack_target is not None:
         return selected_attack_target_led_feedback(preview.attack_target)
     if preview.interaction_object is not None:
-        return LedFeedback((LedFrame(preview.interaction_object.positions, LedColor.INTERACTIVE_OBJECT, LedRole.DESTINATION),))
+        return LedFeedback((LedFrame(preview.interaction_object.positions, LedColor.INTERACTIVE_OBJECT, LedRole.INTERACTIVE_OBJECT),))
     return LedFeedback((LedFrame((preview.clicked_position,), LedColor.INVALID_SELECTION, LedRole.DESTINATION),))
 
 

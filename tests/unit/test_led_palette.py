@@ -6,6 +6,7 @@ def test_default_role_colors_use_semantic_palette():
     assert DEFAULT_COLORS[LedRole.MOVEMENT_RANGE] == LedColor.MOVEMENT_RANGE
     assert DEFAULT_COLORS[LedRole.SELECTED_PATH] == LedColor.PLAYER_MOVEMENT_PATH
     assert DEFAULT_COLORS[LedRole.DESTINATION] == LedColor.MOVEMENT_DESTINATION
+    assert DEFAULT_COLORS[LedRole.INTERACTIVE_OBJECT] == LedColor.INTERACTIVE_OBJECT
     assert DEFAULT_COLORS[LedRole.ALLY] == LedColor.ALLY
     assert DEFAULT_COLORS[LedRole.ENEMY] == LedColor.ENEMY
 

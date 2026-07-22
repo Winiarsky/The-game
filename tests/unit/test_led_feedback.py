@@ -1,5 +1,15 @@
+import pytest
+
 from dnd_board_game.actors import Actor, ActorId, Faction
-from dnd_board_game.hardware import BoardLedAdapter, BoardSessionAdapter, LedRole, movement_led_feedback
+from dnd_board_game.hardware import (
+    BoardLedAdapter,
+    BoardSessionAdapter,
+    LedColor,
+    LedFeedback,
+    LedFrame,
+    LedRole,
+    movement_led_feedback,
+)
 from dnd_board_game.world import BoardState, Coordinate, find_path, movement_range
 
 
@@ -70,6 +80,23 @@ def test_board_led_adapter_writes_frames_to_connection_and_clears():
     assert (0, 0) in connection.calls[0][0]
     assert all(isinstance(color, list) for color in connection.calls[0][1])
     assert connection.cleared is True
+
+
+@pytest.mark.parametrize("path_color", [LedColor.PLAYER_MOVEMENT_PATH, LedColor.ENEMY_MOVEMENT_PATH])
+def test_selected_path_overrides_interactive_object_regardless_of_frame_order(path_color):
+    overlap = Coordinate(4, 5)
+    connection = FakeConnection()
+    adapter = BoardLedAdapter(connection)
+    feedback = LedFeedback(
+        (
+            LedFrame((overlap,), path_color, LedRole.SELECTED_PATH),
+            LedFrame((overlap,), LedColor.INTERACTIVE_OBJECT, LedRole.INTERACTIVE_OBJECT),
+        )
+    )
+
+    adapter.show_feedback(feedback)
+
+    assert connection.calls == [([(4, 5)], list(path_color))]
 
 
 def test_board_session_adapter_owns_scan_reset_and_led_transport():

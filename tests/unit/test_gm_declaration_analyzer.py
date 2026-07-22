@@ -19,8 +19,10 @@ def test_declaration_analyzer_prompt_is_centralized():
     prompt = load_prompt(PromptId.GM_DECLARATION_ANALYZER)
 
     assert "pistoletem laserowym" in prompt
-    assert "wyważam bramę mocnym dmuchnięciem" in prompt
+    assert "sikam na mur i krzyczę" in prompt
     assert "player_question" in prompt
+    assert "world_action" in prompt
+    assert "immediate_effects" in prompt
     assert "declared_resources" in prompt
     assert "action_flow" in prompt
 
@@ -52,6 +54,84 @@ def test_declaration_analysis_accepts_plausible_climbing_interpretation():
 
     assert analysis.analysis_type == GmDeclarationAnalysisType.PLAUSIBLE
     assert analysis.action_flow == GmActionFlow.CHALLENGE_ATTEMPT
+
+
+def test_world_action_accepts_only_policy_grounded_immediate_consequences():
+    exploration = build_exploration_from_scenario(load_scenario("content/scenarios/abandoned_watchtower.json"))
+    state = ExplorationState(
+        exploration.zones,
+        exploration.points,
+        exploration.party_position,
+        SceneFlags(),
+        challenges=exploration.challenges,
+        resources=exploration.resources,
+        inventory_resource_ids=exploration.initial_resource_ids,
+    )
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Sikam na mur i wrzeszczę na gobliny.",
+    )
+    analysis = GmDeclarationAnalysis.model_validate(
+        {
+            "analysis_type": "world_action",
+            "player_message": "Mur pozostaje niewzruszony, ale gobliny zdecydowanie już nie śpią.",
+            "immediate_effects": [
+                {
+                    "type": "add_noise",
+                    "parameters": {"challenge_id": "closed_gate", "value": 3},
+                },
+                {
+                    "type": "add_complication",
+                    "parameters": {
+                        "challenge_id": "closed_gate",
+                        "value": "alarm_w_strażnicy",
+                    },
+                },
+            ],
+        }
+    )
+
+    validated = validate_gm_declaration_analysis(analysis, request)
+
+    assert validated.action_flow == GmActionFlow.WORLD_ACTION
+
+
+def test_world_action_rejects_effect_outside_active_challenge_policy():
+    exploration = build_exploration_from_scenario(load_scenario("content/scenarios/abandoned_watchtower.json"))
+    state = ExplorationState(
+        exploration.zones,
+        exploration.points,
+        exploration.party_position,
+        SceneFlags(),
+        challenges=exploration.challenges,
+        resources=exploration.resources,
+        inventory_resource_ids=exploration.initial_resource_ids,
+    )
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Ogłaszam się właścicielem strażnicy.",
+    )
+    analysis = GmDeclarationAnalysis.model_validate(
+        {
+            "analysis_type": "world_action",
+            "player_message": "Strażnica nie uznaje tej procedury sukcesji.",
+            "immediate_effects": [
+                {
+                    "type": "set_flag",
+                    "parameters": {"key": "owns_watchtower", "value": True},
+                }
+            ],
+        }
+    )
+
+    with pytest.raises(GmProposalValidationError, match="nie jest dozwolona"):
+        validate_gm_declaration_analysis(analysis, request)
 
 
 def test_declaration_analysis_rejects_missing_declared_resource_when_plausible():

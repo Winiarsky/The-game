@@ -227,6 +227,14 @@ def create_app(session: ExplorationUiSession) -> Flask:
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
+    @app.post("/api/exploration/board-selection")
+    def api_exploration_board_selection():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(session.set_exploration_board_selection(bool(data.get("enabled", False))))
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
     @app.post("/api/board/configure")
     def api_board_configure():
         data = request.get_json(silent=True) or {}

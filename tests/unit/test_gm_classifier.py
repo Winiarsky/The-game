@@ -726,7 +726,7 @@ def test_gm_classifier_rejects_improvised_tool_on_non_improvised_mechanic():
         validate_gm_classifier_proposal(proposal, request)
 
 
-def test_gm_classifier_rejects_empty_situational_modifier():
+def test_gm_classifier_drops_empty_situational_modifier():
     exploration, state = _state()
     request = build_gm_classifier_request(
         scenario_id=exploration.scenario_id,
@@ -748,8 +748,11 @@ def test_gm_classifier_rejects_empty_situational_modifier():
         ],
     )
 
-    with pytest.raises(GmProposalValidationError, match="nie zmienia rzutu"):
-        validate_gm_classifier_proposal(proposal, request)
+    validated = validate_gm_classifier_proposal(proposal, request)
+    option = challenge_option_from_validated_proposal(validated)
+
+    assert validated.proposal.situational_modifiers == ()
+    assert option.situational_modifiers == ()
 
 
 def test_gm_classifier_rejects_resource_without_matching_tag():
@@ -1280,6 +1283,44 @@ def test_gm_classifier_accepts_actor_inventory_item_and_restricts_option_owner()
     assert option.requires_item_ids == ("thieves_tools",)
 
 
+def test_gm_classifier_normalizes_selected_actor_inventory_source_id():
+    exploration, state = _state()
+    source_id = "actor:rogue:item:thieves_tools"
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Używam narzędzi złodziejskich i otwieram zamek.",
+        actors=exploration.actors,
+        referenced_crafting_source_ids=(source_id,),
+        selected_use_source_id=source_id,
+    )
+    proposal = _proposal(
+        approach_label="Otwieranie zatartego zamka",
+        approach_tags=["lockpicking", "rusted_lock", "quiet"],
+        ability="dexterity",
+        skill="sleight_of_hand",
+        used_resource_ids=[source_id],
+        selected_mechanic="use_item_check",
+        check_participants="single_actor",
+        check_aggregation="lead_result",
+        player_narration="Łotrzyca ostrożnie otwiera zamek swoimi narzędziami.",
+        success_message="Zamek ustępuje.",
+        failure_message="Zamek nadal stawia opór.",
+    )
+
+    validated = validate_gm_classifier_proposal(proposal, request)
+    option = challenge_option_from_validated_proposal(validated)
+    grounded_source = request.to_prompt_payload()["player_grounded_sources"][0]
+
+    assert validated.resources == ()
+    assert validated.required_actor_item_ids == ("thieves_tools",)
+    assert option.requires_item_ids == ("thieves_tools",)
+    assert grounded_source["id"] == source_id
+    assert grounded_source["reference_id"] == "thieves_tools"
+
+
 def test_declaration_analysis_accepts_conversation_source_fact_ids_as_grounded():
     exploration, state = _state()
     request = build_gm_classifier_request(
@@ -1778,7 +1819,11 @@ def test_gm_classifier_exposes_active_graded_observation_without_revealing_facts
         observations=exploration.observations,
     )
 
-    observation = request.to_prompt_payload()["available_observations"][0]
+    observation = next(
+        item
+        for item in request.to_prompt_payload()["available_observations"]
+        if item["id"] == "look_through_gate_gap"
+    )
 
     assert observation["id"] == "look_through_gate_gap"
     assert observation["base_dc"] == 10

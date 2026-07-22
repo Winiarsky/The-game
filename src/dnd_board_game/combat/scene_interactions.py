@@ -115,11 +115,22 @@ def available_combat_interaction_options(
             continue
         if not can_pay_action_economy_cost(state, interaction.action_cost):
             continue
+        adjacent_target = (
+            adjacent_living_enemy(state, actor)
+            if any(condition.condition_type == "adjacent_enemy_exists" for condition in interaction.conditions)
+            else None
+        )
+        description = interaction.description
+        if adjacent_target is not None:
+            description += (
+                f" Aktualny cel: {adjacent_target.name} na polu "
+                f"{adjacent_target.position.as_tuple()}; sąsiednie pole obejmuje także skos."
+            )
         options.append(
             CombatInteractionOption(
                 id=interaction.id,
                 label=interaction.label,
-                description=interaction.description,
+                description=description,
                 object_id=scene_object.id,
                 object_name=scene_object.name,
                 target_position=position,

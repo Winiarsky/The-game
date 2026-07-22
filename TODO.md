@@ -25,6 +25,8 @@ najbliższy horyzont, a nie kopię całej roadmapy.
 - [x] Add deterministic property-based crafting drafts, component validation, allocation, dismantling, and engine-owned costs.
 - [x] Integrate property-based crafting with the GM classifier and chat confirmation, without a default build roll.
 - [x] Close the exploration MVP with a chat-first GM, grounded scene answers, progressive hints, and persisted reveal context.
+- [x] Give LLM narration a lively D&D table voice and resolve absurd-but-possible declarations as policy-limited world actions with immediate fictional consequences.
+- [x] Drop no-op LLM situational modifiers so descriptive details such as loud actions do not reject otherwise valid declarations.
 - [x] Add persistent NpcRuntimeState with attitude, physical/emotional state, revealed information, used attempts, relationship events, content-driven updates, UI, LLM context, and snapshot compatibility.
 - [x] Add filterable slash-command intent hints to the exploration chat while preserving automatic intent detection.
 - [x] Unify player questions and progressive hint requests under `/pytaj`; infer hint strength from message content.
@@ -33,6 +35,7 @@ najbliższy horyzont, a nie kopię całej roadmapy.
 - [x] Replace the gate's predefined approach/risk lists with structured guidance facts and update the interaction form.
 - [x] Give `/szukaj` an exact-first and semantic-fallback flow with player-confirmed substitutes and persisted scene findings.
 - [x] Give `/użyj` explicit source resolution, deterministic source binding, and a property/risk preview for scene-item use.
+- [x] Normalize actor-inventory source ids selected by `/użyj` before exploration resource validation.
 - [x] Add explicit take/collect policies for portable findings, quest items, and treasure without conflating search with inventory transfer.
 - [x] Let detachable scene fixtures be acquired during confirmed crafting instead of requiring an unavailable technical detachment command.
 - [x] Ground actor-inventory items in generated exploration checks and restrict the test leader to an actor who owns the item.
@@ -85,6 +88,21 @@ najbliższy horyzont, a nie kopię całej roadmapy.
 - [x] Close M5 with versioned FeatureDefinition/FeatureGrant composition for resources, actions, triggers, and auras, including provenance, collision validation, UI, snapshots, and two content fixtures.
 - [x] Add data-driven exploration traps with detection, disarm/bypass/trigger actions, hazard activation, snapshots, and an alarm-wire reference fixture.
 - [x] Close the combat turn-economy MVP with explicit action costs, data-driven Use an Object, separate draw/stow interactions, and visible UI costs.
+- [x] Define the board-first player UI direction, target exploration/combat/NPC views, information hierarchy, and edge cases in `docs/PLAYER_UI_DESIGN.md`.
+- [x] UI-1: Add the shared player shell and visual tokens; move hardware configuration and debug surfaces out of the normal player flow.
+- [x] UI-2: Rework exploration and NPC presentation around one stateful full-screen chat without duplicated trial/result cards.
+- [x] UI-3: Rework encounter setup and combat around a compact turn HUD, board-context menus, and one preview/roll/result flow without a digital map.
+- [x] UI-4: Add on-demand character/state/spell/inventory drawers, information-overload priorities, keyboard navigation, and disconnected-board fallback.
+- [x] Add passive board focus for physically placed initiative/Stealth actors and exploration objects, without treating exploration party members or NPCs as separate board pieces.
+- [x] Move prepared-spell selection to the final initial-setup step before first-location selection.
+- [ ] UI-5: Validate the complete board-first UI vertical slice with `abandoned_watchtower` and the manual hardware checklist.
+- [x] Fix the pre-combat Stealth transition renderer after encounter setup confirmation.
+- [x] Clarify rubble interaction targets, prioritize movement paths over object LEDs, and require visible acknowledgement of automatic enemy opportunity-attack results.
+- [x] Keep combat result acknowledgements inside the combat panel, name ranged-melee threats, clarify compound movement destinations, and surface defeated-enemy results.
+- [x] Keep the idle combat panel board-first by moving hero spells, common actions, equipment, and turn ending behind the active hero's board tile menu.
+- [x] Render acknowledged combat results once instead of duplicating the same message across prompt, inline summary, and acknowledgement card.
+- [x] Keep exploration LEDs aligned with actual input mode: passive focus during an open interaction and selectable locations/points only after leaving it.
+- [x] Add strict combat targeting after selecting an attack or spell source so movement tiles cannot steal target/area clicks, with explicit single-target and area labels.
 
 ## Completed Work And Deferred Backlog
 

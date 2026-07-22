@@ -74,6 +74,17 @@ def test_start_session_requires_board_and_selects_setup_stage() -> None:
     assert transition.stage == ExplorationFlowStage.PARTY_SETUP
     assert transition.setup_steps[0].label == "przeszkody"
 
+    without_map_setup = service.start_session(
+        board_connected=True,
+        board_backend="simulator",
+        current_stage=ExplorationFlowStage.READY_TO_START,
+        setup_steps=(),
+        spell_preparation_pending=True,
+    )
+
+    assert without_map_setup is not None
+    assert without_map_setup.stage == ExplorationFlowStage.SPELL_PREPARATION
+
 
 def test_confirm_location_preview_updates_party_and_emits_existing_event() -> None:
     service = ExplorationFlowService()
@@ -117,6 +128,11 @@ def test_setup_and_finish_interaction_transitions_are_explicit() -> None:
 
     next_step = service.advance_setup_step(steps=(first, second), current_index=0)
     finished = service.advance_setup_step(steps=(first, second), current_index=1)
+    finished_before_spells = service.advance_setup_step(
+        steps=(first, second),
+        current_index=1,
+        spell_preparation_pending=True,
+    )
     after_interaction = service.finish_interaction(
         current_stage=ExplorationFlowStage.INTERACTION_RESULT,
         post_interaction_setup_steps=(first,),
@@ -125,6 +141,8 @@ def test_setup_and_finish_interaction_transitions_are_explicit() -> None:
     assert next_step is not None and next_step.current_index == 1 and not next_step.completed
     assert finished is not None and finished.completed
     assert finished.stage == ExplorationFlowStage.LOCATION_PREVIEW
+    assert finished_before_spells is not None
+    assert finished_before_spells.stage == ExplorationFlowStage.SPELL_PREPARATION
     assert after_interaction is not None
     assert after_interaction.stage == ExplorationFlowStage.PARTY_SETUP
     assert after_interaction.setup_steps == (first,)
