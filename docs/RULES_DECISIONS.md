@@ -238,7 +238,11 @@ Implementacja MVP:
 - Naturalne `20` przy ataku oznacza trafienie krytyczne.
 - Naturalne `1` przy ataku oznacza automatyczne pudło.
 - Przy trafieniu aplikacja prosi o wynik obrażeń.
-- W MVP gracz może wpisać końcowy wynik obrażeń krytycznych samodzielnie.
+- Gracz wpisuje końcowy wynik każdego składnika obrażeń osobno. Dla źródła
+  jednoskładnikowego stary pojedynczy input pozostaje kompatybilny.
+- Źródło ataku może deklarować wiele składników z osobnym typem oraz formułą `NdM`
+  albo wartością stałą. Krytyk podwaja wyłącznie liczbę kości każdego składnika;
+  płaski modyfikator jest dodawany jeden raz.
 - Obrażenia są wpisywane jako komponenty z typem obrażeń.
 - `hp` aktora oznacza aktualne HP, a `max_hp` oznacza maksymalne HP z contentu/scenariusza.
 - Obrażenia najpierw zmniejszają temporary HP, potem HP.

@@ -38,6 +38,7 @@ from dnd_board_game.combat import (
     AttackSourceType,
     CombatCondition,
     ConditionSaveTiming,
+    DamageComponentSpec,
     DamageType,
     HealingSource,
     HealingSourceType,
@@ -58,6 +59,7 @@ from dnd_board_game.combat import (
     SetupVisibility,
     SceneFlags,
 )
+from dnd_board_game.rules import DiceExpression
 from dnd_board_game.exploration import (
     CheckAggregation,
     CheckParticipants,
@@ -188,6 +190,7 @@ class ScenarioAttackDefinition:
     damage_die_sides: int | None
     damage_modifier: int
     damage_type: str
+    damage_components: tuple[DamageComponentSpec, ...]
     ability: str | None = None
     spell_level: int = 0
     area: SpellArea | None = None
@@ -1138,6 +1141,11 @@ def _parse_attack(data: dict[str, Any], actor_id: str) -> ScenarioAttackDefiniti
         raise ValueError(f"attack {attack_id}.reach_feet is only valid for melee attacks.")
     if reach_feet is not None and (reach_feet <= 0 or reach_feet % 5 != 0):
         raise ValueError(f"attack {attack_id}.reach_feet must be a positive multiple of 5.")
+    damage_components = _parse_damage_components(
+        damage,
+        context=f"attack {attack_id}.damage",
+    )
+    primary_damage = damage_components[0]
     return ScenarioAttackDefinition(
         id=attack_id,
         name=str(_required(data, "name", f"attack {attack_id}")),
@@ -1145,10 +1153,15 @@ def _parse_attack(data: dict[str, Any], actor_id: str) -> ScenarioAttackDefiniti
         range_feet=range_feet,
         reach_feet=reach_feet,
         attack_modifier=(int(data["attack_modifier"]) if "attack_modifier" in data else None),
-        damage_fixed=_parse_damage_fixed(damage),
-        damage_die_sides=_parse_damage_die(damage),
-        damage_modifier=int(damage.get("modifier", 0)),
-        damage_type=str(_required(damage, "damage_type", f"attack {attack_id}.damage")),
+        damage_fixed=primary_damage.fixed,
+        damage_die_sides=(
+            primary_damage.dice.sides
+            if primary_damage.dice is not None
+            else None
+        ),
+        damage_modifier=primary_damage.modifier,
+        damage_type=primary_damage.damage_type.value,
+        damage_components=damage_components,
         ability=str(data["ability"]) if "ability" in data else None,
         spell_level=spell_level,
         area=_parse_spell_area(data.get("area"), f"attack {attack_id}.area"),
@@ -3372,6 +3385,7 @@ def _attack_source_from_definition(
         damage_die_sides=definition.damage_die_sides,
         damage_modifier=definition.damage_modifier,
         damage_type=definition.damage_type,
+        damage_components=definition.damage_components,
         id=definition.id,
         ability=definition.ability,
         spell_level=definition.spell_level,
@@ -3418,7 +3432,12 @@ def _validate_scenario(definition: ScenarioDefinition) -> None:
             _enum_value(AttackSourceType, attack.source_type.value, f"attack {attack.id}.source_type")
             from dnd_board_game.combat import DamageType
 
-            _enum_value(DamageType, attack.damage_type, f"attack {attack.id}.damage.damage_type")
+            for component in attack.damage_components:
+                _enum_value(
+                    DamageType,
+                    component.damage_type.value,
+                    f"attack {attack.id}.damage.components.{component.id}.damage_type",
+                )
     for entry in definition.environment:
         for position in entry.positions:
             if not definition.board_dimensions.in_bounds(position):
@@ -4630,10 +4649,71 @@ def _parse_damage_die(data: dict[str, Any]) -> int | None:
     dice = data.get("dice")
     if dice is None:
         return None
-    text = str(dice).lower().strip()
-    if not text.startswith("1d"):
-        raise ValueError("damage.dice supports only MVP format '1dN'.")
-    return int(text[2:])
+    expression = DiceExpression.parse(str(dice))
+    if expression.count != 1:
+        raise ValueError("This damage field still supports only '1dN'.")
+    return expression.sides
+
+
+def _parse_damage_components(
+    data: dict[str, Any],
+    *,
+    context: str,
+) -> tuple[DamageComponentSpec, ...]:
+    raw_components = data.get("components")
+    if raw_components is None:
+        entries: list[dict[str, Any]] = [data]
+    else:
+        if not isinstance(raw_components, list) or not raw_components:
+            raise ValueError(f"{context}.components must be a non-empty list.")
+        entries = []
+        for index, value in enumerate(raw_components):
+            if not isinstance(value, dict):
+                raise ValueError(f"{context}.components[{index}] must be an object.")
+            entries.append(value)
+        legacy_fields = {"dice", "fixed", "modifier", "damage_type"} & set(data)
+        if legacy_fields:
+            raise ValueError(
+                f"{context} cannot mix components with legacy fields: "
+                + ", ".join(sorted(legacy_fields))
+                + "."
+            )
+
+    components: list[DamageComponentSpec] = []
+    for index, entry in enumerate(entries):
+        component_context = (
+            context
+            if raw_components is None
+            else f"{context}.components[{index}]"
+        )
+        dice_value = entry.get("dice")
+        fixed_value = entry.get("fixed")
+        if (dice_value is None) == (fixed_value is None):
+            raise ValueError(
+                f"{component_context} requires exactly one of dice or fixed."
+            )
+        component_id = str(entry.get("id", "base" if index == 0 else f"component_{index + 1}"))
+        components.append(
+            DamageComponentSpec(
+                id=component_id,
+                label=str(entry.get("label", "")),
+                damage_type=_enum_value(
+                    DamageType,
+                    str(_required(entry, "damage_type", component_context)),
+                    f"{component_context}.damage_type",
+                ),
+                dice=(
+                    DiceExpression.parse(str(dice_value))
+                    if dice_value is not None
+                    else None
+                ),
+                fixed=int(fixed_value) if fixed_value is not None else None,
+                modifier=int(entry.get("modifier", 0)),
+            )
+        )
+    if len({component.id for component in components}) != len(components):
+        raise ValueError(f"{context}.components ids must be unique.")
+    return tuple(components)
 
 
 def _parse_damage_fixed(data: dict[str, Any]) -> int | None:
@@ -4642,16 +4722,7 @@ def _parse_damage_fixed(data: dict[str, Any]) -> int | None:
 
 
 def _damage_hint(definition: ScenarioAttackDefinition) -> str:
-    if definition.damage_fixed is not None:
-        base = str(definition.damage_fixed)
-    elif definition.damage_die_sides is None:
-        base = "damage"
-    else:
-        base = f"1d{definition.damage_die_sides}"
-    if definition.damage_modifier:
-        sign = "+" if definition.damage_modifier > 0 else "-"
-        base = f"{base} {sign} {abs(definition.damage_modifier)}"
-    return f"{base} {definition.damage_type}"
+    return " + ".join(component.hint() for component in definition.damage_components)
 
 
 def _healing_hint(definition: ScenarioHealingDefinition) -> str:

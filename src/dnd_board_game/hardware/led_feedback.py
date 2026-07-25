@@ -33,7 +33,15 @@ class LedFeedback:
 
 
 class BoardConnectionLike(Protocol):
-    def set_leds(self, positions, rgb_color, *, brightness: int | None = None) -> None: ...
+    def set_leds(
+        self,
+        positions,
+        rgb_color,
+        *,
+        brightness: int | None = None,
+        replace: bool = False,
+        transition_ms: int | None = None,
+    ) -> None: ...
 
     def leds_off(self) -> None: ...
 
@@ -93,12 +101,18 @@ def movement_led_feedback(
 class BoardLedAdapter:
     def __init__(self, connection: BoardConnectionLike) -> None:
         self.connection = connection
+        self._last_render: tuple[
+            tuple[tuple[int, int], tuple[int, int, int]], ...
+        ] | None = None
+        self._last_brightness: int | None = None
 
     def show_feedback(
         self,
         feedback: LedFeedback,
         *,
         brightness: int | None = None,
+        replace: bool = False,
+        transition_ms: int | None = None,
     ) -> None:
         updates: dict[tuple[int, int], tuple[int, int, int]] = {}
         for frame in sorted(feedback.frames, key=lambda item: LED_ROLE_PRIORITY[item.role]):
@@ -106,23 +120,39 @@ class BoardLedAdapter:
                 updates[position.as_tuple()] = frame.color
         if not updates:
             return
+        rendered = tuple(sorted(updates.items()))
+        if rendered == self._last_render and brightness == self._last_brightness:
+            return
         positions = list(updates.keys())
         colors = [list(color) for color in updates.values()]
         color_payload = colors[0] if len({tuple(color) for color in colors}) == 1 else colors
-        if brightness is None:
-            self.connection.set_leds(positions, color_payload)
-            return
         try:
             self.connection.set_leds(
                 positions,
                 color_payload,
                 brightness=brightness,
+                replace=replace,
+                transition_ms=transition_ms,
             )
         except TypeError:
-            self.connection.set_leds(positions, color_payload)
+            if brightness is None:
+                self.connection.set_leds(positions, color_payload)
+            else:
+                try:
+                    self.connection.set_leds(
+                        positions,
+                        color_payload,
+                        brightness=brightness,
+                    )
+                except TypeError:
+                    self.connection.set_leds(positions, color_payload)
+        self._last_render = rendered
+        self._last_brightness = brightness
 
     def show_movement(self, feedback: LedFeedback) -> None:
         self.show_feedback(feedback)
 
     def clear(self) -> None:
         self.connection.leds_off()
+        self._last_render = None
+        self._last_brightness = None

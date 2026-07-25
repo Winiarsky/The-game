@@ -624,8 +624,13 @@ def set_leds():
     if not isinstance(leds, list):
         return jsonify({"ok": False, "error": "Brak listy leds."}), 400
 
+    replace = bool(payload.get("replace", False))
     applied = 0
     with state_lock:
+        if replace:
+            for row in range(BOARD_ROWS):
+                for col in range(BOARD_COLS):
+                    _set_cell_color(row, col, None)
         for led in leds:
             if not isinstance(led, dict):
                 continue
@@ -648,11 +653,22 @@ def set_leds():
             _set_cell_color(row, col, rgb)
             applied += 1
 
-        if applied:
+        if applied or replace:
             state_version += 1
 
-    logger.info("Zaktualizowano %s pol LED.", applied)
-    return jsonify({"ok": True, "applied": applied})
+    logger.info(
+        "Zaktualizowano %s pol LED%s.",
+        applied,
+        " (pelna klatka)" if replace else "",
+    )
+    return jsonify(
+        {
+            "ok": True,
+            "applied": applied,
+            "replace": replace,
+            "transition_ms": max(0, int(payload.get("transition_ms") or 0)),
+        }
+    )
 
 
 @app.get("/off")

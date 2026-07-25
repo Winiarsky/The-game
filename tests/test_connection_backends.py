@@ -7,7 +7,14 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from board.connection import Connection, _HardwareBackend, _WledClient, _color_to_hex
+from board.connection import (
+    Connection,
+    _HardwareBackend,
+    _SimulatorBackend,
+    _WledClient,
+    _color_to_hex,
+)
+from board.settings import load_board_config, wled_config
 
 
 class _FakeSimulatorBackend:
@@ -177,6 +184,83 @@ def test_wled_scan_update_can_override_normal_brightness(monkeypatch):
 
     assert client.set_leds([(4, [10, 20, 30])])
     assert payloads[1]["bri"] == 128
+
+
+def test_wled_update_sends_transition_in_same_full_frame(monkeypatch):
+    client = _WledClient(
+        {
+            "base_url": "http://wled.test",
+            "led_count": 20,
+            "brightness": 128,
+        }
+    )
+    client.available = True
+    payloads = []
+    monkeypatch.setattr(client, "_post_state", lambda payload: payloads.append(payload) or {})
+
+    assert client.set_leds(
+        [(4, [10, 20, 30])],
+        replace=True,
+        transition_ms=180,
+    )
+
+    assert len(payloads) == 1
+    assert payloads[0]["transition"] == 2
+    instructions = payloads[0]["seg"][0]["i"]
+    assert instructions[:3] == [0, 20, "000000"]
+    assert instructions[3] == 4
+
+
+def test_simulator_update_forwards_atomic_frame_metadata(monkeypatch):
+    calls = []
+
+    class Response:
+        @staticmethod
+        def raise_for_status():
+            return None
+
+    monkeypatch.setattr(
+        "board.connection.requests.post",
+        lambda url, **kwargs: calls.append((url, kwargs)) or Response(),
+    )
+    backend = _SimulatorBackend("http://simulator.test")
+
+    backend.set_leds(
+        [(4, [10, 20, 30])],
+        brightness=250,
+        replace=True,
+        transition_ms=80,
+    )
+
+    assert calls == [
+        (
+            "http://simulator.test/set",
+            {
+                "json": {
+                    "leds": [{"i": 5, "rgb": [10, 20, 30]}],
+                    "replace": True,
+                    "brightness": 250,
+                    "transition_ms": 80,
+                },
+                "timeout": 5.0,
+            },
+        )
+    ]
+
+
+def test_led_transition_timings_have_defaults_and_environment_overrides(
+    monkeypatch,
+    tmp_path,
+):
+    defaults = wled_config(load_board_config(tmp_path / "missing.json"))
+    assert defaults["transition_ms"] == 180
+    assert defaults["scan_transition_ms"] == 80
+
+    monkeypatch.setenv("WLED_TRANSITION_MS", "0")
+    monkeypatch.setenv("WLED_SCAN_TRANSITION_MS", "25")
+    overridden = wled_config(load_board_config(tmp_path / "missing.json"))
+    assert overridden["transition_ms"] == 0
+    assert overridden["scan_transition_ms"] == 25
 
 
 def test_connection_forwards_cancel_scan_to_simulator_backend(monkeypatch):

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import StrEnum
+import re
+from collections.abc import Callable
 from typing import Iterable
 
 
@@ -21,6 +23,50 @@ class RollModifierType(StrEnum):
     COVER = "cover"
     SITUATIONAL = "situational"
     CUSTOM = "custom"
+
+
+@dataclass(frozen=True, slots=True)
+class DiceExpression:
+    """A transport-neutral NdM dice expression without a flat modifier."""
+
+    count: int
+    sides: int
+
+    def __post_init__(self) -> None:
+        if self.count < 1:
+            raise ValueError("Dice count must be positive.")
+        if self.sides < 2:
+            raise ValueError("Die sides must be at least 2.")
+
+    @classmethod
+    def parse(cls, value: str) -> "DiceExpression":
+        match = re.fullmatch(r"\s*(\d+)[dD](\d+)\s*", str(value))
+        if match is None:
+            raise ValueError("Dice expression must use NdM format, for example '2d6'.")
+        return cls(count=int(match.group(1)), sides=int(match.group(2)))
+
+    def format(self, *, dice_multiplier: int = 1) -> str:
+        if dice_multiplier < 1:
+            raise ValueError("Dice multiplier must be positive.")
+        return f"{self.count * dice_multiplier}d{self.sides}"
+
+    def roll(
+        self,
+        roll_die: Callable[[int], int],
+        *,
+        dice_multiplier: int = 1,
+    ) -> tuple[int, ...]:
+        if dice_multiplier < 1:
+            raise ValueError("Dice multiplier must be positive.")
+        results = tuple(
+            int(roll_die(self.sides))
+            for _ in range(self.count * dice_multiplier)
+        )
+        if any(result < 1 or result > self.sides for result in results):
+            raise ValueError(
+                f"Die result must be between 1 and {self.sides}."
+            )
+        return results
 
 
 @dataclass(frozen=True, slots=True)

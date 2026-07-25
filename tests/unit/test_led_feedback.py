@@ -141,4 +141,91 @@ def test_board_session_uses_boosted_brightness_only_for_active_scan():
 
     assert connection.calls[0][2] == 240
     assert connection.calls[1][2] is None
-    assert connection.clear_calls == 1
+    assert connection.clear_calls == 2
+
+
+def test_board_session_replaces_atomic_frames_without_black_clear():
+    class AtomicConnection:
+        led_transition_ms = 180
+        scan_led_transition_ms = 80
+        scan_brightness = 255
+
+        def __init__(self):
+            self.calls = []
+            self.clear_calls = 0
+
+        def set_leds(
+            self,
+            positions,
+            rgb_color,
+            *,
+            brightness=None,
+            replace=False,
+            transition_ms=None,
+        ):
+            self.calls.append(
+                {
+                    "positions": tuple(positions),
+                    "colors": rgb_color,
+                    "brightness": brightness,
+                    "replace": replace,
+                    "transition_ms": transition_ms,
+                }
+            )
+
+        def leds_off(self):
+            self.clear_calls += 1
+
+    connection = AtomicConnection()
+    adapter = BoardSessionAdapter(connection)
+    first = LedFeedback(
+        (LedFrame((Coordinate(1, 1),), LedColor.ACTIVE_ACTOR, LedRole.ACTIVE_ACTOR),)
+    )
+    second = LedFeedback(
+        (LedFrame((Coordinate(2, 1),), LedColor.ACTIVE_ACTOR, LedRole.ACTIVE_ACTOR),)
+    )
+
+    adapter.show_feedback(first)
+    adapter.show_feedback(second)
+
+    assert connection.clear_calls == 0
+    assert [call["positions"] for call in connection.calls] == [
+        ((1, 1),),
+        ((2, 1),),
+    ]
+    assert all(call["replace"] is True for call in connection.calls)
+    assert all(call["transition_ms"] == 180 for call in connection.calls)
+
+
+def test_board_session_skips_duplicate_frame_but_renders_scan_brightness_change():
+    class AtomicConnection:
+        led_transition_ms = 180
+        scan_led_transition_ms = 80
+        scan_brightness = 250
+
+        def __init__(self):
+            self.calls = []
+
+        def set_leds(self, positions, rgb_color, **kwargs):
+            self.calls.append((tuple(positions), rgb_color, kwargs))
+
+        def leds_off(self):
+            raise AssertionError("Pełna klatka nie powinna gasić LED-ów osobnym żądaniem.")
+
+    connection = AtomicConnection()
+    adapter = BoardSessionAdapter(connection)
+    feedback = LedFeedback(
+        (LedFrame((Coordinate(3, 4),), LedColor.INTERACTIVE_OBJECT, LedRole.INTERACTIVE_OBJECT),)
+    )
+
+    adapter.show_feedback(feedback)
+    adapter.show_feedback(feedback)
+    adapter.show_scan_feedback(feedback)
+
+    assert len(connection.calls) == 2
+    assert connection.calls[0][2]["transition_ms"] == 180
+    assert connection.calls[1][2] == {
+        "brightness": 250,
+        "replace": True,
+        "transition_ms": 80,
+    }

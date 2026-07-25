@@ -235,8 +235,22 @@ class _SimulatorBackend:
                 continue
             return result
 
-    def set_leds(self, led_updates: list[tuple[int, list[int]]]) -> None:
-        payload = {"leds": [{"i": idx + 1, "rgb": rgb} for idx, rgb in led_updates]}
+    def set_leds(
+        self,
+        led_updates: list[tuple[int, list[int]]],
+        *,
+        brightness: int | None = None,
+        replace: bool = False,
+        transition_ms: int | None = None,
+    ) -> None:
+        payload = {
+            "leds": [{"i": idx + 1, "rgb": rgb} for idx, rgb in led_updates],
+            "replace": replace,
+        }
+        if brightness is not None:
+            payload["brightness"] = max(1, min(255, int(brightness)))
+        if transition_ms is not None:
+            payload["transition_ms"] = max(0, int(transition_ms))
         requests.post(f"{self.base_url}/set", json=payload, timeout=5.0).raise_for_status()
 
     def leds_off(self) -> None:
@@ -347,6 +361,8 @@ class _WledClient:
         led_updates: list[tuple[int, list[int]]],
         *,
         brightness: int | None = None,
+        replace: bool = False,
+        transition_ms: int | None = None,
     ) -> bool:
         if not led_updates:
             return True
@@ -363,13 +379,14 @@ class _WledClient:
             else max(1, min(255, int(brightness)))
         )
         try:
-            self._post_state(
-                {
-                    "on": True,
-                    "bri": effective_brightness,
-                    "seg": [{"id": self.segment_id, "on": True, "i": instructions}],
-                }
-            )
+            payload: dict[str, Any] = {
+                "on": True,
+                "bri": effective_brightness,
+                "seg": [{"id": self.segment_id, "on": True, "i": instructions}],
+            }
+            if transition_ms is not None:
+                payload["transition"] = max(0, int(round(transition_ms / 100)))
+            self._post_state(payload)
         except Exception as exc:
             self._mark_unavailable(exc, action="set_leds")
             return False
@@ -529,8 +546,15 @@ class _HardwareBackend:
         led_updates: list[tuple[int, list[int]]],
         *,
         brightness: int | None = None,
+        replace: bool = False,
+        transition_ms: int | None = None,
     ) -> None:
-        self.wled.set_leds(led_updates, brightness=brightness)
+        self.wled.set_leds(
+            led_updates,
+            brightness=brightness,
+            replace=replace,
+            transition_ms=transition_ms,
+        )
 
     def leds_off(self) -> None:
         self.wled.clear()
@@ -561,6 +585,16 @@ class Connection:
         self.scan_brightness = max(
             1,
             min(255, int(configured_wled.get("scan_brightness") or 255)),
+        )
+        transition_ms = configured_wled.get("transition_ms")
+        scan_transition_ms = configured_wled.get("scan_transition_ms")
+        self.led_transition_ms = max(
+            0,
+            int(180 if transition_ms is None else transition_ms),
+        )
+        self.scan_led_transition_ms = max(
+            0,
+            int(80 if scan_transition_ms is None else scan_transition_ms),
         )
 
         resolved_backend = backend
@@ -623,17 +657,27 @@ class Connection:
         rgb_color,
         *,
         brightness: int | None = None,
+        replace: bool = False,
+        transition_ms: int | None = None,
     ) -> None:
         led_updates = self._resolve_led_updates(positions, rgb_color)
         if not led_updates:
             return
-        if brightness is None:
-            self._backend.set_leds(led_updates)
-            return
         try:
-            self._backend.set_leds(led_updates, brightness=brightness)
+            self._backend.set_leds(
+                led_updates,
+                brightness=brightness,
+                replace=replace,
+                transition_ms=transition_ms,
+            )
         except TypeError:
-            self._backend.set_leds(led_updates)
+            if brightness is None:
+                self._backend.set_leds(led_updates)
+            else:
+                try:
+                    self._backend.set_leds(led_updates, brightness=brightness)
+                except TypeError:
+                    self._backend.set_leds(led_updates)
 
     def leds_off(self) -> None:
         self._backend.leds_off()

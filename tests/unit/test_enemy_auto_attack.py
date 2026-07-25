@@ -17,6 +17,7 @@ from dnd_board_game.combat import (
     AttackSourceType,
     CombatCondition,
     ConditionState,
+    DamageComponentSpec,
     DamageType,
     HiddenState,
     InitiativeEntry,
@@ -26,7 +27,7 @@ from dnd_board_game.combat import (
     resolve_enemy_auto_turn,
     start_combat,
 )
-from dnd_board_game.rules import D20RollInput, D20RollRequest, RollMode, RollModifier, RollModifierType, resolve_d20_roll
+from dnd_board_game.rules import DiceExpression, D20RollInput, D20RollRequest, RollMode, RollModifier, RollModifierType, resolve_d20_roll
 from dnd_board_game.world import BoardState, Coordinate
 
 
@@ -106,6 +107,52 @@ def test_enemy_auto_attack_reports_damage_after_target_resistance():
     assert result.applied_damage is not None
     assert result.applied_damage.hp_after == 18
     assert "4 -> 2 slashing" in result.message
+
+
+def test_enemy_auto_attack_resolves_multicomponent_damage_per_type():
+    enemy = _actor("elemental", Faction.ENEMY, Coordinate(1, 0))
+    hero = replace(
+        _actor("hero", Faction.ALLY, Coordinate(0, 0), hp=30),
+        damage_affinities=DamageAffinityProfile(resistances=(DamageType.FIRE,)),
+    )
+    state = start_combat((enemy, hero), _order(enemy, hero))
+    source = replace(
+        _source(),
+        damage_components=(
+            DamageComponentSpec(
+                "blade",
+                DamageType.SLASHING,
+                dice=DiceExpression.parse("2d6"),
+                label="Ostrze",
+            ),
+            DamageComponentSpec(
+                "flame",
+                DamageType.FIRE,
+                dice=DiceExpression.parse("1d4"),
+                label="Płomień",
+            ),
+        ),
+        damage_hint="",
+    )
+
+    result = resolve_enemy_auto_attack(
+        BoardState(),
+        state,
+        enemy,
+        source,
+        random.Random(7),
+    )
+
+    assert result.damage is not None
+    assert result.damage.total_before_reduction == 7
+    assert result.damage.total_applied == 6
+    assert [
+        (component.damage_type, component.amount_before, component.amount_applied)
+        for component in result.damage.resolved_components
+    ] == [
+        (DamageType.SLASHING, 6, 6),
+        (DamageType.FIRE, 1, 0),
+    ]
 
 
 def test_enemy_save_attack_waits_for_manual_player_roll_before_damage() -> None:

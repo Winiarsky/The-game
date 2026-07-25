@@ -87,6 +87,9 @@ najbliższy horyzont, a nie kopię całej roadmapy.
 - [x] Add D&D 5e 2014 versatile-weapon attack variants that require a free second hand and expose the stronger damage die in combat UI.
 - [x] Add shields as held equipment with don/doff action cost, proficiency validation, effective AC, hand conflicts, UI, content, and snapshots.
 - [x] Add typed damage components with D&D 5e 2014 resistance, immunity, vulnerability, content/snapshot support, and visible damage breakdowns.
+- [x] Add compatible `NdM` and multi-component attack damage content, including
+  per-component manual player input, automatic enemy rolls, critical dice doubling,
+  per-type affinity resolution, area spells, Ready attacks, and opportunity attacks.
 - [x] Unify saving-throw requests/results and add enemy effects that pause for a physical player d20 before applying save-adjusted typed damage.
 - [x] Add data-driven exploration hazards triggered by failed checks, with a visible physical saving throw and save-adjusted typed damage.
 - [x] Add save-dependent exploration hazard effects, persistent actor conditions, snapshot support, and an exploration-to-combat condition bridge.
@@ -118,6 +121,7 @@ najbliższy horyzont, a nie kopię całej roadmapy.
 - [x] Add a direct courtyard-entry debug preset (including the legacy `courtyard_search` shortcut), full arrival narration, mandatory wounded-scout miniature placement, and illustrated scout/search action tiles.
 - [x] Make wounded-scout intimidation a deterministic Charisma (Intimidation) check with authored outcome branches, without contradictory social-table refusal or a premature NPC response.
 - [x] Add strict combat targeting after selecting an attack or spell source so movement tiles cannot steal target/area clicks, with explicit single-target and area labels.
+- [x] Replace clear-then-render combat LED updates with atomic fading frames, preserve attacker/target focus during rolls, and keep the acting enemy visible through movement previews.
 - [x] Clarify exploration checks by naming the tested skill and separating the rolling leader from a non-rolling helper.
 - [x] Give exploration goal cards `must`/`allow` policies for D&D single, optional Help, and whole-party checks, selected before the free-form method.
 

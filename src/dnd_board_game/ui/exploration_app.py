@@ -5,7 +5,7 @@ import uuid
 from dataclasses import dataclass, field, fields, replace
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from dnd_board_game.actions import (
     PlayerIntentHint,
@@ -3456,7 +3456,12 @@ class ExplorationUiSession:
         )
         return self._apply_player_area_spell_transition(transition)
 
-    def submit_player_area_spell_damage(self, *, damage: int) -> dict[str, object]:
+    def submit_player_area_spell_damage(
+        self,
+        *,
+        damage: int | None = None,
+        component_totals: Mapping[str, int] | None = None,
+    ) -> dict[str, object]:
         pending = self.pending_area_spell
         if pending is None or pending.stage != "damage_roll":
             raise ValueError("Nie ma oczekujących obrażeń czaru obszarowego.")
@@ -3471,6 +3476,7 @@ class ExplorationUiSession:
             source=source,
             pending=pending,
             damage=damage,
+            component_totals=component_totals,
         )
         return self._apply_player_area_spell_transition(transition)
 
@@ -3604,7 +3610,12 @@ class ExplorationUiSession:
         )
         return self._apply_player_attack_transition(transition)
 
-    def submit_player_damage_roll(self, *, damage: int) -> dict[str, object]:
+    def submit_player_damage_roll(
+        self,
+        *,
+        damage: int | None = None,
+        component_totals: dict[str, int] | None = None,
+    ) -> dict[str, object]:
         pending = self.pending_player_attack
         if pending is None or pending.stage != "damage_roll":
             raise ValueError("Nie ma oczekującego rzutu obrażeń gracza.")
@@ -3622,6 +3633,7 @@ class ExplorationUiSession:
             pending=pending,
             active_effects=self.active_combat_effects,
             damage=damage,
+            component_totals=component_totals,
         )
         return self._apply_player_attack_transition(transition)
 
@@ -5817,7 +5829,12 @@ class ExplorationUiSession:
         self._sync_board_leds()
         return self.state_payload()
 
-    def submit_enemy_opportunity_damage_roll(self, *, damage: int) -> dict[str, object]:
+    def submit_enemy_opportunity_damage_roll(
+        self,
+        *,
+        damage: int | None = None,
+        component_totals: Mapping[str, int] | None = None,
+    ) -> dict[str, object]:
         pending = self.pending_enemy_opportunity_attack
         if pending is None or pending.stage != "damage_roll":
             raise ValueError("Nie ma oczekujących obrażeń ataku okazyjnego.")
@@ -5833,6 +5850,7 @@ class ExplorationUiSession:
             attack_sources_by_actor=encounter.attack_sources_by_actor,
             active_effects=self.active_combat_effects,
             damage=damage,
+            component_totals=component_totals,
             critical=pending.critical,
         )
         applied_damage = damage_resolution.applied_damage
@@ -6019,7 +6037,12 @@ class ExplorationUiSession:
         self._sync_board_leds()
         return self.state_payload()
 
-    def submit_ready_damage_roll(self, *, damage: int) -> dict[str, object]:
+    def submit_ready_damage_roll(
+        self,
+        *,
+        damage: int | None = None,
+        component_totals: Mapping[str, int] | None = None,
+    ) -> dict[str, object]:
         pending = self.pending_ready_attack
         if pending is None or pending.stage != "damage_roll":
             raise ValueError("Nie ma oczekujących obrażeń przygotowanej akcji.")
@@ -6035,6 +6058,7 @@ class ExplorationUiSession:
             attack_sources_by_actor=encounter.attack_sources_by_actor,
             active_effects=self.active_combat_effects,
             damage=damage,
+            component_totals=component_totals,
             critical=pending.critical,
         )
         applied_damage = damage_resolution.applied_damage
@@ -6729,7 +6753,10 @@ class ExplorationUiSession:
             if self.pending_player_attack is not None:
                 return BoardScanTarget(
                     positions=(),
-                    feedback=active_actor_led_feedback(self.combat_state.initiative_order),
+                    feedback=_pending_player_attack_led_feedback(
+                        self.pending_player_attack,
+                        self.combat_state,
+                    ),
                     empty_message="Atak gracza czeka na wpisanie rzutu w UI.",
                 )
             if self.pending_player_healing is not None:
@@ -9777,7 +9804,6 @@ class ExplorationUiSession:
                 "source": source,
                 "effect_type": result.effect_type,
                 "changed": result.changed,
-                "message": result.message,
                 "effect": raw_effect,
                 "flags": [{"key": key, "value": value} for key, value in self.state.flags.values],
                 "inventory_resource_ids": list(self.state.inventory_resource_ids),
@@ -10798,6 +10824,9 @@ def _attack_source_payload(source, actor: Actor | None = None) -> dict[str, obje
         "damage_die_sides": source.damage_die_sides,
         "damage_modifier": source.damage_modifier,
         "damage_type": source.damage_type,
+        "damage_components": [
+            component.as_payload() for component in source.damage_components
+        ],
         "ability": source.ability,
         "spell_level": source.spell_level,
         "casting_kind": source.casting_kind.value,
@@ -11119,7 +11148,14 @@ def _pending_player_attack_payload(
         "attack_mode": instruction.mode.value,
         "active_modifiers": [_roll_modifier_payload(modifier) for modifier in instruction.breakdown.active_modifiers],
         "ignored_modifiers": [_roll_modifier_payload(modifier) for modifier in instruction.breakdown.ignored_modifiers],
-        "damage_instruction": _damage_roll_instruction(source),
+        "damage_instruction": _damage_roll_instruction(
+            source,
+            critical=pending.critical,
+        ),
+        "damage_components": [
+            component.as_payload(critical=pending.critical)
+            for component in source.damage_components
+        ],
         "natural_roll": pending.natural_roll,
         "natural_rolls": list(pending.natural_rolls),
         "total": pending.total,
@@ -11215,6 +11251,10 @@ def _pending_area_spell_payload(
         ],
         "spell_save_dc": source.save_dc or caster.spell_save_dc,
         "damage_instruction": _damage_roll_instruction(source),
+        "damage_components": [
+            component.as_payload()
+            for component in source.damage_components
+        ],
     }
 
 
@@ -11252,7 +11292,14 @@ def _pending_enemy_opportunity_attack_payload(
         "attack_mode": instruction.mode.value,
         "active_modifiers": [_roll_modifier_payload(modifier) for modifier in instruction.breakdown.active_modifiers],
         "ignored_modifiers": [_roll_modifier_payload(modifier) for modifier in instruction.breakdown.ignored_modifiers],
-        "damage_instruction": _damage_roll_instruction(source),
+        "damage_instruction": _damage_roll_instruction(
+            source,
+            critical=pending.critical,
+        ),
+        "damage_components": [
+            component.as_payload(critical=pending.critical)
+            for component in source.damage_components
+        ],
         "natural_roll": pending.natural_roll,
         "natural_rolls": list(pending.natural_rolls),
         "total": pending.total,
@@ -11291,7 +11338,14 @@ def _pending_ready_attack_payload(
         "attack_mode": instruction.mode.value,
         "active_modifiers": [_roll_modifier_payload(modifier) for modifier in instruction.breakdown.active_modifiers],
         "ignored_modifiers": [_roll_modifier_payload(modifier) for modifier in instruction.breakdown.ignored_modifiers],
-        "damage_instruction": _damage_roll_instruction(source),
+        "damage_instruction": _damage_roll_instruction(
+            source,
+            critical=pending.critical,
+        ),
+        "damage_components": [
+            component.as_payload(critical=pending.critical)
+            for component in source.damage_components
+        ],
         "natural_roll": pending.natural_roll,
         "natural_rolls": list(pending.natural_rolls),
         "total": pending.total,
@@ -11309,7 +11363,21 @@ def _roll_modifier_payload(modifier: RollModifier) -> dict[str, object]:
     }
 
 
-def _damage_roll_instruction(source) -> str:
+def _damage_roll_instruction(source, *, critical: bool = False) -> str:
+    components = getattr(source, "damage_components", ())
+    if components:
+        hints = " oraz ".join(
+            component.hint(critical=critical) for component in components
+        )
+        legacy_hint = str(getattr(source, "damage_hint", ""))
+        if "(" in legacy_hint and legacy_hint.rstrip().endswith(")"):
+            hints = f"{hints} {legacy_hint[legacy_hint.index('('):]}"
+        suffix = (
+            "Wpisz wynik każdego składnika osobno."
+            if len(components) > 1
+            else "Wpisz sumę po modyfikatorach."
+        )
+        return f"Rzuć obrażenia: {hints}. {suffix}"
     if source.damage_fixed is not None:
         return f"Obrażenia stałe: {source.damage_fixed} {source.damage_type}. Wpisz {source.damage_fixed}."
     return f"Rzuć obrażenia: {source.damage_hint}. Wpisz sumę po modyfikatorach."
@@ -11468,22 +11536,31 @@ def _pending_enemy_turn_target_positions(result) -> tuple[Coordinate, ...]:
 def _pending_enemy_turn_led_feedback(result) -> LedFeedback:
     if result is None:
         return LedFeedback()
+    active_position = (
+        result.movement_path.origin
+        if result.movement_path is not None and result.movement_path.valid
+        else result.enemy.position
+    )
+    frames: list[LedFrame] = [
+        LedFrame((active_position,), LedColor.ACTIVE_ACTOR, LedRole.ACTIVE_ACTOR)
+    ]
     if result.movement_path is not None and result.movement_path.valid:
         path_positions = tuple(position for position in result.movement_path.path if position != result.movement_path.origin)
-        frames: list[LedFrame] = []
         if path_positions:
             frames.append(LedFrame(path_positions, LedColor.ENEMY_MOVEMENT_PATH, LedRole.SELECTED_PATH))
         frames.append(LedFrame((result.movement_path.destination,), LedColor.ENEMY_MOVEMENT_DESTINATION, LedRole.DESTINATION))
         return LedFeedback(tuple(frames))
     if result.target is not None:
-        return LedFeedback((LedFrame((result.target.position,), LedColor.ENEMY, LedRole.ENEMY),))
-    return LedFeedback()
+        frames.append(LedFrame((result.target.position,), LedColor.ENEMY, LedRole.ENEMY))
+    return LedFeedback(tuple(frames))
 
 
 def _enemy_turn_intent_led_feedback(intent) -> LedFeedback:
     if intent is None:
         return LedFeedback()
-    frames: list[LedFrame] = []
+    frames: list[LedFrame] = [
+        LedFrame((intent.enemy.position,), LedColor.ACTIVE_ACTOR, LedRole.ACTIVE_ACTOR)
+    ]
     if intent.movement_path is not None and intent.movement_path.valid:
         path_positions = tuple(position for position in intent.movement_path.path if position != intent.movement_path.origin)
         if path_positions:
@@ -11491,6 +11568,46 @@ def _enemy_turn_intent_led_feedback(intent) -> LedFeedback:
         frames.append(LedFrame((intent.movement_path.destination,), LedColor.ENEMY_MOVEMENT_DESTINATION, LedRole.DESTINATION))
     if intent.target is not None:
         frames.append(LedFrame((intent.target.position,), LedColor.ENEMY, LedRole.ENEMY))
+    return LedFeedback(tuple(frames))
+
+
+def _pending_player_attack_led_feedback(
+    pending: PendingPlayerAttack,
+    state: CombatState,
+) -> LedFeedback:
+    attacker = next(
+        (
+            actor
+            for actor in state.actors
+            if str(actor.id) == pending.attacker_id and not actor.is_defeated()
+        ),
+        None,
+    )
+    target = next(
+        (
+            actor
+            for actor in state.actors
+            if str(actor.id) == pending.target_id and not actor.is_defeated()
+        ),
+        None,
+    )
+    frames: list[LedFrame] = []
+    if attacker is not None:
+        frames.append(
+            LedFrame(
+                (attacker.position,),
+                LedColor.ACTIVE_ACTOR,
+                LedRole.ACTIVE_ACTOR,
+            )
+        )
+    if target is not None:
+        frames.append(
+            LedFrame(
+                (target.position,),
+                LedColor.SELECTED_ATTACK_TARGET,
+                LedRole.ENEMY,
+            )
+        )
     return LedFeedback(tuple(frames))
 
 
@@ -11732,7 +11849,17 @@ def _enemy_turn_message(result) -> str:
     summary = _enemy_roll_summary(result)
     if not summary:
         return result.message
-    return f"{result.message} {summary}"
+    movement = result.movement_path
+    if (
+        movement is not None
+        and movement.valid
+        and movement.destination != movement.origin
+    ):
+        return (
+            f"{result.enemy.name} rusza się na "
+            f"({movement.destination.col}, {movement.destination.row}). {summary}"
+        )
+    return summary
 
 
 def _movement_preview_payload(path, state: CombatState) -> dict[str, object] | None:

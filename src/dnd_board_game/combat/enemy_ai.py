@@ -28,7 +28,14 @@ from .attack_positioning import AttackPositioning, attack_source_with_positionin
 from .conditions import CombatCondition, attack_source_with_prone, condition_roll_request, has_condition, path_with_condition_cost
 from .scene import SceneObject
 from .stealth import is_hidden_from, resolve_search, reveal_actor
-from .damage import AppliedDamageResult, DamageComponentInput, DamageResult, DamageType, apply_damage_result, resolve_damage
+from .damage import (
+    AppliedDamageResult,
+    DamageComponentInput,
+    DamageResult,
+    apply_damage_result,
+    resolve_damage,
+    roll_damage_components,
+)
 from .session import (
     CombatState,
     movement_remaining,
@@ -58,6 +65,7 @@ class EnemyAutoAttackResult:
     saving_throw_request: SavingThrowRequest | None = None
     saving_throw_result: SavingThrowResult | None = None
     base_damage: int | None = None
+    base_damage_components: tuple[DamageComponentInput, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,6 +87,7 @@ class EnemyAutoTurnResult:
     saving_throw_request: SavingThrowRequest | None = None
     saving_throw_result: SavingThrowResult | None = None
     base_damage: int | None = None
+    base_damage_components: tuple[DamageComponentInput, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -168,7 +177,11 @@ def resolve_enemy_auto_attack(
         dc = int(source.save_dc or enemy.spell_save_dc)
         if dc <= 0:
             raise ValueError(f"Atak {source.name} wymaga dodatniego ST rzutu obronnego.")
-        base_damage = _enemy_damage_amount(source, rng, critical=False)
+        base_damage_components = roll_damage_components(
+            source.damage_components,
+            lambda sides: rng.randint(1, sides),
+        )
+        base_damage = sum(component.amount for component in base_damage_components)
         saving_throw_request = SavingThrowRequest(
             ability=source.save_ability,
             dc=dc,
@@ -193,6 +206,7 @@ def resolve_enemy_auto_attack(
             source=source,
             saving_throw_request=saving_throw_request,
             base_damage=base_damage,
+            base_damage_components=base_damage_components,
         )
     attack_roll = resolve_d20_roll(_roll_input_for_request(source.attack_roll_request, rng))
     declaration = AttackDeclaration(attacker=enemy, target=target, source=source)
@@ -203,14 +217,13 @@ def resolve_enemy_auto_attack(
     updated_target: Actor | None = None
 
     if resolution.hit:
-        if source.damage_fixed is not None:
-            damage_amount = source.damage_fixed + source.damage_modifier
-        else:
-            die_sides = source.damage_die_sides or 6
-            dice_count = 2 if resolution.critical else 1
-            damage_amount = sum(rng.randint(1, die_sides) for _ in range(dice_count)) + source.damage_modifier
-        damage_type = DamageType(source.damage_type)
-        damage = resolve_damage((DamageComponentInput(damage_amount, damage_type, source.name),))
+        damage = resolve_damage(
+            roll_damage_components(
+                source.damage_components,
+                lambda sides: rng.randint(1, sides),
+                critical=resolution.critical,
+            )
+        )
         applied_damage = apply_damage_result(
             target_actor,
             damage,
@@ -222,7 +235,7 @@ def resolve_enemy_auto_attack(
         defeated_text = " Cel zostaje pokonany." if applied_damage.defeated_by_damage else ""
         message = (
             f"{enemy.name} trafia {target.name}. Wynik ataku: {attack_roll.total}. "
-            f"Obrażenia: {damage.total_before_reduction} -> {damage.total_applied} {damage_type.value}. "
+            f"Obrażenia: {_damage_result_text(damage)}. "
             f"{target_actor.name}: HP {applied_damage.hp_before} -> {applied_damage.hp_after}.{defeated_text}"
         )
     else:
@@ -572,20 +585,17 @@ def _turn_result_from_attack(result: EnemyAutoAttackResult) -> EnemyAutoTurnResu
         saving_throw_request=result.saving_throw_request,
         saving_throw_result=result.saving_throw_result,
         base_damage=result.base_damage,
+        base_damage_components=result.base_damage_components,
     )
 
 
-def _enemy_damage_amount(
-    source: AttackSource,
-    rng: random.Random,
-    *,
-    critical: bool,
-) -> int:
-    if source.damage_fixed is not None:
-        return max(0, source.damage_fixed + source.damage_modifier)
-    die_sides = source.damage_die_sides or 6
-    dice_count = 2 if critical else 1
-    return max(
-        0,
-        sum(rng.randint(1, die_sides) for _ in range(dice_count)) + source.damage_modifier,
-    )
+def _damage_result_text(damage: DamageResult) -> str:
+    parts = []
+    for component in damage.resolved_components:
+        amount = (
+            f"{component.amount_before} -> {component.amount_applied}"
+            if component.changed
+            else str(component.amount_applied)
+        )
+        parts.append(f"{amount} {component.damage_type.value}")
+    return ", ".join(parts) + f"; razem {damage.total_applied}"

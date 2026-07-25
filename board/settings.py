@@ -38,6 +38,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "led_count": 620,
         "brightness": 128,
         "scan_brightness": 255,
+        "transition_ms": 180,
+        "scan_transition_ms": 80,
         "color_order": "rgb",
         "request_timeout_s": 2.0,
     },
@@ -115,6 +117,10 @@ def _apply_env_overrides(config: dict[str, Any]) -> dict[str, Any]:
         wled_cfg["brightness"] = int(os.environ["WLED_BRIGHTNESS"])
     if os.environ.get("WLED_SCAN_BRIGHTNESS"):
         wled_cfg["scan_brightness"] = int(os.environ["WLED_SCAN_BRIGHTNESS"])
+    if os.environ.get("WLED_TRANSITION_MS"):
+        wled_cfg["transition_ms"] = int(os.environ["WLED_TRANSITION_MS"])
+    if os.environ.get("WLED_SCAN_TRANSITION_MS"):
+        wled_cfg["scan_transition_ms"] = int(os.environ["WLED_SCAN_TRANSITION_MS"])
     if os.environ.get("WLED_COLOR_ORDER"):
         wled_cfg["color_order"] = str(os.environ["WLED_COLOR_ORDER"]).strip().lower()
     return config

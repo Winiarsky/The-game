@@ -2964,7 +2964,7 @@ function pendingEnemyOpportunityAttackHtml(pending) {
     return `
       <p>${esc(pending.damage_instruction || 'Wpisz obrażenia po trafieniu.')}</p>
       <div class="row">
-        <label>Obrażenia: <input id="enemy-opportunity-damage-roll" type="number" min="0" value="${esc(defaultDamageValue(source))}"></label>
+        ${damageComponentInputsHtml(pending, 'enemy-opportunity-damage', source)}
         <button onclick="submitEnemyOpportunityDamageRoll()">Zapisz obrażenia</button>
       </div>
     `;
@@ -3100,7 +3100,7 @@ function pendingReadyAttackHtml(pending) {
     return `
       <p>${esc(pending.damage_instruction || 'Wpisz obrażenia po trafieniu.')}</p>
       <div class="row">
-        <label>Obrażenia: <input id="ready-damage-roll" type="number" min="0" value="${esc(defaultDamageValue(source))}"></label>
+        ${damageComponentInputsHtml(pending, 'ready-damage', source)}
         <button onclick="submitReadyDamageRoll()">Zapisz obrażenia</button>
       </div>
     `;
@@ -3176,7 +3176,7 @@ function pendingPlayerAttackHtml(pending) {
       <p>${esc(pending.damage_instruction || 'Wpisz obrażenia po trafieniu.')}</p>
       ${spellSavesHtml(pending.saving_throws || [])}
       <div class="row">
-        <label>Obrażenia: <input id="combat-damage-roll" type="number" min="0" value="${esc(defaultDamageValue(source))}"></label>
+        ${damageComponentInputsHtml(pending, 'combat-damage', source)}
         <button onclick="submitPlayerDamageRoll()">Zapisz obrażenia</button>
         <button class="secondary" data-allow-busy="true" onclick="finishCombatTurn()">Zakończ turę</button>
       </div>
@@ -3230,7 +3230,7 @@ function pendingAreaSpellHtml(pending) {
       ${friendlyFire}
       ${spellSavesHtml(pending.saving_throws || [])}
       <div class="row">
-        <label>Obrażenia: <input id="area-spell-damage-roll" type="number" min="0" value="${esc(defaultDamageValue(source))}"></label>
+        ${damageComponentInputsHtml(pending, 'area-spell-damage', source)}
         <button onclick="submitAreaSpellDamage()">Zapisz obrażenia</button>
         <button class="secondary" data-allow-busy="true" onclick="finishCombatTurn()">Zakończ turę</button>
       </div>
@@ -3504,6 +3504,34 @@ function defaultDamageValue(source) {
   if (!source) return 0;
   if (source.damage_fixed !== null && source.damage_fixed !== undefined) return Number(source.damage_fixed) + Number(source.damage_modifier || 0);
   return Math.max(0, Number(source.damage_modifier || 0));
+}
+function damageComponentInputsHtml(pending, prefix, source) {
+  const components = (pending && pending.damage_components) || [];
+  if (!components.length) {
+    return `<label>Obrażenia: <input id="${esc(prefix)}-legacy" type="number" min="0" value="${esc(defaultDamageValue(source))}"></label>`;
+  }
+  return components.map((component, index) => {
+    const fixed = component.fixed;
+    const modifier = Number(component.modifier || 0);
+    const value = fixed !== null && fixed !== undefined
+      ? Math.max(0, Number(fixed) + modifier)
+      : Math.max(0, modifier);
+    const label = component.label || component.damage_type_label || component.damage_type || `Składnik ${index + 1}`;
+    return `<label>${esc(label)} (${esc(component.formula || '')}): <input id="${esc(prefix)}-${index}" type="number" min="0" value="${esc(value)}"></label>`;
+  }).join('');
+}
+function damageComponentPayload(pending, prefix) {
+  const components = (pending && pending.damage_components) || [];
+  if (!components.length) {
+    const legacy = document.getElementById(`${prefix}-legacy`);
+    return {damage: Number(legacy ? legacy.value : 0)};
+  }
+  const totals = {};
+  components.forEach((component, index) => {
+    const input = document.getElementById(`${prefix}-${index}`);
+    totals[component.id] = Number(input ? input.value : 0);
+  });
+  return {components: totals};
 }
 function defaultHealingValue(source) {
   if (!source) return 0;
@@ -3843,8 +3871,8 @@ function moveCombatContextMenu(delta) { api('/api/combat/context-menu/select', {
 function confirmCombatContextMenu(optionId) { api('/api/combat/context-menu/confirm', {option_id: optionId || ''}, 'Wykonuję wybraną akcję...'); }
 function cancelCombatContextMenu() { api('/api/combat/context-menu/cancel', {}, ''); }
 function submitPlayerDamageRoll() {
-  const damage = document.getElementById('combat-damage-roll');
-  api('/api/combat/player-damage', {damage: Number(damage ? damage.value : 0)}, 'Zapisuję obrażenia...');
+  const pending = ((state.combat || {}).pending_player_attack) || {};
+  api('/api/combat/player-damage', damageComponentPayload(pending, 'combat-damage'), 'Zapisuję obrażenia...');
 }
 function submitPlayerHealingRoll() {
   const healing = document.getElementById('combat-healing-roll');
@@ -3853,8 +3881,8 @@ function submitPlayerHealingRoll() {
 function cancelPlayerHealing() { api('/api/combat/player-healing-cancel', {}, 'Anuluję leczenie...'); }
 function confirmAreaSpell() { api('/api/combat/area-spell/confirm', {}, 'Potwierdzam czar obszarowy...'); }
 function submitAreaSpellDamage() {
-  const damage = document.getElementById('area-spell-damage-roll');
-  api('/api/combat/area-spell/damage', {damage: Number(damage ? damage.value : 0)}, 'Zapisuję obrażenia obszarowe...');
+  const pending = ((state.combat || {}).pending_area_spell) || {};
+  api('/api/combat/area-spell/damage', damageComponentPayload(pending, 'area-spell-damage'), 'Zapisuję obrażenia obszarowe...');
 }
 function cancelAreaSpell() { api('/api/combat/area-spell/cancel', {}, 'Anuluję czar obszarowy...'); }
 function useStrengthPotion(actionId) { api('/api/combat/strength-potion', {action_id: actionId}, 'Używam eliksiru...'); }
@@ -3937,8 +3965,8 @@ function submitEnemyOpportunityAttackRoll() {
   api('/api/combat/enemy-opportunity/roll', d20RollPayload('enemy-opportunity-natural-roll'), 'Rozstrzygam atak okazyjny...');
 }
 function submitEnemyOpportunityDamageRoll() {
-  const damage = document.getElementById('enemy-opportunity-damage-roll');
-  api('/api/combat/enemy-opportunity/damage', {damage: Number(damage ? damage.value : 0)}, 'Zapisuję obrażenia ataku okazyjnego...');
+  const pending = ((state.combat || {}).pending_enemy_opportunity_attack) || {};
+  api('/api/combat/enemy-opportunity/damage', damageComponentPayload(pending, 'enemy-opportunity-damage'), 'Zapisuję obrażenia ataku okazyjnego...');
 }
 function startReadyAttack() { api('/api/combat/ready-attack/start', {}, 'Używam przygotowanej akcji...'); }
 function skipReadyAttack() { api('/api/combat/ready-attack/skip', {}, 'Pomijam przygotowaną akcję...'); }
@@ -3946,8 +3974,8 @@ function submitReadyAttackRoll() {
   api('/api/combat/ready-attack/roll', d20RollPayload('ready-natural-roll'), 'Rozstrzygam przygotowaną akcję...');
 }
 function submitReadyDamageRoll() {
-  const damage = document.getElementById('ready-damage-roll');
-  api('/api/combat/ready-attack/damage', {damage: Number(damage ? damage.value : 0)}, 'Zapisuję obrażenia przygotowanej akcji...');
+  const pending = ((state.combat || {}).pending_ready_attack) || {};
+  api('/api/combat/ready-attack/damage', damageComponentPayload(pending, 'ready-damage'), 'Zapisuję obrażenia przygotowanej akcji...');
 }
 function confirmEnemyTurnResult() { api('/api/combat/enemy-turn/confirm', {}, 'Potwierdzam wynik przeciwnika...'); }
 function submitEnemySavingThrow() {

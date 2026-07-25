@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from random import Random
+from typing import Mapping
 
 from dnd_board_game.actions import ActionResourceResolver, SpellSaveAttackResolver
 from dnd_board_game.actors import (
@@ -21,6 +22,7 @@ from dnd_board_game.combat import (
     AttackSource,
     CombatState,
     CombatStatus,
+    DamageComponentInput,
     HealingSource,
     SpellSaveResult,
     attack_source_with_hidden_advantage,
@@ -31,6 +33,7 @@ from dnd_board_game.combat import (
     can_consume_spell_resource,
     can_use_attack_action,
     consume_next_attack_effects,
+    damage_components_from_totals,
     current_actor,
     dexterity_save_cover_modifiers,
     evaluate_attack_positioning,
@@ -532,7 +535,8 @@ class PlayerCombatActionFlowService:
         source: AttackSource,
         pending: PendingPlayerAttack,
         active_effects: tuple[ActiveCombatEffect, ...],
-        damage: int,
+        damage: int | None = None,
+        component_totals: Mapping[str, int] | None = None,
     ) -> PlayerAttackTransition:
         if pending.stage != "damage_roll":
             raise ValueError("Nie ma oczekującego rzutu obrażeń gracza.")
@@ -545,13 +549,33 @@ class PlayerCombatActionFlowService:
             active_effects,
         )
         target = _actor_by_id(state, pending.target_id)
-        damage_amount = max(0, int(damage))
+        if component_totals is not None:
+            damage_components = damage_components_from_totals(
+                effective_source.damage_components,
+                component_totals,
+            )
+        else:
+            if len(effective_source.damage_components) > 1:
+                raise ValueError(
+                    "To źródło zadaje kilka typów obrażeń. Wpisz wynik każdego składnika osobno."
+                )
+            damage_amount = max(0, int(damage or 0))
+            component = effective_source.damage_components[0]
+            damage_components = (
+                DamageComponentInput(
+                    damage_amount,
+                    component.damage_type,
+                    component.label or component.id,
+                ),
+            )
+        damage_amount = sum(component.amount for component in damage_components)
         save = pending.saving_throws[0] if pending.saving_throws else None
         resolution = self._spell_saves.apply_target_damage(
             state,
             target_id=pending.target_id,
             source=effective_source,
             base_damage=damage_amount,
+            damage_components=damage_components,
             saving_throw=save,
             critical=pending.critical,
         )

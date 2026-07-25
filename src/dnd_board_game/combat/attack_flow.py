@@ -5,10 +5,18 @@ from enum import StrEnum
 from typing import Sequence
 
 from dnd_board_game.actors import Actor, Faction, attack_roll_modifiers
-from dnd_board_game.rules import AttackRollOutcome, AttackRollResult, D20RollRequest, D20RollResult, resolve_attack_roll
+from dnd_board_game.rules import (
+    AttackRollOutcome,
+    AttackRollResult,
+    D20RollRequest,
+    D20RollResult,
+    DiceExpression,
+    resolve_attack_roll,
+)
 from dnd_board_game.world import BoardState, Coordinate, line_of_sight_clear
 
 from .action_economy import ActionUse, consume_action
+from .damage import DamageComponentSpec, DamageType
 from .spells import SpellArea
 from .targets import CombatTarget, actor_as_combat_target, is_public_attack_target
 from .stealth import HiddenState, is_hidden_from
@@ -50,6 +58,7 @@ class AttackSource:
     damage_die_sides: int | None = None
     damage_modifier: int = 0
     damage_type: str = "slashing"
+    damage_components: tuple[DamageComponentSpec, ...] = ()
     id: str = ""
     ability: str | None = None
     spell_level: int = 0
@@ -77,6 +86,57 @@ class AttackSource:
             raise ValueError("Attack resource_pool_id cannot be empty.")
         if self.resource_cost < 1:
             raise ValueError("Attack resource_cost must be positive.")
+        components = self.damage_components
+        if self.damage_fixed is not None and self.damage_die_sides is not None:
+            object.__setattr__(self, "damage_die_sides", None)
+        if len(components) == 1 and components[0].id == "base":
+            component = components[0]
+            component_die_sides = (
+                component.dice.sides if component.dice is not None else None
+            )
+            if (
+                component.fixed != self.damage_fixed
+                or component_die_sides != self.damage_die_sides
+                or component.modifier != self.damage_modifier
+                or component.damage_type.value != self.damage_type
+            ):
+                components = ()
+        if not components:
+            fixed = self.damage_fixed
+            die_sides = self.damage_die_sides
+            if (
+                fixed is not None
+                or die_sides is not None
+                or self.damage_hint
+                or self.id
+            ):
+                components = (
+                    DamageComponentSpec(
+                        id="base",
+                        damage_type=DamageType(self.damage_type),
+                        dice=(
+                            None
+                            if die_sides is None or fixed is not None
+                            else DiceExpression(1, die_sides)
+                        ),
+                        fixed=(
+                            fixed
+                            if fixed is not None
+                            else (0 if die_sides is None else None)
+                        ),
+                        modifier=self.damage_modifier,
+                        label=self.name,
+                    ),
+                )
+                object.__setattr__(self, "damage_components", components)
+        if len({component.id for component in components}) != len(components):
+            raise ValueError("Attack damage component ids must be unique.")
+        if components and not self.damage_hint:
+            object.__setattr__(
+                self,
+                "damage_hint",
+                " + ".join(component.hint() for component in components),
+            )
 
 
 @dataclass(frozen=True, slots=True)

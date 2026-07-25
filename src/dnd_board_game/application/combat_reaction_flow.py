@@ -13,7 +13,6 @@ from dnd_board_game.combat import (
     CombatState,
     CombatStatus,
     DamageComponentInput,
-    DamageType,
     EnemyAutoTurnResult,
     apply_damage_result,
     attack_source_with_target_combat_effects,
@@ -21,11 +20,13 @@ from dnd_board_game.combat import (
     attack_source_with_prone,
     actor_as_combat_target,
     consume_next_attack_effects,
+    damage_components_from_totals,
     replace_actor,
     reveal_actor,
     is_hidden_from,
     resolve_attack,
     resolve_damage,
+    roll_damage_components,
     reaction_available_for,
     start_attack_action,
     use_actor_reaction,
@@ -161,9 +162,12 @@ class CombatReactionFlowService:
                 str(actor.id),
             )
             if resolution.hit:
-                damage_amount = _opportunity_damage(source, roll_damage)
                 damage_result = resolve_damage(
-                    (DamageComponentInput(damage_amount, DamageType(source.damage_type), source.name),)
+                    roll_damage_components(
+                        source.damage_components,
+                        roll_damage,
+                        critical=resolution.critical,
+                    )
                 )
                 applied_damage = apply_damage_result(actor, damage_result, critical=resolution.critical)
                 applied_damages.append(applied_damage)
@@ -298,7 +302,8 @@ class PlayerReactionFlowService:
         target_id: str,
         attack_sources_by_actor: Mapping[ActorId, AttackSource],
         active_effects: tuple[ActiveCombatEffect, ...],
-        damage: int,
+        damage: int | None = None,
+        component_totals: Mapping[str, int] | None = None,
         critical: bool = False,
     ) -> PlayerReactionDamageResolution:
         attacker = _actor_by_string_id(state, attacker_id)
@@ -312,15 +317,27 @@ class PlayerReactionFlowService:
             source,
             active_effects,
         )
-        damage_result = resolve_damage(
-            (
+        if component_totals is not None:
+            components = damage_components_from_totals(
+                source.damage_components,
+                component_totals,
+            )
+        else:
+            if damage is None:
+                raise ValueError("Brak wyniku obrażeń reakcji.")
+            if len(source.damage_components) > 1:
+                raise ValueError(
+                    "Ten atak wymaga osobnego wyniku dla każdego składnika obrażeń."
+                )
+            component = source.damage_components[0]
+            components = (
                 DamageComponentInput(
                     max(0, int(damage)),
-                    DamageType(source.damage_type),
-                    source.name,
+                    component.damage_type,
+                    component.label or component.id,
                 ),
             )
-        )
+        damage_result = resolve_damage(components)
         applied_damage = apply_damage_result(target, damage_result, critical=critical)
         return PlayerReactionDamageResolution(
             state=replace_actor(state, applied_damage.actor_after),
@@ -373,19 +390,6 @@ class PlayerReactionFlowService:
                     trigger=trigger,
                 )
         return None
-
-
-def _opportunity_damage(
-    source: AttackSource,
-    roll_damage: Callable[[int], int],
-) -> int:
-    if source.damage_fixed is not None:
-        return source.damage_fixed + source.damage_modifier
-    die_sides = source.damage_die_sides or 6
-    rolled = int(roll_damage(die_sides))
-    if not 1 <= rolled <= die_sides:
-        raise ValueError(f"Wynik kości obrażeń musi być w zakresie 1-{die_sides}.")
-    return rolled + source.damage_modifier
 
 
 def _ready_trigger_for_enemy_result(result: EnemyAutoTurnResult) -> str | None:

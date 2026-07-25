@@ -6,11 +6,15 @@ from dnd_board_game.actors import Actor, ActorId, DamageAffinityProfile, DeathSa
 from dnd_board_game.combat import (
     DamageAdjustment,
     DamageComponentInput,
+    DamageComponentSpec,
     DamageType,
     apply_damage,
     apply_damage_result,
+    damage_components_from_totals,
+    roll_damage_components,
     resolve_damage,
 )
+from dnd_board_game.rules import DiceExpression
 from dnd_board_game.world import Coordinate
 
 
@@ -126,6 +130,56 @@ def test_mixed_damage_applies_affinities_only_to_matching_components() -> None:
         (DamageType.SLASHING, 7),
         (DamageType.FIRE, 2),
     ]
+
+
+def test_damage_component_specs_roll_ndm_and_double_only_dice_on_critical() -> None:
+    rolls = iter((3, 4, 5, 6, 2, 3))
+    components = (
+        DamageComponentSpec(
+            "blade",
+            DamageType.SLASHING,
+            dice=DiceExpression.parse("2d6"),
+            modifier=3,
+            label="Ostrze",
+        ),
+        DamageComponentSpec(
+            "flame",
+            DamageType.FIRE,
+            dice=DiceExpression.parse("1d4"),
+            label="Płomień",
+        ),
+    )
+
+    result = roll_damage_components(
+        components,
+        lambda _sides: next(rolls),
+        critical=True,
+    )
+
+    assert [(item.amount, item.damage_type) for item in result] == [
+        (21, DamageType.SLASHING),
+        (5, DamageType.FIRE),
+    ]
+    assert components[0].formula(critical=True) == "4d6 + 3"
+
+
+def test_manual_damage_component_totals_preserve_independent_types() -> None:
+    components = (
+        DamageComponentSpec("blade", DamageType.SLASHING, fixed=5),
+        DamageComponentSpec("flame", DamageType.FIRE, fixed=3),
+    )
+
+    totals = damage_components_from_totals(
+        components,
+        {"blade": 5, "flame": 3},
+    )
+    result = resolve_damage(
+        totals,
+        DamageAffinityProfile(resistances=(DamageType.FIRE,)),
+    )
+
+    assert result.total_before_reduction == 8
+    assert result.total_applied == 6
 
 
 def test_same_type_components_are_combined_before_resistance_rounding() -> None:

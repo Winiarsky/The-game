@@ -115,6 +115,41 @@ def test_load_scenario_builds_actors_and_attack_sources():
     assert goblin_source.damage_modifier == 2
 
 
+def test_load_scenario_normalizes_multicomponent_ndm_damage(tmp_path) -> None:
+    data = _village_square_data_without_refs()
+    data["actors"][0]["attacks"][0]["damage"] = {
+        "components": [
+            {
+                "id": "blade",
+                "label": "Ostrze",
+                "dice": "2d6",
+                "modifier": 3,
+                "damage_type": "slashing",
+            },
+            {
+                "id": "flame",
+                "label": "Płomień",
+                "dice": "1d4",
+                "damage_type": "fire",
+            },
+        ]
+    }
+    scenario_path = tmp_path / "multi_damage.json"
+    scenario_path.write_text(json.dumps(data), encoding="utf-8")
+
+    encounter = build_encounter_from_scenario(load_scenario(scenario_path))
+    actor = encounter.actors[0]
+    source = encounter.attack_sources_by_actor[actor.id]
+
+    assert [component.id for component in source.damage_components] == [
+        "blade",
+        "flame",
+    ]
+    assert source.damage_components[0].dice is not None
+    assert source.damage_components[0].dice.format() == "2d6"
+    assert source.damage_hint == "Ostrze: 2d6 + 3 cięte + Płomień: 1d4 od ognia"
+
+
 def test_gate_skirmish_loads_rest_and_recharge_limited_attack_sources() -> None:
     encounter = build_encounter_from_scenario(
         load_scenario("content/scenarios/gate_skirmish.json")

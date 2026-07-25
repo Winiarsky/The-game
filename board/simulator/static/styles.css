@@ -209,7 +209,10 @@ header h1 {
     font-size: 0.7rem;
     color: #333;
     cursor: pointer;
-    transition: transform 0.1s ease, box-shadow 0.2s ease;
+    transition:
+        transform 0.1s ease,
+        background-color 180ms ease-out,
+        box-shadow 180ms ease-out;
     position: relative;
     overflow: visible;
 }

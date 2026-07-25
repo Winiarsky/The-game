@@ -14,6 +14,7 @@ from dnd_board_game.combat import (
     CombatState,
     CombatCondition,
     ConditionState,
+    DamageComponentSpec,
     HealingSource,
     HealingSourceType,
     HiddenState,
@@ -24,7 +25,7 @@ from dnd_board_game.combat import (
     current_actor,
     start_combat,
 )
-from dnd_board_game.rules import D20RollInput, D20RollRequest, resolve_d20_roll
+from dnd_board_game.rules import DiceExpression, D20RollInput, D20RollRequest, resolve_d20_roll
 from dnd_board_game.world import BoardState, Coordinate
 
 
@@ -186,6 +187,75 @@ def test_staged_attack_moves_from_target_preview_through_damage() -> None:
     assert damaged.pending is None
     assert damaged.applied_damage is not None
     assert damaged.event_type == "ui_combat_player_damage_roll"
+
+
+def test_player_damage_accepts_independent_multicomponent_totals() -> None:
+    service = PlayerCombatActionFlowService()
+    hero = _actor("hero", Faction.ALLY, Coordinate(0, 0))
+    enemy = replace(
+        _actor("enemy", Faction.ENEMY, Coordinate(1, 0)),
+        hp=20,
+        damage_affinities=DamageAffinityProfile(
+            resistances=(DamageType.FIRE,)
+        ),
+    )
+    state = _state(hero, enemy)
+    source = replace(
+        _source(),
+        damage_components=(
+            DamageComponentSpec(
+                "blade",
+                DamageType.SLASHING,
+                dice=DiceExpression.parse("1d8"),
+            ),
+            DamageComponentSpec(
+                "flame",
+                DamageType.FIRE,
+                dice=DiceExpression.parse("1d6"),
+            ),
+        ),
+    )
+    selected = service.select_attack_target(
+        state=state,
+        board=BoardState(),
+        source=source,
+        position=enemy.position,
+        active_effects=(),
+    )
+    assert selected.pending is not None
+    confirmed = service.confirm_attack_target(
+        state=state,
+        board=BoardState(),
+        source=source,
+        pending=selected.pending,
+        active_effects=(),
+        rng=Random(1),
+    )
+    assert confirmed.pending is not None
+    rolled = service.submit_attack_roll(
+        state=state,
+        board=BoardState(),
+        source=source,
+        pending=confirmed.pending,
+        active_effects=(),
+        natural_roll=15,
+    )
+    assert rolled.pending is not None
+
+    damaged = service.submit_damage(
+        state=rolled.state,
+        source=source,
+        pending=rolled.pending,
+        active_effects=(),
+        component_totals={"blade": 6, "flame": 5},
+    )
+
+    assert damaged.applied_damage is not None
+    assert damaged.applied_damage.damage.total_before_reduction == 11
+    assert damaged.applied_damage.damage.total_applied == 8
+    assert next(
+        actor for actor in damaged.state.actors if actor.id == enemy.id
+    ).hp == 12
 
 
 def test_single_target_dexterity_save_uses_scene_cover_bonus() -> None:

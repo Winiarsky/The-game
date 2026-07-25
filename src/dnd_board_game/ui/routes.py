@@ -409,7 +409,11 @@ def create_app(session: ExplorationUiSession) -> Flask:
     def api_combat_player_damage():
         data = request.get_json(silent=True) or {}
         try:
-            return jsonify(session.submit_player_damage_roll(damage=int(data.get("damage", 0))))
+            return jsonify(
+                session.submit_player_damage_roll(
+                    **_damage_submission(data),
+                )
+            )
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
@@ -439,7 +443,11 @@ def create_app(session: ExplorationUiSession) -> Flask:
     def api_combat_area_spell_damage():
         data = request.get_json(silent=True) or {}
         try:
-            return jsonify(session.submit_player_area_spell_damage(damage=int(data.get("damage", 0))))
+            return jsonify(
+                session.submit_player_area_spell_damage(
+                    **_damage_submission(data),
+                )
+            )
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
@@ -746,7 +754,11 @@ def create_app(session: ExplorationUiSession) -> Flask:
     def api_combat_enemy_opportunity_damage():
         data = request.get_json(silent=True) or {}
         try:
-            return jsonify(session.submit_enemy_opportunity_damage_roll(damage=int(data.get("damage", 0))))
+            return jsonify(
+                session.submit_enemy_opportunity_damage_roll(
+                    **_damage_submission(data),
+                )
+            )
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
@@ -782,7 +794,11 @@ def create_app(session: ExplorationUiSession) -> Flask:
     def api_combat_ready_attack_damage():
         data = request.get_json(silent=True) or {}
         try:
-            return jsonify(session.submit_ready_damage_roll(damage=int(data.get("damage", 0))))
+            return jsonify(
+                session.submit_ready_damage_roll(
+                    **_damage_submission(data),
+                )
+            )
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
@@ -876,6 +892,24 @@ def create_app(session: ExplorationUiSession) -> Flask:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
     return app
+
+
+def _damage_submission(data: object) -> dict[str, object]:
+    if not isinstance(data, dict):
+        data = {}
+    raw_components = data.get("components")
+    if isinstance(raw_components, dict):
+        return {
+            "damage": None,
+            "component_totals": {
+                str(component_id): int(amount)
+                for component_id, amount in raw_components.items()
+            },
+        }
+    return {
+        "damage": int(data.get("damage", 0)),
+        "component_totals": None,
+    }
 
 
 def _session_log_payload(session: ExplorationUiSession, *, limit: int = 200) -> dict[str, object]:

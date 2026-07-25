@@ -3563,6 +3563,7 @@ def test_exploration_ui_session_writes_debug_log_for_npc_effects(tmp_path):
     assert effect_event["payload"]["source"] == "npc_proposal"
     assert effect_event["payload"]["effect"]["parameters"]["key"] == "scout_calmed"
     assert {"key": "scout_calmed", "value": True} in effect_event["payload"]["flags"]
+    assert "message" not in effect_event["payload"]
 
     client = create_app(session).test_client()
     payload = client.get("/api/session-log").get_json()
@@ -3682,7 +3683,8 @@ def test_exploration_ui_session_board_click_on_enemy_prompts_manual_attack_and_d
     _start_combat_from_scout_alarm(session)
     state = session.state_payload()
     target = state["combat"]["legal_targets"][0]
-    session.attach_board_connection(FakeBoardConnection(clicks=[tuple(target["position"])]), backend="simulator")
+    board = FakeBoardConnection(clicks=[tuple(target["position"])])
+    session.attach_board_connection(board, backend="simulator")
 
     selected = session.scan_board_selection()
 
@@ -3707,6 +3709,21 @@ def test_exploration_ui_session_board_click_on_enemy_prompts_manual_attack_and_d
     assert confirmed["combat"]["pending_player_attack"]["stage"] == "attack_roll"
     assert confirmed["combat"]["pending_player_attack"]["target"]["id"] == target["id"]
     assert confirmed["combat"]["turn_action"]["action_use"] == "action_available"
+    positions, colors = next(
+        call for call in reversed(board.led_calls) if call[0] != "off"
+    )
+    highlighted = {
+        tuple(position): color
+        for position, color in zip(positions, colors, strict=True)
+    }
+    attacker_position = tuple(
+        confirmed["combat"]["pending_player_attack"]["attacker"]["position"]
+    )
+    target_position = tuple(
+        confirmed["combat"]["pending_player_attack"]["target"]["position"]
+    )
+    assert highlighted[attacker_position] == list(LedColor.ACTIVE_ACTOR)
+    assert highlighted[target_position] == list(LedColor.SELECTED_ATTACK_TARGET)
 
     attack_roll = session.submit_player_attack_roll(natural_roll=20, natural_roll_2=20)
     pending = attack_roll["combat"]["pending_player_attack"]
@@ -4370,6 +4387,7 @@ def test_exploration_ui_session_cleric_area_spell_previews_line_and_consumes_slo
     cleric_after_confirm = next(actor for actor in confirmed["combat"]["actors"] if actor["id"] == "cleric")
 
     assert confirmed["combat"]["pending_area_spell"]["stage"] == "damage_roll"
+    assert confirmed["combat"]["pending_area_spell"]["damage_components"]
     assert confirmed["combat"]["turn_action"]["action_use"] == "action_used"
     assert cleric_after_confirm["spell_slots"][0]["remaining"] == 1
     save = confirmed["combat"]["pending_area_spell"]["saving_throws"][0]
@@ -4638,6 +4656,8 @@ def test_exploration_ui_session_ready_attack_can_stop_enemy_turn():
 
     target_payload = next(actor for actor in stopped["combat"]["actors"] if actor["id"] == str(target.id))
     assert rolled["combat"]["pending_ready_attack"]["stage"] == "damage_roll"
+    assert rolled["combat"]["pending_ready_attack"]["damage_components"]
+    assert rolled["combat"]["pending_ready_attack"]["damage_components"][0]["dice"].startswith("2d")
     assert target_payload["defeated"] is True
     assert stopped["combat"]["pending_ready_attack"] is None
     assert stopped["combat"]["enemy_turn_preview"] is None
@@ -4677,6 +4697,8 @@ def test_exploration_ui_session_hero_opportunity_attack_can_stop_enemy_movement(
 
     enemy_payload = next(actor for actor in stopped["combat"]["actors"] if actor["id"] == str(enemy.id))
     assert rolled["combat"]["pending_enemy_opportunity_attack"]["stage"] == "damage_roll"
+    assert rolled["combat"]["pending_enemy_opportunity_attack"]["damage_components"]
+    assert rolled["combat"]["pending_enemy_opportunity_attack"]["damage_components"][0]["dice"].startswith("2d")
     assert enemy_payload["defeated"] is True
     assert stopped["combat"]["pending_enemy_opportunity_attack"] is None
     assert stopped["combat"]["enemy_turn_preview"] is None
@@ -5787,6 +5809,7 @@ def test_exploration_ui_session_enemy_turn_waits_for_board_confirmation():
         session.finish_combat_turn()
     assert session.combat_state is not None
     enemy_id = str(session.combat_state.initiative_order.current_actor.id)
+    enemy_position = session.combat_state.initiative_order.current_actor.position.as_tuple()
     board = FakeBoardConnection()
     session.attach_board_connection(board, backend="simulator")
 
@@ -5803,6 +5826,7 @@ def test_exploration_ui_session_enemy_turn_waits_for_board_confirmation():
         if positions != "off"
         for position in positions
     }
+    assert enemy_position in highlighted_positions
     if intent_payload["kind"] == "movement":
         assert tuple(intent_payload["destination"]) in highlighted_positions
     if intent_payload.get("target_position"):
@@ -5834,6 +5858,8 @@ def test_exploration_ui_session_enemy_turn_waits_for_board_confirmation():
     if "natural_roll" in enemy_preview:
         assert "Rzut d20:" in result["combat"]["enemy_turn_result"]["message"]
         assert "wynik końcowy:" in result["combat"]["enemy_turn_result"]["message"]
+        assert result["combat"]["enemy_turn_result"]["message"].count("wynik końcowy:") == 1
+        assert result["combat"]["enemy_turn_result"]["message"].count("HP celu:") <= 1
 
     state = session.confirm_enemy_turn_result()
 

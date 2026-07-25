@@ -62,6 +62,28 @@ Aktualny vertical slice wykonuje triggery `turn_start` i `turn_end`.
 `save_damage_on_success` (`none` albo `half`). Takie źródło nie wykonuje attack rolla:
 cel wykonuje saving throw, a wynik modyfikuje obrażenia przed profilem odporności.
 
+Obrażenia źródła ataku mają kompatybilny stary format pojedynczego składnika:
+
+```json
+"damage": {"dice": "1d8", "modifier": 3, "damage_type": "slashing"}
+```
+
+Nowy format obsługuje dowolne `NdM` oraz wiele niezależnie typowanych składników:
+
+```json
+"damage": {
+  "components": [
+    {"id": "blade", "label": "Ostrze", "dice": "2d6", "modifier": 3, "damage_type": "slashing"},
+    {"id": "flame", "label": "Płomień", "dice": "1d4", "damage_type": "fire"}
+  ]
+}
+```
+
+Krytyk podwaja liczbę kości każdego składnika, ale nie jego stały modyfikator.
+Gracz wpisuje osobny końcowy wynik każdego składnika, a resistance, immunity i
+vulnerability są stosowane według typu. Id składnika jest stabilnym kontraktem UI
+i zapisu zdarzenia.
+
 Każde nowe źródło ataku inline deklaruje `attack_kind`. Atak `melee` podaje również
 `reach_feet` jako dodatnią wielokrotność 5 feet (zwykle 5), a atak `ranged` używa
 `range_feet` i nie deklaruje reach. Loader zachowuje starsze wnioskowanie z zasięgu

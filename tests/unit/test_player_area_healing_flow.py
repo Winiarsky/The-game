@@ -10,6 +10,8 @@ from dnd_board_game.combat import (
     AttackSource,
     AttackSourceType,
     CombatState,
+    DamageComponentSpec,
+    DamageType,
     HealingSource,
     HealingSourceType,
     InitiativeEntry,
@@ -187,6 +189,60 @@ def test_area_spell_flow_previews_confirms_and_applies_save_adjusted_damage() ->
     assert damaged.pending is None
     assert len(damaged.applied_damages) == 1
     assert dict(damaged.event_payload)["base_damage"] == 5
+
+
+def test_area_spell_applies_save_to_each_typed_damage_component() -> None:
+    service = PlayerAreaHealingFlowService()
+    caster = _actor("caster", Faction.ALLY, Coordinate(0, 0))
+    enemy = _actor("enemy", Faction.ENEMY, Coordinate(2, 0))
+    state = _state(caster, enemy)
+    source = replace(
+        _line_spell(),
+        damage_components=(
+            DamageComponentSpec(
+                id="radiance",
+                label="Blask",
+                damage_type=DamageType.RADIANT,
+                fixed=5,
+            ),
+            DamageComponentSpec(
+                id="flame",
+                label="Płomień",
+                damage_type=DamageType.FIRE,
+                fixed=3,
+            ),
+        ),
+    )
+    selected = service.select_area_spell(
+        state=state,
+        board=BoardState(),
+        source=source,
+        position=Coordinate(1, 0),
+    )
+    assert selected.pending is not None
+    confirmed = service.confirm_area_spell(
+        state=state,
+        source=source,
+        pending=selected.pending,
+        rng=Random(1),
+    )
+    assert confirmed.pending is not None
+    assert confirmed.pending.saving_throws[0].success is True
+
+    damaged = service.submit_area_damage(
+        state=confirmed.state,
+        source=source,
+        pending=confirmed.pending,
+        component_totals={"radiance": 5, "flame": 3},
+    )
+
+    applied = damaged.applied_damages[0]
+    assert applied.hp_after == 7
+    assert [
+        (component.damage_type, component.amount_before)
+        for component in applied.damage.resolved_components
+    ] == [(DamageType.RADIANT, 2), (DamageType.FIRE, 1)]
+    assert dict(damaged.event_payload)["base_damage"] == 8
 
 
 def test_area_spell_includes_allies_in_friendly_fire_targets() -> None:

@@ -10,6 +10,8 @@ from dnd_board_game.combat import (
     AttackSource,
     AttackSourceType,
     CombatState,
+    DamageComponentSpec,
+    DamageType,
     EnemyAutoTurnResult,
     InitiativeEntry,
     InitiativeOrder,
@@ -19,6 +21,7 @@ from dnd_board_game.combat import (
     use_actor_reaction,
 )
 from dnd_board_game.rules import D20RollInput, D20RollRequest, resolve_d20_roll
+from dnd_board_game.rules import DiceExpression
 from dnd_board_game.world import BoardState, Coordinate, PathResult, find_path
 
 
@@ -276,6 +279,85 @@ def test_player_reaction_damage_updates_target_and_clamps_negative_input() -> No
 
     assert damaged.applied_damage.hp_after == 6
     assert unchanged.applied_damage.damage.total_applied == 0
+
+
+def test_player_reaction_damage_accepts_typed_component_totals() -> None:
+    service = PlayerReactionFlowService()
+    goblin = _actor("goblin", Faction.ENEMY, Coordinate(1, 0))
+    hero = _actor("hero", Faction.ALLY, Coordinate(0, 0))
+    state = _state(goblin, hero)
+    source = replace(
+        _source(),
+        damage_components=(
+            DamageComponentSpec(
+                id="blade",
+                damage_type=DamageType.SLASHING,
+                fixed=3,
+            ),
+            DamageComponentSpec(
+                id="flame",
+                damage_type=DamageType.FIRE,
+                fixed=2,
+            ),
+        ),
+    )
+
+    damaged = service.apply_damage(
+        state=state,
+        attacker_id="hero",
+        target_id="goblin",
+        attack_sources_by_actor={hero.id: source},
+        active_effects=(),
+        component_totals={"blade": 3, "flame": 2},
+    )
+
+    assert damaged.applied_damage.hp_after == 5
+    assert [
+        component.damage_type
+        for component in damaged.applied_damage.damage.resolved_components
+    ] == [DamageType.SLASHING, DamageType.FIRE]
+
+
+def test_automatic_opportunity_attack_rolls_all_components_and_doubles_critical_dice() -> None:
+    service = CombatReactionFlowService()
+    hero = _actor("hero", Faction.ALLY, Coordinate(0, 0), hp=20)
+    goblin = _actor("goblin", Faction.ENEMY, Coordinate(1, 0))
+    state = _state(hero, goblin)
+    source = replace(
+        _source(),
+        damage_components=(
+            DamageComponentSpec(
+                id="blade",
+                damage_type=DamageType.SLASHING,
+                dice=DiceExpression(1, 6),
+            ),
+            DamageComponentSpec(
+                id="flame",
+                damage_type=DamageType.FIRE,
+                fixed=3,
+            ),
+        ),
+    )
+    rolled_sides: list[int] = []
+
+    resolution = service.resolve_opportunity_movement(
+        state=state,
+        actor_id="hero",
+        path=_path(state, hero),
+        threat_actor_ids=("goblin",),
+        attack_sources_by_actor={goblin.id: source},
+        active_effects=(),
+        roll_d20=_roll(20),
+        roll_damage=lambda sides: rolled_sides.append(sides) or 2,
+    )
+
+    moved = next(actor for actor in resolution.state.actors if actor.id == hero.id)
+    assert moved.hp == 13
+    assert rolled_sides == [6, 6]
+    assert [
+        component.amount_before
+        for component in resolution.applied_damages[0].damage.resolved_components
+    ] == [4, 3]
 
 
 def test_ready_trigger_detection_uses_enemy_movement_and_legal_range() -> None:

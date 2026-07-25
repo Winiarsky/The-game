@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from enum import StrEnum
+from collections.abc import Callable, Mapping
 
 from dnd_board_game.actors import Actor, DamageAffinityProfile, DeathSaveState
 from dnd_board_game.core.damage_types import DamageType, damage_type_label_pl
+from dnd_board_game.rules import DiceExpression
 
 
 class DamageAdjustment(StrEnum):
@@ -16,6 +18,64 @@ class DamageAdjustment(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class DamageComponentSpec:
+    """Authored damage formula for one independently typed component."""
+
+    id: str
+    damage_type: DamageType
+    dice: DiceExpression | None = None
+    fixed: int | None = None
+    modifier: int = 0
+    label: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.id.strip():
+            raise ValueError("Damage component id cannot be empty.")
+        if (self.dice is None) == (self.fixed is None):
+            raise ValueError(
+                "Damage component requires exactly one of dice or fixed."
+            )
+        if self.fixed is not None and self.fixed < 0:
+            raise ValueError("Fixed damage cannot be negative.")
+
+    def formula(self, *, critical: bool = False) -> str:
+        base = (
+            self.dice.format(dice_multiplier=2 if critical else 1)
+            if self.dice is not None
+            else str(self.fixed)
+        )
+        if self.modifier:
+            sign = "+" if self.modifier > 0 else "-"
+            base = f"{base} {sign} {abs(self.modifier)}"
+        return base
+
+    def hint(self, *, critical: bool = False) -> str:
+        label = self.label.strip()
+        prefix = f"{label}: " if label else ""
+        return (
+            f"{prefix}{self.formula(critical=critical)} "
+            f"{damage_type_label_pl(self.damage_type)}"
+        )
+
+    def as_payload(self, *, critical: bool = False) -> dict[str, object]:
+        return {
+            "id": self.id,
+            "label": self.label,
+            "damage_type": self.damage_type.value,
+            "damage_type_label": damage_type_label_pl(self.damage_type),
+            "dice": (
+                self.dice.format(dice_multiplier=2 if critical else 1)
+                if self.dice is not None
+                else None
+            ),
+            "fixed": self.fixed,
+            "modifier": self.modifier,
+            "formula": self.formula(critical=critical),
+            "hint": self.hint(critical=critical),
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class DamageComponentInput:
     amount: int
     damage_type: DamageType
@@ -24,6 +84,59 @@ class DamageComponentInput:
     def __post_init__(self) -> None:
         if self.amount < 0:
             raise ValueError("Damage amount cannot be negative.")
+
+
+def roll_damage_components(
+    components: tuple[DamageComponentSpec, ...],
+    roll_die: Callable[[int], int],
+    *,
+    critical: bool = False,
+) -> tuple[DamageComponentInput, ...]:
+    """Roll authored components, doubling only dice on a critical hit."""
+
+    results: list[DamageComponentInput] = []
+    for component in components:
+        if component.dice is not None:
+            rolls = component.dice.roll(
+                roll_die,
+                dice_multiplier=2 if critical else 1,
+            )
+            amount = sum(rolls) + component.modifier
+        else:
+            amount = int(component.fixed or 0) + component.modifier
+        results.append(
+            DamageComponentInput(
+                max(0, amount),
+                component.damage_type,
+                component.label or component.id,
+            )
+        )
+    return tuple(results)
+
+
+def damage_components_from_totals(
+    components: tuple[DamageComponentSpec, ...],
+    totals: Mapping[str, int],
+) -> tuple[DamageComponentInput, ...]:
+    expected_ids = {component.id for component in components}
+    unknown_ids = set(totals) - expected_ids
+    if unknown_ids:
+        raise ValueError(
+            "Unknown damage component ids: " + ", ".join(sorted(unknown_ids)) + "."
+        )
+    missing_ids = expected_ids - set(totals)
+    if missing_ids:
+        raise ValueError(
+            "Missing damage component totals: " + ", ".join(sorted(missing_ids)) + "."
+        )
+    return tuple(
+        DamageComponentInput(
+            int(totals[component.id]),
+            component.damage_type,
+            component.label or component.id,
+        )
+        for component in components
+    )
 
 
 @dataclass(frozen=True, slots=True)

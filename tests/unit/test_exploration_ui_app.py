@@ -536,6 +536,7 @@ def test_exploration_ui_combat_turn_controls_remain_available_during_board_scan(
     assert "/api/combat/enemy-opportunity/skip" in html
     assert "/api/combat/enemy-opportunity/roll" in html
     assert "/api/combat/enemy-opportunity/damage" in html
+    assert "damageComponentPayload(pending, 'enemy-opportunity-damage')" in html
     assert "combatMainPromptHtml" in html
     assert "combatInstructionText" in html
     assert "combatActorStatusHtml" in html
@@ -599,6 +600,7 @@ def test_exploration_ui_combat_turn_controls_remain_available_during_board_scan(
     assert "natural_roll_2" in html
     assert "attack_mode" in html
     assert "/api/combat/player-damage" in html
+    assert "damageComponentPayload(pending, 'area-spell-damage')" in html
     assert "/api/combat/dash" in html
     assert "/api/combat/dodge" in html
     assert "/api/combat/disengage" in html
@@ -622,6 +624,7 @@ def test_exploration_ui_combat_turn_controls_remain_available_during_board_scan(
     assert "/api/combat/ready-attack/skip" in html
     assert "/api/combat/ready-attack/roll" in html
     assert "/api/combat/ready-attack/damage" in html
+    assert "damageComponentPayload(pending, 'ready-damage')" in html
     assert "useCombatDash()" in html
     assert "useCombatDodge()" in html
     assert "useCombatDisengage()" in html

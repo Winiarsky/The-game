@@ -133,17 +133,32 @@ class AttackActionResolver(ActionResourceResolver):
         target_id: str,
         source: AttackSource,
         base_damage: int,
+        damage_components: tuple[DamageComponentInput, ...] | None = None,
         saving_throw: SpellSaveResult | None = None,
         critical: bool = False,
     ) -> SingleTargetDamageResolution:
         target = _actor_by_id(state, target_id)
-        applied_amount = apply_save_damage_amount(max(0, int(base_damage)), saving_throw)
-        damage = resolve_damage((DamageComponentInput(applied_amount, DamageType(source.damage_type), source.name),))
+        raw_components = damage_components or (
+            DamageComponentInput(
+                max(0, int(base_damage)),
+                DamageType(source.damage_type),
+                source.name,
+            ),
+        )
+        adjusted_components = tuple(
+            DamageComponentInput(
+                apply_save_damage_amount(component.amount, saving_throw),
+                component.damage_type,
+                component.label,
+            )
+            for component in raw_components
+        )
+        damage = resolve_damage(adjusted_components)
         applied = apply_damage_result(target, damage, critical=critical)
         return SingleTargetDamageResolution(
             state=replace_actor(state, applied.actor_after),
             target_id=target_id,
-            base_damage=max(0, int(base_damage)),
+            base_damage=sum(component.amount for component in raw_components),
             applied_damage=applied,
             saving_throw=saving_throw,
         )
@@ -228,10 +243,18 @@ class AreaSpellResolver(ActionResourceResolver):
         *,
         source: AttackSource,
         target_ids: tuple[str, ...],
-        base_damage: int,
+        base_damage: int = 0,
+        damage_components: tuple[DamageComponentInput, ...] | None = None,
         saving_throws: tuple[SpellSaveResult, ...] = (),
     ) -> AreaSpellDamageResolution:
-        damage_amount = max(0, int(base_damage))
+        components = damage_components or (
+            DamageComponentInput(
+                max(0, int(base_damage)),
+                DamageType(source.damage_type),
+                source.name,
+            ),
+        )
+        damage_amount = sum(component.amount for component in components)
         updated_state = state
         target_results: list[AreaSpellTargetDamage] = []
         for target_id in target_ids:
@@ -242,8 +265,15 @@ class AreaSpellResolver(ActionResourceResolver):
             if target.is_defeated():
                 continue
             save = spell_save_for_actor(saving_throws, target_id)
-            applied_amount = apply_save_damage_amount(damage_amount, save)
-            damage = resolve_damage((DamageComponentInput(applied_amount, DamageType(source.damage_type), source.name),))
+            adjusted_components = tuple(
+                DamageComponentInput(
+                    apply_save_damage_amount(component.amount, save),
+                    component.damage_type,
+                    component.label,
+                )
+                for component in components
+            )
+            damage = resolve_damage(adjusted_components)
             applied = apply_damage_result(target, damage)
             updated_state = replace_actor(updated_state, applied.actor_after)
             target_results.append(AreaSpellTargetDamage(target_id=target_id, applied_damage=applied, saving_throw=save))

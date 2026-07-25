@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from random import Random
+from typing import Mapping
 
 from dnd_board_game.actions import AreaSpellResolver, HealingActionResolver
 from dnd_board_game.actors import Actor, Faction, spell_is_prepared
@@ -11,6 +12,7 @@ from dnd_board_game.combat import (
     AttackSource,
     CombatState,
     CombatStatus,
+    DamageComponentInput,
     HealingSource,
     SceneObject,
     SpellAreaShape,
@@ -22,6 +24,7 @@ from dnd_board_game.combat import (
     current_actor,
     direction_anchor_positions,
     dexterity_save_cover_modifiers,
+    damage_components_from_totals,
     evaluate_cover_from_origin,
     legal_area_centers,
     legal_healing_targets,
@@ -345,19 +348,40 @@ class PlayerAreaHealingFlowService:
         state: CombatState,
         source: AttackSource,
         pending: PendingAreaSpell,
-        damage: int,
+        damage: int | None = None,
+        component_totals: Mapping[str, int] | None = None,
     ) -> PlayerAreaSpellTransition:
         if pending.stage != "damage_roll":
             raise ValueError("Nie ma oczekujących obrażeń czaru obszarowego.")
         caster = _active_hero(state)
         if str(caster.id) != pending.caster_id:
             raise ValueError("Oczekujące obrażenia czaru nie należą do aktywnego aktora.")
-        damage_amount = max(0, int(damage))
+        if component_totals is not None:
+            components = damage_components_from_totals(
+                source.damage_components,
+                component_totals,
+            )
+        else:
+            if damage is None:
+                raise ValueError("Brak wyniku obrażeń czaru obszarowego.")
+            if len(source.damage_components) > 1:
+                raise ValueError(
+                    "Ten czar wymaga osobnego wyniku dla każdego składnika obrażeń."
+                )
+            component = source.damage_components[0]
+            components = (
+                DamageComponentInput(
+                    max(0, int(damage)),
+                    component.damage_type,
+                    component.label or component.id,
+                ),
+            )
+        damage_amount = sum(component.amount for component in components)
         resolution = self._area_spells.apply_area_damage(
             state,
             source=source,
             target_ids=pending.target_ids,
-            base_damage=damage_amount,
+            damage_components=components,
             saving_throws=pending.saving_throws,
         )
         applied_results = tuple(

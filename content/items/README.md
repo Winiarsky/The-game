@@ -33,7 +33,11 @@ Runtime przypisuje wyposażone przedmioty do jawnych slotów `main_hand` i
 Jeżeli broń dwuręczna zajmie obie dłonie, późniejsze wyposażone bronie zostają
 znormalizowane do stanu niewyposażonego.
 
-`damage` obsługuje MVP format `dice`, np. `1d6`, opcjonalny `modifier` i `damage_type`.
+`damage` zachowuje zgodność z pojedynczym formatem `dice`, np. `1d6`,
+opcjonalnym `modifier` i `damage_type`. Nowe źródło może zamiast tego podać
+`components`: niepustą listę składników z unikalnym `id`, formułą `NdM` albo
+`fixed`, opcjonalnym `modifier`, `label` i osobnym `damage_type`. Nie wolno mieszać
+`components` ze starymi polami na tym samym poziomie.
 Premia ataku bronią jest liczona z modyfikatora `ability` aktora oraz jego biegłości
 w id przedmiotu. `attack_modifier` jest obsługiwany wyłącznie jako fallback dla
 starszego źródła ataku, które nie deklaruje `ability`.

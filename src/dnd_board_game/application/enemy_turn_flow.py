@@ -318,15 +318,22 @@ class EnemyTurnFlowService:
             condition_states=result.state.condition_states,
             combat_actors=result.state.actors,
         )
-        base_damage = max(0, int(result.base_damage or 0))
-        adjusted_damage = apply_save_damage_amount(base_damage, saving_throw)
+        base_components = result.base_damage_components or (
+            DamageComponentInput(
+                max(0, int(result.base_damage or 0)),
+                DamageType(source.damage_type),
+                source.name,
+            ),
+        )
+        base_damage = sum(component.amount for component in base_components)
         damage = resolve_damage(
-            (
+            tuple(
                 DamageComponentInput(
-                    adjusted_damage,
-                    DamageType(source.damage_type),
-                    source.name,
-                ),
+                    apply_save_damage_amount(component.amount, saving_throw),
+                    component.damage_type,
+                    component.label,
+                )
+                for component in base_components
             )
         )
         applied = apply_damage_result(target, damage)
