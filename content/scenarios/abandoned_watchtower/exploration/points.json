@@ -44,6 +44,14 @@
       "npc_interaction": {
         "id": "wounded_scout",
         "name": "Ranny zwiadowca",
+        "narrative_style": {
+          "preset": "heroic_dnd",
+          "tone": "Przygodowe D&D z bohaterską energią drużyny i nerwowym, suchym humorem zwiadowcy.",
+          "humor_level": "light",
+          "irony_level": "light",
+          "dramatic_intensity": "high",
+          "guidance": "Humor może maskować strach i ból NPC, ale nie wolno nim unieważniać ran, traumy ani ważnych wyznań."
+        },
         "public_description": "Pod zawalonym wozem leży ranny zwiadowca w rozdartej opończy. Oddycha płytko, ściska bok i reaguje nerwowo na każdy gwałtowny ruch.",
         "gm_context": "Prawda scenariusza: zwiadowca został ranny przez bestię grasującą w okolicy strażnicy. Bestią jest przeklęty komendant strażnicy, który przemienia się w sowoniedźwiedzia. Rany nie wyglądają jak zadane zwykłą bronią. Zwiadowca widział, że coś ciężkiego przeciągnięto w stronę wieży obserwacyjnej. Ma torbę z meldunkami, cenną dla niego, ale o niewielkiej wartości rynkowej. W rękawie ukrywa mały nóż i użyje go tylko w desperacji. Zasady prowadzenia: nie ujawniaj wszystkich tropów od razu; łagodne podejście i realna pomoc powinny budować zaufanie; zastraszanie i kradzież są możliwe, ale ryzykowne; informacje są zablokowane flagami; podpowiedzi dawaj dopiero, gdy gracze pytają albo robią coś, co naturalnie odsłania trop. Wiedza i ograniczenia: zwiadowca nie zna pełnej prawdy o klątwie komendanta, nie ma dużej ilości złota ani magicznego przedmiotu, nie może zostać aktywnym towarzyszem drużyny, a improwizowane materiały opatrunkowe pojawiają się jako użyteczny zasób tylko wtedy, gdy gracze ich szukają.",
         "personality": "Zmęczony, podejrzliwy, mówi krótkimi zdaniami. Po okazaniu pomocy staje się wdzięczny i konkretny.",
@@ -58,6 +66,74 @@
           "can_be_calmed",
           "can_be_robbed",
           "can_be_attacked"
+        ],
+        "goals": [
+          {
+            "id": "calm_scout",
+            "label": "Uspokójcie zwiadowcę",
+            "description": "Spróbujcie zmniejszyć jego strach i zdobyć odrobinę zaufania.",
+            "followup_prompt": "Co mówicie albo robicie, żeby poczuł się bezpieczniej?",
+            "intent_ids": ["social"]
+          },
+          {
+            "id": "help_scout",
+            "label": "Udzielcie mu pomocy",
+            "description": "Zajmijcie się ranami albo uwolnijcie go spod desek.",
+            "followup_prompt": "Jakiej pomocy udzielacie i czego do tego używacie?",
+            "intent_ids": ["medical"]
+          },
+          {
+            "id": "ask_scout",
+            "label": "Dowiedzcie się, co się stało",
+            "description": "Spróbujcie zdobyć informacje o strażnicy i napastniku.",
+            "followup_prompt": "O co pytacie i jak próbujecie skłonić go do odpowiedzi?",
+            "intent_ids": ["information", "social"],
+            "narrative_style": {
+              "preset": "serious_revelation",
+              "tone": "Szczery, filmowy i poważny moment składania świadectwa przez rannego zwiadowcę.",
+              "humor_level": "none",
+              "irony_level": "none",
+              "dramatic_intensity": "high",
+              "guidance": "Pozwól pauzom, bólowi i konkretnym szczegółom nieść scenę. To miejsce na mocną kwestię bez rozładowującego dowcipu."
+            }
+          },
+          {
+            "id": "pressure_scout",
+            "label": "Wywrzyjcie presję",
+            "description": "Postawcie sprawę ostro, licząc się z pogorszeniem relacji.",
+            "followup_prompt": "Jak naciskacie na zwiadowcę i czego od niego żądacie?",
+            "intent_ids": ["intimidation"]
+          },
+          {
+            "id": "custom_scout",
+            "label": "Własny sposób",
+            "description": "Podejdźcie do rozmowy lub sytuacji na własnych zasadach.",
+            "followup_prompt": "Co dokładnie robicie i jaki efekt chcecie osiągnąć?",
+            "custom": true
+          }
+        ],
+        "key_issues": [
+          {
+            "id": "reports_must_survive",
+            "kind": "priority",
+            "description": "Najważniejsze dla zwiadowcy jest bezpieczne dostarczenie meldunków.",
+            "visibility": "hidden",
+            "goal_ids": ["calm_scout", "ask_scout", "custom_scout"],
+            "match_phrases": [
+              "uratujemy meldunki",
+              "zabezpieczymy meldunki",
+              "dostarczymy meldunki",
+              "oddamy meldunki dowódcy",
+              "meldunki nie zaginą"
+            ],
+            "consumed_if_flags": ["scout_trusts_party"],
+            "narration": "Palce zwiadowcy przestają kurczowo zaciskać się na torbie. Przez chwilę wygląda, jakby ktoś zdjął mu z piersi niewidzialny kamień — niezbyt duży, ale z gatunku tych wyjątkowo złośliwych.",
+            "npc_response": "Meldunki muszą dotrzeć. Jeśli dajecie mi na to słowo, powiem wam, co widziałem. Tylko... nie zgubcie ich. Mają paskudny zwyczaj być ważniejsze od ludzi.",
+            "effects": [
+              {"type": "set_flag", "parameters": {"key": "scout_calmed", "value": true}},
+              {"type": "set_flag", "parameters": {"key": "scout_trusts_party", "value": true}}
+            ]
+          }
         ],
         "locked_information": [
           {
@@ -164,8 +240,6 @@
               "status": "locked",
               "uses_social_reaction": true,
               "unlock_if_flags": [
-                "scout_calmed",
-                "scout_stabilized",
                 "scout_trusts_party"
               ],
               "reveals": [

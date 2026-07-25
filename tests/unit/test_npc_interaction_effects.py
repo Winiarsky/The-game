@@ -8,7 +8,7 @@ from dnd_board_game.llm import NpcInteractionProposal, build_npc_interaction_req
 from dnd_board_game.scenarios import build_exploration_from_scenario, load_scenario
 
 
-def _request():
+def _request(*, selected_goal_id=None):
     exploration = build_exploration_from_scenario(load_scenario("content/scenarios/abandoned_watchtower.json"))
     state = ExplorationState(
         exploration.zones,
@@ -28,6 +28,7 @@ def _request():
         point=point,
         state=state,
         player_action="Uspokajamy zwiadowcę.",
+        selected_goal_id=selected_goal_id,
     )
 
 
@@ -65,6 +66,34 @@ def test_npc_interaction_requires_risk_for_social_reaction_intent():
 
     with pytest.raises(ValueError, match="requires request_risk"):
         validate_npc_interaction_proposal(proposal, _request())
+
+
+def test_npc_selected_goal_rejects_unrelated_intent():
+    proposal = NpcInteractionProposal.model_validate(
+        {
+            "action_type": "medical",
+            "requires_roll": True,
+            "ability": "wisdom",
+            "skill": "medicine",
+            "dc": 12,
+        }
+    )
+
+    with pytest.raises(ValueError, match="does not match selected goal"):
+        validate_npc_interaction_proposal(
+            proposal,
+            _request(selected_goal_id="calm_scout"),
+        )
+
+
+def test_npc_prompt_uses_goal_narrative_style_override():
+    request = _request(selected_goal_id="ask_scout")
+
+    style = request.to_prompt_payload()["effective_narrative_style"]
+
+    assert style["preset"] == "serious_revelation"
+    assert style["humor_level"] == "none"
+    assert style["irony_level"] == "none"
 
 
 def test_npc_interaction_marks_too_risky_request_as_refusal_without_roll():

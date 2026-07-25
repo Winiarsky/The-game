@@ -26,6 +26,7 @@ from dnd_board_game.exploration import (
     ExplorationState,
     ExplorationZone,
     PartyCheckInput,
+    apply_goal_resolution_profile,
     available_challenge_options,
     available_exploration_zones,
     challenge_for_zone,
@@ -654,10 +655,15 @@ def _challenge_prompt_message(
     ]
     if challenge.llm_context.summary:
         lines.append(challenge.llm_context.summary)
-    lines.append(
-        f"Aby przejść dalej, musicie osiągnąć postęp {challenge.progress_required}. "
-        f"Aktualny postęp: {challenge_state.current_progress}/{challenge.progress_required}."
-    )
+    if challenge.completion_all_flags or challenge.completion_any_flags:
+        lines.append(
+            "Przejście zależy od konkretnych zmian stanu przeszkody, nie od punktów postępu."
+        )
+    else:
+        lines.append(
+            f"Aby przejść dalej, musicie osiągnąć postęp {challenge.progress_required}. "
+            f"Aktualny postęp: {challenge_state.current_progress}/{challenge.progress_required}."
+        )
     if challenge_state.noise:
         lines.append(f"Dotychczasowy hałas: {challenge_state.noise}.")
     if challenge_state.complications:
@@ -842,7 +848,13 @@ def _handle_freeform_action_once(
                 observer,
             )
             return updated_state, messages, False
-        option = challenge_option_from_validated_proposal(validated)
+        option = apply_goal_resolution_profile(
+            challenge_option_from_validated_proposal(validated),
+            challenge=validated.challenge,
+            selected_goal_id=None,
+            player_action=freeform_action,
+            state=state,
+        )
         resource = validated.resources[0] if validated.resources else None
         observer.record(
             "gm_classifier_proposal_validated",
@@ -889,13 +901,26 @@ def _handle_freeform_action_once(
         pending_effect = RuntimePreparationEffect(proposal.preparation_effect, option.id)
         if set(option.tags).intersection(set(proposal.preparation_effect.target_tags)):
             applicable_preview_effects = (*applicable_preview_effects, pending_effect)
-    preview = _challenge_consequence_preview(option, proposal, resource, applicable_preview_effects)
+    preview = _challenge_consequence_preview(
+        validated.challenge,
+        option,
+        proposal,
+        resource,
+        applicable_preview_effects,
+    )
+    resolution_summary = (
+        "rozstrzygnięcie stanowe bez punktów postępu."
+        if validated.challenge.completion_all_flags or validated.challenge.completion_any_flags
+        else (
+            f"postęp przy sukcesie: +{option.progress_on_success}, "
+            f"postęp przy porażce: +{option.progress_on_failure}."
+        )
+    )
     summary = (
         f"Propozycja MG: {option.label}. Test: {option.ability_check.ability}"
         f"{'/' + option.ability_check.skill if option.ability_check.skill else ''}, "
         f"{'narzędzie ' + option.ability_check.tool + ', ' if option.ability_check.tool else ''}"
-        f"ST {option.ability_check.dc}, postęp przy sukcesie: +{option.progress_on_success}, "
-        f"postęp przy porażce: +{option.progress_on_failure}."
+        f"ST {option.ability_check.dc}, {resolution_summary}"
     )
     if proposal.difficulty_tier:
         summary = f"{summary} Trudność: {proposal.difficulty_tier}."
@@ -1912,6 +1937,7 @@ def _llm_unlocked_option_flag(option_id: str) -> str:
 
 
 def _challenge_consequence_preview(
+    challenge: ExplorationChallenge,
     option: ExplorationChallengeOption,
     proposal,
     resource: ExplorationResource | None,
@@ -1922,13 +1948,16 @@ def _challenge_consequence_preview(
     success_progress = option.progress_on_success + boost
     failure_noise = max(0, option.failure_noise - reduction)
     critical_noise = max(0, option.critical_failure_noise - reduction)
+    uses_flag_completion = bool(challenge.completion_all_flags or challenge.completion_any_flags)
+    progress_success = "" if uses_flag_completion else f"; postęp +{success_progress}"
+    progress_failure = "" if uses_flag_completion else f"; postęp +{option.progress_on_failure}"
     lines = [
         "Preview konsekwencji:",
-        f"- Krytyczny sukces: {option.success_message or 'pełny sukces'}; postęp +{success_progress}.",
-        f"- Sukces: {option.success_message or 'sukces'}; postęp +{success_progress}.",
-        f"- Porażka: {option.failure_message or 'fail-forward'}; postęp +{option.progress_on_failure}; hałas +{failure_noise}.",
-        f"- Krytyczna porażka: {option.critical_failure_message or option.failure_message or 'poważniejsza komplikacja'}; "
-        f"postęp +{option.progress_on_failure}; hałas +{critical_noise}.",
+        f"- Krytyczny sukces: {option.critical_success_message or option.success_message or 'pełny sukces'}{progress_success}.",
+        f"- Sukces: {option.success_message or 'sukces'}{progress_success}.",
+        f"- Porażka: {option.failure_message or 'fail-forward'}{progress_failure}; hałas +{failure_noise}.",
+        f"- Krytyczna porażka: {option.critical_failure_message or option.failure_message or 'poważniejsza komplikacja'}"
+        f"{progress_failure}; hałas +{critical_noise}.",
     ]
     if proposal.difficulty_tier:
         lines.insert(1, f"- Trudność: {proposal.difficulty_tier}, ST {option.ability_check.dc}.")
@@ -1974,7 +2003,7 @@ def _support_roll_modifiers(state: ExplorationState, option: ExplorationChalleng
 
 def _challenge_roll_for_option(args: argparse.Namespace, option_id: str) -> int | None:
     overrides = _parse_actor_value_overrides(args.challenge_roll, int)
-    return overrides.get(option_id)
+    return overrides.get(option_id, overrides.get("gm_generated"))
 
 
 def _visible_point_for_position(state: ExplorationState, position: Coordinate) -> ExplorationPoint | None:

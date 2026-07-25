@@ -13,6 +13,10 @@ class BoardSessionAdapter:
     def __init__(self, connection: object) -> None:
         self.connection = connection
         self.leds = BoardLedAdapter(connection)  # type: ignore[arg-type]
+        self.scan_brightness = max(
+            1,
+            min(255, int(getattr(connection, "scan_brightness", 255))),
+        )
 
     @classmethod
     def connect(
@@ -63,3 +67,16 @@ class BoardSessionAdapter:
         if feedback.frames:
             self.leds.show_feedback(feedback)
 
+    def show_scan_feedback(self, feedback: LedFeedback) -> None:
+        self.leds.clear()
+        if feedback.frames:
+            self.leds.show_feedback(
+                feedback,
+                brightness=self.scan_brightness,
+            )
+
+    def restore_feedback(self, feedback: LedFeedback) -> None:
+        if feedback.frames:
+            self.leds.show_feedback(feedback)
+        else:
+            self.leds.clear()

@@ -114,3 +114,31 @@ def test_board_session_adapter_owns_scan_reset_and_led_transport():
     assert connection.reset is True
     assert connection.cleared is True
     assert connection.calls
+
+
+def test_board_session_uses_boosted_brightness_only_for_active_scan():
+    class BrightnessConnection:
+        scan_brightness = 240
+
+        def __init__(self):
+            self.calls = []
+            self.clear_calls = 0
+
+        def set_leds(self, positions, rgb_color, *, brightness=None):
+            self.calls.append((tuple(positions), rgb_color, brightness))
+
+        def leds_off(self):
+            self.clear_calls += 1
+
+    connection = BrightnessConnection()
+    adapter = BoardSessionAdapter(connection)
+    feedback = LedFeedback(
+        (LedFrame((Coordinate(3, 4),), LedColor.INTERACTIVE_OBJECT, LedRole.INTERACTIVE_OBJECT),)
+    )
+
+    adapter.show_scan_feedback(feedback)
+    adapter.restore_feedback(feedback)
+
+    assert connection.calls[0][2] == 240
+    assert connection.calls[1][2] is None
+    assert connection.clear_calls == 1

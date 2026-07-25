@@ -39,6 +39,9 @@ from dnd_board_game.exploration import (
     LlmGuidanceFactKind,
     MECHANIC_TOOLS,
     available_challenge_options,
+    interaction_goal,
+    effective_narrative_style,
+    matched_method_rules,
     build_crafting_source_registry,
     challenge_state_for,
     infer_mechanic_id,
@@ -340,6 +343,26 @@ class GmDeclarationThreadEntry:
 
 
 @dataclass(frozen=True, slots=True)
+class GmFlowRouteCandidate:
+    transition_id: str
+    goal_id: str
+    label: str
+    description: str
+    route_kind: str
+    suggested_tags: tuple[str, ...] = ()
+
+    def as_payload(self) -> dict[str, object]:
+        return {
+            "transition_id": self.transition_id,
+            "goal_id": self.goal_id,
+            "label": self.label,
+            "description": self.description,
+            "route_kind": self.route_kind,
+            "suggested_tags": list(self.suggested_tags),
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class GmClassifierRequest:
     scenario_id: str
     scenario_name: str
@@ -359,10 +382,27 @@ class GmClassifierRequest:
     selected_use_source_id: str | None = None
     selected_fixture_source_id: str | None = None
     selected_fixture_operation: FixtureOperation | None = None
+    selected_goal_id: str | None = None
+    selected_flow_transition_id: str | None = None
+    selected_flow_route_kind: str | None = None
+    selected_flow_option_id: str | None = None
+    selected_flow_observation_ids: tuple[str, ...] = ()
+    available_flow_routes: tuple[GmFlowRouteCandidate, ...] = ()
+    selected_check_participants: CheckParticipants | None = None
+    selected_participant_actor_ids: tuple[str, ...] = ()
+    conversation_only: bool = False
 
     def to_prompt_payload(self) -> dict[str, Any]:
         challenge_state = challenge_state_for(self.state, self.challenge.id)
         policy = self.challenge.llm_policy
+        uses_progress = not bool(
+            self.challenge.completion_all_flags
+            or self.challenge.completion_any_flags
+        )
+        policy_payload = policy.as_payload()
+        if not uses_progress:
+            policy_payload["progress_on_success_range"] = [0, 0]
+            policy_payload["progress_on_failure_range"] = [0, 0]
         resources = [
             _resource_payload(resource)
             for resource in self.state.resources
@@ -387,6 +427,50 @@ class GmClassifierRequest:
             if source is not None and source.usable
         )
         conversation_knowledge = _conversation_knowledge(self, crafting_registry)
+        selected_goal = interaction_goal(
+            self.challenge.goals,
+            self.selected_goal_id,
+            self.state.flags,
+        )
+        method_rules = matched_method_rules(
+            self.challenge,
+            self.player_action,
+            self.selected_goal_id,
+        )
+        narrative_style = effective_narrative_style(
+            self.challenge.narrative_style,
+            selected_goal,
+        )
+        selected_flow_option = next(
+            (
+                option
+                for option in self.challenge.options
+                if option.id == self.selected_flow_option_id
+            ),
+            None,
+        )
+        selected_participant_ids = set(self.selected_participant_actor_ids)
+        selected_participants = [
+            {
+                "actor_id": str(actor.id),
+                "actor_name": actor.name,
+                "role": (
+                    "group_member"
+                    if selected_goal is not None
+                    and (
+                        self.selected_check_participants
+                        or selected_goal.check_participants
+                    )
+                    == CheckParticipants.WHOLE_PARTY
+                    else "lead"
+                    if self.selected_participant_actor_ids
+                    and str(actor.id) == self.selected_participant_actor_ids[0]
+                    else "helper"
+                ),
+            }
+            for actor in self.actors
+            if str(actor.id) in selected_participant_ids
+        ]
         return {
             "scenario": {"id": self.scenario_id, "name": self.scenario_name},
             "scenario_context": self.scenario_context.as_payload(),
@@ -399,13 +483,49 @@ class GmClassifierRequest:
             "challenge": {
                 "id": self.challenge.id,
                 "name": self.challenge.name,
-                "progress_required": self.challenge.progress_required,
-                "current_progress": challenge_state.current_progress,
+                **(
+                    {
+                        "progress_required": self.challenge.progress_required,
+                        "current_progress": challenge_state.current_progress,
+                    }
+                    if uses_progress
+                    else {}
+                ),
+                "uses_progress": uses_progress,
+                "completion_all_flags": list(self.challenge.completion_all_flags),
+                "completion_any_flags": list(self.challenge.completion_any_flags),
                 "completed": challenge_state.completed,
                 "noise": challenge_state.noise,
                 "complications": list(challenge_state.complications),
                 "context": self.challenge.llm_context.as_payload(),
-                "llm_policy": policy.as_payload(),
+                "llm_policy": policy_payload,
+                "selected_goal": selected_goal.as_payload() if selected_goal is not None else None,
+                "selected_flow_route": (
+                    {
+                        "transition_id": self.selected_flow_transition_id,
+                        "route_kind": self.selected_flow_route_kind,
+                        "option_id": selected_flow_option.id,
+                        "mechanics_owned_by_runtime": True,
+                        "ability": selected_flow_option.ability_check.ability,
+                        "skill": selected_flow_option.ability_check.skill,
+                        "tool": selected_flow_option.ability_check.tool,
+                        "dc": selected_flow_option.ability_check.dc,
+                    }
+                    if self.selected_flow_transition_id is not None
+                    and selected_flow_option is not None
+                    else None
+                ),
+                "available_flow_routes": [
+                    route.as_payload() for route in self.available_flow_routes
+                ],
+                "selected_check_participants": (
+                    self.selected_check_participants.value
+                    if self.selected_check_participants is not None
+                    else None
+                ),
+                "selected_participants": selected_participants,
+                "matched_method_rules": [rule.as_payload() for rule in method_rules],
+                "effective_narrative_style": narrative_style.as_payload(),
                 "available_options": [
                     {
                         "id": option.id,
@@ -414,8 +534,8 @@ class GmClassifierRequest:
                         "skill": option.ability_check.skill,
                         "tool": option.ability_check.tool,
                         "dc": option.ability_check.dc,
-                        "progress_on_success": option.progress_on_success,
-                        "progress_on_failure": option.progress_on_failure,
+                        "progress_on_success": option.progress_on_success if uses_progress else 0,
+                        "progress_on_failure": option.progress_on_failure if uses_progress else 0,
                         "tags": list(option.tags),
                         "requirements": _option_requirements_payload(option),
                         "mechanic": mechanic_payload_for_option(option),
@@ -556,9 +676,7 @@ class GmClassifierRequest:
             "conversation_knowledge": conversation_knowledge,
             "available_observations": [
                 observation.as_prompt_payload(self.state.flags)
-                for observation in self.observations
-                if observation.zone_id == self.zone.id
-                and (observation.challenge_id is None or observation.challenge_id == self.challenge.id)
+                for observation in _active_observations(self)
             ],
             "conversation_policy": {
                 "next_hint_level": _allowed_hint_level(self),
@@ -585,6 +703,7 @@ class GmClassifierRequest:
                 if self.explicit_player_intent_hint is not None
                 else None
             ),
+            "conversation_only": self.conversation_only,
             "player_action": self.player_action,
         }
 
@@ -826,6 +945,15 @@ def build_gm_classifier_request(
     selected_use_source_id: str | None = None,
     selected_fixture_source_id: str | None = None,
     selected_fixture_operation: FixtureOperation | None = None,
+    selected_goal_id: str | None = None,
+    selected_flow_transition_id: str | None = None,
+    selected_flow_route_kind: str | None = None,
+    selected_flow_option_id: str | None = None,
+    selected_flow_observation_ids: tuple[str, ...] = (),
+    available_flow_routes: tuple[GmFlowRouteCandidate, ...] = (),
+    selected_check_participants: CheckParticipants | None = None,
+    selected_participant_actor_ids: tuple[str, ...] = (),
+    conversation_only: bool = False,
 ) -> GmClassifierRequest:
     zone = next(zone for zone in state.zones if zone.id == state.party_position.zone_id)
     challenge = next((challenge for challenge in state.challenges if challenge.zone_id == zone.id), None)
@@ -850,6 +978,15 @@ def build_gm_classifier_request(
         selected_use_source_id=selected_use_source_id,
         selected_fixture_source_id=selected_fixture_source_id,
         selected_fixture_operation=selected_fixture_operation,
+        selected_goal_id=selected_goal_id,
+        selected_flow_transition_id=selected_flow_transition_id,
+        selected_flow_route_kind=selected_flow_route_kind,
+        selected_flow_option_id=selected_flow_option_id,
+        selected_flow_observation_ids=selected_flow_observation_ids,
+        available_flow_routes=available_flow_routes,
+        selected_check_participants=selected_check_participants,
+        selected_participant_actor_ids=selected_participant_actor_ids,
+        conversation_only=conversation_only,
     )
 
 
@@ -869,6 +1006,7 @@ def validate_gm_declaration_analysis(
     analysis = _normalize_question_response(analysis, request)
     analysis = _normalize_explicit_build_analysis(analysis, request)
     _validate_player_intent_hint(analysis, request)
+    _validate_selected_flow_transition(analysis, request)
     if analysis.analysis_type == GmDeclarationAnalysisType.PLAYER_QUESTION:
         _validate_conversation_response(analysis, request)
         return analysis
@@ -897,6 +1035,45 @@ def validate_gm_declaration_analysis(
     if unknown_resources:
         raise GmProposalValidationError("Drużyna nie ma zadeklarowanych zasobów: " + ", ".join(unknown_resources))
     return analysis
+
+
+def _validate_selected_flow_transition(
+    analysis: GmDeclarationAnalysis,
+    request: GmClassifierRequest,
+) -> None:
+    selected_id = analysis.selected_flow_transition_id
+    available_ids = {
+        candidate.transition_id for candidate in request.available_flow_routes
+    }
+    if selected_id is not None and selected_id not in available_ids:
+        raise GmProposalValidationError(
+            "MG wskazał nieaktywną albo nieistniejącą krawędź eksploracji."
+        )
+    if (
+        selected_id is not None
+        and analysis.analysis_type != GmDeclarationAnalysisType.PLAUSIBLE
+    ):
+        raise GmProposalValidationError(
+            "Krawędź eksploracji można wybrać tylko dla wiarygodnej deklaracji działania."
+        )
+    if (
+        selected_id is not None
+        and analysis.action_flow
+        not in {GmActionFlow.CHALLENGE_ATTEMPT, GmActionFlow.COMBINED}
+    ):
+        raise GmProposalValidationError(
+            "Krawędź eksploracji można wybrać tylko dla wykonywanej teraz próby."
+        )
+    if (
+        request.available_flow_routes
+        and request.selected_goal_id is None
+        and analysis.analysis_type == GmDeclarationAnalysisType.PLAUSIBLE
+        and analysis.action_flow == GmActionFlow.CHALLENGE_ATTEMPT
+        and selected_id is None
+    ):
+        raise GmProposalValidationError(
+            "Opis działania nie wskazuje jednoznacznie jednej aktywnej drogi eksploracji."
+        )
 
 
 def _validate_world_action(
@@ -1158,12 +1335,28 @@ def validate_gm_classifier_proposal(
     proposal: GmClassifierProposal,
     request: GmClassifierRequest,
 ) -> GmValidatedProposal:
+    if (
+        request.selected_goal_id is not None
+        and interaction_goal(
+            request.challenge.goals,
+            request.selected_goal_id,
+            request.state.flags,
+        )
+        is None
+    ):
+        raise GmProposalValidationError(
+            f"Selected interaction goal is unavailable: {request.selected_goal_id}."
+        )
     proposal = _ground_explicit_build_proposal(proposal, request)
     proposal = _ground_temporary_item_preparation(proposal, request)
     proposal = _ground_fixture_action_proposal(proposal, request)
+    proposal = _apply_authored_method_rules(proposal, request)
+    proposal = _apply_authored_participant_model(proposal, request)
+    proposal = _ground_selected_flow_mechanics(proposal, request)
     proposal = _drop_noop_situational_modifiers(proposal)
     policy = request.challenge.llm_policy
-    proposal = _ground_proposal_dc(proposal, policy)
+    if request.selected_flow_option_id is None:
+        proposal = _ground_proposal_dc(proposal, policy)
     # General guards: LLM may only propose an interpretation for the active
     # challenge; deterministic game code still owns state changes.
     if proposal.intent_type == GmIntentType.UNSUPPORTED:
@@ -1231,15 +1424,27 @@ def validate_gm_classifier_proposal(
         raise GmProposalValidationError(f"Nieobsługiwana umiejętność testu: {proposal.skill}.")
     if proposal.dc is None or proposal.progress_on_success is None or proposal.progress_on_failure is None:
         raise GmProposalValidationError("Propozycja LLM nie zawiera ST albo postępu.")
-    _validate_difficulty_tier(proposal, policy)
+    uses_progress = not bool(
+        request.challenge.completion_all_flags
+        or request.challenge.completion_any_flags
+    )
+    if not uses_progress:
+        proposal = proposal.model_copy(
+            update={
+                "progress_on_success": 0,
+                "progress_on_failure": 0,
+            }
+        )
+    if request.selected_flow_option_id is None:
+        _validate_difficulty_tier(proposal, policy)
     if not policy.dc_min <= proposal.dc <= policy.dc_max:
         raise GmProposalValidationError(f"ST {proposal.dc} jest poza zakresem policy: {policy.dc_min}-{policy.dc_max}.")
-    if not policy.progress_success_min <= proposal.progress_on_success <= policy.progress_success_max:
+    if uses_progress and not policy.progress_success_min <= proposal.progress_on_success <= policy.progress_success_max:
         raise GmProposalValidationError(
             "Postęp przy sukcesie jest poza zakresem policy: "
             f"{policy.progress_success_min}-{policy.progress_success_max}."
         )
-    if not policy.progress_failure_min <= proposal.progress_on_failure <= policy.progress_failure_max:
+    if uses_progress and not policy.progress_failure_min <= proposal.progress_on_failure <= policy.progress_failure_max:
         raise GmProposalValidationError(
             "Postęp przy porażce jest poza zakresem policy: "
             f"{policy.progress_failure_min}-{policy.progress_failure_max}."
@@ -1282,6 +1487,92 @@ def validate_gm_classifier_proposal(
         challenge=request.challenge,
         resources=resources,
         required_actor_item_ids=actor_item_ids,
+    )
+
+
+def _apply_authored_participant_model(
+    proposal: GmClassifierProposal,
+    request: GmClassifierRequest,
+) -> GmClassifierProposal:
+    if (
+        proposal.action_flow == GmActionFlow.PREPARATION
+        or not proposal.requires_roll_now
+        or request.selected_goal_id is None
+    ):
+        return proposal
+    goal = interaction_goal(
+        request.challenge.goals,
+        request.selected_goal_id,
+        request.state.flags,
+    )
+    if goal is None:
+        return proposal
+    participants = request.selected_check_participants or goal.check_participants
+    aggregation = (
+        CheckAggregation.MAJORITY
+        if participants == CheckParticipants.WHOLE_PARTY
+        else CheckAggregation.LEAD_RESULT
+    )
+    mechanic = {
+        CheckParticipants.SINGLE_ACTOR: ExplorationMechanicId.SINGLE_ACTOR_CHECK,
+        CheckParticipants.LEAD_WITH_HELP: ExplorationMechanicId.LEAD_WITH_HELP_CHECK,
+        CheckParticipants.WHOLE_PARTY: ExplorationMechanicId.GROUP_CHECK,
+    }[participants]
+    return proposal.model_copy(
+        update={
+            "selected_mechanic": mechanic,
+            "check_participants": participants,
+            "check_aggregation": aggregation,
+        }
+    )
+
+
+def _apply_authored_method_rules(
+    proposal: GmClassifierProposal,
+    request: GmClassifierRequest,
+) -> GmClassifierProposal:
+    rules = matched_method_rules(
+        request.challenge,
+        request.player_action,
+        request.selected_goal_id,
+    )
+    if not rules or proposal.action_flow != GmActionFlow.CHALLENGE_ATTEMPT:
+        return proposal
+    modifiers = list(proposal.situational_modifiers)
+    consequences = list(proposal.consequences)
+    for rule in rules:
+        if rule.modifier:
+            normalized_label = rule.label.strip().casefold()
+            modifiers = [
+                modifier
+                for modifier in modifiers
+                if modifier.label.strip().casefold() != normalized_label
+            ]
+            modifiers = modifiers[: MAX_SITUATIONAL_MODIFIERS - 1]
+            modifiers.append(
+                GmSituationalModifier(
+                    label=rule.label,
+                    modifier=rule.modifier,
+                    source=ExplorationSituationalModifierSource.GM,
+                    reason=rule.reason,
+                )
+            )
+        if rule.noise_delta:
+            consequences = [
+                consequence.model_copy(
+                    update={"value": max(0, int(consequence.value) + rule.noise_delta)}
+                )
+                if consequence.type == GmConsequenceType.ADD_NOISE
+                and isinstance(consequence.value, int)
+                and not isinstance(consequence.value, bool)
+                else consequence
+                for consequence in consequences
+            ]
+    return proposal.model_copy(
+        update={
+            "situational_modifiers": tuple(modifiers),
+            "consequences": tuple(consequences),
+        }
     )
 
 
@@ -1484,8 +1775,16 @@ def challenge_option_from_validated_proposal(validated: GmValidatedProposal) -> 
             skill=proposal.skill,
             dc=proposal.dc or 10,
         ),
-        progress_on_success=proposal.progress_on_success or 1,
-        progress_on_failure=proposal.progress_on_failure or 0,
+        progress_on_success=(
+            proposal.progress_on_success
+            if proposal.progress_on_success is not None
+            else 1
+        ),
+        progress_on_failure=(
+            proposal.progress_on_failure
+            if proposal.progress_on_failure is not None
+            else 0
+        ),
         color=LedColor.MENU_PURPLE,
         description=proposal.player_narration,
         success_message=proposal.success_message or "Podejście działa.",
@@ -1757,6 +2056,65 @@ def _validate_difficulty_tier(proposal: GmClassifierProposal, policy: LlmChallen
         )
     if not proposal.difficulty_reason.strip():
         raise GmProposalValidationError("Propozycja LLM musi wyjaśnić wybór difficulty_tier.")
+
+
+def _ground_selected_flow_mechanics(
+    proposal: GmClassifierProposal,
+    request: GmClassifierRequest,
+) -> GmClassifierProposal:
+    """Make an authored graph edge authoritative over LLM check parameters."""
+
+    option_id = request.selected_flow_option_id
+    if (
+        option_id is None
+        or proposal.action_flow == GmActionFlow.PREPARATION
+        or not proposal.requires_roll_now
+    ):
+        return proposal
+    profile = next(
+        (
+            option
+            for option in request.challenge.options
+            if option.id == option_id
+        ),
+        None,
+    )
+    if profile is None:
+        raise GmProposalValidationError(
+            f"Aktywna krawędź flowgrafu wskazuje nieistniejącą opcję: {option_id}."
+        )
+    uses_progress = not bool(
+        request.challenge.completion_all_flags
+        or request.challenge.completion_any_flags
+    )
+    flow_note = (
+        "Mechanika testu pochodzi z aktywnej krawędzi flowgrafu "
+        f"{request.selected_flow_transition_id or option_id}."
+    )
+    return proposal.model_copy(
+        update={
+            "target_challenge_id": request.challenge.id,
+            "ability": profile.ability_check.ability,
+            "skill": profile.ability_check.skill,
+            "dc": profile.ability_check.dc,
+            "difficulty_reason": flow_note,
+            "progress_on_success": (
+                profile.progress_on_success if uses_progress else 0
+            ),
+            "progress_on_failure": (
+                profile.progress_on_failure if uses_progress else 0
+            ),
+            "consequences": (),
+            "success_message": profile.success_message,
+            "failure_message": profile.failure_message,
+            "critical_failure_message": profile.critical_failure_message,
+            "gm_notes": " ".join(
+                part
+                for part in (proposal.gm_notes.strip(), flow_note)
+                if part
+            ),
+        }
+    )
 
 
 def _ground_proposal_dc(
@@ -2066,14 +2424,25 @@ def _option_requirements_payload(option: ExplorationChallengeOption) -> dict[str
 def _dynamic_state_payload(state: ExplorationState, challenge: ExplorationChallenge) -> dict[str, Any]:
     challenge_state = challenge_state_for(state, challenge.id)
     visible_points = visible_exploration_points(state.points)
+    uses_progress = not bool(
+        challenge.completion_all_flags
+        or challenge.completion_any_flags
+    )
+    challenge_progress: dict[str, Any] = {
+        "challenge_id": challenge.id,
+        "uses_progress": uses_progress,
+        "completed": challenge_state.completed,
+    }
+    if uses_progress:
+        challenge_progress.update(
+            {
+                "current": challenge_state.current_progress,
+                "required": challenge.progress_required,
+            }
+        )
     return {
         "known_flags": [{"key": key, "value": value} for key, value in state.flags.values],
-        "challenge_progress": {
-            "challenge_id": challenge.id,
-            "current": challenge_state.current_progress,
-            "required": challenge.progress_required,
-            "completed": challenge_state.completed,
-        },
+        "challenge_progress": challenge_progress,
         "noise": challenge_state.noise,
         "complications": list(challenge_state.complications),
         "revealed_points": [
@@ -2114,6 +2483,33 @@ def _attempt_history_payload(challenge_state) -> list[dict[str, Any]]:
         }
         for attempt in challenge_state.attempts
     ]
+
+
+def _active_observations(
+    request: GmClassifierRequest,
+) -> tuple[ExplorationObservation, ...]:
+    selected_goal = interaction_goal(
+        request.challenge.goals,
+        request.selected_goal_id,
+        request.state.flags,
+    )
+    allowed_ids = (
+        set(request.selected_flow_observation_ids)
+        if request.selected_flow_observation_ids
+        else set(selected_goal.observation_ids)
+        if selected_goal is not None
+        else set()
+    )
+    return tuple(
+        observation
+        for observation in request.observations
+        if observation.zone_id == request.zone.id
+        and (
+            observation.challenge_id is None
+            or observation.challenge_id == request.challenge.id
+        )
+        and (not allowed_ids or observation.id in allowed_ids)
+    )
 
 
 def _conversation_knowledge(request: GmClassifierRequest, crafting_registry) -> dict[str, object]:
@@ -2213,11 +2609,7 @@ def _conversation_knowledge(request: GmClassifierRequest, crafting_registry) -> 
                 impossible,
                 kind="world_constraint",
             )
-    for observation in request.observations:
-        if observation.zone_id != request.zone.id:
-            continue
-        if observation.challenge_id is not None and observation.challenge_id != request.challenge.id:
-            continue
+    for observation in _active_observations(request):
         for fact in observation.facts:
             add_fact(
                 f"observation:{observation.id}:fact:{fact.id}",
@@ -2273,6 +2665,11 @@ def _validate_conversation_response(
             raise GmProposalValidationError("Odpowiedź MG zdradza zbyt silną podpowiedź na tym etapie rozmowy.")
         if analysis.response_kind == GmConversationResponseKind.STRONG_HINT and analysis.hint_level < 2:
             raise GmProposalValidationError("Strong hint wymaga hint_level 2 albo 3.")
+    elif analysis.response_kind == GmConversationResponseKind.REQUIRES_CHECK:
+        if analysis.hint_level > _allowed_hint_level(request):
+            raise GmProposalValidationError(
+                "Sugestia sprawdzenia zdradza zbyt silną podpowiedź na tym etapie rozmowy."
+            )
     elif analysis.hint_level != 0:
         raise GmProposalValidationError("Zwykła odpowiedź MG nie może zwiększać poziomu podpowiedzi.")
     for fact_id in analysis.grounded_fact_ids:
@@ -2292,10 +2689,7 @@ def _validate_conversation_response(
             )
         if analysis.observation_id is not None:
             active_observation_ids = {
-                observation.id
-                for observation in request.observations
-                if observation.zone_id == request.zone.id
-                and (observation.challenge_id is None or observation.challenge_id == request.challenge.id)
+                observation.id for observation in _active_observations(request)
             }
             if analysis.observation_id not in active_observation_ids:
                 raise GmProposalValidationError("MG wskazał obserwację niedostępną w aktualnej scenie.")
@@ -2378,6 +2772,7 @@ class GmDeclarationAnalysis(BaseModel):
     suggested_followup: str = Field(default="", max_length=500)
     requires_check: bool = False
     observation_id: str | None = Field(default=None, max_length=120)
+    selected_flow_transition_id: str | None = Field(default=None, max_length=120)
     source_query: GmSceneSourceQuery | None = None
     use_source_id: str | None = Field(default=None, max_length=240)
     action_target_source_id: str | None = Field(default=None, max_length=240)
@@ -2410,12 +2805,19 @@ class GmDeclarationAnalysis(BaseModel):
 def _world_notes(state: ExplorationState, challenge: ExplorationChallenge) -> list[str]:
     challenge_state = challenge_state_for(state, challenge.id)
     notes: list[str] = []
-    if challenge_state.current_progress:
+    if (
+        not challenge.completion_all_flags
+        and not challenge.completion_any_flags
+        and challenge_state.current_progress
+    ):
         notes.append(
             f"Wyzwanie `{challenge.name}` ma postęp {challenge_state.current_progress}/{challenge.progress_required}."
         )
     if challenge_state.noise:
-        notes.append(f"Dotychczasowy hałas przy wyzwaniu: {challenge_state.noise}.")
+        notes.append(
+            f"Dotychczasowy poziom hałasu/czujności przy wyzwaniu: "
+            f"{challenge_state.noise}."
+        )
     for complication in challenge_state.complications:
         notes.append(f"Aktywna komplikacja: {complication}.")
     for key, value in state.flags.values:

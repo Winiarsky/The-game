@@ -3,6 +3,7 @@
     {
       "id": "hero",
       "name": "Bohater",
+      "portrait": "portraits/abandoned_watchtower/hero.webp",
       "kind": "player_character",
       "faction": "ally",
       "uses_death_saves": true,
@@ -44,6 +45,7 @@
     {
       "id": "rogue",
       "name": "Łotrzyca",
+      "portrait": "portraits/abandoned_watchtower/rogue.webp",
       "kind": "player_character",
       "faction": "ally",
       "uses_death_saves": true,
@@ -85,6 +87,7 @@
     {
       "id": "cleric",
       "name": "Kapłan",
+      "portrait": "portraits/abandoned_watchtower/cleric.webp",
       "kind": "player_character",
       "faction": "ally",
       "uses_death_saves": true,

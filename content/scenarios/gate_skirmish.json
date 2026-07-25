@@ -9,6 +9,7 @@
     {
       "id": "hero",
       "name": "Bohater",
+      "portrait": "portraits/abandoned_watchtower/hero.webp",
       "kind": "player_character",
       "faction": "ally",
       "ac": 14,
@@ -41,6 +42,7 @@
     {
       "id": "rogue",
       "name": "Łotrzyca",
+      "portrait": "portraits/abandoned_watchtower/rogue.webp",
       "kind": "player_character",
       "faction": "ally",
       "ac": 15,
@@ -70,6 +72,7 @@
     {
       "id": "cleric",
       "name": "Kapłan",
+      "portrait": "portraits/abandoned_watchtower/cleric.webp",
       "kind": "player_character",
       "faction": "ally",
       "ac": 13,
@@ -199,12 +202,14 @@
     {
       "id": "goblin_a",
       "name": "Goblin przy wozie",
+      "portrait": "portraits/abandoned_watchtower/goblin-cart.webp",
       "source_ref": "goblin",
       "position": [7, 9]
     },
     {
       "id": "goblin_b",
       "name": "Goblin przy rumowisku",
+      "portrait": "portraits/abandoned_watchtower/goblin-rubble.webp",
       "source_ref": "goblin",
       "position": [11, 7],
       "triggers": [

@@ -19,12 +19,18 @@ def _policy():
     return trigger.opening_policy
 
 
-def _state(*, noise: int, tags: tuple[str, ...] = (), spotted: bool = False) -> ExplorationState:
+def _state(
+    *,
+    noise: int,
+    critical_breach: bool = False,
+    wall_bypass: bool = False,
+    ambush_prepared: bool = False,
+) -> ExplorationState:
     attempt = ExplorationChallengeAttempt(
         challenge_id="closed_gate",
         option_id="freeform",
         approach_label="Podejście graczy",
-        approach_tags=tags,
+        approach_tags=(),
         resource_id=None,
         natural_roll=15,
         total=15,
@@ -35,8 +41,12 @@ def _state(*, noise: int, tags: tuple[str, ...] = (), spotted: bool = False) -> 
         complications_added=(),
     )
     flags = SceneFlags()
-    if spotted:
-        flags = set_scene_flag(flags, "gate_goblins_spotted", True)
+    if critical_breach:
+        flags = set_scene_flag(flags, "gate_critical_breach", True)
+    if wall_bypass:
+        flags = set_scene_flag(flags, "gate_wall_bypass_surprise", True)
+    if ambush_prepared:
+        flags = set_scene_flag(flags, "gate_goblin_ambush_prepared", True)
     return ExplorationState(
         zones=(),
         points=(),
@@ -55,28 +65,42 @@ def _state(*, noise: int, tags: tuple[str, ...] = (), spotted: bool = False) -> 
 
 
 def test_quiet_entry_surprises_enemies() -> None:
-    result = resolve_encounter_opening(_state(noise=2), _policy())
+    result = resolve_encounter_opening(_state(noise=0), _policy())
 
     assert result.rule_id == "quiet_entry"
     assert result.outcome == EncounterOpeningOutcome.PARTY_SURPRISES_ENEMIES
 
 
-def test_noise_without_reconnaissance_lets_enemies_surprise_party() -> None:
+def test_full_alert_lets_enemies_surprise_party() -> None:
     result = resolve_encounter_opening(_state(noise=3), _policy())
 
-    assert result.rule_id == "alerted_without_reconnaissance"
+    assert result.rule_id == "ambush_prepared_by_alert"
     assert result.outcome == EncounterOpeningOutcome.ENEMIES_SURPRISE_PARTY
 
 
-def test_reconnaissance_prevents_enemy_surprise_despite_noise() -> None:
-    result = resolve_encounter_opening(_state(noise=3, spotted=True), _policy())
+def test_partial_alert_has_no_surprise() -> None:
+    result = resolve_encounter_opening(_state(noise=2), _policy())
 
-    assert result.rule_id == "alerted_after_reconnaissance"
+    assert result.rule_id == "default"
     assert result.outcome == EncounterOpeningOutcome.NO_SURPRISE
 
 
-def test_forced_breach_takes_priority_over_noise_ambush() -> None:
-    result = resolve_encounter_opening(_state(noise=5, tags=("heavy_force",)), _policy())
+def test_critical_breach_surprises_enemies_when_alert_is_low() -> None:
+    result = resolve_encounter_opening(_state(noise=0, critical_breach=True), _policy())
 
-    assert result.rule_id == "forced_breach"
-    assert result.outcome == EncounterOpeningOutcome.NO_SURPRISE
+    assert result.rule_id == "critical_breach"
+    assert result.outcome == EncounterOpeningOutcome.PARTY_SURPRISES_ENEMIES
+
+
+def test_discovered_wall_route_surprises_enemies_when_entry_stays_quiet() -> None:
+    result = resolve_encounter_opening(_state(noise=1, wall_bypass=True), _policy())
+
+    assert result.rule_id == "hidden_wall_entry"
+    assert result.outcome == EncounterOpeningOutcome.PARTY_SURPRISES_ENEMIES
+
+
+def test_prepared_ambush_takes_priority_over_quiet_final_attempt() -> None:
+    result = resolve_encounter_opening(_state(noise=0, ambush_prepared=True), _policy())
+
+    assert result.rule_id == "ambush_prepared_by_failure"
+    assert result.outcome == EncounterOpeningOutcome.ENEMIES_SURPRISE_PARTY

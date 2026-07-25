@@ -10,7 +10,10 @@ let chatInstanceOpen = true;
 let activeInteractionId = null;
 let waitingForGm = false;
 let optimisticPlayerMessage = null;
-const slashCommands = Array.isArray(window.EXPLORATION_SLASH_COMMANDS) ? window.EXPLORATION_SLASH_COMMANDS : [];
+const slashCommands = [];
+let selectedInteractionGoalId = null;
+let selectedInteractionCheckParticipants = null;
+let selectedInteractionActorIds = [];
 let filteredSlashCommands = [];
 let activeSlashCommandIndex = 0;
 let sidePanelOpen = localStorage.getItem('explorationSidePanelOpen') === 'true';
@@ -171,12 +174,27 @@ async function api(path, body, busyMessage) {
     if (nextStage === 'location_active' && (previousStage !== 'location_active' || nextInteractionId !== previousInteractionId)) {
       chatInstanceOpen = true;
     }
+    if (nextInteractionId !== previousInteractionId) {
+      selectedInteractionGoalId = null;
+      selectedInteractionCheckParticipants = null;
+      selectedInteractionActorIds = [];
+    }
+    if (path === '/api/action' && res.ok && !(body && body.conversation_only)) {
+      selectedInteractionGoalId = null;
+      selectedInteractionCheckParticipants = null;
+      selectedInteractionActorIds = [];
+    }
     activeInteractionId = nextInteractionId;
     optimisticPlayerMessage = null;
     if (path === '/api/rolls' && res.ok) {
       resultAck = state.flow && state.flow.stage === 'interaction_result' ? null : latestResultMessage(state);
     } else if (path === '/api/combat/opportunity-movement/confirm' && res.ok) {
       resultAck = latestMessageWithTitle(state, 'Atak okazyjny');
+    } else if (path === '/api/combat/player-attack-confirm' && res.ok) {
+      const spellResult = latestMessageWithTitle(state, 'Czar');
+      resultAck = spellResult && spellResult.body.includes('rzut obronny')
+        ? {title: 'Rzut obronny przeciwnika', body: spellResult.body}
+        : null;
     } else if (path === '/api/combat/player-damage' && res.ok) {
       const damageResult = latestMessageWithTitle(state, 'Obrażenia');
       resultAck = damageResult && damageResult.body.includes('Cel zostaje pokonany')
@@ -207,6 +225,9 @@ function render() {
   if (interactionId && interactionId !== activeInteractionId) {
     activeInteractionId = interactionId;
     chatInstanceOpen = true;
+    selectedInteractionGoalId = null;
+    selectedInteractionCheckParticipants = null;
+    selectedInteractionActorIds = [];
   }
   const modeLabel = currentModeLabel();
   document.getElementById('app-mode-label').textContent = modeLabel;
@@ -216,7 +237,11 @@ function render() {
   document.getElementById('panel-zone-name').textContent = state.current_zone.name;
   document.getElementById('scene-status-summary').innerHTML = sceneStatusSummaryHtml();
   renderPartyShell();
-  document.getElementById('challenge').textContent = state.active_challenge ? `${state.active_challenge.name}: ${state.active_challenge.current_progress}/${state.active_challenge.progress_required}, hałas ${state.active_challenge.noise}` : 'Brak';
+  document.getElementById('challenge').textContent = state.active_challenge
+    ? state.active_challenge.uses_progress
+      ? `${state.active_challenge.name}: ${state.active_challenge.current_progress}/${state.active_challenge.progress_required}, hałas ${state.active_challenge.noise}`
+      : `${state.active_challenge.name}: stan oparty na elementach bramy, czujność ${state.active_challenge.noise}/3`
+    : 'Brak';
   document.getElementById('visible-environment').innerHTML = visibleEnvironmentHtml();
   document.getElementById('resources').innerHTML = state.resources.map(r => {
     const kind = r.temporary ? ' · przedmiot sceny' : (r.consume_on_use ? ' · jednorazowy' : '');
@@ -243,13 +268,13 @@ function render() {
   const conversation = document.getElementById('scene-conversation');
   conversation.innerHTML = sceneConversationHtml();
   document.getElementById('chat-typing').hidden = !waitingForGm;
-  document.getElementById('messages').innerHTML = state.messages.map(m => `<div class="message"><b>${m.title}</b><br>${m.body}</div>`).join('');
+  document.getElementById('messages').innerHTML = state.messages.map(message => messageCardHtml(message)).join('');
   document.getElementById('pending').innerHTML = pendingHtml(state.pending);
   document.getElementById('pending-title').textContent = pendingTitle(state.pending);
   document.getElementById('pending-accept-button').textContent = state.pending && state.pending.kind === 'source_selection' ? 'Wybierz' : state.pending && state.pending.kind === 'collection' ? 'Zabierz' : 'Akceptuj';
   document.getElementById('pending-reject-button').textContent = state.pending && state.pending.kind === 'source_selection' ? 'Nie wybieram' : 'Odrzuć';
   document.getElementById('lead-actor-choice').innerHTML = leadActorChoiceHtml();
-  document.getElementById('result').innerHTML = resultAck ? `<div class="interaction-result-summary"><b>${esc(resultAck.title)}</b><span>${esc(resultAck.body)}</span></div>` : '';
+  document.getElementById('result').innerHTML = resultAck ? messageCardHtml(resultAck, 'interaction-result-summary') : '';
   const resultAckButton = document.getElementById('result-ack-button');
   if (resultAckButton) resultAckButton.textContent = state.combat ? 'Przeczytałem — wróć do tury' : 'Kontynuuj rozmowę';
   document.getElementById('encounter').innerHTML = encounterHtml();
@@ -262,11 +287,15 @@ function render() {
   document.getElementById('rolls').innerHTML = state.required_rolls.map(r => {
     const sides = Number(r.die_sides || 20);
     const value = sides === 100 ? 50 : 10;
+    const plan = state.pending && state.pending.stage === 'roll' ? (state.pending.check_plan || {}) : {};
+    const namedCheck = plan.skill ? skillLabel(plan.skill) : '';
+    const rollLabel = namedCheck ? `${namedCheck} d20` : (r.label || `d${sides}`);
+    const actor = actorById(r.actor_id);
     if (r.requires_second_roll) {
-      return `<label>${esc(r.actor_name)} ${esc(r.label || `d${sides}`)} #1: <input data-actor="${esc(r.actor_id)}" data-roll-index="1" type="number" min="1" max="${sides}" value="${value}"></label>
-        <label>${esc(r.actor_name)} ${esc(r.label || `d${sides}`)} #2: <input data-actor="${esc(r.actor_id)}" data-roll-index="2" type="number" min="1" max="${sides}" value="${value + 3 > sides ? value - 3 : value + 3}"></label>`;
+      return `<label class="roll-entry">${actorPortraitHtml(actor, 'roll')}<span>${esc(r.actor_name)} — ${esc(rollLabel)} #1:</span> <input data-actor="${esc(r.actor_id)}" data-roll-index="1" type="number" min="1" max="${sides}" value="${value}"></label>
+        <label class="roll-entry">${actorPortraitHtml(actor, 'roll')}<span>${esc(r.actor_name)} — ${esc(rollLabel)} #2:</span> <input data-actor="${esc(r.actor_id)}" data-roll-index="2" type="number" min="1" max="${sides}" value="${value + 3 > sides ? value - 3 : value + 3}"></label>`;
     }
-    return `<label>${esc(r.actor_name)} ${esc(r.label || `d${sides}`)}: <input data-actor="${esc(r.actor_id)}" data-roll-index="1" type="number" min="1" max="${sides}" value="${value}"></label>`;
+    return `<label class="roll-entry">${actorPortraitHtml(actor, 'roll')}<span>${esc(r.actor_name)} — ${esc(rollLabel)}:</span> <input data-actor="${esc(r.actor_id)}" data-roll-index="1" type="number" min="1" max="${sides}" value="${value}"></label>`;
   }).join(' ');
   document.getElementById('debug-payload').textContent = JSON.stringify(state, null, 2);
   renderSessionLogMeta();
@@ -274,6 +303,7 @@ function render() {
     ? state.active_point.name
     : state.current_zone.name;
   document.getElementById('conversation-meta').innerHTML = conversationMetaHtml();
+  document.getElementById('interaction-goals').innerHTML = interactionGoalsHtml();
   updateActivePanel();
   scrollChatToBottom();
 }
@@ -321,7 +351,7 @@ function renderPartyShell() {
     return;
   }
   if (!actors.some(actor => String(actor.id) === selectedPanelActorId)) selectedPanelActorId = String(actors[0].id);
-  summary.innerHTML = actors.map(actor => partySummaryActorHtml(actor)).join('');
+  summary.innerHTML = actors.map(actor => partySummaryActorHtml(currentActorState(actor))).join('');
   const actor = selectedPanelActor();
   details.innerHTML = actor ? partyDetailActorHtml(actor) : '<span class="muted">Brak danych postaci.</span>';
   document.getElementById('actor-states').innerHTML = actor ? actorStatesHtml(actor) : '<span class="muted">Brak danych postaci.</span>';
@@ -332,9 +362,50 @@ function renderPartyShell() {
 function selectedPanelActor() {
   if (!state) return null;
   const base = (state.actors || []).find(actor => String(actor.id) === selectedPanelActorId) || (state.actors || [])[0] || null;
-  if (!base) return null;
+  return currentActorState(base);
+}
+function currentActorState(base) {
+  if (!base || !state) return base || null;
   const combatActor = state.combat && (state.combat.actors || []).find(actor => String(actor.id) === String(base.id));
   return combatActor ? {...base, ...combatActor} : base;
+}
+function portraitActors() {
+  const actors = [...((state && state.actors) || []), ...((state && state.combat && state.combat.actors) || [])];
+  return [...new Map(actors.map(actor => [String(actor.id), actor])).values()];
+}
+function actorById(actorId) {
+  return portraitActors().find(actor => String(actor.id) === String(actorId)) || null;
+}
+function actorPortraitHtml(actor, variant = '') {
+  if (!actor || !actor.portrait_url) return '';
+  const modifier = variant ? ` actor-portrait-${variant}` : '';
+  return `<img class="actor-portrait${modifier}" src="${esc(actor.portrait_url)}" alt="Portret: ${esc(actor.name || 'postać')}" loading="lazy">`;
+}
+function partyPortraitStackHtml(actors) {
+  const portraits = actors.filter(actor => actor.portrait_url);
+  if (!portraits.length) return '';
+  return `<span class="party-portrait-stack" aria-hidden="true">${portraits.map(actor => actorPortraitHtml(actor, 'party')).join('')}</span>`;
+}
+function actorForMessage(message) {
+  const title = String((message && message.title) || '');
+  const body = String((message && message.body) || '');
+  const matches = portraitActors().filter(actor => actor.portrait_url && actor.name).map(actor => {
+    const titleIndex = title.indexOf(actor.name);
+    const bodyIndex = body.indexOf(actor.name);
+    return {
+      actor,
+      index: titleIndex >= 0 ? titleIndex : bodyIndex >= 0 ? title.length + 1 + bodyIndex : Number.MAX_SAFE_INTEGER,
+    };
+  }).filter(match => match.index !== Number.MAX_SAFE_INTEGER);
+  matches.sort((left, right) => left.index - right.index);
+  return matches.length ? matches[0].actor : null;
+}
+function messageCardHtml(message, extraClass = '') {
+  const actor = actorForMessage(message);
+  return `<div class="${extraClass || 'message'}${actor ? ' with-portrait' : ''}">
+    ${actorPortraitHtml(actor, 'message')}
+    <div class="message-copy"><b>${esc(message.title || '')}</b><span>${esc(message.body || '')}</span></div>
+  </div>`;
 }
 function selectPanelActor(actorId) {
   selectedPanelActorId = String(actorId || '');
@@ -348,7 +419,7 @@ function renderPanelActorSelector() {
   selector.hidden = !actorTabs.has(sidePanelTab);
   if (selector.hidden || !state) return;
   const actors = state.actors || [];
-  selector.innerHTML = `<span>Wybierz bohatera</span><div role="listbox" aria-label="Bohater">${actors.map(actor => `<button class="${String(actor.id) === selectedPanelActorId ? 'active' : ''}" data-allow-busy="true" onclick="selectPanelActor('${esc(actor.id)}')" aria-selected="${String(actor.id) === selectedPanelActorId ? 'true' : 'false'}">${esc(actor.name)}</button>`).join('')}</div>`;
+  selector.innerHTML = `<span>Wybierz bohatera</span><div role="listbox" aria-label="Bohater">${actors.map(actor => `<button class="${String(actor.id) === selectedPanelActorId ? 'active' : ''}" data-allow-busy="true" onclick="selectPanelActor('${esc(actor.id)}')" aria-selected="${String(actor.id) === selectedPanelActorId ? 'true' : 'false'}">${actorPortraitHtml(actor, 'tab')}<span>${esc(actor.name)}</span></button>`).join('')}</div>`;
 }
 function actorHealthTone(actor) {
   const maximum = Math.max(1, Number(actor.max_hp || 1));
@@ -363,12 +434,20 @@ function actorConditionLabels(actor) {
 function partySummaryActorHtml(actor) {
   const hp = Number(actor.hp || 0);
   const maximum = Number(actor.max_hp || 0);
+  const temporary = Number(actor.temp_hp || 0);
   const percentage = maximum > 0 ? Math.max(0, Math.min(100, Math.round((hp / maximum) * 100))) : 0;
   const conditions = actorConditionLabels(actor);
+  const hpText = `${hp}/${maximum} PW${temporary > 0 ? ` +${temporary}` : ''}`;
   return `
-    <button class="party-summary-actor ${actorHealthTone(actor)}" data-allow-busy="true" onclick="openActorPanel('${esc(actor.id)}', 'party')" title="${esc(actor.name)}: ${hp}/${maximum} PW${conditions.length ? ` · ${esc(conditions.join(', '))}` : ''}">
-      <span class="party-summary-name">${esc(actor.name)}</span>
-      <span class="party-summary-hp"><i style="width:${percentage}%"></i></span>
+    <button class="party-summary-actor ${actorHealthTone(actor)}" data-allow-busy="true" onclick="openActorPanel('${esc(actor.id)}', 'party')" title="${esc(actor.name)}: ${esc(hpText)}${conditions.length ? ` · ${esc(conditions.join(', '))}` : ''}">
+      ${actorPortraitHtml(actor, 'summary')}
+      <span class="party-summary-content">
+        <span class="party-summary-main">
+          <span class="party-summary-name">${esc(actor.name)}</span>
+          <span class="party-summary-hp-value">${esc(hpText)}</span>
+        </span>
+        <span class="party-summary-hp" role="meter" aria-label="${esc(actor.name)}: ${hp} z ${maximum} punktów życia" aria-valuemin="0" aria-valuemax="${maximum}" aria-valuenow="${hp}"><i style="width:${percentage}%"></i></span>
+      </span>
       ${conditions.length ? `<span class="party-summary-condition" aria-label="Aktywne stany">${conditions.length}</span>` : ''}
     </button>
   `;
@@ -383,7 +462,7 @@ function partyDetailActorHtml(actor) {
   const features = actor.features || [];
   return `
     <article class="party-detail-card ${actorHealthTone(actor)}">
-      <div class="party-detail-heading"><strong>${esc(actor.name)}</strong><span>${hp}/${maximum} PW</span></div>
+      <div class="party-detail-heading">${actorPortraitHtml(actor, 'detail')}<strong>${esc(actor.name)}</strong><span>${hp}/${maximum} PW</span></div>
       <div class="party-detail-hp" aria-label="${percentage}% punktów życia"><i style="width:${percentage}%"></i></div>
       <div class="character-vitals"><span><b>KP</b>${esc(actor.ac ?? '-')}</span><span><b>Szybkość</b>${esc(actor.speed_feet ?? '-')} ft</span><span><b>Temp HP</b>${esc(actor.temp_hp || 0)}</span><span><b>Biegłość</b>${signedNumber(actor.proficiency_bonus || 0)}</span></div>
       <div class="ability-grid">${['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'].map(ability => {
@@ -947,9 +1026,7 @@ function sceneConversationHtml() {
   return `<div class="scene-conversation-list">
     ${sceneIntroMessageHtml()}
     ${entries.map(message => `
-    <div class="conversation-entry ${message.role === 'player' ? 'player' : 'gm'}">
-      <b>${esc(message.title)}</b><span>${esc(message.body)}</span>
-    </div>
+    ${messageCardHtml(message, `conversation-entry ${message.role === 'player' ? 'player' : 'gm'}`)}
   `).join('')}${transitionHtml}</div>`;
 }
 function resolveNpcTransition(reactionId) {
@@ -987,6 +1064,154 @@ function conversationMetaHtml() {
   if (runtime.physical_state) chips.push(`<span class="conversation-context-chip">${esc(runtime.physical_state)}</span>`);
   if (runtime.emotional_state) chips.push(`<span class="conversation-context-chip">${esc(runtime.emotional_state)}</span>`);
   return chips.join('');
+}
+function currentInteractionGoals() {
+  const point = state.active_point || null;
+  if (point && point.npc) return point.npc.goals || [];
+  return state.active_challenge ? (state.active_challenge.goals || []) : [];
+}
+function interactionGoalsHtml() {
+  const goals = currentInteractionGoals();
+  if (!goals.length || state.pending || (state.required_rolls || []).length || resultAck) return '';
+  const selected = goals.find(goal => goal.id === selectedInteractionGoalId) || null;
+  return `
+    <div class="interaction-goals-head">
+      <b>${selected ? 'Wybrany cel' : 'Co chcecie osiągnąć?'}</b>
+      <span>${selected ? esc(selected.followup_prompt) : 'Wybierzcie kierunek. Sposób nadal należy do was.'}</span>
+    </div>
+    <div class="interaction-goal-grid">
+      ${goals.map(goal => `
+        <button type="button" class="interaction-goal-card${goal.id === selectedInteractionGoalId ? ' selected' : ''}"
+          onclick="selectInteractionGoal('${esc(goal.id)}')">
+          ${goal.image ? `<img class="interaction-goal-image" src="${esc(goal.image.startsWith('/') ? goal.image : `/scenario-assets/${goal.image}`)}" alt="">` : ''}
+          <b>${esc(goal.label)}</b>
+          <span>${esc(goal.description)}</span>
+          <small>${esc(goalParticipantLabel(goal))}</small>
+        </button>
+      `).join('')}
+    </div>
+    ${selected ? interactionParticipantPickerHtml(selected) : ''}
+    ${selected ? `<div class="goal-action-composer">
+      <label for="goal-action"><b>Jak to robicie?</b><span>${esc(selected.followup_prompt || 'Opiszcie metodę działania.')}</span></label>
+      <textarea id="goal-action" placeholder="${esc(selected.followup_prompt || 'Opiszcie metodę działania...')}"></textarea>
+      <div class="row">
+        <button type="button" onclick="sendGoalAction()">Zadeklaruj działanie</button>
+        <button type="button" class="secondary" onclick="cancelInteractionGoal()">Anuluj wybór</button>
+      </div>
+    </div>` : ''}`;
+}
+function selectInteractionGoal(goalId) {
+  const goal = currentInteractionGoals().find(item => item.id === goalId);
+  if (!goal) return;
+  if (selectedInteractionGoalId !== goalId) {
+    selectedInteractionActorIds = [];
+    selectedInteractionCheckParticipants = goal.participant_mode === 'must'
+      ? goal.check_participants
+      : null;
+  }
+  selectedInteractionGoalId = goalId;
+  const panel = document.getElementById('interaction-goals');
+  if (panel) panel.innerHTML = interactionGoalsHtml();
+  const input = document.getElementById('goal-action');
+  if (input) input.focus();
+}
+function cancelInteractionGoal() {
+  selectedInteractionGoalId = null;
+  selectedInteractionCheckParticipants = null;
+  selectedInteractionActorIds = [];
+  const panel = document.getElementById('interaction-goals');
+  if (panel) panel.innerHTML = interactionGoalsHtml();
+}
+function checkParticipantLabel(mode) {
+  if (mode === 'whole_party') return 'Test grupowy';
+  if (mode === 'lead_with_help') return 'Jedna postać z pomocą';
+  return 'Jedna postać';
+}
+function goalParticipantLabel(goal) {
+  const options = goal.allowed_check_participants || [goal.check_participants || 'single_actor'];
+  if (goal.participant_mode === 'allow') return `Wybór: ${options.map(checkParticipantLabel).join(' / ')}`;
+  return `Wymagany: ${checkParticipantLabel(goal.check_participants)}`;
+}
+function selectedGoalCheckParticipants(goal) {
+  return goal.participant_mode === 'must'
+    ? (goal.check_participants || 'single_actor')
+    : selectedInteractionCheckParticipants;
+}
+function interactionParticipantPickerHtml(goal) {
+  if (!state.active_challenge || (state.active_point && state.active_point.npc)) return '';
+  const mode = selectedGoalCheckParticipants(goal);
+  const actors = state.actors || [];
+  const options = goal.allowed_check_participants || [goal.check_participants || 'single_actor'];
+  const singleAllowed = options.includes('single_actor');
+  const helpAllowed = options.includes('lead_with_help');
+  const wholePartyAllowed = options.includes('whole_party');
+  const eligibleIds = new Set((goal.eligible_actor_ids || actors.map(actor => actor.id)).map(String));
+  const actorSelectionAllowed = singleAllowed || helpAllowed;
+  const instruction = [
+    actorSelectionAllowed
+      ? helpAllowed
+        ? 'Pierwsza wybrana postać prowadzi, druga opcjonalnie pomaga i daje przewagę.'
+        : 'Wybierz jedną postać, która wykona test.'
+      : '',
+    wholePartyAllowed
+      ? 'Możecie też wybrać całą drużynę — wtedy każdy rzuca.'
+      : '',
+  ].filter(Boolean).join(' ');
+  return `<div class="interaction-participants">
+    <b>Kto wykonuje test?</b>
+    <span>${instruction}</span>
+    <div class="interaction-actor-grid">${actorSelectionAllowed ? actors.map(actor => {
+      const index = selectedInteractionActorIds.indexOf(String(actor.id));
+      const eligible = eligibleIds.has(String(actor.id));
+      const role = index === 0 ? 'prowadzi' : index === 1 ? 'pomaga' : 'wybierz';
+      return `<button type="button" class="interaction-actor-card${index >= 0 ? ' selected' : ''}${eligible ? '' : ' unavailable'}"
+        onclick="toggleInteractionActor('${esc(actor.id)}')"${eligible ? '' : ' disabled title="Ta postać nie spełnia wymagań tej próby."'}>${actorPortraitHtml(actor, 'choice')}<span><b>${esc(actor.name)}</b><small>${eligible ? role : 'brak wymaganych zdolności lub narzędzi'}</small></span></button>`;
+    }).join('') : ''}
+    ${wholePartyAllowed ? `<button type="button" class="interaction-actor-card whole-party${mode === 'whole_party' ? ' selected' : ''}"
+      onclick="selectWholePartyForInteraction()">${partyPortraitStackHtml(actors)}<span><b>Cała drużyna</b><small>${mode === 'whole_party' ? 'wszyscy rzucają' : 'test grupowy'}</small></span></button>` : ''}
+    </div>
+  </div>`;
+}
+function toggleInteractionActor(actorId) {
+  const goal = currentInteractionGoals().find(item => item.id === selectedInteractionGoalId);
+  if (!goal) return;
+  const options = goal.allowed_check_participants || [goal.check_participants || 'single_actor'];
+  const singleAllowed = options.includes('single_actor');
+  const helpAllowed = options.includes('lead_with_help');
+  if (!singleAllowed && !helpAllowed) return;
+  const id = String(actorId);
+  if (goal.eligible_actor_ids && !goal.eligible_actor_ids.map(String).includes(id)) return;
+  if (selectedInteractionCheckParticipants === 'whole_party') selectedInteractionActorIds = [];
+  const currentIndex = selectedInteractionActorIds.indexOf(id);
+  if (currentIndex >= 0) {
+    selectedInteractionActorIds.splice(currentIndex, 1);
+  } else if (helpAllowed) {
+    if (selectedInteractionActorIds.length >= 2) selectedInteractionActorIds.pop();
+    selectedInteractionActorIds.push(id);
+  } else {
+    selectedInteractionActorIds = [id];
+  }
+  if (goal.participant_mode === 'must') {
+    selectedInteractionCheckParticipants = goal.check_participants;
+  } else if (selectedInteractionActorIds.length >= 2) {
+    selectedInteractionCheckParticipants = 'lead_with_help';
+  } else if (selectedInteractionActorIds.length === 1) {
+    selectedInteractionCheckParticipants = singleAllowed ? 'single_actor' : 'lead_with_help';
+  } else {
+    selectedInteractionCheckParticipants = null;
+  }
+  const panel = document.getElementById('interaction-goals');
+  if (panel) panel.innerHTML = interactionGoalsHtml();
+}
+function selectWholePartyForInteraction() {
+  const goal = currentInteractionGoals().find(item => item.id === selectedInteractionGoalId);
+  if (!goal) return;
+  const options = goal.allowed_check_participants || [goal.check_participants || 'single_actor'];
+  if (!options.includes('whole_party')) return;
+  selectedInteractionActorIds = [];
+  selectedInteractionCheckParticipants = 'whole_party';
+  const panel = document.getElementById('interaction-goals');
+  if (panel) panel.innerHTML = interactionGoalsHtml();
 }
 function pendingHtml(pending) {
   if (!pending) return '';
@@ -1129,7 +1354,9 @@ function pendingHtml(pending) {
     if (selectedResource) {
       lines.push(`<p><b>Zasób sceny:</b> ${resourceSummary(selectedResource)}.</p>`);
     }
-    lines.push(`<p><b>Postęp:</b> sukces +${Number(option.progress_on_success || 0)}, porażka +${Number(option.progress_on_failure || 0)}.</p>`);
+    if (!state.active_challenge || state.active_challenge.uses_progress) {
+      lines.push(`<p><b>Postęp:</b> sukces +${Number(option.progress_on_success || 0)}, porażka +${Number(option.progress_on_failure || 0)}.</p>`);
+    }
     if (pending.kind === 'challenge' && pending.stage === 'decision' && !pending.fixture_action) {
       lines.push(`<button class="secondary" onclick="toggleDecisionCorrection()">Popraw decyzję MG</button>`);
       if (decisionCorrectionOpen) lines.push(decisionCorrectionHtml(option, pending));
@@ -1227,6 +1454,16 @@ function resourceSummary(resource) {
 function leadActorChoiceHtml() {
   if (!state.pending || !['challenge', 'observation', 'collection', 'trap'].includes(state.pending.kind) || state.pending.stage !== 'decision' || !state.actors || !state.actors.length) return '';
   if (state.pending.kind === 'collection' && state.pending.collection && state.pending.collection.destination !== 'actor_inventory') return '';
+  if (['challenge', 'observation'].includes(state.pending.kind) && (state.pending.participant_actor_ids || []).length) {
+    const ids = state.pending.participant_actor_ids.map(String);
+    const mode = state.pending.option ? state.pending.option.check_participants : 'single_actor';
+    const names = ids.map((id, index) => {
+      const actor = state.actors.find(item => String(item.id) === id);
+      const role = mode === 'whole_party' ? 'rzuca' : index === 0 ? 'prowadzi' : 'pomaga';
+      return `${actor ? actor.name : id} — ${role}`;
+    });
+    return `<div class="interaction-participant-summary"><b>Uczestnicy ustaleni przed deklaracją:</b> ${esc(names.join(', '))}</div>`;
+  }
   const selectedId = state.selected_lead_actor_id || (state.actors[0] && state.actors[0].id) || '';
   const options = state.actors.map(actor => `<option value="${esc(actor.id)}"${String(actor.id) === String(selectedId) ? ' selected' : ''}>${esc(actor.name)}</option>`).join('');
   const label = state.pending.kind === 'collection' ? 'Kto zabiera?' : 'Kto prowadzi test?';
@@ -1237,6 +1474,12 @@ function decisionCorrectionHtml(option, pending) {
   const actorOptions = (selectedId, allowEmpty=false) => `${allowEmpty ? '<option value="">-</option>' : ''}${(state.actors || []).map(actor => `<option value="${esc(actor.id)}"${String(actor.id) === String(selectedId || '') ? ' selected' : ''}>${esc(actor.name)}</option>`).join('')}`;
   const mechanicOptions = (state.allowed_mechanics || []).map(tool => `<option value="${esc(tool.id)}"${tool.id === mechanicId ? ' selected' : ''}>${esc(tool.label || tool.id)}</option>`).join('');
   const participants = option.check_participants || (option.mechanic && option.mechanic.participants ? option.mechanic.participants : 'single_actor');
+  const lockedParticipantIds = (pending.participant_actor_ids || []).map(String);
+  const lockedParticipantSummary = lockedParticipantIds.map((id, index) => {
+    const actor = (state.actors || []).find(item => String(item.id) === id);
+    const role = participants === 'whole_party' ? 'rzuca' : index === 0 ? 'prowadzi' : 'pomaga';
+    return `${actor ? actor.name : id} — ${role}`;
+  }).join(', ');
   const aggregation = option.check_aggregation || (participants === 'whole_party' ? 'highest' : 'lead_result');
   const abilityOptions = ['strength','dexterity','constitution','intelligence','wisdom','charisma'].map(ability => `<option value="${ability}"${ability === option.ability ? ' selected' : ''}>${ability}</option>`).join('');
   const rollMode = option.roll_mode || 'normal';
@@ -1268,14 +1511,14 @@ function decisionCorrectionHtml(option, pending) {
     <div class="card" style="margin-top:10px">
       <h4>Korekta przed rzutem</h4>
       <label>Mechanika <select id="correction-mechanic">${mechanicOptions}</select></label>
-      <label>Uczestnicy
+      ${lockedParticipantIds.length ? `<div class="interaction-participant-summary"><b>Uczestnicy ustaleni przed deklaracją:</b> ${esc(lockedParticipantSummary)}</div>` : `<label>Uczestnicy
         <select id="correction-participants">
           <option value="single_actor"${participants === 'single_actor' ? ' selected' : ''}>jedna postać</option>
           <option value="lead_with_help"${participants === 'lead_with_help' ? ' selected' : ''}>prowadzący z pomocą</option>
           <option value="whole_party"${participants === 'whole_party' ? ' selected' : ''}>cała drużyna</option>
           <option value="selected_actors"${participants === 'selected_actors' ? ' selected' : ''}>wybrane postacie</option>
         </select>
-      </label>
+      </label>`}
       <label>Agregacja
         <select id="correction-aggregation">
           <option value="lead_result"${aggregation === 'lead_result' ? ' selected' : ''}>wynik prowadzącego</option>
@@ -1287,8 +1530,8 @@ function decisionCorrectionHtml(option, pending) {
           <option value="sum_progress"${aggregation === 'sum_progress' ? ' selected' : ''}>suma postępu</option>
         </select>
       </label>
-      <label>Prowadzący <select id="correction-lead">${actorOptions(state.selected_lead_actor_id)}</select></label>
-      <label>Pomocnik <select id="correction-helper">${actorOptions(state.selected_helper_actor_id, true)}</select></label>
+      ${lockedParticipantIds.length ? '' : `<label>Prowadzący <select id="correction-lead">${actorOptions(state.selected_lead_actor_id)}</select></label>
+      <label>Pomocnik <select id="correction-helper">${actorOptions(state.selected_helper_actor_id, true)}</select></label>`}
       <label>Cecha <select id="correction-ability">${abilityOptions}</select></label>
       <label>Skill <input id="correction-skill" value="${esc(option.skill || '')}" placeholder="np. athletics"></label>
       <label>ST <input id="correction-dc" type="number" min="5" max="25" value="${esc(option.dc || 10)}"></label>
@@ -1341,7 +1584,7 @@ function rollPromptHtml() {
   const plan = state.pending.check_plan || {};
   const participants = {
     single_actor: 'rzuca jeden wybrany bohater',
-    lead_with_help: 'rzuca prowadzący z pomocą',
+    lead_with_help: 'prowadzący wykonuje test, pomocnik nie rzuca osobno',
     whole_party: 'rzuca cała drużyna',
     selected_actors: 'rzucają wybrani bohaterowie'
   }[plan.participants] || plan.participants || 'rzut eksploracyjny';
@@ -1351,7 +1594,20 @@ function rollPromptHtml() {
     lowest: 'liczy się najniższy wynik',
     majority: 'sukces, jeśli zda co najmniej połowa'
   }[plan.aggregation] || plan.aggregation || '';
-  const names = (state.required_rolls || []).map(r => r.actor_name).join(', ');
+  const checkName = skillLabel(plan.skill);
+  const abilityName = abilityLabel(plan.ability);
+  const checkLabel = plan.skill
+    ? `${checkName} (${abilityName})`
+    : plan.tool
+      ? `${plan.tool_label || plan.tool} (${abilityName})`
+      : abilityName;
+  const lead = (state.actors || []).find(actor => String(actor.id) === String(plan.lead_actor_id || ''));
+  const helper = (state.actors || []).find(actor => String(actor.id) === String(plan.helper_actor_id || ''));
+  const rollingNames = (state.required_rolls || []).map(r => r.actor_name).join(', ');
+  const roleHtml = plan.participants === 'lead_with_help'
+    ? `<p><b>Test wykonuje:</b> ${esc((lead && lead.name) || rollingNames || '-')} — ${esc(checkLabel)} przeciw ST ${esc(plan.dc)}.</p>
+       <p><b>Pomaga:</b> ${esc((helper && helper.name) || '-')} — nie rzuca osobno; jego pomoc daje prowadzącemu przewagę.</p>`
+    : `<p><b>Test:</b> ${esc(checkLabel)} przeciw ST ${esc(plan.dc)}. <b>Rzucają:</b> ${esc(rollingNames || '-')}.</p>`;
   const rollBreakdowns = (state.required_rolls || []).map(required => {
     const active = required.active_modifiers || [];
     const ignored = required.ignored_modifiers || [];
@@ -1362,7 +1618,7 @@ function rollPromptHtml() {
   }).join('');
   const mechanic = plan.mechanic || {};
   const mechanicHtml = mechanic.id ? `<p><b>Mechanika:</b> ${esc(mechanic.label || mechanic.id)}</p>` : '';
-  const rollModeHtml = plan.roll_mode && plan.roll_mode !== 'normal' ? `<p><b>Tryb rzutu:</b> ${esc(plan.roll_mode)}.</p>` : '';
+  const rollModeHtml = plan.roll_mode && plan.roll_mode !== 'normal' ? `<p><b>Tryb rzutu:</b> ${esc(rollModeLabel(plan.roll_mode))}.</p>` : '';
   const situationalHtml = plan.situational_modifiers && plan.situational_modifiers.length
     ? `<p><b>Modyfikatory sytuacyjne:</b> ${plan.situational_modifiers.map(mod => `${esc(mod.label)} ${signedNumber(Number(mod.modifier || 0))}${mod.roll_mode && mod.roll_mode !== 'normal' ? `, ${esc(mod.roll_mode)}` : ''} (${esc(mod.reason)})`).join('; ')}</p>`
     : '';
@@ -1382,7 +1638,7 @@ function rollPromptHtml() {
       }).join('; ')}</p>`
     : '';
   const toolProficiencyHtml = plan.tool ? `<p><b>Biegłość narzędzia:</b> ${esc(plan.tool_label || plan.tool)}.</p>` : '';
-  return `${mechanicHtml}${rollModeHtml}<p><b>Format rzutu:</b> ${esc(participants)}${aggregation ? `, ${esc(aggregation)}` : ''}.</p><p><b>Rzucają:</b> ${esc(names || '-')}</p>${toolProficiencyHtml}${rollBreakdowns ? `<ul>${rollBreakdowns}</ul>` : ''}${resourceHtml}${situationalHtml}${improvisedHtml}${bonusHtml}`;
+  return `${mechanicHtml}${roleHtml}${rollModeHtml}<p><b>Rozstrzygnięcie:</b> ${esc(participants)}${aggregation ? `; ${esc(aggregation)}` : ''}.</p>${toolProficiencyHtml}${rollBreakdowns ? `<ul>${rollBreakdowns}</ul>` : ''}${resourceHtml}${situationalHtml}${improvisedHtml}${bonusHtml}`;
 }
 function latestResultMessage(state) {
   const messages = state.messages || [];
@@ -1634,6 +1890,7 @@ function combatInitiativeRibbonHtml(combat, order) {
     return {
       id,
       name: entry.actor_name || actor.name || '-',
+      portrait_url: actor.portrait_url || null,
       total: entry.total === undefined ? null : entry.total,
       faction: actor.faction || 'neutral',
       defeated: Boolean(actor.defeated),
@@ -1646,7 +1903,7 @@ function combatInitiativeRibbonHtml(combat, order) {
       <span class="initiative-ribbon-label">Inicjatywa</span>
       <div class="initiative-ribbon-order">${entries.map(entry => `
         <div class="initiative-actor ${esc(entry.faction)}${entry.id === currentId ? ' current' : ''}${entry.defeated ? ' defeated' : ''}"${entry.id === currentId ? ' aria-current="step"' : ''}>
-          <span>${esc(entry.name)}</span>${entry.total === null ? '' : `<b>${esc(entry.total)}</b>`}
+          ${actorPortraitHtml(entry, 'initiative')}<span>${esc(entry.name)}</span>${entry.total === null ? '' : `<b>${esc(entry.total)}</b>`}
         </div>
       `).join('')}</div>
     </div>
@@ -1660,8 +1917,11 @@ function combatTurnHudHtml(combat) {
   return `
     <div class="combat-turn-hud ${esc(actor.faction || 'neutral')}">
       <div class="combat-turn-identity">
+        ${actorPortraitHtml(actor, 'turn')}
+        <div>
         <span>Aktywna tura · runda ${esc(combat.round_number || '-')}</span>
         <b>${esc(actor.name || '-')}</b>
+        </div>
       </div>
       <div class="combat-hp" aria-label="Punkty życia ${esc(actorHpLabel(actor))}">
         <span><b>HP ${esc(actorHpLabel(actor))}</b><small>KP ${esc(actorAcLabel(actor))}</small></span>
@@ -1926,7 +2186,7 @@ function combatInstructionText(combat, finished, isAllyTurn, isEnemyTurn) {
       : '';
     return `Wybrano ruch na (${preview.destination[0]},${preview.destination[1]}). Uruchom skan i kliknij pole docelowe, żeby zatwierdzić.${draggedInstruction}`;
   }
-  const selfActionHint = ` Kliknij pole ${actor.name || 'aktywnego bohatera'}, aby otworzyć jego czary, akcje, ekwipunek i zakończenie tury.`;
+  const selfActionHint = ` Kliknij pole ${actor.name || 'aktywnego bohatera'}, aby otworzyć jego czary, akcje i ekwipunek. Turę możesz zakończyć także przyciskiem obok skanowania.`;
   if (actionUsed && remaining > 0) return `Akcja zużyta. Możesz jeszcze ruszyć się (${remaining} ft).${selfActionHint}`;
   if (actionUsed) return `Akcja zużyta.${selfActionHint}`;
   if (remaining > 0) return `Kliknij Skanuj planszę, a potem wybierz niebieskie pole ruchu, czerwony cel, turkusowego rannego sojusznika albo zielony obiekt.${selfActionHint}`;
@@ -2180,7 +2440,7 @@ function actorAcLabel(actor) {
   return equipmentBonus > 0 ? `${ac} (${base} + ekwipunek ${equipmentBonus})` : `${ac}`;
 }
 function latestCombatMessageHtml() {
-  const combatTitles = new Set(['Atak', 'Obrażenia', 'Ruch', 'Koniec tury', 'Atak przeciwnika', 'Efekt przeciwnika', 'Obrażenia przeciwnika', 'Ruch przeciwnika', 'Tura przeciwnika', 'Rzut obronny', 'Atak okazyjny', 'Pomoc', 'Ready', 'Leczenie', 'Eliksir', 'Rzut śmierci', 'Stabilizacja']);
+  const combatTitles = new Set(['Atak', 'Czar', 'Obrażenia', 'Ruch', 'Koniec tury', 'Atak przeciwnika', 'Efekt przeciwnika', 'Obrażenia przeciwnika', 'Ruch przeciwnika', 'Tura przeciwnika', 'Rzut obronny', 'Atak okazyjny', 'Pomoc', 'Ready', 'Leczenie', 'Eliksir', 'Rzut śmierci', 'Stabilizacja']);
   const messages = state.messages || [];
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     if (!combatTitles.has(messages[i].title)) continue;
@@ -2308,6 +2568,7 @@ function combatPrimaryActionHtml(combat, isAllyTurn, isEnemyTurn) {
         : `<p>Ruch dostępny: ${esc(movement.remaining_feet || 0)} ft.</p>`}
     <div class="row">
       <button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button>
+      ${!targeting && !preview ? '<button class="secondary" data-allow-busy="true" onclick="finishCombatTurn()">Zakończ turę</button>' : ''}
     </div>
   `;
 }
@@ -3170,6 +3431,35 @@ function abilityLabel(ability) {
   };
   return labels[ability] || ability || '-';
 }
+function skillLabel(skill) {
+  const labels = {
+    acrobatics: 'Akrobatyka',
+    animal_handling: 'Opieka nad zwierzętami',
+    arcana: 'Wiedza tajemna',
+    athletics: 'Atletyka',
+    deception: 'Oszustwo',
+    history: 'Historia',
+    insight: 'Intuicja',
+    intimidation: 'Zastraszanie',
+    investigation: 'Śledztwo',
+    medicine: 'Medycyna',
+    nature: 'Natura',
+    perception: 'Spostrzegawczość',
+    performance: 'Występy',
+    persuasion: 'Perswazja',
+    religion: 'Religia',
+    sleight_of_hand: 'Zwinne dłonie',
+    stealth: 'Skradanie się',
+    survival: 'Sztuka przetrwania'
+  };
+  return labels[skill] || skill || '';
+}
+function rollModeLabel(mode) {
+  return {
+    advantage: 'przewaga — rzuć 2k20 i wybierz wyższy wynik',
+    disadvantage: 'utrudnienie — rzuć 2k20 i wybierz niższy wynik'
+  }[mode] || mode || 'zwykły';
+}
 function saveSuccessLabel(value) {
   if (value === 'half') return 'połowa obrażeń przy sukcesie';
   return 'brak obrażeń przy sukcesie';
@@ -3290,13 +3580,46 @@ async function sendAction() {
   const text = input ? input.value.trim() : '';
   if (!text) return;
   optimisticPlayerMessage = {role: 'player', title: 'Gracze', body: text};
-  if (input) {
-    input.value = '';
-    input.placeholder = 'Napisz wiadomość do MG...';
-  }
+  if (input) input.value = '';
   closeSlashCommandMenu();
   render();
-  const result = await api('/api/action', {text}, 'Czekam na odpowiedź MG...');
+  const result = await api(
+    '/api/action',
+    {text, conversation_only: true},
+    'MG poprawia płaszcz i zastanawia się nad odpowiedzią...'
+  );
+  if (result && !result.ok && input) input.value = text;
+}
+async function sendGoalAction() {
+  const input = document.getElementById('goal-action');
+  const text = input ? input.value.trim() : '';
+  if (!text) return;
+  const selectedGoal = currentInteractionGoals().find(goal => goal.id === selectedInteractionGoalId) || null;
+  if (!selectedGoal) return;
+  const selectedCheckParticipants = selectedGoal ? selectedGoalCheckParticipants(selectedGoal) : null;
+  if (selectedGoal && state.active_challenge && !(state.active_point && state.active_point.npc) && !selectedCheckParticipants) {
+    alert('Najpierw wybierz typ testu.');
+    return;
+  }
+  if (selectedGoal && state.active_challenge && !(state.active_point && state.active_point.npc) && selectedCheckParticipants !== 'whole_party' && selectedInteractionActorIds.length < 1) {
+    alert('Najpierw wybierz postać, która wykonuje test.');
+    return;
+  }
+  optimisticPlayerMessage = {role: 'player', title: 'Gracze', body: text};
+  if (input) input.value = '';
+  render();
+  const result = await api(
+    '/api/action',
+    {
+      text,
+      selected_goal_id: selectedInteractionGoalId,
+      check_participants: selectedCheckParticipants,
+      participant_actor_ids: selectedGoal && selectedCheckParticipants === 'whole_party'
+        ? []
+        : selectedInteractionActorIds,
+    },
+    'Czekam na odpowiedź MG...'
+  );
   if (result && !result.ok && input) input.value = text;
 }
 function startShortRest() { api('/api/rest/short/start', {}, 'Przygotowuję podgląd odpoczynku...'); }
@@ -3353,10 +3676,10 @@ function submitDecisionCorrection() {
   };
   api('/api/decision/correction', {
     mechanic_id: document.getElementById('correction-mechanic').value,
-    check_participants: document.getElementById('correction-participants').value,
+    check_participants: document.getElementById('correction-participants')?.value || state.pending.option?.check_participants || 'single_actor',
     check_aggregation: document.getElementById('correction-aggregation').value,
-    lead_actor_id: document.getElementById('correction-lead').value,
-    helper_actor_id: document.getElementById('correction-helper').value,
+    lead_actor_id: document.getElementById('correction-lead')?.value || (state.pending.participant_actor_ids || [])[0] || '',
+    helper_actor_id: document.getElementById('correction-helper')?.value || (state.pending.participant_actor_ids || [])[1] || '',
     ability: document.getElementById('correction-ability').value,
     skill: document.getElementById('correction-skill').value,
     dc: Number(document.getElementById('correction-dc').value),

@@ -22,6 +22,10 @@ def create_app(session: ExplorationUiSession) -> Flask:
     def scenario_assets(filename: str):
         return send_from_directory(session._scenario_asset_root().resolve(), filename)
 
+    @app.get("/game-assets/<path:filename>")
+    def game_assets(filename: str):
+        return send_from_directory(session._game_asset_root().resolve(), filename)
+
     @app.get("/api/state")
     def api_state():
         return jsonify(session.state_payload())
@@ -134,7 +138,30 @@ def create_app(session: ExplorationUiSession) -> Flask:
     def api_action():
         data = request.get_json(silent=True) or {}
         try:
-            return jsonify(session.submit_action(str(data.get("text", ""))))
+            selected_goal_id = data.get("selected_goal_id")
+            raw_participant_ids = data.get("participant_actor_ids", [])
+            if not isinstance(raw_participant_ids, list):
+                raise ValueError("participant_actor_ids musi być listą.")
+            return jsonify(
+                session.submit_action(
+                    str(data.get("text", "")),
+                    selected_goal_id=(
+                        str(selected_goal_id)
+                        if selected_goal_id is not None
+                        else None
+                    ),
+                    selected_check_participants=(
+                        str(data["check_participants"])
+                        if data.get("check_participants") is not None
+                        else None
+                    ),
+                    participant_actor_ids=tuple(
+                        str(actor_id) for actor_id in raw_participant_ids
+                    ),
+                    conversation_only=bool(data.get("conversation_only", False)),
+                    infer_flow_route=bool(data.get("infer_flow_route", False)),
+                )
+            )
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 

@@ -35,24 +35,27 @@ def _roll(total_roll: int):
     return resolve_d20_roll(D20RollInput(D20RollRequest(), total_roll))
 
 
-def test_success_adds_progress_and_completes_gate_challenge():
+def test_force_success_clears_both_gate_blockers_and_completes_challenge():
     state = _state()
     challenge = state.challenges[0]
     option = next(item for item in challenge.options if item.id == "force_gate")
 
-    result = resolve_challenge_option(state, challenge, option, _roll(12))
+    result = resolve_challenge_option(state, challenge, option, _roll(16))
 
     updated = challenge_state_for(result.state, challenge.id)
     assert result.success is True
-    assert updated.current_progress == 3
+    assert updated.current_progress == 0
     assert updated.completed is True
     assert scene_flag(result.state.flags, "gate_passed") is True
+    assert scene_flag(result.state.flags, "gate_lock_cleared") is True
+    assert scene_flag(result.state.flags, "gate_bolt_cleared") is True
+    assert updated.noise == 2
     assert updated.attempts[-1].option_id == "force_gate"
-    assert updated.attempts[-1].progress_added == 3
+    assert updated.attempts[-1].progress_added == 0
     assert updated.attempts[-1].success is True
 
 
-def test_failure_still_adds_fail_forward_progress_and_complication():
+def test_vault_failure_adds_complication_without_fake_gate_progress():
     state = _state()
     challenge = state.challenges[0]
     option = next(item for item in challenge.options if item.id == "vault_gate")
@@ -61,26 +64,32 @@ def test_failure_still_adds_fail_forward_progress_and_complication():
 
     updated = challenge_state_for(result.state, challenge.id)
     assert result.success is False
-    assert result.progress_added == 1
-    assert updated.current_progress == 1
+    assert result.progress_added == 0
+    assert updated.current_progress == 0
+    assert scene_flag(result.state.flags, "gate_bolt_cleared") is not True
     assert "ryzyko_upadku" in updated.complications
     assert updated.attempts[-1].option_id == "vault_gate"
     assert updated.attempts[-1].success is False
     assert updated.attempts[-1].complications_added == ("ryzyko_upadku",)
 
 
-def test_repeated_challenge_attempts_keep_history_order():
+def test_failed_force_attempt_can_be_retried_and_alert_is_capped():
     state = _state()
     challenge = state.challenges[0]
-    option = next(item for item in challenge.options if item.id == "break_picket")
+    option = next(item for item in challenge.options if item.id == "force_gate")
 
-    first = resolve_challenge_option(state, challenge, option, _roll(2))
-    second = resolve_challenge_option(first.state, challenge, option, _roll(10))
+    first = resolve_challenge_option(state, challenge, option, _roll(10))
+    second = resolve_challenge_option(first.state, challenge, option, _roll(16))
 
     updated = challenge_state_for(second.state, challenge.id)
-    assert [attempt.option_id for attempt in updated.attempts] == ["break_picket", "break_picket"]
-    assert [attempt.total for attempt in updated.attempts] == [2, 10]
-    assert updated.current_progress == 2
+    assert [attempt.option_id for attempt in updated.attempts] == ["force_gate", "force_gate"]
+    assert [attempt.total for attempt in updated.attempts] == [10, 16]
+    assert updated.current_progress == 0
+    assert updated.noise == 3
+    assert updated.completed is True
+    assert scene_flag(second.state.flags, "gate_lock_cleared") is True
+    assert scene_flag(second.state.flags, "gate_bolt_cleared") is True
+    assert scene_flag(second.state.flags, "gate_goblin_ambush_prepared") is True
 
 
 def test_critical_failure_uses_critical_complication():
@@ -93,10 +102,14 @@ def test_critical_failure_uses_critical_complication():
     updated = challenge_state_for(result.state, challenge.id)
     assert result.critical_failure is True
     assert result.noise_added == 3
+    assert updated.completed is False
+    assert scene_flag(result.state.flags, "gate_lock_cleared") is not True
+    assert scene_flag(result.state.flags, "gate_bolt_cleared") is not True
+    assert scene_flag(result.state.flags, "gate_goblin_ambush_prepared") is True
     assert "alarm_w_strażnicy" in updated.complications
 
 
-def test_force_gate_can_be_quiet_on_natural_20_or_success_margin():
+def test_force_gate_is_quiet_only_on_natural_20():
     state = _state()
     challenge = state.challenges[0]
     option = next(item for item in challenge.options if item.id == "force_gate")
@@ -111,7 +124,24 @@ def test_force_gate_can_be_quiet_on_natural_20_or_success_margin():
     high_margin = resolve_challenge_option(state, challenge, option, high_margin_roll)
 
     assert natural_20.noise_added == 0
-    assert high_margin.noise_added == 0
+    assert scene_flag(natural_20.state.flags, "gate_critical_breach") is True
+    assert high_margin.noise_added == 2
+
+
+def test_opened_lock_hides_lockpicking_but_does_not_complete_gate():
+    state = _state()
+    challenge = state.challenges[0]
+    option = next(item for item in challenge.options if item.id == "lockpick_gate")
+
+    result = resolve_challenge_option(state, challenge, option, _roll(16))
+
+    updated = challenge_state_for(result.state, challenge.id)
+    available_ids = {item.id for item in available_challenge_options(result.state, challenge)}
+    assert updated.completed is False
+    assert scene_flag(result.state.flags, "gate_lock_cleared") is True
+    assert scene_flag(result.state.flags, "gate_bolt_cleared") is not True
+    assert "lockpick_gate" not in available_ids
+    assert "force_gate" in available_ids
 
 
 def test_resource_locked_option_is_hidden_until_resource_is_owned():
@@ -227,7 +257,7 @@ def test_gate_challenge_does_not_reveal_hidden_npc_before_encounter_is_won():
     challenge = next(item for item in state.challenges if item.id == "closed_gate")
     option = next(item for item in challenge.options if item.id == "force_gate")
 
-    result = resolve_challenge_option(state, challenge, option, _roll(12))
+    result = resolve_challenge_option(state, challenge, option, _roll(16))
     revealed_state, revealed = reveal_exploration_points(result.state, challenge.reveals_on_complete)
 
     updated = challenge_state_for(result.state, challenge.id)

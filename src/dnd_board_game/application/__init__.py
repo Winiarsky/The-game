@@ -71,6 +71,10 @@ from .exploration_flow import (
     SetupStepTransition,
     StartSessionTransition,
 )
+from .exploration_interaction_flow import (
+    ExplorationGoalRoute,
+    ExplorationInteractionFlowService,
+)
 from .exploration_hazard_flow import (
     ExplorationHazardResolution,
     apply_exploration_hazard_outcome,
@@ -176,6 +180,8 @@ __all__ = [
     "PendingEnemySavingThrow",
     "ExplorationFlowService",
     "ExplorationFlowStage",
+    "ExplorationGoalRoute",
+    "ExplorationInteractionFlowService",
     "ExplorationHazardResolution",
     "FinishInteractionTransition",
     "LocationTransition",

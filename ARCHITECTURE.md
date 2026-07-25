@@ -90,6 +90,11 @@ This keeps board communication consistent when one tile can represent multiple i
 The exploration web surface is split into explicit responsibilities:
 
 - `application/exploration_flow.py` owns deterministic exploration flow transitions,
+- `exploration/flow_graph.py` owns pure state-derived exploration graph nodes,
+  conditions and route references, while
+  `application/exploration_interaction_flow.py` selects the available authored
+  goal route. Flow graphs orchestrate content but never resolve D&D checks or
+  mutate state; see `docs/EXPLORATION_FLOW_GRAPHS.md`,
 - `application/exploration_hazard_flow.py` owns hazard saving throws, typed damage,
   save-dependent effects, and actor-condition consequences,
 - `exploration/traps.py` owns pure trap-state transitions and action outcomes; detection

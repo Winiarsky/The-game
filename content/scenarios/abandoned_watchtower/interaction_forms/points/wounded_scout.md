@@ -58,6 +58,30 @@ Dla NPC:
 - zdolność rozmowy: może mówić krótkimi zdaniami
 - zdolność obrony: bardzo ograniczona; ukryty nóż tylko jako desperacka reakcja
 
+### 7A. Cele Widoczne Dla Graczy
+
+- `calm_scout`: Uspokójcie zwiadowcę.
+- `help_scout`: Udzielcie mu pomocy.
+- `ask_scout`: Dowiedzcie się, co się stało.
+- `pressure_scout`: Wywrzyjcie presję.
+- `custom_scout`: Własny sposób.
+
+### 7B. Kluczowe Kwestie NPC
+
+- `reports_must_survive` (`priority`, ukryte): najważniejsze jest bezpieczne
+  dostarczenie meldunków.
+- Ugruntowana obietnica ich uratowania lub dostarczenia natychmiast uspokaja
+  zwiadowcę i buduje zaufanie, bez rzutu.
+- Kwestia działa tylko raz; zwykłe pytanie o zawartość torby nie jest obietnicą i
+  nie powinno jej uruchomić.
+
+### 7C. Styl Narracji
+
+- Instancja: przygodowy ton D&D z lekkim, nerwowym humorem zwiadowcy.
+- `ask_scout`: `serious_revelation`; zero humoru i ironii, wysoki dramatyzm.
+- Kluczowa kwestia meldunków ma własną autorską narrację, więc nie potrzebuje
+  dodatkowego żartu generowanego przez LLM.
+
 ## 8. Co Gracze Mogą Realnie Próbować
 - uspokoić go i porozmawiać
 - opatrzyć rany
@@ -102,7 +126,7 @@ Proponowany model intencji dla tego NPC:
   },
   "information": {
     "status": "locked",
-    "unlock_if_flags": ["scout_calmed", "scout_stabilized", "scout_trusts_party"]
+    "unlock_if_flags": ["scout_trusts_party"]
   },
   "search": {
     "status": "allowed",

@@ -21,6 +21,8 @@ from dnd_board_game.exploration import (
     SocialInteractionPlan,
     SocialRequestRisk,
     npc_runtime_state_for,
+    interaction_goal,
+    effective_narrative_style,
     plan_npc_attempt,
     plan_npc_intent_action,
     plan_social_interaction,
@@ -110,12 +112,23 @@ class NpcInteractionRequest:
     state: ExplorationState
     player_action: str
     conversation_thread: tuple[GmDeclarationThreadEntry, ...] = ()
+    selected_goal_id: str | None = None
+    conversation_only: bool = False
 
     def to_prompt_payload(self) -> dict[str, Any]:
         npc = self.point.npc_interaction
         if npc is None:
             raise ValueError(f"Exploration point {self.point.id} has no npc_interaction.")
         runtime_state = npc_runtime_state_for(self.state, npc.id)
+        selected_goal = interaction_goal(
+            npc.goals,
+            self.selected_goal_id,
+            self.state.flags,
+        )
+        narrative_style = effective_narrative_style(
+            npc.narrative_style,
+            selected_goal,
+        )
         return {
             "scenario": {"id": self.scenario_id, "name": self.scenario_name},
             "zone": {
@@ -134,6 +147,9 @@ class NpcInteractionRequest:
             ),
             "scene_flags": dict(self.state.flags.values),
             "conversation_thread": [entry.as_payload() for entry in self.conversation_thread],
+            "selected_goal": selected_goal.as_payload() if selected_goal is not None else None,
+            "conversation_only": self.conversation_only,
+            "effective_narrative_style": narrative_style.as_payload(),
             "player_action": self.player_action,
         }
 
@@ -260,6 +276,8 @@ def build_npc_interaction_request(
     state: ExplorationState,
     player_action: str,
     conversation_thread: tuple[GmDeclarationThreadEntry, ...] = (),
+    selected_goal_id: str | None = None,
+    conversation_only: bool = False,
 ) -> NpcInteractionRequest:
     return NpcInteractionRequest(
         scenario_id=scenario_id,
@@ -269,6 +287,8 @@ def build_npc_interaction_request(
         state=state,
         player_action=player_action,
         conversation_thread=conversation_thread,
+        selected_goal_id=selected_goal_id,
+        conversation_only=conversation_only,
     )
 
 
@@ -280,6 +300,24 @@ def validate_npc_interaction_proposal(
     if npc is None:
         raise ValueError(f"Exploration point {request.point.id} has no npc_interaction.")
     policy = npc.policy
+    selected_goal = interaction_goal(
+        npc.goals,
+        request.selected_goal_id,
+        request.state.flags,
+    )
+    if request.selected_goal_id is not None and selected_goal is None:
+        raise ValueError(
+            f"Selected NPC interaction goal is unavailable: {request.selected_goal_id}."
+        )
+    if (
+        selected_goal is not None
+        and not selected_goal.custom
+        and selected_goal.intent_ids
+        and proposal.action_type not in selected_goal.intent_ids
+    ):
+        raise ValueError(
+            f"NPC intent {proposal.action_type} does not match selected goal {selected_goal.id}."
+        )
     success_flags = {
         *{change.key for change in proposal.flag_changes_on_success if change.value is True},
         *_true_set_flag_keys(proposal.effects_on_success),

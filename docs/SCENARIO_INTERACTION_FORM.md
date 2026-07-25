@@ -71,6 +71,128 @@ Po co ta interakcja istnieje?
 - klimat
 - inne
 
+## 6A. Cele Widoczne Dla Graczy
+Karty opisują rezultat, który drużyna chce osiągnąć, a nie gotową metodę ani kwestię dialogową.
+
+Cel 1:
+- id:
+- etykieta:
+- krótki opis:
+- opcjonalny obraz kafelka (`image`, ścieżka względem katalogu scenariusza):
+- pytanie „jak to robicie?” po wyborze:
+- dozwolone intencje NPC (`intent_ids`), jeśli dotyczy:
+- sugerowane tagi podejścia, jeśli dotyczy przeszkody:
+- flagi wymagane / zabraniające pokazania:
+- tryb wyboru uczestników: `must` / `allow`
+- domyślny albo wymagany model: `single_actor` / `lead_with_help` / `whole_party`
+- modele dozwolone przy `allow`:
+- dozwolone aktywne obserwacje (`observation_ids`), jeśli karta służy rozpoznaniu:
+- domyślna stopniowana obserwacja dla szerokiego opisu (`default_observation_id`):
+- proceduralne użycia znanych elementów (`source_actions`):
+  - id użycia:
+  - `source_ref`: id istniejącego itemu albo fixture'a sceny:
+  - `option_id`: autorski profil testu i konsekwencji:
+  - widoczna nazwa oraz narracja:
+
+Autor wybiera jedną z dwóch polityk:
+
+- `must`: kafelek wymusza jeden model;
+- `allow`: kafelek zawiera listę dozwolonych modeli, a UI wyprowadza wybór z
+  uczestników wskazanych przed opisaniem metody: pierwszy bohater prowadzi, drugi
+  pomaga, a osobny przycisk wybiera całą drużynę.
+
+Modele testu:
+
+- `single_actor`: dokładnie jedna postać;
+- `lead_with_help`: prowadzący i opcjonalnie jeden zdolny pomocnik; pomoc daje
+  prowadzącemu przewagę, a pomocnik nie rzuca osobno;
+- `whole_party`: cała drużyna rzuca, a klasyczny test grupowy zdaje co najmniej
+  połowa drużyny.
+
+LLM opisuje wybraną metodę i wskazane role, ale nie zmienia wybranego modelu.
+W propozycji MG nie wybiera się tych postaci ponownie: karta pokazuje ustalonego
+prowadzącego, pomocnika albo całą drużynę.
+
+Znane połączenie elementu z działaniem, np. `deska → podważ rygiel`, powinno być
+`source_action`, a nie ponownie zgadywanym `improvised_tool`. Runtime rozpoznaje
+istniejący `source_ref`, podstawia wskazany profil i nie pyta LLM o mechanikę.
+
+Dla wyzwania prowadzonego przez flowgraf nie dodawaj ogólnego celu `Własny plan`
+ani `Własny sposób`. Kafelek określa rezultat, a pole „Jak to robicie?” pozostawia
+graczom swobodę metody. Jeśli ważny zamiar nie mieści się w żadnym celu, dodaj
+konkretny kafelek rezultatu zamiast furtki omijającej graf.
+
+## 6B. Reguły Metod I Kompromisów
+Wpisuj tylko reguły, które silnik ma stosować deterministycznie po rozpoznaniu
+konkretnego opisu graczy. Karta celu sama nie daje premii.
+
+Reguła 1:
+- id:
+- cele, których dotyczy:
+- frazy albo sygnały metody:
+- wymagany istniejący przedmiot, fixture lub właściwość:
+- modyfikator od -2 do +2:
+- zmiana hałasu:
+- inne ograniczenie ryzyka:
+- widoczne uzasadnienie:
+
+## 6C. Kluczowe Kwestie NPC
+Kluczowa kwestia jest autorskim priorytetem, drażliwym tematem, pokusą, strachem,
+twardą granicą albo wyjątkiem. Gracz nie musi widzieć rozwiązania na karcie celu.
+
+Kwestia 1:
+- id:
+- rodzaj: `priority` / `sensitivity` / `temptation` / `fear` / `hard_boundary` / `exception`
+- widoczność: `obvious` / `hint` / `hidden`
+- czego dotyczy:
+- cele rozmowy, przy których może zadziałać:
+- frazy lub semantyczne sygnały deklaracji:
+- wymagane ugruntowanie, np. realne monety albo posiadany przedmiot:
+- efekt natychmiastowy:
+- odblokowywane lub blokowane cele/intencje:
+- narracja i kwestia NPC:
+- kiedy uważa się ją za zużytą:
+
+Twarda granica blokuje test, dopóki nie zadziała autorski wyjątek. Naturalne 20 nie
+omija rozkazu, braku zasobu ani niemożliwości świata.
+
+## 6D. Styl Narracji
+Jeśli sekcja zostanie pominięta, obowiązuje `heroic_dnd`: bohaterskie power fantasy,
+lekka ironia, sytuacyjny humor i poważne traktowanie konsekwencji.
+
+Styl bazowy instancji:
+- `preset`: stabilna nazwa profilu:
+- `tone`: opis głosu i energii sceny:
+- `humor_level`: `none` / `light` / `medium` / `high`
+- `irony_level`: `none` / `light` / `medium` / `high`
+- `dramatic_intensity`: `none` / `light` / `medium` / `high`
+- `guidance`: czego pilnować i czego unikać:
+
+Każdy cel z sekcji 6A może opcjonalnie zawierać własne `narrative_style`. Pełny
+profil celu nadpisuje wtedy profil instancji. Używaj tego dla wyjątków, np.
+karczemnej bójki prowadzonej z humorem albo poważnego wyznania bez ironii.
+
+## 6E. Flowgraf Wyzwania
+
+Dla interakcji, której dostępne cele zmieniają się wraz ze stanem sceny, opisz
+deterministyczny graf:
+
+- id grafu oraz id wyzwania:
+- węzły stanu wyprowadzane z flag (`all_flags`, `any_flags`, `no_flags`):
+- które węzły są terminalne:
+- dla każdego przejścia:
+  - stabilne id:
+  - id kafelka celu:
+  - wymagane aktywne węzły:
+  - rodzaj resolvera: `challenge_option` / `observation_router`:
+  - id autorskiej opcji albo lista obserwacji:
+  - opcjonalne proceduralne `source_action_ids`:
+
+Flowgraf decyduje, które kafelki są widoczne i do jakiej mechaniki prowadzą.
+Wybrany kafelek jest jedynym wejściem do działania. LLM interpretuje metodę opisaną
+w jego polu, ale nie wybiera innego celu, nie aktywuje zablokowanej krawędzi i nie
+wymyśla skutków mechanicznych.
+
 ## 7. Stan Początkowy
 Dla NPC:
 - emocje:
@@ -96,7 +218,7 @@ Fixture 1:
 - czy jest odłączalny albo zniszczalny:
 - co może powstać po odłączeniu/zniszczeniu:
 - jaka zmiana stanu ma zostać zapisana przy powrocie do sceny:
-- dozwolone operacje `/akcja` (`detach`, `damage`, `destroy`, `move`, `open`, `close`, `repair`):
+- dozwolone operacje strukturalne (`detach`, `damage`, `destroy`, `move`, `open`, `close`, `repair`):
 - dla każdej operacji: dozwolone stany początkowe, stan wynikowy, ability/skill, difficulty tier:
 - postęp, hałas i komplikacja sukcesu/porażki:
 - czy sukces wyłącza fixture i ujawnia `yield_items`:
@@ -116,7 +238,7 @@ Element 1:
 - właściwości lokalnie dodane/zmienione:
 - właściciel albo miejsce:
 - widoczność/dostępność:
-- miejsce docelowe po `/weź`: `actor_inventory` / `party_treasure` / `scenario_quest`:
+- miejsce docelowe po zabraniu: `actor_inventory` / `party_treasure` / `scenario_quest`:
 - czy użycie zużywa, rezerwuje czy tylko wykorzystuje element:
 - zachowanie po znalezieniu: pozostaje w scenie / wymaga osobnej akcji zabrania / jawny efekt scenariusza przyznaje zasób:
 
@@ -125,7 +247,7 @@ przypisuje mu właściwości z katalogu. LLM przekłada opis funkcji gracza na w
 wymagane i preferowane, a runtime wybiera tylko istniejące elementy sceny. Formularz
 nie powinien zawierać ręcznych aliasów w rodzaju „kij = deska”.
 Znalezienie zapisuje wiedzę drużyny o elemencie sceny, ale nie przenosi go do
-ekwipunku. `/weź` wykonuje osobny, potwierdzany transfer zgodny z `portable` i
+ekwipunku. Akcja zabrania wykonuje osobny, potwierdzany transfer zgodny z `portable` i
 `collection_destination`. Automatyczne przyznanie bez deklaracji gracza wymaga
 jawnego, deterministycznego efektu scenariusza.
 
@@ -143,14 +265,17 @@ Bezpośrednie użycie istniejącego elementu w tej samej deklaracji powinno traf
 `improvised_tool_check`. Pełny crafting jest właściwy dopiero przy składaniu albo
 przerabianiu konstrukcji przeznaczonej do późniejszego użycia.
 
-`/zbuduj` opisuj przez cele funkcjonalne i wymagane właściwości, nigdy przez listę
+Budowanie opisuj przez cele funkcjonalne i wymagane właściwości, nigdy przez listę
 gotowych drabin, taranów czy dźwigni. Runtime może deterministycznie uzupełnić
 komponenty z dostępnych źródeł, chyba że gracz jawnie ograniczył budowę do dokładnie
 wskazanego zestawu. Podgląd musi pokazać finalny dobór przed akceptacją.
 
-Dla `/użyj` opisz wpływ właściwości i stanu elementu, ryzyko oraz jego dostępność po
+Dla użycia elementu opisz wpływ właściwości i stanu, ryzyko oraz jego dostępność po
 rozstrzygnięciu. Deklaracja musi zostać związana z jednym istniejącym `source_id`,
 a propozycja MG nie może zmienić wskazanego przez gracza źródła.
+
+Komendy z ukośnikiem pozostają formatem diagnostycznym kompatybilności. Gracze
+korzystają z kart celów i opisują metodę naturalnym językiem.
 
 ## 8. Fakty Sceny Dla Rozmowy Z MG
 Nie wypisuj katalogu gotowych rozwiązań. Opisz prawdziwe fakty i właściwości sceny,
@@ -222,6 +347,43 @@ poniżej pierwszego progu nie może stwierdzać, że ukrytego obiektu albo zagro
 Nagroda jest przypisana do bohatera prowadzącego test, zachowywana w zapisie sesji
 i zużywana tylko przy jego rzucie inicjatywy w pasującym encounterze. Nie używaj jej,
 jeżeli rozpoznanie nie daje konkretnej przewagi pozycyjnej lub czasowej.
+
+### 11A. Kontekstowe Poszukiwania
+
+Dla karty typu „Rozejrzyjcie się” rozdziel dwa rodzaje szukania:
+
+- oczywisty materiał opisany funkcją, np. „coś ciężkiego na taran” — bez rzutu;
+  LLM tworzy semantyczne `source_query`, a silnik dopasowuje wyłącznie istniejące
+  elementy po ich właściwościach;
+- ukryta informacja, słabość, pułapka, narzędzie lub droga — przypisana obserwacja
+  i rzut z progami;
+- szerokie „coś przydatnego/interesującego” — `default_observation_id`, jeden rzut
+  i kumulatywne warstwy znalezisk.
+
+Dla każdej intencji poszukiwawczej podaj:
+
+- czego gracz szuka funkcjonalnie, nie tylko dokładną nazwą;
+- czy wynik jest oczywisty (`source_query`) czy ukryty (`observation_id`);
+- przykłady różnych naturalnych opisów intencji;
+- przy ukrytym wyniku: test, progi, flagi i efekty;
+- co zmienia się w widocznych kartach po odkryciu;
+- czy znalezisko daje przewagę w późniejszym encounterze.
+
+`intent_examples` uczą znaczenia wypowiedzi i pomagają lokalnemu matcherowi, ale
+nie są zamkniętą listą haseł. LLM ma rozpoznawać parafrazy, np. „belka do rozwalenia
+wrót” tak samo jak „materiał na taran”.
+
+## 11B. Swobodna Rozmowa Z MG
+
+Pole „Napisz wiadomość do MG” nie deklaruje działania. MG może:
+
+- odpowiedzieć na jawny fakt sceny;
+- wyjaśnić, co bohaterowie widzą albo już wiedzą;
+- ironicznie naprowadzić na sposób samodzielnego sprawdzenia tajemnicy;
+- odmówić ujawnienia ukrytej informacji przed działaniem.
+
+Rozmowa nie tworzy rzutu, pendingu ani efektu świata. Działanie rozpoczyna się
+wyłącznie z wybranej karty celu i osobnego pola „Jak to robicie?”.
 
 ## 12. Możliwe Efekty Mechaniczne
 Co może się zmienić w stanie gry?

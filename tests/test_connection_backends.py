@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from board.connection import Connection, _HardwareBackend, _color_to_hex
+from board.connection import Connection, _HardwareBackend, _WledClient, _color_to_hex
 
 
 class _FakeSimulatorBackend:
@@ -153,6 +153,30 @@ def test_connection_supports_per_cell_colors(monkeypatch):
 def test_wled_color_hex_supports_grb_channel_order():
     assert _color_to_hex([0, 255, 120], "rgb") == "00FF78"
     assert _color_to_hex([0, 255, 120], "grb") == "FF0078"
+
+
+def test_wled_scan_update_can_override_normal_brightness(monkeypatch):
+    client = _WledClient(
+        {
+            "base_url": "http://wled.test",
+            "brightness": 128,
+            "scan_brightness": 255,
+        }
+    )
+    client.available = True
+    payloads = []
+
+    def capture(payload):
+        payloads.append(payload)
+        return {}
+
+    monkeypatch.setattr(client, "_post_state", capture)
+
+    assert client.set_leds([(4, [10, 20, 30])], brightness=client.scan_brightness)
+    assert payloads[0]["bri"] == 255
+
+    assert client.set_leds([(4, [10, 20, 30])])
+    assert payloads[1]["bri"] == 128
 
 
 def test_connection_forwards_cancel_scan_to_simulator_backend(monkeypatch):

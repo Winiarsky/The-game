@@ -67,6 +67,15 @@ from dnd_board_game.exploration import (
     ExplorationHazard,
     ExplorationHazardDamage,
     ExplorationHazardTrigger,
+    ExplorationFlowCondition,
+    ExplorationFlowGraph,
+    ExplorationFlowNode,
+    ExplorationFlowRouteKind,
+    ExplorationFlowTransition,
+    InteractionGoal,
+    InteractionSourceAction,
+    InteractionParticipantMode,
+    InteractionMethodRule,
     ExplorationTrap,
     ExplorationObservation,
     ExplorationOptionBonus,
@@ -94,7 +103,9 @@ from dnd_board_game.exploration import (
     LlmGuidanceFactKind,
     LlmGuidanceFactVisibility,
     LlmDcTier,
+    NarrativeStyle,
     NpcInteraction,
+    NpcKeyIssue,
     NpcAttitude,
     NpcAttemptPolicy,
     NpcIntentTarget,
@@ -264,6 +275,7 @@ class ScenarioActorDefinition:
     healing_sources: tuple[ScenarioHealingDefinition, ...] = ()
     combat_actions: tuple[ScenarioCombatActionDefinition, ...] = ()
     source_ref: str | None = None
+    portrait: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -323,6 +335,7 @@ class ScenarioDefinition:
     exploration_encounter_triggers: tuple[ExplorationEncounterTrigger, ...] = ()
     exploration_npc_transitions: tuple[NpcSceneTransition, ...] = ()
     exploration_observations: tuple[ExplorationObservation, ...] = ()
+    exploration_flows: tuple[ExplorationFlowGraph, ...] = ()
     exploration_traps: tuple[ExplorationTrap, ...] = ()
     party_start_zone_id: str | None = None
     llm_context: LlmContext = LlmContext()
@@ -368,6 +381,7 @@ class LoadedExploration:
     encounter_triggers: tuple[ExplorationEncounterTrigger, ...] = ()
     npc_transitions: tuple[NpcSceneTransition, ...] = ()
     observations: tuple[ExplorationObservation, ...] = ()
+    flows: tuple[ExplorationFlowGraph, ...] = ()
     traps: tuple[ExplorationTrap, ...] = ()
     environment: tuple[EnvironmentSetupEntry, ...] = ()
     llm_context: LlmContext = LlmContext()
@@ -534,6 +548,7 @@ def build_exploration_from_scenario(loaded: LoadedScenario) -> LoadedExploration
         encounter_triggers=definition.exploration_encounter_triggers,
         npc_transitions=definition.exploration_npc_transitions,
         observations=definition.exploration_observations,
+        flows=definition.exploration_flows,
         traps=definition.exploration_traps,
         environment=tuple(
             EnvironmentSetupEntry(
@@ -603,6 +618,10 @@ def _parse_scenario(data: dict[str, Any], scenario_path: Path) -> ScenarioDefini
         exploration_observations=tuple(
             _parse_exploration_observation(entry)
             for entry in exploration_data.get("observations", [])
+        ),
+        exploration_flows=tuple(
+            _parse_exploration_flow(entry)
+            for entry in exploration_data.get("flows", [])
         ),
         exploration_traps=tuple(
             _parse_exploration_trap(entry)
@@ -823,6 +842,7 @@ def _parse_actor(
         healing_sources=healing_sources,
         combat_actions=combat_actions,
         source_ref=str(source_ref) if source_ref is not None else None,
+        portrait=str(merged.get("portrait", "")).strip(),
     )
 
 
@@ -1688,6 +1708,317 @@ def _parse_exploration_point(data: Any) -> ExplorationPoint:
     )
 
 
+def _parse_narrative_style(
+    data: Any,
+    field: str,
+    *,
+    base: NarrativeStyle | None = None,
+) -> NarrativeStyle:
+    inherited = base or NarrativeStyle()
+    if data is None:
+        return inherited
+    if not isinstance(data, dict):
+        raise ValueError(f"{field} must be an object.")
+    return NarrativeStyle(
+        preset=str(data.get("preset", inherited.preset)),
+        tone=str(data.get("tone", inherited.tone)),
+        humor_level=str(data.get("humor_level", inherited.humor_level)).strip().lower(),
+        irony_level=str(data.get("irony_level", inherited.irony_level)).strip().lower(),
+        dramatic_intensity=str(
+            data.get("dramatic_intensity", inherited.dramatic_intensity)
+        ).strip().lower(),
+        guidance=str(data.get("guidance", inherited.guidance)),
+    )
+
+
+def _parse_interaction_goals(
+    data: Any,
+    field: str,
+    *,
+    base_style: NarrativeStyle,
+) -> tuple[InteractionGoal, ...]:
+    if data is None:
+        return ()
+    if not isinstance(data, list):
+        raise ValueError(f"{field} must be an array.")
+    goals: list[InteractionGoal] = []
+    for index, raw_goal in enumerate(data):
+        goal_field = f"{field}[{index}]"
+        if not isinstance(raw_goal, dict):
+            raise ValueError(f"{goal_field} must be an object.")
+        goal_id = str(_required(raw_goal, "id", goal_field)).strip().lower()
+        raw_source_actions = raw_goal.get("source_actions", [])
+        if not isinstance(raw_source_actions, list) or any(
+            not isinstance(item, dict) for item in raw_source_actions
+        ):
+            raise ValueError(f"{goal_field}.source_actions must be an array of objects.")
+        goals.append(
+            InteractionGoal(
+                id=goal_id,
+                label=str(_required(raw_goal, "label", goal_field)),
+                description=str(_required(raw_goal, "description", goal_field)),
+                image=str(raw_goal.get("image", "")),
+                followup_prompt=str(raw_goal.get("followup_prompt", "Jak chcecie to zrobić?")),
+                intent_ids=tuple(
+                    str(item).strip().lower()
+                    for item in raw_goal.get("intent_ids", [])
+                    if str(item).strip()
+                ),
+                suggested_tags=tuple(
+                    str(item).strip().lower()
+                    for item in raw_goal.get("suggested_tags", [])
+                    if str(item).strip()
+                ),
+                required_flags=tuple(str(item) for item in raw_goal.get("required_flags", [])),
+                forbidden_flags=tuple(str(item) for item in raw_goal.get("forbidden_flags", [])),
+                resolution_option_id=(
+                    str(raw_goal["resolution_option_id"])
+                    if raw_goal.get("resolution_option_id")
+                    else None
+                ),
+                observation_ids=tuple(
+                    str(item).strip()
+                    for item in raw_goal.get("observation_ids", [])
+                    if str(item).strip()
+                ),
+                default_observation_id=(
+                    str(raw_goal["default_observation_id"]).strip()
+                    if raw_goal.get("default_observation_id")
+                    else None
+                ),
+                source_actions=tuple(
+                    InteractionSourceAction(
+                        id=str(_required(raw_action, "id", f"{goal_field}.source_actions[{action_index}]")),
+                        source_ref=str(
+                            _required(
+                                raw_action,
+                                "source_ref",
+                                f"{goal_field}.source_actions[{action_index}]",
+                            )
+                        ),
+                        option_id=str(
+                            _required(
+                                raw_action,
+                                "option_id",
+                                f"{goal_field}.source_actions[{action_index}]",
+                            )
+                        ),
+                        label=str(
+                            _required(
+                                raw_action,
+                                "label",
+                                f"{goal_field}.source_actions[{action_index}]",
+                            )
+                        ),
+                        narration=str(
+                            _required(
+                                raw_action,
+                                "narration",
+                                f"{goal_field}.source_actions[{action_index}]",
+                            )
+                        ),
+                    )
+                    for action_index, raw_action in enumerate(raw_source_actions)
+                ),
+                participant_mode=InteractionParticipantMode(
+                    str(raw_goal.get("participant_mode", InteractionParticipantMode.MUST.value))
+                ),
+                check_participants=CheckParticipants(
+                    str(
+                        raw_goal.get(
+                            "check_participants",
+                            CheckParticipants.SINGLE_ACTOR.value,
+                        )
+                    )
+                ),
+                allowed_check_participants=tuple(
+                    CheckParticipants(str(item))
+                    for item in raw_goal.get("allowed_check_participants", [])
+                ),
+                custom=bool(raw_goal.get("custom", False)),
+                narrative_style=(
+                    _parse_narrative_style(
+                        raw_goal.get("narrative_style"),
+                        f"{goal_field}.narrative_style",
+                        base=base_style,
+                    )
+                    if "narrative_style" in raw_goal
+                    else None
+                ),
+            )
+        )
+    ids = tuple(goal.id for goal in goals)
+    if len(ids) != len(set(ids)):
+        raise ValueError(f"{field} cannot repeat goal ids.")
+    return tuple(goals)
+
+
+def _parse_exploration_flow(data: Any) -> ExplorationFlowGraph:
+    if not isinstance(data, dict):
+        raise ValueError("scenario.exploration.flows entries must be objects.")
+    flow_id = str(_required(data, "id", "exploration flow")).strip()
+    challenge_id = str(
+        _required(data, "challenge_id", f"exploration flow {flow_id}")
+    ).strip()
+    raw_nodes = _required_list(data, "nodes", f"exploration flow {flow_id}")
+    raw_transitions = _required_list(
+        data,
+        "transitions",
+        f"exploration flow {flow_id}",
+    )
+    nodes: list[ExplorationFlowNode] = []
+    for index, raw_node in enumerate(raw_nodes):
+        field = f"exploration flow {flow_id}.nodes[{index}]"
+        if not isinstance(raw_node, dict):
+            raise ValueError(f"{field} must be an object.")
+        raw_condition = raw_node.get("active_when", {})
+        if not isinstance(raw_condition, dict):
+            raise ValueError(f"{field}.active_when must be an object.")
+        nodes.append(
+            ExplorationFlowNode(
+                id=str(_required(raw_node, "id", field)).strip(),
+                label=str(_required(raw_node, "label", field)).strip(),
+                active_when=ExplorationFlowCondition(
+                    all_flags=_parse_string_tuple(
+                        raw_condition.get("all_flags", []),
+                        f"{field}.active_when.all_flags",
+                    ),
+                    any_flags=_parse_string_tuple(
+                        raw_condition.get("any_flags", []),
+                        f"{field}.active_when.any_flags",
+                    ),
+                    no_flags=_parse_string_tuple(
+                        raw_condition.get("no_flags", []),
+                        f"{field}.active_when.no_flags",
+                    ),
+                ),
+                terminal=bool(raw_node.get("terminal", False)),
+            )
+        )
+    transitions: list[ExplorationFlowTransition] = []
+    for index, raw_transition in enumerate(raw_transitions):
+        field = f"exploration flow {flow_id}.transitions[{index}]"
+        if not isinstance(raw_transition, dict):
+            raise ValueError(f"{field} must be an object.")
+        transitions.append(
+            ExplorationFlowTransition(
+                id=str(_required(raw_transition, "id", field)).strip(),
+                goal_id=str(_required(raw_transition, "goal_id", field)).strip().lower(),
+                from_node_ids=_parse_string_tuple(
+                    _required_list(raw_transition, "from", field),
+                    f"{field}.from",
+                ),
+                route_kind=_enum_value(
+                    ExplorationFlowRouteKind,
+                    str(_required(raw_transition, "route_kind", field)),
+                    f"{field}.route_kind",
+                ),
+                route_ref=(
+                    str(raw_transition["route_ref"]).strip()
+                    if raw_transition.get("route_ref") is not None
+                    else None
+                ),
+                observation_ids=_parse_string_tuple(
+                    raw_transition.get("observation_ids", []),
+                    f"{field}.observation_ids",
+                ),
+                default_observation_id=(
+                    str(raw_transition["default_observation_id"]).strip()
+                    if raw_transition.get("default_observation_id") is not None
+                    else None
+                ),
+                source_action_ids=_parse_string_tuple(
+                    raw_transition.get("source_action_ids", []),
+                    f"{field}.source_action_ids",
+                ),
+            )
+        )
+    return ExplorationFlowGraph(
+        id=flow_id,
+        challenge_id=challenge_id,
+        nodes=tuple(nodes),
+        transitions=tuple(transitions),
+    )
+
+
+def _parse_npc_key_issues(data: Any, field: str) -> tuple[NpcKeyIssue, ...]:
+    if data is None:
+        return ()
+    if not isinstance(data, list):
+        raise ValueError(f"{field} must be an array.")
+    issues: list[NpcKeyIssue] = []
+    for index, raw_issue in enumerate(data):
+        issue_field = f"{field}[{index}]"
+        if not isinstance(raw_issue, dict):
+            raise ValueError(f"{issue_field} must be an object.")
+        raw_effects = raw_issue.get("effects", [])
+        if not isinstance(raw_effects, list) or any(not isinstance(item, dict) for item in raw_effects):
+            raise ValueError(f"{issue_field}.effects must be an array of objects.")
+        issues.append(
+            NpcKeyIssue(
+                id=str(_required(raw_issue, "id", issue_field)).strip().lower(),
+                kind=str(_required(raw_issue, "kind", issue_field)).strip().lower(),
+                description=str(_required(raw_issue, "description", issue_field)),
+                match_phrases=tuple(
+                    str(item).strip().lower()
+                    for item in raw_issue.get("match_phrases", [])
+                    if str(item).strip()
+                ),
+                narration=str(_required(raw_issue, "narration", issue_field)),
+                npc_response=str(_required(raw_issue, "npc_response", issue_field)),
+                effects=tuple(dict(item) for item in raw_effects),
+                visibility=str(raw_issue.get("visibility", "hidden")).strip().lower(),
+                goal_ids=tuple(str(item).strip().lower() for item in raw_issue.get("goal_ids", [])),
+                repeatable=bool(raw_issue.get("repeatable", False)),
+                consumed_if_flags=tuple(str(item) for item in raw_issue.get("consumed_if_flags", [])),
+            )
+        )
+    ids = tuple(issue.id for issue in issues)
+    if len(ids) != len(set(ids)):
+        raise ValueError(f"{field} cannot repeat key issue ids.")
+    return tuple(issues)
+
+
+def _parse_interaction_method_rules(
+    data: Any,
+    field: str,
+) -> tuple[InteractionMethodRule, ...]:
+    if data is None:
+        return ()
+    if not isinstance(data, list):
+        raise ValueError(f"{field} must be an array.")
+    rules: list[InteractionMethodRule] = []
+    for index, raw_rule in enumerate(data):
+        rule_field = f"{field}[{index}]"
+        if not isinstance(raw_rule, dict):
+            raise ValueError(f"{rule_field} must be an object.")
+        rules.append(
+            InteractionMethodRule(
+                id=str(_required(raw_rule, "id", rule_field)).strip().lower(),
+                label=str(_required(raw_rule, "label", rule_field)),
+                description=str(_required(raw_rule, "description", rule_field)),
+                goal_ids=tuple(str(item).strip().lower() for item in raw_rule.get("goal_ids", [])),
+                match_phrases=tuple(
+                    str(item).strip().lower()
+                    for item in raw_rule.get("match_phrases", [])
+                    if str(item).strip()
+                ),
+                modifier=int(raw_rule.get("modifier", 0)),
+                noise_delta=int(raw_rule.get("noise_delta", 0)),
+                success_noise_override=(
+                    int(raw_rule["success_noise_override"])
+                    if raw_rule.get("success_noise_override") is not None
+                    else None
+                ),
+                reason=str(raw_rule.get("reason", "")),
+            )
+        )
+    ids = tuple(rule.id for rule in rules)
+    if len(ids) != len(set(ids)):
+        raise ValueError(f"{field} cannot repeat method rule ids.")
+    return tuple(rules)
+
+
 def _parse_npc_interaction(data: Any, point_id: str) -> NpcInteraction | None:
     if data is None:
         return None
@@ -1705,6 +2036,10 @@ def _parse_npc_interaction(data: Any, point_id: str) -> NpcInteraction | None:
     dc_max = int(dc_range[1])
     if dc_min > dc_max:
         raise ValueError(f"exploration point {point_id}.npc_interaction.policy.dc_range min cannot exceed max.")
+    narrative_style = _parse_narrative_style(
+        data.get("narrative_style"),
+        f"exploration point {point_id}.npc_interaction.narrative_style",
+    )
     return NpcInteraction(
         id=str(data.get("id", point_id)),
         name=str(data.get("name", data.get("public_name", point_id))),
@@ -1721,6 +2056,15 @@ def _parse_npc_interaction(data: Any, point_id: str) -> NpcInteraction | None:
         initial_emotional_state=str(data.get("initial_emotional_state", "")),
         dialogue_intro=str(data.get("dialogue_intro", "")),
         capabilities=tuple(str(item) for item in data.get("capabilities", [])),
+        goals=_parse_interaction_goals(
+            data.get("goals"),
+            f"exploration point {point_id}.npc_interaction.goals",
+            base_style=narrative_style,
+        ),
+        key_issues=_parse_npc_key_issues(
+            data.get("key_issues"),
+            f"exploration point {point_id}.npc_interaction.key_issues",
+        ),
         locked_information=tuple(
             _parse_npc_locked_information(entry, point_id)
             for entry in data.get("locked_information", [])
@@ -1739,6 +2083,7 @@ def _parse_npc_interaction(data: Any, point_id: str) -> NpcInteraction | None:
             dc_min=dc_min,
             dc_max=dc_max,
         ),
+        narrative_style=narrative_style,
     )
 
 
@@ -2061,6 +2406,10 @@ def _parse_exploration_challenge(data: Any) -> ExplorationChallenge:
         raise ValueError("scenario.exploration.challenges entries must be objects.")
     challenge_id = str(_required(data, "id", "exploration challenge"))
     options_data = _required_list(data, "options", f"exploration challenge {challenge_id}")
+    narrative_style = _parse_narrative_style(
+        data.get("narrative_style"),
+        f"exploration challenge {challenge_id}.narrative_style",
+    )
     return ExplorationChallenge(
         id=challenge_id,
         zone_id=str(_required(data, "zone_id", f"exploration challenge {challenge_id}")),
@@ -2071,6 +2420,25 @@ def _parse_exploration_challenge(data: Any) -> ExplorationChallenge:
         reveals_on_complete=tuple(str(item) for item in data.get("reveals_on_complete", [])),
         llm_context=_parse_llm_context(data.get("llm_context", {}), f"exploration challenge {challenge_id}.llm_context"),
         llm_policy=_parse_llm_challenge_policy(data.get("llm_policy", {}), f"exploration challenge {challenge_id}.llm_policy"),
+        goals=_parse_interaction_goals(
+            data.get("goals"),
+            f"exploration challenge {challenge_id}.goals",
+            base_style=narrative_style,
+        ),
+        method_rules=_parse_interaction_method_rules(
+            data.get("method_rules"),
+            f"exploration challenge {challenge_id}.method_rules",
+        ),
+        narrative_style=narrative_style,
+        completion_all_flags=_parse_string_tuple(
+            data.get("completion_all_flags", []),
+            f"exploration challenge {challenge_id}.completion_all_flags",
+        ),
+        completion_any_flags=_parse_string_tuple(
+            data.get("completion_any_flags", []),
+            f"exploration challenge {challenge_id}.completion_any_flags",
+        ),
+        noise_cap=int(data["noise_cap"]) if data.get("noise_cap") is not None else None,
     )
 
 
@@ -2095,11 +2463,41 @@ def _parse_exploration_challenge_option(data: Any, challenge_id: str) -> Explora
         color=_parse_color(data.get("color", "interactive"), f"exploration challenge option {option_id}.color"),
         description=str(data.get("description", "")),
         success_message=str(data.get("success_message", "")),
+        critical_success_message=str(data.get("critical_success_message", "")),
         failure_message=str(data.get("failure_message", "")),
         critical_failure_message=str(data.get("critical_failure_message", "")),
         tags=tuple(str(item) for item in data.get("tags", [])),
         unlocks_if_flag=str(data["unlocks_if_flag"]) if "unlocks_if_flag" in data else None,
         unlocks_if_resource_id=str(data["unlocks_if_resource_id"]) if "unlocks_if_resource_id" in data else None,
+        unavailable_if_flags=_parse_string_tuple(
+            data.get("unavailable_if_flags", []),
+            f"exploration challenge option {option_id}.unavailable_if_flags",
+        ),
+        unavailable_message=str(data.get("unavailable_message", "")),
+        dc_modifiers_if_flags=tuple(
+            (
+                str(_required(entry, "flag", f"exploration challenge option {option_id}.dc_modifiers_if_flags")),
+                int(_required(entry, "modifier", f"exploration challenge option {option_id}.dc_modifiers_if_flags")),
+            )
+            for entry in data.get("dc_modifiers_if_flags", [])
+            if isinstance(entry, dict)
+        ),
+        critical_success_flags=_parse_string_tuple(
+            data.get("critical_success_flags", []),
+            f"exploration challenge option {option_id}.critical_success_flags",
+        ),
+        success_flags=_parse_string_tuple(
+            data.get("success_flags", []),
+            f"exploration challenge option {option_id}.success_flags",
+        ),
+        failure_flags=_parse_string_tuple(
+            data.get("failure_flags", []),
+            f"exploration challenge option {option_id}.failure_flags",
+        ),
+        critical_failure_flags=_parse_string_tuple(
+            data.get("critical_failure_flags", []),
+            f"exploration challenge option {option_id}.critical_failure_flags",
+        ),
         success_noise=int(data.get("success_noise", 0)),
         failure_noise=int(data.get("failure_noise", 0)),
         critical_failure_noise=int(data.get("critical_failure_noise", 0)),
@@ -2886,6 +3284,7 @@ def _actor_from_definition(definition: ScenarioActorDefinition) -> Actor:
         auras=definition.auras,
         triggers=definition.triggers,
         features=definition.features,
+        portrait=definition.portrait,
     )
 
 
@@ -3058,6 +3457,28 @@ def _validate_exploration(definition: ScenarioDefinition) -> None:
                 )
         _validate_llm_challenge_policy(challenge, resource_ids)
         option_ids = {option.id for option in challenge.options}
+        challenge_zone = next(zone for zone in definition.exploration_zones if zone.id == challenge.zone_id)
+        zone_source_refs = {
+            *(item.id for item in challenge_zone.item_instances),
+            *(fixture.id for fixture in challenge_zone.fixtures),
+            *(
+                item.id
+                for fixture in challenge_zone.fixtures
+                for item in fixture.yield_items
+            ),
+        }
+        for goal in challenge.goals:
+            for source_action in goal.source_actions:
+                if source_action.option_id not in option_ids:
+                    raise ValueError(
+                        f"exploration challenge {challenge.id} goal {goal.id} source action "
+                        f"{source_action.id} references unknown option: {source_action.option_id}."
+                    )
+                if source_action.source_ref not in zone_source_refs:
+                    raise ValueError(
+                        f"exploration challenge {challenge.id} goal {goal.id} source action "
+                        f"{source_action.id} references unknown scene source: {source_action.source_ref}."
+                    )
         unknown_unlock_options = set(challenge.llm_policy.allowed_unlock_option_ids) - option_ids
         if unknown_unlock_options:
             raise ValueError(
@@ -3146,9 +3567,143 @@ def _validate_exploration(definition: ScenarioDefinition) -> None:
                         f"exploration fixture {fixture.id} releases yield items but defines none."
                     )
     challenge_ids = {challenge.id for challenge in definition.exploration_challenges}
+    for challenge in definition.exploration_challenges:
+        goal_ids = {goal.id for goal in challenge.goals}
+        for rule in challenge.method_rules:
+            unknown_goal_ids = set(rule.goal_ids) - goal_ids
+            if unknown_goal_ids:
+                raise ValueError(
+                    f"exploration challenge {challenge.id}.method_rules.{rule.id} "
+                    "references unknown goals: "
+                    + ", ".join(sorted(unknown_goal_ids))
+                    + "."
+                )
     observation_ids = tuple(observation.id for observation in definition.exploration_observations)
     if len(observation_ids) != len(set(observation_ids)):
         raise ValueError("exploration.observations contains duplicate ids.")
+    observations_by_id = {
+        observation.id: observation for observation in definition.exploration_observations
+    }
+    for challenge in definition.exploration_challenges:
+        for goal in challenge.goals:
+            unknown_observation_ids = set(goal.observation_ids) - observations_by_id.keys()
+            if unknown_observation_ids:
+                raise ValueError(
+                    f"exploration challenge {challenge.id} goal {goal.id} references "
+                    "unknown observations: "
+                    + ", ".join(sorted(unknown_observation_ids))
+                    + "."
+                )
+            for observation_id in goal.observation_ids:
+                observation = observations_by_id[observation_id]
+                if (
+                    observation.zone_id != challenge.zone_id
+                    or (
+                        observation.challenge_id is not None
+                        and observation.challenge_id != challenge.id
+                    )
+                ):
+                    raise ValueError(
+                        f"exploration challenge {challenge.id} goal {goal.id} observation "
+                        f"{observation_id} is not active in this challenge."
+                    )
+    flow_ids = tuple(flow.id for flow in definition.exploration_flows)
+    if len(flow_ids) != len(set(flow_ids)):
+        raise ValueError("exploration.flows contains duplicate ids.")
+    flow_challenge_ids = tuple(flow.challenge_id for flow in definition.exploration_flows)
+    if len(flow_challenge_ids) != len(set(flow_challenge_ids)):
+        raise ValueError("Only one exploration flow may own a challenge.")
+    challenges_by_id = {
+        challenge.id: challenge for challenge in definition.exploration_challenges
+    }
+    for flow in definition.exploration_flows:
+        challenge = challenges_by_id.get(flow.challenge_id)
+        if challenge is None:
+            raise ValueError(
+                f"exploration flow {flow.id} references unknown challenge: {flow.challenge_id}."
+            )
+        goal_ids = {goal.id for goal in challenge.goals}
+        transition_goal_ids = tuple(
+            transition.goal_id for transition in flow.transitions
+        )
+        if len(transition_goal_ids) != len(set(transition_goal_ids)):
+            raise ValueError(
+                f"exploration flow {flow.id} must define exactly one transition per goal."
+            )
+        unknown_goals = set(transition_goal_ids) - goal_ids
+        missing_goals = goal_ids - set(transition_goal_ids)
+        if unknown_goals:
+            raise ValueError(
+                f"exploration flow {flow.id} references unknown goals: "
+                + ", ".join(sorted(unknown_goals))
+                + "."
+            )
+        if missing_goals:
+            raise ValueError(
+                f"exploration flow {flow.id} does not route goals: "
+                + ", ".join(sorted(missing_goals))
+                + "."
+            )
+        node_ids_with_routes = {
+            node_id
+            for transition in flow.transitions
+            for node_id in transition.from_node_ids
+        }
+        dead_nodes = {
+            node.id
+            for node in flow.nodes
+            if not node.terminal and node.id not in node_ids_with_routes
+        }
+        if dead_nodes:
+            raise ValueError(
+                f"exploration flow {flow.id} has non-terminal nodes without routes: "
+                + ", ".join(sorted(dead_nodes))
+                + "."
+            )
+        options_by_id = {option.id: option for option in challenge.options}
+        goals_by_id = {goal.id: goal for goal in challenge.goals}
+        for transition in flow.transitions:
+            goal = goals_by_id[transition.goal_id]
+            if transition.route_kind == ExplorationFlowRouteKind.CHALLENGE_OPTION:
+                if transition.route_ref not in options_by_id:
+                    raise ValueError(
+                        f"exploration flow transition {transition.id} references unknown option: "
+                        f"{transition.route_ref}."
+                    )
+            unknown_observations = (
+                set(transition.observation_ids) - observations_by_id.keys()
+            )
+            if unknown_observations:
+                raise ValueError(
+                    f"exploration flow transition {transition.id} references unknown observations: "
+                    + ", ".join(sorted(unknown_observations))
+                    + "."
+                )
+            for observation_id in transition.observation_ids:
+                observation = observations_by_id[observation_id]
+                if (
+                    observation.zone_id != challenge.zone_id
+                    or (
+                        observation.challenge_id is not None
+                        and observation.challenge_id != challenge.id
+                    )
+                ):
+                    raise ValueError(
+                        f"exploration flow transition {transition.id} observation "
+                        f"{observation_id} is not active in this challenge."
+                    )
+            known_source_action_ids = {
+                source_action.id for source_action in goal.source_actions
+            }
+            unknown_source_actions = (
+                set(transition.source_action_ids) - known_source_action_ids
+            )
+            if unknown_source_actions:
+                raise ValueError(
+                    f"exploration flow transition {transition.id} references unknown source actions: "
+                    + ", ".join(sorted(unknown_source_actions))
+                    + "."
+                )
     encounter_trigger_ids = {trigger.id for trigger in definition.exploration_encounter_triggers}
     for observation in definition.exploration_observations:
         if observation.zone_id not in zone_ids:
@@ -3171,7 +3726,6 @@ def _validate_exploration(definition: ScenarioDefinition) -> None:
     trap_ids = tuple(trap.id for trap in definition.exploration_traps)
     if len(trap_ids) != len(set(trap_ids)):
         raise ValueError("exploration.traps contains duplicate ids.")
-    observations_by_id = {item.id: item for item in definition.exploration_observations}
     for trap in definition.exploration_traps:
         if trap.zone_id not in zone_ids:
             raise ValueError(f"exploration trap {trap.id}.zone_id references unknown zone.")
@@ -3297,6 +3851,42 @@ def _validate_npc_content_effects(definition: ScenarioDefinition) -> None:
             raise ValueError(f"NPC {npc.id}.locked_information contains duplicate ids.")
         known_information_ids = set(information_ids)
         allowed_flags = set(policy.allowed_flags)
+        goal_ids = {goal.id for goal in npc.goals}
+        permission_ids = {permission.intent for permission in policy.intent_permissions}
+        for goal in npc.goals:
+            unknown_intents = set(goal.intent_ids) - permission_ids
+            if unknown_intents:
+                raise ValueError(
+                    f"NPC {npc.id}.goals.{goal.id} references unknown intents: "
+                    + ", ".join(sorted(unknown_intents))
+                    + "."
+                )
+        for issue in npc.key_issues:
+            unknown_goal_ids = set(issue.goal_ids) - goal_ids
+            if unknown_goal_ids:
+                raise ValueError(
+                    f"NPC {npc.id}.key_issues.{issue.id} references unknown goals: "
+                    + ", ".join(sorted(unknown_goal_ids))
+                    + "."
+                )
+            unknown_consumed_flags = (
+                set(issue.consumed_if_flags) - allowed_flags
+                if allowed_flags
+                else set()
+            )
+            if unknown_consumed_flags:
+                raise ValueError(
+                    f"NPC {npc.id}.key_issues.{issue.id}.consumed_if_flags contains "
+                    "disallowed flags: "
+                    + ", ".join(sorted(unknown_consumed_flags))
+                    + "."
+                )
+            _validate_npc_effect_sequence(
+                issue.effects,
+                state=state,
+                npc=npc,
+                field=f"NPC {npc.id}.key_issues.{issue.id}.effects",
+            )
         for info in npc.locked_information:
             unknown_set_flags = set(info.sets_flags) - allowed_flags if allowed_flags else set()
             if unknown_set_flags:

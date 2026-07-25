@@ -138,14 +138,18 @@ def match_exploration_observation(
     *,
     zone_id: str,
     challenge_id: str | None,
+    allowed_observation_ids: tuple[str, ...] = (),
 ) -> ExplorationObservation | None:
     """Match an explicit observation declaration to authored intent examples."""
 
     if not _is_observation_focused_action(player_action):
         return None
     action_stems = _observation_intent_stems(player_action)
+    allowed_ids = set(allowed_observation_ids)
     scored: list[tuple[int, ExplorationObservation]] = []
     for observation in observations:
+        if allowed_ids and observation.id not in allowed_ids:
+            continue
         if observation.zone_id != zone_id:
             continue
         if observation.challenge_id is not None and observation.challenge_id != challenge_id:
@@ -175,6 +179,7 @@ def _is_observation_focused_action(value: str) -> bool:
         "obse",
         "ogla",
         "patr",
+        "rozg",
         "spra",
         "szuk",
         "zagl",

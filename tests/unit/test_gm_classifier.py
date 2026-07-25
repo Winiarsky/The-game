@@ -5,7 +5,12 @@ from pydantic import ValidationError
 
 from dnd_board_game.actions import PlayerIntentHint
 from dnd_board_game.combat import SceneFlags, set_scene_flag
-from dnd_board_game.exploration import ExplorationState, FixtureOperation, set_party_zone
+from dnd_board_game.exploration import (
+    CheckParticipants,
+    ExplorationState,
+    FixtureOperation,
+    set_party_zone,
+)
 from dnd_board_game.llm import (
     GeminiGmClassifierClient,
     GmActionFlow,
@@ -13,6 +18,7 @@ from dnd_board_game.llm import (
     GmDeclarationAnalysis,
     GmDeclarationAnalysisType,
     GmDeclarationThreadEntry,
+    GmFlowRouteCandidate,
     GmClassifierProposal,
     GmPreparationEffect,
     GmProposalValidationError,
@@ -82,6 +88,81 @@ def test_gm_classifier_validates_owned_resource_with_matching_tag():
     assert [resource.id for resource in validated.resources] == ["rope"]
 
 
+def test_selected_goal_applies_authored_quiet_tradeoff():
+    exploration, state = _state()
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Wchodzimy z liną po cichu.",
+        actors=exploration.actors,
+        selected_goal_id="force_entry",
+    )
+
+    validated = validate_gm_classifier_proposal(_proposal(), request)
+
+    quiet = next(
+        modifier
+        for modifier in validated.proposal.situational_modifiers
+        if modifier.label == "Działanie po cichu"
+    )
+    assert quiet.modifier == -1
+    failure_noise = next(
+        item
+        for item in validated.proposal.consequences
+        if item.type.value == "add_noise" and item.trigger.value == "failure"
+    )
+    assert failure_noise.value == 0
+
+
+def test_selected_goal_sends_effective_narrative_style_to_gm():
+    exploration, state = _state()
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Oglądam zawiasy i szukam śladów.",
+        actors=exploration.actors,
+        selected_goal_id="look_around",
+    )
+
+    style = request.to_prompt_payload()["challenge"]["effective_narrative_style"]
+
+    assert style["preset"] == "tense_discovery"
+    assert style["humor_level"] == "none"
+
+
+def test_selected_goal_sends_authored_participant_model_and_actor_roles_to_gm():
+    exploration, state = _state()
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Bohater napiera na bramę, a Kapłan podpiera mu ramię.",
+        actors=exploration.actors,
+        selected_goal_id="force_entry",
+        selected_check_participants=CheckParticipants.LEAD_WITH_HELP,
+        selected_participant_actor_ids=("hero", "cleric"),
+    )
+
+    challenge = request.to_prompt_payload()["challenge"]
+    validated = validate_gm_classifier_proposal(_proposal(), request)
+
+    assert challenge["selected_goal"]["check_participants"] == "lead_with_help"
+    assert challenge["selected_goal"]["participant_mode"] == "allow"
+    assert challenge["selected_check_participants"] == "lead_with_help"
+    assert challenge["selected_participants"] == [
+        {"actor_id": "hero", "actor_name": "Bohater", "role": "lead"},
+        {"actor_id": "cleric", "actor_name": "Kapłan", "role": "helper"},
+    ]
+    assert validated.proposal.check_participants.value == "lead_with_help"
+    assert validated.proposal.check_aggregation.value == "lead_result"
+    assert validated.proposal.selected_mechanic.value == "lead_with_help_check"
+
+
 def test_fixture_action_mechanics_are_grounded_from_fixture_policy():
     exploration, state = _state()
     source_id = "zone:gate:fixture:gate_corroded_hinges"
@@ -118,7 +199,7 @@ def test_fixture_action_mechanics_are_grounded_from_fixture_policy():
     assert option.ability_check.ability == "strength"
     assert option.ability_check.skill == "athletics"
     assert option.ability_check.dc == 12
-    assert option.progress_on_success == 2
+    assert option.progress_on_success == 0
     assert option.progress_on_failure == 0
     assert option.success_noise == 1
     assert option.failure_noise == 1
@@ -152,6 +233,47 @@ def test_declaration_analysis_validates_grounded_fixture_operation():
 
     assert validated.action_target_source_id == source_id
     assert validated.fixture_operation.value == "detach"
+
+
+def test_declaration_analysis_accepts_only_one_of_the_active_flow_routes():
+    exploration, state = _state()
+    route = GmFlowRouteCandidate(
+        transition_id="force_gate",
+        goal_id="force_entry",
+        label="Wyważ bramę",
+        description="Spróbuj pokonać bramę siłą.",
+        route_kind="challenge_option",
+    )
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Bohater taranuje bramę barkiem.",
+        actors=exploration.actors,
+        available_flow_routes=(route,),
+    )
+    valid = GmDeclarationAnalysis.model_validate(
+        {
+            "analysis_type": "plausible",
+            "normalized_intent": "Wyważenie bramy barkiem.",
+            "selected_flow_transition_id": "force_gate",
+        }
+    )
+
+    assert validate_gm_declaration_analysis(
+        valid, request
+    ).selected_flow_transition_id == "force_gate"
+
+    invented = valid.model_copy(
+        update={"selected_flow_transition_id": "sekretna_furtka_z_krzakow"}
+    )
+    with pytest.raises(GmProposalValidationError, match="nieaktywną albo nieistniejącą"):
+        validate_gm_declaration_analysis(invented, request)
+
+    ambiguous = valid.model_copy(update={"selected_flow_transition_id": None})
+    with pytest.raises(GmProposalValidationError, match="jednoznacznie"):
+        validate_gm_declaration_analysis(ambiguous, request)
 
 
 def test_gm_classifier_preserves_selected_mechanic_on_generated_option():
@@ -1215,7 +1337,7 @@ def test_gm_classifier_rejects_too_many_resources_for_challenge_policy():
         validate_gm_classifier_proposal(proposal, request)
 
 
-def test_gm_classifier_ignores_extra_llm_fields_but_rejects_success_progress_outside_policy():
+def test_gm_classifier_normalizes_progress_to_zero_for_flag_completed_challenge():
     proposal = _proposal(messages=[], progress_on_success=0)
     exploration, state = _state()
     request = build_gm_classifier_request(
@@ -1224,6 +1346,38 @@ def test_gm_classifier_ignores_extra_llm_fields_but_rejects_success_progress_out
         scenario_context=exploration.llm_context,
         state=state,
         player_action="Chcemy zrobić podkop.",
+    )
+
+    validated = validate_gm_classifier_proposal(proposal, request)
+    option = challenge_option_from_validated_proposal(validated)
+
+    assert validated.proposal.progress_on_success == 0
+    assert validated.proposal.progress_on_failure == 0
+    assert option.progress_on_success == 0
+    assert option.progress_on_failure == 0
+
+
+def test_gm_classifier_still_rejects_progress_outside_policy_for_progress_challenge():
+    exploration, state = _state()
+    courtyard = next(zone for zone in exploration.zones if zone.id == "courtyard")
+    state = set_party_zone(state, courtyard)
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Nasłuchujemy na dziedzińcu.",
+    )
+    proposal = _proposal(
+        target_challenge_id="courtyard_search",
+        approach_label="Nasłuchiwanie na dziedzińcu",
+        approach_tags=["listening", "quiet"],
+        ability="wisdom",
+        skill="perception",
+        progress_on_success=0,
+        progress_on_failure=0,
+        used_resource_ids=[],
+        consequences=[],
     )
 
     with pytest.raises(GmProposalValidationError, match="Postęp przy sukcesie jest poza zakresem policy"):
@@ -1481,8 +1635,8 @@ def test_gm_classifier_builds_temporary_challenge_option():
     assert option.ability_check.ability == "dexterity"
     assert option.ability_check.skill == "acrobatics"
     assert option.ability_check.dc == 15
-    assert option.progress_on_success == 2
-    assert option.progress_on_failure == 1
+    assert option.progress_on_success == 0
+    assert option.progress_on_failure == 0
     assert option.failure_noise == 1
     assert option.critical_failure_complication == "minor_injury"
 
@@ -1511,12 +1665,20 @@ def test_gm_classifier_request_payload_contains_context_layers_and_dynamic_state
     assert payload["challenge"]["llm_policy"]["allowed_grant_resource_ids"] == ["saw"]
     assert payload["challenge"]["llm_policy"]["allowed_unlock_option_ids"] == ["saw_picket"]
     assert payload["challenge"]["llm_policy"]["effect_boost_range"] == [1, 1]
+    assert payload["challenge"]["llm_policy"]["progress_on_success_range"] == [0, 0]
+    assert payload["challenge"]["llm_policy"]["progress_on_failure_range"] == [0, 0]
     assert payload["challenge"]["llm_policy"]["max_resources_per_attempt"] == 1
     assert "heavy_force" in payload["allowed_tags"]
     assert "bribe" not in payload["allowed_tags"]
     assert "crafting" in payload["allowed_skills"]
     assert "athletics" in load_llm_core_rules().skills
-    assert payload["dynamic_state"]["challenge_progress"]["current"] == 0
+    assert payload["dynamic_state"]["challenge_progress"] == {
+        "challenge_id": "closed_gate",
+        "uses_progress": False,
+        "completed": False,
+    }
+    assert "current_progress" not in payload["challenge"]
+    assert "progress_required" not in payload["challenge"]
     assert payload["dynamic_state"]["inventory_resource_ids"] == ["rope", "wedge"]
     assert payload["dynamic_state"]["attempt_history"] == []
     party_actors = {actor["id"]: actor for actor in payload["party_actors"]}
@@ -1524,6 +1686,8 @@ def test_gm_classifier_request_payload_contains_context_layers_and_dynamic_state
     assert "sacred_flame" in party_actors["cleric"]["spell_ids"]
     assert "lead_with_help_check" in {mechanic["id"] for mechanic in payload["allowed_mechanics"]}
     options = {option["id"]: option for option in payload["challenge"]["available_options"]}
+    assert all(option["progress_on_success"] == 0 for option in options.values())
+    assert all(option["progress_on_failure"] == 0 for option in options.values())
     assert options["lockpick_gate"]["requirements"]["item_ids"] == ["thieves_tools"]
     assert options["lockpick_gate"]["mechanic"]["id"] == "use_item_check"
     assert options["reveal_bolt_with_flame"]["requirements"]["spell_ids"] == ["sacred_flame"]
@@ -1808,6 +1972,21 @@ def test_gm_classifier_request_payload_contains_explicit_player_intent_hint():
     assert request.to_prompt_payload()["player_intent_hint"] == "question"
 
 
+def test_gm_classifier_request_marks_free_gm_conversation():
+    exploration, state = _state()
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Czy to wygląda na strzeżone od środka?",
+        player_intent_hint=PlayerIntentHint.QUESTION,
+        conversation_only=True,
+    )
+
+    assert request.to_prompt_payload()["conversation_only"] is True
+
+
 def test_gm_classifier_exposes_active_graded_observation_without_revealing_facts():
     exploration, state = _state()
     request = build_gm_classifier_request(
@@ -1865,6 +2044,38 @@ def test_gm_classifier_accepts_observation_check_but_rejects_hidden_result_befor
         validate_gm_declaration_analysis(leaked_result, request)
 
 
+def test_requires_check_can_carry_an_allowed_gentle_hint_level():
+    exploration, state = _state()
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Czy okolica jest bezpieczna?",
+        observations=exploration.observations,
+        player_intent_hint=PlayerIntentHint.QUESTION,
+        conversation_only=True,
+    )
+    analysis = GmDeclarationAnalysis.model_validate(
+        {
+            "analysis_type": "player_question",
+            "player_message": (
+                "Z miejsca nie da się tego rozstrzygnąć. Możecie zajrzeć przez szczelinę."
+            ),
+            "response_kind": "requires_check",
+            "requires_check": True,
+            "suggested_followup": "Zaglądam przez szczelinę i szukam ruchu.",
+            "observation_id": "look_through_gate_gap",
+            "hint_level": 1,
+        }
+    )
+
+    validated = validate_gm_declaration_analysis(analysis, request)
+
+    assert validated.response_kind.value == "requires_check"
+    assert validated.hint_level == 1
+
+
 def test_explicit_question_intent_cannot_be_changed_into_action():
     exploration, state = _state()
     request = build_gm_classifier_request(
@@ -1890,7 +2101,7 @@ def test_explicit_question_intent_cannot_be_changed_into_action():
 def test_gm_classifier_request_payload_contains_attempt_history_after_roll():
     exploration, state = _state()
     challenge = state.challenges[0]
-    option = next(item for item in challenge.options if item.id == "break_picket")
+    option = next(item for item in challenge.options if item.id == "force_gate")
     from dnd_board_game.exploration import resolve_challenge_option
     from dnd_board_game.rules import D20RollInput, D20RollRequest, resolve_d20_roll
 
@@ -1901,12 +2112,13 @@ def test_gm_classifier_request_payload_contains_attempt_history_after_roll():
         scenario_name=exploration.scenario_name,
         scenario_context=exploration.llm_context,
         state=result.state,
-        player_action="Próbujemy dalej podważać sztachety.",
+        player_action="Próbujemy dalej wyważać bramę.",
     )
 
     history = request.to_prompt_payload()["dynamic_state"]["attempt_history"]
-    assert history[0]["option_id"] == "break_picket"
-    assert history[0]["progress_added"] == 1
+    assert history[0]["option_id"] == "force_gate"
+    assert history[0]["progress_added"] == 0
+    assert history[0]["noise_added"] == 3
 
 
 def test_gm_declaration_analysis_model_accepts_player_question():

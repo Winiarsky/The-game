@@ -90,6 +90,7 @@ def test_snapshot_json_round_trip_is_deterministic(tmp_path):
     assert restored.as_dict() == snapshot.as_dict()
     assert restored.as_dict()["schema_version"] == SNAPSHOT_SCHEMA_VERSION
     cleric = next(actor for actor in restored.actors if str(actor.id) == "cleric")
+    assert cleric.portrait == "portraits/abandoned_watchtower/cleric.webp"
     shield = next(item for item in cleric.inventory if item.id == "shield")
     assert shield.armor_class_bonus == 2
     assert shield.armor_proficiency == "shield"

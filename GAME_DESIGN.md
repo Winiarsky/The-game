@@ -88,6 +88,11 @@ lub obiekt, jego pole otrzymuje pasywny focus LED. Focus nie uruchamia skanowani
 nie wymaga kliknięcia planszy: zapisanie rzutu, zakończenie kroku albo zmiana
 aktywnego uczestnika gasi poprzednie wskazanie lub przenosi je na kolejny cel.
 
+Pasywny focus i zwykłe podświetlenie używają standardowej jasności planszy. Po
+jawnym uruchomieniu skanu te same legalne pola przechodzą na osobną, wyższą
+`scan_brightness`, żeby fizycznie odróżnić „informację” od „plansza czeka teraz na
+kliknięcie”. Po wyborze pola, anulowaniu albo timeoutcie jasność wraca do standardu.
+
 Docelowa hierarchia informacji, widoki eksploracji, NPC, encountera i walki oraz
 kontrakt plansza–monitor są opisane w `docs/PLAYER_UI_DESIGN.md`. Koncepcyjne mockupy
 ustalają klimat dark fantasy, ale cyfrowe mapy i pozycje figurek nie są częścią
@@ -96,8 +101,9 @@ docelowego layoutu: przestrzeń pozostaje domeną fizycznej planszy.
 ### Eksploracja zaczyna się od fikcji
 
 Po wejściu do lokacji gracze najpierw widzą ilustrację i opis sytuacji. Aplikacja
-nie pokazuje od razu listy testów, ST ani kompletnego menu rozwiązań. Drużyna może
-swobodnie zadeklarować działanie albo zadać MG pytanie o scenę.
+nie pokazuje od razu listy testów, ST ani kompletnego menu rozwiązań. Drużyna
+wybiera widoczny cel sceny, wskazuje uczestników i swobodnie opisuje metodę jego
+osiągnięcia. Osobne pole rozmowy służy wyłącznie pytaniom do MG.
 
 Pytanie o jawny fakt otrzymuje odpowiedź bez rzutu. Poszukiwanie albo przygotowanie
 może dopiero później prowadzić do testu, zasobu lub komplikacji. System nie może
@@ -651,13 +657,15 @@ Domyślnym modelem jest `fail-forward`:
 
 ### Wyzwanie Z Postępem
 
-Eksploracyjne przeszkody powinny być modelowane jako wyzwania z postępem, a nie jako pojedyncze testy.
+Eksploracyjne przeszkody powinny być modelowane jako wyzwania stanowe, a nie jako
+pojedyncze testy. W zależności od sceny stan może być opisany punktami postępu albo
+konkretnymi flagami fizycznych blokad.
 
 Przykład:
 
 ```text
-Wyzwanie: Zamknięta brama
-Cel: dostać się na dziedziniec
+Wyzwanie: Przeprawa przez rwącą rzekę
+Cel: dostać się na drugi brzeg
 Postęp wymagany: 3
 Postęp aktualny: 0
 Ryzyka: hałas, strata czasu, uszkodzenie sprzętu
@@ -673,27 +681,27 @@ Każda dostępna opcja opisuje:
 * możliwe komplikacje,
 * flagi sceny ustawiane po rozstrzygnięciu.
 
-Przykładowe opcje dla zamkniętej bramy:
+Przykładowy model flagowy dla zamkniętej bramy:
 
 ```text
 Wyważ bramę:
 - test: Siła / Atletyka
-- sukces: +3 postępu, brama otwarta, hałas
-- porażka: +1 postępu, hałas, zmęczenie albo uszkodzenie narzędzia
+- sukces: puszcza zamek i rygiel, brama otwarta, hałas
+- porażka: puszcza tylko zamek, gobliny szykują zasadzkę
 ```
 
 ```text
 Przejdź górą:
 - test: Zręczność / Akrobatyka
-- sukces: +2 postępu, ciche przejście części drużyny
-- porażka: +1 postępu, ryzyko upadku albo utrata czasu
+- sukces: bohater zdejmuje rygiel od środka
+- porażka: rygiel pozostaje, ryzyko upadku albo utrata czasu
 ```
 
 ```text
 Podważ mechanizm:
 - test: Inteligencja / narzędzia albo rzemiosło
-- sukces: +3 postępu, ciche otwarcie
-- porażka: +1 postępu, narzędzie się zużywa albo mechanizm klinuje się częściowo
+- sukces: osłabia konstrukcję i ułatwia kolejne wyważanie
+- porażka: narzędzie się ześlizguje, a czujność przeciwników rośnie
 ```
 
 ```text
@@ -786,9 +794,38 @@ Efekt: advantage albo +2 do testu
 
 ### Rola LLM W Eksploracji
 
-W pierwszej implementacji opcje eksploracyjne są predefiniowane w contentcie.
+Eksploracja używa trybu hybrydowego. Content definiuje kilka widocznych kart celu,
+ale nie gotowe sposoby wykonania. Po wyborze celu gracze opisują metodę naturalnym
+językiem, LLM ją strukturyzuje, a deterministyczny silnik sprawdza zasoby, reguły
+metod, koszty i konsekwencje. Wyzwanie grafowe nie pokazuje karty całkowicie
+dowolnego planu: swoboda graczy znajduje się w opisie metody po wybraniu
+konkretnego rezultatu. Brakujący ważny zamiar powinien dostać czytelny kafelek
+celu, a nie ogólną furtkę omijającą graf.
 
-Pierwszy zaimplementowany vertical slice tego modelu to brama w scenariuszu `Opuszczona strażnica`: wyzwanie ma postęp `3/3`, kilka podejść, hałas, komplikacje, przygotowanie przez badanie okolicy oraz minimalne zasoby drużyny.
+Każda karta celu definiuje politykę wyboru modelu testu. `must` wymusza jeden
+model, natomiast `allow` podaje listę modeli dostępnych przed opisaniem metody:
+
+* `single_actor`: gracze wskazują jednego wykonawcę i nie mogą dodać pomocnika;
+* `lead_with_help`: wskazują prowadzącego oraz opcjonalnie jednego pomocnika,
+  który musi być zdolny do podjęcia próby; pomoc daje jedną przewagę i nie tworzy
+  osobnego rzutu;
+* `whole_party`: wybór wykonawcy jest wyłączony, rzuca cała drużyna, a klasyczny
+  test grupowy udaje się, gdy co najmniej połowa postaci odniesie sukces.
+
+Wybór następuje przed opisaniem metody. Role trafiają do LLM jako kontekst narracji,
+ale dozwolony zakres, ostateczny wybór, uczestników i agregację waliduje
+deterministycznie silnik.
+
+UI nie pokazuje osobnego technicznego etapu wyboru modelu. Pierwsza kliknięta
+postać zostaje prowadzącym (`single_actor`), druga pomocnikiem
+(`lead_with_help`), a przycisk „Cała drużyna” wybiera `whole_party`. Przy `must`
+niedozwolone warianty po prostu nie są dostępne.
+
+Pierwszy zaimplementowany vertical slice tego modelu to brama w scenariuszu
+`Opuszczona strażnica`: zamek i rygiel są osobnymi blokadami, czujność goblinów
+rośnie w zakresie 0–3, a badanie lub osłabienie konstrukcji modyfikuje późniejsze
+próby. Jawna deklaracja działania po cichu utrudnia test, ale udany test nie
+zwiększa czujności.
 
 LLM może działać jako opcjonalna warstwa interpretacji kreatywnych deklaracji graczy.
 
@@ -809,6 +846,20 @@ Minimalny kontrakt:
 
 * Pydantic waliduje kształt odpowiedzi LLM.
 * Silnik gry waliduje aktualny stan: aktywną strefę, wyzwanie, flagi, zasoby i tagi.
+* Wybrany `InteractionGoal` wiąże interpretację z zamierzonym rezultatem, ale sam
+  nie dowodzi wykonalności metody i nie przyznaje premii.
+* `InteractionGoal.participant_mode` oraz lista dozwolonych modeli są autorskim
+  kontraktem. Ostateczny model może wynikać z `must` albo wyboru graczy w `allow`,
+  ale nie może zostać podmieniony przez LLM ani ekran późnej akceptacji.
+* `InteractionMethodRule` może deterministycznie narzucić autorski kompromis, np.
+  `-1` za działanie po cichu wraz z redukcją hałasu.
+* Każda instancja interakcji ma `NarrativeStyle`. Domyślny `heroic_dnd` prowadzi
+  bohaterskie power fantasy z lekką ironią i sytuacyjnym humorem.
+* Pojedynczy `InteractionGoal` może nadpisać pełny profil narracyjny instancji.
+  Pozwala to przejść od karczemnego rozmachu do poważnego wyznania bez zmiany
+  mechaniki ani globalnego promptu.
+* Poziom humoru lub ironii `none` jest wiążący. LLM nie powinien wtedy dopisywać
+  dowcipu do sceny, która ma wybrzmieć serio.
 * LLM nie wykonuje efektów gry. LLM strukturyzuje deklarację graczy, a deterministic engine wykonuje tylko znane prymitywy mechaniczne.
 * Każde wyzwanie może definiować `llm_policy`: lokalne skille, tagi podejść, komplikacje, dozwolone konsekwencje, zakres ST, zakres postępu, dozwolone typy przygotowania, whitelisty grantowanych zasobów/odblokowywanych opcji i limit zasobów.
 * Trudność testów freeform powinna być content-driven: challenge może definiować `dc_policy` z tierami trudności i odpowiadającymi im ST.
@@ -851,7 +902,15 @@ Po odrzuceniu deklaracji aplikacja powinna dać graczom możliwość wpisania ko
 
 ### Globalne Intencje I Lokalne Policy
 
-Freeform nie powinien być budowany jako sztywne menu gotowych akcji per obiekt. Zamiast tego system powinien mieć globalny katalog intencji, a każdy obiekt, NPC, lokacja albo przeszkoda powinny definiować lokalne policy, które mówi, które intencje są dozwolone, zablokowane albo dozwolone z konsekwencją.
+Freeform nie powinien być budowany jako sztywne menu gotowych akcji per obiekt.
+Karty pokazują cele rozmowy lub interakcji, nie gotowe wypowiedzi. System nadal ma
+globalny katalog intencji, a każdy obiekt, NPC, lokacja albo przeszkoda definiują
+lokalne policy.
+
+NPC może dodatkowo definiować `NpcKeyIssue`: ukryty lub jawny priorytet, drażliwy
+temat, pokusę, twardą granicę albo wyjątek. Ugruntowane trafienie w taką kwestię
+uruchamia wyłącznie autorski efekt. Twardej granicy nie można obejść samym wysokim
+rzutem.
 
 Globalny katalog intencji powinien być trzymany w contentcie, np. `content/llm/intent_catalog.json`, a nie zaszyty w promptach lub runtime. Przykładowe intencje:
 

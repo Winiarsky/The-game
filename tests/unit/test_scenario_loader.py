@@ -133,6 +133,8 @@ def test_gate_skirmish_loads_rest_and_recharge_limited_attack_sources() -> None:
     )
 
     assert heroic_strike.resource_pool_id == "heroic_strike_uses"
+    assert hero.portrait == "portraits/abandoned_watchtower/hero.webp"
+    assert goblin.portrait == "portraits/abandoned_watchtower/goblin-rubble.webp"
     assert hero.features[0].feature_id == "heroic_strike"
     assert hero.features[0].action_ids == ("heroic_strike",)
     assert hero.resource_pools[0].recovery.value == "short_rest"
@@ -462,7 +464,7 @@ def test_load_abandoned_watchtower_builds_exploration_scene():
     assert exploration.board.terrain_at(Coordinate(8, 5)).blocks_movement is False
     assert len(exploration.zones) == 4
     assert len(exploration.challenges) == 2
-    assert len(exploration.observations) == 2
+    assert len(exploration.observations) == 6
     gate_observation = next(
         item for item in exploration.observations if item.id == "look_through_gate_gap"
     )
@@ -756,9 +758,10 @@ def test_load_abandoned_watchtower_builds_exploration_encounter_triggers():
     assert gate.opening_policy is not None
     assert gate.opening_policy.challenge_id == "closed_gate"
     assert [rule.id for rule in gate.opening_policy.rules] == [
-        "forced_breach",
-        "alerted_without_reconnaissance",
-        "alerted_after_reconnaissance",
+        "ambush_prepared_by_failure",
+        "ambush_prepared_by_alert",
+        "hidden_wall_entry",
+        "critical_breach",
         "quiet_entry",
     ]
     assert gate.opening_policy.rules[1].min_noise == 3

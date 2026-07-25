@@ -31,6 +31,12 @@ najbliższy horyzont, a nie kopię całej roadmapy.
 - [x] Add filterable slash-command intent hints to the exploration chat while preserving automatic intent detection.
 - [x] Unify player questions and progressive hint requests under `/pytaj`; infer hint strength from message content.
 - [x] Add deterministic graded observations that reveal cumulative scene facts without advancing the active challenge.
+- [x] Add goal-scoped contextual searches: semantic no-roll material lookup, graded hidden discoveries, preselected observers, and flag-driven follow-up cards.
+- [x] Separate free GM conversation from goal actions and route known scene-item uses through authored procedural source actions.
+- [x] Add the first guarded exploration flow-graph vertical slice and migrate the watchtower gate's goal availability and routing.
+- [x] Make authored flow options authoritative for check mechanics and accept a reduced LLM method-only contract on migrated routes.
+- [ ] Migrate remaining exploration/NPC scenes to guarded flow graphs and reduce the LLM contract to route selection plus grounded method details.
+  - [x] Revalidate the selected goal against its currently active graph transition, with participant choice made before the method description and roll.
 - [x] Route authored observation intents before generic challenge classification and ground numeric DCs to content tiers.
 - [x] Replace the gate's predefined approach/risk lists with structured guidance facts and update the interaction form.
 - [x] Give `/szukaj` an exact-first and semantic-fallback flow with player-confirmed substitutes and persisted scene findings.
@@ -91,6 +97,7 @@ najbliższy horyzont, a nie kopię całej roadmapy.
 - [x] Define the board-first player UI direction, target exploration/combat/NPC views, information hierarchy, and edge cases in `docs/PLAYER_UI_DESIGN.md`.
 - [x] UI-1: Add the shared player shell and visual tokens; move hardware configuration and debug surfaces out of the normal player flow.
 - [x] UI-2: Rework exploration and NPC presentation around one stateful full-screen chat without duplicated trial/result cards.
+- [x] Make tall interaction composers scrollable and give every watchtower gate goal a responsive illustrated tile.
 - [x] UI-3: Rework encounter setup and combat around a compact turn HUD, board-context menus, and one preview/roll/result flow without a digital map.
 - [x] UI-4: Add on-demand character/state/spell/inventory drawers, information-overload priorities, keyboard navigation, and disconnected-board fallback.
 - [x] Add passive board focus for physically placed initiative/Stealth actors and exploration objects, without treating exploration party members or NPCs as separate board pieces.
@@ -103,6 +110,8 @@ najbliższy horyzont, a nie kopię całej roadmapy.
 - [x] Render acknowledged combat results once instead of duplicating the same message across prompt, inline summary, and acknowledgement card.
 - [x] Keep exploration LEDs aligned with actual input mode: passive focus during an open interaction and selectable locations/points only after leaving it.
 - [x] Add strict combat targeting after selecting an attack or spell source so movement tiles cannot steal target/area clicks, with explicit single-target and area labels.
+- [x] Clarify exploration checks by naming the tested skill and separating the rolling leader from a non-rolling helper.
+- [x] Give exploration goal cards `must`/`allow` policies for D&D single, optional Help, and whole-party checks, selected before the free-form method.
 
 ## Completed Work And Deferred Backlog
 
@@ -154,6 +163,13 @@ obowiązują `Current Roadmap Focus` oraz etapy z `ROADMAP.md`.
 - [x] Add global LLM intent catalog in `content/llm/intent_catalog.json`.
 - [x] Add global LLM effect and condition catalogs for deterministic content-driven outcomes.
 - [x] Replace NPC `allowed_actions` with local `intent_permissions` based on the global intent catalog.
+- [x] Add hybrid exploration goal cards, authored method tradeoffs, and first NPC key issue vertical slice for the watchtower gate and wounded scout.
+- [x] Add inherited instance/goal narrative profiles with heroic D&D defaults and serious-scene overrides.
+- [x] Replace the watchtower gate progress track with lock/bolt state flags, repeatable outcome branches, capped goblin alert, and a concrete weaken-structure goal.
+- [x] Remove stale progress validation, LLM context, and decision UI from flag-completed gate interactions.
+- [x] Keep End Turn beside combat board scanning and require acknowledgement of automatic enemy saves against player spells.
+- [ ] Add grounded value/currency requirements and a guard-bribe hard-boundary fixture for NPC key-issue validation.
+- [ ] Add semantic LLM key-issue classification beyond authored phrase matching, with deterministic engine validation.
 - [x] Route exploration web UI NPC flags and challenge reveals through the effect executor.
 - [x] Add content-driven NPC effect fields with legacy flag-change fallback.
 - [x] Add per-session web UI JSONL debug logs for actions, LLM proposals, rolls, and effects.
@@ -225,6 +241,8 @@ obowiązują `Current Roadmap Focus` oraz etapy z `ROADMAP.md`.
 - [x] Fix real enemy-movement Ready detection when `EnemyAutoTurnResult.enemy` already has the destination position.
 - [x] Add exploration map environment setup before location selection.
 - [x] Couple exploration web UI with board/simulator backend for LEDs and board clicks.
+- [x] Boost LED brightness only while an active board scan is waiting for a physical click.
+- [x] Add data-driven actor portraits to party, test selection, rolls, combat order, and actor-linked messages.
 - [x] Add inventory/cantrip option bonuses with actor item consumption and breakage checks to exploration rolls.
 - [x] Add named exploration mechanic tools for LLM-selected challenge mechanics.
 - [x] Add GM correction UI for selected exploration mechanic before rolls.

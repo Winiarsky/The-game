@@ -259,6 +259,7 @@ class _WledClient:
         self.led_offset = int(cfg.get("led_offset") or 0)
         self.led_count = int(cfg.get("led_count") or 620)
         self.brightness = max(1, min(255, int(cfg.get("brightness") or 128)))
+        self.scan_brightness = max(1, min(255, int(cfg.get("scan_brightness") or 255)))
         self.color_order = str(cfg.get("color_order") or "rgb").strip().lower()
         self.request_timeout_s = float(cfg.get("request_timeout_s") or 2.0)
         retry_cooldown_raw = cfg.get("retry_cooldown_s")
@@ -341,7 +342,12 @@ class _WledClient:
         self._mark_available()
         return True
 
-    def set_leds(self, led_updates: list[tuple[int, list[int]]]) -> bool:
+    def set_leds(
+        self,
+        led_updates: list[tuple[int, list[int]]],
+        *,
+        brightness: int | None = None,
+    ) -> bool:
         if not led_updates:
             return True
         if not self.ensure_available():
@@ -351,11 +357,16 @@ class _WledClient:
         instructions: list[Any] = [start, stop, "000000"]
         for led_index, color in led_updates:
             instructions.extend([self.led_offset + int(led_index), _color_to_hex(color, self.color_order)])
+        effective_brightness = (
+            self.brightness
+            if brightness is None
+            else max(1, min(255, int(brightness)))
+        )
         try:
             self._post_state(
                 {
                     "on": True,
-                    "bri": self.brightness,
+                    "bri": effective_brightness,
                     "seg": [{"id": self.segment_id, "on": True, "i": instructions}],
                 }
             )
@@ -513,8 +524,13 @@ class _HardwareBackend:
                     break
                 return result
 
-    def set_leds(self, led_updates: list[tuple[int, list[int]]]) -> None:
-        self.wled.set_leds(led_updates)
+    def set_leds(
+        self,
+        led_updates: list[tuple[int, list[int]]],
+        *,
+        brightness: int | None = None,
+    ) -> None:
+        self.wled.set_leds(led_updates, brightness=brightness)
 
     def leds_off(self) -> None:
         self.wled.clear()
@@ -541,6 +557,11 @@ class Connection:
         self.config = load_board_config(self.config_path)
         self.rows, self.cols = board_dimensions(self.config)
         self.led_config = load_led_mapping(rows=self.rows, cols=self.cols)
+        configured_wled = wled_config(self.config)
+        self.scan_brightness = max(
+            1,
+            min(255, int(configured_wled.get("scan_brightness") or 255)),
+        )
 
         resolved_backend = backend
         resolved_simulator_url = simulator_url
@@ -596,11 +617,23 @@ class Connection:
         except TypeError:
             return self._backend.scan_board(acceptable_responses)
 
-    def set_leds(self, positions: list[tuple[int, int]], rgb_color) -> None:
+    def set_leds(
+        self,
+        positions: list[tuple[int, int]],
+        rgb_color,
+        *,
+        brightness: int | None = None,
+    ) -> None:
         led_updates = self._resolve_led_updates(positions, rgb_color)
         if not led_updates:
             return
-        self._backend.set_leds(led_updates)
+        if brightness is None:
+            self._backend.set_leds(led_updates)
+            return
+        try:
+            self._backend.set_leds(led_updates, brightness=brightness)
+        except TypeError:
+            self._backend.set_leds(led_updates)
 
     def leds_off(self) -> None:
         self._backend.leds_off()

@@ -1,6 +1,148 @@
 {
   "observations": [
     {
+      "id": "survey_gate_surroundings",
+      "zone_id": "gate",
+      "challenge_id": "closed_gate",
+      "label": "Rozejrzenie się za czymś przydatnym",
+      "description": "Bohater szeroko przeszukuje bramę i jej otoczenie bez wskazania jednego konkretnego celu. Jeden wynik ujawnia wszystkie dostrzeżone warstwy znalezisk.",
+      "ability": "intelligence",
+      "skill": "investigation",
+      "participants": "single_actor",
+      "aggregation": "lead_result",
+      "failure_message": "Widzisz głównie mokre drewno, kamienie i zarośla — imponujący katalog rzeczy starych, lecz na razie bez pewnego planu użycia.",
+      "intent_examples": [
+        "rozglądam się za czymś przydatnym",
+        "szukam czegoś interesującego",
+        "dokładnie przeszukuję otoczenie bramy",
+        "sprawdzam co można tutaj znaleźć",
+        "oglądam wszystko dookoła"
+      ],
+      "facts": [
+        {
+          "id": "gate_ram_materials_found",
+          "minimum_total": 10,
+          "reveal_flag": "gate_ram_materials_found",
+          "narration": "Spróchniałe deski i luźne kamienie nie są subtelnymi narzędziami, ale mogą posłużyć jako podparcie, dźwignia albo rdzeń prowizorycznego tarana."
+        },
+        {
+          "id": "weak_left_hinge_found",
+          "minimum_total": 13,
+          "reveal_flag": "weak_left_hinge_found",
+          "narration": "Lewy dolny zawias jest przeżarty rdzą. Wygląda jak element, który od dawna marzy o wcześniejszej emeryturze."
+        },
+        {
+          "id": "gate_wall_route_found",
+          "minimum_total": 16,
+          "reveal_flag": "gate_wall_route_found",
+          "narration": "Za gęstymi zaroślami odkrywasz osłonięty, niski odcinek muru. Da się nim wejść na dziedziniec z boku i zaskoczyć gobliny."
+        },
+        {
+          "id": "gate_saw_found",
+          "minimum_total": 20,
+          "reveal_flag": "gate_saw_found",
+          "narration": "Pod stertą desek leży stara, lecz nadal użyteczna piła. Nie jest piękna, ale żadna brama nie wymaga od piły urody.",
+          "effects": [
+            {
+              "type": "grant_resource",
+              "parameters": {
+                "resource_id": "saw"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "search_gate_alternate_route",
+      "zone_id": "gate",
+      "challenge_id": "closed_gate",
+      "label": "Poszukiwanie alternatywnego przejścia",
+      "description": "Bohater szuka mniej oczywistej drogi na dziedziniec, badając mur, zarośla i ukształtowanie terenu.",
+      "ability": "wisdom",
+      "skill": "survival",
+      "participants": "single_actor",
+      "aggregation": "lead_result",
+      "failure_message": "Mur i zarośla nie zdradzają jeszcze bezpiecznej drogi. Brak znaleziska nie dowodzi jednak, że obejścia nie ma.",
+      "intent_examples": [
+        "szukam alternatywnego przejścia",
+        "sprawdzam czy można ominąć bramę",
+        "szukam innej drogi na dziedziniec",
+        "badam mur pod kątem przejścia",
+        "czy da się wejść bokiem"
+      ],
+      "facts": [
+        {
+          "id": "gate_wall_route_found",
+          "minimum_total": 13,
+          "reveal_flag": "gate_wall_route_found",
+          "narration": "Za zaroślami odnajdujesz niski, osłonięty odcinek muru. To realne przejście na dziedziniec i szansa, by wejść goblinom na flankę."
+        }
+      ]
+    },
+    {
+      "id": "inspect_gate_hinges",
+      "zone_id": "gate",
+      "challenge_id": "closed_gate",
+      "label": "Oględziny zawiasów",
+      "description": "Bohater porównuje okucia i szuka najsłabszego punktu konstrukcji.",
+      "ability": "intelligence",
+      "skill": "investigation",
+      "participants": "single_actor",
+      "aggregation": "lead_result",
+      "failure_message": "Rdza jest wszędzie i bardzo demokratycznie utrudnia ocenę. Nie wskazujesz jeszcze pewnego słabego punktu.",
+      "intent_examples": [
+        "oglądam zawiasy",
+        "szukam słabego punktu bramy",
+        "sprawdzam które okucie jest najsłabsze",
+        "badam konstrukcję bramy",
+        "gdzie najlepiej podważyć bramę"
+      ],
+      "facts": [
+        {
+          "id": "weak_left_hinge_found",
+          "minimum_total": 12,
+          "reveal_flag": "weak_left_hinge_found",
+          "narration": "Lewy dolny zawias jest głęboko przeżarty korozją. Uderzenie albo dźwignia przy nim będą wyraźnie skuteczniejsze."
+        }
+      ]
+    },
+    {
+      "id": "search_gate_cutting_tool",
+      "zone_id": "gate",
+      "challenge_id": "closed_gate",
+      "label": "Poszukiwanie narzędzia do cięcia",
+      "description": "Bohater przeszukuje spróchniałe deski i zarośla, wypatrując piły albo innego zachowanego narzędzia do cięcia.",
+      "ability": "intelligence",
+      "skill": "investigation",
+      "participants": "single_actor",
+      "aggregation": "lead_result",
+      "failure_message": "Znajdujesz drzazgi, rdzę i jeden wyjątkowo rozczarowujący kawałek blachy, lecz żadnego sprawnego narzędzia.",
+      "intent_examples": [
+        "szukam piły",
+        "szukam czegoś do przecięcia rygla",
+        "przeszukuję deski za narzędziem do cięcia",
+        "chcę znaleźć coś czym przetnę drewno",
+        "rozglądam się za ostrym narzędziem"
+      ],
+      "facts": [
+        {
+          "id": "gate_saw_found",
+          "minimum_total": 14,
+          "reveal_flag": "gate_saw_found",
+          "narration": "Pod deskami znajdujesz starą piłę. Zęby widziały lepsze czasy, ale rygiel też.",
+          "effects": [
+            {
+              "type": "grant_resource",
+              "parameters": {
+                "resource_id": "saw"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "search_gate_traps",
       "zone_id": "gate",
       "challenge_id": "closed_gate",

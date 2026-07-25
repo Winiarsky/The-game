@@ -264,6 +264,7 @@ def _actor_payload(actor: Actor) -> dict[str, object]:
     prep = actor.spell_preparation
     return {
         "id": str(actor.id), "name": actor.name, "ac": actor.ac, "hp": actor.hp,
+        "portrait": actor.portrait,
         "temp_hp": actor.temp_hp, "max_hp": actor.max_hp, "speed_feet": actor.speed_feet,
         "position": _coordinate_payload(actor.position), "faction": actor.faction.value,
         "size": actor.size.value,
@@ -412,6 +413,7 @@ def _actor_from_payload(raw: object) -> Actor:
         )
     return Actor(
         id=ActorId(_string(data.get("id"), "actor.id")), name=_string(data.get("name"), "actor.name"),
+        portrait=_string(data.get("portrait", ""), "actor.portrait", allow_empty=True),
         ac=_integer(data.get("ac"), "actor.ac"), hp=_integer(data.get("hp"), "actor.hp"),
         temp_hp=_integer(data.get("temp_hp"), "actor.temp_hp"), max_hp=_integer(data.get("max_hp"), "actor.max_hp"),
         speed_feet=_integer(data.get("speed_feet"), "actor.speed_feet"), position=_coordinate(data.get("position"), "actor.position"),

@@ -82,6 +82,7 @@ class Actor:
     auras: tuple[ActorAura, ...] = ()
     triggers: tuple[ActorTrigger, ...] = ()
     features: tuple[FeatureGrant, ...] = ()
+    portrait: str = ""
 
     def __post_init__(self) -> None:
         if self.max_hp <= 0:

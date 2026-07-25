@@ -101,3 +101,26 @@ def test_observation_intent_does_not_capture_action_using_the_gate_gap():
     )
 
     assert matched is None
+
+
+def test_observation_match_can_be_scoped_to_selected_contextual_goal():
+    through_gap = replace(
+        _observation(),
+        id="through_gap",
+        intent_examples=("zaglądam przez szczelinę",),
+    )
+    surroundings = replace(
+        _observation(),
+        id="surroundings",
+        intent_examples=("rozglądam się za czymś przydatnym",),
+    )
+
+    matched = match_exploration_observation(
+        (through_gap, surroundings),
+        "rozglądam się za czymś przydatnym",
+        zone_id="gate",
+        challenge_id="closed_gate",
+        allowed_observation_ids=("surroundings",),
+    )
+
+    assert matched == surroundings

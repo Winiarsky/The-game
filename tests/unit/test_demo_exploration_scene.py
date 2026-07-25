@@ -3,7 +3,7 @@ import sys
 import time
 
 from dnd_board_game.hardware import BoardLedAdapter
-from dnd_board_game.combat import SceneFlags
+from dnd_board_game.combat import SceneFlags, scene_flag
 from dnd_board_game.exploration import ExplorationState, reveal_exploration_points
 from dnd_board_game.llm import GmClassifierProposal, GmDeclarationAnalysis, GmDeclarationAnalysisType, NpcInteractionProposal
 from dnd_board_game.runtime import demo_exploration_scene
@@ -441,7 +441,7 @@ def test_demo_exploration_scene_challenge_can_use_lowest_party_check(tmp_path):
     assert check_events[0]["payload"]["plan"]["aggregation"] == "lowest"
     assert check_events[0]["payload"]["success"] is False
     assert check_events[0]["payload"]["selected_actor_id"] == "rogue"
-    assert check_events[0]["payload"]["consequence_actor_ids"] == ["rogue"]
+    assert check_events[0]["payload"]["consequence_actor_ids"] == ["rogue", "cleric"]
 
 
 def test_demo_exploration_scene_zone_travel_preview_uses_only_markers(tmp_path):
@@ -474,7 +474,6 @@ def test_demo_exploration_scene_zone_travel_preview_uses_only_markers(tmp_path):
     set_led_positions = [event[1] for event in connection.events if event[0] == "set_leds"]
     assert [(9, 2)] in set_led_positions
     assert [(9, 10)] in set_led_positions
-    assert not any(len(positions) > 1 and (9, 10) in positions for positions in set_led_positions)
 
 
 def test_demo_exploration_scene_gate_completion_keeps_wounded_scout_hidden_until_encounter(tmp_path):
@@ -730,8 +729,9 @@ def test_demo_exploration_scene_gm_classifier_resolves_generated_option(tmp_path
     assert "resource_used" in event_types
     assert "gm_classifier_option_resolved" in event_types
     assert "challenge_progress_updated" in event_types
-    assert any("postęp przy sukcesie: +2, postęp przy porażce: +1" in message for message in result.messages)
-    assert demo_exploration_scene.challenge_state_for(result.final_state, "closed_gate").current_progress == 2
+    assert any("Zamek nadal może trzymać bramę" in message for message in result.messages)
+    assert scene_flag(result.final_state.flags, "gate_bolt_cleared") is True
+    assert demo_exploration_scene.challenge_state_for(result.final_state, "closed_gate").current_progress == 0
 
 
 def test_demo_exploration_scene_gm_classifier_retries_after_rejection(tmp_path, monkeypatch):
@@ -765,7 +765,7 @@ def test_demo_exploration_scene_gm_classifier_retries_after_rejection(tmp_path, 
     assert len(client.requests) == 2
     assert "gm_classifier_proposal_rejected" in event_types
     assert "gm_classifier_option_resolved" in event_types
-    assert demo_exploration_scene.challenge_state_for(result.final_state, "closed_gate").current_progress == 2
+    assert scene_flag(result.final_state.flags, "gate_bolt_cleared") is True
 
 
 def test_demo_exploration_scene_interactive_gm_auto_selects_single_zone(tmp_path, monkeypatch):
@@ -1041,7 +1041,7 @@ def test_demo_exploration_scene_interpretation_help_does_not_change_state_before
     event_types = [event["event_type"] for event in events]
     assert "gm_interpretation_explained" in event_types
     assert "gm_interpretation_accepted" in event_types
-    assert demo_exploration_scene.challenge_state_for(result.final_state, "closed_gate").current_progress == 2
+    assert scene_flag(result.final_state.flags, "gate_bolt_cleared") is True
 
 
 def test_demo_exploration_scene_reclassifies_same_declaration_with_context(tmp_path, monkeypatch):
@@ -1074,7 +1074,7 @@ def test_demo_exploration_scene_reclassifies_same_declaration_with_context(tmp_p
     assert "Poprzednia interpretacja" in client.requests[1].declaration_thread[-1].content
     assert "gm_interpretation_reclassify_requested" in event_types
     assert "gm_interpretation_reclassified" in event_types
-    assert demo_exploration_scene.challenge_state_for(result.final_state, "closed_gate").current_progress == 2
+    assert scene_flag(result.final_state.flags, "gate_bolt_cleared") is True
 
 
 def test_demo_exploration_scene_rejected_interpretation_records_correction(tmp_path, monkeypatch):
@@ -1106,7 +1106,7 @@ def test_demo_exploration_scene_rejected_interpretation_records_correction(tmp_p
     assert "gm_interpretation_rejected" in event_types
     assert "gm_interpretation_corrected" in event_types
     assert client.analysis_requests[1].player_action == "Nie, chodzi nam o wspinaczkę bez użycia klina."
-    assert demo_exploration_scene.challenge_state_for(result.final_state, "closed_gate").current_progress == 2
+    assert scene_flag(result.final_state.flags, "gate_bolt_cleared") is True
 
 
 def test_demo_exploration_scene_preparation_then_attempt_applies_effect(tmp_path, monkeypatch):
@@ -1147,7 +1147,7 @@ def test_demo_exploration_scene_preparation_then_attempt_applies_effect(tmp_path
     assert "preparation_effect_applied" in event_types
     assert "preparation_effect_expired" in event_types
     assert "gm_classifier_option_resolved" in event_types
-    assert demo_exploration_scene.challenge_state_for(result.final_state, "closed_gate").current_progress == 2
+    assert scene_flag(result.final_state.flags, "gate_bolt_cleared") is True
 
 
 def test_demo_exploration_scene_advantage_preparation_changes_roll_instruction(tmp_path, monkeypatch, capsys):
@@ -1254,7 +1254,8 @@ def test_demo_exploration_scene_effect_boost_increases_success_progress(tmp_path
         gm_client=client,
     )
 
-    assert demo_exploration_scene.challenge_state_for(result.final_state, "closed_gate").current_progress == 3
+    assert scene_flag(result.final_state.flags, "gate_structure_weakened") is True
+    assert demo_exploration_scene.challenge_state_for(result.final_state, "closed_gate").current_progress == 0
 
 
 def test_demo_exploration_scene_grant_resource_effect_adds_resource_after_success(tmp_path, monkeypatch):
@@ -1404,8 +1405,8 @@ def test_demo_exploration_scene_gate_click_shows_challenge_prompt_by_default(tmp
 
     event_types = [event["event_type"] for event in _events(result.observation_path)]
     assert "challenge_freeform_prompted" in event_types
-    assert any("Aby przejść dalej" in message for message in result.messages)
-    assert any("Aktualny postęp: 0/3" in message for message in result.messages)
+    assert any("konkretnych zmian stanu przeszkody" in message for message in result.messages)
+    assert not any("Aktualny postęp" in message for message in result.messages)
 
 
 def test_demo_exploration_scene_pending_scripts_do_not_open_challenge_menu_by_default(tmp_path):

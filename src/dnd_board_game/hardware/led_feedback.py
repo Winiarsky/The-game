@@ -33,7 +33,7 @@ class LedFeedback:
 
 
 class BoardConnectionLike(Protocol):
-    def set_leds(self, positions, rgb_color) -> None: ...
+    def set_leds(self, positions, rgb_color, *, brightness: int | None = None) -> None: ...
 
     def leds_off(self) -> None: ...
 
@@ -94,7 +94,12 @@ class BoardLedAdapter:
     def __init__(self, connection: BoardConnectionLike) -> None:
         self.connection = connection
 
-    def show_feedback(self, feedback: LedFeedback) -> None:
+    def show_feedback(
+        self,
+        feedback: LedFeedback,
+        *,
+        brightness: int | None = None,
+    ) -> None:
         updates: dict[tuple[int, int], tuple[int, int, int]] = {}
         for frame in sorted(feedback.frames, key=lambda item: LED_ROLE_PRIORITY[item.role]):
             for position in frame.positions:
@@ -103,10 +108,18 @@ class BoardLedAdapter:
             return
         positions = list(updates.keys())
         colors = [list(color) for color in updates.values()]
-        if len({tuple(color) for color in colors}) == 1:
-            self.connection.set_leds(positions, colors[0])
-        else:
-            self.connection.set_leds(positions, colors)
+        color_payload = colors[0] if len({tuple(color) for color in colors}) == 1 else colors
+        if brightness is None:
+            self.connection.set_leds(positions, color_payload)
+            return
+        try:
+            self.connection.set_leds(
+                positions,
+                color_payload,
+                brightness=brightness,
+            )
+        except TypeError:
+            self.connection.set_leds(positions, color_payload)
 
     def show_movement(self, feedback: LedFeedback) -> None:
         self.show_feedback(feedback)

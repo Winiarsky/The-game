@@ -1,0 +1,94 @@
+{
+  "flows": [
+    {
+      "id": "closed_gate_flow",
+      "challenge_id": "closed_gate",
+      "nodes": [
+        {
+          "id": "gate_blocked",
+          "label": "Brama nadal blokuje drogę",
+          "active_when": {
+            "no_flags": ["gate_passed"]
+          }
+        },
+        {
+          "id": "lock_closed",
+          "label": "Zamek pozostaje zamknięty",
+          "active_when": {
+            "no_flags": ["gate_lock_cleared", "gate_passed"]
+          }
+        },
+        {
+          "id": "bolt_exposed",
+          "label": "Otwarty zamek odsłania problem rygla",
+          "active_when": {
+            "all_flags": ["gate_lock_cleared"],
+            "no_flags": ["gate_bolt_cleared", "gate_passed"]
+          }
+        },
+        {
+          "id": "wall_route_known",
+          "label": "Drużyna zna obejście przez mur",
+          "active_when": {
+            "all_flags": ["gate_wall_route_found"],
+            "no_flags": ["gate_bypass_open", "gate_passed"]
+          }
+        },
+        {
+          "id": "gate_passed",
+          "label": "Droga na dziedziniec jest otwarta",
+          "active_when": {
+            "all_flags": ["gate_passed"]
+          },
+          "terminal": true
+        }
+      ],
+      "transitions": [
+        {
+          "id": "force_gate",
+          "goal_id": "force_entry",
+          "from": ["gate_blocked"],
+          "route_kind": "challenge_option",
+          "route_ref": "force_gate"
+        },
+        {
+          "id": "open_gate_lock",
+          "goal_id": "open_lock",
+          "from": ["lock_closed"],
+          "route_kind": "challenge_option",
+          "route_ref": "lockpick_gate"
+        },
+        {
+          "id": "survey_gate",
+          "goal_id": "look_around",
+          "from": ["gate_blocked"],
+          "route_kind": "observation_router",
+          "observation_ids": [
+            "survey_gate_surroundings",
+            "search_gate_alternate_route",
+            "inspect_gate_hinges",
+            "search_gate_cutting_tool",
+            "search_gate_traps",
+            "look_through_gate_gap"
+          ],
+          "default_observation_id": "survey_gate_surroundings"
+        },
+        {
+          "id": "remove_gate_bolt",
+          "goal_id": "remove_bolt",
+          "from": ["bolt_exposed"],
+          "route_kind": "challenge_option",
+          "route_ref": "remove_gate_bolt",
+          "source_action_ids": ["pry_bolt_with_plank"]
+        },
+        {
+          "id": "use_wall_route",
+          "goal_id": "use_wall_route",
+          "from": ["wall_route_known"],
+          "route_kind": "challenge_option",
+          "route_ref": "find_way_around"
+        }
+      ]
+    }
+  ]
+}

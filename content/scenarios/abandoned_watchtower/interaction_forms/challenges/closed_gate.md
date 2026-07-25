@@ -33,11 +33,13 @@ Brama jest pierwszą realną przeszkodą eksploracyjną sceny. Ma sprawdzić, cz
 ### Zasady Prowadzenia
 - Nie kanalizuj graczy do jednej gotowej opcji. LLM/MG ma interpretować deklarację drużyny i dobrać mechanikę do opisu.
 - Nagradzaj wcześniejsze badanie bramy, sensowne użycie narzędzi, asekurację i ciche działanie.
-- Siłowe działania mogą szybko dawać duży postęp, ale zwykle generują hałas.
+- Siłowe działania mogą od razu usunąć obie blokady, ale zwykle generują hałas.
 - Ciche, precyzyjne działania powinny być mniej ryzykowne pod względem hałasu, ale mogą wymagać lepszego opisu, narzędzia albo trudniejszego testu.
 - Nie zdradzaj od razu, że zawiasy są najsłabszym punktem. Ujawnij to po badaniu bramy, dobrym opisie działania albo sukcesie odpowiedniego testu.
 - Jeśli gracze pytają o ryzyko, można opisać je fabularnie: skrzypienie, mokre drewno, kolce na górze, zatarty zamek, niestabilne okucia.
-- Fail-forward: porażka nie powinna blokować sceny. Może dawać mniejszy postęp, hałas, stratę czasu, drobną ranę albo komplikację.
+- Fail-forward nie oznacza abstrakcyjnych punktów postępu. Porażka może trwale
+  zmienić konkretny element bramy, podnieść czujność goblinów, zastawić zasadzkę
+  albo zranić wykonującego próbę. Dozwolone próby można powtarzać.
 
 ### Wiedza I Ograniczenia
 - Brama nie ma magicznego hasła ani sekretnego przycisku otwierającego przejście.
@@ -63,6 +65,56 @@ Dla obiektu/lokacji:
 - stan fizyczny: stara drewniana brama z metalowymi okuciami, zawiasami i zardzewialym zamkiem
 - czy jest zamknięty/uszkodzony/aktywny: zamknieta / stara / zatarty zamek / skorodowane zawiasy / rygiel po wewnetrznej stronie
 - czy jest niebezpieczny: kolce na gorze, wystajace gwozdzie, ryzyko upadku przy wspinaczce
+
+### 7A. Cele Widoczne Dla Graczy
+
+- `force_entry`: Wyważcie bramę — `allow`: jedna postać, pomoc albo test grupowy.
+- `open_lock`: Otwórzcie zamek — `must`: jedna postać.
+- `look_around`: Rozejrzyjcie się — `must`: jedna wybrana postać; opis graczy
+  rozstrzyga, czy chodzi o oczywisty materiał bez rzutu, czy ukryte znalezisko.
+- `remove_bolt`: Zdejmijcie rygiel — pojawia się dopiero po
+  `gate_lock_cleared`, ma ilustrację rygla i pozwala na jedną postać lub pomocnika.
+  Znaleziona `gate_rotten_planks` ma proceduralne użycie `pry_bolt_with_plank`:
+  Strength/Athletics ST 12 i autorskie konsekwencje bez klasyfikowania improwizacji
+  przez LLM.
+- `use_wall_route`: Przejdźcie odkrytą drogą — pojawia się dopiero po
+  `gate_wall_route_found`.
+
+Po wyborze gracze opisują metodę. Cel nie przyznaje premii i nie zastępuje
+sprawdzenia przedmiotów oraz elementów sceny. Kafelki znikają, gdy ich konkretny
+rezultat został już osiągnięty: nie można drugi raz otworzyć otwartego zamka ani
+ponownie odkryć tego samego słabego punktu.
+
+### 7AA. Reguły Metod
+
+- `quiet_tradeoff`: jawne „po cichu” lub „bez hałasu” daje `-1` do próby.
+  Sukces nie zwiększa czujności goblinów, a hałas porażki jest mniejszy o `1`.
+- Lina z hakiem nadal daje `+2` wyłącznie przez istniejący zasób `rope` i pasujący
+  tag `climbing`.
+
+### 7AB. Styl Narracji
+
+- Instancja: `heroic_dnd`, bohaterskie fantasy z lekką ironią starej bramy.
+- `force_entry`: `heroic_charge`, dynamiczny power fantasy z sytuacyjnym humorem.
+- `look_around`: `tense_discovery`, bez humoru i ironii; napięcie budowane detalem.
+
+### 7AC. Kontekstowe „Rozejrzyjcie się”
+
+- „Szukamy czegoś ciężkiego, czym można wyważyć bramę” albo parafraza funkcjonalna:
+  bez rzutu, semantyczne dopasowanie istniejących desek i kamieni.
+- „Szukamy czegoś przydatnego/interesującego”: stopniowane
+  `survey_gate_surroundings`; progi ujawniają materiały, zawias, przejście i piłę.
+- „Szukamy alternatywnej drogi”: `search_gate_alternate_route`, rzut odkrywający
+  `gate_wall_route_found`; nowa karta może doprowadzić do zaskoczenia goblinów.
+- „Oglądam zawiasy / gdzie najlepiej podważyć”: `inspect_gate_hinges`.
+- „Szukam piły / czegoś do cięcia drewna”: `search_gate_cutting_tool`.
+- Pułapki i zaglądanie przez szczelinę nadal korzystają z własnych obserwacji.
+- Przykłady są semantycznymi wzorcami, a nie hasłami wymagającymi dosłownego tekstu.
+
+Pole wiadomości pod kafelkami służy wyłącznie rozmowie z MG. Pytanie o to, czy
+brama jest strzeżona, nie odkrywa goblinów i nie tworzy rzutu; MG sugeruje
+nasłuchiwanie albo zajrzenie przez szczelinę. Metodę działania wpisuje się dopiero
+w polu wybranej karty.
 
 ### 7B. Dostępne Przedmioty I Materiały
 
@@ -124,8 +176,8 @@ Propozycja docelowa:
 }
 ```
 
-Lokalne limity / konsekwencje do przyszlego JSON:
-- `force`: moze szybko dac duzy postep, ale zwykle generuje halas.
+Lokalne limity / konsekwencje:
+- `force`: może usunąć zamek i rygiel w jednej próbie, ale zwykle generuje hałas.
 - `crafting`: moze byc cichsze i stabilniejsze, szczegolnie po odkryciu skorodowanego zawiasu.
 - `search`: moze ujawnic `weak_left_hinge` albo `craftsman_logo`.
 - `stealth`: dozwolone, ale porazka zwieksza halas albo marnuje czas.
@@ -147,6 +199,10 @@ Informacja 2:
 
 ## 12. Możliwe Efekty Mechaniczne
 - ustawia flagę: `gate_passed`
+- blokady: `gate_lock_cleared`, `gate_bolt_cleared`
+- przygotowanie: `weak_left_hinge_found`, `gate_structure_weakened`,
+  `gate_ram_materials_found`, `gate_saw_found`, `gate_wall_route_found`
+- stan przeciwników: `gate_goblin_ambush_prepared`, `gate_critical_breach`
 - daje zasób: nie
 - zabiera zasób: nie
 - ujawnia punkt: nie
@@ -171,20 +227,26 @@ Dla jakich sytuacji:
 - przejscie gora przez brame bez przygotowania: medium/hard, zależnie od opisu zabezpieczenia i asekuracji
 
 ## 14. Sukces / Porażka / Krytyczne Wyniki
-Sukces:
-- co się dzieje: brama sie otwiera albo wyraznie oslabia, zależnie od deklaracji
-- jaki efekt mechaniczny: progress pointy, flaga pomocnicza albo bonus/przygotowanie do nastepnego rzutu
-
-Porażka:
-- co się dzieje: brama stawia opor
-- jaki efekt mechaniczny: mniej progress pointow, kara do nastepnych rzutow, rany, halas, stracony czas albo komplikacja
-
-Krytyczny sukces: wyjatkowo dobrze otwieracie brame
-- co dodatkowo: dodatkowe progress pointy, redukcja halasu
-
-Krytyczna porażka: brama okazuje sie bardziej stabilna niz sie wydaje
-- co się pogarsza: brak albo redukcja progress pointow, powazniejsze konsekwencje, np. zaklinowanie zamka, upadek, skaleczenie albo duzy halas
-- wspinaczka `vault_gate`: uruchamia data-driven hazard `fall_from_gate`; prowadzący próbę wykonuje fizyczny Dexterity save ST 12, sukces redukuje `1d6 bludgeoning` o połowę, porażka stosuje pełne obrażenia
+- `force_gate`, krytyczny sukces: puszcza zamek i rygiel, czujność nie rośnie,
+  `gate_critical_breach` daje drużynie zaskoczenie.
+- `force_gate`, sukces: puszcza zamek i rygiel, czujność rośnie o 2.
+- `force_gate`, porażka: puszcza tylko zamek, czujność osiąga 3, gobliny
+  przygotowują zasadzkę; próbę można powtórzyć.
+- `force_gate`, krytyczna porażka: żadna blokada nie puszcza, czujność osiąga 3,
+  gobliny przygotowują zasadzkę, a wykonujący próbę rozstrzyga hazard obrażeń.
+- Otwarty zamek obniża ST późniejszego wyważania o 2. Zdjęty rygiel obniża je o 3.
+  Odkryty słaby zawias i osłabiona konstrukcja obniżają je o kolejne 2 każdy.
+- `lockpick_gate`, sukces: otwiera wyłącznie zamek; rygiel nadal trzyma bramę.
+  Kafelek otwierania zamka znika.
+- `remove_gate_bolt`, sukces: zdejmuje rygiel; właściwy test i modyfikatory
+  zależą od opisanej metody, ale skutki flagowe pozostają autorskie.
+- `find_way_around`, sukces: ustawia `gate_bypass_open` oraz
+  `gate_wall_bypass_surprise`; wejście przy hałasie najwyżej 1 zaskakuje gobliny.
+- Podważanie zawiasu albo budowa narzędzia nadal mogą ustawić
+  `gate_structure_weakened`, lecz nie mają osobnego kafelka — wynikają z opisu
+  działania po znalezieniu odpowiednich elementów.
+- krytyczna porażka `force_gate` uruchamia `force_gate_backlash`: Constitution
+  save ST 10 przeciw `1d6 bludgeoning`, połowa obrażeń przy sukcesie.
 - formularz nowej opcji powinien jawnie podać: trigger hazardu, narrację, ability/ST save'a, skutek sukcesu, skutek porażki oraz typ i kość obrażeń; zagrożenie nie może istnieć wyłącznie w opisie dla LLM
   
 
@@ -197,12 +259,16 @@ Krytyczna porażka: brama okazuje sie bardziej stabilna niz sie wydaje
 - limit zasobów: jeden istotny zasob/narzedzie na probe, chyba ze runtime pozniej obsluzy laczenie zasobow
 
 ## 16. Czy Interakcja Ma Progres?
-Tak.
+Nie ma abstrakcyjnego paska postępu.
 
-Jeśli tak:
-- ile punktów postępu potrzeba:  `3`
-- co daje postęp: brama zaczyna coraz bardziej sie otwierac, rygiel/okucia puszczaja albo drużyna zdobywa praktyczna droge przejscia
-- co kończy interakcję: osiągnięcie progressu i ustawienie `gate_passed`
+- Stan przejścia opisują dwie blokady: `gate_lock_cleared` i
+  `gate_bolt_cleared`.
+- Interakcję kończy usunięcie obu blokad albo ustawienie alternatywnej flagi
+  `gate_bypass_open`.
+- `gate_passed` jest ustawiane automatycznie po spełnieniu jednego z tych
+  warunków.
+- Osobny licznik `noise` ma zakres 0–3 i oznacza czujność goblinów:
+  0 — nieświadome, 1–2 — podejrzliwe/gotowe, 3 — przygotowana zasadzka.
 
 ## 17. Konsekwencje Długoterminowe
 - NPC pamięta: niedotyczy

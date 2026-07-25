@@ -19,6 +19,7 @@
       "encounter_triggers": "exploration/encounter_triggers.json",
       "npc_transitions": "exploration/npc_transitions.json",
       "observations": "exploration/observations.json",
+      "flows": "exploration/flows.json",
       "traps": "exploration/traps.json",
       "resources": "exploration/resources.json",
       "initial_resources": "exploration/initial_resources.json"

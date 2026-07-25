@@ -53,7 +53,7 @@ MECHANIC_TOOLS: dict[ExplorationMechanicId, ExplorationMechanicTool] = {
     ExplorationMechanicId.LEAD_WITH_HELP_CHECK: ExplorationMechanicTool(
         id=ExplorationMechanicId.LEAD_WITH_HELP_CHECK,
         label="Prowadzący z pomocą",
-        description="Jedna postać prowadzi działanie, a druga pomaga; docelowo pomoc daje przewagę prowadzącemu.",
+        description="Jedna postać wykonuje test z przewagą, a druga pomaga i nie wykonuje osobnego rzutu.",
         participants=CheckParticipants.LEAD_WITH_HELP,
         aggregations=(CheckAggregation.LEAD_RESULT,),
     ),

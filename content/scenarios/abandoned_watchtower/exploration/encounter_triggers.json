@@ -15,34 +15,41 @@
         "default_narration": "Brama ustępuje, a drużyna i gobliny dostrzegają się niemal jednocześnie. Nikt nie rozpoczyna starcia z przewagą zaskoczenia.",
         "rules": [
           {
-            "id": "forced_breach",
-            "outcome": "no_surprise",
-            "title": "Głośne wejście",
-            "narration": "Brama ustępuje z trzaskiem. Gobliny wiedzą, że ktoś nadchodzi, ale drużyna wchodzi gotowa na natychmiastowe starcie. Nikt nie jest zaskoczony.",
-            "completion_any_tags": ["heavy_force"]
-          },
-          {
-            "id": "alerted_without_reconnaissance",
+            "id": "ambush_prepared_by_failure",
             "outcome": "enemies_surprise_party",
             "title": "Gobliny przygotowały zasadzkę",
-            "narration": "Hałas uprzedził gobliny, a drużyna nie rozpoznała zagrożenia za bramą. Przeciwnicy wykorzystują pierwsze sekundy starcia.",
-            "min_noise": 3,
-            "forbidden_flags": ["gate_goblins_spotted"]
+            "narration": "Wcześniejsze niepowodzenie dało goblinom czas na przygotowanie pułapki. Kiedy przejście się otwiera, przeciwnicy czekają już na właściwy moment.",
+            "required_flags": ["gate_goblin_ambush_prepared"]
           },
           {
-            "id": "alerted_after_reconnaissance",
-            "outcome": "no_surprise",
-            "title": "Obie strony są przygotowane",
-            "narration": "Gobliny słyszały drużynę, lecz wcześniejsze rozpoznanie zdradziło ich obecność. Obie strony rozpoczynają walkę świadomie.",
-            "min_noise": 3,
-            "required_flags": ["gate_goblins_spotted"]
+            "id": "ambush_prepared_by_alert",
+            "outcome": "enemies_surprise_party",
+            "title": "Gobliny przygotowały zasadzkę",
+            "narration": "Kolejne odgłosy pracy przy bramie dały goblinom dość czasu, by przygotować pozycje i prostą pułapkę przy wejściu.",
+            "min_noise": 3
+          },
+          {
+            "id": "hidden_wall_entry",
+            "outcome": "party_surprises_enemies",
+            "title": "Bohaterowie wchodzą bokiem",
+            "narration": "Drużyna wykorzystuje odkryte przejście przez mur i pojawia się na dziedzińcu z kierunku, którego gobliny nie pilnowały. Taktyka goblinów właśnie odkrywa pojęcie drzwi bocznych.",
+            "max_noise": 1,
+            "required_flags": ["gate_wall_bypass_surprise"]
+          },
+          {
+            "id": "critical_breach",
+            "outcome": "party_surprises_enemies",
+            "title": "Błyskawiczne przełamanie",
+            "narration": "Brama ustępuje w jednej heroicznej chwili. Gobliny miały podejrzenia, lecz zdecydowanie nie spodziewały się wejścia z własnym refrenem bitewnym.",
+            "max_noise": 1,
+            "required_flags": ["gate_critical_breach"]
           },
           {
             "id": "quiet_entry",
             "outcome": "party_surprises_enemies",
             "title": "Ciche wejście",
             "narration": "Brama otwiera się wystarczająco cicho, by gobliny nie zdążyły zareagować. Drużyna zaskakuje przeciwników.",
-            "max_noise": 2
+            "max_noise": 0
           }
         ]
       },

@@ -24,6 +24,7 @@
         "led_offset": 0,
         "led_count": 620,
         "brightness": 128,
+        "scan_brightness": 255,
         "color_order": "grb",
         "request_timeout_s": 2.0
     }

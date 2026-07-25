@@ -142,6 +142,11 @@ class CheckParticipants(StrEnum):
     SELECTED_ACTORS = "selected_actors"
 
 
+class InteractionParticipantMode(StrEnum):
+    MUST = "must"
+    ALLOW = "allow"
+
+
 class CheckAggregation(StrEnum):
     LEAD_RESULT = "lead_result"
     HIGHEST = "highest"
@@ -826,6 +831,238 @@ class PendingNpcTransition:
 
 
 @dataclass(frozen=True, slots=True)
+class NarrativeStyle:
+    preset: str = "heroic_dnd"
+    tone: str = (
+        "Bohaterskie power fantasy w duchu przygody D&D: odważne czyny, barwne "
+        "obrazy i drużyna traktowana jak przyszłe legendy."
+    )
+    humor_level: str = "medium"
+    irony_level: str = "light"
+    dramatic_intensity: str = "high"
+    guidance: str = (
+        "Humor ma wynikać z postaci, pecha i reakcji świata. Zachowaj miejsce na "
+        "szczere, poważne uderzenia fabularne i nie obracaj każdego sukcesu w żart."
+    )
+
+    def __post_init__(self) -> None:
+        if not self.preset.strip() or not self.tone.strip():
+            raise ValueError("Narrative style requires preset and tone.")
+        allowed_levels = {"none", "light", "medium", "high"}
+        if self.humor_level not in allowed_levels:
+            raise ValueError("Narrative style humor_level is invalid.")
+        if self.irony_level not in allowed_levels:
+            raise ValueError("Narrative style irony_level is invalid.")
+        if self.dramatic_intensity not in allowed_levels:
+            raise ValueError("Narrative style dramatic_intensity is invalid.")
+
+    def as_payload(self) -> dict[str, object]:
+        return {
+            "preset": self.preset,
+            "tone": self.tone,
+            "humor_level": self.humor_level,
+            "irony_level": self.irony_level,
+            "dramatic_intensity": self.dramatic_intensity,
+            "guidance": self.guidance,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class InteractionSourceAction:
+    id: str
+    source_ref: str
+    option_id: str
+    label: str
+    narration: str
+
+    def __post_init__(self) -> None:
+        if not all(
+            value.strip()
+            for value in (
+                self.id,
+                self.source_ref,
+                self.option_id,
+                self.label,
+                self.narration,
+            )
+        ):
+            raise ValueError(
+                "Interaction source action requires id, source_ref, option_id, label, and narration."
+            )
+
+    def as_payload(self) -> dict[str, str]:
+        return {
+            "id": self.id,
+            "source_ref": self.source_ref,
+            "option_id": self.option_id,
+            "label": self.label,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class InteractionGoal:
+    id: str
+    label: str
+    description: str
+    image: str = ""
+    followup_prompt: str = "Jak chcecie to zrobić?"
+    intent_ids: tuple[str, ...] = ()
+    suggested_tags: tuple[str, ...] = ()
+    required_flags: tuple[str, ...] = ()
+    forbidden_flags: tuple[str, ...] = ()
+    resolution_option_id: str | None = None
+    observation_ids: tuple[str, ...] = ()
+    default_observation_id: str | None = None
+    source_actions: tuple[InteractionSourceAction, ...] = ()
+    participant_mode: InteractionParticipantMode = InteractionParticipantMode.MUST
+    check_participants: CheckParticipants = CheckParticipants.SINGLE_ACTOR
+    allowed_check_participants: tuple[CheckParticipants, ...] = ()
+    custom: bool = False
+    narrative_style: NarrativeStyle | None = None
+
+    def __post_init__(self) -> None:
+        if not self.id.strip() or not self.label.strip() or not self.description.strip():
+            raise ValueError("Interaction goal requires id, label, and description.")
+        if not self.followup_prompt.strip():
+            raise ValueError("Interaction goal followup_prompt cannot be empty.")
+        if set(self.required_flags).intersection(self.forbidden_flags):
+            raise ValueError("Interaction goal cannot require and forbid the same flag.")
+        if self.check_participants == CheckParticipants.SELECTED_ACTORS:
+            raise ValueError(
+                "Interaction goal supports only single_actor, lead_with_help, or whole_party."
+            )
+        if any(
+            participants == CheckParticipants.SELECTED_ACTORS
+            for participants in self.allowed_check_participants
+        ):
+            raise ValueError(
+                "Interaction goal supports only single_actor, lead_with_help, or whole_party."
+            )
+        if (
+            self.participant_mode == InteractionParticipantMode.ALLOW
+            and not self.allowed_check_participants
+        ):
+            raise ValueError("Allow participant mode requires at least one allowed check type.")
+        if (
+            self.participant_mode == InteractionParticipantMode.ALLOW
+            and self.check_participants not in self.allowed_check_participants
+        ):
+            raise ValueError("The default check type must be included in allowed check types.")
+        if len(set(self.allowed_check_participants)) != len(self.allowed_check_participants):
+            raise ValueError("Interaction goal cannot repeat allowed check types.")
+        if (
+            self.default_observation_id is not None
+            and self.default_observation_id not in self.observation_ids
+        ):
+            raise ValueError(
+                "Interaction goal default_observation_id must be included in observation_ids."
+            )
+        source_action_ids = tuple(action.id for action in self.source_actions)
+        if len(source_action_ids) != len(set(source_action_ids)):
+            raise ValueError("Interaction goal cannot repeat source action ids.")
+
+    @property
+    def participant_options(self) -> tuple[CheckParticipants, ...]:
+        if self.participant_mode == InteractionParticipantMode.MUST:
+            return (self.check_participants,)
+        return self.allowed_check_participants
+
+    def as_payload(self) -> dict[str, object]:
+        return {
+            "id": self.id,
+            "label": self.label,
+            "description": self.description,
+            "image": self.image,
+            "followup_prompt": self.followup_prompt,
+            "intent_ids": list(self.intent_ids),
+            "suggested_tags": list(self.suggested_tags),
+            "resolution_option_id": self.resolution_option_id,
+            "observation_ids": list(self.observation_ids),
+            "default_observation_id": self.default_observation_id,
+            "source_actions": [action.as_payload() for action in self.source_actions],
+            "participant_mode": self.participant_mode.value,
+            "check_participants": self.check_participants.value,
+            "allowed_check_participants": [
+                participants.value for participants in self.participant_options
+            ],
+            "custom": self.custom,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class InteractionMethodRule:
+    id: str
+    label: str
+    description: str
+    goal_ids: tuple[str, ...] = ()
+    match_phrases: tuple[str, ...] = ()
+    modifier: int = 0
+    noise_delta: int = 0
+    success_noise_override: int | None = None
+    reason: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.id.strip() or not self.label.strip() or not self.description.strip():
+            raise ValueError("Interaction method rule requires id, label, and description.")
+        if not self.match_phrases:
+            raise ValueError("Interaction method rule requires at least one match phrase.")
+        if not -2 <= self.modifier <= 2:
+            raise ValueError("Interaction method rule modifier must be between -2 and +2.")
+        if self.success_noise_override is not None and self.success_noise_override < 0:
+            raise ValueError("Interaction method rule success noise override cannot be negative.")
+        if self.modifier == 0 and self.noise_delta == 0 and self.success_noise_override is None:
+            raise ValueError("Interaction method rule must change a modifier or noise.")
+        if self.modifier != 0 and not self.reason.strip():
+            raise ValueError("Interaction method rule with a modifier requires reason.")
+
+    def as_payload(self) -> dict[str, object]:
+        return {
+            "id": self.id,
+            "label": self.label,
+            "description": self.description,
+            "goal_ids": list(self.goal_ids),
+            "modifier": self.modifier,
+            "noise_delta": self.noise_delta,
+            "success_noise_override": self.success_noise_override,
+            "reason": self.reason,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class NpcKeyIssue:
+    id: str
+    kind: str
+    description: str
+    match_phrases: tuple[str, ...]
+    narration: str
+    npc_response: str
+    effects: tuple[dict[str, object], ...] = ()
+    visibility: str = "hidden"
+    goal_ids: tuple[str, ...] = ()
+    repeatable: bool = False
+    consumed_if_flags: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.id.strip() or not self.kind.strip() or not self.description.strip():
+            raise ValueError("NPC key issue requires id, kind, and description.")
+        if self.visibility not in {"obvious", "hint", "hidden"}:
+            raise ValueError("NPC key issue visibility must be obvious, hint, or hidden.")
+        if not self.match_phrases:
+            raise ValueError("NPC key issue requires at least one match phrase.")
+        if not self.narration.strip() or not self.npc_response.strip():
+            raise ValueError("NPC key issue requires fictional narration and NPC response.")
+
+    def as_prompt_payload(self) -> dict[str, object]:
+        return {
+            "id": self.id,
+            "kind": self.kind,
+            "description": self.description,
+            "visibility": self.visibility,
+            "goal_ids": list(self.goal_ids),
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class NpcIntentPermission:
     intent: str
     status: str
@@ -924,6 +1161,9 @@ class NpcInteraction:
     capabilities: tuple[str, ...] = ()
     locked_information: tuple[NpcLockedInformation, ...] = ()
     policy: NpcInteractionPolicy = NpcInteractionPolicy()
+    goals: tuple[InteractionGoal, ...] = ()
+    key_issues: tuple[NpcKeyIssue, ...] = ()
+    narrative_style: NarrativeStyle = NarrativeStyle()
 
     def as_payload(self) -> dict[str, object]:
         return {
@@ -942,6 +1182,9 @@ class NpcInteraction:
             "capabilities": list(self.capabilities),
             "locked_information": [info.as_payload() for info in self.locked_information],
             "policy": self.policy.as_payload(),
+            "goals": [goal.as_payload() for goal in self.goals],
+            "key_issues": [issue.as_prompt_payload() for issue in self.key_issues],
+            "narrative_style": self.narrative_style.as_payload(),
         }
 
 
@@ -1329,11 +1572,19 @@ class ExplorationChallengeOption:
     color: tuple[int, int, int]
     description: str = ""
     success_message: str = ""
+    critical_success_message: str = ""
     failure_message: str = ""
     critical_failure_message: str = ""
     tags: tuple[str, ...] = ()
     unlocks_if_flag: str | None = None
     unlocks_if_resource_id: str | None = None
+    unavailable_if_flags: tuple[str, ...] = ()
+    unavailable_message: str = ""
+    dc_modifiers_if_flags: tuple[tuple[str, int], ...] = ()
+    critical_success_flags: tuple[str, ...] = ()
+    success_flags: tuple[str, ...] = ()
+    failure_flags: tuple[str, ...] = ()
+    critical_failure_flags: tuple[str, ...] = ()
     success_noise: int = 0
     failure_noise: int = 0
     critical_failure_noise: int = 0
@@ -1367,6 +1618,12 @@ class ExplorationChallenge:
     reveals_on_complete: tuple[str, ...] = ()
     llm_context: LlmContext = LlmContext()
     llm_policy: LlmChallengePolicy = LlmChallengePolicy()
+    goals: tuple[InteractionGoal, ...] = ()
+    method_rules: tuple[InteractionMethodRule, ...] = ()
+    narrative_style: NarrativeStyle = NarrativeStyle()
+    completion_all_flags: tuple[str, ...] = ()
+    completion_any_flags: tuple[str, ...] = ()
+    noise_cap: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1714,6 +1971,8 @@ def available_challenge_options(
     result: list[ExplorationChallengeOption] = []
     for option in challenge.options:
         llm_unlocked = scene_flag(state.flags, f"llm_unlocked_option:{option.id}", False)
+        if any(bool(scene_flag(state.flags, flag, False)) for flag in option.unavailable_if_flags):
+            continue
         if option.unlocks_if_flag is not None and not scene_flag(state.flags, option.unlocks_if_flag, False) and not llm_unlocked:
             continue
         if (
@@ -1951,11 +2210,18 @@ def resolve_challenge_option(
         raise ValueError(f"Challenge {challenge.id} is already completed.")
     check = resolve_ability_check(roll, option.ability_check.dc)
     success = check.success
+    critical_success = roll.is_natural_20 and success
     critical_failure = roll.is_natural_1 and not success
-    raw_progress_added = option.progress_on_success + max(0, progress_boost_on_success) if success else option.progress_on_failure
+    uses_flag_completion = bool(challenge.completion_all_flags or challenge.completion_any_flags)
+    raw_progress_added = (
+        0
+        if uses_flag_completion
+        else option.progress_on_success + max(0, progress_boost_on_success)
+        if success
+        else option.progress_on_failure
+    )
     progress_added = min(challenge.progress_required - current.current_progress, raw_progress_added)
     progress = min(challenge.progress_required, current.current_progress + progress_added)
-    completed = progress >= challenge.progress_required
     noise_added = _challenge_noise(option, roll, success, critical_failure)
     complications_added = _challenge_complications(option, success, critical_failure)
     if resource is not None:
@@ -1967,6 +2233,28 @@ def resolve_challenge_option(
 
     complications = tuple(dict.fromkeys((*current.complications, *complications_added)))
     flags = state.flags
+    outcome_flags = (
+        option.critical_success_flags
+        if critical_success
+        else option.success_flags
+        if success
+        else option.critical_failure_flags
+        if critical_failure
+        else option.failure_flags
+    )
+    for flag in outcome_flags:
+        flags = set_scene_flag(flags, flag, True)
+    completed_by_all = bool(challenge.completion_all_flags) and all(
+        bool(scene_flag(flags, flag, False)) for flag in challenge.completion_all_flags
+    )
+    completed_by_any = bool(challenge.completion_any_flags) and any(
+        bool(scene_flag(flags, flag, False)) for flag in challenge.completion_any_flags
+    )
+    completed = (
+        completed_by_all or completed_by_any
+        if uses_flag_completion
+        else progress >= challenge.progress_required
+    )
     if completed:
         flags = set_scene_flag(flags, challenge.completed_flag, True)
     if resource is not None:
@@ -1975,7 +2263,12 @@ def resolve_challenge_option(
     updated = ExplorationChallengeState(
         challenge_id=challenge.id,
         current_progress=progress,
-        noise=current.noise + noise_added,
+        noise=min(
+            challenge.noise_cap,
+            current.noise + noise_added,
+        )
+        if challenge.noise_cap is not None
+        else current.noise + noise_added,
         complications=complications,
         completed=completed,
         attempts=(
@@ -1997,7 +2290,17 @@ def resolve_challenge_option(
         ),
     )
     new_state = replace(state, flags=flags, challenge_states=_replace_challenge_state(state, updated))
-    message = _challenge_result_message(challenge, option, roll, success, critical_failure, progress_added, updated, resource)
+    message = _challenge_result_message(
+        challenge,
+        option,
+        roll,
+        success,
+        critical_success,
+        critical_failure,
+        progress_added,
+        updated,
+        resource,
+    )
     return ChallengeResult(
         state=new_state,
         challenge=challenge,
@@ -2065,6 +2368,7 @@ def _challenge_result_message(
     option: ExplorationChallengeOption,
     roll: D20RollResult,
     success: bool,
+    critical_success: bool,
     critical_failure: bool,
     progress_added: int,
     updated: ExplorationChallengeState,
@@ -2072,6 +2376,8 @@ def _challenge_result_message(
 ) -> str:
     if critical_failure and option.critical_failure_message:
         base = option.critical_failure_message
+    elif critical_success and option.critical_success_message:
+        base = option.critical_success_message
     elif success:
         base = option.success_message or "Podejście działa."
     else:
@@ -2080,10 +2386,17 @@ def _challenge_result_message(
     noise_text = f" Hałas: {updated.noise}." if updated.noise else " Bez dodatkowego hałasu."
     complications_text = f" Komplikacje: {', '.join(updated.complications)}." if updated.complications else ""
     completed_text = " Wyzwanie zakończone." if updated.completed else ""
+    progress_text = (
+        ""
+        if challenge.completion_all_flags or challenge.completion_any_flags
+        else (
+            f" Dodany postęp: {progress_added}. Postęp {challenge.name}: "
+            f"{updated.current_progress}/{challenge.progress_required}."
+        )
+    )
     return (
-        f"{base}{resource_text} Wynik testu: {roll.total}. "
-        f"Dodany postęp: {progress_added}. Postęp {challenge.name}: "
-        f"{updated.current_progress}/{challenge.progress_required}.{noise_text}{complications_text}{completed_text}"
+        f"{base}{resource_text} Wynik testu: {roll.total}.{progress_text}"
+        f"{noise_text}{complications_text}{completed_text}"
     )
 
 

@@ -137,6 +137,49 @@ def test_exploration_ui_renders_hazard_saving_throw_details() -> None:
     assert "Ryzyko obrażeń:" in javascript
 
 
+def test_exploration_goal_ui_selects_participants_before_sending_method() -> None:
+    html, javascript, stylesheet = _page_assets(_client())
+
+    assert "function interactionParticipantPickerHtml" in javascript
+    assert "function toggleInteractionActor" in javascript
+    assert "function selectWholePartyForInteraction" in javascript
+    assert "participant_actor_ids:" in javascript
+    assert "check_participants: selectedCheckParticipants" in javascript
+    assert "Pierwsza wybrana postać prowadzi" in javascript
+    assert "Cała drużyna" in javascript
+    assert 'id="goal-action"' in javascript
+    assert "function sendGoalAction" in javascript
+    assert "{text, conversation_only: true}" in javascript
+    assert "To jest rozmowa, nie deklaracja działania ani rzut." in html
+    assert ".interaction-actor-card.selected" in stylesheet
+    assert "state.active_challenge.uses_progress" in javascript
+
+
+def test_interaction_screen_scrolls_and_goal_images_keep_their_aspect_ratio() -> None:
+    _html, _javascript, stylesheet = _page_assets(_client())
+
+    assert "body.chat-instance-mode #action-panel" in stylesheet
+    assert "overflow-y: auto" in stylesheet
+    assert "overscroll-behavior: contain" in stylesheet
+    assert "aspect-ratio: 16 / 9" in stylesheet
+    assert "object-fit: cover" in stylesheet
+    assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in stylesheet
+
+
+def test_actor_portrait_ui_covers_party_tests_combat_and_messages() -> None:
+    _html, javascript, stylesheet = _page_assets(_client())
+
+    assert "function actorPortraitHtml" in javascript
+    assert "actorPortraitHtml(actor, 'summary')" in javascript
+    assert "actorPortraitHtml(actor, 'choice')" in javascript
+    assert "actorPortraitHtml(entry, 'initiative')" in javascript
+    assert "actorPortraitHtml(actor, 'turn')" in javascript
+    assert "function messageCardHtml" in javascript
+    assert "actorForMessage(message)" in javascript
+    assert ".actor-portrait-choice" in stylesheet
+    assert ".actor-portrait-message" in stylesheet
+
+
 def test_encounter_stealth_ui_uses_defined_modifier_formatter() -> None:
     _html, javascript, _stylesheet = _page_assets(_client())
 
@@ -181,6 +224,11 @@ def test_exploration_ui_page_uses_board_first_player_shell():
     assert html.index('data-side-panel-content="developer"') < html.index('id="debug-payload"')
     assert "function setSidePanelTab" in javascript
     assert "function renderPartyShell" in javascript
+    assert "partySummaryActorHtml(currentActorState(actor))" in javascript
+    assert "function currentActorState" in javascript
+    assert "party-summary-hp-value" in javascript
+    assert "role=\"meter\"" in javascript
+    assert ".party-summary-hp { display: block; height: 7px;" in stylesheet
     assert "function renderBoardConnectionIndicator" in javascript
     assert "function actorStatesHtml" in javascript
     assert "function actorSpellsHtml" in javascript
@@ -591,7 +639,7 @@ def test_exploration_ui_combat_turn_controls_remain_available_during_board_scan(
     assert "drugim kliknięciem" not in html
 
 
-def test_idle_player_turn_shows_only_board_scan_and_routes_actions_through_own_tile_menu():
+def test_idle_player_turn_keeps_end_turn_next_to_board_scan_and_routes_other_actions_through_own_tile():
     client = _client()
 
     _html, javascript, _stylesheet = _page_assets(client)
@@ -611,9 +659,13 @@ def test_idle_player_turn_shows_only_board_scan_and_routes_actions_through_own_t
     assert "useCombatDash()" not in idle_turn_source
     assert "useCombatDodge()" not in idle_turn_source
     assert "useCombatDisengage()" not in idle_turn_source
-    assert "finishCombatTurn()" not in idle_turn_source
+    assert "finishCombatTurn()" in idle_turn_source
     assert "Kliknij pole ${actor.name || 'aktywnego bohatera'}" in javascript
-    assert "czary, akcje, ekwipunek i zakończenie tury" in javascript
+    assert "czary, akcje i ekwipunek" in javascript
+    assert "Turę możesz zakończyć także przyciskiem obok skanowania" in javascript
+    assert "Rzut obronny przeciwnika" in javascript
+    assert "path === '/api/combat/player-attack-confirm'" in javascript
+    assert "'Atak', 'Czar', 'Obrażenia'" in javascript
     assert "combat.context_menu.is_self_menu ? combatStabilizationHtml(combat)" in javascript
     assert "combat.targeting.kind === 'area'" in javascript
     assert "Pola ruchu są wyłączone" in javascript
@@ -678,6 +730,34 @@ def test_exploration_ui_serves_gate_preview_asset():
     assert response.content_type == "image/png"
 
 
+def test_exploration_ui_serves_every_gate_goal_tile_image():
+    client = _client(active=False)
+    names = (
+        "gate_force_entry.webp",
+        "gate_wall_route.webp",
+        "gate_lock.webp",
+        "gate_look_around.webp",
+        "gate_bolt.webp",
+    )
+
+    for name in names:
+        response = client.get(f"/scenario-assets/assets/{name}")
+        assert response.status_code == 200
+        assert response.content_type == "image/webp"
+
+
+def test_exploration_ui_serves_actor_portrait_and_exposes_its_url():
+    client = _client(active=False)
+
+    state = client.get("/api/state").get_json()
+    hero = next(actor for actor in state["actors"] if actor["id"] == "hero")
+    response = client.get(hero["portrait_url"])
+
+    assert hero["portrait_url"] == "/game-assets/portraits/abandoned_watchtower/hero.webp"
+    assert response.status_code == 200
+    assert response.content_type == "image/webp"
+
+
 def test_exploration_ui_prefills_board_settings_from_shared_config():
     client = _client()
 
@@ -706,6 +786,8 @@ def test_exploration_ui_state_keeps_gm_knowledge_behind_conversation_boundary():
         "noise",
         "completed",
         "complications",
+        "goals",
+        "uses_progress",
     }
 
 
@@ -1086,6 +1168,7 @@ def test_exploration_ui_reveals_selects_and_resolves_npc_point():
     point_state = point_response.get_json()
     assert point_state["active_point"]["id"] == "wounded_scout"
     assert point_state["active_point"]["npc"]["name"] == "Ranny zwiadowca"
+    assert point_state["active_point"]["npc"]["goals"][0]["id"] == "calm_scout"
     assert {"label": "Ranny zwiadowca", "value": "odkryty, ranny"} in point_state["scene_status"]
 
     action_response = client.post("/api/action", json={"text": "Uspokajamy zwiadowcę."})
@@ -1097,6 +1180,34 @@ def test_exploration_ui_reveals_selects_and_resolves_npc_point():
     accepted = client.post("/api/rolls", json={"rolls": {"hero": 20}}).get_json()
     assert {"key": "scout_calmed", "value": True} in accepted["flags"]
     assert {"label": "Ranny zwiadowca", "value": "uspokojony"} in accepted["scene_status"]
+
+
+def test_exploration_ui_applies_authored_npc_key_issue_without_roll():
+    session = _session()
+    client = create_app(session).test_client()
+    client.post("/api/action", json={"text": "Wyważamy bramę."})
+    client.post("/api/decision", json={"decision": "accept"})
+    client.post("/api/rolls", json={"rolls": {"hero": 16}})
+    _confirm_fallen_gate_setup(client)
+    session.state, _ = reveal_exploration_points(session.state, ("wounded_scout",))
+    client.post("/api/travel", json={"zone_id": "courtyard"})
+    client.post("/api/point", json={"point_id": "wounded_scout"})
+
+    response = client.post(
+        "/api/action",
+        json={
+            "text": "Dajemy słowo, że dostarczymy meldunki.",
+            "selected_goal_id": "calm_scout",
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["pending"] is None
+    assert {"key": "scout_calmed", "value": True} in data["flags"]
+    assert {"key": "scout_trusts_party", "value": True} in data["flags"]
+    assert data["conversation"]["entries"][-1]["title"] == "Ranny zwiadowca"
+    assert "Meldunki muszą dotrzeć" in data["conversation"]["entries"][-1]["body"]
 
 
 def test_exploration_ui_points_are_board_first_and_text_redirects_to_point_led():
