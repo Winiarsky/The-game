@@ -62,9 +62,31 @@ Dla NPC:
 
 - `calm_scout`: Uspokójcie zwiadowcę.
 - `help_scout`: Udzielcie mu pomocy.
-- `ask_scout`: Dowiedzcie się, co się stało.
+- `ask_scout`: Dowiedzcie się, co się stało; kafelek pojawia się dopiero po
+  zdobyciu zaufania.
 - `pressure_scout`: Wywrzyjcie presję.
-- `custom_scout`: Własny sposób.
+
+Kafelka ogólnego „Własny sposób” nie ma. Gracze wybierają cel, ale sposób jego
+osiągnięcia nadal opisują całkowicie swobodnie.
+
+### 7AA. Flow Rozmowy
+
+- `scout_untrusted`: dostępne są uspokojenie, pomoc i presja.
+- `scout_trusted`: uspokojenie znika, a pojawia się możliwość zdobywania
+  informacji; pomoc i presja pozostają dostępne.
+- `calm_scout` prowadzi zawsze do intencji `social`.
+- `help_scout` prowadzi zawsze do intencji `medical`.
+- `ask_scout` prowadzi zawsze do intencji `information`.
+- `pressure_scout` prowadzi zawsze do intencji `intimidation`.
+- Flow wybiera intencję przed wywołaniem LLM. Model interpretuje metodę i
+  odgrywa NPC, ale nie może przerzucić deklaracji na inny rodzaj działania.
+- `medical` ma autorski test `wisdom/medicine`, ST 12. Sukces ustawia leczenie,
+  stabilizację i zaufanie; porażka zapisuje komplikację medyczną.
+- Dla `social` ST nadal wynika z deterministycznej tabeli nastawienia i
+  sklasyfikowanego ryzyka prośby, natomiast flagi obu wyników pochodzą z policy,
+  nie z odpowiedzi LLM.
+- Przed opisaniem metody gracze wybierają prowadzącego i opcjonalnego
+  pomocnika. Presję wykonuje dokładnie jedna postać.
 
 ### 7B. Kluczowe Kwestie NPC
 
@@ -153,7 +175,13 @@ Proponowany model intencji dla tego NPC:
   },
   "intimidation": {
     "status": "allowed_with_consequence",
-    "notes": "Możliwe, ale trudne i ryzykowne."
+    "uses_social_reaction": false,
+    "check": {
+      "ability": "charisma",
+      "skill": "intimidation",
+      "dc": 18
+    },
+    "notes": "Możliwe, ale trudne i ryzykowne. Zawsze prowadzi do rzutu zamiast automatycznej odmowy z tabeli reakcji społecznej."
   },
   "magic": {
     "status": "allowed_with_context",

@@ -89,6 +89,87 @@
           "route_ref": "find_way_around"
         }
       ]
+    },
+    {
+      "id": "courtyard_search_flow",
+      "challenge_id": "courtyard_search",
+      "nodes": [
+        {
+          "id": "courtyard_unsearched",
+          "label": "Dziedziniec czeka na dokładne oględziny",
+          "active_when": {
+            "no_flags": ["courtyard_searched"]
+          }
+        },
+        {
+          "id": "courtyard_searched",
+          "label": "Najważniejsze ślady na dziedzińcu zostały odnalezione",
+          "active_when": {
+            "all_flags": ["courtyard_searched"]
+          },
+          "terminal": true
+        }
+      ],
+      "transitions": [
+        {
+          "id": "survey_courtyard",
+          "goal_id": "survey_courtyard",
+          "from": ["courtyard_unsearched"],
+          "route_kind": "challenge_option",
+          "route_ref": "inspect_tracks_courtyard"
+        }
+      ]
+    },
+    {
+      "id": "wounded_scout_flow",
+      "npc_id": "wounded_scout",
+      "nodes": [
+        {
+          "id": "scout_untrusted",
+          "label": "Zwiadowca jest ranny i nie ufa drużynie",
+          "active_when": {
+            "no_flags": ["scout_trusts_party", "scout_dead"]
+          }
+        },
+        {
+          "id": "scout_trusted",
+          "label": "Zwiadowca ufa drużynie",
+          "active_when": {
+            "all_flags": ["scout_trusts_party"],
+            "no_flags": ["scout_dead"]
+          }
+        }
+      ],
+      "transitions": [
+        {
+          "id": "calm_wounded_scout",
+          "goal_id": "calm_scout",
+          "from": ["scout_untrusted"],
+          "route_kind": "npc_intent",
+          "route_ref": "social"
+        },
+        {
+          "id": "help_wounded_scout",
+          "goal_id": "help_scout",
+          "from": ["scout_untrusted", "scout_trusted"],
+          "route_kind": "npc_intent",
+          "route_ref": "medical"
+        },
+        {
+          "id": "question_wounded_scout",
+          "goal_id": "ask_scout",
+          "from": ["scout_trusted"],
+          "route_kind": "npc_intent",
+          "route_ref": "information"
+        },
+        {
+          "id": "pressure_wounded_scout",
+          "goal_id": "pressure_scout",
+          "from": ["scout_untrusted", "scout_trusted"],
+          "route_kind": "npc_intent",
+          "route_ref": "intimidation"
+        }
+      ]
     }
   ]
 }

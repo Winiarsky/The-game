@@ -159,7 +159,6 @@ def create_app(session: ExplorationUiSession) -> Flask:
                         str(actor_id) for actor_id in raw_participant_ids
                     ),
                     conversation_only=bool(data.get("conversation_only", False)),
-                    infer_flow_route=bool(data.get("infer_flow_route", False)),
                 )
             )
         except Exception as exc:

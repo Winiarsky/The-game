@@ -26,7 +26,11 @@ def precombat_stealth_is_available(
 
     return bool(
         opening is not None
-        and opening.outcome == EncounterOpeningOutcome.PARTY_SURPRISES_ENEMIES
+        and opening.outcome
+        in {
+            EncounterOpeningOutcome.PARTY_CAN_HIDE,
+            EncounterOpeningOutcome.PARTY_INITIATIVE_ADVANTAGE_AND_CAN_HIDE,
+        }
     )
 
 

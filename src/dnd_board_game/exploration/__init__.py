@@ -35,6 +35,7 @@ from .flow_graph import (
     ExplorationFlowRouteKind,
     ExplorationFlowTransition,
     exploration_flow_for_challenge,
+    exploration_flow_for_npc,
 )
 
 from .effects import (
@@ -227,6 +228,7 @@ from .traps import (
     resolve_trap_action,
     reveal_trap,
     set_trap_status,
+    trap_activates_for_challenge,
     trap_state_for,
     trigger_trap,
 )
@@ -297,6 +299,7 @@ __all__ = [
     "ExplorationFlowRouteKind",
     "ExplorationFlowTransition",
     "exploration_flow_for_challenge",
+    "exploration_flow_for_npc",
     "ExplorationTrap",
     "ExplorationTrapAction",
     "ExplorationTrapActionResult",
@@ -433,6 +436,7 @@ __all__ = [
     "resolve_trap_action",
     "reveal_trap",
     "set_trap_status",
+    "trap_activates_for_challenge",
     "trap_state_for",
     "trigger_trap",
 ]

@@ -489,6 +489,9 @@ def test_load_abandoned_watchtower_builds_exploration_scene():
     )
     assert exploration.traps[0].id == "gate_alarm_wire"
     assert exploration.traps[0].detection_observation_id == "search_gate_traps"
+    assert exploration.traps[0].activation_forbidden_flags == (
+        "gate_critical_breach",
+    )
     assert exploration.traps[0].hazard.failure_effects[0]["type"] == "add_noise"
     gate_trigger = next(item for item in exploration.encounter_triggers if item.id == "gate_open_skirmish")
     assert gate_trigger.outcome_on_victory is not None
@@ -762,7 +765,7 @@ def test_load_abandoned_watchtower_builds_exploration_encounter_triggers():
         "ambush_prepared_by_alert",
         "hidden_wall_entry",
         "critical_breach",
-        "quiet_entry",
+        "critical_lock_and_bolt_entry",
     ]
     assert gate.opening_policy.rules[1].min_noise == 3
     assert gate.opening_policy.rules[1].outcome.value == "enemies_surprise_party"

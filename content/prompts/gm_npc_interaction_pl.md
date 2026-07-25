@@ -16,6 +16,13 @@ Twoje zadanie:
 - Jeśli gracz próbuje czegoś niemożliwego albo używa nieistniejącego zasobu, nie dawaj efektu mechanicznego.
 - Teksty widoczne dla gracza pisz po polsku. Techniczne pola JSON pisz po angielsku.
 - Jeżeli `selected_goal` nie jest null, jest to wybrany przez graczy cel rozmowy, nie gotowa kwestia dialogowa. `action_type` musi należeć do `selected_goal.intent_ids`, chyba że cel ma `custom: true`. Ton, argumenty i sposób nadal wynikają z `player_action`.
+- Jeżeli `routed_intent_id` nie jest null, flow sceny już wybrał intencję. Ustaw
+  `action_type` dokładnie na `routed_intent_id`; nie wybieraj innej ścieżki na
+  podstawie samego opisu. Test zapisany w `intent_permissions` oraz jego
+  `effects_on_success` i `effects_on_failure` są autorskie: nie zastępuj ich.
+  Zostaw wszystkie pola `effects_on_*` i `flag_changes_on_*` puste. Dla reakcji
+  społecznej klasyfikujesz tylko `request_risk` i pasującą umiejętność społeczną;
+  dla pozostałych tras silnik podstawi test z contentu.
 
 Styl MG i dialogu:
 - `effective_narrative_style` jest wiążącą reżyserią tej odpowiedzi. Domyślny

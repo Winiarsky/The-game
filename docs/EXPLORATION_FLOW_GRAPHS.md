@@ -1,6 +1,6 @@
 # Exploration Flow Graphs
 
-Exploration flow graphs organize authored scene routes without replacing D&D
+Exploration flow graphs organize authored scene and NPC routes without replacing D&D
 mechanics. They are deterministic content: the runtime maps a player-selected
 goal to one currently active route. The LLM interprets only the method described
 inside that goal; it cannot switch goals, activate a route whose state condition
@@ -8,7 +8,7 @@ is false, or invent its mechanical outcome.
 
 ## Runtime model
 
-A graph belongs to one exploration challenge and contains:
+A graph belongs to exactly one exploration challenge or NPC and contains:
 
 - state-derived nodes with `all_flags`, `any_flags`, and `no_flags` conditions,
 - transitions connecting one player-facing goal to one or more source nodes,
@@ -24,7 +24,9 @@ Supported route kinds in the first vertical slice:
 - `challenge_option` — resolves through an authored challenge option and the
   normal D&D check flow,
 - `observation_router` — matches the declaration to one of the transition's
-  authored graded observations.
+  authored graded observations,
+- `npc_intent` — locks a selected NPC goal to one authored intent before the
+  method is sent to the LLM.
 
 ## Player declaration flow
 
@@ -61,6 +63,8 @@ visible goal card and its separate method field.
 
 The reference implementation is
 `content/scenarios/abandoned_watchtower/exploration/flows.json`.
+It contains both `closed_gate_flow` and the first NPC graph,
+`wounded_scout_flow`.
 
 ## LLM method contract
 
@@ -84,8 +88,8 @@ the reduced contract the preferred prompt format for migrated graph routes.
 
 Scenario loading rejects:
 
-- duplicate flow or challenge ownership,
-- unknown challenges, nodes, goals, options, observations, or source actions,
+- duplicate flow, challenge ownership or NPC ownership,
+- unknown challenges, NPCs, nodes, goals, intents, options, observations, or source actions,
 - goals missing a transition,
 - duplicate goal transitions,
 - non-terminal nodes without outgoing routes,
@@ -98,7 +102,24 @@ Challenges without a flow graph continue to use the legacy
 `observation_ids`, and `source_actions` fields.
 
 For a migrated challenge, the graph is authoritative for visible goals,
-routing and base check mechanics. Legacy goal fields remain temporarily as an
-adapter for validators and scenes without graphs. Later migrations should move
-the remaining source, observation and legacy declaration routing out of
-`ExplorationUiSession`.
+routing, observation scope and base check mechanics. Do not duplicate
+`required_flags`, `forbidden_flags`, `resolution_option_id`, `observation_ids`
+or `default_observation_id` on its goal cards. A goal may still define the
+descriptive body of a procedural `source_action`; the transition explicitly
+lists which of those action ids belong to the active route.
+
+`ExplorationGoalExecutionPlanner` is the application boundary between a
+selected card and UI pending state. It revalidates the active route, resolves
+the authored participant policy, checks actor/tool eligibility and restricts
+source actions and observations to that route. The UI records and presents the
+returned plan but does not recreate those decisions.
+
+`NpcGoalExecutionPlanner` performs the equivalent work for conversations. It
+derives visible NPC goals from flags, locks the transition's `route_ref` as the
+intent, and validates the selected leader/helper or whole party before the
+players describe their method. The NPC LLM receives the routed intent and
+cannot move the declaration to another conversation branch. An NPC permission
+may additionally own a fixed `check` and authored `effects_on_success` /
+`effects_on_failure`. On a routed goal the runtime replaces LLM-proposed
+mechanics with those values. Social request risk remains an LLM classification,
+but attitude-to-DC conversion and effects are deterministic.

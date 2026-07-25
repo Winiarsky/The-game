@@ -36,11 +36,25 @@
         [
           8,
           8
+        ],
+        [
+          8,
+          9
+        ],
+        [
+          9,
+          8
+        ],
+        [
+          9,
+          9
         ]
       ],
       "color": "purple",
       "visibility": "hidden",
       "description": "Pod zawalonym wozem leży ranny zwiadowca. Jest przytomny, ale osłabiony.",
+      "image": "assets/courtyard_wounded_scout.png",
+      "interaction_label": "Podejdź do rannego zwiadowcy",
       "npc_interaction": {
         "id": "wounded_scout",
         "name": "Ranny zwiadowca",
@@ -73,21 +87,30 @@
             "label": "Uspokójcie zwiadowcę",
             "description": "Spróbujcie zmniejszyć jego strach i zdobyć odrobinę zaufania.",
             "followup_prompt": "Co mówicie albo robicie, żeby poczuł się bezpieczniej?",
-            "intent_ids": ["social"]
+            "intent_ids": ["social"],
+            "participant_mode": "allow",
+            "check_participants": "single_actor",
+            "allowed_check_participants": ["single_actor", "lead_with_help"]
           },
           {
             "id": "help_scout",
             "label": "Udzielcie mu pomocy",
             "description": "Zajmijcie się ranami albo uwolnijcie go spod desek.",
             "followup_prompt": "Jakiej pomocy udzielacie i czego do tego używacie?",
-            "intent_ids": ["medical"]
+            "intent_ids": ["medical"],
+            "participant_mode": "allow",
+            "check_participants": "single_actor",
+            "allowed_check_participants": ["single_actor", "lead_with_help"]
           },
           {
             "id": "ask_scout",
             "label": "Dowiedzcie się, co się stało",
             "description": "Spróbujcie zdobyć informacje o strażnicy i napastniku.",
             "followup_prompt": "O co pytacie i jak próbujecie skłonić go do odpowiedzi?",
-            "intent_ids": ["information", "social"],
+            "intent_ids": ["information"],
+            "participant_mode": "allow",
+            "check_participants": "single_actor",
+            "allowed_check_participants": ["single_actor", "lead_with_help"],
             "narrative_style": {
               "preset": "serious_revelation",
               "tone": "Szczery, filmowy i poważny moment składania świadectwa przez rannego zwiadowcę.",
@@ -102,14 +125,9 @@
             "label": "Wywrzyjcie presję",
             "description": "Postawcie sprawę ostro, licząc się z pogorszeniem relacji.",
             "followup_prompt": "Jak naciskacie na zwiadowcę i czego od niego żądacie?",
-            "intent_ids": ["intimidation"]
-          },
-          {
-            "id": "custom_scout",
-            "label": "Własny sposób",
-            "description": "Podejdźcie do rozmowy lub sytuacji na własnych zasadach.",
-            "followup_prompt": "Co dokładnie robicie i jaki efekt chcecie osiągnąć?",
-            "custom": true
+            "intent_ids": ["intimidation"],
+            "participant_mode": "must",
+            "check_participants": "single_actor"
           }
         ],
         "key_issues": [
@@ -118,7 +136,7 @@
             "kind": "priority",
             "description": "Najważniejsze dla zwiadowcy jest bezpieczne dostarczenie meldunków.",
             "visibility": "hidden",
-            "goal_ids": ["calm_scout", "ask_scout", "custom_scout"],
+            "goal_ids": ["calm_scout", "ask_scout"],
             "match_phrases": [
               "uratujemy meldunki",
               "zabezpieczymy meldunki",
@@ -222,7 +240,14 @@
               },
               "state_on_failure": {
                 "emotional_state": "Nadal przestraszony i podejrzliwy."
-              }
+              },
+              "effects_on_success": [
+                {"type": "set_flag", "parameters": {"key": "scout_calmed", "value": true}},
+                {"type": "set_flag", "parameters": {"key": "scout_trusts_party", "value": true}}
+              ],
+              "effects_on_failure": [
+                {"type": "set_flag", "parameters": {"key": "scout_panicked", "value": true}}
+              ]
             },
             "medical": {
               "status": "allowed",
@@ -234,7 +259,20 @@
               "state_on_failure": {
                 "physical_state": "Nadal ranny i osłabiony.",
                 "emotional_state": "Zaniepokojony nieudaną próbą pomocy."
-              }
+              },
+              "check": {
+                "ability": "wisdom",
+                "skill": "medicine",
+                "dc": 12
+              },
+              "effects_on_success": [
+                {"type": "set_flag", "parameters": {"key": "scout_treated", "value": true}},
+                {"type": "set_flag", "parameters": {"key": "scout_stabilized", "value": true}},
+                {"type": "set_flag", "parameters": {"key": "scout_trusts_party", "value": true}}
+              ],
+              "effects_on_failure": [
+                {"type": "set_flag", "parameters": {"key": "medical_complication", "value": true}}
+              ]
             },
             "information": {
               "status": "locked",
@@ -335,9 +373,9 @@
                 "emotional_state": "Wrogi i przerażony."
               }
             },
-            "intimidation": {
-              "status": "allowed_with_consequence",
-              "uses_social_reaction": true,
+        "intimidation": {
+          "status": "allowed_with_consequence",
+          "uses_social_reaction": false,
               "attempt_policy": {
                 "attempt_id": "scout_intimidation",
                 "max_attempts": 1,
@@ -348,10 +386,13 @@
                 {
                   "id": "scout_information",
                   "label": "Wymuszenie informacji",
-                  "description": "Groźbami zmusić zwiadowcę, żeby powiedział, co zaatakowało go przy strażnicy.",
-                  "reward_label": "Trop o bestii",
-                  "risk_summary": "Niezależnie od wyniku zwiadowca zapamięta groźby; porażka wywoła panikę i hałas.",
-                  "outcomes": {
+              "description": "Groźbami zmusić zwiadowcę, żeby powiedział, co zaatakowało go przy strażnicy.",
+              "reward_label": "Trop o bestii",
+              "risk_summary": "Niezależnie od wyniku zwiadowca zapamięta groźby; porażka wywoła panikę i hałas.",
+              "ability": "charisma",
+              "skill": "intimidation",
+              "dc": 18,
+              "outcomes": {
                     "critical_success": {
                       "preview": "Pełny trop o bestii, ale trwałe pogorszenie relacji.",
                       "message": "Zwiadowca łamie się i dokładnie opisuje wielkie pazury, dziób oraz sowią głowę bestii.",

@@ -21,6 +21,7 @@ def build_parser() -> argparse.ArgumentParser:
     debug_target = parser.add_mutually_exclusive_group()
     debug_target.add_argument("--debug-point", default="")
     debug_target.add_argument("--debug-challenge", default="")
+    debug_target.add_argument("--debug-courtyard-entry", action="store_true")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=5200)
     parser.add_argument("--debug", action="store_true", default=False)
@@ -36,6 +37,7 @@ def main(argv: list[str] | None = None) -> int:
         npc_client=npc_client,
         debug_point_id=args.debug_point or None,
         debug_challenge_id=args.debug_challenge or None,
+        debug_courtyard_entry=args.debug_courtyard_entry,
     )
     if args.board_backend != "none":
         session.configure_board(

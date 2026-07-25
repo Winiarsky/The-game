@@ -23,7 +23,9 @@ def _state(
     *,
     noise: int,
     critical_breach: bool = False,
-    wall_bypass: bool = False,
+    wall_critical_entry: bool = False,
+    lock_critical: bool = False,
+    bolt_critical: bool = False,
     ambush_prepared: bool = False,
 ) -> ExplorationState:
     attempt = ExplorationChallengeAttempt(
@@ -43,8 +45,12 @@ def _state(
     flags = SceneFlags()
     if critical_breach:
         flags = set_scene_flag(flags, "gate_critical_breach", True)
-    if wall_bypass:
-        flags = set_scene_flag(flags, "gate_wall_bypass_surprise", True)
+    if wall_critical_entry:
+        flags = set_scene_flag(flags, "gate_wall_critical_entry", True)
+    if lock_critical:
+        flags = set_scene_flag(flags, "gate_lock_critical", True)
+    if bolt_critical:
+        flags = set_scene_flag(flags, "gate_bolt_critical", True)
     if ambush_prepared:
         flags = set_scene_flag(flags, "gate_goblin_ambush_prepared", True)
     return ExplorationState(
@@ -64,11 +70,11 @@ def _state(
     )
 
 
-def test_quiet_entry_surprises_enemies() -> None:
+def test_merely_quiet_entry_has_no_automatic_opening_bonus() -> None:
     result = resolve_encounter_opening(_state(noise=0), _policy())
 
-    assert result.rule_id == "quiet_entry"
-    assert result.outcome == EncounterOpeningOutcome.PARTY_SURPRISES_ENEMIES
+    assert result.rule_id == "default"
+    assert result.outcome == EncounterOpeningOutcome.NO_SURPRISE
 
 
 def test_full_alert_lets_enemies_surprise_party() -> None:
@@ -85,18 +91,38 @@ def test_partial_alert_has_no_surprise() -> None:
     assert result.outcome == EncounterOpeningOutcome.NO_SURPRISE
 
 
-def test_critical_breach_surprises_enemies_when_alert_is_low() -> None:
+def test_critical_breach_gives_party_initiative_advantage() -> None:
     result = resolve_encounter_opening(_state(noise=0, critical_breach=True), _policy())
 
     assert result.rule_id == "critical_breach"
-    assert result.outcome == EncounterOpeningOutcome.PARTY_SURPRISES_ENEMIES
+    assert result.outcome == EncounterOpeningOutcome.PARTY_INITIATIVE_ADVANTAGE
 
 
-def test_discovered_wall_route_surprises_enemies_when_entry_stays_quiet() -> None:
-    result = resolve_encounter_opening(_state(noise=1, wall_bypass=True), _policy())
+def test_critical_wall_route_allows_hiding_and_initiative_advantage() -> None:
+    result = resolve_encounter_opening(_state(noise=1, wall_critical_entry=True), _policy())
 
     assert result.rule_id == "hidden_wall_entry"
-    assert result.outcome == EncounterOpeningOutcome.PARTY_SURPRISES_ENEMIES
+    assert result.outcome == EncounterOpeningOutcome.PARTY_INITIATIVE_ADVANTAGE_AND_CAN_HIDE
+
+
+def test_critical_lock_and_bolt_allow_hiding() -> None:
+    result = resolve_encounter_opening(
+        _state(noise=0, lock_critical=True, bolt_critical=True),
+        _policy(),
+    )
+
+    assert result.rule_id == "critical_lock_and_bolt_entry"
+    assert result.outcome == EncounterOpeningOutcome.PARTY_CAN_HIDE
+
+
+def test_only_one_critical_gate_blocker_does_not_allow_hiding() -> None:
+    result = resolve_encounter_opening(
+        _state(noise=0, lock_critical=True),
+        _policy(),
+    )
+
+    assert result.rule_id == "default"
+    assert result.outcome == EncounterOpeningOutcome.NO_SURPRISE
 
 
 def test_prepared_ambush_takes_priority_over_quiet_final_attempt() -> None:

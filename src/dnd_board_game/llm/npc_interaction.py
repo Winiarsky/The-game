@@ -113,6 +113,7 @@ class NpcInteractionRequest:
     player_action: str
     conversation_thread: tuple[GmDeclarationThreadEntry, ...] = ()
     selected_goal_id: str | None = None
+    routed_intent_id: str | None = None
     conversation_only: bool = False
 
     def to_prompt_payload(self) -> dict[str, Any]:
@@ -148,6 +149,7 @@ class NpcInteractionRequest:
             "scene_flags": dict(self.state.flags.values),
             "conversation_thread": [entry.as_payload() for entry in self.conversation_thread],
             "selected_goal": selected_goal.as_payload() if selected_goal is not None else None,
+            "routed_intent_id": self.routed_intent_id,
             "conversation_only": self.conversation_only,
             "effective_narrative_style": narrative_style.as_payload(),
             "player_action": self.player_action,
@@ -277,6 +279,7 @@ def build_npc_interaction_request(
     player_action: str,
     conversation_thread: tuple[GmDeclarationThreadEntry, ...] = (),
     selected_goal_id: str | None = None,
+    routed_intent_id: str | None = None,
     conversation_only: bool = False,
 ) -> NpcInteractionRequest:
     return NpcInteractionRequest(
@@ -288,6 +291,7 @@ def build_npc_interaction_request(
         player_action=player_action,
         conversation_thread=conversation_thread,
         selected_goal_id=selected_goal_id,
+        routed_intent_id=routed_intent_id,
         conversation_only=conversation_only,
     )
 
@@ -308,6 +312,14 @@ def validate_npc_interaction_proposal(
     if request.selected_goal_id is not None and selected_goal is None:
         raise ValueError(
             f"Selected NPC interaction goal is unavailable: {request.selected_goal_id}."
+        )
+    if (
+        request.routed_intent_id is not None
+        and proposal.action_type != request.routed_intent_id
+    ):
+        raise ValueError(
+            f"NPC intent {proposal.action_type} does not match authored route "
+            f"{request.routed_intent_id}."
         )
     if (
         selected_goal is not None

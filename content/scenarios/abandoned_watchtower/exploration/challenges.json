@@ -20,7 +20,6 @@
           "image": "assets/gate_force_entry.webp",
           "followup_prompt": "Czego używacie i jak zabieracie się do wyważania?",
           "suggested_tags": ["heavy_force", "lever", "weak_point"],
-          "resolution_option_id": "force_gate",
           "participant_mode": "allow",
           "check_participants": "lead_with_help",
           "allowed_check_participants": ["single_actor", "lead_with_help", "whole_party"],
@@ -40,12 +39,9 @@
           "image": "assets/gate_wall_route.webp",
           "followup_prompt": "Jak korzystacie z odkrytego przejścia i jak pomagacie sobie na murze?",
           "suggested_tags": ["climbing", "wall_climb", "quiet"],
-          "resolution_option_id": "find_way_around",
           "participant_mode": "allow",
           "check_participants": "whole_party",
-          "allowed_check_participants": ["single_actor", "lead_with_help", "whole_party"],
-          "required_flags": ["gate_wall_route_found"],
-          "forbidden_flags": ["gate_bypass_open"]
+          "allowed_check_participants": ["single_actor", "lead_with_help", "whole_party"]
         },
         {
           "id": "open_lock",
@@ -54,10 +50,8 @@
           "image": "assets/gate_lock.webp",
           "followup_prompt": "Jakich narzędzi i sposobu używacie przy zamku?",
           "suggested_tags": ["lockpicking", "rusted_lock", "quiet"],
-          "resolution_option_id": "lockpick_gate",
           "participant_mode": "must",
-          "check_participants": "single_actor",
-          "forbidden_flags": ["gate_lock_cleared"]
+          "check_participants": "single_actor"
         },
         {
           "id": "look_around",
@@ -66,8 +60,6 @@
           "image": "assets/gate_look_around.webp",
           "followup_prompt": "Czego dokładnie szukacie albo co chcecie obejrzeć?",
           "suggested_tags": ["scouting", "search", "weak_point", "useful_material"],
-          "observation_ids": ["survey_gate_surroundings", "search_gate_alternate_route", "inspect_gate_hinges", "search_gate_cutting_tool", "search_gate_traps", "look_through_gate_gap"],
-          "default_observation_id": "survey_gate_surroundings",
           "participant_mode": "must",
           "check_participants": "single_actor",
           "narrative_style": {
@@ -86,7 +78,6 @@
           "image": "assets/gate_bolt.webp",
           "followup_prompt": "Jak próbujecie zdjąć rygiel po drugiej stronie bramy?",
           "suggested_tags": ["inner_bolt", "lever", "hook", "saw", "improvised_tool"],
-          "resolution_option_id": "remove_gate_bolt",
           "source_actions": [
             {
               "id": "pry_bolt_with_plank",
@@ -98,9 +89,7 @@
           ],
           "participant_mode": "allow",
           "check_participants": "lead_with_help",
-          "allowed_check_participants": ["single_actor", "lead_with_help"],
-          "required_flags": ["gate_lock_cleared"],
-          "forbidden_flags": ["gate_bolt_cleared"]
+          "allowed_check_participants": ["single_actor", "lead_with_help"]
         }
       ],
       "method_rules": [
@@ -510,7 +499,7 @@
           "unlocks_if_flag": "gate_lock_cleared",
           "unavailable_if_flags": ["gate_bolt_cleared"],
           "unavailable_message": "Rygiel został już zdjęty. Deska może wrócić do zaszczytnej kariery zwykłej deski.",
-          "critical_success_flags": ["gate_bolt_cleared"],
+          "critical_success_flags": ["gate_bolt_cleared", "gate_bolt_critical"],
           "success_flags": ["gate_bolt_cleared"],
           "critical_failure_flags": ["gate_goblin_ambush_prepared"],
           "failure_complication": "rygiel_poza_zasiegiem",
@@ -539,7 +528,7 @@
           "unlocks_if_flag": "gate_lock_cleared",
           "unavailable_if_flags": ["gate_bolt_cleared"],
           "unavailable_message": "Rygiel został już zdjęty. Brama nie ma więcej mechanicznych blokad.",
-          "critical_success_flags": ["gate_bolt_cleared"],
+          "critical_success_flags": ["gate_bolt_cleared", "gate_bolt_critical"],
           "success_flags": ["gate_bolt_cleared"],
           "critical_failure_flags": ["gate_goblin_ambush_prepared"],
           "failure_complication": "rygiel_poza_zasiegiem",
@@ -599,8 +588,8 @@
           "critical_failure_noise": 2,
           "unlocks_if_flag": "gate_wall_route_found",
           "unavailable_if_flags": ["gate_bypass_open"],
-          "critical_success_flags": ["gate_bypass_open", "gate_wall_bypass_surprise"],
-          "success_flags": ["gate_bypass_open", "gate_wall_bypass_surprise"],
+          "critical_success_flags": ["gate_bypass_open", "gate_wall_critical_entry"],
+          "success_flags": ["gate_bypass_open"],
           "critical_failure_flags": ["gate_goblin_ambush_prepared"],
           "failure_complication": "stracony_czas",
           "critical_failure_complication": "ślepy_trop",
@@ -634,7 +623,7 @@
           "dc_modifiers_if_flags": [
             {"flag": "gate_lock_jammed", "modifier": 2}
           ],
-          "critical_success_flags": ["gate_lock_cleared"],
+          "critical_success_flags": ["gate_lock_cleared", "gate_lock_critical"],
           "success_flags": ["gate_lock_cleared"],
           "critical_failure_flags": ["gate_lock_jammed"],
           "failure_complication": "jammed_lock",
@@ -777,6 +766,19 @@
       "id": "courtyard_search",
       "zone_id": "courtyard",
       "name": "Przeszukanie dziedzińca",
+      "goals": [
+        {
+          "id": "survey_courtyard",
+          "label": "Rozejrzyjcie się po okolicy",
+          "description": "Obejrzyjcie ślady walki, krew, błoto i szczątki rozbitego wozu.",
+          "image": "assets/courtyard_search.png",
+          "followup_prompt": "Na czym skupiacie uwagę i czego próbujecie się dowiedzieć?",
+          "suggested_tags": ["scouting", "tracking", "careful"],
+          "participant_mode": "allow",
+          "check_participants": "single_actor",
+          "allowed_check_participants": ["single_actor", "lead_with_help"]
+        }
+      ],
       "progress_required": 2,
       "completed_flag": "courtyard_searched",
       "llm_policy": {

@@ -30,26 +30,24 @@
           },
           {
             "id": "hidden_wall_entry",
-            "outcome": "party_surprises_enemies",
-            "title": "Bohaterowie wchodzą bokiem",
-            "narration": "Drużyna wykorzystuje odkryte przejście przez mur i pojawia się na dziedzińcu z kierunku, którego gobliny nie pilnowały. Taktyka goblinów właśnie odkrywa pojęcie drzwi bocznych.",
-            "max_noise": 1,
-            "required_flags": ["gate_wall_bypass_surprise"]
+            "outcome": "party_initiative_advantage_and_can_hide",
+            "title": "Widmo nad murem",
+            "narration": "Drużyna pokonuje mur z taką gracją, że gobliny mogłyby przysiąc, iż widziały tylko wyjątkowo uzbrojony podmuch wiatru. Bohaterowie mogą podejść skrycie, a wszyscy rozpoczynają starcie z przewagą do inicjatywy.",
+            "required_flags": ["gate_wall_critical_entry"]
           },
           {
             "id": "critical_breach",
-            "outcome": "party_surprises_enemies",
+            "outcome": "party_initiative_advantage",
             "title": "Błyskawiczne przełamanie",
-            "narration": "Brama ustępuje w jednej heroicznej chwili. Gobliny miały podejrzenia, lecz zdecydowanie nie spodziewały się wejścia z własnym refrenem bitewnym.",
-            "max_noise": 1,
+            "narration": "Brama ustępuje w jednej heroicznej chwili. O ukrywaniu się nie ma mowy — wejście ma subtelność spadającej wieży — ale tempo natarcia daje całej drużynie przewagę do inicjatywy.",
             "required_flags": ["gate_critical_breach"]
           },
           {
-            "id": "quiet_entry",
-            "outcome": "party_surprises_enemies",
-            "title": "Ciche wejście",
-            "narration": "Brama otwiera się wystarczająco cicho, by gobliny nie zdążyły zareagować. Drużyna zaskakuje przeciwników.",
-            "max_noise": 0
+            "id": "critical_lock_and_bolt_entry",
+            "outcome": "party_can_hide",
+            "title": "Zamek i rygiel pokonane bez fanfar",
+            "narration": "Zamek kapituluje, rygiel ustępuje, a cisza pozostaje niemal nietknięta. Drużyna może spróbować ukryć się przed goblinami, zanim rozpocznie starcie.",
+            "required_flags": ["gate_lock_critical", "gate_bolt_critical"]
           }
         ]
       },

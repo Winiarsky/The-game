@@ -185,6 +185,9 @@ class EncounterTriggerCondition(StrEnum):
 
 class EncounterOpeningOutcome(StrEnum):
     PARTY_SURPRISES_ENEMIES = "party_surprises_enemies"
+    PARTY_INITIATIVE_ADVANTAGE = "party_initiative_advantage"
+    PARTY_CAN_HIDE = "party_can_hide"
+    PARTY_INITIATIVE_ADVANTAGE_AND_CAN_HIDE = "party_initiative_advantage_and_can_hide"
     NO_SURPRISE = "no_surprise"
     ENEMIES_SURPRISE_PARTY = "enemies_surprise_party"
 
@@ -1073,6 +1076,11 @@ class NpcIntentPermission:
     reveals: tuple[str, ...] = ()
     state_on_success: NpcStateUpdate | None = None
     state_on_failure: NpcStateUpdate | None = None
+    check_ability: str | None = None
+    check_skill: str | None = None
+    check_dc: int | None = None
+    effects_on_success: tuple[dict[str, object], ...] = ()
+    effects_on_failure: tuple[dict[str, object], ...] = ()
     uses_social_reaction: bool = False
     attempt_policy: NpcAttemptPolicy | None = None
     targets: tuple[NpcIntentTarget, ...] = ()
@@ -1081,6 +1089,10 @@ class NpcIntentPermission:
         target_ids = tuple(target.id for target in self.targets)
         if len(target_ids) != len(set(target_ids)):
             raise ValueError(f"NPC intent {self.intent} cannot repeat target ids.")
+        if self.check_dc is not None and self.check_ability is None:
+            raise ValueError(
+                f"NPC intent {self.intent} check DC requires an ability."
+            )
 
     def target(self, target_id: str) -> NpcIntentTarget | None:
         normalized = target_id.strip().lower()
@@ -1106,6 +1118,16 @@ class NpcIntentPermission:
             payload["state_on_success"] = _npc_state_update_payload(self.state_on_success)
         if self.state_on_failure is not None:
             payload["state_on_failure"] = _npc_state_update_payload(self.state_on_failure)
+        if self.check_ability is not None:
+            payload["check"] = {
+                "ability": self.check_ability,
+                "skill": self.check_skill,
+                "dc": self.check_dc,
+            }
+        if self.effects_on_success:
+            payload["effects_on_success"] = list(self.effects_on_success)
+        if self.effects_on_failure:
+            payload["effects_on_failure"] = list(self.effects_on_failure)
         return payload
 
 
@@ -1197,6 +1219,8 @@ class ExplorationPoint:
     color: tuple[int, int, int]
     visibility: SetupVisibility = SetupVisibility.VISIBLE
     description: str = ""
+    image: str = ""
+    interaction_label: str = ""
     requires_setup: bool = True
     npc_interaction: NpcInteraction | None = None
 
@@ -1529,6 +1553,8 @@ class ExplorationTrap:
     detection_observation_id: str
     hazard: ExplorationHazard
     activation_challenge_id: str | None = None
+    activation_required_flags: tuple[str, ...] = ()
+    activation_forbidden_flags: tuple[str, ...] = ()
     disarm_check: SceneAbilityCheck | None = None
     bypass_check: SceneAbilityCheck | None = None
     required_item_id: str | None = None
@@ -1543,6 +1569,12 @@ class ExplorationTrap:
             raise ValueError("Exploration trap id, zone_id and name cannot be empty.")
         if not self.revealed_description.strip() or not self.detection_observation_id.strip():
             raise ValueError(f"Exploration trap {self.id} requires reveal text and detection observation.")
+        if set(self.activation_required_flags).intersection(
+            self.activation_forbidden_flags
+        ):
+            raise ValueError(
+                f"Exploration trap {self.id} cannot require and forbid the same activation flag."
+            )
 
 
 @dataclass(frozen=True, slots=True)

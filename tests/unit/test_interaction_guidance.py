@@ -1,4 +1,5 @@
 from dnd_board_game.combat import SceneFlags, set_scene_flag
+from dnd_board_game.application import ExplorationInteractionFlowService
 from dnd_board_game.exploration import (
     interaction_goal,
     effective_narrative_style,
@@ -14,7 +15,7 @@ def _watchtower():
     )
 
 
-def test_watchtower_exposes_hybrid_goals_for_gate_and_scout():
+def test_watchtower_exposes_authored_goals_without_generic_escape_card():
     exploration = _watchtower()
     gate = next(item for item in exploration.challenges if item.id == "closed_gate")
     scout = next(item for item in exploration.points if item.id == "wounded_scout")
@@ -26,15 +27,16 @@ def test_watchtower_exposes_hybrid_goals_for_gate_and_scout():
         "look_around",
         "remove_bolt",
     ]
-    assert {goal.id: goal.resolution_option_id for goal in gate.goals} == {
-        "force_entry": "force_gate",
-        "use_wall_route": "find_way_around",
-        "open_lock": "lockpick_gate",
-        "look_around": None,
-        "remove_bolt": "remove_gate_bolt",
-    }
+    assert all(goal.resolution_option_id is None for goal in gate.goals)
+    assert all(not goal.required_flags for goal in gate.goals)
+    assert all(not goal.forbidden_flags for goal in gate.goals)
     assert scout.npc_interaction is not None
-    assert [goal.id for goal in scout.npc_interaction.goals][-1] == "custom_scout"
+    assert [goal.id for goal in scout.npc_interaction.goals] == [
+        "calm_scout",
+        "help_scout",
+        "ask_scout",
+        "pressure_scout",
+    ]
 
 
 def test_every_gate_goal_has_a_distinct_tile_image():
@@ -117,25 +119,45 @@ def test_gate_goals_follow_lock_and_discovery_flags():
     exploration = _watchtower()
     gate = next(item for item in exploration.challenges if item.id == "closed_gate")
 
+    service = ExplorationInteractionFlowService()
     initial_ids = {
         goal.id
-        for goal in gate.goals
-        if interaction_goal(gate.goals, goal.id, SceneFlags()) is not None
+        for goal in service.available_goals(
+            challenge=gate,
+            flows=exploration.flows,
+            flags=SceneFlags(),
+        )
     }
     assert "open_lock" in initial_ids
     assert "remove_bolt" not in initial_ids
     assert "use_wall_route" not in initial_ids
 
     flags = set_scene_flag(SceneFlags(), "gate_lock_cleared", True)
-    assert interaction_goal(gate.goals, "open_lock", flags) is None
-    bolt = interaction_goal(gate.goals, "remove_bolt", flags)
+    assert service.route_for_goal(
+        challenge=gate,
+        flows=exploration.flows,
+        goal_id="open_lock",
+        flags=flags,
+    ) is None
+    bolt_route = service.route_for_goal(
+        challenge=gate,
+        flows=exploration.flows,
+        goal_id="remove_bolt",
+        flags=flags,
+    )
+    bolt = bolt_route.goal if bolt_route is not None else None
     assert bolt is not None
     assert bolt.image == "assets/gate_bolt.webp"
     assert bolt.source_actions[0].source_ref == "gate_rotten_planks"
     assert bolt.source_actions[0].option_id == "pry_bolt_with_plank"
 
     flags = set_scene_flag(flags, "gate_wall_route_found", True)
-    assert interaction_goal(gate.goals, "use_wall_route", flags) is not None
+    assert service.route_for_goal(
+        challenge=gate,
+        flows=exploration.flows,
+        goal_id="use_wall_route",
+        flags=flags,
+    ) is not None
 
 
 def test_scout_information_goal_uses_serious_revelation_profile():

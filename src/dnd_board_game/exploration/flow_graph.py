@@ -16,6 +16,7 @@ from dnd_board_game.combat import SceneFlags, scene_flag
 class ExplorationFlowRouteKind(StrEnum):
     CHALLENGE_OPTION = "challenge_option"
     OBSERVATION_ROUTER = "observation_router"
+    NPC_INTENT = "npc_intent"
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,6 +87,12 @@ class ExplorationFlowTransition:
             raise ValueError(
                 f"Exploration flow transition {self.id} requires a challenge option reference."
             )
+        if self.route_kind == ExplorationFlowRouteKind.NPC_INTENT and not (
+            self.route_ref and self.route_ref.strip()
+        ):
+            raise ValueError(
+                f"Exploration flow transition {self.id} requires an NPC intent reference."
+            )
         if self.route_kind == ExplorationFlowRouteKind.OBSERVATION_ROUTER:
             if self.route_ref is not None:
                 raise ValueError(
@@ -111,13 +118,18 @@ class ExplorationFlowTransition:
 @dataclass(frozen=True, slots=True)
 class ExplorationFlowGraph:
     id: str
-    challenge_id: str
     nodes: tuple[ExplorationFlowNode, ...]
     transitions: tuple[ExplorationFlowTransition, ...]
+    challenge_id: str = ""
+    npc_id: str = ""
 
     def __post_init__(self) -> None:
-        if not self.id.strip() or not self.challenge_id.strip():
-            raise ValueError("Exploration flow graphs require id and challenge_id.")
+        if not self.id.strip():
+            raise ValueError("Exploration flow graphs require an id.")
+        if bool(self.challenge_id.strip()) == bool(self.npc_id.strip()):
+            raise ValueError(
+                "Exploration flow graphs require exactly one owner: challenge_id or npc_id."
+            )
         if not self.nodes:
             raise ValueError(f"Exploration flow graph {self.id} requires at least one node.")
         node_ids = tuple(node.id for node in self.nodes)
@@ -184,5 +196,15 @@ def exploration_flow_for_challenge(
 ) -> ExplorationFlowGraph | None:
     return next(
         (flow for flow in flows if flow.challenge_id == challenge_id),
+        None,
+    )
+
+
+def exploration_flow_for_npc(
+    flows: tuple[ExplorationFlowGraph, ...],
+    npc_id: str,
+) -> ExplorationFlowGraph | None:
+    return next(
+        (flow for flow in flows if flow.npc_id == npc_id),
         None,
     )

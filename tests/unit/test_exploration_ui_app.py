@@ -105,6 +105,24 @@ def _session(*, active: bool = True):
     return session
 
 
+def _submit_force_gate(
+    client,
+    text: str = "Wyważamy bramę.",
+    *,
+    check_participants: str = "single_actor",
+    actor_ids: tuple[str, ...] = ("hero",),
+):
+    return client.post(
+        "/api/action",
+        json={
+            "text": text,
+            "selected_goal_id": "force_entry",
+            "check_participants": check_participants,
+            "participant_actor_ids": list(actor_ids),
+        },
+    )
+
+
 def _page_assets(client) -> tuple[str, str, str]:
     html = client.get("/").get_data(as_text=True)
     javascript = client.get("/static/exploration.js").get_data(as_text=True)
@@ -119,6 +137,20 @@ def test_combat_ui_exposes_manual_enemy_saving_throw_endpoint() -> None:
     assert "pending_enemy_saving_throw" in javascript
     assert "enemy-saving-throw-roll" in javascript
     assert "/static/exploration.js" in html
+
+
+def test_courtyard_interaction_tile_images_are_served() -> None:
+    client = _client()
+
+    scout = client.get(
+        "/scenario-assets/assets/courtyard_wounded_scout.png"
+    )
+    search = client.get("/scenario-assets/assets/courtyard_search.png")
+
+    assert scout.status_code == 200
+    assert scout.mimetype == "image/png"
+    assert search.status_code == 200
+    assert search.mimetype == "image/png"
 
 
 def test_combat_ui_warns_about_area_spell_friendly_fire() -> None:
@@ -665,6 +697,8 @@ def test_idle_player_turn_keeps_end_turn_next_to_board_scan_and_routes_other_act
     assert "Turę możesz zakończyć także przyciskiem obok skanowania" in javascript
     assert "Rzut obronny przeciwnika" in javascript
     assert "path === '/api/combat/player-attack-confirm'" in javascript
+    assert "latestMessageWithTitleSince(state, 'Czar', previousMessageCount)" in javascript
+    assert "function latestMessageWithTitleSince" in javascript
     assert "'Atak', 'Czar', 'Obrażenia'" in javascript
     assert "combat.context_menu.is_self_menu ? combatStabilizationHtml(combat)" in javascript
     assert "combat.targeting.kind === 'area'" in javascript
@@ -929,7 +963,7 @@ def test_exploration_ui_decision_without_pending_is_controlled_error():
 def test_exploration_ui_action_accept_and_roll_flow():
     client = _client()
 
-    action_response = client.post("/api/action", json={"text": "Wyważamy bramę."})
+    action_response = _submit_force_gate(client)
     assert action_response.status_code == 200
     assert action_response.get_json()["pending"]["stage"] == "decision"
 
@@ -960,7 +994,7 @@ def test_exploration_ui_action_accept_and_roll_flow():
 def test_exploration_ui_accept_can_select_lead_actor():
     client = _client()
 
-    client.post("/api/action", json={"text": "Wyważamy bramę."})
+    _submit_force_gate(client, actor_ids=("rogue",))
     response = client.post("/api/decision", json={"decision": "accept", "lead_actor_id": "rogue"})
 
     assert response.status_code == 200
@@ -974,7 +1008,12 @@ def test_exploration_ui_accept_can_select_lead_actor():
 def test_exploration_ui_decision_correction_endpoint_updates_pending_option():
     client = _client()
 
-    client.post("/api/action", json={"text": "Wyważamy bramę z pomocą."})
+    _submit_force_gate(
+        client,
+        "Wyważamy bramę z pomocą.",
+        check_participants="lead_with_help",
+        actor_ids=("rogue", "hero"),
+    )
     response = client.post(
         "/api/decision/correction",
         json={
@@ -1015,7 +1054,7 @@ def test_exploration_ui_decision_correction_endpoint_updates_pending_option():
 def test_exploration_ui_decision_correction_endpoint_updates_improvised_tool():
     client = _client()
 
-    client.post("/api/action", json={"text": "Używam starej deski jak dźwigni."})
+    _submit_force_gate(client, "Używam starej deski jak dźwigni.")
     response = client.post(
         "/api/decision/correction",
         json={
@@ -1048,7 +1087,7 @@ def test_exploration_ui_decision_correction_endpoint_updates_improvised_tool():
 
 def test_exploration_ui_reset_endpoint_restores_state():
     client = _client()
-    client.post("/api/action", json={"text": "Wyważamy bramę."})
+    _submit_force_gate(client)
     client.post("/api/decision", json={"decision": "accept"})
     client.post("/api/rolls", json={"rolls": {"hero": 16}})
 
@@ -1090,7 +1129,7 @@ def test_exploration_ui_confirms_spell_preparation_through_api():
 
 def test_exploration_ui_shows_and_handles_travel_after_completed_challenge():
     client = _client()
-    client.post("/api/action", json={"text": "Wyważamy bramę."})
+    _submit_force_gate(client)
     client.post("/api/decision", json={"decision": "accept"})
     completed = client.post("/api/rolls", json={"rolls": {"hero": 16}}).get_json()
 
@@ -1111,7 +1150,7 @@ def test_exploration_ui_shows_and_handles_travel_after_completed_challenge():
 
 def test_exploration_ui_finish_interaction_returns_to_location_selection():
     client = _client()
-    client.post("/api/action", json={"text": "Wyważamy bramę."})
+    _submit_force_gate(client)
     client.post("/api/decision", json={"decision": "accept"})
     completed = client.post("/api/rolls", json={"rolls": {"hero": 16}}).get_json()
     assert completed["flow"]["stage"] == "interaction_result"
@@ -1135,7 +1174,7 @@ def test_exploration_ui_can_cancel_location_preview():
     board = FakeBoardConnection(clicks=[(9, 10)])
     session.attach_board_connection(board, backend="simulator")
     client = create_app(session).test_client()
-    client.post("/api/action", json={"text": "Wyważamy bramę."})
+    _submit_force_gate(client)
     client.post("/api/decision", json={"decision": "accept"})
     client.post("/api/rolls", json={"rolls": {"hero": 16}})
     _confirm_fallen_gate_setup(client)
@@ -1156,12 +1195,13 @@ def test_exploration_ui_can_cancel_location_preview():
 def test_exploration_ui_reveals_selects_and_resolves_npc_point():
     session = _session()
     client = create_app(session).test_client()
-    client.post("/api/action", json={"text": "Wyważamy bramę."})
+    _submit_force_gate(client)
     client.post("/api/decision", json={"decision": "accept"})
     client.post("/api/rolls", json={"rolls": {"hero": 16}})
     _confirm_fallen_gate_setup(client)
     session.state, _ = reveal_exploration_points(session.state, ("wounded_scout",))
     client.post("/api/travel", json={"zone_id": "courtyard"})
+    client.post("/api/board/select", json={"col": 8, "row": 8})
 
     point_response = client.post("/api/point", json={"point_id": "wounded_scout"})
     assert point_response.status_code == 200
@@ -1185,12 +1225,13 @@ def test_exploration_ui_reveals_selects_and_resolves_npc_point():
 def test_exploration_ui_applies_authored_npc_key_issue_without_roll():
     session = _session()
     client = create_app(session).test_client()
-    client.post("/api/action", json={"text": "Wyważamy bramę."})
+    _submit_force_gate(client)
     client.post("/api/decision", json={"decision": "accept"})
     client.post("/api/rolls", json={"rolls": {"hero": 16}})
     _confirm_fallen_gate_setup(client)
     session.state, _ = reveal_exploration_points(session.state, ("wounded_scout",))
     client.post("/api/travel", json={"zone_id": "courtyard"})
+    client.post("/api/board/select", json={"col": 8, "row": 8})
     client.post("/api/point", json={"point_id": "wounded_scout"})
 
     response = client.post(
@@ -1198,6 +1239,8 @@ def test_exploration_ui_applies_authored_npc_key_issue_without_roll():
         json={
             "text": "Dajemy słowo, że dostarczymy meldunki.",
             "selected_goal_id": "calm_scout",
+            "check_participants": "single_actor",
+            "participant_actor_ids": ["cleric"],
         },
     )
 
@@ -1208,17 +1251,26 @@ def test_exploration_ui_applies_authored_npc_key_issue_without_roll():
     assert {"key": "scout_trusts_party", "value": True} in data["flags"]
     assert data["conversation"]["entries"][-1]["title"] == "Ranny zwiadowca"
     assert "Meldunki muszą dotrzeć" in data["conversation"]["entries"][-1]["body"]
+    assert {goal["id"] for goal in data["active_point"]["npc"]["goals"]} == {
+        "help_scout",
+        "ask_scout",
+        "pressure_scout",
+    }
 
 
 def test_exploration_ui_points_are_board_first_and_text_redirects_to_point_led():
     session = _session()
     client = create_app(session).test_client()
-    client.post("/api/action", json={"text": "Wyważamy bramę."})
+    _submit_force_gate(client)
     client.post("/api/decision", json={"decision": "accept"})
     client.post("/api/rolls", json={"rolls": {"hero": 16}})
     _confirm_fallen_gate_setup(client)
     session.state, _ = reveal_exploration_points(session.state, ("wounded_scout",))
     client.post("/api/travel", json={"zone_id": "courtyard"})
+    setup = client.get("/api/state").get_json()
+    assert setup["flow"]["stage"] == "party_setup"
+    assert setup["exploration_setup"]["current_step"]["assignment_point_id"] == "wounded_scout"
+    client.post("/api/board/select", json={"col": 8, "row": 8})
 
     state = client.get("/api/state").get_json()
     wounded = next(point for point in state["current_zone_points"] if point["id"] == "wounded_scout")
@@ -1235,7 +1287,7 @@ def test_exploration_ui_points_are_board_first_and_text_redirects_to_point_led()
 
 def test_exploration_ui_sets_pending_gate_skirmish_after_gate_opens():
     client = _client()
-    client.post("/api/action", json={"text": "Hałasujemy przy bramie."})
+    _submit_force_gate(client, "Hałasujemy przy bramie.")
     client.post("/api/decision", json={"decision": "accept"})
     data = client.post("/api/rolls", json={"rolls": {"hero": 16}}).get_json()
 
@@ -1252,7 +1304,7 @@ def test_exploration_ui_runs_guided_encounter_setup_after_trigger():
     board = FakeBoardConnection()
     session.attach_board_connection(board, backend="simulator")
     client = create_app(session).test_client()
-    client.post("/api/action", json={"text": "Hałasujemy przy bramie."})
+    _submit_force_gate(client, "Hałasujemy przy bramie.")
     client.post("/api/decision", json={"decision": "accept"})
     client.post("/api/rolls", json={"rolls": {"hero": 16}})
     _confirm_fallen_gate_setup(client)
@@ -1303,7 +1355,7 @@ def test_exploration_ui_runs_guided_encounter_setup_after_trigger():
 def test_exploration_ui_can_assign_player_start_from_ui_position_buttons():
     session = _session()
     client = create_app(session).test_client()
-    client.post("/api/action", json={"text": "Hałasujemy przy bramie."})
+    _submit_force_gate(client, "Hałasujemy przy bramie.")
     client.post("/api/decision", json={"decision": "accept"})
     client.post("/api/rolls", json={"rolls": {"hero": 16}})
     _confirm_fallen_gate_setup(client)
@@ -1332,7 +1384,7 @@ def test_exploration_ui_starts_combat_after_setup_and_initiative():
     board = FakeBoardConnection()
     session.attach_board_connection(board, backend="simulator")
     client = create_app(session).test_client()
-    client.post("/api/action", json={"text": "Hałasujemy przy bramie."})
+    _submit_force_gate(client, "Hałasujemy przy bramie.")
     client.post("/api/decision", json={"decision": "accept"})
     client.post("/api/rolls", json={"rolls": {"hero": 16}})
     _confirm_fallen_gate_setup(client)
@@ -1395,7 +1447,7 @@ def test_exploration_ui_happy_path_returns_to_player_after_enemy_turns():
     assert active["flow"]["stage"] == "location_active"
     assert active["active_challenge"]["id"] == "closed_gate"
 
-    action = client.post("/api/action", json={"text": "Hałasujemy przy bramie."}).get_json()
+    action = _submit_force_gate(client, "Hałasujemy przy bramie.").get_json()
     assert action["pending"]["stage"] == "decision"
 
     accepted = client.post("/api/decision", json={"decision": "accept"}).get_json()
@@ -1481,7 +1533,7 @@ def test_exploration_ui_board_scan_selects_travel_zone_and_updates_leds():
     app = create_app(session)
     client = app.test_client()
 
-    client.post("/api/action", json={"text": "Wyważamy bramę głośno."})
+    _submit_force_gate(client, "Wyważamy bramę głośno.")
     client.post("/api/decision", json={"decision": "accept"})
     client.post("/api/rolls", json={"rolls": {"hero": 16}})
     _confirm_fallen_gate_setup(client)

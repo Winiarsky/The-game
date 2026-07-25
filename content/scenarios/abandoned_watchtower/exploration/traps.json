@@ -7,6 +7,7 @@
       "revealed_description": "Tuż za bramą biegnie nisko cienka, zabrudzona linka połączona z metalowymi blaszkami. Jej poruszenie zaalarmuje gobliny na dziedzińcu.",
       "detection_observation_id": "search_gate_traps",
       "activation_challenge_id": "closed_gate",
+      "activation_forbidden_flags": ["gate_critical_breach"],
       "required_item_id": "thieves_tools",
       "disarm_check": {
         "ability": "dexterity",

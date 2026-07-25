@@ -25,3 +25,7 @@ Jeżeli brama zostanie otwarta, zanim pułapkę rozbrojono albo bezpiecznie omin
 linka aktywuje się automatycznie. Bohater wykonuje Dexterity save ST 12. Sukces
 zatrzymuje blaszki w ostatniej chwili. Porażka dodaje 3 punkty hałasu do bramy i
 ustawia flagę `gate_alarm_triggered`, wpływając na otwarcie encounteru.
+
+Wyjątek: krytyczne przełamanie `gate_critical_breach` wyrywa całe skrzydło wraz
+z mocowaniem linki, zanim blaszki zdążą zadzwonić. Pułapka nie uruchamia wtedy
+rzutu obronnego i nie podważa zaskoczenia goblinów.

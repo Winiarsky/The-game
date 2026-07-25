@@ -33,6 +33,7 @@ from dnd_board_game.exploration import (
     challenge_state_for,
     add_exploration_condition,
     ExplorationTrapStatus,
+    reveal_exploration_points,
     trap_state_for,
     build_crafting_source_registry,
     craft_temporary_item,
@@ -83,26 +84,6 @@ class FakeGmClient:
     def classify(self, request):
         self.requests.append(request)
         return self.proposal
-
-
-class FakeFlowRoutingGmClient(FakeGmClient):
-    def __init__(self, proposal, transition_id):
-        super().__init__(proposal)
-        self.transition_id = transition_id
-        self.analysis_requests = []
-
-    def analyze(self, request):
-        self.analysis_requests.append(request)
-        return GmDeclarationAnalysis.model_validate(
-            {
-                "analysis_type": "plausible",
-                "action_flow": "challenge_attempt",
-                "normalized_intent": request.player_action,
-                "reason": "test wejścia z opisu do flowgrafu",
-                "confidence": 1.0,
-                "selected_flow_transition_id": self.transition_id,
-            }
-        )
 
 
 class FakeSemanticSourceGmClient(FakeGmClient):
@@ -485,9 +466,12 @@ def _start_gate_skirmish(session: ExplorationUiSession):
 
 def _prepare_gate_encounter_setup(session: ExplorationUiSession) -> None:
     session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    flags = set_scene_flag(session.state.flags, "gate_passed", True)
+    flags = set_scene_flag(flags, "gate_lock_critical", True)
+    flags = set_scene_flag(flags, "gate_bolt_critical", True)
     session.state = replace(
         session.state,
-        flags=set_scene_flag(session.state.flags, "gate_passed", True),
+        flags=flags,
     )
     session.state_payload()
     session.resolve_encounter_opening()
@@ -562,7 +546,12 @@ def test_exploration_ui_session_resolves_gate_challenge():
     )
     session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
 
-    state = session.submit_action("Wyważamy bramę.")
+    state = session.submit_action(
+        "Wyważamy bramę.",
+        selected_goal_id="force_entry",
+        selected_check_participants="single_actor",
+        participant_actor_ids=("hero",),
+    )
     assert state["pending"]["stage"] == "decision"
     assert state["active_challenge"]["current_progress"] == 0
     assert state["conversation"]["entries"][-1]["title"] == "Narracja MG"
@@ -707,70 +696,6 @@ def test_gate_flow_owns_check_mechanics_but_keeps_grounded_method_modifier():
         "tool": None,
         "dc": 15,
     }
-
-
-def test_freeform_description_enters_one_active_flow_route():
-    client = FakeFlowRoutingGmClient(
-        _challenge_proposal(
-            ability="charisma",
-            skill="deception",
-            dc=18,
-            player_narration=(
-                "Bohater rusza barkiem na bramę; drewno skrzypi, jakby właśnie "
-                "przypomniało sobie o zaległym ubezpieczeniu."
-            ),
-        ),
-        "force_gate",
-    )
-    session = ExplorationUiSession(
-        "content/scenarios/abandoned_watchtower.json",
-        gm_client=client,
-    )
-    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
-
-    preview = session.submit_action(
-        "Bohater rozpędza się i wyważa bramę barkiem.",
-        selected_check_participants="single_actor",
-        participant_actor_ids=("hero",),
-        infer_flow_route=True,
-    )
-
-    assert preview["pending"]["option"]["id"] == "force_gate"
-    assert preview["pending"]["option"]["ability"] == "strength"
-    assert preview["pending"]["option"]["skill"] == "athletics"
-    candidates = client.analysis_requests[0].to_prompt_payload()["challenge"][
-        "available_flow_routes"
-    ]
-    assert {candidate["transition_id"] for candidate in candidates} == {
-        "force_gate",
-        "open_gate_lock",
-        "survey_gate",
-    }
-    assert client.requests[0].selected_flow_transition_id == "force_gate"
-
-
-def test_freeform_description_cannot_enter_a_blocked_flow_route():
-    client = FakeFlowRoutingGmClient(
-        _challenge_proposal(),
-        "remove_gate_bolt",
-    )
-    session = ExplorationUiSession(
-        "content/scenarios/abandoned_watchtower.json",
-        gm_client=client,
-    )
-    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
-
-    state = session.submit_action(
-        "Zdejmuję rygiel, którego jeszcze nie odsłoniłem.",
-        selected_check_participants="single_actor",
-        participant_actor_ids=("hero",),
-        infer_flow_route=True,
-    )
-
-    assert state["pending"] is None
-    assert state["messages"][-1]["title"] == "MG dopytuje"
-    assert "kilku ścieżkach" in state["messages"][-1]["body"]
-    assert client.requests == []
 
 
 def test_gate_flow_accepts_reduced_llm_method_contract_without_check_fields():
@@ -1097,7 +1022,7 @@ def test_failed_trap_disarm_queues_save_and_adds_alarm_noise() -> None:
     assert scene_flag(session.state.flags, "gate_alarm_triggered") is True
 
 
-def test_hidden_trap_triggers_when_gate_is_completed() -> None:
+def test_hidden_trap_does_not_trigger_after_critical_gate_breach() -> None:
     session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
     session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
     challenge = next(item for item in session.state.challenges if item.id == "closed_gate")
@@ -1110,7 +1035,27 @@ def test_hidden_trap_triggers_when_gate_is_completed() -> None:
     )
 
     session.decide("accept", lead_actor_id="hero")
-    triggered = session.resolve_rolls({"hero": 20})
+    resolved = session.resolve_rolls({"hero": 20})
+
+    assert resolved["pending"] is None
+    assert scene_flag(session.state.flags, "gate_critical_breach") is True
+    assert trap_state_for(session.state, "gate_alarm_wire").status == ExplorationTrapStatus.HIDDEN
+
+
+def test_hidden_trap_still_triggers_after_normal_gate_success() -> None:
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    challenge = next(item for item in session.state.challenges if item.id == "closed_gate")
+    option = next(item for item in challenge.options if item.id == "force_gate")
+    session.pending = PendingInteraction(
+        kind=PendingKind.CHALLENGE,
+        stage=PendingStage.DECISION,
+        challenge=challenge,
+        option=option,
+    )
+
+    session.decide("accept", lead_actor_id="hero")
+    triggered = session.resolve_rolls({"hero": 15})
 
     assert triggered["pending"]["kind"] == "trap"
     assert triggered["pending"]["stage"] == "hazard_save"
@@ -1697,6 +1642,31 @@ def test_action_through_gap_routes_to_authored_observation_before_generic_classi
     assert not any("dc_policy" in message["body"] for message in state["messages"])
 
 
+def test_selected_observer_names_leader_and_does_not_add_technical_gm_chat(tmp_path):
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=FakeGmClient(_challenge_proposal()),
+        session_id="selected_observer_narration_test",
+        observation_dir=tmp_path,
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+
+    state = session.submit_action(
+        "Cicho podkradam się pod bramę i zerkam przez szczelinę, czy nikogo nie ma po drugiej stronie.",
+        selected_goal_id="look_around",
+        participant_actor_ids=("rogue",),
+    )
+
+    assert state["pending"]["kind"] == "observation"
+    assert state["pending"]["observation"]["description"].startswith(
+        "Łotrzyca zagląda"
+    )
+    assert not any(
+        entry["title"] == "MG proponuje sprawdzenie"
+        for entry in state["conversation"]["entries"]
+    )
+
+
 def test_initiative_passively_moves_led_focus_between_actors_without_board_scan() -> None:
     session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
     _prepare_gate_encounter_setup(session)
@@ -1753,6 +1723,122 @@ def test_active_exploration_npc_does_not_claim_actor_led_focus() -> None:
 
     assert selection["active_point"]["id"] == "wounded_scout"
     assert session._current_board_scan_target().positions
+
+
+def test_entering_courtyard_requires_scout_placement_then_exposes_actions_and_npc_led() -> None:
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    board = FakeBoardConnection()
+    session.attach_board_connection(board, backend="simulator")
+    flags = set_scene_flag(session.state.flags, "gate_passed", True)
+    flags = set_scene_flag(flags, "gate_skirmish_cleared", True)
+    session.state = replace(session.state, flags=flags)
+    session.resolved_encounter_trigger_ids.add("gate_open_skirmish")
+    session.state, _ = reveal_exploration_points(session.state, ("wounded_scout",))
+    session.ui_flow_stage = UiFlowStage.LOCATION_PREVIEW
+    session.preview_zone_id = "courtyard"
+
+    setup = session.confirm_location_preview()
+
+    assert setup["flow"]["stage"] == "party_setup"
+    step = setup["exploration_setup"]["current_step"]
+    assert step["requires_board_assignment"] is True
+    assert step["assignment_point_id"] == "wounded_scout"
+    assert step["assignment_point_name"] == "Ranny zwiadowca"
+    assert step["available_positions"] == [[8, 8], [8, 9], [9, 8], [9, 9]]
+    assert "rannego człowieka" in step["message"]
+    with pytest.raises(ValueError, match="Najpierw ustaw figurkę"):
+        session.confirm_exploration_setup_step()
+
+    active = session._handle_board_position(Coordinate(9, 9))
+
+    assert active["flow"]["stage"] == "location_active"
+    assert active["exploration_setup"] is None
+    scout = next(point for point in active["current_zone_points"] if point["id"] == "wounded_scout")
+    assert scout["positions"] == [[9, 9]]
+    assert [goal["id"] for goal in active["active_challenge"]["goals"]] == [
+        "survey_courtyard"
+    ]
+    assert active["active_challenge"]["goals"][0]["image"] == "assets/courtyard_search.png"
+    assert scout["interaction_label"] == "Podejdź do rannego zwiadowcy"
+    assert scout["image"] == "assets/courtyard_wounded_scout.png"
+    assert scene_flag(
+        session.state.flags,
+        "exploration_point_placed_wounded_scout",
+        False,
+    ) is True
+
+    session.select_point("wounded_scout")
+    assert session.active_point is not None
+    assert session.active_point.id == "wounded_scout"
+    assert session.pending_encounter is None
+    assert session.exploration_setup_flow is None
+    assert session.ui_flow_stage == UiFlowStage.LOCATION_ACTIVE
+    target = session._current_board_scan_target()
+
+    assert target.positions == ()
+    assert target.feedback.frames[0].positions == (Coordinate(9, 9),)
+    assert target.feedback.frames[0].color == session.active_point.color
+    assert target.feedback.frames[0].role == LedRole.INTERACTIVE_OBJECT
+
+
+def test_debug_courtyard_entry_starts_with_description_and_scout_setup() -> None:
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        debug_courtyard_entry=True,
+    )
+
+    state = session.state_payload()
+
+    assert state["current_zone"]["id"] == "courtyard"
+    assert state["flow"]["stage"] == "party_setup"
+    assert state["exploration_setup"]["current_step"]["assignment_point_id"] == "wounded_scout"
+    assert [message["title"] for message in state["messages"]] == [
+        "Dziedziniec",
+        "Setup dziedzińca",
+    ]
+    assert "zarośnięty, błotnisty dziedziniec" in state["messages"][0]["body"]
+    assert "ranny zwiadowca" in state["messages"][0]["body"]
+    assert "Postaw figurkę" in state["messages"][1]["body"]
+
+    active = session.select_board_position(Coordinate(8, 8))
+
+    assert active["flow"]["stage"] == "location_active"
+    assert [goal["label"] for goal in active["active_challenge"]["goals"]] == [
+        "Rozejrzyjcie się po okolicy"
+    ]
+    scout = next(
+        point
+        for point in active["current_zone_points"]
+        if point["id"] == "wounded_scout"
+    )
+    assert scout["interaction_label"] == "Podejdź do rannego zwiadowcy"
+
+
+def test_legacy_courtyard_challenge_debug_uses_complete_entry_setup() -> None:
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        debug_challenge_id="courtyard_search",
+    )
+
+    state = session.state_payload()
+
+    assert state["current_zone"]["id"] == "courtyard"
+    assert state["flow"]["stage"] == "party_setup"
+    assert (
+        state["exploration_setup"]["current_step"]["assignment_point_id"]
+        == "wounded_scout"
+    )
+
+    active = session.select_board_position(Coordinate(8, 9))
+
+    assert [
+        point["interaction_label"]
+        for point in active["current_zone_points"]
+        if point["id"] == "wounded_scout"
+    ] == ["Podejdź do rannego zwiadowcy"]
+    assert [goal["label"] for goal in active["active_challenge"]["goals"]] == [
+        "Rozejrzyjcie się po okolicy"
+    ]
 
 
 def test_open_zone_interaction_only_passively_highlights_current_location() -> None:
@@ -1842,7 +1928,7 @@ def test_exact_gate_reconnaissance_grants_and_consumes_initiative_advantage(tmp_
     )
     session.state_payload()
     opening = session.resolve_encounter_opening()
-    assert opening["pending_encounter"]["opening"]["outcome"] == "party_surprises_enemies"
+    assert opening["pending_encounter"]["opening"]["outcome"] == "no_surprise"
     session.start_encounter_setup()
     while session.encounter_setup_flow is not None and not session.encounter_setup_flow.completed:
         if session.encounter_setup_flow.is_player_start_step:
@@ -1852,7 +1938,6 @@ def test_exact_gate_reconnaissance_grants_and_consumes_initiative_advantage(tmp_
         else:
             session.confirm_encounter_setup_step()
 
-    session.finish_precombat_stealth()
     state = session.start_encounter_initiative()
 
     assert state["encounter_initiative"]["current_prompt"]["actor_id"] == "hero"
@@ -1878,21 +1963,20 @@ def test_exact_gate_reconnaissance_grants_and_consumes_initiative_advantage(tmp_
     assert any(point["id"] == "wounded_scout" for point in resolved["visible_points"])
 
 
-def test_quiet_gate_opening_gives_enemies_initiative_disadvantage(tmp_path):
+def test_critical_gate_breach_gives_every_ally_initiative_advantage_without_hiding(tmp_path):
     session = ExplorationUiSession(
         "content/scenarios/abandoned_watchtower.json",
         session_id="quiet_gate_surprise_test",
         observation_dir=tmp_path,
     )
     session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
-    session.state = replace(
-        session.state,
-        flags=set_scene_flag(session.state.flags, "gate_passed", True),
-    )
+    flags = set_scene_flag(session.state.flags, "gate_passed", True)
+    flags = set_scene_flag(flags, "gate_critical_breach", True)
+    session.state = replace(session.state, flags=flags)
     session.state_payload()
 
     opening = session.resolve_encounter_opening()
-    assert opening["pending_encounter"]["opening"]["outcome"] == "party_surprises_enemies"
+    assert opening["pending_encounter"]["opening"]["outcome"] == "party_initiative_advantage"
 
     session.start_encounter_setup()
     while session.encounter_setup_flow is not None and not session.encounter_setup_flow.completed:
@@ -1902,20 +1986,57 @@ def test_quiet_gate_opening_gives_enemies_initiative_disadvantage(tmp_path):
             )
         else:
             session.confirm_encounter_setup_step()
-    session.finish_precombat_stealth()
-    session.start_encounter_initiative()
-    for roll in (20, 19, 18):
-        session.submit_encounter_initiative_roll(roll)
+    assert session.state_payload()["encounter_stealth"] is None
+    state = session.start_encounter_initiative()
+    ally_modes: list[str] = []
+    while session.combat_state is None:
+        prompt = state["encounter_initiative"]["current_prompt"]
+        ally_modes.append(prompt["roll_mode"])
+        state = session.submit_encounter_initiative_roll(20, 19)
 
-    state = session.state_payload()
+    assert ally_modes == ["advantage", "advantage", "advantage"]
+    final_state = session.state_payload()
     enemy_entries = [
         entry
-        for entry in state["encounter_initiative"]["order"]
+        for entry in final_state["encounter_initiative"]["order"]
         if entry["actor_id"] in {"goblin_a", "goblin_b"}
     ]
     assert len(enemy_entries) == 2
-    assert all(entry["roll_mode"] == "disadvantage" for entry in enemy_entries)
-    assert all(len(entry["natural_rolls"]) == 2 for entry in enemy_entries)
+    assert all(entry["roll_mode"] == "normal" for entry in enemy_entries)
+    assert all(len(entry["natural_rolls"]) == 1 for entry in enemy_entries)
+
+
+def test_critical_wall_entry_allows_hiding_and_gives_party_initiative_advantage(tmp_path):
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        session_id="critical_wall_entry_test",
+        observation_dir=tmp_path,
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    flags = set_scene_flag(session.state.flags, "gate_passed", True)
+    flags = set_scene_flag(flags, "gate_wall_critical_entry", True)
+    session.state = replace(session.state, flags=flags)
+    session.state_payload()
+
+    opening = session.resolve_encounter_opening()
+    assert (
+        opening["pending_encounter"]["opening"]["outcome"]
+        == "party_initiative_advantage_and_can_hide"
+    )
+
+    session.start_encounter_setup()
+    while session.encounter_setup_flow is not None and not session.encounter_setup_flow.completed:
+        if session.encounter_setup_flow.is_player_start_step:
+            session.assign_encounter_player_start_position(
+                session.encounter_setup_flow.remaining_player_start_positions()[0]
+            )
+        else:
+            session.confirm_encounter_setup_step()
+
+    assert session.state_payload()["encounter_stealth"] is not None
+    session.finish_precombat_stealth()
+    initiative = session.start_encounter_initiative()
+    assert initiative["encounter_initiative"]["current_prompt"]["roll_mode"] == "advantage"
 
 
 def test_precombat_stealth_roll_becomes_per_observer_hidden_state_in_combat(tmp_path):
@@ -1925,10 +2046,10 @@ def test_precombat_stealth_roll_becomes_per_observer_hidden_state_in_combat(tmp_
         observation_dir=tmp_path,
     )
     session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
-    session.state = replace(
-        session.state,
-        flags=set_scene_flag(session.state.flags, "gate_passed", True),
-    )
+    flags = set_scene_flag(session.state.flags, "gate_passed", True)
+    flags = set_scene_flag(flags, "gate_lock_critical", True)
+    flags = set_scene_flag(flags, "gate_bolt_critical", True)
+    session.state = replace(session.state, flags=flags)
     session.state_payload()
     session.resolve_encounter_opening()
     session.start_encounter_setup()
@@ -2650,7 +2771,12 @@ def test_exploration_ui_session_pending_encounter_waits_for_ui_setup_not_board_c
     session.attach_board_connection(board, backend="simulator")
     session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
 
-    session.submit_action("Wyważamy bramę.")
+    session.submit_action(
+        "Wyważamy bramę.",
+        selected_goal_id="force_entry",
+        selected_check_participants="single_actor",
+        participant_actor_ids=("hero",),
+    )
     session.decide("accept")
     session.resolve_rolls({"hero": 16})
     session.finish_interaction_result()
@@ -2868,6 +2994,152 @@ def test_exploration_ui_session_social_reaction_sets_flags_and_changes_attitude(
     assert "Spokojniejszy" in runtime["emotional_state"]
     assert runtime["relationship_events"][0]["intent"] == "social"
     assert any(message["title"] == "Zmiana nastawienia" for message in state["messages"])
+
+
+def test_selected_npc_goal_locks_flow_intent_and_participants_before_description():
+    proposal = NpcInteractionProposal.model_validate(
+        {
+            "action_type": "medical",
+            "request_risk": "no_risk",
+            "player_narration": "Kapłan przemawia spokojnie, a Bohater pilnuje dystansu.",
+            "npc_response": "Dobrze. Tylko bez gwałtownych ruchów.",
+            "requires_roll": True,
+            "ability": "charisma",
+            "skill": "persuasion",
+            "dc": 10,
+        }
+    )
+    client = FakeNpcClient(proposal)
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        npc_client=client,
+        debug_point_id="wounded_scout",
+    )
+
+    state = session.submit_action(
+        "Kapłan odkłada broń i spokojnie zapewnia, że przyszliśmy pomóc.",
+        selected_goal_id="calm_scout",
+        selected_check_participants="lead_with_help",
+        participant_actor_ids=("cleric", "hero"),
+    )
+
+    assert client.requests[0].routed_intent_id == "social"
+    assert state["pending"]["proposal"]["action_type"] == "social"
+    assert state["pending"]["participant_actor_ids"] == ["cleric", "hero"]
+
+    state = session.decide("accept")
+
+    assert state["pending"]["check_plan"]["lead_actor_id"] == "cleric"
+    assert state["pending"]["check_plan"]["helper_actor_id"] == "hero"
+    assert state["pending"]["check_plan"]["roll_mode"] == "advantage"
+
+
+def test_selected_medical_npc_goal_uses_authored_check_and_effects():
+    proposal = NpcInteractionProposal.model_validate(
+        {
+            "action_type": "harm",
+            "player_narration": "Kapłan ogląda ranę i przygotowuje opatrunek.",
+            "npc_response": "Tylko ostrożnie.",
+            "requires_roll": True,
+            "ability": "strength",
+            "skill": "athletics",
+            "dc": 20,
+            "effects_on_success": [
+                {"type": "set_flag", "parameters": {"key": "scout_dead", "value": True}}
+            ],
+        }
+    )
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        npc_client=FakeNpcClient(proposal),
+        debug_point_id="wounded_scout",
+    )
+
+    state = session.submit_action(
+        "Kapłan oczyszcza ranę i zakłada opatrunek.",
+        selected_goal_id="help_scout",
+        selected_check_participants="single_actor",
+        participant_actor_ids=("cleric",),
+    )
+
+    assert state["pending"]["proposal"]["action_type"] == "medical"
+    assert state["pending"]["proposal"]["ability"] == "wisdom"
+    assert state["pending"]["proposal"]["skill"] == "medicine"
+    assert state["pending"]["proposal"]["dc"] == 12
+    assert state["pending"]["proposal"]["effects_on_success"] == []
+
+    state = session.decide("accept")
+    assert state["pending"]["check_plan"]["lead_actor_id"] == "cleric"
+    assert state["pending"]["check_plan"]["dc"] == 12
+    state = session.resolve_rolls({"cleric": 20})
+
+    assert scene_flag(session.state.flags, "scout_treated", False) is True
+    assert scene_flag(session.state.flags, "scout_stabilized", False) is True
+    assert scene_flag(session.state.flags, "scout_trusts_party", False) is True
+    assert scene_flag(session.state.flags, "scout_dead", False) is False
+
+
+def test_selected_intimidation_goal_always_offers_authored_roll_without_technical_refusal():
+    proposal = NpcInteractionProposal.model_validate(
+        {
+            "action_type": "intimidation",
+            "request_risk": "significant_risk",
+            "target_id": "scout_information",
+            "player_narration": (
+                "Bohater wysuwa miecz z pochwy i żąda pokazania zawartości torby."
+            ),
+            "npc_response": (
+                "Zwiadowca blednie i odsuwa się w błoto, kurczowo ściskając torbę."
+            ),
+            "requires_roll": False,
+            "success_message": "Zwiadowca zdradza trop o bestii.",
+            "failure_message": "Zwiadowca wpada w panikę.",
+        }
+    )
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        npc_client=FakeNpcClient(proposal),
+        debug_point_id="wounded_scout",
+    )
+
+    state = session.submit_action(
+        "Albo pokażesz nam torbę, albo skrócę twoje cierpienie mieczem.",
+        selected_goal_id="pressure_scout",
+        selected_check_participants="single_actor",
+        participant_actor_ids=("hero",),
+    )
+
+    assert state["pending"]["proposal"]["requires_roll"] is True
+    assert state["pending"]["proposal"]["ability"] == "charisma"
+    assert state["pending"]["proposal"]["skill"] == "intimidation"
+    assert state["pending"]["proposal"]["dc"] == 18
+    assert "social_plan" not in state["pending"]
+    assert state["pending"]["npc_action_plan"]["target_id"] == "scout_information"
+    assert [message["title"] for message in state["messages"][-2:]] == [
+        "Gracze",
+        "Narracja MG",
+    ]
+
+    roll = session.decide("accept")
+
+    assert roll["pending"]["stage"] == "roll"
+    assert roll["pending"]["check_plan"]["dc"] == 18
+    assert not any(
+        message["title"] == "Reakcja NPC"
+        and "nie wymaga rzutu" in message["body"]
+        for message in roll["messages"]
+    )
+
+    resolved = session.resolve_rolls({"hero": 20})
+
+    assert resolved["pending"] is None
+    assert scene_flag(session.state.flags, "scout_coerced", False) is True
+    assert scene_flag(session.state.flags, "beast_hint_learned", False) is True
+    assert any(
+        message["title"] == "Wynik interakcji NPC"
+        and "dokładnie opisuje" in message["body"]
+        for message in resolved["messages"]
+    )
 
 
 def test_npc_instance_gm_chat_does_not_address_npc_or_apply_effects():

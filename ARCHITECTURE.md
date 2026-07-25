@@ -93,8 +93,14 @@ The exploration web surface is split into explicit responsibilities:
 - `exploration/flow_graph.py` owns pure state-derived exploration graph nodes,
   conditions and route references, while
   `application/exploration_interaction_flow.py` selects the available authored
-  goal route. Flow graphs orchestrate content but never resolve D&D checks or
-  mutate state; see `docs/EXPLORATION_FLOW_GRAPHS.md`,
+  goal route and `application/exploration_goal_execution.py` validates the
+  player-selected participant model, actor eligibility, authored observation
+  scope and procedural source actions before the UI creates pending state.
+  `application/npc_goal_execution.py` applies the same boundary to NPC goals:
+  it derives visible cards, locks the authored NPC intent, and validates the
+  selected leader/helper before LLM narration.
+  Flow graphs orchestrate content but never resolve D&D checks or mutate state;
+  see `docs/EXPLORATION_FLOW_GRAPHS.md`,
 - `application/exploration_hazard_flow.py` owns hazard saving throws, typed damage,
   save-dependent effects, and actor-condition consequences,
 - `exploration/traps.py` owns pure trap-state transitions and action outcomes; detection

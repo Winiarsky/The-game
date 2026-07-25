@@ -1,4 +1,6 @@
-from dnd_board_game.combat import SceneFlags
+from dataclasses import replace
+
+from dnd_board_game.combat import SceneFlags, set_scene_flag
 from dnd_board_game.exploration import (
     ExplorationState,
     ExplorationTrapAction,
@@ -7,6 +9,7 @@ from dnd_board_game.exploration import (
     match_revealed_trap_action,
     reveal_trap,
     trap_state_for,
+    trap_activates_for_challenge,
 )
 from dnd_board_game.scenarios import build_exploration_from_scenario, load_scenario
 
@@ -34,6 +37,27 @@ def test_trap_is_hidden_until_revealed() -> None:
 
     assert trap_state_for(state, "gate_alarm_wire").status == ExplorationTrapStatus.HIDDEN
     assert trap_state_for(revealed, "gate_alarm_wire").status == ExplorationTrapStatus.REVEALED
+
+
+def test_challenge_activation_honors_required_and_forbidden_flags() -> None:
+    state = _state()
+    trap = state.traps[0]
+
+    assert trap_activates_for_challenge(state, trap, "closed_gate") is True
+
+    critical_breach = replace(
+        state,
+        flags=set_scene_flag(state.flags, "gate_critical_breach", True),
+    )
+
+    assert (
+        trap_activates_for_challenge(
+            critical_breach,
+            trap,
+            "closed_gate",
+        )
+        is False
+    )
 
 
 def test_successful_disarm_and_bypass_prevent_trigger() -> None:

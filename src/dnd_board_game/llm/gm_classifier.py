@@ -343,26 +343,6 @@ class GmDeclarationThreadEntry:
 
 
 @dataclass(frozen=True, slots=True)
-class GmFlowRouteCandidate:
-    transition_id: str
-    goal_id: str
-    label: str
-    description: str
-    route_kind: str
-    suggested_tags: tuple[str, ...] = ()
-
-    def as_payload(self) -> dict[str, object]:
-        return {
-            "transition_id": self.transition_id,
-            "goal_id": self.goal_id,
-            "label": self.label,
-            "description": self.description,
-            "route_kind": self.route_kind,
-            "suggested_tags": list(self.suggested_tags),
-        }
-
-
-@dataclass(frozen=True, slots=True)
 class GmClassifierRequest:
     scenario_id: str
     scenario_name: str
@@ -387,7 +367,6 @@ class GmClassifierRequest:
     selected_flow_route_kind: str | None = None
     selected_flow_option_id: str | None = None
     selected_flow_observation_ids: tuple[str, ...] = ()
-    available_flow_routes: tuple[GmFlowRouteCandidate, ...] = ()
     selected_check_participants: CheckParticipants | None = None
     selected_participant_actor_ids: tuple[str, ...] = ()
     conversation_only: bool = False
@@ -515,9 +494,6 @@ class GmClassifierRequest:
                     and selected_flow_option is not None
                     else None
                 ),
-                "available_flow_routes": [
-                    route.as_payload() for route in self.available_flow_routes
-                ],
                 "selected_check_participants": (
                     self.selected_check_participants.value
                     if self.selected_check_participants is not None
@@ -950,7 +926,6 @@ def build_gm_classifier_request(
     selected_flow_route_kind: str | None = None,
     selected_flow_option_id: str | None = None,
     selected_flow_observation_ids: tuple[str, ...] = (),
-    available_flow_routes: tuple[GmFlowRouteCandidate, ...] = (),
     selected_check_participants: CheckParticipants | None = None,
     selected_participant_actor_ids: tuple[str, ...] = (),
     conversation_only: bool = False,
@@ -983,7 +958,6 @@ def build_gm_classifier_request(
         selected_flow_route_kind=selected_flow_route_kind,
         selected_flow_option_id=selected_flow_option_id,
         selected_flow_observation_ids=selected_flow_observation_ids,
-        available_flow_routes=available_flow_routes,
         selected_check_participants=selected_check_participants,
         selected_participant_actor_ids=selected_participant_actor_ids,
         conversation_only=conversation_only,
@@ -1006,7 +980,6 @@ def validate_gm_declaration_analysis(
     analysis = _normalize_question_response(analysis, request)
     analysis = _normalize_explicit_build_analysis(analysis, request)
     _validate_player_intent_hint(analysis, request)
-    _validate_selected_flow_transition(analysis, request)
     if analysis.analysis_type == GmDeclarationAnalysisType.PLAYER_QUESTION:
         _validate_conversation_response(analysis, request)
         return analysis
@@ -1035,45 +1008,6 @@ def validate_gm_declaration_analysis(
     if unknown_resources:
         raise GmProposalValidationError("Drużyna nie ma zadeklarowanych zasobów: " + ", ".join(unknown_resources))
     return analysis
-
-
-def _validate_selected_flow_transition(
-    analysis: GmDeclarationAnalysis,
-    request: GmClassifierRequest,
-) -> None:
-    selected_id = analysis.selected_flow_transition_id
-    available_ids = {
-        candidate.transition_id for candidate in request.available_flow_routes
-    }
-    if selected_id is not None and selected_id not in available_ids:
-        raise GmProposalValidationError(
-            "MG wskazał nieaktywną albo nieistniejącą krawędź eksploracji."
-        )
-    if (
-        selected_id is not None
-        and analysis.analysis_type != GmDeclarationAnalysisType.PLAUSIBLE
-    ):
-        raise GmProposalValidationError(
-            "Krawędź eksploracji można wybrać tylko dla wiarygodnej deklaracji działania."
-        )
-    if (
-        selected_id is not None
-        and analysis.action_flow
-        not in {GmActionFlow.CHALLENGE_ATTEMPT, GmActionFlow.COMBINED}
-    ):
-        raise GmProposalValidationError(
-            "Krawędź eksploracji można wybrać tylko dla wykonywanej teraz próby."
-        )
-    if (
-        request.available_flow_routes
-        and request.selected_goal_id is None
-        and analysis.analysis_type == GmDeclarationAnalysisType.PLAUSIBLE
-        and analysis.action_flow == GmActionFlow.CHALLENGE_ATTEMPT
-        and selected_id is None
-    ):
-        raise GmProposalValidationError(
-            "Opis działania nie wskazuje jednoznacznie jednej aktywnej drogi eksploracji."
-        )
 
 
 def _validate_world_action(
@@ -2094,6 +2028,9 @@ def _ground_selected_flow_mechanics(
     return proposal.model_copy(
         update={
             "target_challenge_id": request.challenge.id,
+            "approach_tags": tuple(
+                dict.fromkeys((*proposal.approach_tags, *profile.tags))
+            ),
             "ability": profile.ability_check.ability,
             "skill": profile.ability_check.skill,
             "dc": profile.ability_check.dc,
@@ -2772,7 +2709,6 @@ class GmDeclarationAnalysis(BaseModel):
     suggested_followup: str = Field(default="", max_length=500)
     requires_check: bool = False
     observation_id: str | None = Field(default=None, max_length=120)
-    selected_flow_transition_id: str | None = Field(default=None, max_length=120)
     source_query: GmSceneSourceQuery | None = None
     use_source_id: str | None = Field(default=None, max_length=240)
     action_target_source_id: str | None = Field(default=None, max_length=240)

@@ -801,9 +801,10 @@
         ]
       ],
       "color": "movement",
-      "description": "Pusty dziedziniec z porozrzucanymi deskami i śladami błota.",
+      "description": "Za wyłamaną bramą rozciąga się zarośnięty, błotnisty dziedziniec. Wśród porozrzucanych desek, krwawych śladów i szczątków rozbitego wozu leży ranny zwiadowca — żywy, lecz wyraźnie poturbowany.",
+      "image": "assets/courtyard_search.png",
       "llm_context": {
-        "summary": "Dziedziniec za bramą jest zarośnięty, błotnisty i pełen śladów gwałtownego opuszczenia strażnicy.",
+        "summary": "Kamienne mury są spękane i porośnięte bluszczem. Błoto przecinają ślady walki oraz przeciągania czegoś ciężkiego w stronę wieży, a spod zawalonego wozu dobiega urywany oddech zwiadowcy.",
         "available_materials": [
           "błoto",
           "ślady walki",

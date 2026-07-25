@@ -234,7 +234,7 @@ def test_npc_interaction_rejects_llm_effects_for_structured_target():
         validate_npc_interaction_proposal(proposal, _request())
 
 
-def test_structured_social_target_combines_reaction_table_with_content_outcomes():
+def test_structured_intimidation_uses_authored_check_and_content_outcomes():
     proposal = NpcInteractionProposal.model_validate(
         {
             "action_type": "intimidation",
@@ -247,11 +247,12 @@ def test_structured_social_target_combines_reaction_table_with_content_outcomes(
 
     validated = validate_npc_interaction_proposal(proposal, _request())
 
-    assert validated.social_plan is not None
-    assert validated.social_plan.dc == 20
+    assert validated.social_plan is None
     assert validated.action_plan is not None
     assert validated.action_plan.target.reward_label == "Trop o bestii"
     assert validated.attempt_plan is not None
     assert validated.attempt_plan.max_attempts == 1
+    assert validated.proposal.requires_roll is True
     assert validated.proposal.ability == "charisma"
     assert validated.proposal.skill == "intimidation"
+    assert validated.proposal.dc == 18

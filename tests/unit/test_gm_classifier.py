@@ -18,7 +18,6 @@ from dnd_board_game.llm import (
     GmDeclarationAnalysis,
     GmDeclarationAnalysisType,
     GmDeclarationThreadEntry,
-    GmFlowRouteCandidate,
     GmClassifierProposal,
     GmPreparationEffect,
     GmProposalValidationError,
@@ -114,6 +113,38 @@ def test_selected_goal_applies_authored_quiet_tradeoff():
         if item.type.value == "add_noise" and item.trigger.value == "failure"
     )
     assert failure_noise.value == 0
+
+
+def test_selected_flow_adds_authored_tags_before_narration_consistency_check():
+    exploration, state = _state()
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Bierzemy długi rozbieg i wbijamy się w bramę z bara.",
+        actors=exploration.actors,
+        selected_goal_id="force_entry",
+        selected_flow_transition_id="force_gate",
+        selected_flow_route_kind="challenge_option",
+        selected_flow_option_id="force_gate",
+        selected_check_participants=CheckParticipants.LEAD_WITH_HELP,
+        selected_participant_actor_ids=("hero", "cleric"),
+    )
+    proposal = _proposal(
+        approach_label="Wspólne uderzenie",
+        approach_tags=["noise"],
+        player_narration=(
+            "Bohater i Kapłan biorą rozbieg i uderzają barkami w bramę."
+        ),
+        used_resource_ids=[],
+    )
+
+    validated = validate_gm_classifier_proposal(proposal, request)
+
+    assert "heavy_force" in validated.proposal.approach_tags
+    assert validated.proposal.ability == "strength"
+    assert validated.proposal.skill == "athletics"
 
 
 def test_selected_goal_sends_effective_narrative_style_to_gm():
@@ -233,47 +264,6 @@ def test_declaration_analysis_validates_grounded_fixture_operation():
 
     assert validated.action_target_source_id == source_id
     assert validated.fixture_operation.value == "detach"
-
-
-def test_declaration_analysis_accepts_only_one_of_the_active_flow_routes():
-    exploration, state = _state()
-    route = GmFlowRouteCandidate(
-        transition_id="force_gate",
-        goal_id="force_entry",
-        label="Wyważ bramę",
-        description="Spróbuj pokonać bramę siłą.",
-        route_kind="challenge_option",
-    )
-    request = build_gm_classifier_request(
-        scenario_id=exploration.scenario_id,
-        scenario_name=exploration.scenario_name,
-        scenario_context=exploration.llm_context,
-        state=state,
-        player_action="Bohater taranuje bramę barkiem.",
-        actors=exploration.actors,
-        available_flow_routes=(route,),
-    )
-    valid = GmDeclarationAnalysis.model_validate(
-        {
-            "analysis_type": "plausible",
-            "normalized_intent": "Wyważenie bramy barkiem.",
-            "selected_flow_transition_id": "force_gate",
-        }
-    )
-
-    assert validate_gm_declaration_analysis(
-        valid, request
-    ).selected_flow_transition_id == "force_gate"
-
-    invented = valid.model_copy(
-        update={"selected_flow_transition_id": "sekretna_furtka_z_krzakow"}
-    )
-    with pytest.raises(GmProposalValidationError, match="nieaktywną albo nieistniejącą"):
-        validate_gm_declaration_analysis(invented, request)
-
-    ambiguous = valid.model_copy(update={"selected_flow_transition_id": None})
-    with pytest.raises(GmProposalValidationError, match="jednoznacznie"):
-        validate_gm_declaration_analysis(ambiguous, request)
 
 
 def test_gm_classifier_preserves_selected_mechanic_on_generated_option():

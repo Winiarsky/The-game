@@ -163,6 +163,7 @@ function setBusy(message) {
 async function api(path, body, busyMessage) {
   const previousStage = state && state.flow ? state.flow.stage : null;
   const previousInteractionId = state && state.conversation ? state.conversation.interaction_id : null;
+  const previousMessageCount = state && state.messages ? state.messages.length : 0;
   setBusy(busyMessage || 'Czekam na odpowiedź...');
   try {
     const res = await fetch(path, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body || {})});
@@ -191,7 +192,7 @@ async function api(path, body, busyMessage) {
     } else if (path === '/api/combat/opportunity-movement/confirm' && res.ok) {
       resultAck = latestMessageWithTitle(state, 'Atak okazyjny');
     } else if (path === '/api/combat/player-attack-confirm' && res.ok) {
-      const spellResult = latestMessageWithTitle(state, 'Czar');
+      const spellResult = latestMessageWithTitleSince(state, 'Czar', previousMessageCount);
       resultAck = spellResult && spellResult.body.includes('rzut obronny')
         ? {title: 'Rzut obronny przeciwnika', body: spellResult.body}
         : null;
@@ -800,14 +801,20 @@ function flowPanelHtml() {
     if (setup && setup.current_step) {
       const step = setup.current_step || {};
       const hasPositions = Boolean(step.has_positions);
+      const requiresBoardAssignment = Boolean(step.requires_board_assignment);
       const positions = (step.positions || []).map(pos => `(${pos[0]},${pos[1]})`).join(', ');
+      const fallbackButtons = (step.available_positions || []).map(pos =>
+        `<button class="secondary" onclick="selectBoardPosition(${Number(pos[0])}, ${Number(pos[1])})">(${Number(pos[0])},${Number(pos[1])})</button>`
+      ).join('');
       return `
         <h3>Setup mapy ${Number(setup.current_index) + 1}/${setup.step_count}</h3>
         <p><b>${esc(step.label || '')}</b></p>
         <p>${esc(step.message || '')}</p>
         ${hasPositions ? `<p><b>Kolor:</b> ${esc(step.color || '-')}</p><p><b>Pola:</b> ${esc(positions)}</p>` : '<p class="muted">Ten krok jest tylko instrukcją i nie podświetla pól na planszy.</p>'}
-        <p class="muted">${hasPositions ? 'Rozstaw elementy na fizycznej planszy. Jeśli potwierdzasz planszą, najpierw kliknij Skanuj planszę.' : 'Potwierdź, żeby przejść do pierwszego podświetlanego elementu mapy.'}</p>
-        <div class="row"><button onclick="confirmExplorationSetup()">Potwierdź setup</button>${hasPositions ? '<button class="secondary" data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button>' : ''}</div>
+        <p class="muted">${requiresBoardAssignment ? `Ustaw figurkę ${esc(step.assignment_point_name || '')} i kliknij wybrane podświetlone pole.` : hasPositions ? 'Rozstaw elementy na fizycznej planszy. Jeśli potwierdzasz planszą, najpierw kliknij Skanuj planszę.' : 'Potwierdź, żeby przejść do pierwszego podświetlanego elementu mapy.'}</p>
+        ${requiresBoardAssignment
+          ? `<div class="row"><button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button></div><details class="encounter-position-fallback"><summary>Awaryjny wybór bez skanu</summary><div class="row">${fallbackButtons}</div></details>`
+          : `<div class="row"><button onclick="confirmExplorationSetup()">Potwierdź setup</button>${hasPositions ? '<button class="secondary" data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button>' : ''}</div>`}
       `;
     }
     return `
@@ -1070,9 +1077,14 @@ function currentInteractionGoals() {
   if (point && point.npc) return point.npc.goals || [];
   return state.active_challenge ? (state.active_challenge.goals || []) : [];
 }
+function currentInteractionPointCards() {
+  if (state.active_point) return [];
+  return (state.current_zone_points || []).filter(point => point && point.has_npc);
+}
 function interactionGoalsHtml() {
   const goals = currentInteractionGoals();
-  if (!goals.length || state.pending || (state.required_rolls || []).length || resultAck) return '';
+  const pointCards = currentInteractionPointCards();
+  if ((!goals.length && !pointCards.length) || state.pending || (state.required_rolls || []).length || resultAck) return '';
   const selected = goals.find(goal => goal.id === selectedInteractionGoalId) || null;
   return `
     <div class="interaction-goals-head">
@@ -1080,6 +1092,15 @@ function interactionGoalsHtml() {
       <span>${selected ? esc(selected.followup_prompt) : 'Wybierzcie kierunek. Sposób nadal należy do was.'}</span>
     </div>
     <div class="interaction-goal-grid">
+      ${pointCards.map(point => `
+        <button type="button" class="interaction-goal-card npc-point-card"
+          onclick="selectPoint('${esc(point.id)}')">
+          ${point.image ? `<img class="interaction-goal-image" src="${esc(point.image.startsWith('/') ? point.image : `/scenario-assets/${point.image}`)}" alt="">` : ''}
+          <b>${esc(point.interaction_label || point.name)}</b>
+          <span>${esc(point.description || 'Podejdźcie i rozpocznijcie rozmowę.')}</span>
+          <small>Interakcja z NPC</small>
+        </button>
+      `).join('')}
       ${goals.map(goal => `
         <button type="button" class="interaction-goal-card${goal.id === selectedInteractionGoalId ? ' selected' : ''}"
           onclick="selectInteractionGoal('${esc(goal.id)}')">
@@ -1138,7 +1159,7 @@ function selectedGoalCheckParticipants(goal) {
     : selectedInteractionCheckParticipants;
 }
 function interactionParticipantPickerHtml(goal) {
-  if (!state.active_challenge || (state.active_point && state.active_point.npc)) return '';
+  if (!state.active_challenge && !(state.active_point && state.active_point.npc)) return '';
   const mode = selectedGoalCheckParticipants(goal);
   const actors = state.actors || [];
   const options = goal.allowed_check_participants || [goal.check_participants || 'single_actor'];
@@ -1653,6 +1674,13 @@ function latestMessageWithTitle(state, title) {
     if (messages[i].title === title) return messages[i];
   }
   return messages[messages.length - 1] || null;
+}
+function latestMessageWithTitleSince(state, title, startIndex) {
+  const messages = state.messages || [];
+  for (let i = messages.length - 1; i >= Math.max(0, Number(startIndex || 0)); i -= 1) {
+    if (messages[i].title === title) return messages[i];
+  }
+  return null;
 }
 function travelOptionsHtml() {
   const zones = state.travel_options || [];
@@ -3597,11 +3625,11 @@ async function sendGoalAction() {
   const selectedGoal = currentInteractionGoals().find(goal => goal.id === selectedInteractionGoalId) || null;
   if (!selectedGoal) return;
   const selectedCheckParticipants = selectedGoal ? selectedGoalCheckParticipants(selectedGoal) : null;
-  if (selectedGoal && state.active_challenge && !(state.active_point && state.active_point.npc) && !selectedCheckParticipants) {
+  if (selectedGoal && !selectedCheckParticipants) {
     alert('Najpierw wybierz typ testu.');
     return;
   }
-  if (selectedGoal && state.active_challenge && !(state.active_point && state.active_point.npc) && selectedCheckParticipants !== 'whole_party' && selectedInteractionActorIds.length < 1) {
+  if (selectedGoal && selectedCheckParticipants !== 'whole_party' && selectedInteractionActorIds.length < 1) {
     alert('Najpierw wybierz postać, która wykonuje test.');
     return;
   }

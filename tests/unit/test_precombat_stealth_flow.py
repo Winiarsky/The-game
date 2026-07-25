@@ -39,9 +39,15 @@ def _opening(outcome: EncounterOpeningOutcome) -> EncounterOpeningResolution:
     return EncounterOpeningResolution("rule", outcome, "title", "narration", 0)
 
 
-def test_precombat_stealth_is_only_available_when_party_approaches_unnoticed() -> None:
+def test_precombat_stealth_is_available_only_for_authored_hide_openings() -> None:
     assert precombat_stealth_is_available(
-        _opening(EncounterOpeningOutcome.PARTY_SURPRISES_ENEMIES)
+        _opening(EncounterOpeningOutcome.PARTY_CAN_HIDE)
+    )
+    assert precombat_stealth_is_available(
+        _opening(EncounterOpeningOutcome.PARTY_INITIATIVE_ADVANTAGE_AND_CAN_HIDE)
+    )
+    assert not precombat_stealth_is_available(
+        _opening(EncounterOpeningOutcome.PARTY_INITIATIVE_ADVANTAGE)
     )
     assert not precombat_stealth_is_available(
         _opening(EncounterOpeningOutcome.NO_SURPRISE)

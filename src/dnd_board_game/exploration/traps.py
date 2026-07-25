@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
+from dnd_board_game.combat import scene_flag
+
 from .models import (
     ExplorationState,
     ExplorationTrap,
@@ -62,6 +64,26 @@ def trigger_trap(state: ExplorationState, trap: ExplorationTrap) -> ExplorationS
     }:
         return state
     return set_trap_status(state, trap.id, ExplorationTrapStatus.TRIGGERED)
+
+
+def trap_activates_for_challenge(
+    state: ExplorationState,
+    trap: ExplorationTrap,
+    challenge_id: str,
+) -> bool:
+    return (
+        trap.activation_challenge_id == challenge_id
+        and all(
+            bool(scene_flag(state.flags, flag, False))
+            for flag in trap.activation_required_flags
+        )
+        and not any(
+            bool(scene_flag(state.flags, flag, False))
+            for flag in trap.activation_forbidden_flags
+        )
+        and trap_state_for(state, trap.id).status
+        in {ExplorationTrapStatus.HIDDEN, ExplorationTrapStatus.REVEALED}
+    )
 
 
 def resolve_trap_action(
@@ -160,5 +182,6 @@ __all__ = [
     "reveal_trap",
     "set_trap_status",
     "trap_state_for",
+    "trap_activates_for_challenge",
     "trigger_trap",
 ]

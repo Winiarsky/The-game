@@ -75,6 +75,16 @@ from .exploration_interaction_flow import (
     ExplorationGoalRoute,
     ExplorationInteractionFlowService,
 )
+from .exploration_goal_execution import (
+    ExplorationGoalExecutionPlan,
+    ExplorationGoalExecutionPlanner,
+    ProceduralSourceExecution,
+)
+from .npc_goal_execution import (
+    NpcGoalExecutionPlan,
+    NpcGoalExecutionPlanner,
+    NpcGoalRoute,
+)
 from .exploration_hazard_flow import (
     ExplorationHazardResolution,
     apply_exploration_hazard_outcome,

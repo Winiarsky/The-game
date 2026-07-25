@@ -37,6 +37,9 @@ najbliższy horyzont, a nie kopię całej roadmapy.
 - [x] Make authored flow options authoritative for check mechanics and accept a reduced LLM method-only contract on migrated routes.
 - [ ] Migrate remaining exploration/NPC scenes to guarded flow graphs and reduce the LLM contract to route selection plus grounded method details.
   - [x] Revalidate the selected goal against its currently active graph transition, with participant choice made before the method description and roll.
+  - [x] Extract goal, participant, observation and procedural-source planning from `ExplorationUiSession` into an application service and remove duplicated gate routing fields.
+  - [x] Migrate the wounded scout to an NPC-owned flow with authored intent routing and pre-declaration participant selection.
+  - [ ] Migrate the legacy `demo_exploration_scene` freeform harness from tag-based goal inference to explicit flow routes, then update its watchtower regression cases.
 - [x] Route authored observation intents before generic challenge classification and ground numeric DCs to content tiers.
 - [x] Replace the gate's predefined approach/risk lists with structured guidance facts and update the interaction form.
 - [x] Give `/szukaj` an exact-first and semantic-fallback flow with player-confirmed substitutes and persisted scene findings.
@@ -50,6 +53,7 @@ najbliższy horyzont, a nie kopię całej roadmapy.
 - [x] Keep the wounded scout hidden until the gate encounter is won instead of revealing it when the gate opens.
 - [x] Add a scenario-driven encounter-opening stage with initiative disadvantage for the surprised side.
 - [x] Bridge scenario-driven quiet encounter openings into optional per-character Stealth vs passive Perception before initiative.
+- [x] Split critical gate openings into independent party-wide initiative advantage and precombat Hide opportunities for force, lock-and-bolt, and wall routes.
 - [ ] [Deferred rules fidelity] Replace side-wide initiative disadvantage with the full per-creature D&D 5e 2014 surprised condition when a scenario needs exact rules fidelity.
 - [x] Replace text-only exploration materials and predefined temporary-item templates with deterministic property-based crafting.
 - [x] Persist component reservations and dynamically crafted temporary items in scenario snapshots.
@@ -108,7 +112,11 @@ najbliższy horyzont, a nie kopię całej roadmapy.
 - [x] Keep combat result acknowledgements inside the combat panel, name ranged-melee threats, clarify compound movement destinations, and surface defeated-enemy results.
 - [x] Keep the idle combat panel board-first by moving hero spells, common actions, equipment, and turn ending behind the active hero's board tile menu.
 - [x] Render acknowledged combat results once instead of duplicating the same message across prompt, inline summary, and acknowledgement card.
+- [x] Scope automatic spell-result acknowledgements to messages created by the current combat request so a previous caster's result cannot reappear during another actor's attack.
 - [x] Keep exploration LEDs aligned with actual input mode: passive focus during an open interaction and selectable locations/points only after leaving it.
+- [x] Add a courtyard-entry NPC placement setup, persisted selected point positions, location action cards, and passive LED focus for the physically placed wounded scout.
+- [x] Add a direct courtyard-entry debug preset (including the legacy `courtyard_search` shortcut), full arrival narration, mandatory wounded-scout miniature placement, and illustrated scout/search action tiles.
+- [x] Make wounded-scout intimidation a deterministic Charisma (Intimidation) check with authored outcome branches, without contradictory social-table refusal or a premature NPC response.
 - [x] Add strict combat targeting after selecting an attack or spell source so movement tiles cannot steal target/area clicks, with explicit single-target and area labels.
 - [x] Clarify exploration checks by naming the tested skill and separating the rolling leader from a non-rolling helper.
 - [x] Give exploration goal cards `must`/`allow` policies for D&D single, optional Help, and whole-party checks, selected before the free-form method.

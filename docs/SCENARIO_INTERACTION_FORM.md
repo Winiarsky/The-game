@@ -82,12 +82,14 @@ Cel 1:
 - pytanie „jak to robicie?” po wyborze:
 - dozwolone intencje NPC (`intent_ids`), jeśli dotyczy:
 - sugerowane tagi podejścia, jeśli dotyczy przeszkody:
-- flagi wymagane / zabraniające pokazania:
+- flagi wymagane / zabraniające pokazania (tylko interakcja bez flowgrafu):
 - tryb wyboru uczestników: `must` / `allow`
 - domyślny albo wymagany model: `single_actor` / `lead_with_help` / `whole_party`
 - modele dozwolone przy `allow`:
-- dozwolone aktywne obserwacje (`observation_ids`), jeśli karta służy rozpoznaniu:
-- domyślna stopniowana obserwacja dla szerokiego opisu (`default_observation_id`):
+- dozwolone aktywne obserwacje (`observation_ids`) — tylko bez flowgrafu; przy
+  grafie lista należy do przejścia:
+- domyślna stopniowana obserwacja (`default_observation_id`) — tylko bez
+  flowgrafu; przy grafie należy do przejścia:
 - proceduralne użycia znanych elementów (`source_actions`):
   - id użycia:
   - `source_ref`: id istniejącego itemu albo fixture'a sceny:
@@ -121,6 +123,12 @@ Dla wyzwania prowadzonego przez flowgraf nie dodawaj ogólnego celu `Własny pla
 ani `Własny sposób`. Kafelek określa rezultat, a pole „Jak to robicie?” pozostawia
 graczom swobodę metody. Jeśli ważny zamiar nie mieści się w żadnym celu, dodaj
 konkretny kafelek rezultatu zamiast furtki omijającej graf.
+
+Dla NPC prowadzonego przez flowgraf stosuj tę samą zasadę. Graf ma `npc_id`, a
+każde przejście celu używa `route_kind: npc_intent` oraz `route_ref` wskazującego
+jedną intencję z `intent_permissions`. Dostępność kafelków należy wtedy do
+węzłów grafu, nie do powielonych flag na celu. Gracze wybierają prowadzącego i
+opcjonalnego pomocnika przed wpisaniem argumentu lub sposobu działania.
 
 ## 6B. Reguły Metod I Kompromisów
 Wpisuj tylko reguły, które silnik ma stosować deterministycznie po rozpoznaniu
@@ -186,12 +194,18 @@ deterministyczny graf:
   - wymagane aktywne węzły:
   - rodzaj resolvera: `challenge_option` / `observation_router`:
   - id autorskiej opcji albo lista obserwacji:
+  - opcjonalna domyślna obserwacja:
   - opcjonalne proceduralne `source_action_ids`:
 
 Flowgraf decyduje, które kafelki są widoczne i do jakiej mechaniki prowadzą.
 Wybrany kafelek jest jedynym wejściem do działania. LLM interpretuje metodę opisaną
 w jego polu, ale nie wybiera innego celu, nie aktywuje zablokowanej krawędzi i nie
 wymyśla skutków mechanicznych.
+
+W wyzwaniu posiadającym graf nie duplikuj na kafelkach `required_flags`,
+`forbidden_flags`, `resolution_option_id`, `observation_ids` ani
+`default_observation_id`. Definicje proceduralnych `source_actions` pozostają przy
+kafelku jako treść działania, ale przejście grafu wskazuje aktywne identyfikatory.
 
 ## 7. Stan Początkowy
 Dla NPC:

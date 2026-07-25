@@ -228,7 +228,8 @@ Dla jakich sytuacji:
 
 ## 14. Sukces / Porażka / Krytyczne Wyniki
 - `force_gate`, krytyczny sukces: puszcza zamek i rygiel, czujność nie rośnie,
-  `gate_critical_breach` daje drużynie zaskoczenie.
+  `gate_critical_breach` daje całej drużynie przewagę do inicjatywy, ale nie
+  otwiera etapu skradania.
 - `force_gate`, sukces: puszcza zamek i rygiel, czujność rośnie o 2.
 - `force_gate`, porażka: puszcza tylko zamek, czujność osiąga 3, gobliny
   przygotowują zasadzkę; próbę można powtórzyć.
@@ -237,11 +238,15 @@ Dla jakich sytuacji:
 - Otwarty zamek obniża ST późniejszego wyważania o 2. Zdjęty rygiel obniża je o 3.
   Odkryty słaby zawias i osłabiona konstrukcja obniżają je o kolejne 2 każdy.
 - `lockpick_gate`, sukces: otwiera wyłącznie zamek; rygiel nadal trzyma bramę.
-  Kafelek otwierania zamka znika.
+  Kafelek otwierania zamka znika. Krytyczny sukces dodatkowo ustawia
+  `gate_lock_critical`.
 - `remove_gate_bolt`, sukces: zdejmuje rygiel; właściwy test i modyfikatory
-  zależą od opisanej metody, ale skutki flagowe pozostają autorskie.
-- `find_way_around`, sukces: ustawia `gate_bypass_open` oraz
-  `gate_wall_bypass_surprise`; wejście przy hałasie najwyżej 1 zaskakuje gobliny.
+  zależą od opisanej metody, ale skutki flagowe pozostają autorskie. Krytyczny
+  sukces ustawia `gate_bolt_critical`. Dopiero para `gate_lock_critical` oraz
+  `gate_bolt_critical` otwiera drużynie etap skradania przed walką.
+- `find_way_around`, zwykły sukces: ustawia wyłącznie `gate_bypass_open`.
+  Krytyczny sukces dodatkowo ustawia `gate_wall_critical_entry`, co otwiera
+  etap skradania i daje całej drużynie przewagę do inicjatywy.
 - Podważanie zawiasu albo budowa narzędzia nadal mogą ustawić
   `gate_structure_weakened`, lecz nie mają osobnego kafelka — wynikają z opisu
   działania po znalezieniu odpowiednich elementów.

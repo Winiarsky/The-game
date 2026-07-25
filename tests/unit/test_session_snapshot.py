@@ -52,6 +52,7 @@ from dnd_board_game.save import (
     read_snapshot,
 )
 from dnd_board_game.ui.exploration_app import ExplorationUiSession, UiFlowStage, create_app
+from dnd_board_game.world import Coordinate
 
 
 def _session(tmp_path) -> ExplorationUiSession:
@@ -390,10 +391,10 @@ def test_snapshot_round_trip_preserves_unconsumed_encounter_edge(tmp_path):
 def test_snapshot_round_trip_preserves_encounter_opening_resolution(tmp_path):
     session = _session(tmp_path)
     session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
-    session.state = replace(
-        session.state,
-        flags=set_scene_flag(session.state.flags, "gate_passed", True),
-    )
+    flags = set_scene_flag(session.state.flags, "gate_passed", True)
+    flags = set_scene_flag(flags, "gate_lock_critical", True)
+    flags = set_scene_flag(flags, "gate_bolt_critical", True)
+    session.state = replace(session.state, flags=flags)
     session.state_payload()
     session.resolve_encounter_opening()
     assert session.pending_encounter is not None
@@ -415,7 +416,7 @@ def test_snapshot_round_trip_preserves_encounter_opening_resolution(tmp_path):
 
     assert restored.pending_encounter is not None
     assert restored.pending_encounter.opening_resolution is not None
-    assert restored.pending_encounter.opening_resolution.outcome.value == "party_surprises_enemies"
+    assert restored.pending_encounter.opening_resolution.outcome.value == "party_can_hide"
     assert restored.pending_encounter.precombat_stealth_completed is True
     assert restored.pending_encounter.precombat_stealth_attempts[0].total == 20
 
@@ -523,6 +524,36 @@ def test_session_save_and_load_restores_exploration_state(tmp_path):
     assert session.exploration.actors[0].hp == changed_actor.hp
     assert session.state.elapsed_minutes == 75
     assert session.snapshot_path.exists()
+
+
+def test_snapshot_round_trip_preserves_selected_exploration_point_position(tmp_path):
+    session = _session(tmp_path)
+    session.state = replace(
+        session.state,
+        points=tuple(
+            replace(point, positions=(Coordinate(9, 9),))
+            if point.id == "wounded_scout"
+            else point
+            for point in session.state.points
+        ),
+        flags=set_scene_flag(
+            session.state.flags,
+            "exploration_point_placed_wounded_scout",
+            True,
+        ),
+    )
+
+    restored = SessionSnapshot.from_dict(
+        session.create_snapshot().as_dict(),
+        base_state=replace(session.state, points=session.exploration.points),
+    )
+
+    scout = next(
+        point
+        for point in restored.exploration_state.points
+        if point.id == "wounded_scout"
+    )
+    assert scout.positions == (Coordinate(9, 9),)
 
 
 def test_session_save_and_load_restores_active_combat(tmp_path):

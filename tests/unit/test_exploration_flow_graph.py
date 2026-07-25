@@ -106,37 +106,3 @@ def test_gate_flow_rejects_a_goal_whose_node_is_inactive():
         )
         is None
     )
-
-
-def test_flow_service_resolves_only_currently_active_transition_ids():
-    exploration = _watchtower()
-    challenge = next(
-        challenge
-        for challenge in exploration.challenges
-        if challenge.id == "closed_gate"
-    )
-    service = ExplorationInteractionFlowService()
-
-    active = service.available_routes(
-        challenge=challenge,
-        flows=exploration.flows,
-        flags=SceneFlags(),
-    )
-
-    assert {route.transition.id for route in active if route.transition} == {
-        "force_gate",
-        "open_gate_lock",
-        "survey_gate",
-    }
-    assert service.route_for_transition(
-        challenge=challenge,
-        flows=exploration.flows,
-        transition_id="force_gate",
-        flags=SceneFlags(),
-    ).goal.id == "force_entry"
-    assert service.route_for_transition(
-        challenge=challenge,
-        flows=exploration.flows,
-        transition_id="remove_gate_bolt",
-        flags=SceneFlags(),
-    ) is None

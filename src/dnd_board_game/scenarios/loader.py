@@ -1703,6 +1703,8 @@ def _parse_exploration_point(data: Any) -> ExplorationPoint:
             f"exploration point {point_id}.visibility",
         ),
         description=str(data.get("description", "")),
+        image=str(data.get("image", "")),
+        interaction_label=str(data.get("interaction_label", "")),
         requires_setup=bool(data.get("requires_setup", True)),
         npc_interaction=_parse_npc_interaction(data.get("npc_interaction"), point_id),
     )
@@ -1857,9 +1859,8 @@ def _parse_exploration_flow(data: Any) -> ExplorationFlowGraph:
     if not isinstance(data, dict):
         raise ValueError("scenario.exploration.flows entries must be objects.")
     flow_id = str(_required(data, "id", "exploration flow")).strip()
-    challenge_id = str(
-        _required(data, "challenge_id", f"exploration flow {flow_id}")
-    ).strip()
+    challenge_id = str(data.get("challenge_id", "")).strip()
+    npc_id = str(data.get("npc_id", "")).strip()
     raw_nodes = _required_list(data, "nodes", f"exploration flow {flow_id}")
     raw_transitions = _required_list(
         data,
@@ -1935,9 +1936,10 @@ def _parse_exploration_flow(data: Any) -> ExplorationFlowGraph:
         )
     return ExplorationFlowGraph(
         id=flow_id,
-        challenge_id=challenge_id,
         nodes=tuple(nodes),
         transitions=tuple(transitions),
+        challenge_id=challenge_id,
+        npc_id=npc_id,
     )
 
 
@@ -2120,6 +2122,25 @@ def _parse_npc_intent_permissions(data: Any, point_id: str) -> tuple[NpcIntentPe
             raise ValueError(
                 f"exploration point {point_id}.npc_interaction.policy.intent_permissions.{intent}.consequences must be an object."
             )
+        raw_check = permission_data.get("check")
+        if raw_check is not None and not isinstance(raw_check, dict):
+            raise ValueError(
+                f"exploration point {point_id}.npc_interaction.policy.intent_permissions.{intent}.check must be an object."
+            )
+        effects_on_success = permission_data.get("effects_on_success", [])
+        effects_on_failure = permission_data.get("effects_on_failure", [])
+        if not isinstance(effects_on_success, list) or any(
+            not isinstance(item, dict) for item in effects_on_success
+        ):
+            raise ValueError(
+                f"exploration point {point_id}.npc_interaction.policy.intent_permissions.{intent}.effects_on_success must be an array of objects."
+            )
+        if not isinstance(effects_on_failure, list) or any(
+            not isinstance(item, dict) for item in effects_on_failure
+        ):
+            raise ValueError(
+                f"exploration point {point_id}.npc_interaction.policy.intent_permissions.{intent}.effects_on_failure must be an array of objects."
+            )
         permissions.append(
             NpcIntentPermission(
                 intent=intent,
@@ -2137,6 +2158,23 @@ def _parse_npc_intent_permissions(data: Any, point_id: str) -> tuple[NpcIntentPe
                     permission_data.get("state_on_failure"),
                     f"exploration point {point_id}.npc_interaction.policy.intent_permissions.{intent}.state_on_failure",
                 ),
+                check_ability=(
+                    str(raw_check["ability"]).strip().lower()
+                    if raw_check and raw_check.get("ability")
+                    else None
+                ),
+                check_skill=(
+                    str(raw_check["skill"]).strip().lower()
+                    if raw_check and raw_check.get("skill")
+                    else None
+                ),
+                check_dc=(
+                    int(raw_check["dc"])
+                    if raw_check and raw_check.get("dc") is not None
+                    else None
+                ),
+                effects_on_success=tuple(dict(item) for item in effects_on_success),
+                effects_on_failure=tuple(dict(item) for item in effects_on_failure),
                 uses_social_reaction=bool(permission_data.get("uses_social_reaction", False)),
                 attempt_policy=_parse_npc_attempt_policy(
                     permission_data.get("attempt_policy"),
@@ -2625,6 +2663,14 @@ def _parse_exploration_trap(data: Any) -> ExplorationTrap:
             str(data["activation_challenge_id"])
             if data.get("activation_challenge_id")
             else None
+        ),
+        activation_required_flags=_parse_string_tuple(
+            data.get("activation_required_flags", []),
+            f"{field}.activation_required_flags",
+        ),
+        activation_forbidden_flags=_parse_string_tuple(
+            data.get("activation_forbidden_flags", []),
+            f"{field}.activation_forbidden_flags",
         ),
         disarm_check=(
             _parse_scene_ability_check(disarm_data, f"trap:{trap_id}:disarm")
@@ -3610,13 +3656,83 @@ def _validate_exploration(definition: ScenarioDefinition) -> None:
     flow_ids = tuple(flow.id for flow in definition.exploration_flows)
     if len(flow_ids) != len(set(flow_ids)):
         raise ValueError("exploration.flows contains duplicate ids.")
-    flow_challenge_ids = tuple(flow.challenge_id for flow in definition.exploration_flows)
+    flow_challenge_ids = tuple(
+        flow.challenge_id for flow in definition.exploration_flows if flow.challenge_id
+    )
     if len(flow_challenge_ids) != len(set(flow_challenge_ids)):
         raise ValueError("Only one exploration flow may own a challenge.")
+    flow_npc_ids = tuple(
+        flow.npc_id for flow in definition.exploration_flows if flow.npc_id
+    )
+    if len(flow_npc_ids) != len(set(flow_npc_ids)):
+        raise ValueError("Only one exploration flow may own an NPC.")
     challenges_by_id = {
         challenge.id: challenge for challenge in definition.exploration_challenges
     }
+    flow_npcs_by_id = {
+        point.npc_interaction.id: point.npc_interaction
+        for point in definition.exploration_points
+        if point.npc_interaction is not None
+    }
     for flow in definition.exploration_flows:
+        if flow.npc_id:
+            npc = flow_npcs_by_id.get(flow.npc_id)
+            if npc is None:
+                raise ValueError(
+                    f"exploration flow {flow.id} references unknown NPC: {flow.npc_id}."
+                )
+            goal_ids = {goal.id for goal in npc.goals}
+            transition_goal_ids = tuple(
+                transition.goal_id for transition in flow.transitions
+            )
+            if len(transition_goal_ids) != len(set(transition_goal_ids)):
+                raise ValueError(
+                    f"exploration flow {flow.id} must define exactly one transition per NPC goal."
+                )
+            unknown_goals = set(transition_goal_ids) - goal_ids
+            missing_goals = goal_ids - set(transition_goal_ids)
+            if unknown_goals:
+                raise ValueError(
+                    f"exploration flow {flow.id} references unknown NPC goals: "
+                    + ", ".join(sorted(unknown_goals))
+                    + "."
+                )
+            if missing_goals:
+                raise ValueError(
+                    f"exploration flow {flow.id} does not route NPC goals: "
+                    + ", ".join(sorted(missing_goals))
+                    + "."
+                )
+            known_intents = {
+                permission.intent for permission in npc.policy.intent_permissions
+            }
+            for transition in flow.transitions:
+                if transition.route_kind != ExplorationFlowRouteKind.NPC_INTENT:
+                    raise ValueError(
+                        f"NPC flow transition {transition.id} must use npc_intent routing."
+                    )
+                if transition.route_ref not in known_intents:
+                    raise ValueError(
+                        f"NPC flow transition {transition.id} references unknown intent: "
+                        f"{transition.route_ref}."
+                    )
+            node_ids_with_routes = {
+                node_id
+                for transition in flow.transitions
+                for node_id in transition.from_node_ids
+            }
+            dead_nodes = {
+                node.id
+                for node in flow.nodes
+                if not node.terminal and node.id not in node_ids_with_routes
+            }
+            if dead_nodes:
+                raise ValueError(
+                    f"exploration flow {flow.id} has non-terminal nodes without routes: "
+                    + ", ".join(sorted(dead_nodes))
+                    + "."
+                )
+            continue
         challenge = challenges_by_id.get(flow.challenge_id)
         if challenge is None:
             raise ValueError(
@@ -3909,6 +4025,40 @@ def _validate_npc_content_effects(definition: ScenarioDefinition) -> None:
                     + ", ".join(sorted(unknown_permission_information))
                     + "."
                 )
+            if (
+                permission.check_ability is not None
+                and policy.allowed_abilities
+                and permission.check_ability not in policy.allowed_abilities
+            ):
+                raise ValueError(
+                    f"NPC {npc.id}.intent_permissions.{permission.intent}.check uses a disallowed ability."
+                )
+            if (
+                permission.check_skill is not None
+                and policy.allowed_skills
+                and permission.check_skill not in policy.allowed_skills
+            ):
+                raise ValueError(
+                    f"NPC {npc.id}.intent_permissions.{permission.intent}.check uses a disallowed skill."
+                )
+            if permission.check_dc is not None and not (
+                policy.dc_min <= permission.check_dc <= policy.dc_max
+            ):
+                raise ValueError(
+                    f"NPC {npc.id}.intent_permissions.{permission.intent}.check DC is outside policy range."
+                )
+            _validate_npc_effect_sequence(
+                permission.effects_on_success,
+                state=state,
+                npc=npc,
+                field=f"NPC {npc.id}.intent_permissions.{permission.intent}.effects_on_success",
+            )
+            _validate_npc_effect_sequence(
+                permission.effects_on_failure,
+                state=state,
+                npc=npc,
+                field=f"NPC {npc.id}.intent_permissions.{permission.intent}.effects_on_failure",
+            )
             for target in permission.targets:
                 for branch in target.outcome_branches:
                     unknown_branch_information = (

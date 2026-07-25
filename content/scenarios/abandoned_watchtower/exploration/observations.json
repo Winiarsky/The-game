@@ -182,7 +182,7 @@
       "zone_id": "gate",
       "challenge_id": "closed_gate",
       "label": "Dokładne rozpoznanie przez szczelinę",
-      "description": "Bohater zagląda przez wąską szczelinę i przez chwilę obserwuje ograniczony fragment dziedzińca, szukając ruchu, sylwetek i śladów obecności.",
+      "description": "{lead_actor} zagląda przez wąską szczelinę i przez chwilę obserwuje ograniczony fragment dziedzińca, szukając ruchu, sylwetek i śladów obecności.",
       "ability": "wisdom",
       "skill": "perception",
       "participants": "single_actor",

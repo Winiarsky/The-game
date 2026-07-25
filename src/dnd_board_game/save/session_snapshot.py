@@ -536,6 +536,13 @@ def _exploration_payload(state: ExplorationState) -> dict[str, object]:
         "party_position": {"zone_id": state.party_position.zone_id, "marker_position": _coordinate_payload(state.party_position.marker_position)},
         "flags": [{"key": key, "value": _json_value(value, "flag.value")} for key, value in state.flags.values],
         "point_visibility": [{"id": point.id, "visibility": point.visibility.value} for point in state.points],
+        "point_positions": [
+            {
+                "id": point.id,
+                "positions": [_coordinate_payload(position) for position in point.positions],
+            }
+            for point in state.points
+        ],
         "exhausted_search_zones": list(state.exhausted_search_zones),
         "challenge_states": [
             {"challenge_id": item.challenge_id, "current_progress": item.current_progress, "noise": item.noise,
@@ -649,6 +656,26 @@ def _exploration_from_payload(base: ExplorationState, raw: object) -> Exploratio
     known_points = {point.id for point in base.points}
     if set(visibility) != known_points:
         raise SnapshotValidationError("Lista punktów zapisu nie odpowiada aktualnej wersji scenariusza.")
+    point_positions = {point.id: point.positions for point in base.points}
+    if "point_positions" in data:
+        point_positions = {}
+        for raw_item in _sequence(data.get("point_positions"), "point_positions"):
+            item = _mapping(raw_item, "point_positions item")
+            point_id = _string(item.get("id"), "point_positions.id")
+            positions = tuple(
+                _coordinate(raw_position, f"point_positions.{point_id}.position")
+                for raw_position in _sequence(
+                    item.get("positions", []),
+                    f"point_positions.{point_id}.positions",
+                )
+            )
+            if not positions:
+                raise SnapshotValidationError("Punkt eksploracji musi zachować co najmniej jedną pozycję.")
+            point_positions[point_id] = positions
+        if set(point_positions) != known_points:
+            raise SnapshotValidationError(
+                "Lista pozycji punktów zapisu nie odpowiada aktualnej wersji scenariusza."
+            )
     flags = []
     for raw_item in _sequence(data.get("flags", []), "flags"):
         item = _mapping(raw_item, "flag")
@@ -941,7 +968,15 @@ def _exploration_from_payload(base: ExplorationState, raw: object) -> Exploratio
                 raise SnapshotValidationError("Zapis zawiera nieznaną informację NPC.")
     return replace(
         base, party_position=PartyPosition(zone_id, _optional_coordinate(party.get("marker_position"), "party_position.marker_position")),
-        flags=SceneFlags(tuple(flags)), points=tuple(replace(point, visibility=visibility[point.id]) for point in base.points),
+        flags=SceneFlags(tuple(flags)),
+        points=tuple(
+            replace(
+                point,
+                visibility=visibility[point.id],
+                positions=point_positions[point.id],
+            )
+            for point in base.points
+        ),
         exhausted_search_zones=_string_tuple(data.get("exhausted_search_zones", []), "exhausted_search_zones"),
         challenge_states=challenge_states, inventory_resource_ids=resources,
         elapsed_minutes=_integer(data.get("elapsed_minutes"), "elapsed_minutes"), short_rest_counts=short_counts,

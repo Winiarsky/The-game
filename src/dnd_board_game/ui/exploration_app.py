@@ -33,7 +33,11 @@ from dnd_board_game.application import (
     ExpiredCombatEffects,
     ExplorationFlowService,
     ExplorationFlowStage,
+    ExplorationGoalExecutionPlan,
+    ExplorationGoalExecutionPlanner,
     ExplorationInteractionFlowService,
+    NpcGoalExecutionPlan,
+    NpcGoalExecutionPlanner,
     PendingAreaSpell,
     PendingCombatInteraction,
     PendingCombatSkillCheck,
@@ -177,6 +181,7 @@ from dnd_board_game.combat import (
     resolve_death_save,
     roll_enemy_initiative,
     scene_flag,
+    set_scene_flag,
     saving_throw_aura_modifiers,
     scene_object_by_id,
     setup_led_feedback,
@@ -222,7 +227,6 @@ from dnd_board_game.exploration import (
     ExplorationSituationalModifierSource,
     ImprovisedToolUse,
     InteractionGoal,
-    InteractionParticipantMode,
     PartyCheckInput,
     PartyPosition,
     NpcAttemptPlan,
@@ -242,7 +246,6 @@ from dnd_board_game.exploration import (
     MECHANIC_TOOLS,
     active_option_bonuses_for_actor,
     apply_goal_resolution_profile,
-    available_interaction_goals,
     apply_fixture_action,
     apply_exploration_effect,
     actors_matching_challenge_option,
@@ -256,7 +259,6 @@ from dnd_board_game.exploration import (
     mechanic_payload_for_option,
     matching_resources,
     match_revealed_trap_action,
-    match_exploration_observation,
     match_available_sources,
     match_scene_sources_by_properties,
     match_visible_scene_sources,
@@ -292,6 +294,7 @@ from dnd_board_game.exploration import (
     restore_npc_transition_plan,
     set_npc_interaction_status,
     trap_state_for,
+    trap_activates_for_challenge,
     trigger_trap,
     remove_exploration_condition,
     use_temporary_item,
@@ -301,7 +304,6 @@ from dnd_board_game.llm import (
     GmDeclarationAnalysis,
     GmDeclarationAnalysisType,
     GmDeclarationThreadEntry,
-    GmFlowRouteCandidate,
     GmClassifierProposal,
     GmPreparationEffect,
     GmProposalValidationError,
@@ -389,7 +391,6 @@ CONVERSATION_GM_TITLES = frozenset(
     {
         "Odpowiedź MG",
         "Podpowiedź MG",
-        "MG proponuje sprawdzenie",
         "MG dopytuje",
         "Świat odpowiada",
         "Deklaracja wymaga doprecyzowania",
@@ -457,6 +458,9 @@ class PendingInteraction:
     social_plan: SocialInteractionPlan | None = None
     attempt_plan: NpcAttemptPlan | None = None
     action_plan: NpcIntentActionPlan | None = None
+    npc_authored_route: bool = False
+    npc_effects_on_success: tuple[dict[str, object], ...] = ()
+    npc_effects_on_failure: tuple[dict[str, object], ...] = ()
 
     def as_payload(self) -> dict[str, object]:
         payload: dict[str, object] = {
@@ -684,6 +688,10 @@ class ExplorationSetupFlow:
     steps: tuple[SetupStep, ...]
     current_index: int = 0
     completed: bool = False
+    assignment_point_id: str = ""
+    assignment_point_name: str = ""
+    assigned_position: Coordinate | None = None
+    return_to_location_active: bool = False
 
     @property
     def current_step(self) -> SetupStep | None:
@@ -693,11 +701,24 @@ class ExplorationSetupFlow:
 
     def as_payload(self) -> dict[str, object]:
         step = self.current_step
+        step_payload = _setup_step_payload(step) if step is not None else None
+        if step_payload is not None and self.assignment_point_id:
+            step_payload["requires_board_assignment"] = True
+            step_payload["assignment_point_id"] = self.assignment_point_id
+            step_payload["assignment_point_name"] = self.assignment_point_name
+            step_payload["available_positions"] = [
+                [position.col, position.row] for position in step.positions
+            ]
+            step_payload["assigned_position"] = (
+                [self.assigned_position.col, self.assigned_position.row]
+                if self.assigned_position is not None
+                else None
+            )
         return {
             "status": "completed" if self.completed else "active",
             "current_index": self.current_index,
             "step_count": len(self.steps),
-            "current_step": _setup_step_payload(step) if step is not None else None,
+            "current_step": step_payload,
         }
 
 
@@ -845,6 +866,7 @@ class ExplorationUiSession:
         npc_client: object | None = None,
         debug_point_id: str | None = None,
         debug_challenge_id: str | None = None,
+        debug_courtyard_entry: bool = False,
         session_id: str | None = None,
         observation_dir: str | Path = "data/session_observations",
         save_dir: str | Path = "data/saves",
@@ -854,8 +876,21 @@ class ExplorationUiSession:
         self.npc_client = npc_client
         self.debug_point_id = debug_point_id or ""
         self.debug_challenge_id = debug_challenge_id or ""
-        if self.debug_point_id and self.debug_challenge_id:
-            raise ValueError("Wybierz debug point albo debug challenge, nie oba jednocześnie.")
+        if sum(
+            bool(value)
+            for value in (
+                self.debug_point_id,
+                self.debug_challenge_id,
+                debug_courtyard_entry,
+            )
+        ) > 1:
+            raise ValueError(
+                "Wybierz debug point, debug challenge albo wejście na dziedziniec."
+            )
+        self.debug_courtyard_entry = bool(debug_courtyard_entry)
+        if self.debug_challenge_id == "courtyard_search":
+            self.debug_challenge_id = ""
+            self.debug_courtyard_entry = True
         self._fixed_session_id = session_id
         self.observation_dir = Path(observation_dir)
         self.save_dir = Path(save_dir)
@@ -876,6 +911,10 @@ class ExplorationUiSession:
         self.short_rest_flow = ShortRestFlowService()
         self.exploration_flow = ExplorationFlowService()
         self.exploration_interaction_flow = ExplorationInteractionFlowService()
+        self.exploration_goal_execution = ExplorationGoalExecutionPlanner(
+            self.exploration_interaction_flow
+        )
+        self.npc_goal_execution = NpcGoalExecutionPlanner()
         self.reset()
 
     def reset(self) -> None:
@@ -964,7 +1003,7 @@ class ExplorationUiSession:
             "Plansza niepodłączona. Domyślne ustawienia wczytane z board/config.json "
             f"({self.configured_board_backend})."
         )
-        if self.debug_point_id or self.debug_challenge_id:
+        if self.debug_point_id or self.debug_challenge_id or self.debug_courtyard_entry:
             self.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
         else:
             self.ui_flow_stage = UiFlowStage.WAITING_FOR_BOARD
@@ -978,6 +1017,7 @@ class ExplorationUiSession:
                 "scenario_name": self.exploration.scenario_name,
                 "debug_point_id": self.debug_point_id,
                 "debug_challenge_id": self.debug_challenge_id,
+                "debug_courtyard_entry": self.debug_courtyard_entry,
                 "initial_zone_id": self.state.party_position.zone_id,
                 "initial_resource_ids": list(self.state.inventory_resource_ids),
                 "automatic_long_rest": [
@@ -1003,6 +1043,8 @@ class ExplorationUiSession:
             "Drużyna rozpoczyna scenariusz po long reście. Odnowiono HP, sloty i zasoby; teraz można przygotować czary.",
         )
         self._add_trigger_activation_notices(long_rest_triggers.activations)
+        if self.debug_courtyard_entry:
+            self._prepare_debug_courtyard_entry()
 
     @property
     def pending(self) -> PendingInteraction | None:
@@ -1303,8 +1345,8 @@ class ExplorationUiSession:
             available_zones=[_zone_payload(zone, self._scenario_asset_root()) for zone in visible_exploration_zones(self.state.zones) if zone_is_ui_available(self.state, zone)],
             visible_environment=[_environment_entry_payload(entry) for entry in self.exploration.environment if entry.visibility == SetupVisibility.VISIBLE],
             travel_options=[_zone_payload(zone, self._scenario_asset_root()) for zone in self.travel_options()],
-            visible_points=[_point_payload(point, _npc_state_for_point(self.state, point), self.state.flags) for point in visible_exploration_points(self.state.points)],
-            current_zone_points=[_point_payload(point, _npc_state_for_point(self.state, point), self.state.flags) for point in current_zone_points],
+            visible_points=[_point_payload(point, _npc_state_for_point(self.state, point), self.state.flags, self.exploration.flows) for point in visible_exploration_points(self.state.points)],
+            current_zone_points=[_point_payload(point, _npc_state_for_point(self.state, point), self.state.flags, self.exploration.flows) for point in current_zone_points],
             active_challenge=(
                 _challenge_payload(
                     self.state,
@@ -1317,7 +1359,7 @@ class ExplorationUiSession:
                 else None
             ),
             active_point=(
-                _point_payload(self.active_point, _npc_state_for_point(self.state, self.active_point), self.state.flags)
+                _point_payload(self.active_point, _npc_state_for_point(self.state, self.active_point), self.state.flags, self.exploration.flows)
                 if self.active_point
                 else None
             ),
@@ -1970,6 +2012,7 @@ class ExplorationUiSession:
         self.board_message = transition.board_message
         if transition.event_type:
             self._record(transition.event_type, dict(transition.event_payload))
+        self._queue_current_zone_npc_setup()
         self._sync_board_leds()
         return self.state_payload()
 
@@ -1977,6 +2020,10 @@ class ExplorationUiSession:
         if self.exploration_setup_flow is None:
             return self.state_payload()
         flow = self.exploration_setup_flow
+        if flow.assignment_point_id and flow.assigned_position is None:
+            raise ValueError(
+                f"Najpierw ustaw figurkę: {flow.assignment_point_name} na jednym z podświetlonych pól."
+            )
         transition = self.exploration_flow.advance_setup_step(
             steps=flow.steps,
             current_index=flow.current_index,
@@ -1992,9 +2039,17 @@ class ExplorationUiSession:
             flow.completed = True
             self.exploration_setup_flow = None
             self.exploration_setup_is_initial = False
-            self.ui_flow_stage = transition.stage
+            self.ui_flow_stage = (
+                UiFlowStage.LOCATION_ACTIVE
+                if flow.return_to_location_active
+                else transition.stage
+            )
             self.preview_zone_id = ""
-            self.board_message = transition.board_message
+            self.board_message = (
+                f"Figurka {flow.assignment_point_name} jest ustawiona. Wybierzcie działanie na dziedzińcu."
+                if flow.return_to_location_active and flow.assignment_point_name
+                else transition.board_message
+            )
             self._refresh_pending_encounter()
             if self.pending_encounter is not None:
                 trigger = self._trigger_by_id(self.pending_encounter.trigger_id)
@@ -2009,6 +2064,118 @@ class ExplorationUiSession:
             self.board_message = transition.board_message
         self._sync_board_leds()
         return self.state_payload()
+
+    def _queue_current_zone_npc_setup(self) -> None:
+        if self.ui_flow_stage != UiFlowStage.LOCATION_ACTIVE:
+            return
+        point = next(
+            (
+                candidate
+                for candidate in self.current_zone_points()
+                if candidate.npc_interaction is not None
+                and candidate.requires_setup
+                and not bool(scene_flag(self.state.flags, _point_setup_flag(candidate.id), False))
+            ),
+            None,
+        )
+        if point is None:
+            return
+        step = SetupStep(
+            kind=SetupStepKind.ENVIRONMENT,
+            label=point.name,
+            positions=point.positions,
+            color=point.color,
+            message=(
+                f"Na dziedzińcu dostrzegacie rannego człowieka. "
+                f"Ustaw figurkę „{point.name}” na jednym z podświetlonych pól i potwierdź pozycję kliknięciem."
+            ),
+            visibility=SetupVisibility.VISIBLE,
+        )
+        self.exploration_setup_flow = ExplorationSetupFlow(
+            (step,),
+            assignment_point_id=point.id,
+            assignment_point_name=point.name,
+            return_to_location_active=True,
+        )
+        self.ui_flow_stage = UiFlowStage.PARTY_SETUP
+        self.board_message = (
+            f"Widzicie rannego człowieka. Ustaw figurkę {point.name} na jednym z podświetlonych pól."
+        )
+        npc_description = (
+            point.npc_interaction.public_description
+            if point.npc_interaction is not None
+            else point.description
+        )
+        self._add_message(
+            self.current_zone.name,
+            (
+                f"{self.current_zone.description} "
+                f"{self.current_zone.llm_context.summary} "
+                f"{npc_description}"
+            ).strip(),
+        )
+        self._add_message(
+            "Setup dziedzińca",
+            (
+                f"Postaw figurkę „{point.name}” na jednym z podświetlonych pól. "
+                "Kliknięcie wybranego pola zapisze pozycję zwiadowcy i odblokuje działania na dziedzińcu."
+            ),
+        )
+        self._record(
+            "ui_exploration_point_setup_started",
+            {
+                "point_id": point.id,
+                "candidate_positions": [position.as_tuple() for position in point.positions],
+            },
+        )
+
+    def _prepare_debug_courtyard_entry(self) -> None:
+        courtyard = next(zone for zone in self.state.zones if zone.id == "courtyard")
+        flags = set_scene_flag(self.state.flags, "gate_passed", True)
+        flags = set_scene_flag(flags, "gate_skirmish_cleared", True)
+        self.state = replace(
+            self.state,
+            party_position=PartyPosition(courtyard.id),
+            flags=flags,
+        )
+        self.state, _ = reveal_exploration_points(self.state, ("wounded_scout",))
+        self.resolved_encounter_trigger_ids.add("gate_open_skirmish")
+        self.active_point_id = ""
+        self.preview_zone_id = ""
+        self.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+        self.messages.clear()
+        self._queue_current_zone_npc_setup()
+
+    def assign_exploration_point_position(self, position: Coordinate) -> dict[str, object]:
+        flow = self.exploration_setup_flow
+        if flow is None or not flow.assignment_point_id:
+            raise ValueError("Aktualny setup nie oczekuje ustawienia punktu eksploracji.")
+        step = flow.current_step
+        if step is None or position not in step.positions:
+            raise ValueError("Wybierz jedno z podświetlonych pól dla figurki NPC.")
+        point = next(
+            (candidate for candidate in self.state.points if candidate.id == flow.assignment_point_id),
+            None,
+        )
+        if point is None:
+            raise ValueError("Nie znaleziono ustawianego punktu eksploracji.")
+        self.state = replace(
+            self.state,
+            points=tuple(
+                replace(candidate, positions=(position,))
+                if candidate.id == point.id
+                else candidate
+                for candidate in self.state.points
+            ),
+            flags=set_scene_flag(self.state.flags, _point_setup_flag(point.id), True),
+        )
+        flow.assigned_position = position
+        self.board_message = f"Ustawiono figurkę {point.name} na polu {position.as_tuple()}."
+        self._record(
+            "ui_exploration_point_setup_assigned",
+            {"point_id": point.id, "position": position.as_tuple()},
+        )
+        return self.confirm_exploration_setup_step()
 
     def scan_board_selection(self) -> dict[str, object]:
         if self.board_adapter is None:
@@ -2059,7 +2226,6 @@ class ExplorationUiSession:
         selected_check_participants: str | None = None,
         participant_actor_ids: tuple[str, ...] = (),
         conversation_only: bool = False,
-        infer_flow_route: bool = False,
     ) -> dict[str, object]:
         if self.ui_flow_stage != UiFlowStage.LOCATION_ACTIVE:
             raise ValueError("Najpierw rozpocznij sesję i potwierdź wejście do lokacji na planszy.")
@@ -2071,34 +2237,60 @@ class ExplorationUiSession:
             selected_goal_id is not None
             or selected_check_participants is not None
             or participant_actor_ids
-            or infer_flow_route
         ):
             raise ValueError("Swobodna wiadomość do MG nie może jednocześnie deklarować akcji.")
         point = self.active_point
         available_goals = (
-            point.npc_interaction.goals
+            self.npc_goal_execution.available_goals(
+                npc=point.npc_interaction,
+                flows=self.exploration.flows,
+                flags=self.state.flags,
+            )
             if point is not None and point.npc_interaction is not None
             else self.active_challenge.goals
             if self.active_challenge is not None
             else ()
         )
-        selected_goal_route = (
-            self.exploration_interaction_flow.route_for_goal(
-                challenge=self.active_challenge,
-                flows=self.exploration.flows,
-                goal_id=selected_goal_id,
-                flags=self.state.flags,
-            )
-            if self.active_challenge is not None
-            and (point is None or point.npc_interaction is None)
-            else None
-        )
+        selected_goal_execution: ExplorationGoalExecutionPlan | None = None
+        selected_npc_execution: NpcGoalExecutionPlan | None = None
         if self.active_challenge is not None and (
             point is None or point.npc_interaction is None
         ):
+            selected_goal_execution = (
+                self.exploration_goal_execution.plan(
+                    challenge=self.active_challenge,
+                    flows=self.exploration.flows,
+                    flags=self.state.flags,
+                    actors=self.exploration.actors,
+                    goal_id=selected_goal_id,
+                    requested_check_participants=selected_check_participants,
+                    requested_actor_ids=participant_actor_ids,
+                )
+                if selected_goal_id is not None
+                else None
+            )
             selected_goal = (
-                selected_goal_route.goal
-                if selected_goal_route is not None
+                selected_goal_execution.route.goal
+                if selected_goal_execution is not None
+                else None
+            )
+        elif point is not None and point.npc_interaction is not None:
+            selected_npc_execution = (
+                self.npc_goal_execution.plan(
+                    npc=point.npc_interaction,
+                    flows=self.exploration.flows,
+                    flags=self.state.flags,
+                    actors=self.exploration.actors,
+                    goal_id=selected_goal_id,
+                    requested_check_participants=selected_check_participants,
+                    requested_actor_ids=participant_actor_ids,
+                )
+                if selected_goal_id is not None
+                else None
+            )
+            selected_goal = (
+                selected_npc_execution.route.goal
+                if selected_npc_execution is not None
                 else None
             )
         else:
@@ -2111,31 +2303,30 @@ class ExplorationUiSession:
             raise ValueError("Wybrany cel nie jest dostępny w tej interakcji.")
         selected_participant_ids: tuple[str, ...] = ()
         resolved_check_participants: CheckParticipants | None = None
-        if (
-            self.active_challenge is not None
-            and selected_goal is not None
-            and (point is None or point.npc_interaction is None)
-        ):
-            resolved_check_participants = _resolve_goal_check_participants(
-                selected_goal,
-                selected_check_participants,
+        if selected_goal_execution is not None:
+            resolved_check_participants = (
+                selected_goal_execution.check_participants
             )
-            selected_participant_ids = _validate_goal_participants(
-                selected_goal,
-                self.active_challenge,
-                self.exploration.actors,
-                participant_actor_ids,
-                check_participants=resolved_check_participants,
-                resolution_option_id=(
-                    selected_goal_route.resolution_option_id
-                    if selected_goal_route is not None
-                    else None
-                ),
+            selected_participant_ids = (
+                selected_goal_execution.participant_actor_ids
             )
-        elif participant_actor_ids and not infer_flow_route:
+        elif selected_npc_execution is not None:
+            resolved_check_participants = selected_npc_execution.check_participants
+            selected_participant_ids = selected_npc_execution.participant_actor_ids
+        elif participant_actor_ids:
             raise ValueError("Postacie można wskazać dopiero po wybraniu celu wyzwania.")
-        elif infer_flow_route and selected_check_participants is not None:
-            resolved_check_participants = CheckParticipants(selected_check_participants)
+        selected_goal_route = (
+            selected_goal_execution.route
+            if selected_goal_execution is not None
+            else None
+        )
+        selected_flow_transition = (
+            selected_goal_route.transition
+            if selected_goal_route is not None
+            else selected_npc_execution.route.transition
+            if selected_npc_execution is not None
+            else None
+        )
         self._record(
             "ui_action_submitted",
             {
@@ -2154,21 +2345,18 @@ class ExplorationUiSession:
                 "active_challenge_id": self.active_challenge.id if self.active_challenge else None,
                 "selected_goal_id": selected_goal.id if selected_goal is not None else None,
                 "flow_transition_id": (
-                    selected_goal_route.transition.id
-                    if selected_goal_route is not None
-                    and selected_goal_route.transition is not None
+                    selected_flow_transition.id
+                    if selected_flow_transition is not None
                     else None
                 ),
                 "flow_route_kind": (
-                    selected_goal_route.route_kind.value
+                    selected_flow_transition.route_kind.value
+                    if selected_flow_transition is not None
+                    else selected_goal_route.route_kind.value
                     if selected_goal_route is not None
                     else None
                 ),
-                "participant_actor_ids": list(
-                    participant_actor_ids
-                    if infer_flow_route
-                    else selected_participant_ids
-                ),
+                "participant_actor_ids": list(selected_participant_ids),
                 "check_participants": (
                     resolved_check_participants.value
                     if resolved_check_participants is not None
@@ -2188,6 +2376,7 @@ class ExplorationUiSession:
                 point,
                 action_text,
                 selected_goal_id=selected_goal.id if selected_goal is not None else None,
+                goal_execution=selected_npc_execution,
                 conversation_only=conversation_only,
             )
         referenced_point = self._referenced_current_zone_point(action_text)
@@ -2224,11 +2413,9 @@ class ExplorationUiSession:
             player_display_text=raw_text,
             selected_goal_id=selected_goal.id if selected_goal is not None else None,
             selected_check_participants=resolved_check_participants,
-            participant_actor_ids=(
-                participant_actor_ids if infer_flow_route else selected_participant_ids
-            ),
+            participant_actor_ids=selected_participant_ids,
             conversation_only=conversation_only,
-            infer_flow_route=infer_flow_route,
+            goal_execution=selected_goal_execution,
         )
 
     def _submit_trap_action(
@@ -2430,6 +2617,7 @@ class ExplorationUiSession:
             self._add_message(transition.message_title, transition.message_body)
         if transition.event_type:
             self._record(transition.event_type, dict(transition.event_payload))
+        self._queue_current_zone_npc_setup()
         self._sync_board_leds()
         return self.state_payload()
 
@@ -2675,10 +2863,27 @@ class ExplorationUiSession:
             opening is not None
             and opening.outcome == EncounterOpeningOutcome.ENEMIES_SURPRISE_PARTY
         )
+        party_advantaged = bool(
+            opening is not None
+            and opening.outcome
+            in {
+                EncounterOpeningOutcome.PARTY_INITIATIVE_ADVANTAGE,
+                EncounterOpeningOutcome.PARTY_INITIATIVE_ADVANTAGE_AND_CAN_HIDE,
+            }
+        )
+        party_roll_mode = (
+            RollMode.DISADVANTAGE
+            if party_disadvantaged
+            else RollMode.ADVANTAGE
+            if party_advantaged
+            else RollMode.NORMAL
+        )
         roll_modes_by_actor_id = {
-            str(actor.id): RollMode.DISADVANTAGE
+            str(actor.id): party_roll_mode
             for actor in encounter.actors
-            if party_disadvantaged and actor.faction == Faction.ALLY and not actor.is_defeated()
+            if party_roll_mode != RollMode.NORMAL
+            and actor.faction == Faction.ALLY
+            and not actor.is_defeated()
         }
         for actor_id in applicable_edges:
             roll_modes_by_actor_id[actor_id] = (
@@ -6751,10 +6956,15 @@ class ExplorationUiSession:
         if not self.exploration_board_selection_active:
             point = self.active_point
             if point is not None:
-                focus_positions = point.positions if point.npc_interaction is None else ()
+                focus_positions = (
+                    point.positions
+                    if point.npc_interaction is None
+                    or bool(scene_flag(self.state.flags, _point_setup_flag(point.id), False))
+                    else ()
+                )
                 return self._passive_focus_target(
                     focus_positions,
-                    color=LedColor.INTERACTIVE_OBJECT,
+                    color=point.color,
                     role=LedRole.INTERACTIVE_OBJECT,
                     message="Interakcja jest aktywna w UI; plansza nie wymaga kliknięcia.",
                 )
@@ -6786,6 +6996,11 @@ class ExplorationUiSession:
         return (*ordered, *rest)
 
     def _handle_board_position(self, selected: Coordinate) -> dict[str, object]:
+        if (
+            self.exploration_setup_flow is not None
+            and self.exploration_setup_flow.assignment_point_id
+        ):
+            return self.assign_exploration_point_position(selected)
         if self.encounter_setup_flow is not None and self.encounter_setup_flow.current_step is not None:
             if self.encounter_setup_flow.is_player_start_step:
                 return self.assign_encounter_player_start_position(selected)
@@ -6954,27 +7169,19 @@ class ExplorationUiSession:
         selected_check_participants: CheckParticipants | None = None,
         participant_actor_ids: tuple[str, ...] = (),
         conversation_only: bool = False,
-        infer_flow_route: bool = False,
+        goal_execution: ExplorationGoalExecutionPlan | None = None,
     ) -> dict[str, object]:
         conversation_text = player_display_text or text
-        selected_goal_route = self.exploration_interaction_flow.route_for_goal(
-            challenge=challenge,
-            flows=self.exploration.flows,
-            goal_id=selected_goal_id,
-            flags=self.state.flags,
+        selected_goal_route = (
+            goal_execution.route if goal_execution is not None else None
         )
         selected_goal = (
             selected_goal_route.goal if selected_goal_route is not None else None
         )
-        available_flow_routes = (
-            self.exploration_interaction_flow.available_routes(
-                challenge=challenge,
-                flows=self.exploration.flows,
-                flags=self.state.flags,
-            )
-            if infer_flow_route and selected_goal_route is None
-            else ()
-        )
+        if selected_goal_id is not None and (
+            selected_goal is None or selected_goal.id != selected_goal_id
+        ):
+            raise ValueError("Plan wykonania nie odpowiada wybranemu celowi.")
         client = self._gm_client()
         crafting_registry = build_crafting_source_registry(self.state, self.exploration.actors)
         source_matches = (
@@ -6982,33 +7189,19 @@ class ExplorationUiSession:
             if player_intent_hint == PlayerIntentHint.USE
             else match_visible_scene_sources(crafting_registry, text)
         )
-        procedural_source_action = (
-            next(
-                (
-                    (source_action, source_match)
-                    for source_action in selected_goal_route.source_actions
-                    for source_match in source_matches
-                    if source_match.source.reference_id == source_action.source_ref
-                ),
-                None,
+        procedural_source_execution = (
+            goal_execution.procedural_source_execution(
+                challenge,
+                source_matches,
+                direct_source_use=describes_direct_source_use(text),
             )
-            if selected_goal_route is not None and describes_direct_source_use(text)
+            if goal_execution is not None
             else None
         )
-        if procedural_source_action is not None:
-            source_action, source_match = procedural_source_action
-            profile = next(
-                (
-                    option
-                    for option in challenge.options
-                    if option.id == source_action.option_id
-                ),
-                None,
-            )
-            if profile is None:
-                raise ValueError(
-                    f"Akcja źródła {source_action.id} wskazuje nieistniejącą opcję."
-                )
+        if procedural_source_execution is not None:
+            source_action = procedural_source_execution.action
+            source_match = procedural_source_execution.source_match
+            profile = procedural_source_execution.option
             participants = selected_check_participants or selected_goal.check_participants
             option = replace(
                 profile,
@@ -7058,18 +7251,23 @@ class ExplorationUiSession:
                 challenge,
             )
         authored_observation = (
-            match_exploration_observation(
+            goal_execution.authored_observation(
                 self.exploration.observations,
                 text,
                 zone_id=self.current_zone.id,
                 challenge_id=challenge.id,
-                allowed_observation_ids=(
-                    selected_goal_route.observation_ids
-                    if selected_goal_route is not None
-                    else ()
-                ),
             )
-            if player_intent_hint not in {PlayerIntentHint.BUILD, PlayerIntentHint.USE}
+            if goal_execution is not None
+            and player_intent_hint
+            not in {PlayerIntentHint.BUILD, PlayerIntentHint.USE}
+            else self.exploration_goal_execution.legacy_authored_observation(
+                self.exploration.observations,
+                text,
+                zone_id=self.current_zone.id,
+                challenge_id=challenge.id,
+            )
+            if player_intent_hint
+            not in {PlayerIntentHint.BUILD, PlayerIntentHint.USE}
             else None
         )
         if (
@@ -7128,18 +7326,6 @@ class ExplorationUiSession:
                 selected_goal_route.observation_ids
                 if selected_goal_route is not None
                 else ()
-            ),
-            available_flow_routes=tuple(
-                GmFlowRouteCandidate(
-                    transition_id=route.transition.id,
-                    goal_id=route.goal.id,
-                    label=route.goal.label,
-                    description=route.goal.description,
-                    route_kind=route.route_kind.value,
-                    suggested_tags=route.goal.suggested_tags,
-                )
-                for route in available_flow_routes
-                if route.transition is not None
             ),
             selected_check_participants=selected_check_participants,
             selected_participant_actor_ids=participant_actor_ids,
@@ -7208,66 +7394,6 @@ class ExplorationUiSession:
                         "confidence": 1.0,
                         "response_kind": "clarification",
                     }
-                )
-            if infer_flow_route and analysis.analysis_type == GmDeclarationAnalysisType.PLAUSIBLE:
-                transition_id = analysis.selected_flow_transition_id
-                inferred_route = (
-                    self.exploration_interaction_flow.route_for_transition(
-                        challenge=challenge,
-                        flows=self.exploration.flows,
-                        transition_id=transition_id,
-                        flags=self.state.flags,
-                    )
-                    if transition_id is not None
-                    else None
-                )
-                if inferred_route is None:
-                    self._add_message(
-                        "MG dopytuje",
-                        (
-                            "Plan brzmi śmiało, lecz na razie rozbiega się po kilku "
-                            "ścieżkach niczym drużyna po haśle „dzielimy się”. "
-                            "Dopowiedzcie, co dokładnie chcecie osiągnąć i jak."
-                        ),
-                    )
-                    return self.state_payload()
-                selected_goal_route = inferred_route
-                selected_goal = inferred_route.goal
-                selected_check_participants = _resolve_goal_check_participants(
-                    selected_goal,
-                    (
-                        selected_check_participants.value
-                        if selected_check_participants is not None
-                        else None
-                    ),
-                )
-                participant_actor_ids = _validate_goal_participants(
-                    selected_goal,
-                    challenge,
-                    self.exploration.actors,
-                    participant_actor_ids,
-                    check_participants=selected_check_participants,
-                    resolution_option_id=inferred_route.resolution_option_id,
-                )
-                request_data = replace(
-                    request_data,
-                    selected_goal_id=selected_goal.id,
-                    selected_flow_transition_id=inferred_route.transition.id,
-                    selected_flow_route_kind=inferred_route.route_kind.value,
-                    selected_flow_option_id=inferred_route.resolution_option_id,
-                    selected_flow_observation_ids=inferred_route.observation_ids,
-                    selected_check_participants=selected_check_participants,
-                    selected_participant_actor_ids=participant_actor_ids,
-                )
-                self._record(
-                    "ui_flow_route_inferred",
-                    {
-                        "challenge_id": challenge.id,
-                        "transition_id": inferred_route.transition.id,
-                        "goal_id": selected_goal.id,
-                        "participant_actor_ids": list(participant_actor_ids),
-                        "check_participants": selected_check_participants.value,
-                    },
                 )
             if (
                 player_intent_hint == PlayerIntentHint.USE
@@ -7458,30 +7584,32 @@ class ExplorationUiSession:
                     "requires_check": analysis.requires_check,
                 },
             )
-            title = (
-                "Podpowiedź MG"
-                if response_kind in {"gentle_hint", "strong_hint"}
-                else "Odpowiedź MG"
-                if conversation_only
-                else "MG proponuje sprawdzenie"
-                if response_kind == "requires_check"
-                else "Odpowiedź MG"
-            )
-            self._add_message(
-                title,
-                answer,
-                outcome=outcome,
-                grounded_fact_ids=analysis.grounded_fact_ids,
-                hint_level=analysis.hint_level,
-            )
             if observation is not None and not conversation_only:
                 self.pending = PendingInteraction(
                     kind=PendingKind.OBSERVATION,
                     stage=PendingStage.DECISION,
                     proposal=analysis,
                     challenge=challenge,
-                    observation=observation,
+                    observation=_observation_for_participants(
+                        observation,
+                        self.exploration.actors,
+                        participant_actor_ids,
+                        fallback_actor_id=self.lead_actor_id,
+                    ),
                     participant_actor_ids=participant_actor_ids,
+                )
+            else:
+                title = (
+                    "Podpowiedź MG"
+                    if response_kind in {"gentle_hint", "strong_hint"}
+                    else "Odpowiedź MG"
+                )
+                self._add_message(
+                    title,
+                    answer,
+                    outcome=outcome,
+                    grounded_fact_ids=analysis.grounded_fact_ids,
+                    hint_level=analysis.hint_level,
                 )
             return self.state_payload()
         if analysis.analysis_type == GmDeclarationAnalysisType.WORLD_ACTION:
@@ -7886,6 +8014,7 @@ class ExplorationUiSession:
         text: str,
         *,
         selected_goal_id: str | None = None,
+        goal_execution: NpcGoalExecutionPlan | None = None,
         conversation_only: bool = False,
     ) -> dict[str, object]:
         npc = point.npc_interaction
@@ -7953,6 +8082,11 @@ class ExplorationUiSession:
             player_action=text,
             conversation_thread=self._conversation_thread_for_active_interaction(exclude_latest_player=True),
             selected_goal_id=selected_goal_id,
+            routed_intent_id=(
+                goal_execution.route.intent_id
+                if goal_execution is not None
+                else None
+            ),
             conversation_only=conversation_only,
         )
         proposal = client.interact_npc(request_data)
@@ -7971,6 +8105,35 @@ class ExplorationUiSession:
             )
             self._add_message("Odpowiedź MG", answer)
             return self.state_payload()
+        if goal_execution is not None:
+            permission = goal_execution.permission
+            authored_check = permission.check_ability is not None
+            proposal = proposal.model_copy(
+                update={
+                    "action_type": goal_execution.route.intent_id,
+                    "check_participants": goal_execution.check_participants,
+                    "check_aggregation": (
+                        CheckAggregation.MAJORITY
+                        if goal_execution.check_participants
+                        == CheckParticipants.WHOLE_PARTY
+                        else CheckAggregation.LEAD_RESULT
+                    ),
+                    **(
+                        {
+                            "requires_roll": True,
+                            "ability": permission.check_ability,
+                            "skill": permission.check_skill,
+                            "dc": permission.check_dc,
+                        }
+                        if authored_check
+                        else {}
+                    ),
+                    "effects_on_success": (),
+                    "effects_on_failure": (),
+                    "flag_changes_on_success": (),
+                    "flag_changes_on_failure": (),
+                }
+            )
         validated = validate_npc_interaction_proposal(proposal, request_data)
         self._record(
             "ui_npc_proposal_validated",
@@ -7983,14 +8146,36 @@ class ExplorationUiSession:
             kind=PendingKind.NPC,
             stage=PendingStage.DECISION,
             proposal=validated.proposal,
+            participant_actor_ids=(
+                goal_execution.participant_actor_ids
+                if goal_execution is not None
+                else ()
+            ),
             point=point,
             social_plan=validated.social_plan,
             attempt_plan=validated.attempt_plan,
             action_plan=validated.action_plan,
+            npc_authored_route=goal_execution is not None,
+            npc_effects_on_success=(
+                goal_execution.permission.effects_on_success
+                if goal_execution is not None
+                else ()
+            ),
+            npc_effects_on_failure=(
+                goal_execution.permission.effects_on_failure
+                if goal_execution is not None
+                else ()
+            ),
         )
         if validated.proposal.player_narration:
             self._add_message("Narracja MG", validated.proposal.player_narration)
-        if validated.proposal.npc_response:
+        if (
+            validated.proposal.npc_response
+            and not (
+                validated.action_plan is not None
+                and validated.proposal.requires_roll
+            )
+        ):
             self._add_message("Odpowiedź NPC", validated.proposal.npc_response)
         self._sync_board_leds()
         return self.state_payload()
@@ -8470,7 +8655,24 @@ class ExplorationUiSession:
             self._add_message("Wynik interakcji NPC", "Interakcja nie wymagała rzutu.")
             self.pending = None
             return self.state_payload()
-        plan = _npc_check_plan(proposal, self.lead_actor_id)
+        participant_actor_ids = self.pending.participant_actor_ids
+        lead_actor_id = (
+            participant_actor_ids[0]
+            if participant_actor_ids
+            else self.lead_actor_id
+        )
+        helper_actor_id = (
+            participant_actor_ids[1]
+            if len(participant_actor_ids) > 1
+            and (proposal.check_participants == CheckParticipants.LEAD_WITH_HELP)
+            else None
+        )
+        plan = _npc_check_plan(
+            proposal,
+            lead_actor_id,
+            helper_actor_id=helper_actor_id,
+            selected_actor_ids=participant_actor_ids,
+        )
         self.pending = replace(self.pending, stage=PendingStage.ROLL, check_plan=plan)
         self._add_message("Rzut", f"Wpisz wyniki rzutów. {_check_plan_text(self.exploration.actors, plan)}")
         return self.state_payload()
@@ -8798,9 +9000,11 @@ class ExplorationUiSession:
                 item
                 for item in self.state.traps
                 if item.zone_id == challenge.zone_id
-                and item.activation_challenge_id == challenge.id
-                and trap_state_for(self.state, item.id).status
-                in {ExplorationTrapStatus.HIDDEN, ExplorationTrapStatus.REVEALED}
+                and trap_activates_for_challenge(
+                    self.state,
+                    item,
+                    challenge.id,
+                )
             ),
             None,
         )
@@ -9181,6 +9385,21 @@ class ExplorationUiSession:
             )
 
     def _apply_npc_flags(self, proposal: NpcInteractionProposal, *, success: bool) -> None:
+        if self.pending is not None and self.pending.npc_authored_route:
+            effects = (
+                self.pending.npc_effects_on_success
+                if success
+                else self.pending.npc_effects_on_failure
+            )
+            for effect in effects:
+                result = apply_exploration_effect(self.state, effect)
+                self.state = result.state
+                self._record_effect_result(
+                    result,
+                    source="npc_authored_route",
+                    raw_effect=effect,
+                )
+            return
         effects = proposal.effects_on_success if success else proposal.effects_on_failure
         if effects:
             for effect in effects:
@@ -9659,6 +9878,10 @@ def _setup_positions_text(positions: tuple[Coordinate, ...]) -> str:
     if not positions:
         return ""
     return " na polach: " + ", ".join(f"({position.col},{position.row})" for position in positions)
+
+
+def _point_setup_flag(point_id: str) -> str:
+    return f"exploration_point_placed_{point_id}"
 
 
 def _exploration_environment_label(setup_type: EnvironmentSetupType) -> str:
@@ -11607,6 +11830,11 @@ def _default_encounter_victory_outcome(name: str) -> EncounterOutcome:
 def _encounter_opening_outcome_label(outcome: EncounterOpeningOutcome) -> str:
     return {
         EncounterOpeningOutcome.PARTY_SURPRISES_ENEMIES: "Przeciwnicy mają utrudnienie do inicjatywy",
+        EncounterOpeningOutcome.PARTY_INITIATIVE_ADVANTAGE: "Cała drużyna ma przewagę do inicjatywy",
+        EncounterOpeningOutcome.PARTY_CAN_HIDE: "Drużyna może spróbować się ukryć",
+        EncounterOpeningOutcome.PARTY_INITIATIVE_ADVANTAGE_AND_CAN_HIDE: (
+            "Drużyna może się ukryć i ma przewagę do inicjatywy"
+        ),
         EncounterOpeningOutcome.NO_SURPRISE: "Nikt nie jest zaskoczony",
         EncounterOpeningOutcome.ENEMIES_SURPRISE_PARTY: "Drużyna ma utrudnienie do inicjatywy",
     }[outcome]
@@ -11660,81 +11888,6 @@ def _analyze(client: object, request_data: object) -> GmDeclarationAnalysis:
         reason="Klient testowy bez analyzer; uznaję deklarację za wiarygodną.",
         confidence=1.0,
     )
-
-
-def _validate_goal_participants(
-    goal: InteractionGoal,
-    challenge: ExplorationChallenge,
-    actors: tuple[Actor, ...],
-    requested_actor_ids: tuple[str, ...],
-    *,
-    check_participants: CheckParticipants,
-    resolution_option_id: str | None = None,
-) -> tuple[str, ...]:
-    ally_ids = tuple(str(actor.id) for actor in actors if actor.faction == Faction.ALLY)
-    requested = tuple(dict.fromkeys(actor_id.strip() for actor_id in requested_actor_ids if actor_id.strip()))
-    if len(requested) != len(requested_actor_ids):
-        raise ValueError("Każdą postać można wskazać tylko raz.")
-    unknown = tuple(actor_id for actor_id in requested if actor_id not in ally_ids)
-    if unknown:
-        raise ValueError("Wybrano postać, która nie należy do drużyny.")
-
-    if check_participants == CheckParticipants.WHOLE_PARTY:
-        if requested:
-            raise ValueError("W teście grupowym rzuca automatycznie cała drużyna.")
-        selected = ally_ids
-    elif check_participants == CheckParticipants.SINGLE_ACTOR:
-        if len(requested) != 1:
-            raise ValueError("Ten test wykonuje dokładnie jedna wybrana postać.")
-        selected = requested
-    elif check_participants == CheckParticipants.LEAD_WITH_HELP:
-        if len(requested) not in {1, 2}:
-            raise ValueError(
-                "Wybierz głównego wykonawcę oraz opcjonalnie jednego pomocnika."
-            )
-        selected = requested
-    else:
-        raise ValueError("Kafelek ma nieobsługiwany model uczestników.")
-
-    profile = next(
-        (
-            option
-            for option in challenge.options
-            if option.id == (resolution_option_id or goal.resolution_option_id)
-        ),
-        None,
-    )
-    if profile is not None and check_participants != CheckParticipants.WHOLE_PARTY:
-        eligible_ids = {
-            str(actor.id)
-            for actor in actors_matching_challenge_option(actors, profile)
-            if actor.faction == Faction.ALLY
-        }
-        incapable = tuple(actor_id for actor_id in selected if actor_id not in eligible_ids)
-        if incapable:
-            names = ", ".join(
-                actor.name for actor in actors if str(actor.id) in set(incapable)
-            )
-            raise ValueError(
-                f"Te postacie nie spełniają wymagań tego sposobu: {names}."
-            )
-    return selected
-
-
-def _resolve_goal_check_participants(
-    goal: InteractionGoal,
-    requested: str | None,
-) -> CheckParticipants:
-    if goal.participant_mode == InteractionParticipantMode.MUST:
-        if requested is not None and CheckParticipants(requested) != goal.check_participants:
-            raise ValueError("Ten kafelek wymusza inny typ testu.")
-        return goal.check_participants
-    if requested is None:
-        raise ValueError("Najpierw wybierz typ testu dla tego kafelka.")
-    selected = CheckParticipants(requested)
-    if selected not in goal.participant_options:
-        raise ValueError("Wybrany typ testu nie jest dozwolony dla tego kafelka.")
-    return selected
 
 
 def _challenge_check_plan(
@@ -11806,7 +11959,13 @@ def _challenge_check_plan(
     )
 
 
-def _npc_check_plan(proposal: NpcInteractionProposal, lead_actor_id: str) -> ExplorationCheckPlan:
+def _npc_check_plan(
+    proposal: NpcInteractionProposal,
+    lead_actor_id: str,
+    *,
+    helper_actor_id: str | None = None,
+    selected_actor_ids: tuple[str, ...] = (),
+) -> ExplorationCheckPlan:
     participants = proposal.check_participants or (CheckParticipants.WHOLE_PARTY if proposal.action_type == "search" else CheckParticipants.SINGLE_ACTOR)
     aggregation = proposal.check_aggregation or (CheckAggregation.HIGHEST if participants == CheckParticipants.WHOLE_PARTY else CheckAggregation.LEAD_RESULT)
     consequence_targets = proposal.consequence_targets or (ConsequenceTarget.NPC,)
@@ -11818,7 +11977,14 @@ def _npc_check_plan(proposal: NpcInteractionProposal, lead_actor_id: str) -> Exp
         skill=proposal.skill,
         dc=proposal.dc or 10,
         lead_actor_id=lead_actor_id,
+        helper_actor_id=helper_actor_id,
+        selected_actor_ids=selected_actor_ids,
         reason_for_players=proposal.player_narration,
+        roll_mode=(
+            RollMode.ADVANTAGE
+            if helper_actor_id is not None
+            else RollMode.NORMAL
+        ),
     )
 
 
@@ -11842,6 +12008,29 @@ def _observation_check_plan(
             "participants": observation.participants.value,
             "aggregation": observation.aggregation.value,
         },
+    )
+
+
+def _observation_for_participants(
+    observation: ExplorationObservation,
+    actors: tuple[Actor, ...],
+    participant_actor_ids: tuple[str, ...],
+    *,
+    fallback_actor_id: str,
+) -> ExplorationObservation:
+    lead_actor_id = (
+        participant_actor_ids[0]
+        if participant_actor_ids
+        else fallback_actor_id
+    )
+    lead_actor = next(
+        (actor for actor in actors if str(actor.id) == lead_actor_id),
+        None,
+    )
+    lead_name = lead_actor.name if lead_actor is not None else "Wybrana postać"
+    return replace(
+        observation,
+        description=observation.description.replace("{lead_actor}", lead_name),
     )
 
 
@@ -12186,6 +12375,7 @@ def _point_payload(
     point: ExplorationPoint | None,
     npc_state: NpcRuntimeState | None = None,
     flags: SceneFlags | None = None,
+    flows: tuple[ExplorationFlowGraph, ...] = (),
 ) -> dict[str, object] | None:
     if point is None:
         return None
@@ -12194,6 +12384,8 @@ def _point_payload(
         "name": point.name,
         "zone_id": point.zone_id,
         "description": point.description,
+        "image": point.image,
+        "interaction_label": point.interaction_label,
         "positions": [[position.col, position.row] for position in point.positions],
         "color": led_color_name_pl(point.color),
         "has_npc": point.npc_interaction is not None,
@@ -12208,7 +12400,11 @@ def _point_payload(
             "goals": [
                 goal.as_payload()
                 for goal in (
-                    available_interaction_goals(point.npc_interaction.goals, flags)
+                    NpcGoalExecutionPlanner().available_goals(
+                        npc=point.npc_interaction,
+                        flows=flows,
+                        flags=flags,
+                    )
                     if flags is not None
                     else point.npc_interaction.goals
                 )
