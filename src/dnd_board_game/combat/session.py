@@ -933,7 +933,7 @@ def stop_combat(state: CombatState) -> CombatState:
 
 
 def combat_is_finished(state: CombatState) -> bool:
-    return combat_winner(state) is not None
+    return state.status == CombatStatus.FINISHED or combat_winner(state) is not None
 
 
 def combat_winner(state: CombatState) -> Faction | None:

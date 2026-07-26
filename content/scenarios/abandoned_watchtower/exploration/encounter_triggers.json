@@ -84,6 +84,34 @@
             }
           }
         ]
+      },
+      "outcome_on_retreat": {
+        "title": "Odwrót spod bramy",
+        "body": "Drużyna cofa się za osłonę i oddaje goblinom przejście, zanim starcie zostanie rozstrzygnięte.",
+        "next_instruction": "Zakończ wynik, żeby wrócić do eksploracji i przygotować kolejne podejście.",
+        "effects": [
+          {
+            "type": "set_flag",
+            "parameters": {
+              "key": "party_retreated_at_gate",
+              "value": true
+            }
+          }
+        ]
+      },
+      "outcome_on_surrender": {
+        "title": "Broń złożona pod bramą",
+        "body": "Drużyna kapituluje. Gobliny przejmują kontrolę nad sytuacją, a dalsze konsekwencje ustala MG.",
+        "next_instruction": "Zakończ wynik, żeby wrócić do eksploracji i rozegrać konsekwencje kapitulacji.",
+        "effects": [
+          {
+            "type": "set_flag",
+            "parameters": {
+              "key": "party_surrendered_at_gate",
+              "value": true
+            }
+          }
+        ]
       }
     },
     {

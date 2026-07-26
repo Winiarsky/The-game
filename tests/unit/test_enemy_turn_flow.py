@@ -8,6 +8,7 @@ from dnd_board_game.actors import AbilityScores, Actor, ActorId, DamageAffinityP
 from dnd_board_game.application import EnemyTurnFlowService, EnemyTurnTransitionKind
 from dnd_board_game.combat import (
     ActiveCombatEffect,
+    AttackKind,
     AttackSource,
     AttackSourceType,
     CombatState,
@@ -244,9 +245,11 @@ def test_ready_enemy_moves_trigger_uses_real_ai_movement_path() -> None:
         rng=Random(3),
     )
 
-    assert transition.kind == EnemyTurnTransitionKind.READY
+    assert transition.kind == EnemyTurnTransitionKind.REACTION
     assert transition.result.movement_path is not None
     assert transition.result.movement_path.origin != transition.result.movement_path.destination
+    assert transition.reaction_window is not None
+    assert transition.reaction_window.current_option.kind.value == "ready_attack"
     assert transition.ready_trigger is not None
     assert transition.ready_trigger.readied_actor_id == "hero"
     assert transition.ready_trigger.trigger == "enemy_moves"
@@ -278,6 +281,61 @@ def test_leaving_blocked_adjacent_hero_reach_prompts_opportunity_attack() -> Non
         rng=Random(4),
     )
 
-    assert transition.kind == EnemyTurnTransitionKind.OPPORTUNITY
+    assert transition.kind == EnemyTurnTransitionKind.REACTION
+    assert transition.reaction_window is not None
+    assert transition.reaction_window.current_option.kind.value == "opportunity_attack"
     assert transition.threat_actor_ids == ("nearby",)
     assert transition.event_type == "ui_combat_enemy_opportunity_pending"
+
+
+def test_enemy_movement_collects_ready_and_opportunity_into_one_ordered_window() -> None:
+    service = EnemyTurnFlowService()
+    enemy = _actor("enemy", Faction.ENEMY, Coordinate(1, 0))
+    nearby_hero = _actor("nearby", Faction.ALLY, Coordinate(0, 0))
+    ranged_hero = _actor("ranged", Faction.ALLY, Coordinate(6, 0))
+    state = _state(enemy, nearby_hero, ranged_hero)
+    board = BoardState()
+    board.add_wall(nearby_hero.position, enemy.position)
+    board.set_terrain(Coordinate(0, 1), BLOCKING_TERRAIN)
+    board.set_terrain(Coordinate(1, 1), BLOCKING_TERRAIN)
+    ranged_source = replace(
+        _source(),
+        range_feet=30,
+        attack_kind=AttackKind.RANGED,
+    )
+    sources = {
+        enemy.id: _source(),
+        nearby_hero.id: _source(),
+        ranged_hero.id: ranged_source,
+    }
+    ready = ActiveCombatEffect(
+        id="ready:ranged",
+        actor_id="ranged",
+        kind="ready_attack",
+        label="Ready",
+        object_id="combat_action:ready:enemy_moves",
+        value=0,
+    )
+    intent = service.plan(
+        state=state,
+        board=board,
+        attack_sources_by_actor=sources,
+    )
+
+    transition = service.resolve(
+        state=state,
+        intent=intent.intent,
+        board=board,
+        attack_sources_by_actor=sources,
+        active_effects=(ready,),
+        rng=Random(4),
+    )
+
+    assert transition.kind == EnemyTurnTransitionKind.REACTION
+    assert transition.reaction_window is not None
+    assert [
+        option.kind.value for option in transition.reaction_window.options
+    ] == ["ready_attack", "opportunity_attack"]
+    assert [
+        option.reactor_actor_id for option in transition.reaction_window.options
+    ] == ["ranged", "nearby"]

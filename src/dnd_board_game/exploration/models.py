@@ -337,6 +337,9 @@ class ExplorationEncounterTrigger:
     opening_policy: EncounterOpeningPolicy | None = None
     outcome_on_victory: EncounterOutcome | None = None
     outcome_on_defeat: EncounterOutcome | None = None
+    outcome_on_retreat: EncounterOutcome | None = None
+    outcome_on_surrender: EncounterOutcome | None = None
+    outcome_on_objective: EncounterOutcome | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -1987,7 +1987,7 @@ function combatCurrentStepHtml(combat, finished, isAllyTurn, isEnemyTurn, interr
       ${resultAck ? '' : combatMainPromptHtml(combat, finished, isAllyTurn, isEnemyTurn)}
       ${phase === 'result' && !resultAck ? `<div class="combat-inline-result">${latestCombatMessageHtml()}</div>` : ''}
       <div class="combat-action-card">
-        ${finished ? '<button onclick="resolveCombatOutcome()">Zastosuj wynik walki</button>' : combatPrimaryActionHtml(combat, isAllyTurn, isEnemyTurn)}
+        ${finished ? '<button onclick="resolveCombatOutcome()">Zastosuj wynik encountera</button>' : combatPrimaryActionHtml(combat, isAllyTurn, isEnemyTurn)}
       </div>
     </div>
   `;
@@ -2082,7 +2082,10 @@ function combatPromptTitle(combat, finished, isAllyTurn, isEnemyTurn) {
 }
 function combatInstructionText(combat, finished, isAllyTurn, isEnemyTurn) {
   if (resultAck) return resultAck.body || 'Przeczytaj wynik i potwierdź.';
-  if (finished) return 'Zastosuj wynik walki, żeby wrócić do eksploracji.';
+  if (finished) {
+    const result = combat.encounter_result || {};
+    return result.message || 'Zastosuj wynik encountera, żeby wrócić do eksploracji.';
+  }
   const actor = combat.current_actor || {};
   if (combat.death_save_required) {
     const saves = actor.death_saves || {};
@@ -2597,6 +2600,8 @@ function combatPrimaryActionHtml(combat, isAllyTurn, isEnemyTurn) {
     <div class="row">
       <button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button>
       ${!targeting && !preview ? '<button class="secondary" data-allow-busy="true" onclick="finishCombatTurn()">Zakończ turę</button>' : ''}
+      ${!targeting && !preview ? '<button class="secondary" data-allow-busy="true" onclick="retreatFromCombat()">Odwrót</button>' : ''}
+      ${!targeting && !preview ? '<button class="secondary" data-allow-busy="true" onclick="surrenderCombat()">Kapitulacja</button>' : ''}
     </div>
   `;
 }
@@ -3989,6 +3994,14 @@ function submitEnemySavingThrow() {
 async function finishCombatTurn() {
   await stopBoardScanLoop();
   api('/api/combat/end-turn', {}, 'Kończę turę...');
+}
+function retreatFromCombat() {
+  if (!window.confirm('Czy cała drużyna wycofuje się z tego encountera?')) return;
+  api('/api/combat/retreat', {}, 'Drużyna wycofuje się...');
+}
+function surrenderCombat() {
+  if (!window.confirm('Czy cała drużyna kapituluje?')) return;
+  api('/api/combat/surrender', {}, 'Drużyna kapituluje...');
 }
 function resolveCombatOutcome() { api('/api/encounter/combat/resolve', {}, 'Zastosowuję wynik walki w eksploracji...'); }
 function ackResult() {

@@ -16,7 +16,7 @@ from dnd_board_game.rules import (
 from dnd_board_game.world import Coordinate
 
 from .action_economy import ActionEconomyCost
-from .session import CombatState, combat_winner
+from .session import CombatState, CombatStatus, combat_winner
 from .setup import SetupVisibility
 
 
@@ -30,6 +30,15 @@ class SceneObjectiveStatus(StrEnum):
     ACTIVE = "active"
     COMPLETED = "completed"
     FAILED = "failed"
+
+
+class SceneConclusionType(StrEnum):
+    ONGOING = "ongoing"
+    VICTORY = "victory"
+    DEFEAT = "defeat"
+    OBJECTIVE_COMPLETED = "objective_completed"
+    RETREAT = "retreat"
+    SURRENDER = "surrender"
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,6 +131,7 @@ class SceneObject:
 class SceneResult:
     finished: bool
     message: str
+    conclusion: SceneConclusionType = SceneConclusionType.ONGOING
     winner: Faction | None = None
     completed_objectives: tuple[str, ...] = ()
 
@@ -254,6 +264,8 @@ def objective_status_after_flags(
 
 
 def scene_is_finished(state: CombatState, objectives: tuple[SceneObjective, ...]) -> bool:
+    if state.status == CombatStatus.FINISHED:
+        return True
     if objectives and all(objective.status == SceneObjectiveStatus.COMPLETED for objective in objectives):
         return True
     return combat_winner(state) is not None
@@ -262,10 +274,83 @@ def scene_is_finished(state: CombatState, objectives: tuple[SceneObjective, ...]
 def scene_result(state: CombatState, objectives: tuple[SceneObjective, ...]) -> SceneResult:
     completed = tuple(objective.id for objective in objectives if objective.status == SceneObjectiveStatus.COMPLETED)
     if objectives and all(objective.status == SceneObjectiveStatus.COMPLETED for objective in objectives):
-        return SceneResult(True, "Scena zakończona. Cel sceny został osiągnięty.", Faction.ALLY, completed)
-    winner = combat_winner(state)
+        return SceneResult(
+            True,
+            "Scena zakończona. Cel sceny został osiągnięty.",
+            SceneConclusionType.OBJECTIVE_COMPLETED,
+            Faction.ALLY,
+            completed,
+        )
+    winner = (
+        state.winner
+        if state.status == CombatStatus.FINISHED and state.winner is not None
+        else combat_winner(state)
+    )
     if winner == Faction.ALLY:
-        return SceneResult(True, "Scena zakończona. Bohaterowie zwyciężyli.", winner, completed)
+        return SceneResult(
+            True,
+            "Scena zakończona. Bohaterowie zwyciężyli.",
+            SceneConclusionType.VICTORY,
+            winner,
+            completed,
+        )
     if winner == Faction.ENEMY:
-        return SceneResult(True, "Scena zakończona. Bohaterowie zostali pokonani.", winner, completed)
-    return SceneResult(False, "Scena trwa.", None, completed)
+        return SceneResult(
+            True,
+            "Scena zakończona. Bohaterowie zostali pokonani.",
+            SceneConclusionType.DEFEAT,
+            winner,
+            completed,
+        )
+    return SceneResult(
+        False,
+        "Scena trwa.",
+        SceneConclusionType.ONGOING,
+        None,
+        completed,
+    )
+
+
+def conclude_scene(
+    state: CombatState,
+    *,
+    conclusion: SceneConclusionType,
+    objectives: tuple[SceneObjective, ...] = (),
+    acting_faction: Faction = Faction.ALLY,
+) -> tuple[CombatState, SceneResult]:
+    if state.status != CombatStatus.ACTIVE:
+        raise ValueError("Only an active combat can be concluded.")
+    if conclusion not in {
+        SceneConclusionType.OBJECTIVE_COMPLETED,
+        SceneConclusionType.RETREAT,
+        SceneConclusionType.SURRENDER,
+    }:
+        raise ValueError(f"Unsupported declared scene conclusion: {conclusion.value}.")
+    if acting_faction not in {Faction.ALLY, Faction.ENEMY}:
+        raise ValueError("Only an ally or enemy side can conclude an encounter.")
+    completed = tuple(
+        objective.id
+        for objective in objectives
+        if objective.status == SceneObjectiveStatus.COMPLETED
+    )
+    if conclusion == SceneConclusionType.OBJECTIVE_COMPLETED:
+        if not objectives or len(completed) != len(objectives):
+            raise ValueError("All scene objectives must be completed.")
+        winner = acting_faction
+        message = "Scena zakończona. Cel sceny został osiągnięty."
+    elif conclusion == SceneConclusionType.RETREAT:
+        winner = None
+        side = "Bohaterowie" if acting_faction == Faction.ALLY else "Przeciwnicy"
+        message = f"Scena zakończona. {side} wycofują się ze starcia."
+    else:
+        winner = (
+            Faction.ENEMY
+            if acting_faction == Faction.ALLY
+            else Faction.ALLY
+        )
+        side = "Bohaterowie" if acting_faction == Faction.ALLY else "Przeciwnicy"
+        message = f"Scena zakończona. {side} poddają się."
+    return (
+        replace(state, status=CombatStatus.FINISHED, winner=winner),
+        SceneResult(True, message, conclusion, winner, completed),
+    )

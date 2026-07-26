@@ -534,6 +534,14 @@ def test_load_abandoned_watchtower_builds_exploration_scene():
         effect["type"] == "reveal_point" and effect["parameters"]["point_id"] == "wounded_scout"
         for effect in gate_trigger.outcome_on_victory.effects
     )
+    assert gate_trigger.outcome_on_retreat is not None
+    assert gate_trigger.outcome_on_retreat.effects[0]["parameters"]["key"] == (
+        "party_retreated_at_gate"
+    )
+    assert gate_trigger.outcome_on_surrender is not None
+    assert gate_trigger.outcome_on_surrender.effects[0]["parameters"]["key"] == (
+        "party_surrendered_at_gate"
+    )
     assert challenge.llm_policy.allowed_local_skills == ("crafting", "lockpicking")
     assert "heavy_force" in challenge.llm_policy.allowed_approach_tags
     assert "bribe" not in challenge.llm_policy.allowed_approach_tags

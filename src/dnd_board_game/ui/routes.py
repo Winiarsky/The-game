@@ -832,6 +832,20 @@ def create_app(session: ExplorationUiSession) -> Flask:
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
+    @app.post("/api/combat/retreat")
+    def api_combat_retreat():
+        try:
+            return jsonify(session.retreat_from_combat())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/surrender")
+    def api_combat_surrender():
+        try:
+            return jsonify(session.surrender_combat())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
     @app.post("/api/combat/death-save")
     def api_combat_death_save():
         data = request.get_json(silent=True) or {}

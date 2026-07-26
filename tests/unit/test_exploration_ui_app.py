@@ -512,6 +512,10 @@ def test_exploration_ui_combat_turn_controls_remain_available_during_board_scan(
     assert "pendingCombatInteractionHtml" in html
     assert "/api/combat/interaction/confirm" in html
     assert "/api/combat/interaction/cancel" in html
+    assert "/api/combat/retreat" in html
+    assert "/api/combat/surrender" in html
+    assert "retreatFromCombat()" in html
+    assert "surrenderCombat()" in html
     assert "combatContextMenuHtml" in html
     assert "moveCombatContextMenu" in html
     assert "/api/combat/context-menu/select" in html
@@ -695,6 +699,8 @@ def test_idle_player_turn_keeps_end_turn_next_to_board_scan_and_routes_other_act
     assert "useCombatDodge()" not in idle_turn_source
     assert "useCombatDisengage()" not in idle_turn_source
     assert "finishCombatTurn()" in idle_turn_source
+    assert "retreatFromCombat()" in idle_turn_source
+    assert "surrenderCombat()" in idle_turn_source
     assert "Kliknij pole ${actor.name || 'aktywnego bohatera'}" in javascript
     assert "czary, akcje i ekwipunek" in javascript
     assert "Turę możesz zakończyć także przyciskiem obok skanowania" in javascript

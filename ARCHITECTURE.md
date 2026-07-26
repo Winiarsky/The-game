@@ -153,9 +153,17 @@ The exploration web surface is split into explicit responsibilities:
   and confirms the returned positions and affected actors,
 - `application/combat_shove_flow.py` and `application/combat_grapple_flow.py` own the
   visible opposed-check previews and deterministic results of special melee maneuvers,
-- `application/combat_reaction_flow.py` owns opportunity-attack reaction consumption,
-  manual hero reaction attacks, Ready trigger detection, attack and damage resolution,
-  and the final movement decision,
+- `combat/reactions.py` owns the transport-neutral ordered `ReactionWindow` contract:
+  one interrupted actor, stable reaction options, the current roll stage, advancement,
+  and skipping reactors whose reaction resource is no longer available.
+  `application/combat_reaction_flow.py` consumes that queue for automatic and manual
+  opportunity attacks, while Ready detection contributes options to the same window;
+  the UI resumes the interrupted enemy action only after the window closes,
+- `combat/scene.py` owns transport-neutral scene objectives and typed encounter
+  conclusions. Victory/defeat can come from combat state, interaction objectives can
+  finish an active encounter, and retreat/surrender are explicit declarations rather
+  than synthetic HP changes. The exploration trigger selects the matching authored
+  outcome and applies its effects only after the result is confirmed,
 - `application/combat_turn_action_flow.py` owns common player turn actions and their
   deterministic combat effects (`Dash`, `Dodge`, `Disengage`, `Help`, and Ready preparation),
 - `combat/action_economy.py` defines shared action costs, while `combat/session.py`

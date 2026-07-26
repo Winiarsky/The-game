@@ -90,6 +90,8 @@ najbliższy horyzont, a nie kopię całej roadmapy.
 - [x] Add compatible `NdM` and multi-component attack damage content, including
   per-component manual player input, automatic enemy rolls, critical dice doubling,
   per-type affinity resolution, area spells, Ready attacks, and opportunity attacks.
+- [x] Add a shared ordered reaction window and migrate Ready plus manual/automatic
+  opportunity attacks to one pause, advancement, skip, and resume contract.
 - [x] Unify saving-throw requests/results and add enemy effects that pause for a physical player d20 before applying save-adjusted typed damage.
 - [x] Add data-driven exploration hazards triggered by failed checks, with a visible physical saving throw and save-adjusted typed damage.
 - [x] Add save-dependent exploration hazard effects, persistent actor conditions, snapshot support, and an exploration-to-combat condition bridge.
@@ -225,6 +227,7 @@ obowiązują `Current Roadmap Focus` oraz etapy z `ROADMAP.md`.
 - [x] Add Attack action budgets, Extra Attack-ready actors, attack-replacing Shove/Grapple, split movement between attacks, and data-driven monster Multiattack.
 - [x] Add combat Help action with ally advantage against a chosen target.
 - [x] Add combat Ready action for prepared attacks triggered during enemy turns.
+- [x] Add generic encounter conclusions for victory, defeat, objective completion, party retreat, and surrender with scenario-driven outcomes.
 - [x] Add full advantage/disadvantage d20 input and resolution for combat attacks.
 - [x] Add combat action sources, cleric healing, and strength potion MVP.
 - [x] Add MVP spell slots and area spell targeting for combat.

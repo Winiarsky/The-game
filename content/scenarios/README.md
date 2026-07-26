@@ -2,6 +2,13 @@
 
 Scenariusze opisują konkretne encountery uruchamiane przez runtime.
 
+Triggery eksploracyjne mogą przypisać osobne skutki do sposobu zakończenia
+encountera. `outcome_on_victory` i `outcome_on_defeat` obsługują rozstrzygnięcie
+przez zdolną do walki stronę, a opcjonalne `outcome_on_objective`,
+`outcome_on_retreat` i `outcome_on_surrender` pozwalają nadać inne konsekwencje
+wykonaniu celu, wycofaniu drużyny i kapitulacji. Każdy outcome używa tego samego
+formatu `title`, `body`, `next_instruction` i `effects`.
+
 Scenariusz może być zapisany jako jeden plik JSON albo jako folder z manifestem.
 
 ## Pojedynczy Plik

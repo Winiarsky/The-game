@@ -13,6 +13,10 @@ from dnd_board_game.combat import (
     CombatStatus,
     EnemyAutoTurnResult,
     EnemyTurnPlan,
+    OpportunityAttackThreat,
+    ReactionKind,
+    ReactionOption,
+    ReactionWindow,
     SceneObject,
     DamageComponentInput,
     DamageType,
@@ -21,6 +25,7 @@ from dnd_board_game.combat import (
     attack_source_with_target_combat_effects,
     current_actor,
     opportunity_attackers_for_movement,
+    open_reaction_window,
     plan_enemy_turn,
     resolve_enemy_auto_turn,
     resolve_actor_saving_throw,
@@ -35,6 +40,7 @@ from .damage_presentation import applied_damage_message, applied_damage_payload
 
 
 class EnemyTurnTransitionKind(StrEnum):
+    REACTION = "reaction"
     READY = "ready"
     OPPORTUNITY = "opportunity"
     MOVEMENT = "movement"
@@ -60,6 +66,7 @@ class EnemyTurnResolutionTransition:
     board_message: str
     message_title: str
     message_body: str
+    reaction_window: ReactionWindow | None = None
     ready_trigger: ReadyAttackTrigger | None = None
     threat_actor_ids: tuple[str, ...] = ()
     event_type: str = ""
@@ -171,38 +178,15 @@ class EnemyTurnFlowService:
                 else None
             ),
         )
-        ready = self._player_reactions.detect_ready_attack(
+        ready_attacks = self._player_reactions.detect_ready_attacks(
             state=state,
             enemy_result=result,
             board=board,
             attack_sources_by_actor=attack_sources_by_actor,
             active_effects=active_effects,
         )
-        if ready is not None:
-            readied_actor = next(
-                actor for actor in state.actors if str(actor.id) == ready.readied_actor_id
-            )
-            return EnemyTurnResolutionTransition(
-                result=result,
-                kind=EnemyTurnTransitionKind.READY,
-                ready_trigger=ready,
-                board_message=(
-                    f"Wyzwolono Ready: {readied_actor.name} może użyć przygotowanego ataku."
-                ),
-                message_title="Ready",
-                message_body=(
-                    f"{readied_actor.name}: warunek przygotowanej akcji został spełniony "
-                    f"({_ready_trigger_label(ready.trigger)})."
-                ),
-                event_type="ui_combat_ready_triggered",
-                event_payload=(
-                    ("readied_actor_id", ready.readied_actor_id),
-                    ("target_id", ready.target_id),
-                    ("trigger", ready.trigger),
-                ),
-            )
-        if _result_has_movement(result, enemy.position):
-            threats = tuple(
+        movement_threats = (
+            tuple(
                 threat
                 for threat in opportunity_attackers_for_movement(
                     state,
@@ -214,32 +198,102 @@ class EnemyTurnFlowService:
                 )
                 if threat.attacker.faction == Faction.ALLY
             )
-            if threats:
-                threat_actor_ids = tuple(str(threat.attacker.id) for threat in threats)
-                threat_names = ", ".join(threat.attacker.name for threat in threats)
-                return EnemyTurnResolutionTransition(
-                    result=result,
-                    kind=EnemyTurnTransitionKind.OPPORTUNITY,
-                    threat_actor_ids=threat_actor_ids,
-                    board_message=(
-                        f"{enemy.name} opuszcza zasięg: {threat_names}. "
-                        "Wybierz atak okazyjny albo pomiń reakcję."
-                    ),
-                    message_title="Atak okazyjny",
-                    message_body=(
-                        f"{enemy.name} prowokuje atak okazyjny. "
-                        f"Reakcję może wykonać: {threat_names}."
-                    ),
-                    event_type="ui_combat_enemy_opportunity_pending",
-                    event_payload=(
-                        ("enemy_id", str(enemy.id)),
-                        (
-                            "destination",
-                            [result.movement_path.destination.col, result.movement_path.destination.row],
-                        ),
-                        ("threat_actor_ids", list(threat_actor_ids)),
-                    ),
+            if _result_has_movement(result, enemy.position)
+            else ()
+        )
+        reaction_options = (
+            *(
+                ReactionOption(
+                    id=f"ready:{ready.effect_id}:{ready.target_id}",
+                    kind=ReactionKind.READY_ATTACK,
+                    reactor_actor_id=ready.readied_actor_id,
+                    target_actor_id=ready.target_id,
+                    trigger_event=ready.trigger,
+                    effect_id=ready.effect_id,
+                    label="Ready",
                 )
+                for ready in ready_attacks
+            ),
+            *(
+                ReactionOption(
+                    id=f"opportunity:{threat.attacker.id}:{enemy.id}",
+                    kind=ReactionKind.OPPORTUNITY_ATTACK,
+                    reactor_actor_id=str(threat.attacker.id),
+                    target_actor_id=str(enemy.id),
+                    trigger_event="enemy_leaves_reach",
+                    label="Atak okazyjny",
+                )
+                for threat in movement_threats
+            ),
+        )
+        reaction_window = open_reaction_window(
+            interrupted_actor_id=str(enemy.id),
+            trigger_event=_reaction_window_trigger(ready_attacks, movement_threats),
+            options=reaction_options,
+        )
+        if reaction_window is not None:
+            ready = ready_attacks[0] if ready_attacks else None
+            threat_actor_ids = tuple(
+                str(threat.attacker.id) for threat in movement_threats
+            )
+            if ready is not None:
+                readied_actor = next(
+                    actor for actor in state.actors if str(actor.id) == ready.readied_actor_id
+                )
+                board_message = (
+                    f"Wyzwolono Ready: {readied_actor.name} może użyć przygotowanego ataku."
+                )
+                message_title = "Ready"
+                message_body = (
+                    f"{readied_actor.name}: warunek przygotowanej akcji został spełniony "
+                    f"({_ready_trigger_label(ready.trigger)})."
+                )
+                event_type = "ui_combat_ready_triggered"
+                event_payload = (
+                    ("readied_actor_id", ready.readied_actor_id),
+                    ("target_id", ready.target_id),
+                    ("trigger", ready.trigger),
+                    ("reaction_count", len(reaction_options)),
+                )
+            else:
+                threat_names = ", ".join(
+                    threat.attacker.name for threat in movement_threats
+                )
+                board_message = (
+                    f"{enemy.name} opuszcza zasięg: {threat_names}. "
+                    "Wybierz atak okazyjny albo pomiń reakcję."
+                )
+                message_title = "Atak okazyjny"
+                message_body = (
+                    f"{enemy.name} prowokuje atak okazyjny. "
+                    f"Reakcję może wykonać: {threat_names}."
+                )
+                event_type = "ui_combat_enemy_opportunity_pending"
+                event_payload = (
+                    ("enemy_id", str(enemy.id)),
+                    (
+                        "destination",
+                        [
+                            result.movement_path.destination.col,
+                            result.movement_path.destination.row,
+                        ],
+                    ),
+                    ("threat_actor_ids", list(threat_actor_ids)),
+                    ("reaction_count", len(reaction_options)),
+                )
+            return EnemyTurnResolutionTransition(
+                result=result,
+                kind=EnemyTurnTransitionKind.REACTION,
+                reaction_window=reaction_window,
+                ready_trigger=ready,
+                threat_actor_ids=threat_actor_ids,
+                board_message=board_message,
+                message_title=message_title,
+                message_body=message_body,
+                event_type=event_type,
+                event_payload=event_payload,
+            )
+        if _result_has_movement(result, enemy.position):
             destination = result.movement_path.destination
             return EnemyTurnResolutionTransition(
                 result=result,
@@ -386,6 +440,17 @@ def _enemy_attack_source(
         return attack_sources_by_actor.get(enemy.id)
     used = state.turn_action.attacks_used if state.turn_action.attack_action_active else 0
     return sequence[min(used, len(sequence) - 1)]
+
+
+def _reaction_window_trigger(
+    ready_attacks: tuple[ReadyAttackTrigger, ...],
+    movement_threats: tuple[OpportunityAttackThreat, ...],
+) -> str:
+    if ready_attacks and movement_threats:
+        return "enemy_action"
+    if ready_attacks:
+        return ready_attacks[0].trigger
+    return "enemy_leaves_reach"
 
 
 def _active_enemy(state: CombatState) -> Actor:

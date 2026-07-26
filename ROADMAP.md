@@ -176,6 +176,10 @@ Kryterium wyjścia:
 
 ## Etap M4: Domknięcie Walki
 
+Status: ukończony jako stabilne MVP. Walka ma wspólną kolejkę reakcji oraz
+generyczne wyniki encountera: zwycięstwo, porażkę, wykonanie celu, odwrót
+i kapitulację.
+
 Kolejność:
 
 1. komplet ekonomii tury: action, bonus action, reaction, movement, free interaction,

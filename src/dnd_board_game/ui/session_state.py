@@ -18,7 +18,13 @@ if TYPE_CHECKING:
         PendingPlayerHealing,
         PendingShortRest,
     )
-    from dnd_board_game.combat import CombatContextMenu, EnemyAutoTurnResult, EnemyTurnPlan
+    from dnd_board_game.combat import (
+        CombatContextMenu,
+        EnemyAutoTurnResult,
+        EnemyTurnPlan,
+        ReactionWindow,
+        SceneResult,
+    )
     from dnd_board_game.exploration import NpcTransitionPlan, PendingEncounter
 
     from .exploration_app import (
@@ -48,6 +54,7 @@ class UiPendingState:
     enemy_turn_result: EnemyAutoTurnResult | None = None
     enemy_turn_ack_result: EnemyAutoTurnResult | None = None
     enemy_saving_throw: PendingEnemySavingThrow | None = None
+    encounter_result: SceneResult | None = None
     player_attack: PendingPlayerAttack | None = None
     player_healing: PendingPlayerHealing | None = None
     area_spell: PendingAreaSpell | None = None
@@ -60,6 +67,7 @@ class UiPendingState:
     concentration_check: PendingConcentrationCheck | None = None
     combat_ready: PendingCombatReady | None = None
     opportunity_movement: PendingOpportunityMovement | None = None
+    reaction_window: ReactionWindow | None = None
     enemy_opportunity_attack: PendingEnemyOpportunityAttack | None = None
     ready_attack: PendingReadyAttack | None = None
     short_rest: PendingShortRest | None = None

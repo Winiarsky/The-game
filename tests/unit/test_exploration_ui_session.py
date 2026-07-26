@@ -20,6 +20,12 @@ from dnd_board_game.combat import (
     ConditionState,
     EnemyAutoTurnResult,
     HiddenState,
+    ReactionKind,
+    ReactionOption,
+    SceneConclusionType,
+    SceneObjective,
+    SceneObjectiveCondition,
+    open_reaction_window,
     current_actor,
     replace_actor,
     scene_flag,
@@ -3609,6 +3615,76 @@ def test_exploration_ui_session_applies_victory_outcome_after_combat():
     assert state["pending_encounter"] is None
 
 
+def test_exploration_ui_session_applies_retreat_outcome_without_a_winner():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+
+    concluded = session.retreat_from_combat()
+
+    assert concluded["combat"]["status"] == "finished"
+    assert concluded["combat"]["winner"] is None
+    assert concluded["combat"]["encounter_result"]["conclusion"] == "retreat"
+
+    resolved = session.resolve_active_combat()
+
+    assert resolved["combat"] is None
+    assert {"key": "party_retreated_at_gate", "value": True} in resolved["flags"]
+
+
+def test_exploration_ui_session_applies_surrender_outcome():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+
+    concluded = session.surrender_combat()
+
+    assert concluded["combat"]["status"] == "finished"
+    assert concluded["combat"]["winner"] == "enemy"
+    assert concluded["combat"]["encounter_result"]["conclusion"] == "surrender"
+
+    resolved = session.resolve_active_combat()
+
+    assert resolved["combat"] is None
+    assert {"key": "party_surrendered_at_gate", "value": True} in resolved["flags"]
+
+
+def test_combat_interaction_can_complete_objective_and_end_encounter():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+    encounter = session._active_encounter()
+    assert encounter is not None
+    session._replace_active_encounter(
+        replace(
+            encounter,
+            objectives=(
+                SceneObjective(
+                    id="secure_cart",
+                    name="Zabezpiecz wóz",
+                    description="Użyj wozu, aby zabezpieczyć pozycję.",
+                    condition=SceneObjectiveCondition.INTERACT_WITH_OBJECT,
+                    target_id="broken_cart",
+                ),
+            ),
+        )
+    )
+
+    session.submit_combat_movement(col=7, row=7)
+    session.select_board_position(Coordinate(7, 8))
+    session.confirm_combat_context_menu("interact:broken_cart")
+    concluded = session.confirm_combat_interaction("take_cover_cart")
+
+    assert concluded["combat"]["status"] == "finished"
+    assert concluded["combat"]["encounter_result"]["conclusion"] == (
+        SceneConclusionType.OBJECTIVE_COMPLETED.value
+    )
+    assert concluded["combat"]["encounter_result"]["completed_objectives"] == [
+        "secure_cart"
+    ]
+    assert any(
+        actor["faction"] == "enemy" and not actor["defeated"]
+        for actor in concluded["combat"]["actors"]
+    )
+
+
 def test_exploration_ui_session_player_attack_applies_damage_and_uses_action():
     session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
     _start_combat_from_scout_alarm(session)
@@ -4642,6 +4718,102 @@ def test_exploration_ui_session_ready_prepares_attack_and_can_trigger_on_enemy_m
     assert not any(effect.kind == "ready_attack" for effect in session.active_combat_effects)
     assert session.combat_state is not None
     assert readied_actor.id in session.pending_enemy_turn_result.state.spent_reaction_actor_ids
+
+
+def test_exploration_ui_session_reaction_window_advances_from_ready_to_opportunity():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+
+    session.start_combat_ready()
+    readied_actor, target = _prepare_ready_attack_trigger(session, "enemy_moves")
+    pending_ready = session.pending_ready_attack
+    assert pending_ready is not None
+    opportunity_actor = next(
+        actor
+        for actor in session.combat_state.actors
+        if actor.faction == Faction.ALLY and actor.id != readied_actor.id
+    )
+    session.pending_reaction_window = open_reaction_window(
+        interrupted_actor_id=str(target.id),
+        trigger_event="enemy_action",
+        options=(
+            ReactionOption(
+                id=f"ready:{pending_ready.effect_id}:{target.id}",
+                kind=ReactionKind.READY_ATTACK,
+                reactor_actor_id=str(readied_actor.id),
+                target_actor_id=str(target.id),
+                trigger_event="enemy_moves",
+                effect_id=pending_ready.effect_id,
+                label="Ready",
+            ),
+            ReactionOption(
+                id=f"opportunity:{opportunity_actor.id}:{target.id}",
+                kind=ReactionKind.OPPORTUNITY_ATTACK,
+                reactor_actor_id=str(opportunity_actor.id),
+                target_actor_id=str(target.id),
+                trigger_event="enemy_leaves_reach",
+                label="Atak okazyjny",
+            ),
+        ),
+    )
+    session._activate_current_reaction_option()
+
+    advanced = session.skip_ready_attack()
+
+    assert advanced["combat"]["reaction_window"]["current_index"] == 1
+    assert advanced["combat"]["pending_ready_attack"] is None
+    assert (
+        advanced["combat"]["pending_enemy_opportunity_attack"]["attacker"]["id"]
+        == str(opportunity_actor.id)
+    )
+
+    resumed = session.skip_enemy_opportunity_attack()
+
+    assert resumed["combat"]["reaction_window"] is None
+    assert resumed["combat"]["pending_enemy_opportunity_attack"] is None
+    assert resumed["combat"]["enemy_turn_preview"] is not None
+
+
+def test_exploration_ui_session_reaction_window_skips_spent_reactor_options():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+
+    session.start_combat_ready()
+    readied_actor, target = _prepare_ready_attack_trigger(session, "enemy_moves")
+    pending_ready = session.pending_ready_attack
+    assert pending_ready is not None
+    session.pending_reaction_window = open_reaction_window(
+        interrupted_actor_id=str(target.id),
+        trigger_event="enemy_action",
+        options=(
+            ReactionOption(
+                id=f"ready:{pending_ready.effect_id}:{target.id}",
+                kind=ReactionKind.READY_ATTACK,
+                reactor_actor_id=str(readied_actor.id),
+                target_actor_id=str(target.id),
+                trigger_event="enemy_moves",
+                effect_id=pending_ready.effect_id,
+                label="Ready",
+            ),
+            ReactionOption(
+                id=f"opportunity:{readied_actor.id}:{target.id}",
+                kind=ReactionKind.OPPORTUNITY_ATTACK,
+                reactor_actor_id=str(readied_actor.id),
+                target_actor_id=str(target.id),
+                trigger_event="enemy_leaves_reach",
+                label="Atak okazyjny",
+            ),
+        ),
+    )
+    session._activate_current_reaction_option()
+
+    session.start_ready_attack()
+    resumed = session.submit_ready_attack_roll(natural_roll=1)
+
+    assert resumed["combat"]["reaction_window"] is None
+    assert resumed["combat"]["pending_ready_attack"] is None
+    assert resumed["combat"]["pending_enemy_opportunity_attack"] is None
+    assert resumed["combat"]["enemy_turn_preview"] is not None
 
 
 def test_exploration_ui_session_ready_attack_can_stop_enemy_turn():

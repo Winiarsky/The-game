@@ -4,16 +4,20 @@ from dnd_board_game.actors import AbilityScores, Actor, ActorId, Faction
 from dnd_board_game.combat import (
     InitiativeEntry,
     InitiativeOrder,
+    CombatStatus,
+    SceneConclusionType,
     SceneObjective,
     SceneObjectiveCondition,
     SceneObjectiveStatus,
     SceneObject,
     complete_interaction_objective,
+    conclude_scene,
     objective_status_after_combat,
     objective_status_after_flags,
     set_scene_flag,
     SceneFlags,
     scene_is_finished,
+    scene_result,
     start_combat,
 )
 from dnd_board_game.rules import D20RollInput, D20RollRequest, resolve_d20_roll
@@ -102,3 +106,58 @@ def test_flag_equals_objective_waits_for_matching_flag_value():
     updated = objective_status_after_flags((objective,), flags)
 
     assert updated[0].status == SceneObjectiveStatus.ACTIVE
+
+
+def test_completed_objective_can_finish_combat_while_enemies_remain() -> None:
+    hero = _actor("hero", Faction.ALLY, 10)
+    goblin = _actor("goblin", Faction.ENEMY, 10)
+    state = start_combat((hero, goblin), _order(hero, goblin))
+    objective = SceneObjective(
+        "secure",
+        "Zabezpiecz",
+        "",
+        SceneObjectiveCondition.INTERACT_WITH_OBJECT,
+        status=SceneObjectiveStatus.COMPLETED,
+        target_id="crate",
+    )
+
+    finished_state, result = conclude_scene(
+        state,
+        conclusion=SceneConclusionType.OBJECTIVE_COMPLETED,
+        objectives=(objective,),
+    )
+
+    assert finished_state.status == CombatStatus.FINISHED
+    assert finished_state.winner == Faction.ALLY
+    assert result.conclusion == SceneConclusionType.OBJECTIVE_COMPLETED
+    assert result.completed_objectives == ("secure",)
+
+
+def test_party_retreat_finishes_combat_without_declaring_a_winner() -> None:
+    hero = _actor("hero", Faction.ALLY, 10)
+    goblin = _actor("goblin", Faction.ENEMY, 10)
+    state = start_combat((hero, goblin), _order(hero, goblin))
+
+    finished_state, result = conclude_scene(
+        state,
+        conclusion=SceneConclusionType.RETREAT,
+    )
+
+    assert finished_state.status == CombatStatus.FINISHED
+    assert finished_state.winner is None
+    assert result.conclusion == SceneConclusionType.RETREAT
+
+
+def test_party_surrender_finishes_combat_with_enemy_winner() -> None:
+    hero = _actor("hero", Faction.ALLY, 10)
+    goblin = _actor("goblin", Faction.ENEMY, 10)
+    state = start_combat((hero, goblin), _order(hero, goblin))
+
+    finished_state, result = conclude_scene(
+        state,
+        conclusion=SceneConclusionType.SURRENDER,
+    )
+
+    assert finished_state.winner == Faction.ENEMY
+    assert result.conclusion == SceneConclusionType.SURRENDER
+    assert scene_result(finished_state, ()).conclusion == SceneConclusionType.DEFEAT

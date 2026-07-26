@@ -14,7 +14,10 @@ from dnd_board_game.combat import (
     CombatStatus,
     DamageComponentInput,
     EnemyAutoTurnResult,
+    ReactionKind,
+    ReactionOption,
     apply_damage_result,
+    advance_reaction_window,
     attack_source_with_target_combat_effects,
     attack_source_with_hidden_advantage,
     attack_source_with_prone,
@@ -24,6 +27,7 @@ from dnd_board_game.combat import (
     replace_actor,
     reveal_actor,
     is_hidden_from,
+    open_reaction_window,
     resolve_attack,
     resolve_damage,
     roll_damage_components,
@@ -106,7 +110,23 @@ class CombatReactionFlowService:
         applied_damages: list[AppliedDamageResult] = []
         updated_state = state
         updated_effects = active_effects
-        for attacker_id in threat_actor_ids:
+        reaction_window = open_reaction_window(
+            interrupted_actor_id=actor_id,
+            trigger_event="actor_leaves_reach",
+            options=tuple(
+                ReactionOption(
+                    id=f"opportunity:{attacker_id}:{actor_id}",
+                    kind=ReactionKind.OPPORTUNITY_ATTACK,
+                    reactor_actor_id=attacker_id,
+                    target_actor_id=actor_id,
+                    trigger_event="actor_leaves_reach",
+                    label="Atak okazyjny",
+                )
+                for attacker_id in threat_actor_ids
+            ),
+        )
+        while reaction_window is not None:
+            attacker_id = reaction_window.current_option.reactor_actor_id
             actor = next(
                 (candidate for candidate in updated_state.actors if str(candidate.id) == actor_id),
                 actor,
@@ -118,12 +138,15 @@ class CombatReactionFlowService:
                 None,
             )
             if attacker is None or attacker.is_defeated():
+                reaction_window = advance_reaction_window(reaction_window)
                 continue
             source = attack_sources_by_actor.get(attacker.id)
             if source is None:
+                reaction_window = advance_reaction_window(reaction_window)
                 continue
             reaction = use_actor_reaction(updated_state, attacker)
             if not reaction.accepted:
+                reaction_window = advance_reaction_window(reaction_window)
                 continue
             updated_state = reaction.state
             actor = next(candidate for candidate in updated_state.actors if str(candidate.id) == actor_id)
@@ -182,6 +205,7 @@ class CombatReactionFlowService:
                     f"{attacker.name}: d20 {attack_roll.natural_roll}, razem {attack_roll.total}, "
                     f"pudło przeciwko {actor.name}."
                 )
+            reaction_window = advance_reaction_window(reaction_window)
 
         actor = next(
             (candidate for candidate in updated_state.actors if str(candidate.id) == actor_id),
@@ -354,12 +378,31 @@ class PlayerReactionFlowService:
         attack_sources_by_actor: Mapping[ActorId, AttackSource],
         active_effects: tuple[ActiveCombatEffect, ...],
     ) -> ReadyAttackTrigger | None:
+        triggers = self.detect_ready_attacks(
+            state=state,
+            enemy_result=enemy_result,
+            board=board,
+            attack_sources_by_actor=attack_sources_by_actor,
+            active_effects=active_effects,
+        )
+        return triggers[0] if triggers else None
+
+    def detect_ready_attacks(
+        self,
+        *,
+        state: CombatState,
+        enemy_result: EnemyAutoTurnResult,
+        board: BoardState,
+        attack_sources_by_actor: Mapping[ActorId, AttackSource],
+        active_effects: tuple[ActiveCombatEffect, ...],
+    ) -> tuple[ReadyAttackTrigger, ...]:
         trigger = _ready_trigger_for_enemy_result(enemy_result)
         if trigger is None:
-            return None
+            return ()
         trigger_target = enemy_result.moved_enemy or enemy_result.enemy
         if trigger_target.is_defeated():
-            return None
+            return ()
+        ready_attacks: list[ReadyAttackTrigger] = []
         for effect in active_effects:
             if effect.kind != "ready_attack":
                 continue
@@ -383,13 +426,15 @@ class PlayerReactionFlowService:
                 source,
             ).legal_targets
             if any(target.id == str(trigger_target.id) for target in legal_targets):
-                return ReadyAttackTrigger(
-                    readied_actor_id=str(readied_actor.id),
-                    target_id=str(trigger_target.id),
-                    effect_id=effect.id,
-                    trigger=trigger,
+                ready_attacks.append(
+                    ReadyAttackTrigger(
+                        readied_actor_id=str(readied_actor.id),
+                        target_id=str(trigger_target.id),
+                        effect_id=effect.id,
+                        trigger=trigger,
+                    )
                 )
-        return None
+        return tuple(ready_attacks)
 
 
 def _ready_trigger_for_enemy_result(result: EnemyAutoTurnResult) -> str | None:

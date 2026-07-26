@@ -265,6 +265,13 @@ Implementacja MVP:
   każde źródło po kolei i po każdym wyniku wraca do planowania, dzięki czemu może
   ponownie wybrać legalny cel lub wykorzystać pozostały ruch.
 - Reakcja jest śledzona per aktor, również poza jego własną turą, i odświeża się na początku jego następnej tury.
+- Reakcje przerywające akcję korzystają ze wspólnego, uporządkowanego
+  `ReactionWindow`. Okno przechowuje przerwanego aktora i stabilną kolejność opcji;
+  każda opcja jest rozstrzygana lub pomijana przed wznowieniem akcji. Aktor, który
+  zużył reakcję, jest automatycznie pomijany w późniejszych opcjach tego samego okna.
+  W obecnym contencie Ready ma pierwszeństwo przed wykrytymi atakami okazyjnymi,
+  zachowując dotychczasowy kontrakt sceny; nowe rodzaje reakcji muszą jawnie określić
+  miejsce w kolejności zamiast tworzyć osobny stan oczekujący w UI.
 - `Dash` zużywa akcję główną i dodaje aktorowi dodatkową pulę ruchu równą jego `speed_feet` do końca bieżącej tury.
 - `Dodge/Unik` zużywa akcję główną i daje efekt `Unik`: ataki przeciwko aktorowi mają utrudnienie; efekt wygasa na początku następnej tury tego aktora.
 - `Disengage/Odwrót` zużywa akcję główną i w MVP daje efekt `Odwrót`: bezpieczne odejście do końca tury, blokujące ataki okazyjne.
@@ -436,6 +443,14 @@ Odstępstwa / decyzje planszowe:
 - Zielone LED-y oznaczają legalne pola interakcji sceny; jeśli pole jest jednocześnie ruchem i interakcją, kliknięcie z dostępną akcją otwiera wybór interakcji.
 - Interakcja przy przeciwniku może wywołać uproszczony atak okazyjny jako decyzję planszowego MVP.
 - Pierwsza scena grywalna może zakończyć się przez spełnienie celu sceny, a nie tylko przez pokonanie wszystkich przeciwników.
+- Wynik encountera ma jawny typ: `victory`, `defeat`, `objective_completed`,
+  `retreat` albo `surrender`. Odwrót nie tworzy zwycięzcy, kapitulacja przyznaje
+  zwycięstwo stronie przeciwnej, a wykonanie wszystkich aktywnych celów może
+  zakończyć walkę mimo żywych przeciwników.
+- Content triggera może definiować osobne `outcome_on_objective`,
+  `outcome_on_retreat` i `outcome_on_surrender`. Brak wyniku celu używa wyniku
+  zwycięstwa, a brak wyniku odwrotu lub kapitulacji używa wyniku porażki przed
+  przejściem do neutralnego fallbacku runtime.
 - Broń podniesiona z pola pozostaje niewyposażona. Menu własnego pola pokazuje osobne opcje dobycia, schowania i upuszczenia broni wraz z kosztem. Dobycie i schowanie są osobnymi interakcjami z obiektem: pierwsza w turze jest darmowa, druga wymaga akcji, a trzecia nie mieści się w zwykłej turze. Upuszczenie jest darmowe i pozostawia broń na aktualnym polu.
 - Sloty `main_hand` i `off_hand` są jawnym, serializowanym stanem instancji przedmiotu przez `held_in`. UI pokazuje zawartość obu dłoni, liczbę wolnych rąk oraz rękę zarezerwowaną przez trwający Grapple.
 - Ataki broni są katalogowane przez źródłowy item niezależnie od pierwotnego właściciela, dzięki czemu broń podniesiona od innego aktora zachowuje swoje akcje ataku po wyposażeniu.

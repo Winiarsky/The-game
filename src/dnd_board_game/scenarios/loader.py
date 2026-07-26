@@ -2893,6 +2893,18 @@ def _parse_exploration_encounter_trigger(data: Any) -> ExplorationEncounterTrigg
             data.get("outcome_on_defeat"),
             f"exploration encounter trigger {trigger_id}.outcome_on_defeat",
         ),
+        outcome_on_retreat=_parse_encounter_outcome(
+            data.get("outcome_on_retreat"),
+            f"exploration encounter trigger {trigger_id}.outcome_on_retreat",
+        ),
+        outcome_on_surrender=_parse_encounter_outcome(
+            data.get("outcome_on_surrender"),
+            f"exploration encounter trigger {trigger_id}.outcome_on_surrender",
+        ),
+        outcome_on_objective=_parse_encounter_outcome(
+            data.get("outcome_on_objective"),
+            f"exploration encounter trigger {trigger_id}.outcome_on_objective",
+        ),
     )
 
 

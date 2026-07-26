@@ -120,11 +120,17 @@ from dnd_board_game.combat import (
     InitiativeOrder,
     HealingSource,
     InitiativePrompt,
+    ReactionKind,
+    ReactionOption,
+    ReactionStage,
+    ReactionWindow,
     SpellAreaShape,
     TurnActionState,
     EnvironmentSetupEntry,
     EnvironmentSetupType,
     SceneFlags,
+    SceneConclusionType,
+    SceneResult,
     SetupStep,
     SetupStepKind,
     SetupVisibility,
@@ -136,6 +142,7 @@ from dnd_board_game.combat import (
     expire_turn_start_effects,
     expire_combat_effects,
     finish_turn,
+    advance_reaction_window,
     active_actor_led_feedback,
     active_auras,
     attack_source_with_combat_effects,
@@ -156,9 +163,13 @@ from dnd_board_game.combat import (
     condition_definition,
     condition_label,
     condition_roll_request,
+    conclude_scene,
+    complete_interaction_objective,
     ConditionSaveTiming,
+    objective_status_after_combat,
     pending_condition_saves,
     resolve_condition_save,
+    scene_result,
     can_use_object_interactions,
     consume_spell_resource,
     direction_anchor_positions,
@@ -178,6 +189,9 @@ from dnd_board_game.combat import (
     resolve_actor_trigger_events,
     resolve_combat_trigger_events,
     pickup_dropped_weapon,
+    open_reaction_window,
+    reaction_available_for,
+    record_current_reaction_attack,
     resolve_death_save,
     roll_enemy_initiative,
     scene_flag,
@@ -186,6 +200,7 @@ from dnd_board_game.combat import (
     scene_object_by_id,
     setup_led_feedback,
     start_combat,
+    start_current_reaction,
     start_attack_action,
     standing_movement_cost,
     stow_weapon,
@@ -1103,6 +1118,14 @@ class ExplorationUiSession:
         self.pending_state.enemy_saving_throw = value
 
     @property
+    def pending_encounter_result(self) -> SceneResult | None:
+        return self.pending_state.encounter_result
+
+    @pending_encounter_result.setter
+    def pending_encounter_result(self, value: SceneResult | None) -> None:
+        self.pending_state.encounter_result = value
+
+    @property
     def pending_player_attack(self) -> PendingPlayerAttack | None:
         return self.pending_state.player_attack
 
@@ -1221,6 +1244,14 @@ class ExplorationUiSession:
     @pending_opportunity_movement.setter
     def pending_opportunity_movement(self, value: PendingOpportunityMovement | None) -> None:
         self.pending_state.opportunity_movement = value
+
+    @property
+    def pending_reaction_window(self) -> ReactionWindow | None:
+        return self.pending_state.reaction_window
+
+    @pending_reaction_window.setter
+    def pending_reaction_window(self, value: ReactionWindow | None) -> None:
+        self.pending_state.reaction_window = value
 
     @property
     def pending_enemy_opportunity_attack(self) -> PendingEnemyOpportunityAttack | None:
@@ -1406,6 +1437,7 @@ class ExplorationUiSession:
                 self.pending_enemy_turn_result,
                 self.pending_enemy_turn_ack_result,
                 self.pending_enemy_saving_throw,
+                self.pending_encounter_result,
                 self.pending_player_attack,
                 self.pending_player_healing,
                 self.pending_area_spell,
@@ -1419,6 +1451,7 @@ class ExplorationUiSession:
                 self.pending_concentration_check,
                 self.pending_combat_ready,
                 self.pending_opportunity_movement,
+                self.pending_reaction_window,
                 self.pending_enemy_opportunity_attack,
                 self.pending_ready_attack,
                 self.active_combat_effects,
@@ -2680,22 +2713,36 @@ class ExplorationUiSession:
             raise ValueError("Nie ma aktywnego encountera do rozstrzygnięcia.")
         if self.combat_state is None:
             raise ValueError("Walka nie została jeszcze rozpoczęta.")
-        if self.combat_state.winner is None:
-            raise ValueError("Walka nie ma jeszcze zwycięzcy.")
         trigger = self._trigger_by_id(self.pending_encounter.trigger_id)
         if trigger is None:
             raise ValueError(f"Nieznany trigger encountera: {self.pending_encounter.trigger_id}.")
-        if self.combat_state.winner == Faction.ALLY:
-            outcome = trigger.outcome_on_victory or _default_encounter_victory_outcome(self.pending_encounter.name)
-        else:
-            outcome = trigger.outcome_on_defeat or _default_encounter_defeat_outcome(self.pending_encounter.name)
+        encounter = self._active_encounter()
+        objectives = encounter.objectives if encounter is not None else ()
+        updated_objectives = objective_status_after_combat(
+            self.combat_state,
+            objectives,
+        )
+        if updated_objectives != objectives and encounter is not None:
+            encounter = replace(encounter, objectives=updated_objectives)
+            self._replace_active_encounter(encounter)
+        encounter_result = self.pending_encounter_result or scene_result(
+            self.combat_state,
+            updated_objectives,
+        )
+        if not encounter_result.finished:
+            raise ValueError("Encounter nie ma jeszcze końcowego wyniku.")
+        outcome = _encounter_outcome_for_result(
+            trigger,
+            self.pending_encounter.name,
+            encounter_result,
+        )
         visible_points_before = {point.id for point in visible_exploration_points(self.state.points)}
         effects = []
         for effect in outcome.effects:
-            result = apply_exploration_effect(self.state, effect)
-            self.state = result.state
-            self._record_effect_result(result, source="encounter_outcome", raw_effect=effect)
-            effects.append(result)
+            effect_result = apply_exploration_effect(self.state, effect)
+            self.state = effect_result.state
+            self._record_effect_result(effect_result, source="encounter_outcome", raw_effect=effect)
+            effects.append(effect_result)
         visible_points_after = {point.id for point in visible_exploration_points(self.state.points)}
         revealed_point_ids = tuple(sorted(visible_points_after - visible_points_before))
         self.resolved_encounter_trigger_ids.add(trigger.id)
@@ -2703,7 +2750,13 @@ class ExplorationUiSession:
             "ui_encounter_resolved",
             {
                 "trigger_id": trigger.id,
-                "winner": self.combat_state.winner.value,
+                "conclusion": encounter_result.conclusion.value,
+                "winner": (
+                    encounter_result.winner.value
+                    if encounter_result.winner is not None
+                    else None
+                ),
+                "completed_objectives": list(encounter_result.completed_objectives),
                 "effect_types": [result.effect_type for result in effects],
                 "revealed_point_ids": list(revealed_point_ids),
             },
@@ -2762,6 +2815,7 @@ class ExplorationUiSession:
             "next_instruction": outcome.next_instruction or "Zakończ wynik, żeby wrócić do wyboru lokacji.",
         }
         self.pending_encounter = None
+        self.pending_encounter_result = None
         self.encounter_setup_flow = None
         self.encounter_initiative_flow = None
         self.combat_state = None
@@ -2772,6 +2826,83 @@ class ExplorationUiSession:
         self.board_message = "Encounter rozstrzygnięty. Na planszy podświetlono nowe opcje sceny."
         self._sync_board_leds()
         return self.state_payload()
+
+    def retreat_from_combat(self) -> dict[str, object]:
+        return self._declare_combat_conclusion(SceneConclusionType.RETREAT)
+
+    def surrender_combat(self) -> dict[str, object]:
+        return self._declare_combat_conclusion(SceneConclusionType.SURRENDER)
+
+    def _declare_combat_conclusion(
+        self,
+        conclusion: SceneConclusionType,
+    ) -> dict[str, object]:
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        if self.pending_encounter is None:
+            raise ValueError("Nie ma aktywnego encountera.")
+        if self.combat_state.status != CombatStatus.ACTIVE:
+            raise ValueError("Walka została już zakończona.")
+        actor = combat_current_actor(self.combat_state)
+        if actor.faction != Faction.ALLY:
+            raise ValueError("Odwrót lub kapitulację można zadeklarować w turze bohatera.")
+        if self._combat_has_pending_resolution():
+            raise ValueError("Najpierw dokończ lub anuluj rozpoczętą akcję.")
+        encounter = self._active_encounter()
+        self.combat_state, result = conclude_scene(
+            self.combat_state,
+            conclusion=conclusion,
+            objectives=encounter.objectives if encounter is not None else (),
+            acting_faction=Faction.ALLY,
+        )
+        self.pending_encounter_result = result
+        self.selected_combat_movement_path = None
+        self.combat_targeting_attack_source_id = None
+        self._clear_player_pending_choices()
+        title = (
+            "Odwrót drużyny"
+            if conclusion == SceneConclusionType.RETREAT
+            else "Kapitulacja drużyny"
+        )
+        self.board_message = result.message
+        self._add_message(title, result.message)
+        self._record(
+            "ui_combat_encounter_concluded",
+            {
+                "conclusion": conclusion.value,
+                "winner": result.winner.value if result.winner is not None else None,
+                "completed_objectives": list(result.completed_objectives),
+            },
+        )
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def _combat_has_pending_resolution(self) -> bool:
+        return any(
+            pending is not None
+            for pending in (
+                self.pending_enemy_turn_intent,
+                self.pending_enemy_turn_result,
+                self.pending_enemy_turn_ack_result,
+                self.pending_enemy_saving_throw,
+                self.pending_player_attack,
+                self.pending_player_healing,
+                self.pending_area_spell,
+                self.pending_combat_interaction,
+                self.pending_combat_help,
+                self.pending_combat_skill_check,
+                self.pending_combat_shove,
+                self.pending_combat_grapple,
+                self.pending_concentration_action,
+                self.pending_concentration_check,
+                self.pending_combat_ready,
+                self.pending_opportunity_movement,
+                self.pending_reaction_window,
+                self.pending_enemy_opportunity_attack,
+                self.pending_ready_attack,
+                self.pending_combat_context_menu,
+            )
+        )
 
     def confirm_encounter_setup_step(self) -> dict[str, object]:
         if self.encounter_setup_flow is None:
@@ -4365,8 +4496,62 @@ class ExplorationUiSession:
         self.board_message = transition.board_message
         self._add_message(transition.message_title, transition.message_body)
         self._record(transition.event_type, dict(transition.event_payload))
+        if transition.event_type == "ui_combat_interaction_confirmed":
+            event_payload = dict(transition.event_payload)
+            self._complete_combat_objective_for_object(
+                str(event_payload.get("object_id", "")),
+            )
         self._sync_board_leds()
         return self.state_payload()
+
+    def _complete_combat_objective_for_object(self, object_id: str) -> None:
+        if not object_id or self.combat_state is None:
+            return
+        encounter = self._active_encounter()
+        if encounter is None:
+            return
+        scene_object = scene_object_by_id(encounter.scene_objects, object_id)
+        if scene_object is None:
+            return
+        objectives = complete_interaction_objective(
+            encounter.objectives,
+            scene_object,
+        )
+        if objectives == encounter.objectives:
+            return
+        encounter = replace(encounter, objectives=objectives)
+        self._replace_active_encounter(encounter)
+        completed_ids = tuple(
+            objective.id
+            for objective in objectives
+            if objective.status.value == "completed"
+        )
+        self._record(
+            "ui_combat_objective_completed",
+            {
+                "object_id": object_id,
+                "completed_objective_ids": list(completed_ids),
+            },
+        )
+        if not objectives or len(completed_ids) != len(objectives):
+            return
+        self.combat_state, result = conclude_scene(
+            self.combat_state,
+            conclusion=SceneConclusionType.OBJECTIVE_COMPLETED,
+            objectives=objectives,
+            acting_faction=Faction.ALLY,
+        )
+        self.pending_encounter_result = result
+        self.board_message = result.message
+        self._add_message("Cel encountera osiągnięty", result.message)
+        self._record(
+            "ui_combat_encounter_concluded",
+            {
+                "conclusion": result.conclusion.value,
+                "winner": result.winner.value if result.winner is not None else None,
+                "completed_objectives": list(result.completed_objectives),
+            },
+        )
 
     def _effective_attack_source(self, actor: Actor, source, target: Actor | None = None):
         if target is not None:
@@ -5591,20 +5776,10 @@ class ExplorationUiSession:
             return self._finish_pending_enemy_turn(result)
         self.pending_enemy_turn_result = result
         self.board_message = transition.board_message
-        if transition.kind == EnemyTurnTransitionKind.READY:
-            ready = transition.ready_trigger
-            assert ready is not None
-            self.pending_ready_attack = PendingReadyAttack(
-                readied_actor_id=ready.readied_actor_id,
-                target_id=ready.target_id,
-                effect_id=ready.effect_id,
-                trigger=ready.trigger,
-            )
-        elif transition.kind == EnemyTurnTransitionKind.OPPORTUNITY:
-            self.pending_enemy_opportunity_attack = PendingEnemyOpportunityAttack(
-                target_id=str(result.enemy.id),
-                threat_actor_ids=transition.threat_actor_ids,
-            )
+        if transition.kind == EnemyTurnTransitionKind.REACTION:
+            assert transition.reaction_window is not None
+            self.pending_reaction_window = transition.reaction_window
+            self._activate_current_reaction_option()
         if transition.message_title:
             self._add_message(transition.message_title, transition.message_body)
         if transition.event_type:
@@ -5627,6 +5802,7 @@ class ExplorationUiSession:
         self.selected_combat_movement_path = None
         self.pending_enemy_turn_intent = None
         self.pending_enemy_turn_result = None
+        self.pending_reaction_window = None
         self.pending_enemy_opportunity_attack = None
         self.pending_ready_attack = None
         self.pending_approach_interaction = None
@@ -5685,6 +5861,150 @@ class ExplorationUiSession:
         self._sync_board_leds()
         return self.state_payload()
 
+    def _activate_current_reaction_option(self) -> None:
+        window = self.pending_reaction_window
+        self.pending_enemy_opportunity_attack = None
+        self.pending_ready_attack = None
+        if window is None:
+            return
+        option = window.current_option
+        if option.kind == ReactionKind.READY_ATTACK:
+            if option.effect_id is None:
+                raise ValueError("Ready reaction requires an effect id.")
+            self.pending_ready_attack = PendingReadyAttack(
+                readied_actor_id=option.reactor_actor_id,
+                target_id=option.target_actor_id,
+                effect_id=option.effect_id,
+                trigger=option.trigger_event,
+                stage=window.stage.value,
+                natural_roll=window.natural_roll,
+                natural_rolls=window.natural_rolls,
+                total=window.total,
+                hit=window.hit,
+                critical=window.critical,
+            )
+        elif option.kind == ReactionKind.OPPORTUNITY_ATTACK:
+            self.pending_enemy_opportunity_attack = PendingEnemyOpportunityAttack(
+                target_id=option.target_actor_id,
+                threat_actor_ids=(option.reactor_actor_id,),
+                stage=window.stage.value,
+                natural_roll=window.natural_roll,
+                natural_rolls=window.natural_rolls,
+                total=window.total,
+                hit=window.hit,
+                critical=window.critical,
+            )
+
+    def _ensure_reaction_window(self, kind: ReactionKind) -> ReactionWindow:
+        window = self.pending_reaction_window
+        if window is not None:
+            if window.current_option.kind != kind:
+                raise ValueError("Aktualne okno reakcji oczekuje innego rodzaju reakcji.")
+            return window
+        if kind == ReactionKind.READY_ATTACK:
+            pending = self.pending_ready_attack
+            if pending is None:
+                raise ValueError("Nie ma oczekującej przygotowanej akcji.")
+            options = (
+                ReactionOption(
+                    id=f"ready:{pending.effect_id}:{pending.target_id}",
+                    kind=kind,
+                    reactor_actor_id=pending.readied_actor_id,
+                    target_actor_id=pending.target_id,
+                    trigger_event=pending.trigger,
+                    effect_id=pending.effect_id,
+                    label="Ready",
+                ),
+            )
+            interrupted_actor_id = pending.target_id
+            trigger_event = pending.trigger
+        else:
+            pending = self.pending_enemy_opportunity_attack
+            if pending is None:
+                raise ValueError("Nie ma oczekującego ataku okazyjnego.")
+            options = tuple(
+                ReactionOption(
+                    id=f"opportunity:{actor_id}:{pending.target_id}",
+                    kind=kind,
+                    reactor_actor_id=actor_id,
+                    target_actor_id=pending.target_id,
+                    trigger_event="enemy_leaves_reach",
+                    label="Atak okazyjny",
+                )
+                for actor_id in pending.threat_actor_ids
+            )
+            interrupted_actor_id = pending.target_id
+            trigger_event = "enemy_leaves_reach"
+        opened = open_reaction_window(
+            interrupted_actor_id=interrupted_actor_id,
+            trigger_event=trigger_event,
+            options=options,
+        )
+        assert opened is not None
+        stage = ReactionStage(pending.stage)
+        self.pending_reaction_window = replace(
+            opened,
+            current_index=(
+                pending.current_index
+                if isinstance(pending, PendingEnemyOpportunityAttack)
+                else 0
+            ),
+            stage=stage,
+            natural_roll=pending.natural_roll,
+            natural_rolls=pending.natural_rolls,
+            total=pending.total,
+            hit=pending.hit,
+            critical=pending.critical,
+        )
+        return self.pending_reaction_window
+
+    def _advance_reaction_window_or_resume_enemy(self) -> dict[str, object]:
+        window = self.pending_reaction_window
+        if window is None:
+            self.pending_enemy_opportunity_attack = None
+            self.pending_ready_attack = None
+            self._resume_enemy_turn_after_reaction_prompt()
+            return self.state_payload()
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        available_ids = {
+            str(actor.id)
+            for actor in self.combat_state.actors
+            if reaction_available_for(self.combat_state, actor)
+        }
+        self.pending_reaction_window = advance_reaction_window(
+            window,
+            available_reactor_ids=available_ids,
+        )
+        self._activate_current_reaction_option()
+        if self.pending_reaction_window is None:
+            self._record(
+                "ui_combat_reaction_window_closed",
+                {
+                    "interrupted_actor_id": window.interrupted_actor_id,
+                    "trigger_event": window.trigger_event,
+                },
+            )
+            self._resume_enemy_turn_after_reaction_prompt()
+            return self.state_payload()
+        option = self.pending_reaction_window.current_option
+        reactor = self._actor_by_string_id(option.reactor_actor_id)
+        target = self._actor_by_string_id(option.target_actor_id)
+        self.board_message = (
+            f"{target.name}: kolejna reakcja — {reactor.name}, {option.label.lower()}."
+        )
+        self._record(
+            "ui_combat_reaction_advanced",
+            {
+                "option_id": option.id,
+                "kind": option.kind.value,
+                "reactor_actor_id": option.reactor_actor_id,
+                "target_actor_id": option.target_actor_id,
+            },
+        )
+        self._sync_board_leds()
+        return self.state_payload()
+
     def submit_enemy_saving_throw(
         self,
         natural_roll: int,
@@ -5729,6 +6049,7 @@ class ExplorationUiSession:
         return self.state_payload()
 
     def start_enemy_opportunity_attack(self) -> dict[str, object]:
+        window = self._ensure_reaction_window(ReactionKind.OPPORTUNITY_ATTACK)
         pending = self.pending_enemy_opportunity_attack
         if pending is None or pending.stage != "choice":
             raise ValueError("Nie ma ataku okazyjnego bohatera do rozpoczęcia.")
@@ -5741,7 +6062,8 @@ class ExplorationUiSession:
         if source is None:
             raise ValueError(f"Aktor {attacker.name} nie ma zdefiniowanego ataku.")
         source = self._effective_attack_source(attacker, source, target)
-        self.pending_enemy_opportunity_attack = replace(pending, stage="attack_roll")
+        self.pending_reaction_window = start_current_reaction(window)
+        self._activate_current_reaction_option()
         self.board_message = f"{attacker.name} wykonuje atak okazyjny przeciwko {target.name}. Wpisz rzut d20."
         self._add_message("Atak okazyjny", f"{attacker.name} reaguje atakiem okazyjnym. {roll_instruction(source.attack_roll_request).message}")
         self._record(
@@ -5752,6 +6074,7 @@ class ExplorationUiSession:
         return self.state_payload()
 
     def skip_enemy_opportunity_attack(self) -> dict[str, object]:
+        self._ensure_reaction_window(ReactionKind.OPPORTUNITY_ATTACK)
         pending = self.pending_enemy_opportunity_attack
         if pending is None or pending.stage != "choice":
             raise ValueError("Nie ma ataku okazyjnego bohatera do pominięcia.")
@@ -5764,6 +6087,7 @@ class ExplorationUiSession:
         return self._advance_enemy_opportunity_or_resume_preview()
 
     def submit_enemy_opportunity_attack_roll(self, *, natural_roll: int, natural_roll_2: int | None = None) -> dict[str, object]:
+        window = self._ensure_reaction_window(ReactionKind.OPPORTUNITY_ATTACK)
         pending = self.pending_enemy_opportunity_attack
         if pending is None or pending.stage != "attack_roll":
             raise ValueError("Nie ma oczekującego rzutu ataku okazyjnego.")
@@ -5797,6 +6121,14 @@ class ExplorationUiSession:
             },
         )
         if not reaction.hit:
+            self.pending_reaction_window = record_current_reaction_attack(
+                window,
+                natural_roll=reaction.attack_roll.natural_roll,
+                natural_rolls=reaction.attack_roll.natural_rolls,
+                total=reaction.attack_roll.total,
+                hit=False,
+                critical=False,
+            )
             self._add_message("Atak okazyjny", reaction.message)
             return self._advance_enemy_opportunity_or_resume_preview()
         self._apply_combat_trigger_events(
@@ -5813,15 +6145,15 @@ class ExplorationUiSession:
                 self.pending_enemy_turn_result,
                 state=self.combat_state,
             )
-        self.pending_enemy_opportunity_attack = replace(
-            pending,
-            stage="damage_roll",
+        self.pending_reaction_window = record_current_reaction_attack(
+            window,
             natural_roll=reaction.attack_roll.natural_roll,
             natural_rolls=reaction.attack_roll.natural_rolls,
             total=reaction.attack_roll.total,
             hit=True,
             critical=reaction.critical,
         )
+        self._activate_current_reaction_option()
         self._add_message(
             "Atak okazyjny",
             f"{reaction.message} Trafienie: rzuć obrażenia {reaction.source.damage_hint} i wpisz sumę.",
@@ -5835,6 +6167,7 @@ class ExplorationUiSession:
         damage: int | None = None,
         component_totals: Mapping[str, int] | None = None,
     ) -> dict[str, object]:
+        self._ensure_reaction_window(ReactionKind.OPPORTUNITY_ATTACK)
         pending = self.pending_enemy_opportunity_attack
         if pending is None or pending.stage != "damage_roll":
             raise ValueError("Nie ma oczekujących obrażeń ataku okazyjnego.")
@@ -5884,6 +6217,7 @@ class ExplorationUiSession:
                 state=self.combat_state,
             )
         if applied_damage.defeated_by_damage:
+            self.pending_reaction_window = None
             self.pending_enemy_opportunity_attack = None
             self.pending_enemy_turn_result = None
             self.pending_enemy_turn_intent = None
@@ -5902,36 +6236,11 @@ class ExplorationUiSession:
         return self._advance_enemy_opportunity_or_resume_preview()
 
     def _advance_enemy_opportunity_or_resume_preview(self) -> dict[str, object]:
-        pending = self.pending_enemy_opportunity_attack
-        if pending is None:
-            return self.state_payload()
-        next_index = pending.current_index + 1
-        if next_index < len(pending.threat_actor_ids):
-            self.pending_enemy_opportunity_attack = replace(
-                pending,
-                current_index=next_index,
-                stage="choice",
-                natural_roll=None,
-                total=None,
-                hit=None,
-                critical=False,
-            )
-            next_attacker = self._actor_by_string_id(self.pending_enemy_opportunity_attack.attacker_id)
-            target = self._actor_by_string_id(pending.target_id)
-            self.board_message = f"{target.name} nadal prowokuje reakcję: {next_attacker.name}."
-            self._sync_board_leds()
-            return self.state_payload()
-        self.pending_enemy_opportunity_attack = None
-        result = self.pending_enemy_turn_result
-        if result is not None and result.movement_path is not None:
-            self.board_message = (
-                f"{result.enemy.name} rusza na {result.movement_path.destination.as_tuple()}. "
-                "Przestaw figurkę po podświetlonej ścieżce i kliknij pole docelowe."
-            )
-        self._sync_board_leds()
-        return self.state_payload()
+        self._ensure_reaction_window(ReactionKind.OPPORTUNITY_ATTACK)
+        return self._advance_reaction_window_or_resume_enemy()
 
     def start_ready_attack(self) -> dict[str, object]:
+        window = self._ensure_reaction_window(ReactionKind.READY_ATTACK)
         pending = self.pending_ready_attack
         if pending is None or pending.stage != "choice":
             raise ValueError("Nie ma przygotowanej akcji do rozpoczęcia.")
@@ -5944,7 +6253,8 @@ class ExplorationUiSession:
         if source is None:
             raise ValueError(f"Aktor {attacker.name} nie ma zdefiniowanego ataku.")
         source = self._effective_attack_source(attacker, source, target)
-        self.pending_ready_attack = replace(pending, stage="attack_roll")
+        self.pending_reaction_window = start_current_reaction(window)
+        self._activate_current_reaction_option()
         self.board_message = f"{attacker.name} używa przygotowanej akcji przeciwko {target.name}. Wpisz rzut d20."
         self._add_message("Ready", f"{attacker.name} używa przygotowanej akcji. {roll_instruction(source.attack_roll_request).message}")
         self._record(
@@ -5955,20 +6265,20 @@ class ExplorationUiSession:
         return self.state_payload()
 
     def skip_ready_attack(self) -> dict[str, object]:
+        self._ensure_reaction_window(ReactionKind.READY_ATTACK)
         pending = self.pending_ready_attack
         if pending is None or pending.stage != "choice":
             raise ValueError("Nie ma przygotowanej akcji do pominięcia.")
         attacker = self._actor_by_string_id(pending.readied_actor_id)
-        self.pending_ready_attack = None
         self._add_message("Ready", f"{attacker.name} nie używa przygotowanej akcji.")
         self._record(
             "ui_combat_ready_attack_skipped",
             {"attacker_id": pending.readied_actor_id, "target_id": pending.target_id, "trigger": pending.trigger},
         )
-        self._resume_enemy_turn_after_reaction_prompt()
-        return self.state_payload()
+        return self._advance_reaction_window_or_resume_enemy()
 
     def submit_ready_attack_roll(self, *, natural_roll: int, natural_roll_2: int | None = None) -> dict[str, object]:
+        window = self._ensure_reaction_window(ReactionKind.READY_ATTACK)
         pending = self.pending_ready_attack
         if pending is None or pending.stage != "attack_roll":
             raise ValueError("Nie ma oczekującego rzutu przygotowanej akcji.")
@@ -6003,10 +6313,16 @@ class ExplorationUiSession:
             },
         )
         if not reaction.hit:
-            self.pending_ready_attack = None
+            self.pending_reaction_window = record_current_reaction_attack(
+                window,
+                natural_roll=reaction.attack_roll.natural_roll,
+                natural_rolls=reaction.attack_roll.natural_rolls,
+                total=reaction.attack_roll.total,
+                hit=False,
+                critical=False,
+            )
             self._add_message("Ready", reaction.message)
-            self._resume_enemy_turn_after_reaction_prompt()
-            return self.state_payload()
+            return self._advance_reaction_window_or_resume_enemy()
         self._apply_combat_trigger_events(
             (
                 EffectEvent(
@@ -6021,15 +6337,15 @@ class ExplorationUiSession:
                 self.pending_enemy_turn_result,
                 state=self.combat_state,
             )
-        self.pending_ready_attack = replace(
-            pending,
-            stage="damage_roll",
+        self.pending_reaction_window = record_current_reaction_attack(
+            window,
             natural_roll=reaction.attack_roll.natural_roll,
             natural_rolls=reaction.attack_roll.natural_rolls,
             total=reaction.attack_roll.total,
             hit=True,
             critical=reaction.critical,
         )
+        self._activate_current_reaction_option()
         self._add_message(
             "Ready",
             f"{reaction.message} Trafienie: rzuć obrażenia {reaction.source.damage_hint} i wpisz sumę.",
@@ -6043,6 +6359,7 @@ class ExplorationUiSession:
         damage: int | None = None,
         component_totals: Mapping[str, int] | None = None,
     ) -> dict[str, object]:
+        self._ensure_reaction_window(ReactionKind.READY_ATTACK)
         pending = self.pending_ready_attack
         if pending is None or pending.stage != "damage_roll":
             raise ValueError("Nie ma oczekujących obrażeń przygotowanej akcji.")
@@ -6091,8 +6408,9 @@ class ExplorationUiSession:
                 self.pending_enemy_turn_result,
                 state=self.combat_state,
             )
-        self.pending_ready_attack = None
         if applied_damage.defeated_by_damage:
+            self.pending_reaction_window = None
+            self.pending_ready_attack = None
             self.pending_enemy_turn_result = None
             self.pending_enemy_turn_intent = None
             self.pending_enemy_turn_ack_result = None
@@ -6108,8 +6426,7 @@ class ExplorationUiSession:
             return self.state_payload()
         self._maybe_prompt_concentration_check(applied_damage)
         self._add_message("Ready", message)
-        self._resume_enemy_turn_after_reaction_prompt()
-        return self.state_payload()
+        return self._advance_reaction_window_or_resume_enemy()
 
     def _resume_enemy_turn_after_reaction_prompt(self) -> None:
         result = self.pending_enemy_turn_result
@@ -6229,6 +6546,7 @@ class ExplorationUiSession:
         self.selected_combat_movement_path = None
         self.pending_enemy_turn_intent = None
         self.pending_enemy_turn_result = None
+        self.pending_reaction_window = None
         self.pending_enemy_opportunity_attack = None
         self.pending_ready_attack = None
         self.pending_enemy_turn_ack_result = None
@@ -6350,6 +6668,7 @@ class ExplorationUiSession:
         self.pending_enemy_turn_result = None
         self.pending_enemy_turn_ack_result = None
         self.pending_enemy_saving_throw = None
+        self.pending_reaction_window = None
         self.pending_enemy_opportunity_attack = None
         self.pending_ready_attack = None
         self.pending_approach_interaction = None
@@ -6543,6 +6862,12 @@ class ExplorationUiSession:
         if self.encounter_setup_flow is not None:
             return self.encounter_setup_flow.encounter
         return None
+
+    def _replace_active_encounter(self, encounter: LoadedEncounter) -> None:
+        if self.encounter_setup_flow is not None:
+            self.encounter_setup_flow.encounter = encounter
+        if self.encounter_initiative_flow is not None:
+            self.encounter_initiative_flow.encounter = encounter
 
     def _board_payload(self) -> dict[str, object]:
         return {
@@ -10109,6 +10434,7 @@ def _combat_payload(
     pending_enemy_turn_result=None,
     pending_enemy_turn_ack_result=None,
     pending_enemy_saving_throw: PendingEnemySavingThrow | None = None,
+    pending_encounter_result: SceneResult | None = None,
     pending_player_attack: PendingPlayerAttack | None = None,
     pending_player_healing: PendingPlayerHealing | None = None,
     pending_area_spell: PendingAreaSpell | None = None,
@@ -10122,6 +10448,7 @@ def _combat_payload(
     pending_concentration_check: PendingConcentrationCheck | None = None,
     pending_combat_ready: PendingCombatReady | None = None,
     pending_opportunity_movement: PendingOpportunityMovement | None = None,
+    pending_reaction_window: ReactionWindow | None = None,
     pending_enemy_opportunity_attack: PendingEnemyOpportunityAttack | None = None,
     pending_ready_attack: PendingReadyAttack | None = None,
     active_combat_effects: tuple[ActiveCombatEffect, ...] = (),
@@ -10132,6 +10459,12 @@ def _combat_payload(
     if state is None:
         return None
     actor = combat_current_actor(state)
+    encounter_result = pending_encounter_result
+    if encounter_result is None and state.status == CombatStatus.FINISHED:
+        encounter_result = scene_result(
+            state,
+            encounter.objectives if encounter is not None else (),
+        )
     selected_attack_source_ids = selected_attack_source_ids or {}
     selected_healing_source_ids = selected_healing_source_ids or {}
     attack_sources = (
@@ -10367,6 +10700,7 @@ def _combat_payload(
             pending_enemy_saving_throw,
             state,
         ),
+        "encounter_result": _scene_result_payload(encounter_result),
         "pending_player_attack": _pending_player_attack_payload(pending_player_attack, state, encounter, active_combat_effects),
         "pending_player_healing": _pending_player_healing_payload(pending_player_healing, state, encounter),
         "pending_area_spell": _pending_area_spell_payload(pending_area_spell, state, encounter, active_combat_effects),
@@ -10401,6 +10735,7 @@ def _combat_payload(
             if pending_opportunity_movement is not None
             else None
         ),
+        "reaction_window": _reaction_window_payload(pending_reaction_window),
         "pending_enemy_opportunity_attack": _pending_enemy_opportunity_attack_payload(
             pending_enemy_opportunity_attack,
             state,
@@ -11309,6 +11644,32 @@ def _pending_enemy_opportunity_attack_payload(
     }
 
 
+def _reaction_window_payload(
+    window: ReactionWindow | None,
+) -> dict[str, object] | None:
+    if window is None:
+        return None
+    return {
+        "interrupted_actor_id": window.interrupted_actor_id,
+        "trigger_event": window.trigger_event,
+        "current_index": window.current_index,
+        "stage": window.stage.value,
+        "current_option_id": window.current_option.id,
+        "options": [
+            {
+                "id": option.id,
+                "kind": option.kind.value,
+                "reactor_actor_id": option.reactor_actor_id,
+                "target_actor_id": option.target_actor_id,
+                "trigger_event": option.trigger_event,
+                "effect_id": option.effect_id,
+                "label": option.label,
+            }
+            for option in window.options
+        ],
+    }
+
+
 def _pending_ready_attack_payload(
     pending: PendingReadyAttack | None,
     state: CombatState,
@@ -11778,6 +12139,18 @@ def _pending_enemy_saving_throw_payload(
     }
 
 
+def _scene_result_payload(result: SceneResult | None) -> dict[str, object] | None:
+    if result is None:
+        return None
+    return {
+        "finished": result.finished,
+        "conclusion": result.conclusion.value,
+        "winner": result.winner.value if result.winner is not None else None,
+        "message": result.message,
+        "completed_objectives": list(result.completed_objectives),
+    }
+
+
 def _attack_positioning_payload(positioning: AttackPositioning) -> dict[str, object]:
     return {
         "cover_level": positioning.cover_level.value,
@@ -11954,6 +12327,42 @@ def _default_encounter_victory_outcome(name: str) -> EncounterOutcome:
     )
 
 
+def _encounter_outcome_for_result(
+    trigger: ExplorationEncounterTrigger,
+    encounter_name: str,
+    result: SceneResult,
+) -> EncounterOutcome:
+    if result.conclusion == SceneConclusionType.VICTORY:
+        return (
+            trigger.outcome_on_victory
+            or _default_encounter_victory_outcome(encounter_name)
+        )
+    if result.conclusion == SceneConclusionType.OBJECTIVE_COMPLETED:
+        return (
+            trigger.outcome_on_objective
+            or trigger.outcome_on_victory
+            or _default_encounter_victory_outcome(encounter_name)
+        )
+    if result.conclusion == SceneConclusionType.RETREAT:
+        return (
+            trigger.outcome_on_retreat
+            or trigger.outcome_on_defeat
+            or _default_encounter_retreat_outcome(encounter_name)
+        )
+    if result.conclusion == SceneConclusionType.SURRENDER:
+        return (
+            trigger.outcome_on_surrender
+            or trigger.outcome_on_defeat
+            or _default_encounter_surrender_outcome(encounter_name)
+        )
+    if result.conclusion == SceneConclusionType.DEFEAT:
+        return (
+            trigger.outcome_on_defeat
+            or _default_encounter_defeat_outcome(encounter_name)
+        )
+    raise ValueError("Encounter nie ma końcowego typu rozstrzygnięcia.")
+
+
 def _encounter_opening_outcome_label(outcome: EncounterOpeningOutcome) -> str:
     return {
         EncounterOpeningOutcome.PARTY_SURPRISES_ENEMIES: "Przeciwnicy mają utrudnienie do inicjatywy",
@@ -11971,6 +12380,22 @@ def _default_encounter_defeat_outcome(name: str) -> EncounterOutcome:
     return EncounterOutcome(
         title="Drużyna pokonana",
         body=f"Drużyna przegrywa encounter: {name}. Zapisz konsekwencje ręcznie albo zresetuj scenę.",
+        next_instruction="Zakończ wynik, żeby wrócić do eksploracji.",
+    )
+
+
+def _default_encounter_retreat_outcome(name: str) -> EncounterOutcome:
+    return EncounterOutcome(
+        title="Drużyna wycofuje się",
+        body=f"Drużyna przerywa encounter: {name} i wycofuje się bez rozstrzygnięcia.",
+        next_instruction="Zakończ wynik, żeby wrócić do eksploracji.",
+    )
+
+
+def _default_encounter_surrender_outcome(name: str) -> EncounterOutcome:
+    return EncounterOutcome(
+        title="Drużyna kapituluje",
+        body=f"Drużyna poddaje się w encounterze: {name}.",
         next_instruction="Zakończ wynik, żeby wrócić do eksploracji.",
     )
 
