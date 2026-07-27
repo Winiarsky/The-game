@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 import pytest
 
 from dnd_board_game.actors import Actor, ActorId, Faction
@@ -5,12 +7,13 @@ from dnd_board_game.combat import (
     AttackActionStatus,
     AttackSource,
     AttackSourceType,
+    attack_source_for_actor,
     attack_declaration_from_state,
     cancel_attack_action,
     select_attack_target,
     start_attack_action,
 )
-from dnd_board_game.rules import D20RollRequest
+from dnd_board_game.rules import D20RollRequest, RollMode
 from dnd_board_game.world import BoardState, Coordinate
 from dnd_board_game.world import BLOCKING_TERRAIN
 
@@ -105,3 +108,14 @@ def test_select_illegal_target_is_rejected_and_cancel_works():
     cancelled = cancel_attack_action(state)
     assert cancelled.status == AttackActionStatus.CANCELLED
     assert cancelled.selected_target is None
+
+
+def test_exhaustion_level_three_gives_attack_disadvantage():
+    hero = _actor("hero", Faction.ALLY, Coordinate(0, 0))
+
+    source = attack_source_for_actor(
+        _source(),
+        replace(hero, exhaustion_level=3),
+    )
+
+    assert source.attack_roll_request.mode == RollMode.DISADVANTAGE

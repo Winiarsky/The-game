@@ -13,17 +13,32 @@
   "objectives": [
     {
       "id": "find_watchtower_hook",
-      "name": "Dowiedzcie się o problemie przy strażnicy",
-      "description": "Zbierzcie pierwszy trop prowadzący do opuszczonej strażnicy.",
+      "name": "Przygotujcie wyprawę do strażnicy",
+      "description": "Zdobądźcie trop, przyjmijcie zadanie i potwierdźcie gotowość do drogi.",
       "condition": "flag_equals",
-      "flag_key": "quest_hook_found",
-      "flag_value": true
+      "flag_key": "ready_for_watchtower",
+      "flag_value": true,
+      "milestones": [
+        {
+          "label": "Zdobądźcie trop o strażnicy",
+          "flag_key": "quest_hook_found"
+        },
+        {
+          "label": "Przyjmijcie zadanie Brena",
+          "flag_key": "quest_accepted"
+        },
+        {
+          "label": "Potwierdźcie gotowość do drogi",
+          "flag_key": "ready_for_watchtower"
+        }
+      ]
     }
   ],
   "actors": [
     {
       "id": "hero",
       "name": "Bohater",
+      "portrait": "portraits/abandoned_watchtower/hero.webp",
       "kind": "player_character",
       "faction": "ally",
       "ac": 14,
@@ -40,11 +55,13 @@
         "charisma": 10
       },
       "currency": {"gp": 10},
-      "item_refs": ["longsword"]
+      "proficiencies": {"tools": ["smiths_tools"]},
+      "item_refs": ["longsword", "smiths_tools"]
     },
     {
       "id": "rogue",
       "name": "Łotrzyca",
+      "portrait": "portraits/abandoned_watchtower/rogue.webp",
       "kind": "player_character",
       "faction": "ally",
       "ac": 15,
@@ -66,6 +83,131 @@
   ],
   "exploration": {
     "party_start_zone": "market",
+    "clock": {
+      "start_hour": 17,
+      "events": [
+        {
+          "id": "dusk_on_old_road",
+          "at_minute": 90,
+          "label": "Zapada zmierzch",
+        "narration": "Słońce znika za drzewami. Nad wioską i starym traktem zapada coraz głębszy półmrok.",
+          "effects": [
+            {"type": "set_flag", "parameters": {"key": "watchtower_dusk_arrival", "value": true}}
+          ]
+        },
+        {
+          "id": "watchtower_defenders_alerted",
+          "at_minute": 120,
+          "label": "Czas działa na korzyść goblinów",
+          "narration": "Zwłoka pozwala goblinom w strażnicy umocnić posterunki i przygotować się na intruzów.",
+          "effects": [
+            {"type": "set_flag", "parameters": {"key": "watchtower_alerted", "value": true}}
+          ]
+        }
+      ]
+    },
+    "downtime": {
+      "crafting_recipes": [
+        {
+          "id": "forge_dagger",
+          "label": "Wykuj sztylet",
+          "description": "Wykonaj prosty, trwały sztylet zgodnie z zasadami rzemiosła w downtime.",
+          "zone_id": "market",
+          "workshop_label": "Kuźnia na rynku",
+          "item_ref": "dagger",
+          "quantity": 1,
+          "required_tool_id": "smiths_tools"
+        }
+      ]
+    },
+    "continuation": {
+      "id": "depart_for_watchtower",
+      "label": "Wyruszcie do opuszczonej strażnicy",
+      "description": "Drużyna opuszcza wioskę i rusza starym traktem ku strażnicy.",
+      "departure_zone_id": "forest_road",
+      "target_scenario_id": "abandoned_watchtower",
+      "target_scenario_path": "abandoned_watchtower.json",
+      "available_if_flags": ["ready_for_watchtower"],
+      "propagate_flags": [
+        "quest_hook_found",
+        "quest_accepted",
+        "watchtower_dusk_arrival",
+        "watchtower_alerted"
+      ],
+      "outcomes": [
+        {
+          "id": "lost_old_road",
+          "kind": "fail_forward",
+          "label": "Zgubiony stary trakt",
+          "narration": "Drużyna dociera do strażnicy mimo zgubienia traktu, ale traci czas i nadchodzi od mniej korzystnej strony.",
+          "navigation_result": "failure",
+          "target_effects": [
+            {
+              "type": "set_flag",
+              "parameters": {
+                "key": "watchtower_route_lost",
+                "value": true
+              }
+            }
+          ]
+        },
+        {
+          "id": "alerted_watchtower_arrival",
+          "kind": "partial_success",
+          "label": "Strażnica przygotowana do obrony",
+          "narration": "Drużyna dociera do celu, lecz długa zwłoka pozwoliła goblinom przygotować obronę.",
+          "required_flags": ["watchtower_alerted"],
+          "target_effects": [
+            {
+              "type": "set_flag",
+              "parameters": {
+                "key": "watchtower_reinforced",
+                "value": true
+              }
+            }
+          ]
+        },
+        {
+          "id": "dusk_watchtower_arrival",
+          "kind": "partial_success",
+          "label": "Podejście o zmierzchu",
+          "narration": "Drużyna dociera do strażnicy po zmroku; cel pozostaje osiągalny, ale widoczność sprzyja zasadzce.",
+          "required_flags": ["watchtower_dusk_arrival"],
+          "target_effects": [
+            {
+              "type": "set_flag",
+              "parameters": {
+                "key": "watchtower_night_approach",
+                "value": true
+              }
+            }
+          ]
+        },
+        {
+          "id": "prepared_watchtower_arrival",
+          "kind": "success",
+          "label": "Sprawne dotarcie do strażnicy",
+          "narration": "Drużyna sprawnie pokonuje stary trakt i dociera do strażnicy przed narastającym zagrożeniem.",
+          "target_effects": [
+            {
+              "type": "set_flag",
+              "parameters": {
+                "key": "watchtower_clean_approach",
+                "value": true
+              }
+            }
+          ]
+        }
+      ],
+      "travel_minutes": 45,
+      "travel": {
+        "navigation_dc": 12,
+        "navigation_ability": "wisdom",
+        "navigation_skill": "survival",
+        "navigation_failure_delay_minutes": 30,
+        "safe_travel_minutes": 480
+      }
+    },
     "merchants": [
       {
         "id": "mira_market_stall",
@@ -97,20 +239,20 @@
       {
         "id": "market",
         "name": "Rynek",
+        "image": "assets/merchant_mira.png",
+        "paper_map": {
+          "id": "village_market",
+          "preview_path": "print_maps/village_watchtower/png/village_market.png",
+          "a4_pdf_path": "print_maps/village_watchtower/pdf/a4/village_market.pdf",
+          "full_size_pdf_path": "print_maps/village_watchtower/pdf/full_size/village_market.pdf"
+        },
         "positions": [[7, 3], [8, 3], [9, 3], [7, 4], [8, 4], [9, 4], [7, 5], [8, 5], [9, 5]],
         "anchor_position": [8, 4],
         "color": "marker",
         "description": "Centralny plac wioski z tablicą ogłoszeń i kilkoma zaniepokojonymi mieszkańcami.",
         "adjacent_zone_ids": ["tavern", "elder_house", "forest_road"],
+        "travel_minutes": 5,
         "options": [
-          {
-            "id": "talk_to_elder",
-            "label": "Porozmawiaj z sołtysem",
-            "kind": "message",
-            "color": "interactive",
-            "message": "Sołtys opowiada o światłach widzianych nocą przy starej strażnicy.",
-            "success_flag": "quest_hook_found"
-          },
           {
             "id": "read_notice_board",
             "label": "Sprawdź tablicę ogłoszeń",
@@ -149,27 +291,26 @@
       {
         "id": "tavern",
         "name": "Karczma",
+        "image": "assets/innkeeper_olan.png",
+        "paper_map": {
+          "id": "village_tavern",
+          "preview_path": "print_maps/village_watchtower/png/village_tavern.png",
+          "a4_pdf_path": "print_maps/village_watchtower/pdf/a4/village_tavern.pdf",
+          "full_size_pdf_path": "print_maps/village_watchtower/pdf/full_size/village_tavern.pdf"
+        },
         "positions": [[2, 10], [3, 10], [4, 10], [2, 11], [3, 11], [4, 11], [2, 12], [3, 12], [4, 12]],
         "anchor_position": [3, 11],
         "color": "warning",
         "description": "Głośna karczma, w której można odpocząć i posłuchać plotek.",
         "adjacent_zone_ids": ["market"],
+        "travel_minutes": 5,
+        "short_rest": {
+          "id": "village_tavern_rest",
+          "safety": "safe",
+          "duration_minutes": 60,
+          "max_completions": 1
+        },
         "options": [
-          {
-            "id": "listen_at_tavern",
-            "label": "Posłuchaj plotek",
-            "kind": "message",
-            "color": "warning",
-            "message": "Karczmarz mówi, że ktoś widział gobliny kręcące się przy starym trakcie.",
-            "success_flag": "tavern_rumor_heard"
-          },
-          {
-            "id": "rest_at_tavern",
-            "label": "Kup posiłek i odpocznij",
-            "kind": "message",
-            "color": "interactive",
-            "message": "Drużyna odpoczywa chwilę i porządkuje informacje."
-          },
           {
             "id": "dice_game_placeholder",
             "label": "Zagraj w kości",
@@ -182,11 +323,19 @@
       {
         "id": "elder_house",
         "name": "Dom sołtysa",
+        "image": "assets/elder_bren.png",
+        "paper_map": {
+          "id": "village_elder_house",
+          "preview_path": "print_maps/village_watchtower/png/village_elder_house.png",
+          "a4_pdf_path": "print_maps/village_watchtower/pdf/a4/village_elder_house.pdf",
+          "full_size_pdf_path": "print_maps/village_watchtower/pdf/full_size/village_elder_house.pdf"
+        },
         "positions": [[13, 8], [14, 8], [15, 8], [13, 9], [14, 9], [15, 9], [13, 10], [14, 10], [15, 10]],
         "anchor_position": [14, 9],
         "color": "interactive",
         "description": "Skromny dom sołtysa i miejsce rozmów o problemach wioski.",
         "adjacent_zone_ids": ["market"],
+        "travel_minutes": 5,
         "options": [
           {
             "id": "inspect_old_map",
@@ -194,25 +343,26 @@
             "kind": "message",
             "color": "movement",
             "message": "Na starej mapie widać boczną ścieżkę do strażnicy.",
-            "success_flag": "old_map_seen"
-          },
-          {
-            "id": "ask_for_reward",
-            "label": "Zapytaj o nagrodę",
-            "kind": "message",
-            "color": "marker",
-            "message": "Sołtys obiecuje drobną zapłatę i wdzięczność mieszkańców."
+            "success_flag": "route_prepared"
           }
         ]
       },
       {
         "id": "forest_road",
         "name": "Droga do lasu",
+        "image": "assets/forest_road.png",
+        "paper_map": {
+          "id": "village_forest_road",
+          "preview_path": "print_maps/village_watchtower/png/village_forest_road.png",
+          "a4_pdf_path": "print_maps/village_watchtower/pdf/a4/village_forest_road.pdf",
+          "full_size_pdf_path": "print_maps/village_watchtower/pdf/full_size/village_forest_road.pdf"
+        },
         "positions": [[16, 18], [17, 18], [18, 18], [16, 19], [17, 19], [18, 19], [16, 20], [17, 20], [18, 20]],
         "anchor_position": [17, 19],
         "color": "movement",
         "description": "Droga prowadząca w stronę opuszczonej strażnicy.",
         "adjacent_zone_ids": ["market"],
+        "travel_minutes": 15,
         "options": [
           {
             "id": "check_tracks",
@@ -230,13 +380,6 @@
             "failure_message": "Ślady mieszają się w błocie i nie dają pewnej odpowiedzi.",
             "success_flag": "forest_tracks_found",
             "failure_flag": "forest_tracks_unclear"
-          },
-          {
-            "id": "leave_for_watchtower_placeholder",
-            "label": "Rusz do strażnicy",
-            "kind": "message",
-            "color": "movement",
-            "message": "To przejście do kolejnej sceny. Łączenie scen zostanie dodane w osobnym etapie."
           }
         ]
       }
@@ -245,6 +388,7 @@
       {
         "id": "merchant_stall",
         "name": "Stragan Miry",
+        "image": "assets/merchant_mira.png",
         "zone_id": "market",
         "positions": [[7, 5]],
         "color": "interactive",
@@ -257,6 +401,7 @@
       {
         "id": "elder_npc",
         "name": "Sołtys Bren",
+        "image": "assets/elder_bren.png",
         "zone_id": "market",
         "positions": [[8, 5]],
         "color": "interactive",
@@ -274,10 +419,124 @@
           "initial_emotional_state": "Zaniepokojony i ostrożny.",
           "dialogue_intro": "Bren kiwa głową: 'Jeśli naprawdę chcecie pomóc, wysłuchajcie najpierw, co wiemy.'",
           "capabilities": ["can_talk", "can_offer_quest", "can_refuse"],
+          "goals": [
+            {
+              "id": "ask_watchtower_problem",
+              "label": "Zapytajcie o strażnicę",
+              "image": "assets/elder_bren.png",
+              "description": "Dowiedzcie się, co wydarzyło się przy starej strażnicy i czego potrzebują mieszkańcy.",
+              "followup_prompt": "O co dokładnie pytacie Brena i jak pokazujecie, że traktujecie sprawę poważnie?",
+              "intent_ids": ["information"],
+              "participant_mode": "must",
+              "check_participants": "single_actor",
+              "grounded_response": {
+                "player_narration": "Bren rozwija starą mapę i wskazuje opuszczoną strażnicę oraz prowadzący do niej trakt.",
+                "npc_response": "Od kilku dni nikt ze strażnicy nie wrócił do wioski. Na trakcie widywano gobliny, a mieszkańcy boją się, że zajęły posterunek. Sprawdźcie to miejsce i usuńcie zagrożenie, zanim zapadnie noc.",
+                "success_message": "Bren przekazuje drużynie sprawdzony trop o opuszczonej strażnicy.",
+                "variants": [
+                  {
+                    "id": "map_and_warning",
+                    "player_narration": "Bren wygładza mapę na stole i kreśli palcem drogę od wioski do opuszczonej strażnicy.",
+                    "npc_response": "Strażnicy nie dają znaku od kilku dni, a przy trakcie widziano gobliny. Ludzie podejrzewają, że zajęły posterunek. Dotrzyjcie tam, sprawdźcie, co się stało, i rozprawcie się z zagrożeniem przed nocą.",
+                    "success_message": "Drużyna poznaje sprawdzony trop prowadzący do opuszczonej strażnicy."
+                  },
+                  {
+                    "id": "plain_report",
+                    "player_narration": "Sołtys mówi bez ozdobników, wskazując na mapie stary trakt i stojącą przy nim strażnicę.",
+                    "npc_response": "Od kilku dni nikt stamtąd nie wrócił. W okolicy kręcą się gobliny i mieszkańcy obawiają się, że przejęły strażnicę. Idźcie tam, zbadajcie sprawę i usuńcie zagrożenie, nim zapadnie noc.",
+                    "success_message": "Bren podaje drużynie najpewniejsze informacje o zagrożeniu przy strażnicy."
+                  }
+                ]
+              }
+            },
+            {
+              "id": "negotiate_advance",
+              "label": "Negocjujcie zapłatę z góry",
+              "image": "assets/elder_bren.png",
+              "description": "Spróbujcie uzyskać gwarancję wynagrodzenia, zanim wyruszycie pod strażnicę.",
+              "followup_prompt": "Jak uzasadniacie żądanie zapłaty lub gwarancji przed wyprawą?",
+              "intent_ids": ["social"],
+              "participant_mode": "allow",
+              "check_participants": "single_actor",
+              "allowed_check_participants": ["single_actor", "lead_with_help"],
+              "grounded_response": {
+                "player_narration": "Bren zaciska dłoń na mapie i uważnie wysłuchuje warunków drużyny.",
+                "variants": [
+                  {
+                    "id": "guarded",
+                    "player_narration": "Bren marszczy brwi, lecz nie przerywa i pozwala drużynie przedstawić swoje warunki."
+                  },
+                  {
+                    "id": "measured",
+                    "player_narration": "Sołtys splata dłonie na stole i w milczeniu rozważa argumenty drużyny."
+                  }
+                ]
+              }
+            },
+            {
+              "id": "accept_watchtower_quest",
+              "label": "Przyjmijcie zadanie",
+              "image": "assets/elder_bren.png",
+              "description": "Potwierdźcie, że drużyna zajmie się zagrożeniem przy opuszczonej strażnicy.",
+              "followup_prompt": "Jak oznajmiacie Brenowi, że przyjmujecie zadanie?",
+              "intent_ids": ["commitment"],
+              "participant_mode": "must",
+              "check_participants": "single_actor",
+              "grounded_response": {
+                "player_narration": "Bren poważnieje i czeka, aż drużyna jednoznacznie potwierdzi swoją decyzję.",
+                "npc_response": "Dobrze. Skoro podejmujecie się tej wyprawy, wskażę wam najpewniejszą drogę. Przygotujcie się i wróćcie do mnie, kiedy będziecie gotowi wyruszyć.",
+                "success_message": "Bren przyjmuje zobowiązanie drużyny i wskazuje kolejny etap przygotowań.",
+                "variants": [
+                  {
+                    "id": "relieved",
+                    "player_narration": "Napięcie na twarzy Brena nieco ustępuje, gdy słyszy jednoznaczną decyzję drużyny.",
+                    "npc_response": "Dobrze. Skoro bierzecie to na siebie, pokażę wam najpewniejszą drogę. Przygotujcie się, a gdy będziecie gotowi do wymarszu, wróćcie do mnie.",
+                    "success_message": "Sołtys przyjmuje zobowiązanie drużyny i kieruje ją do przygotowań."
+                  },
+                  {
+                    "id": "formal",
+                    "player_narration": "Bren odpowiada uroczystym skinieniem głowy, traktując obietnicę drużyny zupełnie poważnie.",
+                    "npc_response": "Przyjmuję wasze słowo. Wskażę wam bezpieczniejszą drogę do strażnicy, ale najpierw przygotujcie się do wyprawy. Zgłoście się, kiedy będziecie gotowi ruszyć.",
+                    "success_message": "Bren uznaje decyzję drużyny i wskazuje, że czas zakończyć przygotowania."
+                  }
+                ]
+              }
+            },
+            {
+              "id": "confirm_watchtower_departure",
+              "label": "Potwierdźcie gotowość do drogi",
+              "image": "assets/elder_bren.png",
+              "description": "Powiedzcie Brenowi, że przygotowania są zakończone i ruszacie starym traktem.",
+              "followup_prompt": "Jak potwierdzacie, że drużyna jest gotowa wyruszyć?",
+              "intent_ids": ["travel"],
+              "participant_mode": "must",
+              "check_participants": "single_actor",
+              "grounded_response": {
+                "player_narration": "Bren składa mapę i jeszcze raz wskazuje kierunek starego traktu.",
+                "npc_response": "Stary trakt zaczyna się przy drodze do lasu. Nie zwlekajcie dłużej — im później dotrzecie do strażnicy, tym więcej czasu będą mieli jej obrońcy.",
+                "success_message": "Bren potwierdza, że droga do strażnicy stoi otworem.",
+                "variants": [
+                  {
+                    "id": "urgent",
+                    "player_narration": "Bren zwija mapę szybkim ruchem i wskazuje drogę prowadzącą ku skrajowi lasu.",
+                    "npc_response": "Tam zaczyna się stary trakt. Ruszajcie bez zwłoki — każda godzina daje obrońcom strażnicy więcej czasu.",
+                    "success_message": "Sołtys wskazuje drogę i potwierdza, że drużyna może ruszać."
+                  },
+                  {
+                    "id": "practical",
+                    "player_narration": "Sołtys raz jeszcze pokazuje drużynie początek starego traktu przy drodze do lasu.",
+                    "npc_response": "Idźcie starym traktem od strony lasu. Nie odkładajcie wymarszu, bo zwłoka działa na korzyść tych, którzy trzymają strażnicę.",
+                    "success_message": "Bren kończy odprawę i otwiera drużynie drogę do strażnicy."
+                  }
+                ]
+              }
+            }
+          ],
           "policy": {
             "intent_permissions": {
               "social": {
                 "status": "allowed_with_consequence",
+                "time_cost_minutes": 15,
                 "targets": [
                   {
                     "id": "demand_advance_payment",
@@ -325,12 +584,38 @@
               },
               "information": {
                 "status": "allowed",
-                "notes": "Bren może opowiedzieć o ostrzeżeniu i drodze do strażnicy."
+                "time_cost_minutes": 10,
+                "notes": "Bren bez testu opisuje problem przy strażnicy i prosi drużynę o pomoc.",
+                "effects_on_success": [
+                  {"type": "set_flag", "parameters": {"key": "quest_hook_found", "value": true}}
+                ]
+              },
+              "commitment": {
+                "status": "allowed",
+                "time_cost_minutes": 5,
+                "notes": "Przyjęcie zadania jest świadomą decyzją drużyny i nie wymaga testu.",
+                "effects_on_success": [
+                  {"type": "set_flag", "parameters": {"key": "quest_accepted", "value": true}}
+                ]
+              },
+              "travel": {
+                "status": "allowed",
+                "time_cost_minutes": 5,
+                "notes": "Po przyjęciu zadania drużyna może potwierdzić gotowość do drogi.",
+                "effects_on_success": [
+                  {"type": "set_flag", "parameters": {"key": "ready_for_watchtower", "value": true}}
+                ]
               },
               "harm": {"status": "blocked"},
               "theft": {"status": "blocked"}
             },
-            "allowed_flags": ["quest_hook_found", "elder_argument", "elder_refuses_party"],
+            "allowed_flags": [
+              "quest_hook_found",
+              "quest_accepted",
+              "ready_for_watchtower",
+              "elder_argument",
+              "elder_refuses_party"
+            ],
             "allowed_effect_types": ["set_flag"],
             "allowed_abilities": ["charisma", "wisdom"],
             "allowed_skills": ["persuasion", "insight"],
@@ -341,6 +626,7 @@
       {
         "id": "notice_board",
         "name": "Tablica ogłoszeń",
+        "image": "assets/notice_board.png",
         "zone_id": "market",
         "positions": [[7, 4]],
         "color": "marker",
@@ -350,23 +636,221 @@
       },
       {
         "id": "tavern_keeper",
-        "name": "Karczmarz",
+        "name": "Karczmarz Olan",
+        "image": "assets/innkeeper_olan.png",
         "zone_id": "tavern",
         "positions": [[3, 12]],
         "color": "warning",
         "visibility": "visible",
         "description": "Karczmarz wyciera kufel i uważnie słucha rozmów.",
-        "requires_setup": true
+        "interaction_label": "Porozmawiaj z Olanem",
+        "requires_setup": true,
+        "npc_interaction": {
+          "id": "keeper_olan",
+          "name": "Karczmarz Olan",
+          "public_description": "Krępy karczmarz wyciera cynowy kufel, obserwując salę spod krzaczastych brwi.",
+          "gm_context": "Olan słyszał od woźnicy o goblinach przy starym trakcie i o nocnych światłach w opuszczonej strażnicy. Chętnie dzieli się tym pierwszym konkretnym tropem, ale po jego przekazaniu nie ma już nowych informacji o strażnicy.",
+          "personality": "Gadatliwy, spostrzegawczy i ostrożny w formułowaniu oskarżeń. Lubi krótkie, konkretne rozmowy.",
+          "current_state": "Obsługuje spokojniejszą część wieczoru i ma chwilę dla przybyszów.",
+          "initial_attitude": "indifferent",
+          "initial_emotional_state": "Czujny, lecz rozmowny.",
+          "dialogue_intro": "Olan odkłada kufel: 'Jeśli pytacie o trakt, ostatnio docierają stamtąd paskudne historie.'",
+          "capabilities": ["can_talk", "can_share_rumors"],
+          "goals": [
+            {
+              "id": "ask_watchtower_rumors",
+              "label": "Zapytajcie o strażnicę",
+              "image": "assets/innkeeper_olan.png",
+              "description": "Dowiedzcie się, co Olan słyszał o goblinach, starym trakcie i opuszczonej strażnicy.",
+              "followup_prompt": "Jak pytacie Olana o niepokojące wydarzenia na trakcie i przy strażnicy?",
+              "intent_ids": ["information"],
+              "participant_mode": "must",
+              "check_participants": "single_actor",
+              "grounded_response": {
+                "player_narration": "Olan odkłada ścierkę i zniża głos, upewniając się, że nikt obcy nie przysłuchuje się rozmowie.",
+                "npc_response": "Woźnica widział goblinich zwiadowców przy starym trakcie. Nocą nad opuszczoną strażnicą pojawiają się też światła, choć od dawna nikt z wioski tam nie mieszka. Jeśli szukacie źródła kłopotów, zacznijcie właśnie tam.",
+                "success_message": "Olan przekazuje drużynie zasłyszany trop o goblinach i opuszczonej strażnicy.",
+                "variants": [
+                  {
+                    "id": "quiet_rumor",
+                    "player_narration": "Olan nachyla się nad ladą i ścisza głos, jakby sama opowieść mogła sprowadzić kłopoty.",
+                    "npc_response": "Jeden z woźniców widział goblinich zwiadowców przy starym trakcie. Mówił też o światłach nad opuszczoną strażnicą, chociaż żaden mieszkaniec nie zagląda tam od dawna. Ja zacząłbym poszukiwania właśnie tam.",
+                    "success_message": "Karczmarz dzieli się tropem o goblinach i nocnych światłach przy strażnicy."
+                  },
+                  {
+                    "id": "dry_warning",
+                    "player_narration": "Karczmarz odkłada kufel i spogląda na drużynę z nagłą, rzeczową powagą.",
+                    "npc_response": "Woźnica wypatrzył gobliny przy starym trakcie, a nocą widuje się światła nad pustą strażnicą. Nikt z wioski tam nie mieszka. Jeśli te kłopoty mają jedno źródło, szukałbym go właśnie w strażnicy.",
+                    "success_message": "Olan wskazuje drużynie związek między goblinami, starym traktem i opuszczoną strażnicą."
+                  }
+                ]
+              }
+            },
+            {
+              "id": "chat_with_keeper",
+              "label": "Porozmawiajcie z Olanem",
+              "image": "assets/innkeeper_olan.png",
+              "description": "Podejmijcie niezobowiązującą rozmowę o karczmie, wiosce lub podróżnych.",
+              "followup_prompt": "O czym chcecie porozmawiać z Olanem?",
+              "intent_ids": ["social"],
+              "participant_mode": "allow",
+              "check_participants": "single_actor",
+              "allowed_check_participants": ["single_actor", "lead_with_help"]
+            }
+          ],
+          "policy": {
+            "intent_permissions": {
+              "information": {
+                "status": "allowed",
+                "time_cost_minutes": 10,
+                "notes": "Olan bez testu przekazuje zasłyszaną plotkę o goblinach i światłach przy strażnicy.",
+                "effects_on_success": [
+                  {"type": "set_flag", "parameters": {"key": "tavern_rumor_heard", "value": true}},
+                  {"type": "set_flag", "parameters": {"key": "quest_hook_found", "value": true}}
+                ]
+              },
+              "social": {
+                "status": "allowed",
+                "time_cost_minutes": 15,
+                "notes": "Swobodna rozmowa o karczmie, wiosce i podróżnych."
+              },
+              "trade": {"status": "blocked"},
+              "gambling": {"status": "blocked"},
+              "harm": {"status": "blocked"},
+              "theft": {"status": "blocked"}
+            },
+            "allowed_flags": ["tavern_rumor_heard", "quest_hook_found"],
+            "allowed_effect_types": ["set_flag"],
+            "allowed_abilities": ["charisma", "wisdom"],
+            "allowed_skills": ["persuasion", "insight"],
+            "dc_range": [10, 20]
+          }
+        }
       },
       {
         "id": "lost_pouch",
         "name": "Zgubiona sakiewka",
+        "image": "assets/lost_pouch.png",
         "zone_id": "market",
         "positions": [[9, 5]],
         "color": "success",
         "visibility": "hidden",
         "description": "Pod ławą leży mała sakiewka z inicjałami mieszkańca.",
         "requires_setup": false
+      }
+    ],
+    "flows": [
+      {
+        "id": "elder_bren_flow",
+        "npc_id": "elder_bren",
+        "nodes": [
+          {
+            "id": "elder_seeking_help",
+            "label": "Bren nadal szuka pomocy dla wioski",
+            "active_when": {
+              "no_flags": ["quest_hook_found", "elder_refuses_party"]
+            }
+          },
+          {
+            "id": "elder_hook_shared",
+            "label": "Drużyna zna problem i może przyjąć zadanie",
+            "active_when": {
+              "all_flags": ["quest_hook_found"],
+              "no_flags": ["quest_accepted", "elder_refuses_party"]
+            }
+          },
+          {
+            "id": "elder_quest_accepted",
+            "label": "Drużyna przyjęła zadanie i może zakończyć przygotowania",
+            "active_when": {
+              "all_flags": ["quest_accepted"],
+              "no_flags": ["ready_for_watchtower", "elder_refuses_party"]
+            }
+          },
+          {
+            "id": "elder_departure_ready",
+            "label": "Drużyna jest gotowa wyruszyć",
+            "active_when": {
+              "all_flags": ["ready_for_watchtower"]
+            },
+            "terminal": true
+          },
+          {
+            "id": "elder_closed",
+            "label": "Bren zakończył rozmowę z drużyną",
+            "active_when": {
+              "all_flags": ["elder_refuses_party"],
+              "no_flags": ["ready_for_watchtower"]
+            },
+            "terminal": true
+          }
+        ],
+        "transitions": [
+          {
+            "id": "ask_bren_about_watchtower",
+            "goal_id": "ask_watchtower_problem",
+            "from": ["elder_seeking_help", "elder_hook_shared", "elder_quest_accepted"],
+            "route_kind": "npc_intent",
+            "route_ref": "information"
+          },
+          {
+            "id": "negotiate_bren_advance",
+            "goal_id": "negotiate_advance",
+            "from": ["elder_seeking_help"],
+            "route_kind": "npc_intent",
+            "route_ref": "social"
+          },
+          {
+            "id": "accept_bren_watchtower_quest",
+            "goal_id": "accept_watchtower_quest",
+            "from": ["elder_hook_shared"],
+            "route_kind": "npc_intent",
+            "route_ref": "commitment"
+          },
+          {
+            "id": "confirm_bren_watchtower_departure",
+            "goal_id": "confirm_watchtower_departure",
+            "from": ["elder_quest_accepted"],
+            "route_kind": "npc_intent",
+            "route_ref": "travel"
+          }
+        ]
+      },
+      {
+        "id": "tavern_keeper_flow",
+        "npc_id": "keeper_olan",
+        "nodes": [
+          {
+            "id": "keeper_has_rumor",
+            "label": "Olan nie przekazał jeszcze tropu",
+            "active_when": {
+              "no_flags": ["tavern_rumor_heard"]
+            }
+          },
+          {
+            "id": "keeper_rumor_shared",
+            "label": "Drużyna poznała plotkę Olana",
+            "active_when": {
+              "all_flags": ["tavern_rumor_heard"]
+            }
+          }
+        ],
+        "transitions": [
+          {
+            "id": "ask_olan_about_watchtower",
+            "goal_id": "ask_watchtower_rumors",
+            "from": ["keeper_has_rumor"],
+            "route_kind": "npc_intent",
+            "route_ref": "information"
+          },
+          {
+            "id": "chat_with_olan",
+            "goal_id": "chat_with_keeper",
+            "from": ["keeper_has_rumor", "keeper_rumor_shared"],
+            "route_kind": "npc_intent",
+            "route_ref": "social"
+          }
+        ]
       }
     ],
     "npc_transitions": [

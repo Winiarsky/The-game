@@ -188,7 +188,14 @@
       </div>
       <div id="chat-stream">
         <div id="scene-conversation"></div>
-        <div id="chat-typing" class="chat-typing" hidden><span></span><span></span><span></span></div>
+        <div id="chat-typing" class="chat-typing" hidden>
+          <span></span><span></span><span></span>
+          <em id="chat-typing-label">MG zastanawia się nad odpowiedzią…</em>
+        </div>
+        <div id="chat-retry" class="chat-retry" hidden>
+          <span id="chat-retry-message">Nie udało się uzyskać odpowiedzi MG.</span>
+          <button class="secondary" data-allow-busy="true" onclick="retryLastGmRequest()">Spróbuj ponownie</button>
+        </div>
         <div id="interaction-state-card" class="chat-resolution conversation-system-card interaction-state-card" aria-live="polite" hidden>
           <div class="interaction-state-head">
             <div>

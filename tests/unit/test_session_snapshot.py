@@ -5,6 +5,7 @@ import pytest
 
 from dnd_board_game.actors import (
     ActorId,
+    ActorSenseProfile,
     ActorTrigger,
     CreatureSize,
     DamageAffinityProfile,
@@ -117,6 +118,7 @@ def test_snapshot_json_round_trip_is_deterministic(tmp_path):
     assert restored.as_dict() == snapshot.as_dict()
     assert restored.as_dict()["schema_version"] == SNAPSHOT_SCHEMA_VERSION
     cleric = next(actor for actor in restored.actors if str(actor.id) == "cleric")
+    assert cleric.level == 1
     assert cleric.portrait == "portraits/abandoned_watchtower/cleric.webp"
     shield = next(item for item in cleric.inventory if item.id == "shield")
     assert shield.armor_class_bonus == 2
@@ -132,6 +134,8 @@ def test_snapshot_json_round_trip_is_deterministic(tmp_path):
         "sacred_flame",
         "radiant_line",
         "healing_word",
+        "cure_wounds",
+        "inflict_wounds",
         "bless_attack_bonus",
         "comprehend_languages",
         "shield",
@@ -149,6 +153,11 @@ def test_snapshot_json_round_trip_is_deterministic(tmp_path):
     radiant_line = next(spell for spell in cleric.spells if spell.id == "radiant_line")
     assert radiant_line.scaling is not None
     assert radiant_line.scaling.damage_dice_per_slot_level == 1
+    sacred_flame = next(
+        spell for spell in cleric.spells if spell.id == "sacred_flame"
+    )
+    assert sacred_flame.scaling is not None
+    assert sacred_flame.scaling.cantrip_damage_dice_per_tier == 1
     bless = next(
         spell for spell in cleric.spells if spell.id == "bless_attack_bonus"
     )
@@ -277,6 +286,168 @@ def test_snapshot_v18_round_trip_preserves_dispellable_spell_level(tmp_path):
 
     assert restored.active_effects == (effect,)
     assert restored.active_effects[0].spell_level == 3
+
+
+def test_snapshot_v19_migrates_actor_senses_and_v20_round_trip_preserves_them(
+    tmp_path,
+):
+    session = _session(tmp_path)
+    hero = next(
+        actor for actor in session.exploration.actors if str(actor.id) == "hero"
+    )
+    session.exploration = session._replace_exploration_actor(
+        replace(hero, senses=ActorSenseProfile(darkvision_feet=60))
+    )
+
+    restored = SessionSnapshot.from_dict(
+        session.create_snapshot().as_dict(),
+        base_state=session.state,
+    )
+    restored_hero = next(
+        actor for actor in restored.actors if str(actor.id) == "hero"
+    )
+    assert restored_hero.senses.darkvision_feet == 60
+
+    old = session.create_snapshot().as_dict()
+    old["schema_version"] = 19
+    for actor in old["actors"]:
+        actor.pop("senses")
+    migrated = SessionSnapshot.from_dict(old, base_state=session.state)
+    migrated_hero = next(
+        actor for actor in migrated.actors if str(actor.id) == "hero"
+    )
+    assert migrated_hero.senses == ActorSenseProfile()
+
+
+def test_snapshot_v20_migrates_empty_exploration_hiding_state(tmp_path):
+    session = _session(tmp_path)
+    raw = session.create_snapshot().as_dict()
+    raw["schema_version"] = 20
+    raw["exploration"].pop("hidden_actor_states")
+
+    restored = SessionSnapshot.from_dict(raw, base_state=session.state)
+
+    assert restored.as_dict()["schema_version"] == SNAPSHOT_SCHEMA_VERSION
+    assert restored.exploration_state.hidden_actor_states == ()
+
+
+def test_snapshot_v21_round_trip_preserves_exploration_hiding_state(tmp_path):
+    session = _session(tmp_path)
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.start_exploration_hide("rogue")
+    session.resolve_rolls({"rogue": 15})
+
+    restored = SessionSnapshot.from_dict(
+        session.create_snapshot().as_dict(),
+        base_state=session.state,
+    )
+
+    assert len(restored.exploration_state.hidden_actor_states) == 1
+    hidden = restored.exploration_state.hidden_actor_states[0]
+    assert hidden.actor_id == "rogue"
+    assert hidden.zone_id == "gate"
+    assert hidden.natural_roll == 15
+    assert hidden.stealth_total == 22
+
+
+def test_snapshot_v21_migrates_typed_fixture_runtime_fields(tmp_path):
+    session = _session(tmp_path)
+    plan = plan_fixture_action(
+        session.state,
+        source_id="zone:gate:fixture:gate_corroded_hinges",
+        operation=FixtureOperation.DETACH,
+    )
+    session.state = apply_fixture_action(
+        session.state,
+        plan,
+        success=True,
+    ).state
+    raw = session.create_snapshot().as_dict()
+    raw["schema_version"] = 21
+    fixture_state = raw["exploration"]["fixture_states"][0]
+    fixture_state.pop("opened")
+    fixture_state.pop("locked")
+    fixture_state.pop("looted")
+    fixture_state.pop("current_hit_points")
+
+    restored = SessionSnapshot.from_dict(raw, base_state=session.state)
+
+    assert restored.as_dict()["schema_version"] == SNAPSHOT_SCHEMA_VERSION
+    migrated = restored.exploration_state.fixture_states[0]
+    assert migrated.opened is False
+    assert migrated.locked is False
+    assert migrated.looted is False
+    assert migrated.current_hit_points is None
+
+
+def test_snapshot_v22_round_trip_preserves_door_and_container_state(tmp_path):
+    session = _session(tmp_path)
+    gate_source = "zone:gate:fixture:watchtower_gate"
+    unlocked = apply_fixture_action(
+        session.state,
+        plan_fixture_action(
+            session.state,
+            source_id=gate_source,
+            operation=FixtureOperation.UNLOCK,
+        ),
+        success=True,
+    )
+    opened = apply_fixture_action(
+        unlocked.state,
+        plan_fixture_action(
+            unlocked.state,
+            source_id=gate_source,
+            operation=FixtureOperation.OPEN,
+        ),
+        success=True,
+    )
+    session.state = opened.state
+
+    restored = SessionSnapshot.from_dict(
+        session.create_snapshot().as_dict(),
+        base_state=session.state,
+    )
+
+    gate = next(
+        item
+        for item in restored.exploration_state.fixture_states
+        if item.fixture_id == "watchtower_gate"
+    )
+    assert gate.opened is True
+    assert gate.locked is False
+    assert gate.current_hit_points == 27
+
+
+def test_snapshot_v22_migrates_actor_exhaustion_to_zero(tmp_path):
+    session = _session(tmp_path)
+    raw = session.create_snapshot().as_dict()
+    raw["schema_version"] = 22
+    for actor in raw["actors"]:
+        actor.pop("exhaustion_level")
+
+    restored = SessionSnapshot.from_dict(raw, base_state=session.state)
+
+    assert restored.as_dict()["schema_version"] == SNAPSHOT_SCHEMA_VERSION
+    assert all(actor.exhaustion_level == 0 for actor in restored.actors)
+
+
+def test_snapshot_v23_round_trip_preserves_actor_exhaustion(tmp_path):
+    session = _session(tmp_path)
+    actors = tuple(
+        replace(actor, exhaustion_level=3)
+        if str(actor.id) == "hero"
+        else actor
+        for actor in session.exploration.actors
+    )
+    session.exploration = replace(session.exploration, actors=actors)
+
+    restored = SessionSnapshot.from_dict(
+        session.create_snapshot().as_dict(),
+        base_state=session.state,
+    )
+
+    hero = next(actor for actor in restored.actors if str(actor.id) == "hero")
+    assert hero.exhaustion_level == 3
 
 
 def test_snapshot_save_and_load_restores_dynamic_summoned_actor(tmp_path):
@@ -769,6 +940,39 @@ def test_snapshot_round_trip_preserves_merchant_trade_state(tmp_path):
     assert merchant.currency.total_cp == 10_035
     assert next(item for item in hero.inventory if item.id == "crossbow_bolt").quantity == 7
     assert hero.currency.total_cp == 965
+
+
+def test_snapshot_round_trip_preserves_completed_downtime_crafting(tmp_path):
+    session = ExplorationUiSession(
+        "content/scenarios/village_square_mvp.json",
+        session_id="downtime_round_trip",
+        observation_dir=tmp_path / "observations",
+        save_dir=tmp_path / "saves",
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.complete_downtime_crafting(
+        actor_id="hero",
+        recipe_id="forge_dagger",
+    )
+    base = ExplorationUiSession(
+        "content/scenarios/village_square_mvp.json",
+        session_id="downtime_base",
+        observation_dir=tmp_path / "observations",
+        save_dir=tmp_path / "saves",
+    )
+
+    restored = SessionSnapshot.from_dict(
+        session.create_snapshot().as_dict(),
+        base_state=base.state,
+    )
+
+    hero = next(actor for actor in restored.actors if str(actor.id) == "hero")
+    assert hero.currency.total_cp == 900
+    assert next(item for item in hero.inventory if item.id == "dagger").quantity == 1
+    assert restored.exploration_state.elapsed_minutes == 480
+    flags = dict(restored.exploration_state.flags.values)
+    assert flags.get("watchtower_dusk_arrival") is True
+    assert flags.get("watchtower_alerted") is True
 
 
 def test_snapshot_round_trip_preserves_pending_npc_scene_transition(tmp_path):

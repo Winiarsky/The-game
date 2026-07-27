@@ -4,7 +4,13 @@ from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import Sequence
 
-from dnd_board_game.actors import Actor, Faction, attack_roll_modifiers
+from dnd_board_game.actors import (
+    Actor,
+    ExhaustionRollKind,
+    Faction,
+    apply_exhaustion_to_roll_request,
+    attack_roll_modifiers,
+)
 from dnd_board_game.rules import (
     AttackRollOutcome,
     AttackRollResult,
@@ -12,6 +18,7 @@ from dnd_board_game.rules import (
     D20RollRequest,
     D20RollResult,
     DiceExpression,
+    cantrip_damage_dice_count,
     resolve_attack_roll,
 )
 from dnd_board_game.world import BoardState, Coordinate, line_of_sight_clear
@@ -90,10 +97,13 @@ class AttackSource:
     action_cost: ActionEconomyCost = ActionEconomyCost.ACTION
     cast_level: int | None = None
     upcast_damage_dice_per_level: int = 0
+    cantrip_damage_dice_per_tier: int = 0
 
     def __post_init__(self) -> None:
         if self.upcast_damage_dice_per_level < 0:
             raise ValueError("Attack upcast damage dice cannot be negative.")
+        if self.cantrip_damage_dice_per_tier < 0:
+            raise ValueError("Cantrip damage dice scaling cannot be negative.")
         if self.range_feet <= 0:
             raise ValueError("Attack source range_feet must be positive.")
         if self.reach_feet is not None and (
@@ -205,6 +215,47 @@ def attack_source_at_cast_level(
     )
 
 
+def attack_source_at_actor_level(
+    source: AttackSource,
+    actor_level: int,
+) -> AttackSource:
+    """Scale a cantrip source to its caster's character level."""
+    if source.casting_kind != SpellCastingKind.CANTRIP or source.spell_level != 0:
+        return source
+    if source.cantrip_damage_dice_per_tier == 0:
+        return source
+    components = list(source.damage_components)
+    index = next(
+        (
+            index
+            for index, component in enumerate(components)
+            if component.dice is not None
+        ),
+        None,
+    )
+    if index is None:
+        raise ValueError("Cantrip scaling requires a dice damage component.")
+    component = components[index]
+    assert component.dice is not None
+    components[index] = replace(
+        component,
+        dice=DiceExpression(
+            cantrip_damage_dice_count(
+                base_dice=component.dice.count,
+                actor_level=actor_level,
+                dice_per_tier=source.cantrip_damage_dice_per_tier,
+            ),
+            component.dice.sides,
+        ),
+    )
+    scaled_components = tuple(components)
+    return replace(
+        source,
+        damage_components=scaled_components,
+        damage_hint=" + ".join(component.hint() for component in scaled_components),
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class AttackActionState:
     attacker: Actor
@@ -247,7 +298,14 @@ def attack_source_for_actor(source: AttackSource, actor: Actor) -> AttackSource:
     """Bind a weapon source to the current wielder's ability and proficiency profile."""
 
     if source.source_type != AttackSourceType.WEAPON or source.ability is None:
-        return source
+        return replace(
+            source,
+            attack_roll_request=apply_exhaustion_to_roll_request(
+                actor,
+                source.attack_roll_request,
+                ExhaustionRollKind.ATTACK,
+            ),
+        )
     proficiency_id = source.proficiency_id or source.source_item_id or source.id
     category_id = getattr(source, "weapon_category_id", None)
     proficient = actor.proficiencies.is_weapon_proficient(proficiency_id) or (
@@ -293,12 +351,17 @@ def attack_source_for_actor(source: AttackSource, actor: Actor) -> AttackSource:
             for component in damage_components
         )
         applied = desired
-    return replace(
-        source,
-        attack_roll_request=D20RollRequest(
+    request = apply_exhaustion_to_roll_request(
+        actor,
+        D20RollRequest(
             mode=mode,
             modifiers=modifiers,
         ),
+        ExhaustionRollKind.ATTACK,
+    )
+    return replace(
+        source,
+        attack_roll_request=request,
         damage_modifier=damage_modifier,
         damage_components=damage_components,
         damage_hint="",

@@ -14,7 +14,13 @@ const slashCommands = [];
 let selectedInteractionGoalId = null;
 let selectedInteractionCheckParticipants = null;
 let selectedInteractionActorIds = [];
+let selectedSocialSkill = null;
 let selectedTradeActorId = '';
+let selectedDowntimeActorId = '';
+let downtimePanelOpen = false;
+let continuationPanelOpen = false;
+let selectedContinuationPace = 'normal';
+let selectedContinuationNavigatorId = '';
 let filteredSlashCommands = [];
 let activeSlashCommandIndex = 0;
 let sidePanelOpen = localStorage.getItem('explorationSidePanelOpen') === 'true';
@@ -150,6 +156,10 @@ function setBusy(message) {
   status.textContent = message || '';
   const typing = document.getElementById('chat-typing');
   if (typing) typing.hidden = !waitingForGm;
+  const typingLabel = document.getElementById('chat-typing-label');
+  if (typingLabel && waitingForGm) {
+    typingLabel.textContent = 'MG zastanawia się nad odpowiedzią…';
+  }
   const leaveButton = document.getElementById('leave-interaction-button');
   if (leaveButton) {
     const unresolved = Boolean(state && state.pending && state.pending.stage) || Boolean(state && state.required_rolls && state.required_rolls.length);
@@ -161,15 +171,48 @@ function setBusy(message) {
     el.disabled = busy;
   });
 }
+let lastFailedGmRequest = null;
+let gmSlowResponseTimer = null;
+function setChatRetry(request, message) {
+  lastFailedGmRequest = request;
+  const panel = document.getElementById('chat-retry');
+  const copy = document.getElementById('chat-retry-message');
+  if (copy) copy.textContent = message || 'Nie udało się uzyskać odpowiedzi MG.';
+  if (panel) panel.hidden = !request;
+}
+async function retryLastGmRequest() {
+  if (!lastFailedGmRequest) return;
+  const request = lastFailedGmRequest;
+  setChatRetry(null, '');
+  await api(request.path, request.body, request.busyMessage);
+}
 async function api(path, body, busyMessage) {
   const previousStage = state && state.flow ? state.flow.stage : null;
   const previousInteractionId = state && state.conversation ? state.conversation.interaction_id : null;
   const previousMessageCount = state && state.messages ? state.messages.length : 0;
+  const gmRequest = Boolean(busyMessage && (busyMessage.includes('MG') || busyMessage.includes('NPC')));
+  const retryRequest = gmRequest ? {path, body: body || {}, busyMessage} : null;
   setBusy(busyMessage || 'Czekam na odpowiedź...');
+  if (gmRequest) {
+    setChatRetry(null, '');
+    clearTimeout(gmSlowResponseTimer);
+    gmSlowResponseTimer = setTimeout(() => {
+      const label = document.getElementById('chat-typing-label');
+      if (label && waitingForGm) {
+        label.textContent = 'Odpowiedź trwa dłużej niż zwykle — nadal czekam…';
+      }
+    }, 15000);
+  }
   try {
     const res = await fetch(path, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body || {})});
     const data = await res.json();
-    if (!res.ok) alert(data.error || 'Błąd');
+    if (!res.ok) {
+      if (retryRequest) {
+        setChatRetry(retryRequest, 'MG nie zwrócił poprawnej odpowiedzi. Możecie bezpiecznie ponowić zapytanie.');
+      } else {
+        alert(data.error || 'Błąd');
+      }
+    }
     state = data.state || data;
     const nextStage = state && state.flow ? state.flow.stage : null;
     const nextInteractionId = state && state.conversation ? state.conversation.interaction_id : null;
@@ -180,11 +223,13 @@ async function api(path, body, busyMessage) {
       selectedInteractionGoalId = null;
       selectedInteractionCheckParticipants = null;
       selectedInteractionActorIds = [];
+      selectedSocialSkill = null;
     }
     if (path === '/api/action' && res.ok && !(body && body.conversation_only)) {
       selectedInteractionGoalId = null;
       selectedInteractionCheckParticipants = null;
       selectedInteractionActorIds = [];
+      selectedSocialSkill = null;
     }
     activeInteractionId = nextInteractionId;
     optimisticPlayerMessage = null;
@@ -208,7 +253,20 @@ async function api(path, body, busyMessage) {
     render();
     refreshSessionLog();
     return {ok: res.ok, data};
+  } catch (error) {
+    if (retryRequest) {
+      setChatRetry(
+        retryRequest,
+        'Połączenie z MG zostało przerwane lub przekroczono timeout dostawcy. Spróbujcie ponownie.'
+      );
+      optimisticPlayerMessage = null;
+      render();
+      return {ok: false, error};
+    }
+    alert('Nie udało się połączyć z aplikacją.');
+    return {ok: false, error};
   } finally {
+    clearTimeout(gmSlowResponseTimer);
     setBusy('');
   }
 }
@@ -230,6 +288,7 @@ function render() {
     selectedInteractionGoalId = null;
     selectedInteractionCheckParticipants = null;
     selectedInteractionActorIds = [];
+    selectedSocialSkill = null;
   }
   const modeLabel = currentModeLabel();
   document.getElementById('app-mode-label').textContent = modeLabel;
@@ -258,8 +317,15 @@ function render() {
   document.getElementById('active-effects').innerHTML = activeEffectsHtml();
   renderSnapshotPanel();
   const finishScenarioButton = document.getElementById('finish-scenario-button');
-  finishScenarioButton.disabled = Boolean(state.combat) || ['spell_preparation','short_rest','scenario_complete'].includes(state.flow.stage);
-  finishScenarioButton.textContent = state.flow.stage === 'scenario_complete' ? 'Scenariusz zakończony' : 'Zakończ scenariusz';
+  const continuation = state.flow.continuation;
+  finishScenarioButton.disabled = Boolean(state.combat)
+    || ['spell_preparation','short_rest','scenario_complete'].includes(state.flow.stage)
+    || Boolean(continuation && !continuation.available);
+  finishScenarioButton.textContent = state.flow.stage === 'scenario_complete'
+    ? 'Scenariusz zakończony'
+    : continuation
+      ? (continuation.available ? continuation.label : 'Najpierw ukończ przygotowania')
+      : 'Zakończ scenariusz';
   renderBoardPanel();
   renderBoardConnectionIndicator();
   renderBoardFallback();
@@ -566,18 +632,56 @@ function identifierLabel(identifier) {
   const text = String(identifier || '').replaceAll('_', ' ').trim();
   return text ? text.charAt(0).toLocaleUpperCase('pl') + text.slice(1) : '-';
 }
+function actorSensesText(actor) {
+  const senses = actor.senses || {};
+  const labels = [
+    ['Widzenie w ciemności', senses.darkvision_feet],
+    ['Ślepowidzenie', senses.blindsight_feet],
+    ['Wyczucie drgań', senses.tremorsense_feet],
+    ['Prawdziwe widzenie', senses.truesight_feet],
+  ].filter(([, distance]) => Number(distance || 0) > 0)
+    .map(([label, distance]) => `${label} ${distance} ft`);
+  return labels.join(', ') || 'zwykły wzrok';
+}
 function actorInventoryPanelHtml(actor) {
   const items = actor.inventory || [];
   const hands = actor.hands || {};
   const currency = actor.currency || {};
   const carrying = actor.carrying || {};
   const activeLight = actor.active_light || null;
+  const awareness = ((state.flow || {}).awareness) || {};
+  const hiddenState = (awareness.hidden_actor_states || []).find(item => String(item.actor_id) === String(actor.id));
+  const canUseAwareness = !state.combat && (state.flow || {}).stage === 'location_active';
+  const awarenessButtons = !canUseAwareness ? '' : `
+    <div class="panel-actions">
+      ${awareness.search_available ? `<button type="button" class="secondary" onclick="startExplorationSearch('${esc(actor.id)}')">Przeszukaj · ${esc(awareness.search_minutes)} min</button>` : ''}
+      ${awareness.allows_hiding && !activeLight ? `<button type="button" class="secondary" onclick="startExplorationHide('${esc(actor.id)}')">${hiddenState ? `Ukryty · ${esc(hiddenState.stealth_total)}` : 'Ukryj się'}</button>` : ''}
+    </div>`;
+  const fixtureCards = !canUseAwareness ? '' : ((state.flow || {}).fixtures || []).map(fixture => {
+    const hp = fixture.maximum_hit_points !== null && fixture.maximum_hit_points !== undefined
+      ? ` · HP ${esc(fixture.current_hit_points)}/${esc(fixture.maximum_hit_points)} · KP ${esc(fixture.armor_class)}`
+      : '';
+    const stateLabel = fixture.destroyed
+      ? 'zniszczony'
+      : fixture.locked
+        ? 'zamknięty na zamek'
+        : fixture.opened
+          ? 'otwarty'
+          : identifierLabel(fixture.condition);
+    const actions = (fixture.actions || []).map(action => action.operation === 'damage'
+      ? `<button type="button" class="secondary" onclick="damageExplorationFixture('${esc(actor.id)}','${esc(fixture.id)}')">${esc(action.label)}</button>`
+      : `<button type="button" class="secondary" onclick="startExplorationFixtureAction('${esc(actor.id)}','${esc(fixture.id)}','${esc(action.operation)}')">${esc(action.label)}${action.requires_roll ? ' · rzut' : ''}</button>`
+    ).join('');
+    return `<article class="panel-info-card fixture${fixture.destroyed ? ' unavailable' : ''}"><div><b>${esc(fixture.name)}</b><span>${esc(stateLabel)}${hp}</span></div><p class="muted">${esc(fixture.description || identifierLabel(fixture.kind))}</p>${actions ? `<div class="panel-actions">${actions}</div>` : ''}</article>`;
+  }).join('');
   const handLabel = hand => hand && hand.item_name ? hand.item_name : 'wolna';
   const coinText = ['pp', 'gp', 'ep', 'sp', 'cp'].filter(key => Number(currency[key] || 0) > 0).map(key => `${esc(currency[key])} ${key}`).join(', ') || 'brak monet';
   const carryingText = `${Number(carrying.weight_lb || 0).toFixed(1)} / ${Number(carrying.capacity_lb || 0).toFixed(1)} lb`;
   return `
     <div class="actor-panel-summary"><b>${esc(actor.name)}</b><span>${items.length} ${items.length === 1 ? 'przedmiot' : 'przedmiotów'} · ${esc(carryingText)}</span></div>
-    <p class="muted"><b>Monety:</b> ${coinText}. <b>Udźwig:</b> ${esc(carryingText)}${carrying.over_capacity ? ' — przeciążenie' : ''}.${activeLight ? ` <b>Światło:</b> ${esc(activeLight.source_name)} ${esc(activeLight.bright_distance_feet)}/${esc(activeLight.dim_additional_feet)} ft, ${esc(activeLight.remaining_minutes)} min.` : ''}</p>
+    <p class="muted"><b>Monety:</b> ${coinText}. <b>Udźwig:</b> ${esc(carryingText)}${carrying.over_capacity ? ' — przeciążenie' : ''}. <b>Zmysły:</b> ${esc(actorSensesText(actor))}.${activeLight ? ` <b>Światło:</b> ${esc(activeLight.source_name)} ${esc(activeLight.bright_distance_feet)}/${esc(activeLight.dim_additional_feet)} ft, ${esc(activeLight.remaining_minutes)} min.` : ''}</p>
+    ${awarenessButtons}
+    ${fixtureCards}
     <div class="hands-summary"><span><b>Główna ręka</b>${esc(handLabel(hands.main_hand))}</span><span><b>Druga ręka</b>${esc(handLabel(hands.off_hand))}</span></div>
     ${items.length ? items.map(item => {
       const held = (item.held_in || []).map(hand => hand === 'main_hand' ? 'główna ręka' : hand === 'off_hand' ? 'druga ręka' : hand).join(', ');
@@ -652,6 +756,42 @@ async function changeActorLight(actorId, itemId, action) {
     item_id: itemId,
     action,
   }, action === 'ignite' ? 'Zapalanie światła...' : 'Zmiana światła...');
+}
+async function startExplorationSearch(actorId) {
+  await api('/api/exploration/search/start', {actor_id: actorId}, 'Przygotowuję aktywne przeszukiwanie...');
+}
+async function selectZoneOption(optionId, requiresActor) {
+  const actorSelect = document.getElementById(`zone-option-actor-${optionId}`);
+  await api('/api/exploration/option', {
+    option_id: optionId,
+    actor_id: requiresActor && actorSelect ? actorSelect.value : null,
+  }, 'Wykonuję działanie w lokacji...');
+}
+async function startExplorationHide(actorId) {
+  await api('/api/exploration/hide/start', {actor_id: actorId}, 'Przygotowuję próbę ukrycia...');
+}
+async function startExplorationFixtureAction(actorId, fixtureId, operation) {
+  await api('/api/exploration/fixture/action', {
+    actor_id: actorId,
+    fixture_id: fixtureId,
+    operation,
+  }, 'Przygotowuję interakcję z obiektem...');
+}
+async function damageExplorationFixture(actorId, fixtureId) {
+  const rawAttackTotal = prompt('Podaj łączny wynik ataku przeciw KP obiektu:');
+  if (rawAttackTotal === null) return;
+  const attackTotal = Number(rawAttackTotal);
+  if (!Number.isInteger(attackTotal) || attackTotal < 0) return;
+  const rawDamage = prompt('Podaj obrażenia:');
+  if (rawDamage === null) return;
+  const damage = Number(rawDamage);
+  if (!Number.isInteger(damage) || damage < 0) return;
+  await api('/api/exploration/fixture/damage', {
+    actor_id: actorId,
+    fixture_id: fixtureId,
+    attack_total: attackTotal,
+    damage,
+  }, 'Rozliczam atak na obiekt...');
 }
 function renderSnapshotPanel() {
   const snapshot = state.snapshot || {};
@@ -849,11 +989,53 @@ function flowPanelHtml() {
     return shortRestHtml();
   }
   if (stage === 'scenario_complete') {
+    const handoff = flow.scenario_handoff;
+    const outcome = handoff && handoff.outcome;
+    const outcomeKindLabels = {
+      success: 'Sukces',
+      partial_success: 'Sukces z konsekwencją',
+      fail_forward: 'Niepowodzenie — historia toczy się dalej',
+    };
+    const objectiveStatusLabels = {
+      completed: 'ukończony',
+      failed: 'nieudany',
+      active: 'nierozstrzygnięty',
+      hidden: 'nieodkryty',
+    };
+    const objectives = handoff && handoff.source_objectives || flow.objectives || [];
+    const lootMessages = (state.messages || [])
+      .filter(message => {
+        const title = String(message.title || '').toLocaleLowerCase('pl');
+        return title.includes('łup') || title.includes('zebrano') || title.includes('zabezpieczono');
+      })
+      .slice(-5);
     return `
       <div class="start-panel"><div class="inner">
         <h2>Scenariusz zakończony</h2>
         <p>Efekty trwające do końca scenariusza zostały wygaszone.</p>
-        <p class="muted">Kliknij Reset, aby rozpocząć scenariusz od automatycznego long resta, konfiguracji planszy i setupu zakończonego przygotowaniem czarów.</p>
+        ${outcome ? `
+          <div class="status-item">
+            <b>${esc(outcome.label)}</b>
+            <span>${esc(outcomeKindLabels[outcome.kind] || outcome.kind)}</span>
+          </div>
+          ${outcome.narration ? `<p>${esc(outcome.narration)}</p>` : ''}
+        ` : ''}
+        ${objectives.length ? `
+          <h3>Podsumowanie celów</h3>
+          <div class="status-list">${objectives.map(objective => `
+            <div class="status-item">
+              <b>${esc(objective.name)}</b>
+              <span>${esc(objectiveStatusLabels[objective.status] || objective.status)}</span>
+            </div>
+          `).join('')}</div>
+        ` : ''}
+        ${lootMessages.length ? `
+          <h3>Zdobyte i zabezpieczone rzeczy</h3>
+          <div class="status-list">${lootMessages.map(message => `
+            <div class="status-item"><b>${esc(message.title)}</b><span>${esc(message.body)}</span></div>
+          `).join('')}</div>
+        ` : ''}
+        ${handoff ? `<p><b>Kolejny scenariusz:</b> ${esc(handoff.target_scenario_name || handoff.target_scenario_id)}</p><p class="muted">Drużyna, ekwipunek, czas i konsekwencje podróży zostaną przeniesione automatycznie.</p><button class="start-button" onclick="startScenarioHandoff()">Rozłóż kolejną mapę</button>` : '<p class="muted">Możecie rozpocząć scenariusz ponownie od automatycznego long resta, konfiguracji planszy i setupu zakończonego przygotowaniem czarów.</p><button class="start-button" onclick="resetSession()">Rozpocznij ponownie</button>'}
       </div></div>
     `;
   }
@@ -883,6 +1065,20 @@ function flowPanelHtml() {
       const hasPositions = Boolean(step.has_positions);
       const requiresBoardAssignment = Boolean(step.requires_board_assignment);
       const positions = (step.positions || []).map(pos => `(${pos[0]},${pos[1]})`).join(', ');
+      const paperMap = setup.paper_map || null;
+      const paperMapHtml = paperMap ? `
+        <div class="paper-map-setup">
+          <img src="${esc(paperMap.preview_url)}" alt="Podgląd papierowej mapy">
+          <div>
+            <p><b>Mapa papierowa ${esc(paperMap.width_cm)} × ${esc(paperMap.height_cm)} cm</b></p>
+            <p>Usuń poprzednią mapę, połącz wydrukowane kartki i połóż nową mapę na całej planszy zgodnie ze znacznikami rogów.</p>
+            <div class="row">
+              <a class="button-link" href="${esc(paperMap.a4_pdf_url)}" target="_blank" rel="noopener">Pobierz PDF A4</a>
+              <a class="button-link secondary" href="${esc(paperMap.full_size_pdf_url)}" target="_blank" rel="noopener">PDF 50 × 75 cm</a>
+            </div>
+          </div>
+        </div>
+      ` : '';
       const fallbackButtons = (step.available_positions || []).map(pos =>
         `<button class="secondary" onclick="selectBoardPosition(${Number(pos[0])}, ${Number(pos[1])})">(${Number(pos[0])},${Number(pos[1])})</button>`
       ).join('');
@@ -890,6 +1086,7 @@ function flowPanelHtml() {
         <h3>Setup mapy ${Number(setup.current_index) + 1}/${setup.step_count}</h3>
         <p><b>${esc(step.label || '')}</b></p>
         <p>${esc(step.message || '')}</p>
+        ${paperMapHtml}
         ${hasPositions ? `<p><b>Kolor:</b> ${esc(step.color || '-')}</p><p><b>Pola:</b> ${esc(positions)}</p>` : '<p class="muted">Ten krok jest tylko instrukcją i nie podświetla pól na planszy.</p>'}
         <p class="muted">${requiresBoardAssignment ? `Ustaw figurkę ${esc(step.assignment_point_name || '')} i kliknij wybrane podświetlone pole.` : hasPositions ? 'Rozstaw elementy na fizycznej planszy. Jeśli potwierdzasz planszą, najpierw kliknij Skanuj planszę.' : 'Potwierdź, żeby przejść do pierwszego podświetlanego elementu mapy.'}</p>
         ${requiresBoardAssignment
@@ -1174,13 +1371,119 @@ function currentInteractionPointCards() {
   if (state.active_point) return [];
   return (state.current_zone_points || []).filter(point => point && (point.has_npc || point.has_merchant));
 }
+function objectiveProgressHtml() {
+  const objectives = (state.flow && state.flow.objectives) || [];
+  if (!objectives.length) return '';
+  const statusLabels = {active: 'w toku', completed: 'ukończony', failed: 'nieudany'};
+  return `<div class="objective-progress-card">
+    <b>Cel sceny</b>
+    ${objectives.map(objective => `
+      <div class="objective-progress-item">
+        <strong>${esc(objective.name)}</strong>
+        <span>${esc(statusLabels[objective.status] || objective.status)}</span>
+        ${(objective.milestones || []).length ? `<div class="objective-milestones">${objective.milestones.map(step => `
+          <span class="${step.completed ? 'completed' : ''}">${step.completed ? '✓' : '○'} ${esc(step.label)}</span>
+        `).join('')}</div>` : ''}
+      </div>
+    `).join('')}
+  </div>`;
+}
+function zoneOptionCardsHtml(options) {
+  const allies = (state.actors || []).filter(actor => actor.faction === 'ally' && !actor.defeated);
+  return options.map(option => {
+    const check = option.check || null;
+    const actorSelect = check ? `<label>Wykonuje:
+      <select id="zone-option-actor-${esc(option.id)}">
+        ${allies.map(actor => `<option value="${esc(actor.id)}">${esc(actor.name)}</option>`).join('')}
+      </select>
+    </label>` : '';
+    const checkText = check
+      ? `${abilityLabel(check.ability)}${check.skill ? ` (${skillLabel(check.skill)})` : ''}, ST ${esc(check.dc)}`
+      : 'Bez rzutu';
+    return `<div class="interaction-goal-card zone-option-card${option.completed ? ' completed' : ''}">
+      <b>${esc(option.label)}</b>
+      <span>${esc(option.description || option.message || '')}</span>
+      <small>${option.completed ? 'Ukończone' : esc(checkText)}</small>
+      ${option.completed ? '' : `${actorSelect}<button type="button" onclick="selectZoneOption('${esc(option.id)}', ${check ? 'true' : 'false'})">Wykonaj</button>`}
+    </div>`;
+  }).join('');
+}
+function continuationPanelHtml(continuation) {
+  if (!continuationPanelOpen || !continuation) return '';
+  const travel = continuation.travel || {};
+  const allies = (state.actors || []).filter(actor => actor.faction === 'ally' && !actor.defeated);
+  if (!selectedContinuationNavigatorId && allies.length) selectedContinuationNavigatorId = String(allies[0].id);
+  const navigator = allies.find(actor => String(actor.id) === String(selectedContinuationNavigatorId)) || allies[0] || null;
+  const baseMinutes = Number(continuation.travel_minutes || 0);
+  const paceMinutes = selectedContinuationPace === 'fast'
+    ? Math.ceil(baseMinutes * 3 / 4)
+    : selectedContinuationPace === 'slow'
+      ? Math.ceil(baseMinutes * 4 / 3)
+      : baseMinutes;
+  const worstMinutes = paceMinutes + Number(travel.navigation_failure_delay_minutes || 0);
+  const forcedCount = Math.max(0, Math.ceil((worstMinutes - Number(travel.safe_travel_minutes || 480)) / 60));
+  const forcedInputs = forcedCount ? allies.map(actor => `
+    <div class="status-item"><b>${esc(actor.name)} — wymuszony marsz</b>
+      ${Array.from({length: forcedCount}, (_unused, index) => `
+        <label>Godzina ${index + 1}, Constitution save ST ${11 + index}:
+          <input id="forced-${esc(actor.id)}-${index}-1" type="number" min="1" max="20" value="10">
+          ${Number(actor.exhaustion_level || 0) >= 1 ? `<input id="forced-${esc(actor.id)}-${index}-2" type="number" min="1" max="20" value="10" aria-label="Drugi rzut z utrudnienia">` : ''}
+        </label>
+      `).join('')}
+    </div>
+  `).join('') : '';
+  return `<div class="goal-action-composer continuation-composer">
+    <h3>${esc(continuation.label)}</h3>
+    <p>${esc(continuation.description || '')}</p>
+    <div class="interaction-participants">
+      <label>Tempo:
+        <select id="continuation-pace" onchange="selectedContinuationPace = this.value; render()">
+          <option value="fast"${selectedContinuationPace === 'fast' ? ' selected' : ''}>Szybkie — ${Math.ceil(baseMinutes * 3 / 4)} min, Perception −5</option>
+          <option value="normal"${selectedContinuationPace === 'normal' ? ' selected' : ''}>Normalne — ${baseMinutes} min</option>
+          <option value="slow"${selectedContinuationPace === 'slow' ? ' selected' : ''}>Wolne — ${Math.ceil(baseMinutes * 4 / 3)} min, umożliwia Stealth</option>
+        </select>
+      </label>
+      ${travel.navigation_dc !== null && travel.navigation_dc !== undefined ? `
+        <label>Nawigator:
+          <select id="continuation-navigator" onchange="selectedContinuationNavigatorId = this.value; render()">
+            ${allies.map(actor => `<option value="${esc(actor.id)}"${navigator && String(actor.id) === String(navigator.id) ? ' selected' : ''}>${esc(actor.name)}</option>`).join('')}
+          </select>
+        </label>
+        <label>Naturalny wynik d20 — ${esc(skillLabel(travel.navigation_skill || 'survival'))}, ST ${esc(travel.navigation_dc)}:
+          <input id="continuation-navigation-roll-1" type="number" min="1" max="20" value="10">
+        </label>
+        ${navigator && Number(navigator.exhaustion_level || 0) >= 1 ? `<label>Drugi d20 z utrudnienia:
+          <input id="continuation-navigation-roll-2" type="number" min="1" max="20" value="10">
+        </label>` : ''}
+        <p class="muted">Nieudana nawigacja nie zatrzyma wyprawy, ale doda ${esc(travel.navigation_failure_delay_minutes || 0)} min opóźnienia.</p>
+      ` : ''}
+      ${forcedInputs ? `<h4>Wymuszony marsz</h4>${forcedInputs}` : ''}
+    </div>
+    <div class="row">
+      <button type="button" onclick="submitContinuation()">Wyrusz i zapisz scenę</button>
+      <button type="button" class="secondary" onclick="closeContinuationPanel()">Anuluj</button>
+    </div>
+  </div>`;
+}
 function interactionGoalsHtml() {
   if (state.trade) return tradePanelHtml();
+  if (downtimePanelOpen && state.downtime) return downtimePanelHtml();
   const goals = currentInteractionGoals();
   const pointCards = currentInteractionPointCards();
-  if ((!goals.length && !pointCards.length) || state.pending || (state.required_rolls || []).length || resultAck) return '';
+  const hasDowntime = Boolean(state.downtime && !state.active_point);
+  const zoneOptions = !state.active_point ? ((state.flow && state.flow.zone_options) || []) : [];
+  const continuation = !state.active_point && state.flow ? state.flow.continuation : null;
+  const hasContinuation = Boolean(continuation && continuation.available);
+  if ((!goals.length && !pointCards.length && !hasDowntime && !zoneOptions.length && !hasContinuation) || state.pending || (state.required_rolls || []).length || resultAck) return '';
   const selected = goals.find(goal => goal.id === selectedInteractionGoalId) || null;
+  const socialSkillLabels = {
+    persuasion: 'Perswazja',
+    deception: 'Oszustwo',
+    intimidation: 'Zastraszanie',
+  };
+  const socialSkillOptions = selected ? (selected.social_skill_options || []) : [];
   return `
+    ${objectiveProgressHtml()}
     <div class="interaction-goals-head">
       <b>${selected ? 'Wybrany cel' : 'Co chcecie osiągnąć?'}</b>
       <span>${selected ? esc(selected.followup_prompt) : 'Wybierzcie kierunek. Sposób nadal należy do was.'}</span>
@@ -1195,6 +1498,21 @@ function interactionGoalsHtml() {
           <small>${point.has_merchant ? 'Handel' : 'Interakcja z NPC'}</small>
         </button>
       `).join('')}
+      ${hasDowntime ? `
+        <button type="button" class="interaction-goal-card" onclick="openDowntimePanel()">
+          <b>Rzemiosło w downtime</b>
+          <span>Wykorzystaj warsztat, materiały i pełne dni pracy, aby stworzyć trwały przedmiot.</span>
+          <small>${esc((state.downtime.recipes || []).map(recipe => recipe.workshop_label).join(' · '))}</small>
+        </button>
+      ` : ''}
+      ${zoneOptionCardsHtml(zoneOptions)}
+      ${hasContinuation ? `
+        <button type="button" class="interaction-goal-card continuation-card" onclick="openContinuationPanel()">
+          <b>${esc(continuation.label)}</b>
+          <span>${esc(continuation.description || 'Wyruszcie do kolejnej sceny.')}</span>
+          <small>Dalsza podróż · ${esc(continuation.travel_minutes || 0)} min w normalnym tempie</small>
+        </button>
+      ` : ''}
       ${goals.map(goal => `
         <button type="button" class="interaction-goal-card${goal.id === selectedInteractionGoalId ? ' selected' : ''}"
           onclick="selectInteractionGoal('${esc(goal.id)}')">
@@ -1205,7 +1523,17 @@ function interactionGoalsHtml() {
         </button>
       `).join('')}
     </div>
+    ${continuationPanelHtml(continuation)}
     ${selected ? interactionParticipantPickerHtml(selected) : ''}
+    ${selected && socialSkillOptions.length ? `<div class="interaction-participants">
+      <b>Jak chcecie wpłynąć na NPC?</b>
+      <span>Ten wybór należy do graczy i ustala skill ewentualnego testu Charisma.</span>
+      <label>Podejście społeczne:
+        <select id="social-skill" onchange="selectedSocialSkill = this.value">
+          ${socialSkillOptions.map(skill => `<option value="${esc(skill)}"${skill === selectedSocialSkill ? ' selected' : ''}>${esc(socialSkillLabels[skill] || skill)}</option>`).join('')}
+        </select>
+      </label>
+    </div>` : ''}
     ${selected ? `<div class="goal-action-composer">
       <label for="goal-action"><b>Jak to robicie?</b><span>${esc(selected.followup_prompt || 'Opiszcie metodę działania.')}</span></label>
       <textarea id="goal-action" placeholder="${esc(selected.followup_prompt || 'Opiszcie metodę działania...')}"></textarea>
@@ -1224,6 +1552,79 @@ function tradeMoneyLabel(totalCp) {
     .filter(entry => entry[0] > 0)
     .map(entry => `${entry[0]} ${entry[1]}`)
     .join(', ') || '0 cp';
+}
+function activeDowntimeActor(downtime) {
+  const actors = downtime.actors || [];
+  if (!actors.some(actor => String(actor.id) === String(selectedDowntimeActorId))) {
+    selectedDowntimeActorId = actors.length ? String(actors[0].id) : '';
+  }
+  return actors.find(actor => String(actor.id) === String(selectedDowntimeActorId)) || null;
+}
+function downtimePanelHtml() {
+  const downtime = state.downtime || {};
+  const actor = activeDowntimeActor(downtime);
+  if (!actor) return '<p>Brak postaci zdolnej do pracy.</p>';
+  const actorOptions = (downtime.actors || []).map(candidate => `
+    <option value="${esc(candidate.id)}"${String(candidate.id) === String(actor.id) ? ' selected' : ''}>${esc(candidate.name)}</option>
+  `).join('');
+  const recipes = (downtime.recipes || []).map(recipe => {
+    const availability = (recipe.availability || []).find(
+      entry => String(entry.actor_id) === String(actor.id)
+    ) || {available: false, reason: 'Ta postać nie może wykonać receptury.'};
+    return `
+      <div class="status-item">
+        <b>${esc(recipe.label)}</b>
+        <span>${esc(recipe.description || (recipe.product || {}).description || '')}</span>
+        <span><b>Rezultat:</b> ${esc((recipe.product || {}).name)} ×${esc((recipe.product || {}).quantity)}</span>
+        <span><b>Materiały:</b> ${esc(tradeMoneyLabel(recipe.material_cost_cp))} · <b>praca:</b> ${esc(recipe.work_days)} dzień (${esc(recipe.time_cost_minutes / 60)} godz.)</span>
+        <span><b>Warsztat:</b> ${esc(recipe.workshop_label)} · <b>biegłość i narzędzia:</b> ${esc(recipe.required_tool_id)}</span>
+        ${availability.available ? '' : `<span class="muted">${esc(availability.reason)}</span>`}
+        <button type="button" onclick="completeDowntimeCrafting('${esc(recipe.id)}')"
+          ${availability.available ? '' : 'disabled'}>Rozpocznij i ukończ pracę</button>
+      </div>
+    `;
+  }).join('') || '<p class="muted">Brak dostępnych receptur.</p>';
+  return `
+    <div class="trade-panel">
+      <div class="interaction-goals-head">
+        <b>Rzemiosło w downtime</b>
+        <span>Praca zużywa materiały, przesuwa wspólny zegar i daje trwały przedmiot.</span>
+      </div>
+      <label>Pracująca postać:
+        <select onchange="selectDowntimeActor(this.value)">${actorOptions}</select>
+      </label>
+      <span><b>Portfel:</b> ${esc(tradeMoneyLabel((actor.currency || {}).total_cp))}</span>
+      <div class="status-list">${recipes}</div>
+      <button type="button" class="secondary" onclick="closeDowntimePanel()">Wróć</button>
+    </div>
+  `;
+}
+function openDowntimePanel() {
+  downtimePanelOpen = true;
+  document.getElementById('interaction-goals').innerHTML = interactionGoalsHtml();
+}
+function closeDowntimePanel() {
+  downtimePanelOpen = false;
+  document.getElementById('interaction-goals').innerHTML = interactionGoalsHtml();
+}
+function selectDowntimeActor(actorId) {
+  selectedDowntimeActorId = String(actorId || '');
+  document.getElementById('interaction-goals').innerHTML = interactionGoalsHtml();
+}
+function completeDowntimeCrafting(recipeId) {
+  const downtime = state.downtime || {};
+  const actor = activeDowntimeActor(downtime);
+  const recipe = (downtime.recipes || []).find(
+    candidate => String(candidate.id) === String(recipeId)
+  );
+  if (!actor || !recipe) return;
+  const prompt = `${actor.name} wykona: ${(recipe.product || {}).name}. ` +
+    `Koszt materiałów: ${tradeMoneyLabel(recipe.material_cost_cp)}, czas: ${recipe.time_cost_minutes / 60} godz. Kontynuować?`;
+  if (!window.confirm(prompt)) return;
+  api('/api/downtime/crafting/complete', {
+    actor_id: actor.id,
+    recipe_id: recipe.id,
+  }, 'Rozliczam dzień pracy...');
 }
 function activeTradeActor(trade) {
   const actors = trade.actors || [];
@@ -1354,6 +1755,7 @@ function selectInteractionGoal(goalId) {
     selectedInteractionCheckParticipants = goal.participant_mode === 'must'
       ? goal.check_participants
       : null;
+    selectedSocialSkill = (goal.social_skill_options || [])[0] || null;
   }
   selectedInteractionGoalId = goalId;
   const panel = document.getElementById('interaction-goals');
@@ -1365,6 +1767,7 @@ function cancelInteractionGoal() {
   selectedInteractionGoalId = null;
   selectedInteractionCheckParticipants = null;
   selectedInteractionActorIds = [];
+  selectedSocialSkill = null;
   const panel = document.getElementById('interaction-goals');
   if (panel) panel.innerHTML = interactionGoalsHtml();
 }
@@ -1608,6 +2011,15 @@ function pendingHtml(pending) {
       if (decisionCorrectionOpen) lines.push(decisionCorrectionHtml(option, pending));
     }
   } else if (proposal.action_type) {
+    const actionTypeLabels = {
+      information: 'Zdobycie informacji',
+      commitment: 'Podjęcie zobowiązania',
+      travel: 'Przygotowanie do drogi',
+      social: 'Wpływ społeczny',
+      medical: 'Pomoc medyczna',
+      trade: 'Handel',
+    };
+    const actionTypeLabel = actionTypeLabels[proposal.action_type] || proposal.action_type;
     const attemptBlocked = pending.attempt_plan && !pending.attempt_plan.available;
     if (pending.npc_action_plan) {
       const action = pending.npc_action_plan;
@@ -1646,9 +2058,9 @@ function pendingHtml(pending) {
       }
     } else if (!attemptBlocked && proposal.requires_roll) {
       const skill = proposal.skill ? `/${esc(proposal.skill)}` : '';
-      lines.push(`<p><b>Akcja:</b> ${esc(proposal.action_type)}. Test: ${esc(proposal.ability)}${skill}, ST ${esc(proposal.dc)}.</p>`);
+      lines.push(`<p><b>Rodzaj działania:</b> ${esc(actionTypeLabel)}. Test: ${esc(proposal.ability)}${skill}, ST ${esc(proposal.dc)}.</p>`);
     } else if (!attemptBlocked) {
-      lines.push(`<p><b>Akcja:</b> ${esc(proposal.action_type)}. Bez rzutu.</p>`);
+      lines.push(`<p><b>Rodzaj działania:</b> ${esc(actionTypeLabel)}. Bez rzutu.</p>`);
     }
   }
   return lines.join('') || '<p>MG proponuje interpretację deklaracji.</p>';
@@ -3604,6 +4016,7 @@ function pendingConcentrationCheckHtml(pending) {
     <p>${esc(actor.name || 'Bohater')} utrzymuje koncentrację: ST ${esc(pending.dc)}.</p>
     <div class="row">
       <label>Wynik d20: <input id="concentration-check-roll" type="number" min="1" max="20" value="10"></label>
+      ${pending.roll_mode && pending.roll_mode !== 'normal' ? '<label>Drugi wynik d20: <input id="concentration-check-roll-2" type="number" min="1" max="20" value="10"></label>' : ''}
       <button onclick="submitConcentrationCheck()">Zapisz rzut</button>
     </div>
     <p class="muted">Premia CON: ${esc(signedNumber(modifier))}${components.length ? ` (${components.map(item => `${esc(item.label)} ${esc(signedNumber(item.value))}`).join(', ')})` : ''}. Sukces utrzymuje efekt, porażka go kończy.</p>
@@ -4191,7 +4604,11 @@ function updateActivePanel() {
   document.getElementById('scene-description-card').hidden = interactionStage || !document.getElementById('scene-description').innerHTML.trim();
   document.getElementById('chat-composer').hidden = stage !== 'location_active' || hasPendingDecision || hasNpcTransition || hasRolls || hasResult || Boolean(state.trade);
   const leaveButton = document.getElementById('leave-interaction-button');
-  leaveButton.textContent = stage === 'interaction_result' ? 'Zakończ interakcję' : 'Opuść interakcję';
+  leaveButton.textContent = stage === 'interaction_result'
+    ? 'Zakończ interakcję'
+    : state.active_point
+      ? 'Opuść interakcję'
+      : 'Menu eksploracji';
   leaveButton.disabled = hasPendingDecision || hasNpcTransition || hasRolls || busy;
   const restButton = document.getElementById('short-rest-button');
   if (restButton) {
@@ -4230,6 +4647,11 @@ async function leaveChatInstance() {
   }
   if ((state.pending && state.pending.stage) || (state.required_rolls || []).length) return;
   chatInstanceOpen = false;
+  const leaveResult = await api('/api/point/leave', {}, 'Wracam do lokacji...');
+  if (leaveResult && !leaveResult.ok) {
+    chatInstanceOpen = true;
+    return;
+  }
   await api('/api/exploration/board-selection', {enabled: true}, 'Pokazuję dostępne pola...');
 }
 async function sendAction() {
@@ -4274,6 +4696,9 @@ async function sendGoalAction() {
       participant_actor_ids: selectedGoal && selectedCheckParticipants === 'whole_party'
         ? []
         : selectedInteractionActorIds,
+      selected_social_skill: (selectedGoal.social_skill_options || []).length
+        ? selectedSocialSkill
+        : null,
     },
     'Czekam na odpowiedź MG...'
   );
@@ -4373,7 +4798,80 @@ function sendRolls() {
   api('/api/rolls', {rolls}, 'Rozstrzygam wynik rzutu...');
 }
 function resetSession() { api('/api/reset', {}, 'Resetuję scenę...'); }
+function startScenarioHandoff() {
+  api('/api/scenario/handoff/start', {}, 'Przenoszę drużynę i przygotowuję kolejną mapę...');
+}
+function openContinuationPanel() {
+  continuationPanelOpen = true;
+  chatInstanceOpen = true;
+  setSidePanelOpen(false);
+  render();
+  window.requestAnimationFrame(() => document.querySelector('.continuation-composer')?.scrollIntoView({behavior: 'smooth', block: 'start'}));
+}
+function closeContinuationPanel() {
+  continuationPanelOpen = false;
+  render();
+}
+function requiredD20Value(id) {
+  const input = document.getElementById(id);
+  const value = Number(input && input.value);
+  if (!Number.isInteger(value) || value < 1 || value > 20) {
+    throw new Error('Każdy naturalny wynik d20 musi być liczbą od 1 do 20.');
+  }
+  return value;
+}
+function submitContinuation() {
+  const continuation = state.flow && state.flow.continuation;
+  if (!continuation || !continuation.available) return;
+  const travel = continuation.travel || {};
+  const pace = selectedContinuationPace;
+  const allies = (state.actors || []).filter(actor => actor.faction === 'ally' && !actor.defeated);
+  const navigator = allies.find(actor => String(actor.id) === String(selectedContinuationNavigatorId)) || null;
+  try {
+    let navigationRoll = null;
+    if (travel.navigation_dc !== null && travel.navigation_dc !== undefined) {
+      if (!navigator) throw new Error('Wybierz nawigatora.');
+      navigationRoll = {natural_roll: requiredD20Value('continuation-navigation-roll-1')};
+      if (Number(navigator.exhaustion_level || 0) >= 1) {
+        navigationRoll.natural_roll_2 = requiredD20Value('continuation-navigation-roll-2');
+      }
+    }
+    const baseMinutes = Number(continuation.travel_minutes || 0);
+    const paceMinutes = pace === 'fast'
+      ? Math.ceil(baseMinutes * 3 / 4)
+      : pace === 'slow'
+        ? Math.ceil(baseMinutes * 4 / 3)
+        : baseMinutes;
+    const worstMinutes = paceMinutes + Number(travel.navigation_failure_delay_minutes || 0);
+    const forcedCount = Math.max(0, Math.ceil((worstMinutes - Number(travel.safe_travel_minutes || 480)) / 60));
+    const forcedMarchRolls = {};
+    allies.forEach(actor => {
+      forcedMarchRolls[actor.id] = Array.from({length: forcedCount}, (_unused, index) => {
+        const roll = {natural_roll: requiredD20Value(`forced-${actor.id}-${index}-1`)};
+        if (Number(actor.exhaustion_level || 0) >= 1) {
+          roll.natural_roll_2 = requiredD20Value(`forced-${actor.id}-${index}-2`);
+        }
+        return roll;
+      });
+    });
+    continuationPanelOpen = false;
+    api('/api/scenario/continue', {
+      pace,
+      navigator_actor_id: navigator ? navigator.id : null,
+      navigation_roll: navigationRoll,
+      forced_march_rolls: forcedMarchRolls,
+    }, 'Rozstrzygam podróż i przygotowuję kolejny scenariusz...');
+  } catch (error) {
+    window.alert(error.message);
+  }
+}
 function finishScenario() {
+  const continuation = state.flow && state.flow.continuation;
+  if (continuation) {
+    if (!continuation.available) return;
+    openContinuationPanel();
+    return;
+  }
   if (!window.confirm('Zakończyć scenariusz i wygasić efekty trwające do jego końca?')) return;
   api('/api/scenario/finish', {}, 'Kończę scenariusz...');
 }
@@ -4568,7 +5066,11 @@ function confirmConcentrationAction() {
 function cancelConcentrationAction() { api('/api/combat/concentration/cancel', {}, 'Anuluję czar koncentracyjny...'); }
 function submitConcentrationCheck() {
   const roll = document.getElementById('concentration-check-roll');
-  api('/api/combat/concentration-check', {natural_roll: Number(roll ? roll.value : 0)}, 'Rozstrzygam koncentrację...');
+  const roll2 = document.getElementById('concentration-check-roll-2');
+  api('/api/combat/concentration-check', {
+    natural_roll: Number(roll ? roll.value : 0),
+    natural_roll_2: roll2 ? Number(roll2.value || 0) : null,
+  }, 'Rozstrzygam koncentrację...');
 }
 function submitDeathSave() {
   const roll = document.getElementById('combat-death-save-roll');

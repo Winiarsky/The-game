@@ -4,7 +4,11 @@ from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import Sequence
 
-from dnd_board_game.actors import Actor
+from dnd_board_game.actors import (
+    Actor,
+    ExhaustionRollKind,
+    apply_exhaustion_to_roll_request,
+)
 from dnd_board_game.inventory import effective_speed_feet
 from dnd_board_game.rules import (
     D20RollInput,
@@ -288,6 +292,11 @@ def resolve_condition_save(
         states,
         actor,
         saving_throw_ability=condition_state.save_ability,
+    )
+    request = apply_exhaustion_to_roll_request(
+        actor,
+        request,
+        ExhaustionRollKind.SAVING_THROW,
     )
     if request.mode != RollMode.NORMAL and natural_roll_2 is None:
         raise ValueError("Condition save with advantage or disadvantage requires two d20 rolls.")
@@ -573,16 +582,24 @@ def condition_roll_request(
 
 
 def _condition_expires_on(state: ConditionState, event: EffectEvent) -> bool:
-    if state.save_timing is not None:
-        return False
-    if state.duration == EffectDuration.UNTIL_ENCOUNTER_END:
-        return event.event_type == EffectEventType.ENCOUNTER_ENDED
-    if state.duration == EffectDuration.UNTIL_SCENARIO_END:
-        return event.event_type == EffectEventType.SCENARIO_ENDED
-    if state.duration == EffectDuration.UNTIL_LONG_REST:
-        return event.event_type == EffectEventType.LONG_REST_COMPLETED
+    if event.event_type == EffectEventType.SCENARIO_ENDED:
+        return state.duration != EffectDuration.PERMANENT
+    if event.event_type == EffectEventType.LONG_REST_COMPLETED:
+        return state.duration != EffectDuration.PERMANENT
+    if event.event_type == EffectEventType.ENCOUNTER_ENDED:
+        return state.duration in {
+            EffectDuration.UNTIL_TURN_START,
+            EffectDuration.UNTIL_TURN_END,
+            EffectDuration.UNTIL_ROUND_END,
+            EffectDuration.UNTIL_NEXT_ATTACK,
+            EffectDuration.WHILE_AT_POSITION,
+            EffectDuration.CONCENTRATION,
+            EffectDuration.UNTIL_ENCOUNTER_END,
+        }
     if state.duration == EffectDuration.UNTIL_SHORT_REST:
         return event.event_type == EffectEventType.SHORT_REST_COMPLETED
+    if state.save_timing is not None:
+        return False
     if state.duration == EffectDuration.UNTIL_TURN_START:
         return (
             event.event_type == EffectEventType.TURN_START

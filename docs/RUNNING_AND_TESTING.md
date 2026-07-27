@@ -1,8 +1,33 @@
 # Uruchamianie I Testowanie
 
-Ten dokument opisuje docelowy sposób uruchamiania nowej aplikacji oraz testowania jej bez fizycznej planszy i z fizyczną planszą.
+Ten dokument opisuje sposób uruchamiania aktualnej aplikacji oraz testowania jej
+bez fizycznej planszy, z symulatorem i z fizyczną planszą. Głównym runtime'em MVP
+jest lokalne web UI `dnd_board_game.runtime.exploration_ui`; starsze terminalowe
+dema poniżej pozostają małymi narzędziami diagnostycznymi dla konkretnych warstw.
 
-Na obecnym etapie aplikacja ma pierwszy runtime debugowy dla ruchu. Nie jest to jeszcze docelowe UI gry.
+## Główne Web UI MVP
+
+Bez planszy i bez LLM:
+
+```bash
+PYTHONPATH=src python -m dnd_board_game.runtime.exploration_ui \
+  --scenario content/scenarios/abandoned_watchtower.json \
+  --gm-classifier none --board-backend none --port 5200
+```
+
+Z Gemini należy najpierw wczytać `.env`:
+
+```bash
+source .env
+PYTHONPATH=src python -m dnd_board_game.runtime.exploration_ui \
+  --scenario content/scenarios/village_square_mvp.json \
+  --gm-classifier gemini --board-backend none --port 5200
+```
+
+UI jest dostępne pod `http://127.0.0.1:5200`. Obsługuje setup papierowych map,
+eksplorację, NPC, podróż i handoff między scenariuszami, walkę, czary, loot oraz
+zapis sesji. Dla szybkiej diagnostyki można użyć `--debug-point`,
+`--debug-challenge` albo `--debug-courtyard-entry`.
 
 ## Tryby Uruchamiania
 
@@ -301,10 +326,14 @@ Bez planszy:
 PYTHONPATH=src python -m dnd_board_game.runtime.demo_exploration_scene --scenario content/scenarios/abandoned_watchtower.json --board-backend none --gm-classifier gemini --interactive-freeform --freeform-retries 4 --gm-accept ask --session-id abandoned_watchtower_demo --max-steps 6
 ```
 
+Tryb interaktywny pokazuje aktywne cele guarded flow graphu przed opisem metody.
+Przy nieinteraktywnym `--freeform-action` trzeba przekazać jawny `--goal-id`;
+nieaktywny cel jest odrzucany przed wywołaniem LLM.
+
 Deterministyczny smoke test LLM bez wywołania zewnętrznego API:
 
 ```bash
-PYTHONPATH=src python -m dnd_board_game.runtime.demo_exploration_scene --scenario content/scenarios/abandoned_watchtower.json --board-backend none --gm-dry-run --freeform-action "Próbujemy wejść górą przez bramę, używając liny z hakiem." --session-id abandoned_watchtower_dry_run --max-steps 1
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_exploration_scene --scenario content/scenarios/abandoned_watchtower.json --board-backend none --gm-dry-run --goal-id force_entry --freeform-action "Próbujemy wyważyć bramę z całej siły." --session-id abandoned_watchtower_dry_run --max-steps 1
 ```
 
 W symulatorze:
@@ -320,19 +349,19 @@ source .env
 ```
 
 ```bash
-PYTHONPATH=src python -m dnd_board_game.runtime.demo_exploration_scene --scenario content/scenarios/abandoned_watchtower.json --board-backend none --gm-classifier groq --gm-accept yes --freeform-action "Próbujemy wejść górą przez bramę, używając liny z hakiem." --challenge-roll gm_generated=14 --session-id gm_classifier_demo --max-steps 2
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_exploration_scene --scenario content/scenarios/abandoned_watchtower.json --board-backend none --gm-classifier groq --gm-accept yes --goal-id force_entry --freeform-action "Próbujemy wyważyć bramę z całej siły." --challenge-roll gm_generated=14 --session-id gm_classifier_demo --max-steps 2
 ```
 
 Wariant Gemini jest domyślny dla `--freeform-action` i `--interactive-freeform`; używa `GEMINI_API_KEY` i opcjonalnie `GEMINI_MODEL` z `.env`:
 
 ```bash
-PYTHONPATH=src python -m dnd_board_game.runtime.demo_exploration_scene --scenario content/scenarios/abandoned_watchtower.json --board-backend none --gm-accept yes --freeform-action "Próbujemy wejść górą przez bramę, używając liny z hakiem." --challenge-roll gm_generated=14 --session-id gm_classifier_gemini_demo --max-steps 2
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_exploration_scene --scenario content/scenarios/abandoned_watchtower.json --board-backend none --gm-accept yes --goal-id force_entry --freeform-action "Próbujemy wyważyć bramę z całej siły." --challenge-roll gm_generated=14 --session-id gm_classifier_gemini_demo --max-steps 2
 ```
 
 Dry-run bez rzutu i bez zmiany stanu:
 
 ```bash
-PYTHONPATH=src python -m dnd_board_game.runtime.demo_exploration_scene --scenario content/scenarios/abandoned_watchtower.json --board-backend none --gm-dry-run --freeform-action "Chcemy zrobić dźwignię z deski i kamienia, żeby podważyć mechanizm bramy." --session-id gm_classifier_dry_run --max-steps 2
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_exploration_scene --scenario content/scenarios/abandoned_watchtower.json --board-backend none --gm-dry-run --goal-id force_entry --freeform-action "Chcemy zrobić dźwignię z deski i kamienia, żeby podważyć mechanizm bramy." --session-id gm_classifier_dry_run --max-steps 2
 ```
 
 Interaktywny retry po odrzuceniu:
@@ -404,7 +433,13 @@ Tryb eksploracji:
 - używa wspólnego pionka drużyny,
 - pokazuje dostępne lokacje przez punkty główne bez dodatkowego potwierdzania setupu stref,
 - jawne elementy fizyczne z `requires_setup` są rozstawiane osobno i potwierdzane kliknięciem,
-- proste opcje informacyjne mogą ustawiać flagi sceny i kończyć objective, np. rozmowa z sołtysem w `village_square_mvp`,
+- autorskie cele NPC mogą ustawiać kolejne etapy zadania; w `village_square_mvp` osobno zdobywa się trop, przyjmuje zadanie i potwierdza gotowość,
+- bieżący cel sceny może pokazywać autorskie kamienie milowe oparte na flagach, dzięki czemu drużyna widzi postęp bez technicznych nazw stanu,
+- opcje bieżącej strefy (`message`, `check`, `search`) są wykonywane bezpośrednio z kart głównego widoku; test wymaga wyboru postaci i fizycznego d20,
+- continuation scenariusza staje się aktywne dopiero po spełnieniu flag zadania i wejściu do wskazanej strefy wyjścia; przed wskazaniem kolejnej sceny zapisuje snapshot źródłowy,
+- aktywne continuation otwiera wbudowany formularz tempa, nawigatora, nawigacji i ewentualnego wymuszonego marszu; ekran końcowy używa nazwy scenariusza zamiast surowego `id` i nie pokazuje lokalnej ścieżki snapshotu,
+- zegar pokazuje porę dnia; przejścia między lokacjami, rozmowy, odpoczynek i dalsza podróż doliczają autorski koszt czasu,
+- szybkie wyjście do strażnicy unika konsekwencji zwłoki, natomiast odpoczynek w karczmie może uruchomić zmierzch i przygotowanie goblinów; handoff zapisuje godzinę przybycia oraz uruchomione progi,
 - domyślnie świecą tylko główne punkty dostępnych lokacji,
 - kliknięcie aktualnej strefy pokazuje kolorowe menu opcji na polach wokół punktu głównego,
 - opcja `Rozejrzyj się po okolicy` dopiero wtedy podświetla całą strefę i pozwala klikać kafle,

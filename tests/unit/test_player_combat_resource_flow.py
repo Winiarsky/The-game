@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from random import Random
 
 import pytest
@@ -372,3 +372,36 @@ def test_successful_concentration_check_keeps_effect() -> None:
     assert transition.active_effects == (effect,)
     assert dict(transition.event_payload)["success"] is True
     assert "koncentracja utrzymana" in transition.message_body
+
+
+def test_exhaustion_gives_concentration_save_disadvantage() -> None:
+    service = PlayerCombatResourceFlowService()
+    cleric = replace(
+        _actor("cleric", Faction.ALLY, Coordinate(0, 0), constitution=12),
+        exhaustion_level=3,
+    )
+    state = _state(cleric)
+    effect = ActiveCombatEffect(
+        id="focus",
+        actor_id="cleric",
+        kind="concentration_attack_bonus",
+        label="Skupienie",
+        object_id="test",
+        value=1,
+        source_actor_id="cleric",
+        target_actor_id="cleric",
+    )
+
+    transition = service.resolve_concentration_check(
+        state=state,
+        active_effects=(effect,),
+        actor_id="cleric",
+        effect_ids=(effect.id,),
+        damage=1,
+        dc=10,
+        natural_roll=20,
+        natural_roll_2=1,
+    )
+
+    assert transition.active_effects == ()
+    assert dict(transition.event_payload)["natural_roll"] == 1

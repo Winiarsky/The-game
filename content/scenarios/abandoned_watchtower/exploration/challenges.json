@@ -460,12 +460,20 @@
                 "damage_type": "bludgeoning"
               },
               "success_message": "Bohater chwyta krawędź i spada znacznie łagodniej.",
-              "failure_message": "Bohater nie odzyskuje równowagi i uderza o twarde podłoże.",
+              "failure_message": "Bohater nie odzyskuje równowagi, uderza o twarde podłoże i rozcina skórę o zabrudzone kolce.",
               "failure_effects": [
                 {
                   "type": "apply_condition",
                   "parameters": {
                     "condition": "prone"
+                  }
+                },
+                {
+                  "type": "apply_condition",
+                  "parameters": {
+                    "condition": "poisoned",
+                    "duration": "until_short_rest",
+                    "source_label": "Zatrute kolce na bramie"
                   }
                 }
               ]

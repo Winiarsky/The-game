@@ -18,6 +18,7 @@ from dnd_board_game.exploration import (
     ExplorationZone,
     NpcAttemptPlan,
     NpcIntentActionPlan,
+    SOCIAL_CHECK_SKILLS,
     SocialInteractionPlan,
     SocialRequestRisk,
     npc_runtime_state_for,
@@ -69,6 +70,7 @@ class NpcInteractionProposal(BaseModel):
     request_risk: SocialRequestRisk | None = None
     target_id: str | None = Field(default=None, max_length=120)
     quantity: int = Field(default=1, ge=1)
+    grounded_response_variant_id: str | None = Field(default=None, max_length=120)
     player_narration: str = Field(default="", max_length=1000)
     npc_response: str = Field(default="", max_length=1000)
     requires_roll: bool = False
@@ -87,7 +89,13 @@ class NpcInteractionProposal(BaseModel):
     revealed_information_ids: tuple[str, ...] = ()
     gm_notes: str = Field(default="", max_length=1000)
 
-    @field_validator("action_type", "ability", "skill", "target_id")
+    @field_validator(
+        "action_type",
+        "ability",
+        "skill",
+        "target_id",
+        "grounded_response_variant_id",
+    )
     @classmethod
     def _lower_optional(cls, value: str | None) -> str | None:
         return value.strip().lower() if value else value
@@ -114,7 +122,17 @@ class NpcInteractionRequest:
     conversation_thread: tuple[GmDeclarationThreadEntry, ...] = ()
     selected_goal_id: str | None = None
     routed_intent_id: str | None = None
+    selected_social_skill: str | None = None
     conversation_only: bool = False
+
+    def __post_init__(self) -> None:
+        if (
+            self.selected_social_skill is not None
+            and self.selected_social_skill not in SOCIAL_CHECK_SKILLS
+        ):
+            raise ValueError(
+                "Selected social skill must be persuasion, deception, or intimidation."
+            )
 
     def to_prompt_payload(self) -> dict[str, Any]:
         npc = self.point.npc_interaction
@@ -130,6 +148,61 @@ class NpcInteractionRequest:
             npc.narrative_style,
             selected_goal,
         )
+        npc_payload = npc.as_payload()
+        if selected_goal is not None:
+            npc_payload["goals"] = [selected_goal.as_payload()]
+        if self.routed_intent_id is not None:
+            # Guarded routes never need the scenario author's private truth or
+            # hidden key-issue definitions. Deterministic code has already
+            # matched key issues before the LLM is called.
+            npc_payload["gm_context"] = ""
+            npc_payload["current_state"] = ""
+            npc_payload["key_issues"] = []
+            permission = npc.policy.intent_permission(self.routed_intent_id)
+            permission_payload = (
+                permission.as_payload()
+                if permission is not None
+                else None
+            )
+            if permission_payload is not None:
+                unlocked_reveal_ids = {
+                    item.id
+                    for item in npc.locked_information
+                    if all(
+                        scene_flag(self.state.flags, flag, False)
+                        for flag in item.reveal_if_flags
+                    )
+                }
+                permission_payload["reveals"] = [
+                    info_id
+                    for info_id in permission.reveals
+                    if info_id in unlocked_reveal_ids
+                ]
+            npc_payload["policy"]["intent_permissions"] = (
+                {
+                    self.routed_intent_id: permission_payload,
+                }
+                if permission_payload is not None
+                else {}
+            )
+            npc_payload["policy"]["allowed_flags"] = []
+            npc_payload["policy"]["allowed_effect_types"] = []
+            if permission is not None:
+                reveal_ids = set(permission.reveals)
+                npc_payload["locked_information"] = [
+                    item
+                    for item in npc_payload["locked_information"]
+                    if item.get("id") in reveal_ids
+                    and all(
+                        scene_flag(self.state.flags, flag, False)
+                        for flag in item.get("reveal_if_flags", ())
+                    )
+                ]
+        grounded_response = (
+            selected_goal.grounded_response
+            if selected_goal is not None
+            else None
+        )
         return {
             "scenario": {"id": self.scenario_id, "name": self.scenario_name},
             "zone": {
@@ -142,7 +215,7 @@ class NpcInteractionRequest:
                 "name": self.point.name,
                 "description": self.point.description,
             },
-            "npc": npc.as_payload(),
+            "npc": npc_payload,
             "npc_runtime_state": (
                 runtime_state.as_payload() if runtime_state is not None else None
             ),
@@ -150,8 +223,52 @@ class NpcInteractionRequest:
             "conversation_thread": [entry.as_payload() for entry in self.conversation_thread],
             "selected_goal": selected_goal.as_payload() if selected_goal is not None else None,
             "routed_intent_id": self.routed_intent_id,
+            "selected_social_skill": self.selected_social_skill,
             "conversation_only": self.conversation_only,
             "effective_narrative_style": narrative_style.as_payload(),
+            "grounding_contract": {
+                "mode": (
+                    "authored_variants"
+                    if grounded_response is not None and grounded_response.variants
+                    else "authored_response"
+                    if grounded_response is not None
+                    else "cosmetic_generation"
+                ),
+                "authored_response": (
+                    grounded_response.as_prompt_payload()
+                    if grounded_response is not None
+                    else None
+                ),
+                "authorized_facts": [
+                    fact
+                    for fact in (
+                        self.zone.description,
+                        self.point.description,
+                        npc.public_description,
+                        (
+                            npc.gm_context
+                            if self.routed_intent_id is None
+                            else ""
+                        ),
+                        (
+                            npc.current_state
+                            if self.routed_intent_id is None
+                            else ""
+                        ),
+                        selected_goal.description
+                        if selected_goal is not None
+                        else "",
+                    )
+                    if fact.strip()
+                ],
+                "forbidden_claims_without_authored_effect": [
+                    "new quest evidence or unseen events",
+                    "a reward, price, debt, or payment",
+                    "buying, selling, spending, receiving, or transferring currency",
+                    "receiving or transferring an item",
+                    "a promise that changes the NPC or world state",
+                ],
+            },
             "player_action": self.player_action,
         }
 
@@ -280,6 +397,7 @@ def build_npc_interaction_request(
     conversation_thread: tuple[GmDeclarationThreadEntry, ...] = (),
     selected_goal_id: str | None = None,
     routed_intent_id: str | None = None,
+    selected_social_skill: str | None = None,
     conversation_only: bool = False,
 ) -> NpcInteractionRequest:
     return NpcInteractionRequest(
@@ -292,6 +410,11 @@ def build_npc_interaction_request(
         conversation_thread=conversation_thread,
         selected_goal_id=selected_goal_id,
         routed_intent_id=routed_intent_id,
+        selected_social_skill=(
+            selected_social_skill.strip().lower()
+            if selected_social_skill is not None
+            else None
+        ),
         conversation_only=conversation_only,
     )
 
@@ -353,17 +476,37 @@ def validate_npc_interaction_proposal(
     elif policy.allowed_actions and proposal.action_type not in policy.allowed_actions:
         raise ValueError(f"NPC action is not allowed here: {proposal.action_type}.")
     social_plan = None
+    if (
+        request.selected_social_skill is not None
+        and (permission is None or not permission.uses_social_reaction)
+    ):
+        raise ValueError(
+            "A player-selected social skill can only be used by a social reaction route."
+        )
     if permission is not None and permission.uses_social_reaction:
         if proposal.request_risk is None:
             raise ValueError(
                 f"NPC intent {proposal.action_type} requires request_risk classification."
             )
+        if (
+            request.selected_social_skill is not None
+            and policy.allowed_skills
+            and request.selected_social_skill not in policy.allowed_skills
+        ):
+            raise ValueError(
+                f"NPC social skill is not allowed here: "
+                f"{request.selected_social_skill}."
+            )
         runtime_state = npc_runtime_state_for(request.state, npc.id)
         attitude = runtime_state.attitude if runtime_state is not None else npc.initial_attitude
         social_plan = plan_social_interaction(attitude, proposal.request_risk)
         if social_plan.requires_roll:
-            social_skill = proposal.skill or "persuasion"
-            if social_skill not in {"persuasion", "deception", "intimidation"}:
+            social_skill = (
+                request.selected_social_skill
+                or proposal.skill
+                or "persuasion"
+            )
+            if social_skill not in SOCIAL_CHECK_SKILLS:
                 raise ValueError(
                     "A social reaction check must use persuasion, deception, or intimidation."
                 )
@@ -455,6 +598,44 @@ def validate_npc_interaction_proposal(
             raise ValueError(
                 f"NPC information {info_id} is still locked by flags: {', '.join(missing_after_success)}."
             )
+    if (
+        proposal.revealed_information_ids
+        and (selected_goal is None or selected_goal.grounded_response is None)
+    ):
+        authorized_information = tuple(
+            known_info[info_id]
+            for info_id in proposal.revealed_information_ids
+        )
+        proposal = proposal.model_copy(
+            update={
+                "player_narration": (
+                    f"{npc.name} zbiera myśli i odpowiada tylko o tym, "
+                    "co zdołał zapamiętać."
+                ),
+                "npc_response": " ".join(
+                    information.text for information in authorized_information
+                ),
+                "success_message": "NPC przekazuje dostępne informacje.",
+                "failure_message": (
+                    "NPC nie jest jeszcze gotowy, by powiedzieć coś więcej."
+                ),
+            }
+        )
+    if selected_goal is not None and selected_goal.grounded_response is not None:
+        grounded = selected_goal.grounded_response
+        selected_variant = grounded.variant(proposal.grounded_response_variant_id)
+        authored = selected_variant or grounded
+        proposal = proposal.model_copy(
+            update={
+                "grounded_response_variant_id": (
+                    selected_variant.id if selected_variant is not None else None
+                ),
+                "player_narration": authored.player_narration,
+                "npc_response": authored.npc_response,
+                "success_message": authored.success_message,
+                "failure_message": authored.failure_message,
+            }
+        )
     return NpcValidatedInteraction(
         proposal=proposal,
         point=request.point,

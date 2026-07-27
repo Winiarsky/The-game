@@ -12,6 +12,7 @@ from dnd_board_game.actors import (
     ActorAura,
     ActorTrigger,
     ActorId,
+    ActorSenseProfile,
     AuraEffectKind,
     AuraTarget,
     TriggerEffectKind,
@@ -36,6 +37,7 @@ from dnd_board_game.combat import (
     AttackSource,
     AttackKind,
     AttackSourceType,
+    attack_source_at_actor_level,
     CombatCondition,
     ConditionSaveTiming,
     DamageComponentSpec,
@@ -58,12 +60,14 @@ from dnd_board_game.combat import (
     SceneInteractionEffect,
     SceneObjective,
     SceneObjectiveCondition,
+    SceneObjectiveMilestone,
     SceneObject,
     SetupVisibility,
     SceneFlags,
 )
 from dnd_board_game.rules import (
     DiceExpression,
+    ability_modifier,
     SpellAccessKind,
     SpellAccessProfile,
     SpellCastingTime,
@@ -110,6 +114,10 @@ from dnd_board_game.exploration import (
     CraftingPolicy,
     CraftingPropertyRequirement,
     CraftingPurpose,
+    DowntimeCraftingRecipe,
+    DowntimePolicy,
+    ContinuationNavigationResult,
+    ContinuationOutcomeKind,
     ExplorationOption,
     ExplorationOptionKind,
     ExplorationPoint,
@@ -123,8 +131,11 @@ from dnd_board_game.exploration import (
     LlmGuidanceFact,
     LlmGuidanceFactKind,
     LlmGuidanceFactVisibility,
+    LightLevel,
     LlmDcTier,
     NarrativeStyle,
+    NpcGroundedResponse,
+    NpcGroundedResponseVariant,
     NpcInteraction,
     NpcKeyIssue,
     NpcAttitude,
@@ -144,15 +155,23 @@ from dnd_board_game.exploration import (
     ObservationFact,
     ObservationEncounterEdge,
     PartyPosition,
+    PaperMap,
     SceneMode,
     SceneFixture,
     FixtureActionPolicy,
+    FixtureKind,
     FixtureOperation,
     RestSafety,
+    ScenarioClockEvent,
+    ScenarioClockPolicy,
+    ScenarioContinuation,
+    ScenarioContinuationOutcome,
+    TravelPolicy,
     ShortRestPolicy,
     TemporaryItemTemplate,
     EncounterTriggerCondition,
     mechanic_tool,
+    validate_exploration_effect,
     validate_policy_exploration_effect,
 )
 from dnd_board_game.hardware import LedColor
@@ -264,6 +283,7 @@ class ScenarioAttackDefinition:
     thrown: bool = False
     action_cost: ActionEconomyCost = ActionEconomyCost.ACTION
     upcast_damage_dice_per_level: int = 0
+    cantrip_damage_dice_per_tier: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -275,6 +295,7 @@ class ScenarioHealingDefinition:
     healing_fixed: int | None
     healing_die_sides: int | None
     healing_modifier: int
+    ability: str | None = None
     spell_level: int = 0
     casting_kind: SpellCastingKind = SpellCastingKind.NONE
     prepared: bool = True
@@ -336,10 +357,12 @@ class ScenarioActorDefinition:
     spell_access: tuple[SpellAccessProfile, ...]
     hit_dice: tuple[HitDicePool, ...]
     resource_pools: tuple[ActorResourcePool, ...]
+    level: int
     proficiency_bonus: int
     proficiencies: ProficiencyProfile
     uses_death_saves: bool
     damage_affinities: DamageAffinityProfile
+    senses: ActorSenseProfile
     attacks: tuple[ScenarioAttackDefinition, ...]
     attacks_per_action: int = 1
     multiattack: tuple[str, ...] = ()
@@ -390,6 +413,7 @@ class ScenarioObjectiveDefinition:
     target_id: str | None = None
     flag_key: str | None = None
     flag_value: object = True
+    milestones: tuple[SceneObjectiveMilestone, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -414,9 +438,12 @@ class ScenarioDefinition:
     exploration_flows: tuple[ExplorationFlowGraph, ...] = ()
     exploration_traps: tuple[ExplorationTrap, ...] = ()
     exploration_merchants: tuple[MerchantState, ...] = ()
+    exploration_clock_policy: ScenarioClockPolicy = ScenarioClockPolicy()
+    exploration_continuation: ScenarioContinuation | None = None
     party_start_zone_id: str | None = None
     llm_context: LlmContext = LlmContext()
     crafting_policy: CraftingPolicy = CraftingPolicy()
+    downtime_policy: DowntimePolicy = DowntimePolicy()
 
 
 @dataclass(frozen=True, slots=True)
@@ -463,10 +490,13 @@ class LoadedExploration:
     flows: tuple[ExplorationFlowGraph, ...] = ()
     traps: tuple[ExplorationTrap, ...] = ()
     merchants: tuple[MerchantState, ...] = ()
+    clock_policy: ScenarioClockPolicy = ScenarioClockPolicy()
+    continuation: ScenarioContinuation | None = None
     environment: tuple[EnvironmentSetupEntry, ...] = ()
     llm_context: LlmContext = LlmContext()
     objectives: tuple[SceneObjective, ...] = ()
     crafting_policy: CraftingPolicy = CraftingPolicy()
+    downtime_policy: DowntimePolicy = DowntimePolicy()
 
 
 def load_scenario(path: str | Path) -> LoadedScenario:
@@ -527,7 +557,10 @@ def build_encounter_from_scenario(loaded: LoadedScenario) -> LoadedEncounter:
             if all(candidate.id != source.id for candidate in by_id):
                 by_id.append(source)
     healing_sources_by_actor = {
-        ActorId(actor.id): tuple(_healing_source_from_definition(source) for source in actor.healing_sources)
+        ActorId(actor.id): tuple(
+            _healing_source_from_definition(source, actors_by_id[actor.id])
+            for source in actor.healing_sources
+        )
         for actor in definition.actors
         if actor.healing_sources
     }
@@ -574,6 +607,7 @@ def build_encounter_from_scenario(loaded: LoadedScenario) -> LoadedEncounter:
             target_id=objective.target_id,
             flag_key=objective.flag_key,
             flag_value=objective.flag_value,
+            milestones=objective.milestones,
         )
         for objective in definition.objectives
     )
@@ -615,6 +649,7 @@ def build_exploration_from_scenario(loaded: LoadedScenario) -> LoadedExploration
             target_id=objective.target_id,
             flag_key=objective.flag_key,
             flag_value=objective.flag_value,
+            milestones=objective.milestones,
         )
         for objective in definition.objectives
     )
@@ -635,6 +670,8 @@ def build_exploration_from_scenario(loaded: LoadedScenario) -> LoadedExploration
         flows=definition.exploration_flows,
         traps=definition.exploration_traps,
         merchants=definition.exploration_merchants,
+        clock_policy=definition.exploration_clock_policy,
+        continuation=definition.exploration_continuation,
         environment=tuple(
             EnvironmentSetupEntry(
                 id=entry.id,
@@ -650,6 +687,7 @@ def build_exploration_from_scenario(loaded: LoadedScenario) -> LoadedExploration
         llm_context=definition.llm_context,
         objectives=objectives,
         crafting_policy=definition.crafting_policy,
+        downtime_policy=definition.downtime_policy,
     )
 
 
@@ -680,6 +718,11 @@ def _parse_scenario(data: dict[str, Any], scenario_path: Path) -> ScenarioDefini
         raise ValueError("scenario.exploration must be an object.")
     property_catalog = _load_item_property_catalog(scenario_path)
     crafting_policy = _load_crafting_policy(scenario_path, property_catalog)
+    downtime_policy = _parse_downtime_policy(
+        exploration_data.get("downtime"),
+        scenario_path,
+        property_catalog,
+    )
     scene_mode = _enum_value(SceneMode, str(data.get("scene_mode", SceneMode.ENCOUNTER.value)), "scenario.scene_mode")
     return ScenarioDefinition(
         content_header=content_header,
@@ -726,9 +769,17 @@ def _parse_scenario(data: dict[str, Any], scenario_path: Path) -> ScenarioDefini
             _parse_merchant(entry, scenario_path, property_catalog)
             for entry in exploration_data.get("merchants", [])
         ),
+        exploration_clock_policy=_parse_scenario_clock(
+            exploration_data.get("clock"),
+        ),
+        exploration_continuation=_parse_scenario_continuation(
+            exploration_data.get("continuation"),
+            scenario_path,
+        ),
         party_start_zone_id=str(exploration_data["party_start_zone"]) if "party_start_zone" in exploration_data else None,
         llm_context=_parse_llm_context(data.get("llm_context", {}), "scenario.llm_context"),
         crafting_policy=crafting_policy,
+        downtime_policy=downtime_policy,
     )
 
 
@@ -917,6 +968,7 @@ def _parse_actor(
         raise ValueError(f"actor {actor_id}.multiattack is only supported for monsters.")
     proficiencies = _parse_proficiency_profile(merged, actor_id)
     damage_affinities = _parse_damage_affinities(merged, actor_id)
+    senses = _parse_actor_senses(merged.get("senses"), actor_id)
     condition_immunities_data = merged.get("condition_immunities", [])
     if not isinstance(condition_immunities_data, list | tuple):
         raise ValueError(f"actor {actor_id}.condition_immunities must be a list.")
@@ -996,10 +1048,12 @@ def _parse_actor(
         ),
         hit_dice=_parse_hit_dice(merged.get("hit_dice", {}), actor_id),
         resource_pools=resource_pools,
+        level=int(merged.get("level", 1)),
         proficiency_bonus=int(merged.get("proficiency_bonus", 2)),
         proficiencies=proficiencies,
         uses_death_saves=bool(merged.get("uses_death_saves", actor_kind == "player_character")),
         damage_affinities=damage_affinities,
+        senses=senses,
         attacks=attacks,
         attacks_per_action=attacks_per_action,
         multiattack=multiattack,
@@ -1061,6 +1115,19 @@ def _parse_damage_affinities(data: dict[str, Any], actor_id: str) -> DamageAffin
         resistances=values("damage_resistances"),
         immunities=values("damage_immunities"),
         vulnerabilities=values("damage_vulnerabilities"),
+    )
+
+
+def _parse_actor_senses(data: Any, actor_id: str) -> ActorSenseProfile:
+    if data is None:
+        return ActorSenseProfile()
+    if not isinstance(data, dict):
+        raise ValueError(f"actor {actor_id}.senses must be an object.")
+    return ActorSenseProfile(
+        darkvision_feet=int(data.get("darkvision_feet", 0)),
+        blindsight_feet=int(data.get("blindsight_feet", 0)),
+        tremorsense_feet=int(data.get("tremorsense_feet", 0)),
+        truesight_feet=int(data.get("truesight_feet", 0)),
     )
 
 
@@ -1196,6 +1263,9 @@ def _parse_spell_definition(data: dict[str, Any], spell_ref: str) -> SpellDefini
                 targets_per_slot_level=int(
                     scaling_data.get("targets_per_slot_level", 0)
                 ),
+                cantrip_damage_dice_per_tier=int(
+                    scaling_data.get("cantrip_damage_dice_per_tier", 0)
+                ),
             )
             if scaling_data is not None
             else None
@@ -1245,6 +1315,10 @@ def _spell_effect_payload(
         effect.setdefault(
             "upcast_targets_per_level",
             spell.scaling.targets_per_slot_level,
+        )
+        effect.setdefault(
+            "cantrip_damage_dice_per_tier",
+            spell.scaling.cantrip_damage_dice_per_tier,
         )
     effect.setdefault(
         "action_cost",
@@ -2166,6 +2240,9 @@ def _parse_attack(data: dict[str, Any], actor_id: str) -> ScenarioAttackDefiniti
         upcast_damage_dice_per_level=int(
             data.get("upcast_damage_dice_per_level", 0)
         ),
+        cantrip_damage_dice_per_tier=int(
+            data.get("cantrip_damage_dice_per_tier", 0)
+        ),
     )
 
 
@@ -2185,6 +2262,11 @@ def _parse_healing_source(data: dict[str, Any], actor_id: str) -> ScenarioHealin
         if healing.get("dice") is not None
         else None
     )
+    ability = str(data["ability"]) if data.get("ability") is not None else None
+    if ability is not None and ability not in ABILITY_NAMES:
+        raise ValueError(
+            f"healing source {source_id}.ability must be a D&D ability, got {ability!r}."
+        )
     return ScenarioHealingDefinition(
         id=source_id,
         name=str(_required(data, "name", f"healing source {source_id}")),
@@ -2193,6 +2275,7 @@ def _parse_healing_source(data: dict[str, Any], actor_id: str) -> ScenarioHealin
         healing_fixed=_parse_damage_fixed(healing),
         healing_die_sides=_parse_damage_die(healing),
         healing_modifier=int(healing.get("modifier", 0)),
+        ability=ability,
         spell_level=spell_level,
         casting_kind=_parse_spell_casting_kind(
             data.get("casting_kind"),
@@ -2499,7 +2582,32 @@ def _parse_objective(data: dict[str, Any]) -> ScenarioObjectiveDefinition:
         target_id=str(data["target_id"]) if "target_id" in data else None,
         flag_key=str(data["flag_key"]) if "flag_key" in data else None,
         flag_value=data.get("flag_value", True),
+        milestones=_parse_objective_milestones(
+            data.get("milestones", []),
+            objective_id,
+        ),
     )
+
+
+def _parse_objective_milestones(
+    data: object,
+    objective_id: str,
+) -> tuple[SceneObjectiveMilestone, ...]:
+    field = f"objective {objective_id}.milestones"
+    if not isinstance(data, list):
+        raise ValueError(f"{field} must be an array.")
+    milestones: list[SceneObjectiveMilestone] = []
+    for index, raw in enumerate(data):
+        if not isinstance(raw, dict):
+            raise ValueError(f"{field}[{index}] must be an object.")
+        milestones.append(
+            SceneObjectiveMilestone(
+                label=str(_required(raw, "label", f"{field}[{index}]")),
+                flag_key=str(_required(raw, "flag_key", f"{field}[{index}]")),
+                flag_value=raw.get("flag_value", True),
+            )
+        )
+    return tuple(milestones)
 
 
 def _parse_exploration_zone(
@@ -2539,6 +2647,10 @@ def _parse_exploration_zone(
         anchor_position=_parse_coordinate(data["anchor_position"], f"exploration zone {zone_id}.anchor_position") if "anchor_position" in data else None,
         description=str(data.get("description", "")),
         image=str(data.get("image", "")),
+        paper_map=_parse_paper_map(
+            data.get("paper_map"),
+            f"exploration zone {zone_id}.paper_map",
+        ),
         visibility=_enum_value(
             SetupVisibility,
             str(data.get("visibility", SetupVisibility.VISIBLE.value)),
@@ -2548,7 +2660,15 @@ def _parse_exploration_zone(
         available_if_value=data.get("available_if_value", True),
         options=tuple(_parse_exploration_option(entry, zone_id) for entry in data.get("options", [])),
         adjacent_zone_ids=tuple(str(item) for item in data.get("adjacent_zone_ids", [])),
+        travel_minutes=int(data.get("travel_minutes", 0)),
+        ambient_light=_enum_value(
+            LightLevel,
+            str(data.get("ambient_light", LightLevel.BRIGHT.value)),
+            f"exploration zone {zone_id}.ambient_light",
+        ),
+        allows_hiding=bool(data.get("allows_hiding", False)),
         search_dc=int(search_data["dc"]) if "dc" in search_data else None,
+        search_minutes=int(search_data.get("minutes", 10)),
         search_ability=str(search_data.get("ability", "wisdom")),
         search_skill=str(search_data["skill"]) if "skill" in search_data else "perception",
         search_reveals=tuple(str(item) for item in search_data.get("reveals", [])),
@@ -2558,6 +2678,23 @@ def _parse_exploration_zone(
         short_rest_policy=_parse_short_rest_policy(data.get("short_rest"), zone_id),
         item_instances=item_instances,
         fixtures=fixtures,
+    )
+
+
+def _parse_paper_map(data: Any, field: str) -> PaperMap | None:
+    if data is None:
+        return None
+    if not isinstance(data, dict):
+        raise ValueError(f"{field} must be an object.")
+    return PaperMap(
+        id=str(_required(data, "id", field)).strip(),
+        preview_path=str(_required(data, "preview_path", field)).strip(),
+        a4_pdf_path=str(_required(data, "a4_pdf_path", field)).strip(),
+        full_size_pdf_path=str(
+            _required(data, "full_size_pdf_path", field)
+        ).strip(),
+        width_cm=float(data.get("width_cm", 50.0)),
+        height_cm=float(data.get("height_cm", 75.0)),
     )
 
 
@@ -2650,6 +2787,56 @@ def _load_crafting_policy(
         property_ids=tuple(sorted(property_catalog.known_ids)),
         property_labels=tuple(sorted((item.id, item.label) for item in property_catalog.properties)),
     )
+
+
+def _parse_downtime_policy(
+    data: object,
+    scenario_path: Path,
+    property_catalog: ItemPropertyCatalog,
+) -> DowntimePolicy:
+    if data is None:
+        return DowntimePolicy()
+    if not isinstance(data, dict):
+        raise ValueError("scenario.exploration.downtime must be an object.")
+    raw_recipes = data.get("crafting_recipes", [])
+    if not isinstance(raw_recipes, list):
+        raise ValueError(
+            "scenario.exploration.downtime.crafting_recipes must be a list."
+        )
+    recipes: list[DowntimeCraftingRecipe] = []
+    for index, raw_recipe in enumerate(raw_recipes):
+        field = f"scenario.exploration.downtime.crafting_recipes[{index}]"
+        if not isinstance(raw_recipe, dict):
+            raise ValueError(f"{field} must be an object.")
+        item_ref = str(_required(raw_recipe, "item_ref", field))
+        quantity = int(raw_recipe.get("quantity", 1))
+        item_data = _read_item_definition(scenario_path, item_ref)
+        product = _inventory_item_from_item_data(
+            item_data,
+            quantity=quantity,
+            equipped=False,
+            source_ref=item_ref,
+            property_catalog=property_catalog,
+        )
+        recipes.append(
+            DowntimeCraftingRecipe(
+                id=validate_stable_id(
+                    str(_required(raw_recipe, "id", field)),
+                    f"{field}.id",
+                ),
+                label=str(_required(raw_recipe, "label", field)),
+                description=str(raw_recipe.get("description", "")),
+                zone_id=str(_required(raw_recipe, "zone_id", field)),
+                workshop_label=str(
+                    _required(raw_recipe, "workshop_label", field)
+                ),
+                product=product,
+                required_tool_id=str(
+                    _required(raw_recipe, "required_tool_id", field)
+                ),
+            )
+        )
+    return DowntimePolicy(crafting_recipes=tuple(recipes))
 
 
 def _parse_scene_item_instances(
@@ -2839,13 +3026,52 @@ def _parse_scene_fixtures(
             SceneFixture(
                 id=str(_required(raw_fixture, "id", fixture_field)),
                 name=str(_required(raw_fixture, "name", fixture_field)),
+                kind=_enum_value(
+                    FixtureKind,
+                    raw_fixture.get("kind", FixtureKind.OBJECT.value),
+                    f"{fixture_field}.kind",
+                ),
                 description=str(raw_fixture.get("description", "")),
+                positions=_parse_start_zone(
+                    raw_fixture.get("positions", []),
+                    f"{fixture_field}.positions",
+                ),
                 properties=properties,
                 condition=str(raw_fixture.get("condition", "normal")),
                 visible=bool(raw_fixture.get("visible", True)),
                 portable=bool(raw_fixture.get("portable", False)),
                 detachable=bool(raw_fixture.get("detachable", False)),
                 destructible=bool(raw_fixture.get("destructible", False)),
+                initially_open=bool(raw_fixture.get("initially_open", False)),
+                initially_locked=bool(raw_fixture.get("initially_locked", False)),
+                key_item_id=(
+                    str(raw_fixture["key_item_id"])
+                    if raw_fixture.get("key_item_id") is not None
+                    else None
+                ),
+                lock_dc=(
+                    int(raw_fixture["lock_dc"])
+                    if raw_fixture.get("lock_dc") is not None
+                    else None
+                ),
+                armor_class=(
+                    int(raw_fixture["armor_class"])
+                    if raw_fixture.get("armor_class") is not None
+                    else None
+                ),
+                hit_points=(
+                    int(raw_fixture["hit_points"])
+                    if raw_fixture.get("hit_points") is not None
+                    else None
+                ),
+                damage_threshold=int(raw_fixture.get("damage_threshold", 0)),
+                blocks_movement_when_closed=bool(
+                    raw_fixture.get("blocks_movement_when_closed", False)
+                ),
+                cover_bonus=int(raw_fixture.get("cover_bonus", 0)),
+                projectile_cover_bonus=int(
+                    raw_fixture.get("projectile_cover_bonus", 0)
+                ),
                 yield_items=_parse_scene_item_instances(
                     raw_fixture.get("yield_items", []),
                     scenario_path,
@@ -2950,6 +3176,250 @@ def _parse_exploration_option(data: Any, zone_id: str) -> ExplorationOption:
         success_flag=str(data["success_flag"]) if "success_flag" in data else None,
         failure_flag=str(data["failure_flag"]) if "failure_flag" in data else None,
         reveals=tuple(str(item) for item in data.get("reveals", [])),
+    )
+
+
+def _parse_scenario_continuation(
+    data: Any,
+    scenario_path: Path,
+) -> ScenarioContinuation | None:
+    if data is None:
+        return None
+    if not isinstance(data, dict):
+        raise ValueError("scenario.exploration.continuation must be an object.")
+    continuation_id = validate_stable_id(
+        str(_required(data, "id", "scenario.exploration.continuation")),
+        "scenario.exploration.continuation.id",
+    )
+    target_scenario_id = validate_stable_id(
+        str(
+            _required(
+                data,
+                "target_scenario_id",
+                f"scenario continuation {continuation_id}",
+            )
+        ),
+        f"scenario continuation {continuation_id}.target_scenario_id",
+    )
+    raw_target_path = str(
+        _required(
+            data,
+            "target_scenario_path",
+            f"scenario continuation {continuation_id}",
+        )
+    ).strip()
+    target_path = Path(raw_target_path)
+    if target_path.is_absolute() or ".." in target_path.parts:
+        raise ValueError(
+            f"scenario continuation {continuation_id}.target_scenario_path "
+            "must be a relative path without parent traversal."
+        )
+    resolved_target = scenario_path.parent / target_path
+    if not resolved_target.exists():
+        raise ValueError(
+            f"scenario continuation {continuation_id} references missing scenario: "
+            f"{raw_target_path}."
+        )
+    target_data, _loaded_path = _load_scenario_data(resolved_target)
+    target_data = migrate_scenario_payload(target_data)
+    actual_target_id = str(target_data.get("id", "")).strip()
+    if actual_target_id != target_scenario_id:
+        raise ValueError(
+            f"scenario continuation {continuation_id} expects scenario "
+            f"{target_scenario_id}, but {raw_target_path} defines {actual_target_id or 'no id'}."
+        )
+    raw_travel = data.get("travel", {})
+    if not isinstance(raw_travel, dict):
+        raise ValueError(
+            f"scenario continuation {continuation_id}.travel must be an object."
+        )
+    outcomes = _parse_scenario_continuation_outcomes(
+        data.get("outcomes", []),
+        continuation_id,
+    )
+    return ScenarioContinuation(
+        id=continuation_id,
+        label=str(
+            _required(data, "label", f"scenario continuation {continuation_id}")
+        ),
+        description=str(data.get("description", "")),
+        departure_zone_id=validate_stable_id(
+            str(
+                _required(
+                    data,
+                    "departure_zone_id",
+                    f"scenario continuation {continuation_id}",
+                )
+            ),
+            f"scenario continuation {continuation_id}.departure_zone_id",
+        ),
+        target_scenario_id=target_scenario_id,
+        target_scenario_path=raw_target_path,
+        target_scenario_name=str(target_data.get("name", target_scenario_id)),
+        available_if_flags=tuple(
+            str(flag)
+            for flag in data.get("available_if_flags", [])
+        ),
+        propagate_flags=_parse_string_tuple(
+            data.get("propagate_flags", []),
+            f"scenario continuation {continuation_id}.propagate_flags",
+        ),
+        outcomes=outcomes,
+        travel_minutes=int(data.get("travel_minutes", 0)),
+        travel_policy=TravelPolicy(
+            navigation_dc=(
+                int(raw_travel["navigation_dc"])
+                if raw_travel.get("navigation_dc") is not None
+                else None
+            ),
+            navigation_ability=str(
+                raw_travel.get("navigation_ability", "wisdom")
+            ).strip().lower(),
+            navigation_skill=(
+                str(raw_travel["navigation_skill"]).strip().lower()
+                if raw_travel.get("navigation_skill") is not None
+                else None
+            ),
+            navigation_failure_delay_minutes=int(
+                raw_travel.get("navigation_failure_delay_minutes", 0)
+            ),
+            safe_travel_minutes=int(
+                raw_travel.get("safe_travel_minutes", 480)
+            ),
+        ),
+    )
+
+
+def _parse_scenario_continuation_outcomes(
+    data: object,
+    continuation_id: str,
+) -> tuple[ScenarioContinuationOutcome, ...]:
+    field = f"scenario continuation {continuation_id}.outcomes"
+    if not isinstance(data, list):
+        raise ValueError(f"{field} must be an array.")
+    outcomes: list[ScenarioContinuationOutcome] = []
+    for index, raw_outcome in enumerate(data):
+        outcome_field = f"{field}[{index}]"
+        if not isinstance(raw_outcome, dict):
+            raise ValueError(f"{outcome_field} must be an object.")
+        raw_effects = raw_outcome.get("target_effects", [])
+        if not isinstance(raw_effects, list):
+            raise ValueError(f"{outcome_field}.target_effects must be an array.")
+        effects: list[dict[str, object]] = []
+        for effect_index, raw_effect in enumerate(raw_effects):
+            effect_field = f"{outcome_field}.target_effects[{effect_index}]"
+            if not isinstance(raw_effect, dict):
+                raise ValueError(f"{effect_field} must be an object.")
+            effect_type = str(_required(raw_effect, "type", effect_field)).strip()
+            parameters = raw_effect.get("parameters")
+            if effect_type != "set_flag" or not isinstance(parameters, dict):
+                raise ValueError(f"{effect_field} must be a set_flag effect.")
+            key = str(_required(parameters, "key", effect_field)).strip()
+            value = _required(parameters, "value", effect_field)
+            effects.append(
+                {
+                    "type": "set_flag",
+                    "parameters": {"key": key, "value": value},
+                }
+            )
+        outcomes.append(
+            ScenarioContinuationOutcome(
+                id=validate_stable_id(
+                    str(_required(raw_outcome, "id", outcome_field)),
+                    f"{outcome_field}.id",
+                ),
+                kind=_enum_value(
+                    ContinuationOutcomeKind,
+                    str(raw_outcome.get("kind", ContinuationOutcomeKind.SUCCESS.value)),
+                    f"{outcome_field}.kind",
+                ),
+                label=str(_required(raw_outcome, "label", outcome_field)),
+                narration=str(raw_outcome.get("narration", "")),
+                required_flags=_parse_string_tuple(
+                    raw_outcome.get("required_flags", []),
+                    f"{outcome_field}.required_flags",
+                ),
+                forbidden_flags=_parse_string_tuple(
+                    raw_outcome.get("forbidden_flags", []),
+                    f"{outcome_field}.forbidden_flags",
+                ),
+                navigation_result=_enum_value(
+                    ContinuationNavigationResult,
+                    str(
+                        raw_outcome.get(
+                            "navigation_result",
+                            ContinuationNavigationResult.ANY.value,
+                        )
+                    ),
+                    f"{outcome_field}.navigation_result",
+                ),
+                target_effects=tuple(effects),
+            )
+        )
+    return tuple(outcomes)
+
+
+def _parse_scenario_clock(data: Any) -> ScenarioClockPolicy:
+    if data is None:
+        return ScenarioClockPolicy()
+    if not isinstance(data, dict):
+        raise ValueError("scenario.exploration.clock must be an object.")
+    raw_events = data.get("events", [])
+    if not isinstance(raw_events, list):
+        raise ValueError("scenario.exploration.clock.events must be an array.")
+    events: list[ScenarioClockEvent] = []
+    for index, raw_event in enumerate(raw_events):
+        if not isinstance(raw_event, dict):
+            raise ValueError(
+                f"scenario.exploration.clock.events[{index}] must be an object."
+            )
+        event_id = validate_stable_id(
+            str(
+                _required(
+                    raw_event,
+                    "id",
+                    f"scenario.exploration.clock.events[{index}]",
+                )
+            ),
+            f"scenario.exploration.clock.events[{index}].id",
+        )
+        raw_effects = raw_event.get("effects", [])
+        if not isinstance(raw_effects, list) or any(
+            not isinstance(effect, dict) for effect in raw_effects
+        ):
+            raise ValueError(
+                f"scenario clock event {event_id}.effects must be an array of objects."
+            )
+        events.append(
+            ScenarioClockEvent(
+                id=event_id,
+                at_minute=int(
+                    _required(
+                        raw_event,
+                        "at_minute",
+                        f"scenario clock event {event_id}",
+                    )
+                ),
+                label=str(
+                    _required(
+                        raw_event,
+                        "label",
+                        f"scenario clock event {event_id}",
+                    )
+                ),
+                narration=str(
+                    _required(
+                        raw_event,
+                        "narration",
+                        f"scenario clock event {event_id}",
+                    )
+                ),
+                effects=tuple(dict(effect) for effect in raw_effects),
+            )
+        )
+    return ScenarioClockPolicy(
+        start_hour=int(data.get("start_hour", 8)),
+        events=tuple(sorted(events, key=lambda event: (event.at_minute, event.id))),
     )
 
 
@@ -3119,12 +3589,50 @@ def _parse_interaction_goals(
                     if "narrative_style" in raw_goal
                     else None
                 ),
+                grounded_response=_parse_npc_grounded_response(
+                    raw_goal.get("grounded_response"),
+                    f"{goal_field}.grounded_response",
+                ),
             )
         )
     ids = tuple(goal.id for goal in goals)
     if len(ids) != len(set(ids)):
         raise ValueError(f"{field} cannot repeat goal ids.")
     return tuple(goals)
+
+
+def _parse_npc_grounded_response(
+    data: Any,
+    field: str,
+) -> NpcGroundedResponse | None:
+    if data is None:
+        return None
+    if not isinstance(data, dict):
+        raise ValueError(f"{field} must be an object.")
+    raw_variants = data.get("variants", [])
+    if not isinstance(raw_variants, list):
+        raise ValueError(f"{field}.variants must be a list.")
+    variants: list[NpcGroundedResponseVariant] = []
+    for index, raw_variant in enumerate(raw_variants):
+        variant_field = f"{field}.variants[{index}]"
+        if not isinstance(raw_variant, dict):
+            raise ValueError(f"{variant_field} must be an object.")
+        variants.append(
+            NpcGroundedResponseVariant(
+                id=str(_required(raw_variant, "id", variant_field)).strip(),
+                player_narration=str(raw_variant.get("player_narration", "")),
+                npc_response=str(raw_variant.get("npc_response", "")),
+                success_message=str(raw_variant.get("success_message", "")),
+                failure_message=str(raw_variant.get("failure_message", "")),
+            )
+        )
+    return NpcGroundedResponse(
+        player_narration=str(data.get("player_narration", "")),
+        npc_response=str(data.get("npc_response", "")),
+        success_message=str(data.get("success_message", "")),
+        failure_message=str(data.get("failure_message", "")),
+        variants=tuple(variants),
+    )
 
 
 def _parse_exploration_flow(data: Any) -> ExplorationFlowGraph:
@@ -3456,6 +3964,7 @@ def _parse_npc_intent_permissions(data: Any, point_id: str) -> tuple[NpcIntentPe
                     permission_data.get("targets"),
                     f"exploration point {point_id}.npc_interaction.policy.intent_permissions.{intent}.targets",
                 ),
+                time_cost_minutes=int(permission_data.get("time_cost_minutes", 0)),
             )
         )
     return tuple(permissions)
@@ -3931,6 +4440,13 @@ def _parse_exploration_trap(data: Any) -> ExplorationTrap:
         revealed_description=str(_required(data, "revealed_description", field)),
         detection_observation_id=str(_required(data, "detection_observation_id", field)),
         hazard=hazards[0],
+        detection_dc=(
+            int(data["detection_dc"])
+            if data.get("detection_dc") is not None
+            else None
+        ),
+        detection_distance_feet=int(data.get("detection_distance_feet", 10)),
+        passive_detection=bool(data.get("passive_detection", True)),
         activation_challenge_id=(
             str(data["activation_challenge_id"])
             if data.get("activation_challenge_id")
@@ -3999,11 +4515,42 @@ def _parse_exploration_hazard_effects(
         parameters = dict(raw_parameters)
         if effect_type == "apply_condition":
             condition = str(_required(parameters, "condition", effect_context)).strip().lower()
-            if condition != CombatCondition.PRONE.value:
+            if condition not in {
+                CombatCondition.PRONE.value,
+                CombatCondition.POISONED.value,
+                CombatCondition.RESTRAINED.value,
+            }:
                 raise ValueError(
                     f"{effect_context}.condition must be a persistent exploration condition."
                 )
             parameters["condition"] = condition
+            duration = str(
+                parameters.get("duration", EffectDuration.PERMANENT.value)
+            ).strip().lower()
+            allowed_durations = {
+                EffectDuration.UNTIL_ENCOUNTER_END,
+                EffectDuration.UNTIL_SHORT_REST,
+                EffectDuration.UNTIL_LONG_REST,
+                EffectDuration.UNTIL_SCENARIO_END,
+                EffectDuration.PERMANENT,
+            }
+            parsed_duration = _enum_value(
+                EffectDuration,
+                duration,
+                f"{effect_context}.parameters.duration",
+            )
+            if parsed_duration not in allowed_durations:
+                raise ValueError(
+                    f"{effect_context}.parameters.duration is not valid outside combat."
+                )
+            parameters["duration"] = parsed_duration.value
+            if "source_label" in parameters:
+                source_label = str(parameters["source_label"]).strip()
+                if not source_label:
+                    raise ValueError(
+                        f"{effect_context}.parameters.source_label cannot be empty."
+                    )
+                parameters["source_label"] = source_label
         effects.append({"type": effect_type, "parameters": parameters})
     return tuple(effects)
 
@@ -4232,6 +4779,8 @@ def _parse_exploration_observation(data: Any) -> ExplorationObservation:
         participants=CheckParticipants(str(data.get("participants", CheckParticipants.SINGLE_ACTOR.value))),
         aggregation=CheckAggregation(str(data.get("aggregation", CheckAggregation.LEAD_RESULT.value))),
         roll_mode=RollMode(str(data.get("roll_mode", RollMode.NORMAL.value))),
+        sight_based=bool(data.get("sight_based", False)),
+        distance_feet=int(data.get("distance_feet", 5)),
         intent_examples=_parse_string_tuple(
             data.get("intent_examples", []),
             f"exploration observation {observation_id}.intent_examples",
@@ -4662,10 +5211,12 @@ def _actor_from_definition(definition: ScenarioActorDefinition) -> Actor:
         spell_access=definition.spell_access,
         hit_dice=definition.hit_dice,
         resource_pools=definition.resource_pools,
+        level=definition.level,
         proficiency_bonus=definition.proficiency_bonus,
         proficiencies=definition.proficiencies,
         uses_death_saves=definition.uses_death_saves,
         damage_affinities=definition.damage_affinities,
+        senses=definition.senses,
         attacks_per_action=definition.attacks_per_action,
         condition_immunities=definition.condition_immunities,
         auras=definition.auras,
@@ -4686,8 +5237,11 @@ def _attack_source_from_definition(
             actor,
             definition.ability,
             proficient=(
-                definition.source_type == AttackSourceType.WEAPON
-                and actor.proficiencies.is_weapon_proficient(proficiency_id)
+                definition.source_type == AttackSourceType.SPELL
+                or (
+                    definition.source_type == AttackSourceType.WEAPON
+                    and actor.proficiencies.is_weapon_proficient(proficiency_id)
+                )
             ),
         )
     else:
@@ -4703,7 +5257,7 @@ def _attack_source_from_definition(
                 stacking_key=stacking_key,
             ),
         )
-    return AttackSource(
+    source = AttackSource(
         name=definition.name,
         source_type=definition.source_type,
         range_feet=definition.range_feet,
@@ -4741,19 +5295,33 @@ def _attack_source_from_definition(
         thrown=definition.thrown,
         action_cost=definition.action_cost,
         upcast_damage_dice_per_level=definition.upcast_damage_dice_per_level,
+        cantrip_damage_dice_per_tier=definition.cantrip_damage_dice_per_tier,
     )
+    return attack_source_at_actor_level(source, actor.level)
 
 
-def _healing_source_from_definition(definition: ScenarioHealingDefinition) -> HealingSource:
+def _healing_source_from_definition(
+    definition: ScenarioHealingDefinition,
+    actor: Actor | None = None,
+) -> HealingSource:
+    healing_modifier = definition.healing_modifier
+    if definition.ability is not None:
+        if actor is None:
+            raise ValueError(
+                f"Healing source {definition.id} requires an actor ability modifier."
+            )
+        healing_modifier += ability_modifier(
+            getattr(actor.ability_scores, definition.ability)
+        )
     return HealingSource(
         id=definition.id,
         name=definition.name,
         source_type=definition.source_type,
         range_feet=definition.range_feet,
-        healing_hint=_healing_hint(definition),
+        healing_hint=_healing_hint(definition, modifier=healing_modifier),
         healing_fixed=definition.healing_fixed,
         healing_die_sides=definition.healing_die_sides,
-        healing_modifier=definition.healing_modifier,
+        healing_modifier=healing_modifier,
         healing_dice_count=definition.healing_dice_count,
         spell_level=definition.spell_level,
         casting_kind=definition.casting_kind,
@@ -4818,10 +5386,27 @@ def _validate_exploration(definition: ScenarioDefinition) -> None:
     actor_spell_ids = {spell_id for actor in definition.actors for spell_id in actor.spell_ids}
     if definition.party_start_zone_id not in zone_ids:
         raise ValueError("exploration.party_start_zone references unknown zone.")
+    for recipe in definition.downtime_policy.crafting_recipes:
+        if recipe.zone_id not in zone_ids:
+            raise ValueError(
+                f"downtime crafting recipe {recipe.id} references unknown zone."
+            )
+    if (
+        definition.exploration_continuation is not None
+        and definition.exploration_continuation.departure_zone_id not in zone_ids
+    ):
+        raise ValueError(
+            f"scenario continuation {definition.exploration_continuation.id} "
+            "references unknown departure zone."
+        )
     for resource_id in definition.exploration_initial_resources:
         if resource_id not in resource_ids:
             raise ValueError(f"exploration.initial_resources references unknown resource: {resource_id}.")
     for zone in definition.exploration_zones:
+        if zone.travel_minutes < 0:
+            raise ValueError(
+                f"exploration zone {zone.id}.travel_minutes cannot be negative."
+            )
         for position in zone.positions:
             if not definition.board_dimensions.in_bounds(position):
                 raise ValueError(f"exploration zone {zone.id}.positions contains out of bounds coordinate.")
@@ -4963,7 +5548,10 @@ def _validate_exploration(definition: ScenarioDefinition) -> None:
                         f"exploration fixture {fixture.id}.action_policies requires a challenge in zone {zone.id}."
                     )
                 policy = challenge.llm_policy
-                if policy.dc_for_tier(action.difficulty_tier) is None:
+                if (
+                    action.difficulty_tier != "automatic"
+                    and policy.dc_for_tier(action.difficulty_tier) is None
+                ):
                     raise ValueError(
                         f"exploration fixture {fixture.id} action {action.operation.value} references unknown "
                         f"difficulty tier: {action.difficulty_tier}."
@@ -5305,6 +5893,7 @@ def _validate_exploration(definition: ScenarioDefinition) -> None:
                         + "."
                     )
     _validate_npc_content_effects(definition)
+    _validate_clock_content_effects(definition)
     for point in definition.exploration_points:
         if point.npc_interaction is None:
             continue
@@ -5327,6 +5916,7 @@ def _validate_npc_content_effects(definition: ScenarioDefinition) -> None:
         resources=definition.exploration_resources,
         traps=definition.exploration_traps,
         merchants=definition.exploration_merchants,
+        clock_policy=definition.exploration_clock_policy,
     )
     npc_by_id: dict[str, NpcInteraction] = {}
     for point in definition.exploration_points:
@@ -5472,6 +6062,28 @@ def _validate_npc_content_effects(definition: ScenarioDefinition) -> None:
                         f"reactions.{reaction.id}.effects"
                     ),
                 )
+
+
+def _validate_clock_content_effects(definition: ScenarioDefinition) -> None:
+    state = ExplorationState(
+        zones=definition.exploration_zones,
+        points=definition.exploration_points,
+        party_position=PartyPosition(str(definition.party_start_zone_id)),
+        flags=SceneFlags(),
+        challenges=definition.exploration_challenges,
+        resources=definition.exploration_resources,
+        traps=definition.exploration_traps,
+        merchants=definition.exploration_merchants,
+        clock_policy=definition.exploration_clock_policy,
+    )
+    for event in definition.exploration_clock_policy.events:
+        for index, effect in enumerate(event.effects):
+            try:
+                validate_exploration_effect(effect, state)
+            except ValueError as exc:
+                raise ValueError(
+                    f"scenario clock event {event.id}.effects[{index}]: {exc}"
+                ) from exc
 
 
 def _validate_npc_effect_sequence(
@@ -6169,16 +6781,21 @@ def _damage_hint(definition: ScenarioAttackDefinition) -> str:
     return " + ".join(component.hint() for component in definition.damage_components)
 
 
-def _healing_hint(definition: ScenarioHealingDefinition) -> str:
+def _healing_hint(
+    definition: ScenarioHealingDefinition,
+    *,
+    modifier: int | None = None,
+) -> str:
     if definition.healing_fixed is not None:
         base = str(definition.healing_fixed)
     elif definition.healing_die_sides is None:
         base = "leczenie"
     else:
         base = f"{definition.healing_dice_count}d{definition.healing_die_sides}"
-    if definition.healing_modifier:
-        sign = "+" if definition.healing_modifier > 0 else "-"
-        base = f"{base} {sign} {abs(definition.healing_modifier)}"
+    applied_modifier = definition.healing_modifier if modifier is None else modifier
+    if applied_modifier:
+        sign = "+" if applied_modifier > 0 else "-"
+        base = f"{base} {sign} {abs(applied_modifier)}"
     return base
 
 

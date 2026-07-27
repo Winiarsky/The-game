@@ -1,3 +1,4 @@
+import json
 import random
 from dataclasses import replace
 
@@ -664,7 +665,7 @@ def test_open_lock_goal_is_consumed_and_makes_later_force_check_easier():
     assert force_preview["selected_lead_actor_id"] == "hero"
 
 
-def test_gate_flow_owns_check_mechanics_but_keeps_grounded_method_modifier():
+def test_gate_flow_owns_check_mechanics_and_drops_llm_numeric_modifier():
     client = FakeGmClient(
         _challenge_proposal(
             ability="charisma",
@@ -704,7 +705,7 @@ def test_gate_flow_owns_check_mechanics_but_keeps_grounded_method_modifier():
     assert option["ability"] == "strength"
     assert option["skill"] == "athletics"
     assert option["dc"] == 15
-    assert option["situational_modifiers"][0]["modifier"] == 1
+    assert option["situational_modifiers"] == []
     flow_route = client.requests[0].to_prompt_payload()["challenge"][
         "selected_flow_route"
     ]
@@ -948,7 +949,7 @@ def test_exploration_hazard_waits_for_manual_save_after_critical_failure() -> No
     assert any(message["title"] == "Wynik zagrożenia" for message in resolved["messages"])
 
 
-def test_failed_hazard_save_adds_visible_recoverable_prone_condition() -> None:
+def test_failed_hazard_save_adds_prone_and_persistent_poisoned_conditions() -> None:
     session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
     session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
     challenge = next(item for item in session.state.challenges if item.id == "closed_gate")
@@ -965,15 +966,20 @@ def test_failed_hazard_save_adds_visible_recoverable_prone_condition() -> None:
     failed = session.resolve_rolls({"hero": 1})
 
     hero_payload = next(actor for actor in failed["actors"] if actor["id"] == "hero")
-    assert hero_payload["conditions"] == [
-        {"id": "prone", "label": "Powalony", "recoverable": True},
+    assert [condition["id"] for condition in hero_payload["conditions"]] == [
+        "prone",
+        "poisoned",
     ]
+    assert hero_payload["conditions"][0]["recoverable"] is True
+    assert hero_payload["conditions"][1]["duration"] == "until_short_rest"
     assert any(item["label"] == "Stan: Bohater" for item in failed["scene_status"])
 
     recovered = session.recover_exploration_condition(actor_id="hero", condition="prone")
 
     hero_payload = next(actor for actor in recovered["actors"] if actor["id"] == "hero")
-    assert hero_payload["conditions"] == []
+    assert [condition["id"] for condition in hero_payload["conditions"]] == [
+        "poisoned",
+    ]
     assert recovered["messages"][-1]["title"] == "Powrót na nogi"
 
 
@@ -991,6 +997,37 @@ def test_exploration_condition_is_carried_into_encounter() -> None:
     assert ConditionState("hero", CombatCondition.PRONE) in session.combat_state.condition_states
 
 
+def test_scenario_condition_returns_from_encounter_until_its_rest_boundary() -> None:
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    poisoned = ConditionState(
+        "hero",
+        CombatCondition.POISONED,
+        source_label="Zatrute kolce",
+        duration=EffectDuration.UNTIL_SHORT_REST,
+    )
+    session.state = replace(session.state, condition_states=(poisoned,))
+
+    _start_combat_from_scout_alarm(session)
+
+    assert session.combat_state is not None
+    assert poisoned in session.combat_state.condition_states
+    for actor in tuple(session.combat_state.actors):
+        if actor.faction == Faction.ENEMY:
+            session.combat_state = replace_actor(
+                session.combat_state,
+                replace(actor, hp=0),
+            )
+
+    resolved = session.resolve_active_combat()
+
+    assert session.state.condition_states == (poisoned,)
+    hero = next(actor for actor in resolved["actors"] if actor["id"] == "hero")
+    assert len(hero["conditions"]) == 1
+    assert hero["conditions"][0]["id"] == "poisoned"
+    assert hero["conditions"][0]["duration"] == "until_short_rest"
+    assert hero["conditions"][0]["source_label"] == "Zatrute kolce"
+
+
 def test_chat_detects_and_disarms_authored_trap() -> None:
     session = ExplorationUiSession(
         "content/scenarios/abandoned_watchtower.json",
@@ -1003,7 +1040,9 @@ def test_chat_detects_and_disarms_authored_trap() -> None:
     assert proposed["pending"]["kind"] == "observation"
     assert proposed["pending"]["observation"]["id"] == "search_gate_traps"
     session.decide("accept", lead_actor_id="rogue")
-    detected = session.resolve_rolls({"rogue": 20})
+    detected = session.resolve_rolls(
+        {"rogue": {"natural_roll": 20, "natural_roll_2": 20}}
+    )
     assert trap_state_for(session.state, "gate_alarm_wire").status == ExplorationTrapStatus.REVEALED
     assert any(item["label"].startswith("Pułapka:") for item in detected["scene_status"])
 
@@ -1025,7 +1064,9 @@ def test_failed_trap_disarm_queues_save_and_adds_alarm_noise() -> None:
     session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
     session.submit_action("/szukaj szukam pułapek przy bramie")
     session.decide("accept", lead_actor_id="rogue")
-    session.resolve_rolls({"rogue": 20})
+    session.resolve_rolls(
+        {"rogue": {"natural_roll": 20, "natural_roll_2": 20}}
+    )
     session.submit_action("/akcja rozbrajam linkę alarmową")
     session.decide("accept")
 
@@ -1034,10 +1075,20 @@ def test_failed_trap_disarm_queues_save_and_adds_alarm_noise() -> None:
     assert triggered["pending"]["stage"] == "hazard_save"
     assert triggered["pending"]["hazard"]["id"] == "gate_alarm_wire_trigger"
     assert trap_state_for(session.state, "gate_alarm_wire").status == ExplorationTrapStatus.TRIGGERED
+    assert next(
+        item
+        for item in triggered["scene_status"]
+        if item["label"].startswith("Pułapka:")
+    )["value"] == "uruchomiona — oczekuje na rzut obronny"
 
     resolved = session.resolve_rolls({"rogue": 1})
 
     assert resolved["pending"] is None
+    assert next(
+        item
+        for item in resolved["scene_status"]
+        if item["label"].startswith("Pułapka:")
+    )["value"] == "uruchomiona — rozstrzygnięta"
     assert next(
         item for item in session.state.challenge_states if item.challenge_id == "closed_gate"
     ).noise == 3
@@ -1600,7 +1651,10 @@ def test_graded_gate_observation_reveals_only_information_tiers_reached(tmp_path
 
     rolling = session.decide("accept", lead_actor_id="hero")
     assert rolling["pending"]["stage"] == "roll"
-    resolved = session.resolve_rolls({"hero": 16})
+    assert rolling["required_rolls"][0]["roll_mode"] == "disadvantage"
+    resolved = session.resolve_rolls(
+        {"hero": {"natural_roll": 16, "natural_roll_2": 16}}
+    )
 
     assert resolved["pending"] is None
     assert scene_flag(session.state.flags, "courtyard_activity_suspected", False) is True
@@ -1640,6 +1694,319 @@ def test_look_around_keeps_preselected_actor_and_reveals_contextual_finds(tmp_pa
     assert "use_wall_route" in {
         goal["id"] for goal in resolved["active_challenge"]["goals"]
     }
+
+
+def test_exploration_time_burns_out_active_torch(tmp_path):
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        session_id="light_duration_test",
+        observation_dir=tmp_path,
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+
+    lit = session.change_actor_light(
+        actor_id="hero",
+        item_id="torch",
+        action="ignite",
+    )
+    hero = next(
+        actor for actor in session.exploration.actors if str(actor.id) == "hero"
+    )
+    assert hero.active_light is not None
+    assert lit["flow"]["visibility"][0]["light_source_actor_id"] == "hero"
+
+    session._advance_scenario_time(60, source="test")
+    state = session.state_payload()
+    hero = next(
+        actor for actor in session.exploration.actors if str(actor.id) == "hero"
+    )
+
+    assert hero.active_light is None
+    assert state["flow"]["visibility"][0]["perceived_light"] == "dim"
+    assert state["messages"][-1]["title"] == "Źródło światła zgasło"
+
+
+def test_active_exploration_search_reveals_trap_and_advances_time(tmp_path):
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        session_id="active_search_test",
+        observation_dir=tmp_path,
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+
+    rolling = session.start_exploration_search("rogue")
+
+    assert rolling["pending"]["kind"] == "search"
+    assert rolling["required_rolls"][0]["roll_mode"] == "disadvantage"
+
+    resolved = session.resolve_rolls(
+        {"rogue": {"natural_roll": 20, "natural_roll_2": 20}}
+    )
+
+    assert resolved["pending"] is None
+    assert session.state.elapsed_minutes == 10
+    assert session.state.exhausted_search_zones == ("gate",)
+    assert (
+        trap_state_for(session.state, "gate_alarm_wire").status
+        == ExplorationTrapStatus.REVEALED
+    )
+    assert resolved["flow"]["awareness"]["search_available"] is False
+
+
+def test_exploration_hide_is_saved_and_igniting_light_reveals_actor(tmp_path):
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        session_id="exploration_hide_test",
+        observation_dir=tmp_path,
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+
+    rolling = session.start_exploration_hide("hero")
+    assert rolling["pending"]["kind"] == "hide"
+    hidden = session.resolve_rolls({"hero": 15})
+
+    assert hidden["flow"]["awareness"]["hidden_actor_states"][0][
+        "actor_id"
+    ] == "hero"
+
+    revealed = session.change_actor_light(
+        actor_id="hero",
+        item_id="torch",
+        action="ignite",
+    )
+
+    assert revealed["flow"]["awareness"]["hidden_actor_states"] == []
+
+
+def test_fixture_unlock_open_and_loot_flow_is_local_and_persistent(tmp_path):
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        session_id="fixture_container_test",
+        observation_dir=tmp_path,
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    chest_id = "gate_supply_chest"
+
+    initial = next(
+        item for item in session.state_payload()["flow"]["fixtures"]
+        if item["id"] == chest_id
+    )
+    assert initial["locked"] is True
+    assert initial["current_hit_points"] == 10
+
+    rolling = session.start_exploration_fixture_action(
+        actor_id="rogue",
+        fixture_id=chest_id,
+        operation="unlock",
+    )
+    assert rolling["pending"]["kind"] == "fixture"
+    assert rolling["required_rolls"][0]["tool"] == "thieves_tools"
+    session.resolve_rolls({"rogue": 20})
+
+    opened = session.start_exploration_fixture_action(
+        actor_id="rogue",
+        fixture_id=chest_id,
+        operation="open",
+    )
+    chest = next(
+        item for item in opened["flow"]["fixtures"] if item["id"] == chest_id
+    )
+    assert chest["opened"] is True
+    assert chest["locked"] is False
+
+    looted = session.start_exploration_fixture_action(
+        actor_id="rogue",
+        fixture_id=chest_id,
+        operation="loot",
+    )
+    chest = next(
+        item for item in looted["flow"]["fixtures"] if item["id"] == chest_id
+    )
+    assert chest["looted"] is True
+    assert any(
+        item.source_id == "zone:gate:item:gate_chest_arrows"
+        for item in session.state.source_discoveries
+    )
+
+
+def test_hidden_cache_becomes_a_lootable_fixture_only_after_its_point_is_revealed():
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.state = replace(
+        session.state,
+        party_position=replace(
+            session.state.party_position,
+            zone_id="courtyard",
+        ),
+    )
+
+    assert not any(
+        item["id"] == "hidden_cache"
+        for item in session.state_payload()["flow"]["fixtures"]
+    )
+
+    session.state, _ = reveal_exploration_points(
+        session.state,
+        ("hidden_cache",),
+    )
+    fixture = next(
+        item
+        for item in session.state_payload()["flow"]["fixtures"]
+        if item["id"] == "hidden_cache"
+    )
+    assert {action["operation"] for action in fixture["actions"]} == {"open"}
+
+    session.start_exploration_fixture_action(
+        actor_id="rogue",
+        fixture_id="hidden_cache",
+        operation="open",
+    )
+    looted = session.start_exploration_fixture_action(
+        actor_id="rogue",
+        fixture_id="hidden_cache",
+        operation="loot",
+    )
+
+    fixture = next(
+        item for item in looted["flow"]["fixtures"]
+        if item["id"] == "hidden_cache"
+    )
+    assert fixture["looted"] is True
+    assert any(
+        item.source_id == "zone:courtyard:item:scout_cache_dagger"
+        for item in session.state.source_discoveries
+    )
+    proposed = session.submit_action("/wez sztylet")
+    assert proposed["pending"]["kind"] == "collection"
+
+    collected = session.decide("accept", lead_actor_id="rogue")
+    rogue = next(actor for actor in collected["actors"] if actor["id"] == "rogue")
+    assert any(
+        item["id"] == "collected:courtyard:scout_cache_dagger"
+        and item["source_ref"] == "dagger"
+        for item in rogue["inventory"]
+    )
+
+
+def test_fixture_damage_respects_ac_threshold_hp_and_destruction(tmp_path):
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        session_id="fixture_damage_test",
+        observation_dir=tmp_path,
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    chest_id = "gate_supply_chest"
+
+    missed = session.damage_exploration_fixture(
+        actor_id="hero",
+        fixture_id=chest_id,
+        attack_total=14,
+        damage=20,
+    )
+    chest = next(
+        item for item in missed["flow"]["fixtures"] if item["id"] == chest_id
+    )
+    assert chest["current_hit_points"] == 10
+
+    resisted = session.damage_exploration_fixture(
+        actor_id="hero",
+        fixture_id=chest_id,
+        attack_total=15,
+        damage=2,
+    )
+    chest = next(
+        item for item in resisted["flow"]["fixtures"] if item["id"] == chest_id
+    )
+    assert chest["current_hit_points"] == 10
+
+    destroyed = session.damage_exploration_fixture(
+        actor_id="hero",
+        fixture_id=chest_id,
+        attack_total=15,
+        damage=10,
+    )
+    chest = next(
+        item for item in destroyed["flow"]["fixtures"] if item["id"] == chest_id
+    )
+    assert chest["destroyed"] is True
+    assert chest["current_hit_points"] == 0
+
+
+def test_open_exploration_door_is_non_blocking_in_encounter_projection(tmp_path):
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        session_id="fixture_encounter_bridge_test",
+        observation_dir=tmp_path,
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.start_exploration_fixture_action(
+        actor_id="rogue",
+        fixture_id="watchtower_gate",
+        operation="unlock",
+    )
+    session.resolve_rolls({"rogue": 20})
+    session.start_exploration_fixture_action(
+        actor_id="rogue",
+        fixture_id="watchtower_gate",
+        operation="open",
+    )
+    flags = set_scene_flag(session.state.flags, "gate_passed", True)
+    flags = set_scene_flag(flags, "gate_lock_critical", True)
+    flags = set_scene_flag(flags, "gate_bolt_critical", True)
+    session.state = replace(session.state, flags=flags)
+    session.state_payload()
+    session.resolve_encounter_opening()
+    session.start_encounter_setup()
+
+    assert session.encounter_setup_flow is not None
+    gate = next(
+        item
+        for item in session.encounter_setup_flow.encounter.scene_objects
+        if item.id == "fixture:gate:watchtower_gate"
+    )
+    assert gate.blocks_movement is False
+    assert gate.projectile_cover_bonus == 0
+
+
+def test_exploration_hide_is_reused_after_encounter_setup(tmp_path):
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        session_id="exploration_hide_bridge_test",
+        observation_dir=tmp_path,
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.start_exploration_hide("rogue")
+    session.resolve_rolls({"rogue": 15})
+    flags = set_scene_flag(session.state.flags, "gate_passed", True)
+    flags = set_scene_flag(flags, "gate_lock_critical", True)
+    flags = set_scene_flag(flags, "gate_bolt_critical", True)
+    session.state = replace(session.state, flags=flags)
+    session.state_payload()
+    session.resolve_encounter_opening()
+    session.start_encounter_setup()
+
+    while (
+        session.encounter_setup_flow is not None
+        and not session.encounter_setup_flow.completed
+    ):
+        if session.encounter_setup_flow.is_player_start_step:
+            session.assign_encounter_player_start_position(
+                session.encounter_setup_flow.remaining_player_start_positions()[0]
+            )
+        else:
+            session.confirm_encounter_setup_step()
+
+    stealth = session.state_payload()["encounter_stealth"]
+    rogue = next(
+        actor for actor in stealth["actors"] if actor["actor_id"] == "rogue"
+    )
+
+    assert rogue["attempted"] is True
+    assert rogue["result"]["total"] == 22
+    assert rogue["can_attempt"] is False
+    assert session.state.hidden_actor_states == ()
 
 
 def test_action_through_gap_routes_to_authored_observation_before_generic_classifier(tmp_path):
@@ -1762,12 +2129,17 @@ def test_entering_courtyard_requires_scout_placement_then_exposes_actions_and_np
     setup = session.confirm_location_preview()
 
     assert setup["flow"]["stage"] == "party_setup"
+    assert setup["exploration_setup"]["paper_map"]["id"] == "watchtower_courtyard"
+
+    setup = session.confirm_exploration_setup_step()
+
     step = setup["exploration_setup"]["current_step"]
     assert step["requires_board_assignment"] is True
     assert step["assignment_point_id"] == "wounded_scout"
     assert step["assignment_point_name"] == "Ranny zwiadowca"
     assert step["available_positions"] == [[8, 8], [8, 9], [9, 8], [9, 9]]
-    assert "rannego człowieka" in step["message"]
+    assert "Ranny zwiadowca" in step["message"]
+    assert "Dziedziniec" in step["message"]
     with pytest.raises(ValueError, match="Najpierw ustaw figurkę"):
         session.confirm_exploration_setup_step()
 
@@ -1816,7 +2188,7 @@ def test_debug_courtyard_entry_starts_with_description_and_scout_setup() -> None
     assert state["exploration_setup"]["current_step"]["assignment_point_id"] == "wounded_scout"
     assert [message["title"] for message in state["messages"]] == [
         "Dziedziniec",
-        "Setup dziedzińca",
+        "Setup punktu eksploracji",
     ]
     assert "zarośnięty, błotnisty dziedziniec" in state["messages"][0]["body"]
     assert "ranny zwiadowca" in state["messages"][0]["body"]
@@ -1933,7 +2305,9 @@ def test_exact_gate_reconnaissance_grants_and_consumes_initiative_advantage(tmp_
     session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
     session.submit_action("/pytaj zaglądam przez szczelinę i obserwuję gobliny")
     session.decide("accept", lead_actor_id="hero")
-    session.resolve_rolls({"hero": 20})
+    session.resolve_rolls(
+        {"hero": {"natural_roll": 20, "natural_roll_2": 20}}
+    )
 
     edge = session.state.encounter_edges[0]
     assert edge.beneficiary_actor_id == "hero"
@@ -2162,6 +2536,31 @@ def test_conversation_is_scoped_to_interaction_and_reused_as_gm_context(tmp_path
     assert len(session.state_payload()["conversation"]["entries"]) == 4
 
 
+def test_action_without_active_interaction_returns_guidance_and_is_not_kept_in_chat(tmp_path):
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        session_id="no_active_interaction_test",
+        observation_dir=tmp_path,
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.state = replace(
+        session.state,
+        challenge_states=(
+            ExplorationChallengeState(challenge_id="closed_gate", completed=True),
+        ),
+    )
+
+    state = session.submit_action("Otwieram skrzynię, która na pewno gdzieś tu jest.")
+
+    assert state["pending"] is None
+    assert state["messages"][-1]["title"] == "Najpierw wybierz interakcję"
+    assert all(
+        message["body"] != "Otwieram skrzynię, która na pewno gdzieś tu jest."
+        for message in state["messages"]
+    )
+    assert state["conversation"]["entries"] == []
+
+
 def test_snapshot_restores_interaction_conversation(tmp_path):
     session = ExplorationUiSession(
         "content/scenarios/abandoned_watchtower.json",
@@ -2243,9 +2642,65 @@ def test_exploration_ui_session_turns_validation_error_into_visible_gm_message(t
 
     assert state["pending"] is None
     assert state["messages"][-1]["title"] == "Deklaracja wymaga korekty"
-    assert "działo laserowe" in state["messages"][-1]["body"]
+    assert "bezpiecznie zinterpretować" in state["messages"][-1]["body"]
+    assert not any(
+        entry["role"] == "player" and "działa laserowego" in entry["body"]
+        for entry in state["conversation"]["entries"]
+    )
     events = [__import__("json").loads(line) for line in session.observer.path.read_text(encoding="utf-8").splitlines()]
     assert any(event["event_type"] == "ui_gm_declaration_rejected" for event in events)
+
+
+def test_exploration_ui_session_retries_invalid_gm_payload_once(tmp_path):
+    invalid = _challenge_proposal(
+        selected_mechanic="single_actor_check",
+        check_participants="single_actor",
+        check_aggregation="lead_result",
+        improvised_tool={
+            "label": "Pan Łomot",
+            "source": "interaction_object",
+            "source_detail": "dębowa belka",
+            "effect_modifier": 1,
+            "reason": "Belka służy jako taran.",
+        },
+    )
+    valid = _challenge_proposal(
+        selected_mechanic="single_actor_check",
+        check_participants="single_actor",
+        check_aggregation="lead_result",
+        improvised_tool=None,
+    )
+
+    class RecoveringGmClient(FakeGmClient):
+        def __init__(self):
+            super().__init__(invalid)
+            self.proposals = [invalid, valid]
+
+        def classify(self, request):
+            self.requests.append(request)
+            return self.proposals.pop(0)
+
+    client = RecoveringGmClient()
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=client,
+        session_id="validation_retry_test",
+        observation_dir=tmp_path,
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+
+    state = session.submit_action("Uderzamy w bramę belką zwaną Panem Łomotem.")
+
+    assert state["pending"]["kind"] == "challenge"
+    assert len(client.requests) == 2
+    events = [
+        json.loads(line)
+        for line in session.observer.path.read_text(encoding="utf-8").splitlines()
+    ]
+    assert any(
+        event["event_type"] == "ui_gm_proposal_validation_recovered"
+        for event in events
+    )
 
 
 def test_exploration_ui_session_creates_and_uses_temporary_scene_item(tmp_path):
@@ -2822,6 +3277,13 @@ def test_exploration_ui_session_starts_with_map_setup_before_location_preview():
     state = session.start_session()
 
     assert state["flow"]["stage"] == "party_setup"
+    assert state["exploration_setup"]["current_step"]["label"] == (
+        "papierowa mapa: Brama strażnicy"
+    )
+    assert state["exploration_setup"]["paper_map"]["id"] == "watchtower_gate"
+
+    state = session.confirm_exploration_setup_step()
+
     assert state["exploration_setup"]["current_step"]["label"] == "elementy mapy"
     assert state["exploration_setup"]["current_step"]["has_positions"] is False
     assert state["exploration_setup"]["current_step"]["color"] is None
@@ -2854,6 +3316,8 @@ def test_exploration_ui_session_requires_spell_preparation_after_physical_setup(
     assert {spell["id"] for spell in cleric["spells"]} == {
         "radiant_line",
         "healing_word",
+        "cure_wounds",
+        "inflict_wounds",
         "bless_attack_bonus",
     }
 
@@ -2981,11 +3445,29 @@ def test_exploration_ui_session_finishes_scenario_and_expires_daily_effects():
         duration=EffectDuration.PERMANENT,
     )
     session.active_combat_effects = (daily, permanent)
+    permanent_condition = ConditionState(
+        "hero",
+        CombatCondition.PRONE,
+        duration=EffectDuration.PERMANENT,
+    )
+    session.state = replace(
+        session.state,
+        condition_states=(
+            ConditionState(
+                "hero",
+                CombatCondition.POISONED,
+                duration=EffectDuration.UNTIL_SCENARIO_END,
+            ),
+            permanent_condition,
+        ),
+    )
 
     payload = session.finish_scenario()
 
     assert payload["flow"]["stage"] == "scenario_complete"
     assert [effect["id"] for effect in payload["active_effects"]] == ["permanent"]
+    assert session.state.condition_states == (permanent_condition,)
+    assert any(message["title"] == "Stan wygasł" for message in payload["messages"])
     assert any(message["title"] == "Scenariusz zakończony" for message in payload["messages"])
 
 
@@ -3076,6 +3558,40 @@ def test_selected_npc_goal_locks_flow_intent_and_participants_before_description
     assert state["pending"]["check_plan"]["roll_mode"] == "advantage"
 
 
+def test_selected_social_skill_is_authoritative_in_npc_goal_flow():
+    proposal = NpcInteractionProposal.model_validate(
+        {
+            "action_type": "social",
+            "request_risk": "no_risk",
+            "player_narration": "Zwiadowca słucha deklaracji drużyny.",
+            "npc_response": "Dobrze, mówcie.",
+            "requires_roll": True,
+            "ability": "charisma",
+            "skill": "persuasion",
+            "dc": 20,
+        }
+    )
+    client = FakeNpcClient(proposal)
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        npc_client=client,
+        debug_point_id="wounded_scout",
+    )
+
+    pending = session.submit_action(
+        "Oszukujemy zwiadowcę, że przysłał nas jego dowódca.",
+        selected_goal_id="calm_scout",
+        selected_check_participants="single_actor",
+        participant_actor_ids=("hero",),
+        selected_social_skill="deception",
+    )
+
+    assert client.requests[0].selected_social_skill == "deception"
+    assert pending["pending"]["proposal"]["ability"] == "charisma"
+    assert pending["pending"]["proposal"]["skill"] == "deception"
+    assert pending["pending"]["proposal"]["dc"] == 10
+
+
 def test_selected_medical_npc_goal_uses_authored_check_and_effects():
     proposal = NpcInteractionProposal.model_validate(
         {
@@ -3121,6 +3637,67 @@ def test_selected_medical_npc_goal_uses_authored_check_and_effects():
     assert scene_flag(session.state.flags, "scout_dead", False) is False
 
 
+def test_explicit_healing_spell_on_npc_uses_spell_rules_without_medicine_roll():
+    proposal = NpcInteractionProposal.model_validate(
+        {
+            "action_type": "medical",
+            "player_narration": "Kapłan wypowiada krótką modlitwę nad rannym.",
+            "npc_response": "Oddech zwiadowcy natychmiast się uspokaja.",
+            "requires_roll": True,
+            "ability": "wisdom",
+            "skill": "medicine",
+            "dc": 12,
+        }
+    )
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        npc_client=FakeNpcClient(proposal),
+        debug_point_id="wounded_scout",
+    )
+
+    pending = session.submit_action(
+        "Kapłan rzuca Słowo leczenia na zwiadowcę.",
+        selected_goal_id="help_scout",
+        selected_check_participants="single_actor",
+        participant_actor_ids=("cleric",),
+    )
+
+    assert pending["pending"]["proposal"]["requires_roll"] is False
+    assert pending["pending"]["spell_use"] == {
+        "actor_id": "cleric",
+        "spell_id": "healing_word",
+        "spell_name": "Słowo leczenia",
+        "spell_level": 1,
+    }
+    cleric_before = next(actor for actor in pending["actors"] if actor["id"] == "cleric")
+    assert cleric_before["spell_slots"][0]["remaining"] == 2
+    assert not any(
+        message["title"] == "Odpowiedź NPC"
+        and "natychmiast się uspokaja" in message["body"]
+        for message in pending["messages"]
+    )
+
+    resolved = session.decide("accept")
+
+    assert resolved["pending"] is None
+    assert resolved["required_rolls"] == []
+    cleric_after = next(actor for actor in resolved["actors"] if actor["id"] == "cleric")
+    assert cleric_after["spell_slots"][0]["remaining"] == 1
+    assert scene_flag(session.state.flags, "scout_treated", False) is True
+    assert scene_flag(session.state.flags, "scout_stabilized", False) is True
+    assert scene_flag(session.state.flags, "scout_trusts_party", False) is True
+    assert any(
+        message["title"] == "Zużyty slot czaru"
+        and "Słowo leczenia" in message["body"]
+        for message in resolved["messages"]
+    )
+    assert any(
+        message["title"] == "Odpowiedź NPC"
+        and "natychmiast się uspokaja" in message["body"]
+        for message in resolved["messages"]
+    )
+
+
 def test_selected_intimidation_goal_always_offers_authored_roll_without_technical_refusal():
     proposal = NpcInteractionProposal.model_validate(
         {
@@ -3157,10 +3734,12 @@ def test_selected_intimidation_goal_always_offers_authored_roll_without_technica
     assert state["pending"]["proposal"]["dc"] == 18
     assert "social_plan" not in state["pending"]
     assert state["pending"]["npc_action_plan"]["target_id"] == "scout_information"
-    assert [message["title"] for message in state["messages"][-2:]] == [
-        "Gracze",
-        "Narracja MG",
-    ]
+    assert state["messages"][-1]["title"] == "Gracze"
+    assert not any(
+        message["title"] == "Narracja MG"
+        and "wysuwa miecz" in message["body"]
+        for message in state["messages"]
+    )
 
     roll = session.decide("accept")
 
@@ -3217,6 +3796,60 @@ def test_npc_instance_gm_chat_does_not_address_npc_or_apply_effects():
     assert "dzień zdecydowanie" in state["conversation"]["entries"][-1]["body"]
     assert scene_flag(session.state.flags, "scout_calmed", False) is False
     assert client.requests[0].to_prompt_payload()["conversation_only"] is True
+
+
+def test_cosmetic_npc_exchange_resolves_without_extra_acceptance():
+    proposal = NpcInteractionProposal.model_validate(
+        {
+            "action_type": "search",
+            "player_narration": "Zwiadowca zerka na zabłocone buty Bohatera.",
+            "npc_response": "Ładny marsz. Błoto wygląda na bardziej wypoczęte.",
+            "requires_roll": False,
+        }
+    )
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        npc_client=FakeNpcClient(proposal),
+        debug_point_id="wounded_scout",
+    )
+
+    state = session.submit_action("Jak oceniasz nasz marsz?")
+
+    assert state["pending"] is None
+    assert state["messages"][-2]["title"] == "Narracja MG"
+    assert state["messages"][-1] == {
+        "title": "Odpowiedź NPC",
+        "body": "Ładny marsz. Błoto wygląda na bardziej wypoczęte.",
+    }
+
+
+def test_invalid_npc_payload_retries_then_returns_player_facing_message():
+    proposal = NpcInteractionProposal.model_validate(
+        {
+            "action_type": "information",
+            "request_risk": "no_risk",
+            "npc_response": "Sekret, którego nie wolno jeszcze ujawnić.",
+            "requires_roll": False,
+        }
+    )
+    client = FakeNpcClient(proposal)
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        npc_client=client,
+        debug_point_id="wounded_scout",
+    )
+
+    state = session.submit_action("Powiedz nam od razu całą prawdę.")
+
+    assert state["pending"] is None
+    assert len(client.requests) == 2
+    assert state["messages"][-1]["title"] == "Rozmowa wymaga doprecyzowania"
+    assert "bezpiecznie zinterpretować" in state["messages"][-1]["body"]
+    assert not any(
+        entry["role"] == "player"
+        and "całą prawdę" in entry["body"]
+        for entry in state["conversation"]["entries"]
+    )
 
 
 def test_exploration_ui_session_refuses_request_beyond_current_npc_attitude():
@@ -3456,12 +4089,20 @@ def test_second_npc_fixture_uses_transition_without_starting_combat():
             "requires_roll": False,
         }
     )
+    client = FakeNpcClient(proposal)
     session = ExplorationUiSession(
         "content/scenarios/village_square_mvp.json",
-        npc_client=FakeNpcClient(proposal),
+        npc_client=client,
         debug_point_id="elder_npc",
     )
-    session.submit_action("Żądamy zapłaty z góry.")
+    session.submit_action(
+        "Żądamy zapłaty z góry.",
+        selected_goal_id="negotiate_advance",
+        selected_check_participants="single_actor",
+        participant_actor_ids=("hero",),
+    )
+    assert client.requests[0].selected_goal_id == "negotiate_advance"
+    assert client.requests[0].routed_intent_id == "social"
     session.decide("accept")
 
     escalated = session.resolve_rolls({"hero": 1})
@@ -3476,6 +4117,541 @@ def test_second_npc_fixture_uses_transition_without_starting_combat():
     assert resumed["pending_encounter"] is None
     assert resumed["active_point"]["npc"]["runtime_state"]["interaction_status"] == "active"
     assert scene_flag(session.state.flags, "elder_argument", True) is False
+
+
+def test_village_elder_ui_goals_follow_guarded_flow_state():
+    session = ExplorationUiSession(
+        "content/scenarios/village_square_mvp.json",
+        debug_point_id="elder_npc",
+    )
+
+    initial = session.state_payload()
+    assert {
+        goal["id"] for goal in initial["active_point"]["npc"]["goals"]
+    } == {"ask_watchtower_problem", "negotiate_advance"}
+
+    session.state = replace(
+        session.state,
+        flags=set_scene_flag(session.state.flags, "quest_hook_found", True),
+    )
+    informed = session.state_payload()
+    assert [
+        goal["id"] for goal in informed["active_point"]["npc"]["goals"]
+    ] == ["ask_watchtower_problem", "accept_watchtower_quest"]
+
+    session.state = replace(
+        session.state,
+        flags=set_scene_flag(session.state.flags, "quest_accepted", True),
+    )
+    accepted = session.state_payload()
+    assert [
+        goal["id"] for goal in accepted["active_point"]["npc"]["goals"]
+    ] == ["ask_watchtower_problem", "confirm_watchtower_departure"]
+
+    session.state = replace(
+        session.state,
+        flags=set_scene_flag(session.state.flags, "elder_refuses_party", True),
+    )
+    closed = session.state_payload()
+    assert closed["active_point"]["npc"]["goals"] == []
+
+
+def test_village_authored_npc_route_hides_gemini_invented_reward_and_purchase():
+    proposal = NpcInteractionProposal.model_validate(
+        {
+            "action_type": "information",
+            "player_narration": "Bohater kupuje mapę od Brena za kilka monet.",
+            "npc_response": (
+                "Bren obiecuje sto sztuk złota i ujawnia obecność niebieskiego smoka."
+            ),
+            "success_message": "Drużyna otrzymuje złoto.",
+            "requires_roll": False,
+        }
+    )
+    session = ExplorationUiSession(
+        "content/scenarios/village_square_mvp.json",
+        npc_client=FakeNpcClient(proposal),
+        debug_point_id="elder_npc",
+    )
+
+    state = session.submit_action(
+        "Pytamy Brena, co wydarzyło się przy strażnicy.",
+        selected_goal_id="ask_watchtower_problem",
+        selected_check_participants="single_actor",
+        participant_actor_ids=("hero",),
+    )
+
+    preview_bodies = [message["body"] for message in state["messages"]]
+    assert not any("Bren rozwija starą mapę" in body for body in preview_bodies)
+    assert not any("Na trakcie widywano gobliny" in body for body in preview_bodies)
+    assert state["pending"]["proposal"]["success_message"] == (
+        "Bren przekazuje drużynie sprawdzony trop o opuszczonej strażnicy."
+    )
+    state = session.decide("accept")
+    bodies = [message["body"] for message in state["messages"]]
+    assert any("Bren rozwija starą mapę" in body for body in bodies)
+    assert any("Na trakcie widywano gobliny" in body for body in bodies)
+    assert not any("sto sztuk złota" in body for body in bodies)
+    assert not any("niebieskiego smoka" in body for body in bodies)
+    assert not any("kupuje mapę" in body for body in bodies)
+
+
+def test_village_zone_options_are_exposed_and_resolve_authored_effects():
+    session = ExplorationUiSession("content/scenarios/village_square_mvp.json")
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+
+    initial = session.state_payload()
+
+    options = {
+        option["id"]: option
+        for option in initial["flow"]["zone_options"]
+    }
+    assert set(options) == {"read_notice_board", "ask_for_rumors"}
+    assert options["read_notice_board"]["completed"] is False
+    assert options["ask_for_rumors"]["check"] == {
+        "ability": "charisma",
+        "skill": "persuasion",
+        "tool": None,
+        "dc": 10,
+    }
+    assert [
+        milestone["completed"]
+        for milestone in initial["flow"]["objectives"][0]["milestones"]
+    ] == [False, False, False]
+
+    notice = session.select_exploration_option("read_notice_board")
+
+    assert scene_flag(session.state.flags, "notice_read", False) is True
+    notice_option = next(
+        option
+        for option in notice["flow"]["zone_options"]
+        if option["id"] == "read_notice_board"
+    )
+    assert notice_option["completed"] is True
+    assert notice["messages"][-1]["title"] == "Sprawdź tablicę ogłoszeń"
+
+    rolling = session.select_exploration_option(
+        "ask_for_rumors",
+        actor_id="rogue",
+    )
+
+    assert rolling["pending"]["kind"] == "zone_option"
+    assert rolling["required_rolls"][0]["actor_id"] == "rogue"
+    assert rolling["required_rolls"][0]["dc"] == 10
+
+    resolved = session.resolve_rolls({"rogue": 12})
+
+    assert scene_flag(session.state.flags, "rumors_collected", False) is True
+    assert resolved["pending"] is None
+    assert resolved["messages"][-1]["title"] == "Popytaj mieszkańców"
+
+
+def test_village_npc_setup_and_travel_messages_use_current_location():
+    session = ExplorationUiSession("content/scenarios/village_square_mvp.json")
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+
+    session._queue_current_zone_npc_setup()
+
+    setup = session.state_payload()
+    step = setup["exploration_setup"]["current_step"]
+    assert step["assignment_point_id"] == "elder_npc"
+    assert "Sołtys Bren" in step["message"]
+    assert "rannego człowieka" not in step["message"]
+    assert "dziedziń" not in step["message"].lower()
+
+    session.assign_exploration_point_position(Coordinate(8, 5))
+    active = session.confirm_exploration_setup_step()
+
+    assert active["flow"]["stage"] == "location_active"
+    assert "Rynek" in active["board"]["message"]
+    assert "dziedziń" not in active["board"]["message"].lower()
+
+    traveled = session.travel_to("elder_house")
+
+    assert "Dom sołtysa" in traveled["board"]["message"]
+    assert traveled["flow"]["stage"] == "party_setup"
+    assert traveled["exploration_setup"]["paper_map"]["id"] == "village_elder_house"
+    assert "Rozłóż papierową mapę" in traveled["board"]["message"]
+
+    confirmed = session.confirm_exploration_setup_step()
+
+    assert confirmed["flow"]["stage"] == "location_active"
+    assert "Dom sołtysa" in confirmed["current_zone"]["name"]
+
+
+def test_village_initial_setup_starts_with_printable_paper_map():
+    session = ExplorationUiSession("content/scenarios/village_square_mvp.json")
+    session.attach_board_connection(FakeBoardConnection(), backend="simulator")
+
+    state = session.start_session()
+
+    setup = state["exploration_setup"]
+    assert setup["current_step"]["label"] == "papierowa mapa: Rynek"
+    assert setup["paper_map"]["id"] == "village_market"
+    assert setup["paper_map"]["width_cm"] == 50.0
+    assert setup["paper_map"]["height_cm"] == 75.0
+    assert setup["paper_map"]["a4_pdf_url"].endswith("/village_market.pdf")
+
+
+def test_village_npc_intro_is_only_added_on_first_open():
+    session = ExplorationUiSession(
+        "content/scenarios/village_square_mvp.json",
+        debug_point_id="elder_npc",
+    )
+
+    intro = session.active_point.npc_interaction.dialogue_intro
+    assert intro
+    session.select_point("")
+    first_open = session.select_point("elder_npc")
+    initial_count = sum(
+        entry["body"] == intro
+        for entry in first_open["conversation"]["entries"]
+    )
+
+    session.select_point("")
+    reopened = session.select_point("elder_npc")
+
+    assert initial_count == 1
+    assert sum(
+        entry["body"] == intro
+        for entry in reopened["conversation"]["entries"]
+    ) == 1
+
+
+def test_village_quest_lifecycle_creates_guarded_watchtower_handoff(tmp_path):
+    proposal = NpcInteractionProposal.model_validate(
+        {
+            "action_type": "information",
+            "player_narration": "Bren rozwija mapę i słucha decyzji drużyny.",
+            "npc_response": "Bren potwierdza kolejne ustalenie.",
+            "requires_roll": False,
+        }
+    )
+    client = FakeNpcClient(proposal)
+    session = ExplorationUiSession(
+        "content/scenarios/village_square_mvp.json",
+        npc_client=client,
+        debug_point_id="elder_npc",
+        observation_dir=tmp_path / "observations",
+        save_dir=tmp_path / "saves",
+    )
+
+    with pytest.raises(ValueError, match="autorskie wyjście"):
+        session.finish_scenario()
+    with pytest.raises(ValueError, match="nie jest jeszcze gotowa"):
+        session.continue_scenario()
+
+    session.submit_action(
+        "Pytamy Brena, co dzieje się przy strażnicy.",
+        selected_goal_id="ask_watchtower_problem",
+        selected_check_participants="single_actor",
+        participant_actor_ids=("hero",),
+    )
+    after_hook = session.decide("accept")
+
+    assert scene_flag(session.state.flags, "quest_hook_found", False) is True
+    assert after_hook["flow"]["objectives"][0]["status"] == "active"
+    assert {
+        goal["id"] for goal in after_hook["active_point"]["npc"]["goals"]
+    } == {"ask_watchtower_problem", "accept_watchtower_quest"}
+
+    session.submit_action(
+        "Przyjmujemy zadanie i zajmiemy się strażnicą.",
+        selected_goal_id="accept_watchtower_quest",
+        selected_check_participants="single_actor",
+        participant_actor_ids=("hero",),
+    )
+    after_acceptance = session.decide("accept")
+
+    assert scene_flag(session.state.flags, "quest_accepted", False) is True
+    assert after_acceptance["flow"]["objectives"][0]["status"] == "active"
+    assert {
+        goal["id"] for goal in after_acceptance["active_point"]["npc"]["goals"]
+    } == {"ask_watchtower_problem", "confirm_watchtower_departure"}
+
+    session.submit_action(
+        "Jesteśmy przygotowani. Ruszamy starym traktem.",
+        selected_goal_id="confirm_watchtower_departure",
+        selected_check_participants="single_actor",
+        participant_actor_ids=("hero",),
+    )
+    ready = session.decide("accept")
+
+    assert scene_flag(session.state.flags, "ready_for_watchtower", False) is True
+    assert ready["flow"]["objectives"][0]["status"] == "completed"
+    assert ready["flow"]["continuation"]["available"] is False
+    assert ready["flow"]["continuation"]["requires_departure_zone"] is True
+    assert ready["active_point"]["npc"]["goals"] == []
+
+    session.travel_to("forest_road")
+    at_departure = session.confirm_exploration_setup_step()
+    assert at_departure["flow"]["continuation"]["available"] is True
+
+    completed = session.continue_scenario(
+        navigator_actor_id="hero",
+        navigation_roll=20,
+    )
+
+    handoff = completed["flow"]["scenario_handoff"]
+    assert completed["flow"]["stage"] == "scenario_complete"
+    assert handoff["source_scenario_id"] == "village_square_mvp"
+    assert handoff["target_scenario_id"] == "abandoned_watchtower"
+    assert handoff["target_scenario_name"] == "Opuszczona strażnica"
+    assert "Opuszczona strażnica" in completed["board"]["message"]
+    assert "abandoned_watchtower" not in completed["board"]["message"]
+    continuation_message = next(
+        message
+        for message in completed["messages"]
+        if message["title"] == "Dalsza droga"
+    )
+    assert "Opuszczona strażnica" in continuation_message["body"]
+    assert "abandoned_watchtower" not in continuation_message["body"]
+    assert handoff["source_zone_id"] == "forest_road"
+    assert handoff["target_scenario_path"].endswith(
+        "content/scenarios/abandoned_watchtower.json"
+    )
+    assert handoff["departure_minute"] == 35
+    assert handoff["travel_minutes"] == 45
+    assert handoff["travel"]["pace"] == "normal"
+    assert handoff["travel"]["navigation"]["success"] is True
+    assert handoff["arrival_minute"] == 80
+    assert handoff["arrival_clock"]["time"] == "18:20"
+    assert handoff["triggered_clock_event_ids"] == []
+    assert handoff["outcome"]["id"] == "prepared_watchtower_arrival"
+    assert handoff["outcome"]["kind"] == "success"
+    assert handoff["source_objectives"] == [
+        {
+            "id": "find_watchtower_hook",
+            "name": "Przygotujcie wyprawę do strażnicy",
+            "status": "completed",
+        },
+    ]
+    assert {
+        effect["parameters"]["key"]
+        for effect in handoff["outcome"]["target_effects"]
+    } >= {
+        "quest_hook_found",
+        "quest_accepted",
+        "watchtower_clean_approach",
+    }
+    assert scene_flag(session.state.flags, "watchtower_dusk_arrival", False) is False
+    assert scene_flag(session.state.flags, "watchtower_alerted", False) is False
+    assert session.snapshot_path.exists()
+    saved = json.loads(session.snapshot_path.read_text(encoding="utf-8"))
+    assert {actor["id"] for actor in saved["actors"]} == {"hero", "rogue"}
+    saved_flags = {
+        item["key"]: item["value"]
+        for item in saved["exploration"]["flags"]
+    }
+    assert saved_flags.items() >= {
+        "quest_hook_found": True,
+        "quest_accepted": True,
+        "ready_for_watchtower": True,
+    }.items()
+    assert saved["exploration"]["party_position"]["zone_id"] == "forest_road"
+    assert saved["exploration"]["elapsed_minutes"] == 80
+    assert "elder_bren" in {
+        item["npc_id"] for item in saved["exploration"]["npc_states"]
+    }
+    assert [request.routed_intent_id for request in client.requests] == [
+        "information",
+        "commitment",
+        "travel",
+    ]
+
+    source_hero = next(
+        actor for actor in session.exploration.actors if str(actor.id) == "hero"
+    )
+    started = session.start_scenario_handoff()
+
+    assert started["scenario"]["id"] == "abandoned_watchtower"
+    assert started["flow"]["stage"] == "waiting_for_board"
+    assert started["flow"]["clock"]["time"] == "18:20"
+    assert {
+        actor["id"] for actor in started["actors"] if actor["faction"] == "ally"
+    } == {"hero", "rogue", "cleric"}
+    target_hero = next(
+        actor for actor in session.exploration.actors if str(actor.id) == "hero"
+    )
+    target_hero_items = {item.id: item for item in target_hero.inventory}
+    assert {
+        item.id: item.quantity for item in source_hero.inventory
+    }.items() <= {
+        item.id: item.quantity for item in target_hero.inventory
+    }.items()
+    assert target_hero.currency == source_hero.currency
+    target_rogue = next(
+        actor for actor in session.exploration.actors if str(actor.id) == "rogue"
+    )
+    assert "thieves_tools" in target_rogue.proficiencies.tools
+    assert {
+        "crossbow",
+        "dagger",
+        "sticky_flask",
+        "thieves_tools",
+        "crossbow_bolt",
+    } <= {item.id for item in target_rogue.inventory}
+    assert target_hero_items["longsword"].equipped is True
+    assert scene_flag(session.state.flags, "quest_hook_found", False) is True
+    assert scene_flag(session.state.flags, "quest_accepted", False) is True
+    assert scene_flag(session.state.flags, "watchtower_clean_approach", False) is True
+    assert started["flow"]["scenario_handoff"]["applied"] is True
+
+
+def test_village_delay_triggers_clock_consequences_during_watchtower_travel(
+    tmp_path,
+):
+    session = ExplorationUiSession(
+        "content/scenarios/village_square_mvp.json",
+        debug_point_id="elder_npc",
+        observation_dir=tmp_path / "observations",
+        save_dir=tmp_path / "saves",
+    )
+    flags = session.state.flags
+    for key in (
+        "quest_hook_found",
+        "quest_accepted",
+        "ready_for_watchtower",
+        "exploration_point_placed_elder_npc",
+    ):
+        flags = set_scene_flag(flags, key, True)
+    session.state = replace(session.state, flags=flags)
+
+    session.travel_to("tavern")
+    session.confirm_exploration_setup_step()
+    session.assign_exploration_point_position(Coordinate(3, 12))
+    session.confirm_exploration_setup_step()
+    session.start_short_rest()
+    rested = session.confirm_short_rest()
+    assert rested["flow"]["clock"]["time"] == "18:05"
+    session.finish_short_rest()
+    session.travel_to("market")
+    session.confirm_exploration_setup_step()
+    session.travel_to("forest_road")
+    session.confirm_exploration_setup_step()
+
+    completed = session.continue_scenario(
+        navigator_actor_id="hero",
+        navigation_roll=20,
+    )
+    handoff = completed["flow"]["scenario_handoff"]
+
+    assert handoff["departure_minute"] == 85
+    assert handoff["arrival_minute"] == 130
+    assert handoff["arrival_clock"]["time"] == "19:10"
+    assert handoff["triggered_clock_event_ids"] == [
+        "dusk_on_old_road",
+        "watchtower_defenders_alerted",
+    ]
+    assert handoff["outcome"]["id"] == "alerted_watchtower_arrival"
+    assert handoff["outcome"]["kind"] == "partial_success"
+    assert {
+        effect["parameters"]["key"]
+        for effect in handoff["outcome"]["target_effects"]
+    } >= {
+        "watchtower_dusk_arrival",
+        "watchtower_alerted",
+        "watchtower_reinforced",
+    }
+    assert scene_flag(session.state.flags, "watchtower_dusk_arrival", False) is True
+    assert scene_flag(session.state.flags, "watchtower_alerted", False) is True
+    saved = json.loads(session.snapshot_path.read_text(encoding="utf-8"))
+    saved_flags = {
+        item["key"]: item["value"]
+        for item in saved["exploration"]["flags"]
+    }
+    assert saved_flags["clock_event:dusk_on_old_road"] is True
+    assert saved_flags["clock_event:watchtower_defenders_alerted"] is True
+    clock_messages = {
+        message.title
+        for message in session.messages
+        if message.title in {"Zapada zmierzch", "Czas działa na korzyść goblinów"}
+    }
+    assert clock_messages == {"Zapada zmierzch", "Czas działa na korzyść goblinów"}
+
+
+def test_village_failed_fast_navigation_adds_authored_delay(tmp_path):
+    session = ExplorationUiSession(
+        "content/scenarios/village_square_mvp.json",
+        observation_dir=tmp_path / "observations",
+        save_dir=tmp_path / "saves",
+    )
+    flags = set_scene_flag(session.state.flags, "ready_for_watchtower", True)
+    session.state = replace(session.state, flags=flags)
+    session.travel_to("forest_road")
+    session.confirm_exploration_setup_step()
+    departure_minute = session.state.elapsed_minutes
+
+    completed = session.continue_scenario(
+        pace="fast",
+        navigator_actor_id="hero",
+        navigation_roll=1,
+    )
+    handoff = completed["flow"]["scenario_handoff"]
+
+    assert handoff["travel"]["pace_minutes"] == 34
+    assert handoff["travel"]["navigation"]["success"] is False
+    assert handoff["travel"]["navigation"]["delay_minutes"] == 30
+    assert handoff["travel_minutes"] == 64
+    assert handoff["arrival_minute"] == departure_minute + 64
+    assert handoff["outcome"]["id"] == "lost_old_road"
+    assert handoff["outcome"]["kind"] == "fail_forward"
+    assert handoff["outcome"]["target_effects"][-1] == {
+        "type": "set_flag",
+        "parameters": {"key": "watchtower_route_lost", "value": True},
+    }
+
+
+def test_village_keeper_rumor_uses_authored_route_completes_hook_and_hides_goal():
+    proposal = NpcInteractionProposal.model_validate(
+        {
+            "action_type": "social",
+            "player_narration": "Olan przypomina sobie rozmowę z woźnicą.",
+            "npc_response": (
+                "Przy starym trakcie widziano gobliny, a nocą w strażnicy paliły się światła."
+            ),
+            "requires_roll": False,
+            "effects_on_success": [
+                {
+                    "type": "set_flag",
+                    "parameters": {"key": "untrusted_llm_flag", "value": True},
+                }
+            ],
+        }
+    )
+    client = FakeNpcClient(proposal)
+    session = ExplorationUiSession(
+        "content/scenarios/village_square_mvp.json",
+        npc_client=client,
+        debug_point_id="tavern_keeper",
+    )
+
+    initial = session.state_payload()
+    assert {
+        goal["id"] for goal in initial["active_point"]["npc"]["goals"]
+    } == {"ask_watchtower_rumors", "chat_with_keeper"}
+
+    pending = session.submit_action(
+        "Pytamy Olana, co słyszał o starym trakcie i opuszczonej strażnicy.",
+        selected_goal_id="ask_watchtower_rumors",
+        selected_check_participants="single_actor",
+        participant_actor_ids=("rogue",),
+    )
+
+    assert client.requests[0].selected_goal_id == "ask_watchtower_rumors"
+    assert client.requests[0].routed_intent_id == "information"
+    assert pending["pending"]["proposal"]["action_type"] == "information"
+    assert pending["pending"]["proposal"]["effects_on_success"] == []
+
+    resolved = session.decide("accept")
+
+    assert resolved["pending"] is None
+    assert scene_flag(session.state.flags, "tavern_rumor_heard", False) is True
+    assert scene_flag(session.state.flags, "quest_hook_found", False) is True
+    assert scene_flag(session.state.flags, "untrusted_llm_flag", False) is False
+    assert [
+        goal["id"] for goal in resolved["active_point"]["npc"]["goals"]
+    ] == ["chat_with_keeper"]
 
 
 def test_npc_request_receives_only_that_npc_interaction_history():
@@ -3665,6 +4841,60 @@ def test_exploration_ui_session_applies_retreat_outcome_without_a_winner():
 
     assert resolved["combat"] is None
     assert {"key": "party_retreated_at_gate", "value": True} in resolved["flags"]
+
+
+def test_combat_resolution_stashes_unclaimed_corpse_and_battlefield_loot():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+    assert session.combat_state is not None
+    recovered_bolts = InventoryItem(
+        "aftermath_bolts",
+        "Odzyskane bełty",
+        "ammunition",
+        quantity=3,
+        weight_lb=0.075,
+        ammunition_type="bolt",
+    )
+    session.combat_state = replace(
+        session.combat_state,
+        battlefield_loot=(
+            BattlefieldLoot(
+                id="test_aftermath_bolts",
+                position=Coordinate(7, 7),
+                bundle=LootBundle(
+                    id="test_aftermath_bolts",
+                    label="Bełty z pola walki",
+                    items=(recovered_bolts,),
+                ),
+            ),
+        ),
+    )
+    for actor in tuple(session.combat_state.actors):
+        if actor.faction == Faction.ENEMY:
+            session.combat_state = replace_actor(
+                session.combat_state,
+                replace(actor, hp=0),
+            )
+
+    resolved = session.resolve_active_combat()
+
+    assert resolved["combat"] is None
+    hero = next(
+        actor for actor in session.exploration.actors if str(actor.id) == "hero"
+    )
+    assert any(
+        item.id == "poison_vial" and item.quantity == 2
+        for item in hero.inventory
+    )
+    assert any(
+        item.id == "aftermath_bolts" and item.quantity == 3
+        for item in hero.inventory
+    )
+    assert hero.currency.sp == 10
+    assert any(
+        message["title"] == "Zabezpieczono łup po walce"
+        for message in resolved["messages"]
+    )
 
 
 def test_exploration_ui_session_applies_surrender_outcome():
@@ -3967,6 +5197,10 @@ def test_exploration_ui_session_player_movement_updates_position_and_remaining_s
 
     state = session.state_payload()
     actor_id = state["combat"]["current_actor"]["id"]
+    assert all(
+        set(tile) == {"col", "row", "cost_feet"}
+        for tile in state["combat"]["movement"]["destinations"]
+    )
     destination = next(tile for tile in state["combat"]["movement"]["destinations"] if tile["cost_feet"] == 5)
 
     state = session.submit_combat_movement(col=destination["col"], row=destination["row"])
@@ -4220,6 +5454,8 @@ def test_exploration_ui_session_crossbow_in_melee_requires_disadvantage_roll() -
     pending = confirmed["combat"]["pending_player_attack"]
 
     assert pending["attack_mode"] == "disadvantage"
+    assert pending["source"]["resource_label"] == "amunicja bolt: 20"
+    assert pending["source"]["ammunition_remaining"] == 20
     assert pending["positioning"]["ranged_in_melee"] is True
     assert pending["positioning"]["ranged_threat_actor_ids"] == ["goblin_b"]
     assert pending["positioning"]["ranged_threats"] == [
@@ -5058,6 +6294,10 @@ def test_exploration_ui_session_ready_attack_can_stop_enemy_turn():
     assert rolled["combat"]["pending_ready_attack"]["stage"] == "damage_roll"
     assert rolled["combat"]["pending_ready_attack"]["damage_components"]
     assert rolled["combat"]["pending_ready_attack"]["damage_components"][0]["dice"].startswith("2d")
+    assert any(
+        message["title"] == "Ready" and "2d" in message["body"]
+        for message in rolled["messages"]
+    )
     assert target_payload["defeated"] is True
     assert stopped["combat"]["pending_ready_attack"] is None
     assert stopped["combat"]["enemy_turn_preview"] is None
@@ -5099,6 +6339,10 @@ def test_exploration_ui_session_hero_opportunity_attack_can_stop_enemy_movement(
     assert rolled["combat"]["pending_enemy_opportunity_attack"]["stage"] == "damage_roll"
     assert rolled["combat"]["pending_enemy_opportunity_attack"]["damage_components"]
     assert rolled["combat"]["pending_enemy_opportunity_attack"]["damage_components"][0]["dice"].startswith("2d")
+    assert any(
+        message["title"] == "Atak okazyjny" and "2d" in message["body"]
+        for message in rolled["messages"]
+    )
     assert enemy_payload["defeated"] is True
     assert stopped["combat"]["pending_enemy_opportunity_attack"] is None
     assert stopped["combat"]["enemy_turn_preview"] is None
@@ -7442,6 +8686,50 @@ def test_village_merchant_supports_partial_buy_and_resale() -> None:
     assert next(
         item for item in sold["trade"]["stock"] if item["id"] == "crossbow_bolt"
     )["quantity"] == 34
+
+
+def test_village_downtime_crafting_spends_materials_adds_item_and_advances_clock() -> None:
+    session = ExplorationUiSession("content/scenarios/village_square_mvp.json")
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+
+    before = session.state_payload()
+
+    assert before["downtime"]["zone_id"] == "market"
+    recipe = before["downtime"]["recipes"][0]
+    assert recipe["id"] == "forge_dagger"
+    assert recipe["material_cost_cp"] == 100
+    assert recipe["time_cost_minutes"] == 480
+    hero_availability = next(
+        entry
+        for entry in recipe["availability"]
+        if entry["actor_id"] == "hero"
+    )
+    rogue_availability = next(
+        entry
+        for entry in recipe["availability"]
+        if entry["actor_id"] == "rogue"
+    )
+    assert hero_availability["available"] is True
+    assert rogue_availability["available"] is False
+
+    completed = session.complete_downtime_crafting(
+        actor_id="hero",
+        recipe_id="forge_dagger",
+    )
+
+    hero = next(actor for actor in completed["actors"] if actor["id"] == "hero")
+    assert hero["currency"]["total_cp"] == 900
+    dagger = next(item for item in hero["inventory"] if item["id"] == "dagger")
+    assert dagger["quantity"] == 1
+    assert dagger["equipped"] is False
+    assert session.state.elapsed_minutes == 480
+    flags = {entry["key"]: entry["value"] for entry in completed["flags"]}
+    assert flags["watchtower_dusk_arrival"] is True
+    assert flags["watchtower_alerted"] is True
+    assert any(
+        message["title"] == "Rzemiosło ukończone"
+        for message in completed["messages"]
+    )
 
 
 def test_village_merchant_rejects_unaffordable_purchase_without_changing_stock() -> None:

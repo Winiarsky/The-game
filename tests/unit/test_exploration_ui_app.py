@@ -1,3 +1,5 @@
+from unittest.mock import Mock
+
 from dnd_board_game.llm import GmClassifierProposal, GmDeclarationAnalysis, GmDeclarationAnalysisType, NpcInteractionProposal
 from dnd_board_game.exploration import reveal_exploration_points
 from dnd_board_game.ui.exploration_app import ExplorationUiSession, UiFlowStage, create_app
@@ -401,6 +403,27 @@ def test_trade_routes_forward_validated_transaction_payloads() -> None:
     assert "całkowitą" in invalid.get_json()["error"]
 
 
+def test_downtime_crafting_route_forwards_actor_and_recipe() -> None:
+    session = _session()
+    captured: dict[str, object] = {}
+
+    def complete(**payload):
+        captured.update(payload)
+        return session.state_payload()
+
+    session.complete_downtime_crafting = complete
+    response = create_app(session).test_client().post(
+        "/api/downtime/crafting/complete",
+        json={"actor_id": "hero", "recipe_id": "forge_dagger"},
+    )
+
+    assert response.status_code == 200
+    assert captured == {
+        "actor_id": "hero",
+        "recipe_id": "forge_dagger",
+    }
+
+
 def test_armor_route_requires_boolean_equip_and_forwards_payload() -> None:
     session = _session()
     captured: dict[str, object] = {}
@@ -453,6 +476,120 @@ def test_light_route_forwards_actor_item_and_action() -> None:
     }
 
 
+def test_action_route_forwards_player_selected_social_skill() -> None:
+    session = Mock()
+    session.submit_action.return_value = {"ok": True}
+    client = create_app(session).test_client()
+
+    response = client.post(
+        "/api/action",
+        json={
+            "text": "Przekonujemy zwiadowcę.",
+            "selected_goal_id": "calm_scout",
+            "check_participants": "single_actor",
+            "participant_actor_ids": ["hero"],
+            "selected_social_skill": "deception",
+        },
+    )
+
+    assert response.status_code == 200
+    session.submit_action.assert_called_once_with(
+        "Przekonujemy zwiadowcę.",
+        selected_goal_id="calm_scout",
+        selected_check_participants="single_actor",
+        participant_actor_ids=("hero",),
+        selected_social_skill="deception",
+        conversation_only=False,
+    )
+
+
+def test_exploration_awareness_routes_forward_actor_id() -> None:
+    session = _session()
+    captured: list[tuple[str, str]] = []
+
+    def search(actor_id):
+        captured.append(("search", actor_id))
+        return session.state_payload()
+
+    def hide(actor_id):
+        captured.append(("hide", actor_id))
+        return session.state_payload()
+
+    session.start_exploration_search = search
+    session.start_exploration_hide = hide
+    client = create_app(session).test_client()
+
+    search_response = client.post(
+        "/api/exploration/search/start",
+        json={"actor_id": "rogue"},
+    )
+    hide_response = client.post(
+        "/api/exploration/hide/start",
+        json={"actor_id": "hero"},
+    )
+
+    assert search_response.status_code == 200
+    assert hide_response.status_code == 200
+    assert captured == [("search", "rogue"), ("hide", "hero")]
+
+
+def test_exploration_fixture_routes_forward_typed_payloads() -> None:
+    session = _session()
+    captured: list[tuple[object, ...]] = []
+
+    def action(**kwargs):
+        captured.append(
+            (
+                "action",
+                kwargs["actor_id"],
+                kwargs["fixture_id"],
+                kwargs["operation"],
+            )
+        )
+        return session.state_payload()
+
+    def damage(**kwargs):
+        captured.append(
+            (
+                "damage",
+                kwargs["actor_id"],
+                kwargs["fixture_id"],
+                kwargs["attack_total"],
+                kwargs["damage"],
+            )
+        )
+        return session.state_payload()
+
+    session.start_exploration_fixture_action = action
+    session.damage_exploration_fixture = damage
+    client = create_app(session).test_client()
+
+    action_response = client.post(
+        "/api/exploration/fixture/action",
+        json={
+            "actor_id": "rogue",
+            "fixture_id": "gate_supply_chest",
+            "operation": "unlock",
+        },
+    )
+    damage_response = client.post(
+        "/api/exploration/fixture/damage",
+        json={
+            "actor_id": "hero",
+            "fixture_id": "gate_supply_chest",
+            "attack_total": 16,
+            "damage": 7,
+        },
+    )
+
+    assert action_response.status_code == 200
+    assert damage_response.status_code == 200
+    assert captured == [
+        ("action", "rogue", "gate_supply_chest", "unlock"),
+        ("damage", "hero", "gate_supply_chest", 16, 7),
+    ]
+
+
 def test_combat_ui_exposes_manual_enemy_saving_throw_endpoint() -> None:
     html, javascript, _stylesheet = _page_assets(_client())
 
@@ -474,6 +611,22 @@ def test_courtyard_interaction_tile_images_are_served() -> None:
     assert scout.mimetype == "image/png"
     assert search.status_code == 200
     assert search.mimetype == "image/png"
+
+
+def test_printable_paper_map_assets_are_served() -> None:
+    client = _client()
+
+    preview = client.get(
+        "/game-assets/print_maps/village_watchtower/png/watchtower_gate.png"
+    )
+    pdf = client.get(
+        "/game-assets/print_maps/village_watchtower/pdf/a4/watchtower_gate.pdf"
+    )
+
+    assert preview.status_code == 200
+    assert preview.mimetype == "image/png"
+    assert pdf.status_code == 200
+    assert pdf.mimetype == "application/pdf"
 
 
 def test_combat_ui_warns_about_area_spell_friendly_fire() -> None:
@@ -504,10 +657,24 @@ def test_exploration_goal_ui_selects_participants_before_sending_method() -> Non
     assert "Cała drużyna" in javascript
     assert 'id="goal-action"' in javascript
     assert "function sendGoalAction" in javascript
+    assert "selected_social_skill:" in javascript
+    assert "Jak chcecie wpłynąć na NPC?" in javascript
+    assert "Ten wybór należy do graczy" in javascript
     assert "{text, conversation_only: true}" in javascript
     assert "To jest rozmowa, nie deklaracja działania ani rzut." in html
     assert ".interaction-actor-card.selected" in stylesheet
     assert "state.active_challenge.uses_progress" in javascript
+
+
+def test_exploration_ui_exposes_downtime_crafting_preview_and_confirmation() -> None:
+    _html, javascript, _stylesheet = _page_assets(_client())
+
+    assert "function downtimePanelHtml" in javascript
+    assert "Rzemiosło w downtime" in javascript
+    assert "recipe.material_cost_cp" in javascript
+    assert "recipe.time_cost_minutes" in javascript
+    assert "window.confirm(prompt)" in javascript
+    assert "/api/downtime/crafting/complete" in javascript
 
 
 def test_interaction_screen_scrolls_and_goal_images_keep_their_aspect_ratio() -> None:
@@ -713,6 +880,7 @@ def test_exploration_ui_page_is_fiction_first_and_accepts_questions():
     assert "Co robicie lub o co pytacie?" in html
     assert "Napisz wiadomość do MG" in html
     assert 'id="chat-typing"' in html
+    assert 'id="chat-retry"' in html
     assert "Opuść interakcję" in html
     assert 'id="exploration-menu-panel"' in html
     assert "Nie macie pomysłu? Zobaczcie inspiracje" not in javascript
@@ -725,9 +893,19 @@ def test_exploration_ui_page_is_fiction_first_and_accepts_questions():
     assert "scrollChatToBottom" in javascript
     assert "data-chat-scroll-bound" in javascript
     assert "waitingForGm" in javascript
+    assert "retryLastGmRequest" in javascript
+    assert "Odpowiedź trwa dłużej niż zwykle" in javascript
     assert "leaveChatInstance" in javascript
     assert "resolveNpcTransition" in javascript
     assert "/api/npc-transition/resolve" in javascript
+    assert "/api/exploration/option" in javascript
+    assert "objectiveProgressHtml" in javascript
+    assert 'id="continuation-pace"' in javascript
+    assert "target_scenario_name" in javascript
+    assert "Zdobyte i zabezpieczone rzeczy" in javascript
+    assert "Rozpocznij ponownie" in javascript
+    assert "window.prompt" not in javascript
+    assert "'Menu eksploracji'" in javascript
     assert ".npc-transition-reactions" in stylesheet
     assert ".scene-image" in stylesheet
     assert ".conversation-entry" in stylesheet
@@ -735,10 +913,13 @@ def test_exploration_ui_page_is_fiction_first_and_accepts_questions():
     assert ".interaction-state-steps" in stylesheet
     assert ".conversation-context-chip" in stylesheet
     assert ".physical-roll-inputs" in stylesheet
+    assert ".objective-milestones" in stylesheet
+    assert ".continuation-composer" in stylesheet
     assert "body.chat-instance-mode { height: 100vh; overflow: hidden; }" in stylesheet
     assert "function pendingTitle" in javascript
     assert "if (proposal.player_narration) lines.push" not in javascript
     assert ".chat-typing" in stylesheet
+    assert ".chat-retry" in stylesheet
     assert "body.chat-instance-mode" in stylesheet
 
 
@@ -753,6 +934,25 @@ def test_exploration_ui_page_includes_snapshot_controls():
     assert "/api/snapshot/load" in javascript
 
 
+def test_point_leave_route_clears_active_interaction_before_board_selection() -> None:
+    session = _session()
+    session.select_point = Mock(return_value=session.state_payload())
+    client = create_app(session).test_client()
+
+    response = client.post("/api/point/leave", json={})
+
+    assert response.status_code == 200
+    session.select_point.assert_called_once_with("")
+
+    _html, javascript, _stylesheet = _page_assets(client)
+    leave_start = javascript.index("async function leaveChatInstance()")
+    leave_end = javascript.index("async function sendAction()", leave_start)
+    leave_body = javascript[leave_start:leave_end]
+    assert leave_body.index("/api/point/leave") < leave_body.index(
+        "/api/exploration/board-selection"
+    )
+
+
 def test_exploration_ui_page_and_api_include_scenario_end_lifecycle():
     client = _client()
 
@@ -763,8 +963,43 @@ def test_exploration_ui_page_and_api_include_scenario_end_lifecycle():
     assert 'id="finish-scenario-button"' in html
     assert "Źródło:" in javascript
     assert "/api/scenario/finish" in javascript
+    assert "/api/scenario/continue" in javascript
+    assert "/api/scenario/handoff/start" in javascript
+    assert "Sukces z konsekwencją" in javascript
+    assert "Niepowodzenie — historia toczy się dalej" in javascript
+    assert "Podsumowanie celów" in javascript
+    assert "zostaną przeniesione automatycznie" in javascript
     assert response.status_code == 200
     assert response.get_json()["flow"]["stage"] == "scenario_complete"
+
+
+def test_scenario_continue_api_forwards_travel_choices_and_physical_rolls():
+    session = Mock()
+    session.continue_scenario.return_value = {"ok": True}
+    client = create_app(session).test_client()
+
+    response = client.post(
+        "/api/scenario/continue",
+        json={
+            "pace": "slow",
+            "navigator_actor_id": "hero",
+            "navigation_roll": {"natural_roll": 14, "natural_roll_2": 8},
+            "forced_march_rolls": {
+                "hero": [{"natural_roll": 12, "natural_roll_2": 4}],
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.get_json() == {"ok": True}
+    session.continue_scenario.assert_called_once_with(
+        pace="slow",
+        navigator_actor_id="hero",
+        navigation_roll={"natural_roll": 14, "natural_roll_2": 8},
+        forced_march_rolls={
+            "hero": [{"natural_roll": 12, "natural_roll_2": 4}],
+        },
+    )
 
 
 def test_exploration_ui_short_rest_api_advances_time_and_returns_to_exploration():
@@ -1504,7 +1739,10 @@ def test_exploration_ui_shows_and_handles_travel_after_completed_challenge():
     response = client.post("/api/travel", json={"zone_id": "courtyard"})
 
     assert response.status_code == 200
-    data = response.get_json()
+    assert response.get_json()["exploration_setup"]["paper_map"]["id"] == (
+        "watchtower_courtyard"
+    )
+    data = client.post("/api/exploration/setup/confirm", json={}).get_json()
     assert data["current_zone"]["id"] == "courtyard"
     assert data["active_challenge"]["id"] == "courtyard_search"
 
@@ -1562,6 +1800,7 @@ def test_exploration_ui_reveals_selects_and_resolves_npc_point():
     _confirm_fallen_gate_setup(client)
     session.state, _ = reveal_exploration_points(session.state, ("wounded_scout",))
     client.post("/api/travel", json={"zone_id": "courtyard"})
+    client.post("/api/exploration/setup/confirm", json={})
     client.post("/api/board/select", json={"col": 8, "row": 8})
 
     point_response = client.post("/api/point", json={"point_id": "wounded_scout"})
@@ -1570,6 +1809,11 @@ def test_exploration_ui_reveals_selects_and_resolves_npc_point():
     assert point_state["active_point"]["id"] == "wounded_scout"
     assert point_state["active_point"]["npc"]["name"] == "Ranny zwiadowca"
     assert point_state["active_point"]["npc"]["goals"][0]["id"] == "calm_scout"
+    assert point_state["active_point"]["npc"]["goals"][0]["social_skill_options"] == [
+        "persuasion",
+        "deception",
+        "intimidation",
+    ]
     assert {"label": "Ranny zwiadowca", "value": "odkryty, ranny"} in point_state["scene_status"]
 
     action_response = client.post("/api/action", json={"text": "Uspokajamy zwiadowcę."})
@@ -1592,6 +1836,7 @@ def test_exploration_ui_applies_authored_npc_key_issue_without_roll():
     _confirm_fallen_gate_setup(client)
     session.state, _ = reveal_exploration_points(session.state, ("wounded_scout",))
     client.post("/api/travel", json={"zone_id": "courtyard"})
+    client.post("/api/exploration/setup/confirm", json={})
     client.post("/api/board/select", json={"col": 8, "row": 8})
     client.post("/api/point", json={"point_id": "wounded_scout"})
 
@@ -1630,6 +1875,9 @@ def test_exploration_ui_points_are_board_first_and_text_redirects_to_point_led()
     client.post("/api/travel", json={"zone_id": "courtyard"})
     setup = client.get("/api/state").get_json()
     assert setup["flow"]["stage"] == "party_setup"
+    assert setup["exploration_setup"]["paper_map"]["id"] == "watchtower_courtyard"
+    client.post("/api/exploration/setup/confirm", json={})
+    setup = client.get("/api/state").get_json()
     assert setup["exploration_setup"]["current_step"]["assignment_point_id"] == "wounded_scout"
     client.post("/api/board/select", json={"col": 8, "row": 8})
 

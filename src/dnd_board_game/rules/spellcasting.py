@@ -160,17 +160,38 @@ def spell_target_count(
     if targets_per_slot_level < 0:
         raise ValueError("Target scaling cannot be negative.")
     return base_targets + (cast_level - spell_level) * targets_per_slot_level
+
+
+def cantrip_damage_dice_count(
+    *,
+    base_dice: int,
+    actor_level: int,
+    dice_per_tier: int = 1,
+) -> int:
+    """Return a cantrip's damage dice at the 5e character-level breakpoints."""
+    if base_dice < 1:
+        raise ValueError("A damaging cantrip must have at least one base die.")
+    if not 1 <= actor_level <= 20:
+        raise ValueError("Actor level must be between 1 and 20.")
+    if dice_per_tier < 0:
+        raise ValueError("Cantrip damage scaling cannot be negative.")
+    tiers = sum(actor_level >= threshold for threshold in (5, 11, 17))
+    return base_dice + tiers * dice_per_tier
+
+
 @dataclass(frozen=True, slots=True)
 class SpellScaling:
     damage_dice_per_slot_level: int = 0
     healing_dice_per_slot_level: int = 0
     targets_per_slot_level: int = 0
+    cantrip_damage_dice_per_tier: int = 0
 
     def __post_init__(self) -> None:
         values = (
             self.damage_dice_per_slot_level,
             self.healing_dice_per_slot_level,
             self.targets_per_slot_level,
+            self.cantrip_damage_dice_per_tier,
         )
         if any(value < 0 for value in values):
             raise ValueError("Spell scaling values cannot be negative.")
@@ -205,6 +226,17 @@ class SpellDefinition:
             raise ValueError("A cantrip cannot be cast as a ritual.")
         if not self.effect_kind.strip():
             raise ValueError("Spell definition requires an effect kind.")
+        if self.scaling is not None:
+            if self.level == 0 and any(
+                (
+                    self.scaling.damage_dice_per_slot_level,
+                    self.scaling.healing_dice_per_slot_level,
+                    self.scaling.targets_per_slot_level,
+                )
+            ):
+                raise ValueError("A cantrip cannot scale from spell-slot level.")
+            if self.level > 0 and self.scaling.cantrip_damage_dice_per_tier:
+                raise ValueError("Only a cantrip can use cantrip damage scaling.")
         if self.effect_kind == "exploration" and self.exploration_effect is None:
             raise ValueError("An exploration spell requires an exploration effect.")
         if self.effect_kind != "exploration" and self.exploration_effect is not None:

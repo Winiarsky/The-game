@@ -149,11 +149,19 @@ konsekwencji. Znalezienie, użycie i zabranie pozostają trzema różnymi zmiana
 
 Jawna `/akcja` może trwale zmienić fixture sceny tylko wtedy, gdy content tego
 fixture'a definiuje odpowiednią `action_policy`. LLM wybiera istniejący cel oraz
-operację (`detach`, `damage`, `destroy`, `move`, `open`, `close`, `repair`), ale
+operację (`detach`, `damage`, `destroy`, `move`, `open`, `close`, `unlock`,
+`loot`, `repair`), ale
 silnik narzuca cechę, umiejętność, poziom trudności, postęp, hałas, komplikację i
 wynikowy stan. Sukces zapisuje runtime state obiektu i może ujawnić authored
 `yield_items`; porażka nie może samodzielnie zmienić stanu fixture'a. Wzmianka o
 obiekcie w opisie działania nie wystarcza do uruchomienia operacji na nim.
+
+Drzwi, zamki i pojemniki mają również bezpośrednie przyciski lokalnego runtime.
+Nie wymagają klasyfikacji LLM: content ustala dozwolone operacje, DC zamka,
+wymagane narzędzia, stan początkowy i zawartość. Otwarty lub zniszczony fixture
+przestaje blokować ruch i zapewniać cover po przejściu do encountera. Obiekt
+niszczalny używa jawnego KP, HP oraz opcjonalnego progu obrażeń; wpisanie rzutu
+ataku i obrażeń pozostaje fizyczną czynnością graczy.
 
 Jeśli drużyna nie ma pomysłu, może rozwinąć opcjonalne inspiracje zawierające
 przykładowe działania bez ST i ukrytych konsekwencji. Dokładne parametry testów,
@@ -617,8 +625,12 @@ przyszłego wspólnego modelu atakowalnego wyposażenia.
 
 ### NPC
 
-* używają modelu `Actor`
-* implementacja odłożona na później
+* trwały stan rozmówcy obejmuje nastawienie, kondycję fizyczną i emocjonalną,
+  ujawnione informacje, wykorzystane próby oraz historię relacji,
+* reakcje na prośby korzystają z deterministycznej tabeli attitude/risk 2014,
+* gracz wybiera Persuasion, Deception albo Intimidation; LLM nie wybiera skilla,
+  ST ani skutków testu społecznego,
+* content definiuje zmiany stanu, limity ponowień, wyniki i przejścia sceny.
 
 ---
 
@@ -890,6 +902,10 @@ Minimalny kontrakt:
   ale nie może zostać podmieniony przez LLM ani ekran późnej akceptacji.
 * `InteractionMethodRule` może deterministycznie narzucić autorski kompromis, np.
   `-1` za działanie po cichu wraz z redukcją hałasu.
+* LLM nie tworzy liczbowych modyfikatorów sytuacyjnych, przewagi ani utrudnienia.
+  Te wartości pochodzą wyłącznie z authored option/method rule, rzeczywiście
+  posiadanego zasobu, stanu aktora albo innej deterministycznej reguły runtime.
+  Model może opisać mokrą linę lub spróchniałe drewno, ale sam opis nie zmienia rzutu.
 * Każda instancja interakcji ma `NarrativeStyle`. Domyślny `heroic_dnd` prowadzi
   bohaterskie power fantasy z lekką ironią i sytuacyjnym humorem.
 * Pojedynczy `InteractionGoal` może nadpisać pełny profil narracyjny instancji.
@@ -909,6 +925,17 @@ Minimalny kontrakt:
 * Pomoc złożona z jawnych materiałów sceny może działać na dwa sposoby: konstrukcja i natychmiastowe użycie to jednorazowe `improvised_tool_check`, natomiast jawne `/zbuduj` tworzy dynamiczny `TemporaryItem` do późniejszego użycia.
 * `/zbuduj` wybiera cel funkcjonalny z polityki craftingu, a deterministyczny silnik dobiera brakujące komponenty według właściwości. Gracz przed akceptacją widzi materiały, sposób ich rozliczenia, czas, zastosowania, efekt, ryzyko i zakres konstrukcji.
 * `TemporaryItem` nie jest stałym ekwipunkiem i nie wymaga gotowego szablonu konkretnego przedmiotu. Ma parametry wyliczone z celu funkcjonalnego, jawną liczbę użyć, zakres życia i zapisane komponenty. Starsze template'y pozostają wyłącznie formatem kompatybilności dla historycznego contentu.
+* Formalny crafting w downtime jest osobnym flow od `/zbuduj`. Receptura jest
+  dostępna tylko w autorskim warsztacie, wymaga biegłości i fizycznie posiadanych
+  narzędzi, pobiera połowę wartości rynkowej produktu na materiały i liczy pełne
+  ośmiogodzinne dni po 5 gp postępu. Rezultatem jest trwały mundane
+  `InventoryItem`, a koszt czasu przesuwa wspólny zegar scenariusza.
+* Warunek aktora nie należy wyłącznie do ekranu walki. `ConditionState` nałożony
+  przez hazard eksploracyjny przechodzi do encountera, a po nim wraca do
+  eksploracji, jeśli jego duration nadal obowiązuje. `until_encounter_end`,
+  `until_short_rest`, `until_long_rest`, `until_scenario_end` i `permanent`
+  rozstrzygają wspólne eventy lifecycle; UI nie usuwa warunków według lokalnej
+  listy wyjątków.
 * Freeform `action_flow` obsługuje w MVP: `challenge_attempt`, `preparation` i `combined`.
 * Rozmowa jest przypisana do stabilnego identyfikatora instancji interakcji (`challenge`, punkt albo NPC), a nie do samego ekranu. Powrót do tej instancji odtwarza jej transcript bez mieszania rozmów z innymi obiektami.
 * Snapshot przechowuje pełny transcript. Do LLM trafia ograniczone okno najnowszych wpisów aktualnej interakcji; starsza historia pozostaje dostępna dla UI i przyszłego mechanizmu podsumowań.
@@ -919,9 +946,14 @@ Minimalny kontrakt:
 * Efekt przygotowania działa tylko przy następnej próbie, której tagi pasują do `target_tags`, i po użyciu wygasa.
 * Odpowiedź LLM może utworzyć tymczasową opcję challenge, ale rozstrzygnięcie nadal przechodzi przez deterministic engine.
 * Interpretacja LLM musi zostać zaakceptowana przed rzutem. Przed akceptacją aplikacja pokazuje kontrakt mechaniczny: test, ST, tier trudności, postęp oraz konsekwencje critical success / success / failure / critical failure.
+* Narracja opisująca osiągnięty skutek, reakcję NPC lub ujawniony trop pojawia się
+  dopiero po zaakceptowaniu kosztu i rozstrzygnięciu ewentualnego rzutu. Podgląd
+  może opisywać wyłącznie zamiar oraz warunki próby.
 * Gracz może poprosić o wyjaśnienie interpretacji, odrzucić ją, skorygować albo poprosić o reinterpretację tej samej deklaracji.
 * Historia prób challenge jest częścią stanu gry i trafia do dynamicznego kontekstu LLM.
 * Lokalny wątek deklaracji przechowuje odrzucone deklaracje, pytania i korekty w ramach aktywnego challenge, żeby odpowiedzi typu "to bez butów" miały kontekst.
+  Odrzucony tekst może pozostać w technicznym kontekście ponowienia, ale nie jest
+  pokazywany jako zaakceptowana wypowiedź w historii graczy.
 
 Warstwy kontekstu dla LLM:
 
@@ -1002,7 +1034,11 @@ Statusy intencji powinny być enumem, np.:
 * `locked`,
 * `hidden`.
 
-LLM powinien najpierw sklasyfikować deklarację gracza do globalnej intencji i ewentualnej metody, np. `theft` + `stealth`, `social` + `persuasion`, `gambling` + `high_stakes`. Dopiero potem engine sprawdza lokalne `intent_permissions`.
+LLM powinien najpierw sklasyfikować deklarację gracza do globalnej intencji i,
+gdy gracz nie dokonał jawnego wyboru, ewentualnej metody, np. `theft` +
+`stealth` albo `gambling` + `high_stakes`. W testach społecznych głównego UI
+Persuasion, Deception lub Intimidation wybiera gracz. Dopiero potem engine
+sprawdza lokalne `intent_permissions`.
 
 ### Parametry, Warunki I Efekty
 
@@ -1589,6 +1625,27 @@ rzutu. Aktywacja deleguje konsekwencje do ogólnego silnika hazardów.
   rozproszenia i celowo nie wymagają koncentracji.
 - Ten pionowy zakres obsługuje czary sojusznika przeciw przeciwnikom; fizyczne
   save'y bohaterów na efekty wrogów nadal przechodzą przez istniejący przepływ.
+
+## Podróż i wyczerpanie
+
+- Continuation może deklarować bazowy czas drogi, ST nawigacji, używaną cechę
+  i skill, opóźnienie po porażce oraz bezpieczny limit marszu.
+- Tempo szybkie skraca czas do 3/4, normalne go nie zmienia, a wolne wydłuża do
+  4/3. Szybkie tempo obniża passive Perception o 5, a wolne pozwala na Stealth;
+  te właściwości są jawnym metadanym dla kolejnych zdarzeń podróży.
+- Nawigator wykonuje fizyczny ability check. Porażka jest fail-forward: drużyna
+  dociera do celu, ale zegar przesuwa się o autorskie opóźnienie.
+- Po rozliczeniu czasu i nawigacji continuation wybiera pierwszą pasującą
+  autorską gałąź `success`, `partial_success` albo `fail_forward`. Gałąź może
+  zależeć od końcowych flag i wyniku nawigacji, przekazuje nazwany rezultat
+  graczom oraz typowane konsekwencje przyszłej scenie.
+- Handoff zawiera rozstrzygnięcie celów sceny źródłowej. Wybrane flagi mogą być
+  propagowane jawnie; runtime nie kopiuje całego prywatnego stanu scenariusza.
+- Każda rozpoczęta godzina ponad bezpieczny limit wymaga od każdego żywego
+  członka drużyny Constitution save o ST `10 + numer dodatkowej godziny`.
+- Exhaustion 1–6 nakłada kolejno: disadvantage na ability checks, połowę
+  szybkości, disadvantage na ataki i save'y, połowę maksimum HP, szybkość 0
+  oraz śmierć. Long rest usuwa jeden poziom.
 
 ## Rozpraszanie magii
 

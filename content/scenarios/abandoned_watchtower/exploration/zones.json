@@ -3,6 +3,14 @@
     {
       "id": "gate",
       "name": "Brama strażnicy",
+      "paper_map": {
+        "id": "watchtower_gate",
+        "preview_path": "print_maps/village_watchtower/png/watchtower_gate.png",
+        "a4_pdf_path": "print_maps/village_watchtower/pdf/a4/watchtower_gate.pdf",
+        "full_size_pdf_path": "print_maps/village_watchtower/pdf/full_size/watchtower_gate.pdf"
+      },
+      "ambient_light": "dim",
+      "allows_hiding": true,
       "positions": [
         [
           6,
@@ -155,16 +163,50 @@
         {
           "id": "watchtower_gate",
           "name": "Stara brama",
+          "kind": "door",
           "description": "Ciężkie drewniane skrzydła połączone metalowymi okuciami i zamknięte ryglem od środka.",
+          "positions": [[9, 3], [10, 3]],
           "properties": ["wide", "rigid", "heavy", "wooden", "metallic"],
           "condition": "closed",
           "portable": false,
           "detachable": false,
           "destructible": true,
+          "initially_locked": true,
+          "lock_dc": 15,
+          "armor_class": 15,
+          "hit_points": 27,
+          "damage_threshold": 5,
+          "blocks_movement_when_closed": true,
+          "cover_bonus": 5,
+          "projectile_cover_bonus": 5,
           "action_policies": [
             {
-              "operation": "damage",
+              "operation": "unlock",
               "allowed_conditions": ["closed"],
+              "result_condition": "closed",
+              "ability": "dexterity",
+              "skill": null,
+              "difficulty_tier": "medium"
+            },
+            {
+              "operation": "open",
+              "allowed_conditions": ["closed"],
+              "result_condition": "open",
+              "ability": "strength",
+              "skill": null,
+              "difficulty_tier": "automatic"
+            },
+            {
+              "operation": "close",
+              "allowed_conditions": ["open"],
+              "result_condition": "closed",
+              "ability": "strength",
+              "skill": null,
+              "difficulty_tier": "automatic"
+            },
+            {
+              "operation": "damage",
+              "allowed_conditions": ["closed", "damaged"],
               "result_condition": "damaged",
               "ability": "strength",
               "skill": "athletics",
@@ -186,6 +228,9 @@
           "portable": false,
           "detachable": true,
           "destructible": true,
+          "armor_class": 19,
+          "hit_points": 10,
+          "damage_threshold": 3,
           "action_policies": [
             {
               "operation": "detach",
@@ -222,7 +267,70 @@
           "condition": "overgrown",
           "portable": false,
           "detachable": true,
-          "destructible": true
+          "destructible": true,
+          "armor_class": 11,
+          "hit_points": 8
+        },
+        {
+          "id": "gate_supply_chest",
+          "name": "Skrzynia strażnicza",
+          "kind": "container",
+          "description": "Niska, okuta skrzynia pozostawiona przy wewnętrznej stronie bramy.",
+          "positions": [[7, 3]],
+          "properties": ["rigid", "wooden", "metallic"],
+          "condition": "closed",
+          "destructible": true,
+          "initially_locked": true,
+          "lock_dc": 12,
+          "armor_class": 15,
+          "hit_points": 10,
+          "damage_threshold": 3,
+          "cover_bonus": 2,
+          "projectile_cover_bonus": 2,
+          "action_policies": [
+            {
+              "operation": "unlock",
+              "allowed_conditions": ["closed"],
+              "result_condition": "closed",
+              "ability": "dexterity",
+              "skill": null,
+              "difficulty_tier": "easy"
+            },
+            {
+              "operation": "open",
+              "allowed_conditions": ["closed"],
+              "result_condition": "open",
+              "ability": "strength",
+              "skill": null,
+              "difficulty_tier": "automatic"
+            },
+            {
+              "operation": "close",
+              "allowed_conditions": ["open"],
+              "result_condition": "closed",
+              "ability": "strength",
+              "skill": null,
+              "difficulty_tier": "automatic"
+            },
+            {
+              "operation": "loot",
+              "allowed_conditions": ["open"],
+              "result_condition": "open",
+              "ability": "wisdom",
+              "skill": null,
+              "difficulty_tier": "automatic",
+              "release_yield_items": true
+            }
+          ],
+          "yield_items": [
+            {
+              "id": "gate_chest_arrows",
+              "definition_id": "arrow",
+              "quantity": 12,
+              "condition": "normal",
+              "available": false
+            }
+          ]
         }
       ],
       "adjacent_zone_ids": [
@@ -243,6 +351,7 @@
       ],
       "search": {
         "dc": 10,
+        "minutes": 10,
         "ability": "wisdom",
         "skill": "perception",
         "reveals": [
@@ -270,6 +379,14 @@
     {
       "id": "courtyard",
       "name": "Dziedziniec",
+      "paper_map": {
+        "id": "watchtower_courtyard",
+        "preview_path": "print_maps/village_watchtower/png/watchtower_courtyard.png",
+        "a4_pdf_path": "print_maps/village_watchtower/pdf/a4/watchtower_courtyard.pdf",
+        "full_size_pdf_path": "print_maps/village_watchtower/pdf/full_size/watchtower_courtyard.pdf"
+      },
+      "ambient_light": "dim",
+      "allows_hiding": true,
       "positions": [
         [
           4,
@@ -803,6 +920,51 @@
       "color": "movement",
       "description": "Za wyłamaną bramą rozciąga się zarośnięty, błotnisty dziedziniec. Wśród porozrzucanych desek, krwawych śladów i szczątków rozbitego wozu leży ranny zwiadowca — żywy, lecz wyraźnie poturbowany.",
       "image": "assets/courtyard_search.png",
+      "fixtures": [
+        {
+          "id": "hidden_cache",
+          "name": "Ukryta skrytka pod deską",
+          "kind": "container",
+          "description": "Luźna deska osłania płytką skrytkę z awaryjnym nożem zwiadowcy.",
+          "positions": [[11, 12]],
+          "properties": ["wooden", "container"],
+          "condition": "closed",
+          "visible": false,
+          "portable": false,
+          "detachable": false,
+          "destructible": true,
+          "armor_class": 10,
+          "hit_points": 4,
+          "action_policies": [
+            {
+              "operation": "open",
+              "allowed_conditions": ["closed"],
+              "result_condition": "open",
+              "ability": "strength",
+              "skill": null,
+              "difficulty_tier": "automatic"
+            },
+            {
+              "operation": "loot",
+              "allowed_conditions": ["open"],
+              "result_condition": "open",
+              "ability": "wisdom",
+              "skill": null,
+              "difficulty_tier": "automatic",
+              "release_yield_items": true
+            }
+          ],
+          "yield_items": [
+            {
+              "id": "scout_cache_dagger",
+              "definition_id": "dagger",
+              "quantity": 1,
+              "condition": "weathered",
+              "available": false
+            }
+          ]
+        }
+      ],
       "llm_context": {
         "summary": "Kamienne mury są spękane i porośnięte bluszczem. Błoto przecinają ślady walki oraz przeciągania czegoś ciężkiego w stronę wieży, a spod zawalonego wozu dobiega urywany oddech zwiadowcy.",
         "available_materials": [
@@ -834,6 +996,7 @@
       ],
       "search": {
         "dc": 12,
+        "minutes": 10,
         "ability": "wisdom",
         "skill": "perception",
         "reveals": [
@@ -882,6 +1045,15 @@
     {
       "id": "barracks",
       "name": "Koszary",
+      "image": "assets/barracks_preview.png",
+      "paper_map": {
+        "id": "watchtower_barracks",
+        "preview_path": "print_maps/village_watchtower/png/watchtower_barracks.png",
+        "a4_pdf_path": "print_maps/village_watchtower/pdf/a4/watchtower_barracks.pdf",
+        "full_size_pdf_path": "print_maps/village_watchtower/pdf/full_size/watchtower_barracks.pdf"
+      },
+      "ambient_light": "darkness",
+      "allows_hiding": true,
       "positions": [
         [
           4,
@@ -1148,6 +1320,15 @@
     {
       "id": "tower",
       "name": "Wieża obserwacyjna",
+      "image": "assets/tower_preview.png",
+      "paper_map": {
+        "id": "watchtower_tower",
+        "preview_path": "print_maps/village_watchtower/png/watchtower_tower.png",
+        "a4_pdf_path": "print_maps/village_watchtower/pdf/a4/watchtower_tower.pdf",
+        "full_size_pdf_path": "print_maps/village_watchtower/pdf/full_size/watchtower_tower.pdf"
+      },
+      "ambient_light": "darkness",
+      "allows_hiding": true,
       "positions": [
         [
           5,

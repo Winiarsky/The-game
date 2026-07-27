@@ -159,6 +159,6 @@ Na tym etapie nie robimy:
 - Bazowy otwarty source pack zasad 2014 to SRD 5.1 na CC BY 4.0; content
   projektowy i jego brak zadeklarowanej licencji są śledzone oddzielnie w
   `content/source_packs.json` oraz `docs/CONTENT_VERSIONING_AND_SOURCES.md`.
-- Snapshot pojedynczego scenariusza ma wersjonowany format v18 opisany w `docs/SAVE_FORMAT.md`;
+- Snapshot pojedynczego scenariusza ma wersjonowany format v23 opisany w `docs/SAVE_FORMAT.md`;
   stan kampanii oraz migracje przyszłych wersji pozostają do zaprojektowania w M9.
 - Bazową wersją zasad dla pierwszego pełnego wydania jest D&D 5e 2014. Odstępstwa wymagane przez fizyczną planszę albo tempo gry zapisujemy jawnie w `GAME_DESIGN.md` i `docs/RULES_DECISIONS.md`.

@@ -8,7 +8,7 @@ from enum import StrEnum
 from dnd_board_game.actors import Actor, Faction
 from dnd_board_game.inventory import ItemCollectionDestination
 
-from .models import CraftingComponentDisposition, ExplorationState
+from .models import CraftingComponentDisposition, ExplorationState, SetupVisibility
 
 
 class CraftingSourceKind(StrEnum):
@@ -96,6 +96,11 @@ def build_crafting_source_registry(
         raise ValueError(f"Unknown exploration zone for crafting sources: {active_zone_id}.")
 
     sources: list[CraftingSource] = []
+    visible_point_ids = {
+        point.id
+        for point in state.points
+        if point.visibility == SetupVisibility.VISIBLE
+    }
     for item in zone.item_instances:
         sources.append(
             CraftingSource(
@@ -141,7 +146,7 @@ def build_crafting_source_registry(
                 properties=fixture.properties,
                 condition=runtime.condition if runtime is not None else fixture.condition,
                 zone_id=zone.id,
-                visible=fixture.visible,
+                visible=fixture.visible or fixture.id in visible_point_ids,
                 available=fixture_available,
                 portable=fixture.portable,
                 detachable=fixture.detachable,

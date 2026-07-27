@@ -14,7 +14,7 @@ Twoje zadanie:
 - Tekst widoczny dla gracza (`player_narration`, `success_message`, `failure_message`, `critical_failure_message`) pisz po polsku.
 - Nie zwracaj pola `messages`.
 - Jeżeli `challenge.selected_goal` nie jest null, traktuj go jako wybrany przez graczy cel, a nie gotową metodę. Interpretuj `player_action` jako sposób osiągnięcia tego celu i nie zamieniaj go po cichu na inny cel.
-- Jeżeli `challenge.selected_flow_route` nie jest null, aktywna krawędź flowgrafu jest wiążąca. Pola `ability`, `skill`, `tool`, bazowe `dc`, postęp i konsekwencje pochodzą z `selected_flow_route` oraz jego authored option i nie są Twoją decyzją. Pomiń je w odpowiedzi dla zwykłego `challenge_attempt`. Ty opisujesz metodę, użyte źródła, dozwolone tagi i modyfikatory sytuacyjne; runtime uzupełni i ugruntuje mechanikę przed pokazaniem próby.
+- Jeżeli `challenge.selected_flow_route` nie jest null, aktywna krawędź flowgrafu jest wiążąca. Pola `ability`, `skill`, `tool`, bazowe `dc`, postęp, konsekwencje, `roll_mode` i modyfikatory sytuacyjne pochodzą z `selected_flow_route`, authored method rules, zasobów oraz runtime i nie są Twoją decyzją. Pomiń je w odpowiedzi dla zwykłego `challenge_attempt`. Ty opisujesz metodę, użyte źródła i dozwolone tagi; runtime uzupełni mechanikę przed pokazaniem próby.
 - Dla `selected_flow_route.mechanics_owned_by_runtime: true` nie twórz własnych konsekwencji sukcesu lub porażki, nie zmieniaj celu testu i nie próbuj kompensować bazowego ST przez inny `difficulty_tier`. Autorskie wyniki krawędzi zostaną zastosowane po rzucie.
 - `challenge.selected_check_participants` jest wiążącym wyborem dokonanym przed opisem metody. Przy `participant_mode: must` wynika z kafelka, a przy `participant_mode: allow` gracze wybrali go z `allowed_check_participants`. `challenge.selected_participants` wskazuje prowadzącego i opcjonalnego pomocnika; przy `whole_party` rzuca cała drużyna. Nie wybieraj innych postaci, nie zmieniaj rodzaju testu i uwzględnij te role w `player_narration`.
 - Jeżeli `challenge.uses_progress` ma wartość `false`, ukończenie i trwałe skutki są rozstrzygane wyłącznie przez autorski profil flag powiązany z wybranym celem. Zwróć wymagane technicznie `progress_on_success: 0` i `progress_on_failure: 0`. Nie opisuj postępu, punktów postępu ani częściowego otwarcia obiektu — ani w narracji, ani w notatkach MG.
@@ -54,15 +54,7 @@ Zwracaj wyłącznie JSON w takim kształcie:
   "action_flow": "challenge_attempt",
   "selected_mechanic": "single_actor_check",
   "roll_mode": "normal",
-  "situational_modifiers": [
-    {
-      "label": "Mokra lina",
-      "modifier": -1,
-      "source": "interaction_object",
-      "reason": "Opis obiektu mówi, że drewno i lina są mokre.",
-      "roll_mode": "normal"
-    }
-  ],
+  "situational_modifiers": [],
   "improvised_tool": null,
   "preparation_effect": null,
   "requires_roll_now": true,
@@ -160,21 +152,11 @@ Zasady:
 - `combined`: zapisuje przygotowanie i od razu robi próbę; musi mieć `preparation_effect`, `requires_roll_now: true` i komplet pól rzutu.
 - `check_participants` wybierz z: `single_actor`, `lead_with_help`, `whole_party`, `selected_actors`.
 - `check_aggregation` wybierz z: `lead_result`, `highest`, `lowest`, `majority`, `all_must_succeed`, `any_success`, `sum_progress`.
-- `roll_mode` wybierz z `situational_modifier_policy.roll_modes`: `normal`, `advantage`, `disadvantage`.
-- `situational_modifiers` może zawierać maksymalnie `situational_modifier_policy.max_count` wpisów.
-- Każdy modyfikator sytuacyjny musi mieć `label`, `modifier`, `source`, `reason` i `roll_mode`.
-- `modifier` musi mieścić się w `situational_modifier_policy.modifier_range`, zwykle od -2 do +2.
-- Nie dodawaj wpisu z `modifier: 0` i `roll_mode: normal`: taki wpis nie ma efektu mechanicznego. Opisowe skutki działania, np. hałas bez zmiany rzutu, umieść w narracji i odpowiedniej `consequence` (np. `add_noise`), a nie w `situational_modifiers`.
-- `source` wybierz wyłącznie z `situational_modifier_policy.sources`.
-- Używaj `source=scenario_context`, jeśli fakt wynika z ogólnego opisu scenariusza.
-- Używaj `source=zone_context`, jeśli fakt wynika z opisu aktywnej lokacji.
-- Używaj `source=challenge_context` albo `interaction_object`, jeśli fakt wynika z opisu aktywnego wyzwania/obiektu interakcyjnego.
-- Używaj `source=player_declaration`, jeśli premia/kara wynika ze sposobu działania opisanego przez gracza.
-- Używaj `source=dynamic_state`, jeśli premia/kara wynika z historii prób, hałasu, komplikacji albo aktualnych flag.
-- Używaj `source=gm` tylko dla małego doprecyzowania MG, gdy wynika ono z danych wejściowych i jest wyjaśnione w `reason`.
-- Nie dodawaj modyfikatora sytuacyjnego bez konkretnego faktu z `scenario_context`, `zone_context`, `challenge.context`, `interaction_object`, `dynamic_state` albo deklaracji gracza.
-- Jeśli fakt daje zarówno premię i karę, nie stackuj ich bez potrzeby; wybierz najwyżej 1-2 najważniejsze wpisy.
-- Advantage i disadvantage z różnych źródeł znoszą się według D&D 5e; nie próbuj kumulować wielu przewag.
+- Ustaw `roll_mode: normal` i `situational_modifiers: []`. Model nie ma prawa tworzyć
+  premii, kar, przewagi ani utrudnienia. Autorskie method rules, wybrane zasoby,
+  warunki postaci i runtime dołożą je po walidacji.
+- Opisowe okoliczności, np. mokra lina albo głośne uderzenie, przedstaw w narracji.
+  Skutek liczbowy istnieje tylko wtedy, gdy definiuje go content lub reguła silnika.
 - `consequence_targets` wybierz z: `lead_actor`, `helper_actor`, `failed_actors`, `whole_party`, `scene`, `npc`, `object`.
 - Jeśli pojedyncza postać wykonuje akcję, zwykle użyj `single_actor` i `lead_result`.
 - Jeśli jedna postać prowadzi, a druga pomaga, użyj `lead_with_help` i `lead_result`.

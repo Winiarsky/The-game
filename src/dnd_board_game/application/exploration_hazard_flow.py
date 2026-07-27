@@ -21,7 +21,7 @@ from dnd_board_game.exploration import (
     add_exploration_condition,
     apply_exploration_effect,
 )
-from dnd_board_game.rules import SavingThrowResult
+from dnd_board_game.rules import EffectDuration, SavingThrowResult
 
 from .damage_presentation import applied_damage_message
 
@@ -101,7 +101,17 @@ def apply_exploration_hazard_outcome(
         parameters = dict(raw_parameters)
         if effect_type == "apply_condition":
             condition = CombatCondition(str(parameters.get("condition", "")))
-            updated = add_exploration_condition(current, actor_id, condition)
+            updated = add_exploration_condition(
+                current,
+                actor_id,
+                condition,
+                source_label=str(
+                    parameters.get("source_label", f"Zagrożenie: {challenge_id}")
+                ),
+                duration=EffectDuration(
+                    str(parameters.get("duration", EffectDuration.PERMANENT.value))
+                ),
+            )
             changed = updated != current
             current = updated
             results.append(
@@ -126,6 +136,8 @@ def _condition_label(condition: CombatCondition) -> str:
     return {
         CombatCondition.PRONE: "Powalony",
         CombatCondition.GRAPPLED: "Pochwycony",
+        CombatCondition.POISONED: "Zatruty",
+        CombatCondition.RESTRAINED: "Unieruchomiony",
     }[condition]
 
 

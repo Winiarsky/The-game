@@ -1,13 +1,13 @@
 # Format Zapisu Gry
 
-## Zakres v18
+## Zakres v23
 
 Snapshot sesji używa identyfikatora schematu `dnd_board_game.session` i pola
-`schema_version: 18`. Zapis obejmuje mechaniczny stan potrzebny do deterministycznego
+`schema_version: 23`. Zapis obejmuje mechaniczny stan potrzebny do deterministycznego
 wznowienia scenariusza:
 
 - kontrakt contentu: schemat scenariusza, jego wersję, ruleset i wymagane source packi,
-- pełny bieżący stan aktorów, przygotowanych czarów, slotów, ekwipunku, zasobów oraz profilu biegłości w save'ach, skillach, broniach, pancerzach i narzędziach,
+- pełny bieżący stan aktorów, exhaustion, przygotowanych czarów, slotów, ekwipunku, zasobów oraz profilu biegłości w save'ach, skillach, broniach, pancerzach i narzędziach,
 - pozycję drużyny, flagi, widoczność punktów, postęp wyzwań, czas i odpoczynki,
 - aktywne czasowe efekty magii eksploracyjnej wraz z czarem, aktorem, flagą,
   minutą rozpoczęcia i opcjonalną minutą wygaśnięcia,
@@ -25,6 +25,8 @@ wznowienia scenariusza:
 - jawne stany warunków walki przypisane do aktorów wraz ze źródłem, czasem trwania
   i opcjonalnym rzutem kończącym warunek,
 - jawne stany postaci powstałe w eksploracji, przenoszone do następnego encountera,
+- trwałe stany fixture'ów eksploracji: otwarcie, zamek, opróżnienie pojemnika,
+  aktualne HP, zniszczenie oraz ujawnione elementy,
 - stabilne wybory źródeł ataku/leczenia i stan nawigacji UI potrzebny do wznowienia.
 
 Snapshot nie jest logiem sesji. Nie zawiera historii komunikatów, połączenia z
@@ -82,10 +84,19 @@ aktualnego contentu i odrzuca zapis, jeśli nie można go jednoznacznie odtworzy
 - Migracja `v17 -> v18` dodaje aktywnym efektom opcjonalny poziom źródłowego
   czaru, a stanom opcjonalne ID i poziom czaru. Brak tych danych zachowuje efekt,
   ale nie pozwala traktować go jako bezpiecznie rozpraszalnej magii.
+- Migracja `v18 -> v19` dodaje aktorom jawny poziom `level`, domyślnie `1`.
+- Migracja `v19 -> v20` dodaje aktorom typowany profil `senses` z zerowymi
+  zasięgami darkvision, blindsight, tremorsense i truesight.
+- Migracja `v20 -> v21` dodaje eksploracji pustą listę `hidden_actor_states`.
+  Nowe wpisy przechowują aktora, strefę, naturalny wynik i końcowy wynik Stealth.
+- Migracja `v21 -> v22` uzupełnia istniejące stany fixture'ów o pola
+  `opened`, `locked`, `looted` i `current_hit_points`.
+- Migracja `v22 -> v23` dodaje wszystkim aktorom eksploracji i walki
+  `exhaustion_level: 0`.
 - Migracje są wykonywane kolejno, bez pomijania wersji, przed budową modeli domeny.
 - Migracja nie może uruchamiać odpoczynku, losowania, sprzętu, Flask ani LLM.
 
-Snapshot v18 jest zapisem pojedynczego scenariusza. Stan drużyny pomiędzy
+Snapshot v23 jest zapisem pojedynczego scenariusza. Stan drużyny pomiędzy
 scenariuszami, kampania i migracje rzeczywistych starszych formatów należą do M9.
 Sekcja eksploracji zapisuje również opcjonalne `temporary_items`: przedmioty
 zbudowane z materiałów sceny, wraz z pozostałą liczbą użyć, źródłowymi materiałami
@@ -118,7 +129,7 @@ Instancje inventory oraz upuszczone bronie zapisują wymaganie dłoni
 broń bez jawnego wymagania jest normalizowana jako jednoręczna przy użyciu reguł
 inventory.
 
-Snapshot v18 zapisuje portfel aktora w nominałach `cp`, `sp`, `ep`, `gp`, `pp`
+Snapshot v23 zapisuje portfel aktora w nominałach `cp`, `sp`, `ep`, `gp`, `pp`
 oraz jednostkową `value_cp` i `weight_lb` każdej instancji inventory. Całkowita
 wartość, masa monet (50 monet = 1 lb), masa ekwipunku i udźwig są wartościami
 pochodnymi i nie są osobnym autorytatywnym stanem.

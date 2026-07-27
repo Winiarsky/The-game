@@ -113,6 +113,8 @@ def _args(tmp_path, *extra):
             "0",
             "--max-steps",
             "6",
+            "--goal-id",
+            "open_lock",
             *extra,
         ]
     )
@@ -395,6 +397,8 @@ def test_demo_exploration_scene_shows_new_locations_after_gate_completion(tmp_pa
             "groq",
             "--freeform-action",
             "Wyważamy starą bramę.",
+            "--goal-id",
+            "force_entry",
             "--gm-accept",
             "yes",
             "--exploration-script",
@@ -412,7 +416,7 @@ def test_demo_exploration_scene_shows_new_locations_after_gate_completion(tmp_pa
     assert any(event["event_type"] == "exploration_available_locations_shown" for event in events)
 
 
-def test_demo_exploration_scene_challenge_can_use_lowest_party_check(tmp_path):
+def test_demo_exploration_scene_flow_route_overrides_classifier_party_check(tmp_path):
     result = run_demo(
         _args(
             tmp_path,
@@ -437,11 +441,11 @@ def test_demo_exploration_scene_challenge_can_use_lowest_party_check(tmp_path):
     events = _events(result.observation_path)
     check_events = [event for event in events if event["event_type"] == "check_resolved" and event["payload"]["phase"] == "challenge"]
     assert check_events
-    assert check_events[0]["payload"]["plan"]["participants"] == "whole_party"
-    assert check_events[0]["payload"]["plan"]["aggregation"] == "lowest"
-    assert check_events[0]["payload"]["success"] is False
-    assert check_events[0]["payload"]["selected_actor_id"] == "rogue"
-    assert check_events[0]["payload"]["consequence_actor_ids"] == ["rogue", "cleric"]
+    assert check_events[0]["payload"]["plan"]["participants"] == "single_actor"
+    assert check_events[0]["payload"]["plan"]["aggregation"] == "lead_result"
+    assert check_events[0]["payload"]["success"] is True
+    assert check_events[0]["payload"]["selected_actor_id"] == "hero"
+    assert check_events[0]["payload"]["consequence_actor_ids"] == []
 
 
 def test_demo_exploration_scene_zone_travel_preview_uses_only_markers(tmp_path):
@@ -456,6 +460,8 @@ def test_demo_exploration_scene_zone_travel_preview_uses_only_markers(tmp_path):
             "groq",
             "--freeform-action",
             "Wyważamy starą bramę.",
+            "--goal-id",
+            "force_entry",
             "--gm-accept",
             "yes",
             "--challenge-roll",
@@ -470,7 +476,7 @@ def test_demo_exploration_scene_zone_travel_preview_uses_only_markers(tmp_path):
     events = _events(result.observation_path)
     assert any(event["event_type"] == "zone_travel_previewed" for event in events)
     assert any("Wybrana lokacja: Dziedziniec" in message for message in result.messages)
-    assert any("Pusty dziedziniec" in message for message in result.messages)
+    assert any("zarośnięty, błotnisty dziedziniec" in message for message in result.messages)
     set_led_positions = [event[1] for event in connection.events if event[0] == "set_leds"]
     assert [(9, 2)] in set_led_positions
     assert [(9, 10)] in set_led_positions
@@ -484,6 +490,8 @@ def test_demo_exploration_scene_gate_completion_keeps_wounded_scout_hidden_until
             "groq",
             "--freeform-action",
             "Wyważamy bramę.",
+            "--goal-id",
+            "force_entry",
             "--gm-accept",
             "yes",
             "--exploration-script",
@@ -729,9 +737,45 @@ def test_demo_exploration_scene_gm_classifier_resolves_generated_option(tmp_path
     assert "resource_used" in event_types
     assert "gm_classifier_option_resolved" in event_types
     assert "challenge_progress_updated" in event_types
-    assert any("Zamek nadal może trzymać bramę" in message for message in result.messages)
-    assert scene_flag(result.final_state.flags, "gate_bolt_cleared") is True
+    assert any("Zardzewiały mechanizm ustępuje" in message for message in result.messages)
+    assert scene_flag(result.final_state.flags, "gate_lock_cleared") is True
+    route_event = next(
+        event
+        for event in events
+        if event["event_type"] == "exploration_flow_route_selected"
+    )
+    assert route_event["payload"]["goal_id"] == "open_lock"
+    assert route_event["payload"]["transition_id"] == "open_gate_lock"
+    assert client.requests[0].selected_flow_option_id == "lockpick_gate"
     assert demo_exploration_scene.challenge_state_for(result.final_state, "closed_gate").current_progress == 0
+
+
+def test_demo_exploration_scene_rejects_inactive_explicit_flow_goal(tmp_path):
+    client = FakeGmClient(_gm_rope_proposal())
+
+    result = run_demo(
+        _args(
+            tmp_path,
+            "--gm-classifier",
+            "groq",
+            "--gm-dry-run",
+            "--freeform-action",
+            "Próbujemy od razu zdjąć niewidoczny rygiel.",
+            "--goal-id",
+            "remove_bolt",
+            "--max-steps",
+            "1",
+        ),
+        gm_client=client,
+    )
+
+    assert client.analysis_requests == []
+    assert client.requests == []
+    assert any(
+        "nie jest aktywną trasą" in message
+        and "force_entry, open_lock, look_around" in message
+        for message in result.messages
+    )
 
 
 def test_demo_exploration_scene_gm_classifier_retries_after_rejection(tmp_path, monkeypatch):
@@ -765,7 +809,8 @@ def test_demo_exploration_scene_gm_classifier_retries_after_rejection(tmp_path, 
     assert len(client.requests) == 2
     assert "gm_classifier_proposal_rejected" in event_types
     assert "gm_classifier_option_resolved" in event_types
-    assert scene_flag(result.final_state.flags, "gate_bolt_cleared") is True
+    assert scene_flag(result.final_state.flags, "gate_lock_cleared") is True
+    assert scene_flag(result.final_state.flags, "gate_bolt_cleared") is None
 
 
 def test_demo_exploration_scene_interactive_gm_auto_selects_single_zone(tmp_path, monkeypatch):
@@ -1041,7 +1086,7 @@ def test_demo_exploration_scene_interpretation_help_does_not_change_state_before
     event_types = [event["event_type"] for event in events]
     assert "gm_interpretation_explained" in event_types
     assert "gm_interpretation_accepted" in event_types
-    assert scene_flag(result.final_state.flags, "gate_bolt_cleared") is True
+    assert scene_flag(result.final_state.flags, "gate_lock_cleared") is True
 
 
 def test_demo_exploration_scene_reclassifies_same_declaration_with_context(tmp_path, monkeypatch):
@@ -1074,7 +1119,7 @@ def test_demo_exploration_scene_reclassifies_same_declaration_with_context(tmp_p
     assert "Poprzednia interpretacja" in client.requests[1].declaration_thread[-1].content
     assert "gm_interpretation_reclassify_requested" in event_types
     assert "gm_interpretation_reclassified" in event_types
-    assert scene_flag(result.final_state.flags, "gate_bolt_cleared") is True
+    assert scene_flag(result.final_state.flags, "gate_lock_cleared") is True
 
 
 def test_demo_exploration_scene_rejected_interpretation_records_correction(tmp_path, monkeypatch):
@@ -1106,7 +1151,7 @@ def test_demo_exploration_scene_rejected_interpretation_records_correction(tmp_p
     assert "gm_interpretation_rejected" in event_types
     assert "gm_interpretation_corrected" in event_types
     assert client.analysis_requests[1].player_action == "Nie, chodzi nam o wspinaczkę bez użycia klina."
-    assert scene_flag(result.final_state.flags, "gate_bolt_cleared") is True
+    assert scene_flag(result.final_state.flags, "gate_lock_cleared") is True
 
 
 def test_demo_exploration_scene_preparation_then_attempt_applies_effect(tmp_path, monkeypatch):
@@ -1147,7 +1192,7 @@ def test_demo_exploration_scene_preparation_then_attempt_applies_effect(tmp_path
     assert "preparation_effect_applied" in event_types
     assert "preparation_effect_expired" in event_types
     assert "gm_classifier_option_resolved" in event_types
-    assert scene_flag(result.final_state.flags, "gate_bolt_cleared") is True
+    assert scene_flag(result.final_state.flags, "gate_lock_cleared") is True
 
 
 def test_demo_exploration_scene_advantage_preparation_changes_roll_instruction(tmp_path, monkeypatch, capsys):
@@ -1254,7 +1299,8 @@ def test_demo_exploration_scene_effect_boost_increases_success_progress(tmp_path
         gm_client=client,
     )
 
-    assert scene_flag(result.final_state.flags, "gate_structure_weakened") is True
+    assert scene_flag(result.final_state.flags, "gate_lock_cleared") is True
+    assert scene_flag(result.final_state.flags, "gate_structure_weakened") is None
     assert demo_exploration_scene.challenge_state_for(result.final_state, "closed_gate").current_progress == 0
 
 
@@ -1442,7 +1488,7 @@ def test_demo_exploration_scene_village_setup_confirms_visible_points_with_fake_
     result = run_demo(args, connection_factory=lambda args: connection)
 
     scan_events = [event for event in connection.events if event[0] == "scan_board"]
-    assert scan_events[0][1] == [(8, 5), (7, 4), (3, 12)]
+    assert scan_events[0][1] == [(7, 5), (8, 5), (7, 4), (3, 12)]
     assert any("Setup jawnych elementów 1" in message for message in result.messages)
     assert any("Dostępne lokacje" in message for message in result.messages)
     event_types = [event["event_type"] for event in _events(result.observation_path)]

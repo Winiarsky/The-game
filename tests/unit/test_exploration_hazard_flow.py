@@ -14,7 +14,11 @@ from dnd_board_game.exploration import (
     ExplorationState,
     PartyPosition,
 )
-from dnd_board_game.rules import SaveDamageOnSuccess, SavingThrowRequest
+from dnd_board_game.rules import (
+    EffectDuration,
+    SaveDamageOnSuccess,
+    SavingThrowRequest,
+)
 from dnd_board_game.world import Coordinate
 
 
@@ -72,3 +76,29 @@ def test_exploration_hazard_applies_failure_condition_to_exploration_state() -> 
     assert updated.condition_states[0].actor_id == "hero"
     assert updated.condition_states[0].condition.value == "prone"
     assert results[0].changed is True
+
+
+def test_exploration_hazard_preserves_condition_source_and_rest_duration() -> None:
+    state = ExplorationState((), (), PartyPosition("gate"))
+    effects = (
+        {
+            "type": "apply_condition",
+            "parameters": {
+                "condition": "poisoned",
+                "duration": "until_short_rest",
+                "source_label": "Zatrute kolce",
+            },
+        },
+    )
+
+    updated, _results = apply_exploration_hazard_outcome(
+        state,
+        effects,
+        actor_id="hero",
+        challenge_id="closed_gate",
+    )
+
+    condition = updated.condition_states[0]
+    assert condition.condition.value == "poisoned"
+    assert condition.duration == EffectDuration.UNTIL_SHORT_REST
+    assert condition.source_label == "Zatrute kolce"

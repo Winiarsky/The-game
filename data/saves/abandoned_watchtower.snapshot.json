@@ -1,0 +1,1425 @@
+{
+  "active_effects": [],
+  "actors": [
+    {
+      "ability_scores": {
+        "charisma": 10,
+        "constitution": 12,
+        "dexterity": 14,
+        "intelligence": 10,
+        "strength": 16,
+        "wisdom": 12
+      },
+      "ac": 14,
+      "active_light": null,
+      "attacks_per_action": 1,
+      "auras": [],
+      "condition_immunities": [],
+      "currency": {
+        "cp": 0,
+        "ep": 0,
+        "gp": 10,
+        "pp": 0,
+        "sp": 0,
+        "total_cp": 1000,
+        "weight_lb": 0.2
+      },
+      "damage_affinities": {
+        "immunities": [],
+        "resistances": [],
+        "vulnerabilities": []
+      },
+      "death_saves": {
+        "dead": false,
+        "failures": 0,
+        "stable": false,
+        "successes": 0
+      },
+      "exhaustion_level": 0,
+      "faction": "ally",
+      "features": [],
+      "hit_dice": [],
+      "hp": 20,
+      "id": "hero",
+      "inventory": [
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "Uniwersalna jednoręczna broń sieczna.",
+          "durability": null,
+          "equipped": true,
+          "gear_category": null,
+          "hands_required": 1,
+          "held_in": [
+            "main_hand"
+          ],
+          "id": "longsword",
+          "kind": "weapon",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Miecz",
+          "portable": true,
+          "properties": [
+            "long",
+            "rigid",
+            "metallic",
+            "sharp",
+            "cutting"
+          ],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "longsword",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 1500,
+          "total_weight_lb": 3.0,
+          "value_cp": 1500,
+          "versatile_damage_dice": "1d10",
+          "weapon_category": "martial",
+          "weapon_properties": [
+            "versatile"
+          ],
+          "weight_lb": 3.0
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "",
+          "durability": null,
+          "equipped": true,
+          "gear_category": "artisans_tool",
+          "hands_required": 0,
+          "held_in": [],
+          "id": "smiths_tools",
+          "kind": "tool",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Narzędzia kowala",
+          "portable": true,
+          "properties": [],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "smiths_tools",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": "smiths_tools",
+          "total_value_cp": 2000,
+          "total_weight_lb": 8.0,
+          "value_cp": 2000,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 8.0
+        }
+      ],
+      "level": 1,
+      "max_hp": 20,
+      "name": "Bohater",
+      "portrait": "portraits/abandoned_watchtower/hero.webp",
+      "position": [
+        0,
+        0
+      ],
+      "proficiencies": {
+        "armor": [],
+        "expertise": [],
+        "saving_throws": [],
+        "skills": [],
+        "tools": [
+          "smiths_tools"
+        ],
+        "weapons": []
+      },
+      "proficiency_bonus": 2,
+      "resource_pools": [],
+      "senses": {
+        "blindsight_feet": 0,
+        "darkvision_feet": 0,
+        "tremorsense_feet": 0,
+        "truesight_feet": 0
+      },
+      "size": "medium",
+      "speed_feet": 30,
+      "spell_access": [],
+      "spell_ids": [],
+      "spell_preparation": null,
+      "spell_save_dc": 0,
+      "spell_slots": [],
+      "spells": [],
+      "temp_hp": 0,
+      "triggers": [],
+      "uses_death_saves": true
+    },
+    {
+      "ability_scores": {
+        "charisma": 12,
+        "constitution": 12,
+        "dexterity": 16,
+        "intelligence": 12,
+        "strength": 10,
+        "wisdom": 14
+      },
+      "ac": 15,
+      "active_light": null,
+      "attacks_per_action": 1,
+      "auras": [],
+      "condition_immunities": [],
+      "currency": {
+        "cp": 0,
+        "ep": 0,
+        "gp": 5,
+        "pp": 0,
+        "sp": 0,
+        "total_cp": 500,
+        "weight_lb": 0.1
+      },
+      "damage_affinities": {
+        "immunities": [],
+        "resistances": [],
+        "vulnerabilities": []
+      },
+      "death_saves": {
+        "dead": false,
+        "failures": 0,
+        "stable": false,
+        "successes": 0
+      },
+      "exhaustion_level": 0,
+      "faction": "ally",
+      "features": [],
+      "hit_dice": [],
+      "hp": 16,
+      "id": "rogue",
+      "inventory": [
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "Krótki nóż o sztywnym metalowym ostrzu.",
+          "durability": null,
+          "equipped": true,
+          "gear_category": null,
+          "hands_required": 1,
+          "held_in": [
+            "main_hand"
+          ],
+          "id": "dagger",
+          "kind": "weapon",
+          "light_source": null,
+          "light_weapon": true,
+          "magic_effects": [],
+          "name": "Sztylet",
+          "portable": true,
+          "properties": [
+            "short",
+            "light",
+            "rigid",
+            "metallic",
+            "sharp",
+            "cutting"
+          ],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "dagger",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 200,
+          "total_weight_lb": 1.0,
+          "value_cp": 200,
+          "versatile_damage_dice": null,
+          "weapon_category": "simple",
+          "weapon_properties": [
+            "finesse",
+            "light",
+            "thrown"
+          ],
+          "weight_lb": 1.0
+        }
+      ],
+      "level": 1,
+      "max_hp": 16,
+      "name": "Łotrzyca",
+      "portrait": "portraits/abandoned_watchtower/rogue.webp",
+      "position": [
+        0,
+        1
+      ],
+      "proficiencies": {
+        "armor": [],
+        "expertise": [],
+        "saving_throws": [],
+        "skills": [],
+        "tools": [],
+        "weapons": []
+      },
+      "proficiency_bonus": 2,
+      "resource_pools": [],
+      "senses": {
+        "blindsight_feet": 0,
+        "darkvision_feet": 0,
+        "tremorsense_feet": 0,
+        "truesight_feet": 0
+      },
+      "size": "medium",
+      "speed_feet": 30,
+      "spell_access": [],
+      "spell_ids": [],
+      "spell_preparation": null,
+      "spell_save_dc": 0,
+      "spell_slots": [],
+      "spells": [],
+      "temp_hp": 0,
+      "triggers": [],
+      "uses_death_saves": true
+    },
+    {
+      "ability_scores": {
+        "charisma": 14,
+        "constitution": 12,
+        "dexterity": 12,
+        "intelligence": 10,
+        "strength": 10,
+        "wisdom": 16
+      },
+      "ac": 13,
+      "active_light": null,
+      "attacks_per_action": 1,
+      "auras": [
+        {
+          "effect_kind": "saving_throw_bonus",
+          "id": "protective_reliquary",
+          "label": "Aura ochronnego relikwiarza",
+          "radius_feet": 10,
+          "target": "self_and_allies",
+          "value": 1
+        }
+      ],
+      "condition_immunities": [],
+      "currency": {
+        "cp": 0,
+        "ep": 0,
+        "gp": 0,
+        "pp": 0,
+        "sp": 0,
+        "total_cp": 0,
+        "weight_lb": 0.0
+      },
+      "damage_affinities": {
+        "immunities": [],
+        "resistances": [],
+        "vulnerabilities": []
+      },
+      "death_saves": {
+        "dead": false,
+        "failures": 0,
+        "stable": false,
+        "successes": 0
+      },
+      "exhaustion_level": 0,
+      "faction": "ally",
+      "features": [],
+      "hit_dice": [
+        {
+          "die_sides": 8,
+          "maximum": 2,
+          "remaining": 2
+        }
+      ],
+      "hp": 14,
+      "id": "cleric",
+      "inventory": [
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 2,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": "shield",
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "Metalowa tarcza zajmująca jedną rękę i zapewniająca +2 do KP.",
+          "durability": null,
+          "equipped": true,
+          "gear_category": null,
+          "hands_required": 1,
+          "held_in": [
+            "main_hand"
+          ],
+          "id": "shield",
+          "kind": "shield",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Tarcza",
+          "portable": true,
+          "properties": [
+            "hard",
+            "metallic",
+            "rigid"
+          ],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "shield",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 1000,
+          "total_weight_lb": 6.0,
+          "value_cp": 1000,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 6.0
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": 10,
+          "charges_maximum": 10,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "Bandaże, maści i szyny. Zestaw ma dziesięć użyć i pozwala ustabilizować istotę bez testu Medicine.",
+          "durability": null,
+          "equipped": true,
+          "gear_category": "tool",
+          "hands_required": 0,
+          "held_in": [],
+          "id": "healers_kit",
+          "kind": "tool",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Zestaw uzdrowiciela",
+          "portable": true,
+          "properties": [],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "healers_kit",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": "healers_kit",
+          "total_value_cp": 500,
+          "total_weight_lb": 3.0,
+          "value_cp": 500,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 3.0
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": 7,
+          "charges_maximum": 7,
+          "charges_recovery": "long_rest",
+          "charges_recovery_dice": "1d6",
+          "charges_recovery_modifier": 1,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "Różdżka ma 7 ładunków. Wydaje 1 ładunek, aby spróbować magicznie unieruchomić cel; po długim odpoczynku odzyskuje 1k6+1 ładunków.",
+          "durability": null,
+          "equipped": false,
+          "gear_category": null,
+          "hands_required": 0,
+          "held_in": [],
+          "id": "binding_wand",
+          "kind": "magic_item",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Różdżka oplątania",
+          "portable": true,
+          "properties": [
+            "rigid",
+            "wooden"
+          ],
+          "quantity": 1,
+          "requires_attunement": true,
+          "source_ref": "binding_wand",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 5000,
+          "total_weight_lb": 1.0,
+          "value_cp": 5000,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 1.0
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "Po zestrojeniu i założeniu amulet wzmacnia obronę właściciela: +1 do KP oraz rzutów obronnych.",
+          "durability": null,
+          "equipped": true,
+          "gear_category": null,
+          "hands_required": 0,
+          "held_in": [],
+          "id": "guardian_amulet",
+          "kind": "magic_item",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [
+            {
+              "id": "guardian_armor",
+              "kind": "armor_class_bonus",
+              "requires_equipped": true,
+              "value": 1
+            },
+            {
+              "id": "guardian_saves",
+              "kind": "saving_throw_bonus",
+              "requires_equipped": true,
+              "value": 1
+            }
+          ],
+          "name": "Amulet czujnego strażnika",
+          "portable": true,
+          "properties": [
+            "metallic"
+          ],
+          "quantity": 1,
+          "requires_attunement": true,
+          "source_ref": "guardian_amulet",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 7500,
+          "total_weight_lb": 0.2,
+          "value_cp": 7500,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 0.2
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "",
+          "durability": null,
+          "equipped": true,
+          "gear_category": "holy_symbol",
+          "hands_required": 0,
+          "held_in": [],
+          "id": "holy_symbol_amulet",
+          "kind": "focus",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Amulet ze świętym symbolem",
+          "portable": true,
+          "properties": [],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "holy_symbol_amulet",
+          "spellcasting_focus_kind": "holy_symbol",
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 500,
+          "total_weight_lb": 1.0,
+          "value_cp": 500,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 1.0
+        }
+      ],
+      "level": 1,
+      "max_hp": 14,
+      "name": "Kapłan",
+      "portrait": "portraits/abandoned_watchtower/cleric.webp",
+      "position": [
+        0,
+        2
+      ],
+      "proficiencies": {
+        "armor": [
+          "light",
+          "medium",
+          "shield"
+        ],
+        "expertise": [],
+        "saving_throws": [
+          "wisdom",
+          "charisma"
+        ],
+        "skills": [
+          "medicine",
+          "religion"
+        ],
+        "tools": [],
+        "weapons": []
+      },
+      "proficiency_bonus": 2,
+      "resource_pools": [],
+      "senses": {
+        "blindsight_feet": 0,
+        "darkvision_feet": 0,
+        "tremorsense_feet": 0,
+        "truesight_feet": 0
+      },
+      "size": "medium",
+      "speed_feet": 30,
+      "spell_access": [
+        {
+          "allowed_focus_kinds": [
+            "holy_symbol",
+            "component_pouch"
+          ],
+          "kind": "prepared",
+          "spell_ids": [
+            "sacred_flame",
+            "radiant_line",
+            "healing_word",
+            "cure_wounds",
+            "inflict_wounds",
+            "bless_attack_bonus"
+          ]
+        },
+        {
+          "allowed_focus_kinds": [
+            "holy_symbol",
+            "component_pouch"
+          ],
+          "kind": "known",
+          "spell_ids": [
+            "comprehend_languages",
+            "shield",
+            "counterspell",
+            "warding_rite",
+            "call_guardian_spirit",
+            "veil_step",
+            "repelling_pulse",
+            "grasping_current",
+            "weakening_miasma",
+            "binding_frost",
+            "unravel_magic"
+          ]
+        }
+      ],
+      "spell_ids": [
+        "sacred_flame",
+        "radiant_line",
+        "inflict_wounds",
+        "healing_word",
+        "cure_wounds",
+        "bless_attack_bonus",
+        "shield",
+        "counterspell",
+        "warding_rite",
+        "call_guardian_spirit",
+        "veil_step",
+        "repelling_pulse",
+        "grasping_current",
+        "weakening_miasma",
+        "binding_frost",
+        "unravel_magic",
+        "comprehend_languages"
+      ],
+      "spell_preparation": {
+        "always_prepared_spell_ids": [],
+        "available_spells": [
+          {
+            "id": "radiant_line",
+            "label": "Smuga światła",
+            "level": 1
+          },
+          {
+            "id": "healing_word",
+            "label": "Słowo leczenia",
+            "level": 1
+          },
+          {
+            "id": "cure_wounds",
+            "label": "Leczenie ran",
+            "level": 1
+          },
+          {
+            "id": "inflict_wounds",
+            "label": "Zadawanie ran",
+            "level": 1
+          },
+          {
+            "id": "bless_attack_bonus",
+            "label": "Błogosławieństwo",
+            "level": 1
+          }
+        ],
+        "confirmed": false,
+        "preparation_limit": 2,
+        "prepared_spell_ids": [
+          "healing_word",
+          "bless_attack_bonus"
+        ],
+        "source_label": "lista czarów kapłana"
+      },
+      "spell_save_dc": 13,
+      "spell_slots": [
+        {
+          "level": 1,
+          "maximum": 2,
+          "remaining": 2
+        },
+        {
+          "level": 3,
+          "maximum": 1,
+          "remaining": 1
+        }
+      ],
+      "spells": [
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "instantaneous"
+          },
+          "effect_kind": "attack",
+          "exploration_effect": null,
+          "id": "sacred_flame",
+          "level": 0,
+          "name": "Święty płomień",
+          "range": {
+            "feet": 60,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": {
+            "cantrip_damage_dice_per_tier": 1,
+            "damage_dice_per_slot_level": 0,
+            "healing_dice_per_slot_level": 0,
+            "targets_per_slot_level": 0
+          },
+          "school": "evocation"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [
+              {
+                "consumed": false,
+                "item_id": "incense",
+                "label": "szczypta kadzidła",
+                "minimum_value_cp": 0,
+                "quantity": 1
+              }
+            ],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "instantaneous"
+          },
+          "effect_kind": "attack",
+          "exploration_effect": null,
+          "id": "radiant_line",
+          "level": 1,
+          "name": "Smuga światła",
+          "range": {
+            "feet": 30,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": {
+            "cantrip_damage_dice_per_tier": 0,
+            "damage_dice_per_slot_level": 1,
+            "healing_dice_per_slot_level": 0,
+            "targets_per_slot_level": 0
+          },
+          "school": "evocation"
+        },
+        {
+          "casting_time": "bonus_action",
+          "components": {
+            "materials": [],
+            "somatic": false,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "instantaneous"
+          },
+          "effect_kind": "healing",
+          "exploration_effect": null,
+          "id": "healing_word",
+          "level": 1,
+          "name": "Słowo leczenia",
+          "range": {
+            "feet": 60,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": {
+            "cantrip_damage_dice_per_tier": 0,
+            "damage_dice_per_slot_level": 0,
+            "healing_dice_per_slot_level": 1,
+            "targets_per_slot_level": 0
+          },
+          "school": "evocation"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "instantaneous"
+          },
+          "effect_kind": "healing",
+          "exploration_effect": null,
+          "id": "cure_wounds",
+          "level": 1,
+          "name": "Leczenie ran",
+          "range": {
+            "feet": 0,
+            "kind": "touch"
+          },
+          "ritual": false,
+          "scaling": {
+            "cantrip_damage_dice_per_tier": 0,
+            "damage_dice_per_slot_level": 0,
+            "healing_dice_per_slot_level": 1,
+            "targets_per_slot_level": 0
+          },
+          "school": "evocation"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "instantaneous"
+          },
+          "effect_kind": "attack",
+          "exploration_effect": null,
+          "id": "inflict_wounds",
+          "level": 1,
+          "name": "Zadawanie ran",
+          "range": {
+            "feet": 0,
+            "kind": "touch"
+          },
+          "ritual": false,
+          "scaling": {
+            "cantrip_damage_dice_per_tier": 0,
+            "damage_dice_per_slot_level": 1,
+            "healing_dice_per_slot_level": 0,
+            "targets_per_slot_level": 0
+          },
+          "school": "necromancy"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [
+              {
+                "consumed": false,
+                "item_id": "holy_water_flask",
+                "label": "kropla wody święconej",
+                "minimum_value_cp": 0,
+                "quantity": 1
+              }
+            ],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": true,
+          "duration": {
+            "amount": 1,
+            "kind": "minute"
+          },
+          "effect_kind": "combat_action",
+          "exploration_effect": null,
+          "id": "bless_attack_bonus",
+          "level": 1,
+          "name": "Błogosławieństwo",
+          "range": {
+            "feet": 30,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": {
+            "cantrip_damage_dice_per_tier": 0,
+            "damage_dice_per_slot_level": 0,
+            "healing_dice_per_slot_level": 0,
+            "targets_per_slot_level": 1
+          },
+          "school": "enchantment"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [
+              {
+                "consumed": false,
+                "item_id": "soot_and_salt",
+                "label": "szczypta sadzy i soli",
+                "minimum_value_cp": 0,
+                "quantity": 1
+              }
+            ],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "hour"
+          },
+          "effect_kind": "exploration",
+          "exploration_effect": {
+            "flag_key": "comprehend_languages_active",
+            "flag_value": true,
+            "kind": "set_flag"
+          },
+          "id": "comprehend_languages",
+          "level": 1,
+          "name": "Rozumienie języków",
+          "range": {
+            "feet": 0,
+            "kind": "self"
+          },
+          "ritual": true,
+          "scaling": null,
+          "school": "divination"
+        },
+        {
+          "casting_time": "reaction",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "round"
+          },
+          "effect_kind": "combat_action",
+          "exploration_effect": null,
+          "id": "shield",
+          "level": 1,
+          "name": "Tarcza",
+          "range": {
+            "feet": 0,
+            "kind": "self"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "abjuration"
+        },
+        {
+          "casting_time": "reaction",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": false
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "instantaneous"
+          },
+          "effect_kind": "combat_action",
+          "exploration_effect": null,
+          "id": "counterspell",
+          "level": 3,
+          "name": "Kontrczar",
+          "range": {
+            "feet": 60,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "abjuration"
+        },
+        {
+          "casting_time": "minute",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "instantaneous"
+          },
+          "effect_kind": "combat_action",
+          "exploration_effect": null,
+          "id": "warding_rite",
+          "level": 1,
+          "name": "Rytuał ochronny",
+          "range": {
+            "feet": 0,
+            "kind": "self"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "abjuration"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [
+              {
+                "consumed": false,
+                "item_id": "guardian_amulet",
+                "label": "amulet strażnika",
+                "minimum_value_cp": 0,
+                "quantity": 1
+              }
+            ],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": true,
+          "duration": {
+            "amount": 1,
+            "kind": "minute"
+          },
+          "effect_kind": "combat_action",
+          "exploration_effect": null,
+          "id": "call_guardian_spirit",
+          "level": 1,
+          "name": "Wezwanie ducha strażnika",
+          "range": {
+            "feet": 30,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "conjuration"
+        },
+        {
+          "casting_time": "bonus_action",
+          "components": {
+            "materials": [],
+            "somatic": false,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "instantaneous"
+          },
+          "effect_kind": "combat_action",
+          "exploration_effect": null,
+          "id": "veil_step",
+          "level": 1,
+          "name": "Krok przez zasłonę",
+          "range": {
+            "feet": 0,
+            "kind": "self"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "conjuration"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "instantaneous"
+          },
+          "effect_kind": "combat_action",
+          "exploration_effect": null,
+          "id": "repelling_pulse",
+          "level": 1,
+          "name": "Odpychający impuls",
+          "range": {
+            "feet": 30,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "evocation"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "instantaneous"
+          },
+          "effect_kind": "combat_action",
+          "exploration_effect": null,
+          "id": "grasping_current",
+          "level": 1,
+          "name": "Chwytający nurt",
+          "range": {
+            "feet": 30,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "transmutation"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "until_dispelled"
+          },
+          "effect_kind": "combat_action",
+          "exploration_effect": null,
+          "id": "weakening_miasma",
+          "level": 1,
+          "name": "Osłabiająca miazma",
+          "range": {
+            "feet": 30,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "necromancy"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "until_dispelled"
+          },
+          "effect_kind": "combat_action",
+          "exploration_effect": null,
+          "id": "binding_frost",
+          "level": 1,
+          "name": "Krępujący szron",
+          "range": {
+            "feet": 30,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "transmutation"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "instantaneous"
+          },
+          "effect_kind": "combat_action",
+          "exploration_effect": null,
+          "id": "unravel_magic",
+          "level": 1,
+          "name": "Rozplątanie magii",
+          "range": {
+            "feet": 60,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "abjuration"
+        }
+      ],
+      "temp_hp": 0,
+      "triggers": [],
+      "uses_death_saves": true
+    }
+  ],
+  "combat": null,
+  "content": {
+    "ruleset_id": "dnd_5e_2014",
+    "scenario_schema": "dnd_board_game.scenario",
+    "scenario_schema_version": 1,
+    "source_pack_ids": [
+      "project_original"
+    ]
+  },
+  "conversation_entries": [],
+  "exploration": {
+    "challenge_states": [],
+    "condition_states": [],
+    "elapsed_minutes": 620,
+    "encounter_edges": [],
+    "exhausted_search_zones": [],
+    "fixture_states": [],
+    "flags": [
+      {
+        "key": "quest_accepted",
+        "value": true
+      },
+      {
+        "key": "quest_hook_found",
+        "value": true
+      },
+      {
+        "key": "watchtower_clean_approach",
+        "value": true
+      }
+    ],
+    "hidden_actor_states": [],
+    "inventory_resource_ids": [
+      "rope",
+      "wedge"
+    ],
+    "magic_effects": [],
+    "merchants": [],
+    "npc_states": [
+      {
+        "attitude": "indifferent",
+        "closure_reason": "",
+        "emotional_state": "Przestraszony i podejrzliwy; łatwo wpada w panikę.",
+        "interaction_status": "active",
+        "npc_id": "wounded_scout",
+        "physical_state": "Ranny i przygnieciony lekkimi deskami; oddycha płytko i ściska bok.",
+        "relationship_events": [],
+        "revealed_information_ids": [],
+        "used_attempt_ids": []
+      }
+    ],
+    "party_position": {
+      "marker_position": [
+        9,
+        2
+      ],
+      "zone_id": "gate"
+    },
+    "point_positions": [
+      {
+        "id": "old_camp_tools",
+        "positions": [
+          [
+            11,
+            3
+          ]
+        ]
+      },
+      {
+        "id": "hidden_cache",
+        "positions": [
+          [
+            11,
+            12
+          ]
+        ]
+      },
+      {
+        "id": "wounded_scout",
+        "positions": [
+          [
+            8,
+            8
+          ],
+          [
+            8,
+            9
+          ],
+          [
+            9,
+            8
+          ],
+          [
+            9,
+            9
+          ]
+        ]
+      }
+    ],
+    "point_visibility": [
+      {
+        "id": "old_camp_tools",
+        "visibility": "hidden"
+      },
+      {
+        "id": "hidden_cache",
+        "visibility": "hidden"
+      },
+      {
+        "id": "wounded_scout",
+        "visibility": "hidden"
+      }
+    ],
+    "short_rest_counts": [],
+    "source_collections": [],
+    "source_discoveries": [],
+    "temporary_items": [],
+    "trap_states": []
+  },
+  "pending_encounter": null,
+  "pending_npc_transition": null,
+  "resolved_encounter_trigger_ids": [],
+  "scenario_id": "abandoned_watchtower",
+  "schema": "dnd_board_game.session",
+  "schema_version": 23,
+  "selected_attack_source_ids": {},
+  "selected_healing_source_ids": {},
+  "ui": {
+    "active_point_id": "",
+    "interaction_result": null,
+    "preview_zone_id": "",
+    "selected_helper_actor_id": null,
+    "selected_lead_actor_id": "hero",
+    "stage": "waiting_for_board"
+  }
+}

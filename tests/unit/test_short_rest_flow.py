@@ -4,6 +4,7 @@ import pytest
 
 from dnd_board_game.actors import ActorTrigger, TriggerEffectKind, TriggerEventType
 from dnd_board_game.application import ShortRestFlowService
+from dnd_board_game.combat import CombatCondition, ConditionState
 from dnd_board_game.exploration import (
     ExplorationState,
     TimedMagicEffect,
@@ -64,6 +65,41 @@ def test_short_rest_preview_and_completion_apply_time_policy_and_effects() -> No
     assert transition.actors[0].hp == actors[0].hp
     assert transition.actors[0].resource_pools[0].current == 1
     assert transition.effects[0].effect_type == "add_noise"
+
+
+def test_short_rest_expires_matching_exploration_condition() -> None:
+    exploration = _loaded()
+    permanent = ConditionState(
+        "hero",
+        CombatCondition.PRONE,
+        duration=EffectDuration.PERMANENT,
+    )
+    state = replace(
+        _state(exploration),
+        condition_states=(
+            ConditionState(
+                "hero",
+                CombatCondition.POISONED,
+                duration=EffectDuration.UNTIL_SHORT_REST,
+            ),
+            permanent,
+        ),
+    )
+    gate = next(zone for zone in exploration.zones if zone.id == "gate")
+    service = ShortRestFlowService()
+
+    transition = service.complete(
+        state=state,
+        actors=exploration.actors,
+        pending=service.start(
+            state=state,
+            zone=gate,
+            encounter_pending=False,
+        ),
+    )
+
+    assert transition.state.condition_states == (permanent,)
+    assert transition.expired_conditions[0].condition == CombatCondition.POISONED
 
 
 def test_short_rest_hit_die_can_be_spent_after_completion() -> None:

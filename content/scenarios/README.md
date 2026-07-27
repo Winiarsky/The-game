@@ -147,6 +147,24 @@ dopiero po nim stosuje obrażenia:
 
 W jednej opcji może być najwyżej jedno zagrożenie dla danego triggera.
 
+`success_effects` i `failure_effects` hazardu mogą nakładać trwały poza walką
+warunek `prone`, `poisoned` albo `restrained`:
+
+```json
+{
+  "type": "apply_condition",
+  "parameters": {
+    "condition": "poisoned",
+    "duration": "until_short_rest",
+    "source_label": "Zatrute kolce"
+  }
+}
+```
+
+Dozwolone duration poza walką to `until_encounter_end`, `until_short_rest`,
+`until_long_rest`, `until_scenario_end` i `permanent`. Warunek zachowuje te dane
+przy wejściu do encountera i powrocie do eksploracji.
+
 Aktor deklaruje biegłości przez jeden profil:
 
 ```json
@@ -166,6 +184,101 @@ Aktor deklaruje biegłości przez jeden profil:
 `expertise` wymaga wpisania tego samego skilla w `skills`. Biegłość broni wskazuje
 stabilne id itemu albo id naturalnego źródła ataku. Loader nadal odczytuje starsze
 `skill_proficiencies` i `skill_expertise`, ale nowe dane powinny używać profilu.
+
+Aktor może deklarować zasięgi zmysłów, a strefa bazowe oświetlenie:
+
+```json
+{
+  "senses": {"darkvision_feet": 60},
+  "ambient_light": "darkness"
+}
+```
+
+Dozwolone zmysły to `darkvision_feet`, `blindsight_feet`,
+`tremorsense_feet` i `truesight_feet`; każdy zasięg jest nieujemną
+wielokrotnością 5 ft. `ambient_light` przyjmuje `bright`, `dim` albo `darkness`.
+Authored observation zależna od wzroku dodaje `sight_based: true` oraz dodatni
+`distance_feet` będący wielokrotnością 5 ft.
+
+Strefa może udostępnić Hide i aktywny Search:
+
+```json
+{
+  "allows_hiding": true,
+  "search": {
+    "dc": 12,
+    "ability": "wisdom",
+    "skill": "perception",
+    "minutes": 10,
+    "reveals": ["hidden_cache"]
+  }
+}
+```
+
+Pułapka może być wykrywana zarówno przez wskazaną authored observation, jak i
+przez wspólny Search/passive Perception:
+
+```json
+{
+  "detection_observation_id": "search_gate_traps",
+  "detection_dc": 15,
+  "detection_distance_feet": 10,
+  "passive_detection": true
+}
+```
+
+Brak `detection_dc` wyłącza generyczne wykrywanie i pozostawia wyłącznie
+autorską observation. Dystans musi być dodatnią wielokrotnością 5 ft.
+
+Strefa może deklarować trwałe fixture'y drzwi, pojemników i przeszkód:
+
+```json
+{
+  "id": "supply_chest",
+  "name": "Skrzynia",
+  "kind": "container",
+  "positions": [[7, 3]],
+  "condition": "closed",
+  "initially_locked": true,
+  "lock_dc": 12,
+  "destructible": true,
+  "armor_class": 15,
+  "hit_points": 10,
+  "damage_threshold": 3,
+  "cover_bonus": 2,
+  "projectile_cover_bonus": 2,
+  "action_policies": [
+    {
+      "operation": "unlock",
+      "result_condition": "closed",
+      "ability": "dexterity",
+      "difficulty_tier": "easy"
+    },
+    {
+      "operation": "open",
+      "allowed_conditions": ["closed"],
+      "result_condition": "open",
+      "ability": "strength",
+      "difficulty_tier": "automatic"
+    },
+    {
+      "operation": "loot",
+      "allowed_conditions": ["open"],
+      "result_condition": "open",
+      "ability": "wisdom",
+      "difficulty_tier": "automatic",
+      "release_yield_items": true
+    }
+  ],
+  "yield_items": []
+}
+```
+
+`kind` przyjmuje `object`, `door`, `container` albo `obstacle`. Fixture z
+`destructible: true` musi podać `armor_class` i dodatnie `hit_points`.
+`damage_threshold` jest opcjonalny. `blocks_movement_when_closed` oraz bonusy
+cover są projektowane do encountera z aktualnego stanu eksploracji. Wartość
+`difficulty_tier: "automatic"` oznacza lokalną operację bez rzutu.
 
 Test sceny może wskazać `tool` obok `ability` i opcjonalnego `skill`:
 
@@ -245,6 +358,30 @@ content/scenarios/abandoned_watchtower/
 
 Każdy plik części może zawierać samą wartość albo obiekt nazwany polem, np. `{"actors": [...]}`. Drugi wariant jest czytelniejszy i obecnie zalecany.
 
+Strefa może wskazywać fizyczną papierową mapę:
+
+```json
+{
+  "id": "gate",
+  "name": "Brama strażnicy",
+  "paper_map": {
+    "id": "watchtower_gate",
+    "preview_path": "print_maps/village_watchtower/png/watchtower_gate.png",
+    "a4_pdf_path": "print_maps/village_watchtower/pdf/a4/watchtower_gate.pdf",
+    "full_size_pdf_path": "print_maps/village_watchtower/pdf/full_size/watchtower_gate.pdf",
+    "width_cm": 50,
+    "height_cm": 75
+  }
+}
+```
+
+Ścieżki są względne wobec głównego `assets/`. Przed pierwszym setupem oraz po
+każdym przejściu do innej strefy UI pokazuje podgląd i linki do druku, a
+rozgrywka pozostaje zatrzymana do potwierdzenia rozłożenia mapy. Dopiero później
+uruchamiane są kroki ustawiania NPC, elementów sceny i pasywnego wykrywania.
+Standard projektu to plansza 20×30 pól, pole 2,5 cm i mapa 50×75 cm bez
+nadrukowanej kratki. Kafelkowe PDF-y A4 należy drukować w skali 100%.
+
 Zasób eksploracji może być wielokrotnego użytku albo jednorazowy:
 
 ```json
@@ -274,6 +411,8 @@ Aktor przygotowujący czary może deklarować generyczny profil:
 ```
 
 Identyfikatory muszą wskazywać źródła czarów poziomu 1+ tego aktora. Cantripy nie należą do profilu. Przed setupem scenariusza gracz potwierdza dokładnie `preparation_limit` pozycji; `always_prepared_spell_ids` nie zajmują limitu.
+Opcjonalne pole aktora `"level": 1` przechowuje poziom postaci (1–20) używany
+między innymi do skalowania obrażeń cantripów. Brak pola zachowuje poziom 1.
 
 Aktor może posiadać Hit Dice i generyczne zasoby odpoczynku:
 
@@ -422,10 +561,47 @@ Nastawienie przyjmuje `hostile`, `indifferent` albo `friendly`. Pola pominięte 
 automatycznie zapisuje historię zaakceptowanych interakcji, wykorzystane intencje
 wymagające rzutu oraz faktycznie ujawnione `locked_information`.
 
+Krytyczny cel rozmowy może zawierać ukryte `grounded_response`:
+
+```json
+{
+  "id": "accept_quest",
+  "label": "Przyjmijcie zadanie",
+  "description": "Potwierdźcie decyzję drużyny.",
+  "intent_ids": ["commitment"],
+  "grounded_response": {
+    "player_narration": "NPC uważnie słucha decyzji drużyny.",
+    "npc_response": "Dobrze. Wróćcie, kiedy będziecie gotowi wyruszyć.",
+    "success_message": "NPC przyjmuje zobowiązanie drużyny.",
+    "variants": [
+      {
+        "id": "relieved",
+        "player_narration": "Napięcie na twarzy NPC nieco ustępuje.",
+        "npc_response": "Dobrze. Przygotujcie się i wróćcie przed wymarszem.",
+        "success_message": "NPC przyjmuje decyzję drużyny."
+      }
+    ]
+  }
+}
+```
+
+Pole nie jest wystawiane w zwykłym payloadzie gracza. Dla guarded route prompt
+LLM zawiera wyłącznie aktywny cel i jego permission, a walidator zastępuje
+widoczne `player_narration`, `npc_response`, `success_message` i
+`failure_message` wartościami autorskimi. Opcjonalne `variants` są równoważnymi
+parafrazami zatwierdzonymi w contencie. Model wybiera wyłącznie ich `id`, a
+walidator kopiuje kompletny wariant; brak lub obcy identyfikator wraca do tekstu
+bazowego. Model nadal klasyfikuje intencję,
+ryzyko i metodę, ale nie może ustanowić nowego tropu, nagrody, zakupu ani
+transferu waluty samym tekstem.
+
 `uses_social_reaction: true` oznacza prośbę rozstrzyganą tabelą reakcji D&D 5e
 zależną od bieżącego nastawienia. LLM klasyfikuje `request_risk` jako
 `no_risk`, `minor_risk` albo `significant_risk`, natomiast silnik wyznacza ST
-0/10/20 lub odmowę. Aktualne nastawienie i warunki reakcji są jawne w UI.
+0/10/20 lub odmowę. Dla celu korzystającego z tej tabeli UI każe graczowi
+wybrać Persuasion, Deception albo Intimidation. Wybór trafia do walidatora i
+ma pierwszeństwo przed metodą proponowaną przez LLM. `allowed_skills` może
+ograniczyć listę. Aktualne nastawienie i warunki reakcji są jawne w UI.
 
 Opcjonalne `attempt_policy` dotyczy wyłącznie faktycznie wykonanych rzutów.
 `attempt_id` jest stabilnym kluczem licznika, `max_attempts` ustala limit, a
@@ -480,6 +656,150 @@ reakcji przejścia przechodzą ten sam walidator co propozycje LLM w runtime.
 Walidowane są parametry i referencje prymitywu oraz lokalne
 `allowed_effect_types`/`allowed_flags`. Błąd wskazuje pełną ścieżkę wpisu, dzięki
 czemu wadliwy content nie może rozpocząć sesji.
+
+Cel sceny może opcjonalnie zawierać prezentacyjne `milestones`. Każdy kamień
+milowy ma etykietę, klucz flagi i opcjonalną wartość oczekiwaną (domyślnie
+`true`). Nie zmienia warunku ukończenia celu; pozwala UI pokazać graczom
+czytelny postęp bez ujawniania technicznych nazw flag:
+
+```json
+{
+  "id": "prepare_departure",
+  "name": "Przygotujcie wyprawę",
+  "condition": "flag_equals",
+  "flag_key": "ready_to_depart",
+  "flag_value": true,
+  "milestones": [
+    {"label": "Zdobądźcie trop", "flag_key": "hook_found"},
+    {"label": "Przyjmijcie zadanie", "flag_key": "quest_accepted"},
+    {"label": "Potwierdźcie gotowość", "flag_key": "ready_to_depart"}
+  ]
+}
+```
+
+Scenariusz eksploracyjny może mieć jedno autorskie `exploration.continuation`.
+Wyjście wskazuje strefę odejścia, relatywną ścieżkę i oczekiwane `id` kolejnego
+scenariusza oraz flagi wymagane do aktywacji:
+
+```json
+{
+  "continuation": {
+    "id": "depart_for_watchtower",
+    "label": "Wyruszcie do strażnicy",
+    "description": "Drużyna rusza starym traktem.",
+    "departure_zone_id": "forest_road",
+    "target_scenario_id": "abandoned_watchtower",
+    "target_scenario_path": "abandoned_watchtower.json",
+    "available_if_flags": ["ready_for_watchtower"],
+    "propagate_flags": ["quest_accepted", "watchtower_alerted"],
+    "travel_minutes": 45,
+    "travel": {
+      "navigation_dc": 12,
+      "navigation_ability": "wisdom",
+      "navigation_skill": "survival",
+      "navigation_failure_delay_minutes": 30,
+      "safe_travel_minutes": 480
+    },
+    "outcomes": [
+      {
+        "id": "lost_route",
+        "kind": "fail_forward",
+        "label": "Zgubiony trakt",
+        "navigation_result": "failure",
+        "target_effects": [
+          {
+            "type": "set_flag",
+            "parameters": {"key": "route_lost", "value": true}
+          }
+        ]
+      },
+      {
+        "id": "prepared_arrival",
+        "kind": "success",
+        "label": "Przybycie zgodnie z planem"
+      }
+    ]
+  }
+}
+```
+
+Loader odrzuca nieznaną strefę, brakujący plik, niezgodne `target_scenario_id`,
+ścieżkę absolutną oraz `..`. Runtime pozwala zakończyć scenę przez continuation
+dopiero po spełnieniu flag i wejściu do strefy wyjścia. Przed wystawieniem
+handoffu zapisuje pełny snapshot sceny źródłowej. Z ekranu podsumowania można
+następnie uruchomić scenę docelową: runtime zachowuje wspólnych członków drużyny
+z ich HP, ekwipunkiem, walutą i zasobami, dodaje aktorów występujących dopiero
+w scenie docelowej, przenosi godzinę i jawne zasoby eksploracyjne oraz stosuje
+zweryfikowane `target_effects`. Podłączony backend planszy pozostaje aktywny,
+a nowa scena zaczyna się od zwykłego setupu papierowej mapy.
+
+Opcjonalne `outcomes` są sprawdzane w kolejności po rozliczeniu podróży i progów
+zegara. Gałąź może deklarować `required_flags`, `forbidden_flags` oraz
+`navigation_result` (`any`, `success`, `failure`). Ostatni wpis musi być
+bezwarunkowym fallbackiem. `kind` przyjmuje `success`, `partial_success` albo
+`fail_forward`, a `target_effects` dopuszcza obecnie tylko pełne efekty
+`set_flag`. `propagate_flags` kopiuje do handoffu wyłącznie jawnie wymienione
+wartości; efekt wybranej gałęzi nadpisuje propagowany klucz. Runtime pokazuje
+rezultat i cele źródłowe, a po rozpoczęciu sceny docelowej automatycznie stosuje
+wynikowe konsekwencje.
+
+Pole `travel` jest opcjonalną polityką podróży. UI zbiera tempo
+`fast`/`normal`/`slow`, nawigatora oraz fizyczne wyniki d20. Runtime oblicza
+czas z tempa, dodaje opóźnienie po nieudanej nawigacji i rozstrzyga Constitution
+saves forced march po przekroczeniu `safe_travel_minutes`.
+
+Wspólny czas scenariusza można skonfigurować w `exploration.clock`. Koszt wejścia
+do strefy podaje jej `travel_minutes`, a polityka intencji NPC może podać
+`time_cost_minutes`. Short rest, rytuały, crafting i zmiana pancerza korzystają
+z tego samego licznika. Progi są ukrytym contentem MG i uruchamiają się tylko raz:
+
+```json
+{
+  "clock": {
+    "start_hour": 17,
+    "events": [
+      {
+        "id": "dusk_on_old_road",
+        "at_minute": 90,
+        "label": "Zapada zmierzch",
+        "narration": "Drogę spowija półmrok.",
+        "effects": [
+          {"type": "set_flag", "parameters": {"key": "dusk_arrival", "value": true}}
+        ]
+      }
+    ]
+  }
+}
+```
+
+`at_minute` jest czasem od początku scenariusza, nie godziną zegarową. UI pokazuje
+wyliczoną porę dnia, ale nie ujawnia przyszłych progów. Loader waliduje efekty
+zegarowe tym samym kontraktem co pozostałe efekty eksploracji.
+
+Formalne rzemiosło wykonywane przez pełne dni pracy deklaruje się osobno od
+improwizowanego `/zbuduj`:
+
+```json
+{
+  "downtime": {
+    "crafting_recipes": [{
+      "id": "forge_dagger",
+      "label": "Wykuj sztylet",
+      "zone_id": "market",
+      "workshop_label": "Kuźnia na rynku",
+      "item_ref": "dagger",
+      "quantity": 1,
+      "required_tool_id": "smiths_tools"
+    }]
+  }
+}
+```
+
+Produkt musi być zwykłym, przenośnym itemem o dodatniej wartości. Aktor musi
+znajdować się w podanej strefie, mieć biegłość `required_tool_id`, posiadać
+działający item z takim `tool_proficiency_id` i zapłacić połowę wartości
+rynkowej produktu. Runtime liczy pełne ośmiogodzinne dni po 5 gp postępu i
+przesuwa istniejący zegar scenariusza.
 
 Pułapka eksploracyjna łączy wykrycie przez istniejącą obserwację z własnym stanem
 oraz hazardem uruchamianym po nieudanej interakcji albo ukończeniu wskazanego challenge'a:

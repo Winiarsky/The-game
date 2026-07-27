@@ -4,7 +4,12 @@ from dataclasses import dataclass, replace
 from enum import StrEnum
 from collections.abc import Callable, Mapping
 
-from dnd_board_game.actors import Actor, DamageAffinityProfile, DeathSaveState
+from dnd_board_game.actors import (
+    Actor,
+    DamageAffinityProfile,
+    DeathSaveState,
+    effective_max_hit_points,
+)
 from dnd_board_game.core.damage_types import DamageType, damage_type_label_pl
 from dnd_board_game.rules import DiceExpression
 
@@ -240,10 +245,10 @@ def apply_damage_result(
     if actor.uses_death_saves and not actor.death_saves.dead:
         if hp_before > 0 and hp == 0:
             excess_damage = max(0, remaining - hp_before)
-            instant_death = excess_damage >= actor.max_hp
+            instant_death = excess_damage >= effective_max_hit_points(actor)
             death_saves = DeathSaveState(dead=True) if instant_death else DeathSaveState()
         elif hp_before == 0 and remaining > 0:
-            instant_death = remaining >= actor.max_hp
+            instant_death = remaining >= effective_max_hit_points(actor)
             if instant_death:
                 death_saves = DeathSaveState(dead=True)
             else:

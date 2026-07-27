@@ -1284,6 +1284,15 @@ def validate_gm_classifier_proposal(
     proposal = _ground_explicit_build_proposal(proposal, request)
     proposal = _ground_temporary_item_preparation(proposal, request)
     proposal = _ground_fixture_action_proposal(proposal, request)
+    # Numeric roll authority stays in authored content, selected resources and
+    # deterministic runtime state. The model may describe circumstances, but
+    # it cannot create a bonus, penalty, advantage or disadvantage.
+    proposal = proposal.model_copy(
+        update={
+            "roll_mode": RollMode.NORMAL,
+            "situational_modifiers": (),
+        }
+    )
     proposal = _apply_authored_method_rules(proposal, request)
     proposal = _apply_authored_participant_model(proposal, request)
     proposal = _ground_selected_flow_mechanics(proposal, request)

@@ -6,8 +6,10 @@ from typing import Mapping
 from dnd_board_game.actors import (
     Actor,
     ActorId,
+    ExhaustionRollKind,
     Faction,
     ability_roll_modifier,
+    apply_exhaustion_to_roll_request,
     skill_modifier,
     skill_roll_modifiers,
 )
@@ -641,11 +643,15 @@ def _skill_request(state: CombatState, actor: Actor, skill: str) -> D20RollReque
         skill,
         D20RollRequest(modifiers=skill_roll_modifiers(actor, skill)),
     )
-    return condition_roll_request(
-        request,
-        state.condition_states,
+    return apply_exhaustion_to_roll_request(
         actor,
-        ability_check=True,
+        condition_roll_request(
+            request,
+            state.condition_states,
+            actor,
+            ability_check=True,
+        ),
+        ExhaustionRollKind.ABILITY_CHECK,
     )
 
 
@@ -659,11 +665,15 @@ def _actor_is_restrained_by_net(state: CombatState, actor: Actor) -> bool:
 
 
 def _net_escape_request(state: CombatState, actor: Actor) -> D20RollRequest:
-    return condition_roll_request(
-        D20RollRequest(modifiers=(ability_roll_modifier(actor, "strength"),)),
-        state.condition_states,
+    return apply_exhaustion_to_roll_request(
         actor,
-        ability_check=True,
+        condition_roll_request(
+            D20RollRequest(modifiers=(ability_roll_modifier(actor, "strength"),)),
+            state.condition_states,
+            actor,
+            ability_check=True,
+        ),
+        ExhaustionRollKind.ABILITY_CHECK,
     )
 
 

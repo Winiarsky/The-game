@@ -40,6 +40,14 @@
     "gambling": {
       "label": "Hazard",
       "description": "Zakłady, gra o stawkę, ryzykowanie zasobów dla zysku."
+    },
+    "commitment": {
+      "label": "Przyjęcie zobowiązania",
+      "description": "Świadome przyjęcie zadania, obietnicy albo odpowiedzialności bez negocjowania warunków."
+    },
+    "travel": {
+      "label": "Wyruszenie w drogę",
+      "description": "Potwierdzenie gotowości, opuszczenie bieżącej sceny i przejście do wskazanego miejsca."
     }
   }
 }

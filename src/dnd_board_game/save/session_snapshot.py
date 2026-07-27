@@ -11,6 +11,7 @@ from dnd_board_game.actors import (
     ActorAura,
     ActorTrigger,
     ActorId,
+    ActorSenseProfile,
     AuraEffectKind,
     AuraTarget,
     TriggerEffectKind,
@@ -61,6 +62,7 @@ from dnd_board_game.exploration import (
     EncounterOpeningResolution,
     ExplorationChallengeAttempt,
     ExplorationChallengeState,
+    ExplorationHiddenActorState,
     ExplorationState,
     ExplorationTrapState,
     ExplorationTrapStatus,
@@ -138,7 +140,7 @@ from dnd_board_game.scenarios.content_contract import (
 
 
 SNAPSHOT_SCHEMA = "dnd_board_game.session"
-SNAPSHOT_SCHEMA_VERSION = 18
+SNAPSHOT_SCHEMA_VERSION = 23
 
 
 def _migrate_snapshot_v1_to_v2(data: dict[str, Any]) -> dict[str, Any]:
@@ -363,6 +365,119 @@ def _migrate_snapshot_v17_to_v18(data: dict[str, Any]) -> dict[str, Any]:
     return migrated
 
 
+def _migrate_snapshot_v18_to_v19(data: dict[str, Any]) -> dict[str, Any]:
+    migrated = dict(data)
+    migrated["schema_version"] = 19
+
+    def actor_payload_v19(raw: object) -> object:
+        if not isinstance(raw, dict):
+            return raw
+        actor = dict(raw)
+        actor.setdefault("level", 1)
+        return actor
+
+    migrated["actors"] = [
+        actor_payload_v19(actor) for actor in migrated.get("actors", [])
+    ]
+    combat = migrated.get("combat")
+    if isinstance(combat, dict):
+        combat_v19 = dict(combat)
+        combat_v19["actors"] = [
+            actor_payload_v19(actor) for actor in combat.get("actors", [])
+        ]
+        migrated["combat"] = combat_v19
+    return migrated
+
+
+def _migrate_snapshot_v19_to_v20(data: dict[str, Any]) -> dict[str, Any]:
+    migrated = dict(data)
+    migrated["schema_version"] = 20
+
+    def actor_payload_v20(raw: object) -> object:
+        if not isinstance(raw, dict):
+            return raw
+        actor = dict(raw)
+        actor.setdefault(
+            "senses",
+            {
+                "darkvision_feet": 0,
+                "blindsight_feet": 0,
+                "tremorsense_feet": 0,
+                "truesight_feet": 0,
+            },
+        )
+        return actor
+
+    migrated["actors"] = [
+        actor_payload_v20(actor) for actor in migrated.get("actors", [])
+    ]
+    combat = migrated.get("combat")
+    if isinstance(combat, dict):
+        combat_v20 = dict(combat)
+        combat_v20["actors"] = [
+            actor_payload_v20(actor) for actor in combat.get("actors", [])
+        ]
+        migrated["combat"] = combat_v20
+    return migrated
+
+
+def _migrate_snapshot_v20_to_v21(data: dict[str, Any]) -> dict[str, Any]:
+    migrated = dict(data)
+    migrated["schema_version"] = 21
+    exploration = migrated.get("exploration")
+    if isinstance(exploration, dict):
+        exploration_v21 = dict(exploration)
+        exploration_v21.setdefault("hidden_actor_states", [])
+        migrated["exploration"] = exploration_v21
+    return migrated
+
+
+def _migrate_snapshot_v21_to_v22(data: dict[str, Any]) -> dict[str, Any]:
+    migrated = dict(data)
+    migrated["schema_version"] = 22
+    exploration = migrated.get("exploration")
+    if isinstance(exploration, dict):
+        exploration_v22 = dict(exploration)
+        fixture_states = []
+        for raw in exploration.get("fixture_states", []):
+            if not isinstance(raw, dict):
+                fixture_states.append(raw)
+                continue
+            fixture_state = dict(raw)
+            fixture_state.setdefault("opened", False)
+            fixture_state.setdefault("locked", False)
+            fixture_state.setdefault("looted", False)
+            fixture_state.setdefault("current_hit_points", None)
+            fixture_states.append(fixture_state)
+        exploration_v22["fixture_states"] = fixture_states
+        migrated["exploration"] = exploration_v22
+    return migrated
+
+
+def _migrate_snapshot_v22_to_v23(data: dict[str, Any]) -> dict[str, Any]:
+    migrated = dict(data)
+    migrated["schema_version"] = 23
+
+    def actor_payload_v23(raw: object) -> object:
+        if not isinstance(raw, dict):
+            return raw
+        actor = dict(raw)
+        actor.setdefault("exhaustion_level", 0)
+        return actor
+
+    migrated["actors"] = [
+        actor_payload_v23(actor) for actor in migrated.get("actors", [])
+    ]
+    combat = migrated.get("combat")
+    if isinstance(combat, dict):
+        combat_v23 = dict(combat)
+        combat_v23["actors"] = [
+            actor_payload_v23(actor) for actor in combat.get("actors", [])
+        ]
+        migrated["combat"] = combat_v23
+    return migrated
+
+
 _SNAPSHOT_MIGRATIONS = MigrationRegistry(
     schema=SNAPSHOT_SCHEMA,
     current_version=SNAPSHOT_SCHEMA_VERSION,
@@ -384,6 +499,11 @@ _SNAPSHOT_MIGRATIONS.register(14, _migrate_snapshot_v14_to_v15)
 _SNAPSHOT_MIGRATIONS.register(15, _migrate_snapshot_v15_to_v16)
 _SNAPSHOT_MIGRATIONS.register(16, _migrate_snapshot_v16_to_v17)
 _SNAPSHOT_MIGRATIONS.register(17, _migrate_snapshot_v17_to_v18)
+_SNAPSHOT_MIGRATIONS.register(18, _migrate_snapshot_v18_to_v19)
+_SNAPSHOT_MIGRATIONS.register(19, _migrate_snapshot_v19_to_v20)
+_SNAPSHOT_MIGRATIONS.register(20, _migrate_snapshot_v20_to_v21)
+_SNAPSHOT_MIGRATIONS.register(21, _migrate_snapshot_v21_to_v22)
+_SNAPSHOT_MIGRATIONS.register(22, _migrate_snapshot_v22_to_v23)
 
 
 class SnapshotValidationError(ValueError):
@@ -590,6 +710,8 @@ def _actor_payload(actor: Actor) -> dict[str, object]:
             "vulnerabilities": [value.value for value in actor.damage_affinities.vulnerabilities],
         },
         "uses_death_saves": actor.uses_death_saves,
+        "level": actor.level,
+        "exhaustion_level": actor.exhaustion_level,
         "attacks_per_action": actor.attacks_per_action,
         "condition_immunities": list(actor.condition_immunities),
         "auras": [
@@ -670,6 +792,7 @@ def _actor_payload(actor: Actor) -> dict[str, object]:
                 "hood_lowered": actor.active_light.hood_lowered,
             }
         ),
+        "senses": actor.senses.as_payload(),
         "spell_preparation": None if prep is None else {
             "source_label": prep.source_label, "preparation_limit": prep.preparation_limit,
             "available_spells": [{"id": spell.id, "label": spell.label, "level": spell.level} for spell in prep.available_spells],
@@ -754,6 +877,7 @@ def _spell_definition_payload(spell: SpellDefinition) -> dict[str, object]:
                 "damage_dice_per_slot_level": spell.scaling.damage_dice_per_slot_level,
                 "healing_dice_per_slot_level": spell.scaling.healing_dice_per_slot_level,
                 "targets_per_slot_level": spell.scaling.targets_per_slot_level,
+                "cantrip_damage_dice_per_tier": spell.scaling.cantrip_damage_dice_per_tier,
             }
         ),
         "exploration_effect": (
@@ -789,6 +913,10 @@ def _spell_definition_from_payload(raw: object) -> SpellDefinition:
             targets_per_slot_level=_integer(
                 scaling_data.get("targets_per_slot_level", 0),
                 "actor.spell.scaling.targets_per_slot_level",
+            ),
+            cantrip_damage_dice_per_tier=_integer(
+                scaling_data.get("cantrip_damage_dice_per_tier", 0),
+                "actor.spell.scaling.cantrip_damage_dice_per_tier",
             ),
         )
     exploration_effect_raw = data.get("exploration_effect")
@@ -870,6 +998,7 @@ def _actor_from_payload(raw: object) -> Actor:
     death_raw = _mapping(data.get("death_saves", {}), "actor.death_saves")
     proficiency_raw = _mapping(data.get("proficiencies", {}), "actor.proficiencies")
     affinities_raw = _mapping(data.get("damage_affinities", {}), "actor.damage_affinities")
+    senses_raw = _mapping(data.get("senses", {}), "actor.senses")
     prep = None
     if prep_raw is not None:
         item = _mapping(prep_raw, "actor.spell_preparation")
@@ -918,6 +1047,24 @@ def _actor_from_payload(raw: object) -> Actor:
         currency=_currency_from_payload(data.get("currency", {})),
         inventory=inventory,
         active_light=active_light,
+        senses=ActorSenseProfile(
+            darkvision_feet=_integer(
+                senses_raw.get("darkvision_feet", 0),
+                "actor.senses.darkvision_feet",
+            ),
+            blindsight_feet=_integer(
+                senses_raw.get("blindsight_feet", 0),
+                "actor.senses.blindsight_feet",
+            ),
+            tremorsense_feet=_integer(
+                senses_raw.get("tremorsense_feet", 0),
+                "actor.senses.tremorsense_feet",
+            ),
+            truesight_feet=_integer(
+                senses_raw.get("truesight_feet", 0),
+                "actor.senses.truesight_feet",
+            ),
+        ),
         spell_ids=_string_tuple(data.get("spell_ids", []), "actor.spell_ids"), spell_preparation=prep,
         spells=tuple(
             _spell_definition_from_payload(value)
@@ -947,6 +1094,11 @@ def _actor_from_payload(raw: object) -> Actor:
         ),
         hit_dice=tuple(HitDicePool(_integer(pool.get("die_sides"), "hit_die.die_sides"), _integer(pool.get("remaining"), "hit_die.remaining"), _integer(pool.get("maximum"), "hit_die.maximum")) for value in _sequence(data.get("hit_dice", []), "hit_dice") for pool in (_mapping(value, "hit_die"),)),
         resource_pools=tuple(_resource_pool_from_payload(value) for value in _sequence(data.get("resource_pools", []), "resource_pools")),
+        level=_integer(data.get("level", 1), "actor.level"),
+        exhaustion_level=_integer(
+            data.get("exhaustion_level", 0),
+            "actor.exhaustion_level",
+        ),
         proficiency_bonus=_integer(data.get("proficiency_bonus", 2), "actor.proficiency_bonus"),
         proficiencies=ProficiencyProfile(
             saving_throws=_string_tuple(
@@ -1151,6 +1303,10 @@ def _exploration_payload(state: ExplorationState) -> dict[str, object]:
                 "unavailable": item.unavailable,
                 "detached": item.detached,
                 "destroyed": item.destroyed,
+                "opened": item.opened,
+                "locked": item.locked,
+                "looted": item.looted,
+                "current_hit_points": item.current_hit_points,
                 "released_item_ids": list(item.released_item_ids),
             }
             for item in state.fixture_states
@@ -1174,6 +1330,15 @@ def _exploration_payload(state: ExplorationState) -> dict[str, object]:
         "trap_states": [
             {"trap_id": item.trap_id, "status": item.status.value}
             for item in state.trap_states
+        ],
+        "hidden_actor_states": [
+            {
+                "actor_id": item.actor_id,
+                "zone_id": item.zone_id,
+                "natural_roll": item.natural_roll,
+                "stealth_total": item.stealth_total,
+            }
+            for item in state.hidden_actor_states
         ],
         "npc_states": [item.as_payload() for item in state.npc_states],
         "merchants": [
@@ -1391,6 +1556,17 @@ def _exploration_from_payload(base: ExplorationState, raw: object) -> Exploratio
             unavailable=_boolean(item.get("unavailable", False), "fixture_state.unavailable"),
             detached=_boolean(item.get("detached", False), "fixture_state.detached"),
             destroyed=_boolean(item.get("destroyed", False), "fixture_state.destroyed"),
+            opened=_boolean(item.get("opened", False), "fixture_state.opened"),
+            locked=_boolean(item.get("locked", False), "fixture_state.locked"),
+            looted=_boolean(item.get("looted", False), "fixture_state.looted"),
+            current_hit_points=(
+                _integer(
+                    item.get("current_hit_points"),
+                    "fixture_state.current_hit_points",
+                )
+                if item.get("current_hit_points") is not None
+                else None
+            ),
             released_item_ids=_string_tuple(
                 item.get("released_item_ids", []),
                 "fixture_state.released_item_ids",
@@ -1474,6 +1650,35 @@ def _exploration_from_payload(base: ExplorationState, raw: object) -> Exploratio
         raise SnapshotValidationError("Zapis zawiera stan nieznanej pułapki.")
     if len({item.trap_id for item in trap_states}) != len(trap_states):
         raise SnapshotValidationError("Zapis zawiera powtórzony stan pułapki.")
+    hidden_actor_states = tuple(
+        ExplorationHiddenActorState(
+            actor_id=_string(
+                item.get("actor_id"),
+                "exploration.hidden_actor_state.actor_id",
+            ),
+            zone_id=_string(
+                item.get("zone_id"),
+                "exploration.hidden_actor_state.zone_id",
+            ),
+            natural_roll=_integer(
+                item.get("natural_roll"),
+                "exploration.hidden_actor_state.natural_roll",
+            ),
+            stealth_total=_integer(
+                item.get("stealth_total"),
+                "exploration.hidden_actor_state.stealth_total",
+            ),
+        )
+        for raw_item in _sequence(
+            data.get("hidden_actor_states", []),
+            "hidden_actor_states",
+        )
+        for item in (_mapping(raw_item, "hidden_actor_state"),)
+    )
+    if any(item.zone_id not in {zone.id for zone in base.zones} for item in hidden_actor_states):
+        raise SnapshotValidationError("Zapis zawiera ukrycie w nieznanej lokacji.")
+    if len({item.actor_id for item in hidden_actor_states}) != len(hidden_actor_states):
+        raise SnapshotValidationError("Zapis zawiera powtórzony stan ukrycia aktora.")
     npc_states = base.npc_states
     if "npc_states" in data:
         npc_states = tuple(
@@ -1598,6 +1803,7 @@ def _exploration_from_payload(base: ExplorationState, raw: object) -> Exploratio
         fixture_states=fixture_states,
         condition_states=condition_states,
         trap_states=trap_states,
+        hidden_actor_states=hidden_actor_states,
         npc_states=npc_states,
         merchants=merchants,
         magic_effects=magic_effects,

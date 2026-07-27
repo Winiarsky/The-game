@@ -104,3 +104,17 @@ def test_same_named_auras_do_not_stack_and_stronger_value_wins() -> None:
 
     assert result.total == 13
     assert [modifier.value for modifier in result.modifiers] == [0, 3]
+
+
+def test_exhaustion_level_three_gives_saving_throw_disadvantage() -> None:
+    actor = replace(_actor("target", Coordinate(0, 0)), exhaustion_level=3)
+
+    result = resolve_actor_saving_throw(
+        actor,
+        SavingThrowRequest(ability="dexterity", dc=10, source_label="Test"),
+        natural_roll=18,
+        natural_roll_2=4,
+    )
+
+    assert result.natural_roll == 4
+    assert "Exhaustion" in {modifier.label for modifier in result.modifiers}

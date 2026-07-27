@@ -74,6 +74,19 @@ def create_app(session: ExplorationUiSession) -> Flask:
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
+    @app.post("/api/downtime/crafting/complete")
+    def api_downtime_crafting_complete():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                session.complete_downtime_crafting(
+                    actor_id=str(data.get("actor_id", "")),
+                    recipe_id=str(data.get("recipe_id", "")),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
     @app.post("/api/equipment/armor")
     def api_equipment_armor():
         data = request.get_json(silent=True) or {}
@@ -100,6 +113,73 @@ def create_app(session: ExplorationUiSession) -> Flask:
                     actor_id=str(data.get("actor_id", "")),
                     item_id=str(data.get("item_id", "")),
                     action=str(data.get("action", "")),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/exploration/search/start")
+    def api_exploration_search_start():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                session.start_exploration_search(
+                    str(data.get("actor_id", "")),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/exploration/option")
+    def api_exploration_option():
+        data = request.get_json(silent=True) or {}
+        actor_id = data.get("actor_id")
+        try:
+            return jsonify(
+                session.select_exploration_option(
+                    str(data.get("option_id", "")),
+                    actor_id=str(actor_id) if actor_id else None,
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/exploration/hide/start")
+    def api_exploration_hide_start():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                session.start_exploration_hide(
+                    str(data.get("actor_id", "")),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/exploration/fixture/action")
+    def api_exploration_fixture_action():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                session.start_exploration_fixture_action(
+                    actor_id=str(data.get("actor_id", "")),
+                    fixture_id=str(data.get("fixture_id", "")),
+                    operation=str(data.get("operation", "")),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/exploration/fixture/damage")
+    def api_exploration_fixture_damage():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                session.damage_exploration_fixture(
+                    actor_id=str(data.get("actor_id", "")),
+                    fixture_id=str(data.get("fixture_id", "")),
+                    attack_total=int(data.get("attack_total", 0)),
+                    damage=int(data.get("damage", 0)),
                 )
             )
         except Exception as exc:
@@ -225,6 +305,11 @@ def create_app(session: ExplorationUiSession) -> Flask:
                     participant_actor_ids=tuple(
                         str(actor_id) for actor_id in raw_participant_ids
                     ),
+                    selected_social_skill=(
+                        str(data["selected_social_skill"])
+                        if data.get("selected_social_skill") is not None
+                        else None
+                    ),
                     conversation_only=bool(data.get("conversation_only", False)),
                 )
             )
@@ -317,6 +402,13 @@ def create_app(session: ExplorationUiSession) -> Flask:
         data = request.get_json(silent=True) or {}
         try:
             return jsonify(session.select_point(str(data.get("point_id", ""))))
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/point/leave")
+    def api_point_leave():
+        try:
+            return jsonify(session.select_point(""))
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
@@ -610,7 +702,16 @@ def create_app(session: ExplorationUiSession) -> Flask:
     def api_combat_concentration_check():
         data = request.get_json(silent=True) or {}
         try:
-            return jsonify(session.submit_concentration_check(natural_roll=int(data.get("natural_roll", 0))))
+            return jsonify(
+                session.submit_concentration_check(
+                    natural_roll=int(data.get("natural_roll", 0)),
+                    natural_roll_2=(
+                        int(data["natural_roll_2"])
+                        if data.get("natural_roll_2") is not None
+                        else None
+                    ),
+                )
+            )
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
@@ -1286,6 +1387,36 @@ def create_app(session: ExplorationUiSession) -> Flask:
     def api_scenario_finish():
         try:
             return jsonify(session.finish_scenario())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/scenario/continue")
+    def api_scenario_continue():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                session.continue_scenario(
+                    pace=str(data.get("pace", "normal")),
+                    navigator_actor_id=(
+                        str(data["navigator_actor_id"])
+                        if data.get("navigator_actor_id") is not None
+                        else None
+                    ),
+                    navigation_roll=data.get("navigation_roll"),
+                    forced_march_rolls=(
+                        data.get("forced_march_rolls")
+                        if isinstance(data.get("forced_march_rolls"), dict)
+                        else None
+                    ),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/scenario/handoff/start")
+    def api_scenario_handoff_start():
+        try:
+            return jsonify(session.start_scenario_handoff())
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 

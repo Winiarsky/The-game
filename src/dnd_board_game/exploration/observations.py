@@ -58,6 +58,8 @@ class ExplorationObservation:
     aggregation: CheckAggregation = CheckAggregation.LEAD_RESULT
     roll_mode: RollMode = RollMode.NORMAL
     intent_examples: tuple[str, ...] = ()
+    sight_based: bool = False
+    distance_feet: int = 5
 
     def __post_init__(self) -> None:
         if not self.id.strip() or not self.zone_id.strip():
@@ -70,6 +72,10 @@ class ExplorationObservation:
             raise ValueError(f"Observation {self.id} failure_message cannot be empty.")
         if not self.facts:
             raise ValueError(f"Observation {self.id} requires at least one fact.")
+        if self.distance_feet < 5 or self.distance_feet % 5:
+            raise ValueError(
+                f"Observation {self.id} distance must be a positive multiple of 5 feet."
+            )
         fact_ids = tuple(fact.id for fact in self.facts)
         if len(fact_ids) != len(set(fact_ids)):
             raise ValueError(f"Observation {self.id} fact ids must be unique.")
@@ -91,6 +97,8 @@ class ExplorationObservation:
             "ability": self.ability,
             "skill": self.skill,
             "base_dc": self.dc,
+            "sight_based": self.sight_based,
+            "distance_feet": self.distance_feet,
             "intent_examples": list(self.intent_examples),
             "facts": [
                 {

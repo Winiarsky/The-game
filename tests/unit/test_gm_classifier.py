@@ -290,7 +290,7 @@ def test_gm_classifier_preserves_selected_mechanic_on_generated_option():
     assert option.check_participants.value == "lead_with_help"
 
 
-def test_gm_classifier_preserves_situational_modifiers_on_generated_option():
+def test_gm_classifier_drops_llm_owned_situational_modifiers():
     exploration, state = _state()
     request = build_gm_classifier_request(
         scenario_id=exploration.scenario_id,
@@ -316,10 +316,9 @@ def test_gm_classifier_preserves_situational_modifiers_on_generated_option():
     validated = validate_gm_classifier_proposal(proposal, request)
     option = challenge_option_from_validated_proposal(validated)
 
-    assert option.roll_mode.value == "disadvantage"
-    assert option.situational_modifiers[0].label == "Mokra lina"
-    assert option.situational_modifiers[0].modifier == -1
-    assert option.situational_modifiers[0].source.value == "interaction_object"
+    assert validated.proposal.roll_mode.value == "normal"
+    assert option.roll_mode.value == "normal"
+    assert option.situational_modifiers == ()
 
 
 def test_gm_classifier_preserves_improvised_tool_on_generated_option():
@@ -1917,6 +1916,8 @@ def test_llm_content_config_loads_general_rules_and_grounding_terms():
     assert any(mention.label == "kwas" for mention in grounding.guarded_resource_mentions)
     assert "social" in intent_catalog.ids
     assert "theft" in intent_catalog.ids
+    assert "commitment" in intent_catalog.ids
+    assert "travel" in intent_catalog.ids
 
 
 def test_gm_classifier_rejects_unknown_check_aggregation():

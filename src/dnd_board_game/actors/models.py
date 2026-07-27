@@ -10,6 +10,7 @@ from .features import FeatureGrant, validate_unique_feature_grants
 from .triggers import ActorTrigger
 from .proficiency_profile import ProficiencyProfile
 from .size import CreatureSize
+from .senses import ActorSenseProfile
 from dnd_board_game.inventory.economy import CurrencyWallet
 from dnd_board_game.inventory.adventuring_gear import ActiveLight
 
@@ -71,6 +72,7 @@ class Actor:
     spell_save_dc: int = 0
     inventory: tuple[InventoryItem, ...] = ()
     active_light: ActiveLight | None = None
+    senses: ActorSenseProfile = field(default_factory=ActorSenseProfile)
     currency: CurrencyWallet = field(default_factory=CurrencyWallet)
     spell_ids: tuple[str, ...] = ()
     spell_preparation: SpellPreparationProfile | None = None
@@ -78,6 +80,8 @@ class Actor:
     spell_access: tuple[SpellAccessProfile, ...] = ()
     hit_dice: tuple[HitDicePool, ...] = ()
     resource_pools: tuple[ActorResourcePool, ...] = ()
+    level: int = 1
+    exhaustion_level: int = 0
     proficiency_bonus: int = 2
     proficiencies: ProficiencyProfile = field(default_factory=ProficiencyProfile)
     uses_death_saves: bool = False
@@ -94,6 +98,10 @@ class Actor:
     def __post_init__(self) -> None:
         if self.max_hp <= 0:
             object.__setattr__(self, "max_hp", max(0, self.hp))
+        if not 1 <= self.level <= 20:
+            raise ValueError("Actor level must be between 1 and 20.")
+        if not 0 <= self.exhaustion_level <= 6:
+            raise ValueError("Actor exhaustion_level must be between 0 and 6.")
         if self.proficiency_bonus < 0:
             raise ValueError("Proficiency bonus cannot be negative.")
         if self.attacks_per_action < 1:

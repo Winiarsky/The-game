@@ -166,6 +166,12 @@ from .short_rest_flow import (
     ShortRestHitDieTransition,
     short_rest_count,
 )
+from .scenario_continuation_flow import (
+    ScenarioContinuationFlowService,
+    ScenarioContinuationOutcomeResolution,
+    ScenarioContinuationPlan,
+    merge_handoff_actor,
+)
 from .enemy_turn_flow import (
     EnemySavingThrowTransition,
     EnemyTurnFlowService,
@@ -174,9 +180,15 @@ from .enemy_turn_flow import (
     EnemyTurnTransitionKind,
     PendingEnemySavingThrow,
 )
+from .effect_boundary_flow import (
+    ConditionBoundaryTransition,
+    expire_exploration_conditions,
+    reconcile_conditions_after_encounter,
+)
 
 __all__ = [
     "CancelPreviewTransition",
+    "ConditionBoundaryTransition",
     "CombatMovementFlowService",
     "CombatMovementPreview",
     "CombatMovementSubmission",
@@ -231,6 +243,7 @@ __all__ = [
     "EnemyTurnIntentTransition",
     "EnemyTurnResolutionTransition",
     "EnemyTurnTransitionKind",
+    "expire_exploration_conditions",
     "PendingEnemySavingThrow",
     "ExplorationFlowService",
     "ExplorationFlowStage",
@@ -282,6 +295,10 @@ __all__ = [
     "ShortRestCompletionTransition",
     "ShortRestFlowService",
     "ShortRestHitDieTransition",
+    "ScenarioContinuationFlowService",
+    "ScenarioContinuationOutcomeResolution",
+    "ScenarioContinuationPlan",
+    "merge_handoff_actor",
     "concentration_effects_for_actor",
     "short_rest_count",
     "legal_stabilization_targets",
@@ -289,5 +306,6 @@ __all__ = [
     "resolve_exploration_hazard",
     "apply_exploration_hazard_outcome",
     "resolve_targeted_item_action",
+    "reconcile_conditions_after_encounter",
     "targeted_item_action_is_legal",
 ]

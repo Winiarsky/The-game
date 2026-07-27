@@ -109,12 +109,41 @@ The exploration web surface is split into explicit responsibilities:
   see `docs/EXPLORATION_FLOW_GRAPHS.md`,
 - `application/exploration_hazard_flow.py` owns hazard saving throws, typed damage,
   save-dependent effects, and actor-condition consequences,
+- `application/effect_boundary_flow.py` owns condition transitions across exploration,
+  combat, rest and scenario boundaries. Encounter entry filters exploration conditions
+  through `start_combat`; encounter exit expires local durations, removes invalid grapples,
+  and returns every still-valid condition for persistent party actors. Rest and scenario
+  events use the same `EffectEvent` lifecycle instead of UI-specific cleanup,
 - `exploration/traps.py` owns pure trap-state transitions and action outcomes; detection
-  remains an exploration observation and activation delegates to the hazard flow,
+  may come from an authored observation or the shared awareness evaluator, while
+  activation delegates to the hazard flow,
+- `exploration/awareness.py` owns active zone Search, passive trap detection and
+  persistent zone-scoped Hide totals. UI gathers physical d20 input and applies
+  light-based roll modes; encounter setup translates stored Hide totals into the
+  existing per-observer precombat stealth contract,
+- `exploration/fixture_actions.py` owns persistent doors, locks, containers and
+  destructible scene fixtures. It resolves authored state transitions, HP and
+  damage thresholds, releases contained items, and projects the current
+  exploration state into combat `SceneObject`s for movement and cover,
+- `exploration/travel.py` owns deterministic overland pace, navigation and
+  forced-march resolution. It consumes explicit physical d20 input and returns
+  updated actors plus timing metadata; UI only gathers choices and rolls,
 - `application/spell_preparation_flow.py` owns the pre-scenario confirmation sequence for
   actors with generic prepared-spell profiles,
 - `application/short_rest_flow.py` owns content-driven short-rest preview, completion,
   exploration consequences, and sequential Hit Dice spending,
+- `application/scenario_continuation_flow.py` validates content-authored exits between
+  scenarios from deterministic flags and the current departure zone. The UI advances
+  the pace-adjusted travel duration and navigation delay, resolves forced march, then
+  selects an ordered success/partial-success/fail-forward outcome from the final flags
+  and navigation result. The verified handoff contains source objective results,
+  explicitly propagated flags and validated target effects. The UI expires
+  scenario-scoped effects and saves the complete source snapshot before exposing the
+  target. The current local runtime can immediately start that target and merges
+  same-id party actors through `merge_handoff_actor`: target content owns static
+  capabilities, proficiencies, spells and canonical loadout, while mutable HP,
+  currency, counters, preparation and acquired inventory come from the source.
+  A future campaign save may replace this bridge with canonical character records,
 - `application/combat_movement_flow.py` owns player movement planning, movement application,
   and opportunity-attack threat detection before reactions are resolved,
 - `combat/attack_flow.py` owns the explicit melee-reach versus ranged-range contract;
@@ -135,14 +164,29 @@ The exploration web surface is split into explicit responsibilities:
   resource, attack, action, trigger, and aura models; feature execution never bypasses
   their deterministic resolvers,
 - `exploration/npc_state.py` owns deterministic updates of persistent NPC runtime
-  state. The LLM classifies and narrates an interaction, while content permissions
-  select success/failure state updates; conversation history and NPC state remain
-  separate persisted concerns. `exploration/social_interactions.py` maps current
+  state. The LLM classifies and may narrate an interaction, while content permissions
+  select success/failure state updates. Guarded NPC prompts contain only the active
+  goal and permission; a critical goal can additionally define a hidden
+  `grounded_response`, which replaces the model's visible narration after validation.
+  It may contain approved equivalent variants; the LLM selects only a variant id
+  and the validator copies its complete authored text, falling back to the base
+  response for a missing or unknown id.
+  This keeps quest facts, rewards, items and currency transfers content-authoritative;
+  guarded routes omit private GM context, hidden key issues and still-locked
+  information from the model prompt. If an interaction reveals authored information,
+  runtime replaces generated prose with the exact authorized facts so semantic
+  spoilers cannot bypass id validation.
+  conversation history and NPC state remain separate persisted concerns.
+  `exploration/social_interactions.py` maps current
   NPC attitude and content-classified request risk to the deterministic 2014
   conversation reaction threshold; the LLM cannot choose this DC. Both are
   separate persisted inputs to later interactions. `exploration/npc_state.py`
   also plans content-limited NPC attempts from persisted relationship events
   and current scene flags; the UI cannot consume an attempt before a roll.
+- exploration zones may reference a `PaperMap` stored under the shared game
+  assets. Initial setup and every zone change pause in `PARTY_SETUP` until the
+  players confirm that the 50×75 cm printed map is physically placed. Only then
+  does the UI queue NPC placement, passive traps and other zone setup.
   `exploration/npc_outcomes.py` validates structured intent targets, selects one
   of four check-result branches, and applies its effects through the shared
   exploration effect executor. `exploration/npc_transitions.py` resolves the
@@ -222,6 +266,11 @@ The exploration web surface is split into explicit responsibilities:
   metadata, container capacities, light/fuel lifecycles, utility check modifiers,
   object durability and equipment-pack expansion. The loader resolves standalone
   item files and stable IDs from the unified adventuring-gear catalog,
+- `actors/senses.py` owns typed creature sense ranges, while
+  `exploration/visibility.py` combines them with zone ambient light and active
+  party light. The evaluator is deterministic and returns sight availability,
+  Perception roll mode and passive-Perception adjustment; UI and scenario content
+  consume that result instead of inferring visibility from narration,
 - `application/enemy_turn_flow.py` owns enemy-turn validation, data-driven Multiattack
   source sequencing, intent planning, automatic
   resolution orchestration, and classification into Ready, opportunity, movement, attack,
@@ -266,13 +315,24 @@ Versioned definitions under `content/spells/` are the single source for spell me
 their attack, healing or combat-action effect. `rules/spellcasting.py` owns the content-neutral
 schema, prepared/known/spellbook access profiles, cast-level selection and V/S/M validation;
 `scenarios/loader.py` adapts the effect to the existing combat pipeline.
-Per-slot scaling remains data in `SpellDefinition` and is applied by generic attack/healing
-source transformers before prompting for physical dice. `application/ritual_casting_flow.py`
+Per-slot and cantrip-tier scaling remain data in `SpellDefinition` and are applied by generic
+attack/healing source transformers before prompting for physical dice. Actor `level` is
+authoritative for the cantrip thresholds 5/11/17; healing definitions may bind a caster
+ability modifier instead of storing a character-specific constant. `application/ritual_casting_flow.py`
 owns exploration ritual execution: access and components are validated through the same
 casting rules, normal casting time gains ten minutes, and no spell slot is consumed.
 `exploration/magic_effects.py` owns the shared minute-based lifecycle for persistent
 exploration magic. Rituals register typed effects there, while crafting, rests and armor
 changes advance the same clock; expiry removes the effect and clears its authoritative flag.
+The same pure transition evaluates ordered `ScenarioClockPolicy` thresholds and applies each
+authored effect once, using a persisted internal marker flag. UI call sites only present the
+returned event notices and never decide which consequence occurs.
+`exploration/downtime.py` owns formal, location-bound crafting performed over full workdays.
+It validates the recipe, actor tool proficiency, owned tools and material budget, then returns
+a permanent inventory result and an explicit time cost. Scenario content chooses available
+recipes and workshops; the UI advances the existing scenario clock rather than maintaining a
+second downtime calendar. This is intentionally separate from temporary, property-based scene
+crafting.
 Combat-duration spell effects use the shared `ActiveEffect` lifecycle. In particular,
 Shield contributes to the common effective-AC calculation for the triggering attack and
 later attacks, then expires at the protected actor's next turn start.

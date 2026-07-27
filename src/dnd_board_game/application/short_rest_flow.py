@@ -4,12 +4,17 @@ from dataclasses import dataclass, replace
 from typing import Callable
 
 from dnd_board_game.actors import Actor, Faction
-from dnd_board_game.combat import TriggerActivation, resolve_actor_trigger_events
+from dnd_board_game.combat import (
+    ConditionState,
+    TriggerActivation,
+    resolve_actor_trigger_events,
+)
 from dnd_board_game.exploration import (
     ExplorationEffectResult,
     ExplorationState,
     ExplorationZone,
     ShortRestPolicy,
+    ScenarioClockEvent,
     TimedMagicEffect,
     apply_exploration_effect,
     advance_exploration_time,
@@ -29,6 +34,7 @@ from dnd_board_game.rules import (
     expire_active_effects,
     spend_hit_die,
 )
+from .effect_boundary_flow import expire_exploration_conditions
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,7 +53,9 @@ class ShortRestCompletionTransition:
     effects: tuple[ExplorationEffectResult, ...]
     active_effects: tuple[ActiveEffect, ...]
     expired_effects: tuple[ActiveEffect, ...]
+    expired_conditions: tuple[ConditionState, ...]
     expired_magic_effects: tuple[TimedMagicEffect, ...]
+    triggered_clock_events: tuple[ScenarioClockEvent, ...]
     trigger_activations: tuple[TriggerActivation, ...]
     attunement_results: tuple[ItemAttunementResult, ...] = ()
 
@@ -145,6 +153,10 @@ class ShortRestFlowService:
             pending.policy.duration_minutes,
         )
         updated_state = time_advance.state
+        updated_state, condition_expiration = expire_exploration_conditions(
+            updated_state,
+            EffectEvent(EffectEventType.SHORT_REST_COMPLETED),
+        )
         effects: list[ExplorationEffectResult] = []
         for raw_effect in pending.policy.completion_effects:
             effect = apply_exploration_effect(updated_state, raw_effect)
@@ -169,7 +181,9 @@ class ShortRestFlowService:
             effects=tuple(effects),
             active_effects=expiration.active_effects,
             expired_effects=expiration.expired_effects,
+            expired_conditions=condition_expiration.expired_conditions,
             expired_magic_effects=time_advance.expired_effects,
+            triggered_clock_events=time_advance.triggered_clock_events,
             trigger_activations=trigger_resolution.activations,
             attunement_results=tuple(attunement_results),
         )

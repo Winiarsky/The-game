@@ -42,7 +42,24 @@ najbliższy horyzont, a nie kopię całej roadmapy.
 - [x] Add M7.9 data-driven spell movement with visible free-tile teleportation, save-based push/pull, obstacle-aware final positions, no movement-cost/opportunity triggers, UI/LED selection, and project-original fixtures.
 - [x] Add M7.10 generic save-first spell debuffs with shared condition state, automatic enemy saves, repeated saves at authored timing, UI/LED target selection, and project-original Poisoned/Restrained fixtures.
 - [x] Close M7.11 with generic creature-targeted spell dispelling, automatic same/lower-level removal, physical spellcasting-ability checks for stronger effects, shared ActiveEffect/ConditionState provenance, summon dismissal, UI/LED flow, and snapshot v18.
-- [ ] Start the next mechanics-first roadmap stage after reviewing the remaining M8 gaps.
+- [x] Add M7.12's first executable SRD spell-content tranche (Sacred Flame, Healing Word, Fire Bolt, Burning Hands, Cure Wounds, and Inflict Wounds), character-level cantrip scaling at 5/11/17, spell-attack proficiency, caster-ability healing, reference-scenario preparation, and snapshot v19.
+- [x] Start M8 by auditing its already-complete foundations and migrating the terminal exploration harness to authoritative guarded flow routes.
+- [x] Add M8.2 guarded NPC flow for `village_square_mvp`: explicit information/reward goals, state-gated negotiation, terminal refusal state, shared planner/UI payload, and regression coverage.
+- [x] Add M8.3 guarded tavern-keeper flow for `village_square_mvp`: migrate the legacy rumor option to Olan's NPC interaction, apply the authored quest hook, hide the consumed rumor goal, and keep ordinary conversation available.
+- [x] Add M8.4 village quest lifecycle and authored scenario continuation: separate hook/acceptance/readiness flags, gate departure by state and location, validate the watchtower target, expose objective progress in UI, and save a source-scene handoff snapshot.
+- [x] Add M8.5 scenario time and delay consequences: data-driven clock thresholds, travel/conversation/rest costs, one-shot effects and narration, visible time of day, and timed watchtower handoff metadata.
+- [x] Add M8.6 exploration visibility: typed ambient light and actor senses, darkvision/blindsight/truesight evaluation, sight-based observations, dim-light Perception disadvantage/passive -5, darkness blocking, party light ranges and burn time, precombat Stealth integration, UI disclosure, and snapshot v20.
+- [x] Add M8.7 exploration awareness: active zone Search with time and light rules, passive trap detection, typed trap detection DC/range, persistent zone Hide totals, reveal-on-light/time/travel, encounter stealth handoff, UI controls, and snapshot v21.
+- [x] Add M8.8 interactive exploration fixtures: typed doors, locks and containers; local unlock/open/close/loot flows; object AC, HP and damage thresholds; persistent state, combat movement/cover projection, UI controls, reference content, and snapshot v22.
+- [x] Add M8.9 overland travel: fast/normal/slow pace, authored navigation checks and fail-forward delay, forced-march Constitution saves, six exhaustion levels shared by exploration/combat/resting, village-to-watchtower UI handoff, and snapshot v23.
+- [x] Close M8.10 social interaction rules: persistent NPC state and attitude, deterministic 2014 reaction thresholds, authored retries/outcomes/transitions, visible stakes, and player-authoritative Persuasion/Deception/Intimidation selection.
+- [x] Add M8.11 formal downtime crafting: location-bound data-driven recipes, tool ownership and proficiency, half-price materials, 5 gp workdays, permanent inventory results, shared-clock consequences, and player confirmation.
+- [x] Add M8.12 shared condition boundaries: exploration hazards can author persistent Poisoned/Restrained states with source and duration; conditions enter combat, return to exploration, and expire consistently on encounter, rest, long-rest, and scenario events.
+- [x] Close M8.13 with ordered continuation outcomes: success, partial success and fail-forward branches can depend on final flags/navigation, carry selected flags, emit validated target effects and summarize source objectives in the verified handoff.
+- [x] Harden the M8 village playtest UI: expose authored zone options, show objective milestones, make NPC setup/location messages generic, avoid repeated dialogue intros, and replace continuation prompts/raw ids with an in-page Polish travel form and friendly scenario names.
+- [x] Ground generative NPC narration against authored facts and effects: scope prompts to the active goal/permission and let critical routes enforce hidden content-authored narration so Gemini cannot invent quest evidence, rewards, purchases, or currency transfers.
+- [x] Add controlled authored paraphrases for guarded NPC routes: Gemini selects an approved variant id matching the player's tone, while validation copies the complete variant and safely falls back to the base response.
+- [ ] [Deferred spell fidelity] Add creature-type and object-target contracts for spell riders such as healing exclusions for undead/constructs and ignition of unattended flammable objects.
 - [ ] [Deferred mounted combat] Let a mounted wielder use a lance in one hand; until an explicit mounted actor state exists, the lance correctly uses two hands and retains its close-range disadvantage.
 - [ ] [Deferred destructible equipment] Model the net as an AC 10 object with 5 HP that can be cut using slashing damage; Strength DC 10 escape is implemented.
 - [ ] [Deferred attunement fidelity] End attunement automatically after the official distance/time, death, prerequisite-loss, or another-creature-attunement conditions.
@@ -65,7 +82,8 @@ najbliższy horyzont, a nie kopię całej roadmapy.
   - [x] Revalidate the selected goal against its currently active graph transition, with participant choice made before the method description and roll.
   - [x] Extract goal, participant, observation and procedural-source planning from `ExplorationUiSession` into an application service and remove duplicated gate routing fields.
   - [x] Migrate the wounded scout to an NPC-owned flow with authored intent routing and pre-declaration participant selection.
-  - [ ] Migrate the legacy `demo_exploration_scene` freeform harness from tag-based goal inference to explicit flow routes, then update its watchtower regression cases.
+  - [x] Migrate the legacy `demo_exploration_scene` freeform harness from tag-based goal inference to explicit flow routes, then update its watchtower regression cases.
+  - [x] Migrate village elder Bren to an NPC-owned flow with quest-state and refusal-state gating.
 - [x] Route authored observation intents before generic challenge classification and ground numeric DCs to content tiers.
 - [x] Replace the gate's predefined approach/risk lists with structured guidance facts and update the interaction form.
 - [x] Give `/szukaj` an exact-first and semantic-fallback flow with player-confirmed substitutes and persisted scene findings.
@@ -281,6 +299,7 @@ obowiązują `Current Roadmap Focus` oraz etapy z `ROADMAP.md`.
 - [x] Complete pending-state typing and remove dead compatibility helpers after combat-flow extraction.
 - [x] Fix real enemy-movement Ready detection when `EnemyAutoTurnResult.enemy` already has the destination position.
 - [x] Add exploration map environment setup before location selection.
+- [x] Add printable black-and-white 20×30 paper maps for all village/watchtower zones, tiled A4 and full-size PDFs, plus a mandatory physical-map confirmation step on initial setup and zone changes.
 - [x] Couple exploration web UI with board/simulator backend for LEDs and board clicks.
 - [x] Boost LED brightness only while an active board scan is waiting for a physical click.
 - [x] Add data-driven actor portraits to party, test selection, rolls, combat order, and actor-linked messages.
@@ -298,6 +317,25 @@ obowiązują `Current Roadmap Focus` oraz etapy z `ROADMAP.md`.
 - [x] Add generic pre-scenario prepared-spell selection and runtime enforcement MVP.
 - [ ] [Deferred K3-K4] Add class-derived spell lists, known-spell profiles, and advanced concentration modifiers.
 - [ ] [Deferred product UX] Add voice input and richer UI for free-form exploration declarations.
+- [x] [MVP playtest P0] Clear `active_point_id` when the player leaves an NPC chat so zone actions are available again.
+- [x] [MVP playtest P0] Consume scenario handoff by launching the target scene and mapping party, time, inventory, resources, flags, and target effects.
+- [x] [MVP playtest P0] Route an explicitly declared available spell through deterministic spell execution instead of replacing it with an LLM-selected skill check.
+- [x] [MVP playtest P1] Keep critical-hit player messages consistent with doubled damage dice.
+- [x] [MVP playtest P1] Preserve defeated-actor loot, currency, dropped weapons, and recoverable ammunition when combat resolves back into exploration.
+- [x] [MVP playtest P1] Give the watchtower hidden cache a collectible content-backed reward.
+- [x] [MVP playtest P1] Fix caught-trap status, attack-preview ammunition count, and missing village party labels/portraits.
+- [x] [MVP playtest P2] Stop serializing a complete path for every reachable combat tile; send only destination/cost and expose the full path for the selected preview.
+- [ ] [MVP playtest P2] Replace repeated full actor/item definitions with stable refs and paginate long UI/session histories.
+- [x] [MVP playful Gemini retest P0] Merge scenario handoff actors by preserving mutable campaign state while retaining target/canonical proficiencies, tools, spells, and other static capabilities.
+- [x] [MVP playful Gemini retest P0] Prevent semantic leakage of locked NPC information from generated narration, not only unauthorized `revealed_information_ids`.
+- [x] [MVP playful Gemini retest P1] Replace raw LLM validation errors with a player-facing retry and do not retain rejected declarations as accepted conversation history.
+- [x] [MVP playful Gemini retest P1] Restrict generated numeric situational modifiers to authored/approved modifiers instead of allowing Gemini to change roll totals.
+- [x] [MVP playful Gemini retest P1] Keep outcome narration behind player acceptance and add a visible loading/retry state for 20–30 second provider latency.
+- [x] [MVP reference playtest P1] Resolve zero-risk cosmetic NPC exchanges immediately without a redundant acceptance step.
+- [x] [MVP reference playtest UX] Return player guidance instead of a technical error when no interaction is active, without retaining the rejected declaration in chat.
+- [x] [MVP reference playtest UX] Show objectives, secured loot, and an accessible restart action on the scenario-complete screen.
+- [x] Clarify that the old watchtower interaction forms are historical briefs and update the current web-runtime instructions.
+- [ ] [Character builder K1] Add a domain character builder before the web form, with explicit level and derived class/species/background grants.
 - [x] Implement hardware adapter interface around `board.Connection`.
 - [x] Add LED frame generation for selected path and movement range.
 - [x] Decide first UI/runtime surface.

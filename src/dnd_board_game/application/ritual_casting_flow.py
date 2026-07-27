@@ -11,6 +11,7 @@ from dnd_board_game.combat import (
 )
 from dnd_board_game.exploration import (
     ExplorationState,
+    ScenarioClockEvent,
     TimedMagicEffect,
     advance_exploration_time,
     apply_timed_magic_effect,
@@ -32,6 +33,7 @@ class RitualCastingResult:
     spell_name: str
     elapsed_minutes: int
     expired_effects: tuple[TimedMagicEffect, ...] = ()
+    triggered_clock_events: tuple[ScenarioClockEvent, ...] = ()
 
 
 class RitualCastingFlowService:
@@ -104,6 +106,7 @@ class RitualCastingFlowService:
             spell_name=spell.name,
             elapsed_minutes=elapsed,
             expired_effects=time_advance.expired_effects,
+            triggered_clock_events=time_advance.triggered_clock_events,
         )
 
 

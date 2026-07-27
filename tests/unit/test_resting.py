@@ -109,6 +109,27 @@ def test_long_rest_requires_positive_hp() -> None:
         complete_long_rest(replace(_actor(), hp=0))
 
 
+def test_long_rest_reduces_exhaustion_and_restores_hp_to_new_effective_maximum() -> None:
+    still_halved = complete_long_rest(replace(_actor(), hp=4, exhaustion_level=5))
+    fully_restored = complete_long_rest(replace(_actor(), hp=4, exhaustion_level=4))
+
+    assert still_halved.actor_after.exhaustion_level == 4
+    assert still_halved.actor_after.hp == 10
+    assert still_halved.hp_recovered == 6
+    assert fully_restored.actor_after.exhaustion_level == 3
+    assert fully_restored.actor_after.hp == 20
+
+
+def test_hit_die_cannot_heal_above_exhaustion_reduced_maximum() -> None:
+    actor = replace(_actor(), hp=8, exhaustion_level=4)
+
+    result = spend_hit_die(actor, die_sides=8, natural_roll=6)
+
+    assert result.healing_total == 8
+    assert result.effective_healing == 2
+    assert result.actor_after.hp == 10
+
+
 def test_long_rest_recovers_random_item_charges_with_injected_roll() -> None:
     wand = InventoryItem(
         "binding_wand",

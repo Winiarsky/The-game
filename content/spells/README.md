@@ -13,7 +13,12 @@ Optional `scaling` adds damage, healing, or targets for every slot level above
 the spell's base level. A targeted `combat_action` declares its base
 `target_count`; `targets_per_slot_level` increases that limit for the selected
 higher slot while all selected effects still belong to one cast and, when
-applicable, one concentration. Ritual spells set `ritual: true`; exploration rituals
+applicable, one concentration. Damaging cantrips use
+`cantrip_damage_dice_per_tier`; the loader scales their first dice component
+from the actor's explicit character `level` at the 5e thresholds 5, 11 and 17.
+Healing effects may declare `ability` so the runtime adds the caster's current
+ability modifier instead of baking a fixture-specific value into content.
+Ritual spells set `ritual: true`; exploration rituals
 may use the generic `set_flag` effect, take their normal casting time plus ten
 minutes, validate components, and do not consume a spell slot. Their declared
 duration is converted to the shared exploration clock: recasting replaces the
@@ -44,3 +49,8 @@ any`. It selects a visible creature carrying spell-authored active effects or
 conditions. Effects at or below the selected cast level end automatically;
 stronger effects require one physical spellcasting-ability check each against
 DC `10 + effect level`.
+
+The first executable SRD 5.1 catalog tranche contains Sacred Flame, Healing
+Word, Fire Bolt, Burning Hands, Cure Wounds and Inflict Wounds. SRD definitions
+use `srd_5_1_cc_by_4_0`; project-original mechanic fixtures retain
+`project_original`.

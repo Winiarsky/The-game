@@ -5,6 +5,7 @@ from .auras import ActorAura, AuraEffectKind, AuraTarget
 from .features import FeatureDefinition, FeatureGrant, FeatureSourceKind
 from .triggers import ActorTrigger, TriggerEffectKind, TriggerEventType
 from .models import AbilityScores, Actor, ActorId, DeathSaveState, Faction, is_ally_or_neutral
+from .senses import ActorSenseProfile
 from .size import (
     CREATURE_SIZE_ORDER,
     CreatureSize,
@@ -47,6 +48,14 @@ from .spell_preparation import (
     prepare_spells,
     spell_is_prepared,
 )
+from .exhaustion import (
+    ExhaustionRollKind,
+    apply_exhaustion_to_roll_request,
+    effective_max_hit_points,
+    exhaustion_disadvantages,
+    increase_exhaustion,
+    reduce_exhaustion,
+)
 
 __all__ = [
     "AbilityScores",
@@ -56,6 +65,7 @@ __all__ = [
     "ActorResourcePool",
     "ActorResourceRechargeResult",
     "ActorResourceUseResult",
+    "ActorSenseProfile",
     "ActorAura",
     "ActorTrigger",
     "DeathSaveState",
@@ -66,6 +76,7 @@ __all__ = [
     "FeatureDefinition",
     "FeatureGrant",
     "FeatureSourceKind",
+    "ExhaustionRollKind",
     "AuraEffectKind",
     "AuraTarget",
     "TriggerEffectKind",
@@ -79,9 +90,13 @@ __all__ = [
     "SpellPreparationProfile",
     "is_ally_or_neutral",
     "ability_roll_modifier",
+    "apply_exhaustion_to_roll_request",
     "actor_resource_pool",
     "ability_check_roll_modifiers",
     "attack_roll_modifiers",
+    "effective_max_hit_points",
+    "exhaustion_disadvantages",
+    "increase_exhaustion",
     "passive_skill_score",
     "prepare_spells",
     "proficiency_roll_modifier",
@@ -97,5 +112,6 @@ __all__ = [
     "largest_grapple_or_shove_target",
     "depleted_recharge_resource_ids",
     "resolve_actor_resource_recharge",
+    "reduce_exhaustion",
     "spend_actor_resource",
 ]

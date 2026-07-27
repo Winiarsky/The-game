@@ -92,12 +92,17 @@ def armor_speed_penalty_feet(actor: Actor) -> int:
 def effective_speed_feet(actor: Actor) -> int:
     from .magic_items import MagicItemEffectKind, magic_item_effect_total
 
-    return max(
+    speed = max(
         0,
         actor.speed_feet
         - armor_speed_penalty_feet(actor)
         + magic_item_effect_total(actor, MagicItemEffectKind.SPEED_BONUS_FEET),
     )
+    if actor.exhaustion_level >= 5:
+        return 0
+    if actor.exhaustion_level >= 2:
+        return speed // 2
+    return speed
 
 
 def has_stealth_disadvantage(actor: Actor) -> bool:

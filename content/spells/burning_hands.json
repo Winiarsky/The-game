@@ -1,0 +1,30 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["srd_5_1_cc_by_4_0"],
+  "id": "burning_hands",
+  "name": "Płonące dłonie",
+  "level": 1,
+  "school": "evocation",
+  "casting_time": "action",
+  "range": {"kind": "self"},
+  "components": {"verbal": true, "somatic": true, "materials": []},
+  "duration": {"kind": "instantaneous"},
+  "concentration": false,
+  "ritual": false,
+  "scaling": {"damage_dice_per_slot_level": 1},
+  "effect": {
+    "kind": "attack",
+    "ability": "intelligence",
+    "save_ability": "dexterity",
+    "save_damage_on_success": "half",
+    "area": {
+      "shape": "cone",
+      "length_feet": 15,
+      "width_feet": 5,
+      "target_mode": "all_creatures"
+    },
+    "damage": {"dice": "3d6", "modifier": 0, "damage_type": "fire"}
+  }
+}

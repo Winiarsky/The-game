@@ -38,6 +38,7 @@
       "item_refs": [
         "longsword",
         "dagger",
+        "torch",
         "strength_potion",
         "sticky_flask"
       ]
@@ -167,6 +168,8 @@
         "sacred_flame",
         "radiant_line",
         "healing_word",
+        "cure_wounds",
+        "inflict_wounds",
         "bless_attack_bonus",
         "comprehend_languages",
         "shield",
@@ -187,6 +190,8 @@
             "sacred_flame",
             "radiant_line",
             "healing_word",
+            "cure_wounds",
+            "inflict_wounds",
             "bless_attack_bonus"
           ],
           "allowed_focus_kinds": ["holy_symbol", "component_pouch"]
@@ -203,6 +208,8 @@
         "available_spell_ids": [
           "radiant_line",
           "healing_word",
+          "cure_wounds",
+          "inflict_wounds",
           "bless_attack_bonus"
         ],
         "default_prepared_spell_ids": [

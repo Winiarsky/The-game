@@ -1,0 +1,23 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["srd_5_1_cc_by_4_0"],
+  "id": "fire_bolt",
+  "name": "Ognisty pocisk",
+  "level": 0,
+  "school": "evocation",
+  "casting_time": "action",
+  "range": {"kind": "distance", "feet": 120},
+  "components": {"verbal": true, "somatic": true, "materials": []},
+  "duration": {"kind": "instantaneous"},
+  "concentration": false,
+  "ritual": false,
+  "scaling": {"cantrip_damage_dice_per_tier": 1},
+  "effect": {
+    "kind": "attack",
+    "ability": "intelligence",
+    "attack_kind": "ranged",
+    "damage": {"dice": "1d10", "modifier": 0, "damage_type": "fire"}
+  }
+}

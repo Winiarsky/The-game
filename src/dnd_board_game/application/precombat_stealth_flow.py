@@ -1,9 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Sequence
+from typing import Mapping, Sequence
 
-from dnd_board_game.actors import Actor, Faction, skill_modifier, skill_roll_modifiers
+from dnd_board_game.actors import (
+    Actor,
+    ExhaustionRollKind,
+    Faction,
+    apply_exhaustion_to_roll_request,
+    skill_modifier,
+    skill_roll_modifiers,
+)
 from dnd_board_game.inventory import armor_skill_roll_request
 from dnd_board_game.combat import HiddenState, resolve_hide
 from dnd_board_game.exploration import (
@@ -42,6 +49,8 @@ def resolve_precombat_stealth(
     actor_id: str,
     natural_roll: int,
     natural_roll_2: int | None = None,
+    passive_perception_adjustments: Mapping[str, int] | None = None,
+    automatically_hidden_from_actor_ids: Sequence[str] = (),
 ) -> PrecombatStealthResolution:
     actor = next((candidate for candidate in actors if str(candidate.id) == actor_id), None)
     if actor is None:
@@ -51,15 +60,26 @@ def resolve_precombat_stealth(
     if any(attempt.actor_id == actor_id for attempt in attempts):
         raise ValueError(f"{actor.name} wykorzystał już próbę skradania przed tym starciem.")
 
-    request = armor_skill_roll_request(
+    request = apply_exhaustion_to_roll_request(
         actor,
-        "stealth",
-        D20RollRequest(modifiers=skill_roll_modifiers(actor, "stealth")),
+        armor_skill_roll_request(
+            actor,
+            "stealth",
+            D20RollRequest(modifiers=skill_roll_modifiers(actor, "stealth")),
+        ),
+        ExhaustionRollKind.ABILITY_CHECK,
     )
     if request.mode.value != "normal" and natural_roll_2 is None:
         raise ValueError("Ten test wymaga wpisania dwóch wyników d20.")
     roll = resolve_d20_roll(D20RollInput(request, natural_roll, natural_roll_2))
-    hiding = resolve_hide((), actor, actors, roll.total)
+    hiding = resolve_hide(
+        (),
+        actor,
+        actors,
+        roll.total,
+        passive_perception_adjustments=passive_perception_adjustments,
+        automatically_hidden_from_actor_ids=automatically_hidden_from_actor_ids,
+    )
     hidden_from = hiding.hidden_state.hidden_from_actor_ids if hiding.hidden_state else ()
     attempt = PrecombatStealthAttempt(
         actor_id=actor_id,

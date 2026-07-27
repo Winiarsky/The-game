@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING, Mapping, Sequence
 
 from dnd_board_game.actors import Actor, Faction, passive_skill_score
 from dnd_board_game.world import BoardState, bresenham_line, line_of_sight_clear
@@ -63,16 +63,28 @@ def resolve_hide(
     actor: Actor,
     actors: Sequence[Actor],
     stealth_total: int,
+    *,
+    passive_perception_adjustments: Mapping[str, int] | None = None,
+    automatically_hidden_from_actor_ids: Sequence[str] = (),
 ) -> HideResolution:
     opponents = tuple(
         observer
         for observer in actors
         if _hostile(actor, observer) and not observer.is_defeated()
     )
+    adjustments = passive_perception_adjustments or {}
+    automatic = set(automatically_hidden_from_actor_ids)
     hidden_from = tuple(
         str(observer.id)
         for observer in opponents
-        if stealth_total > passive_skill_score(observer, "perception")
+        if (
+            str(observer.id) in automatic
+            or stealth_total
+            > (
+                passive_skill_score(observer, "perception")
+                + adjustments.get(str(observer.id), 0)
+            )
+        )
     )
     detected_by = tuple(
         str(observer.id) for observer in opponents if str(observer.id) not in hidden_from

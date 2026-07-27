@@ -32,6 +32,7 @@ from dnd_board_game.application import (
     CombatResourceTransition,
     EnemyTurnFlowService,
     EnemyTurnTransitionKind,
+    expire_exploration_conditions,
     ExpiredCombatEffects,
     ExplorationFlowService,
     ExplorationFlowStage,
@@ -65,6 +66,8 @@ from dnd_board_game.application import (
     PlayerCombatResourceFlowService,
     RitualCastingFlowService,
     ritual_casting_minutes,
+    ScenarioContinuationFlowService,
+    merge_handoff_actor,
     SpellPreparationFlowService,
     ShortRestFlowService,
     SummoningFlowService,
@@ -87,6 +90,7 @@ from dnd_board_game.application import (
     precombat_stealth_modifier,
     resolve_precombat_stealth,
     resolve_targeted_item_action,
+    reconcile_conditions_after_encounter,
     targeted_item_action_is_legal,
     ShoveMode,
     GrappleMode,
@@ -99,6 +103,7 @@ from dnd_board_game.application.damage_presentation import (
 )
 from dnd_board_game.actors import (
     Actor,
+    ExhaustionRollKind,
     Faction,
     FeatureGrant,
     actor_resource_pool,
@@ -107,6 +112,8 @@ from dnd_board_game.actors import (
     creature_size_label_pl,
     largest_grapple_or_shove_target,
     ability_check_roll_modifiers,
+    apply_exhaustion_to_roll_request,
+    effective_max_hit_points,
     passive_skill_score,
     saving_throw_roll_modifiers,
     skill_modifier,
@@ -194,6 +201,7 @@ from dnd_board_game.combat import (
     complete_interaction_objective,
     ConditionSaveTiming,
     objective_status_after_combat,
+    objective_status_after_flags,
     pending_condition_saves,
     resolve_condition_save,
     scene_result,
@@ -205,6 +213,7 @@ from dnd_board_game.combat import (
     eligible_two_weapon_bonus_sources,
     is_hidden_from,
     hide_eligibility,
+    resolve_hide,
     has_condition,
     grappled_by,
     grappled_actor_ids,
@@ -259,6 +268,8 @@ from dnd_board_game.exploration import (
     ExplorationTrapStatus,
     ExplorationChallengeOption,
     ExplorationCheckPlan,
+    ExplorationOption,
+    ExplorationOptionKind,
     ExplorationPoint,
     ExplorationResource,
     ExplorationState,
@@ -268,13 +279,17 @@ from dnd_board_game.exploration import (
     FixtureOperation,
     ExplorationMechanicId,
     ExplorationObservation,
+    ExplorationVisibility,
     ExplorationSituationalModifier,
     ExplorationSituationalModifierSource,
     ImprovisedToolUse,
     InteractionGoal,
+    LightLevel,
     PartyCheckInput,
     PartyPosition,
+    PaperMap,
     NpcAttemptPlan,
+    NpcInteraction,
     NpcInteractionStatus,
     NpcIntentActionPlan,
     NpcRuntimeState,
@@ -282,15 +297,20 @@ from dnd_board_game.exploration import (
     NpcTransitionPlan,
     NpcTransitionResultType,
     NpcStateUpdate,
+    SOCIAL_CHECK_SKILLS,
     SocialInteractionPlan,
     PendingEncounter,
+    PrecombatStealthAttempt,
     ShortRestPolicy,
     SceneSourceMatch,
     SceneSourceCollection,
     TemporaryItem,
+    TravelD20Input,
+    TravelPace,
     MECHANIC_TOOLS,
     active_option_bonuses_for_actor,
     apply_goal_resolution_profile,
+    apply_fixture_damage,
     apply_fixture_action,
     apply_exploration_effect,
     actors_matching_challenge_option,
@@ -301,6 +321,12 @@ from dnd_board_game.exploration import (
     challenge_for_zone,
     challenge_state_for,
     exploration_zone_feedback,
+    exploration_visibility,
+    fixture_runtime_state,
+    fixture_scene_objects,
+    clear_exploration_hidden,
+    detect_passive_traps,
+    hide_exploration_actor,
     mechanic_payload_for_option,
     matching_resources,
     match_revealed_trap_action,
@@ -314,12 +340,15 @@ from dnd_board_game.exploration import (
     create_temporary_item,
     discover_scene_source,
     craft_temporary_item,
+    complete_downtime_crafting,
     consume_encounter_edge,
     dismantle_crafted_item,
     grant_encounter_edge,
     reveal_exploration_points,
     resolve_challenge_option,
     resolve_exploration_check,
+    resolve_active_search,
+    resolve_travel,
     resolve_observation,
     validate_mechanic_selection,
     validate_policy_exploration_effect,
@@ -330,6 +359,7 @@ from dnd_board_game.exploration import (
     npc_runtime_state_for,
     plan_source_collection,
     plan_fixture_action,
+    plan_downtime_crafting,
     resolve_trap_action,
     resolve_npc_runtime_interaction,
     npc_outcome_for_check,
@@ -349,11 +379,13 @@ from dnd_board_game.llm import (
     GmDeclarationAnalysis,
     GmDeclarationAnalysisType,
     GmDeclarationThreadEntry,
+    GmClassifierRequest,
     GmClassifierProposal,
     GmPreparationEffect,
     GmProposalValidationError,
     PreparationEffectType,
     NpcInteractionProposal,
+    NpcInteractionRequest,
     build_gm_classifier_request,
     build_npc_interaction_request,
     challenge_option_from_validated_proposal,
@@ -363,6 +395,7 @@ from dnd_board_game.llm import (
 )
 from dnd_board_game.hardware import BoardSessionAdapter, LedColor, LedFeedback, LedFrame, LedRole, led_color_name_pl, movement_led_feedback
 from dnd_board_game.inventory import (
+    advance_actor_light,
     ammunition_quantity,
     armor_skill_roll_request,
     break_inventory_item,
@@ -376,6 +409,7 @@ from dnd_board_game.inventory import (
     inventory_item_payload,
     ignite_light_source,
     InventoryItem,
+    LootBundle,
     MerchantState,
     buy_from_merchant,
     merchant_buy_unit_price_cp,
@@ -401,6 +435,7 @@ from dnd_board_game.rules import (
     RollMode,
     RollModifier,
     RollModifierType,
+    SpellDefinition,
     ability_modifier,
     complete_long_rest,
     expire_active_effects,
@@ -436,6 +471,10 @@ class PendingKind(StrEnum):
     SOURCE_SELECTION = "source_selection"
     COLLECTION = "collection"
     TRAP = "trap"
+    SEARCH = "search"
+    HIDE = "hide"
+    FIXTURE = "fixture"
+    ZONE_OPTION = "zone_option"
 
 
 class PendingStage(StrEnum):
@@ -501,6 +540,7 @@ class PendingInteraction:
     proposal: GmClassifierProposal | GmDeclarationAnalysis | NpcInteractionProposal | None = None
     challenge: ExplorationChallenge | None = None
     option: ExplorationChallengeOption | None = None
+    zone_option: ExplorationOption | None = None
     participant_actor_ids: tuple[str, ...] = ()
     resources: tuple[ExplorationResource, ...] = ()
     point: ExplorationPoint | None = None
@@ -528,6 +568,11 @@ class PendingInteraction:
     npc_authored_route: bool = False
     npc_effects_on_success: tuple[dict[str, object], ...] = ()
     npc_effects_on_failure: tuple[dict[str, object], ...] = ()
+    npc_time_cost_minutes: int = 0
+    npc_spell_actor_id: str | None = None
+    npc_spell_id: str | None = None
+    npc_spell_name: str = ""
+    npc_spell_level: int = 0
 
     def as_payload(self) -> dict[str, object]:
         payload: dict[str, object] = {
@@ -540,6 +585,11 @@ class PendingInteraction:
             payload["challenge_name"] = self.challenge.name
         if self.option is not None:
             payload["option"] = _challenge_option_payload(self.option)
+        if self.zone_option is not None:
+            payload["zone_option"] = _zone_option_payload(
+                self.zone_option,
+                completed=False,
+            )
         if self.participant_actor_ids:
             payload["participant_actor_ids"] = list(self.participant_actor_ids)
         if self.resources:
@@ -555,6 +605,15 @@ class PendingInteraction:
             payload["attempt_plan"] = self.attempt_plan.as_payload()
         if self.action_plan is not None:
             payload["npc_action_plan"] = self.action_plan.as_payload()
+        if self.npc_time_cost_minutes:
+            payload["time_cost_minutes"] = self.npc_time_cost_minutes
+        if self.npc_spell_id is not None:
+            payload["spell_use"] = {
+                "actor_id": self.npc_spell_actor_id,
+                "spell_id": self.npc_spell_id,
+                "spell_name": self.npc_spell_name,
+                "spell_level": self.npc_spell_level,
+            }
         if self.hazard is not None:
             payload["hazard"] = self.hazard.as_payload()
             payload["hazard_actor_id"] = self.hazard_actor_id
@@ -759,6 +818,8 @@ class ExplorationSetupFlow:
     assignment_point_name: str = ""
     assigned_position: Coordinate | None = None
     return_to_location_active: bool = False
+    paper_map: PaperMap | None = None
+    paper_map_step_index: int = -1
 
     @property
     def current_step(self) -> SetupStep | None:
@@ -781,12 +842,18 @@ class ExplorationSetupFlow:
                 if self.assigned_position is not None
                 else None
             )
-        return {
+        payload = {
             "status": "completed" if self.completed else "active",
             "current_index": self.current_index,
             "step_count": len(self.steps),
             "current_step": step_payload,
         }
+        if (
+            self.paper_map is not None
+            and self.current_index == self.paper_map_step_index
+        ):
+            payload["paper_map"] = self.paper_map.as_payload()
+        return payload
 
 
 @dataclass(slots=True)
@@ -984,6 +1051,7 @@ class ExplorationUiSession:
         self.ritual_casting_flow = RitualCastingFlowService()
         self.spell_preparation_flow = SpellPreparationFlowService()
         self.short_rest_flow = ShortRestFlowService()
+        self.scenario_continuation_flow = ScenarioContinuationFlowService()
         self.exploration_flow = ExplorationFlowService()
         self.exploration_interaction_flow = ExplorationInteractionFlowService()
         self.exploration_goal_execution = ExplorationGoalExecutionPlanner(
@@ -1031,6 +1099,7 @@ class ExplorationUiSession:
             inventory_resource_ids=self.exploration.initial_resource_ids,
             traps=self.exploration.traps,
             merchants=self.exploration.merchants,
+            clock_policy=self.exploration.clock_policy,
         )
         if self.debug_point_id:
             self.state, _revealed = reveal_exploration_points(self.state, (self.debug_point_id,))
@@ -1088,6 +1157,7 @@ class ExplorationUiSession:
             self.ui_flow_stage = UiFlowStage.WAITING_FOR_BOARD
         self.preview_zone_id = ""
         self.interaction_result: dict[str, object] | None = None
+        self.scenario_handoff: dict[str, object] | None = None
         self._record(
             "ui_session_started",
             {
@@ -1418,6 +1488,19 @@ class ExplorationUiSession:
         current_zone_points = self.current_zone_points() if self.ui_flow_stage == UiFlowStage.LOCATION_ACTIVE else ()
         scene_status = _scene_status_payload(self.state)
         scene_status.append({"label": "Czas scenariusza", "value": _duration_minutes_label(self.state.elapsed_minutes)})
+        clock_payload = _scenario_clock_payload(
+            self.state.clock_policy.start_hour,
+            self.state.elapsed_minutes,
+        )
+        scene_status.append(
+            {"label": "Pora dnia", "value": str(clock_payload["label"])}
+        )
+        scene_status.append(
+            {
+                "label": "Oświetlenie",
+                "value": _light_level_label(self.current_zone.ambient_light),
+            }
+        )
         fixture_names = {
             (zone.id, fixture.id): fixture.name
             for zone in self.state.zones
@@ -1450,16 +1533,25 @@ class ExplorationUiSession:
             ExplorationTrapStatus.REVEALED: "wykryta — aktywna",
             ExplorationTrapStatus.DISARMED: "rozbrojona",
             ExplorationTrapStatus.BYPASSED: "bezpiecznie ominięta",
-            ExplorationTrapStatus.TRIGGERED: "uruchomiona",
+            ExplorationTrapStatus.TRIGGERED: "uruchomiona — rozstrzygnięta",
         }
         for trap in self.state.traps:
             trap_state = trap_state_for(self.state, trap.id)
             if trap_state.status == ExplorationTrapStatus.HIDDEN:
                 continue
+            trap_status = trap_status_labels[trap_state.status]
+            if (
+                trap_state.status == ExplorationTrapStatus.TRIGGERED
+                and self.pending is not None
+                and self.pending.trap is not None
+                and self.pending.trap.id == trap.id
+                and self.pending.stage == PendingStage.HAZARD_SAVE
+            ):
+                trap_status = "uruchomiona — oczekuje na rzut obronny"
             scene_status.append(
                 {
                     "label": f"Pułapka: {trap.name}",
-                    "value": trap_status_labels[trap_state.status],
+                    "value": trap_status,
                 }
             )
         for edge in self.state.encounter_edges:
@@ -1474,6 +1566,15 @@ class ExplorationUiSession:
         if self.pending_encounter is not None:
             scene_status.append({"label": "Encounter", "value": self.pending_encounter.name})
         preview_zone = self._preview_zone()
+        objectives = objective_status_after_flags(
+            self.exploration.objectives,
+            self.state.flags,
+        )
+        continuation = self.scenario_continuation_flow.availability_payload(
+            self.exploration.continuation,
+            flags=self.state.flags,
+            current_zone_id=self.current_zone.id,
+        )
         collected_source_ids = {item.source_id for item in self.state.source_collections}
         return UiSessionView(
             scenario={"id": self.exploration.scenario_id, "name": self.exploration.scenario_name},
@@ -1488,6 +1589,75 @@ class ExplorationUiSession:
                 "preview_zone": _zone_payload(preview_zone, self._scenario_asset_root(), self.state) if preview_zone else None,
                 "available_locations": [_zone_payload(zone, self._scenario_asset_root(), self.state) for zone in self._scene_location_zones()],
                 "interaction_result": self.interaction_result,
+                "objectives": [
+                    {
+                        "id": objective.id,
+                        "name": objective.name,
+                        "description": objective.description,
+                        "status": objective.status.value,
+                        "milestones": [
+                            {
+                                "label": milestone.label,
+                                "completed": (
+                                    scene_flag(
+                                        self.state.flags,
+                                        milestone.flag_key,
+                                        None,
+                                    )
+                                    == milestone.flag_value
+                                ),
+                            }
+                            for milestone in objective.milestones
+                        ],
+                    }
+                    for objective in objectives
+                ],
+                "zone_options": [
+                    _zone_option_payload(
+                        option,
+                        completed=_zone_option_is_completed(
+                            option,
+                            self.state.flags,
+                        ),
+                    )
+                    for option in self.current_zone.options
+                ],
+                "continuation": continuation,
+                "scenario_handoff": self.scenario_handoff,
+                "clock": clock_payload,
+                "visibility": [
+                    exploration_visibility(
+                        actor,
+                        ambient_light=self.current_zone.ambient_light,
+                        distance_feet=5,
+                        party=self.exploration.actors,
+                    ).as_payload()
+                    | {"actor_id": str(actor.id), "actor_name": actor.name}
+                    for actor in self.exploration.actors
+                    if actor.faction == Faction.ALLY and not actor.is_defeated()
+                ],
+                "awareness": {
+                    "allows_hiding": self.current_zone.allows_hiding,
+                    "search_available": (
+                        self.current_zone.search_dc is not None
+                        and self.current_zone.id
+                        not in self.state.exhausted_search_zones
+                        and self.pending is None
+                        and self.pending_encounter is None
+                    ),
+                    "search_minutes": self.current_zone.search_minutes,
+                    "hidden_actor_states": [
+                        {
+                            "actor_id": item.actor_id,
+                            "zone_id": item.zone_id,
+                            "natural_roll": item.natural_roll,
+                            "stealth_total": item.stealth_total,
+                        }
+                        for item in self.state.hidden_actor_states
+                        if item.zone_id == self.current_zone.id
+                    ],
+                },
+                "fixtures": self._current_fixture_payloads(),
             },
             spell_preparation=self._spell_preparation_payload(),
             short_rest=self._short_rest_payload(),
@@ -1514,6 +1684,7 @@ class ExplorationUiSession:
                 else None
             ),
             trade=self._trade_payload(),
+            downtime=self._downtime_payload(),
             resources=[
                 *[_resource_payload(resource) for resource in self.state.resources if resource.id in self.state.inventory_resource_ids],
                 *[
@@ -1703,6 +1874,7 @@ class ExplorationUiSession:
             inventory_resource_ids=base_exploration.initial_resource_ids,
             traps=base_exploration.traps,
             merchants=base_exploration.merchants,
+            clock_policy=base_exploration.clock_policy,
         )
         snapshot = read_snapshot(self.snapshot_path, base_state=base_state)
         if snapshot.scenario_id != base_exploration.scenario_id:
@@ -2012,10 +2184,17 @@ class ExplorationUiSession:
         )
         self.state = transition.state
         self.exploration = replace(self.exploration, actors=transition.actors)
+        self.state = clear_exploration_hidden(self.state)
+        self._advance_party_lights(pending.policy.duration_minutes)
         self.pending_short_rest = transition.pending
         self.active_combat_effects = transition.active_effects
         self._add_trigger_activation_notices(transition.trigger_activations)
         self._add_expired_magic_effect_notices(transition.expired_magic_effects)
+        self._add_expired_condition_notices(
+            transition.expired_conditions,
+            prefix="Krótki odpoczynek kończy stan",
+        )
+        self._add_clock_event_notices(transition.triggered_clock_events)
         for effect, raw_effect in zip(transition.effects, pending.policy.completion_effects, strict=True):
             self._record_effect_result(
                 effect,
@@ -2049,6 +2228,13 @@ class ExplorationUiSession:
                 },
                 "effect_types": [effect.effect_type for effect in transition.effects],
                 "expired_effect_ids": [effect.id for effect in transition.expired_effects],
+                "expired_conditions": [
+                    {
+                        "actor_id": condition.actor_id,
+                        "condition": condition.condition.value,
+                    }
+                    for condition in transition.expired_conditions
+                ],
                 "expired_magic_effect_ids": [
                     effect.id for effect in transition.expired_magic_effects
                 ],
@@ -2069,13 +2255,268 @@ class ExplorationUiSession:
         self.board_message = "Odpoczynek ukończony. Wydaj Hit Dice albo zakończ odpoczynek."
         return self.state_payload()
 
-    def finish_scenario(self) -> dict[str, object]:
+    def continue_scenario(
+        self,
+        *,
+        pace: str = TravelPace.NORMAL.value,
+        navigator_actor_id: str | None = None,
+        navigation_roll: object = None,
+        forced_march_rolls: Mapping[str, object] | None = None,
+    ) -> dict[str, object]:
+        if self.pending_short_rest is not None or self.pending is not None:
+            raise ValueError("Najpierw zakończ aktywną decyzję albo odpoczynek.")
+        plan = self.scenario_continuation_flow.plan(
+            self.exploration.continuation,
+            source_scenario_id=self.exploration.scenario_id,
+            flags=self.state.flags,
+            current_zone_id=self.current_zone.id,
+        )
+        travel_actors = tuple(
+            actor
+            for actor in self.exploration.actors
+            if actor.faction == Faction.ALLY and not actor.is_defeated()
+        )
+        travel = resolve_travel(
+            plan.continuation,
+            travel_actors,
+            pace=TravelPace(pace),
+            navigator_actor_id=navigator_actor_id,
+            navigation_roll=(
+                _travel_d20_input(navigation_roll)
+                if navigation_roll is not None
+                else None
+            ),
+            forced_march_rolls={
+                str(actor_id): tuple(
+                    _travel_d20_input(item)
+                    for item in (
+                        raw_rolls
+                        if isinstance(raw_rolls, list | tuple)
+                        else ()
+                    )
+                )
+                for actor_id, raw_rolls in (forced_march_rolls or {}).items()
+            },
+        )
+        traveled_by_id = {str(actor.id): actor for actor in travel.actors}
+        self.exploration = replace(
+            self.exploration,
+            actors=tuple(
+                traveled_by_id.get(str(actor.id), actor)
+                for actor in self.exploration.actors
+            ),
+        )
+        departure_minute = self.state.elapsed_minutes
+        travel_advance = self._advance_scenario_time(
+            travel.total_minutes,
+            source="scenario_continuation",
+        )
+        arrival_clock = _scenario_clock_payload(
+            self.state.clock_policy.start_hour,
+            self.state.elapsed_minutes,
+        )
+        outcome_resolution = self.scenario_continuation_flow.resolve_outcome(
+            plan,
+            flags=self.state.flags,
+            navigation_succeeded=travel.navigation.success,
+        )
+        source_objectives = objective_status_after_flags(
+            self.exploration.objectives,
+            self.state.flags,
+        )
+        self.finish_scenario(_authored_continuation=True)
+        target_path = (
+            self.scenario_path.parent
+            / plan.continuation.target_scenario_path
+        ).resolve()
+        self.scenario_handoff = {
+            **plan.as_payload(),
+            "target_scenario_path": str(target_path),
+            "source_snapshot_path": str(self.snapshot_path.resolve()),
+            "departure_minute": departure_minute,
+            "arrival_minute": self.state.elapsed_minutes,
+            "travel_minutes": travel.total_minutes,
+            "travel": travel.as_payload(),
+            "arrival_clock": arrival_clock,
+            "triggered_clock_event_ids": [
+                event.id for event in travel_advance.triggered_clock_events
+            ],
+            "outcome": outcome_resolution.as_payload(),
+            "source_objectives": [
+                {
+                    "id": objective.id,
+                    "name": objective.name,
+                    "status": objective.status.value,
+                }
+                for objective in source_objectives
+            ],
+        }
+        write_snapshot(self.snapshot_path, self.create_snapshot())
+        self._record(
+            "ui_scenario_continuation_ready",
+            dict(self.scenario_handoff),
+        )
+        target_scenario_label = (
+            plan.continuation.target_scenario_name
+            or plan.continuation.target_scenario_id
+        )
+        self._add_message(
+            "Dalsza droga",
+            (
+                f"{outcome_resolution.outcome.narration or plan.continuation.description} "
+                f"Podróż zajęła "
+                f"{travel.total_minutes} min. Stan wioski i drużyny zapisano. "
+                f"Kolejny scenariusz: {target_scenario_label}."
+            ),
+        )
+        self.board_message = (
+            f"Scena zakończona. Kolejny scenariusz: "
+            f"{target_scenario_label}."
+        )
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def start_scenario_handoff(self) -> dict[str, object]:
+        if self.ui_flow_stage != UiFlowStage.SCENARIO_COMPLETE:
+            raise ValueError("Najpierw zakończ bieżący scenariusz.")
+        if self.scenario_handoff is None:
+            raise ValueError("Zakończony scenariusz nie wskazuje kolejnej sceny.")
+        handoff = dict(self.scenario_handoff)
+        target_path = Path(str(handoff["target_scenario_path"])).resolve()
+        source_party = tuple(
+            actor for actor in self.exploration.actors if actor.faction == Faction.ALLY
+        )
+        source_resources = self.state.inventory_resource_ids
+        board_adapter = self.board_adapter
+        board_backend = self.board_backend
+        board_settings = (
+            self.board_url,
+            self.board_serial_port,
+            self.wled_url,
+            self.scan_timeout_s,
+        )
+
+        self.scenario_path = target_path
+        self.debug_point_id = ""
+        self.debug_challenge_id = ""
+        self.debug_courtyard_entry = False
+        self.reset()
+
+        source_by_id = {str(actor.id): actor for actor in source_party}
+        target_party_positions = [
+            actor.position
+            for actor in self.exploration.actors
+            if actor.faction == Faction.ALLY
+        ]
+        fallback_position = (
+            target_party_positions[0]
+            if target_party_positions
+            else self.exploration.actors[0].position
+        )
+        merged_actors = []
+        merged_ids: set[str] = set()
+        for target_actor in self.exploration.actors:
+            source_actor = source_by_id.get(str(target_actor.id))
+            if source_actor is None:
+                merged_actors.append(target_actor)
+                continue
+            merged_actors.append(merge_handoff_actor(source_actor, target_actor))
+            merged_ids.add(str(source_actor.id))
+        merged_actors.extend(
+            replace(actor, position=fallback_position)
+            for actor in source_party
+            if str(actor.id) not in merged_ids
+        )
+        self.exploration = replace(
+            self.exploration,
+            actors=tuple(merged_actors),
+        )
+
+        outcome = handoff.get("outcome")
+        if isinstance(outcome, dict):
+            for raw_effect in outcome.get("target_effects", ()):
+                if not isinstance(raw_effect, dict):
+                    continue
+                result = apply_exploration_effect(self.state, raw_effect)
+                self.state = result.state
+                self._record_effect_result(
+                    result,
+                    source="scenario_handoff",
+                    raw_effect=raw_effect,
+                )
+        arrival_clock = handoff.get("arrival_clock")
+        if isinstance(arrival_clock, dict):
+            arrival_hour = int(arrival_clock.get("hour", 0))
+            arrival_minute = int(arrival_clock.get("minute", 0))
+            elapsed_minutes = (
+                arrival_hour * 60
+                + arrival_minute
+                - self.state.clock_policy.start_hour * 60
+            ) % (24 * 60)
+            self.state = replace(self.state, elapsed_minutes=elapsed_minutes)
+        self.state = replace(
+            self.state,
+            inventory_resource_ids=tuple(
+                dict.fromkeys((*self.state.inventory_resource_ids, *source_resources))
+            ),
+        )
+
+        self.board_adapter = board_adapter
+        self.board_backend = board_backend
+        (
+            self.board_url,
+            self.board_serial_port,
+            self.wled_url,
+            self.scan_timeout_s,
+        ) = board_settings
+        if board_adapter is not None and board_backend in {"simulator", "hardware"}:
+            self.ui_flow_stage = UiFlowStage.READY_TO_START
+            self.board_message = (
+                f"Plansza nadal podłączona: {board_backend}. "
+                "Rozpocznij setup kolejnej papierowej mapy."
+            )
+        self.selected_lead_actor_id = str(
+            next(
+                actor
+                for actor in self.exploration.actors
+                if actor.faction == Faction.ALLY
+            ).id
+        )
+        handoff["applied"] = True
+        self.scenario_handoff = handoff
+        self._record(
+            "ui_scenario_handoff_applied",
+            {
+                "source_scenario_id": handoff["source_scenario_id"],
+                "target_scenario_id": self.exploration.scenario_id,
+                "party_actor_ids": [
+                    str(actor.id)
+                    for actor in self.exploration.actors
+                    if actor.faction == Faction.ALLY
+                ],
+                "elapsed_minutes": self.state.elapsed_minutes,
+            },
+        )
+        write_snapshot(self.snapshot_path, self.create_snapshot())
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def finish_scenario(
+        self,
+        *,
+        _authored_continuation: bool = False,
+    ) -> dict[str, object]:
         if self.combat_state is not None:
             raise ValueError("Najpierw zakończ aktywną walkę.")
         if self.pending_short_rest is not None or self.pending is not None:
             raise ValueError("Najpierw zakończ aktywną decyzję albo odpoczynek.")
         if self.ui_flow_stage == UiFlowStage.SCENARIO_COMPLETE:
             return self.state_payload()
+        if self.exploration.continuation is not None and not _authored_continuation:
+            raise ValueError(
+                "Ten scenariusz ma autorskie wyjście. Ukończ cel i wyrusz "
+                "wskazaną drogą."
+            )
         if self.ui_flow_stage not in {
             UiFlowStage.LOCATION_ACTIVE,
             UiFlowStage.INTERACTION_RESULT,
@@ -2086,6 +2527,14 @@ class ExplorationUiSession:
             EffectEvent(EffectEventType.SCENARIO_ENDED),
         )
         self.active_combat_effects = expiration.active_effects
+        self.state, condition_expiration = expire_exploration_conditions(
+            self.state,
+            EffectEvent(EffectEventType.SCENARIO_ENDED),
+        )
+        self._add_expired_condition_notices(
+            condition_expiration.expired_conditions,
+            prefix="Koniec scenariusza usuwa stan",
+        )
         self.active_preparation_effects.clear()
         expired_temporary_items = tuple(item.id for item in self.state.temporary_items if item.available)
         self.state = replace(self.state, temporary_items=())
@@ -2097,6 +2546,13 @@ class ExplorationUiSession:
             {
                 "elapsed_minutes": self.state.elapsed_minutes,
                 "expired_effect_ids": [effect.id for effect in expiration.expired_effects],
+                "expired_conditions": [
+                    {
+                        "actor_id": condition.actor_id,
+                        "condition": condition.condition.value,
+                    }
+                    for condition in condition_expiration.expired_conditions
+                ],
                 "expired_temporary_item_ids": list(expired_temporary_items),
             },
         )
@@ -2176,7 +2632,11 @@ class ExplorationUiSession:
         return self.state_payload()
 
     def start_session(self) -> dict[str, object]:
-        setup_steps = _build_exploration_setup_steps(self.exploration.environment)
+        paper_map_step = _paper_map_setup_step(self.current_zone)
+        setup_steps = (
+            ((paper_map_step,) if paper_map_step is not None else ())
+            + _build_exploration_setup_steps(self.exploration.environment)
+        )
         transition = self.exploration_flow.start_session(
             board_connected=self.board_adapter is not None,
             board_backend=self.board_backend,
@@ -2189,10 +2649,16 @@ class ExplorationUiSession:
         if transition is None:
             return self.state_payload()
         self.exploration_setup_flow = (
-            ExplorationSetupFlow(transition.setup_steps) if transition.setup_steps else None
+            ExplorationSetupFlow(
+                transition.setup_steps,
+                paper_map=self.current_zone.paper_map,
+                paper_map_step_index=0 if paper_map_step is not None else -1,
+            )
+            if transition.setup_steps
+            else None
         )
         self.exploration_setup_is_initial = bool(transition.setup_steps)
-        self.ui_flow_stage = transition.stage
+        self.ui_flow_stage = UiFlowStage(transition.stage.value)
         self.board_message = transition.board_message
         self.preview_zone_id = ""
         self.pending = None
@@ -2231,6 +2697,7 @@ class ExplorationUiSession:
         return self.state_payload()
 
     def confirm_location_preview(self) -> dict[str, object]:
+        previous_zone_id = self.current_zone.id
         transition = self.exploration_flow.confirm_location_preview(
             current_stage=self.ui_flow_stage,
             state=self.state,
@@ -2248,7 +2715,16 @@ class ExplorationUiSession:
         self.board_message = transition.board_message
         if transition.event_type:
             self._record(transition.event_type, dict(transition.event_payload))
-        self._queue_current_zone_npc_setup()
+        paper_map_setup_started = (
+            self.current_zone.id != previous_zone_id
+            and self._begin_current_zone_paper_map_setup()
+        )
+        if (
+            self.ui_flow_stage == UiFlowStage.LOCATION_ACTIVE
+            and not paper_map_setup_started
+        ):
+            self._detect_passive_traps()
+            self._queue_current_zone_npc_setup()
         self._sync_board_leds()
         return self.state_payload()
 
@@ -2282,7 +2758,8 @@ class ExplorationUiSession:
             )
             self.preview_zone_id = ""
             self.board_message = (
-                f"Figurka {flow.assignment_point_name} jest ustawiona. Wybierzcie działanie na dziedzińcu."
+                f"Figurka {flow.assignment_point_name} jest ustawiona. "
+                f"Wybierzcie działanie w lokacji: {self.current_zone.name}."
                 if flow.return_to_location_active and flow.assignment_point_name
                 else transition.board_message
             )
@@ -2294,12 +2771,39 @@ class ExplorationUiSession:
                     if trigger is not None and trigger.opening_policy is not None
                     else "Encounter gotowy. Potwierdź rozpoczęcie setupu w UI albo Enterem."
                 )
+            if self.ui_flow_stage == UiFlowStage.LOCATION_ACTIVE:
+                self._detect_passive_traps()
+                self._queue_current_zone_npc_setup()
         else:
             flow.current_index = transition.current_index
             self.ui_flow_stage = transition.stage
             self.board_message = transition.board_message
         self._sync_board_leds()
         return self.state_payload()
+
+    def _begin_current_zone_paper_map_setup(self) -> bool:
+        step = _paper_map_setup_step(self.current_zone)
+        if step is None:
+            return False
+        self.exploration_setup_flow = ExplorationSetupFlow(
+            (step,),
+            return_to_location_active=True,
+            paper_map=self.current_zone.paper_map,
+            paper_map_step_index=0,
+        )
+        self.ui_flow_stage = UiFlowStage.PARTY_SETUP
+        self.board_message = (
+            f"Rozłóż papierową mapę lokacji: {self.current_zone.name}, "
+            "a następnie potwierdź setup."
+        )
+        self._add_message(
+            "Zmiana papierowej mapy",
+            (
+                f"Przed dalszą grą rozłóżcie mapę „{self.current_zone.name}” "
+                "na całej fizycznej planszy."
+            ),
+        )
+        return True
 
     def _queue_current_zone_npc_setup(self) -> None:
         if self.ui_flow_stage != UiFlowStage.LOCATION_ACTIVE:
@@ -2322,8 +2826,9 @@ class ExplorationUiSession:
             positions=point.positions,
             color=point.color,
             message=(
-                f"Na dziedzińcu dostrzegacie rannego człowieka. "
-                f"Ustaw figurkę „{point.name}” na jednym z podświetlonych pól i potwierdź pozycję kliknięciem."
+                f"W lokacji „{self.current_zone.name}” pojawia się punkt: "
+                f"„{point.name}”. Ustaw figurkę na jednym z podświetlonych pól "
+                "i potwierdź pozycję kliknięciem."
             ),
             visibility=SetupVisibility.VISIBLE,
         )
@@ -2335,7 +2840,8 @@ class ExplorationUiSession:
         )
         self.ui_flow_stage = UiFlowStage.PARTY_SETUP
         self.board_message = (
-            f"Widzicie rannego człowieka. Ustaw figurkę {point.name} na jednym z podświetlonych pól."
+            f"Ustaw figurkę {point.name} w lokacji {self.current_zone.name} "
+            "na jednym z podświetlonych pól."
         )
         npc_description = (
             point.npc_interaction.public_description
@@ -2351,10 +2857,11 @@ class ExplorationUiSession:
             ).strip(),
         )
         self._add_message(
-            "Setup dziedzińca",
+            "Setup punktu eksploracji",
             (
                 f"Postaw figurkę „{point.name}” na jednym z podświetlonych pól. "
-                "Kliknięcie wybranego pola zapisze pozycję zwiadowcy i odblokuje działania na dziedzińcu."
+                "Kliknięcie wybranego pola zapisze pozycję punktu i odblokuje "
+                f"działania w lokacji {self.current_zone.name}."
             ),
         )
         self._record(
@@ -2461,6 +2968,7 @@ class ExplorationUiSession:
         selected_goal_id: str | None = None,
         selected_check_participants: str | None = None,
         participant_actor_ids: tuple[str, ...] = (),
+        selected_social_skill: str | None = None,
         conversation_only: bool = False,
     ) -> dict[str, object]:
         if self.ui_flow_stage != UiFlowStage.LOCATION_ACTIVE:
@@ -2473,9 +2981,16 @@ class ExplorationUiSession:
             selected_goal_id is not None
             or selected_check_participants is not None
             or participant_actor_ids
+            or selected_social_skill is not None
         ):
             raise ValueError("Swobodna wiadomość do MG nie może jednocześnie deklarować akcji.")
         point = self.active_point
+        if selected_social_skill is not None and (
+            point is None or point.npc_interaction is None
+        ):
+            raise ValueError(
+                "Podejście społeczne można wybrać tylko w interakcji z NPC."
+            )
         available_goals = (
             self.npc_goal_execution.available_goals(
                 npc=point.npc_interaction,
@@ -2598,6 +3113,7 @@ class ExplorationUiSession:
                     if resolved_check_participants is not None
                     else None
                 ),
+                "selected_social_skill": selected_social_skill,
             },
         )
         self._add_message("Gracze", raw_text)
@@ -2613,6 +3129,7 @@ class ExplorationUiSession:
                 action_text,
                 selected_goal_id=selected_goal.id if selected_goal is not None else None,
                 goal_execution=selected_npc_execution,
+                selected_social_skill=selected_social_skill,
                 conversation_only=conversation_only,
             )
         referenced_point = self._referenced_current_zone_point(action_text)
@@ -2629,7 +3146,15 @@ class ExplorationUiSession:
             return self.state_payload()
         challenge = self.active_challenge
         if challenge is None:
-            raise ValueError("W aktualnej lokacji nie ma aktywnego wyzwania ani punktu NPC.")
+            self._remove_latest_visible_player_message()
+            self._add_message(
+                "Najpierw wybierz interakcję",
+                (
+                    "Podejdź pionkiem do podświetlonego punktu albo wybierz dostępną "
+                    "interakcję w tej lokacji, a dopiero potem opisz działanie."
+                ),
+            )
+            return self.state_payload()
         trap_action = match_revealed_trap_action(
             self.state,
             action_text,
@@ -2843,17 +3368,24 @@ class ExplorationUiSession:
             zone_id=zone_id,
         )
         self.state = transition.state
+        self.state = clear_exploration_hidden(self.state)
+        self._advance_party_lights(transition.elapsed_minutes)
         self.pending = None
         self.active_point_id = transition.active_point_id
         self.preview_zone_id = transition.preview_zone_id
         self.interaction_result = None
-        self.ui_flow_stage = transition.stage
+        self.ui_flow_stage = UiFlowStage(transition.stage.value)
         self.exploration_board_selection_active = False
+        self.board_message = transition.board_message
         if transition.message_title:
             self._add_message(transition.message_title, transition.message_body)
+        self._add_expired_magic_effect_notices(transition.expired_magic_effects)
+        self._add_clock_event_notices(transition.triggered_clock_events)
         if transition.event_type:
             self._record(transition.event_type, dict(transition.event_payload))
-        self._queue_current_zone_npc_setup()
+        if not self._begin_current_zone_paper_map_setup():
+            self._detect_passive_traps()
+            self._queue_current_zone_npc_setup()
         self._sync_board_leds()
         return self.state_payload()
 
@@ -2870,6 +3402,22 @@ class ExplorationUiSession:
             raise ValueError("Najpierw rozstrzygnij rozpoczęcie starcia.")
         encounter = build_encounter_from_scenario(load_scenario(self.pending_encounter.encounter_scenario))
         encounter = _encounter_with_session_actor_state(encounter, self.exploration.actors)
+        projected_fixtures = fixture_scene_objects(
+            self.state,
+            zone_id=self.current_zone.id,
+        )
+        authored_object_ids = {item.id for item in encounter.scene_objects}
+        encounter = replace(
+            encounter,
+            scene_objects=(
+                *encounter.scene_objects,
+                *(
+                    item
+                    for item in projected_fixtures
+                    if item.id not in authored_object_ids
+                ),
+            ),
+        )
         steps = _build_encounter_setup_steps(encounter)
         if not steps:
             raise ValueError("Scenariusz encountera nie ma elementów do setupu.")
@@ -2988,27 +3536,49 @@ class ExplorationUiSession:
                 "Efekty encountera wygasły",
                 ", ".join(effect.label for effect in expired_effects),
             )
+        self._stash_remaining_combat_loot(encounter_result)
         self.exploration = _exploration_with_combat_actor_state(
             self.exploration,
             self.combat_state.actors,
         )
         exploration_actor_ids = {str(actor.id) for actor in self.exploration.actors}
         encounter_actor_ids = {str(actor.id) for actor in self.combat_state.actors}
-        preserved_conditions = tuple(
-            condition
-            for condition in self.state.condition_states
-            if condition.actor_id not in encounter_actor_ids
+        condition_transition = reconcile_conditions_after_encounter(
+            exploration_conditions=self.state.condition_states,
+            combat_conditions=self.combat_state.condition_states,
+            exploration_actor_ids=frozenset(exploration_actor_ids),
+            encounter_actor_ids=frozenset(encounter_actor_ids),
         )
-        combat_conditions = tuple(
-            condition
-            for condition in self.combat_state.condition_states
-            if condition.actor_id in exploration_actor_ids
-            and condition.condition == CombatCondition.PRONE
+        self.combat_state = replace(
+            self.combat_state,
+            condition_states=tuple(
+                condition
+                for condition in self.combat_state.condition_states
+                if condition not in condition_transition.expired_conditions
+            ),
         )
         self.state = replace(
             self.state,
-            condition_states=(*preserved_conditions, *combat_conditions),
+            condition_states=condition_transition.condition_states,
         )
+        self._add_expired_condition_notices(
+            condition_transition.expired_conditions,
+            prefix="Koniec encountera usuwa stan",
+        )
+        if condition_transition.expired_conditions:
+            self._record(
+                "ui_conditions_expired",
+                {
+                    "event": EffectEventType.ENCOUNTER_ENDED.value,
+                    "conditions": [
+                        {
+                            "actor_id": condition.actor_id,
+                            "condition": condition.condition.value,
+                        }
+                        for condition in condition_transition.expired_conditions
+                    ],
+                },
+            )
         self.interaction_result = {
             "title": outcome.title or "Wynik encountera",
             "body": outcome.body or "Encounter został rozstrzygnięty.",
@@ -3029,6 +3599,116 @@ class ExplorationUiSession:
         self.board_message = "Encounter rozstrzygnięty. Na planszy podświetlono nowe opcje sceny."
         self._sync_board_leds()
         return self.state_payload()
+
+    def _stash_remaining_combat_loot(self, result: SceneResult) -> None:
+        if self.combat_state is None or result.winner != Faction.ALLY:
+            return
+        bundles: list[tuple[LootBundle, str | None]] = []
+        dropped_item_ids_by_actor: dict[str, set[str]] = {}
+        for dropped in self.combat_state.dropped_weapons:
+            source_actor = next(
+                actor
+                for actor in self.combat_state.actors
+                if actor.id == dropped.source_actor_id
+            )
+            dropped_item_ids_by_actor.setdefault(
+                str(dropped.source_actor_id),
+                set(),
+            ).add(dropped.weapon.id)
+            if source_actor.faction == Faction.ALLY:
+                continue
+            bundles.append(
+                (
+                    LootBundle(
+                        id=f"aftermath:{dropped.id}",
+                        label=dropped.weapon.name,
+                        items=(dropped.weapon,),
+                    ),
+                    None,
+                )
+            )
+        for actor in self.combat_state.actors:
+            if actor.faction == Faction.ALLY or not actor.is_defeated():
+                continue
+            bundle = loot_bundle_from_actor(
+                actor,
+                excluded_item_ids=frozenset(
+                    dropped_item_ids_by_actor.get(str(actor.id), ())
+                ),
+            )
+            if not bundle.is_empty:
+                bundles.append((bundle, None))
+        bundles.extend(
+            (ground.bundle, None)
+            for ground in self.combat_state.battlefield_loot
+            if not ground.bundle.is_empty
+        )
+        if not bundles:
+            return
+
+        eligible_ids = [
+            str(actor.id)
+            for actor in self.combat_state.actors
+            if actor.faction == Faction.ALLY and not actor.is_defeated()
+        ]
+        if self.selected_lead_actor_id in eligible_ids:
+            eligible_ids.remove(self.selected_lead_actor_id)
+            eligible_ids.insert(0, self.selected_lead_actor_id)
+        transferred_items: list[str] = []
+        transferred_currency = CurrencyWallet()
+        state = self.combat_state
+        for bundle, preferred_actor_id in bundles:
+            candidate_ids = (
+                [preferred_actor_id, *eligible_ids]
+                if preferred_actor_id in eligible_ids
+                else eligible_ids
+            )
+            candidate_ids = list(dict.fromkeys(candidate_ids))
+            for recipient_id in candidate_ids:
+                recipient = next(
+                    actor
+                    for actor in state.actors
+                    if str(actor.id) == recipient_id
+                )
+                try:
+                    transfer = transfer_all_loot(bundle, recipient)
+                except ValueError:
+                    continue
+                state = replace_actor(state, transfer.recipient)
+                transferred_items.extend(
+                    f"{item.name} ×{item.quantity}" for item in transfer.items
+                )
+                transferred_currency = transferred_currency.add(transfer.currency)
+                break
+            else:
+                raise ValueError(
+                    f"Nie można zakończyć encountera: łup „{bundle.label}” "
+                    "przekracza udźwig drużyny. Zabierz wybrane rzeczy albo zostaw je jawnie przed wyjściem."
+                )
+        self.combat_state = replace(
+            state,
+            dropped_weapons=(),
+            battlefield_loot=(),
+        )
+        summary = ", ".join(transferred_items)
+        if not transferred_currency.is_empty:
+            coins = transferred_currency.total_coins
+            summary = f"{summary}; {coins} monet" if summary else f"{coins} monet"
+        self._add_message(
+            "Zabezpieczono łup po walce",
+            (
+                f"Przed opuszczeniem pola walki drużyna zabiera: {summary}."
+                if summary
+                else "Drużyna zabezpiecza pozostały łup."
+            ),
+        )
+        self._record(
+            "ui_combat_aftermath_loot_stashed",
+            {
+                "items": transferred_items,
+                "currency": transferred_currency.as_payload(),
+            },
+        )
 
     def retreat_from_combat(self) -> dict[str, object]:
         return self._declare_combat_conclusion(SceneConclusionType.RETREAT)
@@ -3125,6 +3805,7 @@ class ExplorationUiSession:
         self._add_message("Setup potwierdzony", f"Potwierdzono: {step.label}.")
         if flow.current_index + 1 >= len(flow.steps):
             flow.completed = True
+            self._seed_precombat_stealth_from_exploration()
             self._add_message(
                 "Setup zakończony",
                 "Figurki i jawne elementy encountera są rozstawione. Następny krok to ewentualne skradanie, inicjatywa i start walki.",
@@ -3169,6 +3850,7 @@ class ExplorationUiSession:
         self._add_message("Setup potwierdzony", "Pola startowe bohaterów zostały przypisane z planszy.")
         if flow.current_index + 1 >= len(flow.steps):
             flow.completed = True
+            self._seed_precombat_stealth_from_exploration()
             self._add_message(
                 "Setup zakończony",
                 "Figurki i jawne elementy encountera są rozstawione. Następny krok to ewentualne skradanie, inicjatywa i start walki.",
@@ -3191,6 +3873,7 @@ class ExplorationUiSession:
             and not self.pending_encounter.precombat_stealth_completed
         ):
             raise ValueError("Najpierw zakończ etap skradania przed walką albo świadomie go pomiń.")
+        self.state = clear_exploration_hidden(self.state)
         trigger_id = self.pending_encounter.trigger_id if self.pending_encounter is not None else ""
         applicable_edges = {
             edge.beneficiary_actor_id: edge
@@ -3359,12 +4042,24 @@ class ExplorationUiSession:
         if not precombat_stealth_is_available(self.pending_encounter.opening_resolution):
             raise ValueError("Okoliczności rozpoczęcia tego starcia nie pozwalają na skradanie przed walką.")
 
+        encounter_actors = self.encounter_setup_flow.encounter.actors
+        hiding_actor = next(
+            actor for actor in encounter_actors if str(actor.id) == actor_id
+        )
+        passive_adjustments, automatically_hidden = (
+            self._precombat_visibility_adjustments(
+                hiding_actor,
+                encounter_actors,
+            )
+        )
         resolution = resolve_precombat_stealth(
-            self.encounter_setup_flow.encounter.actors,
+            encounter_actors,
             self.pending_encounter.precombat_stealth_attempts,
             actor_id=actor_id,
             natural_roll=natural_roll,
             natural_roll_2=natural_roll_2,
+            passive_perception_adjustments=passive_adjustments,
+            automatically_hidden_from_actor_ids=automatically_hidden,
         )
         self.pending_encounter = replace(
             self.pending_encounter,
@@ -3404,6 +4099,119 @@ class ExplorationUiSession:
         )
         self._sync_board_leds()
         return self.state_payload()
+
+    def _precombat_visibility_adjustments(
+        self,
+        hiding_actor: Actor,
+        encounter_actors: tuple[Actor, ...],
+    ) -> tuple[dict[str, int], tuple[str, ...]]:
+        passive_adjustments: dict[str, int] = {}
+        automatically_hidden: list[str] = []
+        for observer in encounter_actors:
+            if (
+                observer.faction == hiding_actor.faction
+                or observer.faction == Faction.NEUTRAL
+                or observer.is_defeated()
+            ):
+                continue
+            distance_feet = (
+                max(
+                    abs(observer.position.col - hiding_actor.position.col),
+                    abs(observer.position.row - hiding_actor.position.row),
+                )
+                * 5
+            )
+            visibility = exploration_visibility(
+                observer,
+                ambient_light=self.current_zone.ambient_light,
+                distance_feet=distance_feet,
+                party=encounter_actors,
+            )
+            if not visibility.can_see:
+                automatically_hidden.append(str(observer.id))
+            elif visibility.passive_perception_adjustment:
+                passive_adjustments[str(observer.id)] = (
+                    visibility.passive_perception_adjustment
+                )
+        return passive_adjustments, tuple(automatically_hidden)
+
+    def _seed_precombat_stealth_from_exploration(self) -> None:
+        if (
+            self.encounter_setup_flow is None
+            or not self.encounter_setup_flow.completed
+            or self.pending_encounter is None
+            or not precombat_stealth_is_available(
+                self.pending_encounter.opening_resolution
+            )
+        ):
+            return
+        encounter_actors = self.encounter_setup_flow.encounter.actors
+        attempts = list(self.pending_encounter.precombat_stealth_attempts)
+        attempted_ids = {attempt.actor_id for attempt in attempts}
+        seeded_ids: list[str] = []
+        for hidden in self.state.hidden_actor_states:
+            if (
+                hidden.zone_id != self.current_zone.id
+                or hidden.actor_id in attempted_ids
+            ):
+                continue
+            actor = next(
+                (
+                    candidate
+                    for candidate in encounter_actors
+                    if str(candidate.id) == hidden.actor_id
+                ),
+                None,
+            )
+            if actor is None or actor.faction != Faction.ALLY or actor.is_defeated():
+                continue
+            adjustments, automatically_hidden = (
+                self._precombat_visibility_adjustments(actor, encounter_actors)
+            )
+            hiding = resolve_hide(
+                (),
+                actor,
+                encounter_actors,
+                hidden.stealth_total,
+                passive_perception_adjustments=adjustments,
+                automatically_hidden_from_actor_ids=automatically_hidden,
+            )
+            attempts.append(
+                PrecombatStealthAttempt(
+                    actor_id=hidden.actor_id,
+                    natural_roll=hidden.natural_roll,
+                    total=hidden.stealth_total,
+                    hidden_from_actor_ids=(
+                        hiding.hidden_state.hidden_from_actor_ids
+                        if hiding.hidden_state is not None
+                        else ()
+                    ),
+                    detected_by_actor_ids=hiding.detected_by_actor_ids,
+                )
+            )
+            attempted_ids.add(hidden.actor_id)
+            seeded_ids.append(hidden.actor_id)
+        if not seeded_ids:
+            return
+        self.pending_encounter = replace(
+            self.pending_encounter,
+            precombat_stealth_attempts=tuple(attempts),
+        )
+        self.state = replace(
+            self.state,
+            hidden_actor_states=tuple(
+                item
+                for item in self.state.hidden_actor_states
+                if item.actor_id not in set(seeded_ids)
+            ),
+        )
+        self._add_message(
+            "Ukrycie przeniesione do encountera",
+            (
+                "Zapisane wyniki Stealth zostały porównane z percepcją "
+                "przeciwników po rozstawieniu figurek."
+            ),
+        )
 
     def finish_precombat_stealth(self) -> dict[str, object]:
         if self.encounter_setup_flow is None or not self.encounter_setup_flow.completed:
@@ -3572,6 +4380,8 @@ class ExplorationUiSession:
         )
         self.exploration = replace(self.exploration, actors=result.actors)
         self.state = result.state
+        self.state = clear_exploration_hidden(self.state)
+        self._advance_party_lights(result.elapsed_minutes)
         self._add_message(
             "Rytuał",
             (
@@ -3580,6 +4390,7 @@ class ExplorationUiSession:
             ),
         )
         self._add_expired_magic_effect_notices(result.expired_effects)
+        self._add_clock_event_notices(result.triggered_clock_events)
         self._record(
             "ui_exploration_ritual_cast",
             {
@@ -4240,7 +5051,12 @@ class ExplorationUiSession:
         else:
             self._dismiss_summons_without_concentration()
 
-    def submit_concentration_check(self, *, natural_roll: int) -> dict[str, object]:
+    def submit_concentration_check(
+        self,
+        *,
+        natural_roll: int,
+        natural_roll_2: int | None = None,
+    ) -> dict[str, object]:
         pending = self.pending_concentration_check
         if pending is None:
             raise ValueError("Nie ma oczekującego rzutu na koncentrację.")
@@ -4254,6 +5070,7 @@ class ExplorationUiSession:
             damage=pending.damage,
             dc=pending.dc,
             natural_roll=int(natural_roll),
+            natural_roll_2=natural_roll_2,
         )
         result = self._apply_combat_resource_transition(transition)
         if (
@@ -7017,6 +7834,79 @@ class ExplorationUiSession:
                 f"Kończy się działanie efektu {effect.label}.",
             )
 
+    def _add_expired_condition_notices(
+        self,
+        conditions: tuple[ConditionState, ...],
+        *,
+        prefix: str,
+    ) -> None:
+        actor_names = {
+            str(actor.id): actor.name
+            for actor in (
+                self.combat_state.actors
+                if self.combat_state is not None
+                else self.exploration.actors
+            )
+        }
+        for condition in conditions:
+            actor_name = actor_names.get(condition.actor_id, condition.actor_id)
+            self._add_message(
+                "Stan wygasł",
+                f"{prefix}: {actor_name} — {condition_label(condition.condition)}.",
+            )
+
+    def _add_clock_event_notices(self, events) -> None:
+        for event in events:
+            self._add_message(event.label, event.narration)
+            self._record(
+                "ui_scenario_clock_event_triggered",
+                {
+                    "event_id": event.id,
+                    "at_minute": event.at_minute,
+                    "elapsed_minutes": self.state.elapsed_minutes,
+                    "effect_types": [
+                        str(effect.get("type", ""))
+                        for effect in event.effects
+                    ],
+                },
+            )
+
+    def _new_clock_events_between(
+        self,
+        before: ExplorationState,
+        after: ExplorationState,
+    ):
+        return tuple(
+            event
+            for event in after.clock_policy.events
+            if not bool(scene_flag(before.flags, event.marker_flag, False))
+            and bool(scene_flag(after.flags, event.marker_flag, False))
+        )
+
+    def _advance_scenario_time(
+        self,
+        minutes: int,
+        *,
+        source: str,
+    ):
+        result = advance_exploration_time(self.state, minutes)
+        self.state = result.state
+        if minutes:
+            self.state = clear_exploration_hidden(self.state)
+        self._advance_party_lights(minutes)
+        self._add_expired_magic_effect_notices(result.expired_effects)
+        self._add_clock_event_notices(result.triggered_clock_events)
+        if minutes:
+            self._record(
+                "ui_scenario_time_advanced",
+                {
+                    "source": source,
+                    "minutes": minutes,
+                    "elapsed_minutes": self.state.elapsed_minutes,
+                },
+            )
+        return result
+
     def _add_trigger_activation_notices(self, activations) -> None:
         for activation in activations:
             actor = next(
@@ -7772,7 +8662,10 @@ class ExplorationUiSession:
         self._activate_current_reaction_option()
         self._add_message(
             "Atak okazyjny",
-            f"{reaction.message} Trafienie: rzuć obrażenia {reaction.source.damage_hint} i wpisz sumę.",
+            (
+                f"{reaction.message} "
+                f"{_damage_roll_instruction(reaction.source, critical=reaction.critical)}"
+            ),
         )
         self._sync_board_leds()
         return self.state_payload()
@@ -7964,7 +8857,10 @@ class ExplorationUiSession:
         self._activate_current_reaction_option()
         self._add_message(
             "Ready",
-            f"{reaction.message} Trafienie: rzuć obrażenia {reaction.source.damage_hint} i wpisz sumę.",
+            (
+                f"{reaction.message} "
+                f"{_damage_roll_instruction(reaction.source, critical=reaction.critical)}"
+            ),
         )
         self._sync_board_leds()
         return self.state_payload()
@@ -8207,6 +9103,11 @@ class ExplorationUiSession:
                 condition_states,
                 actor,
                 saving_throw_ability=condition_state.save_ability,
+            )
+            request = apply_exhaustion_to_roll_request(
+                actor,
+                request,
+                ExhaustionRollKind.SAVING_THROW,
             )
             natural_roll = self.encounter_rng.randint(1, 20)
             natural_roll_2 = (
@@ -9415,7 +10316,11 @@ class ExplorationUiSession:
             return self.state_payload()
         self.pending = None
         point = selection.point
-        if point.npc_interaction is not None and point.npc_interaction.dialogue_intro:
+        if (
+            point.npc_interaction is not None
+            and point.npc_interaction.dialogue_intro
+            and not self._conversation_entries_for_active_interaction()
+        ):
             self._add_message(point.npc_interaction.name, point.npc_interaction.dialogue_intro)
         self._sync_board_leds()
         return self.state_payload()
@@ -9542,7 +10447,13 @@ class ExplorationUiSession:
             result.elapsed_minutes,
         )
         self.state = time_advance.state
+        self.state = clear_exploration_hidden(
+            self.state,
+            actor_id=actor_id,
+        )
+        self._advance_party_lights(result.elapsed_minutes)
         self._add_expired_magic_effect_notices(time_advance.expired_effects)
+        self._add_clock_event_notices(time_advance.triggered_clock_events)
         self._add_message("Pancerz", result.message)
         self._record(
             "ui_armor_changed",
@@ -9590,12 +10501,555 @@ class ExplorationUiSession:
         else:
             raise ValueError("Nieznana akcja źródła światła.")
         self.exploration = self._replace_exploration_actor(updated)
+        if action == "ignite":
+            self.state = clear_exploration_hidden(
+                self.state,
+                actor_id=actor_id,
+            )
         self._add_message("Światło", message)
         self._record(
             "ui_actor_light_changed",
             {"actor_id": actor_id, "item_id": item_id, "action": action},
         )
         return self.state_payload()
+
+    def start_exploration_search(self, actor_id: str) -> dict[str, object]:
+        if self.ui_flow_stage != UiFlowStage.LOCATION_ACTIVE:
+            raise ValueError("Strefę można przeszukiwać podczas aktywnej eksploracji.")
+        if self.pending is not None or self.pending_encounter is not None:
+            raise ValueError("Najpierw zakończ bieżącą decyzję albo encounter.")
+        zone = self.current_zone
+        if zone.search_dc is None:
+            raise ValueError("Ta strefa nie ma skonfigurowanego aktywnego Search.")
+        if zone.id in self.state.exhausted_search_zones:
+            raise ValueError("Ta strefa została już dokładnie przeszukana.")
+        actor = self._trade_actor(actor_id)
+        detection_distance = max(
+            (
+                trap.detection_distance_feet
+                for trap in self.state.traps
+                if trap.zone_id == zone.id
+            ),
+            default=10,
+        )
+        visibility = exploration_visibility(
+            actor,
+            ambient_light=zone.ambient_light,
+            distance_feet=detection_distance,
+            party=self.exploration.actors,
+        )
+        if not visibility.can_see:
+            raise ValueError(
+                f"{actor.name} nie może wzrokowo przeszukać tej strefy w ciemności."
+            )
+        sight_roll_mode = (
+            visibility.perception_roll_mode
+            if zone.search_skill == "perception"
+            else RollMode.NORMAL
+        )
+        plan = ExplorationCheckPlan(
+            participants=CheckParticipants.SINGLE_ACTOR,
+            aggregation=CheckAggregation.LEAD_RESULT,
+            consequence_targets=(ConsequenceTarget.SCENE,),
+            ability=zone.search_ability,
+            skill=zone.search_skill,
+            dc=zone.search_dc,
+            lead_actor_id=actor_id,
+            reason_for_players=f"Dokładne przeszukanie strefy: {zone.name}.",
+            roll_mode=sight_roll_mode,
+            mechanic_payload={
+                "id": "active_exploration_search",
+                "label": "Aktywne przeszukiwanie",
+                "zone_id": zone.id,
+                "time_cost_minutes": zone.search_minutes,
+                "visibility": visibility.as_payload(),
+            },
+        )
+        self.pending = PendingInteraction(
+            kind=PendingKind.SEARCH,
+            stage=PendingStage.ROLL,
+            participant_actor_ids=(actor_id,),
+            check_plan=plan,
+        )
+        self._add_message(
+            "Przeszukiwanie",
+            (
+                f"{actor.name} dokładnie bada strefę. "
+                f"Koszt czasu: {zone.search_minutes} min. "
+                f"{_check_plan_text(self.exploration.actors, plan)}"
+            ),
+        )
+        self._record(
+            "ui_exploration_search_started",
+            {"actor_id": actor_id, "zone_id": zone.id},
+        )
+        return self.state_payload()
+
+    def select_exploration_option(
+        self,
+        option_id: str,
+        *,
+        actor_id: str | None = None,
+    ) -> dict[str, object]:
+        if self.ui_flow_stage != UiFlowStage.LOCATION_ACTIVE:
+            raise ValueError("Działania lokacji są dostępne podczas aktywnej eksploracji.")
+        if self.pending is not None or self.pending_encounter is not None:
+            raise ValueError("Najpierw zakończ bieżącą decyzję albo encounter.")
+        if self.active_point is not None:
+            raise ValueError("Najpierw wróć z punktu interakcji do lokacji.")
+        option = next(
+            (
+                candidate
+                for candidate in self.current_zone.options
+                if candidate.id == option_id
+            ),
+            None,
+        )
+        if option is None:
+            raise ValueError("To działanie nie jest dostępne w aktualnej lokacji.")
+        if _zone_option_is_completed(option, self.state.flags):
+            raise ValueError("To działanie zostało już rozstrzygnięte.")
+        if option.kind == ExplorationOptionKind.SEARCH:
+            if not actor_id:
+                raise ValueError("Wybierz postać prowadzącą przeszukiwanie.")
+            return self.start_exploration_search(actor_id)
+        if option.kind == ExplorationOptionKind.MESSAGE:
+            if option.success_flag:
+                self.state = replace(
+                    self.state,
+                    flags=set_scene_flag(
+                        self.state.flags,
+                        option.success_flag,
+                        True,
+                    ),
+                )
+            self._add_message(
+                option.label,
+                option.message or option.description or "Działanie zakończone.",
+            )
+            self._record(
+                "ui_zone_option_resolved",
+                {
+                    "zone_id": self.current_zone.id,
+                    "option_id": option.id,
+                    "kind": option.kind.value,
+                    "success": True,
+                    "flag_key": option.success_flag,
+                },
+            )
+            self._refresh_pending_encounter()
+            self.board_message = (
+                f"{self.current_zone.name}: zakończono działanie „{option.label}”."
+            )
+            self._sync_board_leds()
+            return self.state_payload()
+        if option.kind != ExplorationOptionKind.CHECK or option.ability_check is None:
+            raise ValueError("To działanie nie ma obsługiwanej mechaniki.")
+        if not actor_id:
+            raise ValueError("Wybierz postać wykonującą test.")
+        actor = self._trade_actor(actor_id)
+        plan = _zone_option_check_plan(option, actor_id)
+        self.pending = PendingInteraction(
+            kind=PendingKind.ZONE_OPTION,
+            stage=PendingStage.ROLL,
+            zone_option=option,
+            participant_actor_ids=(actor_id,),
+            check_plan=plan,
+        )
+        self._add_message(
+            "Działanie w lokacji",
+            (
+                f"{actor.name}: {option.label}. "
+                f"{_check_plan_text(self.exploration.actors, plan)}"
+            ),
+        )
+        self._record(
+            "ui_zone_option_started",
+            {
+                "zone_id": self.current_zone.id,
+                "option_id": option.id,
+                "actor_id": actor_id,
+            },
+        )
+        return self.state_payload()
+
+    def start_exploration_hide(self, actor_id: str) -> dict[str, object]:
+        if self.ui_flow_stage != UiFlowStage.LOCATION_ACTIVE:
+            raise ValueError("Ukryć się można podczas aktywnej eksploracji.")
+        if self.pending is not None or self.pending_encounter is not None:
+            raise ValueError("Najpierw zakończ bieżącą decyzję albo encounter.")
+        if not self.current_zone.allows_hiding:
+            raise ValueError("Ta strefa nie zapewnia warunków pozwalających się ukryć.")
+        actor = self._trade_actor(actor_id)
+        if actor.active_light is not None:
+            raise ValueError("Nie można skutecznie ukryć się z zapalonym źródłem światła.")
+        plan = ExplorationCheckPlan(
+            participants=CheckParticipants.SINGLE_ACTOR,
+            aggregation=CheckAggregation.LEAD_RESULT,
+            consequence_targets=(ConsequenceTarget.LEAD_ACTOR,),
+            ability="dexterity",
+            skill="stealth",
+            dc=10,
+            lead_actor_id=actor_id,
+            reason_for_players=f"Próba ukrycia się w strefie: {self.current_zone.name}.",
+            mechanic_payload={
+                "id": "exploration_hide",
+                "label": "Ukrycie w eksploracji",
+                "zone_id": self.current_zone.id,
+            },
+        )
+        self.pending = PendingInteraction(
+            kind=PendingKind.HIDE,
+            stage=PendingStage.ROLL,
+            participant_actor_ids=(actor_id,),
+            check_plan=plan,
+        )
+        self._add_message(
+            "Ukrywanie",
+            f"{actor.name}: {_check_plan_text(self.exploration.actors, plan)}",
+        )
+        self._record(
+            "ui_exploration_hide_started",
+            {"actor_id": actor_id, "zone_id": self.current_zone.id},
+        )
+        return self.state_payload()
+
+    def _current_fixture_payloads(self) -> list[dict[str, object]]:
+        payloads: list[dict[str, object]] = []
+        visible_point_ids = {
+            point.id for point in visible_exploration_points(self.state.points)
+        }
+        labels = {
+            FixtureOperation.OPEN: "Otwórz",
+            FixtureOperation.CLOSE: "Zamknij",
+            FixtureOperation.UNLOCK: "Otwórz zamek",
+            FixtureOperation.LOOT: "Przeszukaj zawartość",
+            FixtureOperation.DAMAGE: "Zaatakuj obiekt",
+            FixtureOperation.DESTROY: "Zniszcz",
+            FixtureOperation.DETACH: "Odłącz",
+            FixtureOperation.MOVE: "Przesuń",
+            FixtureOperation.REPAIR: "Napraw",
+        }
+        for fixture in self.current_zone.fixtures:
+            if not fixture.visible and fixture.id not in visible_point_ids:
+                continue
+            runtime = fixture_runtime_state(
+                self.state,
+                zone_id=self.current_zone.id,
+                fixture=fixture,
+            )
+            actions: list[dict[str, object]] = []
+            for policy in fixture.action_policies:
+                try:
+                    plan_fixture_action(
+                        self.state,
+                        source_id=(
+                            f"zone:{self.current_zone.id}:fixture:{fixture.id}"
+                        ),
+                        operation=policy.operation,
+                    )
+                except ValueError:
+                    continue
+                actions.append(
+                    {
+                        "operation": policy.operation.value,
+                        "label": labels[policy.operation],
+                        "requires_roll": policy.difficulty_tier != "automatic",
+                    }
+                )
+            payloads.append(
+                {
+                    "id": fixture.id,
+                    "name": fixture.name,
+                    "kind": fixture.kind.value,
+                    "description": fixture.description,
+                    "positions": [
+                        [position.col, position.row]
+                        for position in fixture.positions
+                    ],
+                    "condition": runtime.condition,
+                    "opened": runtime.opened,
+                    "locked": runtime.locked,
+                    "looted": runtime.looted,
+                    "destroyed": runtime.destroyed,
+                    "destructible": fixture.destructible,
+                    "armor_class": fixture.armor_class,
+                    "current_hit_points": runtime.current_hit_points,
+                    "maximum_hit_points": fixture.hit_points,
+                    "damage_threshold": fixture.damage_threshold,
+                    "blocks_movement": (
+                        fixture.blocks_movement_when_closed
+                        and not runtime.opened
+                        and not runtime.destroyed
+                    ),
+                    "cover_bonus": (
+                        fixture.cover_bonus
+                        if not runtime.opened and not runtime.destroyed
+                        else 0
+                    ),
+                    "actions": actions,
+                }
+            )
+        return payloads
+
+    def start_exploration_fixture_action(
+        self,
+        *,
+        actor_id: str,
+        fixture_id: str,
+        operation: str,
+    ) -> dict[str, object]:
+        if self.ui_flow_stage != UiFlowStage.LOCATION_ACTIVE:
+            raise ValueError("Obiektów można używać podczas aktywnej eksploracji.")
+        if self.pending is not None or self.pending_encounter is not None:
+            raise ValueError("Najpierw zakończ bieżącą decyzję albo encounter.")
+        actor = self._trade_actor(actor_id)
+        fixture_operation = FixtureOperation(operation)
+        plan = plan_fixture_action(
+            self.state,
+            source_id=f"zone:{self.current_zone.id}:fixture:{fixture_id}",
+            operation=fixture_operation,
+        )
+        has_key = (
+            plan.fixture.key_item_id is not None
+            and any(
+                item.available
+                and (
+                    item.id == plan.fixture.key_item_id
+                    or item.source_ref == plan.fixture.key_item_id
+                )
+                for item in actor.inventory
+            )
+        )
+        if (
+            plan.policy.difficulty_tier == "automatic"
+            or (
+                fixture_operation == FixtureOperation.UNLOCK
+                and has_key
+            )
+        ):
+            self._commit_fixture_action(plan, success=True, actor_id=actor_id)
+            self._sync_board_leds()
+            return self.state_payload()
+        tool = None
+        tool_label = ""
+        if fixture_operation == FixtureOperation.UNLOCK:
+            tool = "thieves_tools"
+            tool_label = "Narzędzia złodziejskie"
+            has_tools = any(
+                item.available
+                and (
+                    item.id == tool
+                    or item.source_ref == tool
+                    or item.tool_proficiency_id == tool
+                )
+                for item in actor.inventory
+            )
+            if not has_tools:
+                raise ValueError(
+                    f"{actor.name} potrzebuje narzędzi złodziejskich do otwarcia zamka."
+                )
+        challenge = challenge_for_zone(self.state, self.current_zone.id)
+        authored_dc = (
+            challenge.llm_policy.dc_for_tier(plan.policy.difficulty_tier)
+            if challenge is not None
+            else None
+        )
+        dc = (
+            plan.fixture.lock_dc
+            if fixture_operation == FixtureOperation.UNLOCK
+            and plan.fixture.lock_dc is not None
+            else authored_dc
+        )
+        if dc is None:
+            raise ValueError("Operacja fixture nie ma skonfigurowanego DC.")
+        check_plan = ExplorationCheckPlan(
+            participants=CheckParticipants.SINGLE_ACTOR,
+            aggregation=CheckAggregation.LEAD_RESULT,
+            consequence_targets=(ConsequenceTarget.OBJECT,),
+            ability=plan.policy.ability,
+            skill=plan.policy.skill,
+            tool=tool,
+            tool_label=tool_label,
+            dc=dc,
+            lead_actor_id=actor_id,
+            reason_for_players=(
+                f"{plan.policy.operation.value}: {plan.fixture.name}."
+            ),
+            mechanic_payload={
+                "id": "fixture_interaction",
+                "fixture_id": plan.fixture.id,
+                "operation": plan.policy.operation.value,
+            },
+        )
+        self.pending = PendingInteraction(
+            kind=PendingKind.FIXTURE,
+            stage=PendingStage.ROLL,
+            participant_actor_ids=(actor_id,),
+            check_plan=check_plan,
+            fixture_action_plan=plan,
+        )
+        self._add_message(
+            "Interakcja z obiektem",
+            f"{actor.name}: {_check_plan_text(self.exploration.actors, check_plan)}",
+        )
+        self._record(
+            "ui_fixture_action_started",
+            {
+                "actor_id": actor_id,
+                "fixture_id": fixture_id,
+                "operation": fixture_operation.value,
+            },
+        )
+        return self.state_payload()
+
+    def damage_exploration_fixture(
+        self,
+        *,
+        actor_id: str,
+        fixture_id: str,
+        attack_total: int,
+        damage: int,
+    ) -> dict[str, object]:
+        if self.ui_flow_stage != UiFlowStage.LOCATION_ACTIVE:
+            raise ValueError("Obiekty można niszczyć podczas aktywnej eksploracji.")
+        if self.pending is not None or self.pending_encounter is not None:
+            raise ValueError("Najpierw zakończ bieżącą decyzję albo encounter.")
+        actor = self._trade_actor(actor_id)
+        fixture = next(
+            (
+                item
+                for item in self.current_zone.fixtures
+                if item.id == fixture_id
+            ),
+            None,
+        )
+        if fixture is None:
+            raise ValueError("Nie znaleziono obiektu w bieżącej strefie.")
+        if not fixture.destructible or fixture.armor_class is None:
+            raise ValueError(f"{fixture.name} nie jest obiektem niszczalnym.")
+        if attack_total < fixture.armor_class:
+            self._add_message(
+                "Atak na obiekt",
+                (
+                    f"{actor.name} nie trafia {fixture.name}: "
+                    f"{attack_total} przeciw KP {fixture.armor_class}."
+                ),
+            )
+            return self.state_payload()
+        result = apply_fixture_damage(
+            self.state,
+            source_id=f"zone:{self.current_zone.id}:fixture:{fixture_id}",
+            raw_damage=damage,
+        )
+        self.state = result.state
+        released_labels = self._reveal_fixture_items(
+            zone_id=self.current_zone.id,
+            item_ids=result.released_item_ids,
+            operation="destroy",
+        )
+        threshold_text = (
+            f" Próg obrażeń {fixture.damage_threshold} zatrzymał cios."
+            if result.applied_damage == 0 and damage > 0
+            else ""
+        )
+        released_text = (
+            f" Ujawniona zawartość: {', '.join(released_labels)}."
+            if released_labels
+            else ""
+        )
+        self._add_message(
+            "Uszkodzenie obiektu",
+            (
+                f"{fixture.name}: {result.previous_hit_points} → "
+                f"{result.current_hit_points} HP."
+                f"{threshold_text}{released_text}"
+            ),
+        )
+        self._record(
+            "ui_fixture_damaged",
+            {
+                "actor_id": actor_id,
+                "fixture_id": fixture_id,
+                "attack_total": attack_total,
+                "armor_class": fixture.armor_class,
+                "raw_damage": damage,
+                "applied_damage": result.applied_damage,
+                "current_hit_points": result.current_hit_points,
+                "destroyed": result.destroyed,
+            },
+        )
+        return self.state_payload()
+
+    def _commit_fixture_action(
+        self,
+        plan: FixtureActionPlan,
+        *,
+        success: bool,
+        actor_id: str,
+    ) -> None:
+        result = apply_fixture_action(self.state, plan, success=success)
+        self.state = result.state
+        released_labels = self._reveal_fixture_items(
+            zone_id=plan.zone_id,
+            item_ids=result.released_item_ids,
+            operation=plan.policy.operation.value,
+        )
+        if result.changed:
+            released_text = (
+                f" Ujawnione elementy: {', '.join(released_labels)}."
+                if released_labels
+                else ""
+            )
+            self._add_message(
+                "Zmiana obiektu",
+                (
+                    f"{plan.fixture.name}: {plan.current_condition} → "
+                    f"{plan.policy.result_condition}.{released_text}"
+                ),
+            )
+        elif not success:
+            self._add_message(
+                "Interakcja z obiektem",
+                f"Nie udało się wykonać: {plan.policy.operation.value}.",
+            )
+        self._record(
+            "ui_fixture_action_resolved",
+            {
+                "actor_id": actor_id,
+                "source_id": plan.source_id,
+                "operation": plan.policy.operation.value,
+                "success": success,
+                "changed": result.changed,
+                "released_item_ids": list(result.released_item_ids),
+            },
+        )
+
+    def _reveal_fixture_items(
+        self,
+        *,
+        zone_id: str,
+        item_ids: tuple[str, ...],
+        operation: str,
+    ) -> list[str]:
+        if not item_ids:
+            return []
+        registry = build_crafting_source_registry(
+            self.state,
+            self.exploration.actors,
+        )
+        labels: list[str] = []
+        for item_id in item_ids:
+            source = registry.source_by_id(f"zone:{zone_id}:item:{item_id}")
+            if source is None:
+                continue
+            self.state = discover_scene_source(
+                self.state,
+                source,
+                requested_as=f"rezultat {operation}",
+            )
+            labels.append(source.label)
+        return labels
 
     def _apply_trade_result(
         self,
@@ -9675,6 +11129,141 @@ class ExplorationUiSession:
             "stock": stock,
             "actors": actor_payloads,
         }
+
+    def _downtime_payload(self) -> dict[str, object] | None:
+        if (
+            self.ui_flow_stage != UiFlowStage.LOCATION_ACTIVE
+            or self.combat_state is not None
+            or self.pending_encounter is not None
+            or self.pending is not None
+            or self.pending_npc_transition is not None
+            or self.active_point is not None
+        ):
+            return None
+        recipes = tuple(
+            recipe
+            for recipe in self.exploration.downtime_policy.crafting_recipes
+            if recipe.zone_id == self.current_zone.id
+        )
+        if not recipes:
+            return None
+        actors = tuple(
+            actor
+            for actor in self.exploration.actors
+            if actor.faction == Faction.ALLY and not actor.is_defeated()
+        )
+        recipe_payloads: list[dict[str, object]] = []
+        for recipe in recipes:
+            availability: list[dict[str, object]] = []
+            for actor in actors:
+                try:
+                    plan_downtime_crafting(
+                        actor=actor,
+                        recipe=recipe,
+                        current_zone_id=self.current_zone.id,
+                    )
+                except ValueError as exc:
+                    availability.append(
+                        {
+                            "actor_id": str(actor.id),
+                            "available": False,
+                            "reason": str(exc),
+                        }
+                    )
+                else:
+                    availability.append(
+                        {
+                            "actor_id": str(actor.id),
+                            "available": True,
+                            "reason": "",
+                        }
+                    )
+            recipe_payloads.append(
+                {
+                    "id": recipe.id,
+                    "label": recipe.label,
+                    "description": recipe.description,
+                    "workshop_label": recipe.workshop_label,
+                    "product": inventory_item_payload(recipe.product),
+                    "market_value_cp": recipe.market_value_cp,
+                    "material_cost_cp": recipe.material_cost_cp,
+                    "work_days": recipe.work_days,
+                    "time_cost_minutes": recipe.time_cost_minutes,
+                    "required_tool_id": recipe.required_tool_id,
+                    "availability": availability,
+                }
+            )
+        return {
+            "zone_id": self.current_zone.id,
+            "actors": [
+                {
+                    "id": str(actor.id),
+                    "name": actor.name,
+                    "currency": actor.currency.as_payload(),
+                }
+                for actor in actors
+            ],
+            "recipes": recipe_payloads,
+        }
+
+    def complete_downtime_crafting(
+        self,
+        *,
+        actor_id: str,
+        recipe_id: str,
+    ) -> dict[str, object]:
+        if (
+            self.ui_flow_stage != UiFlowStage.LOCATION_ACTIVE
+            or self.combat_state is not None
+            or self.pending_encounter is not None
+            or self.pending is not None
+            or self.pending_npc_transition is not None
+            or self.active_point is not None
+        ):
+            raise ValueError("Rzemiosło downtime nie jest teraz dostępne.")
+        actor = next(
+            (
+                candidate
+                for candidate in self.exploration.actors
+                if str(candidate.id) == actor_id
+            ),
+            None,
+        )
+        if actor is None:
+            raise ValueError(f"Nieznana postać: {actor_id}.")
+        recipe = self.exploration.downtime_policy.recipe_by_id(recipe_id)
+        plan = plan_downtime_crafting(
+            actor=actor,
+            recipe=recipe,
+            current_zone_id=self.current_zone.id,
+        )
+        result = complete_downtime_crafting(plan)
+        self.exploration = self._replace_exploration_actor(result.actor_after)
+        self._advance_scenario_time(
+            result.time_cost_minutes,
+            source="downtime_crafting",
+        )
+        self._record(
+            "ui_downtime_crafting_completed",
+            {
+                "actor_id": actor_id,
+                "recipe_id": recipe.id,
+                "item_id": recipe.product.id,
+                "quantity": recipe.product.quantity,
+                "material_cost_cp": result.material_cost_cp,
+                "time_cost_minutes": result.time_cost_minutes,
+            },
+        )
+        self._add_message(
+            "Rzemiosło ukończone",
+            (
+                f"{actor.name} wykonuje: {recipe.product.name} "
+                f"×{recipe.product.quantity}. Materiały kosztują "
+                f"{result.material_cost_cp} cp, a praca zajmuje "
+                f"{result.time_cost_minutes // 60} godz."
+            ),
+        )
+        return self.state_payload()
 
     def _submit_challenge_action(
         self,
@@ -10171,8 +11760,11 @@ class ExplorationUiSession:
         if analysis.normalized_intent:
             request_data = replace(request_data, player_action=analysis.normalized_intent)
         try:
-            proposal = client.classify(request_data)
-            validated = validate_gm_classifier_proposal(proposal, request_data)
+            proposal, validated = self._classify_gm_with_validation_retry(
+                client,
+                request_data,
+                challenge=challenge,
+            )
         except GmProposalValidationError as exc:
             return self._reject_gm_declaration(conversation_text, str(exc), challenge)
         if validated.proposal != proposal:
@@ -10452,6 +12044,7 @@ class ExplorationUiSession:
         challenge: ExplorationChallenge,
     ) -> dict[str, object]:
         answer = _player_facing_gm_validation_message(reason)
+        self._remove_latest_visible_player_message()
         self._remember_scene_exchange(text, answer, outcome="validation_error")
         self._record(
             "ui_gm_declaration_rejected",
@@ -10464,6 +12057,61 @@ class ExplorationUiSession:
         )
         self._add_message("Deklaracja wymaga korekty", answer)
         return self.state_payload()
+
+    def _classify_gm_with_validation_retry(
+        self,
+        client,
+        request_data: GmClassifierRequest,
+        *,
+        challenge: ExplorationChallenge,
+    ):
+        try:
+            proposal = client.classify(request_data)
+            return proposal, validate_gm_classifier_proposal(proposal, request_data)
+        except GmProposalValidationError as first_error:
+            self._record(
+                "ui_gm_proposal_validation_retry",
+                {
+                    "challenge_id": challenge.id,
+                    "reason": str(first_error),
+                },
+            )
+            retry_note = GmDeclarationThreadEntry(
+                "gm",
+                (
+                    "Poprzednia propozycja nie przeszła walidacji. Popraw wyłącznie "
+                    "strukturę propozycji i zachowaj deklarację graczy. Ograniczenie: "
+                    f"{first_error}"
+                ),
+                "technical_validation_retry",
+            )
+            retry_request = replace(
+                request_data,
+                declaration_thread=(
+                    *request_data.declaration_thread,
+                    retry_note,
+                )[-16:],
+            )
+            proposal = client.classify(retry_request)
+            validated = validate_gm_classifier_proposal(proposal, retry_request)
+            self._record(
+                "ui_gm_proposal_validation_recovered",
+                {"challenge_id": challenge.id},
+            )
+            return proposal, validated
+
+    def _remove_latest_visible_player_message(self) -> None:
+        if self.conversation_entries and self.conversation_entries[-1].role == "player":
+            removed = self.conversation_entries.pop()
+            self._record(
+                "ui_rejected_player_message_removed",
+                {
+                    "interaction_id": removed.interaction_id,
+                    "body": removed.body,
+                },
+            )
+        if self.messages and self.messages[-1].title == "Gracze":
+            self.messages.pop()
 
     def _remember_scene_exchange(
         self,
@@ -10533,10 +12181,15 @@ class ExplorationUiSession:
         *,
         selected_goal_id: str | None = None,
         goal_execution: NpcGoalExecutionPlan | None = None,
+        selected_social_skill: str | None = None,
         conversation_only: bool = False,
     ) -> dict[str, object]:
         npc = point.npc_interaction
         assert npc is not None
+        declared_spell = self._declared_npc_support_spell(
+            text,
+            goal_execution=goal_execution,
+        )
         runtime_state = npc_runtime_state_for(self.state, npc.id)
         if (
             not conversation_only
@@ -10605,9 +12258,23 @@ class ExplorationUiSession:
                 if goal_execution is not None
                 else None
             ),
+            selected_social_skill=selected_social_skill,
             conversation_only=conversation_only,
         )
-        proposal = client.interact_npc(request_data)
+        try:
+            proposal, validated = self._classify_npc_with_validation_retry(
+                client,
+                request_data,
+                point=point,
+                goal_execution=goal_execution,
+                declared_spell=declared_spell,
+            )
+        except ValueError as exc:
+            return self._reject_npc_declaration(
+                point,
+                text,
+                reason=str(exc),
+            )
         if conversation_only:
             answer = (
                 proposal.player_narration.strip()
@@ -10623,36 +12290,6 @@ class ExplorationUiSession:
             )
             self._add_message("Odpowiedź MG", answer)
             return self.state_payload()
-        if goal_execution is not None:
-            permission = goal_execution.permission
-            authored_check = permission.check_ability is not None
-            proposal = proposal.model_copy(
-                update={
-                    "action_type": goal_execution.route.intent_id,
-                    "check_participants": goal_execution.check_participants,
-                    "check_aggregation": (
-                        CheckAggregation.MAJORITY
-                        if goal_execution.check_participants
-                        == CheckParticipants.WHOLE_PARTY
-                        else CheckAggregation.LEAD_RESULT
-                    ),
-                    **(
-                        {
-                            "requires_roll": True,
-                            "ability": permission.check_ability,
-                            "skill": permission.check_skill,
-                            "dc": permission.check_dc,
-                        }
-                        if authored_check
-                        else {}
-                    ),
-                    "effects_on_success": (),
-                    "effects_on_failure": (),
-                    "flag_changes_on_success": (),
-                    "flag_changes_on_failure": (),
-                }
-            )
-        validated = validate_npc_interaction_proposal(proposal, request_data)
         self._record(
             "ui_npc_proposal_validated",
             {
@@ -10684,19 +12321,248 @@ class ExplorationUiSession:
                 if goal_execution is not None
                 else ()
             ),
+            npc_time_cost_minutes=(
+                goal_execution.permission.time_cost_minutes
+                if goal_execution is not None
+                else (
+                    point.npc_interaction.policy.intent_permission(
+                        validated.proposal.action_type
+                    ).time_cost_minutes
+                    if point.npc_interaction is not None
+                    and point.npc_interaction.policy.intent_permission(
+                        validated.proposal.action_type
+                    )
+                    is not None
+                    else 0
+                )
+            ),
+            npc_spell_actor_id=(
+                str(declared_spell[0].id)
+                if declared_spell is not None
+                else None
+            ),
+            npc_spell_id=(
+                declared_spell[1].id
+                if declared_spell is not None
+                else None
+            ),
+            npc_spell_name=(
+                declared_spell[1].name
+                if declared_spell is not None
+                else ""
+            ),
+            npc_spell_level=(
+                declared_spell[1].level
+                if declared_spell is not None
+                else 0
+            ),
         )
-        if validated.proposal.player_narration:
-            self._add_message("Narracja MG", validated.proposal.player_narration)
-        if (
-            validated.proposal.npc_response
-            and not (
-                validated.action_plan is not None
-                and validated.proposal.requires_roll
+        if self._pending_npc_is_cosmetic():
+            self._show_pending_npc_narration(success=True)
+            self._update_npc_runtime(
+                validated.proposal,
+                success=True,
+                revealed_information_ids=(),
             )
-        ):
-            self._add_message("Odpowiedź NPC", validated.proposal.npc_response)
+            self._record(
+                "ui_npc_cosmetic_interaction_resolved",
+                {"point_id": point.id},
+            )
+            self.pending = None
         self._sync_board_leds()
         return self.state_payload()
+
+    def _classify_npc_with_validation_retry(
+        self,
+        client,
+        request_data: NpcInteractionRequest,
+        *,
+        point: ExplorationPoint,
+        goal_execution: NpcGoalExecutionPlan | None,
+        declared_spell: tuple[Actor, SpellDefinition] | None,
+    ):
+        if request_data.conversation_only:
+            return client.interact_npc(request_data), None
+
+        def prepare(proposal: NpcInteractionProposal) -> NpcInteractionProposal:
+            if goal_execution is not None:
+                permission = goal_execution.permission
+                authored_check = permission.check_ability is not None
+                proposal = proposal.model_copy(
+                    update={
+                        "action_type": goal_execution.route.intent_id,
+                        "check_participants": goal_execution.check_participants,
+                        "check_aggregation": (
+                            CheckAggregation.MAJORITY
+                            if goal_execution.check_participants
+                            == CheckParticipants.WHOLE_PARTY
+                            else CheckAggregation.LEAD_RESULT
+                        ),
+                        **(
+                            {
+                                "requires_roll": True,
+                                "ability": permission.check_ability,
+                                "skill": permission.check_skill,
+                                "dc": permission.check_dc,
+                            }
+                            if authored_check
+                            else {}
+                        ),
+                        "effects_on_success": (),
+                        "effects_on_failure": (),
+                        "flag_changes_on_success": (),
+                        "flag_changes_on_failure": (),
+                    }
+                )
+            if declared_spell is not None:
+                assert goal_execution is not None
+                proposal = proposal.model_copy(
+                    update={
+                        "action_type": goal_execution.route.intent_id,
+                        "requires_roll": False,
+                        "ability": None,
+                        "skill": None,
+                        "dc": None,
+                        "effects_on_success": (),
+                        "effects_on_failure": (),
+                        "flag_changes_on_success": (),
+                        "flag_changes_on_failure": (),
+                    }
+                )
+            return proposal
+
+        try:
+            proposal = prepare(client.interact_npc(request_data))
+            return proposal, validate_npc_interaction_proposal(
+                proposal,
+                request_data,
+            )
+        except ValueError as first_error:
+            self._record(
+                "ui_npc_proposal_validation_retry",
+                {"point_id": point.id, "reason": str(first_error)},
+            )
+            retry_note = GmDeclarationThreadEntry(
+                "gm",
+                (
+                    "Poprzednia propozycja nie przeszła walidacji. Popraw strukturę "
+                    "bez zmiany celu rozmowy. Ograniczenie: "
+                    f"{first_error}"
+                ),
+                "technical_validation_retry",
+            )
+            retry_request = replace(
+                request_data,
+                conversation_thread=(
+                    *request_data.conversation_thread,
+                    retry_note,
+                )[-16:],
+            )
+            proposal = prepare(client.interact_npc(retry_request))
+            validated = validate_npc_interaction_proposal(
+                proposal,
+                retry_request,
+            )
+            self._record(
+                "ui_npc_proposal_validation_recovered",
+                {"point_id": point.id},
+            )
+            return proposal, validated
+
+    def _reject_npc_declaration(
+        self,
+        point: ExplorationPoint,
+        text: str,
+        *,
+        reason: str,
+    ) -> dict[str, object]:
+        self._remove_latest_visible_player_message()
+        answer = (
+            "Nie udało się bezpiecznie zinterpretować tej wypowiedzi. "
+            "Spróbujcie powiedzieć to krócej albo opisać sam cel rozmowy."
+        )
+        self._record(
+            "ui_npc_declaration_rejected",
+            {
+                "point_id": point.id,
+                "declaration": text,
+                "reason": reason,
+            },
+        )
+        self._add_message("Rozmowa wymaga doprecyzowania", answer)
+        return self.state_payload()
+
+    def _pending_npc_is_cosmetic(self) -> bool:
+        if self.pending is None:
+            return False
+        proposal = self.pending.proposal
+        if not isinstance(proposal, NpcInteractionProposal):
+            return False
+        return not any(
+            (
+                proposal.requires_roll,
+                self.pending.npc_authored_route,
+                self.pending.action_plan is not None,
+                self.pending.npc_spell_id is not None,
+                self.pending.npc_time_cost_minutes,
+                proposal.effects_on_success,
+                proposal.effects_on_failure,
+                proposal.flag_changes_on_success,
+                proposal.flag_changes_on_failure,
+                proposal.revealed_information_ids,
+            )
+        )
+
+    def _show_pending_npc_narration(self, *, success: bool) -> None:
+        if self.pending is None:
+            return
+        proposal = self.pending.proposal
+        if not isinstance(proposal, NpcInteractionProposal):
+            return
+        if proposal.player_narration:
+            self._add_message("Narracja MG", proposal.player_narration)
+        if success and proposal.npc_response:
+            self._add_message("Odpowiedź NPC", proposal.npc_response)
+
+    def _declared_npc_support_spell(
+        self,
+        text: str,
+        *,
+        goal_execution: NpcGoalExecutionPlan | None,
+    ) -> tuple[Actor, SpellDefinition] | None:
+        if (
+            goal_execution is None
+            or goal_execution.route.intent_id != "medical"
+            or not goal_execution.participant_actor_ids
+        ):
+            return None
+        normalized_text = text.casefold().replace("_", " ")
+        matches = []
+        participant_ids = set(goal_execution.participant_actor_ids)
+        for actor in self.exploration.actors:
+            if str(actor.id) not in participant_ids:
+                continue
+            for spell in actor.spells:
+                names = {
+                    spell.id.casefold().replace("_", " "),
+                    spell.name.casefold(),
+                }
+                if spell.effect_kind == "healing" and any(
+                    name in normalized_text for name in names
+                ):
+                    matches.append((actor, spell))
+        if len(matches) != 1:
+            return None
+        actor, spell = matches[0]
+        validation = actor_spell_cast_validation(actor, spell.id)
+        if validation is None or not validation.valid:
+            reason = (
+                " ".join(validation.errors)
+                if validation is not None
+                else f"{actor.name} nie zna czaru {spell.name}."
+            )
+            raise ValueError(reason)
+        return actor, spell
 
     def resolve_npc_transition(self, reaction_id: str) -> dict[str, object]:
         plan = self.pending_npc_transition
@@ -11037,6 +12903,7 @@ class ExplorationUiSession:
     def _accept_crafting(self) -> dict[str, object]:
         assert self.pending is not None and self.pending.crafting_plan is not None
         plan = self.pending.crafting_plan
+        state_before = self.state
         magic_effects_before = self.state.magic_effects
         self.state, item = craft_temporary_item(
             self.state,
@@ -11054,6 +12921,11 @@ class ExplorationUiSession:
                 if effect.id not in remaining_magic_effect_ids
             )
         )
+        self._add_clock_event_notices(
+            self._new_clock_events_between(state_before, self.state)
+        )
+        self.state = clear_exploration_hidden(self.state)
+        self._advance_party_lights(item.time_cost_minutes)
         self._record(
             "ui_crafting_confirmed",
             {
@@ -11173,14 +13045,66 @@ class ExplorationUiSession:
             )
             self.pending = None
             return self.state_payload()
+        if self.pending.npc_spell_id is not None:
+            actor = next(
+                (
+                    candidate
+                    for candidate in self.exploration.actors
+                    if str(candidate.id) == self.pending.npc_spell_actor_id
+                ),
+                None,
+            )
+            if actor is None:
+                raise ValueError("Nie znaleziono postaci rzucającej zadeklarowany czar.")
+            spell_use = consume_spell_resource(
+                actor,
+                self.pending.npc_spell_level,
+                spell_id=self.pending.npc_spell_id,
+            )
+            self.exploration = self._replace_exploration_actor(spell_use.actor_after)
+            if spell_use.consumed:
+                self._add_message(
+                    "Zużyty slot czaru",
+                    (
+                        f"{self.pending.npc_spell_name}: zużyto slot "
+                        f"{spell_use.spell_level}. poziomu."
+                    ),
+                )
+            self._record(
+                "ui_npc_spell_consumed",
+                {
+                    "actor_id": str(actor.id),
+                    "spell_id": self.pending.npc_spell_id,
+                    "spell_level": spell_use.spell_level,
+                    "consumed": spell_use.consumed,
+                },
+            )
+            self._apply_npc_flags(proposal, success=True)
+            revealed = self._reveal_npc_information(proposal)
+            self._update_npc_runtime(
+                proposal,
+                success=True,
+                revealed_information_ids=revealed,
+            )
+            self._advance_pending_npc_time()
+            self._show_pending_npc_narration(success=True)
+            self._add_message(
+                "Wynik interakcji NPC",
+                f"{self.pending.npc_spell_name} zapewnia pomoc bez testu Medycyny.",
+            )
+            self.pending = None
+            return self.state_payload()
         if self.pending.action_plan is not None and not proposal.requires_roll:
             self._resolve_structured_npc_outcome(proposal, NpcOutcomeTier.SUCCESS)
+            self._advance_pending_npc_time()
             self.pending = None
             return self.state_payload()
         if not proposal.requires_roll:
             self._apply_npc_flags(proposal, success=True)
             revealed = self._reveal_npc_information(proposal)
             self._update_npc_runtime(proposal, success=True, revealed_information_ids=revealed)
+            self._advance_pending_npc_time()
+            self._show_pending_npc_narration(success=True)
             self._add_message("Wynik interakcji NPC", "Interakcja nie wymagała rzutu.")
             self.pending = None
             return self.state_payload()
@@ -11206,6 +13130,16 @@ class ExplorationUiSession:
         self._add_message("Rzut", f"Wpisz wyniki rzutów. {_check_plan_text(self.exploration.actors, plan)}")
         return self.state_payload()
 
+    def _advance_pending_npc_time(self) -> None:
+        if self.pending is None or self.pending.npc_time_cost_minutes <= 0:
+            return
+        minutes = self.pending.npc_time_cost_minutes
+        self._advance_scenario_time(minutes, source="npc_interaction")
+        self._add_message(
+            "Upływ czasu",
+            f"Rozmowa zajmuje {minutes} min.",
+        )
+
     def _accept_observation(self) -> dict[str, object]:
         assert self.pending is not None and self.pending.observation is not None
         observation = self.pending.observation
@@ -11214,10 +13148,144 @@ class ExplorationUiSession:
             if self.pending.participant_actor_ids
             else self.lead_actor_id
         )
-        plan = _observation_check_plan(observation, lead_actor_id)
+        visibility: ExplorationVisibility | None = None
+        if observation.sight_based:
+            actor = next(
+                (
+                    candidate
+                    for candidate in self.exploration.actors
+                    if str(candidate.id) == lead_actor_id
+                ),
+                None,
+            )
+            if actor is None:
+                raise ValueError("Nie znaleziono postaci prowadzącej obserwację.")
+            visibility = exploration_visibility(
+                actor,
+                ambient_light=self.current_zone.ambient_light,
+                distance_feet=observation.distance_feet,
+                party=self.exploration.actors,
+            )
+            if not visibility.can_see:
+                raise ValueError(
+                    f"{actor.name} nie widzi celu obserwacji w tej ciemności. "
+                    "Zapal źródło światła albo wybierz postać z odpowiednim zmysłem."
+                )
+        plan = _observation_check_plan(
+            observation,
+            lead_actor_id,
+            visibility=visibility,
+        )
         self.pending = replace(self.pending, stage=PendingStage.ROLL, check_plan=plan)
         self._add_message("Rzut", f"Wpisz wynik rzutu. {_check_plan_text(self.exploration.actors, plan)}")
         return self.state_payload()
+
+    def _advance_party_lights(self, minutes: int) -> None:
+        if minutes <= 0:
+            return
+        actors_before = self.exploration.actors
+        actors_after = tuple(
+            advance_actor_light(actor, minutes)
+            for actor in actors_before
+        )
+        self.exploration = replace(self.exploration, actors=actors_after)
+        for before, after in zip(actors_before, actors_after, strict=True):
+            if before.active_light is None or after.active_light is not None:
+                continue
+            self._add_message(
+                "Źródło światła zgasło",
+                f"{before.name}: {before.active_light.source_name} wypaliło się.",
+            )
+            self._record(
+                "ui_light_source_expired",
+                {
+                    "actor_id": str(before.id),
+                    "item_id": before.active_light.source_item_id,
+                    "source_name": before.active_light.source_name,
+                    "elapsed_minutes": minutes,
+                },
+            )
+
+    def _detect_passive_traps(self) -> None:
+        traps = tuple(
+            trap
+            for trap in self.state.traps
+            if trap.zone_id == self.current_zone.id
+            and trap.detection_dc is not None
+            and trap.passive_detection
+            and trap_state_for(self.state, trap.id).status
+            == ExplorationTrapStatus.HIDDEN
+        )
+        if not traps:
+            return
+        detected: list[tuple[ExplorationTrap, str | None, int | None]] = []
+        for trap in traps:
+            totals: dict[str, int] = {}
+            for actor in self.exploration.actors:
+                if actor.faction != Faction.ALLY or actor.is_defeated():
+                    continue
+                visibility = exploration_visibility(
+                    actor,
+                    ambient_light=self.current_zone.ambient_light,
+                    distance_feet=trap.detection_distance_feet,
+                    party=self.exploration.actors,
+                )
+                if not visibility.can_see:
+                    continue
+                totals[str(actor.id)] = (
+                    passive_skill_score(actor, "perception")
+                    + visibility.passive_perception_adjustment
+                )
+            detection = detect_passive_traps(
+                self.state,
+                zone_id=self.current_zone.id,
+                perception_totals=totals,
+                trap_ids=(trap.id,),
+            )
+            self.state = detection.state
+            detected.extend(
+                (
+                    revealed,
+                    detection.detector_actor_id,
+                    detection.detector_total,
+                )
+                for revealed in detection.revealed_traps
+            )
+        if not detected:
+            return
+        for trap, detector_actor_id, _detector_total in detected:
+            detector = next(
+                (
+                    actor
+                    for actor in self.exploration.actors
+                    if str(actor.id) == detector_actor_id
+                ),
+                None,
+            )
+            detector_name = (
+                detector.name
+                if detector is not None
+                else "Najbardziej spostrzegawcza postać"
+            )
+            self._add_message(
+                "Pasywnie wykryto pułapkę",
+                f"{detector_name} zauważa: {trap.revealed_description}",
+            )
+        self._record(
+            "ui_passive_trap_detection",
+            {
+                "zone_id": self.current_zone.id,
+                "detections": [
+                    {
+                        "trap_id": trap.id,
+                        "detector_actor_id": detector_actor_id,
+                        "perception_total": detector_total,
+                    }
+                    for trap, detector_actor_id, detector_total in detected
+                ],
+                "trap_ids": [trap.id for trap, _, _ in detected],
+            },
+        )
 
     def _accept_trap_action(self) -> dict[str, object]:
         assert self.pending is not None and self.pending.trap is not None
@@ -11299,6 +13367,14 @@ class ExplorationUiSession:
             self._resolve_observation_roll(check_result)
         elif self.pending.kind == PendingKind.TRAP:
             self._resolve_trap_roll(check_result)
+        elif self.pending.kind == PendingKind.SEARCH:
+            self._resolve_exploration_search_roll(inputs)
+        elif self.pending.kind == PendingKind.HIDE:
+            self._resolve_exploration_hide_roll(check_result)
+        elif self.pending.kind == PendingKind.FIXTURE:
+            self._resolve_fixture_roll(check_result)
+        elif self.pending.kind == PendingKind.ZONE_OPTION:
+            self._resolve_zone_option_roll(check_result)
         else:
             self._resolve_npc_roll(check_result)
         if self.pending is not None and self.pending.stage not in {
@@ -11310,6 +13386,119 @@ class ExplorationUiSession:
             self._refresh_pending_encounter()
         self._sync_board_leds()
         return self.state_payload()
+
+    def _resolve_exploration_search_roll(
+        self,
+        inputs: tuple[PartyCheckInput, ...],
+    ) -> None:
+        assert self.pending is not None
+        zone = self.current_zone
+        result = resolve_active_search(self.state, zone, inputs)
+        self.state = result.search.state
+        self._add_message("Wynik przeszukiwania", result.search.message)
+        for trap in result.revealed_traps:
+            self._add_message(
+                "Wykryto pułapkę",
+                f"{trap.name}: {trap.revealed_description}",
+            )
+        self._record(
+            "ui_exploration_search_resolved",
+            {
+                "zone_id": zone.id,
+                "total": result.search.party_check.winning_roll.total,
+                "revealed_point_ids": [
+                    point.id for point in result.search.revealed_points
+                ],
+                "revealed_trap_ids": [
+                    trap.id for trap in result.revealed_traps
+                ],
+                "elapsed_minutes": zone.search_minutes,
+            },
+        )
+        self._advance_scenario_time(
+            zone.search_minutes,
+            source="active_search",
+        )
+
+    def _resolve_zone_option_roll(self, check_result) -> None:
+        assert self.pending is not None
+        option = self.pending.zone_option
+        if option is None:
+            raise ValueError("Brak działania lokacji oczekującego na rzut.")
+        success = bool(check_result.success)
+        flag_key = option.success_flag if success else option.failure_flag
+        if flag_key:
+            self.state = replace(
+                self.state,
+                flags=set_scene_flag(self.state.flags, flag_key, True),
+            )
+        message = (
+            option.success_message
+            if success
+            else option.failure_message
+        ) or (
+            "Test zakończył się sukcesem."
+            if success
+            else "Test zakończył się niepowodzeniem."
+        )
+        self._add_message(
+            option.label,
+            (
+                f"{message} Wynik: {check_result.selected_roll.total}, "
+                f"ST {option.ability_check.dc if option.ability_check else '-'}."
+            ),
+        )
+        self._record(
+            "ui_zone_option_resolved",
+            {
+                "zone_id": self.current_zone.id,
+                "option_id": option.id,
+                "kind": option.kind.value,
+                "success": success,
+                "natural_roll": check_result.selected_roll.natural_roll,
+                "total": check_result.selected_roll.total,
+                "flag_key": flag_key,
+            },
+        )
+        self.board_message = (
+            f"{self.current_zone.name}: rozstrzygnięto „{option.label}”."
+        )
+
+    def _resolve_exploration_hide_roll(self, check_result) -> None:
+        assert self.pending is not None
+        actor = check_result.selected_actor
+        self.state = hide_exploration_actor(
+            self.state,
+            actor,
+            zone_id=self.current_zone.id,
+            check=check_result,
+        )
+        self._add_message(
+            "Ukrycie",
+            (
+                f"{actor.name} zapisuje wynik Stealth "
+                f"{check_result.selected_roll.total}. Wynik zostanie porównany "
+                "z percepcją napotkanych obserwatorów."
+            ),
+        )
+        self._record(
+            "ui_exploration_hide_resolved",
+            {
+                "actor_id": str(actor.id),
+                "zone_id": self.current_zone.id,
+                "natural_roll": check_result.selected_roll.natural_roll,
+                "total": check_result.selected_roll.total,
+            },
+        )
+
+    def _resolve_fixture_roll(self, check_result) -> None:
+        assert self.pending is not None
+        assert self.pending.fixture_action_plan is not None
+        self._commit_fixture_action(
+            self.pending.fixture_action_plan,
+            success=check_result.success,
+            actor_id=str(check_result.selected_actor.id),
+        )
 
     def _resolve_challenge_roll(self, check_result) -> None:
         assert self.pending is not None and self.pending.challenge is not None and self.pending.option is not None
@@ -11851,6 +14040,7 @@ class ExplorationUiSession:
                 natural_roll=check_result.selected_roll.natural_roll,
             )
             self._resolve_structured_npc_outcome(proposal, outcome)
+            self._advance_pending_npc_time()
             return
         success = check_result.success
         message = proposal.success_message if success else proposal.failure_message
@@ -11863,6 +14053,8 @@ class ExplorationUiSession:
             success=success,
             revealed_information_ids=revealed,
         )
+        self._advance_pending_npc_time()
+        self._show_pending_npc_narration(success=success)
 
     def _resolve_structured_npc_outcome(
         self,
@@ -12266,6 +14458,11 @@ class ExplorationUiSession:
                 "actor_name": actor.name,
                 "die_sides": 20,
                 "label": "d20",
+                "ability": plan.ability,
+                "skill": plan.skill,
+                "tool": plan.tool,
+                "tool_label": plan.tool_label,
+                "dc": plan.dc,
                 "modifier_total": instruction.breakdown.modifier_total,
                 "active_modifiers": [
                     _roll_modifier_payload(modifier)
@@ -12405,6 +14602,23 @@ def _build_exploration_setup_steps(environment: tuple[EnvironmentSetupEntry, ...
             )
         )
     return tuple(_split_large_setup_steps(tuple(steps), max_positions=8))
+
+
+def _paper_map_setup_step(zone: ExplorationZone) -> SetupStep | None:
+    paper_map = zone.paper_map
+    if paper_map is None:
+        return None
+    return SetupStep(
+        kind=SetupStepKind.ENVIRONMENT,
+        label=f"papierowa mapa: {zone.name}",
+        positions=(),
+        color=LedColor.MARKER,
+        message=(
+            f"Usuń poprzednią papierową mapę i rozłóż mapę „{zone.name}” "
+            f"({paper_map.width_cm:g} × {paper_map.height_cm:g} cm) na całej "
+            "planszy. Ustaw ją zgodnie ze znacznikami rogów, a potem potwierdź."
+        ),
+    )
 
 
 def _fallen_gate_setup_step() -> SetupStep:
@@ -12583,6 +14797,7 @@ def _encounter_with_session_actor_state(
             hit_dice=session_by_id[str(actor.id)].hit_dice,
             resource_pools=session_by_id[str(actor.id)].resource_pools,
             death_saves=session_by_id[str(actor.id)].death_saves,
+            exhaustion_level=session_by_id[str(actor.id)].exhaustion_level,
             currency=session_by_id[str(actor.id)].currency,
             inventory=persisted_inventory(actor),
         )
@@ -12610,6 +14825,7 @@ def _exploration_with_combat_actor_state(
             inventory=combat_by_id[str(actor.id)].inventory,
             currency=combat_by_id[str(actor.id)].currency,
             death_saves=combat_by_id[str(actor.id)].death_saves,
+            exhaustion_level=combat_by_id[str(actor.id)].exhaustion_level,
         )
         if str(actor.id) in combat_by_id
         else actor
@@ -13183,11 +15399,13 @@ def _combat_actor_payload(
     return {
         "id": str(actor.id),
         "name": actor.name,
-        "portrait_url": _actor_portrait_url(actor),
         "faction": actor.faction.value,
+        "defeated": actor.is_defeated(),
+        "portrait_url": _actor_portrait_url(actor),
         "size": actor.size.value,
         "size_label": creature_size_label_pl(actor.size),
         "damage_affinities": _damage_affinities_payload(actor),
+        "senses": actor.senses.as_payload(),
         "condition_immunities": list(actor.condition_immunities),
         "triggers": [
             {
@@ -13202,6 +15420,8 @@ def _combat_actor_payload(
         "features": [_feature_grant_payload(feature) for feature in actor.features],
         "hp": actor.hp,
         "max_hp": actor.max_hp,
+        "effective_max_hp": effective_max_hit_points(actor),
+        "exhaustion_level": actor.exhaustion_level,
         "temp_hp": actor.temp_hp,
         "ac": combat_armor_class(actor, active_combat_effects),
         "base_ac": actor.ac,
@@ -13374,6 +15594,11 @@ def _condition_save_payload(
         actor,
         saving_throw_ability=ability,
     )
+    request = apply_exhaustion_to_roll_request(
+        actor,
+        request,
+        ExhaustionRollKind.SAVING_THROW,
+    )
     return {
         "condition": condition_state.condition.value,
         "label": condition_label(condition_state.condition),
@@ -13539,10 +15764,17 @@ def _pending_concentration_check_payload(
     active_effects: tuple[ActiveCombatEffect, ...],
 ) -> dict[str, object]:
     actor = _actor_by_string_id_from_state(state, pending.actor_id)
-    modifiers = (
-        *saving_throw_roll_modifiers(actor, "constitution"),
-        *saving_throw_aura_modifiers(state.actors, actor),
+    request = apply_exhaustion_to_roll_request(
+        actor,
+        D20RollRequest(
+            modifiers=(
+                *saving_throw_roll_modifiers(actor, "constitution"),
+                *saving_throw_aura_modifiers(state.actors, actor),
+            )
+        ),
+        ExhaustionRollKind.SAVING_THROW,
     )
+    modifiers = request.modifiers
     modifier = sum(item.value for item in modifiers)
     effects = tuple(
         effect for effect in active_effects if effect.id in pending.effect_ids
@@ -13554,6 +15786,7 @@ def _pending_concentration_check_payload(
         "damage": pending.damage,
         "dc": pending.dc,
         "modifier": modifier,
+        "roll_mode": request.mode.value,
         "modifier_components": [_roll_modifier_payload(item) for item in modifiers],
         "instruction": (
             f"{actor.name} otrzymał {pending.damage} obrażeń. "
@@ -13621,6 +15854,7 @@ def _attack_source_payload(source, actor: Actor | None = None) -> dict[str, obje
         "spell_level": source.spell_level,
         "cast_level": source.cast_level,
         "upcast_damage_dice_per_level": source.upcast_damage_dice_per_level,
+        "cantrip_damage_dice_per_tier": source.cantrip_damage_dice_per_tier,
         "available_cast_levels": (
             list(available_cast_levels(actor, source.spell_level))
             if actor is not None
@@ -14044,7 +16278,7 @@ def _combat_action_payload(action, actor: Actor | None = None) -> dict[str, obje
         "resource_label": (
             f"ładunki {charges_current}/{charges_maximum}"
             if charges_maximum is not None
-            else _source_resource_label(action)
+            else _source_resource_label(action, actor)
         ),
         "mechanic": action_mechanic_payload(combat_action_mechanic_from_definition(action)),
     }
@@ -14143,7 +16377,7 @@ def _pending_player_attack_payload(
         "two_weapon_bonus": pending.two_weapon_bonus,
         "attacker": _combat_actor_payload(attacker, active_combat_effects),
         "target": _combat_actor_payload(target, active_combat_effects),
-        "source": _attack_source_payload(source),
+        "source": _attack_source_payload(source, attacker),
         "attack_instruction": instruction.message,
         "attack_modifier": instruction.breakdown.modifier_total,
         "attack_mode": instruction.mode.value,
@@ -14235,7 +16469,7 @@ def _pending_area_spell_payload(
     return {
         "stage": pending.stage,
         "caster": _combat_actor_payload(caster, active_combat_effects),
-        "source": _attack_source_payload(source),
+        "source": _attack_source_payload(source, caster),
         "origin": [pending.origin.col, pending.origin.row],
         "anchor": [pending.anchor.col, pending.anchor.row],
         "area_positions": [[position.col, position.row] for position in pending.area_positions],
@@ -14291,7 +16525,7 @@ def _pending_enemy_opportunity_attack_payload(
         "target": _combat_actor_payload(target, active_combat_effects),
         "threats": threats,
         "current_index": pending.current_index,
-        "source": _attack_source_payload(source),
+        "source": _attack_source_payload(source, attacker),
         "attack_instruction": instruction.message,
         "attack_modifier": instruction.breakdown.modifier_total,
         "attack_mode": instruction.mode.value,
@@ -14369,7 +16603,7 @@ def _pending_ready_attack_payload(
         "trigger_label": _ready_trigger_label(pending.trigger),
         "attacker": _combat_actor_payload(attacker, active_combat_effects),
         "target": _combat_actor_payload(target, active_combat_effects),
-        "source": _attack_source_payload(source),
+        "source": _attack_source_payload(source, attacker),
         "attack_instruction": instruction.message,
         "attack_modifier": instruction.breakdown.modifier_total,
         "attack_mode": instruction.mode.value,
@@ -14693,7 +16927,7 @@ def _enemy_turn_intent_payload(
         payload["target_position"] = [intent.target.position.col, intent.target.position.row]
     if source is not None:
         instruction = roll_instruction(source.attack_roll_request)
-        payload["source"] = _attack_source_payload(source)
+        payload["source"] = _attack_source_payload(source, intent.enemy)
         payload["attack_instruction"] = instruction.message
         payload["attack_modifier"] = instruction.breakdown.modifier_total
         payload["damage_instruction"] = _damage_roll_instruction(source)
@@ -14745,7 +16979,7 @@ def _enemy_turn_preview_payload(
         payload["target_position"] = [result.target.position.col, result.target.position.row]
     if source is not None:
         instruction = roll_instruction(source.attack_roll_request)
-        payload["source"] = _attack_source_payload(source)
+        payload["source"] = _attack_source_payload(source, result.enemy)
         payload["attack_instruction"] = instruction.message
         payload["attack_modifier"] = instruction.breakdown.modifier_total
         payload["damage_instruction"] = _damage_roll_instruction(source)
@@ -14946,7 +17180,6 @@ def _movement_payload(result, state: CombatState, actor: Actor) -> dict[str, obj
                 "col": tile.col,
                 "row": tile.row,
                 "cost_feet": result.costs_by_tile[tile],
-                "path": [[position.col, position.row] for position in result.paths_by_tile.get(tile, ())],
             }
             for tile in destinations
         ],
@@ -15193,6 +17426,33 @@ def _challenge_check_plan(
     )
 
 
+def _zone_option_check_plan(
+    option: ExplorationOption,
+    actor_id: str,
+) -> ExplorationCheckPlan:
+    check = option.ability_check
+    if check is None:
+        raise ValueError(f"Działanie {option.id} nie definiuje testu.")
+    return ExplorationCheckPlan(
+        participants=CheckParticipants.SINGLE_ACTOR,
+        aggregation=CheckAggregation.LEAD_RESULT,
+        consequence_targets=(ConsequenceTarget.SCENE,),
+        ability=check.ability,
+        skill=check.skill,
+        tool=check.tool,
+        tool_label=check.tool or "",
+        dc=check.dc,
+        lead_actor_id=actor_id,
+        reason_for_players=option.description or option.label,
+        roll_modifiers_by_actor_id=((actor_id, check.modifiers),),
+        mechanic_payload={
+            "id": "authored_zone_option",
+            "label": option.label,
+            "option_id": option.id,
+        },
+    )
+
+
 def _npc_check_plan(
     proposal: NpcInteractionProposal,
     lead_actor_id: str,
@@ -15225,7 +17485,22 @@ def _npc_check_plan(
 def _observation_check_plan(
     observation: ExplorationObservation,
     lead_actor_id: str,
+    *,
+    visibility: ExplorationVisibility | None = None,
 ) -> ExplorationCheckPlan:
+    visibility_roll_mode = (
+        visibility.perception_roll_mode
+        if visibility is not None and observation.skill == "perception"
+        else RollMode.NORMAL
+    )
+    mechanic_payload: dict[str, object] = {
+        "id": "graded_observation",
+        "label": "Stopniowane rozpoznanie",
+        "participants": observation.participants.value,
+        "aggregation": observation.aggregation.value,
+    }
+    if visibility is not None:
+        mechanic_payload["visibility"] = visibility.as_payload()
     return ExplorationCheckPlan(
         participants=observation.participants,
         aggregation=observation.aggregation,
@@ -15235,13 +17510,11 @@ def _observation_check_plan(
         dc=observation.dc,
         lead_actor_id=lead_actor_id,
         reason_for_players=observation.description,
-        roll_mode=observation.roll_mode,
-        mechanic_payload={
-            "id": "graded_observation",
-            "label": "Stopniowane rozpoznanie",
-            "participants": observation.participants.value,
-            "aggregation": observation.aggregation.value,
-        },
+        roll_mode=_combined_roll_mode(
+            observation.roll_mode,
+            (visibility_roll_mode,),
+        ),
+        mechanic_payload=mechanic_payload,
     )
 
 
@@ -15334,6 +17607,11 @@ def _actor_check_request(actor: Actor, plan: ExplorationCheckPlan) -> D20RollReq
             *_plan_roll_modifiers(actor, plan),
         ),
     )
+    request = apply_exhaustion_to_roll_request(
+        actor,
+        request,
+        ExhaustionRollKind.ABILITY_CHECK,
+    )
     return armor_skill_roll_request(actor, plan.skill or "", request)
 
 
@@ -15348,6 +17626,28 @@ def _manual_rolls_from_payload(raw_roll: object, roll_mode: RollMode) -> tuple[i
     if roll_mode != RollMode.NORMAL and natural_roll_2 is None:
         raise ValueError("Ten rzut wymaga wpisania dwóch wyników d20.")
     return natural_roll, natural_roll_2
+
+
+def _travel_d20_input(raw_roll: object) -> TravelD20Input:
+    if isinstance(raw_roll, Mapping):
+        natural_roll = int(
+            raw_roll.get("natural_roll")
+            or raw_roll.get("roll")
+            or 0
+        )
+        raw_second = (
+            raw_roll.get("natural_roll_2")
+            or raw_roll.get("roll_2")
+        )
+        natural_roll_2 = (
+            int(raw_second)
+            if raw_second not in (None, "")
+            else None
+        )
+    else:
+        natural_roll = int(raw_roll)
+        natural_roll_2 = None
+    return TravelD20Input(natural_roll, natural_roll_2)
 
 
 def _actors_for_plan(actors: tuple[Actor, ...], plan: ExplorationCheckPlan) -> tuple[Actor, ...]:
@@ -15484,7 +17784,10 @@ def _player_facing_gm_validation_message(reason: str) -> str:
             f"Brakuje komponentu {missing_text}. Możecie wskazać dodatkowy element albo użyć "
             "tego materiału bezpośrednio, bez budowania osobnej konstrukcji."
         )
-    return f"Nie mogę jeszcze rozstrzygnąć tej deklaracji: {reason}"
+    return (
+        "Nie udało się bezpiecznie zinterpretować tej deklaracji. "
+        "Spróbujcie opisać krócej sam cel, używany przedmiot i sposób działania."
+    )
 
 
 def _pending_explanation(pending: PendingInteraction) -> str:
@@ -15579,6 +17882,8 @@ def _zone_payload(zone: ExplorationZone, asset_root: Path | None = None, state: 
         "description": zone.description,
         "summary": zone.llm_context.summary,
         "color": led_color_name_pl(zone.color),
+        "ambient_light": zone.ambient_light.value,
+        "ambient_light_label": _light_level_label(zone.ambient_light),
         "available": zone_is_ui_available(state, zone) if state is not None else True,
     }
     if state is not None and not zone_is_ui_available(state, zone):
@@ -15587,7 +17892,51 @@ def _zone_payload(zone: ExplorationZone, asset_root: Path | None = None, state: 
         image_path = zone.image.lstrip("/")
         payload["image"] = zone.image
         payload["image_url"] = f"/scenario-assets/{image_path}"
+    if zone.paper_map is not None:
+        payload["paper_map"] = zone.paper_map.as_payload()
     return payload
+
+
+def _zone_option_is_completed(
+    option: ExplorationOption,
+    flags: SceneFlags,
+) -> bool:
+    completion_flags = tuple(
+        flag
+        for flag in (option.success_flag, option.failure_flag)
+        if flag is not None
+    )
+    return bool(completion_flags) and any(
+        bool(scene_flag(flags, flag, False))
+        for flag in completion_flags
+    )
+
+
+def _zone_option_payload(
+    option: ExplorationOption,
+    *,
+    completed: bool,
+) -> dict[str, object]:
+    check = option.ability_check
+    return {
+        "id": option.id,
+        "label": option.label,
+        "description": option.description,
+        "kind": option.kind.value,
+        "color": led_color_name_pl(option.color),
+        "completed": completed,
+        "message": option.message,
+        "check": (
+            {
+                "ability": check.ability,
+                "skill": check.skill,
+                "tool": check.tool,
+                "dc": check.dc,
+            }
+            if check is not None
+            else None
+        ),
+    }
 
 
 def _single_zone_feedback(zone: ExplorationZone | None) -> LedFeedback:
@@ -15638,7 +17987,7 @@ def _point_payload(
             "dialogue_intro": point.npc_interaction.dialogue_intro,
             "runtime_state": npc_state.as_payload() if npc_state is not None else None,
             "goals": [
-                goal.as_payload()
+                _npc_goal_payload(goal, point.npc_interaction)
                 for goal in (
                     NpcGoalExecutionPlanner().available_goals(
                         npc=point.npc_interaction,
@@ -15650,6 +17999,30 @@ def _point_payload(
                 )
             ],
         }
+    return payload
+
+
+def _npc_goal_payload(
+    goal: InteractionGoal,
+    npc: NpcInteraction,
+) -> dict[str, object]:
+    payload = goal.as_payload()
+    permission = next(
+        (
+            candidate
+            for intent in goal.intent_ids
+            for candidate in (npc.policy.intent_permission(intent),)
+            if candidate is not None and candidate.uses_social_reaction
+        ),
+        None,
+    )
+    if permission is not None:
+        payload["social_skill_options"] = [
+            skill
+            for skill in SOCIAL_CHECK_SKILLS
+            if not npc.policy.allowed_skills
+            or skill in npc.policy.allowed_skills
+        ]
     return payload
 
 
@@ -15741,6 +18114,8 @@ def _exploration_actor_payload(
     return {
         "id": str(actor.id),
         "name": actor.name,
+        "faction": actor.faction.value,
+        "defeated": actor.is_defeated(),
         "portrait_url": _actor_portrait_url(actor),
         "ac": effective_armor_class(actor),
         "base_ac": actor.ac,
@@ -15748,9 +18123,12 @@ def _exploration_actor_payload(
         "size": actor.size.value,
         "size_label": creature_size_label_pl(actor.size),
         "damage_affinities": _damage_affinities_payload(actor),
+        "senses": actor.senses.as_payload(),
         "condition_immunities": list(actor.condition_immunities),
         "hp": actor.hp,
         "max_hp": actor.max_hp,
+        "effective_max_hp": effective_max_hit_points(actor),
+        "exhaustion_level": actor.exhaustion_level,
         "temp_hp": actor.temp_hp,
         "speed_feet": effective_speed_feet(actor),
         "base_speed_feet": actor.speed_feet,
@@ -15936,6 +18314,38 @@ def _duration_minutes_label(minutes: int) -> str:
     if hours:
         return f"{hours} godz."
     return f"{remainder} min"
+
+
+def _light_level_label(level: LightLevel) -> str:
+    return {
+        LightLevel.BRIGHT: "jasne światło",
+        LightLevel.DIM: "półmrok",
+        LightLevel.DARKNESS: "ciemność",
+    }[level]
+
+
+def _scenario_clock_payload(
+    start_hour: int,
+    elapsed_minutes: int,
+) -> dict[str, object]:
+    total_minutes = (start_hour * 60 + max(0, elapsed_minutes)) % (24 * 60)
+    hour, minute = divmod(total_minutes, 60)
+    if 5 <= hour < 8:
+        phase = "świt"
+    elif 8 <= hour < 18:
+        phase = "dzień"
+    elif 18 <= hour < 21:
+        phase = "zmierzch"
+    else:
+        phase = "noc"
+    time_label = f"{hour:02d}:{minute:02d}"
+    return {
+        "hour": hour,
+        "minute": minute,
+        "phase": phase,
+        "time": time_label,
+        "label": f"{time_label} — {phase}",
+    }
 
 
 def _scene_status_payload(state: ExplorationState) -> list[dict[str, str]]:

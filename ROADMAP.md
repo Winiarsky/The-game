@@ -237,7 +237,8 @@ Kolejność:
 
 ## Etap M7: Pełny Podsystem Magii
 
-Status: ukończony w zakresie rodzin mechanicznych M7.1–M7.11: wersjonowany schemat czaru,
+Status: ukończony w zakresie rodzin mechanicznych M7.1–M7.11 oraz pierwszej partii
+contentu M7.12: wersjonowany schemat czaru,
 referencje z contentu, profile prepared/known/spellbook, V/S/M i focusy,
 kosztowne oraz zużywane komponenty, jawny wybór poziomu slotu, skalowanie kości
 obrażeń i leczenia, podstawowe casting time, rytuały eksploracyjne, wspólny
@@ -248,7 +249,8 @@ przywołania jako dynamiczni aktorzy, teleport, wymuszony push/pull, generyczne
 debuffy z pierwszym i powtarzanym save'em oraz rozpraszanie efektów czarów.
 Dispel automatycznie kończy efekty nie wyższe od użytego slotu, a silniejsze
 wymagają fizycznego testu cechy rzucania czarów. Snapshot v18 utrwala pochodzenie
-i poziom czaru dla aktywnych efektów oraz stanów. Następny przegląd dotyczy M8.
+i poziom czaru dla aktywnych efektów oraz stanów. Snapshot v19 dodaje jawny poziom
+aktora i skalowanie cantripów 5/11/17.
 
 Kolejność:
 
@@ -270,17 +272,74 @@ powinien tworzyć jednorazowego przepływu w UI.
 
 ## Etap M8: Eksploracja, Sceny Społeczne I Cykl Przygody
 
+Status: ukończony. M8.1 domyka wspólne routowanie guarded flow graph także w
+terminalowym `demo_exploration_scene`: gracz wybiera jawny aktywny cel, a contentowa
+krawędź narzuca profil rozstrzygnięcia. LLM opisuje metodę, lecz nie wybiera
+skutków innej trasy na podstawie tagów. M8.2 migruje drugą scenę społeczną:
+sołtys Bren ma osobny flow NPC z jawnymi celami informacji i negocjacji, ukryciem
+nieaktualnej negocjacji po zdobyciu tropu oraz terminalnym stanem odmowy. M8.3
+zastępuje tekstową opcję plotki w karczmie właściwą rozmową z Olanem: autorska
+trasa informacji nadaje trop zadania, znika po wykorzystaniu, a zwykła rozmowa
+pozostaje dostępna. M8.4 rozdziela trop, przyjęcie zadania i gotowość do drogi,
+a następnie wystawia typowane wyjście z `forest_road` do
+`abandoned_watchtower`. Wyjście waliduje flagi i lokację, kończy scenę oraz
+zapisuje kompletny snapshot źródłowy jako bezpieczny handoff. Automatyczne
+scalanie wielu snapshotów pozostaje częścią stanu kampanii w M9. M8.5 dodaje
+wspólny zegar scenariusza: przejścia między strefami, rozmowy, odpoczynek,
+rytuały, crafting i zakładanie pancerza przesuwają ten sam czas, a autorskie
+progi uruchamiają jednorazowe konsekwencje. Wioska rozróżnia szybkie wyjście od
+zwłoki prowadzącej do zmierzchu i przygotowania obrony strażnicy. M8.6 dodaje
+typowane oświetlenie stref i zmysły aktorów, wspólny evaluator widzenia,
+mechaniczne utrudnienie Perception w półmroku, blokadę wzroku w ciemności,
+zasięgi i wypalanie źródeł światła oraz użycie tych reguł w obserwacjach i
+skradaniu przed encounterem. M8.7 uruchamia aktywny Search strefy jako lokalny
+flow bez LLM, rozlicza czas, światło, ukryte punkty i pułapki z osobnym detection
+DC. Passive Perception może wykryć pułapkę przy wejściu, a wynik Hide zapisany w
+eksploracji jest po setupie porównywany z konkretnymi obserwatorami encountera.
+M8.8 typuje fixture'y jako drzwi, pojemniki, przeszkody albo zwykłe obiekty.
+Zamki, otwarcie, loot, AC, HP i próg obrażeń mają trwały stan snapshotu, a
+zamknięte obiekty są projektowane do encountera jako blokady i cover. Otwarcie
+lub zniszczenie w eksploracji usuwa te właściwości bez duplikowania stanu walki.
+M8.9 domyka podróż pomiędzy wioską i strażnicą. Gracze wybierają szybkie,
+normalne albo wolne tempo, wyznaczają nawigatora i wpisują fizyczne rzuty.
+Nieudana nawigacja nie blokuje scenariusza, lecz dodaje autorskie opóźnienie.
+Podróż ponad bezpieczny limit uruchamia kolejne Constitution saves wymuszonego
+marszu, a exhaustion pozostaje na aktorze w eksploracji, walce i snapshotcie.
+M8.10 audytuje i domyka istniejący system społeczny. Trwały stan NPC, tabela
+reakcji 2014, limity prób, cztery poziomy wyniku i jawne reakcje przejść pozostają
+deterministyczne. UI przekazuje graczom wybór Persuasion, Deception albo
+Intimidation; LLM klasyfikuje ryzyko prośby i narrację, ale nie wybiera tego
+podejścia ani ST. M8.11 oddziela improwizowany crafting sceny od formalnego
+rzemiosła w downtime. Receptura wskazuje warsztat, produkt i wymagane narzędzia;
+silnik wymaga biegłości oraz posiadania narzędzi, pobiera połowę wartości
+rynkowej materiałów, liczy pełne dni po 5 gp postępu i dodaje trwały mundane
+item. Cały czas pracy przechodzi przez wspólny zegar scenariusza.
+M8.12 domyka dwukierunkowy lifecycle warunków pomiędzy eksploracją i walką.
+Warunek zachowuje źródło oraz czas trwania przy wejściu do encountera i powrocie;
+granice encountera, short/long resta oraz scenariusza używają tych samych
+`EffectEvent`. Warunki lokalne dla walki i nieważne chwyty wygasają, natomiast
+np. zatrucie `until_short_rest` pozostaje na bohaterze po zwycięstwie.
+M8.13 domyka przejścia między scenami: continuation wybiera po podróży pierwszą
+pasującą autorską gałąź `success`, `partial_success` albo `fail_forward`,
+podsumowuje cele źródłowe i wystawia zweryfikowane flagi oraz efekty dla sceny
+docelowej. Ich zastosowanie do nowego snapshotu pozostaje jawną odpowiedzialnością
+warstwy kampanii M9. Końcowy playtest `village_square_mvp` domknął warstwę
+gracza: autorskie opcje stref są wykonywalne z głównego widoku, cel pokazuje
+kamienie milowe, setup NPC i komunikaty planszy używają bieżącej lokacji, a
+continuation ma widoczny formularz tempa, nawigatora i fizycznych rzutów zamiast
+technicznych promptów oraz identyfikatorów.
+
 Obecny challenge/freeform MVP pozostaje podstawą. Kolejność rozszerzeń:
 
-1. czas scenariusza, odpoczynki i zużycie zasobów,
-2. light, darkness, senses i stealth/perception,
-3. ukrywanie, poszukiwanie, pułapki i hazards,
-4. drzwi, zamki, pojemniki, cover i obiekty niszczalne,
-5. podróż, tempo, nawigacja i exhaustion, jeśli należą do ustalonego zakresu,
-6. conversation state, attitude i testy społeczne bez zastępowania decyzji graczy,
-7. downtime oraz crafting tylko wtedy, gdy wymaga tego docelowy zakres,
-8. wspólne efekty eksploracji, walki i scenariusza,
-9. rozgałęzienia, cele, porażki fail-forward i konsekwencje między scenami.
+1. ~~czas scenariusza, odpoczynki i zużycie zasobów~~ — ukończone w M8.5,
+2. ~~light, darkness, senses i stealth/perception~~ — ukończone w M8.6,
+3. ~~ukrywanie, poszukiwanie, pułapki i hazards~~ — ukończone w M8.7,
+4. ~~drzwi, zamki, pojemniki, cover i obiekty niszczalne~~ — ukończone w M8.8,
+5. ~~podróż, tempo, nawigacja i exhaustion~~ — ukończone w M8.9,
+6. ~~conversation state, attitude i testy społeczne bez zastępowania decyzji graczy~~ — ukończone w M8.10,
+7. ~~downtime i formalny crafting~~ — referencyjny pełny vertical slice ukończony w M8.11,
+8. ~~wspólne efekty eksploracji, walki i scenariusza~~ — dwukierunkowe warunki i granice lifecycle ukończone w M8.12,
+9. ~~rozgałęzienia, cele, porażki fail-forward i konsekwencje między scenami~~ — uporządkowane outcome branches i typowany handoff ukończone w M8.13.
 
 LLM pozostaje klasyfikatorem deklaracji i pomocnikiem narracyjnym. Nie staje się
 źródłem reguł ani bezpośrednim wykonawcą zmian stanu.

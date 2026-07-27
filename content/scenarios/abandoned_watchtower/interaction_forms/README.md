@@ -1,6 +1,14 @@
 # Formularze Interakcji: Opuszczona Strażnica
 
-Ten folder jest roboczym miejscem do przeprojektowania istniejących interakcji scenariusza przez formularze.
+Ten folder zawiera historyczne formularze projektowe użyte podczas
+przeprojektowania interakcji. Nie jest źródłem prawdy runtime.
+
+Aktualne, wykonywalne definicje znajdują się w `content/scenarios/abandoned_watchtower/`
+i są walidowane przez loader oraz testy. Pozostawione w formularzach znaczniki
+`TODO` opisują pierwotne pytania projektowe; nie oznaczają brakującej mechaniki,
+jeżeli odpowiadające pole istnieje już w JSON. Przy dalszej rozbudowie najpierw
+aktualizujemy content i test, a formularz tylko wtedy, gdy nadal służy jako brief
+autorski.
 
 Wypełnij pliki Markdown po ludzku. Na podstawie tych formularzy kolejny etap powinien wygenerować albo zaktualizować:
 
@@ -12,7 +20,7 @@ Wypełnij pliki Markdown po ludzku. Na podstawie tych formularzy kolejny etap po
 - brakujące prymitywy runtime,
 - testy jednostkowe i manualne.
 
-## Formularze Do Wypełnienia
+## Formularze Referencyjne
 
 ### Wyzwania
 

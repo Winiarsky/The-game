@@ -6,6 +6,9 @@ from enum import Enum
 from .models import NpcAttitude
 
 
+SOCIAL_CHECK_SKILLS = ("persuasion", "deception", "intimidation")
+
+
 class SocialRequestRisk(str, Enum):
     """Risk an NPC accepts when fulfilling a player's request."""
 

@@ -4,7 +4,13 @@ from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import TYPE_CHECKING, Callable
 
-from dnd_board_game.actors import Actor, ActorResourcePool, DeathSaveState, HitDicePool, RecoveryPeriod
+from dnd_board_game.actors import (
+    Actor,
+    ActorResourcePool,
+    DeathSaveState,
+    HitDicePool,
+    RecoveryPeriod,
+)
 
 from .abilities import ability_modifier
 
@@ -86,9 +92,12 @@ def complete_long_rest(
     preparation = actor.spell_preparation
     if preparation is not None:
         preparation = replace(preparation, confirmed=False)
+    exhaustion_level = max(0, actor.exhaustion_level - 1)
+    restored_max_hp = _effective_max_hit_points(actor, exhaustion_level)
     updated = replace(
         actor,
-        hp=actor.max_hp,
+        hp=restored_max_hp,
+        exhaustion_level=exhaustion_level,
         temp_hp=0,
         spell_slots=slots,
         spell_preparation=preparation,
@@ -102,7 +111,7 @@ def complete_long_rest(
         updated,
         RestType.LONG_REST,
         recovered,
-        hp_recovered=max(0, actor.max_hp - actor.hp),
+        hp_recovered=max(0, restored_max_hp - actor.hp),
         hit_dice_recovered=recovered_hit_dice,
         item_charge_recoveries=charges.recoveries,
     )
@@ -124,7 +133,7 @@ def spend_hit_die(actor: Actor, *, die_sides: int, natural_roll: int) -> HitDieS
         raise ValueError(f"{actor.name} nie ma dostępnej Hit Die d{die_sides}.")
     modifier = ability_modifier(actor.ability_scores.constitution)
     healing_total = max(0, natural_roll + modifier)
-    hp_after = min(actor.max_hp, actor.hp + healing_total)
+    hp_after = min(_effective_max_hit_points(actor), actor.hp + healing_total)
     pools[pool_index] = replace(pools[pool_index], remaining=pools[pool_index].remaining - 1)
     updated = replace(
         actor,
@@ -172,3 +181,8 @@ def _recover_long_rest_hit_dice(actor: Actor) -> tuple[tuple[HitDicePool, ...], 
         pools.append(replace(pool, remaining=pool.remaining + amount))
         recovered += amount
     return tuple(pools), recovered
+
+
+def _effective_max_hit_points(actor: Actor, exhaustion_level: int | None = None) -> int:
+    level = actor.exhaustion_level if exhaustion_level is None else exhaustion_level
+    return actor.max_hp // 2 if level >= 4 else actor.max_hp

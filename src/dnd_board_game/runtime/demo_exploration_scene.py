@@ -12,6 +12,10 @@ from dataclasses import dataclass, replace
 from enum import StrEnum
 from pathlib import Path
 
+from dnd_board_game.application import (
+    ExplorationGoalRoute,
+    ExplorationInteractionFlowService,
+)
 from dnd_board_game.actors import Actor, ability_check_roll_modifiers
 from dnd_board_game.combat import SceneFlags, SetupVisibility, objective_status_after_flags, scene_flag, set_scene_flag
 from dnd_board_game.exploration import (
@@ -21,6 +25,7 @@ from dnd_board_game.exploration import (
     ExplorationChallenge,
     ExplorationCheckPlan,
     ExplorationChallengeOption,
+    ExplorationFlowRouteKind,
     ExplorationPoint,
     ExplorationResource,
     ExplorationState,
@@ -138,6 +143,7 @@ def run_demo(
         resources=exploration.resources,
         inventory_resource_ids=exploration.initial_resource_ids,
         merchants=exploration.merchants,
+        clock_policy=exploration.clock_policy,
     )
     messages: list[str] = [f"Scenariusz eksploracji: {exploration.scenario_name}."]
     _print_section(messages[-1])
@@ -293,6 +299,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--selected-actor", action="append", default=[])
     parser.add_argument("--gm-classifier", choices=("auto", "none", "groq", "gemini"), default="auto")
     parser.add_argument("--freeform-action", default="")
+    parser.add_argument(
+        "--goal-id",
+        default="",
+        help="Jawny cel aktywnego flow graphu używany przez deklarację freeform.",
+    )
     parser.add_argument("--groq-model", default=None)
     parser.add_argument("--gemini-model", default=None)
     parser.add_argument("--gm-dry-run", action="store_true", default=False)
@@ -740,6 +751,75 @@ def _handle_freeform_actions(
     return state, tuple(messages), False
 
 
+def _selected_freeform_goal_route(
+    args: argparse.Namespace,
+    exploration: LoadedExploration,
+    state: ExplorationState,
+    challenge: ExplorationChallenge,
+    observer: SessionObserver,
+) -> ExplorationGoalRoute:
+    flow_service = ExplorationInteractionFlowService()
+    available_goals = flow_service.available_goals(
+        challenge=challenge,
+        flows=exploration.flows,
+        flags=state.flags,
+    )
+    requested_goal_id = str(getattr(args, "goal_id", "") or "").strip()
+    if not requested_goal_id:
+        if len(available_goals) == 1:
+            requested_goal_id = available_goals[0].id
+        elif args.interactive_freeform and sys.stdin.isatty():
+            _print_section(
+                "Cel deklaracji",
+                "\n".join(
+                    f"{index}. {goal.label} (`{goal.id}`)"
+                    for index, goal in enumerate(available_goals, start=1)
+                ),
+            )
+            selected = _read_int_or_default(
+                "Wybierz numer celu: ",
+                1,
+            )
+            if not 1 <= selected <= len(available_goals):
+                raise ValueError("Wybrano cel spoza listy aktywnych tras.")
+            requested_goal_id = available_goals[selected - 1].id
+        else:
+            available = ", ".join(goal.id for goal in available_goals) or "brak"
+            raise ValueError(
+                "Deklaracja freeform wymaga jawnego `--goal-id`; "
+                f"aktywne cele: {available}."
+            )
+    route = flow_service.route_for_goal(
+        challenge=challenge,
+        flows=exploration.flows,
+        goal_id=requested_goal_id,
+        flags=state.flags,
+    )
+    if route is None:
+        available = ", ".join(goal.id for goal in available_goals) or "brak"
+        raise ValueError(
+            f"Cel {requested_goal_id!r} nie jest aktywną trasą; aktywne cele: {available}."
+        )
+    if route.route_kind != ExplorationFlowRouteKind.CHALLENGE_OPTION:
+        raise ValueError(
+            f"Cel {route.goal.id!r} prowadzi przez {route.route_kind.value}, "
+            "a terminalowy harness freeform obsługuje obecnie trasę challenge_option."
+        )
+    observer.record(
+        "exploration_flow_route_selected",
+        {
+            "challenge_id": challenge.id,
+            "goal_id": route.goal.id,
+            "transition_id": (
+                route.transition.id if route.transition is not None else None
+            ),
+            "route_kind": route.route_kind.value,
+            "route_ref": route.resolution_option_id,
+        },
+    )
+    return route
+
+
 def _handle_freeform_action_once(
     args: argparse.Namespace,
     exploration: LoadedExploration,
@@ -776,6 +856,29 @@ def _handle_freeform_action_once(
             player_action=freeform_action,
             declaration_thread=_llm_declaration_thread(declaration_thread),
             active_preparation_effects=_llm_preparation_effects(active_preparation_effects),
+            actors=exploration.actors,
+            crafting_policy=exploration.crafting_policy,
+            observations=exploration.observations,
+        )
+        goal_route = _selected_freeform_goal_route(
+            args,
+            exploration,
+            state,
+            request.challenge,
+            observer,
+        )
+        request = replace(
+            request,
+            selected_goal_id=goal_route.goal.id,
+            selected_flow_transition_id=(
+                goal_route.transition.id
+                if goal_route.transition is not None
+                else None
+            ),
+            selected_flow_route_kind=goal_route.route_kind.value,
+            selected_flow_option_id=goal_route.resolution_option_id,
+            selected_flow_observation_ids=goal_route.observation_ids,
+            selected_check_participants=goal_route.goal.check_participants,
         )
         observer.record(
             "gm_classifier_requested",
@@ -852,7 +955,9 @@ def _handle_freeform_action_once(
         option = apply_goal_resolution_profile(
             challenge_option_from_validated_proposal(validated),
             challenge=validated.challenge,
-            selected_goal_id=None,
+            selected_goal_id=goal_route.goal.id,
+            resolution_option_id=goal_route.resolution_option_id,
+            selected_check_participants=goal_route.goal.check_participants,
             player_action=freeform_action,
             state=state,
         )

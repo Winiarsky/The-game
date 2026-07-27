@@ -10,10 +10,13 @@ from dnd_board_game.exploration import (
     ExplorationState,
     ExplorationZone,
     PendingEncounter,
+    ScenarioClockEvent,
+    TimedMagicEffect,
     challenge_state_for,
     set_party_zone,
     visible_exploration_points,
     zone_is_available,
+    advance_exploration_time,
 )
 
 
@@ -60,6 +63,9 @@ class LocationTransition:
     message_body: str = ""
     event_type: str = ""
     event_payload: tuple[tuple[str, object], ...] = ()
+    elapsed_minutes: int = 0
+    expired_magic_effects: tuple[TimedMagicEffect, ...] = ()
+    triggered_clock_events: tuple[ScenarioClockEvent, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -227,16 +233,38 @@ class ExplorationFlowService:
         destination = next((zone for zone in travel_options if zone.id == zone_id), None)
         if destination is None:
             raise ValueError("Ta lokacja nie jest teraz dostępna.")
+        time_advance = advance_exploration_time(
+            set_party_zone(state, destination),
+            destination.travel_minutes,
+        )
         return LocationTransition(
-            state=set_party_zone(state, destination),
+            state=time_advance.state,
             stage=ExplorationFlowStage.LOCATION_ACTIVE,
             preview_zone_id="",
             active_point_id="",
-            board_message="",
+            board_message=(
+                f"Drużyna przechodzi do lokacji: {destination.name}. "
+                "Wybierzcie punkt albo działanie dostępne w tej lokacji."
+            ),
             message_title="Przejście",
-            message_body=f"Drużyna przechodzi z {current_zone.name} do lokacji: {destination.name}.",
+            message_body=(
+                f"Drużyna przechodzi z {current_zone.name} do lokacji: "
+                f"{destination.name}."
+                + (
+                    f" Mija {destination.travel_minutes} min."
+                    if destination.travel_minutes
+                    else ""
+                )
+            ),
             event_type="ui_zone_traveled",
-            event_payload=(("from_zone_id", current_zone.id), ("to_zone_id", destination.id)),
+            event_payload=(
+                ("from_zone_id", current_zone.id),
+                ("to_zone_id", destination.id),
+                ("elapsed_minutes", destination.travel_minutes),
+            ),
+            elapsed_minutes=destination.travel_minutes,
+            expired_magic_effects=time_advance.expired_effects,
+            triggered_clock_events=time_advance.triggered_clock_events,
         )
 
     def select_point(

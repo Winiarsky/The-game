@@ -21,6 +21,7 @@ from dnd_board_game.rules import (
     D20RollInput,
     D20RollRequest,
     D20RollResult,
+    EffectDuration,
     RollMode,
     RollModifier,
     RollModifierType,
@@ -29,6 +30,7 @@ from dnd_board_game.rules import (
     resolve_d20_roll,
 )
 from dnd_board_game.world import Coordinate
+from .visibility import LightLevel
 
 
 class SceneMode(StrEnum):
@@ -49,7 +51,16 @@ class FixtureOperation(StrEnum):
     MOVE = "move"
     OPEN = "open"
     CLOSE = "close"
+    UNLOCK = "unlock"
+    LOOT = "loot"
     REPAIR = "repair"
+
+
+class FixtureKind(StrEnum):
+    OBJECT = "object"
+    DOOR = "door"
+    CONTAINER = "container"
+    OBSTACLE = "obstacle"
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,13 +92,25 @@ class FixtureActionPolicy:
 class SceneFixture:
     id: str
     name: str
+    kind: FixtureKind = FixtureKind.OBJECT
     description: str = ""
+    positions: tuple[Coordinate, ...] = ()
     properties: tuple[str, ...] = ()
     condition: str = "normal"
     visible: bool = True
     portable: bool = False
     detachable: bool = False
     destructible: bool = False
+    initially_open: bool = False
+    initially_locked: bool = False
+    key_item_id: str | None = None
+    lock_dc: int | None = None
+    armor_class: int | None = None
+    hit_points: int | None = None
+    damage_threshold: int = 0
+    blocks_movement_when_closed: bool = False
+    cover_bonus: int = 0
+    projectile_cover_bonus: int = 0
     yield_items: tuple[ItemInstance, ...] = ()
     action_policies: tuple[FixtureActionPolicy, ...] = ()
 
@@ -98,6 +121,50 @@ class SceneFixture:
             raise ValueError("Scene fixture name cannot be empty.")
         if not self.condition.strip():
             raise ValueError("Scene fixture condition cannot be empty.")
+        if self.initially_open and self.initially_locked:
+            raise ValueError(f"Scene fixture {self.id} cannot start open and locked.")
+        if self.initially_locked and self.kind not in {
+            FixtureKind.DOOR,
+            FixtureKind.CONTAINER,
+        }:
+            raise ValueError(
+                f"Scene fixture {self.id} can only be locked when it is a door or container."
+            )
+        if self.key_item_id is not None and not self.key_item_id.strip():
+            raise ValueError(f"Scene fixture {self.id}.key_item_id cannot be empty.")
+        if self.lock_dc is not None and not 5 <= self.lock_dc <= 30:
+            raise ValueError(f"Scene fixture {self.id}.lock_dc must be between 5 and 30.")
+        if (self.armor_class is None) != (self.hit_points is None):
+            raise ValueError(
+                f"Scene fixture {self.id} durability requires both armor_class and hit_points."
+            )
+        if self.armor_class is not None and not 5 <= self.armor_class <= 30:
+            raise ValueError(
+                f"Scene fixture {self.id}.armor_class must be between 5 and 30."
+            )
+        if self.hit_points is not None and self.hit_points <= 0:
+            raise ValueError(f"Scene fixture {self.id}.hit_points must be positive.")
+        if self.damage_threshold < 0:
+            raise ValueError(
+                f"Scene fixture {self.id}.damage_threshold cannot be negative."
+            )
+        if self.cover_bonus not in {0, 2, 5}:
+            raise ValueError(
+                f"Scene fixture {self.id}.cover_bonus must be 0, 2, or 5."
+            )
+        if self.projectile_cover_bonus not in {0, 2, 5}:
+            raise ValueError(
+                f"Scene fixture {self.id}.projectile_cover_bonus must be 0, 2, or 5."
+            )
+        if (
+            self.destructible
+            and (self.armor_class is None or self.hit_points is None)
+        ):
+            raise ValueError(
+                f"Destructible scene fixture {self.id} requires armor_class and hit_points."
+            )
+        if self.kind in {FixtureKind.DOOR, FixtureKind.CONTAINER, FixtureKind.OBSTACLE} and not self.positions:
+            raise ValueError(f"Scene fixture {self.id} requires at least one board position.")
         if any(not property_id.strip() for property_id in self.properties):
             raise ValueError(f"Scene fixture {self.id}.properties cannot contain empty ids.")
         if len(self.properties) != len(set(self.properties)):
@@ -471,6 +538,286 @@ class ExplorationOption:
 
 
 @dataclass(frozen=True, slots=True)
+class ScenarioClockEvent:
+    id: str
+    at_minute: int
+    label: str
+    narration: str
+    effects: tuple[dict[str, object], ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.id.strip() or not self.label.strip() or not self.narration.strip():
+            raise ValueError("Scenario clock events require id, label, and narration.")
+        if self.at_minute <= 0:
+            raise ValueError(f"Scenario clock event {self.id} must occur after minute 0.")
+
+    @property
+    def marker_flag(self) -> str:
+        return f"clock_event:{self.id}"
+
+
+@dataclass(frozen=True, slots=True)
+class ScenarioClockPolicy:
+    start_hour: int = 8
+    events: tuple[ScenarioClockEvent, ...] = ()
+
+    def __post_init__(self) -> None:
+        if self.start_hour < 0 or self.start_hour > 23:
+            raise ValueError("Scenario clock start_hour must be in range 0..23.")
+        event_ids = tuple(event.id for event in self.events)
+        if len(event_ids) != len(set(event_ids)):
+            raise ValueError("Scenario clock event ids must be unique.")
+
+
+class TravelPace(StrEnum):
+    FAST = "fast"
+    NORMAL = "normal"
+    SLOW = "slow"
+
+
+@dataclass(frozen=True, slots=True)
+class TravelPolicy:
+    navigation_dc: int | None = None
+    navigation_ability: str = "wisdom"
+    navigation_skill: str | None = "survival"
+    navigation_failure_delay_minutes: int = 0
+    safe_travel_minutes: int = 480
+
+    def __post_init__(self) -> None:
+        if self.navigation_dc is not None and not 5 <= self.navigation_dc <= 30:
+            raise ValueError("Travel navigation DC must be between 5 and 30.")
+        if not self.navigation_ability.strip():
+            raise ValueError("Travel navigation ability cannot be empty.")
+        if (
+            self.navigation_skill is not None
+            and not self.navigation_skill.strip()
+        ):
+            raise ValueError("Travel navigation skill cannot be empty.")
+        if self.navigation_failure_delay_minutes < 0:
+            raise ValueError("Travel navigation failure delay cannot be negative.")
+        if self.safe_travel_minutes <= 0:
+            raise ValueError("Travel safe duration must be positive.")
+
+    def as_payload(self) -> dict[str, object]:
+        return {
+            "navigation_dc": self.navigation_dc,
+            "navigation_ability": self.navigation_ability,
+            "navigation_skill": self.navigation_skill,
+            "navigation_failure_delay_minutes": (
+                self.navigation_failure_delay_minutes
+            ),
+            "safe_travel_minutes": self.safe_travel_minutes,
+            "paces": [
+                {
+                    "id": TravelPace.FAST.value,
+                    "label": "Szybkie",
+                    "passive_perception_modifier": -5,
+                    "allows_stealth": False,
+                },
+                {
+                    "id": TravelPace.NORMAL.value,
+                    "label": "Normalne",
+                    "passive_perception_modifier": 0,
+                    "allows_stealth": False,
+                },
+                {
+                    "id": TravelPace.SLOW.value,
+                    "label": "Wolne",
+                    "passive_perception_modifier": 0,
+                    "allows_stealth": True,
+                },
+            ],
+        }
+
+
+class ContinuationOutcomeKind(StrEnum):
+    SUCCESS = "success"
+    PARTIAL_SUCCESS = "partial_success"
+    FAIL_FORWARD = "fail_forward"
+
+
+class ContinuationNavigationResult(StrEnum):
+    ANY = "any"
+    SUCCESS = "success"
+    FAILURE = "failure"
+
+
+@dataclass(frozen=True, slots=True)
+class ScenarioContinuationOutcome:
+    id: str
+    kind: ContinuationOutcomeKind
+    label: str
+    narration: str = ""
+    required_flags: tuple[str, ...] = ()
+    forbidden_flags: tuple[str, ...] = ()
+    navigation_result: ContinuationNavigationResult = ContinuationNavigationResult.ANY
+    target_effects: tuple[dict[str, object], ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.id.strip() or not self.label.strip():
+            raise ValueError("Scenario continuation outcome id and label cannot be empty.")
+        for field_name, values in (
+            ("required_flags", self.required_flags),
+            ("forbidden_flags", self.forbidden_flags),
+        ):
+            if len(values) != len(set(values)) or any(not value.strip() for value in values):
+                raise ValueError(
+                    f"Scenario continuation outcome {self.id} has invalid {field_name}."
+                )
+        if set(self.required_flags) & set(self.forbidden_flags):
+            raise ValueError(
+                f"Scenario continuation outcome {self.id} requires and forbids the same flag."
+            )
+        for effect in self.target_effects:
+            if not isinstance(effect, dict) or effect.get("type") != "set_flag":
+                raise ValueError(
+                    f"Scenario continuation outcome {self.id} supports set_flag target effects only."
+                )
+            parameters = effect.get("parameters")
+            if (
+                not isinstance(parameters, dict)
+                or not isinstance(parameters.get("key"), str)
+                or not str(parameters["key"]).strip()
+                or "value" not in parameters
+            ):
+                raise ValueError(
+                    f"Scenario continuation outcome {self.id} has an invalid target effect."
+                )
+
+    @property
+    def is_default(self) -> bool:
+        return (
+            not self.required_flags
+            and not self.forbidden_flags
+            and self.navigation_result == ContinuationNavigationResult.ANY
+        )
+
+    def as_payload(self) -> dict[str, object]:
+        return {
+            "id": self.id,
+            "kind": self.kind.value,
+            "label": self.label,
+            "narration": self.narration,
+            "target_effects": [dict(effect) for effect in self.target_effects],
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class ScenarioContinuation:
+    id: str
+    label: str
+    description: str
+    departure_zone_id: str
+    target_scenario_id: str
+    target_scenario_path: str
+    target_scenario_name: str = ""
+    available_if_flags: tuple[str, ...] = ()
+    propagate_flags: tuple[str, ...] = ()
+    outcomes: tuple[ScenarioContinuationOutcome, ...] = ()
+    travel_minutes: int = 0
+    travel_policy: TravelPolicy = TravelPolicy()
+
+    def __post_init__(self) -> None:
+        required = (
+            self.id,
+            self.label,
+            self.departure_zone_id,
+            self.target_scenario_id,
+            self.target_scenario_path,
+        )
+        if any(not value.strip() for value in required):
+            raise ValueError("Scenario continuation fields cannot be empty.")
+        if len(self.available_if_flags) != len(set(self.available_if_flags)):
+            raise ValueError(
+                f"Scenario continuation {self.id} repeats availability flags."
+            )
+        if any(not flag.strip() for flag in self.available_if_flags):
+            raise ValueError(
+                f"Scenario continuation {self.id} contains an empty availability flag."
+            )
+        if (
+            len(self.propagate_flags) != len(set(self.propagate_flags))
+            or any(not flag.strip() for flag in self.propagate_flags)
+        ):
+            raise ValueError(
+                f"Scenario continuation {self.id} has invalid propagated flags."
+            )
+        outcome_ids = tuple(outcome.id for outcome in self.outcomes)
+        if len(outcome_ids) != len(set(outcome_ids)):
+            raise ValueError(
+                f"Scenario continuation {self.id} repeats outcome ids."
+            )
+        defaults = tuple(outcome for outcome in self.outcomes if outcome.is_default)
+        if self.outcomes and (
+            len(defaults) != 1 or self.outcomes[-1] is not defaults[0]
+        ):
+            raise ValueError(
+                f"Scenario continuation {self.id} requires one final default outcome."
+            )
+        if self.travel_minutes < 0:
+            raise ValueError(
+                f"Scenario continuation {self.id} travel time cannot be negative."
+            )
+
+    def as_payload(self) -> dict[str, object]:
+        return {
+            "id": self.id,
+            "label": self.label,
+            "description": self.description,
+            "departure_zone_id": self.departure_zone_id,
+            "target_scenario_id": self.target_scenario_id,
+            "target_scenario_name": (
+                self.target_scenario_name or self.target_scenario_id
+            ),
+            "target_scenario_path": self.target_scenario_path,
+            "available_if_flags": list(self.available_if_flags),
+            "propagate_flags": list(self.propagate_flags),
+            "has_authored_outcomes": bool(self.outcomes),
+            "travel_minutes": self.travel_minutes,
+            "travel": self.travel_policy.as_payload(),
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class PaperMap:
+    id: str
+    preview_path: str
+    a4_pdf_path: str
+    full_size_pdf_path: str
+    width_cm: float = 50.0
+    height_cm: float = 75.0
+
+    def __post_init__(self) -> None:
+        if not all(
+            value.strip()
+            for value in (
+                self.id,
+                self.preview_path,
+                self.a4_pdf_path,
+                self.full_size_pdf_path,
+            )
+        ):
+            raise ValueError("Paper map requires id and all asset paths.")
+        if self.width_cm <= 0 or self.height_cm <= 0:
+            raise ValueError("Paper map dimensions must be positive.")
+
+    def as_payload(self) -> dict[str, object]:
+        return {
+            "id": self.id,
+            "preview_path": self.preview_path,
+            "a4_pdf_path": self.a4_pdf_path,
+            "full_size_pdf_path": self.full_size_pdf_path,
+            "preview_url": f"/game-assets/{self.preview_path.lstrip('/')}",
+            "a4_pdf_url": f"/game-assets/{self.a4_pdf_path.lstrip('/')}",
+            "full_size_pdf_url": (
+                f"/game-assets/{self.full_size_pdf_path.lstrip('/')}"
+            ),
+            "width_cm": self.width_cm,
+            "height_cm": self.height_cm,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class ExplorationZone:
     id: str
     name: str
@@ -479,12 +826,17 @@ class ExplorationZone:
     anchor_position: Coordinate | None = None
     description: str = ""
     image: str = ""
+    paper_map: PaperMap | None = None
     visibility: SetupVisibility = SetupVisibility.VISIBLE
     available_if_flag: str | None = None
     available_if_value: object = True
     options: tuple[ExplorationOption, ...] = ()
     adjacent_zone_ids: tuple[str, ...] = ()
+    travel_minutes: int = 0
+    ambient_light: LightLevel = LightLevel.BRIGHT
+    allows_hiding: bool = False
     search_dc: int | None = None
+    search_minutes: int = 10
     search_ability: str = "wisdom"
     search_skill: str | None = "perception"
     search_reveals: tuple[str, ...] = ()
@@ -494,6 +846,12 @@ class ExplorationZone:
     short_rest_policy: ShortRestPolicy | None = None
     item_instances: tuple[ItemInstance, ...] = ()
     fixtures: tuple[SceneFixture, ...] = ()
+
+    def __post_init__(self) -> None:
+        if self.travel_minutes < 0:
+            raise ValueError("Exploration zone travel time cannot be negative.")
+        if self.search_minutes <= 0:
+            raise ValueError("Exploration zone search time must be positive.")
 
     @property
     def marker_position(self) -> Coordinate:
@@ -906,6 +1264,81 @@ class InteractionSourceAction:
 
 
 @dataclass(frozen=True, slots=True)
+class NpcGroundedResponseVariant:
+    id: str
+    player_narration: str = ""
+    npc_response: str = ""
+    success_message: str = ""
+    failure_message: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.id.strip():
+            raise ValueError("Grounded NPC response variant requires an id.")
+        if not any(
+            value.strip()
+            for value in (
+                self.player_narration,
+                self.npc_response,
+                self.success_message,
+                self.failure_message,
+            )
+        ):
+            raise ValueError(
+                "Grounded NPC response variant requires at least one authored text."
+            )
+
+    def as_prompt_payload(self) -> dict[str, str]:
+        return {
+            "id": self.id,
+            "player_narration": self.player_narration,
+            "npc_response": self.npc_response,
+            "success_message": self.success_message,
+            "failure_message": self.failure_message,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class NpcGroundedResponse:
+    player_narration: str = ""
+    npc_response: str = ""
+    success_message: str = ""
+    failure_message: str = ""
+    variants: tuple[NpcGroundedResponseVariant, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not any(
+            value.strip()
+            for value in (
+                self.player_narration,
+                self.npc_response,
+                self.success_message,
+                self.failure_message,
+            )
+        ):
+            raise ValueError("Grounded NPC response requires at least one authored text.")
+        variant_ids = tuple(variant.id for variant in self.variants)
+        if len(variant_ids) != len(set(variant_ids)):
+            raise ValueError("Grounded NPC response cannot repeat variant ids.")
+
+    def variant(self, variant_id: str | None) -> NpcGroundedResponseVariant | None:
+        if variant_id is None:
+            return None
+        return next(
+            (variant for variant in self.variants if variant.id == variant_id),
+            None,
+        )
+
+    def as_prompt_payload(self) -> dict[str, object]:
+        return {
+            "player_narration": self.player_narration,
+            "npc_response": self.npc_response,
+            "success_message": self.success_message,
+            "failure_message": self.failure_message,
+            "variants": [variant.as_prompt_payload() for variant in self.variants],
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class InteractionGoal:
     id: str
     label: str
@@ -925,6 +1358,7 @@ class InteractionGoal:
     allowed_check_participants: tuple[CheckParticipants, ...] = ()
     custom: bool = False
     narrative_style: NarrativeStyle | None = None
+    grounded_response: NpcGroundedResponse | None = None
 
     def __post_init__(self) -> None:
         if not self.id.strip() or not self.label.strip() or not self.description.strip():
@@ -1087,6 +1521,7 @@ class NpcIntentPermission:
     uses_social_reaction: bool = False
     attempt_policy: NpcAttemptPolicy | None = None
     targets: tuple[NpcIntentTarget, ...] = ()
+    time_cost_minutes: int = 0
 
     def __post_init__(self) -> None:
         target_ids = tuple(target.id for target in self.targets)
@@ -1096,6 +1531,8 @@ class NpcIntentPermission:
             raise ValueError(
                 f"NPC intent {self.intent} check DC requires an ability."
             )
+        if self.time_cost_minutes < 0:
+            raise ValueError(f"NPC intent {self.intent} time cost cannot be negative.")
 
     def target(self, target_id: str) -> NpcIntentTarget | None:
         normalized = target_id.strip().lower()
@@ -1108,6 +1545,7 @@ class NpcIntentPermission:
             "unlock_if_flags": list(self.unlock_if_flags),
             "reveals": list(self.reveals),
             "uses_social_reaction": self.uses_social_reaction,
+            "time_cost_minutes": self.time_cost_minutes,
         }
         if self.limits:
             payload["limits"] = self.limits
@@ -1556,6 +1994,9 @@ class ExplorationTrap:
     revealed_description: str
     detection_observation_id: str
     hazard: ExplorationHazard
+    detection_dc: int | None = None
+    detection_distance_feet: int = 10
+    passive_detection: bool = True
     activation_challenge_id: str | None = None
     activation_required_flags: tuple[str, ...] = ()
     activation_forbidden_flags: tuple[str, ...] = ()
@@ -1579,6 +2020,14 @@ class ExplorationTrap:
             raise ValueError(
                 f"Exploration trap {self.id} cannot require and forbid the same activation flag."
             )
+        if self.detection_dc is not None and not 5 <= self.detection_dc <= 30:
+            raise ValueError(
+                f"Exploration trap {self.id} detection DC must be between 5 and 30."
+            )
+        if self.detection_distance_feet < 5 or self.detection_distance_feet % 5:
+            raise ValueError(
+                f"Exploration trap {self.id} detection distance must be a positive multiple of 5 feet."
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -1589,6 +2038,20 @@ class ExplorationTrapState:
     def __post_init__(self) -> None:
         if not self.trap_id.strip():
             raise ValueError("Exploration trap state id cannot be empty.")
+
+
+@dataclass(frozen=True, slots=True)
+class ExplorationHiddenActorState:
+    actor_id: str
+    zone_id: str
+    natural_roll: int
+    stealth_total: int
+
+    def __post_init__(self) -> None:
+        if not self.actor_id.strip() or not self.zone_id.strip():
+            raise ValueError("Exploration hidden state requires actor and zone ids.")
+        if not 1 <= self.natural_roll <= 20:
+            raise ValueError("Exploration hidden state natural roll must be between 1 and 20.")
 
 @dataclass(frozen=True, slots=True)
 class SearchResult:
@@ -1861,6 +2324,10 @@ class FixtureRuntimeState:
     unavailable: bool = False
     detached: bool = False
     destroyed: bool = False
+    opened: bool = False
+    locked: bool = False
+    looted: bool = False
+    current_hit_points: int | None = None
     released_item_ids: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
@@ -1868,6 +2335,10 @@ class FixtureRuntimeState:
             raise ValueError("Fixture runtime state ids and condition cannot be empty.")
         if len(self.released_item_ids) != len(set(self.released_item_ids)):
             raise ValueError("Fixture runtime released item ids cannot contain duplicates.")
+        if self.opened and self.locked:
+            raise ValueError("Fixture runtime state cannot be open and locked.")
+        if self.current_hit_points is not None and self.current_hit_points < 0:
+            raise ValueError("Fixture runtime hit points cannot be negative.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -1925,11 +2396,16 @@ class ExplorationState:
     condition_states: tuple[ConditionState, ...] = ()
     traps: tuple[ExplorationTrap, ...] = ()
     trap_states: tuple[ExplorationTrapState, ...] = ()
+    hidden_actor_states: tuple[ExplorationHiddenActorState, ...] = ()
     npc_states: tuple[NpcRuntimeState, ...] = ()
     merchants: tuple[MerchantState, ...] = ()
     magic_effects: tuple[TimedMagicEffect, ...] = ()
+    clock_policy: ScenarioClockPolicy = ScenarioClockPolicy()
 
     def __post_init__(self) -> None:
+        hidden_actor_ids = tuple(item.actor_id for item in self.hidden_actor_states)
+        if len(hidden_actor_ids) != len(set(hidden_actor_ids)):
+            raise ValueError("Exploration hidden actor states must be unique by actor id.")
         magic_effect_ids = tuple(effect.id for effect in self.magic_effects)
         if len(magic_effect_ids) != len(set(magic_effect_ids)):
             raise ValueError("Timed magic effect ids must be unique.")
@@ -1986,10 +2462,19 @@ def add_exploration_condition(
     state: ExplorationState,
     actor_id: str,
     condition: CombatCondition,
+    *,
+    source_label: str = "",
+    duration: EffectDuration = EffectDuration.PERMANENT,
 ) -> ExplorationState:
     return replace(
         state,
-        condition_states=add_condition(state.condition_states, actor_id, condition),
+        condition_states=add_condition(
+            state.condition_states,
+            actor_id,
+            condition,
+            source_label=source_label,
+            duration=duration,
+        ),
     )
 
 

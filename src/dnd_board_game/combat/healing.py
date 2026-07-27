@@ -4,7 +4,7 @@ from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import Sequence
 
-from dnd_board_game.actors import Actor, DeathSaveState
+from dnd_board_game.actors import Actor, DeathSaveState, effective_max_hit_points
 from dnd_board_game.world import BoardState, line_of_sight_clear
 
 from .attack_flow import AttackSourceType, SpellCastingKind
@@ -107,7 +107,7 @@ def legal_healing_targets(
 def apply_healing_result(actor: Actor, source: HealingSource, amount: int) -> AppliedHealingResult:
     healing_amount = max(0, int(amount))
     hp_before = actor.hp
-    hp_after = min(actor.max_hp, hp_before + healing_amount)
+    hp_after = min(effective_max_hit_points(actor), hp_before + healing_amount)
     actor_after = replace(
         actor,
         hp=hp_after,

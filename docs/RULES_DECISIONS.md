@@ -622,6 +622,44 @@ Implementacja MVP:
 - Proste opcje eksploracyjne typu `message` mogą ustawiać flagi sceny. Dzięki temu rozmowa, odczytanie tablicy albo obejrzenie punktu zainteresowania może domknąć objective bez sztucznego testu cechy.
 - `village_square_mvp` jest pierwszą mini-sceną eksploracji społecznej: kilka jawnych lokacji, setup jawnych NPC/obiektów, ukryty punkt i objective zależne od flagi.
 - LLM może analizować i klasyfikować kreatywne deklaracje graczy do ustrukturyzowanych propozycji challenge, ale nie może samodzielnie zmieniać zasad ani stanu gry.
+- Jeśli challenge posiada guarded flow graph, cel deklaracji musi być wybrany
+  przed opisaniem metody. Aktywna krawędź grafu jest autorytatywna dla profilu
+  opcji, uczestników, ST i skutków; tagi propozycji LLM nie mogą przełączyć
+  rozstrzygnięcia na inny cel.
+- Główne web UI i terminalowy `demo_exploration_scene` korzystają z tego samego
+  `ExplorationInteractionFlowService`. Tryb nieinteraktywny terminala wymaga
+  `--goal-id`, gdy aktywnych jest kilka celów; cel nieaktywny jest odrzucany
+  przed wywołaniem analyzer/classifiera.
+- Flow NPC może wystawić inne cele w zależności od flag świata, niezależnie od
+  opisowej odpowiedzi modelu. W `village_square_mvp` negocjacja zaliczki jest
+  dostępna tylko przed zdobyciem tropu o strażnicy, pytania informacyjne
+  pozostają dostępne po jego zdobyciu, a `elder_refuses_party` aktywuje
+  terminalny węzeł bez dalszych celów.
+- Jednorazowa informacja NPC jest modelowana jako cel dostępny tylko w węźle
+  sprzed ustawienia flagi wiedzy. Karczmarz Olan nadaje autorskie
+  `tavern_rumor_heard` i `quest_hook_found`; runtime usuwa efekty zaproponowane
+  przez LLM, po czym flow ukrywa wykorzystany cel plotki i nadal wystawia zwykłą
+  rozmowę.
+- Zdobycie tropu nie kończy już automatycznie mini-sceny wioski. Autorski flow
+  rozdziela `quest_hook_found`, `quest_accepted` oraz
+  `ready_for_watchtower`; objective kończy się dopiero po świadomym przyjęciu
+  zadania i potwierdzeniu gotowości.
+- `ScenarioContinuation` jest typowanym wyjściem ze sceny. Loader sprawdza
+  ścieżkę oraz identyfikator scenariusza docelowego, a runtime wymaga wszystkich
+  flag i właściwej strefy wyjścia. Przejście wygasza efekty końca scenariusza,
+  zapisuje pełny snapshot źródłowy i emituje jawny handoff. Łączenie tego
+  snapshotu ze stanem następnej sceny pozostaje odpowiedzialnością przyszłego
+  modelu kampanii, zamiast niejawnego nadpisywania różniących się definicji
+  postaci.
+- Continuation może mieć uporządkowane outcome branches. Pierwsza gałąź pasująca
+  do końcowych flag i wyniku nawigacji wygrywa; ostatnia musi być bezwarunkowym
+  fallbackiem. Wynik ma jawny typ `success`, `partial_success` albo
+  `fail_forward`, opis dla graczy i wyłącznie walidowane efekty `set_flag` dla
+  sceny docelowej.
+- Handoff zawiera statusy celów źródłowych i tylko flagi wskazane w
+  `propagate_flags`. Efekt gałęzi o tym samym kluczu ma pierwszeństwo przed
+  propagowaną wartością. Zastosowanie efektów przy utworzeniu stanu celu należy
+  do warstwy kampanii M9.
 - Główny widok aktywnej eksploracji jest rozmową z MG. Obraz i publiczny opis sceny są pierwszą wiadomością, a gotowe listy inspiracji, opcji i ukrytych ryzyk nie są wystawiane w player API.
 - Pytania graczy o otoczenie są odpowiedziami strukturalnymi typu `observation`, `clarification`, `gentle_hint`, `strong_hint`, `requires_check` albo `impossible`. Naturalny tekst MG musi wskazywać identyfikatory faktów, na których został oparty, a runtime odrzuca nieznane fakty.
 - Jawne obiekty i ich właściwości mogą być opisane bez rzutu. Gdy odpowiedź wymaga niepewnej albo ukrytej obserwacji, MG nie ujawnia wyniku, tylko proponuje dalszą deklarację przez `requires_check`.
@@ -799,6 +837,63 @@ Implementacja MVP:
 - Snapshot v12 zapisuje cały kontrakt instancji mundane gear. Migracja v11→v12
   pozostawia starsze przedmioty bez nowych opcjonalnych właściwości.
 
+## Światło, zmysły i obserwacja eksploracyjna
+
+- Strefa eksploracji deklaruje `ambient_light`: `bright`, `dim` albo `darkness`.
+  Obserwacja zależna od wzroku deklaruje też abstrakcyjny dystans w stopach.
+- Półmrok jest lightly obscured: test Wisdom (Perception) oparty na wzroku ma
+  utrudnienie, a pasywna Perception otrzymuje odpowiadające mu `-5`. Pełna
+  ciemność blokuje zwykły wzrok.
+- Darkvision w swoim zasięgu traktuje ciemność jak półmrok, a półmrok jak jasne
+  światło. Blindsight i truesight w zasięgu omijają poziom światła. Tremorsense
+  jest zapisanym zmysłem, ale nie zastępuje wzroku w authored obserwacji.
+- Zapalone światło członka drużyny może oświetlić abstrakcyjny dystans
+  obserwacji. Jego czas jest zużywany przez każdy mechaniczny upływ czasu
+  eksploracji; po wyczerpaniu źródło gaśnie i runtime pokazuje komunikat.
+- Te same korekty widzenia obserwatorów są stosowane podczas opcjonalnego
+  skradania przed encounterem. Dokładna geometria światła na siatce pozostaje
+  osobnym rozszerzeniem.
+
+## Search, Hide, pułapki i hazards w eksploracji
+
+- Aktywny Search strefy jest jawną akcją lokalnego runtime, a nie decyzją LLM.
+  Content strefy ustala cechę, skill, DC, koszt minutowy i odkrywane punkty.
+  Jeden wynik może równocześnie ujawnić wszystkie pułapki, których osobne
+  `detection_dc` osiągnął.
+- Passive Perception jest sprawdzana przy wejściu do strefy dla pułapek z
+  `passive_detection`. Półmrok stosuje `-5`, ciemność bez odpowiedniego zmysłu
+  wyklucza wzrokowe wykrycie.
+- Hide w strefie dozwolone jest wyłącznie, gdy content deklaruje
+  `allows_hiding`. Zapisujemy wynik Stealth bez sztucznego stałego sukcesu:
+  dopiero obecność obserwatora pozwala porównać go z jego passive Perception.
+  Zapalone światło, istotny upływ czasu, odpoczynek, dłuższa czynność, podróż
+  albo rozpoczęcie encountera kończą nieprzeniesione ukrycie.
+- Jeżeli authored opening dopuszcza Hide, wynik zapisany w eksploracji jest po
+  fizycznym setupie porównywany osobno z każdym przeciwnikiem i przechodzi do
+  combatowego `HiddenState`. Bohater nie rzuca ponownie.
+- Pułapka po wykryciu korzysta z istniejących stanów `revealed`, `disarmed`,
+  `bypassed` i `triggered`. Nieudane rozbrojenie może uruchomić ten sam
+  data-driven hazard: fizyczny save, obrażenia oraz authored effects.
+
+## Drzwi, zamki, pojemniki i obiekty niszczalne
+
+- Fixture sceny deklaruje typ `door`, `container`, `obstacle` albo `object`.
+  Drzwi i przeszkody mają pola planszy; zamknięte drzwi mogą blokować ruch oraz
+  zapewniać połowę (`+2`) lub trzy czwarte (`+5`) osłony.
+- `unlock`, `open`, `close` i `loot` są lokalnymi operacjami runtime. LLM nie
+  ustala ich DC ani skutków. Otwieranie zamka bez klucza wymaga fizycznego d20,
+  narzędzi złodziejskich i korzysta z profilu biegłości aktora.
+- Pojemnik ujawnia `yield_items` dopiero po udanym otwarciu i operacji `loot`.
+  Ujawnienie zawartości nie przenosi jej automatycznie do ekwipunku; obowiązuje
+  istniejący, jawny przepływ zabrania przedmiotu.
+- Obiekt niszczalny ma KP, HP i opcjonalny próg obrażeń. Cios poniżej progu nie
+  zmniejsza HP. Przy 0 HP obiekt jest zniszczony, przestaje blokować i zapewniać
+  osłonę, a zawartość pojemnika zostaje ujawniona.
+- Encounter otrzymuje projekcję bieżącego stanu fixture'ów z eksploracji.
+  Otwarte lub wcześniej zniszczone drzwi nie odzyskują blokowania ani cover po
+  rozpoczęciu walki. Bezpośrednie niszczenie tych fixture'ów w trakcie walki
+  pozostaje kolejnym rozszerzeniem combatowego targetingu obiektów.
+
 ## Trwały stan NPC
 
 - Opis, osobowość i wiedza NPC są definicją contentu, natomiast zmieniające się nastawienie, kondycja fizyczna i emocjonalna, ujawnione informacje, wykorzystane próby oraz zdarzenia relacji należą do `NpcRuntimeState`.
@@ -806,6 +901,10 @@ Implementacja MVP:
 - Zmiana stanu wynika z `state_on_success` albo `state_on_failure` właściwej polityki intencji. LLM tworzy narrację i klasyfikuje zamiar, ale nie może samodzielnie ustawić dowolnego nastawienia poza contentowym kontraktem.
 - Kolejne wywołanie NPC otrzymuje zarówno lokalną historię rozmowy, jak i aktualny runtime state. Snapshot zapisuje oba elementy osobno.
 - Intencja oznaczona `uses_social_reaction` korzysta z tabeli Conversation Reaction z DMG 2014. LLM klasyfikuje wyłącznie koszt prośby dla NPC (`no_risk`, `minor_risk`, `significant_risk`), a deterministyczny silnik łączy go z nastawieniem: friendly 0/10/20, indifferent 10/20/brak możliwości, hostile 20/brak możliwości/brak możliwości.
+- Dla celu korzystającego z tej tabeli gracz przed wysłaniem deklaracji wybiera
+  `Persuasion`, `Deception` albo `Intimidation`. Ten wybór jest autorytatywny:
+  propozycja LLM nie może go zastąpić. Content może ograniczyć dostępny zestaw
+  przez `allowed_skills`; wszystkie trzy testy używają Charisma.
 - ST, automatyczna zgoda i odmowa wynikają z tej tabeli, nie z propozycji LLM. UI pokazuje aktualne nastawienie, poziom ryzyka i warunek reakcji przed akceptacją; każda contentowa zmiana nastawienia pojawia się również jako wpis rozmowy.
 - Powtarzalne testy NPC mogą mieć contentowe `attempt_policy`. Runtime liczy wyłącznie zaakceptowane i rozstrzygnięte rzuty oznaczone stabilnym `attempt_id`; rozmowa bez rzutu, odmowa i odrzucony preview nie zużywają limitu.
 - `max_attempts` jest limitem bezwzględnym, a `retry_requires_any_flags` wymaga, aby przed ponowieniem zaszła co najmniej jedna wskazana zmiana świata. Blokada oraz wyczerpanie zwracają naturalne teksty contentowe i nigdy nie uruchamiają efektów sukcesu ani porażki.
@@ -815,6 +914,85 @@ Implementacja MVP:
 - Gałąź wyniku może wskazać `transition_id`. Runtime wybiera pierwszy pasujący wariant z contentu na podstawie flag i rozstrzygniętych encounterów, po czym zatrzymuje automatyczne triggery do jawnej reakcji drużyny. Reakcja może wznowić dialog, trwale zamknąć interakcję albo uruchomić nazwany istniejący encounter; LLM jedynie narracyjnie opisuje scenę.
 - Efekty propozycji LLM, strukturalnych wyników NPC, ujawnianej wiedzy i reakcji przejścia korzystają z jednego walidatora. Loader sprawdza typ prymitywu, wymagane parametry, referencje do zasobów/punktów/challenge'y/stref/pułapek oraz lokalne `allowed_effect_types` i `allowed_flags`, zwracając pełną ścieżkę błędnego wpisu przed rozpoczęciem sesji.
 - `village_square_mvp` zawiera drugi fixture tego kontraktu: krytycznie nieudane negocjacje z sołtysem prowadzą do przeprosin i wznowienia dialogu albo jego zamknięcia, bez encountera. Potwierdza to, że transition router nie jest mechaniką specyficzną dla walki lub rannego zwiadowcy.
+
+## Zegar scenariusza i konsekwencje zwłoki
+
+- `ExplorationState.elapsed_minutes` jest jednym autorytatywnym licznikiem czasu
+  eksploracji. Podróż między strefami, rozmowy NPC, short rest, rytuały, crafting,
+  zmiana pancerza i continuation nie prowadzą własnych zegarów.
+- Content scenariusza może zdefiniować godzinę rozpoczęcia oraz uporządkowane
+  progi minutowe. Godzina i pora dnia w UI są prezentacją; decyzje reguł opierają
+  się na czasie od rozpoczęcia sceny.
+- Po przekroczeniu progu jego efekty są wykonywane przez wspólny
+  `apply_exploration_effect`. Wewnętrzna flaga markera jest zapisywana w
+  snapshotcie, więc ten sam event nie uruchamia się ponownie po kolejnym
+  przesunięciu czasu albo wczytaniu sesji.
+- Progi pozostają ukrytym contentem MG. Gracz widzi koszt jawnej decyzji, bieżącą
+  porę dnia i narrację konsekwencji dopiero wtedy, gdy ta nastąpi.
+- `village_square_mvp` rozpoczyna się o 17:00. Szybka ścieżka zadania pozwala
+  dotrzeć do strażnicy przed progami zwłoki; dodatkowy odpoczynek może spowodować
+  przybycie o zmierzchu i dać goblinom czas na przygotowanie obrony.
+- Handoff zapisuje minutę wyjścia i przybycia, czas dalszej podróży, wyliczoną
+  godzinę oraz eventy uruchomione podczas continuation. Po przesunięciu zegara
+  wybierana jest gałąź rezultatu, więc konsekwencje zmierzchu i alarmu mogą
+  zmienić wynik tego samego przejścia. Handoff jawnie wskazuje flagi i efekty do
+  przeniesienia; ich zastosowanie pozostaje zadaniem kampanii M9.
+
+## Podróż, nawigacja i exhaustion
+
+- Bazowy `travel_minutes` continuation jest czasem tempa normalnego. Tempo
+  szybkie używa `ceil(3/4 czasu)`, a wolne `ceil(4/3 czasu)`.
+- Nawigacja jest zwykłym fizycznym ability checkiem wybranego aktora przeciw
+  authored DC. Porażka nie zatrzymuje przejścia: dodaje authored delay przed
+  obliczeniem forced march i progów zegara.
+- Forced march liczy każdą rozpoczętą godzinę ponad `safe_travel_minutes`.
+  Każdy żywy członek drużyny wykonuje Constitution save o rosnącym ST
+  `10 + numer dodatkowej godziny`; porażka zwiększa exhaustion o jeden.
+- Używamy tabeli exhaustion D&D 5e 2014. Poziom 1 daje disadvantage na ability
+  checks, 2 połowi szybkość, 3 dodaje disadvantage na ataki i save'y, 4 połowi
+  maksimum HP, 5 ustawia szybkość na 0, a 6 zabija aktora. Advantage i
+  disadvantage nadal znoszą się zgodnie ze wspólnym resolverem d20.
+- Stan exhaustion należy do aktora, przechodzi pomiędzy eksploracją i combatem
+  oraz jest zapisywany. Long rest zdejmuje jeden poziom po spełnieniu zwykłych
+  warunków odpoczynku.
+
+## Formalny crafting w downtime
+
+- Formalne rzemiosło nie korzysta z tymczasowych konstrukcji `/zbuduj`.
+  Content receptury wskazuje strefę, warsztat, zwykły produkt oraz wymagany
+  identyfikator narzędzi.
+- Wykonawca musi być żywym sojusznikiem, mieć biegłość w wymaganych narzędziach
+  i posiadać działający przedmiot o tym samym `tool_proficiency_id`.
+- Zgodnie z bazową regułą 2014 materiały kosztują połowę wartości rynkowej
+  produktu. Postęp wynosi 5 gp na ośmiogodzinny dzień; rozpoczęta część kolejnego
+  dnia jest rozliczana jako pełny dzień pracy.
+- Obecny vertical slice kończy recepturę atomowo. Koszt, rezultat i pełny czas są
+  pokazane przed potwierdzeniem, po czym silnik pobiera monety, dodaje trwały
+  mundane item i przesuwa wspólny zegar. Projekty wielodniowe przerywane w
+  połowie oraz współpraca wielu rzemieślników pozostają poza tym zakresem.
+- Referencyjna kuźnia w `village_square_mvp` tworzy sztylet za 1 gp materiałów
+  w ciągu jednego dnia. Osiem godzin uruchamia istniejące konsekwencje zwłoki,
+  co potwierdza, że downtime nie ma osobnego ani darmowego czasu.
+
+## Granice warunków eksploracji i walki
+
+- `ConditionState` jest wspólnym stanem aktora, a nie stanem konkretnego widoku.
+  Warunki eksploracyjne dotyczące uczestników są przekazywane do `CombatState`.
+- Po encounterze najpierw emitowany jest `ENCOUNTER_ENDED`. Warunki o duration
+  lokalnym dla tury, rundy, pozycji, koncentracji albo encountera wygasają.
+  Pozostałe warunki bohaterów wracają do `ExplorationState` z niezmienionym
+  źródłem, duration i kontraktem save'a.
+- `Grappled` nie może przetrwać, jeżeli jego źródłowy aktor nie należy do
+  trwałej drużyny eksploracyjnej. Pozostałe `permanent` warunki mogą trwać dalej.
+- `SHORT_REST_COMPLETED`, `LONG_REST_COMPLETED` i `SCENARIO_ENDED` rozstrzygają
+  warunki tym samym eventowym kontraktem co aktywne efekty. Własny ponawiany
+  save nie blokuje wygaśnięcia na nadrzędnej granicy.
+- Hazard eksploracyjny może obecnie nałożyć `Prone`, `Poisoned` albo
+  `Restrained` z duration właściwym poza walką. `Grappled` wymaga żywego źródła
+  i pozostaje mechaniką rozstrzyganą w combat flow.
+- Referencyjny upadek na zatrute kolce bramy nakłada `Prone` oraz `Poisoned`
+  `until_short_rest`. Zatrucie wpływa na testy i ataki w encounterze, po czym
+  pozostaje widoczne w eksploracji aż do odpoczynku.
 
 Poza zakresem MVP:
 

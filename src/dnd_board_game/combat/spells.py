@@ -4,7 +4,13 @@ from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import Iterable, Sequence
 
-from dnd_board_game.actors import Actor, Faction, saving_throw_roll_modifiers
+from dnd_board_game.actors import (
+    Actor,
+    ExhaustionRollKind,
+    Faction,
+    apply_exhaustion_to_roll_request,
+    saving_throw_roll_modifiers,
+)
 from dnd_board_game.rules import (
     D20RollInput,
     D20RollRequest,
@@ -348,6 +354,11 @@ def resolve_actor_saving_throw(
             actor,
             saving_throw_ability=saving_throw.ability,
         )
+    roll_request = apply_exhaustion_to_roll_request(
+        actor,
+        roll_request,
+        ExhaustionRollKind.SAVING_THROW,
+    )
     if roll_request.mode != RollMode.NORMAL and natural_roll_2 is None:
         raise ValueError("Advantage or disadvantage saving throw requires two d20 rolls.")
     roll = resolve_d20_roll(

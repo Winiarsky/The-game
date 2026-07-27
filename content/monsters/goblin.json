@@ -12,6 +12,9 @@
   "hp": 10,
   "temp_hp": 0,
   "speed_feet": 30,
+  "senses": {
+    "darkvision_feet": 60
+  },
   "ability_scores": {
     "strength": 8,
     "dexterity": 14,

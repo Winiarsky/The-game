@@ -101,6 +101,28 @@ def test_hide_is_resolved_individually_against_passive_perception() -> None:
     assert result.detected_by_actor_ids == ("scout",)
 
 
+def test_hide_accepts_light_based_passive_perception_adjustments() -> None:
+    rogue = _actor("rogue", Faction.ALLY, Coordinate(0, 0))
+    goblin = _actor("goblin", Faction.ENEMY, Coordinate(4, 0), wisdom=16)
+    scout = _actor("scout", Faction.ENEMY, Coordinate(4, 1), wisdom=20)
+
+    result = resolve_hide(
+        (),
+        rogue,
+        (rogue, goblin, scout),
+        stealth_total=12,
+        passive_perception_adjustments={"goblin": -5},
+        automatically_hidden_from_actor_ids=("scout",),
+    )
+
+    assert result.hidden_state == HiddenState(
+        "rogue",
+        12,
+        ("goblin", "scout"),
+    )
+    assert result.detected_by_actor_ids == ()
+
+
 def test_search_reveals_only_to_the_searching_actor() -> None:
     goblin = _actor("goblin", Faction.ENEMY, Coordinate(4, 0))
     scout = _actor("scout", Faction.ENEMY, Coordinate(4, 1))

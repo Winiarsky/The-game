@@ -42,6 +42,17 @@ class SceneConclusionType(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class SceneObjectiveMilestone:
+    label: str
+    flag_key: str
+    flag_value: object = True
+
+    def __post_init__(self) -> None:
+        if not self.label.strip() or not self.flag_key.strip():
+            raise ValueError("Objective milestone label and flag key cannot be empty.")
+
+
+@dataclass(frozen=True, slots=True)
 class SceneObjective:
     id: str
     name: str
@@ -51,6 +62,7 @@ class SceneObjective:
     target_id: str | None = None
     flag_key: str | None = None
     flag_value: object = True
+    milestones: tuple[SceneObjectiveMilestone, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

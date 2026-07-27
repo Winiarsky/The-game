@@ -2,7 +2,7 @@
   "schema": "dnd_board_game.spell",
   "schema_version": 1,
   "ruleset_id": "dnd_5e_2014",
-  "source_pack_ids": ["project_original"],
+  "source_pack_ids": ["srd_5_1_cc_by_4_0"],
   "id": "healing_word",
   "name": "Słowo leczenia",
   "level": 1,
@@ -16,6 +16,7 @@
   "scaling": {"healing_dice_per_slot_level": 1},
   "effect": {
     "kind": "healing",
-    "healing": {"dice": "1d4", "modifier": 3}
+    "ability": "wisdom",
+    "healing": {"dice": "1d4", "modifier": 0}
   }
 }

@@ -1,0 +1,22 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["srd_5_1_cc_by_4_0"],
+  "id": "cure_wounds",
+  "name": "Leczenie ran",
+  "level": 1,
+  "school": "evocation",
+  "casting_time": "action",
+  "range": {"kind": "touch"},
+  "components": {"verbal": true, "somatic": true, "materials": []},
+  "duration": {"kind": "instantaneous"},
+  "concentration": false,
+  "ritual": false,
+  "scaling": {"healing_dice_per_slot_level": 1},
+  "effect": {
+    "kind": "healing",
+    "ability": "wisdom",
+    "healing": {"dice": "1d8", "modifier": 0}
+  }
+}

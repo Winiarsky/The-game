@@ -15,7 +15,7 @@ from dnd_board_game.combat import (
     SetupVisibility,
     SpellCastingKind,
 )
-from dnd_board_game.exploration import NpcOutcomeTier, SceneMode
+from dnd_board_game.exploration import FixtureKind, LightLevel, NpcOutcomeTier, SceneMode
 from dnd_board_game.inventory import HandSlot, effective_armor_class
 from dnd_board_game.scenarios import (
     RULESET_DND_5E_2014,
@@ -74,6 +74,7 @@ def _village_square_data_without_refs():
         actor.pop("item_refs", None)
         actor["attacks"] = [attack]
     data["exploration"].pop("merchants", None)
+    data["exploration"].pop("continuation", None)
     data["exploration"]["points"] = [
         point
         for point in data["exploration"]["points"]
@@ -105,6 +106,7 @@ def test_load_scenario_builds_actors_and_attack_sources():
     assert goblin.size == CreatureSize.SMALL
     assert goblin.position == Coordinate(1, 0)
     assert goblin.damage_affinities.resistances == ()
+    assert goblin.senses.darkvision_feet == 60
 
     hero_source = encounter.attack_sources_by_actor[hero.id]
     assert hero_source.name == "Miecz"
@@ -411,6 +413,8 @@ def test_load_gate_skirmish_uses_shared_map_setup_and_ranged_rogue():
         "sacred_flame",
         "radiant_line",
         "healing_word",
+        "cure_wounds",
+        "inflict_wounds",
         "bless_attack_bonus",
         "comprehend_languages",
         "shield",
@@ -613,6 +617,8 @@ def test_load_abandoned_watchtower_builds_exploration_scene():
     )
     assert gate_observation.id == "look_through_gate_gap"
     assert gate_observation.dc == 10
+    assert gate_observation.sight_based is True
+    assert gate_observation.distance_feet == 30
     assert [fact.minimum_total for fact in gate_observation.facts] == [10, 15, 20]
     assert gate_observation.facts[1].reveal_flag == "gate_goblins_spotted"
     initiative_edge = gate_observation.facts[2].encounter_edge
@@ -628,9 +634,22 @@ def test_load_abandoned_watchtower_builds_exploration_scene():
     assert vault.hazards[0].saving_throw.dc == 12
     assert vault.hazards[0].damage.damage_type == "bludgeoning"
     assert vault.hazards[0].failure_effects == (
-        {"type": "apply_condition", "parameters": {"condition": "prone"}},
+        {
+            "type": "apply_condition",
+            "parameters": {"condition": "prone", "duration": "permanent"},
+        },
+        {
+            "type": "apply_condition",
+            "parameters": {
+                "condition": "poisoned",
+                "duration": "until_short_rest",
+                "source_label": "Zatrute kolce na bramie",
+            },
+        },
     )
     assert exploration.traps[0].id == "gate_alarm_wire"
+    assert exploration.traps[0].detection_dc == 15
+    assert exploration.traps[0].detection_distance_feet == 10
     assert exploration.traps[0].detection_observation_id == "search_gate_traps"
     assert exploration.traps[0].activation_forbidden_flags == (
         "gate_critical_breach",
@@ -659,6 +678,12 @@ def test_load_abandoned_watchtower_builds_exploration_scene():
     assert "Opuszczona" in exploration.llm_context.summary
     assert "brak działającego mechanizmu lotu" in exploration.llm_context.forbidden_assumptions
     gate = next(zone for zone in exploration.zones if zone.id == "gate")
+    assert gate.ambient_light == LightLevel.DIM
+    assert gate.allows_hiding is True
+    assert gate.search_minutes == 10
+    assert next(
+        zone for zone in exploration.zones if zone.id == "barracks"
+    ).ambient_light == LightLevel.DARKNESS
     assert gate.image == "assets/gate_preview.png"
     assert "lina nie pozwala latać" in gate.llm_context.forbidden_assumptions
     assert {item.id for item in gate.item_instances} == {"gate_rotten_planks", "gate_loose_stones"}
@@ -670,7 +695,21 @@ def test_load_abandoned_watchtower_builds_exploration_scene():
         "watchtower_gate",
         "gate_corroded_hinges",
         "gate_thorny_brush",
+        "gate_supply_chest",
     }
+    gate_fixture = next(
+        fixture for fixture in gate.fixtures if fixture.id == "watchtower_gate"
+    )
+    assert gate_fixture.kind == FixtureKind.DOOR
+    assert gate_fixture.initially_locked is True
+    assert gate_fixture.hit_points == 27
+    assert gate_fixture.blocks_movement_when_closed is True
+    chest = next(
+        fixture for fixture in gate.fixtures if fixture.id == "gate_supply_chest"
+    )
+    assert chest.kind == FixtureKind.CONTAINER
+    assert chest.lock_dc == 12
+    assert chest.yield_items[0].definition_id == "arrow"
     hinges = next(fixture for fixture in gate.fixtures if fixture.id == "gate_corroded_hinges")
     assert hinges.detachable is True
     assert hinges.yield_items[0].definition_id == "scrap_metal"
@@ -826,6 +865,8 @@ def test_load_abandoned_watchtower_folder_keeps_monster_and_item_refs_working():
     assert {spell.id for spell in cleric.spell_preparation.available_spells} == {
         "radiant_line",
         "healing_word",
+        "cure_wounds",
+        "inflict_wounds",
         "bless_attack_bonus",
     }
     gate = next(zone for zone in exploration.zones if zone.id == "gate")
@@ -950,12 +991,47 @@ def test_load_village_square_mvp_builds_exploration_locations_setup_points_and_o
     assert {zone.id for zone in exploration.zones} == {"market", "tavern", "elder_house", "forest_road"}
     assert len(exploration.objectives) == 1
     assert exploration.objectives[0].condition == SceneObjectiveCondition.FLAG_EQUALS
-    assert exploration.objectives[0].flag_key == "quest_hook_found"
+    assert exploration.objectives[0].flag_key == "ready_for_watchtower"
+    assert [
+        (milestone.label, milestone.flag_key, milestone.flag_value)
+        for milestone in exploration.objectives[0].milestones
+    ] == [
+        ("Zdobądźcie trop o strażnicy", "quest_hook_found", True),
+        ("Przyjmijcie zadanie Brena", "quest_accepted", True),
+        ("Potwierdźcie gotowość do drogi", "ready_for_watchtower", True),
+    ]
+    assert exploration.continuation is not None
+    assert exploration.continuation.target_scenario_name == "Opuszczona strażnica"
+    assert exploration.continuation.propagate_flags == (
+        "quest_hook_found",
+        "quest_accepted",
+        "watchtower_dusk_arrival",
+        "watchtower_alerted",
+    )
+    assert [outcome.id for outcome in exploration.continuation.outcomes] == [
+        "lost_old_road",
+        "alerted_watchtower_arrival",
+        "dusk_watchtower_arrival",
+        "prepared_watchtower_arrival",
+    ]
+    recipe = exploration.downtime_policy.recipe_by_id("forge_dagger")
+    assert recipe.zone_id == "market"
+    assert recipe.product.id == "dagger"
+    assert recipe.material_cost_cp == 100
+    assert recipe.time_cost_minutes == 480
+    hero = next(actor for actor in exploration.actors if str(actor.id) == "hero")
+    assert hero.proficiencies.tools == ("smiths_tools",)
+    assert any(item.id == "smiths_tools" for item in hero.inventory)
+    assert hero.portrait == "portraits/abandoned_watchtower/hero.webp"
+    rogue = next(actor for actor in exploration.actors if str(actor.id) == "rogue")
+    assert rogue.portrait == "portraits/abandoned_watchtower/rogue.webp"
 
     market = next(zone for zone in exploration.zones if zone.id == "market")
     assert market.marker_position == Coordinate(8, 4)
-    assert {option.id for option in market.options} >= {"talk_to_elder", "read_notice_board", "ask_for_rumors"}
-    assert next(option for option in market.options if option.id == "talk_to_elder").success_flag == "quest_hook_found"
+    assert {option.id for option in market.options} == {
+        "read_notice_board",
+        "ask_for_rumors",
+    }
 
     visible_setup_points = {point.id for point in exploration.points if point.visibility == SetupVisibility.VISIBLE and point.requires_setup}
     assert visible_setup_points == {
@@ -968,8 +1044,92 @@ def test_load_village_square_mvp_builds_exploration_locations_setup_points_and_o
     assert hidden_point.visibility == SetupVisibility.HIDDEN
     assert hidden_point.requires_setup is False
     elder = next(point for point in exploration.points if point.id == "elder_npc")
+    market = next(zone for zone in exploration.zones if zone.id == "market")
+    assert market.paper_map is not None
+    assert market.paper_map.id == "village_market"
+    assert market.paper_map.width_cm == 50.0
+    assert market.paper_map.a4_pdf_path.endswith("village_market.pdf")
     assert elder.npc_interaction is not None
     assert elder.npc_interaction.id == "elder_bren"
+    assert {goal.id for goal in elder.npc_interaction.goals} == {
+        "ask_watchtower_problem",
+        "negotiate_advance",
+        "accept_watchtower_quest",
+        "confirm_watchtower_departure",
+    }
+    elder_goals = {
+        goal.id: goal
+        for goal in elder.npc_interaction.goals
+    }
+    assert elder_goals["ask_watchtower_problem"].grounded_response is not None
+    assert (
+        elder_goals["ask_watchtower_problem"].grounded_response.success_message
+        == "Bren przekazuje drużynie sprawdzony trop o opuszczonej strażnicy."
+    )
+    assert {
+        variant.id
+        for variant in elder_goals[
+            "ask_watchtower_problem"
+        ].grounded_response.variants
+    } == {"map_and_warning", "plain_report"}
+    assert elder_goals["negotiate_advance"].grounded_response is not None
+    assert elder_goals["negotiate_advance"].grounded_response.npc_response == ""
+    elder_flow = next(flow for flow in exploration.flows if flow.npc_id == "elder_bren")
+    assert elder_flow.id == "elder_bren_flow"
+    assert {transition.id for transition in elder_flow.transitions} == {
+        "ask_bren_about_watchtower",
+        "negotiate_bren_advance",
+        "accept_bren_watchtower_quest",
+        "confirm_bren_watchtower_departure",
+    }
+    assert exploration.continuation is not None
+    assert exploration.continuation.id == "depart_for_watchtower"
+    assert exploration.continuation.departure_zone_id == "forest_road"
+    assert exploration.continuation.target_scenario_id == "abandoned_watchtower"
+    assert exploration.continuation.target_scenario_path == "abandoned_watchtower.json"
+    assert exploration.continuation.available_if_flags == ("ready_for_watchtower",)
+    assert exploration.continuation.travel_minutes == 45
+    assert exploration.continuation.travel_policy.navigation_dc == 12
+    assert (
+        exploration.continuation.travel_policy.navigation_failure_delay_minutes
+        == 30
+    )
+    assert exploration.continuation.travel_policy.safe_travel_minutes == 480
+    assert exploration.clock_policy.start_hour == 17
+    assert [
+        (event.id, event.at_minute)
+        for event in exploration.clock_policy.events
+    ] == [
+        ("dusk_on_old_road", 90),
+        ("watchtower_defenders_alerted", 120),
+    ]
+    assert {zone.id: zone.travel_minutes for zone in exploration.zones} == {
+        "market": 5,
+        "tavern": 5,
+        "elder_house": 5,
+        "forest_road": 15,
+    }
+    tavern = next(zone for zone in exploration.zones if zone.id == "tavern")
+    assert tavern.short_rest_policy is not None
+    assert tavern.short_rest_policy.duration_minutes == 60
+    assert "listen_at_tavern" not in {option.id for option in tavern.options}
+    keeper = next(point for point in exploration.points if point.id == "tavern_keeper")
+    assert keeper.npc_interaction is not None
+    assert keeper.npc_interaction.id == "keeper_olan"
+    assert {goal.id for goal in keeper.npc_interaction.goals} == {
+        "ask_watchtower_rumors",
+        "chat_with_keeper",
+    }
+    keeper_flow = next(flow for flow in exploration.flows if flow.npc_id == "keeper_olan")
+    assert keeper_flow.id == "tavern_keeper_flow"
+    assert {transition.id for transition in keeper_flow.transitions} == {
+        "ask_olan_about_watchtower",
+        "chat_with_olan",
+    }
+    assert elder.npc_interaction.policy.intent_permission("information").time_cost_minutes == 10
+    assert elder.npc_interaction.policy.intent_permission("commitment").time_cost_minutes == 5
+    assert elder.npc_interaction.policy.intent_permission("travel").time_cost_minutes == 5
+    assert keeper.npc_interaction.policy.intent_permission("information").time_cost_minutes == 10
     merchant_point = next(
         point for point in exploration.points if point.id == "merchant_stall"
     )
@@ -1016,6 +1176,57 @@ def test_load_village_square_mvp_builds_exploration_locations_setup_points_and_o
         for variant in transition.variants
         for reaction in variant.reactions
     )
+
+
+def test_scenario_continuation_rejects_target_id_mismatch(tmp_path):
+    data = _village_square_data_without_refs()
+    data["exploration"]["continuation"] = {
+        "id": "depart",
+        "label": "Wyrusz",
+        "departure_zone_id": "forest_road",
+        "target_scenario_id": "expected_target",
+        "target_scenario_path": "target.json",
+        "available_if_flags": ["ready_for_watchtower"],
+    }
+    target_path = tmp_path / "target.json"
+    target_path.write_text(
+        json.dumps(
+            {
+                "schema": SCENARIO_SCHEMA,
+                "schema_version": 1,
+                "ruleset_id": RULESET_DND_5E_2014,
+                "source_pack_ids": ["project_original"],
+                "id": "different_target",
+            }
+        ),
+        encoding="utf-8",
+    )
+    scenario_path = tmp_path / "scenario.json"
+    scenario_path.write_text(json.dumps(data), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="expects scenario expected_target"):
+        load_scenario(scenario_path)
+
+
+def test_loader_rejects_invalid_scenario_clock_effect_with_precise_path(tmp_path):
+    data = _village_square_data_without_refs()
+    data["exploration"]["clock"]["events"][0]["effects"] = [
+        {
+            "type": "grant_resource",
+            "parameters": {"resource_id": "missing_clock_resource"},
+        }
+    ]
+    scenario_path = tmp_path / "bad_clock_effect.json"
+    scenario_path.write_text(json.dumps(data), encoding="utf-8")
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"scenario clock event dusk_on_old_road\.effects\[0\].*"
+            r"missing_clock_resource"
+        ),
+    ):
+        load_scenario(scenario_path)
 
 
 def test_loader_rejects_npc_branch_effect_with_precise_content_path(tmp_path):

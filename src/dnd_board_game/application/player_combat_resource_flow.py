@@ -5,7 +5,14 @@ from random import Random
 from typing import Protocol
 
 from dnd_board_game.actions import ActionResourceResolver
-from dnd_board_game.actors import Actor, Faction, saving_throw_roll_modifiers, spell_is_prepared
+from dnd_board_game.actors import (
+    Actor,
+    ExhaustionRollKind,
+    Faction,
+    apply_exhaustion_to_roll_request,
+    saving_throw_roll_modifiers,
+    spell_is_prepared,
+)
 from dnd_board_game.combat import (
     ActionEconomyCost,
     ActiveCombatEffect,
@@ -400,6 +407,7 @@ class PlayerCombatResourceFlowService:
                 damage=damage,
                 dc=dc,
                 natural_roll=rng.randint(1, 20),
+                natural_roll_2=rng.randint(1, 20),
             )
         return CombatResourceTransition(
             state=state,
@@ -425,15 +433,24 @@ class PlayerCombatResourceFlowService:
         damage: int,
         dc: int,
         natural_roll: int,
+        natural_roll_2: int | None = None,
     ) -> CombatResourceTransition:
         actor = _actor_by_id(state, actor_id)
-        request = D20RollRequest(
-            modifiers=(
-                *saving_throw_roll_modifiers(actor, "constitution"),
-                *saving_throw_aura_modifiers(state.actors, actor),
-            )
+        request = apply_exhaustion_to_roll_request(
+            actor,
+            D20RollRequest(
+                modifiers=(
+                    *saving_throw_roll_modifiers(actor, "constitution"),
+                    *saving_throw_aura_modifiers(state.actors, actor),
+                )
+            ),
+            ExhaustionRollKind.SAVING_THROW,
         )
-        roll = resolve_d20_roll(D20RollInput(request, int(natural_roll)))
+        if request.mode.value != "normal" and natural_roll_2 is None:
+            raise ValueError("Ten rzut obronny wymaga dwóch wyników d20.")
+        roll = resolve_d20_roll(
+            D20RollInput(request, int(natural_roll), natural_roll_2)
+        )
         success = roll.total >= int(dc)
         effect_labels = tuple(
             effect.label for effect in active_effects if effect.id in effect_ids

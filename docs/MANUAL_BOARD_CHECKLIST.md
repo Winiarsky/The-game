@@ -328,9 +328,18 @@ PYTHONPATH=src python -m dnd_board_game.runtime.demo_exploration_scene --scenari
 - [ ] Ukryta sakiewka nie świeci podczas setupu.
 - [ ] Kliknięcie głównego punktu `Rynek` pokazuje menu opcji wokół lokacji.
 - [ ] Opcje mają czytelne nazwy kolorów, bez wartości RGB.
-- [ ] Kliknięcie opcji `Porozmawiaj z sołtysem` ustawia flagę celu.
-- [ ] Po ustawieniu flagi aplikacja kończy scenę komunikatem o osiągniętym celu eksploracji.
-- [ ] JSONL zawiera `scene_flag_set`, `objective_completed` i `exploration_finished`.
+- [ ] Główny widok rynku pokazuje `Sprawdź tablicę ogłoszeń` i `Popytaj mieszkańców`; pierwsza opcja rozstrzyga się bez rzutu, a druga prosi o postać i fizyczny d20.
+- [ ] Cel `Przygotujcie wyprawę do strażnicy` pokazuje trzy kamienie milowe i zaznacza je kolejno po zdobyciu tropu, przyjęciu zadania i potwierdzeniu gotowości.
+- [ ] Rozmowa z Brenem najpierw ujawnia problem, potem pozwala przyjąć zadanie, a na końcu potwierdzić gotowość.
+- [ ] Ponowne otwarcie rozmowy z Brenem nie dodaje drugi raz jego tekstu powitalnego.
+- [ ] Samo zdobycie tropu nie kończy objective; kończy je dopiero `ready_for_watchtower`.
+- [ ] Przycisk wyjścia pozostaje zablokowany poza `Droga do lasu`.
+- [ ] W `Droga do lasu` karta wyjścia otwiera formularz tempa, nawigatora i fizycznego rzutu Survival.
+- [ ] Po rozstrzygnięciu wyjście pokazuje nazwę `Opuszczona strażnica`, bez surowego `abandoned_watchtower` i bez absolutnej ścieżki snapshotu.
+- [ ] UI pokazuje bieżącą porę dnia i dolicza czas rozmów oraz przejść między lokacjami.
+- [ ] Szybkie wyjście nie ustawia flag zwłoki; po short reście w karczmie dalsza podróż pokazuje narrację zmierzchu i alarmu goblinów.
+- [ ] Handoff zawiera `departure_minute`, `arrival_minute`, `travel_minutes`, `arrival_clock` i uruchomione eventy zegara.
+- [ ] JSONL zawiera `ui_scenario_time_advanced`, `ui_scenario_clock_event_triggered`, `ui_scenario_completed` oraz `ui_scenario_continuation_ready`.
 
 ### Runtime `demo_exploration_scene` LLM GM Classifier
 
@@ -338,7 +347,7 @@ Terminal 2:
 
 ```bash
 source .env
-PYTHONPATH=src python -m dnd_board_game.runtime.demo_exploration_scene --scenario content/scenarios/abandoned_watchtower.json --board-backend none --gm-classifier groq --gm-accept yes --freeform-action "Próbujemy wejść górą przez bramę, używając liny z hakiem." --challenge-roll gm_generated=14 --session-id gm_classifier_demo --max-steps 2
+PYTHONPATH=src python -m dnd_board_game.runtime.demo_exploration_scene --scenario content/scenarios/abandoned_watchtower.json --board-backend none --gm-classifier groq --gm-accept yes --goal-id force_entry --freeform-action "Próbujemy wyważyć bramę z całej siły." --challenge-roll gm_generated=14 --session-id gm_classifier_demo --max-steps 2
 ```
 
 - [ ] Freeform działa domyślnie na Gemini, jeśli w środowisku jest `GEMINI_API_KEY`; `--gm-classifier groq` nadal pozwala wymusić Groq.
@@ -370,3 +379,100 @@ Problemy:
 
 Następne poprawki:
 ```
+## M8.6 — światło i widzenie
+
+- [ ] W `abandoned_watchtower` sprawdź, że brama pokazuje półmrok, a obserwacja
+  Perception przez szczelinę wymaga dwóch k20 i wybiera niższy wynik.
+- [ ] Zapal pochodnię Bohatera i potwierdź, że obserwacja do 20 ft nie ma
+  utrudnienia, UI pokazuje zasięg/czas, a po 60 minutach mechanicznego czasu
+  pochodnia gaśnie.
+- [ ] W ciemnej strefie potwierdź, że sight-based observation bez światła lub
+  odpowiedniego zmysłu jest blokowana czytelnym komunikatem.
+
+## M8.7 — Search, Hide i pułapki
+
+- [ ] W panelu Łotrzycy wybierz „Przeszukaj”, wpisz dwa wyniki k20 wymagane
+  przez półmrok i potwierdź koszt 10 minut oraz wykrycie linki przy wyniku 15+.
+- [ ] Po wykryciu linki sprawdź osobno rozbrojenie, obejście i świadome
+  uruchomienie; nieudane rozbrojenie powinno przejść do fizycznego Dexterity save.
+- [ ] Wykonaj Hide Łotrzycą, potwierdź widoczny zapis wyniku, a potem rozpocznij
+  ciche wejście. Po setupie bohater nie powinien rzucać ponownie, a wynik ma być
+  porównany osobno z goblinami.
+- [ ] Zapalenie pochodni ukrytym bohaterem powinno natychmiast usunąć jego
+  eksploracyjny stan Hide.
+
+## M8.8 — drzwi, zamki, pojemniki i obiekty
+
+- [ ] Przy bramie sprawdź, że Stara brama i Skrzynia strażnicza pokazują stan
+  zamka, KP oraz HP bez wpisywania deklaracji do chatu.
+- [ ] Łotrzycą wybierz „Otwórz zamek” skrzyni. UI powinno wymagać fizycznego d20,
+  pokazać narzędzia złodziejskie i doliczyć biegłość.
+- [ ] Po odblokowaniu wybierz „Otwórz”, a następnie „Przeszukaj zawartość”.
+  Dwanaście strzał powinno zostać ujawnionych w scenie, ale nie przeniesionych
+  automatycznie do ekwipunku.
+- [ ] Zaatakuj skrzynię: wynik poniżej KP nie zmienia HP, obrażenia poniżej progu
+  nie zmieniają HP, a zejście do 0 niszczy obiekt i ujawnia zawartość.
+- [ ] Otwórz Starą bramę przed encounterem i potwierdź, że jej projekcja w walce
+  nie blokuje ruchu ani nie zapewnia cover. Powtórz z zamkniętą bramą i sprawdź
+  blokadę oraz `+5`.
+
+## M8.9 — podróż i exhaustion
+
+- [ ] W `village_square_mvp` odblokuj wyjście do strażnicy, wybierz normalne
+  tempo, nawigatora i udany fizyczny rzut. Handoff powinien doliczyć 45 minut.
+- [ ] Powtórz z nieudanym rzutem nawigacji. Drużyna nadal dociera, ale handoff
+  pokazuje dodatkowe 30 minut i uruchamia odpowiednie progi zegara.
+- [ ] Sprawdź szybkie i wolne tempo: payload pokazuje odpowiednio karę do
+  passive Perception albo możliwość Stealth oraz zmieniony czas.
+- [ ] W testowym contentcie z trasą ponad 8 godzin wpisz rzuty Constitution save
+  dla każdego rozpoczętego dodatkowego odcinka. Porażka zwiększa exhaustion.
+- [ ] Rozpocznij encounter wyczerpanym aktorem i potwierdź zachowanie poziomu
+  oraz odpowiednie kary; long rest powinien usunąć dokładnie jeden poziom.
+
+## M8.10 — rozmowy i testy społeczne
+
+- [ ] Przy rannym zwiadowcy wybierz cel uspokojenia. UI powinno jawnie pokazać
+  Perswazję, Oszustwo i Zastraszanie przed wpisaniem deklaracji.
+- [ ] Wybierz Oszustwo, choć narracja klienta LLM sugeruje Perswazję. Podgląd
+  testu ma nadal pokazać Charisma (Deception) oraz ST z tabeli reakcji.
+- [ ] Sprawdź automatyczną zgodę, test i odmowę dla różnych kombinacji
+  attitude/risk; odmowa niemożliwej prośby nie może uruchomić efektów sukcesu.
+- [ ] Po nieudanej próbie potwierdź blokadę ponowienia, odblokowanie po zmianie
+  wymaganej flagi i ostateczne wyczerpanie limitu.
+- [ ] Zmień nastawienie przez authored outcome, wyjdź z rozmowy i wróć. UI oraz
+  snapshot powinny zachować attitude, historię i ujawnione informacje.
+
+## M8.11 — crafting w downtime
+
+- [ ] Na rynku w `village_square_mvp` otwórz kartę „Rzemiosło w downtime”.
+  Bohater z narzędziami kowala powinien móc wykuć sztylet, a Łotrzyca powinna
+  widzieć konkretny powód blokady.
+- [ ] Przed potwierdzeniem sprawdź podgląd: 1 gp materiałów, 8 godzin pracy,
+  kuźnia na rynku i trwały sztylet.
+- [ ] Po potwierdzeniu sprawdź spadek portfela Bohatera z 10 gp do 9 gp, sztylet
+  w jego ekwipunku oraz przesunięcie zegara o 480 minut.
+- [ ] Potwierdź, że oba autorskie progi zwłoki wioski uruchomiły się tylko raz.
+
+## M8.12 — wspólne warunki eksploracji i walki
+
+- [ ] Przy `vault_gate` doprowadź do krytycznej porażki i nieudanego save'a
+  hazardu. Bohater powinien otrzymać `Prone` oraz `Poisoned` ze źródłem
+  „Zatrute kolce na bramie” i duration `until_short_rest`.
+- [ ] Rozpocznij encounter bez leczenia. `Poisoned` ma nadal dawać utrudnienie
+  do ataków i testów cech.
+- [ ] Zakończ encounter zwycięstwem. `Poisoned` powinno wrócić do eksploracji,
+  natomiast warunki `until_encounter_end` oraz chwyty przeciwników mają zniknąć.
+- [ ] Ukończ short rest i potwierdź komunikat wygaśnięcia zatrucia. Warunek
+  permanentny nie może zostać usunięty przez ten odpoczynek.
+
+## M8.13 — rezultaty i konsekwencje między scenami
+
+- [ ] Ukończ zadanie wioski bez zwłoki i przejdź do strażnicy. Ekran końca ma
+  pokazać sukces „Sprawne dotarcie do strażnicy” oraz ukończony cel źródłowy.
+- [ ] Powtórz po short reście uruchamiając alarm strażnicy. Wynik ma być
+  `partial_success`, a narracja ma informować o przygotowanych obrońcach.
+- [ ] Powtórz z nieudaną nawigacją. Drużyna nadal dociera, ale wynik ma być
+  `fail_forward` i wskazywać zgubienie starego traktu.
+- [ ] Sprawdź payload handoffu: zawiera tylko wskazane `propagated_flags`,
+  zwalidowane `target_effects` oraz `source_objectives`; ekran gracza nie
+  ujawnia technicznych nazw ukrytych flag docelowych.

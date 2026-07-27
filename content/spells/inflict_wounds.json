@@ -1,0 +1,23 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["srd_5_1_cc_by_4_0"],
+  "id": "inflict_wounds",
+  "name": "Zadawanie ran",
+  "level": 1,
+  "school": "necromancy",
+  "casting_time": "action",
+  "range": {"kind": "touch"},
+  "components": {"verbal": true, "somatic": true, "materials": []},
+  "duration": {"kind": "instantaneous"},
+  "concentration": false,
+  "ritual": false,
+  "scaling": {"damage_dice_per_slot_level": 1},
+  "effect": {
+    "kind": "attack",
+    "ability": "wisdom",
+    "attack_kind": "melee",
+    "damage": {"dice": "3d10", "modifier": 0, "damage_type": "necrotic"}
+  }
+}
