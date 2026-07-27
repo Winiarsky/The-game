@@ -130,6 +130,329 @@ def _page_assets(client) -> tuple[str, str, str]:
     return html, javascript, stylesheet
 
 
+def test_combat_context_menu_confirm_route_forwards_loot_quantity() -> None:
+    session = _session()
+    captured: dict[str, object] = {}
+
+    def confirm(option_id: str = "", *, quantity: int | None = None):
+        captured["option_id"] = option_id
+        captured["quantity"] = quantity
+        return session.state_payload()
+
+    session.confirm_combat_context_menu = confirm
+    client = create_app(session).test_client()
+
+    response = client.post(
+        "/api/combat/context-menu/confirm",
+        json={"option_id": "loot-item:goblin:bolts", "quantity": 3},
+    )
+
+    assert response.status_code == 200
+    assert captured == {
+        "option_id": "loot-item:goblin:bolts",
+        "quantity": 3,
+    }
+
+    invalid = client.post(
+        "/api/combat/context-menu/confirm",
+        json={"option_id": "loot-item:goblin:bolts", "quantity": 1.5},
+    )
+    assert invalid.status_code == 400
+    assert "całkowitą" in invalid.get_json()["error"]
+
+
+def test_concentration_routes_forward_cast_level_and_multiple_targets() -> None:
+    session = _session()
+    captured: dict[str, object] = {}
+
+    def start(action_id: str, cast_level: int | None = None):
+        captured["action_id"] = action_id
+        captured["cast_level"] = cast_level
+        return session.state_payload()
+
+    def confirm(
+        *,
+        target_id: str | None = None,
+        target_ids: tuple[str, ...] = (),
+    ):
+        captured["target_id"] = target_id
+        captured["target_ids"] = target_ids
+        return session.state_payload()
+
+    session.start_combat_concentration_action = start
+    session.confirm_combat_concentration_action = confirm
+    client = create_app(session).test_client()
+
+    started = client.post(
+        "/api/combat/concentration/start",
+        json={"action_id": "bless_attack_bonus", "cast_level": 2},
+    )
+    confirmed = client.post(
+        "/api/combat/concentration/confirm",
+        json={"target_ids": ["cleric", "hero", "rogue"]},
+    )
+
+    assert started.status_code == 200
+    assert confirmed.status_code == 200
+    assert captured == {
+        "action_id": "bless_attack_bonus",
+        "cast_level": 2,
+        "target_id": None,
+        "target_ids": ("cleric", "hero", "rogue"),
+    }
+
+
+def test_summon_routes_forward_cast_level_and_position() -> None:
+    session = _session()
+    captured: dict[str, object] = {}
+
+    def start(action_id: str, cast_level: int | None = None):
+        captured["action_id"] = action_id
+        captured["cast_level"] = cast_level
+        return session.state_payload()
+
+    def confirm(*, col: int, row: int):
+        captured["col"] = col
+        captured["row"] = row
+        return session.state_payload()
+
+    session.start_summon = start
+    session.confirm_summon = confirm
+    client = create_app(session).test_client()
+
+    started = client.post(
+        "/api/combat/summon/start",
+        json={"action_id": "call_guardian_spirit", "cast_level": 1},
+    )
+    confirmed = client.post(
+        "/api/combat/summon/confirm",
+        json={"col": 4, "row": 7},
+    )
+
+    assert started.status_code == 200
+    assert confirmed.status_code == 200
+    assert captured == {
+        "action_id": "call_guardian_spirit",
+        "cast_level": 1,
+        "col": 4,
+        "row": 7,
+    }
+
+
+def test_magic_movement_routes_forward_cast_level_and_target() -> None:
+    session = _session()
+    captured: dict[str, object] = {}
+
+    def start(action_id: str, cast_level: int | None = None):
+        captured["action_id"] = action_id
+        captured["cast_level"] = cast_level
+        return session.state_payload()
+
+    def confirm(
+        *,
+        col: int | None = None,
+        row: int | None = None,
+        target_id: str | None = None,
+    ):
+        captured["col"] = col
+        captured["row"] = row
+        captured["target_id"] = target_id
+        return session.state_payload()
+
+    session.start_magic_movement = start
+    session.confirm_magic_movement = confirm
+    client = create_app(session).test_client()
+
+    started = client.post(
+        "/api/combat/magic-movement/start",
+        json={"action_id": "repelling_pulse", "cast_level": 1},
+    )
+    confirmed = client.post(
+        "/api/combat/magic-movement/confirm",
+        json={"target_id": "goblin_a"},
+    )
+
+    assert started.status_code == 200
+    assert confirmed.status_code == 200
+    assert captured == {
+        "action_id": "repelling_pulse",
+        "cast_level": 1,
+        "col": None,
+        "row": None,
+        "target_id": "goblin_a",
+    }
+
+
+def test_spell_debuff_routes_forward_cast_level_and_target() -> None:
+    session = _session()
+    captured: dict[str, object] = {}
+
+    def start(action_id: str, cast_level: int | None = None):
+        captured["action_id"] = action_id
+        captured["cast_level"] = cast_level
+        return session.state_payload()
+
+    def confirm(*, target_id: str):
+        captured["target_id"] = target_id
+        return session.state_payload()
+
+    session.start_spell_debuff = start
+    session.confirm_spell_debuff = confirm
+    client = create_app(session).test_client()
+
+    started = client.post(
+        "/api/combat/spell-debuff/start",
+        json={"action_id": "weakening_miasma", "cast_level": 1},
+    )
+    confirmed = client.post(
+        "/api/combat/spell-debuff/confirm",
+        json={"target_id": "goblin_a"},
+    )
+
+    assert started.status_code == 200
+    assert confirmed.status_code == 200
+    assert captured == {
+        "action_id": "weakening_miasma",
+        "cast_level": 1,
+        "target_id": "goblin_a",
+    }
+
+
+def test_spell_dispel_routes_forward_cast_level_target_and_check() -> None:
+    session = _session()
+    captured: dict[str, object] = {}
+
+    def start(action_id: str, cast_level: int | None = None):
+        captured["action_id"] = action_id
+        captured["cast_level"] = cast_level
+        return session.state_payload()
+
+    def confirm(*, target_id: str):
+        captured["target_id"] = target_id
+        return session.state_payload()
+
+    def check(*, natural_roll: int):
+        captured["natural_roll"] = natural_roll
+        return session.state_payload()
+
+    session.start_spell_dispel = start
+    session.confirm_spell_dispel = confirm
+    session.resolve_spell_dispel_check = check
+    client = create_app(session).test_client()
+
+    started = client.post(
+        "/api/combat/spell-dispel/start",
+        json={"action_id": "unravel_magic", "cast_level": 1},
+    )
+    confirmed = client.post(
+        "/api/combat/spell-dispel/confirm",
+        json={"target_id": "goblin_a"},
+    )
+    checked = client.post(
+        "/api/combat/spell-dispel/check",
+        json={"natural_roll": 17},
+    )
+
+    assert started.status_code == 200
+    assert confirmed.status_code == 200
+    assert checked.status_code == 200
+    assert captured == {
+        "action_id": "unravel_magic",
+        "cast_level": 1,
+        "target_id": "goblin_a",
+        "natural_roll": 17,
+    }
+
+
+def test_trade_routes_forward_validated_transaction_payloads() -> None:
+    session = _session()
+    captured: list[tuple[str, dict[str, object]]] = []
+
+    def buy(**payload):
+        captured.append(("buy", payload))
+        return session.state_payload()
+
+    def sell(**payload):
+        captured.append(("sell", payload))
+        return session.state_payload()
+
+    session.buy_merchant_item = buy
+    session.sell_merchant_item = sell
+    client = create_app(session).test_client()
+    payload = {
+        "merchant_id": "mira",
+        "actor_id": "hero",
+        "item_id": "crossbow_bolt",
+        "quantity": 6,
+    }
+
+    assert client.post("/api/trade/buy", json=payload).status_code == 200
+    assert client.post("/api/trade/sell", json=payload).status_code == 200
+    assert captured == [
+        ("buy", payload),
+        ("sell", payload),
+    ]
+
+    invalid = client.post(
+        "/api/trade/buy",
+        json={**payload, "quantity": 1.5},
+    )
+    assert invalid.status_code == 400
+    assert "całkowitą" in invalid.get_json()["error"]
+
+
+def test_armor_route_requires_boolean_equip_and_forwards_payload() -> None:
+    session = _session()
+    captured: dict[str, object] = {}
+
+    def change(**payload):
+        captured.update(payload)
+        return session.state_payload()
+
+    session.change_actor_armor = change
+    client = create_app(session).test_client()
+
+    response = client.post(
+        "/api/equipment/armor",
+        json={"actor_id": "hero", "armor_id": "chain_mail", "equip": True},
+    )
+
+    assert response.status_code == 200
+    assert captured == {
+        "actor_id": "hero",
+        "armor_id": "chain_mail",
+        "equip": True,
+    }
+    invalid = client.post(
+        "/api/equipment/armor",
+        json={"actor_id": "hero", "armor_id": "chain_mail", "equip": "yes"},
+    )
+    assert invalid.status_code == 400
+    assert "true albo false" in invalid.get_json()["error"]
+
+
+def test_light_route_forwards_actor_item_and_action() -> None:
+    session = _session()
+    captured: dict[str, object] = {}
+
+    def change(**payload):
+        captured.update(payload)
+        return session.state_payload()
+
+    session.change_actor_light = change
+    response = create_app(session).test_client().post(
+        "/api/equipment/light",
+        json={"actor_id": "hero", "item_id": "candle", "action": "ignite"},
+    )
+
+    assert response.status_code == 200
+    assert captured == {
+        "actor_id": "hero",
+        "item_id": "candle",
+        "action": "ignite",
+    }
+
+
 def test_combat_ui_exposes_manual_enemy_saving_throw_endpoint() -> None:
     html, javascript, _stylesheet = _page_assets(_client())
 
@@ -328,6 +651,7 @@ def test_exploration_ui_page_includes_short_rest_flow():
     assert 'id="short-rest-button"' in html
     assert "Krótki odpoczynek" in javascript
     assert "spendShortRestHitDie" in javascript
+    assert "data-short-rest-attunement" in javascript
     assert "/api/rest/short/start" in javascript
 
 
@@ -456,6 +780,32 @@ def test_exploration_ui_short_rest_api_advances_time_and_returns_to_exploration(
     assert completed.get_json()["short_rest"]["elapsed_minutes"] == 60
     assert finished.status_code == 200
     assert finished.get_json()["flow"]["stage"] == "location_active"
+
+
+def test_exploration_ui_short_rest_api_accepts_attunement_choice():
+    client = _client()
+
+    client.post("/api/rest/short/start", json={})
+    completed = client.post(
+        "/api/rest/short/confirm",
+        json={
+            "attunement_choices": [
+                {
+                    "actor_id": "cleric",
+                    "item_id": "binding_wand",
+                    "action": "attune",
+                }
+            ]
+        },
+    )
+
+    assert completed.status_code == 200
+    cleric = next(
+        actor for actor in completed.get_json()["actors"]
+        if actor["id"] == "cleric"
+    )
+    wand = next(item for item in cleric["inventory"] if item["id"] == "binding_wand")
+    assert wand["attuned"] is True
 
 
 def test_exploration_ui_page_includes_gm_decision_correction_controls():
@@ -628,6 +978,8 @@ def test_exploration_ui_combat_turn_controls_remain_available_during_board_scan(
     assert "/api/combat/ready-attack/skip" in html
     assert "/api/combat/ready-attack/roll" in html
     assert "/api/combat/ready-attack/damage" in html
+    assert "/api/combat/defensive-spell/cast" in html
+    assert "/api/combat/defensive-spell/skip" in html
     assert "damageComponentPayload(pending, 'ready-damage')" in html
     assert "useCombatDash()" in html
     assert "useCombatDodge()" in html

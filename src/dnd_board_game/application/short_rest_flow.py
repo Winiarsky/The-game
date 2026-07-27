@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from typing import Callable
 
 from dnd_board_game.actors import Actor, Faction
 from dnd_board_game.combat import TriggerActivation, resolve_actor_trigger_events
@@ -9,7 +10,14 @@ from dnd_board_game.exploration import (
     ExplorationState,
     ExplorationZone,
     ShortRestPolicy,
+    TimedMagicEffect,
     apply_exploration_effect,
+    advance_exploration_time,
+)
+from dnd_board_game.inventory import (
+    ItemAttunementChoice,
+    ItemAttunementResult,
+    apply_item_attunement,
 )
 from dnd_board_game.rules import (
     ActiveEffect,
@@ -39,7 +47,9 @@ class ShortRestCompletionTransition:
     effects: tuple[ExplorationEffectResult, ...]
     active_effects: tuple[ActiveEffect, ...]
     expired_effects: tuple[ActiveEffect, ...]
+    expired_magic_effects: tuple[TimedMagicEffect, ...]
     trigger_activations: tuple[TriggerActivation, ...]
+    attunement_results: tuple[ItemAttunementResult, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,26 +85,66 @@ class ShortRestFlowService:
         actors: tuple[Actor, ...],
         pending: PendingShortRest,
         active_effects: tuple[ActiveEffect, ...] = (),
+        roll_die: Callable[[int], int] | None = None,
+        attunement_choices: tuple[ItemAttunementChoice, ...] = (),
     ) -> ShortRestCompletionTransition:
         if pending.completed:
             raise ValueError("Ten krótki odpoczynek został już ukończony.")
         if state.party_position.zone_id != pending.zone_id:
             raise ValueError("Drużyna opuściła miejsce wybranego odpoczynku.")
-        rest_results = tuple(
-            complete_short_rest(actor)
+        choices_by_actor: dict[str, ItemAttunementChoice] = {}
+        for choice in attunement_choices:
+            if choice.actor_id in choices_by_actor:
+                raise ValueError(
+                    "Jeden bohater może zmienić tylko jedną więź podczas short resta."
+                )
+            choices_by_actor[choice.actor_id] = choice
+        allied_ids = {
+            str(actor.id)
             for actor in actors
             if actor.faction == Faction.ALLY
-        )
+        }
+        unknown_choice_ids = set(choices_by_actor) - allied_ids
+        if unknown_choice_ids:
+            raise ValueError("Wybrano attunement dla nieznanego bohatera.")
+        actors_by_id = {str(actor.id): actor for actor in actors}
+        for actor_id, choice in choices_by_actor.items():
+            apply_item_attunement(
+                actors_by_id[actor_id],
+                item_id=choice.item_id,
+                action=choice.action,
+            )
+        rest_results_list: list[RestResult] = []
+        attunement_results: list[ItemAttunementResult] = []
+        for actor in actors:
+            if actor.faction != Faction.ALLY:
+                continue
+            rest_result = complete_short_rest(actor, roll_die=roll_die)
+            choice = choices_by_actor.get(str(actor.id))
+            if choice is not None:
+                attunement = apply_item_attunement(
+                    rest_result.actor_after,
+                    item_id=choice.item_id,
+                    action=choice.action,
+                )
+                attunement_results.append(attunement)
+                rest_result = replace(rest_result, actor_after=attunement.actor)
+            rest_results_list.append(rest_result)
+        rest_results = tuple(rest_results_list)
         actors_by_id = {result.actor_after.id: result.actor_after for result in rest_results}
         updated_actors = tuple(actors_by_id.get(actor.id, actor) for actor in actors)
         updated_state = replace(
             state,
-            elapsed_minutes=state.elapsed_minutes + pending.policy.duration_minutes,
             short_rest_counts=_increment_short_rest_count(
                 state.short_rest_counts,
                 pending.policy.id,
             ),
         )
+        time_advance = advance_exploration_time(
+            updated_state,
+            pending.policy.duration_minutes,
+        )
+        updated_state = time_advance.state
         effects: list[ExplorationEffectResult] = []
         for raw_effect in pending.policy.completion_effects:
             effect = apply_exploration_effect(updated_state, raw_effect)
@@ -119,7 +169,9 @@ class ShortRestFlowService:
             effects=tuple(effects),
             active_effects=expiration.active_effects,
             expired_effects=expiration.expired_effects,
+            expired_magic_effects=time_advance.expired_effects,
             trigger_activations=trigger_resolution.activations,
+            attunement_results=tuple(attunement_results),
         )
 
     def spend_hit_die(

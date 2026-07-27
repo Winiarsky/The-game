@@ -1,0 +1,25 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["project_original"],
+  "id": "repelling_pulse",
+  "name": "Odpychający impuls",
+  "level": 1,
+  "school": "evocation",
+  "casting_time": "action",
+  "range": {"kind": "distance", "feet": 30},
+  "components": {"verbal": true, "somatic": true, "materials": []},
+  "duration": {"kind": "instantaneous"},
+  "concentration": false,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "spell_movement",
+    "label": "Odpychający impuls",
+    "target_faction": "enemy",
+    "save_ability": "strength",
+    "save_dc": 13,
+    "movement": {"kind": "push", "distance_feet": 10}
+  }
+}

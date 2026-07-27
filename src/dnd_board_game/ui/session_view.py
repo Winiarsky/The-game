@@ -21,6 +21,7 @@ class UiSessionView:
     current_zone_points: list[dict[str, object]]
     active_challenge: dict[str, object] | None
     active_point: dict[str, object] | None
+    trade: dict[str, object] | None
     resources: list[dict[str, object]]
     discovered_sources: list[dict[str, object]]
     actors: list[dict[str, object]]
@@ -59,6 +60,7 @@ class UiSessionView:
             "current_zone_points": self.current_zone_points,
             "active_challenge": self.active_challenge,
             "active_point": self.active_point,
+            "trade": self.trade,
             "resources": self.resources,
             "discovered_sources": self.discovered_sources,
             "actors": self.actors,

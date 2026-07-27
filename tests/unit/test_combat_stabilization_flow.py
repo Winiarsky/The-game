@@ -62,7 +62,13 @@ def test_failed_medicine_check_still_uses_action() -> None:
 
 
 def test_healers_kit_stabilizes_without_roll_and_consumes_one_use() -> None:
-    kit = InventoryItem("healers_kit", "Zestaw uzdrowiciela", "tool", quantity=2)
+    kit = InventoryItem(
+        "healers_kit",
+        "Zestaw uzdrowiciela",
+        "tool",
+        charges_maximum=10,
+        charges_current=2,
+    )
     healer = replace(_actor("healer", Faction.ALLY, Coordinate(0, 0)), inventory=(kit,))
     target = _dying(_actor("target", Faction.ALLY, Coordinate(1, 0)))
     enemy = _actor("enemy", Faction.ENEMY, Coordinate(5, 0))

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import Callable, Mapping
+from typing import Callable, Mapping, Protocol
 
 from dnd_board_game.actors import Actor, ActorId
 from dnd_board_game.combat import (
@@ -10,6 +10,7 @@ from dnd_board_game.combat import (
     AppliedDamageResult,
     AttackDeclaration,
     AttackSource,
+    AttackSourceType,
     CombatState,
     CombatStatus,
     DamageComponentInput,
@@ -22,9 +23,14 @@ from dnd_board_game.combat import (
     attack_source_with_hidden_advantage,
     attack_source_with_prone,
     actor_as_combat_target,
+    actor_spell_cast_validation,
+    consume_spell_resource,
     consume_next_attack_effects,
     damage_components_from_totals,
+    expend_thrown_weapon,
+    grid_distance_feet,
     replace_actor,
+    record_ammunition_expenditure,
     reveal_actor,
     is_hidden_from,
     open_reaction_window,
@@ -37,16 +43,23 @@ from dnd_board_game.combat import (
     use_movement,
 )
 from dnd_board_game.rules import (
+    EffectDuration,
     D20RollInput,
     D20RollRequest,
     D20RollResult,
     EffectEvent,
     EffectEventType,
+    EffectSource,
+    EffectSourceType,
     RollMode,
+    RollModifier,
+    RollModifierType,
     expire_active_effects,
+    apply_active_effect,
     resolve_d20_roll,
 )
-from dnd_board_game.world import BoardState, PathResult
+from dnd_board_game.inventory import consume_ammunition, has_ammunition
+from dnd_board_game.world import BoardState, PathResult, line_of_sight_clear
 
 from .damage_presentation import applied_damage_message
 
@@ -85,6 +98,438 @@ class ReadyAttackTrigger:
     target_id: str
     effect_id: str
     trigger: str
+
+
+class DefensiveSpellActionSpec(Protocol):
+    id: str
+    label: str
+    action_type: str
+    value: int
+    spell_level: int
+
+
+@dataclass(frozen=True, slots=True)
+class DefensiveSpellReactionResolution:
+    state: CombatState
+    active_effects: tuple[ActiveCombatEffect, ...]
+    result: EnemyAutoTurnResult
+    effect: ActiveCombatEffect
+    prevented_hit: bool
+    message: str
+
+
+class DefensiveSpellReactionFlowService:
+    """Offer and resolve a self-only AC reaction after a known attack roll."""
+
+    def option(
+        self,
+        *,
+        state: CombatState,
+        enemy_result: EnemyAutoTurnResult,
+        actions_by_actor: Mapping[ActorId, tuple[DefensiveSpellActionSpec, ...]],
+    ) -> ReactionOption | None:
+        resolution = enemy_result.attack_resolution
+        target = enemy_result.target
+        if (
+            resolution is None
+            or target is None
+            or not resolution.hit
+            or resolution.critical
+        ):
+            return None
+        actor = next(
+            (candidate for candidate in state.actors if str(candidate.id) == target.id),
+            None,
+        )
+        if (
+            actor is None
+            or actor.is_defeated()
+            or not reaction_available_for(state, actor)
+        ):
+            return None
+        action = next(
+            (
+                candidate
+                for candidate in actions_by_actor.get(actor.id, ())
+                if candidate.action_type == "reaction_ac_bonus"
+                and candidate.value > 0
+                and _spell_action_is_available(actor, candidate)
+            ),
+            None,
+        )
+        if action is None:
+            return None
+        return ReactionOption(
+            id=f"defensive-spell:{actor.id}:{action.id}",
+            kind=ReactionKind.DEFENSIVE_SPELL,
+            reactor_actor_id=str(actor.id),
+            target_actor_id=str(enemy_result.enemy.id),
+            trigger_event="actor_hit_by_attack",
+            effect_id=action.id,
+            label=action.label,
+            value=action.value,
+            spell_level=action.spell_level,
+        )
+
+    def cast(
+        self,
+        *,
+        state: CombatState,
+        enemy_result: EnemyAutoTurnResult,
+        active_effects: tuple[ActiveCombatEffect, ...],
+        option: ReactionOption,
+        actions_by_actor: Mapping[ActorId, tuple[DefensiveSpellActionSpec, ...]],
+    ) -> DefensiveSpellReactionResolution:
+        if option.kind != ReactionKind.DEFENSIVE_SPELL or option.effect_id is None:
+            raise ValueError("Aktualna reakcja nie jest czarem obronnym.")
+        target = _actor_by_string_id(state, option.reactor_actor_id)
+        action = next(
+            (
+                candidate
+                for candidate in actions_by_actor.get(target.id, ())
+                if candidate.id == option.effect_id
+                and candidate.action_type == "reaction_ac_bonus"
+            ),
+            None,
+        )
+        if action is None:
+            raise ValueError("Czar obronny nie jest dostępny dla tego aktora.")
+        if enemy_result.attack_resolution is None or enemy_result.attack_roll is None:
+            raise ValueError("Brak oczekującego rzutu ataku dla reakcji obronnej.")
+        if enemy_result.target is None or enemy_result.target.id != str(target.id):
+            raise ValueError("Oczekujący atak nie jest wymierzony w tego aktora.")
+
+        reaction = use_actor_reaction(state, target)
+        if not reaction.accepted:
+            raise ValueError(reaction.message)
+        target_with_reaction = _actor_by_string_id(reaction.state, str(target.id))
+        spell_use = consume_spell_resource(
+            target_with_reaction,
+            action.spell_level,
+            spell_id=action.id,
+        )
+        target_after_cast = spell_use.actor_after
+        reaction_state = replace_actor(reaction.state, target_after_cast)
+
+        effect = ActiveCombatEffect(
+            id=f"spell-ac:{target.id}:{action.id}",
+            actor_id=str(target.id),
+            kind="spell_ac_bonus",
+            label=action.label,
+            object_id=f"spell:{action.id}",
+            value=action.value,
+            source_actor_id=str(target.id),
+            source=EffectSource(EffectSourceType.SPELL, action.id, action.label),
+            duration=EffectDuration.UNTIL_TURN_START,
+            expiration_actor_id=str(target.id),
+            stacking_key=f"spell_ac_bonus:{target.id}",
+            spell_level=action.spell_level,
+        )
+        updated_effects = apply_active_effect(active_effects, effect).active_effects
+
+        target_snapshot = replace(
+            enemy_result.target,
+            ac=enemy_result.target.ac + action.value,
+        )
+        declaration = replace(
+            enemy_result.attack_resolution.declaration,
+            target=target_snapshot,
+        )
+        updated_attack = resolve_attack(
+            declaration,
+            enemy_result.attack_roll,
+            ActionUse.ACTION_AVAILABLE,
+        )
+
+        merged_state = replace(
+            enemy_result.state,
+            spent_reaction_actor_ids=reaction_state.spent_reaction_actor_ids,
+            condition_states=(
+                enemy_result.state.condition_states
+                if updated_attack.hit
+                else state.condition_states
+            ),
+        )
+        merged_state = replace_actor(merged_state, target_after_cast)
+        applied_damage = None
+        updated_target = None
+        damage = enemy_result.damage if updated_attack.hit else None
+        if updated_attack.hit and damage is not None:
+            applied_damage = apply_damage_result(
+                target_after_cast,
+                damage,
+                critical=updated_attack.critical,
+            )
+            updated_target = applied_damage.actor_after
+            merged_state = replace_actor(merged_state, updated_target)
+
+        prevented_hit = not updated_attack.hit
+        message = (
+            f"{target.name} rzuca {action.label}: AC rośnie do {target_snapshot.ac}. "
+            + (
+                f"Wynik ataku {enemy_result.attack_roll.total} staje się pudłem."
+                if prevented_hit
+                else f"Wynik ataku {enemy_result.attack_roll.total} nadal trafia."
+            )
+        )
+        updated_result = replace(
+            enemy_result,
+            state=merged_state,
+            target=target_snapshot,
+            attack_resolution=updated_attack,
+            damage=damage,
+            applied_damage=applied_damage,
+            updated_target=updated_target,
+            message=message,
+        )
+        return DefensiveSpellReactionResolution(
+            state=reaction_state,
+            active_effects=updated_effects,
+            result=updated_result,
+            effect=effect,
+            prevented_hit=prevented_hit,
+            message=message,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class CounterspellReactionResolution:
+    state: CombatState
+    result: EnemyAutoTurnResult
+    cast_level: int
+    interrupted_spell_level: int
+    countered: bool
+    check_request: D20RollRequest | None
+    check_dc: int | None
+    check_modifier: int
+    check_roll: D20RollResult | None
+    message: str
+
+
+class CounterspellReactionFlowService:
+    """Offer Counterspell before an enemy spell result is committed."""
+
+    def option(
+        self,
+        *,
+        board: BoardState,
+        state: CombatState,
+        enemy_result: EnemyAutoTurnResult,
+        actions_by_actor: Mapping[ActorId, tuple[DefensiveSpellActionSpec, ...]],
+    ) -> ReactionOption | None:
+        source = enemy_result.source
+        if (
+            source is None
+            or source.source_type != AttackSourceType.SPELL
+            or enemy_result.spell_countered
+            or not enemy_result.action_used
+        ):
+            return None
+        enemy_caster = next(
+            (
+                actor
+                for actor in enemy_result.state.actors
+                if actor.id == enemy_result.enemy.id
+            ),
+            enemy_result.enemy,
+        )
+        for actor in state.actors:
+            if (
+                actor.faction == enemy_result.enemy.faction
+                or actor.is_defeated()
+                or not reaction_available_for(state, actor)
+                or grid_distance_feet(actor.position, enemy_caster.position) > 60
+                or not line_of_sight_clear(
+                    board,
+                    actor.position,
+                    enemy_caster.position,
+                )
+            ):
+                continue
+            action = next(
+                (
+                    candidate
+                    for candidate in actions_by_actor.get(actor.id, ())
+                    if candidate.action_type == "spell_counter"
+                    and _counterspell_cast_levels(actor, candidate)
+                ),
+                None,
+            )
+            if action is None:
+                continue
+            return ReactionOption(
+                id=f"counterspell:{actor.id}:{action.id}",
+                kind=ReactionKind.SPELL_COUNTER,
+                reactor_actor_id=str(actor.id),
+                target_actor_id=str(enemy_result.enemy.id),
+                trigger_event="enemy_casts_spell",
+                effect_id=action.id,
+                label=action.label,
+                spell_level=action.spell_level,
+                cast_levels=_counterspell_cast_levels(actor, action),
+            )
+        return None
+
+    def cast(
+        self,
+        *,
+        state: CombatState,
+        enemy_result: EnemyAutoTurnResult,
+        option: ReactionOption,
+        cast_level: int,
+        actions_by_actor: Mapping[ActorId, tuple[DefensiveSpellActionSpec, ...]],
+    ) -> CounterspellReactionResolution:
+        if option.kind != ReactionKind.SPELL_COUNTER or option.effect_id is None:
+            raise ValueError("Aktualna reakcja nie jest Kontrczarem.")
+        caster = _actor_by_string_id(state, option.reactor_actor_id)
+        action = next(
+            (
+                candidate
+                for candidate in actions_by_actor.get(caster.id, ())
+                if candidate.id == option.effect_id
+                and candidate.action_type == "spell_counter"
+            ),
+            None,
+        )
+        if action is None:
+            raise ValueError("Kontrczar nie jest dostępny dla tego aktora.")
+        if cast_level not in _counterspell_cast_levels(caster, action):
+            raise ValueError("Wybrany poziom slotu Kontrczaru nie jest dostępny.")
+        source = enemy_result.source
+        if source is None or source.source_type != AttackSourceType.SPELL:
+            raise ValueError("Oczekująca akcja przeciwnika nie jest czarem.")
+
+        reaction = use_actor_reaction(state, caster)
+        if not reaction.accepted:
+            raise ValueError(reaction.message)
+        caster_with_reaction = _actor_by_string_id(
+            reaction.state,
+            option.reactor_actor_id,
+        )
+        spell_use = consume_spell_resource(
+            caster_with_reaction,
+            action.spell_level,
+            cast_level,
+            spell_id=action.id,
+        )
+        resource_state = replace_actor(reaction.state, spell_use.actor_after)
+        interrupted_level = int(source.cast_level or source.spell_level)
+        if interrupted_level <= cast_level:
+            message = (
+                f"{caster.name} rzuca {action.label} ze slotu {cast_level}. poziomu "
+                f"i automatycznie przerywa {source.name}."
+            )
+            return CounterspellReactionResolution(
+                state=resource_state,
+                result=_countered_enemy_spell_result(
+                    state=resource_state,
+                    enemy_result=enemy_result,
+                    caster=spell_use.actor_after,
+                    message=message,
+                ),
+                cast_level=cast_level,
+                interrupted_spell_level=interrupted_level,
+                countered=True,
+                check_request=None,
+                check_dc=None,
+                check_modifier=_spellcasting_ability_modifier(caster),
+                check_roll=None,
+                message=message,
+            )
+
+        modifier = _spellcasting_ability_modifier(caster)
+        request = D20RollRequest(
+            modifiers=(
+                RollModifier(
+                    "cecha bazowa rzucania czarów",
+                    modifier,
+                    RollModifierType.ABILITY,
+                ),
+            )
+        )
+        return CounterspellReactionResolution(
+            state=resource_state,
+            result=_enemy_spell_result_with_counterspell_resources(
+                resource_state,
+                enemy_result,
+                spell_use.actor_after,
+            ),
+            cast_level=cast_level,
+            interrupted_spell_level=interrupted_level,
+            countered=False,
+            check_request=request,
+            check_dc=10 + interrupted_level,
+            check_modifier=modifier,
+            check_roll=None,
+            message=(
+                f"{caster.name} rzuca {action.label}. Wrogi czar {interrupted_level}. "
+                f"poziomu wymaga testu cechy rzucania czarów ST {10 + interrupted_level}."
+            ),
+        )
+
+    def resolve_check(
+        self,
+        *,
+        state: CombatState,
+        enemy_result: EnemyAutoTurnResult,
+        caster_id: str,
+        cast_level: int,
+        interrupted_spell_level: int,
+        natural_roll: int,
+    ) -> CounterspellReactionResolution:
+        caster = _actor_by_string_id(state, caster_id)
+        modifier = _spellcasting_ability_modifier(caster)
+        request = D20RollRequest(
+            modifiers=(
+                RollModifier(
+                    "cecha bazowa rzucania czarów",
+                    modifier,
+                    RollModifierType.ABILITY,
+                ),
+            )
+        )
+        check = resolve_d20_roll(D20RollInput(request, int(natural_roll)))
+        dc = 10 + interrupted_spell_level
+        countered = check.total >= dc
+        source_name = (
+            enemy_result.source.name
+            if enemy_result.source is not None
+            else "wrogi czar"
+        )
+        message = (
+            f"{caster.name}: test Kontrczaru {check.total} przeciw ST {dc} — "
+            + (
+                f"sukces, {source_name} zostaje przerwany."
+                if countered
+                else f"porażka, {source_name} działa normalnie."
+            )
+        )
+        result = (
+            _countered_enemy_spell_result(
+                state=state,
+                enemy_result=enemy_result,
+                caster=caster,
+                message=message,
+            )
+            if countered
+            else _enemy_spell_result_with_counterspell_resources(
+                state,
+                enemy_result,
+                caster,
+            )
+        )
+        return CounterspellReactionResolution(
+            state=state,
+            result=result,
+            cast_level=cast_level,
+            interrupted_spell_level=interrupted_spell_level,
+            countered=countered,
+            check_request=request,
+            check_dc=dc,
+            check_modifier=modifier,
+            check_roll=check,
+            message=message,
+        )
 
 
 class CombatReactionFlowService:
@@ -144,12 +589,35 @@ class CombatReactionFlowService:
             if source is None:
                 reaction_window = advance_reaction_window(reaction_window)
                 continue
+            if source.ammunition_type is not None and not has_ammunition(
+                attacker,
+                source.ammunition_type,
+            ):
+                reaction_window = advance_reaction_window(reaction_window)
+                continue
             reaction = use_actor_reaction(updated_state, attacker)
             if not reaction.accepted:
                 reaction_window = advance_reaction_window(reaction_window)
                 continue
             updated_state = reaction.state
+            if source.ammunition_type is not None:
+                usage = consume_ammunition(attacker, source.ammunition_type)
+                updated_state = record_ammunition_expenditure(
+                    updated_state,
+                    attacker,
+                    usage,
+                )
+                updated_state = replace_actor(updated_state, usage.actor_after)
+                attacker = usage.actor_after
             actor = next(candidate for candidate in updated_state.actors if str(candidate.id) == actor_id)
+            if source.thrown and source.source_item_id is not None:
+                updated_state = expend_thrown_weapon(
+                    updated_state,
+                    str(attacker.id),
+                    source.source_item_id,
+                    actor.position,
+                )
+                attacker = _actor_by_string_id(updated_state, str(attacker.id))
             source = attack_source_with_target_combat_effects(attacker, actor, source, updated_effects)
             source = attack_source_with_hidden_advantage(
                 source,
@@ -253,12 +721,34 @@ class PlayerReactionFlowService:
         source = attack_sources_by_actor.get(attacker.id)
         if source is None:
             raise ValueError(f"Aktor {attacker.name} nie ma zdefiniowanego ataku.")
+        if source.ammunition_type is not None and not has_ammunition(
+            attacker,
+            source.ammunition_type,
+        ):
+            raise ValueError(f"Brak amunicji typu {source.ammunition_type} dla {source.name}.")
         reaction = use_actor_reaction(state, attacker)
         if not reaction.accepted:
             raise ValueError(reaction.message)
         updated_state = reaction.state
         attacker = _actor_by_string_id(updated_state, attacker_id)
+        if source.ammunition_type is not None:
+            usage = consume_ammunition(attacker, source.ammunition_type)
+            updated_state = record_ammunition_expenditure(
+                updated_state,
+                attacker,
+                usage,
+            )
+            updated_state = replace_actor(updated_state, usage.actor_after)
+            attacker = usage.actor_after
         target = _actor_by_string_id(updated_state, target_id)
+        if source.thrown and source.source_item_id is not None:
+            updated_state = expend_thrown_weapon(
+                updated_state,
+                attacker_id,
+                source.source_item_id,
+                target.position,
+            )
+            attacker = _actor_by_string_id(updated_state, attacker_id)
         source = attack_source_with_target_combat_effects(
             attacker,
             target,
@@ -419,6 +909,11 @@ class PlayerReactionFlowService:
             source = attack_sources_by_actor.get(readied_actor.id)
             if source is None:
                 continue
+            if source.ammunition_type is not None and not has_ammunition(
+                readied_actor,
+                source.ammunition_type,
+            ):
+                continue
             legal_targets = start_attack_action(
                 board,
                 readied_actor,
@@ -447,6 +942,95 @@ def _ready_trigger_for_enemy_result(result: EnemyAutoTurnResult) -> str | None:
     if result.target is not None:
         return "enemy_attacks"
     return None
+
+
+def _spell_action_is_available(
+    actor: Actor,
+    action: DefensiveSpellActionSpec,
+) -> bool:
+    action_cost = getattr(action, "action_cost", None)
+    if getattr(action_cost, "value", action_cost) != "reaction":
+        return False
+    validation = actor_spell_cast_validation(actor, action.id)
+    return validation is not None and validation.valid
+
+
+def _counterspell_cast_levels(
+    actor: Actor,
+    action: DefensiveSpellActionSpec,
+) -> tuple[int, ...]:
+    action_cost = getattr(action, "action_cost", None)
+    if getattr(action_cost, "value", action_cost) != "reaction":
+        return ()
+    validation = actor_spell_cast_validation(actor, action.id)
+    if validation is None or not validation.valid:
+        return ()
+    return validation.available_cast_levels
+
+
+def _spellcasting_ability_modifier(actor: Actor) -> int:
+    if actor.spell_save_dc <= 0:
+        return 0
+    return actor.spell_save_dc - 8 - actor.proficiency_bonus
+
+
+def _enemy_spell_result_with_counterspell_resources(
+    state: CombatState,
+    enemy_result: EnemyAutoTurnResult,
+    caster: Actor,
+) -> EnemyAutoTurnResult:
+    merged_state = replace(
+        enemy_result.state,
+        spent_reaction_actor_ids=state.spent_reaction_actor_ids,
+    )
+    result_caster = next(
+        (actor for actor in merged_state.actors if actor.id == caster.id),
+        None,
+    )
+    if result_caster is not None:
+        caster = replace(
+            result_caster,
+            inventory=caster.inventory,
+            spell_slots=caster.spell_slots,
+        )
+    return replace(
+        enemy_result,
+        state=replace_actor(merged_state, caster),
+    )
+
+
+def _countered_enemy_spell_result(
+    *,
+    state: CombatState,
+    enemy_result: EnemyAutoTurnResult,
+    caster: Actor,
+    message: str,
+) -> EnemyAutoTurnResult:
+    enemy_after_action = next(
+        (
+            actor
+            for actor in enemy_result.state.actors
+            if actor.id == enemy_result.enemy.id
+        ),
+        enemy_result.enemy,
+    )
+    countered_state = replace_actor(state, enemy_after_action)
+    return replace(
+        enemy_result,
+        state=countered_state,
+        message=message,
+        attack_roll=None,
+        attack_resolution=None,
+        damage=None,
+        applied_damage=None,
+        updated_target=None,
+        saving_throw_request=None,
+        saving_throw_result=None,
+        base_damage=None,
+        base_damage_components=(),
+        spell_countered=True,
+        counterspell_actor_id=str(caster.id),
+    )
 
 
 def _actor_by_string_id(state: CombatState, actor_id: str) -> Actor:

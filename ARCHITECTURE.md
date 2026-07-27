@@ -20,7 +20,7 @@ src/dnd_board_game/
   actors/                      # Actor state, PCs, monsters, NPCs
   actions/                     # Action definitions and action resolution entry points
   combat/                      # Initiative, turns, attacks, damage, conditions
-  inventory/                   # Items, equipment, inventory rules
+  inventory/                   # Items, equipment, attunement, charges, loot, currency, and trade
   scenarios/                   # Scenario loading and runtime encounter setup
   hardware/                    # Adapter from game events to board.Connection
   ui/                          # Application session, Flask transport, views, templates, and static assets
@@ -62,6 +62,12 @@ combat -> WLED
 - Small APIs with tests before adding feature breadth.
 - Data-driven content after the core behavior is stable.
 - Combat/exploration features should map to the action-mechanics hierarchy in `docs/MECHANICS_ARCHITECTURE.md` before UI-specific flow is added.
+- `core/migrations.py` owns schema-neutral, sequential pure-data migrations.
+  Snapshot and content loaders register explicit `vN -> vN+1` transforms and
+  never silently skip an unknown version.
+- `scenarios/content_contract.py` owns content headers, stable-id syntax and
+  source-pack metadata, while `scenarios/content_audit.py` validates the whole
+  repository catalog through the same scenario loader used by runtime.
 
 ## Hardware Boundary
 
@@ -157,8 +163,32 @@ The exploration web surface is split into explicit responsibilities:
   one interrupted actor, stable reaction options, the current roll stage, advancement,
   and skipping reactors whose reaction resource is no longer available.
   `application/combat_reaction_flow.py` consumes that queue for automatic and manual
-  opportunity attacks, while Ready detection contributes options to the same window;
-  the UI resumes the interrupted enemy action only after the window closes,
+  opportunity attacks, post-hit defensive spell reactions and pre-resolution
+  Counterspell reactions, while Ready detection contributes options to the same
+  window. A defensive spell re-evaluates the already rolled attack before damage is
+  committed; Counterspell either clears the pending spell result or records its
+  ability-check stage. The UI resumes the interrupted enemy action only after the
+  window closes,
+- `combat/long_casting.py` owns persisted, transport-neutral progress for casting
+  times measured in minutes or hours. `application/long_casting_flow.py` spends one
+  action per caster turn, uses the shared concentration effect/check lifecycle,
+  defers slots and components until completion, and removes interrupted casts
+  without charging their spell resource,
+- `combat/summoning.py` owns data-driven summoned-creature statistics, legal
+  placement and initiative insertion/removal. `application/summoning_flow.py`
+  consumes the caster's action and slot, binds the dynamic actor to the shared
+  concentration lifecycle, and removes it when that concentration disappears,
+- `combat/magic_movement.py` owns free-tile validation for teleportation and
+  obstacle-aware straight-line push/pull destinations. The application flow
+  consumes the spell resource, resolves an optional save and emits ordinary
+  actor-moved events without spending movement or opening opportunity attacks,
+- `application/spell_debuff_flow.py` owns save-first hostile spell targeting,
+  resource consumption and condition application. It delegates the condition
+  itself and repeated turn-timed saves to the shared combat condition lifecycle,
+- `combat/dispelling.py` groups spell-authored active effects and conditions by
+  target, source and cast level. `application/spell_dispel_flow.py` owns target
+  selection, automatic same/lower-level removal, physical ability checks for
+  stronger spells and summon cleanup after their concentration effect disappears,
 - `combat/scene.py` owns transport-neutral scene objectives and typed encounter
   conclusions. Victory/defeat can come from combat state, interaction objectives can
   finish an active encounter, and retreat/surrender are explicit declarations rather
@@ -171,6 +201,27 @@ The exploration web surface is split into explicit responsibilities:
   and free object-interaction resources; movement remains available between attacks,
   and Shove or Grapple can replace one attack,
   content and UI only declare or display those costs,
+- `inventory/armor.py` owns body-armor AC formulas, Strength-based speed penalties,
+  Stealth disadvantage and exploration don/doff transitions; combat movement and
+  roll flows consume these derived rules without mutating base actor statistics,
+- `inventory/charges.py` owns generic item-use spending and deterministic rest
+  recovery. Application flows supply action costs and injected dice; UI and content
+  do not mutate charge counters directly,
+- `inventory/attunement.py` owns the three-item limit, item-power availability and
+  deterministic attune/unattune transitions. `application/short_rest_flow.py`
+  limits each actor to one such transition during a completed short rest,
+- `inventory/magic_items.py` owns typed passive item effects and their shared
+  availability/equipment/attunement gate. Existing AC, speed and d20 modifier
+  builders consume its contributions instead of implementing item-specific rules,
+- `inventory/weapons.py` owns stable weapon-category/property/special-rule enums.
+  Item content uses one nested `weapon` contract; the scenario loader expands it
+  into typed melee, ranged, finesse and thrown attack sources. Combat owns binding
+  actor ability damage, long-range disadvantage, heavy/Small handling and physical
+  thrown-weapon placement,
+- `inventory/adventuring_gear.py` owns typed mundane categories, spellcasting-focus
+  metadata, container capacities, light/fuel lifecycles, utility check modifiers,
+  object durability and equipment-pack expansion. The loader resolves standalone
+  item files and stable IDs from the unified adventuring-gear catalog,
 - `application/enemy_turn_flow.py` owns enemy-turn validation, data-driven Multiattack
   source sequencing, intent planning, automatic
   resolution orchestration, and classification into Ready, opportunity, movement, attack,
@@ -183,7 +234,9 @@ The exploration web surface is split into explicit responsibilities:
 - `application/player_area_healing_flow.py` owns player healing and area-spell targeting,
   resource consumption, saving throws, multi-target damage, and cancellation transitions,
 - `application/player_combat_resource_flow.py` owns consumable combat actions and the
-  concentration lifecycle, including damage-triggered checks and effect removal,
+  concentration lifecycle, including cast-level target-count scaling, bounded
+  multi-target selection, grouped target effects, damage-triggered checks and
+  all-at-once effect removal,
 - `application/combat_scene_interaction_flow.py` owns combat scene-object selection,
   interaction resolution, saving throws, and position-bound effect expiration,
 - `ui/exploration_app.py` owns the current application session and compatibility entry point,
@@ -209,6 +262,20 @@ Prepared-spell membership is deterministic actor domain state in
 `actors/spell_preparation.py`. Scenario content supplies the available list and preparation
 limit; neither the actor model nor the application flow infers a character class. Combat and
 exploration resolvers consult the same profile before consuming a spell slot.
+Versioned definitions under `content/spells/` are the single source for spell metadata and
+their attack, healing or combat-action effect. `rules/spellcasting.py` owns the content-neutral
+schema, prepared/known/spellbook access profiles, cast-level selection and V/S/M validation;
+`scenarios/loader.py` adapts the effect to the existing combat pipeline.
+Per-slot scaling remains data in `SpellDefinition` and is applied by generic attack/healing
+source transformers before prompting for physical dice. `application/ritual_casting_flow.py`
+owns exploration ritual execution: access and components are validated through the same
+casting rules, normal casting time gains ten minutes, and no spell slot is consumed.
+`exploration/magic_effects.py` owns the shared minute-based lifecycle for persistent
+exploration magic. Rituals register typed effects there, while crafting, rests and armor
+changes advance the same clock; expiry removes the effect and clears its authoritative flag.
+Combat-duration spell effects use the shared `ActiveEffect` lifecycle. In particular,
+Shield contributes to the common effective-AC calculation for the triggering attack and
+later attacks, then expires at the protected actor's next turn start.
 
 Rest data is actor domain state in `actors/resources.py`; D&D recovery decisions live in
 `rules/resting.py`. Scenario zones may provide a `ShortRestPolicy`, but they do not implement

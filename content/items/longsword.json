@@ -1,25 +1,24 @@
 {
+  "schema": "dnd_board_game.item",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["srd_5_1_cc_by_4_0"],
   "id": "longsword",
   "name": "Miecz",
   "kind": "weapon",
-  "hands_required": 1,
-  "versatile_damage_dice": "1d10",
-  "description": "Długi miecz o stalowym ostrzu.",
+  "value_cp": 1500,
+  "weight_lb": 3,
+  "description": "Uniwersalna jednoręczna broń sieczna.",
   "properties": ["long", "rigid", "metallic", "sharp", "cutting"],
-  "attacks": [
-    {
-      "id": "longsword_slash",
-      "name": "Miecz",
-      "source_type": "weapon",
+  "weapon": {
+      "category": "martial",
       "attack_kind": "melee",
-      "ability": "strength",
-      "range_feet": 5,
-      "reach_feet": 5,
+      "attack_id": "longsword_slash",
+      "properties": ["versatile"],
+      "versatile_damage_dice": "1d10",
       "damage": {
         "dice": "1d8",
-        "modifier": 0,
         "damage_type": "slashing"
       }
-    }
-  ]
+  }
 }

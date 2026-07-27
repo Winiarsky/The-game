@@ -1,4 +1,8 @@
 {
+  "schema": "dnd_board_game.scenario",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["project_original"],
   "id": "village_square_mvp",
   "name": "Wioska pod strażnicą",
   "scene_mode": "exploration",
@@ -35,6 +39,7 @@
         "wisdom": 12,
         "charisma": 10
       },
+      "currency": {"gp": 10},
       "item_refs": ["longsword"]
     },
     {
@@ -55,11 +60,39 @@
         "wisdom": 14,
         "charisma": 12
       },
+      "currency": {"gp": 5},
       "item_refs": ["dagger"]
     }
   ],
   "exploration": {
     "party_start_zone": "market",
+    "merchants": [
+      {
+        "id": "mira_market_stall",
+        "name": "Mira, kupczyni z rynku",
+        "buyback_percent": 50,
+        "currency": {"gp": 100},
+        "stock": [
+          {"item_ref": "crossbow_bolt", "quantity": 40},
+          {"item_ref": "healers_kit", "quantity": 1},
+          {"item_ref": "strength_potion", "quantity": 1},
+          {"item_ref": "dagger", "quantity": 2},
+          {"item_ref": "leather_armor", "quantity": 2},
+          {"item_ref": "chain_shirt", "quantity": 1},
+          {"item_ref": "chain_mail", "quantity": 1},
+          {"item_ref": "backpack", "quantity": 2},
+          {"item_ref": "candle", "quantity": 20},
+          {"item_ref": "torch", "quantity": 20},
+          {"item_ref": "oil_flask", "quantity": 10},
+          {"item_ref": "hempen_rope", "quantity": 3},
+          {"item_ref": "rations", "quantity": 20},
+          {"item_ref": "ink", "quantity": 2},
+          {"item_ref": "ink_pen", "quantity": 4},
+          {"item_ref": "paper", "quantity": 20},
+          {"item_ref": "explorers_pack", "quantity": 1}
+        ]
+      }
+    ],
     "zones": [
       {
         "id": "market",
@@ -209,6 +242,18 @@
       }
     ],
     "points": [
+      {
+        "id": "merchant_stall",
+        "name": "Stragan Miry",
+        "zone_id": "market",
+        "positions": [[7, 5]],
+        "color": "interactive",
+        "visibility": "visible",
+        "description": "Zadaszony stragan z bełtami, wyposażeniem podróżnym i kilkoma drogimi miksturami.",
+        "interaction_label": "Handluj z Mirą",
+        "requires_setup": true,
+        "merchant_id": "mira_market_stall"
+      },
       {
         "id": "elder_npc",
         "name": "Sołtys Bren",

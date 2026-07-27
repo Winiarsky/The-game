@@ -17,6 +17,10 @@ if TYPE_CHECKING:
         PendingPlayerAttack,
         PendingPlayerHealing,
         PendingShortRest,
+        PendingSummon,
+        PendingMagicMovement,
+        PendingSpellDebuff,
+        PendingSpellDispel,
     )
     from dnd_board_game.combat import (
         CombatContextMenu,
@@ -58,6 +62,10 @@ class UiPendingState:
     player_attack: PendingPlayerAttack | None = None
     player_healing: PendingPlayerHealing | None = None
     area_spell: PendingAreaSpell | None = None
+    summon: PendingSummon | None = None
+    magic_movement: PendingMagicMovement | None = None
+    spell_debuff: PendingSpellDebuff | None = None
+    spell_dispel: PendingSpellDispel | None = None
     combat_interaction: PendingCombatInteraction | None = None
     combat_help: PendingCombatHelp | None = None
     combat_skill_check: PendingCombatSkillCheck | None = None
@@ -68,6 +76,8 @@ class UiPendingState:
     combat_ready: PendingCombatReady | None = None
     opportunity_movement: PendingOpportunityMovement | None = None
     reaction_window: ReactionWindow | None = None
+    defensive_spell_reaction_resolved: bool | None = None
+    counterspell_reaction_resolved: bool | None = None
     enemy_opportunity_attack: PendingEnemyOpportunityAttack | None = None
     ready_attack: PendingReadyAttack | None = None
     short_rest: PendingShortRest | None = None
@@ -79,6 +89,10 @@ class UiPendingState:
         self.player_attack = None
         self.player_healing = None
         self.area_spell = None
+        self.summon = None
+        self.magic_movement = None
+        self.spell_debuff = None
+        self.spell_dispel = None
         self.combat_interaction = None
         self.combat_help = None
         self.combat_skill_check = None

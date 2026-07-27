@@ -173,6 +173,7 @@ from .models import (
     FixtureActionPolicy,
     FixtureOperation,
     FixtureRuntimeState,
+    TimedMagicEffect,
     ShortRestPolicy,
     TemporaryItem,
     SceneSourceDiscovery,
@@ -213,6 +214,11 @@ from .models import (
     zone_for_position,
     zone_is_available,
     remove_exploration_condition,
+)
+from .magic_effects import (
+    ExplorationTimeAdvance,
+    advance_exploration_time,
+    apply_timed_magic_effect,
 )
 from .npc_state import (
     NpcAttemptPlan,
@@ -373,6 +379,10 @@ __all__ = [
     "FixtureActionPolicy",
     "FixtureOperation",
     "FixtureRuntimeState",
+    "TimedMagicEffect",
+    "ExplorationTimeAdvance",
+    "advance_exploration_time",
+    "apply_timed_magic_effect",
     "ShortRestPolicy",
     "TemporaryItem",
     "TemporaryItemScope",

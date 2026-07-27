@@ -1,5 +1,8 @@
 {
+  "schema": "dnd_board_game.item_catalog",
   "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["project_original"],
   "properties": [
     {"id": "long", "label": "długie"},
     {"id": "short", "label": "krótkie"},

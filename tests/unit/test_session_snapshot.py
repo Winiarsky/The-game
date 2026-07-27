@@ -4,6 +4,7 @@ from dataclasses import replace
 import pytest
 
 from dnd_board_game.actors import (
+    ActorId,
     ActorTrigger,
     CreatureSize,
     DamageAffinityProfile,
@@ -13,10 +14,16 @@ from dnd_board_game.actors import (
     TriggerEventType,
 )
 from dnd_board_game.combat import (
+    AmmunitionExpenditure,
+    BattlefieldLoot,
     CombatCondition,
     ConditionSaveTiming,
     ConditionState,
     HiddenState,
+    LongCastState,
+    SummonedCreatureState,
+    add_summoned_creature,
+    summon_actor,
     DamageType,
     replace_actor,
     set_scene_flag,
@@ -44,13 +51,32 @@ from dnd_board_game.exploration import (
     resolve_npc_runtime_interaction,
     set_trap_status,
 )
-from dnd_board_game.inventory import HandSlot
+from dnd_board_game.inventory import (
+    ArmorCategory,
+    BundleEntry,
+    CheckModifier,
+    CheckModifierMode,
+    GearCategory,
+    HandSlot,
+    InventoryItem,
+    ItemChargeRecovery,
+    LootBundle,
+    LightSource,
+    SpellcastingFocusKind,
+)
 from dnd_board_game.save import (
     SNAPSHOT_SCHEMA_VERSION,
     SessionSnapshot,
     SnapshotValidationError,
     read_snapshot,
 )
+from dnd_board_game.rules import (
+    ActiveEffect,
+    EffectDuration,
+    EffectSource,
+    EffectSourceType,
+)
+from dnd_board_game.scenarios import build_encounter_from_scenario, load_scenario
 from dnd_board_game.ui.exploration_app import ExplorationUiSession, UiFlowStage, create_app
 from dnd_board_game.world import Coordinate
 
@@ -96,7 +122,653 @@ def test_snapshot_json_round_trip_is_deterministic(tmp_path):
     assert shield.armor_class_bonus == 2
     assert shield.armor_proficiency == "shield"
     assert len(shield.held_in) == 1
+    amulet = next(item for item in cleric.inventory if item.id == "guardian_amulet")
+    assert [effect.kind.value for effect in amulet.magic_effects] == [
+        "armor_class_bonus",
+        "saving_throw_bonus",
+    ]
     assert cleric.auras[0].id == "protective_reliquary"
+    assert {spell.id for spell in cleric.spells} == {
+        "sacred_flame",
+        "radiant_line",
+        "healing_word",
+        "bless_attack_bonus",
+        "comprehend_languages",
+        "shield",
+        "counterspell",
+        "warding_rite",
+        "call_guardian_spirit",
+        "veil_step",
+        "repelling_pulse",
+        "grasping_current",
+        "weakening_miasma",
+        "binding_frost",
+        "unravel_magic",
+    }
+    assert cleric.spell_access[0].kind.value == "prepared"
+    radiant_line = next(spell for spell in cleric.spells if spell.id == "radiant_line")
+    assert radiant_line.scaling is not None
+    assert radiant_line.scaling.damage_dice_per_slot_level == 1
+    bless = next(
+        spell for spell in cleric.spells if spell.id == "bless_attack_bonus"
+    )
+    assert bless.scaling is not None
+    assert bless.scaling.targets_per_slot_level == 1
+    ritual = next(
+        spell for spell in cleric.spells if spell.id == "comprehend_languages"
+    )
+    assert ritual.exploration_effect is not None
+    assert ritual.exploration_effect.flag_key == "comprehend_languages_active"
+
+
+def test_snapshot_round_trip_preserves_timed_exploration_magic(tmp_path):
+    session = _session(tmp_path)
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.cast_exploration_ritual("cleric", "comprehend_languages")
+    snapshot = session.create_snapshot()
+    fresh_state = _session(tmp_path).state
+
+    restored = SessionSnapshot.from_dict(
+        snapshot.as_dict(),
+        base_state=fresh_state,
+    )
+
+    assert len(restored.exploration_state.magic_effects) == 1
+    effect = restored.exploration_state.magic_effects[0]
+    assert effect.spell_id == "comprehend_languages"
+    assert effect.expires_at_minute == session.state.elapsed_minutes + 60
+    assert restored.exploration_state.flags == session.state.flags
+
+
+def test_snapshot_v14_migrates_with_no_timed_exploration_magic(tmp_path):
+    session = _session(tmp_path)
+    raw = session.create_snapshot().as_dict()
+    raw["schema_version"] = 14
+    raw["exploration"].pop("magic_effects")
+
+    restored = SessionSnapshot.from_dict(raw, base_state=session.state)
+
+    assert restored.as_dict()["schema_version"] == SNAPSHOT_SCHEMA_VERSION
+    assert restored.exploration_state.magic_effects == ()
+
+
+def test_snapshot_v15_migrates_with_no_long_casts(tmp_path):
+    session = _session(tmp_path)
+    _start_scout_combat(session)
+    raw = session.create_snapshot().as_dict()
+    raw["schema_version"] = 15
+    raw["combat"].pop("long_casts")
+
+    restored = SessionSnapshot.from_dict(raw, base_state=session.state)
+
+    assert restored.as_dict()["schema_version"] == SNAPSHOT_SCHEMA_VERSION
+    assert restored.combat_state is not None
+    assert restored.combat_state.long_casts == ()
+
+
+def test_snapshot_v16_migrates_with_no_summoned_creatures(tmp_path):
+    session = _session(tmp_path)
+    _start_scout_combat(session)
+    raw = session.create_snapshot().as_dict()
+    raw["schema_version"] = 16
+    raw["combat"].pop("summoned_creatures")
+
+    restored = SessionSnapshot.from_dict(raw, base_state=session.state)
+
+    assert restored.as_dict()["schema_version"] == SNAPSHOT_SCHEMA_VERSION
+    assert restored.combat_state is not None
+    assert restored.combat_state.summoned_creatures == ()
+
+
+def test_snapshot_v17_migrates_spell_origin_metadata_defaults(tmp_path):
+    session = _session(tmp_path)
+    raw = session.create_snapshot().as_dict()
+    raw["schema_version"] = 17
+    raw["exploration"]["condition_states"] = [
+        {
+            "actor_id": "hero",
+            "condition": "poisoned",
+            "source_actor_id": None,
+            "source_label": "Stary efekt",
+            "duration": "permanent",
+            "expiration_actor_id": "hero",
+            "save_ability": None,
+            "save_dc": None,
+            "save_timing": None,
+        }
+    ]
+    for effect in raw["active_effects"]:
+        effect.pop("spell_level", None)
+
+    restored = SessionSnapshot.from_dict(raw, base_state=session.state)
+
+    assert restored.as_dict()["schema_version"] == SNAPSHOT_SCHEMA_VERSION
+    condition = restored.exploration_state.condition_states[0]
+    assert condition.source_spell_id is None
+    assert condition.source_spell_level is None
+    assert all(effect.spell_level is None for effect in restored.active_effects)
+
+
+def test_snapshot_v18_round_trip_preserves_dispellable_spell_level(tmp_path):
+    session = _session(tmp_path)
+    effect = ActiveEffect(
+        id="spell-effect:test",
+        actor_id="hero",
+        kind="spell_ac_bonus",
+        label="Magiczna osłona",
+        object_id="spell:test_ward",
+        value=2,
+        source_actor_id="hero",
+        target_actor_id="hero",
+        source=EffectSource(
+            EffectSourceType.SPELL,
+            "test_ward",
+            "Magiczna osłona",
+        ),
+        duration=EffectDuration.CONCENTRATION,
+        spell_level=3,
+    )
+    session.active_combat_effects = (effect,)
+
+    restored = SessionSnapshot.from_dict(
+        session.create_snapshot().as_dict(),
+        base_state=session.state,
+    )
+
+    assert restored.active_effects == (effect,)
+    assert restored.active_effects[0].spell_level == 3
+
+
+def test_snapshot_save_and_load_restores_dynamic_summoned_actor(tmp_path):
+    session = _session(tmp_path)
+    _start_scout_combat(session)
+    assert session.combat_state is not None
+    owner = session.combat_state.actors[0]
+    gate = build_encounter_from_scenario(
+        load_scenario("content/scenarios/gate_skirmish.json")
+    )
+    cleric = next(actor for actor in gate.actors if str(actor.id) == "cleric")
+    action = next(
+        action
+        for action in gate.combat_actions_by_actor[cleric.id]
+        if action.id == "call_guardian_spirit"
+    )
+    assert action.summon is not None
+    summoned_actor_id = ActorId("summon:test_owner:guardian:1")
+    effect_id = "concentration_summon:test"
+    summoned = SummonedCreatureState(
+        actor_id=summoned_actor_id,
+        owner_actor_id=owner.id,
+        spell_id=action.id,
+        definition=action.summon,
+        concentration_effect_id=effect_id,
+    )
+    actor = summon_actor(
+        action.summon,
+        actor_id=summoned_actor_id,
+        owner=owner,
+        position=Coordinate(19, 29),
+    )
+    session.combat_state = add_summoned_creature(
+        session.combat_state,
+        summoned,
+        actor,
+    )
+
+    session.save_snapshot()
+    session.combat_state = None
+    loaded = session.load_snapshot()
+
+    assert session.combat_state is not None
+    assert session.combat_state.summoned_creatures[0].actor_id == summoned_actor_id
+    assert any(
+        str(actor.id) == summoned_actor_id
+        for actor in session.combat_state.actors
+    )
+    assert loaded["combat"]["summoned_creatures"][0]["actor_id"] == summoned_actor_id
+
+
+def test_snapshot_round_trip_preserves_long_cast_progress(tmp_path):
+    session = _session(tmp_path)
+    _start_scout_combat(session)
+    assert session.combat_state is not None
+    caster = session.combat_state.actors[0]
+    cast = LongCastState(
+        caster_id=caster.id,
+        spell_id="warding_rite",
+        label="Rytuał ochronny",
+        cast_level=1,
+        required_actions=10,
+        completed_actions=4,
+        started_round=1,
+        last_progress_round=4,
+    )
+    session.combat_state = replace(
+        session.combat_state,
+        long_casts=(cast,),
+    )
+
+    restored = SessionSnapshot.from_dict(
+        session.create_snapshot().as_dict(),
+        base_state=session.state,
+    )
+
+    assert restored.combat_state is not None
+    assert restored.combat_state.long_casts == (cast,)
+
+
+def test_snapshot_v1_migrates_through_current_content_contract(tmp_path):
+    session = _session(tmp_path)
+    raw = session.create_snapshot().as_dict()
+    raw["schema_version"] = 1
+    raw.pop("content")
+
+    restored = SessionSnapshot.from_dict(raw, base_state=session.state)
+
+    migrated = restored.as_dict()
+    assert migrated["schema_version"] == SNAPSHOT_SCHEMA_VERSION
+    assert migrated["content"] == {
+        "scenario_schema": "dnd_board_game.scenario",
+        "scenario_schema_version": 1,
+        "ruleset_id": "dnd_5e_2014",
+        "source_pack_ids": ["project_original"],
+    }
+
+
+def test_snapshot_v2_migrates_currency_value_and_weight_defaults(tmp_path):
+    session = _session(tmp_path)
+    raw = session.create_snapshot().as_dict()
+    raw["schema_version"] = 2
+    for actor in raw["actors"]:
+        actor.pop("currency", None)
+        for item in actor["inventory"]:
+            item.pop("value_cp", None)
+            item.pop("weight_lb", None)
+
+    restored = SessionSnapshot.from_dict(raw, base_state=session.state)
+
+    assert restored.as_dict()["schema_version"] == SNAPSHOT_SCHEMA_VERSION
+    assert all(actor.currency.total_coins == 0 for actor in restored.actors)
+    assert all(
+        item.value_cp == 0 and item.weight_lb == 0
+        for actor in restored.actors
+        for item in actor.inventory
+    )
+
+
+def test_snapshot_v3_migrates_ammunition_type_default(tmp_path):
+    session = _session(tmp_path)
+    raw = session.create_snapshot().as_dict()
+    raw["schema_version"] = 3
+    for actor in raw["actors"]:
+        for item in actor["inventory"]:
+            item.pop("ammunition_type", None)
+
+    restored = SessionSnapshot.from_dict(raw, base_state=session.state)
+
+    assert restored.as_dict()["schema_version"] == SNAPSHOT_SCHEMA_VERSION
+    assert all(
+        item.ammunition_type is None
+        for actor in restored.actors
+        for item in actor.inventory
+    )
+
+
+def test_snapshot_v4_migrates_empty_ammunition_recovery_state(tmp_path):
+    session = _session(tmp_path)
+    _start_scout_combat(session)
+    raw = session.create_snapshot().as_dict()
+    raw["schema_version"] = 4
+    raw["combat"].pop("ammunition_expenditures")
+    raw["combat"].pop("battlefield_loot")
+
+    restored = SessionSnapshot.from_dict(raw, base_state=session.state)
+
+    assert restored.as_dict()["schema_version"] == SNAPSHOT_SCHEMA_VERSION
+    assert restored.combat_state is not None
+    assert restored.combat_state.ammunition_expenditures == ()
+    assert restored.combat_state.battlefield_loot == ()
+
+
+def test_snapshot_round_trip_preserves_ammunition_ledger_and_battlefield_loot(tmp_path):
+    session = _session(tmp_path)
+    _start_scout_combat(session)
+    assert session.combat_state is not None
+    shooter = session.combat_state.actors[0]
+    bolt = InventoryItem(
+        "crossbow_bolt",
+        "Bełt do kuszy",
+        "ammunition",
+        quantity=1,
+        equipped=False,
+        ammunition_type="bolt",
+        value_cp=5,
+        weight_lb=0.075,
+    )
+    session.combat_state = replace(
+        session.combat_state,
+        ammunition_expenditures=(
+            AmmunitionExpenditure(
+                shooter_actor_id=shooter.id,
+                shooter_faction=shooter.faction,
+                ammunition_type="bolt",
+                item=bolt,
+                quantity=5,
+            ),
+        ),
+        battlefield_loot=(
+            BattlefieldLoot(
+                id="recovered_ammunition",
+                position=Coordinate(3, 4),
+                bundle=LootBundle(
+                    id="battlefield:recovered_ammunition",
+                    label="Odzyskana amunicja",
+                    items=(replace(bolt, quantity=2),),
+                ),
+            ),
+        ),
+    )
+
+    restored = SessionSnapshot.from_dict(
+        session.create_snapshot().as_dict(),
+        base_state=session.state,
+    )
+
+    assert restored.combat_state is not None
+    assert restored.combat_state.ammunition_expenditures == (
+        AmmunitionExpenditure(
+            shooter_actor_id=shooter.id,
+            shooter_faction=shooter.faction,
+            ammunition_type="bolt",
+            item=bolt,
+            quantity=5,
+        ),
+    )
+    assert restored.combat_state.battlefield_loot[0].position == Coordinate(3, 4)
+    assert restored.combat_state.battlefield_loot[0].bundle.items[0].quantity == 2
+
+
+def test_snapshot_v5_initializes_merchants_from_current_content(tmp_path):
+    session = ExplorationUiSession(
+        "content/scenarios/village_square_mvp.json",
+        session_id="merchant_migration",
+        observation_dir=tmp_path / "observations",
+        save_dir=tmp_path / "saves",
+    )
+    raw = session.create_snapshot().as_dict()
+    raw["schema_version"] = 5
+    raw["exploration"].pop("merchants")
+
+    restored = SessionSnapshot.from_dict(raw, base_state=session.state)
+
+    assert restored.as_dict()["schema_version"] == SNAPSHOT_SCHEMA_VERSION
+    assert restored.exploration_state.merchants[0].id == "mira_market_stall"
+    assert restored.exploration_state.merchants[0].inventory[0].quantity == 40
+
+
+def test_snapshot_v6_migrates_to_current_armor_schema(tmp_path):
+    session = _session(tmp_path)
+    raw = session.create_snapshot().as_dict()
+    raw["schema_version"] = 6
+
+    restored = SessionSnapshot.from_dict(raw, base_state=session.state)
+
+    assert restored.as_dict()["schema_version"] == SNAPSHOT_SCHEMA_VERSION
+
+
+def test_snapshot_v7_migrates_to_current_item_charge_schema(tmp_path):
+    session = _session(tmp_path)
+    raw = session.create_snapshot().as_dict()
+    raw["schema_version"] = 7
+    for actor in raw["actors"]:
+        for item in actor["inventory"]:
+            item.pop("charges_maximum", None)
+            item.pop("charges_current", None)
+            item.pop("charges_recovery", None)
+            item.pop("charges_recovery_dice", None)
+            item.pop("charges_recovery_modifier", None)
+
+    restored = SessionSnapshot.from_dict(raw, base_state=session.state)
+
+    assert restored.as_dict()["schema_version"] == SNAPSHOT_SCHEMA_VERSION
+    ordinary_item = restored.actors[0].inventory[0]
+    assert ordinary_item.charges_maximum is None
+    assert ordinary_item.charges_recovery == ItemChargeRecovery.NEVER
+
+
+def test_snapshot_v8_migrates_to_current_attunement_schema(tmp_path):
+    session = _session(tmp_path)
+    raw = session.create_snapshot().as_dict()
+    raw["schema_version"] = 8
+    for actor in raw["actors"]:
+        for item in actor["inventory"]:
+            item.pop("requires_attunement", None)
+            item.pop("attuned", None)
+
+    restored = SessionSnapshot.from_dict(raw, base_state=session.state)
+
+    assert restored.as_dict()["schema_version"] == SNAPSHOT_SCHEMA_VERSION
+    assert all(
+        not item.requires_attunement and not item.attuned
+        for actor in restored.actors
+        for item in actor.inventory
+    )
+
+
+def test_snapshot_v9_migrates_to_current_magic_effect_schema(tmp_path):
+    session = _session(tmp_path)
+    raw = session.create_snapshot().as_dict()
+    raw["schema_version"] = 9
+    for actor in raw["actors"]:
+        for item in actor["inventory"]:
+            item.pop("magic_effects", None)
+
+    restored = SessionSnapshot.from_dict(raw, base_state=session.state)
+
+    assert restored.as_dict()["schema_version"] == SNAPSHOT_SCHEMA_VERSION
+    assert all(
+        not item.magic_effects
+        for actor in restored.actors
+        for item in actor.inventory
+    )
+
+
+def test_snapshot_v10_migrates_to_current_weapon_schema(tmp_path):
+    session = _session(tmp_path)
+    raw = session.create_snapshot().as_dict()
+    raw["schema_version"] = 10
+    for actor in raw["actors"]:
+        for item in actor["inventory"]:
+            item.pop("weapon_category", None)
+            item.pop("weapon_properties", None)
+
+    restored = SessionSnapshot.from_dict(raw, base_state=session.state)
+
+    assert restored.as_dict()["schema_version"] == SNAPSHOT_SCHEMA_VERSION
+    assert all(
+        item.weapon_category is None and not item.weapon_properties
+        for actor in restored.actors
+        for item in actor.inventory
+    )
+
+
+def test_snapshot_v11_migrates_and_round_trip_preserves_mundane_gear(tmp_path):
+    session = _session(tmp_path)
+    actor = session.exploration.actors[0]
+    pack = InventoryItem(
+        "test_pack",
+        "Pakiet testowy",
+        "equipment_pack",
+        equipped=False,
+        gear_category=GearCategory.EQUIPMENT_PACK,
+        stackable=False,
+        spellcasting_focus_kind=SpellcastingFocusKind.COMPONENT_POUCH,
+        container_capacity=None,
+        light_source=LightSource(20, 20, 60),
+        check_modifiers=(
+            CheckModifier(
+                "test_advantage",
+                "Próba",
+                "test_context",
+                CheckModifierMode.ADVANTAGE,
+            ),
+        ),
+        bundle_contents=(BundleEntry("torch", 10),),
+    )
+    actor = replace(actor, inventory=(*actor.inventory, pack))
+    from dnd_board_game.inventory import ActiveLight, LightShape
+    actor = replace(
+        actor,
+        active_light=ActiveLight(
+            "torch",
+            "Pochodnia",
+            20,
+            20,
+            42,
+            LightShape.RADIUS,
+        ),
+    )
+    session.exploration = session._replace_exploration_actor(actor)
+
+    restored = SessionSnapshot.from_dict(
+        session.create_snapshot().as_dict(),
+        base_state=session.state,
+    )
+    restored_pack = next(
+        item for item in restored.actors[0].inventory if item.id == "test_pack"
+    )
+
+    assert restored_pack.gear_category == GearCategory.EQUIPMENT_PACK
+    assert restored_pack.light_source == pack.light_source
+    assert restored_pack.check_modifiers == pack.check_modifiers
+    assert restored_pack.bundle_contents == pack.bundle_contents
+    assert restored.actors[0].active_light == actor.active_light
+
+    old = session.create_snapshot().as_dict()
+    old["schema_version"] = 11
+    for raw_actor in old["actors"]:
+        raw_actor.pop("active_light", None)
+        for raw_item in raw_actor["inventory"]:
+            for field in (
+                "gear_category",
+                "stackable",
+                "tool_proficiency_id",
+                "spellcasting_focus_kind",
+                "container_capacity",
+                "light_source",
+                "check_modifiers",
+                "durability",
+                "bundle_contents",
+            ):
+                raw_item.pop(field, None)
+    migrated = SessionSnapshot.from_dict(old, base_state=session.state)
+    assert migrated.as_dict()["schema_version"] == SNAPSHOT_SCHEMA_VERSION
+
+
+def test_snapshot_round_trip_preserves_item_charge_state(tmp_path):
+    session = _session(tmp_path)
+    cleric = next(actor for actor in session.exploration.actors if str(actor.id) == "cleric")
+    wand = next(item for item in cleric.inventory if item.id == "binding_wand")
+    cleric = replace(
+        cleric,
+        inventory=tuple(
+            replace(item, charges_current=3, attuned=True)
+            if item.id == wand.id
+            else item
+            for item in cleric.inventory
+        ),
+    )
+    session.exploration = session._replace_exploration_actor(cleric)
+
+    restored = SessionSnapshot.from_dict(
+        session.create_snapshot().as_dict(),
+        base_state=session.state,
+    )
+    restored_cleric = next(actor for actor in restored.actors if str(actor.id) == "cleric")
+    restored_wand = next(
+        item for item in restored_cleric.inventory if item.id == "binding_wand"
+    )
+
+    assert restored_wand.quantity == 1
+    assert restored_wand.charges_current == 3
+    assert restored_wand.charges_maximum == 7
+    assert restored_wand.charges_recovery == ItemChargeRecovery.LONG_REST
+    assert restored_wand.charges_recovery_dice == "1d6"
+    assert restored_wand.charges_recovery_modifier == 1
+    assert restored_wand.requires_attunement is True
+    assert restored_wand.attuned is True
+
+
+def test_snapshot_round_trip_preserves_body_armor_rules(tmp_path):
+    session = _session(tmp_path)
+    actor = session.exploration.actors[0]
+    armor = InventoryItem(
+        "chain_mail",
+        "Kolczuga",
+        "armor",
+        equipped=True,
+        armor_category=ArmorCategory.HEAVY,
+        armor_base_ac=16,
+        armor_dexterity_cap=0,
+        armor_strength_requirement=13,
+        stealth_disadvantage=True,
+        armor_proficiency="heavy",
+        value_cp=7500,
+        weight_lb=55,
+    )
+    actor = replace(actor, inventory=(*actor.inventory, armor))
+    session.exploration = session._replace_exploration_actor(actor)
+
+    restored = SessionSnapshot.from_dict(
+        session.create_snapshot().as_dict(),
+        base_state=session.state,
+    )
+    restored_armor = next(
+        item
+        for item in restored.actors[0].inventory
+        if item.id == "chain_mail"
+    )
+
+    assert restored_armor.armor_category == ArmorCategory.HEAVY
+    assert restored_armor.armor_base_ac == 16
+    assert restored_armor.armor_dexterity_cap == 0
+    assert restored_armor.armor_strength_requirement == 13
+    assert restored_armor.stealth_disadvantage is True
+
+
+def test_snapshot_round_trip_preserves_merchant_trade_state(tmp_path):
+    session = ExplorationUiSession(
+        "content/scenarios/village_square_mvp.json",
+        session_id="merchant_round_trip",
+        observation_dir=tmp_path / "observations",
+        save_dir=tmp_path / "saves",
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.select_point("merchant_stall")
+    session.buy_merchant_item(
+        merchant_id="mira_market_stall",
+        actor_id="hero",
+        item_id="crossbow_bolt",
+        quantity=7,
+    )
+    base = ExplorationUiSession(
+        "content/scenarios/village_square_mvp.json",
+        session_id="merchant_base",
+        observation_dir=tmp_path / "observations",
+        save_dir=tmp_path / "saves",
+    )
+
+    restored = SessionSnapshot.from_dict(
+        session.create_snapshot().as_dict(),
+        base_state=base.state,
+    )
+
+    merchant = restored.exploration_state.merchants[0]
+    hero = next(actor for actor in restored.actors if str(actor.id) == "hero")
+    assert next(item for item in merchant.inventory if item.id == "crossbow_bolt").quantity == 33
+    assert merchant.currency.total_cp == 10_035
+    assert next(item for item in hero.inventory if item.id == "crossbow_bolt").quantity == 7
+    assert hero.currency.total_cp == 965
 
 
 def test_snapshot_round_trip_preserves_pending_npc_scene_transition(tmp_path):
@@ -290,10 +962,13 @@ def test_snapshot_round_trip_preserves_skill_profile_and_combat_hidden_state(tmp
             ConditionState(
                 "hero",
                 CombatCondition.POISONED,
+                source_actor_id="goblin_a",
                 source_label="Trucizna testowa",
                 save_ability="constitution",
                 save_dc=12,
                 save_timing=ConditionSaveTiming.TURN_END,
+                source_spell_id="enemy_miasma",
+                source_spell_level=3,
             ),
             ConditionState("goblin_a", CombatCondition.GRAPPLED, "hero"),
         ),
@@ -314,6 +989,8 @@ def test_snapshot_round_trip_preserves_skill_profile_and_combat_hidden_state(tmp
     assert restored_goblin.resource_pools[0].recharge.minimum_roll == 5
     assert restored_goblin.features[0].feature_id == "goblin_frenzied_lunge"
     assert restored_goblin.features[0].resource_ids == ("frenzied_lunge_charge",)
+    assert restored_goblin.currency.sp == 5
+    assert next(item for item in restored_goblin.inventory if item.id == "poison_vial").weight_lb == 0.5
     assert restored_hero.size == CreatureSize.LARGE
     assert restored_hero.damage_affinities == DamageAffinityProfile(
         resistances=(DamageType.FIRE,),
@@ -327,6 +1004,14 @@ def test_snapshot_round_trip_preserves_skill_profile_and_combat_hidden_state(tmp
     restored_longsword = next(item for item in restored_hero.inventory if item.id == "longsword")
     assert restored_longsword.hands_required == 1
     assert restored_longsword.held_in == (HandSlot.MAIN_HAND,)
+    restored_rogue = next(
+        actor for actor in restored.combat_state.actors if str(actor.id) == "rogue"
+    )
+    restored_bolts = next(
+        item for item in restored_rogue.inventory if item.id == "crossbow_bolt"
+    )
+    assert restored_bolts.ammunition_type == "bolt"
+    assert restored_bolts.quantity == 20
     assert restored.combat_state.turn_action.two_weapon_trigger_item_id == "longsword"
     assert restored.combat_state.turn_action.attack_action_active is True
     assert restored.combat_state.turn_action.attacks_used == 1
@@ -338,10 +1023,13 @@ def test_snapshot_round_trip_preserves_skill_profile_and_combat_hidden_state(tmp
         ConditionState(
             "hero",
             CombatCondition.POISONED,
+            source_actor_id="goblin_a",
             source_label="Trucizna testowa",
             save_ability="constitution",
             save_dc=12,
             save_timing=ConditionSaveTiming.TURN_END,
+            source_spell_id="enemy_miasma",
+            source_spell_level=3,
         ),
         ConditionState("goblin_a", CombatCondition.GRAPPLED, "hero"),
     )

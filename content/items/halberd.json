@@ -1,0 +1,1 @@
+{"schema":"dnd_board_game.item","schema_version":1,"ruleset_id":"dnd_5e_2014","source_pack_ids":["srd_5_1_cc_by_4_0"],"id":"halberd","name":"Halabarda","kind":"weapon","value_cp":2000,"weight_lb":6,"weapon":{"category":"martial","attack_kind":"melee","properties":["heavy","reach","two_handed"],"damage":{"dice":"1d10","damage_type":"slashing"}}}

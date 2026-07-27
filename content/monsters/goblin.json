@@ -1,4 +1,8 @@
 {
+  "schema": "dnd_board_game.monster",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["project_original"],
   "id": "goblin",
   "name": "Goblin",
   "kind": "monster",
@@ -26,6 +30,16 @@
     "tools": []
   },
   "feature_refs": ["goblin_frenzied_lunge"],
+  "currency": {
+    "sp": 5
+  },
+  "inventory": [
+    {
+      "item_ref": "poison_vial",
+      "quantity": 1,
+      "equipped": false
+    }
+  ],
   "attacks": [
     {
       "id": "goblin_scimitar",

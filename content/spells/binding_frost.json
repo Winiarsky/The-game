@@ -1,0 +1,28 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["project_original"],
+  "id": "binding_frost",
+  "name": "Krępujący szron",
+  "level": 1,
+  "school": "transmutation",
+  "casting_time": "action",
+  "range": {"kind": "distance", "feet": 30},
+  "components": {"verbal": true, "somatic": true, "materials": []},
+  "duration": {"kind": "until_dispelled"},
+  "concentration": false,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "spell_debuff",
+    "label": "Krępujący szron",
+    "effect_kind": "apply_condition",
+    "condition": "restrained",
+    "duration": "permanent",
+    "target_faction": "enemy",
+    "save_ability": "strength",
+    "save_dc": 13,
+    "save_timing": "turn_end"
+  }
+}

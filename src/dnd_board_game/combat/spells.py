@@ -11,12 +11,17 @@ from dnd_board_game.rules import (
     SaveDamageOnSuccess,
     SavingThrowRequest,
     SavingThrowResult,
+    SpellCastValidation,
     RollModifier,
     RollMode,
     resolve_d20_roll,
     resolve_saving_throw_request,
     save_damage_multiplier,
+    available_spell_slot_levels,
+    spell_is_accessible,
+    validate_spell_cast,
 )
+from dnd_board_game.inventory import free_hand_count
 from dnd_board_game.world import BoardState, Coordinate, line_of_sight_clear
 
 
@@ -154,23 +159,135 @@ def actors_in_area(
     )
 
 
-def can_consume_spell_resource(actor: Actor, spell_level: int) -> bool:
+def available_cast_levels(actor: Actor, spell_level: int) -> tuple[int, ...]:
+    """Return legal slot levels, including higher-level slots used for upcasting."""
+    return available_spell_slot_levels(actor.spell_slots, spell_level)
+
+
+def actor_spell_cast_validation(
+    actor: Actor,
+    spell_id: str,
+    *,
+    cast_level: int | None = None,
+    ritual: bool = False,
+) -> SpellCastValidation | None:
+    """Validate access, slot level, focus/material and somatic-hand requirements."""
+    spell = next((candidate for candidate in actor.spells if candidate.id == spell_id), None)
+    if spell is None:
+        return None
+    prepared = actor.spell_preparation
+    accessible = spell_is_accessible(
+        spell,
+        actor.spell_access,
+        prepared_spell_ids=prepared.prepared_spell_ids if prepared is not None else (),
+        always_prepared_spell_ids=(
+            prepared.always_prepared_spell_ids if prepared is not None else ()
+        ),
+    )
+    if ritual and not accessible:
+        accessible = any(
+            profile.kind.value == "spellbook" and spell.id in profile.spell_ids
+            for profile in actor.spell_access
+        )
+    if not accessible:
+        return replace(
+            validate_spell_cast(
+                spell,
+                slots=actor.spell_slots,
+                inventory=actor.inventory,
+                cast_level=cast_level,
+                ritual=ritual,
+            ),
+            valid=False,
+            errors=(f"Aktor nie ma dostępu do czaru {spell.name}.",),
+        )
+    allowed_focus_kinds = tuple(
+        kind
+        for profile in actor.spell_access
+        if spell.id in profile.spell_ids
+        for kind in profile.allowed_focus_kinds
+    )
+    return validate_spell_cast(
+        spell,
+        slots=actor.spell_slots,
+        inventory=actor.inventory,
+        cast_level=cast_level,
+        allowed_focus_kinds=allowed_focus_kinds,
+        has_free_hand=free_hand_count(actor.inventory) > 0,
+        ritual=ritual,
+    )
+
+
+def can_consume_spell_resource(
+    actor: Actor,
+    spell_level: int,
+    cast_level: int | None = None,
+) -> bool:
     if spell_level <= 0:
         return True
-    return any(slot.level == spell_level and slot.remaining > 0 for slot in actor.spell_slots)
+    levels = available_cast_levels(actor, spell_level)
+    return bool(levels) if cast_level is None else cast_level in levels
 
 
-def consume_spell_resource(actor: Actor, spell_level: int) -> SpellResourceUse:
-    if spell_level <= 0:
-        return SpellResourceUse(actor, actor, spell_level, False)
-    slots = list(actor.spell_slots)
+def consume_spell_resource(
+    actor: Actor,
+    spell_level: int,
+    cast_level: int | None = None,
+    spell_id: str | None = None,
+    ritual: bool = False,
+) -> SpellResourceUse:
+    actor_after_components = actor
+    if spell_id is not None:
+        validation = actor_spell_cast_validation(
+            actor,
+            spell_id,
+            cast_level=cast_level,
+            ritual=ritual,
+        )
+        if validation is not None:
+            if not validation.valid:
+                raise ValueError(" ".join(validation.errors))
+            inventory = list(actor.inventory)
+            for use in validation.material_uses:
+                if not use.consumed:
+                    continue
+                index = next(
+                    (
+                        index
+                        for index, item in enumerate(inventory)
+                        if item.id == use.item_id
+                    ),
+                    None,
+                )
+                if index is None:
+                    raise ValueError(f"Brak komponentu materialnego {use.item_id}.")
+                item = inventory[index]
+                remaining = item.quantity - use.quantity
+                if remaining < 0:
+                    raise ValueError(f"Za mało komponentu materialnego {item.name}.")
+                if remaining == 0:
+                    inventory.pop(index)
+                else:
+                    inventory[index] = replace(item, quantity=remaining)
+            actor_after_components = replace(actor, inventory=tuple(inventory))
+    if ritual or spell_level <= 0:
+        return SpellResourceUse(actor, actor_after_components, spell_level, False)
+    levels = available_cast_levels(actor_after_components, spell_level)
+    selected_level = levels[0] if cast_level is None and levels else cast_level
+    if selected_level is None or selected_level not in levels:
+        requested = spell_level if cast_level is None else cast_level
+        raise ValueError(f"Brak slotów czaru poziomu {requested} lub wyższego.")
+    slots = list(actor_after_components.spell_slots)
     for index, slot in enumerate(slots):
-        if slot.level == spell_level:
-            if slot.remaining <= 0:
-                raise ValueError(f"Brak slotów czaru poziomu {spell_level}.")
+        if slot.level == selected_level:
             slots[index] = replace(slot, remaining=slot.remaining - 1)
-            return SpellResourceUse(actor, replace(actor, spell_slots=tuple(slots)), spell_level, True)
-    raise ValueError(f"Aktor nie ma slotów czaru poziomu {spell_level}.")
+            return SpellResourceUse(
+                actor,
+                replace(actor_after_components, spell_slots=tuple(slots)),
+                selected_level,
+                True,
+            )
+    raise ValueError(f"Aktor nie ma slotów czaru poziomu {selected_level}.")
 
 
 def resolve_spell_save(

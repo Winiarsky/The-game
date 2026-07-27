@@ -26,6 +26,8 @@ class AttackPositioning:
     cover_sources: tuple[str, ...] = ()
     ranged_threat_actor_ids: tuple[str, ...] = ()
     flanking_ally_ids: tuple[str, ...] = ()
+    long_range: bool = False
+    lance_close_range: bool = False
 
     @property
     def total_cover(self) -> bool:
@@ -101,6 +103,16 @@ def evaluate_attack_positioning(
         cover_sources=cover_sources,
         ranged_threat_actor_ids=tuple(dict.fromkeys(ranged_threats)),
         flanking_ally_ids=tuple(dict.fromkeys(flanking_allies)),
+        long_range=(
+            effective_attack_kind(source) == AttackKind.RANGED
+            and source.long_range_feet is not None
+            and _distance_feet(attacker.position, target.position) > source.range_feet
+        ),
+        lance_close_range=(
+            source.weapon_special_rule is not None
+            and source.weapon_special_rule.value == "lance"
+            and _distance_feet(attacker.position, target.position) <= 5
+        ),
     )
 
 
@@ -173,7 +185,12 @@ def dexterity_save_cover_modifiers(
 
 
 def attack_source_with_positioning(source: AttackSource, positioning: AttackPositioning) -> AttackSource:
-    if not positioning.ranged_threat_actor_ids and not positioning.flanking_ally_ids:
+    if (
+        not positioning.ranged_threat_actor_ids
+        and not positioning.flanking_ally_ids
+        and not positioning.long_range
+        and not positioning.lance_close_range
+    ):
         return source
     request = source.attack_roll_request
     mode = request.mode
@@ -186,6 +203,26 @@ def attack_source_with_positioning(source: AttackSource, positioning: AttackPosi
                 0,
                 RollModifierType.SITUATIONAL,
                 stacking_key="ranged_attack_in_melee",
+            )
+        )
+    if positioning.long_range:
+        mode = _with_disadvantage(mode)
+        modifiers.append(
+            RollModifier(
+                "Daleki zasięg broni",
+                0,
+                RollModifierType.SITUATIONAL,
+                stacking_key="weapon_long_range",
+            )
+        )
+    if positioning.lance_close_range:
+        mode = _with_disadvantage(mode)
+        modifiers.append(
+            RollModifier(
+                "Lanca przeciw celowi w odległości 5 stóp",
+                0,
+                RollModifierType.SITUATIONAL,
+                stacking_key="lance_close_range",
             )
         )
     if positioning.flanking_ally_ids:
@@ -245,6 +282,13 @@ def _adjacent(first: Actor, second: Actor) -> bool:
         abs(first.position.col - second.position.col),
         abs(first.position.row - second.position.row),
     ) == 1
+
+
+def _distance_feet(first: Coordinate, second: Coordinate) -> int:
+    return max(
+        abs(first.col - second.col),
+        abs(first.row - second.row),
+    ) * 5
 
 
 def _hostile(first: Actor, second: Actor) -> bool:

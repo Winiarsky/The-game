@@ -1,0 +1,52 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["project_original"],
+  "id": "call_guardian_spirit",
+  "name": "Wezwanie ducha strażnika",
+  "level": 1,
+  "school": "conjuration",
+  "casting_time": "action",
+  "range": {"kind": "distance", "feet": 30},
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": [
+      {"item_id": "guardian_amulet", "label": "amulet strażnika"}
+    ]
+  },
+  "duration": {"kind": "minute", "amount": 1},
+  "concentration": true,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "summon",
+    "label": "Wezwanie ducha strażnika",
+    "target_faction": "self",
+    "summon": {
+      "id": "guardian_spirit",
+      "name": "Duch strażnik",
+      "size": "small",
+      "ac": 13,
+      "hp": 8,
+      "speed_feet": 30,
+      "ability_scores": {
+        "strength": 8,
+        "dexterity": 14,
+        "constitution": 12,
+        "intelligence": 6,
+        "wisdom": 12,
+        "charisma": 8
+      },
+      "attack": {
+        "id": "spirit_claw",
+        "name": "Widmowy pazur",
+        "bonus": 4,
+        "range_feet": 5,
+        "damage_fixed": 5,
+        "damage_type": "radiant"
+      }
+    }
+  }
+}

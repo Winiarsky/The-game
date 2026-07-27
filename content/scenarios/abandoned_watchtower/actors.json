@@ -82,6 +82,13 @@
         "dagger",
         "sticky_flask",
         "thieves_tools"
+      ],
+      "inventory": [
+        {
+          "item_ref": "crossbow_bolt",
+          "quantity": 20,
+          "equipped": false
+        }
       ]
     },
     {
@@ -119,7 +126,8 @@
         "d8": 2
       },
       "spell_slots": {
-        "1": 2
+        "1": 2,
+        "3": 1
       },
       "spell_save_dc": 13,
       "auras": [
@@ -139,8 +147,54 @@
         },
         {
           "item_ref": "healers_kit",
-          "quantity": 10,
+          "quantity": 1,
           "equipped": true
+        },
+        {
+          "item_ref": "binding_wand",
+          "equipped": false
+        },
+        {
+          "item_ref": "guardian_amulet",
+          "equipped": true
+        },
+        {
+          "item_ref": "holy_symbol_amulet",
+          "equipped": true
+        }
+      ],
+      "spell_refs": [
+        "sacred_flame",
+        "radiant_line",
+        "healing_word",
+        "bless_attack_bonus",
+        "comprehend_languages",
+        "shield",
+        "counterspell",
+        "warding_rite",
+        "call_guardian_spirit",
+        "veil_step",
+        "repelling_pulse",
+        "grasping_current",
+        "weakening_miasma",
+        "binding_frost",
+        "unravel_magic"
+      ],
+      "spell_access": [
+        {
+          "kind": "prepared",
+          "spell_ids": [
+            "sacred_flame",
+            "radiant_line",
+            "healing_word",
+            "bless_attack_bonus"
+          ],
+          "allowed_focus_kinds": ["holy_symbol", "component_pouch"]
+        },
+        {
+          "kind": "known",
+          "spell_ids": ["comprehend_languages", "shield", "counterspell", "warding_rite", "call_guardian_spirit", "veil_step", "repelling_pulse", "grasping_current", "weakening_miasma", "binding_frost", "unravel_magic"],
+          "allowed_focus_kinds": ["holy_symbol", "component_pouch"]
         }
       ],
       "spell_preparation": {
@@ -157,80 +211,7 @@
         ],
         "always_prepared_spell_ids": []
       },
-      "attacks": [
-        {
-          "id": "sacred_flame",
-          "name": "Święty płomień",
-          "source_type": "spell",
-          "attack_kind": "ranged",
-          "casting_kind": "cantrip",
-          "prepared": true,
-          "ability": "wisdom",
-          "range_feet": 60,
-          "save_ability": "dexterity",
-          "save_damage_on_success": "none",
-          "damage": {
-            "dice": "1d8",
-            "modifier": 0,
-            "damage_type": "radiant"
-          }
-        },
-        {
-          "id": "radiant_line",
-          "name": "Smuga światła",
-          "source_type": "spell",
-          "attack_kind": "ranged",
-          "casting_kind": "leveled",
-          "prepared": true,
-          "ability": "wisdom",
-          "range_feet": 30,
-          "spell_level": 1,
-          "save_ability": "dexterity",
-          "save_damage_on_success": "half",
-          "area": {
-            "shape": "line",
-            "length_feet": 30,
-            "width_feet": 5,
-            "target_mode": "all_creatures"
-          },
-          "damage": {
-            "dice": "1d8",
-            "modifier": 0,
-            "damage_type": "radiant"
-          }
-        }
-      ],
-      "healing_sources": [
-        {
-          "id": "healing_word",
-          "name": "Słowo leczenia",
-          "source_type": "spell",
-          "casting_kind": "leveled",
-          "prepared": true,
-          "range_feet": 60,
-          "spell_level": 1,
-          "healing": {
-            "dice": "1d4",
-            "modifier": 3
-          }
-        }
-      ],
-      "combat_actions": [
-        {
-          "id": "bless_attack_bonus",
-          "name": "Błogosławieństwo",
-          "action_type": "concentration_attack_bonus",
-          "action_cost": "action",
-          "label": "Błogosławieństwo",
-          "value": 1,
-          "target_faction": "ally",
-          "spell_level": 1,
-          "casting_kind": "leveled",
-          "prepared": true,
-          "concentration": true,
-          "duration": "concentration"
-        }
-      ]
+      "attacks": []
     }
   ]
 }

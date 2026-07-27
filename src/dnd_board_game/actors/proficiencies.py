@@ -36,10 +36,15 @@ def proficiency_roll_modifier(actor: Actor, *, label: str = "Biegłość") -> Ro
 
 
 def saving_throw_roll_modifiers(actor: Actor, ability: str) -> tuple[RollModifier, ...]:
+    from dnd_board_game.inventory import MagicItemEffectKind, magic_item_roll_modifiers
+
     modifiers = [ability_roll_modifier(actor, ability)]
     if actor.proficiencies.is_save_proficient(ability):
         modifiers.append(proficiency_roll_modifier(actor))
-    return tuple(modifiers)
+    return (
+        *modifiers,
+        *magic_item_roll_modifiers(actor, MagicItemEffectKind.SAVING_THROW_BONUS),
+    )
 
 
 def saving_throw_modifier(actor: Actor, ability: str) -> int:
@@ -52,10 +57,15 @@ def attack_roll_modifiers(
     *,
     proficient: bool,
 ) -> tuple[RollModifier, ...]:
+    from dnd_board_game.inventory import MagicItemEffectKind, magic_item_roll_modifiers
+
     modifiers = [ability_roll_modifier(actor, ability)]
     if proficient:
         modifiers.append(proficiency_roll_modifier(actor))
-    return tuple(modifiers)
+    return (
+        *modifiers,
+        *magic_item_roll_modifiers(actor, MagicItemEffectKind.ATTACK_ROLL_BONUS),
+    )
 
 
 def _ability_label(ability: str) -> str:

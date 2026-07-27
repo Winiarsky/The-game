@@ -31,15 +31,20 @@ SKILL_ABILITIES: dict[str, str] = {
 def skill_modifier(actor: Actor, skill: str) -> int:
     """Return the D&D 5e ability + proficiency contribution for a skill."""
 
+    from dnd_board_game.inventory import MagicItemEffectKind, magic_item_effect_total
+
     ability = SKILL_ABILITIES.get(skill)
     if ability is None:
         raise ValueError(f"Unknown skill: {skill}.")
     result = ability_modifier(getattr(actor.ability_scores, ability))
     if skill in actor.skill_expertise:
-        return result + 2 * actor.proficiency_bonus
-    if skill in actor.skill_proficiencies:
-        return result + actor.proficiency_bonus
-    return result
+        result += 2 * actor.proficiency_bonus
+    elif skill in actor.skill_proficiencies:
+        result += actor.proficiency_bonus
+    return result + magic_item_effect_total(
+        actor,
+        MagicItemEffectKind.ABILITY_CHECK_BONUS,
+    )
 
 
 def passive_skill_score(actor: Actor, skill: str) -> int:
@@ -63,6 +68,7 @@ def ability_check_roll_modifiers(
     tool: str | None = None,
 ) -> tuple[RollModifier, ...]:
     """Build one D&D ability-check modifier set with non-stacking proficiency sources."""
+    from dnd_board_game.inventory import MagicItemEffectKind, magic_item_roll_modifiers
 
     modifiers = [ability_roll_modifier(actor, ability)]
     if skill in actor.skill_expertise:
@@ -81,11 +87,18 @@ def ability_check_roll_modifiers(
             (
                 item.name
                 for item in actor.inventory
-                if item.id == tool or item.source_ref == tool
+                if (
+                    item.id == tool
+                    or item.source_ref == tool
+                    or item.tool_proficiency_id == tool
+                )
             ),
             tool,
         )
         modifiers.append(
             proficiency_roll_modifier(actor, label=f"Biegłość: {tool_label}")
         )
-    return tuple(modifiers)
+    return (
+        *modifiers,
+        *magic_item_roll_modifiers(actor, MagicItemEffectKind.ABILITY_CHECK_BONUS),
+    )

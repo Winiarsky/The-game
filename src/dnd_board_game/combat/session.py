@@ -4,7 +4,13 @@ from dataclasses import dataclass, replace
 from enum import StrEnum
 
 from dnd_board_game.actors import Actor, ActorId, Faction
-from dnd_board_game.inventory import HandSlot, InventoryItem, plan_hand_equip
+from dnd_board_game.inventory import (
+    AmmunitionUse,
+    HandSlot,
+    InventoryItem,
+    LootBundle,
+    plan_hand_equip,
+)
 from dnd_board_game.world import Coordinate, PathResult
 
 from .action_economy import ActionEconomyCost, ActionUse, consume_action
@@ -20,7 +26,9 @@ from .conditions import (
     standing_movement_cost,
 )
 from .initiative import InitiativeEntry, InitiativeOrder
+from .long_casting import LongCastState
 from .stealth import HiddenState, reveal_actor
+from .summoning import SummonedCreatureState
 
 
 class CombatStatus(StrEnum):
@@ -116,6 +124,61 @@ class DropWeaponResult:
     message: str
 
 
+def expend_thrown_weapon(
+    state: CombatState,
+    actor_id: str,
+    item_id: str,
+    position: Coordinate,
+) -> CombatState:
+    """Remove one thrown weapon and place it as recoverable battlefield equipment."""
+
+    actor = next(
+        (candidate for candidate in state.actors if str(candidate.id) == actor_id),
+        None,
+    )
+    if actor is None:
+        raise ValueError("Nie znaleziono aktora rzucającego bronią.")
+    weapon = next(
+        (
+            item
+            for item in actor.inventory
+            if item.id == item_id or item.source_ref == item_id
+        ),
+        None,
+    )
+    if weapon is None or weapon.kind != "weapon" or not weapon.available:
+        raise ValueError("Brak dostępnego egzemplarza rzucanej broni.")
+    remaining_quantity = weapon.quantity - 1
+    remaining = replace(
+        weapon,
+        quantity=remaining_quantity,
+        equipped=weapon.equipped if remaining_quantity > 0 else False,
+        held_in=weapon.held_in if remaining_quantity > 0 else (),
+    )
+    updated_actor = replace(
+        actor,
+        inventory=tuple(
+            remaining if item.id == weapon.id else item
+            for item in actor.inventory
+        ),
+    )
+    thrown = replace(weapon, quantity=1, equipped=False, held_in=())
+    dropped = DroppedWeapon(
+        id=(
+            f"thrown:{actor.id}:{weapon.id}:{state.round_number}:"
+            f"{len(state.dropped_weapons)}"
+        ),
+        source_actor_id=actor.id,
+        weapon=thrown,
+        position=position,
+        dropped_round=state.round_number,
+    )
+    return replace(
+        replace_actor(state, updated_actor),
+        dropped_weapons=(*state.dropped_weapons, dropped),
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class StowWeaponResult:
     state: CombatState
@@ -146,6 +209,22 @@ class DroppedWeapon:
 
 
 @dataclass(frozen=True, slots=True)
+class AmmunitionExpenditure:
+    shooter_actor_id: ActorId
+    shooter_faction: Faction
+    ammunition_type: str
+    item: InventoryItem
+    quantity: int
+
+
+@dataclass(frozen=True, slots=True)
+class BattlefieldLoot:
+    id: str
+    position: Coordinate
+    bundle: LootBundle
+
+
+@dataclass(frozen=True, slots=True)
 class CombatState:
     actors: tuple[Actor, ...]
     initiative_order: InitiativeOrder
@@ -156,6 +235,10 @@ class CombatState:
     dropped_weapons: tuple[DroppedWeapon, ...] = ()
     hidden_states: tuple[HiddenState, ...] = ()
     condition_states: tuple[ConditionState, ...] = ()
+    ammunition_expenditures: tuple[AmmunitionExpenditure, ...] = ()
+    battlefield_loot: tuple[BattlefieldLoot, ...] = ()
+    long_casts: tuple[LongCastState, ...] = ()
+    summoned_creatures: tuple[SummonedCreatureState, ...] = ()
 
     @property
     def round_number(self) -> int:
@@ -223,6 +306,113 @@ def replace_actor(state: CombatState, updated_actor: Actor) -> CombatState:
         condition_states=normalize_grapple_conditions(state.condition_states, actors),
     )
     return _with_finished_status(synced)
+
+
+def record_ammunition_expenditure(
+    state: CombatState,
+    shooter: Actor,
+    use: AmmunitionUse,
+) -> CombatState:
+    """Record ammunition actually fired during this encounter."""
+
+    if state.status != CombatStatus.ACTIVE:
+        raise ValueError("Ammunition can only be fired during active combat.")
+    entries = tuple(
+        AmmunitionExpenditure(
+            shooter_actor_id=shooter.id,
+            shooter_faction=shooter.faction,
+            ammunition_type=use.ammunition_type,
+            item=item,
+            quantity=item.quantity,
+        )
+        for item in use.consumed_items
+    )
+    return replace(state, ammunition_expenditures=(*state.ammunition_expenditures, *entries))
+
+
+def recoverable_ammunition_quantity(
+    state: CombatState,
+    ammunition_type: str,
+    *,
+    faction: Faction = Faction.ALLY,
+) -> int:
+    fired = sum(
+        entry.quantity
+        for entry in state.ammunition_expenditures
+        if entry.shooter_faction == faction
+        and entry.ammunition_type == ammunition_type
+    )
+    return fired // 2
+
+
+def finalize_ammunition_recovery(
+    state: CombatState,
+    winner: Faction | None,
+) -> CombatState:
+    if winner != Faction.ALLY or state.battlefield_loot:
+        return state
+    grouped: dict[str, list[AmmunitionExpenditure]] = {}
+    for entry in state.ammunition_expenditures:
+        if entry.shooter_faction == Faction.ALLY:
+            grouped.setdefault(entry.ammunition_type, []).append(entry)
+    items: list[InventoryItem] = []
+    for ammunition_type, entries in grouped.items():
+        remaining_recovery = sum(entry.quantity for entry in entries) // 2
+        if remaining_recovery <= 0:
+            continue
+        recovered_by_id: dict[str, InventoryItem] = {}
+        for entry in entries:
+            if remaining_recovery <= 0:
+                break
+            recovered_quantity = min(entry.quantity, remaining_recovery)
+            recovered = replace(
+                entry.item,
+                quantity=recovered_quantity,
+                equipped=False,
+                held_in=(),
+            )
+            current = recovered_by_id.get(recovered.id)
+            recovered_by_id[recovered.id] = (
+                replace(current, quantity=current.quantity + recovered.quantity)
+                if current is not None
+                else recovered
+            )
+            remaining_recovery -= recovered_quantity
+        items.extend(recovered_by_id.values())
+    if not items:
+        return state
+    defeated_enemy = next(
+        (
+            actor
+            for actor in state.actors
+            if actor.faction == Faction.ENEMY and actor.is_defeated()
+        ),
+        None,
+    )
+    position = (
+        defeated_enemy.position
+        if defeated_enemy is not None
+        else next(
+            actor.position
+            for actor in state.actors
+            if actor.faction == Faction.ALLY and not actor.is_defeated()
+        )
+    )
+    bundle = LootBundle(
+        id="battlefield:recovered_ammunition",
+        label="Odzyskana amunicja",
+        items=tuple(items),
+    )
+    return replace(
+        state,
+        battlefield_loot=(
+            BattlefieldLoot(
+                id="recovered_ammunition",
+                position=position,
+                bundle=bundle,
+            ),
+        ),
+    )
 
 
 def _drop_equipped_weapons(
@@ -929,11 +1119,15 @@ def _turn_action_for(
 
 
 def stop_combat(state: CombatState) -> CombatState:
-    return replace(state, status=CombatStatus.STOPPED)
+    return replace(state, status=CombatStatus.STOPPED, long_casts=())
 
 
 def combat_is_finished(state: CombatState) -> bool:
     return state.status == CombatStatus.FINISHED or combat_winner(state) is not None
+
+
+def refresh_combat_status(state: CombatState) -> CombatState:
+    return _with_finished_status(state)
 
 
 def combat_winner(state: CombatState) -> Faction | None:
@@ -956,7 +1150,13 @@ def _with_finished_status(state: CombatState) -> CombatState:
     winner = combat_winner(state)
     if winner is None:
         return state
-    return replace(state, status=CombatStatus.FINISHED, winner=winner)
+    finished = replace(
+        state,
+        status=CombatStatus.FINISHED,
+        winner=winner,
+        long_casts=(),
+    )
+    return finalize_ammunition_recovery(finished, winner)
 
 
 def _sync_order_actor_states(order: InitiativeOrder, actors: tuple[Actor, ...]) -> InitiativeOrder:

@@ -5,6 +5,7 @@ from enum import StrEnum
 from typing import Sequence
 
 from dnd_board_game.actors import Actor
+from dnd_board_game.inventory import effective_speed_feet
 from dnd_board_game.rules import (
     D20RollInput,
     D20RollRequest,
@@ -90,6 +91,8 @@ class ConditionState:
     save_ability: str | None = None
     save_dc: int | None = None
     save_timing: ConditionSaveTiming | None = None
+    source_spell_id: str | None = None
+    source_spell_level: int | None = None
 
     def __post_init__(self) -> None:
         if not self.actor_id:
@@ -107,6 +110,15 @@ class ConditionState:
             raise ValueError("Condition save requires ability, DC and timing.")
         if self.save_dc is not None and self.save_dc < 0:
             raise ValueError("Condition save DC cannot be negative.")
+        spell_fields = (self.source_spell_id, self.source_spell_level)
+        if any(value is not None for value in spell_fields) and not all(
+            value is not None for value in spell_fields
+        ):
+            raise ValueError("Magical condition source requires spell id and level.")
+        if self.source_spell_id is not None and not self.source_spell_id.strip():
+            raise ValueError("Condition source spell id cannot be empty.")
+        if self.source_spell_level is not None and self.source_spell_level < 0:
+            raise ValueError("Condition source spell level cannot be negative.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -145,17 +157,21 @@ def add_condition(
     save_ability: str | None = None,
     save_dc: int | None = None,
     save_timing: ConditionSaveTiming | None = None,
+    source_spell_id: str | None = None,
+    source_spell_level: int | None = None,
 ) -> tuple[ConditionState, ...]:
     candidate = ConditionState(
-        actor_id,
-        condition,
-        source_actor_id,
-        source_label,
-        duration,
-        expiration_actor_id,
-        save_ability,
-        save_dc,
-        save_timing,
+        actor_id=actor_id,
+        condition=condition,
+        source_actor_id=source_actor_id,
+        source_label=source_label,
+        duration=duration,
+        expiration_actor_id=expiration_actor_id,
+        save_ability=save_ability,
+        save_dc=save_dc,
+        save_timing=save_timing,
+        source_spell_id=source_spell_id,
+        source_spell_level=source_spell_level,
     )
     if candidate in states:
         return tuple(states)
@@ -179,6 +195,8 @@ def apply_condition(
     save_ability: str | None = None,
     save_dc: int | None = None,
     save_timing: ConditionSaveTiming | None = None,
+    source_spell_id: str | None = None,
+    source_spell_level: int | None = None,
 ) -> ConditionApplicationResult:
     definition = condition_definition(condition)
     if condition.value in actor.condition_immunities:
@@ -199,6 +217,8 @@ def apply_condition(
         save_ability=save_ability,
         save_dc=save_dc,
         save_timing=save_timing,
+        source_spell_id=source_spell_id,
+        source_spell_level=source_spell_level,
     )
     applied_state = next(
         state
@@ -375,7 +395,7 @@ def normalize_grapple_conditions(
 
 
 def standing_movement_cost(actor: Actor) -> int:
-    return actor.speed_feet // 2
+    return effective_speed_feet(actor) // 2
 
 
 def path_with_condition_cost(
@@ -408,6 +428,7 @@ def effective_movement_speed(
     actor: Actor,
     states: Sequence[ConditionState],
 ) -> int:
+    base_speed = effective_speed_feet(actor)
     if any(
         condition_definition(state.condition).speed_zero
         for state in states
@@ -415,8 +436,8 @@ def effective_movement_speed(
     ):
         return 0
     if grappled_actor_ids(states, str(actor.id)):
-        return actor.speed_feet // 2
-    return actor.speed_feet
+        return base_speed // 2
+    return base_speed
 
 
 def movement_range_with_condition_cost(

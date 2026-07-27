@@ -1,17 +1,26 @@
 # Format Zapisu Gry
 
-## Zakres v1
+## Zakres v18
 
 Snapshot sesji używa identyfikatora schematu `dnd_board_game.session` i pola
-`schema_version: 1`. Zapis obejmuje mechaniczny stan potrzebny do deterministycznego
+`schema_version: 18`. Zapis obejmuje mechaniczny stan potrzebny do deterministycznego
 wznowienia scenariusza:
 
+- kontrakt contentu: schemat scenariusza, jego wersję, ruleset i wymagane source packi,
 - pełny bieżący stan aktorów, przygotowanych czarów, slotów, ekwipunku, zasobów oraz profilu biegłości w save'ach, skillach, broniach, pancerzach i narzędziach,
 - pozycję drużyny, flagi, widoczność punktów, postęp wyzwań, czas i odpoczynki,
-- aktywne efekty wraz ze źródłem, czasem trwania i regułą stackowania,
+- aktywne czasowe efekty magii eksploracyjnej wraz z czarem, aktorem, flagą,
+  minutą rozpoczęcia i opcjonalną minutą wygaśnięcia,
+- aktywne efekty wraz ze źródłem, poziomem źródłowego czaru, czasem trwania i regułą stackowania,
 - oczekujący encounter oraz opcjonalny stan aktywnej walki,
 - kolejność inicjatywy, rundę, bieżącą turę, ekonomię akcji, darmową interakcję z obiektem i zużyte reakcje,
+- postęp długotrwałych czarów: rzucającego, czar, poziom slotu, wymagane i wykonane
+  akcje oraz rundę ostatniego postępu,
+- przywołane istoty wraz z właścicielem, czarem, efektem koncentracji i pełną
+  definicją statystyk/ataku potrzebną do wznowienia dynamicznego aktora,
 - broń upuszczoną podczas aktywnej walki wraz z polem, właścicielem źródłowym i rundą,
+- rejestr wystrzelonej amunicji oraz pozostałe stosy łupu pola walki,
+- bieżący towar, portfel i procent odkupu każdego kupca,
 - wynik Stealth oraz listę obserwatorów, przed którymi każdy aktor pozostaje ukryty,
 - jawne stany warunków walki przypisane do aktorów wraz ze źródłem, czasem trwania
   i opcjonalnym rzutem kończącym warunek,
@@ -26,21 +35,57 @@ jest blokowany do czasu rozstrzygnięcia albo anulowania takiego kroku.
 
 Identyfikatory scenariusza, aktorów, lokacji, punktów, wyzwań, zasobów, triggerów,
 efektów i źródeł akcji są częścią kontraktu zapisu. Zmiana takiego identyfikatora
-jest zmianą schematu danych i wymaga migracji. Loader v1 sprawdza odwołania do
+jest zmianą schematu danych i wymaga migracji. Loader sprawdza odwołania do
 aktualnego contentu i odrzuca zapis, jeśli nie można go jednoznacznie odtworzyć.
 
 ## Wersjonowanie i migracje
 
 - Runtime zapisuje wyłącznie bieżącą wersję.
-- Loader odrzuca nieznany `schema` oraz nieobsługiwany `schema_version` z czytelnym
-  błędem; nie próbuje zgadywać brakujących danych.
-- Pierwsza zmiana formatu tworzy migrację `v1 -> v2` jako czystą transformację
-  słownika JSON, test fixture starej wersji oraz deterministyczny test
-  `load -> migrate -> save`.
+- Loader odrzuca nieznany `schema`, przyszły `schema_version` i brak kroku
+  migracji z czytelnym błędem; nie próbuje zgadywać brakującego stanu.
+- Migracja `v1 -> v2` jest czystą transformacją słownika JSON. Dodaje kontrakt
+  contentu `dnd_board_game.scenario` v1, ruleset `dnd_5e_2014` oraz historyczny
+  pack `project_original`; nie zmienia stanu mechanicznego.
+- Migracja `v2 -> v3` dodaje aktorom pusty portfel, a instancjom inventory
+  domyślną wartość `0 cp` i masę `0 lb`.
+- Migracja `v3 -> v4` dodaje instancjom inventory opcjonalne `ammunition_type`.
+- Migracja `v4 -> v5` dodaje walce pusty rejestr wystrzelonej amunicji i pustą
+  listę trwałych pakietów łupu pola walki.
+- Migracja `v5 -> v6` zachowuje brak stanu kupców; podczas odczytu ich stan
+  początkowy jest wtedy pobierany z aktualnego, zweryfikowanego contentu scenariusza.
+- Migracja `v6 -> v7` zachowuje brak opcjonalnych pól pancerza. Dotychczasowe
+  przedmioty zachowują wcześniejsze zachowanie, dopóki content nie nada im kategorii
+  i formuły pancerza.
+- Migracja `v7 -> v8` zachowuje brak opcjonalnych pól ładunków. Dotychczasowe
+  przedmioty pozostają zwykłymi consumable albo wyposażeniem bez puli ładunków.
+- Migracja `v8 -> v9` dodaje zgodne wartości domyślne attunement. Dotychczasowe
+  przedmioty nie wymagają dostrojenia i zachowują wcześniejszą dostępność mocy.
+- Migracja `v9 -> v10` dodaje pustą listę `magic_effects`. Dotychczasowe
+  przedmioty zachowują wcześniejsze zachowanie.
+- Migracja `v10 -> v11` dodaje puste `weapon_category` i `weapon_properties`.
+  Starsze instancje zachowują kompatybilne, jawnie zapisane pola wyposażenia.
+- Migracja `v11 -> v12` zachowuje brak opcjonalnych pól mundane gear. Starsze
+  przedmioty pozostają zwykłymi instancjami bez kategorii, pojemności, światła,
+  reguł użytkowych, durability i zawartości pakietu. Aktor bez `active_light`
+  zaczyna bez zapalonego źródła światła.
+- Migracja `v12 -> v13` zachowuje brak opcjonalnych definicji czarów i profili
+  dostępu. Nowe zapisy utrwalają pełne `SpellDefinition` oraz profile
+  prepared/known/spellbook aktora.
+- Migracja `v13 -> v14` zachowuje brak opcjonalnych reguł skalowania i efektów
+  eksploracyjnych czarów. Nowe zapisy utrwalają dane upcastingu oraz rytuałów.
+- Migracja `v14 -> v15` zachowuje brak czasowych efektów magii eksploracyjnej.
+  Nowe zapisy utrwalają ich źródło, flagę oraz minutowy lifecycle.
+- Migracja `v15 -> v16` dodaje aktywnej walce pustą listę `long_casts`. Nowe
+  zapisy utrwalają postęp długotrwałego castingu.
+- Migracja `v16 -> v17` dodaje aktywnej walce pustą listę `summoned_creatures`.
+  Nowe zapisy utrwalają dynamicznych aktorów i ich relację z koncentracją.
+- Migracja `v17 -> v18` dodaje aktywnym efektom opcjonalny poziom źródłowego
+  czaru, a stanom opcjonalne ID i poziom czaru. Brak tych danych zachowuje efekt,
+  ale nie pozwala traktować go jako bezpiecznie rozpraszalnej magii.
 - Migracje są wykonywane kolejno, bez pomijania wersji, przed budową modeli domeny.
 - Migracja nie może uruchamiać odpoczynku, losowania, sprzętu, Flask ani LLM.
 
-Snapshot v1 jest zapisem pojedynczego scenariusza. Stan drużyny pomiędzy
+Snapshot v18 jest zapisem pojedynczego scenariusza. Stan drużyny pomiędzy
 scenariuszami, kampania i migracje rzeczywistych starszych formatów należą do M9.
 Sekcja eksploracji zapisuje również opcjonalne `temporary_items`: przedmioty
 zbudowane z materiałów sceny, wraz z pozostałą liczbą użyć, źródłowymi materiałami
@@ -58,7 +103,8 @@ i warunek, np. `prone`. Brak pola w starszym snapshotcie v1 oznacza brak aktywny
 stanów eksploracyjnych. Przy rozpoczęciu encountera warunki znanych aktorów są
 kopiowane do `CombatState`; po walce ich aktualny stan jest synchronizowany z eksploracją.
 Stan może dodatkowo zawierać `source_label`, `duration`, `expiration_actor_id`,
-`save_ability`, `save_dc` i `save_timing`. Aktor zapisuje także listę
+`save_ability`, `save_dc`, `save_timing`, `source_spell_id` i
+`source_spell_level`. Aktor zapisuje także listę
 `condition_immunities`. Brak tych pól zachowuje zgodne wartości domyślne v1.
 
 `trap_states` zapisuje wyłącznie runtime'owy stan pułapek zdefiniowanych w aktualnym
@@ -72,10 +118,49 @@ Instancje inventory oraz upuszczone bronie zapisują wymaganie dłoni
 broń bez jawnego wymagania jest normalizowana jako jednoręczna przy użyciu reguł
 inventory.
 
+Snapshot v18 zapisuje portfel aktora w nominałach `cp`, `sp`, `ep`, `gp`, `pp`
+oraz jednostkową `value_cp` i `weight_lb` każdej instancji inventory. Całkowita
+wartość, masa monet (50 monet = 1 lb), masa ekwipunku i udźwig są wartościami
+pochodnymi i nie są osobnym autorytatywnym stanem.
+
+Sekcja eksploracji zapisuje pełny runtime'owy stan kupców: stabilne ID, nazwę,
+`buyback_percent`, portfel oraz pozostałe stosy inventory. Loader wymaga dokładnie
+tego samego zbioru ID kupców co aktualny content scenariusza. Starszy snapshot bez
+tego pola inicjalizuje kupców z contentu; późniejsze zapisy zachowują już wszystkie
+wykonane zakupy i sprzedaże.
+
+Instancja amunicji zapisuje stabilne `ammunition_type`, np. `bolt`, oraz zwykłe
+`quantity`. Wymagany typ i właściwość `loading` pozostają częścią wersjonowanej
+definicji źródła ataku; snapshot przechowuje zużyty, pozostały stan stosów.
+Aktywna walka zapisuje również wpisy `ammunition_expenditures` z aktorem, frakcją,
+typem, liczbą i prototypem zużytego stosu. `battlefield_loot` przechowuje pozycję
+oraz pozostałą zawartość odzyskanego pakietu, więc zapis w trakcie walki i po
+częściowym zebraniu łupu nie duplikuje ani nie gubi pocisków.
+
 Item może również zapisywać `armor_class_bonus` i `armor_proficiency`. Dzięki temu
 stan założonej tarczy, zajęty slot dłoni i wynikające efektywne KP są odtwarzane bez
 zapisywania pochodnej premii bezpośrednio w `Actor.ac`. Brak pól w starszym zapisie
 oznacza odpowiednio premię `0` i brak wymagania biegłości.
+
+Pancerz korpusu zapisuje również `armor_category`, `armor_base_ac`,
+`armor_dexterity_cap`, opcjonalne `armor_strength_requirement` oraz
+`stealth_disadvantage`. Stan `equipped` wskazuje jedyny założony pancerz. Efektywne
+KP i szybkość pozostają wartościami pochodnymi i nie są zapisywane osobno.
+
+Przedmiot z pulą ładunków zapisuje `charges_maximum`, bieżące
+`charges_current`, moment `charges_recovery` oraz opcjonalne
+`charges_recovery_dice` i `charges_recovery_modifier`. Snapshot zachowuje wyłącznie
+stan puli; koszt konkretnej akcji pozostaje w wersjonowanym contentcie. Odtworzenie
+nie wykonuje rzutu ani odpoczynku.
+
+Instancja zapisuje także `requires_attunement` i bieżące `attuned`. Dzięki temu
+zapis w eksploracji albo walce zachowuje dostępność mocy bez ponownego short resta.
+Limit trzech więzi jest walidowany przy nowym dostrajaniu, a nie wyliczany jako
+osobne pole snapshotu.
+
+Lista `magic_effects` jest zapisywana razem z instancją, aby aktywna walka mogła
+odtworzyć dokładne, wersjonowane prymitywy przedmiotu. Efektywne KP, szybkość i
+sumy modyfikatorów nadal są wyliczane, nie serializowane.
 
 Stan ekonomii bieżącej tury może zawierać `two_weapon_trigger_item_id`. Identyfikuje
 lekką broń używaną w zwykłym ataku i pozwala po wczytaniu zachować legalność ataku

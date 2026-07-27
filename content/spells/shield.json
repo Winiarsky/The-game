@@ -1,0 +1,24 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["project_original"],
+  "id": "shield",
+  "name": "Tarcza",
+  "level": 1,
+  "school": "abjuration",
+  "casting_time": "reaction",
+  "range": {"kind": "self"},
+  "components": {"verbal": true, "somatic": true, "materials": []},
+  "duration": {"kind": "round", "amount": 1},
+  "concentration": false,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "reaction_ac_bonus",
+    "label": "Tarcza",
+    "value": 5,
+    "target_faction": "self",
+    "duration": "until_turn_start"
+  }
+}

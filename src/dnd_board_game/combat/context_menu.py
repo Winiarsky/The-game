@@ -29,6 +29,9 @@ class CombatMenuAction(StrEnum):
     APPROACH_AND_INTERACT = "approach_and_interact"
     PICK_UP = "pick_up"
     APPROACH_AND_PICK_UP = "approach_and_pick_up"
+    LOOT = "loot"
+    LOOT_ITEM = "loot_item"
+    LOOT_CURRENCY = "loot_currency"
     EQUIP_WEAPON = "equip_weapon"
     STOW_WEAPON = "stow_weapon"
     DROP_WEAPON = "drop_weapon"
@@ -45,6 +48,7 @@ class CombatMenuAction(StrEnum):
     READY = "ready"
     HIDE = "hide"
     SEARCH = "search"
+    ESCAPE_NET = "escape_net"
     SHOVE = "shove"
     GRAPPLE = "grapple"
     DROP_PRONE = "drop_prone"
@@ -67,6 +71,11 @@ class CombatMenuOption:
     dropped_weapon_id: str | None = None
     item_id: str | None = None
     target_actor_id: str | None = None
+    loot_bundle_id: str | None = None
+    loot_quantity_max: int | None = None
+    loot_unit_weight_lb: float | None = None
+    recipient_remaining_capacity_lb: float | None = None
+    currency_denomination: str | None = None
     shove_mode: str | None = None
     grapple_mode: str | None = None
     provider: str = ""
@@ -86,6 +95,11 @@ class CombatMenuOption:
             "dropped_weapon_id": self.dropped_weapon_id,
             "item_id": self.item_id,
             "target_actor_id": self.target_actor_id,
+            "loot_bundle_id": self.loot_bundle_id,
+            "loot_quantity_max": self.loot_quantity_max,
+            "loot_unit_weight_lb": self.loot_unit_weight_lb,
+            "recipient_remaining_capacity_lb": self.recipient_remaining_capacity_lb,
+            "currency_denomination": self.currency_denomination,
             "shove_mode": self.shove_mode,
             "grapple_mode": self.grapple_mode,
             "provider": self.provider,

@@ -1,0 +1,1 @@
+{"schema":"dnd_board_game.item","schema_version":1,"ruleset_id":"dnd_5e_2014","source_pack_ids":["srd_5_1_cc_by_4_0"],"id":"quarterstaff","name":"Kostur","kind":"weapon","value_cp":20,"weight_lb":4,"weapon":{"category":"simple","attack_kind":"melee","properties":["versatile"],"versatile_damage_dice":"1d8","damage":{"dice":"1d6","damage_type":"bludgeoning"}}}

@@ -14,6 +14,7 @@ from dnd_board_game.combat import (
     current_actor,
     drop_weapon,
     equip_weapon,
+    expend_thrown_weapon,
     finish_turn,
     movement_remaining,
     pickup_dropped_weapon,
@@ -70,6 +71,37 @@ def test_start_combat_selects_first_initiative_actor():
 
     assert current_actor(state).id == hero.id
     assert state.round_number == 1
+
+
+def test_thrown_weapon_leaves_inventory_hand_and_can_be_recovered() -> None:
+    hero = replace(
+        _actor("hero", Faction.ALLY, 0),
+        inventory=(
+            InventoryItem(
+                "javelin",
+                "Oszczep",
+                "weapon",
+                equipped=True,
+                hands_required=1,
+                held_in=(HandSlot.MAIN_HAND,),
+            ),
+        ),
+    )
+    goblin = _actor("goblin", Faction.ENEMY, 2)
+    state = start_combat((hero, goblin), _order(hero, goblin))
+
+    thrown = expend_thrown_weapon(
+        state,
+        str(hero.id),
+        "javelin",
+        goblin.position,
+    )
+
+    updated = next(actor for actor in thrown.actors if actor.id == hero.id)
+    assert updated.inventory[0].quantity == 0
+    assert updated.inventory[0].equipped is False
+    assert thrown.dropped_weapons[0].weapon.quantity == 1
+    assert thrown.dropped_weapons[0].position == goblin.position
 
 
 def test_start_combat_carries_known_exploration_conditions() -> None:

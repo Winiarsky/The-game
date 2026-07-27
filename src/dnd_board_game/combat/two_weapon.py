@@ -40,7 +40,10 @@ def eligible_two_weapon_bonus_sources(
             or not _is_light_melee_source(item, source)
         ):
             continue
-        if all(candidate.id != source.id for candidate in options):
+        if all(
+            _held_item_for_source(actor, candidate).id != item.id
+            for candidate in options
+        ):
             options.append(source)
     return tuple(options)
 
@@ -83,7 +86,22 @@ def two_weapon_bonus_attack_source(actor: Actor, source: AttackSource) -> Attack
     elif modifier < 0:
         base = f"{base} - {abs(modifier)}"
     hint = f"{base} {source.damage_type} (atak drugą bronią; bez dodatniego modyfikatora cechy)"
-    return replace(source, damage_modifier=modifier, damage_hint=hint)
+    removed = source.damage_modifier - modifier
+    components = tuple(
+        replace(component, modifier=component.modifier - removed)
+        if component.id == "base"
+        else component
+        for component in source.damage_components
+    )
+    return replace(
+        source,
+        damage_modifier=modifier,
+        damage_components=components,
+        damage_hint=hint,
+        ability_damage_modifier_applied=(
+            source.ability_damage_modifier_applied - removed
+        ),
+    )
 
 
 def _held_item_for_source(actor: Actor, source: AttackSource) -> InventoryItem | None:

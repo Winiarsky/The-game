@@ -2,10 +2,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from enum import StrEnum
+from typing import TYPE_CHECKING, Callable
 
 from dnd_board_game.actors import Actor, ActorResourcePool, DeathSaveState, HitDicePool, RecoveryPeriod
 
 from .abilities import ability_modifier
+
+if TYPE_CHECKING:
+    from dnd_board_game.inventory import ItemChargeRecoveryResult
 
 
 class RestType(StrEnum):
@@ -21,6 +25,7 @@ class RestResult:
     recovered_resource_ids: tuple[str, ...]
     hp_recovered: int = 0
     hit_dice_recovered: int = 0
+    item_charge_recoveries: tuple[ItemChargeRecoveryResult, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,16 +39,48 @@ class HitDieSpendResult:
     effective_healing: int
 
 
-def complete_short_rest(actor: Actor) -> RestResult:
+def complete_short_rest(
+    actor: Actor,
+    *,
+    roll_die: Callable[[int], int] | None = None,
+) -> RestResult:
+    from dnd_board_game.inventory import ItemChargeRecovery, recover_item_charges
+
     resources, recovered = _recover_resources(actor, RestType.SHORT_REST)
-    updated = replace(actor, resource_pools=resources)
-    return RestResult(actor, updated, RestType.SHORT_REST, recovered)
+    charges = recover_item_charges(
+        actor,
+        ItemChargeRecovery.SHORT_REST,
+        roll_die=roll_die,
+    )
+    updated = replace(
+        actor,
+        resource_pools=resources,
+        inventory=charges.actor.inventory,
+    )
+    return RestResult(
+        actor,
+        updated,
+        RestType.SHORT_REST,
+        recovered,
+        item_charge_recoveries=charges.recoveries,
+    )
 
 
-def complete_long_rest(actor: Actor) -> RestResult:
+def complete_long_rest(
+    actor: Actor,
+    *,
+    roll_die: Callable[[int], int] | None = None,
+) -> RestResult:
+    from dnd_board_game.inventory import ItemChargeRecovery, recover_item_charges
+
     if actor.hp <= 0:
         raise ValueError(f"{actor.name} musi mieć co najmniej 1 HP na początku long resta.")
     resources, recovered = _recover_resources(actor, RestType.LONG_REST)
+    charges = recover_item_charges(
+        actor,
+        ItemChargeRecovery.LONG_REST,
+        roll_die=roll_die,
+    )
     hit_dice, recovered_hit_dice = _recover_long_rest_hit_dice(actor)
     slots = tuple(replace(slot, remaining=slot.maximum) for slot in actor.spell_slots)
     preparation = actor.spell_preparation
@@ -57,6 +94,7 @@ def complete_long_rest(actor: Actor) -> RestResult:
         spell_preparation=preparation,
         hit_dice=hit_dice,
         resource_pools=resources,
+        inventory=charges.actor.inventory,
         death_saves=DeathSaveState(),
     )
     return RestResult(
@@ -66,6 +104,7 @@ def complete_long_rest(actor: Actor) -> RestResult:
         recovered,
         hp_recovered=max(0, actor.max_hp - actor.hp),
         hit_dice_recovered=recovered_hit_dice,
+        item_charge_recoveries=charges.recoveries,
     )
 
 

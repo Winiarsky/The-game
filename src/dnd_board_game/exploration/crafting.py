@@ -12,6 +12,7 @@ from .models import (
     TemporaryItem,
     TemporaryItemScope,
 )
+from .magic_effects import advance_exploration_time
 
 
 class CraftingValidationError(ValueError):
@@ -222,12 +223,15 @@ def craft_temporary_item(
         scope=draft.scope,
         time_cost_minutes=plan.purpose.time_cost_minutes,
     )
+    updated_state = replace(
+        state,
+        temporary_items=(*state.temporary_items, item),
+    )
     return (
-        replace(
-            state,
-            temporary_items=(*state.temporary_items, item),
-            elapsed_minutes=state.elapsed_minutes + plan.purpose.time_cost_minutes,
-        ),
+        advance_exploration_time(
+            updated_state,
+            plan.purpose.time_cost_minutes,
+        ).state,
         item,
     )
 

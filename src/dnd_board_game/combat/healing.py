@@ -8,6 +8,7 @@ from dnd_board_game.actors import Actor, DeathSaveState
 from dnd_board_game.world import BoardState, line_of_sight_clear
 
 from .attack_flow import AttackSourceType, SpellCastingKind
+from .action_economy import ActionEconomyCost
 from .targets import CombatTarget, actor_as_combat_target, is_public_attack_target
 
 
@@ -27,9 +28,19 @@ class HealingSource:
     healing_fixed: int | None = None
     healing_die_sides: int | None = None
     healing_modifier: int = 0
+    healing_dice_count: int = 1
     spell_level: int = 0
     casting_kind: SpellCastingKind = SpellCastingKind.NONE
     prepared: bool = True
+    action_cost: ActionEconomyCost = ActionEconomyCost.ACTION
+    cast_level: int | None = None
+    upcast_healing_dice_per_level: int = 0
+
+    def __post_init__(self) -> None:
+        if self.healing_dice_count < 1:
+            raise ValueError("Healing dice count must be positive.")
+        if self.upcast_healing_dice_per_level < 0:
+            raise ValueError("Healing upcast dice cannot be negative.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,6 +52,36 @@ class AppliedHealingResult:
     hp_after: int
     amount: int
     effective_healing: int
+
+
+def healing_source_at_cast_level(
+    source: HealingSource,
+    cast_level: int,
+) -> HealingSource:
+    if source.spell_level <= 0:
+        raise ValueError("Only a leveled spell can use a spell-slot level.")
+    if cast_level < source.spell_level:
+        raise ValueError("Cast level cannot be lower than the spell's base level.")
+    dice_count = source.healing_dice_count + (
+        cast_level - source.spell_level
+    ) * source.upcast_healing_dice_per_level
+    if source.healing_die_sides is None and dice_count != source.healing_dice_count:
+        raise ValueError("Healing-dice upcasting requires a dice healing source.")
+    if source.healing_fixed is not None:
+        base = str(source.healing_fixed)
+    elif source.healing_die_sides is not None:
+        base = f"{dice_count}d{source.healing_die_sides}"
+    else:
+        base = "leczenie"
+    if source.healing_modifier:
+        sign = "+" if source.healing_modifier > 0 else "-"
+        base = f"{base} {sign} {abs(source.healing_modifier)}"
+    return replace(
+        source,
+        cast_level=cast_level,
+        healing_dice_count=dice_count,
+        healing_hint=base,
+    )
 
 
 def legal_healing_targets(

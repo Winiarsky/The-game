@@ -92,6 +92,8 @@ class ActionResourceResolver:
         actor: Actor,
         *,
         spell_level: int = 0,
+        spell_id: str | None = None,
+        cast_level: int | None = None,
         action_cost: ActionEconomyCost = ActionEconomyCost.ACTION,
         resource_pool_id: str | None = None,
         resource_cost: int = 1,
@@ -101,9 +103,14 @@ class ActionResourceResolver:
             raise ValueError(action_result.message)
         state_after_action = action_result.state
         actor_after_action = _actor_by_id(state_after_action, str(actor.id))
-        resource_result = consume_spell_resource(actor_after_action, int(spell_level))
+        resource_result = consume_spell_resource(
+            actor_after_action,
+            int(spell_level),
+            cast_level=cast_level,
+            spell_id=spell_id,
+        )
         state_after_resource = state_after_action
-        if resource_result.consumed:
+        if resource_result.actor_after != actor_after_action:
             state_after_resource = replace_actor(state_after_action, resource_result.actor_after)
         actor_after_resource = resource_result.actor_after
         if resource_pool_id is not None:
@@ -118,7 +125,7 @@ class ActionResourceResolver:
             state=state_after_resource,
             actor_before=actor,
             actor_after=actor_after_resource,
-            spell_level=int(spell_level),
+            spell_level=resource_result.spell_level,
             spell_resource_consumed=resource_result.consumed,
             actor_resource_id=resource_pool_id,
             actor_resource_cost=resource_cost if resource_pool_id is not None else 0,
@@ -181,6 +188,9 @@ class SpellSaveAttackResolver(AttackActionResolver):
             state,
             caster,
             spell_level=source.spell_level,
+            spell_id=source.id,
+            cast_level=source.cast_level,
+            action_cost=source.action_cost,
             resource_pool_id=source.resource_pool_id,
             resource_cost=source.resource_cost,
         )
@@ -224,6 +234,9 @@ class AreaSpellResolver(ActionResourceResolver):
             state,
             caster,
             spell_level=source.spell_level,
+            spell_id=source.id,
+            cast_level=source.cast_level,
+            action_cost=source.action_cost,
             resource_pool_id=source.resource_pool_id,
             resource_cost=source.resource_cost,
         )
@@ -290,7 +303,14 @@ class HealingActionResolver(ActionResourceResolver):
         source: HealingSource,
         amount: int,
     ) -> HealingActionResolution:
-        resource_use = self.consume_action_and_source_resource(state, healer, spell_level=source.spell_level)
+        resource_use = self.consume_action_and_source_resource(
+            state,
+            healer,
+            spell_level=source.spell_level,
+            spell_id=source.id,
+            cast_level=source.cast_level,
+            action_cost=source.action_cost,
+        )
         target = _actor_by_id(resource_use.state, target_id)
         applied = apply_healing_result(target, source, int(amount))
         return HealingActionResolution(replace_actor(resource_use.state, applied.actor_after), resource_use, applied)

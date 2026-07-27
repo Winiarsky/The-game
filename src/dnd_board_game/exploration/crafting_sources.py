@@ -40,6 +40,9 @@ class CraftingSource:
     description: str = ""
     item_kind: str = "item"
     collection_destination: ItemCollectionDestination | None = None
+    weight_lb: float = 0.0
+    value_cp: int = 0
+    ammunition_type: str | None = None
 
     def __post_init__(self) -> None:
         if not self.id.strip() or not self.reference_id.strip():
@@ -111,6 +114,9 @@ def build_crafting_source_registry(
                 description=item.definition.description,
                 item_kind=item.definition.kind,
                 collection_destination=item.definition.collection_destination,
+                weight_lb=item.definition.default_weight_lb or 0.0,
+                value_cp=item.definition.default_value_cp or 0,
+                ammunition_type=item.definition.ammunition_type,
             )
         )
     for fixture in zone.fixtures:
@@ -163,6 +169,9 @@ def build_crafting_source_registry(
                     description=item.definition.description,
                     item_kind=item.definition.kind,
                     collection_destination=item.definition.collection_destination,
+                    weight_lb=item.definition.default_weight_lb or 0.0,
+                    value_cp=item.definition.default_value_cp or 0,
+                    ammunition_type=item.definition.ammunition_type,
                 )
             )
 
@@ -222,6 +231,9 @@ def build_crafting_source_registry(
                     description=item.description,
                     item_kind=item.kind,
                     collection_destination=ItemCollectionDestination.ACTOR_INVENTORY,
+                    weight_lb=item.weight_lb,
+                    value_cp=item.value_cp,
+                    ammunition_type=item.ammunition_type,
                 )
             )
     return CraftingSourceRegistry(_apply_existing_component_allocations(tuple(sources), state))

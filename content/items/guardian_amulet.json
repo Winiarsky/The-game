@@ -1,0 +1,28 @@
+{
+  "schema": "dnd_board_game.item",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["project_original"],
+  "id": "guardian_amulet",
+  "name": "Amulet czujnego strażnika",
+  "kind": "magic_item",
+  "value_cp": 7500,
+  "weight_lb": 0.2,
+  "requires_attunement": true,
+  "description": "Po zestrojeniu i założeniu amulet wzmacnia obronę właściciela: +1 do KP oraz rzutów obronnych.",
+  "properties": ["metallic"],
+  "magic_effects": [
+    {
+      "id": "guardian_armor",
+      "kind": "armor_class_bonus",
+      "value": 1,
+      "requires_equipped": true
+    },
+    {
+      "id": "guardian_saves",
+      "kind": "saving_throw_bonus",
+      "value": 1,
+      "requires_equipped": true
+    }
+  ]
+}

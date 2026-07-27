@@ -22,6 +22,7 @@ from dnd_board_game.combat import (
     AttackSource,
     CombatState,
     CombatStatus,
+    CombatCondition,
     DamageComponentInput,
     HealingSource,
     SpellSaveResult,
@@ -37,10 +38,12 @@ from dnd_board_game.combat import (
     current_actor,
     dexterity_save_cover_modifiers,
     evaluate_attack_positioning,
+    expend_thrown_weapon,
     grappled_actor_ids,
     is_hidden_from,
     reveal_actor,
     replace_actor,
+    record_ammunition_expenditure,
     resolve_attack,
     set_two_weapon_trigger,
     select_attack_target,
@@ -52,8 +55,16 @@ from dnd_board_game.combat import (
     use_bonus_action,
     use_attack_action,
     versatile_two_handed_source_is_legal,
+    apply_condition,
 )
 from dnd_board_game.rules import D20RollInput, RollMode, resolve_d20_roll, roll_instruction
+from dnd_board_game.inventory import (
+    consume_ammunition,
+    free_hand_count,
+    has_ammunition,
+    hands_required,
+    item_power_available,
+)
 from dnd_board_game.world import BoardState, Coordinate
 
 from .damage_presentation import applied_damage_message, applied_damage_payload
@@ -77,6 +88,7 @@ class PendingPlayerAttack:
     ranged_threat_actor_ids: tuple[str, ...] = ()
     flanking_ally_ids: tuple[str, ...] = ()
     two_weapon_bonus: bool = False
+    cast_level: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -193,6 +205,7 @@ class PlayerCombatActionFlowService:
             target_id=selected.selected_target.id,
             source_id=source.id,
             two_weapon_bonus=two_weapon_bonus,
+            cast_level=source.cast_level,
             **_positioning_pending_fields(positioning),
         )
         return PlayerAttackTransition(
@@ -258,8 +271,13 @@ class PlayerCombatActionFlowService:
         )
         if effective_source.save_ability:
             _require_usable_source(attacker, effective_source)
-            confirmation = self._spell_saves.confirm_target_save_spell(
+            state_after_ammunition = _consume_attack_ammunition(
                 state,
+                str(attacker.id),
+                effective_source,
+            )
+            confirmation = self._spell_saves.confirm_target_save_spell(
+                state_after_ammunition,
                 caster=attacker,
                 target=target,
                 source=effective_source,
@@ -429,7 +447,13 @@ class PlayerCombatActionFlowService:
             state_after_resource = bonus_use.state
         else:
             if _uses_attack_action(effective_source):
-                attack_use = use_attack_action(state, attacker)
+                attack_use = use_attack_action(
+                    state,
+                    attacker,
+                    maximum_attacks=1
+                    if effective_source.loading or effective_source.limited_attacks
+                    else None,
+                )
                 if not attack_use.accepted:
                     raise ValueError(attack_use.message)
                 state_after_resource = attack_use.state
@@ -438,6 +462,9 @@ class PlayerCombatActionFlowService:
                     state,
                     attacker,
                     spell_level=effective_source.spell_level,
+                    spell_id=effective_source.id,
+                    cast_level=effective_source.cast_level,
+                    action_cost=effective_source.action_cost,
                     resource_pool_id=effective_source.resource_pool_id,
                     resource_cost=effective_source.resource_cost,
                 )
@@ -451,6 +478,18 @@ class PlayerCombatActionFlowService:
                 state_after_resource,
                 str(attacker.id),
                 effective_source,
+            )
+        state_after_resource = _consume_attack_ammunition(
+            state_after_resource,
+            str(attacker.id),
+            effective_source,
+        )
+        if effective_source.thrown and effective_source.source_item_id is not None:
+            state_after_resource = expend_thrown_weapon(
+                state_after_resource,
+                str(attacker.id),
+                effective_source.source_item_id,
+                selected.selected_target.position,
             )
         resolution = resolve_attack(
             AttackDeclaration(attacker, selected.selected_target, effective_source),
@@ -498,6 +537,42 @@ class PlayerCombatActionFlowService:
                 board_message="",
                 message_title="Atak",
                 message_body=message,
+                event_type="ui_combat_player_attack_roll",
+                event_payload=event_payload,
+                clear_combat_help=True,
+                clear_movement_preview=True,
+            )
+        if effective_source.on_hit_condition is not None:
+            target_actor = _actor_by_id(revealed_state, pending.target_id)
+            if (
+                effective_source.weapon_special_rule is not None
+                and effective_source.weapon_special_rule.value == "net"
+                and target_actor.size.value in {"large", "huge", "gargantuan"}
+            ):
+                condition_message = (
+                    f"{target_actor.name} jest zbyt duży, aby sieć go unieruchomiła."
+                )
+                conditioned_state = revealed_state
+            else:
+                application = apply_condition(
+                    revealed_state.condition_states,
+                    target_actor,
+                    CombatCondition(effective_source.on_hit_condition),
+                    source_actor_id=str(attacker.id),
+                    source_label=f"Sieć: {effective_source.name}",
+                )
+                conditioned_state = replace(
+                    revealed_state,
+                    condition_states=application.states,
+                )
+                condition_message = application.message
+            return PlayerAttackTransition(
+                state=conditioned_state,
+                active_effects=updated_effects,
+                pending=None,
+                board_message="",
+                message_title="Atak",
+                message_body=f"{message} {condition_message}",
                 event_type="ui_combat_player_attack_roll",
                 event_payload=event_payload,
                 clear_combat_help=True,
@@ -618,7 +693,13 @@ class PlayerCombatActionFlowService:
     ) -> PlayerAttackTransition:
         attacker = _active_hero(state)
         _require_usable_source(attacker, source)
-        pending = PendingPlayerAttack(str(attacker.id), target_id, source.id, "attack_roll")
+        pending = PendingPlayerAttack(
+            str(attacker.id),
+            target_id,
+            source.id,
+            "attack_roll",
+            cast_level=source.cast_level,
+        )
         attacker, target, selected, positioning = _validated_attack(
             state, board, source, pending, scene_objects
         )
@@ -643,7 +724,13 @@ class PlayerCombatActionFlowService:
             _manual_d20_input(effective_source, natural_roll, natural_roll_2)
         )
         if _uses_attack_action(effective_source):
-            attack_use = use_attack_action(state, attacker)
+            attack_use = use_attack_action(
+                state,
+                attacker,
+                maximum_attacks=1
+                if effective_source.loading or effective_source.limited_attacks
+                else None,
+            )
             if not attack_use.accepted:
                 raise ValueError(attack_use.message)
             state_after_resource = attack_use.state
@@ -652,6 +739,9 @@ class PlayerCombatActionFlowService:
                 state,
                 attacker,
                 spell_level=effective_source.spell_level,
+                spell_id=effective_source.id,
+                cast_level=effective_source.cast_level,
+                action_cost=effective_source.action_cost,
                 resource_pool_id=effective_source.resource_pool_id,
                 resource_cost=effective_source.resource_cost,
             )
@@ -661,6 +751,18 @@ class PlayerCombatActionFlowService:
                 state_after_resource,
                 str(attacker.id),
                 effective_source,
+            )
+        state_after_resource = _consume_attack_ammunition(
+            state_after_resource,
+            str(attacker.id),
+            effective_source,
+        )
+        if effective_source.thrown and effective_source.source_item_id is not None:
+            state_after_resource = expend_thrown_weapon(
+                state_after_resource,
+                str(attacker.id),
+                effective_source.source_item_id,
+                selected.selected_target.position,
             )
         resolution = resolve_attack(
             AttackDeclaration(attacker, selected.selected_target, effective_source),
@@ -689,16 +791,38 @@ class PlayerCombatActionFlowService:
             resolution.critical,
         )
         if resolution.hit:
-            damage_resolution = self._spell_saves.apply_target_damage(
-                updated_state,
-                target_id=selected.selected_target.id,
-                source=effective_source,
-                base_damage=max(0, int(damage)),
-                critical=resolution.critical,
-            )
-            updated_state = damage_resolution.state
-            applied = damage_resolution.applied_damage
-            message = f"{message} {_damage_application_message(applied)}"
+            if effective_source.on_hit_condition is not None:
+                target_actor = _actor_by_id(updated_state, selected.selected_target.id)
+                if not (
+                    effective_source.weapon_special_rule is not None
+                    and effective_source.weapon_special_rule.value == "net"
+                    and target_actor.size.value in {"large", "huge", "gargantuan"}
+                ):
+                    application = apply_condition(
+                        updated_state.condition_states,
+                        target_actor,
+                        CombatCondition(effective_source.on_hit_condition),
+                        source_actor_id=str(attacker.id),
+                        source_label=f"Sieć: {effective_source.name}",
+                    )
+                    updated_state = replace(
+                        updated_state,
+                        condition_states=application.states,
+                    )
+                    message = f"{message} {application.message}"
+                else:
+                    message = f"{message} {target_actor.name} jest zbyt duży dla sieci."
+            else:
+                damage_resolution = self._spell_saves.apply_target_damage(
+                    updated_state,
+                    target_id=selected.selected_target.id,
+                    source=effective_source,
+                    base_damage=max(0, int(damage)),
+                    critical=resolution.critical,
+                )
+                updated_state = damage_resolution.state
+                applied = damage_resolution.applied_damage
+                message = f"{message} {_damage_application_message(applied)}"
         return PlayerAttackTransition(
             state=updated_state,
             active_effects=updated_effects,
@@ -748,7 +872,7 @@ def _require_usable_source(actor: Actor, source: AttackSource | HealingSource) -
             for item in actor.inventory
             if item.id == source_item_id or item.source_ref == source_item_id
         )
-        if not any(item.available and item.equipped for item in items):
+        if not any(item_power_available(item) and item.equipped for item in items):
             raise ValueError(f"{source.name} nie jest obecnie trzymane ani wyposażone.")
     if not spell_is_prepared(
         actor.spell_preparation,
@@ -757,8 +881,21 @@ def _require_usable_source(actor: Actor, source: AttackSource | HealingSource) -
         legacy_prepared=source.prepared,
     ):
         raise ValueError(f"Czar {source.name} nie został przygotowany.")
-    if not can_consume_spell_resource(actor, getattr(source, "spell_level", 0)):
+    if not can_consume_spell_resource(
+        actor,
+        getattr(source, "spell_level", 0),
+        getattr(source, "cast_level", None),
+    ):
         raise ValueError(f"Brak slotów czaru dla {source.name}.")
+    from dnd_board_game.combat import actor_spell_cast_validation
+
+    cast_validation = actor_spell_cast_validation(
+        actor,
+        source.id,
+        cast_level=getattr(source, "cast_level", None),
+    )
+    if cast_validation is not None and not cast_validation.valid:
+        raise ValueError(" ".join(cast_validation.errors))
     resource_pool_id = getattr(source, "resource_pool_id", None)
     resource_cost = int(getattr(source, "resource_cost", 1))
     if resource_pool_id is not None and not can_spend_actor_resource(
@@ -767,6 +904,26 @@ def _require_usable_source(actor: Actor, source: AttackSource | HealingSource) -
         resource_cost,
     ):
         raise ValueError(f"Brak dostępnych użyć: {source.name}.")
+    ammunition_type = getattr(source, "ammunition_type", None)
+    if ammunition_type is not None and not has_ammunition(actor, ammunition_type):
+        raise ValueError(f"Brak amunicji typu {ammunition_type} dla {source.name}.")
+    if ammunition_type is not None and source_item_id is not None:
+        weapon = next(
+            (
+                item
+                for item in actor.inventory
+                if item.id == source_item_id or item.source_ref == source_item_id
+            ),
+            None,
+        )
+        if (
+            weapon is not None
+            and hands_required(weapon) == 1
+            and free_hand_count(actor.inventory) < 1
+        ):
+            raise ValueError(
+                f"{source.name} wymaga wolnej drugiej ręki do załadowania amunicji."
+            )
 
 
 def _consume_attack_source_resource(
@@ -779,6 +936,19 @@ def _consume_attack_source_resource(
     actor = _actor_by_id(state, actor_id)
     usage = spend_actor_resource(actor, source.resource_pool_id, source.resource_cost)
     return replace_actor(state, usage.actor_after)
+
+
+def _consume_attack_ammunition(
+    state: CombatState,
+    actor_id: str,
+    source: AttackSource,
+) -> CombatState:
+    if source.ammunition_type is None:
+        return state
+    actor = _actor_by_id(state, actor_id)
+    usage = consume_ammunition(actor, source.ammunition_type)
+    recorded = record_ammunition_expenditure(state, actor, usage)
+    return replace_actor(recorded, usage.actor_after)
 
 
 def _validated_attack(
@@ -864,6 +1034,16 @@ def _require_attack_economy(
             raise ValueError("Ten atak nie jest legalnym atakiem drugą bronią.")
         return
     if _uses_attack_action(source):
+        if (
+            (source.loading or source.limited_attacks)
+            and state.turn_action.attack_action_active
+            and state.turn_action.attacks_used >= 1
+        ):
+            if source.loading:
+                raise ValueError(
+                    "Właściwość loading pozwala oddać tylko jeden strzał na akcję."
+                )
+            raise ValueError("Ta broń pozwala wykonać tylko jeden atak w ramach akcji.")
         if not can_use_attack_action(state, actor):
             raise ValueError("Wykorzystano już wszystkie ataki tej akcji.")
     elif state.turn_action.action_use != ActionUse.ACTION_AVAILABLE:

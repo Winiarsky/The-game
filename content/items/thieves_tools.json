@@ -1,7 +1,17 @@
 {
+  "schema": "dnd_board_game.item",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["srd_5_1_cc_by_4_0"],
   "id": "thieves_tools",
   "name": "Narzędzia złodziejskie",
   "kind": "tool",
+  "value_cp": 2500,
+  "weight_lb": 1,
   "description": "Zestaw niewielkich metalowych wytrychów i precyzyjnych narzędzi.",
-  "properties": ["short", "rigid", "metallic", "prying"]
+  "properties": ["short", "rigid", "metallic", "prying"],
+  "gear": {
+    "category": "tool",
+    "tool_proficiency_id": "thieves_tools"
+  }
 }

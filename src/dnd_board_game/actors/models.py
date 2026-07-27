@@ -10,12 +10,15 @@ from .features import FeatureGrant, validate_unique_feature_grants
 from .triggers import ActorTrigger
 from .proficiency_profile import ProficiencyProfile
 from .size import CreatureSize
+from dnd_board_game.inventory.economy import CurrencyWallet
+from dnd_board_game.inventory.adventuring_gear import ActiveLight
 
 if TYPE_CHECKING:
     from dnd_board_game.actors.resources import ActorResourcePool, HitDicePool
     from dnd_board_game.actors.spell_preparation import SpellPreparationProfile
     from dnd_board_game.combat.spells import SpellSlotState
     from dnd_board_game.inventory import InventoryItem
+    from dnd_board_game.rules import SpellAccessProfile, SpellDefinition
     from dnd_board_game.world.coordinates import Coordinate
 
 
@@ -67,8 +70,12 @@ class Actor:
     spell_slots: tuple[SpellSlotState, ...] = ()
     spell_save_dc: int = 0
     inventory: tuple[InventoryItem, ...] = ()
+    active_light: ActiveLight | None = None
+    currency: CurrencyWallet = field(default_factory=CurrencyWallet)
     spell_ids: tuple[str, ...] = ()
     spell_preparation: SpellPreparationProfile | None = None
+    spells: tuple[SpellDefinition, ...] = ()
+    spell_access: tuple[SpellAccessProfile, ...] = ()
     hit_dice: tuple[HitDicePool, ...] = ()
     resource_pools: tuple[ActorResourcePool, ...] = ()
     proficiency_bonus: int = 2

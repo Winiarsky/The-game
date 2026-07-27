@@ -1,0 +1,36 @@
+{
+  "schema": "dnd_board_game.item",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["project_original"],
+  "id": "binding_wand",
+  "name": "Różdżka oplątania",
+  "kind": "magic_item",
+  "value_cp": 5000,
+  "weight_lb": 1,
+  "charges_maximum": 7,
+  "charges_recovery": "long_rest",
+  "charges_recovery_dice": "1d6",
+  "charges_recovery_modifier": 1,
+  "requires_attunement": true,
+  "description": "Różdżka ma 7 ładunków. Wydaje 1 ładunek, aby spróbować magicznie unieruchomić cel; po długim odpoczynku odzyskuje 1k6+1 ładunków.",
+  "properties": ["rigid", "wooden"],
+  "combat_actions": [
+    {
+      "id": "binding_wand_restraint",
+      "name": "Różdżka oplątania",
+      "label": "Opleć cel magicznymi więzami",
+      "action_type": "targeted_item_effect",
+      "action_cost": "action",
+      "charge_cost": 1,
+      "target_faction": "enemy",
+      "range_feet": 30,
+      "effect_kind": "apply_condition",
+      "condition": "restrained",
+      "save_ability": "dexterity",
+      "save_dc": 13,
+      "save_timing": "turn_end",
+      "duration": "permanent"
+    }
+  ]
+}

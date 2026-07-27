@@ -1,25 +1,25 @@
 {
+  "schema": "dnd_board_game.item",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["srd_5_1_cc_by_4_0"],
   "id": "dagger",
   "name": "Sztylet",
   "kind": "weapon",
-  "hands_required": 1,
-  "light_weapon": true,
+  "value_cp": 200,
+  "weight_lb": 1,
   "description": "Krótki nóż o sztywnym metalowym ostrzu.",
   "properties": ["short", "light", "rigid", "metallic", "sharp", "cutting"],
-  "attacks": [
-    {
-      "id": "dagger_stab",
-      "name": "Sztylet",
-      "source_type": "weapon",
+  "weapon": {
+      "category": "simple",
       "attack_kind": "melee",
-      "ability": "dexterity",
-      "range_feet": 5,
-      "reach_feet": 5,
+      "attack_id": "dagger_stab",
+      "properties": ["finesse", "light", "thrown"],
+      "normal_range_feet": 20,
+      "long_range_feet": 60,
       "damage": {
         "dice": "1d4",
-        "modifier": 3,
         "damage_type": "piercing"
       }
-    }
-  ]
+  }
 }

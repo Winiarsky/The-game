@@ -1,0 +1,1 @@
+{"schema":"dnd_board_game.item","schema_version":1,"ruleset_id":"dnd_5e_2014","source_pack_ids":["srd_5_1_cc_by_4_0"],"id":"blowgun_needle","name":"Igła do dmuchawki","kind":"ammunition","value_cp":2,"weight_lb":0.02,"ammunition_type":"needle","description":"Lekka igła używana jako amunicja do dmuchawki."}

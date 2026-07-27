@@ -137,6 +137,7 @@ def run_demo(
         challenges=exploration.challenges,
         resources=exploration.resources,
         inventory_resource_ids=exploration.initial_resource_ids,
+        merchants=exploration.merchants,
     )
     messages: list[str] = [f"Scenariusz eksploracji: {exploration.scenario_name}."]
     _print_section(messages[-1])

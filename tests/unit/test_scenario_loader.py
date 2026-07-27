@@ -17,7 +17,13 @@ from dnd_board_game.combat import (
 )
 from dnd_board_game.exploration import NpcOutcomeTier, SceneMode
 from dnd_board_game.inventory import HandSlot, effective_armor_class
-from dnd_board_game.scenarios import build_encounter_from_scenario, build_exploration_from_scenario, load_scenario
+from dnd_board_game.scenarios import (
+    RULESET_DND_5E_2014,
+    SCENARIO_SCHEMA,
+    build_encounter_from_scenario,
+    build_exploration_from_scenario,
+    load_scenario,
+)
 from dnd_board_game.world import Coordinate, find_path
 
 
@@ -67,6 +73,12 @@ def _village_square_data_without_refs():
     for actor in data["actors"]:
         actor.pop("item_refs", None)
         actor["attacks"] = [attack]
+    data["exploration"].pop("merchants", None)
+    data["exploration"]["points"] = [
+        point
+        for point in data["exploration"]["points"]
+        if point.get("merchant_id") is None
+    ]
     return data
 
 
@@ -392,14 +404,105 @@ def test_load_gate_skirmish_uses_shared_map_setup_and_ranged_rogue():
     assert cleric_sources["radiant_line"].spell_level == 1
     assert cleric_sources["radiant_line"].area is not None
     assert cleric_sources["radiant_line"].area.target_mode.value == "all_creatures"
-    assert encounter.healing_sources_by_actor[cleric.id][0].casting_kind == SpellCastingKind.LEVELED
+    healing_word = encounter.healing_sources_by_actor[cleric.id][0]
+    assert healing_word.casting_kind == SpellCastingKind.LEVELED
+    assert healing_word.action_cost == ActionEconomyCost.BONUS_ACTION
+    assert {spell.id for spell in cleric.spells} == {
+        "sacred_flame",
+        "radiant_line",
+        "healing_word",
+        "bless_attack_bonus",
+        "comprehend_languages",
+        "shield",
+        "counterspell",
+        "warding_rite",
+        "call_guardian_spirit",
+        "veil_step",
+        "repelling_pulse",
+        "grasping_current",
+        "weakening_miasma",
+        "binding_frost",
+        "unravel_magic",
+    }
+    assert cleric.spell_access[0].kind.value == "prepared"
+    assert cleric.spell_access[0].allowed_focus_kinds == (
+        "holy_symbol",
+        "component_pouch",
+    )
+    assert next(spell for spell in cleric.spells if spell.id == "radiant_line").components.materials[0].item_id == "incense"
+    ritual = next(
+        spell for spell in cleric.spells if spell.id == "comprehend_languages"
+    )
+    assert ritual.ritual is True
+    assert ritual.exploration_effect is not None
+    assert ritual.exploration_effect.flag_key == "comprehend_languages_active"
     bless = next(action for action in encounter.combat_actions_by_actor[cleric.id] if action.id == "bless_attack_bonus")
     assert bless.action_type == "concentration_attack_bonus"
     assert bless.casting_kind == SpellCastingKind.LEVELED
     assert bless.spell_level == 1
     assert bless.concentration is True
     assert bless.target_faction == "ally"
+    assert bless.target_count == 3
+    assert bless.upcast_targets_per_level == 1
     assert bless.value == 1
+    summon = next(
+        action
+        for action in encounter.combat_actions_by_actor[cleric.id]
+        if action.id == "call_guardian_spirit"
+    )
+    assert summon.action_type == "summon"
+    assert summon.concentration is True
+    assert summon.range_feet == 30
+    assert summon.summon is not None
+    assert summon.summon.name == "Duch strażnik"
+    assert summon.summon.attack_damage_type == DamageType.RADIANT
+    teleport = next(
+        action
+        for action in encounter.combat_actions_by_actor[cleric.id]
+        if action.id == "veil_step"
+    )
+    assert teleport.action_type == "spell_movement"
+    assert teleport.action_cost == ActionEconomyCost.BONUS_ACTION
+    assert teleport.movement is not None
+    assert teleport.movement.kind.value == "teleport"
+    push = next(
+        action
+        for action in encounter.combat_actions_by_actor[cleric.id]
+        if action.id == "repelling_pulse"
+    )
+    assert push.movement is not None
+    assert push.movement.kind.value == "push"
+    assert push.movement.distance_feet == 10
+    assert push.save_ability == "strength"
+    debuff = next(
+        action
+        for action in encounter.combat_actions_by_actor[cleric.id]
+        if action.id == "weakening_miasma"
+    )
+    assert debuff.action_type == "spell_debuff"
+    assert debuff.effect_kind == "apply_condition"
+    assert debuff.condition == CombatCondition.POISONED
+    assert debuff.save_ability == "constitution"
+    assert debuff.save_timing == "turn_end"
+    dispel = next(
+        action
+        for action in encounter.combat_actions_by_actor[cleric.id]
+        if action.id == "unravel_magic"
+    )
+    assert dispel.action_type == "spell_dispel"
+    assert dispel.effect_kind == "dispel_magic"
+    assert dispel.range_feet == 60
+    assert dispel.target_faction == "any"
+    shield = next(
+        action
+        for action in encounter.combat_actions_by_actor[cleric.id]
+        if action.id == "shield"
+    )
+    assert shield.action_type == "reaction_ac_bonus"
+    assert shield.action_cost == ActionEconomyCost.REACTION
+    assert shield.casting_kind == SpellCastingKind.LEVELED
+    assert shield.spell_level == 1
+    assert shield.value == 5
     assert encounter.board.terrain_at(Coordinate(8, 5)).blocks_movement is True
     assert encounter.board.terrain_at(Coordinate(10, 7)).is_difficult is True
 
@@ -490,6 +593,11 @@ def test_load_abandoned_watchtower_builds_exploration_scene():
     loaded = load_scenario("content/scenarios/abandoned_watchtower.json")
     exploration = build_exploration_from_scenario(loaded)
 
+    assert loaded.definition.content_header.schema == SCENARIO_SCHEMA
+    assert loaded.definition.content_header.schema_version == 1
+    assert loaded.definition.content_header.ruleset_id == RULESET_DND_5E_2014
+    assert loaded.definition.content_header.source_pack_ids == ("project_original",)
+    assert exploration.content_header == loaded.definition.content_header
     assert loaded.definition.scene_mode == SceneMode.EXPLORATION
     assert exploration.scenario_id == "abandoned_watchtower"
     assert exploration.party_position.zone_id == "gate"
@@ -674,6 +782,7 @@ def test_load_abandoned_watchtower_folder_manifest_matches_alias_file():
 def test_load_abandoned_watchtower_folder_keeps_monster_and_item_refs_working():
     loaded = load_scenario("content/scenarios/abandoned_watchtower")
     exploration = build_exploration_from_scenario(loaded)
+    encounter = build_encounter_from_scenario(loaded)
 
     hero = next(actor for actor in exploration.actors if actor.id == "hero")
     assert hero.name == "Bohater"
@@ -693,7 +802,21 @@ def test_load_abandoned_watchtower_folder_keeps_monster_and_item_refs_working():
     assert shield.armor_proficiency == "shield"
     assert effective_armor_class(cleric) == cleric.ac + 2
     healers_kit = next(item for item in cleric.inventory if item.id == "healers_kit")
-    assert healers_kit.quantity == 10
+    assert healers_kit.quantity == 1
+    assert healers_kit.charges_current == 10
+    wand = next(item for item in cleric.inventory if item.id == "binding_wand")
+    assert wand.charges_current == 7
+    assert wand.charges_maximum == 7
+    assert wand.charges_recovery.value == "long_rest"
+    assert wand.charges_recovery_dice == "1d6"
+    assert wand.requires_attunement is True
+    assert wand.attuned is False
+    wand_action = next(
+        action
+        for action in encounter.combat_actions_by_actor[cleric.id]
+        if action.id == "binding_wand_restraint"
+    )
+    assert wand_action.charge_cost == 1
     assert cleric.spell_preparation is not None
     assert cleric.spell_preparation.source_label == "lista czarów kapłana"
     assert cleric.spell_preparation.preparation_limit == 2
@@ -835,13 +958,52 @@ def test_load_village_square_mvp_builds_exploration_locations_setup_points_and_o
     assert next(option for option in market.options if option.id == "talk_to_elder").success_flag == "quest_hook_found"
 
     visible_setup_points = {point.id for point in exploration.points if point.visibility == SetupVisibility.VISIBLE and point.requires_setup}
-    assert visible_setup_points == {"elder_npc", "notice_board", "tavern_keeper"}
+    assert visible_setup_points == {
+        "merchant_stall",
+        "elder_npc",
+        "notice_board",
+        "tavern_keeper",
+    }
     hidden_point = next(point for point in exploration.points if point.id == "lost_pouch")
     assert hidden_point.visibility == SetupVisibility.HIDDEN
     assert hidden_point.requires_setup is False
     elder = next(point for point in exploration.points if point.id == "elder_npc")
     assert elder.npc_interaction is not None
     assert elder.npc_interaction.id == "elder_bren"
+    merchant_point = next(
+        point for point in exploration.points if point.id == "merchant_stall"
+    )
+    assert merchant_point.merchant_id == "mira_market_stall"
+    merchant = exploration.merchants[0]
+    assert merchant.name == "Mira, kupczyni z rynku"
+    assert merchant.currency.gp == 100
+    assert {
+        item.id: item.quantity for item in merchant.inventory
+    } == {
+        "crossbow_bolt": 40,
+        "healers_kit": 1,
+        "strength_potion": 1,
+        "dagger": 2,
+        "leather_armor": 2,
+        "chain_shirt": 1,
+        "chain_mail": 1,
+        "backpack": 2,
+        "candle": 20,
+        "torch": 20,
+        "oil_flask": 10,
+        "hempen_rope": 3,
+        "rations": 20,
+        "ink": 2,
+        "ink_pen": 4,
+        "paper": 20,
+        "explorers_pack": 1,
+    }
+    chain_mail = next(item for item in merchant.inventory if item.id == "chain_mail")
+    assert chain_mail.armor_category.value == "heavy"
+    assert chain_mail.armor_base_ac == 16
+    assert chain_mail.armor_dexterity_cap == 0
+    assert chain_mail.armor_strength_requirement == 13
+    assert chain_mail.stealth_disadvantage is True
     demand = elder.npc_interaction.policy.intent_permission("social").target(
         "demand_advance_payment"
     )

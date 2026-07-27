@@ -47,7 +47,32 @@ def test_collects_selected_scene_quantity_into_actor_inventory() -> None:
     collected = next(item for item in hero.inventory if item.name == "Drewniana deska")
     assert collected.quantity == 2
     assert collected.equipped is False
+    assert collected.weight_lb == 8
     assert result.collection.destination == "actor_inventory"
+
+
+def test_actor_inventory_collection_rejects_weight_over_capacity() -> None:
+    exploration, state = _loaded_state()
+    source = build_crafting_source_registry(state, exploration.actors).source_by_id(
+        "zone:gate:item:gate_rotten_planks"
+    )
+    assert source is not None
+    hero = next(actor for actor in exploration.actors if str(actor.id) == "hero")
+    weakened_hero = replace(
+        hero,
+        ability_scores=replace(hero.ability_scores, strength=1),
+    )
+    actors = tuple(
+        weakened_hero if actor.id == hero.id else actor
+        for actor in exploration.actors
+    )
+
+    with pytest.raises(ValueError, match="nie uniesie"):
+        collect_source(
+            state,
+            actors,
+            plan_source_collection(source, quantity=2, owner_actor_id="hero"),
+        )
 
 
 def test_collection_revalidates_remaining_quantity() -> None:

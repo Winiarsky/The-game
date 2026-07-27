@@ -42,11 +42,14 @@ from dnd_board_game.combat import (
     DamageType,
     HealingSource,
     HealingSourceType,
+    MagicMovementDefinition,
+    MagicMovementKind,
     SpellCastingKind,
     SpellArea,
     SpellAreaShape,
     SpellAreaTargetMode,
     SpellSlotState,
+    SummonDefinition,
     EnvironmentSetupEntry,
     EnvironmentSetupType,
     SceneAbilityCheck,
@@ -59,7 +62,23 @@ from dnd_board_game.combat import (
     SetupVisibility,
     SceneFlags,
 )
-from dnd_board_game.rules import DiceExpression
+from dnd_board_game.rules import (
+    DiceExpression,
+    SpellAccessKind,
+    SpellAccessProfile,
+    SpellCastingTime,
+    SpellComponents,
+    SpellDefinition,
+    SpellDuration,
+    SpellDurationKind,
+    SpellExplorationEffect,
+    SpellExplorationEffectKind,
+    SpellMaterial,
+    SpellRange,
+    SpellRangeKind,
+    SpellSchool,
+    SpellScaling,
+)
 from dnd_board_game.exploration import (
     CheckAggregation,
     CheckParticipants,
@@ -139,17 +158,46 @@ from dnd_board_game.exploration import (
 from dnd_board_game.hardware import LedColor
 from dnd_board_game.rules import EffectDuration, SaveDamageOnSuccess, SavingThrowRequest
 from dnd_board_game.inventory import (
+    ArmorCategory,
+    BundleEntry,
+    CheckModifier,
+    CheckModifierMode,
+    ContainerCapacity,
+    GearCategory,
     InventoryItem,
     HandSlot,
     ItemCollectionDestination,
+    ItemChargeRecovery,
     ItemDefinition,
     ItemInstance,
+    MagicItemEffect,
+    MagicItemEffectKind,
+    LightShape,
+    LightSource,
+    ObjectDurability,
+    SpellcastingFocusKind,
     ItemPropertyCatalog,
     ItemPropertyDefinition,
+    MerchantState,
     normalize_hand_equipment,
+    validate_attunement_limit,
 )
+from dnd_board_game.inventory.weapons import (
+    WeaponCategory,
+    WeaponProperty,
+    WeaponSpecialRule,
+)
+from dnd_board_game.inventory.economy import CurrencyWallet
 from dnd_board_game.rules import D20RollRequest, RollMode, RollModifier, RollModifierType
 from dnd_board_game.world import BLOCKING_TERRAIN, DIFFICULT_TERRAIN, BoardDimensions, BoardState, Coordinate
+from .content_contract import (
+    SCENARIO_SCHEMA,
+    ContentHeader,
+    load_source_pack_registry,
+    migrate_scenario_payload,
+    parse_content_header,
+    validate_stable_id,
+)
 
 
 KNOWN_LLM_CONSEQUENCE_TYPES = frozenset(
@@ -204,6 +252,18 @@ class ScenarioAttackDefinition:
     source_item_id: str | None = None
     attack_kind: AttackKind = AttackKind.MELEE
     proficiency_id: str | None = None
+    ammunition_type: str | None = None
+    loading: bool = False
+    long_range_feet: int | None = None
+    heavy: bool = False
+    weapon_special_rule: WeaponSpecialRule | None = None
+    adds_ability_modifier_to_damage: bool = False
+    weapon_category_id: str | None = None
+    on_hit_condition: str | None = None
+    limited_attacks: bool = False
+    thrown: bool = False
+    action_cost: ActionEconomyCost = ActionEconomyCost.ACTION
+    upcast_damage_dice_per_level: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -218,6 +278,9 @@ class ScenarioHealingDefinition:
     spell_level: int = 0
     casting_kind: SpellCastingKind = SpellCastingKind.NONE
     prepared: bool = True
+    action_cost: ActionEconomyCost = ActionEconomyCost.ACTION
+    healing_dice_count: int = 1
+    upcast_healing_dice_per_level: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -230,6 +293,8 @@ class ScenarioCombatActionDefinition:
     ability: str | None = None
     duration: str = "next_turn_start"
     target_faction: str = "self"
+    target_count: int = 1
+    upcast_targets_per_level: int = 0
     spell_level: int = 0
     casting_kind: SpellCastingKind = SpellCastingKind.NONE
     prepared: bool = True
@@ -238,10 +303,14 @@ class ScenarioCombatActionDefinition:
     range_feet: int = 0
     effect_kind: str | None = None
     action_cost: ActionEconomyCost = ActionEconomyCost.ACTION
+    casting_time: SpellCastingTime = SpellCastingTime.ACTION
     condition: CombatCondition | None = None
     save_ability: str | None = None
     save_dc: int | None = None
     save_timing: str | None = None
+    charge_cost: int = 0
+    summon: SummonDefinition | None = None
+    movement: MagicMovementDefinition | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -260,8 +329,11 @@ class ScenarioActorDefinition:
     spell_slots: tuple[SpellSlotState, ...]
     spell_save_dc: int
     inventory: tuple[InventoryItem, ...]
+    currency: CurrencyWallet
     spell_ids: tuple[str, ...]
     spell_preparation: SpellPreparationProfile | None
+    spells: tuple[SpellDefinition, ...]
+    spell_access: tuple[SpellAccessProfile, ...]
     hit_dice: tuple[HitDicePool, ...]
     resource_pools: tuple[ActorResourcePool, ...]
     proficiency_bonus: int
@@ -322,6 +394,7 @@ class ScenarioObjectiveDefinition:
 
 @dataclass(frozen=True, slots=True)
 class ScenarioDefinition:
+    content_header: ContentHeader
     id: str
     name: str
     board_dimensions: BoardDimensions
@@ -340,6 +413,7 @@ class ScenarioDefinition:
     exploration_observations: tuple[ExplorationObservation, ...] = ()
     exploration_flows: tuple[ExplorationFlowGraph, ...] = ()
     exploration_traps: tuple[ExplorationTrap, ...] = ()
+    exploration_merchants: tuple[MerchantState, ...] = ()
     party_start_zone_id: str | None = None
     llm_context: LlmContext = LlmContext()
     crafting_policy: CraftingPolicy = CraftingPolicy()
@@ -353,6 +427,7 @@ class LoadedScenario:
 
 @dataclass(frozen=True, slots=True)
 class LoadedEncounter:
+    content_header: ContentHeader
     scenario_id: str
     scenario_name: str
     board: BoardState
@@ -371,6 +446,7 @@ class LoadedEncounter:
 
 @dataclass(frozen=True, slots=True)
 class LoadedExploration:
+    content_header: ContentHeader
     scenario_id: str
     scenario_name: str
     board: BoardState
@@ -386,6 +462,7 @@ class LoadedExploration:
     observations: tuple[ExplorationObservation, ...] = ()
     flows: tuple[ExplorationFlowGraph, ...] = ()
     traps: tuple[ExplorationTrap, ...] = ()
+    merchants: tuple[MerchantState, ...] = ()
     environment: tuple[EnvironmentSetupEntry, ...] = ()
     llm_context: LlmContext = LlmContext()
     objectives: tuple[SceneObjective, ...] = ()
@@ -395,7 +472,9 @@ class LoadedExploration:
 def load_scenario(path: str | Path) -> LoadedScenario:
     scenario_path = Path(path)
     data, loaded_path = _load_scenario_data(scenario_path)
+    data = migrate_scenario_payload(data)
     definition = _parse_scenario(data, loaded_path)
+    _validate_known_source_packs(definition.content_header, loaded_path)
     _validate_scenario(definition)
     return LoadedScenario(definition=definition, path=loaded_path)
 
@@ -499,6 +578,7 @@ def build_encounter_from_scenario(loaded: LoadedScenario) -> LoadedEncounter:
         for objective in definition.objectives
     )
     return LoadedEncounter(
+        content_header=definition.content_header,
         scenario_id=definition.id,
         scenario_name=definition.name,
         board=board,
@@ -539,6 +619,7 @@ def build_exploration_from_scenario(loaded: LoadedScenario) -> LoadedExploration
         for objective in definition.objectives
     )
     return LoadedExploration(
+        content_header=definition.content_header,
         scenario_id=definition.id,
         scenario_name=definition.name,
         board=board,
@@ -553,6 +634,7 @@ def build_exploration_from_scenario(loaded: LoadedScenario) -> LoadedExploration
         observations=definition.exploration_observations,
         flows=definition.exploration_flows,
         traps=definition.exploration_traps,
+        merchants=definition.exploration_merchants,
         environment=tuple(
             EnvironmentSetupEntry(
                 id=entry.id,
@@ -572,6 +654,12 @@ def build_exploration_from_scenario(loaded: LoadedScenario) -> LoadedExploration
 
 
 def _parse_scenario(data: dict[str, Any], scenario_path: Path) -> ScenarioDefinition:
+    content_header = parse_content_header(
+        data,
+        expected_schema=SCENARIO_SCHEMA,
+        context="scenario",
+        legacy_defaults=True,
+    )
     board_data = _required_mapping(data, "board", "scenario")
     cols = int(board_data.get("cols", 20))
     rows = int(board_data.get("rows", 30))
@@ -594,7 +682,11 @@ def _parse_scenario(data: dict[str, Any], scenario_path: Path) -> ScenarioDefini
     crafting_policy = _load_crafting_policy(scenario_path, property_catalog)
     scene_mode = _enum_value(SceneMode, str(data.get("scene_mode", SceneMode.ENCOUNTER.value)), "scenario.scene_mode")
     return ScenarioDefinition(
-        id=str(_required(data, "id", "scenario")),
+        content_header=content_header,
+        id=validate_stable_id(
+            str(_required(data, "id", "scenario")),
+            "scenario.id",
+        ),
         name=str(_required(data, "name", "scenario")),
         board_dimensions=BoardDimensions(cols=cols, rows=rows),
         scene_mode=scene_mode,
@@ -630,6 +722,10 @@ def _parse_scenario(data: dict[str, Any], scenario_path: Path) -> ScenarioDefini
             _parse_exploration_trap(entry)
             for entry in exploration_data.get("traps", [])
         ),
+        exploration_merchants=tuple(
+            _parse_merchant(entry, scenario_path, property_catalog)
+            for entry in exploration_data.get("merchants", [])
+        ),
         party_start_zone_id=str(exploration_data["party_start_zone"]) if "party_start_zone" in exploration_data else None,
         llm_context=_parse_llm_context(data.get("llm_context", {}), "scenario.llm_context"),
         crafting_policy=crafting_policy,
@@ -646,7 +742,12 @@ def _parse_actor(
     source_ref = data.get("source_ref")
     merged: dict[str, Any] = {}
     if source_ref is not None:
-        merged.update(_read_json(_content_ref_path(scenario_path, "monsters", str(source_ref))))
+        merged.update(
+            _read_content_definition(
+                _content_ref_path(scenario_path, "monsters", str(source_ref)),
+                "dnd_board_game.monster",
+            )
+        )
     merged.update(data)
 
     actor_id = str(_required(merged, "id", "actor"))
@@ -658,7 +759,10 @@ def _parse_actor(
         raise ValueError(f"actor {actor_id}.feature_refs must be a list of non-empty ids.")
     feature_definitions = tuple(
         _parse_feature_definition(
-            _read_json(_content_ref_path(scenario_path, "features", feature_ref)),
+            _read_content_definition(
+                _content_ref_path(scenario_path, "features", feature_ref),
+                "dnd_board_game.feature",
+            ),
             actor_id,
         )
         for feature_ref in feature_refs
@@ -680,6 +784,29 @@ def _parse_actor(
     if not isinstance(combat_actions_data, list):
         raise ValueError(f"actor {merged.get('id', '<unknown>')}.combat_actions must be a list.")
     combat_actions_data = list(combat_actions_data)
+    spell_refs = merged.get("spell_refs", [])
+    if not isinstance(spell_refs, list) or not all(
+        isinstance(spell_ref, str) and spell_ref.strip()
+        for spell_ref in spell_refs
+    ):
+        raise ValueError(f"actor {merged.get('id', '<unknown>')}.spell_refs must be a list of non-empty ids.")
+    if len(spell_refs) != len(set(spell_refs)):
+        raise ValueError(f"actor {merged.get('id', '<unknown>')}.spell_refs cannot contain duplicates.")
+    spells: list[SpellDefinition] = []
+    for spell_ref in spell_refs:
+        spell_data = _read_content_definition(
+            _content_ref_path(scenario_path, "spells", spell_ref),
+            "dnd_board_game.spell",
+        )
+        spell = _parse_spell_definition(spell_data, str(spell_ref))
+        spells.append(spell)
+        collection, effect = _spell_effect_payload(spell_data, spell)
+        if collection == "attack":
+            attacks_data.append(effect)
+        elif collection == "healing":
+            healing_data.append(effect)
+        elif collection == "combat_action":
+            combat_actions_data.append(effect)
     item_refs = merged.get("item_refs", [])
     if not isinstance(item_refs, list):
         raise ValueError(f"actor {merged.get('id', '<unknown>')}.item_refs must be a list.")
@@ -688,7 +815,7 @@ def _parse_actor(
         raise ValueError(f"actor {merged.get('id', '<unknown>')}.inventory must be a list.")
     inventory_items: list[InventoryItem] = []
     for item_ref in item_refs:
-        item = _read_json(_content_ref_path(scenario_path, "items", str(item_ref)))
+        item = _read_item_definition(scenario_path, str(item_ref))
         inventory_item = _inventory_item_from_item_data(
             item,
             quantity=1,
@@ -699,7 +826,7 @@ def _parse_actor(
         inventory_items.append(inventory_item)
         attacks_data.extend(
             _attacks_with_item_source(
-                item.get("attacks", []),
+                _item_attack_definitions(item),
                 inventory_item.id,
                 proficiency_id=str(item.get("id", inventory_item.id)),
             )
@@ -716,7 +843,7 @@ def _parse_actor(
         inventory_items.append(inventory_item)
         attacks_data.extend(
             _attacks_with_item_source(
-                item.get("attacks", []),
+                _item_attack_definitions(item),
                 inventory_item.id,
                 proficiency_id=str(item.get("id", inventory_item.id)),
             )
@@ -724,6 +851,7 @@ def _parse_actor(
         if inventory_item.equipped:
             healing_data.extend(item.get("healing_sources", []))
         combat_actions_data.extend(_combat_actions_with_item_source(item.get("combat_actions", []), inventory_item.id))
+    validate_attunement_limit(inventory_items)
 
     attacks = tuple(_parse_attack(attack, actor_id) for attack in attacks_data) + tuple(
         attack
@@ -745,6 +873,28 @@ def _parse_actor(
     _validate_unique_ids(attacks, f"actor {actor_id}.attacks")
     _validate_unique_ids(healing_sources, f"actor {actor_id}.healing_sources")
     _validate_unique_ids(combat_actions, f"actor {actor_id}.combat_actions")
+    for action in combat_actions:
+        if action.charge_cost <= 0:
+            continue
+        item = next(
+            (
+                candidate
+                for candidate in inventory_items
+                if candidate.id == action.source_item_id
+                or candidate.source_ref == action.source_item_id
+            ),
+            None,
+        )
+        if item is None or item.charges_maximum is None:
+            raise ValueError(
+                f"actor {actor_id}.combat_action {action.id} charges require "
+                "a charge-bearing source item."
+            )
+        if action.charge_cost > item.charges_maximum:
+            raise ValueError(
+                f"actor {actor_id}.combat_action {action.id}.charge_cost exceeds "
+                f"{item.id}.charges_maximum."
+            )
     spell_slots = _parse_spell_slots(merged.get("spell_slots", {}), actor_id)
     actor_kind = str(_required(merged, "kind", f"actor {actor_id}"))
     attacks_per_action = int(merged.get("attacks_per_action", 1))
@@ -820,7 +970,15 @@ def _parse_actor(
         spell_slots=spell_slots,
         spell_save_dc=int(merged.get("spell_save_dc", 0)),
         inventory=normalize_hand_equipment(inventory_items),
-        spell_ids=_spell_ids_for_actor(attacks, healing_sources, combat_actions),
+        currency=_parse_currency_wallet(merged.get("currency", {}), actor_id),
+        spell_ids=tuple(
+            dict.fromkeys(
+                (
+                    *_spell_ids_for_actor(attacks, healing_sources, combat_actions),
+                    *(spell.id for spell in spells),
+                )
+            )
+        ),
         spell_preparation=_parse_spell_preparation(
             merged.get("spell_preparation"),
             actor_id=actor_id,
@@ -828,6 +986,13 @@ def _parse_actor(
             healing_sources=healing_sources,
             combat_actions=combat_actions,
             spell_slots=spell_slots,
+            spells=tuple(spells),
+        ),
+        spells=tuple(spells),
+        spell_access=_parse_spell_access(
+            merged.get("spell_access"),
+            actor_id=actor_id,
+            spell_ids=tuple(spell.id for spell in spells),
         ),
         hit_dice=_parse_hit_dice(merged.get("hit_dice", {}), actor_id),
         resource_pools=resource_pools,
@@ -907,12 +1072,16 @@ def _parse_spell_preparation(
     healing_sources: tuple[ScenarioHealingDefinition, ...],
     combat_actions: tuple[ScenarioCombatActionDefinition, ...],
     spell_slots: tuple[SpellSlotState, ...],
+    spells: tuple[SpellDefinition, ...] = (),
 ) -> SpellPreparationProfile | None:
     if data is None:
         return None
     if not isinstance(data, dict):
         raise ValueError(f"actor {actor_id}.spell_preparation must be an object.")
     known_spells: dict[str, PreparableSpell] = {}
+    for spell in spells:
+        if spell.level > 0:
+            known_spells[spell.id] = PreparableSpell(spell.id, spell.name, spell.level)
     for source in (*attacks, *healing_sources, *combat_actions):
         casting_kind = source.casting_kind
         if casting_kind != SpellCastingKind.LEVELED:
@@ -952,6 +1121,200 @@ def _parse_spell_preparation(
     )
 
 
+def _parse_spell_definition(data: dict[str, Any], spell_ref: str) -> SpellDefinition:
+    spell_id = str(_required(data, "id", f"spell {spell_ref}"))
+    if spell_id != spell_ref:
+        raise ValueError(f"spell ref {spell_ref} resolves to mismatched id {spell_id}.")
+    components_data = _required_mapping(data, "components", f"spell {spell_id}")
+    materials_data = components_data.get("materials", [])
+    if not isinstance(materials_data, list):
+        raise ValueError(f"spell {spell_id}.components.materials must be a list.")
+    range_data = _required_mapping(data, "range", f"spell {spell_id}")
+    duration_data = _required_mapping(data, "duration", f"spell {spell_id}")
+    effect_data = _required_mapping(data, "effect", f"spell {spell_id}")
+    scaling_data = data.get("scaling")
+    if scaling_data is not None and not isinstance(scaling_data, dict):
+        raise ValueError(f"spell {spell_id}.scaling must be an object.")
+    return SpellDefinition(
+        id=spell_id,
+        name=str(_required(data, "name", f"spell {spell_id}")),
+        level=int(_required(data, "level", f"spell {spell_id}")),
+        school=_enum_value(
+            SpellSchool,
+            _required(data, "school", f"spell {spell_id}"),
+            f"spell {spell_id}.school",
+        ),
+        casting_time=_enum_value(
+            SpellCastingTime,
+            _required(data, "casting_time", f"spell {spell_id}"),
+            f"spell {spell_id}.casting_time",
+        ),
+        range=SpellRange(
+            kind=_enum_value(
+                SpellRangeKind,
+                _required(range_data, "kind", f"spell {spell_id}.range"),
+                f"spell {spell_id}.range.kind",
+            ),
+            feet=int(range_data.get("feet", 0)),
+        ),
+        components=SpellComponents(
+            verbal=bool(components_data.get("verbal", False)),
+            somatic=bool(components_data.get("somatic", False)),
+            materials=tuple(
+                SpellMaterial(
+                    item_id=str(_required(material, "item_id", f"spell {spell_id}.material")),
+                    label=str(_required(material, "label", f"spell {spell_id}.material")),
+                    minimum_value_cp=int(material.get("minimum_value_cp", 0)),
+                    consumed=bool(material.get("consumed", False)),
+                    quantity=int(material.get("quantity", 1)),
+                )
+                for raw_material in materials_data
+                for material in (
+                    _require_mapping(raw_material, f"spell {spell_id}.components.materials"),
+                )
+            ),
+        ),
+        duration=SpellDuration(
+            kind=_enum_value(
+                SpellDurationKind,
+                _required(duration_data, "kind", f"spell {spell_id}.duration"),
+                f"spell {spell_id}.duration.kind",
+            ),
+            amount=int(duration_data.get("amount", 1)),
+        ),
+        concentration=bool(data.get("concentration", False)),
+        ritual=bool(data.get("ritual", False)),
+        effect_kind=str(_required(effect_data, "kind", f"spell {spell_id}.effect")),
+        scaling=(
+            SpellScaling(
+                damage_dice_per_slot_level=int(
+                    scaling_data.get("damage_dice_per_slot_level", 0)
+                ),
+                healing_dice_per_slot_level=int(
+                    scaling_data.get("healing_dice_per_slot_level", 0)
+                ),
+                targets_per_slot_level=int(
+                    scaling_data.get("targets_per_slot_level", 0)
+                ),
+            )
+            if scaling_data is not None
+            else None
+        ),
+        exploration_effect=(
+            SpellExplorationEffect(
+                kind=_enum_value(
+                    SpellExplorationEffectKind,
+                    _required(effect_data, "effect_type", f"spell {spell_id}.effect"),
+                    f"spell {spell_id}.effect.effect_type",
+                ),
+                flag_key=str(
+                    _required(effect_data, "flag_key", f"spell {spell_id}.effect")
+                ),
+                flag_value=effect_data.get("flag_value", True),
+            )
+            if effect_data.get("kind") == "exploration"
+            else None
+        ),
+    )
+
+
+def _spell_effect_payload(
+    data: dict[str, Any],
+    spell: SpellDefinition,
+) -> tuple[str, dict[str, Any]]:
+    effect = dict(_required_mapping(data, "effect", f"spell {spell.id}"))
+    collection = str(effect.pop("kind"))
+    if collection not in {"attack", "healing", "combat_action", "exploration"}:
+        raise ValueError(
+            f"spell {spell.id}.effect.kind must be attack, healing, combat_action or exploration."
+        )
+    effect.setdefault("id", spell.id)
+    effect.setdefault("name", spell.name)
+    effect.setdefault("spell_level", spell.level)
+    effect.setdefault("casting_kind", "cantrip" if spell.level == 0 else "leveled")
+    effect.setdefault("prepared", True)
+    if spell.scaling is not None:
+        effect.setdefault(
+            "upcast_damage_dice_per_level",
+            spell.scaling.damage_dice_per_slot_level,
+        )
+        effect.setdefault(
+            "upcast_healing_dice_per_level",
+            spell.scaling.healing_dice_per_slot_level,
+        )
+        effect.setdefault(
+            "upcast_targets_per_level",
+            spell.scaling.targets_per_slot_level,
+        )
+    effect.setdefault(
+        "action_cost",
+        {
+            SpellCastingTime.ACTION: "action",
+            SpellCastingTime.BONUS_ACTION: "bonus_action",
+            SpellCastingTime.REACTION: "reaction",
+        }.get(spell.casting_time, "action"),
+    )
+    effect.setdefault("casting_time", spell.casting_time.value)
+    if spell.range.kind == SpellRangeKind.DISTANCE:
+        effect.setdefault("range_feet", spell.range.feet)
+    elif spell.range.kind == SpellRangeKind.TOUCH:
+        effect.setdefault("range_feet", 5)
+    elif spell.range.kind == SpellRangeKind.SELF:
+        effect.setdefault("range_feet", 0 if collection == "combat_action" else 5)
+    if collection == "exploration":
+        return collection, effect
+    if collection == "attack":
+        effect.setdefault("source_type", "spell")
+        effect.setdefault("attack_kind", "ranged")
+    elif collection == "healing":
+        effect.setdefault("source_type", "spell")
+    else:
+        effect.setdefault("concentration", spell.concentration)
+        if spell.concentration:
+            effect.setdefault("duration", "concentration")
+    return collection, effect
+
+
+def _parse_spell_access(
+    data: Any,
+    *,
+    actor_id: str,
+    spell_ids: tuple[str, ...],
+) -> tuple[SpellAccessProfile, ...]:
+    if data is None:
+        return ()
+    if not isinstance(data, list):
+        raise ValueError(f"actor {actor_id}.spell_access must be a list.")
+    profiles: list[SpellAccessProfile] = []
+    for index, raw_profile in enumerate(data):
+        field = f"actor {actor_id}.spell_access[{index}]"
+        profile = _require_mapping(raw_profile, field)
+        profile_spell_ids = _parse_string_tuple(
+            profile.get("spell_ids", []),
+            f"{field}.spell_ids",
+        )
+        unknown = set(profile_spell_ids) - set(spell_ids)
+        if unknown:
+            raise ValueError(
+                f"{field} references unknown spell refs: {', '.join(sorted(unknown))}."
+            )
+        profiles.append(
+            SpellAccessProfile(
+                kind=_enum_value(
+                    SpellAccessKind,
+                    _required(profile, "kind", field),
+                    f"{field}.kind",
+                ),
+                spell_ids=profile_spell_ids,
+                allowed_focus_kinds=_parse_string_tuple(
+                    profile.get("allowed_focus_kinds", []),
+                    f"{field}.allowed_focus_kinds",
+                ),
+            )
+        )
+    return tuple(profiles)
+
+
 def _combat_actions_with_item_source(actions: Any, item_id: str) -> list[dict[str, Any]]:
     if actions is None:
         return []
@@ -965,6 +1328,138 @@ def _combat_actions_with_item_source(actions: Any, item_id: str) -> list[dict[st
         item_action.setdefault("source_item_id", item_id)
         result.append(item_action)
     return result
+
+
+def _item_attack_definitions(item: dict[str, Any]) -> list[dict[str, Any]]:
+    weapon = item.get("weapon")
+    authored = item.get("attacks", [])
+    if weapon is None:
+        return list(authored)
+    if authored:
+        raise ValueError(
+            f"item {item.get('id', '<unknown>')} cannot mix weapon schema with attacks."
+        )
+    if not isinstance(weapon, dict):
+        raise ValueError(f"item {item.get('id', '<unknown>')}.weapon must be an object.")
+    item_id = str(_required(item, "id", "weapon item"))
+    category = _enum_value(
+        WeaponCategory,
+        _required(weapon, "category", f"item {item_id}.weapon"),
+        f"item {item_id}.weapon.category",
+    )
+    base_kind = _enum_value(
+        AttackKind,
+        _required(weapon, "attack_kind", f"item {item_id}.weapon"),
+        f"item {item_id}.weapon.attack_kind",
+    )
+    raw_properties = weapon.get("properties", [])
+    if not isinstance(raw_properties, list):
+        raise ValueError(f"item {item_id}.weapon.properties must be a list.")
+    properties = tuple(
+        _enum_value(
+            WeaponProperty,
+            value,
+            f"item {item_id}.weapon.properties",
+        )
+        for value in raw_properties
+    )
+    if len(properties) != len(set(properties)):
+        raise ValueError(f"item {item_id}.weapon.properties cannot contain duplicates.")
+    damage = _required_mapping(weapon, "damage", f"item {item_id}.weapon")
+    normal_range = int(weapon.get("normal_range_feet", 0))
+    long_range = int(weapon.get("long_range_feet", 0))
+    ranged_capable = base_kind == AttackKind.RANGED or WeaponProperty.THROWN in properties
+    if ranged_capable and (normal_range <= 0 or long_range <= normal_range):
+        raise ValueError(
+            f"item {item_id}.weapon requires normal_range_feet and a greater long_range_feet."
+        )
+    if not ranged_capable and (normal_range or long_range):
+        raise ValueError(f"item {item_id}.weapon ranges require a ranged or thrown weapon.")
+    ammunition_type = weapon.get("ammunition_type")
+    if WeaponProperty.AMMUNITION in properties and not ammunition_type:
+        raise ValueError(f"item {item_id}.weapon ammunition property requires ammunition_type.")
+    if ammunition_type and WeaponProperty.AMMUNITION not in properties:
+        raise ValueError(f"item {item_id}.weapon ammunition_type requires ammunition property.")
+    special_rule = (
+        _enum_value(
+            WeaponSpecialRule,
+            weapon["special_rule"],
+            f"item {item_id}.weapon.special_rule",
+        )
+        if weapon.get("special_rule") is not None
+        else None
+    )
+    if (WeaponProperty.SPECIAL in properties) != (special_rule is not None):
+        raise ValueError(
+            f"item {item_id}.weapon special property and special_rule must be declared together."
+        )
+    finesse = WeaponProperty.FINESSE in properties
+    abilities = ("dexterity", "strength") if finesse else (
+        ("dexterity",) if base_kind == AttackKind.RANGED else ("strength",)
+    )
+    base_attack_id = str(weapon.get("attack_id", f"{item_id}_attack"))
+    base_name = str(item.get("name", item_id))
+
+    def attacks_for_kind(kind: AttackKind, *, thrown: bool = False) -> list[dict[str, Any]]:
+        result: list[dict[str, Any]] = []
+        for index, ability in enumerate(abilities):
+            suffix = "" if index == 0 else f"_{ability}"
+            attack_id = (
+                f"{item_id}_throw{suffix}"
+                if thrown
+                else f"{base_attack_id}{suffix}"
+            )
+            label = (
+                f"{base_name} — rzut"
+                if thrown
+                else base_name
+            )
+            if finesse and index > 0:
+                label = f"{label} ({'Zręczność' if ability == 'dexterity' else 'Siła'})"
+            result.append(
+                {
+                    "id": attack_id,
+                    "name": label,
+                    "source_type": "weapon",
+                    "attack_kind": kind.value,
+                    "ability": ability,
+                    "range_feet": normal_range if kind == AttackKind.RANGED else (
+                        10 if WeaponProperty.REACH in properties else 5
+                    ),
+                    **(
+                        {"reach_feet": 10 if WeaponProperty.REACH in properties else 5}
+                        if kind == AttackKind.MELEE
+                        else {"long_range_feet": long_range}
+                    ),
+                    "damage": dict(damage),
+                    "ammunition_type": (
+                        str(ammunition_type)
+                        if kind == AttackKind.RANGED and not thrown and ammunition_type
+                        else None
+                    ),
+                    "loading": WeaponProperty.LOADING in properties,
+                    "heavy": WeaponProperty.HEAVY in properties,
+                    "weapon_special_rule": (
+                        special_rule.value if special_rule is not None else None
+                    ),
+                    "adds_ability_modifier_to_damage": special_rule != WeaponSpecialRule.NET,
+                    "weapon_category_id": category.proficiency_id,
+                    "on_hit_condition": (
+                        "restrained" if special_rule == WeaponSpecialRule.NET else None
+                    ),
+                    "limited_attacks": special_rule == WeaponSpecialRule.NET,
+                    "thrown": thrown or (
+                        base_kind == AttackKind.RANGED
+                        and WeaponProperty.THROWN in properties
+                    ),
+                }
+            )
+        return result
+
+    attacks = attacks_for_kind(base_kind)
+    if WeaponProperty.THROWN in properties and base_kind == AttackKind.MELEE:
+        attacks.extend(attacks_for_kind(AttackKind.RANGED, thrown=True))
+    return attacks
 
 
 def _attacks_with_item_source(
@@ -998,7 +1493,7 @@ def _parse_inventory_entry(
         raise ValueError(f"actor {actor_id}.inventory entries must be objects.")
     item_ref = item_entry.get("item_ref", item_entry.get("ref"))
     if item_ref is not None:
-        item_data = _read_json(_content_ref_path(scenario_path, "items", str(item_ref)))
+        item_data = _read_item_definition(scenario_path, str(item_ref))
         item_id = str(item_data.get("id", item_ref))
         name = str(item_data.get("name", item_id))
         kind = str(item_data.get("kind", "item"))
@@ -1028,6 +1523,11 @@ def _parse_inventory_entry(
     property_catalog.validate(added_properties, f"actor {actor_id}.inventory {item_id}.added_properties")
     property_catalog.validate(removed_properties, f"actor {actor_id}.inventory {item_id}.removed_properties")
     properties = tuple(sorted((set(base_properties) | set(added_properties)) - set(removed_properties)))
+    weapon_category, weapon_properties = _weapon_inventory_metadata(
+        item_data,
+        f"actor {actor_id}.inventory {item_id}.weapon",
+    )
+    weapon_data = item_data.get("weapon", {}) if weapon_category is not None else {}
     inventory_item = InventoryItem(
         id=item_id,
         name=str(item_entry.get("name", name)),
@@ -1039,7 +1539,17 @@ def _parse_inventory_entry(
         description=str(item_entry.get("description", item_data.get("description", ""))),
         properties=properties,
         portable=bool(item_entry.get("portable", item_data.get("portable", True))),
-        hands_required=int(item_entry.get("hands_required", item_data.get("hands_required", 0))),
+        hands_required=int(
+            item_entry.get(
+                "hands_required",
+                item_data.get(
+                    "hands_required",
+                    2 if WeaponProperty.TWO_HANDED in weapon_properties else (
+                        1 if weapon_category is not None else 0
+                    ),
+                ),
+            )
+        ),
         held_in=tuple(
             _enum_value(
                 HandSlot,
@@ -1048,10 +1558,33 @@ def _parse_inventory_entry(
             )
             for value in item_entry.get("held_in", [])
         ),
-        light_weapon=bool(item_entry.get("light_weapon", item_data.get("light_weapon", False))),
+        light_weapon=bool(
+            item_entry.get(
+                "light_weapon",
+                item_data.get(
+                    "light_weapon",
+                    WeaponProperty.LIGHT in weapon_properties,
+                ),
+            )
+        ),
         versatile_damage_dice=(
-            str(item_entry.get("versatile_damage_dice", item_data.get("versatile_damage_dice")))
-            if item_entry.get("versatile_damage_dice", item_data.get("versatile_damage_dice")) is not None
+            str(
+                item_entry.get(
+                    "versatile_damage_dice",
+                    item_data.get(
+                        "versatile_damage_dice",
+                        weapon_data.get("versatile_damage_dice"),
+                    ),
+                )
+            )
+            if item_entry.get(
+                "versatile_damage_dice",
+                item_data.get(
+                    "versatile_damage_dice",
+                    weapon_data.get("versatile_damage_dice"),
+                ),
+            )
+            is not None
             else None
         ),
         armor_class_bonus=int(
@@ -1061,6 +1594,114 @@ def _parse_inventory_entry(
             str(item_entry.get("armor_proficiency", item_data.get("armor_proficiency")))
             if item_entry.get("armor_proficiency", item_data.get("armor_proficiency")) is not None
             else None
+        ),
+        armor_category=(
+            _enum_value(
+                ArmorCategory,
+                item_entry.get("armor_category", item_data.get("armor_category")),
+                f"actor {actor_id}.inventory {item_id}.armor_category",
+            )
+            if item_entry.get("armor_category", item_data.get("armor_category")) is not None
+            else None
+        ),
+        armor_base_ac=(
+            int(item_entry.get("armor_base_ac", item_data.get("armor_base_ac")))
+            if item_entry.get("armor_base_ac", item_data.get("armor_base_ac")) is not None
+            else None
+        ),
+        armor_dexterity_cap=(
+            int(item_entry.get("armor_dexterity_cap", item_data.get("armor_dexterity_cap")))
+            if item_entry.get("armor_dexterity_cap", item_data.get("armor_dexterity_cap")) is not None
+            else None
+        ),
+        armor_strength_requirement=(
+            int(
+                item_entry.get(
+                    "armor_strength_requirement",
+                    item_data.get("armor_strength_requirement"),
+                )
+            )
+            if item_entry.get(
+                "armor_strength_requirement",
+                item_data.get("armor_strength_requirement"),
+            )
+            is not None
+            else None
+        ),
+        stealth_disadvantage=bool(
+            item_entry.get(
+                "stealth_disadvantage",
+                item_data.get("stealth_disadvantage", False),
+            )
+        ),
+        charges_maximum=(
+            int(item_entry.get("charges_maximum", item_data.get("charges_maximum")))
+            if item_entry.get("charges_maximum", item_data.get("charges_maximum")) is not None
+            else None
+        ),
+        charges_current=(
+            int(item_entry.get("charges_current", item_data.get("charges_current")))
+            if item_entry.get("charges_current", item_data.get("charges_current")) is not None
+            else None
+        ),
+        charges_recovery=_enum_value(
+            ItemChargeRecovery,
+            item_entry.get(
+                "charges_recovery",
+                item_data.get("charges_recovery", ItemChargeRecovery.NEVER.value),
+            ),
+            f"actor {actor_id}.inventory {item_id}.charges_recovery",
+        ),
+        charges_recovery_dice=(
+            str(
+                item_entry.get(
+                    "charges_recovery_dice",
+                    item_data.get("charges_recovery_dice"),
+                )
+            )
+            if item_entry.get(
+                "charges_recovery_dice",
+                item_data.get("charges_recovery_dice"),
+            )
+            is not None
+            else None
+        ),
+        charges_recovery_modifier=int(
+            item_entry.get(
+                "charges_recovery_modifier",
+                item_data.get("charges_recovery_modifier", 0),
+            )
+        ),
+        requires_attunement=bool(
+            item_entry.get(
+                "requires_attunement",
+                item_data.get("requires_attunement", False),
+            )
+        ),
+        attuned=bool(item_entry.get("attuned", False)),
+        magic_effects=_parse_magic_item_effects(
+            item_entry.get("magic_effects", item_data.get("magic_effects", [])),
+            f"actor {actor_id}.inventory {item_id}.magic_effects",
+        ),
+        weapon_category=weapon_category,
+        weapon_properties=weapon_properties,
+        ammunition_type=(
+            str(item_entry.get("ammunition_type", item_data.get("ammunition_type")))
+            if item_entry.get("ammunition_type", item_data.get("ammunition_type")) is not None
+            else None
+        ),
+        **_gear_metadata(item_data, f"actor {actor_id}.inventory {item_id}.gear"),
+        value_cp=int(
+            item_entry.get(
+                "value_cp",
+                item_data.get("value_cp", item_data.get("default_value_cp", 0)),
+            )
+        ),
+        weight_lb=float(
+            item_entry.get(
+                "weight_lb",
+                item_data.get("weight_lb", item_data.get("default_weight_lb", 0)),
+            )
         ),
     )
     return item_data, inventory_item
@@ -1077,6 +1718,11 @@ def _inventory_item_from_item_data(
     item_id = str(_required(item, "id", f"item {source_ref or '<inline>'}"))
     properties = _parse_string_tuple(item.get("properties", []), f"item {item_id}.properties")
     property_catalog.validate(properties, f"item {item_id}.properties")
+    weapon_category, weapon_properties = _weapon_inventory_metadata(
+        item,
+        f"item {item_id}.weapon",
+    )
+    weapon_data = item.get("weapon", {}) if weapon_category is not None else {}
     return InventoryItem(
         id=item_id,
         name=str(item.get("name", item_id)),
@@ -1088,11 +1734,20 @@ def _inventory_item_from_item_data(
         description=str(item.get("description", "")),
         properties=properties,
         portable=bool(item.get("portable", True)),
-        hands_required=int(item.get("hands_required", 0)),
-        light_weapon=bool(item.get("light_weapon", False)),
+        hands_required=int(
+            item.get(
+                "hands_required",
+                2 if WeaponProperty.TWO_HANDED in weapon_properties else (
+                    1 if weapon_category is not None else 0
+                ),
+            )
+        ),
+        light_weapon=bool(
+            item.get("light_weapon", WeaponProperty.LIGHT in weapon_properties)
+        ),
         versatile_damage_dice=(
-            str(item["versatile_damage_dice"])
-            if item.get("versatile_damage_dice") is not None
+            str(item.get("versatile_damage_dice", weapon_data.get("versatile_damage_dice")))
+            if item.get("versatile_damage_dice", weapon_data.get("versatile_damage_dice")) is not None
             else None
         ),
         armor_class_bonus=int(item.get("armor_class_bonus", 0)),
@@ -1101,6 +1756,291 @@ def _inventory_item_from_item_data(
             if item.get("armor_proficiency") is not None
             else None
         ),
+        armor_category=(
+            _enum_value(
+                ArmorCategory,
+                item["armor_category"],
+                f"item {item_id}.armor_category",
+            )
+            if item.get("armor_category") is not None
+            else None
+        ),
+        armor_base_ac=(
+            int(item["armor_base_ac"])
+            if item.get("armor_base_ac") is not None
+            else None
+        ),
+        armor_dexterity_cap=(
+            int(item["armor_dexterity_cap"])
+            if item.get("armor_dexterity_cap") is not None
+            else None
+        ),
+        armor_strength_requirement=(
+            int(item["armor_strength_requirement"])
+            if item.get("armor_strength_requirement") is not None
+            else None
+        ),
+        stealth_disadvantage=bool(item.get("stealth_disadvantage", False)),
+        charges_maximum=(
+            int(item["charges_maximum"])
+            if item.get("charges_maximum") is not None
+            else None
+        ),
+        charges_current=(
+            int(item["charges_current"])
+            if item.get("charges_current") is not None
+            else None
+        ),
+        charges_recovery=_enum_value(
+            ItemChargeRecovery,
+            item.get("charges_recovery", ItemChargeRecovery.NEVER.value),
+            f"item {item_id}.charges_recovery",
+        ),
+        charges_recovery_dice=(
+            str(item["charges_recovery_dice"])
+            if item.get("charges_recovery_dice") is not None
+            else None
+        ),
+        charges_recovery_modifier=int(item.get("charges_recovery_modifier", 0)),
+        requires_attunement=bool(item.get("requires_attunement", False)),
+        attuned=bool(item.get("attuned", False)),
+        magic_effects=_parse_magic_item_effects(
+            item.get("magic_effects", []),
+            f"item {item_id}.magic_effects",
+        ),
+        weapon_category=weapon_category,
+        weapon_properties=weapon_properties,
+        ammunition_type=(
+            str(item["ammunition_type"])
+            if item.get("ammunition_type") is not None
+            else None
+        ),
+        **_gear_metadata(item, f"item {item_id}.gear"),
+        value_cp=int(item.get("value_cp", item.get("default_value_cp", 0))),
+        weight_lb=float(item.get("weight_lb", item.get("default_weight_lb", 0))),
+    )
+
+
+def _gear_metadata(data: dict[str, Any], field: str) -> dict[str, Any]:
+    raw = data.get("gear")
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise ValueError(f"{field} must be an object.")
+    category = _enum_value(
+        GearCategory,
+        _required(raw, "category", field),
+        f"{field}.category",
+    )
+    container: ContainerCapacity | None = None
+    if raw.get("container") is not None:
+        container_data = _required_mapping(raw, "container", field)
+        container = ContainerCapacity(
+            maximum_weight_lb=(
+                float(container_data["maximum_weight_lb"])
+                if container_data.get("maximum_weight_lb") is not None
+                else None
+            ),
+            volume_cubic_feet=(
+                float(container_data["volume_cubic_feet"])
+                if container_data.get("volume_cubic_feet") is not None
+                else None
+            ),
+            liquid_pints=(
+                float(container_data["liquid_pints"])
+                if container_data.get("liquid_pints") is not None
+                else None
+            ),
+            ammunition_type=(
+                str(container_data["ammunition_type"])
+                if container_data.get("ammunition_type") is not None
+                else None
+            ),
+            ammunition_count=(
+                int(container_data["ammunition_count"])
+                if container_data.get("ammunition_count") is not None
+                else None
+            ),
+            sheet_count=(
+                int(container_data["sheet_count"])
+                if container_data.get("sheet_count") is not None
+                else None
+            ),
+        )
+    light: LightSource | None = None
+    if raw.get("light") is not None:
+        light_data = _required_mapping(raw, "light", field)
+        light = LightSource(
+            bright_distance_feet=int(
+                _required(light_data, "bright_distance_feet", f"{field}.light")
+            ),
+            dim_additional_feet=int(
+                _required(light_data, "dim_additional_feet", f"{field}.light")
+            ),
+            duration_minutes=int(
+                _required(light_data, "duration_minutes", f"{field}.light")
+            ),
+            shape=_enum_value(
+                LightShape,
+                light_data.get("shape", LightShape.RADIUS.value),
+                f"{field}.light.shape",
+            ),
+            fuel_item_id=(
+                str(light_data["fuel_item_id"])
+                if light_data.get("fuel_item_id") is not None
+                else None
+            ),
+            hooded_dim_distance_feet=(
+                int(light_data["hooded_dim_distance_feet"])
+                if light_data.get("hooded_dim_distance_feet") is not None
+                else None
+            ),
+        )
+    modifiers: list[CheckModifier] = []
+    raw_modifiers = raw.get("check_modifiers", [])
+    if not isinstance(raw_modifiers, list):
+        raise ValueError(f"{field}.check_modifiers must be a list.")
+    for index, modifier_data in enumerate(raw_modifiers):
+        modifier_field = f"{field}.check_modifiers[{index}]"
+        if not isinstance(modifier_data, dict):
+            raise ValueError(f"{modifier_field} must be an object.")
+        modifiers.append(
+            CheckModifier(
+                id=str(_required(modifier_data, "id", modifier_field)),
+                label=str(_required(modifier_data, "label", modifier_field)),
+                context=str(_required(modifier_data, "context", modifier_field)),
+                mode=_enum_value(
+                    CheckModifierMode,
+                    _required(modifier_data, "mode", modifier_field),
+                    f"{modifier_field}.mode",
+                ),
+                value=int(modifier_data.get("value", 0)),
+                ability=(
+                    str(modifier_data["ability"])
+                    if modifier_data.get("ability") is not None
+                    else None
+                ),
+                skill=(
+                    str(modifier_data["skill"])
+                    if modifier_data.get("skill") is not None
+                    else None
+                ),
+            )
+        )
+    durability: ObjectDurability | None = None
+    if raw.get("durability") is not None:
+        durability_data = _required_mapping(raw, "durability", field)
+        durability = ObjectDurability(
+            hit_points=(
+                int(durability_data["hit_points"])
+                if durability_data.get("hit_points") is not None
+                else None
+            ),
+            break_strength_dc=(
+                int(durability_data["break_strength_dc"])
+                if durability_data.get("break_strength_dc") is not None
+                else None
+            ),
+            escape_dexterity_dc=(
+                int(durability_data["escape_dexterity_dc"])
+                if durability_data.get("escape_dexterity_dc") is not None
+                else None
+            ),
+            pick_lock_dc=(
+                int(durability_data["pick_lock_dc"])
+                if durability_data.get("pick_lock_dc") is not None
+                else None
+            ),
+        )
+    raw_bundle = raw.get("bundle_contents", [])
+    if not isinstance(raw_bundle, list):
+        raise ValueError(f"{field}.bundle_contents must be a list.")
+    bundle = tuple(
+        BundleEntry(
+            item_id=str(_required(entry, "item_id", f"{field}.bundle_contents[{index}]")),
+            quantity=int(entry.get("quantity", 1)),
+        )
+        for index, entry in enumerate(raw_bundle)
+        if isinstance(entry, dict)
+    )
+    if len(bundle) != len(raw_bundle):
+        raise ValueError(f"{field}.bundle_contents entries must be objects.")
+    return {
+        "gear_category": category,
+        "stackable": bool(raw.get("stackable", True)),
+        "tool_proficiency_id": (
+            str(raw["tool_proficiency_id"])
+            if raw.get("tool_proficiency_id") is not None
+            else None
+        ),
+        "spellcasting_focus_kind": (
+            _enum_value(
+                SpellcastingFocusKind,
+                raw["spellcasting_focus_kind"],
+                f"{field}.spellcasting_focus_kind",
+            )
+            if raw.get("spellcasting_focus_kind") is not None
+            else None
+        ),
+        "container_capacity": container,
+        "light_source": light,
+        "check_modifiers": tuple(modifiers),
+        "durability": durability,
+        "bundle_contents": bundle,
+    }
+
+
+def _parse_merchant(
+    data: Any,
+    scenario_path: Path,
+    property_catalog: ItemPropertyCatalog,
+) -> MerchantState:
+    if not isinstance(data, dict):
+        raise ValueError("scenario.exploration.merchants entries must be objects.")
+    merchant_id = validate_stable_id(
+        str(_required(data, "id", "exploration merchant")),
+        "exploration.merchant.id",
+    )
+    stock_data = data.get("stock", [])
+    if not isinstance(stock_data, list):
+        raise ValueError(f"exploration merchant {merchant_id}.stock must be a list.")
+    stock: list[InventoryItem] = []
+    for index, raw_entry in enumerate(stock_data):
+        if not isinstance(raw_entry, dict):
+            raise ValueError(
+                f"exploration merchant {merchant_id}.stock[{index}] must be an object."
+            )
+        item_ref = str(
+            _required(
+                raw_entry,
+                "item_ref",
+                f"exploration merchant {merchant_id}.stock[{index}]",
+            )
+        )
+        quantity = int(raw_entry.get("quantity", 1))
+        if quantity < 1:
+            raise ValueError(
+                f"exploration merchant {merchant_id} stock quantity must be positive."
+            )
+        item_data = _read_item_definition(scenario_path, item_ref)
+        stock.append(
+            _inventory_item_from_item_data(
+                item_data,
+                quantity=quantity,
+                equipped=False,
+                source_ref=item_ref,
+                property_catalog=property_catalog,
+            )
+        )
+    return MerchantState(
+        id=merchant_id,
+        name=str(_required(data, "name", f"exploration merchant {merchant_id}")),
+        inventory=tuple(stock),
+        currency=_parse_currency_wallet(
+            data.get("currency", {}),
+            f"exploration merchant {merchant_id}",
+        ),
+        buyback_percent=int(data.get("buyback_percent", 50)),
     )
 
 
@@ -1141,6 +2081,17 @@ def _parse_attack(data: dict[str, Any], actor_id: str) -> ScenarioAttackDefiniti
         raise ValueError(f"attack {attack_id}.reach_feet is only valid for melee attacks.")
     if reach_feet is not None and (reach_feet <= 0 or reach_feet % 5 != 0):
         raise ValueError(f"attack {attack_id}.reach_feet must be a positive multiple of 5.")
+    long_range_feet = (
+        int(data["long_range_feet"])
+        if data.get("long_range_feet") is not None
+        else None
+    )
+    if long_range_feet is not None and (
+        attack_kind != AttackKind.RANGED or long_range_feet <= range_feet
+    ):
+        raise ValueError(
+            f"attack {attack_id}.long_range_feet requires a ranged attack and must exceed range_feet."
+        )
     damage_components = _parse_damage_components(
         damage,
         context=f"attack {attack_id}.damage",
@@ -1175,6 +2126,46 @@ def _parse_attack(data: dict[str, Any], actor_id: str) -> ScenarioAttackDefiniti
         proficiency_id=str(data["proficiency_id"]) if "proficiency_id" in data else None,
         resource_pool_id=str(data["resource_pool_id"]) if "resource_pool_id" in data else None,
         resource_cost=int(data.get("resource_cost", 1)),
+        ammunition_type=(
+            str(data["ammunition_type"])
+            if data.get("ammunition_type") is not None
+            else None
+        ),
+        loading=bool(data.get("loading", False)),
+        long_range_feet=long_range_feet,
+        heavy=bool(data.get("heavy", False)),
+        weapon_special_rule=(
+            _enum_value(
+                WeaponSpecialRule,
+                data["weapon_special_rule"],
+                f"attack {attack_id}.weapon_special_rule",
+            )
+            if data.get("weapon_special_rule") is not None
+            else None
+        ),
+        adds_ability_modifier_to_damage=bool(
+            data.get("adds_ability_modifier_to_damage", False)
+        ),
+        weapon_category_id=(
+            str(data["weapon_category_id"])
+            if data.get("weapon_category_id") is not None
+            else None
+        ),
+        on_hit_condition=(
+            str(data["on_hit_condition"])
+            if data.get("on_hit_condition") is not None
+            else None
+        ),
+        limited_attacks=bool(data.get("limited_attacks", False)),
+        thrown=bool(data.get("thrown", False)),
+        action_cost=_enum_value(
+            ActionEconomyCost,
+            data.get("action_cost", "action"),
+            f"attack {attack_id}.action_cost",
+        ),
+        upcast_damage_dice_per_level=int(
+            data.get("upcast_damage_dice_per_level", 0)
+        ),
     )
 
 
@@ -1189,6 +2180,11 @@ def _parse_healing_source(data: dict[str, Any], actor_id: str) -> ScenarioHealin
         f"healing source {source_id}.source_type",
     )
     spell_level = int(data.get("spell_level", 0))
+    healing_dice = (
+        DiceExpression.parse(str(healing["dice"]))
+        if healing.get("dice") is not None
+        else None
+    )
     return ScenarioHealingDefinition(
         id=source_id,
         name=str(_required(data, "name", f"healing source {source_id}")),
@@ -1205,6 +2201,15 @@ def _parse_healing_source(data: dict[str, Any], actor_id: str) -> ScenarioHealin
             f"healing source {source_id}.casting_kind",
         ),
         prepared=bool(data.get("prepared", True)),
+        action_cost=_enum_value(
+            ActionEconomyCost,
+            data.get("action_cost", "action"),
+            f"healing source {source_id}.action_cost",
+        ),
+        healing_dice_count=healing_dice.count if healing_dice is not None else 1,
+        upcast_healing_dice_per_level=int(
+            data.get("upcast_healing_dice_per_level", 0)
+        ),
     )
 
 
@@ -1218,7 +2223,18 @@ def _parse_combat_action(data: dict[str, Any], actor_id: str) -> ScenarioCombatA
     if range_feet < 0:
         raise ValueError(f"combat action {action_id}.range_feet must be non-negative.")
     effect_kind = str(data["effect_kind"]) if "effect_kind" in data else None
+    charge_cost = int(data.get("charge_cost", 0))
+    if charge_cost < 0:
+        raise ValueError(f"combat action {action_id}.charge_cost cannot be negative.")
     duration = str(data.get("duration", "next_turn_start"))
+    target_count = int(data.get("target_count", 1))
+    upcast_targets_per_level = int(data.get("upcast_targets_per_level", 0))
+    if target_count < 1:
+        raise ValueError(f"combat action {action_id}.target_count must be positive.")
+    if upcast_targets_per_level < 0:
+        raise ValueError(
+            f"combat action {action_id}.upcast_targets_per_level cannot be negative."
+        )
     if action_type == "targeted_item_effect":
         if not data.get("source_item_id"):
             raise ValueError(f"combat action {action_id} requires source_item_id.")
@@ -1245,7 +2261,89 @@ def _parse_combat_action(data: dict[str, Any], actor_id: str) -> ScenarioCombatA
             )
         if save_timing is not None:
             ConditionSaveTiming(save_timing)
-    source_type = AttackSourceType.SPELL if action_type.startswith("concentration_") else AttackSourceType.CUSTOM
+    if action_type == "spell_debuff":
+        if effect_kind != "apply_condition" or condition is None:
+            raise ValueError(
+                f"combat action {action_id} spell_debuff requires apply_condition."
+            )
+        if save_ability is None or save_timing is None:
+            raise ValueError(
+                f"combat action {action_id} spell_debuff requires save ability and timing."
+            )
+        if range_feet <= 0:
+            raise ValueError(
+                f"combat action {action_id} spell_debuff requires positive range_feet."
+            )
+        if str(data.get("target_faction", "enemy")) not in {"enemy", "hostile"}:
+            raise ValueError(
+                f"combat action {action_id} spell_debuff must target an enemy."
+            )
+        EffectDuration(duration)
+    if action_type == "spell_dispel":
+        if effect_kind != "dispel_magic":
+            raise ValueError(
+                f"combat action {action_id} spell_dispel requires dispel_magic."
+            )
+        if range_feet <= 0:
+            raise ValueError(
+                f"combat action {action_id} spell_dispel requires positive range_feet."
+            )
+        if str(data.get("target_faction", "any")) != "any":
+            raise ValueError(
+                f"combat action {action_id} spell_dispel must target any faction."
+            )
+    summon = (
+        _parse_summon_definition(data["summon"], action_id)
+        if "summon" in data
+        else None
+    )
+    if action_type == "summon":
+        if summon is None:
+            raise ValueError(f"combat action {action_id} requires summon.")
+        if not bool(data.get("concentration", False)):
+            raise ValueError(
+                f"combat action {action_id} summon must require concentration."
+            )
+        if range_feet <= 0:
+            raise ValueError(
+                f"combat action {action_id} summon requires positive range_feet."
+            )
+    elif summon is not None:
+        raise ValueError(
+            f"combat action {action_id}.summon is only valid for action_type summon."
+        )
+    movement = (
+        _parse_magic_movement_definition(data["movement"], action_id)
+        if "movement" in data
+        else None
+    )
+    if action_type == "spell_movement":
+        if movement is None:
+            raise ValueError(f"combat action {action_id} requires movement.")
+        if movement.kind == MagicMovementKind.TELEPORT:
+            if str(data.get("target_faction", "self")) != "self":
+                raise ValueError(
+                    f"combat action {action_id} teleport must target self."
+                )
+        else:
+            if range_feet <= 0:
+                raise ValueError(
+                    f"combat action {action_id} forced movement requires range_feet."
+                )
+            if save_ability is None:
+                raise ValueError(
+                    f"combat action {action_id} forced movement requires save_ability."
+                )
+    elif movement is not None:
+        raise ValueError(
+            f"combat action {action_id}.movement is only valid for spell_movement."
+        )
+    source_type = (
+        AttackSourceType.SPELL
+        if action_type.startswith("concentration_")
+        or str(data.get("casting_kind", "none")) in {"cantrip", "leveled"}
+        else AttackSourceType.CUSTOM
+    )
     return ScenarioCombatActionDefinition(
         id=action_id,
         name=str(_required(data, "name", f"combat action {action_id}")),
@@ -1255,6 +2353,8 @@ def _parse_combat_action(data: dict[str, Any], actor_id: str) -> ScenarioCombatA
         ability=str(data["ability"]) if "ability" in data else None,
         duration=duration,
         target_faction=str(data.get("target_faction", "self")),
+        target_count=target_count,
+        upcast_targets_per_level=upcast_targets_per_level,
         spell_level=spell_level,
         casting_kind=_parse_spell_casting_kind(
             data.get("casting_kind"),
@@ -1268,10 +2368,77 @@ def _parse_combat_action(data: dict[str, Any], actor_id: str) -> ScenarioCombatA
         range_feet=range_feet,
         effect_kind=effect_kind,
         action_cost=ActionEconomyCost(str(data.get("action_cost", "action"))),
+        casting_time=_enum_value(
+            SpellCastingTime,
+            data.get("casting_time", "action"),
+            f"combat action {action_id}.casting_time",
+        ),
         condition=condition,
         save_ability=save_ability,
         save_dc=save_dc,
         save_timing=save_timing,
+        charge_cost=charge_cost,
+        summon=summon,
+        movement=movement,
+    )
+
+
+def _parse_summon_definition(data: Any, action_id: str) -> SummonDefinition:
+    path = f"combat action {action_id}.summon"
+    if not isinstance(data, dict):
+        raise ValueError(f"{path} must be an object.")
+    abilities = data.get("ability_scores", {})
+    if not isinstance(abilities, dict):
+        raise ValueError(f"{path}.ability_scores must be an object.")
+    attack = data.get("attack")
+    if not isinstance(attack, dict):
+        raise ValueError(f"{path}.attack must be an object.")
+    return SummonDefinition(
+        id=str(_required(data, "id", path)),
+        name=str(_required(data, "name", path)),
+        size=_enum_value(
+            CreatureSize,
+            data.get("size", "medium"),
+            f"{path}.size",
+        ),
+        ac=int(_required(data, "ac", path)),
+        hp=int(_required(data, "hp", path)),
+        speed_feet=int(data.get("speed_feet", 30)),
+        ability_scores=AbilityScores(
+            strength=int(abilities.get("strength", 10)),
+            dexterity=int(abilities.get("dexterity", 10)),
+            constitution=int(abilities.get("constitution", 10)),
+            intelligence=int(abilities.get("intelligence", 10)),
+            wisdom=int(abilities.get("wisdom", 10)),
+            charisma=int(abilities.get("charisma", 10)),
+        ),
+        attack_id=str(_required(attack, "id", f"{path}.attack")),
+        attack_name=str(_required(attack, "name", f"{path}.attack")),
+        attack_bonus=int(attack.get("bonus", 0)),
+        attack_range_feet=int(attack.get("range_feet", 5)),
+        attack_damage_fixed=int(_required(attack, "damage_fixed", f"{path}.attack")),
+        attack_damage_type=_enum_value(
+            DamageType,
+            _required(attack, "damage_type", f"{path}.attack"),
+            f"{path}.attack.damage_type",
+        ),
+    )
+
+
+def _parse_magic_movement_definition(
+    data: Any,
+    action_id: str,
+) -> MagicMovementDefinition:
+    path = f"combat action {action_id}.movement"
+    if not isinstance(data, dict):
+        raise ValueError(f"{path} must be an object.")
+    return MagicMovementDefinition(
+        kind=_enum_value(
+            MagicMovementKind,
+            _required(data, "kind", path),
+            f"{path}.kind",
+        ),
+        distance_feet=int(_required(data, "distance_feet", path)),
     )
 
 
@@ -1397,6 +2564,12 @@ def _parse_exploration_zone(
 def _load_item_property_catalog(scenario_path: Path) -> ItemPropertyCatalog:
     path = _content_ref_path(scenario_path, "items", "properties")
     data = _read_json(path)
+    header = parse_content_header(
+        data,
+        expected_schema="dnd_board_game.item_catalog",
+        context=str(path),
+    )
+    _validate_known_source_packs(header, path)
     schema_version = int(data.get("schema_version", 0))
     if schema_version != 1:
         raise ValueError(f"{path}.schema_version must be 1.")
@@ -1424,6 +2597,12 @@ def _load_crafting_policy(
 ) -> CraftingPolicy:
     path = _content_ref_path(scenario_path, "items", "crafting_purposes")
     data = _read_json(path)
+    header = parse_content_header(
+        data,
+        expected_schema="dnd_board_game.item_catalog",
+        context=str(path),
+    )
+    _validate_known_source_packs(header, path)
     schema_version = int(data.get("schema_version", 0))
     raw_purposes = data.get("purposes")
     if not isinstance(raw_purposes, list):
@@ -1506,7 +2685,7 @@ def _parse_scene_item_instance(
     definition_ref = data.get("definition_id", data.get("item_ref"))
     if definition_ref is None:
         raise ValueError(f"{field}.definition_id is required.")
-    definition_data = _read_json(_content_ref_path(scenario_path, "items", str(definition_ref)))
+    definition_data = _read_item_definition(scenario_path, str(definition_ref))
     definition = _parse_item_definition(definition_data, property_catalog, f"item definition {definition_ref}")
     added_properties = _parse_string_tuple(data.get("added_properties", []), f"{field}.added_properties")
     removed_properties = _parse_string_tuple(data.get("removed_properties", []), f"{field}.removed_properties")
@@ -1532,7 +2711,13 @@ def _parse_item_definition(
 ) -> ItemDefinition:
     properties = _parse_string_tuple(data.get("properties", []), f"{field}.properties")
     property_catalog.validate(properties, f"{field}.properties")
-    weight = data.get("default_weight_lb")
+    weight = data.get("default_weight_lb", data.get("weight_lb"))
+    value = data.get("default_value_cp", data.get("value_cp"))
+    weapon_category, weapon_properties = _weapon_inventory_metadata(
+        data,
+        f"{field}.weapon",
+    )
+    weapon_data = data.get("weapon", {}) if weapon_category is not None else {}
     return ItemDefinition(
         id=str(_required(data, "id", field)),
         name=str(_required(data, "name", field)),
@@ -1541,16 +2726,31 @@ def _parse_item_definition(
         properties=properties,
         portable=bool(data.get("portable", True)),
         default_weight_lb=float(weight) if weight is not None else None,
+        default_value_cp=int(value) if value is not None else None,
+        ammunition_type=(
+            str(data["ammunition_type"])
+            if data.get("ammunition_type") is not None
+            else None
+        ),
         collection_destination=_enum_value(
             ItemCollectionDestination,
             data.get("collection_destination", ItemCollectionDestination.ACTOR_INVENTORY.value),
             f"{field}.collection_destination",
         ),
-        hands_required=int(data.get("hands_required", 0)),
-        light_weapon=bool(data.get("light_weapon", False)),
+        hands_required=int(
+            data.get(
+                "hands_required",
+                2 if WeaponProperty.TWO_HANDED in weapon_properties else (
+                    1 if weapon_category is not None else 0
+                ),
+            )
+        ),
+        light_weapon=bool(
+            data.get("light_weapon", WeaponProperty.LIGHT in weapon_properties)
+        ),
         versatile_damage_dice=(
-            str(data["versatile_damage_dice"])
-            if data.get("versatile_damage_dice") is not None
+            str(data.get("versatile_damage_dice", weapon_data.get("versatile_damage_dice")))
+            if data.get("versatile_damage_dice", weapon_data.get("versatile_damage_dice")) is not None
             else None
         ),
         armor_class_bonus=int(data.get("armor_class_bonus", 0)),
@@ -1559,6 +2759,60 @@ def _parse_item_definition(
             if data.get("armor_proficiency") is not None
             else None
         ),
+        armor_category=(
+            _enum_value(
+                ArmorCategory,
+                data["armor_category"],
+                f"{field}.armor_category",
+            )
+            if data.get("armor_category") is not None
+            else None
+        ),
+        armor_base_ac=(
+            int(data["armor_base_ac"])
+            if data.get("armor_base_ac") is not None
+            else None
+        ),
+        armor_dexterity_cap=(
+            int(data["armor_dexterity_cap"])
+            if data.get("armor_dexterity_cap") is not None
+            else None
+        ),
+        armor_strength_requirement=(
+            int(data["armor_strength_requirement"])
+            if data.get("armor_strength_requirement") is not None
+            else None
+        ),
+        stealth_disadvantage=bool(data.get("stealth_disadvantage", False)),
+        charges_maximum=(
+            int(data["charges_maximum"])
+            if data.get("charges_maximum") is not None
+            else None
+        ),
+        charges_current=(
+            int(data["charges_current"])
+            if data.get("charges_current") is not None
+            else None
+        ),
+        charges_recovery=_enum_value(
+            ItemChargeRecovery,
+            data.get("charges_recovery", ItemChargeRecovery.NEVER.value),
+            f"{field}.charges_recovery",
+        ),
+        charges_recovery_dice=(
+            str(data["charges_recovery_dice"])
+            if data.get("charges_recovery_dice") is not None
+            else None
+        ),
+        charges_recovery_modifier=int(data.get("charges_recovery_modifier", 0)),
+        requires_attunement=bool(data.get("requires_attunement", False)),
+        magic_effects=_parse_magic_item_effects(
+            data.get("magic_effects", []),
+            f"{field}.magic_effects",
+        ),
+        weapon_category=weapon_category,
+        weapon_properties=weapon_properties,
+        **_gear_metadata(data, f"{field}.gear"),
     )
 
 
@@ -1720,6 +2974,11 @@ def _parse_exploration_point(data: Any) -> ExplorationPoint:
         interaction_label=str(data.get("interaction_label", "")),
         requires_setup=bool(data.get("requires_setup", True)),
         npc_interaction=_parse_npc_interaction(data.get("npc_interaction"), point_id),
+        merchant_id=(
+            str(data["merchant_id"])
+            if data.get("merchant_id") is not None
+            else None
+        ),
     )
 
 
@@ -3226,6 +4485,60 @@ def _parse_string_tuple(data: Any, field: str) -> tuple[str, ...]:
     return tuple(str(item) for item in data)
 
 
+def _parse_magic_item_effects(
+    data: Any,
+    field: str,
+) -> tuple[MagicItemEffect, ...]:
+    if data is None:
+        return ()
+    if not isinstance(data, list):
+        raise ValueError(f"{field} must be a list.")
+    effects: list[MagicItemEffect] = []
+    for index, entry in enumerate(data):
+        path = f"{field}[{index}]"
+        if not isinstance(entry, dict):
+            raise ValueError(f"{path} must be an object.")
+        effects.append(
+            MagicItemEffect(
+                id=str(_required(entry, "id", path)),
+                kind=_enum_value(
+                    MagicItemEffectKind,
+                    _required(entry, "kind", path),
+                    f"{path}.kind",
+                ),
+                value=int(_required(entry, "value", path)),
+                requires_equipped=bool(entry.get("requires_equipped", True)),
+            )
+        )
+    return tuple(effects)
+
+
+def _weapon_inventory_metadata(
+    data: dict[str, Any],
+    field: str,
+) -> tuple[WeaponCategory | None, tuple[WeaponProperty, ...]]:
+    raw = data.get("weapon")
+    if raw is None:
+        return None, ()
+    if not isinstance(raw, dict):
+        raise ValueError(f"{field} must be an object.")
+    category = _enum_value(
+        WeaponCategory,
+        _required(raw, "category", field),
+        f"{field}.category",
+    )
+    values = raw.get("properties", [])
+    if not isinstance(values, list):
+        raise ValueError(f"{field}.properties must be a list.")
+    properties = tuple(
+        _enum_value(WeaponProperty, value, f"{field}.properties")
+        for value in values
+    )
+    if len(properties) != len(set(properties)):
+        raise ValueError(f"{field}.properties cannot contain duplicates.")
+    return category, properties
+
+
 def _parse_interactions(data: Any, environment_id: str) -> tuple[SceneInteraction, ...]:
     if data is None:
         return ()
@@ -3342,8 +4655,11 @@ def _actor_from_definition(definition: ScenarioActorDefinition) -> Actor:
         spell_slots=definition.spell_slots,
         spell_save_dc=definition.spell_save_dc,
         inventory=definition.inventory,
+        currency=definition.currency,
         spell_ids=definition.spell_ids,
         spell_preparation=definition.spell_preparation,
+        spells=definition.spells,
+        spell_access=definition.spell_access,
         hit_dice=definition.hit_dice,
         resource_pools=definition.resource_pools,
         proficiency_bonus=definition.proficiency_bonus,
@@ -3413,6 +4729,18 @@ def _attack_source_from_definition(
         reach_feet=definition.reach_feet,
         resource_pool_id=definition.resource_pool_id,
         resource_cost=definition.resource_cost,
+        ammunition_type=definition.ammunition_type,
+        loading=definition.loading,
+        long_range_feet=definition.long_range_feet,
+        heavy=definition.heavy,
+        weapon_special_rule=definition.weapon_special_rule,
+        adds_ability_modifier_to_damage=definition.adds_ability_modifier_to_damage,
+        weapon_category_id=definition.weapon_category_id,
+        on_hit_condition=definition.on_hit_condition,
+        limited_attacks=definition.limited_attacks,
+        thrown=definition.thrown,
+        action_cost=definition.action_cost,
+        upcast_damage_dice_per_level=definition.upcast_damage_dice_per_level,
     )
 
 
@@ -3426,9 +4754,12 @@ def _healing_source_from_definition(definition: ScenarioHealingDefinition) -> He
         healing_fixed=definition.healing_fixed,
         healing_die_sides=definition.healing_die_sides,
         healing_modifier=definition.healing_modifier,
+        healing_dice_count=definition.healing_dice_count,
         spell_level=definition.spell_level,
         casting_kind=definition.casting_kind,
         prepared=definition.prepared,
+        action_cost=definition.action_cost,
+        upcast_healing_dice_per_level=definition.upcast_healing_dice_per_level,
     )
 
 
@@ -3478,6 +4809,11 @@ def _validate_exploration(definition: ScenarioDefinition) -> None:
     zone_ids = {zone.id for zone in definition.exploration_zones}
     point_ids = {point.id for point in definition.exploration_points}
     resource_ids = {resource.id for resource in definition.exploration_resources}
+    merchant_ids = tuple(
+        merchant.id for merchant in definition.exploration_merchants
+    )
+    if len(merchant_ids) != len(set(merchant_ids)):
+        raise ValueError("exploration.merchants contains duplicate ids.")
     actor_item_ids = {item.id for actor in definition.actors for item in actor.inventory}
     actor_spell_ids = {spell_id for actor in definition.actors for spell_id in actor.spell_ids}
     if definition.party_start_zone_id not in zone_ids:
@@ -3506,6 +4842,17 @@ def _validate_exploration(definition: ScenarioDefinition) -> None:
         for position in point.positions:
             if not definition.board_dimensions.in_bounds(position):
                 raise ValueError(f"exploration point {point.id}.positions contains out of bounds coordinate.")
+        if point.merchant_id is not None and point.merchant_id not in merchant_ids:
+            raise ValueError(
+                f"exploration point {point.id}.merchant_id references unknown merchant."
+            )
+    referenced_merchant_ids = {
+        point.merchant_id
+        for point in definition.exploration_points
+        if point.merchant_id is not None
+    }
+    if referenced_merchant_ids != set(merchant_ids):
+        raise ValueError("Every exploration merchant must be referenced by a point.")
     for challenge in definition.exploration_challenges:
         if challenge.zone_id not in zone_ids:
             raise ValueError(f"exploration challenge {challenge.id}.zone_id references unknown zone.")
@@ -3979,6 +5326,7 @@ def _validate_npc_content_effects(definition: ScenarioDefinition) -> None:
         challenges=definition.exploration_challenges,
         resources=definition.exploration_resources,
         traps=definition.exploration_traps,
+        merchants=definition.exploration_merchants,
     )
     npc_by_id: dict[str, NpcInteraction] = {}
     for point in definition.exploration_points:
@@ -4356,6 +5704,76 @@ def _read_json(path: Path) -> dict[str, Any]:
     return data
 
 
+def _read_content_definition(path: Path, expected_schema: str) -> dict[str, Any]:
+    data = _read_json(path)
+    header = parse_content_header(
+        data,
+        expected_schema=expected_schema,
+        context=str(path),
+    )
+    _validate_known_source_packs(header, path)
+    definition_id = data.get("id")
+    if not isinstance(definition_id, str):
+        raise ValueError(f"{path}.id must be a string.")
+    validate_stable_id(definition_id, f"{path}.id")
+    return data
+
+
+def _read_item_definition(scenario_path: Path, item_ref: str) -> dict[str, Any]:
+    """Resolve an item from a legacy standalone file or the unified gear catalog."""
+
+    standalone_path = _content_ref_path(scenario_path, "items", item_ref)
+    if standalone_path.exists():
+        return _read_content_definition(standalone_path, "dnd_board_game.item")
+    catalog_path = _content_ref_path(
+        scenario_path,
+        "items",
+        "adventuring_gear",
+    )
+    catalog = _read_json(catalog_path)
+    header = parse_content_header(
+        catalog,
+        expected_schema="dnd_board_game.item_catalog",
+        context=str(catalog_path),
+    )
+    _validate_known_source_packs(header, catalog_path)
+    raw_items = catalog.get("items")
+    if not isinstance(raw_items, list):
+        raise ValueError(f"{catalog_path}.items must be a list.")
+    matches = [
+        entry
+        for entry in raw_items
+        if isinstance(entry, dict) and entry.get("id") == item_ref
+    ]
+    if len(matches) != 1:
+        raise ValueError(f"Unknown item definition: {item_ref}.")
+    item = dict(matches[0])
+    item.update(
+        {
+            "schema": "dnd_board_game.item",
+            "schema_version": header.schema_version,
+            "ruleset_id": header.ruleset_id,
+            "source_pack_ids": list(header.source_pack_ids),
+        }
+    )
+    validate_stable_id(item_ref, f"{catalog_path}.items.id")
+    return item
+
+
+def _validate_known_source_packs(header: ContentHeader, source_path: Path) -> None:
+    registry_path = _content_root_path(source_path) / "source_packs.json"
+    if not registry_path.exists():
+        return
+    source_packs = load_source_pack_registry(registry_path)
+    unknown = set(header.source_pack_ids) - set(source_packs)
+    if unknown:
+        raise ValueError(
+            f"{source_path}.source_pack_ids references unknown packs: "
+            + ", ".join(sorted(unknown))
+            + "."
+        )
+
+
 def _load_json_value(path: Path) -> Any:
     try:
         with path.open("r", encoding="utf-8") as handle:
@@ -4391,6 +5809,20 @@ def _parse_ability_scores(data: dict[str, Any]) -> AbilityScores:
         intelligence=int(data.get("intelligence", 10)),
         wisdom=int(data.get("wisdom", 10)),
         charisma=int(data.get("charisma", 10)),
+    )
+
+
+def _parse_currency_wallet(data: Any, actor_id: str) -> CurrencyWallet:
+    if data is None:
+        return CurrencyWallet()
+    if not isinstance(data, dict):
+        raise ValueError(f"actor {actor_id}.currency must be an object.")
+    return CurrencyWallet(
+        cp=int(data.get("cp", 0)),
+        sp=int(data.get("sp", 0)),
+        ep=int(data.get("ep", 0)),
+        gp=int(data.get("gp", 0)),
+        pp=int(data.get("pp", 0)),
     )
 
 
@@ -4743,7 +6175,7 @@ def _healing_hint(definition: ScenarioHealingDefinition) -> str:
     elif definition.healing_die_sides is None:
         base = "leczenie"
     else:
-        base = f"1d{definition.healing_die_sides}"
+        base = f"{definition.healing_dice_count}d{definition.healing_die_sides}"
     if definition.healing_modifier:
         sign = "+" if definition.healing_modifier > 0 else "-"
         base = f"{base} {sign} {abs(definition.healing_modifier)}"

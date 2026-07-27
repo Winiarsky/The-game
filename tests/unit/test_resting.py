@@ -14,6 +14,7 @@ from dnd_board_game.actors import (
     SpellPreparationProfile,
 )
 from dnd_board_game.combat import SpellSlotState
+from dnd_board_game.inventory import InventoryItem, ItemChargeRecovery
 from dnd_board_game.rules import complete_long_rest, complete_short_rest, spend_hit_die
 from dnd_board_game.world import Coordinate
 
@@ -56,6 +57,22 @@ def test_short_rest_recovers_only_short_rest_resources() -> None:
     assert result.actor_after.spell_slots[0].remaining == 0
 
 
+def test_short_rest_recovers_short_rest_item_charges() -> None:
+    amulet = InventoryItem(
+        "restful_amulet",
+        "Amulet wytchnienia",
+        "magic_item",
+        charges_maximum=2,
+        charges_current=0,
+        charges_recovery=ItemChargeRecovery.SHORT_REST,
+    )
+
+    result = complete_short_rest(replace(_actor(), inventory=(amulet,)))
+
+    assert result.actor_after.inventory[0].charges_current == 2
+    assert result.item_charge_recoveries[0].recovered == 2
+
+
 def test_hit_die_is_spent_after_short_rest_and_heals_with_constitution() -> None:
     result = spend_hit_die(_actor(), die_sides=8, natural_roll=6)
 
@@ -90,3 +107,25 @@ def test_long_rest_restores_hp_slots_resources_hit_dice_and_reopens_preparation(
 def test_long_rest_requires_positive_hp() -> None:
     with pytest.raises(ValueError, match="co najmniej 1 HP"):
         complete_long_rest(replace(_actor(), hp=0))
+
+
+def test_long_rest_recovers_random_item_charges_with_injected_roll() -> None:
+    wand = InventoryItem(
+        "binding_wand",
+        "Różdżka",
+        "magic_item",
+        charges_maximum=7,
+        charges_current=1,
+        charges_recovery=ItemChargeRecovery.LONG_REST,
+        charges_recovery_dice="1d6",
+        charges_recovery_modifier=1,
+    )
+
+    result = complete_long_rest(
+        replace(_actor(), inventory=(wand,)),
+        roll_die=lambda _sides: 3,
+    )
+
+    assert result.actor_after.inventory[0].charges_current == 5
+    assert result.item_charge_recoveries[0].rolls == (3,)
+    assert result.item_charge_recoveries[0].recovered == 4

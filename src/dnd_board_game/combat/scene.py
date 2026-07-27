@@ -16,7 +16,7 @@ from dnd_board_game.rules import (
 from dnd_board_game.world import Coordinate
 
 from .action_economy import ActionEconomyCost
-from .session import CombatState, CombatStatus, combat_winner
+from .session import CombatState, CombatStatus, combat_winner, finalize_ammunition_recovery
 from .setup import SetupVisibility
 
 
@@ -350,7 +350,10 @@ def conclude_scene(
         )
         side = "Bohaterowie" if acting_faction == Faction.ALLY else "Przeciwnicy"
         message = f"Scena zakończona. {side} poddają się."
+    finished = replace(state, status=CombatStatus.FINISHED, winner=winner)
+    if conclusion == SceneConclusionType.OBJECTIVE_COMPLETED:
+        finished = finalize_ammunition_recovery(finished, winner)
     return (
-        replace(state, status=CombatStatus.FINISHED, winner=winner),
+        finished,
         SceneResult(True, message, conclusion, winner, completed),
     )

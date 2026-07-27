@@ -2,7 +2,10 @@
 
 Minimalne przedmioty i wyposażenie dla lokalnego contentu MVP.
 
-Na tym etapie obsługujemy broń, proste narzędzia i consumable potrzebne do MVP:
+Katalog obejmuje komplet 37 broni, 12 pancerzy korpusu, tarczę, cztery rodziny
+amunicji oraz 144 definicje adventuring gear, focusów, narzędzi, instrumentów
+i pakietów SRD 5.1. Scenariusz używa stabilnego `item_ref` niezależnie od tego,
+czy definicja ma osobny plik, czy jest wpisem `adventuring_gear.json`.
 
 - `id`, `name`, `kind`,
 - `quantity` w inventory aktora,
@@ -15,6 +18,18 @@ Na tym etapie obsługujemy broń, proste narzędzia i consumable potrzebne do MV
 - `reach_feet`: wymagany dla nowego źródła melee, dodatnia wielokrotność 5 feet;
   nie występuje dla ranged,
 - `ability` używana do wyliczenia ataku,
+- opcjonalne `ammunition_type` wymagające jednej sztuki kompatybilnej amunicji
+  przy każdym wykonanym ataku,
+- opcjonalne `loading`, ograniczające broń do jednego strzału w ramach Action,
+- opcjonalne `charges_maximum`, `charges_recovery` (`never`, `short_rest`,
+  `long_rest`), `charges_recovery_dice` i `charges_recovery_modifier` dla
+  niestosowalnych przedmiotów wielokrotnego użytku,
+- opcjonalne `requires_attunement` dla magicznych przedmiotów, których specjalne
+  moce wymagają dostrojenia podczas short resta,
+- opcjonalne `magic_effects`: lista pasywnych efektów z unikalnym `id`, typem
+  `kind`, niezerowym `value` i opcjonalnym `requires_equipped` (domyślnie `true`).
+  Obsługiwane typy to `armor_class_bonus`, `saving_throw_bonus`,
+  `ability_check_bonus`, `attack_roll_bonus` oraz `speed_bonus_feet`,
 - `damage`.
 
 Wyposażenie trzymane w dłoniach deklaruje również:
@@ -27,6 +42,10 @@ Wyposażenie trzymane w dłoniach deklaruje również:
 - opcjonalne `armor_class_bonus` i `armor_proficiency` dla wyposażenia ochronnego.
   Tarcza używa `kind: shield`, zajmuje jedną rękę i wymaga akcji do założenia lub
   zdjęcia podczas walki.
+- pancerz korpusu używa `kind: armor`, `armor_category` (`light`, `medium`,
+  `heavy`) i dodatniego `armor_base_ac`. Opcjonalne `armor_dexterity_cap`,
+  `armor_strength_requirement` i `stealth_disadvantage` opisują pełną formułę
+  bez kodowania jej w nazwie przedmiotu.
 
 Runtime przypisuje wyposażone przedmioty do jawnych slotów `main_hand` i
 `off_hand`. Starsza broń bez `hands_required` jest traktowana jako jednoręczna.
@@ -43,10 +62,64 @@ w id przedmiotu. `attack_modifier` jest obsługiwany wyłącznie jako fallback d
 starszego źródła ataku, które nie deklaruje `ability`.
 Loader potrafi jeszcze odczytać starsze źródła bez `attack_kind`, ale nowy content
 nie powinien polegać na wnioskowaniu rodzaju ataku z samego `range_feet`.
+
+## Jednolity schemat broni
+
+Nowa broń używa jednego zagnieżdżonego obiektu `weapon`, bez ręcznie powielanej
+listy `attacks`:
+
+```json
+{
+  "id": "spear",
+  "kind": "weapon",
+  "weapon": {
+    "category": "simple",
+    "attack_kind": "melee",
+    "properties": ["thrown", "versatile"],
+    "normal_range_feet": 20,
+    "long_range_feet": 60,
+    "versatile_damage_dice": "1d8",
+    "damage": {"dice": "1d6", "damage_type": "piercing"}
+  }
+}
+```
+
+`category` przyjmuje `simple` albo `martial`. Właściwości to `ammunition`,
+`finesse`, `heavy`, `light`, `loading`, `reach`, `special`, `thrown`,
+`two_handed` i `versatile`. Ammunition wymaga `ammunition_type`; ranged i thrown
+wymagają obu zasięgów; versatile wymaga `versatile_damage_dice`; special wymaga
+`special_rule` (`lance` albo `net`). Loader waliduje każdy samodzielny item podczas
+repozytoryjnego audytu, nawet jeśli żaden scenariusz MVP go nie referencjonuje.
 Narzędzia mogą nie mieć mechaniki walki, ale mogą być wymagane przez opcje eksploracji.
 Uszkodzone narzędzia pozostają widoczne w ekwipunku, ale nie spełniają wymagań opcji i nie dają premii.
-`healers_kit` używa `quantity` jako liczby pozostałych zastosowań; każde użycie w walce
-stabilizuje sąsiedniego nieprzytomnego sojusznika bez testu Medicine i zmniejsza ilość o jeden.
+`healers_kit` używa puli 10 nieregenerujących się ładunków; każde użycie w walce
+stabilizuje sąsiedniego nieprzytomnego sojusznika bez testu Medicine.
+
+## Jednolity schemat zwykłego ekwipunku
+
+Pole `gear` zawiera wspólne, opcjonalne reguły:
+
+```json
+{
+  "id": "hooded_lantern",
+  "kind": "gear",
+  "gear": {
+    "category": "adventuring_gear",
+    "light": {
+      "bright_distance_feet": 30,
+      "dim_additional_feet": 30,
+      "duration_minutes": 360,
+      "fuel_item_id": "oil_flask",
+      "hooded_dim_distance_feet": 5
+    }
+  }
+}
+```
+
+Obsługiwane metadane obejmują `category`, `stackable`, `tool_proficiency_id`,
+`spellcasting_focus_kind`, `container`, `light`, `check_modifiers`, `durability`
+i `bundle_contents`. Equipment pack musi wskazywać istniejące stabilne ID;
+repozytoryjny audyt sprawdza wszystkie wpisy katalogu i referencje bundle.
 
 ## Kontekstowe akcje przedmiotów w walce
 
@@ -76,6 +149,21 @@ nie przy otwarciu menu. Obsługiwane efekty to `grant_next_attack_penalty` oraz
 rzutem, kompletnego zestawu `save_ability`, `save_dc`, `save_timing`. Kolejne efekty
 wymagają jawnego resolwera i testów, a nie interpretowania dowolnego tekstu z contentu.
 
+Opcjonalny dodatni `charge_cost` zmienia zużycie sztuki przedmiotu na wydanie
+podanej liczby ładunków. Loader wymaga wtedy źródłowego przedmiotu z
+`charges_maximum`, a runtime ukrywa akcję po wyczerpaniu puli. Bieżące
+`charges_current` należy do instancji i domyślnie zaczyna się od maksimum.
+
+`attuned` jest stanem instancji inventory, nie definicji katalogowej. Może być
+ustawione tylko dla przedmiotu z `requires_attunement: true`. Niedostrojona
+instancja pozostaje w ekwipunku, ale jej specjalne źródła i akcje są niedostępne.
+Każdy aktor może podczas jednego short resta zmienić jedną więź, przy limicie
+trzech dostrojonych przedmiotów.
+
+Efekty `magic_effects` są aktywne tylko dla dostępnego przedmiotu, po wymaganym
+dostrojeniu i — domyślnie — założeniu. Premie do rzutów pojawiają się jako osobne
+komponenty typu `item`; KP i szybkość pozostają wartościami pochodnymi.
+
 `action_cost` korzysta ze wspólnego kontraktu ekonomii tury i przyjmuje `action`,
 `bonus_action`, `reaction`, `object_interaction` albo `free`. Brak pola zachowuje
 kompatybilną wartość domyślną `action`; nowy content powinien podawać koszt jawnie.
@@ -89,7 +177,9 @@ może zawierać:
 - `description`,
 - `properties`,
 - `portable`,
-- `default_weight_lb`.
+- `default_weight_lb`,
+- `default_value_cp`,
+- `ammunition_type` dla stosów kompatybilnej amunicji,
 - `collection_destination`: `actor_inventory` (domyślne), `party_treasure` albo
   `scenario_quest`.
 

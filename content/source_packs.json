@@ -1,0 +1,22 @@
+{
+  "schema": "dnd_board_game.source_packs",
+  "schema_version": 1,
+  "source_packs": [
+    {
+      "id": "project_original",
+      "name": "Oryginalny content projektu",
+      "license_id": "NOASSERTION",
+      "source_url": "",
+      "attribution": "Content przygotowany bezpośrednio dla projektu The Game.",
+      "redistributable": false
+    },
+    {
+      "id": "srd_5_1_cc_by_4_0",
+      "name": "System Reference Document 5.1",
+      "license_id": "CC-BY-4.0",
+      "source_url": "https://media.wizards.com/2023/downloads/dnd/SRD_CC_v5.1.pdf",
+      "attribution": "This work includes material taken from the System Reference Document 5.1 (\"SRD 5.1\") by Wizards of the Coast LLC and available at https://dnd.wizards.com/resources/systems-reference-document. The SRD 5.1 is licensed under the Creative Commons Attribution 4.0 International License available at https://creativecommons.org/licenses/by/4.0/legalcode.",
+      "redistributable": true
+    }
+  ]
+}

@@ -3,11 +3,20 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Mapping
 
-from dnd_board_game.actors import Actor, ActorId, Faction, skill_modifier, skill_roll_modifiers
+from dnd_board_game.actors import (
+    Actor,
+    ActorId,
+    Faction,
+    ability_roll_modifier,
+    skill_modifier,
+    skill_roll_modifiers,
+)
+from dnd_board_game.inventory import armor_skill_roll_request, effective_speed_feet
 from dnd_board_game.combat import (
     ActionUse,
     ActiveCombatEffect,
     AttackSource,
+    CombatCondition,
     CombatState,
     CombatStatus,
     HiddenState,
@@ -18,6 +27,7 @@ from dnd_board_game.combat import (
     hide_eligibility,
     resolve_hide,
     resolve_search,
+    remove_condition,
     stand_up,
     use_dash,
     use_turn_action,
@@ -78,6 +88,7 @@ class PendingCombatSkillCheck:
     modifier: int
     instruction: str
     opposing_actor_ids: tuple[str, ...]
+    roll_mode: str = "normal"
 
     def as_payload(self) -> dict[str, object]:
         return {
@@ -87,6 +98,8 @@ class PendingCombatSkillCheck:
             "modifier": self.modifier,
             "instruction": self.instruction,
             "opposing_actor_ids": list(self.opposing_actor_ids),
+            "roll_mode": self.roll_mode,
+            "requires_second_roll": self.roll_mode != "normal",
         }
 
 
@@ -110,7 +123,10 @@ class CombatTurnActionFlowService:
             message_title="Dash",
             message_body=result.message,
             event_type="ui_combat_dash",
-            event_payload=(("actor_id", str(actor.id)), ("extra_movement_feet", actor.speed_feet)),
+            event_payload=(
+                ("actor_id", str(actor.id)),
+                ("extra_movement_feet", effective_speed_feet(actor)),
+            ),
         )
 
     def use_dodge(
@@ -244,6 +260,7 @@ class CombatTurnActionFlowService:
             modifier=skill_modifier(actor, "stealth"),
             instruction=roll_instruction(request).message,
             opposing_actor_ids=opponents,
+            roll_mode=request.mode.value,
         )
 
     def resolve_hide(
@@ -253,6 +270,7 @@ class CombatTurnActionFlowService:
         board: BoardState,
         pending: PendingCombatSkillCheck,
         natural_roll: int,
+        natural_roll_2: int | None = None,
         active_effects: tuple[ActiveCombatEffect, ...],
         scene_objects: tuple[SceneObject, ...] = (),
     ) -> CombatTurnActionTransition:
@@ -260,7 +278,10 @@ class CombatTurnActionFlowService:
         eligibility = hide_eligibility(board, actor, state.actors, scene_objects)
         if not eligibility.allowed:
             raise ValueError("Warunki zmieniły się i nie można już wykonać Hide.")
-        result = resolve_d20_roll(D20RollInput(_skill_request(state, actor, "stealth"), natural_roll))
+        request = _skill_request(state, actor, "stealth")
+        if request.mode.value != "normal" and natural_roll_2 is None:
+            raise ValueError("Ten test wymaga wpisania dwóch wyników d20.")
+        result = resolve_d20_roll(D20RollInput(request, natural_roll, natural_roll_2))
         hiding = resolve_hide(state.hidden_states, actor, state.actors, result.total)
         updated_state = replace(
             _consume_action(state),
@@ -343,6 +364,74 @@ class CombatTurnActionFlowService:
                 ("found_actor_ids", list(search.found_actor_ids)),
             ),
         )
+
+    def prepare_net_escape(self, *, state: CombatState) -> PendingCombatSkillCheck:
+        actor = _active_hero(state)
+        if state.turn_action.action_use != ActionUse.ACTION_AVAILABLE:
+            raise ValueError("Akcja w tej turze została już zużyta.")
+        if not _actor_is_restrained_by_net(state, actor):
+            raise ValueError("Ten aktor nie jest unieruchomiony przez sieć.")
+        request = _net_escape_request(state, actor)
+        instruction = roll_instruction(request)
+        return PendingCombatSkillCheck(
+            actor_id=str(actor.id),
+            action="escape_net",
+            skill="strength",
+            modifier=instruction.breakdown.modifier_total,
+            instruction=instruction.message,
+            opposing_actor_ids=(),
+            roll_mode=request.mode.value,
+        )
+
+    def resolve_net_escape(
+        self,
+        *,
+        state: CombatState,
+        pending: PendingCombatSkillCheck,
+        natural_roll: int,
+        natural_roll_2: int | None = None,
+        active_effects: tuple[ActiveCombatEffect, ...],
+    ) -> CombatTurnActionTransition:
+        actor = _validate_pending_skill_actor(state, pending, "escape_net")
+        if not _actor_is_restrained_by_net(state, actor):
+            raise ValueError("Sieć nie unieruchamia już tego aktora.")
+        request = _net_escape_request(state, actor)
+        if request.mode.value != "normal" and natural_roll_2 is None:
+            raise ValueError("Ten test wymaga wpisania dwóch wyników d20.")
+        result = resolve_d20_roll(
+            D20RollInput(request, natural_roll, natural_roll_2)
+        )
+        escaped = result.total >= 10
+        conditions = (
+            remove_condition(
+                state.condition_states,
+                str(actor.id),
+                CombatCondition.RESTRAINED,
+            )
+            if escaped
+            else state.condition_states
+        )
+        updated = replace(_consume_action(state), condition_states=conditions)
+        return CombatTurnActionTransition(
+            state=updated,
+            active_effects=active_effects,
+            actor_id=str(actor.id),
+            message_title="Sieć",
+            message_body=(
+                f"{actor.name} uwalnia się z sieci (Strength {result.total} przeciw ST 10)."
+                if escaped
+                else f"{actor.name} nie uwalnia się z sieci (Strength {result.total} przeciw ST 10)."
+            ),
+            event_type="ui_combat_net_escape",
+            event_payload=(
+                ("actor_id", str(actor.id)),
+                ("natural_roll", result.natural_roll),
+                ("total", result.total),
+                ("dc", 10),
+                ("escaped", escaped),
+            ),
+        )
+
     def prepare_help(self, *, state: CombatState) -> HelpPreparation:
         actor = _active_hero(state)
         if state.turn_action.action_use != ActionUse.ACTION_AVAILABLE:
@@ -547,8 +636,31 @@ def _ready_trigger_label(trigger: str) -> str:
 
 
 def _skill_request(state: CombatState, actor: Actor, skill: str) -> D20RollRequest:
-    return condition_roll_request(
+    request = armor_skill_roll_request(
+        actor,
+        skill,
         D20RollRequest(modifiers=skill_roll_modifiers(actor, skill)),
+    )
+    return condition_roll_request(
+        request,
+        state.condition_states,
+        actor,
+        ability_check=True,
+    )
+
+
+def _actor_is_restrained_by_net(state: CombatState, actor: Actor) -> bool:
+    return any(
+        condition.actor_id == str(actor.id)
+        and condition.condition == CombatCondition.RESTRAINED
+        and condition.source_label.startswith("Sieć:")
+        for condition in state.condition_states
+    )
+
+
+def _net_escape_request(state: CombatState, actor: Actor) -> D20RollRequest:
+    return condition_roll_request(
+        D20RollRequest(modifiers=(ability_roll_modifier(actor, "strength"),)),
         state.condition_states,
         actor,
         ability_check=True,

@@ -106,6 +106,7 @@ class ActiveEffect:
     stacking_key: str = ""
     expiration_actor_id: str | None = None
     additional_expirations: tuple[AdditionalEffectExpiration, ...] = ()
+    spell_level: int | None = None
 
     def __post_init__(self) -> None:
         duration_was_explicit = self.duration is not None
@@ -115,6 +116,8 @@ class ActiveEffect:
             raise ValueError("Active effect actor_id cannot be empty.")
         if not self.kind.strip():
             raise ValueError("Active effect kind cannot be empty.")
+        if self.spell_level is not None and self.spell_level < 0:
+            raise ValueError("Active effect spell level cannot be negative.")
         if self.source is None:
             object.__setattr__(self, "source", _legacy_effect_source(self))
         if self.duration is None:
@@ -181,6 +184,7 @@ class ActiveEffect:
                 }
                 for expiration in self.additional_expirations
             ],
+            "spell_level": self.spell_level,
         }
         if self.anchor_position is not None:
             payload["anchor_position"] = [self.anchor_position.col, self.anchor_position.row]
@@ -263,6 +267,8 @@ def effect_value_label(effect: ActiveEffect) -> str:
         return f"{_format_signed(effect.value)} do ataku i obrażeń z Siły"
     if effect.kind == "concentration_attack_bonus":
         return f"{_format_signed(effect.value)} do ataku"
+    if effect.kind == "spell_ac_bonus":
+        return f"{_format_signed(effect.value)} AC"
     return _format_signed(effect.value)
 
 
@@ -278,6 +284,7 @@ def effect_expiration_label(effect: ActiveEffect) -> str:
         "ready_attack": "znika po użyciu reakcji albo na początku następnej tury aktora",
         "strength_potion": "znika na początku następnej tury aktora",
         "concentration_attack_bonus": "znika po utracie koncentracji albo rzuceniu nowego czaru koncentracyjnego",
+        "spell_ac_bonus": "znika na początku następnej tury chronionego aktora",
     }
     if effect.kind in legacy_labels:
         return legacy_labels[effect.kind]

@@ -40,6 +40,7 @@ class PendingPlayerHealing:
     target_id: str
     source_id: str
     stage: str = "healing_roll"
+    cast_level: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,6 +54,7 @@ class PendingAreaSpell:
     target_positioning: tuple[tuple[str, AttackPositioning], ...] = ()
     stage: str = "confirm_area"
     saving_throws: tuple[SpellSaveResult, ...] = ()
+    cast_level: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,6 +105,7 @@ class PlayerAreaHealingFlowService:
             healer_id=str(healer.id),
             target_id=target.id,
             source_id=source.id,
+            cast_level=source.cast_level,
         )
         return PlayerHealingTransition(
             state=state,
@@ -258,6 +261,7 @@ class PlayerAreaHealingFlowService:
             area_positions=area_positions,
             target_ids=tuple(str(target.id) for target in targets),
             target_positioning=target_positioning,
+            cast_level=source.cast_level,
         )
         target_names = ", ".join(target.name for target in targets) or "brak celów"
         return PlayerAreaSpellTransition(
@@ -461,8 +465,21 @@ def _require_usable_source(actor: Actor, source: AttackSource | HealingSource) -
         legacy_prepared=source.prepared,
     ):
         raise ValueError(f"Czar {source.name} nie został przygotowany.")
-    if not can_consume_spell_resource(actor, getattr(source, "spell_level", 0)):
+    if not can_consume_spell_resource(
+        actor,
+        getattr(source, "spell_level", 0),
+        getattr(source, "cast_level", None),
+    ):
         raise ValueError(f"Brak slotów czaru dla {source.name}.")
+    from dnd_board_game.combat import actor_spell_cast_validation
+
+    cast_validation = actor_spell_cast_validation(
+        actor,
+        source.id,
+        cast_level=getattr(source, "cast_level", None),
+    )
+    if cast_validation is not None and not cast_validation.valid:
+        raise ValueError(" ".join(cast_validation.errors))
 
 
 def _spell_save_message(save: SpellSaveResult) -> str:

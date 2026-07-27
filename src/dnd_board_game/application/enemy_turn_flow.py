@@ -171,6 +171,7 @@ class EnemyTurnFlowService:
             source,
             rng,
             scene_objects,
+            active_effects,
             maximum_attacks=(
                 len(multiattack_sources_by_actor.get(enemy.id, ()))
                 if multiattack_sources_by_actor

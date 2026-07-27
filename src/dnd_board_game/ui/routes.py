@@ -42,6 +42,69 @@ def create_app(session: ExplorationUiSession) -> Flask:
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
+    @app.post("/api/trade/buy")
+    def api_trade_buy():
+        data = request.get_json(silent=True) or {}
+        try:
+            quantity = _trade_quantity(data.get("quantity"))
+            return jsonify(
+                session.buy_merchant_item(
+                    merchant_id=str(data.get("merchant_id", "")),
+                    actor_id=str(data.get("actor_id", "")),
+                    item_id=str(data.get("item_id", "")),
+                    quantity=quantity,
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/trade/sell")
+    def api_trade_sell():
+        data = request.get_json(silent=True) or {}
+        try:
+            quantity = _trade_quantity(data.get("quantity"))
+            return jsonify(
+                session.sell_merchant_item(
+                    merchant_id=str(data.get("merchant_id", "")),
+                    actor_id=str(data.get("actor_id", "")),
+                    item_id=str(data.get("item_id", "")),
+                    quantity=quantity,
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/equipment/armor")
+    def api_equipment_armor():
+        data = request.get_json(silent=True) or {}
+        try:
+            equip = data.get("equip")
+            if not isinstance(equip, bool):
+                raise ValueError("Pole equip musi mieć wartość true albo false.")
+            return jsonify(
+                session.change_actor_armor(
+                    actor_id=str(data.get("actor_id", "")),
+                    armor_id=str(data.get("armor_id", "")),
+                    equip=equip,
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/equipment/light")
+    def api_equipment_light():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                session.change_actor_light(
+                    actor_id=str(data.get("actor_id", "")),
+                    item_id=str(data.get("item_id", "")),
+                    action=str(data.get("action", "")),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
     @app.post("/api/snapshot/save")
     def api_snapshot_save():
         try:
@@ -88,8 +151,12 @@ def create_app(session: ExplorationUiSession) -> Flask:
 
     @app.post("/api/rest/short/confirm")
     def api_short_rest_confirm():
+        data = request.get_json(silent=True) or {}
+        raw_choices = data.get("attunement_choices", [])
+        if not isinstance(raw_choices, list):
+            return jsonify({"error": "Pole attunement_choices musi być listą.", "state": session.state_payload()}), 400
         try:
-            return jsonify(session.confirm_short_rest())
+            return jsonify(session.confirm_short_rest(attunement_choices=raw_choices))
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
@@ -331,10 +398,16 @@ def create_app(session: ExplorationUiSession) -> Flask:
     def api_encounter_stealth_roll():
         data = request.get_json(silent=True) or {}
         try:
+            natural_roll_2 = data.get("natural_roll_2")
             return jsonify(
                 session.submit_precombat_stealth_roll(
                     actor_id=str(data.get("actor_id", "")),
                     natural_roll=int(data.get("natural_roll", 0)),
+                    natural_roll_2=(
+                        int(natural_roll_2)
+                        if natural_roll_2 not in (None, "")
+                        else None
+                    ),
                 )
             )
         except Exception as exc:
@@ -379,7 +452,26 @@ def create_app(session: ExplorationUiSession) -> Flask:
     def api_combat_attack_source():
         data = request.get_json(silent=True) or {}
         try:
-            return jsonify(session.select_combat_attack_source(str(data.get("source_id", ""))))
+            cast_level = data.get("cast_level")
+            return jsonify(
+                session.select_combat_attack_source(
+                    str(data.get("source_id", "")),
+                    int(cast_level) if cast_level not in (None, "") else None,
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/exploration/ritual")
+    def api_exploration_ritual():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                session.cast_exploration_ritual(
+                    str(data.get("actor_id", "")),
+                    str(data.get("spell_id", "")),
+                )
+            )
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
@@ -387,7 +479,13 @@ def create_app(session: ExplorationUiSession) -> Flask:
     def api_combat_healing_source():
         data = request.get_json(silent=True) or {}
         try:
-            return jsonify(session.select_combat_healing_source(str(data.get("source_id", ""))))
+            cast_level = data.get("cast_level")
+            return jsonify(
+                session.select_combat_healing_source(
+                    str(data.get("source_id", "")),
+                    int(cast_level) if cast_level not in (None, "") else None,
+                )
+            )
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
@@ -470,7 +568,13 @@ def create_app(session: ExplorationUiSession) -> Flask:
     def api_combat_concentration_start():
         data = request.get_json(silent=True) or {}
         try:
-            return jsonify(session.start_combat_concentration_action(str(data.get("action_id", ""))))
+            cast_level = data.get("cast_level")
+            return jsonify(
+                session.start_combat_concentration_action(
+                    str(data.get("action_id", "")),
+                    None if cast_level is None else int(cast_level),
+                )
+            )
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
@@ -478,7 +582,20 @@ def create_app(session: ExplorationUiSession) -> Flask:
     def api_combat_concentration_confirm():
         data = request.get_json(silent=True) or {}
         try:
-            return jsonify(session.confirm_combat_concentration_action(target_id=str(data.get("target_id", ""))))
+            raw_target_ids = data.get("target_ids", [])
+            if not isinstance(raw_target_ids, list):
+                raise ValueError("target_ids musi być listą.")
+            target_ids = tuple(str(target_id) for target_id in raw_target_ids)
+            return jsonify(
+                session.confirm_combat_concentration_action(
+                    target_id=(
+                        str(data["target_id"])
+                        if "target_id" in data
+                        else None
+                    ),
+                    target_ids=target_ids,
+                )
+            )
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
@@ -524,7 +641,18 @@ def create_app(session: ExplorationUiSession) -> Flask:
     def api_combat_context_menu_confirm():
         data = request.get_json(silent=True) or {}
         try:
-            return jsonify(session.confirm_combat_context_menu(str(data.get("option_id", ""))))
+            raw_quantity = data.get("quantity")
+            if raw_quantity is not None and (
+                isinstance(raw_quantity, bool)
+                or not isinstance(raw_quantity, int)
+            ):
+                raise ValueError("Liczba zabieranych sztuk musi być liczbą całkowitą.")
+            return jsonify(
+                session.confirm_combat_context_menu(
+                    str(data.get("option_id", "")),
+                    quantity=raw_quantity,
+                )
+            )
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
@@ -596,7 +724,17 @@ def create_app(session: ExplorationUiSession) -> Flask:
     def api_combat_skill_check():
         data = request.get_json(silent=True) or {}
         try:
-            return jsonify(session.submit_combat_skill_check(natural_roll=int(data.get("natural_roll", 0))))
+            natural_roll_2 = data.get("natural_roll_2")
+            return jsonify(
+                session.submit_combat_skill_check(
+                    natural_roll=int(data.get("natural_roll", 0)),
+                    natural_roll_2=(
+                        int(natural_roll_2)
+                        if natural_roll_2 not in (None, "")
+                        else None
+                    ),
+                )
+            )
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
@@ -726,6 +864,252 @@ def create_app(session: ExplorationUiSession) -> Flask:
     def api_combat_enemy_opportunity_start():
         try:
             return jsonify(session.start_enemy_opportunity_attack())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/defensive-spell/cast")
+    def api_combat_defensive_spell_cast():
+        try:
+            return jsonify(session.cast_defensive_spell_reaction())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/long-cast/start")
+    def api_combat_long_cast_start():
+        data = request.get_json(silent=True) or {}
+        try:
+            cast_level = data.get("cast_level")
+            return jsonify(
+                session.start_long_cast(
+                    str(data.get("action_id", "")),
+                    cast_level=(
+                        int(cast_level)
+                        if cast_level not in (None, "")
+                        else None
+                    ),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/long-cast/continue")
+    def api_combat_long_cast_continue():
+        try:
+            return jsonify(session.continue_long_cast())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/long-cast/cancel")
+    def api_combat_long_cast_cancel():
+        try:
+            return jsonify(session.cancel_long_cast())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/summon/start")
+    def api_combat_summon_start():
+        data = request.get_json(silent=True) or {}
+        try:
+            cast_level = data.get("cast_level")
+            return jsonify(
+                session.start_summon(
+                    str(data.get("action_id", "")),
+                    cast_level=(
+                        int(cast_level)
+                        if cast_level not in (None, "")
+                        else None
+                    ),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/summon/confirm")
+    def api_combat_summon_confirm():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                session.confirm_summon(
+                    col=int(data.get("col")),
+                    row=int(data.get("row")),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/summon/cancel")
+    def api_combat_summon_cancel():
+        try:
+            return jsonify(session.cancel_summon())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/magic-movement/start")
+    def api_combat_magic_movement_start():
+        data = request.get_json(silent=True) or {}
+        try:
+            cast_level = data.get("cast_level")
+            return jsonify(
+                session.start_magic_movement(
+                    str(data.get("action_id", "")),
+                    cast_level=(
+                        int(cast_level)
+                        if cast_level not in (None, "")
+                        else None
+                    ),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/magic-movement/confirm")
+    def api_combat_magic_movement_confirm():
+        data = request.get_json(silent=True) or {}
+        try:
+            col = data.get("col")
+            row = data.get("row")
+            return jsonify(
+                session.confirm_magic_movement(
+                    col=int(col) if col not in (None, "") else None,
+                    row=int(row) if row not in (None, "") else None,
+                    target_id=(
+                        str(data["target_id"])
+                        if data.get("target_id") not in (None, "")
+                        else None
+                    ),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/magic-movement/cancel")
+    def api_combat_magic_movement_cancel():
+        try:
+            return jsonify(session.cancel_magic_movement())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/spell-debuff/start")
+    def api_combat_spell_debuff_start():
+        data = request.get_json(silent=True) or {}
+        try:
+            cast_level = data.get("cast_level")
+            return jsonify(
+                session.start_spell_debuff(
+                    str(data.get("action_id", "")),
+                    cast_level=(
+                        int(cast_level)
+                        if cast_level not in (None, "")
+                        else None
+                    ),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/spell-debuff/confirm")
+    def api_combat_spell_debuff_confirm():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                session.confirm_spell_debuff(
+                    target_id=str(data.get("target_id", "")),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/spell-debuff/cancel")
+    def api_combat_spell_debuff_cancel():
+        try:
+            return jsonify(session.cancel_spell_debuff())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/spell-dispel/start")
+    def api_combat_spell_dispel_start():
+        data = request.get_json(silent=True) or {}
+        try:
+            cast_level = data.get("cast_level")
+            return jsonify(
+                session.start_spell_dispel(
+                    str(data.get("action_id", "")),
+                    cast_level=(
+                        int(cast_level)
+                        if cast_level not in (None, "")
+                        else None
+                    ),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/spell-dispel/confirm")
+    def api_combat_spell_dispel_confirm():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                session.confirm_spell_dispel(
+                    target_id=str(data.get("target_id", "")),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/spell-dispel/check")
+    def api_combat_spell_dispel_check():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                session.resolve_spell_dispel_check(
+                    natural_roll=int(data.get("natural_roll", 0)),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/spell-dispel/cancel")
+    def api_combat_spell_dispel_cancel():
+        try:
+            return jsonify(session.cancel_spell_dispel())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/counterspell/cast")
+    def api_combat_counterspell_cast():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                session.cast_counterspell_reaction(
+                    cast_level=int(data.get("cast_level", 0)),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/counterspell/roll")
+    def api_combat_counterspell_roll():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                session.submit_counterspell_check(
+                    natural_roll=int(data.get("natural_roll", 0)),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/counterspell/skip")
+    def api_combat_counterspell_skip():
+        try:
+            return jsonify(session.skip_counterspell_reaction())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/defensive-spell/skip")
+    def api_combat_defensive_spell_skip():
+        try:
+            return jsonify(session.skip_defensive_spell_reaction())
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
@@ -924,6 +1308,14 @@ def _damage_submission(data: object) -> dict[str, object]:
         "damage": int(data.get("damage", 0)),
         "component_totals": None,
     }
+
+
+def _trade_quantity(value: object) -> int:
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError("Liczba przedmiotów musi być liczbą całkowitą.")
+    if value < 1:
+        raise ValueError("Liczba przedmiotów musi być dodatnia.")
+    return value
 
 
 def _session_log_payload(session: ExplorationUiSession, *, limit: int = 200) -> dict[str, object]:

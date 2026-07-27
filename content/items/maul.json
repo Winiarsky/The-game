@@ -1,0 +1,1 @@
+{"schema":"dnd_board_game.item","schema_version":1,"ruleset_id":"dnd_5e_2014","source_pack_ids":["srd_5_1_cc_by_4_0"],"id":"maul","name":"Wielki młot","kind":"weapon","value_cp":1000,"weight_lb":10,"weapon":{"category":"martial","attack_kind":"melee","properties":["heavy","two_handed"],"damage":{"dice":"2d6","damage_type":"bludgeoning"}}}

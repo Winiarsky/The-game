@@ -5,6 +5,7 @@ from enum import StrEnum
 
 from dnd_board_game.actors import Actor
 from dnd_board_game.inventory import effective_armor_class
+from dnd_board_game.rules import ActiveEffect
 from dnd_board_game.world import Coordinate
 
 
@@ -41,12 +42,37 @@ class CombatTarget:
             object.__setattr__(self, "max_hp", max(0, self.hp))
 
 
-def actor_as_combat_target(actor: Actor) -> CombatTarget:
+def combat_effect_armor_class_bonus(
+    actor: Actor,
+    active_effects: tuple[ActiveEffect, ...] = (),
+) -> int:
+    return sum(
+        effect.value
+        for effect in active_effects
+        if effect.actor_id == str(actor.id)
+        and effect.kind == "spell_ac_bonus"
+    )
+
+
+def combat_armor_class(
+    actor: Actor,
+    active_effects: tuple[ActiveEffect, ...] = (),
+) -> int:
+    return effective_armor_class(actor) + combat_effect_armor_class_bonus(
+        actor,
+        active_effects,
+    )
+
+
+def actor_as_combat_target(
+    actor: Actor,
+    active_effects: tuple[ActiveEffect, ...] = (),
+) -> CombatTarget:
     return CombatTarget(
         id=str(actor.id),
         name=actor.name,
         position=actor.position,
-        ac=effective_armor_class(actor),
+        ac=combat_armor_class(actor, active_effects),
         hp=actor.hp,
         target_type=CombatTargetType.ACTOR,
         visibility=CombatTargetVisibility.VISIBLE,

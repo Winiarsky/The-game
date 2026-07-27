@@ -93,7 +93,7 @@ Kryterium wyjścia:
 
 ## Etap M1: Wspólne Kontrakty Efektów, Czasu I Zasobów
 
-Status: ukończony. Kontrakty efektów, czasu, zasobów, odpoczynków i snapshotu v1 mają grywalny vertical slice.
+Status: ukończony. Kontrakty efektów, czasu, zasobów, odpoczynków i snapshotu v2 mają grywalny vertical slice.
 
 To jest fundament dla czarów, warunków, cech klasowych, odpoczynków, przedmiotów
 i efektów scenariusza.
@@ -121,7 +121,7 @@ Zaimplementowany vertical slice:
 - godzinny koszt i jawne konsekwencje odpoczynku,
 - automatyczny long rest przed przygotowaniem scenariusza,
 - odnowienie HP, slotów i zasobów oraz ponowne otwarcie przygotowania czarów.
-- wersjonowany snapshot v1 stanu aktora, eksploracji, efektów i opcjonalnej walki,
+- wersjonowany snapshot stanu aktora, eksploracji, efektów i opcjonalnej walki,
 - atomowy zapis/odczyt JSON, jawna walidacja content ids oraz blokada zapisu w połowie decyzji,
 - przyciski zapisu i odczytu w web UI oraz deterministyczny round-trip.
 
@@ -220,6 +220,10 @@ To jest ostatni etap, po którym wolno zacząć implementować dane ras i klas.
 
 ## Etap M6: Ekwipunek I Przedmioty
 
+Status: ukończony dla ustalonego zakresu R2 i wejścia do M7. Katalog obejmuje
+pełne bronie i pancerze bazowe SRD 5.1, amunicję, ordinary adventuring gear,
+focusy, narzędzia oraz equipment packi pod wspólnym kontraktem.
+
 Kolejność:
 
 1. waluta, ilość, masa i carrying capacity,
@@ -232,6 +236,19 @@ Kolejność:
 8. magiczne przedmioty składane z ogólnych efektów.
 
 ## Etap M7: Pełny Podsystem Magii
+
+Status: ukończony w zakresie rodzin mechanicznych M7.1–M7.11: wersjonowany schemat czaru,
+referencje z contentu, profile prepared/known/spellbook, V/S/M i focusy,
+kosztowne oraz zużywane komponenty, jawny wybór poziomu slotu, skalowanie kości
+obrażeń i leczenia, podstawowe casting time, rytuały eksploracyjne, wspólny
+minutowy lifecycle efektów eksploracyjnych z automatycznym expiry, skalowanie
+liczby celów z poziomem slotu, Tarcza i Kontrczar korzystające ze wspólnego okna
+reakcji, długie rzucanie wymagające kolejnych akcji i koncentracji, generyczne
+przywołania jako dynamiczni aktorzy, teleport, wymuszony push/pull, generyczne
+debuffy z pierwszym i powtarzanym save'em oraz rozpraszanie efektów czarów.
+Dispel automatycznie kończy efekty nie wyższe od użytego slotu, a silniejsze
+wymagają fizycznego testu cechy rzucania czarów. Snapshot v18 utrwala pochodzenie
+i poziom czaru dla aktywnych efektów oraz stanów. Następny przegląd dotyczy M8.
 
 Kolejność:
 
@@ -272,7 +289,7 @@ LLM pozostaje klasyfikatorem deklaracji i pomocnikiem narracyjnym. Nie staje si�
 
 Kolejność:
 
-1. rozszerzenie snapshotu scenariusza v1 o migracje i stan między scenariuszami,
+1. rozszerzenie snapshotu scenariusza v2 o stan między scenariuszami i kolejne migracje,
 2. stan drużyny między scenariuszami,
 3. XP albo milestone jako wybrana strategia progresji,
 4. level-up jako deterministyczna transformacja postaci,
@@ -285,6 +302,10 @@ Kolejność:
 ## Etap C1: Schematy, Walidacja I Pochodzenie Danych
 
 Ten etap biegnie równolegle z mechanikami, ale nie oznacza masowego katalogu.
+
+Status: fundament ukończony. Definicje mają wersjonowane nagłówki, ruleset,
+source packi i stabilne ID; wspólny audyt ładuje wszystkie scenariusze i
+raportuje referencje, nieobsługiwane mechaniki oraz nieustalone licencje.
 
 Zakres:
 
@@ -535,4 +556,4 @@ etapy to:
 2. zinwentaryzować mechaniki w macierzy i oznaczyć luki,
 3. domknąć fundament aktora: proficiency, skills, 0 HP i death saves,
 4. następnie realizować M3–M8 w zapisanej kolejności,
-5. w M9 rozszerzyć snapshot v1 o stan kampanii i rzeczywiste migracje między wersjami.
+5. w M9 rozszerzyć bieżący snapshot o stan kampanii i kolejne rzeczywiste migracje.

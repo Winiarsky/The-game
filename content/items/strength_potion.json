@@ -1,7 +1,13 @@
 {
+  "schema": "dnd_board_game.item",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["project_original"],
   "id": "strength_potion",
   "name": "Magiczny napój siły",
   "kind": "consumable",
+  "value_cp": 5000,
+  "weight_lb": 0.5,
   "combat_actions": [
     {
       "id": "drink_strength_potion",

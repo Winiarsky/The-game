@@ -8,14 +8,16 @@ from dnd_board_game.actors import Actor, Faction, attack_roll_modifiers
 from dnd_board_game.rules import (
     AttackRollOutcome,
     AttackRollResult,
+    ActiveEffect,
     D20RollRequest,
     D20RollResult,
     DiceExpression,
     resolve_attack_roll,
 )
 from dnd_board_game.world import BoardState, Coordinate, line_of_sight_clear
+from dnd_board_game.inventory.weapons import WeaponSpecialRule
 
-from .action_economy import ActionUse, consume_action
+from .action_economy import ActionEconomyCost, ActionUse, consume_action
 from .damage import DamageComponentSpec, DamageType
 from .spells import SpellArea
 from .targets import CombatTarget, actor_as_combat_target, is_public_attack_target
@@ -74,8 +76,24 @@ class AttackSource:
     reach_feet: int | None = None
     resource_pool_id: str | None = None
     resource_cost: int = 1
+    ammunition_type: str | None = None
+    loading: bool = False
+    long_range_feet: int | None = None
+    heavy: bool = False
+    weapon_special_rule: WeaponSpecialRule | None = None
+    adds_ability_modifier_to_damage: bool = False
+    ability_damage_modifier_applied: int = 0
+    weapon_category_id: str | None = None
+    on_hit_condition: str | None = None
+    limited_attacks: bool = False
+    thrown: bool = False
+    action_cost: ActionEconomyCost = ActionEconomyCost.ACTION
+    cast_level: int | None = None
+    upcast_damage_dice_per_level: int = 0
 
     def __post_init__(self) -> None:
+        if self.upcast_damage_dice_per_level < 0:
+            raise ValueError("Attack upcast damage dice cannot be negative.")
         if self.range_feet <= 0:
             raise ValueError("Attack source range_feet must be positive.")
         if self.reach_feet is not None and (
@@ -86,6 +104,13 @@ class AttackSource:
             raise ValueError("Attack resource_pool_id cannot be empty.")
         if self.resource_cost < 1:
             raise ValueError("Attack resource_cost must be positive.")
+        if self.ammunition_type is not None and not self.ammunition_type.strip():
+            raise ValueError("Attack ammunition_type cannot be empty.")
+        if self.ammunition_type is not None and self.attack_kind != AttackKind.RANGED:
+            raise ValueError("Only ranged attacks can require ammunition.")
+        if self.long_range_feet is not None:
+            if self.long_range_feet <= self.range_feet:
+                raise ValueError("long_range_feet must be greater than normal range.")
         components = self.damage_components
         if self.damage_fixed is not None and self.damage_die_sides is not None:
             object.__setattr__(self, "damage_die_sides", None)
@@ -139,6 +164,47 @@ class AttackSource:
             )
 
 
+def attack_source_at_cast_level(
+    source: AttackSource,
+    cast_level: int,
+) -> AttackSource:
+    if source.spell_level <= 0:
+        raise ValueError("Only a leveled spell can use a spell-slot level.")
+    if cast_level < source.spell_level:
+        raise ValueError("Cast level cannot be lower than the spell's base level.")
+    extra_dice = (
+        cast_level - source.spell_level
+    ) * source.upcast_damage_dice_per_level
+    components = list(source.damage_components)
+    if extra_dice:
+        index = next(
+            (
+                index
+                for index, component in enumerate(components)
+                if component.dice is not None
+            ),
+            None,
+        )
+        if index is None:
+            raise ValueError("Damage-dice upcasting requires a dice damage component.")
+        component = components[index]
+        assert component.dice is not None
+        components[index] = replace(
+            component,
+            dice=DiceExpression(
+                component.dice.count + extra_dice,
+                component.dice.sides,
+            ),
+        )
+    scaled_components = tuple(components)
+    return replace(
+        source,
+        cast_level=cast_level,
+        damage_components=scaled_components,
+        damage_hint=" + ".join(component.hint() for component in scaled_components),
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class AttackActionState:
     attacker: Actor
@@ -183,16 +249,60 @@ def attack_source_for_actor(source: AttackSource, actor: Actor) -> AttackSource:
     if source.source_type != AttackSourceType.WEAPON or source.ability is None:
         return source
     proficiency_id = source.proficiency_id or source.source_item_id or source.id
+    category_id = getattr(source, "weapon_category_id", None)
+    proficient = actor.proficiencies.is_weapon_proficient(proficiency_id) or (
+        category_id is not None
+        and actor.proficiencies.is_weapon_proficient(category_id)
+    )
+    mode = source.attack_roll_request.mode
+    modifiers = attack_roll_modifiers(
+        actor,
+        source.ability,
+        proficient=proficient,
+    )
+    if source.heavy and actor.size.value == "small":
+        from dnd_board_game.rules import RollMode, RollModifier, RollModifierType
+
+        mode = (
+            RollMode.NORMAL
+            if mode == RollMode.ADVANTAGE
+            else RollMode.DISADVANTAGE
+        )
+        modifiers = (
+            *modifiers,
+            RollModifier(
+                "Ciężka broń używana przez małą istotę",
+                0,
+                RollModifierType.ITEM,
+                stacking_key="heavy_weapon_small_wielder",
+            ),
+        )
+    damage_modifier = source.damage_modifier
+    damage_components = source.damage_components
+    applied = source.ability_damage_modifier_applied
+    if source.adds_ability_modifier_to_damage:
+        from dnd_board_game.rules import ability_modifier
+
+        desired = ability_modifier(getattr(actor.ability_scores, source.ability))
+        delta = desired - applied
+        damage_modifier += delta
+        damage_components = tuple(
+            replace(component, modifier=component.modifier + delta)
+            if component.id == "base"
+            else component
+            for component in damage_components
+        )
+        applied = desired
     return replace(
         source,
         attack_roll_request=D20RollRequest(
-            mode=source.attack_roll_request.mode,
-            modifiers=attack_roll_modifiers(
-                actor,
-                source.ability,
-                proficient=actor.proficiencies.is_weapon_proficient(proficiency_id),
-            ),
+            mode=mode,
+            modifiers=modifiers,
         ),
+        damage_modifier=damage_modifier,
+        damage_components=damage_components,
+        damage_hint="",
+        ability_damage_modifier_applied=applied,
     )
 
 
@@ -202,6 +312,7 @@ def legal_attack_targets(
     actors: Sequence[Actor],
     source: AttackSource,
     hidden_states: Sequence[HiddenState] = (),
+    active_effects: tuple[ActiveEffect, ...] = (),
 ) -> tuple[CombatTarget, ...]:
     targets: list[CombatTarget] = []
     for actor in actors:
@@ -211,7 +322,7 @@ def legal_attack_targets(
             continue
         if is_hidden_from(hidden_states, str(actor.id), str(attacker.id)):
             continue
-        target = actor_as_combat_target(actor)
+        target = actor_as_combat_target(actor, active_effects)
         if not is_public_attack_target(target):
             continue
         if _target_in_range(attacker.position, actor.position, attack_range_feet(source)) and line_of_sight_clear(
@@ -227,11 +338,19 @@ def start_attack_action(
     actors: Sequence[Actor],
     source: AttackSource,
     hidden_states: Sequence[HiddenState] = (),
+    active_effects: tuple[ActiveEffect, ...] = (),
 ) -> AttackActionState:
     return AttackActionState(
         attacker=attacker,
         source=source,
-        legal_targets=legal_attack_targets(board, attacker, actors, source, hidden_states),
+        legal_targets=legal_attack_targets(
+            board,
+            attacker,
+            actors,
+            source,
+            hidden_states,
+            active_effects,
+        ),
     )
 
 
@@ -308,4 +427,4 @@ def melee_reach_feet(source: AttackSource) -> int:
 def attack_range_feet(source: AttackSource) -> int:
     if effective_attack_kind(source) == AttackKind.MELEE:
         return melee_reach_feet(source)
-    return source.range_feet
+    return source.long_range_feet or source.range_feet

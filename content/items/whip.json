@@ -1,0 +1,1 @@
+{"schema":"dnd_board_game.item","schema_version":1,"ruleset_id":"dnd_5e_2014","source_pack_ids":["srd_5_1_cc_by_4_0"],"id":"whip","name":"Bicz","kind":"weapon","value_cp":200,"weight_lb":3,"weapon":{"category":"martial","attack_kind":"melee","properties":["finesse","reach"],"damage":{"dice":"1d4","damage_type":"slashing"}}}

@@ -10,6 +10,7 @@ from dnd_board_game.inventory import (
     ItemCollectionDestination,
     add_inventory_item,
 )
+from dnd_board_game.inventory.economy import carried_weight_lb, carrying_capacity_lb
 
 from .crafting_sources import (
     CraftingSource,
@@ -39,6 +40,8 @@ class CollectionPlan:
             "owner_actor_id": self.owner_actor_id,
             "properties": list(self.source.properties),
             "portable": self.source.portable,
+            "weight_lb": self.source.weight_lb,
+            "value_cp": self.source.value_cp,
         }
 
 
@@ -160,8 +163,16 @@ def collect_source(
             description=current.description,
             properties=current.properties,
             portable=current.portable,
+            weight_lb=current.weight_lb,
+            value_cp=current.value_cp,
+            ammunition_type=current.ammunition_type,
         )
         updated_owner = add_inventory_item(owner, inventory_item)
+        if carried_weight_lb(updated_owner) > carrying_capacity_lb(updated_owner):
+            raise ValueError(
+                f"{owner.name} nie uniesie tego przedmiotu "
+                f"({carried_weight_lb(updated_owner):g}/{carrying_capacity_lb(updated_owner):g} lb)."
+            )
         updated_actors = tuple(
             updated_owner if actor.id == updated_owner.id else actor for actor in actors
         )

@@ -12,6 +12,7 @@ from dnd_board_game.actors import (
     RecoveryPeriod,
 )
 from dnd_board_game.combat import (
+    ActiveCombatEffect,
     AttackKind,
     AttackSource,
     AttackSourceType,
@@ -27,6 +28,7 @@ from dnd_board_game.combat import (
     resolve_enemy_auto_turn,
     start_combat,
 )
+from dnd_board_game.inventory import InventoryItem
 from dnd_board_game.rules import DiceExpression, D20RollInput, D20RollRequest, RollMode, RollModifier, RollModifierType, resolve_d20_roll
 from dnd_board_game.world import BoardState, Coordinate
 
@@ -89,6 +91,72 @@ def test_enemy_auto_attack_hits_with_deterministic_rng_and_applies_damage():
     assert updated_hero.max_hp == 20
     assert "trafia" in result.message
     assert "HP 20 -> 16" in result.message
+
+
+def test_enemy_auto_attack_uses_active_spell_ac_bonus() -> None:
+    enemy = _actor("goblin", Faction.ENEMY, Coordinate(1, 0))
+    hero = _actor("hero", Faction.ALLY, Coordinate(0, 0), hp=20)
+    state = start_combat((enemy, hero), _order(enemy, hero))
+    shield = ActiveCombatEffect(
+        id="spell-ac:hero:shield",
+        actor_id="hero",
+        kind="spell_ac_bonus",
+        label="Tarcza",
+        object_id="spell:shield",
+        value=5,
+    )
+
+    result = resolve_enemy_auto_attack(
+        BoardState(),
+        state,
+        enemy,
+        _source(),
+        random.Random(7),
+        active_effects=(shield,),
+    )
+
+    assert result.target is not None
+    assert result.target.ac == 17
+    assert result.attack_resolution is not None
+    assert not result.attack_resolution.hit
+    assert result.applied_damage is None
+
+
+def test_enemy_cannot_throw_an_unavailable_weapon() -> None:
+    enemy = replace(
+        _actor("goblin", Faction.ENEMY, Coordinate(1, 0)),
+        inventory=(
+            InventoryItem(
+                "javelin",
+                "Oszczep",
+                "weapon",
+                quantity=0,
+                equipped=False,
+                source_ref="javelin",
+            ),
+        ),
+    )
+    hero = _actor("hero", Faction.ALLY, Coordinate(0, 0), hp=20)
+    state = start_combat((enemy, hero), _order(enemy, hero))
+    source = replace(
+        _source(),
+        name="Rzut oszczepem",
+        source_item_id="javelin",
+        thrown=True,
+    )
+
+    result = resolve_enemy_auto_attack(
+        BoardState(),
+        state,
+        enemy,
+        source,
+        random.Random(7),
+    )
+
+    assert result.action_used is False
+    assert result.target is None
+    assert "nie ma już dostępnej broni" in result.message
+    assert result.state.turn_action.action_use.value == "action_available"
 
 
 def test_enemy_auto_attack_reports_damage_after_target_resistance():

@@ -1,7 +1,13 @@
 {
+  "schema": "dnd_board_game.item",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["srd_5_1_cc_by_4_0"],
   "id": "shield",
   "name": "Tarcza",
   "kind": "shield",
+  "value_cp": 1000,
+  "weight_lb": 6,
   "hands_required": 1,
   "armor_class_bonus": 2,
   "armor_proficiency": "shield",

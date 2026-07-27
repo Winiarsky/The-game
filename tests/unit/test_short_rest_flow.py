@@ -4,7 +4,13 @@ import pytest
 
 from dnd_board_game.actors import ActorTrigger, TriggerEffectKind, TriggerEventType
 from dnd_board_game.application import ShortRestFlowService
-from dnd_board_game.exploration import ExplorationState, challenge_state_for
+from dnd_board_game.exploration import (
+    ExplorationState,
+    TimedMagicEffect,
+    apply_timed_magic_effect,
+    challenge_state_for,
+)
+from dnd_board_game.inventory import ItemAttunementAction, ItemAttunementChoice
 from dnd_board_game.scenarios import build_exploration_from_scenario, load_scenario
 from dnd_board_game.rules import (
     ActiveEffect,
@@ -80,6 +86,31 @@ def test_short_rest_hit_die_can_be_spent_after_completion() -> None:
     assert hero.hit_dice[0].remaining == 1
 
 
+def test_short_rest_allows_one_attunement_change_per_actor() -> None:
+    exploration = _loaded()
+    state = _state(exploration)
+    gate = next(zone for zone in exploration.zones if zone.id == "gate")
+    service = ShortRestFlowService()
+
+    transition = service.complete(
+        state=state,
+        actors=exploration.actors,
+        pending=service.start(state=state, zone=gate, encounter_pending=False),
+        attunement_choices=(
+            ItemAttunementChoice(
+                actor_id="cleric",
+                item_id="binding_wand",
+                action=ItemAttunementAction.ATTUNE,
+            ),
+        ),
+    )
+
+    cleric = next(actor for actor in transition.actors if str(actor.id) == "cleric")
+    wand = next(item for item in cleric.inventory if item.id == "binding_wand")
+    assert wand.attuned is True
+    assert transition.attunement_results[0].item.id == "binding_wand"
+
+
 def test_short_rest_policy_limit_and_missing_policy_are_explicit() -> None:
     exploration = _loaded()
     gate = next(zone for zone in exploration.zones if zone.id == "gate")
@@ -118,6 +149,17 @@ def test_short_rest_expires_only_effects_bound_to_short_rest() -> None:
         source=EffectSource(EffectSourceType.SYSTEM, "test", "Test"),
         duration=EffectDuration.UNTIL_SCENARIO_END,
     )
+    magic_effect = TimedMagicEffect(
+        id="spell:hero:test",
+        actor_id="hero",
+        spell_id="test",
+        label="Krótka magia",
+        flag_key="short_magic",
+        flag_value=True,
+        started_at_minute=state.elapsed_minutes,
+        expires_at_minute=state.elapsed_minutes + 60,
+    )
+    state = apply_timed_magic_effect(state, magic_effect)
 
     pending = service.start(state=state, zone=gate, encounter_pending=False)
     transition = service.complete(
@@ -129,6 +171,7 @@ def test_short_rest_expires_only_effects_bound_to_short_rest() -> None:
 
     assert transition.expired_effects == (short_effect,)
     assert transition.active_effects == (daily_effect,)
+    assert transition.expired_magic_effects == (magic_effect,)
 
 
 def test_short_rest_completion_emits_actor_trigger_after_recovery() -> None:

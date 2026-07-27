@@ -26,6 +26,12 @@ Jeżeli dana mechanika D&D 5e nie jest jeszcze zaimplementowana:
 
 Lepsze jest niepełne, ale poprawne zachowanie zgodne z D&D 5e niż kompletna, ale własna mechanika niezgodna z systemem.
 
+Zwykły ekwipunek pozostaje pełnoprawnym elementem fikcji i zasad. Przedmioty takie
+jak atrament, pióro, papier, lina, źródło światła albo focus nie są tworzone
+doraźnie przez narrację LLM: muszą istnieć w ekwipunku, scenie, łupie lub ofercie
+kupca pod stabilnym ID. Mechanika korzysta z ich typowanych właściwości, nie z
+porównywania polskiej nazwy.
+
 Każda implementacja reguły powinna dać się powiązać z konkretnym pojęciem z D&D 5e.
 
 ---
@@ -589,6 +595,26 @@ Zakładanie i zdejmowanie zużywa akcję zgodnie z tabelą czasu zakładania pan
 2014. Obecne MVP nie pozwala założyć tarczy bez biegłości, zamiast implementować cały
 pakiet kar za niebiegły pancerz oraz blokadę rzucania czarów.
 
+### Katalog broni SRD 5.1
+
+Docelowy katalog obejmuje wszystkie 37 broni SRD 5.1 z podziałem na simple/martial
+oraz melee/ranged. Definicja przechowuje wyłącznie kość lub stałą bazę obrażeń;
+modyfikator Siły albo Zręczności jest wiązany z aktualnym aktorem także po
+podniesieniu broni przez inną postać. Finesse wystawia jawne warianty cechy.
+
+Thrown tworzy wariant dystansowy i po wykonaniu ataku przenosi jeden egzemplarz
+broni z ekwipunku na pole celu jako podnoszalny obiekt. Normalny/daleki zasięg jest
+jawny, a atak powyżej normalnego zasięgu ma utrudnienie. Heavy daje utrudnienie
+Small wielbicielowi, reach ustawia 10 ft, loading i sieć ograniczają liczbę ataków,
+a jednoręczna broń z ammunition wymaga wolnej drugiej dłoni do przeładowania.
+
+Lanca ma utrudnienie przeciw celowi w odległości 5 ft. Ponieważ runtime nie ma
+jeszcze stanu mounted, pozostaje dwuręczna; wariant jednoręczny będzie częścią
+mounted combat. Trafienie siecią nakłada Restrained na cel Large lub mniejszy,
+zużywa/rzuca egzemplarz sieci i ogranicza Attack action do jednego ataku. Cel może
+zużyć akcję na Strength check ST 10. Niszczenie sieci jako AC 10 / 5 HP wymaga
+przyszłego wspólnego modelu atakowalnego wyposażenia.
+
 ### NPC
 
 * używają modelu `Actor`
@@ -772,6 +798,17 @@ Zasób sceny z `consume_on_use: true` jest jednorazowy. Silnik usuwa go dopiero 
 Scenariusz pełni także rolę pojedynczego dnia przygody. Jeśli postać korzysta z przygotowywanych czarów, wybiera listę na ten scenariusz jako ostatni krok setupu: po podłączeniu planszy i ustawieniu mapy, ale przed wyborem pierwszej lokacji. Mechanicznie wybór nadal odpowiada przygotowaniu po zakończonym długim odpoczynku w D&D 5e. Ten etap jest generyczną mechaniką aktora, a nie implementacją konkretnej klasy; cantripy nie wchodzą do wyboru, a czary zawsze przygotowane nie zajmują limitu.
 
 Long rest odbywa się automatycznie bezpośrednio przed scenariuszem. Short rest jest decyzją drużyny podczas eksploracji: UI pokazuje godzinny koszt, bezpieczeństwo miejsca, jawne zagrożenie i zasoby możliwe do odzyskania. Po ukończeniu gracze wydają Hit Dice pojedynczo. Zagrożenie nie jest uniwersalnym losowym encounterem; wynika z contentu lokacji, np. odpoczynek przed bramą zwiększa hałas, a zawalone koszary zapewniają jedno bezpieczne miejsce odpoczynku.
+
+Podczas jednego short resta każdy bohater może dodatkowo dostroić albo odstroić
+jeden wymagający tego magiczny przedmiot. Bohater może utrzymywać najwyżej trzy
+więzi. Przed dostrojeniem przedmiot pozostaje w ekwipunku, ale jego akcje, specjalne
+źródła i ładunki są nieaktywne. Automatyczne zakończenie więzi przez dystans, śmierć,
+utratę wymagań albo dostrojenie innej istoty pozostaje poza zakresem obecnego MVP.
+
+Pasywne moce magicznych przedmiotów są składane z typowanych efektów contentu.
+Obecne prymitywy obejmują premie do KP, rzutów obronnych, testów cech, ataków i
+szybkości. Wszystkie przechodzą przez wspólną bramkę dostępności, wyposażenia oraz
+dostrojenia; UI pokazuje zarówno wartość efektu, jak i jego nieaktywny stan.
 
 Aktywne efekty zawsze pokazują graczowi nazwę, źródło i moment wygaśnięcia. Ten sam
 cykl życia obsługuje efekty akcji, czarów, przedmiotów i sceny: mogą kończyć się na
@@ -1408,8 +1445,27 @@ Silnik musi wspierać przyszłe rozszerzenia dla:
 
 * ataków okazyjnych,
 * przygotowanych akcji,
-* reakcji,
+* kolejnych rodzin reakcji,
 * koncentracji.
+
+Reakcja obronna po trafieniu zatrzymuje atak przed zastosowaniem obrażeń. `Tarcza`
+zużywa reakcję i slot 1. poziomu, podnosi AC o 5, ponownie ocenia ten sam rzut ataku
+i utrzymuje premię do początku następnej tury chronionego aktora. Trafienie krytyczne
+nie otwiera tego promptu, ponieważ premia do AC nie może zmienić jego wyniku.
+
+`Kontrczar` otwiera wspólne okno reakcji przed zatwierdzeniem widzianego wrogiego
+czaru w zasięgu 60 stóp. Zużywa reakcję i jawnie wybrany slot: automatycznie
+przerywa czar na nie wyższym poziomie, a przeciw silniejszemu wymaga fizycznego
+testu d20 cechy rzucania czarów przeciw ST `10 + poziom wrogiego czaru`. Sukces
+usuwa skutki oczekującego czaru, zachowując zużytą akcję i wykonany ruch wroga.
+
+Czar o czasie rzucania dłuższym niż jedna akcja zapisuje jawny postęp: minuta to
+10 akcji, 10 minut to 100, a godzina 600. Rzucający musi poświęcić akcję w każdej
+swojej turze i przez cały proces utrzymuje koncentrację. Obrażenia uruchamiają
+zwykły CON save; porażka, utrata przytomności, dobrowolne anulowanie albo
+zakończenie tury bez wymaganej akcji przerywa czar. Zwykły ruch nie przerywa
+rzucania. Slot oraz zużywane komponenty są pobierane dopiero przy ukończeniu.
+`Rytuał ochronny` jest referencyjnym, data-driven fixture tego przepływu.
 
 ---
 
@@ -1494,6 +1550,61 @@ Pułapki są osobnymi, początkowo ukrytymi elementami contentu. Wykrycie nie mo
 wynikać wyłącznie z narracyjnego domysłu LLM: wymaga ustrukturyzowanej obserwacji i
 efektu `reveal_trap`. Po ujawnieniu gracz widzi dozwolone działania oraz warunki
 rzutu. Aktywacja deleguje konsekwencje do ogólnego silnika hazardów.
+
+## Przywołania na fizycznej planszy
+
+- Przywołanie wybiera jedno wolne, nieblokujące i widoczne pole w zasięgu czaru.
+  Pole można wskazać skanem planszy albo tym samym wyborem w UI.
+- Przywołana istota jest pełnym dynamicznym aktorem tej samej frakcji co
+  przywołujący. Działa bezpośrednio po właścicielu, współdzieląc jego wynik
+  inicjatywy, ale ma własny ruch, HP, KP i źródło ataku.
+- Pierwszy pionowy zakres obsługuje jedną istotę na jedno rzucenie. Rozpoczęcie
+  innej koncentracji usuwa przywołanie atomowo; utrata koncentracji, pokonanie
+  rzucającego, spadek przywołanej istoty do 0 HP lub zastąpienie efektu usuwa
+  aktora także z inicjatywy.
+- Statblock referencyjnego ducha jest contentem `project_original`, a nie próbą
+  odwzorowania konkretnego chronionego czaru. Mechanika pozostaje generyczna.
+
+## Magiczny ruch na fizycznej planszy
+
+- Teleport wskazuje wolne, widoczne pole w deklarowanym zasięgu. Nie wymaga
+  ścieżki, nie zużywa szybkości i nie wywołuje ataków okazyjnych.
+- Push i pull wybierają widocznego przeciwnika w zasięgu. Po nieudanym save cel
+  porusza się po prostej względem rzucającego, maksymalnie o zadany dystans.
+- Wymuszony ruch kończy się na ostatnim legalnym polu przed ścianą, zamkniętą
+  krawędzią, blokującym obiektem albo żywym aktorem. Nie omija przeszkody przez
+  skrócenie deklarowanego dystansu i nie wydaje ruchu celu.
+- Pierwszy zakres nie obsługuje teleportowania innego sojusznika, zamiany miejsc
+  ani wyboru dowolnego kierunku push/pull niezależnego od rzucającego.
+
+## Osłabienia czarami
+
+- Czar osłabiający wybiera jednego widocznego przeciwnika w zasięgu przez UI
+  albo skan planszy. Akcja i slot są zużywane dopiero po potwierdzeniu celu.
+- Przeciwnik wykonuje pierwszy save automatycznie. Porażka nakłada zwykły
+  `ConditionState`, dzięki czemu Poisoned, Restrained i kolejne stany korzystają
+  z tych samych modyfikatorów, prezentacji, zapisu oraz lifecycle co inne źródła.
+- Powtarzany save odbywa się w zadanym przez content momencie tury. Sukces usuwa
+  stan. Pierwsze fixtures są `project_original`, trwają do udanego save'a lub
+  rozproszenia i celowo nie wymagają koncentracji.
+- Ten pionowy zakres obsługuje czary sojusznika przeciw przeciwnikom; fizyczne
+  save'y bohaterów na efekty wrogów nadal przechodzą przez istniejący przepływ.
+
+## Rozpraszanie magii
+
+- Czar rozpraszający wskazuje jedną widoczną istotę z aktywnym efektem czaru.
+  Może to być sojusznik, przeciwnik albo dynamicznie przywołana istota.
+- Runtime grupuje efekty według celu, źródłowego rzucającego, stabilnego ID czaru
+  i poziomu rzeczywiście użytego slotu. Nie rozpoznaje magii po polskiej nazwie.
+- Każdy efekt czaru o poziomie nie wyższym niż slot rozproszenia kończy się
+  automatycznie. Każdy silniejszy wymaga osobnego fizycznego testu d20 cechy
+  rzucania czarów przeciw ST `10 + poziom efektu`, bez proficiency.
+- Rozproszenie usuwa tylko elementy pochodzące z czarów. Warunki z trucizny,
+  manewru, przedmiotu lub sceny pozostają. Usunięcie koncentracyjnego efektu
+  przywołania usuwa również dynamicznego aktora z planszy i inicjatywy.
+- Pierwszy zakres działa w aktywnej walce i celuje w istoty. Rozpraszanie
+  samodzielnych efektów obszarowych, obiektów oraz magii eksploracyjnej pozostaje
+  do przyszłego wspólnego modelu takich celów.
 
 ## Poza Zakresem Pierwszej Wersji
 

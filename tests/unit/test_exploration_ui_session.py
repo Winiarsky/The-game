@@ -14,7 +14,15 @@ from dnd_board_game.actors import (
 )
 from dnd_board_game.actions import PlayerIntentHint
 from dnd_board_game.combat import (
+    ActionUse,
+    AmmunitionExpenditure,
+    AttackDeclaration,
     AttackKind,
+    AttackSource,
+    AttackSourceType,
+    BattlefieldLoot,
+    CombatMenuAction,
+    CombatStatus,
     CombatCondition,
     ConditionSaveTiming,
     ConditionState,
@@ -25,14 +33,18 @@ from dnd_board_game.combat import (
     SceneConclusionType,
     SceneObjective,
     SceneObjectiveCondition,
+    SpellSlotState,
     open_reaction_window,
+    actor_as_combat_target,
     current_actor,
     replace_actor,
+    resolve_attack,
     scene_flag,
     set_scene_flag,
 )
 from dnd_board_game.combat.damage import DamageComponentInput, DamageType, apply_damage_result, resolve_damage
 from dnd_board_game.exploration import (
+    advance_exploration_time,
     CraftingComponentSelection,
     CraftingDraft,
     ExplorationChallengeState,
@@ -45,7 +57,8 @@ from dnd_board_game.exploration import (
     craft_temporary_item,
 )
 from dnd_board_game.hardware import LedColor, LedRole
-from dnd_board_game.inventory import HandSlot, InventoryItem
+from dnd_board_game.inventory import ArmorCategory, HandSlot, InventoryItem, LootBundle
+from dnd_board_game.inventory.economy import CurrencyWallet
 from dnd_board_game.llm import (
     GmClassifierProposal,
     GmDeclarationAnalysis,
@@ -54,10 +67,13 @@ from dnd_board_game.llm import (
 )
 from dnd_board_game.rules import (
     ActiveEffect,
+    D20RollInput,
+    D20RollRequest,
     EffectDuration,
     EffectSource,
     EffectSourceType,
     RollMode,
+    resolve_d20_roll,
 )
 from dnd_board_game.ui.exploration_app import (
     ExplorationUiSession,
@@ -2879,8 +2895,25 @@ def test_exploration_ui_session_completes_short_rest_and_spends_hit_die():
     assert preview["short_rest"]["policy"]["safety"] == "contested"
     assert preview["short_rest"]["policy"]["duration_minutes"] == 60
     assert preview["short_rest"]["pending"]["completed"] is False
+    cleric_preview = next(
+        actor
+        for actor in preview["short_rest"]["pending"]["actors"]
+        if actor["actor_id"] == "cleric"
+    )
+    assert cleric_preview["attunement_count"] == 0
+    assert cleric_preview["attunement_maximum"] == 3
+    assert cleric_preview["attunement_items"][0]["item_id"] == "binding_wand"
+    assert cleric_preview["attunement_items"][0]["action"] == "attune"
 
-    completed = session.confirm_short_rest()
+    completed = session.confirm_short_rest(
+        attunement_choices=[
+            {
+                "actor_id": "cleric",
+                "item_id": "binding_wand",
+                "action": "attune",
+            }
+        ]
+    )
 
     assert completed["short_rest"]["pending"]["completed"] is True
     assert completed["short_rest"]["elapsed_minutes"] == 60
@@ -2891,6 +2924,9 @@ def test_exploration_ui_session_completes_short_rest_and_spends_hit_die():
     )["value"] == "gobliny są zaalarmowane"
     hero_before_die = next(actor for actor in completed["actors"] if actor["id"] == "hero")
     assert hero_before_die["hp"] == 10
+    cleric = next(actor for actor in completed["actors"] if actor["id"] == "cleric")
+    wand = next(item for item in cleric["inventory"] if item["id"] == "binding_wand")
+    assert wand["attuned"] is True
 
     healed = session.spend_short_rest_hit_die(
         actor_id="hero",
@@ -3724,6 +3760,15 @@ def test_exploration_ui_keeps_weapon_targets_visible_between_extra_attacks():
         session.combat_state,
         replace(hero, attacks_per_action=2),
     )
+    encounter = session._active_encounter()
+    assert encounter is not None
+    extra_attack_source = replace(
+        session._attack_sources_for_actor(current_actor(session.combat_state))[0],
+        loading=False,
+    )
+    encounter.attack_source_options_by_actor[hero.id] = (extra_attack_source,)
+    encounter.attack_sources_by_actor[hero.id] = extra_attack_source
+    session.selected_attack_source_ids[str(hero.id)] = extra_attack_source.id
     initial = session.state_payload()
     target_id = initial["combat"]["legal_targets"][0]["id"]
 
@@ -4190,6 +4235,44 @@ def test_exploration_ui_session_crossbow_in_melee_requires_disadvantage_roll() -
     )
 
 
+def test_exploration_ui_crossbow_attack_consumes_and_displays_bolts() -> None:
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+    assert session.combat_state is not None
+    rogue = session.combat_state.initiative_order.current_actor
+    assert str(rogue.id) == "rogue"
+    session.selected_attack_source_ids["rogue"] = "crossbow_shot"
+    before = session.state_payload()
+    crossbow_before = next(
+        source
+        for source in before["combat"]["available_attack_sources"]
+        if source["id"] == "crossbow_shot"
+    )
+    target_id = before["combat"]["legal_targets"][0]["id"]
+
+    after = session.submit_player_attack(
+        target_id=target_id,
+        natural_roll=1,
+        natural_roll_2=1,
+    )
+
+    rogue_after = next(
+        actor for actor in after["combat"]["actors"] if actor["id"] == "rogue"
+    )
+    bolts_after = next(
+        item for item in rogue_after["inventory"] if item["id"] == "crossbow_bolt"
+    )
+    crossbow_after = next(
+        source
+        for source in after["combat"]["available_attack_sources"]
+        if source["id"] == "crossbow_shot"
+    )
+    assert crossbow_before["ammunition_remaining"] == 20
+    assert bolts_after["quantity"] == 19
+    assert crossbow_after["ammunition_remaining"] == 19
+    assert crossbow_after["loading"] is True
+
+
 def test_exploration_ui_session_melee_flanking_is_visible_and_grants_advantage() -> None:
     session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
     _start_gate_skirmish(session)
@@ -4292,8 +4375,98 @@ def test_exploration_ui_session_cleric_can_heal_wounded_ally():
     cleric = next(actor for actor in healed["combat"]["actors"] if actor["id"] == "cleric")
     assert hero["hp"] == 16
     assert cleric["spell_slots"][0]["remaining"] == 1
-    assert healed["combat"]["turn_action"]["action_use"] == "action_used"
+    assert healed["combat"]["turn_action"]["action_use"] == "action_available"
+    assert healed["combat"]["turn_action"]["bonus_action_use"] == "action_used"
     assert any(message["title"] == "Leczenie" and "HP 10 -> 16" in message["body"] for message in healed["messages"])
+
+
+def test_exploration_ui_session_can_select_a_higher_spell_slot():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+    assert session.combat_state is not None
+    while str(session.combat_state.initiative_order.current_actor.id) != "cleric":
+        session.finish_combat_turn()
+    cleric = next(actor for actor in session.combat_state.actors if str(actor.id) == "cleric")
+    hero = next(actor for actor in session.combat_state.actors if str(actor.id) == "hero")
+    session.combat_state = replace_actor(
+        session.combat_state,
+        replace(
+            cleric,
+            spell_slots=(SpellSlotState(1, 1, 2), SpellSlotState(2, 1, 1)),
+        ),
+    )
+    session.combat_state = replace_actor(
+        session.combat_state,
+        replace(hero, hp=10),
+    )
+
+    selected = session.select_combat_healing_source("healing_word", cast_level=2)
+    assert selected["combat"]["selected_healing_source_id"] == "healing_word@2"
+    healing_payload = next(
+        source
+        for source in selected["combat"]["available_healing_sources"]
+        if source["id"] == "healing_word"
+    )
+    assert healing_payload["available_cast_levels"] == [1, 2]
+
+    target_position = next(
+        actor.position
+        for actor in session.combat_state.actors
+        if str(actor.id) == "hero"
+    )
+    pending = session.select_player_healing_target_at_position(target_position)
+    assert "2d4 + 3" in pending["combat"]["pending_player_healing"]["healing_instruction"]
+    healed = session.submit_player_healing_roll(healing=4)
+    cleric_payload = next(
+        actor for actor in healed["combat"]["actors"] if actor["id"] == "cleric"
+    )
+    assert cleric_payload["spell_slots"] == [
+        {"level": 1, "remaining": 1, "maximum": 2},
+        {"level": 2, "remaining": 0, "maximum": 1},
+    ]
+
+
+def test_exploration_ui_session_casts_ritual_without_spending_a_slot():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    cleric_before = next(
+        actor for actor in session.exploration.actors if str(actor.id) == "cleric"
+    )
+    slots_before = cleric_before.spell_slots
+    elapsed_before = session.state.elapsed_minutes
+
+    payload = session.cast_exploration_ritual(
+        "cleric",
+        "comprehend_languages",
+    )
+
+    cleric_after = next(
+        actor for actor in session.exploration.actors if str(actor.id) == "cleric"
+    )
+    assert cleric_after.spell_slots == slots_before
+    assert session.state.elapsed_minutes == elapsed_before + 10
+    assert scene_flag(session.state.flags, "comprehend_languages_active") is True
+    assert len(session.state.magic_effects) == 1
+    effect = session.state.magic_effects[0]
+    assert effect.spell_id == "comprehend_languages"
+    assert effect.expires_at_minute == elapsed_before + 70
+    payload_effect = next(
+        active_effect
+        for active_effect in payload["active_effects"]
+        if active_effect["id"] == effect.id
+    )
+    assert payload_effect["expires"] == "Pozostało 60 min"
+    assert any(
+        message["title"] == "Rytuał"
+        and "slot czaru nie został zużyty" in message["body"]
+        for message in payload["messages"]
+    )
+
+    session.state = advance_exploration_time(session.state, 59).state
+    assert scene_flag(session.state.flags, "comprehend_languages_active") is True
+    session.state = advance_exploration_time(session.state, 1).state
+    assert session.state.magic_effects == ()
+    assert scene_flag(session.state.flags, "comprehend_languages_active") is False
 
 
 def test_exploration_ui_session_cleric_concentration_spell_grants_attack_bonus():
@@ -4325,6 +4498,61 @@ def test_exploration_ui_session_cleric_concentration_spell_grants_attack_bonus()
     source = next(source for source in session._attack_sources_for_actor(hero_actor) if source.id == "longsword_slash")
     modified = session._effective_attack_source(hero_actor, source)
     assert any(modifier.label == "Błogosławieństwo" and modifier.value == 1 for modifier in modified.attack_roll_request.modifiers)
+
+
+def test_exploration_ui_session_upcasts_bless_for_multiple_targets():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+    assert session.combat_state is not None
+    while str(session.combat_state.initiative_order.current_actor.id) != "cleric":
+        session.finish_combat_turn()
+    cleric_actor = next(
+        actor for actor in session.combat_state.actors if str(actor.id) == "cleric"
+    )
+    session.combat_state = replace_actor(
+        session.combat_state,
+        replace(
+            cleric_actor,
+            spell_slots=(SpellSlotState(1, 2, 2), SpellSlotState(2, 1, 1)),
+        ),
+    )
+
+    started = session.start_combat_concentration_action(
+        "bless_attack_bonus",
+        cast_level=2,
+    )
+    pending = started["combat"]["pending_concentration_action"]
+    target_ids = tuple(target["id"] for target in pending["targets"])
+
+    assert pending["cast_level"] == 2
+    assert pending["maximum_targets"] == 4
+    assert pending["action"]["target_count"] == 3
+    assert pending["action"]["upcast_targets_per_level"] == 1
+    assert pending["action"]["available_cast_levels"] == [1, 2]
+    assert 1 <= len(target_ids) <= 4
+
+    confirmed = session.confirm_combat_concentration_action(
+        target_ids=target_ids,
+    )
+    cleric = next(
+        actor for actor in confirmed["combat"]["actors"] if actor["id"] == "cleric"
+    )
+
+    assert cleric["spell_slots"] == [
+        {"level": 1, "remaining": 2, "maximum": 2},
+        {"level": 2, "remaining": 0, "maximum": 1},
+    ]
+    assert cleric["concentration"]["target_count"] == len(target_ids)
+    assert set(cleric["concentration"]["target_actor_ids"]) == set(target_ids)
+    blessed_targets = {
+        actor["id"]
+        for actor in confirmed["combat"]["actors"]
+        if any(
+            effect["kind"] == "concentration_attack_bonus"
+            for effect in actor["effects"]
+        )
+    }
+    assert blessed_targets == set(target_ids)
 
 
 def _cleric_casts_bless_on_hero(session: ExplorationUiSession) -> None:
@@ -5067,6 +5295,13 @@ def test_exploration_ui_session_can_equip_weapon_originating_from_another_actor(
                 equipped=False,
                 source_ref="crossbow",
             ),
+            InventoryItem(
+                "borrowed_crossbow_bolt",
+                "Pożyczony bełt",
+                "ammunition",
+                equipped=False,
+                ammunition_type="bolt",
+            ),
         ),
     )
     session.combat_state = replace_actor(session.combat_state, cleric)
@@ -5393,7 +5628,13 @@ def test_exploration_ui_session_exposes_and_resolves_two_weapon_bonus_attack():
     main_source = next(source for source in sources if source.source_item_id == "crossbow")
     off_source = next(source for source in sources if source.source_item_id == "dagger")
     encounter.attack_source_options_by_actor[actor.id] = tuple(
-        replace(source, attack_kind=AttackKind.MELEE, range_feet=5)
+        replace(
+            source,
+            attack_kind=AttackKind.MELEE,
+            range_feet=5,
+            ammunition_type=None,
+            loading=False,
+        )
         if source.id == main_source.id
         else source
         for source in sources
@@ -5595,6 +5836,68 @@ def test_exploration_ui_session_targeted_inventory_action_is_contextual_and_cons
     assert "restrained" in updated_goblin["conditions"]
     assert any(chip["label"] == "Unieruchomiony" for chip in updated_goblin["status_chips"])
     assert resolved["combat"]["turn_action"]["action_use"] == "action_used"
+
+
+def test_exploration_ui_session_charged_item_action_spends_charge_not_item() -> None:
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.start_short_rest()
+    session.confirm_short_rest(
+        attunement_choices=[
+            {
+                "actor_id": "cleric",
+                "item_id": "binding_wand",
+                "action": "attune",
+            }
+        ]
+    )
+    session.finish_short_rest()
+    _start_gate_skirmish(session)
+    assert session.combat_state is not None
+    cleric_index = next(
+        index
+        for index, entry in enumerate(session.combat_state.initiative_order.entries)
+        if str(entry.actor.id) == "cleric"
+    )
+    session.combat_state = replace(
+        session.combat_state,
+        initiative_order=replace(
+            session.combat_state.initiative_order,
+            current_index=cleric_index,
+        ),
+        turn_action=replace(
+            session.combat_state.turn_action,
+            action_use=ActionUse.ACTION_AVAILABLE,
+        ),
+    )
+    cleric = current_actor(session.combat_state)
+    goblin = next(
+        actor for actor in session.combat_state.actors if actor.faction == Faction.ENEMY
+    )
+    goblin = replace(
+        goblin,
+        position=Coordinate(cleric.position.col, cleric.position.row + 1),
+    )
+    session.combat_state = replace_actor(session.combat_state, goblin)
+
+    opened = session.select_board_position(goblin.position)
+    option = next(
+        item
+        for item in opened["combat"]["context_menu"]["options"]
+        if item["action_id"] == "binding_wand_restraint"
+    )
+    resolved = session.confirm_combat_context_menu(option["id"])
+    cleric_payload = next(
+        actor for actor in resolved["combat"]["actors"] if actor["id"] == "cleric"
+    )
+    wand = next(
+        item for item in cleric_payload["inventory"] if item["id"] == "binding_wand"
+    )
+
+    assert wand["quantity"] == 1
+    assert wand["charges_current"] == 6
+    assert wand["charges_maximum"] == 7
+    assert wand["attuned"] is True
 
 
 def test_combat_condition_save_is_visible_and_blocks_turn_end_until_resolved():
@@ -6046,6 +6349,424 @@ def test_exploration_ui_session_enemy_turn_waits_for_board_confirmation():
     assert state["combat"]["current_actor"]["id"] != enemy_id or state["combat"]["status"] == "finished"
 
 
+def test_exploration_ui_session_offers_and_casts_shield_before_enemy_damage():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+    assert session.combat_state is not None
+    cleric = next(
+        actor for actor in session.combat_state.actors if str(actor.id) == "cleric"
+    )
+    enemy = next(
+        actor for actor in session.combat_state.actors if actor.faction == Faction.ENEMY
+    )
+    target = actor_as_combat_target(cleric)
+    source = AttackSource(
+        "Testowy atak",
+        AttackSourceType.WEAPON,
+        5,
+        D20RollRequest(),
+        damage_fixed=4,
+    )
+    attack_roll = resolve_d20_roll(D20RollInput(source.attack_roll_request, target.ac))
+    attack = resolve_attack(
+        AttackDeclaration(enemy, target, source),
+        attack_roll,
+        ActionUse.ACTION_AVAILABLE,
+    )
+    damage = resolve_damage((DamageComponentInput(4, DamageType.SLASHING),))
+    applied = apply_damage_result(cleric, damage)
+    session.pending_enemy_turn_result = EnemyAutoTurnResult(
+        state=replace_actor(session.combat_state, applied.actor_after),
+        enemy=enemy,
+        target=target,
+        message="Trafienie.",
+        attack_roll=attack_roll,
+        attack_resolution=attack,
+        damage=damage,
+        applied_damage=applied,
+        updated_target=applied.actor_after,
+        action_used=True,
+        source=source,
+    )
+
+    offered = session._commit_pending_enemy_turn()
+
+    window = offered["combat"]["reaction_window"]
+    assert window["options"][0]["kind"] == "defensive_spell"
+    assert offered["combat"]["enemy_turn_result"] is None
+    with pytest.raises(ValueError, match="czar obronny"):
+        session._commit_pending_enemy_turn()
+
+    resolved = session.cast_defensive_spell_reaction()
+
+    cleric_after = next(
+        actor for actor in session.combat_state.actors if actor.id == cleric.id
+    )
+    assert cleric_after.hp == cleric.hp
+    assert resolved["combat"]["enemy_turn_result"]["hit"] is False
+    assert resolved["combat"]["enemy_turn_result"].get("damage") is None
+    assert any(
+        effect["kind"] == "spell_ac_bonus" and effect["value"] == 5
+        for effect in resolved["combat"]["active_effects"]
+    )
+
+
+def test_exploration_ui_session_counterspell_interrupts_enemy_spell_before_shield():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+    assert session.combat_state is not None
+    cleric = next(
+        actor for actor in session.combat_state.actors if str(actor.id) == "cleric"
+    )
+    enemy = next(
+        actor for actor in session.combat_state.actors if actor.faction == Faction.ENEMY
+    )
+    target = actor_as_combat_target(cleric)
+    source = AttackSource(
+        "Wrogi płomień",
+        AttackSourceType.SPELL,
+        60,
+        D20RollRequest(),
+        damage_fixed=4,
+        id="enemy_flame",
+        spell_level=3,
+        cast_level=3,
+    )
+    attack_roll = resolve_d20_roll(D20RollInput(source.attack_roll_request, 15))
+    attack = resolve_attack(
+        AttackDeclaration(enemy, target, source),
+        attack_roll,
+        ActionUse.ACTION_AVAILABLE,
+    )
+    damage = resolve_damage((DamageComponentInput(4, DamageType.FIRE),))
+    applied = apply_damage_result(cleric, damage)
+    session.pending_enemy_turn_result = EnemyAutoTurnResult(
+        state=replace_actor(session.combat_state, applied.actor_after),
+        enemy=enemy,
+        target=target,
+        message="Trafienie czarem.",
+        attack_roll=attack_roll,
+        attack_resolution=attack,
+        damage=damage,
+        applied_damage=applied,
+        updated_target=applied.actor_after,
+        action_used=True,
+        source=source,
+    )
+
+    offered = session._commit_pending_enemy_turn()
+
+    window = offered["combat"]["reaction_window"]
+    assert window["options"][0]["kind"] == "spell_counter"
+    assert window["options"][0]["cast_levels"] == [3]
+
+    resolved = session.cast_counterspell_reaction(cast_level=3)
+
+    cleric_after = next(
+        actor for actor in session.combat_state.actors if actor.id == cleric.id
+    )
+    assert cleric_after.hp == cleric.hp
+    assert resolved["combat"]["enemy_turn_result"]["spell_countered"] is True
+    assert resolved["combat"]["enemy_turn_result"].get("damage") is None
+    assert next(
+        slot for slot in cleric_after.spell_slots if slot.level == 3
+    ).remaining == 0
+
+
+def test_exploration_ui_session_starts_and_discloses_long_cast_progress():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+    assert session.combat_state is not None
+    while str(session.combat_state.initiative_order.current_actor.id) != "cleric":
+        session.finish_combat_turn()
+    cleric = session.combat_state.initiative_order.current_actor
+    slot_before = next(
+        slot.remaining for slot in cleric.spell_slots if slot.level == 1
+    )
+
+    started = session.start_long_cast("warding_rite", cast_level=1)
+
+    pending = started["combat"]["long_cast"]
+    assert pending["spell_id"] == "warding_rite"
+    assert pending["completed_actions"] == 1
+    assert pending["required_actions"] == 10
+    assert any(
+        effect["kind"] == "concentration_long_cast"
+        for effect in started["combat"]["active_effects"]
+    )
+    cleric_after = next(
+        actor for actor in session.combat_state.actors if actor.id == cleric.id
+    )
+    assert next(
+        slot.remaining for slot in cleric_after.spell_slots if slot.level == 1
+    ) == slot_before
+
+
+def test_exploration_ui_session_summons_actor_with_player_turn_and_attack():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+    assert session.combat_state is not None
+    while str(session.combat_state.initiative_order.current_actor.id) != "cleric":
+        session.finish_combat_turn()
+
+    started = session.start_summon("call_guardian_spirit", cast_level=1)
+
+    pending = started["combat"]["pending_summon"]
+    assert pending["action_id"] == "call_guardian_spirit"
+    position = pending["legal_positions"][0]
+    confirmed = session.confirm_summon(
+        col=position["col"],
+        row=position["row"],
+    )
+
+    summon = confirmed["combat"]["summoned_creatures"][0]
+    assert summon["name"] == "Duch strażnik"
+    assert any(
+        effect["kind"] == "concentration_summon"
+        for effect in confirmed["combat"]["active_effects"]
+    )
+    summoned_actor_id = summon["actor_id"]
+    session.finish_combat_turn()
+    payload = session.state_payload()["combat"]
+    assert payload["current_actor"]["id"] == summoned_actor_id
+    assert payload["available_attack_sources"][0]["id"] == "spirit_claw"
+
+
+def test_exploration_ui_session_lost_concentration_dismisses_summon():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+    assert session.combat_state is not None
+    while str(session.combat_state.initiative_order.current_actor.id) != "cleric":
+        session.finish_combat_turn()
+    cleric = session.combat_state.initiative_order.current_actor
+    started = session.start_summon("call_guardian_spirit", cast_level=1)
+    position = started["combat"]["pending_summon"]["legal_positions"][0]
+    confirmed = session.confirm_summon(
+        col=position["col"],
+        row=position["row"],
+    )
+    summoned_actor_id = confirmed["combat"]["summoned_creatures"][0]["actor_id"]
+    damage = resolve_damage((DamageComponentInput(4, DamageType.FIRE),))
+    applied = apply_damage_result(cleric, damage)
+    session.combat_state = replace_actor(session.combat_state, applied.actor_after)
+
+    session._maybe_prompt_concentration_check(applied)
+    assert session.pending_concentration_check is not None
+    resolved = session.submit_concentration_check(natural_roll=1)
+
+    assert resolved["combat"]["summoned_creatures"] == []
+    assert all(
+        actor["id"] != summoned_actor_id
+        for actor in resolved["combat"]["actors"]
+    )
+    assert all(
+        entry.actor.id != summoned_actor_id
+        for entry in session.combat_state.initiative_order.entries
+    )
+
+
+def test_exploration_ui_session_teleports_without_spending_movement():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+    assert session.combat_state is not None
+    while str(session.combat_state.initiative_order.current_actor.id) != "cleric":
+        session.finish_combat_turn()
+    origin = session.combat_state.initiative_order.current_actor.position
+    session.use_combat_dodge()
+    cleric = session.combat_state.initiative_order.current_actor
+    options = session._combat_context_options(cleric, cleric.position)
+    assert "combat-action:veil_step" in {option.id for option in options}
+
+    started = session.start_magic_movement("veil_step", cast_level=1)
+
+    pending = started["combat"]["pending_magic_movement"]
+    assert pending["kind"] == "teleport"
+    movement_before = started["combat"]["movement"]["remaining_feet"]
+    destination = pending["legal_positions"][0]
+    confirmed = session.confirm_magic_movement(
+        col=destination["col"],
+        row=destination["row"],
+    )
+
+    assert confirmed["combat"]["pending_magic_movement"] is None
+    assert confirmed["combat"]["current_actor"]["position"] == [
+        destination["col"],
+        destination["row"],
+    ]
+    assert confirmed["combat"]["current_actor"]["position"] != list(origin.as_tuple())
+    assert confirmed["combat"]["movement"]["remaining_feet"] == movement_before
+
+
+def test_exploration_ui_session_forced_movement_selects_target_from_board_flow():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+    assert session.combat_state is not None
+    while str(session.combat_state.initiative_order.current_actor.id) != "cleric":
+        session.finish_combat_turn()
+    session.encounter_rng = random.Random(1)
+
+    started = session.start_magic_movement("repelling_pulse", cast_level=1)
+
+    pending = started["combat"]["pending_magic_movement"]
+    assert pending["kind"] == "push"
+    target = pending["targets"][0]
+    origin = target["position"]
+    confirmed = session._handle_board_position(
+        Coordinate(target["position"][0], target["position"][1])
+    )
+    target_after = next(
+        actor
+        for actor in confirmed["combat"]["actors"]
+        if actor["id"] == target["id"]
+    )
+
+    assert confirmed["combat"]["pending_magic_movement"] is None
+    assert target_after["position"] != origin
+
+
+def test_exploration_ui_session_spell_debuff_selects_target_from_board_flow():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+    assert session.combat_state is not None
+    while str(session.combat_state.initiative_order.current_actor.id) != "cleric":
+        session.finish_combat_turn()
+    session.encounter_rng = random.Random(1)
+    cleric = session.combat_state.initiative_order.current_actor
+    options = session._combat_context_options(cleric, cleric.position)
+    assert "combat-action:weakening_miasma" in {option.id for option in options}
+
+    started = session.start_spell_debuff("weakening_miasma", cast_level=1)
+
+    pending = started["combat"]["pending_spell_debuff"]
+    assert pending["condition"] == "poisoned"
+    assert pending["save_ability"] == "constitution"
+    target = pending["targets"][0]
+    confirmed = session._handle_board_position(
+        Coordinate(target["position"][0], target["position"][1])
+    )
+    target_after = next(
+        actor
+        for actor in confirmed["combat"]["actors"]
+        if actor["id"] == target["id"]
+    )
+
+    assert confirmed["combat"]["pending_spell_debuff"] is None
+    assert "poisoned" in target_after["conditions"]
+    condition = next(
+        item
+        for item in session.combat_state.condition_states
+        if item.actor_id == target["id"]
+    )
+    assert condition.save_timing == ConditionSaveTiming.TURN_END
+
+
+def test_exploration_ui_session_spell_dispel_removes_magical_condition_from_board():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+    assert session.combat_state is not None
+    while str(session.combat_state.initiative_order.current_actor.id) != "cleric":
+        session.finish_combat_turn()
+    enemy = next(
+        actor
+        for actor in session.combat_state.actors
+        if actor.faction == Faction.ENEMY
+    )
+    condition = ConditionState(
+        actor_id=str(enemy.id),
+        condition=CombatCondition.POISONED,
+        source_actor_id="enemy_caster",
+        source_label="Wroga miazma",
+        save_ability="constitution",
+        save_dc=13,
+        save_timing=ConditionSaveTiming.TURN_END,
+        source_spell_id="enemy_miasma",
+        source_spell_level=1,
+    )
+    session.combat_state = replace(
+        session.combat_state,
+        condition_states=(condition,),
+    )
+    cleric = session.combat_state.initiative_order.current_actor
+    options = session._combat_context_options(cleric, cleric.position)
+    assert "combat-action:unravel_magic" in {option.id for option in options}
+
+    started = session.start_spell_dispel("unravel_magic", cast_level=1)
+
+    pending = started["combat"]["pending_spell_dispel"]
+    target = next(
+        target for target in pending["targets"] if target["id"] == str(enemy.id)
+    )
+    confirmed = session._handle_board_position(
+        Coordinate(target["position"][0], target["position"][1])
+    )
+
+    assert confirmed["combat"]["pending_spell_dispel"] is None
+    assert session.combat_state.condition_states == ()
+    enemy_after = next(
+        actor
+        for actor in confirmed["combat"]["actors"]
+        if actor["id"] == str(enemy.id)
+    )
+    assert "poisoned" not in enemy_after["conditions"]
+
+
+def test_exploration_ui_session_damage_can_interrupt_long_cast_without_slot():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+    assert session.combat_state is not None
+    while str(session.combat_state.initiative_order.current_actor.id) != "cleric":
+        session.finish_combat_turn()
+    cleric = session.combat_state.initiative_order.current_actor
+    slot_before = next(
+        slot.remaining for slot in cleric.spell_slots if slot.level == 1
+    )
+    session.start_long_cast("warding_rite", cast_level=1)
+    damage = resolve_damage((DamageComponentInput(4, DamageType.FIRE),))
+    applied = apply_damage_result(cleric, damage)
+    session.combat_state = replace_actor(session.combat_state, applied.actor_after)
+
+    session._maybe_prompt_concentration_check(applied)
+    assert session.pending_concentration_check is not None
+    resolved = session.submit_concentration_check(natural_roll=1)
+
+    assert resolved["combat"]["long_cast"] is None
+    assert not any(
+        effect["kind"] == "concentration_long_cast"
+        for effect in resolved["combat"]["active_effects"]
+    )
+    cleric_after = next(
+        actor for actor in session.combat_state.actors if actor.id == cleric.id
+    )
+    assert next(
+        slot.remaining for slot in cleric_after.spell_slots if slot.level == 1
+    ) == slot_before
+
+
+def test_exploration_ui_session_missing_required_action_interrupts_long_cast():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+    assert session.combat_state is not None
+    while str(session.combat_state.initiative_order.current_actor.id) != "cleric":
+        session.finish_combat_turn()
+    session.start_long_cast("warding_rite", cast_level=1)
+    session.finish_combat_turn()
+    while str(session.combat_state.initiative_order.current_actor.id) != "cleric":
+        session.finish_combat_turn()
+
+    resolved = session.finish_combat_turn()
+
+    assert session.combat_state.long_casts == ()
+    assert not any(
+        effect["kind"] == "concentration_long_cast"
+        for effect in resolved["combat"]["active_effects"]
+    )
+    assert any(
+        message["title"] == "Przerwane rzucanie"
+        and "nie poświęcono akcji" in message["body"]
+        for message in resolved["messages"]
+    )
+
+
 def test_enemy_save_attack_waits_for_manual_hero_d20_in_ui() -> None:
     session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
     _start_gate_skirmish(session)
@@ -6366,3 +7087,481 @@ def test_attack_against_unconscious_target_has_advantage_and_close_hit_is_critic
     assert selected["combat"]["pending_player_attack"]["attack_mode"] == "advantage"
     assert rolled["combat"]["pending_player_attack"]["natural_rolls"] == [10, 11]
     assert rolled["combat"]["pending_player_attack"]["critical"] is True
+
+
+def test_context_menu_loots_defeated_enemy_and_spends_action() -> None:
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    combat = _start_gate_skirmish(session)
+    actor = combat.initiative_order.current_actor
+    source = next(candidate for candidate in combat.actors if candidate.faction == Faction.ENEMY)
+    source = replace(
+        source,
+        hp=0,
+        position=Coordinate(actor.position.col + 1, actor.position.row),
+        inventory=(
+            InventoryItem(
+                "test_loot",
+                "Łup testowy",
+                "treasure",
+                equipped=False,
+                weight_lb=1,
+                value_cp=250,
+            ),
+        ),
+        currency=CurrencyWallet(sp=5),
+    )
+    session.combat_state = replace(
+        combat,
+        actors=tuple(source if candidate.id == source.id else candidate for candidate in combat.actors),
+    )
+
+    options = session._combat_context_options(actor, source.position)
+    opened = session._open_combat_context_menu(actor, source.position, options)
+    option = next(
+        candidate
+        for candidate in opened["combat"]["context_menu"]["options"]
+        if candidate["action"] == "loot"
+    )
+    looted = session.confirm_combat_context_menu(option["id"])
+
+    actor_after = next(
+        candidate for candidate in looted["combat"]["actors"] if candidate["id"] == str(actor.id)
+    )
+    source_after = next(
+        candidate for candidate in looted["combat"]["actors"] if candidate["id"] == str(source.id)
+    )
+    assert actor_after["currency"]["sp"] == 5
+    assert any(item["id"] == "test_loot" for item in actor_after["inventory"])
+    assert source_after["currency"]["sp"] == 0
+    assert source_after["inventory"] == []
+    assert looted["combat"]["turn_action"]["action_use"] == "action_used"
+
+
+def test_finished_combat_keeps_defeated_enemy_loot_selectable_without_action_cost() -> None:
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    combat = _start_gate_skirmish(session)
+    actor = combat.initiative_order.current_actor
+    source = next(candidate for candidate in combat.actors if candidate.faction == Faction.ENEMY)
+    source = replace(
+        source,
+        hp=0,
+        inventory=(
+            InventoryItem(
+                "post_combat_loot",
+                "Łup po walce",
+                "treasure",
+                equipped=False,
+                weight_lb=1,
+            ),
+        ),
+    )
+    session.combat_state = replace(
+        combat,
+        status=CombatStatus.FINISHED,
+        actors=tuple(source if candidate.id == source.id else candidate for candidate in combat.actors),
+    )
+
+    scan_target = session._current_board_scan_target()
+    assert source.position in scan_target.positions
+    options = session._combat_context_options(actor, source.position)
+    opened = session._open_combat_context_menu(actor, source.position, options)
+    option = next(
+        candidate
+        for candidate in opened["combat"]["context_menu"]["options"]
+        if candidate["action"] == "loot"
+    )
+    looted = session.confirm_combat_context_menu(option["id"])
+
+    actor_after = next(
+        candidate for candidate in looted["combat"]["actors"] if candidate["id"] == str(actor.id)
+    )
+    assert any(item["id"] == "post_combat_loot" for item in actor_after["inventory"])
+    assert looted["combat"]["status"] == "finished"
+
+
+def test_finished_combat_partially_collects_recovered_ammunition_from_battlefield() -> None:
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    combat = _start_gate_skirmish(session)
+    actor = combat.initiative_order.current_actor
+    bolt = replace(
+        next(
+            item
+            for item in actor.inventory
+            if item.ammunition_type == "bolt"
+        ),
+        quantity=4,
+    )
+    position = Coordinate(actor.position.col + 1, actor.position.row)
+    session.combat_state = replace(
+        combat,
+        status=CombatStatus.FINISHED,
+        winner=Faction.ALLY,
+        ammunition_expenditures=(
+            AmmunitionExpenditure(
+                shooter_actor_id=actor.id,
+                shooter_faction=Faction.ALLY,
+                ammunition_type="bolt",
+                item=replace(bolt, quantity=1),
+                quantity=9,
+            ),
+        ),
+        battlefield_loot=(
+            BattlefieldLoot(
+                id="recovered_ammunition",
+                position=position,
+                bundle=LootBundle(
+                    id="battlefield:recovered_ammunition",
+                    label="Odzyskana amunicja",
+                    items=(bolt,),
+                ),
+            ),
+        ),
+    )
+
+    scan_target = session._current_board_scan_target()
+    assert position in scan_target.positions
+    options = session._combat_context_options(actor, position)
+    option = next(
+        candidate
+        for candidate in options
+        if candidate.provider == "battlefield_loot"
+        and candidate.action == CombatMenuAction.LOOT_ITEM
+    )
+    opened = session._open_combat_context_menu(actor, position, options)
+    looted = session.confirm_combat_context_menu(option.id, quantity=2)
+
+    actor_after = next(
+        candidate
+        for candidate in looted["combat"]["actors"]
+        if candidate["id"] == str(actor.id)
+    )
+    assert any(
+        item["ammunition_type"] == "bolt" and item["quantity"] >= 2
+        for item in actor_after["inventory"]
+    )
+    assert looted["combat"]["battlefield_loot"][0]["items"][0]["quantity"] == 2
+    assert looted["combat"]["ammunition_recovery"] == {
+        "fired": 9,
+        "recoverable": 4,
+    }
+
+
+def test_combat_loot_can_take_part_of_item_stack_and_leave_remainder() -> None:
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    combat = _start_gate_skirmish(session)
+    actor = combat.initiative_order.current_actor
+    source = next(candidate for candidate in combat.actors if candidate.faction == Faction.ENEMY)
+    source = replace(
+        source,
+        hp=0,
+        position=Coordinate(actor.position.col + 1, actor.position.row),
+        inventory=(
+            InventoryItem(
+                "bolt_stack",
+                "Bełty testowe",
+                "ammunition",
+                quantity=7,
+                equipped=False,
+                ammunition_type="bolt",
+                weight_lb=0.075,
+            ),
+        ),
+    )
+    session.combat_state = replace(
+        combat,
+        actors=tuple(
+            source if candidate.id == source.id else candidate
+            for candidate in combat.actors
+        ),
+    )
+
+    options = session._combat_context_options(actor, source.position)
+    option = next(
+        candidate
+        for candidate in options
+        if candidate.id == f"loot-item:{source.id}:bolt_stack"
+    )
+    assert option.loot_quantity_max == 7
+    assert option.loot_unit_weight_lb == 0.075
+    opened = session._open_combat_context_menu(actor, source.position, options)
+    payload_option = next(
+        candidate
+        for candidate in opened["combat"]["context_menu"]["options"]
+        if candidate["id"] == option.id
+    )
+    assert payload_option["loot_quantity_max"] == 7
+
+    looted = session.confirm_combat_context_menu(option.id, quantity=3)
+
+    actor_after = next(
+        candidate for candidate in looted["combat"]["actors"] if candidate["id"] == str(actor.id)
+    )
+    source_after = next(
+        candidate for candidate in looted["combat"]["actors"] if candidate["id"] == str(source.id)
+    )
+    assert next(item for item in actor_after["inventory"] if item["id"] == "bolt_stack")["quantity"] == 3
+    assert next(item for item in source_after["inventory"] if item["id"] == "bolt_stack")["quantity"] == 4
+    assert looted["combat"]["turn_action"]["action_use"] == "action_used"
+
+
+def test_combat_loot_can_take_selected_coin_denomination_quantity() -> None:
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    combat = _start_gate_skirmish(session)
+    actor = combat.initiative_order.current_actor
+    source = next(candidate for candidate in combat.actors if candidate.faction == Faction.ENEMY)
+    source = replace(
+        source,
+        hp=0,
+        position=Coordinate(actor.position.col + 1, actor.position.row),
+        currency=CurrencyWallet(sp=25, gp=2),
+    )
+    session.combat_state = replace(
+        combat,
+        actors=tuple(
+            source if candidate.id == source.id else candidate
+            for candidate in combat.actors
+        ),
+    )
+
+    options = session._combat_context_options(actor, source.position)
+    option = next(
+        candidate
+        for candidate in options
+        if candidate.currency_denomination == "sp"
+    )
+    session._open_combat_context_menu(actor, source.position, options)
+    looted = session.confirm_combat_context_menu(option.id, quantity=7)
+
+    actor_after = next(
+        candidate for candidate in looted["combat"]["actors"] if candidate["id"] == str(actor.id)
+    )
+    source_after = next(
+        candidate for candidate in looted["combat"]["actors"] if candidate["id"] == str(source.id)
+    )
+    assert actor_after["currency"]["sp"] == 7
+    assert source_after["currency"]["sp"] == 18
+    assert source_after["currency"]["gp"] == 2
+
+
+def test_invalid_partial_loot_quantity_keeps_context_menu_open() -> None:
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    combat = _start_gate_skirmish(session)
+    actor = combat.initiative_order.current_actor
+    actor = replace(
+        actor,
+        ability_scores=replace(actor.ability_scores, strength=1),
+        inventory=(
+            InventoryItem(
+                "ballast",
+                "Ciężki bagaż",
+                "gear",
+                equipped=False,
+                weight_lb=15,
+            ),
+        ),
+    )
+    source = next(candidate for candidate in combat.actors if candidate.faction == Faction.ENEMY)
+    source = replace(
+        source,
+        hp=0,
+        position=Coordinate(actor.position.col + 1, actor.position.row),
+        inventory=(
+            InventoryItem(
+                "heavy_loot",
+                "Ciężki łup",
+                "treasure",
+                quantity=2,
+                equipped=False,
+                weight_lb=1,
+            ),
+        ),
+    )
+    session.combat_state = replace(
+        combat,
+        actors=tuple(
+            actor
+            if candidate.id == actor.id
+            else source
+            if candidate.id == source.id
+            else candidate
+            for candidate in combat.actors
+        ),
+    )
+    options = session._combat_context_options(actor, source.position)
+    option = next(candidate for candidate in options if candidate.item_id == "heavy_loot")
+    assert option.recipient_remaining_capacity_lb == 0
+    session._open_combat_context_menu(actor, source.position, options)
+
+    with pytest.raises(ValueError, match="przekracza udźwig"):
+        session.confirm_combat_context_menu(option.id, quantity=1)
+
+    assert session.pending_combat_context_menu is not None
+    assert session.combat_state.turn_action.action_use.value == "action_available"
+
+
+def test_village_merchant_supports_partial_buy_and_resale() -> None:
+    session = ExplorationUiSession("content/scenarios/village_square_mvp.json")
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+
+    opened = session.select_point("merchant_stall")
+
+    assert opened["active_point"]["has_merchant"] is True
+    assert opened["trade"]["merchant_id"] == "mira_market_stall"
+    assert next(
+        item for item in opened["trade"]["stock"] if item["id"] == "crossbow_bolt"
+    )["quantity"] == 40
+
+    purchased = session.buy_merchant_item(
+        merchant_id="mira_market_stall",
+        actor_id="hero",
+        item_id="crossbow_bolt",
+        quantity=10,
+    )
+
+    hero = next(actor for actor in purchased["actors"] if actor["id"] == "hero")
+    assert hero["currency"]["total_cp"] == 950
+    assert next(
+        item for item in hero["inventory"] if item["id"] == "crossbow_bolt"
+    )["quantity"] == 10
+    assert next(
+        item for item in purchased["trade"]["stock"] if item["id"] == "crossbow_bolt"
+    )["quantity"] == 30
+
+    sold = session.sell_merchant_item(
+        merchant_id="mira_market_stall",
+        actor_id="hero",
+        item_id="crossbow_bolt",
+        quantity=4,
+    )
+
+    hero = next(actor for actor in sold["actors"] if actor["id"] == "hero")
+    assert hero["currency"]["total_cp"] == 958
+    assert next(
+        item for item in hero["inventory"] if item["id"] == "crossbow_bolt"
+    )["quantity"] == 6
+    assert next(
+        item for item in sold["trade"]["stock"] if item["id"] == "crossbow_bolt"
+    )["quantity"] == 34
+
+
+def test_village_merchant_rejects_unaffordable_purchase_without_changing_stock() -> None:
+    session = ExplorationUiSession("content/scenarios/village_square_mvp.json")
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.select_point("merchant_stall")
+    before = session.state_payload()
+
+    with pytest.raises(ValueError, match="dość monet"):
+        session.buy_merchant_item(
+            merchant_id="mira_market_stall",
+            actor_id="rogue",
+            item_id="strength_potion",
+            quantity=1,
+        )
+
+    after = session.state_payload()
+    assert after["trade"]["stock"] == before["trade"]["stock"]
+    rogue = next(actor for actor in after["actors"] if actor["id"] == "rogue")
+    assert rogue["currency"]["total_cp"] == 500
+
+
+def test_village_hero_can_buy_don_and_doff_light_armor_during_exploration() -> None:
+    session = ExplorationUiSession("content/scenarios/village_square_mvp.json")
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    hero = next(actor for actor in session.exploration.actors if str(actor.id) == "hero")
+    hero = replace(
+        hero,
+        proficiencies=replace(
+            hero.proficiencies,
+            armor=("light",),
+        ),
+    )
+    session.exploration = session._replace_exploration_actor(hero)
+    session.select_point("merchant_stall")
+    purchased = session.buy_merchant_item(
+        merchant_id="mira_market_stall",
+        actor_id="hero",
+        item_id="leather_armor",
+        quantity=1,
+    )
+
+    armor = next(
+        item
+        for item in next(actor for actor in purchased["actors"] if actor["id"] == "hero")["inventory"]
+        if item["id"] == "leather_armor"
+    )
+    assert armor["armor_category"] == ArmorCategory.LIGHT.value
+    before_minutes = session.state.elapsed_minutes
+
+    donned = session.change_actor_armor(
+        actor_id="hero",
+        armor_id="leather_armor",
+        equip=True,
+    )
+    hero_payload = next(actor for actor in donned["actors"] if actor["id"] == "hero")
+    assert next(item for item in hero_payload["inventory"] if item["id"] == "leather_armor")[
+        "equipped"
+    ] is True
+    assert session.state.elapsed_minutes == before_minutes + 1
+
+    doffed = session.change_actor_armor(
+        actor_id="hero",
+        armor_id="leather_armor",
+        equip=False,
+    )
+    hero_payload = next(actor for actor in doffed["actors"] if actor["id"] == "hero")
+    assert next(item for item in hero_payload["inventory"] if item["id"] == "leather_armor")[
+        "equipped"
+    ] is False
+    assert session.state.elapsed_minutes == before_minutes + 2
+
+
+def test_selective_combat_loot_takes_item_and_leaves_currency_on_corpse() -> None:
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    combat = _start_gate_skirmish(session)
+    actor = combat.initiative_order.current_actor
+    source = next(candidate for candidate in combat.actors if candidate.faction == Faction.ENEMY)
+    source = replace(
+        source,
+        hp=0,
+        position=Coordinate(actor.position.col + 1, actor.position.row),
+        inventory=(
+            InventoryItem(
+                "selective_loot",
+                "Lekki łup",
+                "treasure",
+                equipped=False,
+                weight_lb=0.5,
+            ),
+        ),
+        currency=CurrencyWallet(gp=2),
+    )
+    session.combat_state = replace(
+        combat,
+        actors=tuple(source if candidate.id == source.id else candidate for candidate in combat.actors),
+    )
+
+    options = session._combat_context_options(actor, source.position)
+    assert {option.action for option in options if option.provider == "loot"} == {
+        CombatMenuAction.LOOT,
+        CombatMenuAction.LOOT_ITEM,
+        CombatMenuAction.LOOT_CURRENCY,
+    }
+    opened = session._open_combat_context_menu(actor, source.position, options)
+    looted = session.confirm_combat_context_menu(
+        f"loot-item:{source.id}:selective_loot"
+    )
+
+    actor_after = next(
+        candidate for candidate in looted["combat"]["actors"] if candidate["id"] == str(actor.id)
+    )
+    source_after = next(
+        candidate for candidate in looted["combat"]["actors"] if candidate["id"] == str(source.id)
+    )
+    assert any(item["id"] == "selective_loot" for item in actor_after["inventory"])
+    assert actor_after["currency"]["gp"] == 0
+    assert source_after["inventory"] == []
+    assert source_after["currency"]["gp"] == 2
+    assert looted["combat"]["turn_action"]["action_use"] == "action_used"
+    AttackDeclaration,
+    AttackSource,
+    AttackSourceType,

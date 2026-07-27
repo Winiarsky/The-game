@@ -11,6 +11,7 @@ from .attack_flow import (
     AttackSourceType,
     SpellCastingKind,
     attack_declaration_from_state,
+    attack_source_at_cast_level,
     attack_source_for_actor,
     attack_range_feet,
     cancel_attack_action,
@@ -48,7 +49,14 @@ from .damage import (
 )
 from .death_saves import DeathSaveOutcome, DeathSaveResolution, resolve_death_save, stabilize_actor
 from .enemy_ai import EnemyAutoAttackResult, EnemyAutoTurnResult, EnemyTurnPlan, plan_enemy_turn, resolve_enemy_auto_attack, resolve_enemy_auto_turn
-from .healing import AppliedHealingResult, HealingSource, HealingSourceType, apply_healing_result, legal_healing_targets
+from .healing import (
+    AppliedHealingResult,
+    HealingSource,
+    HealingSourceType,
+    apply_healing_result,
+    healing_source_at_cast_level,
+    legal_healing_targets,
+)
 from .initiative import (
     InitiativeEntry,
     InitiativeOrder,
@@ -61,6 +69,14 @@ from .initiative import (
     roll_enemy_initiative,
 )
 from .opportunity import OpportunityAttackThreat, opportunity_attackers_for_movement
+from .long_casting import (
+    LongCastState,
+    add_long_cast,
+    advance_long_cast,
+    casting_time_actions,
+    long_cast_for_actor,
+    remove_long_cast,
+)
 from .reactions import (
     ReactionKind,
     ReactionOption,
@@ -80,6 +96,8 @@ from .spells import (
     SpellSlotState,
     ability_label_pl,
     actors_in_area,
+    actor_spell_cast_validation,
+    available_cast_levels,
     apply_save_damage_amount,
     area_positions_for_center,
     area_positions_for_direction,
@@ -96,6 +114,8 @@ from .targets import (
     CombatTargetType,
     CombatTargetVisibility,
     actor_as_combat_target,
+    combat_armor_class,
+    combat_effect_armor_class_bonus,
     is_public_attack_target,
     target_is_defeated,
 )
@@ -118,6 +138,24 @@ from .stealth import (
     resolve_search,
     reveal_actor,
     refresh_hidden_after_movement,
+)
+from .summoning import (
+    SummonDefinition,
+    SummonedCreatureState,
+    add_summoned_creature,
+    legal_summon_positions,
+    remove_summons,
+    summon_actor,
+    summon_attack_source,
+    summoned_state_for_actor,
+)
+from .magic_movement import (
+    MagicMovementDefinition,
+    MagicMovementKind,
+    forced_movement_destination,
+    legal_forced_movement_targets,
+    legal_teleport_positions,
+    move_actor_magically,
 )
 from .setup import (
     ActorSetupEntry,
@@ -178,6 +216,8 @@ from .scene_interactions import (
     scene_object_by_id,
 )
 from .session import (
+    AmmunitionExpenditure,
+    BattlefieldLoot,
     CombatState,
     CombatStatus,
     ConditionChangeResult,
@@ -200,6 +240,7 @@ from .session import (
     current_actor,
     drop_prone,
     drop_weapon,
+    expend_thrown_weapon,
     don_shield,
     doff_shield,
     equip_weapon,
@@ -207,6 +248,8 @@ from .session import (
     movement_remaining,
     pickup_dropped_weapon,
     reaction_available_for,
+    record_ammunition_expenditure,
+    recoverable_ammunition_quantity,
     replace_actor,
     start_combat,
     stand_up,
@@ -275,6 +318,13 @@ from .conditions import (
     resolve_condition_save,
     standing_movement_cost,
 )
+from .dispelling import (
+    DispelRemoval,
+    DispellableSpellEffect,
+    dispellable_spell_effects_for_target,
+    dispellable_target_ids,
+    remove_dispellable_spell_effect,
+)
 from .auras import ActiveAura, active_auras, actor_is_affected_by_aura, saving_throw_aura_modifiers
 from .triggers import (
     ActorTriggerResolution,
@@ -287,6 +337,7 @@ from .triggers import (
 )
 
 __all__ = [
+    "AmmunitionExpenditure",
     "ActorSetupEntry",
     "ActionUse",
     "ActiveCombatEffect",
@@ -296,6 +347,7 @@ __all__ = [
     "TriggerResolution",
     "AppliedCombatInteraction",
     "AppliedDamageResult",
+    "BattlefieldLoot",
     "DeathSaveOutcome",
     "DeathSaveResolution",
     "DropWeaponResult",
@@ -382,6 +434,8 @@ __all__ = [
     "matching_actor_triggers",
     "actor_is_affected_by_aura",
     "actor_as_combat_target",
+    "combat_armor_class",
+    "combat_effect_armor_class_bonus",
     "actor_by_id",
     "apply_damage",
     "apply_damage_result",
@@ -449,11 +503,33 @@ __all__ = [
     "legal_area_centers",
     "legal_healing_targets",
     "legal_melee_targets",
+    "LongCastState",
+    "add_long_cast",
+    "advance_long_cast",
+    "casting_time_actions",
+    "long_cast_for_actor",
+    "remove_long_cast",
+    "SummonDefinition",
+    "SummonedCreatureState",
+    "add_summoned_creature",
+    "legal_summon_positions",
+    "remove_summons",
+    "summon_actor",
+    "summon_attack_source",
+    "summoned_state_for_actor",
+    "refresh_combat_status",
+    "MagicMovementDefinition",
+    "MagicMovementKind",
+    "forced_movement_destination",
+    "legal_forced_movement_targets",
+    "legal_teleport_positions",
+    "move_actor_magically",
     "attack_range_feet",
     "effective_attack_kind",
     "melee_reach_feet",
     "movement_remaining",
     "drop_weapon",
+    "expend_thrown_weapon",
     "don_shield",
     "doff_shield",
     "equip_weapon",
@@ -476,6 +552,8 @@ __all__ = [
     "ConditionSaveTiming",
     "ConditionState",
     "ConditionChangeResult",
+    "DispellableSpellEffect",
+    "DispelRemoval",
     "CombatMenuAction",
     "CombatMenuCategory",
     "CombatMenuOption",
@@ -484,6 +562,8 @@ __all__ = [
     "condition_definition",
     "condition_label",
     "condition_roll_request",
+    "dispellable_spell_effects_for_target",
+    "dispellable_target_ids",
     "expire_condition_states",
     "pending_condition_saves",
     "resolve_condition_save",
@@ -503,6 +583,8 @@ __all__ = [
     "resolve_actor_saving_throw",
     "roll_enemy_initiative",
     "reaction_available_for",
+    "record_ammunition_expenditure",
+    "recoverable_ammunition_quantity",
     "scene_flag",
     "saving_throw_aura_modifiers",
     "scene_object_at_position",
@@ -529,6 +611,7 @@ __all__ = [
     "normalize_grapple_conditions",
     "path_with_condition_cost",
     "remove_condition",
+    "remove_dispellable_spell_effect",
     "remove_grapple",
     "standing_movement_cost",
     "start_attack_action",

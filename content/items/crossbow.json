@@ -1,23 +1,26 @@
 {
+  "schema": "dnd_board_game.item",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["srd_5_1_cc_by_4_0"],
   "id": "crossbow",
   "name": "Kusza",
   "kind": "weapon",
-  "hands_required": 2,
-  "description": "Drewniano-metalowa kusza z napiętym mechanizmem.",
+  "value_cp": 2500,
+  "weight_lb": 5,
+  "description": "Dwuręczna lekka kusza strzelająca bełtami.",
   "properties": ["rigid", "wooden", "metallic"],
-  "attacks": [
-    {
-      "id": "crossbow_shot",
-      "name": "Kusza",
-      "source_type": "weapon",
+  "weapon": {
+      "category": "simple",
       "attack_kind": "ranged",
-      "ability": "dexterity",
-      "range_feet": 80,
+      "attack_id": "crossbow_shot",
+      "properties": ["ammunition", "loading", "two_handed"],
+      "ammunition_type": "bolt",
+      "normal_range_feet": 80,
+      "long_range_feet": 320,
       "damage": {
         "dice": "1d8",
-        "modifier": 3,
         "damage_type": "piercing"
       }
-    }
-  ]
+  }
 }

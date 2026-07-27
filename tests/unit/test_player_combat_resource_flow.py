@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from random import Random
 
+import pytest
+
 from dnd_board_game.actors import AbilityScores, Actor, ActorId, Faction
 from dnd_board_game.application import PlayerCombatResourceFlowService
 from dnd_board_game.combat import (
@@ -29,6 +31,9 @@ class _Action:
     label: str
     value: int
     target_faction: str = "self"
+    target_count: int = 1
+    upcast_targets_per_level: int = 0
+    range_feet: int = 0
     spell_level: int = 0
     prepared: bool = True
     source_item_id: str | None = None
@@ -80,6 +85,9 @@ def _concentration_action() -> _Action:
         label="Błogosławieństwo",
         value=1,
         target_faction="ally",
+        target_count=3,
+        upcast_targets_per_level=1,
+        range_feet=30,
         spell_level=1,
     )
 
@@ -155,6 +163,127 @@ def test_concentration_start_and_confirmation_consume_slot_and_create_effect() -
     assert confirmed.active_effects[0].source_actor_id == "cleric"
     assert confirmed.active_effects[0].target_actor_id == "hero"
     assert confirmed.event_type == "ui_combat_concentration_confirmed"
+
+
+def test_upcast_concentration_spell_applies_one_effect_per_selected_target() -> None:
+    service = PlayerCombatResourceFlowService()
+    cleric = _actor(
+        "cleric",
+        Faction.ALLY,
+        Coordinate(0, 0),
+        spell_slots=(SpellSlotState(1, 1, 1), SpellSlotState(2, 1, 1)),
+    )
+    allies = (
+        _actor("hero", Faction.ALLY, Coordinate(1, 0)),
+        _actor("rogue", Faction.ALLY, Coordinate(2, 0)),
+        _actor("wizard", Faction.ALLY, Coordinate(3, 0)),
+    )
+    enemy = _actor("enemy", Faction.ENEMY, Coordinate(5, 0))
+    state = _state(cleric, *allies, enemy)
+
+    started = service.start_concentration(
+        state=state,
+        active_effects=(),
+        action=_concentration_action(),
+        cast_level=2,
+    )
+    assert started.pending_action is not None
+    assert started.pending_action.cast_level == 2
+    assert started.pending_action.maximum_targets == 4
+
+    selected_ids = tuple(
+        str(actor.id)
+        for actor in (cleric, *allies)
+    )
+    confirmed = service.confirm_concentration(
+        state=state,
+        active_effects=(),
+        action=_concentration_action(),
+        pending=started.pending_action,
+        target_ids=selected_ids,
+    )
+
+    assert {effect.target_actor_id for effect in confirmed.active_effects} == set(
+        selected_ids
+    )
+    assert len(confirmed.active_effects) == 4
+    updated_cleric = next(
+        actor for actor in confirmed.state.actors if actor.id == cleric.id
+    )
+    assert updated_cleric.spell_slots[0].remaining == 1
+    assert updated_cleric.spell_slots[1].remaining == 0
+    assert dict(confirmed.event_payload)["cast_level"] == 2
+    assert dict(confirmed.event_payload)["target_ids"] == list(selected_ids)
+
+    broken = service.resolve_concentration_check(
+        state=confirmed.state,
+        active_effects=confirmed.active_effects,
+        actor_id="cleric",
+        effect_ids=tuple(effect.id for effect in confirmed.active_effects),
+        damage=10,
+        dc=10,
+        natural_roll=1,
+    )
+    assert broken.active_effects == ()
+
+
+def test_concentration_spell_rejects_more_targets_than_cast_level_allows() -> None:
+    service = PlayerCombatResourceFlowService()
+    cleric = _actor(
+        "cleric",
+        Faction.ALLY,
+        Coordinate(0, 0),
+        spell_slots=(SpellSlotState(1, 1, 1),),
+    )
+    allies = tuple(
+        _actor(f"ally-{index}", Faction.ALLY, Coordinate(index, 0))
+        for index in range(1, 4)
+    )
+    enemy = _actor("enemy", Faction.ENEMY, Coordinate(5, 0))
+    state = _state(cleric, *allies, enemy)
+    started = service.start_concentration(
+        state=state,
+        active_effects=(),
+        action=_concentration_action(),
+        cast_level=1,
+    )
+    assert started.pending_action is not None
+
+    with pytest.raises(ValueError, match="maksymalnie 3"):
+        service.confirm_concentration(
+            state=state,
+            active_effects=(),
+            action=_concentration_action(),
+            pending=started.pending_action,
+            target_ids=tuple(str(actor.id) for actor in (cleric, *allies)),
+        )
+
+
+def test_concentration_target_selection_can_be_toggled_for_board_input() -> None:
+    service = PlayerCombatResourceFlowService()
+    cleric = _actor(
+        "cleric",
+        Faction.ALLY,
+        Coordinate(0, 0),
+        spell_slots=(SpellSlotState(1, 1, 1),),
+    )
+    hero = _actor("hero", Faction.ALLY, Coordinate(1, 0))
+    enemy = _actor("enemy", Faction.ENEMY, Coordinate(2, 0))
+    started = service.start_concentration(
+        state=_state(cleric, hero, enemy),
+        active_effects=(),
+        action=_concentration_action(),
+    )
+    assert started.pending_action is not None
+
+    selected = service.toggle_concentration_target(
+        started.pending_action,
+        "hero",
+    )
+    assert selected.selected_target_ids == ("hero",)
+
+    cleared = service.toggle_concentration_target(selected, "hero")
+    assert cleared.selected_target_ids == ()
 
 
 def test_damage_prompts_ally_check_and_failure_removes_concentration() -> None:

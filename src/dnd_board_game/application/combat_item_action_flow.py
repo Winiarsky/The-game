@@ -16,7 +16,11 @@ from dnd_board_game.combat import (
     replace_actor,
     use_action_economy_cost,
 )
-from dnd_board_game.inventory import consume_inventory_item, inventory_item_by_id
+from dnd_board_game.inventory import (
+    consume_item_use,
+    has_item_use,
+    inventory_item_by_id,
+)
 from dnd_board_game.rules import (
     EffectDuration,
     EffectSource,
@@ -40,6 +44,7 @@ class TargetedItemActionSpec(Protocol):
     save_dc: int | None
     save_timing: str | None
     action_cost: ActionEconomyCost
+    charge_cost: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,6 +73,11 @@ def targeted_item_action_is_legal(
         and action.source_item_id
         and item is not None
         and item.available
+        and has_item_use(
+            actor,
+            action.source_item_id,
+            charge_cost=getattr(action, "charge_cost", 0),
+        )
         and _target_matches(actor, target, action.target_faction)
         and _distance_feet(actor, target) <= action.range_feet
         and can_pay_action_economy_cost(state, _action_cost(action))
@@ -90,8 +100,12 @@ def resolve_targeted_item_action(
     action_use = use_action_economy_cost(state, _action_cost(action))
     if not action_use.accepted:
         raise ValueError(action_use.message)
-    consumed_actor = consume_inventory_item(current_actor(action_use.state), action.source_item_id or "")
-    updated_state = replace_actor(action_use.state, consumed_actor)
+    item_use = consume_item_use(
+        current_actor(action_use.state),
+        action.source_item_id or "",
+        charge_cost=getattr(action, "charge_cost", 0),
+    )
+    updated_state = replace_actor(action_use.state, item_use.actor)
     if action.effect_kind == "apply_condition":
         if action.condition is None:
             raise ValueError("Akcja przedmiotu nie definiuje nakładanego warunku.")
@@ -131,6 +145,7 @@ def resolve_targeted_item_action(
                 ("source_item_id", action.source_item_id or ""),
                 ("condition", action.condition.value),
                 ("applied", application.applied),
+                ("charge_cost", item_use.spent),
             ),
         )
     duration = EffectDuration(action.duration)
@@ -168,6 +183,7 @@ def resolve_targeted_item_action(
             ("source_item_id", action.source_item_id or ""),
             ("effect_kind", action.effect_kind or ""),
             ("value", action.value),
+            ("charge_cost", item_use.spent),
         ),
     )
 

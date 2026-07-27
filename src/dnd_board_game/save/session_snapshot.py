@@ -31,6 +31,8 @@ from dnd_board_game.actors import (
 )
 from dnd_board_game.combat import (
     ActionUse,
+    AmmunitionExpenditure,
+    BattlefieldLoot,
     CombatState,
     CombatCondition,
     ConditionSaveTiming,
@@ -39,6 +41,9 @@ from dnd_board_game.combat import (
     HiddenState,
     InitiativeEntry,
     InitiativeOrder,
+    LongCastState,
+    SummonDefinition,
+    SummonedCreatureState,
     TurnActionState,
     DamageType,
 )
@@ -46,6 +51,7 @@ from dnd_board_game.combat.session import CombatStatus
 from dnd_board_game.combat.spells import SpellSlotState
 from dnd_board_game.combat.scene import SceneFlags
 from dnd_board_game.combat.setup import SetupVisibility
+from dnd_board_game.core import MigrationError, MigrationRegistry
 from dnd_board_game.exploration import (
     CraftingComponentDisposition,
     CraftingComponentUse,
@@ -71,8 +77,33 @@ from dnd_board_game.exploration import (
     PrecombatStealthAttempt,
     TemporaryItem,
     TemporaryItemScope,
+    TimedMagicEffect,
 )
-from dnd_board_game.inventory import HandSlot, InventoryItem
+from dnd_board_game.inventory import (
+    ArmorCategory,
+    ActiveLight,
+    BundleEntry,
+    CheckModifier,
+    CheckModifierMode,
+    ContainerCapacity,
+    GearCategory,
+    HandSlot,
+    InventoryItem,
+    ItemChargeRecovery,
+    LootBundle,
+    MagicItemEffect,
+    MagicItemEffectKind,
+    LightShape,
+    LightSource,
+    ObjectDurability,
+    SpellcastingFocusKind,
+    WeaponCategory,
+    WeaponProperty,
+    MerchantState,
+    inventory_item_payload,
+    validate_attunement_limit,
+)
+from dnd_board_game.inventory.economy import CurrencyWallet
 from dnd_board_game.rules import (
     ActiveEffect,
     AdditionalEffectExpiration,
@@ -83,13 +114,276 @@ from dnd_board_game.rules import (
     EffectStackingPolicy,
     RollMode,
     RollModifierBreakdown,
+    SpellAccessKind,
+    SpellAccessProfile,
+    SpellCastingTime,
+    SpellComponents,
+    SpellDefinition,
+    SpellDuration,
+    SpellDurationKind,
+    SpellExplorationEffect,
+    SpellExplorationEffectKind,
+    SpellMaterial,
+    SpellRange,
+    SpellRangeKind,
+    SpellSchool,
+    SpellScaling,
 )
 from dnd_board_game.world import Coordinate
 from dnd_board_game.ui.conversation import InteractionConversationEntry
+from dnd_board_game.scenarios.content_contract import (
+    RULESET_DND_5E_2014,
+    SCENARIO_SCHEMA,
+)
 
 
 SNAPSHOT_SCHEMA = "dnd_board_game.session"
-SNAPSHOT_SCHEMA_VERSION = 1
+SNAPSHOT_SCHEMA_VERSION = 18
+
+
+def _migrate_snapshot_v1_to_v2(data: dict[str, Any]) -> dict[str, Any]:
+    migrated = dict(data)
+    migrated["schema_version"] = 2
+    migrated["content"] = {
+        "scenario_schema": SCENARIO_SCHEMA,
+        "scenario_schema_version": 1,
+        "ruleset_id": RULESET_DND_5E_2014,
+        "source_pack_ids": ["project_original"],
+    }
+    return migrated
+
+
+def _migrate_snapshot_v2_to_v3(data: dict[str, Any]) -> dict[str, Any]:
+    migrated = dict(data)
+    migrated["schema_version"] = 3
+
+    def actor_payload_v3(raw: object) -> object:
+        if not isinstance(raw, dict):
+            return raw
+        actor = dict(raw)
+        actor.setdefault("currency", {"cp": 0, "sp": 0, "ep": 0, "gp": 0, "pp": 0})
+        inventory: list[object] = []
+        for raw_item in actor.get("inventory", []):
+            if not isinstance(raw_item, dict):
+                inventory.append(raw_item)
+                continue
+            item = dict(raw_item)
+            item.setdefault("value_cp", 0)
+            item.setdefault("weight_lb", 0.0)
+            inventory.append(item)
+        actor["inventory"] = inventory
+        return actor
+
+    migrated["actors"] = [actor_payload_v3(actor) for actor in migrated.get("actors", [])]
+    combat = migrated.get("combat")
+    if isinstance(combat, dict):
+        combat_v3 = dict(combat)
+        combat_v3["actors"] = [actor_payload_v3(actor) for actor in combat.get("actors", [])]
+        migrated["combat"] = combat_v3
+    return migrated
+
+
+def _migrate_snapshot_v3_to_v4(data: dict[str, Any]) -> dict[str, Any]:
+    migrated = dict(data)
+    migrated["schema_version"] = 4
+
+    def actor_payload_v4(raw: object) -> object:
+        if not isinstance(raw, dict):
+            return raw
+        actor = dict(raw)
+        inventory: list[object] = []
+        for raw_item in actor.get("inventory", []):
+            if not isinstance(raw_item, dict):
+                inventory.append(raw_item)
+                continue
+            item = dict(raw_item)
+            item.setdefault("ammunition_type", None)
+            inventory.append(item)
+        actor["inventory"] = inventory
+        return actor
+
+    migrated["actors"] = [actor_payload_v4(actor) for actor in migrated.get("actors", [])]
+    combat = migrated.get("combat")
+    if isinstance(combat, dict):
+        combat_v4 = dict(combat)
+        combat_v4["actors"] = [actor_payload_v4(actor) for actor in combat.get("actors", [])]
+        migrated["combat"] = combat_v4
+    return migrated
+
+
+def _migrate_snapshot_v4_to_v5(data: dict[str, Any]) -> dict[str, Any]:
+    migrated = dict(data)
+    migrated["schema_version"] = 5
+    combat = migrated.get("combat")
+    if isinstance(combat, dict):
+        combat_v5 = dict(combat)
+        combat_v5.setdefault("ammunition_expenditures", [])
+        combat_v5.setdefault("battlefield_loot", [])
+        migrated["combat"] = combat_v5
+    return migrated
+
+
+def _migrate_snapshot_v5_to_v6(data: dict[str, Any]) -> dict[str, Any]:
+    migrated = dict(data)
+    migrated["schema_version"] = 6
+    # Merchant state did not exist in v5. Its absence intentionally means that
+    # the current scenario content supplies the initial merchant state.
+    return migrated
+
+
+def _migrate_snapshot_v6_to_v7(data: dict[str, Any]) -> dict[str, Any]:
+    migrated = dict(data)
+    migrated["schema_version"] = 7
+    # Body-armor fields are optional. Items from v6 retain their prior behavior.
+    return migrated
+
+
+def _migrate_snapshot_v7_to_v8(data: dict[str, Any]) -> dict[str, Any]:
+    migrated = dict(data)
+    migrated["schema_version"] = 8
+    # Charge fields are optional. Items from v7 remain ordinary consumables.
+    return migrated
+
+
+def _migrate_snapshot_v8_to_v9(data: dict[str, Any]) -> dict[str, Any]:
+    migrated = dict(data)
+    migrated["schema_version"] = 9
+    # Attunement is opt-in. Existing items retain their previous availability.
+    return migrated
+
+
+def _migrate_snapshot_v9_to_v10(data: dict[str, Any]) -> dict[str, Any]:
+    migrated = dict(data)
+    migrated["schema_version"] = 10
+    return migrated
+
+
+def _migrate_snapshot_v10_to_v11(data: dict[str, Any]) -> dict[str, Any]:
+    migrated = dict(data)
+    migrated["schema_version"] = 11
+    return migrated
+
+
+def _migrate_snapshot_v11_to_v12(data: dict[str, Any]) -> dict[str, Any]:
+    migrated = dict(data)
+    migrated["schema_version"] = 12
+    # Mundane-gear metadata is optional; v11 items retain their prior behavior.
+    return migrated
+
+
+def _migrate_snapshot_v12_to_v13(data: dict[str, Any]) -> dict[str, Any]:
+    migrated = dict(data)
+    migrated["schema_version"] = 13
+    # Spell definitions are restored from scenario content for a fresh session;
+    # old saves safely retain empty optional runtime metadata.
+    return migrated
+
+
+def _migrate_snapshot_v13_to_v14(data: dict[str, Any]) -> dict[str, Any]:
+    migrated = dict(data)
+    migrated["schema_version"] = 14
+    # Spell scaling and ritual metadata are optional additions to SpellDefinition.
+    return migrated
+
+
+def _migrate_snapshot_v14_to_v15(data: dict[str, Any]) -> dict[str, Any]:
+    migrated = dict(data)
+    migrated["schema_version"] = 15
+    exploration = dict(_mapping(migrated.get("exploration"), "exploration"))
+    exploration.setdefault("magic_effects", [])
+    migrated["exploration"] = exploration
+    return migrated
+
+
+def _migrate_snapshot_v15_to_v16(data: dict[str, Any]) -> dict[str, Any]:
+    migrated = dict(data)
+    migrated["schema_version"] = 16
+    combat = migrated.get("combat")
+    if combat is not None:
+        combat_data = dict(_mapping(combat, "combat"))
+        combat_data.setdefault("long_casts", [])
+        migrated["combat"] = combat_data
+    return migrated
+
+
+def _migrate_snapshot_v16_to_v17(data: dict[str, Any]) -> dict[str, Any]:
+    migrated = dict(data)
+    migrated["schema_version"] = 17
+    combat = migrated.get("combat")
+    if combat is not None:
+        combat_data = dict(_mapping(combat, "combat"))
+        combat_data.setdefault("summoned_creatures", [])
+        migrated["combat"] = combat_data
+    return migrated
+
+
+def _migrate_snapshot_v17_to_v18(data: dict[str, Any]) -> dict[str, Any]:
+    migrated = dict(data)
+    migrated["schema_version"] = 18
+    migrated["active_effects"] = [
+        (
+            {**effect, "spell_level": effect.get("spell_level")}
+            if isinstance(effect, dict)
+            else effect
+        )
+        for effect in migrated.get("active_effects", [])
+    ]
+    exploration = migrated.get("exploration")
+    if isinstance(exploration, dict):
+        exploration_v18 = dict(exploration)
+        exploration_v18["condition_states"] = [
+            (
+                {
+                    **condition,
+                    "source_spell_id": condition.get("source_spell_id"),
+                    "source_spell_level": condition.get("source_spell_level"),
+                }
+                if isinstance(condition, dict)
+                else condition
+            )
+            for condition in exploration.get("condition_states", [])
+        ]
+        migrated["exploration"] = exploration_v18
+    combat = migrated.get("combat")
+    if isinstance(combat, dict):
+        combat_v18 = dict(combat)
+        combat_v18["condition_states"] = [
+            (
+                {
+                    **condition,
+                    "source_spell_id": condition.get("source_spell_id"),
+                    "source_spell_level": condition.get("source_spell_level"),
+                }
+                if isinstance(condition, dict)
+                else condition
+            )
+            for condition in combat.get("condition_states", [])
+        ]
+        migrated["combat"] = combat_v18
+    return migrated
+
+
+_SNAPSHOT_MIGRATIONS = MigrationRegistry(
+    schema=SNAPSHOT_SCHEMA,
+    current_version=SNAPSHOT_SCHEMA_VERSION,
+)
+_SNAPSHOT_MIGRATIONS.register(1, _migrate_snapshot_v1_to_v2)
+_SNAPSHOT_MIGRATIONS.register(2, _migrate_snapshot_v2_to_v3)
+_SNAPSHOT_MIGRATIONS.register(3, _migrate_snapshot_v3_to_v4)
+_SNAPSHOT_MIGRATIONS.register(4, _migrate_snapshot_v4_to_v5)
+_SNAPSHOT_MIGRATIONS.register(5, _migrate_snapshot_v5_to_v6)
+_SNAPSHOT_MIGRATIONS.register(6, _migrate_snapshot_v6_to_v7)
+_SNAPSHOT_MIGRATIONS.register(7, _migrate_snapshot_v7_to_v8)
+_SNAPSHOT_MIGRATIONS.register(8, _migrate_snapshot_v8_to_v9)
+_SNAPSHOT_MIGRATIONS.register(9, _migrate_snapshot_v9_to_v10)
+_SNAPSHOT_MIGRATIONS.register(10, _migrate_snapshot_v10_to_v11)
+_SNAPSHOT_MIGRATIONS.register(11, _migrate_snapshot_v11_to_v12)
+_SNAPSHOT_MIGRATIONS.register(12, _migrate_snapshot_v12_to_v13)
+_SNAPSHOT_MIGRATIONS.register(13, _migrate_snapshot_v13_to_v14)
+_SNAPSHOT_MIGRATIONS.register(14, _migrate_snapshot_v14_to_v15)
+_SNAPSHOT_MIGRATIONS.register(15, _migrate_snapshot_v15_to_v16)
+_SNAPSHOT_MIGRATIONS.register(16, _migrate_snapshot_v16_to_v17)
+_SNAPSHOT_MIGRATIONS.register(17, _migrate_snapshot_v17_to_v18)
 
 
 class SnapshotValidationError(ValueError):
@@ -99,6 +393,10 @@ class SnapshotValidationError(ValueError):
 @dataclass(frozen=True, slots=True)
 class SessionSnapshot:
     scenario_id: str
+    scenario_schema: str
+    scenario_schema_version: int
+    ruleset_id: str
+    source_pack_ids: tuple[str, ...]
     ui_stage: str
     actors: tuple[Actor, ...]
     exploration_state: ExplorationState
@@ -121,6 +419,12 @@ class SessionSnapshot:
             "schema": SNAPSHOT_SCHEMA,
             "schema_version": SNAPSHOT_SCHEMA_VERSION,
             "scenario_id": self.scenario_id,
+            "content": {
+                "scenario_schema": self.scenario_schema,
+                "scenario_schema_version": self.scenario_schema_version,
+                "ruleset_id": self.ruleset_id,
+                "source_pack_ids": list(self.source_pack_ids),
+            },
             "ui": {
                 "stage": self.ui_stage,
                 "selected_lead_actor_id": self.selected_lead_actor_id,
@@ -151,14 +455,13 @@ class SessionSnapshot:
 
     @classmethod
     def from_dict(cls, raw: object, *, base_state: ExplorationState) -> SessionSnapshot:
-        data = _mapping(raw, "snapshot")
-        if data.get("schema") != SNAPSHOT_SCHEMA:
-            raise SnapshotValidationError("Nieznany format zapisu gry.")
-        version = _integer(data.get("schema_version"), "schema_version")
-        if version != SNAPSHOT_SCHEMA_VERSION:
+        try:
+            data = _SNAPSHOT_MIGRATIONS.migrate(raw)
+        except MigrationError as exc:
             raise SnapshotValidationError(
-                f"Nieobsługiwana wersja zapisu: {version}; oczekiwana: {SNAPSHOT_SCHEMA_VERSION}."
-            )
+                f"Nieobsługiwana wersja lub format zapisu: {exc}"
+            ) from exc
+        content = _mapping(data.get("content"), "content")
         ui = _mapping(data.get("ui"), "ui")
         actors = tuple(_actor_from_payload(item) for item in _sequence(data.get("actors"), "actors"))
         _require_unique((str(actor.id) for actor in actors), "actor id")
@@ -200,6 +503,19 @@ class SessionSnapshot:
             )
         return cls(
             scenario_id=_string(data.get("scenario_id"), "scenario_id"),
+            scenario_schema=_string(
+                content.get("scenario_schema"),
+                "content.scenario_schema",
+            ),
+            scenario_schema_version=_integer(
+                content.get("scenario_schema_version"),
+                "content.scenario_schema_version",
+            ),
+            ruleset_id=_string(content.get("ruleset_id"), "content.ruleset_id"),
+            source_pack_ids=_string_tuple(
+                content.get("source_pack_ids"),
+                "content.source_pack_ids",
+            ),
             ui_stage=_string(ui.get("stage"), "ui.stage"),
             actors=actors,
             exploration_state=state,
@@ -329,15 +645,31 @@ def _actor_payload(actor: Actor) -> dict[str, object]:
         },
         "spell_slots": [{"level": slot.level, "remaining": slot.remaining, "maximum": slot.maximum} for slot in actor.spell_slots],
         "spell_save_dc": actor.spell_save_dc, "spell_ids": list(actor.spell_ids),
-        "inventory": [
-            {"id": item.id, "name": item.name, "kind": item.kind, "quantity": item.quantity,
-             "equipped": item.equipped, "source_ref": item.source_ref, "broken": item.broken,
-             "description": item.description, "properties": list(item.properties), "portable": item.portable,
-             "hands_required": item.hands_required, "held_in": [slot.value for slot in item.held_in],
-             "light_weapon": item.light_weapon, "versatile_damage_dice": item.versatile_damage_dice,
-             "armor_class_bonus": item.armor_class_bonus, "armor_proficiency": item.armor_proficiency}
-            for item in actor.inventory
+        "spells": [_spell_definition_payload(spell) for spell in actor.spells],
+        "spell_access": [
+            {
+                "kind": profile.kind.value,
+                "spell_ids": list(profile.spell_ids),
+                "allowed_focus_kinds": list(profile.allowed_focus_kinds),
+            }
+            for profile in actor.spell_access
         ],
+        "currency": actor.currency.as_payload(),
+        "inventory": [inventory_item_payload(item) for item in actor.inventory],
+        "active_light": (
+            None
+            if actor.active_light is None
+            else {
+                "source_item_id": actor.active_light.source_item_id,
+                "source_name": actor.active_light.source_name,
+                "bright_distance_feet": actor.active_light.bright_distance_feet,
+                "dim_additional_feet": actor.active_light.dim_additional_feet,
+                "remaining_minutes": actor.active_light.remaining_minutes,
+                "shape": actor.active_light.shape.value,
+                "hooded_dim_distance_feet": actor.active_light.hooded_dim_distance_feet,
+                "hood_lowered": actor.active_light.hood_lowered,
+            }
+        ),
         "spell_preparation": None if prep is None else {
             "source_label": prep.source_label, "preparation_limit": prep.preparation_limit,
             "available_spells": [{"id": spell.id, "label": spell.label, "level": spell.level} for spell in prep.available_spells],
@@ -389,6 +721,148 @@ def _resource_pool_from_payload(raw: object) -> ActorResourcePool:
     )
 
 
+def _spell_definition_payload(spell: SpellDefinition) -> dict[str, object]:
+    return {
+        "id": spell.id,
+        "name": spell.name,
+        "level": spell.level,
+        "school": spell.school.value,
+        "casting_time": spell.casting_time.value,
+        "range": {"kind": spell.range.kind.value, "feet": spell.range.feet},
+        "components": {
+            "verbal": spell.components.verbal,
+            "somatic": spell.components.somatic,
+            "materials": [
+                {
+                    "item_id": material.item_id,
+                    "label": material.label,
+                    "minimum_value_cp": material.minimum_value_cp,
+                    "consumed": material.consumed,
+                    "quantity": material.quantity,
+                }
+                for material in spell.components.materials
+            ],
+        },
+        "duration": {"kind": spell.duration.kind.value, "amount": spell.duration.amount},
+        "concentration": spell.concentration,
+        "ritual": spell.ritual,
+        "effect_kind": spell.effect_kind,
+        "scaling": (
+            None
+            if spell.scaling is None
+            else {
+                "damage_dice_per_slot_level": spell.scaling.damage_dice_per_slot_level,
+                "healing_dice_per_slot_level": spell.scaling.healing_dice_per_slot_level,
+                "targets_per_slot_level": spell.scaling.targets_per_slot_level,
+            }
+        ),
+        "exploration_effect": (
+            None
+            if spell.exploration_effect is None
+            else {
+                "kind": spell.exploration_effect.kind.value,
+                "flag_key": spell.exploration_effect.flag_key,
+                "flag_value": spell.exploration_effect.flag_value,
+            }
+        ),
+    }
+
+
+def _spell_definition_from_payload(raw: object) -> SpellDefinition:
+    data = _mapping(raw, "actor.spell")
+    range_data = _mapping(data.get("range"), "actor.spell.range")
+    components = _mapping(data.get("components"), "actor.spell.components")
+    duration = _mapping(data.get("duration"), "actor.spell.duration")
+    scaling_raw = data.get("scaling")
+    scaling = None
+    if scaling_raw is not None:
+        scaling_data = _mapping(scaling_raw, "actor.spell.scaling")
+        scaling = SpellScaling(
+            damage_dice_per_slot_level=_integer(
+                scaling_data.get("damage_dice_per_slot_level", 0),
+                "actor.spell.scaling.damage_dice_per_slot_level",
+            ),
+            healing_dice_per_slot_level=_integer(
+                scaling_data.get("healing_dice_per_slot_level", 0),
+                "actor.spell.scaling.healing_dice_per_slot_level",
+            ),
+            targets_per_slot_level=_integer(
+                scaling_data.get("targets_per_slot_level", 0),
+                "actor.spell.scaling.targets_per_slot_level",
+            ),
+        )
+    exploration_effect_raw = data.get("exploration_effect")
+    exploration_effect = None
+    if exploration_effect_raw is not None:
+        exploration_effect_data = _mapping(
+            exploration_effect_raw,
+            "actor.spell.exploration_effect",
+        )
+        exploration_effect = SpellExplorationEffect(
+            kind=_enum(
+                SpellExplorationEffectKind,
+                exploration_effect_data.get("kind"),
+                "actor.spell.exploration_effect.kind",
+            ),
+            flag_key=_string(
+                exploration_effect_data.get("flag_key"),
+                "actor.spell.exploration_effect.flag_key",
+            ),
+            flag_value=exploration_effect_data.get("flag_value", True),
+        )
+    return SpellDefinition(
+        id=_string(data.get("id"), "actor.spell.id"),
+        name=_string(data.get("name"), "actor.spell.name"),
+        level=_integer(data.get("level"), "actor.spell.level"),
+        school=_enum(SpellSchool, data.get("school"), "actor.spell.school"),
+        casting_time=_enum(
+            SpellCastingTime,
+            data.get("casting_time"),
+            "actor.spell.casting_time",
+        ),
+        range=SpellRange(
+            _enum(SpellRangeKind, range_data.get("kind"), "actor.spell.range.kind"),
+            _integer(range_data.get("feet", 0), "actor.spell.range.feet"),
+        ),
+        components=SpellComponents(
+            verbal=_boolean(components.get("verbal", False), "actor.spell.components.verbal"),
+            somatic=_boolean(components.get("somatic", False), "actor.spell.components.somatic"),
+            materials=tuple(
+                SpellMaterial(
+                    item_id=_string(material.get("item_id"), "actor.spell.material.item_id"),
+                    label=_string(material.get("label"), "actor.spell.material.label"),
+                    minimum_value_cp=_integer(
+                        material.get("minimum_value_cp", 0),
+                        "actor.spell.material.minimum_value_cp",
+                    ),
+                    consumed=_boolean(
+                        material.get("consumed", False),
+                        "actor.spell.material.consumed",
+                    ),
+                    quantity=_integer(
+                        material.get("quantity", 1),
+                        "actor.spell.material.quantity",
+                    ),
+                )
+                for raw_material in _sequence(
+                    components.get("materials", []),
+                    "actor.spell.components.materials",
+                )
+                for material in (_mapping(raw_material, "actor.spell.material"),)
+            ),
+        ),
+        duration=SpellDuration(
+            _enum(SpellDurationKind, duration.get("kind"), "actor.spell.duration.kind"),
+            _integer(duration.get("amount", 1), "actor.spell.duration.amount"),
+        ),
+        concentration=_boolean(data.get("concentration", False), "actor.spell.concentration"),
+        ritual=_boolean(data.get("ritual", False), "actor.spell.ritual"),
+        effect_kind=_string(data.get("effect_kind"), "actor.spell.effect_kind"),
+        scaling=scaling,
+        exploration_effect=exploration_effect,
+    )
+
+
 def _actor_from_payload(raw: object) -> Actor:
     data = _mapping(raw, "actor")
     abilities = _mapping(data.get("ability_scores"), "actor.ability_scores")
@@ -411,6 +885,25 @@ def _actor_from_payload(raw: object) -> Actor:
             always_prepared_spell_ids=_string_tuple(item.get("always_prepared_spell_ids", []), "always_prepared_spell_ids"),
             confirmed=_boolean(item.get("confirmed"), "spell_preparation.confirmed"),
         )
+    inventory = tuple(
+        _inventory_item_from_payload(value, "actor.inventory")
+        for value in _sequence(data.get("inventory", []), "actor.inventory")
+    )
+    active_light_raw = data.get("active_light")
+    active_light = None
+    if active_light_raw is not None:
+        light = _mapping(active_light_raw, "actor.active_light")
+        active_light = ActiveLight(
+            source_item_id=_string(light.get("source_item_id"), "actor.active_light.source_item_id"),
+            source_name=_string(light.get("source_name"), "actor.active_light.source_name"),
+            bright_distance_feet=_integer(light.get("bright_distance_feet"), "actor.active_light.bright_distance_feet"),
+            dim_additional_feet=_integer(light.get("dim_additional_feet"), "actor.active_light.dim_additional_feet"),
+            remaining_minutes=_integer(light.get("remaining_minutes"), "actor.active_light.remaining_minutes"),
+            shape=_enum(LightShape, light.get("shape"), "actor.active_light.shape"),
+            hooded_dim_distance_feet=_optional_integer(light.get("hooded_dim_distance_feet"), "actor.active_light.hooded_dim_distance_feet"),
+            hood_lowered=_boolean(light.get("hood_lowered", False), "actor.active_light.hood_lowered"),
+        )
+    validate_attunement_limit(inventory)
     return Actor(
         id=ActorId(_string(data.get("id"), "actor.id")), name=_string(data.get("name"), "actor.name"),
         portrait=_string(data.get("portrait", ""), "actor.portrait", allow_empty=True),
@@ -422,8 +915,36 @@ def _actor_from_payload(raw: object) -> Actor:
         ability_scores=AbilityScores(**{name: _integer(abilities.get(name), f"ability_scores.{name}") for name in _ABILITY_NAMES}),
         spell_slots=tuple(SpellSlotState(_integer(slot.get("level"), "slot.level"), _integer(slot.get("remaining"), "slot.remaining"), _integer(slot.get("maximum"), "slot.maximum")) for value in _sequence(data.get("spell_slots", []), "spell_slots") for slot in (_mapping(value, "slot"),)),
         spell_save_dc=_integer(data.get("spell_save_dc"), "actor.spell_save_dc"),
-        inventory=tuple(InventoryItem(id=_string(item.get("id"), "item.id"), name=_string(item.get("name"), "item.name"), kind=_string(item.get("kind"), "item.kind"), quantity=_integer(item.get("quantity"), "item.quantity"), equipped=_boolean(item.get("equipped"), "item.equipped"), source_ref=_optional_string(item.get("source_ref"), "item.source_ref"), broken=_boolean(item.get("broken"), "item.broken"), description=_string(item.get("description", ""), "item.description", allow_empty=True), properties=_string_tuple(item.get("properties", []), "item.properties"), portable=_boolean(item.get("portable", True), "item.portable"), hands_required=_integer(item.get("hands_required", 0), "item.hands_required"), held_in=tuple(_enum(HandSlot, slot, "item.held_in") for slot in _sequence(item.get("held_in", []), "item.held_in")), light_weapon=_boolean(item.get("light_weapon", False), "item.light_weapon"), versatile_damage_dice=_optional_string(item.get("versatile_damage_dice"), "item.versatile_damage_dice"), armor_class_bonus=_integer(item.get("armor_class_bonus", 0), "item.armor_class_bonus"), armor_proficiency=_optional_string(item.get("armor_proficiency"), "item.armor_proficiency")) for value in _sequence(data.get("inventory", []), "inventory") for item in (_mapping(value, "item"),)),
+        currency=_currency_from_payload(data.get("currency", {})),
+        inventory=inventory,
+        active_light=active_light,
         spell_ids=_string_tuple(data.get("spell_ids", []), "actor.spell_ids"), spell_preparation=prep,
+        spells=tuple(
+            _spell_definition_from_payload(value)
+            for value in _sequence(data.get("spells", []), "actor.spells")
+        ),
+        spell_access=tuple(
+            SpellAccessProfile(
+                kind=_enum(
+                    SpellAccessKind,
+                    profile.get("kind"),
+                    "actor.spell_access.kind",
+                ),
+                spell_ids=_string_tuple(
+                    profile.get("spell_ids", []),
+                    "actor.spell_access.spell_ids",
+                ),
+                allowed_focus_kinds=_string_tuple(
+                    profile.get("allowed_focus_kinds", []),
+                    "actor.spell_access.allowed_focus_kinds",
+                ),
+            )
+            for raw_profile in _sequence(
+                data.get("spell_access", []),
+                "actor.spell_access",
+            )
+            for profile in (_mapping(raw_profile, "actor.spell_access"),)
+        ),
         hit_dice=tuple(HitDicePool(_integer(pool.get("die_sides"), "hit_die.die_sides"), _integer(pool.get("remaining"), "hit_die.remaining"), _integer(pool.get("maximum"), "hit_die.maximum")) for value in _sequence(data.get("hit_dice", []), "hit_dice") for pool in (_mapping(value, "hit_die"),)),
         resource_pools=tuple(_resource_pool_from_payload(value) for value in _sequence(data.get("resource_pools", []), "resource_pools")),
         proficiency_bonus=_integer(data.get("proficiency_bonus", 2), "actor.proficiency_bonus"),
@@ -551,6 +1072,19 @@ def _exploration_payload(state: ExplorationState) -> dict[str, object]:
             for item in state.challenge_states
         ],
         "inventory_resource_ids": list(state.inventory_resource_ids), "elapsed_minutes": state.elapsed_minutes,
+        "magic_effects": [
+            {
+                "id": effect.id,
+                "actor_id": effect.actor_id,
+                "spell_id": effect.spell_id,
+                "label": effect.label,
+                "flag_key": effect.flag_key,
+                "flag_value": _json_value(effect.flag_value, "magic_effect.flag_value"),
+                "started_at_minute": effect.started_at_minute,
+                "expires_at_minute": effect.expires_at_minute,
+            }
+            for effect in state.magic_effects
+        ],
         "short_rest_counts": [{"policy_id": key, "count": value} for key, value in state.short_rest_counts],
         "temporary_items": [
             {
@@ -632,6 +1166,8 @@ def _exploration_payload(state: ExplorationState) -> dict[str, object]:
                 "save_ability": item.save_ability,
                 "save_dc": item.save_dc,
                 "save_timing": item.save_timing.value if item.save_timing is not None else None,
+                "source_spell_id": item.source_spell_id,
+                "source_spell_level": item.source_spell_level,
             }
             for item in state.condition_states
         ],
@@ -640,6 +1176,19 @@ def _exploration_payload(state: ExplorationState) -> dict[str, object]:
             for item in state.trap_states
         ],
         "npc_states": [item.as_payload() for item in state.npc_states],
+        "merchants": [
+            {
+                "id": merchant.id,
+                "name": merchant.name,
+                "buyback_percent": merchant.buyback_percent,
+                "currency": merchant.currency.as_payload(),
+                "inventory": [
+                    inventory_item_payload(item)
+                    for item in merchant.inventory
+                ],
+            }
+            for merchant in state.merchants
+        ],
     }
 
 
@@ -693,6 +1242,29 @@ def _exploration_from_payload(base: ExplorationState, raw: object) -> Exploratio
         (_string(item.get("policy_id"), "short_rest.policy_id"), _integer(item.get("count"), "short_rest.count"))
         for raw_item in _sequence(data.get("short_rest_counts", []), "short_rest_counts")
         for item in (_mapping(raw_item, "short_rest_count"),)
+    )
+    magic_effects = tuple(
+        TimedMagicEffect(
+            id=_string(item.get("id"), "magic_effect.id"),
+            actor_id=_string(item.get("actor_id"), "magic_effect.actor_id"),
+            spell_id=_string(item.get("spell_id"), "magic_effect.spell_id"),
+            label=_string(item.get("label"), "magic_effect.label"),
+            flag_key=_string(item.get("flag_key"), "magic_effect.flag_key"),
+            flag_value=item.get("flag_value", True),
+            started_at_minute=_integer(
+                item.get("started_at_minute"),
+                "magic_effect.started_at_minute",
+            ),
+            expires_at_minute=_optional_integer(
+                item.get("expires_at_minute"),
+                "magic_effect.expires_at_minute",
+            ),
+        )
+        for raw_item in _sequence(
+            data.get("magic_effects", []),
+            "magic_effects",
+        )
+        for item in (_mapping(raw_item, "magic_effect"),)
     )
     temporary_items = tuple(
         TemporaryItem(
@@ -873,6 +1445,14 @@ def _exploration_from_payload(base: ExplorationState, raw: object) -> Exploratio
                 item.get("save_timing"),
                 "exploration.condition.save_timing",
             ),
+            source_spell_id=_optional_string(
+                item.get("source_spell_id"),
+                "exploration.condition.source_spell_id",
+            ),
+            source_spell_level=_optional_integer(
+                item.get("source_spell_level"),
+                "exploration.condition.source_spell_level",
+            ),
         )
         for raw_item in _sequence(data.get("condition_states", []), "condition_states")
         for item in (_mapping(raw_item, "condition_state"),)
@@ -966,6 +1546,37 @@ def _exploration_from_payload(base: ExplorationState, raw: object) -> Exploratio
             }
             if set(npc_state.revealed_information_ids) - known_information_ids:
                 raise SnapshotValidationError("Zapis zawiera nieznaną informację NPC.")
+    merchants = base.merchants
+    if "merchants" in data:
+        merchants = tuple(
+            MerchantState(
+                id=_string(item.get("id"), "exploration.merchant.id"),
+                name=_string(item.get("name"), "exploration.merchant.name"),
+                buyback_percent=_integer(
+                    item.get("buyback_percent"),
+                    "exploration.merchant.buyback_percent",
+                ),
+                currency=_currency_from_payload(item.get("currency", {})),
+                inventory=tuple(
+                    _inventory_item_from_payload(
+                        raw_inventory_item,
+                        "exploration.merchant.inventory.item",
+                    )
+                    for raw_inventory_item in _sequence(
+                        item.get("inventory", []),
+                        "exploration.merchant.inventory",
+                    )
+                ),
+            )
+            for raw_item in _sequence(data.get("merchants", []), "merchants")
+            for item in (_mapping(raw_item, "merchant"),)
+        )
+        if {merchant.id for merchant in merchants} != {
+            merchant.id for merchant in base.merchants
+        }:
+            raise SnapshotValidationError(
+                "Lista sprzedawców nie odpowiada aktualnej wersji scenariusza."
+            )
     return replace(
         base, party_position=PartyPosition(zone_id, _optional_coordinate(party.get("marker_position"), "party_position.marker_position")),
         flags=SceneFlags(tuple(flags)),
@@ -988,6 +1599,8 @@ def _exploration_from_payload(base: ExplorationState, raw: object) -> Exploratio
         condition_states=condition_states,
         trap_states=trap_states,
         npc_states=npc_states,
+        merchants=merchants,
+        magic_effects=magic_effects,
     )
 
 
@@ -1028,6 +1641,7 @@ def _effect_payload(effect: ActiveEffect) -> dict[str, object]:
         "duration": effect.duration.value, "stacking": effect.stacking.value, "stacking_key": effect.stacking_key,
         "expiration_actor_id": effect.expiration_actor_id,
         "additional_expirations": [{"duration": item.duration.value, "actor_id": item.actor_id, "target_actor_id": item.target_actor_id} for item in effect.additional_expirations],
+        "spell_level": effect.spell_level,
     }
 
 
@@ -1044,7 +1658,310 @@ def _effect_from_payload(raw: object) -> ActiveEffect:
         duration=_enum(EffectDuration, data.get("duration"), "effect.duration"), stacking=_enum(EffectStackingPolicy, data.get("stacking"), "effect.stacking"),
         stacking_key=_string(data.get("stacking_key"), "effect.stacking_key"), expiration_actor_id=_optional_string(data.get("expiration_actor_id"), "effect.expiration_actor_id"),
         additional_expirations=tuple(AdditionalEffectExpiration(_enum(EffectDuration, item.get("duration"), "expiration.duration"), _optional_string(item.get("actor_id"), "expiration.actor_id"), _optional_string(item.get("target_actor_id"), "expiration.target_actor_id")) for value in _sequence(data.get("additional_expirations", []), "additional_expirations") for item in (_mapping(value, "expiration"),)),
+        spell_level=_optional_integer(data.get("spell_level"), "effect.spell_level"),
     )
+
+
+def _inventory_item_from_payload(raw: object, path: str) -> InventoryItem:
+    item = _mapping(raw, path)
+    return InventoryItem(
+        id=_string(item.get("id"), f"{path}.id"),
+        name=_string(item.get("name"), f"{path}.name"),
+        kind=_string(item.get("kind"), f"{path}.kind"),
+        quantity=_integer(item.get("quantity"), f"{path}.quantity"),
+        equipped=_boolean(item.get("equipped"), f"{path}.equipped"),
+        source_ref=_optional_string(item.get("source_ref"), f"{path}.source_ref"),
+        broken=_boolean(item.get("broken"), f"{path}.broken"),
+        description=_string(
+            item.get("description", ""),
+            f"{path}.description",
+            allow_empty=True,
+        ),
+        properties=_string_tuple(item.get("properties", []), f"{path}.properties"),
+        portable=_boolean(item.get("portable", True), f"{path}.portable"),
+        hands_required=_integer(item.get("hands_required", 0), f"{path}.hands_required"),
+        held_in=tuple(
+            _enum(HandSlot, slot, f"{path}.held_in")
+            for slot in _sequence(item.get("held_in", []), f"{path}.held_in")
+        ),
+        light_weapon=_boolean(item.get("light_weapon", False), f"{path}.light_weapon"),
+        versatile_damage_dice=_optional_string(
+            item.get("versatile_damage_dice"),
+            f"{path}.versatile_damage_dice",
+        ),
+        armor_class_bonus=_integer(
+            item.get("armor_class_bonus", 0),
+            f"{path}.armor_class_bonus",
+        ),
+        armor_proficiency=_optional_string(
+            item.get("armor_proficiency"),
+            f"{path}.armor_proficiency",
+        ),
+        armor_category=(
+            _enum(
+                ArmorCategory,
+                item.get("armor_category"),
+                f"{path}.armor_category",
+            )
+            if item.get("armor_category") is not None
+            else None
+        ),
+        armor_base_ac=_optional_integer(
+            item.get("armor_base_ac"),
+            f"{path}.armor_base_ac",
+        ),
+        armor_dexterity_cap=_optional_integer(
+            item.get("armor_dexterity_cap"),
+            f"{path}.armor_dexterity_cap",
+        ),
+        armor_strength_requirement=_optional_integer(
+            item.get("armor_strength_requirement"),
+            f"{path}.armor_strength_requirement",
+        ),
+        stealth_disadvantage=_boolean(
+            item.get("stealth_disadvantage", False),
+            f"{path}.stealth_disadvantage",
+        ),
+        charges_maximum=_optional_integer(
+            item.get("charges_maximum"),
+            f"{path}.charges_maximum",
+        ),
+        charges_current=_optional_integer(
+            item.get("charges_current"),
+            f"{path}.charges_current",
+        ),
+        charges_recovery=_enum(
+            ItemChargeRecovery,
+            item.get("charges_recovery", ItemChargeRecovery.NEVER.value),
+            f"{path}.charges_recovery",
+        ),
+        charges_recovery_dice=_optional_string(
+            item.get("charges_recovery_dice"),
+            f"{path}.charges_recovery_dice",
+        ),
+        charges_recovery_modifier=_integer(
+            item.get("charges_recovery_modifier", 0),
+            f"{path}.charges_recovery_modifier",
+        ),
+        requires_attunement=_boolean(
+            item.get("requires_attunement", False),
+            f"{path}.requires_attunement",
+        ),
+        attuned=_boolean(
+            item.get("attuned", False),
+            f"{path}.attuned",
+        ),
+        magic_effects=_magic_item_effects(
+            item.get("magic_effects", []),
+            f"{path}.magic_effects",
+        ),
+        weapon_category=_optional_enum(
+            WeaponCategory,
+            item.get("weapon_category"),
+            f"{path}.weapon_category",
+        ),
+        weapon_properties=tuple(
+            _enum(WeaponProperty, value, f"{path}.weapon_properties")
+            for value in _sequence(
+                item.get("weapon_properties", []),
+                f"{path}.weapon_properties",
+            )
+        ),
+        ammunition_type=_optional_string(
+            item.get("ammunition_type"),
+            f"{path}.ammunition_type",
+        ),
+        gear_category=_optional_enum(
+            GearCategory,
+            item.get("gear_category"),
+            f"{path}.gear_category",
+        ),
+        stackable=_boolean(item.get("stackable", True), f"{path}.stackable"),
+        tool_proficiency_id=_optional_string(
+            item.get("tool_proficiency_id"),
+            f"{path}.tool_proficiency_id",
+        ),
+        spellcasting_focus_kind=_optional_enum(
+            SpellcastingFocusKind,
+            item.get("spellcasting_focus_kind"),
+            f"{path}.spellcasting_focus_kind",
+        ),
+        container_capacity=_container_capacity_from_payload(
+            item.get("container_capacity"),
+            f"{path}.container_capacity",
+        ),
+        light_source=_light_source_from_payload(
+            item.get("light_source"),
+            f"{path}.light_source",
+        ),
+        check_modifiers=_check_modifiers_from_payload(
+            item.get("check_modifiers", []),
+            f"{path}.check_modifiers",
+        ),
+        durability=_durability_from_payload(
+            item.get("durability"),
+            f"{path}.durability",
+        ),
+        bundle_contents=tuple(
+            BundleEntry(
+                item_id=_string(
+                    entry.get("item_id"),
+                    f"{path}.bundle_contents[{index}].item_id",
+                ),
+                quantity=_integer(
+                    entry.get("quantity", 1),
+                    f"{path}.bundle_contents[{index}].quantity",
+                ),
+            )
+            for index, raw_entry in enumerate(
+                _sequence(item.get("bundle_contents", []), f"{path}.bundle_contents")
+            )
+            for entry in (
+                _mapping(raw_entry, f"{path}.bundle_contents[{index}]"),
+            )
+        ),
+        value_cp=_integer(item.get("value_cp", 0), f"{path}.value_cp"),
+        weight_lb=_number(item.get("weight_lb", 0), f"{path}.weight_lb"),
+    )
+
+
+def _container_capacity_from_payload(
+    raw: object,
+    path: str,
+) -> ContainerCapacity | None:
+    if raw is None:
+        return None
+    data = _mapping(raw, path)
+    return ContainerCapacity(
+        maximum_weight_lb=(
+            _number(data.get("maximum_weight_lb"), f"{path}.maximum_weight_lb")
+            if data.get("maximum_weight_lb") is not None
+            else None
+        ),
+        volume_cubic_feet=(
+            _number(data.get("volume_cubic_feet"), f"{path}.volume_cubic_feet")
+            if data.get("volume_cubic_feet") is not None
+            else None
+        ),
+        liquid_pints=(
+            _number(data.get("liquid_pints"), f"{path}.liquid_pints")
+            if data.get("liquid_pints") is not None
+            else None
+        ),
+        ammunition_type=_optional_string(
+            data.get("ammunition_type"),
+            f"{path}.ammunition_type",
+        ),
+        ammunition_count=_optional_integer(
+            data.get("ammunition_count"),
+            f"{path}.ammunition_count",
+        ),
+        sheet_count=_optional_integer(
+            data.get("sheet_count"),
+            f"{path}.sheet_count",
+        ),
+    )
+
+
+def _light_source_from_payload(raw: object, path: str) -> LightSource | None:
+    if raw is None:
+        return None
+    data = _mapping(raw, path)
+    return LightSource(
+        bright_distance_feet=_integer(
+            data.get("bright_distance_feet"),
+            f"{path}.bright_distance_feet",
+        ),
+        dim_additional_feet=_integer(
+            data.get("dim_additional_feet"),
+            f"{path}.dim_additional_feet",
+        ),
+        duration_minutes=_integer(
+            data.get("duration_minutes"),
+            f"{path}.duration_minutes",
+        ),
+        shape=_enum(
+            LightShape,
+            data.get("shape", LightShape.RADIUS.value),
+            f"{path}.shape",
+        ),
+        fuel_item_id=_optional_string(
+            data.get("fuel_item_id"),
+            f"{path}.fuel_item_id",
+        ),
+        hooded_dim_distance_feet=_optional_integer(
+            data.get("hooded_dim_distance_feet"),
+            f"{path}.hooded_dim_distance_feet",
+        ),
+    )
+
+
+def _check_modifiers_from_payload(
+    raw: object,
+    path: str,
+) -> tuple[CheckModifier, ...]:
+    return tuple(
+        CheckModifier(
+            id=_string(data.get("id"), f"{path}[{index}].id"),
+            label=_string(data.get("label"), f"{path}[{index}].label"),
+            context=_string(data.get("context"), f"{path}[{index}].context"),
+            mode=_enum(
+                CheckModifierMode,
+                data.get("mode"),
+                f"{path}[{index}].mode",
+            ),
+            value=_integer(data.get("value", 0), f"{path}[{index}].value"),
+            ability=_optional_string(data.get("ability"), f"{path}[{index}].ability"),
+            skill=_optional_string(data.get("skill"), f"{path}[{index}].skill"),
+        )
+        for index, entry in enumerate(_sequence(raw, path))
+        for data in (_mapping(entry, f"{path}[{index}]"),)
+    )
+
+
+def _durability_from_payload(raw: object, path: str) -> ObjectDurability | None:
+    if raw is None:
+        return None
+    data = _mapping(raw, path)
+    return ObjectDurability(
+        hit_points=_optional_integer(data.get("hit_points"), f"{path}.hit_points"),
+        break_strength_dc=_optional_integer(
+            data.get("break_strength_dc"),
+            f"{path}.break_strength_dc",
+        ),
+        escape_dexterity_dc=_optional_integer(
+            data.get("escape_dexterity_dc"),
+            f"{path}.escape_dexterity_dc",
+        ),
+        pick_lock_dc=_optional_integer(
+            data.get("pick_lock_dc"),
+            f"{path}.pick_lock_dc",
+        ),
+    )
+
+
+def _magic_item_effects(data: Any, path: str) -> tuple[MagicItemEffect, ...]:
+    entries = _sequence(data, path)
+    effects: list[MagicItemEffect] = []
+    for index, raw in enumerate(entries):
+        effect_path = f"{path}[{index}]"
+        effect = _mapping(raw, effect_path)
+        effects.append(
+            MagicItemEffect(
+                id=_string(effect.get("id"), f"{effect_path}.id"),
+                kind=_enum(
+                    MagicItemEffectKind,
+                    effect.get("kind"),
+                    f"{effect_path}.kind",
+                ),
+                value=_integer(effect.get("value"), f"{effect_path}.value"),
+                requires_equipped=_boolean(
+                    effect.get("requires_equipped", True),
+                    f"{effect_path}.requires_equipped",
+                ),
+            )
+        )
+    return tuple(effects)
 
 
 def _combat_payload(state: CombatState | None) -> dict[str, object] | None:
@@ -1059,30 +1976,62 @@ def _combat_payload(state: CombatState | None) -> dict[str, object] | None:
         "turn_action": {"action_use": state.turn_action.action_use.value, "bonus_action_use": state.turn_action.bonus_action_use.value, "reaction_available": state.turn_action.reaction_available, "movement_used_feet": state.turn_action.movement_used_feet, "extra_movement_feet": state.turn_action.extra_movement_feet, "object_interaction_available": state.turn_action.object_interaction_available, "two_weapon_trigger_item_id": state.turn_action.two_weapon_trigger_item_id, "attack_action_active": state.turn_action.attack_action_active, "attacks_used": state.turn_action.attacks_used, "attacks_maximum": state.turn_action.attacks_maximum},
         "status": state.status.value, "winner": state.winner.value if state.winner else None,
         "spent_reaction_actor_ids": sorted(str(item) for item in state.spent_reaction_actor_ids),
+        "ammunition_expenditures": [
+            {
+                "shooter_actor_id": str(entry.shooter_actor_id),
+                "shooter_faction": entry.shooter_faction.value,
+                "ammunition_type": entry.ammunition_type,
+                "quantity": entry.quantity,
+                "item": inventory_item_payload(entry.item),
+            }
+            for entry in state.ammunition_expenditures
+        ],
+        "battlefield_loot": [
+            {
+                "id": ground.id,
+                "position": _coordinate_payload(ground.position),
+                "bundle": {
+                    "id": ground.bundle.id,
+                    "label": ground.bundle.label,
+                    "items": [
+                        inventory_item_payload(item)
+                        for item in ground.bundle.items
+                    ],
+                    "currency": ground.bundle.currency.as_payload(),
+                },
+            }
+            for ground in state.battlefield_loot
+        ],
+        "long_casts": [
+            {
+                "caster_id": str(cast.caster_id),
+                "spell_id": cast.spell_id,
+                "label": cast.label,
+                "cast_level": cast.cast_level,
+                "required_actions": cast.required_actions,
+                "completed_actions": cast.completed_actions,
+                "started_round": cast.started_round,
+                "last_progress_round": cast.last_progress_round,
+            }
+            for cast in state.long_casts
+        ],
+        "summoned_creatures": [
+            {
+                "actor_id": str(summon.actor_id),
+                "owner_actor_id": str(summon.owner_actor_id),
+                "spell_id": summon.spell_id,
+                "concentration_effect_id": summon.concentration_effect_id,
+                "definition": _summon_definition_payload(summon.definition),
+            }
+            for summon in state.summoned_creatures
+        ],
         "dropped_weapons": [
             {
                 "id": dropped.id,
                 "source_actor_id": str(dropped.source_actor_id),
                 "position": _coordinate_payload(dropped.position),
                 "dropped_round": dropped.dropped_round,
-                "weapon": {
-                    "id": dropped.weapon.id,
-                    "name": dropped.weapon.name,
-                    "kind": dropped.weapon.kind,
-                    "quantity": dropped.weapon.quantity,
-                    "equipped": dropped.weapon.equipped,
-                    "source_ref": dropped.weapon.source_ref,
-                    "broken": dropped.weapon.broken,
-                    "description": dropped.weapon.description,
-                    "properties": list(dropped.weapon.properties),
-                    "portable": dropped.weapon.portable,
-                    "hands_required": dropped.weapon.hands_required,
-                    "held_in": [slot.value for slot in dropped.weapon.held_in],
-                    "light_weapon": dropped.weapon.light_weapon,
-                    "versatile_damage_dice": dropped.weapon.versatile_damage_dice,
-                    "armor_class_bonus": dropped.weapon.armor_class_bonus,
-                    "armor_proficiency": dropped.weapon.armor_proficiency,
-                },
+                "weapon": inventory_item_payload(dropped.weapon),
             }
             for dropped in state.dropped_weapons
         ],
@@ -1105,10 +2054,125 @@ def _combat_payload(state: CombatState | None) -> dict[str, object] | None:
                 "save_ability": condition.save_ability,
                 "save_dc": condition.save_dc,
                 "save_timing": condition.save_timing.value if condition.save_timing is not None else None,
+                "source_spell_id": condition.source_spell_id,
+                "source_spell_level": condition.source_spell_level,
             }
             for condition in state.condition_states
         ],
     }
+
+
+def _summon_definition_payload(
+    definition: SummonDefinition,
+) -> dict[str, object]:
+    return {
+        "id": definition.id,
+        "name": definition.name,
+        "size": definition.size.value,
+        "ac": definition.ac,
+        "hp": definition.hp,
+        "speed_feet": definition.speed_feet,
+        "ability_scores": {
+            name: getattr(definition.ability_scores, name)
+            for name in _ABILITY_NAMES
+        },
+        "attack": {
+            "id": definition.attack_id,
+            "name": definition.attack_name,
+            "bonus": definition.attack_bonus,
+            "range_feet": definition.attack_range_feet,
+            "damage_fixed": definition.attack_damage_fixed,
+            "damage_type": definition.attack_damage_type.value,
+        },
+    }
+
+
+def _summoned_creature_from_payload(
+    raw: object,
+    actors_by_id: Mapping[str, Actor],
+) -> SummonedCreatureState:
+    data = _mapping(raw, "combat.summoned_creature")
+    definition_data = _mapping(
+        data.get("definition"),
+        "combat.summoned_creature.definition",
+    )
+    abilities = _mapping(
+        definition_data.get("ability_scores"),
+        "combat.summoned_creature.definition.ability_scores",
+    )
+    attack = _mapping(
+        definition_data.get("attack"),
+        "combat.summoned_creature.definition.attack",
+    )
+    actor_id = _string(data.get("actor_id"), "summoned_creature.actor_id")
+    owner_actor_id = _string(
+        data.get("owner_actor_id"),
+        "summoned_creature.owner_actor_id",
+    )
+    if actor_id not in actors_by_id:
+        raise SnapshotValidationError(
+            f"Przywołanie odwołuje się do nieznanego aktora: {actor_id}."
+        )
+    if owner_actor_id not in actors_by_id:
+        raise SnapshotValidationError(
+            f"Przywołanie ma nieznanego właściciela: {owner_actor_id}."
+        )
+    definition = SummonDefinition(
+        id=_string(definition_data.get("id"), "summon.definition.id"),
+        name=_string(definition_data.get("name"), "summon.definition.name"),
+        size=_enum(
+            CreatureSize,
+            definition_data.get("size"),
+            "summon.definition.size",
+        ),
+        ac=_integer(definition_data.get("ac"), "summon.definition.ac"),
+        hp=_integer(definition_data.get("hp"), "summon.definition.hp"),
+        speed_feet=_integer(
+            definition_data.get("speed_feet"),
+            "summon.definition.speed_feet",
+        ),
+        ability_scores=AbilityScores(
+            **{
+                name: _integer(
+                    abilities.get(name),
+                    f"summon.definition.ability_scores.{name}",
+                )
+                for name in _ABILITY_NAMES
+            }
+        ),
+        attack_id=_string(attack.get("id"), "summon.definition.attack.id"),
+        attack_name=_string(
+            attack.get("name"),
+            "summon.definition.attack.name",
+        ),
+        attack_bonus=_integer(
+            attack.get("bonus"),
+            "summon.definition.attack.bonus",
+        ),
+        attack_range_feet=_integer(
+            attack.get("range_feet"),
+            "summon.definition.attack.range_feet",
+        ),
+        attack_damage_fixed=_integer(
+            attack.get("damage_fixed"),
+            "summon.definition.attack.damage_fixed",
+        ),
+        attack_damage_type=_enum(
+            DamageType,
+            attack.get("damage_type"),
+            "summon.definition.attack.damage_type",
+        ),
+    )
+    return SummonedCreatureState(
+        actor_id=ActorId(actor_id),
+        owner_actor_id=ActorId(owner_actor_id),
+        spell_id=_string(data.get("spell_id"), "summoned_creature.spell_id"),
+        definition=definition,
+        concentration_effect_id=_string(
+            data.get("concentration_effect_id"),
+            "summoned_creature.concentration_effect_id",
+        ),
+    )
 
 
 def _combat_from_payload(raw: object) -> CombatState | None:
@@ -1158,39 +2222,119 @@ def _combat_from_payload(raw: object) -> CombatState | None:
         spent_reaction_actor_ids=frozenset(
             ActorId(item) for item in _string_tuple(data.get("spent_reaction_actor_ids", []), "spent_reaction_actor_ids")
         ),
+        long_casts=tuple(
+            LongCastState(
+                caster_id=ActorId(
+                    _string(item.get("caster_id"), "long_cast.caster_id")
+                ),
+                spell_id=_string(item.get("spell_id"), "long_cast.spell_id"),
+                label=_string(item.get("label"), "long_cast.label"),
+                cast_level=_integer(
+                    item.get("cast_level"),
+                    "long_cast.cast_level",
+                ),
+                required_actions=_integer(
+                    item.get("required_actions"),
+                    "long_cast.required_actions",
+                ),
+                completed_actions=_integer(
+                    item.get("completed_actions"),
+                    "long_cast.completed_actions",
+                ),
+                started_round=_integer(
+                    item.get("started_round"),
+                    "long_cast.started_round",
+                ),
+                last_progress_round=_integer(
+                    item.get("last_progress_round"),
+                    "long_cast.last_progress_round",
+                ),
+            )
+            for raw_item in _sequence(
+                data.get("long_casts", []),
+                "combat.long_casts",
+            )
+            for item in (_mapping(raw_item, "combat.long_cast"),)
+        ),
+        summoned_creatures=tuple(
+            _summoned_creature_from_payload(raw_item, by_id)
+            for raw_item in _sequence(
+                data.get("summoned_creatures", []),
+                "combat.summoned_creatures",
+            )
+        ),
+        ammunition_expenditures=tuple(
+            AmmunitionExpenditure(
+                shooter_actor_id=ActorId(
+                    _string(
+                        item.get("shooter_actor_id"),
+                        "ammunition_expenditure.shooter_actor_id",
+                    )
+                ),
+                shooter_faction=_enum(
+                    Faction,
+                    item.get("shooter_faction"),
+                    "ammunition_expenditure.shooter_faction",
+                ),
+                ammunition_type=_string(
+                    item.get("ammunition_type"),
+                    "ammunition_expenditure.ammunition_type",
+                ),
+                item=_inventory_item_from_payload(
+                    item.get("item"),
+                    "ammunition_expenditure.item",
+                ),
+                quantity=_integer(
+                    item.get("quantity"),
+                    "ammunition_expenditure.quantity",
+                ),
+            )
+            for raw_item in _sequence(
+                data.get("ammunition_expenditures", []),
+                "combat.ammunition_expenditures",
+            )
+            for item in (_mapping(raw_item, "ammunition_expenditure"),)
+        ),
+        battlefield_loot=tuple(
+            BattlefieldLoot(
+                id=_string(item.get("id"), "battlefield_loot.id"),
+                position=_coordinate(
+                    item.get("position"),
+                    "battlefield_loot.position",
+                ),
+                bundle=LootBundle(
+                    id=_string(bundle.get("id"), "battlefield_loot.bundle.id"),
+                    label=_string(
+                        bundle.get("label"),
+                        "battlefield_loot.bundle.label",
+                    ),
+                    items=tuple(
+                        _inventory_item_from_payload(
+                            raw_bundle_item,
+                            "battlefield_loot.bundle.item",
+                        )
+                        for raw_bundle_item in _sequence(
+                            bundle.get("items", []),
+                            "battlefield_loot.bundle.items",
+                        )
+                    ),
+                    currency=_currency_from_payload(bundle.get("currency", {})),
+                ),
+            )
+            for raw_item in _sequence(
+                data.get("battlefield_loot", []),
+                "combat.battlefield_loot",
+            )
+            for item in (_mapping(raw_item, "battlefield_loot"),)
+            for bundle in (_mapping(item.get("bundle"), "battlefield_loot.bundle"),)
+        ),
         dropped_weapons=tuple(
             DroppedWeapon(
                 id=_string(item.get("id"), "dropped_weapon.id"),
                 source_actor_id=ActorId(_string(item.get("source_actor_id"), "dropped_weapon.source_actor_id")),
-                weapon=InventoryItem(
-                    id=_string(weapon.get("id"), "dropped_weapon.weapon.id"),
-                    name=_string(weapon.get("name"), "dropped_weapon.weapon.name"),
-                    kind=_string(weapon.get("kind"), "dropped_weapon.weapon.kind"),
-                    quantity=_integer(weapon.get("quantity"), "dropped_weapon.weapon.quantity"),
-                    equipped=_boolean(weapon.get("equipped"), "dropped_weapon.weapon.equipped"),
-                    source_ref=_optional_string(weapon.get("source_ref"), "dropped_weapon.weapon.source_ref"),
-                    broken=_boolean(weapon.get("broken"), "dropped_weapon.weapon.broken"),
-                    description=_string(weapon.get("description", ""), "dropped_weapon.weapon.description", allow_empty=True),
-                    properties=_string_tuple(weapon.get("properties", []), "dropped_weapon.weapon.properties"),
-                    portable=_boolean(weapon.get("portable", True), "dropped_weapon.weapon.portable"),
-                    hands_required=_integer(weapon.get("hands_required", 0), "dropped_weapon.weapon.hands_required"),
-                    held_in=tuple(
-                        _enum(HandSlot, slot, "dropped_weapon.weapon.held_in")
-                        for slot in _sequence(weapon.get("held_in", []), "dropped_weapon.weapon.held_in")
-                    ),
-                    light_weapon=_boolean(weapon.get("light_weapon", False), "dropped_weapon.weapon.light_weapon"),
-                    versatile_damage_dice=_optional_string(
-                        weapon.get("versatile_damage_dice"),
-                        "dropped_weapon.weapon.versatile_damage_dice",
-                    ),
-                    armor_class_bonus=_integer(
-                        weapon.get("armor_class_bonus", 0),
-                        "dropped_weapon.weapon.armor_class_bonus",
-                    ),
-                    armor_proficiency=_optional_string(
-                        weapon.get("armor_proficiency"),
-                        "dropped_weapon.weapon.armor_proficiency",
-                    ),
+                weapon=_inventory_item_from_payload(
+                    weapon,
+                    "dropped_weapon.weapon",
                 ),
                 position=_coordinate(item.get("position"), "dropped_weapon.position"),
                 dropped_round=_integer(item.get("dropped_round"), "dropped_weapon.dropped_round"),
@@ -1244,6 +2388,14 @@ def _combat_from_payload(raw: object) -> CombatState | None:
                     ConditionSaveTiming,
                     item.get("save_timing"),
                     "condition_state.save_timing",
+                ),
+                source_spell_id=_optional_string(
+                    item.get("source_spell_id"),
+                    "condition_state.source_spell_id",
+                ),
+                source_spell_level=_optional_integer(
+                    item.get("source_spell_level"),
+                    "condition_state.source_spell_level",
                 ),
             )
             for raw_item in _sequence(data.get("condition_states", []), "combat.condition_states")
@@ -1371,6 +2523,23 @@ def _integer(value: object, field: str) -> int:
 
 def _optional_integer(value: object, field: str) -> int | None:
     return None if value is None else _integer(value, field)
+
+
+def _number(value: object, field: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise SnapshotValidationError(f"Pole {field} musi być liczbą.")
+    return float(value)
+
+
+def _currency_from_payload(value: object) -> CurrencyWallet:
+    data = _mapping(value, "actor.currency")
+    return CurrencyWallet(
+        cp=_integer(data.get("cp", 0), "actor.currency.cp"),
+        sp=_integer(data.get("sp", 0), "actor.currency.sp"),
+        ep=_integer(data.get("ep", 0), "actor.currency.ep"),
+        gp=_integer(data.get("gp", 0), "actor.currency.gp"),
+        pp=_integer(data.get("pp", 0), "actor.currency.pp"),
+    )
 
 
 def _boolean(value: object, field: str) -> bool:

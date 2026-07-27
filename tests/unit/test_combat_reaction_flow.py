@@ -4,24 +4,39 @@ from typing import Callable
 import pytest
 
 from dnd_board_game.actors import AbilityScores, Actor, ActorId, Faction
-from dnd_board_game.application import CombatReactionFlowService, PlayerReactionFlowService
+from dnd_board_game.application import (
+    CombatReactionFlowService,
+    CounterspellReactionFlowService,
+    DefensiveSpellReactionFlowService,
+    PlayerReactionFlowService,
+)
 from dnd_board_game.combat import (
+    ActionUse,
     ActiveCombatEffect,
+    AttackDeclaration,
     AttackSource,
     AttackSourceType,
     CombatState,
+    DamageComponentInput,
     DamageComponentSpec,
     DamageType,
     EnemyAutoTurnResult,
     InitiativeEntry,
     InitiativeOrder,
+    actor_as_combat_target,
+    apply_damage_result,
+    combat_armor_class,
+    expire_turn_start_effects,
     reaction_available_for,
     replace_actor,
+    resolve_attack,
+    resolve_damage,
     start_combat,
     use_actor_reaction,
 )
 from dnd_board_game.rules import D20RollInput, D20RollRequest, resolve_d20_roll
 from dnd_board_game.rules import DiceExpression
+from dnd_board_game.scenarios import build_encounter_from_scenario, load_scenario
 from dnd_board_game.world import BoardState, Coordinate, PathResult, find_path
 
 
@@ -77,6 +92,248 @@ def _path(state: CombatState, actor: Actor) -> PathResult:
 
 def _roll(natural_roll: int) -> Callable[[D20RollRequest], D20RollInput]:
     return lambda request: D20RollInput(request, natural_roll)
+
+
+def _enemy_spell_result(
+    state: CombatState,
+    enemy: Actor,
+    target: Actor,
+    *,
+    spell_level: int,
+) -> EnemyAutoTurnResult:
+    source = AttackSource(
+        "Wrogi płomień",
+        AttackSourceType.SPELL,
+        60,
+        D20RollRequest(),
+        damage_fixed=4,
+        id="enemy_flame",
+        spell_level=spell_level,
+        cast_level=spell_level,
+    )
+    target_snapshot = actor_as_combat_target(target)
+    attack_roll = resolve_d20_roll(D20RollInput(source.attack_roll_request, 15))
+    attack = resolve_attack(
+        AttackDeclaration(enemy, target_snapshot, source),
+        attack_roll,
+        ActionUse.ACTION_AVAILABLE,
+    )
+    damage = resolve_damage((DamageComponentInput(4, DamageType.FIRE),))
+    applied = apply_damage_result(target, damage)
+    return EnemyAutoTurnResult(
+        state=replace_actor(state, applied.actor_after),
+        enemy=enemy,
+        target=target_snapshot,
+        message="Wrogi czar trafia.",
+        attack_roll=attack_roll,
+        attack_resolution=attack,
+        damage=damage,
+        applied_damage=applied,
+        updated_target=applied.actor_after,
+        action_used=True,
+        source=source,
+    )
+
+
+def test_counterspell_automatically_interrupts_spell_at_selected_slot_level() -> None:
+    encounter = build_encounter_from_scenario(
+        load_scenario("content/scenarios/gate_skirmish.json")
+    )
+    cleric = next(actor for actor in encounter.actors if str(actor.id) == "cleric")
+    enemy = next(actor for actor in encounter.actors if actor.faction == Faction.ENEMY)
+    state = _state(enemy, cleric)
+    enemy_result = _enemy_spell_result(state, enemy, cleric, spell_level=3)
+    service = CounterspellReactionFlowService()
+
+    option = service.option(
+        board=encounter.board,
+        state=state,
+        enemy_result=enemy_result,
+        actions_by_actor=encounter.combat_actions_by_actor,
+    )
+
+    assert option is not None
+    assert option.cast_levels == (3,)
+    resolution = service.cast(
+        state=state,
+        enemy_result=enemy_result,
+        option=option,
+        cast_level=3,
+        actions_by_actor=encounter.combat_actions_by_actor,
+    )
+    updated_cleric = next(
+        actor for actor in resolution.result.state.actors if actor.id == cleric.id
+    )
+    assert resolution.countered
+    assert resolution.check_request is None
+    assert resolution.result.spell_countered
+    assert resolution.result.applied_damage is None
+    assert updated_cleric.hp == cleric.hp
+    assert next(slot for slot in updated_cleric.spell_slots if slot.level == 3).remaining == 0
+    assert not reaction_available_for(resolution.state, updated_cleric)
+
+
+def test_counterspell_uses_spellcasting_ability_check_against_stronger_spell() -> None:
+    encounter = build_encounter_from_scenario(
+        load_scenario("content/scenarios/gate_skirmish.json")
+    )
+    cleric = next(actor for actor in encounter.actors if str(actor.id) == "cleric")
+    enemy = next(actor for actor in encounter.actors if actor.faction == Faction.ENEMY)
+    state = _state(enemy, cleric)
+    enemy_result = _enemy_spell_result(state, enemy, cleric, spell_level=4)
+    service = CounterspellReactionFlowService()
+    option = service.option(
+        board=encounter.board,
+        state=state,
+        enemy_result=enemy_result,
+        actions_by_actor=encounter.combat_actions_by_actor,
+    )
+    assert option is not None
+
+    started = service.cast(
+        state=state,
+        enemy_result=enemy_result,
+        option=option,
+        cast_level=3,
+        actions_by_actor=encounter.combat_actions_by_actor,
+    )
+    assert not started.countered
+    assert started.check_dc == 14
+    assert started.check_modifier == 3
+    assert started.check_request is not None
+
+    resolved = service.resolve_check(
+        state=started.state,
+        enemy_result=started.result,
+        caster_id=str(cleric.id),
+        cast_level=3,
+        interrupted_spell_level=4,
+        natural_roll=11,
+    )
+    assert resolved.check_roll is not None
+    assert resolved.check_roll.total == 14
+    assert resolved.countered
+    assert resolved.result.spell_countered
+    assert resolved.result.applied_damage is None
+
+
+def test_failed_counterspell_preserves_enemy_spell_damage_and_spent_resources() -> None:
+    encounter = build_encounter_from_scenario(
+        load_scenario("content/scenarios/gate_skirmish.json")
+    )
+    cleric = next(actor for actor in encounter.actors if str(actor.id) == "cleric")
+    enemy = next(actor for actor in encounter.actors if actor.faction == Faction.ENEMY)
+    state = _state(enemy, cleric)
+    enemy_result = _enemy_spell_result(state, enemy, cleric, spell_level=4)
+    service = CounterspellReactionFlowService()
+    option = service.option(
+        board=encounter.board,
+        state=state,
+        enemy_result=enemy_result,
+        actions_by_actor=encounter.combat_actions_by_actor,
+    )
+    assert option is not None
+    started = service.cast(
+        state=state,
+        enemy_result=enemy_result,
+        option=option,
+        cast_level=3,
+        actions_by_actor=encounter.combat_actions_by_actor,
+    )
+
+    resolved = service.resolve_check(
+        state=started.state,
+        enemy_result=started.result,
+        caster_id=str(cleric.id),
+        cast_level=3,
+        interrupted_spell_level=4,
+        natural_roll=1,
+    )
+
+    result_cleric = next(
+        actor for actor in resolved.result.state.actors if actor.id == cleric.id
+    )
+    assert not resolved.countered
+    assert resolved.result.applied_damage is not None
+    assert result_cleric.hp == cleric.hp - 4
+    assert next(
+        slot for slot in result_cleric.spell_slots if slot.level == 3
+    ).remaining == 0
+    assert str(cleric.id) in resolved.result.state.spent_reaction_actor_ids
+
+
+def test_shield_reaction_consumes_slot_and_turns_hit_into_miss() -> None:
+    encounter = build_encounter_from_scenario(
+        load_scenario("content/scenarios/gate_skirmish.json")
+    )
+    cleric = next(actor for actor in encounter.actors if str(actor.id) == "cleric")
+    enemy = next(actor for actor in encounter.actors if actor.faction == Faction.ENEMY)
+    state = _state(enemy, cleric)
+    target = actor_as_combat_target(cleric)
+    source = AttackSource(
+        "Testowy atak",
+        AttackSourceType.WEAPON,
+        5,
+        D20RollRequest(),
+        damage_fixed=4,
+    )
+    attack_roll = resolve_d20_roll(D20RollInput(source.attack_roll_request, target.ac))
+    attack = resolve_attack(
+        AttackDeclaration(enemy, target, source),
+        attack_roll,
+        ActionUse.ACTION_AVAILABLE,
+    )
+    damage = resolve_damage((DamageComponentInput(4, DamageType.SLASHING),))
+    applied = apply_damage_result(cleric, damage)
+    enemy_result = EnemyAutoTurnResult(
+        state=replace_actor(state, applied.actor_after),
+        enemy=enemy,
+        target=target,
+        message="Trafienie.",
+        attack_roll=attack_roll,
+        attack_resolution=attack,
+        damage=damage,
+        applied_damage=applied,
+        updated_target=applied.actor_after,
+        action_used=True,
+        source=source,
+    )
+    service = DefensiveSpellReactionFlowService()
+    option = service.option(
+        state=state,
+        enemy_result=enemy_result,
+        actions_by_actor=encounter.combat_actions_by_actor,
+    )
+
+    assert option is not None
+    resolution = service.cast(
+        state=state,
+        enemy_result=enemy_result,
+        active_effects=(),
+        option=option,
+        actions_by_actor=encounter.combat_actions_by_actor,
+    )
+
+    updated_cleric = next(
+        actor for actor in resolution.result.state.actors if actor.id == cleric.id
+    )
+    reaction_cleric = next(
+        actor for actor in resolution.state.actors if actor.id == cleric.id
+    )
+    assert resolution.prevented_hit
+    assert resolution.result.attack_resolution is not None
+    assert not resolution.result.attack_resolution.hit
+    assert resolution.result.applied_damage is None
+    assert updated_cleric.hp == cleric.hp
+    assert sum(slot.remaining for slot in reaction_cleric.spell_slots) == (
+        sum(slot.remaining for slot in cleric.spell_slots) - 1
+    )
+    assert not reaction_available_for(resolution.state, reaction_cleric)
+    assert combat_armor_class(reaction_cleric, resolution.active_effects) == target.ac + 5
+    assert expire_turn_start_effects(
+        resolution.active_effects,
+        str(reaction_cleric.id),
+    ) == ()
 
 
 def test_missed_opportunity_attack_consumes_reaction_then_moves() -> None:
@@ -396,3 +653,8 @@ def test_ready_trigger_detection_uses_enemy_movement_and_legal_range() -> None:
     assert trigger.readied_actor_id == "hero"
     assert trigger.target_id == "goblin"
     assert trigger.trigger == "enemy_moves"
+    actor_as_combat_target,
+    apply_damage_result,
+    combat_armor_class,
+    resolve_attack,
+    resolve_damage,

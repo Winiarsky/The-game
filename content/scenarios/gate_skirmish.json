@@ -1,4 +1,8 @@
 {
+  "schema": "dnd_board_game.scenario",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["project_original"],
   "id": "gate_skirmish",
   "name": "Pierwsza potyczka za bramą",
   "board": {
@@ -36,7 +40,8 @@
       "feature_refs": ["heroic_strike"],
       "item_refs": ["longsword", "dagger", "strength_potion", "sticky_flask"],
       "inventory": [
-        {"item_ref": "crossbow", "equipped": false}
+        {"item_ref": "crossbow", "equipped": false},
+        {"item_ref": "crossbow_bolt", "quantity": 20, "equipped": false}
       ]
     },
     {
@@ -67,7 +72,10 @@
         "armor": ["light"],
         "tools": ["thieves_tools"]
       },
-      "item_refs": ["crossbow", "dagger", "sticky_flask"]
+      "item_refs": ["crossbow", "dagger", "sticky_flask"],
+      "inventory": [
+        {"item_ref": "crossbow_bolt", "quantity": 20, "equipped": false}
+      ]
     },
     {
       "id": "cleric",
@@ -97,7 +105,8 @@
         "tools": []
       },
       "spell_slots": {
-        "1": 2
+        "1": 2,
+        "3": 1
       },
       "spell_save_dc": 13,
       "auras": [
@@ -108,6 +117,20 @@
           "target": "self_and_allies",
           "effect_kind": "saving_throw_bonus",
           "value": 1
+        }
+      ],
+      "inventory": [
+        {
+          "item_ref": "binding_wand",
+          "equipped": false
+        },
+        {
+          "item_ref": "guardian_amulet",
+          "equipped": true
+        },
+        {
+          "item_ref": "holy_symbol_amulet",
+          "equipped": true
         }
       ],
       "spell_preparation": {
@@ -124,80 +147,41 @@
         ],
         "always_prepared_spell_ids": []
       },
-      "attacks": [
+      "spell_refs": [
+        "sacred_flame",
+        "radiant_line",
+        "healing_word",
+        "bless_attack_bonus",
+        "comprehend_languages",
+        "shield",
+        "counterspell",
+        "warding_rite",
+        "call_guardian_spirit",
+        "veil_step",
+        "repelling_pulse",
+        "grasping_current",
+        "weakening_miasma",
+        "binding_frost",
+        "unravel_magic"
+      ],
+      "spell_access": [
         {
-          "id": "sacred_flame",
-          "name": "Święty płomień",
-          "source_type": "spell",
-          "attack_kind": "ranged",
-          "casting_kind": "cantrip",
-          "prepared": true,
-          "ability": "wisdom",
-          "range_feet": 60,
-          "save_ability": "dexterity",
-          "save_damage_on_success": "none",
-          "damage": {
-            "dice": "1d8",
-            "modifier": 0,
-            "damage_type": "radiant"
-          }
+          "kind": "prepared",
+          "spell_ids": [
+            "sacred_flame",
+            "radiant_line",
+            "healing_word",
+            "bless_attack_bonus"
+          ],
+          "allowed_focus_kinds": ["holy_symbol", "component_pouch"]
         },
         {
-          "id": "radiant_line",
-          "name": "Smuga światła",
-          "source_type": "spell",
-          "attack_kind": "ranged",
-          "casting_kind": "leveled",
-          "prepared": true,
-          "ability": "wisdom",
-          "range_feet": 30,
-          "spell_level": 1,
-          "save_ability": "dexterity",
-          "save_damage_on_success": "half",
-          "area": {
-            "shape": "line",
-            "length_feet": 30,
-            "width_feet": 5,
-            "target_mode": "all_creatures"
-          },
-          "damage": {
-            "dice": "1d8",
-            "modifier": 0,
-            "damage_type": "radiant"
-          }
+          "kind": "known",
+          "spell_ids": ["comprehend_languages", "shield", "counterspell", "warding_rite", "call_guardian_spirit", "veil_step", "repelling_pulse", "grasping_current", "weakening_miasma", "binding_frost", "unravel_magic"],
+          "allowed_focus_kinds": ["holy_symbol", "component_pouch"]
         }
       ],
-      "healing_sources": [
-        {
-          "id": "healing_word",
-          "name": "Słowo leczenia",
-          "source_type": "spell",
-          "casting_kind": "leveled",
-          "prepared": true,
-          "range_feet": 60,
-          "spell_level": 1,
-          "healing": {
-            "dice": "1d4",
-            "modifier": 3
-          }
-        }
-      ],
-      "combat_actions": [
-        {
-          "id": "bless_attack_bonus",
-          "name": "Błogosławieństwo",
-          "action_type": "concentration_attack_bonus",
-          "action_cost": "action",
-          "label": "Błogosławieństwo",
-          "value": 1,
-          "target_faction": "ally",
-          "spell_level": 1,
-          "casting_kind": "leveled",
-          "prepared": true,
-          "concentration": true,
-          "duration": "concentration"
-        }
-      ]
+      "attacks": []
     },
     {
       "id": "goblin_a",

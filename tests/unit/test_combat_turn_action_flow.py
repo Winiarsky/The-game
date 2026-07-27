@@ -9,12 +9,14 @@ from dnd_board_game.combat import (
     AttackSourceType,
     CombatState,
     CombatCondition,
+    ConditionState,
     HiddenState,
     InitiativeEntry,
     InitiativeOrder,
     start_combat,
     has_condition,
 )
+from dnd_board_game.inventory import ArmorCategory, InventoryItem
 from dnd_board_game.rules import D20RollInput, D20RollRequest, resolve_d20_roll
 from dnd_board_game.world import BLOCKING_TERRAIN, BoardState, Coordinate
 
@@ -175,6 +177,55 @@ def test_hide_uses_action_and_preserves_per_observer_hidden_state() -> None:
     assert hidden.state.hidden_states[0].stealth_total == 16
 
 
+def test_heavy_armor_applies_speed_penalty_and_requires_two_stealth_rolls() -> None:
+    service = CombatTurnActionFlowService()
+    armor = InventoryItem(
+        "chain_mail",
+        "Kolczuga",
+        "armor",
+        equipped=True,
+        armor_category=ArmorCategory.HEAVY,
+        armor_base_ac=16,
+        armor_dexterity_cap=0,
+        armor_strength_requirement=13,
+        stealth_disadvantage=True,
+        armor_proficiency="heavy",
+    )
+    hero = replace(
+        _actor("hero", Faction.ALLY, Coordinate(0, 0)),
+        inventory=(armor,),
+        ability_scores=AbilityScores(strength=12, dexterity=14),
+        proficiencies=ProficiencyProfile(armor=("heavy",)),
+    )
+    goblin = _actor("goblin", Faction.ENEMY, Coordinate(4, 0))
+    board = BoardState()
+    board.set_terrain(Coordinate(2, 0), BLOCKING_TERRAIN)
+    state = _state(hero, goblin)
+
+    dashed = service.use_dash(state=state, active_effects=())
+    pending = service.prepare_hide(state=state, board=board)
+
+    assert dashed.state.turn_action.extra_movement_feet == 20
+    assert pending.roll_mode == "disadvantage"
+    with pytest.raises(ValueError, match="dwóch wyników"):
+        service.resolve_hide(
+            state=state,
+            board=board,
+            pending=pending,
+            natural_roll=18,
+            active_effects=(),
+        )
+    hidden = service.resolve_hide(
+        state=state,
+        board=board,
+        pending=pending,
+        natural_roll=18,
+        natural_roll_2=7,
+        active_effects=(),
+    )
+    assert hidden.state.hidden_states == ()
+
+
 def test_search_uses_action_and_reveals_hidden_enemy_to_searcher() -> None:
     service = CombatTurnActionFlowService()
     hero = _actor("hero", Faction.ALLY, Coordinate(0, 0))
@@ -195,6 +246,41 @@ def test_search_uses_action_and_reveals_hidden_enemy_to_searcher() -> None:
     assert searched.state.turn_action.action_use.value == "action_used"
     assert searched.state.hidden_states == ()
     assert dict(searched.event_payload)["found_actor_ids"] == ["goblin"]
+
+
+def test_net_escape_uses_plain_strength_check_and_consumes_action() -> None:
+    service = CombatTurnActionFlowService()
+    hero = replace(
+        _actor("hero", Faction.ALLY, Coordinate(0, 0)),
+        ability_scores=AbilityScores(strength=14),
+    )
+    goblin = _actor("goblin", Faction.ENEMY, Coordinate(4, 0))
+    state = replace(
+        _state(hero, goblin),
+        condition_states=(
+            ConditionState(
+                "hero",
+                CombatCondition.RESTRAINED,
+                source_label="Sieć: Sieć",
+            ),
+        ),
+    )
+
+    pending = service.prepare_net_escape(state=state)
+    escaped = service.resolve_net_escape(
+        state=state,
+        pending=pending,
+        natural_roll=8,
+        active_effects=(),
+    )
+
+    assert pending.modifier == 2
+    assert not has_condition(
+        escaped.state.condition_states,
+        "hero",
+        CombatCondition.RESTRAINED,
+    )
+    assert escaped.state.turn_action.action_use.value == "action_used"
 
 
 def test_actions_reject_enemy_turn_and_missing_help_targets() -> None:

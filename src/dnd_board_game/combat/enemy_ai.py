@@ -11,6 +11,7 @@ from dnd_board_game.actors import (
     spend_actor_resource,
 )
 from dnd_board_game.rules import (
+    ActiveEffect,
     D20RollInput,
     D20RollRequest,
     D20RollResult,
@@ -21,11 +22,19 @@ from dnd_board_game.rules import (
     resolve_d20_roll,
 )
 from dnd_board_game.world import BoardState, PathResult, find_path, movement_range
+from dnd_board_game.inventory import consume_ammunition, has_ammunition
 
 from .action_economy import ActionUse
 from .attack_flow import AttackDeclaration, AttackResolution, AttackSource, legal_attack_targets, legal_melee_targets, resolve_attack
 from .attack_positioning import AttackPositioning, attack_source_with_positioning, evaluate_attack_positioning
-from .conditions import CombatCondition, attack_source_with_prone, condition_roll_request, has_condition, path_with_condition_cost
+from .conditions import (
+    CombatCondition,
+    apply_condition,
+    attack_source_with_prone,
+    condition_roll_request,
+    has_condition,
+    path_with_condition_cost,
+)
 from .scene import SceneObject
 from .stealth import is_hidden_from, resolve_search, reveal_actor
 from .damage import (
@@ -38,7 +47,9 @@ from .damage import (
 )
 from .session import (
     CombatState,
+    expend_thrown_weapon,
     movement_remaining,
+    record_ammunition_expenditure,
     replace_actor,
     stand_up,
     use_attack_action,
@@ -88,6 +99,8 @@ class EnemyAutoTurnResult:
     saving_throw_result: SavingThrowResult | None = None
     base_damage: int | None = None
     base_damage_components: tuple[DamageComponentInput, ...] = ()
+    spell_countered: bool = False
+    counterspell_actor_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,9 +121,11 @@ def resolve_enemy_auto_attack(
     source: AttackSource,
     rng: random.Random,
     scene_objects: tuple[SceneObject, ...] = (),
+    active_effects: tuple[ActiveEffect, ...] = (),
     *,
     maximum_attacks: int | None = None,
 ) -> EnemyAutoAttackResult:
+    enemy = _actor_for_id(state, enemy.id)
     if source.resource_pool_id is not None and not can_spend_actor_resource(
         enemy,
         source.resource_pool_id,
@@ -124,7 +139,41 @@ def resolve_enemy_auto_attack(
             action_used=False,
             source=source,
         )
-    action_result = use_attack_action(state, enemy, maximum_attacks=maximum_attacks)
+    if source.ammunition_type is not None and not has_ammunition(
+        enemy,
+        source.ammunition_type,
+    ):
+        return EnemyAutoAttackResult(
+            state,
+            enemy,
+            None,
+            f"{enemy.name} nie ma amunicji typu {source.ammunition_type} dla {source.name}.",
+            action_used=False,
+            source=source,
+        )
+    if source.thrown and source.source_item_id is not None and not any(
+        item.available
+        and (
+            item.id == source.source_item_id
+            or item.source_ref == source.source_item_id
+        )
+        for item in enemy.inventory
+    ):
+        return EnemyAutoAttackResult(
+            state,
+            enemy,
+            None,
+            f"{enemy.name} nie ma już dostępnej broni {source.name} do rzutu.",
+            action_used=False,
+            source=source,
+        )
+    action_result = use_attack_action(
+        state,
+        enemy,
+        maximum_attacks=1
+        if source.loading or source.limited_attacks
+        else maximum_attacks,
+    )
     if not action_result.accepted:
         return EnemyAutoAttackResult(action_result.state, enemy, None, action_result.message, action_used=False)
     if source.resource_pool_id is not None:
@@ -145,6 +194,7 @@ def resolve_enemy_auto_attack(
         action_result.state.actors,
         source,
         action_result.state.hidden_states,
+        active_effects,
     )
     if not targets:
         return EnemyAutoAttackResult(
@@ -156,7 +206,31 @@ def resolve_enemy_auto_attack(
         )
 
     target = _select_enemy_target(enemy, targets)
+    if source.ammunition_type is not None:
+        usage = consume_ammunition(
+            _actor_for_id(action_result.state, enemy.id),
+            source.ammunition_type,
+        )
+        recorded_state = record_ammunition_expenditure(
+            action_result.state,
+            enemy,
+            usage,
+        )
+        action_result = replace(
+            action_result,
+            state=replace_actor(recorded_state, usage.actor_after),
+        )
+        enemy = usage.actor_after
     target_actor = _actor_for_target(action_result.state, target)
+    if source.thrown and source.source_item_id is not None:
+        thrown_state = expend_thrown_weapon(
+            action_result.state,
+            str(enemy.id),
+            source.source_item_id,
+            target.position,
+        )
+        action_result = replace(action_result, state=thrown_state)
+        enemy = _actor_for_id(thrown_state, enemy.id)
     positioning = evaluate_attack_positioning(
         board,
         enemy,
@@ -217,27 +291,53 @@ def resolve_enemy_auto_attack(
     updated_target: Actor | None = None
 
     if resolution.hit:
-        damage = resolve_damage(
-            roll_damage_components(
-                source.damage_components,
-                lambda sides: rng.randint(1, sides),
+        if source.on_hit_condition is not None:
+            if (
+                source.weapon_special_rule is not None
+                and source.weapon_special_rule.value == "net"
+                and target_actor.size.value in {"large", "huge", "gargantuan"}
+            ):
+                message = (
+                    f"{enemy.name} trafia {target.name}, ale cel jest zbyt duży dla sieci."
+                )
+            else:
+                application = apply_condition(
+                    action_result.state.condition_states,
+                    target_actor,
+                    CombatCondition(source.on_hit_condition),
+                    source_actor_id=str(enemy.id),
+                    source_label=f"Sieć: {source.name}",
+                )
+                updated_state = replace(
+                    action_result.state,
+                    condition_states=application.states,
+                )
+                message = (
+                    f"{enemy.name} trafia {target.name}. Wynik ataku: {attack_roll.total}. "
+                    f"{application.message}"
+                )
+        else:
+            damage = resolve_damage(
+                roll_damage_components(
+                    source.damage_components,
+                    lambda sides: rng.randint(1, sides),
+                    critical=resolution.critical,
+                )
+            )
+            applied_damage = apply_damage_result(
+                target_actor,
+                damage,
                 critical=resolution.critical,
             )
-        )
-        applied_damage = apply_damage_result(
-            target_actor,
-            damage,
-            critical=resolution.critical,
-        )
-        damage = applied_damage.damage
-        updated_target = applied_damage.actor_after
-        updated_state = replace_actor(action_result.state, updated_target)
-        defeated_text = " Cel zostaje pokonany." if applied_damage.defeated_by_damage else ""
-        message = (
-            f"{enemy.name} trafia {target.name}. Wynik ataku: {attack_roll.total}. "
-            f"Obrażenia: {_damage_result_text(damage)}. "
-            f"{target_actor.name}: HP {applied_damage.hp_before} -> {applied_damage.hp_after}.{defeated_text}"
-        )
+            damage = applied_damage.damage
+            updated_target = applied_damage.actor_after
+            updated_state = replace_actor(action_result.state, updated_target)
+            defeated_text = " Cel zostaje pokonany." if applied_damage.defeated_by_damage else ""
+            message = (
+                f"{enemy.name} trafia {target.name}. Wynik ataku: {attack_roll.total}. "
+                f"Obrażenia: {_damage_result_text(damage)}. "
+                f"{target_actor.name}: HP {applied_damage.hp_before} -> {applied_damage.hp_after}.{defeated_text}"
+            )
     else:
         message = f"{enemy.name} pudłuje przeciwko {target.name}. Wynik ataku: {attack_roll.total}."
 
@@ -275,6 +375,7 @@ def resolve_enemy_auto_turn(
     source: AttackSource,
     rng: random.Random,
     scene_objects: tuple[SceneObject, ...] = (),
+    active_effects: tuple[ActiveEffect, ...] = (),
     *,
     maximum_attacks: int | None = None,
 ) -> EnemyAutoTurnResult:
@@ -297,6 +398,7 @@ def resolve_enemy_auto_turn(
                 source,
                 rng,
                 scene_objects,
+                active_effects,
                 maximum_attacks=maximum_attacks,
             )
             return EnemyAutoTurnResult(
@@ -363,6 +465,7 @@ def resolve_enemy_auto_turn(
         source,
         rng,
         scene_objects,
+        active_effects,
         maximum_attacks=maximum_attacks,
     )
     if plan.movement_path is None:

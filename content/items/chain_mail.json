@@ -1,0 +1,19 @@
+{
+  "schema": "dnd_board_game.item",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["srd_5_1_cc_by_4_0"],
+  "id": "chain_mail",
+  "name": "Kolczuga",
+  "kind": "armor",
+  "value_cp": 7500,
+  "weight_lb": 55,
+  "armor_category": "heavy",
+  "armor_base_ac": 16,
+  "armor_dexterity_cap": 0,
+  "armor_strength_requirement": 13,
+  "armor_proficiency": "heavy",
+  "stealth_disadvantage": true,
+  "description": "Ciężki pancerz o KP 16. Siła poniżej 13 zmniejsza szybkość o 10 ft; testy Stealth mają utrudnienie.",
+  "properties": ["heavy", "metallic", "hard"]
+}

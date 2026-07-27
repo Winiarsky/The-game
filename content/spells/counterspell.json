@@ -1,0 +1,22 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["srd_5_1_cc_by_4_0"],
+  "id": "counterspell",
+  "name": "Kontrczar",
+  "level": 3,
+  "school": "abjuration",
+  "casting_time": "reaction",
+  "range": {"kind": "distance", "feet": 60},
+  "components": {"verbal": false, "somatic": true, "materials": []},
+  "duration": {"kind": "instantaneous"},
+  "concentration": false,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "spell_counter",
+    "label": "Kontrczar",
+    "target_faction": "enemy"
+  }
+}

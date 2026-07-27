@@ -1,0 +1,1 @@
+{"schema":"dnd_board_game.item","schema_version":1,"ruleset_id":"dnd_5e_2014","source_pack_ids":["srd_5_1_cc_by_4_0"],"id":"warhammer","name":"Młot bojowy","kind":"weapon","value_cp":1500,"weight_lb":2,"weapon":{"category":"martial","attack_kind":"melee","properties":["versatile"],"versatile_damage_dice":"1d10","damage":{"dice":"1d8","damage_type":"bludgeoning"}}}

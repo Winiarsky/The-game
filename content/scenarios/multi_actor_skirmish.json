@@ -1,4 +1,8 @@
 {
+  "schema": "dnd_board_game.scenario",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["project_original"],
   "id": "multi_actor_skirmish",
   "name": "Potyczka przy rozbitych skrzyniach",
   "board": {
@@ -44,7 +48,10 @@
         "wisdom": 10,
         "charisma": 12
       },
-      "item_refs": ["crossbow"]
+      "item_refs": ["crossbow"],
+      "inventory": [
+        {"item_ref": "crossbow_bolt", "quantity": 20, "equipped": false}
+      ]
     },
     {
       "id": "goblin_a",

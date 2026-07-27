@@ -1,0 +1,1 @@
+{"schema":"dnd_board_game.item","schema_version":1,"ruleset_id":"dnd_5e_2014","source_pack_ids":["srd_5_1_cc_by_4_0"],"id":"dart","name":"Rzutka","kind":"weapon","value_cp":5,"weight_lb":0.25,"weapon":{"category":"simple","attack_kind":"ranged","properties":["finesse","thrown"],"normal_range_feet":20,"long_range_feet":60,"damage":{"dice":"1d4","damage_type":"piercing"}}}

@@ -1,8 +1,20 @@
 {
+  "schema": "dnd_board_game.item",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["srd_5_1_cc_by_4_0"],
   "id": "healers_kit",
   "name": "Zestaw uzdrowiciela",
   "kind": "tool",
-  "description": "Bandaże, maści i szyny pozwalające ustabilizować nieprzytomną istotę bez testu Medicine. Jedna sztuka w ekwipunku oznacza jedno użycie.",
+  "charges_maximum": 10,
+  "charges_recovery": "never",
+  "value_cp": 500,
+  "weight_lb": 3,
+  "description": "Bandaże, maści i szyny. Zestaw ma dziesięć użyć i pozwala ustabilizować istotę bez testu Medicine.",
   "properties": [],
-  "portable": true
+  "portable": true,
+  "gear": {
+    "category": "tool",
+    "tool_proficiency_id": "healers_kit"
+  }
 }

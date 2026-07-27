@@ -14,6 +14,7 @@ const slashCommands = [];
 let selectedInteractionGoalId = null;
 let selectedInteractionCheckParticipants = null;
 let selectedInteractionActorIds = [];
+let selectedTradeActorId = '';
 let filteredSlashCommands = [];
 let activeSlashCommandIndex = 0;
 let sidePanelOpen = localStorage.getItem('explorationSidePanelOpen') === 'true';
@@ -327,6 +328,7 @@ function currentModeLabel() {
   if (stage === 'party_setup') return 'Przygotowanie planszy';
   if (stage === 'location_preview') return 'Wybór lokacji';
   if (stage === 'scenario_complete') return 'Koniec scenariusza';
+  if (state.trade) return 'Handel';
   if (state.active_point && state.active_point.npc) return 'Rozmowa';
   return 'Eksploracja';
 }
@@ -538,16 +540,21 @@ function actorSpellsHtml(actor) {
   const preparationActor = (((state.spell_preparation || {}).actors) || []).find(candidate => String(candidate.actor_id) === String(actor.id));
   const preparationById = new Map(((preparationActor || {}).spells || []).map(spell => [String(spell.id), spell]));
   const sourceById = actorSpellSourceMap();
+  const definitionById = new Map((actor.spells || []).map(spell => [String(spell.id), spell]));
   const spellIds = actor.spell_ids || [];
   const slots = (actor.spell_slots || []).filter(slot => Number(slot.maximum || 0) > 0);
   const spellCards = spellIds.map(spellId => {
     const prepared = preparationById.get(String(spellId));
     const source = sourceById.get(String(spellId)) || {};
-    const level = prepared ? Number(prepared.level || 0) : Number(source.spell_level || 0);
-    const label = prepared?.label || source.name || source.label || identifierLabel(spellId);
-    const isPrepared = prepared ? Boolean(prepared.prepared || prepared.always_prepared) : level === 0;
-    const status = level === 0 ? 'Sztuczka · zawsze dostępna' : isPrepared ? `Poziom ${level} · przygotowany` : `Poziom ${level} · nieprzygotowany`;
-    return `<article class="panel-info-card spell${isPrepared ? ' prepared' : ' unavailable'}"><div><b>${esc(label)}</b><span>${esc(status)}</span></div>${source.concentration ? '<small>Koncentracja</small>' : ''}</article>`;
+    const definition = definitionById.get(String(spellId)) || {};
+    const level = prepared ? Number(prepared.level || 0) : Number(definition.level ?? source.spell_level ?? 0);
+    const label = prepared?.label || definition.name || source.name || source.label || identifierLabel(spellId);
+    const isPrepared = prepared ? Boolean(prepared.prepared || prepared.always_prepared) : Boolean(definition.castable || level === 0);
+    const status = level === 0 ? 'Sztuczka · zawsze dostępna' : isPrepared ? `Poziom ${level} · dostępny` : `Poziom ${level} · nieprzygotowany`;
+    const ritualButton = definition.ritual && !state.combat
+      ? `<button class="secondary" ${definition.ritual_castable ? '' : 'disabled'} onclick="castExplorationRitual('${esc(actor.id)}', '${esc(spellId)}')">Rzuć jako rytuał · ${esc(definition.ritual_casting_minutes || 10)} min</button>`
+      : '';
+    return `<article class="panel-info-card spell${isPrepared ? ' prepared' : ' unavailable'}"><div><b>${esc(label)}</b><span>${esc(status)}</span></div>${definition.concentration || source.concentration ? '<small>Koncentracja</small>' : ''}${definition.ritual ? '<small>Rytuał</small>' : ''}${ritualButton}</article>`;
   }).join('');
   return `
     <div class="actor-panel-summary"><b>${esc(actor.name)}</b><span>${spellIds.length ? `${spellIds.length} znanych czarów` : 'Nie zna czarów'}</span></div>
@@ -562,16 +569,89 @@ function identifierLabel(identifier) {
 function actorInventoryPanelHtml(actor) {
   const items = actor.inventory || [];
   const hands = actor.hands || {};
+  const currency = actor.currency || {};
+  const carrying = actor.carrying || {};
+  const activeLight = actor.active_light || null;
   const handLabel = hand => hand && hand.item_name ? hand.item_name : 'wolna';
+  const coinText = ['pp', 'gp', 'ep', 'sp', 'cp'].filter(key => Number(currency[key] || 0) > 0).map(key => `${esc(currency[key])} ${key}`).join(', ') || 'brak monet';
+  const carryingText = `${Number(carrying.weight_lb || 0).toFixed(1)} / ${Number(carrying.capacity_lb || 0).toFixed(1)} lb`;
   return `
-    <div class="actor-panel-summary"><b>${esc(actor.name)}</b><span>${items.length} ${items.length === 1 ? 'przedmiot' : 'przedmiotów'}</span></div>
+    <div class="actor-panel-summary"><b>${esc(actor.name)}</b><span>${items.length} ${items.length === 1 ? 'przedmiot' : 'przedmiotów'} · ${esc(carryingText)}</span></div>
+    <p class="muted"><b>Monety:</b> ${coinText}. <b>Udźwig:</b> ${esc(carryingText)}${carrying.over_capacity ? ' — przeciążenie' : ''}.${activeLight ? ` <b>Światło:</b> ${esc(activeLight.source_name)} ${esc(activeLight.bright_distance_feet)}/${esc(activeLight.dim_additional_feet)} ft, ${esc(activeLight.remaining_minutes)} min.` : ''}</p>
     <div class="hands-summary"><span><b>Główna ręka</b>${esc(handLabel(hands.main_hand))}</span><span><b>Druga ręka</b>${esc(handLabel(hands.off_hand))}</span></div>
     ${items.length ? items.map(item => {
       const held = (item.held_in || []).map(hand => hand === 'main_hand' ? 'główna ręka' : hand === 'off_hand' ? 'druga ręka' : hand).join(', ');
-      const tags = [item.equipped ? 'wyposażony' : '', held, item.broken ? 'uszkodzony' : '', item.available === false ? 'niedostępny' : ''].filter(Boolean);
-      return `<article class="panel-info-card inventory${item.broken || item.available === false ? ' unavailable' : ''}"><div><b>${esc(item.name || identifierLabel(item.id))}${Number(item.quantity || 1) > 1 ? ` ×${esc(item.quantity)}` : ''}</b><span>${esc(item.description || identifierLabel(item.kind))}</span></div>${tags.length ? `<div class="panel-item-tags">${tags.map(tag => `<small>${esc(tag)}</small>`).join('')}</div>` : ''}${(item.properties || []).length ? `<p>${item.properties.map(property => `<span class="property-chip">${esc(identifierLabel(property))}</span>`).join('')}</p>` : ''}</article>`;
+      const armorCategory = ({light: 'lekki', medium: 'średni', heavy: 'ciężki'})[item.armor_category] || '';
+      const armorFormula = item.armor_category
+        ? `KP ${item.armor_base_ac}${item.armor_dexterity_cap === 0 ? '' : item.armor_dexterity_cap === null || item.armor_dexterity_cap === undefined ? ' + Zr' : ` + Zr (maks. +${item.armor_dexterity_cap})`}`
+        : '';
+      const chargeLabel = item.charges_maximum !== null && item.charges_maximum !== undefined
+        ? `ładunki ${item.charges_current}/${item.charges_maximum}`
+        : '';
+      const attunementLabel = item.requires_attunement
+        ? (item.attuned ? 'dostrojony' : 'wymaga dostrojenia')
+        : '';
+      const effectLabels = (item.magic_effects || []).map(effect => {
+        const label = ({
+          armor_class_bonus: 'KP',
+          saving_throw_bonus: 'rzuty obronne',
+          ability_check_bonus: 'testy cech',
+          attack_roll_bonus: 'ataki',
+          speed_bonus_feet: 'szybkość'
+        })[effect.kind] || identifierLabel(effect.kind);
+        const value = Number(effect.value || 0);
+        return `${value >= 0 ? '+' : ''}${value} ${label}${effect.kind === 'speed_bonus_feet' ? ' ft' : ''}`;
+      });
+      const magicInactive = effectLabels.length && (item.available === false || (item.requires_attunement && !item.attuned) || (item.magic_effects || []).every(effect => effect.requires_equipped && !item.equipped))
+        ? 'efekty nieaktywne'
+        : '';
+      const weaponCategory = ({simple: 'broń prosta', martial: 'broń żołnierska'})[item.weapon_category] || '';
+      const weaponProperties = (item.weapon_properties || []).map(identifierLabel);
+      const gearCategory = item.gear_category ? identifierLabel(item.gear_category) : '';
+      const focusKind = item.spellcasting_focus_kind ? `focus: ${identifierLabel(item.spellcasting_focus_kind)}` : '';
+      const capacity = item.container_capacity || null;
+      const capacityLabel = capacity
+        ? [
+            capacity.maximum_weight_lb ? `${capacity.maximum_weight_lb} lb` : '',
+            capacity.liquid_pints ? `${capacity.liquid_pints} pint` : '',
+            capacity.ammunition_count ? `${capacity.ammunition_count} szt. ${identifierLabel(capacity.ammunition_type)}` : '',
+            capacity.sheet_count ? `${capacity.sheet_count} arkuszy` : ''
+          ].filter(Boolean).join(' / ')
+        : '';
+      const light = item.light_source || null;
+      const lightLabel = light
+        ? `światło ${light.bright_distance_feet}/${light.dim_additional_feet} ft · ${light.duration_minutes} min${light.fuel_item_id ? ` · paliwo: ${identifierLabel(light.fuel_item_id)}` : ''}`
+        : '';
+      const bundleLabel = (item.bundle_contents || []).length
+        ? `pakiet: ${(item.bundle_contents || []).reduce((sum, entry) => sum + Number(entry.quantity || 1), 0)} elementów`
+        : '';
+      const tags = [item.equipped ? 'wyposażony' : '', held, weaponCategory, ...weaponProperties, gearCategory, focusKind, capacityLabel ? `pojemność ${capacityLabel}` : '', lightLabel, item.tool_proficiency_id ? `narzędzie: ${identifierLabel(item.tool_proficiency_id)}` : '', bundleLabel, armorCategory ? `pancerz ${armorCategory}` : '', armorFormula, item.armor_strength_requirement ? `Siła ${item.armor_strength_requirement}` : '', item.stealth_disadvantage ? 'utrudnienie Stealth' : '', chargeLabel, attunementLabel, ...effectLabels, magicInactive, item.broken ? 'uszkodzony' : '', item.available === false ? 'niedostępny' : '', `${Number(item.total_weight_lb || 0).toFixed(1)} lb`, Number(item.total_value_cp || 0) > 0 ? `${esc(item.total_value_cp)} cp` : ''].filter(Boolean);
+      const canChangeArmor = item.kind === 'armor' && item.armor_category && item.available !== false && !item.broken && !state.combat && (state.flow || {}).stage === 'location_active';
+      const armorButton = canChangeArmor
+        ? `<button type="button" class="secondary" onclick="changeActorArmor('${esc(actor.id)}','${esc(item.id)}',${item.equipped ? 'false' : 'true'})">${item.equipped ? 'Zdejmij pancerz' : 'Załóż pancerz'}</button>`
+        : '';
+      const litHere = activeLight && activeLight.source_item_id === item.id;
+      const canChangeLight = item.light_source && item.available !== false && !item.broken && !state.combat && (state.flow || {}).stage === 'location_active';
+      const lightButtons = !canChangeLight ? '' : litHere
+        ? `<button type="button" class="secondary" onclick="changeActorLight('${esc(actor.id)}','${esc(item.id)}','extinguish')">Zgaś</button>${item.light_source.hooded_dim_distance_feet !== null && item.light_source.hooded_dim_distance_feet !== undefined ? `<button type="button" class="secondary" onclick="changeActorLight('${esc(actor.id)}','${esc(item.id)}','toggle_hood')">Przełącz osłonę</button>` : ''}`
+        : `<button type="button" class="secondary" onclick="changeActorLight('${esc(actor.id)}','${esc(item.id)}','ignite')">Zapal</button>`;
+      return `<article class="panel-info-card inventory${item.broken || item.available === false ? ' unavailable' : ''}"><div><b>${esc(item.name || identifierLabel(item.id))}${Number(item.quantity || 1) > 1 ? ` ×${esc(item.quantity)}` : ''}</b><span>${esc(item.description || identifierLabel(item.kind))}</span></div>${tags.length ? `<div class="panel-item-tags">${tags.map(tag => `<small>${esc(tag)}</small>`).join('')}</div>` : ''}${(item.properties || []).length ? `<p>${item.properties.map(property => `<span class="property-chip">${esc(identifierLabel(property))}</span>`).join('')}</p>` : ''}${armorButton}${lightButtons}</article>`;
     }).join('') : '<div class="panel-empty-state"><b>Pusty ekwipunek</b><span>Postać nie niesie żadnych przedmiotów.</span></div>'}
   `;
+}
+async function changeActorArmor(actorId, armorId, equip) {
+  await api('/api/equipment/armor', {
+    actor_id: actorId,
+    armor_id: armorId,
+    equip: Boolean(equip),
+  }, equip ? 'Zakładanie pancerza...' : 'Zdejmowanie pancerza...');
+}
+async function changeActorLight(actorId, itemId, action) {
+  await api('/api/equipment/light', {
+    actor_id: actorId,
+    item_id: itemId,
+    action,
+  }, action === 'ignite' ? 'Zapalanie światła...' : 'Zmiana światła...');
 }
 function renderSnapshotPanel() {
   const snapshot = state.snapshot || {};
@@ -909,12 +989,25 @@ function shortRestHtml() {
   const pending = rest.pending || {};
   const safety = policy.safety === 'safe' ? 'bezpieczne' : 'ryzykowne';
   if (!pending.completed) {
+    const attunement = (pending.actors || []).map(actor => {
+      const items = (actor.attunement_items || []).filter(item => item.available);
+      if (!items.length) return '';
+      const options = items.map(item => {
+        const value = `${item.action}:${item.item_id}`;
+        const label = item.action === 'unattune'
+          ? `Zerwij więź: ${item.item_name}`
+          : `Dostrój: ${item.item_name}`;
+        return `<option value="${esc(value)}">${esc(label)}</option>`;
+      }).join('');
+      return `<label class="field"><span>${esc(actor.actor_name)} — attunement ${esc(actor.attunement_count)}/${esc(actor.attunement_maximum)}</span><select data-short-rest-attunement="${esc(actor.actor_id)}"><option value="">Bez zmiany</option>${options}</select></label>`;
+    }).join('');
     return `
       <div class="start-panel"><div class="inner">
         <h2>Krótki odpoczynek</h2>
         <p><b>Czas:</b> ${esc(policy.duration_label || '1 godz.')}</p>
         <p><b>Warunki:</b> ${esc(safety)}</p>
         ${policy.risk_summary ? `<div class="status"><b>Koszt lub zagrożenie:</b> ${esc(policy.risk_summary)}</div>` : ''}
+        ${attunement ? `<div class="status"><b>Dostrajanie magicznych przedmiotów</b><p class="muted">Każdy bohater może podczas tego odpoczynku dostroić albo odstroić jeden przedmiot.</p>${attunement}</div>` : ''}
         <p class="muted">Hit Dice będą wydawane dopiero po ukończeniu odpoczynku. Anulowanie teraz nie przesuwa czasu.</p>
         <div class="row"><button onclick="confirmShortRest()">Rozpocznij godzinny odpoczynek</button><button class="secondary" data-allow-busy="true" onclick="cancelShortRest()">Anuluj</button></div>
       </div></div>
@@ -1079,9 +1172,10 @@ function currentInteractionGoals() {
 }
 function currentInteractionPointCards() {
   if (state.active_point) return [];
-  return (state.current_zone_points || []).filter(point => point && point.has_npc);
+  return (state.current_zone_points || []).filter(point => point && (point.has_npc || point.has_merchant));
 }
 function interactionGoalsHtml() {
+  if (state.trade) return tradePanelHtml();
   const goals = currentInteractionGoals();
   const pointCards = currentInteractionPointCards();
   if ((!goals.length && !pointCards.length) || state.pending || (state.required_rolls || []).length || resultAck) return '';
@@ -1098,7 +1192,7 @@ function interactionGoalsHtml() {
           ${point.image ? `<img class="interaction-goal-image" src="${esc(point.image.startsWith('/') ? point.image : `/scenario-assets/${point.image}`)}" alt="">` : ''}
           <b>${esc(point.interaction_label || point.name)}</b>
           <span>${esc(point.description || 'Podejdźcie i rozpocznijcie rozmowę.')}</span>
-          <small>Interakcja z NPC</small>
+          <small>${point.has_merchant ? 'Handel' : 'Interakcja z NPC'}</small>
         </button>
       `).join('')}
       ${goals.map(goal => `
@@ -1120,6 +1214,137 @@ function interactionGoalsHtml() {
         <button type="button" class="secondary" onclick="cancelInteractionGoal()">Anuluj wybór</button>
       </div>
     </div>` : ''}`;
+}
+function tradeMoneyLabel(totalCp) {
+  let remaining = Math.max(0, Math.floor(Number(totalCp || 0)));
+  const pp = Math.floor(remaining / 1000); remaining %= 1000;
+  const gp = Math.floor(remaining / 100); remaining %= 100;
+  const sp = Math.floor(remaining / 10); remaining %= 10;
+  return [[pp, 'pp'], [gp, 'gp'], [sp, 'sp'], [remaining, 'cp']]
+    .filter(entry => entry[0] > 0)
+    .map(entry => `${entry[0]} ${entry[1]}`)
+    .join(', ') || '0 cp';
+}
+function activeTradeActor(trade) {
+  const actors = trade.actors || [];
+  if (!actors.some(actor => String(actor.id) === String(selectedTradeActorId))) {
+    selectedTradeActorId = actors.length ? String(actors[0].id) : '';
+  }
+  return actors.find(actor => String(actor.id) === String(selectedTradeActorId)) || null;
+}
+function tradePanelHtml() {
+  const trade = state.trade || {};
+  const actors = trade.actors || [];
+  const actor = activeTradeActor(trade);
+  if (!actor) return '<p>Brak postaci zdolnej do handlu.</p>';
+  const actorOptions = actors.map(candidate => `
+    <option value="${esc(candidate.id)}"${String(candidate.id) === String(actor.id) ? ' selected' : ''}>${esc(candidate.name)}</option>
+  `).join('');
+  const stock = (trade.stock || []).map(item => tradeItemRowHtml('buy', item, actor, trade)).join('')
+    || '<p class="muted">Sprzedawca nie ma już towaru.</p>';
+  const sellable = (actor.sellable_items || []).map(item => tradeItemRowHtml('sell', item, actor, trade)).join('')
+    || '<p class="muted">Ta postać nie ma przedmiotów możliwych do sprzedaży.</p>';
+  return `
+    <div class="trade-panel">
+      <div class="interaction-goals-head">
+        <b>${esc(trade.merchant_name || 'Sprzedawca')}</b>
+        <span>Sprzedawca odkupuje przedmioty za ${esc(trade.buyback_percent)}% wartości katalogowej.</span>
+      </div>
+      <div class="row">
+        <label>Handlująca postać:
+          <select onchange="selectTradeActor(this.value)">${actorOptions}</select>
+        </label>
+        <span><b>Portfel:</b> ${esc(tradeMoneyLabel((actor.currency || {}).total_cp))}</span>
+        <span><b>Udźwig:</b> ${esc((actor.carrying || {}).weight_lb)} / ${esc((actor.carrying || {}).capacity_lb)} lb</span>
+        <span><b>Kasa kupca:</b> ${esc(tradeMoneyLabel((trade.currency || {}).total_cp))}</span>
+      </div>
+      <h4>Kup</h4>
+      <div class="status-list">${stock}</div>
+      <h4>Sprzedaj</h4>
+      <div class="status-list">${sellable}</div>
+      <button type="button" class="secondary" onclick="selectPoint(&quot;&quot;)">Odejdź od stoiska</button>
+    </div>
+  `;
+}
+function tradeItemRowHtml(direction, item, actor, trade) {
+  const inputId = `trade-${direction}-${item.id}`;
+  const quoteId = `${inputId}-quote`;
+  const actionLabel = direction === 'buy' ? 'Kup' : 'Sprzedaj';
+  const unitPrice = Number(item.unit_price_cp || 0);
+  return `
+    <div class="status-item">
+      <b>${esc(item.name)} ×${esc(item.quantity)}</b>
+      <span>Cena za sztukę: ${esc(tradeMoneyLabel(unitPrice))} · masa ${esc(item.weight_lb)} lb</span>
+      <div class="row">
+        <label>Ilość:
+          <input id="${esc(inputId)}" type="number" min="1" max="${esc(item.quantity)}" value="1"
+            oninput="updateTradeQuote('${direction}', '${esc(item.id)}')">
+        </label>
+        <button onclick="${direction === 'buy' ? 'buyTradeItem' : 'sellTradeItem'}('${esc(item.id)}')">${actionLabel}</button>
+      </div>
+      <span id="${esc(quoteId)}" class="muted">${esc(tradeQuoteText(direction, item, 1, actor, trade))}</span>
+    </div>
+  `;
+}
+function tradeQuoteText(direction, item, quantity, actor, trade) {
+  const count = Math.max(0, Number(quantity || 0));
+  const total = count * Number(item.unit_price_cp || 0);
+  const mass = count * Number(item.weight_lb || 0);
+  const actorCp = Number((actor.currency || {}).total_cp || 0);
+  const currentWeight = Number((actor.carrying || {}).weight_lb || 0);
+  if (direction === 'buy') {
+    const afterCp = actorCp - total;
+    const afterWeight = currentWeight + mass;
+    const capacity = Number((actor.carrying || {}).capacity_lb || 0);
+    const warning = afterCp < 0
+      ? ' · brak środków'
+      : afterWeight > capacity
+        ? ' · przekroczony udźwig'
+        : '';
+    return `Razem ${tradeMoneyLabel(total)} · portfel po zakupie ${tradeMoneyLabel(Math.max(0, afterCp))} · masa po zakupie ${afterWeight.toFixed(3)} lb${warning}`;
+  }
+  const merchantAfter = Number((trade.currency || {}).total_cp || 0) - total;
+  return `Razem ${tradeMoneyLabel(total)} · portfel po sprzedaży ${tradeMoneyLabel(actorCp + total)} · masa po sprzedaży ${Math.max(0, currentWeight - mass).toFixed(3)} lb${merchantAfter < 0 ? ' · kupiec nie ma dość monet' : ''}`;
+}
+function selectTradeActor(actorId) {
+  selectedTradeActorId = String(actorId || '');
+  const panel = document.getElementById('interaction-goals');
+  if (panel) panel.innerHTML = interactionGoalsHtml();
+}
+function updateTradeQuote(direction, itemId) {
+  const trade = state.trade || {};
+  const actor = activeTradeActor(trade);
+  if (!actor) return;
+  const items = direction === 'buy' ? (trade.stock || []) : (actor.sellable_items || []);
+  const item = items.find(candidate => String(candidate.id) === String(itemId));
+  const input = document.getElementById(`trade-${direction}-${itemId}`);
+  const quote = document.getElementById(`trade-${direction}-${itemId}-quote`);
+  if (!item || !input || !quote) return;
+  quote.textContent = tradeQuoteText(direction, item, Number(input.value || 0), actor, trade);
+}
+function buyTradeItem(itemId) {
+  const trade = state.trade || {};
+  const actor = activeTradeActor(trade);
+  const input = document.getElementById(`trade-buy-${itemId}`);
+  if (!actor || !input) return;
+  api('/api/trade/buy', {
+    merchant_id: trade.merchant_id,
+    actor_id: actor.id,
+    item_id: itemId,
+    quantity: Number(input.value || 0),
+  }, 'Finalizuję zakup...');
+}
+function sellTradeItem(itemId) {
+  const trade = state.trade || {};
+  const actor = activeTradeActor(trade);
+  const input = document.getElementById(`trade-sell-${itemId}`);
+  if (!actor || !input) return;
+  api('/api/trade/sell', {
+    merchant_id: trade.merchant_id,
+    actor_id: actor.id,
+    item_id: itemId,
+    quantity: Number(input.value || 0),
+  }, 'Finalizuję sprzedaż...');
 }
 function selectInteractionGoal(goalId) {
   const goal = currentInteractionGoals().find(item => item.id === goalId);
@@ -1821,7 +2046,7 @@ function encounterStealthHtml(setup, stealth) {
       const detected = (result.detected_by || []).map(item => item.actor_name).join(', ') || 'nikt';
       return `<div class="status-item"><b>${esc(actor.actor_name)}</b><span>Stealth ${Number(result.total)} — ukryty przed: ${esc(hidden)}; wykrywają: ${esc(detected)}.</span></div>`;
     }
-    return `<div class="status-item"><b>${esc(actor.actor_name)}</b><span>Modyfikator Stealth: ${signedNumber(Number(actor.modifier || 0))}</span>${actor.can_attempt ? `<div class="row"><label>Wynik d20: <input id="precombat-stealth-${esc(actor.actor_id)}" type="number" min="1" max="20" value="10"></label><button onclick="submitPrecombatStealth('${esc(actor.actor_id)}')">Spróbuj się ukryć</button></div>` : ''}</div>`;
+    return `<div class="status-item"><b>${esc(actor.actor_name)}</b><span>Modyfikator Stealth: ${signedNumber(Number(actor.modifier || 0))}${actor.roll_mode === 'disadvantage' ? ' · utrudnienie' : ''}</span>${actor.can_attempt ? `<div class="row">${d20RollInputsHtml(`precombat-stealth-${actor.actor_id}`, actor.roll_mode)}<button onclick="submitPrecombatStealth('${esc(actor.actor_id)}')">Spróbuj się ukryć</button></div>` : ''}</div>`;
   }).join('');
   return `
     <div class="message"><b>Skradanie przed walką</b><br>${esc(stealth.instruction || '')}</div>
@@ -1882,6 +2107,7 @@ function combatStartHtml() {
         ${latestCombatMessageHtml()}
       </section>
       ${combatDroppedWeaponsHtml(combat)}
+      ${combatBattlefieldLootHtml(combat)}
       ${combatActiveEffectsHtml(combat)}
       <section class="combat-section">
         <h4>Aktualny aktor</h4>
@@ -1960,6 +2186,7 @@ function combatTurnHudHtml(combat) {
   `;
 }
 function combatInterruptPresentation(combat) {
+  if (defensiveSpellReaction(combat)) return 'Możesz rzucić czar obronny po trafieniu';
   if (combat.pending_ready_attack) return 'Przygotowana akcja czeka na decyzję';
   if (combat.pending_enemy_opportunity_attack) return 'Możliwy atak okazyjny bohatera';
   if (combat.pending_opportunity_movement) return 'Ruch może wywołać atak okazyjny';
@@ -1979,6 +2206,20 @@ function combatDroppedWeaponsHtml(combat) {
     </div>
   `;
 }
+function combatBattlefieldLootHtml(combat) {
+  const loot = combat.battlefield_loot || [];
+  if (!loot.length) return '';
+  return `
+    <div class="combat-last-result">
+      <h4>Łup pola walki</h4>
+      ${loot.map(bundle => `
+        <p><b>${esc(bundle.label)}</b> — pole (${esc(bundle.position[0])},${esc(bundle.position[1])}):
+        ${(bundle.items || []).map(item => `${esc(item.name)} ×${esc(item.quantity)}`).join(', ')}</p>
+      `).join('')}
+      <p class="muted">Kliknij podświetlone pole na planszy, aby zebrać odzyskaną amunicję.</p>
+    </div>
+  `;
+}
 function combatCurrentStepHtml(combat, finished, isAllyTurn, isEnemyTurn, interrupt = '') {
   const phase = combatPresentationPhase(combat, finished, isAllyTurn, isEnemyTurn);
   return `
@@ -1995,7 +2236,7 @@ function combatCurrentStepHtml(combat, finished, isAllyTurn, isEnemyTurn, interr
 function combatPresentationPhase(combat, finished, isAllyTurn, isEnemyTurn) {
   if (resultAck) return 'result';
   if (finished || combat.enemy_turn_result) return 'result';
-  if (combat.death_save_required || combat.pending_concentration_check || combat.pending_enemy_saving_throw || (combat.condition_saves || []).length) return 'roll';
+  if (defensiveSpellReaction(combat) || combat.death_save_required || combat.pending_concentration_check || combat.pending_enemy_saving_throw || (combat.pending_spell_dispel && combat.pending_spell_dispel.stage === 'ability_check') || (combat.condition_saves || []).length) return 'roll';
   const rollPending = [
     combat.pending_player_attack,
     combat.pending_area_spell,
@@ -2003,7 +2244,7 @@ function combatPresentationPhase(combat, finished, isAllyTurn, isEnemyTurn) {
     combat.pending_ready_attack,
   ].find(pending => pending && (pending.stage === 'attack_roll' || pending.stage === 'damage_roll'));
   if (rollPending || combat.pending_player_healing || combat.pending_combat_skill_check || combat.pending_combat_shove || combat.pending_combat_grapple) return 'roll';
-  if (combat.movement_preview || combat.pending_opportunity_movement || combat.enemy_turn_intent || combat.enemy_turn_preview || combat.pending_combat_interaction || combat.pending_combat_help || combat.pending_concentration_action || combat.pending_combat_ready) return 'preview';
+  if (combat.movement_preview || combat.pending_opportunity_movement || combat.enemy_turn_intent || combat.enemy_turn_preview || combat.pending_combat_interaction || combat.pending_combat_help || combat.pending_concentration_action || combat.pending_summon || combat.pending_magic_movement || combat.pending_spell_debuff || combat.pending_spell_dispel || combat.pending_combat_ready) return 'preview';
   if (combat.pending_player_attack || combat.pending_area_spell) return 'preview';
   if (isEnemyTurn) return 'preview';
   return 'choice';
@@ -2036,6 +2277,8 @@ function combatPromptTitle(combat, finished, isAllyTurn, isEnemyTurn) {
     return `${pendingActor.name || 'Bohater'}: test koncentracji`;
   }
   if (isEnemyTurn) {
+    const defensiveSpell = defensiveSpellReaction(combat);
+    if (defensiveSpell) return `${defensiveSpell.label || 'Czar obronny'}: reakcja po trafieniu`;
     if (combat.pending_ready_attack) return `Tura ${actor.name || 'przeciwnika'}: Ready`;
     if (combat.pending_enemy_opportunity_attack) return `Tura ${actor.name || 'przeciwnika'}: reakcja bohatera`;
     if (combat.pending_enemy_saving_throw) return `${(combat.pending_enemy_saving_throw.target || {}).name || 'Bohater'}: rzut obronny`;
@@ -2059,6 +2302,14 @@ function combatPromptTitle(combat, finished, isAllyTurn, isEnemyTurn) {
     return combat.pending_area_spell.stage === 'damage_roll'
       ? `Tura ${actor.name || 'gracza'}: obrażenia obszarowe`
       : `Tura ${actor.name || 'gracza'}: potwierdź obszar`;
+  }
+  if (isAllyTurn && combat.pending_summon) return `Tura ${actor.name || 'gracza'}: wybierz pole przywołania`;
+  if (isAllyTurn && combat.pending_magic_movement) return `Tura ${actor.name || 'gracza'}: magiczny ruch`;
+  if (isAllyTurn && combat.pending_spell_debuff) return `Tura ${actor.name || 'gracza'}: wybierz cel osłabienia`;
+  if (isAllyTurn && combat.pending_spell_dispel) {
+    return combat.pending_spell_dispel.stage === 'ability_check'
+      ? `Tura ${actor.name || 'gracza'}: test rozproszenia`
+      : `Tura ${actor.name || 'gracza'}: wybierz cel rozproszenia`;
   }
   if (isAllyTurn && combat.context_menu) return `Tura ${actor.name || 'gracza'}: wybierz akcję`;
   if (isAllyTurn && combat.targeting) {
@@ -2084,7 +2335,11 @@ function combatInstructionText(combat, finished, isAllyTurn, isEnemyTurn) {
   if (resultAck) return resultAck.body || 'Przeczytaj wynik i potwierdź.';
   if (finished) {
     const result = combat.encounter_result || {};
-    return result.message || 'Zastosuj wynik encountera, żeby wrócić do eksploracji.';
+    const recovery = combat.ammunition_recovery || {};
+    const recoveryText = Number(recovery.recoverable || 0) > 0
+      ? ` Po minucie przeszukiwania pola walki można odzyskać ${recovery.recoverable} z ${recovery.fired} wystrzelonych pocisków. Kliknij podświetlony stos, aby go zebrać.`
+      : '';
+    return (result.message || 'Zastosuj wynik encountera, żeby wrócić do eksploracji.') + recoveryText;
   }
   const actor = combat.current_actor || {};
   if (combat.death_save_required) {
@@ -2095,6 +2350,11 @@ function combatInstructionText(combat, finished, isAllyTurn, isEnemyTurn) {
     return combat.pending_concentration_check.instruction || 'Rzuć CON save, żeby utrzymać koncentrację.';
   }
   if (isEnemyTurn) {
+    const defensiveSpell = defensiveSpellReaction(combat);
+    if (defensiveSpell) {
+      const preview = combat.enemy_turn_preview || {};
+      return `${preview.target_name || 'Bohater'} został trafiony. ${defensiveSpell.label || 'Czar obronny'} podniesie AC o ${defensiveSpell.value || 0} i może zamienić trafienie w pudło.`;
+    }
     if (combat.pending_ready_attack) {
       const pendingReady = combat.pending_ready_attack;
       const attacker = pendingReady.attacker || {};
@@ -2165,6 +2425,26 @@ function combatInstructionText(combat, finished, isAllyTurn, isEnemyTurn) {
   }
   if (combat.pending_concentration_action) {
     return 'Wybierz sojusznika. Czar zużyje akcję i slot, a wcześniejsza koncentracja tego aktora zostanie zakończona.';
+  }
+  if (combat.pending_summon) {
+    return 'Wybierz wolne, widoczne pole w zasięgu. Slot i akcja zostaną zużyte dopiero po potwierdzeniu.';
+  }
+  if (combat.pending_magic_movement) {
+    return combat.pending_magic_movement.kind === 'teleport'
+      ? 'Wybierz widoczne, wolne pole teleportacji. Teleport nie zużyje ruchu.'
+      : 'Wybierz podświetlony cel. Po nieudanym save zostanie przesunięty do ostatniego legalnego pola.';
+  }
+  if (combat.pending_spell_debuff) {
+    const pendingDebuff = combat.pending_spell_debuff;
+    return `Wybierz podświetlonego przeciwnika. Wykona automatyczny ${pendingDebuff.save_ability || ''} save przeciw ST ${pendingDebuff.save_dc || '-'}.`;
+  }
+  if (combat.pending_spell_dispel) {
+    const pendingDispel = combat.pending_spell_dispel;
+    const check = pendingDispel.current_check || {};
+    if (pendingDispel.stage === 'ability_check') {
+      return `Rzuć fizyczne d20 dla testu cechy rzucania czarów. ${check.label || 'Efekt'} wymaga wyniku ST ${check.dc || '-'}.`;
+    }
+    return 'Wybierz podświetloną istotę z aktywnym efektem czaru. Slot i akcja zostaną zużyte po potwierdzeniu celu.';
   }
   if (combat.pending_combat_ready) {
     return 'Wybierz warunek. Akcja zostanie zużyta teraz, a atak będzie można wykonać później reakcją.';
@@ -2358,6 +2638,8 @@ function damageAffinitiesHtml(actor) {
 function actorInventoryHtml(actor) {
   const items = actor && actor.inventory ? actor.inventory : [];
   const hands = (actor && actor.hands) || {};
+  const currency = (actor && actor.currency) || {};
+  const carrying = (actor && actor.carrying) || {};
   const handItem = slot => slot && slot.item_name ? esc(slot.item_name) : 'wolna';
   const heldLabel = item => {
     const slots = item.held_in || [];
@@ -2367,8 +2649,10 @@ function actorInventoryHtml(actor) {
     return item.equipped === false ? ' (niezałożone)' : '';
   };
   const handsHtml = `<p><b>Ręce:</b> główna — ${handItem(hands.main_hand)}, druga — ${handItem(hands.off_hand)}${Number(hands.reserved_hands || 0) > 0 ? `; chwyt: ${esc(hands.reserved_hands)} ręka` : ''}. Wolne: ${esc(hands.free_hands === undefined ? '-' : hands.free_hands)}.</p>`;
-  if (!items.length) return handsHtml;
-  return `${handsHtml}<p><b>Ekwipunek:</b> ${items.map(item => `${esc(item.name || item.id)}${item.quantity !== undefined ? ` x${esc(item.quantity)}` : ''}${heldLabel(item)}`).join(', ')}</p>`;
+  const coins = ['pp', 'gp', 'ep', 'sp', 'cp'].filter(key => Number(currency[key] || 0) > 0).map(key => `${esc(currency[key])} ${key}`).join(', ') || 'brak';
+  const economyHtml = `<p><b>Monety:</b> ${coins}. <b>Udźwig:</b> ${Number(carrying.weight_lb || 0).toFixed(1)} / ${Number(carrying.capacity_lb || 0).toFixed(1)} lb.</p>`;
+  if (!items.length) return `${handsHtml}${economyHtml}`;
+  return `${handsHtml}${economyHtml}<p><b>Ekwipunek:</b> ${items.map(item => `${esc(item.name || item.id)}${item.quantity !== undefined ? ` x${esc(item.quantity)}` : ''}${heldLabel(item)}`).join(', ')}</p>`;
 }
 function statusChipsHtml(chips, emptyText) {
   const items = chips || [];
@@ -2471,7 +2755,7 @@ function actorAcLabel(actor) {
   return equipmentBonus > 0 ? `${ac} (${base} + ekwipunek ${equipmentBonus})` : `${ac}`;
 }
 function latestCombatMessageHtml() {
-  const combatTitles = new Set(['Atak', 'Czar', 'Obrażenia', 'Ruch', 'Koniec tury', 'Atak przeciwnika', 'Efekt przeciwnika', 'Obrażenia przeciwnika', 'Ruch przeciwnika', 'Tura przeciwnika', 'Rzut obronny', 'Atak okazyjny', 'Pomoc', 'Ready', 'Leczenie', 'Eliksir', 'Rzut śmierci', 'Stabilizacja']);
+  const combatTitles = new Set(['Atak', 'Czar', 'Obrażenia', 'Kontrczar', 'Ruch', 'Koniec tury', 'Atak przeciwnika', 'Efekt przeciwnika', 'Obrażenia przeciwnika', 'Ruch przeciwnika', 'Tura przeciwnika', 'Rzut obronny', 'Atak okazyjny', 'Pomoc', 'Ready', 'Leczenie', 'Eliksir', 'Rzut śmierci', 'Stabilizacja']);
   const messages = state.messages || [];
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     if (!combatTitles.has(messages[i].title)) continue;
@@ -2515,7 +2799,18 @@ function combatPrimaryActionHtml(combat, isAllyTurn, isEnemyTurn) {
   if (combat.pending_concentration_check) {
     return pendingConcentrationCheckHtml(combat.pending_concentration_check);
   }
+  if (combat.long_cast && isAllyTurn) {
+    return longCastHtml(combat.long_cast, combat);
+  }
   if (isEnemyTurn) {
+    const counterspell = counterspellReaction(combat);
+    if (counterspell) {
+      return counterspellReactionHtml(counterspell, combat.reaction_window || {}, combat.enemy_turn_preview || {});
+    }
+    const defensiveSpell = defensiveSpellReaction(combat);
+    if (defensiveSpell) {
+      return defensiveSpellReactionHtml(defensiveSpell, combat.enemy_turn_preview || {});
+    }
     if (combat.pending_ready_attack) {
       return pendingReadyAttackHtml(combat.pending_ready_attack);
     }
@@ -2572,6 +2867,18 @@ function combatPrimaryActionHtml(combat, isAllyTurn, isEnemyTurn) {
   }
   if (combat.pending_concentration_action) {
     return pendingConcentrationActionHtml(combat.pending_concentration_action);
+  }
+  if (combat.pending_summon) {
+    return pendingSummonHtml(combat.pending_summon);
+  }
+  if (combat.pending_magic_movement) {
+    return pendingMagicMovementHtml(combat.pending_magic_movement);
+  }
+  if (combat.pending_spell_debuff) {
+    return pendingSpellDebuffHtml(combat.pending_spell_debuff);
+  }
+  if (combat.pending_spell_dispel) {
+    return pendingSpellDispelHtml(combat.pending_spell_dispel);
   }
   if (combat.pending_combat_ready) {
     return pendingCombatReadyHtml(combat.pending_combat_ready);
@@ -2632,7 +2939,7 @@ function pendingCombatSkillCheckHtml(pending) {
     <div class="combat-action-box">
       <p><b>${esc(pending.action === 'hide' ? 'Hide' : 'Search')}:</b> ${esc(pending.instruction || '')}</p>
       <div class="row">
-        <label>d20 ${esc(label)}: <input id="combat-skill-check-roll" type="number" min="1" max="20" value="10"></label>
+        ${d20RollInputsHtml('combat-skill-check-roll', pending.roll_mode)}
         <button onclick="submitCombatSkillCheck()">Rozstrzygnij</button>
         <button class="secondary" onclick="cancelCombatSkillCheck()">Anuluj</button>
       </div>
@@ -2688,6 +2995,10 @@ function combatActionDetailsHtml(combat, isAllyTurn, isEnemyTurn) {
   if (combat.pending_opportunity_movement) return pendingOpportunityMovementDetailsHtml(combat.pending_opportunity_movement);
   if (combat.pending_combat_help) return pendingCombatHelpDetailsHtml(combat.pending_combat_help);
   if (combat.pending_concentration_action) return pendingConcentrationActionDetailsHtml(combat.pending_concentration_action);
+  if (combat.pending_summon) return '<p>Przywołana istota dołącza do inicjatywy zaraz po właścicielu i znika po utracie koncentracji.</p>';
+  if (combat.pending_magic_movement) return '<p>Teleport i wymuszony ruch nie zużywają szybkości przemieszczanego aktora oraz nie wywołują ataków okazyjnych.</p>';
+  if (combat.pending_spell_debuff) return '<p>Po nieudanym pierwszym save stan zostaje zapisany we wspólnym systemie kondycji. Kolejne save są rozstrzygane w turach celu.</p>';
+  if (combat.pending_spell_dispel) return '<p>Efekty o poziomie nie wyższym od użytego slotu kończą się automatycznie. Każdy silniejszy efekt wymaga osobnego testu przeciw ST 10 + jego poziom.</p>';
   if (combat.pending_combat_ready) return pendingCombatReadyDetailsHtml(combat.pending_combat_ready);
   if (combat.pending_player_attack) return pendingPlayerAttackDetailsHtml(combat.pending_player_attack);
   if (combat.pending_player_healing) return pendingPlayerHealingDetailsHtml(combat.pending_player_healing);
@@ -2699,21 +3010,31 @@ function combatSourceButtonsHtml(combat) {
   const attacks = combat.available_attack_sources || [];
   const selectedAttack = combat.selected_attack_source_id || '';
   const actor = combat.current_actor || {};
-  const attackButtons = attacks.map(source => {
-    const selected = source.id === selectedAttack ? ' selected' : '';
+  const attackButtons = attacks.flatMap(source => {
     const disabledReason = sourceUnavailableReason(source, actor);
     const disabled = disabledReason ? ' disabled title="' + esc(disabledReason) + '"' : '';
-    const label = sourceButtonLabel(source);
-    return `<button class="secondary${selected}" data-allow-busy="true"${disabled} onclick="selectCombatAttackSource('${esc(source.id)}')">${label}</button>`;
+    const levels = Number(source.spell_level || 0) > 0 ? (source.available_cast_levels || []) : [null];
+    return levels.map(level => {
+      const selectionId = level === null ? source.id : `${source.id}@${level}`;
+      const selected = selectionId === selectedAttack ? ' selected' : '';
+      const levelLabel = level === null ? '' : ` · slot ${level}`;
+      const argument = level === null ? 'null' : Number(level);
+      return `<button class="secondary${selected}" data-allow-busy="true"${disabled} onclick="selectCombatAttackSource('${esc(source.id)}', ${argument})">${sourceButtonLabel(source)}${esc(levelLabel)}</button>`;
+    });
   }).join('');
   const healing = combat.available_healing_sources || [];
   const selectedHealing = combat.selected_healing_source_id || '';
-  const healingButtons = healing.map(source => {
-    const selected = source.id === selectedHealing ? ' selected' : '';
+  const healingButtons = healing.flatMap(source => {
     const disabledReason = sourceUnavailableReason(source, actor);
     const disabled = disabledReason ? ' disabled title="' + esc(disabledReason) + '"' : '';
-    const label = sourceButtonLabel(source);
-    return `<button class="secondary${selected}" data-allow-busy="true"${disabled} onclick="selectCombatHealingSource('${esc(source.id)}')">${label}</button>`;
+    const levels = Number(source.spell_level || 0) > 0 ? (source.available_cast_levels || []) : [null];
+    return levels.map(level => {
+      const selectionId = level === null ? source.id : `${source.id}@${level}`;
+      const selected = selectionId === selectedHealing ? ' selected' : '';
+      const levelLabel = level === null ? '' : ` · slot ${level}`;
+      const argument = level === null ? 'null' : Number(level);
+      return `<button class="secondary${selected}" data-allow-busy="true"${disabled} onclick="selectCombatHealingSource('${esc(source.id)}', ${argument})">${sourceButtonLabel(source)}${esc(levelLabel)}</button>`;
+    });
   }).join('');
   const actionButtons = (combat.combat_actions || []).map(action => {
     if (action.action_type === 'strength_potion') {
@@ -2725,8 +3046,62 @@ function combatSourceButtonsHtml(combat) {
     if (action.action_type === 'concentration_attack_bonus') {
       const disabledReason = sourceUnavailableReason(action, actor);
       const disabled = disabledReason ? ' disabled title="' + esc(disabledReason) + '"' : '';
-      const label = sourceButtonLabel(action);
-      return `<button class="secondary"${disabled} data-allow-busy="true" onclick="startConcentrationAction('${esc(action.id)}')">${label}</button>`;
+      const label = esc(action.name || action.label || action.id);
+      const levels = Number(action.spell_level || 0) > 0 ? (action.available_cast_levels || []) : [0];
+      return levels.map(level => {
+        const levelLabel = Number(action.spell_level || 0) > 0 ? ` · slot ${level}` : '';
+        return `<button class="secondary"${disabled} data-allow-busy="true" onclick="startConcentrationAction('${esc(action.id)}', ${Number(level)})">${label}${esc(levelLabel)}</button>`;
+      }).join('');
+    }
+    if (action.action_type === 'long_cast_effect') {
+      const disabledReason = sourceUnavailableReason(action, actor);
+      const disabled = disabledReason ? ' disabled title="' + esc(disabledReason) + '"' : '';
+      const label = esc(action.name || action.label || action.id);
+      const levels = Number(action.spell_level || 0) > 0 ? (action.available_cast_levels || []) : [0];
+      return levels.map(level => {
+        const levelLabel = Number(action.spell_level || 0) > 0 ? ` · slot ${level}` : '';
+        return `<button class="secondary"${disabled} data-allow-busy="true" onclick="startLongCast('${esc(action.id)}', ${Number(level)})">${label}${esc(levelLabel)} · rozpocznij</button>`;
+      }).join('');
+    }
+    if (action.action_type === 'summon') {
+      const disabledReason = sourceUnavailableReason(action, actor);
+      const disabled = disabledReason ? ' disabled title="' + esc(disabledReason) + '"' : '';
+      const label = esc(action.name || action.label || action.id);
+      const levels = Number(action.spell_level || 0) > 0 ? (action.available_cast_levels || []) : [0];
+      return levels.map(level => {
+        const levelLabel = Number(action.spell_level || 0) > 0 ? ` · slot ${level}` : '';
+        return `<button class="secondary"${disabled} data-allow-busy="true" onclick="startSummon('${esc(action.id)}', ${Number(level)})">${label}${esc(levelLabel)} · wybierz pole</button>`;
+      }).join('');
+    }
+    if (action.action_type === 'spell_movement') {
+      const disabledReason = sourceUnavailableReason(action, actor);
+      const disabled = disabledReason ? ' disabled title="' + esc(disabledReason) + '"' : '';
+      const label = esc(action.name || action.label || action.id);
+      const levels = Number(action.spell_level || 0) > 0 ? (action.available_cast_levels || []) : [0];
+      return levels.map(level => {
+        const levelLabel = Number(action.spell_level || 0) > 0 ? ` · slot ${level}` : '';
+        return `<button class="secondary"${disabled} data-allow-busy="true" onclick="startMagicMovement('${esc(action.id)}', ${Number(level)})">${label}${esc(levelLabel)} · wybierz</button>`;
+      }).join('');
+    }
+    if (action.action_type === 'spell_debuff') {
+      const disabledReason = sourceUnavailableReason(action, actor);
+      const disabled = disabledReason ? ' disabled title="' + esc(disabledReason) + '"' : '';
+      const label = esc(action.name || action.label || action.id);
+      const levels = Number(action.spell_level || 0) > 0 ? (action.available_cast_levels || []) : [0];
+      return levels.map(level => {
+        const levelLabel = Number(action.spell_level || 0) > 0 ? ` · slot ${level}` : '';
+        return `<button class="secondary"${disabled} data-allow-busy="true" onclick="startSpellDebuff('${esc(action.id)}', ${Number(level)})">${label}${esc(levelLabel)} · wybierz cel</button>`;
+      }).join('');
+    }
+    if (action.action_type === 'spell_dispel') {
+      const disabledReason = sourceUnavailableReason(action, actor);
+      const disabled = disabledReason ? ' disabled title="' + esc(disabledReason) + '"' : '';
+      const label = esc(action.name || action.label || action.id);
+      const levels = Number(action.spell_level || 0) > 0 ? (action.available_cast_levels || []) : [0];
+      return levels.map(level => {
+        const levelLabel = Number(action.spell_level || 0) > 0 ? ` · slot ${level}` : '';
+        return `<button class="secondary"${disabled} data-allow-busy="true" onclick="startSpellDispel('${esc(action.id)}', ${Number(level)})">${label}${esc(levelLabel)} · wybierz cel</button>`;
+      }).join('');
     }
     return '';
   }).join('');
@@ -2746,8 +3121,8 @@ function sourceUnavailableReason(source, actor) {
   const spellLevel = Number(source.spell_level || 0);
   if (spellLevel <= 0) return '';
   const slots = actor.spell_slots || [];
-  const slot = slots.find(item => Number(item.level) === spellLevel);
-  if (!slot || Number(slot.remaining || 0) <= 0) return `Brak slotów czaru ${spellLevel}. poziomu.`;
+  const slot = slots.find(item => Number(item.level) >= spellLevel && Number(item.remaining || 0) > 0);
+  if (!slot) return `Brak slotów czaru ${spellLevel}. poziomu lub wyższego.`;
   return '';
 }
 function spellSlotSummaryHtml(actor) {
@@ -2769,7 +3144,7 @@ function sourceSummaryText(source) {
     if (area.target_mode === 'all_creatures') parts.push('friendly fire');
   }
   if (source.attack_kind === 'melee' && source.reach_feet) parts.push(`reach ${source.reach_feet} ft`);
-  else if (source.range_feet) parts.push(`${source.range_feet} ft`);
+  else if (source.range_feet) parts.push(source.long_range_feet ? `${source.range_feet}/${source.long_range_feet} ft` : `${source.range_feet} ft`);
   return parts.join(' · ');
 }
 function playerTurnDetailsHtml(combat) {
@@ -2926,6 +3301,173 @@ function enemyTurnResultHtml(result) {
     <button data-allow-busy="true" onclick="confirmEnemyTurnResult()">Przeczytałem — zakończ turę przeciwnika</button>
   `;
 }
+function longCastHtml(cast, combat) {
+  const actionSpent = ((combat.turn_action || {}).action_use || '') !== 'action_available';
+  return `
+    <div class="combat-action-box">
+      <p><b>Rzucanie: ${esc(cast.label || cast.spell_id)}</b></p>
+      <p>Postęp ${esc(cast.completed_actions)}/${esc(cast.required_actions)} akcji (${esc(cast.progress_percent)}%). Pozostało: ${esc(cast.remaining_actions)}.</p>
+      <p class="muted">Musisz poświęcić akcję w każdej swojej turze i utrzymać koncentrację. Slot zostanie zużyty dopiero po ukończeniu.</p>
+      <div class="row">
+        <button data-allow-busy="true" ${actionSpent ? 'disabled title="Akcja w tej turze została już zużyta."' : ''} onclick="continueLongCast()">Kontynuuj rzucanie</button>
+        <button class="secondary" data-allow-busy="true" onclick="cancelLongCast()">Przerwij bez zużycia slotu</button>
+      </div>
+    </div>
+  `;
+}
+function pendingSummonHtml(pending) {
+  const positions = pending.legal_positions || [];
+  const options = positions.map(position => (
+    `<option value="${esc(position.col)},${esc(position.row)}">(${esc(position.col)}, ${esc(position.row)})</option>`
+  )).join('');
+  return `
+    <div class="combat-action-box">
+      <p><b>Wybierz pole przywołania</b></p>
+      <p class="muted">Plansza pokazuje ${esc(positions.length)} wolnych i widocznych pól w zasięgu.</p>
+      <div class="row">
+        <button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button>
+        <select id="summon-position">${options}</select>
+        <button data-allow-busy="true" onclick="confirmSummonFromSelect()">Potwierdź pole</button>
+        <button class="secondary" data-allow-busy="true" onclick="cancelSummon()">Anuluj</button>
+      </div>
+    </div>
+  `;
+}
+function pendingMagicMovementHtml(pending) {
+  if (pending.kind === 'teleport') {
+    const positions = pending.legal_positions || [];
+    const options = positions.map(position => (
+      `<option value="${esc(position.col)},${esc(position.row)}">(${esc(position.col)}, ${esc(position.row)})</option>`
+    )).join('');
+    return `
+      <div class="combat-action-box">
+        <p><b>Wybierz pole teleportacji</b></p>
+        <div class="row">
+          <button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button>
+          <select id="magic-movement-position">${options}</select>
+          <button data-allow-busy="true" onclick="confirmMagicMovementFromUi()">Teleportuj</button>
+          <button class="secondary" data-allow-busy="true" onclick="cancelMagicMovement()">Anuluj</button>
+        </div>
+      </div>
+    `;
+  }
+  const targets = pending.targets || [];
+  const options = targets.map(target => (
+    `<option value="${esc(target.id)}">${esc(target.name)} — (${esc(target.position[0])}, ${esc(target.position[1])})</option>`
+  )).join('');
+  return `
+    <div class="combat-action-box">
+      <p><b>${pending.kind === 'push' ? 'Odepchnij' : 'Przyciągnij'} cel</b></p>
+      <p class="muted">Cel wykona automatyczny rzut obronny po potwierdzeniu.</p>
+      <div class="row">
+        <button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button>
+        <select id="magic-movement-target">${options}</select>
+        <button data-allow-busy="true" onclick="confirmMagicMovementFromUi()">Potwierdź cel</button>
+        <button class="secondary" data-allow-busy="true" onclick="cancelMagicMovement()">Anuluj</button>
+      </div>
+    </div>
+  `;
+}
+function pendingSpellDebuffHtml(pending) {
+  const targets = pending.targets || [];
+  const options = targets.map(target => (
+    `<option value="${esc(target.id)}">${esc(target.name)} — (${esc(target.position[0])}, ${esc(target.position[1])})</option>`
+  )).join('');
+  return `
+    <div class="combat-action-box">
+      <p><b>${esc(pending.label || 'Czar osłabiający')}</b></p>
+      <p class="muted">Stan: ${esc(pending.condition || '-')}; save ${esc(pending.save_ability || '-')} przeciw ST ${esc(pending.save_dc || '-')}.</p>
+      <div class="row">
+        <button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button>
+        <select id="spell-debuff-target">${options}</select>
+        <button data-allow-busy="true" onclick="confirmSpellDebuffFromUi()">Potwierdź cel</button>
+        <button class="secondary" data-allow-busy="true" onclick="cancelSpellDebuff()">Anuluj</button>
+      </div>
+    </div>
+  `;
+}
+function pendingSpellDispelHtml(pending) {
+  if (pending.stage === 'ability_check') {
+    const check = pending.current_check || {};
+    const modifier = Number(pending.check_modifier || 0);
+    return `
+      <div class="combat-action-box">
+        <p><b>Test rozproszenia: ${esc(check.label || 'efekt czaru')}</b></p>
+        <p class="muted">Poziom efektu ${esc(check.spell_level || '-')}; d20 ${signedNumber(modifier)} przeciw ST ${esc(check.dc || '-')}.</p>
+        <div class="row">
+          <label>Naturalny d20: <input id="spell-dispel-roll" type="number" min="1" max="20" value="10"></label>
+          <button data-allow-busy="true" onclick="submitSpellDispelCheck()">Rozstrzygnij</button>
+        </div>
+      </div>
+    `;
+  }
+  const targets = pending.targets || [];
+  const options = targets.map(target => (
+    `<option value="${esc(target.id)}">${esc(target.name)} — (${esc(target.position[0])}, ${esc(target.position[1])})</option>`
+  )).join('');
+  return `
+    <div class="combat-action-box">
+      <p><b>${esc(pending.label || 'Rozproszenie magii')}</b></p>
+      <p class="muted">Wybierz istotę z co najmniej jednym aktywnym efektem czaru.</p>
+      <div class="row">
+        <button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button>
+        <select id="spell-dispel-target">${options}</select>
+        <button data-allow-busy="true" onclick="confirmSpellDispelFromUi()">Potwierdź cel</button>
+        <button class="secondary" data-allow-busy="true" onclick="cancelSpellDispel()">Anuluj</button>
+      </div>
+    </div>
+  `;
+}
+function defensiveSpellReaction(combat) {
+  const window = combat && combat.reaction_window;
+  if (!window) return null;
+  const options = window.options || [];
+  return options.find(option => option.id === window.current_option_id && option.kind === 'defensive_spell') || null;
+}
+function counterspellReaction(combat) {
+  const window = combat && combat.reaction_window;
+  if (!window) return null;
+  const options = window.options || [];
+  return options.find(option => option.id === window.current_option_id && option.kind === 'spell_counter') || null;
+}
+function counterspellReactionHtml(option, window, preview) {
+  const source = preview.source || {};
+  const enemySpellLevel = Number(source.cast_level || source.spell_level || 0);
+  if (window.stage === 'ability_check') {
+    return `
+      <p><b>${esc(option.label || 'Kontrczar')} wymaga testu cechy rzucania czarów.</b></p>
+      <p>Wrogi czar: ${esc(source.name || 'nieznany')} · poziom ${esc(enemySpellLevel)} · ST ${esc(window.dc || 10 + enemySpellLevel)} · modyfikator ${esc(signedNumber(window.modifier || 0))}.</p>
+      <div class="row">
+        <label>Naturalny wynik d20: <input id="counterspell-roll" type="number" min="1" max="20" value="10"></label>
+        <button data-allow-busy="true" onclick="submitCounterspellCheck()">Rozstrzygnij Kontrczar</button>
+      </div>
+    `;
+  }
+  const levels = option.cast_levels || [];
+  const choices = levels.map(level => `<option value="${esc(level)}">slot ${esc(level)}. poziomu</option>`).join('');
+  return `
+    <p><b>${esc(preview.enemy_name || 'Przeciwnik')} rzuca ${esc(source.name || 'czar')}.</b></p>
+    <p>${esc(option.label || 'Kontrczar')} automatycznie przerwie czar do poziomu użytego slotu. Silniejszy czar wymaga testu cechy rzucania czarów ST 10 + poziom czaru.</p>
+    <div class="row">
+      <label>Slot: <select id="counterspell-cast-level">${choices}</select></label>
+      <button data-allow-busy="true" onclick="castCounterspellReaction()">Rzuć ${esc(option.label || 'Kontrczar')}</button>
+      <button class="secondary" data-allow-busy="true" onclick="skipCounterspellReaction()">Nie kontruj</button>
+    </div>
+  `;
+}
+function defensiveSpellReactionHtml(option, preview) {
+  const attackTotal = preview.total === undefined || preview.total === null ? '?' : preview.total;
+  const currentAc = preview.target_ac === undefined || preview.target_ac === null ? '?' : preview.target_ac;
+  const nextAc = currentAc === '?' ? '?' : Number(currentAc) + Number(option.value || 0);
+  return `
+    <p><b>Atak ${esc(attackTotal)} przeciw AC ${esc(currentAc)} trafił.</b></p>
+    <p>${esc(option.label || 'Czar obronny')} podniesie AC do ${esc(nextAc)} aż do początku następnej tury bohatera. Zużyje reakcję i slot poziomu ${esc(option.spell_level || 1)}.</p>
+    <div class="row">
+      <button data-allow-busy="true" onclick="castDefensiveSpellReaction()">Rzuć ${esc(option.label || 'czar obronny')}</button>
+      <button class="secondary" data-allow-busy="true" onclick="skipDefensiveSpellReaction()">Przyjmij trafienie</button>
+    </div>
+  `;
+}
 function pendingEnemySavingThrowHtml(pending) {
   const request = pending.request || {};
   const target = pending.target || {};
@@ -3026,11 +3568,17 @@ function pendingCombatHelpDetailsHtml(pending) {
 function pendingConcentrationActionHtml(pending) {
   const action = pending.action || {};
   const targets = pending.targets || [];
-  const targetOptions = targets.map(actor => `<option value="${esc(actor.id)}">${esc(actor.name)} (${esc(actor.position[0])},${esc(actor.position[1])})</option>`).join('');
+  const selected = new Set(pending.selected_target_ids || []);
+  const targetOptions = targets.map(actor => `
+    <label class="choice-card">
+      <input type="checkbox" name="combat-concentration-target" value="${esc(actor.id)}"${selected.has(actor.id) ? ' checked' : ''}>
+      <span><b>${esc(actor.name)}</b><small>(${esc(actor.position[0])},${esc(actor.position[1])})</small></span>
+    </label>
+  `).join('');
   return `
-    <p>${esc(action.label || action.name || 'Czar koncentracyjny')}: wybierz sojusznika dla efektu.</p>
+    <p>${esc(action.label || action.name || 'Czar koncentracyjny')}: wybierz od 1 do ${esc(pending.maximum_targets || 1)} celów. Slot ${esc(pending.cast_level || action.spell_level || '-')}.</p>
+    <div class="choice-grid">${targetOptions}</div>
     <div class="row">
-      <label>Cel: <select id="combat-concentration-target">${targetOptions}</select></label>
       <button data-allow-busy="true" onclick="confirmConcentrationAction()">Potwierdź czar</button>
       <button class="secondary" data-allow-busy="true" onclick="cancelConcentrationAction()">Anuluj</button>
     </div>
@@ -3042,8 +3590,9 @@ function pendingConcentrationActionDetailsHtml(pending) {
   const targets = pending.targets || [];
   return `
     <p><b>Rzucający:</b> ${esc(caster.name || '-')}</p>
-    <p><b>Czar:</b> ${esc(action.label || action.name || '-')} ${action.resource_label ? `(${esc(action.resource_label)})` : ''}</p>
+    <p><b>Czar:</b> ${esc(action.label || action.name || '-')} · slot ${esc(pending.cast_level || action.spell_level || '-')}</p>
     <p><b>Koncentracja:</b> ${action.concentration ? 'tak' : 'nie'} | <b>Efekt:</b> ${esc(signedNumber(action.value || 0))} do ataku celu</p>
+    <p><b>Limit celów:</b> ${esc(pending.maximum_targets || 1)}</p>
     <p><b>Legalni sojusznicy:</b> ${targets.map(actor => `${esc(actor.name)} (${esc(actor.position[0])},${esc(actor.position[1])})`).join(', ') || 'brak'}</p>
   `;
 }
@@ -3334,7 +3883,10 @@ function combatContextMenuHtml(menu) {
       : '';
     previousCategory = option.category;
     const selected = index === Number(menu.selected_index || 0);
-    return `${heading}<button class="combat-context-option${selected ? ' selected' : ''}" data-allow-busy="true" onclick="confirmCombatContextMenu('${esc(option.id)}')" aria-current="${selected ? 'true' : 'false'}"><b>${esc(option.label)}</b><span>${esc(option.description || '')}</span></button>`;
+    if (option.loot_quantity_max !== null && option.loot_quantity_max !== undefined) {
+      return `${heading}${combatLootQuantityOptionHtml(option, index, selected)}`;
+    }
+    return `${heading}<button class="combat-context-option${selected ? ' selected' : ''}" data-allow-busy="true" onclick="confirmCombatContextMenu('${esc(option.id)}', ${index})" aria-current="${selected ? 'true' : 'false'}"><b>${esc(option.label)}</b><span>${esc(option.description || '')}</span></button>`;
   }).join('');
   return `
     <div class="combat-context-heading"><span>Wskazane pole na planszy</span><b>${esc(menu.title || 'Dostępne akcje')}</b></div>
@@ -3342,6 +3894,50 @@ function combatContextMenuHtml(menu) {
     <div class="combat-context-menu">${rows}</div>
     <div class="row"><button data-allow-busy="true" onclick="confirmCombatContextMenu('')">Potwierdź</button><button class="secondary" data-allow-busy="true" onclick="cancelCombatContextMenu()">Anuluj</button></div>
   `;
+}
+function combatLootQuantityOptionHtml(option, index, selected) {
+  const available = Math.max(0, Number(option.loot_quantity_max || 0));
+  const unitWeight = Math.max(0, Number(option.loot_unit_weight_lb || 0));
+  const remaining = Math.max(0, Number(option.recipient_remaining_capacity_lb || 0));
+  const capacityMaximum = unitWeight > 0
+    ? Math.max(0, Math.floor((remaining + 1e-9) / unitWeight))
+    : available;
+  const maximum = Math.min(available, capacityMaximum);
+  if (maximum < 1) {
+    return `
+      <div class="combat-context-option${selected ? ' selected' : ''}" aria-current="${selected ? 'true' : 'false'}">
+        <b>${esc(option.label)}</b>
+        <span>${esc(option.description || '')}</span>
+        <span class="combat-warning">Brak wolnego udźwigu na choćby jedną sztukę.</span>
+      </div>
+    `;
+  }
+  const selectedWeight = maximum * unitWeight;
+  return `
+    <div class="combat-context-option${selected ? ' selected' : ''}" aria-current="${selected ? 'true' : 'false'}">
+      <b>${esc(option.label)}</b>
+      <span>${esc(option.description || '')}</span>
+      <div class="row">
+        <label>Ilość:
+          <input id="combat-loot-quantity-${index}" type="number" min="1" max="${esc(maximum)}" value="${esc(maximum)}" oninput="updateCombatLootQuantity(${index})">
+        </label>
+        <button data-allow-busy="true" onclick="confirmCombatContextMenu('${esc(option.id)}', ${index})">Zabierz wybraną ilość</button>
+      </div>
+      <span id="combat-loot-summary-${index}" class="muted">Wybrana masa: ${esc(selectedWeight.toFixed(3))} lb · udźwig po zabraniu: ${esc(Math.max(0, remaining - selectedWeight).toFixed(3))} lb.</span>
+    </div>
+  `;
+}
+function updateCombatLootQuantity(index) {
+  const menu = ((state.combat || {}).context_menu) || {};
+  const option = (menu.options || [])[index] || {};
+  const input = document.getElementById(`combat-loot-quantity-${index}`);
+  const summary = document.getElementById(`combat-loot-summary-${index}`);
+  if (!input || !summary) return;
+  const quantity = Math.max(0, Number(input.value || 0));
+  const unitWeight = Math.max(0, Number(option.loot_unit_weight_lb || 0));
+  const remaining = Math.max(0, Number(option.recipient_remaining_capacity_lb || 0));
+  const selectedWeight = quantity * unitWeight;
+  summary.textContent = `Wybrana masa: ${selectedWeight.toFixed(3)} lb · udźwig po zabraniu: ${Math.max(0, remaining - selectedWeight).toFixed(3)} lb.`;
 }
 function combatContextMenuDetailsHtml(menu) {
   const selected = (menu.options || [])[Number(menu.selected_index || 0)] || null;
@@ -3378,7 +3974,7 @@ function pendingPlayerAttackDetailsHtml(pending) {
     return `
       <p><b>${pending.two_weapon_bonus ? 'Potwierdzenie ataku drugą bronią' : 'Potwierdzenie ataku'}</b></p>
       <p><b>Cel:</b> ${esc(target.name || '-')} | <b>Efektywne AC:</b> ${esc(pending.target_ac || target.ac || '-')} | <b>Pole:</b> (${esc(target.position ? target.position[0] : '-')},${esc(target.position ? target.position[1] : '-')})</p>
-      <p><b>Atak:</b> ${esc(source.name || '-')} | <b>${source.attack_kind === 'melee' ? 'Reach' : 'Zasięg'}:</b> ${esc(source.attack_kind === 'melee' ? (source.reach_feet || source.range_feet || 0) : (source.range_feet || 0))} ft | <b>Premia końcowa:</b> ${esc(modifierLabel)}</p>
+      <p><b>Atak:</b> ${esc(source.name || '-')} | <b>${source.attack_kind === 'melee' ? 'Reach' : 'Zasięg'}:</b> ${esc(source.attack_kind === 'melee' ? (source.reach_feet || source.range_feet || 0) : (source.long_range_feet ? `${source.range_feet}/${source.long_range_feet}` : (source.range_feet || 0)))} ft | <b>Premia końcowa:</b> ${esc(modifierLabel)}</p>
       <p><b>Osłona:</b> ${esc(coverNames[positioning.cover_level] || positioning.cover_level || 'brak')}${Number(positioning.cover_bonus || 0) ? `, AC +${esc(positioning.cover_bonus)}` : ''}${(positioning.cover_sources || []).length ? ` (${(positioning.cover_sources || []).map(esc).join(', ')})` : ''}</p>
       <p><b>Atak dystansowy w zwarciu:</b> ${positioning.ranged_in_melee ? 'tak — utrudnienie' : 'nie'}</p>
       <p><b>Flankowanie:</b> ${positioning.flanking ? 'tak — przewaga' : 'nie'}</p>
@@ -3593,7 +4189,7 @@ function updateActivePanel() {
   updateInteractionStateCard(hasPendingDecision, hasRolls, hasResult);
   document.getElementById('action-panel').hidden = !chatMode;
   document.getElementById('scene-description-card').hidden = interactionStage || !document.getElementById('scene-description').innerHTML.trim();
-  document.getElementById('chat-composer').hidden = stage !== 'location_active' || hasPendingDecision || hasNpcTransition || hasRolls || hasResult;
+  document.getElementById('chat-composer').hidden = stage !== 'location_active' || hasPendingDecision || hasNpcTransition || hasRolls || hasResult || Boolean(state.trade);
   const leaveButton = document.getElementById('leave-interaction-button');
   leaveButton.textContent = stage === 'interaction_result' ? 'Zakończ interakcję' : 'Opuść interakcję';
   leaveButton.disabled = hasPendingDecision || hasNpcTransition || hasRolls || busy;
@@ -3684,7 +4280,19 @@ async function sendGoalAction() {
   if (result && !result.ok && input) input.value = text;
 }
 function startShortRest() { api('/api/rest/short/start', {}, 'Przygotowuję podgląd odpoczynku...'); }
-function confirmShortRest() { api('/api/rest/short/confirm', {}, 'Mija godzina odpoczynku...'); }
+function confirmShortRest() {
+  const attunementChoices = [...document.querySelectorAll('[data-short-rest-attunement]')]
+    .filter(select => select.value)
+    .map(select => {
+      const separator = select.value.indexOf(':');
+      return {
+        actor_id: select.dataset.shortRestAttunement,
+        action: select.value.slice(0, separator),
+        item_id: select.value.slice(separator + 1),
+      };
+    });
+  api('/api/rest/short/confirm', {attunement_choices: attunementChoices}, 'Mija godzina odpoczynku...');
+}
 function cancelShortRest() { api('/api/rest/short/cancel', {}, 'Anuluję odpoczynek...'); }
 function finishShortRest() { api('/api/rest/short/finish', {}, 'Wracam do eksploracji...'); }
 function spendShortRestHitDie(actorId, dieSides) {
@@ -3788,7 +4396,7 @@ function startSession() { api('/api/start', {}, 'Rozpoczynam sesję...'); }
 function isAllyCombatTurnActive() {
   const combat = state && state.combat ? state.combat : null;
   const actor = combat && combat.current_actor ? combat.current_actor : {};
-  return Boolean(combat && combat.status === 'active' && actor.faction === 'ally' && !combat.context_menu && !combat.enemy_turn_preview && !combat.pending_player_attack && !combat.pending_player_healing && !combat.pending_area_spell && !combat.pending_combat_interaction && !combat.pending_combat_help && !combat.pending_concentration_action && !combat.pending_concentration_check && !combat.pending_combat_ready);
+  return Boolean(combat && combat.status === 'active' && actor.faction === 'ally' && !combat.context_menu && !combat.enemy_turn_preview && !combat.pending_player_attack && !combat.pending_player_healing && !combat.pending_area_spell && !combat.pending_combat_interaction && !combat.pending_combat_help && !combat.pending_concentration_action && !combat.pending_summon && !combat.pending_magic_movement && !combat.pending_spell_debuff && !combat.pending_spell_dispel && !combat.pending_concentration_check && !combat.pending_combat_ready);
 }
 async function scanBoard() {
   if (boardScanInFlight) return;
@@ -3852,8 +4460,10 @@ function resolveEncounterOpening() { api('/api/encounter/opening/resolve', {}, '
 function confirmEncounterSetup() { api('/api/encounter/setup/confirm', {}, 'Potwierdzam krok setupu...'); }
 function startEncounterInitiative() { api('/api/encounter/initiative/start', {}, 'Rozpoczynam inicjatywę...'); }
 function submitPrecombatStealth(actorId) {
-  const input = document.getElementById(`precombat-stealth-${actorId}`);
-  api('/api/encounter/stealth/roll', {actor_id: actorId, natural_roll: Number(input ? input.value : 0)}, 'Rozstrzygam skradanie przed walką...');
+  api('/api/encounter/stealth/roll', {
+    actor_id: actorId,
+    ...d20RollPayload(`precombat-stealth-${actorId}`),
+  }, 'Rozstrzygam skradanie przed walką...');
 }
 function finishPrecombatStealth() { api('/api/encounter/stealth/finish', {}, 'Kończę etap skradania...'); }
 function submitEncounterInitiativeRoll() {
@@ -3866,14 +4476,29 @@ function submitEncounterInitiativeRoll() {
 function submitPlayerAttackRoll() {
   api('/api/combat/player-attack-roll', d20RollPayload('combat-attack-natural-roll'), 'Rozstrzygam rzut ataku...');
 }
-function selectCombatAttackSource(sourceId) { api('/api/combat/attack-source', {source_id: sourceId}, 'Wybieram źródło ataku...'); }
-function selectCombatHealingSource(sourceId) { api('/api/combat/healing-source', {source_id: sourceId}, 'Wybieram leczenie...'); }
+function selectCombatAttackSource(sourceId, castLevel = null) { api('/api/combat/attack-source', {source_id: sourceId, cast_level: castLevel}, 'Wybieram źródło ataku...'); }
+function selectCombatHealingSource(sourceId, castLevel = null) { api('/api/combat/healing-source', {source_id: sourceId, cast_level: castLevel}, 'Wybieram leczenie...'); }
+function castExplorationRitual(actorId, spellId) { api('/api/exploration/ritual', {actor_id: actorId, spell_id: spellId}, 'Odprawiam rytuał...'); }
 function confirmPlayerAttackTarget() { api('/api/combat/player-attack-confirm', {}, 'Potwierdzam atak...'); }
 function cancelPlayerAttackTarget() { api('/api/combat/player-attack-cancel', {}, 'Anuluję wybór celu...'); }
 function confirmCombatInteraction(interactionId) { api('/api/combat/interaction/confirm', {interaction_id: interactionId}, 'Potwierdzam interakcję...'); }
 function cancelCombatInteraction() { api('/api/combat/interaction/cancel', {}, 'Anuluję interakcję...'); }
 function moveCombatContextMenu(delta) { api('/api/combat/context-menu/select', {delta}, ''); }
-function confirmCombatContextMenu(optionId) { api('/api/combat/context-menu/confirm', {option_id: optionId || ''}, 'Wykonuję wybraną akcję...'); }
+function confirmCombatContextMenu(optionId, optionIndex = null) {
+  const menu = ((state.combat || {}).context_menu) || {};
+  const options = menu.options || [];
+  const index = optionIndex === null
+    ? Number(menu.selected_index || 0)
+    : Number(optionIndex);
+  const option = options[index] || {};
+  const payload = {option_id: optionId || ''};
+  if (option.loot_quantity_max !== null && option.loot_quantity_max !== undefined) {
+    const input = document.getElementById(`combat-loot-quantity-${index}`);
+    if (!input) return;
+    payload.quantity = Number(input ? input.value : 0);
+  }
+  api('/api/combat/context-menu/confirm', payload, 'Zabieram wybraną część łupu...');
+}
 function cancelCombatContextMenu() { api('/api/combat/context-menu/cancel', {}, ''); }
 function submitPlayerDamageRoll() {
   const pending = ((state.combat || {}).pending_player_attack) || {};
@@ -3891,10 +4516,54 @@ function submitAreaSpellDamage() {
 }
 function cancelAreaSpell() { api('/api/combat/area-spell/cancel', {}, 'Anuluję czar obszarowy...'); }
 function useStrengthPotion(actionId) { api('/api/combat/strength-potion', {action_id: actionId}, 'Używam eliksiru...'); }
-function startConcentrationAction(actionId) { api('/api/combat/concentration/start', {action_id: actionId}, 'Przygotowuję czar koncentracyjny...'); }
+function startLongCast(actionId, castLevel = null) { api('/api/combat/long-cast/start', {action_id: actionId, cast_level: castLevel}, 'Rozpoczynam długie rzucanie...'); }
+function continueLongCast() { api('/api/combat/long-cast/continue', {}, 'Kontynuuję długie rzucanie...'); }
+function cancelLongCast() { api('/api/combat/long-cast/cancel', {}, 'Przerywam długie rzucanie...'); }
+function startSummon(actionId, castLevel = null) { api('/api/combat/summon/start', {action_id: actionId, cast_level: castLevel}, 'Wybieram pole przywołania...'); }
+function confirmSummonFromSelect() {
+  const value = (document.getElementById('summon-position') || {}).value || '';
+  const parts = value.split(',').map(Number);
+  if (parts.length !== 2 || parts.some(Number.isNaN)) return;
+  api('/api/combat/summon/confirm', {col: parts[0], row: parts[1]}, 'Przywołuję istotę...');
+}
+function cancelSummon() { api('/api/combat/summon/cancel', {}, 'Anuluję przywołanie...'); }
+function startMagicMovement(actionId, castLevel = null) { api('/api/combat/magic-movement/start', {action_id: actionId, cast_level: castLevel}, 'Wybieram magiczny ruch...'); }
+function confirmMagicMovementFromUi() {
+  const pending = ((state || {}).combat || {}).pending_magic_movement || {};
+  if (pending.kind === 'teleport') {
+    const value = (document.getElementById('magic-movement-position') || {}).value || '';
+    const parts = value.split(',').map(Number);
+    if (parts.length !== 2 || parts.some(Number.isNaN)) return;
+    api('/api/combat/magic-movement/confirm', {col: parts[0], row: parts[1]}, 'Teleportuję...');
+    return;
+  }
+  const targetId = (document.getElementById('magic-movement-target') || {}).value || '';
+  if (!targetId) return;
+  api('/api/combat/magic-movement/confirm', {target_id: targetId}, 'Rozstrzygam wymuszony ruch...');
+}
+function cancelMagicMovement() { api('/api/combat/magic-movement/cancel', {}, 'Anuluję magiczny ruch...'); }
+function startSpellDebuff(actionId, castLevel = null) { api('/api/combat/spell-debuff/start', {action_id: actionId, cast_level: castLevel}, 'Wybieram cel osłabienia...'); }
+function confirmSpellDebuffFromUi() {
+  const targetId = (document.getElementById('spell-debuff-target') || {}).value || '';
+  if (!targetId) return;
+  api('/api/combat/spell-debuff/confirm', {target_id: targetId}, 'Rozstrzygam czar osłabiający...');
+}
+function cancelSpellDebuff() { api('/api/combat/spell-debuff/cancel', {}, 'Anuluję czar osłabiający...'); }
+function startSpellDispel(actionId, castLevel = null) { api('/api/combat/spell-dispel/start', {action_id: actionId, cast_level: castLevel}, 'Wybieram cel rozproszenia...'); }
+function confirmSpellDispelFromUi() {
+  const targetId = (document.getElementById('spell-dispel-target') || {}).value || '';
+  if (!targetId) return;
+  api('/api/combat/spell-dispel/confirm', {target_id: targetId}, 'Rozpraszam efekty magiczne...');
+}
+function submitSpellDispelCheck() {
+  const naturalRoll = Number((document.getElementById('spell-dispel-roll') || {}).value || 0);
+  api('/api/combat/spell-dispel/check', {natural_roll: naturalRoll}, 'Rozstrzygam test rozproszenia...');
+}
+function cancelSpellDispel() { api('/api/combat/spell-dispel/cancel', {}, 'Anuluję rozproszenie magii...'); }
+function startConcentrationAction(actionId, castLevel = null) { api('/api/combat/concentration/start', {action_id: actionId, cast_level: castLevel}, 'Przygotowuję czar koncentracyjny...'); }
 function confirmConcentrationAction() {
-  const target = document.getElementById('combat-concentration-target');
-  api('/api/combat/concentration/confirm', {target_id: target ? target.value : ''}, 'Potwierdzam czar koncentracyjny...');
+  const targets = [...document.querySelectorAll('input[name="combat-concentration-target"]:checked')].map(input => input.value);
+  api('/api/combat/concentration/confirm', {target_ids: targets}, 'Potwierdzam czar koncentracyjny...');
 }
 function cancelConcentrationAction() { api('/api/combat/concentration/cancel', {}, 'Anuluję czar koncentracyjny...'); }
 function submitConcentrationCheck() {
@@ -3936,8 +4605,7 @@ function useCombatDisengage() { api('/api/combat/disengage', {}, 'Wykonuję Odwr
 function startCombatHide() { api('/api/combat/hide/start', {}, 'Przygotowuję Hide...'); }
 function startCombatSearch() { api('/api/combat/search/start', {}, 'Przygotowuję Search...'); }
 function submitCombatSkillCheck() {
-  const roll = document.getElementById('combat-skill-check-roll');
-  api('/api/combat/skill-check', {natural_roll: Number(roll ? roll.value : 0)}, 'Rozstrzygam test...');
+  api('/api/combat/skill-check', d20RollPayload('combat-skill-check-roll'), 'Rozstrzygam test...');
 }
 function cancelCombatSkillCheck() { api('/api/combat/skill-check/cancel', {}, 'Anuluję test...'); }
 function submitCombatShove() {
@@ -3964,6 +4632,17 @@ function confirmCombatReady() {
 }
 function cancelCombatReady() { api('/api/combat/ready/cancel', {}, 'Anuluję Ready...'); }
 function resolveEnemyTurn() { api('/api/combat/enemy-turn', {}, 'Rozgrywam turę przeciwnika...'); }
+function castDefensiveSpellReaction() { api('/api/combat/defensive-spell/cast', {}, 'Rzucam czar obronny...'); }
+function skipDefensiveSpellReaction() { api('/api/combat/defensive-spell/skip', {}, 'Przyjmuję trafienie...'); }
+function castCounterspellReaction() {
+  const input = document.getElementById('counterspell-cast-level');
+  api('/api/combat/counterspell/cast', {cast_level: Number(input ? input.value : 0)}, 'Rzucam Kontrczar...');
+}
+function submitCounterspellCheck() {
+  const input = document.getElementById('counterspell-roll');
+  api('/api/combat/counterspell/roll', {natural_roll: Number(input ? input.value : 0)}, 'Rozstrzygam Kontrczar...');
+}
+function skipCounterspellReaction() { api('/api/combat/counterspell/skip', {}, 'Pomijam Kontrczar...'); }
 function startEnemyOpportunityAttack() { api('/api/combat/enemy-opportunity/start', {}, 'Rozpoczynam atak okazyjny...'); }
 function skipEnemyOpportunityAttack() { api('/api/combat/enemy-opportunity/skip', {}, 'Pomijam reakcję...'); }
 function submitEnemyOpportunityAttackRoll() {
@@ -4047,7 +4726,17 @@ function triggerPrimaryAction() {
       if (combat.context_menu) { confirmCombatContextMenu(''); return true; }
       if (combat.death_save_required) { submitDeathSave(); return true; }
       if (combat.pending_concentration_check) { submitConcentrationCheck(); return true; }
+      if (combat.long_cast && combat.current_actor && combat.long_cast.caster_id === combat.current_actor.id) {
+        continueLongCast();
+        return true;
+      }
       if (combat.pending_enemy_saving_throw) { submitEnemySavingThrow(); return true; }
+      if (counterspellReaction(combat)) {
+        if (combat.reaction_window.stage === 'ability_check') submitCounterspellCheck();
+        else castCounterspellReaction();
+        return true;
+      }
+      if (defensiveSpellReaction(combat)) { castDefensiveSpellReaction(); return true; }
       if (combat.enemy_turn_result) { confirmEnemyTurnResult(); return true; }
       if (combat.pending_ready_attack) {
         if (combat.pending_ready_attack.stage === 'choice') startReadyAttack();
@@ -4067,6 +4756,14 @@ function triggerPrimaryAction() {
       if (combat.pending_combat_grapple) { submitCombatGrapple(); return true; }
       if (combat.pending_combat_skill_check) { submitCombatSkillCheck(); return true; }
       if (combat.pending_concentration_action) { confirmConcentrationAction(); return true; }
+      if (combat.pending_summon) { confirmSummonFromSelect(); return true; }
+      if (combat.pending_magic_movement) { confirmMagicMovementFromUi(); return true; }
+      if (combat.pending_spell_debuff) { confirmSpellDebuffFromUi(); return true; }
+      if (combat.pending_spell_dispel) {
+        if (combat.pending_spell_dispel.stage === 'ability_check') submitSpellDispelCheck();
+        else confirmSpellDispelFromUi();
+        return true;
+      }
       if (combat.pending_combat_ready) { confirmCombatReady(); return true; }
       if (combat.pending_combat_interaction) {
         const options = combat.pending_combat_interaction.options || [];
@@ -4119,6 +4816,10 @@ function cancelCurrentCombatStep() {
   if (combat.pending_combat_grapple) { cancelCombatGrapple(); return true; }
   if (combat.pending_combat_skill_check) { cancelCombatSkillCheck(); return true; }
   if (combat.pending_concentration_action) { cancelConcentrationAction(); return true; }
+  if (combat.pending_summon) { cancelSummon(); return true; }
+  if (combat.pending_magic_movement) { cancelMagicMovement(); return true; }
+  if (combat.pending_spell_debuff) { cancelSpellDebuff(); return true; }
+  if (combat.pending_spell_dispel && combat.pending_spell_dispel.stage === 'target_selection') { cancelSpellDispel(); return true; }
   if (combat.pending_combat_ready) { cancelCombatReady(); return true; }
   if (combat.pending_combat_interaction) { cancelCombatInteraction(); return true; }
   if (combat.pending_player_attack) { cancelPlayerAttackTarget(); return true; }

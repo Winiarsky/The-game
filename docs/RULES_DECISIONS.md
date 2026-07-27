@@ -272,6 +272,21 @@ Implementacja MVP:
   W obecnym contencie Ready ma pierwszeństwo przed wykrytymi atakami okazyjnymi,
   zachowując dotychczasowy kontrakt sceny; nowe rodzaje reakcji muszą jawnie określić
   miejsce w kolejności zamiast tworzyć osobny stan oczekujący w UI.
+- `Kontrczar` ma pierwszeństwo przed reakcją `Tarcza`, ponieważ przerywa rzucanie
+  wrogiego czaru przed jego skutkiem. Wymaga widoczności i dystansu do 60 stóp,
+  zużywa reakcję oraz jawnie wybrany slot. Czar na poziomie nie wyższym od slotu
+  jest przerywany automatycznie; silniejszy wymaga testu cechy rzucania czarów
+  przeciw ST `10 + poziom czaru`. Dopóki model aktora przechowuje ST czarów, ale
+  nie identyfikator głównej cechy, modyfikator testu jest odtwarzany jako
+  `spell_save_dc - 8 - proficiency_bonus`, bez dodawania biegłości do testu.
+- Casting time `minute`, `ten_minutes` i `hour` jest przeliczany na odpowiednio
+  10, 100 i 600 sześciusekundowych rund. Rozpoczęcie i każdy dalszy krok zużywa
+  akcję, a stan `LongCastState` zapisuje ostatnią rundę postępu. Brak tej akcji
+  przed końcem kolejnej tury przerywa czar.
+- Długie rzucanie korzysta ze wspólnego lifecycle koncentracji niezależnie od
+  późniejszego duration czaru. Ruch jest legalny; obrażenia wywołują zwykły CON
+  save. Przerwanie nie zużywa slotu, ponieważ slot i komponenty są rozliczane
+  dopiero po ukończeniu castingu.
 - `Dash` zużywa akcję główną i dodaje aktorowi dodatkową pulę ruchu równą jego `speed_feet` do końca bieżącej tury.
 - `Dodge/Unik` zużywa akcję główną i daje efekt `Unik`: ataki przeciwko aktorowi mają utrudnienie; efekt wygasa na początku następnej tury tego aktora.
 - `Disengage/Odwrót` zużywa akcję główną i w MVP daje efekt `Odwrót`: bezpieczne odejście do końca tury, blokujące ataki okazyjne.
@@ -283,6 +298,18 @@ Implementacja MVP:
 - `Actor` przechowuje jeden `ProficiencyProfile` dla saving throwów, skilli, expertise, broni, pancerzy i narzędzi. `proficiency_bonus` pozostaje wartością aktora, niezależną od konkretnej klasy.
 - Ability check, saving throw i attack roll składają osobne `RollModifier`: cechę, proficiency albo expertise oraz modyfikatory sytuacyjne. UI pokazuje te składniki zamiast anonimowej premii końcowej.
 - Biegłość w broni jest wiązana ze stabilnym id itemu, a dla naturalnego ataku potwora z id źródła ataku. Atak bronią wskazujący `ability` wylicza premię z cechy i dodaje proficiency wyłącznie przy pasującej biegłości aktora. Historyczne `attack_modifier` pozostaje fallbackiem dla starszego contentu bez `ability`.
+- Katalog SRD 5.1 obejmuje 37 broni w jednym kontrakcie `weapon`. Biegłość może
+  pochodzić z id broni albo kategorii `simple_weapons`/`martial_weapons`; kość
+  obrażeń nie zawiera statystyki konkretnego właściciela.
+- Finesse wystawia warianty Strength i Dexterity. Thrown wystawia wariant ranged,
+  usuwa jeden egzemplarz z dłoni/stacku i pozostawia podnoszalną broń na polu celu.
+  Long range jest legalny z utrudnieniem; heavy daje utrudnienie Small istocie.
+- Jednoręczna broń ammunition wymaga wolnej drugiej dłoni. Loading i sieć
+  ograniczają ataki w ramach jednej Attack action do jednego.
+- Lanca ma reach 10 ft i utrudnienie przeciw celowi w 5 ft. Do czasu wdrożenia
+  mounted combat jest dwuręczna. Sieć trafieniem nakłada Restrained tylko na cel
+  Large lub mniejszy; akcja Strength ST 10 usuwa stan. Zniszczenie sieci jako
+  atakowalnego obiektu AC 10 / 5 HP pozostaje odroczone.
 - Saving throwy czarów, efektów sceny i koncentracji korzystają z tego samego profilu. Samo posiadanie wysokiej cechy nie oznacza biegłości.
 - Wszystkie nowe save'y opisuje wspólny `SavingThrowRequest`: cecha, ST, źródło oraz skutek sukcesu. `SavingThrowResult` zachowuje naturalny d20, jawne składniki modyfikatora, sumę i mnożnik obrażeń.
 - Save wymuszony przez przeciwnika na bohaterze jest rzutem fizycznym gracza. Po potwierdzeniu celu tura przeciwnika zatrzymuje się, UI pokazuje cechę, ST i modyfikatory, a wpisany naturalny d20 rozstrzyga pełne, połowę albo brak obrażeń.
@@ -385,7 +412,7 @@ Implementacja MVP:
 - Wolne deklaracje eksploracji są porządkowane przez named `ExplorationMechanicId`, np. `single_actor_check`, `lead_with_help_check`, `group_check`, `use_item_check`, `use_spell_check`, `improvised_tool_check`. LLM wybiera mechanikę, ale walidacja i rozstrzygnięcie pozostają deterministyczne.
 - Magiczny napój siły w MVP jest akcją walki pochodzącą z itemu aktora: zużywa akcję główną, zmniejsza `quantity` itemu o 1 i daje efekt `strength_potion` do początku następnej tury aktora.
 - `strength_potion` daje premię do ataku i obrażeń tylko źródłom opartym o Siłę.
-- Nie implementujemy jeszcze attunement, pełnych ładunków/odnawiania itemów, klasowo wyliczanych list czarów, profili casterów znanych czarów, zaawansowanych modyfikatorów testu koncentracji ani zaawansowanych efektów czarów poza obrażeniami/lekkim leczeniem i prostym buffem do ataku.
+- Nie implementujemy jeszcze klasowo wyliczanych list czarów, profili casterów znanych czarów, zaawansowanych modyfikatorów testu koncentracji ani zaawansowanych efektów czarów poza obrażeniami/lekkim leczeniem i prostym buffem do ataku.
 - Jawne obiekty sceny deklarują jawny `action_cost`: `action`, `bonus_action`, `reaction`, `object_interaction` albo `free`. `object_interaction` najpierw zużywa jedną darmową interakcję w turze, a po jej wykorzystaniu może zużyć akcję główną.
 - Interakcje walki są data-driven: `SceneInteraction` może deklarować listę `conditions` oraz listę `effects`.
 - Warunki interakcji MVP obejmują dostępną akcję, sąsiedztwo obiektu, stanie na obiekcie, sąsiedniego przeciwnika oraz wolne pole docelowe.
@@ -461,7 +488,10 @@ Odstępstwa / decyzje planszowe:
 - Broń versatile ma równocześnie jawny wariant jednoręczny i oburęczny. Wariant oburęczny jest legalny tylko przy wolnej drugiej ręce, używa `versatile_damage_dice` i nie tworzy trwałego stanu chwytu między atakami. Ręka zarezerwowana przez Grapple blokuje ten wariant.
 - Założona tarcza zajmuje jedną rękę i dodaje `+2` do efektywnego KP. Bazowe `Actor.ac` nie jest mutowane; ataki, podgląd celu i UI korzystają ze wspólnego `effective_armor_class()`.
 - Założenie albo zdjęcie tarczy zużywa akcję. Aktor może korzystać najwyżej z jednej tarczy, a zajęta dłoń automatycznie blokuje niezgodne warianty Two-Weapon Fighting, versatile i Grapple.
-- Pełne zasady 2014 pozwalają użyć tarczy bez biegłości kosztem zestawu kar. Do czasu wdrożenia kompletnego frameworka pancerzy MVP odrzuca założenie tarczy bez wymaganej biegłości, żeby nie tworzyć stanu z brakującymi konsekwencjami.
+- Pancerz korpusu ma kategorię `light`, `medium` albo `heavy`. Lekki dodaje pełny modyfikator Zręczności do bazowego KP, średni ogranicza go do `+2`, a ciężki używa limitu `0`. Założony pancerz zastępuje bazowe `Actor.ac`; premia tarczy jest dodawana później.
+- Aktor może mieć założony najwyżej jeden pancerz korpusu. Zakładanie trwa odpowiednio 1, 5 albo 10 minut, a zdejmowanie 1, 1 albo 5 minut dla pancerza lekkiego, średniego i ciężkiego. Operacje są dostępne w spokojnej eksploracji, nie podczas encountera.
+- Niespełnienie wymagania Siły ciężkiego pancerza nie blokuje jego noszenia, lecz zmniejsza szybkość o 10 ft. Flaga pancerza `stealth_disadvantage` daje utrudnienie do testów Dexterity (Stealth), w tym Hide, skradania przed walką i authored testów eksploracyjnych.
+- Pełne zasady 2014 pozwalają nosić pancerz lub tarczę bez biegłości kosztem zestawu kar obejmujących testy, save'y, ataki i czary. MVP odrzuca ich założenie bez wymaganej biegłości, żeby nie tworzyć częściowo zaimplementowanego stanu.
 - Akcja `targeted_item_effect` jest definiowana w contentowym itemie, ale jej `effect_kind` musi należeć do jawnie obsługiwanych efektów. Runtime sprawdza dostępność przedmiotu, frakcję i zasięg celu, a akcję tury oraz ilość przedmiotu zużywa dopiero podczas wykonania. `apply_condition` nakłada ustrukturyzowany warunek z opcjonalnym save-at-start/save-at-end; odporność celu blokuje aplikację bez zużycia niejawnych wyjątków.
 - `Poisoned` daje utrudnienie do ataków i testów cech. `Restrained` zeruje szybkość, daje utrudnienie do ataków i Dex save'ów oraz przewagę atakom przeciw celowi. Przewaga i utrudnienie nadal znoszą się według wspólnego kontraktu d20.
 - Bohater wykonuje jawny fizyczny rzut kończący warunek przed zakończeniem właściwej granicy tury. Przeciwnik wykonuje ten rzut automatycznie i zapisuje wynik w historii sesji. Warunki bez save'a mogą wygasać automatycznie na wskazanej granicy tury.
@@ -643,6 +673,132 @@ Implementacja MVP:
 - Loader odrzuca powtórzone cechy oraz kolizje identyfikatorów między bazowym aktorem i grantami. Cecha nie może być pustym opisem bez mechanicznego grantu.
 - Snapshot zachowuje grant i aktualny stan przyznanych prymitywów; definicja pozostaje wersjonowanym contentem. Mechanizm jest fundamentem dla przyszłych ras, klas, featów i magicznych przedmiotów, ale sam ich jeszcze nie implementuje.
 
+## Ekonomia przedmiotów i łup
+
+- Portfel aktora przechowuje osobne, nieujemne ilości `cp`, `sp`, `ep`, `gp` i `pp`.
+  Wartość porównawcza jest liczona w miedzi: `sp=10`, `ep=50`, `gp=100`,
+  `pp=1000 cp`.
+- Każde 50 monet waży 1 lb. Masa inventory to suma `weight_lb × quantity`;
+  standardowy udźwig wynosi `Strength × 15 lb`. Ten etap nie włącza wariantowych
+  progów encumbrance ani kar do szybkości.
+- Łup jest neutralnym `LootBundle` z inventory i portfelem. Pokonany aktor jest
+  pierwszym adapterem; ten sam kontrakt może obsłużyć znalezione zwłoki i skrzynie.
+- W walce przeszukanie pokonanego przeciwnika wymaga stania w zasięgu 5 ft i zużywa
+  akcję. Po walce zebranie łupu nie ma kosztu akcji.
+- Menu pozwala zabrać cały pakiet, cały stos przedmiotu, wszystkie monety albo
+  wybraną liczbę sztuk ze stosu i wybranego nominału. Kontrolka pokazuje masę
+  wybranej części oraz pozostały po transferze udźwig; dotyczy to również
+  odzyskanej amunicji, mikstur i materiałów.
+- Każdy transfer jest atomowy i zostaje odrzucony, jeśli wybrana część przekroczyłaby
+  udźwig albo dostępną liczbę. Przy błędzie menu pozostaje otwarte, a akcja nie jest
+  wydawana. Niewybrane przedmioty oraz monety pozostają w źródle i są zapisywane
+  jako zwykły stan aktora lub pakietu pola walki.
+- Wyposażone bronie upuszczone przy 0 HP pozostają osobnymi obiektami pola i nie są
+  duplikowane w pakiecie łupu. Nieprzenośne, zepsute i nadal wyposażone przedmioty
+  również nie wchodzą do bieżącego transferu.
+- Kupiec jest stanem scenariusza z własnym inventory, portfelem i procentem odkupu.
+  Zakup używa katalogowej `value_cp`, a sprzedaż ceny
+  `floor(value_cp × buyback_percent / 100)`; wartość zerowa i wynik poniżej `1 cp`
+  wykluczają przedmiot z handlu.
+- Kupno i sprzedaż dopuszczają część stosu. Resolver przed zatwierdzeniem sprawdza
+  dostępny towar, monety kupującego, monety kupca oraz udźwig postaci. Transakcja
+  jest atomowa: błąd nie zmienia żadnej strony.
+- Kupiec odkupuje wyłącznie dostępne, przenośne i niewyposażone przedmioty. Portfele
+  są po transakcji normalizowane do nominałów `pp/gp/sp/cp`, więc wydawanie reszty
+  nie zależy od fizycznego zapasu konkretnego nominału.
+- Handel jest dostępny tylko w lokacji przypisanej do kupca, poza aktywną walką,
+  oczekującym encounterem i nierozstrzygniętą decyzją. `village_square_mvp`
+  stanowi pierwszy fixture pełnego przepływu content–UI–snapshot.
+
+## Amunicja i loading
+
+- Źródło ataku dystansowego może wymagać stabilnego `ammunition_type`. Inventory
+  spełnia wymaganie sumą dostępnych stosów tego typu, niezależnie od ich ID.
+- Jedna sztuka amunicji jest zużywana przy faktycznym wykonaniu ataku, również przy
+  pudle. Sam wybór źródła/celu i anulowanie podglądu niczego nie zużywają.
+- Brak kompatybilnej amunicji blokuje atak gracza, reakcję i atak AI przed wydaniem
+  odpowiedniej akcji albo reakcji.
+- Właściwość `loading` ogranicza broń do jednego strzału w ramach Action niezależnie
+  od `attacks_per_action`; nie blokuje osobnego strzału z reakcji.
+- Referencyjna kusza wymaga `bolt`, a scenariuszowi użytkownicy zaczynają z 20
+  bełtami. Pozostałe bełty są zwykłym, ważonym i lootowalnym inventory.
+- Każdy faktycznie wystrzelony pocisk jest zapisywany w rejestrze bieżącego
+  encountera wraz z frakcją strzelca i pełnymi metadanymi stosu. Rejestr obejmuje
+  ataki zwykłe, AI i reakcje oraz jest częścią snapshotu.
+- Po zwycięstwie drużyny można poświęcić minutę na przeszukanie pola walki i
+  odzyskać połowę amunicji wystrzelonej przez bohaterów, osobno dla każdego typu,
+  z zaokrągleniem w dół. Odzysk tworzy zwykły, trwały `LootBundle` na polu
+  pokonanego przeciwnika; można zebrać cały pakiet albo pojedynczy stos.
+- Amunicja przeciwników nie zwiększa odzysku drużyny. Odwrót, kapitulacja i
+  porażka nie tworzą stosu odzyskanej amunicji, ponieważ drużyna nie kontroluje
+  pola walki.
+
+## Ładunki przedmiotów
+
+- Instancja przedmiotu może mieć niestosowalną pulę `charges_current` /
+  `charges_maximum`. Akcja z dodatnim `charge_cost` sprawdza i wydaje tę pulę;
+  koszt `0` zachowuje dotychczasowe zużycie jednej sztuki consumable.
+- Ładunek i koszt ekonomii tury są wydawane dopiero przy wykonaniu akcji. Samo
+  otwarcie menu, wskazanie celu albo anulowanie nie zmienia stanu.
+- Wyczerpana pula blokuje akcję przed wydaniem Action. Przedmiot pozostaje w
+  inventory z ilością `1`, dzięki czemu może później odzyskać ładunki.
+- `charges_recovery` może wskazać short rest, long rest albo brak recovery.
+  Brak kości odnawia pulę do maksimum; formuła `NdM` z modyfikatorem korzysta
+  wyłącznie ze wstrzykniętego RNG i ogranicza wynik do maksimum. Long rest
+  obejmuje także przedmioty odnawiane przy short rest.
+- Referencyjna Różdżka oplątania wydaje 1 z 7 ładunków, aby nałożyć Restrained
+  po nieudanym Dex save ST 13, i odzyskuje `1d6+1` po long rest. Stan jest
+  widoczny w UI i zachowywany w snapshotcie v9.
+
+## Attunement magicznych przedmiotów
+
+- Przedmiot może deklarować `requires_attunement`. Jego instancja przechowuje
+  bieżące `attuned`; zwykłe przedmioty nie mogą ustawić tego stanu.
+- Bohater może utrzymywać najwyżej trzy dostrojone przedmioty. Podczas jednego
+  ukończonego short resta może dostroić albo dobrowolnie odstroić najwyżej jeden.
+  Wspólny odpoczynek drużyny pozwala każdemu bohaterowi dokonać własnego wyboru.
+- Niedostrojony przedmiot pozostaje dostępny jako fizyczny element inventory, ale
+  nie wystawia specjalnych ataków, akcji ani efektów i nie może wydawać ładunków.
+  Sam odpoczynek może nadal odnowić jego pulę ładunków.
+- Wybór jest zatwierdzany razem z short restem. Anulowanie podglądu odpoczynku
+  nie zmienia więzi ani czasu scenariusza.
+- Stan instancji z eksploracji jest nakładany na odpowiadający mu przedmiot
+  encountera, więc dostrojenie i liczba ładunków nie resetują się przy rozpoczęciu
+  walki. Snapshot v12 zachowuje oba pola.
+- MVP nie kończy więzi automatycznie wskutek dystansu przez 24 godziny, śmierci,
+  utraty wymagań ani dostrojenia innej istoty; te oficjalne warunki pozostają
+  odroczoną regułą fidelity.
+
+## Kompozycyjne efekty magicznych przedmiotów
+
+- Definicja lub instancja przedmiotu może deklarować typowane `magic_effects`.
+  Pierwszy zestaw prymitywów obejmuje premie do KP, save, ability check, attack
+  roll i szybkości.
+- Wspólny evaluator aktywuje efekt wyłącznie dla dostępnej instancji, po
+  wymaganym attunement i — jeśli `requires_equipped` nie wyłączono — wyposażeniu.
+- Premie do d20 są osobnymi komponentami `ITEM` nazwanymi nazwą przedmiotu.
+  Pozwala to UI wyjaśnić wynik i zachowuje istniejące reguły stackingu.
+- Referencyjny `guardian_amulet` składa premię +1 KP oraz +1 do wszystkich rzutów
+  obronnych bez własnego resolwera. Snapshot v12 zachowuje deklaracje efektów.
+
+## Zwykły ekwipunek i przygotowanie M7
+
+- Zwykły ekwipunek SRD 5.1 jest przechowywany w jednym katalogu
+  `content/items/adventuring_gear.json`. Stabilne ID pozostaje globalnym ID
+  przedmiotu; ścieżka katalogu nie jest częścią zapisu ani referencji scenariusza.
+- `gear.category` rozróżnia pojemniki, consumable, ubrania, focusy, narzędzia,
+  instrumenty i equipment packi bez wyprowadzania mechaniki z polskiej nazwy.
+- Pojemności, źródła światła i paliwo, modyfikatory testów, durability oraz
+  zawartość pakietów są typowanymi regułami domenowymi. Świeca i pochodnia
+  zużywają własną sztukę przy zapaleniu; lampy zużywają jedną butelkę oliwy.
+- Equipment pack jest kupowalnym bundle. Rozpakowanie zużywa jedną instancję
+  pakietu i atomowo dodaje rzeczywiste stosy wskazanych przedmiotów.
+- Focus mistyczny, focus druida, święty symbol, component pouch, instrument
+  oraz spellbook mają jawne metadane przygotowane dla walidacji komponentów
+  V/S/M w M7. Samo posiadanie focusu nie omija jeszcze przyszłego kontraktu czaru.
+- Snapshot v12 zapisuje cały kontrakt instancji mundane gear. Migracja v11→v12
+  pozostawia starsze przedmioty bez nowych opcjonalnych właściwości.
+
 ## Trwały stan NPC
 
 - Opis, osobowość i wiedza NPC są definicją contentu, natomiast zmieniające się nastawienie, kondycja fizyczna i emocjonalna, ujawnione informacje, wykorzystane próby oraz zdarzenia relacji należą do `NpcRuntimeState`.
@@ -669,6 +825,19 @@ Poza zakresem MVP:
 - pełny silnik wyzwań z wieloetapowymi konsekwencjami poza pierwszym challenge bramy,
 - integracja pełnego ekwipunku i czarów z opcjami eksploracyjnymi,
 - głosowy interfejs kreatywnych deklaracji przez LLM.
+
+## Rozpraszanie efektów czarów
+
+- Efekt jest rozpraszalny wyłącznie wtedy, gdy runtime zachowuje jego stabilne
+  `spell_id` i rzeczywisty poziom rzucenia. Sama etykieta albo stan nie wystarcza.
+- Czar rozpraszający na istocie kończy wszystkie efekty czarów na tym celu,
+  których poziom nie przekracza użytego slotu.
+- Dla każdego silniejszego efektu gracz wykonuje osobny fizyczny test d20 cechy
+  rzucania czarów przeciw ST `10 + poziom efektu`. Proficiency nie jest dodawane.
+- Efekty z akcji, przedmiotów, sceny i zwykłych warunków nie są usuwane. Zakończenie
+  efektu utrzymującego summon usuwa powiązanego dynamicznego aktora.
+- Obecny przepływ celuje w istoty podczas walki. Obiekty, samodzielne magiczne
+  obszary i efekty eksploracyjne wymagają przyszłego wspólnego modelu celu magii.
 
 Testy:
 

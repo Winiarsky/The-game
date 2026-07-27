@@ -16,7 +16,7 @@ from dnd_board_game.combat import (
     set_scene_flag,
 )
 from dnd_board_game.hardware import LedColor, LedFeedback, LedFrame, LedRole
-from dnd_board_game.inventory import ItemInstance
+from dnd_board_game.inventory import ItemInstance, MerchantState
 from dnd_board_game.rules import (
     D20RollInput,
     D20RollRequest,
@@ -1226,6 +1226,7 @@ class ExplorationPoint:
     interaction_label: str = ""
     requires_setup: bool = True
     npc_interaction: NpcInteraction | None = None
+    merchant_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1870,6 +1871,40 @@ class FixtureRuntimeState:
 
 
 @dataclass(frozen=True, slots=True)
+class TimedMagicEffect:
+    id: str
+    actor_id: str
+    spell_id: str
+    label: str
+    flag_key: str
+    flag_value: bool | int | str
+    started_at_minute: int
+    expires_at_minute: int | None
+
+    def __post_init__(self) -> None:
+        if any(
+            not value.strip()
+            for value in (
+                self.id,
+                self.actor_id,
+                self.spell_id,
+                self.label,
+                self.flag_key,
+            )
+        ):
+            raise ValueError("Timed magic effect ids and labels cannot be empty.")
+        if self.started_at_minute < 0:
+            raise ValueError("Timed magic effect start cannot be negative.")
+        if not isinstance(self.flag_value, (bool, int, str)):
+            raise ValueError("Timed magic effect flag value must be bool, int, or str.")
+        if (
+            self.expires_at_minute is not None
+            and self.expires_at_minute <= self.started_at_minute
+        ):
+            raise ValueError("Timed magic effect expiry must be after its start.")
+
+
+@dataclass(frozen=True, slots=True)
 class ExplorationState:
     zones: tuple[ExplorationZone, ...]
     points: tuple[ExplorationPoint, ...]
@@ -1891,8 +1926,24 @@ class ExplorationState:
     traps: tuple[ExplorationTrap, ...] = ()
     trap_states: tuple[ExplorationTrapState, ...] = ()
     npc_states: tuple[NpcRuntimeState, ...] = ()
+    merchants: tuple[MerchantState, ...] = ()
+    magic_effects: tuple[TimedMagicEffect, ...] = ()
 
     def __post_init__(self) -> None:
+        magic_effect_ids = tuple(effect.id for effect in self.magic_effects)
+        if len(magic_effect_ids) != len(set(magic_effect_ids)):
+            raise ValueError("Timed magic effect ids must be unique.")
+        if any(
+            effect.started_at_minute > self.elapsed_minutes
+            for effect in self.magic_effects
+        ):
+            raise ValueError("Timed magic effect cannot start in the future.")
+        if any(
+            effect.expires_at_minute is not None
+            and effect.expires_at_minute <= self.elapsed_minutes
+            for effect in self.magic_effects
+        ):
+            raise ValueError("Expired timed magic effects cannot remain active.")
         known_npcs = {
             point.npc_interaction.id: point.npc_interaction
             for point in self.points
@@ -1917,6 +1968,18 @@ class ExplorationState:
             raise ValueError("Exploration NPC runtime state ids must be unique.")
         if set(npc_ids) - set(known_npcs):
             raise ValueError("Exploration state contains an unknown NPC runtime state.")
+        merchant_ids = tuple(merchant.id for merchant in self.merchants)
+        if len(merchant_ids) != len(set(merchant_ids)):
+            raise ValueError("Exploration merchant ids must be unique.")
+        referenced_merchant_ids = {
+            point.merchant_id
+            for point in self.points
+            if point.merchant_id is not None
+        }
+        if referenced_merchant_ids != set(merchant_ids):
+            raise ValueError(
+                "Exploration points and merchant states must reference the same merchant ids."
+            )
 
 
 def add_exploration_condition(

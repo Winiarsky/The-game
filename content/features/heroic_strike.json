@@ -1,5 +1,8 @@
 {
+  "schema": "dnd_board_game.feature",
   "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["project_original"],
   "id": "heroic_strike",
   "label": "Potężne uderzenie",
   "description": "Bohater może wykonać silniejsze uderzenie raz na krótki odpoczynek.",

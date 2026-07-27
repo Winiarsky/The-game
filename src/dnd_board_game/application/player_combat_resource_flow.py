@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from random import Random
 from typing import Protocol
 
@@ -12,12 +12,14 @@ from dnd_board_game.combat import (
     AppliedDamageResult,
     CombatState,
     CombatStatus,
+    available_cast_levels,
     can_consume_spell_resource,
     current_actor,
+    grid_distance_feet,
     replace_actor,
     use_action_economy_cost,
 )
-from dnd_board_game.inventory import consume_inventory_item, has_inventory_quantity
+from dnd_board_game.inventory import consume_item_use, has_item_use
 from dnd_board_game.rules import (
     D20RollInput,
     D20RollRequest,
@@ -26,10 +28,12 @@ from dnd_board_game.rules import (
     EffectEventType,
     EffectSource,
     EffectSourceType,
+    EffectStackingPolicy,
     RollModifier,
     apply_active_effect,
     expire_active_effects,
     resolve_d20_roll,
+    spell_target_count,
 )
 from dnd_board_game.combat.auras import saving_throw_aura_modifiers
 
@@ -40,10 +44,14 @@ class CombatActionSpec(Protocol):
     label: str
     value: int
     target_faction: str
+    target_count: int
+    upcast_targets_per_level: int
+    range_feet: int
     spell_level: int
     prepared: bool
     source_item_id: str | None
     action_cost: ActionEconomyCost
+    charge_cost: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,6 +59,9 @@ class PendingConcentrationAction:
     caster_id: str
     action_id: str
     target_ids: tuple[str, ...]
+    cast_level: int
+    maximum_targets: int
+    selected_target_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,9 +105,10 @@ class PlayerCombatResourceFlowService:
         actor = _active_hero(state)
         if action.action_type != "strength_potion":
             raise ValueError("Nieznana akcja eliksiru.")
-        if action.source_item_id is not None and not has_inventory_quantity(
+        if action.source_item_id is not None and not has_item_use(
             actor,
             action.source_item_id,
+            charge_cost=getattr(action, "charge_cost", 0),
         ):
             raise ValueError("Ten przedmiot został już zużyty.")
         action_result = use_action_economy_cost(state, _action_cost(action))
@@ -105,7 +117,11 @@ class PlayerCombatResourceFlowService:
         updated_state = action_result.state
         actor_after = current_actor(updated_state)
         if action.source_item_id is not None:
-            actor_after = consume_inventory_item(actor_after, action.source_item_id)
+            actor_after = consume_item_use(
+                actor_after,
+                action.source_item_id,
+                charge_cost=getattr(action, "charge_cost", 0),
+            ).actor
             updated_state = replace_actor(updated_state, actor_after)
         effect = ActiveCombatEffect(
             id=f"strength_potion:{actor_after.id}:{action.id}",
@@ -151,32 +167,49 @@ class PlayerCombatResourceFlowService:
         state: CombatState,
         active_effects: tuple[ActiveCombatEffect, ...],
         action: CombatActionSpec,
+        cast_level: int | None = None,
     ) -> CombatResourceTransition:
         actor = _active_hero(state)
         if action.action_type != "concentration_attack_bonus":
             raise ValueError("Nieznana akcja koncentracji.")
-        _require_usable_action(actor, action)
+        selected_cast_level = _selected_cast_level(actor, action, cast_level)
+        _require_usable_action(actor, action, selected_cast_level)
         targets = _concentration_targets(state, actor, action)
         if not targets:
             raise ValueError("Brak legalnego celu czaru koncentracyjnego.")
+        maximum_targets = spell_target_count(
+            base_targets=int(getattr(action, "target_count", 1)),
+            spell_level=action.spell_level,
+            cast_level=selected_cast_level,
+            targets_per_slot_level=int(
+                getattr(action, "upcast_targets_per_level", 0)
+            ),
+        )
         pending = PendingConcentrationAction(
             caster_id=str(actor.id),
             action_id=action.id,
             target_ids=tuple(str(target.id) for target in targets),
+            cast_level=selected_cast_level,
+            maximum_targets=maximum_targets,
         )
         return CombatResourceTransition(
             state=state,
             active_effects=active_effects,
             pending_action=pending,
-            board_message=f"{action.label}: wybierz sojusznika dla efektu koncentracji.",
+            board_message=(
+                f"{action.label}: wybierz do {maximum_targets} legalnych celów."
+            ),
             message_title="Koncentracja",
             message_body=(
-                f"{actor.name} przygotowuje {action.label}. Wybierz sojusznika."
+                f"{actor.name} przygotowuje {action.label}. "
+                f"Wybierz od 1 do {maximum_targets} celów."
             ),
             event_type="ui_combat_concentration_started",
             event_payload=(
                 ("caster_id", str(actor.id)),
                 ("action_id", action.id),
+                ("cast_level", selected_cast_level),
+                ("maximum_targets", maximum_targets),
                 ("target_ids", [str(target.id) for target in targets]),
             ),
             clear_player_choices=True,
@@ -189,39 +222,69 @@ class PlayerCombatResourceFlowService:
         active_effects: tuple[ActiveCombatEffect, ...],
         action: CombatActionSpec,
         pending: PendingConcentrationAction,
-        target_id: str,
+        target_id: str | None = None,
+        target_ids: tuple[str, ...] = (),
     ) -> CombatResourceTransition:
         caster = _active_hero(state)
         if str(caster.id) != pending.caster_id:
             raise ValueError(
                 "Oczekujący czar koncentracyjny nie należy do aktywnego aktora."
             )
-        if target_id not in pending.target_ids:
-            raise ValueError("Wybrany cel nie jest legalnym celem czaru koncentracyjnego.")
-        _require_usable_action(caster, action)
-        target = _actor_by_id(state, target_id)
+        selected_target_ids = target_ids
+        if not selected_target_ids and target_id:
+            selected_target_ids = (target_id,)
+        if not selected_target_ids:
+            selected_target_ids = pending.selected_target_ids
+        if not selected_target_ids:
+            raise ValueError("Wybierz co najmniej jeden cel czaru koncentracyjnego.")
+        if len(selected_target_ids) != len(set(selected_target_ids)):
+            raise ValueError("Ten sam cel czaru został wybrany więcej niż raz.")
+        if len(selected_target_ids) > pending.maximum_targets:
+            raise ValueError(
+                f"Ten poziom czaru pozwala wybrać maksymalnie {pending.maximum_targets} celów."
+            )
+        if set(selected_target_ids) - set(pending.target_ids):
+            raise ValueError("Wybrano nielegalny cel czaru koncentracyjnego.")
+        _require_usable_action(caster, action, pending.cast_level)
+        targets = tuple(
+            _actor_by_id(state, selected_id)
+            for selected_id in selected_target_ids
+        )
         resource_use = self._resources.consume_action_and_source_resource(
             state,
             caster,
             spell_level=action.spell_level,
+            spell_id=action.id,
+            cast_level=pending.cast_level,
             action_cost=_action_cost(action),
         )
-        effect = ActiveCombatEffect(
-            id=f"concentration_attack_bonus:{caster.id}:{target.id}:{action.id}",
-            actor_id=str(target.id),
-            kind="concentration_attack_bonus",
-            label=action.label,
-            object_id=f"combat_action:{action.id}",
-            value=action.value,
-            source_actor_id=str(caster.id),
-            target_actor_id=str(target.id),
-            source=EffectSource(EffectSourceType.SPELL, action.id, action.label),
-            duration=EffectDuration.CONCENTRATION,
-            stacking_key=f"concentration:{caster.id}",
+        removed = concentration_effects_for_actor(active_effects, str(caster.id))
+        updated_effects = remove_concentration_effects(
+            active_effects,
+            str(caster.id),
         )
-        application = apply_active_effect(active_effects, effect)
-        removed = application.replaced_effects
-        updated_effects = application.active_effects
+        applied_effects: list[ActiveCombatEffect] = []
+        for target in targets:
+            effect = ActiveCombatEffect(
+                id=f"concentration_attack_bonus:{caster.id}:{target.id}:{action.id}",
+                actor_id=str(target.id),
+                kind="concentration_attack_bonus",
+                label=action.label,
+                object_id=f"combat_action:{action.id}",
+                value=action.value,
+                source_actor_id=str(caster.id),
+                target_actor_id=str(target.id),
+                source=EffectSource(EffectSourceType.SPELL, action.id, action.label),
+                duration=EffectDuration.CONCENTRATION,
+                stacking=EffectStackingPolicy.STACK,
+                stacking_key=f"concentration:{caster.id}",
+                spell_level=pending.cast_level,
+            )
+            updated_effects = apply_active_effect(
+                updated_effects,
+                effect,
+            ).active_effects
+            applied_effects.append(effect)
         ended = (
             " Poprzednia koncentracja zakończona: "
             f"{', '.join(effect.label for effect in removed)}."
@@ -229,8 +292,9 @@ class PlayerCombatResourceFlowService:
             else ""
         )
         message = (
-            f"{caster.name} rzuca {action.label}. {target.name} ma {action.value:+d} "
-            f"do ataku, dopóki koncentracja trwa.{ended}"
+            f"{caster.name} rzuca {action.label} ze slotu {pending.cast_level}. poziomu. "
+            f"Cele: {', '.join(target.name for target in targets)}; "
+            f"{action.value:+d} do ataku, dopóki koncentracja trwa.{ended}"
         )
         return CombatResourceTransition(
             state=resource_use.state,
@@ -241,14 +305,36 @@ class PlayerCombatResourceFlowService:
             event_type="ui_combat_concentration_confirmed",
             event_payload=(
                 ("caster_id", str(caster.id)),
-                ("target_id", str(target.id)),
+                ("target_id", str(targets[0].id)),
+                ("target_ids", [str(target.id) for target in targets]),
                 ("action_id", action.id),
+                ("cast_level", pending.cast_level),
+                ("maximum_targets", pending.maximum_targets),
                 ("value", action.value),
+                ("effect_ids", [effect.id for effect in applied_effects]),
                 ("removed_effect_ids", [effect.id for effect in removed]),
             ),
             clear_pending_action=True,
             clear_movement_preview=True,
         )
+
+    def toggle_concentration_target(
+        self,
+        pending: PendingConcentrationAction,
+        target_id: str,
+    ) -> PendingConcentrationAction:
+        if target_id not in pending.target_ids:
+            raise ValueError("Wybrany cel nie jest legalnym celem czaru koncentracyjnego.")
+        selected = list(pending.selected_target_ids)
+        if target_id in selected:
+            selected.remove(target_id)
+        else:
+            if len(selected) >= pending.maximum_targets:
+                raise ValueError(
+                    f"Można wybrać maksymalnie {pending.maximum_targets} celów."
+                )
+            selected.append(target_id)
+        return replace(pending, selected_target_ids=tuple(selected))
 
     def cancel_concentration(
         self,
@@ -436,7 +522,11 @@ def _action_cost(action: CombatActionSpec) -> ActionEconomyCost:
     return ActionEconomyCost(getattr(action, "action_cost", ActionEconomyCost.ACTION))
 
 
-def _require_usable_action(actor: Actor, action: CombatActionSpec) -> None:
+def _require_usable_action(
+    actor: Actor,
+    action: CombatActionSpec,
+    cast_level: int | None = None,
+) -> None:
     casting_kind = getattr(action, "casting_kind", None)
     casting_value = getattr(casting_kind, "value", None)
     if casting_value is None:
@@ -451,8 +541,25 @@ def _require_usable_action(actor: Actor, action: CombatActionSpec) -> None:
     if not can_consume_spell_resource(
         actor,
         action.spell_level,
+        cast_level,
     ):
         raise ValueError(f"Brak slotów czaru dla {action.label}.")
+
+
+def _selected_cast_level(
+    actor: Actor,
+    action: CombatActionSpec,
+    cast_level: int | None,
+) -> int:
+    if action.spell_level <= 0:
+        if cast_level not in {None, 0}:
+            raise ValueError("Cantrip nie korzysta ze slotu czaru.")
+        return 0
+    levels = available_cast_levels(actor, action.spell_level)
+    selected = levels[0] if cast_level is None and levels else cast_level
+    if selected is None or selected not in levels:
+        raise ValueError(f"Brak slotu {cast_level}. poziomu dla {action.label}.")
+    return selected
 
 
 def _concentration_targets(
@@ -461,10 +568,19 @@ def _concentration_targets(
     action: CombatActionSpec,
 ) -> tuple[Actor, ...]:
     if action.target_faction == "ally":
+        range_feet = int(getattr(action, "range_feet", 0))
         return tuple(
             candidate
             for candidate in state.actors
             if candidate.faction == actor.faction and not candidate.is_defeated()
+            and (
+                candidate.id == actor.id
+                or (
+                    range_feet > 0
+                    and grid_distance_feet(actor.position, candidate.position)
+                    <= range_feet
+                )
+            )
         )
     return (actor,)
 

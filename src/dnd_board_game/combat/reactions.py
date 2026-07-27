@@ -8,12 +8,15 @@ from enum import StrEnum
 class ReactionKind(StrEnum):
     READY_ATTACK = "ready_attack"
     OPPORTUNITY_ATTACK = "opportunity_attack"
+    DEFENSIVE_SPELL = "defensive_spell"
+    SPELL_COUNTER = "spell_counter"
 
 
 class ReactionStage(StrEnum):
     CHOICE = "choice"
     ATTACK_ROLL = "attack_roll"
     DAMAGE_ROLL = "damage_roll"
+    ABILITY_CHECK = "ability_check"
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,6 +30,9 @@ class ReactionOption:
     trigger_event: str
     effect_id: str | None = None
     label: str = ""
+    value: int = 0
+    spell_level: int = 0
+    cast_levels: tuple[int, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.id.strip():
@@ -53,6 +59,9 @@ class ReactionWindow:
     total: int | None = None
     hit: bool | None = None
     critical: bool = False
+    dc: int | None = None
+    modifier: int | None = None
+    cast_level: int | None = None
 
     def __post_init__(self) -> None:
         if not self.interrupted_actor_id.strip():
@@ -145,6 +154,9 @@ def advance_reaction_window(
                 total=None,
                 hit=None,
                 critical=False,
+                dc=None,
+                modifier=None,
+                cast_level=None,
             )
         next_index += 1
     return None

@@ -5,9 +5,44 @@ from .combat_movement_flow import (
     CombatMovementPreview,
     CombatMovementSubmission,
 )
+from .long_casting_flow import (
+    LongCastActionSpec,
+    LongCastingFlowService,
+    LongCastingTransition,
+)
+from .summoning_flow import (
+    PendingSummon,
+    SummonActionSpec,
+    SummoningFlowService,
+    SummoningTransition,
+    remove_orphaned_summons,
+)
+from .magic_movement_flow import (
+    MagicMovementActionSpec,
+    MagicMovementFlowService,
+    MagicMovementTransition,
+    PendingMagicMovement,
+)
+from .spell_debuff_flow import (
+    PendingSpellDebuff,
+    SpellDebuffActionSpec,
+    SpellDebuffFlowService,
+    SpellDebuffTransition,
+)
+from .spell_dispel_flow import (
+    PendingDispelCheck,
+    PendingSpellDispel,
+    SpellDispelActionSpec,
+    SpellDispelFlowService,
+    SpellDispelTransition,
+)
 from .combat_reaction_flow import (
     CombatReactionFlowService,
     CombatReactionResolution,
+    CounterspellReactionFlowService,
+    CounterspellReactionResolution,
+    DefensiveSpellReactionFlowService,
+    DefensiveSpellReactionResolution,
     PlayerReactionAttackResolution,
     PlayerReactionDamageResolution,
     PlayerReactionFlowService,
@@ -119,6 +154,11 @@ from .player_area_healing_flow import (
     PlayerHealingTransition,
 )
 from .spell_preparation_flow import SpellPreparationFlowService, SpellPreparationTransition
+from .ritual_casting_flow import (
+    RitualCastingFlowService,
+    RitualCastingResult,
+    ritual_casting_minutes,
+)
 from .short_rest_flow import (
     PendingShortRest,
     ShortRestCompletionTransition,
@@ -142,6 +182,10 @@ __all__ = [
     "CombatMovementSubmission",
     "CombatReactionFlowService",
     "CombatReactionResolution",
+    "CounterspellReactionFlowService",
+    "CounterspellReactionResolution",
+    "DefensiveSpellReactionFlowService",
+    "DefensiveSpellReactionResolution",
     "CombatApproachInteractionPlan",
     "CombatSceneEffectExpiration",
     "CombatSceneInteractionFlowService",
@@ -195,6 +239,27 @@ __all__ = [
     "ExplorationHazardResolution",
     "FinishInteractionTransition",
     "LocationTransition",
+    "LongCastActionSpec",
+    "LongCastingFlowService",
+    "LongCastingTransition",
+    "PendingSummon",
+    "SummonActionSpec",
+    "SummoningFlowService",
+    "SummoningTransition",
+    "remove_orphaned_summons",
+    "MagicMovementActionSpec",
+    "MagicMovementFlowService",
+    "MagicMovementTransition",
+    "PendingMagicMovement",
+    "PendingSpellDebuff",
+    "SpellDebuffActionSpec",
+    "SpellDebuffFlowService",
+    "SpellDebuffTransition",
+    "PendingDispelCheck",
+    "PendingSpellDispel",
+    "SpellDispelActionSpec",
+    "SpellDispelFlowService",
+    "SpellDispelTransition",
     "CombatSourceSelectionTransition",
     "PendingPlayerAttack",
     "PendingAreaSpell",

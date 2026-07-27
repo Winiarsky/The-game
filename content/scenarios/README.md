@@ -2,6 +2,12 @@
 
 Scenariusze opisują konkretne encountery uruchamiane przez runtime.
 
+Każdy główny plik scenariusza ma nagłówek `schema`, `schema_version`,
+`ruleset_id` oraz `source_pack_ids`. Stabilne `id` używa `snake_case`; jego
+zmiana wymaga migracji zapisów i referencji. Szczegółowy kontrakt, polityka
+źródeł i polecenie audytu znajdują się w
+`docs/CONTENT_VERSIONING_AND_SOURCES.md`.
+
 Triggery eksploracyjne mogą przypisać osobne skutki do sposobu zakończenia
 encountera. `outcome_on_victory` i `outcome_on_defeat` obsługują rozstrzygnięcie
 przez zdolną do walki stronę, a opcjonalne `outcome_on_objective`,
@@ -327,6 +333,8 @@ Referencja wskazuje plik `content/features/<id>.json`. Schemat v1 cechy ma posta
     "attacks": [],
     "healing_sources": [],
     "combat_actions": [],
+    "spell_refs": [],
+    "spell_access": [],
     "triggers": [],
     "auras": []
   }

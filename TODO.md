@@ -18,8 +18,34 @@ najbliższy horyzont, a nie kopię całej roadmapy.
 - [x] Replace the historical milestone roadmap with the mechanics-first master roadmap.
 - [x] Add a living D&D implementation matrix separating stable MVP, partial, fixture, and missing systems.
 - [x] Lock the first full release rules baseline to D&D 5e 2014.
-- [ ] Decide and document the licensing/source-pack strategy for the target content catalog.
-- [ ] Define schema versions, stable content ids, and migration rules for content and save snapshots.
+- [x] Decide and document the SRD 5.1 CC BY 4.0/source-pack strategy for the target 2014 content catalog.
+- [x] Define schema versions, stable content ids, sequential migration rules, and a repository content audit.
+- [x] Start M6 with coin denominations, item value/weight, Strength-based carrying capacity, generic corpse/container loot bundles, and selective combat looting of whole bundles, item stacks, or currency.
+- [x] Add typed ammunition stacks, per-attack consumption for player/AI/reactions, empty-ammo blocking, crossbow `loading`, UI counts, lootable bolts, and snapshot v4 migration.
+- [x] Recover half of party-fired ammunition after victory as persistent battlefield loot, with UI collection and snapshot v5 migration.
+- [x] Add partial combat-loot selection for item stacks, recovered ammunition, and individual coin denominations, with live mass/capacity preview and atomic transfer validation.
+- [x] Add scenario-defined merchants with deterministic partial buy/sell transactions, buyback prices, wallet/carrying-capacity validation, web UI previews, and snapshot v6 persistence.
+- [x] Add light, medium, and heavy body armor with 2014 AC formulas, Strength speed penalties, Stealth disadvantage, exploration don/doff time, merchant content, and snapshot v7 persistence.
+- [x] Add generic item charges with action costs, depletion blocking, deterministic short/long-rest recovery, UI counts, a reference binding wand, and snapshot v8 persistence.
+- [x] Add D&D 5e 2014 item attunement with a three-item limit, one change per actor during short rest, power gating, UI selection, encounter persistence, and snapshot v9.
+- [x] Close M6 with composable passive magic-item effects for AC, saves, checks, attacks, and speed; add an attunement-gated reference amulet, UI disclosure, and snapshot v10.
+- [x] Add the complete 37-weapon SRD 5.1 catalog under one typed schema, category proficiency, dynamic ability damage, finesse choices, thrown recovery, normal/long range, heavy, reach, loading, ammunition hand requirements, lance/net rules, UI disclosure, content audit, and snapshot v11.
+- [x] Complete mundane equipment before M7 with all 12 body armors, 144 SRD adventuring-gear/focus/tool/pack definitions, typed containers, light/fuel, utility checks, durability, pack expansion, merchant/UI integration, content audit, and snapshot v12.
+- [x] Start M7 with a versioned `SpellDefinition` schema, spell refs as the single source for existing fixture effects, prepared/known/spellbook access profiles, V/S/M and focus validation, costly/consumed materials, cast-at-level slot selection, casting-time action costs, UI metadata, and snapshot v13.
+- [x] Add M7.2 data-driven damage/healing scaling per slot level, an explicit higher-slot UI flow, exploration ritual casting with access/component validation, +10 minute time cost, no slot consumption, a utility ritual fixture, and snapshot v14.
+- [x] Add M7.3 shared minute-based lifecycle for exploration magic, automatic expiry through ritual/crafting/rest/armor time advances, refresh semantics, UI disclosure, expiration notices, and snapshot v15.
+- [x] Add M7.4 target-count upcasting with explicit slot selection, bounded multi-target selection in UI/board flow, grouped concentration effects, and a three-target Bless fixture gaining one target per higher slot.
+- [x] Add M7.5 defensive spell reactions with a post-hit/pre-damage interrupt, shared reaction and slot consumption, persistent AC effects, expiry at the caster's next turn start, and a data-driven Shield fixture.
+- [x] Add M7.6 Counterspell with a pre-resolution enemy-spell interrupt, 60-foot line-of-sight eligibility, reaction and selected-slot consumption, automatic same/lower-level interruption, a manual spellcasting-ability check for stronger spells, and shared UI/board resumption.
+- [x] Add M7.7 interruptible long casting with one action per turn, transient concentration, damage checks, missed-action/cancel/defeat interruption, deferred slot/component consumption, UI progress, a data-driven reference ward, and snapshot v16.
+- [x] Add M7.8 data-driven concentration summons with board/LOS placement, dynamic allied actors, owner-adjacent initiative, independent attacks, automatic dismissal, UI/LED flow, and snapshot v17.
+- [x] Add M7.9 data-driven spell movement with visible free-tile teleportation, save-based push/pull, obstacle-aware final positions, no movement-cost/opportunity triggers, UI/LED selection, and project-original fixtures.
+- [x] Add M7.10 generic save-first spell debuffs with shared condition state, automatic enemy saves, repeated saves at authored timing, UI/LED target selection, and project-original Poisoned/Restrained fixtures.
+- [x] Close M7.11 with generic creature-targeted spell dispelling, automatic same/lower-level removal, physical spellcasting-ability checks for stronger effects, shared ActiveEffect/ConditionState provenance, summon dismissal, UI/LED flow, and snapshot v18.
+- [ ] Start the next mechanics-first roadmap stage after reviewing the remaining M8 gaps.
+- [ ] [Deferred mounted combat] Let a mounted wielder use a lance in one hand; until an explicit mounted actor state exists, the lance correctly uses two hands and retains its close-range disadvantage.
+- [ ] [Deferred destructible equipment] Model the net as an AC 10 object with 5 HP that can be cut using slashing damage; Strength DC 10 escape is implemented.
+- [ ] [Deferred attunement fidelity] End attunement automatically after the official distance/time, death, prerequisite-loss, or another-creature-attunement conditions.
 - [x] Add the versioned material-property catalog and schemas for item definitions, item instances, and scene fixtures.
 - [x] Add a unified crafting-source registry for zone items, fixtures, exploration resources, and party inventory.
 - [x] Add deterministic property-based crafting drafts, component validation, allocation, dismantling, and engine-owned costs.
@@ -286,6 +312,6 @@ obowiązują `Current Roadmap Focus` oraz etapy z `ROADMAP.md`.
 ## Open Decisions
 
 - [x] UI framework: local Flask/web UI for the current runtime and future authoring modules.
-- [ ] Content licensing/source strategy for D&D 5e data.
-- [ ] Save file format and state versioning.
+- [x] Content licensing/source strategy for D&D 5e data.
+- [x] Save file format and state versioning.
 - [x] Whether diagonal movement follows 5e optional grid rules or simplified board rules.
