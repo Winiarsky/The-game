@@ -87,7 +87,17 @@ def test_character_catalog_loads_character_content(catalog, resources):
         "barbarian", "bard", "cleric", "druid", "fighter", "monk",
         "paladin", "ranger", "rogue", "sorcerer", "warlock", "wizard",
     ]
-    assert [item.id for item in catalog.backgrounds] == ["soldier", "criminal", "acolyte", "sage"]
+    assert [item.id for item in catalog.backgrounds] == [
+        "acolyte", "charlatan", "criminal", "entertainer", "folk_hero",
+        "guild_artisan", "hermit", "noble", "outlander", "sage", "sailor",
+        "soldier", "urchin",
+    ]
+    assert all(item.description for item in catalog.species)
+    assert all(item.description for item in catalog.classes)
+    assert all(item.description for item in catalog.backgrounds)
+    assert all(len(item.skill_proficiencies) == 2 for item in catalog.backgrounds)
+    assert all(item.feature_ids for item in catalog.backgrounds)
+    assert all(item.permission_ids for item in catalog.backgrounds)
     assert len(resources.inventory_items) >= 29
     assert len(resources.spells) >= 127
 
@@ -168,7 +178,7 @@ def test_tiefling_infernal_legacy_is_level_gated_slotless_and_recovers(
     assert restored_pool.current == 1
 
 
-def test_character_validation_requires_supported_level_standard_array_and_legal_choices(catalog):
+def test_character_validation_requires_supported_level_point_buy_and_legal_choices(catalog):
     draft = replace(
         fighter_draft(),
         level=4,
@@ -182,7 +192,7 @@ def test_character_validation_requires_supported_level_standard_array_and_legal_
     assert validation.valid is False
     assert {issue.code for issue in validation.issues} == {
         "unsupported",
-        "invalid_standard_array",
+        "point_buy_range",
         "already_granted",
     }
 
@@ -220,6 +230,7 @@ def test_fighter_build_derives_actor_rules_and_equipment(catalog, resources):
         "shield",
         "chain_mail",
         "crossbow_bolt",
+        "dice_set",
     }
     assert created.languages == ("common", "elvish")
     assert "second_wind" in created.trait_ids

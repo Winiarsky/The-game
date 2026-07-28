@@ -4397,6 +4397,46 @@ def test_village_zone_options_are_exposed_and_resolve_authored_effects():
     assert resolved["messages"][-1]["title"] == "Popytaj mieszkańców"
 
 
+def test_tavern_dice_game_resolves_wager_tool_check_and_can_be_replayed():
+    session = ExplorationUiSession("content/scenarios/village_square_mvp.json")
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.travel_to("tavern")
+    session.confirm_exploration_setup_step()
+    session.assign_exploration_point_position(Coordinate(3, 12))
+    session.confirm_exploration_setup_step()
+
+    option = next(
+        item
+        for item in session.state_payload()["flow"]["zone_options"]
+        if item["id"] == "tavern_dice_game"
+    )
+    assert option["completed"] is False
+    assert option["entry_cost_cp"] == 10
+    assert option["success_reward_cp"] == 20
+    assert option["time_cost_minutes"] == 15
+    assert option["check"]["tool_label"] == "Zestaw kości"
+
+    currency_before = session._trade_actor("hero").currency.total_cp
+    rolling = session.select_exploration_option(
+        "tavern_dice_game",
+        actor_id="hero",
+    )
+    assert rolling["required_rolls"][0]["dc"] == 12
+    assert rolling["required_rolls"][0]["tool"] == "dice_set"
+    assert rolling["required_rolls"][0]["tool_label"] == "Zestaw kości"
+
+    won = session.resolve_rolls({"hero": 20})
+    assert session._trade_actor("hero").currency.total_cp == currency_before + 10
+    assert session.state.elapsed_minutes == 20
+    assert "Bilans gry: +10 cp" in won["messages"][-1]["body"]
+
+    session.select_exploration_option("tavern_dice_game", actor_id="hero")
+    lost = session.resolve_rolls({"hero": 1})
+    assert session._trade_actor("hero").currency.total_cp == currency_before
+    assert session.state.elapsed_minutes == 35
+    assert "Bilans gry: -10 cp" in lost["messages"][-1]["body"]
+
+
 def test_village_npc_setup_and_travel_messages_use_current_location():
     session = ExplorationUiSession("content/scenarios/village_square_mvp.json")
     session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE

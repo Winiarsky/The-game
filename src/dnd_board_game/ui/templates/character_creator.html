@@ -30,7 +30,8 @@
       <section class="roster-grid">
         {% for item in roster.characters %}
           <a class="roster-card" href="{{ url_for('character_detail', character_id=item.actor.id) }}">
-            <span class="roster-avatar">{{ item.actor.name[:1]|upper }}</span>
+            {% set portrait_url = character_portrait_url(item.actor.portrait) %}
+            <span class="roster-avatar">{% if portrait_url %}<img src="{{ portrait_url }}" alt="Portret: {{ item.actor.name }}">{% else %}{{ item.actor.name[:1]|upper }}{% endif %}</span>
             <span>
               <b>{{ item.actor.name }}</b>
               <small>Poziom {{ item.actor.level }} · {{ item.species_id }} · {{ item.class_id }}</small>

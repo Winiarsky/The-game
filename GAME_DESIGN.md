@@ -513,6 +513,49 @@ wykonanie mechaniki pozostaje we wspólnym silniku:
   stabilnymi uprawnieniami backgroundu. Zadziałają tylko wtedy, gdy postać je
   posiada i bieżąca scena jawnie udostępnia odpowiadającą okazję.
 
+Kreator używa bazowych dziewięciu ras i dwunastu klas zgodnych z projektem
+SRD 5.1 oraz rozszerza wybór tła do trzynastu archetypów podstawowej gry 2014.
+Background zawsze przyznaje dwie biegłości umiejętności, wyposażenie, złoto,
+odpowiednie języki lub narzędzia oraz stabilne uprawnienie scenowe. Wybrane
+narzędzie jest jednocześnie faktycznym przedmiotem startowym, jeśli jego definicja
+znajduje się w katalogu wyposażenia. Opisy fabularne w UI są tekstami projektu,
+a mechaniczne podsumowania powstają bezpośrednio z tych samych definicji, których
+używa builder postaci.
+
+Każdy profit rasy, wariantu rasy i backgroundu ma wspólny opis gracza w
+`character_creation/feature_help.py`. Kreator pokazuje przy nazwie dostępny
+myszą i klawiaturą tooltip, który rozdziela treść zasady od sposobu wykonania
+w tej aplikacji. Audyt pochodzenia odrzuca profit bez takiego opisu, bez
+sklasyfikowanego kontraktu runtime albo background bez stabilnego permission
+ID.
+
+Profity backgroundów są mechaniką kontekstową, a nie bezwarunkowym bonusem.
+`rules/background_features.py` wymaga jednocześnie grantu postaci i permission
+udostępnionego przez bieżącą scenę. Oznacza to, że np. `False Identity` może
+odblokować gotową przykrywkę, ale nie gwarantuje sukcesu wobec podejrzliwego
+NPC, a `Researcher` wskazuje źródło wiedzy zamiast automatycznie ujawniać
+odpowiedź. Aktualne scenariusze referencyjne nie zawierają jeszcze okazji dla
+wszystkich trzynastu backgroundów; ich stopniowe dodawanie jest pracą
+contentową, nie brakującym resolverem.
+
+Jawny wyjątek rasowy to `Tinker`: biegłość w narzędziach majsterkowicza jest
+wykonywalna, ale dowolne drobne urządzenia nadal wymagają receptury, authored
+okazji w scenariuszu albo rozstrzygnięcia przy stole. Nie istnieje jeszcze
+uniwersalny kreator tych gadżetów.
+
+Nazwy widoczne dla gracza korzystają ze wspólnego polskiego katalogu
+`core/player_labels_pl.py`. Stabilne angielskie ID pozostają wewnętrznym
+kontraktem contentu i zapisów, ale kreator, karta postaci i załadowane definicje
+czarów pokazują polskie nazwy. Audyt wymaga wpisu dla wszystkich czarów oraz
+każdej umiejętności, biegłości narzędziowej, opcji i języka używanych przez
+kreator.
+
+„Tool proficiency” jest prezentowane zależnie od faktycznej kategorii jako
+zestaw do gry, instrument muzyczny, narzędzia rzemieślnicze albo ogólna
+biegłość narzędziowa. Wybranie zestawu przyznaje biegłość i odpowiadający jej
+przedmiot. Test wykorzystujący narzędzie dodaje premię z biegłości tylko wtedy,
+gdy postać ma właściwą biegłość oraz dostępny przedmiot.
+
 Wszystkie istoty powinny używać wspólnego modelu `Actor`.
 
 ### Postacie Graczy

@@ -7,6 +7,7 @@ from dataclasses import replace
 import json
 from pathlib import Path
 import re
+import unicodedata
 from uuid import uuid4
 
 from .models import CharacterBuildResources, CharacterCatalog, CreatedCharacter
@@ -60,6 +61,26 @@ class CharacterRoster:
         if not path.is_file():
             raise ValueError("Nie znaleziono zapisanej postaci.")
         return self._load_path(path)
+
+    def next_character_id(self, name: str) -> str:
+        """Return a player-hidden stable id derived from the character name."""
+
+        polish_ascii = name.casefold().translate(
+            str.maketrans("ąćęłńóśźż", "acelnoszz")
+        )
+        ascii_name = unicodedata.normalize("NFKD", polish_ascii).encode(
+            "ascii",
+            "ignore",
+        ).decode("ascii")
+        base = re.sub(r"[^a-z0-9]+", "_", ascii_name.casefold()).strip("_")
+        if not base or not base[0].isalpha():
+            base = f"bohater_{base}".rstrip("_")
+        candidate = base
+        suffix = 2
+        while self._record_path(candidate).exists():
+            candidate = f"{base}_{suffix}"
+            suffix += 1
+        return candidate
 
     def save(
         self,

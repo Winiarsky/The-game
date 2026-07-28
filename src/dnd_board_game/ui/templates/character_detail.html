@@ -11,16 +11,20 @@
     <header class="flow-header character-heading">
       <a class="back-link" href="{{ url_for('characters') }}">← Roster postaci</a>
       <span class="step-label">Gotowa postać · poziom {{ character.actor.level }}</span>
-      <h1>{{ character.actor.name }}</h1>
+      <div class="character-title">
+        {% set portrait_url = character_portrait_url(character.actor.portrait) %}
+        {% if portrait_url %}<img src="{{ portrait_url }}" alt="Portret: {{ character.actor.name }}">{% endif %}
+        <h1>{{ character.actor.name }}</h1>
+      </div>
       <p>{{ species.name }} · {{ character_class.name }} · {{ background.name }}</p>
     </header>
 
     <section class="character-sheet">
       <div class="vital-grid">
-        <span><small>HP</small><b>{{ character.actor.max_hp }}</b></span>
+        <span><small>PW</small><b>{{ character.actor.max_hp }}</b></span>
         <span><small>KP</small><b>{{ effective_ac }}</b></span>
-        <span><small>Speed</small><b>{{ character.actor.speed_feet }} ft</b></span>
-        <span><small>Proficiency</small><b>+{{ character.actor.proficiency_bonus }}</b></span>
+        <span><small>Szybkość</small><b>{{ character.actor.speed_feet }} ft</b></span>
+        <span><small>Premia z biegłości</small><b>+{{ character.actor.proficiency_bonus }}</b></span>
       </div>
       <section class="experience-track">
         <div><b>{{ character.actor.experience_points }} XP</b>
@@ -34,13 +38,24 @@
       </section>
       <div class="ability-sheet-grid">
         {% for ability_id in ['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'] %}
-          <span><small>{{ ability_id[:3]|upper }}</small><b>{{ character.actor.ability_scores|attr(ability_id) }}</b></span>
+          <span><small>{{ labels.get(ability_id, ability_id) }}</small><b>{{ character.actor.ability_scores|attr(ability_id) }}</b></span>
         {% endfor %}
       </div>
       <div class="sheet-columns">
-        <section><h2>Biegłości</h2><p>{{ character.actor.proficiencies.skills|join(', ') or 'Brak' }}</p><small>Expertise: {{ character.actor.proficiencies.expertise|join(', ') or 'brak' }}</small></section>
+        <section><h2>Biegłości</h2><p>{% for skill_id in character.actor.proficiencies.skills %}{{ labels.get(skill_id, skill_id) }}{% if not loop.last %}, {% endif %}{% else %}Brak{% endfor %}</p><small>Specjalizacja: {% for skill_id in character.actor.proficiencies.expertise %}{{ labels.get(skill_id, skill_id) }}{% if not loop.last %}, {% endif %}{% else %}brak{% endfor %}</small></section>
         <section><h2>Ekwipunek</h2><p>{% for item in character.actor.inventory %}{{ item.name }}{% if not loop.last %}, {% endif %}{% endfor %}</p></section>
-        <section><h2>Cechy</h2><p>{% for feature in character.actor.features %}{{ feature.feature_id|replace('_', ' ')|title }}{% if not loop.last %}, {% endif %}{% endfor %}</p></section>
+        <section class="feature-sheet-section">
+          <h2>Zdolności i profity</h2>
+          {% for feature in feature_entries %}
+            <details class="sheet-feature">
+              <summary>{{ feature.name }}</summary>
+              <p>{{ feature.rule_text }}</p>
+              <small><b>W grze:</b> {{ feature.game_text }}{% if feature.use_mode %} · {{ feature.use_mode }}{% endif %}</small>
+            </details>
+          {% else %}
+            <p>Brak</p>
+          {% endfor %}
+        </section>
         <section><h2>Czary</h2><p>{% for spell in character.actor.spells %}{{ spell.name }}{% if not loop.last %}, {% endif %}{% else %}Brak{% endfor %}</p></section>
       </div>
     </section>

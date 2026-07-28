@@ -321,11 +321,21 @@
         },
         "options": [
           {
-            "id": "dice_game_placeholder",
+            "id": "tavern_dice_game",
             "label": "Zagraj w kości",
-            "kind": "message",
+            "kind": "check",
             "color": "multi",
-            "message": "Hazardzista uśmiecha się szeroko. Pełna minigra w kości zostanie dodana później."
+            "description": "Postaw 1 sp i rozegraj partię z miejscowym hazardzistą. Wybierz postać, a następnie wykonaj fizyczny rzut d20; biegłość w zestawie kości jest doliczana automatycznie.",
+            "ability_check": {
+              "ability": "wisdom",
+              "tool": "dice_set",
+              "dc": 12
+            },
+            "entry_cost_cp": 10,
+            "success_reward_cp": 20,
+            "time_cost_minutes": 15,
+            "success_message": "Hazardzista kręci głową z uznaniem i przesuwa wygraną na waszą stronę stołu.",
+            "failure_message": "Kości tym razem sprzyjają hazardziście, który zgarnia postawioną monetę."
           }
         ]
       },

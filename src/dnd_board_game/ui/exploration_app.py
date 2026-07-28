@@ -457,6 +457,7 @@ from dnd_board_game.llm import (
     validate_npc_interaction_proposal,
 )
 from dnd_board_game.hardware import BoardSessionAdapter, LedColor, LedFeedback, LedFrame, LedRole, led_color_name_pl, movement_led_feedback
+from dnd_board_game.core.player_labels_pl import player_label
 from dnd_board_game.inventory import (
     advance_actor_light,
     ammunition_quantity,
@@ -481,7 +482,11 @@ from dnd_board_game.inventory import (
     sell_to_merchant,
     set_light_hood,
 )
-from dnd_board_game.inventory.economy import CurrencyWallet, carrying_payload
+from dnd_board_game.inventory.economy import (
+    CurrencyWallet,
+    carrying_payload,
+    currency_wallet_from_cp,
+)
 from dnd_board_game.inventory.loot import (
     loot_bundle_from_actor,
     transfer_actor_loot,
@@ -13309,6 +13314,11 @@ class ExplorationUiSession:
         if not actor_id:
             raise ValueError("Wybierz postać wykonującą test.")
         actor = self._trade_actor(actor_id)
+        if actor.currency.total_cp < option.entry_cost_cp:
+            raise ValueError(
+                f"{actor.name} potrzebuje co najmniej "
+                f"{option.entry_cost_cp} cp, aby wykonać to działanie."
+            )
         plan = _zone_option_check_plan(option, actor_id)
         self.pending = PendingInteraction(
             kind=PendingKind.ZONE_OPTION,
@@ -16237,6 +16247,19 @@ class ExplorationUiSession:
         if option is None:
             raise ValueError("Brak działania lokacji oczekującego na rzut.")
         success = bool(check_result.success)
+        actor = check_result.selected_actor
+        currency_before_cp = actor.currency.total_cp
+        currency_after_cp = (
+            currency_before_cp
+            - option.entry_cost_cp
+            + (option.success_reward_cp if success else 0)
+        )
+        if currency_after_cp != currency_before_cp:
+            actor = replace(
+                actor,
+                currency=currency_wallet_from_cp(currency_after_cp),
+            )
+            self.exploration = self._replace_exploration_actor(actor)
         flag_key = option.success_flag if success else option.failure_flag
         if flag_key:
             self.state = replace(
@@ -16252,12 +16275,24 @@ class ExplorationUiSession:
             if success
             else "Test zakończył się niepowodzeniem."
         )
+        currency_message = ""
+        if option.entry_cost_cp:
+            net_cp = currency_after_cp - currency_before_cp
+            currency_message = (
+                f" Bilans gry: {'+' if net_cp >= 0 else ''}{net_cp} cp; "
+                f"w sakiewce pozostaje {currency_after_cp} cp."
+            )
         self._add_message(
             option.label,
             (
                 f"{message} Wynik: {check_result.selected_roll.total}, "
                 f"ST {option.ability_check.dc if option.ability_check else '-'}."
+                f"{currency_message}"
             ),
+        )
+        self._advance_scenario_time(
+            option.time_cost_minutes,
+            source=f"zone_option:{option.id}",
         )
         self._record(
             "ui_zone_option_resolved",
@@ -16269,6 +16304,11 @@ class ExplorationUiSession:
                 "natural_roll": check_result.selected_roll.natural_roll,
                 "total": check_result.selected_roll.total,
                 "flag_key": flag_key,
+                "entry_cost_cp": option.entry_cost_cp,
+                "success_reward_cp": option.success_reward_cp,
+                "currency_before_cp": currency_before_cp,
+                "currency_after_cp": currency_after_cp,
+                "time_cost_minutes": option.time_cost_minutes,
             },
         )
         self.board_message = (
@@ -18432,6 +18472,9 @@ def _long_cast_payload(cast) -> dict[str, object] | None:
 
 def _actor_portrait_url(actor: Actor) -> str | None:
     portrait = actor.portrait.strip().lstrip("/")
+    if portrait.startswith("character_uploads/"):
+        filename = portrait.removeprefix("character_uploads/")
+        return f"/character-portraits/{filename}" if filename else None
     return f"/game-assets/{portrait}" if portrait else None
 
 
@@ -21089,7 +21132,7 @@ def _zone_option_check_plan(
         ability=check.ability,
         skill=check.skill,
         tool=check.tool,
-        tool_label=check.tool or "",
+        tool_label=player_label(check.tool) if check.tool else "",
         dc=check.dc,
         lead_actor_id=actor_id,
         reason_for_players=option.description or option.label,
@@ -21674,12 +21717,20 @@ def _zone_option_payload(
         "color": led_color_name_pl(option.color),
         "completed": completed,
         "message": option.message,
+        "entry_cost_cp": option.entry_cost_cp,
+        "success_reward_cp": option.success_reward_cp,
+        "time_cost_minutes": option.time_cost_minutes,
         "check": (
             {
                 "ability": check.ability,
                 "skill": check.skill,
                 "tool": check.tool,
                 "dc": check.dc,
+                **(
+                    {"tool_label": player_label(check.tool)}
+                    if check.tool
+                    else {}
+                ),
             }
             if check is not None
             else None

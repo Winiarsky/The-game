@@ -544,6 +544,15 @@ class ExplorationOption:
     success_flag: str | None = None
     failure_flag: str | None = None
     reveals: tuple[str, ...] = ()
+    entry_cost_cp: int = 0
+    success_reward_cp: int = 0
+    time_cost_minutes: int = 0
+
+    def __post_init__(self) -> None:
+        if self.entry_cost_cp < 0 or self.success_reward_cp < 0:
+            raise ValueError("Exploration option currency values cannot be negative.")
+        if self.time_cost_minutes < 0:
+            raise ValueError("Exploration option time cost cannot be negative.")
 
 
 @dataclass(frozen=True, slots=True)

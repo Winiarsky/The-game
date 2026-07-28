@@ -1416,12 +1416,18 @@ function zoneOptionCardsHtml(options) {
       </select>
     </label>` : '';
     const checkText = check
-      ? `${abilityLabel(check.ability)}${check.skill ? ` (${skillLabel(check.skill)})` : ''}, ST ${esc(check.dc)}`
+      ? `${abilityLabel(check.ability)}${check.skill ? ` (${skillLabel(check.skill)})` : ''}${check.tool_label ? ` + ${esc(check.tool_label)}` : ''}, ST ${esc(check.dc)}`
       : 'Bez rzutu';
+    const stakes = Number(option.entry_cost_cp || 0) > 0
+      ? `Stawka ${esc(option.entry_cost_cp)} cp${Number(option.success_reward_cp || 0) > 0 ? ` · wypłata za wygraną ${esc(option.success_reward_cp)} cp` : ''}`
+      : '';
+    const timeCost = Number(option.time_cost_minutes || 0) > 0
+      ? `${esc(option.time_cost_minutes)} min`
+      : '';
     return `<div class="interaction-goal-card zone-option-card${option.completed ? ' completed' : ''}">
       <b>${esc(option.label)}</b>
       <span>${esc(option.description || option.message || '')}</span>
-      <small>${option.completed ? 'Ukończone' : esc(checkText)}</small>
+      <small>${option.completed ? 'Ukończone' : esc([checkText, stakes, timeCost].filter(Boolean).join(' · '))}</small>
       ${option.completed ? '' : `${actorSelect}<button type="button" onclick="selectZoneOption('${esc(option.id)}', ${check ? 'true' : 'false'})">Wykonaj</button>`}
     </div>`;
   }).join('');

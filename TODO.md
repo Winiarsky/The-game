@@ -60,6 +60,9 @@ najbliższy horyzont, a nie kopię całej roadmapy.
 - [x] Ground generative NPC narration against authored facts and effects: scope prompts to the active goal/permission and let critical routes enforce hidden content-authored narration so Gemini cannot invent quest evidence, rewards, purchases, or currency transfers.
 - [x] Add controlled authored paraphrases for guarded NPC routes: Gemini selects an approved variant id matching the player's tone, while validation copies the complete variant and safely falls back to the base response.
 - [x] [Spell fidelity] Add creature-type healing exclusions for undead/constructs and an explicit unattended-flammable-object rider for Fire Bolt.
+- [x] Replace character-creator standard-array-only input with D&D 5e 2014 27-point buy, show base score/cost/origin bonus/final modifier separately, and add audited Polish tooltips for every level-1 class feature.
+- [x] Rebuild class choices as a guided player step with skill use/proficiency explanations, fighting-style rule cards, automatic expanded starting packages, origin-skill conflict prevention, and a final live character-sheet review.
+- [ ] [Deferred character creator] Add an optional starting-wealth mode with class-specific wealth generation, a restricted pre-game shop, affordability/carrying-capacity checks, and an explicit choice between wealth and the automatic class package.
 - [ ] [Deferred mounted combat] Let a mounted wielder use a lance in one hand; until an explicit mounted actor state exists, the lance correctly uses two hands and retains its close-range disadvantage.
 - [ ] [Deferred destructible equipment] Model the net as an AC 10 object with 5 HP that can be cut using slashing damage; Strength DC 10 escape is implemented.
 - [ ] [Deferred attunement fidelity] End attunement automatically after the official distance/time, death, prerequisite-loss, or another-creature-attunement conditions.
@@ -343,6 +346,14 @@ obowiązują `Current Roadmap Focus` oraz etapy z `ROADMAP.md`.
 - [x] [Exploration provider resilience P1] Add jittered retry delays and automatic stable checkpoints after completed exploration resolutions.
 - [x] [Exploration fixture fidelity P2] Document challenge checks as the intentional abstraction for attacking fixtures inside authored exploration goals.
 - [x] [Character creator onboarding P2] Split the long character form into a five-step guided flow while preserving server-side validation.
+- [x] [Character creator UX] Keep save ids internal and generated from unique character-name slugs; replace the public portrait path with a validated local image picker and roster-owned uploads.
+- [x] [Character creator origin UX] Split species, species benefits, background, and background benefits into explicit stages; expose narrative and mechanical descriptions, live final ability values, and all 13 core 2014 background archetypes.
+- [x] [Character creator feature help] Add mouse, keyboard, and touch-accessible explanations for every species, ancestry-variant, and background feature; distinguish automatic, creator, action, contextual, and table-assisted execution and enforce complete help/runtime coverage with an audit.
+- [x] [Polish player terminology] Replace creator-facing technical ids and English spell/tool/skill names with one audited Polish label catalogue; localize all 138 loaded spell definitions and explain gaming-set, instrument, and artisan-tool proficiency choices.
+- [ ] [Background content coverage] Add authored opportunities for appropriate background permissions across future scenarios; the generic ownership-plus-scene resolver is complete, but the current reference content does not exercise every one of the 13 backgrounds.
+- [ ] [Deferred character art] Generate and integrate consistent class/species reference illustrations after the creator mechanics and content are final.
+- [x] [Starter roster] Add, validate, and install one playable level-1 default build for every core class, with persistent portraits and Polish explanatory character cards.
+- [x] [Village tavern] Replace the dice-game placeholder with a replayable physical-d20 gaming-set check, a real wager/payout, elapsed time, and wallet persistence.
 - [x] Clarify that the old watchtower interaction forms are historical briefs and update the current web-runtime instructions.
 - [x] [Character creator MVP K1] Add a separate deterministic single-class level-1 character-creation module with versioned species/class/background catalogues and choice-derived Actor construction.
 - [x] [Character creator MVP K1] Compose executable Fighter/Rogue level-1 grants: four Fighting Styles, Second Wind, Expertise, and Sneak Attack with shared combat/resource rules.

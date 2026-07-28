@@ -35,8 +35,9 @@
             {% for character in roster.characters %}
               <label class="roster-card">
                 <input type="checkbox" name="character_ids" value="{{ character.actor.id }}" {% if character.actor.id|string in (selected_character_ids or []) %}checked{% endif %}>
-                <span class="roster-avatar">{{ character.actor.name[:1]|upper }}</span>
-                <span><b>{{ character.actor.name }}</b><small>Poziom {{ character.actor.level }} · {{ character.class_id|replace('_', ' ')|title }}</small><em>{{ character.actor.experience_points }} XP</em></span>
+                {% set portrait_url = character_portrait_url(character.actor.portrait) %}
+                <span class="roster-avatar">{% if portrait_url %}<img src="{{ portrait_url }}" alt="Portret: {{ character.actor.name }}">{% else %}{{ character.actor.name[:1]|upper }}{% endif %}</span>
+                <span><b>{{ character.actor.name }}</b><small>Poziom {{ character.actor.level }} · {{ class_names.get(character.class_id, character.class_id) }}</small><em>{{ character.actor.experience_points }} XP</em></span>
               </label>
             {% endfor %}
           </div>

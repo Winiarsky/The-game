@@ -180,6 +180,7 @@ class SpeciesDefinition:
     id: str
     name: str
     speed_feet: int
+    description: str = ""
     size: str = "medium"
     ability_bonuses: AbilityScoreBonuses = field(default_factory=AbilityScoreBonuses)
     darkvision_feet: int = 0
@@ -237,6 +238,7 @@ class ClassDefinition:
     saving_throw_proficiencies: tuple[str, ...]
     skill_choice_count: int
     skill_choices: tuple[str, ...]
+    description: str = ""
     weapon_proficiencies: tuple[str, ...] = ()
     armor_proficiencies: tuple[str, ...] = ()
     tool_proficiencies: tuple[str, ...] = ()
@@ -326,6 +328,7 @@ class ClassDefinition:
 class BackgroundDefinition:
     id: str
     name: str
+    description: str = ""
     skill_proficiencies: tuple[str, ...] = ()
     tool_proficiencies: tuple[str, ...] = ()
     languages: tuple[str, ...] = ()

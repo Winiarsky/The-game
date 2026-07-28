@@ -1113,6 +1113,12 @@ def test_load_village_square_mvp_builds_exploration_locations_setup_points_and_o
     assert tavern.short_rest_policy is not None
     assert tavern.short_rest_policy.duration_minutes == 60
     assert "listen_at_tavern" not in {option.id for option in tavern.options}
+    dice_game = next(option for option in tavern.options if option.id == "tavern_dice_game")
+    assert dice_game.ability_check is not None
+    assert dice_game.ability_check.tool == "dice_set"
+    assert dice_game.entry_cost_cp == 10
+    assert dice_game.success_reward_cp == 20
+    assert dice_game.time_cost_minutes == 15
     keeper = next(point for point in exploration.points if point.id == "tavern_keeper")
     assert keeper.npc_interaction is not None
     assert keeper.npc_interaction.id == "keeper_olan"

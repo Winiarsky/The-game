@@ -19,9 +19,9 @@
 
     <form class="character-form" method="post">
       {% if character_class.fighting_style_choices and target_level >= character_class.fighting_style_choice_level %}
-        <section class="form-section"><h2>Fighting Style</h2>
+        <section class="form-section"><h2>Styl walki</h2>
           {% for option in character_class.fighting_style_choices %}
-            <label class="choice-row"><input type="radio" name="selected_fighting_style_id" value="{{ option }}" {% if option == values.selected_fighting_style_id %}checked{% endif %}> <span>{{ option|replace('_', ' ')|title }}</span></label>
+            <label class="choice-row"><input type="radio" name="selected_fighting_style_id" value="{{ option }}" {% if option == values.selected_fighting_style_id %}checked{% endif %}> <span>{{ labels.get(option, option) }}</span></label>
           {% endfor %}
         </section>
       {% endif %}
@@ -35,9 +35,9 @@
       {% endif %}
 
       {% if expertise_count %}
-        <section class="form-section"><h2>Expertise — wybierz {{ expertise_count }}</h2>
+        <section class="form-section"><h2>Specjalizacja — wybierz {{ expertise_count }}</h2>
           {% for skill in expertise_choices %}
-            <label class="check-row"><input type="checkbox" name="selected_expertise_ids" value="{{ skill }}" {% if skill in values.selected_expertise_ids %}checked{% endif %}> {{ skill|replace('_', ' ')|title }}</label>
+            <label class="check-row"><input type="checkbox" name="selected_expertise_ids" value="{{ skill }}" {% if skill in values.selected_expertise_ids %}checked{% endif %}> {{ labels.get(skill, skill) }}</label>
           {% endfor %}
         </section>
       {% endif %}
@@ -45,7 +45,7 @@
       {% for group in option_groups %}
         <section class="form-section" data-conditional-option-group="{{ group.requires_option_id }}"><h2>{{ group.name }} — wybierz {{ group.choice_count }}</h2>
           {% if group.requires_option_id %}
-            <p class="form-help">Wymagane tylko po wybraniu {{ group.requires_option_id|replace('_', ' ')|title }}.</p>
+            <p class="form-help">Wymagane tylko po wybraniu {{ labels.get(group.requires_option_id, group.requires_option_id) }}.</p>
           {% endif %}
           {% for option in group.options %}
             <label class="check-row"><input type="checkbox" name="selected_class_option_ids" value="{{ option.id }}" {% if option.id in values.selected_class_option_ids %}checked{% endif %}> {{ option.name }}</label>
@@ -54,8 +54,8 @@
       {% endfor %}
 
       {% if cantrip_count %}
-        <section class="form-section"><h2>Cantripy — łącznie {{ cantrip_count }}</h2>
-          <p class="form-help">Niektóre opcje klasowe, np. Pact of the Tome, zwiększają tę liczbę. Po zmianie opcji formularz zweryfikuje nowy limit.</p>
+        <section class="form-section"><h2>Sztuczki magiczne — łącznie {{ cantrip_count }}</h2>
+          <p class="form-help">Niektóre opcje klasowe zwiększają tę liczbę. Po zmianie opcji formularz zweryfikuje nowy limit.</p>
           {% for spell in cantrip_choices %}
             <label class="check-row"><input type="checkbox" name="selected_cantrip_ids" value="{{ spell.id }}" {% if spell.id in values.selected_cantrip_ids %}checked{% endif %}> {{ spell.name }}</label>
           {% endfor %}
@@ -63,7 +63,7 @@
       {% endif %}
 
       {% if spell_count %}
-        <section class="form-section"><h2>Znane czary / spellbook — łącznie {{ spell_count }}</h2>
+        <section class="form-section"><h2>Znane czary / księga czarów — łącznie {{ spell_count }}</h2>
           {% for spell in spell_choices %}
             <label class="check-row"><input type="checkbox" name="selected_spell_ids" value="{{ spell.id }}" {% if spell.id in values.selected_spell_ids %}checked{% endif %}> {{ spell.name }} · poziom {{ spell.level }}</label>
           {% endfor %}

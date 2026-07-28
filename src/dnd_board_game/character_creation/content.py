@@ -94,9 +94,12 @@ def load_character_resources(
     background_item_ids = tuple(
         dict.fromkeys(
             (
-            grant.item_id
-            for background in catalog.backgrounds
-            for grant in background.equipment
+                item_id
+                for background in catalog.backgrounds
+                for item_id in (
+                    *(grant.item_id for grant in background.equipment),
+                    *background.tool_choices,
+                )
             )
         ).keys()
     )
@@ -188,6 +191,7 @@ def _parse_species(data: dict[str, Any], field: str) -> SpeciesDefinition:
         id=definition_id,
         name=_required_text(data, "name", field),
         speed_feet=int(data.get("speed_feet", 30)),
+        description=str(data.get("description", "")).strip(),
         size=str(data.get("size", "medium")),
         ability_bonuses=AbilityScoreBonuses(
             strength=int(bonuses.get("strength", 0)),
@@ -322,6 +326,7 @@ def _parse_class(data: dict[str, Any], field: str) -> ClassDefinition:
         saving_throw_proficiencies=_string_tuple(data.get("saving_throw_proficiencies", []), field),
         skill_choice_count=int(data.get("skill_choice_count", 0)),
         skill_choices=_string_tuple(data.get("skill_choices", []), field),
+        description=str(data.get("description", "")).strip(),
         weapon_proficiencies=_string_tuple(data.get("weapon_proficiencies", []), field),
         armor_proficiencies=_string_tuple(data.get("armor_proficiencies", []), field),
         tool_proficiencies=_string_tuple(data.get("tool_proficiencies", []), field),
@@ -488,6 +493,7 @@ def _parse_background(data: dict[str, Any], field: str) -> BackgroundDefinition:
     return BackgroundDefinition(
         id=_definition_id(data, field),
         name=_required_text(data, "name", field),
+        description=str(data.get("description", "")).strip(),
         skill_proficiencies=_string_tuple(data.get("skill_proficiencies", []), field),
         tool_proficiencies=_string_tuple(data.get("tool_proficiencies", []), field),
         languages=_string_tuple(data.get("languages", []), field),

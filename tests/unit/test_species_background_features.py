@@ -38,7 +38,31 @@ def content():
 def _fighter(content, *, actor_id: str, species_id: str, background_id: str):
     catalog, resources = content
     species = catalog.species_by_id(species_id)
+    background = catalog.background_by_id(background_id)
+    fighter = catalog.class_by_id("fighter")
     assert species is not None
+    assert background is not None
+    assert fighter is not None
+    species_language_ids = (
+        ("dwarvish",)
+        if species_id in {"human", "elf"}
+        else ()
+    )
+    granted_skill_ids = {
+        *species.skill_proficiencies,
+        *background.skill_proficiencies,
+    }
+    selected_skill_ids = tuple(
+        skill_id
+        for skill_id in fighter.skill_choices
+        if skill_id not in granted_skill_ids
+    )[: fighter.skill_choice_count]
+    known_languages = {*species.languages, *species_language_ids}
+    selected_background_language_ids = tuple(
+        language
+        for language in ("elvish", "dwarvish", "gnomish", "orc", "draconic")
+        if language not in known_languages
+    )[: background.language_choice_count]
     return build_character(
         CharacterDraft(
             id=actor_id,
@@ -47,42 +71,20 @@ def _fighter(content, *, actor_id: str, species_id: str, background_id: str):
             class_id="fighter",
             background_id=background_id,
             base_ability_scores=AbilityScores(15, 14, 13, 12, 10, 8),
-            selected_skill_ids=("animal_handling", "survival"),
+            selected_skill_ids=selected_skill_ids,
             selected_fighting_style_id="defense",
             equipment_package_id="fighter_sword_and_board",
-            selected_species_language_ids=(
-                ("dwarvish",)
-                if species_id in {"human", "elf"}
-                else ()
-            ),
+            selected_species_language_ids=species_language_ids,
             selected_species_cantrip_ids=(
                 ("mage_hand",) if species_id == "elf" else ()
             ),
             selected_species_tool_ids=(
                 ("smiths_tools",) if species_id == "dwarf" else ()
             ),
-            selected_background_tool_ids=(
-                ("dice_set",)
-                if background_id in {"soldier", "criminal"}
-                else ()
-            ),
-            selected_background_language_ids=(
-                tuple(
-                    language
-                    for language in ("elvish", "dwarvish", "gnomish", "orc")
-                    if language
-                    not in {
-                        *species.languages,
-                        *(
-                            ("dwarvish",)
-                            if species_id in {"human", "elf"}
-                            else ()
-                        ),
-                    }
-                )[:2]
-                if background_id in {"acolyte", "sage"}
-                else ()
-            ),
+            selected_background_tool_ids=background.tool_choices[
+                : background.tool_choice_count
+            ],
+            selected_background_language_ids=selected_background_language_ids,
         ),
         catalog,
         resources,
@@ -253,13 +255,22 @@ def test_half_orc_relentless_endurance_prevents_first_non_instant_defeat(content
 @pytest.mark.parametrize(
     ("background_id", "permissions"),
     (
-        ("soldier", ("invoke_military_rank", "request_military_aid")),
-        ("criminal", ("contact_criminal_network",)),
         (
             "acolyte",
             ("request_faithful_shelter", "request_faithful_care"),
         ),
+        ("charlatan", ("maintain_false_identity",)),
+        ("criminal", ("contact_criminal_network",)),
+        ("entertainer", ("secure_performance_lodging",)),
+        ("folk_hero", ("request_commoner_shelter",)),
+        ("guild_artisan", ("request_guild_support",)),
+        ("hermit", ("recall_personal_discovery",)),
+        ("noble", ("request_noble_audience",)),
+        ("outlander", ("forage_and_recall_geography",)),
         ("sage", ("locate_lore_source",)),
+        ("sailor", ("secure_ship_passage",)),
+        ("soldier", ("invoke_military_rank", "request_military_aid")),
+        ("urchin", ("navigate_city_shortcut",)),
     ),
 )
 def test_background_permissions_are_data_driven_actor_grants(
@@ -275,6 +286,14 @@ def test_background_permissions_are_data_driven_actor_grants(
     )
 
     assert actor_background_permission_ids(actor) == permissions
+    for permission_id in permissions:
+        resolution = resolve_background_permission(
+            actor,
+            permission_id,
+            scene_permission_ids=permissions,
+        )
+        assert resolution.allowed is True
+        assert resolution.feature_id is not None
 
 
 def test_background_permission_requires_actor_grant_and_scene_opportunity(content):

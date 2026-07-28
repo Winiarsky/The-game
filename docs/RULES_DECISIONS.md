@@ -981,6 +981,30 @@ Implementacja MVP:
   odpoczynku: zachowuje obrażenia oraz zużyte istniejące zasoby.
 - Elastyczne premie cech species są jawnym wyborem źródłowym, a nie zakodowaną
   na sztywno odmianą statystyk.
+- Kreator używa wariantu point buy D&D 5e 2014: sześć bazowych cech mieści się
+  w zakresie 8–15, pełna pula wynosi 27 punktów, a koszty wartości 8–15 to
+  odpowiednio 0, 1, 2, 3, 4, 5, 7 i 9. Premie species są dodawane dopiero do
+  kupionej wartości bazowej i nie zużywają puli point buy.
+- Interfejs pokazuje osobno kupioną wartość bazową, jej koszt, wszystkie premie
+  species oraz końcową wartość i modyfikator. Standard array
+  `15, 14, 13, 12, 10, 8` pozostaje legalnym gotowym rozkładem kosztującym
+  dokładnie 27 punktów.
+- Wybór umiejętności klasowej przyznaje biegłość, a nie nową osobną akcję.
+  Na poziomie 1 dodaje premię `+2` do pasującego testu. Kreator pokazuje
+  powiązaną cechę i przykłady użycia oraz blokuje ponowny wybór biegłości
+  otrzymanej już z species albo backgroundu.
+- Style walki są trwałymi cechami postaci. Kreator opisuje warunek i efekt
+  każdego stylu, a istniejące resolvery automatycznie uwzględniają go przy
+  wyliczaniu KP, ataku, obrażeń, reakcji albo walki dwiema broniami.
+- Obecny kreator przyznaje jednej klasie jeden kompletny, automatyczny zestaw
+  startowy. UI rozwija jego przedmioty, ilości i zawartość pakietów; wyposażenie
+  oraz monety backgroundu są dodawane osobno. Alternatywa polegająca na
+  rezygnacji z zestawu i zakupach za klasowy startowy majątek wymaga osobnego
+  trybu sklepu i nie jest symulowana samym polem wyboru.
+- Ostatni etap pokazuje żywe podsumowanie pochodzenia, klasy, końcowych cech,
+  biegłości, specjalizacji i zestawu. Gracz może wrócić bezpośrednio do
+  właściwego etapu, a zapis następuje dopiero przez jawne
+  „Akceptuj i utwórz postać” oraz pełną walidację domenową.
 
 ## Kompletność postaci SRD do poziomu 3
 
@@ -991,6 +1015,9 @@ Implementacja MVP:
   cechy wariantów, subclass i zagnieżdżonych wyborów klasowych. Każde ID musi
   być sklasyfikowane jako wykonywalne, data-driven, marker wyboru albo jawny
   wyjątek stołowy.
+- Każda cecha klasy przyznawana na poziomie 1 ma polski tooltip z opisem reguły,
+  sposobem obsługi w aplikacji i trybem użycia. Osobny audyt wymaga zarówno
+  takiego opisu, jak i kontraktu w `implementation_audit`.
 - Żaden z 127 czarów tego zakresu nie pozostaje surowym castem `assisted`.
   Czary bojowe używają resolverów ataku, leczenia, obszaru, wielopocisku,
   statusu, puli PW, okresowych obrażeń, ruchu, przywołania albo reakcji.

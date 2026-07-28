@@ -1,4 +1,29 @@
 <!doctype html>
+{% macro feature_terms(features) -%}
+  {% for feature in features %}
+        <span
+          class="feature-help"
+          tabindex="0"
+          aria-label="{{ feature.accessibility_text }}"
+        >
+          <span class="feature-help-name">{{ feature.name }}</span>
+          <span class="feature-tooltip" role="tooltip">
+            <b>{{ feature.name }}</b>
+            <span>{{ feature.rule_text }}</span>
+            <span><strong>W naszej grze:</strong> {{ feature.game_text }}</span>
+            <small>{{ feature.use_mode_label }}</small>
+          </span>
+        </span>{% if not loop.last %}<span aria-hidden="true">, </span>{% endif %}
+  {% endfor %}
+{%- endmacro %}
+{% macro feature_tooltips(features) -%}
+  {% if features %}
+    <li class="feature-help-list">
+      <span>Profity:</span>
+      {{ feature_terms(features) }}
+    </li>
+  {% endif %}
+{%- endmacro %}
 <html lang="pl">
 <head>
   <meta charset="utf-8">
@@ -25,175 +50,273 @@
     {% endif %}
 
     <nav class="creator-stepper" aria-label="Etapy tworzenia postaci">
-      <button type="button" data-creator-step-button="0">1. Tożsamość</button>
-      <button type="button" data-creator-step-button="1">2. Pochodzenie</button>
-      <button type="button" data-creator-step-button="2">3. Klasa</button>
-      <button type="button" data-creator-step-button="3">4. Cechy</button>
-      <button type="button" data-creator-step-button="4">5. Wybory</button>
+      <button type="button" data-creator-step-button="0">1. Rasa</button>
+      <button type="button" data-creator-step-button="1">2. Profity rasy</button>
+      <button type="button" data-creator-step-button="2">3. Background</button>
+      <button type="button" data-creator-step-button="3">4. Profity tła</button>
+      <button type="button" data-creator-step-button="4">5. Klasa</button>
+      <button type="button" data-creator-step-button="5">6. Cechy</button>
+      <button type="button" data-creator-step-button="6">7. Wybory klasy</button>
+      <button type="button" data-creator-step-button="7">8. Tożsamość</button>
     </nav>
 
-    <form class="character-form" method="post" action="{{ url_for('create_character') }}">
+    <form class="character-form" method="post" action="{{ url_for('create_character') }}" enctype="multipart/form-data">
       <section class="form-section" data-creator-step="0">
-        <span class="eyebrow">1. Tożsamość</span>
-        <div class="form-grid two">
-          <label>Imię postaci
-            <input name="name" value="{{ values.name }}" required maxlength="80" autocomplete="off">
-          </label>
-          <label>Id zapisu
-            <input name="id" value="{{ values.id }}" required pattern="[a-z][a-z0-9]*(?:_[a-z0-9]+)*" placeholder="np. aldren">
-            <small>Małe litery, cyfry i podkreślenia. Id musi być unikalne.</small>
-          </label>
-          <label class="full">Portret
-            <input name="portrait" value="{{ values.portrait }}" placeholder="portraits/custom/bohater.webp">
-            <small>Opcjonalna ścieżka do lokalnej grafiki.</small>
-          </label>
-        </div>
-      </section>
-
-      <section class="form-section" data-creator-step="1" hidden>
-        <span class="eyebrow">2. Pochodzenie</span>
-        <div class="form-grid two">
-          <fieldset>
-            <legend>Species</legend>
-            {% for item in catalog.species %}
-              <label class="choice-row"><input type="radio" name="species_id" value="{{ item.id }}" {% if values.species_id == item.id %}checked{% endif %} onchange="syncCharacterSpecies()"> <span><b>{{ item.name }}</b><small>{{ item.speed_feet }} ft{% if item.darkvision_feet %} · darkvision {{ item.darkvision_feet }} ft{% endif %}</small></span></label>
-            {% endfor %}
-            {% for item in catalog.species if item.ability_bonus_choice_count or item.skill_choice_count or item.tool_choice_count or item.language_choice_count or item.variant_choice_count or item.cantrip_choice_count %}
-              <div data-species-options="{{ item.id }}">
-                {% if item.ability_bonus_choice_count %}
-                  <p class="form-help">Wybierz {{ item.ability_bonus_choice_count }} cechy z premią +{{ item.ability_bonus_choice_value }}.</p>
-                  {% for ability_id in ability_ids if ability_id not in item.ability_bonus_choice_exclusions %}
-                    <label class="check-row"><input type="checkbox" name="selected_species_bonus_ability_ids" value="{{ ability_id }}" {% if ability_id in values.selected_species_bonus_ability_ids %}checked{% endif %}> {{ labels.get(ability_id, ability_id) }}</label>
-                  {% endfor %}
-                {% endif %}
-                {% if item.skill_choice_count %}
-                  <p class="form-help">Wybierz {{ item.skill_choice_count }} umiejętności species.</p>
-                  {% for skill_id in item.skill_choices %}
-                    <label class="check-row"><input type="checkbox" name="selected_species_skill_ids" value="{{ skill_id }}" {% if skill_id in values.selected_species_skill_ids %}checked{% endif %}> {{ labels.get(skill_id, skill_id) }}</label>
-                  {% endfor %}
-                {% endif %}
-                {% if item.tool_choice_count %}
-                  <p class="form-help">Wybierz {{ item.tool_choice_count }} biegłość narzędziową.</p>
-                  {% for tool_id in item.tool_choices %}
-                    <label class="check-row"><input type="checkbox" name="selected_species_tool_ids" value="{{ tool_id }}" {% if tool_id in values.selected_species_tool_ids %}checked{% endif %}> {{ tool_id|replace('_', ' ')|title }}</label>
-                  {% endfor %}
-                {% endif %}
-                {% if item.language_choice_count %}
-                  <p class="form-help">Wybierz {{ item.language_choice_count }} dodatkowy język.</p>
-                  {% for language_id in language_ids if language_id not in item.languages %}
-                    <label class="check-row"><input type="checkbox" name="selected_species_language_ids" value="{{ language_id }}" {% if language_id in values.selected_species_language_ids %}checked{% endif %}> {{ language_id|replace('_', ' ')|title }}</label>
-                  {% endfor %}
-                {% endif %}
-                {% if item.variant_choice_count %}
-                  <p class="form-help">Wybierz wariant pochodzenia.</p>
-                  {% for variant in item.variant_choices %}
-                    <label class="choice-row"><input type="radio" name="selected_species_variant_id" value="{{ variant.id }}" {% if values.selected_species_variant_id == variant.id %}checked{% endif %}> <span>{{ variant.name }}</span></label>
-                  {% endfor %}
-                {% endif %}
-                {% if item.cantrip_choice_count %}
-                  <p class="form-help">Wybierz {{ item.cantrip_choice_count }} cantrip species.</p>
-                  {% for spell_id in item.cantrip_choices %}
-                    <label class="check-row"><input type="checkbox" name="selected_species_cantrip_ids" value="{{ spell_id }}" {% if spell_id in values.selected_species_cantrip_ids %}checked{% endif %}> {{ spell_id|replace('_', ' ')|title }}</label>
-                  {% endfor %}
-                {% endif %}
-              </div>
-            {% endfor %}
-          </fieldset>
-          <fieldset>
-            <legend>Background</legend>
-            {% for item in catalog.backgrounds %}
-              <label class="choice-row"><input type="radio" name="background_id" value="{{ item.id }}" {% if values.background_id == item.id %}checked{% endif %} onchange="syncCharacterBackground()"> <span><b>{{ item.name }}</b><small>{{ item.skill_proficiencies|join(', ') }}</small></span></label>
-            {% endfor %}
-            {% for item in catalog.backgrounds if item.tool_choice_count or item.language_choice_count %}
-              <div data-background-options="{{ item.id }}">
-                {% if item.tool_choice_count %}
-                  <p class="form-help">Wybierz {{ item.tool_choice_count }} biegłość narzędziową backgroundu.</p>
-                  {% for tool_id in item.tool_choices %}
-                    <label class="check-row"><input type="checkbox" name="selected_background_tool_ids" value="{{ tool_id }}" {% if tool_id in values.selected_background_tool_ids %}checked{% endif %}> {{ tool_id|replace('_', ' ')|title }}</label>
-                  {% endfor %}
-                {% endif %}
-                {% if item.language_choice_count %}
-                  <p class="form-help">Wybierz {{ item.language_choice_count }} języki backgroundu, których postać jeszcze nie zna.</p>
-                  {% for language_id in language_ids %}
-                    <label class="check-row"><input type="checkbox" name="selected_background_language_ids" value="{{ language_id }}" {% if language_id in values.selected_background_language_ids %}checked{% endif %}> {{ language_id|replace('_', ' ')|title }}</label>
-                  {% endfor %}
-                {% endif %}
-              </div>
-            {% endfor %}
-          </fieldset>
-        </div>
-      </section>
-
-      <section class="form-section" data-creator-step="2" hidden>
-        <span class="eyebrow">3. Klasa</span>
-        <div class="class-choice-grid">
-          {% for item in catalog.classes %}
-            <label class="class-choice"><input type="radio" name="class_id" value="{{ item.id }}" {% if values.class_id == item.id %}checked{% endif %} onchange="syncCharacterClass()"> <span><b>{{ item.name }}</b><small>k{{ item.hit_die }} HP · {{ item.skill_choice_count }} umiejętności</small></span></label>
-          {% endfor %}
-        </div>
-      </section>
-
-      <section class="form-section" data-creator-step="3" hidden>
-        <span class="eyebrow">4. Ability scores</span>
-        <p class="form-help">Rozdziel każdą wartość standard array dokładnie raz.</p>
-        <div class="ability-form-grid">
-          {% for ability_id in ability_ids %}
-            <label>{{ labels.get(ability_id, ability_id) }}
-              <select name="{{ ability_id }}">
-                {% for score in standard_array %}<option value="{{ score }}" {% if values[ability_id]|int == score %}selected{% endif %}>{{ score }}</option>{% endfor %}
-              </select>
+        <span class="eyebrow">1. Wybierz rasę</span>
+        <p class="step-intro">Rasa określa stałe premie do cech, szybkość, zmysły i wyjątkowe zdolności. Kliknij kartę, aby zobaczyć pełny zestaw mechanik.</p>
+        <div class="creator-choice-grid">
+          {% for item in catalog.species %}
+            <label class="creator-choice-card">
+              <input type="radio" name="species_id" value="{{ item.id }}" data-choice-label="{{ item.name }}" {% if values.species_id == item.id %}checked{% endif %} onchange="syncCharacterSpecies()">
+              <span>
+                <b>{{ item.name }}</b>
+                <em>{{ item.description }}</em>
+                <ul>
+                  {% for mechanic in species_mechanics[item.id] %}<li>{{ mechanic }}</li>{% endfor %}
+                  {{ feature_tooltips(species_feature_help[item.id]) }}
+                </ul>
+              </span>
             </label>
           {% endfor %}
         </div>
       </section>
 
+      <section class="form-section" data-creator-step="1" hidden>
+        <span class="eyebrow">2. Ustal profity rasy</span>
+        {% for item in catalog.species %}
+          <div class="choice-detail-panel" data-species-options="{{ item.id }}">
+            <h2>{{ item.name }}</h2>
+            <p>{{ item.description }}</p>
+            <div class="mechanics-callout"><b>Automatycznie otrzymujesz</b><ul>
+              {% for mechanic in species_mechanics[item.id] %}<li>{{ mechanic }}</li>{% endfor %}
+              {{ feature_tooltips(species_feature_help[item.id]) }}
+            </ul></div>
+            <div class="form-grid two">
+                {% if item.ability_bonus_choice_count %}
+                  <fieldset><legend>Premie do cech — wybierz {{ item.ability_bonus_choice_count }}</legend>
+                    {% for ability_id in ability_ids if ability_id not in item.ability_bonus_choice_exclusions %}
+                      <label class="check-row"><input type="checkbox" name="selected_species_bonus_ability_ids" value="{{ ability_id }}" {% if ability_id in values.selected_species_bonus_ability_ids %}checked{% endif %}> {{ labels.get(ability_id, ability_id) }} +{{ item.ability_bonus_choice_value }}</label>
+                    {% endfor %}
+                  </fieldset>
+                {% endif %}
+                {% if item.skill_choice_count %}
+                  <fieldset><legend>Umiejętności — wybierz {{ item.skill_choice_count }}</legend>
+                    {% for skill_id in item.skill_choices %}
+                      <label class="check-row"><input type="checkbox" name="selected_species_skill_ids" value="{{ skill_id }}" {% if skill_id in values.selected_species_skill_ids %}checked{% endif %}> {{ labels.get(skill_id, skill_id) }}</label>
+                    {% endfor %}
+                  </fieldset>
+                {% endif %}
+                {% if item.tool_choice_count %}
+                  <fieldset><legend>{{ species_tool_prompts[item.id].legend }}</legend>
+                    <p class="form-help">{{ species_tool_prompts[item.id].explanation }}</p>
+                    {% for tool_id in item.tool_choices %}
+                      <label class="check-row"><input type="checkbox" name="selected_species_tool_ids" value="{{ tool_id }}" {% if tool_id in values.selected_species_tool_ids %}checked{% endif %}> {{ labels.get(tool_id, tool_id) }}</label>
+                    {% endfor %}
+                  </fieldset>
+                {% endif %}
+                {% if item.language_choice_count %}
+                  <fieldset><legend>Języki — wybierz {{ item.language_choice_count }}</legend>
+                    {% for language_id in language_ids if language_id not in item.languages %}
+                      <label class="check-row"><input type="checkbox" name="selected_species_language_ids" value="{{ language_id }}" {% if language_id in values.selected_species_language_ids %}checked{% endif %}> {{ labels.get(language_id, language_id) }}</label>
+                    {% endfor %}
+                  </fieldset>
+                {% endif %}
+                {% if item.variant_choice_count %}
+                  <fieldset><legend>Wariant pochodzenia — wybierz {{ item.variant_choice_count }}</legend>
+                    {% for variant in item.variant_choices %}
+                      <label class="choice-row"><input type="radio" name="selected_species_variant_id" value="{{ variant.id }}" {% if values.selected_species_variant_id == variant.id %}checked{% endif %}> <span>{{ variant.name }}<small class="variant-feature-list">{{ feature_terms(species_variant_feature_help[variant.id]) }}</small></span></label>
+                    {% endfor %}
+                  </fieldset>
+                {% endif %}
+                {% if item.cantrip_choice_count %}
+                  <fieldset><legend>Sztuczka magiczna — wybierz {{ item.cantrip_choice_count }}</legend>
+                    {% for spell_id in item.cantrip_choices %}
+                      <label class="check-row"><input type="checkbox" name="selected_species_cantrip_ids" value="{{ spell_id }}" {% if spell_id in values.selected_species_cantrip_ids %}checked{% endif %}> {{ labels.get(spell_id, spell_id) }}</label>
+                    {% endfor %}
+                  </fieldset>
+                {% endif %}
+              {% if not (item.ability_bonus_choice_count or item.skill_choice_count or item.tool_choice_count or item.language_choice_count or item.variant_choice_count or item.cantrip_choice_count) %}
+                <p class="flow-note full">Ta rasa nie wymaga dodatkowych wyborów. Wszystkie wymienione profity zostaną przyznane automatycznie.</p>
+              {% endif %}
+            </div>
+          </div>
+        {% endfor %}
+      </section>
+
+      <section class="form-section" data-creator-step="2" hidden>
+        <span class="eyebrow">3. Wybierz background</span>
+        <p class="step-intro">Background opisuje życie przed przygodą. Przyznaje dwie biegłości, narzędzia lub języki, wyposażenie, złoto i fabularne uprawnienie działające w odpowiednich scenach.</p>
+        <div class="creator-choice-grid">
+          {% for item in catalog.backgrounds %}
+            <label class="creator-choice-card">
+              <input type="radio" name="background_id" value="{{ item.id }}" data-choice-label="{{ item.name }}" {% if values.background_id == item.id %}checked{% endif %} onchange="syncCharacterBackground()">
+              <span>
+                <b>{{ item.name }}</b>
+                <em>{{ item.description }}</em>
+                <ul>
+                  {% for mechanic in background_mechanics[item.id] %}<li>{{ mechanic }}</li>{% endfor %}
+                  {{ feature_tooltips(background_feature_help[item.id]) }}
+                </ul>
+              </span>
+            </label>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="form-section" data-creator-step="3" hidden>
+        <span class="eyebrow">4. Ustal profity backgroundu</span>
+        {% for item in catalog.backgrounds %}
+          <div class="choice-detail-panel" data-background-options="{{ item.id }}">
+            <h2>{{ item.name }}</h2>
+            <p>{{ item.description }}</p>
+            <div class="mechanics-callout"><b>Automatycznie otrzymujesz</b><ul>
+              {% for mechanic in background_mechanics[item.id] %}<li>{{ mechanic }}</li>{% endfor %}
+              {{ feature_tooltips(background_feature_help[item.id]) }}
+            </ul></div>
+            <div class="form-grid two">
+                {% if item.tool_choice_count %}
+                  <fieldset><legend>{{ background_tool_prompts[item.id].legend }}</legend>
+                    <p class="form-help">{{ background_tool_prompts[item.id].explanation }}</p>
+                    {% for tool_id in item.tool_choices %}
+                      <label class="check-row"><input type="checkbox" name="selected_background_tool_ids" value="{{ tool_id }}" {% if tool_id in values.selected_background_tool_ids %}checked{% endif %}> {{ labels.get(tool_id, tool_id) }}</label>
+                    {% endfor %}
+                  </fieldset>
+                {% endif %}
+                {% if item.language_choice_count %}
+                  <fieldset><legend>Języki — wybierz {{ item.language_choice_count }}</legend>
+                    {% for language_id in language_ids %}
+                      <label class="check-row"><input type="checkbox" name="selected_background_language_ids" value="{{ language_id }}" {% if language_id in values.selected_background_language_ids %}checked{% endif %}> {{ labels.get(language_id, language_id) }}</label>
+                    {% endfor %}
+                  </fieldset>
+                {% endif %}
+              {% if not (item.tool_choice_count or item.language_choice_count) %}
+                <p class="flow-note full">Ten background nie wymaga dodatkowego wyboru. Wszystkie profity zostaną przyznane automatycznie.</p>
+              {% endif %}
+            </div>
+          </div>
+        {% endfor %}
+      </section>
+
       <section class="form-section" data-creator-step="4" hidden>
-        <span class="eyebrow">5. Wybory klasowe</span>
+        <span class="eyebrow">5. Wybierz klasę</span>
+        <p class="step-intro">Klasa określa rolę w drużynie, wytrzymałość, biegłości, główne zasoby oraz dostęp do magii.</p>
+        <div class="class-choice-grid">
+          {% for item in catalog.classes %}
+            <label class="class-choice creator-choice-card"><input type="radio" name="class_id" value="{{ item.id }}" data-choice-label="{{ item.name }}" {% if values.class_id == item.id %}checked{% endif %} onchange="syncCharacterClass()"> <span><b>{{ item.name }}</b><em>{{ item.description }}</em><ul>{% for mechanic in class_mechanics[item.id] %}<li>{{ mechanic }}</li>{% endfor %}<li class="feature-help-list"><span>Zdolności 1. poziomu:</span> {{ feature_terms(class_feature_help[item.id]) }}</li></ul></span></label>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="form-section" data-creator-step="5" hidden>
+        <span class="eyebrow">6. Przydziel cechy</span>
+        <p class="step-intro">Każda cecha zaczyna od 8. Wydaj 27 punktów na wartości bazowe (maksymalnie 15), a następnie kreator doda wszystkie premie rasy i pokaże wynik końcowy.</p>
+        <div class="point-buy-budget" data-point-buy-budget="{{ point_buy_budget }}">
+          <span>Pula point buy</span>
+          <b><output data-point-buy-spent>0</output> / {{ point_buy_budget }} wydane</b>
+          <strong><output data-point-buy-remaining>{{ point_buy_budget }}</output> pozostało</strong>
+        </div>
+        <div class="ability-form-grid">
+          {% for ability_id in ability_ids %}
+            <div class="ability-buy-card">
+              <b>{{ labels.get(ability_id, ability_id) }}</b>
+              <div class="ability-stepper">
+                <button type="button" data-ability-decrease="{{ ability_id }}" aria-label="Zmniejsz {{ labels.get(ability_id, ability_id) }}">−</button>
+                <output data-base-ability-output="{{ ability_id }}">{{ values[ability_id] }}</output>
+                <button type="button" data-ability-increase="{{ ability_id }}" aria-label="Zwiększ {{ labels.get(ability_id, ability_id) }}">+</button>
+              </div>
+              <input type="hidden" name="{{ ability_id }}" value="{{ values[ability_id] }}" data-base-ability="{{ ability_id }}">
+              <small>Koszt z puli: <b data-ability-cost="{{ ability_id }}">0</b></small>
+              <small data-ability-bonus="{{ ability_id }}">Premie: +0</small>
+              <strong data-final-ability="{{ ability_id }}"></strong>
+            </div>
+          {% endfor %}
+        </div>
+        <p class="form-help">Koszt nie rośnie liniowo: wartości 8–13 kosztują 0–5 punktów, 14 kosztuje 7, a 15 kosztuje 9. Premie rasowe nie zużywają tej puli.</p>
+      </section>
+
+      <section class="form-section" data-creator-step="6" hidden>
+        <span class="eyebrow">7. Wybory klasowe</span>
+        <p class="step-intro">Tutaj doprecyzowujesz, w czym bohater jest dobry i jak najczęściej będzie działał. Każda opcja poniżej opisuje zarówno regułę, jak i jej praktyczne znaczenie podczas gry.</p>
         {% for item in catalog.classes %}
           <div class="class-options" data-class-options="{{ item.id }}">
             <h2>{{ item.name }}</h2>
             <div class="form-grid two">
-              <fieldset>
+              <fieldset class="guided-choice-fieldset">
                 <legend>Umiejętności — wybierz {{ item.skill_choice_count }}</legend>
+                <p class="form-help">Biegłość oznacza, że do pasującego testu dodasz premię z biegłości: na 1. poziomie <strong>+2</strong>. Umiejętność nie jest osobną akcją — aplikacja zaproponuje ją, gdy opis sytuacji do niej pasuje. Nie wybieraj ponownie biegłości otrzymanej z rasy lub backgroundu.</p>
                 {% for skill_id in item.skill_choices %}
-                  <label class="check-row"><input type="checkbox" name="selected_skill_ids" value="{{ skill_id }}" {% if skill_id in values.selected_skill_ids %}checked{% endif %}> {{ labels.get(skill_id, skill_id) }}</label>
+                  {% set help = skill_choice_help[skill_id] %}
+                  <label class="choice-explained-row">
+                    <input type="checkbox" name="selected_skill_ids" value="{{ skill_id }}" data-choice-label="{{ labels.get(skill_id, skill_id) }}" {% if skill_id in values.selected_skill_ids %}checked{% endif %}>
+                    <span>
+                      <b>{{ labels.get(skill_id, skill_id) }} <small>({{ labels.get(help.ability_id, help.ability_id) }})</small></b>
+                      <span>{{ help.description }}</span>
+                      <small>Przykłady: {{ help.examples }}.</small>
+                      <small class="choice-conflict" data-skill-conflict="{{ skill_id }}" hidden>Masz już tę biegłość z rasy albo backgroundu.</small>
+                    </span>
+                  </label>
                 {% endfor %}
               </fieldset>
 
-              <fieldset>
-                <legend>Wyposażenie</legend>
+              <fieldset class="guided-choice-fieldset">
+                <legend>Gotowy zestaw startowy</legend>
+                <p class="form-help">Ten zestaw otrzymujesz automatycznie i bez płacenia. Do niego kreator doda przedmioty oraz monety przyznane przez background. Obecna wersja nie zamienia wyposażenia klasowego na osobną pulę zakupową.</p>
                 {% for package in item.equipment_packages %}
-                  <label class="choice-row"><input type="radio" name="equipment_package_id" value="{{ package.id }}" {% if values.equipment_package_id == package.id %}checked{% endif %}> <span><b>{{ package.label }}</b><small>{{ package.items|length }} pozycje startowe</small></span></label>
+                  {% set package_view = equipment_package_views[package.id] %}
+                  <label class="equipment-package-card">
+                    <input type="radio" name="equipment_package_id" value="{{ package.id }}" data-choice-label="{{ package.label }}" {% if values.equipment_package_id == package.id %}checked{% endif %}>
+                    <span>
+                      <b>{{ package.label }}</b>
+                      <small>Domyślny zestaw klasy · {{ package_view["items"]|length }} rodzajów wyposażenia</small>
+                      <ul class="equipment-preview-list">
+                        {% for gear in package_view["items"] %}
+                          <li>
+                            <strong>{{ gear.quantity }}× {{ gear.name }}</strong>{% if gear.equipped %}<small class="ready-badge">przygotowane</small>{% endif %}
+                            {% if gear.description %}<span>{{ gear.description }}</span>{% endif %}
+                            {% if gear.contents %}
+                              <details><summary>Zawartość pakietu</summary><small>{% for nested in gear.contents %}{{ nested.quantity }}× {{ nested.name }}{% if not loop.last %}, {% endif %}{% endfor %}</small></details>
+                            {% endif %}
+                          </li>
+                        {% endfor %}
+                      </ul>
+                    </span>
+                  </label>
                 {% endfor %}
               </fieldset>
 
               {% if item.fighting_style_choices and item.fighting_style_choice_level == 1 %}
-                <fieldset>
-                  <legend>Fighting Style — wybierz 1</legend>
+                <fieldset class="guided-choice-fieldset">
+                  <legend>Styl walki — wybierz 1</legend>
+                  <p class="form-help">To stała specjalizacja bojowa, a nie jednorazowa akcja. Wybierz styl zgodny z bronią i rolą, którą chcesz najczęściej pełnić.</p>
                   {% for option_id in item.fighting_style_choices %}
-                    <label class="choice-row"><input type="radio" name="selected_fighting_style_id" value="{{ option_id }}" {% if values.selected_fighting_style_id == option_id %}checked{% endif %}> <span>{{ labels.get(option_id, option_id) }}</span></label>
+                    {% set help = fighting_style_help[option_id] %}
+                    <label class="choice-explained-row">
+                      <input type="radio" name="selected_fighting_style_id" value="{{ option_id }}" data-choice-label="{{ help.name }}" {% if values.selected_fighting_style_id == option_id %}checked{% endif %}>
+                      <span><b>{{ help.name }}</b><span>{{ help.rule_text }}</span><small>{{ help.play_text }}</small></span>
+                    </label>
                   {% endfor %}
                 </fieldset>
               {% endif %}
 
               {% if item.expertise_choice_count and item.expertise_choice_level == 1 %}
-                <fieldset>
-                  <legend>Expertise — wybierz {{ item.expertise_choice_count }}</legend>
-                  <p class="form-help">Możesz wybrać tylko umiejętności, w których finalnie masz biegłość.</p>
+                <fieldset class="guided-choice-fieldset">
+                  <legend>Ekspertyza — wybierz {{ item.expertise_choice_count }}</legend>
+                  <p class="form-help">Ekspertyza podwaja premię z biegłości. Na 1. poziomie oznacza zwykle <strong>+4 zamiast +2</strong>, oprócz modyfikatora cechy. Możesz wskazać wyłącznie umiejętność, w której postać ma już biegłość.</p>
                   {% for skill_id in skill_ids %}
-                    <label class="check-row"><input type="checkbox" name="selected_expertise_ids" value="{{ skill_id }}" {% if skill_id in values.selected_expertise_ids %}checked{% endif %}> {{ labels.get(skill_id, skill_id) }}</label>
+                    <label class="check-row"><input type="checkbox" name="selected_expertise_ids" value="{{ skill_id }}" data-choice-label="{{ labels.get(skill_id, skill_id) }}" {% if skill_id in values.selected_expertise_ids %}checked{% endif %}> {{ labels.get(skill_id, skill_id) }}</label>
                   {% endfor %}
                 </fieldset>
               {% endif %}
 
               {% for group in item.choice_groups if group.level == 1 %}
-                <fieldset data-conditional-option-group="{{ group.requires_option_id }}">
-                  <legend>{{ group.name }} — wybierz {{ group.choice_count }}</legend>
+                <fieldset class="guided-choice-fieldset" data-conditional-option-group="{{ group.requires_option_id }}">
+                  <legend>{{ labels.get(group.id, group.name) }} — wybierz {{ group.choice_count }}</legend>
+                  {% if class_choice_group_help.get(group.id) %}<p class="form-help">{{ class_choice_group_help[group.id] }}</p>{% endif %}
                   {% if group.requires_option_id %}
                     <p class="form-help">Wymagane tylko po wybraniu {{ labels.get(group.requires_option_id, group.requires_option_id) }}.</p>
                   {% endif %}
                   {% for option in group.options %}
-                    <label class="check-row"><input type="checkbox" name="selected_class_option_ids" value="{{ option.id }}" {% if option.id in values.selected_class_option_ids %}checked{% endif %}> {{ option.name }}</label>
+                    <label class="check-row"><input type="checkbox" name="selected_class_option_ids" value="{{ option.id }}" data-choice-label="{{ labels.get(option.id, option.name) }}" {% if option.id in values.selected_class_option_ids %}checked{% endif %}> {{ labels.get(option.id, option.name) }}</label>
                   {% endfor %}
                 </fieldset>
               {% endfor %}
@@ -201,6 +324,7 @@
               {% if item.subclass_choices and item.subclass_choice_level == 1 %}
                 <fieldset>
                   <legend>Archetyp — wybierz {{ item.subclass_choice_count }}</legend>
+                  <p class="form-help">Archetyp rozwija specjalizację klasy i przyznaje jej dodatkowe zdolności. Ten wybór jest trwałą częścią rozwoju postaci.</p>
                   {% for subclass in item.subclass_choices %}
                     <label class="choice-row"><input type="radio" name="selected_subclass_id" value="{{ subclass.id }}" {% if values.selected_subclass_id == subclass.id %}checked{% endif %}> <span>{{ subclass.name }}</span></label>
                   {% endfor %}
@@ -209,22 +333,24 @@
 
               {% if item.cantrip_choices %}
                 <fieldset>
-                  <legend>Cantripy — wybierz {{ item.cantrip_choice_count }}</legend>
+                  <legend>Sztuczki magiczne — wybierz {{ item.cantrip_choice_count }}</legend>
+                  <p class="form-help">Sztuczki można rzucać bez zużywania slotów czarów. Wybrane tutaj trafią na kartę i do menu magii.</p>
                   {% for spell_id in item.cantrip_choices %}
-                    <label class="check-row"><input type="checkbox" name="selected_cantrip_ids" value="{{ spell_id }}" {% if spell_id in values.selected_cantrip_ids %}checked{% endif %}> {{ spell_id|replace('_', ' ')|title }}</label>
+                    <label class="check-row"><input type="checkbox" name="selected_cantrip_ids" value="{{ spell_id }}" data-choice-label="{{ labels.get(spell_id, spell_id) }}" {% if spell_id in values.selected_cantrip_ids %}checked{% endif %}> {{ labels.get(spell_id, spell_id) }}</label>
                   {% endfor %}
                 </fieldset>
               {% endif %}
 
               {% if item.spell_choice_count %}
                 <fieldset>
-                  <legend>Spellbook — wybierz {{ item.spell_choice_count }}</legend>
+                  <legend>Księga czarów — wybierz {{ item.spell_choice_count }}</legend>
+                  <p class="form-help">To czary znane lub zapisane w księdze. Slot określa, ile czarów możesz rzucić przed odpoczynkiem; sam wybór czaru nie zużywa slotu.</p>
                   {% for spell_id in item.spell_choices %}
-                    <label class="check-row"><input type="checkbox" name="selected_spell_ids" value="{{ spell_id }}" {% if spell_id in values.selected_spell_ids %}checked{% endif %}> {{ spell_id|replace('_', ' ')|title }}</label>
+                    <label class="check-row"><input type="checkbox" name="selected_spell_ids" value="{{ spell_id }}" {% if spell_id in values.selected_spell_ids %}checked{% endif %}> {{ labels.get(spell_id, spell_id) }}</label>
                   {% endfor %}
                   {% for subclass in item.subclass_choices if item.subclass_choice_level == 1 %}
                     {% for spell_id in subclass.additional_spell_choice_ids %}
-                      <label class="check-row"><input type="checkbox" name="selected_spell_ids" value="{{ spell_id }}" {% if spell_id in values.selected_spell_ids %}checked{% endif %}> {{ spell_id|replace('_', ' ')|title }} <small>({{ subclass.name }})</small></label>
+                      <label class="check-row"><input type="checkbox" name="selected_spell_ids" value="{{ spell_id }}" {% if spell_id in values.selected_spell_ids %}checked{% endif %}> {{ labels.get(spell_id, spell_id) }} <small>({{ subclass.name }})</small></label>
                     {% endfor %}
                   {% endfor %}
                 </fieldset>
@@ -233,9 +359,9 @@
               {% if item.preparation_kind %}
                 <fieldset>
                   <legend>Przygotowane czary</legend>
-                  <p class="form-help">Limit zależy od finalnej cechy czarującej i poziomu. Builder poda dokładną liczbę, jeśli wybór jest niepełny.</p>
+                  <p class="form-help">Spośród dostępnych czarów wybierasz te, które będą gotowe do rzucania podczas przygody. Limit zależy od końcowej cechy czarującej i poziomu; przy niepełnym wyborze kreator poda dokładną liczbę.</p>
                   {% for spell_id in item.spell_choices %}
-                    <label class="check-row"><input type="checkbox" name="selected_prepared_spell_ids" value="{{ spell_id }}" {% if spell_id in values.selected_prepared_spell_ids %}checked{% endif %}> {{ spell_id|replace('_', ' ')|title }}</label>
+                    <label class="check-row"><input type="checkbox" name="selected_prepared_spell_ids" value="{{ spell_id }}" {% if spell_id in values.selected_prepared_spell_ids %}checked{% endif %}> {{ labels.get(spell_id, spell_id) }}</label>
                   {% endfor %}
                 </fieldset>
               {% endif %}
@@ -244,18 +370,57 @@
         {% endfor %}
       </section>
 
+      <section class="form-section" data-creator-step="7" hidden>
+        <span class="eyebrow">8. Tożsamość i podsumowanie</span>
+        <p class="step-intro">Nazwij bohatera, sprawdź najważniejsze wybory i dopiero wtedy utwórz postać. Techniczne ID zapisu powstanie automatycznie.</p>
+        <div class="form-grid two">
+          <label class="full">Imię postaci
+            <input name="name" value="{{ values.name }}" required maxlength="80" autocomplete="off" placeholder="np. Janek">
+          </label>
+          <div class="portrait-picker full">
+            <div class="portrait-preview" id="portrait-preview" {% if not portrait_url %}hidden{% endif %}>
+              <img id="portrait-preview-image" src="{{ portrait_url }}" alt="Podgląd portretu">
+            </div>
+            <label>Portret postaci
+              <input type="file" name="portrait_file" id="portrait-file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp">
+              <small>Opcjonalnie. Kliknij „Wybierz plik”, aby otworzyć eksplorator. Gra skopiuje go do rosteru. Obsługiwane formaty: PNG, JPG i WebP.</small>
+            </label>
+          </div>
+          <input type="hidden" name="portrait" value="{{ values.portrait }}">
+        </div>
+        <section class="creator-summary" aria-labelledby="creator-summary-title">
+          <div class="creator-summary-heading">
+            <div><span class="eyebrow">Podgląd karty</span><h2 id="creator-summary-title" data-summary-name>Bezimienny bohater</h2></div>
+            <span>Poziom 1</span>
+          </div>
+          <div class="creator-summary-grid">
+            <article><b>Pochodzenie i klasa</b><p data-summary-origin>—</p><button type="button" class="text-button" data-edit-step="0">Zmień pochodzenie</button><button type="button" class="text-button" data-edit-step="4">Zmień klasę</button></article>
+            <article><b>Cechy końcowe</b><p data-summary-abilities>—</p><button type="button" class="text-button" data-edit-step="5">Zmień cechy</button></article>
+            <article><b>Biegłości klasowe</b><p data-summary-skills>—</p><button type="button" class="text-button" data-edit-step="6">Zmień wybory</button></article>
+            <article><b>Specjalizacja</b><p data-summary-specialization>Brak dodatkowego wyboru</p><button type="button" class="text-button" data-edit-step="6">Zmień wybory</button></article>
+            <article class="full"><b>Wyposażenie startowe</b><p data-summary-equipment>—</p><button type="button" class="text-button" data-edit-step="6">Zobacz zestaw</button></article>
+          </div>
+          <p class="creator-summary-note">Po zatwierdzeniu silnik jeszcze raz sprawdzi wszystkie wymagane wybory i wyliczy pełną kartę: PW, KP, rzuty obronne, ataki, zasoby, czary i ekwipunek.</p>
+        </section>
+      </section>
+
       <div class="flow-actions creator-step-actions">
         <a class="button secondary" href="{{ url_for('characters') }}">Anuluj</a>
         <button type="button" class="secondary" id="creator-step-previous">← Poprzedni etap</button>
         <button type="button" id="creator-step-next">Następny etap →</button>
-        <button type="submit" id="creator-step-submit">Sprawdź i zapisz postać</button>
+        <button type="submit" id="creator-step-submit">Akceptuj i utwórz postać</button>
       </div>
     </form>
   </main>
+  <script id="species-ability-bonuses" type="application/json">{{ species_ability_bonuses|tojson }}</script>
+  <script id="species-skill-grants" type="application/json">{{ species_skill_grants|tojson }}</script>
+  <script id="background-skill-grants" type="application/json">{{ background_skill_grants|tojson }}</script>
+  <script id="skill-labels" type="application/json">{{ skill_labels|tojson }}</script>
   <script>
     let activeCreatorStep = 0;
+    const pointBuyCosts = {{ point_buy_costs|tojson }};
     const creatorSteps = Array.from(document.querySelectorAll('[data-creator-step]'));
-    function showCreatorStep(index) {
+    function showCreatorStep(index, scrollToStep = true) {
       activeCreatorStep = Math.max(0, Math.min(creatorSteps.length - 1, Number(index)));
       creatorSteps.forEach((section, stepIndex) => {
         section.hidden = stepIndex !== activeCreatorStep;
@@ -269,7 +434,10 @@
       document.getElementById('creator-step-previous').hidden = activeCreatorStep === 0;
       document.getElementById('creator-step-next').hidden = activeCreatorStep === creatorSteps.length - 1;
       document.getElementById('creator-step-submit').hidden = activeCreatorStep !== creatorSteps.length - 1;
-      creatorSteps[activeCreatorStep]?.scrollIntoView({behavior: 'smooth', block: 'start'});
+      updateCharacterSummary();
+      if (scrollToStep) {
+        creatorSteps[activeCreatorStep]?.scrollIntoView({behavior: 'smooth', block: 'start'});
+      }
     }
     function syncCharacterClass() {
       const selected = document.querySelector('input[name="class_id"]:checked')?.value;
@@ -278,7 +446,15 @@
         section.hidden = !active;
         section.querySelectorAll('input, select').forEach(control => control.disabled = !active);
       });
+      const activeSection = document.querySelector('[data-class-options]:not([hidden])');
+      const activePackage = activeSection?.querySelector('input[name="equipment_package_id"]:checked');
+      if (!activePackage) {
+        const defaultPackage = activeSection?.querySelector('input[name="equipment_package_id"]');
+        if (defaultPackage) defaultPackage.checked = true;
+      }
       syncConditionalClassOptions();
+      syncClassSkillChoices();
+      updateCharacterSummary();
     }
     function syncConditionalClassOptions() {
       document.querySelectorAll('[data-conditional-option-group]').forEach(group => {
@@ -301,6 +477,8 @@
         section.hidden = !active;
         section.querySelectorAll('input, select').forEach(control => control.disabled = !active);
       });
+      syncClassSkillChoices();
+      updateFinalAbilityScores();
     }
     function syncCharacterBackground() {
       const selected = document.querySelector('input[name="background_id"]:checked')?.value;
@@ -309,6 +487,51 @@
         section.hidden = !active;
         section.querySelectorAll('input, select').forEach(control => control.disabled = !active);
       });
+      syncClassSkillChoices();
+      updateCharacterSummary();
+    }
+    function selectedOriginSkillIds() {
+      const speciesId = document.querySelector('input[name="species_id"]:checked')?.value;
+      const backgroundId = document.querySelector('input[name="background_id"]:checked')?.value;
+      const speciesGrants = JSON.parse(document.getElementById('species-skill-grants')?.textContent || '{}');
+      const backgroundGrants = JSON.parse(document.getElementById('background-skill-grants')?.textContent || '{}');
+      return new Set([
+        ...(speciesGrants[speciesId] || []),
+        ...(backgroundGrants[backgroundId] || []),
+        ...Array.from(
+          document.querySelectorAll(
+            '[data-species-options]:not([hidden]) input[name="selected_species_skill_ids"]:checked'
+          )
+        ).map(input => input.value),
+      ]);
+    }
+    function syncClassSkillChoices() {
+      const originSkills = selectedOriginSkillIds();
+      document.querySelectorAll(
+        '[data-class-options]:not([hidden]) input[name="selected_skill_ids"]'
+      ).forEach(input => {
+        const conflict = originSkills.has(input.value);
+        input.disabled = conflict;
+        if (conflict) input.checked = false;
+        const notice = input.closest('label')?.querySelector(
+          `[data-skill-conflict="${CSS.escape(input.value)}"]`
+        );
+        if (notice) notice.hidden = !conflict;
+      });
+      const finalSkills = new Set([
+        ...originSkills,
+        ...Array.from(
+          document.querySelectorAll(
+            '[data-class-options]:not([hidden]) input[name="selected_skill_ids"]:checked'
+          )
+        ).map(input => input.value),
+      ]);
+      document.querySelectorAll(
+        '[data-class-options]:not([hidden]) input[name="selected_expertise_ids"]'
+      ).forEach(input => {
+        input.disabled = !finalSkills.has(input.value);
+        if (input.disabled) input.checked = false;
+      });
     }
     syncCharacterClass();
     syncCharacterSpecies();
@@ -316,14 +539,157 @@
     document.querySelectorAll('[data-creator-step-button]').forEach(button => {
       button.addEventListener('click', () => showCreatorStep(button.dataset.creatorStepButton));
     });
+    document.querySelectorAll('.feature-help').forEach(feature => {
+      feature.addEventListener('click', event => {
+        event.preventDefault();
+        event.stopPropagation();
+        feature.focus();
+      });
+      feature.addEventListener('keydown', event => {
+        if (event.key === 'Escape') feature.blur();
+      });
+    });
     document.getElementById('creator-step-previous').addEventListener('click', () => showCreatorStep(activeCreatorStep - 1));
     document.getElementById('creator-step-next').addEventListener('click', () => showCreatorStep(activeCreatorStep + 1));
-    showCreatorStep(0);
+    document.querySelectorAll('[data-edit-step]').forEach(button => {
+      button.addEventListener('click', () => showCreatorStep(button.dataset.editStep));
+    });
+    document.querySelector('input[name="name"]')?.addEventListener('input', updateCharacterSummary);
+    document.getElementById('portrait-file')?.addEventListener('change', event => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      const preview = document.getElementById('portrait-preview');
+      const image = document.getElementById('portrait-preview-image');
+      image.src = URL.createObjectURL(file);
+      preview.hidden = false;
+    });
+    showCreatorStep({{ initial_step }}, false);
     document.addEventListener('change', event => {
       if (event.target.matches('input[name="selected_class_option_ids"]')) {
         syncConditionalClassOptions();
       }
+      if (event.target.matches(
+        'input[name="selected_skill_ids"], input[name="selected_species_skill_ids"]'
+      )) {
+        syncClassSkillChoices();
+      }
+      if (event.target.matches('[data-base-ability], input[name="selected_species_bonus_ability_ids"]')) {
+        updateFinalAbilityScores();
+      }
+      updateCharacterSummary();
     });
+    document.querySelectorAll('[data-ability-decrease], [data-ability-increase]').forEach(button => {
+      button.addEventListener('click', () => {
+        const abilityId = button.dataset.abilityDecrease || button.dataset.abilityIncrease;
+        const input = document.querySelector(`[data-base-ability="${abilityId}"]`);
+        const direction = button.hasAttribute('data-ability-increase') ? 1 : -1;
+        input.value = String(Number(input.value) + direction);
+        updateFinalAbilityScores();
+      });
+    });
+    function updateFinalAbilityScores() {
+      const selectedSpecies = document.querySelector('input[name="species_id"]:checked')?.value;
+      const allBonuses = JSON.parse(document.getElementById('species-ability-bonuses')?.textContent || '{}');
+      const speciesBonuses = allBonuses[selectedSpecies] || {fixed: {}, choice_value: 0};
+      const flexibleAbilities = new Set(
+        Array.from(
+          document.querySelectorAll(
+            '[data-species-options]:not([hidden]) input[name="selected_species_bonus_ability_ids"]:checked'
+          )
+        ).map(input => input.value)
+      );
+      const controls = Array.from(document.querySelectorAll('[data-base-ability]'));
+      const spent = controls.reduce(
+        (total, input) => total + Number(pointBuyCosts[input.value] ?? 0),
+        0
+      );
+      const budget = Number(document.querySelector('[data-point-buy-budget]')?.dataset.pointBuyBudget || 27);
+      const remaining = budget - spent;
+      document.querySelector('[data-point-buy-spent]').textContent = String(spent);
+      document.querySelector('[data-point-buy-remaining]').textContent = String(remaining);
+      const budgetPanel = document.querySelector('[data-point-buy-budget]');
+      budgetPanel?.classList.toggle('is-complete', remaining === 0);
+      budgetPanel?.classList.toggle('is-invalid', remaining < 0);
+      controls.forEach(input => {
+        const abilityId = input.dataset.baseAbility;
+        const base = Number(input.value);
+        const fixed = Number(speciesBonuses.fixed?.[abilityId] || 0);
+        const flexible = flexibleAbilities.has(abilityId) ? Number(speciesBonuses.choice_value || 0) : 0;
+        const bonus = fixed + flexible;
+        const finalScore = base + bonus;
+        const modifier = Math.floor((finalScore - 10) / 2);
+        const nextCost = pointBuyCosts[String(base + 1)];
+        const currentCost = Number(pointBuyCosts[String(base)] ?? 0);
+        const increase = document.querySelector(`[data-ability-increase="${abilityId}"]`);
+        const decrease = document.querySelector(`[data-ability-decrease="${abilityId}"]`);
+        if (increase) increase.disabled = base >= 15 || nextCost === undefined || Number(nextCost) - currentCost > remaining;
+        if (decrease) decrease.disabled = base <= 8;
+        document.querySelector(`[data-base-ability-output="${abilityId}"]`).textContent = String(base);
+        document.querySelector(`[data-ability-cost="${abilityId}"]`).textContent = String(currentCost);
+        document.querySelector(`[data-ability-bonus="${abilityId}"]`).textContent =
+          bonus ? `Premie rasy: +${bonus}` : 'Premie rasy: +0';
+        const summary = document.querySelector(`[data-final-ability="${abilityId}"]`);
+        if (summary) {
+          summary.textContent = `Wynik: ${finalScore} (${modifier >= 0 ? '+' : ''}${modifier})`;
+        }
+      });
+      updateCharacterSummary();
+    }
+    function checkedChoiceLabel(selector) {
+      const input = document.querySelector(selector);
+      return input?.dataset.choiceLabel || '';
+    }
+    function updateCharacterSummary() {
+      const summaryName = document.querySelector('[data-summary-name]');
+      if (!summaryName) return;
+      const name = document.querySelector('input[name="name"]')?.value.trim();
+      summaryName.textContent = name || 'Bezimienny bohater';
+
+      const species = checkedChoiceLabel('input[name="species_id"]:checked');
+      const background = checkedChoiceLabel('input[name="background_id"]:checked');
+      const characterClass = checkedChoiceLabel('input[name="class_id"]:checked');
+      document.querySelector('[data-summary-origin]').textContent =
+        [species, background, characterClass].filter(Boolean).join(' · ') || '—';
+
+      const abilities = Array.from(document.querySelectorAll('[data-base-ability]')).map(input => {
+        const card = input.closest('.ability-buy-card');
+        const label = card?.querySelector(':scope > b')?.textContent.trim() || input.dataset.baseAbility;
+        const result = card?.querySelector('[data-final-ability]')?.textContent.replace('Wynik: ', '') || input.value;
+        return `${label} ${result}`;
+      });
+      document.querySelector('[data-summary-abilities]').textContent = abilities.join(' · ');
+
+      const skillLabels = JSON.parse(document.getElementById('skill-labels')?.textContent || '{}');
+      const skills = new Set([
+        ...selectedOriginSkillIds(),
+        ...Array.from(
+          document.querySelectorAll(
+            '[data-class-options]:not([hidden]) input[name="selected_skill_ids"]:checked'
+          )
+        ).map(input => input.value),
+      ]);
+      document.querySelector('[data-summary-skills]').textContent =
+        Array.from(skills).map(skillId => skillLabels[skillId] || skillId).join(', ') || 'Nie wybrano';
+
+      const specializationLabels = Array.from(
+        document.querySelectorAll(
+          '[data-class-options]:not([hidden]) input[name="selected_fighting_style_id"]:checked, ' +
+          '[data-class-options]:not([hidden]) input[name="selected_subclass_id"]:checked, ' +
+          '[data-class-options]:not([hidden]) input[name="selected_class_option_ids"]:checked'
+        )
+      ).map(input => input.dataset.choiceLabel || input.closest('label')?.textContent.trim()).filter(Boolean);
+      document.querySelector('[data-summary-specialization]').textContent =
+        specializationLabels.join(', ') || 'Brak dodatkowego wyboru';
+
+      const equipment = checkedChoiceLabel(
+        '[data-class-options]:not([hidden]) input[name="equipment_package_id"]:checked'
+      );
+      document.querySelector('[data-summary-equipment]').textContent =
+        equipment
+          ? `${equipment}. Dodatkowo otrzymasz wyposażenie i monety z wybranego backgroundu.`
+          : 'Nie przypisano zestawu';
+    }
+    updateFinalAbilityScores();
   </script>
 </body>
 </html>

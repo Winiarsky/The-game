@@ -83,6 +83,7 @@ from dnd_board_game.rules import (
     SpellSchool,
     SpellScaling,
 )
+from dnd_board_game.core.player_labels_pl import player_label
 from dnd_board_game.exploration import (
     CheckAggregation,
     CheckParticipants,
@@ -1410,7 +1411,10 @@ def _parse_spell_definition(data: dict[str, Any], spell_ref: str) -> SpellDefini
         raise ValueError(f"spell {spell_id}.exploration_use must be an object.")
     return SpellDefinition(
         id=spell_id,
-        name=str(_required(data, "name", f"spell {spell_id}")),
+        name=player_label(
+            spell_id,
+            str(_required(data, "name", f"spell {spell_id}")),
+        ),
         level=int(_required(data, "level", f"spell {spell_id}")),
         school=_enum_value(
             SpellSchool,
@@ -3620,6 +3624,9 @@ def _parse_exploration_option(data: Any, zone_id: str) -> ExplorationOption:
         success_flag=str(data["success_flag"]) if "success_flag" in data else None,
         failure_flag=str(data["failure_flag"]) if "failure_flag" in data else None,
         reveals=tuple(str(item) for item in data.get("reveals", [])),
+        entry_cost_cp=int(data.get("entry_cost_cp", 0)),
+        success_reward_cp=int(data.get("success_reward_cp", 0)),
+        time_cost_minutes=int(data.get("time_cost_minutes", 0)),
     )
 
 

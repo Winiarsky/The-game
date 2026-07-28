@@ -9,6 +9,7 @@
     {
       "id": "human",
       "name": "Człowiek",
+      "description": "Ludzie są różnorodni, ambitni i szybko odnajdują się w każdej roli — od żołnierza po uczonego.",
       "speed_feet": 30,
       "ability_bonuses": {
         "strength": 1,
@@ -29,6 +30,7 @@
     {
       "id": "elf",
       "name": "Wysoki elf",
+      "description": "Wysokie elfy łączą długowieczną tradycję, wyostrzone zmysły i naturalny talent do magii.",
       "speed_feet": 30,
       "ability_bonuses": {
         "dexterity": 2,
@@ -78,6 +80,7 @@
     {
       "id": "dwarf",
       "name": "Krasnolud wzgórzowy",
+      "description": "Krasnoludy wzgórzowe słyną z wytrzymałości, rozwagi i pamięci zaklętej w kamieniu oraz rzemiośle.",
       "speed_feet": 25,
       "ability_bonuses": {
         "constitution": 2,
@@ -111,6 +114,7 @@
     {
       "id": "halfling",
       "name": "Niziołek lekkostopy",
+      "description": "Niziołki lekkostopi są pogodni, zaskakująco odważni i potrafią zniknąć w samym środku zamieszania.",
       "speed_feet": 25,
       "size": "small",
       "ability_bonuses": {
@@ -131,6 +135,7 @@
     {
       "id": "dragonborn",
       "name": "Smocze dziecię",
+      "description": "Smocze dzieci dziedziczą dumę, odporność i niszczycielski oddech po jednym z wielkich smoczych rodów.",
       "speed_feet": 30,
       "ability_bonuses": {
         "strength": 2,
@@ -230,6 +235,7 @@
     {
       "id": "gnome",
       "name": "Gnom skalny",
+      "description": "Gnomy skalne patrzą na świat z ciekawością wynalazcy, łącząc spryt, wiedzę i drobne mechaniczne cuda.",
       "speed_feet": 25,
       "size": "small",
       "ability_bonuses": {
@@ -254,6 +260,7 @@
     {
       "id": "half_elf",
       "name": "Półelf",
+      "description": "Półelfy poruszają się między kulturami, łącząc elfią wrażliwość z ludzką wszechstronnością.",
       "speed_feet": 30,
       "ability_bonuses": {
         "charisma": 2
@@ -299,6 +306,7 @@
     {
       "id": "half_orc",
       "name": "Półork",
+      "description": "Półorkowie wnoszą do drużyny nieustępliwość, gwałtowną siłę i wolę przetrwania mimo najcięższych ran.",
       "speed_feet": 30,
       "ability_bonuses": {
         "strength": 2,
@@ -321,6 +329,7 @@
     {
       "id": "tiefling",
       "name": "Diabelstwo",
+      "description": "Diabelstwa noszą ślad piekielnego dziedzictwa, lecz same decydują, czy stanie się ono bronią, ciężarem czy źródłem dumy.",
       "speed_feet": 30,
       "ability_bonuses": {
         "intelligence": 1,
@@ -360,6 +369,7 @@
     {
       "id": "barbarian",
       "name": "Barbarzyńca",
+      "description": "Nieokiełznany wojownik, który przemienia gniew w odporność i ogromną siłę natarcia.",
       "hit_die": 12,
       "saving_throw_proficiencies": [
         "strength",
@@ -473,6 +483,7 @@
     {
       "id": "bard",
       "name": "Bard",
+      "description": "Wszechstronny twórca i czarodziej, wspierający drużynę inspiracją, wiedzą oraz magią słowa.",
       "hit_die": 8,
       "saving_throw_proficiencies": [
         "dexterity",
@@ -856,6 +867,7 @@
     {
       "id": "cleric",
       "name": "Kleryk",
+      "description": "Boski sługa łączący leczenie, ochronę i potężną magię zależną od wybranej domeny.",
       "hit_die": 8,
       "saving_throw_proficiencies": [
         "wisdom",
@@ -1026,6 +1038,7 @@
     {
       "id": "druid",
       "name": "Druid",
+      "description": "Strażnik natury władający magią żywiołów, leczeniem i przemianą w dzikie zwierzęta.",
       "hit_die": 8,
       "saving_throw_proficiencies": [
         "intelligence",
@@ -1320,6 +1333,7 @@
     {
       "id": "fighter",
       "name": "Wojownik",
+      "description": "Mistrz broni i pancerza, którego styl walki oraz dodatkowy zryw pozwalają kontrolować pole bitwy.",
       "hit_die": 10,
       "saving_throw_proficiencies": [
         "strength",
@@ -1423,6 +1437,7 @@
     {
       "id": "monk",
       "name": "Mnich",
+      "description": "Mobilny wojownik wykorzystujący dyscyplinę ciała, szybkie ciosy i energię ki.",
       "hit_die": 8,
       "saving_throw_proficiencies": [
         "strength",
@@ -1507,6 +1522,7 @@
     {
       "id": "paladin",
       "name": "Paladyn",
+      "description": "Zaprzysiężony obrońca łączący ciężki pancerz, leczenie i boską moc wymierzaną wrogom.",
       "hit_die": 10,
       "saving_throw_proficiencies": [
         "wisdom",
@@ -1647,6 +1663,7 @@
     {
       "id": "ranger",
       "name": "Łowca",
+      "description": "Tropiciel i wojownik pogranicza, skuteczny w podróży, zasadzce i walce z wybranymi przeciwnikami.",
       "hit_die": 10,
       "saving_throw_proficiencies": [
         "strength",
@@ -2074,6 +2091,7 @@
     {
       "id": "rogue",
       "name": "Łotrzyca",
+      "description": "Precyzyjny specjalista od skradania, ekspertyzy i wykorzystania jednej dogodnej chwili do potężnego ataku.",
       "hit_die": 8,
       "saving_throw_proficiencies": [
         "dexterity",
@@ -2178,6 +2196,7 @@
     {
       "id": "sorcerer",
       "name": "Zaklinacz",
+      "description": "Wrodzony mag kształtujący czary metamagiczną wolą i mocą płynącą z własnego pochodzenia.",
       "hit_die": 6,
       "saving_throw_proficiencies": [
         "constitution",
@@ -2400,6 +2419,7 @@
     {
       "id": "warlock",
       "name": "Czarnoksiężnik",
+      "description": "Posiadacz mocy uzyskanej dzięki paktowi, rozwijający niepowtarzalny zestaw inwokacji i odnawianych czarów.",
       "hit_die": 8,
       "saving_throw_proficiencies": [
         "wisdom",
@@ -2705,6 +2725,7 @@
     {
       "id": "wizard",
       "name": "Czarodziej",
+      "description": "Uczony mag o najszerszym repertuarze czarów, przygotowujący rozwiązania na niemal każdą sytuację.",
       "hit_die": 6,
       "saving_throw_proficiencies": [
         "intelligence",
@@ -2875,25 +2896,20 @@
   ],
   "backgrounds": [
     {
-      "id": "soldier",
-      "name": "Żołnierz",
+      "id": "acolyte",
+      "name": "Akolita",
+      "description": "Życie w świątyni nauczyło cię rytuałów, teologii i rozpoznawania potrzeb ludzi szukających duchowego wsparcia.",
       "skill_proficiencies": [
-        "athletics",
-        "intimidation"
+        "insight",
+        "religion"
       ],
-      "tool_proficiencies": [
-        "land_vehicles"
-      ],
-      "tool_choice_count": 1,
-      "tool_choices": [
-        "dice_set",
-        "playing_card_set",
-        "dragonchess_set",
-        "three_dragon_ante_set"
-      ],
+      "language_choice_count": 2,
       "equipment": [
         {
-          "item_id": "dice_set"
+          "item_id": "holy_symbol_amulet"
+        },
+        {
+          "item_id": "vestments"
         },
         {
           "item_id": "common_clothes"
@@ -2902,18 +2918,50 @@
           "item_id": "pouch"
         }
       ],
-      "starting_gp": 10,
+      "starting_gp": 15,
       "feature_ids": [
-        "military_rank"
+        "shelter_of_the_faithful"
       ],
       "permission_ids": [
-        "invoke_military_rank",
-        "request_military_aid"
+        "request_faithful_shelter",
+        "request_faithful_care"
+      ]
+    },
+    {
+      "id": "charlatan",
+      "name": "Szarlatan",
+      "description": "Żyjesz dzięki pewności siebie, fałszywym historiom i umiejętności stania się na chwilę kimś zupełnie innym.",
+      "skill_proficiencies": [
+        "deception",
+        "sleight_of_hand"
+      ],
+      "tool_proficiencies": [
+        "disguise_kit",
+        "forgery_kit"
+      ],
+      "equipment": [
+        {
+          "item_id": "disguise_kit"
+        },
+        {
+          "item_id": "fine_clothes"
+        },
+        {
+          "item_id": "pouch"
+        }
+      ],
+      "starting_gp": 15,
+      "feature_ids": [
+        "false_identity"
+      ],
+      "permission_ids": [
+        "maintain_false_identity"
       ]
     },
     {
       "id": "criminal",
       "name": "Przestępca",
+      "description": "Znasz półświatek, jego dyskretne znaki i ludzi, którzy potrafią zdobyć informacje poza prawem.",
       "skill_proficiencies": [
         "deception",
         "stealth"
@@ -2948,19 +2996,85 @@
       ]
     },
     {
-      "id": "acolyte",
-      "name": "Akolita",
+      "id": "entertainer",
+      "name": "Artysta",
+      "description": "Występami zdobywasz uwagę tłumu, dach nad głową i przychylność tych, którzy chcą usłyszeć jeszcze jedną pieśń.",
       "skill_proficiencies": [
-        "insight",
-        "religion"
+        "acrobatics",
+        "performance"
       ],
-      "language_choice_count": 2,
+      "tool_proficiencies": [
+        "disguise_kit"
+      ],
+      "tool_choice_count": 1,
+      "tool_choices": [
+        "bagpipes",
+        "drum",
+        "dulcimer",
+        "flute",
+        "horn",
+        "lute",
+        "lyre",
+        "pan_flute",
+        "shawm",
+        "viol"
+      ],
       "equipment": [
         {
-          "item_id": "holy_symbol_amulet"
+          "item_id": "disguise_kit"
         },
         {
-          "item_id": "vestments"
+          "item_id": "costume_clothes"
+        },
+        {
+          "item_id": "pouch"
+        }
+      ],
+      "starting_gp": 15,
+      "feature_ids": [
+        "by_popular_demand"
+      ],
+      "permission_ids": [
+        "secure_performance_lodging"
+      ]
+    },
+    {
+      "id": "folk_hero",
+      "name": "Bohater ludowy",
+      "description": "Pochodzisz spośród zwykłych ludzi i zasłynąłeś czynem, który uczynił cię symbolem ich nadziei.",
+      "skill_proficiencies": [
+        "animal_handling",
+        "survival"
+      ],
+      "tool_proficiencies": [
+        "land_vehicles"
+      ],
+      "tool_choice_count": 1,
+      "tool_choices": [
+        "alchemists_supplies",
+        "brewers_supplies",
+        "calligraphers_supplies",
+        "carpenters_tools",
+        "cartographers_tools",
+        "cobblers_tools",
+        "cooks_utensils",
+        "glassblowers_tools",
+        "jewelers_tools",
+        "leatherworkers_tools",
+        "masons_tools",
+        "painters_supplies",
+        "potters_tools",
+        "smiths_tools",
+        "tinkers_tools",
+        "weavers_tools",
+        "woodcarvers_tools"
+      ],
+      "equipment": [
+        {
+          "item_id": "shovel"
+        },
+        {
+          "item_id": "iron_pot"
         },
         {
           "item_id": "common_clothes"
@@ -2969,18 +3083,179 @@
           "item_id": "pouch"
         }
       ],
-      "starting_gp": 15,
+      "starting_gp": 10,
       "feature_ids": [
-        "shelter_of_the_faithful"
+        "rustic_hospitality"
       ],
       "permission_ids": [
-        "request_faithful_shelter",
-        "request_faithful_care"
+        "request_commoner_shelter"
+      ]
+    },
+    {
+      "id": "guild_artisan",
+      "name": "Rzemieślnik gildii",
+      "description": "Terminowanie w gildii dało ci fach, zawodowe kontakty i pozycję w uporządkowanym świecie kupców oraz warsztatów.",
+      "skill_proficiencies": [
+        "insight",
+        "persuasion"
+      ],
+      "tool_choice_count": 1,
+      "tool_choices": [
+        "alchemists_supplies",
+        "brewers_supplies",
+        "calligraphers_supplies",
+        "carpenters_tools",
+        "cartographers_tools",
+        "cobblers_tools",
+        "cooks_utensils",
+        "glassblowers_tools",
+        "jewelers_tools",
+        "leatherworkers_tools",
+        "masons_tools",
+        "painters_supplies",
+        "potters_tools",
+        "smiths_tools",
+        "tinkers_tools",
+        "weavers_tools",
+        "woodcarvers_tools"
+      ],
+      "language_choice_count": 1,
+      "equipment": [
+        {
+          "item_id": "travelers_clothes"
+        },
+        {
+          "item_id": "pouch"
+        }
+      ],
+      "starting_gp": 15,
+      "feature_ids": [
+        "guild_membership"
+      ],
+      "permission_ids": [
+        "request_guild_support"
+      ]
+    },
+    {
+      "id": "hermit",
+      "name": "Pustelnik",
+      "description": "Lata odosobnienia poświęciłeś leczeniu, modlitwie lub badaniu tajemnicy, której inni nawet nie zauważyli.",
+      "skill_proficiencies": [
+        "medicine",
+        "religion"
+      ],
+      "tool_proficiencies": [
+        "herbalism_kit"
+      ],
+      "language_choice_count": 1,
+      "equipment": [
+        {
+          "item_id": "map_scroll_case"
+        },
+        {
+          "item_id": "blanket"
+        },
+        {
+          "item_id": "common_clothes"
+        },
+        {
+          "item_id": "herbalism_kit"
+        },
+        {
+          "item_id": "pouch"
+        }
+      ],
+      "starting_gp": 5,
+      "feature_ids": [
+        "discovery"
+      ],
+      "permission_ids": [
+        "recall_personal_discovery"
+      ]
+    },
+    {
+      "id": "noble",
+      "name": "Szlachcic",
+      "description": "Nazwisko, wychowanie i kontakty otwierają przed tobą drzwi, których inni nawet nie mają prawa dotknąć.",
+      "skill_proficiencies": [
+        "history",
+        "persuasion"
+      ],
+      "tool_choice_count": 1,
+      "tool_choices": [
+        "dice_set",
+        "playing_card_set",
+        "dragonchess_set",
+        "three_dragon_ante_set"
+      ],
+      "language_choice_count": 1,
+      "equipment": [
+        {
+          "item_id": "fine_clothes"
+        },
+        {
+          "item_id": "signet_ring"
+        },
+        {
+          "item_id": "pouch"
+        }
+      ],
+      "starting_gp": 25,
+      "feature_ids": [
+        "position_of_privilege"
+      ],
+      "permission_ids": [
+        "request_noble_audience"
+      ]
+    },
+    {
+      "id": "outlander",
+      "name": "Wędrowiec",
+      "description": "Dorastałeś z dala od miejskich murów, ucząc się szlaków, pogody i sposobów przetrwania tam, gdzie kończą się mapy.",
+      "skill_proficiencies": [
+        "athletics",
+        "survival"
+      ],
+      "tool_choice_count": 1,
+      "tool_choices": [
+        "bagpipes",
+        "drum",
+        "dulcimer",
+        "flute",
+        "horn",
+        "lute",
+        "lyre",
+        "pan_flute",
+        "shawm",
+        "viol"
+      ],
+      "language_choice_count": 1,
+      "equipment": [
+        {
+          "item_id": "quarterstaff"
+        },
+        {
+          "item_id": "hunting_trap"
+        },
+        {
+          "item_id": "travelers_clothes"
+        },
+        {
+          "item_id": "pouch"
+        }
+      ],
+      "starting_gp": 10,
+      "feature_ids": [
+        "wanderer"
+      ],
+      "permission_ids": [
+        "forage_and_recall_geography"
       ]
     },
     {
       "id": "sage",
       "name": "Mędrzec",
+      "description": "Poświęciłeś lata studiowaniu źródeł i wiesz nie tylko wiele, ale również gdzie szukać odpowiedzi, których jeszcze nie znasz.",
       "skill_proficiencies": [
         "arcana",
         "history"
@@ -3009,6 +3284,112 @@
       ],
       "permission_ids": [
         "locate_lore_source"
+      ]
+    },
+    {
+      "id": "sailor",
+      "name": "Żeglarz",
+      "description": "Życie na pokładzie nauczyło cię pracy w załodze, czytania szlaków i zdobywania miejsca na statku.",
+      "skill_proficiencies": [
+        "athletics",
+        "perception"
+      ],
+      "tool_proficiencies": [
+        "navigators_tools",
+        "water_vehicles"
+      ],
+      "equipment": [
+        {
+          "item_id": "club"
+        },
+        {
+          "item_id": "silk_rope"
+        },
+        {
+          "item_id": "common_clothes"
+        },
+        {
+          "item_id": "navigators_tools"
+        },
+        {
+          "item_id": "pouch"
+        }
+      ],
+      "starting_gp": 10,
+      "feature_ids": [
+        "ships_passage"
+      ],
+      "permission_ids": [
+        "secure_ship_passage"
+      ]
+    },
+    {
+      "id": "soldier",
+      "name": "Żołnierz",
+      "description": "Służba wojskowa dała ci dyscyplinę, obycie z hierarchią i rozpoznawalną pozycję wśród innych żołnierzy.",
+      "skill_proficiencies": [
+        "athletics",
+        "intimidation"
+      ],
+      "tool_proficiencies": [
+        "land_vehicles"
+      ],
+      "tool_choice_count": 1,
+      "tool_choices": [
+        "dice_set",
+        "playing_card_set",
+        "dragonchess_set",
+        "three_dragon_ante_set"
+      ],
+      "equipment": [
+        {
+          "item_id": "common_clothes"
+        },
+        {
+          "item_id": "pouch"
+        }
+      ],
+      "starting_gp": 10,
+      "feature_ids": [
+        "military_rank"
+      ],
+      "permission_ids": [
+        "invoke_military_rank",
+        "request_military_aid"
+      ]
+    },
+    {
+      "id": "urchin",
+      "name": "Urwis",
+      "description": "Dorastanie na ulicy wyostrzyło twój refleks, ostrożność i znajomość skrótów ukrytych przed mieszkańcami lepszych dzielnic.",
+      "skill_proficiencies": [
+        "sleight_of_hand",
+        "stealth"
+      ],
+      "tool_proficiencies": [
+        "disguise_kit",
+        "thieves_tools"
+      ],
+      "equipment": [
+        {
+          "item_id": "small_knife"
+        },
+        {
+          "item_id": "disguise_kit"
+        },
+        {
+          "item_id": "common_clothes"
+        },
+        {
+          "item_id": "pouch"
+        }
+      ],
+      "starting_gp": 10,
+      "feature_ids": [
+        "city_secrets"
+      ],
+      "permission_ids": [
+        "navigate_city_shortcut"
       ]
     }
   ]

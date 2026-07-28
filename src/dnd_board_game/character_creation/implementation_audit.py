@@ -46,9 +46,57 @@ _MARKER_FEATURE_IDS = frozenset(
 )
 
 _TABLE_ASSISTED_FEATURES = {
+    "by_popular_demand": (
+        "Darmowe miejsce występu i skromne utrzymanie wymagają pasującej "
+        "lokacji; runtime przechowuje uprawnienie sceny."
+    ),
+    "city_secrets": (
+        "Skróty miejskie zależą od authored topologii lokacji; runtime "
+        "przechowuje uprawnienie do ich użycia."
+    ),
+    "criminal_contact": (
+        "Kontakt półświatka wymaga NPC lub punktu kontaktowego w scenariuszu; "
+        "runtime przekazuje authored permission do interakcji."
+    ),
+    "discovery": (
+        "Treść osobistego odkrycia jest wyborem fabularnym gracza i może zostać "
+        "użyta przez authored permission sceny."
+    ),
     "druidic": (
         "Sekretny język działa w rozmowie i na fizycznych notatkach; aplikacja "
         "przechowuje uprawnienie, a treść komunikatu ustalają gracze."
+    ),
+    "false_identity": (
+        "Tożsamość przykrywkowa jest stanem narracyjnym; runtime przechowuje "
+        "uprawnienie do jej wiarygodnego użycia."
+    ),
+    "guild_membership": (
+        "Wsparcie gildii zależy od obecności właściwej organizacji w scenie; "
+        "runtime przekazuje permission do interakcji."
+    ),
+    "military_rank": (
+        "Ranga wojskowa działa wobec rozpoznającej ją organizacji; runtime "
+        "przekazuje permission do NPC i eksploracji."
+    ),
+    "position_of_privilege": (
+        "Status szlachecki działa wobec odpowiedniej społeczności; runtime "
+        "przekazuje permission do audiencji i gościnności."
+    ),
+    "researcher": (
+        "Gdy wiedza nie jest dostępna bezpośrednio, authored scena może wskazać "
+        "źródło lub osobę posiadającą informację."
+    ),
+    "rustic_hospitality": (
+        "Gościnność zwykłych ludzi wymaga pasującej społeczności; runtime "
+        "przechowuje permission do schronienia."
+    ),
+    "shelter_of_the_faithful": (
+        "Opieka współwyznawców wymaga świątyni lub wspólnoty w scenie; runtime "
+        "przechowuje permission do schronienia i pomocy."
+    ),
+    "ships_passage": (
+        "Bezpłatny przejazd wymaga statku i przyjaznej załogi; runtime "
+        "przekazuje permission do sceny podróży."
     ),
     "thieves_cant": (
         "Kodowany język działa w rozmowie i na fizycznych notatkach; aplikacja "
@@ -61,6 +109,10 @@ _TABLE_ASSISTED_FEATURES = {
     "tinker": (
         "Trzy drobne mechaniczne urządzenia są rekwizytami fabularnymi bez "
         "uniwersalnego skutku mechanicznego; aplikacja przechowuje cechę."
+    ),
+    "wanderer": (
+        "Pamięć geografii i zdobywanie pożywienia działają przez authored "
+        "podróż, zasoby oraz permission eksploracji."
     ),
 }
 
@@ -253,6 +305,8 @@ def catalog_feature_ids(catalog: CharacterCatalog) -> frozenset[str]:
         for group in class_definition.choice_groups:
             for option in group.options:
                 feature_ids.update(option.feature_ids)
+    for background in catalog.backgrounds:
+        feature_ids.update(background.feature_ids)
     return frozenset(feature_ids)
 
 

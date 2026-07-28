@@ -26,6 +26,7 @@ from dnd_board_game.actors.spell_preparation import (
 )
 from dnd_board_game.combat import SpellSlotState
 from dnd_board_game.combat import DamageType
+from dnd_board_game.core.player_labels_pl import player_label
 from dnd_board_game.inventory import (
     CurrencyWallet,
     InventoryItem,
@@ -42,7 +43,6 @@ from dnd_board_game.world import Coordinate
 from .models import (
     ABILITY_IDS,
     CHARACTER_RECORD_SCHEMA_VERSION,
-    STANDARD_ARRAY,
     CharacterBuildResources,
     CharacterCatalog,
     CharacterDraft,
@@ -53,6 +53,7 @@ from .models import (
     CreatedCharacter,
     ItemGrant,
 )
+from .point_buy import POINT_BUY_BUDGET, POINT_BUY_MAXIMUM, POINT_BUY_MINIMUM, summarize_point_buy
 
 
 _STABLE_ID = re.compile(r"^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$")
@@ -129,12 +130,28 @@ def validate_character_draft(
         issues.append(_issue("background_id", "unknown", "Wybierz dostępny background."))
     else:
         issues.extend(_validate_background_choices(draft, background, species))
-    if sorted(_ability_values(draft.base_ability_scores), reverse=True) != list(STANDARD_ARRAY):
+    point_buy = summarize_point_buy(draft.base_ability_scores)
+    if not point_buy.scores_in_range:
         issues.append(
             _issue(
                 "base_ability_scores",
-                "invalid_standard_array",
-                "Rozdziel dokładnie wartości standard array: 15, 14, 13, 12, 10 i 8.",
+                "point_buy_range",
+                f"Każda bazowa cecha musi mieścić się między "
+                f"{POINT_BUY_MINIMUM} a {POINT_BUY_MAXIMUM}.",
+            )
+        )
+    elif point_buy.remaining != 0:
+        balance = (
+            f"pozostało: {point_buy.remaining}"
+            if point_buy.remaining > 0
+            else f"przekroczono pulę o {-point_buy.remaining}"
+        )
+        issues.append(
+            _issue(
+                "base_ability_scores",
+                "incomplete_point_buy",
+                f"Rozdaj pełną pulę {POINT_BUY_BUDGET} punktów point buy "
+                f"({balance}).",
             )
         )
     if len(draft.selected_skill_ids) != len(set(draft.selected_skill_ids)):
@@ -214,7 +231,18 @@ def build_character(
     package = next(
         item for item in character_class.equipment_packages if item.id == draft.equipment_package_id
     )
-    item_refs = _merge_item_grants((*package.items, *background.equipment))
+    selected_background_tools = tuple(
+        ItemGrant(tool_id)
+        for tool_id in draft.selected_background_tool_ids
+        if resources.inventory_item(tool_id) is not None
+    )
+    item_refs = _merge_item_grants(
+        (
+            *package.items,
+            *background.equipment,
+            *selected_background_tools,
+        )
+    )
     inventory = _build_inventory(item_refs, resources)
     class_spell_ids = (
         character_class.spell_choices
@@ -1502,7 +1530,7 @@ def _feature_grants(
         grants.append(
             FeatureGrant(
                 feature_id=feature_id,
-                label=f"Fighting Style: {_feature_label(fighting_style_id)}",
+                label=_feature_label(feature_id),
                 source_kind=FeatureSourceKind.CLASS,
                 source_ref=character_class.id,
             )
@@ -1572,21 +1600,7 @@ def _feature_action_ids(feature_id: str) -> tuple[str, ...]:
 
 
 def _feature_label(feature_id: str) -> str:
-    return {
-        "second_wind": "Second Wind",
-        "sneak_attack": "Sneak Attack",
-        "expertise": "Expertise",
-        "thieves_cant": "Thieves' Cant",
-        "spellcasting": "Spellcasting",
-        "divine_domain": "Divine Domain",
-        "arcane_recovery": "Arcane Recovery",
-        "life_domain": "Life Domain",
-        "disciple_of_life": "Disciple of Life",
-        "archery": "Archery",
-        "defense": "Defense",
-        "dueling": "Dueling",
-        "two_weapon_fighting": "Two-Weapon Fighting",
-    }.get(feature_id, feature_id.replace("_", " ").title())
+    return player_label(feature_id)
 
 
 def _unarmored_armor_class(

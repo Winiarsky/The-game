@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING
+from uuid import uuid4
 
 from flask import (
     Flask,
@@ -17,16 +19,24 @@ from dnd_board_game.actions import slash_commands_payload
 from dnd_board_game.actors import AbilityScores
 from dnd_board_game.character_creation import (
     ABILITY_IDS,
+    CLASS_CHOICE_GROUP_HELP,
+    FIGHTING_STYLE_HELP,
+    POINT_BUY_BUDGET,
+    POINT_BUY_COSTS,
+    SKILL_CHOICE_HELP,
     CharacterDraft,
     CharacterRoster,
     LevelUpChoices,
     build_character,
+    class_feature_help,
     character_record_payload,
     load_character_catalog,
     load_character_resources,
     level_up_character,
+    origin_feature_help,
     validate_character_draft,
 )
+from dnd_board_game.core.player_labels_pl import PLAYER_LABELS_PL, player_label
 from dnd_board_game.inventory import effective_armor_class
 from dnd_board_game.rules import experience_progress
 from dnd_board_game.world import Coordinate
@@ -50,6 +60,12 @@ def create_app(
         character_catalog,
         character_resources,
     )
+    character_portrait_dir = Path(character_dir) / "portraits"
+    character_class_names = {
+        character_class.id: character_class.name
+        for character_class in character_catalog.classes
+    }
+    app.jinja_env.globals["character_portrait_url"] = _character_portrait_url
 
     def persist_character_progress(actors) -> None:
         for actor in actors:
@@ -86,6 +102,7 @@ def create_app(
                 ),
             },
             roster=roster,
+            class_names=character_class_names,
         )
 
     @app.post("/new-game/start")
@@ -103,6 +120,7 @@ def create_app(
                     ),
                 },
                 roster=character_roster.scan(),
+                class_names=character_class_names,
                 error="Wybrany scenariusz nie jest aktywny w tym uruchomieniu.",
             ), 400
         character_ids = tuple(request.form.getlist("character_ids"))
@@ -120,6 +138,7 @@ def create_app(
                     ),
                 },
                 roster=character_roster.scan(),
+                class_names=character_class_names,
                 selected_character_ids=character_ids,
                 error="Wybierz od 1 do 5 różnych zapisanych postaci.",
             ), 400
@@ -141,6 +160,7 @@ def create_app(
                     ),
                 },
                 roster=character_roster.scan(),
+                class_names=character_class_names,
                 selected_character_ids=character_ids,
                 error=str(exc),
             ), 400
@@ -183,21 +203,36 @@ def create_app(
     def new_character():
         return _render_character_form(
             character_catalog,
+            character_resources,
             form={},
             issues=(),
         )
 
     @app.post("/characters")
     def create_character():
-        draft = _character_draft_from_request()
+        draft = _character_draft_from_request(
+            character_roster.next_character_id(
+                str(request.form.get("name", "")).strip()
+            )
+        )
         validation = validate_character_draft(draft, character_catalog)
         if not validation.valid:
             return _render_character_form(
                 character_catalog,
+                character_resources,
                 form=request.form,
                 issues=validation.issues,
             ), 400
+        uploaded_portrait_path: Path | None = None
         try:
+            portrait_file = request.files.get("portrait_file")
+            if portrait_file is not None and portrait_file.filename:
+                portrait, uploaded_portrait_path = _store_character_portrait(
+                    portrait_file,
+                    character_id=draft.id,
+                    portrait_dir=character_portrait_dir,
+                )
+                draft = replace(draft, portrait=portrait)
             character = build_character(
                 draft,
                 character_catalog,
@@ -205,10 +240,13 @@ def create_app(
             )
             character_roster.save(character)
         except ValueError as exc:
+            if uploaded_portrait_path is not None and uploaded_portrait_path.exists():
+                uploaded_portrait_path.unlink()
             return _render_character_form(
                 character_catalog,
+                character_resources,
                 form=request.form,
-                issues=({"field": "id", "message": str(exc)},),
+                issues=({"field": "portrait", "message": str(exc)},),
             ), 400
         return redirect(url_for("character_detail", character_id=str(character.actor.id)))
 
@@ -230,6 +268,10 @@ def create_app(
             species=character_catalog.species_by_id(character.species_id),
             character_class=character_catalog.class_by_id(character.class_id),
             background=character_catalog.background_by_id(character.background_id),
+            labels=_PLAYER_LABELS,
+            feature_entries=_character_sheet_feature_entries(
+                character.actor.features
+            ),
         )
 
     @app.get("/characters/<character_id>/copy")
@@ -243,6 +285,7 @@ def create_app(
             ), 404
         return _render_character_form(
             character_catalog,
+            character_resources,
             form=_copy_character_form(character),
             issues=(),
             copy_source=character.actor.name,
@@ -339,6 +382,10 @@ def create_app(
     @app.get("/game-assets/<path:filename>")
     def game_assets(filename: str):
         return send_from_directory(session._game_asset_root().resolve(), filename)
+
+    @app.get("/character-portraits/<path:filename>")
+    def character_portraits(filename: str):
+        return send_from_directory(character_portrait_dir.resolve(), filename)
 
     @app.get("/api/state")
     def api_state():
@@ -2185,35 +2232,7 @@ def _session_log_payload(session: ExplorationUiSession, *, limit: int = 200) -> 
     }
 
 
-_PLAYER_LABELS = {
-    "strength": "Siła",
-    "dexterity": "Zręczność",
-    "constitution": "Kondycja",
-    "intelligence": "Inteligencja",
-    "wisdom": "Mądrość",
-    "charisma": "Charyzma",
-    "acrobatics": "Akrobatyka",
-    "animal_handling": "Opieka nad zwierzętami",
-    "arcana": "Wiedza tajemna",
-    "athletics": "Atletyka",
-    "deception": "Oszustwo",
-    "history": "Historia",
-    "insight": "Intuicja",
-    "intimidation": "Zastraszanie",
-    "investigation": "Śledztwo",
-    "medicine": "Medycyna",
-    "perception": "Percepcja",
-    "performance": "Występy",
-    "persuasion": "Perswazja",
-    "religion": "Religia",
-    "sleight_of_hand": "Zwinne dłonie",
-    "stealth": "Skradanie",
-    "survival": "Sztuka przetrwania",
-    "archery": "Łucznictwo",
-    "defense": "Obrona",
-    "dueling": "Walka jedną bronią",
-    "two_weapon_fighting": "Walka dwiema broniami",
-}
+_PLAYER_LABELS = PLAYER_LABELS_PL
 _PLAYER_LANGUAGE_IDS = (
     "dwarvish", "elvish", "giant", "gnomish", "goblin", "halfling", "orc",
     "abyssal", "celestial", "deep_speech", "draconic", "infernal",
@@ -2223,12 +2242,24 @@ _PLAYER_LANGUAGE_IDS = (
 
 def _render_character_form(
     catalog,
+    resources,
     *,
     form: object,
     issues: tuple[object, ...],
     copy_source: str = "",
 ):
     values = _character_form_values(form)
+    portrait_reference = str(values["portrait"]).strip().lstrip("/")
+    portrait_url = (
+        url_for(
+            "character_portraits",
+            filename=portrait_reference.removeprefix("character_uploads/"),
+        )
+        if portrait_reference.startswith("character_uploads/")
+        else url_for("game_assets", filename=portrait_reference)
+        if portrait_reference
+        else ""
+    )
     skill_ids = sorted(
         {
             skill_id
@@ -2246,23 +2277,562 @@ def _render_character_form(
             for skill_id in background.skill_proficiencies
         }
     )
+    species_mechanics = {
+        species.id: _species_mechanics(species)
+        for species in catalog.species
+    }
+    species_ability_bonuses = {
+        species.id: {
+            "fixed": {
+                ability_id: getattr(species.ability_bonuses, ability_id)
+                for ability_id in ABILITY_IDS
+            },
+            "choice_value": species.ability_bonus_choice_value,
+        }
+        for species in catalog.species
+    }
+    species_feature_help = {
+        species.id: tuple(
+            help_entry
+            for feature_id in species.trait_ids
+            if (help_entry := origin_feature_help(feature_id)) is not None
+        )
+        for species in catalog.species
+    }
+    species_variant_feature_help = {
+        variant.id: tuple(
+            help_entry
+            for feature_id in variant.trait_ids
+            if (help_entry := origin_feature_help(feature_id)) is not None
+        )
+        for species in catalog.species
+        for variant in species.variant_choices
+    }
+    background_mechanics = {
+        background.id: _background_mechanics(background)
+        for background in catalog.backgrounds
+    }
+    background_feature_help = {
+        background.id: tuple(
+            help_entry
+            for feature_id in background.feature_ids
+            if (help_entry := origin_feature_help(feature_id)) is not None
+        )
+        for background in catalog.backgrounds
+    }
+    species_tool_prompts = {
+        species.id: _tool_choice_prompt(
+            species.tool_choices,
+            species.tool_choice_count,
+        )
+        for species in catalog.species
+    }
+    background_tool_prompts = {
+        background.id: _tool_choice_prompt(
+            background.tool_choices,
+            background.tool_choice_count,
+        )
+        for background in catalog.backgrounds
+    }
+    class_mechanics = {
+        character_class.id: _class_mechanics(character_class)
+        for character_class in catalog.classes
+    }
+    class_feature_help_entries = {
+        character_class.id: tuple(
+            help_entry
+            for feature_id in character_class.feature_ids
+            if (help_entry := class_feature_help(feature_id)) is not None
+        )
+        for character_class in catalog.classes
+    }
+    equipment_package_views = {
+        package.id: _equipment_package_view(package, resources)
+        for character_class in catalog.classes
+        for package in character_class.equipment_packages
+    }
+    species_skill_grants = {
+        species.id: species.skill_proficiencies
+        for species in catalog.species
+    }
+    background_skill_grants = {
+        background.id: background.skill_proficiencies
+        for background in catalog.backgrounds
+    }
+    initial_step = _character_issue_step(issues[0]) if issues else 0
     return render_template(
         "character_form.html",
         catalog=catalog,
         values=values,
         issues=issues,
         ability_ids=ABILITY_IDS,
-        standard_array=(15, 14, 13, 12, 10, 8),
+        point_buy_budget=POINT_BUY_BUDGET,
+        point_buy_costs=POINT_BUY_COSTS,
         skill_ids=skill_ids,
         labels=_PLAYER_LABELS,
         language_ids=_PLAYER_LANGUAGE_IDS,
         copy_source=copy_source,
+        portrait_url=portrait_url,
+        species_mechanics=species_mechanics,
+        species_ability_bonuses=species_ability_bonuses,
+        species_feature_help=species_feature_help,
+        species_variant_feature_help=species_variant_feature_help,
+        background_mechanics=background_mechanics,
+        background_feature_help=background_feature_help,
+        species_tool_prompts=species_tool_prompts,
+        background_tool_prompts=background_tool_prompts,
+        class_mechanics=class_mechanics,
+        class_feature_help=class_feature_help_entries,
+        skill_choice_help=SKILL_CHOICE_HELP,
+        skill_labels={
+            skill_id: _PLAYER_LABELS.get(skill_id, skill_id)
+            for skill_id in SKILL_CHOICE_HELP
+        },
+        fighting_style_help=FIGHTING_STYLE_HELP,
+        class_choice_group_help=CLASS_CHOICE_GROUP_HELP,
+        equipment_package_views=equipment_package_views,
+        species_skill_grants=species_skill_grants,
+        background_skill_grants=background_skill_grants,
+        initial_step=initial_step,
     )
 
 
-def _character_draft_from_request() -> CharacterDraft:
+_CHARACTER_FEATURE_LABELS = {
+    "artificers_lore": "Wiedza rzemieślnicza",
+    "brave": "Odważny",
+    "by_popular_demand": "Popularny artysta",
+    "city_secrets": "Sekrety miasta",
+    "criminal_contact": "Kontakt w półświatku",
+    "darkvision": "Widzenie w ciemności",
+    "discovery": "Odkrycie",
+    "dwarven_resilience": "Krasnoludzka odporność",
+    "dwarven_speed": "Nieograniczona szybkość w ciężkim pancerzu",
+    "dwarven_toughness": "Krasnoludzka wytrzymałość",
+    "elf_weapon_training": "Elfie wyszkolenie bronią",
+    "false_identity": "Fałszywa tożsamość",
+    "fey_ancestry": "Fey Ancestry",
+    "gnome_cunning": "Gnomi spryt",
+    "guild_membership": "Członkostwo w gildii",
+    "halfling_nimbleness": "Niziołcza zwinność",
+    "hellish_resistance": "Odporność na ogień",
+    "high_elf_cantrip": "Elficki cantrip",
+    "human_versatility": "Ludzka wszechstronność",
+    "infernal_legacy": "Piekielne dziedzictwo",
+    "lucky": "Szczęście",
+    "military_rank": "Stopień wojskowy",
+    "naturally_stealthy": "Naturalna skrytość",
+    "position_of_privilege": "Uprzywilejowana pozycja",
+    "relentless_endurance": "Nieustępliwa wytrzymałość",
+    "researcher": "Badacz",
+    "rustic_hospitality": "Wiejska gościnność",
+    "savage_attacks": "Brutalne ataki",
+    "shelter_of_the_faithful": "Opieka współwyznawców",
+    "ships_passage": "Przejazd statkiem",
+    "skill_versatility": "Wszechstronność umiejętności",
+    "stonecunning": "Znajomość kamienia",
+    "tinker": "Majsterkowicz",
+    "trance": "Trans",
+    "wanderer": "Wędrowiec",
+}
+
+_SUBCLASS_FEATURE_HELP = {
+    "life_domain": (
+        "Domena Życia",
+        "Zapewnia biegłość w ciężkich pancerzach oraz zawsze przygotowane czary domenowe.",
+        "Biegłość i czary są automatycznie dodane do postaci.",
+    ),
+    "disciple_of_life": (
+        "Uczeń życia",
+        "Czary przywracające PW leczą dodatkowo o 2 + poziom użytego czaru.",
+        "Silnik automatycznie dodaje premię do leczenia.",
+    ),
+    "dragon_ancestor": (
+        "Smoczy przodek",
+        "Magia postaci pochodzi od smoczego przodka i określa jej fabularne dziedzictwo.",
+        "Cecha jest zapisana na karcie; jej znaczenie wykorzystują sceny i dalszy rozwój postaci.",
+    ),
+    "draconic_resilience": (
+        "Smocza odporność",
+        "Maksymalne PW rosną o 1 na poziom, a bez pancerza bazowa KP wynosi 13 + modyfikator Zręczności.",
+        "Premie do PW i KP są wyliczane automatycznie.",
+    ),
+    "dark_ones_blessing": (
+        "Błogosławieństwo Mrocznego",
+        "Gdy sprowadzasz wrogą istotę do 0 PW, zyskujesz tymczasowe PW równe poziomowi czarnoksiężnika + modyfikator Charyzmy.",
+        "Silnik walki wykrywa pokonanie celu i automatycznie przyznaje tymczasowe PW.",
+    ),
+}
+
+_CHARACTER_CONTENT_LABELS = {
+    "battleaxe": "topór bojowy",
+    "blanket": "koc",
+    "club": "pałka",
+    "common_clothes": "zwykłe ubranie",
+    "common": "wspólny",
+    "costume_clothes": "kostium",
+    "crowbar": "łom",
+    "dice_set": "kości do gry",
+    "disguise_kit": "zestaw do charakteryzacji",
+    "dragonchess_set": "zestaw do dragonchess",
+    "draconic": "smoczy",
+    "dwarvish": "krasnoludzki",
+    "fine_clothes": "eleganckie ubranie",
+    "forgery_kit": "zestaw fałszerski",
+    "herbalism_kit": "zestaw zielarski",
+    "halfling": "niziołczy",
+    "handaxe": "toporek",
+    "holy_symbol_amulet": "święty symbol",
+    "hunting_trap": "pułapka myśliwska",
+    "ink": "atrament",
+    "ink_pen": "pióro",
+    "infernal": "piekielny",
+    "iron_pot": "żelazny garnek",
+    "land_vehicles": "pojazdy lądowe",
+    "light_hammer": "lekki młot",
+    "longbow": "długi łuk",
+    "longsword": "długi miecz",
+    "map_scroll_case": "tuba na mapę lub zwój",
+    "navigators_tools": "narzędzia nawigatora",
+    "playing_card_set": "talia kart",
+    "pouch": "sakiewka",
+    "quarterstaff": "kostur",
+    "shortbow": "krótki łuk",
+    "shortsword": "krótki miecz",
+    "shovel": "łopata",
+    "signet_ring": "sygnet",
+    "silk_rope": "jedwabna lina",
+    "small_knife": "mały nóż",
+    "three_dragon_ante_set": "zestaw Three-Dragon Ante",
+    "thieves_tools": "narzędzia złodziejskie",
+    "travelers_clothes": "ubranie podróżne",
+    "vestments": "szaty liturgiczne",
+    "water_vehicles": "pojazdy wodne",
+    "elvish": "elficki",
+    "gnomish": "gnomi",
+    "orc": "orkowy",
+}
+
+
+_GAMING_SET_IDS = frozenset(
+    {"dice_set", "playing_card_set", "dragonchess_set", "three_dragon_ante_set"}
+)
+_MUSICAL_INSTRUMENT_IDS = frozenset(
+    {
+        "bagpipes", "drum", "dulcimer", "flute", "horn",
+        "lute", "lyre", "pan_flute", "shawm", "viol",
+    }
+)
+_ARTISAN_TOOL_IDS = frozenset(
+    {
+        "alchemists_supplies", "brewers_supplies", "calligraphers_supplies",
+        "carpenters_tools", "cartographers_tools", "cobblers_tools",
+        "cooks_utensils", "glassblowers_tools", "jewelers_tools",
+        "leatherworkers_tools", "masons_tools", "painters_supplies",
+        "potters_tools", "smiths_tools", "tinkers_tools", "weavers_tools",
+        "woodcarvers_tools",
+    }
+)
+
+
+def _tool_choice_prompt(
+    tool_ids: tuple[str, ...],
+    choice_count: int,
+) -> dict[str, str]:
+    choices = frozenset(tool_ids)
+    suffix = f"wybierz {choice_count}"
+    if choices and choices <= _GAMING_SET_IDS:
+        category = "Zestaw do gry"
+        explanation = (
+            "Wybierasz biegłość w jednej grze oraz jej fizyczny zestaw. "
+            "Gdy test wykorzystuje tę grę, postać dodaje premię z biegłości."
+        )
+    elif choices and choices <= _MUSICAL_INSTRUMENT_IDS:
+        category = "Instrument muzyczny"
+        explanation = (
+            "Wybierasz biegłość w jednym instrumencie oraz otrzymujesz ten "
+            "instrument. Odpowiednie występy mogą korzystać z premii z biegłości."
+        )
+    elif choices and choices <= _ARTISAN_TOOL_IDS:
+        category = "Narzędzia rzemieślnicze"
+        explanation = (
+            "Wybierasz biegłość i komplet narzędzi. Odpowiednie testy oraz "
+            "receptury rzemieślnicze mogą korzystać z premii z biegłości."
+        )
+    else:
+        category = "Biegłość narzędziowa"
+        explanation = (
+            "Jeśli test wykorzystuje wybrane narzędzie, postać dodaje premię "
+            "z biegłości. Do użycia potrzebny jest również właściwy przedmiot."
+        )
+    return {
+        "legend": f"{category} — {suffix}",
+        "explanation": explanation,
+    }
+
+
+def _content_label(content_id: str) -> str:
+    return _CHARACTER_CONTENT_LABELS.get(
+        content_id,
+        player_label(content_id),
+    )
+
+
+def _feature_labels(feature_ids: tuple[str, ...]) -> str:
+    return ", ".join(
+        _CHARACTER_FEATURE_LABELS.get(
+            feature_id,
+            feature_id.replace("_", " ").title(),
+        )
+        for feature_id in feature_ids
+    )
+
+
+def _character_sheet_feature_entries(features) -> tuple[dict[str, str], ...]:
+    entries: list[dict[str, str]] = []
+    for feature in features:
+        help_entry = (
+            origin_feature_help(feature.feature_id)
+            or class_feature_help(feature.feature_id)
+        )
+        if help_entry is not None:
+            entries.append(
+                {
+                    "name": help_entry.name,
+                    "rule_text": help_entry.rule_text,
+                    "game_text": help_entry.game_text,
+                    "use_mode": help_entry.use_mode_label,
+                }
+            )
+            continue
+        fighting_style_id = feature.feature_id.removeprefix("fighting_style_")
+        fighting_style = (
+            FIGHTING_STYLE_HELP.get(fighting_style_id)
+            if fighting_style_id != feature.feature_id
+            else None
+        )
+        if fighting_style is not None:
+            entries.append(
+                {
+                    "name": f"Styl walki: {fighting_style.name}",
+                    "rule_text": fighting_style.rule_text,
+                    "game_text": fighting_style.play_text,
+                    "use_mode": "Działa automatycznie",
+                }
+            )
+            continue
+        subclass_help = _SUBCLASS_FEATURE_HELP.get(feature.feature_id)
+        if subclass_help is not None:
+            name, rule_text, game_text = subclass_help
+            entries.append(
+                {
+                    "name": name,
+                    "rule_text": rule_text,
+                    "game_text": game_text,
+                    "use_mode": "Działa automatycznie",
+                }
+            )
+            continue
+        if feature.feature_id.startswith("favored_enemy_"):
+            entries.append(
+                {
+                    "name": f"Ulubiony wróg: {player_label(feature.feature_id)}",
+                    "rule_text": (
+                        "Masz przewagę w testach Przetrwania podczas tropienia "
+                        "wybranego typu oraz w testach Inteligencji dotyczących go."
+                    ),
+                    "game_text": (
+                        "Premia pojawia się automatycznie, gdy scena i cel mają "
+                        "pasujące oznaczenie."
+                    ),
+                    "use_mode": "Działa w pasującej scenie",
+                }
+            )
+            continue
+        if feature.feature_id.startswith("natural_explorer_"):
+            entries.append(
+                {
+                    "name": f"Naturalny odkrywca: {player_label(feature.feature_id)}",
+                    "rule_text": (
+                        "Podczas podróży po wybranym terenie zyskujesz korzyści "
+                        "w nawigacji, tropieniu i zdobywaniu pożywienia."
+                    ),
+                    "game_text": (
+                        "Profil podróży stosuje korzyści w scenach oznaczonych "
+                        "tym rodzajem terenu."
+                    ),
+                    "use_mode": "Działa w pasującej scenie",
+                }
+            )
+            continue
+        entries.append(
+            {
+                "name": player_label(feature.feature_id, feature.label),
+                "rule_text": feature.description or "Cecha postaci.",
+                "game_text": "Jej efekt jest uwzględniany przez zasady gry.",
+                "use_mode": "",
+            }
+        )
+    return tuple(entries)
+
+
+def _species_mechanics(species) -> tuple[str, ...]:
+    bonuses = [
+        f"{_PLAYER_LABELS[ability_id]} +{getattr(species.ability_bonuses, ability_id)}"
+        for ability_id in ABILITY_IDS
+        if getattr(species.ability_bonuses, ability_id)
+    ]
+    if species.ability_bonus_choice_count:
+        bonuses.append(
+            f"{species.ability_bonus_choice_count} wybrane cechy "
+            f"+{species.ability_bonus_choice_value}"
+        )
+    result = [
+        f"Cechy: {', '.join(bonuses) or 'bez premii'}",
+        f"Szybkość: {species.speed_feet} ft · rozmiar: "
+        f"{'średni' if species.size == 'medium' else 'mały' if species.size == 'small' else species.size}",
+    ]
+    if species.darkvision_feet:
+        result.append(f"Widzenie w ciemności: {species.darkvision_feet} ft")
+    if species.skill_proficiencies:
+        result.append(
+            "Biegłości: "
+            + ", ".join(_content_label(skill_id) for skill_id in species.skill_proficiencies)
+        )
+    if species.weapon_proficiencies:
+        result.append(
+            "Bronie: "
+            + ", ".join(_content_label(item_id) for item_id in species.weapon_proficiencies)
+        )
+    if species.tool_proficiencies:
+        result.append(
+            "Biegłości narzędziowe: "
+            + ", ".join(_content_label(tool_id) for tool_id in species.tool_proficiencies)
+        )
+    if species.languages:
+        result.append(
+            "Języki: " + ", ".join(_content_label(language_id) for language_id in species.languages)
+        )
+    if species.language_choice_count:
+        result.append(f"Dodatkowe języki: wybierz {species.language_choice_count}")
+    return tuple(result)
+
+
+def _background_mechanics(background) -> tuple[str, ...]:
+    result = [
+        "Umiejętności: "
+        + ", ".join(_content_label(skill_id) for skill_id in background.skill_proficiencies)
+    ]
+    tools = (*background.tool_proficiencies,)
+    if tools:
+        result.append(
+            "Biegłości narzędziowe: "
+            + ", ".join(_content_label(tool_id) for tool_id in tools)
+        )
+    if background.tool_choice_count:
+        category = _tool_choice_prompt(
+            background.tool_choices,
+            background.tool_choice_count,
+        )["legend"].split(" — ", maxsplit=1)[0]
+        result.append(
+            f"{category}: wybierz {background.tool_choice_count}"
+        )
+    if background.language_choice_count:
+        result.append(f"Języki: wybierz {background.language_choice_count}")
+    if background.equipment:
+        result.append(
+            "Wyposażenie: "
+            + ", ".join(_content_label(grant.item_id) for grant in background.equipment)
+        )
+    result.append(f"Startowe złoto: {background.starting_gp} gp")
+    return tuple(result)
+
+
+def _class_mechanics(character_class) -> tuple[str, ...]:
+    result = [
+        f"Kość Wytrzymałości: k{character_class.hit_die}",
+        "Rzuty obronne: "
+        + ", ".join(
+            _PLAYER_LABELS.get(ability_id, ability_id)
+            for ability_id in character_class.saving_throw_proficiencies
+        ),
+        f"Umiejętności: wybierz {character_class.skill_choice_count}",
+    ]
+    if character_class.armor_proficiencies:
+        result.append(
+            "Pancerze: "
+            + ", ".join(character_class.armor_proficiencies)
+        )
+    if character_class.spellcasting_ability:
+        result.append(
+            "Magia: "
+            + _PLAYER_LABELS.get(
+                character_class.spellcasting_ability,
+                character_class.spellcasting_ability,
+            )
+        )
+    return tuple(result)
+
+
+def _equipment_package_view(package, resources) -> dict[str, object]:
+    items: list[dict[str, object]] = []
+    for grant in package.items:
+        item = resources.inventory_item(grant.item_id)
+        if item is None:
+            continue
+        contents = tuple(
+            {
+                "name": (
+                    nested.name
+                    if (nested := resources.inventory_item(entry.item_id))
+                    is not None
+                    else player_label(entry.item_id)
+                ),
+                "quantity": entry.quantity,
+            }
+            for entry in item.bundle_contents
+        )
+        items.append(
+            {
+                "name": item.name,
+                "quantity": grant.quantity,
+                "description": item.description,
+                "equipped": grant.equipped,
+                "contents": contents,
+            }
+        )
+    return {
+        "id": package.id,
+        "label": package.label,
+        "items": tuple(items),
+    }
+
+
+def _character_issue_step(issue: object) -> int:
+    field = (
+        str(issue.get("field", ""))
+        if isinstance(issue, dict)
+        else str(getattr(issue, "field", ""))
+    )
+    if field == "species_id":
+        return 0
+    if field.startswith("selected_species_"):
+        return 1
+    if field == "background_id":
+        return 2
+    if field.startswith("selected_background_"):
+        return 3
+    if field == "class_id":
+        return 4
+    if field in ABILITY_IDS or field == "base_ability_scores":
+        return 5
+    if field in {"name", "portrait"}:
+        return 7
+    return 6
+
+
+def _character_draft_from_request(character_id: str) -> CharacterDraft:
     return CharacterDraft(
-        id=str(request.form.get("id", "")).strip(),
+        id=character_id,
         name=str(request.form.get("name", "")).strip(),
         species_id=str(request.form.get("species_id", "")).strip(),
         class_id=str(request.form.get("class_id", "")).strip(),
@@ -2322,6 +2892,55 @@ def _character_draft_from_request() -> CharacterDraft:
     )
 
 
+def _store_character_portrait(
+    portrait_file,
+    *,
+    character_id: str,
+    portrait_dir: Path,
+) -> tuple[str, Path]:
+    maximum_bytes = 5 * 1024 * 1024
+    payload = portrait_file.stream.read(maximum_bytes + 1)
+    if len(payload) > maximum_bytes:
+        raise ValueError("Portret może mieć maksymalnie 5 MB.")
+    extension = _portrait_extension(payload)
+    if extension is None:
+        raise ValueError("Portret musi być obrazem PNG, JPEG albo WEBP.")
+    portrait_dir.mkdir(parents=True, exist_ok=True)
+    destination = portrait_dir / f"{character_id}.{extension}"
+    temporary = portrait_dir / f".{character_id}.{uuid4().hex}.tmp"
+    try:
+        temporary.write_bytes(payload)
+        temporary.replace(destination)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+    return f"character_uploads/{destination.name}", destination
+
+
+def _character_portrait_url(reference: str) -> str:
+    normalized = str(reference).strip().lstrip("/")
+    if normalized.startswith("character_uploads/"):
+        return url_for(
+            "character_portraits",
+            filename=normalized.removeprefix("character_uploads/"),
+        )
+    return url_for("game_assets", filename=normalized) if normalized else ""
+
+
+def _portrait_extension(payload: bytes) -> str | None:
+    if payload.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "png"
+    if payload.startswith(b"\xff\xd8\xff"):
+        return "jpg"
+    if (
+        len(payload) >= 12
+        and payload[:4] == b"RIFF"
+        and payload[8:12] == b"WEBP"
+    ):
+        return "webp"
+    return None
+
+
 def _character_form_values(form: object) -> dict[str, object]:
     def value(key: str, default: str = "") -> str:
         getter = getattr(form, "get", None)
@@ -2343,7 +2962,6 @@ def _character_form_values(form: object) -> dict[str, object]:
         return ()
 
     result: dict[str, object] = {
-        "id": value("id"),
         "name": value("name"),
         "species_id": value("species_id", "human"),
         "class_id": value("class_id", "fighter"),
@@ -2383,7 +3001,6 @@ def _character_form_values(form: object) -> dict[str, object]:
 def _copy_character_form(character) -> dict[str, object]:
     actor = character.actor
     return {
-        "id": f"{actor.id}_copy",
         "name": f"{actor.name} — kopia",
         "species_id": character.species_id,
         "class_id": character.class_id,
@@ -2624,6 +3241,7 @@ def _level_up_context(
             for group in character_class.choice_groups
             if group.level <= target_level
         ),
+        "labels": _PLAYER_LABELS,
     }
 
 

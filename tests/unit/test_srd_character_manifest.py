@@ -8,6 +8,7 @@ from dnd_board_game.character_creation import (
     SRD_SPECIES_IDS,
     SRD_SPELL_IDS_BY_LEVEL,
     audit_srd_character_coverage,
+    audit_origin_feature_coverage,
     audit_character_implementation,
     audit_assisted_spell_plans,
     table_assisted_feature_exceptions,
@@ -72,12 +73,52 @@ def test_every_level_three_feature_and_spell_has_an_explicit_runtime_contract() 
     assert report.unsupported_spell_effect_ids == ()
     assert report.complete is True
     assert set(table_assisted_feature_exceptions()) == {
+        "by_popular_demand",
+        "city_secrets",
+        "criminal_contact",
+        "discovery",
         "druidic",
+        "false_identity",
+        "guild_membership",
+        "military_rank",
         "thieves_cant",
         "pact_of_the_chain",
+        "position_of_privilege",
+        "researcher",
+        "rustic_hospitality",
+        "shelter_of_the_faithful",
+        "ships_passage",
         "tinker",
+        "wanderer",
     }
     assert set(table_assisted_feature_riders()) == {"cutting_words"}
+
+
+def test_every_species_and_background_feature_has_player_help_and_runtime_contract() -> None:
+    catalog = load_character_catalog("content/character_creation/catalog.json")
+
+    report = audit_origin_feature_coverage(catalog)
+
+    assert report.missing_help_ids == ()
+    assert report.missing_runtime_contract_ids == ()
+    assert report.background_feature_ids_without_permissions == ()
+    assert set(report.table_assisted_feature_ids) == {
+        "by_popular_demand",
+        "city_secrets",
+        "criminal_contact",
+        "discovery",
+        "false_identity",
+        "guild_membership",
+        "military_rank",
+        "position_of_privilege",
+        "researcher",
+        "rustic_hospitality",
+        "shelter_of_the_faithful",
+        "ships_passage",
+        "tinker",
+        "wanderer",
+    }
+    assert report.complete is True
 
 
 def test_every_assisted_spell_has_a_unique_mechanical_migration_plan() -> None:
