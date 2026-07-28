@@ -1,0 +1,43 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "jump",
+  "name": "Jump",
+  "level": 1,
+  "school": "transmutation",
+  "casting_time": "action",
+  "range": {
+    "kind": "touch"
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": [
+      {
+        "item_id": "spell_component_jump",
+        "label": "a grasshopper’s hind leg"
+      }
+    ]
+  },
+  "duration": {
+    "kind": "minute",
+    "amount": 1
+  },
+  "concentration": false,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "targeted_status",
+    "label": "Jump",
+    "target_count": 1,
+    "cast_flag": "cast_jump",
+    "instructions": "Przez minutę potrój dystans skoku dotkniętej istoty, nadal ograniczony dostępnym ruchem.",
+    "effect_kind": "jump_multiplier",
+    "value": 3,
+    "target_faction": "ally"
+  }
+}

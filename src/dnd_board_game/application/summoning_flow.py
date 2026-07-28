@@ -40,6 +40,8 @@ class SummonActionSpec(Protocol):
     spell_level: int
     action_cost: ActionEconomyCost
     summon: SummonDefinition | None
+    concentration: bool
+    duration: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -174,17 +176,20 @@ class SummoningFlowService:
             cast_level=pending.cast_level,
             action_cost=action.action_cost,
         )
-        previous_concentration = concentration_effects_for_actor(
-            active_effects,
-            str(caster.id),
+        previous_concentration = (
+            concentration_effects_for_actor(active_effects, str(caster.id))
+            if bool(getattr(action, "concentration", True))
+            else ()
         )
-        updated_effects = remove_concentration_effects(
-            active_effects,
-            str(caster.id),
+        updated_effects = (
+            remove_concentration_effects(active_effects, str(caster.id))
+            if bool(getattr(action, "concentration", True))
+            else active_effects
         )
         updated_state, removed = remove_summons(
             resource_use.state,
             owner_actor_id=caster.id,
+            spell_id=action.id,
         )
         removed_ids = {str(summon.actor_id) for summon in removed}
         updated_effects = tuple(
@@ -200,7 +205,7 @@ class SummoningFlowService:
             if str(actor.id).startswith(f"summon:{caster.id}:{action.id}:")
         )
         actor_id = ActorId(f"summon:{caster.id}:{action.id}:{sequence}")
-        effect_id = f"concentration_summon:{caster.id}:{actor_id}:{action.id}"
+        effect_id = f"summon_duration:{caster.id}:{actor_id}:{action.id}"
         summoned = SummonedCreatureState(
             actor_id=actor_id,
             owner_actor_id=caster.id,
@@ -218,15 +223,27 @@ class SummoningFlowService:
         effect = ActiveCombatEffect(
             id=effect_id,
             actor_id=str(caster.id),
-            kind="concentration_summon",
+            kind=(
+                "concentration_summon"
+                if bool(getattr(action, "concentration", True))
+                else "summon_duration"
+            ),
             label=action.label,
             object_id=f"spell:{action.id}",
             value=0,
             source_actor_id=str(caster.id),
             target_actor_id=str(actor_id),
             source=EffectSource(EffectSourceType.SPELL, action.id, action.label),
-            duration=EffectDuration.CONCENTRATION,
-            stacking_key=f"concentration:{caster.id}",
+            duration=(
+                EffectDuration.CONCENTRATION
+                if bool(getattr(action, "concentration", True))
+                else _summon_duration(getattr(action, "duration", "encounter"))
+            ),
+            stacking_key=(
+                f"concentration:{caster.id}"
+                if bool(getattr(action, "concentration", True))
+                else f"summon:{caster.id}:{action.id}"
+            ),
             spell_level=pending.cast_level,
         )
         updated_effects = apply_active_effect(updated_effects, effect).active_effects
@@ -323,3 +340,12 @@ def _summon_definition(action: SummonActionSpec) -> SummonDefinition:
     if action.action_type != "summon" or action.summon is None:
         raise ValueError("Ta akcja nie jest czarem przywołania.")
     return action.summon
+
+
+def _summon_duration(value: str) -> EffectDuration:
+    return {
+        "encounter": EffectDuration.UNTIL_ENCOUNTER_END,
+        "short_rest": EffectDuration.UNTIL_SHORT_REST,
+        "long_rest": EffectDuration.UNTIL_LONG_REST,
+        "scenario": EffectDuration.UNTIL_SCENARIO_END,
+    }.get(value, EffectDuration.UNTIL_ENCOUNTER_END)

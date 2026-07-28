@@ -1,0 +1,40 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "animal_friendship",
+  "name": "Animal Friendship",
+  "level": 1,
+  "school": "enchantment",
+  "casting_time": "action",
+  "range": {
+    "kind": "distance",
+    "feet": 30
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": [
+      {
+        "item_id": "spell_component_animal_friendship",
+        "label": "a morsel of food"
+      }
+    ]
+  },
+  "duration": {
+    "kind": "twenty_four_hours",
+    "amount": 1
+  },
+  "concentration": false,
+  "ritual": false,
+  "effect": {
+    "kind": "exploration",
+    "effect_type": "set_flag",
+    "flag_key": "cast_animal_friendship",
+    "flag_value": true,
+    "instructions": "Wskaż bestię w aktywnej scenie. Rzut zapisuje czasowy znacznik celu na 24 godziny; scena lub narrator rozstrzyga Wisdom save i reakcję bestii."
+  }
+}

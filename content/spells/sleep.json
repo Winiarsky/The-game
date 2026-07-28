@@ -1,0 +1,52 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "sleep",
+  "name": "Sleep",
+  "level": 1,
+  "school": "enchantment",
+  "casting_time": "action",
+  "range": {
+    "kind": "distance",
+    "feet": 90
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": [
+      {
+        "item_id": "spell_component_sleep",
+        "label": "a pinch of fine sand, rose petals, or a cricket"
+      }
+    ]
+  },
+  "duration": {
+    "kind": "minute",
+    "amount": 1
+  },
+  "concentration": false,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "targeted_status",
+    "label": "Sleep",
+    "effect_kind": "apply_condition",
+    "condition": "unconscious",
+    "target_faction": "enemy",
+    "target_count": 20,
+    "damage_die_sides": 8,
+    "hit_point_pool_dice_count": 5,
+    "upcast_hit_point_pool_dice_per_level": 2,
+    "excluded_creature_types": [
+      "undead"
+    ],
+    "cast_flag": "cast_sleep",
+    "instructions": "Rzuć 5k8 PW. Od istoty z najmniejszą liczbą aktualnych PW usypiaj cele w promieniu 20 stóp do wyczerpania puli.",
+    "resolution_mode": "automatic",
+    "board_relevance": "direct"
+  }
+}

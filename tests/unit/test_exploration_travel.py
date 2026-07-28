@@ -2,6 +2,8 @@ from dataclasses import replace
 
 from dnd_board_game.actors import (
     ExhaustionRollKind,
+    FeatureGrant,
+    FeatureSourceKind,
     apply_exhaustion_to_roll_request,
     effective_max_hit_points,
     increase_exhaustion,
@@ -79,6 +81,41 @@ def test_navigation_success_and_failure_control_authored_delay() -> None:
     assert failure.total_minutes == 75
     assert failure.navigation.success is False
     assert failure.navigation.delay_minutes == 30
+
+
+def test_natural_explorer_prevents_nonmagical_navigation_failure() -> None:
+    party = _party()
+    ranger = replace(
+        party[0],
+        features=(
+            *party[0].features,
+            FeatureGrant(
+                "natural_explorer_forest",
+                "Natural Explorer: Forest",
+                FeatureSourceKind.CLASS,
+                "ranger",
+            ),
+        ),
+    )
+    route = _route(
+        travel_policy=TravelPolicy(
+            navigation_dc=20,
+            navigation_failure_delay_minutes=60,
+            terrain="forest",
+        )
+    )
+
+    result = resolve_travel(
+        route,
+        (ranger, *party[1:]),
+        pace=TravelPace.NORMAL,
+    )
+
+    assert result.navigation.success is True
+    assert result.navigation.required is False
+    assert result.navigation.actor_id == str(ranger.id)
+    assert result.navigation.feature_id == "natural_explorer"
+    assert result.navigation.delay_minutes == 0
 
 
 def test_fast_and_slow_pace_expose_perception_and_stealth_rules() -> None:

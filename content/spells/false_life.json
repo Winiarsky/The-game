@@ -1,0 +1,47 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "false_life",
+  "name": "False Life",
+  "level": 1,
+  "school": "necromancy",
+  "casting_time": "action",
+  "range": {
+    "kind": "self"
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": [
+      {
+        "item_id": "spell_component_false_life",
+        "label": "a small amount of alcohol or distilled spirits"
+      }
+    ]
+  },
+  "duration": {
+    "kind": "hour",
+    "amount": 1
+  },
+  "concentration": false,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "targeted_status",
+    "label": "False Life",
+    "effect_kind": "temporary_hit_points",
+    "target_faction": "self",
+    "target_count": 1,
+    "damage_die_sides": 4,
+    "damage_modifier": 4,
+    "upcast_value_per_level": 5,
+    "cast_flag": "cast_false_life",
+    "instructions": "Otrzymujesz 1k4+4 tymczasowych PW na godzinę; +5 za każdy wyższy poziom slotu.",
+    "resolution_mode": "automatic",
+    "board_relevance": "direct"
+  }
+}

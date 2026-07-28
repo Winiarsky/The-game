@@ -1,0 +1,20 @@
+{
+  "schema": "dnd_board_game.spell", "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014", "source_pack_ids": ["srd_5_1_cc_by_4_0"],
+  "id": "shillelagh", "name": "Shillelagh", "level": 0,
+  "school": "transmutation", "casting_time": "bonus_action",
+  "range": {"kind": "touch"},
+  "components": {"verbal": true, "somatic": true, "materials": [{"item_id": "spell_component_shillelagh", "label": "jemioła, liść koniczyny i druidyczny focus"}]},
+  "duration": {"kind": "minute", "amount": 1}, "concentration": false, "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "targeted_status",
+    "label": "Shillelagh",
+    "effect_kind": "shillelagh",
+    "target_faction": "self",
+    "cast_flag": "cast_shillelagh",
+    "instructions": "Trzymana pałka lub kostur używa cechy czarowania zamiast Siły, zadaje 1k8 i jest magiczna.",
+    "resolution_mode": "automatic",
+    "board_relevance": "direct"
+  }
+}

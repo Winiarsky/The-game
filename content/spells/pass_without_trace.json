@@ -1,0 +1,43 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "pass_without_trace",
+  "name": "Pass Without Trace",
+  "level": 2,
+  "school": "abjuration",
+  "casting_time": "action",
+  "range": {
+    "kind": "self"
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": [
+      {
+        "item_id": "spell_component_pass_without_trace",
+        "label": "ashes from a burned leaf of mistletoe and a sprig of spruce"
+      }
+    ]
+  },
+  "duration": {
+    "kind": "hour",
+    "amount": 1
+  },
+  "concentration": true,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "targeted_status",
+    "label": "Pass Without Trace",
+    "target_count": 5,
+    "cast_flag": "cast_pass_without_trace",
+    "instructions": "Podczas koncentracji wybrane istoty w 30 stopach mają +10 do Stealth, nie zostawiają śladów i nie można ich śledzić niemagicznie.",
+    "effect_kind": "stealth_bonus_aura",
+    "value": 10,
+    "target_faction": "ally"
+  }
+}

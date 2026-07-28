@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Sequence
 
-from dnd_board_game.actors import Actor
+from dnd_board_game.actors import Actor, actor_has_feature
 from dnd_board_game.inventory import InventoryItem, hands_required, normalize_hand_equipment
 from dnd_board_game.rules import ability_modifier
 
@@ -66,6 +66,14 @@ def two_weapon_bonus_attack_source(actor: Actor, source: AttackSource) -> Attack
     ability modifier is already included in the source and must not be removed.
     """
 
+    if actor_has_feature(actor, "fighting_style_two_weapon_fighting"):
+        return replace(
+            source,
+            damage_hint=(
+                f"{source.damage_hint} "
+                "(atak drugą bronią; Fighting Style zachowuje modyfikator cechy)"
+            ),
+        )
     modifier = source.damage_modifier
     if source.ability is not None and modifier > 0:
         score = getattr(actor.ability_scores, source.ability)

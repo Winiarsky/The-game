@@ -1,0 +1,3015 @@
+{
+  "schema": "dnd_board_game.character_catalog",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "species": [
+    {
+      "id": "human",
+      "name": "Człowiek",
+      "speed_feet": 30,
+      "ability_bonuses": {
+        "strength": 1,
+        "dexterity": 1,
+        "constitution": 1,
+        "intelligence": 1,
+        "wisdom": 1,
+        "charisma": 1
+      },
+      "languages": [
+        "common"
+      ],
+      "language_choice_count": 1,
+      "trait_ids": [
+        "human_versatility"
+      ]
+    },
+    {
+      "id": "elf",
+      "name": "Wysoki elf",
+      "speed_feet": 30,
+      "ability_bonuses": {
+        "dexterity": 2,
+        "intelligence": 1
+      },
+      "darkvision_feet": 60,
+      "skill_proficiencies": [
+        "perception"
+      ],
+      "languages": [
+        "common",
+        "elvish"
+      ],
+      "language_choice_count": 1,
+      "weapon_proficiencies": [
+        "longsword",
+        "shortsword",
+        "shortbow",
+        "longbow"
+      ],
+      "trait_ids": [
+        "darkvision",
+        "fey_ancestry",
+        "trance",
+        "elf_weapon_training",
+        "high_elf_cantrip"
+      ],
+      "cantrip_choice_count": 1,
+      "cantrip_choices": [
+        "acid_splash",
+        "chill_touch",
+        "dancing_lights",
+        "fire_bolt",
+        "light",
+        "mage_hand",
+        "mending",
+        "message",
+        "minor_illusion",
+        "poison_spray",
+        "prestidigitation",
+        "ray_of_frost",
+        "shocking_grasp",
+        "true_strike"
+      ],
+      "cantrip_ability": "intelligence"
+    },
+    {
+      "id": "dwarf",
+      "name": "Krasnolud wzgórzowy",
+      "speed_feet": 25,
+      "ability_bonuses": {
+        "constitution": 2,
+        "wisdom": 1
+      },
+      "darkvision_feet": 60,
+      "weapon_proficiencies": [
+        "battleaxe",
+        "handaxe",
+        "light_hammer",
+        "warhammer"
+      ],
+      "tool_choice_count": 1,
+      "tool_choices": [
+        "smiths_tools",
+        "brewers_supplies",
+        "masons_tools"
+      ],
+      "languages": [
+        "common",
+        "dwarvish"
+      ],
+      "trait_ids": [
+        "darkvision",
+        "dwarven_resilience",
+        "dwarven_speed",
+        "stonecunning",
+        "dwarven_toughness"
+      ]
+    },
+    {
+      "id": "halfling",
+      "name": "Niziołek lekkostopy",
+      "speed_feet": 25,
+      "size": "small",
+      "ability_bonuses": {
+        "dexterity": 2,
+        "charisma": 1
+      },
+      "languages": [
+        "common",
+        "halfling"
+      ],
+      "trait_ids": [
+        "lucky",
+        "brave",
+        "halfling_nimbleness",
+        "naturally_stealthy"
+      ]
+    },
+    {
+      "id": "dragonborn",
+      "name": "Smocze dziecię",
+      "speed_feet": 30,
+      "ability_bonuses": {
+        "strength": 2,
+        "charisma": 1
+      },
+      "languages": [
+        "common",
+        "draconic"
+      ],
+      "trait_ids": [
+        "breath_weapon"
+      ],
+      "variant_choice_count": 1,
+      "variant_choices": [
+        {
+          "id": "black_dragon_ancestry",
+          "name": "Czarny smok",
+          "trait_ids": [
+            "breath_weapon_acid_line_dex",
+            "damage_resistance_acid"
+          ]
+        },
+        {
+          "id": "blue_dragon_ancestry",
+          "name": "Niebieski smok",
+          "trait_ids": [
+            "breath_weapon_lightning_line_dex",
+            "damage_resistance_lightning"
+          ]
+        },
+        {
+          "id": "brass_dragon_ancestry",
+          "name": "Mosiężny smok",
+          "trait_ids": [
+            "breath_weapon_fire_line_dex",
+            "damage_resistance_fire"
+          ]
+        },
+        {
+          "id": "bronze_dragon_ancestry",
+          "name": "Brązowy smok",
+          "trait_ids": [
+            "breath_weapon_lightning_line_dex",
+            "damage_resistance_lightning"
+          ]
+        },
+        {
+          "id": "copper_dragon_ancestry",
+          "name": "Miedziany smok",
+          "trait_ids": [
+            "breath_weapon_acid_line_dex",
+            "damage_resistance_acid"
+          ]
+        },
+        {
+          "id": "gold_dragon_ancestry",
+          "name": "Złoty smok",
+          "trait_ids": [
+            "breath_weapon_fire_cone_dex",
+            "damage_resistance_fire"
+          ]
+        },
+        {
+          "id": "green_dragon_ancestry",
+          "name": "Zielony smok",
+          "trait_ids": [
+            "breath_weapon_poison_cone_con",
+            "damage_resistance_poison"
+          ]
+        },
+        {
+          "id": "red_dragon_ancestry",
+          "name": "Czerwony smok",
+          "trait_ids": [
+            "breath_weapon_fire_cone_dex",
+            "damage_resistance_fire"
+          ]
+        },
+        {
+          "id": "silver_dragon_ancestry",
+          "name": "Srebrny smok",
+          "trait_ids": [
+            "breath_weapon_cold_cone_con",
+            "damage_resistance_cold"
+          ]
+        },
+        {
+          "id": "white_dragon_ancestry",
+          "name": "Biały smok",
+          "trait_ids": [
+            "breath_weapon_cold_cone_con",
+            "damage_resistance_cold"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "gnome",
+      "name": "Gnom skalny",
+      "speed_feet": 25,
+      "size": "small",
+      "ability_bonuses": {
+        "intelligence": 2,
+        "constitution": 1
+      },
+      "darkvision_feet": 60,
+      "tool_proficiencies": [
+        "tinkers_tools"
+      ],
+      "languages": [
+        "common",
+        "gnomish"
+      ],
+      "trait_ids": [
+        "darkvision",
+        "gnome_cunning",
+        "artificers_lore",
+        "tinker"
+      ]
+    },
+    {
+      "id": "half_elf",
+      "name": "Półelf",
+      "speed_feet": 30,
+      "ability_bonuses": {
+        "charisma": 2
+      },
+      "ability_bonus_choice_count": 2,
+      "ability_bonus_choice_value": 1,
+      "ability_bonus_choice_exclusions": [
+        "charisma"
+      ],
+      "darkvision_feet": 60,
+      "skill_choice_count": 2,
+      "skill_choices": [
+        "acrobatics",
+        "animal_handling",
+        "arcana",
+        "athletics",
+        "deception",
+        "history",
+        "insight",
+        "intimidation",
+        "investigation",
+        "medicine",
+        "nature",
+        "perception",
+        "performance",
+        "persuasion",
+        "religion",
+        "sleight_of_hand",
+        "stealth",
+        "survival"
+      ],
+      "languages": [
+        "common",
+        "elvish"
+      ],
+      "language_choice_count": 1,
+      "trait_ids": [
+        "darkvision",
+        "fey_ancestry",
+        "skill_versatility"
+      ]
+    },
+    {
+      "id": "half_orc",
+      "name": "Półork",
+      "speed_feet": 30,
+      "ability_bonuses": {
+        "strength": 2,
+        "constitution": 1
+      },
+      "darkvision_feet": 60,
+      "skill_proficiencies": [
+        "intimidation"
+      ],
+      "languages": [
+        "common",
+        "orc"
+      ],
+      "trait_ids": [
+        "darkvision",
+        "relentless_endurance",
+        "savage_attacks"
+      ]
+    },
+    {
+      "id": "tiefling",
+      "name": "Diabelstwo",
+      "speed_feet": 30,
+      "ability_bonuses": {
+        "intelligence": 1,
+        "charisma": 2
+      },
+      "darkvision_feet": 60,
+      "languages": [
+        "common",
+        "infernal"
+      ],
+      "trait_ids": [
+        "darkvision",
+        "hellish_resistance",
+        "infernal_legacy"
+      ],
+      "fixed_cantrip_ids": [
+        "thaumaturgy"
+      ],
+      "cantrip_ability": "charisma",
+      "innate_spells": [
+        {
+          "spell_id": "hellish_rebuke",
+          "level": 2,
+          "resource_id": "infernal_legacy_hellish_rebuke",
+          "recovery": "long_rest"
+        },
+        {
+          "spell_id": "darkness",
+          "level": 3,
+          "resource_id": "infernal_legacy_darkness",
+          "recovery": "long_rest"
+        }
+      ]
+    }
+  ],
+  "classes": [
+    {
+      "id": "barbarian",
+      "name": "Barbarzyńca",
+      "hit_die": 12,
+      "saving_throw_proficiencies": [
+        "strength",
+        "constitution"
+      ],
+      "skill_choice_count": 2,
+      "skill_choices": [
+        "animal_handling",
+        "athletics",
+        "intimidation",
+        "nature",
+        "perception",
+        "survival"
+      ],
+      "weapon_proficiencies": [
+        "club",
+        "dagger",
+        "greatclub",
+        "handaxe",
+        "javelin",
+        "light_hammer",
+        "mace",
+        "quarterstaff",
+        "sickle",
+        "spear",
+        "battleaxe",
+        "flail",
+        "glaive",
+        "greataxe",
+        "greatsword",
+        "halberd",
+        "lance",
+        "longsword",
+        "maul",
+        "morningstar",
+        "pike",
+        "rapier",
+        "scimitar",
+        "shortsword",
+        "trident",
+        "war_pick",
+        "warhammer",
+        "whip",
+        "blowgun",
+        "crossbow",
+        "hand_crossbow",
+        "heavy_crossbow",
+        "longbow",
+        "net",
+        "shortbow"
+      ],
+      "armor_proficiencies": [
+        "light",
+        "medium",
+        "shield"
+      ],
+      "feature_ids": [
+        "rage",
+        "unarmored_defense_constitution"
+      ],
+      "subclass_choice_count": 1,
+      "subclass_choice_level": 3,
+      "subclass_choices": [
+        {
+          "id": "path_of_the_berserker",
+          "name": "Ścieżka Berserkera",
+          "feature_ids": [
+            "frenzy"
+          ]
+        }
+      ],
+      "level_progression": [
+        {
+          "level": 2,
+          "feature_ids": [
+            "reckless_attack",
+            "danger_sense"
+          ]
+        },
+        {
+          "level": 3,
+          "feature_ids": [
+            "primal_path"
+          ]
+        }
+      ],
+      "equipment_packages": [
+        {
+          "id": "barbarian_greataxe",
+          "label": "Topór dwuręczny i wyposażenie podróżne",
+          "items": [
+            {
+              "item_id": "greataxe",
+              "equipped": true
+            },
+            {
+              "item_id": "handaxe",
+              "quantity": 2
+            },
+            {
+              "item_id": "javelin",
+              "quantity": 4
+            },
+            {
+              "item_id": "explorers_pack"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "bard",
+      "name": "Bard",
+      "hit_die": 8,
+      "saving_throw_proficiencies": [
+        "dexterity",
+        "charisma"
+      ],
+      "skill_choice_count": 3,
+      "skill_choices": [
+        "acrobatics",
+        "animal_handling",
+        "arcana",
+        "athletics",
+        "deception",
+        "history",
+        "insight",
+        "intimidation",
+        "investigation",
+        "medicine",
+        "nature",
+        "perception",
+        "performance",
+        "persuasion",
+        "religion",
+        "sleight_of_hand",
+        "stealth",
+        "survival"
+      ],
+      "weapon_proficiencies": [
+        "simple",
+        "hand_crossbow",
+        "longsword",
+        "rapier",
+        "shortsword"
+      ],
+      "armor_proficiencies": [
+        "light"
+      ],
+      "feature_ids": [
+        "spellcasting",
+        "bardic_inspiration"
+      ],
+      "expertise_choice_count": 2,
+      "expertise_choice_level": 3,
+      "spellcasting_ability": "charisma",
+      "cantrip_choice_count": 2,
+      "cantrip_choices": [
+        "dancing_lights",
+        "light",
+        "mage_hand",
+        "mending",
+        "message",
+        "minor_illusion",
+        "prestidigitation",
+        "true_strike",
+        "vicious_mockery"
+      ],
+      "spell_choice_count": 4,
+      "spell_choices": [
+        "animal_friendship",
+        "bane",
+        "charm_person",
+        "comprehend_languages",
+        "cure_wounds",
+        "detect_magic",
+        "disguise_self",
+        "faerie_fire",
+        "feather_fall",
+        "healing_word",
+        "heroism",
+        "hideous_laughter",
+        "identify",
+        "illusory_script",
+        "longstrider",
+        "silent_image",
+        "sleep",
+        "speak_with_animals",
+        "thunderwave",
+        "unseen_servant",
+        "animal_messenger",
+        "blindness_deafness",
+        "calm_emotions",
+        "detect_thoughts",
+        "enhance_ability",
+        "enthrall",
+        "heat_metal",
+        "hold_person",
+        "invisibility",
+        "knock",
+        "lesser_restoration",
+        "locate_animals_or_plants",
+        "locate_object",
+        "magic_mouth",
+        "see_invisibility",
+        "shatter",
+        "silence",
+        "suggestion",
+        "zone_of_truth"
+      ],
+      "spell_slots": {
+        "1": 2
+      },
+      "preparation_kind": "known",
+      "level_progression": [
+        {
+          "level": 2,
+          "feature_ids": [
+            "jack_of_all_trades",
+            "song_of_rest"
+          ],
+          "spell_slots": {
+            "1": 3
+          },
+          "spell_choice_count": 5
+        },
+        {
+          "level": 3,
+          "feature_ids": [
+            "bard_college"
+          ],
+          "spell_slots": {
+            "1": 4,
+            "2": 2
+          },
+          "spell_choice_count": 6
+        }
+      ],
+      "subclass_choice_count": 1,
+      "subclass_choice_level": 3,
+      "subclass_choices": [
+        {
+          "id": "college_of_lore",
+          "name": "College of Lore",
+          "feature_ids": [
+            "bonus_proficiencies",
+            "cutting_words"
+          ]
+        }
+      ],
+      "choice_groups": [
+        {
+          "id": "bard_instruments",
+          "name": "Musical Instruments",
+          "level": 1,
+          "choice_count": 3,
+          "options": [
+            {
+              "id": "bard_instrument_bagpipes",
+              "name": "Bagpipes",
+              "tool_proficiencies": [
+                "bagpipes"
+              ]
+            },
+            {
+              "id": "bard_instrument_drum",
+              "name": "Drum",
+              "tool_proficiencies": [
+                "drum"
+              ]
+            },
+            {
+              "id": "bard_instrument_dulcimer",
+              "name": "Dulcimer",
+              "tool_proficiencies": [
+                "dulcimer"
+              ]
+            },
+            {
+              "id": "bard_instrument_flute",
+              "name": "Flute",
+              "tool_proficiencies": [
+                "flute"
+              ]
+            },
+            {
+              "id": "bard_instrument_lute",
+              "name": "Lute",
+              "tool_proficiencies": [
+                "lute"
+              ]
+            },
+            {
+              "id": "bard_instrument_lyre",
+              "name": "Lyre",
+              "tool_proficiencies": [
+                "lyre"
+              ]
+            },
+            {
+              "id": "bard_instrument_horn",
+              "name": "Horn",
+              "tool_proficiencies": [
+                "horn"
+              ]
+            },
+            {
+              "id": "bard_instrument_pan_flute",
+              "name": "Pan Flute",
+              "tool_proficiencies": [
+                "pan_flute"
+              ]
+            },
+            {
+              "id": "bard_instrument_shawm",
+              "name": "Shawm",
+              "tool_proficiencies": [
+                "shawm"
+              ]
+            },
+            {
+              "id": "bard_instrument_viol",
+              "name": "Viol",
+              "tool_proficiencies": [
+                "viol"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "lore_bonus_proficiencies",
+          "name": "Bonus Proficiencies",
+          "level": 3,
+          "choice_count": 3,
+          "options": [
+            {
+              "id": "lore_skill_acrobatics",
+              "name": "Acrobatics",
+              "skill_proficiencies": [
+                "acrobatics"
+              ]
+            },
+            {
+              "id": "lore_skill_animal_handling",
+              "name": "Animal Handling",
+              "skill_proficiencies": [
+                "animal_handling"
+              ]
+            },
+            {
+              "id": "lore_skill_arcana",
+              "name": "Arcana",
+              "skill_proficiencies": [
+                "arcana"
+              ]
+            },
+            {
+              "id": "lore_skill_athletics",
+              "name": "Athletics",
+              "skill_proficiencies": [
+                "athletics"
+              ]
+            },
+            {
+              "id": "lore_skill_deception",
+              "name": "Deception",
+              "skill_proficiencies": [
+                "deception"
+              ]
+            },
+            {
+              "id": "lore_skill_history",
+              "name": "History",
+              "skill_proficiencies": [
+                "history"
+              ]
+            },
+            {
+              "id": "lore_skill_insight",
+              "name": "Insight",
+              "skill_proficiencies": [
+                "insight"
+              ]
+            },
+            {
+              "id": "lore_skill_intimidation",
+              "name": "Intimidation",
+              "skill_proficiencies": [
+                "intimidation"
+              ]
+            },
+            {
+              "id": "lore_skill_investigation",
+              "name": "Investigation",
+              "skill_proficiencies": [
+                "investigation"
+              ]
+            },
+            {
+              "id": "lore_skill_medicine",
+              "name": "Medicine",
+              "skill_proficiencies": [
+                "medicine"
+              ]
+            },
+            {
+              "id": "lore_skill_nature",
+              "name": "Nature",
+              "skill_proficiencies": [
+                "nature"
+              ]
+            },
+            {
+              "id": "lore_skill_perception",
+              "name": "Perception",
+              "skill_proficiencies": [
+                "perception"
+              ]
+            },
+            {
+              "id": "lore_skill_performance",
+              "name": "Performance",
+              "skill_proficiencies": [
+                "performance"
+              ]
+            },
+            {
+              "id": "lore_skill_persuasion",
+              "name": "Persuasion",
+              "skill_proficiencies": [
+                "persuasion"
+              ]
+            },
+            {
+              "id": "lore_skill_religion",
+              "name": "Religion",
+              "skill_proficiencies": [
+                "religion"
+              ]
+            },
+            {
+              "id": "lore_skill_sleight_of_hand",
+              "name": "Sleight Of Hand",
+              "skill_proficiencies": [
+                "sleight_of_hand"
+              ]
+            },
+            {
+              "id": "lore_skill_stealth",
+              "name": "Stealth",
+              "skill_proficiencies": [
+                "stealth"
+              ]
+            },
+            {
+              "id": "lore_skill_survival",
+              "name": "Survival",
+              "skill_proficiencies": [
+                "survival"
+              ]
+            }
+          ]
+        }
+      ],
+      "equipment_packages": [
+        {
+          "id": "bard_diplomat",
+          "label": "Rapier i wyposażenie dyplomaty",
+          "items": [
+            {
+              "item_id": "rapier",
+              "equipped": true
+            },
+            {
+              "item_id": "leather_armor",
+              "equipped": true
+            },
+            {
+              "item_id": "lute",
+              "equipped": true
+            },
+            {
+              "item_id": "dagger",
+              "equipped": false
+            },
+            {
+              "item_id": "diplomats_pack",
+              "equipped": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cleric",
+      "name": "Kleryk",
+      "hit_die": 8,
+      "saving_throw_proficiencies": [
+        "wisdom",
+        "charisma"
+      ],
+      "skill_choice_count": 2,
+      "skill_choices": [
+        "history",
+        "insight",
+        "medicine",
+        "persuasion",
+        "religion"
+      ],
+      "weapon_proficiencies": [
+        "mace",
+        "crossbow",
+        "dagger"
+      ],
+      "armor_proficiencies": [
+        "light",
+        "medium",
+        "shield"
+      ],
+      "feature_ids": [
+        "spellcasting",
+        "divine_domain"
+      ],
+      "subclass_choice_count": 1,
+      "subclass_choice_level": 1,
+      "subclass_choices": [
+        {
+          "id": "life_domain",
+          "name": "Domena Życia",
+          "feature_ids": [
+            "life_domain",
+            "disciple_of_life"
+          ],
+          "level_progression": [
+            {
+              "level": 2,
+              "feature_ids": [
+                "channel_divinity_preserve_life"
+              ]
+            },
+            {
+              "level": 3,
+              "always_prepared_spell_ids": [
+                "lesser_restoration",
+                "spiritual_weapon"
+              ]
+            }
+          ],
+          "armor_proficiencies": [
+            "heavy"
+          ],
+          "always_prepared_spell_ids": [
+            "bless",
+            "cure_wounds"
+          ]
+        }
+      ],
+      "spellcasting_ability": "wisdom",
+      "cantrip_choice_count": 3,
+      "cantrip_choices": [
+        "guidance",
+        "light",
+        "mending",
+        "resistance",
+        "sacred_flame",
+        "spare_the_dying",
+        "thaumaturgy"
+      ],
+      "spell_choice_count": 0,
+      "spell_choices": [
+        "bane",
+        "bless",
+        "command",
+        "create_or_destroy_water",
+        "cure_wounds",
+        "detect_evil_and_good",
+        "detect_magic",
+        "detect_poison_and_disease",
+        "guiding_bolt",
+        "healing_word",
+        "inflict_wounds",
+        "protection_from_evil_and_good",
+        "purify_food_and_drink",
+        "sanctuary",
+        "shield_of_faith",
+        "aid",
+        "augury",
+        "blindness_deafness",
+        "calm_emotions",
+        "continual_flame",
+        "enhance_ability",
+        "find_traps",
+        "gentle_repose",
+        "hold_person",
+        "lesser_restoration",
+        "locate_object",
+        "prayer_of_healing",
+        "protection_from_poison",
+        "silence",
+        "spiritual_weapon",
+        "warding_bond",
+        "zone_of_truth"
+      ],
+      "spell_slots": {
+        "1": 2
+      },
+      "level_progression": [
+        {
+          "level": 2,
+          "feature_ids": [
+            "channel_divinity",
+            "turn_undead"
+          ],
+          "spell_slots": {
+            "1": 3
+          }
+        },
+        {
+          "level": 3,
+          "spell_slots": {
+            "1": 4,
+            "2": 2
+          }
+        }
+      ],
+      "preparation_kind": "prepared",
+      "preparation_formula": "ability_modifier_plus_level",
+      "equipment_packages": [
+        {
+          "id": "cleric_guardian",
+          "label": "Buława, tarcza i zbroja łuskowa",
+          "items": [
+            {
+              "item_id": "mace",
+              "equipped": true
+            },
+            {
+              "item_id": "shield",
+              "equipped": true
+            },
+            {
+              "item_id": "scale_mail",
+              "equipped": true
+            },
+            {
+              "item_id": "crossbow",
+              "equipped": false
+            },
+            {
+              "item_id": "crossbow_bolt",
+              "quantity": 20
+            },
+            {
+              "item_id": "holy_symbol_amulet",
+              "equipped": true
+            },
+            {
+              "item_id": "priests_pack"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "druid",
+      "name": "Druid",
+      "hit_die": 8,
+      "saving_throw_proficiencies": [
+        "intelligence",
+        "wisdom"
+      ],
+      "skill_choice_count": 2,
+      "skill_choices": [
+        "arcana",
+        "animal_handling",
+        "insight",
+        "medicine",
+        "nature",
+        "perception",
+        "religion",
+        "survival"
+      ],
+      "weapon_proficiencies": [
+        "club",
+        "dagger",
+        "dart",
+        "javelin",
+        "mace",
+        "quarterstaff",
+        "scimitar",
+        "sickle",
+        "sling",
+        "spear"
+      ],
+      "armor_proficiencies": [
+        "light",
+        "medium",
+        "shield"
+      ],
+      "tool_proficiencies": [
+        "herbalism_kit"
+      ],
+      "feature_ids": [
+        "druidic",
+        "spellcasting"
+      ],
+      "spellcasting_ability": "wisdom",
+      "cantrip_choice_count": 2,
+      "cantrip_choices": [
+        "druidcraft",
+        "guidance",
+        "mending",
+        "poison_spray",
+        "produce_flame",
+        "resistance",
+        "shillelagh"
+      ],
+      "spell_choice_count": 0,
+      "spell_choices": [
+        "animal_friendship",
+        "charm_person",
+        "create_or_destroy_water",
+        "cure_wounds",
+        "detect_magic",
+        "detect_poison_and_disease",
+        "entangle",
+        "faerie_fire",
+        "fog_cloud",
+        "goodberry",
+        "healing_word",
+        "jump",
+        "longstrider",
+        "purify_food_and_drink",
+        "speak_with_animals",
+        "thunderwave",
+        "animal_messenger",
+        "barkskin",
+        "darkvision",
+        "enhance_ability",
+        "find_traps",
+        "flame_blade",
+        "flaming_sphere",
+        "gust_of_wind",
+        "heat_metal",
+        "hold_person",
+        "lesser_restoration",
+        "locate_animals_or_plants",
+        "locate_object",
+        "moonbeam",
+        "pass_without_trace",
+        "protection_from_poison",
+        "spike_growth"
+      ],
+      "spell_slots": {
+        "1": 2
+      },
+      "preparation_kind": "prepared",
+      "preparation_formula": "ability_modifier_plus_level",
+      "level_progression": [
+        {
+          "level": 2,
+          "feature_ids": [
+            "wild_shape",
+            "druid_circle"
+          ],
+          "spell_slots": {
+            "1": 3
+          },
+          "cantrip_choice_count": 3
+        },
+        {
+          "level": 3,
+          "spell_slots": {
+            "1": 4,
+            "2": 2
+          }
+        }
+      ],
+      "subclass_choice_count": 1,
+      "subclass_choice_level": 2,
+      "subclass_choices": [
+        {
+          "id": "circle_of_the_land",
+          "name": "Circle of the Land",
+          "feature_ids": [
+            "bonus_cantrip",
+            "natural_recovery"
+          ]
+        }
+      ],
+      "choice_groups": [
+        {
+          "id": "circle_land",
+          "name": "Circle Land",
+          "level": 2,
+          "choice_count": 1,
+          "options": [
+            {
+              "id": "circle_land_arctic",
+              "name": "Arctic",
+              "feature_ids": [
+                "circle_land_arctic"
+              ],
+              "level_progression": [
+                {
+                  "level": 3,
+                  "always_prepared_spell_ids": [
+                    "hold_person",
+                    "spike_growth"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "circle_land_coast",
+              "name": "Coast",
+              "feature_ids": [
+                "circle_land_coast"
+              ],
+              "level_progression": [
+                {
+                  "level": 3,
+                  "always_prepared_spell_ids": [
+                    "mirror_image",
+                    "misty_step"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "circle_land_desert",
+              "name": "Desert",
+              "feature_ids": [
+                "circle_land_desert"
+              ],
+              "level_progression": [
+                {
+                  "level": 3,
+                  "always_prepared_spell_ids": [
+                    "blur",
+                    "silence"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "circle_land_forest",
+              "name": "Forest",
+              "feature_ids": [
+                "circle_land_forest"
+              ],
+              "level_progression": [
+                {
+                  "level": 3,
+                  "always_prepared_spell_ids": [
+                    "barkskin",
+                    "spider_climb"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "circle_land_grassland",
+              "name": "Grassland",
+              "feature_ids": [
+                "circle_land_grassland"
+              ],
+              "level_progression": [
+                {
+                  "level": 3,
+                  "always_prepared_spell_ids": [
+                    "invisibility",
+                    "pass_without_trace"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "circle_land_mountain",
+              "name": "Mountain",
+              "feature_ids": [
+                "circle_land_mountain"
+              ],
+              "level_progression": [
+                {
+                  "level": 3,
+                  "always_prepared_spell_ids": [
+                    "spider_climb",
+                    "spike_growth"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "circle_land_swamp",
+              "name": "Swamp",
+              "feature_ids": [
+                "circle_land_swamp"
+              ],
+              "level_progression": [
+                {
+                  "level": 3,
+                  "always_prepared_spell_ids": [
+                    "darkness",
+                    "acid_arrow"
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "circle_land_underdark",
+              "name": "Underdark",
+              "feature_ids": [
+                "circle_land_underdark"
+              ],
+              "level_progression": [
+                {
+                  "level": 3,
+                  "always_prepared_spell_ids": [
+                    "spider_climb",
+                    "web"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "equipment_packages": [
+        {
+          "id": "druid_explorer",
+          "label": "Scimitar, tarcza i focus druida",
+          "items": [
+            {
+              "item_id": "scimitar",
+              "equipped": true
+            },
+            {
+              "item_id": "shield",
+              "equipped": true
+            },
+            {
+              "item_id": "leather_armor",
+              "equipped": true
+            },
+            {
+              "item_id": "druidic_focus_mistletoe",
+              "equipped": false
+            },
+            {
+              "item_id": "explorers_pack",
+              "equipped": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "fighter",
+      "name": "Wojownik",
+      "hit_die": 10,
+      "saving_throw_proficiencies": [
+        "strength",
+        "constitution"
+      ],
+      "skill_choice_count": 2,
+      "skill_choices": [
+        "acrobatics",
+        "animal_handling",
+        "athletics",
+        "history",
+        "insight",
+        "intimidation",
+        "perception",
+        "survival"
+      ],
+      "weapon_proficiencies": [
+        "longsword",
+        "crossbow",
+        "dagger",
+        "javelin",
+        "battleaxe",
+        "handaxe",
+        "warhammer",
+        "shortbow",
+        "longbow"
+      ],
+      "armor_proficiencies": [
+        "light",
+        "medium",
+        "heavy",
+        "shield"
+      ],
+      "feature_ids": [
+        "fighting_style",
+        "second_wind"
+      ],
+      "fighting_style_choices": [
+        "archery",
+        "defense",
+        "dueling",
+        "two_weapon_fighting"
+      ],
+      "subclass_choice_count": 1,
+      "subclass_choice_level": 3,
+      "subclass_choices": [
+        {
+          "id": "champion",
+          "name": "Champion",
+          "feature_ids": [
+            "improved_critical"
+          ]
+        }
+      ],
+      "level_progression": [
+        {
+          "level": 2,
+          "feature_ids": [
+            "action_surge"
+          ]
+        },
+        {
+          "level": 3,
+          "feature_ids": [
+            "martial_archetype"
+          ]
+        }
+      ],
+      "equipment_packages": [
+        {
+          "id": "fighter_sword_and_board",
+          "label": "Miecz, tarcza i kolczuga",
+          "items": [
+            {
+              "item_id": "longsword",
+              "equipped": true
+            },
+            {
+              "item_id": "shield",
+              "equipped": true
+            },
+            {
+              "item_id": "chain_mail",
+              "equipped": true
+            },
+            {
+              "item_id": "crossbow",
+              "equipped": false
+            },
+            {
+              "item_id": "crossbow_bolt",
+              "quantity": 20
+            },
+            {
+              "item_id": "explorers_pack"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "monk",
+      "name": "Mnich",
+      "hit_die": 8,
+      "saving_throw_proficiencies": [
+        "strength",
+        "dexterity"
+      ],
+      "skill_choice_count": 2,
+      "skill_choices": [
+        "acrobatics",
+        "athletics",
+        "history",
+        "insight",
+        "religion",
+        "stealth"
+      ],
+      "weapon_proficiencies": [
+        "club",
+        "dagger",
+        "greatclub",
+        "handaxe",
+        "javelin",
+        "light_hammer",
+        "mace",
+        "quarterstaff",
+        "sickle",
+        "spear",
+        "shortsword"
+      ],
+      "tool_proficiencies": [
+        "one_artisans_tool_or_instrument"
+      ],
+      "feature_ids": [
+        "unarmored_defense_wisdom",
+        "martial_arts"
+      ],
+      "subclass_choice_count": 1,
+      "subclass_choice_level": 3,
+      "subclass_choices": [
+        {
+          "id": "way_of_the_open_hand",
+          "name": "Droga Otwartej Dłoni",
+          "feature_ids": [
+            "open_hand_technique"
+          ]
+        }
+      ],
+      "level_progression": [
+        {
+          "level": 2,
+          "feature_ids": [
+            "ki",
+            "unarmored_movement_10"
+          ]
+        },
+        {
+          "level": 3,
+          "feature_ids": [
+            "monastic_tradition",
+            "deflect_missiles"
+          ]
+        }
+      ],
+      "equipment_packages": [
+        {
+          "id": "monk_staff",
+          "label": "Kostur i pakiet odkrywcy",
+          "items": [
+            {
+              "item_id": "quarterstaff",
+              "equipped": true
+            },
+            {
+              "item_id": "dart",
+              "quantity": 10
+            },
+            {
+              "item_id": "explorers_pack"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "paladin",
+      "name": "Paladyn",
+      "hit_die": 10,
+      "saving_throw_proficiencies": [
+        "wisdom",
+        "charisma"
+      ],
+      "skill_choice_count": 2,
+      "skill_choices": [
+        "athletics",
+        "insight",
+        "intimidation",
+        "medicine",
+        "persuasion",
+        "religion"
+      ],
+      "weapon_proficiencies": [
+        "simple",
+        "martial"
+      ],
+      "armor_proficiencies": [
+        "light",
+        "medium",
+        "heavy",
+        "shield"
+      ],
+      "feature_ids": [
+        "divine_sense",
+        "lay_on_hands"
+      ],
+      "fighting_style_choice_level": 2,
+      "fighting_style_choices": [
+        "defense",
+        "dueling",
+        "great_weapon_fighting",
+        "protection"
+      ],
+      "spellcasting_ability": "charisma",
+      "spellcasting_level": 2,
+      "cantrip_choice_count": 0,
+      "cantrip_choices": [],
+      "spell_choice_count": 0,
+      "spell_choices": [
+        "bless",
+        "command",
+        "cure_wounds",
+        "detect_evil_and_good",
+        "detect_magic",
+        "detect_poison_and_disease",
+        "divine_favor",
+        "heroism",
+        "protection_from_evil_and_good",
+        "purify_food_and_drink",
+        "shield_of_faith",
+        "aid",
+        "branding_smite",
+        "find_steed",
+        "lesser_restoration",
+        "locate_object",
+        "magic_weapon",
+        "protection_from_poison",
+        "zone_of_truth"
+      ],
+      "spell_slots": {},
+      "preparation_kind": "prepared",
+      "preparation_formula": "ability_modifier_plus_half_level",
+      "level_progression": [
+        {
+          "level": 2,
+          "feature_ids": [
+            "fighting_style",
+            "spellcasting",
+            "divine_smite"
+          ],
+          "spell_slots": {
+            "1": 2
+          }
+        },
+        {
+          "level": 3,
+          "feature_ids": [
+            "divine_health",
+            "sacred_oath"
+          ],
+          "spell_slots": {
+            "1": 3
+          }
+        }
+      ],
+      "subclass_choice_count": 1,
+      "subclass_choice_level": 3,
+      "subclass_choices": [
+        {
+          "id": "oath_of_devotion",
+          "name": "Oath of Devotion",
+          "feature_ids": [
+            "channel_divinity_sacred_weapon",
+            "channel_divinity_turn_the_unholy"
+          ],
+          "always_prepared_spell_ids": [
+            "protection_from_evil_and_good",
+            "sanctuary"
+          ]
+        }
+      ],
+      "equipment_packages": [
+        {
+          "id": "paladin_guardian",
+          "label": "Miecz, tarcza i kolczuga",
+          "items": [
+            {
+              "item_id": "longsword",
+              "equipped": true
+            },
+            {
+              "item_id": "shield",
+              "equipped": true
+            },
+            {
+              "item_id": "chain_mail",
+              "equipped": true
+            },
+            {
+              "item_id": "javelin",
+              "equipped": false,
+              "quantity": 5
+            },
+            {
+              "item_id": "holy_symbol_amulet",
+              "equipped": false
+            },
+            {
+              "item_id": "priests_pack",
+              "equipped": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ranger",
+      "name": "Łowca",
+      "hit_die": 10,
+      "saving_throw_proficiencies": [
+        "strength",
+        "dexterity"
+      ],
+      "skill_choice_count": 3,
+      "skill_choices": [
+        "animal_handling",
+        "athletics",
+        "insight",
+        "investigation",
+        "nature",
+        "perception",
+        "stealth",
+        "survival"
+      ],
+      "weapon_proficiencies": [
+        "simple",
+        "martial"
+      ],
+      "armor_proficiencies": [
+        "light",
+        "medium",
+        "shield"
+      ],
+      "feature_ids": [
+        "favored_enemy",
+        "natural_explorer"
+      ],
+      "fighting_style_choice_level": 2,
+      "fighting_style_choices": [
+        "archery",
+        "defense",
+        "dueling",
+        "two_weapon_fighting"
+      ],
+      "spellcasting_ability": "wisdom",
+      "spellcasting_level": 2,
+      "cantrip_choice_count": 0,
+      "cantrip_choices": [],
+      "spell_choice_count": 0,
+      "spell_choices": [
+        "alarm",
+        "animal_friendship",
+        "cure_wounds",
+        "detect_magic",
+        "detect_poison_and_disease",
+        "fog_cloud",
+        "goodberry",
+        "hunters_mark",
+        "jump",
+        "longstrider",
+        "speak_with_animals",
+        "animal_messenger",
+        "barkskin",
+        "darkvision",
+        "find_traps",
+        "lesser_restoration",
+        "locate_animals_or_plants",
+        "locate_object",
+        "pass_without_trace",
+        "protection_from_poison",
+        "silence",
+        "spike_growth"
+      ],
+      "spell_slots": {},
+      "preparation_kind": "known",
+      "level_progression": [
+        {
+          "level": 2,
+          "feature_ids": [
+            "fighting_style",
+            "spellcasting"
+          ],
+          "spell_slots": {
+            "1": 2
+          },
+          "spell_choice_count": 2
+        },
+        {
+          "level": 3,
+          "feature_ids": [
+            "ranger_archetype",
+            "primeval_awareness"
+          ],
+          "spell_slots": {
+            "1": 3
+          },
+          "spell_choice_count": 3
+        }
+      ],
+      "subclass_choice_count": 1,
+      "subclass_choice_level": 3,
+      "subclass_choices": [
+        {
+          "id": "hunter",
+          "name": "Hunter",
+          "feature_ids": [
+            "hunters_prey"
+          ]
+        }
+      ],
+      "choice_groups": [
+        {
+          "id": "favored_enemy",
+          "name": "Favored Enemy",
+          "level": 1,
+          "choice_count": 1,
+          "options": [
+            {
+              "id": "favored_enemy_aberration",
+              "name": "Aberration",
+              "feature_ids": [
+                "favored_enemy_aberration"
+              ]
+            },
+            {
+              "id": "favored_enemy_beast",
+              "name": "Beast",
+              "feature_ids": [
+                "favored_enemy_beast"
+              ]
+            },
+            {
+              "id": "favored_enemy_celestial",
+              "name": "Celestial",
+              "feature_ids": [
+                "favored_enemy_celestial"
+              ]
+            },
+            {
+              "id": "favored_enemy_construct",
+              "name": "Construct",
+              "feature_ids": [
+                "favored_enemy_construct"
+              ]
+            },
+            {
+              "id": "favored_enemy_dragon",
+              "name": "Dragon",
+              "feature_ids": [
+                "favored_enemy_dragon"
+              ]
+            },
+            {
+              "id": "favored_enemy_elemental",
+              "name": "Elemental",
+              "feature_ids": [
+                "favored_enemy_elemental"
+              ]
+            },
+            {
+              "id": "favored_enemy_fey",
+              "name": "Fey",
+              "feature_ids": [
+                "favored_enemy_fey"
+              ]
+            },
+            {
+              "id": "favored_enemy_fiend",
+              "name": "Fiend",
+              "feature_ids": [
+                "favored_enemy_fiend"
+              ]
+            },
+            {
+              "id": "favored_enemy_giant",
+              "name": "Giant",
+              "feature_ids": [
+                "favored_enemy_giant"
+              ]
+            },
+            {
+              "id": "favored_enemy_humanoid",
+              "name": "Humanoid",
+              "feature_ids": [
+                "favored_enemy_humanoid"
+              ]
+            },
+            {
+              "id": "favored_enemy_monstrosity",
+              "name": "Monstrosity",
+              "feature_ids": [
+                "favored_enemy_monstrosity"
+              ]
+            },
+            {
+              "id": "favored_enemy_ooze",
+              "name": "Ooze",
+              "feature_ids": [
+                "favored_enemy_ooze"
+              ]
+            },
+            {
+              "id": "favored_enemy_plant",
+              "name": "Plant",
+              "feature_ids": [
+                "favored_enemy_plant"
+              ]
+            },
+            {
+              "id": "favored_enemy_undead",
+              "name": "Undead",
+              "feature_ids": [
+                "favored_enemy_undead"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "favored_enemy_humanoid_races",
+          "name": "Favored Enemy — dwie rasy humanoidów",
+          "level": 1,
+          "choice_count": 2,
+          "requires_option_id": "favored_enemy_humanoid",
+          "options": [
+            {
+              "id": "favored_enemy_humanoid_race_bullywug",
+              "name": "Bullywug",
+              "feature_ids": ["favored_enemy_humanoid_race_bullywug"]
+            },
+            {
+              "id": "favored_enemy_humanoid_race_dwarf",
+              "name": "Dwarf",
+              "feature_ids": ["favored_enemy_humanoid_race_dwarf"]
+            },
+            {
+              "id": "favored_enemy_humanoid_race_elf",
+              "name": "Elf",
+              "feature_ids": ["favored_enemy_humanoid_race_elf"]
+            },
+            {
+              "id": "favored_enemy_humanoid_race_gnoll",
+              "name": "Gnoll",
+              "feature_ids": ["favored_enemy_humanoid_race_gnoll"]
+            },
+            {
+              "id": "favored_enemy_humanoid_race_gnome",
+              "name": "Gnome",
+              "feature_ids": ["favored_enemy_humanoid_race_gnome"]
+            },
+            {
+              "id": "favored_enemy_humanoid_race_goblin",
+              "name": "Goblin",
+              "feature_ids": ["favored_enemy_humanoid_race_goblin"]
+            },
+            {
+              "id": "favored_enemy_humanoid_race_grimlock",
+              "name": "Grimlock",
+              "feature_ids": ["favored_enemy_humanoid_race_grimlock"]
+            },
+            {
+              "id": "favored_enemy_humanoid_race_halfling",
+              "name": "Halfling",
+              "feature_ids": ["favored_enemy_humanoid_race_halfling"]
+            },
+            {
+              "id": "favored_enemy_humanoid_race_hobgoblin",
+              "name": "Hobgoblin",
+              "feature_ids": ["favored_enemy_humanoid_race_hobgoblin"]
+            },
+            {
+              "id": "favored_enemy_humanoid_race_human",
+              "name": "Human",
+              "feature_ids": ["favored_enemy_humanoid_race_human"]
+            },
+            {
+              "id": "favored_enemy_humanoid_race_kobold",
+              "name": "Kobold",
+              "feature_ids": ["favored_enemy_humanoid_race_kobold"]
+            },
+            {
+              "id": "favored_enemy_humanoid_race_lizardfolk",
+              "name": "Lizardfolk",
+              "feature_ids": ["favored_enemy_humanoid_race_lizardfolk"]
+            },
+            {
+              "id": "favored_enemy_humanoid_race_merfolk",
+              "name": "Merfolk",
+              "feature_ids": ["favored_enemy_humanoid_race_merfolk"]
+            },
+            {
+              "id": "favored_enemy_humanoid_race_orc",
+              "name": "Orc",
+              "feature_ids": ["favored_enemy_humanoid_race_orc"]
+            },
+            {
+              "id": "favored_enemy_humanoid_race_sahuagin",
+              "name": "Sahuagin",
+              "feature_ids": ["favored_enemy_humanoid_race_sahuagin"]
+            },
+            {
+              "id": "favored_enemy_humanoid_race_troglodyte",
+              "name": "Troglodyte",
+              "feature_ids": ["favored_enemy_humanoid_race_troglodyte"]
+            }
+          ]
+        },
+        {
+          "id": "natural_explorer",
+          "name": "Natural Explorer",
+          "level": 1,
+          "choice_count": 1,
+          "options": [
+            {
+              "id": "natural_explorer_arctic",
+              "name": "Arctic",
+              "feature_ids": [
+                "natural_explorer_arctic"
+              ]
+            },
+            {
+              "id": "natural_explorer_coast",
+              "name": "Coast",
+              "feature_ids": [
+                "natural_explorer_coast"
+              ]
+            },
+            {
+              "id": "natural_explorer_desert",
+              "name": "Desert",
+              "feature_ids": [
+                "natural_explorer_desert"
+              ]
+            },
+            {
+              "id": "natural_explorer_forest",
+              "name": "Forest",
+              "feature_ids": [
+                "natural_explorer_forest"
+              ]
+            },
+            {
+              "id": "natural_explorer_grassland",
+              "name": "Grassland",
+              "feature_ids": [
+                "natural_explorer_grassland"
+              ]
+            },
+            {
+              "id": "natural_explorer_mountain",
+              "name": "Mountain",
+              "feature_ids": [
+                "natural_explorer_mountain"
+              ]
+            },
+            {
+              "id": "natural_explorer_swamp",
+              "name": "Swamp",
+              "feature_ids": [
+                "natural_explorer_swamp"
+              ]
+            },
+            {
+              "id": "natural_explorer_underdark",
+              "name": "Underdark",
+              "feature_ids": [
+                "natural_explorer_underdark"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "hunters_prey",
+          "name": "Hunter’s Prey",
+          "level": 3,
+          "choice_count": 1,
+          "options": [
+            {
+              "id": "colossus_slayer",
+              "name": "Colossus Slayer",
+              "feature_ids": [
+                "colossus_slayer"
+              ]
+            },
+            {
+              "id": "giant_killer",
+              "name": "Giant Killer",
+              "feature_ids": [
+                "giant_killer"
+              ]
+            },
+            {
+              "id": "horde_breaker",
+              "name": "Horde Breaker",
+              "feature_ids": [
+                "horde_breaker"
+              ]
+            }
+          ]
+        }
+      ],
+      "equipment_packages": [
+        {
+          "id": "ranger_archer",
+          "label": "Łuk, dwa miecze i zbroja łuskowa",
+          "items": [
+            {
+              "item_id": "longbow",
+              "equipped": true
+            },
+            {
+              "item_id": "shortsword",
+              "equipped": true,
+              "quantity": 2,
+              "separate_instances": true
+            },
+            {
+              "item_id": "scale_mail",
+              "equipped": true
+            },
+            {
+              "item_id": "arrow",
+              "equipped": false,
+              "quantity": 20
+            },
+            {
+              "item_id": "explorers_pack",
+              "equipped": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "rogue",
+      "name": "Łotrzyca",
+      "hit_die": 8,
+      "saving_throw_proficiencies": [
+        "dexterity",
+        "intelligence"
+      ],
+      "skill_choice_count": 4,
+      "skill_choices": [
+        "acrobatics",
+        "athletics",
+        "deception",
+        "insight",
+        "intimidation",
+        "investigation",
+        "perception",
+        "performance",
+        "persuasion",
+        "sleight_of_hand",
+        "stealth"
+      ],
+      "weapon_proficiencies": [
+        "crossbow",
+        "dagger",
+        "rapier",
+        "shortsword",
+        "shortbow"
+      ],
+      "armor_proficiencies": [
+        "light"
+      ],
+      "tool_proficiencies": [
+        "thieves_tools"
+      ],
+      "feature_ids": [
+        "expertise",
+        "sneak_attack",
+        "thieves_cant"
+      ],
+      "subclass_choice_count": 1,
+      "subclass_choice_level": 3,
+      "subclass_choices": [
+        {
+          "id": "thief",
+          "name": "Złodziej",
+          "feature_ids": [
+            "fast_hands",
+            "second_story_work"
+          ]
+        }
+      ],
+      "level_progression": [
+        {
+          "level": 2,
+          "feature_ids": [
+            "cunning_action"
+          ]
+        },
+        {
+          "level": 3,
+          "feature_ids": [
+            "roguish_archetype",
+            "sneak_attack_2d6"
+          ]
+        }
+      ],
+      "expertise_choice_count": 2,
+      "equipment_packages": [
+        {
+          "id": "rogue_burglar",
+          "label": "Rapier i zestaw włamywacza",
+          "items": [
+            {
+              "item_id": "rapier",
+              "equipped": true
+            },
+            {
+              "item_id": "shortbow",
+              "equipped": false
+            },
+            {
+              "item_id": "arrow",
+              "quantity": 20
+            },
+            {
+              "item_id": "dagger",
+              "quantity": 2,
+              "separate_instances": true
+            },
+            {
+              "item_id": "leather_armor",
+              "equipped": true
+            },
+            {
+              "item_id": "thieves_tools"
+            },
+            {
+              "item_id": "burglars_pack"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sorcerer",
+      "name": "Zaklinacz",
+      "hit_die": 6,
+      "saving_throw_proficiencies": [
+        "constitution",
+        "charisma"
+      ],
+      "skill_choice_count": 2,
+      "skill_choices": [
+        "arcana",
+        "deception",
+        "insight",
+        "intimidation",
+        "persuasion",
+        "religion"
+      ],
+      "weapon_proficiencies": [
+        "dagger",
+        "dart",
+        "sling",
+        "quarterstaff",
+        "crossbow"
+      ],
+      "feature_ids": [
+        "spellcasting",
+        "sorcerous_origin"
+      ],
+      "spellcasting_ability": "charisma",
+      "cantrip_choice_count": 4,
+      "cantrip_choices": [
+        "acid_splash",
+        "chill_touch",
+        "dancing_lights",
+        "fire_bolt",
+        "light",
+        "mage_hand",
+        "mending",
+        "message",
+        "minor_illusion",
+        "poison_spray",
+        "prestidigitation",
+        "ray_of_frost",
+        "shocking_grasp",
+        "true_strike"
+      ],
+      "spell_choice_count": 2,
+      "spell_choices": [
+        "burning_hands",
+        "charm_person",
+        "color_spray",
+        "comprehend_languages",
+        "detect_magic",
+        "disguise_self",
+        "expeditious_retreat",
+        "false_life",
+        "feather_fall",
+        "fog_cloud",
+        "jump",
+        "mage_armor",
+        "magic_missile",
+        "shield",
+        "silent_image",
+        "sleep",
+        "thunderwave",
+        "alter_self",
+        "blindness_deafness",
+        "blur",
+        "darkness",
+        "darkvision",
+        "detect_thoughts",
+        "enhance_ability",
+        "enlarge_reduce",
+        "gust_of_wind",
+        "hold_person",
+        "invisibility",
+        "knock",
+        "levitate",
+        "mirror_image",
+        "misty_step",
+        "scorching_ray",
+        "see_invisibility",
+        "shatter",
+        "spider_climb",
+        "suggestion",
+        "web"
+      ],
+      "spell_slots": {
+        "1": 2
+      },
+      "preparation_kind": "known",
+      "level_progression": [
+        {
+          "level": 2,
+          "feature_ids": [
+            "font_of_magic"
+          ],
+          "spell_slots": {
+            "1": 3
+          },
+          "spell_choice_count": 3
+        },
+        {
+          "level": 3,
+          "feature_ids": [
+            "metamagic"
+          ],
+          "spell_slots": {
+            "1": 4,
+            "2": 2
+          },
+          "spell_choice_count": 4
+        }
+      ],
+      "subclass_choice_count": 1,
+      "subclass_choice_level": 1,
+      "subclass_choices": [
+        {
+          "id": "draconic_bloodline",
+          "name": "Draconic Bloodline",
+          "feature_ids": [
+            "dragon_ancestor",
+            "draconic_resilience"
+          ]
+        }
+      ],
+      "choice_groups": [
+        {
+          "id": "metamagic",
+          "name": "Metamagic",
+          "level": 3,
+          "choice_count": 2,
+          "options": [
+            {
+              "id": "careful_spell",
+              "name": "Careful Spell",
+              "feature_ids": [
+                "metamagic_careful"
+              ]
+            },
+            {
+              "id": "distant_spell",
+              "name": "Distant Spell",
+              "feature_ids": [
+                "metamagic_distant"
+              ]
+            },
+            {
+              "id": "empowered_spell",
+              "name": "Empowered Spell",
+              "feature_ids": [
+                "metamagic_empowered"
+              ]
+            },
+            {
+              "id": "extended_spell",
+              "name": "Extended Spell",
+              "feature_ids": [
+                "metamagic_extended"
+              ]
+            },
+            {
+              "id": "heightened_spell",
+              "name": "Heightened Spell",
+              "feature_ids": [
+                "metamagic_heightened"
+              ]
+            },
+            {
+              "id": "quickened_spell",
+              "name": "Quickened Spell",
+              "feature_ids": [
+                "metamagic_quickened"
+              ]
+            },
+            {
+              "id": "subtle_spell",
+              "name": "Subtle Spell",
+              "feature_ids": [
+                "metamagic_subtle"
+              ]
+            },
+            {
+              "id": "twinned_spell",
+              "name": "Twinned Spell",
+              "feature_ids": [
+                "metamagic_twinned"
+              ]
+            }
+          ]
+        }
+      ],
+      "equipment_packages": [
+        {
+          "id": "sorcerer_explorer",
+          "label": "Kusza i focus mistyczny",
+          "items": [
+            {
+              "item_id": "crossbow",
+              "equipped": true
+            },
+            {
+              "item_id": "dagger",
+              "equipped": true
+            },
+            {
+              "item_id": "arcane_focus_crystal",
+              "equipped": true
+            },
+            {
+              "item_id": "crossbow_bolt",
+              "equipped": false,
+              "quantity": 20
+            },
+            {
+              "item_id": "explorers_pack",
+              "equipped": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "warlock",
+      "name": "Czarnoksiężnik",
+      "hit_die": 8,
+      "saving_throw_proficiencies": [
+        "wisdom",
+        "charisma"
+      ],
+      "skill_choice_count": 2,
+      "skill_choices": [
+        "arcana",
+        "deception",
+        "history",
+        "intimidation",
+        "investigation",
+        "nature",
+        "religion"
+      ],
+      "weapon_proficiencies": [
+        "simple"
+      ],
+      "armor_proficiencies": [
+        "light"
+      ],
+      "feature_ids": [
+        "otherworldly_patron",
+        "pact_magic"
+      ],
+      "spellcasting_ability": "charisma",
+      "cantrip_choice_count": 2,
+      "cantrip_choices": [
+        "chill_touch",
+        "eldritch_blast",
+        "mage_hand",
+        "minor_illusion",
+        "poison_spray",
+        "prestidigitation",
+        "true_strike"
+      ],
+      "spell_choice_count": 2,
+      "spell_choices": [
+        "charm_person",
+        "comprehend_languages",
+        "expeditious_retreat",
+        "hellish_rebuke",
+        "illusory_script",
+        "protection_from_evil_and_good",
+        "unseen_servant",
+        "darkness",
+        "enthrall",
+        "hold_person",
+        "invisibility",
+        "mirror_image",
+        "misty_step",
+        "ray_of_enfeeblement",
+        "shatter",
+        "spider_climb",
+        "suggestion"
+      ],
+      "spell_slots": {
+        "1": 1
+      },
+      "spell_slot_recovery": "short_rest",
+      "preparation_kind": "known",
+      "level_progression": [
+        {
+          "level": 2,
+          "feature_ids": [
+            "eldritch_invocations"
+          ],
+          "spell_slots": {
+            "1": 2
+          },
+          "spell_choice_count": 3
+        },
+        {
+          "level": 3,
+          "feature_ids": [
+            "pact_boon"
+          ],
+          "spell_slots": {
+            "2": 2
+          },
+          "spell_choice_count": 4
+        }
+      ],
+      "subclass_choice_count": 1,
+      "subclass_choice_level": 1,
+      "subclass_choices": [
+        {
+          "id": "the_fiend",
+          "name": "The Fiend",
+          "feature_ids": [
+            "dark_ones_blessing"
+          ],
+          "additional_spell_choice_ids": [
+            "burning_hands",
+            "command"
+          ],
+          "level_progression": [
+            {
+              "level": 3,
+              "additional_spell_choice_ids": [
+                "blindness_deafness",
+                "scorching_ray"
+              ]
+            }
+          ]
+        }
+      ],
+      "choice_groups": [
+        {
+          "id": "eldritch_invocations",
+          "name": "Eldritch Invocations",
+          "level": 2,
+          "choice_count": 2,
+          "options": [
+            {
+              "id": "agonizing_blast",
+              "name": "Agonizing Blast",
+              "feature_ids": [
+                "agonizing_blast"
+              ]
+            },
+            {
+              "id": "armor_of_shadows",
+              "name": "Armor of Shadows",
+              "feature_ids": [
+                "armor_of_shadows"
+              ],
+              "at_will_spell_ids": [
+                "mage_armor"
+              ]
+            },
+            {
+              "id": "beast_speech",
+              "name": "Beast Speech",
+              "feature_ids": [
+                "beast_speech"
+              ],
+              "at_will_spell_ids": [
+                "speak_with_animals"
+              ]
+            },
+            {
+              "id": "beguiling_influence",
+              "name": "Beguiling Influence",
+              "feature_ids": [
+                "beguiling_influence"
+              ],
+              "skill_proficiencies": [
+                "deception",
+                "persuasion"
+              ]
+            },
+            {
+              "id": "devils_sight",
+              "name": "Devil’s Sight",
+              "feature_ids": [
+                "devils_sight"
+              ]
+            },
+            {
+              "id": "eldritch_sight",
+              "name": "Eldritch Sight",
+              "feature_ids": [
+                "eldritch_sight"
+              ],
+              "at_will_spell_ids": [
+                "detect_magic"
+              ]
+            },
+            {
+              "id": "fiendish_vigor",
+              "name": "Fiendish Vigor",
+              "feature_ids": [
+                "fiendish_vigor"
+              ],
+              "at_will_spell_ids": [
+                "false_life"
+              ]
+            },
+            {
+              "id": "mask_of_many_faces",
+              "name": "Mask of Many Faces",
+              "feature_ids": [
+                "mask_of_many_faces"
+              ],
+              "at_will_spell_ids": [
+                "disguise_self"
+              ]
+            },
+            {
+              "id": "misty_visions",
+              "name": "Misty Visions",
+              "feature_ids": [
+                "misty_visions"
+              ],
+              "at_will_spell_ids": [
+                "silent_image"
+              ]
+            },
+            {
+              "id": "repelling_blast",
+              "name": "Repelling Blast",
+              "feature_ids": [
+                "repelling_blast"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "pact_boon",
+          "name": "Pact Boon",
+          "level": 3,
+          "choice_count": 1,
+          "options": [
+            {
+              "id": "pact_of_the_chain",
+              "name": "Pact of the Chain",
+              "feature_ids": [
+                "pact_of_the_chain"
+              ],
+              "ritual_spell_ids": [
+                "find_familiar"
+              ]
+            },
+            {
+              "id": "pact_of_the_blade",
+              "name": "Pact of the Blade",
+              "feature_ids": [
+                "pact_of_the_blade"
+              ]
+            },
+            {
+              "id": "pact_of_the_tome",
+              "name": "Pact of the Tome",
+              "feature_ids": [
+                "pact_of_the_tome"
+              ],
+              "cantrip_choice_count": 3,
+              "cantrip_choices": [
+                "acid_splash",
+                "chill_touch",
+                "dancing_lights",
+                "druidcraft",
+                "eldritch_blast",
+                "fire_bolt",
+                "guidance",
+                "light",
+                "mage_hand",
+                "mending",
+                "message",
+                "minor_illusion",
+                "poison_spray",
+                "prestidigitation",
+                "produce_flame",
+                "ray_of_frost",
+                "resistance",
+                "sacred_flame",
+                "shillelagh",
+                "shocking_grasp",
+                "spare_the_dying",
+                "thaumaturgy",
+                "true_strike",
+                "vicious_mockery"
+              ]
+            }
+          ]
+        }
+      ],
+      "equipment_packages": [
+        {
+          "id": "warlock_scholar",
+          "label": "Kusza, skórznia i focus",
+          "items": [
+            {
+              "item_id": "crossbow",
+              "equipped": true
+            },
+            {
+              "item_id": "leather_armor",
+              "equipped": true
+            },
+            {
+              "item_id": "arcane_focus_crystal",
+              "equipped": true
+            },
+            {
+              "item_id": "dagger",
+              "equipped": false
+            },
+            {
+              "item_id": "crossbow_bolt",
+              "equipped": false,
+              "quantity": 20
+            },
+            {
+              "item_id": "scholars_pack",
+              "equipped": false
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "wizard",
+      "name": "Czarodziej",
+      "hit_die": 6,
+      "saving_throw_proficiencies": [
+        "intelligence",
+        "wisdom"
+      ],
+      "skill_choice_count": 2,
+      "skill_choices": [
+        "arcana",
+        "history",
+        "insight",
+        "investigation",
+        "medicine",
+        "religion"
+      ],
+      "weapon_proficiencies": [
+        "dagger",
+        "dart",
+        "sling",
+        "quarterstaff",
+        "crossbow"
+      ],
+      "feature_ids": [
+        "spellcasting",
+        "arcane_recovery"
+      ],
+      "subclass_choice_count": 1,
+      "subclass_choice_level": 2,
+      "subclass_choices": [
+        {
+          "id": "school_of_evocation",
+          "name": "Szkoła Ewokacji",
+          "feature_ids": [
+            "evocation_savant",
+            "sculpt_spells"
+          ]
+        }
+      ],
+      "spellcasting_ability": "intelligence",
+      "cantrip_choice_count": 3,
+      "cantrip_choices": [
+        "acid_splash",
+        "chill_touch",
+        "dancing_lights",
+        "fire_bolt",
+        "light",
+        "mage_hand",
+        "mending",
+        "message",
+        "minor_illusion",
+        "poison_spray",
+        "prestidigitation",
+        "ray_of_frost",
+        "shocking_grasp",
+        "true_strike"
+      ],
+      "spell_choice_count": 6,
+      "spell_choices": [
+        "alarm",
+        "burning_hands",
+        "charm_person",
+        "color_spray",
+        "comprehend_languages",
+        "detect_magic",
+        "disguise_self",
+        "expeditious_retreat",
+        "false_life",
+        "feather_fall",
+        "find_familiar",
+        "floating_disk",
+        "fog_cloud",
+        "grease",
+        "hideous_laughter",
+        "identify",
+        "illusory_script",
+        "jump",
+        "longstrider",
+        "mage_armor",
+        "magic_missile",
+        "protection_from_evil_and_good",
+        "shield",
+        "silent_image",
+        "sleep",
+        "thunderwave",
+        "unseen_servant",
+        "acid_arrow",
+        "alter_self",
+        "arcane_lock",
+        "arcanists_magic_aura",
+        "blindness_deafness",
+        "blur",
+        "continual_flame",
+        "darkness",
+        "darkvision",
+        "detect_thoughts",
+        "enlarge_reduce",
+        "flaming_sphere",
+        "gentle_repose",
+        "gust_of_wind",
+        "hold_person",
+        "invisibility",
+        "knock",
+        "levitate",
+        "locate_object",
+        "magic_mouth",
+        "magic_weapon",
+        "mirror_image",
+        "misty_step",
+        "ray_of_enfeeblement",
+        "rope_trick",
+        "scorching_ray",
+        "see_invisibility",
+        "shatter",
+        "spider_climb",
+        "suggestion",
+        "web"
+      ],
+      "spell_slots": {
+        "1": 2
+      },
+      "level_progression": [
+        {
+          "level": 2,
+          "feature_ids": [
+            "arcane_tradition"
+          ],
+          "spell_slots": {
+            "1": 3
+          },
+          "spell_choice_count": 8
+        },
+        {
+          "level": 3,
+          "spell_slots": {
+            "1": 4,
+            "2": 2
+          },
+          "spell_choice_count": 10
+        }
+      ],
+      "preparation_kind": "spellbook",
+      "preparation_formula": "ability_modifier_plus_level",
+      "equipment_packages": [
+        {
+          "id": "wizard_scholar",
+          "label": "Kostur i wyposażenie uczonego",
+          "items": [
+            {
+              "item_id": "quarterstaff",
+              "equipped": true
+            },
+            {
+              "item_id": "dagger"
+            },
+            {
+              "item_id": "component_pouch",
+              "equipped": true
+            },
+            {
+              "item_id": "spellbook"
+            },
+            {
+              "item_id": "scholars_pack"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "backgrounds": [
+    {
+      "id": "soldier",
+      "name": "Żołnierz",
+      "skill_proficiencies": [
+        "athletics",
+        "intimidation"
+      ],
+      "tool_proficiencies": [
+        "land_vehicles"
+      ],
+      "tool_choice_count": 1,
+      "tool_choices": [
+        "dice_set",
+        "playing_card_set",
+        "dragonchess_set",
+        "three_dragon_ante_set"
+      ],
+      "equipment": [
+        {
+          "item_id": "dice_set"
+        },
+        {
+          "item_id": "common_clothes"
+        },
+        {
+          "item_id": "pouch"
+        }
+      ],
+      "starting_gp": 10,
+      "feature_ids": [
+        "military_rank"
+      ],
+      "permission_ids": [
+        "invoke_military_rank",
+        "request_military_aid"
+      ]
+    },
+    {
+      "id": "criminal",
+      "name": "Przestępca",
+      "skill_proficiencies": [
+        "deception",
+        "stealth"
+      ],
+      "tool_proficiencies": [
+        "thieves_tools"
+      ],
+      "tool_choice_count": 1,
+      "tool_choices": [
+        "dice_set",
+        "playing_card_set",
+        "dragonchess_set",
+        "three_dragon_ante_set"
+      ],
+      "equipment": [
+        {
+          "item_id": "crowbar"
+        },
+        {
+          "item_id": "common_clothes"
+        },
+        {
+          "item_id": "pouch"
+        }
+      ],
+      "starting_gp": 15,
+      "feature_ids": [
+        "criminal_contact"
+      ],
+      "permission_ids": [
+        "contact_criminal_network"
+      ]
+    },
+    {
+      "id": "acolyte",
+      "name": "Akolita",
+      "skill_proficiencies": [
+        "insight",
+        "religion"
+      ],
+      "language_choice_count": 2,
+      "equipment": [
+        {
+          "item_id": "holy_symbol_amulet"
+        },
+        {
+          "item_id": "vestments"
+        },
+        {
+          "item_id": "common_clothes"
+        },
+        {
+          "item_id": "pouch"
+        }
+      ],
+      "starting_gp": 15,
+      "feature_ids": [
+        "shelter_of_the_faithful"
+      ],
+      "permission_ids": [
+        "request_faithful_shelter",
+        "request_faithful_care"
+      ]
+    },
+    {
+      "id": "sage",
+      "name": "Mędrzec",
+      "skill_proficiencies": [
+        "arcana",
+        "history"
+      ],
+      "language_choice_count": 2,
+      "equipment": [
+        {
+          "item_id": "ink"
+        },
+        {
+          "item_id": "ink_pen"
+        },
+        {
+          "item_id": "small_knife"
+        },
+        {
+          "item_id": "common_clothes"
+        },
+        {
+          "item_id": "pouch"
+        }
+      ],
+      "starting_gp": 10,
+      "feature_ids": [
+        "researcher"
+      ],
+      "permission_ids": [
+        "locate_lore_source"
+      ]
+    }
+  ]
+}

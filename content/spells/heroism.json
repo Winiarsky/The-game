@@ -1,0 +1,40 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "heroism",
+  "name": "Heroism",
+  "level": 1,
+  "school": "enchantment",
+  "casting_time": "action",
+  "range": {
+    "kind": "touch"
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": []
+  },
+  "duration": {
+    "kind": "minute",
+    "amount": 1
+  },
+  "concentration": true,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "targeted_status",
+    "label": "Heroism",
+    "effect_kind": "heroism_temp_hp",
+    "target_faction": "ally",
+    "target_count": 1,
+    "upcast_targets_per_level": 1,
+    "cast_flag": "cast_heroism",
+    "instructions": "Dobrowolny cel jest odporny na Frightened i na początku każdej tury dostaje tymczasowe PW równe modyfikatorowi cechy rzucania.",
+    "resolution_mode": "automatic",
+    "board_relevance": "direct"
+  }
+}

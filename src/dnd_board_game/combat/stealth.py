@@ -3,7 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Mapping, Sequence
 
-from dnd_board_game.actors import Actor, Faction, passive_skill_score
+from dnd_board_game.actors import (
+    Actor,
+    Faction,
+    actor_has_feature,
+    creature_size_rank,
+    passive_skill_score,
+)
 from dnd_board_game.world import BoardState, bresenham_line, line_of_sight_clear
 
 if TYPE_CHECKING:
@@ -53,7 +59,7 @@ def hide_eligibility(
         for observer in actors
         if _hostile(actor, observer)
         and not observer.is_defeated()
-        and _sees_clearly(board, observer, actor, scene_objects)
+        and _sees_clearly(board, observer, actor, actors, scene_objects)
     )
     return HideEligibility(not blockers, blockers)
 
@@ -147,7 +153,13 @@ def refresh_hidden_after_movement(
         observer_id
         for observer_id in current.hidden_from_actor_ids
         if observer_id in observers
-        and _sees_clearly(board, observers[observer_id], moved_actor, scene_objects)
+        and _sees_clearly(
+            board,
+            observers[observer_id],
+            moved_actor,
+            tuple(observers.values()),
+            scene_objects,
+        )
     )
     remaining_observers = tuple(
         observer_id
@@ -169,11 +181,20 @@ def _sees_clearly(
     board: BoardState,
     observer: Actor,
     actor: Actor,
+    actors: Sequence[Actor],
     scene_objects: Sequence[SceneObject],
 ) -> bool:
     if not line_of_sight_clear(board, observer.position, actor.position):
         return False
     intermediate = frozenset(bresenham_line(observer.position, actor.position)[1:-1])
+    if actor_has_feature(actor, "naturally_stealthy") and any(
+        other.id not in {observer.id, actor.id}
+        and not other.is_defeated()
+        and other.position in intermediate
+        and creature_size_rank(other.size) > creature_size_rank(actor.size)
+        for other in actors
+    ):
+        return False
     strongest_cover = max(
         (
             scene_object.projectile_cover_bonus

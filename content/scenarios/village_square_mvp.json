@@ -205,7 +205,8 @@
         "navigation_ability": "wisdom",
         "navigation_skill": "survival",
         "navigation_failure_delay_minutes": 30,
-        "safe_travel_minutes": 480
+        "safe_travel_minutes": 480,
+        "terrain": "forest"
       }
     },
     "merchants": [
@@ -231,6 +232,14 @@
           {"item_ref": "ink", "quantity": 2},
           {"item_ref": "ink_pen", "quantity": 4},
           {"item_ref": "paper", "quantity": 20},
+          {"item_ref": "spell_component_arcane_lock", "quantity": 2},
+          {"item_ref": "spell_component_augury", "quantity": 1},
+          {"item_ref": "spell_component_continual_flame", "quantity": 2},
+          {"item_ref": "spell_component_find_familiar", "quantity": 3},
+          {"item_ref": "spell_component_identify", "quantity": 1},
+          {"item_ref": "spell_component_illusory_script", "quantity": 3},
+          {"item_ref": "spell_component_magic_mouth", "quantity": 3},
+          {"item_ref": "spell_component_warding_bond", "quantity": 1},
           {"item_ref": "explorers_pack", "quantity": 1}
         ]
       }

@@ -1,0 +1,43 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "invisibility",
+  "name": "Invisibility",
+  "level": 2,
+  "school": "divination",
+  "casting_time": "action",
+  "range": {
+    "kind": "self"
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": [
+      {
+        "item_id": "spell_component_invisibility",
+        "label": "a pinch of talc and a small sprinkling of powdered silver"
+      }
+    ]
+  },
+  "duration": {
+    "kind": "hour",
+    "amount": 1
+  },
+  "concentration": false,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "targeted_status",
+    "label": "Invisibility",
+    "target_count": 1,
+    "cast_flag": "cast_invisibility",
+    "instructions": "Cel i noszone przez niego przedmioty są Invisible podczas koncentracji do godziny; efekt kończy się po ataku lub rzuceniu czaru.",
+    "effect_kind": "invisibility",
+    "value": 0,
+    "target_faction": "ally"
+  }
+}

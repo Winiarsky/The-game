@@ -37,6 +37,11 @@ class _Action:
     spell_level: int = 0
     prepared: bool = True
     source_item_id: str | None = None
+    effect_kind: str | None = None
+    concentration: bool = False
+    duration: str = "next_turn_start"
+    cast_flag: str = ""
+    upcast_value_per_level: int = 0
 
 
 def _actor(
@@ -163,6 +168,98 @@ def test_concentration_start_and_confirmation_consume_slot_and_create_effect() -
     assert confirmed.active_effects[0].source_actor_id == "cleric"
     assert confirmed.active_effects[0].target_actor_id == "hero"
     assert confirmed.event_type == "ui_combat_concentration_confirmed"
+
+
+def test_targeted_status_spell_creates_typed_ac_effect_and_cast_flag() -> None:
+    from dnd_board_game.combat import combat_armor_class
+
+    service = PlayerCombatResourceFlowService()
+    cleric = _actor(
+        "cleric",
+        Faction.ALLY,
+        Coordinate(0, 0),
+        spell_slots=(SpellSlotState(1, 1, 1),),
+    )
+    ally = _actor("ally", Faction.ALLY, Coordinate(1, 0))
+    enemy = _actor("enemy", Faction.ENEMY, Coordinate(3, 0))
+    state = _state(cleric, ally, enemy)
+    action = _Action(
+        id="shield_of_faith",
+        action_type="targeted_status",
+        label="Shield of Faith",
+        value=2,
+        target_faction="ally",
+        range_feet=60,
+        spell_level=1,
+        effect_kind="spell_ac_bonus",
+        concentration=True,
+        duration="concentration",
+        cast_flag="cast_shield_of_faith",
+    )
+
+    started = service.start_concentration(
+        state=state,
+        active_effects=(),
+        action=action,
+    )
+    assert started.pending_action is not None
+    confirmed = service.confirm_concentration(
+        state=state,
+        active_effects=(),
+        action=action,
+        pending=started.pending_action,
+        target_id="ally",
+    )
+
+    assert confirmed.active_effects[0].kind == "spell_ac_bonus"
+    assert combat_armor_class(ally, confirmed.active_effects) == 14
+    assert confirmed.scene_flag_changes == (("cast_shield_of_faith", True),)
+
+
+def test_aid_upcast_increases_current_and_maximum_hit_points() -> None:
+    service = PlayerCombatResourceFlowService()
+    cleric = _actor(
+        "cleric",
+        Faction.ALLY,
+        Coordinate(0, 0),
+        spell_slots=(SpellSlotState(3, 1, 1),),
+    )
+    ally = _actor("ally", Faction.ALLY, Coordinate(1, 0))
+    enemy = _actor("enemy", Faction.ENEMY, Coordinate(3, 0))
+    state = _state(cleric, ally, enemy)
+    action = _Action(
+        id="aid",
+        action_type="targeted_status",
+        label="Aid",
+        value=5,
+        target_faction="ally",
+        range_feet=30,
+        spell_level=2,
+        effect_kind="max_hit_points_bonus",
+        duration="long_rest",
+        cast_flag="cast_aid",
+        upcast_value_per_level=5,
+    )
+
+    started = service.start_concentration(
+        state=state,
+        active_effects=(),
+        action=action,
+        cast_level=3,
+    )
+    confirmed = service.confirm_concentration(
+        state=state,
+        active_effects=(),
+        action=action,
+        pending=started.pending_action,
+        target_id="ally",
+    )
+
+    updated = next(
+        actor for actor in confirmed.state.actors if str(actor.id) == "ally"
+    )
+    assert updated.hp == 30
+    assert updated.max_hp == 30
 
 
 def test_upcast_concentration_spell_applies_one_effect_per_selected_target() -> None:

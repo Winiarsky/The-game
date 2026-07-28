@@ -96,7 +96,15 @@ def validate_unique_feature_grants(grants: tuple[FeatureGrant, ...]) -> None:
         raise ValueError("Actor feature ids cannot contain duplicates.")
 
 
+def actor_has_feature(actor: object, feature_id: str) -> bool:
+    return any(
+        grant.feature_id == feature_id
+        for grant in getattr(actor, "features", ())
+    )
+
+
 __all__ = [
+    "actor_has_feature",
     "FeatureDefinition",
     "FeatureGrant",
     "FeatureSourceKind",

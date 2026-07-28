@@ -4,7 +4,12 @@ from dataclasses import dataclass, replace
 from random import Random
 from typing import Mapping
 
-from dnd_board_game.actors import Actor, Faction, saving_throw_roll_modifiers
+from dnd_board_game.actors import (
+    Actor,
+    Faction,
+    actor_has_feature,
+    saving_throw_roll_modifiers,
+)
 from dnd_board_game.rules import (
     ActiveEffect as ActiveCombatEffect,
     D20RollInput,
@@ -24,12 +29,14 @@ from dnd_board_game.rules import (
     expire_active_effects,
     resolve_d20_roll,
     resolve_saving_throw,
+    DiceExpression,
 )
 from dnd_board_game.world import Coordinate
 
 from .scene import SceneInteraction, SceneObject, available_scene_interactions, visible_scene_objects
 from .action_economy import ActionEconomyCost, action_economy_cost_label
 from .session import ActionUse, CombatState, can_pay_action_economy_cost, replace_actor
+from .damage import DamageComponentSpec
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,7 +120,12 @@ def available_combat_interaction_options(
     for interaction in available_scene_interactions(scene_object):
         if not interaction_conditions_met(interaction, scene_object, state, actor, position):
             continue
-        if not can_pay_action_economy_cost(state, interaction.action_cost):
+        action_cost = _interaction_action_cost(
+            state,
+            actor,
+            interaction.action_cost,
+        )
+        if action_cost is None:
             continue
         adjacent_target = (
             adjacent_living_enemy(state, actor)
@@ -135,10 +147,32 @@ def available_combat_interaction_options(
                 object_name=scene_object.name,
                 target_position=position,
                 conditions=tuple(condition_label(condition.condition_type) for condition in interaction.conditions),
-                action_cost=interaction.action_cost,
+                action_cost=action_cost,
             )
         )
     return tuple(options)
+
+
+def _interaction_action_cost(
+    state: CombatState,
+    actor: Actor,
+    authored_cost: ActionEconomyCost,
+) -> ActionEconomyCost | None:
+    if (
+        actor_has_feature(actor, "fast_hands")
+        and state.turn_action.bonus_action_use == ActionUse.ACTION_AVAILABLE
+        and authored_cost == ActionEconomyCost.ACTION
+    ):
+        return ActionEconomyCost.BONUS_ACTION
+    if can_pay_action_economy_cost(state, authored_cost):
+        return authored_cost
+    if (
+        actor_has_feature(actor, "fast_hands")
+        and state.turn_action.bonus_action_use == ActionUse.ACTION_AVAILABLE
+        and authored_cost == ActionEconomyCost.OBJECT_INTERACTION
+    ):
+        return ActionEconomyCost.BONUS_ACTION
+    return None
 
 
 def combat_interaction_positions(
@@ -405,12 +439,60 @@ def expire_combat_effects(
 
 def attack_source_with_combat_effects(actor: Actor, source, active_effects: tuple[ActiveCombatEffect, ...]):
     modifiers = []
+    shillelagh = any(
+        effect.actor_id == str(actor.id) and effect.kind == "shillelagh"
+        for effect in active_effects
+    ) and (
+        getattr(source, "proficiency_id", "") in {"club", "quarterstaff"}
+        or getattr(source, "id", "") in {"club", "quarterstaff"}
+        or getattr(source, "source_item_id", "") in {"club", "quarterstaff"}
+    )
+    shillelagh_modifier_difference = 0
+    enfeebled = any(
+        effect.actor_id == str(actor.id)
+        and effect.kind == "ray_of_enfeeblement"
+        for effect in active_effects
+    ) and (
+        getattr(getattr(source, "source_type", None), "value", "") == "weapon"
+        and getattr(source, "ability", None) == "strength"
+    )
+    if enfeebled:
+        source = replace(source, damage_divisor=2)
+    if shillelagh:
+        from dnd_board_game.rules import ability_modifier
+
+        casting_modifier = actor.spell_save_dc - 8 - actor.proficiency_bonus
+        current_modifier = ability_modifier(
+            getattr(actor.ability_scores, getattr(source, "ability", "strength"))
+        )
+        shillelagh_modifier_difference = casting_modifier - current_modifier
+        if shillelagh_modifier_difference:
+            modifiers.append(
+                RollModifier(
+                    "Shillelagh",
+                    shillelagh_modifier_difference,
+                    RollModifierType.SPELL,
+                    stacking_key="shillelagh",
+                )
+            )
     for effect in active_effects:
         if effect.actor_id != str(actor.id):
             continue
-        if effect.kind not in {"grant_attack_bonus_while_on_object", "grant_next_attack_penalty", "strength_potion", "concentration_attack_bonus"}:
+        if effect.kind not in {
+            "grant_attack_bonus_while_on_object",
+            "grant_next_attack_penalty",
+            "strength_potion",
+            "concentration_attack_bonus",
+            "sacred_weapon_attack_bonus",
+            "magic_weapon",
+        }:
             continue
         if effect.kind == "strength_potion" and getattr(source, "ability", None) != "strength":
+            continue
+        if (
+            effect.kind == "sacred_weapon_attack_bonus"
+            and effect.object_id != f"weapon:{getattr(source, 'source_item_id', '')}"
+        ):
             continue
         modifiers.append(
             RollModifier(
@@ -423,18 +505,132 @@ def attack_source_with_combat_effects(actor: Actor, source, active_effects: tupl
     damage_bonus = sum(
         effect.value
         for effect in active_effects
-        if effect.actor_id == str(actor.id) and effect.kind == "strength_potion" and getattr(source, "ability", None) == "strength"
+        if effect.actor_id == str(actor.id)
+        and (
+            (
+                effect.kind == "strength_potion"
+                and getattr(source, "ability", None) == "strength"
+            )
+            or (
+                effect.kind == "rage"
+                and getattr(source, "ability", None) == "strength"
+                and getattr(getattr(source, "attack_kind", None), "value", "") == "melee"
+            )
+            or (
+                effect.kind == "magic_weapon"
+                and getattr(getattr(source, "source_type", None), "value", "") == "weapon"
+            )
+        )
     )
-    if not modifiers and damage_bonus == 0:
+    if shillelagh:
+        damage_bonus += shillelagh_modifier_difference
+        components = list(source.damage_components)
+        if components and components[0].dice is not None:
+            components[0] = replace(
+                components[0],
+                dice=DiceExpression(components[0].dice.count, 8),
+            )
+            source = replace(
+                source,
+                ability="wisdom",
+                damage_components=tuple(components),
+                damage_hint=" + ".join(
+                    component.hint() for component in components
+                ),
+            )
+    reckless = any(
+        effect.actor_id == str(actor.id)
+        and effect.kind == "reckless_attack"
+        and getattr(source, "ability", None) == "strength"
+        and getattr(getattr(source, "attack_kind", None), "value", "") == "melee"
+        for effect in active_effects
+    )
+    next_attack_advantage = any(
+        effect.actor_id == str(actor.id)
+        and effect.kind == "next_attack_advantage"
+        for effect in active_effects
+    )
+    extra_components: list[DamageComponentSpec] = []
+    if getattr(getattr(source, "source_type", None), "value", "") == "weapon":
+        for effect in active_effects:
+            if (
+                effect.actor_id == str(actor.id)
+                and effect.kind == "divine_favor_damage"
+            ):
+                extra_components.append(
+                    DamageComponentSpec(
+                        id="divine_favor",
+                        damage_type="radiant",
+                        dice=DiceExpression(1, 4),
+                        label="Divine Favor",
+                    )
+                )
+            if (
+                effect.actor_id == str(actor.id)
+                and effect.kind == "enlarge_reduce:enlarge"
+            ):
+                extra_components.append(
+                    DamageComponentSpec(
+                        id="enlarge",
+                        damage_type=source.damage_components[0].damage_type,
+                        dice=DiceExpression(1, 4),
+                        label="Enlarge",
+                    )
+                )
+            if (
+                effect.actor_id == str(actor.id)
+                and effect.kind == "branding_smite"
+                and getattr(getattr(source, "attack_kind", None), "value", "")
+                == "melee"
+            ):
+                dice_count = max(2, effect.value)
+                extra_components.append(
+                    DamageComponentSpec(
+                        id="branding_smite",
+                        damage_type="radiant",
+                        dice=DiceExpression(dice_count, 6),
+                        label="Branding Smite",
+                    )
+                )
+            if (
+                effect.actor_id == str(actor.id)
+                and effect.kind == "flame_blade"
+                and getattr(getattr(source, "attack_kind", None), "value", "")
+                == "melee"
+            ):
+                extra_components.append(
+                    DamageComponentSpec(
+                        id="flame_blade",
+                        damage_type="fire",
+                        dice=DiceExpression(max(3, effect.value), 6),
+                        label="Flame Blade",
+                    )
+                )
+    if not modifiers and damage_bonus == 0 and not reckless and not extra_components:
         return source
+    mode = (
+        _with_advantage(source.attack_roll_request.mode)
+        if reckless or next_attack_advantage
+        else source.attack_roll_request.mode
+    )
     return replace(
         source,
         attack_roll_request=D20RollRequest(
-            mode=source.attack_roll_request.mode,
+            mode=mode,
             modifiers=source.attack_roll_request.modifiers + tuple(modifiers),
         ),
         damage_modifier=source.damage_modifier + damage_bonus,
-        damage_hint=_damage_hint_with_bonus(source, damage_bonus) if damage_bonus else source.damage_hint,
+        damage_components=(*source.damage_components, *extra_components),
+        damage_hint=(
+            " + ".join(
+                (
+                    _damage_hint_with_bonus(source, damage_bonus)
+                    if damage_bonus
+                    else source.damage_hint,
+                    *(component.hint() for component in extra_components),
+                )
+            )
+        ),
     )
 
 
@@ -447,15 +643,60 @@ def attack_source_with_target_combat_effects(
     source = attack_source_with_combat_effects(attacker, source, active_effects)
     modifiers = []
     mode = source.attack_roll_request.mode
-    for effect in active_effects:
-        if effect.actor_id == str(target.id) and effect.kind == "dodge_until_next_turn":
+    obscuring_zones = tuple(
+        effect
+        for effect in active_effects
+        if effect.kind == "obscuring_zone"
+        and effect.anchor_position is not None
+    )
+    for zone in obscuring_zones:
+        from .spells import grid_distance_feet
+
+        if grid_distance_feet(attacker.position, zone.anchor_position) <= zone.value:
             mode = _with_disadvantage(mode)
+        if grid_distance_feet(target.position, zone.anchor_position) <= zone.value:
+            mode = _with_advantage(mode)
+    if getattr(source, "advantage_against_metal_armor", False) and _wears_metal_armor(target):
+        mode = _with_advantage(mode)
+    for effect in active_effects:
+        if effect.actor_id == str(target.id) and effect.kind in {
+            "dodge_until_next_turn",
+            "attacks_against_disadvantage",
+            "invisibility",
+        }:
+            mode = _with_disadvantage(mode)
+        if effect.actor_id == str(target.id) and effect.kind in {
+            "attacks_against_advantage",
+            "guiding_bolt_mark",
+        }:
+            mode = _with_advantage(mode)
+        if effect.actor_id == str(attacker.id) and effect.kind == "invisibility":
+            mode = _with_advantage(mode)
         if (
             effect.kind == "help_attack_advantage"
             and effect.actor_id == str(attacker.id)
             and effect.target_actor_id == str(target.id)
         ):
             mode = _with_advantage(mode)
+        if effect.actor_id == str(target.id) and effect.kind == "reckless_attack":
+            mode = _with_advantage(mode)
+        if (
+            effect.actor_id == str(target.id)
+            and effect.kind == "hunters_mark"
+            and effect.source_actor_id == str(attacker.id)
+            and getattr(getattr(source, "source_type", None), "value", "") == "weapon"
+        ):
+            component = DamageComponentSpec(
+                id="hunters_mark",
+                damage_type=source.damage_components[0].damage_type,
+                dice=DiceExpression(1, 6),
+                label="Hunter's Mark",
+            )
+            source = replace(
+                source,
+                damage_components=(*source.damage_components, component),
+                damage_hint=f"{source.damage_hint} + {component.hint()}",
+            )
     if target.is_unconscious():
         mode = _with_advantage(mode)
     if not modifiers and mode == source.attack_roll_request.mode:
@@ -466,6 +707,25 @@ def attack_source_with_target_combat_effects(
             mode=mode,
             modifiers=source.attack_roll_request.modifiers + tuple(modifiers),
         ),
+    )
+
+
+def _wears_metal_armor(actor: Actor) -> bool:
+    metal_armor_ids = {
+        "chain_shirt",
+        "scale_mail",
+        "breastplate",
+        "half_plate",
+        "ring_mail",
+        "chain_mail",
+        "splint_armor",
+        "plate_armor",
+    }
+    return any(
+        item.equipped
+        and item.available
+        and (item.source_ref or item.id) in metal_armor_ids
+        for item in getattr(actor, "inventory", ())
     )
 
 
@@ -554,12 +814,20 @@ def replace_effect(
 
 
 def restore_effect_on_state(state: CombatState, effect: ActiveCombatEffect) -> CombatState:
-    if effect.kind != "grant_ac_bonus_until_move" or effect.base_ac is None:
-        return state
     actor = maybe_actor_by_id(state, effect.actor_id)
     if actor is None:
         return state
-    return replace_actor(state, replace(actor, ac=effect.base_ac))
+    if effect.kind == "grant_ac_bonus_until_move" and effect.base_ac is not None:
+        return replace_actor(state, replace(actor, ac=effect.base_ac))
+    if effect.kind == "max_hit_points_bonus":
+        maximum = max(1, actor.max_hp - effect.value)
+        return replace_actor(
+            state,
+            replace(actor, max_hp=maximum, hp=min(actor.hp, maximum)),
+        )
+    if effect.kind == "temporary_hit_points" and actor.temp_hp <= effect.value:
+        return replace_actor(state, replace(actor, temp_hp=0))
+    return state
 
 
 def scene_object_at_position(scene_objects: tuple[SceneObject, ...], position: Coordinate) -> SceneObject | None:

@@ -318,6 +318,11 @@ class EncounterOutcome:
     body: str
     effects: tuple[dict[str, object], ...] = ()
     next_instruction: str = ""
+    experience_points: int = 0
+
+    def __post_init__(self) -> None:
+        if self.experience_points < 0:
+            raise ValueError("Encounter outcome experience_points cannot be negative.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -472,6 +477,7 @@ class LlmChallengePolicy:
     allowed_preparation_effect_types: tuple[str, ...] = ()
     allowed_grant_resource_ids: tuple[str, ...] = ()
     allowed_unlock_option_ids: tuple[str, ...] = ()
+    allowed_background_permission_ids: tuple[str, ...] = ()
     max_resources_per_attempt: int = 1
     dc_min: int = 5
     dc_max: int = 25
@@ -500,6 +506,9 @@ class LlmChallengePolicy:
             "allowed_preparation_effect_types": list(self.allowed_preparation_effect_types),
             "allowed_grant_resource_ids": list(self.allowed_grant_resource_ids),
             "allowed_unlock_option_ids": list(self.allowed_unlock_option_ids),
+            "allowed_background_permission_ids": list(
+                self.allowed_background_permission_ids
+            ),
             "max_resources_per_attempt": self.max_resources_per_attempt,
             "dc_range": [self.dc_min, self.dc_max],
             "progress_on_success_range": [self.progress_success_min, self.progress_success_max],
@@ -582,6 +591,7 @@ class TravelPolicy:
     navigation_skill: str | None = "survival"
     navigation_failure_delay_minutes: int = 0
     safe_travel_minutes: int = 480
+    terrain: str | None = None
 
     def __post_init__(self) -> None:
         if self.navigation_dc is not None and not 5 <= self.navigation_dc <= 30:
@@ -597,6 +607,8 @@ class TravelPolicy:
             raise ValueError("Travel navigation failure delay cannot be negative.")
         if self.safe_travel_minutes <= 0:
             raise ValueError("Travel safe duration must be positive.")
+        if self.terrain is not None and not self.terrain.strip():
+            raise ValueError("Travel terrain cannot be empty.")
 
     def as_payload(self) -> dict[str, object]:
         return {
@@ -607,6 +619,7 @@ class TravelPolicy:
                 self.navigation_failure_delay_minutes
             ),
             "safe_travel_minutes": self.safe_travel_minutes,
+            "terrain": self.terrain,
             "paces": [
                 {
                     "id": TravelPace.FAST.value,
@@ -1359,6 +1372,8 @@ class InteractionGoal:
     custom: bool = False
     narrative_style: NarrativeStyle | None = None
     grounded_response: NpcGroundedResponse | None = None
+    accepted_source_tags: tuple[str, ...] = ()
+    source_required: bool = False
 
     def __post_init__(self) -> None:
         if not self.id.strip() or not self.label.strip() or not self.description.strip():
@@ -1400,6 +1415,13 @@ class InteractionGoal:
         source_action_ids = tuple(action.id for action in self.source_actions)
         if len(source_action_ids) != len(set(source_action_ids)):
             raise ValueError("Interaction goal cannot repeat source action ids.")
+        if self.source_required and not self.accepted_source_tags:
+            raise ValueError("A goal requiring a source must define accepted_source_tags.")
+        if any(
+            not tag.strip() or tag != tag.strip().lower()
+            for tag in self.accepted_source_tags
+        ):
+            raise ValueError("Interaction goal source tags must be normalized.")
 
     @property
     def participant_options(self) -> tuple[CheckParticipants, ...]:
@@ -1426,6 +1448,8 @@ class InteractionGoal:
                 participants.value for participants in self.participant_options
             ],
             "custom": self.custom,
+            "accepted_source_tags": list(self.accepted_source_tags),
+            "source_required": self.source_required,
         }
 
 
@@ -1679,6 +1703,7 @@ class PartyCheckInput:
     natural_roll: int
     request: D20RollRequest
     natural_roll_2: int | None = None
+    natural_rerolls: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -1791,6 +1816,7 @@ class ExplorationCheckPlan:
     option_bonus_payloads: tuple[dict[str, object], ...] = ()
     resource_payload: dict[str, object] | None = None
     mechanic_payload: dict[str, object] | None = None
+    context_tags: tuple[str, ...] = ()
 
     def as_payload(self) -> dict[str, object]:
         return {
@@ -1807,6 +1833,7 @@ class ExplorationCheckPlan:
             "dc": self.dc,
             "reason_for_players": self.reason_for_players,
             "roll_mode": self.roll_mode.value,
+            "context_tags": list(self.context_tags),
             "situational_modifiers": [modifier.as_payload() for modifier in self.situational_modifiers],
             "improvised_tool": self.improvised_tool.as_payload() if self.improvised_tool else None,
             "roll_modifiers_by_actor_id": [
@@ -3005,7 +3032,17 @@ def resolve_exploration_check(
     if not inputs:
         raise ValueError("Party check requires at least one roll.")
     rolls = tuple(
-        (item.actor, resolve_d20_roll(D20RollInput(item.request, item.natural_roll, item.natural_roll_2)))
+        (
+            item.actor,
+            resolve_d20_roll(
+                D20RollInput(
+                    item.request,
+                    item.natural_roll,
+                    item.natural_roll_2,
+                    item.natural_rerolls,
+                )
+            ),
+        )
         for item in inputs
     )
     passed = tuple((actor, roll) for actor, roll in rolls if resolve_ability_check(roll, plan.dc).success)

@@ -267,6 +267,8 @@ def effect_value_label(effect: ActiveEffect) -> str:
         return f"{_format_signed(effect.value)} do ataku i obrażeń z Siły"
     if effect.kind == "concentration_attack_bonus":
         return f"{_format_signed(effect.value)} do ataku"
+    if effect.kind == "bless_roll_bonus":
+        return f"k{effect.value} do ataków i rzutów obronnych"
     if effect.kind == "spell_ac_bonus":
         return f"{_format_signed(effect.value)} AC"
     return _format_signed(effect.value)
@@ -284,6 +286,7 @@ def effect_expiration_label(effect: ActiveEffect) -> str:
         "ready_attack": "znika po użyciu reakcji albo na początku następnej tury aktora",
         "strength_potion": "znika na początku następnej tury aktora",
         "concentration_attack_bonus": "znika po utracie koncentracji albo rzuceniu nowego czaru koncentracyjnego",
+        "bless_roll_bonus": "znika po utracie koncentracji albo rzuceniu nowego czaru koncentracyjnego",
         "spell_ac_bonus": "znika na początku następnej tury chronionego aktora",
     }
     if effect.kind in legacy_labels:
@@ -317,6 +320,12 @@ def _expires_on(effect: ActiveEffect, event: EffectEvent) -> bool:
     assert effect.duration is not None
     if event.event_type == EffectEventType.EFFECT_CONSUMED:
         return bool(event.effect_id) and effect.id == event.effect_id
+    if (
+        effect.kind == "guiding_bolt_mark"
+        and event.event_type == EffectEventType.ATTACK_RESOLVED
+        and event.target_actor_id == effect.actor_id
+    ):
+        return True
     if event.event_type == EffectEventType.SCENARIO_ENDED:
         return effect.duration != EffectDuration.PERMANENT or any(
             expiration.duration != EffectDuration.PERMANENT
@@ -407,6 +416,7 @@ def _legacy_effect_duration(kind: str) -> EffectDuration:
         "ready_attack": EffectDuration.UNTIL_TURN_START,
         "strength_potion": EffectDuration.UNTIL_TURN_START,
         "concentration_attack_bonus": EffectDuration.CONCENTRATION,
+        "bless_roll_bonus": EffectDuration.CONCENTRATION,
     }.get(kind, EffectDuration.UNTIL_SCENARIO_END)
 
 

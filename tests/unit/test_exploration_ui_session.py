@@ -39,6 +39,7 @@ from dnd_board_game.combat import (
     actor_as_combat_target,
     current_actor,
     replace_actor,
+    reaction_available_for,
     resolve_attack,
     scene_flag,
     set_scene_flag,
@@ -1694,6 +1695,90 @@ def test_look_around_keeps_preselected_actor_and_reveals_contextual_finds(tmp_pa
     assert "use_wall_route" in {
         goal["id"] for goal in resolved["active_challenge"]["goals"]
     }
+
+
+def test_rope_can_be_selected_then_attached_for_later_wall_attempt(tmp_path):
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=FakeGmClient(
+            _challenge_proposal(
+                approach_label="Mocowanie liny",
+                approach_tags=["climbing", "wall_climb"],
+                ability="wisdom",
+                skill="survival",
+                player_narration="Bohater sprawdza kamień i osadza hak.",
+            )
+        ),
+        session_id="attach_wall_rope_test",
+        observation_dir=tmp_path,
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.state = replace(
+        session.state,
+        flags=set_scene_flag(
+            session.state.flags,
+            "gate_wall_route_found",
+            True,
+        ),
+    )
+
+    goals_before = {
+        goal["id"]: goal
+        for goal in session.state_payload()["active_challenge"]["goals"]
+    }
+    assert "use_wall_route" in goals_before
+    assert "use_attached_wall_route" not in goals_before
+    assert goals_before["attach_wall_rope"]["source_required"] is True
+    assert [
+        source["id"]
+        for source in goals_before["attach_wall_rope"]["action_sources"]
+        if source["available"]
+    ] == ["resource:rope"]
+
+    proposed = session.submit_action(
+        "Zakładam hak w szczelinie i szarpię linę, zanim zaufa jej reszta.",
+        selected_goal_id="attach_wall_rope",
+        participant_actor_ids=("hero",),
+        selected_action_source_id="resource:rope",
+    )
+
+    assert proposed["pending"] is not None, (
+        session.gm_client.requests[-1].declaration_thread[-1].content
+        if session.gm_client.requests[-1].declaration_thread
+        else proposed["messages"][-1]["body"]
+    )
+    assert proposed["pending"]["action_source"]["id"] == "resource:rope"
+    assert proposed["pending"]["resources"][0]["id"] == "rope"
+    request_payload = session.gm_client.requests[-1].to_prompt_payload()
+    assert request_payload["selected_action_source"]["id"] == "resource:rope"
+    assert "climbing_aid" in request_payload["selected_action_source"]["capability_tags"]
+    assert request_payload["selected_action_source"]["rules"][
+        "engine_owns_modifiers_costs_and_consequences"
+    ] is True
+    rolling = session.decide("accept")
+    assert rolling["pending"]["check_plan"]["resource"]["label"] == "Lina z hakiem"
+    assert rolling["pending"]["check_plan"]["resource"]["modifier"] == 2
+
+    resolved = session.resolve_rolls({"hero": 20})
+
+    assert scene_flag(
+        session.state.flags,
+        "gate_climbing_rope_attached",
+        False,
+    ) is True
+    goals_after = {
+        goal["id"]: goal
+        for goal in resolved["active_challenge"]["goals"]
+    }
+    assert "use_wall_route" not in goals_after
+    assert "attach_wall_rope" not in goals_after
+    assert "use_attached_wall_route" in goals_after
+    attached_route = next(
+        option
+        for option in session.active_challenge.options
+        if option.id == "find_way_around"
+    )
+    assert ("gate_climbing_rope_attached", -2) in attached_route.dc_modifiers_if_flags
 
 
 def test_exploration_time_burns_out_active_torch(tmp_path):
@@ -7638,7 +7723,7 @@ def test_exploration_ui_session_offers_and_casts_shield_before_enemy_damage():
     window = offered["combat"]["reaction_window"]
     assert window["options"][0]["kind"] == "defensive_spell"
     assert offered["combat"]["enemy_turn_result"] is None
-    with pytest.raises(ValueError, match="czar obronny"):
+    with pytest.raises(ValueError, match="oczekującą reakcję"):
         session._commit_pending_enemy_turn()
 
     resolved = session.cast_defensive_spell_reaction()
@@ -7653,6 +7738,95 @@ def test_exploration_ui_session_offers_and_casts_shield_before_enemy_damage():
         effect["kind"] == "spell_ac_bonus" and effect["value"] == 5
         for effect in resolved["combat"]["active_effects"]
     )
+
+
+def test_exploration_ui_session_hellish_rebuke_spends_reaction_and_slot_once():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+    assert session.combat_state is not None
+    encounter = session._active_encounter()
+    assert encounter is not None
+    cleric = next(
+        actor for actor in session.combat_state.actors if str(actor.id) == "cleric"
+    )
+    enemy = next(
+        actor for actor in session.combat_state.actors if actor.faction == Faction.ENEMY
+    )
+    counterspell = next(
+        action
+        for action in encounter.combat_actions_by_actor[cleric.id]
+        if action.action_type == "spell_counter"
+    )
+    rebuke = replace(
+        counterspell,
+        action_type="reaction_damage",
+        label="Hellish Rebuke",
+        save_ability="dexterity",
+        damage_die_sides=10,
+        damage_type="fire",
+        ongoing_damage_dice_count=2,
+        upcast_value_per_level=1,
+    )
+    encounter.combat_actions_by_actor[cleric.id] = (rebuke,)
+    target = actor_as_combat_target(cleric)
+    source = AttackSource(
+        "Testowy atak",
+        AttackSourceType.WEAPON,
+        5,
+        D20RollRequest(),
+        damage_fixed=4,
+    )
+    attack_roll = resolve_d20_roll(
+        D20RollInput(source.attack_roll_request, target.ac)
+    )
+    attack = resolve_attack(
+        AttackDeclaration(enemy, target, source),
+        attack_roll,
+        ActionUse.ACTION_AVAILABLE,
+    )
+    damage = resolve_damage((DamageComponentInput(4, DamageType.SLASHING),))
+    applied = apply_damage_result(cleric, damage)
+    session.pending_enemy_turn_result = EnemyAutoTurnResult(
+        state=replace_actor(session.combat_state, applied.actor_after),
+        enemy=enemy,
+        target=target,
+        message="Trafienie.",
+        attack_roll=attack_roll,
+        attack_resolution=attack,
+        damage=damage,
+        applied_damage=applied,
+        updated_target=applied.actor_after,
+        action_used=True,
+        source=source,
+    )
+    slots_before = next(
+        slot.remaining for slot in cleric.spell_slots if slot.level == rebuke.spell_level
+    )
+    enemy_hp_before = enemy.hp
+
+    offered = session._commit_pending_enemy_turn()
+
+    assert offered["combat"]["reaction_window"]["options"][0]["kind"] == (
+        "retaliation_spell"
+    )
+
+    resolved = session.cast_retaliation_spell_reaction()
+
+    cleric_after = next(
+        actor for actor in session.combat_state.actors if actor.id == cleric.id
+    )
+    enemy_after = next(
+        actor for actor in session.combat_state.actors if actor.id == enemy.id
+    )
+    assert next(
+        slot.remaining
+        for slot in cleric_after.spell_slots
+        if slot.level == rebuke.spell_level
+    ) == slots_before - 1
+    assert reaction_available_for(session.combat_state, cleric_after) is False
+    assert enemy_after.hp < enemy_hp_before
+    assert resolved["combat"]["reaction_window"] is None
+    assert resolved["combat"]["enemy_turn_result"] is not None
 
 
 def test_exploration_ui_session_counterspell_interrupts_enemy_spell_before_shield():

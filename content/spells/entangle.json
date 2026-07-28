@@ -1,0 +1,42 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "entangle",
+  "name": "Entangle",
+  "level": 1,
+  "school": "conjuration",
+  "casting_time": "action",
+  "range": {
+    "kind": "distance",
+    "feet": 90
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": []
+  },
+  "duration": {
+    "kind": "minute",
+    "amount": 1
+  },
+  "concentration": true,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "targeted_status",
+    "label": "Entangle",
+    "effect_kind": "apply_condition",
+    "condition": "restrained",
+    "save_ability": "strength",
+    "target_faction": "enemy",
+    "target_count": 20,
+    "cast_flag": "cast_entangle",
+    "instructions": "Obszar 20 stóp staje się trudnym terenem. Istoty wykonują rzut na Siłę; porażka daje Restrained, uwolnienie wymaga akcji i testu Siły.",
+    "resolution_mode": "automatic",
+    "board_relevance": "direct"
+  }
+}

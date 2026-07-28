@@ -1,0 +1,50 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "flaming_sphere",
+  "name": "Flaming Sphere",
+  "level": 2,
+  "school": "conjuration",
+  "casting_time": "action",
+  "range": {
+    "kind": "distance",
+    "feet": 60
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": [
+      {
+        "item_id": "spell_component_flaming_sphere",
+        "label": "a bit of tallow, a pinch of brimstone, and a dusting of powdered iron"
+      }
+    ]
+  },
+  "duration": {
+    "kind": "minute",
+    "amount": 1
+  },
+  "concentration": true,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "targeted_status",
+    "label": "Flaming Sphere",
+    "effect_kind": "ongoing_damage",
+    "target_faction": "enemy",
+    "ongoing_damage_dice_count": 2,
+    "damage_die_sides": 6,
+    "damage_type": "fire",
+    "save_ability": "dexterity",
+    "save_damage_on_success": "none",
+    "upcast_value_per_level": 1,
+    "cast_flag": "cast_flaming_sphere",
+    "instructions": "Ustaw kulę na wolnym polu. Istoty kończące turę obok niej bronią się Dex przed 2k6 fire; bonus action przesuwa kulę do 30 stóp.",
+    "resolution_mode": "automatic",
+    "board_relevance": "direct"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "schema": "dnd_board_game.spell", "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014", "source_pack_ids": ["srd_5_1_cc_by_4_0"],
+  "id": "mending", "name": "Mending", "level": 0,
+  "school": "transmutation", "casting_time": "minute",
+  "range": {"kind": "touch"},
+  "components": {"verbal": true, "somatic": true, "materials": [{"item_id": "spell_component_mending", "label": "dwa magnesy"}]},
+  "duration": {"kind": "instantaneous"}, "concentration": false, "ritual": false,
+  "effect": {"kind": "exploration", "effect_type": "set_flag", "flag_key": "spell_mending_used", "flag_value": true}
+}

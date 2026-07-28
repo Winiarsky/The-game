@@ -25,6 +25,19 @@ def _spell_data(spell_id: str) -> dict[str, object]:
     return json.loads((SPELL_ROOT / f"{spell_id}.json").read_text(encoding="utf-8"))
 
 
+def test_exploration_use_metadata_distinguishes_objects_from_creatures():
+    fire_bolt = _spell_data("fire_bolt")["exploration_use"]
+    magic_missile = _spell_data("magic_missile")["exploration_use"]
+    knock = _spell_data("knock")["exploration_use"]
+
+    assert {"damage_object", "ignite"} <= set(fire_bolt["tags"])
+    assert "object" in fire_bolt["targets"]
+    assert "damage_creature" in magic_missile["tags"]
+    assert "damage_object" not in magic_missile["tags"]
+    assert {"open", "unlock"} <= set(knock["tags"])
+    assert "very_loud" in knock["consequences"]
+
+
 def test_first_srd_spell_tranche_has_open_source_metadata() -> None:
     for spell_id in SRD_SPELL_IDS:
         data = _spell_data(spell_id)

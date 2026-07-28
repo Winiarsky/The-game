@@ -10,7 +10,11 @@ from dnd_board_game.actors import (
     CreatureSize,
     DamageAffinityProfile,
     DeathSaveState,
+    FeatureGrant,
+    FeatureSourceKind,
     ProficiencyProfile,
+    ActorResourcePool,
+    RecoveryPeriod,
     TriggerEffectKind,
     TriggerEventType,
 )
@@ -27,6 +31,7 @@ from dnd_board_game.combat import (
     summon_actor,
     DamageType,
     replace_actor,
+    transform_into_wild_shape,
     set_scene_flag,
 )
 from dnd_board_game.exploration import (
@@ -168,6 +173,51 @@ def test_snapshot_json_round_trip_is_deterministic(tmp_path):
     )
     assert ritual.exploration_effect is not None
     assert ritual.exploration_effect.flag_key == "comprehend_languages_active"
+
+
+def test_snapshot_round_trip_preserves_active_wild_shape_and_normal_form_hp(tmp_path):
+    session = _session(tmp_path)
+    actor = session.exploration.actors[0]
+    actor = replace(
+        actor,
+        features=(
+            *actor.features,
+            FeatureGrant(
+                "wild_shape",
+                "Wild Shape",
+                FeatureSourceKind.CLASS,
+                "druid",
+            ),
+        ),
+        resource_pools=(
+            *actor.resource_pools,
+            ActorResourcePool(
+                "wild_shape_uses",
+                "Wild Shape",
+                2,
+                2,
+                RecoveryPeriod.SHORT_REST,
+            ),
+        ),
+    )
+    shaped = transform_into_wild_shape(actor, "wolf")
+    session.exploration = replace(
+        session.exploration,
+        actors=(
+            shaped,
+            *session.exploration.actors[1:],
+        ),
+    )
+
+    snapshot = session.create_snapshot()
+    restored = SessionSnapshot.from_dict(snapshot.as_dict(), base_state=session.state)
+    restored_actor = restored.actors[0]
+
+    assert restored_actor.wild_shape is not None
+    assert restored_actor.wild_shape.form_id == "wolf"
+    assert restored_actor.wild_shape.original_hp == actor.hp
+    assert restored_actor.hp == 11
+    assert restored.as_dict() == snapshot.as_dict()
 
 
 def test_snapshot_round_trip_preserves_timed_exploration_magic(tmp_path):
@@ -448,6 +498,41 @@ def test_snapshot_v23_round_trip_preserves_actor_exhaustion(tmp_path):
 
     hero = next(actor for actor in restored.actors if str(actor.id) == "hero")
     assert hero.exhaustion_level == 3
+
+
+def test_snapshot_v24_round_trip_preserves_actor_experience(tmp_path):
+    session = _session(tmp_path)
+    actors = tuple(
+        replace(actor, experience_points=325)
+        if str(actor.id) == "hero"
+        else actor
+        for actor in session.exploration.actors
+    )
+    session.exploration = replace(session.exploration, actors=actors)
+
+    restored = SessionSnapshot.from_dict(
+        session.create_snapshot().as_dict(),
+        base_state=session.state,
+    )
+
+    hero = next(actor for actor in restored.actors if str(actor.id) == "hero")
+    assert hero.experience_points == 325
+
+
+def test_snapshot_v23_migrates_actor_experience_to_zero(tmp_path):
+    session = _session(tmp_path)
+    raw = session.create_snapshot().as_dict()
+    raw["schema_version"] = 23
+    for actor in raw["actors"]:
+        actor.pop("experience_points")
+    if raw["combat"] is not None:
+        for actor in raw["combat"]["actors"]:
+            actor.pop("experience_points")
+
+    restored = SessionSnapshot.from_dict(raw, base_state=session.state)
+
+    assert restored.as_dict()["schema_version"] == SNAPSHOT_SCHEMA_VERSION
+    assert all(actor.experience_points == 0 for actor in restored.actors)
 
 
 def test_snapshot_save_and_load_restores_dynamic_summoned_actor(tmp_path):

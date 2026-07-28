@@ -29,6 +29,7 @@ from dnd_board_game.actors import (
     RecoveryPeriod,
     ResourceRechargeRule,
     SpellPreparationProfile,
+    WildShapeState,
 )
 from dnd_board_game.combat import (
     ActionUse,
@@ -140,7 +141,7 @@ from dnd_board_game.scenarios.content_contract import (
 
 
 SNAPSHOT_SCHEMA = "dnd_board_game.session"
-SNAPSHOT_SCHEMA_VERSION = 23
+SNAPSHOT_SCHEMA_VERSION = 31
 
 
 def _migrate_snapshot_v1_to_v2(data: dict[str, Any]) -> dict[str, Any]:
@@ -478,6 +479,79 @@ def _migrate_snapshot_v22_to_v23(data: dict[str, Any]) -> dict[str, Any]:
     return migrated
 
 
+def _migrate_snapshot_v23_to_v24(data: dict[str, Any]) -> dict[str, Any]:
+    migrated = dict(data)
+    migrated["schema_version"] = 24
+
+    def actor_payload_v24(raw: object) -> object:
+        if not isinstance(raw, dict):
+            return raw
+        actor = dict(raw)
+        actor.setdefault("experience_points", 0)
+        return actor
+
+    migrated["actors"] = [
+        actor_payload_v24(actor) for actor in migrated.get("actors", [])
+    ]
+    combat = migrated.get("combat")
+    if isinstance(combat, dict):
+        combat_v24 = dict(combat)
+        combat_v24["actors"] = [
+            actor_payload_v24(actor) for actor in combat.get("actors", [])
+        ]
+        migrated["combat"] = combat_v24
+    return migrated
+
+
+def _migrate_snapshot_v24_to_v25(data: dict[str, Any]) -> dict[str, Any]:
+    """Spell access gained an optional source-specific casting ability."""
+    migrated = dict(data)
+    migrated["schema_version"] = 25
+    return migrated
+
+
+def _migrate_snapshot_v25_to_v26(data: dict[str, Any]) -> dict[str, Any]:
+    """Spell slots gained an explicit long- or short-rest recovery period."""
+    migrated = dict(data)
+    migrated["schema_version"] = 26
+    return migrated
+
+
+def _migrate_snapshot_v26_to_v27(data: dict[str, Any]) -> dict[str, Any]:
+    """Actors gained a creature type; old actors retain the humanoid default."""
+    migrated = dict(data)
+    migrated["schema_version"] = 27
+    return migrated
+
+
+def _migrate_snapshot_v27_to_v28(data: dict[str, Any]) -> dict[str, Any]:
+    """Spell access can map innate spells to their once-per-rest resources."""
+    migrated = dict(data)
+    migrated["schema_version"] = 28
+    return migrated
+
+
+def _migrate_snapshot_v28_to_v29(data: dict[str, Any]) -> dict[str, Any]:
+    """Actors can persist an active Wild Shape form and their normal statistics."""
+    migrated = dict(data)
+    migrated["schema_version"] = 29
+    return migrated
+
+
+def _migrate_snapshot_v29_to_v30(data: dict[str, Any]) -> dict[str, Any]:
+    """Timed conditions can survive more than one matching expiration event."""
+    migrated = dict(data)
+    migrated["schema_version"] = 30
+    return migrated
+
+
+def _migrate_snapshot_v30_to_v31(data: dict[str, Any]) -> dict[str, Any]:
+    """Persist turn spell restrictions and magical-darkness sight."""
+    migrated = dict(data)
+    migrated["schema_version"] = 31
+    return migrated
+
+
 _SNAPSHOT_MIGRATIONS = MigrationRegistry(
     schema=SNAPSHOT_SCHEMA,
     current_version=SNAPSHOT_SCHEMA_VERSION,
@@ -504,6 +578,14 @@ _SNAPSHOT_MIGRATIONS.register(19, _migrate_snapshot_v19_to_v20)
 _SNAPSHOT_MIGRATIONS.register(20, _migrate_snapshot_v20_to_v21)
 _SNAPSHOT_MIGRATIONS.register(21, _migrate_snapshot_v21_to_v22)
 _SNAPSHOT_MIGRATIONS.register(22, _migrate_snapshot_v22_to_v23)
+_SNAPSHOT_MIGRATIONS.register(23, _migrate_snapshot_v23_to_v24)
+_SNAPSHOT_MIGRATIONS.register(24, _migrate_snapshot_v24_to_v25)
+_SNAPSHOT_MIGRATIONS.register(25, _migrate_snapshot_v25_to_v26)
+_SNAPSHOT_MIGRATIONS.register(26, _migrate_snapshot_v26_to_v27)
+_SNAPSHOT_MIGRATIONS.register(27, _migrate_snapshot_v27_to_v28)
+_SNAPSHOT_MIGRATIONS.register(28, _migrate_snapshot_v28_to_v29)
+_SNAPSHOT_MIGRATIONS.register(29, _migrate_snapshot_v29_to_v30)
+_SNAPSHOT_MIGRATIONS.register(30, _migrate_snapshot_v30_to_v31)
 
 
 class SnapshotValidationError(ValueError):
@@ -701,6 +783,41 @@ def _actor_payload(actor: Actor) -> dict[str, object]:
     return {
         "id": str(actor.id), "name": actor.name, "ac": actor.ac, "hp": actor.hp,
         "portrait": actor.portrait,
+        "creature_type": actor.creature_type,
+        "wild_shape": (
+            {
+                "form_id": actor.wild_shape.form_id,
+                "form_name": actor.wild_shape.form_name,
+                "original_ac": actor.wild_shape.original_ac,
+                "original_hp": actor.wild_shape.original_hp,
+                "original_max_hp": actor.wild_shape.original_max_hp,
+                "original_speed_feet": actor.wild_shape.original_speed_feet,
+                "original_ability_scores": {
+                    name: getattr(actor.wild_shape.original_ability_scores, name)
+                    for name in _ABILITY_NAMES
+                },
+                "original_size": actor.wild_shape.original_size.value,
+                "original_senses": actor.wild_shape.original_senses.as_payload(),
+                "original_damage_affinities": {
+                    "resistances": [
+                        value.value
+                        for value in actor.wild_shape.original_damage_affinities.resistances
+                    ],
+                    "immunities": [
+                        value.value
+                        for value in actor.wild_shape.original_damage_affinities.immunities
+                    ],
+                    "vulnerabilities": [
+                        value.value
+                        for value in actor.wild_shape.original_damage_affinities.vulnerabilities
+                    ],
+                },
+                "original_creature_type": actor.wild_shape.original_creature_type,
+                "remaining_minutes": actor.wild_shape.remaining_minutes,
+            }
+            if actor.wild_shape is not None
+            else None
+        ),
         "temp_hp": actor.temp_hp, "max_hp": actor.max_hp, "speed_feet": actor.speed_feet,
         "position": _coordinate_payload(actor.position), "faction": actor.faction.value,
         "size": actor.size.value,
@@ -711,6 +828,7 @@ def _actor_payload(actor: Actor) -> dict[str, object]:
         },
         "uses_death_saves": actor.uses_death_saves,
         "level": actor.level,
+        "experience_points": actor.experience_points,
         "exhaustion_level": actor.exhaustion_level,
         "attacks_per_action": actor.attacks_per_action,
         "condition_immunities": list(actor.condition_immunities),
@@ -765,7 +883,16 @@ def _actor_payload(actor: Actor) -> dict[str, object]:
             "armor": list(actor.proficiencies.armor),
             "tools": list(actor.proficiencies.tools),
         },
-        "spell_slots": [{"level": slot.level, "remaining": slot.remaining, "maximum": slot.maximum} for slot in actor.spell_slots],
+        "spell_slots": [
+            {
+                "level": slot.level,
+                "remaining": slot.remaining,
+                "maximum": slot.maximum,
+                "recovery": slot.recovery,
+                "temporary": slot.temporary,
+            }
+            for slot in actor.spell_slots
+        ],
         "spell_save_dc": actor.spell_save_dc, "spell_ids": list(actor.spell_ids),
         "spells": [_spell_definition_payload(spell) for spell in actor.spells],
         "spell_access": [
@@ -773,6 +900,11 @@ def _actor_payload(actor: Actor) -> dict[str, object]:
                 "kind": profile.kind.value,
                 "spell_ids": list(profile.spell_ids),
                 "allowed_focus_kinds": list(profile.allowed_focus_kinds),
+                "casting_ability": profile.casting_ability,
+                "resource_ids_by_spell": {
+                    spell_id: resource_id
+                    for spell_id, resource_id in profile.resource_ids_by_spell
+                },
             }
             for profile in actor.spell_access
         ],
@@ -889,6 +1021,9 @@ def _spell_definition_payload(spell: SpellDefinition) -> dict[str, object]:
                 "flag_value": spell.exploration_effect.flag_value,
             }
         ),
+        "exploration_tags": list(spell.exploration_tags),
+        "exploration_target_tags": list(spell.exploration_target_tags),
+        "exploration_consequence_tags": list(spell.exploration_consequence_tags),
     }
 
 
@@ -988,6 +1123,27 @@ def _spell_definition_from_payload(raw: object) -> SpellDefinition:
         effect_kind=_string(data.get("effect_kind"), "actor.spell.effect_kind"),
         scaling=scaling,
         exploration_effect=exploration_effect,
+        exploration_tags=tuple(
+            _string(value, "actor.spell.exploration_tags")
+            for value in _sequence(
+                data.get("exploration_tags", []),
+                "actor.spell.exploration_tags",
+            )
+        ),
+        exploration_target_tags=tuple(
+            _string(value, "actor.spell.exploration_target_tags")
+            for value in _sequence(
+                data.get("exploration_target_tags", []),
+                "actor.spell.exploration_target_tags",
+            )
+        ),
+        exploration_consequence_tags=tuple(
+            _string(value, "actor.spell.exploration_consequence_tags")
+            for value in _sequence(
+                data.get("exploration_consequence_tags", []),
+                "actor.spell.exploration_consequence_tags",
+            )
+        ),
     )
 
 
@@ -999,6 +1155,103 @@ def _actor_from_payload(raw: object) -> Actor:
     proficiency_raw = _mapping(data.get("proficiencies", {}), "actor.proficiencies")
     affinities_raw = _mapping(data.get("damage_affinities", {}), "actor.damage_affinities")
     senses_raw = _mapping(data.get("senses", {}), "actor.senses")
+    wild_shape_raw = data.get("wild_shape")
+    wild_shape = None
+    if wild_shape_raw is not None:
+        shape = _mapping(wild_shape_raw, "actor.wild_shape")
+        original_abilities = _mapping(
+            shape.get("original_ability_scores"),
+            "actor.wild_shape.original_ability_scores",
+        )
+        original_senses = _mapping(
+            shape.get("original_senses", {}),
+            "actor.wild_shape.original_senses",
+        )
+        original_affinities = _mapping(
+            shape.get("original_damage_affinities", {}),
+            "actor.wild_shape.original_damage_affinities",
+        )
+        wild_shape = WildShapeState(
+            form_id=_string(shape.get("form_id"), "actor.wild_shape.form_id"),
+            form_name=_string(shape.get("form_name"), "actor.wild_shape.form_name"),
+            original_ac=_integer(shape.get("original_ac"), "actor.wild_shape.original_ac"),
+            original_hp=_integer(shape.get("original_hp"), "actor.wild_shape.original_hp"),
+            original_max_hp=_integer(
+                shape.get("original_max_hp"),
+                "actor.wild_shape.original_max_hp",
+            ),
+            original_speed_feet=_integer(
+                shape.get("original_speed_feet"),
+                "actor.wild_shape.original_speed_feet",
+            ),
+            original_ability_scores=AbilityScores(
+                **{
+                    name: _integer(
+                        original_abilities.get(name),
+                        f"actor.wild_shape.original_ability_scores.{name}",
+                    )
+                    for name in _ABILITY_NAMES
+                }
+            ),
+            original_size=_enum(
+                CreatureSize,
+                shape.get("original_size"),
+                "actor.wild_shape.original_size",
+            ),
+            original_senses=ActorSenseProfile(
+                darkvision_feet=_integer(
+                    original_senses.get("darkvision_feet", 0),
+                    "actor.wild_shape.original_senses.darkvision_feet",
+                ),
+                blindsight_feet=_integer(
+                    original_senses.get("blindsight_feet", 0),
+                    "actor.wild_shape.original_senses.blindsight_feet",
+                ),
+                tremorsense_feet=_integer(
+                    original_senses.get("tremorsense_feet", 0),
+                    "actor.wild_shape.original_senses.tremorsense_feet",
+                ),
+                truesight_feet=_integer(
+                    original_senses.get("truesight_feet", 0),
+                    "actor.wild_shape.original_senses.truesight_feet",
+                ),
+                magical_darkness_vision_feet=_integer(
+                    original_senses.get("magical_darkness_vision_feet", 0),
+                    "actor.wild_shape.original_senses.magical_darkness_vision_feet",
+                ),
+            ),
+            original_damage_affinities=DamageAffinityProfile(
+                resistances=tuple(
+                    _enum(DamageType, value, "wild_shape.resistance")
+                    for value in _sequence(
+                        original_affinities.get("resistances", []),
+                        "wild_shape.resistances",
+                    )
+                ),
+                immunities=tuple(
+                    _enum(DamageType, value, "wild_shape.immunity")
+                    for value in _sequence(
+                        original_affinities.get("immunities", []),
+                        "wild_shape.immunities",
+                    )
+                ),
+                vulnerabilities=tuple(
+                    _enum(DamageType, value, "wild_shape.vulnerability")
+                    for value in _sequence(
+                        original_affinities.get("vulnerabilities", []),
+                        "wild_shape.vulnerabilities",
+                    )
+                ),
+            ),
+            original_creature_type=_string(
+                shape.get("original_creature_type"),
+                "actor.wild_shape.original_creature_type",
+            ),
+            remaining_minutes=_integer(
+                shape.get("remaining_minutes"),
+                "actor.wild_shape.remaining_minutes",
+            ),
+        )
     prep = None
     if prep_raw is not None:
         item = _mapping(prep_raw, "actor.spell_preparation")
@@ -1036,13 +1289,28 @@ def _actor_from_payload(raw: object) -> Actor:
     return Actor(
         id=ActorId(_string(data.get("id"), "actor.id")), name=_string(data.get("name"), "actor.name"),
         portrait=_string(data.get("portrait", ""), "actor.portrait", allow_empty=True),
+        creature_type=_string(
+            data.get("creature_type", "humanoid"),
+            "actor.creature_type",
+        ),
+        wild_shape=wild_shape,
         ac=_integer(data.get("ac"), "actor.ac"), hp=_integer(data.get("hp"), "actor.hp"),
         temp_hp=_integer(data.get("temp_hp"), "actor.temp_hp"), max_hp=_integer(data.get("max_hp"), "actor.max_hp"),
         speed_feet=_integer(data.get("speed_feet"), "actor.speed_feet"), position=_coordinate(data.get("position"), "actor.position"),
         faction=_enum(Faction, data.get("faction"), "actor.faction"),
         size=_enum(CreatureSize, data.get("size", CreatureSize.MEDIUM.value), "actor.size"),
         ability_scores=AbilityScores(**{name: _integer(abilities.get(name), f"ability_scores.{name}") for name in _ABILITY_NAMES}),
-        spell_slots=tuple(SpellSlotState(_integer(slot.get("level"), "slot.level"), _integer(slot.get("remaining"), "slot.remaining"), _integer(slot.get("maximum"), "slot.maximum")) for value in _sequence(data.get("spell_slots", []), "spell_slots") for slot in (_mapping(value, "slot"),)),
+        spell_slots=tuple(
+            SpellSlotState(
+                _integer(slot.get("level"), "slot.level"),
+                _integer(slot.get("remaining"), "slot.remaining"),
+                _integer(slot.get("maximum"), "slot.maximum"),
+                str(slot.get("recovery", "long_rest")),
+                bool(slot.get("temporary", False)),
+            )
+            for value in _sequence(data.get("spell_slots", []), "spell_slots")
+            for slot in (_mapping(value, "slot"),)
+        ),
         spell_save_dc=_integer(data.get("spell_save_dc"), "actor.spell_save_dc"),
         currency=_currency_from_payload(data.get("currency", {})),
         inventory=inventory,
@@ -1063,6 +1331,10 @@ def _actor_from_payload(raw: object) -> Actor:
             truesight_feet=_integer(
                 senses_raw.get("truesight_feet", 0),
                 "actor.senses.truesight_feet",
+            ),
+            magical_darkness_vision_feet=_integer(
+                senses_raw.get("magical_darkness_vision_feet", 0),
+                "actor.senses.magical_darkness_vision_feet",
             ),
         ),
         spell_ids=_string_tuple(data.get("spell_ids", []), "actor.spell_ids"), spell_preparation=prep,
@@ -1085,6 +1357,18 @@ def _actor_from_payload(raw: object) -> Actor:
                     profile.get("allowed_focus_kinds", []),
                     "actor.spell_access.allowed_focus_kinds",
                 ),
+                casting_ability=(
+                    str(profile["casting_ability"])
+                    if profile.get("casting_ability") is not None
+                    else None
+                ),
+                resource_ids_by_spell=tuple(
+                    (str(spell_id), str(resource_id))
+                    for spell_id, resource_id in _mapping(
+                        profile.get("resource_ids_by_spell", {}),
+                        "actor.spell_access.resource_ids_by_spell",
+                    ).items()
+                ),
             )
             for raw_profile in _sequence(
                 data.get("spell_access", []),
@@ -1095,6 +1379,10 @@ def _actor_from_payload(raw: object) -> Actor:
         hit_dice=tuple(HitDicePool(_integer(pool.get("die_sides"), "hit_die.die_sides"), _integer(pool.get("remaining"), "hit_die.remaining"), _integer(pool.get("maximum"), "hit_die.maximum")) for value in _sequence(data.get("hit_dice", []), "hit_dice") for pool in (_mapping(value, "hit_die"),)),
         resource_pools=tuple(_resource_pool_from_payload(value) for value in _sequence(data.get("resource_pools", []), "resource_pools")),
         level=_integer(data.get("level", 1), "actor.level"),
+        experience_points=_integer(
+            data.get("experience_points", 0),
+            "actor.experience_points",
+        ),
         exhaustion_level=_integer(
             data.get("exhaustion_level", 0),
             "actor.exhaustion_level",
@@ -1324,6 +1612,7 @@ def _exploration_payload(state: ExplorationState) -> dict[str, object]:
                 "save_timing": item.save_timing.value if item.save_timing is not None else None,
                 "source_spell_id": item.source_spell_id,
                 "source_spell_level": item.source_spell_level,
+                "expiration_event_count": item.expiration_event_count,
             }
             for item in state.condition_states
         ],
@@ -1628,6 +1917,10 @@ def _exploration_from_payload(base: ExplorationState, raw: object) -> Exploratio
             source_spell_level=_optional_integer(
                 item.get("source_spell_level"),
                 "exploration.condition.source_spell_level",
+            ),
+            expiration_event_count=_integer(
+                item.get("expiration_event_count", 1),
+                "exploration.condition.expiration_event_count",
             ),
         )
         for raw_item in _sequence(data.get("condition_states", []), "condition_states")
@@ -2179,7 +2472,7 @@ def _combat_payload(state: CombatState | None) -> dict[str, object] | None:
             "current_index": state.initiative_order.current_index, "round_number": state.initiative_order.round_number,
             "entries": [{"actor_id": str(entry.actor.id), "natural_roll": entry.roll.natural_roll, "natural_rolls": list(entry.roll.natural_rolls), "total": entry.roll.total, "mode": entry.roll.mode.value, "dexterity_modifier": entry.dexterity_modifier, "stable_order": entry.stable_order} for entry in state.initiative_order.entries],
         },
-        "turn_action": {"action_use": state.turn_action.action_use.value, "bonus_action_use": state.turn_action.bonus_action_use.value, "reaction_available": state.turn_action.reaction_available, "movement_used_feet": state.turn_action.movement_used_feet, "extra_movement_feet": state.turn_action.extra_movement_feet, "object_interaction_available": state.turn_action.object_interaction_available, "two_weapon_trigger_item_id": state.turn_action.two_weapon_trigger_item_id, "attack_action_active": state.turn_action.attack_action_active, "attacks_used": state.turn_action.attacks_used, "attacks_maximum": state.turn_action.attacks_maximum},
+        "turn_action": {"action_use": state.turn_action.action_use.value, "bonus_action_use": state.turn_action.bonus_action_use.value, "reaction_available": state.turn_action.reaction_available, "movement_used_feet": state.turn_action.movement_used_feet, "extra_movement_feet": state.turn_action.extra_movement_feet, "object_interaction_available": state.turn_action.object_interaction_available, "two_weapon_trigger_item_id": state.turn_action.two_weapon_trigger_item_id, "attack_action_active": state.turn_action.attack_action_active, "attacks_used": state.turn_action.attacks_used, "attacks_maximum": state.turn_action.attacks_maximum, "bonus_attacks_remaining": state.turn_action.bonus_attacks_remaining, "bonus_attack_source_id": state.turn_action.bonus_attack_source_id, "bonus_action_spell_cast": state.turn_action.bonus_action_spell_cast, "leveled_action_spell_cast": state.turn_action.leveled_action_spell_cast},
         "status": state.status.value, "winner": state.winner.value if state.winner else None,
         "spent_reaction_actor_ids": sorted(str(item) for item in state.spent_reaction_actor_ids),
         "ammunition_expenditures": [
@@ -2262,6 +2555,7 @@ def _combat_payload(state: CombatState | None) -> dict[str, object] | None:
                 "save_timing": condition.save_timing.value if condition.save_timing is not None else None,
                 "source_spell_id": condition.source_spell_id,
                 "source_spell_level": condition.source_spell_level,
+                "expiration_event_count": condition.expiration_event_count,
             }
             for condition in state.condition_states
         ],
@@ -2422,6 +2716,23 @@ def _combat_from_payload(raw: object) -> CombatState | None:
             _boolean(turn.get("attack_action_active", False), "turn_action.attack_action_active"),
             _integer(turn.get("attacks_used", 0), "turn_action.attacks_used"),
             _integer(turn.get("attacks_maximum", 0), "turn_action.attacks_maximum"),
+            _integer(
+                turn.get("bonus_attacks_remaining", 0),
+                "turn_action.bonus_attacks_remaining",
+            ),
+            _string(
+                turn.get("bonus_attack_source_id", ""),
+                "turn_action.bonus_attack_source_id",
+                allow_empty=True,
+            ),
+            _boolean(
+                turn.get("bonus_action_spell_cast", False),
+                "turn_action.bonus_action_spell_cast",
+            ),
+            _boolean(
+                turn.get("leveled_action_spell_cast", False),
+                "turn_action.leveled_action_spell_cast",
+            ),
         ),
         status=_enum(CombatStatus, data.get("status"), "combat.status"),
         winner=_optional_enum(Faction, data.get("winner"), "combat.winner"),
@@ -2602,6 +2913,10 @@ def _combat_from_payload(raw: object) -> CombatState | None:
                 source_spell_level=_optional_integer(
                     item.get("source_spell_level"),
                     "condition_state.source_spell_level",
+                ),
+                expiration_event_count=_integer(
+                    item.get("expiration_event_count", 1),
+                    "condition_state.expiration_event_count",
                 ),
             )
             for raw_item in _sequence(data.get("condition_states", []), "combat.condition_states")

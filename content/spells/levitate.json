@@ -1,0 +1,44 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "levitate",
+  "name": "Levitate",
+  "level": 2,
+  "school": "transmutation",
+  "casting_time": "action",
+  "range": {
+    "kind": "distance",
+    "feet": 60
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": [
+      {
+        "item_id": "spell_component_levitate",
+        "label": "either a small leather loop or a piece of golden wire bent into a cup shape with a long shank on one end"
+      }
+    ]
+  },
+  "duration": {
+    "kind": "ten_minutes",
+    "amount": 1
+  },
+  "concentration": true,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "targeted_status",
+    "label": "Levitate",
+    "effect_kind": "levitate",
+    "target_faction": "ally",
+    "cast_flag": "cast_levitate",
+    "instructions": "Cel do 500 funtów wykonuje Con save, jeśli niechętny. Podczas koncentracji unosi się do 20 stóp i porusza tylko przez odpychanie.",
+    "resolution_mode": "automatic",
+    "board_relevance": "direct"
+  }
+}

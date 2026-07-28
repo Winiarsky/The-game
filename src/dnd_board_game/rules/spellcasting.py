@@ -50,6 +50,8 @@ class SpellAccessKind(StrEnum):
     PREPARED = "prepared"
     KNOWN = "known"
     SPELLBOOK = "spellbook"
+    INNATE = "innate"
+    AT_WILL = "at_will"
 
 
 class SpellExplorationEffectKind(StrEnum):
@@ -214,6 +216,9 @@ class SpellDefinition:
     effect_kind: str = ""
     scaling: SpellScaling | None = None
     exploration_effect: SpellExplorationEffect | None = None
+    exploration_tags: tuple[str, ...] = ()
+    exploration_target_tags: tuple[str, ...] = ()
+    exploration_consequence_tags: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.id.strip() or not self.name.strip():
@@ -226,6 +231,13 @@ class SpellDefinition:
             raise ValueError("A cantrip cannot be cast as a ritual.")
         if not self.effect_kind.strip():
             raise ValueError("Spell definition requires an effect kind.")
+        for label, values in (
+            ("exploration_tags", self.exploration_tags),
+            ("exploration_target_tags", self.exploration_target_tags),
+            ("exploration_consequence_tags", self.exploration_consequence_tags),
+        ):
+            if any(not value.strip() or value != value.strip().lower() for value in values):
+                raise ValueError(f"Spell {label} must contain normalized non-empty tags.")
         if self.scaling is not None:
             if self.level == 0 and any(
                 (
@@ -248,6 +260,8 @@ class SpellAccessProfile:
     kind: SpellAccessKind
     spell_ids: tuple[str, ...]
     allowed_focus_kinds: tuple[str, ...] = ()
+    casting_ability: str | None = None
+    resource_ids_by_spell: tuple[tuple[str, str], ...] = ()
 
     def __post_init__(self) -> None:
         if not self.spell_ids or any(not value.strip() for value in self.spell_ids):
@@ -256,6 +270,53 @@ class SpellAccessProfile:
             raise ValueError("Spell access spell ids must be unique.")
         if len(self.allowed_focus_kinds) != len(set(self.allowed_focus_kinds)):
             raise ValueError("Allowed spellcasting focus kinds must be unique.")
+        resource_spell_ids = tuple(
+            spell_id for spell_id, _ in self.resource_ids_by_spell
+        )
+        if set(resource_spell_ids) - set(self.spell_ids):
+            raise ValueError("Innate resource mapping references unknown spells.")
+        if any(
+            not spell_id.strip() or not resource_id.strip()
+            for spell_id, resource_id in self.resource_ids_by_spell
+        ):
+            raise ValueError("Innate spell resource ids cannot be empty.")
+        if self.casting_ability is not None and self.casting_ability not in {
+            "strength",
+            "dexterity",
+            "constitution",
+            "intelligence",
+            "wisdom",
+            "charisma",
+        }:
+            raise ValueError("Spell access casting ability is unknown.")
+
+
+def spellcasting_ability_for_spell(actor: object, spell_id: str) -> str | None:
+    """Return the casting ability belonging to this spell's access source."""
+    return next(
+        (
+            profile.casting_ability
+            for profile in getattr(actor, "spell_access", ())
+            if spell_id in profile.spell_ids and profile.casting_ability is not None
+        ),
+        None,
+    )
+
+
+def spell_save_dc_for_spell(actor: object, spell_id: str) -> int:
+    """Calculate a source-aware spell save DC, with legacy fallback."""
+    ability = spellcasting_ability_for_spell(actor, spell_id)
+    if ability is not None:
+        from .abilities import ability_modifier
+
+        return (
+            8
+            + int(getattr(actor, "proficiency_bonus", 0))
+            + ability_modifier(
+                int(getattr(getattr(actor, "ability_scores"), ability))
+            )
+        )
+    return int(getattr(actor, "spell_save_dc", 0))
 
 
 class SpellSlotLike(Protocol):
@@ -321,7 +382,11 @@ def spell_is_accessible(
     for profile in profiles:
         if spell.id not in profile.spell_ids:
             continue
-        if profile.kind == SpellAccessKind.KNOWN:
+        if profile.kind in {
+            SpellAccessKind.KNOWN,
+            SpellAccessKind.INNATE,
+            SpellAccessKind.AT_WILL,
+        }:
             return True
         if profile.kind in {SpellAccessKind.PREPARED, SpellAccessKind.SPELLBOOK}:
             return spell.id in prepared
@@ -336,7 +401,9 @@ def validate_spell_cast(
     cast_level: int | None = None,
     allowed_focus_kinds: Sequence[str] = (),
     has_free_hand: bool = True,
+    ignore_verbal_somatic: bool = False,
     ritual: bool = False,
+    slotless: bool = False,
 ) -> SpellCastValidation:
     if ritual and not spell.ritual:
         return SpellCastValidation(
@@ -345,7 +412,13 @@ def validate_spell_cast(
             available_cast_levels=(),
             errors=(f"Czar {spell.name} nie ma znacznika rytuału.",),
         )
-    levels = () if ritual else available_spell_slot_levels(slots, spell.level)
+    levels = (
+        ()
+        if ritual
+        else (spell.level,)
+        if slotless
+        else available_spell_slot_levels(slots, spell.level)
+    )
     selected_level = (
         (levels[0] if levels else spell.level)
         if cast_level is None
@@ -376,7 +449,7 @@ def validate_spell_cast(
             errors.append(f"Brak komponentu materialnego: {material.label}.")
 
     material_hand_available = bool(material_uses or focus is not None)
-    if spell.components.somatic and not has_free_hand:
+    if spell.components.somatic and not ignore_verbal_somatic and not has_free_hand:
         if not (spell.components.materials and material_hand_available):
             errors.append("Brak wolnej dłoni do wykonania komponentu somatycznego.")
 

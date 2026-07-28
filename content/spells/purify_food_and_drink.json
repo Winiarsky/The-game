@@ -1,0 +1,34 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "purify_food_and_drink",
+  "name": "Purify Food And Drink",
+  "level": 1,
+  "school": "transmutation",
+  "casting_time": "action",
+  "range": {
+    "kind": "distance",
+    "feet": 10
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": []
+  },
+  "duration": {
+    "kind": "instantaneous"
+  },
+  "concentration": false,
+  "ritual": true,
+  "effect": {
+    "kind": "exploration",
+    "effect_type": "set_flag",
+    "flag_key": "cast_purify_food_and_drink",
+    "flag_value": true,
+    "instructions": "Niemagiczne jedzenie i napoje w promieniu 5 stóp zostają oczyszczone z trucizn i chorób."
+  }
+}

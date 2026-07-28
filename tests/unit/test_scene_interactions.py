@@ -1,7 +1,15 @@
 from dataclasses import replace
 
-from dnd_board_game.actors import AbilityScores, Actor, ActorId, Faction
+from dnd_board_game.actors import (
+    AbilityScores,
+    Actor,
+    ActorId,
+    Faction,
+    FeatureGrant,
+    FeatureSourceKind,
+)
 from dnd_board_game.combat import (
+    ActionEconomyCost,
     ActiveCombatEffect,
     InitiativeEntry,
     InitiativeOrder,
@@ -132,6 +140,44 @@ def test_combat_interaction_conditions_return_available_option():
     assert len(options) == 1
     assert options[0].id == "take_cover"
     assert "akcja główna jest dostępna" in options[0].conditions
+
+
+def test_fast_hands_changes_use_object_action_into_bonus_action():
+    rogue = replace(
+        _actor("rogue", Faction.ALLY, Coordinate(0, 0)),
+        features=(
+            FeatureGrant(
+                "fast_hands",
+                "Fast Hands",
+                FeatureSourceKind.SUBCLASS,
+                "thief",
+            ),
+        ),
+    )
+    enemy = _actor("goblin", Faction.ENEMY, Coordinate(5, 5))
+    state = _combat_state(rogue, enemy)
+    scene_object = SceneObject(
+        "lever",
+        "Dźwignia",
+        (Coordinate(1, 0),),
+        "Przestaw",
+        interactions=(
+            SceneInteraction(
+                "pull_lever",
+                "Przestaw dźwignię",
+                action_cost=ActionEconomyCost.ACTION,
+            ),
+        ),
+    )
+
+    options = available_combat_interaction_options(
+        (scene_object,),
+        state,
+        rogue,
+        Coordinate(1, 0),
+    )
+
+    assert options[0].action_cost == ActionEconomyCost.BONUS_ACTION
 
 
 def test_combat_interaction_hints_include_reachable_object_before_conditions_are_met():

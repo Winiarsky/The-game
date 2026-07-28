@@ -6,6 +6,7 @@ from enum import StrEnum
 from dnd_board_game.actors import Actor, skill_roll_modifiers
 from dnd_board_game.combat import (
     CombatState,
+    consume_spell_resource,
     condition_roll_request,
     current_actor,
     replace_actor,
@@ -23,6 +24,7 @@ MEDICINE_DC = 10
 class StabilizationMethod(StrEnum):
     MEDICINE = "medicine"
     HEALERS_KIT = "healers_kit"
+    SPARE_THE_DYING = "spare_the_dying"
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,6 +89,23 @@ def resolve_combat_stabilization(
             method,
             True,
             kit_remaining=remaining,
+        )
+
+    if method == StabilizationMethod.SPARE_THE_DYING:
+        spell_use = consume_spell_resource(
+            stabilizer,
+            0,
+            spell_id="spare_the_dying",
+        )
+        updated_stabilizer = spell_use.actor_after
+        updated = replace_actor(action.state, updated_stabilizer)
+        updated = replace_actor(updated, stabilize_actor(target))
+        return CombatStabilizationResult(
+            updated,
+            updated_stabilizer,
+            target,
+            method,
+            True,
         )
 
     if natural_roll is None:

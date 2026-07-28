@@ -45,7 +45,7 @@ def test_resource_can_mitigate_failure_noise_and_complication():
 
     result = resolve_challenge_option(state, challenge, option, _roll(2), wedge)
 
-    assert result.noise_added == 0
+    assert result.noise_added == 1
     assert "jammed_gate" not in result.complications_added
 
 

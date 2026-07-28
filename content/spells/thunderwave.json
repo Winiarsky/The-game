@@ -1,0 +1,47 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "thunderwave",
+  "name": "Thunderwave",
+  "level": 1,
+  "school": "evocation",
+  "casting_time": "action",
+  "range": {
+    "kind": "self"
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": []
+  },
+  "duration": {
+    "kind": "instantaneous"
+  },
+  "concentration": false,
+  "ritual": false,
+  "effect": {
+    "kind": "attack",
+    "save_ability": "constitution",
+    "save_damage_on_success": "half",
+    "area": {
+      "shape": "cube",
+      "length_feet": 15,
+      "width_feet": 15,
+      "target_mode": "all_creatures"
+    },
+    "damage": {
+      "dice": "2d8",
+      "modifier": 0,
+      "damage_type": "thunder"
+    },
+    "failed_save_push_feet": 10,
+    "cast_flag": "cast_thunderwave",
+    "instructions": "Istoty w sześcianie 15 stóp wykonują Con save; 2k8 thunder i odepchnięcie 10 stóp, połowa bez odepchnięcia przy sukcesie.",
+    "resolution_mode": "automatic",
+    "board_relevance": "direct"
+  }
+}

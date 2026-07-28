@@ -1,0 +1,38 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "blur",
+  "name": "Blur",
+  "level": 2,
+  "school": "illusion",
+  "casting_time": "action",
+  "range": {
+    "kind": "self"
+  },
+  "components": {
+    "verbal": true,
+    "somatic": false,
+    "materials": []
+  },
+  "duration": {
+    "kind": "minute",
+    "amount": 1
+  },
+  "concentration": true,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "targeted_status",
+    "label": "Blur",
+    "target_count": 1,
+    "cast_flag": "cast_blur",
+    "instructions": "Podczas koncentracji ataki przeciw rzucającemu mają utrudnienie, z wyjątkami dla istot niewidzących i truesight.",
+    "effect_kind": "attacks_against_disadvantage",
+    "value": 0,
+    "target_faction": "self"
+  }
+}

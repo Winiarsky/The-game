@@ -1,0 +1,39 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "rope_trick",
+  "name": "Rope Trick",
+  "level": 2,
+  "school": "transmutation",
+  "casting_time": "action",
+  "range": {
+    "kind": "touch"
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": [
+      {
+        "item_id": "spell_component_rope_trick",
+        "label": "powdered corn extract and a twisted loop of parchment"
+      }
+    ]
+  },
+  "duration": {
+    "kind": "hour",
+    "amount": 1
+  },
+  "concentration": false,
+  "ritual": false,
+  "effect": {
+    "kind": "exploration",
+    "effect_type": "set_flag",
+    "flag_key": "cast_rope_trick",
+    "flag_value": true,
+    "instructions": "Lina do 60 stóp prowadzi przez godzinę do extradimensional space dla maksymalnie 8 Medium istot; wejście staje się niewidoczne po wciągnięciu liny."
+  }
+}

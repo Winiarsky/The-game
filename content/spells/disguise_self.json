@@ -1,0 +1,34 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "disguise_self",
+  "name": "Disguise Self",
+  "level": 1,
+  "school": "illusion",
+  "casting_time": "action",
+  "range": {
+    "kind": "self"
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": []
+  },
+  "duration": {
+    "kind": "hour",
+    "amount": 1
+  },
+  "concentration": false,
+  "ritual": false,
+  "effect": {
+    "kind": "exploration",
+    "effect_type": "set_flag",
+    "flag_key": "cast_disguise_self",
+    "flag_value": true,
+    "instructions": "Na godzinę zmień pozorny wygląd i wyposażenie. Fizyczna inspekcja ujawnia iluzję; Investigation przeciw ST czaru rozpoznaje ją."
+  }
+}

@@ -5,7 +5,7 @@ from enum import StrEnum
 
 from dnd_board_game.actors import Actor
 from dnd_board_game.inventory import effective_armor_class
-from dnd_board_game.rules import ActiveEffect
+from dnd_board_game.rules import ActiveEffect, ability_modifier
 from dnd_board_game.world import Coordinate
 
 
@@ -58,10 +58,46 @@ def combat_armor_class(
     actor: Actor,
     active_effects: tuple[ActiveEffect, ...] = (),
 ) -> int:
-    return effective_armor_class(actor) + combat_effect_armor_class_bonus(
+    armor_class = effective_armor_class(actor) + combat_effect_armor_class_bonus(
         actor,
         active_effects,
     )
+    barkskin_minimum = max(
+        (
+            effect.value
+            for effect in active_effects
+            if effect.actor_id == str(actor.id)
+            and effect.kind == "minimum_armor_class"
+        ),
+        default=0,
+    )
+    mage_armor_base = max(
+        (
+            effect.value
+            for effect in active_effects
+            if effect.actor_id == str(actor.id)
+            and effect.kind == "mage_armor_base"
+        ),
+        default=0,
+    )
+    wears_armor = any(
+        item.available
+        and item.equipped
+        and item.kind == "armor"
+        for item in actor.inventory
+    )
+    mage_armor_class = (
+        mage_armor_base + ability_modifier(actor.ability_scores.dexterity)
+        if mage_armor_base and not wears_armor
+        else 0
+    )
+    warding_bond_bonus = sum(
+        effect.value
+        for effect in active_effects
+        if effect.actor_id == str(actor.id)
+        and effect.kind == "warding_bond"
+    )
+    return max(armor_class, barkskin_minimum, mage_armor_class) + warding_bond_bonus
 
 
 def actor_as_combat_target(

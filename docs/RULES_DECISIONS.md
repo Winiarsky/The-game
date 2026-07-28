@@ -367,7 +367,10 @@ Implementacja MVP:
 - Aktor wymagający przygotowywania czarów ma generyczny `SpellPreparationProfile`: listę dostępnych czarów poziomu 1+, limit, wybór zajmujący limit oraz czary zawsze przygotowane poza limitem.
 - Przed setupem scenariusza UI wymaga wybrania dokładnie tylu czarów, ile wynosi limit profilu. Jest to projektowy odpowiednik przygotowania czarów po zakończonym długim odpoczynku; wybór pozostaje zablokowany do końca scenariusza.
 - Cantripy nie wymagają przygotowania. Nieprzygotowany czar poziomu 1+ nie daje bonusu eksploracyjnego i nie może zostać użyty jako atak, leczenie ani akcja czarowa, nawet jeśli aktor ma wolny slot.
-- Profil jest celowo niezależny od klasy. W tym MVP content podaje listę i limit; wyliczanie ich z poziomu klasy oraz cechy spellcasting zostaje na późniejszy etap.
+- Profil jest źródłowy: kreator wylicza listę, rodzaj dostępu
+  (`known`, `spellbook`, `prepared`), limit przygotowania i cechę czarującą z
+  klasy, poziomu, subclassy, species oraz wybranych opcji. Runtime nie zgaduje
+  klasy na podstawie samego identyfikatora czaru.
 - Scenariusz rozpoczyna się automatycznym long restem drużyny. Odnawia on utracone HP, sloty czarów oraz zasoby z recovery `short_rest` lub `long_rest`, usuwa temporary HP, odzyskuje połowę maksymalnej liczby Hit Dice (minimum jedną) i ponownie otwiera przygotowanie czarów.
 - Aktor z 0 HP nie może skorzystać z long resta. Obecne automatyczne odzyskiwanie Hit Dice wypełnia pule w kolejności danych; wybór odzyskiwanych pul dla przyszłego multiclassingu pozostaje poza MVP.
 - Short rest jest akcją eksploracyjną trwającą co najmniej 60 minut. Dostępność, poziom bezpieczeństwa, limit ukończeń i konsekwencje są definiowane przez `ShortRestPolicy` bieżącej lokacji.
@@ -389,7 +392,10 @@ Implementacja MVP:
 - Rzucenie nowego czaru koncentracyjnego tego samego aktora usuwa jego poprzedni efekt koncentracji i pokazuje komunikat w UI.
 - `Błogosławieństwo` w `gate_skirmish` jest testowym czarem koncentracyjnym: zużywa akcję i slot 1. poziomu, wybiera sojusznika i daje mu `+1` do ataku, dopóki koncentracja trwa.
 - Gdy aktor utrzymujący koncentrację otrzyma obrażenia, wykonuje CON save przeciw ST `max(10, obrażenia // 2)`. Sojusznik wymaga wpisania d20 w UI, przeciwnik rzuca automatycznie; porażka usuwa efekty `concentration_*` tego aktora.
-- MVP testu koncentracji nie uwzględnia jeszcze proficiency, advantage/disadvantage, featów ani klasowych premii do concentration save.
+- Test koncentracji jest zwykłym Constitution saving throwem: uwzględnia
+  modyfikator cechy, biegłość, aury, exhaustion oraz wspólny tryb
+  advantage/disadvantage. Fizyczny rzut wymaga dwóch wyników d20, gdy aktywny
+  tryb tego wymaga.
 - Aktor rzucający czary może mieć `spell_save_dc`; źródło czaru może nadpisać DC własnym `save_dc`.
 - `AttackSource` może być save-spellem przez `save_ability`; wtedy przeciwnik wykonuje automatyczny rzut obronny, a UI pokazuje naturalny d20, modyfikator cechy, sumę, ST i sukces/porażkę.
 - `AttackSource` może mieć obszar (`area`) typu `radius`, `line` albo `cone`; plansza wybiera środek obszaru albo jedno z ośmiu sąsiednich pól kierunku, UI pokazuje pełny preview LED i wymaga Entera/przycisku przed wykonaniem.
@@ -955,6 +961,71 @@ Implementacja MVP:
 - Stan exhaustion należy do aktora, przechodzi pomiędzy eksploracją i combatem
   oraz jest zapisywany. Long rest zdejmuje jeden poziom po spełnieniu zwykłych
   warunków odpoczynku.
+
+## XP i awans postaci do poziomu 3
+
+- Używamy progów doświadczenia D&D 5e 2014: poziom 2 od 300 XP i poziom 3
+  od 900 XP. Tabela domenowa zachowuje progi 1–20, ale aktualny limit produktu
+  i kreatora wynosi 3.
+- Przyznanie XP nie zmienia automatycznie poziomu aktora. Osiągnięcie progu
+  udostępnia osobny level-up, ponieważ awans może wymagać wyboru subclassy,
+  czarów, Expertise, Metamagii, invocation albo innych grantów.
+- Content encountera podaje całkowitą nagrodę. Runtime dzieli ją równo, z
+  zaokrągleniem w dół, pomiędzy żywe postacie sojusznicze używające death
+  saves. NPC, summon i martwa postać nie otrzymują udziału; niepodzielna reszta
+  jest jawnie rejestrowana.
+- XP należy do trwałego stanu aktora, jest widoczne w payloadzie UI i przechodzi
+  przez zapis postaci v4 oraz snapshot sesji v24.
+- Awans jest osobną, czystą transakcją. Wymaga progu XP, zwiększa dokładnie
+  jeden poziom, przebudowuje granty/sloty/HP/Hit Dice i nie daje darmowego
+  odpoczynku: zachowuje obrażenia oraz zużyte istniejące zasoby.
+- Elastyczne premie cech species są jawnym wyborem źródłowym, a nie zakodowaną
+  na sztywno odmianą statystyk.
+
+## Kompletność postaci SRD do poziomu 3
+
+- Autorytatywny zakres to D&D 5e 2014 / SRD 5.1: dziewięć głównych species,
+  dwanaście klas, po jednej subclassie SRD i 127 unikalnych czarów poziomu
+  0–2. Multiclass pozostaje poza tym zakresem.
+- Sam wpis w JSON nie oznacza wdrożenia. `implementation_audit` zbiera również
+  cechy wariantów, subclass i zagnieżdżonych wyborów klasowych. Każde ID musi
+  być sklasyfikowane jako wykonywalne, data-driven, marker wyboru albo jawny
+  wyjątek stołowy.
+- Żaden z 127 czarów tego zakresu nie pozostaje surowym castem `assisted`.
+  Czary bojowe używają resolverów ataku, leczenia, obszaru, wielopocisku,
+  statusu, puli PW, okresowych obrażeń, ruchu, przywołania albo reakcji.
+- Czar o otwartej konsekwencji fabularnej nadal przechodzi pełną walidację
+  dostępu, przygotowania, komponentów, slotu, ekonomii akcji, koncentracji i
+  zasobów, po czym zapisuje typowaną flagę `cast_<spell_id>` oraz — gdy ma to
+  znaczenie — czasowy efekt eksploracyjny. Scenariusz może wymagać tej flagi
+  przy konkretnej interakcji, np. `Animal Friendship` przy zwierzęciu.
+- LLM widzi aktualne flagi i opis sceny, więc może sklasyfikować deklarację lub
+  sparafrazować odpowiedź, ale nie tworzy skutku czaru poza listą efektów
+  dopuszczoną przez content i walidator runtime.
+- Świadome uproszczenia planszowe pozostają jawne: strefy są obecnie
+  zakotwiczane na aktorze zamiast na pustym polu, `Command` ma deterministyczny
+  wariant Halt, a wybrane utrzymywane czary nie mają jeszcze wszystkich
+  specjalnych akcji przesuwania, uwolnienia albo zakończenia efektu.
+- Jawne wyjątki cech to Druidic i Thieves' Cant (treść komunikacji), Tinker
+  (fabularne drobne urządzenia) oraz specjalne formy i swobodne zachowanie
+  chowańca Pact of the Chain. Uprawnienia, rytuał, koszt i czas nadal zapisuje
+  aplikacja.
+- Bardic Inspiration jest opcjonalnym dodatkiem do ataku, ability checku lub
+  saving throwu i znika dopiero po podaniu wyniku kości. Cutting Words działa
+  w deterministycznym oknie reakcji ataku; zastosowania przeciw fizycznym
+  ability checkom i osobnym rzutom obrażeń pozostają rozstrzygane przy stole.
+- Metamagia Sorcerera posiada wszystkie osiem wyborów z poziomu 3. Runtime
+  pilnuje kosztów, nielegalnych kombinacji, Twinned targetingu,
+  Careful/Heightened save'ów, Distant range, Quickened action economy,
+  Subtle components, Extended duration i fizycznego rerollu Empowered.
+- Favored Enemy typu humanoid nie jest skrótem oznaczającym wszystkie
+  humanoidy. Kreator wymaga dokładnie dwóch ras humanoidów, a authored test
+  śledzenia lub wiedzy musi podać zarówno `creature_type:humanoid`, jak i
+  `humanoid_race:<id>`.
+- Leczenie przez Cure Wounds i Healing Word jawnie wyklucza constructy oraz
+  undead. Fire Bolt przekazuje do UI dodatkową regułę zapalenia
+  nieprzymocowanego łatwopalnego obiektu; stan takiego fizycznego rekwizytu
+  rozstrzyga stół.
 
 ## Formalny crafting w downtime
 

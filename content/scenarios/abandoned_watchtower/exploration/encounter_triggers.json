@@ -54,6 +54,7 @@
       "outcome_on_victory": {
         "title": "Przejście zabezpieczone",
         "body": "Dwa gobliny padają albo uciekają w głąb ruin. Drużyna ma chwilę, by rozejrzeć się po dziedzińcu.",
+        "experience_points": 100,
         "next_instruction": "Zakończ wynik, a potem wybierz dziedziniec albo ujawnione punkty na planszy.",
         "effects": [
           {
@@ -125,6 +126,7 @@
       "outcome_on_victory": {
         "title": "Krzyk przycichł",
         "body": "Po walce zwiadowca dalej oddycha, ale patrzy już bardziej przytomnie. Wokół niego robi się dość bezpiecznie, by spróbować rozmowy albo pomocy.",
+        "experience_points": 150,
         "next_instruction": "Zakończ wynik, a potem wybierz rannego zwiadowcę na planszy.",
         "effects": [
           {

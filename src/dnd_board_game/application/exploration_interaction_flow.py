@@ -77,7 +77,11 @@ class ExplorationInteractionFlowService:
         if flow is None:
             return available_interaction_goals(challenge.goals, flags)
         goal_ids = set(flow.available_goal_ids(flags))
-        return tuple(goal for goal in challenge.goals if goal.id in goal_ids)
+        return tuple(
+            goal
+            for goal in available_interaction_goals(challenge.goals, flags)
+            if goal.id in goal_ids
+        )
 
     def route_for_goal(
         self,
@@ -104,4 +108,6 @@ class ExplorationInteractionFlowService:
             raise ValueError(
                 f"Flow {flow.id} routes an unknown goal: {transition.goal_id}."
             )
+        if goal not in available_interaction_goals((goal,), flags):
+            return None
         return ExplorationGoalRoute(goal=goal, transition=transition)

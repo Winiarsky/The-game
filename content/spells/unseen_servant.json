@@ -1,0 +1,40 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "unseen_servant",
+  "name": "Unseen Servant",
+  "level": 1,
+  "school": "conjuration",
+  "casting_time": "action",
+  "range": {
+    "kind": "distance",
+    "feet": 60
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": [
+      {
+        "item_id": "spell_component_unseen_servant",
+        "label": "a piece of string and a bit of wood"
+      }
+    ]
+  },
+  "duration": {
+    "kind": "hour",
+    "amount": 1
+  },
+  "concentration": false,
+  "ritual": true,
+  "effect": {
+    "kind": "exploration",
+    "effect_type": "set_flag",
+    "flag_key": "cast_unseen_servant",
+    "flag_value": true,
+    "instructions": "Na godzinę powstaje niewidzialny sługa o KP 10 i 1 PW; bonus action wydaje mu polecenie prostego zadania w 15 stopach."
+  }
+}

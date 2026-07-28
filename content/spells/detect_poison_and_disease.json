@@ -1,0 +1,39 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "detect_poison_and_disease",
+  "name": "Detect Poison And Disease",
+  "level": 1,
+  "school": "divination",
+  "casting_time": "action",
+  "range": {
+    "kind": "self"
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": [
+      {
+        "item_id": "spell_component_detect_poison_and_disease",
+        "label": "a yew leaf"
+      }
+    ]
+  },
+  "duration": {
+    "kind": "ten_minutes",
+    "amount": 1
+  },
+  "concentration": true,
+  "ritual": true,
+  "effect": {
+    "kind": "exploration",
+    "effect_type": "set_flag",
+    "flag_key": "cast_detect_poison_and_disease",
+    "flag_value": true,
+    "instructions": "Podczas koncentracji wykrywaj i identyfikuj trucizny, jadowite istoty oraz choroby w 30 stopach."
+  }
+}

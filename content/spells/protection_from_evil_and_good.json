@@ -1,0 +1,44 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "protection_from_evil_and_good",
+  "name": "Protection From Evil And Good",
+  "level": 1,
+  "school": "abjuration",
+  "casting_time": "action",
+  "range": {
+    "kind": "touch"
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": [
+      {
+        "item_id": "spell_component_protection_from_evil_and_good",
+        "label": "holy water or powdered silver and iron, which the spell consumes",
+        "consumed": true
+      }
+    ]
+  },
+  "duration": {
+    "kind": "hour",
+    "amount": 1
+  },
+  "concentration": false,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "targeted_status",
+    "label": "Protection From Evil And Good",
+    "target_count": 1,
+    "cast_flag": "cast_protection_from_evil_and_good",
+    "instructions": "Podczas koncentracji aberracje, celestial, elemental, fey, fiend i undead mają utrudnienie ataków na cel i nie mogą go zauroczyć, przerazić ani opętać.",
+    "effect_kind": "protection_from_evil_and_good",
+    "value": 0,
+    "target_faction": "ally"
+  }
+}

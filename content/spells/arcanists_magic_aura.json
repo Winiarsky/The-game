@@ -1,0 +1,39 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "arcanists_magic_aura",
+  "name": "Arcanist’s Magic Aura",
+  "level": 2,
+  "school": "illusion",
+  "casting_time": "action",
+  "range": {
+    "kind": "touch"
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": [
+      {
+        "item_id": "spell_component_arcanists_magic_aura",
+        "label": "a small square of silk"
+      }
+    ]
+  },
+  "duration": {
+    "kind": "twenty_four_hours",
+    "amount": 1
+  },
+  "concentration": false,
+  "ritual": false,
+  "effect": {
+    "kind": "exploration",
+    "effect_type": "set_flag",
+    "flag_key": "cast_arcanists_magic_aura",
+    "flag_value": true,
+    "instructions": "Na 24 godziny ustaw fałszywą aurę szkoły magii lub fałszywy typ istoty dla efektów wykrywania."
+  }
+}

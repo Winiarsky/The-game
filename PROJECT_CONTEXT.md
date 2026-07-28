@@ -92,7 +92,10 @@ Na start implementujemy lub przygotowujemy miejsce na:
 - advantage/disadvantage,
 - podstawowe warunki jako placeholder.
 
-Na tym etapie nie implementujemy pełnego systemu klas, wszystkich czarów, featów, pełnego bestiariusza ani pełnej listy warunków.
+Aktualny master milestone implementuje legalny zakres postaci SRD 5.1 do
+poziomu 3: wszystkie klasy/species z tego zakresu, ich wykonywalne granty,
+level-up oraz czary poziomów 0–2. Featy, poziomy 4+, pełny bestiariusz i pełna
+lista warunków pozostają poza tym zakresem.
 
 Jeśli zasada D&D 5e jest trudna do pogodzenia z fizyczną planszą albo spowalnia grę przy stole, wybieramy prostsze rozwiązanie i zapisujemy odstępstwo w `GAME_DESIGN.md`.
 
@@ -159,6 +162,6 @@ Na tym etapie nie robimy:
 - Bazowy otwarty source pack zasad 2014 to SRD 5.1 na CC BY 4.0; content
   projektowy i jego brak zadeklarowanej licencji są śledzone oddzielnie w
   `content/source_packs.json` oraz `docs/CONTENT_VERSIONING_AND_SOURCES.md`.
-- Snapshot pojedynczego scenariusza ma wersjonowany format v23 opisany w `docs/SAVE_FORMAT.md`;
+- Snapshot pojedynczego scenariusza ma wersjonowany format v24 opisany w `docs/SAVE_FORMAT.md`;
   stan kampanii oraz migracje przyszłych wersji pozostają do zaprojektowania w M9.
 - Bazową wersją zasad dla pierwszego pełnego wydania jest D&D 5e 2014. Odstępstwa wymagane przez fizyczną planszę albo tempo gry zapisujemy jawnie w `GAME_DESIGN.md` i `docs/RULES_DECISIONS.md`.

@@ -1,0 +1,43 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "barkskin",
+  "name": "Barkskin",
+  "level": 2,
+  "school": "transmutation",
+  "casting_time": "action",
+  "range": {
+    "kind": "touch"
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": [
+      {
+        "item_id": "spell_component_barkskin",
+        "label": "a handful of oak bark"
+      }
+    ]
+  },
+  "duration": {
+    "kind": "hour",
+    "amount": 1
+  },
+  "concentration": true,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "targeted_status",
+    "label": "Barkskin",
+    "target_count": 1,
+    "cast_flag": "cast_barkskin",
+    "instructions": "Podczas koncentracji KP dobrowolnego celu nie może spaść poniżej 16.",
+    "effect_kind": "minimum_armor_class",
+    "value": 16,
+    "target_faction": "ally"
+  }
+}

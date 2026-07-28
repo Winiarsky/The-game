@@ -10,6 +10,9 @@ from dnd_board_game.actors import (
     DeathSaveState,
     HitDicePool,
     RecoveryPeriod,
+    actor_has_feature,
+    can_spend_actor_resource,
+    spend_actor_resource,
 )
 
 from .abilities import ability_modifier
@@ -45,6 +48,64 @@ class HitDieSpendResult:
     effective_healing: int
 
 
+@dataclass(frozen=True, slots=True)
+class ArcaneRecoveryResult:
+    rest_before: RestResult
+    rest_after: RestResult
+    actor_before: Actor
+    actor_after: Actor
+    slot_level: int
+
+
+def apply_short_rest_slot_recovery(
+    actor: Actor,
+    *,
+    slot_levels: tuple[int, ...],
+) -> Actor:
+    """Apply Arcane or Natural Recovery once after a completed short rest."""
+    if actor_has_feature(actor, "arcane_recovery"):
+        resource_id = "arcane_recovery_uses"
+        label = "Arcane Recovery"
+    elif actor_has_feature(actor, "natural_recovery"):
+        resource_id = "natural_recovery_uses"
+        label = "Natural Recovery"
+    else:
+        raise ValueError("Postać nie posiada Arcane Recovery ani Natural Recovery.")
+    if not slot_levels:
+        raise ValueError(f"{label} wymaga wyboru co najmniej jednego slotu.")
+    if not can_spend_actor_resource(actor, resource_id):
+        raise ValueError(f"{label} zostało już wykorzystane od ostatniego long resta.")
+    budget = max(1, (actor.level + 1) // 2)
+    if sum(slot_levels) > budget or any(level < 1 or level >= 6 for level in slot_levels):
+        raise ValueError(f"{label} przekracza budżet {budget} poziomów slotów.")
+    requested: dict[int, int] = {}
+    for level in slot_levels:
+        requested[level] = requested.get(level, 0) + 1
+    slots = list(actor.spell_slots)
+    for level, count in requested.items():
+        slot_index = next(
+            (
+                index
+                for index, slot in enumerate(slots)
+                if slot.level == level and not slot.temporary
+            ),
+            None,
+        )
+        if slot_index is None:
+            raise ValueError(f"Postać nie posiada zwykłych slotów {level}. poziomu.")
+        slot = slots[slot_index]
+        if slot.remaining + count > slot.maximum:
+            raise ValueError(f"Nie można odzyskać tylu slotów {level}. poziomu.")
+        slots[slot_index] = replace(slot, remaining=slot.remaining + count)
+    spent = spend_actor_resource(actor, resource_id)
+    return replace(spent.actor_after, spell_slots=tuple(slots))
+
+
+def long_rest_required_minutes(actor: Actor) -> int:
+    """Return the uninterrupted rest duration required by the actor."""
+    return 240 if actor_has_feature(actor, "trance") else 480
+
+
 def complete_short_rest(
     actor: Actor,
     *,
@@ -60,6 +121,12 @@ def complete_short_rest(
     )
     updated = replace(
         actor,
+        spell_slots=tuple(
+            replace(slot, remaining=slot.maximum)
+            if slot.recovery == RestType.SHORT_REST.value
+            else slot
+            for slot in actor.spell_slots
+        ),
         resource_pools=resources,
         inventory=charges.actor.inventory,
     )
@@ -88,7 +155,11 @@ def complete_long_rest(
         roll_die=roll_die,
     )
     hit_dice, recovered_hit_dice = _recover_long_rest_hit_dice(actor)
-    slots = tuple(replace(slot, remaining=slot.maximum) for slot in actor.spell_slots)
+    slots = tuple(
+        replace(slot, remaining=slot.maximum)
+        for slot in actor.spell_slots
+        if not slot.temporary
+    )
     preparation = actor.spell_preparation
     if preparation is not None:
         preparation = replace(preparation, confirmed=False)
@@ -149,6 +220,50 @@ def spend_hit_die(actor: Actor, *, die_sides: int, natural_roll: int) -> HitDieS
         modifier,
         healing_total,
         hp_after - actor.hp,
+    )
+
+
+def apply_arcane_recovery(
+    rest: RestResult,
+    *,
+    slot_level: int,
+) -> ArcaneRecoveryResult:
+    """Spend Arcane Recovery after a short rest and restore one legal spell slot."""
+    actor = rest.actor_after
+    if rest.rest_type != RestType.SHORT_REST:
+        raise ValueError("Arcane Recovery można zastosować wyłącznie po short reście.")
+    if not actor_has_feature(actor, "arcane_recovery"):
+        raise ValueError(f"{actor.name} nie posiada cechy Arcane Recovery.")
+    if not can_spend_actor_resource(actor, "arcane_recovery_uses"):
+        raise ValueError("Arcane Recovery zostało już wykorzystane od ostatniego long resta.")
+    recovery_budget = max(1, (actor.level + 1) // 2)
+    if slot_level < 1 or slot_level > recovery_budget or slot_level >= 6:
+        raise ValueError(
+            f"Arcane Recovery tej postaci może odzyskać slot najwyżej {recovery_budget}. poziomu."
+        )
+    target = next(
+        (slot for slot in actor.spell_slots if slot.level == slot_level),
+        None,
+    )
+    if target is None:
+        raise ValueError(f"{actor.name} nie posiada slotu {slot_level}. poziomu.")
+    if target.remaining >= target.maximum:
+        raise ValueError(f"Sloty {slot_level}. poziomu są już pełne.")
+    spent = spend_actor_resource(actor, "arcane_recovery_uses")
+    updated_slots = tuple(
+        replace(slot, remaining=slot.remaining + 1)
+        if slot.level == slot_level
+        else slot
+        for slot in spent.actor_after.spell_slots
+    )
+    updated_actor = replace(spent.actor_after, spell_slots=updated_slots)
+    updated_rest = replace(rest, actor_after=updated_actor)
+    return ArcaneRecoveryResult(
+        rest_before=rest,
+        rest_after=updated_rest,
+        actor_before=actor,
+        actor_after=updated_actor,
+        slot_level=slot_level,
     )
 
 

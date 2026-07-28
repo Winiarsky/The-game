@@ -54,7 +54,11 @@ from dnd_board_game.exploration import (
     validate_policy_exploration_effect,
 )
 from dnd_board_game.hardware import LedColor
-from dnd_board_game.rules import RollMode
+from dnd_board_game.rules import (
+    RollMode,
+    actor_background_permission_ids,
+    resolve_background_permission,
+)
 from dnd_board_game.actions import PlayerIntentHint
 
 from .content_config import load_freeform_grounding_terms, load_llm_core_rules
@@ -285,6 +289,7 @@ class GmClassifierProposal(BaseModel):
     progress_on_success: int | None = Field(default=None, ge=0, le=3)
     progress_on_failure: int | None = Field(default=None, ge=0, le=1)
     used_resource_ids: tuple[str, ...] = ()
+    background_permission_id: str | None = None
     action_flow: GmActionFlow = GmActionFlow.CHALLENGE_ATTEMPT
     selected_mechanic: ExplorationMechanicId | None = None
     roll_mode: RollMode = RollMode.NORMAL
@@ -322,6 +327,11 @@ class GmClassifierProposal(BaseModel):
     @classmethod
     def _lower_tier(cls, value: str | None) -> str | None:
         return value.strip().lower() if value else None
+
+    @field_validator("background_permission_id")
+    @classmethod
+    def _permission_id(cls, value: str | None) -> str | None:
+        return value.strip() if value and value.strip() else None
 
 
 @dataclass(frozen=True, slots=True)
@@ -369,6 +379,11 @@ class GmClassifierRequest:
     selected_flow_observation_ids: tuple[str, ...] = ()
     selected_check_participants: CheckParticipants | None = None
     selected_participant_actor_ids: tuple[str, ...] = ()
+    selected_action_source_id: str | None = None
+    selected_action_source_label: str = ""
+    selected_action_source_tags: tuple[str, ...] = ()
+    selected_action_source_target_tags: tuple[str, ...] = ()
+    selected_action_source_consequence_tags: tuple[str, ...] = ()
     conversation_only: bool = False
 
     def to_prompt_payload(self) -> dict[str, Any]:
@@ -609,6 +624,24 @@ class GmClassifierRequest:
                 for source in referenced_sources
             ],
             "selected_use_source_id": self.selected_use_source_id,
+            "selected_action_source": (
+                {
+                    "id": self.selected_action_source_id,
+                    "label": self.selected_action_source_label,
+                    "capability_tags": list(self.selected_action_source_tags),
+                    "target_tags": list(self.selected_action_source_target_tags),
+                    "consequence_tags": list(
+                        self.selected_action_source_consequence_tags
+                    ),
+                    "rules": {
+                        "player_selected_source": True,
+                        "llm_interprets_method_not_availability": True,
+                        "engine_owns_modifiers_costs_and_consequences": True,
+                    },
+                }
+                if self.selected_action_source_id is not None
+                else None
+            ),
             "selected_fixture_action": (
                 {
                     "source_id": self.selected_fixture_source_id,
@@ -668,6 +701,9 @@ class GmClassifierRequest:
             "allowed_abilities": sorted(CORE_DND_5E_ABILITIES),
             "allowed_skills": sorted(_allowed_skills(policy)),
             "allowed_tags": sorted(policy.allowed_approach_tags),
+            "allowed_background_permission_ids": list(
+                policy.allowed_background_permission_ids
+            ),
             "allowed_consequence_types": list(policy.allowed_consequence_types),
             "allowed_complications": sorted(policy.allowed_complications),
             "allowed_mechanics": [tool.as_payload() for tool in MECHANIC_TOOLS.values()],
@@ -928,6 +964,11 @@ def build_gm_classifier_request(
     selected_flow_observation_ids: tuple[str, ...] = (),
     selected_check_participants: CheckParticipants | None = None,
     selected_participant_actor_ids: tuple[str, ...] = (),
+    selected_action_source_id: str | None = None,
+    selected_action_source_label: str = "",
+    selected_action_source_tags: tuple[str, ...] = (),
+    selected_action_source_target_tags: tuple[str, ...] = (),
+    selected_action_source_consequence_tags: tuple[str, ...] = (),
     conversation_only: bool = False,
 ) -> GmClassifierRequest:
     zone = next(zone for zone in state.zones if zone.id == state.party_position.zone_id)
@@ -960,6 +1001,13 @@ def build_gm_classifier_request(
         selected_flow_observation_ids=selected_flow_observation_ids,
         selected_check_participants=selected_check_participants,
         selected_participant_actor_ids=selected_participant_actor_ids,
+        selected_action_source_id=selected_action_source_id,
+        selected_action_source_label=selected_action_source_label,
+        selected_action_source_tags=selected_action_source_tags,
+        selected_action_source_target_tags=selected_action_source_target_tags,
+        selected_action_source_consequence_tags=(
+            selected_action_source_consequence_tags
+        ),
         conversation_only=conversation_only,
     )
 
@@ -1317,6 +1365,23 @@ def validate_gm_classifier_proposal(
         raise GmProposalValidationError("To wyzwanie jest już zakończone.")
     if not proposal.approach_label.strip():
         raise GmProposalValidationError("Propozycja LLM nie ma nazwy podejścia.")
+    if proposal.background_permission_id is not None:
+        permission_id = proposal.background_permission_id
+        if permission_id not in policy.allowed_background_permission_ids:
+            raise GmProposalValidationError(
+                f"Ta scena nie udostępnia uprawnienia backgroundu: {permission_id}."
+            )
+        if not any(
+            resolve_background_permission(
+                actor,
+                permission_id,
+                scene_permission_ids=policy.allowed_background_permission_ids,
+            ).allowed
+            for actor in request.actors
+        ):
+            raise GmProposalValidationError(
+                f"Żaden uczestnik nie posiada uprawnienia backgroundu: {permission_id}."
+            )
     if request.explicit_player_intent_hint == PlayerIntentHint.BUILD:
         effect = proposal.preparation_effect
         if (
@@ -2352,6 +2417,7 @@ def _actor_grounding_payload(actor: Actor) -> dict[str, Any]:
             if item.quantity > 0
         ],
         "spell_ids": list(actor.spell_ids),
+        "background_permissions": list(actor_background_permission_ids(actor)),
     }
 
 

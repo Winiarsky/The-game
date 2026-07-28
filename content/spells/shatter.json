@@ -1,0 +1,51 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "shatter",
+  "name": "Shatter",
+  "level": 2,
+  "school": "evocation",
+  "casting_time": "action",
+  "range": {
+    "kind": "distance",
+    "feet": 60
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": [
+      {
+        "item_id": "spell_component_shatter",
+        "label": "a chip of mica"
+      }
+    ]
+  },
+  "duration": {
+    "kind": "instantaneous"
+  },
+  "concentration": false,
+  "ritual": false,
+  "scaling": {
+    "damage_dice_per_slot_level": 1
+  },
+  "effect": {
+    "kind": "attack",
+    "ability": "charisma",
+    "save_ability": "constitution",
+    "save_damage_on_success": "half",
+    "area": {
+      "shape": "radius",
+      "radius_feet": 10,
+      "target_mode": "all_creatures"
+    },
+    "damage": {
+      "dice": "3d8",
+      "modifier": 0,
+      "damage_type": "thunder"
+    }
+  }
+}

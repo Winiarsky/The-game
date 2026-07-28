@@ -1,0 +1,22 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["srd_5_1_cc_by_4_0"],
+  "id": "produce_flame",
+  "name": "Stworzenie płomienia",
+  "level": 0,
+  "school": "conjuration",
+  "casting_time": "action",
+  "range": {"kind": "distance", "feet": 30},
+  "components": {"verbal": true, "somatic": true, "materials": []},
+  "duration": {"kind": "ten_minutes", "amount": 1},
+  "concentration": false,
+  "ritual": false,
+  "scaling": {"cantrip_damage_dice_per_tier": 1},
+  "effect": {
+    "kind": "attack",
+    "attack_kind": "ranged",
+    "damage": {"dice": "1d8", "modifier": 0, "damage_type": "fire"}
+  }
+}

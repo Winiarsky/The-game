@@ -17,6 +17,7 @@
   "effect": {
     "kind": "healing",
     "ability": "wisdom",
+    "excluded_creature_types": ["construct", "undead"],
     "healing": {"dice": "1d8", "modifier": 0}
   }
 }

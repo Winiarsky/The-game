@@ -59,7 +59,7 @@ def movement_cost(
         return None
     occupant = _occupant_at(actors, destination, ignore_actor=actor)
     if occupant is not None:
-        if not is_ally_or_neutral(actor, occupant):
+        if not _can_move_through_occupant(actor, occupant):
             return None
         return DIFFICULT_MOVE_COST_FEET
     if terrain.is_difficult:
@@ -204,7 +204,7 @@ def _corner_side_open(board: BoardState, actor: Actor, actors: Sequence[Actor], 
     if terrain.blocks_movement:
         return False
     occupant = _occupant_at(actors, side, ignore_actor=actor)
-    if occupant is not None and not is_ally_or_neutral(actor, occupant):
+    if occupant is not None and not _can_move_through_occupant(actor, occupant):
         return False
     return True
 
@@ -227,3 +227,26 @@ def _occupant_at(actors: Iterable[Actor], coordinate: Coordinate, *, ignore_acto
         if actor.position == coordinate and not actor.is_defeated():
             return actor
     return None
+
+
+def _can_move_through_occupant(actor: Actor, occupant: Actor) -> bool:
+    if is_ally_or_neutral(actor, occupant):
+        return True
+    size_order = {
+        "tiny": 0,
+        "small": 1,
+        "medium": 2,
+        "large": 3,
+        "huge": 4,
+        "gargantuan": 5,
+    }
+    actor_size = size_order[actor.size.value]
+    occupant_size = size_order[occupant.size.value]
+    feature_ids = {
+        getattr(feature, "feature_id", "")
+        for feature in actor.features
+    }
+    return abs(actor_size - occupant_size) >= 2 or (
+        "halfling_nimbleness" in feature_ids
+        and occupant_size > actor_size
+    )

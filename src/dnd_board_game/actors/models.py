@@ -57,6 +57,30 @@ class DeathSaveState:
 
 
 @dataclass(frozen=True, slots=True)
+class WildShapeState:
+    form_id: str
+    form_name: str
+    original_ac: int
+    original_hp: int
+    original_max_hp: int
+    original_speed_feet: int
+    original_ability_scores: AbilityScores
+    original_size: CreatureSize
+    original_senses: ActorSenseProfile
+    original_damage_affinities: DamageAffinityProfile
+    original_creature_type: str
+    remaining_minutes: int
+
+    def __post_init__(self) -> None:
+        if not self.form_id.strip() or not self.form_name.strip():
+            raise ValueError("Wild Shape form id and name cannot be empty.")
+        if self.original_hp < 0 or self.original_max_hp < 1:
+            raise ValueError("Wild Shape original hit points are invalid.")
+        if self.remaining_minutes < 1:
+            raise ValueError("Wild Shape duration must be positive.")
+
+
+@dataclass(frozen=True, slots=True)
 class Actor:
     id: ActorId
     name: str
@@ -81,6 +105,7 @@ class Actor:
     hit_dice: tuple[HitDicePool, ...] = ()
     resource_pools: tuple[ActorResourcePool, ...] = ()
     level: int = 1
+    experience_points: int = 0
     exhaustion_level: int = 0
     proficiency_bonus: int = 2
     proficiencies: ProficiencyProfile = field(default_factory=ProficiencyProfile)
@@ -94,12 +119,22 @@ class Actor:
     triggers: tuple[ActorTrigger, ...] = ()
     features: tuple[FeatureGrant, ...] = ()
     portrait: str = ""
+    creature_type: str = "humanoid"
+    wild_shape: WildShapeState | None = None
 
     def __post_init__(self) -> None:
+        if self.creature_type not in {
+            "aberration", "beast", "celestial", "construct", "dragon",
+            "elemental", "fey", "fiend", "giant", "humanoid",
+            "monstrosity", "ooze", "plant", "undead",
+        }:
+            raise ValueError("Actor creature type is unknown.")
         if self.max_hp <= 0:
             object.__setattr__(self, "max_hp", max(0, self.hp))
         if not 1 <= self.level <= 20:
             raise ValueError("Actor level must be between 1 and 20.")
+        if self.experience_points < 0:
+            raise ValueError("Actor experience_points cannot be negative.")
         if not 0 <= self.exhaustion_level <= 6:
             raise ValueError("Actor exhaustion_level must be between 0 and 6.")
         if self.proficiency_bonus < 0:

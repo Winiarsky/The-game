@@ -9,7 +9,7 @@ from dnd_board_game.ui.exploration_app import ExplorationUiSession, create_app
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Lokalne GUI do testowania eksploracji i LLM.")
-    parser.add_argument("--scenario", default="content/scenarios/abandoned_watchtower.json")
+    parser.add_argument("--scenario", default="content/scenarios/village_square_mvp.json")
     parser.add_argument("--gm-classifier", choices=("none", "groq", "gemini"), default="gemini")
     parser.add_argument("--groq-model", default=None)
     parser.add_argument("--gemini-model", default=None)

@@ -78,7 +78,8 @@ def apply_exhaustion_to_roll_request(
         if request.mode == RollMode.ADVANTAGE
         else RollMode.DISADVANTAGE
     )
-    return D20RollRequest(
+    return replace(
+        request,
         mode=mode,
         modifiers=(
             *request.modifiers,

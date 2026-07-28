@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -279,11 +279,21 @@ class ScenarioAttackDefinition:
     adds_ability_modifier_to_damage: bool = False
     weapon_category_id: str | None = None
     on_hit_condition: str | None = None
+    on_hit_condition_duration: EffectDuration = EffectDuration.PERMANENT
+    on_hit_condition_expiration: str = "target"
+    advantage_against_metal_armor: bool = False
     limited_attacks: bool = False
     thrown: bool = False
     action_cost: ActionEconomyCost = ActionEconomyCost.ACTION
     upcast_damage_dice_per_level: int = 0
     cantrip_damage_dice_per_tier: int = 0
+    tabletop_riders: tuple[str, ...] = ()
+    on_hit_effect_kind: str | None = None
+    on_hit_effect_duration: EffectDuration = EffectDuration.UNTIL_NEXT_ATTACK
+    on_hit_effect_value: int = 0
+    failed_save_push_feet: int = 0
+    concentration: bool = False
+    miss_damage_on_failure: str = "none"
 
 
 @dataclass(frozen=True, slots=True)
@@ -302,6 +312,12 @@ class ScenarioHealingDefinition:
     action_cost: ActionEconomyCost = ActionEconomyCost.ACTION
     healing_dice_count: int = 1
     upcast_healing_dice_per_level: int = 0
+    excluded_creature_types: tuple[str, ...] = ()
+    ongoing_damage_dice_count: int = 0
+    save_damage_on_success: str = "none"
+    damage_on_cast: bool = False
+    projectile_attack_roll: bool = False
+    projectile_damage_dice_count: int = 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -326,12 +342,37 @@ class ScenarioCombatActionDefinition:
     action_cost: ActionEconomyCost = ActionEconomyCost.ACTION
     casting_time: SpellCastingTime = SpellCastingTime.ACTION
     condition: CombatCondition | None = None
+    condition_options: tuple[CombatCondition, ...] = ()
+    additional_conditions: tuple[CombatCondition, ...] = ()
     save_ability: str | None = None
     save_dc: int | None = None
     save_timing: str | None = None
     charge_cost: int = 0
     summon: SummonDefinition | None = None
     movement: MagicMovementDefinition | None = None
+    instructions: str = ""
+    resolution_mode: str = "automatic"
+    board_relevance: str = "direct"
+    resource_pool_id: str | None = None
+    resource_cost: int = 1
+    metamagic_ids: tuple[str, ...] = ()
+    duration_multiplier: int = 1
+    mechanic_family: str = ""
+    resolver_id: str = ""
+    cast_flag: str = ""
+    projectile_count: int = 0
+    upcast_projectiles_per_level: int = 0
+    damage_die_sides: int = 0
+    damage_modifier: int = 0
+    damage_type: str = ""
+    upcast_value_per_level: int = 0
+    ongoing_damage_dice_count: int = 0
+    allowed_creature_types: tuple[str, ...] = ()
+    minimum_intelligence: int | None = None
+    effect_options: tuple[str, ...] = ()
+    hit_point_pool_dice_count: int = 0
+    upcast_hit_point_pool_dice_per_level: int = 0
+    excluded_creature_types: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -374,6 +415,7 @@ class ScenarioActorDefinition:
     combat_actions: tuple[ScenarioCombatActionDefinition, ...] = ()
     source_ref: str | None = None
     portrait: str = ""
+    creature_type: str = "humanoid"
 
 
 @dataclass(frozen=True, slots=True)
@@ -469,6 +511,15 @@ class LoadedEncounter:
     player_start_zones: tuple[tuple[Coordinate, ...], ...] = ()
     objectives: tuple[SceneObjective, ...] = ()
     scene_objects: tuple[SceneObject, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class CompiledActorCombatContent:
+    """Runtime combat sources compiled from a custom Actor's data-driven content."""
+
+    attack_sources: tuple[AttackSource, ...] = ()
+    healing_sources: tuple[HealingSource, ...] = ()
+    combat_actions: tuple[ScenarioCombatActionDefinition, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -629,6 +680,154 @@ def build_encounter_from_scenario(loaded: LoadedScenario) -> LoadedEncounter:
         player_start_zones=definition.player_start_zones,
         objectives=objectives,
         scene_objects=scene_objects,
+    )
+
+
+def compile_actor_combat_content(
+    actor: Actor,
+    content_anchor: str | Path = "content/character_creation/catalog.json",
+) -> CompiledActorCombatContent:
+    """Compile equipment and executable spells for a roster-created actor.
+
+    Scenario actors go through the same private parsers while loading.  This
+    adapter gives custom actors an equivalent source set without importing
+    legacy fixtures or copying weapon rules into the character creator.
+    """
+
+    anchor = Path(content_anchor)
+    attack_definitions: list[ScenarioAttackDefinition] = []
+    healing_definitions: list[ScenarioHealingDefinition] = []
+    combat_actions: list[ScenarioCombatActionDefinition] = []
+    for item in actor.inventory:
+        if item.kind != "weapon":
+            continue
+        item_ref = item.source_ref or item.id
+        item_data = _read_item_definition(anchor, item_ref)
+        attack_definitions.extend(
+            _parse_attack(raw, str(actor.id))
+            for raw in _attacks_with_item_source(
+                _item_attack_definitions(item_data),
+                item.id,
+                proficiency_id=item_ref,
+            )
+        )
+    for spell in actor.spells:
+        spell_data = _read_content_definition(
+            _content_ref_path(anchor, "spells", spell.id),
+            "dnd_board_game.spell",
+        )
+        collection, effect = _spell_effect_payload(spell_data, spell)
+        if collection == "attack":
+            attack_definitions.append(_parse_attack(effect, str(actor.id)))
+        elif collection == "healing":
+            healing_definitions.append(
+                _parse_healing_source(effect, str(actor.id))
+            )
+        elif collection in {"combat_action", "assisted"}:
+            combat_actions.append(_parse_combat_action(effect, str(actor.id)))
+    attack_sources = tuple(
+        _attack_source_from_definition(
+            definition,
+            f"custom_actor:{actor.id}:{definition.id}",
+            actor,
+        )
+        for definition in attack_definitions
+    )
+    return CompiledActorCombatContent(
+        attack_sources=attack_sources,
+        healing_sources=tuple(
+            _healing_source_from_definition(definition, actor)
+            for definition in healing_definitions
+        ),
+        combat_actions=tuple(combat_actions),
+    )
+
+
+def encounter_with_custom_party(
+    encounter: LoadedEncounter,
+    party: tuple[Actor, ...],
+    *,
+    content_anchor: str | Path = "content/character_creation/catalog.json",
+) -> LoadedEncounter:
+    """Replace authored allied fixtures with up to five roster actors."""
+
+    if not 1 <= len(party) <= 5:
+        raise ValueError("Customowa drużyna musi liczyć od 1 do 5 postaci.")
+    if len({actor.id for actor in party}) != len(party):
+        raise ValueError("Customowa drużyna nie może zawierać duplikatów.")
+    authored_allies = tuple(
+        actor for actor in encounter.actors if actor.faction == Faction.ALLY
+    )
+    if not authored_allies:
+        raise ValueError("Encounter nie definiuje pozycji startowej dla drużyny.")
+    start_positions = tuple(actor.position for actor in authored_allies)
+    custom_actors = tuple(
+        replace(
+            actor,
+            position=start_positions[min(index, len(start_positions) - 1)],
+            faction=Faction.ALLY,
+        )
+        for index, actor in enumerate(party)
+    )
+    enemies = tuple(
+        actor for actor in encounter.actors if actor.faction != Faction.ALLY
+    )
+    ally_ids = {actor.id for actor in authored_allies}
+    compiled = {
+        actor.id: compile_actor_combat_content(actor, content_anchor)
+        for actor in custom_actors
+    }
+    attack_options = {
+        actor_id: sources
+        for actor_id, sources in encounter.attack_source_options_by_actor.items()
+        if actor_id not in ally_ids
+    }
+    attack_options.update(
+        {
+            actor.id: compiled[actor.id].attack_sources
+            for actor in custom_actors
+        }
+    )
+    healing = {
+        actor_id: sources
+        for actor_id, sources in encounter.healing_sources_by_actor.items()
+        if actor_id not in ally_ids
+    }
+    healing.update(
+        {
+            actor.id: compiled[actor.id].healing_sources
+            for actor in custom_actors
+            if compiled[actor.id].healing_sources
+        }
+    )
+    actions = {
+        actor_id: sources
+        for actor_id, sources in encounter.combat_actions_by_actor.items()
+        if actor_id not in ally_ids
+    }
+    actions.update(
+        {
+            actor.id: compiled[actor.id].combat_actions
+            for actor in custom_actors
+            if compiled[actor.id].combat_actions
+        }
+    )
+    return replace(
+        encounter,
+        actors=(*custom_actors, *enemies),
+        attack_source_options_by_actor=attack_options,
+        attack_sources_by_actor={
+            actor_id: sources[0]
+            for actor_id, sources in attack_options.items()
+            if sources
+        },
+        multiattack_sources_by_actor={
+            actor_id: sources
+            for actor_id, sources in encounter.multiattack_sources_by_actor.items()
+            if actor_id not in ally_ids
+        },
+        healing_sources_by_actor=healing,
+        combat_actions_by_actor=actions,
     )
 
 
@@ -1065,6 +1264,7 @@ def _parse_actor(
         combat_actions=combat_actions,
         source_ref=str(source_ref) if source_ref is not None else None,
         portrait=str(merged.get("portrait", "")).strip(),
+        creature_type=str(merged.get("creature_type", "humanoid")),
     )
 
 
@@ -1128,6 +1328,9 @@ def _parse_actor_senses(data: Any, actor_id: str) -> ActorSenseProfile:
         blindsight_feet=int(data.get("blindsight_feet", 0)),
         tremorsense_feet=int(data.get("tremorsense_feet", 0)),
         truesight_feet=int(data.get("truesight_feet", 0)),
+        magical_darkness_vision_feet=int(
+            data.get("magical_darkness_vision_feet", 0)
+        ),
     )
 
 
@@ -1202,6 +1405,9 @@ def _parse_spell_definition(data: dict[str, Any], spell_ref: str) -> SpellDefini
     scaling_data = data.get("scaling")
     if scaling_data is not None and not isinstance(scaling_data, dict):
         raise ValueError(f"spell {spell_id}.scaling must be an object.")
+    exploration_use_data = data.get("exploration_use", {})
+    if not isinstance(exploration_use_data, dict):
+        raise ValueError(f"spell {spell_id}.exploration_use must be an object.")
     return SpellDefinition(
         id=spell_id,
         name=str(_required(data, "name", f"spell {spell_id}")),
@@ -1285,6 +1491,18 @@ def _parse_spell_definition(data: dict[str, Any], spell_ref: str) -> SpellDefini
             if effect_data.get("kind") == "exploration"
             else None
         ),
+        exploration_tags=_parse_string_tuple(
+            exploration_use_data.get("tags", []),
+            f"spell {spell_id}.exploration_use.tags",
+        ),
+        exploration_target_tags=_parse_string_tuple(
+            exploration_use_data.get("targets", []),
+            f"spell {spell_id}.exploration_use.targets",
+        ),
+        exploration_consequence_tags=_parse_string_tuple(
+            exploration_use_data.get("consequences", []),
+            f"spell {spell_id}.exploration_use.consequences",
+        ),
     )
 
 
@@ -1294,15 +1512,23 @@ def _spell_effect_payload(
 ) -> tuple[str, dict[str, Any]]:
     effect = dict(_required_mapping(data, "effect", f"spell {spell.id}"))
     collection = str(effect.pop("kind"))
-    if collection not in {"attack", "healing", "combat_action", "exploration"}:
+    if collection not in {
+        "attack",
+        "healing",
+        "combat_action",
+        "exploration",
+        "assisted",
+    }:
         raise ValueError(
-            f"spell {spell.id}.effect.kind must be attack, healing, combat_action or exploration."
+            f"spell {spell.id}.effect.kind must be attack, healing, combat_action, "
+            "exploration or assisted."
         )
     effect.setdefault("id", spell.id)
     effect.setdefault("name", spell.name)
     effect.setdefault("spell_level", spell.level)
     effect.setdefault("casting_kind", "cantrip" if spell.level == 0 else "leveled")
     effect.setdefault("prepared", True)
+    effect.setdefault("concentration", spell.concentration)
     if spell.scaling is not None:
         effect.setdefault(
             "upcast_damage_dice_per_level",
@@ -1329,13 +1555,66 @@ def _spell_effect_payload(
         }.get(spell.casting_time, "action"),
     )
     effect.setdefault("casting_time", spell.casting_time.value)
+    effect.setdefault(
+        "duration",
+        (
+            "encounter"
+            if spell.duration.kind
+            in {
+                SpellDurationKind.ROUND,
+                SpellDurationKind.MINUTE,
+                SpellDurationKind.TEN_MINUTES,
+            }
+            else "short_rest"
+            if spell.duration.kind
+            in {
+                SpellDurationKind.HOUR,
+                SpellDurationKind.EIGHT_HOURS,
+            }
+            else "scenario"
+            if spell.duration.kind
+            in {
+                SpellDurationKind.TWENTY_FOUR_HOURS,
+                SpellDurationKind.UNTIL_DISPELLED,
+            }
+            else "next_turn_start"
+        ),
+    )
     if spell.range.kind == SpellRangeKind.DISTANCE:
         effect.setdefault("range_feet", spell.range.feet)
     elif spell.range.kind == SpellRangeKind.TOUCH:
         effect.setdefault("range_feet", 5)
     elif spell.range.kind == SpellRangeKind.SELF:
-        effect.setdefault("range_feet", 0 if collection == "combat_action" else 5)
+        effect.setdefault(
+            "range_feet",
+            0 if collection in {"combat_action", "assisted"} else 5,
+        )
     if collection == "exploration":
+        return collection, effect
+    if collection == "assisted":
+        from dnd_board_game.character_creation.assisted_spell_audit import (
+            assisted_spell_plan,
+        )
+
+        plan = assisted_spell_plan(spell.id)
+        effect.setdefault("action_type", "assisted_spell")
+        effect.setdefault("label", spell.name)
+        effect.setdefault("resolution_mode", "assisted")
+        effect.setdefault(
+            "mechanic_family",
+            plan.family.value if plan is not None else "narrative",
+        )
+        effect.setdefault(
+            "resolver_id",
+            plan.resolver_id if plan is not None else "authored_scene_flag",
+        )
+        effect.setdefault(
+            "cast_flag",
+            plan.cast_flag if plan is not None else f"cast_{spell.id}",
+        )
+        effect.setdefault("concentration", spell.concentration)
+        if spell.concentration:
+            effect.setdefault("duration", "concentration")
         return collection, effect
     if collection == "attack":
         effect.setdefault("source_type", "spell")
@@ -1383,6 +1662,18 @@ def _parse_spell_access(
                 allowed_focus_kinds=_parse_string_tuple(
                     profile.get("allowed_focus_kinds", []),
                     f"{field}.allowed_focus_kinds",
+                ),
+                casting_ability=(
+                    str(profile["casting_ability"])
+                    if profile.get("casting_ability") is not None
+                    else None
+                ),
+                resource_ids_by_spell=tuple(
+                    (str(spell_id), str(resource_id))
+                    for spell_id, resource_id in _require_mapping(
+                        profile.get("resource_ids_by_spell", {}),
+                        f"{field}.resource_ids_by_spell",
+                    ).items()
                 ),
             )
         )
@@ -2230,6 +2521,17 @@ def _parse_attack(data: dict[str, Any], actor_id: str) -> ScenarioAttackDefiniti
             if data.get("on_hit_condition") is not None
             else None
         ),
+        on_hit_condition_duration=_enum_value(
+            EffectDuration,
+            data.get("on_hit_condition_duration", EffectDuration.PERMANENT.value),
+            f"attack {attack_id}.on_hit_condition_duration",
+        ),
+        on_hit_condition_expiration=str(
+            data.get("on_hit_condition_expiration", "target")
+        ),
+        advantage_against_metal_armor=bool(
+            data.get("advantage_against_metal_armor", False)
+        ),
         limited_attacks=bool(data.get("limited_attacks", False)),
         thrown=bool(data.get("thrown", False)),
         action_cost=_enum_value(
@@ -2243,6 +2545,24 @@ def _parse_attack(data: dict[str, Any], actor_id: str) -> ScenarioAttackDefiniti
         cantrip_damage_dice_per_tier=int(
             data.get("cantrip_damage_dice_per_tier", 0)
         ),
+        tabletop_riders=_parse_string_tuple(
+            data.get("tabletop_riders", []),
+            f"attack {attack_id}.tabletop_riders",
+        ),
+        on_hit_effect_kind=(
+            str(data["on_hit_effect_kind"])
+            if data.get("on_hit_effect_kind") is not None
+            else None
+        ),
+        on_hit_effect_duration=_enum_value(
+            EffectDuration,
+            data.get("on_hit_effect_duration", "until_next_attack"),
+            f"attack {attack_id}.on_hit_effect_duration",
+        ),
+        on_hit_effect_value=int(data.get("on_hit_effect_value", 0)),
+        failed_save_push_feet=int(data.get("failed_save_push_feet", 0)),
+        concentration=bool(data.get("concentration", False)),
+        miss_damage_on_failure=str(data.get("miss_damage_on_failure", "none")),
     )
 
 
@@ -2293,6 +2613,21 @@ def _parse_healing_source(data: dict[str, Any], actor_id: str) -> ScenarioHealin
         upcast_healing_dice_per_level=int(
             data.get("upcast_healing_dice_per_level", 0)
         ),
+        excluded_creature_types=_parse_string_tuple(
+            data.get("excluded_creature_types", []),
+            f"healing source {source_id}.excluded_creature_types",
+        ),
+        ongoing_damage_dice_count=int(
+            data.get("ongoing_damage_dice_count", 0)
+        ),
+        save_damage_on_success=str(
+            data.get("save_damage_on_success", "none")
+        ),
+        damage_on_cast=bool(data.get("damage_on_cast", False)),
+        projectile_attack_roll=bool(data.get("projectile_attack_roll", False)),
+        projectile_damage_dice_count=int(
+            data.get("projectile_damage_dice_count", 1)
+        ),
     )
 
 
@@ -2323,35 +2658,50 @@ def _parse_combat_action(data: dict[str, Any], actor_id: str) -> ScenarioCombatA
             raise ValueError(f"combat action {action_id} requires source_item_id.")
         if effect_kind not in {"grant_next_attack_penalty", "apply_condition"}:
             raise ValueError(f"combat action {action_id} has unsupported effect_kind.")
-        EffectDuration(duration)
     condition = (
         _enum_value(CombatCondition, str(data["condition"]), f"combat action {action_id}.condition")
         if "condition" in data
         else None
     )
+    condition_options = tuple(
+        _enum_value(
+            CombatCondition,
+            str(value),
+            f"combat action {action_id}.condition_options",
+        )
+        for value in data.get("condition_options", ())
+    )
+    additional_conditions = tuple(
+        _enum_value(
+            CombatCondition,
+            str(value),
+            f"combat action {action_id}.additional_conditions",
+        )
+        for value in data.get("additional_conditions", ())
+    )
     save_ability = str(data["save_ability"]) if "save_ability" in data else None
     save_dc = int(data["save_dc"]) if "save_dc" in data else None
     save_timing = str(data["save_timing"]) if "save_timing" in data else None
     if effect_kind == "apply_condition":
-        if condition is None:
+        if condition is None and not condition_options:
             raise ValueError(f"combat action {action_id} requires condition.")
         save_fields = (save_ability, save_dc, save_timing)
-        if any(value is not None for value in save_fields) and not all(
-            value is not None for value in save_fields
-        ):
+        if any(value is not None for value in save_fields) and save_ability is None:
             raise ValueError(
                 f"combat action {action_id} condition requires all save fields or none."
             )
         if save_timing is not None:
             ConditionSaveTiming(save_timing)
     if action_type == "spell_debuff":
-        if effect_kind != "apply_condition" or condition is None:
+        if effect_kind != "apply_condition" or (
+            condition is None and not condition_options
+        ):
             raise ValueError(
                 f"combat action {action_id} spell_debuff requires apply_condition."
             )
-        if save_ability is None or save_timing is None:
+        if save_ability is None:
             raise ValueError(
-                f"combat action {action_id} spell_debuff requires save ability and timing."
+                f"combat action {action_id} spell_debuff requires save ability."
             )
         if range_feet <= 0:
             raise ValueError(
@@ -2361,7 +2711,6 @@ def _parse_combat_action(data: dict[str, Any], actor_id: str) -> ScenarioCombatA
             raise ValueError(
                 f"combat action {action_id} spell_debuff must target an enemy."
             )
-        EffectDuration(duration)
     if action_type == "spell_dispel":
         if effect_kind != "dispel_magic":
             raise ValueError(
@@ -2375,6 +2724,63 @@ def _parse_combat_action(data: dict[str, Any], actor_id: str) -> ScenarioCombatA
             raise ValueError(
                 f"combat action {action_id} spell_dispel must target any faction."
             )
+    if action_type == "assisted_spell":
+        if not str(data.get("instructions", "")).strip():
+            raise ValueError(
+                f"combat action {action_id} assisted_spell requires instructions."
+            )
+        if str(data.get("resolution_mode", "assisted")) not in {
+            "assisted",
+            "tabletop",
+            "narrative",
+        }:
+            raise ValueError(
+                f"combat action {action_id} has unsupported resolution_mode."
+            )
+        if str(data.get("mechanic_family", "")).strip() not in {
+            "damage",
+            "condition",
+            "buff",
+            "summon",
+            "exploration",
+            "narrative",
+        }:
+            raise ValueError(
+                f"combat action {action_id} requires a supported mechanic_family."
+            )
+        if not str(data.get("cast_flag", "")).strip():
+            raise ValueError(
+                f"combat action {action_id} requires a stable cast_flag."
+            )
+        if not str(data.get("resolver_id", "")).strip():
+            raise ValueError(
+                f"combat action {action_id} requires an audited resolver_id."
+            )
+    if action_type == "multi_target_damage":
+        projectile_count = int(data.get("projectile_count", 0))
+        upcast_projectiles = int(data.get("upcast_projectiles_per_level", 0))
+        damage_die_sides = int(data.get("damage_die_sides", 0))
+        if projectile_count < 1 or upcast_projectiles < 0:
+            raise ValueError(
+                f"combat action {action_id} has invalid projectile counts."
+            )
+        if damage_die_sides < 2:
+            raise ValueError(
+                f"combat action {action_id} requires a damage die."
+            )
+        _enum_value(
+            DamageType,
+            data.get("damage_type"),
+            f"combat action {action_id}.damage_type",
+        )
+        if range_feet <= 0:
+            raise ValueError(
+                f"combat action {action_id} requires positive range_feet."
+            )
+        if not str(data.get("cast_flag", "")).strip():
+            raise ValueError(
+                f"combat action {action_id} requires a stable cast_flag."
+            )
     summon = (
         _parse_summon_definition(data["summon"], action_id)
         if "summon" in data
@@ -2383,10 +2789,6 @@ def _parse_combat_action(data: dict[str, Any], actor_id: str) -> ScenarioCombatA
     if action_type == "summon":
         if summon is None:
             raise ValueError(f"combat action {action_id} requires summon.")
-        if not bool(data.get("concentration", False)):
-            raise ValueError(
-                f"combat action {action_id} summon must require concentration."
-            )
         if range_feet <= 0:
             raise ValueError(
                 f"combat action {action_id} summon requires positive range_feet."
@@ -2457,12 +2859,54 @@ def _parse_combat_action(data: dict[str, Any], actor_id: str) -> ScenarioCombatA
             f"combat action {action_id}.casting_time",
         ),
         condition=condition,
+        condition_options=condition_options,
+        additional_conditions=additional_conditions,
         save_ability=save_ability,
         save_dc=save_dc,
         save_timing=save_timing,
         charge_cost=charge_cost,
         summon=summon,
         movement=movement,
+        instructions=str(data.get("instructions", "")),
+        resolution_mode=str(data.get("resolution_mode", "automatic")),
+        board_relevance=str(data.get("board_relevance", "direct")),
+        mechanic_family=str(data.get("mechanic_family", "")).strip(),
+        resolver_id=str(data.get("resolver_id", "")).strip(),
+        cast_flag=str(data.get("cast_flag", "")).strip(),
+        projectile_count=int(data.get("projectile_count", 0)),
+        upcast_projectiles_per_level=int(
+            data.get("upcast_projectiles_per_level", 0)
+        ),
+        damage_die_sides=int(data.get("damage_die_sides", 0)),
+        damage_modifier=int(data.get("damage_modifier", 0)),
+        damage_type=str(data.get("damage_type", "")),
+        upcast_value_per_level=int(data.get("upcast_value_per_level", 0)),
+        ongoing_damage_dice_count=int(
+            data.get("ongoing_damage_dice_count", 0)
+        ),
+        allowed_creature_types=_parse_string_tuple(
+            data.get("allowed_creature_types", []),
+            f"combat action {action_id}.allowed_creature_types",
+        ),
+        minimum_intelligence=(
+            int(data["minimum_intelligence"])
+            if data.get("minimum_intelligence") is not None
+            else None
+        ),
+        effect_options=_parse_string_tuple(
+            data.get("effect_options", []),
+            f"combat action {action_id}.effect_options",
+        ),
+        hit_point_pool_dice_count=int(
+            data.get("hit_point_pool_dice_count", 0)
+        ),
+        upcast_hit_point_pool_dice_per_level=int(
+            data.get("upcast_hit_point_pool_dice_per_level", 0)
+        ),
+        excluded_creature_types=_parse_string_tuple(
+            data.get("excluded_creature_types", []),
+            f"combat action {action_id}.excluded_creature_types",
+        ),
     )
 
 
@@ -3286,6 +3730,11 @@ def _parse_scenario_continuation(
             safe_travel_minutes=int(
                 raw_travel.get("safe_travel_minutes", 480)
             ),
+            terrain=(
+                str(raw_travel["terrain"]).strip().lower()
+                if raw_travel.get("terrain") is not None
+                else None
+            ),
         ),
     )
 
@@ -3564,6 +4013,12 @@ def _parse_interaction_goals(
                     )
                     for action_index, raw_action in enumerate(raw_source_actions)
                 ),
+                accepted_source_tags=tuple(
+                    str(item).strip().lower()
+                    for item in raw_goal.get("accepted_source_tags", [])
+                    if str(item).strip()
+                ),
+                source_required=bool(raw_goal.get("source_required", False)),
                 participant_mode=InteractionParticipantMode(
                     str(raw_goal.get("participant_mode", InteractionParticipantMode.MUST.value))
                 ),
@@ -4401,6 +4856,11 @@ def _parse_exploration_hazards(data: Any, option_id: str) -> tuple[ExplorationHa
                     damage_on_success=damage_on_success,
                     success_effect_label=str(save.get("success_effect_label", "")),
                     failure_effect_label=str(save.get("failure_effect_label", "pełny efekt")),
+                    effect_tags=(
+                        (damage_type.value,)
+                        if damage_type == DamageType.POISON
+                        else ()
+                    ),
                 ),
                 damage=ExplorationHazardDamage(
                     damage_type=damage_type.value,
@@ -4828,6 +5288,7 @@ def _parse_encounter_outcome(data: Any, field: str) -> EncounterOutcome | None:
         body=str(data.get("body", "")),
         effects=_parse_effects(data.get("effects", []), f"{field}.effects"),
         next_instruction=str(data.get("next_instruction", "")),
+        experience_points=int(data.get("experience_points", 0)),
     )
 
 
@@ -4921,6 +5382,13 @@ def _parse_llm_challenge_policy(data: Any, field: str) -> LlmChallengePolicy:
         allowed_unlock_option_ids=_parse_string_tuple(
             data.get("allowed_unlock_option_ids", list(defaults.allowed_unlock_option_ids)),
             f"{field}.allowed_unlock_option_ids",
+        ),
+        allowed_background_permission_ids=_parse_string_tuple(
+            data.get(
+                "allowed_background_permission_ids",
+                list(defaults.allowed_background_permission_ids),
+            ),
+            f"{field}.allowed_background_permission_ids",
         ),
         max_resources_per_attempt=int(data.get("max_resources_per_attempt", 1)),
         dc_min=dc_min,
@@ -5223,6 +5691,7 @@ def _actor_from_definition(definition: ScenarioActorDefinition) -> Actor:
         triggers=definition.triggers,
         features=definition.features,
         portrait=definition.portrait,
+        creature_type=definition.creature_type,
     )
 
 
@@ -5244,6 +5713,10 @@ def _attack_source_from_definition(
                 )
             ),
         )
+    elif definition.source_type == AttackSourceType.SPELL:
+        # A spell shared by several classes derives its casting ability from
+        # the actor's SpellAccessProfile when the source is selected.
+        modifiers = ()
     else:
         if definition.attack_modifier is None:
             raise ValueError(
@@ -5291,13 +5764,30 @@ def _attack_source_from_definition(
         adds_ability_modifier_to_damage=definition.adds_ability_modifier_to_damage,
         weapon_category_id=definition.weapon_category_id,
         on_hit_condition=definition.on_hit_condition,
+        on_hit_condition_duration=definition.on_hit_condition_duration,
+        on_hit_condition_expiration=definition.on_hit_condition_expiration,
+        advantage_against_metal_armor=definition.advantage_against_metal_armor,
         limited_attacks=definition.limited_attacks,
         thrown=definition.thrown,
         action_cost=definition.action_cost,
         upcast_damage_dice_per_level=definition.upcast_damage_dice_per_level,
         cantrip_damage_dice_per_tier=definition.cantrip_damage_dice_per_tier,
+        tabletop_riders=definition.tabletop_riders,
+        on_hit_effect_kind=definition.on_hit_effect_kind,
+        on_hit_effect_duration=definition.on_hit_effect_duration,
+        on_hit_effect_value=definition.on_hit_effect_value,
+        failed_save_push_feet=definition.failed_save_push_feet,
+        concentration=definition.concentration,
+        miss_damage_on_failure=definition.miss_damage_on_failure,
     )
-    return attack_source_at_actor_level(source, actor.level)
+    from dnd_board_game.combat.fighting_styles import (
+        apply_fighting_style_to_attack_source,
+    )
+
+    return apply_fighting_style_to_attack_source(
+        actor,
+        attack_source_at_actor_level(source, actor.level),
+    )
 
 
 def _healing_source_from_definition(
@@ -5313,7 +5803,7 @@ def _healing_source_from_definition(
         healing_modifier += ability_modifier(
             getattr(actor.ability_scores, definition.ability)
         )
-    return HealingSource(
+    source = HealingSource(
         id=definition.id,
         name=definition.name,
         source_type=definition.source_type,
@@ -5328,7 +5818,13 @@ def _healing_source_from_definition(
         prepared=definition.prepared,
         action_cost=definition.action_cost,
         upcast_healing_dice_per_level=definition.upcast_healing_dice_per_level,
+        excluded_creature_types=definition.excluded_creature_types,
     )
+    if actor is None:
+        return source
+    from dnd_board_game.combat import apply_life_domain_to_healing_source
+
+    return apply_life_domain_to_healing_source(actor, source)
 
 
 def _validate_scenario(definition: ScenarioDefinition) -> None:
@@ -6332,34 +6828,41 @@ def _read_content_definition(path: Path, expected_schema: str) -> dict[str, Any]
 
 
 def _read_item_definition(scenario_path: Path, item_ref: str) -> dict[str, Any]:
-    """Resolve an item from a legacy standalone file or the unified gear catalog."""
+    """Resolve an item from a standalone file or a unified item collection."""
 
     standalone_path = _content_ref_path(scenario_path, "items", item_ref)
     if standalone_path.exists():
         return _read_content_definition(standalone_path, "dnd_board_game.item")
-    catalog_path = _content_ref_path(
-        scenario_path,
-        "items",
-        "adventuring_gear",
-    )
-    catalog = _read_json(catalog_path)
-    header = parse_content_header(
-        catalog,
-        expected_schema="dnd_board_game.item_catalog",
-        context=str(catalog_path),
-    )
-    _validate_known_source_packs(header, catalog_path)
-    raw_items = catalog.get("items")
-    if not isinstance(raw_items, list):
-        raise ValueError(f"{catalog_path}.items must be a list.")
-    matches = [
-        entry
-        for entry in raw_items
-        if isinstance(entry, dict) and entry.get("id") == item_ref
-    ]
+    matches: list[tuple[Path, dict[str, Any], ContentHeader]] = []
+    for catalog_name in ("adventuring_gear", "spell_components"):
+        catalog_path = _content_ref_path(
+            scenario_path,
+            "items",
+            catalog_name,
+        )
+        if not catalog_path.exists():
+            continue
+        catalog = _read_json(catalog_path)
+        header = parse_content_header(
+            catalog,
+            expected_schema="dnd_board_game.item_catalog",
+            context=str(catalog_path),
+        )
+        _validate_known_source_packs(header, catalog_path)
+        raw_items = catalog.get("items")
+        if not isinstance(raw_items, list):
+            raise ValueError(f"{catalog_path}.items must be a list.")
+        matches.extend(
+            (catalog_path, entry, header)
+            for entry in raw_items
+            if isinstance(entry, dict) and entry.get("id") == item_ref
+        )
     if len(matches) != 1:
+        if matches:
+            raise ValueError(f"Duplicate item definition: {item_ref}.")
         raise ValueError(f"Unknown item definition: {item_ref}.")
-    item = dict(matches[0])
+    catalog_path, raw_item, header = matches[0]
+    item = dict(raw_item)
     item.update(
         {
             "schema": "dnd_board_game.item",

@@ -13,6 +13,7 @@ from dnd_board_game.actors import (
     apply_exhaustion_to_roll_request,
     increase_exhaustion,
     saving_throw_roll_modifiers,
+    natural_explorer_benefits,
 )
 from dnd_board_game.rules import (
     D20RollInput,
@@ -39,6 +40,7 @@ class TravelNavigationResult:
     roll: D20RollResult | None = None
     dc: int | None = None
     delay_minutes: int = 0
+    feature_id: str | None = None
 
     def as_payload(self) -> dict[str, object]:
         return {
@@ -49,6 +51,7 @@ class TravelNavigationResult:
             "total": self.roll.total if self.roll else None,
             "dc": self.dc,
             "delay_minutes": self.delay_minutes,
+            "feature_id": self.feature_id,
         }
 
 
@@ -143,6 +146,7 @@ def resolve_travel(
         policy.navigation_ability,
         policy.navigation_skill,
         policy.navigation_failure_delay_minutes,
+        policy.terrain,
         actors,
         navigator_actor_id=navigator_actor_id,
         navigation_roll=navigation_roll,
@@ -221,6 +225,7 @@ def _resolve_navigation(
     ability: str,
     skill: str | None,
     failure_delay_minutes: int,
+    terrain: str | None,
     actors: tuple[Actor, ...],
     *,
     navigator_actor_id: str | None,
@@ -228,6 +233,23 @@ def _resolve_navigation(
 ) -> TravelNavigationResult:
     if dc is None:
         return TravelNavigationResult(required=False, success=True)
+    natural_explorer = next(
+        (
+            actor
+            for actor in actors
+            if terrain is not None
+            and natural_explorer_benefits(actor, terrain=terrain) is not None
+        ),
+        None,
+    )
+    if natural_explorer is not None:
+        return TravelNavigationResult(
+            required=False,
+            success=True,
+            actor_id=str(natural_explorer.id),
+            dc=dc,
+            feature_id="natural_explorer",
+        )
     navigator = next(
         (
             actor

@@ -1,0 +1,41 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "faerie_fire",
+  "name": "Faerie Fire",
+  "level": 1,
+  "school": "evocation",
+  "casting_time": "action",
+  "range": {
+    "kind": "distance",
+    "feet": 60
+  },
+  "components": {
+    "verbal": true,
+    "somatic": false,
+    "materials": []
+  },
+  "duration": {
+    "kind": "minute",
+    "amount": 1
+  },
+  "concentration": true,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "targeted_status",
+    "label": "Faerie Fire",
+    "effect_kind": "attacks_against_advantage",
+    "save_ability": "dexterity",
+    "target_faction": "enemy",
+    "target_count": 20,
+    "cast_flag": "cast_faerie_fire",
+    "instructions": "Istoty w sześcianie 20 stóp wykonują rzut na Zręczność; porażka: świecą, nie korzystają z niewidzialności, ataki na nie mają przewagę.",
+    "resolution_mode": "automatic",
+    "board_relevance": "direct"
+  }
+}

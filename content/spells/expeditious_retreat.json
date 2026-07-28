@@ -1,0 +1,38 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "expeditious_retreat",
+  "name": "Expeditious Retreat",
+  "level": 1,
+  "school": "transmutation",
+  "casting_time": "bonus_action",
+  "range": {
+    "kind": "self"
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": []
+  },
+  "duration": {
+    "kind": "ten_minutes",
+    "amount": 1
+  },
+  "concentration": true,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "targeted_status",
+    "label": "Expeditious Retreat",
+    "target_count": 1,
+    "cast_flag": "cast_expeditious_retreat",
+    "instructions": "Po rzuceniu i w każdej swojej turze podczas koncentracji możesz użyć Dash jako bonus action.",
+    "effect_kind": "bonus_action_dash",
+    "value": 1,
+    "target_faction": "self"
+  }
+}

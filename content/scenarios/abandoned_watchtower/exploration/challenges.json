@@ -20,6 +20,7 @@
           "image": "assets/gate_force_entry.webp",
           "followup_prompt": "Czego używacie i jak zabieracie się do wyważania?",
           "suggested_tags": ["heavy_force", "lever", "weak_point"],
+          "accepted_source_tags": ["break", "damage_object", "ignite", "pry"],
           "participant_mode": "allow",
           "check_participants": "lead_with_help",
           "allowed_check_participants": ["single_actor", "lead_with_help", "whole_party"],
@@ -39,6 +40,33 @@
           "image": "assets/gate_wall_route.webp",
           "followup_prompt": "Jak korzystacie z odkrytego przejścia i jak pomagacie sobie na murze?",
           "suggested_tags": ["climbing", "wall_climb", "quiet"],
+          "accepted_source_tags": ["climbing_aid"],
+          "forbidden_flags": ["gate_climbing_rope_attached"],
+          "participant_mode": "allow",
+          "check_participants": "whole_party",
+          "allowed_check_participants": ["single_actor", "lead_with_help", "whole_party"]
+        },
+        {
+          "id": "attach_wall_rope",
+          "label": "Zamocujcie linę na murze",
+          "description": "Przygotujcie stałą asekurację, z której później skorzysta cała drużyna.",
+          "image": "assets/gate_wall_route.webp",
+          "followup_prompt": "Gdzie i w jaki sposób mocujecie linę, żeby utrzymała ciężar drużyny?",
+          "suggested_tags": ["climbing", "preparation", "wall_climb"],
+          "accepted_source_tags": ["climbing_aid"],
+          "source_required": true,
+          "forbidden_flags": ["gate_climbing_rope_attached"],
+          "participant_mode": "must",
+          "check_participants": "single_actor"
+        },
+        {
+          "id": "use_attached_wall_route",
+          "label": "Przejdźcie po zamocowanej linie",
+          "description": "Stała asekuracja jest już gotowa. Wybierzcie, kto przechodzi, i opiszcie sposób pokonania muru.",
+          "image": "assets/gate_wall_route.webp",
+          "followup_prompt": "Jak organizujecie przejście po przygotowanej linie?",
+          "suggested_tags": ["climbing", "wall_climb", "quiet"],
+          "required_flags": ["gate_climbing_rope_attached"],
           "participant_mode": "allow",
           "check_participants": "whole_party",
           "allowed_check_participants": ["single_actor", "lead_with_help", "whole_party"]
@@ -50,6 +78,7 @@
           "image": "assets/gate_lock.webp",
           "followup_prompt": "Jakich narzędzi i sposobu używacie przy zamku?",
           "suggested_tags": ["lockpicking", "rusted_lock", "quiet"],
+          "accepted_source_tags": ["unlock", "lockpicking"],
           "participant_mode": "must",
           "check_participants": "single_actor"
         },
@@ -78,6 +107,7 @@
           "image": "assets/gate_bolt.webp",
           "followup_prompt": "Jak próbujecie zdjąć rygiel po drugiej stronie bramy?",
           "suggested_tags": ["inner_bolt", "lever", "hook", "saw", "improvised_tool"],
+          "accepted_source_tags": ["pry", "cut", "damage_object"],
           "source_actions": [
             {
               "id": "pry_bolt_with_plank",
@@ -102,6 +132,24 @@
           "noise_delta": -1,
           "success_noise_override": 0,
           "reason": "Drużyna poświęca tempo i swobodę ruchu, żeby nie zaalarmować ruin."
+        },
+        {
+          "id": "strike_wooden_center",
+          "label": "Uderzenie w drewniany środek",
+          "description": "Główne deski lepiej przyjmują niszczącą energię niż metalowe okucia.",
+          "goal_ids": ["force_entry"],
+          "match_phrases": ["centralnie w drewno", "w środek bramy", "w drewniane deski", "w drewniany środek"],
+          "modifier": 1,
+          "reason": "Opis kieruje siłę w duży, podatny fragment drewnianej konstrukcji."
+        },
+        {
+          "id": "strike_metal_hinges",
+          "label": "Precyzyjne trafienie w metalowe zawiasy",
+          "description": "Mały, metalowy cel trudniej uszkodzić bez wcześniejszego rozpoznania.",
+          "goal_ids": ["force_entry"],
+          "match_phrases": ["w metalowe zawiasy", "w zawiasy ogniem", "ognistym pociskiem w zawiasy"],
+          "modifier": -1,
+          "reason": "Opis wybiera mały i odporny fragment zamiast szerokiej drewnianej powierzchni."
         }
       ],
       "progress_required": 3,
@@ -133,7 +181,9 @@
           "improvised_tool",
           "wooden",
           "wall_climb",
-          "spikes"
+          "spikes",
+          "climbing_aid",
+          "preparation"
         ],
         "allowed_complications": [
           "alarm_w_strażnicy",
@@ -580,6 +630,29 @@
           "critical_failure_message": "Zawias klinuje narzędzie z metalicznym wrzaskiem. Brama nie słabnie, za to gobliny mają aż nadto czasu na przygotowania."
         },
         {
+          "id": "attach_climbing_rope",
+          "label": "Zamocuj linę na murze",
+          "color": "marker",
+          "description": "Znajdź pewny punkt i przygotuj stałą asekurację dla kolejnych prób.",
+          "ability_check": {
+            "ability": "wisdom",
+            "skill": "survival",
+            "dc": 10
+          },
+          "progress_on_success": 0,
+          "progress_on_failure": 0,
+          "success_noise": 0,
+          "failure_noise": 1,
+          "critical_failure_noise": 1,
+          "unavailable_if_flags": ["gate_climbing_rope_attached"],
+          "critical_success_flags": ["gate_climbing_rope_attached"],
+          "success_flags": ["gate_climbing_rope_attached"],
+          "tags": ["climbing", "climbing_aid", "preparation"],
+          "success_message": "Lina z hakiem trzyma pewnie. Od tej chwili kafelek przejścia po murze automatycznie uwzględnia asekurację.",
+          "failure_message": "Wybrany punkt nie utrzyma ciężaru drużyny. Lina wraca do was i można spróbować ponownie.",
+          "critical_failure_message": "Hak wyskakuje z kamienia z ostrym brzękiem, ale lina nie zostaje utracona."
+        },
+        {
           "id": "find_way_around",
           "label": "Przejdź odkrytą drogą",
           "color": "marker",
@@ -596,6 +669,9 @@
           "critical_failure_noise": 2,
           "unlocks_if_flag": "gate_wall_route_found",
           "unavailable_if_flags": ["gate_bypass_open"],
+          "dc_modifiers_if_flags": [
+            {"flag": "gate_climbing_rope_attached", "modifier": -2}
+          ],
           "critical_success_flags": ["gate_bypass_open", "gate_wall_critical_entry"],
           "success_flags": ["gate_bypass_open"],
           "critical_failure_flags": ["gate_goblin_ambush_prepared"],
@@ -907,7 +983,8 @@
           "critical_failure_complication": "fałszywy_trop",
           "tags": [
             "tracking",
-            "scouting"
+            "scouting",
+            "creature_type:humanoid"
           ],
           "success_message": "Ślady prowadzą was pod zawalony wóz.",
           "failure_message": "Tracicie chwilę na błędny trop, ale zawężacie obszar poszukiwań.",

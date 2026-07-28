@@ -59,7 +59,7 @@ najbliższy horyzont, a nie kopię całej roadmapy.
 - [x] Harden the M8 village playtest UI: expose authored zone options, show objective milestones, make NPC setup/location messages generic, avoid repeated dialogue intros, and replace continuation prompts/raw ids with an in-page Polish travel form and friendly scenario names.
 - [x] Ground generative NPC narration against authored facts and effects: scope prompts to the active goal/permission and let critical routes enforce hidden content-authored narration so Gemini cannot invent quest evidence, rewards, purchases, or currency transfers.
 - [x] Add controlled authored paraphrases for guarded NPC routes: Gemini selects an approved variant id matching the player's tone, while validation copies the complete variant and safely falls back to the base response.
-- [ ] [Deferred spell fidelity] Add creature-type and object-target contracts for spell riders such as healing exclusions for undead/constructs and ignition of unattended flammable objects.
+- [x] [Spell fidelity] Add creature-type healing exclusions for undead/constructs and an explicit unattended-flammable-object rider for Fire Bolt.
 - [ ] [Deferred mounted combat] Let a mounted wielder use a lance in one hand; until an explicit mounted actor state exists, the lance correctly uses two hands and retains its close-range disadvantage.
 - [ ] [Deferred destructible equipment] Model the net as an AC 10 object with 5 HP that can be cut using slashing damage; Strength DC 10 escape is implemented.
 - [ ] [Deferred attunement fidelity] End attunement automatically after the official distance/time, death, prerequisite-loss, or another-creature-attunement conditions.
@@ -78,6 +78,7 @@ najbliższy horyzont, a nie kopię całej roadmapy.
 - [x] Separate free GM conversation from goal actions and route known scene-item uses through authored procedural source actions.
 - [x] Add the first guarded exploration flow-graph vertical slice and migrate the watchtower gate's goal availability and routing.
 - [x] Make authored flow options authoritative for check mechanics and accept a reduced LLM method-only contract on migrated routes.
+- [x] Add one pre-declaration exploration source contract for resources, tools, items, weapons and spells; filter sources by capability tags, keep ownership/cost/modifier/consequence resolution deterministic, and add the watchtower rope setup-to-persistent-route reference flow.
 - [ ] Migrate remaining exploration/NPC scenes to guarded flow graphs and reduce the LLM contract to route selection plus grounded method details.
   - [x] Revalidate the selected goal against its currently active graph transition, with participant choice made before the method description and roll.
   - [x] Extract goal, participant, observation and procedural-source planning from `ExplorationUiSession` into an application service and remove duplicated gate routing fields.
@@ -315,7 +316,7 @@ obowiązują `Current Roadmap Focus` oraz etapy z `ROADMAP.md`.
 - [x] Add visible scene-resource effects, correction, and consumption to exploration rolls.
 - [x] Replace hardcoded functional item aliases with LLM property queries and deterministic scene-source matching.
 - [x] Add generic pre-scenario prepared-spell selection and runtime enforcement MVP.
-- [ ] [Deferred K3-K4] Add class-derived spell lists, known-spell profiles, and advanced concentration modifiers.
+- [x] [K3-K4] Add class-derived spell lists, known/spellbook/prepared profiles, and full Constitution-save modifiers for concentration.
 - [ ] [Deferred product UX] Add voice input and richer UI for free-form exploration declarations.
 - [x] [MVP playtest P0] Clear `active_point_id` when the player leaves an NPC chat so zone actions are available again.
 - [x] [MVP playtest P0] Consume scenario handoff by launching the target scene and mapping party, time, inventory, resources, flags, and target effects.
@@ -335,7 +336,51 @@ obowiązują `Current Roadmap Focus` oraz etapy z `ROADMAP.md`.
 - [x] [MVP reference playtest UX] Return player guidance instead of a technical error when no interaction is active, without retaining the rejected declaration in chat.
 - [x] [MVP reference playtest UX] Show objectives, secured loot, and an accessible restart action on the scenario-complete screen.
 - [x] Clarify that the old watchtower interaction forms are historical briefs and update the current web-runtime instructions.
-- [ ] [Character builder K1] Add a domain character builder before the web form, with explicit level and derived class/species/background grants.
+- [x] [Character creator MVP K1] Add a separate deterministic single-class level-1 character-creation module with versioned species/class/background catalogues and choice-derived Actor construction.
+- [x] [Character creator MVP K1] Compose executable Fighter/Rogue level-1 grants: four Fighting Styles, Second Wind, Expertise, and Sneak Attack with shared combat/resource rules.
+- [x] [Character creator MVP K1] Apply the currently supported species grants: ability bonuses, speed, skill/weapon proficiencies, darkvision, dwarf poison resistance, and dwarf heavy-armor speed.
+- [x] [Character creator MVP K1] Separate cantrips, class-list/spellbook access, prepared spells and always-prepared domain spells; add an executable level-1 Life Domain and Arcane Recovery.
+- [x] [Character creator MVP K1] Add shared physical-d20 species hooks: Halfling Lucky rerolls, Brave fear-save advantage, Fey Ancestry charm-save/magical-sleep protection, and dwarf poison-save advantage.
+- [x] [Character creator MVP K1] Complete utility species/background hooks: Halfling Nimbleness, Trance duration, tagged Stonecunning expertise, and authored scene-gated background permissions exposed to the GM classifier.
+- [x] [Test maintenance] Update the stale party-check fixture that assumes the expanded watchtower exploration contains exactly two actors.
+- [x] [Exploration UX regression] Restore the `/szukaj` guidance for an unknown `/użyj` source instead of falling through to the generic declaration error.
+- [x] [Character creator MVP] Add the main menu and separate New Game, Load Game, and Create Character flows.
+  - [x] Add the launcher shell, move the existing runtime to `/play`, and provide separate routed New Game, compatible-snapshot Load Game, and catalogue-backed character-module entry screens.
+  - [x] Add the persistent creator roster so Create Character can validate, save, reopen, copy, and recoverably delete a playable character.
+- [x] [Character creator MVP] Add scenario selection followed by a one-to-five saved-character party selection.
+- [x] [Character creator MVP] Replace scenario-authored player templates with the selected custom party while preserving scenario-owned NPCs and enemies.
+- [x] [Character creator MVP] Complete the village-to-watchtower route with a saved custom party; use `docs/CHARACTER_CREATOR_MVP.md` as the milestone DOD.
+- [x] [Character level 1–3 master milestone] Complete the legal SRD 5.1 character catalogue as one release target: all 12 classes, SRD species/variants, one SRD subclass per class, XP/level-up, executable class/species grants, spells levels 0–2, creator/roster integration, completeness audit, and documented board-game exceptions.
+  - [x] Add persistent actor XP, official 2014 thresholds, party encounter awards, visible progress, character record v3, and session snapshot v24 migration.
+  - [x] Add data-driven level progression and level-up choices/grants.
+  - [x] Complete SRD species and variant choices.
+  - [x] Complete all 12 classes and SRD subclasses through level 3.
+  - [x] Complete executable SRD spell content required through spell level 2,
+    replacing all 99 former assisted-table entries with deterministic combat,
+    status, reaction, area or typed exploration-flag contracts.
+  - [x] Add the pure one-level advancement transaction with XP gating, HP/Hit
+    Dice/slot/resource reconciliation, and no implicit rest.
+  - [x] Add flexible species ability-bonus choices and character-record v4
+    migration; expand the top-level species catalogue to the nine SRD species.
+  - [x] Execute Fighter Action Surge, Rogue Cunning Action, Barbarian Rage
+    activation/damage, universal unarmed strikes and Monk Martial Arts basics.
+  - [x] Add an authoritative SRD level-3 completeness manifest and gap report
+    for 9 species, 12 classes/subclasses, and all 127 unique spells at levels 0–2.
+  - [x] Preserve source-specific spellcasting abilities in spell access, attacks,
+    save DC calculation, and session snapshot v25.
+  - [x] Add per-slot rest recovery and session snapshot v26 so Warlock Pact
+    Magic can recharge independently from ordinary Spellcasting.
+  - [x] Replace placeholder background proficiencies with real gaming-set and
+    language choices in creator, actor build, record v7, copy, and level-up.
+  - [x] Add actor creature types and snapshot v27, plus executable Ray of Frost,
+    Chill Touch, and Shocking Grasp secondary effects.
+  - [x] Add all eight level-3 Metamagic choices, sorcery-point costs, legal
+    combinations, targeting/range/action transformations, Twinned resolution,
+    Careful/Heightened saves, Empowered rerolls and the bonus-action spell rule.
+  - [x] Add an executable feature audit which rejects every unclassified
+    species/class/subclass/choice feature and malformed assisted spell.
+  - [x] Model the Ranger's humanoid Favored Enemy choice as exactly two
+    humanoid races and require authored race tags before granting advantage.
 - [x] Implement hardware adapter interface around `board.Connection`.
 - [x] Add LED frame generation for selected path and movement range.
 - [x] Decide first UI/runtime surface.

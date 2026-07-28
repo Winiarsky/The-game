@@ -24,6 +24,7 @@ from dnd_board_game.combat import (
     current_actor,
     grid_distance_feet,
     replace_actor,
+    resolve_spell_save,
     use_action_economy_cost,
 )
 from dnd_board_game.inventory import consume_item_use, has_item_use
@@ -59,6 +60,32 @@ class CombatActionSpec(Protocol):
     source_item_id: str | None
     action_cost: ActionEconomyCost
     charge_cost: int
+    concentration: bool
+    instructions: str
+    resource_pool_id: str | None
+    resource_cost: int
+    metamagic_ids: tuple[str, ...]
+    duration_multiplier: int
+    mechanic_family: str
+    resolver_id: str
+    cast_flag: str
+    damage_die_sides: int
+    damage_modifier: int
+    upcast_value_per_level: int
+    effect_options: tuple[str, ...]
+    effect_kind: str | None
+    condition: object | None
+    save_ability: str | None
+    save_dc: int | None
+    save_timing: str | None
+    duration: str
+    hit_point_pool_dice_count: int
+    upcast_hit_point_pool_dice_per_level: int
+    excluded_creature_types: tuple[str, ...]
+    ongoing_damage_dice_count: int
+    damage_type: str
+    save_damage_on_success: str
+    damage_on_cast: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,6 +121,7 @@ class CombatResourceTransition:
     clear_pending_check: bool = False
     clear_player_choices: bool = False
     clear_movement_preview: bool = False
+    scene_flag_changes: tuple[tuple[str, object], ...] = ()
 
 
 class PlayerCombatResourceFlowService:
@@ -101,6 +129,125 @@ class PlayerCombatResourceFlowService:
 
     def __init__(self) -> None:
         self._resources = ActionResourceResolver()
+
+    def use_assisted_spell(
+        self,
+        *,
+        state: CombatState,
+        active_effects: tuple[ActiveCombatEffect, ...],
+        action: CombatActionSpec,
+        cast_level: int | None = None,
+    ) -> CombatResourceTransition:
+        """Commit a legal cast whose table-facing consequence needs adjudication.
+
+        This path is intentionally stricter than the old ``manual`` placeholder:
+        it validates preparation, components and slot level, spends the correct
+        action and resource, replaces concentration, and persists a traceable
+        spell effect.  Only the consequence described by ``instructions`` stays
+        in the hands of the players.
+        """
+
+        actor = _active_hero(state)
+        if action.action_type != "assisted_spell":
+            raise ValueError("To nie jest wspomagany czar.")
+        instructions = str(getattr(action, "instructions", "")).strip()
+        if not instructions:
+            raise ValueError("Wspomagany czar nie ma instrukcji rozstrzygnięcia.")
+        selected_level = _selected_cast_level(actor, action, cast_level)
+        _require_usable_action(actor, action, selected_level)
+        resource_use = self._resources.consume_action_and_source_resource(
+            state,
+            actor,
+            spell_level=action.spell_level,
+            spell_id=action.id,
+            cast_level=selected_level,
+            action_cost=_action_cost(action),
+            resource_pool_id=getattr(action, "resource_pool_id", None),
+            resource_cost=int(getattr(action, "resource_cost", 1)),
+        )
+        updated_effects = active_effects
+        removed: tuple[ActiveCombatEffect, ...] = ()
+        effect_id = ""
+        if bool(getattr(action, "concentration", False)):
+            removed = concentration_effects_for_actor(
+                active_effects,
+                str(actor.id),
+            )
+            updated_effects = remove_concentration_effects(
+                active_effects,
+                str(actor.id),
+            )
+            effect_id = f"concentration_assisted:{actor.id}:{action.id}"
+            updated_effects = apply_active_effect(
+                updated_effects,
+                ActiveCombatEffect(
+                    id=effect_id,
+                    actor_id=str(actor.id),
+                    kind="concentration_assisted",
+                    label=action.label,
+                    object_id=f"spell:{action.id}",
+                    source_actor_id=str(actor.id),
+                    source=EffectSource(
+                        EffectSourceType.SPELL,
+                        action.id,
+                        action.label,
+                    ),
+                    duration=EffectDuration.CONCENTRATION,
+                    stacking=EffectStackingPolicy.STACK,
+                    stacking_key=f"concentration:{actor.id}",
+                    spell_level=selected_level,
+                ),
+            ).active_effects
+        slot_label = (
+            f" ze slotu {selected_level}. poziomu"
+            if action.spell_level > 0
+            else ""
+        )
+        ended = (
+            " Poprzednia koncentracja zakończona: "
+            f"{', '.join(effect.label for effect in removed)}."
+            if removed
+            else ""
+        )
+        message = (
+            f"{actor.name} rzuca {action.label}{slot_label}. "
+            f"Rozstrzygnięcie przy stole: {instructions}"
+            + (
+                " Czas działania jest podwojony przez Extended Spell."
+                if int(getattr(action, "duration_multiplier", 1)) > 1
+                else ""
+            )
+            + (
+                f" Metamagic: {', '.join(getattr(action, 'metamagic_ids', ()))}."
+                if getattr(action, "metamagic_ids", ())
+                else ""
+            )
+            + ended
+        )
+        return CombatResourceTransition(
+            state=resource_use.state,
+            active_effects=updated_effects,
+            board_message=message,
+            message_title="Czar wspomagany",
+            message_body=message,
+            event_type="ui_combat_assisted_spell_cast",
+            event_payload=(
+                ("caster_id", str(actor.id)),
+                ("action_id", action.id),
+                ("cast_level", selected_level),
+                ("instructions", instructions),
+                ("concentration_effect_id", effect_id),
+                ("removed_effect_ids", [effect.id for effect in removed]),
+                ("metamagic_ids", list(getattr(action, "metamagic_ids", ()))),
+                (
+                    "duration_multiplier",
+                    int(getattr(action, "duration_multiplier", 1)),
+                ),
+            ),
+            clear_player_choices=True,
+            clear_movement_preview=True,
+            scene_flag_changes=((action.cast_flag, True),),
+        )
 
     def use_strength_potion(
         self,
@@ -177,8 +324,11 @@ class PlayerCombatResourceFlowService:
         cast_level: int | None = None,
     ) -> CombatResourceTransition:
         actor = _active_hero(state)
-        if action.action_type != "concentration_attack_bonus":
-            raise ValueError("Nieznana akcja koncentracji.")
+        if action.action_type not in {
+            "concentration_attack_bonus",
+            "targeted_status",
+        }:
+            raise ValueError("Nieznana akcja statusowa.")
         selected_cast_level = _selected_cast_level(actor, action, cast_level)
         _require_usable_action(actor, action, selected_cast_level)
         targets = _concentration_targets(state, actor, action)
@@ -231,6 +381,9 @@ class PlayerCombatResourceFlowService:
         pending: PendingConcentrationAction,
         target_id: str | None = None,
         target_ids: tuple[str, ...] = (),
+        rng: Random | None = None,
+        roll_total: int | None = None,
+        effect_option: str = "",
     ) -> CombatResourceTransition:
         caster = _active_hero(state)
         if str(caster.id) != pending.caster_id:
@@ -242,6 +395,11 @@ class PlayerCombatResourceFlowService:
             selected_target_ids = (target_id,)
         if not selected_target_ids:
             selected_target_ids = pending.selected_target_ids
+        if (
+            not selected_target_ids
+            and int(getattr(action, "hit_point_pool_dice_count", 0)) > 0
+        ):
+            selected_target_ids = pending.target_ids
         if not selected_target_ids:
             raise ValueError("Wybierz co najmniej jeden cel czaru koncentracyjnego.")
         if len(selected_target_ids) != len(set(selected_target_ids)):
@@ -265,24 +423,139 @@ class PlayerCombatResourceFlowService:
             cast_level=pending.cast_level,
             action_cost=_action_cost(action),
         )
-        removed = concentration_effects_for_actor(active_effects, str(caster.id))
-        updated_effects = remove_concentration_effects(
-            active_effects,
-            str(caster.id),
+        is_concentration = bool(getattr(action, "concentration", False)) or (
+            action.action_type == "concentration_attack_bonus"
+        )
+        removed = (
+            concentration_effects_for_actor(active_effects, str(caster.id))
+            if is_concentration
+            else ()
+        )
+        updated_effects = (
+            remove_concentration_effects(active_effects, str(caster.id))
+            if is_concentration
+            else active_effects
         )
         applied_effects: list[ActiveCombatEffect] = []
+        die_sides = int(getattr(action, "damage_die_sides", 0))
+        pool_dice_count = int(
+            getattr(action, "hit_point_pool_dice_count", 0)
+        ) + max(0, pending.cast_level - action.spell_level) * int(
+            getattr(action, "upcast_hit_point_pool_dice_per_level", 0)
+        )
+        manual_value_roll = pool_dice_count > 0 or str(
+            getattr(action, "effect_kind", "")
+        ) == "temporary_hit_points"
+        if die_sides and manual_value_roll:
+            maximum_roll = die_sides * max(1, pool_dice_count)
+            minimum_roll = max(1, pool_dice_count)
+            if (
+                roll_total is None
+                or not minimum_roll <= roll_total <= maximum_roll
+            ):
+                dice_label = (
+                    f"{pool_dice_count}k{die_sides}"
+                    if pool_dice_count
+                    else f"k{die_sides}"
+                )
+                raise ValueError(f"Wpisz sumę fizycznego rzutu {dice_label}.")
+            base_value = roll_total + int(getattr(action, "damage_modifier", 0))
+        else:
+            base_value = action.value
+        if str(getattr(action, "effect_kind", "")) == "heroism_temp_hp":
+            base_value = max(
+                1,
+                caster.spell_save_dc - 8 - caster.proficiency_bonus,
+            )
+        effect_value = base_value + max(
+            0,
+            pending.cast_level - action.spell_level,
+        ) * int(getattr(action, "upcast_value_per_level", 0))
+        base_effect_kind = str(
+            getattr(action, "effect_kind", None)
+            or "concentration_attack_bonus"
+        )
+        options = tuple(getattr(action, "effect_options", ()))
+        if options:
+            if effect_option not in options:
+                raise ValueError("Wybierz jeden z wariantów efektu czaru.")
+            effect_kind = f"{base_effect_kind}:{effect_option}"
+        else:
+            effect_kind = base_effect_kind
+        if base_effect_kind == "ongoing_damage":
+            damage_dice_count = int(
+                getattr(action, "ongoing_damage_dice_count", 0)
+            ) + max(0, pending.cast_level - action.spell_level) * int(
+                getattr(action, "upcast_value_per_level", 0)
+            )
+            effect_kind = ":".join(
+                (
+                    "ongoing_damage",
+                    str(damage_dice_count),
+                    str(die_sides),
+                    str(getattr(action, "damage_type", "force")),
+                    str(getattr(action, "save_ability", "") or "-"),
+                    str(getattr(action, "save_damage_on_success", "none")),
+                )
+            )
+        save_results: list[tuple[str, object]] = []
+        affected_targets: list[Actor] = []
         for target in targets:
+            save_ability = getattr(action, "save_ability", None)
+            if save_ability is not None and base_effect_kind != "ongoing_damage":
+                if rng is None:
+                    raise ValueError("Ten czar wymaga generatora rzutu obronnego.")
+                save = resolve_spell_save(
+                    target,
+                    ability=save_ability,
+                    dc=getattr(action, "save_dc", None)
+                    or caster.spell_save_dc,
+                    natural_roll=rng.randint(1, 20),
+                    condition_states=resource_use.state.condition_states,
+                    combat_actors=resource_use.state.actors,
+                )
+                save_results.append((str(target.id), save.as_payload()))
+                if save.success:
+                    continue
+            affected_targets.append(target)
+        if pool_dice_count:
+            remaining_pool = effect_value
+            pooled_targets: list[Actor] = []
+            for target in sorted(affected_targets, key=lambda actor: actor.hp):
+                if target.hp > remaining_pool:
+                    continue
+                pooled_targets.append(target)
+                remaining_pool -= target.hp
+            affected_targets = pooled_targets
+        for target in affected_targets:
+            if base_effect_kind == "remove_condition":
+                continue
+            if base_effect_kind == "apply_condition" and not is_concentration:
+                continue
             effect = ActiveCombatEffect(
-                id=f"concentration_attack_bonus:{caster.id}:{target.id}:{action.id}",
+                id=f"{effect_kind}:{caster.id}:{target.id}:{action.id}",
                 actor_id=str(target.id),
-                kind="concentration_attack_bonus",
+                kind=(
+                    "concentration_condition"
+                    if base_effect_kind == "apply_condition"
+                    else effect_kind
+                ),
                 label=action.label,
                 object_id=f"combat_action:{action.id}",
-                value=action.value,
+                value=effect_value,
+                anchor_position=(
+                    target.position
+                    if base_effect_kind.endswith("_zone")
+                    else None
+                ),
                 source_actor_id=str(caster.id),
                 target_actor_id=str(target.id),
                 source=EffectSource(EffectSourceType.SPELL, action.id, action.label),
-                duration=EffectDuration.CONCENTRATION,
+                duration=(
+                    EffectDuration.CONCENTRATION
+                    if is_concentration
+                    else _status_effect_duration(action.duration)
+                ),
                 stacking=EffectStackingPolicy.STACK,
                 stacking_key=f"concentration:{caster.id}",
                 spell_level=pending.cast_level,
@@ -292,19 +565,137 @@ class PlayerCombatResourceFlowService:
                 effect,
             ).active_effects
             applied_effects.append(effect)
+        updated_state = resource_use.state
+        if (
+            base_effect_kind == "ongoing_damage"
+            and bool(getattr(action, "damage_on_cast", False))
+        ):
+            from dnd_board_game.combat import (
+                DamageComponentInput,
+                apply_damage_result,
+                resolve_damage,
+            )
+
+            if rng is None:
+                raise ValueError("Obrażenia okresowe wymagają generatora kości.")
+            dice_count = int(getattr(action, "ongoing_damage_dice_count", 0))
+            for target in affected_targets:
+                rolled_damage = sum(rng.randint(1, die_sides) for _ in range(dice_count))
+                applied = apply_damage_result(
+                    target,
+                    resolve_damage(
+                        (
+                            DamageComponentInput(
+                                rolled_damage,
+                                str(getattr(action, "damage_type", "force")),
+                                action.label,
+                            ),
+                        )
+                    ),
+                )
+                updated_state = replace_actor(updated_state, applied.actor_after)
+        if base_effect_kind == "apply_condition":
+            from dnd_board_game.combat import apply_condition, ConditionSaveTiming
+
+            condition = getattr(action, "condition", None)
+            if condition is None:
+                raise ValueError("Czar nie określa nakładanego stanu.")
+            for target in affected_targets:
+                application = apply_condition(
+                    updated_state.condition_states,
+                    target,
+                    condition,
+                    source_actor_id=str(caster.id),
+                    source_label=action.label,
+                    duration=(
+                        EffectDuration.CONCENTRATION
+                        if is_concentration
+                        else _status_effect_duration(action.duration)
+                    ),
+                    save_ability=(
+                        action.save_ability
+                        if action.save_timing is not None
+                        else None
+                    ),
+                    save_dc=(
+                        action.save_dc or caster.spell_save_dc
+                        if action.save_timing is not None
+                        else None
+                    ),
+                    save_timing=(
+                        ConditionSaveTiming(action.save_timing)
+                        if action.save_timing is not None
+                        else None
+                    ),
+                    source_spell_id=action.id,
+                    source_spell_level=pending.cast_level,
+                )
+                updated_state = replace(
+                    updated_state,
+                    condition_states=application.condition_states,
+                )
+        elif base_effect_kind == "remove_condition":
+            from dnd_board_game.combat import CombatCondition, remove_condition
+
+            removed_condition = CombatCondition(effect_option)
+            for target in affected_targets:
+                updated_state = replace(
+                    updated_state,
+                    condition_states=remove_condition(
+                        updated_state.condition_states,
+                        str(target.id),
+                        removed_condition,
+                    ),
+                )
+        elif effect_kind == "max_hit_points_bonus":
+            for target in affected_targets:
+                current = _actor_by_id(updated_state, str(target.id))
+                updated_state = replace_actor(
+                    updated_state,
+                    replace(
+                        current,
+                        max_hp=current.max_hp + effect_value,
+                        hp=current.hp + effect_value,
+                    ),
+                )
+        elif effect_kind in {"temporary_hit_points", "heroism_temp_hp"}:
+            for target in affected_targets:
+                current = _actor_by_id(updated_state, str(target.id))
+                updated_state = replace_actor(
+                    updated_state,
+                    replace(current, temp_hp=max(current.temp_hp, effect_value)),
+                )
+            if effect_kind == "heroism_temp_hp":
+                from dnd_board_game.combat import CombatCondition, remove_condition
+
+                for target in affected_targets:
+                    updated_state = replace(
+                        updated_state,
+                        condition_states=remove_condition(
+                            updated_state.condition_states,
+                            str(target.id),
+                            CombatCondition.FRIGHTENED,
+                        ),
+                    )
         ended = (
             " Poprzednia koncentracja zakończona: "
             f"{', '.join(effect.label for effect in removed)}."
             if removed
             else ""
         )
+        effect_description = (
+            f"k{effect_value} do ataków i rzutów obronnych"
+            if effect_kind == "bless_roll_bonus"
+            else f"{effect_value:+d} do efektu"
+        )
         message = (
             f"{caster.name} rzuca {action.label} ze slotu {pending.cast_level}. poziomu. "
-            f"Cele: {', '.join(target.name for target in targets)}; "
-            f"{action.value:+d} do ataku, dopóki koncentracja trwa.{ended}"
+            f"Cele objęte efektem: "
+            f"{', '.join(target.name for target in affected_targets) or 'brak'}; "
+            f"{effect_description}, dopóki koncentracja trwa.{ended}"
         )
         return CombatResourceTransition(
-            state=resource_use.state,
+            state=updated_state,
             active_effects=updated_effects,
             board_message=message,
             message_title="Koncentracja",
@@ -317,12 +708,19 @@ class PlayerCombatResourceFlowService:
                 ("action_id", action.id),
                 ("cast_level", pending.cast_level),
                 ("maximum_targets", pending.maximum_targets),
-                ("value", action.value),
+                ("value", effect_value),
+                ("effect_kind", effect_kind),
                 ("effect_ids", [effect.id for effect in applied_effects]),
+                ("saving_throws", dict(save_results)),
                 ("removed_effect_ids", [effect.id for effect in removed]),
             ),
             clear_pending_action=True,
             clear_movement_preview=True,
+            scene_flag_changes=(
+                ((action.cast_flag, True),)
+                if str(getattr(action, "cast_flag", "")).strip()
+                else ()
+            ),
         )
 
     def toggle_concentration_target(
@@ -511,7 +909,7 @@ def concentration_effects_for_actor(
     return tuple(
         effect
         for effect in active_effects
-        if effect.kind.startswith("concentration_")
+        if effect.duration == EffectDuration.CONCENTRATION
         and effect.source_actor_id == actor_id
     )
 
@@ -539,6 +937,19 @@ def _action_cost(action: CombatActionSpec) -> ActionEconomyCost:
     return ActionEconomyCost(getattr(action, "action_cost", ActionEconomyCost.ACTION))
 
 
+def _status_effect_duration(value: str) -> EffectDuration:
+    return {
+        "next_turn_start": EffectDuration.UNTIL_TURN_START,
+        "next_attack": EffectDuration.UNTIL_NEXT_ATTACK,
+        "turn_end": EffectDuration.UNTIL_TURN_END,
+        "encounter": EffectDuration.UNTIL_ENCOUNTER_END,
+        "short_rest": EffectDuration.UNTIL_SHORT_REST,
+        "long_rest": EffectDuration.UNTIL_LONG_REST,
+        "scenario": EffectDuration.UNTIL_SCENARIO_END,
+        "permanent": EffectDuration.PERMANENT,
+    }.get(value, EffectDuration.UNTIL_ENCOUNTER_END)
+
+
 def _require_usable_action(
     actor: Actor,
     action: CombatActionSpec,
@@ -559,8 +970,21 @@ def _require_usable_action(
         actor,
         action.spell_level,
         cast_level,
+        action.id,
     ):
         raise ValueError(f"Brak slotów czaru dla {action.label}.")
+    from dnd_board_game.combat import actor_spell_cast_validation
+
+    validation = actor_spell_cast_validation(
+        actor,
+        action.id,
+        cast_level=cast_level,
+        ignore_verbal_somatic=(
+            "metamagic_subtle" in getattr(action, "metamagic_ids", ())
+        ),
+    )
+    if validation is not None and not validation.valid:
+        raise ValueError(" ".join(validation.errors))
 
 
 def _selected_cast_level(
@@ -572,6 +996,20 @@ def _selected_cast_level(
         if cast_level not in {None, 0}:
             raise ValueError("Cantrip nie korzysta ze slotu czaru.")
         return 0
+    from dnd_board_game.combat import actor_spell_cast_validation
+
+    validation = actor_spell_cast_validation(
+        actor,
+        action.id,
+        cast_level=cast_level,
+        ignore_verbal_somatic=(
+            "metamagic_subtle" in getattr(action, "metamagic_ids", ())
+        ),
+    )
+    if validation is not None:
+        if not validation.valid:
+            raise ValueError(" ".join(validation.errors))
+        return validation.cast_level
     levels = available_cast_levels(actor, action.spell_level)
     selected = levels[0] if cast_level is None and levels else cast_level
     if selected is None or selected not in levels:
@@ -584,12 +1022,21 @@ def _concentration_targets(
     actor: Actor,
     action: CombatActionSpec,
 ) -> tuple[Actor, ...]:
-    if action.target_faction == "ally":
+    if action.target_faction in {"ally", "enemy", "any"}:
         range_feet = int(getattr(action, "range_feet", 0))
         return tuple(
             candidate
             for candidate in state.actors
-            if candidate.faction == actor.faction and not candidate.is_defeated()
+            if (
+                True
+                if action.target_faction == "any"
+                else candidate.faction == actor.faction
+                if action.target_faction == "ally"
+                else candidate.faction not in {actor.faction, Faction.NEUTRAL}
+            )
+            and not candidate.is_defeated()
+            and candidate.creature_type
+            not in getattr(action, "excluded_creature_types", ())
             and (
                 candidate.id == actor.id
                 or (

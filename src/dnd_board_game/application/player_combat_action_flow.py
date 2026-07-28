@@ -4,22 +4,29 @@ from dataclasses import dataclass, replace
 from random import Random
 from typing import Mapping
 
-from dnd_board_game.actions import ActionResourceResolver, SpellSaveAttackResolver
+from dnd_board_game.actions import (
+    ActionResourceResolver,
+    AreaSpellResolver,
+    SpellSaveAttackResolver,
+)
 from dnd_board_game.actors import (
     Actor,
     Faction,
+    actor_has_feature,
     can_spend_actor_resource,
     spend_actor_resource,
     spell_is_prepared,
 )
 from dnd_board_game.combat import (
     ActiveCombatEffect,
+    ActionEconomyCost,
     ActionUse,
     AppliedDamageResult,
     AttackPositioning,
     AttackActionState,
     AttackDeclaration,
     AttackSource,
+    AttackSourceType,
     CombatState,
     CombatStatus,
     CombatCondition,
@@ -34,13 +41,23 @@ from dnd_board_game.combat import (
     can_consume_spell_resource,
     can_use_attack_action,
     consume_next_attack_effects,
+    colossus_slayer_damage,
+    condition_hit_is_automatic_critical,
+    commit_colossus_slayer_hit,
+    commit_sneak_attack_hit,
+    consume_spell_resource,
     damage_components_from_totals,
+    dark_ones_blessing_temporary_hit_points,
+    divine_smite_damage,
     current_actor,
     dexterity_save_cover_modifiers,
     evaluate_attack_positioning,
     expend_thrown_weapon,
     grappled_actor_ids,
+    grant_bonus_attacks,
+    grid_distance_feet,
     is_hidden_from,
+    plan_sneak_attack,
     reveal_actor,
     replace_actor,
     record_ammunition_expenditure,
@@ -53,11 +70,23 @@ from dnd_board_game.combat import (
     two_weapon_bonus_source_is_legal,
     two_weapon_trigger_item_id,
     use_bonus_action,
+    use_bonus_attack,
     use_attack_action,
     versatile_two_handed_source_is_legal,
     apply_condition,
 )
-from dnd_board_game.rules import D20RollInput, RollMode, resolve_d20_roll, roll_instruction
+from dnd_board_game.rules import (
+    D20RollInput,
+    EffectDuration,
+    AdditionalEffectExpiration,
+    EffectSource,
+    EffectSourceType,
+    EffectStackingPolicy,
+    RollMode,
+    apply_active_effect,
+    resolve_d20_roll,
+    roll_instruction,
+)
 from dnd_board_game.inventory import (
     consume_ammunition,
     free_hand_count,
@@ -68,6 +97,7 @@ from dnd_board_game.inventory import (
 from dnd_board_game.world import BoardState, Coordinate
 
 from .damage_presentation import applied_damage_message, applied_damage_payload
+from .player_combat_resource_flow import remove_concentration_effects
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,6 +119,17 @@ class PendingPlayerAttack:
     flanking_ally_ids: tuple[str, ...] = ()
     two_weapon_bonus: bool = False
     cast_level: int | None = None
+    sneak_attack: bool = False
+    colossus_slayer: bool = False
+    divine_smite_slot_level: int = 0
+    class_bonus_attack: bool = False
+    open_hand_technique: bool = False
+    horde_breaker: bool = False
+    metamagic_ids: tuple[str, ...] = ()
+    twinned_target_id: str | None = None
+    twinned_second_attack: bool = False
+    repelling_blast: bool = False
+    miss_half_damage: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,6 +156,7 @@ class PlayerAttackTransition:
     clear_combat_help: bool = False
     clear_movement_preview: bool = False
     applied_damage: AppliedDamageResult | None = None
+    additional_applied_damages: tuple[AppliedDamageResult, ...] = ()
 
 
 class PlayerCombatActionFlowService:
@@ -123,6 +165,7 @@ class PlayerCombatActionFlowService:
     def __init__(self) -> None:
         self._resources = ActionResourceResolver()
         self._spell_saves = SpellSaveAttackResolver()
+        self._area_spells = AreaSpellResolver()
 
     def select_attack_source(
         self,
@@ -184,13 +227,46 @@ class PlayerCombatActionFlowService:
         active_effects: tuple[ActiveCombatEffect, ...],
         scene_objects: tuple[SceneObject, ...] = (),
         two_weapon_bonus: bool = False,
+        class_bonus_attack: bool = False,
     ) -> PlayerAttackTransition:
         attacker = _active_hero(state)
         _require_usable_source(attacker, source)
-        _require_attack_economy(state, attacker, source, two_weapon_bonus=two_weapon_bonus)
+        _require_attack_economy(
+            state,
+            attacker,
+            source,
+            two_weapon_bonus=two_weapon_bonus,
+            class_bonus_attack=class_bonus_attack,
+        )
         action = start_attack_action(board, attacker, state.actors, source, state.hidden_states)
         selected = select_attack_target(action, position=position)
         assert selected.selected_target is not None
+        horde_breaker_effect = next(
+            (
+                effect
+                for effect in active_effects
+                if effect.actor_id == str(attacker.id)
+                and effect.kind == "horde_breaker_pending"
+            ),
+            None,
+        )
+        if class_bonus_attack and horde_breaker_effect is not None:
+            original_target_id = horde_breaker_effect.object_id.removeprefix(
+                "actor:"
+            )
+            if selected.selected_target.id == original_target_id:
+                raise ValueError("Horde Breaker wymaga innego celu niż pierwszy atak.")
+            original_target = _actor_by_id(state, original_target_id)
+            if (
+                grid_distance_feet(
+                    original_target.position,
+                    selected.selected_target.position,
+                )
+                > 5
+            ):
+                raise ValueError(
+                    "Cel Horde Breaker musi znajdować się do 5 ft od pierwszego celu."
+                )
         target = _actor_by_id(state, selected.selected_target.id)
         positioning = evaluate_attack_positioning(
             board,
@@ -205,7 +281,10 @@ class PlayerCombatActionFlowService:
             target_id=selected.selected_target.id,
             source_id=source.id,
             two_weapon_bonus=two_weapon_bonus,
+            class_bonus_attack=class_bonus_attack,
+            horde_breaker=horde_breaker_effect is not None,
             cast_level=source.cast_level,
+            metamagic_ids=source.metamagic_ids,
             **_positioning_pending_fields(positioning),
         )
         return PlayerAttackTransition(
@@ -271,32 +350,51 @@ class PlayerCombatActionFlowService:
         )
         if effective_source.save_ability:
             _require_usable_source(attacker, effective_source)
-            state_after_ammunition = _consume_attack_ammunition(
-                state,
-                str(attacker.id),
-                effective_source,
-            )
-            confirmation = self._spell_saves.confirm_target_save_spell(
-                state_after_ammunition,
-                caster=attacker,
-                target=target,
-                source=effective_source,
-                rng=rng,
-                saving_throw_modifiers=dexterity_save_cover_modifiers(
-                    effective_source.save_ability,
-                    positioning,
-                ),
-            )
-            save = confirmation.saving_throw
-            save_text = _spell_save_message(save)
-            if save.damage_multiplier <= 0:
+            if pending.twinned_target_id is not None:
+                twin = _actor_by_id(state, pending.twinned_target_id)
+                confirmation = self._area_spells.confirm_area_spell(
+                    state,
+                    caster=attacker,
+                    source=effective_source,
+                    target_ids=(pending.target_id, pending.twinned_target_id),
+                    rng=rng,
+                    saving_throw_modifiers_by_target={
+                        pending.target_id: dexterity_save_cover_modifiers(
+                            effective_source.save_ability,
+                            positioning,
+                        ),
+                    },
+                )
+                saves = confirmation.saving_throws
+            else:
+                state_after_ammunition = _consume_attack_ammunition(
+                    state,
+                    str(attacker.id),
+                    effective_source,
+                )
+                single = self._spell_saves.confirm_target_save_spell(
+                    state_after_ammunition,
+                    caster=attacker,
+                    target=target,
+                    source=effective_source,
+                    rng=rng,
+                    saving_throw_modifiers=dexterity_save_cover_modifiers(
+                        effective_source.save_ability,
+                        positioning,
+                    ),
+                    heightened="metamagic_heightened" in effective_source.metamagic_ids,
+                )
+                confirmation = single
+                saves = (single.saving_throw,)
+            save_text = " ".join(_spell_save_message(save) for save in saves)
+            save = saves[0]
+            if all(save.damage_multiplier <= 0 for save in saves):
                 return PlayerAttackTransition(
                     state=confirmation.state,
                     active_effects=active_effects,
                     pending=None,
                     board_message=(
-                        f"{effective_source.name}: {save.actor_name} zdaje rzut obronny. "
-                        "Brak obrażeń."
+                        f"{effective_source.name}: wszystkie cele unikają obrażeń."
                     ),
                     message_title="Czar",
                     message_body=(
@@ -317,7 +415,7 @@ class PlayerCombatActionFlowService:
             updated_pending = replace(
                 pending,
                 stage="damage_roll",
-                saving_throws=(save,),
+                saving_throws=saves,
                 hit=True,
             )
             return PlayerAttackTransition(
@@ -408,6 +506,7 @@ class PlayerCombatActionFlowService:
         active_effects: tuple[ActiveCombatEffect, ...],
         natural_roll: int,
         natural_roll_2: int | None = None,
+        natural_rerolls: tuple[int, ...] = (),
         scene_objects: tuple[SceneObject, ...] = (),
     ) -> PlayerAttackTransition:
         if pending.stage != "attack_roll":
@@ -433,14 +532,62 @@ class PlayerCombatActionFlowService:
             attacker,
             target,
         )
+        sneak_attack = plan_sneak_attack(
+            state=state,
+            active_effects=active_effects,
+            attacker=attacker,
+            target=selected.selected_target,
+            source=effective_source,
+            roll_mode=effective_source.attack_roll_request.mode,
+        )
+        if sneak_attack.eligible:
+            effective_source = sneak_attack.source
+        colossus_component = (
+            colossus_slayer_damage(
+                attacker,
+                selected.selected_target,
+                damage_type=effective_source.damage_components[0].damage_type,
+            )
+            if effective_source.source_type == AttackSourceType.WEAPON
+            and effective_source.damage_components
+            and not any(
+                effect.actor_id == str(attacker.id)
+                and effect.kind == "colossus_slayer_used"
+                for effect in active_effects
+            )
+            else None
+        )
+        if colossus_component is not None:
+            effective_source = replace(
+                effective_source,
+                damage_components=(
+                    *effective_source.damage_components,
+                    colossus_component,
+                ),
+                damage_hint=(
+                    f"{effective_source.damage_hint} + "
+                    f"{colossus_component.hint()}"
+                ),
+            )
         attack_roll = resolve_d20_roll(
             _manual_d20_input(
                 effective_source,
                 natural_roll,
                 natural_roll_2,
+                natural_rerolls,
             )
         )
-        if pending.two_weapon_bonus:
+        if pending.twinned_second_attack:
+            state_after_resource = state
+        elif pending.class_bonus_attack:
+            bonus_use = use_bonus_attack(
+                state,
+                source_id=effective_source.id,
+            )
+            if not bonus_use.accepted:
+                raise ValueError(bonus_use.message)
+            state_after_resource = bonus_use.state
+        elif pending.two_weapon_bonus:
             bonus_use = use_bonus_action(state)
             if not bonus_use.accepted:
                 raise ValueError(bonus_use.message)
@@ -473,17 +620,25 @@ class PlayerCombatActionFlowService:
                 state_after_resource,
                 two_weapon_trigger_item_id(attacker, source),
             )
-        if pending.two_weapon_bonus or _uses_attack_action(effective_source):
+        if (
+            not pending.twinned_second_attack
+            and (
+            pending.class_bonus_attack
+            or pending.two_weapon_bonus
+            or _uses_attack_action(effective_source)
+            )
+        ):
             state_after_resource = _consume_attack_source_resource(
                 state_after_resource,
                 str(attacker.id),
                 effective_source,
             )
-        state_after_resource = _consume_attack_ammunition(
-            state_after_resource,
-            str(attacker.id),
-            effective_source,
-        )
+        if not pending.twinned_second_attack:
+            state_after_resource = _consume_attack_ammunition(
+                state_after_resource,
+                str(attacker.id),
+                effective_source,
+            )
         if effective_source.thrown and effective_source.source_item_id is not None:
             state_after_resource = expend_thrown_weapon(
                 state_after_resource,
@@ -496,11 +651,91 @@ class PlayerCombatActionFlowService:
             attack_roll,
             selected.action_use,
         )
+        if resolution.hit and condition_hit_is_automatic_critical(
+            state.condition_states,
+            str(target.id),
+            within_five_feet=(
+                max(
+                    abs(attacker.position.col - target.position.col),
+                    abs(attacker.position.row - target.position.row),
+                )
+                <= 1
+            ),
+        ):
+            resolution = replace(resolution, critical=True)
         updated_effects = consume_next_attack_effects(
             active_effects,
             str(attacker.id),
             selected.selected_target.id,
         )
+        if effective_source.concentration and not pending.twinned_second_attack:
+            updated_effects = remove_concentration_effects(
+                updated_effects,
+                str(attacker.id),
+            )
+        if pending.horde_breaker:
+            updated_effects = tuple(
+                effect
+                for effect in updated_effects
+                if not (
+                    effect.actor_id == str(attacker.id)
+                    and effect.kind == "horde_breaker_pending"
+                )
+            )
+            updated_effects = (
+                *updated_effects,
+                ActiveCombatEffect(
+                    id=f"horde-breaker-used:{attacker.id}",
+                    actor_id=str(attacker.id),
+                    kind="horde_breaker_used",
+                    label="Horde Breaker wykorzystany",
+                    object_id="class_feature:horde_breaker",
+                    value=1,
+                    source_actor_id=str(attacker.id),
+                    duration=EffectDuration.UNTIL_TURN_START,
+                    expiration_actor_id=str(attacker.id),
+                ),
+            )
+        elif (
+            not pending.class_bonus_attack
+            and not pending.two_weapon_bonus
+            and effective_source.source_type == AttackSourceType.WEAPON
+            and actor_has_feature(attacker, "horde_breaker")
+            and not any(
+                effect.actor_id == str(attacker.id)
+                and effect.kind in {
+                    "horde_breaker_pending",
+                    "horde_breaker_used",
+                }
+                for effect in updated_effects
+            )
+            and _has_horde_breaker_target(
+                board=board,
+                state=state_after_resource,
+                attacker=attacker,
+                original_target=target,
+                source=effective_source,
+            )
+        ):
+            state_after_resource = grant_bonus_attacks(
+                state_after_resource,
+                count=1,
+                source_id=effective_source.id,
+            )
+            updated_effects = (
+                *updated_effects,
+                ActiveCombatEffect(
+                    id=f"horde-breaker-pending:{attacker.id}",
+                    actor_id=str(attacker.id),
+                    kind="horde_breaker_pending",
+                    label="Horde Breaker",
+                    object_id=f"actor:{target.id}",
+                    value=1,
+                    source_actor_id=str(attacker.id),
+                    duration=EffectDuration.UNTIL_TURN_START,
+                    expiration_actor_id=str(attacker.id),
+                ),
+            )
         message = _player_attack_message(
             attacker.name,
             selected.selected_target.name,
@@ -530,10 +765,35 @@ class PlayerCombatActionFlowService:
             hidden_states=reveal_actor(state_after_resource.hidden_states, str(attacker.id)),
         )
         if not resolution.hit:
+            if effective_source.miss_damage_on_failure == "half":
+                return PlayerAttackTransition(
+                    state=revealed_state,
+                    active_effects=updated_effects,
+                    pending=replace(
+                        pending,
+                        stage="damage_roll",
+                        natural_roll=attack_roll.natural_roll,
+                        natural_rolls=attack_roll.natural_rolls,
+                        total=attack_roll.total,
+                        hit=False,
+                        critical=False,
+                        miss_half_damage=True,
+                    ),
+                    board_message="",
+                    message_title="Atak",
+                    message_body=(
+                        f"{message} Czar zadaje połowę wyniku obrażeń mimo pudła."
+                    ),
+                    event_type="ui_combat_player_attack_roll",
+                    event_payload=event_payload,
+                    clear_combat_help=True,
+                    clear_movement_preview=True,
+                )
+            next_pending = _twinned_second_attack_pending(pending)
             return PlayerAttackTransition(
                 state=revealed_state,
                 active_effects=updated_effects,
-                pending=None,
+                pending=next_pending,
                 board_message="",
                 message_title="Atak",
                 message_body=message,
@@ -559,25 +819,44 @@ class PlayerCombatActionFlowService:
                     target_actor,
                     CombatCondition(effective_source.on_hit_condition),
                     source_actor_id=str(attacker.id),
-                    source_label=f"Sieć: {effective_source.name}",
+                    source_label=effective_source.name,
+                    duration=effective_source.on_hit_condition_duration,
+                    expiration_actor_id=(
+                        str(attacker.id)
+                        if effective_source.on_hit_condition_expiration == "source"
+                        else str(target_actor.id)
+                    ),
+                    source_spell_id=(
+                        effective_source.id
+                        if effective_source.source_type == AttackSourceType.SPELL
+                        else None
+                    ),
+                    source_spell_level=(
+                        effective_source.spell_level
+                        if effective_source.source_type == AttackSourceType.SPELL
+                        else None
+                    ),
                 )
                 conditioned_state = replace(
                     revealed_state,
-                    condition_states=application.states,
+                    condition_states=application.condition_states,
                 )
                 condition_message = application.message
-            return PlayerAttackTransition(
-                state=conditioned_state,
-                active_effects=updated_effects,
-                pending=None,
-                board_message="",
-                message_title="Atak",
-                message_body=f"{message} {condition_message}",
-                event_type="ui_combat_player_attack_roll",
-                event_payload=event_payload,
-                clear_combat_help=True,
-                clear_movement_preview=True,
-            )
+            message = f"{message} {condition_message}"
+            revealed_state = conditioned_state
+            if not _source_deals_damage(effective_source):
+                return PlayerAttackTransition(
+                    state=conditioned_state,
+                    active_effects=updated_effects,
+                    pending=None,
+                    board_message="",
+                    message_title="Atak",
+                    message_body=message,
+                    event_type="ui_combat_player_attack_roll",
+                    event_payload=event_payload,
+                    clear_combat_help=True,
+                    clear_movement_preview=True,
+                )
         updated_pending = replace(
             pending,
             stage="damage_roll",
@@ -586,6 +865,22 @@ class PlayerCombatActionFlowService:
             total=attack_roll.total,
             hit=True,
             critical=resolution.critical,
+            sneak_attack=sneak_attack.eligible,
+            colossus_slayer=colossus_component is not None,
+            open_hand_technique=(
+                pending.class_bonus_attack
+                and effective_source.id == "unarmed_strike"
+                and actor_has_feature(attacker, "open_hand_technique")
+                and any(
+                    effect.actor_id == str(attacker.id)
+                    and effect.kind == "flurry_of_blows"
+                    for effect in active_effects
+                )
+            ),
+            repelling_blast=(
+                effective_source.id == "eldritch_blast"
+                and actor_has_feature(attacker, "repelling_blast")
+            ),
             **_positioning_pending_fields(positioning),
         )
         return PlayerAttackTransition(
@@ -624,6 +919,56 @@ class PlayerCombatActionFlowService:
             active_effects,
         )
         target = _actor_by_id(state, pending.target_id)
+        effective_source = attack_source_with_target_combat_effects(
+            attacker,
+            target,
+            effective_source,
+            active_effects,
+        )
+        if pending.sneak_attack:
+            effective_source = plan_sneak_attack(
+                state=state,
+                active_effects=active_effects,
+                attacker=attacker,
+                target=target,
+                source=effective_source,
+                roll_mode=RollMode.NORMAL,
+            ).source
+        if pending.colossus_slayer and effective_source.damage_components:
+            component = colossus_slayer_damage(
+                attacker,
+                target,
+                damage_type=effective_source.damage_components[0].damage_type,
+            )
+            if component is not None:
+                effective_source = replace(
+                    effective_source,
+                    damage_components=(*effective_source.damage_components, component),
+                    damage_hint=f"{effective_source.damage_hint} + {component.hint()}",
+                )
+        state_for_damage = state
+        if pending.divine_smite_slot_level:
+            if (
+                effective_source.source_type != AttackSourceType.WEAPON
+                or effective_source.attack_kind.value != "melee"
+            ):
+                raise ValueError("Divine Smite wymaga trafienia bronią w zwarciu.")
+            smite = divine_smite_damage(
+                attacker,
+                slot_level=pending.divine_smite_slot_level,
+                target_creature_type=target.creature_type,
+            )
+            effective_source = replace(
+                effective_source,
+                damage_components=(*effective_source.damage_components, smite),
+                damage_hint=f"{effective_source.damage_hint} + {smite.hint()}",
+            )
+            resource = consume_spell_resource(
+                attacker,
+                spell_level=1,
+                cast_level=pending.divine_smite_slot_level,
+            )
+            state_for_damage = replace_actor(state, resource.actor_after)
         if component_totals is not None:
             damage_components = damage_components_from_totals(
                 effective_source.damage_components,
@@ -644,9 +989,31 @@ class PlayerCombatActionFlowService:
                 ),
             )
         damage_amount = sum(component.amount for component in damage_components)
-        save = pending.saving_throws[0] if pending.saving_throws else None
+        if effective_source.damage_divisor > 1:
+            damage_components = tuple(
+                replace(
+                    component,
+                    amount=component.amount // effective_source.damage_divisor,
+                )
+                for component in damage_components
+            )
+            damage_amount = sum(component.amount for component in damage_components)
+        if pending.miss_half_damage:
+            damage_components = tuple(
+                replace(component, amount=component.amount // 2)
+                for component in damage_components
+            )
+            damage_amount = sum(component.amount for component in damage_components)
+        save = next(
+            (
+                candidate
+                for candidate in pending.saving_throws
+                if candidate.actor_id == pending.target_id
+            ),
+            None,
+        )
         resolution = self._spell_saves.apply_target_damage(
-            state,
+            state_for_damage,
             target_id=pending.target_id,
             source=effective_source,
             base_damage=damage_amount,
@@ -655,10 +1022,130 @@ class PlayerCombatActionFlowService:
             critical=pending.critical,
         )
         applied = resolution.applied_damage
+        resolved_state = resolution.state
+        additional_applied: list[AppliedDamageResult] = []
+        if pending.twinned_target_id is not None and pending.saving_throws:
+            twin_save = next(
+                (
+                    candidate
+                    for candidate in pending.saving_throws
+                    if candidate.actor_id == pending.twinned_target_id
+                ),
+                None,
+            )
+            twin_resolution = self._spell_saves.apply_target_damage(
+                resolved_state,
+                target_id=pending.twinned_target_id,
+                source=effective_source,
+                base_damage=damage_amount,
+                damage_components=damage_components,
+                saving_throw=twin_save,
+                critical=False,
+            )
+            resolved_state = twin_resolution.state
+            additional_applied.append(twin_resolution.applied_damage)
+        if applied.defeated_by_damage and actor_has_feature(
+            attacker,
+            "dark_ones_blessing",
+        ):
+            current_attacker = _actor_by_id(resolved_state, str(attacker.id))
+            resolved_state = replace_actor(
+                resolved_state,
+                replace(
+                    current_attacker,
+                    temp_hp=max(
+                        current_attacker.temp_hp,
+                        dark_ones_blessing_temporary_hit_points(current_attacker),
+                    ),
+                ),
+            )
+        updated_effects = active_effects
+        if pending.sneak_attack:
+            updated_effects = commit_sneak_attack_hit(
+                updated_effects,
+                str(attacker.id),
+            )
+        if pending.colossus_slayer:
+            updated_effects = commit_colossus_slayer_hit(
+                updated_effects,
+                str(attacker.id),
+            )
+        if applied.damage.total_applied > 0:
+            updated_effects = tuple(
+                effect
+                for effect in updated_effects
+                if not (
+                    effect.actor_id == str(attacker.id)
+                    and effect.kind == "branding_smite"
+                )
+            )
+        if (
+            pending.hit is not False
+            and effective_source.on_hit_effect_kind is not None
+        ):
+            on_hit_effect = ActiveCombatEffect(
+                id=(
+                    f"{effective_source.on_hit_effect_kind}:"
+                    f"{attacker.id}:{target.id}:{effective_source.id}"
+                ),
+                actor_id=str(target.id),
+                kind=effective_source.on_hit_effect_kind,
+                label=effective_source.name,
+                object_id=f"spell:{effective_source.id}",
+                value=effective_source.on_hit_effect_value,
+                source_actor_id=str(attacker.id),
+                target_actor_id=str(target.id),
+                source=EffectSource(
+                    EffectSourceType.SPELL,
+                    effective_source.id,
+                    effective_source.name,
+                ),
+                duration=effective_source.on_hit_effect_duration,
+                expiration_actor_id=(
+                    str(attacker.id)
+                    if effective_source.on_hit_effect_kind
+                    == "guiding_bolt_mark"
+                    else None
+                ),
+                additional_expirations=(
+                    (
+                        AdditionalEffectExpiration(
+                            EffectDuration.UNTIL_TURN_END,
+                            actor_id=str(attacker.id),
+                        ),
+                    )
+                    if effective_source.on_hit_effect_kind
+                    == "guiding_bolt_mark"
+                    else ()
+                ),
+                stacking=EffectStackingPolicy.REFRESH,
+                stacking_key=(
+                    f"{effective_source.on_hit_effect_kind}:{target.id}"
+                ),
+                spell_level=effective_source.cast_level
+                or effective_source.spell_level,
+            )
+            updated_effects = apply_active_effect(
+                updated_effects,
+                on_hit_effect,
+            ).active_effects
+        next_pending = (
+            _twinned_second_attack_pending(pending)
+            if pending.twinned_target_id is not None
+            and not pending.saving_throws
+            and not pending.twinned_second_attack
+            else None
+        )
         return PlayerAttackTransition(
-            state=resolution.state,
-            active_effects=active_effects,
-            pending=None,
+            state=resolved_state,
+            active_effects=updated_effects,
+            pending=(
+                replace(pending, stage="open_hand_choice")
+                if pending.open_hand_technique and not applied.defeated
+                else replace(pending, stage="repelling_blast_choice")
+                if pending.repelling_blast and not applied.defeated
+                else next_pending
+            ),
             board_message="",
             message_title="Obrażenia",
             message_body=(
@@ -676,6 +1163,7 @@ class PlayerCombatActionFlowService:
             ),
             clear_combat_help=True,
             applied_damage=applied,
+            additional_applied_damages=tuple(additional_applied),
         )
 
     def resolve_direct_attack(
@@ -689,6 +1177,7 @@ class PlayerCombatActionFlowService:
         natural_roll: int,
         damage: int = 0,
         natural_roll_2: int | None = None,
+        natural_rerolls: tuple[int, ...] = (),
         scene_objects: tuple[SceneObject, ...] = (),
     ) -> PlayerAttackTransition:
         attacker = _active_hero(state)
@@ -699,6 +1188,7 @@ class PlayerCombatActionFlowService:
             source.id,
             "attack_roll",
             cast_level=source.cast_level,
+            metamagic_ids=source.metamagic_ids,
         )
         attacker, target, selected, positioning = _validated_attack(
             state, board, source, pending, scene_objects
@@ -721,7 +1211,12 @@ class PlayerCombatActionFlowService:
             target,
         )
         attack_roll = resolve_d20_roll(
-            _manual_d20_input(effective_source, natural_roll, natural_roll_2)
+            _manual_d20_input(
+                effective_source,
+                natural_roll,
+                natural_roll_2,
+                natural_rerolls,
+            )
         )
         if _uses_attack_action(effective_source):
             attack_use = use_attack_action(
@@ -803,16 +1298,35 @@ class PlayerCombatActionFlowService:
                         target_actor,
                         CombatCondition(effective_source.on_hit_condition),
                         source_actor_id=str(attacker.id),
-                        source_label=f"Sieć: {effective_source.name}",
+                        source_label=effective_source.name,
+                        duration=effective_source.on_hit_condition_duration,
+                        expiration_actor_id=(
+                            str(attacker.id)
+                            if effective_source.on_hit_condition_expiration == "source"
+                            else str(target_actor.id)
+                        ),
+                        source_spell_id=(
+                            effective_source.id
+                            if effective_source.source_type == AttackSourceType.SPELL
+                            else None
+                        ),
+                        source_spell_level=(
+                            effective_source.spell_level
+                            if effective_source.source_type == AttackSourceType.SPELL
+                            else None
+                        ),
                     )
                     updated_state = replace(
                         updated_state,
-                        condition_states=application.states,
+                        condition_states=application.condition_states,
                     )
                     message = f"{message} {application.message}"
                 else:
                     message = f"{message} {target_actor.name} jest zbyt duży dla sieci."
-            else:
+            if (
+                effective_source.on_hit_condition is None
+                or _source_deals_damage(effective_source)
+            ):
                 damage_resolution = self._spell_saves.apply_target_damage(
                     updated_state,
                     target_id=selected.selected_target.id,
@@ -885,14 +1399,18 @@ def _require_usable_source(actor: Actor, source: AttackSource | HealingSource) -
         actor,
         getattr(source, "spell_level", 0),
         getattr(source, "cast_level", None),
+        source.id,
     ):
-        raise ValueError(f"Brak slotów czaru dla {source.name}.")
+        raise ValueError(f"Brak slotów albo użycia wrodzonego czaru dla {source.name}.")
     from dnd_board_game.combat import actor_spell_cast_validation
 
     cast_validation = actor_spell_cast_validation(
         actor,
         source.id,
         cast_level=getattr(source, "cast_level", None),
+        ignore_verbal_somatic=(
+            "metamagic_subtle" in getattr(source, "metamagic_ids", ())
+        ),
     )
     if cast_validation is not None and not cast_validation.valid:
         raise ValueError(" ".join(cast_validation.errors))
@@ -959,12 +1477,14 @@ def _validated_attack(
     scene_objects: tuple[SceneObject, ...] = (),
 ) -> tuple[Actor, Actor, AttackActionState, AttackPositioning]:
     attacker = _require_pending_attacker(state, pending)
-    _require_attack_economy(
-        state,
-        attacker,
-        source,
-        two_weapon_bonus=pending.two_weapon_bonus,
-    )
+    if not pending.twinned_second_attack:
+        _require_attack_economy(
+            state,
+            attacker,
+            source,
+            two_weapon_bonus=pending.two_weapon_bonus,
+            class_bonus_attack=pending.class_bonus_attack,
+        )
     action = start_attack_action(board, attacker, state.actors, source, state.hidden_states)
     selected = select_attack_target(action, target_id=pending.target_id)
     assert selected.selected_target is not None
@@ -1015,6 +1535,7 @@ def _require_attack_economy(
     source: AttackSource,
     *,
     two_weapon_bonus: bool,
+    class_bonus_attack: bool = False,
 ) -> None:
     reserved_hands = len(grappled_actor_ids(state.condition_states, str(actor.id)))
     if not versatile_two_handed_source_is_legal(
@@ -1033,6 +1554,13 @@ def _require_attack_economy(
         ):
             raise ValueError("Ten atak nie jest legalnym atakiem drugą bronią.")
         return
+    if class_bonus_attack:
+        if (
+            state.turn_action.bonus_attacks_remaining < 1
+            or state.turn_action.bonus_attack_source_id != source.id
+        ):
+            raise ValueError("Ten klasowy bonusowy atak nie jest dostępny.")
+        return
     if _uses_attack_action(source):
         if (
             (source.loading or source.limited_attacks)
@@ -1046,12 +1574,40 @@ def _require_attack_economy(
             raise ValueError("Ta broń pozwala wykonać tylko jeden atak w ramach akcji.")
         if not can_use_attack_action(state, actor):
             raise ValueError("Wykorzystano już wszystkie ataki tej akcji.")
-    elif state.turn_action.action_use != ActionUse.ACTION_AVAILABLE:
+    elif (
+        source.action_cost == ActionEconomyCost.ACTION
+        and state.turn_action.action_use != ActionUse.ACTION_AVAILABLE
+    ):
         raise ValueError("Akcja w tej turze została już zużyta.")
+    elif (
+        source.action_cost == ActionEconomyCost.BONUS_ACTION
+        and state.turn_action.bonus_action_use != ActionUse.ACTION_AVAILABLE
+    ):
+        raise ValueError("Akcja bonusowa w tej turze została już zużyta.")
 
 
 def _uses_attack_action(source: AttackSource) -> bool:
     return source.source_type.value == "weapon" and source.area is None
+
+
+def _twinned_second_attack_pending(
+    pending: PendingPlayerAttack,
+) -> PendingPlayerAttack | None:
+    if pending.twinned_target_id is None or pending.twinned_second_attack:
+        return None
+    return replace(
+        pending,
+        target_id=pending.twinned_target_id,
+        twinned_target_id=None,
+        twinned_second_attack=True,
+        stage="attack_roll",
+        natural_roll=None,
+        natural_rolls=(),
+        total=None,
+        hit=None,
+        critical=False,
+        saving_throws=(),
+    )
 
 
 def _require_pending_attacker(state: CombatState, pending: PendingPlayerAttack) -> Actor:
@@ -1061,6 +1617,28 @@ def _require_pending_attacker(state: CombatState, pending: PendingPlayerAttack) 
     return attacker
 
 
+def _has_horde_breaker_target(
+    *,
+    board: BoardState,
+    state: CombatState,
+    attacker: Actor,
+    original_target: Actor,
+    source: AttackSource,
+) -> bool:
+    legal_targets = start_attack_action(
+        board,
+        attacker,
+        state.actors,
+        source,
+        state.hidden_states,
+    ).legal_targets
+    return any(
+        target.id != str(original_target.id)
+        and grid_distance_feet(target.position, original_target.position) <= 5
+        for target in legal_targets
+    )
+
+
 def _actor_by_id(state: CombatState, actor_id: str) -> Actor:
     actor = next((candidate for candidate in state.actors if str(candidate.id) == actor_id), None)
     if actor is None:
@@ -1068,17 +1646,35 @@ def _actor_by_id(state: CombatState, actor_id: str) -> Actor:
     return actor
 
 
+def _source_deals_damage(source: AttackSource) -> bool:
+    return any(
+        component.dice is not None
+        or int(component.fixed or 0) + component.modifier > 0
+        for component in source.damage_components
+    )
+
+
 def _manual_d20_input(
     source: AttackSource,
     natural_roll: int,
     natural_roll_2: int | None,
+    natural_rerolls: tuple[int, ...] = (),
 ) -> D20RollInput:
     request = source.attack_roll_request
     if request.mode == RollMode.NORMAL:
-        return D20RollInput(request, int(natural_roll))
+        return D20RollInput(
+            request,
+            int(natural_roll),
+            natural_rerolls=tuple(int(value) for value in natural_rerolls),
+        )
     if natural_roll_2 is None:
         raise ValueError("Ten rzut wymaga wpisania dwóch wyników d20.")
-    return D20RollInput(request, int(natural_roll), int(natural_roll_2))
+    return D20RollInput(
+        request,
+        int(natural_roll),
+        int(natural_roll_2),
+        tuple(int(value) for value in natural_rerolls),
+    )
 
 
 def _player_attack_message(

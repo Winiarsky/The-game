@@ -36,11 +36,21 @@ from .spell_dispel_flow import (
     SpellDispelFlowService,
     SpellDispelTransition,
 )
+from .player_multi_target_spell_flow import (
+    MultiTargetDamageSpellTransition,
+    PendingMultiTargetDamageSpell,
+    PlayerMultiTargetSpellFlowService,
+    ProjectileAllocation,
+)
 from .combat_reaction_flow import (
+    ClassFeatureReactionFlowService,
     CombatReactionFlowService,
     CombatReactionResolution,
     CounterspellReactionFlowService,
     CounterspellReactionResolution,
+    CuttingWordsReactionResolution,
+    DeflectMissilesReactionResolution,
+    DeflectedMissileReturnResolution,
     DefensiveSpellReactionFlowService,
     DefensiveSpellReactionResolution,
     PlayerReactionAttackResolution,
@@ -80,6 +90,7 @@ from .combat_shove_flow import (
     ShoveMode,
     ShoveResolution,
     automatic_defender_roll,
+    forced_push_destination,
     shove_push_destination,
 )
 from .combat_grapple_flow import (
@@ -159,6 +170,17 @@ from .ritual_casting_flow import (
     RitualCastingResult,
     ritual_casting_minutes,
 )
+from .exploration_spell_casting_flow import (
+    ExplorationSpellCastResult,
+    ExplorationSpellCastingFlowService,
+)
+from .exploration_action_sources import (
+    ExplorationActionSource,
+    ExplorationActionSourceKind,
+    action_sources_for_goal,
+    resource_for_action_source,
+    selected_action_source,
+)
 from .short_rest_flow import (
     PendingShortRest,
     ShortRestCompletionTransition,
@@ -194,8 +216,12 @@ __all__ = [
     "CombatMovementSubmission",
     "CombatReactionFlowService",
     "CombatReactionResolution",
+    "ClassFeatureReactionFlowService",
     "CounterspellReactionFlowService",
     "CounterspellReactionResolution",
+    "CuttingWordsReactionResolution",
+    "DeflectMissilesReactionResolution",
+    "DeflectedMissileReturnResolution",
     "DefensiveSpellReactionFlowService",
     "DefensiveSpellReactionResolution",
     "CombatApproachInteractionPlan",
@@ -229,6 +255,7 @@ __all__ = [
     "GrappleResolution",
     "TargetedItemActionSpec",
     "automatic_defender_roll",
+    "forced_push_destination",
     "shove_push_destination",
     "automatic_grapple_opponent_roll",
     "EncounterDetection",
@@ -273,6 +300,10 @@ __all__ = [
     "SpellDispelActionSpec",
     "SpellDispelFlowService",
     "SpellDispelTransition",
+    "MultiTargetDamageSpellTransition",
+    "PendingMultiTargetDamageSpell",
+    "PlayerMultiTargetSpellFlowService",
+    "ProjectileAllocation",
     "CombatSourceSelectionTransition",
     "PendingPlayerAttack",
     "PendingAreaSpell",
@@ -292,6 +323,13 @@ __all__ = [
     "StartSessionTransition",
     "SpellPreparationFlowService",
     "SpellPreparationTransition",
+    "ExplorationSpellCastResult",
+    "ExplorationSpellCastingFlowService",
+    "ExplorationActionSource",
+    "ExplorationActionSourceKind",
+    "action_sources_for_goal",
+    "resource_for_action_source",
+    "selected_action_source",
     "ShortRestCompletionTransition",
     "ShortRestFlowService",
     "ShortRestHitDieTransition",

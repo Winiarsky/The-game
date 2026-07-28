@@ -1,0 +1,51 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "enhance_ability",
+  "name": "Enhance Ability",
+  "level": 2,
+  "school": "transmutation",
+  "casting_time": "action",
+  "range": {
+    "kind": "touch"
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": [
+      {
+        "item_id": "spell_component_enhance_ability",
+        "label": "fur or a feather from a beast"
+      }
+    ]
+  },
+  "duration": {
+    "kind": "hour",
+    "amount": 1
+  },
+  "concentration": true,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "targeted_status",
+    "label": "Enhance Ability",
+    "effect_kind": "ability_check_advantage",
+    "effect_options": [
+      "strength",
+      "dexterity",
+      "constitution",
+      "intelligence",
+      "wisdom",
+      "charisma"
+    ],
+    "target_faction": "ally",
+    "cast_flag": "cast_enhance_ability",
+    "instructions": "Wybierz cechę celu: przewaga w jej testach i właściwy efekt dodatkowy; trwa podczas koncentracji.",
+    "resolution_mode": "automatic",
+    "board_relevance": "direct"
+  }
+}

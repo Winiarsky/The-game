@@ -478,6 +478,41 @@ critical_miss: false
 
 ## Model Aktora
 
+Postać z kreatora zachowuje źródła swoich grantów jako `FeatureGrant`, ale
+wykonanie mechaniki pozostaje we wspólnym silniku:
+
+- Fighting Style: Defense zwiększa efektywne KP tylko podczas noszenia pancerza,
+- Archery daje `+2` wyłącznie do ataków bronią dystansową,
+- Dueling daje `+2` do obrażeń jednoręcznej broni melee, jeżeli druga ręka nie
+  trzyma innej broni; tarcza jest dozwolona,
+- Two-Weapon Fighting zachowuje dodatni modyfikator cechy w obrażeniach drugiej broni,
+- Second Wind wymaga fizycznego wyniku `d10`, zużywa akcję bonusową i jedno użycie
+  odnawiane po short lub long rest,
+- Sneak Attack na poziomie 1 dodaje osobny komponent `1d6` tego samego typu co
+  broń. Wymaga broni finesse albo ranged, braku disadvantage oraz advantage lub
+  aktywnego sojusznika przy celu. Użycie oznaczamy dopiero po trafieniu i
+  wygaszamy na początku następnej tury łotrzyka,
+- kreator rozdziela znane cantripy, listę klasową albo spellbook, przygotowane
+  czary oraz czary domenowe niezużywające limitu przygotowania,
+- Domena Życia zapewnia ciężki pancerz, zawsze przygotowane czary domenowe oraz
+  `Disciple of Life` skalowane poziomem użytego slotu,
+- Arcane Recovery jest zasobem odnawianym przez long rest; po ukończonym short
+  reście może odzyskać legalny, zużyty slot,
+- Lucky nie losuje za gracza: naturalna jedynka otwiera kontrakt dodatkowego
+  fizycznego rzutu, a wynik zachowuje pierwotną i zastępczą kość; przy
+  advantage/disadvantage każda jedynka jest przerzucana przed wyborem wyniku,
+- Brave, Fey Ancestry i Dwarven Resilience korzystają ze wspólnych tagów save'a
+  (`fear`, `charm`, `poison`); Fey Ancestry udostępnia też deterministyczną
+  ochronę przed `magical_sleep`,
+- Halfling Nimbleness pozwala przejść przez pole większego przeciwnika jako
+  difficult terrain, ale nie pozwala zakończyć tam ruchu,
+- Trance ustawia indywidualny wymóg long resta na 240 zamiast 480 minut,
+- Stonecunning daje podwójną biegłość wyłącznie testom oznaczonym przez content
+  tagiem `stonework`,
+- Military Rank, Criminal Contact, Shelter of the Faithful i Researcher są
+  stabilnymi uprawnieniami backgroundu. Zadziałają tylko wtedy, gdy postać je
+  posiada i bieżąca scena jawnie udostępnia odpowiadającą okazję.
+
 Wszystkie istoty powinny używać wspólnego modelu `Actor`.
 
 ### Postacie Graczy
@@ -1667,8 +1702,8 @@ rzutu. Aktywacja deleguje konsekwencje do ogólnego silnika hazardów.
 
 Pierwsza wersja nie obejmuje:
 
-* pełnego kreatora postaci,
-* pełnego katalogu czarów,
+* kreatora postaci powyżej aktualnego limitu poziomu 3,
+* czarów powyżej 2. poziomu w milestone postaci 1–3,
 * pełnego katalogu potworów,
 * gry sieciowej,
 * zarządzania kampanią,

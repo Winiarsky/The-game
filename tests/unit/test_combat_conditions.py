@@ -4,17 +4,33 @@ from dnd_board_game.actors import Actor, ActorId, Faction
 from dnd_board_game.combat import (
     CombatCondition,
     ConditionState,
+    ConditionSaveTiming,
     InitiativeEntry,
     InitiativeOrder,
     attack_source_with_prone,
     drop_prone,
+    effective_movement_speed,
     has_condition,
     path_with_condition_cost,
+    reaction_available_for,
+    resolve_condition_save,
     stand_up,
     start_combat,
 )
+from dnd_board_game.combat.healing import (
+    HealingSource,
+    HealingSourceType,
+    apply_healing_result,
+)
 from dnd_board_game.combat.attack_flow import AttackKind, AttackSource, AttackSourceType
-from dnd_board_game.rules import D20RollInput, D20RollRequest, RollMode, resolve_d20_roll
+from dnd_board_game.rules import (
+    D20RollInput,
+    D20RollRequest,
+    RollMode,
+    RollModifier,
+    RollModifierType,
+    resolve_d20_roll,
+)
 from dnd_board_game.world import Coordinate, PathResult
 
 
@@ -152,3 +168,92 @@ def test_prone_attack_factors_follow_distance_and_cancel_each_other() -> None:
     assert close_target_prone.attack_roll_request.mode == RollMode.ADVANTAGE
     assert far_target_prone.attack_roll_request.mode == RollMode.NORMAL
     assert both_prone.attack_roll_request.mode == RollMode.NORMAL
+
+
+def test_cantrip_side_effects_reduce_speed_block_reactions_and_healing() -> None:
+    hero = _actor("hero", Faction.ALLY, Coordinate(0, 0))
+    enemy = _actor("enemy", Faction.ENEMY, Coordinate(1, 0))
+    states = (
+        ConditionState("hero", CombatCondition.RAY_OF_FROST_SLOW),
+        ConditionState("hero", CombatCondition.NO_REACTIONS),
+        ConditionState("hero", CombatCondition.NO_HEALING),
+    )
+    combat = replace(_state(hero, enemy), condition_states=states)
+    healing = apply_healing_result(
+        replace(hero, hp=4),
+        HealingSource(
+            "healing",
+            "Healing",
+            HealingSourceType.CUSTOM,
+            5,
+            healing_fixed=5,
+        ),
+        5,
+        condition_states=states,
+    )
+
+    assert effective_movement_speed(hero, states) == 20
+    assert reaction_available_for(combat, hero) is False
+    assert healing.actor_after.hp == 4
+    assert healing.effective_healing == 0
+
+
+def test_chill_touch_makes_undead_attack_caster_with_disadvantage() -> None:
+    caster = _actor("caster", Faction.ALLY, Coordinate(0, 0))
+    undead = replace(
+        _actor("undead", Faction.ENEMY, Coordinate(1, 0)),
+        creature_type="undead",
+    )
+    states = (
+        ConditionState(
+            "undead",
+            CombatCondition.NO_HEALING,
+            source_actor_id="caster",
+        ),
+    )
+
+    against_caster = attack_source_with_prone(
+        _source(),
+        states,
+        undead,
+        caster,
+    )
+    against_other = attack_source_with_prone(
+        _source(),
+        states,
+        undead,
+        replace(caster, id=ActorId("other")),
+    )
+
+    assert against_caster.attack_roll_request.mode == RollMode.DISADVANTAGE
+    assert against_other.attack_roll_request.mode == RollMode.NORMAL
+
+
+def test_condition_save_accepts_optional_bardic_inspiration_modifier() -> None:
+    hero = _actor("hero", Faction.ALLY, Coordinate(0, 0))
+    condition = ConditionState(
+        "hero",
+        CombatCondition.POISONED,
+        save_ability="constitution",
+        save_dc=13,
+        save_timing=ConditionSaveTiming.TURN_END,
+    )
+
+    result = resolve_condition_save(
+        (condition,),
+        hero,
+        condition,
+        natural_roll=10,
+        additional_modifiers=(
+            RollModifier(
+                "Bardic Inspiration k6",
+                3,
+                RollModifierType.FEATURE,
+                stacking_key="bardic_inspiration",
+            ),
+        ),
+    )
+
+    assert result.removed is True
+    assert result.saving_throw.total == 13
+    assert result.saving_throw.modifiers[-1].label == "Bardic Inspiration k6"

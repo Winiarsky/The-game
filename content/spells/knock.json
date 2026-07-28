@@ -1,0 +1,39 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "knock",
+  "name": "Knock",
+  "level": 2,
+  "school": "transmutation",
+  "casting_time": "action",
+  "range": {
+    "kind": "distance",
+    "feet": 60
+  },
+  "components": {
+    "verbal": true,
+    "somatic": false,
+    "materials": []
+  },
+  "duration": {
+    "kind": "instantaneous"
+  },
+  "concentration": false,
+  "ritual": false,
+  "exploration_use": {
+    "tags": ["open", "unlock"],
+    "targets": ["lock", "barrier", "container"],
+    "consequences": ["very_loud"]
+  },
+  "effect": {
+    "kind": "exploration",
+    "effect_type": "set_flag",
+    "flag_key": "cast_knock",
+    "flag_value": true,
+    "instructions": "Wybrany zamek, rygiel albo blokada w 60 stopach otwiera się; Arcane Lock jest tłumiony na 10 minut, a dźwięk słychać z 300 stóp."
+  }
+}

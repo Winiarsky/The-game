@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kroniki Pogranicza</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='launcher.css') }}">
+</head>
+<body class="launcher-page main-menu-page">
+  <main class="launcher-shell">
+    <section class="title-block">
+      <span class="eyebrow">Planszowa gra fabularna</span>
+      <h1>Kroniki Pogranicza</h1>
+      <p>Przygoda prowadzona przez cyfrowego Mistrza Gry i fizyczną planszę.</p>
+    </section>
+
+    <nav class="main-menu" aria-label="Menu główne">
+      <a class="menu-action primary" href="{{ url_for('new_game') }}">
+        <span>Nowa gra</span>
+        <small>Wybierz scenariusz i rozpocznij przygotowanie stołu</small>
+      </a>
+      <a class="menu-action{% if not save_exists %} quiet{% endif %}" href="{{ url_for('load_game') }}">
+        <span>Wczytaj grę</span>
+        <small>{% if save_exists %}Dostępny jest zapis: {{ scenario_name }}{% else %}Brak zapisu dla aktywnego scenariusza{% endif %}</small>
+      </a>
+      <a class="menu-action" href="{{ url_for('characters') }}">
+        <span>Stwórz postać</span>
+        <small>Przejdź do oddzielnego modułu bohaterów</small>
+      </a>
+    </nav>
+
+    <footer>Aktywny scenariusz runtime: {{ scenario_name }}</footer>
+  </main>
+</body>
+</html>

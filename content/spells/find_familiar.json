@@ -1,0 +1,41 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "find_familiar",
+  "name": "Find Familiar",
+  "level": 1,
+  "school": "conjuration",
+  "casting_time": "hour",
+  "range": {
+    "kind": "distance",
+    "feet": 10
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": [
+      {
+        "item_id": "spell_component_find_familiar",
+        "label": "10 gp worth of charcoal, incense, and herbs that must be consumed by fire in a brass brazier",
+        "minimum_value_cp": 1000,
+        "consumed": true
+      }
+    ]
+  },
+  "duration": {
+    "kind": "instantaneous"
+  },
+  "concentration": false,
+  "ritual": true,
+  "effect": {
+    "kind": "exploration",
+    "effect_type": "set_flag",
+    "flag_key": "cast_find_familiar",
+    "flag_value": true,
+    "instructions": "Po godzinie przywołaj ducha w formie wybranej Tiny beast. Zapisz formę, statblock, więź telepatyczną i możliwość dostarczania czarów dotykowych."
+  }
+}

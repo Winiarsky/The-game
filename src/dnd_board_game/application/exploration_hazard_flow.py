@@ -43,12 +43,16 @@ def resolve_exploration_hazard(
     hazard: ExplorationHazard,
     *,
     natural_roll: int,
+    natural_roll_2: int | None = None,
+    natural_rerolls: tuple[int, ...] = (),
     rng: Random,
 ) -> ExplorationHazardResolution:
     saving_throw = resolve_actor_saving_throw(
         actor,
         hazard.saving_throw,
         natural_roll=natural_roll,
+        natural_roll_2=natural_roll_2,
+        natural_rerolls=natural_rerolls,
     )
     base_damage = _roll_hazard_damage(hazard, rng)
     adjusted_damage = apply_save_damage_amount(base_damage, saving_throw)

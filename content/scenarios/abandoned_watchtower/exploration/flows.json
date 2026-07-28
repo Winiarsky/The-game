@@ -27,10 +27,18 @@
           }
         },
         {
-          "id": "wall_route_known",
+          "id": "wall_route_unprepared",
           "label": "Drużyna zna obejście przez mur",
           "active_when": {
             "all_flags": ["gate_wall_route_found"],
+            "no_flags": ["gate_climbing_rope_attached", "gate_bypass_open", "gate_passed"]
+          }
+        },
+        {
+          "id": "wall_route_prepared",
+          "label": "Obejście przez mur ma stałą asekurację",
+          "active_when": {
+            "all_flags": ["gate_wall_route_found", "gate_climbing_rope_attached"],
             "no_flags": ["gate_bypass_open", "gate_passed"]
           }
         },
@@ -82,9 +90,23 @@
           "source_action_ids": ["pry_bolt_with_plank"]
         },
         {
+          "id": "attach_wall_rope",
+          "goal_id": "attach_wall_rope",
+          "from": ["wall_route_unprepared"],
+          "route_kind": "challenge_option",
+          "route_ref": "attach_climbing_rope"
+        },
+        {
           "id": "use_wall_route",
           "goal_id": "use_wall_route",
-          "from": ["wall_route_known"],
+          "from": ["wall_route_unprepared"],
+          "route_kind": "challenge_option",
+          "route_ref": "find_way_around"
+        },
+        {
+          "id": "use_attached_wall_route",
+          "goal_id": "use_attached_wall_route",
+          "from": ["wall_route_prepared"],
           "route_kind": "challenge_option",
           "route_ref": "find_way_around"
         }

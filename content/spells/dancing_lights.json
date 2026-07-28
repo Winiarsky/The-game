@@ -1,0 +1,10 @@
+{
+  "schema": "dnd_board_game.spell", "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014", "source_pack_ids": ["srd_5_1_cc_by_4_0"],
+  "id": "dancing_lights", "name": "Dancing Lights", "level": 0,
+  "school": "evocation", "casting_time": "action",
+  "range": {"kind": "distance", "feet": 120},
+  "components": {"verbal": true, "somatic": true, "materials": [{"item_id": "spell_component_dancing_lights", "label": "fosfor, drewno wiązu lub robaczek świętojański"}]},
+  "duration": {"kind": "minute", "amount": 1}, "concentration": true, "ritual": false,
+  "effect": {"kind": "exploration", "effect_type": "set_flag", "flag_key": "spell_dancing_lights_active", "flag_value": true}
+}

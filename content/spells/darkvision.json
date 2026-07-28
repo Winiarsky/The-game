@@ -1,0 +1,43 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "darkvision",
+  "name": "Darkvision",
+  "level": 2,
+  "school": "transmutation",
+  "casting_time": "action",
+  "range": {
+    "kind": "touch"
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": [
+      {
+        "item_id": "spell_component_darkvision",
+        "label": "either a pinch of dried carrot or an agate"
+      }
+    ]
+  },
+  "duration": {
+    "kind": "eight_hours",
+    "amount": 1
+  },
+  "concentration": false,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "targeted_status",
+    "label": "Darkvision",
+    "target_count": 1,
+    "cast_flag": "cast_darkvision",
+    "instructions": "Dotknięta istota otrzymuje darkvision 60 stóp na 8 godzin.",
+    "effect_kind": "darkvision",
+    "value": 60,
+    "target_faction": "ally"
+  }
+}

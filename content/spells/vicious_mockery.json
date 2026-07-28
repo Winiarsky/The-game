@@ -1,0 +1,23 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["srd_5_1_cc_by_4_0"],
+  "id": "vicious_mockery",
+  "name": "Zjadliwa kpina",
+  "level": 0,
+  "school": "enchantment",
+  "casting_time": "action",
+  "range": {"kind": "distance", "feet": 60},
+  "components": {"verbal": true, "somatic": false, "materials": []},
+  "duration": {"kind": "instantaneous"},
+  "concentration": false,
+  "ritual": false,
+  "scaling": {"cantrip_damage_dice_per_tier": 1},
+  "effect": {
+    "kind": "attack",
+    "save_ability": "wisdom",
+    "damage": {"dice": "1d4", "modifier": 0, "damage_type": "psychic"},
+    "save_damage_on_success": "none"
+  }
+}

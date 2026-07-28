@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nowa gra</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='launcher.css') }}">
+</head>
+<body class="launcher-page">
+  <main class="flow-shell">
+    <header class="flow-header">
+      <a class="back-link" href="{{ url_for('index') }}">← Menu główne</a>
+      <span class="step-label">Nowa gra · krok 1</span>
+      <h1>Wybierz scenariusz</h1>
+      <p>Każda przygoda ma własną papierową mapę, setup planszy i stan zapisu.</p>
+    </header>
+
+    {% if error %}<div class="flow-error" role="alert">{{ error }}</div>{% endif %}
+
+    <form method="post" action="{{ url_for('start_new_game') }}">
+      <label class="scenario-card selected">
+        <input type="radio" name="scenario_id" value="{{ scenario.id }}" checked>
+        <span class="selection-mark" aria-hidden="true">✓</span>
+        <span>
+          <b>{{ scenario.name }}</b>
+          <small>Scenariusz referencyjny · poziomy 1–3 · maksymalnie 5 bohaterów</small>
+          <em>Eksploracja, rozmowy, podróż, walka i fizyczna plansza</em>
+        </span>
+      </label>
+
+      <section class="form-section">
+        <h2>Wybierz drużynę — 1 do 5 postaci</h2>
+        {% if roster.characters %}
+          <div class="roster-grid">
+            {% for character in roster.characters %}
+              <label class="roster-card">
+                <input type="checkbox" name="character_ids" value="{{ character.actor.id }}" {% if character.actor.id|string in (selected_character_ids or []) %}checked{% endif %}>
+                <span class="roster-avatar">{{ character.actor.name[:1]|upper }}</span>
+                <span><b>{{ character.actor.name }}</b><small>Poziom {{ character.actor.level }} · {{ character.class_id|replace('_', ' ')|title }}</small><em>{{ character.actor.experience_points }} XP</em></span>
+              </label>
+            {% endfor %}
+          </div>
+        {% else %}
+          <aside class="flow-note">Roster jest pusty. <a href="{{ url_for('new_character') }}">Najpierw stwórz postać</a>.</aside>
+        {% endif %}
+      </section>
+
+      <div class="flow-actions">
+        <a class="button secondary" href="{{ url_for('index') }}">Anuluj</a>
+        <button type="submit" {% if not roster.characters %}disabled{% endif %}>Rozpocznij przygotowanie</button>
+      </div>
+    </form>
+  </main>
+</body>
+</html>

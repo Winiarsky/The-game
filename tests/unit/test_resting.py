@@ -57,6 +57,20 @@ def test_short_rest_recovers_only_short_rest_resources() -> None:
     assert result.actor_after.spell_slots[0].remaining == 0
 
 
+def test_short_rest_recovers_pact_magic_slots_only() -> None:
+    actor = replace(
+        _actor(),
+        spell_slots=(
+            SpellSlotState(1, 0, 2, recovery="short_rest"),
+            SpellSlotState(2, 0, 1, recovery="long_rest"),
+        ),
+    )
+
+    result = complete_short_rest(actor)
+
+    assert [slot.remaining for slot in result.actor_after.spell_slots] == [2, 0]
+
+
 def test_short_rest_recovers_short_rest_item_charges() -> None:
     amulet = InventoryItem(
         "restful_amulet",

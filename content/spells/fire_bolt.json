@@ -13,11 +13,17 @@
   "duration": {"kind": "instantaneous"},
   "concentration": false,
   "ritual": false,
+  "exploration_use": {
+    "tags": ["damage", "damage_object", "ignite", "break"],
+    "targets": ["creature", "object", "barrier"],
+    "consequences": ["fire"]
+  },
   "scaling": {"cantrip_damage_dice_per_tier": 1},
   "effect": {
     "kind": "attack",
     "ability": "intelligence",
     "attack_kind": "ranged",
+    "tabletop_riders": ["Trafiony nieprzymocowany łatwopalny obiekt, którego nikt nie nosi, zapala się."],
     "damage": {"dice": "1d10", "modifier": 0, "damage_type": "fire"}
   }
 }

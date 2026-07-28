@@ -42,6 +42,7 @@ class PendingShortRest:
     policy: ShortRestPolicy
     zone_id: str
     completed: bool = False
+    song_of_rest_used_actor_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,6 +65,8 @@ class ShortRestCompletionTransition:
 class ShortRestHitDieTransition:
     actors: tuple[Actor, ...]
     result: HitDieSpendResult
+    song_of_rest_healing: int = 0
+    song_of_rest_bard_id: str | None = None
 
 
 class ShortRestFlowService:
@@ -195,13 +198,39 @@ class ShortRestFlowService:
         actor_id: str,
         die_sides: int,
         natural_roll: int,
+        song_of_rest_roll: int | None = None,
+        song_of_rest_die_sides: int = 0,
+        song_of_rest_bard_id: str | None = None,
     ) -> ShortRestHitDieTransition:
         actor = next((candidate for candidate in actors if str(candidate.id) == actor_id), None)
         if actor is None or actor.faction != Faction.ALLY:
             raise ValueError("Nieznany bohater odpoczywający.")
         result = spend_hit_die(actor, die_sides=die_sides, natural_roll=natural_roll)
+        song_healing = 0
+        if song_of_rest_roll is not None:
+            if song_of_rest_bard_id is None or song_of_rest_die_sides < 2:
+                raise ValueError("Drużyna nie ma dostępnego Song of Rest.")
+            if not 1 <= song_of_rest_roll <= song_of_rest_die_sides:
+                raise ValueError(
+                    f"Wynik Song of Rest musi mieścić się w zakresie 1–{song_of_rest_die_sides}."
+                )
+            hp_before_song = result.actor_after.hp
+            actor_after = replace(
+                result.actor_after,
+                hp=min(
+                    result.actor_after.max_hp,
+                    result.actor_after.hp + song_of_rest_roll,
+                ),
+            )
+            song_healing = actor_after.hp - hp_before_song
+            result = replace(result, actor_after=actor_after)
         updated = tuple(result.actor_after if candidate.id == actor.id else candidate for candidate in actors)
-        return ShortRestHitDieTransition(updated, result)
+        return ShortRestHitDieTransition(
+            updated,
+            result,
+            song_healing,
+            song_of_rest_bard_id if song_of_rest_roll is not None else None,
+        )
 
 
 def short_rest_count(state: ExplorationState, policy_id: str) -> int:

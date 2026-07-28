@@ -1,0 +1,44 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "warding_bond",
+  "name": "Warding Bond",
+  "level": 2,
+  "school": "abjuration",
+  "casting_time": "action",
+  "range": {
+    "kind": "touch"
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": [
+      {
+        "item_id": "spell_component_warding_bond",
+        "label": "a pair of platinum rings worth at least 50 gp each, which you and the target must wear for the duration",
+        "minimum_value_cp": 5000
+      }
+    ]
+  },
+  "duration": {
+    "kind": "hour",
+    "amount": 1
+  },
+  "concentration": false,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "targeted_status",
+    "label": "Warding Bond",
+    "target_count": 1,
+    "cast_flag": "cast_warding_bond",
+    "instructions": "Przez godzinę, gdy cel jest w 60 stopach, ma +1 KP i save oraz odporność na wszystkie obrażenia; rzucający otrzymuje tyle samo obrażeń.",
+    "effect_kind": "warding_bond",
+    "value": 1,
+    "target_faction": "ally"
+  }
+}

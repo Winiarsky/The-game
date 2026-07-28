@@ -1,0 +1,40 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "arcane_lock",
+  "name": "Arcane Lock",
+  "level": 2,
+  "school": "abjuration",
+  "casting_time": "action",
+  "range": {
+    "kind": "touch"
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": [
+      {
+        "item_id": "spell_component_arcane_lock",
+        "label": "gold dust worth at least 25 gp, which the spell consumes",
+        "minimum_value_cp": 2500,
+        "consumed": true
+      }
+    ]
+  },
+  "duration": {
+    "kind": "until_dispelled"
+  },
+  "concentration": false,
+  "ritual": false,
+  "effect": {
+    "kind": "exploration",
+    "effect_type": "set_flag",
+    "flag_key": "cast_arcane_lock",
+    "flag_value": true,
+    "instructions": "Dotknięte drzwi, okno, brama lub pojemnik zostają magicznie zamknięte; ustal hasło i zwiększ ST ich sforsowania o 10."
+  }
+}

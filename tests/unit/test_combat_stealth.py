@@ -5,7 +5,10 @@ from dnd_board_game.actors import (
     Actor,
     ActorId,
     Faction,
+    FeatureGrant,
+    FeatureSourceKind,
     ProficiencyProfile,
+    CreatureSize,
     passive_skill_score,
     skill_modifier,
 )
@@ -88,6 +91,28 @@ def test_hide_requires_breaking_clear_sight_but_three_quarters_cover_is_enough()
     assert visible.allowed is False
     assert visible.blocking_observer_ids == ("goblin",)
     assert covered.allowed is True
+
+
+def test_lightfoot_halfling_can_hide_behind_larger_creature() -> None:
+    halfling = replace(
+        _actor("halfling", Faction.ALLY, Coordinate(0, 0)),
+        size=CreatureSize.SMALL,
+        features=(
+            FeatureGrant(
+                feature_id="naturally_stealthy",
+                label="Naturally Stealthy",
+                source_kind=FeatureSourceKind.SPECIES,
+                source_ref="halfling",
+            ),
+        ),
+    )
+    ally = _actor("fighter", Faction.ALLY, Coordinate(2, 0))
+    goblin = _actor("goblin", Faction.ENEMY, Coordinate(4, 0))
+
+    result = hide_eligibility(BoardState(), halfling, (halfling, ally, goblin))
+
+    assert result.allowed is True
+    assert result.blocking_observer_ids == ()
 
 
 def test_hide_is_resolved_individually_against_passive_perception() -> None:

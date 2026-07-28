@@ -41,6 +41,7 @@ def test_ui_session_view_preserves_api_state_contract() -> None:
         active_challenge=None,
         active_point=None,
         trade=None,
+        downtime=None,
         resources=[],
         discovered_sources=[],
         actors=[],

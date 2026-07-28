@@ -1,0 +1,44 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "flame_blade",
+  "name": "Flame Blade",
+  "level": 2,
+  "school": "evocation",
+  "casting_time": "bonus_action",
+  "range": {
+    "kind": "self"
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": [
+      {
+        "item_id": "spell_component_flame_blade",
+        "label": "leaf of sumac"
+      }
+    ]
+  },
+  "duration": {
+    "kind": "ten_minutes",
+    "amount": 1
+  },
+  "concentration": true,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "targeted_status",
+    "label": "Flame Blade",
+    "effect_kind": "flame_blade",
+    "target_faction": "self",
+    "value": 3,
+    "cast_flag": "cast_flame_blade",
+    "instructions": "Podczas koncentracji tworzysz ogniste ostrze; melee spell attack zadaje 3k6 fire. +1k6 za każde dwa poziomy slotu powyżej 2.",
+    "resolution_mode": "automatic",
+    "board_relevance": "direct"
+  }
+}

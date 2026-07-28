@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Awans · {{ character.actor.name }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='launcher.css') }}">
+</head>
+<body class="launcher-page">
+  <main class="flow-shell creator-shell">
+    <header class="flow-header">
+      <a class="back-link" href="{{ url_for('character_detail', character_id=character.actor.id) }}">← Karta postaci</a>
+      <span class="step-label">Awans · poziom {{ character.actor.level }} → {{ target_level }}</span>
+      <h1>{{ character.actor.name }}</h1>
+      <p>{{ character_class.name }} · {{ character.actor.experience_points }} XP. Awans nie wykonuje darmowego odpoczynku.</p>
+    </header>
+
+    {% if error %}<section class="validation-summary" role="alert"><b>Nie można zatwierdzić awansu:</b> {{ error }}</section>{% endif %}
+
+    <form class="character-form" method="post">
+      {% if character_class.fighting_style_choices and target_level >= character_class.fighting_style_choice_level %}
+        <section class="form-section"><h2>Fighting Style</h2>
+          {% for option in character_class.fighting_style_choices %}
+            <label class="choice-row"><input type="radio" name="selected_fighting_style_id" value="{{ option }}" {% if option == values.selected_fighting_style_id %}checked{% endif %}> <span>{{ option|replace('_', ' ')|title }}</span></label>
+          {% endfor %}
+        </section>
+      {% endif %}
+
+      {% if character_class.subclass_choices and target_level >= character_class.subclass_choice_level %}
+        <section class="form-section"><h2>Archetyp klasy</h2>
+          {% for option in character_class.subclass_choices %}
+            <label class="choice-row"><input type="radio" name="selected_subclass_id" value="{{ option.id }}" {% if option.id == values.selected_subclass_id %}checked{% endif %}> <span>{{ option.name }}</span></label>
+          {% endfor %}
+        </section>
+      {% endif %}
+
+      {% if expertise_count %}
+        <section class="form-section"><h2>Expertise — wybierz {{ expertise_count }}</h2>
+          {% for skill in expertise_choices %}
+            <label class="check-row"><input type="checkbox" name="selected_expertise_ids" value="{{ skill }}" {% if skill in values.selected_expertise_ids %}checked{% endif %}> {{ skill|replace('_', ' ')|title }}</label>
+          {% endfor %}
+        </section>
+      {% endif %}
+
+      {% for group in option_groups %}
+        <section class="form-section" data-conditional-option-group="{{ group.requires_option_id }}"><h2>{{ group.name }} — wybierz {{ group.choice_count }}</h2>
+          {% if group.requires_option_id %}
+            <p class="form-help">Wymagane tylko po wybraniu {{ group.requires_option_id|replace('_', ' ')|title }}.</p>
+          {% endif %}
+          {% for option in group.options %}
+            <label class="check-row"><input type="checkbox" name="selected_class_option_ids" value="{{ option.id }}" {% if option.id in values.selected_class_option_ids %}checked{% endif %}> {{ option.name }}</label>
+          {% endfor %}
+        </section>
+      {% endfor %}
+
+      {% if cantrip_count %}
+        <section class="form-section"><h2>Cantripy — łącznie {{ cantrip_count }}</h2>
+          <p class="form-help">Niektóre opcje klasowe, np. Pact of the Tome, zwiększają tę liczbę. Po zmianie opcji formularz zweryfikuje nowy limit.</p>
+          {% for spell in cantrip_choices %}
+            <label class="check-row"><input type="checkbox" name="selected_cantrip_ids" value="{{ spell.id }}" {% if spell.id in values.selected_cantrip_ids %}checked{% endif %}> {{ spell.name }}</label>
+          {% endfor %}
+        </section>
+      {% endif %}
+
+      {% if spell_count %}
+        <section class="form-section"><h2>Znane czary / spellbook — łącznie {{ spell_count }}</h2>
+          {% for spell in spell_choices %}
+            <label class="check-row"><input type="checkbox" name="selected_spell_ids" value="{{ spell.id }}" {% if spell.id in values.selected_spell_ids %}checked{% endif %}> {{ spell.name }} · poziom {{ spell.level }}</label>
+          {% endfor %}
+        </section>
+      {% endif %}
+
+      {% if prepared_count %}
+        <section class="form-section"><h2>Przygotowane czary — wybierz {{ prepared_count }}</h2>
+          {% for spell in preparation_choices %}
+            <label class="check-row"><input type="checkbox" name="selected_prepared_spell_ids" value="{{ spell.id }}" {% if spell.id in values.selected_prepared_spell_ids %}checked{% endif %}> {{ spell.name }} · poziom {{ spell.level }}</label>
+          {% endfor %}
+        </section>
+      {% endif %}
+
+      <div class="flow-actions">
+        <a class="button secondary" href="{{ url_for('character_detail', character_id=character.actor.id) }}">Anuluj</a>
+        <button type="submit">Zatwierdź awans</button>
+      </div>
+    </form>
+  </main>
+  <script>
+    function syncConditionalClassOptions() {
+      document.querySelectorAll('[data-conditional-option-group]').forEach(group => {
+        const required = group.dataset.conditionalOptionGroup;
+        if (!required) return;
+        const trigger = document.querySelector(`input[name="selected_class_option_ids"][value="${CSS.escape(required)}"]`);
+        const active = Boolean(trigger?.checked);
+        group.hidden = !active;
+        group.querySelectorAll('input').forEach(input => {
+          input.disabled = !active;
+          if (!active) input.checked = false;
+        });
+      });
+    }
+    document.addEventListener('change', event => {
+      if (event.target.matches('input[name="selected_class_option_ids"]')) {
+        syncConditionalClassOptions();
+      }
+    });
+    syncConditionalClassOptions();
+  </script>
+</body>
+</html>

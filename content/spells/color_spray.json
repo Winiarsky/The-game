@@ -1,0 +1,50 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "color_spray",
+  "name": "Color Spray",
+  "level": 1,
+  "school": "illusion",
+  "casting_time": "action",
+  "range": {
+    "kind": "self"
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": [
+      {
+        "item_id": "spell_component_color_spray",
+        "label": "a pinch of powder or sand that is colored red, yellow, and blue"
+      }
+    ]
+  },
+  "duration": {
+    "kind": "round",
+    "amount": 1
+  },
+  "concentration": false,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "targeted_status",
+    "label": "Color Spray",
+    "effect_kind": "apply_condition",
+    "condition": "blinded",
+    "target_faction": "enemy",
+    "target_count": 20,
+    "range_feet": 15,
+    "duration": "next_turn_start",
+    "damage_die_sides": 10,
+    "hit_point_pool_dice_count": 6,
+    "upcast_hit_point_pool_dice_per_level": 2,
+    "cast_flag": "cast_color_spray",
+    "instructions": "Rzuć 6k10. Kolejno od celu z najmniejszymi aktualnymi PW istoty w stożku 15 stóp zostają Blinded do końca następnej tury.",
+    "resolution_mode": "automatic",
+    "board_relevance": "direct"
+  }
+}

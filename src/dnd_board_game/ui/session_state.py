@@ -19,6 +19,7 @@ if TYPE_CHECKING:
         PendingShortRest,
         PendingSummon,
         PendingMagicMovement,
+        PendingMultiTargetDamageSpell,
         PendingSpellDebuff,
         PendingSpellDispel,
     )
@@ -64,6 +65,7 @@ class UiPendingState:
     area_spell: PendingAreaSpell | None = None
     summon: PendingSummon | None = None
     magic_movement: PendingMagicMovement | None = None
+    multi_target_damage_spell: PendingMultiTargetDamageSpell | None = None
     spell_debuff: PendingSpellDebuff | None = None
     spell_dispel: PendingSpellDispel | None = None
     combat_interaction: PendingCombatInteraction | None = None
@@ -76,8 +78,11 @@ class UiPendingState:
     combat_ready: PendingCombatReady | None = None
     opportunity_movement: PendingOpportunityMovement | None = None
     reaction_window: ReactionWindow | None = None
+    cutting_words_reaction_resolved: bool | None = None
     defensive_spell_reaction_resolved: bool | None = None
+    deflect_missiles_reaction_resolved: bool | None = None
     counterspell_reaction_resolved: bool | None = None
+    retaliation_spell_reaction_resolved: bool | None = None
     enemy_opportunity_attack: PendingEnemyOpportunityAttack | None = None
     ready_attack: PendingReadyAttack | None = None
     short_rest: PendingShortRest | None = None
@@ -91,6 +96,7 @@ class UiPendingState:
         self.area_spell = None
         self.summon = None
         self.magic_movement = None
+        self.multi_target_damage_spell = None
         self.spell_debuff = None
         self.spell_dispel = None
         self.combat_interaction = None

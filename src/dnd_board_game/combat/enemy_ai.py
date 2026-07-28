@@ -25,13 +25,22 @@ from dnd_board_game.world import BoardState, PathResult, find_path, movement_ran
 from dnd_board_game.inventory import consume_ammunition, has_ammunition
 
 from .action_economy import ActionUse
-from .attack_flow import AttackDeclaration, AttackResolution, AttackSource, legal_attack_targets, legal_melee_targets, resolve_attack
+from .attack_flow import (
+    AttackDeclaration,
+    AttackResolution,
+    AttackSource,
+    AttackSourceType,
+    legal_attack_targets,
+    legal_melee_targets,
+    resolve_attack,
+)
 from .attack_positioning import AttackPositioning, attack_source_with_positioning, evaluate_attack_positioning
 from .conditions import (
     CombatCondition,
     apply_condition,
     attack_source_with_prone,
     condition_roll_request,
+    condition_hit_is_automatic_critical,
     has_condition,
     path_with_condition_cost,
 )
@@ -41,6 +50,7 @@ from .damage import (
     AppliedDamageResult,
     DamageComponentInput,
     DamageResult,
+    DamageType,
     apply_damage_result,
     resolve_damage,
     roll_damage_components,
@@ -53,6 +63,7 @@ from .session import (
     replace_actor,
     stand_up,
     use_attack_action,
+    use_dash,
     use_movement,
     use_turn_action,
 )
@@ -262,6 +273,11 @@ def resolve_enemy_auto_attack(
             source_label=source.name,
             dc_source_label=f"ST efektu: {source.name}",
             damage_on_success=SaveDamageOnSuccess(source.save_damage_on_success),
+            effect_tags=(
+                (DamageType.POISON.value,)
+                if source.damage_type == DamageType.POISON.value
+                else ()
+            ),
         )
         updated_state = replace(
             action_result.state,
@@ -285,6 +301,18 @@ def resolve_enemy_auto_attack(
     attack_roll = resolve_d20_roll(_roll_input_for_request(source.attack_roll_request, rng))
     declaration = AttackDeclaration(attacker=enemy, target=target, source=source)
     resolution = resolve_attack(declaration, attack_roll, ActionUse.ACTION_AVAILABLE)
+    if resolution.hit and condition_hit_is_automatic_critical(
+        action_result.state.condition_states,
+        str(target_actor.id),
+        within_five_feet=(
+            max(
+                abs(enemy.position.col - target_actor.position.col),
+                abs(enemy.position.row - target_actor.position.row),
+            )
+            <= 1
+        ),
+    ):
+        resolution = replace(resolution, critical=True)
     updated_state = action_result.state
     damage: DamageResult | None = None
     applied_damage: AppliedDamageResult | None = None
@@ -306,23 +334,50 @@ def resolve_enemy_auto_attack(
                     target_actor,
                     CombatCondition(source.on_hit_condition),
                     source_actor_id=str(enemy.id),
-                    source_label=f"Sieć: {source.name}",
+                    source_label=source.name,
+                    duration=source.on_hit_condition_duration,
+                    expiration_actor_id=(
+                        str(enemy.id)
+                        if source.on_hit_condition_expiration == "source"
+                        else str(target_actor.id)
+                    ),
+                    source_spell_id=(
+                        source.id if source.source_type == AttackSourceType.SPELL else None
+                    ),
+                    source_spell_level=(
+                        source.spell_level
+                        if source.source_type == AttackSourceType.SPELL
+                        else None
+                    ),
                 )
                 updated_state = replace(
                     action_result.state,
-                    condition_states=application.states,
+                    condition_states=application.condition_states,
                 )
                 message = (
                     f"{enemy.name} trafia {target.name}. Wynik ataku: {attack_roll.total}. "
                     f"{application.message}"
                 )
-        else:
-            damage = resolve_damage(
-                roll_damage_components(
+        if source.on_hit_condition is None or any(
+            component.dice is not None
+            or int(component.fixed or 0) + component.modifier > 0
+            for component in source.damage_components
+        ):
+            rolled_components = roll_damage_components(
                     source.damage_components,
                     lambda sides: rng.randint(1, sides),
                     critical=resolution.critical,
                 )
+            if source.damage_divisor > 1:
+                rolled_components = tuple(
+                    replace(
+                        component,
+                        amount=component.amount // source.damage_divisor,
+                    )
+                    for component in rolled_components
+                )
+            damage = resolve_damage(
+                rolled_components
             )
             applied_damage = apply_damage_result(
                 target_actor,
@@ -331,12 +386,19 @@ def resolve_enemy_auto_attack(
             )
             damage = applied_damage.damage
             updated_target = applied_damage.actor_after
-            updated_state = replace_actor(action_result.state, updated_target)
+            updated_state = replace_actor(updated_state, updated_target)
             defeated_text = " Cel zostaje pokonany." if applied_damage.defeated_by_damage else ""
-            message = (
-                f"{enemy.name} trafia {target.name}. Wynik ataku: {attack_roll.total}. "
+            damage_message = (
                 f"Obrażenia: {_damage_result_text(damage)}. "
                 f"{target_actor.name}: HP {applied_damage.hp_before} -> {applied_damage.hp_after}.{defeated_text}"
+            )
+            message = (
+                f"{message} {damage_message}"
+                if source.on_hit_condition is not None
+                else (
+                    f"{enemy.name} trafia {target.name}. Wynik ataku: {attack_roll.total}. "
+                    f"{damage_message}"
+                )
             )
     else:
         message = f"{enemy.name} pudłuje przeciwko {target.name}. Wynik ataku: {attack_roll.total}."
@@ -363,9 +425,14 @@ def resolve_enemy_auto_attack(
 
 def _roll_input_for_request(request, rng: random.Random) -> D20RollInput:
     first = rng.randint(1, 20)
-    if request.mode == RollMode.NORMAL:
-        return D20RollInput(request, first)
-    return D20RollInput(request, first, rng.randint(1, 20))
+    second = rng.randint(1, 20) if request.mode != RollMode.NORMAL else None
+    original = (first,) if second is None else (first, second)
+    rerolls = (
+        tuple(rng.randint(1, 20) for value in original if value == 1)
+        if request.reroll_natural_ones
+        else ()
+    )
+    return D20RollInput(request, first, second, rerolls)
 
 
 def resolve_enemy_auto_turn(
@@ -507,6 +574,17 @@ def plan_enemy_turn(
     enemy: Actor,
     source: AttackSource | None = None,
 ) -> EnemyTurnPlan:
+    turned = next(
+        (
+            condition
+            for condition in state.condition_states
+            if condition.actor_id == str(enemy.id)
+            and condition.condition == CombatCondition.TURNED
+        ),
+        None,
+    )
+    if turned is not None:
+        return _plan_turned_enemy_turn(board, state, enemy, turned.source_actor_id)
     opening_message = ""
     if has_condition(state.condition_states, str(enemy.id), CombatCondition.PRONE):
         standing = stand_up(state, enemy)
@@ -573,6 +651,81 @@ def plan_enemy_turn(
         None,
         f"{opening_message}{enemy.name} nie ma legalnego celu ani dostępnego ruchu i kończy akcję.",
         action_used=action_result.accepted,
+    )
+
+
+def _plan_turned_enemy_turn(
+    board: BoardState,
+    state: CombatState,
+    enemy: Actor,
+    source_actor_id: str | None,
+) -> EnemyTurnPlan:
+    source = next(
+        (actor for actor in state.actors if str(actor.id) == source_actor_id),
+        None,
+    )
+    if source is None:
+        action = use_turn_action(state)
+        return EnemyTurnPlan(
+            action.state,
+            enemy,
+            None,
+            f"{enemy.name} jest odpędzony i używa Dodge.",
+            action_used=action.accepted,
+        )
+    dash = use_dash(state, enemy)
+    if not dash.accepted:
+        return EnemyTurnPlan(
+            dash.state,
+            enemy,
+            None,
+            f"{enemy.name} jest odpędzony, ale nie może użyć Dash.",
+        )
+    budget = movement_remaining(dash.state, enemy)
+    movement_actor = replace(enemy, speed_feet=budget)
+    movement = movement_range(board, movement_actor, dash.state.actors)
+    destinations = tuple(
+        destination
+        for destination in movement.reachable_tiles
+        if destination != enemy.position
+    )
+    if not destinations:
+        return EnemyTurnPlan(
+            dash.state,
+            enemy,
+            None,
+            f"{enemy.name} jest odpędzony, nie może się oddalić i używa Dodge.",
+            action_used=True,
+        )
+    destination = max(
+        destinations,
+        key=lambda position: (
+            max(
+                abs(position.col - source.position.col),
+                abs(position.row - source.position.row),
+            ),
+            movement.costs_by_tile.get(position, 0),
+            position.col,
+            position.row,
+        ),
+    )
+    path = find_path(board, movement_actor, dash.state.actors, destination)
+    path = path_with_condition_cost(
+        path,
+        dash.state.condition_states,
+        str(enemy.id),
+        movement_budget_feet=budget,
+    )
+    moved = use_movement(dash.state, enemy, path)
+    moved_enemy = _actor_for_id(moved.state, enemy.id)
+    return EnemyTurnPlan(
+        moved.state,
+        moved_enemy,
+        None,
+        f"{enemy.name} jest odpędzony, używa Dash i oddala się od {source.name}.",
+        movement_path=path,
+        moved_enemy=moved_enemy,
+        action_used=True,
     )
 
 

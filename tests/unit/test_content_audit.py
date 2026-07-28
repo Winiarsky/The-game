@@ -24,6 +24,10 @@ def test_repository_content_audit_has_no_errors() -> None:
         "monster:goblin",
         "item:longsword",
         "feature:heroic_strike",
+        "species:human",
+        "class:fighter",
+        "subclass:life_domain",
+        "background:soldier",
     }
     assert all(entry.schema_version == 1 for entry in report.entries)
     assert all(entry.ruleset_id == RULESET_DND_5E_2014 for entry in report.entries)

@@ -570,7 +570,9 @@ def test_demo_exploration_scene_npc_interaction_sets_flags_and_reveals_info(tmp_
     )
 
     events = _events(observer.path)
-    assert any("Stabilizujecie zwiadowcę" in message for message in messages)
+    # Guarded NPC policy owns outcome text; the provider cannot inject a
+    # different success message even when its mechanic selection is accepted.
+    assert any("NPC przekazuje dostępne informacje" in message for message in messages)
     assert any("ktoś przeciągnął coś ciężkiego w stronę wieży obserwacyjnej" in message for message in messages)
     assert ("scout_stabilized", True) in new_state.flags.values
     assert ("tower_hint_learned", True) in new_state.flags.values

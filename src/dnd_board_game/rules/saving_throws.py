@@ -12,6 +12,16 @@ class SaveDamageOnSuccess(StrEnum):
     HALF = "half"
 
 
+class SavingThrowEffectTag(StrEnum):
+    POISON = "poison"
+    FEAR = "fear"
+    CHARM = "charm"
+    MAGICAL_SLEEP = "magical_sleep"
+    MAGIC = "magic"
+    DISEASE = "disease"
+    VISIBLE_DANGER = "visible_danger"
+
+
 @dataclass(frozen=True, slots=True)
 class SavingThrowRequest:
     ability: str
@@ -21,12 +31,17 @@ class SavingThrowRequest:
     dc_source_label: str = ""
     failure_effect_label: str = "pełny efekt"
     success_effect_label: str = ""
+    effect_tags: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if self.dc < 0:
             raise ValueError("Saving throw DC cannot be negative.")
         if not self.ability:
             raise ValueError("Saving throw ability is required.")
+        if any(not tag.strip() for tag in self.effect_tags):
+            raise ValueError("Saving throw effect tags cannot be empty.")
+        if len(self.effect_tags) != len(set(self.effect_tags)):
+            raise ValueError("Saving throw effect tags must be unique.")
 
     @property
     def resolved_success_effect_label(self) -> str:
@@ -46,6 +61,7 @@ class SavingThrowRequest:
             "damage_on_success": self.damage_on_success.value,
             "success_effect_label": self.resolved_success_effect_label,
             "failure_effect_label": self.failure_effect_label,
+            "effect_tags": list(self.effect_tags),
         }
 
 
@@ -145,6 +161,7 @@ __all__ = [
     "SaveDamageOnSuccess",
     "SavingThrowRequest",
     "SavingThrowResult",
+    "SavingThrowEffectTag",
     "ability_label_pl",
     "resolve_saving_throw_request",
     "save_damage_multiplier",

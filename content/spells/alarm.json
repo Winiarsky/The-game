@@ -1,0 +1,40 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "alarm",
+  "name": "Alarm",
+  "level": 1,
+  "school": "abjuration",
+  "casting_time": "minute",
+  "range": {
+    "kind": "distance",
+    "feet": 30
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": [
+      {
+        "item_id": "spell_component_alarm",
+        "label": "a tiny bell and a piece of fine silver wire"
+      }
+    ]
+  },
+  "duration": {
+    "kind": "eight_hours",
+    "amount": 1
+  },
+  "concentration": false,
+  "ritual": true,
+  "effect": {
+    "kind": "exploration",
+    "effect_type": "set_flag",
+    "flag_key": "cast_alarm",
+    "flag_value": true,
+    "instructions": "Wyznacz obszar do 20 stóp. Przez 8 godzin alarm ostrzega mentalnie lub dźwiękiem, gdy nieuprawniona istota wejdzie do obszaru."
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "true_strike",
+  "name": "True Strike",
+  "level": 0,
+  "school": "divination",
+  "casting_time": "action",
+  "range": {
+    "kind": "distance",
+    "feet": 30
+  },
+  "components": {
+    "verbal": false,
+    "somatic": true,
+    "materials": []
+  },
+  "duration": {
+    "kind": "round",
+    "amount": 1
+  },
+  "concentration": true,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "targeted_status",
+    "label": "True Strike",
+    "target_count": 1,
+    "cast_flag": "cast_true_strike",
+    "instructions": "Wskaż widoczny cel w zasięgu 30 ft i połóż znacznik koncentracji. W swojej następnej turze zyskujesz advantage do pierwszego ataku przeciw temu celowi, o ile czar nadal trwa; potem usuń znacznik.",
+    "effect_kind": "next_attack_advantage",
+    "value": 0,
+    "target_faction": "self",
+    "duration": "next_attack"
+  }
+}

@@ -1,6 +1,11 @@
 """D&D 5e rules primitives."""
 
 from .attacks import AttackRollOutcome, AttackRollResult, resolve_attack_roll
+from .background_features import (
+    BackgroundPermissionResolution,
+    actor_background_permission_ids,
+    resolve_background_permission,
+)
 from .abilities import ability_modifier, dexterity_modifier
 from .checks import CheckResult, resolve_ability_check, resolve_saving_throw
 from .contests import (
@@ -11,6 +16,9 @@ from .contests import (
     resolve_contest,
 )
 from .dice import (
+    D20RerollRequired,
+    D20RollKind,
+    D20RollContextTag,
     D20RollInput,
     D20RollInstruction,
     D20RollRequest,
@@ -24,6 +32,7 @@ from .dice import (
     resolve_d20_roll,
     roll_instruction,
 )
+from .d20_traits import actor_is_immune_to_effect, apply_actor_d20_traits
 from .effects import (
     ActiveEffect,
     AdditionalEffectExpiration,
@@ -42,17 +51,32 @@ from .effects import (
     expire_active_effects,
 )
 from .resting import (
+    ArcaneRecoveryResult,
     HitDieSpendResult,
     RestResult,
     RestType,
+    apply_arcane_recovery,
+    apply_short_rest_slot_recovery,
     complete_long_rest,
     complete_short_rest,
+    long_rest_required_minutes,
     spend_hit_die,
+)
+from .progression import (
+    EXPERIENCE_THRESHOLDS,
+    ExperienceAwardResult,
+    ExperienceProgress,
+    PartyExperienceAwardResult,
+    award_experience,
+    award_party_experience,
+    experience_progress,
+    level_for_experience,
 )
 from .saving_throws import (
     SaveDamageOnSuccess,
     SavingThrowRequest,
     SavingThrowResult,
+    SavingThrowEffectTag,
     ability_label_pl,
     resolve_saving_throw_request,
     save_damage_multiplier,
@@ -79,13 +103,17 @@ from .spellcasting import (
     spell_is_accessible,
     spell_duration_minutes,
     spell_target_count,
+    spell_save_dc_for_spell,
+    spellcasting_ability_for_spell,
     validate_spell_cast,
 )
 
 __all__ = [
     "AttackRollOutcome",
     "AttackRollResult",
+    "BackgroundPermissionResolution",
     "ActiveEffect",
+    "ArcaneRecoveryResult",
     "AdditionalEffectExpiration",
     "CheckResult",
     "ContestantRoll",
@@ -93,6 +121,9 @@ __all__ = [
     "ContestOutcome",
     "ContestResult",
     "D20RollInput",
+    "D20RerollRequired",
+    "D20RollKind",
+    "D20RollContextTag",
     "D20RollInstruction",
     "D20RollRequest",
     "D20RollResult",
@@ -115,6 +146,7 @@ __all__ = [
     "SaveDamageOnSuccess",
     "SavingThrowRequest",
     "SavingThrowResult",
+    "SavingThrowEffectTag",
     "SpellAccessKind",
     "SpellAccessProfile",
     "SpellCastValidation",
@@ -132,10 +164,24 @@ __all__ = [
     "SpellSchool",
     "SpellScaling",
     "ability_modifier",
+    "actor_is_immune_to_effect",
+    "actor_background_permission_ids",
+    "apply_actor_d20_traits",
+    "apply_arcane_recovery",
+    "apply_short_rest_slot_recovery",
     "apply_active_effect",
     "build_modifier_breakdown",
     "complete_long_rest",
     "complete_short_rest",
+    "long_rest_required_minutes",
+    "EXPERIENCE_THRESHOLDS",
+    "ExperienceAwardResult",
+    "ExperienceProgress",
+    "PartyExperienceAwardResult",
+    "award_experience",
+    "award_party_experience",
+    "experience_progress",
+    "level_for_experience",
     "dexterity_modifier",
     "effect_expiration_label",
     "effect_summary_label",
@@ -144,6 +190,7 @@ __all__ = [
     "resolve_ability_check",
     "resolve_contest",
     "resolve_attack_roll",
+    "resolve_background_permission",
     "resolve_d20_roll",
     "resolve_saving_throw",
     "resolve_saving_throw_request",
@@ -155,6 +202,8 @@ __all__ = [
     "cantrip_damage_dice_count",
     "spell_is_accessible",
     "spell_duration_minutes",
+    "spell_save_dc_for_spell",
+    "spellcasting_ability_for_spell",
     "spell_target_count",
     "validate_spell_cast",
 ]

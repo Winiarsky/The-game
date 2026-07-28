@@ -4,7 +4,16 @@ import pytest
 
 from dataclasses import replace
 
-from dnd_board_game.actors import AbilityScores, Actor, ActorId, DamageAffinityProfile, Faction
+from dnd_board_game.actors import (
+    AbilityScores,
+    Actor,
+    ActorId,
+    CreatureSize,
+    DamageAffinityProfile,
+    Faction,
+    FeatureGrant,
+    FeatureSourceKind,
+)
 from dnd_board_game.application import EnemyTurnFlowService, EnemyTurnTransitionKind
 from dnd_board_game.combat import (
     ActiveCombatEffect,
@@ -17,7 +26,13 @@ from dnd_board_game.combat import (
     DamageType,
     start_combat,
 )
-from dnd_board_game.rules import D20RollInput, D20RollRequest, resolve_d20_roll
+from dnd_board_game.rules import (
+    D20RollInput,
+    D20RollRequest,
+    RollModifier,
+    RollModifierType,
+    resolve_d20_roll,
+)
 from dnd_board_game.world import BLOCKING_TERRAIN, BoardState, Coordinate
 
 
@@ -108,6 +123,48 @@ def test_adjacent_enemy_result_is_classified_as_attack_confirmation() -> None:
     assert transition.message_title == "Atak przeciwnika"
 
 
+def test_large_enemy_attack_opens_giant_killer_reaction_for_adjacent_ranger() -> None:
+    service = EnemyTurnFlowService()
+    enemy = replace(
+        _actor("enemy", Faction.ENEMY, Coordinate(0, 0)),
+        size=CreatureSize.LARGE,
+    )
+    ranger = replace(
+        _actor("ranger", Faction.ALLY, Coordinate(1, 0)),
+        features=(
+            FeatureGrant(
+                "giant_killer",
+                "Giant Killer",
+                FeatureSourceKind.SUBCLASS,
+                "hunter",
+            ),
+        ),
+    )
+    state = _state(enemy, ranger)
+    sources = {enemy.id: _source(), ranger.id: _source()}
+    intent = service.plan(
+        state=state,
+        board=BoardState(),
+        attack_sources_by_actor=sources,
+    )
+
+    transition = service.resolve(
+        state=state,
+        intent=intent.intent,
+        board=BoardState(),
+        attack_sources_by_actor=sources,
+        active_effects=(),
+        rng=Random(2),
+    )
+
+    assert transition.kind == EnemyTurnTransitionKind.REACTION
+    assert transition.reaction_window is not None
+    option = transition.reaction_window.current_option
+    assert option.kind.value == "ready_attack"
+    assert option.effect_id == "giant_killer"
+    assert option.trigger_event == "giant_killer"
+
+
 def test_enemy_multiattack_uses_next_data_driven_source() -> None:
     service = EnemyTurnFlowService()
     enemy = _actor("enemy", Faction.ENEMY, Coordinate(0, 0))
@@ -196,6 +253,50 @@ def test_enemy_save_flow_applies_manual_roll_then_damage_affinity() -> None:
     assert resolved.result.damage.total_applied == 2  # resistance halves again
     assert resolved.result.updated_target is not None
     assert resolved.result.updated_target.hp == 8
+
+
+def test_enemy_save_flow_accepts_bardic_inspiration_modifier() -> None:
+    service = EnemyTurnFlowService()
+    enemy = _actor("guardian", Faction.ENEMY, Coordinate(0, 0))
+    hero = _actor("hero", Faction.ALLY, Coordinate(1, 0))
+    state = _state(enemy, hero)
+    source = replace(
+        _source(),
+        damage_fixed=8,
+        save_ability="dexterity",
+        save_dc=15,
+        save_damage_on_success="half",
+    )
+    sources = {enemy.id: source}
+    intent = service.plan(
+        state=state,
+        board=BoardState(),
+        attack_sources_by_actor=sources,
+    )
+    pending = service.resolve(
+        state=state,
+        intent=intent.intent,
+        board=BoardState(),
+        attack_sources_by_actor=sources,
+        active_effects=(),
+        rng=Random(1),
+    )
+
+    resolved = service.resolve_player_saving_throw(
+        result=pending.result,
+        natural_roll=10,
+        additional_modifiers=(
+            RollModifier(
+                "Bardic Inspiration k6",
+                3,
+                RollModifierType.FEATURE,
+                stacking_key="bardic_inspiration",
+            ),
+        ),
+    )
+
+    assert resolved.saving_throw.success is True
+    assert resolved.saving_throw.total == 15
 
 
 def test_enemy_approach_is_classified_as_movement_confirmation() -> None:

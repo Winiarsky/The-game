@@ -25,6 +25,17 @@ class RollModifierType(StrEnum):
     CUSTOM = "custom"
 
 
+class D20RollKind(StrEnum):
+    ATTACK = "attack"
+    ABILITY_CHECK = "ability_check"
+    SAVING_THROW = "saving_throw"
+
+
+class D20RollContextTag(StrEnum):
+    STONEWORK = "stonework"
+    ARTIFICERS_LORE = "artificers_lore"
+
+
 @dataclass(frozen=True, slots=True)
 class DiceExpression:
     """A transport-neutral NdM dice expression without a flat modifier."""
@@ -92,6 +103,13 @@ class RollModifierBreakdown:
 class D20RollRequest:
     mode: RollMode = RollMode.NORMAL
     modifiers: tuple[RollModifier, ...] = field(default_factory=tuple)
+    reroll_natural_ones: bool = False
+    reroll_label: str = ""
+    ability: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.reroll_label and not self.reroll_natural_ones:
+            raise ValueError("A d20 reroll label requires an active reroll rule.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,6 +124,7 @@ class D20RollInput:
     request: D20RollRequest
     natural_roll: int
     natural_roll_2: int | None = None
+    natural_rerolls: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,6 +136,17 @@ class D20RollResult:
     mode: RollMode
     is_natural_20: bool
     is_natural_1: bool
+    original_natural_rolls: tuple[int, ...] = ()
+    natural_rerolls: tuple[int, ...] = ()
+
+
+class D20RerollRequired(ValueError):
+    def __init__(self, count: int, label: str) -> None:
+        self.count = count
+        self.label = label
+        super().__init__(
+            f"{label or 'Cecha postaci'} wymaga {count} dodatkowego rzutu d20."
+        )
 
 
 def build_modifier_breakdown(modifiers: Iterable[RollModifier]) -> RollModifierBreakdown:
@@ -158,14 +188,24 @@ def roll_instruction(request: D20RollRequest) -> D20RollInstruction:
     if breakdown.ignored_modifiers:
         ignored = ", ".join(_format_component(modifier) for modifier in breakdown.ignored_modifiers)
         message = f"{message} Odrzucone duplikaty: {ignored}."
+    if request.reroll_natural_ones:
+        message = (
+            f"{message} Jeśli na którejkolwiek kości wypadnie naturalne 1, "
+            f"{request.reroll_label or 'aktywna cecha'} wymaga ponownego rzutu tej kości."
+        )
     return D20RollInstruction(message=message, mode=request.mode, breakdown=breakdown)
 
 
 def resolve_d20_roll(roll_input: D20RollInput) -> D20RollResult:
-    natural_rolls = _natural_rolls_for_mode(roll_input)
-    for natural_roll in natural_rolls:
+    original_natural_rolls = _natural_rolls_for_mode(roll_input)
+    for natural_roll in (*original_natural_rolls, *roll_input.natural_rerolls):
         if not 1 <= natural_roll <= 20:
             raise ValueError("A natural d20 roll must be between 1 and 20.")
+    natural_rolls = _apply_natural_one_rerolls(
+        roll_input.request,
+        original_natural_rolls,
+        roll_input.natural_rerolls,
+    )
     selected_roll = _selected_natural_roll(roll_input.request.mode, natural_rolls)
     breakdown = build_modifier_breakdown(roll_input.request.modifiers)
     return D20RollResult(
@@ -176,7 +216,32 @@ def resolve_d20_roll(roll_input: D20RollInput) -> D20RollResult:
         mode=roll_input.request.mode,
         is_natural_20=selected_roll == 20,
         is_natural_1=selected_roll == 1,
+        original_natural_rolls=original_natural_rolls,
+        natural_rerolls=roll_input.natural_rerolls,
     )
+
+
+def _apply_natural_one_rerolls(
+    request: D20RollRequest,
+    natural_rolls: tuple[int, ...],
+    rerolls: tuple[int, ...],
+) -> tuple[int, ...]:
+    required = sum(value == 1 for value in natural_rolls) if request.reroll_natural_ones else 0
+    if not request.reroll_natural_ones and rerolls:
+        raise ValueError("Ten rzut d20 nie pozwala na ponowne rzuty.")
+    if len(rerolls) < required:
+        raise D20RerollRequired(required - len(rerolls), request.reroll_label)
+    if len(rerolls) > required:
+        raise ValueError("Podano zbyt wiele ponownych rzutów d20.")
+    reroll_index = 0
+    effective: list[int] = []
+    for value in natural_rolls:
+        if value == 1 and request.reroll_natural_ones:
+            effective.append(rerolls[reroll_index])
+            reroll_index += 1
+        else:
+            effective.append(value)
+    return tuple(effective)
 
 
 def _natural_rolls_for_mode(roll_input: D20RollInput) -> tuple[int, ...]:

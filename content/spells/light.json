@@ -1,0 +1,10 @@
+{
+  "schema": "dnd_board_game.spell", "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014", "source_pack_ids": ["srd_5_1_cc_by_4_0"],
+  "id": "light", "name": "Light", "level": 0,
+  "school": "evocation", "casting_time": "action",
+  "range": {"kind": "touch"},
+  "components": {"verbal": true, "somatic": false, "materials": [{"item_id": "spell_component_light", "label": "robaczek świętojański lub fosforyzujący mech"}]},
+  "duration": {"kind": "hour", "amount": 1}, "concentration": false, "ritual": false,
+  "effect": {"kind": "exploration", "effect_type": "set_flag", "flag_key": "spell_light_active", "flag_value": true}
+}

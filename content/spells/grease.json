@@ -1,0 +1,47 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "grease",
+  "name": "Grease",
+  "level": 1,
+  "school": "conjuration",
+  "casting_time": "action",
+  "range": {
+    "kind": "distance",
+    "feet": 60
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": [
+      {
+        "item_id": "spell_component_grease",
+        "label": "a bit of pork rind or butter"
+      }
+    ]
+  },
+  "duration": {
+    "kind": "minute",
+    "amount": 1
+  },
+  "concentration": false,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "targeted_status",
+    "label": "Grease",
+    "effect_kind": "apply_condition",
+    "condition": "prone",
+    "save_ability": "dexterity",
+    "target_faction": "enemy",
+    "target_count": 20,
+    "cast_flag": "cast_grease",
+    "instructions": "Kwadrat 10 stóp staje się trudnym terenem na minutę. Istoty wchodzące lub kończące tam turę wykonują Dex save albo padają Prone.",
+    "resolution_mode": "automatic",
+    "board_relevance": "direct"
+  }
+}

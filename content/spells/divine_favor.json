@@ -1,0 +1,39 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "divine_favor",
+  "name": "Divine Favor",
+  "level": 1,
+  "school": "evocation",
+  "casting_time": "bonus_action",
+  "range": {
+    "kind": "self"
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": []
+  },
+  "duration": {
+    "kind": "minute",
+    "amount": 1
+  },
+  "concentration": true,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "targeted_status",
+    "label": "Divine Favor",
+    "effect_kind": "divine_favor_damage",
+    "target_faction": "self",
+    "value": 4,
+    "cast_flag": "cast_divine_favor",
+    "instructions": "Podczas koncentracji twoje trafienia bronią zadają dodatkowe 1k4 radiant.",
+    "resolution_mode": "automatic",
+    "board_relevance": "direct"
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "spider_climb",
+  "name": "Spider Climb",
+  "level": 2,
+  "school": "transmutation",
+  "casting_time": "action",
+  "range": {
+    "kind": "touch"
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": [
+      {
+        "item_id": "spell_component_spider_climb",
+        "label": "a drop of bitumen and a spider"
+      }
+    ]
+  },
+  "duration": {
+    "kind": "hour",
+    "amount": 1
+  },
+  "concentration": true,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "targeted_status",
+    "label": "Spider Climb",
+    "target_count": 1,
+    "cast_flag": "cast_spider_climb",
+    "instructions": "Podczas koncentracji cel zyskuje climb speed równą szybkości i może chodzić po ścianach oraz suficie bez użycia rąk.",
+    "effect_kind": "spider_climb",
+    "value": 0,
+    "target_faction": "ally"
+  }
+}

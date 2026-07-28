@@ -1,6 +1,6 @@
 from dataclasses import replace
 
-from dnd_board_game.actors import Actor, ActorId, Faction
+from dnd_board_game.actors import AbilityScores, Actor, ActorId, Faction
 from dnd_board_game.inventory import InventoryItem, SpellcastingFocusKind
 from dnd_board_game.rules import (
     SpellAccessKind,
@@ -18,9 +18,18 @@ from dnd_board_game.rules import (
     spell_is_accessible,
     spell_duration_minutes,
     spell_target_count,
+    spell_save_dc_for_spell,
+    spellcasting_ability_for_spell,
     validate_spell_cast,
 )
-from dnd_board_game.combat import SpellSlotState, consume_spell_resource
+from dnd_board_game.combat import (
+    AttackSource,
+    AttackSourceType,
+    SpellSlotState,
+    attack_source_for_actor,
+    consume_spell_resource,
+)
+from dnd_board_game.rules import D20RollInput, D20RollRequest, resolve_d20_roll
 from dnd_board_game.world import Coordinate
 
 
@@ -97,6 +106,57 @@ def test_known_prepared_and_spellbook_access_have_distinct_semantics() -> None:
     assert spell_is_accessible(spell, (prepared,), prepared_spell_ids=(spell.id,))
     assert spell_is_accessible(spell, (spellbook,), prepared_spell_ids=(spell.id,))
     assert spell_is_accessible(replace(spell, level=0), (prepared,))
+
+
+def test_spell_access_keeps_source_specific_casting_ability() -> None:
+    spell = _spell()
+    actor = Actor(
+        id=ActorId("high_elf_sorcerer"),
+        name="High Elf Sorcerer",
+        ac=10,
+        hp=10,
+        temp_hp=0,
+        speed_feet=30,
+        position=Coordinate(0, 0),
+        faction=Faction.ALLY,
+        ability_scores=AbilityScores(intelligence=16, charisma=14),
+        proficiency_bonus=2,
+        spell_save_dc=13,
+        spell_access=(
+            SpellAccessProfile(
+                SpellAccessKind.KNOWN,
+                ("fire_bolt",),
+                casting_ability="intelligence",
+            ),
+            SpellAccessProfile(
+                SpellAccessKind.KNOWN,
+                ("chill_touch",),
+                casting_ability="charisma",
+            ),
+        ),
+    )
+
+    assert spellcasting_ability_for_spell(actor, "fire_bolt") == "intelligence"
+    assert spellcasting_ability_for_spell(actor, "chill_touch") == "charisma"
+    assert spell_save_dc_for_spell(actor, "fire_bolt") == 13
+    assert spell_save_dc_for_spell(actor, "chill_touch") == 12
+
+    fire_bolt = attack_source_for_actor(
+        AttackSource(
+            id="fire_bolt",
+            name="Fire Bolt",
+            source_type=AttackSourceType.SPELL,
+            range_feet=120,
+            attack_roll_request=D20RollRequest(),
+            ability="charisma",
+        ),
+        actor,
+    )
+
+    assert fire_bolt.ability == "intelligence"
+    assert resolve_d20_roll(
+        D20RollInput(fire_bolt.attack_roll_request, 10)
+    ).total == 15
 
 
 def test_focus_replaces_only_costless_unconsumed_material() -> None:

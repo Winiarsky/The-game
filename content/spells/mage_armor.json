@@ -1,0 +1,43 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "mage_armor",
+  "name": "Mage Armor",
+  "level": 1,
+  "school": "abjuration",
+  "casting_time": "action",
+  "range": {
+    "kind": "touch"
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": [
+      {
+        "item_id": "spell_component_mage_armor",
+        "label": "a piece of cured leather"
+      }
+    ]
+  },
+  "duration": {
+    "kind": "eight_hours",
+    "amount": 1
+  },
+  "concentration": false,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "targeted_status",
+    "label": "Mage Armor",
+    "target_count": 1,
+    "cast_flag": "cast_mage_armor",
+    "instructions": "Nieopancerzony, chętny cel ma bazowe KP 13 + modyfikator Zręczności przez 8 godzin.",
+    "effect_kind": "mage_armor_base",
+    "value": 13,
+    "target_faction": "ally"
+  }
+}

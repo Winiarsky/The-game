@@ -237,7 +237,8 @@ def attack_source_with_positioning(source: AttackSource, positioning: AttackPosi
         )
     return replace(
         source,
-        attack_roll_request=D20RollRequest(
+        attack_roll_request=replace(
+            source.attack_roll_request,
             mode=mode,
             modifiers=tuple(modifiers),
         ),
@@ -250,7 +251,8 @@ def attack_source_with_hidden_advantage(source: AttackSource, hidden_from_target
     request = source.attack_roll_request
     return replace(
         source,
-        attack_roll_request=D20RollRequest(
+        attack_roll_request=replace(
+            request,
             mode=_with_advantage(request.mode),
             modifiers=(
                 *request.modifiers,

@@ -126,7 +126,7 @@ def _submit_force_gate(
 
 
 def _page_assets(client) -> tuple[str, str, str]:
-    html = client.get("/").get_data(as_text=True)
+    html = client.get("/play").get_data(as_text=True)
     javascript = client.get("/static/exploration.js").get_data(as_text=True)
     stylesheet = client.get("/static/exploration.css").get_data(as_text=True)
     return html, javascript, stylesheet
@@ -489,6 +489,7 @@ def test_action_route_forwards_player_selected_social_skill() -> None:
             "check_participants": "single_actor",
             "participant_actor_ids": ["hero"],
             "selected_social_skill": "deception",
+            "selected_action_source_id": "actor:hero:item:rope",
         },
     )
 
@@ -499,6 +500,7 @@ def test_action_route_forwards_player_selected_social_skill() -> None:
         selected_check_participants="single_actor",
         participant_actor_ids=("hero",),
         selected_social_skill="deception",
+        selected_action_source_id="actor:hero:item:rope",
         conversation_only=False,
     )
 
@@ -658,6 +660,9 @@ def test_exploration_goal_ui_selects_participants_before_sending_method() -> Non
     assert 'id="goal-action"' in javascript
     assert "function sendGoalAction" in javascript
     assert "selected_social_skill:" in javascript
+    assert "function interactionActionSourcePickerHtml" in javascript
+    assert "selected_action_source_id:" in javascript
+    assert "Źródło ustala legalne możliwości i konsekwencje" in javascript
     assert "Jak chcecie wpłynąć na NPC?" in javascript
     assert "Ten wybór należy do graczy" in javascript
     assert "{text, conversation_only: true}" in javascript
@@ -712,7 +717,7 @@ def test_encounter_stealth_ui_uses_defined_modifier_formatter() -> None:
 def test_exploration_ui_page_includes_session_log_panel():
     client = _client()
 
-    response = client.get("/")
+    response = client.get("/play")
 
     assert response.status_code == 200
     html = response.get_data(as_text=True)

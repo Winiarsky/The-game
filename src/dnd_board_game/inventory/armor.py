@@ -68,22 +68,32 @@ def equipped_armor_class_bonus(items: Sequence[InventoryItem]) -> int:
 
 def effective_armor_class(actor: Actor) -> int:
     from .magic_items import MagicItemEffectKind, magic_item_effect_total
+    from dnd_board_game.actors import actor_has_feature
 
     armor = equipped_body_armor(actor.inventory)
     base = body_armor_class(actor, armor) if armor is not None else actor.ac
     return (
         base
         + equipped_armor_class_bonus(actor.inventory)
+        + (
+            1
+            if armor is not None
+            and actor_has_feature(actor, "fighting_style_defense")
+            else 0
+        )
         + magic_item_effect_total(actor, MagicItemEffectKind.ARMOR_CLASS_BONUS)
     )
 
 
 def armor_speed_penalty_feet(actor: Actor) -> int:
+    from dnd_board_game.actors import actor_has_feature
+
     armor = equipped_body_armor(actor.inventory)
     if (
         armor is None
         or armor.armor_strength_requirement is None
         or actor.ability_scores.strength >= armor.armor_strength_requirement
+        or actor_has_feature(actor, "dwarven_speed")
     ):
         return 0
     return 10

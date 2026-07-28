@@ -56,11 +56,13 @@ class CombatMovementFlowService:
         state: CombatState,
         board: BoardState,
         destination: Coordinate,
+        active_effects: tuple[ActiveCombatEffect, ...] = (),
     ) -> CombatMovementPreview:
         actor, path = self._plan_path(
             state=state,
             board=board,
             destination=destination,
+            active_effects=active_effects,
             invalid_path_message="Nie można dojść do wskazanego pola.",
         )
         dragged = _dragged_actor_for_path(state, actor, path)
@@ -99,6 +101,7 @@ class CombatMovementFlowService:
             state=state,
             board=board,
             destination=destination,
+            active_effects=active_effects,
             invalid_path_message="Nie można wykonać ruchu na wybrane pole.",
         )
         threats = opportunity_attackers_for_movement(
@@ -117,7 +120,11 @@ class CombatMovementFlowService:
                 actor_id=str(actor.id),
                 destination=destination,
                 path=path,
-                movement_remaining_feet=movement_remaining(state, actor),
+                movement_remaining_feet=movement_remaining(
+                    state,
+                    actor,
+                    active_effects,
+                ),
                 requires_opportunity_confirmation=True,
                 threat_actor_ids=threat_actor_ids,
                 board_message=(
@@ -138,7 +145,7 @@ class CombatMovementFlowService:
             )
 
         dragged = _dragged_actor_for_path(state, actor, path)
-        movement = use_movement(state, actor, path)
+        movement = use_movement(state, actor, path, active_effects)
         if not movement.accepted:
             raise ValueError(movement.message)
         moved_actor = current_actor(movement.state)
@@ -177,19 +184,27 @@ class CombatMovementFlowService:
         board: BoardState,
         destination: Coordinate,
         invalid_path_message: str,
+        active_effects: tuple[ActiveCombatEffect, ...] = (),
     ) -> tuple[Actor, PathResult]:
         if state.status != CombatStatus.ACTIVE:
             raise ValueError("Walka nie jest aktywna.")
         actor = current_actor(state)
         if actor.faction != Faction.ALLY:
             raise ValueError("To nie jest tura bohatera.")
-        movement_actor = replace(actor, speed_feet=movement_remaining(state, actor))
+        movement_actor = replace(
+            actor,
+            speed_feet=movement_remaining(state, actor, active_effects),
+        )
         path = find_path(board, movement_actor, state.actors, destination)
         path = path_with_condition_cost(
             path,
             state.condition_states,
             str(actor.id),
-            movement_budget_feet=movement_remaining(state, actor),
+            movement_budget_feet=movement_remaining(
+                state,
+                actor,
+                active_effects,
+            ),
         )
         if not path.valid:
             raise ValueError(invalid_path_message)

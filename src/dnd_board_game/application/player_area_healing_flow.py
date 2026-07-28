@@ -5,7 +5,12 @@ from random import Random
 from typing import Mapping
 
 from dnd_board_game.actions import AreaSpellResolver, HealingActionResolver
-from dnd_board_game.actors import Actor, Faction, spell_is_prepared
+from dnd_board_game.actors import (
+    Actor,
+    Faction,
+    can_spend_actor_resource,
+    spell_is_prepared,
+)
 from dnd_board_game.combat import (
     AppliedDamageResult,
     AttackPositioning,
@@ -18,6 +23,7 @@ from dnd_board_game.combat import (
     SpellAreaShape,
     SpellSaveResult,
     actors_in_area,
+    apply_healing_result,
     area_positions_for_center,
     area_positions_for_direction,
     can_consume_spell_resource,
@@ -26,8 +32,11 @@ from dnd_board_game.combat import (
     dexterity_save_cover_modifiers,
     damage_components_from_totals,
     evaluate_cover_from_origin,
+    forced_movement_destination,
     legal_area_centers,
     legal_healing_targets,
+    replace_actor,
+    MagicMovementKind,
 )
 from dnd_board_game.world import BoardState, Coordinate
 
@@ -41,6 +50,8 @@ class PendingPlayerHealing:
     source_id: str
     stage: str = "healing_roll"
     cast_level: int | None = None
+    metamagic_ids: tuple[str, ...] = ()
+    twinned_target_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,6 +66,10 @@ class PendingAreaSpell:
     stage: str = "confirm_area"
     saving_throws: tuple[SpellSaveResult, ...] = ()
     cast_level: int | None = None
+    protected_target_ids: tuple[str, ...] = ()
+    careful_target_ids: tuple[str, ...] = ()
+    heightened_target_id: str | None = None
+    metamagic_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,6 +121,7 @@ class PlayerAreaHealingFlowService:
             target_id=target.id,
             source_id=source.id,
             cast_level=source.cast_level,
+            metamagic_ids=source.metamagic_ids,
         )
         return PlayerHealingTransition(
             state=state,
@@ -148,9 +164,27 @@ class PlayerAreaHealingFlowService:
             amount=int(healing),
         )
         applied = resolution.applied_healing
+        state_after_healing = resolution.state
+        twin_applied = None
+        if pending.twinned_target_id is not None:
+            twin = next(
+                actor
+                for actor in state_after_healing.actors
+                if str(actor.id) == pending.twinned_target_id
+            )
+            twin_applied = apply_healing_result(
+                twin,
+                source,
+                int(healing),
+                condition_states=state_after_healing.condition_states,
+            )
+            state_after_healing = replace_actor(
+                state_after_healing,
+                twin_applied.actor_after,
+            )
         target = applied.actor_before
         return PlayerHealingTransition(
-            state=resolution.state,
+            state=state_after_healing,
             pending=None,
             board_message="",
             message_title="Leczenie",
@@ -158,6 +192,13 @@ class PlayerAreaHealingFlowService:
                 f"{healer.name} używa {source.name}. {target.name}: "
                 f"HP {applied.hp_before} -> {applied.hp_after} "
                 f"({applied.effective_healing} realnie przywrócone)."
+                + (
+                    f" {twin_applied.actor_before.name}: "
+                    f"HP {twin_applied.hp_before} -> {twin_applied.hp_after} "
+                    f"({twin_applied.effective_healing} realnie przywrócone)."
+                    if twin_applied is not None
+                    else ""
+                )
             ),
             event_type="ui_combat_player_healing_roll",
             event_payload=(
@@ -168,6 +209,10 @@ class PlayerAreaHealingFlowService:
                 ("effective_healing", applied.effective_healing),
                 ("hp_before", applied.hp_before),
                 ("hp_after", applied.hp_after),
+                (
+                    "twinned_target_id",
+                    pending.twinned_target_id,
+                ),
             ),
         )
 
@@ -262,6 +307,7 @@ class PlayerAreaHealingFlowService:
             target_ids=tuple(str(target.id) for target in targets),
             target_positioning=target_positioning,
             cast_level=source.cast_level,
+            metamagic_ids=source.metamagic_ids,
         )
         target_names = ", ".join(target.name for target in targets) or "brak celów"
         return PlayerAreaSpellTransition(
@@ -320,6 +366,8 @@ class PlayerAreaHealingFlowService:
                 )
                 for actor_id, positioning in pending.target_positioning
             },
+            careful_target_ids=pending.careful_target_ids,
+            heightened_target_id=pending.heightened_target_id,
         )
         saves = confirmation.saving_throws
         updated_pending = replace(pending, stage="damage_roll", saving_throws=saves)
@@ -354,6 +402,8 @@ class PlayerAreaHealingFlowService:
         pending: PendingAreaSpell,
         damage: int | None = None,
         component_totals: Mapping[str, int] | None = None,
+        board: BoardState | None = None,
+        scene_objects: tuple[SceneObject, ...] = (),
     ) -> PlayerAreaSpellTransition:
         if pending.stage != "damage_roll":
             raise ValueError("Nie ma oczekujących obrażeń czaru obszarowego.")
@@ -388,6 +438,30 @@ class PlayerAreaHealingFlowService:
             damage_components=components,
             saving_throws=pending.saving_throws,
         )
+        resolved_state = resolution.state
+        pushed_targets: list[tuple[str, Coordinate, Coordinate]] = []
+        if source.failed_save_push_feet and board is not None:
+            caster = _active_hero(resolved_state)
+            for target_result in resolution.targets:
+                if target_result.saving_throw.success:
+                    continue
+                target = _actor_by_id(resolved_state, target_result.target_id)
+                destination = forced_movement_destination(
+                    board,
+                    resolved_state,
+                    caster,
+                    target,
+                    kind=MagicMovementKind.PUSH,
+                    distance_feet=source.failed_save_push_feet,
+                    scene_objects=scene_objects,
+                )
+                if destination != target.position:
+                    before = target.position
+                    resolved_state = replace_actor(
+                        resolved_state,
+                        replace(target, position=destination),
+                    )
+                    pushed_targets.append((str(target.id), before, destination))
         applied_results = tuple(
             (target.applied_damage, target.saving_throw) for target in resolution.targets
         )
@@ -399,7 +473,7 @@ class PlayerAreaHealingFlowService:
         else:
             result_text = "brak trafionych celów."
         return PlayerAreaSpellTransition(
-            state=resolution.state,
+            state=resolved_state,
             pending=None,
             board_message="",
             message_title="Obrażenia obszarowe",
@@ -419,6 +493,17 @@ class PlayerAreaHealingFlowService:
                             ),
                         }
                         for applied, save in applied_results
+                    ],
+                ),
+                (
+                    "pushed_targets",
+                    [
+                        {
+                            "actor_id": actor_id,
+                            "from": [before.col, before.row],
+                            "to": [after.col, after.row],
+                        }
+                        for actor_id, before, after in pushed_targets
                     ],
                 ),
             ),
@@ -469,17 +554,27 @@ def _require_usable_source(actor: Actor, source: AttackSource | HealingSource) -
         actor,
         getattr(source, "spell_level", 0),
         getattr(source, "cast_level", None),
+        source.id,
     ):
-        raise ValueError(f"Brak slotów czaru dla {source.name}.")
+        raise ValueError(f"Brak slotów albo użycia wrodzonego czaru dla {source.name}.")
     from dnd_board_game.combat import actor_spell_cast_validation
 
     cast_validation = actor_spell_cast_validation(
         actor,
         source.id,
         cast_level=getattr(source, "cast_level", None),
+        ignore_verbal_somatic=(
+            "metamagic_subtle" in getattr(source, "metamagic_ids", ())
+        ),
     )
     if cast_validation is not None and not cast_validation.valid:
         raise ValueError(" ".join(cast_validation.errors))
+    if source.resource_pool_id is not None and not can_spend_actor_resource(
+        actor,
+        source.resource_pool_id,
+        source.resource_cost,
+    ):
+        raise ValueError(f"Brak dostępnych użyć: {source.name}.")
 
 
 def _spell_save_message(save: SpellSaveResult) -> str:

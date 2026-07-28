@@ -1,0 +1,34 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "detect_magic",
+  "name": "Detect Magic",
+  "level": 1,
+  "school": "divination",
+  "casting_time": "action",
+  "range": {
+    "kind": "self"
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": []
+  },
+  "duration": {
+    "kind": "ten_minutes",
+    "amount": 1
+  },
+  "concentration": true,
+  "ritual": true,
+  "effect": {
+    "kind": "exploration",
+    "effect_type": "set_flag",
+    "flag_key": "cast_detect_magic",
+    "flag_value": true,
+    "instructions": "Podczas koncentracji wykrywaj magię w 30 stopach; akcja ujawnia aurę i szkołę widocznego źródła."
+  }
+}

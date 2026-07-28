@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nie znaleziono postaci</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='launcher.css') }}">
+</head>
+<body class="launcher-page">
+  <main class="flow-shell">
+    <section class="empty-state">
+      <b>Nie można otworzyć postaci</b>
+      <p>{{ message }}</p>
+      <a class="button" href="{{ url_for('characters') }}">Wróć do rosteru</a>
+    </section>
+  </main>
+</body>
+</html>

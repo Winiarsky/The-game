@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from enum import StrEnum
 
-from dnd_board_game.actors import Actor, ActorId, Faction
+from dnd_board_game.actors import Actor, ActorId, Faction, actor_has_feature
 from dnd_board_game.inventory import (
     AmmunitionUse,
     HandSlot,
@@ -12,12 +12,15 @@ from dnd_board_game.inventory import (
     plan_hand_equip,
 )
 from dnd_board_game.world import Coordinate, PathResult
+from dnd_board_game.rules import ActiveEffect
 
 from .action_economy import ActionEconomyCost, ActionUse, consume_action
 from .conditions import (
     CombatCondition,
     ConditionState,
     add_condition,
+    condition_blocks_actions,
+    condition_blocks_reactions,
     effective_movement_speed,
     grappled_actor_ids,
     has_condition,
@@ -49,6 +52,10 @@ class TurnActionState:
     attack_action_active: bool = False
     attacks_used: int = 0
     attacks_maximum: int = 0
+    bonus_attacks_remaining: int = 0
+    bonus_attack_source_id: str = ""
+    bonus_action_spell_cast: bool = False
+    leveled_action_spell_cast: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -283,6 +290,16 @@ def actor_by_id(state: CombatState, actor_id: ActorId) -> Actor:
 
 def replace_actor(state: CombatState, updated_actor: Actor) -> CombatState:
     previous_actor = actor_by_id(state, updated_actor.id)
+    condition_states = state.condition_states
+    if updated_actor.hp < previous_actor.hp:
+        condition_states = tuple(
+            condition
+            for condition in condition_states
+            if not (
+                condition.actor_id == str(updated_actor.id)
+                and condition.condition == CombatCondition.TURNED
+            )
+        )
     dropped_weapons = state.dropped_weapons
     if previous_actor.hp > 0 and updated_actor.hp <= 0:
         updated_actor, newly_dropped = _drop_equipped_weapons(
@@ -303,7 +320,7 @@ def replace_actor(state: CombatState, updated_actor: Actor) -> CombatState:
         initiative_order=_sync_order_actor_states(state.initiative_order, actors),
         dropped_weapons=dropped_weapons,
         hidden_states=hidden_states,
-        condition_states=normalize_grapple_conditions(state.condition_states, actors),
+        condition_states=normalize_grapple_conditions(condition_states, actors),
     )
     return _with_finished_status(synced)
 
@@ -443,6 +460,13 @@ def _drop_equipped_weapons(
 def use_turn_action(state: CombatState) -> TurnActionUseResult:
     if state.status != CombatStatus.ACTIVE:
         return TurnActionUseResult(state, False, "Walka nie jest aktywna.")
+    actor = current_actor(state)
+    if condition_blocks_actions(state.condition_states, str(actor.id)):
+        return TurnActionUseResult(
+            state,
+            False,
+            "Stan aktywnego aktora blokuje wykonywanie akcji.",
+        )
     try:
         action_use = consume_action(state.turn_action.action_use)
     except ValueError:
@@ -459,7 +483,11 @@ def attack_action_remaining(state: CombatState, actor: Actor | None = None) -> i
     if state.status != CombatStatus.ACTIVE:
         return 0
     acting = actor or current_actor(state)
-    if acting.id != current_actor(state).id or acting.is_defeated():
+    if (
+        acting.id != current_actor(state).id
+        or acting.is_defeated()
+        or condition_blocks_actions(state.condition_states, str(acting.id))
+    ):
         return 0
     turn = state.turn_action
     if turn.attack_action_active:
@@ -518,6 +546,13 @@ def use_attack_action(
 def use_bonus_action(state: CombatState) -> TurnActionUseResult:
     if state.status != CombatStatus.ACTIVE:
         return TurnActionUseResult(state, False, "Walka nie jest aktywna.")
+    actor = current_actor(state)
+    if condition_blocks_actions(state.condition_states, str(actor.id)):
+        return TurnActionUseResult(
+            state,
+            False,
+            "Stan aktywnego aktora blokuje wykonywanie akcji bonusowych.",
+        )
     try:
         bonus_action_use = consume_action(state.turn_action.bonus_action_use)
     except ValueError:
@@ -526,6 +561,56 @@ def use_bonus_action(state: CombatState) -> TurnActionUseResult:
         replace(state, turn_action=replace(state.turn_action, bonus_action_use=bonus_action_use)),
         True,
         "Akcja bonusowa została zużyta.",
+    )
+
+
+def grant_bonus_attacks(
+    state: CombatState,
+    *,
+    count: int,
+    source_id: str,
+) -> CombatState:
+    if count < 1 or not source_id.strip():
+        raise ValueError("Bonusowe ataki wymagają dodatniej liczby i źródła.")
+    return replace(
+        state,
+        turn_action=replace(
+            state.turn_action,
+            bonus_attacks_remaining=count,
+            bonus_attack_source_id=source_id,
+        ),
+    )
+
+
+def use_bonus_attack(
+    state: CombatState,
+    *,
+    source_id: str,
+) -> TurnActionUseResult:
+    turn = state.turn_action
+    if (
+        turn.bonus_attacks_remaining < 1
+        or turn.bonus_attack_source_id != source_id
+    ):
+        return TurnActionUseResult(
+            state,
+            False,
+            "Ten bonusowy atak nie jest dostępny.",
+        )
+    remaining = turn.bonus_attacks_remaining - 1
+    return TurnActionUseResult(
+        replace(
+            state,
+            turn_action=replace(
+                turn,
+                bonus_attacks_remaining=remaining,
+                bonus_attack_source_id=(
+                    turn.bonus_attack_source_id if remaining else ""
+                ),
+            ),
+        ),
+        True,
+        f"Wykorzystano bonusowy atak. Pozostało: {remaining}.",
     )
 
 
@@ -885,6 +970,7 @@ def reaction_available_for(state: CombatState, actor: Actor) -> bool:
         state.status == CombatStatus.ACTIVE
         and not actor.is_defeated()
         and actor.id not in state.spent_reaction_actor_ids
+        and not condition_blocks_reactions(state.condition_states, str(actor.id))
     )
 
 
@@ -959,18 +1045,35 @@ def use_action_economy_cost(
     )
 
 
-def movement_remaining(state: CombatState, actor: Actor) -> int:
-    speed = effective_movement_speed(actor, state.condition_states)
+def movement_remaining(
+    state: CombatState,
+    actor: Actor,
+    active_effects: tuple[ActiveEffect, ...] = (),
+) -> int:
+    speed = effective_movement_speed(actor, state.condition_states, active_effects)
     return max(0, speed + state.turn_action.extra_movement_feet - state.turn_action.movement_used_feet)
 
 
-def use_dash(state: CombatState, actor: Actor) -> TurnActionUseResult:
+def use_dash(
+    state: CombatState,
+    actor: Actor,
+    active_effects: tuple[ActiveEffect, ...] = (),
+) -> TurnActionUseResult:
     if actor.id != current_actor(state).id:
         return TurnActionUseResult(state, False, "To nie jest tura tego aktora.")
-    action_result = use_turn_action(state)
+    action_result = (
+        use_bonus_action(state)
+        if actor_has_feature(actor, "cunning_action")
+        and state.turn_action.bonus_action_use == ActionUse.ACTION_AVAILABLE
+        else use_turn_action(state)
+    )
     if not action_result.accepted:
         return action_result
-    dash_speed = effective_movement_speed(actor, state.condition_states)
+    dash_speed = effective_movement_speed(
+        actor,
+        state.condition_states,
+        active_effects,
+    )
     updated = replace(
         action_result.state,
         turn_action=replace(
@@ -1045,8 +1148,13 @@ def stand_up(state: CombatState, actor: Actor) -> ConditionChangeResult:
     )
 
 
-def use_movement(state: CombatState, actor: Actor, path: PathResult) -> TurnMovementUseResult:
-    remaining = movement_remaining(state, actor)
+def use_movement(
+    state: CombatState,
+    actor: Actor,
+    path: PathResult,
+    active_effects: tuple[ActiveEffect, ...] = (),
+) -> TurnMovementUseResult:
+    remaining = movement_remaining(state, actor, active_effects)
     if state.status != CombatStatus.ACTIVE:
         return TurnMovementUseResult(state, False, "Walka nie jest aktywna.", remaining)
     if actor.id != current_actor(state).id:
@@ -1073,7 +1181,11 @@ def use_movement(state: CombatState, actor: Actor, path: PathResult) -> TurnMove
     updated_state = replace_actor(updated_state, updated_actor)
     movement_used = state.turn_action.movement_used_feet + path.cost_feet
     updated_state = replace(updated_state, turn_action=replace(updated_state.turn_action, movement_used_feet=movement_used))
-    updated_remaining = movement_remaining(updated_state, updated_actor)
+    updated_remaining = movement_remaining(
+        updated_state,
+        updated_actor,
+        active_effects,
+    )
     return TurnMovementUseResult(
         updated_state,
         True,

@@ -1,0 +1,39 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "magic_weapon",
+  "name": "Magic Weapon",
+  "level": 2,
+  "school": "transmutation",
+  "casting_time": "bonus_action",
+  "range": {
+    "kind": "touch"
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": []
+  },
+  "duration": {
+    "kind": "hour",
+    "amount": 1
+  },
+  "concentration": true,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "targeted_status",
+    "label": "Magic Weapon",
+    "effect_kind": "magic_weapon",
+    "target_faction": "ally",
+    "value": 1,
+    "cast_flag": "cast_magic_weapon",
+    "instructions": "Niemagiczna broń podczas koncentracji staje się magiczna i otrzymuje +1 do ataku i obrażeń.",
+    "resolution_mode": "automatic",
+    "board_relevance": "direct"
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "continual_flame",
+  "name": "Continual Flame",
+  "level": 2,
+  "school": "evocation",
+  "casting_time": "action",
+  "range": {
+    "kind": "touch"
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": [
+      {
+        "item_id": "spell_component_continual_flame",
+        "label": "ruby dust worth 50 gp, which the spell consumes",
+        "minimum_value_cp": 5000,
+        "consumed": true
+      }
+    ]
+  },
+  "duration": {
+    "kind": "until_dispelled"
+  },
+  "concentration": false,
+  "ritual": false,
+  "effect": {
+    "kind": "exploration",
+    "effect_type": "set_flag",
+    "flag_key": "cast_continual_flame",
+    "flag_value": true,
+    "instructions": "Dotknięty obiekt emituje światło jak pochodnia, bez ciepła i zużycia paliwa, dopóki efekt nie zostanie rozproszony."
+  }
+}

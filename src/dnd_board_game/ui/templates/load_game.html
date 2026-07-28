@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wczytaj grę</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='launcher.css') }}">
+</head>
+<body class="launcher-page">
+  <main class="flow-shell">
+    <header class="flow-header">
+      <a class="back-link" href="{{ url_for('index') }}">← Menu główne</a>
+      <span class="step-label">Wczytaj grę</span>
+      <h1>Zapisane przygody</h1>
+      <p>Pokazywane są tylko zapisy zgodne z aktywnym scenariuszem i rulesetem.</p>
+    </header>
+
+    {% if error %}<div class="flow-error" role="alert">{{ error }}</div>{% endif %}
+
+    {% if save.exists %}
+      <section class="save-card">
+        <span>
+          <b>{{ save.scenario_name }}</b>
+          <small>Automatycznie zweryfikujemy wersję zapisu przed otwarciem gry.</small>
+        </span>
+        <form method="post" action="{{ url_for('load_current_game') }}">
+          <button type="submit">Wczytaj</button>
+        </form>
+      </section>
+    {% else %}
+      <section class="empty-state">
+        <b>Nie ma jeszcze zapisanej przygody</b>
+        <p>Zapis utworzysz z panelu gry po rozpoczęciu scenariusza.</p>
+        <a class="button" href="{{ url_for('new_game') }}">Rozpocznij nową grę</a>
+      </section>
+    {% endif %}
+  </main>
+</body>
+</html>

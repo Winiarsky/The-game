@@ -8,11 +8,13 @@ from dnd_board_game.actors import Actor, Faction
 from dnd_board_game.hardware import DEFAULT_COLORS, LedFeedback, LedFrame, LedRole
 from dnd_board_game.rules import (
     D20RollInput,
+    D20RollKind,
     D20RollRequest,
     D20RollResult,
     RollModifier,
     RollModifierType,
     RollMode,
+    apply_actor_d20_traits,
     dexterity_modifier,
     resolve_d20_roll,
     roll_instruction,
@@ -77,7 +79,14 @@ def build_player_initiative_prompts(
         if actor.faction != Faction.ALLY or actor.is_defeated():
             continue
         modifier = dexterity_modifier(actor)
-        request = _initiative_request(modifier, roll_modes.get(str(actor.id), RollMode.NORMAL))
+        request = apply_actor_d20_traits(
+            actor,
+            _initiative_request(
+                modifier,
+                roll_modes.get(str(actor.id), RollMode.NORMAL),
+            ),
+            D20RollKind.ABILITY_CHECK,
+        )
         instruction = roll_instruction(request)
         prompts.append(
             InitiativePrompt(
@@ -96,7 +105,11 @@ def build_enemy_initiative_prompt(
     mode: RollMode = RollMode.NORMAL,
 ) -> InitiativePrompt:
     modifier = dexterity_modifier(actor)
-    request = _initiative_request(modifier, mode)
+    request = apply_actor_d20_traits(
+        actor,
+        _initiative_request(modifier, mode),
+        D20RollKind.ABILITY_CHECK,
+    )
     return InitiativePrompt(
         actor=actor,
         message=f"Inicjatywa przeciwnika {actor.name} zostanie rzucona automatycznie.",
@@ -114,7 +127,19 @@ def roll_enemy_initiative(
     prompt = build_enemy_initiative_prompt(actor, mode)
     natural_roll = rng.randint(1, 20)
     natural_roll_2 = rng.randint(1, 20) if mode != RollMode.NORMAL else None
-    roll = resolve_d20_roll(D20RollInput(prompt.request, natural_roll, natural_roll_2))
+    original = (
+        (natural_roll,)
+        if natural_roll_2 is None
+        else (natural_roll, natural_roll_2)
+    )
+    rerolls = (
+        tuple(rng.randint(1, 20) for value in original if value == 1)
+        if prompt.request.reroll_natural_ones
+        else ()
+    )
+    roll = resolve_d20_roll(
+        D20RollInput(prompt.request, natural_roll, natural_roll_2, rerolls)
+    )
     return InitiativeEntry(actor=actor, roll=roll, dexterity_modifier=prompt.dexterity_modifier, stable_order=0)
 
 

@@ -1,0 +1,40 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "animal_messenger",
+  "name": "Animal Messenger",
+  "level": 2,
+  "school": "enchantment",
+  "casting_time": "action",
+  "range": {
+    "kind": "distance",
+    "feet": 30
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": [
+      {
+        "item_id": "spell_component_animal_messenger",
+        "label": "a morsel of food"
+      }
+    ]
+  },
+  "duration": {
+    "kind": "twenty_four_hours",
+    "amount": 1
+  },
+  "concentration": false,
+  "ritual": true,
+  "effect": {
+    "kind": "exploration",
+    "effect_type": "set_flag",
+    "flag_key": "cast_animal_messenger",
+    "flag_value": true,
+    "instructions": "Wybierz Tiny beast i miejsce/odbiorcę. Zwierzę podróżuje i przekazuje wiadomość do 25 słów."
+  }
+}

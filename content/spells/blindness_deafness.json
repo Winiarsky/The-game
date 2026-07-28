@@ -1,0 +1,45 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "blindness_deafness",
+  "name": "Blindness/Deafness",
+  "level": 2,
+  "school": "necromancy",
+  "casting_time": "action",
+  "range": {
+    "kind": "distance",
+    "feet": 30
+  },
+  "components": {
+    "verbal": true,
+    "somatic": false,
+    "materials": []
+  },
+  "duration": {
+    "kind": "minute",
+    "amount": 1
+  },
+  "concentration": false,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "spell_debuff",
+    "label": "Blindness/Deafness",
+    "effect_kind": "apply_condition",
+    "condition_options": [
+      "blinded",
+      "deafened"
+    ],
+    "save_ability": "constitution",
+    "save_timing": "turn_end",
+    "target_faction": "enemy",
+    "cast_flag": "cast_blindness_deafness",
+    "instructions": "Cel wykonuje rzut na Kondycję. Przy porażce jest Blinded albo Deafened; ponawia rzut na końcu każdej swojej tury.",
+    "resolution_mode": "automatic",
+    "board_relevance": "direct"
+  }
+}

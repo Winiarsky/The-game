@@ -1,7 +1,14 @@
 import random
 from dataclasses import replace
 
-from dnd_board_game.actions import AreaSpellResolver, HealingActionResolver, SpellSaveAttackResolver
+import pytest
+
+from dnd_board_game.actions import (
+    ActionResourceResolver,
+    AreaSpellResolver,
+    HealingActionResolver,
+    SpellSaveAttackResolver,
+)
 from dnd_board_game.actors import AbilityScores, Actor, ActorId, DamageAffinityProfile, Faction
 from dnd_board_game.combat import (
     AttackSource,
@@ -14,9 +21,26 @@ from dnd_board_game.combat import (
     SpellSaveResult,
     SpellSlotState,
     start_combat,
+    ActionEconomyCost,
+    apply_healing_result,
+    legal_healing_targets,
 )
-from dnd_board_game.rules import D20RollInput, D20RollRequest, resolve_d20_roll
-from dnd_board_game.world import Coordinate
+from dnd_board_game.rules import (
+    D20RollInput,
+    D20RollRequest,
+    SpellCastingTime,
+    SpellAccessKind,
+    SpellAccessProfile,
+    SpellComponents,
+    SpellDefinition,
+    SpellDuration,
+    SpellDurationKind,
+    SpellRange,
+    SpellRangeKind,
+    SpellSchool,
+    resolve_d20_roll,
+)
+from dnd_board_game.world import BoardState, Coordinate
 
 
 def _actor(actor_id: str, faction: Faction, col: int, *, hp: int = 10, max_hp: int = 10) -> Actor:
@@ -58,6 +82,20 @@ def _save(actor_id: str, *, success: bool, multiplier: float) -> SpellSaveResult
         total=17 if success else 5,
         success=success,
         damage_multiplier=multiplier,
+    )
+
+
+def _spell(spell_id: str, level: int) -> SpellDefinition:
+    return SpellDefinition(
+        id=spell_id,
+        name=spell_id,
+        level=level,
+        school=SpellSchool.EVOCATION,
+        casting_time=SpellCastingTime.ACTION,
+        range=SpellRange(SpellRangeKind.DISTANCE, 30),
+        components=SpellComponents(verbal=True),
+        duration=SpellDuration(SpellDurationKind.INSTANTANEOUS),
+        effect_kind="attack",
     )
 
 
@@ -145,3 +183,109 @@ def test_healing_action_resolver_consumes_spell_slot_and_caps_hp():
     assert updated_healer.spell_slots[0].remaining == 0
     assert updated_wounded.hp == 12
     assert result.applied_healing.effective_healing == 8
+
+
+def test_bonus_action_spell_allows_only_an_action_cantrip_afterward() -> None:
+    caster = replace(
+        _actor("sorcerer", Faction.ALLY, 0),
+        spells=(_spell("quickened_spell", 1), _spell("cantrip", 0)),
+        spell_access=(
+            SpellAccessProfile(
+                SpellAccessKind.KNOWN,
+                ("quickened_spell", "cantrip"),
+            ),
+        ),
+        spell_slots=(SpellSlotState(level=1, remaining=2, maximum=2),),
+    )
+    enemy = _actor("enemy", Faction.ENEMY, 1)
+    resolver = ActionResourceResolver()
+    first = resolver.consume_action_and_source_resource(
+        _state(caster, enemy),
+        caster,
+        spell_level=1,
+        spell_id="quickened_spell",
+        action_cost=ActionEconomyCost.BONUS_ACTION,
+    )
+    updated_caster = next(
+        actor for actor in first.state.actors if actor.id == caster.id
+    )
+
+    with pytest.raises(ValueError, match="wyłącznie cantrip"):
+        resolver.consume_action_and_source_resource(
+            first.state,
+            updated_caster,
+            spell_level=1,
+            spell_id="quickened_spell",
+            action_cost=ActionEconomyCost.ACTION,
+        )
+
+    cantrip = resolver.consume_action_and_source_resource(
+        first.state,
+        updated_caster,
+        spell_level=0,
+        spell_id="cantrip",
+        action_cost=ActionEconomyCost.ACTION,
+    )
+
+    assert cantrip.state.turn_action.bonus_action_spell_cast is True
+    assert cantrip.state.turn_action.action_use.value == "action_used"
+
+
+def test_leveled_action_spell_blocks_later_bonus_action_spell() -> None:
+    caster = replace(
+        _actor("sorcerer", Faction.ALLY, 0),
+        spells=(_spell("leveled_spell", 1),),
+        spell_access=(
+            SpellAccessProfile(
+                SpellAccessKind.KNOWN,
+                ("leveled_spell",),
+            ),
+        ),
+        spell_slots=(SpellSlotState(level=1, remaining=2, maximum=2),),
+    )
+    enemy = _actor("enemy", Faction.ENEMY, 1)
+    resolver = ActionResourceResolver()
+    first = resolver.consume_action_and_source_resource(
+        _state(caster, enemy),
+        caster,
+        spell_level=1,
+        spell_id="leveled_spell",
+        action_cost=ActionEconomyCost.ACTION,
+    )
+    updated_caster = next(
+        actor for actor in first.state.actors if actor.id == caster.id
+    )
+
+    with pytest.raises(ValueError, match="akcją bonusową"):
+        resolver.consume_action_and_source_resource(
+            first.state,
+            updated_caster,
+            spell_level=1,
+            spell_id="leveled_spell",
+            action_cost=ActionEconomyCost.BONUS_ACTION,
+        )
+
+
+def test_healing_spell_excludes_constructs_and_undead_in_domain_and_targeting() -> None:
+    healer = _actor("cleric", Faction.ALLY, 0)
+    living = replace(_actor("living", Faction.ALLY, 1, hp=2), creature_type="humanoid")
+    undead = replace(_actor("undead", Faction.ALLY, 2, hp=2), creature_type="undead")
+    source = HealingSource(
+        "cure_wounds",
+        "Leczenie ran",
+        HealingSourceType.SPELL,
+        15,
+        excluded_creature_types=("construct", "undead"),
+    )
+
+    targets = legal_healing_targets(
+        BoardState(),
+        healer,
+        (healer, living, undead),
+        source,
+    )
+    blocked = apply_healing_result(undead, source, 8)
+
+    assert {target.id for target in targets} == {"living"}
+    assert blocked.effective_healing == 0
+    assert blocked.actor_after.hp == 2

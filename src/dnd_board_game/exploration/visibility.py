@@ -50,6 +50,7 @@ def exploration_visibility(
     ambient_light: LightLevel,
     distance_feet: int,
     party: Sequence[Actor] = (),
+    magical_darkness: bool = False,
 ) -> ExplorationVisibility:
     """Resolve sight at an abstract distance from a co-located exploration party."""
 
@@ -57,12 +58,32 @@ def exploration_visibility(
         raise ValueError(
             "Exploration visibility distance must be a non-negative multiple of 5 feet."
         )
-    illuminated, source_actor, source_name = _strongest_party_light(
-        ambient_light,
-        distance_feet,
-        party,
+    illuminated, source_actor, source_name = (
+        (LightLevel.DARKNESS, None, None)
+        if magical_darkness
+        else _strongest_party_light(
+            ambient_light,
+            distance_feet,
+            party,
+        )
     )
     senses = observer.senses
+    if (
+        magical_darkness
+        and senses.magical_darkness_vision_feet >= distance_feet
+    ):
+        return ExplorationVisibility(
+            ambient_light=ambient_light,
+            illuminated_light=illuminated,
+            perceived_light=LightLevel.BRIGHT,
+            distance_feet=distance_feet,
+            can_see=True,
+            perception_roll_mode=RollMode.NORMAL,
+            passive_perception_adjustment=0,
+            sense_used="devils_sight",
+            light_source_actor_id=None,
+            light_source_name=None,
+        )
     exceptional_sight_distance = max(
         senses.blindsight_feet,
         senses.truesight_feet,
@@ -87,7 +108,11 @@ def exploration_visibility(
         )
     perceived = illuminated
     sense_used = "normal_vision"
-    if senses.darkvision_feet > 0 and senses.darkvision_feet >= distance_feet:
+    if (
+        not magical_darkness
+        and senses.darkvision_feet > 0
+        and senses.darkvision_feet >= distance_feet
+    ):
         sense_used = "darkvision"
         if illuminated == LightLevel.DARKNESS:
             perceived = LightLevel.DIM

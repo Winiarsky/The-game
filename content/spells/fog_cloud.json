@@ -1,0 +1,41 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "fog_cloud",
+  "name": "Fog Cloud",
+  "level": 1,
+  "school": "conjuration",
+  "casting_time": "action",
+  "range": {
+    "kind": "distance",
+    "feet": 120
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": []
+  },
+  "duration": {
+    "kind": "hour",
+    "amount": 1
+  },
+  "concentration": true,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "targeted_status",
+    "label": "Fog Cloud",
+    "effect_kind": "obscuring_zone",
+    "target_faction": "any",
+    "value": 20,
+    "upcast_value_per_level": 20,
+    "cast_flag": "cast_fog_cloud",
+    "instructions": "Utwórz silnie zasłoniętą kulę mgły o promieniu 20 stóp podczas koncentracji; promień +20 stóp za wyższy slot.",
+    "resolution_mode": "automatic",
+    "board_relevance": "direct"
+  }
+}

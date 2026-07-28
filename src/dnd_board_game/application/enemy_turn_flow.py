@@ -5,7 +5,7 @@ from enum import StrEnum
 from random import Random
 from typing import Mapping
 
-from dnd_board_game.actors import Actor, ActorId, Faction
+from dnd_board_game.actors import Actor, ActorId, Faction, actor_has_feature
 from dnd_board_game.combat import (
     ActiveCombatEffect,
     AttackSource,
@@ -31,8 +31,16 @@ from dnd_board_game.combat import (
     resolve_actor_saving_throw,
     resolve_damage,
     replace_actor,
+    reaction_available_for,
+    start_attack_action,
+    grid_distance_feet,
 )
-from dnd_board_game.rules import SavingThrowRequest, SavingThrowResult
+from dnd_board_game.rules import (
+    RollModifier,
+    RollModifierType,
+    SavingThrowRequest,
+    SavingThrowResult,
+)
 from dnd_board_game.world import BoardState, Coordinate
 
 from .combat_reaction_flow import PlayerReactionFlowService, ReadyAttackTrigger
@@ -164,6 +172,32 @@ class EnemyTurnFlowService:
                 source,
                 active_effects,
             )
+        bane = next(
+            (
+                effect
+                for effect in active_effects
+                if effect.actor_id == str(enemy.id)
+                and effect.kind == "bane_roll_penalty"
+            ),
+            None,
+        )
+        if bane is not None:
+            bane_roll = rng.randint(1, bane.value)
+            source = replace(
+                source,
+                attack_roll_request=replace(
+                    source.attack_roll_request,
+                    modifiers=(
+                        *source.attack_roll_request.modifiers,
+                        RollModifier(
+                            bane.label,
+                            -bane_roll,
+                            RollModifierType.SPELL,
+                            stacking_key=bane.id,
+                        ),
+                    ),
+                ),
+            )
         result = resolve_enemy_auto_turn(
             board,
             state,
@@ -179,12 +213,20 @@ class EnemyTurnFlowService:
                 else None
             ),
         )
-        ready_attacks = self._player_reactions.detect_ready_attacks(
-            state=state,
-            enemy_result=result,
-            board=board,
-            attack_sources_by_actor=attack_sources_by_actor,
-            active_effects=active_effects,
+        ready_attacks = (
+            *self._player_reactions.detect_ready_attacks(
+                state=state,
+                enemy_result=result,
+                board=board,
+                attack_sources_by_actor=attack_sources_by_actor,
+                active_effects=active_effects,
+            ),
+            *_giant_killer_reactions(
+                state=state,
+                enemy_result=result,
+                board=board,
+                attack_sources_by_actor=attack_sources_by_actor,
+            ),
         )
         movement_threats = (
             tuple(
@@ -211,7 +253,11 @@ class EnemyTurnFlowService:
                     target_actor_id=ready.target_id,
                     trigger_event=ready.trigger,
                     effect_id=ready.effect_id,
-                    label="Ready",
+                    label=(
+                        "Giant Killer"
+                        if ready.trigger == "giant_killer"
+                        else "Ready"
+                    ),
                 )
                 for ready in ready_attacks
             ),
@@ -354,6 +400,8 @@ class EnemyTurnFlowService:
         result: EnemyAutoTurnResult,
         natural_roll: int,
         natural_roll_2: int | None = None,
+        natural_rerolls: tuple[int, ...] = (),
+        additional_modifiers: tuple[RollModifier, ...] = (),
     ) -> EnemySavingThrowTransition:
         request = result.saving_throw_request
         source = result.source
@@ -370,8 +418,10 @@ class EnemyTurnFlowService:
             request,
             natural_roll=int(natural_roll),
             natural_roll_2=natural_roll_2,
+            natural_rerolls=natural_rerolls,
             condition_states=result.state.condition_states,
             combat_actors=result.state.actors,
+            situational_modifiers=additional_modifiers,
         )
         base_components = result.base_damage_components or (
             DamageComponentInput(
@@ -475,7 +525,59 @@ def _ready_trigger_label(trigger: str) -> str:
     return {
         "enemy_moves": "gdy przeciwnik się poruszy",
         "enemy_attacks": "gdy przeciwnik zaatakuje",
+        "giant_killer": "po ataku Dużej lub większej istoty",
     }.get(trigger, trigger)
+
+
+def _giant_killer_reactions(
+    *,
+    state: CombatState,
+    enemy_result: EnemyAutoTurnResult,
+    board: BoardState,
+    attack_sources_by_actor: Mapping[ActorId, AttackSource],
+) -> tuple[ReadyAttackTrigger, ...]:
+    if (
+        enemy_result.attack_resolution is None
+        or enemy_result.target is None
+        or enemy_result.enemy.size.value
+        not in {"large", "huge", "gargantuan"}
+    ):
+        return ()
+    ranger = next(
+        (
+            actor
+            for actor in state.actors
+            if str(actor.id) == enemy_result.target.id
+        ),
+        None,
+    )
+    if (
+        ranger is None
+        or not actor_has_feature(ranger, "giant_killer")
+        or not reaction_available_for(state, ranger)
+        or grid_distance_feet(ranger.position, enemy_result.enemy.position) > 5
+    ):
+        return ()
+    source = attack_sources_by_actor.get(ranger.id)
+    if source is None:
+        return ()
+    legal = start_attack_action(
+        board,
+        ranger,
+        enemy_result.state.actors,
+        source,
+        enemy_result.state.hidden_states,
+    ).legal_targets
+    if not any(target.id == str(enemy_result.enemy.id) for target in legal):
+        return ()
+    return (
+        ReadyAttackTrigger(
+            readied_actor_id=str(ranger.id),
+            target_id=str(enemy_result.enemy.id),
+            effect_id="giant_killer",
+            trigger="giant_killer",
+        ),
+    )
 
 
 def _enemy_roll_summary(result: EnemyAutoTurnResult) -> str:

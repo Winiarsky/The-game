@@ -1,0 +1,45 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "darkness",
+  "name": "Darkness",
+  "level": 2,
+  "school": "evocation",
+  "casting_time": "action",
+  "range": {
+    "kind": "distance",
+    "feet": 60
+  },
+  "components": {
+    "verbal": true,
+    "somatic": false,
+    "materials": [
+      {
+        "item_id": "spell_component_darkness",
+        "label": "bat fur and a drop of pitch or piece of coal"
+      }
+    ]
+  },
+  "duration": {
+    "kind": "ten_minutes",
+    "amount": 1
+  },
+  "concentration": true,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "targeted_status",
+    "label": "Darkness",
+    "effect_kind": "obscuring_zone",
+    "target_faction": "any",
+    "value": 15,
+    "cast_flag": "cast_darkness",
+    "instructions": "Kula magicznej ciemności o promieniu 15 stóp blokuje zwykłe darkvision podczas koncentracji; zasłoń odpowiedni obszar planszy.",
+    "resolution_mode": "automatic",
+    "board_relevance": "direct"
+  }
+}

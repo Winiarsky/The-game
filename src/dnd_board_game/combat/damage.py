@@ -9,6 +9,9 @@ from dnd_board_game.actors import (
     DamageAffinityProfile,
     DeathSaveState,
     effective_max_hit_points,
+    actor_has_feature,
+    can_spend_actor_resource,
+    spend_actor_resource,
 )
 from dnd_board_game.core.damage_types import DamageType, damage_type_label_pl
 from dnd_board_game.rules import DiceExpression
@@ -32,6 +35,7 @@ class DamageComponentSpec:
     fixed: int | None = None
     modifier: int = 0
     label: str = ""
+    critical_bonus_dice: int = 0
 
     def __post_init__(self) -> None:
         if not self.id.strip():
@@ -42,13 +46,17 @@ class DamageComponentSpec:
             )
         if self.fixed is not None and self.fixed < 0:
             raise ValueError("Fixed damage cannot be negative.")
+        if self.critical_bonus_dice < 0:
+            raise ValueError("Critical bonus dice cannot be negative.")
 
     def formula(self, *, critical: bool = False) -> str:
-        base = (
-            self.dice.format(dice_multiplier=2 if critical else 1)
-            if self.dice is not None
-            else str(self.fixed)
-        )
+        if self.dice is not None:
+            dice_count = self.dice.count * (2 if critical else 1)
+            if critical:
+                dice_count += self.critical_bonus_dice
+            base = f"{dice_count}d{self.dice.sides}"
+        else:
+            base = str(self.fixed)
         if self.modifier:
             sign = "+" if self.modifier > 0 else "-"
             base = f"{base} {sign} {abs(self.modifier)}"
@@ -69,7 +77,10 @@ class DamageComponentSpec:
             "damage_type": self.damage_type.value,
             "damage_type_label": damage_type_label_pl(self.damage_type),
             "dice": (
-                self.dice.format(dice_multiplier=2 if critical else 1)
+                (
+                    f"{self.dice.count * (2 if critical else 1) + (self.critical_bonus_dice if critical else 0)}"
+                    f"d{self.dice.sides}"
+                )
                 if self.dice is not None
                 else None
             ),
@@ -102,10 +113,10 @@ def roll_damage_components(
     results: list[DamageComponentInput] = []
     for component in components:
         if component.dice is not None:
-            rolls = component.dice.roll(
-                roll_die,
-                dice_multiplier=2 if critical else 1,
-            )
+            dice_count = component.dice.count * (2 if critical else 1)
+            if critical:
+                dice_count += component.critical_bonus_dice
+            rolls = DiceExpression(dice_count, component.dice.sides).roll(roll_die)
             amount = sum(rolls) + component.modifier
         else:
             amount = int(component.fixed or 0) + component.modifier
@@ -239,13 +250,27 @@ def apply_damage_result(
     if remaining > 0:
         applied_to_hp = min(hp, remaining)
         hp = max(0, hp - remaining)
+    actor_base = actor
+    wild_shape_overflow = 0
+    normal_form_hp_before = 0
+    if actor.wild_shape is not None and hp == 0:
+        from .class_feature_rules import revert_wild_shape
+
+        wild_shape_overflow = max(0, remaining - hp_before)
+        actor_base = revert_wild_shape(actor)
+        normal_form_hp_before = actor_base.hp
+        hp = max(0, normal_form_hp_before - wild_shape_overflow)
     death_saves = actor.death_saves
     failures_added = 0
     instant_death = False
     if actor.uses_death_saves and not actor.death_saves.dead:
         if hp_before > 0 and hp == 0:
-            excess_damage = max(0, remaining - hp_before)
-            instant_death = excess_damage >= effective_max_hit_points(actor)
+            excess_damage = (
+                max(0, wild_shape_overflow - normal_form_hp_before)
+                if actor.wild_shape is not None
+                else max(0, remaining - hp_before)
+            )
+            instant_death = excess_damage >= effective_max_hit_points(actor_base)
             death_saves = DeathSaveState(dead=True) if instant_death else DeathSaveState()
         elif hp_before == 0 and remaining > 0:
             instant_death = remaining >= effective_max_hit_points(actor)
@@ -259,7 +284,25 @@ def apply_damage_result(
                     failures=failures,
                     dead=failures >= 3,
                 )
-    actor_after = replace(actor, hp=hp, temp_hp=temp_hp, death_saves=death_saves)
+    actor_after = replace(
+        actor_base,
+        hp=hp,
+        temp_hp=temp_hp,
+        death_saves=death_saves,
+    )
+    if (
+        hp_before > 0
+        and hp == 0
+        and not instant_death
+        and actor_has_feature(actor_after, "relentless_endurance")
+        and can_spend_actor_resource(actor_after, "relentless_endurance_uses")
+    ):
+        actor_after = spend_actor_resource(
+            replace(actor_after, hp=1, death_saves=DeathSaveState()),
+            "relentless_endurance_uses",
+        ).actor_after
+        hp = 1
+        death_saves = actor_after.death_saves
     return AppliedDamageResult(
         damage=damage,
         actor_before=actor,

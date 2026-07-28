@@ -29,7 +29,16 @@ from dnd_board_game.combat import (
     start_combat,
 )
 from dnd_board_game.inventory import InventoryItem
-from dnd_board_game.rules import DiceExpression, D20RollInput, D20RollRequest, RollMode, RollModifier, RollModifierType, resolve_d20_roll
+from dnd_board_game.rules import (
+    DiceExpression,
+    D20RollInput,
+    D20RollRequest,
+    EffectDuration,
+    RollMode,
+    RollModifier,
+    RollModifierType,
+    resolve_d20_roll,
+)
 from dnd_board_game.world import BoardState, Coordinate
 
 
@@ -91,6 +100,35 @@ def test_enemy_auto_attack_hits_with_deterministic_rng_and_applies_damage():
     assert updated_hero.max_hp == 20
     assert "trafia" in result.message
     assert "HP 20 -> 16" in result.message
+
+
+def test_damaging_attack_can_also_apply_temporary_on_hit_condition():
+    enemy = _actor("caster", Faction.ENEMY, Coordinate(1, 0))
+    hero = _actor("hero", Faction.ALLY, Coordinate(0, 0), hp=20)
+    state = start_combat((enemy, hero), _order(enemy, hero))
+    source = replace(
+        _source(),
+        id="ray_of_frost",
+        source_type=AttackSourceType.SPELL,
+        on_hit_condition=CombatCondition.RAY_OF_FROST_SLOW.value,
+        on_hit_condition_duration=EffectDuration.UNTIL_TURN_START,
+        on_hit_condition_expiration="source",
+    )
+
+    result = resolve_enemy_auto_attack(
+        BoardState(),
+        state,
+        enemy,
+        source,
+        random.Random(7),
+    )
+
+    assert result.applied_damage is not None
+    assert result.applied_damage.hp_after == 16
+    condition = result.state.condition_states[0]
+    assert condition.condition == CombatCondition.RAY_OF_FROST_SLOW
+    assert condition.duration == EffectDuration.UNTIL_TURN_START
+    assert condition.expiration_actor_id == "caster"
 
 
 def test_enemy_auto_attack_uses_active_spell_ac_bonus() -> None:

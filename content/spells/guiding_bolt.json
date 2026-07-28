@@ -1,0 +1,43 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "guiding_bolt",
+  "name": "Guiding Bolt",
+  "level": 1,
+  "school": "evocation",
+  "casting_time": "action",
+  "range": {
+    "kind": "distance",
+    "feet": 120
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": []
+  },
+  "duration": {
+    "kind": "round",
+    "amount": 1
+  },
+  "concentration": false,
+  "ritual": false,
+  "scaling": {
+    "damage_dice_per_slot_level": 1
+  },
+  "effect": {
+    "kind": "attack",
+    "attack_kind": "ranged",
+    "damage": {
+      "dice": "4d6",
+      "modifier": 0,
+      "damage_type": "radiant"
+    },
+    "on_hit_effect_kind": "guiding_bolt_mark",
+    "on_hit_effect_duration": "until_next_attack",
+    "on_hit_effect_value": 0
+  }
+}

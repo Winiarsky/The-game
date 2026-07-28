@@ -1,0 +1,39 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "create_or_destroy_water",
+  "name": "Create Or Destroy Water",
+  "level": 1,
+  "school": "transmutation",
+  "casting_time": "action",
+  "range": {
+    "kind": "distance",
+    "feet": 30
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": [
+      {
+        "item_id": "spell_component_create_or_destroy_water",
+        "label": "a drop of water if creating water or a few grains of sand if destroying it"
+      }
+    ]
+  },
+  "duration": {
+    "kind": "instantaneous"
+  },
+  "concentration": false,
+  "ritual": false,
+  "effect": {
+    "kind": "exploration",
+    "effect_type": "set_flag",
+    "flag_key": "cast_create_or_destroy_water",
+    "flag_value": true,
+    "instructions": "Stwórz albo zniszcz do 10 galonów wody; alternatywnie utwórz deszcz lub usuń mgłę w sześcianie 30 stóp."
+  }
+}

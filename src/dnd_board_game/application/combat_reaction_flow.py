@@ -3,17 +3,25 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Callable, Mapping, Protocol
 
-from dnd_board_game.actors import Actor, ActorId
+from dnd_board_game.actors import (
+    Actor,
+    ActorId,
+    actor_has_feature,
+    can_spend_actor_resource,
+    spend_actor_resource,
+)
 from dnd_board_game.combat import (
     ActionUse,
     ActiveCombatEffect,
     AppliedDamageResult,
+    AttackKind,
     AttackDeclaration,
     AttackSource,
     AttackSourceType,
     CombatState,
     CombatStatus,
     DamageComponentInput,
+    DamageResult,
     EnemyAutoTurnResult,
     ReactionKind,
     ReactionOption,
@@ -41,6 +49,9 @@ from dnd_board_game.combat import (
     start_attack_action,
     use_actor_reaction,
     use_movement,
+    bardic_inspiration_die_sides,
+    deflect_missiles,
+    deflected_missile_attack_source,
 )
 from dnd_board_game.rules import (
     EffectDuration,
@@ -58,7 +69,11 @@ from dnd_board_game.rules import (
     apply_active_effect,
     resolve_d20_roll,
 )
-from dnd_board_game.inventory import consume_ammunition, has_ammunition
+from dnd_board_game.inventory import (
+    consume_ammunition,
+    free_hand_count,
+    has_ammunition,
+)
 from dnd_board_game.world import BoardState, PathResult, line_of_sight_clear
 
 from .damage_presentation import applied_damage_message
@@ -288,6 +303,380 @@ class DefensiveSpellReactionFlowService:
             result=updated_result,
             effect=effect,
             prevented_hit=prevented_hit,
+            message=message,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class CuttingWordsReactionResolution:
+    state: CombatState
+    result: EnemyAutoTurnResult
+    die_roll: int
+    previous_attack_total: int
+    attack_total: int
+    prevented_hit: bool
+    message: str
+
+
+@dataclass(frozen=True, slots=True)
+class DeflectMissilesReactionResolution:
+    state: CombatState
+    result: EnemyAutoTurnResult
+    die_roll: int
+    reduction: int
+    damage_before: int
+    damage_after: int
+    caught: bool
+    can_return_projectile: bool
+    message: str
+
+
+@dataclass(frozen=True, slots=True)
+class DeflectedMissileReturnResolution:
+    state: CombatState
+    source: AttackSource
+    attack_roll: D20RollResult
+    hit: bool
+    critical: bool
+    message: str
+
+
+class ClassFeatureReactionFlowService:
+    """Resolve level 1–3 class reactions against an automated enemy attack."""
+
+    def cutting_words_options(
+        self,
+        *,
+        board: BoardState,
+        state: CombatState,
+        enemy_result: EnemyAutoTurnResult,
+    ) -> tuple[ReactionOption, ...]:
+        resolution = enemy_result.attack_resolution
+        attack_roll = enemy_result.attack_roll
+        if (
+            resolution is None
+            or attack_roll is None
+            or not resolution.hit
+            or resolution.critical
+        ):
+            return ()
+        enemy = _actor_by_string_id(enemy_result.state, str(enemy_result.enemy.id))
+        return tuple(
+            ReactionOption(
+                id=f"cutting-words:{actor.id}:{enemy.id}",
+                kind=ReactionKind.CUTTING_WORDS,
+                reactor_actor_id=str(actor.id),
+                target_actor_id=str(enemy.id),
+                trigger_event="enemy_attack_roll",
+                effect_id="cutting_words",
+                label="Cutting Words",
+                value=bardic_inspiration_die_sides(actor),
+            )
+            for actor in state.actors
+            if actor.faction != enemy.faction
+            and not actor.is_defeated()
+            and actor_has_feature(actor, "cutting_words")
+            and can_spend_actor_resource(actor, "bardic_inspiration_uses")
+            and reaction_available_for(state, actor)
+            and grid_distance_feet(actor.position, enemy.position) <= 60
+            and line_of_sight_clear(board, actor.position, enemy.position)
+        )
+
+    def apply_cutting_words(
+        self,
+        *,
+        state: CombatState,
+        enemy_result: EnemyAutoTurnResult,
+        option: ReactionOption,
+        die_roll: int,
+    ) -> CuttingWordsReactionResolution:
+        if option.kind != ReactionKind.CUTTING_WORDS:
+            raise ValueError("Aktualna reakcja nie jest Cutting Words.")
+        bard = _actor_by_string_id(state, option.reactor_actor_id)
+        if not actor_has_feature(bard, "cutting_words"):
+            raise ValueError("Aktor nie posiada Cutting Words.")
+        die_sides = bardic_inspiration_die_sides(bard)
+        if not 1 <= int(die_roll) <= die_sides:
+            raise ValueError(f"Cutting Words wymaga wyniku k{die_sides} od 1 do {die_sides}.")
+        if (
+            enemy_result.attack_resolution is None
+            or enemy_result.attack_roll is None
+            or enemy_result.target is None
+        ):
+            raise ValueError("Brak oczekującego wrogiego rzutu ataku.")
+
+        reaction = use_actor_reaction(state, bard)
+        if not reaction.accepted:
+            raise ValueError(reaction.message)
+        bard_after_reaction = _actor_by_string_id(
+            reaction.state,
+            option.reactor_actor_id,
+        )
+        spent = spend_actor_resource(
+            bard_after_reaction,
+            "bardic_inspiration_uses",
+        )
+        reaction_state = replace_actor(reaction.state, spent.actor_after)
+
+        previous_total = enemy_result.attack_roll.total
+        adjusted_roll = replace(
+            enemy_result.attack_roll,
+            total=previous_total - int(die_roll),
+        )
+        adjusted_attack = resolve_attack(
+            enemy_result.attack_resolution.declaration,
+            adjusted_roll,
+            ActionUse.ACTION_AVAILABLE,
+        )
+
+        target_before = _actor_by_string_id(
+            reaction_state,
+            enemy_result.target.id,
+        )
+        merged_state = replace(
+            enemy_result.state,
+            spent_reaction_actor_ids=reaction_state.spent_reaction_actor_ids,
+            condition_states=(
+                enemy_result.state.condition_states
+                if adjusted_attack.hit
+                else state.condition_states
+            ),
+        )
+        merged_state = replace_actor(merged_state, spent.actor_after)
+        applied_damage = None
+        updated_target = None
+        damage = enemy_result.damage if adjusted_attack.hit else None
+        if adjusted_attack.hit and damage is not None:
+            applied_damage = apply_damage_result(
+                target_before,
+                damage,
+                critical=adjusted_attack.critical,
+            )
+            updated_target = applied_damage.actor_after
+            merged_state = replace_actor(merged_state, updated_target)
+        else:
+            merged_state = replace_actor(merged_state, target_before)
+
+        prevented_hit = not adjusted_attack.hit
+        message = (
+            f"{bard.name} używa Cutting Words (k{die_sides}: {die_roll}): "
+            f"atak {previous_total} spada do {adjusted_roll.total} i "
+            + ("pudłuje." if prevented_hit else "nadal trafia.")
+        )
+        updated_result = replace(
+            enemy_result,
+            state=merged_state,
+            attack_roll=adjusted_roll,
+            attack_resolution=adjusted_attack,
+            damage=damage,
+            applied_damage=applied_damage,
+            updated_target=updated_target,
+            message=message,
+        )
+        return CuttingWordsReactionResolution(
+            state=reaction_state,
+            result=updated_result,
+            die_roll=int(die_roll),
+            previous_attack_total=previous_total,
+            attack_total=adjusted_roll.total,
+            prevented_hit=prevented_hit,
+            message=message,
+        )
+
+    def deflect_missiles_option(
+        self,
+        *,
+        state: CombatState,
+        enemy_result: EnemyAutoTurnResult,
+    ) -> ReactionOption | None:
+        source = enemy_result.source
+        target = enemy_result.target
+        damage = enemy_result.damage
+        if (
+            source is None
+            or target is None
+            or damage is None
+            or enemy_result.attack_resolution is None
+            or not enemy_result.attack_resolution.hit
+            or source.source_type != AttackSourceType.WEAPON
+            or source.attack_kind != AttackKind.RANGED
+        ):
+            return None
+        actor = next(
+            (candidate for candidate in state.actors if str(candidate.id) == target.id),
+            None,
+        )
+        if (
+            actor is None
+            or actor.is_defeated()
+            or not actor_has_feature(actor, "deflect_missiles")
+            or not reaction_available_for(state, actor)
+        ):
+            return None
+        return ReactionOption(
+            id=f"deflect-missiles:{actor.id}:{enemy_result.enemy.id}",
+            kind=ReactionKind.DEFLECT_MISSILES,
+            reactor_actor_id=str(actor.id),
+            target_actor_id=str(enemy_result.enemy.id),
+            trigger_event="hit_by_ranged_weapon_attack",
+            effect_id="deflect_missiles",
+            label="Deflect Missiles",
+            value=damage.total_before_reduction,
+        )
+
+    def apply_deflect_missiles(
+        self,
+        *,
+        state: CombatState,
+        enemy_result: EnemyAutoTurnResult,
+        option: ReactionOption,
+        die_roll: int,
+    ) -> DeflectMissilesReactionResolution:
+        if option.kind != ReactionKind.DEFLECT_MISSILES:
+            raise ValueError("Aktualna reakcja nie jest Deflect Missiles.")
+        monk = _actor_by_string_id(state, option.reactor_actor_id)
+        if (
+            enemy_result.damage is None
+            or enemy_result.target is None
+            or enemy_result.target.id != str(monk.id)
+        ):
+            raise ValueError("Brak oczekujących obrażeń pocisku dla mnicha.")
+        reduction = deflect_missiles(
+            monk,
+            natural_d10=int(die_roll),
+            incoming_damage=enemy_result.damage.total_before_reduction,
+            has_free_hand=free_hand_count(monk.inventory) > 0,
+        )
+        reaction = use_actor_reaction(state, monk)
+        if not reaction.accepted:
+            raise ValueError(reaction.message)
+        monk_after_reaction = _actor_by_string_id(
+            reaction.state,
+            option.reactor_actor_id,
+        )
+        reduced_damage = _damage_after_flat_reduction(
+            enemy_result.damage,
+            reduction.reduction,
+        )
+        applied = apply_damage_result(
+            monk_after_reaction,
+            reduced_damage,
+            critical=bool(
+                enemy_result.attack_resolution
+                and enemy_result.attack_resolution.critical
+            ),
+        )
+        merged_state = replace(
+            enemy_result.state,
+            spent_reaction_actor_ids=reaction.state.spent_reaction_actor_ids,
+        )
+        merged_state = replace_actor(merged_state, applied.actor_after)
+        message = (
+            f"{monk.name} używa Deflect Missiles (k10: {die_roll}): "
+            f"redukcja {reduction.reduction}, obrażenia "
+            f"{enemy_result.damage.total_applied} → {applied.damage.total_applied}."
+            + (
+                " Pocisk został złapany i może zostać odrzucony za 1 Ki."
+                if reduction.can_return_projectile
+                else ""
+            )
+        )
+        updated_result = replace(
+            enemy_result,
+            state=merged_state,
+            damage=applied.damage,
+            applied_damage=applied,
+            updated_target=applied.actor_after,
+            message=message,
+        )
+        return DeflectMissilesReactionResolution(
+            state=reaction.state,
+            result=updated_result,
+            die_roll=int(die_roll),
+            reduction=reduction.reduction,
+            damage_before=enemy_result.damage.total_applied,
+            damage_after=applied.damage.total_applied,
+            caught=reduction.caught,
+            can_return_projectile=(
+                reduction.can_return_projectile
+                and can_spend_actor_resource(monk_after_reaction, "ki_points")
+            ),
+            message=message,
+        )
+
+    def return_deflected_missile(
+        self,
+        *,
+        board: BoardState,
+        state: CombatState,
+        actor_id: str,
+        target_id: str,
+        damage_type: DamageType,
+        natural_roll: int,
+        natural_roll_2: int | None = None,
+    ) -> DeflectedMissileReturnResolution:
+        monk = _actor_by_string_id(state, actor_id)
+        target = _actor_by_string_id(state, target_id)
+        if not actor_has_feature(monk, "deflect_missiles"):
+            raise ValueError("Aktor nie posiada Deflect Missiles.")
+        if target.faction == monk.faction or target.is_defeated():
+            raise ValueError("Odrzucony pocisk wymaga żywego wrogiego celu.")
+        distance = grid_distance_feet(monk.position, target.position)
+        if distance > 60 or not line_of_sight_clear(
+            board,
+            monk.position,
+            target.position,
+        ):
+            raise ValueError("Cel odrzucanego pocisku jest poza zasięgiem lub polem widzenia.")
+        if not can_spend_actor_resource(monk, "ki_points"):
+            raise ValueError("Brak 1 punktu Ki do odrzucenia pocisku.")
+        spent = spend_actor_resource(monk, "ki_points")
+        updated_state = replace_actor(state, spent.actor_after)
+        source = deflected_missile_attack_source(
+            spent.actor_after,
+            damage_type=damage_type,
+        )
+        if distance > source.range_feet:
+            source = replace(
+                source,
+                attack_roll_request=replace(
+                    source.attack_roll_request,
+                    mode=RollMode.DISADVANTAGE,
+                ),
+            )
+        attack_roll = resolve_d20_roll(
+            _manual_d20_input(
+                source.attack_roll_request,
+                int(natural_roll),
+                (
+                    int(natural_roll_2)
+                    if natural_roll_2 is not None
+                    else None
+                ),
+            )
+        )
+        attack = resolve_attack(
+            AttackDeclaration(
+                spent.actor_after,
+                actor_as_combat_target(target),
+                source,
+            ),
+            attack_roll,
+            ActionUse.ACTION_AVAILABLE,
+        )
+        message = _player_attack_message(
+            spent.actor_after.name,
+            target.name,
+            attack_roll.total,
+            attack.hit,
+            attack.critical,
+        )
+        return DeflectedMissileReturnResolution(
+            state=updated_state,
+            source=source,
+            attack_roll=attack_roll,
+            hit=attack.hit,
+            critical=attack.critical,
             message=message,
         )
 
@@ -1050,6 +1439,23 @@ def _manual_d20_input(
     if natural_roll_2 is None:
         raise ValueError("Ten rzut wymaga wpisania dwóch wyników d20.")
     return D20RollInput(request, int(natural_roll), int(natural_roll_2))
+
+
+def _damage_after_flat_reduction(
+    damage: DamageResult,
+    reduction: int,
+) -> DamageResult:
+    """Apply a flat reduction to raw components before target affinities."""
+
+    remaining_reduction = max(0, int(reduction))
+    reduced_components: list[DamageComponentInput] = []
+    for component in damage.components:
+        removed = min(component.amount, remaining_reduction)
+        remaining_reduction -= removed
+        reduced_components.append(
+            replace(component, amount=component.amount - removed)
+        )
+    return resolve_damage(tuple(reduced_components))
 
 
 def _player_attack_message(

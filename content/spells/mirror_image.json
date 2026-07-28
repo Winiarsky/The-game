@@ -1,0 +1,39 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "mirror_image",
+  "name": "Mirror Image",
+  "level": 2,
+  "school": "illusion",
+  "casting_time": "action",
+  "range": {
+    "kind": "self"
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": []
+  },
+  "duration": {
+    "kind": "minute",
+    "amount": 1
+  },
+  "concentration": false,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "targeted_status",
+    "label": "Mirror Image",
+    "effect_kind": "mirror_image",
+    "target_faction": "self",
+    "value": 3,
+    "cast_flag": "cast_mirror_image",
+    "instructions": "Powstają 3 duplikaty. Przy ataku na ciebie rzuć k20, by ustalić trafienie duplikatu; duplikat ma KP 10 + Dex i znika po trafieniu.",
+    "resolution_mode": "automatic",
+    "board_relevance": "direct"
+  }
+}

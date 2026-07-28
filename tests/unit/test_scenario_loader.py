@@ -1156,6 +1156,14 @@ def test_load_village_square_mvp_builds_exploration_locations_setup_points_and_o
         "ink": 2,
         "ink_pen": 4,
         "paper": 20,
+        "spell_component_arcane_lock": 2,
+        "spell_component_augury": 1,
+        "spell_component_continual_flame": 2,
+        "spell_component_find_familiar": 3,
+        "spell_component_identify": 1,
+        "spell_component_illusory_script": 3,
+        "spell_component_magic_mouth": 3,
+        "spell_component_warding_bond": 1,
         "explorers_pack": 1,
     }
     chain_mail = next(item for item in merchant.inventory if item.id == "chain_mail")

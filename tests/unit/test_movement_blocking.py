@@ -1,6 +1,15 @@
 import pytest
 
-from dnd_board_game.actors import Actor, ActorId, Faction
+from dataclasses import replace
+
+from dnd_board_game.actors import (
+    Actor,
+    ActorId,
+    CreatureSize,
+    Faction,
+    FeatureGrant,
+    FeatureSourceKind,
+)
 from dnd_board_game.world import (
     BLOCKING_TERRAIN,
     BoardState,
@@ -88,3 +97,49 @@ def test_diagonal_through_fully_blocked_corner_is_rejected():
 
     assert not can_traverse(board, actor, [actor], Coordinate(0, 0), Coordinate(1, 1))
     assert not find_path(board, actor, [actor], Coordinate(1, 1)).valid
+
+
+def test_halfling_nimbleness_crosses_larger_enemy_but_cannot_end_there():
+    board = BoardState()
+    halfling = replace(
+        _actor("halfling", Coordinate(0, 0)),
+        size=CreatureSize.SMALL,
+        features=(
+            FeatureGrant(
+                "halfling_nimbleness",
+                "Halfling Nimbleness",
+                FeatureSourceKind.SPECIES,
+                "halfling",
+            ),
+        ),
+    )
+    enemy = _actor("enemy", Coordinate(0, 1), Faction.ENEMY)
+
+    result = movement_range(board, halfling, (halfling, enemy))
+
+    assert can_traverse(
+        board,
+        halfling,
+        (halfling, enemy),
+        Coordinate(0, 0),
+        Coordinate(0, 1),
+    )
+    assert Coordinate(0, 1) not in result.reachable_tiles
+    assert Coordinate(0, 2) in result.reachable_tiles
+
+
+def test_small_actor_without_nimbleness_cannot_cross_medium_enemy():
+    board = BoardState()
+    small = replace(
+        _actor("small", Coordinate(0, 0)),
+        size=CreatureSize.SMALL,
+    )
+    enemy = _actor("enemy", Coordinate(0, 1), Faction.ENEMY)
+
+    assert not can_traverse(
+        board,
+        small,
+        (small, enemy),
+        Coordinate(0, 0),
+        Coordinate(0, 1),
+    )

@@ -139,13 +139,60 @@ def audit_content(content_root: str | Path) -> ContentAuditReport:
                 expected_schema=expected_schema,
                 context=str(path),
             )
-            local_id = _definition_id(data, path, kind)
-            validate_stable_id(local_id, f"{path}.id")
             unknown_packs = set(header.source_pack_ids) - set(source_packs)
             if unknown_packs:
                 raise ValueError(
                     "unknown source packs: " + ", ".join(sorted(unknown_packs))
                 )
+            if kind == "character_catalog":
+                from dnd_board_game.character_creation.content import (
+                    load_character_catalog,
+                )
+
+                catalog = load_character_catalog(path)
+                for definition_kind, definitions in (
+                    ("species", catalog.species),
+                    ("class", catalog.classes),
+                    ("background", catalog.backgrounds),
+                ):
+                    for definition in definitions:
+                        key = (definition_kind, definition.id)
+                        previous = seen.get(key)
+                        if previous is not None:
+                            raise ValueError(
+                                f"{definition_kind}:{definition.id} duplicates {previous}."
+                            )
+                        seen[key] = path
+                        entries.append(
+                            _entry(
+                                root,
+                                path,
+                                definition_kind,
+                                definition.id,
+                                header,
+                            )
+                        )
+                for character_class in catalog.classes:
+                    for subclass in character_class.subclass_choices:
+                        key = ("subclass", subclass.id)
+                        previous = seen.get(key)
+                        if previous is not None:
+                            raise ValueError(
+                                f"subclass:{subclass.id} duplicates {previous}."
+                            )
+                        seen[key] = path
+                        entries.append(
+                            _entry(
+                                root,
+                                path,
+                                "subclass",
+                                subclass.id,
+                                header,
+                            )
+                        )
+                continue
+            local_id = _definition_id(data, path, kind)
+            validate_stable_id(local_id, f"{path}.id")
             if kind == "item_collection":
                 raw_items = data.get("items")
                 if not isinstance(raw_items, list):
@@ -269,6 +316,15 @@ def audit_content(content_root: str | Path) -> ContentAuditReport:
 
 def _definition_files(root: Path) -> tuple[tuple[Path, str, str], ...]:
     result: list[tuple[Path, str, str]] = []
+    character_catalog = root / "character_creation" / "catalog.json"
+    if character_catalog.exists():
+        result.append(
+            (
+                character_catalog,
+                "character_catalog",
+                "dnd_board_game.character_catalog",
+            )
+        )
     for path in sorted((root / "features").glob("*.json")):
         result.append((path, "feature", "dnd_board_game.feature"))
     for path in sorted((root / "monsters").glob("*.json")):
@@ -278,7 +334,7 @@ def _definition_files(root: Path) -> tuple[tuple[Path, str, str], ...]:
     for path in sorted((root / "items").glob("*.json")):
         kind = (
             "item_collection"
-            if path.stem == "adventuring_gear"
+            if path.stem in {"adventuring_gear", "spell_components"}
             else "item_catalog"
             if path.stem in {"properties", "crafting_purposes"}
             else "item"

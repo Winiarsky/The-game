@@ -5,7 +5,7 @@ from dnd_board_game.scenarios import build_exploration_from_scenario, load_scena
 
 def test_party_check_uses_highest_total():
     exploration = build_exploration_from_scenario(load_scenario("content/scenarios/abandoned_watchtower.json"))
-    hero, rogue = exploration.actors
+    hero, rogue = exploration.actors[:2]
 
     result = resolve_party_check(
         (

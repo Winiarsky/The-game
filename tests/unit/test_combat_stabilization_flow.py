@@ -6,7 +6,21 @@ from dnd_board_game.actors import AbilityScores, Actor, ActorId, DeathSaveState,
 from dnd_board_game.application import StabilizationMethod, legal_stabilization_targets, resolve_combat_stabilization
 from dnd_board_game.combat import InitiativeEntry, InitiativeOrder, start_combat
 from dnd_board_game.inventory import InventoryItem
-from dnd_board_game.rules import D20RollInput, D20RollRequest, resolve_d20_roll
+from dnd_board_game.rules import (
+    D20RollInput,
+    D20RollRequest,
+    SpellAccessKind,
+    SpellAccessProfile,
+    SpellCastingTime,
+    SpellComponents,
+    SpellDefinition,
+    SpellDuration,
+    SpellDurationKind,
+    SpellRange,
+    SpellRangeKind,
+    SpellSchool,
+    resolve_d20_roll,
+)
 from dnd_board_game.world import Coordinate
 
 
@@ -80,6 +94,42 @@ def test_healers_kit_stabilizes_without_roll_and_consumes_one_use() -> None:
     assert result.success is True
     assert result.kit_remaining == 1
     assert result.natural_roll is None
+
+
+def test_spare_the_dying_stabilizes_without_roll_or_slot() -> None:
+    spell = SpellDefinition(
+        id="spare_the_dying",
+        name="Spare the Dying",
+        level=0,
+        school=SpellSchool.NECROMANCY,
+        casting_time=SpellCastingTime.ACTION,
+        range=SpellRange(SpellRangeKind.TOUCH),
+        components=SpellComponents(verbal=True),
+        duration=SpellDuration(SpellDurationKind.INSTANTANEOUS),
+        effect_kind="combat_action",
+    )
+    healer = replace(
+        _actor("healer", Faction.ALLY, Coordinate(0, 0)),
+        spells=(spell,),
+        spell_ids=(spell.id,),
+        spell_access=(
+            SpellAccessProfile(SpellAccessKind.KNOWN, (spell.id,)),
+        ),
+    )
+    target = _dying(_actor("target", Faction.ALLY, Coordinate(1, 0)))
+    enemy = _actor("enemy", Faction.ENEMY, Coordinate(5, 0))
+
+    result = resolve_combat_stabilization(
+        _state(healer, target, enemy),
+        target_id="target",
+        method=StabilizationMethod.SPARE_THE_DYING,
+    )
+
+    assert result.success is True
+    assert result.natural_roll is None
+    assert next(
+        actor for actor in result.state.actors if actor.id == target.id
+    ).death_saves == DeathSaveState(stable=True)
 
 
 def test_only_adjacent_dying_allies_are_legal_targets() -> None:

@@ -338,7 +338,7 @@ def test_demo_mini_combat_loop_enemy_movement_requires_destination_scan(tmp_path
     assert goblin.position.as_tuple() == (1, 0)
     assert any(event[0] == "scan_board" and event[1] == [(1, 0)] for event in connection.events)
     colors = [event[2] for event in connection.events if event[0] == "set_leds"]
-    assert [220, 0, 0] in colors
+    # A one-tile move has no intermediate path tile to paint red.
     assert [255, 120, 0] in colors
     events = _events(result.observation_path)
     assert any(

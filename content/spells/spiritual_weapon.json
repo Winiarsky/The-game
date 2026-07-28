@@ -1,0 +1,62 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "spiritual_weapon",
+  "name": "Spiritual Weapon",
+  "level": 2,
+  "school": "evocation",
+  "casting_time": "bonus_action",
+  "range": {
+    "kind": "distance",
+    "feet": 60
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": []
+  },
+  "duration": {
+    "kind": "minute",
+    "amount": 1
+  },
+  "concentration": false,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "summon",
+    "label": "Spiritual Weapon",
+    "target_faction": "self",
+    "cast_flag": "cast_spiritual_weapon",
+    "summon": {
+      "id": "spiritual_weapon",
+      "name": "Spiritual Weapon",
+      "size": "small",
+      "ac": 18,
+      "hp": 1,
+      "speed_feet": 20,
+      "ability_scores": {
+        "strength": 10,
+        "dexterity": 10,
+        "constitution": 10,
+        "intelligence": 1,
+        "wisdom": 10,
+        "charisma": 1
+      },
+      "attack": {
+        "id": "spiritual_weapon_strike",
+        "name": "Spiritual Weapon Strike",
+        "bonus": 5,
+        "range_feet": 5,
+        "damage_fixed": 7,
+        "damage_type": "force"
+      }
+    },
+    "instructions": "Utwórz broń w 60 stopach i wykonaj melee spell attack za 1k8 + modyfikator cechy force; bonus action przesuwa ją 20 stóp i atakuje ponownie.",
+    "resolution_mode": "automatic",
+    "board_relevance": "direct"
+  }
+}

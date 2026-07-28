@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Postacie</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='launcher.css') }}">
+</head>
+<body class="launcher-page">
+  <main class="flow-shell creator-shell">
+    <header class="flow-header">
+      <a class="back-link" href="{{ url_for('index') }}">← Menu główne</a>
+      <span class="step-label">Roster bohaterów</span>
+      <h1>Twoje postacie</h1>
+      <p>Każda postać jest odbudowywana z zapisanych wyborów przez aktualny katalog zasad.</p>
+    </header>
+
+    {% if request.args.get('deleted') %}
+      <div class="flow-note">Postać została usunięta z rosteru. Plik przeniesiono do lokalnego kosza.</div>
+    {% endif %}
+
+    {% if roster.errors %}
+      <div class="flow-error" role="alert">
+        <b>{{ roster.errors|length }} zapisów nie udało się odczytać.</b>
+        <span>Niekompatybilne pliki pominięto, aby nie blokowały pozostałych postaci.</span>
+      </div>
+    {% endif %}
+
+    {% if roster.characters %}
+      <section class="roster-grid">
+        {% for item in roster.characters %}
+          <a class="roster-card" href="{{ url_for('character_detail', character_id=item.actor.id) }}">
+            <span class="roster-avatar">{{ item.actor.name[:1]|upper }}</span>
+            <span>
+              <b>{{ item.actor.name }}</b>
+              <small>Poziom {{ item.actor.level }} · {{ item.species_id }} · {{ item.class_id }}</small>
+              <em>{{ item.actor.hp }} HP · KP {{ item.actor.ac }}</em>
+            </span>
+          </a>
+        {% endfor %}
+      </section>
+    {% else %}
+      <section class="empty-state">
+        <b>Roster jest pusty</b>
+        <p>Stwórz pierwszą postać poziomu 1. Nie musisz jeszcze rozpoczynać scenariusza.</p>
+      </section>
+    {% endif %}
+
+    <div class="flow-actions">
+      <a class="button secondary" href="{{ url_for('index') }}">Wróć</a>
+      <a class="button" href="{{ url_for('new_character') }}">Stwórz nową postać</a>
+    </div>
+  </main>
+</body>
+</html>

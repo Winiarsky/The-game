@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Mapping
 
 from dnd_board_game.actors import Actor, spend_actor_resource
@@ -26,7 +26,12 @@ from dnd_board_game.combat import (
     resolve_spell_save,
     use_action_economy_cost,
 )
-from dnd_board_game.rules import RollModifier
+from dnd_board_game.rules import (
+    RollMode,
+    RollModifier,
+    save_damage_multiplier,
+    spell_save_dc_for_spell,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,6 +103,28 @@ class ActionResourceResolver:
         resource_pool_id: str | None = None,
         resource_cost: int = 1,
     ) -> ActionResourceResolution:
+        is_spell = bool(
+            spell_id
+            and any(spell.id == spell_id for spell in actor.spells)
+        )
+        if is_spell:
+            if (
+                action_cost == ActionEconomyCost.BONUS_ACTION
+                and state.turn_action.leveled_action_spell_cast
+            ):
+                raise ValueError(
+                    "Po rzuceniu czaru poziomowego akcją nie można w tej turze "
+                    "rzucić czaru akcją bonusową."
+                )
+            if (
+                action_cost == ActionEconomyCost.ACTION
+                and state.turn_action.bonus_action_spell_cast
+                and spell_level > 0
+            ):
+                raise ValueError(
+                    "Po czarze rzuconym akcją bonusową akcją można rzucić "
+                    "wyłącznie cantrip."
+                )
         action_result = use_action_economy_cost(state, action_cost)
         if not action_result.accepted:
             raise ValueError(action_result.message)
@@ -121,6 +148,24 @@ class ActionResourceResolver:
             )
             actor_after_resource = usage.actor_after
             state_after_resource = replace_actor(state_after_resource, actor_after_resource)
+        if is_spell:
+            state_after_resource = replace(
+                state_after_resource,
+                turn_action=replace(
+                    state_after_resource.turn_action,
+                    bonus_action_spell_cast=(
+                        state_after_resource.turn_action.bonus_action_spell_cast
+                        or action_cost == ActionEconomyCost.BONUS_ACTION
+                    ),
+                    leveled_action_spell_cast=(
+                        state_after_resource.turn_action.leveled_action_spell_cast
+                        or (
+                            action_cost == ActionEconomyCost.ACTION
+                            and spell_level > 0
+                        )
+                    ),
+                ),
+            )
         return ActionResourceResolution(
             state=state_after_resource,
             actor_before=actor,
@@ -181,6 +226,7 @@ class SpellSaveAttackResolver(AttackActionResolver):
         source: AttackSource,
         rng: random.Random,
         saving_throw_modifiers: tuple[RollModifier, ...] = (),
+        heightened: bool = False,
     ) -> SingleTargetSaveSpellConfirmation:
         if not source.save_ability:
             raise ValueError(f"Czar {source.name} nie ma zdefiniowanego rzutu obronnego.")
@@ -203,18 +249,27 @@ class SpellSaveAttackResolver(AttackActionResolver):
             natural_roll=rng.randint(1, 20),
             natural_roll_2=(
                 rng.randint(1, 20)
-                if source.save_ability == "dexterity"
-                and has_condition(
-                    resource_use.state.condition_states,
-                    str(target_after.id),
-                    CombatCondition.RESTRAINED,
+                if heightened
+                or (
+                    source.save_ability == "dexterity"
+                    and has_condition(
+                        resource_use.state.condition_states,
+                        str(target_after.id),
+                        CombatCondition.RESTRAINED,
+                    )
                 )
                 else None
             ),
             damage_on_success=source.save_damage_on_success,
+            effect_tags=(
+                (source.damage_type,)
+                if source.damage_type == "poison"
+                else ()
+            ),
             situational_modifiers=saving_throw_modifiers,
             condition_states=resource_use.state.condition_states,
             combat_actors=resource_use.state.actors,
+            roll_mode=RollMode.DISADVANTAGE if heightened else RollMode.NORMAL,
         )
         return SingleTargetSaveSpellConfirmation(resource_use.state, resource_use, saving_throw)
 
@@ -229,6 +284,8 @@ class AreaSpellResolver(ActionResourceResolver):
         target_ids: tuple[str, ...],
         rng: random.Random,
         saving_throw_modifiers_by_target: Mapping[str, tuple[RollModifier, ...]] | None = None,
+        careful_target_ids: tuple[str, ...] = (),
+        heightened_target_id: str | None = None,
     ) -> AreaSpellConfirmation:
         resource_use = self.consume_action_and_source_resource(
             state,
@@ -247,6 +304,21 @@ class AreaSpellResolver(ActionResourceResolver):
             target_ids=target_ids,
             rng=rng,
             saving_throw_modifiers_by_target=saving_throw_modifiers_by_target,
+            heightened_target_id=heightened_target_id,
+        )
+        careful = set(careful_target_ids)
+        saves = tuple(
+            replace(
+                save,
+                success=True,
+                damage_multiplier=save_damage_multiplier(
+                    True,
+                    save.damage_on_success,
+                ),
+            )
+            if save.actor_id in careful
+            else save
+            for save in saves
         )
         return AreaSpellConfirmation(resource_use.state, resource_use, saves)
 
@@ -310,9 +382,16 @@ class HealingActionResolver(ActionResourceResolver):
             spell_id=source.id,
             cast_level=source.cast_level,
             action_cost=source.action_cost,
+            resource_pool_id=source.resource_pool_id,
+            resource_cost=source.resource_cost,
         )
         target = _actor_by_id(resource_use.state, target_id)
-        applied = apply_healing_result(target, source, int(amount))
+        applied = apply_healing_result(
+            target,
+            source,
+            int(amount),
+            condition_states=resource_use.state.condition_states,
+        )
         return HealingActionResolution(replace_actor(resource_use.state, applied.actor_after), resource_use, applied)
 
 
@@ -320,8 +399,9 @@ def spell_save_dc(caster: Actor, source: AttackSource) -> int:
     dc = int(source.save_dc or 0)
     if dc > 0:
         return dc
-    if caster.spell_save_dc > 0:
-        return caster.spell_save_dc
+    source_dc = spell_save_dc_for_spell(caster, source.id)
+    if source_dc > 0:
+        return source_dc
     raise ValueError(f"Czar {source.name} wymaga ST rzutu obronnego.")
 
 
@@ -333,6 +413,7 @@ def roll_spell_saves_for_targets(
     target_ids: tuple[str, ...],
     rng: random.Random,
     saving_throw_modifiers_by_target: Mapping[str, tuple[RollModifier, ...]] | None = None,
+    heightened_target_id: str | None = None,
 ) -> tuple[SpellSaveResult, ...]:
     if not source.save_ability:
         return ()
@@ -345,6 +426,7 @@ def roll_spell_saves_for_targets(
             continue
         if target.is_defeated():
             continue
+        heightened = target_id == heightened_target_id
         saves.append(
             resolve_spell_save(
                 target,
@@ -353,13 +435,22 @@ def roll_spell_saves_for_targets(
                 natural_roll=rng.randint(1, 20),
                 natural_roll_2=(
                     rng.randint(1, 20)
-                    if source.save_ability == "dexterity"
-                    and has_condition(
-                        state.condition_states,
-                        str(target.id),
-                        CombatCondition.RESTRAINED,
+                    if heightened
+                    or (
+                        source.save_ability == "dexterity"
+                        and has_condition(
+                            state.condition_states,
+                            str(target.id),
+                            CombatCondition.RESTRAINED,
+                        )
                     )
                     else None
+                ),
+                natural_rerolls=(),
+                effect_tags=(
+                    (source.damage_type,)
+                    if source.damage_type == "poison"
+                    else ()
                 ),
                 damage_on_success=source.save_damage_on_success,
                 situational_modifiers=(saving_throw_modifiers_by_target or {}).get(
@@ -368,6 +459,11 @@ def roll_spell_saves_for_targets(
                 ),
                 condition_states=state.condition_states,
                 combat_actors=state.actors,
+                roll_mode=(
+                    RollMode.DISADVANTAGE
+                    if heightened
+                    else RollMode.NORMAL
+                ),
             )
         )
     return tuple(saves)

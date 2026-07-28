@@ -1,0 +1,43 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "magic_missile",
+  "name": "Magic Missile",
+  "level": 1,
+  "school": "evocation",
+  "casting_time": "action",
+  "range": {
+    "kind": "distance",
+    "feet": 120
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": []
+  },
+  "duration": {
+    "kind": "instantaneous"
+  },
+  "concentration": false,
+  "ritual": false,
+  "exploration_use": {
+    "tags": ["damage", "damage_creature"],
+    "targets": ["creature"],
+    "consequences": []
+  },
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "multi_target_damage",
+    "target_faction": "enemy",
+    "projectile_count": 3,
+    "upcast_projectiles_per_level": 1,
+    "damage_die_sides": 4,
+    "damage_modifier": 1,
+    "damage_type": "force",
+    "cast_flag": "cast_magic_missile"
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "identify",
+  "name": "Identify",
+  "level": 1,
+  "school": "divination",
+  "casting_time": "minute",
+  "range": {
+    "kind": "touch"
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": [
+      {
+        "item_id": "spell_component_identify",
+        "label": "a pearl worth at least 100 gp and an owl feather",
+        "minimum_value_cp": 10000
+      }
+    ]
+  },
+  "duration": {
+    "kind": "instantaneous"
+  },
+  "concentration": false,
+  "ritual": true,
+  "effect": {
+    "kind": "exploration",
+    "effect_type": "set_flag",
+    "flag_key": "cast_identify",
+    "flag_value": true,
+    "instructions": "Po minucie dotykania obiektu poznaj jego właściwości magiczne, użycie, attunement, ładunki i działające na nim czary."
+  }
+}

@@ -1,22 +1,336 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
-from flask import Flask, jsonify, render_template, request, send_from_directory
+from flask import (
+    Flask,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    send_from_directory,
+    url_for,
+)
 
 from dnd_board_game.actions import slash_commands_payload
+from dnd_board_game.actors import AbilityScores
+from dnd_board_game.character_creation import (
+    ABILITY_IDS,
+    CharacterDraft,
+    CharacterRoster,
+    LevelUpChoices,
+    build_character,
+    character_record_payload,
+    load_character_catalog,
+    load_character_resources,
+    level_up_character,
+    validate_character_draft,
+)
+from dnd_board_game.inventory import effective_armor_class
+from dnd_board_game.rules import experience_progress
 from dnd_board_game.world import Coordinate
 
 if TYPE_CHECKING:
     from .exploration_app import ExplorationUiSession
 
 
-def create_app(session: ExplorationUiSession) -> Flask:
+def create_app(
+    session: ExplorationUiSession,
+    *,
+    character_dir: str | Path = "data/characters",
+) -> Flask:
     app = Flask(__name__)
+    character_catalog = load_character_catalog(
+        Path("content/character_creation/catalog.json")
+    )
+    character_resources = load_character_resources(character_catalog, "content")
+    character_roster = CharacterRoster(
+        character_dir,
+        character_catalog,
+        character_resources,
+    )
+
+    def persist_character_progress(actors) -> None:
+        for actor in actors:
+            character_roster.update_experience(
+                str(actor.id),
+                actor.experience_points,
+            )
+
+    session.character_progress_sink = persist_character_progress
 
     @app.get("/")
     def index():
+        return render_template(
+            "main_menu.html",
+            scenario_name=session.exploration.scenario_name,
+            save_exists=session.snapshot_path.exists(),
+        )
+
+    @app.get("/play")
+    def play():
         return render_template("exploration.html", slash_commands=slash_commands_payload())
+
+    @app.get("/new-game")
+    def new_game():
+        roster = character_roster.scan()
+        return render_template(
+            "new_game.html",
+            scenario={
+                "id": session.exploration.scenario_id,
+                "name": session.exploration.scenario_name,
+                "party_size": sum(
+                    actor.faction.value == "ally"
+                    for actor in session.exploration.actors
+                ),
+            },
+            roster=roster,
+        )
+
+    @app.post("/new-game/start")
+    def start_new_game():
+        scenario_id = str(request.form.get("scenario_id", "")).strip()
+        if scenario_id != session.exploration.scenario_id:
+            return render_template(
+                "new_game.html",
+                scenario={
+                    "id": session.exploration.scenario_id,
+                    "name": session.exploration.scenario_name,
+                    "party_size": sum(
+                        actor.faction.value == "ally"
+                        for actor in session.exploration.actors
+                    ),
+                },
+                roster=character_roster.scan(),
+                error="Wybrany scenariusz nie jest aktywny w tym uruchomieniu.",
+            ), 400
+        character_ids = tuple(request.form.getlist("character_ids"))
+        if not 1 <= len(character_ids) <= 5 or len(character_ids) != len(
+            set(character_ids)
+        ):
+            return render_template(
+                "new_game.html",
+                scenario={
+                    "id": session.exploration.scenario_id,
+                    "name": session.exploration.scenario_name,
+                    "party_size": sum(
+                        actor.faction.value == "ally"
+                        for actor in session.exploration.actors
+                    ),
+                },
+                roster=character_roster.scan(),
+                selected_character_ids=character_ids,
+                error="Wybierz od 1 do 5 różnych zapisanych postaci.",
+            ), 400
+        try:
+            party = tuple(
+                character_roster.load(character_id).actor
+                for character_id in character_ids
+            )
+            session.configure_custom_party(party)
+        except ValueError as exc:
+            return render_template(
+                "new_game.html",
+                scenario={
+                    "id": session.exploration.scenario_id,
+                    "name": session.exploration.scenario_name,
+                    "party_size": sum(
+                        actor.faction.value == "ally"
+                        for actor in session.exploration.actors
+                    ),
+                },
+                roster=character_roster.scan(),
+                selected_character_ids=character_ids,
+                error=str(exc),
+            ), 400
+        return redirect(url_for("play"))
+
+    @app.get("/load-game")
+    def load_game():
+        return render_template(
+            "load_game.html",
+            save={
+                "exists": session.snapshot_path.exists(),
+                "scenario_name": session.exploration.scenario_name,
+                "path": str(session.snapshot_path),
+            },
+        )
+
+    @app.post("/load-game/current")
+    def load_current_game():
+        if not session.snapshot_path.exists():
+            return render_template(
+                "load_game.html",
+                save={
+                    "exists": False,
+                    "scenario_name": session.exploration.scenario_name,
+                    "path": str(session.snapshot_path),
+                },
+                error="Nie znaleziono kompatybilnego zapisu gry.",
+            ), 404
+        session.load_snapshot()
+        return redirect(url_for("play"))
+
+    @app.get("/characters")
+    def characters():
+        return render_template(
+            "character_creator.html",
+            roster=character_roster.scan(),
+        )
+
+    @app.get("/characters/new")
+    def new_character():
+        return _render_character_form(
+            character_catalog,
+            form={},
+            issues=(),
+        )
+
+    @app.post("/characters")
+    def create_character():
+        draft = _character_draft_from_request()
+        validation = validate_character_draft(draft, character_catalog)
+        if not validation.valid:
+            return _render_character_form(
+                character_catalog,
+                form=request.form,
+                issues=validation.issues,
+            ), 400
+        try:
+            character = build_character(
+                draft,
+                character_catalog,
+                character_resources,
+            )
+            character_roster.save(character)
+        except ValueError as exc:
+            return _render_character_form(
+                character_catalog,
+                form=request.form,
+                issues=({"field": "id", "message": str(exc)},),
+            ), 400
+        return redirect(url_for("character_detail", character_id=str(character.actor.id)))
+
+    @app.get("/characters/<character_id>")
+    def character_detail(character_id: str):
+        try:
+            character = character_roster.load(character_id)
+        except ValueError as exc:
+            return render_template(
+                "character_not_found.html",
+                message=str(exc),
+            ), 404
+        return render_template(
+            "character_detail.html",
+            character=character,
+            payload=character_record_payload(character),
+            effective_ac=effective_armor_class(character.actor),
+            experience=experience_progress(character.actor),
+            species=character_catalog.species_by_id(character.species_id),
+            character_class=character_catalog.class_by_id(character.class_id),
+            background=character_catalog.background_by_id(character.background_id),
+        )
+
+    @app.get("/characters/<character_id>/copy")
+    def copy_character(character_id: str):
+        try:
+            character = character_roster.load(character_id)
+        except ValueError as exc:
+            return render_template(
+                "character_not_found.html",
+                message=str(exc),
+            ), 404
+        return _render_character_form(
+            character_catalog,
+            form=_copy_character_form(character),
+            issues=(),
+            copy_source=character.actor.name,
+        )
+
+    @app.get("/characters/<character_id>/level-up")
+    def character_level_up(character_id: str):
+        try:
+            character = character_roster.load(character_id)
+        except ValueError as exc:
+            return render_template(
+                "character_not_found.html",
+                message=str(exc),
+            ), 404
+        return render_template(
+            "character_level_up.html",
+            **_level_up_context(
+                character,
+                character_catalog,
+                character_resources,
+            ),
+        )
+
+    @app.post("/characters/<character_id>/level-up")
+    def apply_character_level_up(character_id: str):
+        try:
+            character = character_roster.load(character_id)
+            result = level_up_character(
+                character,
+                character_catalog,
+                character_resources,
+                choices=LevelUpChoices(
+                    selected_cantrip_ids=tuple(
+                        request.form.getlist("selected_cantrip_ids")
+                    ),
+                    selected_spell_ids=tuple(
+                        request.form.getlist("selected_spell_ids")
+                    ),
+                    selected_prepared_spell_ids=tuple(
+                        request.form.getlist("selected_prepared_spell_ids")
+                    ),
+                    selected_subclass_id=str(
+                        request.form.get("selected_subclass_id", "")
+                    ),
+                    selected_expertise_ids=tuple(
+                        request.form.getlist("selected_expertise_ids")
+                    ),
+                    selected_fighting_style_id=str(
+                        request.form.get("selected_fighting_style_id", "")
+                    ),
+                    selected_class_option_ids=tuple(
+                        request.form.getlist("selected_class_option_ids")
+                    ),
+                ),
+            )
+            character_roster.save(result.character_after, overwrite=True)
+        except ValueError as exc:
+            try:
+                character = character_roster.load(character_id)
+            except ValueError:
+                return render_template(
+                    "character_not_found.html",
+                    message=str(exc),
+                ), 404
+            return render_template(
+                "character_level_up.html",
+                **_level_up_context(
+                    character,
+                    character_catalog,
+                    character_resources,
+                    form=request.form,
+                    error=str(exc),
+                ),
+            ), 400
+        return redirect(
+            url_for("character_detail", character_id=character_id)
+        )
+
+    @app.post("/characters/<character_id>/delete")
+    def delete_character(character_id: str):
+        try:
+            character_roster.delete(character_id)
+        except ValueError as exc:
+            return render_template(
+                "character_not_found.html",
+                message=str(exc),
+            ), 404
+        return redirect(url_for("characters", deleted=character_id))
 
     @app.get("/scenario-assets/<path:filename>")
     def scenario_assets(filename: str):
@@ -249,6 +563,27 @@ def create_app(session: ExplorationUiSession) -> Flask:
                     actor_id=str(data.get("actor_id", "")),
                     die_sides=int(data.get("die_sides", 0)),
                     natural_roll=int(data.get("natural_roll", 0)),
+                    song_of_rest_roll=(
+                        int(data["song_of_rest_roll"])
+                        if data.get("song_of_rest_roll") not in (None, "", 0, "0")
+                        else None
+                    ),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/rest/short/spell-recovery")
+    def api_short_rest_spell_recovery():
+        data = request.get_json(silent=True) or {}
+        try:
+            raw_levels = data.get("slot_levels", [])
+            if not isinstance(raw_levels, list):
+                raise ValueError("slot_levels musi być listą.")
+            return jsonify(
+                session.recover_short_rest_spell_slots(
+                    actor_id=str(data.get("actor_id", "")),
+                    slot_levels=tuple(int(level) for level in raw_levels),
                 )
             )
         except Exception as exc:
@@ -308,6 +643,11 @@ def create_app(session: ExplorationUiSession) -> Flask:
                     selected_social_skill=(
                         str(data["selected_social_skill"])
                         if data.get("selected_social_skill") is not None
+                        else None
+                    ),
+                    selected_action_source_id=(
+                        str(data["selected_action_source_id"])
+                        if data.get("selected_action_source_id") is not None
                         else None
                     ),
                     conversation_only=bool(data.get("conversation_only", False)),
@@ -521,6 +861,7 @@ def create_app(session: ExplorationUiSession) -> Flask:
                 session.submit_encounter_initiative_roll(
                     int(data.get("natural_roll", 0)),
                     int(natural_roll_2) if natural_roll_2 not in (None, "") else None,
+                    _natural_rerolls(data),
                 )
             )
         except Exception as exc:
@@ -535,6 +876,17 @@ def create_app(session: ExplorationUiSession) -> Flask:
                 session.submit_player_attack_roll(
                     natural_roll=int(data.get("natural_roll", 0)),
                     natural_roll_2=int(natural_roll_2) if natural_roll_2 not in (None, "") else None,
+                    natural_rerolls=_natural_rerolls(data),
+                    bardic_inspiration_roll=(
+                        int(data["bardic_inspiration_roll"])
+                        if data.get("bardic_inspiration_roll") not in (None, "", 0, "0")
+                        else None
+                    ),
+                    bless_roll=(
+                        int(data["bless_roll"])
+                        if data.get("bless_roll") not in (None, "", 0, "0")
+                        else None
+                    ),
                 )
             )
         except Exception as exc:
@@ -549,6 +901,7 @@ def create_app(session: ExplorationUiSession) -> Flask:
                 session.select_combat_attack_source(
                     str(data.get("source_id", "")),
                     int(cast_level) if cast_level not in (None, "") else None,
+                    tuple(str(value) for value in data.get("metamagic_ids", ())),
                 )
             )
         except Exception as exc:
@@ -567,6 +920,26 @@ def create_app(session: ExplorationUiSession) -> Flask:
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
+    @app.post("/api/exploration/spell")
+    def api_exploration_spell():
+        data = request.get_json(silent=True) or {}
+        try:
+            cast_level = data.get("cast_level")
+            return jsonify(
+                session.cast_exploration_spell(
+                    str(data.get("actor_id", "")),
+                    str(data.get("spell_id", "")),
+                    cast_level=(
+                        int(cast_level)
+                        if cast_level not in (None, "")
+                        else None
+                    ),
+                    target_id=str(data.get("target_id", "")),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
     @app.post("/api/combat/healing-source")
     def api_combat_healing_source():
         data = request.get_json(silent=True) or {}
@@ -576,6 +949,7 @@ def create_app(session: ExplorationUiSession) -> Flask:
                 session.select_combat_healing_source(
                     str(data.get("source_id", "")),
                     int(cast_level) if cast_level not in (None, "") else None,
+                    tuple(str(value) for value in data.get("metamagic_ids", ())),
                 )
             )
         except Exception as exc:
@@ -585,6 +959,18 @@ def create_app(session: ExplorationUiSession) -> Flask:
     def api_combat_player_attack_confirm():
         try:
             return jsonify(session.confirm_player_attack_target())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/twinned-attack-target")
+    def api_combat_twinned_attack_target():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                session.select_twinned_attack_target(
+                    str(data.get("target_id", "")),
+                )
+            )
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
@@ -607,11 +993,66 @@ def create_app(session: ExplorationUiSession) -> Flask:
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
+    @app.post("/api/combat/divine-smite")
+    def api_combat_divine_smite():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                session.select_combat_divine_smite(
+                    slot_level=int(data.get("slot_level", 0)),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/open-hand-technique")
+    def api_combat_open_hand_technique():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                session.resolve_combat_open_hand_technique(
+                    mode=str(data.get("mode", "")),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/open-hand-technique/skip")
+    def api_combat_open_hand_technique_skip():
+        try:
+            return jsonify(session.skip_combat_open_hand_technique())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/repelling-blast")
+    def api_combat_repelling_blast():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                session.resolve_repelling_blast(
+                    push=bool(data.get("push", True)),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
     @app.post("/api/combat/player-healing")
     def api_combat_player_healing():
         data = request.get_json(silent=True) or {}
         try:
             return jsonify(session.submit_player_healing_roll(healing=int(data.get("healing", 0))))
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/twinned-healing-target")
+    def api_combat_twinned_healing_target():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                session.select_twinned_healing_target(
+                    str(data.get("target_id", "")),
+                )
+            )
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
@@ -626,6 +1067,48 @@ def create_app(session: ExplorationUiSession) -> Flask:
     def api_combat_area_spell_confirm():
         try:
             return jsonify(session.confirm_player_area_spell())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/area-spell/sculpt")
+    def api_combat_area_spell_sculpt():
+        data = request.get_json(silent=True) or {}
+        try:
+            raw_ids = data.get("target_ids", [])
+            if not isinstance(raw_ids, list):
+                raise ValueError("target_ids musi być listą.")
+            return jsonify(
+                session.select_sculpt_spells_targets(
+                    tuple(str(target_id) for target_id in raw_ids),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/area-spell/metamagic-targets")
+    def api_combat_area_spell_metamagic_targets():
+        data = request.get_json(silent=True) or {}
+        try:
+            heightened = data.get("heightened_target_id")
+            return jsonify(
+                session.select_area_spell_metamagic_targets(
+                    careful_target_ids=tuple(
+                        str(value) for value in data.get("careful_target_ids", ())
+                    ),
+                    heightened_target_id=(
+                        str(heightened)
+                        if heightened not in (None, "")
+                        else None
+                    ),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/metamagic/empowered")
+    def api_combat_metamagic_empowered():
+        try:
+            return jsonify(session.activate_empowered_spell())
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
@@ -656,6 +1139,121 @@ def create_app(session: ExplorationUiSession) -> Flask:
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
+    @app.post("/api/combat/assisted-spell")
+    def api_combat_assisted_spell():
+        data = request.get_json(silent=True) or {}
+        try:
+            cast_level = data.get("cast_level")
+            return jsonify(
+                session.use_assisted_combat_spell(
+                    str(data.get("action_id", "")),
+                    cast_level=(
+                        int(cast_level)
+                        if cast_level not in (None, "")
+                        else None
+                    ),
+                    metamagic_ids=tuple(
+                        str(value) for value in data.get("metamagic_ids", ())
+                    ),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/multi-target-spell/start")
+    def api_combat_multi_target_spell_start():
+        data = request.get_json(silent=True) or {}
+        try:
+            cast_level = data.get("cast_level")
+            return jsonify(
+                session.start_multi_target_damage_spell(
+                    str(data.get("action_id", "")),
+                    cast_level=(
+                        int(cast_level)
+                        if cast_level not in (None, "")
+                        else None
+                    ),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/multi-target-spell/target")
+    def api_combat_multi_target_spell_target():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                session.select_multi_target_spell_target(
+                    str(data.get("target_id", ""))
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/multi-target-spell/clear")
+    def api_combat_multi_target_spell_clear():
+        try:
+            return jsonify(session.clear_multi_target_spell_targets())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/multi-target-spell/confirm")
+    def api_combat_multi_target_spell_confirm():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                session.confirm_multi_target_damage_spell(
+                    tuple(int(value) for value in data.get("die_rolls", ())),
+                    tuple(int(value) for value in data.get("natural_rolls", ())),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/multi-target-spell/cancel")
+    def api_combat_multi_target_spell_cancel():
+        try:
+            return jsonify(session.cancel_multi_target_damage_spell())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/class-feature")
+    def api_combat_class_feature():
+        data = request.get_json(silent=True) or {}
+        try:
+            raw_allocations = data.get("allocations", [])
+            allocations = tuple(
+                (str(entry.get("target_id", "")), int(entry.get("points", 0)))
+                for entry in raw_allocations
+                if isinstance(entry, dict)
+            )
+            saving_rolls = tuple(
+                (str(entry.get("target_id", "")), int(entry.get("natural_roll", 0)))
+                for entry in data.get("saving_rolls", [])
+                if isinstance(entry, dict)
+            )
+            natural_roll = data.get("natural_roll")
+            return jsonify(
+                session.use_combat_class_feature(
+                    str(data.get("action_id", "")),
+                    natural_roll=(
+                        int(natural_roll)
+                        if natural_roll not in (None, "")
+                        else None
+                    ),
+                    target_id=str(data.get("target_id", "")),
+                    points=int(data.get("points", 0)),
+                    mode=str(data.get("mode", "")),
+                    slot_level=int(data.get("slot_level", 0)),
+                    source_item_id=str(data.get("source_item_id", "")),
+                    form_id=str(data.get("form_id", "")),
+                    saving_rolls=saving_rolls,
+                    allocations=allocations,
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
     @app.post("/api/combat/concentration/start")
     def api_combat_concentration_start():
         data = request.get_json(silent=True) or {}
@@ -678,14 +1276,21 @@ def create_app(session: ExplorationUiSession) -> Flask:
             if not isinstance(raw_target_ids, list):
                 raise ValueError("target_ids musi być listą.")
             target_ids = tuple(str(target_id) for target_id in raw_target_ids)
-            return jsonify(
-                session.confirm_combat_concentration_action(
-                    target_id=(
+            confirmation_kwargs: dict[str, object] = {
+                "target_id": (
                         str(data["target_id"])
                         if "target_id" in data
                         else None
                     ),
-                    target_ids=target_ids,
+                "target_ids": target_ids,
+            }
+            if data.get("roll_total") not in (None, ""):
+                confirmation_kwargs["roll_total"] = int(data["roll_total"])
+            if data.get("effect_option") not in (None, ""):
+                confirmation_kwargs["effect_option"] = str(data["effect_option"])
+            return jsonify(
+                session.confirm_combat_concentration_action(
+                    **confirmation_kwargs
                 )
             )
         except Exception as exc:
@@ -975,6 +1580,88 @@ def create_app(session: ExplorationUiSession) -> Flask:
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
+    @app.post("/api/combat/retaliation-spell/cast")
+    def api_combat_retaliation_spell_cast():
+        try:
+            return jsonify(session.cast_retaliation_spell_reaction())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/retaliation-spell/skip")
+    def api_combat_retaliation_spell_skip():
+        try:
+            return jsonify(session.skip_retaliation_spell_reaction())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/cutting-words/roll")
+    def api_combat_cutting_words_roll():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                session.resolve_cutting_words_reaction(
+                    die_roll=int(data.get("die_roll", 0)),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/cutting-words/skip")
+    def api_combat_cutting_words_skip():
+        try:
+            return jsonify(session.skip_cutting_words_reaction())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/deflect-missiles/roll")
+    def api_combat_deflect_missiles_roll():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                session.resolve_deflect_missiles_reaction(
+                    die_roll=int(data.get("die_roll", 0)),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/deflect-missiles/skip")
+    def api_combat_deflect_missiles_skip():
+        try:
+            return jsonify(session.skip_deflect_missiles_reaction())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/deflect-missiles/return")
+    def api_combat_deflect_missiles_return():
+        data = request.get_json(silent=True) or {}
+        try:
+            second = data.get("natural_roll_2")
+            return jsonify(
+                session.return_deflected_missile(
+                    natural_roll=int(data.get("natural_roll", 0)),
+                    natural_roll_2=(
+                        int(second)
+                        if second not in (None, "")
+                        else None
+                    ),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/deflect-missiles/damage")
+    def api_combat_deflect_missiles_damage():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                session.submit_deflected_missile_damage(
+                    damage=int(data.get("damage", 0)),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
     @app.post("/api/combat/long-cast/start")
     def api_combat_long_cast_start():
         data = request.get_json(silent=True) or {}
@@ -1112,11 +1799,12 @@ def create_app(session: ExplorationUiSession) -> Flask:
     def api_combat_spell_debuff_confirm():
         data = request.get_json(silent=True) or {}
         try:
-            return jsonify(
-                session.confirm_spell_debuff(
-                    target_id=str(data.get("target_id", "")),
-                )
-            )
+            confirmation_kwargs = {
+                "target_id": str(data.get("target_id", "")),
+            }
+            if data.get("condition") not in (None, ""):
+                confirmation_kwargs["condition"] = str(data["condition"])
+            return jsonify(session.confirm_spell_debuff(**confirmation_kwargs))
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
@@ -1305,6 +1993,17 @@ def create_app(session: ExplorationUiSession) -> Flask:
                     natural_roll_2=(
                         int(natural_roll_2) if natural_roll_2 not in (None, "") else None
                     ),
+                    natural_rerolls=_natural_rerolls(data),
+                    bardic_inspiration_roll=(
+                        int(data["bardic_inspiration_roll"])
+                        if data.get("bardic_inspiration_roll") not in (None, "", 0, "0")
+                        else None
+                    ),
+                    bless_roll=(
+                        int(data["bless_roll"])
+                        if data.get("bless_roll") not in (None, "", 0, "0")
+                        else None
+                    ),
                 )
             )
         except Exception as exc:
@@ -1350,6 +2049,16 @@ def create_app(session: ExplorationUiSession) -> Flask:
                     natural_roll=int(data.get("natural_roll", 0)),
                     natural_roll_2=(
                         int(natural_roll_2) if natural_roll_2 not in (None, "") else None
+                    ),
+                    bardic_inspiration_roll=(
+                        int(data["bardic_inspiration_roll"])
+                        if data.get("bardic_inspiration_roll") not in (None, "", 0, "0")
+                        else None
+                    ),
+                    bless_roll=(
+                        int(data["bless_roll"])
+                        if data.get("bless_roll") not in (None, "", 0, "0")
+                        else None
                     ),
                 )
             )
@@ -1441,6 +2150,15 @@ def _damage_submission(data: object) -> dict[str, object]:
     }
 
 
+def _natural_rerolls(data: object) -> tuple[int, ...]:
+    if not isinstance(data, dict):
+        return ()
+    raw = data.get("natural_rerolls", [])
+    if not isinstance(raw, list):
+        raise ValueError("natural_rerolls musi być listą wyników d20.")
+    return tuple(int(value) for value in raw)
+
+
 def _trade_quantity(value: object) -> int:
     if isinstance(value, bool) or not isinstance(value, int):
         raise ValueError("Liczba przedmiotów musi być liczbą całkowitą.")
@@ -1465,3 +2183,452 @@ def _session_log_payload(session: ExplorationUiSession, *, limit: int = 200) -> 
         "path": str(path),
         "events": events,
     }
+
+
+_PLAYER_LABELS = {
+    "strength": "Siła",
+    "dexterity": "Zręczność",
+    "constitution": "Kondycja",
+    "intelligence": "Inteligencja",
+    "wisdom": "Mądrość",
+    "charisma": "Charyzma",
+    "acrobatics": "Akrobatyka",
+    "animal_handling": "Opieka nad zwierzętami",
+    "arcana": "Wiedza tajemna",
+    "athletics": "Atletyka",
+    "deception": "Oszustwo",
+    "history": "Historia",
+    "insight": "Intuicja",
+    "intimidation": "Zastraszanie",
+    "investigation": "Śledztwo",
+    "medicine": "Medycyna",
+    "perception": "Percepcja",
+    "performance": "Występy",
+    "persuasion": "Perswazja",
+    "religion": "Religia",
+    "sleight_of_hand": "Zwinne dłonie",
+    "stealth": "Skradanie",
+    "survival": "Sztuka przetrwania",
+    "archery": "Łucznictwo",
+    "defense": "Obrona",
+    "dueling": "Walka jedną bronią",
+    "two_weapon_fighting": "Walka dwiema broniami",
+}
+_PLAYER_LANGUAGE_IDS = (
+    "dwarvish", "elvish", "giant", "gnomish", "goblin", "halfling", "orc",
+    "abyssal", "celestial", "deep_speech", "draconic", "infernal",
+    "primordial", "sylvan", "undercommon",
+)
+
+
+def _render_character_form(
+    catalog,
+    *,
+    form: object,
+    issues: tuple[object, ...],
+    copy_source: str = "",
+):
+    values = _character_form_values(form)
+    skill_ids = sorted(
+        {
+            skill_id
+            for character_class in catalog.classes
+            for skill_id in character_class.skill_choices
+        }
+        | {
+            skill_id
+            for species in catalog.species
+            for skill_id in species.skill_proficiencies
+        }
+        | {
+            skill_id
+            for background in catalog.backgrounds
+            for skill_id in background.skill_proficiencies
+        }
+    )
+    return render_template(
+        "character_form.html",
+        catalog=catalog,
+        values=values,
+        issues=issues,
+        ability_ids=ABILITY_IDS,
+        standard_array=(15, 14, 13, 12, 10, 8),
+        skill_ids=skill_ids,
+        labels=_PLAYER_LABELS,
+        language_ids=_PLAYER_LANGUAGE_IDS,
+        copy_source=copy_source,
+    )
+
+
+def _character_draft_from_request() -> CharacterDraft:
+    return CharacterDraft(
+        id=str(request.form.get("id", "")).strip(),
+        name=str(request.form.get("name", "")).strip(),
+        species_id=str(request.form.get("species_id", "")).strip(),
+        class_id=str(request.form.get("class_id", "")).strip(),
+        background_id=str(request.form.get("background_id", "")).strip(),
+        base_ability_scores=AbilityScores(
+            **{
+                ability_id: _form_integer(request.form.get(ability_id))
+                for ability_id in ABILITY_IDS
+            }
+        ),
+        selected_skill_ids=tuple(request.form.getlist("selected_skill_ids")),
+        selected_expertise_ids=tuple(
+            request.form.getlist("selected_expertise_ids")
+        ),
+        selected_fighting_style_id=str(
+            request.form.get("selected_fighting_style_id", "")
+        ).strip(),
+        equipment_package_id=str(
+            request.form.get("equipment_package_id", "")
+        ).strip(),
+        selected_cantrip_ids=tuple(request.form.getlist("selected_cantrip_ids")),
+        selected_spell_ids=tuple(request.form.getlist("selected_spell_ids")),
+        selected_prepared_spell_ids=tuple(
+            request.form.getlist("selected_prepared_spell_ids")
+        ),
+        selected_subclass_id=str(
+            request.form.get("selected_subclass_id", "")
+        ).strip(),
+        selected_species_bonus_ability_ids=tuple(
+            request.form.getlist("selected_species_bonus_ability_ids")
+        ),
+        selected_species_skill_ids=tuple(
+            request.form.getlist("selected_species_skill_ids")
+        ),
+        selected_species_tool_ids=tuple(
+            request.form.getlist("selected_species_tool_ids")
+        ),
+        selected_species_language_ids=tuple(
+            request.form.getlist("selected_species_language_ids")
+        ),
+        selected_species_variant_id=str(
+            request.form.get("selected_species_variant_id", "")
+        ).strip(),
+        selected_species_cantrip_ids=tuple(
+            request.form.getlist("selected_species_cantrip_ids")
+        ),
+        selected_class_option_ids=tuple(
+            request.form.getlist("selected_class_option_ids")
+        ),
+        selected_background_tool_ids=tuple(
+            request.form.getlist("selected_background_tool_ids")
+        ),
+        selected_background_language_ids=tuple(
+            request.form.getlist("selected_background_language_ids")
+        ),
+        portrait=str(request.form.get("portrait", "")).strip(),
+    )
+
+
+def _character_form_values(form: object) -> dict[str, object]:
+    def value(key: str, default: str = "") -> str:
+        getter = getattr(form, "get", None)
+        if getter is None:
+            return default
+        raw = getter(key, default)
+        return str(raw) if raw is not None else default
+
+    def values(key: str) -> tuple[str, ...]:
+        getlist = getattr(form, "getlist", None)
+        if getlist is not None:
+            return tuple(str(item) for item in getlist(key))
+        if isinstance(form, dict):
+            raw = form.get(key, ())
+            if isinstance(raw, (list, tuple)):
+                return tuple(str(item) for item in raw)
+            if raw:
+                return (str(raw),)
+        return ()
+
+    result: dict[str, object] = {
+        "id": value("id"),
+        "name": value("name"),
+        "species_id": value("species_id", "human"),
+        "class_id": value("class_id", "fighter"),
+        "background_id": value("background_id", "soldier"),
+        "portrait": value("portrait"),
+        "selected_fighting_style_id": value("selected_fighting_style_id"),
+        "equipment_package_id": value("equipment_package_id"),
+        "selected_subclass_id": value("selected_subclass_id"),
+        "selected_skill_ids": values("selected_skill_ids"),
+        "selected_expertise_ids": values("selected_expertise_ids"),
+        "selected_cantrip_ids": values("selected_cantrip_ids"),
+        "selected_spell_ids": values("selected_spell_ids"),
+        "selected_prepared_spell_ids": values("selected_prepared_spell_ids"),
+        "selected_species_bonus_ability_ids": values(
+            "selected_species_bonus_ability_ids"
+        ),
+        "selected_species_skill_ids": values("selected_species_skill_ids"),
+        "selected_species_tool_ids": values("selected_species_tool_ids"),
+        "selected_species_language_ids": values(
+            "selected_species_language_ids"
+        ),
+        "selected_species_variant_id": value("selected_species_variant_id"),
+        "selected_species_cantrip_ids": values("selected_species_cantrip_ids"),
+        "selected_class_option_ids": values("selected_class_option_ids"),
+        "selected_background_tool_ids": values(
+            "selected_background_tool_ids"
+        ),
+        "selected_background_language_ids": values(
+            "selected_background_language_ids"
+        ),
+    }
+    for index, ability_id in enumerate(ABILITY_IDS):
+        result[ability_id] = value(ability_id, str((15, 14, 13, 12, 10, 8)[index]))
+    return result
+
+
+def _copy_character_form(character) -> dict[str, object]:
+    actor = character.actor
+    return {
+        "id": f"{actor.id}_copy",
+        "name": f"{actor.name} — kopia",
+        "species_id": character.species_id,
+        "class_id": character.class_id,
+        "background_id": character.background_id,
+        **{
+            ability_id: str(getattr(character.base_ability_scores, ability_id))
+            for ability_id in ABILITY_IDS
+        },
+        "selected_skill_ids": character.selected_skill_ids,
+        "selected_expertise_ids": character.selected_expertise_ids,
+        "selected_fighting_style_id": character.selected_fighting_style_id,
+        "equipment_package_id": character.equipment_package_id,
+        "selected_cantrip_ids": character.selected_cantrip_ids,
+        "selected_spell_ids": character.selected_spell_ids,
+        "selected_prepared_spell_ids": character.selected_prepared_spell_ids,
+        "selected_subclass_id": character.selected_subclass_id,
+        "selected_species_bonus_ability_ids": (
+            character.selected_species_bonus_ability_ids
+        ),
+        "selected_species_skill_ids": character.selected_species_skill_ids,
+        "selected_species_tool_ids": character.selected_species_tool_ids,
+        "selected_species_language_ids": (
+            character.selected_species_language_ids
+        ),
+        "selected_species_variant_id": character.selected_species_variant_id,
+        "selected_species_cantrip_ids": character.selected_species_cantrip_ids,
+        "selected_class_option_ids": character.selected_class_option_ids,
+        "selected_background_tool_ids": character.selected_background_tool_ids,
+        "selected_background_language_ids": (
+            character.selected_background_language_ids
+        ),
+        "portrait": actor.portrait,
+    }
+
+
+def _level_up_context(
+    character,
+    catalog,
+    resources,
+    *,
+    form: object | None = None,
+    error: str = "",
+) -> dict[str, object]:
+    character_class = catalog.class_by_id(character.class_id)
+    if character_class is None:
+        raise ValueError("Klasa zapisanej postaci nie istnieje w katalogu.")
+    target_level = character.actor.level + 1
+
+    def form_values(key: str, fallback: tuple[str, ...]) -> tuple[str, ...]:
+        if form is None:
+            return fallback
+        getlist = getattr(form, "getlist", None)
+        return (
+            tuple(str(value) for value in getlist(key))
+            if getlist is not None
+            else fallback
+        )
+
+    def form_value(key: str, fallback: str) -> str:
+        if form is None:
+            return fallback
+        getter = getattr(form, "get", None)
+        value = getter(key, fallback) if getter is not None else fallback
+        return str(value or "")
+
+    values = {
+        "selected_cantrip_ids": form_values(
+            "selected_cantrip_ids",
+            character.selected_cantrip_ids,
+        ),
+        "selected_spell_ids": form_values(
+            "selected_spell_ids",
+            character.selected_spell_ids,
+        ),
+        "selected_prepared_spell_ids": form_values(
+            "selected_prepared_spell_ids",
+            character.selected_prepared_spell_ids,
+        ),
+        "selected_expertise_ids": form_values(
+            "selected_expertise_ids",
+            character.selected_expertise_ids,
+        ),
+        "selected_class_option_ids": form_values(
+            "selected_class_option_ids",
+            character.selected_class_option_ids,
+        ),
+        "selected_subclass_id": form_value(
+            "selected_subclass_id",
+            character.selected_subclass_id,
+        ),
+        "selected_fighting_style_id": form_value(
+            "selected_fighting_style_id",
+            character.selected_fighting_style_id,
+        ),
+    }
+
+    def progression_count(field: str, default: int) -> int:
+        value = default
+        for entry in character_class.level_progression:
+            candidate = getattr(entry, field)
+            if entry.level <= target_level and candidate is not None:
+                value = candidate
+        return value
+
+    slots = dict(character_class.spell_slots)
+    for entry in character_class.level_progression:
+        if entry.level <= target_level and entry.spell_slots:
+            slots = dict(entry.spell_slots)
+    maximum_spell_level = max(slots, default=0)
+    selected_class_options = tuple(
+        option
+        for group in character_class.choice_groups
+        if group.level <= target_level
+        for option in group.options
+        if option.id in values["selected_class_option_ids"]
+    )
+    optional_cantrip_ids = tuple(
+        cantrip_id
+        for group in character_class.choice_groups
+        if group.level <= target_level
+        for option in group.options
+        for cantrip_id in option.cantrip_choices
+    )
+    cantrip_choices = tuple(
+        spell
+        for spell_id in dict.fromkeys(
+            (*character_class.cantrip_choices, *optional_cantrip_ids)
+        )
+        for spell in (resources.spell(spell_id),)
+        if spell is not None
+    )
+    selected_subclass = next(
+        (
+            subclass
+            for subclass in character_class.subclass_choices
+            if subclass.id == values["selected_subclass_id"]
+        ),
+        None,
+    )
+    subclass_spell_choices = (
+        (
+            *selected_subclass.additional_spell_choice_ids,
+            *(
+                spell_id
+                for entry in selected_subclass.level_progression
+                if entry.level <= target_level
+                for spell_id in entry.additional_spell_choice_ids
+            ),
+        )
+        if selected_subclass is not None
+        else ()
+    )
+    spell_choices = tuple(
+        spell
+        for spell_id in dict.fromkeys(
+            (*character_class.spell_choices, *subclass_spell_choices)
+        )
+        for spell in (resources.spell(spell_id),)
+        if spell is not None and spell.level <= maximum_spell_level
+    )
+    always_prepared = set(
+        (
+            *selected_subclass.always_prepared_spell_ids,
+            *(
+                spell_id
+                for entry in selected_subclass.level_progression
+                if entry.level <= target_level
+                for spell_id in entry.always_prepared_spell_ids
+            ),
+        )
+        if selected_subclass is not None
+        else ()
+    )
+    preparation_choices = tuple(
+        spell for spell in spell_choices if spell.id not in always_prepared
+    )
+    prepared_count = 0
+    if (
+        character_class.preparation_formula
+        and target_level >= character_class.spellcasting_level
+    ):
+        ability = character_class.spellcasting_ability
+        assert ability is not None
+        ability_score = getattr(character.actor.ability_scores, ability)
+        class_level = (
+            target_level // 2
+            if character_class.preparation_formula
+            == "ability_modifier_plus_half_level"
+            else target_level
+        )
+        prepared_count = max(1, (ability_score - 10) // 2 + class_level)
+        prepared_count = min(prepared_count, len(preparation_choices))
+    return {
+        "character": character,
+        "character_class": character_class,
+        "target_level": target_level,
+        "values": values,
+        "error": error,
+        "cantrip_count": (
+            progression_count(
+                "cantrip_choice_count",
+                character_class.cantrip_choice_count,
+            )
+            + sum(
+                option.cantrip_choice_count
+                for option in selected_class_options
+            )
+        ),
+        "cantrip_choices": cantrip_choices,
+        "spell_count": progression_count(
+            "spell_choice_count",
+            character_class.spell_choice_count,
+        ),
+        "spell_choices": spell_choices,
+        "prepared_count": prepared_count,
+        "preparation_choices": preparation_choices,
+        "expertise_count": (
+            character_class.expertise_choice_count
+            if target_level >= character_class.expertise_choice_level
+            else 0
+        ),
+        "expertise_choices": tuple(
+            dict.fromkeys(
+                (
+                    *character.actor.proficiencies.skills,
+                    *(
+                        skill_id
+                        for group in character_class.choice_groups
+                        if group.level <= target_level
+                        for option in group.options
+                        for skill_id in option.skill_proficiencies
+                    ),
+                )
+            )
+        ),
+        "option_groups": tuple(
+            group
+            for group in character_class.choice_groups
+            if group.level <= target_level
+        ),
+    }
+
+
+def _form_integer(value: object) -> int:
+    try:
+        return int(str(value))
+    except (TypeError, ValueError):
+        return 0

@@ -11,6 +11,7 @@ class ActorSenseProfile:
     blindsight_feet: int = 0
     tremorsense_feet: int = 0
     truesight_feet: int = 0
+    magical_darkness_vision_feet: int = 0
 
     def __post_init__(self) -> None:
         values = (
@@ -18,6 +19,7 @@ class ActorSenseProfile:
             self.blindsight_feet,
             self.tremorsense_feet,
             self.truesight_feet,
+            self.magical_darkness_vision_feet,
         )
         if any(value < 0 or value % 5 for value in values):
             raise ValueError(
@@ -30,4 +32,5 @@ class ActorSenseProfile:
             "blindsight_feet": self.blindsight_feet,
             "tremorsense_feet": self.tremorsense_feet,
             "truesight_feet": self.truesight_feet,
+            "magical_darkness_vision_feet": self.magical_darkness_vision_feet,
         }

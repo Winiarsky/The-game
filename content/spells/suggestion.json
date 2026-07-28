@@ -1,0 +1,40 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "suggestion",
+  "name": "Suggestion",
+  "level": 2,
+  "school": "enchantment",
+  "casting_time": "action",
+  "range": {
+    "kind": "distance",
+    "feet": 30
+  },
+  "components": {
+    "verbal": true,
+    "somatic": false,
+    "materials": [
+      {
+        "item_id": "spell_component_suggestion",
+        "label": "a snake’s tongue and either a bit of honeycomb or a drop of sweet oil"
+      }
+    ]
+  },
+  "duration": {
+    "kind": "eight_hours",
+    "amount": 1
+  },
+  "concentration": true,
+  "ritual": false,
+  "effect": {
+    "kind": "exploration",
+    "effect_type": "set_flag",
+    "flag_key": "cast_suggestion",
+    "flag_value": true,
+    "instructions": "Cel rozumiejący język wykonuje Wis save. Porażka: realizuje rozsądnie brzmiącą sugestię podczas koncentracji do 8 godzin."
+  }
+}

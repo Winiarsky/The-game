@@ -1,19 +1,55 @@
 # Format Zapisu Gry
 
-## Zakres v23
+## Zapisane postacie
+
+Własne postacie używają dokumentu oddzielnego od snapshotu scenariusza:
+
+- schemat: `dnd_board_game.character`,
+- aktualna wersja: `7`,
+- ruleset: `dnd_5e_2014`.
+
+Dokument przechowuje wybory źródłowe gracza: tożsamość, poziom, species, klasę,
+background, archetyp klasy, bazowe ability scores, umiejętności klasowe, zestaw
+wyposażenia, cantripy, czary znane lub zapisane w spellbooku, osobny zestaw
+przygotowanych czarów i portret. Wczytanie ponownie waliduje te wybory względem wersjonowanego
+katalogu i deterministycznie buduje wspólny model `Actor`. Pochodne HP, KP,
+biegłość, metadane ekwipunku, sloty i spell DC nie są przyjmowane z pliku jako
+źródło prawdy.
+
+Pliki rosteru znajdują się domyślnie w `data/characters/` pod nazwą
+`<character_id>.character.json`. Zapis jest atomowy, istniejący identyfikator nie
+jest nadpisywany podczas tworzenia postaci, a nazwa pliku musi odpowiadać id
+wewnątrz dokumentu. Odczyt rosteru izoluje uszkodzony lub niekompatybilny plik,
+zamiast blokować pozostałe postacie. Operacja usunięcia przenosi dokument do
+`data/characters/.trash/`, dzięki czemu lokalny zapis można ręcznie odzyskać.
+
+Wersja v3 dodała `experience_points`. Wersja v4 zapisuje elastyczne wybory
+premii cech species (`selected_species_bonus_ability_ids`). Wersja v5 dodaje
+wybory umiejętności, narzędzi, języków, wariantu i cantripu species, a v6
+zapisuje ogólne opcje klasowe (`selected_class_option_ids`). Wersja v7 dodaje
+wybrane narzędzia i języki backgroundu. Migracje uzupełniają starsze dokumenty
+deterministycznymi, kompatybilnymi wyborami.
+
+## Zakres v31
 
 Snapshot sesji używa identyfikatora schematu `dnd_board_game.session` i pola
-`schema_version: 23`. Zapis obejmuje mechaniczny stan potrzebny do deterministycznego
+`schema_version: 31`. Zapis obejmuje mechaniczny stan potrzebny do deterministycznego
 wznowienia scenariusza:
 
 - kontrakt contentu: schemat scenariusza, jego wersję, ruleset i wymagane source packi,
-- pełny bieżący stan aktorów, exhaustion, przygotowanych czarów, slotów, ekwipunku, zasobów oraz profilu biegłości w save'ach, skillach, broniach, pancerzach i narzędziach,
+- pełny bieżący stan aktorów, exhaustion, przygotowanych czarów, zwykłych i
+  tymczasowych slotów, ekwipunku, zasobów oraz profilu biegłości w save'ach,
+  skillach, broniach, pancerzach i narzędziach,
 - pozycję drużyny, flagi, widoczność punktów, postęp wyzwań, czas i odpoczynki,
 - aktywne czasowe efekty magii eksploracyjnej wraz z czarem, aktorem, flagą,
   minutą rozpoczęcia i opcjonalną minutą wygaśnięcia,
 - aktywne efekty wraz ze źródłem, poziomem źródłowego czaru, czasem trwania i regułą stackowania,
 - oczekujący encounter oraz opcjonalny stan aktywnej walki,
 - kolejność inicjatywy, rundę, bieżącą turę, ekonomię akcji, darmową interakcję z obiektem i zużyte reakcje,
+- ograniczenie czaru rzucanego akcją bonusową oraz informację o poziomowym
+  czarze rzuconym akcją w bieżącej turze,
+- rozdzielenie zwykłego darkvision od widzenia w magicznej ciemności
+  zapewnianego przez Devil's Sight,
 - postęp długotrwałych czarów: rzucającego, czar, poziom slotu, wymagane i wykonane
   akcje oraz rundę ostatniego postępu,
 - przywołane istoty wraz z właścicielem, czarem, efektem koncentracji i pełną
@@ -93,10 +129,23 @@ aktualnego contentu i odrzuca zapis, jeśli nie można go jednoznacznie odtworzy
   `opened`, `locked`, `looted` i `current_hit_points`.
 - Migracja `v22 -> v23` dodaje wszystkim aktorom eksploracji i walki
   `exhaustion_level: 0`.
+- Migracja `v23 -> v24` dodaje wszystkim aktorom eksploracji i walki
+  `experience_points: 0`.
+- Migracja `v24 -> v25` zachowuje starsze profile dostępu do czarów; nowe
+  profile zapisują opcjonalną `casting_ability`, aby ten sam czar mógł używać
+  innej cechy zależnie od klasy albo species.
+- Migracja `v25 -> v26` zachowuje dla starszych slotów regenerację po długim
+  odpoczynku. Nowe sloty zapisują `recovery`, dzięki czemu Pact Magic może
+  poprawnie odzyskiwać sloty po krótkim odpoczynku.
+- Migracja `v26 -> v27` nadaje starszym aktorom domyślny typ `humanoid`.
+- Migracja `v27 -> v28` dodaje opcjonalne mapowanie wrodzonych czarów na ich
+  zasoby odnawiane podczas odpoczynku.
+  Nowe zapisy utrwalają `creature_type`, potrzebny m.in. Turn Undead,
+  Favored Enemy i pełnemu efektowi Chill Touch.
 - Migracje są wykonywane kolejno, bez pomijania wersji, przed budową modeli domeny.
 - Migracja nie może uruchamiać odpoczynku, losowania, sprzętu, Flask ani LLM.
 
-Snapshot v23 jest zapisem pojedynczego scenariusza. Stan drużyny pomiędzy
+Snapshot v28 jest zapisem pojedynczego scenariusza. Stan drużyny pomiędzy
 scenariuszami, kampania i migracje rzeczywistych starszych formatów należą do M9.
 Sekcja eksploracji zapisuje również opcjonalne `temporary_items`: przedmioty
 zbudowane z materiałów sceny, wraz z pozostałą liczbą użyć, źródłowymi materiałami
@@ -129,7 +178,7 @@ Instancje inventory oraz upuszczone bronie zapisują wymaganie dłoni
 broń bez jawnego wymagania jest normalizowana jako jednoręczna przy użyciu reguł
 inventory.
 
-Snapshot v23 zapisuje portfel aktora w nominałach `cp`, `sp`, `ep`, `gp`, `pp`
+Snapshot v28 zapisuje portfel aktora w nominałach `cp`, `sp`, `ep`, `gp`, `pp`
 oraz jednostkową `value_cp` i `weight_lb` każdej instancji inventory. Całkowita
 wartość, masa monet (50 monet = 1 lb), masa ekwipunku i udźwig są wartościami
 pochodnymi i nie są osobnym autorytatywnym stanem.

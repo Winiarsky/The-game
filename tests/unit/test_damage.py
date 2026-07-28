@@ -163,6 +163,22 @@ def test_damage_component_specs_roll_ndm_and_double_only_dice_on_critical() -> N
     assert components[0].formula(critical=True) == "4d6 + 3"
 
 
+def test_critical_bonus_die_is_rolled_only_on_a_critical() -> None:
+    component = DamageComponentSpec(
+        "axe",
+        DamageType.SLASHING,
+        dice=DiceExpression.parse("1d12"),
+        critical_bonus_dice=1,
+    )
+
+    normal = roll_damage_components((component,), lambda _sides: 2)
+    critical = roll_damage_components((component,), lambda _sides: 2, critical=True)
+
+    assert normal[0].amount == 2
+    assert critical[0].amount == 6
+    assert component.formula(critical=True) == "3d12"
+
+
 def test_manual_damage_component_totals_preserve_independent_types() -> None:
     components = (
         DamageComponentSpec("blade", DamageType.SLASHING, fixed=5),

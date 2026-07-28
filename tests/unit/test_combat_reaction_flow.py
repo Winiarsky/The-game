@@ -3,8 +3,18 @@ from typing import Callable
 
 import pytest
 
-from dnd_board_game.actors import AbilityScores, Actor, ActorId, Faction
+from dnd_board_game.actors import (
+    AbilityScores,
+    Actor,
+    ActorId,
+    ActorResourcePool,
+    Faction,
+    FeatureGrant,
+    FeatureSourceKind,
+    RecoveryPeriod,
+)
 from dnd_board_game.application import (
+    ClassFeatureReactionFlowService,
     CombatReactionFlowService,
     CounterspellReactionFlowService,
     DefensiveSpellReactionFlowService,
@@ -16,6 +26,7 @@ from dnd_board_game.combat import (
     AttackDeclaration,
     AttackSource,
     AttackSourceType,
+    AttackKind,
     CombatState,
     DamageComponentInput,
     DamageComponentSpec,
@@ -57,6 +68,15 @@ def _actor(
         position=position,
         faction=faction,
         ability_scores=AbilityScores(dexterity=14),
+    )
+
+
+def _class_feature(feature_id: str) -> FeatureGrant:
+    return FeatureGrant(
+        feature_id,
+        feature_id.replace("_", " ").title(),
+        FeatureSourceKind.CLASS,
+        "test",
     )
 
 
@@ -133,6 +153,174 @@ def _enemy_spell_result(
         action_used=True,
         source=source,
     )
+
+
+def _enemy_weapon_result(
+    state: CombatState,
+    enemy: Actor,
+    target: Actor,
+    *,
+    attack_total: int,
+    damage_amount: int,
+    ranged: bool = False,
+) -> EnemyAutoTurnResult:
+    source = AttackSource(
+        "Pocisk" if ranged else "Ostrze",
+        AttackSourceType.WEAPON,
+        60 if ranged else 5,
+        D20RollRequest(),
+        damage_fixed=damage_amount,
+        id="enemy_projectile" if ranged else "enemy_blade",
+        attack_kind=AttackKind.RANGED if ranged else AttackKind.MELEE,
+    )
+    target_snapshot = actor_as_combat_target(target)
+    attack_roll = resolve_d20_roll(
+        D20RollInput(source.attack_roll_request, attack_total)
+    )
+    attack = resolve_attack(
+        AttackDeclaration(enemy, target_snapshot, source),
+        attack_roll,
+        ActionUse.ACTION_AVAILABLE,
+    )
+    damage = resolve_damage(
+        (DamageComponentInput(damage_amount, DamageType.PIERCING),)
+    )
+    applied = apply_damage_result(target, damage)
+    return EnemyAutoTurnResult(
+        state=replace_actor(state, applied.actor_after),
+        enemy=enemy,
+        target=target_snapshot,
+        message="Trafienie.",
+        attack_roll=attack_roll,
+        attack_resolution=attack,
+        damage=damage,
+        applied_damage=applied,
+        updated_target=applied.actor_after,
+        action_used=True,
+        source=source,
+    )
+
+
+def test_cutting_words_spends_reaction_and_inspiration_to_turn_hit_into_miss() -> None:
+    enemy = replace(_actor("enemy", Faction.ENEMY, Coordinate(2, 0)), ac=10)
+    target = replace(_actor("target", Faction.ALLY, Coordinate(1, 0)), ac=12)
+    bard = replace(
+        _actor("bard", Faction.ALLY, Coordinate(0, 0)),
+        level=3,
+        features=(
+            _class_feature("bardic_inspiration"),
+            _class_feature("cutting_words"),
+        ),
+        resource_pools=(
+            ActorResourcePool(
+                "bardic_inspiration_uses",
+                "Bardic Inspiration",
+                2,
+                2,
+                RecoveryPeriod.LONG_REST,
+            ),
+        ),
+    )
+    state = _state(enemy, target, bard)
+    enemy_result = _enemy_weapon_result(
+        state,
+        enemy,
+        target,
+        attack_total=14,
+        damage_amount=5,
+    )
+    service = ClassFeatureReactionFlowService()
+
+    options = service.cutting_words_options(
+        board=BoardState(),
+        state=state,
+        enemy_result=enemy_result,
+    )
+    resolution = service.apply_cutting_words(
+        state=state,
+        enemy_result=enemy_result,
+        option=options[0],
+        die_roll=3,
+    )
+
+    updated_target = next(
+        actor for actor in resolution.result.state.actors if actor.id == target.id
+    )
+    updated_bard = next(
+        actor for actor in resolution.state.actors if actor.id == bard.id
+    )
+    assert resolution.prevented_hit
+    assert resolution.attack_total == 11
+    assert updated_target.hp == target.hp
+    assert updated_bard.resource_pools[0].current == 1
+    assert not reaction_available_for(resolution.state, updated_bard)
+
+
+def test_deflect_missiles_reduces_ranged_weapon_damage_and_catches_projectile() -> None:
+    enemy = replace(_actor("enemy", Faction.ENEMY, Coordinate(3, 0)), ac=10)
+    monk = replace(
+        _actor("monk", Faction.ALLY, Coordinate(0, 0), hp=20),
+        level=3,
+        max_hp=20,
+        features=(_class_feature("deflect_missiles"),),
+        resource_pools=(
+            ActorResourcePool(
+                "ki_points",
+                "Ki",
+                3,
+                3,
+                RecoveryPeriod.SHORT_REST,
+            ),
+        ),
+    )
+    state = _state(enemy, monk)
+    enemy_result = _enemy_weapon_result(
+        state,
+        enemy,
+        monk,
+        attack_total=15,
+        damage_amount=8,
+        ranged=True,
+    )
+    service = ClassFeatureReactionFlowService()
+    option = service.deflect_missiles_option(
+        state=state,
+        enemy_result=enemy_result,
+    )
+
+    assert option is not None
+    resolution = service.apply_deflect_missiles(
+        state=state,
+        enemy_result=enemy_result,
+        option=option,
+        die_roll=3,
+    )
+
+    updated_monk = next(
+        actor for actor in resolution.result.state.actors if actor.id == monk.id
+    )
+    assert resolution.reduction == 8
+    assert resolution.damage_after == 0
+    assert resolution.caught
+    assert resolution.can_return_projectile
+    assert updated_monk.hp == monk.hp
+    assert not reaction_available_for(resolution.state, updated_monk)
+
+    returned = service.return_deflected_missile(
+        board=BoardState(),
+        state=resolution.state,
+        actor_id="monk",
+        target_id="enemy",
+        damage_type=DamageType.PIERCING,
+        natural_roll=20,
+    )
+    monk_after_return = next(
+        actor for actor in returned.state.actors if actor.id == monk.id
+    )
+    assert returned.hit
+    assert returned.critical
+    assert returned.source.damage_components[0].formula() == "1d4 + 2"
+    assert monk_after_return.resource_pools[0].current == 2
 
 
 def test_counterspell_automatically_interrupts_spell_at_selected_slot_level() -> None:

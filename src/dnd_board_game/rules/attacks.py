@@ -24,10 +24,17 @@ class AttackRollResult:
         return self.outcome in {AttackRollOutcome.CRITICAL_HIT, AttackRollOutcome.HIT}
 
 
-def resolve_attack_roll(roll: D20RollResult, target_ac: int) -> AttackRollResult:
+def resolve_attack_roll(
+    roll: D20RollResult,
+    target_ac: int,
+    *,
+    critical_minimum: int = 20,
+) -> AttackRollResult:
     if target_ac < 0:
         raise ValueError("Target AC cannot be negative.")
-    if roll.is_natural_20:
+    if not 2 <= critical_minimum <= 20:
+        raise ValueError("Critical minimum must be between 2 and 20.")
+    if roll.natural_roll >= critical_minimum:
         outcome = AttackRollOutcome.CRITICAL_HIT
     elif roll.is_natural_1:
         outcome = AttackRollOutcome.CRITICAL_MISS

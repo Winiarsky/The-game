@@ -40,14 +40,22 @@ def test_gate_flow_reacts_to_lock_route_and_completion_flags():
     assert {node.id for node in flow.active_nodes(flags)} == {
         "gate_blocked",
         "bolt_exposed",
-        "wall_route_known",
+        "wall_route_unprepared",
     }
     assert set(flow.available_goal_ids(flags)) == {
         "force_entry",
         "look_around",
         "remove_bolt",
         "use_wall_route",
+        "attach_wall_rope",
     }
+
+    prepared = set_scene_flag(flags, "gate_climbing_rope_attached", True)
+    assert "wall_route_prepared" in {
+        node.id for node in flow.active_nodes(prepared)
+    }
+    assert "use_attached_wall_route" in set(flow.available_goal_ids(prepared))
+    assert "use_wall_route" not in set(flow.available_goal_ids(prepared))
 
     completed = set_scene_flag(flags, "gate_passed", True)
     assert [node.id for node in flow.active_nodes(completed)] == ["gate_passed"]

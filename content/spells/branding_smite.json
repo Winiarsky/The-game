@@ -1,0 +1,40 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "branding_smite",
+  "name": "Branding Smite",
+  "level": 2,
+  "school": "evocation",
+  "casting_time": "bonus_action",
+  "range": {
+    "kind": "self"
+  },
+  "components": {
+    "verbal": true,
+    "somatic": false,
+    "materials": []
+  },
+  "duration": {
+    "kind": "minute",
+    "amount": 1
+  },
+  "concentration": true,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "targeted_status",
+    "label": "Branding Smite",
+    "effect_kind": "branding_smite",
+    "target_faction": "self",
+    "value": 2,
+    "upcast_value_per_level": 1,
+    "cast_flag": "cast_branding_smite",
+    "instructions": "Przy następnym trafieniu podczas koncentracji dodaj 2k6 radiant; cel świeci i nie może być niewidzialny. +1k6 za wyższy slot.",
+    "resolution_mode": "automatic",
+    "board_relevance": "direct"
+  }
+}

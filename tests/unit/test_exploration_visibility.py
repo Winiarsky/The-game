@@ -124,3 +124,30 @@ def test_blindsight_bypasses_light_within_its_range() -> None:
     assert result.can_see is True
     assert result.sense_used == "blindsight"
     assert result.perception_roll_mode == RollMode.NORMAL
+
+
+def test_magical_darkness_blocks_darkvision_but_not_devils_sight() -> None:
+    ordinary = _actor(senses=ActorSenseProfile(darkvision_feet=120))
+    devil = _actor(
+        senses=ActorSenseProfile(
+            darkvision_feet=120,
+            magical_darkness_vision_feet=120,
+        )
+    )
+
+    blocked = exploration_visibility(
+        ordinary,
+        ambient_light=LightLevel.BRIGHT,
+        distance_feet=30,
+        magical_darkness=True,
+    )
+    visible = exploration_visibility(
+        devil,
+        ambient_light=LightLevel.BRIGHT,
+        distance_feet=30,
+        magical_darkness=True,
+    )
+
+    assert blocked.can_see is False
+    assert visible.can_see is True
+    assert visible.sense_used == "devils_sight"

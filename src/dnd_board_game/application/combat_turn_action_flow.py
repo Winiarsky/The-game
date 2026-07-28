@@ -10,6 +10,7 @@ from dnd_board_game.actors import (
     Faction,
     ability_roll_modifier,
     apply_exhaustion_to_roll_request,
+    actor_has_feature,
     skill_modifier,
     skill_roll_modifiers,
 )
@@ -32,6 +33,7 @@ from dnd_board_game.combat import (
     remove_condition,
     stand_up,
     use_dash,
+    use_bonus_action,
     use_turn_action,
 )
 from dnd_board_game.rules import (
@@ -115,7 +117,7 @@ class CombatTurnActionFlowService:
         active_effects: tuple[ActiveCombatEffect, ...],
     ) -> CombatTurnActionTransition:
         actor = _active_hero(state)
-        result = use_dash(state, actor)
+        result = use_dash(state, actor, active_effects)
         if not result.accepted:
             raise ValueError(result.message)
         return CombatTurnActionTransition(
@@ -179,7 +181,7 @@ class CombatTurnActionFlowService:
             duration=EffectDuration.UNTIL_TURN_END,
         )
         return CombatTurnActionTransition(
-            state=_consume_action(state),
+            state=_consume_mobility_action(state, actor),
             active_effects=_replace_actor_effect(active_effects, actor, effect),
             actor_id=str(actor.id),
             message_title="Odwrót",
@@ -239,7 +241,7 @@ class CombatTurnActionFlowService:
         scene_objects: tuple[SceneObject, ...] = (),
     ) -> PendingCombatSkillCheck:
         actor = _active_hero(state)
-        if state.turn_action.action_use != ActionUse.ACTION_AVAILABLE:
+        if not _mobility_action_available(state, actor):
             raise ValueError("Akcja w tej turze została już zużyta.")
         eligibility = hide_eligibility(board, actor, state.actors, scene_objects)
         if not eligibility.allowed:
@@ -286,7 +288,7 @@ class CombatTurnActionFlowService:
         result = resolve_d20_roll(D20RollInput(request, natural_roll, natural_roll_2))
         hiding = resolve_hide(state.hidden_states, actor, state.actors, result.total)
         updated_state = replace(
-            _consume_action(state),
+            _consume_mobility_action(state, actor),
             hidden_states=hiding.hidden_states,
         )
         hidden_names = _actor_names(state, hiding.hidden_state.hidden_from_actor_ids) if hiding.hidden_state else ()
@@ -599,6 +601,28 @@ def _active_hero(state: CombatState) -> Actor:
 
 def _consume_action(state: CombatState) -> CombatState:
     result = use_turn_action(state)
+    if not result.accepted:
+        raise ValueError(result.message)
+    return result.state
+
+
+def _mobility_action_available(state: CombatState, actor: Actor) -> bool:
+    return (
+        state.turn_action.action_use == ActionUse.ACTION_AVAILABLE
+        or (
+            actor_has_feature(actor, "cunning_action")
+            and state.turn_action.bonus_action_use == ActionUse.ACTION_AVAILABLE
+        )
+    )
+
+
+def _consume_mobility_action(state: CombatState, actor: Actor) -> CombatState:
+    result = (
+        use_bonus_action(state)
+        if actor_has_feature(actor, "cunning_action")
+        and state.turn_action.bonus_action_use == ActionUse.ACTION_AVAILABLE
+        else use_turn_action(state)
+    )
     if not result.accepted:
         raise ValueError(result.message)
     return result.state

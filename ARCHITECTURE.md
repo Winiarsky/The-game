@@ -18,6 +18,7 @@ src/dnd_board_game/
   rules/                       # D&D 5e mechanics
   world/                       # Grid, topology, terrain, pathfinding, line of sight
   actors/                      # Actor state, PCs, monsters, NPCs
+  character_creation/          # Drafts, catalogues, validation, and saved-character construction
   actions/                     # Action definitions and action resolution entry points
   combat/                      # Initiative, turns, attacks, damage, conditions
   inventory/                   # Items, equipment, attunement, charges, loot, currency, and trade
@@ -68,6 +69,19 @@ combat -> WLED
 - `scenarios/content_contract.py` owns content headers, stable-id syntax and
   source-pack metadata, while `scenarios/content_audit.py` validates the whole
   repository catalog through the same scenario loader used by runtime.
+- `character_creation/` owns deterministic, single-class character drafts,
+  choice validation and construction of the shared `Actor` model. File-backed
+  catalog loading is an adapter in that package; the builder itself does not
+  depend on Flask, board hardware, Gemini, files or real time. Saved-character
+  documents persist source choices and rebuild derived statistics instead of
+  storing a second mutable copy of them. Caster drafts keep learned/spellbook
+  spells separate from prepared spells, and subclass definitions contribute
+  proficiencies, runtime feature grants and always-prepared spells without
+  branching in the UI. `character_creation/roster.py` is the file-backed edge:
+  it performs atomic record writes, rejects unsafe or duplicate ids, rebuilds
+  actors while scanning, isolates incompatible records, and uses a recoverable
+  local trash directory. Flask routes translate form fields to `CharacterDraft`
+  but never calculate derived character rules.
 
 ## Hardware Boundary
 
@@ -95,7 +109,20 @@ This keeps board communication consistent when one tile can represent multiple i
 
 The exploration web surface is split into explicit responsibilities:
 
+- the web root is an application launcher rather than an implicit game start.
+  `/new-game`, `/load-game` and `/characters` are separate player flows, while
+  `/play` hosts the existing board-first scenario runtime. Starting a new game
+  resets the active scenario before entering `/play`; loading delegates to the
+  versioned snapshot reader before redirecting there. The character entry
+  screen reads the versioned character catalogue and never duplicates its
+  species, class or background lists in presentation code,
 - `application/exploration_flow.py` owns deterministic exploration flow transitions,
+- `application/exploration_action_sources.py` projects party resources, inventory,
+  weapons, tools and spell metadata into one capability-tagged source contract.
+  Authored goals filter that contract before the free-form method description; the
+  engine remains authoritative for ownership, availability, modifiers, spell costs
+  and consequence tags. Persistent preparations are scene flags and guarded flow
+  nodes (the reference implementation is the watchtower climbing rope).
 - `exploration/flow_graph.py` owns pure state-derived exploration graph nodes,
   conditions and route references, while
   `application/exploration_interaction_flow.py` selects the available authored
@@ -148,6 +175,12 @@ The exploration web surface is split into explicit responsibilities:
   and opportunity-attack threat detection before reactions are resolved,
 - `combat/attack_flow.py` owns the explicit melee-reach versus ranged-range contract;
   targeting, opportunity threats, enemy positioning, and UI payloads consume that contract,
+- `combat/class_features.py` owns executable level-1 class mechanics shared by
+  authored and custom actors. Second Wind spends the existing bonus-action and
+  short-rest resource contracts; Sneak Attack produces an independently typed
+  damage component and an until-next-turn usage marker. `combat/fighting_styles.py`
+  applies style-specific attack transformations, while Defense and Two-Weapon
+  Fighting reuse their existing armor and off-hand rule boundaries,
 - `combat/conditions.py` owns condition definitions, immunities, roll consequences,
   movement restrictions, timed expiry, and repeated saving throws; application services
   provide dice/input policy but do not duplicate condition rules,
@@ -306,6 +339,16 @@ collapsed GM/debug view. Questions reuse the declaration analyzer and are record
 player/GM exchanges without entering the roll resolver.
 Random rolls are injected into combat application services so deterministic tests can provide
 explicit outcomes while the UI runtime may retain its seeded random source.
+Feature-driven d20 behavior lives in `rules/d20_traits.py`. Callers provide the
+actor, roll kind and semantic save tags; the rule returns a transformed request.
+Halfling Lucky is represented as an explicit natural-one reroll contract, so a
+physical roll remains player input and the result preserves both the original
+and replacement dice.
+Background features grant stable permission IDs through ordinary `FeatureGrant`
+action IDs. `rules/background_features.py` requires both an owned grant and an
+authored scene opportunity; the GM classifier can select a permission only when
+both sides of that contract are present. It cannot invent rank, contacts,
+shelter or research access.
 
 Prepared-spell membership is deterministic actor domain state in
 `actors/spell_preparation.py`. Scenario content supplies the available list and preparation

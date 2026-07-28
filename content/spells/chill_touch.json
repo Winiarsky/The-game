@@ -1,0 +1,25 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["srd_5_1_cc_by_4_0"],
+  "id": "chill_touch",
+  "name": "Dotyk chłodu",
+  "level": 0,
+  "school": "necromancy",
+  "casting_time": "action",
+  "range": {"kind": "distance", "feet": 120},
+  "components": {"verbal": true, "somatic": true, "materials": []},
+  "duration": {"kind": "round", "amount": 1},
+  "concentration": false,
+  "ritual": false,
+  "scaling": {"cantrip_damage_dice_per_tier": 1},
+  "effect": {
+    "kind": "attack",
+    "attack_kind": "ranged",
+    "damage": {"dice": "1d8", "modifier": 0, "damage_type": "necrotic"},
+    "on_hit_condition": "no_healing",
+    "on_hit_condition_duration": "until_turn_start",
+    "on_hit_condition_expiration": "source"
+  }
+}

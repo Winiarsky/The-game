@@ -3,7 +3,14 @@ from random import Random
 
 import pytest
 
-from dnd_board_game.actors import AbilityScores, Actor, ActorId, Faction
+from dnd_board_game.actors import (
+    AbilityScores,
+    Actor,
+    ActorId,
+    Faction,
+    FeatureGrant,
+    FeatureSourceKind,
+)
 from dnd_board_game.application import PlayerCombatActionFlowService
 from dnd_board_game.combat import (
     ActionUse,
@@ -133,6 +140,29 @@ def test_bonus_attack_keeps_non_ability_damage_bonus() -> None:
 
     assert bonus_source.damage_modifier == 1
     assert bonus_source.damage_hint.startswith("1d4 + 1 piercing")
+
+
+def test_two_weapon_fighting_style_keeps_ability_damage_modifier() -> None:
+    actor = replace(
+        _actor("hero", Faction.ALLY, Coordinate(0, 0)),
+        features=(
+            FeatureGrant(
+                feature_id="fighting_style_two_weapon_fighting",
+                label="Fighting Style: Two-Weapon Fighting",
+                source_kind=FeatureSourceKind.CLASS,
+                source_ref="fighter",
+            ),
+        ),
+    )
+
+    bonus_source = two_weapon_bonus_attack_source(
+        actor,
+        _source("dagger", "Sztylet"),
+    )
+
+    assert bonus_source.damage_modifier == 3
+    assert bonus_source.damage_components[0].modifier == 3
+    assert "zachowuje modyfikator cechy" in bonus_source.damage_hint
 
 
 def test_main_light_attack_unlocks_bonus_attack_even_on_a_miss() -> None:

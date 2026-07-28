@@ -18,6 +18,7 @@ from .content_audit import (
     audit_content,
 )
 from .loader import (
+    CompiledActorCombatContent,
     LoadedExploration,
     LoadedEncounter,
     LoadedScenario,
@@ -28,6 +29,8 @@ from .loader import (
     ScenarioObjectiveDefinition,
     build_exploration_from_scenario,
     build_encounter_from_scenario,
+    compile_actor_combat_content,
+    encounter_with_custom_party,
     load_scenario,
 )
 
@@ -37,6 +40,7 @@ __all__ = [
     "ContentAuditIssue",
     "ContentAuditReport",
     "ContentHeader",
+    "CompiledActorCombatContent",
     "LoadedEncounter",
     "LoadedExploration",
     "LoadedScenario",
@@ -50,6 +54,8 @@ __all__ = [
     "ScenarioObjectiveDefinition",
     "SourcePack",
     "build_encounter_from_scenario",
+    "compile_actor_combat_content",
+    "encounter_with_custom_party",
     "build_exploration_from_scenario",
     "audit_content",
     "load_scenario",

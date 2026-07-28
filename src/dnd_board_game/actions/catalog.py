@@ -3,7 +3,13 @@ from __future__ import annotations
 from typing import Any
 
 from .attacks import attack_mechanic_from_source, opportunity_attack_mechanic, ready_attack_mechanic
-from .base import ActionMechanic
+from .base import (
+    ActionMechanic,
+    ActionResource,
+    CombatActionMechanic,
+    MechanicScope,
+    TargetingMode,
+)
 from .healing import healing_mechanic_from_source
 from .movement import basic_move_mechanic, dash_mechanic
 from .turn_actions import (
@@ -48,6 +54,23 @@ def combat_action_mechanic_from_definition(action: Any) -> ActionMechanic:
             str(getattr(action, "id", "concentration_attack_bonus")),
             str(getattr(action, "label", "Czar koncentracyjny")),
         )
+    if action_type == "targeted_status":
+        return CombatActionMechanic(
+            id=str(getattr(action, "id", "targeted_status")),
+            name=str(getattr(action, "label", "Czar statusowy")),
+            scope=MechanicScope.COMBAT,
+            resource=ActionResource.ACTION,
+            targeting=(
+                TargetingMode.ALLY
+                if str(getattr(action, "target_faction", "self")) == "ally"
+                else TargetingMode.SELF
+            ),
+            summary=(
+                "Wybiera legalne cele na planszy, zużywa slot i utrzymuje "
+                "typowany efekt przez jego zdefiniowany czas."
+            ),
+            tags=("spell", "status", "buff"),
+        )
     if action_type == "targeted_item_effect":
         return targeted_item_effect_mechanic(
             str(getattr(action, "id", "targeted_item_effect")),
@@ -87,6 +110,19 @@ def combat_action_mechanic_from_definition(action: Any) -> ActionMechanic:
         return spell_dispel_mechanic(
             str(getattr(action, "id", "spell_dispel")),
             str(getattr(action, "label", "Rozproszenie magii")),
+        )
+    if action_type == "multi_target_damage":
+        return CombatActionMechanic(
+            id=str(getattr(action, "id", "multi_target_damage")),
+            name=str(getattr(action, "label", "Wielocelowy czar obrażeń")),
+            scope=MechanicScope.COMBAT,
+            resource=ActionResource.ACTION,
+            targeting=TargetingMode.ENEMY,
+            summary=(
+                "Gracz rozdziela pociski pomiędzy widoczne cele; każdy pocisk "
+                "ma osobny fizyczny rzut obrażeń i trafia automatycznie."
+            ),
+            tags=("spell", "damage", "multi_target", "physical_dice"),
         )
     raise ValueError(f"Unknown combat action mechanic: {action_type}")
 

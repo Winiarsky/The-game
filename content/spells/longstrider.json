@@ -1,0 +1,43 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "longstrider",
+  "name": "Longstrider",
+  "level": 1,
+  "school": "transmutation",
+  "casting_time": "action",
+  "range": {
+    "kind": "touch"
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": [
+      {
+        "item_id": "spell_component_longstrider",
+        "label": "a pinch of dirt"
+      }
+    ]
+  },
+  "duration": {
+    "kind": "hour",
+    "amount": 1
+  },
+  "concentration": false,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "targeted_status",
+    "label": "Longstrider",
+    "target_count": 1,
+    "cast_flag": "cast_longstrider",
+    "instructions": "Przez godzinę szybkość dotkniętego celu rośnie o 10 stóp; +1 cel za wyższy slot.",
+    "effect_kind": "speed_bonus",
+    "value": 10,
+    "target_faction": "ally"
+  }
+}

@@ -71,6 +71,25 @@ def test_line_area_uses_declared_width() -> None:
     }
 
 
+def test_cube_area_extends_from_caster_in_selected_direction() -> None:
+    board = BoardState(BoardDimensions(cols=8, rows=8))
+    area = SpellArea(SpellAreaShape.CUBE, length_feet=15)
+
+    positions = area_positions_for_direction(
+        board,
+        Coordinate(2, 2),
+        Coordinate(3, 2),
+        area,
+    )
+
+    assert set(positions) == {
+        Coordinate(col, row)
+        for col in (3, 4, 5)
+        for row in (1, 2, 3)
+    }
+    assert Coordinate(2, 2) not in positions
+
+
 def test_cone_area_expands_from_direction():
     board = BoardState(BoardDimensions(cols=8, rows=8))
     area = SpellArea(SpellAreaShape.CONE, length_feet=15)

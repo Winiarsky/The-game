@@ -1,0 +1,46 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "aid",
+  "name": "Aid",
+  "level": 2,
+  "school": "abjuration",
+  "casting_time": "action",
+  "range": {
+    "kind": "distance",
+    "feet": 30
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": [
+      {
+        "item_id": "spell_component_aid",
+        "label": "a tiny strip of white cloth"
+      }
+    ]
+  },
+  "duration": {
+    "kind": "eight_hours",
+    "amount": 1
+  },
+  "concentration": false,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "targeted_status",
+    "label": "Aid",
+    "effect_kind": "max_hit_points_bonus",
+    "value": 5,
+    "upcast_value_per_level": 5,
+    "target_faction": "ally",
+    "target_count": 3,
+    "duration": "long_rest",
+    "cast_flag": "cast_aid",
+    "instructions": "Do 3 celów zwiększa aktualne i maksymalne PW o 5, plus 5 za każdy poziom slotu powyżej 2."
+  }
+}

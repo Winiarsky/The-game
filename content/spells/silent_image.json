@@ -1,0 +1,40 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "silent_image",
+  "name": "Silent Image",
+  "level": 1,
+  "school": "illusion",
+  "casting_time": "action",
+  "range": {
+    "kind": "distance",
+    "feet": 60
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": [
+      {
+        "item_id": "spell_component_silent_image",
+        "label": "a bit of fleece"
+      }
+    ]
+  },
+  "duration": {
+    "kind": "ten_minutes",
+    "amount": 1
+  },
+  "concentration": true,
+  "ritual": false,
+  "effect": {
+    "kind": "exploration",
+    "effect_type": "set_flag",
+    "flag_key": "cast_silent_image",
+    "flag_value": true,
+    "instructions": "Utwórz wizualną iluzję w sześcianie 15 stóp; akcja ją przesuwa. Fizyczna interakcja lub Investigation przeciw ST ujawnia iluzję."
+  }
+}

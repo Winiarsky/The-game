@@ -4,6 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from dnd_board_game.actions import PlayerIntentHint
+from dnd_board_game.actors import FeatureGrant, FeatureSourceKind
 from dnd_board_game.combat import SceneFlags, set_scene_flag
 from dnd_board_game.exploration import (
     CheckParticipants,
@@ -85,6 +86,49 @@ def test_gm_classifier_validates_owned_resource_with_matching_tag():
     validated = validate_gm_classifier_proposal(_proposal(), request)
 
     assert [resource.id for resource in validated.resources] == ["rope"]
+
+
+def test_background_permission_requires_authored_scene_and_owned_grant():
+    exploration, state = _state()
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Powołuję się na swój stopień wojskowy.",
+        actors=exploration.actors,
+    )
+    policy = replace(
+        request.challenge.llm_policy,
+        allowed_background_permission_ids=("invoke_military_rank",),
+    )
+    soldier = replace(
+        request.actors[0],
+        features=(
+            FeatureGrant(
+                "military_rank",
+                "Military Rank",
+                FeatureSourceKind.BACKGROUND,
+                "soldier",
+                action_ids=("invoke_military_rank",),
+            ),
+        ),
+    )
+    permitted_request = replace(
+        request,
+        challenge=replace(request.challenge, llm_policy=policy),
+        actors=(soldier, *request.actors[1:]),
+    )
+    proposal = _proposal(background_permission_id="invoke_military_rank")
+
+    validated = validate_gm_classifier_proposal(proposal, permitted_request)
+
+    assert validated.proposal.background_permission_id == "invoke_military_rank"
+    with pytest.raises(GmProposalValidationError, match="Żaden uczestnik"):
+        validate_gm_classifier_proposal(
+            proposal,
+            replace(permitted_request, actors=request.actors),
+        )
 
 
 def test_selected_goal_applies_authored_quiet_tradeoff():

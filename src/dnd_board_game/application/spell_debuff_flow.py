@@ -18,8 +18,14 @@ from dnd_board_game.combat import (
     grid_distance_feet,
     resolve_spell_save,
     reveal_actor,
+    ActiveCombatEffect,
 )
-from dnd_board_game.rules import EffectDuration
+from dnd_board_game.rules import (
+    EffectDuration,
+    EffectSource,
+    EffectSourceType,
+    EffectStackingPolicy,
+)
 from dnd_board_game.world import BoardState, line_of_sight_clear
 
 
@@ -33,9 +39,15 @@ class SpellDebuffActionSpec(Protocol):
     duration: str
     effect_kind: str | None
     condition: CombatCondition | None
+    condition_options: tuple[CombatCondition, ...]
+    additional_conditions: tuple[CombatCondition, ...]
     save_ability: str | None
     save_dc: int | None
     save_timing: str | None
+    concentration: bool
+    cast_flag: str
+    allowed_creature_types: tuple[str, ...]
+    minimum_intelligence: int | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,6 +74,8 @@ class SpellDebuffTransition:
     message_body: str
     event_type: str
     event_payload: tuple[tuple[str, object], ...]
+    concentration_effect: ActiveCombatEffect | None = None
+    scene_flag_changes: tuple[tuple[str, object], ...] = ()
 
 
 class SpellDebuffFlowService:
@@ -126,6 +140,7 @@ class SpellDebuffFlowService:
         pending: PendingSpellDebuff,
         target_id: str,
         rng: Random,
+        condition: str = "",
     ) -> SpellDebuffTransition:
         caster = current_actor(state)
         _validate_action(action)
@@ -166,47 +181,81 @@ class SpellDebuffFlowService:
             condition_states=resource.state.condition_states,
             combat_actors=resource.state.actors,
         )
+        selected_condition = _selected_condition(action, condition)
+        conditions = (selected_condition, *action.additional_conditions)
         updated = resource.state
-        applied = False
-        application_message = ""
+        applied_conditions: list[CombatCondition] = []
+        application_messages: list[str] = []
         if not save.success:
-            assert action.condition is not None
-            application = apply_condition(
-                updated.condition_states,
-                target,
-                action.condition,
-                source_actor_id=str(caster.id),
-                source_label=action.label,
-                duration=EffectDuration(action.duration),
-                save_ability=action.save_ability,
-                save_dc=save_dc,
-                save_timing=(
-                    ConditionSaveTiming(action.save_timing)
-                    if action.save_timing is not None
-                    else None
-                ),
-                source_spell_id=action.id,
-                source_spell_level=pending.cast_level,
-            )
-            updated = replace(
-                updated,
-                condition_states=application.condition_states,
-            )
-            applied = application.applied
-            application_message = application.message
+            for applied_condition in conditions:
+                application = apply_condition(
+                    updated.condition_states,
+                    target,
+                    applied_condition,
+                    source_actor_id=str(caster.id),
+                    source_label=action.label,
+                    duration=(
+                        EffectDuration.CONCENTRATION
+                        if action.concentration
+                        else _effect_duration(action.duration)
+                    ),
+                    save_ability=(
+                        action.save_ability
+                        if action.save_timing is not None
+                        else None
+                    ),
+                    save_dc=save_dc if action.save_timing is not None else None,
+                    save_timing=(
+                        ConditionSaveTiming(action.save_timing)
+                        if action.save_timing is not None
+                        else None
+                    ),
+                    source_spell_id=action.id,
+                    source_spell_level=pending.cast_level,
+                )
+                updated = replace(
+                    updated,
+                    condition_states=application.condition_states,
+                )
+                if application.applied:
+                    applied_conditions.append(applied_condition)
+                application_messages.append(application.message)
         updated = replace(
             updated,
             hidden_states=reveal_actor(updated.hidden_states, str(caster.id)),
         )
-        condition_name = condition_label(action.condition) if action.condition else "efekt"
+        condition_name = " i ".join(condition_label(value) for value in conditions)
         outcome = (
             f"{target.name} odpiera stan {condition_name}."
             if save.success
-            else application_message
+            else " ".join(application_messages)
         )
         message = (
             f"{caster.name} rzuca {action.label} na {target.name}. "
             f"Save {save.total}/{save_dc}: {outcome}"
+        )
+        concentration_effect = (
+            ActiveCombatEffect(
+                id=f"concentration_debuff:{caster.id}:{action.id}",
+                actor_id=str(target.id),
+                kind="concentration_debuff",
+                label=action.label,
+                object_id=f"spell:{action.id}",
+                value=0,
+                source_actor_id=str(caster.id),
+                target_actor_id=str(target.id),
+                source=EffectSource(
+                    EffectSourceType.SPELL,
+                    action.id,
+                    action.label,
+                ),
+                duration=EffectDuration.CONCENTRATION,
+                stacking=EffectStackingPolicy.STACK,
+                stacking_key=f"concentration:{caster.id}",
+                spell_level=pending.cast_level,
+            )
+            if applied_conditions and action.concentration
+            else None
         )
         return SpellDebuffTransition(
             state=updated,
@@ -219,9 +268,15 @@ class SpellDebuffFlowService:
                 ("target_id", target_id),
                 ("spell_id", action.id),
                 ("cast_level", pending.cast_level),
-                ("condition", action.condition.value if action.condition else None),
+                ("conditions", [value.value for value in conditions]),
                 ("save", save.as_payload()),
-                ("applied", applied),
+                ("applied", bool(applied_conditions)),
+            ),
+            concentration_effect=concentration_effect,
+            scene_flag_changes=(
+                ((action.cast_flag, True),)
+                if str(getattr(action, "cast_flag", "")).strip()
+                else ()
             ),
         )
 
@@ -248,11 +303,27 @@ def _validate_action(action: SpellDebuffActionSpec) -> None:
     if (
         action.action_type != "spell_debuff"
         or action.effect_kind != "apply_condition"
-        or action.condition is None
+        or (action.condition is None and not action.condition_options)
         or action.save_ability is None
-        or action.save_timing is None
     ):
         raise ValueError("Ta akcja nie jest kompletnym czarem debuffującym.")
+
+
+def _selected_condition(
+    action: SpellDebuffActionSpec,
+    requested: str,
+) -> CombatCondition:
+    if action.condition_options:
+        try:
+            selected = CombatCondition(requested)
+        except ValueError as exc:
+            raise ValueError("Wybierz jeden z dostępnych stanów czaru.") from exc
+        if selected not in action.condition_options:
+            raise ValueError("Wybrany stan nie jest dostępny dla tego czaru.")
+        return selected
+    if action.condition is None:
+        raise ValueError("Czar nie określa nakładanego stanu.")
+    return action.condition
 
 
 def _legal_targets(
@@ -268,6 +339,14 @@ def _legal_targets(
         for target in state.actors
         if target.faction not in {caster.faction, Faction.NEUTRAL}
         and not target.is_defeated()
+        and (
+            not getattr(action, "allowed_creature_types", ())
+            or target.creature_type in action.allowed_creature_types
+        )
+        and (
+            getattr(action, "minimum_intelligence", None) is None
+            or target.ability_scores.intelligence >= action.minimum_intelligence
+        )
         and grid_distance_feet(caster.position, target.position)
         <= action.range_feet
         and line_of_sight_clear(board, caster.position, target.position)
@@ -283,3 +362,15 @@ def _actor_by_id(state: CombatState, actor_id: str) -> Actor:
     return next(
         actor for actor in state.actors if str(actor.id) == actor_id
     )
+
+
+def _effect_duration(value: str) -> EffectDuration:
+    return {
+        "next_turn_start": EffectDuration.UNTIL_TURN_START,
+        "turn_end": EffectDuration.UNTIL_TURN_END,
+        "encounter": EffectDuration.UNTIL_ENCOUNTER_END,
+        "short_rest": EffectDuration.UNTIL_SHORT_REST,
+        "long_rest": EffectDuration.UNTIL_LONG_REST,
+        "scenario": EffectDuration.UNTIL_SCENARIO_END,
+        "permanent": EffectDuration.PERMANENT,
+    }.get(value, EffectDuration.UNTIL_ENCOUNTER_END)

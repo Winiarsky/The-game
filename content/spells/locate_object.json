@@ -1,0 +1,39 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "locate_object",
+  "name": "Locate Object",
+  "level": 2,
+  "school": "divination",
+  "casting_time": "action",
+  "range": {
+    "kind": "self"
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": [
+      {
+        "item_id": "spell_component_locate_object",
+        "label": "a forked twig"
+      }
+    ]
+  },
+  "duration": {
+    "kind": "ten_minutes",
+    "amount": 1
+  },
+  "concentration": true,
+  "ritual": false,
+  "effect": {
+    "kind": "exploration",
+    "effect_type": "set_flag",
+    "flag_key": "cast_locate_object",
+    "flag_value": true,
+    "instructions": "Podczas koncentracji poznawaj kierunek do znanego obiektu w promieniu 1000 stóp, o ile nie blokuje go ołów."
+  }
+}

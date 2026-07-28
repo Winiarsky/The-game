@@ -11,7 +11,9 @@ from dnd_board_game.actors import (
 )
 from dnd_board_game.inventory import effective_speed_feet
 from dnd_board_game.rules import (
+    ActiveEffect,
     D20RollInput,
+    D20RollKind,
     D20RollRequest,
     EffectDuration,
     EffectEvent,
@@ -20,7 +22,9 @@ from dnd_board_game.rules import (
     RollModifier,
     RollModifierType,
     SavingThrowRequest,
+    SavingThrowEffectTag,
     SavingThrowResult,
+    apply_actor_d20_traits,
     resolve_d20_roll,
     resolve_saving_throw_request,
 )
@@ -30,10 +34,24 @@ from .attack_flow import AttackSource
 
 
 class CombatCondition(StrEnum):
+    BLINDED = "blinded"
+    CHARMED = "charmed"
+    DEAFENED = "deafened"
+    FRIGHTENED = "frightened"
     PRONE = "prone"
     GRAPPLED = "grappled"
+    INCAPACITATED = "incapacitated"
+    INVISIBLE = "invisible"
+    PARALYZED = "paralyzed"
+    PETRIFIED = "petrified"
     POISONED = "poisoned"
     RESTRAINED = "restrained"
+    STUNNED = "stunned"
+    UNCONSCIOUS = "unconscious"
+    RAY_OF_FROST_SLOW = "ray_of_frost_slow"
+    NO_REACTIONS = "no_reactions"
+    NO_HEALING = "no_healing"
+    TURNED = "turned"
 
 
 class ConditionSaveTiming(StrEnum):
@@ -49,11 +67,54 @@ class ConditionDefinition:
     speed_zero: bool = False
     attack_disadvantage: bool = False
     attacks_against_advantage: bool = False
+    attack_advantage: bool = False
+    attacks_against_disadvantage: bool = False
     ability_check_disadvantage: bool = False
     dexterity_save_disadvantage: bool = False
+    speed_penalty_feet: int = 0
+    reactions_blocked: bool = False
+    healing_blocked: bool = False
+    actions_blocked: bool = False
+    auto_fail_strength_dexterity_saves: bool = False
+    critical_within_five_feet: bool = False
 
 
 CONDITION_DEFINITIONS: dict[CombatCondition, ConditionDefinition] = {
+    CombatCondition.BLINDED: ConditionDefinition(
+        CombatCondition.BLINDED,
+        "Oślepiony",
+        "Nie widzi; jego ataki mają utrudnienie, a ataki przeciw niemu przewagę.",
+        attack_disadvantage=True,
+        attacks_against_advantage=True,
+    ),
+    CombatCondition.CHARMED: ConditionDefinition(
+        CombatCondition.CHARMED,
+        "Zauroczenie",
+        "Nie może atakować źródła zauroczenia; źródło ma przewagę w interakcjach społecznych.",
+    ),
+    CombatCondition.DEAFENED: ConditionDefinition(
+        CombatCondition.DEAFENED,
+        "Ogłuchły",
+        "Nie słyszy i automatycznie przegrywa testy wymagające słuchu.",
+    ),
+    CombatCondition.FRIGHTENED: ConditionDefinition(
+        CombatCondition.FRIGHTENED,
+        "Przerażony",
+        "Ma utrudnienie ataków i testów, gdy widzi źródło strachu, i nie może dobrowolnie się do niego zbliżyć.",
+        attack_disadvantage=True,
+        ability_check_disadvantage=True,
+    ),
+    CombatCondition.TURNED: ConditionDefinition(
+        CombatCondition.TURNED,
+        "Odpędzony",
+        (
+            "Musi oddalać się od źródła, nie może dobrowolnie zbliżyć się na "
+            "mniej niż 30 stóp ani używać reakcji; używa akcji Dash albo Dodge, "
+            "jeśli nie może się ruszyć. Efekt kończy się po otrzymaniu obrażeń."
+        ),
+        attack_disadvantage=True,
+        reactions_blocked=True,
+    ),
     CombatCondition.PRONE: ConditionDefinition(
         CombatCondition.PRONE,
         "Powalony",
@@ -64,6 +125,41 @@ CONDITION_DEFINITIONS: dict[CombatCondition, ConditionDefinition] = {
         "Chwytany",
         "Szybkość wynosi 0 do czasu zakończenia chwytu.",
         speed_zero=True,
+    ),
+    CombatCondition.INCAPACITATED: ConditionDefinition(
+        CombatCondition.INCAPACITATED,
+        "Obezwładniony",
+        "Nie może wykonywać akcji ani reakcji.",
+        reactions_blocked=True,
+        actions_blocked=True,
+    ),
+    CombatCondition.INVISIBLE: ConditionDefinition(
+        CombatCondition.INVISIBLE,
+        "Niewidzialny",
+        "Ataki aktora mają przewagę, a ataki przeciw niemu utrudnienie, o ile przeciwnik nie ignoruje niewidzialności.",
+        attack_advantage=True,
+        attacks_against_disadvantage=True,
+    ),
+    CombatCondition.PARALYZED: ConditionDefinition(
+        CombatCondition.PARALYZED,
+        "Sparaliżowany",
+        "Jest obezwładniony, nie porusza się, automatycznie przegrywa save Siły i Zręczności; trafienia z 5 ft są krytyczne.",
+        speed_zero=True,
+        attacks_against_advantage=True,
+        reactions_blocked=True,
+        actions_blocked=True,
+        auto_fail_strength_dexterity_saves=True,
+        critical_within_five_feet=True,
+    ),
+    CombatCondition.PETRIFIED: ConditionDefinition(
+        CombatCondition.PETRIFIED,
+        "Skamieniały",
+        "Jest obezwładniony, nie porusza się i automatycznie przegrywa save Siły i Zręczności.",
+        speed_zero=True,
+        attacks_against_advantage=True,
+        reactions_blocked=True,
+        actions_blocked=True,
+        auto_fail_strength_dexterity_saves=True,
     ),
     CombatCondition.POISONED: ConditionDefinition(
         CombatCondition.POISONED,
@@ -81,6 +177,45 @@ CONDITION_DEFINITIONS: dict[CombatCondition, ConditionDefinition] = {
         attacks_against_advantage=True,
         dexterity_save_disadvantage=True,
     ),
+    CombatCondition.STUNNED: ConditionDefinition(
+        CombatCondition.STUNNED,
+        "Ogłuszony",
+        "Jest obezwładniony, nie porusza się, automatycznie przegrywa save Siły i Zręczności, a ataki przeciw niemu mają przewagę.",
+        speed_zero=True,
+        attacks_against_advantage=True,
+        reactions_blocked=True,
+        actions_blocked=True,
+        auto_fail_strength_dexterity_saves=True,
+    ),
+    CombatCondition.UNCONSCIOUS: ConditionDefinition(
+        CombatCondition.UNCONSCIOUS,
+        "Nieprzytomny",
+        "Jest obezwładniony i powalony; automatycznie przegrywa save Siły i Zręczności, a trafienia z 5 ft są krytyczne.",
+        speed_zero=True,
+        attacks_against_advantage=True,
+        reactions_blocked=True,
+        actions_blocked=True,
+        auto_fail_strength_dexterity_saves=True,
+        critical_within_five_feet=True,
+    ),
+    CombatCondition.RAY_OF_FROST_SLOW: ConditionDefinition(
+        CombatCondition.RAY_OF_FROST_SLOW,
+        "Spowolniony przez Promień Mrozu",
+        "Szybkość jest zmniejszona o 10 ft do początku następnej tury rzucającego.",
+        speed_penalty_feet=10,
+    ),
+    CombatCondition.NO_REACTIONS: ConditionDefinition(
+        CombatCondition.NO_REACTIONS,
+        "Bez reakcji",
+        "Istota nie może wykonywać reakcji do początku swojej następnej tury.",
+        reactions_blocked=True,
+    ),
+    CombatCondition.NO_HEALING: ConditionDefinition(
+        CombatCondition.NO_HEALING,
+        "Zablokowane leczenie",
+        "Istota nie może odzyskiwać punktów wytrzymałości.",
+        healing_blocked=True,
+    ),
 }
 
 
@@ -97,6 +232,7 @@ class ConditionState:
     save_timing: ConditionSaveTiming | None = None
     source_spell_id: str | None = None
     source_spell_level: int | None = None
+    expiration_event_count: int = 1
 
     def __post_init__(self) -> None:
         if not self.actor_id:
@@ -123,6 +259,8 @@ class ConditionState:
             raise ValueError("Condition source spell id cannot be empty.")
         if self.source_spell_level is not None and self.source_spell_level < 0:
             raise ValueError("Condition source spell level cannot be negative.")
+        if self.expiration_event_count < 1:
+            raise ValueError("Condition expiration event count must be positive.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,6 +301,7 @@ def add_condition(
     save_timing: ConditionSaveTiming | None = None,
     source_spell_id: str | None = None,
     source_spell_level: int | None = None,
+    expiration_event_count: int = 1,
 ) -> tuple[ConditionState, ...]:
     candidate = ConditionState(
         actor_id=actor_id,
@@ -176,6 +315,7 @@ def add_condition(
         save_timing=save_timing,
         source_spell_id=source_spell_id,
         source_spell_level=source_spell_level,
+        expiration_event_count=expiration_event_count,
     )
     if candidate in states:
         return tuple(states)
@@ -201,6 +341,7 @@ def apply_condition(
     save_timing: ConditionSaveTiming | None = None,
     source_spell_id: str | None = None,
     source_spell_level: int | None = None,
+    expiration_event_count: int = 1,
 ) -> ConditionApplicationResult:
     definition = condition_definition(condition)
     if condition.value in actor.condition_immunities:
@@ -223,6 +364,7 @@ def apply_condition(
         save_timing=save_timing,
         source_spell_id=source_spell_id,
         source_spell_level=source_spell_level,
+        expiration_event_count=expiration_event_count,
     )
     applied_state = next(
         state
@@ -249,9 +391,29 @@ def expire_condition_states(
     states: Sequence[ConditionState],
     event: EffectEvent,
 ) -> tuple[tuple[ConditionState, ...], tuple[ConditionState, ...]]:
-    expired = tuple(state for state in states if _condition_expires_on(state, event))
-    expired_ids = {id(state) for state in expired}
-    return tuple(state for state in states if id(state) not in expired_ids), expired
+    kept: list[ConditionState] = []
+    expired: list[ConditionState] = []
+    for state in states:
+        if not _condition_matches_expiration_event(state, event):
+            kept.append(state)
+        elif (
+            event.event_type
+            in {
+                EffectEventType.SCENARIO_ENDED,
+                EffectEventType.LONG_REST_COMPLETED,
+                EffectEventType.ENCOUNTER_ENDED,
+            }
+            or state.expiration_event_count <= 1
+        ):
+            expired.append(state)
+        else:
+            kept.append(
+                replace(
+                    state,
+                    expiration_event_count=state.expiration_event_count - 1,
+                )
+            )
+    return tuple(kept), tuple(expired)
 
 
 def pending_condition_saves(
@@ -273,7 +435,9 @@ def resolve_condition_save(
     *,
     natural_roll: int,
     natural_roll_2: int | None = None,
+    natural_rerolls: tuple[int, ...] = (),
     combat_actors: Sequence[Actor] = (),
+    additional_modifiers: tuple[RollModifier, ...] = (),
 ) -> ConditionSaveResolution:
     from dnd_board_game.actors import saving_throw_roll_modifiers
     from .auras import saving_throw_aura_modifiers
@@ -284,9 +448,11 @@ def resolve_condition_save(
         raise ValueError("Condition does not define a saving throw.")
     request = condition_roll_request(
         D20RollRequest(
+            ability=condition_state.save_ability,
             modifiers=(
                 *saving_throw_roll_modifiers(actor, condition_state.save_ability),
                 *saving_throw_aura_modifiers(combat_actors, actor),
+                *additional_modifiers,
             )
         ),
         states,
@@ -298,9 +464,28 @@ def resolve_condition_save(
         request,
         ExhaustionRollKind.SAVING_THROW,
     )
+    request = apply_actor_d20_traits(
+        actor,
+        request,
+        D20RollKind.SAVING_THROW,
+        effect_tags=(
+            (
+                SavingThrowEffectTag.POISON.value
+                if condition_state.condition == CombatCondition.POISONED
+                else condition_state.condition.value
+            ),
+        ),
+    )
     if request.mode != RollMode.NORMAL and natural_roll_2 is None:
         raise ValueError("Condition save with advantage or disadvantage requires two d20 rolls.")
-    roll = resolve_d20_roll(D20RollInput(request, int(natural_roll), natural_roll_2))
+    roll = resolve_d20_roll(
+        D20RollInput(
+            request,
+            int(natural_roll),
+            natural_roll_2,
+            tuple(int(value) for value in natural_rerolls),
+        )
+    )
     saving_throw = resolve_saving_throw_request(
         SavingThrowRequest(
             ability=condition_state.save_ability,
@@ -313,6 +498,16 @@ def resolve_condition_save(
         actor_name=actor.name,
         roll=roll,
     )
+    if condition_auto_fails_saving_throw(
+        states,
+        str(actor.id),
+        condition_state.save_ability,
+    ):
+        saving_throw = replace(
+            saving_throw,
+            success=False,
+            damage_multiplier=1.0,
+        )
     updated = (
         remove_condition(states, str(actor.id), condition_state.condition)
         if saving_throw.success
@@ -436,8 +631,14 @@ def path_with_condition_cost(
 def effective_movement_speed(
     actor: Actor,
     states: Sequence[ConditionState],
+    active_effects: Sequence[ActiveEffect] = (),
 ) -> int:
-    base_speed = effective_speed_feet(actor)
+    base_speed = effective_speed_feet(actor) + sum(
+        effect.value
+        for effect in active_effects
+        if effect.actor_id == str(actor.id)
+        and effect.kind == "speed_bonus"
+    )
     if any(
         condition_definition(state.condition).speed_zero
         for state in states
@@ -446,7 +647,75 @@ def effective_movement_speed(
         return 0
     if grappled_actor_ids(states, str(actor.id)):
         return base_speed // 2
-    return base_speed
+    penalty = max(
+        (
+            condition_definition(state.condition).speed_penalty_feet
+            for state in states
+            if state.actor_id == str(actor.id)
+        ),
+        default=0,
+    )
+    return max(0, base_speed - penalty)
+
+
+def condition_blocks_reactions(
+    states: Sequence[ConditionState],
+    actor_id: str,
+) -> bool:
+    return any(
+        state.actor_id == actor_id
+        and condition_definition(state.condition).reactions_blocked
+        for state in states
+    )
+
+
+def condition_blocks_actions(
+    states: Sequence[ConditionState],
+    actor_id: str,
+) -> bool:
+    return any(
+        state.actor_id == actor_id
+        and condition_definition(state.condition).actions_blocked
+        for state in states
+    )
+
+
+def condition_auto_fails_saving_throw(
+    states: Sequence[ConditionState],
+    actor_id: str,
+    ability: str,
+) -> bool:
+    return ability in {"strength", "dexterity"} and any(
+        state.actor_id == actor_id
+        and condition_definition(
+            state.condition
+        ).auto_fail_strength_dexterity_saves
+        for state in states
+    )
+
+
+def condition_hit_is_automatic_critical(
+    states: Sequence[ConditionState],
+    target_id: str,
+    *,
+    within_five_feet: bool,
+) -> bool:
+    return within_five_feet and any(
+        state.actor_id == target_id
+        and condition_definition(state.condition).critical_within_five_feet
+        for state in states
+    )
+
+
+def condition_blocks_healing(
+    states: Sequence[ConditionState],
+    actor_id: str,
+) -> bool:
+    return any(
+        state.actor_id == actor_id
+        and condition_definition(state.condition).healing_blocked
+        for state in states
+    )
 
 
 def movement_range_with_condition_cost(
@@ -507,10 +776,30 @@ def attack_source_with_prone(
         for state in states
         if state.actor_id == str(target.id)
     )
-    condition_advantage = any(item.attacks_against_advantage for item in target_conditions)
-    condition_disadvantage = any(item.attack_disadvantage for item in attacker_conditions)
+    condition_advantage = (
+        any(item.attacks_against_advantage for item in target_conditions)
+        or any(item.attack_advantage for item in attacker_conditions)
+    )
+    condition_disadvantage = (
+        any(item.attack_disadvantage for item in attacker_conditions)
+        or any(item.attacks_against_disadvantage for item in target_conditions)
+    )
+    chill_touch_undead_disadvantage = (
+        attacker.creature_type == "undead"
+        and any(
+            state.actor_id == str(attacker.id)
+            and state.condition == CombatCondition.NO_HEALING
+            and state.source_actor_id == str(target.id)
+            for state in states
+        )
+    )
     advantage = (target_prone and target_within_five_feet) or condition_advantage
-    disadvantage = attacker_prone or (target_prone and not target_within_five_feet) or condition_disadvantage
+    disadvantage = (
+        attacker_prone
+        or (target_prone and not target_within_five_feet)
+        or condition_disadvantage
+        or chill_touch_undead_disadvantage
+    )
     if not advantage and not disadvantage:
         return source
 
@@ -531,14 +820,39 @@ def attack_source_with_prone(
             modifiers.append(
                 _factor(f"{definition.label}: utrudnienie ataku", f"condition:{definition.condition}:attack")
             )
+        if definition.attack_advantage:
+            modifiers.append(
+                _factor(
+                    f"{definition.label}: przewaga ataku",
+                    f"condition:{definition.condition}:attack_advantage",
+                )
+            )
     for definition in target_conditions:
         if definition.attacks_against_advantage:
             modifiers.append(
                 _factor(f"{definition.label}: przewaga przeciw celowi", f"condition:{definition.condition}:target")
             )
+        if definition.attacks_against_disadvantage:
+            modifiers.append(
+                _factor(
+                    f"{definition.label}: utrudnienie przeciw celowi",
+                    f"condition:{definition.condition}:target_disadvantage",
+                )
+            )
+    if chill_touch_undead_disadvantage:
+        modifiers.append(
+            _factor(
+                "Dotyk chłodu: nieumarły atakuje rzucającego z utrudnieniem",
+                "chill_touch_undead",
+            )
+        )
     return replace(
         source,
-        attack_roll_request=D20RollRequest(mode=mode, modifiers=tuple(modifiers)),
+        attack_roll_request=replace(
+            request,
+            mode=mode,
+            modifiers=tuple(modifiers),
+        ),
     )
 
 
@@ -578,10 +892,13 @@ def condition_roll_request(
             for definition in disadvantage_definitions
         ),
     )
-    return D20RollRequest(mode=mode, modifiers=modifiers)
+    return replace(request, mode=mode, modifiers=modifiers)
 
 
-def _condition_expires_on(state: ConditionState, event: EffectEvent) -> bool:
+def _condition_matches_expiration_event(
+    state: ConditionState,
+    event: EffectEvent,
+) -> bool:
     if event.event_type == EffectEventType.SCENARIO_ENDED:
         return state.duration != EffectDuration.PERMANENT
     if event.event_type == EffectEventType.LONG_REST_COMPLETED:

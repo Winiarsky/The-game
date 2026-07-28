@@ -1,0 +1,35 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "zone_of_truth",
+  "name": "Zone Of Truth",
+  "level": 2,
+  "school": "enchantment",
+  "casting_time": "action",
+  "range": {
+    "kind": "distance",
+    "feet": 60
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": []
+  },
+  "duration": {
+    "kind": "ten_minutes",
+    "amount": 1
+  },
+  "concentration": false,
+  "ritual": false,
+  "effect": {
+    "kind": "exploration",
+    "effect_type": "set_flag",
+    "flag_key": "cast_zone_of_truth",
+    "flag_value": true,
+    "instructions": "Istoty w promieniu 15 stóp wykonują Cha save. Przy porażce przez 10 minut nie mogą świadomie kłamać; rzucający zna wyniki save."
+  }
+}

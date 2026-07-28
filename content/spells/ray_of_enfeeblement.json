@@ -1,0 +1,42 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "ray_of_enfeeblement",
+  "name": "Ray Of Enfeeblement",
+  "level": 2,
+  "school": "necromancy",
+  "casting_time": "action",
+  "range": {
+    "kind": "distance",
+    "feet": 60
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": []
+  },
+  "duration": {
+    "kind": "minute",
+    "amount": 1
+  },
+  "concentration": true,
+  "ritual": false,
+  "effect": {
+    "kind": "attack",
+    "attack_kind": "ranged",
+    "damage": {
+      "fixed": 0,
+      "damage_type": "necrotic"
+    },
+    "on_hit_effect_kind": "ray_of_enfeeblement",
+    "on_hit_effect_duration": "concentration",
+    "on_hit_effect_value": 0,
+    "instructions": "Ranged spell attack; podczas koncentracji cel zadaje połowę obrażeń atakami broni opartymi na Sile i ponawia Con save na końcu tury.",
+    "resolution_mode": "automatic",
+    "board_relevance": "direct"
+  }
+}

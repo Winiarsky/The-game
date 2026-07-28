@@ -122,6 +122,29 @@ def test_short_rest_hit_die_can_be_spent_after_completion() -> None:
     assert hero.hit_dice[0].remaining == 1
 
 
+def test_song_of_rest_adds_one_optional_healing_die_to_hit_die_recovery() -> None:
+    exploration = _loaded()
+    wounded = tuple(
+        replace(actor, hp=10) if str(actor.id) == "hero" else actor
+        for actor in exploration.actors
+    )
+
+    transition = ShortRestFlowService().spend_hit_die(
+        actors=wounded,
+        actor_id="hero",
+        die_sides=10,
+        natural_roll=5,
+        song_of_rest_roll=4,
+        song_of_rest_die_sides=6,
+        song_of_rest_bard_id="bard",
+    )
+
+    hero = next(actor for actor in transition.actors if str(actor.id) == "hero")
+    assert hero.hp == 20
+    assert transition.song_of_rest_healing == 4
+    assert transition.song_of_rest_bard_id == "bard"
+
+
 def test_short_rest_allows_one_attunement_change_per_actor() -> None:
     exploration = _loaded()
     state = _state(exploration)

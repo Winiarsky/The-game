@@ -1,0 +1,41 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "magic_mouth",
+  "name": "Magic Mouth",
+  "level": 2,
+  "school": "illusion",
+  "casting_time": "minute",
+  "range": {
+    "kind": "distance",
+    "feet": 30
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": [
+      {
+        "item_id": "spell_component_magic_mouth",
+        "label": "a small bit of honeycomb and jade dust worth at least 10 gp, which the spell consumes",
+        "minimum_value_cp": 1000,
+        "consumed": true
+      }
+    ]
+  },
+  "duration": {
+    "kind": "until_dispelled"
+  },
+  "concentration": false,
+  "ritual": true,
+  "effect": {
+    "kind": "exploration",
+    "effect_type": "set_flag",
+    "flag_key": "cast_magic_mouth",
+    "flag_value": true,
+    "instructions": "Ustal wyzwalacz i wiadomość do 25 słów; zaczarowany obiekt odtwarza ją po spełnieniu warunku."
+  }
+}

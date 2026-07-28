@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stwórz postać</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='launcher.css') }}">
+</head>
+<body class="launcher-page">
+  <main class="flow-shell creator-shell">
+    <header class="flow-header">
+      <a class="back-link" href="{{ url_for('characters') }}">← Roster postaci</a>
+      <span class="step-label">{% if copy_source %}Nowa postać na podstawie: {{ copy_source }}{% else %}Kreator postaci · poziom 1{% endif %}</span>
+      <h1>{% if copy_source %}Edytuj jako kopię{% else %}Stwórz bohatera{% endif %}</h1>
+      <p>Wypełnij wybory, a silnik zasad sprawdzi kompletność i wyliczy finalną kartę.</p>
+    </header>
+
+    {% if issues %}
+      <section class="validation-summary" role="alert">
+        <b>Postać nie jest jeszcze gotowa:</b>
+        <ul>
+          {% for issue in issues %}<li>{{ issue.message }}</li>{% endfor %}
+        </ul>
+      </section>
+    {% endif %}
+
+    <form class="character-form" method="post" action="{{ url_for('create_character') }}">
+      <section class="form-section">
+        <span class="eyebrow">1. Tożsamość</span>
+        <div class="form-grid two">
+          <label>Imię postaci
+            <input name="name" value="{{ values.name }}" required maxlength="80" autocomplete="off">
+          </label>
+          <label>Id zapisu
+            <input name="id" value="{{ values.id }}" required pattern="[a-z][a-z0-9]*(?:_[a-z0-9]+)*" placeholder="np. aldren">
+            <small>Małe litery, cyfry i podkreślenia. Id musi być unikalne.</small>
+          </label>
+          <label class="full">Portret
+            <input name="portrait" value="{{ values.portrait }}" placeholder="portraits/custom/bohater.webp">
+            <small>Opcjonalna ścieżka do lokalnej grafiki.</small>
+          </label>
+        </div>
+      </section>
+
+      <section class="form-section">
+        <span class="eyebrow">2. Pochodzenie</span>
+        <div class="form-grid two">
+          <fieldset>
+            <legend>Species</legend>
+            {% for item in catalog.species %}
+              <label class="choice-row"><input type="radio" name="species_id" value="{{ item.id }}" {% if values.species_id == item.id %}checked{% endif %} onchange="syncCharacterSpecies()"> <span><b>{{ item.name }}</b><small>{{ item.speed_feet }} ft{% if item.darkvision_feet %} · darkvision {{ item.darkvision_feet }} ft{% endif %}</small></span></label>
+            {% endfor %}
+            {% for item in catalog.species if item.ability_bonus_choice_count or item.skill_choice_count or item.tool_choice_count or item.language_choice_count or item.variant_choice_count or item.cantrip_choice_count %}
+              <div data-species-options="{{ item.id }}">
+                {% if item.ability_bonus_choice_count %}
+                  <p class="form-help">Wybierz {{ item.ability_bonus_choice_count }} cechy z premią +{{ item.ability_bonus_choice_value }}.</p>
+                  {% for ability_id in ability_ids if ability_id not in item.ability_bonus_choice_exclusions %}
+                    <label class="check-row"><input type="checkbox" name="selected_species_bonus_ability_ids" value="{{ ability_id }}" {% if ability_id in values.selected_species_bonus_ability_ids %}checked{% endif %}> {{ labels.get(ability_id, ability_id) }}</label>
+                  {% endfor %}
+                {% endif %}
+                {% if item.skill_choice_count %}
+                  <p class="form-help">Wybierz {{ item.skill_choice_count }} umiejętności species.</p>
+                  {% for skill_id in item.skill_choices %}
+                    <label class="check-row"><input type="checkbox" name="selected_species_skill_ids" value="{{ skill_id }}" {% if skill_id in values.selected_species_skill_ids %}checked{% endif %}> {{ labels.get(skill_id, skill_id) }}</label>
+                  {% endfor %}
+                {% endif %}
+                {% if item.tool_choice_count %}
+                  <p class="form-help">Wybierz {{ item.tool_choice_count }} biegłość narzędziową.</p>
+                  {% for tool_id in item.tool_choices %}
+                    <label class="check-row"><input type="checkbox" name="selected_species_tool_ids" value="{{ tool_id }}" {% if tool_id in values.selected_species_tool_ids %}checked{% endif %}> {{ tool_id|replace('_', ' ')|title }}</label>
+                  {% endfor %}
+                {% endif %}
+                {% if item.language_choice_count %}
+                  <p class="form-help">Wybierz {{ item.language_choice_count }} dodatkowy język.</p>
+                  {% for language_id in language_ids if language_id not in item.languages %}
+                    <label class="check-row"><input type="checkbox" name="selected_species_language_ids" value="{{ language_id }}" {% if language_id in values.selected_species_language_ids %}checked{% endif %}> {{ language_id|replace('_', ' ')|title }}</label>
+                  {% endfor %}
+                {% endif %}
+                {% if item.variant_choice_count %}
+                  <p class="form-help">Wybierz wariant pochodzenia.</p>
+                  {% for variant in item.variant_choices %}
+                    <label class="choice-row"><input type="radio" name="selected_species_variant_id" value="{{ variant.id }}" {% if values.selected_species_variant_id == variant.id %}checked{% endif %}> <span>{{ variant.name }}</span></label>
+                  {% endfor %}
+                {% endif %}
+                {% if item.cantrip_choice_count %}
+                  <p class="form-help">Wybierz {{ item.cantrip_choice_count }} cantrip species.</p>
+                  {% for spell_id in item.cantrip_choices %}
+                    <label class="check-row"><input type="checkbox" name="selected_species_cantrip_ids" value="{{ spell_id }}" {% if spell_id in values.selected_species_cantrip_ids %}checked{% endif %}> {{ spell_id|replace('_', ' ')|title }}</label>
+                  {% endfor %}
+                {% endif %}
+              </div>
+            {% endfor %}
+          </fieldset>
+          <fieldset>
+            <legend>Background</legend>
+            {% for item in catalog.backgrounds %}
+              <label class="choice-row"><input type="radio" name="background_id" value="{{ item.id }}" {% if values.background_id == item.id %}checked{% endif %} onchange="syncCharacterBackground()"> <span><b>{{ item.name }}</b><small>{{ item.skill_proficiencies|join(', ') }}</small></span></label>
+            {% endfor %}
+            {% for item in catalog.backgrounds if item.tool_choice_count or item.language_choice_count %}
+              <div data-background-options="{{ item.id }}">
+                {% if item.tool_choice_count %}
+                  <p class="form-help">Wybierz {{ item.tool_choice_count }} biegłość narzędziową backgroundu.</p>
+                  {% for tool_id in item.tool_choices %}
+                    <label class="check-row"><input type="checkbox" name="selected_background_tool_ids" value="{{ tool_id }}" {% if tool_id in values.selected_background_tool_ids %}checked{% endif %}> {{ tool_id|replace('_', ' ')|title }}</label>
+                  {% endfor %}
+                {% endif %}
+                {% if item.language_choice_count %}
+                  <p class="form-help">Wybierz {{ item.language_choice_count }} języki backgroundu, których postać jeszcze nie zna.</p>
+                  {% for language_id in language_ids %}
+                    <label class="check-row"><input type="checkbox" name="selected_background_language_ids" value="{{ language_id }}" {% if language_id in values.selected_background_language_ids %}checked{% endif %}> {{ language_id|replace('_', ' ')|title }}</label>
+                  {% endfor %}
+                {% endif %}
+              </div>
+            {% endfor %}
+          </fieldset>
+        </div>
+      </section>
+
+      <section class="form-section">
+        <span class="eyebrow">3. Klasa</span>
+        <div class="class-choice-grid">
+          {% for item in catalog.classes %}
+            <label class="class-choice"><input type="radio" name="class_id" value="{{ item.id }}" {% if values.class_id == item.id %}checked{% endif %} onchange="syncCharacterClass()"> <span><b>{{ item.name }}</b><small>k{{ item.hit_die }} HP · {{ item.skill_choice_count }} umiejętności</small></span></label>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="form-section">
+        <span class="eyebrow">4. Ability scores</span>
+        <p class="form-help">Rozdziel każdą wartość standard array dokładnie raz.</p>
+        <div class="ability-form-grid">
+          {% for ability_id in ability_ids %}
+            <label>{{ labels.get(ability_id, ability_id) }}
+              <select name="{{ ability_id }}">
+                {% for score in standard_array %}<option value="{{ score }}" {% if values[ability_id]|int == score %}selected{% endif %}>{{ score }}</option>{% endfor %}
+              </select>
+            </label>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="form-section">
+        <span class="eyebrow">5. Wybory klasowe</span>
+        {% for item in catalog.classes %}
+          <div class="class-options" data-class-options="{{ item.id }}">
+            <h2>{{ item.name }}</h2>
+            <div class="form-grid two">
+              <fieldset>
+                <legend>Umiejętności — wybierz {{ item.skill_choice_count }}</legend>
+                {% for skill_id in item.skill_choices %}
+                  <label class="check-row"><input type="checkbox" name="selected_skill_ids" value="{{ skill_id }}" {% if skill_id in values.selected_skill_ids %}checked{% endif %}> {{ labels.get(skill_id, skill_id) }}</label>
+                {% endfor %}
+              </fieldset>
+
+              <fieldset>
+                <legend>Wyposażenie</legend>
+                {% for package in item.equipment_packages %}
+                  <label class="choice-row"><input type="radio" name="equipment_package_id" value="{{ package.id }}" {% if values.equipment_package_id == package.id %}checked{% endif %}> <span><b>{{ package.label }}</b><small>{{ package.items|length }} pozycje startowe</small></span></label>
+                {% endfor %}
+              </fieldset>
+
+              {% if item.fighting_style_choices and item.fighting_style_choice_level == 1 %}
+                <fieldset>
+                  <legend>Fighting Style — wybierz 1</legend>
+                  {% for option_id in item.fighting_style_choices %}
+                    <label class="choice-row"><input type="radio" name="selected_fighting_style_id" value="{{ option_id }}" {% if values.selected_fighting_style_id == option_id %}checked{% endif %}> <span>{{ labels.get(option_id, option_id) }}</span></label>
+                  {% endfor %}
+                </fieldset>
+              {% endif %}
+
+              {% if item.expertise_choice_count and item.expertise_choice_level == 1 %}
+                <fieldset>
+                  <legend>Expertise — wybierz {{ item.expertise_choice_count }}</legend>
+                  <p class="form-help">Możesz wybrać tylko umiejętności, w których finalnie masz biegłość.</p>
+                  {% for skill_id in skill_ids %}
+                    <label class="check-row"><input type="checkbox" name="selected_expertise_ids" value="{{ skill_id }}" {% if skill_id in values.selected_expertise_ids %}checked{% endif %}> {{ labels.get(skill_id, skill_id) }}</label>
+                  {% endfor %}
+                </fieldset>
+              {% endif %}
+
+              {% for group in item.choice_groups if group.level == 1 %}
+                <fieldset data-conditional-option-group="{{ group.requires_option_id }}">
+                  <legend>{{ group.name }} — wybierz {{ group.choice_count }}</legend>
+                  {% if group.requires_option_id %}
+                    <p class="form-help">Wymagane tylko po wybraniu {{ labels.get(group.requires_option_id, group.requires_option_id) }}.</p>
+                  {% endif %}
+                  {% for option in group.options %}
+                    <label class="check-row"><input type="checkbox" name="selected_class_option_ids" value="{{ option.id }}" {% if option.id in values.selected_class_option_ids %}checked{% endif %}> {{ option.name }}</label>
+                  {% endfor %}
+                </fieldset>
+              {% endfor %}
+
+              {% if item.subclass_choices and item.subclass_choice_level == 1 %}
+                <fieldset>
+                  <legend>Archetyp — wybierz {{ item.subclass_choice_count }}</legend>
+                  {% for subclass in item.subclass_choices %}
+                    <label class="choice-row"><input type="radio" name="selected_subclass_id" value="{{ subclass.id }}" {% if values.selected_subclass_id == subclass.id %}checked{% endif %}> <span>{{ subclass.name }}</span></label>
+                  {% endfor %}
+                </fieldset>
+              {% endif %}
+
+              {% if item.cantrip_choices %}
+                <fieldset>
+                  <legend>Cantripy — wybierz {{ item.cantrip_choice_count }}</legend>
+                  {% for spell_id in item.cantrip_choices %}
+                    <label class="check-row"><input type="checkbox" name="selected_cantrip_ids" value="{{ spell_id }}" {% if spell_id in values.selected_cantrip_ids %}checked{% endif %}> {{ spell_id|replace('_', ' ')|title }}</label>
+                  {% endfor %}
+                </fieldset>
+              {% endif %}
+
+              {% if item.spell_choice_count %}
+                <fieldset>
+                  <legend>Spellbook — wybierz {{ item.spell_choice_count }}</legend>
+                  {% for spell_id in item.spell_choices %}
+                    <label class="check-row"><input type="checkbox" name="selected_spell_ids" value="{{ spell_id }}" {% if spell_id in values.selected_spell_ids %}checked{% endif %}> {{ spell_id|replace('_', ' ')|title }}</label>
+                  {% endfor %}
+                  {% for subclass in item.subclass_choices if item.subclass_choice_level == 1 %}
+                    {% for spell_id in subclass.additional_spell_choice_ids %}
+                      <label class="check-row"><input type="checkbox" name="selected_spell_ids" value="{{ spell_id }}" {% if spell_id in values.selected_spell_ids %}checked{% endif %}> {{ spell_id|replace('_', ' ')|title }} <small>({{ subclass.name }})</small></label>
+                    {% endfor %}
+                  {% endfor %}
+                </fieldset>
+              {% endif %}
+
+              {% if item.preparation_kind %}
+                <fieldset>
+                  <legend>Przygotowane czary</legend>
+                  <p class="form-help">Limit zależy od finalnej cechy czarującej i poziomu. Builder poda dokładną liczbę, jeśli wybór jest niepełny.</p>
+                  {% for spell_id in item.spell_choices %}
+                    <label class="check-row"><input type="checkbox" name="selected_prepared_spell_ids" value="{{ spell_id }}" {% if spell_id in values.selected_prepared_spell_ids %}checked{% endif %}> {{ spell_id|replace('_', ' ')|title }}</label>
+                  {% endfor %}
+                </fieldset>
+              {% endif %}
+            </div>
+          </div>
+        {% endfor %}
+      </section>
+
+      <div class="flow-actions">
+        <a class="button secondary" href="{{ url_for('characters') }}">Anuluj</a>
+        <button type="submit">Sprawdź i zapisz postać</button>
+      </div>
+    </form>
+  </main>
+  <script>
+    function syncCharacterClass() {
+      const selected = document.querySelector('input[name="class_id"]:checked')?.value;
+      document.querySelectorAll('[data-class-options]').forEach(section => {
+        const active = section.dataset.classOptions === selected;
+        section.hidden = !active;
+        section.querySelectorAll('input, select').forEach(control => control.disabled = !active);
+      });
+      syncConditionalClassOptions();
+    }
+    function syncConditionalClassOptions() {
+      document.querySelectorAll('[data-conditional-option-group]').forEach(group => {
+        const required = group.dataset.conditionalOptionGroup;
+        if (!required) return;
+        const classSection = group.closest('[data-class-options]');
+        const trigger = classSection?.querySelector(`input[name="selected_class_option_ids"][value="${CSS.escape(required)}"]`);
+        const active = Boolean(classSection && !classSection.hidden && trigger?.checked);
+        group.hidden = !active;
+        group.querySelectorAll('input').forEach(input => {
+          input.disabled = !active;
+          if (!active) input.checked = false;
+        });
+      });
+    }
+    function syncCharacterSpecies() {
+      const selected = document.querySelector('input[name="species_id"]:checked')?.value;
+      document.querySelectorAll('[data-species-options]').forEach(section => {
+        const active = section.dataset.speciesOptions === selected;
+        section.hidden = !active;
+        section.querySelectorAll('input, select').forEach(control => control.disabled = !active);
+      });
+    }
+    function syncCharacterBackground() {
+      const selected = document.querySelector('input[name="background_id"]:checked')?.value;
+      document.querySelectorAll('[data-background-options]').forEach(section => {
+        const active = section.dataset.backgroundOptions === selected;
+        section.hidden = !active;
+        section.querySelectorAll('input, select').forEach(control => control.disabled = !active);
+      });
+    }
+    syncCharacterClass();
+    syncCharacterSpecies();
+    syncCharacterBackground();
+    document.addEventListener('change', event => {
+      if (event.target.matches('input[name="selected_class_option_ids"]')) {
+        syncConditionalClassOptions();
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,35 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "calm_emotions",
+  "name": "Calm Emotions",
+  "level": 2,
+  "school": "enchantment",
+  "casting_time": "action",
+  "range": {
+    "kind": "distance",
+    "feet": 60
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": []
+  },
+  "duration": {
+    "kind": "minute",
+    "amount": 1
+  },
+  "concentration": true,
+  "ritual": false,
+  "effect": {
+    "kind": "exploration",
+    "effect_type": "set_flag",
+    "flag_key": "cast_calm_emotions",
+    "flag_value": true,
+    "instructions": "Humanoidy w kuli 20 stóp wykonują rzut na Charyzmę; stłum emocje albo czasowo usuń zauroczenie/przerażenie."
+  }
+}

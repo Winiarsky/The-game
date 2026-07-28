@@ -1,0 +1,39 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "gentle_repose",
+  "name": "Gentle Repose",
+  "level": 2,
+  "school": "necromancy",
+  "casting_time": "action",
+  "range": {
+    "kind": "touch"
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": [
+      {
+        "item_id": "spell_component_gentle_repose",
+        "label": "a pinch of salt and one copper piece placed on each of the corpse’s eyes, which must remain there for the duration"
+      }
+    ]
+  },
+  "duration": {
+    "kind": "ten_minutes",
+    "amount": 1
+  },
+  "concentration": true,
+  "ritual": true,
+  "effect": {
+    "kind": "exploration",
+    "effect_type": "set_flag",
+    "flag_key": "cast_gentle_repose",
+    "flag_value": true,
+    "instructions": "Dotknięte zwłoki przez 10 dni nie rozkładają się i nie mogą stać się undead; czas nie liczy się do limitu wskrzeszenia."
+  }
+}

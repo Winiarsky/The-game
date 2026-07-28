@@ -1,0 +1,35 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "misty_step",
+  "name": "Misty Step",
+  "level": 2,
+  "school": "conjuration",
+  "casting_time": "bonus_action",
+  "range": {
+    "kind": "self"
+  },
+  "components": {
+    "verbal": true,
+    "somatic": false,
+    "materials": []
+  },
+  "duration": {
+    "kind": "instantaneous"
+  },
+  "concentration": false,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "spell_movement",
+    "target_faction": "self",
+    "movement": {
+      "kind": "teleport",
+      "distance_feet": 30
+    }
+  }
+}

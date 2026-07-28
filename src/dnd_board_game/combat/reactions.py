@@ -10,6 +10,9 @@ class ReactionKind(StrEnum):
     OPPORTUNITY_ATTACK = "opportunity_attack"
     DEFENSIVE_SPELL = "defensive_spell"
     SPELL_COUNTER = "spell_counter"
+    CUTTING_WORDS = "cutting_words"
+    DEFLECT_MISSILES = "deflect_missiles"
+    RETALIATION_SPELL = "retaliation_spell"
 
 
 class ReactionStage(StrEnum):

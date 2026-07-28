@@ -1,0 +1,48 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "gust_of_wind",
+  "name": "Gust Of Wind",
+  "level": 2,
+  "school": "evocation",
+  "casting_time": "action",
+  "range": {
+    "kind": "self"
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": [
+      {
+        "item_id": "spell_component_gust_of_wind",
+        "label": "a legume seed"
+      }
+    ]
+  },
+  "duration": {
+    "kind": "minute",
+    "amount": 1
+  },
+  "concentration": true,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "spell_movement",
+    "label": "Gust of Wind",
+    "target_faction": "enemy",
+    "range_feet": 60,
+    "save_ability": "strength",
+    "movement": {
+      "kind": "push",
+      "distance_feet": 15
+    },
+    "cast_flag": "cast_gust_of_wind",
+    "instructions": "Linia 60×10 stóp podczas koncentracji odpycha o 15 stóp po nieudanym Str save, kosztuje podwójny ruch pod wiatr i rozprasza gazy.",
+    "resolution_mode": "automatic",
+    "board_relevance": "direct"
+  }
+}

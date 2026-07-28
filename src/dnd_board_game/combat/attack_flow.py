@@ -10,16 +10,21 @@ from dnd_board_game.actors import (
     Faction,
     apply_exhaustion_to_roll_request,
     attack_roll_modifiers,
+    actor_has_feature,
 )
 from dnd_board_game.rules import (
     AttackRollOutcome,
     AttackRollResult,
     ActiveEffect,
+    D20RollKind,
     D20RollRequest,
     D20RollResult,
     DiceExpression,
+    EffectDuration,
+    apply_actor_d20_traits,
     cantrip_damage_dice_count,
     resolve_attack_roll,
+    spellcasting_ability_for_spell,
 )
 from dnd_board_game.world import BoardState, Coordinate, line_of_sight_clear
 from dnd_board_game.inventory.weapons import WeaponSpecialRule
@@ -92,18 +97,43 @@ class AttackSource:
     ability_damage_modifier_applied: int = 0
     weapon_category_id: str | None = None
     on_hit_condition: str | None = None
+    on_hit_condition_duration: EffectDuration = EffectDuration.PERMANENT
+    on_hit_condition_expiration: str = "target"
+    advantage_against_metal_armor: bool = False
     limited_attacks: bool = False
     thrown: bool = False
     action_cost: ActionEconomyCost = ActionEconomyCost.ACTION
     cast_level: int | None = None
     upcast_damage_dice_per_level: int = 0
     cantrip_damage_dice_per_tier: int = 0
+    metamagic_ids: tuple[str, ...] = ()
+    duration_multiplier: int = 1
+    tabletop_riders: tuple[str, ...] = ()
+    on_hit_effect_kind: str | None = None
+    on_hit_effect_duration: EffectDuration = EffectDuration.UNTIL_NEXT_ATTACK
+    on_hit_effect_value: int = 0
+    failed_save_push_feet: int = 0
+    damage_divisor: int = 1
+    concentration: bool = False
+    miss_damage_on_failure: str = "none"
 
     def __post_init__(self) -> None:
         if self.upcast_damage_dice_per_level < 0:
             raise ValueError("Attack upcast damage dice cannot be negative.")
         if self.cantrip_damage_dice_per_tier < 0:
             raise ValueError("Cantrip damage dice scaling cannot be negative.")
+        if len(self.metamagic_ids) != len(set(self.metamagic_ids)):
+            raise ValueError("Metamagic options on an attack source must be unique.")
+        if self.duration_multiplier < 1:
+            raise ValueError("Spell duration multiplier must be positive.")
+        if self.failed_save_push_feet < 0 or self.failed_save_push_feet % 5:
+            raise ValueError("Failed-save push must be a non-negative multiple of 5 feet.")
+        if self.damage_divisor < 1:
+            raise ValueError("Damage divisor must be positive.")
+        if self.miss_damage_on_failure not in {"none", "half"}:
+            raise ValueError("Miss damage mode must be none or half.")
+        if any(not value.strip() for value in self.tabletop_riders):
+            raise ValueError("Attack tabletop riders cannot be empty.")
         if self.range_feet <= 0:
             raise ValueError("Attack source range_feet must be positive.")
         if self.reach_feet is not None and (
@@ -121,6 +151,8 @@ class AttackSource:
         if self.long_range_feet is not None:
             if self.long_range_feet <= self.range_feet:
                 raise ValueError("long_range_feet must be greater than normal range.")
+        if self.on_hit_condition_expiration not in {"source", "target"}:
+            raise ValueError("On-hit condition expiration must be source or target.")
         components = self.damage_components
         if self.damage_fixed is not None and self.damage_die_sides is not None:
             object.__setattr__(self, "damage_die_sides", None)
@@ -172,6 +204,38 @@ class AttackSource:
                 "damage_hint",
                 " + ".join(component.hint() for component in components),
             )
+
+
+def unarmed_strike_source(actor: Actor) -> AttackSource:
+    """Build the universal unarmed strike, including level 1–3 Martial Arts."""
+    feature_ids = {
+        feature.feature_id for feature in getattr(actor, "features", ())
+    }
+    martial_arts = "martial_arts" in feature_ids
+    ability = (
+        "dexterity"
+        if martial_arts
+        and actor.ability_scores.dexterity >= actor.ability_scores.strength
+        else "strength"
+    )
+    return attack_source_for_actor(
+        AttackSource(
+            id="unarmed_strike",
+            name="Uderzenie bez broni",
+            source_type=AttackSourceType.WEAPON,
+            range_feet=5,
+            reach_feet=5,
+            attack_roll_request=D20RollRequest(),
+            damage_fixed=None if martial_arts else 1,
+            damage_die_sides=4 if martial_arts else None,
+            damage_type="bludgeoning",
+            ability=ability,
+            proficiency_id="unarmed_strike",
+            attack_kind=AttackKind.MELEE,
+            adds_ability_modifier_to_damage=True,
+        ),
+        actor,
+    )
 
 
 def attack_source_at_cast_level(
@@ -297,13 +361,45 @@ def legal_melee_targets(
 def attack_source_for_actor(source: AttackSource, actor: Actor) -> AttackSource:
     """Bind a weapon source to the current wielder's ability and proficiency profile."""
 
+    if source.source_type == AttackSourceType.SPELL:
+        casting_ability = spellcasting_ability_for_spell(actor, source.id)
+        if casting_ability is not None and not source.save_ability:
+            request = apply_exhaustion_to_roll_request(
+                actor,
+                D20RollRequest(
+                    mode=source.attack_roll_request.mode,
+                    modifiers=attack_roll_modifiers(
+                        actor,
+                        casting_ability,
+                        proficient=True,
+                    ),
+                ),
+                ExhaustionRollKind.ATTACK,
+            )
+            bound = replace(
+                source,
+                ability=casting_ability,
+                attack_roll_request=apply_actor_d20_traits(
+                    actor,
+                    request,
+                    D20RollKind.ATTACK,
+                ),
+            )
+            from .class_feature_rules import apply_agonizing_blast
+
+            return apply_agonizing_blast(actor, bound)
     if source.source_type != AttackSourceType.WEAPON or source.ability is None:
+        request = apply_exhaustion_to_roll_request(
+            actor,
+            source.attack_roll_request,
+            ExhaustionRollKind.ATTACK,
+        )
         return replace(
             source,
-            attack_roll_request=apply_exhaustion_to_roll_request(
+            attack_roll_request=apply_actor_d20_traits(
                 actor,
-                source.attack_roll_request,
-                ExhaustionRollKind.ATTACK,
+                request,
+                D20RollKind.ATTACK,
             ),
         )
     proficiency_id = source.proficiency_id or source.source_item_id or source.id
@@ -311,6 +407,13 @@ def attack_source_for_actor(source: AttackSource, actor: Actor) -> AttackSource:
     proficient = actor.proficiencies.is_weapon_proficient(proficiency_id) or (
         category_id is not None
         and actor.proficiencies.is_weapon_proficient(category_id)
+    ) or (
+        actor_has_feature(actor, "pact_of_the_blade")
+        and any(
+            item.id == "pact_weapon"
+            and (item.source_ref == source.source_item_id or item.source_ref == source.id)
+            for item in actor.inventory
+        )
     )
     mode = source.attack_roll_request.mode
     modifiers = attack_roll_modifiers(
@@ -351,6 +454,16 @@ def attack_source_for_actor(source: AttackSource, actor: Actor) -> AttackSource:
             for component in damage_components
         )
         applied = desired
+    if (
+        actor_has_feature(actor, "savage_attacks")
+        and source.attack_kind == AttackKind.MELEE
+    ):
+        damage_components = tuple(
+            replace(component, critical_bonus_dice=max(1, component.critical_bonus_dice))
+            if component.id == "base" and component.dice is not None
+            else component
+            for component in damage_components
+        )
     request = apply_exhaustion_to_roll_request(
         actor,
         D20RollRequest(
@@ -358,6 +471,11 @@ def attack_source_for_actor(source: AttackSource, actor: Actor) -> AttackSource:
             modifiers=modifiers,
         ),
         ExhaustionRollKind.ATTACK,
+    )
+    request = apply_actor_d20_traits(
+        actor,
+        request,
+        D20RollKind.ATTACK,
     )
     return replace(
         source,
@@ -442,7 +560,15 @@ def attack_declaration_from_state(state: AttackActionState) -> AttackDeclaration
 
 
 def resolve_attack(declaration: AttackDeclaration, attack_roll: D20RollResult, action_use: ActionUse) -> AttackResolution:
-    result = resolve_attack_roll(attack_roll, declaration.target.ac)
+    result = resolve_attack_roll(
+        attack_roll,
+        declaration.target.ac,
+        critical_minimum=(
+            19
+            if actor_has_feature(declaration.attacker, "improved_critical")
+            else 20
+        ),
+    )
     used_action = consume_action(action_use)
     close_unconscious_critical = (
         result.hits

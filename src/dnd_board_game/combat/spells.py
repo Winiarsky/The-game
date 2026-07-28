@@ -10,16 +10,21 @@ from dnd_board_game.actors import (
     Faction,
     apply_exhaustion_to_roll_request,
     saving_throw_roll_modifiers,
+    can_spend_actor_resource,
+    spend_actor_resource,
 )
 from dnd_board_game.rules import (
     D20RollInput,
+    D20RollKind,
     D20RollRequest,
     SaveDamageOnSuccess,
     SavingThrowRequest,
     SavingThrowResult,
     SpellCastValidation,
+    SpellAccessKind,
     RollModifier,
     RollMode,
+    apply_actor_d20_traits,
     resolve_d20_roll,
     resolve_saving_throw_request,
     save_damage_multiplier,
@@ -35,6 +40,7 @@ class SpellAreaShape(StrEnum):
     RADIUS = "radius"
     LINE = "line"
     CONE = "cone"
+    CUBE = "cube"
 
 
 class SpellAreaTargetMode(StrEnum):
@@ -64,6 +70,16 @@ class SpellSlotState:
     level: int
     remaining: int
     maximum: int
+    recovery: str = "long_rest"
+    temporary: bool = False
+
+    def __post_init__(self) -> None:
+        if self.level < 1:
+            raise ValueError("Spell slot level must be positive.")
+        if self.maximum < 1 or not 0 <= self.remaining <= self.maximum:
+            raise ValueError("Spell slot state is outside its legal range.")
+        if self.recovery not in {"short_rest", "long_rest"}:
+            raise ValueError("Spell slot recovery must be short_rest or long_rest.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -146,7 +162,35 @@ def area_positions_for_direction(
         )
     if area.shape == SpellAreaShape.CONE:
         return _cone_positions(board, origin, direction, max(0, area.length_feet // 5))
-    raise ValueError("Directional area requires a line or cone spell area.")
+    if area.shape == SpellAreaShape.CUBE:
+        return _cube_positions(
+            board,
+            origin,
+            direction,
+            max(1, area.length_feet // 5),
+        )
+    raise ValueError("Directional area requires a line, cone or cube spell area.")
+
+
+def _cube_positions(
+    board: BoardState,
+    origin: Coordinate,
+    direction: tuple[int, int],
+    size: int,
+) -> tuple[Coordinate, ...]:
+    dx, dy = direction
+    perpendicular = (-dy, dx)
+    half_width = size // 2
+    positions: set[Coordinate] = set()
+    for forward in range(1, size + 1):
+        for lateral in range(-half_width, half_width + 1):
+            position = Coordinate(
+                origin.col + dx * forward + perpendicular[0] * lateral,
+                origin.row + dy * forward + perpendicular[1] * lateral,
+            )
+            if _in_bounds(board, position):
+                positions.add(position)
+    return tuple(sorted(positions, key=lambda position: (position.row, position.col)))
 
 
 def actors_in_area(
@@ -176,11 +220,25 @@ def actor_spell_cast_validation(
     *,
     cast_level: int | None = None,
     ritual: bool = False,
+    ignore_verbal_somatic: bool = False,
 ) -> SpellCastValidation | None:
     """Validate access, slot level, focus/material and somatic-hand requirements."""
     spell = next((candidate for candidate in actor.spells if candidate.id == spell_id), None)
     if spell is None:
         return None
+    if actor.wild_shape is not None:
+        return replace(
+            validate_spell_cast(
+                spell,
+                slots=actor.spell_slots,
+                inventory=actor.inventory,
+                cast_level=cast_level,
+                ritual=ritual,
+                ignore_verbal_somatic=ignore_verbal_somatic,
+            ),
+            valid=False,
+            errors=("Nie można rzucać czarów w formie Wild Shape.",),
+        )
     prepared = actor.spell_preparation
     accessible = spell_is_accessible(
         spell,
@@ -203,6 +261,7 @@ def actor_spell_cast_validation(
                 inventory=actor.inventory,
                 cast_level=cast_level,
                 ritual=ritual,
+                ignore_verbal_somatic=ignore_verbal_somatic,
             ),
             valid=False,
             errors=(f"Aktor nie ma dostępu do czaru {spell.name}.",),
@@ -213,6 +272,26 @@ def actor_spell_cast_validation(
         if spell.id in profile.spell_ids
         for kind in profile.allowed_focus_kinds
     )
+    innate_resource_id = _innate_spell_resource_id(actor, spell.id)
+    at_will = _spell_is_at_will(actor, spell.id)
+    if innate_resource_id is not None and not can_spend_actor_resource(
+        actor,
+        innate_resource_id,
+    ):
+        return replace(
+            validate_spell_cast(
+                spell,
+                slots=actor.spell_slots,
+                inventory=actor.inventory,
+                cast_level=spell.level,
+                allowed_focus_kinds=allowed_focus_kinds,
+                has_free_hand=free_hand_count(actor.inventory) > 0,
+                slotless=True,
+                ignore_verbal_somatic=ignore_verbal_somatic,
+            ),
+            valid=False,
+            errors=(f"Wykorzystano już wrodzone użycie czaru {spell.name}.",),
+        )
     return validate_spell_cast(
         spell,
         slots=actor.spell_slots,
@@ -221,6 +300,8 @@ def actor_spell_cast_validation(
         allowed_focus_kinds=allowed_focus_kinds,
         has_free_hand=free_hand_count(actor.inventory) > 0,
         ritual=ritual,
+        slotless=innate_resource_id is not None or at_will,
+        ignore_verbal_somatic=ignore_verbal_somatic,
     )
 
 
@@ -228,7 +309,17 @@ def can_consume_spell_resource(
     actor: Actor,
     spell_level: int,
     cast_level: int | None = None,
+    spell_id: str | None = None,
 ) -> bool:
+    innate_resource_id = (
+        _innate_spell_resource_id(actor, spell_id)
+        if spell_id is not None
+        else None
+    )
+    if innate_resource_id is not None:
+        return can_spend_actor_resource(actor, innate_resource_id)
+    if spell_id is not None and _spell_is_at_will(actor, spell_id):
+        return True
     if spell_level <= 0:
         return True
     levels = available_cast_levels(actor, spell_level)
@@ -276,8 +367,28 @@ def consume_spell_resource(
                 else:
                     inventory[index] = replace(item, quantity=remaining)
             actor_after_components = replace(actor, inventory=tuple(inventory))
-    if ritual or spell_level <= 0:
+    if (
+        ritual
+        or spell_level <= 0
+        or (spell_id is not None and _spell_is_at_will(actor_after_components, spell_id))
+    ):
         return SpellResourceUse(actor, actor_after_components, spell_level, False)
+    innate_resource_id = (
+        _innate_spell_resource_id(actor_after_components, spell_id)
+        if spell_id is not None
+        else None
+    )
+    if innate_resource_id is not None:
+        spent = spend_actor_resource(
+            actor_after_components,
+            innate_resource_id,
+        )
+        return SpellResourceUse(
+            actor,
+            spent.actor_after,
+            spell_level,
+            True,
+        )
     levels = available_cast_levels(actor_after_components, spell_level)
     selected_level = levels[0] if cast_level is None and levels else cast_level
     if selected_level is None or selected_level not in levels:
@@ -285,7 +396,7 @@ def consume_spell_resource(
         raise ValueError(f"Brak slotów czaru poziomu {requested} lub wyższego.")
     slots = list(actor_after_components.spell_slots)
     for index, slot in enumerate(slots):
-        if slot.level == selected_level:
+        if slot.level == selected_level and slot.remaining > 0:
             slots[index] = replace(slot, remaining=slot.remaining - 1)
             return SpellResourceUse(
                 actor,
@@ -296,6 +407,31 @@ def consume_spell_resource(
     raise ValueError(f"Aktor nie ma slotów czaru poziomu {selected_level}.")
 
 
+def _innate_spell_resource_id(
+    actor: Actor,
+    spell_id: str | None,
+) -> str | None:
+    if not spell_id:
+        return None
+    return next(
+        (
+            resource_id
+            for profile in actor.spell_access
+            for mapped_spell_id, resource_id in profile.resource_ids_by_spell
+            if mapped_spell_id == spell_id
+        ),
+        None,
+    )
+
+
+def _spell_is_at_will(actor: Actor, spell_id: str) -> bool:
+    return any(
+        profile.kind == SpellAccessKind.AT_WILL
+        and spell_id in profile.spell_ids
+        for profile in actor.spell_access
+    )
+
+
 def resolve_spell_save(
     actor: Actor,
     *,
@@ -303,10 +439,13 @@ def resolve_spell_save(
     dc: int,
     natural_roll: int,
     natural_roll_2: int | None = None,
+    natural_rerolls: tuple[int, ...] = (),
     damage_on_success: str = "none",
+    effect_tags: Sequence[str] = (),
     situational_modifiers: Sequence[RollModifier] = (),
     condition_states: Sequence = (),
     combat_actors: Sequence[Actor] = (),
+    roll_mode: RollMode = RollMode.NORMAL,
 ) -> SpellSaveResult:
     request = SavingThrowRequest(
         ability=ability,
@@ -314,15 +453,18 @@ def resolve_spell_save(
         source_label="czar",
         dc_source_label="ST czaru",
         damage_on_success=SaveDamageOnSuccess(damage_on_success),
+        effect_tags=tuple(effect_tags),
     )
     return resolve_actor_saving_throw(
         actor,
         request,
         natural_roll=natural_roll,
         natural_roll_2=natural_roll_2,
+        natural_rerolls=natural_rerolls,
         situational_modifiers=situational_modifiers,
         condition_states=condition_states,
         combat_actors=combat_actors,
+        roll_mode=roll_mode,
     )
 
 
@@ -332,13 +474,17 @@ def resolve_actor_saving_throw(
     *,
     natural_roll: int,
     natural_roll_2: int | None = None,
+    natural_rerolls: tuple[int, ...] = (),
     situational_modifiers: Sequence[RollModifier] = (),
     condition_states: Sequence = (),
     combat_actors: Sequence[Actor] = (),
+    roll_mode: RollMode = RollMode.NORMAL,
 ) -> SavingThrowResult:
     from .auras import saving_throw_aura_modifiers
 
     roll_request = D20RollRequest(
+        ability=saving_throw.ability,
+        mode=roll_mode,
         modifiers=(
             *saving_throw_roll_modifiers(actor, saving_throw.ability),
             *saving_throw_aura_modifiers(combat_actors, actor),
@@ -359,6 +505,12 @@ def resolve_actor_saving_throw(
         roll_request,
         ExhaustionRollKind.SAVING_THROW,
     )
+    roll_request = apply_actor_d20_traits(
+        actor,
+        roll_request,
+        D20RollKind.SAVING_THROW,
+        effect_tags=saving_throw.effect_tags,
+    )
     if roll_request.mode != RollMode.NORMAL and natural_roll_2 is None:
         raise ValueError("Advantage or disadvantage saving throw requires two d20 rolls.")
     roll = resolve_d20_roll(
@@ -366,14 +518,32 @@ def resolve_actor_saving_throw(
             roll_request,
             int(natural_roll),
             int(natural_roll_2) if natural_roll_2 is not None else None,
+            tuple(int(value) for value in natural_rerolls),
         )
     )
-    return resolve_saving_throw_request(
+    result = resolve_saving_throw_request(
         saving_throw,
         actor_id=str(actor.id),
         actor_name=actor.name,
         roll=roll,
     )
+    if condition_states:
+        from .conditions import condition_auto_fails_saving_throw
+
+        if condition_auto_fails_saving_throw(
+            condition_states,
+            str(actor.id),
+            saving_throw.ability,
+        ):
+            return replace(
+                result,
+                success=False,
+                damage_multiplier=save_damage_multiplier(
+                    False,
+                    saving_throw.damage_on_success,
+                ),
+            )
+    return result
 
 
 def spell_save_damage_multiplier(success: bool, damage_on_success: str) -> float:

@@ -2,9 +2,22 @@
 
 from .damage_affinities import DamageAffinityProfile
 from .auras import ActorAura, AuraEffectKind, AuraTarget
-from .features import FeatureDefinition, FeatureGrant, FeatureSourceKind
+from .features import (
+    FeatureDefinition,
+    FeatureGrant,
+    FeatureSourceKind,
+    actor_has_feature,
+)
 from .triggers import ActorTrigger, TriggerEffectKind, TriggerEventType
-from .models import AbilityScores, Actor, ActorId, DeathSaveState, Faction, is_ally_or_neutral
+from .models import (
+    AbilityScores,
+    Actor,
+    ActorId,
+    DeathSaveState,
+    Faction,
+    WildShapeState,
+    is_ally_or_neutral,
+)
 from .senses import ActorSenseProfile
 from .size import (
     CREATURE_SIZE_ORDER,
@@ -56,6 +69,14 @@ from .exhaustion import (
     increase_exhaustion,
     reduce_exhaustion,
 )
+from .ranger_features import (
+    NaturalExplorerBenefits,
+    apply_favored_enemy_advantage,
+    favored_enemy_creature_type,
+    favored_enemy_humanoid_races,
+    natural_explorer_benefits,
+    natural_explorer_terrain,
+)
 
 __all__ = [
     "AbilityScores",
@@ -68,11 +89,13 @@ __all__ = [
     "ActorSenseProfile",
     "ActorAura",
     "ActorTrigger",
+    "actor_has_feature",
     "DeathSaveState",
     "DamageAffinityProfile",
     "CreatureSize",
     "CREATURE_SIZE_ORDER",
     "Faction",
+    "WildShapeState",
     "FeatureDefinition",
     "FeatureGrant",
     "FeatureSourceKind",
@@ -110,6 +133,12 @@ __all__ = [
     "creature_size_label_pl",
     "creature_size_rank",
     "largest_grapple_or_shove_target",
+    "NaturalExplorerBenefits",
+    "apply_favored_enemy_advantage",
+    "favored_enemy_creature_type",
+    "favored_enemy_humanoid_races",
+    "natural_explorer_benefits",
+    "natural_explorer_terrain",
     "depleted_recharge_resource_ids",
     "resolve_actor_resource_recharge",
     "reduce_exhaustion",

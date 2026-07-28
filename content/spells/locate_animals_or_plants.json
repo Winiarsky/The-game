@@ -1,0 +1,38 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "locate_animals_or_plants",
+  "name": "Locate Animals Or Plants",
+  "level": 2,
+  "school": "divination",
+  "casting_time": "action",
+  "range": {
+    "kind": "self"
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": [
+      {
+        "item_id": "spell_component_locate_animals_or_plants",
+        "label": "a bit of fur from a bloodhound"
+      }
+    ]
+  },
+  "duration": {
+    "kind": "instantaneous"
+  },
+  "concentration": false,
+  "ritual": true,
+  "effect": {
+    "kind": "exploration",
+    "effect_type": "set_flag",
+    "flag_key": "cast_locate_animals_or_plants",
+    "flag_value": true,
+    "instructions": "Opisz znany gatunek; poznaj kierunek i dystans do najbliższego okazu w promieniu 5 mil, jeśli istnieje."
+  }
+}

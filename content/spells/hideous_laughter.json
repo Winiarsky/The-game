@@ -1,0 +1,51 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "hideous_laughter",
+  "name": "Hideous Laughter",
+  "level": 1,
+  "school": "enchantment",
+  "casting_time": "action",
+  "range": {
+    "kind": "distance",
+    "feet": 30
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": [
+      {
+        "item_id": "spell_component_hideous_laughter",
+        "label": "tiny tarts and a feather that is waved in the air"
+      }
+    ]
+  },
+  "duration": {
+    "kind": "minute",
+    "amount": 1
+  },
+  "concentration": true,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "spell_debuff",
+    "label": "Hideous Laughter",
+    "effect_kind": "apply_condition",
+    "condition": "incapacitated",
+    "additional_conditions": [
+      "prone"
+    ],
+    "save_ability": "wisdom",
+    "save_timing": "turn_end",
+    "target_faction": "enemy",
+    "minimum_intelligence": 5,
+    "cast_flag": "cast_hideous_laughter",
+    "instructions": "Cel Int 4+ wykonuje Wis save; porażka: Prone i Incapacitated podczas koncentracji, ponawia save po obrażeniach i na końcu tury.",
+    "resolution_mode": "automatic",
+    "board_relevance": "direct"
+  }
+}

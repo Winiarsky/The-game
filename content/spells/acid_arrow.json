@@ -1,0 +1,48 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "srd_5_1_cc_by_4_0"
+  ],
+  "id": "acid_arrow",
+  "name": "Acid Arrow",
+  "level": 2,
+  "school": "evocation",
+  "casting_time": "action",
+  "range": {
+    "kind": "distance",
+    "feet": 90
+  },
+  "components": {
+    "verbal": true,
+    "somatic": true,
+    "materials": [
+      {
+        "item_id": "spell_component_acid_arrow",
+        "label": "powdered rhubarb leaf and an adder’s stomach"
+      }
+    ]
+  },
+  "duration": {
+    "kind": "instantaneous"
+  },
+  "concentration": false,
+  "ritual": false,
+  "effect": {
+    "kind": "attack",
+    "attack_kind": "ranged",
+    "damage": {
+      "dice": "4d4",
+      "modifier": 0,
+      "damage_type": "acid"
+    },
+    "miss_damage_on_failure": "half",
+    "on_hit_effect_kind": "ongoing_damage:2:4:acid:-:none",
+    "on_hit_effect_duration": "until_turn_start",
+    "on_hit_effect_value": 0,
+    "instructions": "Wykonaj dystansowy atak czarem. Trafienie: 4k4 obrażeń od kwasu i 2k4 na końcu następnej tury celu; pudło zadaje połowę początkowych obrażeń.",
+    "resolution_mode": "automatic",
+    "board_relevance": "direct"
+  }
+}

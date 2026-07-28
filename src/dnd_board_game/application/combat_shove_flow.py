@@ -266,6 +266,36 @@ def shove_push_destination(attacker: Actor, target: Actor) -> Coordinate:
     )
 
 
+def forced_push_destination(
+    *,
+    board: BoardState,
+    state: CombatState,
+    attacker: Actor,
+    target: Actor,
+    distance_feet: int,
+    scene_objects: tuple[SceneObject, ...] = (),
+) -> Coordinate:
+    """Return the farthest unobstructed tile on a straight forced-push line."""
+
+    if distance_feet < 0 or distance_feet % 5:
+        raise ValueError("Forced-push distance must be a non-negative multiple of 5 feet.")
+    current = target
+    destination = target.position
+    for _ in range(distance_feet // 5):
+        candidate = shove_push_destination(attacker, current)
+        if not _push_destination_is_available(
+            board,
+            state,
+            current,
+            candidate,
+            scene_objects,
+        ):
+            break
+        destination = candidate
+        current = replace(current, position=candidate)
+    return destination
+
+
 def automatic_defender_roll(pending: PendingShove, rng: Random) -> int:
     return rng.randint(1, 20)
 
