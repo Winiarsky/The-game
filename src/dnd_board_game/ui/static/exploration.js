@@ -1862,7 +1862,7 @@ function interactionActionSourcePickerHtml(goal) {
   };
   return `<div class="interaction-participants">
     <b>Czego używacie?</b>
-    <span>Źródło ustala legalne możliwości i konsekwencje. Opis poniżej nadal decyduje, jak dokładnie go używacie.</span>
+    <span>Źródło ustala legalne możliwości, właściciela i konsekwencje — Gemini nie może go podmienić. W wyzwaniu eksploracyjnym broń lub czar wspiera test celu; nie jest to bojowy rzut przeciw AC ani obrażenia fixture.</span>
     <div class="interaction-actor-grid">
       ${goal.source_required ? '' : `<button type="button" class="interaction-actor-card${selectedInteractionActionSourceId ? '' : ' selected'}"
         onclick="selectInteractionActionSource(null)"><span><b>Bez dodatkowego źródła</b><small>zwykła próba</small></span></button>`}
@@ -3737,6 +3737,21 @@ function sourceSummaryText(source) {
   if ((source.tabletop_riders || []).length) parts.push(`przy stole: ${(source.tabletop_riders || []).join(' ')}`);
   return parts.join(' · ');
 }
+function noLegalAttackTargetGuidance(combat) {
+  const source = combat.available_attack || {};
+  const targets = combat.legal_targets || [];
+  if (targets.length || !source.id || (combat.turn || {}).action_used) return '';
+  const movement = combat.movement || {};
+  const canMove = Number(movement.remaining_feet || 0) > 0 && (movement.destinations || []).length > 0;
+  if (source.attack_kind === 'melee') {
+    return canMove
+      ? 'Brak celu w zasięgu wręcz. Podejdź do przeciwnika na niebieskie pole albo wybierz broń dystansową.'
+      : 'Brak celu w zasięgu wręcz i nie pozostał ruch. Wybierz broń dystansową lub zakończ turę.';
+  }
+  return canMove
+    ? 'Brak legalnego celu dla ataku dystansowego. Zmień pozycję, aby uzyskać zasięg lub linię widzenia.'
+    : 'Brak legalnego celu: przeciwnicy są poza zasięgiem albo linią widzenia. Wybierz inne źródło ataku lub zakończ turę.';
+}
 function playerTurnDetailsHtml(combat) {
   const source = combat.available_attack || {};
   const attackSources = combat.available_attack_sources || [];
@@ -3760,6 +3775,7 @@ function playerTurnDetailsHtml(combat) {
   const targetText = targets.length
     ? targets.map(target => `${target.name} (${target.position[0]},${target.position[1]})`).join(', ')
     : 'brak';
+  const noTargetGuidance = noLegalAttackTargetGuidance(combat);
   return `
     <p><b>Tura gracza:</b> ${esc(actor.name || '-')}</p>
     <p><b>Akcja:</b> ${actionUsed ? 'zużyta' : 'dostępna'} | <b>Bonus action:</b> ${bonusActionUsed ? 'zużyta' : 'dostępna'} | <b>Darmowa interakcja:</b> ${objectInteractionAvailable ? 'dostępna' : 'zużyta'} | <b>Reakcja:</b> ${reactionAvailable ? 'dostępna' : 'zużyta'} | <b>Ruch:</b> ${esc(remaining)} ft${extraMovement > 0 ? ` (+${esc(extraMovement)} Dash)` : ''}${movement.speed_reduction === 'grappling' ? ` | <b>Grapple:</b> szybkość ${esc(movement.base_speed_feet)} → ${esc(movement.effective_speed_feet)} ft` : ''}</p>
@@ -3771,6 +3787,7 @@ function playerTurnDetailsHtml(combat) {
     <p><b>Źródła ataku:</b> ${attackSources.map(sourceSummaryText).map(esc).join(', ') || 'brak'}</p>
     <p><b>Leczenie:</b> ${healingSources.map(item => `${sourceSummaryText(item)}${item.healing_hint ? ` · ${item.healing_hint}` : ''}`).map(esc).join(', ') || 'brak'}</p>
     <p><b>Cele w zasięgu:</b> ${esc(targetText)}</p>
+    ${noTargetGuidance ? `<p class="combat-warning"><b>Dlaczego nie ma celu?</b> ${esc(noTargetGuidance)}</p>` : ''}
     <p><b>Pola czaru obszarowego:</b> ${areaPositions.map(position => `(${esc(position[0])},${esc(position[1])})`).join(', ') || 'brak'}</p>
     <p><b>Ranni sojusznicy w zasięgu:</b> ${healingTargets.map(target => `${esc(target.name)} (${esc(target.position[0])},${esc(target.position[1])})`).join(', ') || 'brak'}</p>
   `;
@@ -4972,6 +4989,7 @@ function pointOptionsHtml() {
 function updateActivePanel() {
   const stage = state.flow ? state.flow.stage : 'location_active';
   const flowActive = stage !== 'location_active';
+  const hasPendingResolution = Boolean(state.pending);
   const hasPendingDecision = state.pending && state.pending.stage === 'decision';
   const hasNpcTransition = Boolean(state.pending_npc_transition);
   const hasRolls = state.required_rolls && state.required_rolls.length > 0;
@@ -4979,7 +4997,7 @@ function updateActivePanel() {
   const hasEncounter = Boolean(state.pending_encounter);
   const interactionStage = stage === 'location_active' || stage === 'interaction_result';
   const chatMode = interactionStage && chatInstanceOpen && !hasEncounter && !state.combat;
-  const menuMode = stage === 'location_active' && !chatInstanceOpen && !hasEncounter && !hasPendingDecision && !hasRolls;
+  const menuMode = stage === 'location_active' && !chatInstanceOpen && !hasEncounter && !hasPendingResolution && !hasRolls;
   document.body.classList.toggle('chat-instance-mode', chatMode);
   const flowPanel = document.getElementById('flow-panel');
   flowPanel.hidden = chatMode || hasEncounter || !flowPanel.innerHTML.trim();
@@ -4995,7 +5013,7 @@ function updateActivePanel() {
   updateInteractionStateCard(hasPendingDecision, hasRolls, hasResult);
   document.getElementById('action-panel').hidden = !chatMode;
   document.getElementById('scene-description-card').hidden = interactionStage || !document.getElementById('scene-description').innerHTML.trim();
-  document.getElementById('chat-composer').hidden = stage !== 'location_active' || hasPendingDecision || hasNpcTransition || hasRolls || hasResult || Boolean(state.trade);
+  document.getElementById('chat-composer').hidden = stage !== 'location_active' || hasPendingResolution || hasNpcTransition || hasRolls || hasResult || Boolean(state.trade);
   const leaveButton = document.getElementById('leave-interaction-button');
   leaveButton.textContent = stage === 'interaction_result'
     ? 'Zakończ interakcję'
@@ -5063,6 +5081,10 @@ async function sendAction() {
   if (result && !result.ok && input) input.value = text;
 }
 async function sendGoalAction() {
+  if (state.pending) {
+    alert('Najpierw rozstrzygnij widoczną decyzję, pułapkę albo rzut.');
+    return;
+  }
   const input = document.getElementById('goal-action');
   const text = input ? input.value.trim() : '';
   if (!text) return;

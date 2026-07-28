@@ -1682,6 +1682,25 @@ rzutu. Aktywacja deleguje konsekwencje do ogólnego silnika hazardów.
   szybkości, disadvantage na ataki i save'y, połowę maksimum HP, szybkość 0
   oraz śmierć. Long rest usuwa jeden poziom.
 
+## Broń i czary przeciw obiektom w wyzwaniach eksploracyjnych
+
+- Gdy gracz wybiera authored cel eksploracyjny, taki jak sforsowanie bramy,
+  broń, narzędzie lub czar jest źródłem możliwości dla testu tego celu. Nie
+  uruchamia automatycznie bojowego attack roll przeciw AC ani odejmowania HP
+  fixture.
+- Jest to jawne uproszczenie dla tempa gry przy stole: authored flow określa
+  cechę, ST, postęp, hałas i konsekwencje, a tagi wybranego źródła określają,
+  czy metoda jest legalna. Przykładowo Fire Bolt użyty do sforsowania bramy
+  może prowadzić do testu cechy czarującej zamiast serii ataków i rzutów
+  obrażeń przeciw drewnu.
+- Jeżeli scena udostępnia bezpośrednią operację na destrukcyjnym fixture poza
+  wyzwaniem, stosuje jego AC, HP, typ obrażeń i zwykłe zasady ataku. Content
+  musi wybrać jeden z tych kontraktów i nie może mieszać ich w ramach tej samej
+  nierozstrzygniętej deklaracji.
+- UI zawsze informuje, że źródło wybrane dla celu eksploracyjnego wspiera test
+  wyzwania. Wybrany przedmiot/czar, jego właściciel i koszt są autorytatywne;
+  LLM opisuje metodę, ale nie może podmienić źródła.
+
 ## Rozpraszanie magii
 
 - Czar rozpraszający wskazuje jedną widoczną istotę z aktywnym efektem czaru.

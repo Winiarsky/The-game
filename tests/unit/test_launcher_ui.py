@@ -80,6 +80,10 @@ def test_character_module_reads_versioned_catalog(tmp_path) -> None:
     assert "Czarodziej" in html
     assert "Żołnierz" in html
     assert "Mędrzec" in html
+    assert 'data-creator-step-button="0"' in html
+    assert 'data-creator-step="4"' in html
+    assert "function showCreatorStep" in html
+    assert "Następny etap" in html
 
 
 def test_character_creator_saves_opens_copies_and_deletes_character(tmp_path) -> None:

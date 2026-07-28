@@ -38,6 +38,7 @@ def main(argv: list[str] | None = None) -> int:
         debug_point_id=args.debug_point or None,
         debug_challenge_id=args.debug_challenge or None,
         debug_courtyard_entry=args.debug_courtyard_entry,
+        automatic_checkpoints=True,
     )
     if args.board_backend != "none":
         session.configure_board(

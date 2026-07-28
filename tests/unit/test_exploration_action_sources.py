@@ -50,6 +50,7 @@ def test_shared_source_registry_filters_resources_items_and_spells(tmp_path):
     assert spell_source.target_tags == ("object",)
     assert spell_source.consequence_tags == ("loud",)
     assert spell_source.check_ability == "wisdom"
+    assert spell_source.as_payload(("damage_object",))["unavailable_reason"] == ""
     assert any(source.kind == ExplorationActionSourceKind.WEAPON for source in sources)
 
 

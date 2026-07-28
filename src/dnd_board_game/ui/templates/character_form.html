@@ -24,8 +24,16 @@
       </section>
     {% endif %}
 
+    <nav class="creator-stepper" aria-label="Etapy tworzenia postaci">
+      <button type="button" data-creator-step-button="0">1. Tożsamość</button>
+      <button type="button" data-creator-step-button="1">2. Pochodzenie</button>
+      <button type="button" data-creator-step-button="2">3. Klasa</button>
+      <button type="button" data-creator-step-button="3">4. Cechy</button>
+      <button type="button" data-creator-step-button="4">5. Wybory</button>
+    </nav>
+
     <form class="character-form" method="post" action="{{ url_for('create_character') }}">
-      <section class="form-section">
+      <section class="form-section" data-creator-step="0">
         <span class="eyebrow">1. Tożsamość</span>
         <div class="form-grid two">
           <label>Imię postaci
@@ -42,7 +50,7 @@
         </div>
       </section>
 
-      <section class="form-section">
+      <section class="form-section" data-creator-step="1" hidden>
         <span class="eyebrow">2. Pochodzenie</span>
         <div class="form-grid two">
           <fieldset>
@@ -116,7 +124,7 @@
         </div>
       </section>
 
-      <section class="form-section">
+      <section class="form-section" data-creator-step="2" hidden>
         <span class="eyebrow">3. Klasa</span>
         <div class="class-choice-grid">
           {% for item in catalog.classes %}
@@ -125,7 +133,7 @@
         </div>
       </section>
 
-      <section class="form-section">
+      <section class="form-section" data-creator-step="3" hidden>
         <span class="eyebrow">4. Ability scores</span>
         <p class="form-help">Rozdziel każdą wartość standard array dokładnie raz.</p>
         <div class="ability-form-grid">
@@ -139,7 +147,7 @@
         </div>
       </section>
 
-      <section class="form-section">
+      <section class="form-section" data-creator-step="4" hidden>
         <span class="eyebrow">5. Wybory klasowe</span>
         {% for item in catalog.classes %}
           <div class="class-options" data-class-options="{{ item.id }}">
@@ -236,13 +244,33 @@
         {% endfor %}
       </section>
 
-      <div class="flow-actions">
+      <div class="flow-actions creator-step-actions">
         <a class="button secondary" href="{{ url_for('characters') }}">Anuluj</a>
-        <button type="submit">Sprawdź i zapisz postać</button>
+        <button type="button" class="secondary" id="creator-step-previous">← Poprzedni etap</button>
+        <button type="button" id="creator-step-next">Następny etap →</button>
+        <button type="submit" id="creator-step-submit">Sprawdź i zapisz postać</button>
       </div>
     </form>
   </main>
   <script>
+    let activeCreatorStep = 0;
+    const creatorSteps = Array.from(document.querySelectorAll('[data-creator-step]'));
+    function showCreatorStep(index) {
+      activeCreatorStep = Math.max(0, Math.min(creatorSteps.length - 1, Number(index)));
+      creatorSteps.forEach((section, stepIndex) => {
+        section.hidden = stepIndex !== activeCreatorStep;
+      });
+      document.querySelectorAll('[data-creator-step-button]').forEach(button => {
+        const stepIndex = Number(button.dataset.creatorStepButton);
+        button.classList.toggle('active', stepIndex === activeCreatorStep);
+        button.classList.toggle('complete', stepIndex < activeCreatorStep);
+        button.setAttribute('aria-current', stepIndex === activeCreatorStep ? 'step' : 'false');
+      });
+      document.getElementById('creator-step-previous').hidden = activeCreatorStep === 0;
+      document.getElementById('creator-step-next').hidden = activeCreatorStep === creatorSteps.length - 1;
+      document.getElementById('creator-step-submit').hidden = activeCreatorStep !== creatorSteps.length - 1;
+      creatorSteps[activeCreatorStep]?.scrollIntoView({behavior: 'smooth', block: 'start'});
+    }
     function syncCharacterClass() {
       const selected = document.querySelector('input[name="class_id"]:checked')?.value;
       document.querySelectorAll('[data-class-options]').forEach(section => {
@@ -285,6 +313,12 @@
     syncCharacterClass();
     syncCharacterSpecies();
     syncCharacterBackground();
+    document.querySelectorAll('[data-creator-step-button]').forEach(button => {
+      button.addEventListener('click', () => showCreatorStep(button.dataset.creatorStepButton));
+    });
+    document.getElementById('creator-step-previous').addEventListener('click', () => showCreatorStep(activeCreatorStep - 1));
+    document.getElementById('creator-step-next').addEventListener('click', () => showCreatorStep(activeCreatorStep + 1));
+    showCreatorStep(0);
     document.addEventListener('change', event => {
       if (event.target.matches('input[name="selected_class_option_ids"]')) {
         syncConditionalClassOptions();

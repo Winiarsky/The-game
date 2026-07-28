@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import time
 from dataclasses import dataclass
 from enum import StrEnum
@@ -380,7 +381,11 @@ class GmClassifierRequest:
     selected_check_participants: CheckParticipants | None = None
     selected_participant_actor_ids: tuple[str, ...] = ()
     selected_action_source_id: str | None = None
+    selected_action_source_reference_id: str = ""
     selected_action_source_label: str = ""
+    selected_action_source_kind: str = ""
+    selected_action_source_owner_actor_id: str | None = None
+    selected_action_source_owner_name: str = ""
     selected_action_source_tags: tuple[str, ...] = ()
     selected_action_source_target_tags: tuple[str, ...] = ()
     selected_action_source_consequence_tags: tuple[str, ...] = ()
@@ -627,7 +632,11 @@ class GmClassifierRequest:
             "selected_action_source": (
                 {
                     "id": self.selected_action_source_id,
+                    "reference_id": self.selected_action_source_reference_id,
                     "label": self.selected_action_source_label,
+                    "kind": self.selected_action_source_kind,
+                    "owner_actor_id": self.selected_action_source_owner_actor_id,
+                    "owner_name": self.selected_action_source_owner_name,
                     "capability_tags": list(self.selected_action_source_tags),
                     "target_tags": list(self.selected_action_source_target_tags),
                     "consequence_tags": list(
@@ -783,8 +792,8 @@ class GroqGmClassifierClient:
         )
         content = self._complete(system_prompt, request)
         try:
-            return GmClassifierProposal.model_validate_json(content)
-        except ValidationError as exc:
+            return _parse_classifier_proposal(content)
+        except (ValidationError, json.JSONDecodeError, TypeError) as exc:
             raise GmProposalValidationError(f"LLM returned invalid proposal: {exc}") from exc
 
     def _complete(self, system_prompt: str, request: GmClassifierRequest) -> str:
@@ -869,8 +878,8 @@ class GeminiGmClassifierClient:
         )
         content = self._complete(system_prompt, request)
         try:
-            return GmClassifierProposal.model_validate_json(content)
-        except ValidationError as exc:
+            return _parse_classifier_proposal(content)
+        except (ValidationError, json.JSONDecodeError, TypeError) as exc:
             raise GmProposalValidationError(f"Gemini returned invalid proposal: {exc}") from exc
 
     def _complete(self, system_prompt: str, request: GmClassifierRequest) -> str:
@@ -936,7 +945,21 @@ def _retry_delay(response: requests.Response, attempt: int, base_delay_s: float)
             return min(30.0, max(0.0, float(retry_after)))
         except ValueError:
             pass
-    return min(30.0, base_delay_s * (2**attempt))
+    exponential = base_delay_s * (2**attempt)
+    jittered = exponential * random.uniform(0.8, 1.2)
+    return min(30.0, jittered)
+
+
+def _parse_classifier_proposal(content: str) -> GmClassifierProposal:
+    raw = json.loads(content)
+    if not isinstance(raw, dict):
+        raise TypeError("classifier response must be a JSON object")
+    # The model never owns numeric situational modifiers. Dropping this field
+    # before schema validation prevents harmless malformed modifier metadata
+    # from rejecting an otherwise valid declaration.
+    raw["situational_modifiers"] = []
+    raw["roll_mode"] = RollMode.NORMAL.value
+    return GmClassifierProposal.model_validate(raw)
 
 
 def build_gm_classifier_request(
@@ -965,7 +988,11 @@ def build_gm_classifier_request(
     selected_check_participants: CheckParticipants | None = None,
     selected_participant_actor_ids: tuple[str, ...] = (),
     selected_action_source_id: str | None = None,
+    selected_action_source_reference_id: str = "",
     selected_action_source_label: str = "",
+    selected_action_source_kind: str = "",
+    selected_action_source_owner_actor_id: str | None = None,
+    selected_action_source_owner_name: str = "",
     selected_action_source_tags: tuple[str, ...] = (),
     selected_action_source_target_tags: tuple[str, ...] = (),
     selected_action_source_consequence_tags: tuple[str, ...] = (),
@@ -1002,7 +1029,11 @@ def build_gm_classifier_request(
         selected_check_participants=selected_check_participants,
         selected_participant_actor_ids=selected_participant_actor_ids,
         selected_action_source_id=selected_action_source_id,
+        selected_action_source_reference_id=selected_action_source_reference_id,
         selected_action_source_label=selected_action_source_label,
+        selected_action_source_kind=selected_action_source_kind,
+        selected_action_source_owner_actor_id=selected_action_source_owner_actor_id,
+        selected_action_source_owner_name=selected_action_source_owner_name,
         selected_action_source_tags=selected_action_source_tags,
         selected_action_source_target_tags=selected_action_source_target_tags,
         selected_action_source_consequence_tags=(
@@ -1332,6 +1363,7 @@ def validate_gm_classifier_proposal(
     proposal = _ground_explicit_build_proposal(proposal, request)
     proposal = _ground_temporary_item_preparation(proposal, request)
     proposal = _ground_fixture_action_proposal(proposal, request)
+    proposal = _ground_selected_action_source(proposal, request)
     # Numeric roll authority stays in authored content, selected resources and
     # deterministic runtime state. The model may describe circumstances, but
     # it cannot create a bonus, penalty, advantage or disadvantage.
@@ -1495,6 +1527,63 @@ def validate_gm_classifier_proposal(
         challenge=request.challenge,
         resources=resources,
         required_actor_item_ids=actor_item_ids,
+    )
+
+
+def _ground_selected_action_source(
+    proposal: GmClassifierProposal,
+    request: GmClassifierRequest,
+) -> GmClassifierProposal:
+    """Keep an explicit UI source authoritative over the model proposal."""
+
+    source_id = request.selected_action_source_id
+    if source_id is None:
+        return proposal
+    owner_id = request.selected_action_source_owner_actor_id
+    if (
+        owner_id is not None
+        and request.selected_participant_actor_ids
+        and owner_id != request.selected_participant_actor_ids[0]
+    ):
+        raise GmProposalValidationError(
+            "Wybrane źródło należy do innej postaci niż prowadzący próbę."
+        )
+    declared_ids = set(proposal.used_resource_ids)
+    accepted_declared_ids = {
+        source_id,
+        request.selected_action_source_reference_id,
+    } - {""}
+    if declared_ids - accepted_declared_ids:
+        raise GmProposalValidationError(
+            "Propozycja Gemini próbuje podmienić źródło wybrane przez graczy."
+        )
+    resource_ids = (
+        (request.selected_action_source_reference_id,)
+        if request.selected_action_source_kind == "resource"
+        else (source_id,)
+        if request.selected_action_source_kind in {"item", "tool", "weapon"}
+        else ()
+    )
+    label = request.selected_action_source_label.strip()
+    approach_label = proposal.approach_label.strip()
+    if label and label.casefold() not in approach_label.casefold():
+        approach_label = (
+            f"{label}: {approach_label}"
+            if approach_label
+            else f"Użycie: {label}"
+        )[:80]
+    narration = (
+        f"{request.selected_action_source_owner_name or 'Wybrana postać'} "
+        f"używa źródła „{label}”."
+        if label
+        else proposal.player_narration
+    )
+    return proposal.model_copy(
+        update={
+            "used_resource_ids": resource_ids,
+            "approach_label": approach_label,
+            "player_narration": narration,
+        }
     )
 
 

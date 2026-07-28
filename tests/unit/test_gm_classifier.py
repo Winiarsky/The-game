@@ -88,6 +88,114 @@ def test_gm_classifier_validates_owned_resource_with_matching_tag():
     assert [resource.id for resource in validated.resources] == ["rope"]
 
 
+def test_selected_action_source_rejects_llm_resource_substitution():
+    exploration, state = _state()
+    owner = exploration.actors[0]
+    item = owner.inventory[0]
+    source_id = f"actor:{owner.id}:item:{item.id}"
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Ktoś próbuje użyć innego przedmiotu.",
+        actors=exploration.actors,
+        selected_participant_actor_ids=(str(owner.id),),
+        selected_action_source_id=source_id,
+        selected_action_source_reference_id=item.id,
+        selected_action_source_label=item.name,
+        selected_action_source_kind="weapon",
+        selected_action_source_owner_actor_id=str(owner.id),
+        selected_action_source_owner_name=owner.name,
+    )
+
+    with pytest.raises(GmProposalValidationError, match="podmienić źródło"):
+        validate_gm_classifier_proposal(
+            _proposal(used_resource_ids=("actor:rogue:item:crowbar",)),
+            request,
+        )
+
+
+def test_selected_action_source_grounds_omitted_resource_and_owner():
+    exploration, state = _state()
+    owner = exploration.actors[0]
+    item = owner.inventory[0]
+    source_id = f"actor:{owner.id}:item:{item.id}"
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Używam wybranego przedmiotu.",
+        actors=exploration.actors,
+        selected_participant_actor_ids=(str(owner.id),),
+        selected_action_source_id=source_id,
+        selected_action_source_reference_id=item.id,
+        selected_action_source_label=item.name,
+        selected_action_source_kind="weapon",
+        selected_action_source_owner_actor_id=str(owner.id),
+        selected_action_source_owner_name=owner.name,
+    )
+
+    validated = validate_gm_classifier_proposal(_proposal(used_resource_ids=()), request)
+
+    assert validated.proposal.used_resource_ids == (source_id,)
+    assert validated.required_actor_item_ids == (item.id,)
+    assert item.name in validated.proposal.approach_label
+    assert validated.proposal.player_narration == (
+        f"{owner.name} używa źródła „{item.name}”."
+    )
+
+
+def test_selected_shared_resource_uses_reference_id_for_deterministic_cost():
+    exploration, state = _state()
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Mocuję linę i wspinam się po murze.",
+        actors=exploration.actors,
+        selected_action_source_id="resource:rope",
+        selected_action_source_reference_id="rope",
+        selected_action_source_label="Lina z hakiem",
+        selected_action_source_kind="resource",
+    )
+
+    validated = validate_gm_classifier_proposal(
+        _proposal(approach_tags=("climbing",), used_resource_ids=()),
+        request,
+    )
+
+    assert validated.proposal.used_resource_ids == ("rope",)
+    assert tuple(resource.id for resource in validated.resources) == ("rope",)
+
+
+def test_selected_action_source_rejects_different_lead_actor():
+    exploration, state = _state()
+    owner = exploration.actors[0]
+    other = exploration.actors[1]
+    item = owner.inventory[0]
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Inna postać próbuje użyć cudzego przedmiotu.",
+        actors=exploration.actors,
+        selected_participant_actor_ids=(str(other.id),),
+        selected_action_source_id=f"actor:{owner.id}:item:{item.id}",
+        selected_action_source_reference_id=item.id,
+        selected_action_source_label=item.name,
+        selected_action_source_kind="weapon",
+        selected_action_source_owner_actor_id=str(owner.id),
+        selected_action_source_owner_name=owner.name,
+    )
+
+    with pytest.raises(GmProposalValidationError, match="innej postaci"):
+        validate_gm_classifier_proposal(_proposal(), request)
+
+
 def test_background_permission_requires_authored_scene_and_owned_grant():
     exploration, state = _state()
     request = build_gm_classifier_request(
@@ -2252,6 +2360,55 @@ def test_gemini_client_retries_429_then_parses_response(monkeypatch):
     assert calls[0][0][0] == "https://generativelanguage.googleapis.com/v1beta/models/gemini-test:generateContent"
     assert calls[0][1]["headers"]["x-goog-api-key"] == "test"
     assert calls[0][1]["json"]["generation_config"]["response_mime_type"] == "application/json"
+
+
+def test_gemini_classifier_drops_malformed_model_situational_modifiers(monkeypatch):
+    exploration, state = _state()
+    request = build_gm_classifier_request(
+        scenario_id=exploration.scenario_id,
+        scenario_name=exploration.scenario_name,
+        scenario_context=exploration.llm_context,
+        state=state,
+        player_action="Uderzam w drewniany środek bramy.",
+    )
+    response = _FakeHttpResponse(
+        200,
+        {},
+        {
+            "candidates": [
+                {
+                    "content": {
+                        "parts": [
+                            {
+                                "text": (
+                                    '{"intent_type":"challenge_attempt",'
+                                    '"target_challenge_id":"closed_gate",'
+                                    '"approach_label":"Uderzenie w bramę",'
+                                    '"approach_tags":["heavy_force"],'
+                                    '"situational_modifiers":[{"value":1,'
+                                    '"source":"matched_method_rules"}]}'
+                                )
+                            }
+                        ]
+                    }
+                }
+            ]
+        },
+    )
+    monkeypatch.setattr(
+        "dnd_board_game.llm.gm_classifier.requests.post",
+        lambda *args, **kwargs: response,
+    )
+    client = GeminiGmClassifierClient(
+        api_key="test",
+        model="gemini-test",
+        max_retries=0,
+    )
+
+    proposal = client.classify(request)
+
+    assert proposal.situational_modifiers == ()
+    assert proposal.roll_mode.value == "normal"
 
 
 class _FakeHttpResponse:

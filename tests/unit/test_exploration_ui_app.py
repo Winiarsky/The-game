@@ -662,13 +662,23 @@ def test_exploration_goal_ui_selects_participants_before_sending_method() -> Non
     assert "selected_social_skill:" in javascript
     assert "function interactionActionSourcePickerHtml" in javascript
     assert "selected_action_source_id:" in javascript
-    assert "Źródło ustala legalne możliwości i konsekwencje" in javascript
+    assert "Źródło ustala legalne możliwości, właściciela i konsekwencje" in javascript
+    assert "Gemini nie może go podmienić" in javascript
+    assert "if (state.pending)" in javascript
     assert "Jak chcecie wpłynąć na NPC?" in javascript
     assert "Ten wybór należy do graczy" in javascript
     assert "{text, conversation_only: true}" in javascript
     assert "To jest rozmowa, nie deklaracja działania ani rzut." in html
     assert ".interaction-actor-card.selected" in stylesheet
     assert "state.active_challenge.uses_progress" in javascript
+
+
+def test_combat_ui_explains_empty_legal_target_list() -> None:
+    _html, javascript, _stylesheet = _page_assets(_client())
+
+    assert "function noLegalAttackTargetGuidance" in javascript
+    assert "Brak celu w zasięgu wręcz" in javascript
+    assert "zasięg lub linię widzenia" in javascript
 
 
 def test_exploration_ui_exposes_downtime_crafting_preview_and_confirmation() -> None:

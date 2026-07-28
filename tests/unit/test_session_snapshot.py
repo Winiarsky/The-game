@@ -93,6 +93,7 @@ def _session(tmp_path) -> ExplorationUiSession:
         session_id="snapshot_test",
         observation_dir=tmp_path / "observations",
         save_dir=tmp_path / "saves",
+        automatic_checkpoints=True,
     )
 
 
@@ -173,6 +174,26 @@ def test_snapshot_json_round_trip_is_deterministic(tmp_path):
     )
     assert ritual.exploration_effect is not None
     assert ritual.exploration_effect.flag_key == "comprehend_languages_active"
+
+
+def test_stable_checkpoint_writes_reloadable_snapshot_and_records_reason(tmp_path):
+    session = _session(tmp_path)
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+
+    assert session._write_stable_checkpoint(reason="test_resolution") is True
+
+    restored = read_snapshot(session.snapshot_path, base_state=session.state)
+    assert restored.scenario_id == session.exploration.scenario_id
+    assert restored.ui_stage == UiFlowStage.LOCATION_ACTIVE.value
+    events = [
+        json.loads(line)
+        for line in session.observer.path.read_text(encoding="utf-8").splitlines()
+    ]
+    assert any(
+        event["event_type"] == "ui_automatic_checkpoint_saved"
+        and event["payload"]["reason"] == "test_resolution"
+        for event in events
+    )
 
 
 def test_snapshot_round_trip_preserves_active_wild_shape_and_normal_form_hp(tmp_path):

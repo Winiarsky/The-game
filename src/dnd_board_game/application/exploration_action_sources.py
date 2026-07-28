@@ -55,7 +55,11 @@ class ExplorationActionSource:
             "spell_level": self.spell_level,
             "check_ability": self.check_ability,
             "available": self.available,
-            "unavailable_reason": self.unavailable_reason,
+            "unavailable_reason": (
+                self.unavailable_reason
+                if not self.available
+                else ""
+            ),
         }
 
 

@@ -335,6 +335,14 @@ obowiązują `Current Roadmap Focus` oraz etapy z `ROADMAP.md`.
 - [x] [MVP reference playtest P1] Resolve zero-risk cosmetic NPC exchanges immediately without a redundant acceptance step.
 - [x] [MVP reference playtest UX] Return player guidance instead of a technical error when no interaction is active, without retaining the rejected declaration in chat.
 - [x] [MVP reference playtest UX] Show objectives, secured loot, and an accessible restart action on the scenario-complete screen.
+- [x] [Custom-party Gemini playtest P0] Make encounter player-start setup support the actual selected party size 1–5 instead of exhausting authored template positions.
+- [x] [Exploration source binding P0] Require selected action source, participant/owner, grounded `used_resource_ids`, availability, and resolved cost to describe the same deterministic resource.
+- [x] [Exploration pending UX P1] Disable or redirect the action composer while an observation, trap, or hazard must be resolved so the next declaration cannot be swallowed.
+- [x] [Gemini declaration robustness P1] Normalize or repair `situational_modifiers` schema retries so valid longer weapon/item descriptions do not fail on missing generated metadata.
+- [x] [Combat onboarding P1] Explain why the active attack source has no legal targets and suggest movement, line-of-sight, or weapon changes.
+- [x] [Exploration provider resilience P1] Add jittered retry delays and automatic stable checkpoints after completed exploration resolutions.
+- [x] [Exploration fixture fidelity P2] Document challenge checks as the intentional abstraction for attacking fixtures inside authored exploration goals.
+- [x] [Character creator onboarding P2] Split the long character form into a five-step guided flow while preserving server-side validation.
 - [x] Clarify that the old watchtower interaction forms are historical briefs and update the current web-runtime instructions.
 - [x] [Character creator MVP K1] Add a separate deterministic single-class level-1 character-creation module with versioned species/class/background catalogues and choice-derived Actor construction.
 - [x] [Character creator MVP K1] Compose executable Fighter/Rogue level-1 grants: four Fighting Styles, Second Wind, Expertise, and Sneak Attack with shared combat/resource rules.

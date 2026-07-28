@@ -508,6 +508,72 @@ def _prepare_gate_encounter_setup(session: ExplorationUiSession) -> None:
             session.confirm_encounter_setup_step()
 
 
+@pytest.mark.parametrize("party_size", (1, 3, 4, 5))
+def test_gate_encounter_start_zone_expands_for_selected_custom_party(party_size):
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+    )
+    templates = tuple(
+        actor
+        for actor in session.exploration.actors
+        if actor.faction == Faction.ALLY
+    )
+    party = tuple(
+        replace(
+            templates[index % len(templates)],
+            id=f"custom_{index + 1}",
+            name=f"Bohater {index + 1}",
+        )
+        for index in range(party_size)
+    )
+    session.configure_custom_party(party)
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    flags = set_scene_flag(session.state.flags, "gate_passed", True)
+    session.state = replace(session.state, flags=flags)
+    session.state_payload()
+    session.resolve_encounter_opening()
+
+    session.start_encounter_setup()
+    flow = session.encounter_setup_flow
+    assert flow is not None
+    start_step = next(
+        step
+        for step in flow.steps
+        if step.label == "pola startowe bohaterów"
+    )
+    assert len(start_step.positions) >= party_size
+    while flow is not None and not flow.completed:
+        if flow.is_player_start_step:
+            session.assign_encounter_player_start_position(
+                flow.remaining_player_start_positions()[0]
+            )
+        else:
+            session.confirm_encounter_setup_step()
+        flow = session.encounter_setup_flow
+
+    assert session.encounter_setup_flow is not None
+    assert session.encounter_setup_flow.completed is True
+    assert len(session.encounter_setup_flow.player_start_assignments) == party_size
+
+
+def test_submit_action_rejects_new_declaration_while_resolution_is_pending():
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        debug_challenge_id="closed_gate",
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.pending = PendingInteraction(
+        kind=PendingKind.TRAP,
+        stage=PendingStage.DECISION,
+    )
+    message_count = len(session.messages)
+
+    with pytest.raises(ValueError, match="Najpierw rozstrzygnij"):
+        session.submit_action("Próbuję teraz użyć łomu.")
+
+    assert len(session.messages) == message_count
+
+
 def _prepare_enemy_opportunity_preview(session: ExplorationUiSession):
     assert session.combat_state is not None
     while session.combat_state.initiative_order.current_actor.faction != Faction.ENEMY:

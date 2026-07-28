@@ -419,6 +419,21 @@ Przebudowę należy wykonywać bez zmiany reguł i bez szerokiego refaktoringu b
 - manualna checklista hardware,
 - korekty wynikające z obserwacji graczy, nie z dodawania kolejnych stałych paneli.
 
+Manualna checklista dla custom party:
+
+- wydruk A4 obu map składa się do deklarowanych 50 × 75 cm, a znaczniki rogów
+  pokrywają się z planszą;
+- setup walki pozwala kolejno ustawić 1, 3, 4 i 5 własnych bohaterów, bez pustego
+  kroku i bez pola zajętego przez przeciwnika albo blokujący obiekt;
+- przy oczekującej pułapce, obserwacji i rzucie ekran prowadzi tylko do
+  obowiązkowego rozstrzygnięcia i nie przyjmuje kolejnej deklaracji;
+- przy braku celu ataku komunikat odpowiada temu, co pokazują LED-y: ruch,
+  zasięg albo linia widzenia;
+- po ruchu, wyborze celu i obszaru podświetlenie pozostaje czytelne z normalnego
+  miejsca graczy przy stole, także na czarno-białej papierowej mapie;
+- po stabilnym wyniku eksploracji ponowne uruchomienie i `Wczytaj grę` odtwarza
+  ostatni checkpoint.
+
 ## Kryteria akceptacji
 
 Docelowy UI można uznać za spójny, gdy:

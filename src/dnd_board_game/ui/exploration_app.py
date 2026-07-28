@@ -531,7 +531,13 @@ from dnd_board_game.scenarios.loader import (
     _read_item_definition,
 )
 from dnd_board_game.runtime.session_observer import SessionObserver
-from dnd_board_game.world import Coordinate, MovementRangeResult, PathResult, movement_range
+from dnd_board_game.world import (
+    Coordinate,
+    MovementRangeResult,
+    PathResult,
+    movement_range,
+    neighbors,
+)
 
 from .session_state import UiPendingState
 from .session_view import UiSessionView
@@ -1090,6 +1096,7 @@ class ExplorationUiSession:
         session_id: str | None = None,
         observation_dir: str | Path = "data/session_observations",
         save_dir: str | Path = "data/saves",
+        automatic_checkpoints: bool = False,
     ) -> None:
         self.scenario_path = Path(scenario_path)
         self.gm_client = gm_client
@@ -1114,6 +1121,7 @@ class ExplorationUiSession:
         self._fixed_session_id = session_id
         self.observation_dir = Path(observation_dir)
         self.save_dir = Path(save_dir)
+        self.automatic_checkpoints = automatic_checkpoints
         self.observer = SessionObserver(session_id or _ui_session_id(), self.observation_dir)
         self.custom_party: tuple[Actor, ...] = ()
         self.character_progress_sink: Callable[[tuple[Actor, ...]], None] | None = None
@@ -2215,6 +2223,29 @@ class ExplorationUiSession:
             "blocker": blocker,
         }
 
+    def _write_stable_checkpoint(self, *, reason: str) -> bool:
+        if not self.automatic_checkpoints:
+            return False
+        if self._snapshot_blocker() is not None:
+            return False
+        try:
+            write_snapshot(self.snapshot_path, self.create_snapshot())
+        except OSError as exc:
+            self._record(
+                "ui_automatic_checkpoint_failed",
+                {"reason": reason, "error": str(exc)},
+            )
+            return False
+        self._record(
+            "ui_automatic_checkpoint_saved",
+            {
+                "reason": reason,
+                "path": str(self.snapshot_path),
+                "schema_version": SNAPSHOT_SCHEMA_VERSION,
+            },
+        )
+        return True
+
     def configure_board(
         self,
         *,
@@ -3237,6 +3268,11 @@ class ExplorationUiSession:
     ) -> dict[str, object]:
         if self.ui_flow_stage != UiFlowStage.LOCATION_ACTIVE:
             raise ValueError("Najpierw rozpocznij sesję i potwierdź wejście do lokacji na planszy.")
+        if self.pending is not None:
+            raise ValueError(
+                "Najpierw rozstrzygnij widoczną decyzję, pułapkę albo rzut. "
+                "Nowa deklaracja nie została wysłana."
+            )
         raw_text = text.strip()
         if not raw_text:
             raise ValueError("Deklaracja nie może być pusta.")
@@ -14065,8 +14101,20 @@ class ExplorationUiSession:
             selected_action_source_id=(
                 action_source.id if action_source is not None else None
             ),
+            selected_action_source_reference_id=(
+                action_source.reference_id if action_source is not None else ""
+            ),
             selected_action_source_label=(
                 action_source.label if action_source is not None else ""
+            ),
+            selected_action_source_kind=(
+                action_source.kind.value if action_source is not None else ""
+            ),
+            selected_action_source_owner_actor_id=(
+                action_source.owner_actor_id if action_source is not None else None
+            ),
+            selected_action_source_owner_name=(
+                action_source.owner_name if action_source is not None else ""
             ),
             selected_action_source_tags=(
                 action_source.tags if action_source is not None else ()
@@ -14535,6 +14583,23 @@ class ExplorationUiSession:
                         bonus
                         for bonus in option.bonuses
                         if bonus.source_type != "item"
+                    ),
+                )
+            elif action_source.kind in {
+                ExplorationActionSourceKind.ITEM,
+                ExplorationActionSourceKind.TOOL,
+                ExplorationActionSourceKind.WEAPON,
+            }:
+                option = replace(
+                    option,
+                    requires_item_ids=(action_source.reference_id,),
+                    bonuses=tuple(
+                        bonus
+                        for bonus in option.bonuses
+                        if (
+                            bonus.source_type != "item"
+                            or bonus.source_id == action_source.reference_id
+                        )
                     ),
                 )
         eligible_actors = tuple(
@@ -16063,12 +16128,14 @@ class ExplorationUiSession:
                 self.pending = None
             if self.pending is None:
                 self._refresh_pending_encounter()
+                self._write_stable_checkpoint(reason="hazard_resolved")
             self._sync_board_leds()
             return self.state_payload()
         if self.pending is not None and self.pending.stage == PendingStage.BREAKAGE:
             self._resolve_breakage_roll(raw_rolls)
             self.pending = None
             self._refresh_pending_encounter()
+            self._write_stable_checkpoint(reason="breakage_resolved")
             self._sync_board_leds()
             return self.state_payload()
         if self.pending is None or self.pending.stage != PendingStage.ROLL or self.pending.check_plan is None:
@@ -16126,6 +16193,8 @@ class ExplorationUiSession:
             self.pending = None
         if self.pending is None or self.pending.stage != PendingStage.HAZARD_SAVE:
             self._refresh_pending_encounter()
+        if self.pending is None:
+            self._write_stable_checkpoint(reason="exploration_roll_resolved")
         self._sync_board_leds()
         return self.state_payload()
 
@@ -17316,7 +17385,14 @@ def _build_encounter_setup_steps(encounter: LoadedEncounter) -> tuple[SetupStep,
     steps = list(build_setup_steps(setup))
     if encounter.player_start_zones:
         steps = [step for step in steps if not (step.kind == SetupStepKind.ACTORS and step.label == "bohaterów")]
-        start_positions = tuple(sorted({position for zone in encounter.player_start_zones for position in zone}))
+        ally_count = sum(
+            actor.faction == Faction.ALLY
+            for actor in encounter.actors
+        )
+        start_positions = _expanded_player_start_positions(
+            encounter,
+            required_count=ally_count,
+        )
         ally_names = ", ".join(actor.name for actor in encounter.actors if actor.faction == Faction.ALLY)
         steps.insert(
             1,
@@ -17332,6 +17408,64 @@ def _build_encounter_setup_steps(encounter: LoadedEncounter) -> tuple[SetupStep,
             ),
         )
     return tuple(_split_large_setup_steps(tuple(steps), max_positions=5))
+
+
+def _expanded_player_start_positions(
+    encounter: LoadedEncounter,
+    *,
+    required_count: int,
+) -> tuple[Coordinate, ...]:
+    """Expand an authored start zone to fit the selected custom party.
+
+    Authored positions remain first. Additional positions grow outwards from the
+    zone and never use blocking terrain, enemies, or blocking scene objects.
+    """
+
+    authored = tuple(
+        sorted(
+            {
+                position
+                for zone in encounter.player_start_zones
+                for position in zone
+            }
+        )
+    )
+    if required_count <= len(authored):
+        return authored
+    blocked = {
+        actor.position
+        for actor in encounter.actors
+        if actor.faction != Faction.ALLY
+    }
+    blocked.update(
+        position
+        for scene_object in encounter.scene_objects
+        if scene_object.blocks_movement
+        for position in scene_object.positions
+    )
+    selected = list(authored)
+    frontier = list(authored)
+    visited = set(authored)
+    while frontier and len(selected) < required_count:
+        origin = frontier.pop(0)
+        for candidate in neighbors(encounter.board, origin):
+            if candidate in visited:
+                continue
+            visited.add(candidate)
+            frontier.append(candidate)
+            if candidate in blocked:
+                continue
+            if encounter.board.terrain_at(candidate).blocks_movement:
+                continue
+            selected.append(candidate)
+            if len(selected) >= required_count:
+                break
+    if len(selected) < required_count:
+        raise ValueError(
+            "Mapa encounteru nie ma wystarczającej liczby dostępnych pól "
+            f"startowych dla {required_count} bohaterów."
+        )
+    return tuple(selected)
 
 
 def _build_exploration_setup_steps(environment: tuple[EnvironmentSetupEntry, ...]) -> tuple[SetupStep, ...]:
