@@ -80,6 +80,15 @@ Cel 1:
 - krótki opis:
 - opcjonalny obraz kafelka (`image`, ścieżka względem katalogu scenariusza):
 - pytanie „jak to robicie?” po wyborze:
+- resolver (`resolution_mode`):
+  - `automatic` — deterministyczny skutek bez rzutu i bez oceny LLM,
+  - `check` — fizyczny d20 i reguły 5e; opis może wpływać tylko przez
+    autorskie reguły metod,
+  - `llm_rubric` — opis ocenia LLM według jawnego `llm_rubric`, bez rzutu,
+  - `conversation` — swobodna rozmowa bez automatycznego testu:
+- pole opisu (`description_mode`): `none` / `optional` / `required`:
+- deklaracja używana przy `none` (`default_declaration`):
+- kryteria oceny przy `llm_rubric`:
 - dozwolone intencje NPC (`intent_ids`), jeśli dotyczy:
 - sugerowane tagi podejścia, jeśli dotyczy przeszkody:
 - flagi wymagane / zabraniające pokazania (tylko interakcja bez flowgrafu):

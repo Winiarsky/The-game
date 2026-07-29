@@ -2,7 +2,11 @@
 
 Budujemy nową lokalną aplikację do prowadzenia taktycznej gry RPG w stylu Dungeons & Dragons 5e na fizycznej planszy 20x30 z podświetleniem LED i wykrywaniem pól.
 
-Poprzednia aplikacja została zarchiwizowana w `legacy/previous_app/`. Używała mechanik zbliżonych do Pathfindera i z czasem zbyt mocno połączyła logikę gry, UI, scenariusze i hardware. Nowy projekt ma zachować tylko niskopoziomową komunikację z planszą/LED oraz wybrane pomysły techniczne opisane w `legacy/LEGACY_DESCRIPTION.md`.
+Poprzednia aplikacja używała mechanik zbliżonych do Pathfindera i z czasem zbyt
+mocno połączyła logikę gry, UI, scenariusze i hardware. Została usunięta z
+aktywnego drzewa po usamodzielnieniu przebudowy; w razie potrzeby można ją
+odtworzyć z historii Git. Zachowaliśmy wyłącznie niskopoziomową komunikację z
+planszą/LED w `board/`.
 
 ## Cel Jednym Zdaniem
 
@@ -132,9 +136,8 @@ Minimalny zakres:
 
 - Język: Python.
 - Nowy kod aplikacji trafia do `src/dnd_board_game/`.
-- Stary kod w `legacy/previous_app/` jest tylko referencją.
 - Zaczynamy od czystego rdzenia domenowego i zasad, zanim odbudujemy UI.
-- Nie kopiujemy mechanik Pathfindera z legacy, jeśli są sprzeczne z podejściem D&D 5e.
+- Nie przywracamy mechanik Pathfindera sprzecznych z podejściem D&D 5e.
 - Potwory, przedmioty i scenariusze docelowo powinny być data-driven.
 - Obiekty gry powinny być możliwie proste i przechowywać stan.
 - Mechaniki i interakcje między obiektami powinny być realizowane przez osobne funkcje lub klasy usługowe, np. `ApplyDamage`, `ResolveAttack`, `AttemptMeleeAttack`.

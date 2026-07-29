@@ -108,7 +108,8 @@ button:disabled { border-color: #504a3e; color: #8f887b; background: #2b2a27; cu
   background: var(--panel);
 }
 .scenario-card { position: relative; cursor: pointer; }
-.scenario-card.selected { border-color: var(--gold); box-shadow: 0 0 0 1px #7c632f inset; }
+.scenario-card.selected, .scenario-card:has(input:checked) { border-color: var(--gold); box-shadow: 0 0 0 1px #7c632f inset; }
+.scenario-card:has(input:focus-visible) { outline: 2px solid var(--gold); outline-offset: 3px; }
 .scenario-card input { position: absolute; opacity: 0; }
 .selection-mark {
   width: 28px;
@@ -117,9 +118,15 @@ button:disabled { border-color: #504a3e; color: #8f887b; background: #2b2a27; cu
   flex: 0 0 auto;
   place-items: center;
   border-radius: 50%;
+  color: transparent;
+  background: transparent;
+  border: 1px solid #756a52;
+  font-weight: 900;
+}
+.scenario-card input:checked + .selection-mark {
   color: #1b160b;
   background: var(--gold);
-  font-weight: 900;
+  border-color: var(--gold);
 }
 .scenario-card span:last-child, .save-card > span { display: grid; flex: 1; gap: 7px; }
 .scenario-card b, .save-card b { font-family: Georgia, "Times New Roman", serif; font-size: 24px; }

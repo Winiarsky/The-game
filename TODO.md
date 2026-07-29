@@ -2,7 +2,8 @@
 
 ## Setup
 
-- [x] Archive previous application into `legacy/previous_app/`.
+- [x] Remove the obsolete previous application from the active tree after the
+  D&D 5e rebuild became self-contained; retain recoverability through Git history.
 - [x] Keep low-level board communication in root `board/`.
 - [x] Add rebuild documentation and Codex working rules.
 - [x] Add package structure for the new D&D 5e application.
@@ -326,6 +327,9 @@ obowiązują `Current Roadmap Focus` oraz etapy z `ROADMAP.md`.
 - [x] Add generic pre-scenario prepared-spell selection and runtime enforcement MVP.
 - [x] [K3-K4] Add class-derived spell lists, known/spellbook/prepared profiles, and full Constitution-save modifiers for concentration.
 - [ ] [Deferred product UX] Add voice input and richer UI for free-form exploration declarations.
+- [x] [Content production gate S0] Add a non-overwriting component-scenario scaffold, extended asset/paper-map/interaction-pad preflight, generic print-map manifests, and a real exploration-scenario selector in New Game.
+- [x] [Content production gate S0] Document the current interaction resolvers and the scaffold → author → map → audit workflow.
+- [ ] [Content production gate S0] Complete the final UI-5 checklist on the physical LED board before authoring the target scenario.
 - [x] [MVP playtest P0] Clear `active_point_id` when the player leaves an NPC chat so zone actions are available again.
 - [x] [MVP playtest P0] Consume scenario handoff by launching the target scene and mapping party, time, inventory, resources, flags, and target effects.
 - [x] [MVP playtest P0] Route an explicitly declared available spell through deterministic spell execution instead of replacing it with an LLM-selected skill check.

@@ -1652,6 +1652,13 @@ class ExplorationUiSession:
         self.custom_party = tuple(actors)
         self.reset()
 
+    def configure_scenario(self, scenario_path: str | Path) -> None:
+        """Switch to a validated scenario while preserving runtime adapters."""
+        candidate = Path(scenario_path)
+        build_exploration_from_scenario(load_scenario(candidate))
+        self.scenario_path = candidate
+        self.reset()
+
     def state_payload(self) -> dict[str, object]:
         if self.ui_flow_stage not in {
             UiFlowStage.SHORT_REST,

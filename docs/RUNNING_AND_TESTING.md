@@ -410,7 +410,7 @@ UI działa jako prosty lokalny runtime testowy:
 - po setupie prowadzi inicjatywę: bohaterowie wpisują naturalne wyniki d20, przeciwnicy rzucają automatycznie,
 - po ustaleniu inicjatywy tworzy początkowy `CombatState` i pokazuje rundę, aktywnego aktora, kolejność oraz HP/AC uczestników,
 - ma panel `Plansza` z przełącznikiem `brak/symulator/hardware`,
-- tryb `hardware` używa tego samego `board/config.json` i `board.Connection`, z którego korzystała aplikacja legacy,
+- tryb `hardware` używa wspólnego `board/config.json` i `board.Connection`,
 - po podłączeniu planszy synchronizuje LED-y z aktualnym krokiem: dostępne lokacje, setup encountera, inicjatywa i aktywny aktor walki,
 - przycisk `Czekaj na kliknięcie` czyta kliknięcie z `scan_board` i wykonuje właściwy krok, np. przejście do lokacji albo potwierdzenie setupu,
 - zapisuje stan tylko w pamięci procesu; przycisk reset ładuje scenariusz od nowa.

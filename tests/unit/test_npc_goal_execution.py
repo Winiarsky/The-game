@@ -179,8 +179,12 @@ def test_village_keeper_flow_hides_consumed_rumor_but_keeps_conversation():
     assert {goal.id for goal in initial} == {
         "ask_watchtower_rumors",
         "chat_with_keeper",
+        "order_olan_ale",
     }
-    assert [goal.id for goal in informed] == ["chat_with_keeper"]
+    assert {goal.id for goal in informed} == {
+        "chat_with_keeper",
+        "order_olan_ale",
+    }
 
 
 def test_village_keeper_flow_locks_rumor_to_authored_information_route():

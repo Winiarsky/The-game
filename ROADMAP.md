@@ -608,11 +608,14 @@ Powstaje jako rozszerzenie kreatora scenariusza:
 
 ## Najbliższa Kolejność Prac
 
-Po obecnym MVP przygotowywania czarów nie przechodzimy jeszcze do klas. Najbliższe
-etapy to:
+Silnik referencyjnego MVP, postacie 1–3 oraz konsument handoffu są gotowe.
+Najbliższe etapy to:
 
-1. zatwierdzić bazową wersję zasad oraz strategię licencji,
-2. zinwentaryzować mechaniki w macierzy i oznaczyć luki,
-3. domknąć fundament aktora: proficiency, skills, 0 HP i death saves,
-4. następnie realizować M3–M8 w zapisanej kolejności,
-5. w M9 rozszerzyć bieżący snapshot o stan kampanii i kolejne rzeczywiste migracje.
+1. przejść bramkę content-production: scaffold, preflight, manifesty map i
+   fizyczny playtest UI-5,
+2. stworzyć pierwszy docelowy, samodzielny scenariusz jako paczkę komponentową,
+3. uzupełniać katalog potworów i okazje backgroundów wyłącznie według potrzeb
+   prawdziwego contentu,
+4. po pierwszym jednostrzale rozbudować M9 o trwały graf kampanii i wspólny
+   quest state,
+5. dopiero potem rozpocząć graficzny authoring suite.

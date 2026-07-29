@@ -4,7 +4,8 @@
 
 - This repository is being rebuilt as a new board-assisted tabletop RPG application.
 - The new rules baseline is Dungeons & Dragons 5e, not Pathfinder.
-- Treat `legacy/previous_app/` as a reference archive only. Do not import from it in new runtime code.
+- The removed Pathfinder-like application is available only through Git history;
+  do not restore or import it into the D&D 5e runtime.
 - Keep low-level board communication in the existing `board/` package.
 - New application code belongs under `src/dnd_board_game/`.
 - New tests belong under `tests/`, grouped as `unit/`, `integration/`, or `hardware/`.
@@ -32,7 +33,6 @@
 - `src/dnd_board_game/hardware/` adapts game events to `board.Connection`; it must not contain D&D rule decisions.
 - `src/dnd_board_game/ui/` owns user-facing presentation and input transport.
 - `content/` stores data-driven scenarios, monsters, and item definitions.
-- `legacy/` must not be changed unless the task is explicitly about documentation or archive maintenance.
 
 ## Workflow For Codex
 

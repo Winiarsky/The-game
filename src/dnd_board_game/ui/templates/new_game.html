@@ -18,15 +18,19 @@
     {% if error %}<div class="flow-error" role="alert">{{ error }}</div>{% endif %}
 
     <form method="post" action="{{ url_for('start_new_game') }}">
-      <label class="scenario-card selected">
-        <input type="radio" name="scenario_id" value="{{ scenario.id }}" checked>
-        <span class="selection-mark" aria-hidden="true">✓</span>
-        <span>
-          <b>{{ scenario.name }}</b>
-          <small>Scenariusz referencyjny · poziomy 1–3 · maksymalnie 5 bohaterów</small>
-          <em>Eksploracja, rozmowy, podróż, walka i fizyczna plansza</em>
-        </span>
-      </label>
+      {% for scenario in scenarios %}
+        <label class="scenario-card">
+          <input type="radio" name="scenario_id" value="{{ scenario.id }}" {% if scenario.id == (selected_scenario_id or active_scenario_id) %}checked{% endif %}>
+          <span class="selection-mark" aria-hidden="true">✓</span>
+          <span>
+            <b>{{ scenario.name }}</b>
+            <small>Scenariusz eksploracyjny · maksymalnie 5 bohaterów</small>
+            <em>{% if scenario.has_paper_map %}Zawiera setup papierowej mapy{% else %}Korzysta z planszy bez osobnej mapy papierowej{% endif %}</em>
+          </span>
+        </label>
+      {% else %}
+        <aside class="flow-note">Brak poprawnych scenariuszy eksploracyjnych.</aside>
+      {% endfor %}
 
       <section class="form-section">
         <h2>Wybierz drużynę — 1 do 5 postaci</h2>
@@ -48,7 +52,7 @@
 
       <div class="flow-actions">
         <a class="button secondary" href="{{ url_for('index') }}">Anuluj</a>
-        <button type="submit" {% if not roster.characters %}disabled{% endif %}>Rozpocznij przygotowanie</button>
+        <button type="submit" {% if not roster.characters or not scenarios %}disabled{% endif %}>Rozpocznij przygotowanie</button>
       </div>
     </form>
   </main>

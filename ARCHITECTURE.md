@@ -11,7 +11,6 @@ content/                       # Data-driven game content
   monsters/
   scenarios/
 docs/                          # Design and engineering notes
-legacy/                        # Archived previous application
 src/dnd_board_game/
   application/                 # Use-case orchestration and explicit flow transitions
   core/                        # Shared primitives and errors

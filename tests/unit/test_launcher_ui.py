@@ -45,6 +45,18 @@ def test_new_game_requires_a_roster_party(tmp_path) -> None:
     assert "Wybierz od 1 do 5" in response.get_data(as_text=True)
 
 
+def test_new_game_lists_real_exploration_scenario_catalog(tmp_path) -> None:
+    client = create_app(_session(tmp_path)).test_client()
+
+    response = client.get("/new-game")
+    html = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert 'value="abandoned_watchtower"' in html
+    assert 'value="village_square_mvp"' in html
+    assert 'value="gate_skirmish"' not in html
+
+
 def test_load_game_empty_state_is_player_facing(tmp_path) -> None:
     client = create_app(_session(tmp_path)).test_client()
 

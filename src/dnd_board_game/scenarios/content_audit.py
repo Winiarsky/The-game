@@ -23,6 +23,7 @@ from .loader import (
     _spell_effect_payload,
     load_scenario,
 )
+from .preflight import preflight_scenario
 
 
 class AuditSeverity(StrEnum):
@@ -306,6 +307,19 @@ def audit_content(content_root: str | Path) -> ContentAuditReport:
             )
             continue
         loaded_scenario_ids.append(loaded.definition.id)
+        for preflight_issue in preflight_scenario(
+            loaded,
+            game_asset_root=root.parent / "assets",
+        ):
+            issues.append(
+                _issue(
+                    AuditSeverity.ERROR,
+                    preflight_issue.code,
+                    path,
+                    f"{preflight_issue.path}: {preflight_issue.message}",
+                    root,
+                )
+            )
 
     return ContentAuditReport(
         entries=tuple(sorted(entries, key=lambda entry: entry.stable_id)),

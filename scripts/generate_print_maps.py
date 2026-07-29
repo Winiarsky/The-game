@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import argparse
+import json
 import math
 from dataclasses import dataclass
 from pathlib import Path
@@ -8,11 +10,7 @@ from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont, ImageOps
 
 
 ROOT = Path(__file__).resolve().parents[1]
-MAP_ROOT = ROOT / "assets" / "print_maps" / "village_watchtower"
-SOURCE_ROOT = MAP_ROOT / "source"
-PNG_ROOT = MAP_ROOT / "png"
-A4_ROOT = MAP_ROOT / "pdf" / "a4"
-FULL_SIZE_ROOT = MAP_ROOT / "pdf" / "full_size"
+DEFAULT_MAP_ROOT = ROOT / "assets" / "print_maps" / "village_watchtower"
 
 DPI = 300
 BOARD_COLUMNS = 20
@@ -36,11 +34,20 @@ TILE_OVERLAP_PX = round(DPI * 0.3 / 2.54)
 class PrintMapSpec:
     id: str
     title: str
+    source_path: Path
 
 
 MAPS = (
-    PrintMapSpec("village_overview", "Wioska"),
-    PrintMapSpec("watchtower_overview", "Strażnica"),
+    PrintMapSpec(
+        "village_overview",
+        "Wioska",
+        DEFAULT_MAP_ROOT / "source" / "village_overview.png",
+    ),
+    PrintMapSpec(
+        "watchtower_overview",
+        "Strażnica",
+        DEFAULT_MAP_ROOT / "source" / "watchtower_overview.png",
+    ),
 )
 
 
@@ -57,7 +64,7 @@ def _font(size: int) -> ImageFont.ImageFont:
 
 
 def _prepare_map(spec: PrintMapSpec) -> Image.Image:
-    source = Image.open(SOURCE_ROOT / f"{spec.id}.png").convert("L")
+    source = Image.open(spec.source_path).convert("L")
     source = ImageOps.fit(
         source,
         MAP_SIZE_PX,
@@ -155,20 +162,74 @@ def _save_pdf(path: Path, pages: list[Image.Image]) -> None:
     )
 
 
-def main() -> None:
-    PNG_ROOT.mkdir(parents=True, exist_ok=True)
-    A4_ROOT.mkdir(parents=True, exist_ok=True)
-    FULL_SIZE_ROOT.mkdir(parents=True, exist_ok=True)
+def generate_print_maps(
+    specs: tuple[PrintMapSpec, ...],
+    output_root: str | Path,
+) -> tuple[Path, ...]:
+    map_root = Path(output_root)
+    png_root = map_root / "png"
+    a4_root = map_root / "pdf" / "a4"
+    full_size_root = map_root / "pdf" / "full_size"
+    png_root.mkdir(parents=True, exist_ok=True)
+    a4_root.mkdir(parents=True, exist_ok=True)
+    full_size_root.mkdir(parents=True, exist_ok=True)
+    written: list[Path] = []
 
-    for spec in MAPS:
+    for spec in specs:
         image = _prepare_map(spec)
-        image.save(PNG_ROOT / f"{spec.id}.png", dpi=(DPI, DPI))
-        _save_pdf(FULL_SIZE_ROOT / f"{spec.id}.pdf", [image])
+        png_path = png_root / f"{spec.id}.png"
+        full_size_path = full_size_root / f"{spec.id}.pdf"
+        a4_path = a4_root / f"{spec.id}.pdf"
+        image.save(png_path, dpi=(DPI, DPI))
+        _save_pdf(full_size_path, [image])
         pages = _tile_pages(image, spec)
-        _save_pdf(A4_ROOT / f"{spec.id}.pdf", pages)
+        _save_pdf(a4_path, pages)
         for page in pages:
             page.close()
         image.close()
+        written.extend((png_path, a4_path, full_size_path))
+    return tuple(written)
+
+
+def load_manifest(path: str | Path) -> tuple[tuple[PrintMapSpec, ...], Path]:
+    manifest_path = Path(path).resolve()
+    data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if data.get("schema") != "dnd_board_game.print_map_manifest":
+        raise ValueError("Nieobsługiwany schemat manifestu map.")
+    if int(data.get("schema_version", 0)) != 1:
+        raise ValueError("Nieobsługiwana wersja manifestu map.")
+    output_value = Path(str(data["output_root"]))
+    output_root = output_value if output_value.is_absolute() else ROOT / output_value
+    specs = tuple(
+        PrintMapSpec(
+            id=str(entry["id"]),
+            title=str(entry["title"]),
+            source_path=(
+                Path(str(entry["source"]))
+                if Path(str(entry["source"])).is_absolute()
+                else manifest_path.parent / str(entry["source"])
+            ),
+        )
+        for entry in data.get("maps", [])
+    )
+    return specs, output_root
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Przygotuj czarno-białe mapy 50 × 75 cm oraz PDF-y A4."
+    )
+    parser.add_argument("--manifest", type=Path)
+    args = parser.parse_args()
+    specs, output_root = (
+        load_manifest(args.manifest)
+        if args.manifest
+        else (MAPS, DEFAULT_MAP_ROOT)
+    )
+    if not specs:
+        parser.error("Manifest nie zawiera żadnej mapy.")
+    for path in generate_print_maps(specs, output_root):
+        print(path)
 
 
 if __name__ == "__main__":

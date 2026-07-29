@@ -79,10 +79,9 @@ zastępczego ID.
   plików zewnętrznych, Flask, hardware ani LLM.
 - Nieznany schemat, przyszła wersja lub brak kroku migracji powodują błąd.
 
-Snapshot sesji używa obecnie v12. Sekwencyjne migracje v1→v12 zachowują starsze
-zapisy, a kolejne wersje dodały kontrakt contentu, ekonomię, amunicję, łup pola
-walki, kupców, pancerze, stan ładunków, attunement oraz kontrakt zwykłego
-ekwipunku.
+Snapshot sesji używa obecnie v31. Sekwencyjne migracje v1→v31 zachowują starsze
+zapisy. Aktualny kontrakt obejmuje między innymi ekonomię, ekwipunek, magię,
+stan eksploracji i NPC, custom party, rozwój postaci oraz źródła czarowania.
 
 ## Audyt
 
@@ -98,7 +97,9 @@ Opcja `--json` zwraca maszynowy raport. Audyt sprawdza:
 - format oraz unikalność stabilnych ID,
 - istnienie source packów,
 - ładowalność scenariuszy,
-- referencje i obsługiwane prymitywy sprawdzane przez właściwy loader.
+- referencje i obsługiwane prymitywy sprawdzane przez właściwy loader,
+- istnienie grafik scenariusza i wszystkich wariantów papierowych map,
+- granice, kolizje oraz pojemność pól interakcji na fizycznej planszy.
 
 Warning `source_license_unasserted` jest oczekiwany, dopóki repozytorium lub pack
 `project_original` nie otrzyma jawnej licencji. Błędy audytu blokują uznanie

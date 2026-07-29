@@ -39,6 +39,7 @@ from dnd_board_game.character_creation import (
 from dnd_board_game.core.player_labels_pl import PLAYER_LABELS_PL, player_label
 from dnd_board_game.inventory import effective_armor_class
 from dnd_board_game.rules import experience_progress
+from dnd_board_game.scenarios import discover_scenarios
 from dnd_board_game.world import Coordinate
 
 if TYPE_CHECKING:
@@ -49,6 +50,7 @@ def create_app(
     session: ExplorationUiSession,
     *,
     character_dir: str | Path = "data/characters",
+    scenario_dir: str | Path = "content/scenarios",
 ) -> Flask:
     app = Flask(__name__)
     character_catalog = load_character_catalog(
@@ -76,6 +78,19 @@ def create_app(
 
     session.character_progress_sink = persist_character_progress
 
+    def scenario_choices():
+        return discover_scenarios(scenario_dir)
+
+    def new_game_context(**extra):
+        choices = scenario_choices()
+        return {
+            "scenarios": choices,
+            "active_scenario_id": session.exploration.scenario_id,
+            "roster": character_roster.scan(),
+            "class_names": character_class_names,
+            **extra,
+        }
+
     @app.get("/")
     def index():
         return render_template(
@@ -90,38 +105,18 @@ def create_app(
 
     @app.get("/new-game")
     def new_game():
-        roster = character_roster.scan()
-        return render_template(
-            "new_game.html",
-            scenario={
-                "id": session.exploration.scenario_id,
-                "name": session.exploration.scenario_name,
-                "party_size": sum(
-                    actor.faction.value == "ally"
-                    for actor in session.exploration.actors
-                ),
-            },
-            roster=roster,
-            class_names=character_class_names,
-        )
+        return render_template("new_game.html", **new_game_context())
 
     @app.post("/new-game/start")
     def start_new_game():
         scenario_id = str(request.form.get("scenario_id", "")).strip()
-        if scenario_id != session.exploration.scenario_id:
+        scenarios_by_id = {entry.id: entry for entry in scenario_choices()}
+        selected_scenario = scenarios_by_id.get(scenario_id)
+        if selected_scenario is None:
             return render_template(
                 "new_game.html",
-                scenario={
-                    "id": session.exploration.scenario_id,
-                    "name": session.exploration.scenario_name,
-                    "party_size": sum(
-                        actor.faction.value == "ally"
-                        for actor in session.exploration.actors
-                    ),
-                },
-                roster=character_roster.scan(),
-                class_names=character_class_names,
-                error="Wybrany scenariusz nie jest aktywny w tym uruchomieniu.",
+                **new_game_context(selected_scenario_id=scenario_id),
+                error="Wybrany scenariusz nie jest dostępny albo nie przeszedł walidacji.",
             ), 400
         character_ids = tuple(request.form.getlist("character_ids"))
         if not 1 <= len(character_ids) <= 5 or len(character_ids) != len(
@@ -129,17 +124,10 @@ def create_app(
         ):
             return render_template(
                 "new_game.html",
-                scenario={
-                    "id": session.exploration.scenario_id,
-                    "name": session.exploration.scenario_name,
-                    "party_size": sum(
-                        actor.faction.value == "ally"
-                        for actor in session.exploration.actors
-                    ),
-                },
-                roster=character_roster.scan(),
-                class_names=character_class_names,
-                selected_character_ids=character_ids,
+                **new_game_context(
+                    selected_scenario_id=scenario_id,
+                    selected_character_ids=character_ids,
+                ),
                 error="Wybierz od 1 do 5 różnych zapisanych postaci.",
             ), 400
         try:
@@ -147,21 +135,15 @@ def create_app(
                 character_roster.load(character_id).actor
                 for character_id in character_ids
             )
+            session.configure_scenario(selected_scenario.path)
             session.configure_custom_party(party)
         except ValueError as exc:
             return render_template(
                 "new_game.html",
-                scenario={
-                    "id": session.exploration.scenario_id,
-                    "name": session.exploration.scenario_name,
-                    "party_size": sum(
-                        actor.faction.value == "ally"
-                        for actor in session.exploration.actors
-                    ),
-                },
-                roster=character_roster.scan(),
-                class_names=character_class_names,
-                selected_character_ids=character_ids,
+                **new_game_context(
+                    selected_scenario_id=scenario_id,
+                    selected_character_ids=character_ids,
+                ),
                 error=str(exc),
             ), 400
         return redirect(url_for("play"))

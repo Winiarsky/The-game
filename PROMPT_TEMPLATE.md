@@ -10,7 +10,6 @@ Cel:
 ...
 
 Ograniczenia:
-- Nie zmieniaj legacy/.
 - Nie zmieniaj board/ bez wyraźnego powodu.
 - Nie dodawaj zależności.
 - Zachowaj deterministyczną logikę poza UI/hardware.

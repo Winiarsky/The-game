@@ -17,6 +17,7 @@ from .content_audit import (
     ContentAuditReport,
     audit_content,
 )
+from .catalog import ScenarioCatalogEntry, discover_scenarios
 from .loader import (
     CompiledActorCombatContent,
     LoadedExploration,
@@ -33,6 +34,7 @@ from .loader import (
     encounter_with_custom_party,
     load_scenario,
 )
+from .preflight import ScenarioPreflightIssue, preflight_scenario
 
 __all__ = [
     "AuditSeverity",
@@ -49,17 +51,21 @@ __all__ = [
     "SCENARIO_SCHEMA_VERSION",
     "ScenarioActorDefinition",
     "ScenarioAttackDefinition",
+    "ScenarioCatalogEntry",
     "ScenarioDefinition",
     "ScenarioEnvironmentDefinition",
     "ScenarioObjectiveDefinition",
+    "ScenarioPreflightIssue",
     "SourcePack",
     "build_encounter_from_scenario",
     "compile_actor_combat_content",
+    "discover_scenarios",
     "encounter_with_custom_party",
     "build_exploration_from_scenario",
     "audit_content",
     "load_scenario",
     "load_source_pack_registry",
     "migrate_scenario_payload",
+    "preflight_scenario",
     "validate_stable_id",
 ]

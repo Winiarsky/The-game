@@ -421,8 +421,13 @@ Przebudowę należy wykonywać bez zmiany reguł i bez szerokiego refaktoringu b
 
 Manualna checklista dla custom party:
 
+- `Nowa gra` pokazuje wszystkie paczki eksploracyjne, a wybór faktycznie
+  uruchamia wskazany scenariusz i jego właściwy setup mapy;
 - wydruk A4 obu map składa się do deklarowanych 50 × 75 cm, a znaczniki rogów
   pokrywają się z planszą;
+- w każdej lokacji liczba, kolejność i kolory LED-owych pól interakcji zgadzają
+  się z kafelkami widocznymi w oknie rozmowy, a kliknięcie pola uruchamia
+  dokładnie wskazany kafelek;
 - setup walki pozwala kolejno ustawić 1, 3, 4 i 5 własnych bohaterów, bez pustego
   kroku i bez pola zajętego przez przeciwnika albo blokujący obiekt;
 - przy oczekującej pułapce, obserwacji i rzucie ekran prowadzi tylko do

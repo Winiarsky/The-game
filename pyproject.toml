@@ -17,7 +17,7 @@ dependencies = [
 [tool.setuptools.packages.find]
 where = ["src", "."]
 include = ["dnd_board_game*", "board*"]
-exclude = ["legacy*", "tests*", "future*"]
+exclude = ["tests*", "future*"]
 
 [tool.setuptools.package-data]
 "dnd_board_game.ui" = ["templates/*.html", "static/*.css", "static/*.js"]
