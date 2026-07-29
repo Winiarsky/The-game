@@ -1,2 +1,0 @@
-"""Kategorie przeszkód."""
-
