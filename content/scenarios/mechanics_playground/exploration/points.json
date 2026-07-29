@@ -1,0 +1,202 @@
+{
+  "points": [
+    {
+      "id": "arena_console",
+      "name": "Pulpit konfiguracji",
+      "zone_id": "control_room",
+      "positions": [[2,2]],
+      "color": "interactive",
+      "description": "Otwórz panel twórcy, wybierz liczbę i profil manekinów, a następnie przygotuj próbę.",
+      "interaction_label": "Obejrzyj instrukcję",
+      "requires_setup": false
+    },
+    {
+      "id": "spell_markers",
+      "name": "Runiczne znaczniki obszaru",
+      "zone_id": "spell_lab",
+      "positions": [[2,8]],
+      "color": "purple",
+      "description": "Podczas celowania plansza pokaże legalne centra efektu, a następnie rzeczywisty obszar, linię albo stożek.",
+      "interaction_label": "Przeczytaj instrukcję",
+      "requires_setup": false
+    },
+    {
+      "id": "hidden_training_cache",
+      "name": "Ukryty znacznik testowy",
+      "zone_id": "exploration_course",
+      "positions": [[8,18]],
+      "color": "warning",
+      "visibility": "hidden",
+      "description": "Znalezisko służące do sprawdzenia aktywnego Szukania i ujawniania punktów.",
+      "interaction_label": "Zbadaj znalezisko",
+      "requires_setup": false
+    },
+    {
+      "id": "training_hound",
+      "name": "Ogar treningowy",
+      "zone_id": "exploration_course",
+      "positions": [[6,16]],
+      "color": "success",
+      "description": "Łagodny pies służący do prób magii wykrywającej zwierzęta.",
+      "interaction_label": "Przywitaj ogara",
+      "requires_setup": false,
+      "divination_kind": "animal",
+      "divination_tags": ["ogar", "pies", "dog", "hound"]
+    },
+    {
+      "id": "training_ivy",
+      "name": "Bluszcz treningowy",
+      "zone_id": "exploration_course",
+      "positions": [[10,20]],
+      "color": "success",
+      "description": "Kępa bluszczu oznaczona jako cel prób magii wykrywającej rośliny.",
+      "interaction_label": "Obejrzyj bluszcz",
+      "requires_setup": false,
+      "divination_kind": "plant",
+      "divination_tags": ["bluszcz", "ivy"]
+    },
+    {
+      "id": "training_compass",
+      "name": "Mosiężny kompas",
+      "zone_id": "exploration_course",
+      "positions": [[12,18]],
+      "color": "warning",
+      "description": "Znany przedmiot treningowy służący do testu Odnalezienia przedmiotu.",
+      "interaction_label": "Obejrzyj kompas",
+      "requires_setup": false,
+      "divination_kind": "object",
+      "divination_tags": ["kompas", "mosiężny kompas", "compass"]
+    },
+    {
+      "id": "training_statue",
+      "name": "Gadający posąg treningowy",
+      "zone_id": "exploration_course",
+      "positions": [[14,18]],
+      "color": "purple",
+      "description": "Kamienny posąg przeznaczony do prób trwałych zaklęć i wyzwalaczy obiektów.",
+      "interaction_label": "Dotknij posągu",
+      "requires_setup": false,
+      "divination_kind": "object",
+      "divination_tags": ["posąg", "statue"]
+    },
+    {
+      "id": "lead_shielded_compass",
+      "name": "Kompas w ołowianej skrzyni",
+      "zone_id": "exploration_course",
+      "positions": [[4,15]],
+      "color": "warning",
+      "description": "Bliższy kompas zamknięty za warstwą ołowiu; czar nie powinien go wykryć.",
+      "interaction_label": "Obejrzyj ołowianą skrzynię",
+      "requires_setup": false,
+      "divination_kind": "object",
+      "divination_tags": ["kompas", "compass"],
+      "divination_lead_shielded": true
+    },
+    {
+      "id": "training_corpse",
+      "name": "Zwłoki treningowe",
+      "zone_id": "exploration_course",
+      "positions": [[2,17]],
+      "color": "warning",
+      "description": "Alchemicznie przygotowane zwłoki służą do prób czarów działających na martwe ciało, czasu rozkładu i blokowania przemiany w nieumarłego.",
+      "interaction_label": "Zbadaj zwłoki",
+      "requires_setup": false
+    },
+    {
+      "id": "master_zero",
+      "name": "MISTRZ-0",
+      "zone_id": "social_lab",
+      "positions": [[14,15]],
+      "color": "success",
+      "description": "Mosiężny automat do prób rozmowy, Perswazji, Oszustwa, Zastraszania i swobodnych pytań.",
+      "interaction_label": "Rozpocznij próbę społeczną",
+      "requires_setup": true,
+      "npc_interaction": {
+        "id": "master_zero",
+        "name": "MISTRZ-0",
+        "public_description": "Mosiężny instruktor obraca kryształowe oko ku rozmówcy i czeka na wybrane podejście.",
+        "gm_context": "To bezpieczny automat treningowy. Ocenia wyłącznie sposób rozmowy i mechanikę testu. Nie zna informacji fabularnych z innych scenariuszy.",
+        "personality": "Precyzyjny, sucho dowcipny i cierpliwy. Zawsze wyjaśnia, jaki skutek mechaniczny właśnie testowano.",
+        "current_state": "Gotowy do kolejnej symulacji.",
+        "initial_attitude": "indifferent",
+        "initial_emotional_state": "Neutralny i uważny.",
+        "dialogue_intro": "MISTRZ-0 brzęczy: „Wybierz procedurę społeczną albo mów swobodnie. Obiecuję nie obrazić się trwale.”",
+        "capabilities": ["can_talk","can_test_social_checks"],
+        "goals": [
+          {
+            "id": "ask_rules",
+            "label": "Zapytaj o zasady próby",
+            "description": "Uzyskaj krótkie wyjaśnienie, do czego służy pracownia.",
+            "followup_prompt": "O co pytacie instruktora?",
+            "intent_ids": ["information"],
+            "resolution_mode": "automatic",
+            "description_mode": "none",
+            "default_declaration": "Pytamy, jak działa pracownia rozmów.",
+            "participant_mode": "must",
+            "check_participants": "single_actor",
+            "grounded_response": {
+              "player_narration": "Automat prostuje się i uruchamia tablicę wyników.",
+              "npc_response": "Wybierzcie rozmówcę i podejście. Uczciwy argument zwykle użyje Perswazji, kłamstwo Oszustwa, a groźba Zastraszania. Opis jest ważny wtedy, gdy ma zmienić nastawienie lub trudność.",
+              "success_message": "Instrukcja społeczna została wyświetlona."
+            }
+          },
+          {
+            "id": "persuasion_test",
+            "label": "Przekonaj automat",
+            "description": "Przedstaw rozsądny argument i przetestuj Charyzmę (Perswazję).",
+            "followup_prompt": "Do czego chcecie przekonać automat i jakiego argumentu używacie?",
+            "intent_ids": ["social"],
+            "resolution_mode": "check",
+            "description_mode": "required",
+            "participant_mode": "allow",
+            "check_participants": "single_actor",
+            "allowed_check_participants": ["single_actor","lead_with_help"]
+          },
+          {
+            "id": "deception_test",
+            "label": "Oszukaj automat",
+            "description": "Opowiedz wiarygodne kłamstwo i przetestuj Charyzmę (Oszustwo).",
+            "followup_prompt": "Jakie kłamstwo ma zaakceptować automat?",
+            "intent_ids": ["deception"],
+            "resolution_mode": "check",
+            "description_mode": "required",
+            "participant_mode": "must",
+            "check_participants": "single_actor"
+          },
+          {
+            "id": "intimidation_test",
+            "label": "Zastrasz automat",
+            "description": "Sformułuj groźbę i przetestuj Charyzmę (Zastraszanie).",
+            "followup_prompt": "Jak próbujecie przestraszyć konstrukt, który wie, że jest wymienny?",
+            "intent_ids": ["social"],
+            "resolution_mode": "check",
+            "description_mode": "required",
+            "participant_mode": "must",
+            "check_participants": "single_actor"
+          }
+        ],
+        "policy": {
+          "intent_permissions": {
+            "information": {"status":"allowed","time_cost_minutes":1},
+            "social": {"status":"allowed","time_cost_minutes":1,"check":{"ability":"charisma","skill":"persuasion","dc":12}},
+            "deception": {"status":"allowed","time_cost_minutes":1,"check":{"ability":"charisma","skill":"deception","dc":12}},
+            "threat": {"status":"allowed","time_cost_minutes":1,"check":{"ability":"charisma","skill":"intimidation","dc":12}}
+          },
+          "allowed_abilities": ["charisma","wisdom"],
+          "allowed_skills": ["persuasion","deception","intimidation","insight"],
+          "dc_range": [5,25]
+        }
+      }
+    },
+    {
+      "id": "rest_manual",
+      "name": "Instrukcja odpoczynku",
+      "zone_id": "rest_station",
+      "positions": [[14,22]],
+      "color": "success",
+      "description": "Wybierz Krótki odpoczynek w przepływie sceny. Możesz wydawać kości wytrzymałości i sprawdzić odnowienie zasobów.",
+      "interaction_label": "Przeczytaj instrukcję",
+      "requires_setup": false
+    }
+  ]
+}

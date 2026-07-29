@@ -6,7 +6,7 @@
     "srd_5_1_cc_by_4_0"
   ],
   "id": "true_strike",
-  "name": "True Strike",
+  "name": "Prawdziwe uderzenie",
   "level": 0,
   "school": "divination",
   "casting_time": "action",
@@ -28,13 +28,13 @@
   "effect": {
     "kind": "combat_action",
     "action_type": "targeted_status",
-    "label": "True Strike",
+    "label": "Prawdziwe uderzenie",
     "target_count": 1,
     "cast_flag": "cast_true_strike",
     "instructions": "Wskaż widoczny cel w zasięgu 30 ft i połóż znacznik koncentracji. W swojej następnej turze zyskujesz advantage do pierwszego ataku przeciw temu celowi, o ile czar nadal trwa; potem usuń znacznik.",
     "effect_kind": "next_attack_advantage",
     "value": 0,
-    "target_faction": "self",
+    "target_faction": "enemy",
     "duration": "next_attack"
   }
 }

@@ -6,7 +6,7 @@
     "srd_5_1_cc_by_4_0"
   ],
   "id": "aid",
-  "name": "Aid",
+  "name": "Wsparcie",
   "level": 2,
   "school": "abjuration",
   "casting_time": "action",
@@ -33,7 +33,7 @@
   "effect": {
     "kind": "combat_action",
     "action_type": "targeted_status",
-    "label": "Aid",
+    "label": "Wsparcie",
     "effect_kind": "max_hit_points_bonus",
     "value": 5,
     "upcast_value_per_level": 5,

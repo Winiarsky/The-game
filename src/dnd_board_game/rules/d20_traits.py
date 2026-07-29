@@ -22,15 +22,42 @@ def apply_actor_d20_traits(
     roll_kind: D20RollKind,
     *,
     effect_tags: Iterable[str] = (),
+    active_effects: Iterable[object] = (),
+    condition_states: Iterable[object] = (),
 ) -> D20RollRequest:
     """Apply executable species rerolls and save advantages to one request."""
     tags = frozenset(str(tag) for tag in effect_tags)
+    effects = tuple(active_effects)
+    conditions = frozenset(
+        str(getattr(getattr(state, "condition", ""), "value", getattr(state, "condition", "")))
+        for state in condition_states
+        if getattr(state, "actor_id", "") == str(getattr(actor, "id", ""))
+    )
     feature_ids = frozenset(
         getattr(grant, "feature_id", "")
         for grant in getattr(actor, "features", ())
     )
+    wearing_heavy_armor = any(
+        getattr(item, "equipped", False)
+        and getattr(getattr(item, "armor_category", None), "value", "") == "heavy"
+        for item in getattr(actor, "inventory", ())
+    )
+    raging = (
+        not wearing_heavy_armor
+        and any(
+            getattr(effect, "actor_id", "") == str(getattr(actor, "id", ""))
+            and getattr(effect, "kind", "") == "rage"
+            for effect in effects
+        )
+    )
     modifiers = list(request.modifiers)
     advantage_labels: list[tuple[str, str]] = []
+    if (
+        raging
+        and request.ability == "strength"
+        and roll_kind in {D20RollKind.ABILITY_CHECK, D20RollKind.SAVING_THROW}
+    ):
+        advantage_labels.append(("Szał", "rage"))
     if roll_kind == D20RollKind.SAVING_THROW:
         if (
             SavingThrowEffectTag.POISON.value in tags
@@ -54,6 +81,7 @@ def apply_actor_d20_traits(
             SavingThrowEffectTag.VISIBLE_DANGER.value in tags
             and "danger_sense" in feature_ids
             and request.ability == "dexterity"
+            and not {"blinded", "deafened", "incapacitated"}.intersection(conditions)
         ):
             advantage_labels.append(("Danger Sense", "danger_sense"))
     if (

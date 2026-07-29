@@ -6,7 +6,7 @@
     "srd_5_1_cc_by_4_0"
   ],
   "id": "shatter",
-  "name": "Shatter",
+  "name": "Roztrzaskanie",
   "level": 2,
   "school": "evocation",
   "casting_time": "action",
@@ -36,6 +36,7 @@
     "kind": "attack",
     "ability": "charisma",
     "save_ability": "constitution",
+    "save_disadvantage_creature_types": ["construct"],
     "save_damage_on_success": "half",
     "area": {
       "shape": "radius",

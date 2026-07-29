@@ -6,7 +6,7 @@
     "srd_5_1_cc_by_4_0"
   ],
   "id": "pass_without_trace",
-  "name": "Pass Without Trace",
+  "name": "Przejście bez śladu",
   "level": 2,
   "school": "abjuration",
   "casting_time": "action",
@@ -32,12 +32,11 @@
   "effect": {
     "kind": "combat_action",
     "action_type": "targeted_status",
-    "label": "Pass Without Trace",
-    "target_count": 5,
+    "label": "Przejście bez śladu",
     "cast_flag": "cast_pass_without_trace",
-    "instructions": "Podczas koncentracji wybrane istoty w 30 stopach mają +10 do Stealth, nie zostawiają śladów i nie można ich śledzić niemagicznie.",
+    "instructions": "Podczas koncentracji rzucający i wszystkie wybrane przez niego istoty w 30 stopach mają +10 do Stealth, nie zostawiają śladów i nie można ich śledzić niemagicznie.",
     "effect_kind": "stealth_bonus_aura",
     "value": 10,
-    "target_faction": "ally"
+    "target_faction": "self"
   }
 }

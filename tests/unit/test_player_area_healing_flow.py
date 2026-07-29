@@ -3,7 +3,14 @@ from random import Random
 
 import pytest
 
-from dnd_board_game.actors import AbilityScores, Actor, ActorId, Faction
+from dnd_board_game.actors import (
+    AbilityScores,
+    Actor,
+    ActorId,
+    ActorResourcePool,
+    Faction,
+    RecoveryPeriod,
+)
 from dnd_board_game.application import PlayerAreaHealingFlowService
 from dnd_board_game.combat import (
     ActionUse,
@@ -332,6 +339,160 @@ def test_radius_spell_excludes_target_with_total_cover_from_effect_origin() -> N
     assert selected.pending is not None
     assert enemy.position not in selected.pending.area_positions
     assert selected.pending.target_ids == ("caster",)
+
+
+def test_shatter_construct_save_uses_disadvantage() -> None:
+    class _SequenceRandom:
+        def __init__(self) -> None:
+            self.values = [10, 18, 2]
+
+        def randint(self, _minimum: int, _maximum: int) -> int:
+            return self.values.pop(0)
+
+    service = PlayerAreaHealingFlowService()
+    caster = _actor("caster", Faction.ALLY, Coordinate(0, 0))
+    construct = replace(
+        _actor("construct", Faction.ENEMY, Coordinate(2, 0)),
+        creature_type="construct",
+    )
+    state = _state(caster, construct)
+    source = replace(
+        _line_spell(),
+        id="shatter",
+        name="Roztrzaskanie",
+        area=SpellArea(SpellAreaShape.RADIUS, radius_feet=10),
+        save_ability="constitution",
+        save_dc=12,
+        save_disadvantage_creature_types=("construct",),
+    )
+
+    selected = service.select_area_spell(
+        state=state,
+        board=BoardState(),
+        source=source,
+        position=Coordinate(2, 0),
+    )
+    assert selected.pending is not None
+
+    rng = _SequenceRandom()
+    confirmed = service.confirm_area_spell(
+        state=state,
+        source=source,
+        pending=selected.pending,
+        rng=rng,
+    )
+
+    assert confirmed.pending is not None
+    save = next(
+        result
+        for result in confirmed.pending.saving_throws
+        if result.actor_id == "construct"
+    )
+    assert save.natural_roll == 2
+    assert save.success is False
+    assert rng.values == []
+
+
+def test_area_metamagic_careful_auto_succeeds_and_heightened_uses_disadvantage() -> None:
+    class _CountingRandom:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def randint(self, _minimum: int, _maximum: int) -> int:
+            self.calls += 1
+            return 10
+
+    service = PlayerAreaHealingFlowService()
+    caster = replace(
+        _actor("caster", Faction.ALLY, Coordinate(0, 0)),
+        resource_pools=(
+            ActorResourcePool(
+                "sorcery_points",
+                "Punkty magii",
+                4,
+                4,
+                RecoveryPeriod.LONG_REST,
+            ),
+        ),
+    )
+    protected = _actor("protected", Faction.ALLY, Coordinate(1, 0))
+    hindered = _actor("hindered", Faction.ENEMY, Coordinate(2, 0))
+    state = _state(caster, protected, hindered)
+    source = replace(
+        _line_spell(),
+        metamagic_ids=("metamagic_careful", "metamagic_heightened"),
+        resource_pool_id="sorcery_points",
+        resource_cost=4,
+    )
+    selected = service.select_area_spell(
+        state=state,
+        board=BoardState(),
+        source=source,
+        position=Coordinate(1, 0),
+    )
+    assert selected.pending is not None
+    pending = replace(
+        selected.pending,
+        careful_target_ids=("protected",),
+        heightened_target_id="hindered",
+    )
+
+    rng = _CountingRandom()
+    confirmed = service.confirm_area_spell(
+        state=state,
+        source=source,
+        pending=pending,
+        rng=rng,
+    )
+    assert confirmed.pending is not None
+    saves = {
+        save.actor_id: save
+        for save in confirmed.pending.saving_throws
+    }
+    assert saves["protected"].success is True
+    assert rng.calls == len(saves) + 1
+
+
+def test_sculpt_spells_protected_ally_is_excluded_from_saves_and_damage() -> None:
+    service = PlayerAreaHealingFlowService()
+    caster = _actor("caster", Faction.ALLY, Coordinate(0, 0))
+    ally = _actor("ally", Faction.ALLY, Coordinate(1, 0))
+    enemy = _actor("enemy", Faction.ENEMY, Coordinate(2, 0))
+    state = _state(caster, ally, enemy)
+    source = _line_spell()
+    selected = service.select_area_spell(
+        state=state,
+        board=BoardState(),
+        source=source,
+        position=Coordinate(1, 0),
+    )
+    assert selected.pending is not None
+    assert selected.pending.target_ids == ("ally", "enemy")
+    sculpted = replace(
+        selected.pending,
+        target_ids=("enemy",),
+        protected_target_ids=("ally",),
+    )
+
+    confirmed = service.confirm_area_spell(
+        state=state,
+        source=source,
+        pending=sculpted,
+        rng=Random(1),
+    )
+
+    assert confirmed.pending is not None
+    assert confirmed.pending.protected_target_ids == ("ally",)
+    assert [save.actor_id for save in confirmed.pending.saving_throws] == ["enemy"]
+    damaged = service.submit_area_damage(
+        state=confirmed.state,
+        source=source,
+        pending=confirmed.pending,
+        damage=6,
+    )
+    actors = {str(actor.id): actor for actor in damaged.state.actors}
+    assert actors["ally"].hp == 10
+    assert actors["enemy"].hp < 10
 
 
 def test_cancel_transitions_leave_combat_state_unchanged() -> None:

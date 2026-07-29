@@ -44,6 +44,7 @@ class UiSessionView:
     combat: dict[str, object] | None
     board: dict[str, object]
     required_rolls: list[dict[str, object]]
+    playground: dict[str, object] | None = None
 
     def as_payload(self) -> dict[str, object]:
         return {
@@ -84,4 +85,5 @@ class UiSessionView:
             "combat": self.combat,
             "board": self.board,
             "required_rolls": self.required_rolls,
+            "playground": self.playground,
         }

@@ -234,8 +234,48 @@ def apply_damage_result(
     damage: DamageResult,
     *,
     critical: bool = False,
+    active_effects: tuple[object, ...] = (),
+    combat_actors: tuple[Actor, ...] = (),
 ) -> AppliedDamageResult:
-    damage = resolve_damage(damage.components, actor.damage_affinities)
+    if active_effects:
+        from .poison_protection import poison_protection_affinities
+
+        affinities = poison_protection_affinities(actor, active_effects)
+        raging_without_heavy_armor = (
+            any(
+                getattr(effect, "actor_id", "") == str(actor.id)
+                and getattr(effect, "kind", "") == "rage"
+                for effect in active_effects
+            )
+            and not any(
+                item.equipped
+                and getattr(getattr(item, "armor_category", None), "value", "") == "heavy"
+                for item in actor.inventory
+            )
+        )
+        if raging_without_heavy_armor:
+            affinities = DamageAffinityProfile(
+                resistances=(
+                    *affinities.resistances,
+                    DamageType.BLUDGEONING,
+                    DamageType.PIERCING,
+                    DamageType.SLASHING,
+                ),
+                immunities=affinities.immunities,
+                vulnerabilities=affinities.vulnerabilities,
+            )
+        if combat_actors:
+            from .warding_bond import warding_bond_affinities
+
+            affinities = warding_bond_affinities(
+                actor,
+                active_effects,
+                combat_actors,
+                affinities,
+            )
+    else:
+        affinities = actor.damage_affinities
+    damage = resolve_damage(damage.components, affinities)
     remaining = damage.total_applied
     temp_hp_before = actor.temp_hp
     hp_before = actor.hp

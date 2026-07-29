@@ -24,12 +24,17 @@ from dnd_board_game.combat import (
     AttackKind,
     AttackSource,
     AttackSourceType,
+    CombatCondition,
+    ConditionState,
+    DamageComponentInput,
+    DamageType,
     InitiativeEntry,
     InitiativeOrder,
     HealingSource,
     HealingSourceType,
     apply_life_domain_to_healing_source,
     apply_fighting_style_to_attack_source,
+    apply_damage_result,
     attack_source_with_combat_effects,
     attack_source_with_target_combat_effects,
     attack_source_for_actor,
@@ -37,6 +42,7 @@ from dnd_board_game.combat import (
     commit_sneak_attack_hit,
     plan_sneak_attack,
     resolve_action_surge,
+    resolve_damage,
     resolve_rage,
     resolve_lay_on_hands,
     resolve_reckless_attack,
@@ -49,7 +55,9 @@ from dnd_board_game.combat import (
 )
 from dnd_board_game.inventory import (
     ArmorCategory,
+    HandSlot,
     InventoryItem,
+    effective_armor_class,
     effective_speed_feet,
 )
 from dnd_board_game.rules import (
@@ -412,6 +420,55 @@ def test_barbarian_rage_spends_bonus_action_and_adds_melee_strength_damage(conte
         pool for pool in rage.actor_after.resource_pools
         if pool.id == "rage_uses"
     ).current == 1
+    strength_check = apply_actor_d20_traits(
+        rage.actor_after,
+        D20RollRequest(ability="strength"),
+        D20RollKind.ABILITY_CHECK,
+        active_effects=rage.active_effects,
+    )
+    strength_save = apply_actor_d20_traits(
+        rage.actor_after,
+        D20RollRequest(ability="strength"),
+        D20RollKind.SAVING_THROW,
+        active_effects=rage.active_effects,
+    )
+    damage = apply_damage_result(
+        rage.actor_after,
+        resolve_damage(
+            (
+                DamageComponentInput(9, DamageType.SLASHING, "miecz"),
+                DamageComponentInput(9, DamageType.FIRE, "ogień"),
+            )
+        ),
+        active_effects=rage.active_effects,
+    )
+
+    assert strength_check.mode == RollMode.ADVANTAGE
+    assert strength_save.mode == RollMode.ADVANTAGE
+    assert damage.damage.total_applied == 13
+
+    heavy_armor = InventoryItem(
+        "plate",
+        "Zbroja płytowa",
+        "armor",
+        armor_category=ArmorCategory.HEAVY,
+        armor_base_ac=18,
+    )
+    armored = replace(rage.actor_after, inventory=(*rage.actor_after.inventory, heavy_armor))
+    armored_damage = apply_damage_result(
+        armored,
+        resolve_damage((DamageComponentInput(9, DamageType.SLASHING, "miecz"),)),
+        active_effects=rage.active_effects,
+    )
+    armored_check = apply_actor_d20_traits(
+        armored,
+        D20RollRequest(ability="strength"),
+        D20RollKind.ABILITY_CHECK,
+        active_effects=rage.active_effects,
+    )
+
+    assert armored_damage.damage.total_applied == 9
+    assert armored_check.mode == RollMode.NORMAL
 
 
 def test_level_three_barbarian_has_three_rage_uses(content):
@@ -422,6 +479,37 @@ def test_level_three_barbarian_has_three_rage_uses(content):
     )
 
     assert rage_pool.maximum == 3
+
+
+def test_barbarian_unarmored_defense_uses_dexterity_constitution_and_allows_shield(
+    content,
+):
+    barbarian = _barbarian(content)
+    shield = InventoryItem(
+        "shield",
+        "Tarcza",
+        "shield",
+        armor_class_bonus=2,
+        held_in=(HandSlot.OFF_HAND,),
+    )
+
+    assert barbarian.ac == 14
+    assert effective_armor_class(barbarian) == 14
+    assert effective_armor_class(
+        replace(barbarian, inventory=(*barbarian.inventory, shield))
+    ) == 16
+
+    medium_armor = InventoryItem(
+        "hide",
+        "Skórzany pancerz",
+        "armor",
+        armor_category=ArmorCategory.MEDIUM,
+        armor_base_ac=12,
+        armor_dexterity_cap=2,
+    )
+    assert effective_armor_class(
+        replace(barbarian, inventory=(medium_armor,))
+    ) == 14
 
 
 def test_level_two_barbarian_has_advantage_on_visible_danger_dexterity_save(content):
@@ -438,9 +526,26 @@ def test_level_two_barbarian_has_advantage_on_visible_danger_dexterity_save(cont
         D20RollRequest(ability="dexterity"),
         D20RollKind.SAVING_THROW,
     )
+    blocked_modes = {
+        condition: apply_actor_d20_traits(
+            barbarian,
+            D20RollRequest(ability="dexterity"),
+            D20RollKind.SAVING_THROW,
+            effect_tags=(SavingThrowEffectTag.VISIBLE_DANGER.value,),
+            condition_states=(
+                ConditionState(str(barbarian.id), condition),
+            ),
+        ).mode
+        for condition in (
+            CombatCondition.BLINDED,
+            CombatCondition.DEAFENED,
+            CombatCondition.INCAPACITATED,
+        )
+    }
 
     assert visible_danger.mode == RollMode.ADVANTAGE
     assert hidden_danger.mode == RollMode.NORMAL
+    assert set(blocked_modes.values()) == {RollMode.NORMAL}
 
 
 def test_reckless_attack_grants_melee_strength_advantage_to_both_sides(content):
@@ -511,6 +616,45 @@ def test_monk_martial_arts_uses_dexterity_and_d4_for_unarmed_strike(content):
     assert source.ability == "dexterity"
     assert source.damage_components[0].dice.format() == "1d4"
     assert source.damage_modifier == 3
+
+    armor = InventoryItem(
+        "scale_mail",
+        "Zbroja łuskowa",
+        "armor",
+        armor_category=ArmorCategory.MEDIUM,
+        armor_base_ac=14,
+        armor_dexterity_cap=2,
+    )
+    armored = replace(monk, inventory=(*monk.inventory, armor))
+    armored_source = unarmed_strike_source(armored)
+    assert armored_source.ability == "strength"
+    assert armored_source.damage_components[0].fixed == 1
+
+
+def test_monk_unarmored_defense_and_movement_stop_with_armor_or_shield(content):
+    monk = _monk(content, level=2)
+    shield = InventoryItem(
+        "shield",
+        "Tarcza",
+        "shield",
+        armor_class_bonus=2,
+        held_in=(HandSlot.OFF_HAND,),
+    )
+    armor = InventoryItem(
+        "hide",
+        "Skórzany pancerz",
+        "armor",
+        armor_category=ArmorCategory.MEDIUM,
+        armor_base_ac=12,
+        armor_dexterity_cap=2,
+    )
+
+    assert monk.ac == 15
+    assert effective_speed_feet(monk) == 40
+    assert effective_armor_class(replace(monk, inventory=(shield,))) == 15
+    assert effective_speed_feet(replace(monk, inventory=(shield,))) == 30
+    assert effective_armor_class(replace(monk, inventory=(armor,))) == 14
+    assert effective_speed_feet(replace(monk, inventory=(armor,))) == 30
 
 
 def test_half_orc_savage_attacks_adds_one_weapon_die_only_on_critical(content):
@@ -794,6 +938,36 @@ def test_fey_ancestry_blocks_magical_sleep_but_not_ordinary_unconsciousness(cont
         SavingThrowEffectTag.MAGICAL_SLEEP.value,
     )
     assert not actor_is_immune_to_effect(elf, "unconscious")
+
+
+@pytest.mark.parametrize("ability", ("intelligence", "wisdom", "charisma"))
+def test_gnome_cunning_grants_advantage_only_to_mental_saves_against_magic(
+    content,
+    ability,
+):
+    gnome = _species_fighter(content, "gnome")
+
+    magical = apply_actor_d20_traits(
+        gnome,
+        D20RollRequest(ability=ability),
+        D20RollKind.SAVING_THROW,
+        effect_tags=(SavingThrowEffectTag.MAGIC.value,),
+    )
+    nonmagical = apply_actor_d20_traits(
+        gnome,
+        D20RollRequest(ability=ability),
+        D20RollKind.SAVING_THROW,
+    )
+    physical = apply_actor_d20_traits(
+        gnome,
+        D20RollRequest(ability="dexterity"),
+        D20RollKind.SAVING_THROW,
+        effect_tags=(SavingThrowEffectTag.MAGIC.value,),
+    )
+
+    assert magical.mode == RollMode.ADVANTAGE
+    assert nonmagical.mode == RollMode.NORMAL
+    assert physical.mode == RollMode.NORMAL
 
 
 def test_shared_attack_initiative_and_save_paths_apply_species_traits(content):

@@ -5,6 +5,8 @@ from dnd_board_game.combat import (
     AttackKind,
     AttackSource,
     AttackSourceType,
+    CombatCondition,
+    ConditionState,
     CoverLevel,
     SceneObject,
     attack_source_with_positioning,
@@ -270,6 +272,25 @@ def test_defeated_ally_does_not_provide_flanking() -> None:
         target,
         _source(kind=AttackKind.MELEE),
         (attacker, target, ally),
+    )
+
+    assert positioning.flanking_ally_ids == ()
+
+
+def test_incapacitated_ally_does_not_provide_flanking() -> None:
+    attacker = _actor("pim", Faction.ALLY, Coordinate(11, 6))
+    target = _actor("goblin", Faction.ENEMY, Coordinate(10, 6))
+    ally = _actor("nimra", Faction.ALLY, Coordinate(9, 6))
+
+    positioning = evaluate_attack_positioning(
+        BoardState(),
+        attacker,
+        target,
+        _source(kind=AttackKind.MELEE),
+        (attacker, target, ally),
+        condition_states=(
+            ConditionState("nimra", CombatCondition.INCAPACITATED),
+        ),
     )
 
     assert positioning.flanking_ally_ids == ()

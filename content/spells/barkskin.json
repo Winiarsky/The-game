@@ -6,7 +6,7 @@
     "srd_5_1_cc_by_4_0"
   ],
   "id": "barkskin",
-  "name": "Barkskin",
+  "name": "Kora",
   "level": 2,
   "school": "transmutation",
   "casting_time": "action",
@@ -32,7 +32,7 @@
   "effect": {
     "kind": "combat_action",
     "action_type": "targeted_status",
-    "label": "Barkskin",
+    "label": "Kora",
     "target_count": 1,
     "cast_flag": "cast_barkskin",
     "instructions": "Podczas koncentracji KP dobrowolnego celu nie może spaść poniżej 16.",

@@ -6,7 +6,7 @@
     "srd_5_1_cc_by_4_0"
   ],
   "id": "protection_from_poison",
-  "name": "Protection From Poison",
+  "name": "Ochrona przed trucizną",
   "level": 2,
   "school": "abjuration",
   "casting_time": "action",
@@ -27,7 +27,7 @@
   "effect": {
     "kind": "combat_action",
     "action_type": "targeted_status",
-    "label": "Protection From Poison",
+    "label": "Ochrona przed trucizną",
     "target_count": 1,
     "cast_flag": "cast_protection_from_poison",
     "instructions": "Zneutralizuj jedną truciznę; przez godzinę cel ma przewagę save przeciw poison i odporność na obrażenia poison.",

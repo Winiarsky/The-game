@@ -52,11 +52,13 @@ class CombatCondition(StrEnum):
     NO_REACTIONS = "no_reactions"
     NO_HEALING = "no_healing"
     TURNED = "turned"
+    ENFEEBLED = "enfeebled"
 
 
 class ConditionSaveTiming(StrEnum):
     TURN_START = "turn_start"
     TURN_END = "turn_end"
+    ACTION = "action"
 
 
 @dataclass(frozen=True, slots=True)
@@ -215,6 +217,11 @@ CONDITION_DEFINITIONS: dict[CombatCondition, ConditionDefinition] = {
         "Zablokowane leczenie",
         "Istota nie może odzyskiwać punktów wytrzymałości.",
         healing_blocked=True,
+    ),
+    CombatCondition.ENFEEBLED: ConditionDefinition(
+        CombatCondition.ENFEEBLED,
+        "Osłabiony",
+        "Ataki bronią oparte na Sile zadają połowę obrażeń; Constitution save na końcu tury kończy efekt.",
     ),
 }
 
@@ -438,9 +445,11 @@ def resolve_condition_save(
     natural_rerolls: tuple[int, ...] = (),
     combat_actors: Sequence[Actor] = (),
     additional_modifiers: tuple[RollModifier, ...] = (),
+    active_effects: Sequence[object] = (),
 ) -> ConditionSaveResolution:
     from dnd_board_game.actors import saving_throw_roll_modifiers
     from .auras import saving_throw_aura_modifiers
+    from .poison_protection import poison_protection_roll_mode
 
     if condition_state.actor_id != str(actor.id):
         raise ValueError("Condition save does not belong to this actor.")
@@ -449,6 +458,15 @@ def resolve_condition_save(
     request = condition_roll_request(
         D20RollRequest(
             ability=condition_state.save_ability,
+            mode=poison_protection_roll_mode(
+                actor,
+                active_effects,
+                (
+                    "poison"
+                    if condition_state.condition == CombatCondition.POISONED
+                    else condition_state.condition.value,
+                ),
+            ),
             modifiers=(
                 *saving_throw_roll_modifiers(actor, condition_state.save_ability),
                 *saving_throw_aura_modifiers(combat_actors, actor),
@@ -475,6 +493,8 @@ def resolve_condition_save(
                 else condition_state.condition.value
             ),
         ),
+        active_effects=active_effects,
+        condition_states=states,
     )
     if request.mode != RollMode.NORMAL and natural_roll_2 is None:
         raise ValueError("Condition save with advantage or disadvantage requires two d20 rolls.")
@@ -645,6 +665,11 @@ def effective_movement_speed(
         if state.actor_id == str(actor.id)
     ):
         return 0
+    if levitation_altitude_feet(str(actor.id), active_effects) > 0:
+        # Levitate does not grant horizontal movement. Pulling along a fixed
+        # object is handled as an explicit scene interaction, never as normal
+        # board movement.
+        return 0
     if grappled_actor_ids(states, str(actor.id)):
         return base_speed // 2
     penalty = max(
@@ -656,6 +681,22 @@ def effective_movement_speed(
         default=0,
     )
     return max(0, base_speed - penalty)
+
+
+def levitation_altitude_feet(
+    actor_id: str,
+    active_effects: Sequence[ActiveEffect],
+) -> int:
+    """Return the represented altitude of an actor affected by Levitate."""
+
+    return max(
+        (
+            effect.value
+            for effect in active_effects
+            if effect.actor_id == actor_id and effect.kind == "levitate"
+        ),
+        default=0,
+    )
 
 
 def condition_blocks_reactions(
@@ -899,6 +940,12 @@ def _condition_matches_expiration_event(
     state: ConditionState,
     event: EffectEvent,
 ) -> bool:
+    if (
+        event.event_type == EffectEventType.DAMAGE_TAKEN
+        and event.actor_id == state.actor_id
+        and state.source_spell_id == "sleep"
+    ):
+        return True
     if event.event_type == EffectEventType.SCENARIO_ENDED:
         return state.duration != EffectDuration.PERMANENT
     if event.event_type == EffectEventType.LONG_REST_COMPLETED:

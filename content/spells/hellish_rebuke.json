@@ -6,7 +6,7 @@
     "srd_5_1_cc_by_4_0"
   ],
   "id": "hellish_rebuke",
-  "name": "Hellish Rebuke",
+  "name": "Piekielna reprymenda",
   "level": 1,
   "school": "evocation",
   "casting_time": "reaction",
@@ -27,7 +27,7 @@
   "effect": {
     "kind": "combat_action",
     "action_type": "reaction_damage",
-    "label": "Hellish Rebuke",
+    "label": "Piekielna reprymenda",
     "save_ability": "dexterity",
     "ongoing_damage_dice_count": 2,
     "damage_die_sides": 10,

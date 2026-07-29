@@ -929,6 +929,11 @@ def create_app(
                         if data.get("bless_roll") not in (None, "", 0, "0")
                         else None
                     ),
+                    mirror_image_roll=(
+                        int(data["mirror_image_roll"])
+                        if data.get("mirror_image_roll") not in (None, "")
+                        else None
+                    ),
                 )
             )
         except Exception as exc:
@@ -957,6 +962,21 @@ def create_app(
                 session.cast_exploration_ritual(
                     str(data.get("actor_id", "")),
                     str(data.get("spell_id", "")),
+                    str(data.get("target_id", "")),
+                    message=str(data.get("message", "")),
+                    trigger_description=str(data.get("trigger_description", "")),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/exploration/hazard/feather-fall")
+    def api_exploration_hazard_feather_fall():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                session.cast_feather_fall_for_pending_hazard(
+                    str(data.get("caster_id", "")),
                 )
             )
         except Exception as exc:
@@ -967,6 +987,11 @@ def create_app(
         data = request.get_json(silent=True) or {}
         try:
             cast_level = data.get("cast_level")
+            raw_target_ids = data.get("target_ids", [])
+            if not isinstance(raw_target_ids, list):
+                raise ValueError("target_ids musi być listą.")
+            healing_roll = data.get("healing_roll")
+            rope_length_feet = data.get("rope_length_feet", 60)
             return jsonify(
                 session.cast_exploration_spell(
                     str(data.get("actor_id", "")),
@@ -977,6 +1002,41 @@ def create_app(
                         else None
                     ),
                     target_id=str(data.get("target_id", "")),
+                    target_ids=tuple(str(value) for value in raw_target_ids),
+                    healing_roll=(
+                        int(healing_roll)
+                        if healing_roll not in (None, "")
+                        else None
+                    ),
+                    rope_length_feet=int(rope_length_feet),
+                    message=str(data.get("message", "")),
+                    trigger_description=str(data.get("trigger_description", "")),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/exploration/rope-trick/enter")
+    def api_exploration_rope_trick_enter():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                session.enter_rope_trick_space(
+                    str(data.get("effect_id", "")),
+                    str(data.get("actor_id", "")),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/exploration/rope-trick/exit")
+    def api_exploration_rope_trick_exit():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                session.exit_rope_trick_space(
+                    str(data.get("effect_id", "")),
+                    str(data.get("actor_id", "")),
                 )
             )
         except Exception as exc:
@@ -1293,6 +1353,44 @@ def create_app(
                     allocations=allocations,
                 )
             )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/class-feature/targeting")
+    def api_combat_class_feature_targeting():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                session.start_combat_class_feature_targeting(
+                    str(data.get("action_id", "")),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/class-feature/targeting/cancel")
+    def api_combat_class_feature_targeting_cancel():
+        try:
+            return jsonify(session.cancel_combat_class_feature_targeting())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/aux-targeting/start")
+    def api_combat_aux_targeting_start():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                session.start_combat_aux_targeting(
+                    str(data.get("mode", "")),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/aux-targeting/finish")
+    def api_combat_aux_targeting_finish():
+        try:
+            return jsonify(session.finish_combat_aux_targeting())
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
@@ -1819,6 +1917,16 @@ def create_app(
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
+    @app.post("/api/combat/moonbeam/move/start")
+    def api_combat_moonbeam_move_start():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                session.start_moonbeam_move(str(data.get("effect_id", "")))
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
     @app.post("/api/combat/spell-debuff/start")
     def api_combat_spell_debuff_start():
         data = request.get_json(silent=True) or {}
@@ -1847,6 +1955,18 @@ def create_app(
             if data.get("condition") not in (None, ""):
                 confirmation_kwargs["condition"] = str(data["condition"])
             return jsonify(session.confirm_spell_debuff(**confirmation_kwargs))
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/spell-debuff/condition")
+    def api_combat_spell_debuff_condition():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                session.select_spell_debuff_condition(
+                    str(data.get("condition", "")),
+                )
+            )
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
@@ -2122,6 +2242,18 @@ def create_app(
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
+    @app.post("/api/combat/stabilize/targeting")
+    def api_combat_stabilize_targeting():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                session.start_combat_stabilization_targeting(
+                    str(data.get("method", "")),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
     @app.post("/api/encounter/combat/resolve")
     def api_encounter_combat_resolve():
         try:
@@ -2133,6 +2265,33 @@ def create_app(
     def api_reset():
         session.reset()
         return jsonify(session.state_payload())
+
+    @app.post("/api/playground/configure")
+    def api_playground_configure():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                session.configure_playground_trial(
+                    dummy_count=int(data.get("dummy_count", 3)),
+                    armor_class=int(data.get("armor_class", 12)),
+                    hit_points=int(data.get("hit_points", 20)),
+                    speed_feet=int(data.get("speed_feet", 10)),
+                    ability_score=int(data.get("ability_score", 10)),
+                    creature_type=str(data.get("creature_type", "construct")),
+                    affinity=str(data.get("affinity", "none")),
+                    damage_type=str(data.get("damage_type", "fire")),
+                    condition_immunity=str(data.get("condition_immunity", "")),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/playground/reset")
+    def api_playground_reset():
+        try:
+            return jsonify(session.reset_playground_trial())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
     @app.post("/api/scenario/finish")
     def api_scenario_finish():

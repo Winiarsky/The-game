@@ -18,6 +18,9 @@
     "kind": "attack",
     "save_ability": "wisdom",
     "damage": {"dice": "1d4", "modifier": 0, "damage_type": "psychic"},
-    "save_damage_on_success": "none"
+    "save_damage_on_success": "none",
+    "on_hit_effect_kind": "vicious_mockery_disadvantage",
+    "on_hit_effect_duration": "until_next_attack",
+    "on_hit_effect_value": 0
   }
 }

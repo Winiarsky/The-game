@@ -6,7 +6,7 @@
     "srd_5_1_cc_by_4_0"
   ],
   "id": "lesser_restoration",
-  "name": "Lesser Restoration",
+  "name": "Pomniejsze przywrócenie",
   "level": 2,
   "school": "abjuration",
   "casting_time": "action",
@@ -26,7 +26,7 @@
   "effect": {
     "kind": "combat_action",
     "action_type": "targeted_status",
-    "label": "Lesser Restoration",
+    "label": "Pomniejsze przywrócenie",
     "effect_kind": "remove_condition",
     "effect_options": [
       "blinded",

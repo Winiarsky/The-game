@@ -16,6 +16,19 @@ from .downtime import (
     complete_downtime_crafting,
     plan_downtime_crafting,
 )
+from .divination import (
+    DivinationSearchResult,
+    DivinationTargetKind,
+    locate_authored_target,
+)
+from .rope_trick import (
+    RopeTrickSpace,
+    decode_rope_trick,
+    encode_rope_trick,
+    enter_rope_trick,
+    exit_rope_trick,
+    set_rope_pulled_inside,
+)
 from .collection import (
     CollectionPlan,
     CollectionResult,
@@ -75,6 +88,12 @@ from .mechanics import (
     mechanic_payload_for_option,
     mechanic_tool,
     validate_mechanic_selection,
+)
+from .magic_mouth import (
+    MagicMouthSpecification,
+    decode_magic_mouth,
+    encode_magic_mouth,
+    magic_mouth_message_for_event,
 )
 from .observations import (
     ExplorationObservation,
@@ -371,6 +390,13 @@ __all__ = [
     "ExplorationOption",
     "ExplorationOptionKind",
     "ExplorationPoint",
+    "DivinationSearchResult",
+    "DivinationTargetKind",
+    "locate_authored_target",
+    "MagicMouthSpecification",
+    "decode_magic_mouth",
+    "encode_magic_mouth",
+    "magic_mouth_message_for_event",
     "ExplorationResource",
     "ExplorationState",
     "ExplorationZone",
@@ -524,6 +550,12 @@ __all__ = [
     "travel_minutes_for_pace",
     "zone_for_position",
     "zone_is_available",
+    "RopeTrickSpace",
+    "decode_rope_trick",
+    "encode_rope_trick",
+    "enter_rope_trick",
+    "exit_rope_trick",
+    "set_rope_pulled_inside",
     "match_revealed_trap_action",
     "resolve_trap_action",
     "reveal_trap",

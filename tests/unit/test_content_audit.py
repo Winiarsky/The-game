@@ -15,6 +15,8 @@ def test_repository_content_audit_has_no_errors() -> None:
         "first_playable_scene",
         "gate_skirmish",
         "goblin_ambush",
+        "mechanics_playground",
+        "mechanics_playground_arena",
         "movement_skirmish",
         "multi_actor_skirmish",
         "village_square_mvp",

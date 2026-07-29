@@ -69,6 +69,7 @@ from .progression import (
     PartyExperienceAwardResult,
     award_experience,
     award_party_experience,
+    award_party_experience_per_actor,
     experience_progress,
     level_for_experience,
 )
@@ -180,6 +181,7 @@ __all__ = [
     "PartyExperienceAwardResult",
     "award_experience",
     "award_party_experience",
+    "award_party_experience_per_actor",
     "experience_progress",
     "level_for_experience",
     "dexterity_modifier",

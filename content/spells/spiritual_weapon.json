@@ -6,7 +6,7 @@
     "srd_5_1_cc_by_4_0"
   ],
   "id": "spiritual_weapon",
-  "name": "Spiritual Weapon",
+  "name": "Duchowa broń",
   "level": 2,
   "school": "evocation",
   "casting_time": "bonus_action",
@@ -28,12 +28,12 @@
   "effect": {
     "kind": "combat_action",
     "action_type": "summon",
-    "label": "Spiritual Weapon",
+    "label": "Duchowa broń",
     "target_faction": "self",
     "cast_flag": "cast_spiritual_weapon",
     "summon": {
       "id": "spiritual_weapon",
-      "name": "Spiritual Weapon",
+      "name": "Duchowa broń",
       "size": "small",
       "ac": 18,
       "hp": 1,
@@ -48,7 +48,7 @@
       },
       "attack": {
         "id": "spiritual_weapon_strike",
-        "name": "Spiritual Weapon Strike",
+        "name": "Cios duchowej broni",
         "bonus": 5,
         "range_feet": 5,
         "damage_fixed": 7,

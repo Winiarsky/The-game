@@ -1,7 +1,7 @@
 {
   "schema": "dnd_board_game.spell", "schema_version": 1,
   "ruleset_id": "dnd_5e_2014", "source_pack_ids": ["srd_5_1_cc_by_4_0"],
-  "id": "shillelagh", "name": "Shillelagh", "level": 0,
+  "id": "shillelagh", "name": "Kostur", "level": 0,
   "school": "transmutation", "casting_time": "bonus_action",
   "range": {"kind": "touch"},
   "components": {"verbal": true, "somatic": true, "materials": [{"item_id": "spell_component_shillelagh", "label": "jemioła, liść koniczyny i druidyczny focus"}]},
@@ -9,7 +9,7 @@
   "effect": {
     "kind": "combat_action",
     "action_type": "targeted_status",
-    "label": "Shillelagh",
+    "label": "Kostur",
     "effect_kind": "shillelagh",
     "target_faction": "self",
     "cast_flag": "cast_shillelagh",

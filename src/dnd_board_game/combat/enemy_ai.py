@@ -45,6 +45,8 @@ from .conditions import (
     path_with_condition_cost,
 )
 from .scene import SceneObject
+from .scene_interactions import MirrorImageOutcome, resolve_mirror_image_redirect
+from .spells import resolve_actor_saving_throw
 from .stealth import is_hidden_from, resolve_search, reveal_actor
 from .damage import (
     AppliedDamageResult,
@@ -88,6 +90,8 @@ class EnemyAutoAttackResult:
     saving_throw_result: SavingThrowResult | None = None
     base_damage: int | None = None
     base_damage_components: tuple[DamageComponentInput, ...] = ()
+    mirror_image_outcome: MirrorImageOutcome | None = None
+    sanctuary_saves: tuple[SavingThrowResult, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,6 +116,8 @@ class EnemyAutoTurnResult:
     base_damage_components: tuple[DamageComponentInput, ...] = ()
     spell_countered: bool = False
     counterspell_actor_id: str | None = None
+    mirror_image_outcome: MirrorImageOutcome | None = None
+    sanctuary_saves: tuple[SavingThrowResult, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -217,6 +223,64 @@ def resolve_enemy_auto_attack(
         )
 
     target = _select_enemy_target(enemy, targets)
+    sanctuary_saves: list[SavingThrowResult] = []
+    remaining_targets = tuple(targets)
+    while True:
+        sanctuary = next(
+            (
+                effect
+                for effect in active_effects
+                if effect.actor_id == target.id
+                and effect.kind == "sanctuary"
+            ),
+            None,
+        )
+        if sanctuary is None:
+            break
+        caster = next(
+            (
+                actor
+                for actor in action_result.state.actors
+                if str(actor.id) == sanctuary.source_actor_id
+            ),
+            _actor_for_target(action_result.state, target),
+        )
+        save = resolve_actor_saving_throw(
+            enemy,
+            SavingThrowRequest(
+                "wisdom",
+                caster.spell_save_dc,
+                "Sanktuarium",
+                SaveDamageOnSuccess.NONE,
+                dc_source_label=f"ST czarów: {caster.name}",
+            ),
+            natural_roll=rng.randint(1, 20),
+            condition_states=action_result.state.condition_states,
+            combat_actors=action_result.state.actors,
+        )
+        sanctuary_saves.append(save)
+        if save.success:
+            break
+        remaining_targets = tuple(
+            candidate
+            for candidate in remaining_targets
+            if candidate.id != target.id
+        )
+        if not remaining_targets:
+            return EnemyAutoAttackResult(
+                state=action_result.state,
+                enemy=enemy,
+                target=target,
+                message=(
+                    f"{enemy.name} nie przełamuje Sanktuarium {target.name} "
+                    f"(Wis {save.total} przeciw ST {save.dc}) i traci atak, "
+                    "bo nie ma innego legalnego celu."
+                ),
+                action_used=True,
+                source=source,
+                sanctuary_saves=tuple(sanctuary_saves),
+            )
+        target = _select_enemy_target(enemy, remaining_targets)
     if source.ammunition_type is not None:
         usage = consume_ammunition(
             _actor_for_id(action_result.state, enemy.id),
@@ -249,6 +313,7 @@ def resolve_enemy_auto_attack(
         source,
         action_result.state.actors,
         scene_objects,
+        action_result.state.condition_states,
     )
     source = attack_source_with_positioning(source, positioning)
     source = attack_source_with_prone(
@@ -299,8 +364,45 @@ def resolve_enemy_auto_attack(
             base_damage_components=base_damage_components,
         )
     attack_roll = resolve_d20_roll(_roll_input_for_request(source.attack_roll_request, rng))
-    declaration = AttackDeclaration(attacker=enemy, target=target, source=source)
+    has_mirror_image = any(
+        effect.actor_id == str(target_actor.id)
+        and effect.kind == "mirror_image"
+        and effect.value > 0
+        for effect in active_effects
+    )
+    mirror_outcome = (
+        resolve_mirror_image_redirect(
+            target_actor,
+            attack_total=attack_roll.total,
+            active_effects=active_effects,
+            redirect_roll=rng.randint(1, 20),
+        )
+        if has_mirror_image
+        else None
+    )
+    attack_target = (
+        replace(target, ac=mirror_outcome.duplicate_ac)
+        if mirror_outcome is not None and mirror_outcome.redirected
+        else target
+    )
+    declaration = AttackDeclaration(attacker=enemy, target=attack_target, source=source)
     resolution = resolve_attack(declaration, attack_roll, ActionUse.ACTION_AVAILABLE)
+    duplicate_was_hit = bool(
+        mirror_outcome is not None
+        and mirror_outcome.redirected
+        and resolution.hit
+    )
+    if mirror_outcome is not None and mirror_outcome.redirected:
+        mirror_outcome = replace(
+            mirror_outcome,
+            duplicate_hit=duplicate_was_hit,
+            duplicates_after=(
+                mirror_outcome.duplicates_before - 1
+                if duplicate_was_hit
+                else mirror_outcome.duplicates_before
+            ),
+        )
+        resolution = replace(resolution, hit=False, critical=False)
     if resolution.hit and condition_hit_is_automatic_critical(
         action_result.state.condition_states,
         str(target_actor.id),
@@ -383,10 +485,21 @@ def resolve_enemy_auto_attack(
                 target_actor,
                 damage,
                 critical=resolution.critical,
+                active_effects=active_effects,
+                combat_actors=updated_state.actors,
             )
             damage = applied_damage.damage
             updated_target = applied_damage.actor_after
             updated_state = replace_actor(updated_state, updated_target)
+            from .warding_bond import transfer_warding_bond_damage
+
+            transfer = transfer_warding_bond_damage(
+                updated_state,
+                protected_actor=target_actor,
+                damage_amount=applied_damage.damage.total_applied,
+                active_effects=active_effects,
+            )
+            updated_state = transfer.state
             defeated_text = " Cel zostaje pokonany." if applied_damage.defeated_by_damage else ""
             damage_message = (
                 f"Obrażenia: {_damage_result_text(damage)}. "
@@ -400,8 +513,38 @@ def resolve_enemy_auto_attack(
                     f"{damage_message}"
                 )
             )
+            if transfer.source_damage is not None:
+                message += (
+                    " Więź ochronna przekazuje rzucającemu "
+                    f"{transfer.source_damage.damage.total_applied} obrażeń."
+                )
     else:
         message = f"{enemy.name} pudłuje przeciwko {target.name}. Wynik ataku: {attack_roll.total}."
+    if mirror_outcome is not None:
+        if mirror_outcome.redirected and duplicate_was_hit:
+            message = (
+                f"{enemy.name} atakuje {target.name}. Lustrzane odbicia: "
+                f"k20 {mirror_outcome.redirect_roll}; atak trafia KP "
+                f"{mirror_outcome.duplicate_ac} i niszczy duplikat "
+                f"({mirror_outcome.duplicates_after} pozostało)."
+            )
+        elif mirror_outcome.redirected:
+            message = (
+                f"{enemy.name} atakuje {target.name}. Lustrzane odbicia: "
+                f"k20 {mirror_outcome.redirect_roll}; atak zostaje "
+                f"przekierowany, ale nie trafia KP {mirror_outcome.duplicate_ac}."
+            )
+        else:
+            message += (
+                f" Lustrzane odbicia: k20 {mirror_outcome.redirect_roll}; "
+                "atak nie został przekierowany."
+            )
+    if sanctuary_saves:
+        successful = sanctuary_saves[-1]
+        message = (
+            f"Sanktuarium: {enemy.name} uzyskuje Wis {successful.total} "
+            f"przeciw ST {successful.dc}. {message}"
+        )
 
     updated_state = replace(
         updated_state,
@@ -420,6 +563,8 @@ def resolve_enemy_auto_attack(
         action_used=True,
         positioning=positioning,
         source=source,
+        mirror_image_outcome=mirror_outcome,
+        sanctuary_saves=tuple(sanctuary_saves),
     )
 
 
@@ -565,6 +710,8 @@ def resolve_enemy_auto_turn(
         saving_throw_request=attack.saving_throw_request,
         saving_throw_result=attack.saving_throw_result,
         base_damage=attack.base_damage,
+        mirror_image_outcome=attack.mirror_image_outcome,
+        sanctuary_saves=attack.sanctuary_saves,
     )
 
 
@@ -842,6 +989,8 @@ def _turn_result_from_attack(result: EnemyAutoAttackResult) -> EnemyAutoTurnResu
         saving_throw_result=result.saving_throw_result,
         base_damage=result.base_damage,
         base_damage_components=result.base_damage_components,
+        mirror_image_outcome=result.mirror_image_outcome,
+        sanctuary_saves=result.sanctuary_saves,
     )
 
 

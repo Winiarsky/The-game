@@ -6,7 +6,7 @@
     "srd_5_1_cc_by_4_0"
   ],
   "id": "heat_metal",
-  "name": "Heat Metal",
+  "name": "Rozgrzanie metalu",
   "level": 2,
   "school": "transmutation",
   "casting_time": "action",
@@ -33,7 +33,7 @@
   "effect": {
     "kind": "combat_action",
     "action_type": "targeted_status",
-    "label": "Heat Metal",
+    "label": "Rozgrzanie metalu",
     "effect_kind": "ongoing_damage",
     "target_faction": "enemy",
     "ongoing_damage_dice_count": 2,

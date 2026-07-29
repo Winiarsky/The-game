@@ -6,7 +6,7 @@
     "srd_5_1_cc_by_4_0"
   ],
   "id": "sanctuary",
-  "name": "Sanctuary",
+  "name": "Sanktuarium",
   "level": 1,
   "school": "abjuration",
   "casting_time": "bonus_action",
@@ -33,7 +33,7 @@
   "effect": {
     "kind": "combat_action",
     "action_type": "targeted_status",
-    "label": "Sanctuary",
+    "label": "Sanktuarium",
     "target_count": 1,
     "cast_flag": "cast_sanctuary",
     "instructions": "Do minuty napastnik atakujący lub celujący szkodliwym czarem wykonuje Wis save albo wybiera inny cel; efekt kończy ofensywna akcja chronionego.",

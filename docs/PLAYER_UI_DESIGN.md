@@ -134,8 +134,11 @@ Pierwszą wiadomością MG jest:
 - tytuł lokacji lub punktu,
 - opis fabularny bez listy rozwiązań i parametrów mechanicznych.
 
-Pod spodem znajduje się historia rozmowy i stały composer. Podczas oczekiwania na
-LLM widoczny jest wpis „MG pisze…” z animowanymi kropkami.
+Pod spodem znajduje się jeden chronologiczny, przewijany strumień: historia,
+kafle decyzji, skan planszy, formularze rozstrzygnięcia, wynik i kolejne wybory.
+Podczas oczekiwania na LLM widoczny jest wpis „MG pisze…” z animowanymi kropkami.
+Opcjonalna swobodna rozmowa „Zapytaj MG” jest schowana w dialogu otwieranym ze
+strumienia i po wysłaniu wraca do historii.
 
 ### Zwykła rozmowa
 
@@ -395,7 +398,7 @@ Przebudowę należy wykonywać bez zmiany reguł i bez szerokiego refaktoringu b
 - pełnoekranowy chat jako dominujący widok,
 - karty próby zmieniające stan bez duplikacji,
 - odkrycia i NPC w tej samej gramatyce rozmowy,
-- responsywny composer i czytelny stan oczekiwania.
+- responsywny dialog „Zapytaj MG” i czytelny stan oczekiwania.
 
 ### UI-3 — encounter i walka
 

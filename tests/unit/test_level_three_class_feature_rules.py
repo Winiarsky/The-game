@@ -14,6 +14,7 @@ from dnd_board_game.actors import (
 )
 from dnd_board_game.combat import (
     ActionUse,
+    ActiveCombatEffect,
     AttackKind,
     AttackSource,
     AttackSourceType,
@@ -80,9 +81,10 @@ from dnd_board_game.rules import (
     SpellRangeKind,
     SpellSchool,
     SpellCastingTime,
+    apply_short_rest_slot_recovery,
     resolve_d20_roll,
 )
-from dnd_board_game.world import Coordinate
+from dnd_board_game.world import BoardState, Coordinate
 
 
 def _actor(*feature_ids: str, level: int = 3, hp: int = 20, max_hp: int = 20):
@@ -125,7 +127,22 @@ def _state(*actors: Actor):
 
 
 def test_level_three_druid_limits_and_natural_recovery():
-    actor = _actor("wild_shape", "natural_recovery")
+    actor = replace(
+        _actor("wild_shape", "natural_recovery"),
+        spell_slots=(
+            SpellSlotState(1, 0, 4),
+            SpellSlotState(2, 0, 2),
+        ),
+        resource_pools=(
+            ActorResourcePool(
+                "natural_recovery_uses",
+                "Natural Recovery",
+                1,
+                1,
+                RecoveryPeriod.LONG_REST,
+            ),
+        ),
+    )
 
     limits = wild_shape_limits(actor)
 
@@ -134,6 +151,38 @@ def test_level_three_druid_limits_and_natural_recovery():
     assert limits.flying_allowed is False
     assert limits.duration_hours == 1
     assert natural_recovery_capacity(actor) == 2
+    recovered = apply_short_rest_slot_recovery(actor, slot_levels=(2,))
+    assert recovered.spell_slots[1].remaining == 1
+    assert recovered.resource_pools[0].current == 0
+    with pytest.raises(ValueError, match="wykorzystane"):
+        apply_short_rest_slot_recovery(recovered, slot_levels=(1,))
+
+
+def test_level_three_arcane_recovery_can_restore_two_first_level_slots():
+    actor = replace(
+        _actor("arcane_recovery"),
+        spell_slots=(
+            SpellSlotState(1, 1, 4),
+            SpellSlotState(2, 0, 2),
+        ),
+        resource_pools=(
+            ActorResourcePool(
+                "arcane_recovery_uses",
+                "Arcane Recovery",
+                1,
+                1,
+                RecoveryPeriod.LONG_REST,
+            ),
+        ),
+    )
+
+    recovered = apply_short_rest_slot_recovery(actor, slot_levels=(1, 1))
+
+    assert recovered.spell_slots[0].remaining == 3
+    assert recovered.spell_slots[1].remaining == 0
+    assert recovered.resource_pools[0].current == 0
+    with pytest.raises(ValueError, match="budżet 2"):
+        apply_short_rest_slot_recovery(actor, slot_levels=(1, 2))
 
 
 def test_wild_shape_uses_beast_hp_natural_attack_and_overflow_damage():
@@ -238,11 +287,19 @@ def test_turn_undead_spends_channel_divinity_and_applies_turned_condition():
         id=ActorId("skeleton"),
         position=Coordinate(3, 1),
     )
+    hidden = replace(
+        zombie,
+        id=ActorId("hidden"),
+        position=Coordinate(1, 3),
+    )
+    board = BoardState()
+    board.add_wall(Coordinate(1, 1), Coordinate(1, 2))
 
     result = resolve_channel_turn(
-        _state(cleric, zombie, skeleton),
+        _state(cleric, zombie, skeleton, hidden),
         action_id="turn_undead",
         saving_rolls={"zombie": 2, "skeleton": 20},
+        board=board,
     )
 
     assert result.turned_target_ids == ("zombie",)
@@ -250,6 +307,11 @@ def test_turn_undead_spends_channel_divinity_and_applies_turned_condition():
     assert has_condition(
         result.state.condition_states,
         "zombie",
+        CombatCondition.TURNED,
+    )
+    assert not has_condition(
+        result.state.condition_states,
+        "hidden",
         CombatCondition.TURNED,
     )
     assert result.actor_after.resource_pools[0].current == 0
@@ -607,6 +669,41 @@ def test_second_story_work_removes_climbing_surcharge_and_extends_jumps():
     )
 
 
+def test_jump_spell_triples_all_jump_distances() -> None:
+    actor = _actor()
+    effect = ActiveCombatEffect(
+        id="jump:hero",
+        actor_id="hero",
+        kind="jump_multiplier",
+        label="Skok",
+        object_id="spell:jump",
+        value=3,
+    )
+
+    base = jump_distances(actor)
+    enhanced = jump_distances(actor, (effect,))
+
+    assert enhanced.running_long_jump_feet == base.running_long_jump_feet * 3
+    assert enhanced.standing_long_jump_feet == enhanced.running_long_jump_feet // 2
+    assert enhanced.running_high_jump_feet == base.running_high_jump_feet * 3
+    assert enhanced.standing_high_jump_feet == enhanced.running_high_jump_feet // 2
+
+
+def test_spider_climb_effect_grants_climb_speed_equal_to_normal_speed() -> None:
+    ordinary = _actor()
+    effect = ActiveCombatEffect(
+        id="spider-climb:test",
+        actor_id=str(ordinary.id),
+        kind="spider_climb",
+        label="Pajęcza wspinaczka",
+        object_id="combat_action:spider_climb",
+        value=0,
+    )
+
+    assert climbing_movement_cost(ordinary, 10) == 20
+    assert climbing_movement_cost(ordinary, 10, (effect,)) == 10
+
+
 def test_font_of_magic_converts_slots_and_creates_temporary_slots():
     sorcerer = replace(
         _actor("font_of_magic"),
@@ -724,6 +821,10 @@ def test_patient_defense_and_step_of_wind_spend_ki():
     assert step.actor_after.resource_pools[0].current == 2
     assert step.state.turn_action.extra_movement_feet == monk.speed_feet
     assert step.active_effects[0].kind == "disengage_until_turn_end"
+    base_jump = jump_distances(monk)
+    step_jump = jump_distances(monk, step.active_effects)
+    assert step_jump.running_long_jump_feet == base_jump.running_long_jump_feet * 2
+    assert step_jump.running_high_jump_feet == base_jump.running_high_jump_feet * 2
 
 
 def test_martial_arts_and_flurry_queue_the_correct_unarmed_strikes():
@@ -817,8 +918,19 @@ def test_divine_sense_spends_action_and_reports_types_without_locations():
         creature_type="fiend",
         position=Coordinate(3, 1),
     )
+    hidden_undead = replace(
+        fiend,
+        id=ActorId("hidden_undead"),
+        creature_type="undead",
+        position=Coordinate(1, 3),
+    )
+    board = BoardState()
+    board.add_wall(Coordinate(1, 1), Coordinate(1, 2))
 
-    result = resolve_divine_sense(_state(paladin, fiend))
+    result = resolve_divine_sense(
+        _state(paladin, fiend, hidden_undead),
+        board=board,
+    )
 
     assert result.detected_creature_types == ("fiend",)
     assert result.state.turn_action.action_use == ActionUse.ACTION_USED

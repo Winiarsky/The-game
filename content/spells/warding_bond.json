@@ -6,7 +6,7 @@
     "srd_5_1_cc_by_4_0"
   ],
   "id": "warding_bond",
-  "name": "Warding Bond",
+  "name": "Więź ochronna",
   "level": 2,
   "school": "abjuration",
   "casting_time": "action",
@@ -20,7 +20,8 @@
       {
         "item_id": "spell_component_warding_bond",
         "label": "a pair of platinum rings worth at least 50 gp each, which you and the target must wear for the duration",
-        "minimum_value_cp": 5000
+        "minimum_value_cp": 5000,
+        "quantity": 2
       }
     ]
   },
@@ -33,7 +34,7 @@
   "effect": {
     "kind": "combat_action",
     "action_type": "targeted_status",
-    "label": "Warding Bond",
+    "label": "Więź ochronna",
     "target_count": 1,
     "cast_flag": "cast_warding_bond",
     "instructions": "Przez godzinę, gdy cel jest w 60 stopach, ma +1 KP i save oraz odporność na wszystkie obrażenia; rzucający otrzymuje tyle samo obrażeń.",

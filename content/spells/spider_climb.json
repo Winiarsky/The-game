@@ -6,7 +6,7 @@
     "srd_5_1_cc_by_4_0"
   ],
   "id": "spider_climb",
-  "name": "Spider Climb",
+  "name": "Pajęcza wspinaczka",
   "level": 2,
   "school": "transmutation",
   "casting_time": "action",
@@ -32,7 +32,7 @@
   "effect": {
     "kind": "combat_action",
     "action_type": "targeted_status",
-    "label": "Spider Climb",
+    "label": "Pajęcza wspinaczka",
     "target_count": 1,
     "cast_flag": "cast_spider_climb",
     "instructions": "Podczas koncentracji cel zyskuje climb speed równą szybkości i może chodzić po ścianach oraz suficie bez użycia rąk.",

@@ -1,0 +1,117 @@
+{
+  "challenges": [
+    {
+      "id": "exploration_course_trial",
+      "zone_id": "exploration_course",
+      "name": "Tor testowy",
+      "goals": [
+        {
+          "id": "test_obstacle",
+          "label": "Przetestuj przeszkodę",
+          "description": "Wybierz standardowy test, przedmiot, broń albo czar i sprawdź pełny przepływ eksploracji.",
+          "followup_prompt": "Co testujecie i w jaki sposób?",
+          "suggested_tags": ["climbing","unlock","break","search","creative"],
+          "accepted_source_tags": ["climbing_aid","unlock","lockpicking","break","damage_object","ignite","pry"],
+          "resolution_mode": "check",
+          "description_mode": "optional",
+          "participant_mode": "allow",
+          "check_participants": "single_actor",
+          "allowed_check_participants": ["single_actor","lead_with_help","whole_party"]
+        }
+      ],
+      "progress_required": 99,
+      "completed_flag": "exploration_course_completed",
+      "llm_policy": {
+        "allowed_approach_tags": ["climbing","unlock","break","search","creative"],
+        "allowed_complications": ["próba_do_powtórzenia"],
+        "allowed_consequence_types": ["add_complication","none"],
+        "dc_range": [5,25],
+        "dc_policy": {
+          "tiers": {
+            "automatic": {"dc":5,"label":"automatyczne","guidance":"Stanowisko nie stawia realnego oporu."},
+            "easy": {"dc":10,"label":"łatwe","guidance":"Standardowe urządzenie treningowe."}
+          },
+          "allowed_tiers": ["automatic","easy"],
+          "default_tier": "easy"
+        }
+      },
+      "options": [
+        {
+          "id": "generic_course_check",
+          "label": "Wykonaj próbę",
+          "color": "interactive",
+          "description": "Uniwersalna próba toru. Konkretna metoda i źródło działania są wybierane przed rzutem.",
+          "ability_check": {
+            "ability": "strength",
+            "skill": "athletics",
+            "dc": 12
+          },
+          "progress_on_success": 1,
+          "progress_on_failure": 0,
+          "failure_complication": "próba_do_powtórzenia",
+          "tags": ["climbing","unlock","break","search","creative"],
+          "success_message": "Stanowisko potwierdza poprawne wykonanie próby.",
+          "failure_message": "Stanowisko pozostaje gotowe; możecie spróbować inną metodą.",
+          "critical_failure_message": "Mechanizm blokuje się na chwilę, po czym automatycznie wraca do pozycji startowej."
+        },
+        {
+          "id": "training_fall_check",
+          "label": "Zasymuluj upadek",
+          "color": "warning",
+          "description": "Wejdź na bezpieczną wieżę ćwiczebną. Nieudany test uruchamia okno reakcji Powolnego opadania przed obrażeniami.",
+          "ability_check": {
+            "ability": "dexterity",
+            "skill": "acrobatics",
+            "dc": 15
+          },
+          "progress_on_success": 0,
+          "progress_on_failure": 0,
+          "tags": ["climbing","falling"],
+          "success_message": "Bohater schodzi bezpiecznie; aby przetestować reakcję, powtórz próbę z wynikiem poniżej ST.",
+          "failure_message": "Platforma zwalnia zabezpieczenie i rozpoczyna kontrolowany upadek.",
+          "critical_failure_message": "Platforma zwalnia zabezpieczenie i rozpoczyna kontrolowany upadek.",
+          "hazards": [
+            {
+              "id": "training_fall",
+              "label": "Upadek treningowy",
+              "trigger": "failure",
+              "narration": "Bohater spada z wieży ćwiczebnej. To moment na reakcję Powolnego opadania.",
+              "saving_throw": {
+                "ability": "dexterity",
+                "dc": 12,
+                "damage_on_success": "half",
+                "success_effect_label": "połowa obrażeń",
+                "failure_effect_label": "pełne obrażenia"
+              },
+              "damage": {
+                "fixed": 10,
+                "damage_type": "bludgeoning"
+              },
+              "success_message": "Bohater amortyzuje część uderzenia.",
+              "failure_message": "Bohater uderza o matę treningową."
+            },
+            {
+              "id": "training_fall_critical",
+              "label": "Upadek treningowy",
+              "trigger": "critical_failure",
+              "narration": "Bohater spada z wieży ćwiczebnej. To moment na reakcję Powolnego opadania.",
+              "saving_throw": {
+                "ability": "dexterity",
+                "dc": 12,
+                "damage_on_success": "half",
+                "success_effect_label": "połowa obrażeń",
+                "failure_effect_label": "pełne obrażenia"
+              },
+              "damage": {
+                "fixed": 10,
+                "damage_type": "bludgeoning"
+              },
+              "success_message": "Bohater amortyzuje część uderzenia.",
+              "failure_message": "Bohater uderza o matę treningową."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

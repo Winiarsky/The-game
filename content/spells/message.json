@@ -1,7 +1,7 @@
 {
   "schema": "dnd_board_game.spell", "schema_version": 1,
   "ruleset_id": "dnd_5e_2014", "source_pack_ids": ["srd_5_1_cc_by_4_0"],
-  "id": "message", "name": "Message", "level": 0,
+  "id": "message", "name": "Wiadomość", "level": 0,
   "school": "transmutation", "casting_time": "action",
   "range": {"kind": "distance", "feet": 120},
   "components": {"verbal": true, "somatic": true, "materials": [{"item_id": "spell_component_message", "label": "krótki kawałek miedzianego drutu"}]},

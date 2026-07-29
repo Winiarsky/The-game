@@ -50,7 +50,7 @@ from .class_feature_rules import (
     transform_into_wild_shape,
     validate_preserve_life_allocations,
 )
-from dnd_board_game.world import Coordinate
+from dnd_board_game.world import BoardState, Coordinate, line_of_sight_clear
 
 
 @dataclass(frozen=True, slots=True)
@@ -377,6 +377,7 @@ def resolve_channel_turn(
     *,
     action_id: str,
     saving_rolls: dict[str, int],
+    board: BoardState | None = None,
 ) -> ChannelTurnResolution:
     actor = current_actor(state)
     target_types = (
@@ -402,6 +403,10 @@ def resolve_channel_turn(
         and not target.is_defeated()
         and target.creature_type in target_types
         and grid_distance_feet(actor.position, target.position) <= 30
+        and (
+            board is None
+            or line_of_sight_clear(board, actor.position, target.position)
+        )
     )
     eligible_ids = tuple(str(target.id) for target in eligible)
     if set(saving_rolls) != set(eligible_ids):
@@ -640,6 +645,15 @@ def _resolve_bonus_strikes(
     actor = current_actor(state)
     if not actor_has_feature(actor, feature_id):
         raise ValueError(f"Aktywna postać nie posiada cechy {feature_id}.")
+    if feature_id == "martial_arts" and any(
+        item.equipped
+        and (
+            getattr(item, "armor_category", None) is not None
+            or item.kind == "shield"
+        )
+        for item in actor.inventory
+    ):
+        raise ValueError("Martial Arts wymaga braku pancerza i tarczy.")
     if not state.turn_action.attack_action_active or state.turn_action.attacks_used < 1:
         raise ValueError("Najpierw wykonaj co najmniej jeden atak w akcji Attack.")
     if state.turn_action.bonus_attacks_remaining:
@@ -671,7 +685,11 @@ def _resolve_bonus_strikes(
     )
 
 
-def resolve_divine_sense(state: CombatState) -> DivineSenseResolution:
+def resolve_divine_sense(
+    state: CombatState,
+    *,
+    board: BoardState | None = None,
+) -> DivineSenseResolution:
     """Detect relevant creature types in the encounter without revealing locations."""
     actor = current_actor(state)
     if not actor_has_feature(actor, "divine_sense"):
@@ -695,6 +713,10 @@ def resolve_divine_sense(state: CombatState) -> DivineSenseResolution:
                 and not target.is_defeated()
                 and target.creature_type in {"celestial", "fiend", "undead"}
                 and grid_distance_feet(actor.position, target.position) <= 60
+                and (
+                    board is None
+                    or line_of_sight_clear(board, actor.position, target.position)
+                )
             }
         )
     )

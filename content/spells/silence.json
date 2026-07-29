@@ -6,7 +6,7 @@
     "srd_5_1_cc_by_4_0"
   ],
   "id": "silence",
-  "name": "Silence",
+  "name": "Cisza",
   "level": 2,
   "school": "illusion",
   "casting_time": "action",
@@ -28,10 +28,14 @@
   "effect": {
     "kind": "combat_action",
     "action_type": "targeted_status",
-    "label": "Silence",
+    "label": "Cisza",
     "effect_kind": "silence_zone",
     "target_faction": "any",
-    "value": 20,
+    "area": {
+      "shape": "radius",
+      "radius_feet": 20,
+      "target_mode": "all_creatures"
+    },
     "cast_flag": "cast_silence",
     "instructions": "Podczas koncentracji kula 20 stóp nie przepuszcza dźwięku; istoty są Deafened i nie można rzucać czarów z komponentem werbalnym.",
     "resolution_mode": "automatic",

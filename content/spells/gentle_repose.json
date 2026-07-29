@@ -6,7 +6,7 @@
     "srd_5_1_cc_by_4_0"
   ],
   "id": "gentle_repose",
-  "name": "Gentle Repose",
+  "name": "Łagodny spoczynek",
   "level": 2,
   "school": "necromancy",
   "casting_time": "action",
@@ -24,10 +24,10 @@
     ]
   },
   "duration": {
-    "kind": "ten_minutes",
+    "kind": "ten_days",
     "amount": 1
   },
-  "concentration": true,
+  "concentration": false,
   "ritual": true,
   "effect": {
     "kind": "exploration",

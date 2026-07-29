@@ -116,6 +116,7 @@ class AttackSource:
     damage_divisor: int = 1
     concentration: bool = False
     miss_damage_on_failure: str = "none"
+    save_disadvantage_creature_types: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if self.upcast_damage_dice_per_level < 0:
@@ -134,6 +135,11 @@ class AttackSource:
             raise ValueError("Miss damage mode must be none or half.")
         if any(not value.strip() for value in self.tabletop_riders):
             raise ValueError("Attack tabletop riders cannot be empty.")
+        if any(
+            not value.strip()
+            for value in self.save_disadvantage_creature_types
+        ):
+            raise ValueError("Save-disadvantage creature types cannot be empty.")
         if self.range_feet <= 0:
             raise ValueError("Attack source range_feet must be positive.")
         if self.reach_feet is not None and (
@@ -211,7 +217,17 @@ def unarmed_strike_source(actor: Actor) -> AttackSource:
     feature_ids = {
         feature.feature_id for feature in getattr(actor, "features", ())
     }
-    martial_arts = "martial_arts" in feature_ids
+    martial_arts = (
+        "martial_arts" in feature_ids
+        and not any(
+            item.equipped
+            and (
+                getattr(item, "armor_category", None) is not None
+                or item.kind == "shield"
+            )
+            for item in actor.inventory
+        )
+    )
     ability = (
         "dexterity"
         if martial_arts
@@ -496,12 +512,39 @@ def legal_attack_targets(
     active_effects: tuple[ActiveEffect, ...] = (),
 ) -> tuple[CombatTarget, ...]:
     targets: list[CombatTarget] = []
+    attacker_space = next(
+        (
+            effect.object_id
+            for effect in active_effects
+            if effect.actor_id == str(attacker.id)
+            and effect.kind == "extradimensional_space"
+        ),
+        None,
+    )
     for actor in actors:
         if actor.id == attacker.id:
             continue
         if actor.faction == attacker.faction or actor.faction == Faction.NEUTRAL:
             continue
         if is_hidden_from(hidden_states, str(actor.id), str(attacker.id)):
+            continue
+        target_space = next(
+            (
+                effect.object_id
+                for effect in active_effects
+                if effect.actor_id == str(actor.id)
+                and effect.kind == "extradimensional_space"
+            ),
+            None,
+        )
+        if attacker_space != target_space:
+            continue
+        if any(
+            effect.kind == "sanctuary_block_target"
+            and effect.actor_id == str(attacker.id)
+            and effect.target_actor_id == str(actor.id)
+            for effect in active_effects
+        ):
             continue
         target = actor_as_combat_target(actor, active_effects)
         if not is_public_attack_target(target):

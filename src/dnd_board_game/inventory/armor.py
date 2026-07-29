@@ -71,7 +71,22 @@ def effective_armor_class(actor: Actor) -> int:
     from dnd_board_game.actors import actor_has_feature
 
     armor = equipped_body_armor(actor.inventory)
+    shield_equipped = any(
+        item.kind == "shield"
+        and item.equipped
+        and item.available
+        and len(item.held_in) == 1
+        for item in actor.inventory
+    )
     base = body_armor_class(actor, armor) if armor is not None else actor.ac
+    if (
+        armor is None
+        and shield_equipped
+        and actor_has_feature(actor, "unarmored_defense_wisdom")
+    ):
+        from dnd_board_game.rules import ability_modifier
+
+        base = 10 + ability_modifier(actor.ability_scores.dexterity)
     return (
         base
         + equipped_armor_class_bonus(actor.inventory)
@@ -101,11 +116,27 @@ def armor_speed_penalty_feet(actor: Actor) -> int:
 
 def effective_speed_feet(actor: Actor) -> int:
     from .magic_items import MagicItemEffectKind, magic_item_effect_total
+    from dnd_board_game.actors import actor_has_feature
 
+    armor = equipped_body_armor(actor.inventory)
+    shield_equipped = any(
+        item.kind == "shield"
+        and item.equipped
+        and item.available
+        for item in actor.inventory
+    )
+    unarmored_movement = (
+        10
+        if actor_has_feature(actor, "unarmored_movement_10")
+        and armor is None
+        and not shield_equipped
+        else 0
+    )
     speed = max(
         0,
         actor.speed_feet
         - armor_speed_penalty_feet(actor)
+        + unarmored_movement
         + magic_item_effect_total(actor, MagicItemEffectKind.SPEED_BONUS_FEET),
     )
     if actor.exhaustion_level >= 5:

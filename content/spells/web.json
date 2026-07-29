@@ -6,7 +6,7 @@
     "srd_5_1_cc_by_4_0"
   ],
   "id": "web",
-  "name": "Web",
+  "name": "Sieć",
   "level": 2,
   "school": "conjuration",
   "casting_time": "action",
@@ -33,14 +33,18 @@
   "effect": {
     "kind": "combat_action",
     "action_type": "targeted_status",
-    "label": "Web",
-    "effect_kind": "apply_condition",
-    "condition": "restrained",
+    "label": "Sieć",
+    "effect_kind": "web_zone",
     "save_ability": "dexterity",
-    "target_faction": "enemy",
-    "target_count": 20,
+    "target_faction": "any",
+    "area": {
+      "shape": "cube",
+      "length_feet": 20,
+      "width_feet": 20,
+      "target_mode": "all_creatures"
+    },
     "cast_flag": "cast_web",
-    "instructions": "Sześcian 20 stóp jest lekkim zasłonięciem i trudnym terenem. Wchodzący/startujący wykonują Dex save albo Restrained; akcja Str uwalnia.",
+    "instructions": "Sześcian 20 stóp jest lekkim zasłonięciem i trudnym terenem. Wchodzący/startujący wykonują Dex save albo zostają Unieruchomieni; akcja i test Siły przeciw ST czaru uwalniają.",
     "resolution_mode": "automatic",
     "board_relevance": "direct"
   }

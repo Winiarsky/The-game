@@ -9,6 +9,7 @@ from dnd_board_game.rules import D20RollRequest, RollMode, RollModifier, RollMod
 from dnd_board_game.world import BoardState, Coordinate, bresenham_line, line_of_sight_clear
 
 from .attack_flow import AttackKind, AttackSource, effective_attack_kind
+from .conditions import ConditionState, condition_blocks_actions
 from .scene import SceneObject
 
 
@@ -41,6 +42,7 @@ def evaluate_attack_positioning(
     source: AttackSource,
     actors: Sequence[Actor],
     scene_objects: Sequence[SceneObject] = (),
+    condition_states: Sequence[ConditionState] = (),
     *,
     flanking_enabled: bool = True,
 ) -> AttackPositioning:
@@ -92,6 +94,10 @@ def evaluate_attack_positioning(
             and actor.faction == attacker.faction
             and actor.faction != Faction.NEUTRAL
             and not actor.is_defeated()
+            and not condition_blocks_actions(
+                condition_states,
+                str(actor.id),
+            )
             and _adjacent(actor, target)
             and _opposite_sides(attacker, actor, target)
             and line_of_sight_clear(board, actor.position, target.position)

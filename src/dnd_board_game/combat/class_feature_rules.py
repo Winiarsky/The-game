@@ -19,6 +19,7 @@ from dnd_board_game.actors import (
     spend_actor_resource,
 )
 from dnd_board_game.rules import (
+    ActiveEffect,
     D20RollRequest,
     DiceExpression,
     RollModifier,
@@ -422,7 +423,10 @@ def open_hand_technique_save_dc(actor: Actor) -> int:
     return 8 + actor.proficiency_bonus + ability_modifier(actor.ability_scores.wisdom)
 
 
-def jump_distances(actor: Actor) -> JumpDistances:
+def jump_distances(
+    actor: Actor,
+    active_effects: tuple[object, ...] = (),
+) -> JumpDistances:
     strength = max(0, actor.ability_scores.strength)
     running_long = strength
     running_high = max(0, 3 + ability_modifier(strength))
@@ -430,6 +434,25 @@ def jump_distances(actor: Actor) -> JumpDistances:
         bonus = max(0, ability_modifier(actor.ability_scores.dexterity))
         running_long += bonus
         running_high += bonus
+    if any(
+        getattr(effect, "actor_id", "") == str(actor.id)
+        and getattr(effect, "kind", "") == "disengage_until_turn_end"
+        and getattr(effect, "object_id", "") == "class_feature:step_of_the_wind"
+        for effect in active_effects
+    ):
+        running_long *= 2
+        running_high *= 2
+    jump_multiplier = max(
+        (
+            int(getattr(effect, "value", 1))
+            for effect in active_effects
+            if getattr(effect, "actor_id", "") == str(actor.id)
+            and getattr(effect, "kind", "") == "jump_multiplier"
+        ),
+        default=1,
+    )
+    running_long *= jump_multiplier
+    running_high *= jump_multiplier
     return JumpDistances(
         running_long_jump_feet=running_long,
         standing_long_jump_feet=running_long // 2,
@@ -438,12 +461,21 @@ def jump_distances(actor: Actor) -> JumpDistances:
     )
 
 
-def climbing_movement_cost(actor: Actor, distance_feet: int) -> int:
+def climbing_movement_cost(
+    actor: Actor,
+    distance_feet: int,
+    active_effects: tuple[ActiveEffect, ...] = (),
+) -> int:
     if distance_feet < 0:
         raise ValueError("Dystans wspinaczki nie może być ujemny.")
     return (
         distance_feet
         if actor_has_feature(actor, "second_story_work")
+        or any(
+            effect.actor_id == str(actor.id)
+            and effect.kind == "spider_climb"
+            for effect in active_effects
+        )
         else distance_feet * 2
     )
 

@@ -1,7 +1,7 @@
 {
   "schema": "dnd_board_game.spell", "schema_version": 1,
   "ruleset_id": "dnd_5e_2014", "source_pack_ids": ["srd_5_1_cc_by_4_0"],
-  "id": "mage_hand", "name": "Mage Hand", "level": 0,
+  "id": "mage_hand", "name": "Dłoń maga", "level": 0,
   "school": "conjuration", "casting_time": "action",
   "range": {"kind": "distance", "feet": 30},
   "components": {"verbal": true, "somatic": true, "materials": []},

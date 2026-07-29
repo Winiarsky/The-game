@@ -402,6 +402,7 @@ class EnemyTurnFlowService:
         natural_roll_2: int | None = None,
         natural_rerolls: tuple[int, ...] = (),
         additional_modifiers: tuple[RollModifier, ...] = (),
+        active_effects: tuple[ActiveCombatEffect, ...] = (),
     ) -> EnemySavingThrowTransition:
         request = result.saving_throw_request
         source = result.source
@@ -422,6 +423,7 @@ class EnemyTurnFlowService:
             condition_states=result.state.condition_states,
             combat_actors=result.state.actors,
             situational_modifiers=additional_modifiers,
+            active_effects=active_effects,
         )
         base_components = result.base_damage_components or (
             DamageComponentInput(
@@ -441,7 +443,11 @@ class EnemyTurnFlowService:
                 for component in base_components
             )
         )
-        applied = apply_damage_result(target, damage)
+        applied = apply_damage_result(
+            target,
+            damage,
+            active_effects=active_effects,
+        )
         updated_state = replace_actor(result.state, applied.actor_after)
         outcome = "sukces" if saving_throw.success else "porażka"
         message = (

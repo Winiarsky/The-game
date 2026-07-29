@@ -150,6 +150,83 @@
           <button class="secondary" data-allow-busy="true" onclick="resetBoardScan()">Reset skanu</button>
         </div>
       </details>
+      <details class="card debug-panel" id="playground-panel" hidden open>
+        <summary>Arena mechanik</summary>
+        <p class="muted">Ustaw manekiny, rozpocznij normalny setup walki i wybieraj wszystkie cele oraz obszary na planszy.</p>
+        <label>Profil
+          <select id="playground-preset" onchange="applyPlaygroundPreset()">
+            <option value="standard">Standardowy cel</option>
+            <option value="armored">Opancerzony cel</option>
+            <option value="resistant">Odporność na obrażenia</option>
+            <option value="immune">Niewrażliwość na obrażenia</option>
+            <option value="vulnerable">Podatność na obrażenia</option>
+            <option value="condition">Odporność na stan</option>
+            <option value="undead">Nieumarły cel</option>
+            <option value="swarm">Grupa celów obszarowych</option>
+          </select>
+        </label>
+        <div class="form-grid">
+          <label>Liczba <input id="playground-dummy-count" type="number" min="1" max="6" value="3"></label>
+          <label>KP <input id="playground-ac" type="number" min="5" max="30" value="12"></label>
+          <label>PW <input id="playground-hp" type="number" min="1" max="999" value="20"></label>
+          <label>Szybkość (stopy) <input id="playground-speed" type="number" min="0" max="60" step="5" value="10"></label>
+          <label>Wszystkie cechy <input id="playground-ability-score" type="number" min="1" max="30" value="10"></label>
+        </div>
+        <label>Typ stworzenia
+          <select id="playground-creature-type">
+            <option value="construct">Konstrukt</option>
+            <option value="humanoid">Humanoid</option>
+            <option value="undead">Nieumarły</option>
+            <option value="beast">Bestia</option>
+            <option value="fey">Fey</option>
+            <option value="fiend">Czart</option>
+            <option value="dragon">Smok</option>
+            <option value="monstrosity">Monstrualność</option>
+            <option value="plant">Roślina</option>
+          </select>
+        </label>
+        <label>Reakcja na typ obrażeń
+          <select id="playground-affinity">
+            <option value="none">Brak</option>
+            <option value="resistance">Odporność — połowa obrażeń</option>
+            <option value="immunity">Niewrażliwość — 0 obrażeń</option>
+            <option value="vulnerability">Podatność — podwójne obrażenia</option>
+          </select>
+        </label>
+        <label>Typ obrażeń
+          <select id="playground-damage-type">
+            <option value="fire">Ogień</option>
+            <option value="cold">Zimno</option>
+            <option value="lightning">Błyskawice</option>
+            <option value="poison">Trucizna</option>
+            <option value="necrotic">Nekrotyczne</option>
+            <option value="radiant">Promieniste</option>
+            <option value="force">Moc</option>
+            <option value="psychic">Psychiczne</option>
+            <option value="slashing">Cięte</option>
+            <option value="piercing">Kłute</option>
+            <option value="bludgeoning">Obuchowe</option>
+          </select>
+        </label>
+        <label>Odporność na stan
+          <select id="playground-condition-immunity">
+            <option value="">Brak</option>
+            <option value="charmed">Zauroczony</option>
+            <option value="frightened">Przerażony</option>
+            <option value="poisoned">Zatruty</option>
+            <option value="prone">Powalony</option>
+            <option value="restrained">Unieruchomiony</option>
+            <option value="stunned">Ogłuszony</option>
+            <option value="paralyzed">Sparaliżowany</option>
+            <option value="unconscious">Nieprzytomny</option>
+          </select>
+        </label>
+        <div class="row panel-actions-row">
+          <button onclick="configurePlaygroundTrial()">Przygotuj próbę</button>
+          <button class="secondary" data-allow-busy="true" onclick="resetPlaygroundTrial()">Resetuj próbę</button>
+        </div>
+        <div id="playground-summary" class="muted"></div>
+      </details>
       <details class="card debug-panel">
         <summary>Historia komunikatów</summary>
         <div id="messages"></div>
@@ -189,7 +266,6 @@
       </div>
       <div id="chat-stream">
         <div id="scene-conversation"></div>
-        <div id="interaction-goals" class="interaction-goals"></div>
         <div id="chat-typing" class="chat-typing" hidden>
           <span></span><span></span><span></span>
           <em id="chat-typing-label">MG zastanawia się nad odpowiedzią…</em>
@@ -198,6 +274,7 @@
           <span id="chat-retry-message">Nie udało się uzyskać odpowiedzi MG.</span>
           <button class="secondary" data-allow-busy="true" onclick="retryLastGmRequest()">Spróbuj ponownie</button>
         </div>
+        <div id="interaction-goals" class="interaction-goals conversation-system-card chat-flow-entry"></div>
         <div id="interaction-state-card" class="chat-resolution conversation-system-card interaction-state-card" aria-live="polite" hidden>
           <div class="interaction-state-head">
             <div>
@@ -230,16 +307,11 @@
             <button id="result-ack-button" onclick="ackResult()">Kontynuuj rozmowę</button>
           </section>
         </div>
-      </div>
-      <div id="chat-composer">
-        <div class="gm-chat-label"><b>Zapytaj MG</b><span>To jest rozmowa, nie deklaracja działania ani rzut.</span></div>
-        <div class="chat-input-wrap">
-          <div id="slash-command-menu" class="slash-command-menu" role="listbox" aria-label="Komendy" hidden></div>
-          <textarea id="action" placeholder="Napisz wiadomość do MG..." aria-controls="slash-command-menu" aria-expanded="false" autocomplete="off"></textarea>
-        </div>
-        <div class="row" style="margin-top:8px">
-          <button onclick="sendAction()">Wyślij</button>
-          <button id="short-rest-button" class="secondary" data-allow-busy="true" onclick="startShortRest()">Krótki odpoczynek</button>
+        <div id="chat-utility-actions" class="chat-utility-actions">
+          <button id="gm-chat-trigger" class="secondary" type="button" onclick="openGmChatDialog()">
+            Zapytaj MG
+          </button>
+          <span>Opcjonalna swobodna rozmowa — nie rozpoczyna testu ani działania.</span>
         </div>
       </div>
     </div>
@@ -257,6 +329,26 @@
     </div>
   </section>
 </main>
+<dialog id="gm-chat-dialog" class="gm-chat-dialog" aria-labelledby="gm-chat-dialog-title" onclose="closeSlashCommandMenu()">
+  <form id="chat-composer" class="gm-chat-dialog-card" onsubmit="submitGmChat(event)">
+    <div class="gm-chat-dialog-head">
+      <div>
+        <span class="muted">Rozmowa opcjonalna</span>
+        <h2 id="gm-chat-dialog-title">Zapytaj MG</h2>
+      </div>
+      <button type="button" class="secondary gm-chat-dialog-close" onclick="closeGmChatDialog()" aria-label="Zamknij">×</button>
+    </div>
+    <p class="muted">To jest swobodna rozmowa. Nie wybiera kafelka, nie deklaruje działania i nie uruchamia rzutu.</p>
+    <div class="chat-input-wrap">
+      <div id="slash-command-menu" class="slash-command-menu" role="listbox" aria-label="Komendy" hidden></div>
+      <textarea id="action" placeholder="Napisz wiadomość do MG..." aria-controls="slash-command-menu" aria-expanded="false" autocomplete="off"></textarea>
+    </div>
+    <div class="row gm-chat-dialog-actions">
+      <button type="button" class="secondary" onclick="closeGmChatDialog()">Anuluj</button>
+      <button type="submit">Wyślij wiadomość</button>
+    </div>
+  </form>
+</dialog>
 <script>window.EXPLORATION_SLASH_COMMANDS = {{ slash_commands | tojson }};</script>
 <script src="{{ url_for('static', filename='exploration.js') }}"></script>
 </body>

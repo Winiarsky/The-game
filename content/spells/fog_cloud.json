@@ -6,7 +6,7 @@
     "srd_5_1_cc_by_4_0"
   ],
   "id": "fog_cloud",
-  "name": "Fog Cloud",
+  "name": "Chmura mgły",
   "level": 1,
   "school": "conjuration",
   "casting_time": "action",
@@ -28,10 +28,11 @@
   "effect": {
     "kind": "combat_action",
     "action_type": "targeted_status",
-    "label": "Fog Cloud",
+    "label": "Chmura mgły",
     "effect_kind": "obscuring_zone",
     "target_faction": "any",
     "value": 20,
+    "area": {"shape": "radius", "radius_feet": 20, "target_mode": "all_creatures"},
     "upcast_value_per_level": 20,
     "cast_flag": "cast_fog_cloud",
     "instructions": "Utwórz silnie zasłoniętą kulę mgły o promieniu 20 stóp podczas koncentracji; promień +20 stóp za wyższy slot.",

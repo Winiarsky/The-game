@@ -7,6 +7,7 @@ from dnd_board_game.rules import (
     EXPERIENCE_THRESHOLDS,
     award_experience,
     award_party_experience,
+    award_party_experience_per_actor,
     experience_progress,
     level_for_experience,
 )
@@ -89,3 +90,28 @@ def test_party_experience_is_split_between_living_player_characters() -> None:
     assert result.experience_per_actor == 50
     assert result.discarded_remainder == 1
     assert [actor.experience_points for actor in result.actors] == [50, 60, 0]
+
+
+def test_fixed_party_experience_awards_every_hero_the_same_amount() -> None:
+    actors = (
+        replace(_actor(), uses_death_saves=True),
+        replace(
+            _actor(),
+            id=ActorId("second"),
+            experience_points=25,
+            uses_death_saves=True,
+        ),
+        replace(
+            _actor(),
+            id=ActorId("enemy"),
+            faction=Faction.ENEMY,
+            uses_death_saves=False,
+        ),
+    )
+
+    result = award_party_experience_per_actor(actors, 300)
+
+    assert result.total_experience == 600
+    assert result.experience_per_actor == 300
+    assert result.discarded_remainder == 0
+    assert [actor.experience_points for actor in result.actors] == [300, 325, 0]

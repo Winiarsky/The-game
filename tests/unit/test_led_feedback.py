@@ -229,3 +229,40 @@ def test_board_session_skips_duplicate_frame_but_renders_scan_brightness_change(
         "replace": True,
         "transition_ms": 80,
     }
+
+
+def test_board_session_animates_projectile_one_field_at_a_time():
+    class AtomicConnection:
+        def __init__(self):
+            self.calls = []
+
+        def set_leds(self, positions, rgb_color, **kwargs):
+            self.calls.append((tuple(positions), rgb_color, kwargs))
+
+        def leds_off(self):
+            raise AssertionError("Animacja atomowa nie powinna osobno gasić planszy.")
+
+    connection = AtomicConnection()
+    adapter = BoardSessionAdapter(connection)
+
+    adapter.animate_projectile(
+        (
+            Coordinate(1, 1),
+            Coordinate(2, 1),
+            Coordinate(3, 2),
+            Coordinate(4, 2),
+        ),
+        step_ms=0,
+    )
+
+    assert [call[0] for call in connection.calls] == [
+        ((2, 1),),
+        ((3, 2),),
+        ((4, 2),),
+    ]
+    assert all(
+        call[1] == list(LedColor.RANGED_PROJECTILE)
+        for call in connection.calls
+    )
+    assert all(call[2]["replace"] is True for call in connection.calls)
+    assert all(call[2]["transition_ms"] == 0 for call in connection.calls)

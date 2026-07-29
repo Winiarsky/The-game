@@ -6,7 +6,7 @@
     "srd_5_1_cc_by_4_0"
   ],
   "id": "divine_favor",
-  "name": "Divine Favor",
+  "name": "Boska przychylność",
   "level": 1,
   "school": "evocation",
   "casting_time": "bonus_action",
@@ -27,7 +27,7 @@
   "effect": {
     "kind": "combat_action",
     "action_type": "targeted_status",
-    "label": "Divine Favor",
+    "label": "Boska przychylność",
     "effect_kind": "divine_favor_damage",
     "target_faction": "self",
     "value": 4,

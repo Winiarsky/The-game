@@ -28,11 +28,11 @@ def breath_weapon_attack_source(actor: Actor) -> AttackSource | None:
         id="base",
         damage_type=damage_type,
         dice=DiceExpression(2, 6),
-        label="Breath Weapon",
+        label="Broń oddechowa",
     )
     return AttackSource(
         id="breath_weapon",
-        name="Breath Weapon",
+        name="Broń oddechowa",
         source_type=AttackSourceType.CUSTOM,
         range_feet=area.length_feet,
         attack_kind=AttackKind.RANGED,

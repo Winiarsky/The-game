@@ -12,13 +12,24 @@ from dnd_board_game.actors import (
     skill_roll_modifiers,
 )
 from dnd_board_game.inventory import armor_skill_roll_request
-from dnd_board_game.combat import HiddenState, resolve_hide
+from dnd_board_game.combat import (
+    ActiveCombatEffect,
+    HiddenState,
+    pass_without_trace_bonus,
+    resolve_hide,
+)
 from dnd_board_game.exploration import (
     EncounterOpeningOutcome,
     EncounterOpeningResolution,
     PrecombatStealthAttempt,
 )
-from dnd_board_game.rules import D20RollInput, D20RollRequest, resolve_d20_roll
+from dnd_board_game.rules import (
+    D20RollInput,
+    D20RollRequest,
+    RollModifier,
+    RollModifierType,
+    resolve_d20_roll,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,6 +62,7 @@ def resolve_precombat_stealth(
     natural_roll_2: int | None = None,
     passive_perception_adjustments: Mapping[str, int] | None = None,
     automatically_hidden_from_actor_ids: Sequence[str] = (),
+    active_effects: Sequence[ActiveCombatEffect] = (),
 ) -> PrecombatStealthResolution:
     actor = next((candidate for candidate in actors if str(candidate.id) == actor_id), None)
     if actor is None:
@@ -69,6 +81,20 @@ def resolve_precombat_stealth(
         ),
         ExhaustionRollKind.ABILITY_CHECK,
     )
+    aura_bonus = pass_without_trace_bonus(actor, actors, active_effects)
+    if aura_bonus:
+        request = D20RollRequest(
+            mode=request.mode,
+            modifiers=(
+                *request.modifiers,
+                RollModifier(
+                    "Przejście bez śladu",
+                    aura_bonus,
+                    RollModifierType.SPELL,
+                    "pass_without_trace",
+                ),
+            ),
+        )
     if request.mode.value != "normal" and natural_roll_2 is None:
         raise ValueError("Ten test wymaga wpisania dwóch wyników d20.")
     roll = resolve_d20_roll(D20RollInput(request, natural_roll, natural_roll_2))
@@ -112,5 +138,13 @@ def hidden_states_from_precombat_attempts(
     )
 
 
-def precombat_stealth_modifier(actor: Actor) -> int:
-    return skill_modifier(actor, "stealth")
+def precombat_stealth_modifier(
+    actor: Actor,
+    actors: Sequence[Actor] = (),
+    active_effects: Sequence[ActiveCombatEffect] = (),
+) -> int:
+    return skill_modifier(actor, "stealth") + pass_without_trace_bonus(
+        actor,
+        actors,
+        active_effects,
+    )

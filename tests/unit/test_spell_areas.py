@@ -90,6 +90,20 @@ def test_cube_area_extends_from_caster_in_selected_direction() -> None:
     assert Coordinate(2, 2) not in positions
 
 
+def test_cube_area_can_use_a_remote_board_selected_center() -> None:
+    board = BoardState(BoardDimensions(cols=10, rows=10))
+    area = SpellArea(SpellAreaShape.CUBE, length_feet=20, width_feet=20)
+
+    positions = area_positions_for_center(board, Coordinate(4, 4), area)
+
+    assert len(positions) == 16
+    assert set(positions) == {
+        Coordinate(col, row)
+        for col in (3, 4, 5, 6)
+        for row in (3, 4, 5, 6)
+    }
+
+
 def test_cone_area_expands_from_direction():
     board = BoardState(BoardDimensions(cols=8, rows=8))
     area = SpellArea(SpellAreaShape.CONE, length_feet=15)

@@ -12,6 +12,7 @@ from dnd_board_game.actors import (
 )
 from dnd_board_game.combat import (
     ActiveCombatEffect,
+    apply_mirror_image_outcome,
     CombatState,
     CombatStatus,
     EnemyAutoTurnResult,
@@ -76,6 +77,10 @@ class CombatTurnFinalizationService:
                 str(result.enemy.id),
                 result.target.id if result.target is not None else None,
             )
+        updated_effects = apply_mirror_image_outcome(
+            updated_effects,
+            result.mirror_image_outcome,
+        )
         message = enemy_turn_message(result)
         return EnemyTurnCommitTransition(
             state=result.state,

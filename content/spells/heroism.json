@@ -6,7 +6,7 @@
     "srd_5_1_cc_by_4_0"
   ],
   "id": "heroism",
-  "name": "Heroism",
+  "name": "Heroizm",
   "level": 1,
   "school": "enchantment",
   "casting_time": "action",
@@ -27,7 +27,7 @@
   "effect": {
     "kind": "combat_action",
     "action_type": "targeted_status",
-    "label": "Heroism",
+    "label": "Heroizm",
     "effect_kind": "heroism_temp_hp",
     "target_faction": "ally",
     "target_count": 1,

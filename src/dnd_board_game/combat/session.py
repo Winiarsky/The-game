@@ -1061,9 +1061,14 @@ def use_dash(
 ) -> TurnActionUseResult:
     if actor.id != current_actor(state).id:
         return TurnActionUseResult(state, False, "To nie jest tura tego aktora.")
+    bonus_action_dash = actor_has_feature(actor, "cunning_action") or any(
+        effect.actor_id == str(actor.id)
+        and effect.kind == "bonus_action_dash"
+        for effect in active_effects
+    )
     action_result = (
         use_bonus_action(state)
-        if actor_has_feature(actor, "cunning_action")
+        if bonus_action_dash
         and state.turn_action.bonus_action_use == ActionUse.ACTION_AVAILABLE
         else use_turn_action(state)
     )

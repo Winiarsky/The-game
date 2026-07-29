@@ -30,6 +30,7 @@ from dnd_board_game.combat import (
     CombatState,
     CombatStatus,
     CombatCondition,
+    ConditionSaveTiming,
     DamageComponentInput,
     HealingSource,
     SpellSaveResult,
@@ -38,6 +39,7 @@ from dnd_board_game.combat import (
     attack_source_with_positioning,
     attack_source_with_combat_effects,
     attack_source_with_target_combat_effects,
+    apply_mirror_image_outcome,
     can_consume_spell_resource,
     can_use_attack_action,
     consume_next_attack_effects,
@@ -53,6 +55,7 @@ from dnd_board_game.combat import (
     dexterity_save_cover_modifiers,
     evaluate_attack_positioning,
     expend_thrown_weapon,
+    end_sanctuary_effects,
     grappled_actor_ids,
     grant_bonus_attacks,
     grid_distance_feet,
@@ -62,6 +65,8 @@ from dnd_board_game.combat import (
     replace_actor,
     record_ammunition_expenditure,
     resolve_attack,
+    resolve_actor_saving_throw,
+    resolve_mirror_image_redirect,
     set_two_weapon_trigger,
     select_attack_target,
     start_attack_action,
@@ -83,6 +88,9 @@ from dnd_board_game.rules import (
     EffectSourceType,
     EffectStackingPolicy,
     RollMode,
+    RollModifier,
+    SaveDamageOnSuccess,
+    SavingThrowRequest,
     apply_active_effect,
     resolve_d20_roll,
     roll_instruction,
@@ -230,7 +238,11 @@ class PlayerCombatActionFlowService:
         class_bonus_attack: bool = False,
     ) -> PlayerAttackTransition:
         attacker = _active_hero(state)
-        _require_usable_source(attacker, source)
+        _require_usable_source(
+            attacker,
+            source,
+            active_effects=active_effects,
+        )
         _require_attack_economy(
             state,
             attacker,
@@ -275,6 +287,7 @@ class PlayerCombatActionFlowService:
             source,
             state.actors,
             scene_objects,
+            state.condition_states,
         )
         pending = PendingPlayerAttack(
             attacker_id=str(attacker.id),
@@ -348,8 +361,86 @@ class PlayerCombatActionFlowService:
             attacker,
             target,
         )
+        sanctuary = next(
+            (
+                effect
+                for effect in active_effects
+                if effect.actor_id == str(target.id)
+                and effect.kind == "sanctuary"
+            ),
+            None,
+        )
+        if sanctuary is not None:
+            caster = (
+                _actor_by_id(state, sanctuary.source_actor_id)
+                if sanctuary.source_actor_id is not None
+                else target
+            )
+            save = resolve_actor_saving_throw(
+                attacker,
+                SavingThrowRequest(
+                    "wisdom",
+                    caster.spell_save_dc,
+                    "Sanktuarium",
+                    SaveDamageOnSuccess.NONE,
+                    dc_source_label=f"ST czarów: {caster.name}",
+                ),
+                natural_roll=rng.randint(1, 20),
+                condition_states=state.condition_states,
+                combat_actors=state.actors,
+            )
+            if not save.success:
+                blocked_effect = ActiveCombatEffect(
+                    id=f"sanctuary-block:{attacker.id}:{target.id}",
+                    actor_id=str(attacker.id),
+                    kind="sanctuary_block_target",
+                    label=f"Sanktuarium: {target.name}",
+                    object_id=f"spell:sanctuary:{target.id}",
+                    value=0,
+                    source_actor_id=sanctuary.source_actor_id,
+                    target_actor_id=str(target.id),
+                    duration=EffectDuration.UNTIL_TURN_END,
+                    stacking=EffectStackingPolicy.REFRESH,
+                    stacking_key=f"sanctuary-block:{attacker.id}:{target.id}",
+                )
+                updated_effects = apply_active_effect(
+                    active_effects,
+                    blocked_effect,
+                ).active_effects
+                return PlayerAttackTransition(
+                    state=state,
+                    active_effects=updated_effects,
+                    pending=None,
+                    board_message=(
+                        f"{attacker.name} nie przełamuje Sanktuarium "
+                        f"(Wis {save.total} przeciw ST {save.dc}). "
+                        "Wybierz na planszy inny legalny cel albo zakończ atak."
+                    ),
+                    message_title="Sanktuarium",
+                    message_body=(
+                        f"{attacker.name}: rzut Mądrości {save.total} przeciw "
+                        f"ST {save.dc} — porażka. {target.name} nie może być "
+                        "celem tego ataku; plansza pokaże pozostałe cele."
+                    ),
+                    event_type="ui_combat_sanctuary_blocked_attack",
+                    event_payload=(
+                        ("attacker_id", str(attacker.id)),
+                        ("target_id", str(target.id)),
+                        ("saving_throw", save.as_payload()),
+                    ),
+                    clear_combat_help=True,
+                    clear_movement_preview=True,
+                )
         if effective_source.save_ability:
-            _require_usable_source(attacker, effective_source)
+            _require_usable_source(
+                attacker,
+                effective_source,
+                active_effects=active_effects,
+            )
+            offensive_effects = end_sanctuary_effects(
+                active_effects,
+                str(attacker.id),
+            )
             if pending.twinned_target_id is not None:
                 twin = _actor_by_id(state, pending.twinned_target_id)
                 confirmation = self._area_spells.confirm_area_spell(
@@ -359,8 +450,8 @@ class PlayerCombatActionFlowService:
                     target_ids=(pending.target_id, pending.twinned_target_id),
                     rng=rng,
                     saving_throw_modifiers_by_target={
-                        pending.target_id: dexterity_save_cover_modifiers(
-                            effective_source.save_ability,
+                        pending.target_id: _spell_save_cover_modifiers(
+                            effective_source,
                             positioning,
                         ),
                     },
@@ -378,8 +469,8 @@ class PlayerCombatActionFlowService:
                     target=target,
                     source=effective_source,
                     rng=rng,
-                    saving_throw_modifiers=dexterity_save_cover_modifiers(
-                        effective_source.save_ability,
+                    saving_throw_modifiers=_spell_save_cover_modifiers(
+                        effective_source,
                         positioning,
                     ),
                     heightened="metamagic_heightened" in effective_source.metamagic_ids,
@@ -391,7 +482,7 @@ class PlayerCombatActionFlowService:
             if all(save.damage_multiplier <= 0 for save in saves):
                 return PlayerAttackTransition(
                     state=confirmation.state,
-                    active_effects=active_effects,
+                    active_effects=offensive_effects,
                     pending=None,
                     board_message=(
                         f"{effective_source.name}: wszystkie cele unikają obrażeń."
@@ -420,7 +511,7 @@ class PlayerCombatActionFlowService:
             )
             return PlayerAttackTransition(
                 state=confirmation.state,
-                active_effects=active_effects,
+                active_effects=offensive_effects,
                 pending=updated_pending,
                 board_message=(
                     f"{effective_source.name}: {save.actor_name} nie zdaje rzutu obronnego. "
@@ -507,6 +598,7 @@ class PlayerCombatActionFlowService:
         natural_roll: int,
         natural_roll_2: int | None = None,
         natural_rerolls: tuple[int, ...] = (),
+        mirror_image_roll: int | None = None,
         scene_objects: tuple[SceneObject, ...] = (),
     ) -> PlayerAttackTransition:
         if pending.stage != "attack_roll":
@@ -577,6 +669,24 @@ class PlayerCombatActionFlowService:
                 natural_rerolls,
             )
         )
+        mirror_image = next(
+            (
+                effect
+                for effect in active_effects
+                if effect.actor_id == str(target.id)
+                and effect.kind == "mirror_image"
+                and effect.value > 0
+            ),
+            None,
+        )
+        if mirror_image is not None and mirror_image_roll is None:
+            raise ValueError("Rzuć dodatkowe k20 dla Lustrzanych odbić.")
+        mirror_outcome = resolve_mirror_image_redirect(
+            target,
+            attack_total=attack_roll.total,
+            active_effects=active_effects,
+            redirect_roll=int(mirror_image_roll or 1),
+        )
         if pending.twinned_second_attack:
             state_after_resource = state
         elif pending.class_bonus_attack:
@@ -646,11 +756,32 @@ class PlayerCombatActionFlowService:
                 effective_source.source_item_id,
                 selected.selected_target.position,
             )
+        attack_target = (
+            replace(selected.selected_target, ac=mirror_outcome.duplicate_ac)
+            if mirror_outcome is not None and mirror_outcome.redirected
+            else selected.selected_target
+        )
         resolution = resolve_attack(
-            AttackDeclaration(attacker, selected.selected_target, effective_source),
+            AttackDeclaration(attacker, attack_target, effective_source),
             attack_roll,
             selected.action_use,
         )
+        duplicate_was_hit = bool(
+            mirror_outcome is not None
+            and mirror_outcome.redirected
+            and resolution.hit
+        )
+        if mirror_outcome is not None and mirror_outcome.redirected:
+            mirror_outcome = replace(
+                mirror_outcome,
+                duplicate_hit=duplicate_was_hit,
+                duplicates_after=(
+                    mirror_outcome.duplicates_before - 1
+                    if duplicate_was_hit
+                    else mirror_outcome.duplicates_before
+                ),
+            )
+            resolution = replace(resolution, hit=False, critical=False)
         if resolution.hit and condition_hit_is_automatic_critical(
             state.condition_states,
             str(target.id),
@@ -667,6 +798,10 @@ class PlayerCombatActionFlowService:
             active_effects,
             str(attacker.id),
             selected.selected_target.id,
+        )
+        updated_effects = apply_mirror_image_outcome(
+            updated_effects,
+            mirror_outcome,
         )
         if effective_source.concentration and not pending.twinned_second_attack:
             updated_effects = remove_concentration_effects(
@@ -743,6 +878,24 @@ class PlayerCombatActionFlowService:
             resolution.hit,
             resolution.critical,
         )
+        if mirror_outcome is not None:
+            if mirror_outcome.redirected and duplicate_was_hit:
+                message += (
+                    f" Lustrzane odbicia: k20 {mirror_outcome.redirect_roll}; "
+                    f"atak trafia KP {mirror_outcome.duplicate_ac} i niszczy duplikat "
+                    f"({mirror_outcome.duplicates_after} pozostało)."
+                )
+            elif mirror_outcome.redirected:
+                message += (
+                    f" Lustrzane odbicia: k20 {mirror_outcome.redirect_roll}; "
+                    f"atak zostaje przekierowany, ale nie trafia KP "
+                    f"{mirror_outcome.duplicate_ac} duplikatu."
+                )
+            else:
+                message += (
+                    f" Lustrzane odbicia: k20 {mirror_outcome.redirect_roll}; "
+                    "atak nie został przekierowany."
+                )
         event_payload = (
             ("attacker_id", str(attacker.id)),
             ("target_id", selected.selected_target.id),
@@ -759,6 +912,20 @@ class PlayerCombatActionFlowService:
             ("two_weapon_bonus", pending.two_weapon_bonus),
             ("resource_pool_id", effective_source.resource_pool_id),
             ("resource_cost", effective_source.resource_cost if effective_source.resource_pool_id else 0),
+            (
+                "mirror_image",
+                (
+                    {
+                        "redirect_roll": mirror_outcome.redirect_roll,
+                        "redirected": mirror_outcome.redirected,
+                        "duplicate_ac": mirror_outcome.duplicate_ac,
+                        "duplicate_hit": mirror_outcome.duplicate_hit,
+                        "duplicates_after": mirror_outcome.duplicates_after,
+                    }
+                    if mirror_outcome is not None
+                    else None
+                ),
+            ),
         )
         revealed_state = replace(
             state_after_resource,
@@ -1020,6 +1187,7 @@ class PlayerCombatActionFlowService:
             damage_components=damage_components,
             saving_throw=save,
             critical=pending.critical,
+            active_effects=active_effects,
         )
         applied = resolution.applied_damage
         resolved_state = resolution.state
@@ -1041,10 +1209,15 @@ class PlayerCombatActionFlowService:
                 damage_components=damage_components,
                 saving_throw=twin_save,
                 critical=False,
+                active_effects=active_effects,
             )
             resolved_state = twin_resolution.state
             additional_applied.append(twin_resolution.applied_damage)
-        if applied.defeated_by_damage and actor_has_feature(
+        defeated_target = any(
+            result.defeated_by_damage
+            for result in (applied, *additional_applied)
+        )
+        if defeated_target and actor_has_feature(
             attacker,
             "dark_ones_blessing",
         ):
@@ -1059,6 +1232,15 @@ class PlayerCombatActionFlowService:
                     ),
                 ),
             )
+        branding_smite = next(
+            (
+                effect
+                for effect in active_effects
+                if effect.actor_id == str(attacker.id)
+                and effect.kind == "branding_smite"
+            ),
+            None,
+        )
         updated_effects = active_effects
         if pending.sneak_attack:
             updated_effects = commit_sneak_attack_hit(
@@ -1079,6 +1261,38 @@ class PlayerCombatActionFlowService:
                     and effect.kind == "branding_smite"
                 )
             )
+            if branding_smite is not None:
+                updated_effects = tuple(
+                    effect
+                    for effect in updated_effects
+                    if not (
+                        effect.actor_id == str(target.id)
+                        and effect.kind == "invisibility"
+                    )
+                )
+                glow = ActiveCombatEffect(
+                    id=f"branding-smite-glow:{attacker.id}:{target.id}",
+                    actor_id=str(target.id),
+                    kind="branding_smite_glow",
+                    label="Piętnujące porażenie: świeci",
+                    object_id="spell:branding_smite",
+                    value=5,
+                    source_actor_id=str(attacker.id),
+                    target_actor_id=str(target.id),
+                    source=EffectSource(
+                        EffectSourceType.SPELL,
+                        "branding_smite",
+                        "Piętnujące porażenie",
+                    ),
+                    duration=EffectDuration.CONCENTRATION,
+                    stacking=EffectStackingPolicy.REFRESH,
+                    stacking_key=f"concentration:{attacker.id}",
+                    spell_level=branding_smite.spell_level,
+                )
+                updated_effects = apply_active_effect(
+                    updated_effects,
+                    glow,
+                ).active_effects
         if (
             pending.hit is not False
             and effective_source.on_hit_effect_kind is not None
@@ -1129,6 +1343,28 @@ class PlayerCombatActionFlowService:
                 updated_effects,
                 on_hit_effect,
             ).active_effects
+            if effective_source.on_hit_effect_kind == "ray_of_enfeeblement":
+                target_actor = _actor_by_id(resolved_state, str(target.id))
+                application = apply_condition(
+                    resolved_state.condition_states,
+                    target_actor,
+                    CombatCondition.ENFEEBLED,
+                    source_actor_id=str(attacker.id),
+                    source_label=effective_source.name,
+                    duration=EffectDuration.CONCENTRATION,
+                    save_ability="constitution",
+                    save_dc=attacker.spell_save_dc,
+                    save_timing=ConditionSaveTiming.TURN_END,
+                    source_spell_id=effective_source.id,
+                    source_spell_level=(
+                        effective_source.cast_level
+                        or effective_source.spell_level
+                    ),
+                )
+                resolved_state = replace(
+                    resolved_state,
+                    condition_states=application.condition_states,
+                )
         next_pending = (
             _twinned_second_attack_pending(pending)
             if pending.twinned_target_id is not None
@@ -1181,7 +1417,11 @@ class PlayerCombatActionFlowService:
         scene_objects: tuple[SceneObject, ...] = (),
     ) -> PlayerAttackTransition:
         attacker = _active_hero(state)
-        _require_usable_source(attacker, source)
+        _require_usable_source(
+            attacker,
+            source,
+            active_effects=active_effects,
+        )
         pending = PendingPlayerAttack(
             str(attacker.id),
             target_id,
@@ -1378,7 +1618,12 @@ def _active_hero(state: CombatState) -> Actor:
     return actor
 
 
-def _require_usable_source(actor: Actor, source: AttackSource | HealingSource) -> None:
+def _require_usable_source(
+    actor: Actor,
+    source: AttackSource | HealingSource,
+    *,
+    active_effects: tuple[ActiveCombatEffect, ...] = (),
+) -> None:
     source_item_id = getattr(source, "source_item_id", None)
     if source_item_id is not None:
         items = tuple(
@@ -1411,6 +1656,10 @@ def _require_usable_source(actor: Actor, source: AttackSource | HealingSource) -
         ignore_verbal_somatic=(
             "metamagic_subtle" in getattr(source, "metamagic_ids", ())
         ),
+        verbal_components_blocked=(
+            "metamagic_subtle" not in getattr(source, "metamagic_ids", ())
+            and _actor_is_silenced(actor, active_effects)
+        ),
     )
     if cast_validation is not None and not cast_validation.valid:
         raise ValueError(" ".join(cast_validation.errors))
@@ -1442,6 +1691,15 @@ def _require_usable_source(actor: Actor, source: AttackSource | HealingSource) -
             raise ValueError(
                 f"{source.name} wymaga wolnej drugiej ręki do załadowania amunicji."
             )
+
+
+def _actor_is_silenced(
+    actor: Actor,
+    active_effects: tuple[ActiveCombatEffect, ...],
+) -> bool:
+    from dnd_board_game.combat import actor_in_silence_zone
+
+    return actor_in_silence_zone(actor, active_effects)
 
 
 def _consume_attack_source_resource(
@@ -1496,6 +1754,7 @@ def _validated_attack(
         source,
         state.actors,
         scene_objects,
+        state.condition_states,
     )
     if positioning.total_cover:
         raise ValueError("Cel ma pełną osłonę i nie może zostać zaatakowany.")
@@ -1651,6 +1910,18 @@ def _source_deals_damage(source: AttackSource) -> bool:
         component.dice is not None
         or int(component.fixed or 0) + component.modifier > 0
         for component in source.damage_components
+    )
+
+
+def _spell_save_cover_modifiers(
+    source: AttackSource,
+    positioning: AttackPositioning,
+) -> tuple[RollModifier, ...]:
+    if source.id == "sacred_flame":
+        return ()
+    return dexterity_save_cover_modifiers(
+        source.save_ability,
+        positioning,
     )
 
 

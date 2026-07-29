@@ -17,6 +17,7 @@ from dnd_board_game.actions import (
     parse_player_input,
     slash_help_message,
 )
+from dnd_board_game.ui.playground_cases import load_playground_audit_registry
 from dnd_board_game.application import (
     ClassFeatureReactionFlowService,
     CombatApproachInteractionPlan,
@@ -116,7 +117,9 @@ from dnd_board_game.application.exploration_action_sources import (
     selected_action_source,
 )
 from dnd_board_game.actors import (
+    AbilityScores,
     Actor,
+    DamageAffinityProfile,
     ExhaustionRollKind,
     Faction,
     FeatureGrant,
@@ -192,6 +195,7 @@ from dnd_board_game.combat import (
     expire_turn_end_effects,
     expire_turn_start_effects,
     expire_combat_effects,
+    expire_condition_states,
     finish_turn,
     advance_reaction_window,
     active_actor_led_feedback,
@@ -237,6 +241,7 @@ from dnd_board_game.combat import (
     objective_status_after_flags,
     pending_condition_saves,
     plan_sneak_attack,
+    remove_condition,
     resolve_condition_save,
     PreserveLifeAllocation,
     resolve_action_surge,
@@ -281,12 +286,14 @@ from dnd_board_game.combat import (
     doff_shield,
     equip_weapon,
     replace_actor,
+    move_moonbeam_zone,
     apply_damage_result,
     resolve_damage,
     resolve_spell_save,
     resolve_actor_trigger_events,
     resolve_combat_trigger_events,
     pickup_dropped_weapon,
+    poison_protection_roll_mode,
     open_reaction_window,
     reaction_available_for,
     use_actor_reaction,
@@ -306,7 +313,7 @@ from dnd_board_game.combat import (
     two_weapon_bonus_attack_source,
     use_turn_action,
 )
-from dnd_board_game.core.damage_types import damage_type_label_pl
+from dnd_board_game.core.damage_types import DamageType, damage_type_label_pl
 from dnd_board_game.exploration import (
     advance_exploration_time,
     CheckAggregation,
@@ -334,6 +341,9 @@ from dnd_board_game.exploration import (
     ExplorationOption,
     ExplorationOptionKind,
     ExplorationPoint,
+    DivinationTargetKind,
+    MagicMouthSpecification,
+    RopeTrickSpace,
     ExplorationResource,
     ExplorationState,
     ExplorationZone,
@@ -374,6 +384,11 @@ from dnd_board_game.exploration import (
     TravelPace,
     MECHANIC_TOOLS,
     active_option_bonuses_for_actor,
+    apply_timed_magic_effect,
+    decode_rope_trick,
+    encode_rope_trick,
+    enter_rope_trick,
+    exit_rope_trick,
     apply_goal_resolution_profile,
     apply_fixture_damage,
     apply_fixture_action,
@@ -390,6 +405,10 @@ from dnd_board_game.exploration import (
     fixture_runtime_state,
     fixture_scene_objects,
     clear_exploration_hidden,
+    locate_authored_target,
+    decode_magic_mouth,
+    encode_magic_mouth,
+    magic_mouth_message_for_event,
     detect_passive_traps,
     hide_exploration_actor,
     mechanic_payload_for_option,
@@ -503,6 +522,8 @@ from dnd_board_game.rules import (
     EffectEvent,
     EffectEventType,
     EffectDuration,
+    EffectSource,
+    EffectSourceType,
     RollMode,
     RollModifier,
     RollModifierType,
@@ -513,7 +534,9 @@ from dnd_board_game.rules import (
     apply_active_effect,
     apply_short_rest_slot_recovery,
     award_party_experience,
+    award_party_experience_per_actor,
     complete_long_rest,
+    experience_progress,
     expire_active_effects,
     resolve_d20_roll,
     roll_instruction,
@@ -529,6 +552,7 @@ from dnd_board_game.scenarios import (
     LoadedExploration,
     build_encounter_from_scenario,
     build_exploration_from_scenario,
+    compile_actor_combat_content,
     encounter_with_custom_party,
     load_scenario,
 )
@@ -539,7 +563,9 @@ from dnd_board_game.scenarios.loader import (
 )
 from dnd_board_game.runtime.session_observer import SessionObserver
 from dnd_board_game.world import (
+    bresenham_line,
     Coordinate,
+    line_of_sight_clear,
     MovementRangeResult,
     PathResult,
     movement_range,
@@ -588,6 +614,58 @@ PACT_WEAPON_FORM_IDS = (
     "morningstar", "pike", "quarterstaff", "rapier", "scimitar",
     "shortsword", "sickle", "spear", "trident", "war_pick",
     "warhammer", "whip",
+)
+COMBAT_CLASS_FEATURE_ACTION_IDS = frozenset(
+    {
+        "second_wind",
+        "action_surge",
+        "rage",
+        "reckless_attack",
+        "bardic_inspiration",
+        "lay_on_hands",
+        "preserve_life",
+        "patient_defense",
+        "step_of_the_wind",
+        "font_of_magic",
+        "martial_arts_bonus_attack",
+        "flurry_of_blows",
+        "divine_sense",
+        "sacred_weapon",
+        "wild_shape",
+        "turn_undead",
+        "turn_the_unholy",
+        "primeval_awareness",
+        "frenzy",
+        "pact_weapon",
+    }
+)
+BONUS_ACTION_CLASS_FEATURE_IDS = frozenset(
+    {
+        "bardic_inspiration",
+        "flurry_of_blows",
+        "font_of_magic",
+        "frenzy",
+        "martial_arts_bonus_attack",
+        "patient_defense",
+        "rage",
+        "second_wind",
+        "step_of_the_wind",
+    }
+)
+FREE_CLASS_FEATURE_ACTION_IDS = frozenset({"action_surge"})
+CONTEXT_COMBAT_ACTION_TYPES = frozenset(
+    {
+        "assisted_spell",
+        "concentration_attack_bonus",
+        "long_cast_effect",
+        "multi_target_damage",
+        "spell_debuff",
+        "spell_dispel",
+        "spell_movement",
+        "strength_potion",
+        "summon",
+        "targeted_status",
+    }
 )
 CONVERSATION_GM_TITLES = frozenset(
     {
@@ -1037,6 +1115,7 @@ class PendingCombatHelp:
     helper_id: str
     ally_ids: tuple[str, ...]
     target_ids: tuple[str, ...]
+    selected_ally_id: str = ""
 
     def as_payload(self, state: CombatState, active_effects: tuple[ActiveCombatEffect, ...]) -> dict[str, object]:
         return {
@@ -1051,6 +1130,14 @@ class PendingCombatHelp:
                 for actor in state.actors
                 if str(actor.id) in self.target_ids
             ],
+            "selected_ally": (
+                _combat_actor_payload(
+                    _actor_by_string_id_from_state(state, self.selected_ally_id),
+                    active_effects,
+                )
+                if self.selected_ally_id
+                else None
+            ),
         }
 
 
@@ -1063,6 +1150,32 @@ class PendingCombatReady:
         return {
             "actor": _combat_actor_payload(_actor_by_string_id_from_state(state, self.actor_id), active_effects),
             "triggers": [{"id": trigger, "label": _ready_trigger_label(trigger)} for trigger in self.triggers],
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class PlaygroundTrialConfig:
+    dummy_count: int = 3
+    armor_class: int = 12
+    hit_points: int = 20
+    speed_feet: int = 10
+    ability_score: int = 10
+    creature_type: str = "construct"
+    affinity: str = "none"
+    damage_type: DamageType = DamageType.FIRE
+    condition_immunity: str = ""
+
+    def as_payload(self) -> dict[str, object]:
+        return {
+            "dummy_count": self.dummy_count,
+            "armor_class": self.armor_class,
+            "hit_points": self.hit_points,
+            "speed_feet": self.speed_feet,
+            "ability_score": self.ability_score,
+            "creature_type": self.creature_type,
+            "affinity": self.affinity,
+            "damage_type": self.damage_type.value,
+            "condition_immunity": self.condition_immunity,
         }
 
 
@@ -1206,6 +1319,7 @@ class ExplorationUiSession:
         if self._fixed_session_id is None:
             self.observer = SessionObserver(_ui_session_id(), self.observation_dir)
         self.encounter_rng = random.Random(7)
+        self.playground_trial_config = PlaygroundTrialConfig()
         self.exploration = build_exploration_from_scenario(load_scenario(self.scenario_path))
         if self.custom_party:
             self.exploration = _exploration_with_custom_party(
@@ -1284,12 +1398,18 @@ class ExplorationUiSession:
         self.exploration_setup_is_initial = False
         self.post_interaction_setup_steps: tuple[SetupStep, ...] = ()
         self.selected_combat_movement_path = None
+        self.pending_spell_zone_move_effect_id = ""
         self.encounter_setup_flow: EncounterSetupFlow | None = None
         self.encounter_initiative_flow: EncounterInitiativeFlow | None = None
         self.combat_state: CombatState | None = None
         self.resolved_encounter_trigger_ids: set[str] = set()
         self.selected_attack_source_ids: dict[str, str] = {}
         self.combat_targeting_attack_source_id: str | None = None
+        self.combat_targeting_class_feature_action_id: str | None = None
+        self.combat_selected_class_feature_target_id: str | None = None
+        self.combat_aux_targeting_mode: str | None = None
+        self.combat_stabilization_method: str | None = None
+        self.combat_stabilization_target_id: str | None = None
         self.selected_healing_source_ids: dict[str, str] = {}
         self.active_combat_effects: tuple[ActiveCombatEffect, ...] = ()
         board_defaults = _load_board_defaults()
@@ -1904,10 +2024,7 @@ class ExplorationUiSession:
             active_effects=[
                 *[effect.as_payload() for effect in self.active_combat_effects],
                 *[
-                    _timed_magic_effect_payload(
-                        effect,
-                        elapsed_minutes=self.state.elapsed_minutes,
-                    )
+                    self._timed_magic_effect_view(effect)
                     for effect in self.state.magic_effects
                 ],
             ],
@@ -1915,7 +2032,7 @@ class ExplorationUiSession:
             flags=[{"key": key, "value": value} for key, value in self.state.flags.values],
             messages=[message.as_payload() for message in self.messages],
             conversation=self._conversation_payload(),
-            pending=self.pending.as_payload() if self.pending else None,
+            pending=self._pending_payload(),
             pending_npc_transition=(
                 self.pending_npc_transition.as_payload()
                 if self.pending_npc_transition is not None
@@ -1932,45 +2049,103 @@ class ExplorationUiSession:
                 self.encounter_initiative_flow.as_payload() if self.encounter_initiative_flow else None
             ),
             combat=_combat_payload(
-                self.combat_state,
-                self._active_encounter(),
-                self.selected_combat_movement_path,
-                self.pending_enemy_turn_intent,
-                self.pending_enemy_turn_result,
-                self.pending_enemy_turn_ack_result,
-                self.pending_enemy_saving_throw,
-                self.pending_encounter_result,
-                self.pending_player_attack,
-                self.pending_player_healing,
-                self.pending_area_spell,
-                self.pending_summon,
-                self.pending_magic_movement,
-                self.pending_spell_debuff,
-                self.pending_spell_dispel,
-                self.pending_multi_target_damage_spell,
-                self.pending_combat_context_menu,
-                self.pending_combat_interaction,
-                self.pending_combat_help,
-                self.pending_combat_skill_check,
-                self.pending_combat_shove,
-                self.pending_combat_grapple,
-                self.pending_concentration_action,
-                self.pending_concentration_check,
-                self.pending_combat_ready,
-                self.pending_opportunity_movement,
-                self.pending_reaction_window,
-                self.pending_enemy_opportunity_attack,
-                self.pending_ready_attack,
-                self.active_combat_effects,
-                self.selected_attack_source_ids,
-                self.selected_healing_source_ids,
-                self.combat_targeting_attack_source_id,
+                state=self.combat_state,
+                encounter=self._active_encounter(),
+                selected_movement_path=self.selected_combat_movement_path,
+                pending_enemy_turn_intent=self.pending_enemy_turn_intent,
+                pending_enemy_turn_result=self.pending_enemy_turn_result,
+                pending_enemy_turn_ack_result=self.pending_enemy_turn_ack_result,
+                pending_enemy_saving_throw=self.pending_enemy_saving_throw,
+                pending_encounter_result=self.pending_encounter_result,
+                pending_player_attack=self.pending_player_attack,
+                pending_player_healing=self.pending_player_healing,
+                pending_area_spell=self.pending_area_spell,
+                pending_summon=self.pending_summon,
+                pending_magic_movement=self.pending_magic_movement,
+                pending_spell_debuff=self.pending_spell_debuff,
+                pending_spell_dispel=self.pending_spell_dispel,
+                pending_multi_target_damage_spell=self.pending_multi_target_damage_spell,
+                pending_combat_context_menu=self.pending_combat_context_menu,
+                pending_combat_interaction=self.pending_combat_interaction,
+                pending_combat_help=self.pending_combat_help,
+                pending_combat_skill_check=self.pending_combat_skill_check,
+                pending_combat_shove=self.pending_combat_shove,
+                pending_combat_grapple=self.pending_combat_grapple,
+                pending_concentration_action=self.pending_concentration_action,
+                pending_concentration_check=self.pending_concentration_check,
+                pending_combat_ready=self.pending_combat_ready,
+                pending_opportunity_movement=self.pending_opportunity_movement,
+                pending_reaction_window=self.pending_reaction_window,
+                pending_enemy_opportunity_attack=self.pending_enemy_opportunity_attack,
+                pending_ready_attack=self.pending_ready_attack,
+                active_combat_effects=self.active_combat_effects,
+                selected_attack_source_ids=self.selected_attack_source_ids,
+                selected_healing_source_ids=self.selected_healing_source_ids,
+                targeting_attack_source_id=self.combat_targeting_attack_source_id,
+                targeting_class_feature_action_id=(
+                    self.combat_targeting_class_feature_action_id
+                ),
+                selected_class_feature_target_id=(
+                    self.combat_selected_class_feature_target_id
+                ),
+                aux_targeting_mode=self.combat_aux_targeting_mode,
+                stabilization_method=self.combat_stabilization_method,
+                stabilization_target_id=self.combat_stabilization_target_id,
             )
             if self.combat_state
             else None,
             board=self._board_payload(),
             required_rolls=self.required_rolls_payload(),
+            playground=(
+                {
+                    "enabled": True,
+                    "config": self.playground_trial_config.as_payload(),
+                    "trial_active": bool(
+                        self.pending_encounter is not None
+                        or self.encounter_setup_flow is not None
+                        or self.combat_state is not None
+                    ),
+                    "modules": [
+                        {"id": "combat_arena", "label": "Walka i pozycjonowanie"},
+                        {"id": "spell_lab", "label": "Czary, obszary i stany"},
+                        {"id": "exploration_course", "label": "Eksploracja i przedmioty"},
+                        {"id": "social_lab", "label": "Rozmowy i testy społeczne"},
+                        {"id": "rest_station", "label": "Odpoczynek i zasoby"},
+                    ],
+                    "audit": load_playground_audit_registry().as_payload(),
+                }
+                if self.exploration.scenario_id == "mechanics_playground"
+                else None
+            ),
         ).as_payload()
+
+    def _pending_payload(self) -> dict[str, object] | None:
+        if self.pending is None:
+            return None
+        payload = self.pending.as_payload()
+        if (
+            self.pending.stage == PendingStage.HAZARD_SAVE
+            and self.pending.hazard is not None
+            and _hazard_is_fall(self.pending.hazard)
+        ):
+            payload["feather_fall_options"] = [
+                {
+                    "actor_id": str(actor.id),
+                    "actor_name": actor.name,
+                    "spell_id": "feather_fall",
+                    "spell_name": "Powolne opadanie",
+                }
+                for actor in self.exploration.actors
+                if (
+                    (validation := actor_spell_cast_validation(
+                        actor,
+                        "feather_fall",
+                    ))
+                    is not None
+                    and validation.valid
+                )
+            ]
+        return payload
 
     def _discovered_sources_payload(self) -> list[dict[str, object]]:
         registry = build_crafting_source_registry(self.state, self.exploration.actors)
@@ -2643,11 +2818,11 @@ class ExplorationUiSession:
                 f"{outcome_resolution.outcome.narration or plan.continuation.description} "
                 f"Podróż zajęła "
                 f"{travel.total_minutes} min. Stan wioski i drużyny zapisano. "
-                f"Kolejny scenariusz: {target_scenario_label}."
+                f"Kolejna lokacja: {target_scenario_label}."
             ),
         )
         self.board_message = (
-            f"Scena zakończona. Kolejny scenariusz: "
+            f"Lokacja zakończona. Kolejna lokacja: "
             f"{target_scenario_label}."
         )
         self._sync_board_leds()
@@ -2655,7 +2830,7 @@ class ExplorationUiSession:
 
     def start_scenario_handoff(self) -> dict[str, object]:
         if self.ui_flow_stage != UiFlowStage.SCENARIO_COMPLETE:
-            raise ValueError("Najpierw zakończ bieżący scenariusz.")
+            raise ValueError("Najpierw zakończ bieżącą lokację.")
         if self.scenario_handoff is None:
             raise ValueError("Zakończony scenariusz nie wskazuje kolejnej sceny.")
         handoff = dict(self.scenario_handoff)
@@ -3980,6 +4155,148 @@ class ExplorationUiSession:
         self._sync_board_leds()
         return self.state_payload()
 
+    def configure_playground_trial(
+        self,
+        *,
+        dummy_count: int,
+        armor_class: int,
+        hit_points: int,
+        speed_feet: int,
+        ability_score: int,
+        creature_type: str,
+        affinity: str,
+        damage_type: str,
+        condition_immunity: str = "",
+    ) -> dict[str, object]:
+        if self.exploration.scenario_id != "mechanics_playground":
+            raise ValueError("Konfigurator prób jest dostępny tylko w Arenie mechanik.")
+        if self.combat_state is not None or self.encounter_setup_flow is not None:
+            raise ValueError("Najpierw zresetuj trwającą próbę.")
+        if self.pending_encounter is not None:
+            raise ValueError("Próba jest już przygotowana. Rozpocznij ją albo użyj resetu.")
+        if not 1 <= dummy_count <= 6:
+            raise ValueError("Arena obsługuje od 1 do 6 manekinów.")
+        if not 5 <= armor_class <= 30:
+            raise ValueError("KP manekina musi mieścić się w zakresie 5–30.")
+        if not 1 <= hit_points <= 999:
+            raise ValueError("Punkty wytrzymałości manekina muszą mieścić się w zakresie 1–999.")
+        if not 0 <= speed_feet <= 60 or speed_feet % 5:
+            raise ValueError("Szybkość musi wynosić 0–60 stóp i być wielokrotnością 5.")
+        if not 1 <= ability_score <= 30:
+            raise ValueError("Wartość cech manekina musi mieścić się w zakresie 1–30.")
+        allowed_creature_types = {
+            "beast", "construct", "dragon", "fey", "fiend", "humanoid",
+            "monstrosity", "plant", "undead",
+        }
+        if creature_type not in allowed_creature_types:
+            raise ValueError("Wybrano nieobsługiwany typ stworzenia.")
+        if affinity not in {"none", "resistance", "immunity", "vulnerability"}:
+            raise ValueError("Wybrano nieobsługiwany profil odporności.")
+        parsed_damage_type = DamageType(damage_type)
+        allowed_condition_immunities = {
+            "", "blinded", "charmed", "deafened", "frightened", "grappled",
+            "incapacitated", "paralyzed", "poisoned", "prone", "restrained",
+            "stunned", "unconscious",
+        }
+        if condition_immunity not in allowed_condition_immunities:
+            raise ValueError("Wybrano nieobsługiwaną odporność na stan.")
+        self.playground_trial_config = PlaygroundTrialConfig(
+            dummy_count=dummy_count,
+            armor_class=armor_class,
+            hit_points=hit_points,
+            speed_feet=speed_feet,
+            ability_score=ability_score,
+            creature_type=creature_type,
+            affinity=affinity,
+            damage_type=parsed_damage_type,
+            condition_immunity=condition_immunity,
+        )
+        self.state = replace(
+            self.state,
+            party_position=PartyPosition("combat_arena"),
+            flags=set_scene_flag(self.state.flags, "playground_trial_requested", True),
+        )
+        self.active_point_id = ""
+        self.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+        self._add_message(
+            "Arena gotowa",
+            (
+                f"Ustawiono {dummy_count} manekinów: KP {armor_class}, "
+                f"{hit_points} PW, szybkość {speed_feet} stóp. "
+                "Rozpocznijcie setup starcia; cele i obszary wybieracie wyłącznie na planszy."
+            ),
+        )
+        self._refresh_pending_encounter()
+        self._record("playground_trial_configured", self.playground_trial_config.as_payload())
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def reset_playground_trial(self) -> dict[str, object]:
+        if self.exploration.scenario_id != "mechanics_playground":
+            raise ValueError("Reset próby jest dostępny tylko w Arenie mechanik.")
+        config = self.playground_trial_config
+        self.reset()
+        self.playground_trial_config = config
+        self.state = replace(
+            self.state,
+            party_position=PartyPosition("combat_arena"),
+        )
+        self.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+        self._add_message(
+            "Próba zresetowana",
+            "Przywrócono PW, zasoby, czary, manekiny, obiekty i stan eksploracji. Możecie zmienić parametry i uruchomić kolejną próbę.",
+        )
+        self._record("playground_trial_reset", config.as_payload())
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def _configure_playground_encounter(self, encounter: LoadedEncounter) -> LoadedEncounter:
+        if self.exploration.scenario_id != "mechanics_playground":
+            return encounter
+        config = self.playground_trial_config
+        affinities = DamageAffinityProfile(
+            resistances=(config.damage_type,) if config.affinity == "resistance" else (),
+            immunities=(config.damage_type,) if config.affinity == "immunity" else (),
+            vulnerabilities=(config.damage_type,) if config.affinity == "vulnerability" else (),
+        )
+        enemies = [actor for actor in encounter.actors if actor.faction == Faction.ENEMY]
+        active_enemy_ids = {
+            str(actor.id)
+            for actor in enemies[:config.dummy_count]
+        }
+        actors = tuple(
+            (
+                replace(
+                    actor,
+                    ac=config.armor_class,
+                    hp=config.hit_points,
+                    max_hp=config.hit_points,
+                    temp_hp=0,
+                    speed_feet=config.speed_feet,
+                    ability_scores=AbilityScores(
+                        strength=config.ability_score,
+                        dexterity=config.ability_score,
+                        constitution=config.ability_score,
+                        intelligence=config.ability_score,
+                        wisdom=config.ability_score,
+                        charisma=config.ability_score,
+                    ),
+                    creature_type=config.creature_type,
+                    damage_affinities=affinities,
+                    condition_immunities=(
+                        (config.condition_immunity,)
+                        if config.condition_immunity
+                        else ()
+                    ),
+                )
+                if actor.faction == Faction.ENEMY
+                else actor
+            )
+            for actor in encounter.actors
+            if actor.faction != Faction.ENEMY or str(actor.id) in active_enemy_ids
+        )
+        return replace(encounter, actors=actors)
+
     def start_encounter_setup(self) -> dict[str, object]:
         self._refresh_pending_encounter()
         if self.pending_encounter is None:
@@ -4002,6 +4319,7 @@ class ExplorationUiSession:
                 ),
             )
         encounter = _encounter_with_session_actor_state(encounter, self.exploration.actors)
+        encounter = self._configure_playground_encounter(encounter)
         projected_fixtures = fixture_scene_objects(
             self.state,
             zone_id=self.current_zone.id,
@@ -4161,16 +4479,46 @@ class ExplorationUiSession:
             self.combat_state.actors,
         )
         experience_result = None
-        if outcome.experience_points:
-            experience_result = award_party_experience(
-                self.exploration.actors,
-                outcome.experience_points,
-                level_cap=3,
+        level_up_actors: list[dict[str, object]] = []
+        if outcome.experience_points or outcome.experience_points_per_actor:
+            experience_result = (
+                award_party_experience_per_actor(
+                    self.exploration.actors,
+                    outcome.experience_points_per_actor,
+                    level_cap=3,
+                )
+                if outcome.experience_points_per_actor
+                else award_party_experience(
+                    self.exploration.actors,
+                    outcome.experience_points,
+                    level_cap=3,
+                )
             )
             self.exploration = replace(
                 self.exploration,
                 actors=experience_result.actors,
             )
+            custom_party_ids = {
+                str(actor.id)
+                for actor in self.custom_party
+            }
+            awarded_actor_ids = set(experience_result.actor_ids)
+            level_up_actors = [
+                {
+                    "id": str(actor.id),
+                    "name": actor.name,
+                    "level": actor.level,
+                    "experience_points": actor.experience_points,
+                    "eligible_level": experience_progress(
+                        actor,
+                        level_cap=3,
+                    ).eligible_level,
+                    "can_open_level_up": str(actor.id) in custom_party_ids,
+                }
+                for actor in self.exploration.actors
+                if str(actor.id) in awarded_actor_ids
+                and experience_progress(actor, level_cap=3).level_up_available
+            ]
             self._record(
                 "ui_party_experience_awarded",
                 {
@@ -4186,6 +4534,15 @@ class ExplorationUiSession:
                     f"Każda postać otrzymuje {experience_result.experience_per_actor} XP."
                 ),
             )
+            if level_up_actors:
+                self._add_message(
+                    "Awans dostępny",
+                    (
+                        "Próg kolejnego poziomu osiągnęli: "
+                        + ", ".join(str(actor["name"]) for actor in level_up_actors)
+                        + ". Po zakończeniu wyniku otwórz awans wybranej postaci."
+                    ),
+                )
             if self.custom_party and self.character_progress_sink is not None:
                 progressed_ids = {
                     str(actor.id) for actor in self.custom_party
@@ -4248,6 +4605,7 @@ class ExplorationUiSession:
                     "total": experience_result.total_experience,
                     "per_actor": experience_result.experience_per_actor,
                     "actor_ids": list(experience_result.actor_ids),
+                    "level_up_actors": level_up_actors,
                 }
             ),
         }
@@ -4425,6 +4783,10 @@ class ExplorationUiSession:
         return self.state_payload()
 
     def _combat_has_pending_resolution(self) -> bool:
+        if self.combat_targeting_class_feature_action_id is not None:
+            return True
+        if self.combat_stabilization_method is not None:
+            return True
         return any(
             pending is not None
             for pending in (
@@ -4452,6 +4814,8 @@ class ExplorationUiSession:
                 self.pending_enemy_opportunity_attack,
                 self.pending_ready_attack,
                 self.pending_combat_context_menu,
+                self.pending_approach_interaction,
+                self.pending_approach_pickup,
             )
         )
 
@@ -4689,6 +5053,20 @@ class ExplorationUiSession:
             hidden_states,
             self.state.condition_states,
         )
+        for effect in self._timed_combat_effects():
+            expired_effects = self.active_combat_effects
+            if effect.duration == EffectDuration.CONCENTRATION:
+                expired_effects = expire_active_effects(
+                    self.active_combat_effects,
+                    EffectEvent(
+                        EffectEventType.CONCENTRATION_ENDED,
+                        actor_id=effect.source_actor_id,
+                    ),
+                ).active_effects
+            self.active_combat_effects = apply_active_effect(
+                expired_effects,
+                effect,
+            ).active_effects
         order_text = ", ".join(entry.actor.name for entry in order.entries)
         self._add_message(
             "Kolejność inicjatywy",
@@ -4732,6 +5110,7 @@ class ExplorationUiSession:
             natural_roll_2=natural_roll_2,
             passive_perception_adjustments=passive_adjustments,
             automatically_hidden_from_actor_ids=automatically_hidden,
+            active_effects=self._stealth_effects(),
         )
         self.pending_encounter = replace(
             self.pending_encounter,
@@ -4914,6 +5293,114 @@ class ExplorationUiSession:
 
     def _clear_player_pending_choices(self) -> None:
         self.pending_state.clear_player_choices()
+        self.pending_spell_zone_move_effect_id = ""
+        self.combat_targeting_class_feature_action_id = None
+        self.combat_selected_class_feature_target_id = None
+        self.combat_aux_targeting_mode = None
+        self.combat_stabilization_method = None
+        self.combat_stabilization_target_id = None
+
+    def start_combat_stabilization_targeting(
+        self,
+        method: str,
+    ) -> dict[str, object]:
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        stabilization_method = StabilizationMethod(method)
+        actor = combat_current_actor(self.combat_state)
+        targets = legal_stabilization_targets(self.combat_state, actor)
+        if not targets:
+            raise ValueError("Brak legalnego celu stabilizacji.")
+        self.combat_stabilization_method = stabilization_method.value
+        self.combat_stabilization_target_id = None
+        self.pending_combat_context_menu = None
+        self.board_message = "Wskaż podświetlonego nieprzytomnego sojusznika."
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def start_combat_aux_targeting(self, mode: str) -> dict[str, object]:
+        allowed = {
+            "twinned_attack",
+            "twinned_healing",
+            "sculpt_spells",
+            "careful_spell",
+            "heightened_spell",
+        }
+        if mode not in allowed or not self._combat_aux_targets(mode):
+            raise ValueError("Brak legalnych celów dla tego wyboru.")
+        self.combat_aux_targeting_mode = mode
+        self.board_message = "Zeskanuj planszę i kliknij podświetloną figurkę."
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def finish_combat_aux_targeting(self) -> dict[str, object]:
+        self.combat_aux_targeting_mode = None
+        self.board_message = "Zakończono wybór dodatkowych celów."
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def _combat_aux_targets(self, mode: str) -> tuple[Actor, ...]:
+        if self.combat_state is None:
+            return ()
+        actor = combat_current_actor(self.combat_state)
+        encounter = self._active_encounter()
+        if mode == "twinned_attack" and self.pending_player_attack and encounter:
+            pending = self.pending_player_attack
+            source = self._attack_source_by_id(
+                actor,
+                pending.source_id,
+                pending.cast_level,
+            )
+            return (
+                tuple(
+                    target
+                    for target in start_attack_action(
+                        encounter.board,
+                        actor,
+                        self.combat_state.actors,
+                        source,
+                        self.combat_state.hidden_states,
+                    ).legal_targets
+                    if str(target.id) != pending.target_id
+                )
+                if source is not None
+                else ()
+            )
+        if mode == "twinned_healing" and self.pending_player_healing and encounter:
+            source = self._selected_healing_source(actor)
+            return (
+                tuple(
+                    target
+                    for target in legal_healing_targets(
+                        encounter.board,
+                        actor,
+                        self.combat_state.actors,
+                        source,
+                    )
+                    if str(target.id) != self.pending_player_healing.target_id
+                )
+                if source is not None
+                else ()
+            )
+        pending = self.pending_area_spell
+        if pending is None:
+            return ()
+        ids = set(pending.target_ids) | set(pending.protected_target_ids)
+        if mode == "sculpt_spells":
+            return tuple(
+                target
+                for target in self.combat_state.actors
+                if str(target.id) in ids
+                and target.faction == actor.faction
+                and target.id != actor.id
+            )
+        if mode in {"careful_spell", "heightened_spell"}:
+            return tuple(
+                target
+                for target in self.combat_state.actors
+                if str(target.id) in ids
+            )
+        return ()
 
     def _attack_sources_for_actor(self, actor: Actor) -> tuple:
         wild_shape_source = wild_shape_attack_source(actor)
@@ -4925,7 +5412,12 @@ class ExplorationUiSession:
                 actor.id,
             )
             if summoned is not None:
-                return (summon_attack_source(summoned.definition),)
+                owner = self._actor_by_string_id(
+                    str(summoned.owner_actor_id)
+                )
+                return (
+                    summon_attack_source(summoned.definition, owner),
+                )
         encounter = self._active_encounter()
         if encounter is None:
             return ()
@@ -5072,6 +5564,10 @@ class ExplorationUiSession:
         self,
         actor_id: str,
         spell_id: str,
+        target_id: str = "",
+        *,
+        message: str = "",
+        trigger_description: str = "",
     ) -> dict[str, object]:
         if self.combat_state is not None:
             raise ValueError("Nie można rozpocząć rytuału podczas walki.")
@@ -5079,11 +5575,43 @@ class ExplorationUiSession:
             raise ValueError("Rytuał można rozpocząć podczas aktywnej eksploracji.")
         if self.pending is not None:
             raise ValueError("Najpierw dokończ bieżącą decyzję eksploracyjną.")
+        search_result = self._locating_divination_result(spell_id, target_id)
+        prepared_target = self._exploration_spell_target(
+            spell_id,
+            target_id,
+            message=message,
+            trigger_description=trigger_description,
+        )
+        if spell_id == "protection_from_poison":
+            caster = next(
+                actor
+                for actor in self.exploration.actors
+                if str(actor.id) == actor_id
+            )
+            target_actor = next(
+                (
+                    actor
+                    for actor in self.exploration.actors
+                    if str(actor.id) == prepared_target
+                ),
+                None,
+            )
+            if (
+                target_actor is None
+                or target_actor.faction != caster.faction
+                or grid_distance_feet(caster.position, target_actor.position) > 5
+            ):
+                raise ValueError(
+                    "Ochrona przed trucizną wymaga sprzymierzonego celu w zasięgu dotyku."
+                )
         result = self.ritual_casting_flow.cast(
             actors=self.exploration.actors,
             state=self.state,
             actor_id=actor_id,
             spell_id=spell_id,
+            target_id=prepared_target or (
+                self.active_point.id if self.active_point is not None else ""
+            ),
         )
         self.exploration = replace(self.exploration, actors=result.actors)
         self.state = result.state
@@ -5093,9 +5621,15 @@ class ExplorationUiSession:
             "Rytuał",
             (
                 f"{result.actor_before.name} rzuca {result.spell_name} jako rytuał. "
-                f"Upływa {result.elapsed_minutes} minut; slot czaru nie został zużyty."
+                + (
+                    f"Cel: {result.target_id}. "
+                    if result.target_id
+                    else ""
+                )
+                + f"Upływa {result.elapsed_minutes} minut; slot czaru nie został zużyty."
             ),
         )
+        self._add_locating_divination_message(spell_id, search_result)
         self._add_expired_magic_effect_notices(result.expired_effects)
         self._add_clock_event_notices(result.triggered_clock_events)
         self._record(
@@ -5103,6 +5637,7 @@ class ExplorationUiSession:
             {
                 "actor_id": actor_id,
                 "spell_id": spell_id,
+                "target_id": result.target_id,
                 "elapsed_minutes": result.elapsed_minutes,
             },
         )
@@ -5115,6 +5650,11 @@ class ExplorationUiSession:
         *,
         cast_level: int | None = None,
         target_id: str = "",
+        target_ids: tuple[str, ...] = (),
+        healing_roll: int | None = None,
+        rope_length_feet: int = 60,
+        message: str = "",
+        trigger_description: str = "",
     ) -> dict[str, object]:
         if self.combat_state is not None:
             raise ValueError("Ten przepływ czaru działa tylko poza walką.")
@@ -5122,8 +5662,16 @@ class ExplorationUiSession:
             raise ValueError("Czar można rzucić podczas aktywnej eksploracji.")
         if self.pending is not None:
             raise ValueError("Najpierw dokończ bieżącą decyzję eksploracyjną.")
+        search_result = self._locating_divination_result(spell_id, target_id)
+        prepared_target = self._exploration_spell_target(
+            spell_id,
+            target_id,
+            message=message,
+            trigger_description=trigger_description,
+            rope_length_feet=rope_length_feet,
+        )
         target = (
-            target_id.strip()
+            prepared_target
             or (
                 self.active_point.id
                 if self.active_point is not None
@@ -5137,18 +5685,90 @@ class ExplorationUiSession:
             spell_id=spell_id,
             cast_level=cast_level,
             target_id=target,
+            target_ids=target_ids,
+            healing_roll=healing_roll,
         )
         self.exploration = replace(self.exploration, actors=result.actors)
         self.state = result.state
-        self._add_message(
-            "Magia eksploracyjna",
-            (
-                f"{result.actor_before.name} rzuca {result.spell_name} "
-                f"na cel/scenę „{target}”. Zapisano znacznik "
-                f"{result.cast_flag}; scenariusz i narrator mogą teraz "
-                "rozstrzygnąć właściwy kontekst."
-            ),
-        )
+        if spell_id == "see_invisibility":
+            self._add_message(
+                "Widzenie niewidzialnego",
+                (
+                    f"{result.actor_before.name} przez godzinę widzi niewidzialne "
+                    "istoty i przedmioty tak, jakby były widzialne. Efekt nie "
+                    "zdejmuje z nich niewidzialności dla pozostałych postaci."
+                ),
+            )
+        elif spell_id == "rope_trick":
+            space = decode_rope_trick(str(result.timed_effect.flag_value))
+            self._add_message(
+                "Sztuczka z liną",
+                (
+                    f"Powstaje niewidoczna z zewnątrz przestrzeń na szczycie "
+                    f"liny długości {space.rope_length_feet} ft. Mieści do 8 "
+                    "istot Medium lub mniejszych; ataki i czary nie przechodzą "
+                    "przez wejście. Efekt trwa godzinę."
+                ),
+            )
+        elif spell_id == "protection_from_poison":
+            self.state = replace(
+                self.state,
+                condition_states=remove_condition(
+                    self.state.condition_states,
+                    target,
+                    CombatCondition.POISONED,
+                ),
+            )
+            protected = next(
+                actor for actor in self.exploration.actors if str(actor.id) == target
+            )
+            self._add_message(
+                "Ochrona przed trucizną",
+                (
+                    f"Zneutralizowano aktywną truciznę działającą na {protected.name}. "
+                    "Przez godzinę cel ma przewagę na rzuty obronne przeciw zatruciu "
+                    "i odporność na obrażenia od trucizny."
+                ),
+            )
+        elif spell_id == "prayer_of_healing":
+            healed = ", ".join(
+                (
+                    f"{item.actor_before.name} +{item.effective_healing} PW "
+                    f"({item.hp_before}→{item.hp_after})"
+                )
+                for item in result.healing_results
+            ) or "brak legalnych celów"
+            self._advance_party_lights(result.elapsed_minutes)
+            self._add_message(
+                "Modlitwa leczenia",
+                (
+                    f"{result.actor_before.name} kończy dziesięciominutową modlitwę. "
+                    f"Wynik: {healed}. Zużyto slot {result.cast_level}. poziomu."
+                ),
+            )
+            self._add_expired_magic_effect_notices(result.expired_effects)
+            self._add_clock_event_notices(result.triggered_clock_events)
+        elif spell_id == "pass_without_trace":
+            self._add_message(
+                "Przejście bez śladu",
+                (
+                    f"{result.actor_before.name} utrzymuje aurę w promieniu 30 ft. "
+                    "Rzucający oraz sojusznicy pozostający w aurze otrzymują +10 "
+                    "do Stealth i nie mogą być tropieni niemagicznie. Efekt wymaga "
+                    "koncentracji."
+                ),
+            )
+        else:
+            self._add_message(
+                "Magia eksploracyjna",
+                (
+                    f"{result.actor_before.name} rzuca {result.spell_name} "
+                    f"na cel/scenę „{target}”. Zapisano znacznik "
+                    f"{result.cast_flag}; scenariusz i narrator mogą teraz "
+                    "rozstrzygnąć właściwy kontekst."
+                ),
+            )
+        self._add_locating_divination_message(spell_id, search_result)
         self._record(
             "ui_exploration_spell_cast",
             {
@@ -5165,6 +5785,303 @@ class ExplorationUiSession:
             },
         )
         return self.state_payload()
+
+    def enter_rope_trick_space(
+        self,
+        effect_id: str,
+        actor_id: str,
+    ) -> dict[str, object]:
+        effect = self._rope_trick_effect(effect_id)
+        actor = next(
+            (
+                candidate
+                for candidate in self.exploration.actors
+                if str(candidate.id) == actor_id
+            ),
+            None,
+        )
+        if actor is None:
+            raise ValueError("Nieznana postać wchodząca do Sztuczki z liną.")
+        updated = enter_rope_trick(effect, actor)
+        self.state = apply_timed_magic_effect(self.state, updated)
+        self._add_message(
+            "Sztuczka z liną",
+            f"{actor.name} wspina się po linie i wchodzi do pozawymiarowej przestrzeni.",
+        )
+        self._record(
+            "ui_rope_trick_entered",
+            {"effect_id": effect_id, "actor_id": actor_id},
+        )
+        return self.state_payload()
+
+    def exit_rope_trick_space(
+        self,
+        effect_id: str,
+        actor_id: str,
+    ) -> dict[str, object]:
+        effect = self._rope_trick_effect(effect_id)
+        actor = next(
+            (
+                candidate
+                for candidate in self.exploration.actors
+                if str(candidate.id) == actor_id
+            ),
+            None,
+        )
+        if actor is None:
+            raise ValueError("Nieznana postać wychodząca ze Sztuczki z liną.")
+        updated = exit_rope_trick(effect, actor_id)
+        self.state = apply_timed_magic_effect(self.state, updated)
+        self._add_message(
+            "Sztuczka z liną",
+            f"{actor.name} schodzi z pozawymiarowej przestrzeni na planszę.",
+        )
+        self._record(
+            "ui_rope_trick_exited",
+            {"effect_id": effect_id, "actor_id": actor_id},
+        )
+        return self.state_payload()
+
+    def _rope_trick_effect(self, effect_id: str) -> TimedMagicEffect:
+        effect = next(
+            (
+                candidate
+                for candidate in self.state.magic_effects
+                if candidate.id == effect_id
+                and candidate.spell_id == "rope_trick"
+            ),
+            None,
+        )
+        if effect is None:
+            raise ValueError("Ta przestrzeń Sztuczki z liną nie jest aktywna.")
+        return effect
+
+    def _exploration_spell_target(
+        self,
+        spell_id: str,
+        target_id: str,
+        *,
+        message: str,
+        trigger_description: str,
+        rope_length_feet: int = 60,
+    ) -> str:
+        if spell_id == "rope_trick":
+            anchor_id = target_id.strip() or (
+                self.active_point.id
+                if self.active_point is not None
+                else self.current_zone.id
+            )
+            return encode_rope_trick(
+                RopeTrickSpace(
+                    anchor_id=anchor_id,
+                    rope_length_feet=rope_length_feet,
+                )
+            )
+        if spell_id != "magic_mouth":
+            return target_id.strip()
+        object_id = target_id.strip() or (
+            self.active_point.id if self.active_point is not None else ""
+        )
+        return encode_magic_mouth(
+            MagicMouthSpecification(
+                object_id=object_id,
+                message=message,
+                trigger_description=trigger_description,
+            )
+        )
+
+    def _locating_divination_result(self, spell_id: str, query: str):
+        kinds = {
+            "locate_animals_or_plants": frozenset(
+                {DivinationTargetKind.ANIMAL, DivinationTargetKind.PLANT}
+            ),
+            "locate_object": frozenset({DivinationTargetKind.OBJECT}),
+        }.get(spell_id)
+        if kinds is None:
+            return None
+        if not query.strip():
+            raise ValueError("Wpisz znany gatunek albo nazwę szukanego celu.")
+        origin = self.state.party_position.marker_position
+        if origin is None and self.active_point is not None:
+            origin = self.active_point.positions[0]
+        return locate_authored_target(
+            self.state.points,
+            query=query,
+            allowed_kinds=kinds,
+            origin=origin or Coordinate(0, 0),
+            maximum_distance_feet=(
+                5 * 5280 if spell_id == "locate_animals_or_plants" else 1000
+            ),
+            blocked_by_lead=spell_id == "locate_object",
+        )
+
+    def _add_locating_divination_message(self, spell_id: str, result) -> None:
+        if spell_id not in {"locate_animals_or_plants", "locate_object"}:
+            return
+        if result is None:
+            self._add_message(
+                "Wynik dywinacji",
+                "W zasięgu czaru nie wyczuwasz pasującego celu.",
+            )
+            return
+        self._add_message(
+            "Wynik dywinacji",
+            (
+                f"Najbliższy pasujący cel znajduje się {result.distance_feet} ft "
+                f"stąd, kierunek: {result.direction}."
+            ),
+        )
+
+    def _timed_magic_effect_view(
+        self,
+        effect: TimedMagicEffect,
+    ) -> dict[str, object]:
+        payload = _timed_magic_effect_payload(
+            effect,
+            elapsed_minutes=self.state.elapsed_minutes,
+        )
+        if effect.spell_id != "locate_object":
+            if effect.spell_id == "magic_mouth":
+                specification = decode_magic_mouth(str(effect.flag_value))
+                payload["value_label"] = (
+                    f"Obiekt: {specification.object_id} · wyzwalacz: "
+                    f"{specification.trigger_description}"
+                )
+                payload["magic_mouth"] = {
+                    "object_id": specification.object_id,
+                    "message": specification.message,
+                    "trigger_description": specification.trigger_description,
+                }
+            elif effect.spell_id == "rope_trick":
+                space = decode_rope_trick(str(effect.flag_value))
+                actor_names = {
+                    str(actor.id): actor.name
+                    for actor in self.exploration.actors
+                }
+                payload["value_label"] = (
+                    f"{len(space.occupant_actor_ids)}/8 osób · "
+                    f"lina {space.rope_length_feet} ft"
+                )
+                payload["rope_trick"] = {
+                    "anchor_id": space.anchor_id,
+                    "rope_length_feet": space.rope_length_feet,
+                    "occupant_actor_ids": list(space.occupant_actor_ids),
+                    "occupant_names": [
+                        actor_names.get(actor_id, actor_id)
+                        for actor_id in space.occupant_actor_ids
+                    ],
+                    "rope_pulled_inside": space.rope_pulled_inside,
+                }
+            return payload
+        result = self._locating_divination_result(
+            effect.spell_id,
+            str(effect.flag_value),
+        )
+        if result is None:
+            payload["value_label"] = "Brak pasującego celu w zasięgu 1000 ft"
+            return payload
+        payload["value_label"] = (
+            f"{result.distance_feet} ft · {result.direction}"
+        )
+        payload["divination"] = {
+            "query": str(effect.flag_value),
+            "distance_feet": result.distance_feet,
+            "direction": result.direction,
+        }
+        return payload
+
+    def _timed_combat_effects(self) -> tuple[ActiveCombatEffect, ...]:
+        """Adapt exploration spells whose rules remain relevant in combat."""
+
+        adapted: list[ActiveCombatEffect] = []
+        for effect in self.state.magic_effects:
+            if effect.spell_id == "pass_without_trace":
+                adapted.append(
+                    ActiveCombatEffect(
+                        id=f"exploration:{effect.id}",
+                        actor_id=effect.actor_id,
+                        kind="stealth_bonus_aura",
+                        label=effect.label,
+                        object_id=f"spell:{effect.spell_id}",
+                        value=10,
+                        source_actor_id=effect.actor_id,
+                        source=EffectSource(
+                            EffectSourceType.SPELL,
+                            effect.spell_id,
+                            effect.label,
+                        ),
+                        duration=EffectDuration.CONCENTRATION,
+                        stacking_key=f"concentration:{effect.actor_id}",
+                    )
+                )
+            elif effect.spell_id == "protection_from_poison":
+                adapted.append(
+                    ActiveCombatEffect(
+                        id=f"exploration:{effect.id}",
+                        actor_id=str(effect.flag_value),
+                        kind="protection_from_poison",
+                        label=effect.label,
+                        object_id=f"spell:{effect.spell_id}",
+                        value=0,
+                        source_actor_id=effect.actor_id,
+                        source=EffectSource(
+                            EffectSourceType.SPELL,
+                            effect.spell_id,
+                            effect.label,
+                        ),
+                        duration=EffectDuration.UNTIL_ENCOUNTER_END,
+                        stacking_key=f"protection_from_poison:{effect.flag_value}",
+                    )
+                )
+            elif effect.spell_id == "rope_trick":
+                space = decode_rope_trick(str(effect.flag_value))
+                for actor_id in space.occupant_actor_ids:
+                    adapted.append(
+                        ActiveCombatEffect(
+                            id=f"exploration:{effect.id}:{actor_id}",
+                            actor_id=actor_id,
+                            kind="extradimensional_space",
+                            label=effect.label,
+                            object_id=f"spell:{effect.spell_id}:{effect.id}",
+                            value=0,
+                            source_actor_id=effect.actor_id,
+                            source=EffectSource(
+                                EffectSourceType.SPELL,
+                                effect.spell_id,
+                                effect.label,
+                            ),
+                            duration=EffectDuration.UNTIL_ENCOUNTER_END,
+                            stacking_key=f"extradimensional_space:{actor_id}",
+                        )
+                    )
+            elif effect.spell_id == "see_invisibility":
+                adapted.append(
+                    ActiveCombatEffect(
+                        id=f"exploration:{effect.id}",
+                        actor_id=effect.actor_id,
+                        kind="see_invisibility",
+                        label=effect.label,
+                        object_id=f"spell:{effect.spell_id}",
+                        value=0,
+                        source_actor_id=effect.actor_id,
+                        source=EffectSource(
+                            EffectSourceType.SPELL,
+                            effect.spell_id,
+                            effect.label,
+                        ),
+                        duration=EffectDuration.UNTIL_ENCOUNTER_END,
+                        stacking_key=f"see_invisibility:{effect.actor_id}",
+                    )
+                )
+        return tuple(adapted)
+
+    def _stealth_effects(self) -> tuple[ActiveCombatEffect, ...]:
+        if self.combat_state is not None:
+            return self.active_combat_effects
+        effects = self.active_combat_effects
+        for effect in self._timed_combat_effects():
+            effects = apply_active_effect(effects, effect).active_effects
+        return effects
 
     def select_combat_attack_source(
         self,
@@ -5414,6 +6331,17 @@ class ExplorationUiSession:
             pending=pending,
             allocations=allocations,
         )
+        for target_id in pending.selected_target_ids:
+            target = next(
+                (
+                    candidate
+                    for candidate in self.combat_state.actors
+                    if str(candidate.id) == target_id
+                ),
+                None,
+            )
+            if target is not None:
+                self._animate_ranged_projectile(actor, target)
         return self._apply_multi_target_spell_transition(transition)
 
     def cancel_multi_target_damage_spell(self) -> dict[str, object]:
@@ -5484,6 +6412,7 @@ class ExplorationUiSession:
         }
         if action_id not in available:
             raise ValueError("Aktywna postać nie posiada tej akcji klasowej.")
+        self._clear_player_pending_choices()
         title = "Cecha klasowa"
         if action_id == "second_wind":
             if natural_roll is None:
@@ -5624,7 +6553,11 @@ class ExplorationUiSession:
                 "dwa Unarmed Strikes."
             )
         elif action_id == "divine_sense":
-            result = resolve_divine_sense(self.combat_state)
+            encounter = self._active_encounter()
+            result = resolve_divine_sense(
+                self.combat_state,
+                board=encounter.board if encounter is not None else None,
+            )
             self.combat_state = result.state
             detected = ", ".join(result.detected_creature_types)
             body = (
@@ -5659,10 +6592,12 @@ class ExplorationUiSession:
                 )
             )
         elif action_id in {"turn_undead", "turn_the_unholy"}:
+            encounter = self._active_encounter()
             result = resolve_channel_turn(
                 self.combat_state,
                 action_id=action_id,
                 saving_rolls=dict(saving_rolls),
+                board=encounter.board if encounter is not None else None,
             )
             self.combat_state = result.state
             body = (
@@ -5735,6 +6670,95 @@ class ExplorationUiSession:
         )
         self._sync_board_leds()
         return self.state_payload()
+
+    def start_combat_class_feature_targeting(
+        self,
+        action_id: str,
+    ) -> dict[str, object]:
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        actor = combat_current_actor(self.combat_state)
+        available = {
+            feature_action_id
+            for feature in actor.features
+            for feature_action_id in feature.action_ids
+        }
+        if action_id not in available:
+            raise ValueError("Aktywna postać nie posiada tej akcji klasowej.")
+        if action_id not in {"bardic_inspiration", "lay_on_hands", "preserve_life"}:
+            raise ValueError("Ta cecha nie korzysta jeszcze z tego trybu wyboru.")
+        targets = self._class_feature_board_targets(action_id, actor)
+        if not targets:
+            raise ValueError("Brak legalnego celu Bardowskiej Inspiracji.")
+        self._clear_player_pending_choices()
+        self.combat_targeting_attack_source_id = None
+        self.combat_targeting_class_feature_action_id = action_id
+        self.combat_selected_class_feature_target_id = None
+        self.board_message = (
+            f"{player_label(action_id)}: zeskanuj planszę i kliknij "
+            "podświetloną figurkę legalnego celu."
+        )
+        self._record(
+            "ui_combat_class_feature_targeting_started",
+            {
+                "actor_id": str(actor.id),
+                "action_id": action_id,
+                "target_ids": [str(target.id) for target in targets],
+            },
+        )
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def cancel_combat_class_feature_targeting(self) -> dict[str, object]:
+        if self.combat_targeting_class_feature_action_id is None:
+            raise ValueError("Nie trwa wybór celu cechy klasowej.")
+        self.combat_targeting_class_feature_action_id = None
+        self.combat_selected_class_feature_target_id = None
+        self.board_message = "Anulowano wybór celu cechy klasowej."
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def _class_feature_board_targets(
+        self,
+        action_id: str,
+        actor: Actor,
+    ) -> tuple[Actor, ...]:
+        if self.combat_state is None:
+            return ()
+        if action_id == "lay_on_hands":
+            return tuple(
+                target
+                for target in self.combat_state.actors
+                if target.faction == actor.faction
+                and not target.is_defeated()
+                and target.hp < target.max_hp
+                and grid_distance_feet(actor.position, target.position) <= 5
+            )
+        if action_id == "preserve_life":
+            return tuple(
+                target
+                for target in self.combat_state.actors
+                if target.faction == actor.faction
+                and not target.is_defeated()
+                and target.hp * 2 < target.max_hp
+                and grid_distance_feet(actor.position, target.position) <= 30
+            )
+        if action_id != "bardic_inspiration":
+            return ()
+        inspired_ids = {
+            effect.actor_id
+            for effect in self.active_combat_effects
+            if effect.kind == "bardic_inspiration"
+        }
+        return tuple(
+            target
+            for target in self.combat_state.actors
+            if target.faction == actor.faction
+            and target.id != actor.id
+            and not target.is_defeated()
+            and str(target.id) not in inspired_ids
+            and grid_distance_feet(actor.position, target.position) <= 60
+        )
 
     def start_long_cast(
         self,
@@ -5887,6 +6911,90 @@ class ExplorationUiSession:
         )
         return self._apply_magic_movement_transition(transition)
 
+    def start_moonbeam_move(self, effect_id: str) -> dict[str, object]:
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        actor = combat_current_actor(self.combat_state)
+        effect = next(
+            (
+                candidate
+                for candidate in self.active_combat_effects
+                if candidate.id == effect_id
+                and candidate.kind.startswith("ongoing_damage_zone:")
+            ),
+            None,
+        )
+        if effect is None or effect.source_actor_id != str(actor.id):
+            raise ValueError("Nie możesz przesunąć tej strefy czaru.")
+        self._clear_player_pending_choices()
+        self.pending_spell_zone_move_effect_id = effect.id
+        maximum_distance = (
+            30
+            if effect.object_id == "combat_action:flaming_sphere"
+            else 60
+        )
+        self.board_message = (
+            f"{effect.label}: zeskanuj planszę i kliknij nowy środek "
+            f"w odległości do {maximum_distance} ft od obecnej strefy."
+        )
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def confirm_moonbeam_move(self, position: Coordinate) -> dict[str, object]:
+        if self.combat_state is None or not self.pending_spell_zone_move_effect_id:
+            raise ValueError("Nie ma oczekującego przesunięcia Księżycowego promienia.")
+        encounter = self._active_encounter()
+        if encounter is None:
+            raise ValueError("Brak danych encountera dla aktywnej walki.")
+        result = move_moonbeam_zone(
+            self.combat_state,
+            self.active_combat_effects,
+            effect_id=self.pending_spell_zone_move_effect_id,
+            destination=position,
+            board=encounter.board,
+        )
+        self.combat_state = result.state
+        self.active_combat_effects = result.active_effects
+        self.pending_spell_zone_move_effect_id = ""
+        self.board_message = (
+            f"Strefę czaru przesunięto na {position.as_tuple()}."
+        )
+        self._add_message("Przesunięcie strefy", self.board_message)
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def _moonbeam_move_positions(self) -> tuple[Coordinate, ...]:
+        if not self.pending_spell_zone_move_effect_id:
+            return ()
+        encounter = self._active_encounter()
+        if encounter is None:
+            return ()
+        effect = next(
+            (
+                candidate
+                for candidate in self.active_combat_effects
+                if candidate.id == self.pending_spell_zone_move_effect_id
+            ),
+            None,
+        )
+        if effect is None or effect.anchor_position is None:
+            return ()
+        maximum_distance = (
+            30
+            if effect.object_id == "combat_action:flaming_sphere"
+            else 60
+        )
+        return tuple(
+            Coordinate(col, row)
+            for row in range(encounter.board.dimensions.rows)
+            for col in range(encounter.board.dimensions.cols)
+            if grid_distance_feet(
+                effect.anchor_position,
+                Coordinate(col, row),
+            )
+            <= maximum_distance
+        )
+
     def start_spell_debuff(
         self,
         action_id: str,
@@ -5939,6 +7047,34 @@ class ExplorationUiSession:
             condition=condition,
         )
         return self._apply_spell_debuff_transition(transition)
+
+    def select_spell_debuff_condition(
+        self,
+        condition: str,
+    ) -> dict[str, object]:
+        pending = self.pending_spell_debuff
+        if pending is None or self.combat_state is None:
+            raise ValueError("Nie ma debuffu oczekującego na wariant.")
+        actor = combat_current_actor(self.combat_state)
+        action = _combat_action_by_id(
+            self._active_encounter(),
+            actor,
+            pending.action_id,
+        )
+        allowed = {
+            candidate.value for candidate in action.condition_options
+        } if action is not None else set()
+        if condition not in allowed:
+            raise ValueError("Wybrany wariant stanu nie jest dostępny.")
+        self.pending_spell_debuff = replace(
+            pending,
+            selected_condition=condition,
+        )
+        self.board_message = (
+            f"Wybrano efekt: {condition_label(CombatCondition(condition))}. "
+            "Teraz wskaż cel na planszy."
+        )
+        return self.state_payload()
 
     def cancel_spell_debuff(self) -> dict[str, object]:
         pending = self.pending_spell_debuff
@@ -6287,6 +7423,7 @@ class ExplorationUiSession:
             active_effects=self.active_combat_effects,
             action=action,
             cast_level=cast_level,
+            board=encounter.board,
         )
         return self._apply_combat_resource_transition(transition)
 
@@ -6512,6 +7649,7 @@ class ExplorationUiSession:
             source=source,
             position=position,
             scene_objects=encounter.scene_objects,
+            active_effects=self.active_combat_effects,
         )
         self.combat_state = transition.state
         self.pending_area_spell = transition.pending
@@ -6545,6 +7683,7 @@ class ExplorationUiSession:
             source=source,
             pending=pending,
             rng=self.encounter_rng,
+            active_effects=self.active_combat_effects,
         )
         return self._apply_player_area_spell_transition(transition)
 
@@ -6573,7 +7712,10 @@ class ExplorationUiSession:
         elif careful:
             raise ValueError("Ten czar nie używa Careful Spell.")
         if "metamagic_heightened" in pending.metamagic_ids:
-            if heightened_target_id not in target_ids:
+            if (
+                heightened_target_id is not None
+                and heightened_target_id not in target_ids
+            ):
                 raise ValueError("Wybierz jeden legalny cel Heightened Spell.")
         elif heightened_target_id is not None:
             raise ValueError("Ten czar nie używa Heightened Spell.")
@@ -6668,10 +7810,16 @@ class ExplorationUiSession:
             raise ValueError(
                 f"Sculpt Spells może ochronić najwyżej {maximum} istot."
             )
+        ordered_target_ids = tuple(
+            dict.fromkeys(
+                (*pending.target_ids, *pending.protected_target_ids)
+            )
+        )
+        all_target_ids = set(ordered_target_ids)
         eligible = {
             str(actor.id)
             for actor in self.combat_state.actors
-            if str(actor.id) in pending.target_ids
+            if str(actor.id) in all_target_ids
             and actor.faction == caster.faction
             and actor.id != caster.id
         }
@@ -6681,7 +7829,7 @@ class ExplorationUiSession:
             pending,
             target_ids=tuple(
                 target_id
-                for target_id in pending.target_ids
+                for target_id in ordered_target_ids
                 if target_id not in set(selected)
             ),
             protected_target_ids=selected,
@@ -6832,8 +7980,9 @@ class ExplorationUiSession:
         pending = self.pending_player_attack
         if pending is None or pending.stage != "confirm_attack":
             raise ValueError("Nie ma czaru oczekującego na drugi cel.")
-        if "metamagic_twinned" not in pending.metamagic_ids:
-            raise ValueError("Ten czar nie używa Twinned Spell.")
+        is_acid_splash = pending.source_id == "acid_splash"
+        if "metamagic_twinned" not in pending.metamagic_ids and not is_acid_splash:
+            raise ValueError("Ten czar nie pozwala wybrać drugiego celu.")
         if self.combat_state is None:
             raise ValueError("Walka nie została rozpoczęta.")
         encounter = self._active_encounter()
@@ -6847,6 +7996,11 @@ class ExplorationUiSession:
         )
         if source is None:
             raise ValueError("Nieznane źródło czaru.")
+        primary = next(
+            actor
+            for actor in self.combat_state.actors
+            if str(actor.id) == pending.target_id
+        )
         legal = {
             target.id
             for target in start_attack_action(
@@ -6857,9 +8011,17 @@ class ExplorationUiSession:
                 self.combat_state.hidden_states,
             ).legal_targets
             if target.id != pending.target_id
+            and (
+                not is_acid_splash
+                or grid_distance_feet(primary.position, target.position) <= 5
+            )
         }
         if target_id not in legal:
-            raise ValueError("Drugi cel Twinned Spell nie jest legalny.")
+            raise ValueError(
+                "Drugi cel Kwasowego rozprysku musi stać do 5 ft od pierwszego."
+                if is_acid_splash
+                else "Drugi cel Twinned Spell nie jest legalny."
+            )
         self.pending_player_attack = replace(
             pending,
             twinned_target_id=target_id,
@@ -6896,6 +8058,7 @@ class ExplorationUiSession:
         natural_rerolls: tuple[int, ...] = (),
         bardic_inspiration_roll: int | None = None,
         bless_roll: int | None = None,
+        mirror_image_roll: int | None = None,
     ) -> dict[str, object]:
         pending = self.pending_player_attack
         if pending is None or pending.stage != "attack_roll":
@@ -6980,6 +8143,7 @@ class ExplorationUiSession:
             natural_roll=natural_roll,
             natural_roll_2=natural_roll_2,
             natural_rerolls=natural_rerolls,
+            mirror_image_roll=mirror_image_roll,
             scene_objects=encounter.scene_objects,
         )
         if inspiration is not None and bardic_inspiration_roll is not None:
@@ -7003,6 +8167,16 @@ class ExplorationUiSession:
                     ("bless_roll", bless_roll),
                 ),
             )
+        target = next(
+            (
+                candidate
+                for candidate in self.combat_state.actors
+                if str(candidate.id) == pending.target_id
+            ),
+            None,
+        )
+        if target is not None:
+            self._animate_ranged_projectile(attacker, target, source)
         return self._apply_player_attack_transition(transition)
 
     def submit_player_damage_roll(
@@ -7297,6 +8471,7 @@ class ExplorationUiSession:
             self._maybe_prompt_concentration_check(applied)
             if self.pending_concentration_check is not None:
                 break
+        self._expire_warding_bonds()
         self._sync_board_leds()
         return self.state_payload()
 
@@ -7361,6 +8536,7 @@ class ExplorationUiSession:
             source=source,
             pending=pending,
             healing=healing,
+            active_effects=self.active_combat_effects,
         )
         self.combat_state = transition.state
         self.pending_player_healing = transition.pending
@@ -7482,10 +8658,23 @@ class ExplorationUiSession:
             submission.actor_id,
             submission.path,
         )
+        self._apply_moonbeam_entry_damage(
+            submission.actor_id,
+            submission.path,
+        )
+        self._apply_web_entry_save(
+            submission.actor_id,
+            submission.path,
+        )
+        self._apply_zone_of_truth_entry_save(
+            submission.actor_id,
+            submission.path,
+        )
         self.selected_combat_movement_path = None
         self.pending_combat_interaction = None
         self.pending_combat_help = None
         self._expire_invalid_combat_effects()
+        self._expire_warding_bonds()
         self._add_message(submission.message_title, submission.message_body)
         self._record(submission.event_type, dict(submission.event_payload))
         movement_events = [
@@ -7542,7 +8731,20 @@ class ExplorationUiSession:
                 pending.actor_id,
                 pending.path,
             )
+            self._apply_moonbeam_entry_damage(
+                pending.actor_id,
+                pending.path,
+            )
+            self._apply_web_entry_save(
+                pending.actor_id,
+                pending.path,
+            )
+            self._apply_zone_of_truth_entry_save(
+                pending.actor_id,
+                pending.path,
+            )
         self._expire_invalid_combat_effects()
+        self._expire_warding_bonds()
         self._add_message(resolution.message_title, resolution.message_body)
         self._record(
             "ui_combat_opportunity_movement_confirmed",
@@ -7687,6 +8889,7 @@ class ExplorationUiSession:
             state=self.combat_state,
             board=encounter.board,
             scene_objects=encounter.scene_objects,
+            active_effects=self.active_combat_effects,
         )
         self._clear_player_pending_choices()
         self.pending_combat_skill_check = pending
@@ -8607,34 +9810,97 @@ class ExplorationUiSession:
                     if action.action_type == "targeted_item_effect":
                         continue
                     action_payload = _combat_action_payload(action, actor)
-                    if not action_payload["available"]:
+                    if (
+                        not action_payload["available"]
+                        or action.action_type not in CONTEXT_COMBAT_ACTION_TYPES
+                        or action.action_cost.value == "reaction"
+                    ):
                         continue
-                    options.append(
-                        CombatMenuOption(
-                            id=f"combat-action:{action.id}",
-                            label=action.label or action.name,
-                            description=(
-                                f"Użyj: {action.name}."
-                                + (
-                                    f" Koszt: {action.charge_cost} ład."
-                                    if action.charge_cost > 0
-                                    else ""
-                                )
-                            ),
-                            category=(CombatMenuCategory.ITEM if action.source_item_id else CombatMenuCategory.MAGIC),
-                            action=CombatMenuAction.COMBAT_ACTION,
-                            action_id=action.id,
-                            item_id=action.source_item_id,
-                            provider="item_action" if action.source_item_id else "combat_action",
-                        )
+                    cast_levels = (
+                        tuple(action_payload["available_cast_levels"])
+                        if action.spell_level > 0
+                        else (0,)
                     )
+                    for cast_level in cast_levels:
+                        slot_label = (
+                            f" · slot {cast_level}"
+                            if action.spell_level > 0
+                            else ""
+                        )
+                        options.append(
+                            CombatMenuOption(
+                                id=(
+                                    f"combat-action:{action.id}"
+                                    if int(cast_level) == int(action.spell_level)
+                                    else f"combat-action:{action.id}:{cast_level}"
+                                ),
+                                label=f"{action.label or action.name}{slot_label}",
+                                description=(
+                                    (action.instructions or f"Użyj: {action.name}.")
+                                    + (
+                                        f" Koszt: {action.charge_cost} ład."
+                                        if action.charge_cost > 0
+                                        else ""
+                                    )
+                                ),
+                                category=(
+                                    CombatMenuCategory.ITEM
+                                    if action.source_item_id
+                                    else CombatMenuCategory.MAGIC
+                                ),
+                                action=CombatMenuAction.COMBAT_ACTION,
+                                action_id=action.id,
+                                cast_level=int(cast_level),
+                                item_id=action.source_item_id,
+                                provider=(
+                                    "item_action"
+                                    if action.source_item_id
+                                    else "combat_action"
+                                ),
+                            )
+                        )
+                for feature in actor.features:
+                    for feature_action_id in feature.action_ids:
+                        if feature_action_id not in COMBAT_CLASS_FEATURE_ACTION_IDS:
+                            continue
+                        if (
+                            feature_action_id in BONUS_ACTION_CLASS_FEATURE_IDS
+                            and not bonus_action_available
+                        ):
+                            continue
+                        if (
+                            feature_action_id != "font_of_magic"
+                            and feature.resource_ids
+                            and not any(
+                                pool.id in feature.resource_ids and pool.current > 0
+                                for pool in actor.resource_pools
+                            )
+                        ):
+                            continue
+                        options.append(
+                            CombatMenuOption(
+                                id=f"class-feature:{feature_action_id}",
+                                label=player_label(feature_action_id),
+                                description=(
+                                    feature.description
+                                    or (
+                                        f"Cecha: {player_label(feature.feature_id, feature.label)}. "
+                                        "Interfejs poprosi tylko o wymagany cel, pulę albo fizyczny rzut."
+                                    )
+                                ),
+                                category=CombatMenuCategory.SUPPORT,
+                                action=CombatMenuAction.CLASS_FEATURE,
+                                action_id=feature_action_id,
+                                provider="class_feature",
+                            )
+                        )
                 options.extend(
                     (
-                        CombatMenuOption("basic:dash", "Dash", "Zużyj akcję, aby zyskać dodatkowy ruch.", CombatMenuCategory.BASIC, CombatMenuAction.DASH),
+                        CombatMenuOption("basic:dash", "Sprint", "Zużyj akcję, aby zyskać dodatkowy ruch.", CombatMenuCategory.BASIC, CombatMenuAction.DASH),
                         CombatMenuOption("basic:dodge", "Unik", "Ataki przeciw tobie mają utrudnienie do początku następnej tury.", CombatMenuCategory.BASIC, CombatMenuAction.DODGE),
                         CombatMenuOption("basic:disengage", "Odwrót", "Ruch w tej turze nie prowokuje ataków okazyjnych.", CombatMenuCategory.BASIC, CombatMenuAction.DISENGAGE),
-                        CombatMenuOption("basic:help", "Help", "Pomóż sojusznikowi w następnym ataku.", CombatMenuCategory.BASIC, CombatMenuAction.HELP),
-                        CombatMenuOption("basic:ready", "Ready", "Przygotuj atak na wybrany warunek.", CombatMenuCategory.BASIC, CombatMenuAction.READY),
+                        CombatMenuOption("basic:help", "Pomoc", "Pomóż sojusznikowi w następnym ataku.", CombatMenuCategory.BASIC, CombatMenuAction.HELP),
+                        CombatMenuOption("basic:ready", "Przygotuj akcję", "Przygotuj atak na wybrany warunek.", CombatMenuCategory.BASIC, CombatMenuAction.READY),
                     )
                 )
                 if any(
@@ -8655,11 +9921,11 @@ class ExplorationUiSession:
                 hiding = hide_eligibility(encounter.board, actor, self.combat_state.actors, encounter.scene_objects)
                 if hiding.allowed:
                     options.append(
-                        CombatMenuOption("basic:hide", "Hide", "Spróbuj ukryć się przed przeciwnikami, którzy nie widzą cię wyraźnie.", CombatMenuCategory.BASIC, CombatMenuAction.HIDE)
+                        CombatMenuOption("basic:hide", "Ukryj się", "Spróbuj ukryć się przed przeciwnikami, którzy nie widzą cię wyraźnie.", CombatMenuCategory.BASIC, CombatMenuAction.HIDE)
                     )
                 if any(str(actor.id) in hidden.hidden_from_actor_ids for hidden in self.combat_state.hidden_states):
                     options.append(
-                        CombatMenuOption("basic:search", "Search", "Użyj Perception, aby odnaleźć ukrytego przeciwnika.", CombatMenuCategory.BASIC, CombatMenuAction.SEARCH)
+                        CombatMenuOption("basic:search", "Szukaj", "Użyj Percepcji, aby odnaleźć ukrytego przeciwnika.", CombatMenuCategory.BASIC, CombatMenuAction.SEARCH)
                     )
             if not action_available and bonus_action_available:
                 for action in encounter.combat_actions_by_actor.get(actor.id, ()):
@@ -8679,6 +9945,82 @@ class ExplorationUiSession:
                             provider="combat_action",
                         )
                     )
+            if not action_available:
+                available_feature_actions = set(FREE_CLASS_FEATURE_ACTION_IDS)
+                if bonus_action_available:
+                    available_feature_actions.update(BONUS_ACTION_CLASS_FEATURE_IDS)
+                for feature in actor.features:
+                    for feature_action_id in feature.action_ids:
+                        if feature_action_id not in available_feature_actions:
+                            continue
+                        if (
+                            feature_action_id != "font_of_magic"
+                            and feature.resource_ids
+                            and not any(
+                                pool.id in feature.resource_ids and pool.current > 0
+                                for pool in actor.resource_pools
+                            )
+                        ):
+                            continue
+                        options.append(
+                            CombatMenuOption(
+                                id=f"class-feature:{feature_action_id}",
+                                label=player_label(feature_action_id),
+                                description=(
+                                    feature.description
+                                    or (
+                                        f"Cecha: {player_label(feature.feature_id, feature.label)}. "
+                                        "Ta zdolność nie wymaga dostępnej akcji głównej."
+                                    )
+                                ),
+                                category=CombatMenuCategory.SUPPORT,
+                                action=CombatMenuAction.CLASS_FEATURE,
+                                action_id=feature_action_id,
+                                provider="class_feature",
+                            )
+                        )
+                if bonus_action_available and (
+                    actor_has_feature(actor, "cunning_action")
+                    or any(
+                        effect.actor_id == str(actor.id)
+                        and effect.kind == "bonus_action_dash"
+                        for effect in self.active_combat_effects
+                    )
+                ):
+                    options.extend(
+                        (
+                            CombatMenuOption(
+                                "basic:dash",
+                                "Sprint",
+                                "Użyj Sprytnej akcji, aby podwoić ruch w tej turze.",
+                                CombatMenuCategory.BASIC,
+                                CombatMenuAction.DASH,
+                            ),
+                            CombatMenuOption(
+                                "basic:disengage",
+                                "Odwrót",
+                                "Użyj Sprytnej akcji, aby ruch nie prowokował ataków okazyjnych.",
+                                CombatMenuCategory.BASIC,
+                                CombatMenuAction.DISENGAGE,
+                            ),
+                        )
+                    )
+                    hiding = hide_eligibility(
+                        encounter.board,
+                        actor,
+                        self.combat_state.actors,
+                        encounter.scene_objects,
+                    )
+                    if hiding.allowed:
+                        options.append(
+                            CombatMenuOption(
+                                "basic:hide",
+                                "Ukryj się",
+                                "Użyj Sprytnej akcji, aby spróbować ukryć się przed przeciwnikami.",
+                                CombatMenuCategory.BASIC,
+                                CombatMenuAction.HIDE,
+                            )
+                        )
             is_prone = has_condition(
                 self.combat_state.condition_states,
                 str(actor.id),
@@ -9174,19 +10516,59 @@ class ExplorationUiSession:
             action = _combat_action_by_id(self._active_encounter(), actor, option.action_id)
             if action is None:
                 raise ValueError("Wybrana akcja nie jest już dostępna.")
+            cast_level = option.cast_level or (
+                action.spell_level if action.spell_level > 0 else None
+            )
             if action.action_type == "strength_potion":
                 return self.use_combat_strength_potion(option.action_id)
+            if action.action_type == "multi_target_damage":
+                return self.start_multi_target_damage_spell(
+                    option.action_id,
+                    cast_level=cast_level,
+                )
+            if action.action_type == "assisted_spell":
+                return self.use_assisted_combat_spell(
+                    option.action_id,
+                    cast_level=cast_level,
+                )
             if action.action_type == "concentration_attack_bonus":
-                return self.start_combat_concentration_action(option.action_id)
+                return self.start_combat_concentration_action(
+                    option.action_id,
+                    cast_level=cast_level,
+                )
+            if action.action_type == "targeted_status":
+                return self.start_combat_concentration_action(
+                    option.action_id,
+                    cast_level=cast_level,
+                )
+            if action.action_type == "long_cast_effect":
+                return self.start_long_cast(
+                    option.action_id,
+                    cast_level=cast_level,
+                )
             if action.action_type == "summon":
-                return self.start_summon(option.action_id)
+                return self.start_summon(
+                    option.action_id,
+                    cast_level=cast_level,
+                )
             if action.action_type == "spell_movement":
-                return self.start_magic_movement(option.action_id)
+                return self.start_magic_movement(
+                    option.action_id,
+                    cast_level=cast_level,
+                )
             if action.action_type == "spell_debuff":
-                return self.start_spell_debuff(option.action_id)
+                return self.start_spell_debuff(
+                    option.action_id,
+                    cast_level=cast_level,
+                )
             if action.action_type == "spell_dispel":
-                return self.start_spell_dispel(option.action_id)
+                return self.start_spell_dispel(
+                    option.action_id,
+                    cast_level=cast_level,
+                )
             raise ValueError("Ten typ akcji nie ma jeszcze wykonawcy w menu walki.")
+        if option.action == CombatMenuAction.CLASS_FEATURE and option.action_id:
+            return self.use_combat_class_feature(option.action_id)
         if option.action == CombatMenuAction.DASH:
             return self.use_combat_dash()
         if option.action == CombatMenuAction.DODGE:
@@ -9687,6 +11069,42 @@ class ExplorationUiSession:
             labels = ", ".join(effect.label for effect in transition.expired_effects)
             self._add_message("Efekty", f"Wygasły efekty pozycyjne: {labels}.")
 
+    def _expire_warding_bonds(self) -> None:
+        if self.combat_state is None:
+            return
+        actors = {
+            str(actor.id): actor
+            for actor in self.combat_state.actors
+        }
+        expired = tuple(
+            effect
+            for effect in self.active_combat_effects
+            if effect.kind == "warding_bond"
+            and (
+                effect.actor_id not in actors
+                or effect.source_actor_id not in actors
+                or actors[effect.actor_id].is_defeated()
+                or actors[str(effect.source_actor_id)].is_defeated()
+                or grid_distance_feet(
+                    actors[effect.actor_id].position,
+                    actors[str(effect.source_actor_id)].position,
+                )
+                > 60
+            )
+        )
+        if not expired:
+            return
+        expired_ids = {effect.id for effect in expired}
+        self.active_combat_effects = tuple(
+            effect
+            for effect in self.active_combat_effects
+            if effect.id not in expired_ids
+        )
+        self._add_message(
+            "Więź ochronna",
+            "Więź ochronna kończy się: uczestnik upadł albo oddalił się ponad 60 ft.",
+        )
+
     def _apply_spike_growth_movement_damage(
         self,
         actor_id: str,
@@ -9694,28 +11112,25 @@ class ExplorationUiSession:
     ) -> None:
         if self.combat_state is None:
             return
-        zones = tuple(
-            effect
-            for effect in self.active_combat_effects
-            if effect.kind == "spike_growth_zone"
-            and effect.anchor_position is not None
+        from dnd_board_game.combat import (
+            spike_growth_damage_dice_count,
+            spike_growth_damaging_steps,
         )
-        if not zones:
-            return
-        damaging_steps = sum(
-            1
-            for position in path.path[1:]
-            if any(
-                grid_distance_feet(position, zone.anchor_position) <= zone.value
-                for zone in zones
-            )
+        damaging_steps = spike_growth_damaging_steps(
+            path.path,
+            self.active_combat_effects,
         )
         if damaging_steps <= 0:
             return
         actor = self._actor_by_string_id(actor_id)
         amount = sum(
             self.encounter_rng.randint(1, 4)
-            for _ in range(damaging_steps * 2)
+            for _ in range(
+                spike_growth_damage_dice_count(
+                    path.path,
+                    self.active_combat_effects,
+                )
+            )
         )
         applied = apply_damage_result(
             actor,
@@ -9724,7 +11139,7 @@ class ExplorationUiSession:
                     DamageComponentInput(
                         amount,
                         "piercing",
-                        "Spike Growth",
+                        "Kolczaste zarośla",
                     ),
                 )
             ),
@@ -9734,10 +11149,173 @@ class ExplorationUiSession:
             applied.actor_after,
         )
         self._add_message(
-            "Spike Growth",
+            "Kolczaste zarośla",
             (
                 f"{actor.name} przechodzi {damaging_steps * 5} ft przez kolce "
                 f"i otrzymuje {applied.damage.total_applied} obrażeń kłutych."
+            ),
+        )
+
+    def _apply_moonbeam_entry_damage(self, actor_id: str, path) -> None:
+        if self.combat_state is None or len(path.path) < 2:
+            return
+        zones = tuple(
+            effect
+            for effect in self.active_combat_effects
+            if effect.kind.startswith("ongoing_damage_zone:")
+            and effect.anchor_position is not None
+        )
+        actor = self._actor_by_string_id(actor_id)
+        for zone in zones:
+            marker_kind = f"moonbeam_triggered:{zone.id}"
+            if any(
+                effect.actor_id == actor_id and effect.kind == marker_kind
+                for effect in self.active_combat_effects
+            ):
+                continue
+            started_inside = (
+                grid_distance_feet(path.path[0], zone.anchor_position)
+                <= zone.value
+            )
+            entered = any(
+                grid_distance_feet(position, zone.anchor_position) <= zone.value
+                for position in path.path[1:]
+            )
+            if started_inside or not entered:
+                continue
+            _, count_raw, sides_raw, damage_type, save_ability, save_mode = (
+                zone.kind.split(":", 5)
+            )
+            amount = sum(
+                self.encounter_rng.randint(1, int(sides_raw))
+                for _ in range(int(count_raw))
+            )
+            caster = next(
+                (
+                    candidate
+                    for candidate in self.combat_state.actors
+                    if str(candidate.id) == zone.source_actor_id
+                ),
+                None,
+            )
+            save = resolve_spell_save(
+                actor,
+                ability=save_ability,
+                dc=(caster.spell_save_dc if caster is not None else 10),
+                natural_roll=self.encounter_rng.randint(1, 20),
+                condition_states=self.combat_state.condition_states,
+                combat_actors=self.combat_state.actors,
+            )
+            if save.success:
+                amount = amount // 2 if save_mode == "half" else 0
+            applied = apply_damage_result(
+                actor,
+                resolve_damage(
+                    (DamageComponentInput(amount, damage_type, zone.label),)
+                ),
+            )
+            self.combat_state = replace_actor(
+                self.combat_state,
+                applied.actor_after,
+            )
+            marker = ActiveCombatEffect(
+                id=f"{marker_kind}:{actor_id}",
+                actor_id=actor_id,
+                kind=marker_kind,
+                label=f"{zone.label} — rozstrzygnięto wejście",
+                object_id=zone.object_id,
+                value=0,
+                duration=EffectDuration.UNTIL_TURN_START,
+                expiration_actor_id=actor_id,
+            )
+            self.active_combat_effects = apply_active_effect(
+                self.active_combat_effects,
+                marker,
+            ).active_effects
+            self._add_message(
+                zone.label,
+                (
+                    f"{actor.name} po raz pierwszy w tej turze wchodzi w obszar "
+                    f"i otrzymuje {applied.damage.total_applied} obrażeń {damage_type}."
+                ),
+            )
+            actor = applied.actor_after
+
+    def _apply_web_entry_save(self, actor_id: str, path) -> None:
+        if self.combat_state is None or len(path.path) < 2:
+            return
+        from dnd_board_game.combat import (
+            resolve_web_save,
+            web_zone_contains,
+            web_zones,
+        )
+
+        for zone in web_zones(self.active_combat_effects):
+            if web_zone_contains(zone, path.path[0]):
+                continue
+            if not any(web_zone_contains(zone, position) for position in path.path[1:]):
+                continue
+            resolution = resolve_web_save(
+                self.combat_state,
+                actor_id=actor_id,
+                zone=zone,
+                rng=self.encounter_rng,
+            )
+            self.combat_state = resolution.state
+            if resolution.saving_throw is None:
+                continue
+            outcome = (
+                "zostaje Unieruchomiony"
+                if resolution.restrained
+                else "unika lepkich nici"
+            )
+            self._add_message(
+                "Sieć",
+                (
+                    f"{resolution.saving_throw.actor_name}: Dex "
+                    f"{resolution.saving_throw.total} przeciw ST "
+                    f"{resolution.saving_throw.dc} — {outcome}."
+                ),
+            )
+            break
+
+    def _apply_zone_of_truth_entry_save(self, actor_id: str, path) -> None:
+        if self.combat_state is None or len(path.path) < 2:
+            return
+        from dnd_board_game.combat import (
+            resolve_zone_of_truth_save,
+            zone_of_truth_contains,
+            zone_of_truth_zones,
+        )
+
+        for zone in zone_of_truth_zones(self.active_combat_effects):
+            if zone_of_truth_contains(zone, path.path[0]):
+                continue
+            if not zone_of_truth_contains(zone, path.path[-1]):
+                continue
+            resolution = resolve_zone_of_truth_save(
+                self.combat_state,
+                self.active_combat_effects,
+                actor_id=actor_id,
+                zone=zone,
+                rng=self.encounter_rng,
+            )
+            self.active_combat_effects = resolution.active_effects
+            if resolution.saving_throw is not None:
+                self._add_zone_of_truth_save_message(resolution.saving_throw, resolution.bound)
+            break
+
+    def _add_zone_of_truth_save_message(self, saving_throw, bound: bool) -> None:
+        self._add_message(
+            "Strefa prawdy — wynik znany rzucającemu",
+            (
+                f"{saving_throw.actor_name}: Charisma {saving_throw.total} "
+                f"przeciw ST {saving_throw.dc} — "
+                + (
+                    "porażka; nie może świadomie kłamać."
+                    if bound
+                    else "sukces; efekt jeszcze go nie wiąże."
+                )
             ),
         )
 
@@ -9745,11 +11323,71 @@ class ExplorationUiSession:
         if self.combat_state is None or not self.active_combat_effects or self.combat_state.status.value != "active":
             return
         actor = combat_current_actor(self.combat_state)
+        from dnd_board_game.combat import (
+            resolve_web_save,
+            web_zone_contains,
+            web_zones,
+        )
+
+        for zone in web_zones(self.active_combat_effects):
+            if not web_zone_contains(zone, actor.position):
+                continue
+            web = resolve_web_save(
+                self.combat_state,
+                actor_id=str(actor.id),
+                zone=zone,
+                rng=self.encounter_rng,
+            )
+            self.combat_state = web.state
+            if web.saving_throw is not None:
+                outcome = (
+                    "zostaje Unieruchomiony"
+                    if web.restrained
+                    else "opiera się sieci"
+                )
+                self._add_message(
+                    "Sieć",
+                    (
+                        f"{actor.name}: Dex {web.saving_throw.total} przeciw "
+                        f"ST {web.saving_throw.dc} — {outcome}."
+                    ),
+                )
+            break
+        from dnd_board_game.combat import (
+            resolve_zone_of_truth_save,
+            zone_of_truth_contains,
+            zone_of_truth_zones,
+        )
+
+        for zone in zone_of_truth_zones(self.active_combat_effects):
+            if not zone_of_truth_contains(zone, actor.position):
+                continue
+            truth = resolve_zone_of_truth_save(
+                self.combat_state,
+                self.active_combat_effects,
+                actor_id=str(actor.id),
+                zone=zone,
+                rng=self.encounter_rng,
+            )
+            self.active_combat_effects = truth.active_effects
+            if truth.saving_throw is not None:
+                self._add_zone_of_truth_save_message(
+                    truth.saving_throw,
+                    truth.bound,
+                )
+            break
         for effect in tuple(self.active_combat_effects):
-            if (
-                effect.actor_id != str(actor.id)
-                or not effect.kind.startswith("ongoing_damage:")
-            ):
+            targeted = (
+                effect.actor_id == str(actor.id)
+                and effect.kind.startswith("ongoing_damage:")
+            )
+            zoned = (
+                effect.kind.startswith("ongoing_damage_zone:")
+                and effect.anchor_position is not None
+                and grid_distance_feet(actor.position, effect.anchor_position)
+                <= effect.value
+            )
+            if not targeted and not zoned:
                 continue
             _, count_raw, sides_raw, damage_type, save_ability, save_mode = (
                 effect.kind.split(":", 5)
@@ -10095,7 +11733,16 @@ class ExplorationUiSession:
         if self.combat_state is None or not events:
             return
         resolution = resolve_combat_trigger_events(self.combat_state, events)
-        self.combat_state = resolution.state
+        condition_states = resolution.state.condition_states
+        for event in events:
+            condition_states, _expired = expire_condition_states(
+                condition_states,
+                event,
+            )
+        self.combat_state = replace(
+            resolution.state,
+            condition_states=condition_states,
+        )
         self._add_trigger_activation_notices(resolution.activations)
 
     def _add_recharge_notices(self, results) -> None:
@@ -10220,6 +11867,12 @@ class ExplorationUiSession:
             and self._maybe_open_retaliation_spell_reaction()
         ):
             return self.state_payload()
+        if result.source is not None and result.target is not None:
+            self._animate_ranged_projectile(
+                result.moved_enemy or result.enemy,
+                result.target,
+                result.source,
+            )
         transition = self.combat_turn_finalization.commit_enemy_result(
             result=result,
             active_effects=self.active_combat_effects,
@@ -11303,6 +12956,7 @@ class ExplorationUiSession:
             natural_roll_2=natural_roll_2,
             natural_rerolls=natural_rerolls,
             additional_modifiers=additional_modifiers,
+            active_effects=self.active_combat_effects,
         )
         self.combat_state = transition.result.state
         self.pending_enemy_turn_ack_result = transition.result
@@ -11907,6 +13561,19 @@ class ExplorationUiSession:
                 actor,
                 saving_throw_ability=condition_state.save_ability,
             )
+            request = replace(
+                request,
+                mode=poison_protection_roll_mode(
+                    actor,
+                    self.active_combat_effects,
+                    (
+                        "poison"
+                        if condition_state.condition == CombatCondition.POISONED
+                        else condition_state.condition.value,
+                    ),
+                    request.mode,
+                ),
+            )
             request = apply_exhaustion_to_roll_request(
                 actor,
                 request,
@@ -11925,8 +13592,21 @@ class ExplorationUiSession:
                 natural_roll=natural_roll,
                 natural_roll_2=natural_roll_2,
                 combat_actors=state.actors,
+                active_effects=self.active_combat_effects,
             )
             condition_states = resolution.condition_states
+            if (
+                resolution.removed
+                and condition_state.condition == CombatCondition.ENFEEBLED
+            ):
+                self.active_combat_effects = tuple(
+                    effect
+                    for effect in self.active_combat_effects
+                    if not (
+                        effect.actor_id == str(actor.id)
+                        and effect.kind == "ray_of_enfeeblement"
+                    )
+                )
             result_label = "usunięty" if resolution.removed else "pozostaje"
             self._add_message(
                 "Rzut przeciw warunkowi",
@@ -11965,6 +13645,10 @@ class ExplorationUiSession:
             raise ValueError("Walka nie została rozpoczęta.")
         if combat_current_actor(self.combat_state).needs_death_save():
             raise ValueError("Najpierw wykonaj rzut śmierci aktywnego bohatera.")
+        if self._combat_has_pending_resolution():
+            raise ValueError(
+                "Najpierw dokończ albo anuluj rozpoczętą akcję, rzut lub wybór celu."
+            )
         actor = combat_current_actor(self.combat_state)
         active_long_cast = next(
             (
@@ -12104,11 +13788,21 @@ class ExplorationUiSession:
             natural_roll_2=natural_roll_2,
             combat_actors=self.combat_state.actors,
             additional_modifiers=additional_modifiers,
+            active_effects=self.active_combat_effects,
         )
         self.combat_state = replace(
             self.combat_state,
             condition_states=resolution.condition_states,
         )
+        if resolution.removed and parsed == CombatCondition.ENFEEBLED:
+            self.active_combat_effects = tuple(
+                effect
+                for effect in self.active_combat_effects
+                if not (
+                    effect.actor_id == str(actor.id)
+                    and effect.kind == "ray_of_enfeeblement"
+                )
+            )
         if inspiration is not None and bardic_inspiration_roll is not None:
             self.active_combat_effects = tuple(
                 effect
@@ -12230,6 +13924,11 @@ class ExplorationUiSession:
     ) -> dict[str, object]:
         if self.combat_state is None:
             raise ValueError("Walka nie została rozpoczęta.")
+        if (
+            self.combat_stabilization_target_id
+            and target_id != self.combat_stabilization_target_id
+        ):
+            raise ValueError("Cel stabilizacji nie odpowiada figurce wskazanej na planszy.")
         stabilization_method = StabilizationMethod(method)
         result = resolve_combat_stabilization(
             self.combat_state,
@@ -12238,6 +13937,8 @@ class ExplorationUiSession:
             natural_roll=natural_roll,
         )
         self.combat_state = result.state
+        self.combat_stabilization_method = None
+        self.combat_stabilization_target_id = None
         if result.method == StabilizationMethod.HEALERS_KIT:
             detail = f"Zestaw uzdrowiciela: bez rzutu. Pozostałe użycia: {result.kit_remaining}."
         elif result.method == StabilizationMethod.SPARE_THE_DYING:
@@ -12298,15 +13999,15 @@ class ExplorationUiSession:
         if not actors:
             return None
         pending = self.spell_preparation_flow.pending_actors(actors)
+        current_actor_id = str(pending[0].id) if pending else None
         return {
             "complete": not pending,
-            "current_actor_id": str(pending[0].id) if pending else None,
+            "current_actor_id": current_actor_id,
             "actors": [
-                {
-                    "actor_id": str(actor.id),
-                    "actor_name": actor.name,
-                    **actor.spell_preparation.as_payload(),
-                }
+                _spell_preparation_actor_payload(
+                    actor,
+                    include_spell_details=str(actor.id) == current_actor_id,
+                )
                 for actor in actors
                 if actor.spell_preparation is not None
             ],
@@ -12550,6 +14251,17 @@ class ExplorationUiSession:
         self.board_message = (
             f"Pole {pad.symbol} ({led_color_name_pl(pad.color)}): {pad.label}."
         )
+        self._record(
+            "ui_board_interaction_pad_activated",
+            {
+                "action_kind": pad.action_kind,
+                "target_id": pad.target_id,
+                "label": pad.label,
+                "symbol": pad.symbol,
+                "position": [pad.position.col, pad.position.row],
+                "selection_revision": self.board_selection_revision,
+            },
+        )
         if pad.action_kind == "point":
             return self.select_point(pad.target_id)
         if pad.action_kind == "zone_option":
@@ -12590,6 +14302,30 @@ class ExplorationUiSession:
         if self.board_adapter is None:
             return
         self.board_adapter.show_feedback(feedback)
+
+    def _animate_ranged_projectile(
+        self,
+        attacker: Actor,
+        target: Actor,
+        source=None,
+    ) -> None:
+        if self.board_adapter is None:
+            return
+        if source is not None and effective_attack_kind(source) != AttackKind.RANGED:
+            return
+        path = bresenham_line(attacker.position, target.position)
+        if len(path) < 2:
+            return
+        self.board_adapter.animate_projectile(path)
+        self._record(
+            "ui_ranged_projectile_animated",
+            {
+                "attacker_id": str(attacker.id),
+                "target_id": str(target.id),
+                "source_id": str(getattr(source, "id", "")),
+                "path": [[position.col, position.row] for position in path],
+            },
+        )
 
     def _current_board_scan_target(self) -> BoardScanTarget:
         if self.encounter_setup_flow is not None:
@@ -12764,6 +14500,46 @@ class ExplorationUiSession:
                     feedback=_pending_enemy_turn_led_feedback(self.pending_enemy_turn_result),
                     empty_message="Tura przeciwnika czeka na potwierdzenie pola docelowego albo celu.",
                 )
+            if self.pending_spell_zone_move_effect_id:
+                positions = self._moonbeam_move_positions()
+                return BoardScanTarget(
+                    positions=positions,
+                    feedback=LedFeedback(
+                        (
+                            LedFrame(
+                                positions,
+                                LedColor.MENU_PURPLE,
+                                LedRole.DESTINATION,
+                            ),
+                        )
+                    ),
+                    empty_message="Kliknij nowy środek Księżycowego promienia.",
+                )
+            if self.combat_aux_targeting_mode is not None:
+                targets = self._combat_aux_targets(
+                    self.combat_aux_targeting_mode
+                )
+                positions = tuple(target.position for target in targets)
+                return BoardScanTarget(
+                    positions=positions,
+                    feedback=LedFeedback(
+                        (LedFrame(positions, LedColor.MENU_PURPLE, LedRole.DESTINATION),)
+                    ),
+                    empty_message="Kliknij podświetloną figurkę dodatkowego celu.",
+                )
+            if self.combat_stabilization_method is not None:
+                targets = legal_stabilization_targets(
+                    self.combat_state,
+                    actor,
+                )
+                positions = tuple(target.position for target in targets)
+                return BoardScanTarget(
+                    positions=positions,
+                    feedback=LedFeedback(
+                        (LedFrame(positions, LedColor.ALLY, LedRole.ALLY),)
+                    ),
+                    empty_message="Kliknij podświetlonego nieprzytomnego sojusznika.",
+                )
             if self.pending_player_attack is not None:
                 return BoardScanTarget(
                     positions=(),
@@ -12878,15 +14654,40 @@ class ExplorationUiSession:
                     ),
                 )
             if self.pending_combat_help is not None:
+                selectable_ids = (
+                    self.pending_combat_help.target_ids
+                    if self.pending_combat_help.selected_ally_id
+                    else self.pending_combat_help.ally_ids
+                )
                 target_positions = tuple(
                     actor.position
                     for actor in self.combat_state.actors
-                    if str(actor.id) in self.pending_combat_help.target_ids
+                    if str(actor.id) in selectable_ids
                 )
                 return BoardScanTarget(
-                    positions=(),
-                    feedback=LedFeedback((LedFrame(target_positions, LedColor.LEGAL_ATTACK_TARGET, LedRole.ENEMY),)),
-                    empty_message="Help czeka na wybór sojusznika i celu w UI.",
+                    positions=target_positions,
+                    feedback=LedFeedback(
+                        (
+                            LedFrame(
+                                target_positions,
+                                (
+                                    LedColor.ENEMY
+                                    if self.pending_combat_help.selected_ally_id
+                                    else LedColor.ALLY
+                                ),
+                                (
+                                    LedRole.ENEMY
+                                    if self.pending_combat_help.selected_ally_id
+                                    else LedRole.ALLY
+                                ),
+                            ),
+                        )
+                    ),
+                    empty_message=(
+                        "Kliknij podświetlonego przeciwnika."
+                        if self.pending_combat_help.selected_ally_id
+                        else "Kliknij podświetlonego sojusznika."
+                    ),
                 )
             if self.pending_multi_target_damage_spell is not None:
                 target_ids = set(
@@ -12913,6 +14714,24 @@ class ExplorationUiSession:
                     ),
                 )
             if self.pending_concentration_action is not None:
+                if (
+                    self.pending_concentration_action.legal_positions
+                    and self.pending_concentration_action.anchor is None
+                ):
+                    legal_positions = self.pending_concentration_action.legal_positions
+                    return BoardScanTarget(
+                        positions=legal_positions,
+                        feedback=LedFeedback(
+                            (
+                                LedFrame(
+                                    legal_positions,
+                                    LedColor.MARKER,
+                                    LedRole.MARKER,
+                                ),
+                            )
+                        ),
+                        empty_message="Wybierz podświetlony środek albo kierunek obszaru czaru.",
+                    )
                 selected_ids = set(
                     self.pending_concentration_action.selected_target_ids
                 )
@@ -12928,9 +14747,18 @@ class ExplorationUiSession:
                     and str(actor.id) not in selected_ids
                 )
                 return BoardScanTarget(
-                    positions=(*target_positions, *selected_positions),
+                    positions=(
+                        ()
+                        if self.pending_concentration_action.legal_positions
+                        else (*target_positions, *selected_positions)
+                    ),
                     feedback=LedFeedback(
                         (
+                            LedFrame(
+                                self.pending_concentration_action.area_positions,
+                                LedColor.MARKER,
+                                LedRole.MARKER,
+                            ),
                             LedFrame(target_positions, LedColor.ALLY, LedRole.ALLY),
                             LedFrame(
                                 selected_positions,
@@ -12948,6 +14776,19 @@ class ExplorationUiSession:
                     positions=(),
                     feedback=active_actor_led_feedback(self.combat_state.initiative_order),
                     empty_message="Rzut na koncentrację czeka na wpisanie wyniku w UI.",
+                )
+            if self.combat_targeting_class_feature_action_id is not None:
+                targets = self._class_feature_board_targets(
+                    self.combat_targeting_class_feature_action_id,
+                    actor,
+                )
+                positions = tuple(target.position for target in targets)
+                return BoardScanTarget(
+                    positions=positions,
+                    feedback=LedFeedback(
+                        (LedFrame(positions, LedColor.ALLY, LedRole.ALLY),)
+                    ),
+                    empty_message="Kliknij podświetloną figurkę celu cechy klasowej.",
                 )
             if self.pending_combat_interaction is not None:
                 position = self.pending_combat_interaction.target_position
@@ -13236,6 +15077,81 @@ class ExplorationUiSession:
             if actor.faction == Faction.ALLY:
                 encounter = self._active_encounter()
                 try:
+                    if self.pending_spell_zone_move_effect_id:
+                        if selected in self._moonbeam_move_positions():
+                            return self.confirm_moonbeam_move(selected)
+                        self.board_message = (
+                            "Kliknij podświetlony środek w odległości do 60 ft."
+                        )
+                        return self.state_payload()
+                    if self.combat_stabilization_method is not None:
+                        target = next(
+                            (
+                                candidate
+                                for candidate in legal_stabilization_targets(
+                                    self.combat_state,
+                                    actor,
+                                )
+                                if candidate.position == selected
+                            ),
+                            None,
+                        )
+                        if target is None:
+                            self.board_message = "Kliknij podświetlonego nieprzytomnego sojusznika."
+                            return self.state_payload()
+                        method = self.combat_stabilization_method
+                        if method == StabilizationMethod.MEDICINE.value:
+                            self.combat_stabilization_target_id = str(target.id)
+                            self.board_message = (
+                                f"Wybrano {target.name}. Wpisz wynik d20 Medicine."
+                            )
+                            return self.state_payload()
+                        self.combat_stabilization_method = None
+                        return self.stabilize_combat_actor(
+                            target_id=str(target.id),
+                            method=method,
+                        )
+                    if self.combat_aux_targeting_mode is not None:
+                        mode = self.combat_aux_targeting_mode
+                        target = next(
+                            (
+                                candidate
+                                for candidate in self._combat_aux_targets(mode)
+                                if candidate.position == selected
+                            ),
+                            None,
+                        )
+                        if target is None:
+                            self.board_message = "Kliknij podświetloną figurkę."
+                            return self.state_payload()
+                        target_id = str(target.id)
+                        if mode == "twinned_attack":
+                            self.combat_aux_targeting_mode = None
+                            return self.select_twinned_attack_target(target_id)
+                        if mode == "twinned_healing":
+                            self.combat_aux_targeting_mode = None
+                            return self.select_twinned_healing_target(target_id)
+                        pending_area = self.pending_area_spell
+                        if pending_area is None:
+                            raise ValueError("Brak oczekującego czaru obszarowego.")
+                        if mode == "sculpt_spells":
+                            selected_ids = set(pending_area.protected_target_ids)
+                            selected_ids.symmetric_difference_update({target_id})
+                            return self.select_sculpt_spells_targets(
+                                tuple(sorted(selected_ids))
+                            )
+                        if mode == "careful_spell":
+                            selected_ids = set(pending_area.careful_target_ids)
+                            selected_ids.symmetric_difference_update({target_id})
+                            return self.select_area_spell_metamagic_targets(
+                                careful_target_ids=tuple(sorted(selected_ids)),
+                                heightened_target_id=pending_area.heightened_target_id,
+                            )
+                        self.combat_aux_targeting_mode = None
+                        return self.select_area_spell_metamagic_targets(
+                            careful_target_ids=pending_area.careful_target_ids,
+                            heightened_target_id=target_id,
+                        )
                     if self.pending_spell_dispel is not None:
                         if self.pending_spell_dispel.stage == "ability_check":
                             self.board_message = (
@@ -13273,7 +15189,8 @@ class ExplorationUiSession:
                         )
                         if target is not None:
                             return self.confirm_spell_debuff(
-                                target_id=str(target.id)
+                                target_id=str(target.id),
+                                condition=self.pending_spell_debuff.selected_condition,
                             )
                         self.board_message = (
                             "Kliknij podświetlonego przeciwnika dla czaru "
@@ -13333,7 +15250,94 @@ class ExplorationUiSession:
                             "pocisku."
                         )
                         return self.state_payload()
+                    if self.pending_combat_help is not None:
+                        pending_help = self.pending_combat_help
+                        selectable_ids = (
+                            pending_help.target_ids
+                            if pending_help.selected_ally_id
+                            else pending_help.ally_ids
+                        )
+                        selected_actor = next(
+                            (
+                                candidate
+                                for candidate in self.combat_state.actors
+                                if str(candidate.id) in selectable_ids
+                                and candidate.position == selected
+                            ),
+                            None,
+                        )
+                        if selected_actor is None:
+                            self.board_message = "Kliknij podświetloną figurkę."
+                            return self.state_payload()
+                        if not pending_help.selected_ally_id:
+                            self.pending_combat_help = replace(
+                                pending_help,
+                                selected_ally_id=str(selected_actor.id),
+                            )
+                            self.board_message = (
+                                f"Help: {selected_actor.name} otrzyma pomoc. "
+                                "Teraz kliknij podświetlonego przeciwnika."
+                            )
+                            self._sync_board_leds()
+                            return self.state_payload()
+                        return self.confirm_combat_help(
+                            ally_id=pending_help.selected_ally_id,
+                            target_id=str(selected_actor.id),
+                        )
                     if self.pending_concentration_action is not None:
+                        if (
+                            self.pending_concentration_action.legal_positions
+                            and self.pending_concentration_action.anchor is None
+                        ):
+                            encounter = self._active_encounter()
+                            actor = combat_current_actor(self.combat_state)
+                            action = _combat_action_by_id(
+                                encounter,
+                                actor,
+                                self.pending_concentration_action.action_id,
+                            )
+                            if encounter is None or action is None:
+                                raise ValueError("Brak danych obszarowego czaru.")
+                            self.pending_concentration_action = (
+                                self.player_combat_resource_flow.select_concentration_area(
+                                    state=self.combat_state,
+                                    board=encounter.board,
+                                    action=action,
+                                    pending=self.pending_concentration_action,
+                                    position=selected,
+                                )
+                            )
+                            names = _actor_names_from_actors(
+                                self.combat_state.actors,
+                                self.pending_concentration_action.selected_target_ids,
+                            )
+                            self.board_message = (
+                                f"{action.label}: wybrano obszar. "
+                                f"Cele w obszarze: {', '.join(names) if names else 'brak'}."
+                            )
+                            self._record(
+                                "ui_combat_spell_area_selected",
+                                {
+                                    "actor_id": str(actor.id),
+                                    "action_id": action.id,
+                                    "anchor": [selected.col, selected.row],
+                                    "target_ids": list(
+                                        self.pending_concentration_action.selected_target_ids
+                                    ),
+                                },
+                            )
+                            self._sync_board_leds()
+                            return self.state_payload()
+                        if (
+                            self.pending_concentration_action.legal_positions
+                            and self.pending_concentration_action.anchor is not None
+                        ):
+                            self.board_message = (
+                                "Obszar czaru jest już wybrany. Wszystkie legalne "
+                                "istoty w obszarze zostaną objęte efektem; potwierdź "
+                                "czar w panelu."
+                            )
+                            return self.state_payload()
                         target = next(
                             (
                                 candidate
@@ -13360,7 +15364,36 @@ class ExplorationUiSession:
                             )
                             self._sync_board_leds()
                             return self.state_payload()
-                        self.board_message = "Kliknij podświetlonego sojusznika dla czaru koncentracyjnego."
+                        self.board_message = "Kliknij podświetlony legalny cel czaru."
+                        return self.state_payload()
+                    if self.combat_targeting_class_feature_action_id is not None:
+                        action_id = self.combat_targeting_class_feature_action_id
+                        target = next(
+                            (
+                                candidate
+                                for candidate in self._class_feature_board_targets(
+                                    action_id,
+                                    actor,
+                                )
+                                if candidate.position == selected
+                            ),
+                            None,
+                        )
+                        if target is None:
+                            self.board_message = "Kliknij podświetlonego sojusznika."
+                            return self.state_payload()
+                        if action_id == "bardic_inspiration":
+                            self.combat_targeting_class_feature_action_id = None
+                            return self.use_combat_class_feature(
+                                action_id,
+                                target_id=str(target.id),
+                            )
+                        self.combat_selected_class_feature_target_id = str(target.id)
+                        self.board_message = (
+                            f"Wybrano: {target.name}. Podaj liczbę punktów "
+                            "leczenia i potwierdź w panelu."
+                        )
+                        self._sync_board_leds()
                         return self.state_payload()
                     if self.combat_targeting_attack_source_id is not None:
                         source = self._selected_attack_source(actor)
@@ -13479,6 +15512,17 @@ class ExplorationUiSession:
             return self.state_payload()
         self.pending = None
         point = selection.point
+        for effect in self.state.magic_effects:
+            if effect.spell_id != "magic_mouth":
+                continue
+            specification = decode_magic_mouth(str(effect.flag_value))
+            spoken = magic_mouth_message_for_event(
+                specification,
+                object_id=point.id,
+                event="interaction",
+            )
+            if spoken is not None:
+                self._add_message("Magiczne usta", spoken)
         if (
             point.npc_interaction is not None
             and point.npc_interaction.dialogue_intro
@@ -13836,7 +15880,11 @@ class ExplorationUiSession:
                 f"{actor.name} potrzebuje co najmniej "
                 f"{option.entry_cost_cp} cp, aby wykonać to działanie."
             )
-        plan = _zone_option_check_plan(option, actor_id)
+        plan = _zone_option_check_plan(
+            option,
+            actor_id,
+            active_effects=self.active_combat_effects,
+        )
         self.pending = PendingInteraction(
             kind=PendingKind.ZONE_OPTION,
             stage=PendingStage.ROLL,
@@ -16447,6 +18495,7 @@ class ExplorationUiSession:
             helper_actor_id=helper_actor_id,
             selected_actor_ids=participant_actor_ids,
             resource=resource,
+            active_effects=self.active_combat_effects,
         )
         self.pending = replace(self.pending, stage=PendingStage.ROLL, check_plan=plan)
         self._add_message("Rzut", f"Wpisz wyniki rzutów. {_check_plan_text(self.exploration.actors, plan)}")
@@ -16548,6 +18597,7 @@ class ExplorationUiSession:
             lead_actor_id,
             helper_actor_id=helper_actor_id,
             selected_actor_ids=participant_actor_ids,
+            active_effects=self.active_combat_effects,
         )
         self.pending = replace(self.pending, stage=PendingStage.ROLL, check_plan=plan)
         self._add_message("Rzut", f"Wpisz wyniki rzutów. {_check_plan_text(self.exploration.actors, plan)}")
@@ -16598,6 +18648,7 @@ class ExplorationUiSession:
             observation,
             lead_actor_id,
             visibility=visibility,
+            active_effects=self.active_combat_effects,
         )
         self.pending = replace(self.pending, stage=PendingStage.ROLL, check_plan=plan)
         self._add_message("Rzut", f"Wpisz wynik rzutu. {_check_plan_text(self.exploration.actors, plan)}")
@@ -16783,19 +18834,25 @@ class ExplorationUiSession:
             self.active_combat_effects,
         )
         check_result = resolve_exploration_check(plan, inputs)
-        consumed_inspiration_ids = {
+        consumed_optional_die_ids = {
             effect.id
             for effect in self.active_combat_effects
-            if effect.kind == "bardic_inspiration"
+            if effect.kind in {"bardic_inspiration", "guidance_roll_bonus"}
             and isinstance(raw_rolls.get(effect.actor_id), Mapping)
-            and raw_rolls[effect.actor_id].get("bardic_inspiration_roll")
+            and raw_rolls[effect.actor_id].get(
+                (
+                    "bardic_inspiration_roll"
+                    if effect.kind == "bardic_inspiration"
+                    else "guidance_roll"
+                )
+            )
             not in (None, "", 0, "0")
         }
-        if consumed_inspiration_ids:
+        if consumed_optional_die_ids:
             self.active_combat_effects = tuple(
                 effect
                 for effect in self.active_combat_effects
-                if effect.id not in consumed_inspiration_ids
+                if effect.id not in consumed_optional_die_ids
             )
         self._record(
             "ui_rolls_resolved",
@@ -17282,7 +19339,9 @@ class ExplorationUiSession:
         if actor_id not in raw_rolls:
             raise ValueError("Brakuje naturalnego wyniku d20 dla rzutu obronnego.")
         raw_roll = raw_rolls[actor_id]
+        natural_roll_2 = None
         if isinstance(raw_roll, dict):
+            natural_roll_2 = raw_roll.get("natural_roll_2")
             raw_roll = raw_roll.get("natural_roll", 0)
         actor = next(
             (candidate for candidate in self.exploration.actors if str(candidate.id) == actor_id),
@@ -17294,7 +19353,13 @@ class ExplorationUiSession:
             actor,
             hazard,
             natural_roll=int(raw_roll),
+            natural_roll_2=(
+                int(natural_roll_2)
+                if natural_roll_2 not in (None, "")
+                else None
+            ),
             rng=self.encounter_rng,
+            active_effects=self._stealth_effects(),
         )
         self.exploration = self._replace_exploration_actor(resolution.actor_after)
         if resolution.applied_damage.damage.total_applied > 0:
@@ -17338,6 +19403,79 @@ class ExplorationUiSession:
                 "outcome_effects": list(resolution.outcome_effects),
             },
         )
+
+    def cast_feather_fall_for_pending_hazard(
+        self,
+        caster_id: str,
+    ) -> dict[str, object]:
+        pending = self.pending
+        if (
+            pending is None
+            or pending.stage != PendingStage.HAZARD_SAVE
+            or pending.hazard is None
+            or pending.hazard_actor_id is None
+            or not _hazard_is_fall(pending.hazard)
+        ):
+            raise ValueError("Powolne opadanie wymaga aktywnego zagrożenia upadkiem.")
+        caster = next(
+            (
+                actor
+                for actor in self.exploration.actors
+                if str(actor.id) == caster_id
+            ),
+            None,
+        )
+        falling_actor = next(
+            (
+                actor
+                for actor in self.exploration.actors
+                if str(actor.id) == pending.hazard_actor_id
+            ),
+            None,
+        )
+        if caster is None or falling_actor is None:
+            raise ValueError("Nie znaleziono rzucającego albo spadającego celu.")
+        validation = actor_spell_cast_validation(caster, "feather_fall")
+        if validation is None or not validation.valid:
+            errors = validation.errors if validation is not None else ()
+            raise ValueError(
+                " ".join(errors)
+                or f"{caster.name} nie może rzucić Powolnego opadania."
+            )
+        if grid_distance_feet(caster.position, falling_actor.position) > 60:
+            raise ValueError("Spadający cel jest poza zasięgiem 60 stóp.")
+        spell_use = consume_spell_resource(
+            caster,
+            1,
+            spell_id="feather_fall",
+            cast_level=1,
+        )
+        self.exploration = self._replace_exploration_actor(
+            spell_use.actor_after
+        )
+        hazard = pending.hazard
+        self.pending = None
+        self._add_message(
+            "Powolne opadanie",
+            (
+                f"{caster.name} używa reakcji. {falling_actor.name} opada "
+                "bezpiecznie i nie otrzymuje obrażeń od tego upadku."
+            ),
+        )
+        self._record(
+            "ui_exploration_feather_fall_cast",
+            {
+                "caster_id": caster_id,
+                "target_actor_ids": [str(falling_actor.id)],
+                "hazard_id": hazard.id,
+                "damage_prevented": True,
+                "cast_level": 1,
+            },
+        )
+        self._refresh_pending_encounter()
+        self._write_stable_checkpoint(reason="feather_fall_resolved")
+        self._sync_board_leds()
+        return self.state_payload()
         if self.pending.breakage_actor_id is not None:
             self.pending = replace(
                 self.pending,
@@ -17822,7 +19960,11 @@ class ExplorationUiSession:
                 {
                     "actor_id": str(actor.id),
                     "actor_name": actor.name,
-                    "modifier": precombat_stealth_modifier(actor),
+                    "modifier": precombat_stealth_modifier(
+                        actor,
+                        encounter.actors,
+                        self._stealth_effects(),
+                    ),
                     "roll_mode": armor_skill_roll_request(
                         actor,
                         "stealth",
@@ -17895,6 +20037,11 @@ class ExplorationUiSession:
             request = self.pending.hazard.saving_throw
             modifiers = saving_throw_roll_modifiers(actor, request.ability)
             request_payload = request.as_payload()
+            roll_mode = poison_protection_roll_mode(
+                actor,
+                self._stealth_effects(),
+                request.effect_tags,
+            )
             return [
                 {
                     "actor_id": str(actor.id),
@@ -17906,8 +20053,12 @@ class ExplorationUiSession:
                         _roll_modifier_payload(modifier) for modifier in modifiers
                     ],
                     "ignored_modifiers": [],
+                    "roll_mode": roll_mode.value,
+                    "requires_second_roll": roll_mode != RollMode.NORMAL,
                     "instruction": (
-                        f"Rzuć fizyczne d20 na {request_payload['ability_label']} "
+                        f"Rzuć fizyczne "
+                        f"{'2d20 z przewagą' if roll_mode == RollMode.ADVANTAGE else 'd20'} "
+                        f"na {request_payload['ability_label']} "
                         f"przeciw ST {request.dc}."
                     ),
                 }
@@ -17938,6 +20089,15 @@ class ExplorationUiSession:
                 ),
                 None,
             )
+            guidance = next(
+                (
+                    effect
+                    for effect in self.active_combat_effects
+                    if effect.actor_id == str(actor.id)
+                    and effect.kind == "guidance_roll_bonus"
+                ),
+                None,
+            )
             payload: dict[str, object] = {
                 "actor_id": str(actor.id),
                 "actor_name": actor.name,
@@ -17961,6 +20121,11 @@ class ExplorationUiSession:
                 "bardic_inspiration": (
                     {"die_sides": inspiration.value, "label": inspiration.label}
                     if inspiration is not None
+                    else None
+                ),
+                "guidance": (
+                    {"die_sides": guidance.value, "label": guidance.label}
+                    if guidance is not None
                     else None
                 ),
             }
@@ -18464,6 +20629,11 @@ def _combat_payload(
     selected_attack_source_ids: dict[str, str] | None = None,
     selected_healing_source_ids: dict[str, str] | None = None,
     targeting_attack_source_id: str | None = None,
+    targeting_class_feature_action_id: str | None = None,
+    selected_class_feature_target_id: str | None = None,
+    aux_targeting_mode: str | None = None,
+    stabilization_method: str | None = None,
+    stabilization_target_id: str | None = None,
 ) -> dict[str, object] | None:
     if state is None:
         return None
@@ -18487,7 +20657,14 @@ def _combat_payload(
     )
     summoned = summoned_state_for_actor(state.summoned_creatures, actor.id)
     if summoned is not None:
-        attack_sources = (summon_attack_source(summoned.definition),)
+        owner = next(
+            candidate
+            for candidate in state.actors
+            if candidate.id == summoned.owner_actor_id
+        )
+        attack_sources = (
+            summon_attack_source(summoned.definition, owner),
+        )
     two_weapon_sources = (
         eligible_two_weapon_bonus_sources(
             actor,
@@ -18798,6 +20975,19 @@ def _combat_payload(
                 and bool(actor_spell_cast_validation(actor, "spare_the_dying").valid)
             ),
             "targets": [_combat_actor_payload(target, active_combat_effects) for target in stabilization_targets],
+            "targeting_method": stabilization_method,
+            "selected_target": (
+                next(
+                    (
+                        _combat_actor_payload(target, active_combat_effects)
+                        for target in stabilization_targets
+                        if str(target.id) == stabilization_target_id
+                    ),
+                    None,
+                )
+                if stabilization_target_id
+                else None
+            ),
         },
         "stealth": {
             "hide_available": bool(
@@ -18820,30 +21010,12 @@ def _combat_payload(
         "class_feature_actions": [
             {
                 "id": action_id,
-                "label": action_id.replace("_", " ").title(),
-                "source_feature": feature.label,
-                "implemented": action_id in {
-                    "second_wind",
-                    "action_surge",
-                    "rage",
-                    "reckless_attack",
-                    "bardic_inspiration",
-                    "lay_on_hands",
-                    "preserve_life",
-                    "patient_defense",
-                    "step_of_the_wind",
-                    "font_of_magic",
-                    "martial_arts_bonus_attack",
-                    "flurry_of_blows",
-                    "divine_sense",
-                    "sacred_weapon",
-                    "wild_shape",
-                    "turn_undead",
-                    "turn_the_unholy",
-                    "primeval_awareness",
-                    "frenzy",
-                    "pact_weapon",
-                },
+                "label": player_label(action_id),
+                "source_feature": player_label(
+                    feature.feature_id,
+                    feature.label,
+                ),
+                "implemented": action_id in COMBAT_CLASS_FEATURE_ACTION_IDS,
                 "wild_shape_forms": (
                     [
                         {
@@ -18874,6 +21046,14 @@ def _combat_payload(
                         if target.id != actor.id
                         and not target.is_defeated()
                         and grid_distance_feet(actor.position, target.position) <= 30
+                        and (
+                            encounter is None
+                            or line_of_sight_clear(
+                                encounter.board,
+                                actor.position,
+                                target.position,
+                            )
+                        )
                         and (
                             target.creature_type == "undead"
                             if action_id == "turn_undead"
@@ -18915,6 +21095,39 @@ def _combat_payload(
                 for action_id in feature.action_ids
             )
         ],
+        "class_feature_targeting": (
+            {
+                "action_id": targeting_class_feature_action_id,
+                "label": player_label(targeting_class_feature_action_id),
+                "instructions": (
+                    "Wybierz na planszy innego, przytomnego sojusznika "
+                    "w zasięgu 60 stóp. Otrzyma kość Bardowskiej Inspiracji, "
+                    "którą może dodać do jednego rzutu ataku, testu cechy "
+                    "albo rzutu obronnego."
+                    if targeting_class_feature_action_id == "bardic_inspiration"
+                    else "Wybierz na planszy rannego sojusznika w zasięgu "
+                    "zdolności, a następnie określ liczbę wydawanych punktów leczenia."
+                ),
+                "selected_target": (
+                    next(
+                        (
+                            {
+                                "id": str(target.id),
+                                "name": target.name,
+                            }
+                            for target in state.actors
+                            if str(target.id) == selected_class_feature_target_id
+                        ),
+                        None,
+                    )
+                    if selected_class_feature_target_id
+                    else None
+                ),
+            }
+            if targeting_class_feature_action_id
+            else None
+        ),
+        "aux_targeting_mode": aux_targeting_mode,
         "legal_targets": [_combat_target_payload(target) for target in targets],
         "legal_area_positions": [[position.col, position.row] for position in area_positions],
         "movement": (
@@ -18968,6 +21181,9 @@ def _combat_payload(
                 "save_ability": debuff_action.save_ability if debuff_action is not None else None,
                 "save_dc": debuff_action.save_dc if debuff_action is not None else None,
                 "save_timing": debuff_action.save_timing if debuff_action is not None else None,
+                "instructions": (
+                    debuff_action.instructions if debuff_action is not None else ""
+                ),
                 "targets": [
                     _combat_actor_payload(target, active_combat_effects)
                     for target in state.actors
@@ -18984,6 +21200,9 @@ def _combat_payload(
                     dispel_action.label
                     if dispel_action is not None
                     else pending_spell_dispel.action_id
+                ),
+                "instructions": (
+                    dispel_action.instructions if dispel_action is not None else ""
                 ),
                 "targets": [
                     _combat_actor_payload(target, active_combat_effects)
@@ -19069,6 +21288,30 @@ def _combat_payload(
             active_combat_effects,
         ),
         "pending_ready_attack": _pending_ready_attack_payload(pending_ready_attack, state, encounter, active_combat_effects),
+        "movable_spell_zones": [
+            {
+                "effect_id": effect.id,
+                "label": effect.label,
+                "anchor": [
+                    effect.anchor_position.col,
+                    effect.anchor_position.row,
+                ],
+                "distance_feet": (
+                    30
+                    if effect.object_id == "combat_action:flaming_sphere"
+                    else 60
+                ),
+                "action_cost_label": (
+                    "akcja dodatkowa"
+                    if effect.object_id == "combat_action:flaming_sphere"
+                    else "akcja"
+                ),
+            }
+            for effect in active_combat_effects
+            if effect.kind.startswith("ongoing_damage_zone:")
+            and effect.anchor_position is not None
+            and effect.source_actor_id == str(actor.id)
+        ],
         "active_effects": [effect.as_payload() for effect in active_combat_effects],
     }
 
@@ -19172,12 +21415,21 @@ def _combat_actor_payload(
             "natural_explorer_terrain": natural_explorer_terrain(actor),
         },
         "mobility_traits": {
-            "climbing_cost_for_10_feet": climbing_movement_cost(actor, 10),
+            "climbing_cost_for_10_feet": climbing_movement_cost(
+                actor,
+                10,
+                active_combat_effects,
+            ),
+            "can_climb_walls_and_ceilings": any(
+                effect.actor_id == str(actor.id)
+                and effect.kind == "spider_climb"
+                for effect in active_combat_effects
+            ),
             "jump_distances": {
-                "running_long_feet": jump_distances(actor).running_long_jump_feet,
-                "standing_long_feet": jump_distances(actor).standing_long_jump_feet,
-                "running_high_feet": jump_distances(actor).running_high_jump_feet,
-                "standing_high_feet": jump_distances(actor).standing_high_jump_feet,
+                "running_long_feet": jump_distances(actor, active_combat_effects).running_long_jump_feet,
+                "standing_long_feet": jump_distances(actor, active_combat_effects).standing_long_jump_feet,
+                "running_high_feet": jump_distances(actor, active_combat_effects).running_high_jump_feet,
+                "standing_high_feet": jump_distances(actor, active_combat_effects).standing_high_jump_feet,
             },
         },
         "hp": actor.hp,
@@ -19370,6 +21622,19 @@ def _condition_save_payload(
         actor,
         saving_throw_ability=ability,
     )
+    request = replace(
+        request,
+        mode=poison_protection_roll_mode(
+            actor,
+            active_combat_effects,
+            (
+                "poison"
+                if condition_state.condition == CombatCondition.POISONED
+                else condition_state.condition.value,
+            ),
+            request.mode,
+        ),
+    )
     request = apply_exhaustion_to_roll_request(
         actor,
         request,
@@ -19544,6 +21809,11 @@ def _pending_concentration_action_payload(
     action=None,
 ) -> dict[str, object]:
     caster = _actor_by_string_id_from_state(state, pending.caster_id)
+    selected_targets = tuple(
+        actor
+        for actor in state.actors
+        if str(actor.id) in pending.selected_target_ids
+    )
     return {
         "caster": _combat_actor_payload(
             caster,
@@ -19557,11 +21827,42 @@ def _pending_concentration_action_payload(
         "cast_level": pending.cast_level,
         "maximum_targets": pending.maximum_targets,
         "selected_target_ids": list(pending.selected_target_ids),
+        "selection_mode": "area" if pending.legal_positions else "targets",
+        "legal_positions": [
+            {"col": position.col, "row": position.row}
+            for position in pending.legal_positions
+        ],
+        "anchor": (
+            {"col": pending.anchor.col, "row": pending.anchor.row}
+            if pending.anchor is not None
+            else None
+        ),
+        "area_positions": [
+            {"col": position.col, "row": position.row}
+            for position in pending.area_positions
+        ],
         "targets": [
             _combat_actor_payload(actor, active_effects)
             for actor in state.actors
             if str(actor.id) in pending.target_ids
         ],
+        "weapon_options": (
+            [
+                {
+                    "id": item.id,
+                    "name": item.name,
+                    "actor_id": str(target.id),
+                }
+                for target in selected_targets
+                for item in target.inventory
+                if item.kind == "weapon"
+                and not item.magic_effects
+                and not item.requires_attunement
+                and "magical" not in item.properties
+            ]
+            if getattr(action, "id", "") == "magic_weapon"
+            else []
+        ),
     }
 
 
@@ -19900,6 +22201,212 @@ def _spell_source_unavailable_reason(actor: Actor | None, source) -> str | None:
     return None
 
 
+def _spell_preparation_actor_payload(
+    actor: Actor,
+    *,
+    include_spell_details: bool,
+) -> dict[str, object]:
+    profile = actor.spell_preparation
+    if profile is None:
+        raise ValueError("Postać nie posiada profilu przygotowywania czarów.")
+    payload = {
+        "actor_id": str(actor.id),
+        "actor_name": actor.name,
+        **profile.as_payload(),
+    }
+    if not include_spell_details:
+        return payload
+    compiled = compile_actor_combat_content(actor)
+    attack_by_id = {source.id: source for source in compiled.attack_sources}
+    healing_by_id = {source.id: source for source in compiled.healing_sources}
+    action_by_id = {action.id: action for action in compiled.combat_actions}
+    spell_by_id = {spell.id: spell for spell in actor.spells}
+    payload["spells"] = [
+        {
+            **entry,
+            **_spell_preparation_description_payload(
+                actor,
+                spell_by_id[str(entry["id"])],
+                attack_source=attack_by_id.get(str(entry["id"])),
+                healing_source=healing_by_id.get(str(entry["id"])),
+                combat_action=action_by_id.get(str(entry["id"])),
+            ),
+        }
+        for entry in payload["spells"]
+        if str(entry["id"]) in spell_by_id
+    ]
+    return payload
+
+
+def _spell_preparation_description_payload(
+    actor: Actor,
+    spell,
+    *,
+    attack_source=None,
+    healing_source=None,
+    combat_action=None,
+) -> dict[str, object]:
+    casting_label = {
+        "action": "akcja",
+        "bonus_action": "akcja dodatkowa",
+        "reaction": "reakcja",
+        "minute": "1 minuta",
+        "ten_minutes": "10 minut",
+        "hour": "1 godzina",
+    }.get(spell.casting_time.value, spell.casting_time.value)
+    range_label = {
+        "self": "na siebie",
+        "touch": "dotyk",
+        "sight": "wzrok",
+        "unlimited": "bez ograniczenia",
+    }.get(
+        spell.range.kind.value,
+        f"{spell.range.feet} ft"
+        if spell.range.feet
+        else spell.range.kind.value,
+    )
+    duration_label = {
+        "instantaneous": "natychmiastowy",
+        "round": f"{spell.duration.amount} runda",
+        "minute": f"{spell.duration.amount} minuta",
+        "ten_minutes": "10 minut",
+        "hour": f"{spell.duration.amount} godzina",
+        "eight_hours": "8 godzin",
+        "twenty_four_hours": "24 godziny",
+        "ten_days": "10 dni",
+        "until_dispelled": "do rozproszenia",
+    }.get(spell.duration.kind.value, spell.duration.kind.value)
+    components = [
+        label
+        for enabled, label in (
+            (spell.components.verbal, "W"),
+            (spell.components.somatic, "S"),
+            (bool(spell.components.materials), "M"),
+        )
+        if enabled
+    ]
+    effect_summary = _spell_effect_summary_pl(
+        actor,
+        spell,
+        attack_source=attack_source,
+        healing_source=healing_source,
+        combat_action=combat_action,
+    )
+    concentration = " Wymaga koncentracji." if spell.concentration else ""
+    ritual = " Można rzucić jako rytuał." if spell.ritual else ""
+    mechanics = (
+        f"Rzucanie: {casting_label}; zasięg: {range_label}; "
+        f"komponenty: {', '.join(components) or 'brak'}; "
+        f"czas trwania: {duration_label}.{concentration}{ritual} "
+        f"{effect_summary}"
+    )
+    flavor_by_effect = {
+        "attack": "Energia zaklęcia pomyka ku celowi i uderza z magiczną siłą.",
+        "healing": "Magia splata rany i przywraca siły wybranemu stworzeniu.",
+        "combat_action": "Zaklęcie zmienia układ sił na polu walki.",
+        "assisted": "Zaklęcie nagina warunki sceny zgodnie z wolą czarującego.",
+        "exploration": "Subtelna magia odsłania lub przekształca element świata.",
+    }
+    return {
+        "school": spell.school.value,
+        "casting_time": spell.casting_time.value,
+        "range": {
+            "kind": spell.range.kind.value,
+            "feet": spell.range.feet,
+        },
+        "duration": {
+            "kind": spell.duration.kind.value,
+            "amount": spell.duration.amount,
+        },
+        "concentration": spell.concentration,
+        "ritual": spell.ritual,
+        "flavor_description": flavor_by_effect.get(
+            spell.effect_kind,
+            "Magia wywołuje opisany efekt w świecie gry.",
+        ),
+        "mechanical_description": mechanics,
+    }
+
+
+def _spell_effect_summary_pl(
+    actor: Actor,
+    spell,
+    *,
+    attack_source=None,
+    healing_source=None,
+    combat_action=None,
+) -> str:
+    if attack_source is not None:
+        if attack_source.save_ability:
+            opening = (
+                f"Cel wykonuje rzut obronny na "
+                f"{_ability_label_pl(attack_source.save_ability)} przeciw ST "
+                f"{attack_source.save_dc or actor.spell_save_dc}."
+            )
+        else:
+            attack_label = (
+                "dystansowy"
+                if attack_source.attack_kind == AttackKind.RANGED
+                else "wręcz"
+            )
+            opening = f"Wykonujesz {attack_label} atak czarem."
+        result = f" Przy trafieniu lub nieudanym rzucie zadaje {attack_source.damage_hint}."
+        rider = (
+            " Następny atak przeciw celowi ma przewagę."
+            if attack_source.on_hit_effect_kind == "guiding_bolt_mark"
+            else ""
+        )
+        tabletop = (
+            f" Dodatkowo przy stole: {' '.join(attack_source.tabletop_riders)}"
+            if attack_source.tabletop_riders
+            else ""
+        )
+        return f"{opening}{result}{rider}{tabletop}"
+    if healing_source is not None:
+        exclusions = (
+            f" Nie działa na: {', '.join(healing_source.excluded_creature_types)}."
+            if healing_source.excluded_creature_types
+            else ""
+        )
+        return (
+            f"Wybrany legalny cel odzyskuje {healing_source.healing_hint} PW."
+            f"{exclusions}"
+        )
+    if combat_action is not None:
+        if combat_action.action_type == "multi_target_damage":
+            projectile_count = int(combat_action.projectile_count)
+            damage = (
+                f"1k{combat_action.damage_die_sides}"
+                f"{combat_action.damage_modifier:+d}"
+            )
+            return (
+                f"Tworzysz {projectile_count} pociski, rozdzielasz je między "
+                f"legalne cele, a każdy automatycznie zadaje {damage} "
+                f"obrażeń typu {combat_action.damage_type}. "
+                "Wyższy slot dodaje kolejne pociski."
+            )
+        if combat_action.action_type == "reaction_ac_bonus":
+            return (
+                f"Po trafieniu reakcją zyskujesz +{combat_action.value} KP "
+                "do początku swojej następnej tury; może to zmienić trafienie w pudło."
+            )
+        if combat_action.instructions:
+            return combat_action.instructions
+        return (
+            f"Resolver walki: {combat_action.action_type.replace('_', ' ')}. "
+            "Interfejs prowadzi przez legalne cele, zasób i wymagane rzuty."
+        )
+    if spell.effect_kind == "exploration":
+        return (
+            "Czar działa w eksploracji. Runtime sprawdza legalny cel, komponenty, "
+            "slot oraz przypisany efekt lub flagę sceny."
+        )
+    return (
+        "Czar ma kontrakt wspomagany: runtime rozlicza legalność, koszt i czas, "
+        "a opisany efekt rozstrzyga odpowiedni resolver lub jawna procedura przy stole."
+    )
+
+
 def _spell_payload(actor: Actor, spell) -> dict[str, object]:
     from dnd_board_game.character_creation import (
         AssistedSpellFamily,
@@ -19910,6 +22417,11 @@ def _spell_payload(actor: Actor, spell) -> dict[str, object]:
     plan = assisted_spell_plan(spell.id)
     exploration_castable = (
         spell.effect_kind == "exploration"
+        or spell.id in {
+            "pass_without_trace",
+            "protection_from_poison",
+            "see_invisibility",
+        }
         or (
         plan is not None
         and (
@@ -20231,6 +22743,17 @@ def _combat_action_payload(action, actor: Actor | None = None) -> dict[str, obje
         "concentration": action.concentration,
         "source_item_id": action.source_item_id,
         "range_feet": action.range_feet,
+        "area": (
+            {
+                "shape": action.area.shape.value,
+                "radius_feet": action.area.radius_feet,
+                "length_feet": action.area.length_feet,
+                "width_feet": action.area.width_feet,
+                "target_mode": action.area.target_mode.value,
+            }
+            if getattr(action, "area", None) is not None
+            else None
+        ),
         "effect_kind": action.effect_kind,
         "action_cost": action.action_cost.value,
         "casting_time": action.casting_time.value,
@@ -20442,6 +22965,7 @@ def _pending_player_attack_payload(
         for candidate in state.actors
         if str(candidate.id) in pending.ranged_threat_actor_ids
     )
+    is_acid_splash = source.id == "acid_splash"
     twinned_targets = (
         tuple(
             candidate
@@ -20453,10 +22977,17 @@ def _pending_player_attack_payload(
                 state.hidden_states,
             ).legal_targets
             if candidate.id != pending.target_id
+            and (
+                not is_acid_splash
+                or grid_distance_feet(target.position, candidate.position) <= 5
+            )
         )
         if (
             pending.stage == "confirm_attack"
-            and "metamagic_twinned" in pending.metamagic_ids
+            and (
+                "metamagic_twinned" in pending.metamagic_ids
+                or is_acid_splash
+            )
         )
         else ()
     )
@@ -20508,6 +23039,12 @@ def _pending_player_attack_payload(
         "critical": pending.critical,
         "twinned_spell": {
             "available": bool(twinned_targets),
+            "label": (
+                "Drugi cel Kwasowego rozprysku"
+                if is_acid_splash
+                else "Twinned Spell"
+            ),
+            "optional": is_acid_splash,
             "second_attack": pending.twinned_second_attack,
             "selected_target_id": pending.twinned_target_id,
             "eligible_targets": [
@@ -20572,6 +23109,25 @@ def _pending_player_attack_payload(
                 for effect in active_combat_effects
                 if effect.actor_id == str(attacker.id)
                 and effect.kind == "bless_roll_bonus"
+            ),
+            None,
+        ),
+        "mirror_image": next(
+            (
+                {
+                    "duplicates": effect.value,
+                    "redirect_threshold": {3: 6, 2: 8, 1: 11}.get(
+                        effect.value,
+                        6,
+                    ),
+                    "duplicate_ac": (
+                        10 + ability_modifier(target.ability_scores.dexterity)
+                    ),
+                }
+                for effect in active_combat_effects
+                if effect.actor_id == str(target.id)
+                and effect.kind == "mirror_image"
+                and effect.value > 0
             ),
             None,
         ),
@@ -20673,7 +23229,10 @@ def _pending_area_spell_payload(
         tuple(
             actor
             for actor in state.actors
-            if str(actor.id) in pending.target_ids
+            if str(actor.id) in {
+                *pending.target_ids,
+                *pending.protected_target_ids,
+            }
             and actor.faction == caster.faction
             and actor.id != caster.id
         )
@@ -21185,6 +23744,7 @@ def _enemy_turn_intent_payload(
                 source,
                 intent.state.actors,
                 encounter.scene_objects,
+                intent.state.condition_states,
             )
             source = attack_source_with_positioning(source, positioning)
             source = attack_source_with_prone(
@@ -21681,6 +24241,7 @@ def _challenge_check_plan(
     helper_actor_id: str | None = None,
     selected_actor_ids: tuple[str, ...] = (),
     resource: ExplorationResource | None = None,
+    active_effects: tuple[ActiveCombatEffect, ...] = (),
 ) -> ExplorationCheckPlan:
     resource_modifier = resource.as_roll_modifier() if resource is not None else None
     participants = option.check_participants or CheckParticipants.SINGLE_ACTOR
@@ -21731,6 +24292,15 @@ def _challenge_check_plan(
             (
                 *((RollMode.ADVANTAGE,) if helper_actor_id is not None else ()),
                 *((RollMode.ADVANTAGE,) if resource is not None and resource.advantage else ()),
+                *(
+                    (RollMode.ADVANTAGE,)
+                    if _enhance_ability_applies(
+                        lead_actor_id,
+                        option.ability_check.ability,
+                        active_effects,
+                    )
+                    else ()
+                ),
             ),
         ),
         situational_modifiers=option.situational_modifiers,
@@ -21746,6 +24316,8 @@ def _challenge_check_plan(
 def _zone_option_check_plan(
     option: ExplorationOption,
     actor_id: str,
+    *,
+    active_effects: tuple[ActiveCombatEffect, ...] = (),
 ) -> ExplorationCheckPlan:
     check = option.ability_check
     if check is None:
@@ -21761,6 +24333,11 @@ def _zone_option_check_plan(
         dc=check.dc,
         lead_actor_id=actor_id,
         reason_for_players=option.description or option.label,
+        roll_mode=(
+            RollMode.ADVANTAGE
+            if _enhance_ability_applies(actor_id, check.ability, active_effects)
+            else RollMode.NORMAL
+        ),
         roll_modifiers_by_actor_id=((actor_id, check.modifiers),),
         mechanic_payload={
             "id": "authored_zone_option",
@@ -21776,6 +24353,7 @@ def _npc_check_plan(
     *,
     helper_actor_id: str | None = None,
     selected_actor_ids: tuple[str, ...] = (),
+    active_effects: tuple[ActiveCombatEffect, ...] = (),
 ) -> ExplorationCheckPlan:
     participants = proposal.check_participants or (CheckParticipants.WHOLE_PARTY if proposal.action_type == "search" else CheckParticipants.SINGLE_ACTOR)
     aggregation = proposal.check_aggregation or (CheckAggregation.HIGHEST if participants == CheckParticipants.WHOLE_PARTY else CheckAggregation.LEAD_RESULT)
@@ -21794,6 +24372,11 @@ def _npc_check_plan(
         roll_mode=(
             RollMode.ADVANTAGE
             if helper_actor_id is not None
+            or _enhance_ability_applies(
+                lead_actor_id,
+                proposal.ability or "wisdom",
+                active_effects,
+            )
             else RollMode.NORMAL
         ),
     )
@@ -21804,6 +24387,7 @@ def _observation_check_plan(
     lead_actor_id: str,
     *,
     visibility: ExplorationVisibility | None = None,
+    active_effects: tuple[ActiveCombatEffect, ...] = (),
 ) -> ExplorationCheckPlan:
     visibility_roll_mode = (
         visibility.perception_roll_mode
@@ -21829,7 +24413,18 @@ def _observation_check_plan(
         reason_for_players=observation.description,
         roll_mode=_combined_roll_mode(
             observation.roll_mode,
-            (visibility_roll_mode,),
+            (
+                visibility_roll_mode,
+                *(
+                    (RollMode.ADVANTAGE,)
+                    if _enhance_ability_applies(
+                        lead_actor_id,
+                        observation.ability,
+                        active_effects,
+                    )
+                    else ()
+                ),
+            ),
         ),
         mechanic_payload=mechanic_payload,
     )
@@ -21934,6 +24529,37 @@ def _check_inputs_from_payload(
                             inspiration_roll,
                             RollModifierType.FEATURE,
                             stacking_key="bardic_inspiration",
+                        ),
+                    ),
+                )
+            guidance_roll_raw = raw_roll.get("guidance_roll")
+            if guidance_roll_raw not in (None, "", 0, "0"):
+                guidance = next(
+                    (
+                        effect
+                        for effect in active_effects
+                        if effect.actor_id == actor_id
+                        and effect.kind == "guidance_roll_bonus"
+                    ),
+                    None,
+                )
+                if guidance is None:
+                    raise ValueError(f"{actor.name} nie ma aktywnych Wskazówek.")
+                guidance_roll = int(guidance_roll_raw)
+                if not 1 <= guidance_roll <= guidance.value:
+                    raise ValueError(
+                        f"Wynik Wskazówek dla {actor.name} musi mieścić "
+                        f"się w zakresie 1–{guidance.value}."
+                    )
+                request = replace(
+                    request,
+                    modifiers=(
+                        *request.modifiers,
+                        RollModifier(
+                            guidance.label,
+                            guidance_roll,
+                            RollModifierType.SPELL,
+                            stacking_key="guidance",
                         ),
                     ),
                 )
@@ -22144,6 +24770,18 @@ def _improvised_tool_from_payload(
         effect_modifier=effect_modifier,
         risk=risk,
         reason=reason,
+    )
+
+
+def _enhance_ability_applies(
+    actor_id: str,
+    ability: str,
+    active_effects: tuple[ActiveCombatEffect, ...],
+) -> bool:
+    return any(
+        effect.actor_id == actor_id
+        and effect.kind == f"ability_check_advantage:{ability}"
+        for effect in active_effects
     )
 
 
@@ -22960,6 +25598,11 @@ def _resource_payload(resource: ExplorationResource) -> dict[str, object]:
         "mitigates_noise": resource.mitigates_noise,
         "consume_on_use": resource.consume_on_use,
     }
+
+
+def _hazard_is_fall(hazard: ExplorationHazard) -> bool:
+    normalized = f"{hazard.id} {hazard.label}".casefold()
+    return "fall" in normalized or "upad" in normalized
 
 
 def _tool_label_for_check(

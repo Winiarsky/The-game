@@ -117,7 +117,27 @@ def summon_actor(
     )
 
 
-def summon_attack_source(definition: SummonDefinition) -> AttackSource:
+def summon_attack_source(
+    definition: SummonDefinition,
+    owner: Actor | None = None,
+) -> AttackSource:
+    owner_spell_attack = (
+        definition.id == "spiritual_weapon"
+        and owner is not None
+    )
+    attack_bonus = (
+        owner.spell_save_dc - 8
+        if owner_spell_attack
+        else definition.attack_bonus
+    )
+    damage_modifier = (
+        max(
+            0,
+            owner.spell_save_dc - 8 - owner.proficiency_bonus,
+        )
+        if owner_spell_attack
+        else 0
+    )
     return AttackSource(
         name=definition.attack_name,
         source_type=AttackSourceType.CUSTOM,
@@ -125,13 +145,28 @@ def summon_attack_source(definition: SummonDefinition) -> AttackSource:
         attack_roll_request=D20RollRequest(
             modifiers=(
                 RollModifier(
-                    "Premia ataku przywołanej istoty",
-                    definition.attack_bonus,
+                    (
+                        "Premia ataku czarami właściciela"
+                        if owner_spell_attack
+                        else "Premia ataku przywołanej istoty"
+                    ),
+                    attack_bonus,
                     RollModifierType.CUSTOM,
                 ),
             )
         ),
-        damage_fixed=definition.attack_damage_fixed,
+        damage_hint=(
+            f"1d8 + {damage_modifier}"
+            if owner_spell_attack
+            else ""
+        ),
+        damage_fixed=(
+            None
+            if owner_spell_attack
+            else definition.attack_damage_fixed
+        ),
+        damage_die_sides=8 if owner_spell_attack else None,
+        damage_modifier=damage_modifier,
         damage_type=definition.attack_damage_type.value,
         id=definition.attack_id,
         attack_kind=(

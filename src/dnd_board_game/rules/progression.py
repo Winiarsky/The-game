@@ -128,13 +128,7 @@ def award_party_experience(
 ) -> PartyExperienceAwardResult:
     if total_experience < 0:
         raise ValueError("Nagroda XP nie może być ujemna.")
-    participants = tuple(
-        actor
-        for actor in actors
-        if actor.faction.value == "ally"
-        and actor.uses_death_saves
-        and not actor.is_dead()
-    )
+    participants = _experience_participants(actors)
     if not participants:
         raise ValueError("Brak żywych członków drużyny, którym można przyznać XP.")
     share, remainder = divmod(total_experience, len(participants))
@@ -154,6 +148,52 @@ def award_party_experience(
         experience_per_actor=share,
         discarded_remainder=remainder,
         actor_ids=tuple(str(actor.id) for actor in participants),
+    )
+
+
+def award_party_experience_per_actor(
+    actors: tuple[Actor, ...],
+    experience_per_actor: int,
+    *,
+    level_cap: int = 3,
+) -> PartyExperienceAwardResult:
+    """Award an authored fixed amount to every living player character."""
+
+    if experience_per_actor < 0:
+        raise ValueError("Nagroda XP na postać nie może być ujemna.")
+    participants = _experience_participants(actors)
+    if not participants:
+        raise ValueError("Brak żywych członków drużyny, którym można przyznać XP.")
+    participant_ids = {actor.id for actor in participants}
+    updated_by_id = {
+        actor.id: award_experience(
+            actor,
+            experience_per_actor,
+            level_cap=level_cap,
+        ).actor
+        for actor in participants
+    }
+    return PartyExperienceAwardResult(
+        actors=tuple(
+            updated_by_id.get(actor.id, actor)
+            if actor.id in participant_ids
+            else actor
+            for actor in actors
+        ),
+        total_experience=experience_per_actor * len(participants),
+        experience_per_actor=experience_per_actor,
+        discarded_remainder=0,
+        actor_ids=tuple(str(actor.id) for actor in participants),
+    )
+
+
+def _experience_participants(actors: tuple[Actor, ...]) -> tuple[Actor, ...]:
+    return tuple(
+        actor
+        for actor in actors
+        if actor.faction.value == "ally"
+        and actor.uses_death_saves
+        and not actor.is_dead()
     )
 
 

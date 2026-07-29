@@ -6,7 +6,7 @@
     "srd_5_1_cc_by_4_0"
   ],
   "id": "faerie_fire",
-  "name": "Faerie Fire",
+  "name": "Baśniowy ogień",
   "level": 1,
   "school": "evocation",
   "casting_time": "action",
@@ -28,13 +28,19 @@
   "effect": {
     "kind": "combat_action",
     "action_type": "targeted_status",
-    "label": "Faerie Fire",
+    "label": "Baśniowy ogień",
     "effect_kind": "attacks_against_advantage",
     "save_ability": "dexterity",
-    "target_faction": "enemy",
+    "target_faction": "any",
     "target_count": 20,
+    "area": {
+      "shape": "cube",
+      "length_feet": 20,
+      "width_feet": 20,
+      "target_mode": "all_creatures"
+    },
     "cast_flag": "cast_faerie_fire",
-    "instructions": "Istoty w sześcianie 20 stóp wykonują rzut na Zręczność; porażka: świecą, nie korzystają z niewidzialności, ataki na nie mają przewagę.",
+    "instructions": "Wskaż na planszy środek sześcianu o boku 20 stóp w zasięgu 60 stóp. Każda istota w obszarze wykonuje rzut obronny na Zręczność; po porażce świeci przez czas koncentracji, nie korzysta z niewidzialności, a widzący ją atakujący mają przewagę.",
     "resolution_mode": "automatic",
     "board_relevance": "direct"
   }

@@ -21,6 +21,7 @@ from dnd_board_game.combat import (
     AttackSourceType,
     CombatState,
     CombatCondition,
+    ConditionSaveTiming,
     ConditionState,
     DamageComponentSpec,
     HealingSource,
@@ -30,10 +31,19 @@ from dnd_board_game.combat import (
     InitiativeEntry,
     InitiativeOrder,
     SceneObject,
+    SpellSlotState,
     current_actor,
+    resolve_condition_save,
+    start_attack_action,
     start_combat,
 )
-from dnd_board_game.rules import DiceExpression, D20RollInput, D20RollRequest, resolve_d20_roll
+from dnd_board_game.rules import (
+    DiceExpression,
+    D20RollInput,
+    D20RollRequest,
+    EffectDuration,
+    resolve_d20_roll,
+)
 from dnd_board_game.world import BoardState, Coordinate
 
 
@@ -197,6 +207,119 @@ def test_staged_attack_moves_from_target_preview_through_damage() -> None:
     assert damaged.event_type == "ui_combat_player_damage_roll"
 
 
+def test_player_attack_uses_physical_mirror_image_roll_and_consumes_duplicate() -> None:
+    service = PlayerCombatActionFlowService()
+    hero = _actor("hero", Faction.ALLY, Coordinate(0, 0))
+    enemy = _actor("enemy", Faction.ENEMY, Coordinate(1, 0))
+    state = _state(hero, enemy)
+    source = _source()
+    mirror = ActiveCombatEffect(
+        id="mirror-image:enemy",
+        actor_id="enemy",
+        kind="mirror_image",
+        label="Lustrzane odbicia",
+        object_id="spell:mirror_image",
+        value=3,
+        source_actor_id="enemy",
+        target_actor_id="enemy",
+        duration=EffectDuration.UNTIL_ENCOUNTER_END,
+    )
+    selected = service.select_attack_target(
+        state=state,
+        board=BoardState(),
+        source=source,
+        position=enemy.position,
+        active_effects=(mirror,),
+    )
+    confirmed = service.confirm_attack_target(
+        state=state,
+        board=BoardState(),
+        source=source,
+        pending=selected.pending,
+        active_effects=(mirror,),
+        rng=Random(1),
+    )
+
+    with pytest.raises(ValueError, match="Lustrzanych odbić"):
+        service.submit_attack_roll(
+            state=state,
+            board=BoardState(),
+            source=source,
+            pending=confirmed.pending,
+            active_effects=(mirror,),
+            natural_roll=15,
+        )
+    rolled = service.submit_attack_roll(
+        state=state,
+        board=BoardState(),
+        source=source,
+        pending=confirmed.pending,
+        active_effects=(mirror,),
+        natural_roll=15,
+        mirror_image_roll=20,
+    )
+
+    assert rolled.pending is None
+    assert rolled.active_effects[0].value == 2
+    assert dict(rolled.event_payload)["hit"] is False
+    assert dict(rolled.event_payload)["mirror_image"]["duplicate_hit"] is True
+    assert "niszczy duplikat" in rolled.message_body
+
+
+def test_failed_sanctuary_save_blocks_target_and_board_keeps_alternative() -> None:
+    service = PlayerCombatActionFlowService()
+    hero = _actor("hero", Faction.ALLY, Coordinate(0, 0))
+    protected = replace(
+        _actor("protected", Faction.ENEMY, Coordinate(1, 0)),
+        spell_save_dc=30,
+    )
+    alternative = _actor("alternative", Faction.ENEMY, Coordinate(0, 1))
+    state = _state(hero, protected, alternative)
+    source = _source()
+    sanctuary = ActiveCombatEffect(
+        id="sanctuary:protected",
+        actor_id="protected",
+        kind="sanctuary",
+        label="Sanktuarium",
+        object_id="spell:sanctuary",
+        value=0,
+        source_actor_id="protected",
+        target_actor_id="protected",
+        duration=EffectDuration.UNTIL_ENCOUNTER_END,
+    )
+    selected = service.select_attack_target(
+        state=state,
+        board=BoardState(),
+        source=source,
+        position=protected.position,
+        active_effects=(sanctuary,),
+    )
+    blocked = service.confirm_attack_target(
+        state=state,
+        board=BoardState(),
+        source=source,
+        pending=selected.pending,
+        active_effects=(sanctuary,),
+        rng=Random(1),
+    )
+
+    assert blocked.pending is None
+    assert blocked.event_type == "ui_combat_sanctuary_blocked_attack"
+    assert any(
+        effect.kind == "sanctuary_block_target"
+        for effect in blocked.active_effects
+    )
+    legal = start_attack_action(
+        BoardState(),
+        hero,
+        state.actors,
+        source,
+        state.hidden_states,
+        blocked.active_effects,
+    ).legal_targets
+    assert {target.id for target in legal} == {"alternative"}
+
+
 def test_guiding_bolt_hit_marks_target_for_next_attack_advantage() -> None:
     service = PlayerCombatActionFlowService()
     hero = _actor("hero", Faction.ALLY, Coordinate(0, 0))
@@ -244,6 +367,163 @@ def test_guiding_bolt_hit_marks_target_for_next_attack_advantage() -> None:
 
     assert damaged.active_effects[0].kind == "guiding_bolt_mark"
     assert damaged.active_effects[0].actor_id == "enemy"
+
+
+def test_branding_smite_hit_reveals_target_and_keeps_concentration_glow() -> None:
+    service = PlayerCombatActionFlowService()
+    hero = _actor("hero", Faction.ALLY, Coordinate(0, 0))
+    enemy = _actor("enemy", Faction.ENEMY, Coordinate(1, 0))
+    state = _state(hero, enemy)
+    source = replace(
+        _source(),
+        damage_components=(
+            DamageComponentSpec(
+                "sword",
+                DamageType.SLASHING,
+                DiceExpression(1, 8),
+                label="Miecz",
+            ),
+        ),
+    )
+    branding = ActiveCombatEffect(
+        id="branding-smite:hero",
+        actor_id="hero",
+        kind="branding_smite",
+        label="Piętnujące porażenie",
+        object_id="spell:branding_smite",
+        value=2,
+        source_actor_id="hero",
+        duration=EffectDuration.CONCENTRATION,
+        spell_level=2,
+    )
+    invisible = ActiveCombatEffect(
+        id="invisibility:enemy",
+        actor_id="enemy",
+        kind="invisibility",
+        label="Niewidzialność",
+        object_id="spell:invisibility",
+        value=0,
+        source_actor_id="enemy",
+        duration=EffectDuration.CONCENTRATION,
+    )
+    effects = (branding, invisible)
+
+    selected = service.select_attack_target(
+        state=state,
+        board=BoardState(),
+        source=source,
+        position=enemy.position,
+        active_effects=effects,
+    )
+    confirmed = service.confirm_attack_target(
+        state=state,
+        board=BoardState(),
+        source=source,
+        pending=selected.pending,
+        active_effects=effects,
+        rng=Random(1),
+    )
+    rolled = service.submit_attack_roll(
+        state=state,
+        board=BoardState(),
+        source=source,
+        pending=confirmed.pending,
+        active_effects=effects,
+        natural_roll=20,
+        natural_roll_2=20,
+    )
+    damaged = service.submit_damage(
+        state=rolled.state,
+        source=source,
+        pending=rolled.pending,
+        active_effects=rolled.active_effects,
+        component_totals={"sword": 4, "branding_smite": 7},
+    )
+
+    assert not any(effect.kind == "invisibility" for effect in damaged.active_effects)
+    glow = next(
+        effect
+        for effect in damaged.active_effects
+        if effect.kind == "branding_smite_glow"
+    )
+    assert glow.actor_id == "enemy"
+    assert glow.source_actor_id == "hero"
+    assert glow.duration == EffectDuration.CONCENTRATION
+
+
+def test_ray_of_enfeeblement_hit_creates_end_turn_constitution_save() -> None:
+    service = PlayerCombatActionFlowService()
+    hero = replace(
+        _actor("hero", Faction.ALLY, Coordinate(0, 0)),
+        spell_save_dc=14,
+        spell_slots=(SpellSlotState(2, 1, 1),),
+    )
+    enemy = _actor("enemy", Faction.ENEMY, Coordinate(2, 0))
+    state = _state(hero, enemy)
+    source = replace(
+        _source(),
+        id="ray_of_enfeeblement",
+        name="Promień osłabienia",
+        source_type=AttackSourceType.SPELL,
+        range_feet=60,
+        attack_kind=AttackKind.RANGED,
+        spell_level=2,
+        concentration=True,
+        on_hit_effect_kind="ray_of_enfeeblement",
+        on_hit_effect_duration=EffectDuration.CONCENTRATION,
+    )
+    selected = service.select_attack_target(
+        state=state,
+        board=BoardState(),
+        source=source,
+        position=enemy.position,
+        active_effects=(),
+    )
+    confirmed = service.confirm_attack_target(
+        state=state,
+        board=BoardState(),
+        source=source,
+        pending=selected.pending,
+        active_effects=(),
+        rng=Random(1),
+    )
+    rolled = service.submit_attack_roll(
+        state=state,
+        board=BoardState(),
+        source=source,
+        pending=confirmed.pending,
+        active_effects=(),
+        natural_roll=20,
+    )
+    damaged = service.submit_damage(
+        state=rolled.state,
+        source=source,
+        pending=rolled.pending,
+        active_effects=rolled.active_effects,
+        damage=0,
+    )
+
+    effect = next(
+        item
+        for item in damaged.active_effects
+        if item.kind == "ray_of_enfeeblement"
+    )
+    condition = next(
+        item
+        for item in damaged.state.condition_states
+        if item.condition == CombatCondition.ENFEEBLED
+    )
+    assert effect.duration == EffectDuration.CONCENTRATION
+    assert condition.save_ability == "constitution"
+    assert condition.save_dc == 14
+    assert condition.save_timing == ConditionSaveTiming.TURN_END
+    save = resolve_condition_save(
+        damaged.state.condition_states,
+        enemy,
+        condition,
+        natural_roll=14,
+    )
+    assert save.removed is True
 
 
 def test_player_damage_accepts_independent_multicomponent_totals() -> None:
@@ -320,7 +600,11 @@ def test_single_target_dexterity_save_uses_scene_cover_bonus() -> None:
     hero = _actor("hero", Faction.ALLY, Coordinate(0, 0))
     enemy = _actor("enemy", Faction.ENEMY, Coordinate(4, 0))
     state = _state(hero, enemy)
-    source = _dexterity_save_source()
+    source = replace(
+        _dexterity_save_source(),
+        id="generic_dexterity_save",
+        name="Generyczny czar obszarowy",
+    )
     cover = SceneObject(
         id="cart",
         name="Wóz",
@@ -360,16 +644,123 @@ def test_single_target_dexterity_save_uses_scene_cover_bonus() -> None:
     )
 
 
-def test_twinned_save_spell_spends_one_action_and_damages_two_targets() -> None:
+def test_sacred_flame_ignores_scene_cover_bonus_on_dexterity_save() -> None:
     service = PlayerCombatActionFlowService()
     hero = _actor("hero", Faction.ALLY, Coordinate(0, 0))
+    enemy = _actor("enemy", Faction.ENEMY, Coordinate(4, 0))
+    state = _state(hero, enemy)
+    source = _dexterity_save_source()
+    cover = SceneObject(
+        id="cart",
+        name="Wóz",
+        positions=(Coordinate(2, 0),),
+        interaction_label="",
+        projectile_cover_bonus=2,
+    )
+    selected = service.select_attack_target(
+        state=state,
+        board=BoardState(),
+        source=source,
+        position=enemy.position,
+        active_effects=(),
+        scene_objects=(cover,),
+    )
+    assert selected.pending is not None
+    assert selected.pending.cover_bonus == 2
+
+    confirmed = service.confirm_attack_target(
+        state=state,
+        board=BoardState(),
+        source=source,
+        pending=selected.pending,
+        active_effects=(),
+        rng=Random(1),
+        scene_objects=(cover,),
+    )
+
+    assert confirmed.pending is not None
+    save = confirmed.pending.saving_throws[0]
+    assert save.total == 7
+    assert save.success is False
+    assert not any(modifier.label == "Połowa osłony" for modifier in save.modifiers)
+
+
+def test_twinned_save_spell_spends_one_action_and_damages_two_targets() -> None:
+    service = PlayerCombatActionFlowService()
+    hero = replace(
+        _actor("hero", Faction.ALLY, Coordinate(0, 0)),
+        level=3,
+        ability_scores=AbilityScores(charisma=16, dexterity=14),
+        features=(
+            FeatureGrant(
+                "dark_ones_blessing",
+                "Błogosławieństwo Mrocznego",
+                FeatureSourceKind.SUBCLASS,
+                "the_fiend",
+            ),
+        ),
+    )
     first = _actor("first", Faction.ENEMY, Coordinate(2, 0))
-    second = _actor("second", Faction.ENEMY, Coordinate(3, 0))
+    second = replace(
+        _actor("second", Faction.ENEMY, Coordinate(3, 0)),
+        hp=3,
+    )
     state = _state(hero, first, second)
     source = replace(
         _dexterity_save_source(),
         save_dc=30,
         metamagic_ids=("metamagic_twinned",),
+    )
+    selected = service.select_attack_target(
+        state=state,
+        board=BoardState(),
+        source=source,
+        position=first.position,
+        active_effects=(),
+    )
+    assert selected.pending is not None
+    pending = replace(
+        selected.pending,
+        twinned_target_id=str(second.id),
+    )
+
+    confirmed = service.confirm_attack_target(
+        state=state,
+        board=BoardState(),
+        source=source,
+        pending=pending,
+        active_effects=(),
+        rng=Random(4),
+    )
+    assert confirmed.pending is not None
+    assert len(confirmed.pending.saving_throws) == 2
+    damaged = service.submit_damage(
+        state=confirmed.state,
+        source=source,
+        pending=confirmed.pending,
+        active_effects=(),
+        damage=4,
+    )
+
+    assert damaged.state.turn_action.action_use == ActionUse.ACTION_USED
+    assert next(actor for actor in damaged.state.actors if actor.id == first.id).hp == 6
+    assert next(actor for actor in damaged.state.actors if actor.id == second.id).hp == 0
+    assert next(actor for actor in damaged.state.actors if actor.id == hero.id).temp_hp == 6
+    assert len(damaged.additional_applied_damages) == 1
+
+
+def test_acid_splash_optional_second_adjacent_target_shares_one_action() -> None:
+    service = PlayerCombatActionFlowService()
+    caster = _actor("caster", Faction.ALLY, Coordinate(0, 0))
+    first = _actor("first", Faction.ENEMY, Coordinate(2, 0))
+    second = _actor("second", Faction.ENEMY, Coordinate(2, 1))
+    state = _state(caster, first, second)
+    source = replace(
+        _dexterity_save_source(),
+        id="acid_splash",
+        name="Kwasowy rozprysk",
+        damage_type="acid",
+        save_dc=30,
     )
     selected = service.select_attack_target(
         state=state,

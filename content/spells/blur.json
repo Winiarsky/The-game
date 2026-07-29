@@ -6,7 +6,7 @@
     "srd_5_1_cc_by_4_0"
   ],
   "id": "blur",
-  "name": "Blur",
+  "name": "Rozmycie",
   "level": 2,
   "school": "illusion",
   "casting_time": "action",
@@ -27,7 +27,7 @@
   "effect": {
     "kind": "combat_action",
     "action_type": "targeted_status",
-    "label": "Blur",
+    "label": "Rozmycie",
     "target_count": 1,
     "cast_flag": "cast_blur",
     "instructions": "Podczas koncentracji ataki przeciw rzucającemu mają utrudnienie, z wyjątkami dla istot niewidzących i truesight.",

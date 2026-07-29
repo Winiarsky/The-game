@@ -120,6 +120,86 @@ def test_prone_actor_crawls_at_double_normal_movement_cost() -> None:
     assert submission.movement_remaining_feet == 10
 
 
+def test_spike_growth_zone_is_difficult_terrain_for_pathfinding() -> None:
+    service = CombatMovementFlowService()
+    hero = _actor("hero", Faction.ALLY, Coordinate(0, 0))
+    goblin = _actor("goblin", Faction.ENEMY, Coordinate(5, 0))
+    zone = ActiveCombatEffect(
+        id="spike-growth:zone",
+        actor_id="hero",
+        kind="spike_growth_zone",
+        label="Kolczaste zarośla",
+        object_id="combat_action:spike_growth",
+        value=20,
+        anchor_position=Coordinate(2, 0),
+    )
+
+    preview = service.preview(
+        state=_state(hero, goblin),
+        board=BoardState(),
+        destination=Coordinate(2, 0),
+        active_effects=(zone,),
+    )
+
+    assert preview.path.path == (
+        Coordinate(0, 0),
+        Coordinate(1, 0),
+        Coordinate(2, 0),
+    )
+    assert preview.path.cost_feet == 20
+
+
+def test_web_zone_is_difficult_terrain_for_pathfinding() -> None:
+    service = CombatMovementFlowService()
+    hero = _actor("hero", Faction.ALLY, Coordinate(0, 0))
+    goblin = _actor("goblin", Faction.ENEMY, Coordinate(8, 0))
+    zone = ActiveCombatEffect(
+        id="web:zone",
+        actor_id="hero",
+        kind="web_zone",
+        label="Sieć",
+        object_id="combat_action:web",
+        value=20,
+        anchor_position=Coordinate(3, 0),
+    )
+
+    preview = service.preview(
+        state=_state(hero, goblin),
+        board=BoardState(),
+        destination=Coordinate(2, 0),
+        active_effects=(zone,),
+    )
+
+    assert preview.path.cost_feet > 10
+
+
+@pytest.mark.parametrize("kind", ("entangle_zone", "grease_zone"))
+def test_level_one_control_zone_is_difficult_terrain_for_pathfinding(
+    kind: str,
+) -> None:
+    service = CombatMovementFlowService()
+    hero = _actor("hero", Faction.ALLY, Coordinate(0, 0))
+    goblin = _actor("goblin", Faction.ENEMY, Coordinate(8, 0))
+    zone = ActiveCombatEffect(
+        id=f"{kind}:zone",
+        actor_id="hero",
+        kind=kind,
+        label=kind,
+        object_id=f"combat_action:{kind}",
+        value=10,
+        anchor_position=Coordinate(2, 0),
+    )
+
+    preview = service.preview(
+        state=_state(hero, goblin),
+        board=BoardState(),
+        destination=Coordinate(2, 0),
+        active_effects=(zone,),
+    )
+
+    assert preview.path.cost_feet > 10
+
+
 def test_submit_exposes_opportunity_threat_without_moving() -> None:
     service = CombatMovementFlowService()
     hero = _actor("hero", Faction.ALLY, Coordinate(0, 0))

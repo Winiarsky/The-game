@@ -1,0 +1,31 @@
+{
+  "encounter_triggers": [
+    {
+      "id": "playground_trial",
+      "name": "Skonfigurowana próba areny",
+      "description": "Manekiny zajmują wskazane pola. Rozstawcie bohaterów i rozpocznijcie normalną walkę.",
+      "encounter_scenario": "content/scenarios/mechanics_playground_arena.json",
+      "condition": "flag_equals",
+      "flag_key": "playground_trial_requested",
+      "flag_value": true,
+      "outcome_on_victory": {
+        "title": "Próba zakończona",
+        "body": "Wszystkie aktywne manekiny zostały wyłączone. Arena nie przyznaje doświadczenia ani łupu.",
+        "next_instruction": "W panelu twórcy wybierz Resetuj próbę, aby przywrócić zasoby i ustawić kolejne parametry.",
+        "effects": [
+          {"type":"set_flag","parameters":{"key":"playground_trial_completed","value":true}}
+        ]
+      },
+      "outcome_on_defeat": {
+        "title": "Próba przerwana",
+        "body": "Drużyna nie może kontynuować. To wynik diagnostyczny, bez konsekwencji fabularnych.",
+        "next_instruction": "Użyj Resetuj próbę w panelu twórcy."
+      },
+      "outcome_on_retreat": {
+        "title": "Próba przerwana",
+        "body": "Drużyna wycofuje się z areny bez konsekwencji fabularnych.",
+        "next_instruction": "Użyj Resetuj próbę w panelu twórcy."
+      }
+    }
+  ]
+}

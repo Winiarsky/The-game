@@ -26,7 +26,13 @@ from dnd_board_game.rules import (
     resolve_background_permission,
     resolve_d20_roll,
 )
-from dnd_board_game.combat import DamageComponentInput, DamageType, apply_damage_result, resolve_damage
+from dnd_board_game.combat import (
+    DamageComponentInput,
+    DamageType,
+    apply_damage_result,
+    build_player_initiative_prompts,
+    resolve_damage,
+)
 
 
 @pytest.fixture
@@ -204,6 +210,13 @@ def test_jack_of_all_trades_applies_only_without_proficiency(content):
 
     assert untrained.modifiers[-1].value == 1
     assert len(trained.modifiers) == 1
+    initiative = build_player_initiative_prompts((bard,))[0]
+    jack_modifier = next(
+        modifier
+        for modifier in initiative.request.modifiers
+        if modifier.stacking_key == "proficiency"
+    )
+    assert jack_modifier.value == bard.proficiency_bonus // 2
 
 
 def test_divine_health_grants_disease_immunity(content):
@@ -243,13 +256,28 @@ def test_half_orc_relentless_endurance_prevents_first_non_instant_defeat(content
 
     first = apply_damage_result(half_orc, damage)
     second = apply_damage_result(first.actor_after, damage)
+    instant = apply_damage_result(
+        half_orc,
+        resolve_damage(
+            (
+                DamageComponentInput(
+                    half_orc.hp + half_orc.max_hp,
+                    DamageType.SLASHING,
+                ),
+            )
+        ),
+    )
 
+    assert half_orc.senses.darkvision_feet == 60
     assert first.actor_after.hp == 1
     assert first.actor_after.resource_pools[-1].id == "relentless_endurance_uses"
     assert first.actor_after.resource_pools[-1].current == 0
     assert first.defeated is False
     assert second.actor_after.hp == 0
     assert second.actor_after.needs_death_save() is True
+    assert instant.instant_death is True
+    assert instant.actor_after.hp == 0
+    assert instant.actor_after.resource_pools[-1].current == 1
 
 
 @pytest.mark.parametrize(

@@ -6,7 +6,7 @@
     "srd_5_1_cc_by_4_0"
   ],
   "id": "enlarge_reduce",
-  "name": "Enlarge/Reduce",
+  "name": "Powiększenie/Pomniejszenie",
   "level": 2,
   "school": "transmutation",
   "casting_time": "action",
@@ -33,7 +33,7 @@
   "effect": {
     "kind": "combat_action",
     "action_type": "targeted_status",
-    "label": "Enlarge/Reduce",
+    "label": "Powiększenie/Pomniejszenie",
     "effect_kind": "enlarge_reduce",
     "effect_options": [
       "enlarge",

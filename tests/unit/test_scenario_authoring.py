@@ -60,10 +60,13 @@ def test_preflight_reports_missing_image_and_bad_pad(tmp_path) -> None:
 def test_catalog_lists_only_exploration_scenarios() -> None:
     entries = discover_scenarios("content/scenarios")
 
-    assert {entry.id for entry in entries} == {
-        "abandoned_watchtower",
+    assert [entry.id for entry in entries] == [
+        "mechanics_playground",
         "village_square_mvp",
-    }
+    ]
+    village = next(entry for entry in entries if entry.id == "village_square_mvp")
+    assert village.continuation_scene_names == ("Opuszczona strażnica",)
+    assert village.scene_count == 2
 
 
 def test_print_map_manifest_resolves_sources_from_manifest_directory(

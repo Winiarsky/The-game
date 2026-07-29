@@ -6,6 +6,7 @@ from dnd_board_game.application import (
     remove_orphaned_summons,
 )
 from dnd_board_game.combat import (
+    DamageType,
     InitiativeEntry,
     InitiativeOrder,
     current_actor,
@@ -84,6 +85,30 @@ def test_summon_joins_initiative_after_owner_and_uses_data_driven_attack():
         if slot.level == 1
     ) == slot_before - 1
     assert confirmed.active_effects[0].kind == "concentration_summon"
+
+
+def test_spiritual_weapon_attack_uses_owner_spell_attack_and_damage_modifier():
+    encounter, cleric, _enemy, action, _state = _fixture()
+    spiritual_definition = replace(
+        action.summon,
+        id="spiritual_weapon",
+        name="Duchowa broń",
+        attack_name="Cios duchowej broni",
+        attack_damage_type=DamageType.FORCE,
+    )
+    cleric = replace(cleric, spell_save_dc=15, proficiency_bonus=2)
+
+    source = summon_attack_source(spiritual_definition, cleric)
+
+    assert sum(
+        modifier.value
+        for modifier in source.attack_roll_request.modifiers
+    ) == 7
+    assert source.damage_fixed is None
+    assert source.damage_die_sides == 8
+    assert source.damage_modifier == 5
+    assert source.damage_hint == "1d8 + 5"
+    assert source.damage_type == "force"
 
 
 def test_lost_concentration_removes_summon_and_its_initiative_entry():

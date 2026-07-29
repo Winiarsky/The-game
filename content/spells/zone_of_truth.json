@@ -6,7 +6,7 @@
     "srd_5_1_cc_by_4_0"
   ],
   "id": "zone_of_truth",
-  "name": "Zone Of Truth",
+  "name": "Strefa prawdy",
   "level": 2,
   "school": "enchantment",
   "casting_time": "action",
@@ -26,10 +26,20 @@
   "concentration": false,
   "ritual": false,
   "effect": {
-    "kind": "exploration",
-    "effect_type": "set_flag",
-    "flag_key": "cast_zone_of_truth",
-    "flag_value": true,
-    "instructions": "Istoty w promieniu 15 stóp wykonują Cha save. Przy porażce przez 10 minut nie mogą świadomie kłamać; rzucający zna wyniki save."
+    "kind": "combat_action",
+    "action_type": "targeted_status",
+    "label": "Strefa prawdy",
+    "effect_kind": "zone_of_truth_zone",
+    "target_faction": "any",
+    "area": {
+      "shape": "radius",
+      "radius_feet": 15,
+      "target_mode": "all_creatures"
+    },
+    "save_ability": "charisma",
+    "cast_flag": "cast_zone_of_truth",
+    "instructions": "Istoty w promieniu 15 stóp wykonują Charisma save przy wejściu lub na początku tury, aż poniosą porażkę. Przez 10 minut nie mogą świadomie kłamać; rzucający zna wyniki.",
+    "resolution_mode": "automatic",
+    "board_relevance": "direct"
   }
 }

@@ -6,7 +6,7 @@
     "srd_5_1_cc_by_4_0"
   ],
   "id": "darkvision",
-  "name": "Darkvision",
+  "name": "Widzenie w ciemności",
   "level": 2,
   "school": "transmutation",
   "casting_time": "action",
@@ -32,7 +32,7 @@
   "effect": {
     "kind": "combat_action",
     "action_type": "targeted_status",
-    "label": "Darkvision",
+    "label": "Widzenie w ciemności",
     "target_count": 1,
     "cast_flag": "cast_darkvision",
     "instructions": "Dotknięta istota otrzymuje darkvision 60 stóp na 8 godzin.",

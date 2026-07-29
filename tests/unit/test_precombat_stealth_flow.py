@@ -1,10 +1,12 @@
+from dataclasses import replace
+
 from dnd_board_game.actors import AbilityScores, Actor, ActorId, Faction, ProficiencyProfile
 from dnd_board_game.application import (
     hidden_states_from_precombat_attempts,
     precombat_stealth_is_available,
     resolve_precombat_stealth,
 )
-from dnd_board_game.combat import HiddenState
+from dnd_board_game.combat import ActiveCombatEffect, HiddenState
 from dnd_board_game.exploration import (
     EncounterOpeningOutcome,
     EncounterOpeningResolution,
@@ -93,3 +95,46 @@ def test_each_actor_gets_only_one_precombat_stealth_attempt() -> None:
         assert "wykorzystał już próbę" in str(exc)
     else:
         raise AssertionError("Second precombat Stealth attempt should be rejected.")
+
+
+def test_pass_without_trace_dynamically_adds_ten_within_thirty_feet() -> None:
+    caster = _actor("druid", Faction.ALLY)
+    near_ally = replace(
+        _actor("rogue", Faction.ALLY),
+        position=Coordinate(6, 0),
+    )
+    far_ally = replace(
+        _actor("ranger", Faction.ALLY),
+        position=Coordinate(7, 0),
+    )
+    enemy = replace(
+        _actor("goblin", Faction.ENEMY),
+        position=Coordinate(1, 0),
+    )
+    effect = ActiveCombatEffect(
+        id="pass-without-trace",
+        actor_id="druid",
+        source_actor_id="druid",
+        kind="stealth_bonus_aura",
+        label="Przejście bez śladu",
+        object_id="spell:pass_without_trace",
+        value=10,
+    )
+
+    near = resolve_precombat_stealth(
+        (caster, near_ally, far_ally, enemy),
+        (),
+        actor_id="rogue",
+        natural_roll=10,
+        active_effects=(effect,),
+    )
+    far = resolve_precombat_stealth(
+        (caster, near_ally, far_ally, enemy),
+        (),
+        actor_id="ranger",
+        natural_roll=10,
+        active_effects=(effect,),
+    )
+
+    assert near.attempt.total == 20
+    assert far.attempt.total == 10

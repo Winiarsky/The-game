@@ -54,7 +54,7 @@
       "outcome_on_victory": {
         "title": "Przejście zabezpieczone",
         "body": "Dwa gobliny padają albo uciekają w głąb ruin. Drużyna ma chwilę, by rozejrzeć się po dziedzińcu.",
-        "experience_points": 100,
+        "experience_points_per_actor": 300,
         "next_instruction": "Zakończ wynik, a potem wybierz dziedziniec albo ujawnione punkty na planszy.",
         "effects": [
           {

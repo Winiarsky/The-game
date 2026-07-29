@@ -11,6 +11,7 @@ from dnd_board_game.combat import (
     CombatStatus,
     SceneObject,
     current_actor,
+    grid_distance_feet,
     grappled_actor_ids,
     movement_remaining,
     opportunity_attackers_for_movement,
@@ -18,7 +19,13 @@ from dnd_board_game.combat import (
     refresh_hidden_after_movement,
     use_movement,
 )
-from dnd_board_game.world import BoardState, Coordinate, PathResult, find_path
+from dnd_board_game.world import (
+    DIFFICULT_TERRAIN,
+    BoardState,
+    Coordinate,
+    PathResult,
+    find_path,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -195,7 +202,16 @@ class CombatMovementFlowService:
             actor,
             speed_feet=movement_remaining(state, actor, active_effects),
         )
-        path = find_path(board, movement_actor, state.actors, destination)
+        movement_board = _board_with_spell_zone_terrain(
+            board,
+            active_effects,
+        )
+        path = find_path(
+            movement_board,
+            movement_actor,
+            state.actors,
+            destination,
+        )
         path = path_with_condition_cost(
             path,
             state.condition_states,
@@ -209,6 +225,59 @@ class CombatMovementFlowService:
         if not path.valid:
             raise ValueError(invalid_path_message)
         return actor, path
+
+
+def _board_with_spell_zone_terrain(
+    board: BoardState,
+    active_effects: tuple[ActiveCombatEffect, ...],
+) -> BoardState:
+    zones = tuple(
+        effect
+        for effect in active_effects
+        if effect.kind in {
+            "spike_growth_zone",
+            "web_zone",
+            "entangle_zone",
+            "grease_zone",
+        }
+        and effect.anchor_position is not None
+    )
+    if not zones:
+        return board
+    overlaid = BoardState(
+        dimensions=board.dimensions,
+        terrain_by_tile=dict(board.terrain_by_tile),
+        walls=set(board.walls),
+        doors=dict(board.doors),
+    )
+    for row in range(board.dimensions.rows):
+        for col in range(board.dimensions.cols):
+            position = Coordinate(col, row)
+            if overlaid.terrain_at(position).blocks_movement:
+                continue
+            if any(_position_in_difficult_zone(position, zone) for zone in zones):
+                overlaid.set_terrain(position, DIFFICULT_TERRAIN)
+    return overlaid
+
+
+def _position_in_difficult_zone(
+    position: Coordinate,
+    zone: ActiveCombatEffect,
+) -> bool:
+    assert zone.anchor_position is not None
+    if zone.kind in {"web_zone", "entangle_zone", "grease_zone"}:
+        side = max(1, zone.value // 5)
+        before = (side - 1) // 2
+        after = side - before - 1
+        return (
+            zone.anchor_position.col - before
+            <= position.col
+            <= zone.anchor_position.col + after
+            and zone.anchor_position.row - before
+            <= position.row
+            <= zone.anchor_position.row + after
+        )
+    return grid_distance_feet(position, zone.anchor_position) <= zone.value
 
 
 def _movement_event_payload(

@@ -132,14 +132,25 @@ def legal_area_centers(board: BoardState, origin: Coordinate, range_feet: int) -
 
 
 def area_positions_for_center(board: BoardState, center: Coordinate, area: SpellArea) -> tuple[Coordinate, ...]:
-    if area.shape != SpellAreaShape.RADIUS:
-        raise ValueError("Centered area requires a radius spell area.")
-    positions = [
-        position
-        for position in _all_board_positions(board)
-        if grid_distance_feet(center, position) <= max(0, area.radius_feet)
-        and line_of_sight_clear(board, center, position)
-    ]
+    if area.shape == SpellAreaShape.RADIUS:
+        positions = [
+            position
+            for position in _all_board_positions(board)
+            if grid_distance_feet(center, position) <= max(0, area.radius_feet)
+            and line_of_sight_clear(board, center, position)
+        ]
+    elif area.shape == SpellAreaShape.CUBE:
+        side = max(1, area.length_feet // 5)
+        before = (side - 1) // 2
+        after = side - before - 1
+        positions = [
+            position
+            for position in _all_board_positions(board)
+            if center.col - before <= position.col <= center.col + after
+            and center.row - before <= position.row <= center.row + after
+        ]
+    else:
+        raise ValueError("Centered area requires a radius or cube spell area.")
     return tuple(sorted(positions, key=lambda position: (position.row, position.col)))
 
 
@@ -221,6 +232,7 @@ def actor_spell_cast_validation(
     cast_level: int | None = None,
     ritual: bool = False,
     ignore_verbal_somatic: bool = False,
+    verbal_components_blocked: bool = False,
 ) -> SpellCastValidation | None:
     """Validate access, slot level, focus/material and somatic-hand requirements."""
     spell = next((candidate for candidate in actor.spells if candidate.id == spell_id), None)
@@ -235,6 +247,7 @@ def actor_spell_cast_validation(
                 cast_level=cast_level,
                 ritual=ritual,
                 ignore_verbal_somatic=ignore_verbal_somatic,
+                verbal_components_blocked=verbal_components_blocked,
             ),
             valid=False,
             errors=("Nie można rzucać czarów w formie Wild Shape.",),
@@ -262,6 +275,7 @@ def actor_spell_cast_validation(
                 cast_level=cast_level,
                 ritual=ritual,
                 ignore_verbal_somatic=ignore_verbal_somatic,
+                verbal_components_blocked=verbal_components_blocked,
             ),
             valid=False,
             errors=(f"Aktor nie ma dostępu do czaru {spell.name}.",),
@@ -288,6 +302,7 @@ def actor_spell_cast_validation(
                 has_free_hand=free_hand_count(actor.inventory) > 0,
                 slotless=True,
                 ignore_verbal_somatic=ignore_verbal_somatic,
+                verbal_components_blocked=verbal_components_blocked,
             ),
             valid=False,
             errors=(f"Wykorzystano już wrodzone użycie czaru {spell.name}.",),
@@ -302,6 +317,7 @@ def actor_spell_cast_validation(
         ritual=ritual,
         slotless=innate_resource_id is not None or at_will,
         ignore_verbal_somatic=ignore_verbal_somatic,
+        verbal_components_blocked=verbal_components_blocked,
     )
 
 
@@ -479,8 +495,18 @@ def resolve_actor_saving_throw(
     condition_states: Sequence = (),
     combat_actors: Sequence[Actor] = (),
     roll_mode: RollMode = RollMode.NORMAL,
+    active_effects: Sequence[object] = (),
 ) -> SavingThrowResult:
     from .auras import saving_throw_aura_modifiers
+    from .poison_protection import poison_protection_roll_mode
+    from .warding_bond import warding_bond_saving_throw_modifiers
+
+    roll_mode = poison_protection_roll_mode(
+        actor,
+        active_effects,
+        saving_throw.effect_tags,
+        roll_mode,
+    )
 
     roll_request = D20RollRequest(
         ability=saving_throw.ability,
@@ -488,6 +514,11 @@ def resolve_actor_saving_throw(
         modifiers=(
             *saving_throw_roll_modifiers(actor, saving_throw.ability),
             *saving_throw_aura_modifiers(combat_actors, actor),
+            *warding_bond_saving_throw_modifiers(
+                actor,
+                active_effects,
+                combat_actors,
+            ),
             *situational_modifiers,
         )
     )
@@ -510,6 +541,8 @@ def resolve_actor_saving_throw(
         roll_request,
         D20RollKind.SAVING_THROW,
         effect_tags=saving_throw.effect_tags,
+        active_effects=active_effects,
+        condition_states=condition_states,
     )
     if roll_request.mode != RollMode.NORMAL and natural_roll_2 is None:
         raise ValueError("Advantage or disadvantage saving throw requires two d20 rolls.")

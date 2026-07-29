@@ -297,6 +297,7 @@ class ScenarioAttackDefinition:
     failed_save_push_feet: int = 0
     concentration: bool = False
     miss_damage_on_failure: str = "none"
+    save_disadvantage_creature_types: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -316,11 +317,6 @@ class ScenarioHealingDefinition:
     healing_dice_count: int = 1
     upcast_healing_dice_per_level: int = 0
     excluded_creature_types: tuple[str, ...] = ()
-    ongoing_damage_dice_count: int = 0
-    save_damage_on_success: str = "none"
-    damage_on_cast: bool = False
-    projectile_attack_roll: bool = False
-    projectile_damage_dice_count: int = 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -365,17 +361,22 @@ class ScenarioCombatActionDefinition:
     cast_flag: str = ""
     projectile_count: int = 0
     upcast_projectiles_per_level: int = 0
+    projectile_attack_roll: bool = False
+    projectile_damage_dice_count: int = 1
     damage_die_sides: int = 0
     damage_modifier: int = 0
     damage_type: str = ""
     upcast_value_per_level: int = 0
     ongoing_damage_dice_count: int = 0
+    save_damage_on_success: str = "none"
+    damage_on_cast: bool = False
     allowed_creature_types: tuple[str, ...] = ()
     minimum_intelligence: int | None = None
     effect_options: tuple[str, ...] = ()
     hit_point_pool_dice_count: int = 0
     upcast_hit_point_pool_dice_per_level: int = 0
     excluded_creature_types: tuple[str, ...] = ()
+    area: SpellArea | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1581,6 +1582,7 @@ def _spell_effect_payload(
             if spell.duration.kind
             in {
                 SpellDurationKind.TWENTY_FOUR_HOURS,
+                SpellDurationKind.TEN_DAYS,
                 SpellDurationKind.UNTIL_DISPELLED,
             }
             else "next_turn_start"
@@ -2569,6 +2571,10 @@ def _parse_attack(data: dict[str, Any], actor_id: str) -> ScenarioAttackDefiniti
         failed_save_push_feet=int(data.get("failed_save_push_feet", 0)),
         concentration=bool(data.get("concentration", False)),
         miss_damage_on_failure=str(data.get("miss_damage_on_failure", "none")),
+        save_disadvantage_creature_types=_parse_string_tuple(
+            data.get("save_disadvantage_creature_types", []),
+            f"attack {attack_id}.save_disadvantage_creature_types",
+        ),
     )
 
 
@@ -2622,17 +2628,6 @@ def _parse_healing_source(data: dict[str, Any], actor_id: str) -> ScenarioHealin
         excluded_creature_types=_parse_string_tuple(
             data.get("excluded_creature_types", []),
             f"healing source {source_id}.excluded_creature_types",
-        ),
-        ongoing_damage_dice_count=int(
-            data.get("ongoing_damage_dice_count", 0)
-        ),
-        save_damage_on_success=str(
-            data.get("save_damage_on_success", "none")
-        ),
-        damage_on_cast=bool(data.get("damage_on_cast", False)),
-        projectile_attack_roll=bool(data.get("projectile_attack_roll", False)),
-        projectile_damage_dice_count=int(
-            data.get("projectile_damage_dice_count", 1)
         ),
     )
 
@@ -2883,6 +2878,10 @@ def _parse_combat_action(data: dict[str, Any], actor_id: str) -> ScenarioCombatA
         upcast_projectiles_per_level=int(
             data.get("upcast_projectiles_per_level", 0)
         ),
+        projectile_attack_roll=bool(data.get("projectile_attack_roll", False)),
+        projectile_damage_dice_count=int(
+            data.get("projectile_damage_dice_count", 1)
+        ),
         damage_die_sides=int(data.get("damage_die_sides", 0)),
         damage_modifier=int(data.get("damage_modifier", 0)),
         damage_type=str(data.get("damage_type", "")),
@@ -2890,6 +2889,10 @@ def _parse_combat_action(data: dict[str, Any], actor_id: str) -> ScenarioCombatA
         ongoing_damage_dice_count=int(
             data.get("ongoing_damage_dice_count", 0)
         ),
+        save_damage_on_success=str(
+            data.get("save_damage_on_success", "none")
+        ),
+        damage_on_cast=bool(data.get("damage_on_cast", False)),
         allowed_creature_types=_parse_string_tuple(
             data.get("allowed_creature_types", []),
             f"combat action {action_id}.allowed_creature_types",
@@ -2912,6 +2915,10 @@ def _parse_combat_action(data: dict[str, Any], actor_id: str) -> ScenarioCombatA
         excluded_creature_types=_parse_string_tuple(
             data.get("excluded_creature_types", []),
             f"combat action {action_id}.excluded_creature_types",
+        ),
+        area=_parse_spell_area(
+            data.get("area"),
+            f"combat action {action_id}.area",
         ),
     )
 
@@ -3937,6 +3944,9 @@ def _parse_exploration_point(data: Any) -> ExplorationPoint:
             if data.get("merchant_id") is not None
             else None
         ),
+        divination_kind=str(data.get("divination_kind", "")).strip().lower(),
+        divination_tags=tuple(str(tag) for tag in data.get("divination_tags", ())),
+        divination_lead_shielded=bool(data.get("divination_lead_shielded", False)),
     )
 
 
@@ -5352,6 +5362,9 @@ def _parse_encounter_outcome(data: Any, field: str) -> EncounterOutcome | None:
         effects=_parse_effects(data.get("effects", []), f"{field}.effects"),
         next_instruction=str(data.get("next_instruction", "")),
         experience_points=int(data.get("experience_points", 0)),
+        experience_points_per_actor=int(
+            data.get("experience_points_per_actor", 0)
+        ),
     )
 
 
@@ -5842,6 +5855,9 @@ def _attack_source_from_definition(
         failed_save_push_feet=definition.failed_save_push_feet,
         concentration=definition.concentration,
         miss_damage_on_failure=definition.miss_damage_on_failure,
+        save_disadvantage_creature_types=(
+            definition.save_disadvantage_creature_types
+        ),
     )
     from dnd_board_game.combat.fighting_styles import (
         apply_fighting_style_to_attack_source,

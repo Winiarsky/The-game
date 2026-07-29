@@ -706,7 +706,7 @@ def test_exploration_goal_ui_selects_participants_before_sending_method() -> Non
     assert "Jak chcecie wpłynąć na NPC?" in javascript
     assert "Ten wybór należy do graczy" in javascript
     assert "{text, conversation_only: true}" in javascript
-    assert "To jest rozmowa, nie deklaracja działania ani rzut." in html
+    assert "Nie wybiera kafelka, nie deklaruje działania i nie uruchamia rzutu." in html
     assert ".interaction-actor-card.selected" in stylesheet
     assert "state.active_challenge.uses_progress" in javascript
 
@@ -730,13 +730,18 @@ def test_exploration_ui_exposes_downtime_crafting_preview_and_confirmation() -> 
     assert "/api/downtime/crafting/complete" in javascript
 
 
-def test_interaction_screen_keeps_choices_in_scrollable_chat_and_gm_composer_fixed() -> None:
+def test_interaction_screen_keeps_full_flow_in_chat_and_gm_composer_in_dialog() -> None:
     html, javascript, stylesheet = _page_assets(_client())
 
     assert "board-pad-grid" not in javascript
     assert "board-interaction-panel" not in javascript
     assert "auxiliaryPads" in javascript
     assert html.index('id="interaction-goals"') < html.index('id="chat-composer"')
+    assert html.index('id="interaction-goals"') < html.index('id="chat-utility-actions"')
+    assert 'id="gm-chat-dialog"' in html
+    assert "function openGmChatDialog" in javascript
+    assert "function closeGmChatDialog" in javascript
+    assert "gmChatDialog.open" in javascript
     assert "function selectZoneOptionGoal" in javascript
     assert "function zoneOptionComposerHtml" in javascript
     assert "function submitZoneOption" in javascript
@@ -748,6 +753,8 @@ def test_interaction_screen_keeps_choices_in_scrollable_chat_and_gm_composer_fix
     assert "overflow: hidden" in stylesheet
     assert "overflow-y: auto" in stylesheet
     assert "overscroll-behavior: contain" in stylesheet
+    assert ".chat-flow-entry" in stylesheet
+    assert ".gm-chat-dialog::backdrop" in stylesheet
     assert "object-fit: cover" in stylesheet
     assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in stylesheet
 
@@ -870,8 +877,39 @@ def test_exploration_ui_page_includes_spell_preparation_flow():
 
     assert "Przygotowanie czarów" in javascript
     assert "data-preparation-spell" in javascript
+    assert "spell.flavor_description" in javascript
+    assert "spell.mechanical_description" in javascript
     assert "confirmSpellPreparation()" in javascript
     assert "/api/spell-preparation/confirm" in javascript
+    assert "option.provider === 'class_feature'" in javascript
+    assert "action.label || identifierLabel(actionId)" in javascript
+
+
+def test_combat_targets_are_selected_on_board_not_by_internal_ids():
+    client = _client(active=False)
+
+    _html, javascript, _stylesheet = _page_assets(client)
+
+    assert "Id celu" not in javascript
+    assert 'name="combat-concentration-target"' not in javascript
+    assert 'id="combat-stabilization-target"' not in javascript
+    assert "data-twinned-attack-target" not in javascript
+    assert "data-twinned-healing-target" not in javascript
+    assert "data-sculpt-target" not in javascript
+    assert "data-careful-target" not in javascript
+    assert "data-heightened-target" not in javascript
+    assert "/api/combat/class-feature/targeting" in javascript
+    assert "Pokaż legalne cele" in javascript
+    assert "Efekt w grze:" in javascript
+
+
+def test_exploration_ui_page_exposes_level_up_after_experience_reward():
+    client = _client()
+
+    _html, javascript, _stylesheet = _page_assets(client)
+
+    assert "Awans jest dostępny:" in javascript
+    assert 'href="/characters/${encodeURIComponent(String(actor.id))}/level-up"' in javascript
 
 
 def test_exploration_ui_page_includes_short_rest_flow():
@@ -879,7 +917,8 @@ def test_exploration_ui_page_includes_short_rest_flow():
 
     html, javascript, _stylesheet = _page_assets(client)
 
-    assert 'id="short-rest-button"' in html
+    assert 'id="short-rest-button"' not in html
+    assert "'startShortRest()'" in javascript
     assert "Krótki odpoczynek" in javascript
     assert "spendShortRestHitDie" in javascript
     assert "data-short-rest-attunement" in javascript
@@ -937,9 +976,10 @@ def test_exploration_ui_page_is_fiction_first_and_accepts_questions():
     assert 'id="chat-stream"' in html
     assert 'id="interaction-state-card"' in html
     assert 'id="pending-title"' in html
-    assert html.index('id="chat-stream"') < html.index('id="pending-panel"') < html.index('id="chat-composer"')
+    assert html.index('id="chat-stream"') < html.index('id="pending-panel"') < html.index('id="chat-utility-actions"')
+    assert html.index('id="chat-stream"') < html.index('id="gm-chat-dialog"') < html.index('id="chat-composer"')
     assert html.index('id="pending-panel"') < html.index('id="roll-panel"') < html.index('id="result-panel"')
-    assert html.count('conversation-system-card') == 1
+    assert html.count('conversation-system-card') == 2
     assert '<h3>Propozycja MG</h3>' not in html
     assert "Co robicie lub o co pytacie?" in html
     assert "Napisz wiadomość do MG" in html
@@ -973,6 +1013,8 @@ def test_exploration_ui_page_is_fiction_first_and_accepts_questions():
     assert "'Wróć do działań'" in javascript
     assert "navigationChoicesHtml" in javascript
     assert "synchronizeBoardSelection" in javascript
+    assert "synchronizeBoardSelection({force: true})" in javascript
+    assert "if (boardSelectionActivated) scrollChatToBottom(true)" in javascript
     assert "selection_revision" in javascript
     assert ".npc-transition-reactions" in stylesheet
     assert ".scene-image" in stylesheet
@@ -1407,6 +1449,49 @@ def test_exploration_ui_state_endpoint_returns_json():
 
     assert response.status_code == 200
     assert response.get_json()["scenario"]["id"] == "abandoned_watchtower"
+
+
+def test_gate_board_scan_selects_goal_and_records_activated_tile():
+    session = _session()
+    board = FakeBoardConnection(clicks=[(6, 1), (8, 1), (10, 1)])
+    session.attach_board_connection(board, backend="simulator")
+    client = create_app(session).test_client()
+
+    interaction = client.get("/api/state").get_json()["flow"]["board_interaction"]
+    assert [
+        (pad["position"], pad["target_id"])
+        for pad in interaction["pads"]
+    ] == [
+        ([6, 1], "force_entry"),
+        ([8, 1], "open_lock"),
+        ([10, 1], "look_around"),
+    ]
+
+    for revision, goal_id in enumerate(
+        ("force_entry", "open_lock", "look_around"),
+        start=1,
+    ):
+        selected = client.post("/api/board/scan", json={}).get_json()
+        board_interaction = selected["flow"]["board_interaction"]
+        assert board_interaction["selected_goal_id"] == goal_id
+        assert board_interaction["selection_revision"] == revision
+
+    events = client.get("/api/session-log").get_json()["events"]
+    activated = [
+        event
+        for event in events
+        if event["event_type"] == "ui_board_interaction_pad_activated"
+    ]
+    assert [event["payload"]["target_id"] for event in activated] == [
+        "force_entry",
+        "open_lock",
+        "look_around",
+    ]
+    assert [event["payload"]["selection_revision"] for event in activated] == [
+        1,
+        2,
+        3,
+    ]
 
 
 def test_exploration_ui_initial_payload_requires_spell_preparation_and_hides_actions():

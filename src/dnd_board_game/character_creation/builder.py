@@ -383,6 +383,12 @@ def build_character(
         max_hp += max(1, fixed_hit_point_gain + constitution_modifier)
     if "dwarven_toughness" in species_trait_ids:
         max_hp += draft.level
+    if (
+        subclass is not None
+        and "draconic_resilience"
+        in _subclass_feature_ids(subclass, draft.level)
+    ):
+        max_hp += draft.level
     spell_save_dc = (
         8 + 2 + ability_modifier(getattr(scores, character_class.spellcasting_ability))
         if character_class.spellcasting_ability is not None

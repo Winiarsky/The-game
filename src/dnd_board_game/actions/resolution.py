@@ -27,6 +27,7 @@ from dnd_board_game.combat import (
     use_action_economy_cost,
 )
 from dnd_board_game.rules import (
+    ActiveEffect,
     RollMode,
     RollModifier,
     save_damage_multiplier,
@@ -188,6 +189,7 @@ class AttackActionResolver(ActionResourceResolver):
         damage_components: tuple[DamageComponentInput, ...] | None = None,
         saving_throw: SpellSaveResult | None = None,
         critical: bool = False,
+        active_effects: tuple[ActiveEffect, ...] = (),
     ) -> SingleTargetDamageResolution:
         target = _actor_by_id(state, target_id)
         raw_components = damage_components or (
@@ -206,9 +208,26 @@ class AttackActionResolver(ActionResourceResolver):
             for component in raw_components
         )
         damage = resolve_damage(adjusted_components)
-        applied = apply_damage_result(target, damage, critical=critical)
+        applied = apply_damage_result(
+            target,
+            damage,
+            critical=critical,
+            active_effects=active_effects,
+            combat_actors=state.actors,
+        )
+        updated_state = replace_actor(state, applied.actor_after)
+        if active_effects:
+            from dnd_board_game.combat import transfer_warding_bond_damage
+
+            transfer = transfer_warding_bond_damage(
+                updated_state,
+                protected_actor=target,
+                damage_amount=applied.damage.total_applied,
+                active_effects=active_effects,
+            )
+            updated_state = transfer.state
         return SingleTargetDamageResolution(
-            state=replace_actor(state, applied.actor_after),
+            state=updated_state,
             target_id=target_id,
             base_damage=sum(component.amount for component in raw_components),
             applied_damage=applied,
@@ -427,6 +446,12 @@ def roll_spell_saves_for_targets(
         if target.is_defeated():
             continue
         heightened = target_id == heightened_target_id
+        creature_disadvantage = target.creature_type in getattr(
+            source,
+            "save_disadvantage_creature_types",
+            (),
+        )
+        disadvantage = heightened or creature_disadvantage
         saves.append(
             resolve_spell_save(
                 target,
@@ -435,7 +460,7 @@ def roll_spell_saves_for_targets(
                 natural_roll=rng.randint(1, 20),
                 natural_roll_2=(
                     rng.randint(1, 20)
-                    if heightened
+                    if disadvantage
                     or (
                         source.save_ability == "dexterity"
                         and has_condition(
@@ -461,7 +486,7 @@ def roll_spell_saves_for_targets(
                 combat_actors=state.actors,
                 roll_mode=(
                     RollMode.DISADVANTAGE
-                    if heightened
+                    if disadvantage
                     else RollMode.NORMAL
                 ),
             )

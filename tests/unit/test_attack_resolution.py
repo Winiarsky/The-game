@@ -2,7 +2,13 @@ from dataclasses import replace
 
 import pytest
 
-from dnd_board_game.actors import Actor, ActorId, Faction
+from dnd_board_game.actors import (
+    Actor,
+    ActorId,
+    Faction,
+    FeatureGrant,
+    FeatureSourceKind,
+)
 from dnd_board_game.combat import (
     ActionUse,
     AttackDeclaration,
@@ -56,6 +62,35 @@ def test_attack_resolution_hit_miss_and_criticals():
     assert resolve_attack(declaration, _roll(9, 3), ActionUse.ACTION_AVAILABLE).outcome == AttackRollOutcome.MISS
     assert resolve_attack(declaration, _roll(20, -10), ActionUse.ACTION_AVAILABLE).outcome == AttackRollOutcome.CRITICAL_HIT
     assert resolve_attack(declaration, _roll(1, 30), ActionUse.ACTION_AVAILABLE).outcome == AttackRollOutcome.CRITICAL_MISS
+
+
+def test_champion_improved_critical_expands_weapon_critical_range_to_nineteen():
+    declaration = _declaration()
+    champion = replace(
+        declaration.attacker,
+        features=(
+            FeatureGrant(
+                "improved_critical",
+                "Ulepszone trafienie krytyczne",
+                FeatureSourceKind.SUBCLASS,
+                "champion",
+            ),
+        ),
+    )
+
+    ordinary = resolve_attack(
+        declaration,
+        _roll(19, -10),
+        ActionUse.ACTION_AVAILABLE,
+    )
+    improved = resolve_attack(
+        replace(declaration, attacker=champion),
+        _roll(19, -10),
+        ActionUse.ACTION_AVAILABLE,
+    )
+
+    assert ordinary.outcome == AttackRollOutcome.MISS
+    assert improved.outcome == AttackRollOutcome.CRITICAL_HIT
 
 
 def test_attack_resolution_preserves_breakdown_and_consumes_action():

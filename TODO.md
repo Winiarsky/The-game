@@ -175,6 +175,10 @@ najbliższy horyzont, a nie kopię całej roadmapy.
 - [x] Replace clear-then-render combat LED updates with atomic fading frames, preserve attacker/target focus during rolls, and keep the acting enemy visible through movement previews.
 - [x] Clarify exploration checks by naming the tested skill and separating the rolling leader from a non-rolling helper.
 - [x] Give exploration goal cards `must`/`allow` policies for D&D single, optional Help, and whole-party checks, selected before the free-form method.
+- [x] Fix watchtower gate board-tile synchronization, restore a persisted hardware selection in the chat UI, log the activated target, and remove the duplicate gate-search card.
+- [x] [Combat playtest] Block ending a turn with an unresolved action, expose executable spells and active class features in the board context menu, explain prepared spells from their real resolver contracts, and animate ranged projectiles across LEDs.
+- [x] [Progression playtest] Award every player hero 300 XP after the gate-goblin victory, persist custom-character progress, and expose direct level-up actions in the encounter result.
+- [x] Add a selectable mechanics playground with configurable training dummies, normal board-first combat setup, spell/area targets, exploration fixtures, a social-test NPC, repeatable short rests, and a one-click trial reset.
 
 ## Completed Work And Deferred Backlog
 
@@ -410,10 +414,38 @@ obowiązują `Current Roadmap Focus` oraz etapy z `ROADMAP.md`.
     species/class/subclass/choice feature and malformed assisted spell.
   - [x] Model the Ranger's humanoid Favored Enemy choice as exactly two
     humanoid races and require authored race tags before granting advantage.
+  - [x] Route Bardic Inspiration, two-stage Help, and direct status, movement,
+    summon, debuff and dispel targets through illuminated board fields instead
+    of public actor ids; add area selection for Sleep and Faerie Fire.
+  - [x] Route stabilization and secondary spell selections (Twinned, Sculpt,
+    Careful and Heightened) through illuminated figures on the board; keep only
+    dice values and non-spatial effect variants in the UI.
+  - [x] Show an explicit mechanical effect while resolving every spell family
+    and remove duplicate target selectors from status, movement, summon,
+    debuff, and dispel panels.
 - [x] Implement hardware adapter interface around `board.Connection`.
 - [x] Add LED frame generation for selected path and movement range.
 - [x] Decide first UI/runtime surface.
 - [x] Add manual board checklist coverage for the first movement demo.
+
+## SRD Level 3 Runtime Audit Follow-up
+
+- [x] [P0 spell fidelity] Correct erroneous concentration metadata for
+  `invisibility` and `gentle_repose`; add semantic validation for concentration
+  and duration instead of auditing only supported schema kinds.
+- [x] [P0 spell fidelity] Require every combat `effect_kind` to have a registered
+  runtime consumer and close the marker-only effects identified in
+  `docs/SRD_LEVEL_3_RUNTIME_AUDIT_2026-07-29.md`.
+- [x] [P0 spell areas] Represent supported persistent spell zones as board objects with
+  point/area targeting, entry/turn triggers, movement, expiry and visible LEDs.
+- [x] [P1 Arena audit] Register all 236 canonical spell, species, class,
+  subclass and cross-cutting cases with reproducible Arena configurations;
+  link 177 cases to automatic behavioral tests and document an explicit,
+  justified skip for the remaining 59.
+- [x] [P1 character help] Extend player-facing help and Arena audit coverage
+  from level-1 class grants to level-2/3 class, subclass and option features.
+- [x] [P1 flanking] Exclude incapacitated allies from flanking and present
+  flanking as advantage rather than a numeric `+0` modifier.
 
 ## Content Tasks
 

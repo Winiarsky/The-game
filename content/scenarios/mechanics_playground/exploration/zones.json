@@ -1,0 +1,153 @@
+{
+  "zones": [
+    {
+      "id": "control_room",
+      "name": "Sterownia areny",
+      "positions": [[1,1],[2,1],[3,1],[4,1],[1,2],[2,2],[3,2],[4,2],[1,3],[2,3],[3,3],[4,3]],
+      "anchor_position": [2,2],
+      "interaction_pad_positions": [[1,1],[4,1],[4,3],[1,3]],
+      "color": "marker",
+      "description": "Mosiężny pulpit dzieli planszę na stanowiska. Panel twórcy pozwala ustawić parametry manekinów i rozpocząć powtarzalną próbę.",
+      "adjacent_zone_ids": ["combat_arena","spell_lab","exploration_course","social_lab","rest_station"]
+    },
+    {
+      "id": "combat_arena",
+      "name": "Arena walki",
+      "positions": [[6,1],[7,1],[8,1],[9,1],[10,1],[11,1],[12,1],[13,1],[14,1],[15,1],[16,1],[17,1],[18,1],[6,2],[7,2],[8,2],[9,2],[10,2],[11,2],[12,2],[13,2],[14,2],[15,2],[16,2],[17,2],[18,2],[6,3],[7,3],[8,3],[9,3],[10,3],[11,3],[12,3],[13,3],[14,3],[15,3],[16,3],[17,3],[18,3],[6,4],[7,4],[8,4],[9,4],[10,4],[11,4],[12,4],[13,4],[14,4],[15,4],[16,4],[17,4],[18,4],[6,5],[7,5],[8,5],[9,5],[10,5],[11,5],[12,5],[13,5],[14,5],[15,5],[16,5],[17,5],[18,5],[6,6],[7,6],[8,6],[9,6],[10,6],[11,6],[12,6],[13,6],[14,6],[15,6],[16,6],[17,6],[18,6],[6,7],[7,7],[8,7],[9,7],[10,7],[11,7],[12,7],[13,7],[14,7],[15,7],[16,7],[17,7],[18,7],[6,8],[7,8],[8,8],[9,8],[10,8],[11,8],[12,8],[13,8],[14,8],[15,8],[16,8],[17,8],[18,8],[6,9],[7,9],[8,9],[9,9],[10,9],[11,9],[12,9],[13,9],[14,9],[15,9],[16,9],[17,9],[18,9],[6,10],[7,10],[8,10],[9,10],[10,10],[11,10],[12,10],[13,10],[14,10],[15,10],[16,10],[17,10],[18,10]],
+      "anchor_position": [12,5],
+      "interaction_pad_positions": [[7,2],[10,2],[13,2],[16,2]],
+      "color": "danger",
+      "description": "Otwarty plac z liniami odległości, osłonami i stanowiskami manekinów. Próbę uruchamia konfigurator Areny w panelu twórcy.",
+      "adjacent_zone_ids": ["control_room","spell_lab"],
+      "fixtures": [
+        {
+          "id": "arena_half_cover",
+          "name": "Niska kamienna osłona",
+          "kind": "obstacle",
+          "description": "Osłona do testowania strzału, linii efektu i pozycjonowania.",
+          "positions": [[11,5],[12,5]],
+          "properties": ["rigid","hard","stone"],
+          "condition": "intact",
+          "portable": false,
+          "destructible": true,
+          "armor_class": 17,
+          "hit_points": 30,
+          "damage_threshold": 5,
+          "cover_bonus": 2,
+          "projectile_cover_bonus": 2
+        }
+      ]
+    },
+    {
+      "id": "spell_lab",
+      "name": "Laboratorium magii",
+      "positions": [[1,6],[2,6],[3,6],[4,6],[1,7],[2,7],[3,7],[4,7],[1,8],[2,8],[3,8],[4,8],[1,9],[2,9],[3,9],[4,9],[1,10],[2,10],[3,10],[4,10]],
+      "anchor_position": [2,8],
+      "interaction_pad_positions": [[1,6],[4,6],[4,10],[1,10]],
+      "color": "purple",
+      "description": "Runiczne stanowisko przypomina, że cele pojedyncze, obszary, linie i stożki zawsze wybiera się na planszy. Wybierz odpowiedni profil manekina w konfiguratorze Areny.",
+      "adjacent_zone_ids": ["control_room","combat_arena"]
+    },
+    {
+      "id": "exploration_course",
+      "name": "Tor eksploracyjny",
+      "positions": [[1,13],[2,13],[3,13],[4,13],[5,13],[6,13],[7,13],[8,13],[9,13],[1,14],[2,14],[3,14],[4,14],[5,14],[6,14],[7,14],[8,14],[9,14],[1,15],[2,15],[3,15],[4,15],[5,15],[6,15],[7,15],[8,15],[9,15],[1,16],[2,16],[3,16],[4,16],[5,16],[6,16],[7,16],[8,16],[9,16],[1,17],[2,17],[3,17],[4,17],[5,17],[6,17],[7,17],[8,17],[9,17],[1,18],[2,18],[3,18],[4,18],[5,18],[6,18],[7,18],[8,18],[9,18],[1,19],[2,19],[3,19],[4,19],[5,19],[6,19],[7,19],[8,19],[9,19],[1,20],[2,20],[3,20],[4,20],[5,20],[6,20],[7,20],[8,20],[9,20]],
+      "anchor_position": [5,16],
+      "interaction_pad_positions": [[2,14],[5,14],[8,14],[2,19],[5,19],[8,19]],
+      "color": "interactive",
+      "description": "Zamek, skrzynia, uszkadzalna przeszkoda oraz lina pozwalają testować automatyczne akcje, testy, przedmioty, broń i czary w eksploracji.",
+      "adjacent_zone_ids": ["control_room","social_lab"],
+      "search": {
+        "dc": 12,
+        "minutes": 10,
+        "ability": "wisdom",
+        "skill": "perception",
+        "reveals": ["hidden_training_cache"],
+        "success_flag": "playground_cache_found",
+        "failure_flag": "playground_search_failed"
+      },
+      "fixtures": [
+        {
+          "id": "training_door",
+          "name": "Drzwi treningowe",
+          "kind": "door",
+          "description": "Wymienny zamek i drewniane skrzydło do prób siłowych, narzędzi oraz niszczenia.",
+          "positions": [[4,15],[5,15]],
+          "properties": ["wide","rigid","wooden","metallic"],
+          "condition": "closed",
+          "portable": false,
+          "destructible": true,
+          "initially_locked": true,
+          "lock_dc": 12,
+          "armor_class": 15,
+          "hit_points": 18,
+          "damage_threshold": 3,
+          "blocks_movement_when_closed": true,
+          "cover_bonus": 5,
+          "projectile_cover_bonus": 5,
+          "action_policies": [
+            {"operation":"unlock","allowed_conditions":["closed"],"result_condition":"closed","ability":"dexterity","skill":null,"difficulty_tier":"easy"},
+            {"operation":"open","allowed_conditions":["closed"],"result_condition":"open","ability":"strength","skill":null,"difficulty_tier":"automatic"},
+            {"operation":"damage","allowed_conditions":["closed","damaged"],"result_condition":"damaged","ability":"strength","skill":"athletics","difficulty_tier":"easy","progress_on_success":3,"progress_on_failure":1}
+          ]
+        },
+        {
+          "id": "training_chest",
+          "name": "Skrzynia treningowa",
+          "kind": "container",
+          "description": "Skrzynia do testowania zamków, otwierania, przeszukania i łupu.",
+          "positions": [[7,18]],
+          "properties": ["rigid","wooden","container"],
+          "condition": "closed",
+          "destructible": true,
+          "initially_locked": true,
+          "lock_dc": 10,
+          "armor_class": 12,
+          "hit_points": 10,
+          "action_policies": [
+            {"operation":"unlock","allowed_conditions":["closed"],"result_condition":"closed","ability":"dexterity","skill":null,"difficulty_tier":"easy"},
+            {"operation":"open","allowed_conditions":["closed"],"result_condition":"open","ability":"strength","skill":null,"difficulty_tier":"automatic"},
+            {"operation":"loot","allowed_conditions":["open"],"result_condition":"open","ability":"wisdom","skill":null,"difficulty_tier":"automatic","release_yield_items":true}
+          ],
+          "yield_items": [
+            {"id":"training_chest_dagger","definition_id":"dagger","quantity":1,"condition":"normal","available":false}
+          ]
+        }
+      ],
+      "short_rest": {
+        "safety": "safe",
+        "duration_minutes": 60,
+        "max_completions": 99,
+        "risk_summary": "Stanowisko jest bezpieczne. Odpoczynek służy testowaniu kości wytrzymałości i regeneracji zasobów.",
+        "completion_effects": []
+      }
+    },
+    {
+      "id": "social_lab",
+      "name": "Pracownia rozmów",
+      "positions": [[11,13],[12,13],[13,13],[14,13],[15,13],[16,13],[17,13],[18,13],[11,14],[12,14],[13,14],[14,14],[15,14],[16,14],[17,14],[18,14],[11,15],[12,15],[13,15],[14,15],[15,15],[16,15],[17,15],[18,15],[11,16],[12,16],[13,16],[14,16],[15,16],[16,16],[17,16],[18,16],[11,17],[12,17],[13,17],[14,17],[15,17],[16,17],[17,17],[18,17],[11,18],[12,18],[13,18],[14,18],[15,18],[16,18],[17,18],[18,18]],
+      "anchor_position": [14,15],
+      "interaction_pad_positions": [[12,14],[15,14],[17,16],[18,18]],
+      "color": "success",
+      "description": "MISTRZ-0 potrafi odpowiadać rzeczowo, poddać się perswazji albo rozpoznać groźbę. Nie zna sekretów kampanii.",
+      "adjacent_zone_ids": ["control_room","exploration_course","rest_station"]
+    },
+    {
+      "id": "rest_station",
+      "name": "Stacja odpoczynku",
+      "positions": [[11,21],[12,21],[13,21],[14,21],[15,21],[16,21],[17,21],[18,21],[11,22],[12,22],[13,22],[14,22],[15,22],[16,22],[17,22],[18,22],[11,23],[12,23],[13,23],[14,23],[15,23],[16,23],[17,23],[18,23],[11,24],[12,24],[13,24],[14,24],[15,24],[16,24],[17,24],[18,24]],
+      "anchor_position": [14,22],
+      "interaction_pad_positions": [[12,22],[14,23],[16,22]],
+      "color": "success",
+      "description": "Bezpieczna ława do testowania krótkiego odpoczynku, kości wytrzymałości i odnawiania zasobów klasowych.",
+      "adjacent_zone_ids": ["control_room","social_lab"],
+      "short_rest": {
+        "safety": "safe",
+        "duration_minutes": 60,
+        "max_completions": 99,
+        "risk_summary": "Odpoczynek jest bezpieczny i nie uruchamia zdarzeń losowych.",
+        "completion_effects": []
+      }
+    }
+  ]
+}

@@ -6,7 +6,7 @@
     "srd_5_1_cc_by_4_0"
   ],
   "id": "flame_blade",
-  "name": "Flame Blade",
+  "name": "Ostrze płomieni",
   "level": 2,
   "school": "evocation",
   "casting_time": "bonus_action",
@@ -32,7 +32,7 @@
   "effect": {
     "kind": "combat_action",
     "action_type": "targeted_status",
-    "label": "Flame Blade",
+    "label": "Ostrze płomieni",
     "effect_kind": "flame_blade",
     "target_faction": "self",
     "value": 3,

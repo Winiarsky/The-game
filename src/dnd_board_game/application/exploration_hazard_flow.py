@@ -22,6 +22,7 @@ from dnd_board_game.exploration import (
     apply_exploration_effect,
 )
 from dnd_board_game.rules import EffectDuration, SavingThrowResult
+from dnd_board_game.rules import ActiveEffect
 
 from .damage_presentation import applied_damage_message
 
@@ -46,6 +47,7 @@ def resolve_exploration_hazard(
     natural_roll_2: int | None = None,
     natural_rerolls: tuple[int, ...] = (),
     rng: Random,
+    active_effects: tuple[ActiveEffect, ...] = (),
 ) -> ExplorationHazardResolution:
     saving_throw = resolve_actor_saving_throw(
         actor,
@@ -53,6 +55,7 @@ def resolve_exploration_hazard(
         natural_roll=natural_roll,
         natural_roll_2=natural_roll_2,
         natural_rerolls=natural_rerolls,
+        active_effects=active_effects,
     )
     base_damage = _roll_hazard_damage(hazard, rng)
     adjusted_damage = apply_save_damage_amount(base_damage, saving_throw)
@@ -65,7 +68,7 @@ def resolve_exploration_hazard(
             ),
         )
     )
-    applied = apply_damage_result(actor, damage)
+    applied = apply_damage_result(actor, damage, active_effects=active_effects)
     outcome_message = hazard.success_message if saving_throw.success else hazard.failure_message
     outcome = "sukces" if saving_throw.success else "porażka"
     message = (

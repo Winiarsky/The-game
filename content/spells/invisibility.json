@@ -6,12 +6,12 @@
     "srd_5_1_cc_by_4_0"
   ],
   "id": "invisibility",
-  "name": "Invisibility",
+  "name": "Niewidzialność",
   "level": 2,
-  "school": "divination",
+  "school": "illusion",
   "casting_time": "action",
   "range": {
-    "kind": "self"
+    "kind": "touch"
   },
   "components": {
     "verbal": true,
@@ -27,12 +27,12 @@
     "kind": "hour",
     "amount": 1
   },
-  "concentration": false,
+  "concentration": true,
   "ritual": false,
   "effect": {
     "kind": "combat_action",
     "action_type": "targeted_status",
-    "label": "Invisibility",
+    "label": "Niewidzialność",
     "target_count": 1,
     "cast_flag": "cast_invisibility",
     "instructions": "Cel i noszone przez niego przedmioty są Invisible podczas koncentracji do godziny; efekt kończy się po ataku lub rzuceniu czaru.",

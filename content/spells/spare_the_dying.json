@@ -4,7 +4,7 @@
   "ruleset_id": "dnd_5e_2014",
   "source_pack_ids": ["srd_5_1_cc_by_4_0"],
   "id": "spare_the_dying",
-  "name": "Spare the Dying",
+  "name": "Oszczędź umierającego",
   "level": 0,
   "school": "necromancy",
   "casting_time": "action",
@@ -16,7 +16,7 @@
   "effect": {
     "kind": "combat_action",
     "action_type": "stabilize",
-    "label": "Spare the Dying",
+    "label": "Oszczędź umierającego",
     "target_faction": "ally"
   }
 }

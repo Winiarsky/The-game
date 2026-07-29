@@ -6,7 +6,7 @@
     "srd_5_1_cc_by_4_0"
   ],
   "id": "false_life",
-  "name": "False Life",
+  "name": "Fałszywe życie",
   "level": 1,
   "school": "necromancy",
   "casting_time": "action",
@@ -32,7 +32,7 @@
   "effect": {
     "kind": "combat_action",
     "action_type": "targeted_status",
-    "label": "False Life",
+    "label": "Fałszywe życie",
     "effect_kind": "temporary_hit_points",
     "target_faction": "self",
     "target_count": 1,

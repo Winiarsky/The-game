@@ -6,7 +6,7 @@
     "srd_5_1_cc_by_4_0"
   ],
   "id": "see_invisibility",
-  "name": "See Invisibility",
+  "name": "Widzenie niewidzialnego",
   "level": 2,
   "school": "divination",
   "casting_time": "action",
@@ -32,7 +32,7 @@
   "effect": {
     "kind": "combat_action",
     "action_type": "targeted_status",
-    "label": "See Invisibility",
+    "label": "Widzenie niewidzialnego",
     "target_count": 1,
     "cast_flag": "cast_see_invisibility",
     "instructions": "Przez godzinę widzisz niewidzialne istoty i obiekty oraz obszary Ethereal Plane w zasięgu wzroku.",

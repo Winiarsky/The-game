@@ -6,7 +6,7 @@
     "srd_5_1_cc_by_4_0"
   ],
   "id": "mirror_image",
-  "name": "Mirror Image",
+  "name": "Lustrzane odbicia",
   "level": 2,
   "school": "illusion",
   "casting_time": "action",
@@ -27,7 +27,7 @@
   "effect": {
     "kind": "combat_action",
     "action_type": "targeted_status",
-    "label": "Mirror Image",
+    "label": "Lustrzane odbicia",
     "effect_kind": "mirror_image",
     "target_faction": "self",
     "value": 3,

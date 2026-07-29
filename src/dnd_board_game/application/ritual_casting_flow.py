@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from dnd_board_game.actors import Actor
 from dnd_board_game.combat import (
     actor_spell_cast_validation,
     consume_spell_resource,
+    set_scene_flag,
 )
 from dnd_board_game.exploration import (
     ExplorationState,
@@ -31,6 +32,7 @@ class RitualCastingResult:
     actor_after: Actor
     spell_id: str
     spell_name: str
+    target_id: str
     elapsed_minutes: int
     expired_effects: tuple[TimedMagicEffect, ...] = ()
     triggered_clock_events: tuple[ScenarioClockEvent, ...] = ()
@@ -44,6 +46,7 @@ class RitualCastingFlowService:
         state: ExplorationState,
         actor_id: str,
         spell_id: str,
+        target_id: str = "",
     ) -> RitualCastingResult:
         actor = next(
             (candidate for candidate in actors if str(candidate.id) == actor_id),
@@ -81,22 +84,30 @@ class RitualCastingFlowService:
                 raise ValueError(f"Nieobsługiwany efekt rytuału: {effect.kind.value}.")
             duration_minutes = spell_duration_minutes(spell.duration)
             if duration_minutes == 0:
-                raise ValueError("Eksploracyjny efekt rytuału musi mieć czas trwania.")
-            timed_effect = TimedMagicEffect(
-                id=f"spell:{actor.id}:{spell.id}",
-                actor_id=str(actor.id),
-                spell_id=spell.id,
-                label=spell.name,
-                flag_key=effect.flag_key,
-                flag_value=effect.flag_value,
-                started_at_minute=updated_state.elapsed_minutes,
-                expires_at_minute=(
-                    None
-                    if duration_minutes is None
-                    else updated_state.elapsed_minutes + duration_minutes
-                ),
-            )
-            updated_state = apply_timed_magic_effect(updated_state, timed_effect)
+                updated_state = replace(
+                    updated_state,
+                    flags=set_scene_flag(
+                        updated_state.flags,
+                        effect.flag_key,
+                        target_id or effect.flag_value,
+                    ),
+                )
+            else:
+                timed_effect = TimedMagicEffect(
+                    id=f"spell:{actor.id}:{spell.id}:{target_id or 'scene'}",
+                    actor_id=str(actor.id),
+                    spell_id=spell.id,
+                    label=spell.name,
+                    flag_key=effect.flag_key,
+                    flag_value=target_id or effect.flag_value,
+                    started_at_minute=updated_state.elapsed_minutes,
+                    expires_at_minute=(
+                        None
+                        if duration_minutes is None
+                        else updated_state.elapsed_minutes + duration_minutes
+                    ),
+                )
+                updated_state = apply_timed_magic_effect(updated_state, timed_effect)
         return RitualCastingResult(
             actors=updated_actors,
             state=updated_state,
@@ -104,6 +115,7 @@ class RitualCastingFlowService:
             actor_after=actor_after,
             spell_id=spell.id,
             spell_name=spell.name,
+            target_id=target_id,
             elapsed_minutes=elapsed,
             expired_effects=time_advance.expired_effects,
             triggered_clock_events=time_advance.triggered_clock_events,

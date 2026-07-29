@@ -40,6 +40,7 @@ class CombatMenuAction(StrEnum):
     SELECT_ATTACK_SOURCE = "select_attack_source"
     SELECT_HEALING_SOURCE = "select_healing_source"
     COMBAT_ACTION = "combat_action"
+    CLASS_FEATURE = "class_feature"
     TARGETED_ITEM_ACTION = "targeted_item_action"
     DASH = "dash"
     DODGE = "dodge"
@@ -66,6 +67,7 @@ class CombatMenuOption:
     position: Coordinate | None = None
     source_id: str | None = None
     action_id: str | None = None
+    cast_level: int | None = None
     destination: Coordinate | None = None
     movement_cost_feet: int = 0
     dropped_weapon_id: str | None = None
@@ -90,6 +92,7 @@ class CombatMenuOption:
             "position": [self.position.col, self.position.row] if self.position is not None else None,
             "source_id": self.source_id,
             "action_id": self.action_id,
+            "cast_level": self.cast_level,
             "destination": [self.destination.col, self.destination.row] if self.destination is not None else None,
             "movement_cost_feet": self.movement_cost_feet,
             "dropped_weapon_id": self.dropped_weapon_id,

@@ -1,0 +1,29 @@
+{
+  "schema": "dnd_board_game.scenario",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["project_original"],
+  "id": "mechanics_playground",
+  "name": "Arena mechanik — laboratorium",
+  "scene_mode": "exploration",
+  "board": {"cols": 20, "rows": 30},
+  "parts": {
+    "actors": "actors.json",
+    "environment": "environment.json",
+    "objectives": "objectives.json",
+    "llm_context": "llm_context.json",
+    "exploration": {
+      "party_start_zone": "exploration/party_start_zone.json",
+      "zones": "exploration/zones.json",
+      "points": "exploration/points.json",
+      "challenges": "exploration/challenges.json",
+      "encounter_triggers": "exploration/encounter_triggers.json",
+      "npc_transitions": "exploration/npc_transitions.json",
+      "observations": "exploration/observations.json",
+      "flows": "exploration/flows.json",
+      "traps": "exploration/traps.json",
+      "resources": "exploration/resources.json",
+      "initial_resources": "exploration/initial_resources.json"
+    }
+  }
+}

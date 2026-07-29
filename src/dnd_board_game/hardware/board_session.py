@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import inspect
+import time
 from typing import Any
 
 from dnd_board_game.world import Coordinate
 
-from .led_feedback import BoardLedAdapter, LedFeedback
+from .led_feedback import BoardLedAdapter, LedFeedback, LedFrame, LedRole
+from .led_palette import LedColor
 
 
 class BoardSessionAdapter:
@@ -84,6 +86,38 @@ class BoardSessionAdapter:
 
     def restore_feedback(self, feedback: LedFeedback) -> None:
         self._replace_feedback(feedback, transition_ms=self.transition_ms)
+
+    def animate_projectile(
+        self,
+        path: tuple[Coordinate, ...],
+        *,
+        color: tuple[int, int, int] = LedColor.RANGED_PROJECTILE,
+        step_ms: int = 55,
+    ) -> None:
+        """Render a short, blocking projectile trace at the hardware boundary."""
+
+        if len(path) < 2:
+            return
+        delay_s = (
+            max(0, int(step_ms)) / 1000
+            if self.atomic_led_frames
+            else 0
+        )
+        for position in path[1:]:
+            self._replace_feedback(
+                LedFeedback(
+                    (
+                        LedFrame(
+                            (position,),
+                            color,
+                            LedRole.DESTINATION,
+                        ),
+                    )
+                ),
+                transition_ms=0,
+            )
+            if delay_s:
+                time.sleep(delay_s)
 
     def _replace_feedback(
         self,

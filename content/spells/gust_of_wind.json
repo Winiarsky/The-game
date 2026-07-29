@@ -6,7 +6,7 @@
     "srd_5_1_cc_by_4_0"
   ],
   "id": "gust_of_wind",
-  "name": "Gust Of Wind",
+  "name": "Podmuch wiatru",
   "level": 2,
   "school": "evocation",
   "casting_time": "action",
@@ -32,7 +32,7 @@
   "effect": {
     "kind": "combat_action",
     "action_type": "spell_movement",
-    "label": "Gust of Wind",
+    "label": "Podmuch wiatru",
     "target_faction": "enemy",
     "range_feet": 60,
     "save_ability": "strength",

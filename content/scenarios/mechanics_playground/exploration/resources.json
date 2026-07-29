@@ -1,0 +1,14 @@
+{
+  "resources": [
+    {
+      "id": "training_rope",
+      "label": "Lina treningowa",
+      "bonus_tags": ["climbing","climbing_aid","secure"],
+      "modifier": 2,
+      "advantage": false,
+      "consume_on_use": false,
+      "properties": ["long","flexible","binding","load_bearing","textile"],
+      "portable": true
+    }
+  ]
+}

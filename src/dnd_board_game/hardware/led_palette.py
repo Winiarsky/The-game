@@ -25,6 +25,7 @@ class LedColor:
     ATTACK_HIT: RGBColor = (0, 255, 120)
     ATTACK_MISS: RGBColor = (255, 0, 0)
     ATTACK_CRITICAL_HIT: RGBColor = (255, 210, 0)
+    RANGED_PROJECTILE: RGBColor = (255, 190, 40)
 
     ENEMY: RGBColor = (255, 0, 80)
     MENU_PINK: RGBColor = (255, 0, 180)

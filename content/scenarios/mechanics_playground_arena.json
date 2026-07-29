@@ -1,0 +1,65 @@
+{
+  "schema": "dnd_board_game.scenario",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["project_original"],
+  "id": "mechanics_playground_arena",
+  "name": "Arena manekinów",
+  "board": {"cols":20,"rows":30},
+  "actors": [
+    {
+      "id":"arena_hero","name":"Bohater treningowy","kind":"player_character","faction":"ally",
+      "uses_death_saves":true,"ac":16,"hp":24,"speed_feet":30,"position":[7,8],
+      "ability_scores":{"strength":16,"dexterity":14,"constitution":14,"intelligence":12,"wisdom":12,"charisma":12},
+      "proficiency_bonus":2,
+      "proficiencies":{"saving_throws":["strength","constitution"],"skills":["athletics","perception"],"weapons":["longsword","dagger","crossbow"],"armor":["light","medium","heavy","shield"],"tools":["thieves_tools"]},
+      "item_refs":["longsword","dagger"],
+      "inventory":[{"item_ref":"crossbow","equipped":false},{"item_ref":"crossbow_bolt","quantity":20,"equipped":false}]
+    },
+    {
+      "id":"training_dummy_1","name":"Manekin 1","kind":"monster","faction":"enemy","creature_type":"construct",
+      "ac":12,"hp":20,"speed_feet":10,"position":[10,5],
+      "ability_scores":{"strength":10,"dexterity":10,"constitution":10,"intelligence":3,"wisdom":10,"charisma":3},
+      "attacks":[{"id":"training_tap","name":"Kontrolne uderzenie","source_type":"weapon","attack_kind":"melee","ability":"strength","range_feet":5,"reach_feet":5,"damage":{"dice":"1d2","modifier":-1,"damage_type":"bludgeoning"}}]
+    },
+    {
+      "id":"training_dummy_2","name":"Manekin 2","kind":"monster","faction":"enemy","creature_type":"construct",
+      "ac":12,"hp":20,"speed_feet":10,"position":[12,5],
+      "ability_scores":{"strength":10,"dexterity":10,"constitution":10,"intelligence":3,"wisdom":10,"charisma":3},
+      "attacks":[{"id":"training_tap","name":"Kontrolne uderzenie","source_type":"weapon","attack_kind":"melee","ability":"strength","range_feet":5,"reach_feet":5,"damage":{"dice":"1d2","modifier":-1,"damage_type":"bludgeoning"}}]
+    },
+    {
+      "id":"training_dummy_3","name":"Manekin 3","kind":"monster","faction":"enemy","creature_type":"construct",
+      "ac":12,"hp":20,"speed_feet":10,"position":[14,5],
+      "ability_scores":{"strength":10,"dexterity":10,"constitution":10,"intelligence":3,"wisdom":10,"charisma":3},
+      "attacks":[{"id":"training_tap","name":"Kontrolne uderzenie","source_type":"weapon","attack_kind":"melee","ability":"strength","range_feet":5,"reach_feet":5,"damage":{"dice":"1d2","modifier":-1,"damage_type":"bludgeoning"}}]
+    },
+    {
+      "id":"training_dummy_4","name":"Manekin 4","kind":"monster","faction":"enemy","creature_type":"construct",
+      "ac":12,"hp":20,"speed_feet":10,"position":[10,3],
+      "ability_scores":{"strength":10,"dexterity":10,"constitution":10,"intelligence":3,"wisdom":10,"charisma":3},
+      "attacks":[{"id":"training_tap","name":"Kontrolne uderzenie","source_type":"weapon","attack_kind":"melee","ability":"strength","range_feet":5,"reach_feet":5,"damage":{"dice":"1d2","modifier":-1,"damage_type":"bludgeoning"}}]
+    },
+    {
+      "id":"training_dummy_5","name":"Manekin 5","kind":"monster","faction":"enemy","creature_type":"construct",
+      "ac":12,"hp":20,"speed_feet":10,"position":[12,3],
+      "ability_scores":{"strength":10,"dexterity":10,"constitution":10,"intelligence":3,"wisdom":10,"charisma":3},
+      "attacks":[{"id":"training_tap","name":"Kontrolne uderzenie","source_type":"weapon","attack_kind":"melee","ability":"strength","range_feet":5,"reach_feet":5,"damage":{"dice":"1d2","modifier":-1,"damage_type":"bludgeoning"}}]
+    },
+    {
+      "id":"training_dummy_6","name":"Manekin 6","kind":"monster","faction":"enemy","creature_type":"construct",
+      "ac":12,"hp":20,"speed_feet":10,"position":[14,3],
+      "ability_scores":{"strength":10,"dexterity":10,"constitution":10,"intelligence":3,"wisdom":10,"charisma":3},
+      "attacks":[{"id":"training_tap","name":"Kontrolne uderzenie","source_type":"weapon","attack_kind":"melee","ability":"strength","range_feet":5,"reach_feet":5,"damage":{"dice":"1d2","modifier":-1,"damage_type":"bludgeoning"}}]
+    }
+  ],
+  "player_start_zones":[[[7,7],[8,7],[9,7],[7,8],[8,8],[9,8]]],
+  "environment":[
+    {
+      "id":"arena_half_cover","name":"Niska kamienna osłona","type":"blocking_terrain",
+      "positions":[[11,6],[12,6]],"visibility":"visible",
+      "description":"Niska osłona do testowania premii do KP i toru pocisku.",
+      "blocks_movement":false,"cover_bonus":2,"projectile_cover_bonus":2
+    }
+  ]
+}

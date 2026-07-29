@@ -10,7 +10,7 @@ from dnd_board_game.ui.exploration_app import (
 
 def _session(tmp_path) -> ExplorationUiSession:
     return ExplorationUiSession(
-        "content/scenarios/abandoned_watchtower.json",
+        "content/scenarios/village_square_mvp.json",
         save_dir=tmp_path / "saves",
         observation_dir=tmp_path / "observations",
     )
@@ -52,9 +52,10 @@ def test_new_game_lists_real_exploration_scenario_catalog(tmp_path) -> None:
     html = response.get_data(as_text=True)
 
     assert response.status_code == 200
-    assert 'value="abandoned_watchtower"' in html
     assert 'value="village_square_mvp"' in html
+    assert 'value="abandoned_watchtower"' not in html
     assert 'value="gate_skirmish"' not in html
+    assert "Opuszczona strażnica" in html
 
 
 def test_load_game_empty_state_is_player_facing(tmp_path) -> None:

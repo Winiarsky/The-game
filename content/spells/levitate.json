@@ -6,7 +6,7 @@
     "srd_5_1_cc_by_4_0"
   ],
   "id": "levitate",
-  "name": "Levitate",
+  "name": "Lewitacja",
   "level": 2,
   "school": "transmutation",
   "casting_time": "action",
@@ -33,9 +33,11 @@
   "effect": {
     "kind": "combat_action",
     "action_type": "targeted_status",
-    "label": "Levitate",
+    "label": "Lewitacja",
     "effect_kind": "levitate",
-    "target_faction": "ally",
+    "target_faction": "any",
+    "save_ability": "constitution",
+    "value": 20,
     "cast_flag": "cast_levitate",
     "instructions": "Cel do 500 funtów wykonuje Con save, jeśli niechętny. Podczas koncentracji unosi się do 20 stóp i porusza tylko przez odpychanie.",
     "resolution_mode": "automatic",

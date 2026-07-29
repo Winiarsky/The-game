@@ -6,7 +6,7 @@
     "srd_5_1_cc_by_4_0"
   ],
   "id": "blindness_deafness",
-  "name": "Blindness/Deafness",
+  "name": "Ślepota/Głuchota",
   "level": 2,
   "school": "necromancy",
   "casting_time": "action",
@@ -28,7 +28,7 @@
   "effect": {
     "kind": "combat_action",
     "action_type": "spell_debuff",
-    "label": "Blindness/Deafness",
+    "label": "Ślepota/Głuchota",
     "effect_kind": "apply_condition",
     "condition_options": [
       "blinded",

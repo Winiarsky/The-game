@@ -10,6 +10,7 @@ from dnd_board_game.combat import (
     attack_source_with_prone,
     drop_prone,
     effective_movement_speed,
+    expire_condition_states,
     has_condition,
     path_with_condition_cost,
     reaction_available_for,
@@ -30,6 +31,9 @@ from dnd_board_game.rules import (
     RollModifier,
     RollModifierType,
     resolve_d20_roll,
+    EffectDuration,
+    EffectEvent,
+    EffectEventType,
 )
 from dnd_board_game.world import Coordinate, PathResult
 
@@ -257,3 +261,23 @@ def test_condition_save_accepts_optional_bardic_inspiration_modifier() -> None:
     assert result.removed is True
     assert result.saving_throw.total == 13
     assert result.saving_throw.modifiers[-1].label == "Bardic Inspiration k6"
+
+
+def test_magical_sleep_ends_when_the_sleeping_actor_takes_damage() -> None:
+    sleeping = ConditionState(
+        "hero",
+        CombatCondition.UNCONSCIOUS,
+        source_actor_id="wizard",
+        source_label="Sen",
+        duration=EffectDuration.UNTIL_ENCOUNTER_END,
+        source_spell_id="sleep",
+        source_spell_level=1,
+    )
+
+    remaining, expired = expire_condition_states(
+        (sleeping,),
+        EffectEvent(EffectEventType.DAMAGE_TAKEN, actor_id="hero"),
+    )
+
+    assert remaining == ()
+    assert expired == (sleeping,)

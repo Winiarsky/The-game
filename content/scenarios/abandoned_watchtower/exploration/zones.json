@@ -337,18 +337,7 @@
       "adjacent_zone_ids": [
         "courtyard"
       ],
-      "options": [
-        {
-          "id": "inspect_gate_area",
-          "label": "Zbadaj okolice bramy",
-          "kind": "search",
-          "resolution_mode": "check",
-          "description_mode": "none",
-          "default_declaration": "Badamy ślady, rygle i teren przed bramą.",
-          "color": "multi",
-          "description": "Sprawdźcie ślady, rygle i teren przed wejściem."
-        }
-      ],
+      "options": [],
       "anchor_position": [
         9,
         2

@@ -5,11 +5,15 @@ from dataclasses import replace
 import pytest
 
 from dnd_board_game.actors import (
+    ActorResourcePool,
     ActorTrigger,
     CreatureSize,
     DamageAffinityProfile,
     DeathSaveState,
     Faction,
+    FeatureGrant,
+    FeatureSourceKind,
+    RecoveryPeriod,
     TriggerEffectKind,
     TriggerEventType,
 )
@@ -3481,6 +3485,10 @@ def test_exploration_ui_session_requires_spell_preparation_after_physical_setup(
         "inflict_wounds",
         "bless_attack_bonus",
     }
+    for spell in cleric["spells"]:
+        assert spell["flavor_description"]
+        assert "Rzucanie:" in spell["mechanical_description"]
+        assert "zasięg:" in spell["mechanical_description"]
 
     session.attach_board_connection(board, backend="simulator")
     assert session.state_payload()["flow"]["stage"] == "ready_to_start"
@@ -5179,6 +5187,85 @@ def test_exploration_ui_session_applies_retreat_outcome_without_a_winner():
     assert {"key": "party_retreated_at_gate", "value": True} in resolved["flags"]
 
 
+def test_gate_victory_awards_level_two_threshold_to_every_hero():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+    assert session.combat_state is not None
+    for actor in tuple(session.combat_state.actors):
+        if actor.faction == Faction.ENEMY:
+            session.combat_state = replace_actor(
+                session.combat_state,
+                replace(actor, hp=0),
+            )
+
+    resolved = session.resolve_active_combat()
+
+    heroes = tuple(
+        actor
+        for actor in session.exploration.actors
+        if actor.faction == Faction.ALLY and actor.uses_death_saves
+    )
+    experience = resolved["flow"]["interaction_result"]["experience"]
+    assert heroes
+    assert all(actor.level == 1 for actor in heroes)
+    assert all(actor.experience_points == 300 for actor in heroes)
+    assert experience["per_actor"] == 300
+    assert experience["total"] == 300 * len(heroes)
+    assert {
+        actor["id"]
+        for actor in experience["level_up_actors"]
+    } == {str(actor.id) for actor in heroes}
+    assert all(
+        actor["eligible_level"] == 2
+        for actor in experience["level_up_actors"]
+    )
+    assert any(
+        message["title"] == "Awans dostępny"
+        for message in resolved["messages"]
+    )
+
+
+def test_gate_victory_persists_custom_party_xp_and_exposes_level_up_links():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    templates = tuple(
+        actor
+        for actor in session.exploration.actors
+        if actor.faction == Faction.ALLY
+    )
+    party = tuple(
+        replace(
+            actor,
+            id=f"saved_{actor.id}",
+            experience_points=0,
+        )
+        for actor in templates
+    )
+    persisted = []
+    session.configure_custom_party(party)
+    session.character_progress_sink = lambda actors: persisted.extend(actors)
+    _start_gate_skirmish(session)
+    assert session.combat_state is not None
+    for actor in tuple(session.combat_state.actors):
+        if actor.faction == Faction.ENEMY:
+            session.combat_state = replace_actor(
+                session.combat_state,
+                replace(actor, hp=0),
+            )
+
+    resolved = session.resolve_active_combat()
+
+    level_up_actors = resolved["flow"]["interaction_result"]["experience"][
+        "level_up_actors"
+    ]
+    assert {actor["id"] for actor in level_up_actors} == {
+        str(actor.id) for actor in party
+    }
+    assert all(actor["can_open_level_up"] for actor in level_up_actors)
+    assert {str(actor.id): actor.experience_points for actor in persisted} == {
+        str(actor.id): 300 for actor in party
+    }
+
+
 def test_combat_resolution_stashes_unclaimed_corpse_and_battlefield_loot():
     session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
     _start_gate_skirmish(session)
@@ -5417,6 +5504,10 @@ def test_exploration_ui_session_board_click_on_enemy_prompts_manual_attack_and_d
     assert pending["stage"] == "damage_roll"
     assert pending["hit"] is True
     assert pending["critical"] is True
+    assert any(
+        positions != "off" and colors == list(LedColor.RANGED_PROJECTILE)
+        for positions, colors in board.led_calls
+    )
     assert pending["target_ac"] == target["ac"]
     assert "Rzuć obrażenia" in pending["damage_instruction"]
     assert attack_roll["combat"]["turn_action"]["action_use"] == "action_used"
@@ -5429,6 +5520,24 @@ def test_exploration_ui_session_board_click_on_enemy_prompts_manual_attack_and_d
     assert state["combat"]["pending_player_attack"] is None
     assert state["combat"]["turn_action"]["action_use"] == "action_used"
     assert any(message["title"] == "Obrażenia" and "HP" in message["body"] for message in state["messages"])
+
+
+def test_exploration_ui_session_cannot_end_turn_during_pending_attack():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_combat_from_scout_alarm(session)
+    target = session.state_payload()["combat"]["legal_targets"][0]
+
+    selected = session.select_player_attack_target_at_position(
+        Coordinate(*target["position"]),
+    )
+
+    assert selected["combat"]["pending_player_attack"]["stage"] == "confirm_attack"
+    with pytest.raises(
+        ValueError,
+        match="Najpierw dokończ albo anuluj rozpoczętą akcję",
+    ):
+        session.finish_combat_turn()
+    assert session.pending_player_attack is not None
 
 
 def test_exploration_ui_session_player_damage_can_finish_combat_and_remove_target():
@@ -5745,7 +5854,7 @@ def test_exploration_ui_session_crossbow_preview_shows_cart_half_cover() -> None
     assert pending["target_ac"] == goblin.ac + 2
 
 
-def test_exploration_ui_session_dexterity_save_preview_and_result_show_cover() -> None:
+def test_exploration_ui_session_sacred_flame_ignores_dexterity_save_cover() -> None:
     session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
     _start_gate_skirmish(session)
     assert session.combat_state is not None
@@ -5767,7 +5876,7 @@ def test_exploration_ui_session_dexterity_save_preview_and_result_show_cover() -
     confirmed = session.confirm_player_attack_target()
     save = confirmed["combat"]["pending_player_attack"]["saving_throws"][0]
 
-    assert any(
+    assert not any(
         component["label"] == "Połowa osłony" and component["value"] == 2
         for component in save["modifier_components"]
     )
@@ -6125,6 +6234,57 @@ def test_exploration_ui_session_upcasts_bless_for_multiple_targets():
         )
     }
     assert blessed_targets == set(target_ids)
+
+
+def test_bardic_inspiration_target_is_selected_on_the_board():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+    assert session.combat_state is not None
+    bard = session.combat_state.initiative_order.current_actor
+    bard = replace(
+        bard,
+        features=(
+            *bard.features,
+            FeatureGrant(
+                feature_id="bardic_inspiration",
+                label="Inspiracja bardowska",
+                source_kind=FeatureSourceKind.CLASS,
+                source_ref="bard",
+                resource_ids=("bardic_inspiration_uses",),
+                action_ids=("bardic_inspiration",),
+            ),
+        ),
+        resource_pools=(
+            *bard.resource_pools,
+            ActorResourcePool(
+                "bardic_inspiration_uses",
+                "Inspiracja bardowska",
+                2,
+                2,
+                RecoveryPeriod.LONG_REST,
+            ),
+        ),
+    )
+    session.combat_state = replace_actor(session.combat_state, bard)
+
+    started = session.start_combat_class_feature_targeting(
+        "bardic_inspiration",
+    )
+    targeting = started["combat"]["class_feature_targeting"]
+    legal_positions = session._current_board_scan_target().positions
+
+    assert targeting["action_id"] == "bardic_inspiration"
+    assert "rzutu ataku" in targeting["instructions"]
+    assert legal_positions
+
+    resolved = session.select_board_position(legal_positions[0])
+
+    assert resolved["combat"]["class_feature_targeting"] is None
+    assert any(
+        effect["kind"] == "bardic_inspiration"
+        for actor in resolved["combat"]["actors"]
+        for effect in actor["effects"]
+    )
 
 
 def _cleric_casts_bless_on_hero(session: ExplorationUiSession) -> None:
@@ -6979,6 +7139,92 @@ def test_exploration_ui_session_own_tile_opens_keyboard_driven_action_menu():
 
     cancelled = session.cancel_combat_context_menu()
     assert cancelled["combat"]["context_menu"] is None
+
+
+def test_exploration_ui_session_self_menu_keeps_bonus_class_feature_after_action():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+    assert session.combat_state is not None
+    actor = session.combat_state.initiative_order.current_actor
+    actor = replace(
+        actor,
+        hp=max(1, actor.hp - 1),
+        features=(
+            *actor.features,
+            FeatureGrant(
+                feature_id="second_wind",
+                label="Drugi oddech",
+                source_kind=FeatureSourceKind.CLASS,
+                source_ref="fighter",
+                resource_ids=("second_wind_uses",),
+                action_ids=("second_wind",),
+            ),
+        ),
+        resource_pools=(
+            *actor.resource_pools,
+            ActorResourcePool(
+                id="second_wind_uses",
+                label="Drugi oddech",
+                current=1,
+                maximum=1,
+                recovery=RecoveryPeriod.SHORT_REST,
+            ),
+        ),
+    )
+    session.combat_state = replace_actor(session.combat_state, actor)
+    session.combat_state = replace(
+        session.combat_state,
+        turn_action=replace(
+            session.combat_state.turn_action,
+            action_use=ActionUse.ACTION_USED,
+        ),
+    )
+
+    opened = session.select_board_position(actor.position)
+    option = next(
+        item
+        for item in opened["combat"]["context_menu"]["options"]
+        if item["id"] == "class-feature:second_wind"
+    )
+
+    assert option["label"] == "Drugi oddech"
+    assert option["provider"] == "class_feature"
+
+
+def test_exploration_ui_session_cunning_action_keeps_mobility_after_action():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+    assert session.combat_state is not None
+    actor = session.combat_state.initiative_order.current_actor
+    actor = replace(
+        actor,
+        features=(
+            *actor.features,
+            FeatureGrant(
+                feature_id="cunning_action",
+                label="Sprytna akcja",
+                source_kind=FeatureSourceKind.CLASS,
+                source_ref="rogue",
+            ),
+        ),
+    )
+    session.combat_state = replace_actor(session.combat_state, actor)
+    session.combat_state = replace(
+        session.combat_state,
+        turn_action=replace(
+            session.combat_state.turn_action,
+            action_use=ActionUse.ACTION_USED,
+        ),
+    )
+
+    opened = session.select_board_position(actor.position)
+    options = {
+        item["id"]: item
+        for item in opened["combat"]["context_menu"]["options"]
+    }
+
+    assert options["basic:dash"]["label"] == "Sprint"
+    assert options["basic:disengage"]["label"] == "Odwrót"
 
 
 def test_exploration_ui_session_prone_and_stand_are_visible_self_actions():

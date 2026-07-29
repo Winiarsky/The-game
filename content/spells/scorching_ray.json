@@ -6,7 +6,7 @@
     "srd_5_1_cc_by_4_0"
   ],
   "id": "scorching_ray",
-  "name": "Scorching Ray",
+  "name": "Palący promień",
   "level": 2,
   "school": "evocation",
   "casting_time": "action",
@@ -27,7 +27,7 @@
   "effect": {
     "kind": "combat_action",
     "action_type": "multi_target_damage",
-    "label": "Scorching Ray",
+    "label": "Palący promień",
     "projectile_count": 3,
     "upcast_projectiles_per_level": 1,
     "projectile_attack_roll": true,

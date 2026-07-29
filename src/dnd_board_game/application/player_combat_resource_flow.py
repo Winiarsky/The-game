@@ -19,6 +19,14 @@ from dnd_board_game.combat import (
     AppliedDamageResult,
     CombatState,
     CombatStatus,
+    SpellArea,
+    SpellAreaShape,
+    area_positions_for_center,
+    area_positions_for_direction,
+    legal_area_centers,
+    direction_anchor_positions,
+    end_invisibility_effects,
+    end_sanctuary_effects,
     available_cast_levels,
     can_consume_spell_resource,
     current_actor,
@@ -27,6 +35,7 @@ from dnd_board_game.combat import (
     resolve_spell_save,
     use_action_economy_cost,
 )
+from dnd_board_game.world import BoardState, Coordinate
 from dnd_board_game.inventory import consume_item_use, has_item_use
 from dnd_board_game.rules import (
     D20RollInput,
@@ -42,6 +51,8 @@ from dnd_board_game.rules import (
     expire_active_effects,
     resolve_d20_roll,
     spell_target_count,
+    actor_is_immune_to_effect,
+    SavingThrowEffectTag,
 )
 from dnd_board_game.combat.auras import saving_throw_aura_modifiers
 
@@ -86,6 +97,7 @@ class CombatActionSpec(Protocol):
     damage_type: str
     save_damage_on_success: str
     damage_on_cast: bool
+    area: SpellArea | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,6 +108,9 @@ class PendingConcentrationAction:
     cast_level: int
     maximum_targets: int
     selected_target_ids: tuple[str, ...] = ()
+    legal_positions: tuple[Coordinate, ...] = ()
+    anchor: Coordinate | None = None
+    area_positions: tuple[Coordinate, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -154,7 +169,12 @@ class PlayerCombatResourceFlowService:
         if not instructions:
             raise ValueError("Wspomagany czar nie ma instrukcji rozstrzygnięcia.")
         selected_level = _selected_cast_level(actor, action, cast_level)
-        _require_usable_action(actor, action, selected_level)
+        _require_usable_action(
+            actor,
+            action,
+            selected_level,
+            active_effects=active_effects,
+        )
         resource_use = self._resources.consume_action_and_source_resource(
             state,
             actor,
@@ -165,16 +185,19 @@ class PlayerCombatResourceFlowService:
             resource_pool_id=getattr(action, "resource_pool_id", None),
             resource_cost=int(getattr(action, "resource_cost", 1)),
         )
-        updated_effects = active_effects
+        updated_effects = end_invisibility_effects(
+            active_effects,
+            str(actor.id),
+        )
         removed: tuple[ActiveCombatEffect, ...] = ()
         effect_id = ""
         if bool(getattr(action, "concentration", False)):
             removed = concentration_effects_for_actor(
-                active_effects,
+                updated_effects,
                 str(actor.id),
             )
             updated_effects = remove_concentration_effects(
-                active_effects,
+                updated_effects,
                 str(actor.id),
             )
             effect_id = f"concentration_assisted:{actor.id}:{action.id}"
@@ -322,6 +345,7 @@ class PlayerCombatResourceFlowService:
         active_effects: tuple[ActiveCombatEffect, ...],
         action: CombatActionSpec,
         cast_level: int | None = None,
+        board: BoardState | None = None,
     ) -> CombatResourceTransition:
         actor = _active_hero(state)
         if action.action_type not in {
@@ -330,9 +354,21 @@ class PlayerCombatResourceFlowService:
         }:
             raise ValueError("Nieznana akcja statusowa.")
         selected_cast_level = _selected_cast_level(actor, action, cast_level)
-        _require_usable_action(actor, action, selected_cast_level)
-        targets = _concentration_targets(state, actor, action)
-        if not targets:
+        _require_usable_action(
+            actor,
+            action,
+            selected_cast_level,
+            active_effects=active_effects,
+        )
+        area = getattr(action, "area", None)
+        if area is not None and board is None:
+            raise ValueError("Obszarowy czar statusowy wymaga aktywnej planszy.")
+        targets = (
+            ()
+            if area is not None
+            else _concentration_targets(state, actor, action)
+        )
+        if area is None and not targets:
             raise ValueError("Brak legalnego celu czaru koncentracyjnego.")
         maximum_targets = spell_target_count(
             base_targets=int(getattr(action, "target_count", 1)),
@@ -342,24 +378,39 @@ class PlayerCombatResourceFlowService:
                 getattr(action, "upcast_targets_per_level", 0)
             ),
         )
+        legal_positions = (
+            legal_area_centers(board, actor.position, action.range_feet)
+            if area is not None
+            and area.shape in {SpellAreaShape.RADIUS, SpellAreaShape.CUBE}
+            else direction_anchor_positions(board, actor.position)
+            if area is not None
+            else ()
+        )
         pending = PendingConcentrationAction(
             caster_id=str(actor.id),
             action_id=action.id,
             target_ids=tuple(str(target.id) for target in targets),
             cast_level=selected_cast_level,
             maximum_targets=maximum_targets,
+            legal_positions=legal_positions,
         )
         return CombatResourceTransition(
             state=state,
             active_effects=active_effects,
             pending_action=pending,
             board_message=(
-                f"{action.label}: wybierz do {maximum_targets} legalnych celów."
+                f"{action.label}: wybierz podświetlony środek lub kierunek na planszy."
+                if area is not None
+                else f"{action.label}: wybierz do {maximum_targets} legalnych celów na planszy."
             ),
             message_title="Koncentracja",
             message_body=(
                 f"{actor.name} przygotowuje {action.label}. "
-                f"Wybierz od 1 do {maximum_targets} celów."
+                + (
+                    "Wybierz podświetlony środek lub kierunek obszaru na planszy."
+                    if area is not None
+                    else f"Wybierz od 1 do {maximum_targets} celów na planszy."
+                )
             ),
             event_type="ui_combat_concentration_started",
             event_payload=(
@@ -370,6 +421,51 @@ class PlayerCombatResourceFlowService:
                 ("target_ids", [str(target.id) for target in targets]),
             ),
             clear_player_choices=True,
+        )
+
+    def select_concentration_area(
+        self,
+        *,
+        state: CombatState,
+        board: BoardState,
+        action: CombatActionSpec,
+        pending: PendingConcentrationAction,
+        position: Coordinate,
+    ) -> PendingConcentrationAction:
+        area = getattr(action, "area", None)
+        if area is None:
+            raise ValueError("Ta akcja nie wybiera obszaru.")
+        if position not in pending.legal_positions:
+            raise ValueError("Kliknij podświetlony środek lub kierunek czaru.")
+        caster = _active_hero(state)
+        area_positions = (
+            area_positions_for_center(board, position, area)
+            if area.shape in {SpellAreaShape.RADIUS, SpellAreaShape.CUBE}
+            else area_positions_for_direction(
+                board,
+                caster.position,
+                position,
+                area,
+            )
+        )
+        legal_targets = _concentration_targets(
+            state,
+            caster,
+            action,
+            enforce_range=False,
+        )
+        targets = tuple(
+            target
+            for target in legal_targets
+            if target.position in area_positions
+        )
+        target_ids = tuple(str(target.id) for target in targets)
+        return replace(
+            pending,
+            target_ids=target_ids,
+            selected_target_ids=target_ids,
+            anchor=position,
+            area_positions=area_positions,
         )
 
     def confirm_concentration(
@@ -400,7 +496,19 @@ class PlayerCombatResourceFlowService:
             and int(getattr(action, "hit_point_pool_dice_count", 0)) > 0
         ):
             selected_target_ids = pending.target_ids
-        if not selected_target_ids:
+        is_persistent_zone = (
+            str(getattr(action, "effect_kind", ""))
+            in {
+                "ongoing_damage_zone",
+                "obscuring_zone",
+                "silence_zone",
+                "spike_growth_zone",
+                "web_zone",
+                "zone_of_truth_zone",
+            }
+            and pending.anchor is not None
+        )
+        if not selected_target_ids and not is_persistent_zone:
             raise ValueError("Wybierz co najmniej jeden cel czaru koncentracyjnego.")
         if len(selected_target_ids) != len(set(selected_target_ids)):
             raise ValueError("Ten sam cel czaru został wybrany więcej niż raz.")
@@ -410,11 +518,37 @@ class PlayerCombatResourceFlowService:
             )
         if set(selected_target_ids) - set(pending.target_ids):
             raise ValueError("Wybrano nielegalny cel czaru koncentracyjnego.")
-        _require_usable_action(caster, action, pending.cast_level)
+        _require_usable_action(
+            caster,
+            action,
+            pending.cast_level,
+            active_effects=active_effects,
+        )
         targets = tuple(
             _actor_by_id(state, selected_id)
             for selected_id in selected_target_ids
         )
+        magic_weapon_item_id = ""
+        if action.id == "magic_weapon":
+            if len(targets) != 1:
+                raise ValueError("Magiczna broń wymaga jednego posiadacza broni.")
+            magic_weapon_item_id = effect_option.strip()
+            weapon = next(
+                (
+                    item
+                    for item in targets[0].inventory
+                    if item.id == magic_weapon_item_id and item.kind == "weapon"
+                ),
+                None,
+            )
+            if weapon is None:
+                raise ValueError("Wybierz konkretną broń celu.")
+            if (
+                weapon.magic_effects
+                or weapon.requires_attunement
+                or "magical" in weapon.properties
+            ):
+                raise ValueError("Magiczna broń działa wyłącznie na niemagiczną broń.")
         resource_use = self._resources.consume_action_and_source_resource(
             state,
             caster,
@@ -426,15 +560,24 @@ class PlayerCombatResourceFlowService:
         is_concentration = bool(getattr(action, "concentration", False)) or (
             action.action_type == "concentration_attack_bonus"
         )
+        effects_after_cast = end_invisibility_effects(
+            active_effects,
+            str(caster.id),
+        )
+        if action.target_faction in {"enemy", "any"}:
+            effects_after_cast = end_sanctuary_effects(
+                effects_after_cast,
+                str(caster.id),
+            )
         removed = (
-            concentration_effects_for_actor(active_effects, str(caster.id))
+            concentration_effects_for_actor(effects_after_cast, str(caster.id))
             if is_concentration
             else ()
         )
         updated_effects = (
-            remove_concentration_effects(active_effects, str(caster.id))
+            remove_concentration_effects(effects_after_cast, str(caster.id))
             if is_concentration
-            else active_effects
+            else effects_after_cast
         )
         applied_effects: list[ActiveCombatEffect] = []
         die_sides = int(getattr(action, "damage_die_sides", 0))
@@ -443,19 +586,24 @@ class PlayerCombatResourceFlowService:
         ) + max(0, pending.cast_level - action.spell_level) * int(
             getattr(action, "upcast_hit_point_pool_dice_per_level", 0)
         )
+        enhance_constitution = (
+            action.id == "enhance_ability"
+            and effect_option == "constitution"
+        )
+        value_dice_count = 2 if enhance_constitution else pool_dice_count
         manual_value_roll = pool_dice_count > 0 or str(
             getattr(action, "effect_kind", "")
-        ) == "temporary_hit_points"
+        ) == "temporary_hit_points" or enhance_constitution
         if die_sides and manual_value_roll:
-            maximum_roll = die_sides * max(1, pool_dice_count)
-            minimum_roll = max(1, pool_dice_count)
+            maximum_roll = die_sides * max(1, value_dice_count)
+            minimum_roll = max(1, value_dice_count)
             if (
                 roll_total is None
                 or not minimum_roll <= roll_total <= maximum_roll
             ):
                 dice_label = (
-                    f"{pool_dice_count}k{die_sides}"
-                    if pool_dice_count
+                    f"{value_dice_count}k{die_sides}"
+                    if value_dice_count
                     else f"k{die_sides}"
                 )
                 raise ValueError(f"Wpisz sumę fizycznego rzutu {dice_label}.")
@@ -471,6 +619,8 @@ class PlayerCombatResourceFlowService:
             0,
             pending.cast_level - action.spell_level,
         ) * int(getattr(action, "upcast_value_per_level", 0))
+        if action.id == "magic_weapon":
+            effect_value = min(3, 1 + max(0, (pending.cast_level - 2) // 2))
         base_effect_kind = str(
             getattr(action, "effect_kind", None)
             or "concentration_attack_bonus"
@@ -482,7 +632,7 @@ class PlayerCombatResourceFlowService:
             effect_kind = f"{base_effect_kind}:{effect_option}"
         else:
             effect_kind = base_effect_kind
-        if base_effect_kind == "ongoing_damage":
+        if base_effect_kind in {"ongoing_damage", "ongoing_damage_zone"}:
             damage_dice_count = int(
                 getattr(action, "ongoing_damage_dice_count", 0)
             ) + max(0, pending.cast_level - action.spell_level) * int(
@@ -490,7 +640,7 @@ class PlayerCombatResourceFlowService:
             )
             effect_kind = ":".join(
                 (
-                    "ongoing_damage",
+                    base_effect_kind,
                     str(damage_dice_count),
                     str(die_sides),
                     str(getattr(action, "damage_type", "force")),
@@ -502,7 +652,10 @@ class PlayerCombatResourceFlowService:
         affected_targets: list[Actor] = []
         for target in targets:
             save_ability = getattr(action, "save_ability", None)
-            if save_ability is not None and base_effect_kind != "ongoing_damage":
+            save_is_required = save_ability is not None and (
+                action.id != "levitate" or target.faction != caster.faction
+            )
+            if save_is_required and base_effect_kind != "ongoing_damage":
                 if rng is None:
                     raise ValueError("Ten czar wymaga generatora rzutu obronnego.")
                 save = resolve_spell_save(
@@ -522,26 +675,135 @@ class PlayerCombatResourceFlowService:
             remaining_pool = effect_value
             pooled_targets: list[Actor] = []
             for target in sorted(affected_targets, key=lambda actor: actor.hp):
+                if (
+                    action.id == "sleep"
+                    and actor_is_immune_to_effect(
+                        target,
+                        SavingThrowEffectTag.MAGICAL_SLEEP.value,
+                    )
+                ):
+                    continue
                 if target.hp > remaining_pool:
                     continue
                 pooled_targets.append(target)
                 remaining_pool -= target.hp
             affected_targets = pooled_targets
+        if base_effect_kind in {
+            "ongoing_damage_zone",
+            "obscuring_zone",
+            "silence_zone",
+            "spike_growth_zone",
+            "web_zone",
+            "zone_of_truth_zone",
+        }:
+            assert pending.anchor is not None
+            assert getattr(action, "area", None) is not None
+            zone_effect = ActiveCombatEffect(
+                id=f"{effect_kind}:{caster.id}:{action.id}",
+                actor_id=str(caster.id),
+                kind=effect_kind,
+                label=action.label,
+                object_id=f"combat_action:{action.id}",
+                value=int(
+                    action.area.radius_feet
+                    if action.area.shape == SpellAreaShape.RADIUS
+                    else action.area.length_feet
+                ),
+                anchor_position=pending.anchor,
+                source_actor_id=str(caster.id),
+                source=EffectSource(
+                    EffectSourceType.SPELL,
+                    action.id,
+                    action.label,
+                ),
+                duration=(
+                    EffectDuration.CONCENTRATION
+                    if is_concentration
+                    else _status_effect_duration(action.duration)
+                ),
+                stacking=EffectStackingPolicy.STACK,
+                stacking_key=(
+                    f"concentration:{caster.id}"
+                    if is_concentration
+                    else f"spell-zone:{caster.id}:{action.id}"
+                ),
+                spell_level=pending.cast_level,
+            )
+            updated_effects = apply_active_effect(
+                updated_effects,
+                zone_effect,
+            ).active_effects
+            applied_effects.append(zone_effect)
+        if (
+            base_effect_kind == "apply_condition"
+            and action.id in {"entangle", "grease"}
+            and pending.anchor is not None
+            and getattr(action, "area", None) is not None
+        ):
+            terrain_zone = ActiveCombatEffect(
+                id=f"{action.id}_zone:{caster.id}:{action.id}",
+                actor_id=str(caster.id),
+                kind=f"{action.id}_zone",
+                label=action.label,
+                object_id=f"combat_action:{action.id}",
+                value=int(action.area.length_feet),
+                anchor_position=pending.anchor,
+                source_actor_id=str(caster.id),
+                source=EffectSource(
+                    EffectSourceType.SPELL,
+                    action.id,
+                    action.label,
+                ),
+                duration=(
+                    EffectDuration.CONCENTRATION
+                    if is_concentration
+                    else _status_effect_duration(action.duration)
+                ),
+                stacking=EffectStackingPolicy.STACK,
+                stacking_key=(
+                    f"concentration:{caster.id}"
+                    if is_concentration
+                    else f"spell-zone:{caster.id}:{action.id}"
+                ),
+                spell_level=pending.cast_level,
+            )
+            updated_effects = apply_active_effect(
+                updated_effects,
+                terrain_zone,
+            ).active_effects
+            applied_effects.append(terrain_zone)
         for target in affected_targets:
+            if base_effect_kind in {
+                "ongoing_damage_zone",
+                "obscuring_zone",
+                "silence_zone",
+                "spike_growth_zone",
+                "web_zone",
+                "zone_of_truth_zone",
+            }:
+                continue
             if base_effect_kind == "remove_condition":
                 continue
             if base_effect_kind == "apply_condition" and not is_concentration:
                 continue
             effect = ActiveCombatEffect(
                 id=f"{effect_kind}:{caster.id}:{target.id}:{action.id}",
-                actor_id=str(target.id),
+                actor_id=(
+                    str(caster.id)
+                    if base_effect_kind == "next_attack_advantage"
+                    else str(target.id)
+                ),
                 kind=(
                     "concentration_condition"
                     if base_effect_kind == "apply_condition"
                     else effect_kind
                 ),
                 label=action.label,
-                object_id=f"combat_action:{action.id}",
+                object_id=(
+                    f"weapon:{magic_weapon_item_id}"
+                    if action.id == "magic_weapon"
+                    else f"combat_action:{action.id}"
+                ),
                 value=effect_value,
                 anchor_position=(
                     target.position
@@ -565,6 +827,31 @@ class PlayerCombatResourceFlowService:
                 effect,
             ).active_effects
             applied_effects.append(effect)
+            if action.id == "heat_metal":
+                heat_penalty = ActiveCombatEffect(
+                    id=f"heat-metal-penalty:{caster.id}:{target.id}",
+                    actor_id=str(target.id),
+                    kind="heat_metal_disadvantage",
+                    label="Rozgrzany metal",
+                    object_id="combat_action:heat_metal",
+                    value=0,
+                    source_actor_id=str(caster.id),
+                    target_actor_id=str(target.id),
+                    source=EffectSource(
+                        EffectSourceType.SPELL,
+                        "heat_metal",
+                        action.label,
+                    ),
+                    duration=EffectDuration.CONCENTRATION,
+                    stacking=EffectStackingPolicy.REFRESH,
+                    stacking_key=f"concentration:{caster.id}",
+                    spell_level=pending.cast_level,
+                )
+                updated_effects = apply_active_effect(
+                    updated_effects,
+                    heat_penalty,
+                ).active_effects
+                applied_effects.append(heat_penalty)
         updated_state = resource_use.state
         if (
             base_effect_kind == "ongoing_damage"
@@ -658,6 +945,18 @@ class PlayerCombatResourceFlowService:
                         hp=current.hp + effect_value,
                     ),
                 )
+        elif effect_kind == "protection_from_poison":
+            from dnd_board_game.combat import CombatCondition, remove_condition
+
+            for target in affected_targets:
+                updated_state = replace(
+                    updated_state,
+                    condition_states=remove_condition(
+                        updated_state.condition_states,
+                        str(target.id),
+                        CombatCondition.POISONED,
+                    ),
+                )
         elif effect_kind in {"temporary_hit_points", "heroism_temp_hp"}:
             for target in affected_targets:
                 current = _actor_by_id(updated_state, str(target.id))
@@ -677,6 +976,16 @@ class PlayerCombatResourceFlowService:
                             CombatCondition.FRIGHTENED,
                         ),
                     )
+        elif (
+            base_effect_kind == "ability_check_advantage"
+            and effect_option == "constitution"
+        ):
+            for target in affected_targets:
+                current = _actor_by_id(updated_state, str(target.id))
+                updated_state = replace_actor(
+                    updated_state,
+                    replace(current, temp_hp=max(current.temp_hp, effect_value)),
+                )
         ended = (
             " Poprzednia koncentracja zakończona: "
             f"{', '.join(effect.label for effect in removed)}."
@@ -690,9 +999,16 @@ class PlayerCombatResourceFlowService:
         )
         message = (
             f"{caster.name} rzuca {action.label} ze slotu {pending.cast_level}. poziomu. "
-            f"Cele objęte efektem: "
-            f"{', '.join(target.name for target in affected_targets) or 'brak'}; "
-            f"{effect_description}, dopóki koncentracja trwa.{ended}"
+            + (
+                f"Środek strefy: {pending.anchor.as_tuple()}; "
+                if base_effect_kind == "ongoing_damage_zone"
+                and pending.anchor is not None
+                else (
+                    f"Cele objęte efektem: "
+                    f"{', '.join(target.name for target in affected_targets) or 'brak'}; "
+                )
+            )
+            + f"{effect_description}, dopóki koncentracja trwa.{ended}"
         )
         return CombatResourceTransition(
             state=updated_state,
@@ -703,7 +1019,7 @@ class PlayerCombatResourceFlowService:
             event_type="ui_combat_concentration_confirmed",
             event_payload=(
                 ("caster_id", str(caster.id)),
-                ("target_id", str(targets[0].id)),
+                ("target_id", str(targets[0].id) if targets else ""),
                 ("target_ids", [str(target.id) for target in targets]),
                 ("action_id", action.id),
                 ("cast_level", pending.cast_level),
@@ -954,6 +1270,8 @@ def _require_usable_action(
     actor: Actor,
     action: CombatActionSpec,
     cast_level: int | None = None,
+    *,
+    active_effects: tuple[ActiveCombatEffect, ...] = (),
 ) -> None:
     casting_kind = getattr(action, "casting_kind", None)
     casting_value = getattr(casting_kind, "value", None)
@@ -982,9 +1300,27 @@ def _require_usable_action(
         ignore_verbal_somatic=(
             "metamagic_subtle" in getattr(action, "metamagic_ids", ())
         ),
+        verbal_components_blocked=_verbal_components_blocked(
+            actor,
+            action,
+            active_effects,
+        ),
     )
     if validation is not None and not validation.valid:
         raise ValueError(" ".join(validation.errors))
+
+
+def _verbal_components_blocked(
+    actor: Actor,
+    action: CombatActionSpec,
+    active_effects: tuple[ActiveCombatEffect, ...],
+) -> bool:
+    from dnd_board_game.combat import actor_in_silence_zone
+
+    return (
+        "metamagic_subtle" not in getattr(action, "metamagic_ids", ())
+        and actor_in_silence_zone(actor, active_effects)
+    )
 
 
 def _selected_cast_level(
@@ -1021,6 +1357,8 @@ def _concentration_targets(
     state: CombatState,
     actor: Actor,
     action: CombatActionSpec,
+    *,
+    enforce_range: bool = True,
 ) -> tuple[Actor, ...]:
     if action.target_faction in {"ally", "enemy", "any"}:
         range_feet = int(getattr(action, "range_feet", 0))
@@ -1035,18 +1373,42 @@ def _concentration_targets(
                 else candidate.faction not in {actor.faction, Faction.NEUTRAL}
             )
             and not candidate.is_defeated()
+            and not (
+                action.id == "warding_bond"
+                and candidate.id == actor.id
+            )
             and candidate.creature_type
             not in getattr(action, "excluded_creature_types", ())
             and (
+                action.id != "heat_metal"
+                or _actor_has_usable_metal_object(candidate)
+            )
+            and (
                 candidate.id == actor.id
                 or (
-                    range_feet > 0
-                    and grid_distance_feet(actor.position, candidate.position)
-                    <= range_feet
+                    not enforce_range
+                    or (
+                        range_feet > 0
+                        and grid_distance_feet(actor.position, candidate.position)
+                        <= range_feet
+                    )
                 )
             )
         )
     return (actor,)
+
+
+def _actor_has_usable_metal_object(actor: Actor) -> bool:
+    return any(
+        item.available
+        and "metallic" in item.properties
+        and (
+            item.equipped
+            or bool(getattr(item, "held_in", ()))
+            or item.kind in {"weapon", "armor", "shield"}
+        )
+        for item in actor.inventory
+    )
 
 
 def _actor_by_id(state: CombatState, actor_id: str) -> Actor:

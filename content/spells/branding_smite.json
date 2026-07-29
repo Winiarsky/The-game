@@ -6,7 +6,7 @@
     "srd_5_1_cc_by_4_0"
   ],
   "id": "branding_smite",
-  "name": "Branding Smite",
+  "name": "Piętnujące porażenie",
   "level": 2,
   "school": "evocation",
   "casting_time": "bonus_action",
@@ -27,7 +27,7 @@
   "effect": {
     "kind": "combat_action",
     "action_type": "targeted_status",
-    "label": "Branding Smite",
+    "label": "Piętnujące porażenie",
     "effect_kind": "branding_smite",
     "target_faction": "self",
     "value": 2,

@@ -24,8 +24,11 @@
           <span class="selection-mark" aria-hidden="true">✓</span>
           <span>
             <b>{{ scenario.name }}</b>
-            <small>Scenariusz eksploracyjny · maksymalnie 5 bohaterów</small>
-            <em>{% if scenario.has_paper_map %}Zawiera setup papierowej mapy{% else %}Korzysta z planszy bez osobnej mapy papierowej{% endif %}</em>
+            <small>Scenariusz eksploracyjny · {{ scenario.scene_count }} {% if scenario.scene_count == 1 %}lokacja{% else %}lokacje{% endif %} · maksymalnie 5 bohaterów</small>
+            <em>
+              {% if scenario.continuation_scene_names %}Dalej: {{ scenario.continuation_scene_names|join(" → ") }} · {% endif %}
+              {% if scenario.has_paper_map %}zawiera setup papierowej mapy{% else %}korzysta z planszy bez osobnej mapy papierowej{% endif %}
+            </em>
           </span>
         </label>
       {% else %}

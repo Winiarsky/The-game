@@ -15,6 +15,7 @@ from dnd_board_game.combat import (
     CombatState,
     CombatStatus,
     EnemyAutoTurnResult,
+    MirrorImageOutcome,
     InitiativeEntry,
     InitiativeOrder,
     actor_as_combat_target,
@@ -144,6 +145,49 @@ def test_commit_enemy_result_consumes_only_effects_for_the_resolved_attack() -> 
         "resource_pool_id": None,
         "resource_cost": 0,
     }
+
+
+def test_commit_enemy_result_removes_destroyed_mirror_duplicate() -> None:
+    service = CombatTurnFinalizationService()
+    enemy = _actor("enemy", Faction.ENEMY)
+    hero = _actor("hero", Faction.ALLY)
+    state = _state(enemy, hero)
+    mirror = replace(
+        _effect(
+            "mirror",
+            "hero",
+            "mirror_image",
+            "Lustrzane odbicia",
+            duration=EffectDuration.UNTIL_ENCOUNTER_END,
+        ),
+        value=3,
+    )
+    result = EnemyAutoTurnResult(
+        state=state,
+        enemy=enemy,
+        target=actor_as_combat_target(hero),
+        message="Atak trafia duplikat.",
+        attack_roll=resolve_d20_roll(D20RollInput(D20RollRequest(), 14)),
+        action_used=True,
+        mirror_image_outcome=MirrorImageOutcome(
+            effect_id="mirror",
+            redirect_roll=15,
+            redirect_threshold=6,
+            redirected=True,
+            duplicate_ac=12,
+            duplicate_hit=True,
+            duplicates_before=3,
+            duplicates_after=2,
+        ),
+    )
+
+    transition = service.commit_enemy_result(
+        result=result,
+        active_effects=(mirror,),
+    )
+
+    assert len(transition.active_effects) == 1
+    assert transition.active_effects[0].value == 2
 
 
 def test_finalize_enemy_turn_expires_end_and_next_turn_start_effects() -> None:

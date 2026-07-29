@@ -56,6 +56,7 @@ class PendingSpellDebuff:
     action_id: str
     cast_level: int
     legal_target_ids: tuple[str, ...]
+    selected_condition: str = ""
 
     def as_payload(self) -> dict[str, object]:
         return {
@@ -63,6 +64,7 @@ class PendingSpellDebuff:
             "action_id": self.action_id,
             "cast_level": self.cast_level,
             "legal_target_ids": list(self.legal_target_ids),
+            "selected_condition": self.selected_condition,
         }
 
 

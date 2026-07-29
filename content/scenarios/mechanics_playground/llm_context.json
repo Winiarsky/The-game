@@ -1,0 +1,21 @@
+{
+  "llm_context": {
+    "summary": "Bezpieczne laboratorium Gildii Kartografów służące wyłącznie do testowania mechanik. Mosiężny automat MISTRZ-0 prowadzi próby, manekiny można naprawiać, a skutki eksperymentów nie wpływają na kampanię.",
+    "available_materials": [
+      "drewniane manekiny",
+      "kamienne osłony",
+      "zamki treningowe",
+      "lina",
+      "skrzynie",
+      "znaczniki odległości"
+    ],
+    "forbidden_assumptions": [
+      "arena nie przyznaje fabularnych nagród ani doświadczenia",
+      "MISTRZ-0 nie zna sekretów żadnego docelowego scenariusza"
+    ],
+    "risk_notes": [
+      "obrażenia i zużyte zasoby obowiązują do resetu próby",
+      "manekiny mogą wykonywać słabe ataki kontrolne"
+    ]
+  }
+}

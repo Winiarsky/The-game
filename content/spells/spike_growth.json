@@ -6,7 +6,7 @@
     "srd_5_1_cc_by_4_0"
   ],
   "id": "spike_growth",
-  "name": "Spike Growth",
+  "name": "Kolczaste zarośla",
   "level": 2,
   "school": "transmutation",
   "casting_time": "action",
@@ -33,10 +33,14 @@
   "effect": {
     "kind": "combat_action",
     "action_type": "targeted_status",
-    "label": "Spike Growth",
+    "label": "Kolczaste zarośla",
     "effect_kind": "spike_growth_zone",
     "target_faction": "any",
-    "value": 20,
+    "area": {
+      "shape": "radius",
+      "radius_feet": 20,
+      "target_mode": "all_creatures"
+    },
     "cast_flag": "cast_spike_growth",
     "instructions": "Obszar promienia 20 stóp jest trudnym terenem; każde 5 stóp ruchu zadaje 2k4 piercing. Nierozpoznany efekt jest zakamuflowany.",
     "resolution_mode": "automatic",

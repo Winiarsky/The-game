@@ -33,6 +33,7 @@ let selectedPanelActorId = localStorage.getItem('explorationPanelActorId') || ''
 let boardFallbackEnabled = localStorage.getItem('explorationBoardFallback') === 'true';
 let pendingClassFeatureActionId = '';
 let boardConnectionNotice = '';
+let selectedPlaygroundAuditCaseId = '';
 
 function closeSlashCommandMenu() {
   const menu = document.getElementById('slash-command-menu');
@@ -202,11 +203,11 @@ function resetInteractionSelection() {
   downtimePanelOpen = false;
   continuationPanelOpen = false;
 }
-function synchronizeBoardSelection() {
+function synchronizeBoardSelection({force = false} = {}) {
   const boardInteraction = state && state.flow ? state.flow.board_interaction : null;
-  if (!boardInteraction) return;
+  if (!boardInteraction) return false;
   const revision = Number(boardInteraction.selection_revision || 0);
-  if (revision <= lastBoardSelectionRevision) return;
+  if (!force && revision <= lastBoardSelectionRevision) return false;
   lastBoardSelectionRevision = revision;
   resetInteractionSelection();
   if (boardInteraction.selected_goal_id) {
@@ -228,6 +229,11 @@ function synchronizeBoardSelection() {
   ) {
     selectedZoneOptionId = String(boardInteraction.selected_action_id);
   }
+  return Boolean(
+    boardInteraction.selected_goal_id
+    || boardInteraction.selected_panel
+    || boardInteraction.selected_action_id
+  );
 }
 async function api(path, body, busyMessage) {
   const previousStage = state && state.flow ? state.flow.stage : null;
@@ -316,14 +322,16 @@ async function loadState() {
   const res = await fetch('/api/state');
   state = await res.json();
   activeInteractionId = state.conversation ? state.conversation.interaction_id : null;
-  lastBoardSelectionRevision = Number(
-    (((state || {}).flow || {}).board_interaction || {}).selection_revision || 0
-  );
+  lastBoardSelectionRevision = -1;
+  synchronizeBoardSelection({force: true});
   chatInstanceOpen = true;
   render();
   refreshSessionLog();
 }
 function render() {
+  const existingChatStream = document.getElementById('chat-stream');
+  const followChatTail = !existingChatStream
+    || existingChatStream.scrollHeight - existingChatStream.scrollTop - existingChatStream.clientHeight < 120;
   const inCombat = Boolean(state.combat);
   const interactionId = state.conversation ? state.conversation.interaction_id : null;
   if (activeInteractionId === null) activeInteractionId = interactionId;
@@ -404,13 +412,16 @@ function render() {
     const actor = actorById(r.actor_id);
     const inspiration = r.bardic_inspiration;
     const inspirationInput = inspiration ? `<label class="roll-entry">${actorPortraitHtml(actor, 'roll')}<span>${esc(r.actor_name)} — ${esc(inspiration.label || 'Bardic Inspiration')} (opcjonalnie):</span> <input data-actor="${esc(r.actor_id)}" data-roll-kind="bardic-inspiration" type="number" min="1" max="${Number(inspiration.die_sides)}" placeholder="nie używaj"></label>` : '';
+    const guidance = r.guidance;
+    const guidanceInput = guidance ? `<label class="roll-entry">${actorPortraitHtml(actor, 'roll')}<span>${esc(r.actor_name)} — ${esc(guidance.label || 'Wskazówki')} (opcjonalnie k4):</span> <input data-actor="${esc(r.actor_id)}" data-roll-kind="guidance" type="number" min="1" max="${Number(guidance.die_sides)}" placeholder="nie używaj"></label>` : '';
     if (r.requires_second_roll) {
       return `<label class="roll-entry">${actorPortraitHtml(actor, 'roll')}<span>${esc(r.actor_name)} — ${esc(rollLabel)} #1:</span> <input data-actor="${esc(r.actor_id)}" data-roll-index="1" type="number" min="1" max="${sides}" value="${value}"></label>
-        <label class="roll-entry">${actorPortraitHtml(actor, 'roll')}<span>${esc(r.actor_name)} — ${esc(rollLabel)} #2:</span> <input data-actor="${esc(r.actor_id)}" data-roll-index="2" type="number" min="1" max="${sides}" value="${value + 3 > sides ? value - 3 : value + 3}"></label>${inspirationInput}`;
+        <label class="roll-entry">${actorPortraitHtml(actor, 'roll')}<span>${esc(r.actor_name)} — ${esc(rollLabel)} #2:</span> <input data-actor="${esc(r.actor_id)}" data-roll-index="2" type="number" min="1" max="${sides}" value="${value + 3 > sides ? value - 3 : value + 3}"></label>${inspirationInput}${guidanceInput}`;
     }
-    return `<label class="roll-entry">${actorPortraitHtml(actor, 'roll')}<span>${esc(r.actor_name)} — ${esc(rollLabel)}:</span> <input data-actor="${esc(r.actor_id)}" data-roll-index="1" type="number" min="1" max="${sides}" value="${value}"></label>${inspirationInput}`;
+    return `<label class="roll-entry">${actorPortraitHtml(actor, 'roll')}<span>${esc(r.actor_name)} — ${esc(rollLabel)}:</span> <input data-actor="${esc(r.actor_id)}" data-roll-index="1" type="number" min="1" max="${sides}" value="${value}"></label>${inspirationInput}${guidanceInput}`;
   }).join(' ');
   document.getElementById('debug-payload').textContent = JSON.stringify(state, null, 2);
+  renderPlaygroundPanel();
   renderSessionLogMeta();
   document.getElementById('action-title').textContent = state.active_point
     ? state.active_point.name
@@ -418,11 +429,82 @@ function render() {
   document.getElementById('conversation-meta').innerHTML = conversationMetaHtml();
   document.getElementById('interaction-goals').innerHTML = interactionGoalsHtml();
   updateActivePanel();
-  scrollChatToBottom();
+  scrollChatToBottom(followChatTail);
 }
-function scrollChatToBottom() {
+function setPlaygroundField(id, value) {
+  const field = document.getElementById(id);
+  if (field) field.value = String(value);
+}
+function renderPlaygroundPanel() {
+  const panel = document.getElementById('playground-panel');
+  if (!panel) return;
+  const playground = state.playground;
+  panel.hidden = !playground;
+  if (!playground) return;
+  const config = playground.config || {};
+  setPlaygroundField('playground-dummy-count', config.dummy_count ?? 3);
+  setPlaygroundField('playground-ac', config.armor_class ?? 12);
+  setPlaygroundField('playground-hp', config.hit_points ?? 20);
+  setPlaygroundField('playground-speed', config.speed_feet ?? 10);
+  setPlaygroundField('playground-ability-score', config.ability_score ?? 10);
+  setPlaygroundField('playground-creature-type', config.creature_type || 'construct');
+  setPlaygroundField('playground-affinity', config.affinity || 'none');
+  setPlaygroundField('playground-damage-type', config.damage_type || 'fire');
+  setPlaygroundField('playground-condition-immunity', config.condition_immunity || '');
+  const summary = document.getElementById('playground-summary');
+  if (summary) {
+    const modules = (playground.modules || []).map(item => esc(item.label)).join(' · ');
+    summary.innerHTML = `${playground.trial_active ? '<b>Próba aktywna.</b> ' : ''}${modules}`;
+  }
+}
+function applyPlaygroundPreset(prefix = 'playground', forcedPreset = '') {
+  const presetField = document.getElementById(`${prefix}-preset`);
+  if (forcedPreset && presetField) presetField.value = forcedPreset;
+  const preset = forcedPreset || presetField?.value || 'standard';
+  const presets = {
+    standard: {count: 1, ac: 12, hp: 20, speed: 10, ability: 10, type: 'construct', affinity: 'none', damage: 'fire', condition: ''},
+    armored: {count: 1, ac: 20, hp: 40, speed: 10, ability: 10, type: 'construct', affinity: 'none', damage: 'fire', condition: ''},
+    resistant: {count: 1, ac: 12, hp: 40, speed: 10, ability: 10, type: 'construct', affinity: 'resistance', damage: 'fire', condition: ''},
+    immune: {count: 1, ac: 12, hp: 40, speed: 10, ability: 10, type: 'construct', affinity: 'immunity', damage: 'fire', condition: ''},
+    vulnerable: {count: 1, ac: 12, hp: 40, speed: 10, ability: 10, type: 'construct', affinity: 'vulnerability', damage: 'radiant', condition: ''},
+    condition: {count: 1, ac: 12, hp: 40, speed: 10, ability: 10, type: 'construct', affinity: 'none', damage: 'fire', condition: 'poisoned'},
+    undead: {count: 1, ac: 13, hp: 35, speed: 10, ability: 12, type: 'undead', affinity: 'vulnerability', damage: 'radiant', condition: 'poisoned'},
+    swarm: {count: 6, ac: 12, hp: 20, speed: 0, ability: 10, type: 'construct', affinity: 'none', damage: 'fire', condition: ''}
+  };
+  const selected = presets[preset] || presets.standard;
+  setPlaygroundField(`${prefix}-dummy-count`, selected.count);
+  setPlaygroundField(`${prefix}-ac`, selected.ac);
+  setPlaygroundField(`${prefix}-hp`, selected.hp);
+  setPlaygroundField(`${prefix}-speed`, selected.speed);
+  setPlaygroundField(`${prefix}-ability-score`, selected.ability);
+  setPlaygroundField(`${prefix}-creature-type`, selected.type);
+  setPlaygroundField(`${prefix}-affinity`, selected.affinity);
+  setPlaygroundField(`${prefix}-damage-type`, selected.damage);
+  setPlaygroundField(`${prefix}-condition-immunity`, selected.condition);
+}
+function configurePlaygroundTrial(prefix = 'playground') {
+  api('/api/playground/configure', {
+    dummy_count: Number(document.getElementById(`${prefix}-dummy-count`).value),
+    armor_class: Number(document.getElementById(`${prefix}-ac`).value),
+    hit_points: Number(document.getElementById(`${prefix}-hp`).value),
+    speed_feet: Number(document.getElementById(`${prefix}-speed`).value),
+    ability_score: Number(document.getElementById(`${prefix}-ability-score`).value),
+    creature_type: document.getElementById(`${prefix}-creature-type`).value,
+    affinity: document.getElementById(`${prefix}-affinity`).value,
+    damage_type: document.getElementById(`${prefix}-damage-type`).value,
+    condition_immunity: document.getElementById(`${prefix}-condition-immunity`).value
+  }, 'Konfiguruję manekiny i przygotowuję arenę...');
+}
+function startPlaygroundPreset(prefix, preset) {
+  applyPlaygroundPreset(prefix, preset);
+  configurePlaygroundTrial(prefix);
+}
+function resetPlaygroundTrial() {
+  api('/api/playground/reset', {}, 'Przywracam stan początkowy próby...');
+}
+function scrollChatToBottom(shouldFollow = true) {
   const chatStream = document.getElementById('chat-stream');
-  if (!chatStream) return;
+  if (!chatStream || !shouldFollow) return;
   const applyScroll = () => { chatStream.scrollTop = chatStream.scrollHeight; };
   window.requestAnimationFrame(() => window.requestAnimationFrame(applyScroll));
   chatStream.querySelectorAll('img:not([data-chat-scroll-bound])').forEach(image => {
@@ -628,7 +710,7 @@ function actorStatesHtml(actor) {
   return `
     <div class="actor-panel-summary"><b>${esc(actor.name)}</b><span>${cards.length ? `${cards.length} aktywnych stanów i efektów` : 'Brak aktywnych stanów'}</span></div>
     ${cards.length ? cards.map(card => `<article class="panel-info-card state ${esc(card.tone)}"><b>${esc(card.label)}</b><span>${esc(card.body)}</span>${card.meta ? `<small>${esc(card.meta)}</small>` : ''}</article>`).join('') : '<div class="panel-empty-state"><b>Wszystko w porządku</b><span>Postać nie ma aktywnych stanów ani efektów.</span></div>'}
-    ${globalEffects.length ? `<div class="panel-subsection"><span class="panel-section-label">Efekty scenariusza</span>${globalEffects.map(effect => `<article class="panel-info-card"><b>${esc(effect.label || 'Efekt')}</b><span>${esc(effect.value_label || '')}</span><small>${esc(effect.expires || '')}</small></article>`).join('')}</div>` : ''}
+    ${globalEffects.length ? `<div class="panel-subsection"><span class="panel-section-label">Efekty scenariusza</span>${globalEffects.map(effect => `<article class="panel-info-card"><b>${esc(effect.label || 'Efekt')}</b><span>${esc(effect.value_label || '')}</span><small>${esc(effect.expires || '')}</small>${effect.rope_trick ? `<div class="panel-actions"><button class="secondary" onclick="enterRopeTrick('${esc(effect.id)}')">Wejdź</button><button class="secondary" onclick="exitRopeTrick('${esc(effect.id)}')">Wyjdź</button></div>` : ''}</article>`).join('')}</div>` : ''}
   `;
 }
 function isTurnResourceChip(chip) {
@@ -1076,7 +1158,7 @@ function flowPanelHtml() {
             <div class="status-item"><b>${esc(message.title)}</b><span>${esc(message.body)}</span></div>
           `).join('')}</div>
         ` : ''}
-        ${handoff ? `<p><b>Kolejny scenariusz:</b> ${esc(handoff.target_scenario_name || handoff.target_scenario_id)}</p><p class="muted">Drużyna, ekwipunek, czas i konsekwencje podróży zostaną przeniesione automatycznie.</p><button class="start-button" onclick="startScenarioHandoff()">Rozłóż kolejną mapę</button>` : '<p class="muted">Możecie rozpocząć scenariusz ponownie od automatycznego long resta, konfiguracji planszy i setupu zakończonego przygotowaniem czarów.</p><button class="start-button" onclick="resetSession()">Rozpocznij ponownie</button>'}
+        ${handoff ? `<p><b>Kolejna lokacja:</b> ${esc(handoff.target_scenario_name || handoff.target_scenario_id)}</p><p class="muted">To dalsza część tej samej przygody. Drużyna, ekwipunek, czas i konsekwencje podróży zostaną przeniesione automatycznie.</p><button class="start-button" onclick="startScenarioHandoff()">Rozłóż mapę kolejnej lokacji</button>` : '<p class="muted">Możecie rozpocząć scenariusz ponownie od automatycznego long resta, konfiguracji planszy i setupu zakończonego przygotowaniem czarów.</p><button class="start-button" onclick="resetSession()">Rozpocznij ponownie</button>'}
       </div></div>
     `;
   }
@@ -1176,9 +1258,26 @@ function flowPanelHtml() {
     const result = flow.interaction_result || {};
     const unlocked = result.unlocked_zones || [];
     const points = result.revealed_points || [];
+    const experience = result.experience || null;
+    const levelUpActors = experience ? (experience.level_up_actors || []) : [];
     return `
       <h3>${esc(result.title || 'Wynik interakcji')}</h3>
       <div class="result">${esc(result.body || '')}</div>
+      ${experience ? `
+        <div class="result">
+          <b>Doświadczenie: +${esc(experience.per_actor)} XP dla każdego bohatera.</b>
+          ${levelUpActors.length ? `
+            <p><b>Awans jest dostępny:</b> ${levelUpActors.map(actor => esc(actor.name)).join(', ')}.</p>
+            <div class="row">
+              ${levelUpActors.filter(actor => actor.can_open_level_up).map(actor => `
+                <a class="button" href="/characters/${encodeURIComponent(String(actor.id))}/level-up">
+                  Awansuj: ${esc(actor.name)}
+                </a>
+              `).join('')}
+            </div>
+          ` : ''}
+        </div>
+      ` : ''}
       ${unlocked.length ? `<p><b>Odblokowano lokacje:</b></p><ul>${unlocked.map(zone => `<li>${esc(zone.name)}</li>`).join('')}</ul>` : ''}
       ${points.length ? `<p><b>Ujawniono punkty:</b></p><ul>${points.map(point => `<li>${esc(point.name)}</li>`).join('')}</ul>` : ''}
       <p class="muted">${esc(result.next_instruction || 'Zakończ interakcję, aby wrócić do wyboru lokacji.')}</p>
@@ -1200,15 +1299,24 @@ function spellPreparationHtml() {
       <p>Mapa jest już przygotowana. Na zakończenie setupu wybierz czary po odbytym długim odpoczynku.</p>
       <p>Źródło: <b>${esc(actor.source_label)}</b>.</p>
       <p><b>Wybrano:</b> <span id="spell-preparation-count">${esc(actor.selected_count)}</span>/${esc(actor.preparation_limit)}</p>
-      <div class="status-list">
+      <div class="status-list spell-preparation-list">
         ${selectable.map(spell => `
-          <label class="status-item">
-            <span><input type="checkbox" data-preparation-spell="${esc(spell.id)}"${spell.prepared ? ' checked' : ''} onchange="updateSpellPreparationCount()"> <b>${esc(spell.label)}</b></span>
-            <span>poziom ${esc(spell.level)}</span>
+          <label class="status-item spell-preparation-card">
+            <span class="spell-preparation-heading">
+              <span><input type="checkbox" data-preparation-spell="${esc(spell.id)}"${spell.prepared ? ' checked' : ''} onchange="updateSpellPreparationCount()"> <b>${esc(spell.label)}</b></span>
+              <span>${esc(spell.level)}. poziom${spell.concentration ? ' · koncentracja' : ''}${spell.ritual ? ' · rytuał' : ''}</span>
+            </span>
+            <span class="spell-flavor">${esc(spell.flavor_description || '')}</span>
+            <span class="spell-mechanics"><b>W grze:</b> ${esc(spell.mechanical_description || 'Szczegóły mechaniczne nie są dostępne.')}</span>
           </label>
         `).join('') || '<p class="muted">Brak czarów do wyboru.</p>'}
       </div>
-      ${alwaysPrepared.length ? `<p><b>Zawsze przygotowane:</b> ${alwaysPrepared.map(spell => esc(spell.label)).join(', ')}. Nie zajmują limitu.</p>` : ''}
+      ${alwaysPrepared.length ? `<div class="spell-always-prepared"><b>Zawsze przygotowane — nie zajmują limitu:</b>${alwaysPrepared.map(spell => `
+        <article class="status-item spell-preparation-card">
+          <span class="spell-preparation-heading"><b>${esc(spell.label)}</b><span>${esc(spell.level)}. poziom</span></span>
+          <span class="spell-flavor">${esc(spell.flavor_description || '')}</span>
+          <span class="spell-mechanics"><b>W grze:</b> ${esc(spell.mechanical_description || '')}</span>
+        </article>`).join('')}</div>` : ''}
       <p class="muted">Po rozpoczęciu scenariusza zestaw pozostaje zablokowany do następnego długiego odpoczynku.</p>
       <button id="spell-preparation-confirm" class="start-button" data-preparation-limit="${esc(actor.preparation_limit)}" onclick="confirmSpellPreparation()">Potwierdź przygotowanie</button>
     </div></div>
@@ -1673,6 +1781,14 @@ function continuationUnavailableText(continuation) {
 function interactionGoalsHtml() {
   if (state.trade) return tradePanelHtml();
   if (downtimePanelOpen && state.downtime) return downtimePanelHtml();
+  if (
+    state.playground
+    && state.current_zone
+    && ['control_room', 'combat_arena'].includes(state.current_zone.id)
+    && !state.playground.trial_active
+  ) {
+    return playgroundChatControlsHtml();
+  }
   const boardToolbar = boardChoiceToolbarHtml();
   const boardInteraction = boardInteractionState();
   if (
@@ -1827,6 +1943,150 @@ function interactionGoalsHtml() {
         <button type="button" class="secondary" onclick="cancelInteractionGoal()">Anuluj wybór</button>
       </div>
     </div>` : ''}`;
+}
+function playgroundOptionsHtml(prefix) {
+  const config = (state.playground && state.playground.config) || {};
+  const audit = (state.playground && state.playground.audit) || {};
+  const auditCases = audit.cases || [];
+  const progress = audit.progress || {};
+  const selected = (value, expected) => String(value) === String(expected) ? ' selected' : '';
+  return `
+    <div class="flow-note">
+      <b>Audyt Areny: ${esc(progress.resolved || 0)}/${esc(progress.total || 0)} (${esc(progress.percent || 0)}%)</b>
+      <progress max="${esc(progress.total || 1)}" value="${esc(progress.resolved || 0)}"></progress>
+      <span>Automatycznie: ${esc(progress.tested || 0)} · pominięte z uzasadnieniem: ${esc(progress.skipped || 0)}</span>
+    </div>
+    <label>Odtwarzalny przypadek audytu
+      <select id="${prefix}-audit-case" onchange="applyPlaygroundAuditCase('${prefix}', this.value)">
+        <option value="">— wybierz sprawdzony przypadek —</option>
+        ${auditCases.map(item => `<option value="${esc(item.id)}"${selected(selectedPlaygroundAuditCaseId, item.id)}>✅ ${esc(item.label)}</option>`).join('')}
+      </select>
+    </label>
+    <div id="${prefix}-audit-case-details" class="flow-note"></div>
+    <label>Profil próby
+      <select id="${prefix}-preset" onchange="applyPlaygroundPreset('${prefix}')">
+        <option value="standard">Standardowy cel</option>
+        <option value="armored">Opancerzony cel</option>
+        <option value="resistant">Odporność na obrażenia</option>
+        <option value="immune">Niewrażliwość na obrażenia</option>
+        <option value="vulnerable">Podatność na obrażenia</option>
+        <option value="condition">Odporność na stan</option>
+        <option value="undead">Nieumarły cel</option>
+        <option value="swarm">Grupa celów obszarowych</option>
+      </select>
+    </label>
+    <div class="form-grid">
+      <label>Liczba manekinów
+        <input id="${prefix}-dummy-count" type="number" min="1" max="6" value="${esc(config.dummy_count ?? 3)}">
+      </label>
+      <label>KP
+        <input id="${prefix}-ac" type="number" min="5" max="30" value="${esc(config.armor_class ?? 12)}">
+      </label>
+      <label>PW każdego celu
+        <input id="${prefix}-hp" type="number" min="1" max="999" value="${esc(config.hit_points ?? 20)}">
+      </label>
+      <label>Szybkość
+        <input id="${prefix}-speed" type="number" min="0" max="60" step="5" value="${esc(config.speed_feet ?? 10)}">
+      </label>
+      <label>Wszystkie cechy
+        <input id="${prefix}-ability-score" type="number" min="1" max="30" value="${esc(config.ability_score ?? 10)}">
+      </label>
+    </div>
+    <details>
+      <summary>Odporności i typ celu</summary>
+      <label>Typ stworzenia
+        <select id="${prefix}-creature-type">
+          <option value="construct"${selected(config.creature_type, 'construct')}>Konstrukt</option>
+          <option value="humanoid"${selected(config.creature_type, 'humanoid')}>Humanoid</option>
+          <option value="undead"${selected(config.creature_type, 'undead')}>Nieumarły</option>
+          <option value="beast"${selected(config.creature_type, 'beast')}>Bestia</option>
+          <option value="fey"${selected(config.creature_type, 'fey')}>Fey</option>
+          <option value="fiend"${selected(config.creature_type, 'fiend')}>Czart</option>
+          <option value="dragon"${selected(config.creature_type, 'dragon')}>Smok</option>
+          <option value="monstrosity"${selected(config.creature_type, 'monstrosity')}>Monstrualność</option>
+          <option value="plant"${selected(config.creature_type, 'plant')}>Roślina</option>
+        </select>
+      </label>
+      <label>Reakcja na obrażenia
+        <select id="${prefix}-affinity">
+          <option value="none"${selected(config.affinity, 'none')}>Brak</option>
+          <option value="resistance"${selected(config.affinity, 'resistance')}>Odporność — połowa</option>
+          <option value="immunity"${selected(config.affinity, 'immunity')}>Niewrażliwość — 0</option>
+          <option value="vulnerability"${selected(config.affinity, 'vulnerability')}>Podatność — podwójne</option>
+        </select>
+      </label>
+      <label>Typ obrażeń
+        <select id="${prefix}-damage-type">
+          ${[
+            ['fire','Ogień'],['cold','Zimno'],['lightning','Błyskawice'],
+            ['poison','Trucizna'],['necrotic','Nekrotyczne'],['radiant','Promieniste'],
+            ['force','Moc'],['psychic','Psychiczne'],['slashing','Cięte'],
+            ['piercing','Kłute'],['bludgeoning','Obuchowe']
+          ].map(([value, label]) => `<option value="${value}"${selected(config.damage_type, value)}>${label}</option>`).join('')}
+        </select>
+      </label>
+      <label>Odporność na stan
+        <select id="${prefix}-condition-immunity">
+          ${[
+            ['','Brak'],['charmed','Zauroczony'],['frightened','Przerażony'],
+            ['poisoned','Zatruty'],['prone','Powalony'],['restrained','Unieruchomiony'],
+            ['stunned','Ogłuszony'],['paralyzed','Sparaliżowany'],['unconscious','Nieprzytomny']
+          ].map(([value, label]) => `<option value="${value}"${selected(config.condition_immunity, value)}>${label}</option>`).join('')}
+        </select>
+      </label>
+    </details>`;
+}
+function applyPlaygroundAuditCase(prefix, caseId) {
+  selectedPlaygroundAuditCaseId = caseId || '';
+  const auditCases = (((state || {}).playground || {}).audit || {}).cases || [];
+  const auditCase = auditCases.find(item => item.id === caseId);
+  const details = document.getElementById(`${prefix}-audit-case-details`);
+  if (!auditCase) {
+    if (details) details.innerHTML = '';
+    return;
+  }
+  const config = auditCase.arena_config || {};
+  const mappings = {
+    'dummy-count': config.dummy_count,
+    ac: config.armor_class,
+    hp: config.hit_points,
+    speed: config.speed_feet,
+    'ability-score': config.ability_score,
+    'creature-type': config.creature_type,
+    affinity: config.affinity,
+    'damage-type': config.damage_type,
+    'condition-immunity': config.condition_immunity
+  };
+  Object.entries(mappings).forEach(([field, value]) => setPlaygroundField(`${prefix}-${field}`, value));
+  if (details) {
+    details.innerHTML = `
+      <b>${esc(auditCase.label)} · ${esc(auditCase.module)}</b>
+      <ol>${(auditCase.manual_steps || []).map(step => `<li>${esc(step)}</li>`).join('')}</ol>
+      <b>Oczekiwany rezultat</b>
+      <ul>${(auditCase.expected_results || []).map(step => `<li>${esc(step)}</li>`).join('')}</ul>
+      ${auditCase.notes ? `<span>${esc(auditCase.notes)}</span>` : ''}`;
+  }
+}
+function playgroundChatControlsHtml() {
+  return `
+    <div class="conversation-system-card chat-flow-entry playground-chat-card">
+      <div class="interaction-goals-head">
+        <div>
+          <b>Przygotuj próbę areny</b>
+          <span>Najpierw ustaw cele. Po zatwierdzeniu gra przejdzie do zwykłego setupu figurek, inicjatywy i walki sterowanej planszą.</span>
+        </div>
+      </div>
+      ${playgroundOptionsHtml('arena')}
+      <div class="flow-note">
+        <b>Co wydarzy się dalej?</b>
+        Manekiny pojawią się jako fizyczne cele. Gra podświetli ich pola podczas setupu,
+        a ataki, czary i obszary będziecie wybierać na planszy.
+      </div>
+      <div class="row conversation-system-actions">
+        <button type="button" onclick="configurePlaygroundTrial('arena')">Ustaw manekiny i rozpocznij setup</button>
+        <button type="button" class="secondary" onclick="startPlaygroundPreset('arena', 'swarm')">Szybki test obszarowy</button>
+      </div>
+    </div>`;
 }
 function interactionContractLabel(goal) {
   const resolution = {
@@ -2587,6 +2847,18 @@ function rollPromptHtml() {
     const damage = hazard.damage || {};
     const required = (state.required_rolls || [])[0] || {};
     const modifiers = required.active_modifiers || [];
+    const featherFallOptions = state.pending.feather_fall_options || [];
+    const featherFallHtml = featherFallOptions.length ? `
+      <div class="flow-note">
+        <b>Reakcja dostępna: Powolne opadanie</b>
+        <span>Zamiast rzutu obronnego wybrany czarujący zużyje reakcję i slot 1. poziomu; spadający bohater wyląduje bez obrażeń.</span>
+        <label>Rzucający
+          <select id="hazard-feather-fall-caster">
+            ${featherFallOptions.map(option => `<option value="${esc(option.actor_id)}">${esc(option.actor_name)}</option>`).join('')}
+          </select>
+        </label>
+        <button type="button" onclick="castHazardFeatherFall()">Rzuć Powolne opadanie</button>
+      </div>` : '';
     return `
       <p><b>Zagrożenie: ${esc(hazard.label || '-')}</b></p>
       <p>${esc(hazard.narration || '')}</p>
@@ -2594,6 +2866,7 @@ function rollPromptHtml() {
       <p><b>Modyfikator:</b> ${esc(signedNumber(required.modifier_total || 0))} — ${modifiers.map(mod => `${esc(mod.label)} ${esc(signedNumber(mod.value || 0))}`).join(', ') || 'bez premii'}.</p>
       <p><b>Sukces:</b> ${esc(save.success_effect_label || 'brak efektu')}. <b>Porażka:</b> ${esc(save.failure_effect_label || 'pełny efekt')}.</p>
       <p><b>Ryzyko obrażeń:</b> ${esc(damage.dice || damage.fixed || 0)}${Number(damage.modifier || 0) ? ` ${esc(signedNumber(damage.modifier))}` : ''} ${esc(damage.damage_type || '')}.</p>
+      ${featherFallHtml}
     `;
   }
   if (state.pending.stage === 'breakage') {
@@ -3018,7 +3291,7 @@ function combatPresentationPhase(combat, finished, isAllyTurn, isEnemyTurn) {
     combat.pending_ready_attack,
   ].find(pending => pending && (pending.stage === 'attack_roll' || pending.stage === 'damage_roll'));
   if (rollPending || combat.pending_player_healing || combat.pending_combat_skill_check || combat.pending_combat_shove || combat.pending_combat_grapple) return 'roll';
-  if (combat.movement_preview || combat.pending_opportunity_movement || combat.enemy_turn_intent || combat.enemy_turn_preview || combat.pending_combat_interaction || combat.pending_combat_help || combat.pending_concentration_action || combat.pending_multi_target_damage_spell || combat.pending_summon || combat.pending_magic_movement || combat.pending_spell_debuff || combat.pending_spell_dispel || combat.pending_combat_ready) return 'preview';
+  if (combat.movement_preview || combat.pending_opportunity_movement || combat.enemy_turn_intent || combat.enemy_turn_preview || combat.pending_combat_interaction || combat.pending_combat_help || combat.class_feature_targeting || combat.pending_concentration_action || combat.pending_multi_target_damage_spell || combat.pending_summon || combat.pending_magic_movement || combat.pending_spell_debuff || combat.pending_spell_dispel || combat.pending_combat_ready) return 'preview';
   if (combat.pending_player_attack || combat.pending_area_spell) return 'preview';
   if (isEnemyTurn) return 'preview';
   return 'choice';
@@ -3658,6 +3931,15 @@ function combatPrimaryActionHtml(combat, isAllyTurn, isEnemyTurn) {
   if (!isAllyTurn) {
     return '<p class="muted">Ten aktor nie ma automatycznych kontrolek w MVP.</p><button data-allow-busy="true" onclick="finishCombatTurn()">Zakończ turę</button>';
   }
+  if (((combat.stabilization || {}).selected_target)) {
+    return combatStabilizationHtml(combat);
+  }
+  if (((combat.stabilization || {}).targeting_method)) {
+    return `
+      <p><b>Stabilizacja:</b> kliknij podświetlonego nieprzytomnego sojusznika.</p>
+      <button data-primary-scan="true" onclick="scanBoard()">Pokaż legalne cele</button>
+    `;
+  }
   if (combat.context_menu) {
     const stabilization = combat.context_menu.is_self_menu ? combatStabilizationHtml(combat) : '';
     return `${combatContextMenuHtml(combat.context_menu)}${stabilization}`;
@@ -3667,6 +3949,9 @@ function combatPrimaryActionHtml(combat, isAllyTurn, isEnemyTurn) {
   }
   if (combat.pending_combat_help) {
     return pendingCombatHelpHtml(combat.pending_combat_help);
+  }
+  if (combat.class_feature_targeting) {
+    return pendingClassFeatureTargetingHtml(combat.class_feature_targeting);
   }
   if (combat.pending_combat_shove) {
     return pendingCombatShoveHtml(combat.pending_combat_shove);
@@ -3731,7 +4016,7 @@ function combatStabilizationHtml(combat) {
   const stabilization = combat.stabilization || {};
   const targets = stabilization.targets || [];
   if (!targets.length) return '';
-  const options = targets.map(target => `<option value="${esc(target.id)}">${esc(target.name)} (${esc(target.hp)} HP)</option>`).join('');
+  const selected = stabilization.selected_target || null;
   const kitUses = Number(stabilization.healers_kit_uses || 0);
   const spareTheDying = Boolean(stabilization.spare_the_dying_available);
   const modifier = Number(stabilization.medicine_modifier || 0);
@@ -3739,12 +4024,13 @@ function combatStabilizationHtml(combat) {
   return `
     <div class="combat-action-box">
       <p><b>Stabilizacja nieprzytomnego sojusznika w zasięgu 5 ft</b></p>
+      <p>${selected ? `Wybrano na planszy: <b>${esc(selected.name)}</b>.` : 'Najpierw wybierz metodę, potem kliknij podświetloną figurkę na planszy.'}</p>
       <div class="row">
-        <select id="combat-stabilization-target">${options}</select>
-        <label>d20 Medicine: <input id="combat-stabilization-roll" type="number" min="1" max="20" value="10"></label>
-        <button class="secondary" data-allow-busy="true" onclick="submitCombatStabilization('medicine')">Medicine ${esc(modifierLabel)} · ST ${esc(stabilization.dc || 10)}</button>
-        ${kitUses > 0 ? `<button class="secondary" data-allow-busy="true" onclick="submitCombatStabilization('healers_kit')">Zestaw uzdrowiciela (${esc(kitUses)})</button>` : ''}
-        ${spareTheDying ? '<button class="secondary" data-allow-busy="true" onclick="submitCombatStabilization(\'spare_the_dying\')">Spare the Dying</button>' : ''}
+        ${selected ? `<label>d20 Medicine: <input id="combat-stabilization-roll" type="number" min="1" max="20" value="10"></label>
+          <button class="secondary" data-allow-busy="true" onclick="confirmBoardStabilization()">Rozstrzygnij Medicine ${esc(modifierLabel)} · ST ${esc(stabilization.dc || 10)}</button>`
+          : `<button class="secondary" data-allow-busy="true" onclick="startStabilizationTargeting('medicine')">Medicine ${esc(modifierLabel)} · ST ${esc(stabilization.dc || 10)}</button>
+          ${kitUses > 0 ? `<button class="secondary" data-allow-busy="true" onclick="startStabilizationTargeting('healers_kit')">Zestaw uzdrowiciela (${esc(kitUses)})</button>` : ''}
+          ${spareTheDying ? '<button class="secondary" data-allow-busy="true" onclick="startStabilizationTargeting(\'spare_the_dying\')">Spare the Dying</button>' : ''}`}
       </div>
     </div>
   `;
@@ -3974,7 +4260,10 @@ function combatSourceButtonsHtml(combat) {
     const disabled = action.implemented ? '' : ' disabled title="Ta cecha działa pasywnie, w reakcji albo przy rozstrzyganiu innej akcji."';
     return `<button class="secondary"${disabled} data-allow-busy="true" onclick="useClassFeature('${esc(action.id)}')">${esc(action.label)} · ${esc(action.source_feature)}</button>`;
   }).join('');
-  return `${attackButtons}${healingButtons}${actionButtons}${classFeatureButtons}`;
+  const spellZoneButtons = (combat.movable_spell_zones || []).map(zone => (
+    `<button class="secondary" data-allow-busy="true" onclick="startMoonbeamMove('${esc(zone.effect_id)}')">Przesuń ${esc(zone.label)} · ${esc(zone.action_cost_label || 'akcja')} · do ${esc(zone.distance_feet)} ft</button>`
+  )).join('');
+  return `${attackButtons}${healingButtons}${actionButtons}${classFeatureButtons}${spellZoneButtons}`;
 }
 function sourceButtonLabel(source) {
   const resource = source.resource_label ? ` · ${esc(source.resource_label)}` : '';
@@ -4204,17 +4493,12 @@ function longCastHtml(cast, combat) {
 }
 function pendingSummonHtml(pending) {
   const positions = pending.legal_positions || [];
-  const options = positions.map(position => (
-    `<option value="${esc(position.col)},${esc(position.row)}">(${esc(position.col)}, ${esc(position.row)})</option>`
-  )).join('');
   return `
     <div class="combat-action-box">
       <p><b>Wybierz pole przywołania</b></p>
-      <p class="muted">Plansza pokazuje ${esc(positions.length)} wolnych i widocznych pól w zasięgu.</p>
+      <p class="muted">Plansza pokaże ${esc(positions.length)} wolnych i widocznych pól w zasięgu. Kliknięcie podświetlonego pola zatwierdza wybór.</p>
       <div class="row">
         <button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button>
-        <select id="summon-position">${options}</select>
-        <button data-allow-busy="true" onclick="confirmSummonFromSelect()">Potwierdź pole</button>
         <button class="secondary" data-allow-busy="true" onclick="cancelSummon()">Anuluj</button>
       </div>
     </div>
@@ -4223,59 +4507,47 @@ function pendingSummonHtml(pending) {
 function pendingMagicMovementHtml(pending) {
   if (pending.kind === 'teleport') {
     const positions = pending.legal_positions || [];
-    const options = positions.map(position => (
-      `<option value="${esc(position.col)},${esc(position.row)}">(${esc(position.col)}, ${esc(position.row)})</option>`
-    )).join('');
     return `
       <div class="combat-action-box">
         <p><b>Wybierz pole teleportacji</b></p>
         <div class="row">
           <button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button>
-          <select id="magic-movement-position">${options}</select>
-          <button data-allow-busy="true" onclick="confirmMagicMovementFromUi()">Teleportuj</button>
+          <span class="muted">Kliknij podświetlone pole — teleport wykona się po wyborze.</span>
           <button class="secondary" data-allow-busy="true" onclick="cancelMagicMovement()">Anuluj</button>
         </div>
       </div>
     `;
   }
-  const targets = pending.targets || [];
-  const options = targets.map(target => (
-    `<option value="${esc(target.id)}">${esc(target.name)} — (${esc(target.position[0])}, ${esc(target.position[1])})</option>`
-  )).join('');
   return `
     <div class="combat-action-box">
       <p><b>${pending.kind === 'push' ? 'Odepchnij' : 'Przyciągnij'} cel</b></p>
       <p class="muted">Cel wykona automatyczny rzut obronny po potwierdzeniu.</p>
       <div class="row">
         <button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button>
-        <select id="magic-movement-target">${options}</select>
-        <button data-allow-busy="true" onclick="confirmMagicMovementFromUi()">Potwierdź cel</button>
+        <span class="muted">Kliknij podświetloną figurkę celu.</span>
         <button class="secondary" data-allow-busy="true" onclick="cancelMagicMovement()">Anuluj</button>
       </div>
     </div>
   `;
 }
 function pendingSpellDebuffHtml(pending) {
-  const targets = pending.targets || [];
-  const options = targets.map(target => (
-    `<option value="${esc(target.id)}">${esc(target.name)} — (${esc(target.position[0])}, ${esc(target.position[1])})</option>`
-  )).join('');
   const conditionOptions = pending.condition_options || [];
   const conditionSelect = conditionOptions.length
-    ? `<select id="spell-debuff-condition">${conditionOptions.map(value => (
-        `<option value="${esc(value)}">${esc(value)}</option>`
-      )).join('')}</select>`
+    ? `<label>Efekt czaru<select id="spell-debuff-condition" onchange="selectSpellDebuffCondition(this.value)">
+        <option value="">— wybierz efekt —</option>${conditionOptions.map(value => (
+        `<option value="${esc(value)}"${pending.selected_condition === value ? ' selected' : ''}>${esc(value)}</option>`
+      )).join('')}</select></label>`
     : '';
   const conditionLabel = pending.condition || conditionOptions.join(' / ') || '-';
   return `
     <div class="combat-action-box">
       <p><b>${esc(pending.label || 'Czar osłabiający')}</b></p>
+      ${pending.instructions ? `<p><b>Efekt w grze:</b> ${esc(pending.instructions)}</p>` : ''}
       <p class="muted">Stan: ${esc(conditionLabel)}; save ${esc(pending.save_ability || '-')} przeciw ST ${esc(pending.save_dc || '-')}.</p>
       <div class="row">
-        <button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button>
-        <select id="spell-debuff-target">${options}</select>
+        <button data-primary-scan="true" onclick="scanBoard()"${conditionOptions.length && !pending.selected_condition ? ' disabled' : ''}>Skanuj planszę</button>
         ${conditionSelect}
-        <button data-allow-busy="true" onclick="confirmSpellDebuffFromUi()">Potwierdź cel</button>
+        <span class="muted">Wybierz podświetloną figurkę na planszy.</span>
         <button class="secondary" data-allow-busy="true" onclick="cancelSpellDebuff()">Anuluj</button>
       </div>
     </div>
@@ -4296,18 +4568,14 @@ function pendingSpellDispelHtml(pending) {
       </div>
     `;
   }
-  const targets = pending.targets || [];
-  const options = targets.map(target => (
-    `<option value="${esc(target.id)}">${esc(target.name)} — (${esc(target.position[0])}, ${esc(target.position[1])})</option>`
-  )).join('');
   return `
     <div class="combat-action-box">
       <p><b>${esc(pending.label || 'Rozproszenie magii')}</b></p>
+      ${pending.instructions ? `<p><b>Efekt w grze:</b> ${esc(pending.instructions)}</p>` : ''}
       <p class="muted">Wybierz istotę z co najmniej jednym aktywnym efektem czaru.</p>
       <div class="row">
         <button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button>
-        <select id="spell-dispel-target">${options}</select>
-        <button data-allow-busy="true" onclick="confirmSpellDispelFromUi()">Potwierdź cel</button>
+        <span class="muted">Wybierz podświetloną figurkę na planszy.</span>
         <button class="secondary" data-allow-busy="true" onclick="cancelSpellDispel()">Anuluj</button>
       </div>
     </div>
@@ -4503,16 +4771,12 @@ function pendingEnemyOpportunityAttackDetailsHtml(pending, preview) {
   `;
 }
 function pendingCombatHelpHtml(pending) {
-  const allies = pending.allies || [];
-  const targets = pending.targets || [];
-  const allyOptions = allies.map(actor => `<option value="${esc(actor.id)}">${esc(actor.name)} (${esc(actor.position[0])},${esc(actor.position[1])})</option>`).join('');
-  const targetOptions = targets.map(actor => `<option value="${esc(actor.id)}">${esc(actor.name)} (${esc(actor.position[0])},${esc(actor.position[1])})</option>`).join('');
+  const selected = pending.selected_ally || null;
   return `
-    <p>Wybierz sojusznika i przeciwnika dla akcji Help.</p>
+    <p><b>Help:</b> najpierw wskaż na planszy sojusznika, a potem przeciwnika, przeciw któremu otrzyma przewagę na następny atak.</p>
+    ${selected ? `<p>Wybrany sojusznik: <b>${esc(selected.name)}</b>. Teraz wskaż przeciwnika.</p>` : ''}
     <div class="row">
-      <label>Sojusznik: <select id="combat-help-ally">${allyOptions}</select></label>
-      <label>Cel: <select id="combat-help-target">${targetOptions}</select></label>
-      <button data-allow-busy="true" onclick="confirmCombatHelp()">Potwierdź Help</button>
+      <button data-primary-scan="true" onclick="scanBoard()">${selected ? 'Pokaż przeciwników' : 'Pokaż sojuszników'}</button>
       <button class="secondary" data-allow-busy="true" onclick="cancelCombatHelp()">Anuluj</button>
     </div>
   `;
@@ -4528,37 +4792,67 @@ function pendingCombatHelpDetailsHtml(pending) {
     <p>Efekt: wybrany sojusznik ma przewagę na następny atak przeciw wybranemu celowi.</p>
   `;
 }
+function pendingClassFeatureTargetingHtml(pending) {
+  const selected = pending.selected_target || null;
+  const needsPoints = ['lay_on_hands', 'preserve_life'].includes(pending.action_id);
+  return `
+    <div class="combat-action-box">
+      <p><b>${esc(pending.label || 'Cecha klasowa')}</b></p>
+      <p><b>Efekt w grze:</b> ${esc(pending.instructions || '')}</p>
+      <p class="muted">Legalne figurki zostaną podświetlone. Kliknięcie figurki zatwierdzi cel bez wpisywania technicznego ID.</p>
+      ${selected ? `<p><b>Wybrany cel:</b> ${esc(selected.name)}</p>` : ''}
+      <div class="row">
+        <button data-primary-scan="true" onclick="scanBoard()">Pokaż legalne cele</button>
+        ${needsPoints ? `<label>Punkty leczenia<input id="class-feature-board-points" type="number" min="1" required></label>
+          <button data-allow-busy="true" onclick="confirmClassFeatureBoardTarget()"${selected ? '' : ' disabled'}>Potwierdź użycie</button>` : ''}
+        <button class="secondary" data-allow-busy="true" onclick="cancelClassFeatureTargeting()">Anuluj</button>
+      </div>
+    </div>
+  `;
+}
 function pendingConcentrationActionHtml(pending) {
   const action = pending.action || {};
   const targets = pending.targets || [];
   const selected = new Set(pending.selected_target_ids || []);
+  const selectedTargets = targets.filter(actor => selected.has(actor.id));
   const dieSides = Number(action.damage_die_sides || 0);
   const poolDice = Number(action.hit_point_pool_dice_count || 0)
     + Math.max(0, Number(pending.cast_level || 0) - Number(action.spell_level || 0))
       * Number(action.upcast_hit_point_pool_dice_per_level || 0);
-  const manualValueRoll = poolDice > 0 || action.effect_kind === 'temporary_hit_points';
+  const enhanceAbilityRoll = action.id === 'enhance_ability';
+  const valueDice = enhanceAbilityRoll ? 2 : poolDice;
+  const manualValueRoll = poolDice > 0 || action.effect_kind === 'temporary_hit_points' || enhanceAbilityRoll;
   const rollInput = dieSides && manualValueRoll
-    ? `<label>Suma fizycznego ${poolDice ? `${poolDice}k${dieSides}` : `k${dieSides}`}<input id="combat-status-roll" type="number" min="${Math.max(1, poolDice)}" max="${dieSides * Math.max(1, poolDice)}" inputmode="numeric"></label>`
+    ? `<label>${enhanceAbilityRoll ? '2k6 tylko dla wariantu Kondycja' : 'Suma fizycznego rzutu'} ${valueDice ? `${valueDice}k${dieSides}` : `k${dieSides}`}<input id="combat-status-roll" type="number" min="${Math.max(1, valueDice)}" max="${dieSides * Math.max(1, valueDice)}" inputmode="numeric"></label>`
     : '';
   const effectOptions = action.effect_options || [];
-  const effectSelect = effectOptions.length
+  const weaponOptions = pending.weapon_options || [];
+  const effectSelect = weaponOptions.length
+    ? `<label>Niemagiczna broń<select id="combat-status-effect-option">${weaponOptions.map(value => (
+        `<option value="${esc(value.id)}">${esc(value.name)}</option>`
+      )).join('')}</select></label>`
+    : effectOptions.length
     ? `<label>Wariant efektu<select id="combat-status-effect-option">${effectOptions.map(value => (
         `<option value="${esc(value)}">${esc(value.replaceAll('_', ' '))}</option>`
       )).join('')}</select></label>`
     : '';
-  const targetOptions = targets.map(actor => `
-    <label class="choice-card">
-      <input type="checkbox" name="combat-concentration-target" value="${esc(actor.id)}"${selected.has(actor.id) ? ' checked' : ''}>
-      <span><b>${esc(actor.name)}</b><small>(${esc(actor.position[0])},${esc(actor.position[1])})</small></span>
-    </label>
-  `).join('');
+  const choosingArea = pending.selection_mode === 'area' && !pending.anchor;
+  const chosenNames = selectedTargets.map(actor => esc(actor.name)).join(', ');
+  const hasSelection = selected.size > 0;
   return `
-    <p>${esc(action.label || action.name || 'Czar koncentracyjny')}: wybierz od 1 do ${esc(pending.maximum_targets || 1)} celów. Slot ${esc(pending.cast_level || action.spell_level || '-')}.</p>
-    <div class="choice-grid">${targetOptions}</div>
+    <p><b>${esc(action.label || action.name || 'Czar')}</b> · slot ${esc(pending.cast_level || action.spell_level || '-')}</p>
+    <p><b>Efekt w grze:</b> ${esc(action.instructions || 'Brak opisu mechanicznego — zgłoś błąd zawartości.')}</p>
+    <p>${choosingArea
+      ? 'Zeskanuj planszę i kliknij podświetlony środek albo kierunek obszaru.'
+      : pending.selection_mode === 'area'
+        ? `<b>Cele objęte obszarem:</b> ${chosenNames || 'brak'}`
+        : `<b>Wybrane cele:</b> ${chosenNames || 'brak'} (maks. ${esc(pending.maximum_targets || 1)})`
+    }</p>
     <div class="row">
+      <button data-primary-scan="true" onclick="scanBoard()">${choosingArea ? 'Pokaż legalny obszar' : 'Pokaż legalne cele'}</button>
       ${rollInput}
       ${effectSelect}
-      <button data-allow-busy="true" onclick="confirmConcentrationAction()">Potwierdź czar</button>
+      <button data-allow-busy="true" onclick="confirmConcentrationAction()"${choosingArea || !hasSelection ? ' disabled' : ''}>Potwierdź czar</button>
       <button class="secondary" data-allow-busy="true" onclick="cancelConcentrationAction()">Anuluj</button>
     </div>
   `;
@@ -4719,9 +5013,9 @@ function pendingPlayerAttackHtml(pending) {
   const rangedThreatWarning = rangedThreatWarningHtml(pending);
   const twinned = pending.twinned_spell || {};
   const twinnedControls = twinned.available
-    ? `<div class="status"><b>Twinned Spell</b><p>Wybierz drugi, inny cel tego samego czaru:</p>
-        ${(twinned.eligible_targets || []).map(item => `<label><input type="radio" name="twinned-attack-target" data-twinned-attack-target="${esc(item.id)}"${twinned.selected_target_id === item.id ? ' checked' : ''}> ${esc(item.name)} (${esc(item.position[0])},${esc(item.position[1])})</label>`).join('')}
-        <button class="secondary" data-allow-busy="true" onclick="applyTwinnedAttackTarget()">Zapisz drugi cel</button></div>`
+    ? `<div class="status"><b>${esc(twinned.label || 'Twinned Spell')}</b>
+        <p>${twinned.selected_target_id ? 'Drugi cel został wskazany na planszy.' : `${twinned.optional ? 'Opcjonalnie wskaż' : 'Wskaż'} na planszy drugi legalny cel.`}</p>
+        <button class="secondary" data-allow-busy="true" onclick="startAuxTargeting('twinned_attack')">Pokaż legalne drugie cele</button></div>`
     : '';
   if (pending.stage === 'open_hand_choice') {
     const technique = pending.open_hand_technique || {};
@@ -4752,6 +5046,7 @@ function pendingPlayerAttackHtml(pending) {
       const coverBonus = source.save_ability === 'dexterity' ? Number((pending.positioning || {}).cover_bonus || 0) : 0;
       return `
         <p>Cel: ${esc(target.name || '-')} | rzut obronny ${esc(abilityLabel(source.save_ability))} przeciw ST ${esc(pending.spell_save_dc || source.save_dc || '-')}</p>
+        ${source.source_type === 'spell' ? spellMechanicalEffectHtml(source) : ''}
         ${coverBonus ? `<p>Osłona celu: +${esc(coverBonus)} do tego rzutu obronnego.</p>` : ''}
         ${twinnedControls}
         <div class="row">
@@ -4762,6 +5057,7 @@ function pendingPlayerAttackHtml(pending) {
     }
     return `
       <p>Cel: ${esc(target.name || '-')} | AC ${esc(target.ac || '-')} | premia ${esc(modifierLabel)}</p>
+      ${source.source_type === 'spell' ? spellMechanicalEffectHtml(source) : ''}
       ${rangedThreatWarning}
       ${twinnedControls}
       <div class="row">
@@ -4808,6 +5104,10 @@ function pendingPlayerAttackHtml(pending) {
       ${pending.bless ? `<label>${esc(pending.bless.label)} (k4)
         <input id="combat-bless-roll" type="number" min="1" max="${Number(pending.bless.die_sides)}" required>
       </label>` : ''}
+      ${pending.mirror_image ? `<label>Lustrzane odbicia — dodatkowe k20
+        <input id="combat-mirror-image-roll" type="number" min="1" max="20" required>
+        <small>${esc(pending.mirror_image.duplicates)} duplikaty; przekierowanie od ${esc(pending.mirror_image.redirect_threshold)}+, KP duplikatu ${esc(pending.mirror_image.duplicate_ac)}.</small>
+      </label>` : ''}
       <button onclick="submitPlayerAttackRoll()">Zapisz rzut</button>
       <button class="secondary" data-allow-busy="true" onclick="finishCombatTurn()">Zakończ turę</button>
     </div>
@@ -4842,13 +5142,15 @@ function d20RollResultText(result) {
 function pendingAreaSpellHtml(pending) {
   const source = pending.source || {};
   const targets = pending.targets || [];
+  const auxMode = (((state || {}).combat || {}).aux_targeting_mode) || '';
   const targetText = targets.map(target => `${target.name} (${target.position[0]},${target.position[1]})`).join(', ') || 'brak celów';
   const friendlyFire = areaSpellFriendlyFireHtml(pending);
   const sculpt = pending.sculpt_spells || {};
   const sculptControls = sculpt.available
-    ? `<div class="status"><b>Sculpt Spells</b><p>Wybierz do ${esc(sculpt.maximum_targets)} sojuszników, którzy automatycznie unikną efektu:</p>
-        ${(sculpt.eligible_targets || []).map(target => `<label><input type="checkbox" data-sculpt-target="${esc(target.id)}"> ${esc(target.name)}</label>`).join('')}
-        <button class="secondary" data-allow-busy="true" onclick="applySculptSpells()">Zastosuj ochronę</button></div>`
+    ? `<div class="status"><b>Sculpt Spells</b><p>Wskaż na planszy do ${esc(sculpt.maximum_targets)} chronionych sojuszników.</p>
+        <p>Chronieni: ${(pending.protected_targets || []).map(target => esc(target.name)).join(', ') || 'brak'}.</p>
+        <button class="secondary" data-allow-busy="true" onclick="startAuxTargeting('sculpt_spells')">Wybierz na planszy</button>
+        ${auxMode === 'sculpt_spells' ? '<button class="secondary" data-allow-busy="true" onclick="finishAuxTargeting()">Zakończ wybór</button>' : ''}</div>`
     : (pending.protected_targets || []).length
       ? `<p><b>Sculpt Spells:</b> ochronieni: ${(pending.protected_targets || []).map(target => esc(target.name)).join(', ')}</p>`
       : '';
@@ -4857,11 +5159,11 @@ function pendingAreaSpellHtml(pending) {
   const heightened = metamagic.heightened || {};
   const metamagicControls = careful.available || heightened.available
     ? `<div class="status"><b>Metamagic</b>
-        ${careful.available ? `<p>Careful Spell: wybierz do ${esc(careful.maximum_targets)} istot, które automatycznie zdadzą save:</p>
-          ${targets.map(target => `<label><input type="checkbox" data-careful-target="${esc(target.id)}"${(careful.selected_target_ids || []).includes(target.id) ? ' checked' : ''}> ${esc(target.name)}</label>`).join('')}` : ''}
-        ${heightened.available ? `<p>Heightened Spell: wskaż jedną istotę, która wykona pierwszy save z utrudnieniem:</p>
-          ${targets.map(target => `<label><input type="radio" name="heightened-target" data-heightened-target="${esc(target.id)}"${heightened.selected_target_id === target.id ? ' checked' : ''}> ${esc(target.name)}</label>`).join('')}` : ''}
-        <button class="secondary" data-allow-busy="true" onclick="applyAreaSpellMetamagicTargets()">Zapisz wybór Metamagic</button>
+        ${careful.available ? `<p>Careful Spell: wskaż na planszy do ${esc(careful.maximum_targets)} istot. Wybrane: ${(pending.careful_targets || []).map(target => esc(target.name)).join(', ') || 'brak'}.</p>
+          <button class="secondary" data-allow-busy="true" onclick="startAuxTargeting('careful_spell')">Wybierz cele Careful</button>` : ''}
+        ${heightened.available ? `<p>Heightened Spell: wskaż na planszy jedną istotę, która wykona pierwszy save z utrudnieniem.</p>
+          <button class="secondary" data-allow-busy="true" onclick="startAuxTargeting('heightened_spell')">Wybierz cel Heightened</button>` : ''}
+        ${['careful_spell', 'heightened_spell'].includes(auxMode) ? '<button class="secondary" data-allow-busy="true" onclick="finishAuxTargeting()">Zakończ wybór</button>' : ''}
       </div>`
     : '';
   if (pending.stage === 'damage_roll') {
@@ -4885,6 +5187,7 @@ function pendingAreaSpellHtml(pending) {
     `;
   }
   return `
+    ${spellMechanicalEffectHtml(source)}
     <p>Obszar: ${esc((pending.area_positions || []).map(position => `(${position[0]},${position[1]})`).join(', ') || '-')}</p>
     <p>Cele w obszarze: ${esc(targetText)}</p>
     ${friendlyFire}
@@ -4893,7 +5196,7 @@ function pendingAreaSpellHtml(pending) {
     ${areaSpellCoverHtml(pending)}
     ${source.save_ability ? `<p>Rzut obronny: ${esc(abilityLabel(source.save_ability))} przeciw ST ${esc(pending.spell_save_dc || source.save_dc || '-')} | ${esc(saveSuccessLabel(source.save_damage_on_success))}</p>` : ''}
     <div class="row">
-      <button data-allow-busy="true" onclick="confirmAreaSpell()">Potwierdź czar</button>
+      <button data-allow-busy="true" onclick="confirmAreaSpell()"${auxMode ? ' disabled' : ''}>Potwierdź czar</button>
       <button class="secondary" data-allow-busy="true" onclick="cancelAreaSpell()">Anuluj czar</button>
     </div>
   `;
@@ -4934,11 +5237,11 @@ function pendingPlayerHealingHtml(pending) {
   const source = pending.source || {};
   const twinned = pending.twinned_spell || {};
   const twinnedControls = twinned.available
-    ? `<div class="status"><b>Twinned Spell</b><p>Wybierz drugi cel leczenia:</p>
-        ${(twinned.eligible_targets || []).map(item => `<label><input type="radio" name="twinned-healing-target" data-twinned-healing-target="${esc(item.id)}"${twinned.selected_target_id === item.id ? ' checked' : ''}> ${esc(item.name)} (${esc(item.position[0])},${esc(item.position[1])})</label>`).join('')}
-        <button class="secondary" data-allow-busy="true" onclick="applyTwinnedHealingTarget()">Zapisz drugi cel</button></div>`
+    ? `<div class="status"><b>Twinned Spell</b><p>Wskaż drugi cel leczenia na planszy.</p>
+        <button class="secondary" data-allow-busy="true" onclick="startAuxTargeting('twinned_healing')">Pokaż legalne drugie cele</button></div>`
     : '';
   return `
+    ${source.source_type === 'spell' ? `<p><b>Efekt w grze:</b> ${esc(source.healing_hint || pending.healing_instruction || '-')} punktów leczenia wybranemu celowi.</p>` : ''}
     <p>${esc(pending.healing_instruction || 'Rzuć leczenie i wpisz wynik.')}</p>
     ${twinnedControls}
     <div class="row">
@@ -4948,6 +5251,14 @@ function pendingPlayerHealingHtml(pending) {
     </div>
     <p class="muted">Cel: ${esc(target.name || '-')}.</p>
   `;
+}
+function spellMechanicalEffectHtml(source) {
+  const parts = [];
+  if (source.damage_hint) parts.push(`${source.damage_hint} obrażeń${source.damage_type ? ` typu ${source.damage_type}` : ''}`);
+  if (source.area && source.area.shape) parts.push(`obszar: ${source.area.shape}`);
+  if (source.save_ability) parts.push(`rzut obronny: ${abilityLabel(source.save_ability)}, ${saveSuccessLabel(source.save_damage_on_success)}`);
+  (source.tabletop_riders || []).forEach(rider => parts.push(rider));
+  return `<p><b>Efekt w grze:</b> ${esc(parts.join('; ') || 'Efekt zostanie rozstrzygnięty zgodnie z opisem czaru.')}</p>`;
 }
 function pendingPlayerHealingDetailsHtml(pending) {
   const healer = pending.healer || {};
@@ -5081,7 +5392,7 @@ function pendingPlayerAttackDetailsHtml(pending) {
       <p><b>Osłona:</b> ${esc(coverNames[positioning.cover_level] || positioning.cover_level || 'brak')}${Number(positioning.cover_bonus || 0) ? `, AC +${esc(positioning.cover_bonus)}` : ''}${(positioning.cover_sources || []).length ? ` (${(positioning.cover_sources || []).map(esc).join(', ')})` : ''}</p>
       <p><b>Atak dystansowy w zwarciu:</b> ${positioning.ranged_in_melee ? 'tak — utrudnienie' : 'nie'}</p>
       <p><b>Flankowanie:</b> ${positioning.flanking ? 'tak — przewaga' : 'nie'}</p>
-      <p><b>Aktywne premie/kary:</b> ${active.length ? active.map(mod => `${esc(mod.label)} ${esc(signedNumber(mod.value))}`).join(', ') : 'brak'}</p>
+      <p><b>Aktywne premie/kary:</b> ${active.length ? active.map(mod => mod.stacking_key === 'flanking_advantage' ? `${esc(mod.label)} — przewaga` : `${esc(mod.label)} ${esc(signedNumber(mod.value))}`).join(', ') : 'brak'}</p>
       ${attackEffectsDetailsHtml(pending)}
       ${ignored.length ? `<p><b>Odrzucone duplikaty:</b> ${ignored.map(mod => `${esc(mod.label)} ${esc(signedNumber(mod.value))}`).join(', ')}</p>` : ''}
       <p><b>Rzut:</b> ${esc(pending.attack_instruction || 'Rzuć 1d20 i wpisz wynik.')}</p>
@@ -5291,7 +5602,16 @@ function updateActivePanel() {
   updateInteractionStateCard(hasPendingDecision, hasRolls, hasResult);
   document.getElementById('action-panel').hidden = !chatMode;
   document.getElementById('scene-description-card').hidden = interactionStage || !document.getElementById('scene-description').innerHTML.trim();
-  document.getElementById('chat-composer').hidden = stage !== 'location_active' || hasPendingResolution || hasNpcTransition || hasRolls || hasResult || Boolean(state.trade);
+  const canAskGm = stage === 'location_active'
+    && !hasPendingResolution
+    && !hasNpcTransition
+    && !hasRolls
+    && !hasResult
+    && !state.trade;
+  const gmChatUtility = document.getElementById('chat-utility-actions');
+  if (gmChatUtility) gmChatUtility.hidden = !canAskGm;
+  const gmChatDialog = document.getElementById('gm-chat-dialog');
+  if (!canAskGm && gmChatDialog && gmChatDialog.open) gmChatDialog.close();
   const leaveButton = document.getElementById('leave-interaction-button');
   leaveButton.textContent = stage === 'interaction_result'
     ? 'Zakończ interakcję'
@@ -5301,12 +5621,6 @@ function updateActivePanel() {
         ? 'Wróć do działań'
         : 'Zmień lokację');
   leaveButton.disabled = hasPendingDecision || hasNpcTransition || hasRolls || busy;
-  const restButton = document.getElementById('short-rest-button');
-  if (restButton) {
-    const rest = state.short_rest || {};
-    restButton.disabled = rest.available !== true;
-    restButton.title = rest.unavailable_reason || '';
-  }
 }
 function updateInteractionStateCard(hasPendingDecision, hasRolls, hasResult) {
   const activeStep = hasResult ? 'result' : hasRolls ? 'roll' : hasPendingDecision ? 'decision' : '';
@@ -5359,6 +5673,7 @@ async function sendAction() {
   const input = document.getElementById('action');
   const text = input ? input.value.trim() : '';
   if (!text) return;
+  closeGmChatDialog();
   optimisticPlayerMessage = {role: 'player', title: 'Gracze', body: text};
   if (input) input.value = '';
   closeSlashCommandMenu();
@@ -5369,6 +5684,22 @@ async function sendAction() {
     'MG poprawia płaszcz i zastanawia się nad odpowiedzią...'
   );
   if (result && !result.ok && input) input.value = text;
+}
+function openGmChatDialog() {
+  const utility = document.getElementById('chat-utility-actions');
+  const dialog = document.getElementById('gm-chat-dialog');
+  if (!dialog || (utility && utility.hidden)) return;
+  if (!dialog.open) dialog.showModal();
+  window.requestAnimationFrame(() => document.getElementById('action')?.focus());
+}
+function closeGmChatDialog() {
+  closeSlashCommandMenu();
+  const dialog = document.getElementById('gm-chat-dialog');
+  if (dialog && dialog.open) dialog.close();
+}
+function submitGmChat(event) {
+  event.preventDefault();
+  sendAction();
 }
 async function sendGoalAction() {
   if (state.pending) {
@@ -5518,6 +5849,15 @@ function sendRolls() {
       }
       return;
     }
+    if (input.dataset.rollKind === 'guidance') {
+      if (input.value !== '') {
+        if (!rolls[actorId] || typeof rolls[actorId] !== 'object') {
+          rolls[actorId] = {natural_roll: Number(rolls[actorId] || 0)};
+        }
+        rolls[actorId].guidance_roll = Number(input.value);
+      }
+      return;
+    }
     const index = input.dataset.rollIndex || '1';
     if (index === '2') {
       if (!rolls[actorId] || typeof rolls[actorId] !== 'object') rolls[actorId] = {natural_roll: Number(rolls[actorId] || 0)};
@@ -5591,7 +5931,7 @@ function submitContinuation() {
       navigator_actor_id: navigator ? navigator.id : null,
       navigation_roll: navigationRoll,
       forced_march_rolls: forcedMarchRolls,
-    }, 'Rozstrzygam podróż i przygotowuję kolejny scenariusz...');
+    }, 'Rozstrzygam podróż i przygotowuję kolejną lokację...');
   } catch (error) {
     window.alert(error.message);
   }
@@ -5625,7 +5965,7 @@ function startSession() { api('/api/start', {}, 'Rozpoczynam sesję...'); }
 function isAllyCombatTurnActive() {
   const combat = state && state.combat ? state.combat : null;
   const actor = combat && combat.current_actor ? combat.current_actor : {};
-  return Boolean(combat && combat.status === 'active' && actor.faction === 'ally' && !combat.context_menu && !combat.enemy_turn_preview && !combat.pending_player_attack && !combat.pending_player_healing && !combat.pending_area_spell && !combat.pending_combat_interaction && !combat.pending_combat_help && !combat.pending_concentration_action && !combat.pending_multi_target_damage_spell && !combat.pending_summon && !combat.pending_magic_movement && !combat.pending_spell_debuff && !combat.pending_spell_dispel && !combat.pending_concentration_check && !combat.pending_combat_ready);
+  return Boolean(combat && combat.status === 'active' && actor.faction === 'ally' && !combat.context_menu && !combat.enemy_turn_preview && !combat.pending_player_attack && !combat.pending_player_healing && !combat.pending_area_spell && !combat.pending_combat_interaction && !combat.pending_combat_help && !combat.class_feature_targeting && !combat.pending_concentration_action && !combat.pending_multi_target_damage_spell && !combat.pending_summon && !combat.pending_magic_movement && !combat.pending_spell_debuff && !combat.pending_spell_dispel && !combat.pending_concentration_check && !combat.pending_combat_ready);
 }
 async function scanBoard() {
   if (boardScanInFlight) return;
@@ -5663,9 +6003,10 @@ async function scanBoardOnce() {
     optimisticPlayerMessage = null;
     resultAck = null;
     chatInstanceOpen = true;
-    synchronizeBoardSelection();
+    const boardSelectionActivated = synchronizeBoardSelection({force: true});
     if (!isAllyCombatTurnActive()) playerTurnScanLoop = false;
     render();
+    if (boardSelectionActivated) scrollChatToBottom(true);
     refreshSessionLog();
   } finally {
     if (token === boardScanToken) {
@@ -5716,25 +6057,173 @@ function submitPlayerAttackRoll() {
   if (inspiration && inspiration.value !== '') payload.bardic_inspiration_roll = Number(inspiration.value);
   const bless = document.getElementById('combat-bless-roll');
   if (bless && bless.value !== '') payload.bless_roll = Number(bless.value);
+  const mirrorImage = document.getElementById('combat-mirror-image-roll');
+  if (mirrorImage && mirrorImage.value !== '') payload.mirror_image_roll = Number(mirrorImage.value);
   api('/api/combat/player-attack-roll', payload, 'Rozstrzygam rzut ataku...');
 }
 function selectCombatAttackSource(sourceId, castLevel = null, metamagicIds = []) { api('/api/combat/attack-source', {source_id: sourceId, cast_level: castLevel, metamagic_ids: metamagicIds}, 'Wybieram źródło ataku...'); }
 function selectCombatHealingSource(sourceId, castLevel = null, metamagicIds = []) { api('/api/combat/healing-source', {source_id: sourceId, cast_level: castLevel, metamagic_ids: metamagicIds}, 'Wybieram leczenie...'); }
-function castExplorationRitual(actorId, spellId) { api('/api/exploration/ritual', {actor_id: actorId, spell_id: spellId}, 'Odprawiam rytuał...'); }
-function castExplorationSpell(actorId, spellId, castLevel) {
-  api('/api/exploration/spell', {actor_id: actorId, spell_id: spellId, cast_level: castLevel}, 'Rzucam czar w eksploracji...');
+function requestTextInput(title, defaultValue = '', options = {}) {
+  return new Promise((resolve) => {
+    const dialog = document.createElement('dialog');
+    dialog.className = 'gm-chat-dialog';
+    const form = document.createElement('form');
+    form.method = 'dialog';
+    const heading = document.createElement('h3');
+    heading.textContent = title;
+    const input = document.createElement(options.multiline ? 'textarea' : 'input');
+    input.value = String(defaultValue ?? '');
+    if (!options.multiline) input.type = options.type || 'text';
+    if (options.min !== undefined) input.min = String(options.min);
+    if (options.max !== undefined) input.max = String(options.max);
+    if (options.step !== undefined) input.step = String(options.step);
+    if (options.maxLength !== undefined) input.maxLength = Number(options.maxLength);
+    input.required = options.required !== false;
+    const actions = document.createElement('div');
+    actions.className = 'dialog-actions';
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'secondary';
+    cancel.textContent = 'Anuluj';
+    const confirm = document.createElement('button');
+    confirm.type = 'submit';
+    confirm.textContent = 'Zatwierdź';
+    actions.append(cancel, confirm);
+    form.append(heading, input, actions);
+    dialog.append(form);
+    document.body.append(dialog);
+    let settled = false;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      dialog.remove();
+      resolve(value);
+    };
+    cancel.addEventListener('click', () => {
+      dialog.close();
+      finish(null);
+    });
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      if (!form.reportValidity()) return;
+      dialog.close();
+      finish(input.value);
+    });
+    dialog.addEventListener('cancel', (event) => {
+      event.preventDefault();
+      dialog.close();
+      finish(null);
+    });
+    dialog.addEventListener('close', () => finish(null));
+    dialog.showModal();
+    input.focus();
+    input.select();
+  });
 }
+async function explorationDivinationQuery(spellId) {
+  if (!['locate_animals_or_plants', 'locate_object'].includes(String(spellId))) return '';
+  return requestTextInput(
+    spellId === 'locate_object'
+      ? 'Jaki znany przedmiot lub rodzaj przedmiotu chcesz odnaleźć?'
+      : 'Jaki znany gatunek zwierzęcia albo rośliny chcesz odnaleźć?',
+    ''
+  );
+}
+async function explorationSpellDetails(spellId, castLevel = null) {
+  if (String(spellId) === 'rope_trick') {
+    const length = await requestTextInput(
+      'Podaj długość liny: wielokrotność 5 ft, od 5 do 60 ft.',
+      '60',
+      {type: 'number', min: 5, max: 60, step: 5}
+    );
+    if (length === null) return null;
+    return {target_id: '', rope_length_feet: Number(length)};
+  }
+  if (String(spellId) === 'protection_from_poison') {
+    const actors = (state.actors || []).filter(actor => !actor.defeated);
+    const answer = await requestTextInput(
+      `Wybierz sprzymierzeńca w zasięgu dotyku:\n${actors.map((actor, index) => `${index + 1}. ${actor.name}`).join('\n')}`,
+      '1',
+      {type: 'number', min: 1, max: actors.length}
+    );
+    if (answer === null) return null;
+    const selected = actors[Number(answer) - 1];
+    if (!selected) {
+      window.alert('Wybierz numer postaci z listy.');
+      return null;
+    }
+    return {target_id: selected.id};
+  }
+  if (String(spellId) === 'prayer_of_healing') {
+    const diceCount = 2 + Math.max(0, Number(castLevel || 2) - 2);
+    const healingRoll = await requestTextInput(
+      `Rzuć ${diceCount}k8. Modlitwa automatycznie obejmie do 6 legalnych sojuszników w 30 ft. Wpisz sumę kości:`,
+      '',
+      {type: 'number', min: diceCount, max: diceCount * 8}
+    );
+    if (healingRoll === null) return null;
+    return {target_id: '', target_ids: [], healing_roll: Number(healingRoll)};
+  }
+  if (String(spellId) !== 'magic_mouth') {
+    return {target_id: await explorationDivinationQuery(spellId)};
+  }
+  const activePoint = state.active_point || {};
+  if (!activePoint.id) {
+    window.alert('Najpierw wejdź w interakcję z przedmiotem lub punktem, który chcesz zaczarować.');
+    return null;
+  }
+  const message = await requestTextInput(
+    'Jaką wiadomość (maksymalnie 25 słów) mają wypowiedzieć Magiczne usta?',
+    '',
+    {multiline: true, maxLength: 240}
+  );
+  if (message === null) return null;
+  const triggerDescription = await requestTextInput(
+    'Opisz widzialny albo słyszalny warunek. Na Arenie wyzwoli go interakcja z tym obiektem.',
+    'Ktoś wchodzi w interakcję z obiektem',
+    {multiline: true}
+  );
+  if (triggerDescription === null) return null;
+  return {target_id: activePoint.id, message, trigger_description: triggerDescription};
+}
+async function castExplorationRitual(actorId, spellId) {
+  const details = await explorationSpellDetails(spellId);
+  if (details === null || details.target_id === null) return;
+  api('/api/exploration/ritual', {actor_id: actorId, spell_id: spellId, ...details}, 'Odprawiam rytuał...');
+}
+function castHazardFeatherFall() {
+  const caster = document.getElementById('hazard-feather-fall-caster');
+  api(
+    '/api/exploration/hazard/feather-fall',
+    {caster_id: caster ? caster.value : ''},
+    'Rzucam Powolne opadanie...'
+  );
+}
+async function castExplorationSpell(actorId, spellId, castLevel) {
+  const details = await explorationSpellDetails(spellId, castLevel);
+  if (details === null || details.target_id === null) return;
+  api('/api/exploration/spell', {actor_id: actorId, spell_id: spellId, cast_level: castLevel, ...details}, 'Rzucam czar w eksploracji...');
+}
+async function ropeTrickActor(effectId, mode) {
+  const actors = state.actors || [];
+  const answer = await requestTextInput(
+    `${mode === 'enter' ? 'Kto wchodzi' : 'Kto wychodzi'}?\n${actors.map((actor, index) => `${index + 1}. ${actor.name}`).join('\n')}`,
+    '1',
+    {type: 'number', min: 1, max: actors.length}
+  );
+  if (answer === null) return;
+  const actor = actors[Number(answer) - 1];
+  if (!actor) {
+    window.alert('Wybierz numer postaci z listy.');
+    return;
+  }
+  api(`/api/exploration/rope-trick/${mode}`, {effect_id: effectId, actor_id: actor.id}, mode === 'enter' ? 'Wchodzę do przestrzeni...' : 'Wychodzę z przestrzeni...');
+}
+function enterRopeTrick(effectId) { ropeTrickActor(effectId, 'enter'); }
+function exitRopeTrick(effectId) { ropeTrickActor(effectId, 'exit'); }
 function confirmPlayerAttackTarget() { api('/api/combat/player-attack-confirm', {}, 'Potwierdzam atak...'); }
-function applyTwinnedAttackTarget() {
-  const target = document.querySelector('[data-twinned-attack-target]:checked');
-  if (!target) return;
-  api('/api/combat/twinned-attack-target', {target_id: target.dataset.twinnedAttackTarget}, 'Zapisuję drugi cel czaru...');
-}
-function applyTwinnedHealingTarget() {
-  const target = document.querySelector('[data-twinned-healing-target]:checked');
-  if (!target) return;
-  api('/api/combat/twinned-healing-target', {target_id: target.dataset.twinnedHealingTarget}, 'Zapisuję drugi cel leczenia...');
-}
+function startAuxTargeting(mode) { api('/api/combat/aux-targeting/start', {mode}, 'Podświetlam legalne cele...'); }
+function finishAuxTargeting() { api('/api/combat/aux-targeting/finish', {}, 'Kończę wybór celów...'); }
 function cancelPlayerAttackTarget() { api('/api/combat/player-attack-cancel', {}, 'Anuluję wybór celu...'); }
 function confirmCombatInteraction(interactionId) { api('/api/combat/interaction/confirm', {interaction_id: interactionId}, 'Potwierdzam interakcję...'); }
 function cancelCombatInteraction() { api('/api/combat/interaction/cancel', {}, 'Anuluję interakcję...'); }
@@ -5746,6 +6235,10 @@ function confirmCombatContextMenu(optionId, optionIndex = null) {
     ? Number(menu.selected_index || 0)
     : Number(optionIndex);
   const option = options[index] || {};
+  if (option.provider === 'class_feature' && option.action_id) {
+    useClassFeature(option.action_id);
+    return;
+  }
   const payload = {option_id: optionId || ''};
   if (option.loot_quantity_max !== null && option.loot_quantity_max !== undefined) {
     const input = document.getElementById(`combat-loot-quantity-${index}`);
@@ -5777,20 +6270,6 @@ function submitPlayerHealingRoll() {
 }
 function cancelPlayerHealing() { api('/api/combat/player-healing-cancel', {}, 'Anuluję leczenie...'); }
 function confirmAreaSpell() { api('/api/combat/area-spell/confirm', {}, 'Potwierdzam czar obszarowy...'); }
-function applySculptSpells() {
-  const target_ids = Array.from(document.querySelectorAll('[data-sculpt-target]:checked'))
-    .map(input => input.dataset.sculptTarget);
-  api('/api/combat/area-spell/sculpt', {target_ids}, 'Chronię sojuszników przez Sculpt Spells...');
-}
-function applyAreaSpellMetamagicTargets() {
-  const careful_target_ids = Array.from(document.querySelectorAll('[data-careful-target]:checked'))
-    .map(input => input.dataset.carefulTarget);
-  const heightened = document.querySelector('[data-heightened-target]:checked');
-  api('/api/combat/area-spell/metamagic-targets', {
-    careful_target_ids,
-    heightened_target_id: heightened ? heightened.dataset.heightenedTarget : null,
-  }, 'Zapisuję cele Metamagic...');
-}
 function activateEmpoweredSpell() {
   api('/api/combat/metamagic/empowered', {}, 'Aktywuję Empowered Spell...');
 }
@@ -5835,6 +6314,10 @@ function useClassFeature(actionId) {
   const needsSavingRolls = ['turn_undead', 'turn_the_unholy'].includes(actionId);
   const needsPrimevalAwareness = actionId === 'primeval_awareness';
   const needsPactWeapon = actionId === 'pact_weapon';
+  if (needsTarget) {
+    api('/api/combat/class-feature/targeting', {action_id: actionId}, 'Podświetlam legalne cele zdolności...');
+    return;
+  }
   if (!needsRoll && !needsTarget && !needsPoints && !needsFont && !needsWildShape && !needsSavingRolls && !needsPrimevalAwareness && !needsPactWeapon) {
     api('/api/combat/class-feature', {action_id: actionId}, 'Używam cechy klasowej...');
     return;
@@ -5848,9 +6331,8 @@ function useClassFeature(actionId) {
   }
   dialog.innerHTML = `
     <form method="dialog" class="modal-card" onsubmit="submitClassFeatureDialog(event)">
-      <h2>${esc(identifierLabel(actionId))}</h2>
+      <h2>${esc(action.label || identifierLabel(actionId))}</h2>
       ${needsRoll ? '<label>Wynik k10<input id="class-feature-roll" type="number" min="1" max="10" required></label>' : ''}
-      ${needsTarget ? '<label>Id celu<input id="class-feature-target" required autocomplete="off"></label>' : ''}
       ${needsPoints ? '<label>Punkty leczenia<input id="class-feature-points" type="number" min="1" required></label>' : ''}
       ${needsFont ? `<label>Kierunek konwersji<select id="class-feature-mode" required>
         <option value="slot_to_points">Slot → Sorcery Points</option>
@@ -5880,6 +6362,20 @@ function useClassFeature(actionId) {
       </div>
     </form>`;
   dialog.showModal();
+}
+function cancelClassFeatureTargeting() {
+  api('/api/combat/class-feature/targeting/cancel', {}, 'Anuluję wybór celu...');
+}
+function confirmClassFeatureBoardTarget() {
+  const pending = (((state || {}).combat || {}).class_feature_targeting) || {};
+  const selected = pending.selected_target || {};
+  const points = Number((document.getElementById('class-feature-board-points') || {}).value || 0);
+  if (!selected.id || points < 1) return;
+  api('/api/combat/class-feature', {
+    action_id: pending.action_id,
+    target_id: selected.id,
+    points,
+  }, 'Używam cechy klasowej...');
 }
 function closeClassFeatureDialog() {
   document.getElementById('class-feature-dialog')?.close();
@@ -5911,42 +6407,17 @@ function startLongCast(actionId, castLevel = null) { api('/api/combat/long-cast/
 function continueLongCast() { api('/api/combat/long-cast/continue', {}, 'Kontynuuję długie rzucanie...'); }
 function cancelLongCast() { api('/api/combat/long-cast/cancel', {}, 'Przerywam długie rzucanie...'); }
 function startSummon(actionId, castLevel = null) { api('/api/combat/summon/start', {action_id: actionId, cast_level: castLevel}, 'Wybieram pole przywołania...'); }
-function confirmSummonFromSelect() {
-  const value = (document.getElementById('summon-position') || {}).value || '';
-  const parts = value.split(',').map(Number);
-  if (parts.length !== 2 || parts.some(Number.isNaN)) return;
-  api('/api/combat/summon/confirm', {col: parts[0], row: parts[1]}, 'Przywołuję istotę...');
-}
 function cancelSummon() { api('/api/combat/summon/cancel', {}, 'Anuluję przywołanie...'); }
 function startMagicMovement(actionId, castLevel = null) { api('/api/combat/magic-movement/start', {action_id: actionId, cast_level: castLevel}, 'Wybieram magiczny ruch...'); }
-function confirmMagicMovementFromUi() {
-  const pending = ((state || {}).combat || {}).pending_magic_movement || {};
-  if (pending.kind === 'teleport') {
-    const value = (document.getElementById('magic-movement-position') || {}).value || '';
-    const parts = value.split(',').map(Number);
-    if (parts.length !== 2 || parts.some(Number.isNaN)) return;
-    api('/api/combat/magic-movement/confirm', {col: parts[0], row: parts[1]}, 'Teleportuję...');
-    return;
-  }
-  const targetId = (document.getElementById('magic-movement-target') || {}).value || '';
-  if (!targetId) return;
-  api('/api/combat/magic-movement/confirm', {target_id: targetId}, 'Rozstrzygam wymuszony ruch...');
-}
+function startMoonbeamMove(effectId) { api('/api/combat/moonbeam/move/start', {effect_id: effectId}, 'Wybieram nowy środek strefy czaru...'); }
 function cancelMagicMovement() { api('/api/combat/magic-movement/cancel', {}, 'Anuluję magiczny ruch...'); }
 function startSpellDebuff(actionId, castLevel = null) { api('/api/combat/spell-debuff/start', {action_id: actionId, cast_level: castLevel}, 'Wybieram cel osłabienia...'); }
-function confirmSpellDebuffFromUi() {
-  const targetId = (document.getElementById('spell-debuff-target') || {}).value || '';
-  const condition = (document.getElementById('spell-debuff-condition') || {}).value || '';
-  if (!targetId) return;
-  api('/api/combat/spell-debuff/confirm', {target_id: targetId, condition}, 'Rozstrzygam czar osłabiający...');
+function selectSpellDebuffCondition(condition) {
+  if (!condition) return;
+  api('/api/combat/spell-debuff/condition', {condition}, 'Ustawiam wariant efektu...');
 }
 function cancelSpellDebuff() { api('/api/combat/spell-debuff/cancel', {}, 'Anuluję czar osłabiający...'); }
 function startSpellDispel(actionId, castLevel = null) { api('/api/combat/spell-dispel/start', {action_id: actionId, cast_level: castLevel}, 'Wybieram cel rozproszenia...'); }
-function confirmSpellDispelFromUi() {
-  const targetId = (document.getElementById('spell-dispel-target') || {}).value || '';
-  if (!targetId) return;
-  api('/api/combat/spell-dispel/confirm', {target_id: targetId}, 'Rozpraszam efekty magiczne...');
-}
 function submitSpellDispelCheck() {
   const naturalRoll = Number((document.getElementById('spell-dispel-roll') || {}).value || 0);
   api('/api/combat/spell-dispel/check', {natural_roll: naturalRoll}, 'Rozstrzygam test rozproszenia...');
@@ -5954,10 +6425,9 @@ function submitSpellDispelCheck() {
 function cancelSpellDispel() { api('/api/combat/spell-dispel/cancel', {}, 'Anuluję rozproszenie magii...'); }
 function startConcentrationAction(actionId, castLevel = null) { api('/api/combat/concentration/start', {action_id: actionId, cast_level: castLevel}, 'Przygotowuję czar koncentracyjny...'); }
 function confirmConcentrationAction() {
-  const targets = [...document.querySelectorAll('input[name="combat-concentration-target"]:checked')].map(input => input.value);
   const roll = (document.getElementById('combat-status-roll') || {}).value || null;
   const effectOption = (document.getElementById('combat-status-effect-option') || {}).value || '';
-  api('/api/combat/concentration/confirm', {target_ids: targets, roll_total: roll, effect_option: effectOption}, 'Potwierdzam czar koncentracyjny...');
+  api('/api/combat/concentration/confirm', {roll_total: roll, effect_option: effectOption}, 'Potwierdzam czar...');
 }
 function cancelConcentrationAction() { api('/api/combat/concentration/cancel', {}, 'Anuluję czar koncentracyjny...'); }
 function submitConcentrationCheck() {
@@ -5985,13 +6455,17 @@ function submitCombatConditionSave(condition) {
     bless_roll: bless && bless.value !== '' ? Number(bless.value) : null,
   }, 'Rozstrzygam rzut przeciw warunkowi...');
 }
-function submitCombatStabilization(method) {
-  const target = document.getElementById('combat-stabilization-target');
+function startStabilizationTargeting(method) {
+  api('/api/combat/stabilize/targeting', {method}, 'Podświetlam cele stabilizacji...');
+}
+function confirmBoardStabilization() {
+  const stabilization = (((state || {}).combat || {}).stabilization) || {};
+  const target = stabilization.selected_target || {};
   const roll = document.getElementById('combat-stabilization-roll');
   api('/api/combat/stabilize', {
-    target_id: target ? target.value : '',
-    method,
-    natural_roll: method === 'medicine' ? Number(roll ? roll.value : 0) : null,
+    target_id: target.id || '',
+    method: 'medicine',
+    natural_roll: Number(roll ? roll.value : 0),
   }, 'Stabilizuję sojusznika...');
 }
 function submitCombatMove() {
@@ -6022,9 +6496,14 @@ function submitCombatGrapple() {
 function cancelCombatGrapple() { api('/api/combat/grapple/cancel', {}, 'Anuluję Grapple...'); }
 function startCombatHelp() { api('/api/combat/help/start', {}, 'Przygotowuję Help...'); }
 function confirmCombatHelp() {
-  const ally = document.getElementById('combat-help-ally');
-  const target = document.getElementById('combat-help-target');
-  api('/api/combat/help/confirm', {ally_id: ally ? ally.value : '', target_id: target ? target.value : ''}, 'Potwierdzam Help...');
+  const pending = ((state || {}).combat || {}).pending_combat_help || {};
+  const allyId = pending.selected_ally_id || ((pending.selected_ally || {}).id) || '';
+  const targetId = pending.selected_target_id || ((pending.selected_target || {}).id) || '';
+  api(
+    '/api/combat/help/confirm',
+    {ally_id: allyId, target_id: targetId},
+    'Potwierdzam akcję Help...'
+  );
 }
 function cancelCombatHelp() { api('/api/combat/help/cancel', {}, 'Anuluję Help...'); }
 function startCombatReady() { api('/api/combat/ready/start', {}, 'Przygotowuję Ready...'); }
@@ -6135,7 +6614,8 @@ function triggerPrimaryAction() {
   if (isVisible('result-panel')) { ackResult(); return true; }
   if (isVisible('pending-panel')) { decision('accept'); return true; }
   if (isVisible('roll-panel')) { sendRolls(); return true; }
-  if (isVisible('action-panel')) { sendAction(); return true; }
+  const gmChatDialog = document.getElementById('gm-chat-dialog');
+  if (gmChatDialog && gmChatDialog.open) { sendAction(); return true; }
   if (state.flow && state.flow.stage === 'short_rest') {
     if (state.short_rest && state.short_rest.pending && state.short_rest.pending.completed) finishShortRest();
     else confirmShortRest();
@@ -6181,7 +6661,7 @@ function triggerPrimaryAction() {
         return true;
       }
       if (combat.pending_opportunity_movement) { confirmOpportunityMovement(); return true; }
-      if (combat.pending_combat_help) { confirmCombatHelp(); return true; }
+      if (combat.pending_combat_help) { scanBoard(); return true; }
       if (combat.pending_combat_shove) { submitCombatShove(); return true; }
       if (combat.pending_combat_grapple) { submitCombatGrapple(); return true; }
       if (combat.pending_combat_skill_check) { submitCombatSkillCheck(); return true; }
@@ -6191,12 +6671,12 @@ function triggerPrimaryAction() {
         else scanBoard();
         return true;
       }
-      if (combat.pending_summon) { confirmSummonFromSelect(); return true; }
-      if (combat.pending_magic_movement) { confirmMagicMovementFromUi(); return true; }
-      if (combat.pending_spell_debuff) { confirmSpellDebuffFromUi(); return true; }
+      if (combat.pending_summon) { scanBoard(); return true; }
+      if (combat.pending_magic_movement) { scanBoard(); return true; }
+      if (combat.pending_spell_debuff) { scanBoard(); return true; }
       if (combat.pending_spell_dispel) {
         if (combat.pending_spell_dispel.stage === 'ability_check') submitSpellDispelCheck();
-        else confirmSpellDispelFromUi();
+        else scanBoard();
         return true;
       }
       if (combat.pending_combat_ready) { confirmCombatReady(); return true; }

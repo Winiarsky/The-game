@@ -37,6 +37,7 @@ from dnd_board_game.combat import (
 from dnd_board_game.rules import (
     D20RollInput,
     D20RollRequest,
+    EffectDuration,
     EffectEvent,
     EffectEventType,
     RollMode,
@@ -335,6 +336,424 @@ def test_rubble_interaction_adds_next_attack_penalty_and_consumes_it():
     assert consume_next_attack_effects(applied.active_effects, str(enemy.id)) == ()
 
 
+def test_magic_weapon_bonus_applies_only_to_enchanted_weapon_source() -> None:
+    hero = _actor("hero", Faction.ALLY, Coordinate(1, 1))
+    longsword = AttackSource(
+        "Długi miecz",
+        AttackSourceType.WEAPON,
+        5,
+        D20RollRequest(),
+        source_item_id="longsword",
+        damage_modifier=3,
+    )
+    longbow = replace(
+        longsword,
+        name="Długi łuk",
+        source_item_id="longbow",
+    )
+    effect = ActiveCombatEffect(
+        id="magic-weapon",
+        actor_id="hero",
+        kind="magic_weapon",
+        label="Magiczna broń",
+        object_id="weapon:longsword",
+        value=1,
+    )
+
+    enchanted = attack_source_with_combat_effects(hero, longsword, (effect,))
+    untouched = attack_source_with_combat_effects(hero, longbow, (effect,))
+
+    assert any(
+        modifier.label == "Magiczna broń" and modifier.value == 1
+        for modifier in enchanted.attack_roll_request.modifiers
+    )
+    assert enchanted.damage_modifier == 4
+    assert untouched == longbow
+
+
+def test_vicious_mockery_disadvantages_only_next_weapon_attack() -> None:
+    hero = _actor("hero", Faction.ALLY, Coordinate(1, 1))
+    effect = ActiveCombatEffect(
+        id="vicious-mockery:hero",
+        actor_id="hero",
+        kind="vicious_mockery_disadvantage",
+        label="Zjadliwa kpina",
+        object_id="spell:vicious_mockery",
+        value=0,
+        duration=EffectDuration.UNTIL_NEXT_ATTACK,
+    )
+    weapon = AttackSource(
+        "Długi miecz",
+        AttackSourceType.WEAPON,
+        5,
+        D20RollRequest(),
+    )
+    spell = AttackSource(
+        "Ognisty pocisk",
+        AttackSourceType.SPELL,
+        120,
+        D20RollRequest(),
+    )
+
+    mocked_weapon = attack_source_with_combat_effects(hero, weapon, (effect,))
+    mocked_spell = attack_source_with_combat_effects(hero, spell, (effect,))
+
+    assert mocked_weapon.attack_roll_request.mode == RollMode.DISADVANTAGE
+    assert mocked_spell.attack_roll_request.mode == RollMode.NORMAL
+    assert consume_next_attack_effects((effect,), "hero") == ()
+
+
+def test_true_strike_advantage_applies_only_against_declared_target() -> None:
+    hero = _actor("hero", Faction.ALLY, Coordinate(1, 1))
+    marked = _actor("marked", Faction.ENEMY, Coordinate(2, 1))
+    other = _actor("other", Faction.ENEMY, Coordinate(1, 2))
+    effect = ActiveCombatEffect(
+        id="true-strike:hero:marked",
+        actor_id="hero",
+        kind="next_attack_advantage",
+        label="Prawdziwe uderzenie",
+        object_id="spell:true_strike",
+        value=0,
+        target_actor_id="marked",
+        duration=EffectDuration.CONCENTRATION,
+    )
+    source = AttackSource(
+        "Krótki miecz",
+        AttackSourceType.WEAPON,
+        5,
+        D20RollRequest(),
+    )
+
+    against_marked = attack_source_with_target_combat_effects(
+        hero,
+        marked,
+        source,
+        (effect,),
+    )
+    against_other = attack_source_with_target_combat_effects(
+        hero,
+        other,
+        source,
+        (effect,),
+    )
+
+    assert against_marked.attack_roll_request.mode == RollMode.ADVANTAGE
+    assert against_other.attack_roll_request.mode == RollMode.NORMAL
+
+
+def test_protection_from_evil_and_good_hinders_listed_creature_attacks() -> None:
+    attacker = replace(
+        _actor("undead", Faction.ENEMY, Coordinate(1, 1)),
+        creature_type="undead",
+    )
+    protected = _actor("protected", Faction.ALLY, Coordinate(2, 1))
+    effect = ActiveCombatEffect(
+        id="protection:protected",
+        actor_id="protected",
+        kind="protection_from_evil_and_good",
+        label="Ochrona przed dobrem i złem",
+        object_id="spell:protection_from_evil_and_good",
+        value=0,
+    )
+    source = AttackSource(
+        "Szpony",
+        AttackSourceType.WEAPON,
+        5,
+        D20RollRequest(),
+    )
+
+    modified = attack_source_with_target_combat_effects(
+        attacker,
+        protected,
+        source,
+        (effect,),
+    )
+
+    assert modified.attack_roll_request.mode == RollMode.DISADVANTAGE
+
+
+def test_hunters_mark_adds_one_d6_only_to_casters_weapon_hits() -> None:
+    from dnd_board_game.combat import DamageComponentSpec, DamageType
+    from dnd_board_game.rules import DiceExpression
+
+    ranger = _actor("ranger", Faction.ALLY, Coordinate(0, 0))
+    ally = _actor("ally", Faction.ALLY, Coordinate(0, 1))
+    marked = _actor("marked", Faction.ENEMY, Coordinate(1, 0))
+    other = _actor("other", Faction.ENEMY, Coordinate(1, 1))
+    source = AttackSource(
+        "Łuk",
+        AttackSourceType.WEAPON,
+        5,
+        D20RollRequest(),
+        damage_components=(
+            DamageComponentSpec(
+                "bow",
+                DamageType.PIERCING,
+                DiceExpression(1, 8),
+                label="Łuk",
+            ),
+        ),
+    )
+    mark = ActiveCombatEffect(
+        id="hunters-mark:ranger:marked",
+        actor_id=str(marked.id),
+        kind="hunters_mark",
+        label="Znak łowcy",
+        object_id="spell:hunters_mark",
+        value=6,
+        source_actor_id=str(ranger.id),
+        target_actor_id=str(marked.id),
+    )
+
+    marked_source = attack_source_with_target_combat_effects(
+        ranger, marked, source, (mark,)
+    )
+    marked_source_again = attack_source_with_target_combat_effects(
+        ranger, marked, marked_source, (mark,)
+    )
+    wrong_attacker = attack_source_with_target_combat_effects(
+        ally, marked, source, (mark,)
+    )
+    wrong_target = attack_source_with_target_combat_effects(
+        ranger, other, source, (mark,)
+    )
+
+    assert marked_source.damage_components[-1].dice == DiceExpression(1, 6)
+    assert marked_source.damage_components[-1].label == "Znak łowcy"
+    assert len(marked_source_again.damage_components) == 2
+    assert len(wrong_attacker.damage_components) == 1
+    assert len(wrong_target.damage_components) == 1
+
+
+def test_branding_smite_accepts_ranged_weapon_attack() -> None:
+    from dnd_board_game.combat import AttackKind, DamageComponentSpec, DamageType
+    from dnd_board_game.rules import DiceExpression
+
+    paladin = _actor("paladin", Faction.ALLY, Coordinate(0, 0))
+    bow = AttackSource(
+        "Łuk",
+        AttackSourceType.WEAPON,
+        150,
+        D20RollRequest(),
+        damage_components=(
+            DamageComponentSpec(
+                "bow",
+                DamageType.PIERCING,
+                DiceExpression(1, 8),
+                label="Łuk",
+            ),
+        ),
+        attack_kind=AttackKind.RANGED,
+    )
+    effect = ActiveCombatEffect(
+        id="branding-smite:paladin",
+        actor_id="paladin",
+        kind="branding_smite",
+        label="Piętnujące porażenie",
+        object_id="spell:branding_smite",
+        value=2,
+    )
+
+    branded = attack_source_with_combat_effects(paladin, bow, (effect,))
+
+    assert branded.damage_components[-1].dice == DiceExpression(2, 6)
+    assert branded.damage_components[-1].damage_type == DamageType.RADIANT
+
+
+def test_flame_blade_replaces_weapon_proxy_with_melee_spell_attack() -> None:
+    from dnd_board_game.combat import DamageComponentSpec, DamageType
+    from dnd_board_game.rules import DiceExpression
+
+    druid = _actor("druid", Faction.ALLY, Coordinate(0, 0))
+    scimitar = AttackSource(
+        "Bułat",
+        AttackSourceType.WEAPON,
+        5,
+        D20RollRequest(),
+        damage_components=(
+            DamageComponentSpec(
+                "scimitar",
+                DamageType.SLASHING,
+                DiceExpression(1, 6),
+                label="Bułat",
+            ),
+        ),
+        ability="dexterity",
+    )
+    effect = ActiveCombatEffect(
+        id="flame-blade:druid",
+        actor_id="druid",
+        kind="flame_blade",
+        label="Ostrze płomieni",
+        object_id="spell:flame_blade",
+        value=3,
+    )
+
+    blade = attack_source_with_combat_effects(druid, scimitar, (effect,))
+
+    assert blade.id == "flame_blade"
+    assert blade.name == "Ostrze płomieni"
+    assert blade.source_type == AttackSourceType.SPELL
+    assert blade.ability == "wisdom"
+    assert blade.damage_components == (
+        DamageComponentSpec(
+            "flame_blade",
+            DamageType.FIRE,
+            DiceExpression(3, 6),
+            label="Ostrze płomieni",
+        ),
+    )
+
+
+def test_heat_metal_penalty_disadvantages_wearers_attacks() -> None:
+    wearer = _actor("wearer", Faction.ENEMY, Coordinate(0, 0))
+    source = AttackSource(
+        "Miecz",
+        AttackSourceType.WEAPON,
+        5,
+        D20RollRequest(),
+    )
+    effect = ActiveCombatEffect(
+        id="heat-metal:wearer",
+        actor_id="wearer",
+        kind="heat_metal_disadvantage",
+        label="Rozgrzany metal",
+        object_id="spell:heat_metal",
+        value=0,
+    )
+
+    heated = attack_source_with_combat_effects(wearer, source, (effect,))
+
+    assert heated.attack_roll_request.mode == RollMode.DISADVANTAGE
+
+
+def test_blindsight_or_truesight_ignores_blur_within_sense_range() -> None:
+    from dnd_board_game.actors.senses import ActorSenseProfile
+
+    ordinary = _actor("ordinary", Faction.ENEMY, Coordinate(0, 0))
+    seer = replace(
+        _actor("seer", Faction.ENEMY, Coordinate(0, 0)),
+        senses=ActorSenseProfile(blindsight_feet=30),
+    )
+    blurred = _actor("blurred", Faction.ALLY, Coordinate(3, 0))
+    source = AttackSource(
+        "Miecz",
+        AttackSourceType.WEAPON,
+        5,
+        D20RollRequest(),
+    )
+    effect = ActiveCombatEffect(
+        id="blur:blurred",
+        actor_id="blurred",
+        kind="attacks_against_disadvantage",
+        label="Rozmycie",
+        object_id="spell:blur",
+        value=0,
+    )
+
+    ordinary_attack = attack_source_with_target_combat_effects(
+        ordinary, blurred, source, (effect,)
+    )
+    sighted_attack = attack_source_with_target_combat_effects(
+        seer, blurred, source, (effect,)
+    )
+
+    assert ordinary_attack.attack_roll_request.mode == RollMode.DISADVANTAGE
+    assert sighted_attack.attack_roll_request.mode == RollMode.NORMAL
+
+
+def test_shillelagh_uses_spellcasting_modifier_and_d8_for_club() -> None:
+    hero = replace(
+        _actor("hero", Faction.ALLY, Coordinate(1, 1)),
+        spell_save_dc=14,
+    )
+    effect = ActiveCombatEffect(
+        id="shillelagh:hero",
+        actor_id="hero",
+        kind="shillelagh",
+        label="Kostur",
+        object_id="spell:shillelagh",
+        value=0,
+    )
+    club = AttackSource(
+        id="club",
+        name="Pałka",
+        source_type=AttackSourceType.WEAPON,
+        range_feet=5,
+        attack_roll_request=D20RollRequest(),
+        damage_hint="1d4",
+        damage_components=(),
+        proficiency_id="club",
+        ability="strength",
+    )
+    from dnd_board_game.combat import DamageComponentSpec, DamageType
+    from dnd_board_game.rules import DiceExpression
+
+    club = replace(
+        club,
+        damage_components=(
+            DamageComponentSpec(
+                id="club",
+                damage_type=DamageType.BLUDGEONING,
+                dice=DiceExpression(1, 4),
+            ),
+        ),
+    )
+
+    enchanted = attack_source_with_combat_effects(hero, club, (effect,))
+
+    assert enchanted.ability == "wisdom"
+    assert enchanted.damage_components[0].dice == DiceExpression(1, 8)
+    assert any(
+        modifier.label == "Shillelagh"
+        for modifier in enchanted.attack_roll_request.modifiers
+    )
+
+
+def test_ray_of_enfeeblement_halves_only_strength_weapon_damage() -> None:
+    hero = _actor("hero", Faction.ALLY, Coordinate(1, 1))
+    effect = ActiveCombatEffect(
+        id="ray:hero",
+        actor_id="hero",
+        kind="ray_of_enfeeblement",
+        label="Promień osłabienia",
+        object_id="spell:ray_of_enfeeblement",
+        value=0,
+        source_actor_id="wizard",
+        duration=EffectDuration.CONCENTRATION,
+    )
+    strength_weapon = AttackSource(
+        "Młot",
+        AttackSourceType.WEAPON,
+        5,
+        D20RollRequest(),
+        ability="strength",
+    )
+    dexterity_weapon = replace(
+        strength_weapon,
+        name="Rapier",
+        ability="dexterity",
+    )
+    strength_spell = replace(
+        strength_weapon,
+        name="Czar Siły",
+        source_type=AttackSourceType.SPELL,
+    )
+
+    assert (
+        attack_source_with_combat_effects(hero, strength_weapon, (effect,)).damage_divisor
+        == 2
+    )
+    assert (
+        attack_source_with_combat_effects(hero, dexterity_weapon, (effect,)).damage_divisor
+        == 1
+    )
+    assert (
+        attack_source_with_combat_effects(hero, strength_spell, (effect,)).damage_divisor
+        == 1
+    )
+
+
 def test_help_effect_grants_advantage_against_specific_target_and_is_consumed():
     helper = _actor("helper", Faction.ALLY, Coordinate(0, 0))
     ally = _actor("ally", Faction.ALLY, Coordinate(1, 0))
@@ -359,6 +778,98 @@ def test_help_effect_grants_advantage_against_specific_target_and_is_consumed():
     assert other_target.attack_roll_request.mode == RollMode.NORMAL
     assert consume_next_attack_effects((effect,), str(ally.id), str(other.id)) == (effect,)
     assert consume_next_attack_effects((effect,), str(ally.id), str(target.id)) == ()
+
+
+def test_invisibility_grants_attack_advantage_and_ends_after_attack() -> None:
+    ally = _actor("ally", Faction.ALLY, Coordinate(1, 0))
+    target = _actor("goblin", Faction.ENEMY, Coordinate(0, 1))
+    source = AttackSource("Miecz", AttackSourceType.WEAPON, 5, D20RollRequest())
+    effect = ActiveCombatEffect(
+        id="invisibility:wizard:ally",
+        actor_id=str(ally.id),
+        kind="invisibility",
+        label="Niewidzialność",
+        object_id="spell:invisibility",
+        value=0,
+        source_actor_id="wizard",
+        target_actor_id=str(ally.id),
+        duration=EffectDuration.CONCENTRATION,
+    )
+
+    modified = attack_source_with_target_combat_effects(
+        ally,
+        target,
+        source,
+        (effect,),
+    )
+
+    assert modified.attack_roll_request.mode == RollMode.ADVANTAGE
+    assert consume_next_attack_effects((effect,), str(ally.id), str(target.id)) == ()
+
+
+def test_see_invisibility_cancels_only_invisibility_attack_modifiers() -> None:
+    seer = _actor("seer", Faction.ALLY, Coordinate(1, 0))
+    invisible_enemy = _actor("enemy", Faction.ENEMY, Coordinate(0, 1))
+    source = AttackSource("Miecz", AttackSourceType.WEAPON, 5, D20RollRequest())
+    invisibility = ActiveCombatEffect(
+        id="invisibility:enemy",
+        actor_id="enemy",
+        kind="invisibility",
+        label="Niewidzialność",
+        object_id="spell:invisibility",
+        value=0,
+        source_actor_id="enemy",
+        duration=EffectDuration.CONCENTRATION,
+    )
+    sight = ActiveCombatEffect(
+        id="see-invisibility:seer",
+        actor_id="seer",
+        kind="see_invisibility",
+        label="Widzenie niewidzialnego",
+        object_id="spell:see_invisibility",
+        value=0,
+        source_actor_id="seer",
+        duration=EffectDuration.UNTIL_ENCOUNTER_END,
+    )
+
+    without_sight = attack_source_with_target_combat_effects(
+        seer,
+        invisible_enemy,
+        source,
+        (invisibility,),
+    )
+    with_sight = attack_source_with_target_combat_effects(
+        seer,
+        invisible_enemy,
+        source,
+        (invisibility, sight),
+    )
+    enemy_attacks_seer = attack_source_with_target_combat_effects(
+        invisible_enemy,
+        seer,
+        source,
+        (invisibility, sight),
+    )
+
+    assert without_sight.attack_roll_request.mode == RollMode.DISADVANTAGE
+    assert with_sight.attack_roll_request.mode == RollMode.NORMAL
+    assert enemy_attacks_seer.attack_roll_request.mode == RollMode.NORMAL
+
+
+def test_sanctuary_ends_when_protected_actor_makes_attack() -> None:
+    sanctuary = ActiveCombatEffect(
+        id="sanctuary:ally",
+        actor_id="ally",
+        kind="sanctuary",
+        label="Sanktuarium",
+        object_id="spell:sanctuary",
+        value=0,
+        source_actor_id="cleric",
+        target_actor_id="ally",
+        duration=EffectDuration.UNTIL_ENCOUNTER_END,
+    )
+
+    assert consume_next_attack_effects((sanctuary,), "ally", "goblin") == ()
 
 
 def test_help_effect_cancels_disadvantage_and_expires_on_helper_turn_start():

@@ -1,7 +1,7 @@
 {
   "schema": "dnd_board_game.spell", "schema_version": 1,
   "ruleset_id": "dnd_5e_2014", "source_pack_ids": ["srd_5_1_cc_by_4_0"],
-  "id": "thaumaturgy", "name": "Thaumaturgy", "level": 0,
+  "id": "thaumaturgy", "name": "Taumaturgia", "level": 0,
   "school": "transmutation", "casting_time": "action",
   "range": {"kind": "distance", "feet": 30},
   "components": {"verbal": true, "somatic": false, "materials": []},

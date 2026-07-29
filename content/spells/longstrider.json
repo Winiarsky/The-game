@@ -6,7 +6,7 @@
     "srd_5_1_cc_by_4_0"
   ],
   "id": "longstrider",
-  "name": "Longstrider",
+  "name": "Długie kroki",
   "level": 1,
   "school": "transmutation",
   "casting_time": "action",
@@ -32,7 +32,7 @@
   "effect": {
     "kind": "combat_action",
     "action_type": "targeted_status",
-    "label": "Longstrider",
+    "label": "Długie kroki",
     "target_count": 1,
     "cast_flag": "cast_longstrider",
     "instructions": "Przez godzinę szybkość dotkniętego celu rośnie o 10 stóp; +1 cel za wyższy slot.",

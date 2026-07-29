@@ -6,7 +6,7 @@
     "srd_5_1_cc_by_4_0"
   ],
   "id": "moonbeam",
-  "name": "Moonbeam",
+  "name": "Księżycowy promień",
   "level": 2,
   "school": "evocation",
   "casting_time": "action",
@@ -33,9 +33,14 @@
   "effect": {
     "kind": "combat_action",
     "action_type": "targeted_status",
-    "label": "Moonbeam",
-    "effect_kind": "ongoing_damage",
-    "target_faction": "enemy",
+    "label": "Księżycowy promień",
+    "effect_kind": "ongoing_damage_zone",
+    "target_faction": "any",
+    "area": {
+      "shape": "radius",
+      "radius_feet": 5,
+      "target_mode": "all_creatures"
+    },
     "ongoing_damage_dice_count": 2,
     "damage_die_sides": 10,
     "damage_type": "radiant",

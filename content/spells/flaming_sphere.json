@@ -6,7 +6,7 @@
     "srd_5_1_cc_by_4_0"
   ],
   "id": "flaming_sphere",
-  "name": "Flaming Sphere",
+  "name": "Płonąca kula",
   "level": 2,
   "school": "conjuration",
   "casting_time": "action",
@@ -33,14 +33,19 @@
   "effect": {
     "kind": "combat_action",
     "action_type": "targeted_status",
-    "label": "Flaming Sphere",
-    "effect_kind": "ongoing_damage",
-    "target_faction": "enemy",
+    "label": "Płonąca kula",
+    "effect_kind": "ongoing_damage_zone",
+    "target_faction": "any",
     "ongoing_damage_dice_count": 2,
     "damage_die_sides": 6,
     "damage_type": "fire",
     "save_ability": "dexterity",
-    "save_damage_on_success": "none",
+    "save_damage_on_success": "half",
+    "area": {
+      "shape": "radius",
+      "radius_feet": 5,
+      "target_mode": "all_creatures"
+    },
     "upcast_value_per_level": 1,
     "cast_flag": "cast_flaming_sphere",
     "instructions": "Ustaw kulę na wolnym polu. Istoty kończące turę obok niej bronią się Dex przed 2k6 fire; bonus action przesuwa kulę do 30 stóp.",

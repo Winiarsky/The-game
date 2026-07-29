@@ -10,6 +10,7 @@ from dnd_board_game.actors import (
     actor_has_feature,
     saving_throw_roll_modifiers,
 )
+from dnd_board_game.core.damage_types import DamageType
 from dnd_board_game.rules import (
     ActiveEffect as ActiveCombatEffect,
     D20RollInput,
@@ -29,14 +30,17 @@ from dnd_board_game.rules import (
     expire_active_effects,
     resolve_d20_roll,
     resolve_saving_throw,
+    ability_modifier,
     DiceExpression,
 )
 from dnd_board_game.world import Coordinate
 
 from .scene import SceneInteraction, SceneObject, available_scene_interactions, visible_scene_objects
 from .action_economy import ActionEconomyCost, action_economy_cost_label
+from .attack_flow import AttackSourceType
 from .session import ActionUse, CombatState, can_pay_action_economy_cost, replace_actor
 from .damage import DamageComponentSpec
+from .spells import grid_distance_feet
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,6 +66,75 @@ class CombatInteractionOption:
             "action_cost": self.action_cost.value,
             "action_cost_label": action_economy_cost_label(self.action_cost),
         }
+
+
+@dataclass(frozen=True, slots=True)
+class MirrorImageOutcome:
+    effect_id: str
+    redirect_roll: int
+    redirect_threshold: int
+    redirected: bool
+    duplicate_ac: int
+    duplicate_hit: bool
+    duplicates_before: int
+    duplicates_after: int
+
+
+def resolve_mirror_image_redirect(
+    target: Actor,
+    *,
+    attack_total: int,
+    active_effects: tuple[ActiveCombatEffect, ...],
+    redirect_roll: int,
+) -> MirrorImageOutcome | None:
+    effect = next(
+        (
+            candidate
+            for candidate in active_effects
+            if candidate.actor_id == str(target.id)
+            and candidate.kind == "mirror_image"
+            and candidate.value > 0
+        ),
+        None,
+    )
+    if effect is None:
+        return None
+    if not 1 <= redirect_roll <= 20:
+        raise ValueError("Mirror Image redirect roll must be between 1 and 20.")
+    threshold = {3: 6, 2: 8, 1: 11}.get(effect.value, 6)
+    redirected = redirect_roll >= threshold
+    duplicate_ac = 10 + ability_modifier(target.ability_scores.dexterity)
+    duplicate_hit = redirected and attack_total >= duplicate_ac
+    return MirrorImageOutcome(
+        effect_id=effect.id,
+        redirect_roll=redirect_roll,
+        redirect_threshold=threshold,
+        redirected=redirected,
+        duplicate_ac=duplicate_ac,
+        duplicate_hit=duplicate_hit,
+        duplicates_before=effect.value,
+        duplicates_after=effect.value - 1 if duplicate_hit else effect.value,
+    )
+
+
+def apply_mirror_image_outcome(
+    active_effects: tuple[ActiveCombatEffect, ...],
+    outcome: MirrorImageOutcome | None,
+) -> tuple[ActiveCombatEffect, ...]:
+    if outcome is None or not outcome.duplicate_hit:
+        return active_effects
+    if outcome.duplicates_after <= 0:
+        return tuple(
+            effect
+            for effect in active_effects
+            if effect.id != outcome.effect_id
+        )
+    return tuple(
+        replace(effect, value=outcome.duplicates_after)
+        if effect.id == outcome.effect_id
+        else effect
+        for effect in active_effects
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -439,6 +512,38 @@ def expire_combat_effects(
 
 def attack_source_with_combat_effects(actor: Actor, source, active_effects: tuple[ActiveCombatEffect, ...]):
     modifiers = []
+    flame_blade = next(
+        (
+            effect
+            for effect in active_effects
+            if effect.actor_id == str(actor.id)
+            and effect.kind == "flame_blade"
+            and getattr(getattr(source, "attack_kind", None), "value", "")
+            == "melee"
+        ),
+        None,
+    )
+    if flame_blade is not None:
+        from dnd_board_game.rules import spellcasting_ability_for_spell
+
+        source = replace(
+            source,
+            id="flame_blade",
+            name="Ostrze płomieni",
+            source_type=AttackSourceType.SPELL,
+            ability=spellcasting_ability_for_spell(actor, "flame_blade")
+            or "wisdom",
+            damage_modifier=0,
+            damage_components=(
+                DamageComponentSpec(
+                    id="flame_blade",
+                    damage_type=DamageType.FIRE,
+                    dice=DiceExpression(max(3, flame_blade.value), 6),
+                    label="Ostrze płomieni",
+                ),
+            ),
+            damage_hint=f"{max(3, flame_blade.value)}k6 fire",
+        )
     shillelagh = any(
         effect.actor_id == str(actor.id) and effect.kind == "shillelagh"
         for effect in active_effects
@@ -494,6 +599,11 @@ def attack_source_with_combat_effects(actor: Actor, source, active_effects: tupl
             and effect.object_id != f"weapon:{getattr(source, 'source_item_id', '')}"
         ):
             continue
+        if (
+            effect.kind == "magic_weapon"
+            and effect.object_id != f"weapon:{getattr(source, 'source_item_id', '')}"
+        ):
+            continue
         modifiers.append(
             RollModifier(
                 effect.label,
@@ -519,6 +629,8 @@ def attack_source_with_combat_effects(actor: Actor, source, active_effects: tupl
             or (
                 effect.kind == "magic_weapon"
                 and getattr(getattr(source, "source_type", None), "value", "") == "weapon"
+                and effect.object_id
+                == f"weapon:{getattr(source, 'source_item_id', '')}"
             )
         )
     )
@@ -548,6 +660,18 @@ def attack_source_with_combat_effects(actor: Actor, source, active_effects: tupl
     next_attack_advantage = any(
         effect.actor_id == str(actor.id)
         and effect.kind == "next_attack_advantage"
+        and effect.target_actor_id is None
+        for effect in active_effects
+    )
+    vicious_mockery_disadvantage = any(
+        effect.actor_id == str(actor.id)
+        and effect.kind == "vicious_mockery_disadvantage"
+        and getattr(getattr(source, "source_type", None), "value", "") == "weapon"
+        for effect in active_effects
+    )
+    heat_metal_disadvantage = any(
+        effect.actor_id == str(actor.id)
+        and effect.kind == "heat_metal_disadvantage"
         for effect in active_effects
     )
     extra_components: list[DamageComponentSpec] = []
@@ -560,7 +684,7 @@ def attack_source_with_combat_effects(actor: Actor, source, active_effects: tupl
                 extra_components.append(
                     DamageComponentSpec(
                         id="divine_favor",
-                        damage_type="radiant",
+                        damage_type=DamageType.RADIANT,
                         dice=DiceExpression(1, 4),
                         label="Divine Favor",
                     )
@@ -580,39 +704,39 @@ def attack_source_with_combat_effects(actor: Actor, source, active_effects: tupl
             if (
                 effect.actor_id == str(actor.id)
                 and effect.kind == "branding_smite"
-                and getattr(getattr(source, "attack_kind", None), "value", "")
-                == "melee"
             ):
                 dice_count = max(2, effect.value)
                 extra_components.append(
                     DamageComponentSpec(
                         id="branding_smite",
-                        damage_type="radiant",
+                        damage_type=DamageType.RADIANT,
                         dice=DiceExpression(dice_count, 6),
-                        label="Branding Smite",
+                        label="Piętnujące porażenie",
                     )
                 )
-            if (
-                effect.actor_id == str(actor.id)
-                and effect.kind == "flame_blade"
-                and getattr(getattr(source, "attack_kind", None), "value", "")
-                == "melee"
-            ):
-                extra_components.append(
-                    DamageComponentSpec(
-                        id="flame_blade",
-                        damage_type="fire",
-                        dice=DiceExpression(max(3, effect.value), 6),
-                        label="Flame Blade",
-                    )
-                )
-    if not modifiers and damage_bonus == 0 and not reckless and not extra_components:
+    existing_component_ids = {
+        component.id for component in source.damage_components
+    }
+    extra_components = [
+        component
+        for component in extra_components
+        if component.id not in existing_component_ids
+    ]
+    if (
+        not modifiers
+        and damage_bonus == 0
+        and not reckless
+        and not next_attack_advantage
+        and not vicious_mockery_disadvantage
+        and not extra_components
+        and not heat_metal_disadvantage
+    ):
         return source
-    mode = (
-        _with_advantage(source.attack_roll_request.mode)
-        if reckless or next_attack_advantage
-        else source.attack_roll_request.mode
-    )
+    mode = source.attack_roll_request.mode
+    if reckless or next_attack_advantage:
+        mode = _with_advantage(mode)
+    if vicious_mockery_disadvantage or heat_metal_disadvantage:
+        mode = _with_disadvantage(mode)
     return replace(
         source,
         attack_roll_request=D20RollRequest(
@@ -643,6 +767,13 @@ def attack_source_with_target_combat_effects(
     source = attack_source_with_combat_effects(attacker, source, active_effects)
     modifiers = []
     mode = source.attack_roll_request.mode
+    if any(
+        effect.actor_id == str(attacker.id)
+        and effect.kind == "next_attack_advantage"
+        and effect.target_actor_id == str(target.id)
+        for effect in active_effects
+    ):
+        mode = _with_advantage(mode)
     obscuring_zones = tuple(
         effect
         for effect in active_effects
@@ -650,27 +781,63 @@ def attack_source_with_target_combat_effects(
         and effect.anchor_position is not None
     )
     for zone in obscuring_zones:
-        from .spells import grid_distance_feet
-
         if grid_distance_feet(attacker.position, zone.anchor_position) <= zone.value:
             mode = _with_disadvantage(mode)
         if grid_distance_feet(target.position, zone.anchor_position) <= zone.value:
             mode = _with_advantage(mode)
     if getattr(source, "advantage_against_metal_armor", False) and _wears_metal_armor(target):
         mode = _with_advantage(mode)
+    attacker_sees_invisible = any(
+        effect.actor_id == str(attacker.id)
+        and effect.kind == "see_invisibility"
+        for effect in active_effects
+    )
+    target_sees_invisible = any(
+        effect.actor_id == str(target.id)
+        and effect.kind == "see_invisibility"
+        for effect in active_effects
+    )
+    protected_from_attacker = any(
+        effect.actor_id == str(target.id)
+        and effect.kind == "protection_from_evil_and_good"
+        and attacker.creature_type
+        in {"aberration", "celestial", "elemental", "fey", "fiend", "undead"}
+        for effect in active_effects
+    )
+    if protected_from_attacker:
+        mode = _with_disadvantage(mode)
     for effect in active_effects:
-        if effect.actor_id == str(target.id) and effect.kind in {
-            "dodge_until_next_turn",
-            "attacks_against_disadvantage",
-            "invisibility",
-        }:
+        ignores_blur = (
+            effect.object_id in {"spell:blur", "combat_action:blur"}
+            and max(
+                attacker.senses.blindsight_feet,
+                attacker.senses.truesight_feet,
+            )
+            >= grid_distance_feet(attacker.position, target.position)
+        )
+        if (
+            effect.actor_id == str(target.id)
+            and effect.kind
+            in {"dodge_until_next_turn", "attacks_against_disadvantage"}
+            and not ignores_blur
+        ):
+            mode = _with_disadvantage(mode)
+        if (
+            effect.actor_id == str(target.id)
+            and effect.kind == "invisibility"
+            and not attacker_sees_invisible
+        ):
             mode = _with_disadvantage(mode)
         if effect.actor_id == str(target.id) and effect.kind in {
             "attacks_against_advantage",
             "guiding_bolt_mark",
         }:
             mode = _with_advantage(mode)
-        if effect.actor_id == str(attacker.id) and effect.kind == "invisibility":
+        if (
+            effect.actor_id == str(attacker.id)
+            and effect.kind == "invisibility"
+            and not target_sees_invisible
+        ):
             mode = _with_advantage(mode)
         if (
             effect.kind == "help_attack_advantage"
@@ -685,12 +852,17 @@ def attack_source_with_target_combat_effects(
             and effect.kind == "hunters_mark"
             and effect.source_actor_id == str(attacker.id)
             and getattr(getattr(source, "source_type", None), "value", "") == "weapon"
+            and source.damage_components
+            and all(
+                component.id != "hunters_mark"
+                for component in source.damage_components
+            )
         ):
             component = DamageComponentSpec(
                 id="hunters_mark",
                 damage_type=source.damage_components[0].damage_type,
                 dice=DiceExpression(1, 6),
-                label="Hunter's Mark",
+                label="Znak łowcy",
             )
             source = replace(
                 source,
@@ -734,7 +906,7 @@ def consume_next_attack_effects(
     actor_id: str,
     target_actor_id: str | None = None,
 ) -> tuple[ActiveCombatEffect, ...]:
-    return expire_active_effects(
+    remaining = expire_active_effects(
         active_effects,
         EffectEvent(
             EffectEventType.ATTACK_RESOLVED,
@@ -742,6 +914,35 @@ def consume_next_attack_effects(
             target_actor_id=target_actor_id,
         ),
     ).active_effects
+    return tuple(
+        effect
+        for effect in end_invisibility_effects(remaining, actor_id)
+        if not (effect.actor_id == actor_id and effect.kind == "sanctuary")
+    )
+
+
+def end_invisibility_effects(
+    active_effects: tuple[ActiveCombatEffect, ...],
+    actor_id: str,
+) -> tuple[ActiveCombatEffect, ...]:
+    """End every invisibility effect carried by an actor after attack or cast."""
+
+    return tuple(
+        effect
+        for effect in active_effects
+        if not (effect.actor_id == actor_id and effect.kind == "invisibility")
+    )
+
+
+def end_sanctuary_effects(
+    active_effects: tuple[ActiveCombatEffect, ...],
+    actor_id: str,
+) -> tuple[ActiveCombatEffect, ...]:
+    return tuple(
+        effect
+        for effect in active_effects
+        if not (effect.actor_id == actor_id and effect.kind == "sanctuary")
+    )
 
 
 def expire_turn_start_effects(active_effects: tuple[ActiveCombatEffect, ...], actor_id: str) -> tuple[ActiveCombatEffect, ...]:

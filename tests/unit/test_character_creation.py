@@ -122,6 +122,8 @@ def test_tiefling_infernal_legacy_is_level_gated_slotless_and_recovers(
         resources,
     ).actor
 
+    assert level_one.senses.darkvision_feet == 60
+    assert level_one.damage_affinities.resistances == (DamageType.FIRE,)
     assert {spell.id for spell in level_one.spells} == {"thaumaturgy"}
     assert {spell.id for spell in level_two.spells} == {
         "thaumaturgy",
@@ -139,6 +141,12 @@ def test_tiefling_infernal_legacy_is_level_gated_slotless_and_recovers(
         "infernal_legacy_hellish_rebuke",
         "infernal_legacy_darkness",
     }
+    assert all(
+        profile.casting_ability == "charisma"
+        for actor in (level_one, level_two, level_three)
+        for profile in actor.spell_access
+        if profile.spell_ids
+    )
     rebuke = next(
         action
         for action in compile_actor_combat_content(level_two).combat_actions
@@ -345,6 +353,13 @@ def test_sorcerer_level_up_collects_new_spell_and_metamagic_choices(
         selected_background_tool_ids=("dice_set",),
     )
     created = build_character(draft, catalog, resources)
+    assert created.actor.ac == 15
+    assert created.actor.max_hp == 9
+    assert all(
+        profile.casting_ability == "charisma"
+        for profile in created.actor.spell_access
+        if profile.spell_ids
+    )
     created = replace(
         created,
         actor=replace(created.actor, experience_points=900),
@@ -374,10 +389,12 @@ def test_sorcerer_level_up_collects_new_spell_and_metamagic_choices(
     ).character_after
 
     assert level_two.actor.level == 2
+    assert level_two.actor.max_hp == 16
     assert next(
         pool for pool in level_two.actor.resource_pools if pool.id == "sorcery_points"
     ).maximum == 2
     assert level_three.actor.level == 3
+    assert level_three.actor.max_hp == 23
     assert {"metamagic_quickened", "metamagic_subtle"} <= {
         feature.feature_id for feature in level_three.actor.features
     }
@@ -417,6 +434,15 @@ def test_rogue_combines_species_background_and_class_proficiencies(catalog, reso
     }
     assert actor.proficiencies.tools == ("thieves_tools", "dice_set")
     assert actor.proficiencies.expertise == ("stealth", "perception")
+    assert {"longsword", "shortsword", "shortbow", "longbow"} <= set(
+        actor.proficiencies.weapons
+    )
+    high_elf_cantrip = next(
+        profile
+        for profile in actor.spell_access
+        if "mage_hand" in profile.spell_ids
+    )
+    assert high_elf_cantrip.casting_ability == "intelligence"
     assert "sneak_attack" in {feature.feature_id for feature in actor.features}
     assert effective_armor_class(actor) == 14
 
@@ -447,6 +473,8 @@ def test_cleric_builds_spell_slots_access_and_preparation(catalog, resources):
     actor = created.actor
 
     assert actor.spell_save_dc == 13
+    assert actor.senses.darkvision_feet == 60
+    assert actor.max_hp == 12
     assert actor.spell_slots[0].level == 1
     assert actor.spell_slots[0].remaining == actor.spell_slots[0].maximum == 2
     assert {
@@ -614,6 +642,10 @@ def test_warlock_invocations_grant_at_will_spells_skills_and_devils_sight(
         resources,
     ).actor
 
+    assert len(actor.spell_slots) == 1
+    assert actor.spell_slots[0].level == 1
+    assert actor.spell_slots[0].maximum == 2
+    assert actor.spell_slots[0].recovery == "short_rest"
     assert {"deception", "persuasion"} <= set(actor.proficiencies.skills)
     assert "mage_armor" in actor.spell_ids
     assert any(
@@ -667,6 +699,70 @@ def test_warlock_invocations_grant_at_will_spells_skills_and_devils_sight(
     ).actor
     assert devil_sighted.senses.darkvision_feet == 120
     assert devil_sighted.senses.magical_darkness_vision_feet == 120
+
+
+@pytest.mark.parametrize(
+    ("invocation_id", "spell_id"),
+    (
+        ("armor_of_shadows", "mage_armor"),
+        ("beast_speech", "speak_with_animals"),
+        ("eldritch_sight", "detect_magic"),
+        ("fiendish_vigor", "false_life"),
+        ("mask_of_many_faces", "disguise_self"),
+        ("misty_visions", "silent_image"),
+    ),
+)
+def test_all_at_will_warlock_invocations_grant_slotless_spell_access(
+    catalog,
+    resources,
+    invocation_id,
+    spell_id,
+):
+    actor = build_character(
+        CharacterDraft(
+            id=f"vex_{invocation_id}",
+            name="Vex",
+            species_id="human",
+            class_id="warlock",
+            background_id="soldier",
+            base_ability_scores=AbilityScores(8, 14, 13, 12, 10, 15),
+            selected_skill_ids=("arcana", "investigation"),
+            equipment_package_id="warlock_scholar",
+            selected_cantrip_ids=("eldritch_blast", "mage_hand"),
+            selected_spell_ids=("command", "charm_person", "hellish_rebuke"),
+            selected_subclass_id="the_fiend",
+            selected_class_option_ids=(invocation_id, "beguiling_influence"),
+            selected_species_language_ids=("infernal",),
+            selected_background_tool_ids=("dice_set",),
+            level=2,
+        ),
+        catalog,
+        resources,
+    ).actor
+
+    profile = next(
+        profile
+        for profile in actor.spell_access
+        if spell_id in profile.spell_ids
+    )
+    assert profile.kind.value == "at_will"
+    assert profile.casting_ability == "charisma"
+    hands_free = replace(
+        actor,
+        inventory=tuple(
+            replace(
+                item,
+                equipped=item.spellcasting_focus_kind is not None,
+                held_in=(),
+            )
+            for item in actor.inventory
+        ),
+    )
+    assert consume_spell_resource(
+        hands_free,
+        spell_level=1,
+        spell_id=spell_id,
+    ).consumed is False
 
 
 @pytest.mark.parametrize(
@@ -826,6 +922,57 @@ def test_druid_land_and_paladin_oath_level_three_choices_are_executable_grants(
     } <= {feature.feature_id for feature in paladin.features}
 
 
+@pytest.mark.parametrize(
+    ("terrain_option", "expected_spells"),
+    (
+        ("circle_land_arctic", {"hold_person", "spike_growth"}),
+        ("circle_land_coast", {"mirror_image", "misty_step"}),
+        ("circle_land_desert", {"blur", "silence"}),
+        ("circle_land_forest", {"barkskin", "spider_climb"}),
+        ("circle_land_grassland", {"invisibility", "pass_without_trace"}),
+        ("circle_land_mountain", {"spider_climb", "spike_growth"}),
+        ("circle_land_swamp", {"darkness", "acid_arrow"}),
+        ("circle_land_underdark", {"spider_climb", "web"}),
+    ),
+)
+def test_all_circle_of_land_terrain_choices_grant_level_three_spells(
+    catalog,
+    resources,
+    terrain_option,
+    expected_spells,
+):
+    actor = build_character(
+        CharacterDraft(
+            id=f"druid_{terrain_option}",
+            name="Rowan",
+            species_id="human",
+            class_id="druid",
+            background_id="sage",
+            base_ability_scores=AbilityScores(10, 14, 13, 12, 15, 8),
+            selected_skill_ids=("nature", "survival"),
+            equipment_package_id="druid_explorer",
+            selected_cantrip_ids=("druidcraft", "guidance", "shillelagh"),
+            selected_prepared_spell_ids=(
+                "animal_friendship",
+                "cure_wounds",
+                "entangle",
+                "faerie_fire",
+                "healing_word",
+                "moonbeam",
+            ),
+            selected_subclass_id="circle_of_the_land",
+            selected_class_option_ids=(terrain_option,),
+            selected_species_language_ids=("dwarvish",),
+            selected_background_language_ids=("elvish", "sylvan"),
+            level=3,
+        ),
+        catalog,
+        resources,
+    ).actor
+
+    assert set(actor.spell_preparation.always_prepared_spell_ids) == expected_spells
+
+
 def test_lore_bard_level_three_combines_bonus_skills_and_expertise(
     catalog,
     resources,
@@ -872,6 +1019,16 @@ def test_lore_bard_level_three_combines_bonus_skills_and_expertise(
     )
     assert actor.proficiencies.expertise == ("arcana", "medicine")
     assert {"flute", "lute", "viol"} <= set(actor.proficiencies.tools)
+    assert actor.spell_save_dc == 13
+    assert actor.spell_slots[0].level == 1
+    assert actor.spell_slots[0].maximum == 4
+    assert actor.spell_slots[1].level == 2
+    assert actor.spell_slots[1].maximum == 2
+    assert all(
+        profile.casting_ability == "charisma"
+        for profile in actor.spell_access
+        if profile.spell_ids
+    )
     assert "cutting_words" in {
         feature.feature_id for feature in actor.features
     }
@@ -1006,6 +1163,19 @@ def test_wizard_builds_spellbook_character(catalog, resources):
         "shield",
         "magic_missile",
     )
+    ritual = actor_spell_cast_validation(
+        actor,
+        "alarm",
+        ritual=True,
+    )
+    assert ritual is not None
+    assert ritual.valid is True
+    assert ritual.cast_level == 1
+    assert ritual.available_cast_levels == ()
+    unprepared = actor_spell_cast_validation(actor, "alarm")
+    assert unprepared is not None
+    assert unprepared.valid is False
+    assert unprepared.errors == ("Aktor nie ma dostępu do czaru Alarm.",)
     assert actor.resource_pools[0].id == "arcane_recovery_uses"
     assert actor.proficiencies.skills == (
         "arcana",
@@ -1077,6 +1247,12 @@ def test_half_elf_applies_two_distinct_flexible_ability_bonuses(catalog, resourc
     actor = build_character(draft, catalog, resources).actor
 
     assert actor.ability_scores == AbilityScores(16, 14, 14, 12, 10, 10)
+    assert actor.senses.darkvision_feet == 60
+    assert {"arcana", "nature"} <= set(actor.proficiencies.skills)
+    assert "fey_ancestry" in {
+        feature.feature_id
+        for feature in actor.features
+    }
 
 
 def test_half_elf_rejects_charisma_as_flexible_bonus(catalog):
@@ -1098,22 +1274,46 @@ def test_half_elf_rejects_charisma_as_flexible_bonus(catalog):
     )
 
 
-def test_dragonborn_ancestry_drives_resistance_and_breath_source(catalog, resources):
+@pytest.mark.parametrize(
+    ("ancestry_id", "damage_type", "shape", "save_ability"),
+    (
+        ("black_dragon_ancestry", DamageType.ACID, "line", "dexterity"),
+        ("blue_dragon_ancestry", DamageType.LIGHTNING, "line", "dexterity"),
+        ("brass_dragon_ancestry", DamageType.FIRE, "line", "dexterity"),
+        ("bronze_dragon_ancestry", DamageType.LIGHTNING, "line", "dexterity"),
+        ("copper_dragon_ancestry", DamageType.ACID, "line", "dexterity"),
+        ("gold_dragon_ancestry", DamageType.FIRE, "cone", "dexterity"),
+        ("red_dragon_ancestry", DamageType.FIRE, "cone", "dexterity"),
+        ("green_dragon_ancestry", DamageType.POISON, "cone", "constitution"),
+        ("silver_dragon_ancestry", DamageType.COLD, "cone", "constitution"),
+        ("white_dragon_ancestry", DamageType.COLD, "cone", "constitution"),
+    ),
+)
+def test_dragonborn_ancestry_drives_resistance_and_breath_source(
+    catalog,
+    resources,
+    ancestry_id,
+    damage_type,
+    shape,
+    save_ability,
+):
     draft = replace(
         fighter_draft(),
         species_id="dragonborn",
         selected_species_language_ids=(),
-        selected_species_variant_id="blue_dragon_ancestry",
+        selected_species_variant_id=ancestry_id,
     )
 
     actor = build_character(draft, catalog, resources).actor
     breath = breath_weapon_attack_source(actor)
 
-    assert actor.damage_affinities.is_resistant_to(DamageType.LIGHTNING)
+    assert actor.damage_affinities.is_resistant_to(damage_type)
     assert breath is not None
+    assert breath.name == "Broń oddechowa"
     assert breath.area is not None
-    assert breath.area.shape.value == "line"
-    assert breath.save_ability == "dexterity"
+    assert breath.area.shape.value == shape
+    assert breath.save_ability == save_ability
+    assert breath.damage_type == damage_type.value
     assert breath.damage_components[0].dice.format() == "2d6"
     assert breath.resource_pool_id == "breath_weapon_uses"
 

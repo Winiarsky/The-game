@@ -1,0 +1,6 @@
+{
+  "schema": "dnd_board_game.print_map_manifest",
+  "schema_version": 1,
+  "output_root": "assets/print_maps/mechanics_playground",
+  "maps": []
+}

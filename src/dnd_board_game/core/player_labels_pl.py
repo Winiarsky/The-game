@@ -312,7 +312,7 @@ SPELL_NAMES_PL = {
     "spare_the_dying": "Oszczędzenie umierającego",
     "speak_with_animals": "Rozmowa ze zwierzętami",
     "spider_climb": "Pajęcza wspinaczka",
-    "spike_growth": "Kolczasty wzrost",
+    "spike_growth": "Kolczaste zarośla",
     "spiritual_weapon": "Duchowa broń",
     "suggestion": "Sugestia",
     "thaumaturgy": "Taumaturgia",

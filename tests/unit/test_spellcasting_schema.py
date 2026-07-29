@@ -64,6 +64,31 @@ def test_available_spell_slot_levels_supports_upcasting() -> None:
     assert validate_spell_cast(_spell(), slots=slots, cast_level=2).valid is True
 
 
+def test_silence_blocks_verbal_spell_but_subtle_spell_ignores_components() -> None:
+    slots = (SpellSlotState(1, 1, 1),)
+    spell = _spell(
+        components=SpellComponents(verbal=True, somatic=True),
+    )
+
+    blocked = validate_spell_cast(
+        spell,
+        slots=slots,
+        verbal_components_blocked=True,
+        has_free_hand=False,
+    )
+    subtle = validate_spell_cast(
+        spell,
+        slots=slots,
+        verbal_components_blocked=True,
+        has_free_hand=False,
+        ignore_verbal_somatic=True,
+    )
+
+    assert blocked.valid is False
+    assert "obszarze Ciszy" in blocked.errors[0]
+    assert subtle.valid is True
+
+
 def test_spell_duration_converts_to_exploration_minutes() -> None:
     assert spell_duration_minutes(
         SpellDuration(SpellDurationKind.MINUTE, 3)
@@ -71,6 +96,9 @@ def test_spell_duration_converts_to_exploration_minutes() -> None:
     assert spell_duration_minutes(
         SpellDuration(SpellDurationKind.HOUR, 2)
     ) == 120
+    assert spell_duration_minutes(
+        SpellDuration(SpellDurationKind.TEN_DAYS)
+    ) == 10 * 24 * 60
     assert spell_duration_minutes(
         SpellDuration(SpellDurationKind.UNTIL_DISPELLED)
     ) is None

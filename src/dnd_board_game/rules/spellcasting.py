@@ -43,6 +43,7 @@ class SpellDurationKind(StrEnum):
     HOUR = "hour"
     EIGHT_HOURS = "eight_hours"
     TWENTY_FOUR_HOURS = "twenty_four_hours"
+    TEN_DAYS = "ten_days"
     UNTIL_DISPELLED = "until_dispelled"
 
 
@@ -138,6 +139,7 @@ def spell_duration_minutes(duration: SpellDuration) -> int | None:
         SpellDurationKind.HOUR: 60,
         SpellDurationKind.EIGHT_HOURS: 8 * 60,
         SpellDurationKind.TWENTY_FOUR_HOURS: 24 * 60,
+        SpellDurationKind.TEN_DAYS: 10 * 24 * 60,
     }
     if duration.kind == SpellDurationKind.INSTANTANEOUS:
         return 0
@@ -402,6 +404,7 @@ def validate_spell_cast(
     allowed_focus_kinds: Sequence[str] = (),
     has_free_hand: bool = True,
     ignore_verbal_somatic: bool = False,
+    verbal_components_blocked: bool = False,
     ritual: bool = False,
     slotless: bool = False,
 ) -> SpellCastValidation:
@@ -425,6 +428,15 @@ def validate_spell_cast(
         else int(cast_level)
     )
     errors: list[str] = []
+    if (
+        spell.components.verbal
+        and verbal_components_blocked
+        and not ignore_verbal_somatic
+    ):
+        errors.append(
+            f"Czar {spell.name} ma komponent werbalny i nie może zostać "
+            "rzucony w obszarze Ciszy."
+        )
     if not ritual and selected_level not in levels:
         errors.append(
             f"Czar {spell.name} nie może zostać rzucony na poziomie {selected_level}; "

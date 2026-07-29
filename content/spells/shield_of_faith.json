@@ -6,7 +6,7 @@
     "srd_5_1_cc_by_4_0"
   ],
   "id": "shield_of_faith",
-  "name": "Shield Of Faith",
+  "name": "Tarcza wiary",
   "level": 1,
   "school": "abjuration",
   "casting_time": "bonus_action",
@@ -33,7 +33,7 @@
   "effect": {
     "kind": "combat_action",
     "action_type": "targeted_status",
-    "label": "Shield of Faith",
+    "label": "Tarcza wiary",
     "effect_kind": "spell_ac_bonus",
     "value": 2,
     "target_faction": "ally",

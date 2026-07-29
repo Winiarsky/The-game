@@ -28,6 +28,7 @@ from dnd_board_game.combat import (
     condition_roll_request,
     drop_prone,
     hide_eligibility,
+    pass_without_trace_bonus,
     resolve_hide,
     resolve_search,
     remove_condition,
@@ -44,6 +45,8 @@ from dnd_board_game.rules import (
     apply_active_effect,
     D20RollInput,
     D20RollRequest,
+    RollModifier,
+    RollModifierType,
     resolve_d20_roll,
     roll_instruction,
 )
@@ -239,6 +242,7 @@ class CombatTurnActionFlowService:
         state: CombatState,
         board: BoardState,
         scene_objects: tuple[SceneObject, ...] = (),
+        active_effects: tuple[ActiveCombatEffect, ...] = (),
     ) -> PendingCombatSkillCheck:
         actor = _active_hero(state)
         if not _mobility_action_available(state, actor):
@@ -251,6 +255,12 @@ class CombatTurnActionFlowService:
             )
             raise ValueError(f"Nie możesz się ukryć: nadal wyraźnie widzą cię: {names}.")
         request = _skill_request(state, actor, "stealth")
+        request = _with_pass_without_trace(
+            request,
+            actor,
+            state.actors,
+            active_effects,
+        )
         opponents = tuple(
             str(candidate.id)
             for candidate in state.actors
@@ -261,7 +271,8 @@ class CombatTurnActionFlowService:
             actor_id=str(actor.id),
             action="hide",
             skill="stealth",
-            modifier=skill_modifier(actor, "stealth"),
+            modifier=skill_modifier(actor, "stealth")
+            + pass_without_trace_bonus(actor, state.actors, active_effects),
             instruction=roll_instruction(request).message,
             opposing_actor_ids=opponents,
             roll_mode=request.mode.value,
@@ -283,6 +294,12 @@ class CombatTurnActionFlowService:
         if not eligibility.allowed:
             raise ValueError("Warunki zmieniły się i nie można już wykonać Hide.")
         request = _skill_request(state, actor, "stealth")
+        request = _with_pass_without_trace(
+            request,
+            actor,
+            state.actors,
+            active_effects,
+        )
         if request.mode.value != "normal" and natural_roll_2 is None:
             raise ValueError("Ten test wymaga wpisania dwóch wyników d20.")
         result = resolve_d20_roll(D20RollInput(request, natural_roll, natural_roll_2))
@@ -405,7 +422,9 @@ class CombatTurnActionFlowService:
         result = resolve_d20_roll(
             D20RollInput(request, natural_roll, natural_roll_2)
         )
-        escaped = result.total >= 10
+        restraint = _net_restraint(state, actor)
+        dc = restraint.save_dc or 10
+        escaped = result.total >= dc
         conditions = (
             remove_condition(
                 state.condition_states,
@@ -422,16 +441,16 @@ class CombatTurnActionFlowService:
             actor_id=str(actor.id),
             message_title="Sieć",
             message_body=(
-                f"{actor.name} uwalnia się z sieci (Strength {result.total} przeciw ST 10)."
+                f"{actor.name} uwalnia się z sieci (Strength {result.total} przeciw ST {dc})."
                 if escaped
-                else f"{actor.name} nie uwalnia się z sieci (Strength {result.total} przeciw ST 10)."
+                else f"{actor.name} nie uwalnia się z sieci (Strength {result.total} przeciw ST {dc})."
             ),
             event_type="ui_combat_net_escape",
             event_payload=(
                 ("actor_id", str(actor.id)),
                 ("natural_roll", result.natural_roll),
                 ("total", result.total),
-                ("dc", 10),
+                ("dc", dc),
                 ("escaped", escaped),
             ),
         )
@@ -679,12 +698,41 @@ def _skill_request(state: CombatState, actor: Actor, skill: str) -> D20RollReque
     )
 
 
+def _with_pass_without_trace(
+    request: D20RollRequest,
+    actor: Actor,
+    actors: tuple[Actor, ...],
+    active_effects: tuple[ActiveCombatEffect, ...],
+) -> D20RollRequest:
+    bonus = pass_without_trace_bonus(actor, actors, active_effects)
+    if bonus <= 0:
+        return request
+    return replace(
+        request,
+        modifiers=(
+            *request.modifiers,
+            RollModifier(
+                "Przejście bez śladu",
+                bonus,
+                RollModifierType.SPELL,
+                "pass_without_trace",
+            ),
+        ),
+    )
 def _actor_is_restrained_by_net(state: CombatState, actor: Actor) -> bool:
-    return any(
-        condition.actor_id == str(actor.id)
-        and condition.condition == CombatCondition.RESTRAINED
-        and condition.source_label.startswith("Sieć:")
-        for condition in state.condition_states
+    return _net_restraint(state, actor) is not None
+
+
+def _net_restraint(state: CombatState, actor: Actor):
+    return next(
+        (
+            condition
+            for condition in state.condition_states
+            if condition.actor_id == str(actor.id)
+            and condition.condition == CombatCondition.RESTRAINED
+            and condition.source_label.startswith("Sieć:")
+        ),
+        None,
     )
 
 

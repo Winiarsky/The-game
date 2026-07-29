@@ -160,6 +160,138 @@ def test_enemy_auto_attack_uses_active_spell_ac_bonus() -> None:
     assert result.applied_damage is None
 
 
+def test_enemy_attack_can_destroy_mirror_image_instead_of_hurting_target() -> None:
+    enemy = _actor("goblin", Faction.ENEMY, Coordinate(1, 0))
+    hero = _actor("hero", Faction.ALLY, Coordinate(0, 0), hp=20)
+    state = start_combat((enemy, hero), _order(enemy, hero))
+    mirror = ActiveCombatEffect(
+        id="mirror-image:hero",
+        actor_id="hero",
+        kind="mirror_image",
+        label="Lustrzane odbicia",
+        object_id="spell:mirror_image",
+        value=3,
+        source_actor_id="hero",
+        target_actor_id="hero",
+        duration=EffectDuration.UNTIL_ENCOUNTER_END,
+    )
+
+    result = resolve_enemy_auto_attack(
+        BoardState(),
+        state,
+        enemy,
+        _source(),
+        random.Random(0),
+        active_effects=(mirror,),
+    )
+
+    assert result.attack_roll is not None
+    assert result.attack_roll.total == 17
+    assert result.mirror_image_outcome is not None
+    assert result.mirror_image_outcome.redirect_roll == 14
+    assert result.mirror_image_outcome.duplicate_hit is True
+    assert result.mirror_image_outcome.duplicates_after == 2
+    assert result.applied_damage is None
+    assert next(actor for actor in result.state.actors if actor.id == hero.id).hp == 20
+    assert "niszczy duplikat" in result.message
+
+
+def test_enemy_failing_sanctuary_save_retargets_another_legal_hero() -> None:
+    enemy = _actor("goblin", Faction.ENEMY, Coordinate(0, 0))
+    protected = replace(
+        _actor("protected", Faction.ALLY, Coordinate(1, 0), hp=5),
+        spell_save_dc=30,
+    )
+    alternative = _actor("alternative", Faction.ALLY, Coordinate(1, 1), hp=20)
+    state = start_combat(
+        (enemy, protected, alternative),
+        InitiativeOrder(
+            (
+                InitiativeEntry(
+                    enemy,
+                    resolve_d20_roll(D20RollInput(D20RollRequest(), 20)),
+                    2,
+                    0,
+                ),
+                InitiativeEntry(
+                    protected,
+                    resolve_d20_roll(D20RollInput(D20RollRequest(), 10)),
+                    2,
+                    1,
+                ),
+                InitiativeEntry(
+                    alternative,
+                    resolve_d20_roll(D20RollInput(D20RollRequest(), 9)),
+                    2,
+                    2,
+                ),
+            )
+        ),
+    )
+    sanctuary = ActiveCombatEffect(
+        id="sanctuary:protected",
+        actor_id="protected",
+        kind="sanctuary",
+        label="Sanktuarium",
+        object_id="spell:sanctuary",
+        value=0,
+        source_actor_id="protected",
+        target_actor_id="protected",
+        duration=EffectDuration.UNTIL_ENCOUNTER_END,
+    )
+
+    result = resolve_enemy_auto_attack(
+        BoardState(),
+        state,
+        enemy,
+        _source(),
+        random.Random(0),
+        active_effects=(sanctuary,),
+    )
+
+    assert result.sanctuary_saves
+    assert result.sanctuary_saves[0].success is False
+    assert result.target is not None and result.target.id == "alternative"
+    assert next(
+        actor for actor in result.state.actors if actor.id == protected.id
+    ).hp == 5
+
+
+def test_enemy_failing_sanctuary_save_without_alternative_loses_attack() -> None:
+    enemy = _actor("goblin", Faction.ENEMY, Coordinate(1, 0))
+    protected = replace(
+        _actor("protected", Faction.ALLY, Coordinate(0, 0), hp=20),
+        spell_save_dc=30,
+    )
+    state = start_combat((enemy, protected), _order(enemy, protected))
+    sanctuary = ActiveCombatEffect(
+        id="sanctuary:protected",
+        actor_id="protected",
+        kind="sanctuary",
+        label="Sanktuarium",
+        object_id="spell:sanctuary",
+        value=0,
+        source_actor_id="protected",
+        target_actor_id="protected",
+        duration=EffectDuration.UNTIL_ENCOUNTER_END,
+    )
+
+    result = resolve_enemy_auto_attack(
+        BoardState(),
+        state,
+        enemy,
+        _source(),
+        random.Random(0),
+        active_effects=(sanctuary,),
+    )
+
+    assert result.action_used is True
+    assert result.sanctuary_saves[0].success is False
+    assert result.attack_roll is None
+    assert result.applied_damage is None
+    assert "traci atak" in result.message
+
+
 def test_enemy_cannot_throw_an_unavailable_weapon() -> None:
     enemy = replace(
         _actor("goblin", Faction.ENEMY, Coordinate(1, 0)),

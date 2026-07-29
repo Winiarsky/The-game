@@ -332,10 +332,19 @@ class EncounterOutcome:
     effects: tuple[dict[str, object], ...] = ()
     next_instruction: str = ""
     experience_points: int = 0
+    experience_points_per_actor: int = 0
 
     def __post_init__(self) -> None:
         if self.experience_points < 0:
             raise ValueError("Encounter outcome experience_points cannot be negative.")
+        if self.experience_points_per_actor < 0:
+            raise ValueError(
+                "Encounter outcome experience_points_per_actor cannot be negative."
+            )
+        if self.experience_points and self.experience_points_per_actor:
+            raise ValueError(
+                "Encounter outcome cannot define both total and per-actor experience."
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -1757,6 +1766,15 @@ class ExplorationPoint:
     requires_setup: bool = True
     npc_interaction: NpcInteraction | None = None
     merchant_id: str | None = None
+    divination_kind: str = ""
+    divination_tags: tuple[str, ...] = ()
+    divination_lead_shielded: bool = False
+
+    def __post_init__(self) -> None:
+        if self.divination_kind not in {"", "animal", "plant", "object"}:
+            raise ValueError("Unknown exploration-point divination kind.")
+        if any(not tag.strip() for tag in self.divination_tags):
+            raise ValueError("Exploration-point divination tags cannot be empty.")
 
 
 @dataclass(frozen=True, slots=True)

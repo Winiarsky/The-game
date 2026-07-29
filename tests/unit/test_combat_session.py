@@ -477,6 +477,43 @@ def test_dash_uses_action_and_adds_extra_movement_until_turn_end():
     assert next_turn.turn_action.extra_movement_feet == 0
 
 
+def test_expeditious_retreat_dash_uses_bonus_action() -> None:
+    hero = _actor("hero", Faction.ALLY, 0)
+    goblin = _actor("goblin", Faction.ENEMY, 2)
+    state = start_combat((hero, goblin), _order(hero, goblin))
+    effect = ActiveCombatEffect(
+        id="expeditious-retreat:hero",
+        actor_id="hero",
+        kind="bonus_action_dash",
+        label="Szybki odwrót",
+        object_id="spell:expeditious_retreat",
+        value=1,
+    )
+
+    dashed = use_dash(state, hero, (effect,))
+
+    assert dashed.accepted is True
+    assert dashed.state.turn_action.action_use.value == "action_available"
+    assert dashed.state.turn_action.bonus_action_use.value == "action_used"
+    assert dashed.state.turn_action.extra_movement_feet == hero.speed_feet
+
+
+def test_longstrider_effect_increases_available_board_movement() -> None:
+    hero = _actor("hero", Faction.ALLY, 0)
+    goblin = _actor("goblin", Faction.ENEMY, 8)
+    state = start_combat((hero, goblin), _order(hero, goblin))
+    effect = ActiveCombatEffect(
+        id="longstrider:hero",
+        actor_id="hero",
+        kind="speed_bonus",
+        label="Długie kroki",
+        object_id="spell:longstrider",
+        value=10,
+    )
+
+    assert movement_remaining(state, hero, (effect,)) == 40
+
+
 def test_finish_turn_wraps_to_next_round():
     hero = _actor("hero", Faction.ALLY, 0)
     goblin = _actor("goblin", Faction.ENEMY, 1)

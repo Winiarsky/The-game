@@ -6,7 +6,7 @@
     "srd_5_1_cc_by_4_0"
   ],
   "id": "hideous_laughter",
-  "name": "Hideous Laughter",
+  "name": "Ohydny śmiech",
   "level": 1,
   "school": "enchantment",
   "casting_time": "action",
@@ -33,7 +33,7 @@
   "effect": {
     "kind": "combat_action",
     "action_type": "spell_debuff",
-    "label": "Hideous Laughter",
+    "label": "Ohydny śmiech",
     "effect_kind": "apply_condition",
     "condition": "incapacitated",
     "additional_conditions": [
