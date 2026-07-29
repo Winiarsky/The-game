@@ -85,6 +85,8 @@
           {
             "id": "calm_scout",
             "label": "Uspokójcie zwiadowcę",
+            "resolution_mode": "check",
+            "description_mode": "required",
             "description": "Spróbujcie zmniejszyć jego strach i zdobyć odrobinę zaufania.",
             "followup_prompt": "Co mówicie albo robicie, żeby poczuł się bezpieczniej?",
             "intent_ids": ["social"],
@@ -95,6 +97,9 @@
           {
             "id": "help_scout",
             "label": "Udzielcie mu pomocy",
+            "resolution_mode": "check",
+            "description_mode": "optional",
+            "default_declaration": "Udzielamy zwiadowcy podstawowej pomocy.",
             "description": "Zajmijcie się ranami albo uwolnijcie go spod desek.",
             "followup_prompt": "Jakiej pomocy udzielacie i czego do tego używacie?",
             "intent_ids": ["medical"],
@@ -105,6 +110,8 @@
           {
             "id": "ask_scout",
             "label": "Dowiedzcie się, co się stało",
+            "resolution_mode": "conversation",
+            "description_mode": "required",
             "description": "Spróbujcie zdobyć informacje o strażnicy i napastniku.",
             "followup_prompt": "O co pytacie i jak próbujecie skłonić go do odpowiedzi?",
             "intent_ids": ["information"],
@@ -123,6 +130,8 @@
           {
             "id": "pressure_scout",
             "label": "Wywrzyjcie presję",
+            "resolution_mode": "check",
+            "description_mode": "required",
             "description": "Postawcie sprawę ostro, licząc się z pogorszeniem relacji.",
             "followup_prompt": "Jak naciskacie na zwiadowcę i czego od niego żądacie?",
             "intent_ids": ["intimidation"],

@@ -71,6 +71,7 @@ class NpcInteractionProposal(BaseModel):
     target_id: str | None = Field(default=None, max_length=120)
     quantity: int = Field(default=1, ge=1)
     grounded_response_variant_id: str | None = Field(default=None, max_length=120)
+    rubric_outcome: str | None = Field(default=None, pattern="^(success|failure)$")
     player_narration: str = Field(default="", max_length=1000)
     npc_response: str = Field(default="", max_length=1000)
     requires_roll: bool = False
@@ -95,6 +96,7 @@ class NpcInteractionProposal(BaseModel):
         "skill",
         "target_id",
         "grounded_response_variant_id",
+        "rubric_outcome",
     )
     @classmethod
     def _lower_optional(cls, value: str | None) -> str | None:
@@ -437,6 +439,14 @@ def validate_npc_interaction_proposal(
             f"Selected NPC interaction goal is unavailable: {request.selected_goal_id}."
         )
     if (
+        selected_goal is not None
+        and selected_goal.resolution_mode.value == "llm_rubric"
+        and proposal.rubric_outcome is None
+    ):
+        raise ValueError(
+            f"NPC interaction goal {selected_goal.id} requires rubric_outcome."
+        )
+    if (
         request.routed_intent_id is not None
         and proposal.action_type != request.routed_intent_id
     ):
@@ -476,6 +486,10 @@ def validate_npc_interaction_proposal(
     elif policy.allowed_actions and proposal.action_type not in policy.allowed_actions:
         raise ValueError(f"NPC action is not allowed here: {proposal.action_type}.")
     social_plan = None
+    rubric_mode = (
+        selected_goal is not None
+        and selected_goal.resolution_mode.value == "llm_rubric"
+    )
     if (
         request.selected_social_skill is not None
         and (permission is None or not permission.uses_social_reaction)
@@ -483,7 +497,7 @@ def validate_npc_interaction_proposal(
         raise ValueError(
             "A player-selected social skill can only be used by a social reaction route."
         )
-    if permission is not None and permission.uses_social_reaction:
+    if permission is not None and permission.uses_social_reaction and not rubric_mode:
         if proposal.request_risk is None:
             raise ValueError(
                 f"NPC intent {proposal.action_type} requires request_risk classification."

@@ -303,7 +303,12 @@ obowiązują `Current Roadmap Focus` oraz etapy z `ROADMAP.md`.
 - [x] Complete pending-state typing and remove dead compatibility helpers after combat-flow extraction.
 - [x] Fix real enemy-movement Ready detection when `EnemyAutoTurnResult.enemy` already has the destination position.
 - [x] Add exploration map environment setup before location selection.
-- [x] Add printable black-and-white 20×30 paper maps for all village/watchtower zones, tiled A4 and full-size PDFs, plus a mandatory physical-map confirmation step on initial setup and zone changes.
+- [x] Consolidate the MVP into two printable black-and-white 20×30 overview maps (village and watchtower), tiled A4 and full-size PDFs; require physical-map confirmation only when the active paper map changes.
+- [x] Add authored interaction-pad pools, dynamic numbered/color-coded UI-to-LED bindings, and board-driven point/goal/zone-option selection.
+- [x] [Board interaction UX] Keep the entire interaction in one chat stream: one set of actionable tiles with board badges, a compact scan control, then an explicit per-action actor choice, player description, resolution, and result.
+- [x] [Interaction resolution UX] Add data-driven automatic, deterministic-check, LLM-rubric, and conversation modes with none/optional/required descriptions; migrate every village/watchtower MVP interaction and bypass LLM for fully scripted challenge checks.
+- [x] [Board color fidelity] Stop reordering logical RGB values before sending them to the configured WLED API, so physical LEDs, Polish color labels, and UI borders use the same palette.
+- [x] [Village playtest regression] Synchronize physical board-pad selections with the chat exactly once per click, clear stale NPC presentation after board-driven transitions, keep navigation inside the chat, and disclose the authored watchtower departure gate.
 - [x] Couple exploration web UI with board/simulator backend for LEDs and board clicks.
 - [x] Boost LED brightness only while an active board scan is waiting for a physical click.
 - [x] Add data-driven actor portraits to party, test selection, rolls, combat order, and actor-linked messages.
@@ -354,6 +359,7 @@ obowiązują `Current Roadmap Focus` oraz etapy z `ROADMAP.md`.
 - [ ] [Deferred character art] Generate and integrate consistent class/species reference illustrations after the creator mechanics and content are final.
 - [x] [Starter roster] Add, validate, and install one playable level-1 default build for every core class, with persistent portraits and Polish explanatory character cards.
 - [x] [Village tavern] Replace the dice-game placeholder with a replayable physical-d20 gaming-set check, a real wager/payout, elapsed time, and wallet persistence.
+- [x] [Village tavern] Add the nested Olan beer conversation: ordering unlocks a tasting prompt, Gemini interprets the player's description, the D&D social resolution handles uncertainty, and the outcome persists in Olan's attitude.
 - [x] Clarify that the old watchtower interaction forms are historical briefs and update the current web-runtime instructions.
 - [x] [Character creator MVP K1] Add a separate deterministic single-class level-1 character-creation module with versioned species/class/background catalogues and choice-derived Actor construction.
 - [x] [Character creator MVP K1] Compose executable Fighter/Rogue level-1 grants: four Fighting Styles, Second Wind, Expertise, and Sneak Attack with shared combat/resource rules.

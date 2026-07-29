@@ -39,14 +39,8 @@ class PrintMapSpec:
 
 
 MAPS = (
-    PrintMapSpec("village_market", "Rynek"),
-    PrintMapSpec("village_tavern", "Karczma"),
-    PrintMapSpec("village_elder_house", "Dom sołtysa"),
-    PrintMapSpec("village_forest_road", "Droga do lasu"),
-    PrintMapSpec("watchtower_gate", "Brama strażnicy"),
-    PrintMapSpec("watchtower_courtyard", "Dziedziniec strażnicy"),
-    PrintMapSpec("watchtower_barracks", "Koszary strażnicy"),
-    PrintMapSpec("watchtower_tower", "Wieża obserwacyjna"),
+    PrintMapSpec("village_overview", "Wioska"),
+    PrintMapSpec("watchtower_overview", "Strażnica"),
 )
 
 

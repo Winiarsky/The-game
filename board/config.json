@@ -27,7 +27,7 @@
         "scan_brightness": 255,
         "transition_ms": 180,
         "scan_transition_ms": 80,
-        "color_order": "grb",
+        "color_order": "rgb",
         "request_timeout_s": 2.0
     }
 }

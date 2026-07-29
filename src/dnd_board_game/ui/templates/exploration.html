@@ -189,6 +189,7 @@
       </div>
       <div id="chat-stream">
         <div id="scene-conversation"></div>
+        <div id="interaction-goals" class="interaction-goals"></div>
         <div id="chat-typing" class="chat-typing" hidden>
           <span></span><span></span><span></span>
           <em id="chat-typing-label">MG zastanawia się nad odpowiedzią…</em>
@@ -231,7 +232,6 @@
         </div>
       </div>
       <div id="chat-composer">
-        <div id="interaction-goals" class="interaction-goals"></div>
         <div class="gm-chat-label"><b>Zapytaj MG</b><span>To jest rozmowa, nie deklaracja działania ani rzut.</span></div>
         <div class="chat-input-wrap">
           <div id="slash-command-menu" class="slash-command-menu" role="listbox" aria-label="Komendy" hidden></div>
@@ -242,15 +242,6 @@
           <button id="short-rest-button" class="secondary" data-allow-busy="true" onclick="startShortRest()">Krótki odpoczynek</button>
         </div>
       </div>
-    </div>
-    <div class="card" id="exploration-menu-panel">
-      <h3>Menu eksploracji</h3>
-      <p>Aktualna lokacja: <b id="exploration-menu-zone"></b></p>
-      <button onclick="openChatInstance()">Wróć do rozmowy</button>
-      <h3 class="menu-section-title">Lokacje sceny</h3>
-      <div id="menu-travel-options"></div>
-      <h3 class="menu-section-title">Odkryte punkty</h3>
-      <div id="menu-point-options"></div>
     </div>
     <div class="card" id="encounter-panel">
       <h3 id="encounter-title">Nadchodzi starcie</h3>

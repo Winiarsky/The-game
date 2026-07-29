@@ -4,6 +4,7 @@ let resultAck = null;
 let playerTurnScanLoop = false;
 let boardScanInFlight = false;
 let boardScanToken = 0;
+let lastBoardSelectionRevision = 0;
 let sessionLog = null;
 let decisionCorrectionOpen = false;
 let chatInstanceOpen = true;
@@ -16,6 +17,8 @@ let selectedInteractionCheckParticipants = null;
 let selectedInteractionActorIds = [];
 let selectedSocialSkill = null;
 let selectedInteractionActionSourceId = null;
+let selectedZoneOptionId = null;
+let selectedZoneOptionActorId = null;
 let selectedTradeActorId = '';
 let selectedDowntimeActorId = '';
 let downtimePanelOpen = false;
@@ -188,6 +191,44 @@ async function retryLastGmRequest() {
   setChatRetry(null, '');
   await api(request.path, request.body, request.busyMessage);
 }
+function resetInteractionSelection() {
+  selectedInteractionGoalId = null;
+  selectedInteractionCheckParticipants = null;
+  selectedInteractionActorIds = [];
+  selectedSocialSkill = null;
+  selectedInteractionActionSourceId = null;
+  selectedZoneOptionId = null;
+  selectedZoneOptionActorId = null;
+  downtimePanelOpen = false;
+  continuationPanelOpen = false;
+}
+function synchronizeBoardSelection() {
+  const boardInteraction = state && state.flow ? state.flow.board_interaction : null;
+  if (!boardInteraction) return;
+  const revision = Number(boardInteraction.selection_revision || 0);
+  if (revision <= lastBoardSelectionRevision) return;
+  lastBoardSelectionRevision = revision;
+  resetInteractionSelection();
+  if (boardInteraction.selected_goal_id) {
+    const boardGoalId = String(boardInteraction.selected_goal_id);
+    const goal = currentInteractionGoals().find(item => String(item.id) === boardGoalId);
+    if (goal) {
+      selectedInteractionGoalId = boardGoalId;
+      selectedInteractionCheckParticipants = goal.participant_mode === 'must'
+        ? goal.check_participants
+        : null;
+      selectedSocialSkill = (goal.social_skill_options || [])[0] || null;
+    }
+  }
+  if (boardInteraction.selected_panel === 'downtime') downtimePanelOpen = true;
+  if (boardInteraction.selected_panel === 'continuation') continuationPanelOpen = true;
+  if (
+    boardInteraction.selected_action_kind === 'zone_option'
+    && boardInteraction.selected_action_id
+  ) {
+    selectedZoneOptionId = String(boardInteraction.selected_action_id);
+  }
+}
 async function api(path, body, busyMessage) {
   const previousStage = state && state.flow ? state.flow.stage : null;
   const previousInteractionId = state && state.conversation ? state.conversation.interaction_id : null;
@@ -222,12 +263,9 @@ async function api(path, body, busyMessage) {
       chatInstanceOpen = true;
     }
     if (nextInteractionId !== previousInteractionId) {
-      selectedInteractionGoalId = null;
-      selectedInteractionCheckParticipants = null;
-      selectedInteractionActorIds = [];
-      selectedSocialSkill = null;
-      selectedInteractionActionSourceId = null;
+      resetInteractionSelection();
     }
+    synchronizeBoardSelection();
     if (path === '/api/action' && res.ok && !(body && body.conversation_only)) {
       selectedInteractionGoalId = null;
       selectedInteractionCheckParticipants = null;
@@ -278,6 +316,9 @@ async function loadState() {
   const res = await fetch('/api/state');
   state = await res.json();
   activeInteractionId = state.conversation ? state.conversation.interaction_id : null;
+  lastBoardSelectionRevision = Number(
+    (((state || {}).flow || {}).board_interaction || {}).selection_revision || 0
+  );
   chatInstanceOpen = true;
   render();
   refreshSessionLog();
@@ -353,9 +394,6 @@ function render() {
   document.getElementById('encounter').innerHTML = encounterHtml();
   document.getElementById('travel-options').innerHTML = travelOptionsHtml();
   document.getElementById('point-options').innerHTML = pointOptionsHtml();
-  document.getElementById('exploration-menu-zone').textContent = state.current_zone.name;
-  document.getElementById('menu-travel-options').innerHTML = explorationMenuLocationsHtml();
-  document.getElementById('menu-point-options').innerHTML = pointOptionsHtml();
   document.getElementById('roll-prompt').innerHTML = rollPromptHtml();
   document.getElementById('rolls').innerHTML = state.required_rolls.map(r => {
     const sides = Number(r.die_sides || 20);
@@ -769,13 +807,6 @@ async function changeActorLight(actorId, itemId, action) {
 }
 async function startExplorationSearch(actorId) {
   await api('/api/exploration/search/start', {actor_id: actorId}, 'Przygotowuję aktywne przeszukiwanie...');
-}
-async function selectZoneOption(optionId, requiresActor) {
-  const actorSelect = document.getElementById(`zone-option-actor-${optionId}`);
-  await api('/api/exploration/option', {
-    option_id: optionId,
-    actor_id: requiresActor && actorSelect ? actorSelect.value : null,
-  }, 'Wykonuję działanie w lokacji...');
 }
 async function startExplorationHide(actorId) {
   await api('/api/exploration/hide/start', {actor_id: actorId}, 'Przygotowuję próbę ukrycia...');
@@ -1389,32 +1420,91 @@ function currentInteractionPointCards() {
   if (state.active_point) return [];
   return (state.current_zone_points || []).filter(point => point && (point.has_npc || point.has_merchant));
 }
-function objectiveProgressHtml() {
-  const objectives = (state.flow && state.flow.objectives) || [];
-  if (!objectives.length) return '';
-  const statusLabels = {active: 'w toku', completed: 'ukończony', failed: 'nieudany'};
-  return `<div class="objective-progress-card">
-    <b>Cel sceny</b>
-    ${objectives.map(objective => `
-      <div class="objective-progress-item">
-        <strong>${esc(objective.name)}</strong>
-        <span>${esc(statusLabels[objective.status] || objective.status)}</span>
-        ${(objective.milestones || []).length ? `<div class="objective-milestones">${objective.milestones.map(step => `
-          <span class="${step.completed ? 'completed' : ''}">${step.completed ? '✓' : '○'} ${esc(step.label)}</span>
-        `).join('')}</div>` : ''}
-      </div>
-    `).join('')}
+function boardInteractionState() {
+  return (state.flow && state.flow.board_interaction) || null;
+}
+function boardPadFor(actionKind, targetId) {
+  const interaction = boardInteractionState();
+  if (!interaction) return null;
+  return (interaction.pads || []).find(pad =>
+    pad.action_kind === actionKind && String(pad.target_id) === String(targetId)
+  ) || null;
+}
+function boardPadCss(pad) {
+  if (!pad || !pad.color_rgb) return '';
+  return `--board-pad-color:rgb(${pad.color_rgb.map(Number).join(',')})`;
+}
+function boardPadBadge(pad) {
+  if (!pad) return '';
+  return `<span class="board-pad-badge" style="${boardPadCss(pad)}">
+    <strong>${esc(pad.symbol)}</strong>
+    ${esc(pad.color)} · pole ${esc(pad.coordinate_label)}
+  </span>`;
+}
+function boardChoiceToolbarHtml() {
+  const interaction = boardInteractionState();
+  if (!interaction || state.flow.stage !== 'location_active') return '';
+  if (interaction.mode === 'navigation') {
+    return `<div class="board-choice-toolbar">
+      <span><b>Wybierz drogę</b><small>Kliknij lokację tutaj albo jej znacznik na planszy.</small></span>
+      <button type="button" class="secondary" onclick="scanBoard()">Skanuj planszę</button>
+    </div>`;
+  }
+  return `<div class="board-choice-toolbar">
+    <span><b>Wybierz kafelek</b><small>Kliknij tutaj albo przestaw figurkę na odpowiadające mu pole.</small></span>
+    <button type="button" class="secondary" onclick="scanBoard()">Skanuj planszę</button>
   </div>`;
 }
+function navigationLocationBadge(zone) {
+  const position = zone.marker_position || [];
+  const color = zone.color_rgb || [];
+  const style = color.length === 3
+    ? `--board-pad-color:rgb(${color.map(Number).join(',')})`
+    : '';
+  const coordinate = position.length === 2 ? ` · pole ${esc(position[0])},${esc(position[1])}` : '';
+  return `<span class="board-pad-badge" style="${style}">
+    <strong>●</strong>${esc(zone.color || 'znacznik')}${coordinate}
+  </span>`;
+}
+function navigationChoicesHtml() {
+  const current = state.current_zone || {};
+  const options = state.travel_options || [];
+  const cards = [
+    `<button type="button" class="interaction-goal-card navigation-current-card" onclick="setBoardSelectionMode(false)">
+      ${navigationLocationBadge(current)}
+      <b>Pozostańcie: ${esc(current.name || 'obecna lokacja')}</b>
+      <span>Wróćcie do rozmów i działań dostępnych w tej lokacji.</span>
+      <small>Wróć do działań</small>
+    </button>`,
+    ...options.map(zone => {
+      const position = zone.marker_position || [];
+      const action = position.length === 2
+        ? `selectBoardPosition(${Number(position[0])}, ${Number(position[1])})`
+        : `travel('${esc(zone.id)}')`;
+      return `<button type="button" class="interaction-goal-card board-linked-tile" style="${navigationLocationBadgeStyle(zone)}" onclick="${action}">
+        ${navigationLocationBadge(zone)}
+        <b>${esc(zone.name)}</b>
+        <span>${esc(zone.description || zone.summary || '')}</span>
+        <small>Podgląd lokacji · potwierdź Enterem</small>
+      </button>`;
+    }),
+  ];
+  return `<div class="interaction-goals-head">
+    <b>Dokąd idziecie?</b>
+    <span>Najpierw wybierzcie drogę. Gra pokaże podgląd i poprosi o potwierdzenie.</span>
+  </div>
+  <div class="interaction-goal-grid">${cards.join('')}</div>`;
+}
+function navigationLocationBadgeStyle(zone) {
+  const color = zone.color_rgb || [];
+  return color.length === 3
+    ? `--board-pad-color:rgb(${color.map(Number).join(',')})`
+    : '';
+}
 function zoneOptionCardsHtml(options) {
-  const allies = (state.actors || []).filter(actor => actor.faction === 'ally' && !actor.defeated);
   return options.map(option => {
+    const pad = boardPadFor('zone_option', option.id);
     const check = option.check || null;
-    const actorSelect = check ? `<label>Wykonuje:
-      <select id="zone-option-actor-${esc(option.id)}">
-        ${allies.map(actor => `<option value="${esc(actor.id)}">${esc(actor.name)}</option>`).join('')}
-      </select>
-    </label>` : '';
     const checkText = check
       ? `${abilityLabel(check.ability)}${check.skill ? ` (${skillLabel(check.skill)})` : ''}${check.tool_label ? ` + ${esc(check.tool_label)}` : ''}, ST ${esc(check.dc)}`
       : 'Bez rzutu';
@@ -1424,16 +1514,94 @@ function zoneOptionCardsHtml(options) {
     const timeCost = Number(option.time_cost_minutes || 0) > 0
       ? `${esc(option.time_cost_minutes)} min`
       : '';
-    return `<div class="interaction-goal-card zone-option-card${option.completed ? ' completed' : ''}">
+    return `<button type="button" class="interaction-goal-card zone-option-card${option.completed ? ' completed' : ''}${option.id === selectedZoneOptionId ? ' selected' : ''}${pad ? ' board-linked-tile' : ''}"${pad ? ` style="${boardPadCss(pad)}"` : ''}${option.completed ? ' disabled' : ` onclick="selectZoneOptionGoal('${esc(option.id)}')"`}>
+      ${boardPadBadge(pad)}
       <b>${esc(option.label)}</b>
       <span>${esc(option.description || option.message || '')}</span>
       <small>${option.completed ? 'Ukończone' : esc([checkText, stakes, timeCost].filter(Boolean).join(' · '))}</small>
-      ${option.completed ? '' : `${actorSelect}<button type="button" onclick="selectZoneOption('${esc(option.id)}', ${check ? 'true' : 'false'})">Wykonaj</button>`}
-    </div>`;
+    </button>`;
   }).join('');
 }
+function selectZoneOptionGoal(optionId) {
+  selectedInteractionGoalId = null;
+  selectedZoneOptionId = optionId;
+  selectedZoneOptionActorId = '';
+  const option = (((state || {}).flow || {}).zone_options || []).find(
+    candidate => String(candidate.id) === String(optionId)
+  );
+  if (
+    option
+    && option.resolution_mode === 'automatic'
+    && option.description_mode === 'none'
+  ) {
+    submitZoneOption();
+    return;
+  }
+  const panel = document.getElementById('interaction-goals');
+  if (panel) panel.innerHTML = interactionGoalsHtml();
+}
+function selectZoneOptionActor(actorId) {
+  selectedZoneOptionActorId = String(actorId || '');
+  const panel = document.getElementById('interaction-goals');
+  if (panel) panel.innerHTML = interactionGoalsHtml();
+  const input = document.getElementById('zone-option-description');
+  if (input) input.focus();
+}
+function zoneOptionComposerHtml(option) {
+  if (!option) return '';
+  const allies = (state.actors || []).filter(actor => actor.faction === 'ally' && !actor.defeated);
+  const needsActor = Boolean(option.check);
+  const descriptionMode = option.description_mode || 'required';
+  const actorReady = !needsActor || Boolean(selectedZoneOptionActorId);
+  const descriptionControl = descriptionMode === 'none' ? '' : `
+    <label for="zone-option-description"><b>${descriptionMode === 'required' ? '2. Jak to robicie?' : 'Opcjonalnie: jak to robicie?'}</b>
+      <span>${descriptionMode === 'required'
+        ? 'Krótko opiszcie sposób działania.'
+        : 'Możecie dodać metodę dla narracji lub autorskiej premii. Puste pole oznacza standardowe wykonanie.'}</span>
+    </label>
+    <textarea id="zone-option-description" placeholder="${descriptionMode === 'required' ? 'Opiszcie sposób działania…' : 'Opcjonalny opis metody…'}"></textarea>
+  `;
+  return `<div class="goal-action-composer">
+    ${needsActor ? `<b>1. Kto podejmuje działanie?</b>
+    <span>Ta postać wykona test i poniesie jego konsekwencje.</span>
+    <div class="interaction-actor-grid">
+      ${allies.map(actor => `<button type="button" class="interaction-actor-card${String(actor.id) === String(selectedZoneOptionActorId) ? ' selected' : ''}" onclick="selectZoneOptionActor('${esc(actor.id)}')">${actorPortraitHtml(actor, 'choice')}<span><b>${esc(actor.name)}</b><small>${String(actor.id) === String(selectedZoneOptionActorId) ? 'wykonuje' : 'wybierz'}</small></span></button>`).join('')}
+    </div>` : ''}
+    ${actorReady ? `
+      ${descriptionControl}
+      <div class="row">
+        <button type="button" onclick="submitZoneOption()">${option.resolution_mode === 'automatic' ? 'Wykonaj' : 'Przejdź do testu'}</button>
+        <button type="button" class="secondary" onclick="selectedZoneOptionId=null; selectedZoneOptionActorId=null; document.getElementById('interaction-goals').innerHTML=interactionGoalsHtml()">Wróć</button>
+      </div>
+    ` : `
+      <p class="flow-note">Najpierw wybierzcie postać wykonującą test.</p>
+      <button type="button" class="secondary" onclick="selectedZoneOptionId=null; selectedZoneOptionActorId=null; document.getElementById('interaction-goals').innerHTML=interactionGoalsHtml()">Wróć</button>
+    `}
+  </div>`;
+}
+function submitZoneOption() {
+  const option = ((((state || {}).flow || {}).zone_options) || []).find(
+    candidate => String(candidate.id) === String(selectedZoneOptionId)
+  );
+  if (!option) return;
+  if (option.check && !selectedZoneOptionActorId) {
+    alert('Najpierw wybierz postać, która podejmuje działanie.');
+    return;
+  }
+  const input = document.getElementById('zone-option-description');
+  const description = input ? input.value.trim() : '';
+  if (!description && option.description_mode === 'required') {
+    alert('Najpierw opiszcie, jak wykonujecie to działanie.');
+    return;
+  }
+  api('/api/exploration/option', {
+    option_id: selectedZoneOptionId,
+    actor_id: selectedZoneOptionActorId || null,
+    player_description: description,
+  }, 'Przygotowuję rozstrzygnięcie...');
+}
 function continuationPanelHtml(continuation) {
-  if (!continuationPanelOpen || !continuation) return '';
+  if (!continuationPanelOpen || !continuation || !continuation.available) return '';
   const travel = continuation.travel || {};
   const allies = (state.actors || []).filter(actor => actor.faction === 'ally' && !actor.defeated);
   if (!selectedContinuationNavigatorId && allies.length) selectedContinuationNavigatorId = String(allies[0].id);
@@ -1491,68 +1659,142 @@ function continuationPanelHtml(continuation) {
     </div>
   </div>`;
 }
+function continuationUnavailableText(continuation) {
+  const locations = (state.flow && state.flow.available_locations) || [];
+  const departure = locations.find(zone => String(zone.id) === String(continuation.departure_zone_id));
+  if (continuation.missing_flags && continuation.missing_flags.length) {
+    return continuation.unavailable_hint || 'Dokończcie przygotowania fabularne przed wymarszem.';
+  }
+  if (continuation.requires_departure_zone) {
+    return `Wyruszyć można z lokacji „${departure ? departure.name : continuation.departure_zone_id}”.`;
+  }
+  return continuation.unavailable_hint || 'Ta droga nie jest jeszcze dostępna.';
+}
 function interactionGoalsHtml() {
   if (state.trade) return tradePanelHtml();
   if (downtimePanelOpen && state.downtime) return downtimePanelHtml();
+  const boardToolbar = boardChoiceToolbarHtml();
+  const boardInteraction = boardInteractionState();
+  if (
+    boardInteraction
+    && boardInteraction.mode === 'navigation'
+    && state.flow.stage === 'location_active'
+    && !state.active_point
+  ) {
+    return `${boardToolbar}${navigationChoicesHtml()}`;
+  }
   const goals = currentInteractionGoals();
   const pointCards = currentInteractionPointCards();
   const hasDowntime = Boolean(state.downtime && !state.active_point);
   const zoneOptions = !state.active_point ? ((state.flow && state.flow.zone_options) || []) : [];
   const continuation = !state.active_point && state.flow ? state.flow.continuation : null;
-  const hasContinuation = Boolean(continuation && continuation.available);
-  if ((!goals.length && !pointCards.length && !hasDowntime && !zoneOptions.length && !hasContinuation) || state.pending || (state.required_rolls || []).length || resultAck) return '';
+  const hasContinuation = Boolean(continuation);
+  const auxiliaryPads = ((boardInteractionState() || {}).pads || []).filter(
+    pad => pad.action_kind === 'short_rest' || pad.action_kind === 'search'
+  );
+  if ((!goals.length && !pointCards.length && !hasDowntime && !zoneOptions.length && !hasContinuation && !auxiliaryPads.length && !boardToolbar) || state.pending || (state.required_rolls || []).length || resultAck) return '';
   const selected = goals.find(goal => goal.id === selectedInteractionGoalId) || null;
+  const selectedZoneOption = zoneOptions.find(option => option.id === selectedZoneOptionId) || null;
+  const selectedParticipants = selected ? selectedGoalCheckParticipants(selected) : null;
+  const participantsReady = Boolean(
+    selected
+    && (
+      selectedParticipants === 'whole_party'
+      || (
+        selectedParticipants
+        && selectedInteractionActorIds.length > 0
+      )
+    )
+  );
+  const actionSourceReady = Boolean(
+    selected
+    && (
+      !selected.source_required
+      || selectedInteractionActionSourceId
+    )
+  );
   const socialSkillLabels = {
     persuasion: 'Perswazja',
     deception: 'Oszustwo',
     intimidation: 'Zastraszanie',
   };
   const socialSkillOptions = selected ? (selected.social_skill_options || []) : [];
+  const descriptionMode = selected ? (selected.description_mode || 'required') : 'required';
   return `
-    ${objectiveProgressHtml()}
+    ${boardToolbar}
     <div class="interaction-goals-head">
-      <b>${selected ? 'Wybrany cel' : 'Co chcecie osiągnąć?'}</b>
-      <span>${selected ? esc(selected.followup_prompt) : 'Wybierzcie kierunek. Sposób nadal należy do was.'}</span>
+      <b>${selected || selectedZoneOption ? 'Wybrane działanie' : 'Co chcecie zrobić?'}</b>
+      <span>${selected
+        ? descriptionMode === 'none'
+          ? 'Wybierzcie wykonawcę i potrzebne źródło. Opis nie jest wymagany.'
+          : esc(selected.followup_prompt)
+        : selectedZoneOption
+          ? 'Wybierzcie postać i wykonajcie wymagane kroki.'
+          : 'Wybierzcie działanie. Formularz pokaże tylko kroki, które mają znaczenie.'}</span>
     </div>
-    <div class="interaction-goal-grid">
-      ${pointCards.map(point => `
-        <button type="button" class="interaction-goal-card npc-point-card"
+    ${selectedZoneOption || selected ? '' : `<div class="interaction-goal-grid">
+      ${pointCards.map(point => {
+        const pad = boardPadFor('point', point.id);
+        return `
+        <button type="button" class="interaction-goal-card npc-point-card${pad ? ' board-linked-tile' : ''}"${pad ? ` style="${boardPadCss(pad)}"` : ''}
           onclick="selectPoint('${esc(point.id)}')">
-          ${point.image ? `<img class="interaction-goal-image" src="${esc(point.image.startsWith('/') ? point.image : `/scenario-assets/${point.image}`)}" alt="">` : ''}
+          ${boardPadBadge(pad)}
           <b>${esc(point.interaction_label || point.name)}</b>
           <span>${esc(point.description || 'Podejdźcie i rozpocznijcie rozmowę.')}</span>
           <small>${point.has_merchant ? 'Handel' : 'Interakcja z NPC'}</small>
-        </button>
-      `).join('')}
+        </button>`;
+      }).join('')}
       ${hasDowntime ? `
-        <button type="button" class="interaction-goal-card" onclick="openDowntimePanel()">
+        <button type="button" class="interaction-goal-card${boardPadFor('panel', 'downtime') ? ' board-linked-tile' : ''}" style="${boardPadCss(boardPadFor('panel', 'downtime'))}" onclick="openDowntimePanel()">
+          ${boardPadBadge(boardPadFor('panel', 'downtime'))}
           <b>Rzemiosło w downtime</b>
           <span>Wykorzystaj warsztat, materiały i pełne dni pracy, aby stworzyć trwały przedmiot.</span>
           <small>${esc((state.downtime.recipes || []).map(recipe => recipe.workshop_label).join(' · '))}</small>
         </button>
       ` : ''}
       ${zoneOptionCardsHtml(zoneOptions)}
-      ${hasContinuation ? `
-        <button type="button" class="interaction-goal-card continuation-card" onclick="openContinuationPanel()">
+      ${hasContinuation && continuation.available ? `
+        <button type="button" class="interaction-goal-card continuation-card${boardPadFor('panel', 'continuation') ? ' board-linked-tile' : ''}" style="${boardPadCss(boardPadFor('panel', 'continuation'))}" onclick="openContinuationPanel()">
+          ${boardPadBadge(boardPadFor('panel', 'continuation'))}
           <b>${esc(continuation.label)}</b>
           <span>${esc(continuation.description || 'Wyruszcie do kolejnej sceny.')}</span>
           <small>Dalsza podróż · ${esc(continuation.travel_minutes || 0)} min w normalnym tempie</small>
         </button>
+      ` : hasContinuation ? `
+        <button type="button" class="interaction-goal-card continuation-card locked" disabled>
+          <b>🔒 ${esc(continuation.label)}</b>
+          <span>${esc(continuationUnavailableText(continuation))}</span>
+          <small>${continuation.requires_departure_zone ? 'Najpierw dotrzyjcie do lokacji wyjścia' : 'Brakuje przygotowania fabularnego'}</small>
+        </button>
       ` : ''}
-      ${goals.map(goal => `
-        <button type="button" class="interaction-goal-card${goal.id === selectedInteractionGoalId ? ' selected' : ''}"
-          onclick="selectInteractionGoal('${esc(goal.id)}')">
-          ${goal.image ? `<img class="interaction-goal-image" src="${esc(goal.image.startsWith('/') ? goal.image : `/scenario-assets/${goal.image}`)}" alt="">` : ''}
-          <b>${esc(goal.label)}</b>
-          <span>${esc(goal.description)}</span>
-          <small>${esc(goalParticipantLabel(goal))}</small>
+      ${auxiliaryPads.map(pad => `
+        <button type="button" class="interaction-goal-card board-linked-tile" style="${boardPadCss(pad)}"
+          onclick="${pad.action_kind === 'short_rest'
+            ? 'startShortRest()'
+            : `startExplorationSearch('${esc((boardInteractionState() || {}).selected_actor_id || '')}')`}">
+          ${boardPadBadge(pad)}
+          <b>${esc(pad.label)}</b>
+          <span>${esc(pad.description || '')}</span>
+          <small>${pad.action_kind === 'short_rest' ? 'Odpoczynek drużyny' : 'Test wybranej postaci'}</small>
         </button>
       `).join('')}
-    </div>
+      ${goals.map(goal => {
+        const pad = boardPadFor('goal', goal.id);
+        return `
+        <button type="button" class="interaction-goal-card${goal.id === selectedInteractionGoalId ? ' selected' : ''}${pad ? ' board-linked-tile' : ''}"${pad ? ` style="${boardPadCss(pad)}"` : ''}
+          onclick="selectInteractionGoal('${esc(goal.id)}')">
+          ${boardPadBadge(pad)}
+          <b>${esc(goal.label)}</b>
+          <span>${esc(goal.description)}</span>
+          <small>${esc(`${interactionContractLabel(goal)} · ${goalParticipantLabel(goal)}`)}</small>
+        </button>`;
+      }).join('')}
+    </div>`}
+    ${zoneOptionComposerHtml(selectedZoneOption)}
     ${continuationPanelHtml(continuation)}
     ${selected ? interactionParticipantPickerHtml(selected) : ''}
-    ${selected ? interactionActionSourcePickerHtml(selected) : ''}
-    ${selected && socialSkillOptions.length ? `<div class="interaction-participants">
+    ${selected && participantsReady ? interactionActionSourcePickerHtml(selected) : ''}
+    ${selected && participantsReady && socialSkillOptions.length ? `<div class="interaction-participants">
       <b>Jak chcecie wpłynąć na NPC?</b>
       <span>Ten wybór należy do graczy i ustala skill ewentualnego testu Charisma.</span>
       <label>Podejście społeczne:
@@ -1561,14 +1803,44 @@ function interactionGoalsHtml() {
         </select>
       </label>
     </div>` : ''}
-    ${selected ? `<div class="goal-action-composer">
-      <label for="goal-action"><b>Jak to robicie?</b><span>${esc(selected.followup_prompt || 'Opiszcie metodę działania.')}</span></label>
-      <textarea id="goal-action" placeholder="${esc(selected.followup_prompt || 'Opiszcie metodę działania...')}"></textarea>
+    ${selected && !participantsReady ? `<p class="flow-note">Najpierw wskażcie postać. Potem opiszecie jej podejście.</p>` : ''}
+    ${selected && participantsReady && !actionSourceReady ? `<p class="flow-note">Wybierzcie wymagany czar, przedmiot albo narzędzie. Potem opiszcie jego użycie.</p>` : ''}
+    ${selected && participantsReady && actionSourceReady ? `<div class="goal-action-composer">
+      ${selected.resolution_mode === 'llm_rubric' && (selected.llm_rubric || []).length ? `
+        <div class="flow-note">
+          <b>Na co zwróci uwagę MG:</b>
+          <ul>${selected.llm_rubric.map(criterion => `<li>${esc(criterion)}</li>`).join('')}</ul>
+        </div>
+      ` : ''}
+      ${descriptionMode === 'none' ? `
+        <p class="flow-note">To działanie ma zdefiniowany sposób wykonania. Nie musicie dopisywać opisu.</p>
+      ` : `
+        <label for="goal-action"><b>${descriptionMode === 'required' ? 'Jak to robicie?' : 'Opcjonalnie: jak to robicie?'}</b>
+          <span>${descriptionMode === 'required'
+            ? esc(selected.followup_prompt || 'Opiszcie metodę działania.')
+            : 'Opis może wpłynąć tylko na dozwolone przez scenę premie lub konsekwencje. Możecie zostawić pole puste.'}</span>
+        </label>
+        <textarea id="goal-action" placeholder="${descriptionMode === 'required' ? esc(selected.followup_prompt || 'Opiszcie metodę działania...') : 'Opcjonalny opis metody…'}"></textarea>
+      `}
       <div class="row">
-        <button type="button" onclick="sendGoalAction()">Zadeklaruj działanie</button>
+        <button type="button" onclick="sendGoalAction()">${selected.resolution_mode === 'automatic' ? 'Wykonaj' : selected.resolution_mode === 'llm_rubric' ? 'Przekaż opis MG' : 'Przejdź dalej'}</button>
         <button type="button" class="secondary" onclick="cancelInteractionGoal()">Anuluj wybór</button>
       </div>
     </div>` : ''}`;
+}
+function interactionContractLabel(goal) {
+  const resolution = {
+    automatic: 'Bez rzutu',
+    check: 'Test D&D',
+    llm_rubric: 'Ocena opisu przez MG',
+    conversation: 'Rozmowa',
+  }[goal.resolution_mode] || 'Interakcja';
+  const description = {
+    none: 'bez opisu',
+    optional: 'opis opcjonalny',
+    required: 'opis wymagany',
+  }[goal.description_mode] || 'opis wymagany';
+  return `${resolution}, ${description}`;
 }
 function tradeMoneyLabel(totalCp) {
   let remaining = Math.max(0, Math.floor(Number(totalCp || 0)));
@@ -2104,6 +2376,8 @@ function pendingHtml(pending) {
       commitment: 'Podjęcie zobowiązania',
       travel: 'Przygotowanie do drogi',
       social: 'Wpływ społeczny',
+      hospitality: 'Gościnność',
+      beer_tasting: 'Opinia o piwie',
       medical: 'Pomoc medyczna',
       trade: 'Handel',
     };
@@ -5002,8 +5276,7 @@ function updateActivePanel() {
   const hasResult = Boolean(resultAck) && !state.combat;
   const hasEncounter = Boolean(state.pending_encounter);
   const interactionStage = stage === 'location_active' || stage === 'interaction_result';
-  const chatMode = interactionStage && chatInstanceOpen && !hasEncounter && !state.combat;
-  const menuMode = stage === 'location_active' && !chatInstanceOpen && !hasEncounter && !hasPendingResolution && !hasRolls;
+  const chatMode = interactionStage && !hasEncounter && !state.combat;
   document.body.classList.toggle('chat-instance-mode', chatMode);
   const flowPanel = document.getElementById('flow-panel');
   flowPanel.hidden = chatMode || hasEncounter || !flowPanel.innerHTML.trim();
@@ -5011,7 +5284,6 @@ function updateActivePanel() {
   document.getElementById('encounter-panel').hidden = !hasEncounter || hasResult;
   document.getElementById('travel-panel').hidden = true;
   document.getElementById('points-panel').hidden = true;
-  document.getElementById('exploration-menu-panel').hidden = !menuMode;
   document.getElementById('pending-panel').hidden = !hasPendingDecision;
   document.getElementById('roll-panel').hidden = !hasRolls;
   const interactionCard = document.getElementById('interaction-state-card');
@@ -5024,8 +5296,10 @@ function updateActivePanel() {
   leaveButton.textContent = stage === 'interaction_result'
     ? 'Zakończ interakcję'
     : state.active_point
-      ? 'Opuść interakcję'
-      : 'Menu eksploracji';
+      ? 'Zakończ rozmowę'
+      : ((boardInteractionState() || {}).mode === 'navigation'
+        ? 'Wróć do działań'
+        : 'Zmień lokację');
   leaveButton.disabled = hasPendingDecision || hasNpcTransition || hasRolls || busy;
   const restButton = document.getElementById('short-rest-button');
   if (restButton) {
@@ -5056,6 +5330,15 @@ async function openChatInstance() {
   chatInstanceOpen = true;
   await api('/api/exploration/board-selection', {enabled: false}, 'Otwieram interakcję...');
 }
+async function setBoardSelectionMode(enabled) {
+  chatInstanceOpen = true;
+  resetInteractionSelection();
+  return api(
+    '/api/exploration/board-selection',
+    {enabled: Boolean(enabled)},
+    enabled ? 'Pokazuję dostępne drogi...' : 'Wracam do działań w lokacji...'
+  );
+}
 async function leaveChatInstance() {
   const stage = state.flow ? state.flow.stage : 'location_active';
   if (stage === 'interaction_result') {
@@ -5063,13 +5346,14 @@ async function leaveChatInstance() {
     return;
   }
   if ((state.pending && state.pending.stage) || (state.required_rolls || []).length) return;
-  chatInstanceOpen = false;
-  const leaveResult = await api('/api/point/leave', {}, 'Wracam do lokacji...');
-  if (leaveResult && !leaveResult.ok) {
-    chatInstanceOpen = true;
+  if (state.active_point) {
+    const leaveResult = await api('/api/point/leave', {}, 'Kończę rozmowę...');
+    if (leaveResult && !leaveResult.ok) return;
+    await setBoardSelectionMode(true);
     return;
   }
-  await api('/api/exploration/board-selection', {enabled: true}, 'Pokazuję dostępne pola...');
+  const navigationActive = (boardInteractionState() || {}).mode === 'navigation';
+  await setBoardSelectionMode(!navigationActive);
 }
 async function sendAction() {
   const input = document.getElementById('action');
@@ -5092,10 +5376,14 @@ async function sendGoalAction() {
     return;
   }
   const input = document.getElementById('goal-action');
-  const text = input ? input.value.trim() : '';
-  if (!text) return;
   const selectedGoal = currentInteractionGoals().find(goal => goal.id === selectedInteractionGoalId) || null;
   if (!selectedGoal) return;
+  const enteredText = input ? input.value.trim() : '';
+  if (!enteredText && selectedGoal.description_mode === 'required') {
+    alert('Najpierw opiszcie sposób działania.');
+    return;
+  }
+  const text = enteredText || selectedGoal.default_declaration || selectedGoal.label;
   const selectedCheckParticipants = selectedGoal ? selectedGoalCheckParticipants(selectedGoal) : null;
   if (selectedGoal && !selectedCheckParticipants) {
     alert('Najpierw wybierz typ testu.');
@@ -5109,7 +5397,9 @@ async function sendGoalAction() {
     alert('Najpierw wybierz czar, przedmiot albo narzędzie.');
     return;
   }
-  optimisticPlayerMessage = {role: 'player', title: 'Gracze', body: text};
+  optimisticPlayerMessage = selectedGoal.description_mode === 'none'
+    ? null
+    : {role: 'player', title: 'Gracze', body: text};
   if (input) input.value = '';
   render();
   const result = await api(
@@ -5355,6 +5645,7 @@ async function scanBoard() {
 async function scanBoardOnce() {
   if (boardScanInFlight) return;
   const token = boardScanToken;
+  const previousInteractionId = state && state.conversation ? state.conversation.interaction_id : null;
   boardScanInFlight = true;
   setBusy('Czekam na kliknięcie pola na planszy...');
   try {
@@ -5366,6 +5657,13 @@ async function scanBoardOnce() {
       alert(data.error || 'Błąd');
     }
     state = data.state || data;
+    const nextInteractionId = state && state.conversation ? state.conversation.interaction_id : null;
+    if (nextInteractionId !== previousInteractionId) resetInteractionSelection();
+    activeInteractionId = nextInteractionId;
+    optimisticPlayerMessage = null;
+    resultAck = null;
+    chatInstanceOpen = true;
+    synchronizeBoardSelection();
     if (!isAllyCombatTurnActive()) playerTurnScanLoop = false;
     render();
     refreshSessionLog();

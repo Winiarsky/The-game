@@ -1815,13 +1815,8 @@ def test_rope_can_be_selected_then_attached_for_later_wall_attempt(tmp_path):
     )
     assert proposed["pending"]["action_source"]["id"] == "resource:rope"
     assert proposed["pending"]["resources"][0]["id"] == "rope"
-    request_payload = session.gm_client.requests[-1].to_prompt_payload()
-    assert request_payload["selected_action_source"]["id"] == "resource:rope"
-    assert "climbing_aid" in request_payload["selected_action_source"]["capability_tags"]
-    assert request_payload["selected_action_source"]["rules"][
-        "engine_owns_modifiers_costs_and_consequences"
-    ] is True
-    rolling = session.decide("accept")
+    assert session.gm_client.requests == []
+    rolling = proposed
     assert rolling["pending"]["check_plan"]["resource"]["label"] == "Lina z hakiem"
     assert rolling["pending"]["check_plan"]["resource"]["modifier"] == 2
 
@@ -2249,8 +2244,15 @@ def test_active_exploration_npc_does_not_claim_actor_led_focus() -> None:
     session._sync_board_leds()
 
     target = session._current_board_scan_target()
-    assert target.positions == ()
-    assert target.feedback.frames == ()
+    pads = session.state_payload()["flow"]["board_interaction"]["pads"]
+    assert target.positions == tuple(
+        Coordinate(*pad["position"]) for pad in pads
+    )
+    assert target.feedback.frames
+    assert all(
+        frame.role == LedRole.INTERACTIVE_OBJECT
+        for frame in target.feedback.frames
+    )
     assert all(frame.role != LedRole.ACTIVE_ACTOR for frame in target.feedback.frames)
     assert not any(
         positions == [position.as_tuple() for position in point.positions]
@@ -2280,7 +2282,7 @@ def test_entering_courtyard_requires_scout_placement_then_exposes_actions_and_np
     setup = session.confirm_location_preview()
 
     assert setup["flow"]["stage"] == "party_setup"
-    assert setup["exploration_setup"]["paper_map"]["id"] == "watchtower_courtyard"
+    assert setup["exploration_setup"]["paper_map"]["id"] == "watchtower_overview"
 
     setup = session.confirm_exploration_setup_step()
 
@@ -2320,10 +2322,15 @@ def test_entering_courtyard_requires_scout_placement_then_exposes_actions_and_np
     assert session.ui_flow_stage == UiFlowStage.LOCATION_ACTIVE
     target = session._current_board_scan_target()
 
-    assert target.positions == ()
-    assert target.feedback.frames[0].positions == (Coordinate(9, 9),)
-    assert target.feedback.frames[0].color == session.active_point.color
-    assert target.feedback.frames[0].role == LedRole.INTERACTIVE_OBJECT
+    pads = session.state_payload()["flow"]["board_interaction"]["pads"]
+    assert target.positions == tuple(
+        Coordinate(*pad["position"]) for pad in pads
+    )
+    assert len(target.feedback.frames) == len(pads)
+    assert all(
+        frame.role == LedRole.INTERACTIVE_OBJECT
+        for frame in target.feedback.frames
+    )
 
 
 def test_debug_courtyard_entry_starts_with_description_and_scout_setup() -> None:
@@ -2386,19 +2393,22 @@ def test_legacy_courtyard_challenge_debug_uses_complete_entry_setup() -> None:
     ]
 
 
-def test_open_zone_interaction_only_passively_highlights_current_location() -> None:
+def test_open_zone_interaction_exposes_numbered_pads_then_navigation_markers() -> None:
     session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
     session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
 
     interaction_target = session._current_board_scan_target()
 
-    assert interaction_target.positions == ()
-    assert len(interaction_target.feedback.frames) == 1
-    assert interaction_target.feedback.frames[0].positions == (session.current_zone.marker_position,)
+    pads = session.state_payload()["flow"]["board_interaction"]["pads"]
+    assert interaction_target.positions == tuple(
+        Coordinate(*pad["position"]) for pad in pads
+    )
+    assert len(interaction_target.feedback.frames) == len(pads)
 
-    session.set_exploration_board_selection(True)
+    navigation = session.set_exploration_board_selection(True)
     selection_target = session._current_board_scan_target()
 
+    assert navigation["flow"]["board_interaction"]["pads"] == []
     assert session.current_zone.marker_position in selection_target.positions
 
 
@@ -3431,7 +3441,7 @@ def test_exploration_ui_session_starts_with_map_setup_before_location_preview():
     assert state["exploration_setup"]["current_step"]["label"] == (
         "papierowa mapa: Brama strażnicy"
     )
-    assert state["exploration_setup"]["paper_map"]["id"] == "watchtower_gate"
+    assert state["exploration_setup"]["paper_map"]["id"] == "watchtower_overview"
 
     state = session.confirm_exploration_setup_step()
 
@@ -4332,13 +4342,8 @@ def test_village_authored_npc_route_hides_gemini_invented_reward_and_purchase():
         participant_actor_ids=("hero",),
     )
 
-    preview_bodies = [message["body"] for message in state["messages"]]
-    assert not any("Bren rozwija starą mapę" in body for body in preview_bodies)
-    assert not any("Na trakcie widywano gobliny" in body for body in preview_bodies)
-    assert state["pending"]["proposal"]["success_message"] == (
-        "Bren przekazuje drużynie sprawdzony trop o opuszczonej strażnicy."
-    )
-    state = session.decide("accept")
+    assert state["pending"] is None
+    assert session.npc_client.requests == []
     bodies = [message["body"] for message in state["messages"]]
     assert any("Bren rozwija starą mapę" in body for body in bodies)
     assert any("Na trakcie widywano gobliny" in body for body in bodies)
@@ -4384,6 +4389,7 @@ def test_village_zone_options_are_exposed_and_resolve_authored_effects():
     rolling = session.select_exploration_option(
         "ask_for_rumors",
         actor_id="rogue",
+        player_description="Łotrzyca zagaduje mieszkańców bez wzbudzania podejrzeń.",
     )
 
     assert rolling["pending"]["kind"] == "zone_option"
@@ -4400,8 +4406,8 @@ def test_village_zone_options_are_exposed_and_resolve_authored_effects():
 def test_tavern_dice_game_resolves_wager_tool_check_and_can_be_replayed():
     session = ExplorationUiSession("content/scenarios/village_square_mvp.json")
     session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.active_paper_map_id = "village_overview"
     session.travel_to("tavern")
-    session.confirm_exploration_setup_step()
     session.assign_exploration_point_position(Coordinate(3, 12))
     session.confirm_exploration_setup_step()
 
@@ -4420,6 +4426,7 @@ def test_tavern_dice_game_resolves_wager_tool_check_and_can_be_replayed():
     rolling = session.select_exploration_option(
         "tavern_dice_game",
         actor_id="hero",
+        player_description="Bohater siada do stołu i obserwuje sposób gry przeciwnika.",
     )
     assert rolling["required_rolls"][0]["dc"] == 12
     assert rolling["required_rolls"][0]["tool"] == "dice_set"
@@ -4430,16 +4437,86 @@ def test_tavern_dice_game_resolves_wager_tool_check_and_can_be_replayed():
     assert session.state.elapsed_minutes == 20
     assert "Bilans gry: +10 cp" in won["messages"][-1]["body"]
 
-    session.select_exploration_option("tavern_dice_game", actor_id="hero")
+    session.select_exploration_option(
+        "tavern_dice_game",
+        actor_id="hero",
+        player_description="Bohater rewanżuje się, tym razem grając bardziej zachowawczo.",
+    )
     lost = session.resolve_rolls({"hero": 1})
     assert session._trade_actor("hero").currency.total_cp == currency_before
     assert session.state.elapsed_minutes == 35
     assert "Bilans gry: -10 cp" in lost["messages"][-1]["body"]
 
 
+def test_village_interaction_pads_link_board_colors_to_ui_actions():
+    session = ExplorationUiSession("content/scenarios/village_square_mvp.json")
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.active_paper_map_id = "village_overview"
+    session.travel_to("tavern")
+    session.assign_exploration_point_position(Coordinate(3, 12))
+    session.confirm_exploration_setup_step()
+
+    board = FakeBoardConnection()
+    session.attach_board_connection(board, backend="simulator")
+    interaction = session.state_payload()["flow"]["board_interaction"]
+
+    assert interaction["mode"] == "interaction"
+    assert [
+        (pad["symbol"], pad["action_kind"], pad["target_id"])
+        for pad in interaction["pads"]
+    ] == [
+        ("1", "point", "tavern_keeper"),
+        ("2", "zone_option", "tavern_dice_game"),
+        ("3", "short_rest", "short_rest"),
+    ]
+    assert interaction["pads"][0]["color"] != interaction["pads"][1]["color"]
+    assert len(session._current_board_scan_target().feedback.frames) == 3
+
+    selected = session.select_board_position(Coordinate(3, 9))
+
+    assert selected["pending"] is None
+    assert selected["flow"]["board_interaction"]["selected_action_kind"] == (
+        "zone_option"
+    )
+    assert selected["flow"]["board_interaction"]["selected_action_id"] == (
+        "tavern_dice_game"
+    )
+
+    rolling = session.select_exploration_option(
+        "tavern_dice_game",
+        actor_id="hero",
+    )
+    assert rolling["pending"]["kind"] == "zone_option"
+    assert rolling["required_rolls"][0]["tool_label"] == "Zestaw kości"
+    assert rolling["conversation"]["entries"] == []
+
+
+def test_board_pad_can_choose_an_npc_goal_without_free_text_guessing():
+    session = ExplorationUiSession("content/scenarios/village_square_mvp.json")
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.active_paper_map_id = "village_overview"
+    session.travel_to("tavern")
+    session.assign_exploration_point_position(Coordinate(3, 12))
+    session.confirm_exploration_setup_step()
+    session.select_point("tavern_keeper")
+
+    interaction = session.state_payload()["flow"]["board_interaction"]
+    first_goal = interaction["pads"][0]
+    selected = session.select_board_position(
+        Coordinate(*first_goal["position"]),
+    )
+
+    assert selected["flow"]["board_interaction"]["selected_goal_id"] == (
+        first_goal["target_id"]
+    )
+    assert selected["flow"]["board_interaction"]["selection_revision"] == 1
+    assert first_goal["label"]
+
+
 def test_village_npc_setup_and_travel_messages_use_current_location():
     session = ExplorationUiSession("content/scenarios/village_square_mvp.json")
     session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.active_paper_map_id = "village_overview"
 
     session._queue_current_zone_npc_setup()
 
@@ -4460,14 +4537,30 @@ def test_village_npc_setup_and_travel_messages_use_current_location():
     traveled = session.travel_to("elder_house")
 
     assert "Dom sołtysa" in traveled["board"]["message"]
-    assert traveled["flow"]["stage"] == "party_setup"
-    assert traveled["exploration_setup"]["paper_map"]["id"] == "village_elder_house"
-    assert "Rozłóż papierową mapę" in traveled["board"]["message"]
+    assert traveled["flow"]["stage"] == "location_active"
+    assert traveled["exploration_setup"] is None
+    assert "Rozłóż papierową mapę" not in traveled["board"]["message"]
+    assert "Dom sołtysa" in traveled["current_zone"]["name"]
 
-    confirmed = session.confirm_exploration_setup_step()
 
-    assert confirmed["flow"]["stage"] == "location_active"
-    assert "Dom sołtysa" in confirmed["current_zone"]["name"]
+def test_village_leaving_olan_and_traveling_clears_his_active_conversation():
+    session = ExplorationUiSession(
+        "content/scenarios/village_square_mvp.json",
+        debug_point_id="tavern_keeper",
+    )
+
+    session.select_point("")
+    session.travel_to("forest_road")
+    arrived = session.state_payload()
+
+    assert arrived["current_zone"]["id"] == "forest_road"
+    assert arrived["active_point"] is None
+    assert arrived["conversation"]["interaction_id"] == "zone:forest_road"
+    assert all(
+        "Olan" not in entry["body"]
+        for entry in arrived["conversation"]["entries"]
+    )
+    assert "sołtysem Brenem" in arrived["flow"]["continuation"]["unavailable_hint"]
 
 
 def test_village_initial_setup_starts_with_printable_paper_map():
@@ -4478,10 +4571,10 @@ def test_village_initial_setup_starts_with_printable_paper_map():
 
     setup = state["exploration_setup"]
     assert setup["current_step"]["label"] == "papierowa mapa: Rynek"
-    assert setup["paper_map"]["id"] == "village_market"
+    assert setup["paper_map"]["id"] == "village_overview"
     assert setup["paper_map"]["width_cm"] == 50.0
     assert setup["paper_map"]["height_cm"] == 75.0
-    assert setup["paper_map"]["a4_pdf_url"].endswith("/village_market.pdf")
+    assert setup["paper_map"]["a4_pdf_url"].endswith("/village_overview.pdf")
 
 
 def test_village_npc_intro_is_only_added_on_first_open():
@@ -4532,42 +4625,36 @@ def test_village_quest_lifecycle_creates_guarded_watchtower_handoff(tmp_path):
     with pytest.raises(ValueError, match="nie jest jeszcze gotowa"):
         session.continue_scenario()
 
-    session.submit_action(
+    after_hook = session.submit_action(
         "Pytamy Brena, co dzieje się przy strażnicy.",
         selected_goal_id="ask_watchtower_problem",
         selected_check_participants="single_actor",
         participant_actor_ids=("hero",),
     )
-    after_hook = session.decide("accept")
-
     assert scene_flag(session.state.flags, "quest_hook_found", False) is True
     assert after_hook["flow"]["objectives"][0]["status"] == "active"
     assert {
         goal["id"] for goal in after_hook["active_point"]["npc"]["goals"]
     } == {"ask_watchtower_problem", "accept_watchtower_quest"}
 
-    session.submit_action(
+    after_acceptance = session.submit_action(
         "Przyjmujemy zadanie i zajmiemy się strażnicą.",
         selected_goal_id="accept_watchtower_quest",
         selected_check_participants="single_actor",
         participant_actor_ids=("hero",),
     )
-    after_acceptance = session.decide("accept")
-
     assert scene_flag(session.state.flags, "quest_accepted", False) is True
     assert after_acceptance["flow"]["objectives"][0]["status"] == "active"
     assert {
         goal["id"] for goal in after_acceptance["active_point"]["npc"]["goals"]
     } == {"ask_watchtower_problem", "confirm_watchtower_departure"}
 
-    session.submit_action(
+    ready = session.submit_action(
         "Jesteśmy przygotowani. Ruszamy starym traktem.",
         selected_goal_id="confirm_watchtower_departure",
         selected_check_participants="single_actor",
         participant_actor_ids=("hero",),
     )
-    ready = session.decide("accept")
-
     assert scene_flag(session.state.flags, "ready_for_watchtower", False) is True
     assert ready["flow"]["objectives"][0]["status"] == "completed"
     assert ready["flow"]["continuation"]["available"] is False
@@ -4644,11 +4731,7 @@ def test_village_quest_lifecycle_creates_guarded_watchtower_handoff(tmp_path):
     assert "elder_bren" in {
         item["npc_id"] for item in saved["exploration"]["npc_states"]
     }
-    assert [request.routed_intent_id for request in client.requests] == [
-        "information",
-        "commitment",
-        "travel",
-    ]
+    assert client.requests == []
 
     source_hero = next(
         actor for actor in session.exploration.actors if str(actor.id) == "hero"
@@ -4820,7 +4903,7 @@ def test_village_keeper_rumor_uses_authored_route_completes_hook_and_hides_goal(
     initial = session.state_payload()
     assert {
         goal["id"] for goal in initial["active_point"]["npc"]["goals"]
-    } == {"ask_watchtower_rumors", "chat_with_keeper"}
+    } == {"ask_watchtower_rumors", "chat_with_keeper", "order_olan_ale"}
 
     pending = session.submit_action(
         "Pytamy Olana, co słyszał o starym trakcie i opuszczonej strażnicy.",
@@ -4829,20 +4912,82 @@ def test_village_keeper_rumor_uses_authored_route_completes_hook_and_hides_goal(
         participant_actor_ids=("rogue",),
     )
 
-    assert client.requests[0].selected_goal_id == "ask_watchtower_rumors"
-    assert client.requests[0].routed_intent_id == "information"
-    assert pending["pending"]["proposal"]["action_type"] == "information"
-    assert pending["pending"]["proposal"]["effects_on_success"] == []
-
-    resolved = session.decide("accept")
-
+    assert client.requests == []
+    resolved = pending
     assert resolved["pending"] is None
     assert scene_flag(session.state.flags, "tavern_rumor_heard", False) is True
     assert scene_flag(session.state.flags, "quest_hook_found", False) is True
     assert scene_flag(session.state.flags, "untrusted_llm_flag", False) is False
-    assert [
+    assert {
         goal["id"] for goal in resolved["active_point"]["npc"]["goals"]
-    ] == ["chat_with_keeper"]
+    } == {"chat_with_keeper", "order_olan_ale"}
+
+
+def test_village_keeper_beer_branch_replaces_order_with_tasting_and_updates_attitude():
+    proposal = NpcInteractionProposal.model_validate(
+        {
+            "action_type": "social",
+            "request_risk": "no_risk",
+            "player_narration": (
+                "Bohater próbuje piwa powoli, najpierw wyłapując zapach słodu."
+            ),
+            "npc_response": (
+                "Olan uśmiecha się, słysząc porównanie chmielowej goryczki "
+                "do zapachu mokrego lasu."
+            ),
+            "requires_roll": False,
+            "rubric_outcome": "success",
+            "success_message": "Szczera i obrazowa odpowiedź trafia do Olana.",
+            "failure_message": "Zdawkowa odpowiedź rozczarowuje Olana.",
+        }
+    )
+    client = FakeNpcClient(proposal)
+    session = ExplorationUiSession(
+        "content/scenarios/village_square_mvp.json",
+        npc_client=client,
+        debug_point_id="tavern_keeper",
+    )
+
+    initial_goal_ids = {
+        goal["id"]
+        for goal in session.state_payload()["active_point"]["npc"]["goals"]
+    }
+    assert "order_olan_ale" in initial_goal_ids
+    assert "describe_olan_ale" not in initial_goal_ids
+
+    after_order = session.submit_action(
+        "Janek prosi Olana o kufel miejscowego piwa.",
+        selected_goal_id="order_olan_ale",
+        selected_check_participants="single_actor",
+        participant_actor_ids=("hero",),
+    )
+    assert scene_flag(session.state.flags, "olan_beer_ordered", False) is True
+    after_order_goal_ids = {
+        goal["id"] for goal in after_order["active_point"]["npc"]["goals"]
+    }
+    assert "order_olan_ale" not in after_order_goal_ids
+    assert "describe_olan_ale" in after_order_goal_ids
+    assert client.requests == []
+
+    pending_tasting = session.submit_action(
+        (
+            "Janek mówi, że piwo pachnie mokrym lasem po deszczu, "
+            "a karmelowy słód łagodnie przechodzi w wytrawną goryczkę."
+        ),
+        selected_goal_id="describe_olan_ale",
+        selected_check_participants="single_actor",
+        participant_actor_ids=("hero",),
+    )
+    assert pending_tasting["pending"] is None
+    assert client.requests[0].routed_intent_id == "beer_tasting"
+    after_tasting = pending_tasting
+
+    assert scene_flag(session.state.flags, "olan_beer_reviewed", False) is True
+    assert after_tasting["active_point"]["npc"]["runtime_state"]["attitude"] == "friendly"
+    final_goal_ids = {
+        goal["id"] for goal in after_tasting["active_point"]["npc"]["goals"]
+    }
+    assert "describe_olan_ale" not in final_goal_ids
 
 
 def test_npc_request_receives_only_that_npc_interaction_history():

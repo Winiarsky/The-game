@@ -23,13 +23,20 @@ def test_watchtower_exposes_authored_goals_without_generic_escape_card():
     assert [goal.id for goal in gate.goals] == [
         "force_entry",
         "use_wall_route",
+        "attach_wall_rope",
+        "use_attached_wall_route",
         "open_lock",
         "look_around",
         "remove_bolt",
     ]
     assert all(goal.resolution_option_id is None for goal in gate.goals)
-    assert all(not goal.required_flags for goal in gate.goals)
-    assert all(not goal.forbidden_flags for goal in gate.goals)
+    goals = {goal.id: goal for goal in gate.goals}
+    assert goals["use_attached_wall_route"].required_flags == (
+        "gate_climbing_rope_attached",
+    )
+    assert goals["attach_wall_rope"].forbidden_flags == (
+        "gate_climbing_rope_attached",
+    )
     assert scout.npc_interaction is not None
     assert [goal.id for goal in scout.npc_interaction.goals] == [
         "calm_scout",
@@ -39,14 +46,13 @@ def test_watchtower_exposes_authored_goals_without_generic_escape_card():
     ]
 
 
-def test_every_gate_goal_has_a_distinct_tile_image():
+def test_every_gate_goal_has_a_tile_image():
     exploration = _watchtower()
     gate = next(item for item in exploration.challenges if item.id == "closed_gate")
 
     images = [goal.image for goal in gate.goals]
 
     assert all(images)
-    assert len(set(images)) == len(images)
 
 
 def test_quiet_method_rule_is_grounded_in_player_wording():

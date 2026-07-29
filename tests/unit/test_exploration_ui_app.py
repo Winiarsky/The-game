@@ -104,6 +104,7 @@ def _session(*, active: bool = True):
     )
     if active:
         session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+        session.active_paper_map_id = "watchtower_overview"
     return session
 
 
@@ -505,6 +506,43 @@ def test_action_route_forwards_player_selected_social_skill() -> None:
     )
 
 
+def test_exploration_option_route_forwards_actor_and_player_description() -> None:
+    session = _session()
+    captured: dict[str, object] = {}
+
+    def select_option(
+        option_id: str,
+        *,
+        actor_id: str | None = None,
+        player_description: str = "",
+    ):
+        captured.update(
+            {
+                "option_id": option_id,
+                "actor_id": actor_id,
+                "player_description": player_description,
+            }
+        )
+        return session.state_payload()
+
+    session.select_exploration_option = select_option
+    response = create_app(session).test_client().post(
+        "/api/exploration/option",
+        json={
+            "option_id": "tavern_dice_game",
+            "actor_id": "hero",
+            "player_description": "Obserwuję dłonie przeciwnika przed pierwszym rzutem.",
+        },
+    )
+
+    assert response.status_code == 200
+    assert captured == {
+        "option_id": "tavern_dice_game",
+        "actor_id": "hero",
+        "player_description": "Obserwuję dłonie przeciwnika przed pierwszym rzutem.",
+    }
+
+
 def test_exploration_awareness_routes_forward_actor_id() -> None:
     session = _session()
     captured: list[tuple[str, str]] = []
@@ -619,10 +657,10 @@ def test_printable_paper_map_assets_are_served() -> None:
     client = _client()
 
     preview = client.get(
-        "/game-assets/print_maps/village_watchtower/png/watchtower_gate.png"
+        "/game-assets/print_maps/village_watchtower/png/watchtower_overview.png"
     )
     pdf = client.get(
-        "/game-assets/print_maps/village_watchtower/pdf/a4/watchtower_gate.pdf"
+        "/game-assets/print_maps/village_watchtower/pdf/a4/watchtower_overview.pdf"
     )
 
     assert preview.status_code == 200
@@ -692,13 +730,24 @@ def test_exploration_ui_exposes_downtime_crafting_preview_and_confirmation() -> 
     assert "/api/downtime/crafting/complete" in javascript
 
 
-def test_interaction_screen_scrolls_and_goal_images_keep_their_aspect_ratio() -> None:
-    _html, _javascript, stylesheet = _page_assets(_client())
+def test_interaction_screen_keeps_choices_in_scrollable_chat_and_gm_composer_fixed() -> None:
+    html, javascript, stylesheet = _page_assets(_client())
 
+    assert "board-pad-grid" not in javascript
+    assert "board-interaction-panel" not in javascript
+    assert "auxiliaryPads" in javascript
+    assert html.index('id="interaction-goals"') < html.index('id="chat-composer"')
+    assert "function selectZoneOptionGoal" in javascript
+    assert "function zoneOptionComposerHtml" in javascript
+    assert "function submitZoneOption" in javascript
+    assert "player_description: description" in javascript
+    assert "Opis nie jest wymagany." in javascript
+    assert "Opis może wpłynąć tylko na dozwolone przez scenę premie" in javascript
+    assert "Na co zwróci uwagę MG:" in javascript
     assert "body.chat-instance-mode #action-panel" in stylesheet
+    assert "overflow: hidden" in stylesheet
     assert "overflow-y: auto" in stylesheet
     assert "overscroll-behavior: contain" in stylesheet
-    assert "aspect-ratio: 16 / 9" in stylesheet
     assert "object-fit: cover" in stylesheet
     assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in stylesheet
 
@@ -897,7 +946,7 @@ def test_exploration_ui_page_is_fiction_first_and_accepts_questions():
     assert 'id="chat-typing"' in html
     assert 'id="chat-retry"' in html
     assert "Opuść interakcję" in html
-    assert 'id="exploration-menu-panel"' in html
+    assert 'id="exploration-menu-panel"' not in html
     assert "Nie macie pomysłu? Zobaczcie inspiracje" not in javascript
     assert "Wskazówki MG i mechanika sceny" not in javascript
     assert "sceneConversationHtml" in javascript
@@ -914,13 +963,17 @@ def test_exploration_ui_page_is_fiction_first_and_accepts_questions():
     assert "resolveNpcTransition" in javascript
     assert "/api/npc-transition/resolve" in javascript
     assert "/api/exploration/option" in javascript
-    assert "objectiveProgressHtml" in javascript
+    assert "boardChoiceToolbarHtml" in javascript
     assert 'id="continuation-pace"' in javascript
     assert "target_scenario_name" in javascript
     assert "Zdobyte i zabezpieczone rzeczy" in javascript
     assert "Rozpocznij ponownie" in javascript
     assert "window.prompt" not in javascript
-    assert "'Menu eksploracji'" in javascript
+    assert "'Zmień lokację'" in javascript
+    assert "'Wróć do działań'" in javascript
+    assert "navigationChoicesHtml" in javascript
+    assert "synchronizeBoardSelection" in javascript
+    assert "selection_revision" in javascript
     assert ".npc-transition-reactions" in stylesheet
     assert ".scene-image" in stylesheet
     assert ".conversation-entry" in stylesheet
@@ -928,7 +981,7 @@ def test_exploration_ui_page_is_fiction_first_and_accepts_questions():
     assert ".interaction-state-steps" in stylesheet
     assert ".conversation-context-chip" in stylesheet
     assert ".physical-roll-inputs" in stylesheet
-    assert ".objective-milestones" in stylesheet
+    assert ".board-choice-toolbar" in stylesheet
     assert ".continuation-composer" in stylesheet
     assert "body.chat-instance-mode { height: 100vh; overflow: hidden; }" in stylesheet
     assert "function pendingTitle" in javascript
@@ -963,9 +1016,11 @@ def test_point_leave_route_clears_active_interaction_before_board_selection() ->
     leave_start = javascript.index("async function leaveChatInstance()")
     leave_end = javascript.index("async function sendAction()", leave_start)
     leave_body = javascript[leave_start:leave_end]
+    assert "/api/point/leave" in leave_body
     assert leave_body.index("/api/point/leave") < leave_body.index(
-        "/api/exploration/board-selection"
+        "setBoardSelectionMode(true)"
     )
+    assert "chatInstanceOpen = false" not in leave_body
 
 
 def test_exploration_ui_page_and_api_include_scenario_end_lifecycle():
@@ -1275,8 +1330,8 @@ def test_exploration_ui_combat_turn_controls_remain_available_during_board_scan(
     assert "confirmLocationPreview()" in html
     assert "/api/location/confirm-preview" in html
     assert "/api/exploration/board-selection" in html
-    assert "{enabled: false}" in html
-    assert "{enabled: true}" in html
+    assert "setBoardSelectionMode(false)" in html
+    assert "setBoardSelectionMode(true)" in html
     assert "drugim kliknięciem" not in html
 
 
@@ -1754,10 +1809,8 @@ def test_exploration_ui_shows_and_handles_travel_after_completed_challenge():
     response = client.post("/api/travel", json={"zone_id": "courtyard"})
 
     assert response.status_code == 200
-    assert response.get_json()["exploration_setup"]["paper_map"]["id"] == (
-        "watchtower_courtyard"
-    )
-    data = client.post("/api/exploration/setup/confirm", json={}).get_json()
+    data = response.get_json()
+    assert data["exploration_setup"] is None
     assert data["current_zone"]["id"] == "courtyard"
     assert data["active_challenge"]["id"] == "courtyard_search"
 
@@ -1890,9 +1943,6 @@ def test_exploration_ui_points_are_board_first_and_text_redirects_to_point_led()
     client.post("/api/travel", json={"zone_id": "courtyard"})
     setup = client.get("/api/state").get_json()
     assert setup["flow"]["stage"] == "party_setup"
-    assert setup["exploration_setup"]["paper_map"]["id"] == "watchtower_courtyard"
-    client.post("/api/exploration/setup/confirm", json={})
-    setup = client.get("/api/state").get_json()
     assert setup["exploration_setup"]["current_step"]["assignment_point_id"] == "wounded_scout"
     client.post("/api/board/select", json={"col": 8, "row": 8})
 

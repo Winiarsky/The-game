@@ -4,11 +4,12 @@
       "id": "gate",
       "name": "Brama strażnicy",
       "paper_map": {
-        "id": "watchtower_gate",
-        "preview_path": "print_maps/village_watchtower/png/watchtower_gate.png",
-        "a4_pdf_path": "print_maps/village_watchtower/pdf/a4/watchtower_gate.pdf",
-        "full_size_pdf_path": "print_maps/village_watchtower/pdf/full_size/watchtower_gate.pdf"
+        "id": "watchtower_overview",
+        "preview_path": "print_maps/village_watchtower/png/watchtower_overview.png",
+        "a4_pdf_path": "print_maps/village_watchtower/pdf/a4/watchtower_overview.pdf",
+        "full_size_pdf_path": "print_maps/village_watchtower/pdf/full_size/watchtower_overview.pdf"
       },
+      "interaction_pad_positions": [[6, 1], [8, 1], [10, 1], [12, 1], [12, 3], [10, 4], [8, 4], [6, 3]],
       "ambient_light": "dim",
       "allows_hiding": true,
       "positions": [
@@ -341,6 +342,9 @@
           "id": "inspect_gate_area",
           "label": "Zbadaj okolice bramy",
           "kind": "search",
+          "resolution_mode": "check",
+          "description_mode": "none",
+          "default_declaration": "Badamy ślady, rygle i teren przed bramą.",
           "color": "multi",
           "description": "Sprawdźcie ślady, rygle i teren przed wejściem."
         }
@@ -380,11 +384,12 @@
       "id": "courtyard",
       "name": "Dziedziniec",
       "paper_map": {
-        "id": "watchtower_courtyard",
-        "preview_path": "print_maps/village_watchtower/png/watchtower_courtyard.png",
-        "a4_pdf_path": "print_maps/village_watchtower/pdf/a4/watchtower_courtyard.pdf",
-        "full_size_pdf_path": "print_maps/village_watchtower/pdf/full_size/watchtower_courtyard.pdf"
+        "id": "watchtower_overview",
+        "preview_path": "print_maps/village_watchtower/png/watchtower_overview.png",
+        "a4_pdf_path": "print_maps/village_watchtower/pdf/a4/watchtower_overview.pdf",
+        "full_size_pdf_path": "print_maps/village_watchtower/pdf/full_size/watchtower_overview.pdf"
       },
+      "interaction_pad_positions": [[5, 6], [7, 6], [10, 6], [12, 6], [14, 8], [14, 11], [12, 14], [5, 14]],
       "ambient_light": "dim",
       "allows_hiding": true,
       "positions": [
@@ -1010,6 +1015,9 @@
           "id": "search_courtyard",
           "label": "Zbadaj obszar",
           "kind": "search",
+          "resolution_mode": "check",
+          "description_mode": "none",
+          "default_declaration": "Przeszukujemy dziedziniec w poszukiwaniu śladów i skrytek.",
           "color": "multi",
           "description": "Przeszukajcie dziedziniec w poszukiwaniu śladów albo skrytek."
         },
@@ -1017,6 +1025,9 @@
           "id": "inspect_tracks",
           "label": "Sprawdź ślady",
           "kind": "check",
+          "resolution_mode": "check",
+          "description_mode": "none",
+          "default_declaration": "Badamy ślady na dziedzińcu.",
           "color": "interactive",
           "allow_help": true,
           "ability_check": {
@@ -1047,11 +1058,12 @@
       "name": "Koszary",
       "image": "assets/barracks_preview.png",
       "paper_map": {
-        "id": "watchtower_barracks",
-        "preview_path": "print_maps/village_watchtower/png/watchtower_barracks.png",
-        "a4_pdf_path": "print_maps/village_watchtower/pdf/a4/watchtower_barracks.pdf",
-        "full_size_pdf_path": "print_maps/village_watchtower/pdf/full_size/watchtower_barracks.pdf"
+        "id": "watchtower_overview",
+        "preview_path": "print_maps/village_watchtower/png/watchtower_overview.png",
+        "a4_pdf_path": "print_maps/village_watchtower/pdf/a4/watchtower_overview.pdf",
+        "full_size_pdf_path": "print_maps/village_watchtower/pdf/full_size/watchtower_overview.pdf"
       },
+      "interaction_pad_positions": [[6, 17], [8, 17], [10, 17], [12, 17], [12, 20], [10, 21], [8, 21], [6, 20]],
       "ambient_light": "darkness",
       "allows_hiding": true,
       "positions": [
@@ -1306,6 +1318,9 @@
           "id": "search_barracks",
           "label": "Przeszukaj koszary",
           "kind": "message",
+          "resolution_mode": "automatic",
+          "description_mode": "none",
+          "default_declaration": "Przeszukujemy opuszczone koszary.",
           "color": "interactive",
           "message": "Znajdujecie zbutwiałe koce i pusty stojak na broń."
         }
@@ -1322,11 +1337,12 @@
       "name": "Wieża obserwacyjna",
       "image": "assets/tower_preview.png",
       "paper_map": {
-        "id": "watchtower_tower",
-        "preview_path": "print_maps/village_watchtower/png/watchtower_tower.png",
-        "a4_pdf_path": "print_maps/village_watchtower/pdf/a4/watchtower_tower.pdf",
-        "full_size_pdf_path": "print_maps/village_watchtower/pdf/full_size/watchtower_tower.pdf"
+        "id": "watchtower_overview",
+        "preview_path": "print_maps/village_watchtower/png/watchtower_overview.png",
+        "a4_pdf_path": "print_maps/village_watchtower/pdf/a4/watchtower_overview.pdf",
+        "full_size_pdf_path": "print_maps/village_watchtower/pdf/full_size/watchtower_overview.pdf"
       },
+      "interaction_pad_positions": [[6, 23], [8, 23], [10, 23], [12, 23], [12, 26], [10, 27], [8, 27], [6, 26]],
       "ambient_light": "darkness",
       "allows_hiding": true,
       "positions": [
@@ -1593,6 +1609,9 @@
           "id": "climb_tower",
           "label": "Wejdź na wieżę",
           "kind": "check",
+          "resolution_mode": "check",
+          "description_mode": "optional",
+          "default_declaration": "Wspinamy się na wieżę obserwacyjną.",
           "color": "warning",
           "allow_help": true,
           "ability_check": {

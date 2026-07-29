@@ -15,7 +15,14 @@ from dnd_board_game.combat import (
     SetupVisibility,
     SpellCastingKind,
 )
-from dnd_board_game.exploration import FixtureKind, LightLevel, NpcOutcomeTier, SceneMode
+from dnd_board_game.exploration import (
+    FixtureKind,
+    InteractionDescriptionMode,
+    InteractionResolutionMode,
+    LightLevel,
+    NpcOutcomeTier,
+    SceneMode,
+)
 from dnd_board_game.inventory import HandSlot, effective_armor_class
 from dnd_board_game.scenarios import (
     RULESET_DND_5E_2014,
@@ -678,6 +685,12 @@ def test_load_abandoned_watchtower_builds_exploration_scene():
     assert "Opuszczona" in exploration.llm_context.summary
     assert "brak działającego mechanizmu lotu" in exploration.llm_context.forbidden_assumptions
     gate = next(zone for zone in exploration.zones if zone.id == "gate")
+    assert len(gate.interaction_pad_positions) == 8
+    assert {
+        zone.paper_map.id
+        for zone in exploration.zones
+        if zone.paper_map is not None
+    } == {"watchtower_overview"}
     assert gate.ambient_light == LightLevel.DIM
     assert gate.allows_hiding is True
     assert gate.search_minutes == 10
@@ -1046,9 +1059,15 @@ def test_load_village_square_mvp_builds_exploration_locations_setup_points_and_o
     elder = next(point for point in exploration.points if point.id == "elder_npc")
     market = next(zone for zone in exploration.zones if zone.id == "market")
     assert market.paper_map is not None
-    assert market.paper_map.id == "village_market"
+    assert market.paper_map.id == "village_overview"
     assert market.paper_map.width_cm == 50.0
-    assert market.paper_map.a4_pdf_path.endswith("village_market.pdf")
+    assert market.paper_map.a4_pdf_path.endswith("village_overview.pdf")
+    assert len(market.interaction_pad_positions) == 8
+    assert {
+        zone.paper_map.id
+        for zone in exploration.zones
+        if zone.paper_map is not None
+    } == {"village_overview"}
     assert elder.npc_interaction is not None
     assert elder.npc_interaction.id == "elder_bren"
     assert {goal.id for goal in elder.npc_interaction.goals} == {
@@ -1088,6 +1107,7 @@ def test_load_village_square_mvp_builds_exploration_locations_setup_points_and_o
     assert exploration.continuation.target_scenario_id == "abandoned_watchtower"
     assert exploration.continuation.target_scenario_path == "abandoned_watchtower.json"
     assert exploration.continuation.available_if_flags == ("ready_for_watchtower",)
+    assert "sołtysem Brenem" in exploration.continuation.unavailable_hint
     assert exploration.continuation.travel_minutes == 45
     assert exploration.continuation.travel_policy.navigation_dc == 12
     assert (
@@ -1119,18 +1139,41 @@ def test_load_village_square_mvp_builds_exploration_locations_setup_points_and_o
     assert dice_game.entry_cost_cp == 10
     assert dice_game.success_reward_cp == 20
     assert dice_game.time_cost_minutes == 15
+    assert dice_game.resolution_mode == InteractionResolutionMode.CHECK
+    assert dice_game.description_mode == InteractionDescriptionMode.NONE
+    assert dice_game.default_declaration
     keeper = next(point for point in exploration.points if point.id == "tavern_keeper")
     assert keeper.npc_interaction is not None
     assert keeper.npc_interaction.id == "keeper_olan"
     assert {goal.id for goal in keeper.npc_interaction.goals} == {
         "ask_watchtower_rumors",
         "chat_with_keeper",
+        "order_olan_ale",
+        "describe_olan_ale",
     }
+    keeper_goals = {
+        goal.id: goal for goal in keeper.npc_interaction.goals
+    }
+    assert (
+        keeper_goals["ask_watchtower_rumors"].resolution_mode
+        == InteractionResolutionMode.AUTOMATIC
+    )
+    assert (
+        keeper_goals["chat_with_keeper"].resolution_mode
+        == InteractionResolutionMode.CONVERSATION
+    )
+    assert (
+        keeper_goals["describe_olan_ale"].resolution_mode
+        == InteractionResolutionMode.LLM_RUBRIC
+    )
+    assert keeper_goals["describe_olan_ale"].llm_rubric
     keeper_flow = next(flow for flow in exploration.flows if flow.npc_id == "keeper_olan")
     assert keeper_flow.id == "tavern_keeper_flow"
     assert {transition.id for transition in keeper_flow.transitions} == {
         "ask_olan_about_watchtower",
         "chat_with_olan",
+        "order_olan_ale",
+        "describe_olan_ale",
     }
     assert elder.npc_interaction.policy.intent_permission("information").time_cost_minutes == 10
     assert elder.npc_interaction.policy.intent_permission("commitment").time_cost_minutes == 5

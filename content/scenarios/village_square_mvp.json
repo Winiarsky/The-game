@@ -127,6 +127,7 @@
       "departure_zone_id": "forest_road",
       "target_scenario_id": "abandoned_watchtower",
       "target_scenario_path": "abandoned_watchtower.json",
+      "unavailable_hint": "Najpierw porozmawiajcie na Rynku z sołtysem Brenem, przyjmijcie zadanie i potwierdźcie mu gotowość do wymarszu.",
       "available_if_flags": ["ready_for_watchtower"],
       "propagate_flags": [
         "quest_hook_found",
@@ -250,13 +251,14 @@
         "name": "Rynek",
         "image": "assets/merchant_mira.png",
         "paper_map": {
-          "id": "village_market",
-          "preview_path": "print_maps/village_watchtower/png/village_market.png",
-          "a4_pdf_path": "print_maps/village_watchtower/pdf/a4/village_market.pdf",
-          "full_size_pdf_path": "print_maps/village_watchtower/pdf/full_size/village_market.pdf"
+          "id": "village_overview",
+          "preview_path": "print_maps/village_watchtower/png/village_overview.png",
+          "a4_pdf_path": "print_maps/village_watchtower/pdf/a4/village_overview.pdf",
+          "full_size_pdf_path": "print_maps/village_watchtower/pdf/full_size/village_overview.pdf"
         },
         "positions": [[7, 3], [8, 3], [9, 3], [7, 4], [8, 4], [9, 4], [7, 5], [8, 5], [9, 5]],
         "anchor_position": [8, 4],
+        "interaction_pad_positions": [[6, 2], [8, 2], [10, 2], [10, 4], [10, 6], [8, 6], [6, 6], [6, 4]],
         "color": "marker",
         "description": "Centralny plac wioski z tablicą ogłoszeń i kilkoma zaniepokojonymi mieszkańcami.",
         "adjacent_zone_ids": ["tavern", "elder_house", "forest_road"],
@@ -266,6 +268,9 @@
             "id": "read_notice_board",
             "label": "Sprawdź tablicę ogłoszeń",
             "kind": "message",
+            "resolution_mode": "automatic",
+            "description_mode": "none",
+            "default_declaration": "Czytamy tablicę ogłoszeń.",
             "color": "marker",
             "message": "Na tablicy wisi świeże ostrzeżenie: nie zbliżać się do opuszczonej strażnicy po zmroku.",
             "success_flag": "notice_read"
@@ -274,6 +279,9 @@
             "id": "ask_for_rumors",
             "label": "Popytaj mieszkańców",
             "kind": "check",
+            "resolution_mode": "check",
+            "description_mode": "optional",
+            "default_declaration": "Pytamy mieszkańców o niepokojące wydarzenia.",
             "color": "multi",
             "description": "Spróbuj zebrać plotki od przechodniów.",
             "ability_check": {
@@ -302,13 +310,14 @@
         "name": "Karczma",
         "image": "assets/innkeeper_olan.png",
         "paper_map": {
-          "id": "village_tavern",
-          "preview_path": "print_maps/village_watchtower/png/village_tavern.png",
-          "a4_pdf_path": "print_maps/village_watchtower/pdf/a4/village_tavern.pdf",
-          "full_size_pdf_path": "print_maps/village_watchtower/pdf/full_size/village_tavern.pdf"
+          "id": "village_overview",
+          "preview_path": "print_maps/village_watchtower/png/village_overview.png",
+          "a4_pdf_path": "print_maps/village_watchtower/pdf/a4/village_overview.pdf",
+          "full_size_pdf_path": "print_maps/village_watchtower/pdf/full_size/village_overview.pdf"
         },
         "positions": [[2, 10], [3, 10], [4, 10], [2, 11], [3, 11], [4, 11], [2, 12], [3, 12], [4, 12]],
         "anchor_position": [3, 11],
+        "interaction_pad_positions": [[1, 9], [3, 9], [5, 9], [5, 11], [5, 13], [3, 13], [1, 13], [1, 11]],
         "color": "warning",
         "description": "Głośna karczma, w której można odpocząć i posłuchać plotek.",
         "adjacent_zone_ids": ["market"],
@@ -324,6 +333,9 @@
             "id": "tavern_dice_game",
             "label": "Zagraj w kości",
             "kind": "check",
+            "resolution_mode": "check",
+            "description_mode": "none",
+            "default_declaration": "Rozgrywamy partię w kości.",
             "color": "multi",
             "description": "Postaw 1 sp i rozegraj partię z miejscowym hazardzistą. Wybierz postać, a następnie wykonaj fizyczny rzut d20; biegłość w zestawie kości jest doliczana automatycznie.",
             "ability_check": {
@@ -344,13 +356,14 @@
         "name": "Dom sołtysa",
         "image": "assets/elder_bren.png",
         "paper_map": {
-          "id": "village_elder_house",
-          "preview_path": "print_maps/village_watchtower/png/village_elder_house.png",
-          "a4_pdf_path": "print_maps/village_watchtower/pdf/a4/village_elder_house.pdf",
-          "full_size_pdf_path": "print_maps/village_watchtower/pdf/full_size/village_elder_house.pdf"
+          "id": "village_overview",
+          "preview_path": "print_maps/village_watchtower/png/village_overview.png",
+          "a4_pdf_path": "print_maps/village_watchtower/pdf/a4/village_overview.pdf",
+          "full_size_pdf_path": "print_maps/village_watchtower/pdf/full_size/village_overview.pdf"
         },
         "positions": [[13, 8], [14, 8], [15, 8], [13, 9], [14, 9], [15, 9], [13, 10], [14, 10], [15, 10]],
         "anchor_position": [14, 9],
+        "interaction_pad_positions": [[12, 7], [14, 7], [16, 7], [16, 9], [16, 11], [14, 11], [12, 11], [12, 9]],
         "color": "interactive",
         "description": "Skromny dom sołtysa i miejsce rozmów o problemach wioski.",
         "adjacent_zone_ids": ["market"],
@@ -360,6 +373,9 @@
             "id": "inspect_old_map",
             "label": "Obejrzyj starą mapę",
             "kind": "message",
+            "resolution_mode": "automatic",
+            "description_mode": "none",
+            "default_declaration": "Oglądamy starą mapę.",
             "color": "movement",
             "message": "Na starej mapie widać boczną ścieżkę do strażnicy.",
             "success_flag": "route_prepared"
@@ -371,13 +387,14 @@
         "name": "Droga do lasu",
         "image": "assets/forest_road.png",
         "paper_map": {
-          "id": "village_forest_road",
-          "preview_path": "print_maps/village_watchtower/png/village_forest_road.png",
-          "a4_pdf_path": "print_maps/village_watchtower/pdf/a4/village_forest_road.pdf",
-          "full_size_pdf_path": "print_maps/village_watchtower/pdf/full_size/village_forest_road.pdf"
+          "id": "village_overview",
+          "preview_path": "print_maps/village_watchtower/png/village_overview.png",
+          "a4_pdf_path": "print_maps/village_watchtower/pdf/a4/village_overview.pdf",
+          "full_size_pdf_path": "print_maps/village_watchtower/pdf/full_size/village_overview.pdf"
         },
         "positions": [[16, 18], [17, 18], [18, 18], [16, 19], [17, 19], [18, 19], [16, 20], [17, 20], [18, 20]],
         "anchor_position": [17, 19],
+        "interaction_pad_positions": [[15, 17], [17, 17], [19, 17], [19, 19], [19, 21], [17, 21], [15, 21], [15, 19]],
         "color": "movement",
         "description": "Droga prowadząca w stronę opuszczonej strażnicy.",
         "adjacent_zone_ids": ["market"],
@@ -387,6 +404,9 @@
             "id": "check_tracks",
             "label": "Zbadaj ślady",
             "kind": "check",
+            "resolution_mode": "check",
+            "description_mode": "none",
+            "default_declaration": "Badamy ślady na drodze.",
             "color": "interactive",
             "description": "Sprawdź, kto ostatnio szedł w stronę lasu.",
             "ability_check": {
@@ -442,6 +462,9 @@
             {
               "id": "ask_watchtower_problem",
               "label": "Zapytajcie o strażnicę",
+              "resolution_mode": "automatic",
+              "description_mode": "none",
+              "default_declaration": "Pytamy Brena, co wydarzyło się przy strażnicy.",
               "image": "assets/elder_bren.png",
               "description": "Dowiedzcie się, co wydarzyło się przy starej strażnicy i czego potrzebują mieszkańcy.",
               "followup_prompt": "O co dokładnie pytacie Brena i jak pokazujecie, że traktujecie sprawę poważnie?",
@@ -471,6 +494,8 @@
             {
               "id": "negotiate_advance",
               "label": "Negocjujcie zapłatę z góry",
+              "resolution_mode": "check",
+              "description_mode": "required",
               "image": "assets/elder_bren.png",
               "description": "Spróbujcie uzyskać gwarancję wynagrodzenia, zanim wyruszycie pod strażnicę.",
               "followup_prompt": "Jak uzasadniacie żądanie zapłaty lub gwarancji przed wyprawą?",
@@ -495,6 +520,9 @@
             {
               "id": "accept_watchtower_quest",
               "label": "Przyjmijcie zadanie",
+              "resolution_mode": "automatic",
+              "description_mode": "none",
+              "default_declaration": "Przyjmujemy zadanie Brena.",
               "image": "assets/elder_bren.png",
               "description": "Potwierdźcie, że drużyna zajmie się zagrożeniem przy opuszczonej strażnicy.",
               "followup_prompt": "Jak oznajmiacie Brenowi, że przyjmujecie zadanie?",
@@ -524,6 +552,9 @@
             {
               "id": "confirm_watchtower_departure",
               "label": "Potwierdźcie gotowość do drogi",
+              "resolution_mode": "automatic",
+              "description_mode": "none",
+              "default_declaration": "Potwierdzamy gotowość do drogi.",
               "image": "assets/elder_bren.png",
               "description": "Powiedzcie Brenowi, że przygotowania są zakończone i ruszacie starym traktem.",
               "followup_prompt": "Jak potwierdzacie, że drużyna jest gotowa wyruszyć?",
@@ -679,6 +710,9 @@
             {
               "id": "ask_watchtower_rumors",
               "label": "Zapytajcie o strażnicę",
+              "resolution_mode": "automatic",
+              "description_mode": "none",
+              "default_declaration": "Pytamy Olana o strażnicę i stary trakt.",
               "image": "assets/innkeeper_olan.png",
               "description": "Dowiedzcie się, co Olan słyszał o goblinach, starym trakcie i opuszczonej strażnicy.",
               "followup_prompt": "Jak pytacie Olana o niepokojące wydarzenia na trakcie i przy strażnicy?",
@@ -708,6 +742,8 @@
             {
               "id": "chat_with_keeper",
               "label": "Porozmawiajcie z Olanem",
+              "resolution_mode": "conversation",
+              "description_mode": "required",
               "image": "assets/innkeeper_olan.png",
               "description": "Podejmijcie niezobowiązującą rozmowę o karczmie, wiosce lub podróżnych.",
               "followup_prompt": "O czym chcecie porozmawiać z Olanem?",
@@ -715,6 +751,41 @@
               "participant_mode": "allow",
               "check_participants": "single_actor",
               "allowed_check_participants": ["single_actor", "lead_with_help"]
+            },
+            {
+              "id": "order_olan_ale",
+              "label": "Zamówcie piwo Olana",
+              "resolution_mode": "automatic",
+              "description_mode": "none",
+              "default_declaration": "Zamawiamy kufel miejscowego piwa.",
+              "image": "assets/innkeeper_olan.png",
+              "description": "Poproście o kufel miejscowego piwa i sprawdźcie, czym karczmarz częstuje podróżnych.",
+              "followup_prompt": "Kto zamawia piwo i w jaki sposób zwraca się do Olana?",
+              "intent_ids": ["hospitality"],
+              "participant_mode": "must",
+              "check_participants": "single_actor",
+              "grounded_response": {
+                "player_narration": "Olan napełnia cynowy kufel bursztynowym piwem i przesuwa go po ladzie.",
+                "npc_response": "Spróbujcie. Słód z naszej doliny, chmiel od starej Miry. I powiedzcie uczciwie — jak wam smakuje?",
+                "success_message": "Drużyna otrzymuje kufel miejscowego piwa, a Olan czeka na szczerą opinię."
+              }
+            },
+            {
+              "id": "describe_olan_ale",
+              "label": "Opiszcie smak piwa",
+              "resolution_mode": "llm_rubric",
+              "description_mode": "required",
+              "llm_rubric": [
+                "Wypowiedź zawiera konkretny detal smaku, aromatu, konsystencji albo osobistą, szczerą reakcję.",
+                "Wypowiedź przekazuje Olanowi więcej niż samo ogólne stwierdzenie „dobre” lub „niedobre”.",
+                "Ocena nie musi być pochwałą; powinna być spójna i odnosić się do wypitego piwa."
+              ],
+              "image": "assets/innkeeper_olan.png",
+              "description": "Olan czeka na opinię. Trafna, barwna lub szczera reakcja może poprawić jego nastawienie.",
+              "followup_prompt": "Jak opisujecie smak piwa i co dokładnie mówicie Olanowi?",
+              "intent_ids": ["beer_tasting"],
+              "participant_mode": "must",
+              "check_participants": "single_actor"
             }
           ],
           "policy": {
@@ -733,12 +804,39 @@
                 "time_cost_minutes": 15,
                 "notes": "Swobodna rozmowa o karczmie, wiosce i podróżnych."
               },
+              "hospitality": {
+                "status": "allowed",
+                "time_cost_minutes": 5,
+                "notes": "Olan bez testu podaje próbkę miejscowego piwa i prosi o opinię.",
+                "effects_on_success": [
+                  {"type": "set_flag", "parameters": {"key": "olan_beer_ordered", "value": true}}
+                ]
+              },
+              "beer_tasting": {
+                "status": "allowed",
+                "time_cost_minutes": 5,
+                "notes": "MG ocenia, czy opis smaku jest szczery, barwny i pasuje do podanego piwa. Nie wymaga pochwały; liczy się jakość reakcji gracza.",
+                "uses_social_reaction": true,
+                "state_on_success": {
+                  "attitude": "friendly",
+                  "emotional_state": "Rozbawiony i wyraźnie przychylniejszy drużynie."
+                },
+                "state_on_failure": {
+                  "emotional_state": "Lekko rozczarowany zdawkową albo obraźliwą odpowiedzią."
+                },
+                "effects_on_success": [
+                  {"type": "set_flag", "parameters": {"key": "olan_beer_reviewed", "value": true}}
+                ],
+                "effects_on_failure": [
+                  {"type": "set_flag", "parameters": {"key": "olan_beer_reviewed", "value": true}}
+                ]
+              },
               "trade": {"status": "blocked"},
               "gambling": {"status": "blocked"},
               "harm": {"status": "blocked"},
               "theft": {"status": "blocked"}
             },
-            "allowed_flags": ["tavern_rumor_heard", "quest_hook_found"],
+            "allowed_flags": ["tavern_rumor_heard", "quest_hook_found", "olan_beer_ordered", "olan_beer_reviewed"],
             "allowed_effect_types": ["set_flag"],
             "allowed_abilities": ["charisma", "wisdom"],
             "allowed_skills": ["persuasion", "insight"],
@@ -852,6 +950,29 @@
             "active_when": {
               "all_flags": ["tavern_rumor_heard"]
             }
+          },
+          {
+            "id": "keeper_beer_available",
+            "label": "Drużyna może zamówić miejscowe piwo",
+            "active_when": {
+              "no_flags": ["olan_beer_ordered"]
+            }
+          },
+          {
+            "id": "keeper_awaits_beer_opinion",
+            "label": "Olan czeka na opinię o piwie",
+            "active_when": {
+              "all_flags": ["olan_beer_ordered"],
+              "no_flags": ["olan_beer_reviewed"]
+            }
+          },
+          {
+            "id": "keeper_beer_reviewed",
+            "label": "Drużyna oceniła piwo Olana",
+            "active_when": {
+              "all_flags": ["olan_beer_reviewed"]
+            },
+            "terminal": true
           }
         ],
         "transitions": [
@@ -868,6 +989,20 @@
             "from": ["keeper_has_rumor", "keeper_rumor_shared"],
             "route_kind": "npc_intent",
             "route_ref": "social"
+          },
+          {
+            "id": "order_olan_ale",
+            "goal_id": "order_olan_ale",
+            "from": ["keeper_beer_available"],
+            "route_kind": "npc_intent",
+            "route_ref": "hospitality"
+          },
+          {
+            "id": "describe_olan_ale",
+            "goal_id": "describe_olan_ale",
+            "from": ["keeper_awaits_beer_opinion"],
+            "route_kind": "npc_intent",
+            "route_ref": "beer_tasting"
           }
         ]
       }

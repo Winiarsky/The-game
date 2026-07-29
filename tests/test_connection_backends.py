@@ -162,6 +162,10 @@ def test_wled_color_hex_supports_grb_channel_order():
     assert _color_to_hex([0, 255, 120], "grb") == "FF0078"
 
 
+def test_project_wled_config_keeps_ui_rgb_colors_unchanged():
+    assert wled_config(load_board_config())["color_order"] == "rgb"
+
+
 def test_wled_scan_update_can_override_normal_brightness(monkeypatch):
     client = _WledClient(
         {

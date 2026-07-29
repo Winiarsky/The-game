@@ -99,6 +99,8 @@ from dnd_board_game.exploration import (
     ExplorationFlowRouteKind,
     ExplorationFlowTransition,
     InteractionGoal,
+    InteractionDescriptionMode,
+    InteractionResolutionMode,
     InteractionSourceAction,
     InteractionParticipantMode,
     InteractionMethodRule,
@@ -3107,6 +3109,13 @@ def _parse_exploration_zone(
         available_if_flag=str(data["available_if_flag"]) if "available_if_flag" in data else None,
         available_if_value=data.get("available_if_value", True),
         options=tuple(_parse_exploration_option(entry, zone_id) for entry in data.get("options", [])),
+        interaction_pad_positions=tuple(
+            _parse_coordinate(
+                position,
+                f"exploration zone {zone_id}.interaction_pad_positions",
+            )
+            for position in data.get("interaction_pad_positions", [])
+        ),
         adjacent_zone_ids=tuple(str(item) for item in data.get("adjacent_zone_ids", [])),
         travel_minutes=int(data.get("travel_minutes", 0)),
         ambient_light=_enum_value(
@@ -3627,6 +3636,28 @@ def _parse_exploration_option(data: Any, zone_id: str) -> ExplorationOption:
         entry_cost_cp=int(data.get("entry_cost_cp", 0)),
         success_reward_cp=int(data.get("success_reward_cp", 0)),
         time_cost_minutes=int(data.get("time_cost_minutes", 0)),
+        resolution_mode=InteractionResolutionMode(
+            str(
+                data.get(
+                    "resolution_mode",
+                    (
+                        InteractionResolutionMode.AUTOMATIC.value
+                        if str(data.get("kind", ExplorationOptionKind.MESSAGE.value))
+                        == ExplorationOptionKind.MESSAGE.value
+                        else InteractionResolutionMode.CHECK.value
+                    ),
+                )
+            )
+        ),
+        description_mode=InteractionDescriptionMode(
+            str(
+                data.get(
+                    "description_mode",
+                    InteractionDescriptionMode.REQUIRED.value,
+                )
+            )
+        ),
+        default_declaration=str(data.get("default_declaration", "")),
     )
 
 
@@ -3707,6 +3738,7 @@ def _parse_scenario_continuation(
         target_scenario_id=target_scenario_id,
         target_scenario_path=raw_target_path,
         target_scenario_name=str(target_data.get("name", target_scenario_id)),
+        unavailable_hint=str(data.get("unavailable_hint", "")),
         available_if_flags=tuple(
             str(flag)
             for flag in data.get("available_if_flags", [])
@@ -4026,6 +4058,30 @@ def _parse_interaction_goals(
                     if str(item).strip()
                 ),
                 source_required=bool(raw_goal.get("source_required", False)),
+                resolution_mode=InteractionResolutionMode(
+                    str(
+                        raw_goal.get(
+                            "resolution_mode",
+                            InteractionResolutionMode.CHECK.value,
+                        )
+                    )
+                ),
+                description_mode=InteractionDescriptionMode(
+                    str(
+                        raw_goal.get(
+                            "description_mode",
+                            InteractionDescriptionMode.REQUIRED.value,
+                        )
+                    )
+                ),
+                default_declaration=str(
+                    raw_goal.get("default_declaration", "")
+                ),
+                llm_rubric=tuple(
+                    str(item).strip()
+                    for item in raw_goal.get("llm_rubric", [])
+                    if str(item).strip()
+                ),
                 participant_mode=InteractionParticipantMode(
                     str(raw_goal.get("participant_mode", InteractionParticipantMode.MUST.value))
                 ),

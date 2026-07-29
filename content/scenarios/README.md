@@ -365,10 +365,10 @@ Strefa może wskazywać fizyczną papierową mapę:
   "id": "gate",
   "name": "Brama strażnicy",
   "paper_map": {
-    "id": "watchtower_gate",
-    "preview_path": "print_maps/village_watchtower/png/watchtower_gate.png",
-    "a4_pdf_path": "print_maps/village_watchtower/pdf/a4/watchtower_gate.pdf",
-    "full_size_pdf_path": "print_maps/village_watchtower/pdf/full_size/watchtower_gate.pdf",
+    "id": "watchtower_overview",
+    "preview_path": "print_maps/village_watchtower/png/watchtower_overview.png",
+    "a4_pdf_path": "print_maps/village_watchtower/pdf/a4/watchtower_overview.pdf",
+    "full_size_pdf_path": "print_maps/village_watchtower/pdf/full_size/watchtower_overview.pdf",
     "width_cm": 50,
     "height_cm": 75
   }
@@ -376,11 +376,33 @@ Strefa może wskazywać fizyczną papierową mapę:
 ```
 
 Ścieżki są względne wobec głównego `assets/`. Przed pierwszym setupem oraz po
-każdym przejściu do innej strefy UI pokazuje podgląd i linki do druku, a
-rozgrywka pozostaje zatrzymana do potwierdzenia rozłożenia mapy. Dopiero później
-uruchamiane są kroki ustawiania NPC, elementów sceny i pasywnego wykrywania.
+przejściu do strefy używającej innej mapy UI pokazuje podgląd i linki do druku,
+a rozgrywka pozostaje zatrzymana do potwierdzenia rozłożenia mapy. Strefy na tej
+samej mapie nie wymagają jej ponownego rozkładania. `interaction_pad_positions`
+określa pola, na których runtime pokazuje dynamiczne, kolorowe opcje powiązane
+numerem i kolorem z kafelkami UI. Dopiero później uruchamiane są kroki ustawiania
+NPC, elementów sceny i pasywnego wykrywania.
 Standard projektu to plansza 20×30 pól, pole 2,5 cm i mapa 50×75 cm bez
 nadrukowanej kratki. Kafelkowe PDF-y A4 należy drukować w skali 100%.
+
+## Kontrakt interakcji
+
+Opcje stref i cele wyzwań/NPC jawnie określają sposób rozstrzygnięcia:
+
+- `resolution_mode`: `automatic` (autorski rezultat bez rzutu i LLM), `check`
+  (deterministyczny test D&D), `llm_rubric` (ocena tekstu według zapisanych
+  kryteriów, bez rzutu) albo `conversation` (swobodna rozmowa w granicach
+  wiedzy i polityki NPC);
+- `description_mode`: `none`, `optional` albo `required`;
+- `default_declaration`: tekst techniczny wykonywany po kliknięciu, wymagany
+  przy `description_mode: none`;
+- `llm_rubric`: lista jawnych kryteriów, wymagana tylko dla `llm_rubric`.
+
+Opis opcjonalny może uruchomić wyłącznie premie, kary lub konsekwencje
+zdefiniowane w contencie (np. regułę metody dla wyważania bramy). LLM nie może
+sam zmieniać ST ani tworzyć nagród. Dla prostego, oskryptowanego testu runtime
+przechodzi bezpośrednio do fizycznego rzutu, bez wcześniejszej interpretacji
+deklaracji przez LLM.
 
 Zasób eksploracji może być wielokrotnego użytku albo jednorazowy:
 
@@ -690,6 +712,7 @@ scenariusza oraz flagi wymagane do aktywacji:
     "departure_zone_id": "forest_road",
     "target_scenario_id": "abandoned_watchtower",
     "target_scenario_path": "abandoned_watchtower.json",
+    "unavailable_hint": "Porozmawiajcie z sołtysem i potwierdźcie gotowość.",
     "available_if_flags": ["ready_for_watchtower"],
     "propagate_flags": ["quest_accepted", "watchtower_alerted"],
     "travel_minutes": 45,
@@ -722,6 +745,9 @@ scenariusza oraz flagi wymagane do aktywacji:
   }
 }
 ```
+
+Opcjonalne `unavailable_hint` jest bezpieczną dla gracza instrukcją wyświetlaną,
+gdy przejście istnieje, ale nie zostały jeszcze spełnione jego flagi.
 
 Loader odrzuca nieznaną strefę, brakujący plik, niezgodne `target_scenario_id`,
 ścieżkę absolutną oraz `..`. Runtime pozwala zakończyć scenę przez continuation

@@ -16,6 +16,9 @@
         {
           "id": "force_entry",
           "label": "Wyważcie bramę",
+          "resolution_mode": "check",
+          "description_mode": "optional",
+          "default_declaration": "Próbujemy siłą wyważyć bramę.",
           "description": "Spróbujcie sforsować drewno, zamek albo okucia siłą.",
           "image": "assets/gate_force_entry.webp",
           "followup_prompt": "Czego używacie i jak zabieracie się do wyważania?",
@@ -36,6 +39,9 @@
         {
           "id": "use_wall_route",
           "label": "Przejdźcie odkrytą drogą",
+          "resolution_mode": "check",
+          "description_mode": "none",
+          "default_declaration": "Przechodzimy odkrytą drogą przez niski fragment muru.",
           "description": "Wykorzystajcie znalezione obejście przez niski fragment muru, zanim gobliny zorientują się w planie.",
           "image": "assets/gate_wall_route.webp",
           "followup_prompt": "Jak korzystacie z odkrytego przejścia i jak pomagacie sobie na murze?",
@@ -49,6 +55,9 @@
         {
           "id": "attach_wall_rope",
           "label": "Zamocujcie linę na murze",
+          "resolution_mode": "check",
+          "description_mode": "none",
+          "default_declaration": "Mocujemy wybraną linę jako asekurację na murze.",
           "description": "Przygotujcie stałą asekurację, z której później skorzysta cała drużyna.",
           "image": "assets/gate_wall_route.webp",
           "followup_prompt": "Gdzie i w jaki sposób mocujecie linę, żeby utrzymała ciężar drużyny?",
@@ -62,6 +71,9 @@
         {
           "id": "use_attached_wall_route",
           "label": "Przejdźcie po zamocowanej linie",
+          "resolution_mode": "check",
+          "description_mode": "none",
+          "default_declaration": "Przechodzimy przez mur po zamocowanej linie.",
           "description": "Stała asekuracja jest już gotowa. Wybierzcie, kto przechodzi, i opiszcie sposób pokonania muru.",
           "image": "assets/gate_wall_route.webp",
           "followup_prompt": "Jak organizujecie przejście po przygotowanej linie?",
@@ -74,6 +86,9 @@
         {
           "id": "open_lock",
           "label": "Otwórzcie zamek",
+          "resolution_mode": "check",
+          "description_mode": "none",
+          "default_declaration": "Próbujemy otworzyć zardzewiały zamek wybranym narzędziem.",
           "description": "Zajmijcie się zardzewiałym zamkiem lub mechanizmem bramy.",
           "image": "assets/gate_lock.webp",
           "followup_prompt": "Jakich narzędzi i sposobu używacie przy zamku?",
@@ -85,6 +100,8 @@
         {
           "id": "look_around",
           "label": "Rozejrzyjcie się",
+          "resolution_mode": "check",
+          "description_mode": "required",
           "description": "Powiedzcie, czego szukacie. Konkretne, oczywiste materiały można znaleźć bez rzutu; ukryte przejścia, zagrożenia i szerokie poszukiwania wymagają próby.",
           "image": "assets/gate_look_around.webp",
           "followup_prompt": "Czego dokładnie szukacie albo co chcecie obejrzeć?",
@@ -103,6 +120,9 @@
         {
           "id": "remove_bolt",
           "label": "Zdejmijcie rygiel",
+          "resolution_mode": "check",
+          "description_mode": "optional",
+          "default_declaration": "Próbujemy dosięgnąć i zdjąć rygiel po drugiej stronie bramy.",
           "description": "Zamek jest otwarty, lecz od środka bramę trzyma ciężki drewniany rygiel. Wymyślcie, jak dosięgnąć, podważyć albo przeciąć blokadę.",
           "image": "assets/gate_bolt.webp",
           "followup_prompt": "Jak próbujecie zdjąć rygiel po drugiej stronie bramy?",
@@ -854,6 +874,9 @@
         {
           "id": "survey_courtyard",
           "label": "Rozejrzyjcie się po okolicy",
+          "resolution_mode": "check",
+          "description_mode": "optional",
+          "default_declaration": "Uważnie badamy dziedziniec i wypatrujemy śladów oraz zagrożeń.",
           "description": "Obejrzyjcie ślady walki, krew, błoto i szczątki rozbitego wozu.",
           "image": "assets/courtyard_search.png",
           "followup_prompt": "Na czym skupiacie uwagę i czego próbujecie się dowiedzieć?",

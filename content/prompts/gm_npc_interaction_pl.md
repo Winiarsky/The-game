@@ -62,6 +62,7 @@ Zwracaj JSON w takim kształcie:
   "target_id": null,
   "quantity": 1,
   "grounded_response_variant_id": null,
+  "rubric_outcome": null,
   "player_narration": "Krótki opis tego, co widzi drużyna i jak NPC reaguje.",
   "npc_response": "Kwestia wypowiedziana przez NPC.",
   "requires_roll": true,
@@ -92,6 +93,7 @@ Zasady:
 - Intencji ze statusem `locked` używaj tylko wtedy, gdy spełnione są jej `unlock_if_flags` albo proponowany sukces ustawia te flagi.
 - Jeśli deklaracja jest zwykłą rozmową bez ryzyka, `requires_roll` może być false.
 - Jeśli wybrana intencja ma `uses_social_reaction: true`, sklasyfikuj koszt spełnienia prośby dla NPC w `request_risk`: `no_risk`, `minor_risk` albo `significant_risk`.
+- Jeżeli `selected_goal.resolution_mode` to `llm_rubric`, oceń wypowiedź wyłącznie według `selected_goal.llm_rubric` i ustaw `rubric_outcome` na `success` albo `failure`. Nie żądaj rzutu i nie zastępuj rubryki testem społecznym.
 - `request_risk` opisuje ryzyko dla NPC, nie trudność samej wypowiedzi. Dla pozostałych intencji ustaw null.
 - Dla intencji z `uses_social_reaction` nie ustalaj samodzielnie ST ani tego, czy rzut jest konieczny. Silnik nadpisze `requires_roll`, `ability` i `dc` na podstawie aktualnego nastawienia NPC; wybierz tylko właściwe `skill`: `persuasion`, `deception` albo `intimidation`.
 - `attempt_policy` jest twardą pamięcią wcześniejszych rzutów. Jeśli runtime i policy wskazują, że ponowienie jest zablokowane albo wyczerpane, odpowiedz naturalnie w roli NPC; nie obiecuj kolejnego testu ani sukcesu.

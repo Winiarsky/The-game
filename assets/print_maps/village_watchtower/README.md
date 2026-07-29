@@ -1,5 +1,15 @@
 # Papierowe mapy: wioska i strażnica
 
+MVP korzysta tylko z dwóch fizycznych map:
+
+- `village_overview` — jedna stała mapa wioski; rynek, karczma, dom sołtysa
+  i droga do lasu są punktami na tej samej planszy,
+- `watchtower_overview` — jedna stała mapa całego kompleksu strażnicy.
+
+Wejście do budynku nie wymaga podmiany papieru. Aplikacja pokazuje ilustrację
+sceny w UI, a dostępne działania przypisuje do kolorowych pól interakcji
+podświetlanych na głównej mapie.
+
 Każda mapa odpowiada całej fizycznej planszy:
 
 - 20 kolumn × 30 rzędów,

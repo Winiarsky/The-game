@@ -500,6 +500,7 @@ def create_app(
                 session.select_exploration_option(
                     str(data.get("option_id", "")),
                     actor_id=str(actor_id) if actor_id else None,
+                    player_description=str(data.get("player_description", "")),
                 )
             )
         except Exception as exc:
@@ -804,6 +805,18 @@ def create_app(
         data = request.get_json(silent=True) or {}
         try:
             return jsonify(session.set_exploration_board_selection(bool(data.get("enabled", False))))
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/exploration/lead-actor")
+    def api_exploration_lead_actor():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                session.set_exploration_lead_actor(
+                    str(data.get("actor_id", "")),
+                )
+            )
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 

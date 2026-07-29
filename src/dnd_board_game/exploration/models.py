@@ -214,6 +214,19 @@ class InteractionParticipantMode(StrEnum):
     ALLOW = "allow"
 
 
+class InteractionResolutionMode(StrEnum):
+    AUTOMATIC = "automatic"
+    CHECK = "check"
+    LLM_RUBRIC = "llm_rubric"
+    CONVERSATION = "conversation"
+
+
+class InteractionDescriptionMode(StrEnum):
+    NONE = "none"
+    OPTIONAL = "optional"
+    REQUIRED = "required"
+
+
 class CheckAggregation(StrEnum):
     LEAD_RESULT = "lead_result"
     HIGHEST = "highest"
@@ -547,12 +560,22 @@ class ExplorationOption:
     entry_cost_cp: int = 0
     success_reward_cp: int = 0
     time_cost_minutes: int = 0
+    resolution_mode: InteractionResolutionMode = InteractionResolutionMode.CHECK
+    description_mode: InteractionDescriptionMode = InteractionDescriptionMode.REQUIRED
+    default_declaration: str = ""
 
     def __post_init__(self) -> None:
         if self.entry_cost_cp < 0 or self.success_reward_cp < 0:
             raise ValueError("Exploration option currency values cannot be negative.")
         if self.time_cost_minutes < 0:
             raise ValueError("Exploration option time cost cannot be negative.")
+        if (
+            self.description_mode == InteractionDescriptionMode.NONE
+            and not self.default_declaration.strip()
+        ):
+            raise ValueError(
+                "An exploration option without description input requires default_declaration."
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -733,6 +756,7 @@ class ScenarioContinuation:
     target_scenario_id: str
     target_scenario_path: str
     target_scenario_name: str = ""
+    unavailable_hint: str = ""
     available_if_flags: tuple[str, ...] = ()
     propagate_flags: tuple[str, ...] = ()
     outcomes: tuple[ScenarioContinuationOutcome, ...] = ()
@@ -792,6 +816,7 @@ class ScenarioContinuation:
                 self.target_scenario_name or self.target_scenario_id
             ),
             "target_scenario_path": self.target_scenario_path,
+            "unavailable_hint": self.unavailable_hint,
             "available_if_flags": list(self.available_if_flags),
             "propagate_flags": list(self.propagate_flags),
             "has_authored_outcomes": bool(self.outcomes),
@@ -853,6 +878,7 @@ class ExplorationZone:
     available_if_flag: str | None = None
     available_if_value: object = True
     options: tuple[ExplorationOption, ...] = ()
+    interaction_pad_positions: tuple[Coordinate, ...] = ()
     adjacent_zone_ids: tuple[str, ...] = ()
     travel_minutes: int = 0
     ambient_light: LightLevel = LightLevel.BRIGHT
@@ -874,6 +900,14 @@ class ExplorationZone:
             raise ValueError("Exploration zone travel time cannot be negative.")
         if self.search_minutes <= 0:
             raise ValueError("Exploration zone search time must be positive.")
+        if len(self.interaction_pad_positions) != len(
+            set(self.interaction_pad_positions)
+        ):
+            raise ValueError("Exploration interaction pad positions must be unique.")
+        if self.marker_position in self.interaction_pad_positions:
+            raise ValueError(
+                "Exploration interaction pads cannot use the zone anchor position."
+            )
 
     @property
     def marker_position(self) -> Coordinate:
@@ -1383,6 +1417,10 @@ class InteractionGoal:
     grounded_response: NpcGroundedResponse | None = None
     accepted_source_tags: tuple[str, ...] = ()
     source_required: bool = False
+    resolution_mode: InteractionResolutionMode = InteractionResolutionMode.CHECK
+    description_mode: InteractionDescriptionMode = InteractionDescriptionMode.REQUIRED
+    default_declaration: str = ""
+    llm_rubric: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.id.strip() or not self.label.strip() or not self.description.strip():
@@ -1431,6 +1469,23 @@ class InteractionGoal:
             for tag in self.accepted_source_tags
         ):
             raise ValueError("Interaction goal source tags must be normalized.")
+        if (
+            self.description_mode == InteractionDescriptionMode.NONE
+            and not self.default_declaration.strip()
+        ):
+            raise ValueError(
+                "An interaction goal without description input requires default_declaration."
+            )
+        if (
+            self.resolution_mode == InteractionResolutionMode.LLM_RUBRIC
+            and not self.llm_rubric
+        ):
+            raise ValueError("An LLM rubric interaction requires at least one criterion.")
+        if (
+            self.resolution_mode != InteractionResolutionMode.LLM_RUBRIC
+            and self.llm_rubric
+        ):
+            raise ValueError("Only an LLM rubric interaction may define llm_rubric.")
 
     @property
     def participant_options(self) -> tuple[CheckParticipants, ...]:
@@ -1459,6 +1514,10 @@ class InteractionGoal:
             "custom": self.custom,
             "accepted_source_tags": list(self.accepted_source_tags),
             "source_required": self.source_required,
+            "resolution_mode": self.resolution_mode.value,
+            "description_mode": self.description_mode.value,
+            "default_declaration": self.default_declaration,
+            "llm_rubric": list(self.llm_rubric),
         }
 
 
