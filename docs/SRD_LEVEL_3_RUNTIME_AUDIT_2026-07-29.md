@@ -1,387 +1,392 @@
 # Audyt zgodności mechanik postaci z SRD 5.1
 
-Data audytu: 2026-07-29  
+Data pierwszego audytu: 2026-07-29
+
+Aktualizacja po naprawach i testach Areny: 2026-07-30
+
 Zakres: D&D 5e 2014 / SRD 5.1, postacie jednoklasowe do 3. poziomu,
 9 ras, 12 klas i 127 czarów poziomów 0–2.
 
 Źródłem porównawczym jest
 [System Reference Document 5.1](https://media.wizards.com/2016/downloads/DND/SRD-OGL_V5.1.pdf).
-Audyt sprawdza nie tylko obecność wpisu w katalogu, ale również koszt akcji,
-celowanie, zasięg, koncentrację, czas działania, skalowanie, rzeczywisty wpływ
-na stan gry, obsługę planszy oraz komunikat widoczny dla gracza.
+Bieżącym źródłem statusów, presetów i instrukcji testowych jest
+[rejestr Areny](../content/scenarios/mechanics_playground/audit_cases.json).
+Ten dokument jest generowany z rejestru poleceniem
+`python scripts/generate_srd_runtime_audit.py`; nie zawiera już historycznych
+statusów sprzed napraw.
 
-## Domknięcie audytu na Arenie
-
-Lista robocza audytu została przeniesiona do wykonywalnego rejestru
-`content/scenarios/mechanics_playground/audit_cases.json`. Rejestr jest
-autorytatywnym źródłem bieżącego statusu i zapisanych konfiguracji Areny.
+## Wynik końcowy
 
 | Wynik | Liczba |
 |---|---:|
-| Wszystkie przypadki | 236/236 |
-| Przetestowane automatycznie | 177 |
-| Świadomie pominięte z komentarzem | 59 |
-| Nierozstrzygnięte | 0 |
+| Wszystkie przypadki | 236 |
+| ✅ Przetestowane automatycznie | 177 |
+| ⏸️ Świadomie odłożone z uzasadnieniem | 59 |
+| ❓ Nierozstrzygnięte | 0 |
+| Unikalne odwołania do testów | 217 |
 
-Pokrycie obejmuje 127 czarów, 29 cech rasowych, 58 cech klasowych, 20 cech
-podklas oraz 2 mechaniki przekrojowe: flankowanie i rejestr konsumentów efektów
-czarów. Każdy przypadek zawiera odtwarzalny `arena_config`, kroki ręczne i
-oczekiwany rezultat. Status `skipped` nie oznacza przeoczenia: wskazuje element,
-którego uczciwe domknięcie wymaga nowego systemu (np. trwałych iluzji, aktorów
-chowańców, zegara świata albo kontraktu rozmowy LLM), a komentarz w rejestrze
-opisuje konkretną granicę.
+Status **przetestowane automatycznie** oznacza, że przypadek ma wykonywalny
+resolver oraz co najmniej jeden wskazany test rezultatu lub kontraktu.
+Status **świadomie odłożone** oznacza, że brak został zidentyfikowany, ma
+odtwarzalny preset Areny i komentarz opisujący potrzebny system. Nie jest
+traktowany jako działająca mechanika.
 
-Poniższe tabele zachowują stan i rozpoznanie problemów z chwili pierwotnego
-audytu. Bieżący wynik napraw i testów należy odczytywać z rejestru Areny.
+## Pokrycie według obszaru
 
-## Legenda
+| Obszar | Razem | Automatycznie | Odłożone |
+|---|---:|---:|---:|
+| Czary poziomów 0–2 | 127 | 82 | 45 |
+| Cechy rasowe | 29 | 28 | 1 |
+| Cechy klasowe | 58 | 49 | 9 |
+| Cechy podklas | 20 | 16 | 4 |
+| Mechaniki przekrojowe | 2 | 2 | 0 |
 
-| Status | Znaczenie |
-|---|---|
-| ✅ Zgodne | Główna mechanika działa deterministycznie i odpowiada SRD. |
-| 🟡 Adaptacja | Grywalne, lecz uproszczone albo zależne od oznaczonej sceny/stanu stołu. |
-| 🟠 Częściowe | Czar lub cecha działa tylko w części; istotny rider, wybór, czas albo przypadek brzegowy nie jest egzekwowany. |
-| 🔴 Błąd/brak efektu | Dane są błędne albo po użyciu powstaje głównie znacznik bez deklarowanego skutku. |
-| ⚪ Wybór/marker | Wpis sam nie powinien mieć efektu; wskazuje podklasę, styl albo grupę dalszych opcji. |
-| 🧪 | Brak testu behawioralnego odwołującego się bezpośrednio do tego czaru/efektu. |
+## Pokrycie modułów Areny
 
-## Wynik ogólny
+| Moduł | Liczba przypadków |
+|---|---:|
+| Arena walki | 124 |
+| Tor eksploracyjny | 57 |
+| Laboratorium czarów | 29 |
+| Pracownia rozmów | 18 |
+| Stacja odpoczynku | 8 |
 
-| Obszar | Pokrycie katalogu | Wynik audytu semantycznego |
-|---|---:|---|
-| Rasy | 9/9 | Rdzeń jest grywalny; `Tinker` jest świadomie stołowy, a część cech zależy od tagów sceny. |
-| Klasy/podklasy | 12/12 | Większość rdzenia walki działa, lecz istnieją uproszczenia czasu, widoczności, eksploracji i kilka niepełnych riderów. |
-| Czary 0–2 | 127/127 | 17 ataków, 2 leczenia, 61 akcji bojowych i 47 flag eksploracyjnych. Komplet plików nie oznacza kompletu mechaniki. |
-| Testy czarów | — | 65/127 identyfikatorów czarów nie występuje bezpośrednio w testach; obecny audyt sprawdza głównie schemat, nie rezultat każdego czaru. |
-| Flankowanie | reguła opcjonalna | Geometria ostatniej sesji była poprawna, ale brakuje kontroli `incapacitated`, a UI błędnie pokazuje przewagę jako `+0`. |
+Każdy z 236 wpisów przechowuje `arena_config`, wymagania drużyny, kroki
+ręczne i oczekiwane wyniki. Pozwala to odtworzyć ręcznie dokładnie te same
+warunki, których użyto podczas audytu.
 
-### Najważniejsze wykryte problemy
+## Najważniejsze domknięte problemy
 
-| Priorytet | Problem | Skutek dla gracza |
-|---|---|---|
-| P0 | `Invisibility` ma `concentration: false`. | Czar nie kończy poprzedniej koncentracji i nie może zostać przerwany obrażeniami zgodnie z SRD. |
-| P0 | `Gentle Repose` ma `concentration: true`, choć SRD jej nie wymaga. | Legalny czar bez koncentracji niepotrzebnie blokuje inne czary koncentracyjne. |
-| P0 | Efekty `Feather Fall`, `Mirror Image`, `Sanctuary`, `Levitate`, `Silence`, `Enhance Ability`, `Expeditious Retreat`, `Jump`, `See Invisibility`, `Spider Climb`, `Pass without Trace` i części ochronnych czarów nie mają pełnego konsumenta zasad. | Czar można rzucić i zużyć slot, ale oczekiwany efekt nie wpływa albo wpływa tylko częściowo na grę. |
-| P0 | Strefy `Darkness`, `Fog Cloud`, `Grease`, `Entangle`, `Web`, `Silence`, `Spike Growth`, `Flaming Sphere` i `Moonbeam` nie mają spójnego kontraktu punkt/obszar/ruch strefy. | UI często wybiera aktora zamiast pola; puste pole i wejście w strefę nie działają jak w SRD. |
-| P0 | `Vicious Mockery` nie nakłada utrudnienia do następnego ataku. | Sztuczka zadaje tylko obrażenia, tracąc główny rider. |
-| P1 | `Acid Splash` nie obsługuje opcjonalnego drugiego celu w odległości 5 stóp od pierwszego. | Czar jest słabszy niż w SRD. |
-| P1 | `Produce Flame` nie tworzy utrzymywanego źródła światła, a `Shatter` i `Fire Bolt` mają niepełną obsługę obiektów. | Brakuje zastosowań eksploracyjnych i interakcji z otoczeniem. |
-| P1 | Minuty i godziny są mapowane na granice `encounter`, `short_rest` lub `scenario`. | Efekty mogą skończyć się za wcześnie albo trwać za długo między scenami. |
-| P1 | `Sleep` budzi po obrażeniach, lecz brak ogólnej akcji sojusznika „obudź”; czas jest mapowany na encounter. | Jedna z dwóch standardowych metod pobudki nie ma własnej akcji. |
-| P1 | Pomoc klasowa w kreatorze obejmuje głównie cechy poziomu 1. | Gracz po awansie nie dostaje równie pełnego wyjaśnienia cech poziomu 2–3. |
+- Skorygowano koncentrację, czas działania, koszty akcji i zużywanie zasobów.
+- Wszystkie bojowe rodziny `effect_kind` mają zarejestrowaną granicę wykonawczą;
+  audyt blokuje ponowne dodanie martwego markera bez konsumenta.
+- Celowanie w aktorów, pola, linie, stożki i obszary jest prowadzone przez
+  planszę oraz legalne podświetlone pola.
+- Trwałe strefy obsługują właściwy dla danego czaru obszar, ruch, widoczność,
+  trudny teren, wejście w strefę lub początek tury.
+- Flankowanie daje przewagę zamiast liczbowego `+0` i nie korzysta z
+  obezwładnionego sojusznika.
+- Naprawiono m.in. Niewidzialność, Piętnujące porażenie, Znak łowcy,
+  Ostrze płomieni, Płonącą kulę, Rozgrzanie metalu, Wzmocnienie cechy,
+  Rozmycie, Ochronę przed dobrem i złem oraz ignorowanie osłony przez
+  Święty płomień.
+- Nazwy czarów, zdolności, umiejętności, narzędzi i przedmiotów używane
+  w interfejsie mają polskie etykiety.
 
-## Flankowanie — rekonstrukcja ostatniej sesji
+## Aktualnie przetestowane przypadki
 
-W `data/session_observations/exploration_ui_dee7ac6aa2.jsonl`:
+Poniższe statusy pochodzą bezpośrednio z rejestru Areny. Pełne kroki ręczne,
+skład drużyny i konfiguracja manekinów pozostają w pliku JSON.
 
-| Aktor | Pozycja |
-|---|---|
-| Pim | `(11, 6)` |
-| Goblin przy rumowisku | `(10, 6)` |
-| Nimra | `(9, 6)` |
+### Czary poziomów 0–2
 
-Pim i Nimra stali dokładnie po przeciwnych stronach jednopolowego goblina.
-`flanking_ally_ids=["nimra"]` było więc geometrycznie poprawne. Wynik ataku
-poprosił o `2d20 z przewagą`, co również odpowiada włączonej opcjonalnej regule
-flankowania. Dwie rzeczy były jednak nieprawidłowe:
+| ID | Nazwa | Moduł Areny | Aktualny efekt / oczekiwany rezultat | Dowód automatyczny |
+|---|---|---|---|---|
+| `spell_invisibility` | Niewidzialność | Arena walki | Czar ma szkołę iluzji, zasięg dotyku i koncentrację do 1 godziny.<br>Ataki niewidzialnego mają ułatwienie, a ataki przeciw niemu utrudnienie.<br>Efekt kończy się po ataku, rzuceniu czaru albo utracie koncentracji. | `tests/unit/test_spell_catalog.py::test_invisibility_and_gentle_repose_match_srd_metadata`<br>`tests/unit/test_scene_interactions.py::test_invisibility_grants_attack_advantage_and_ends_after_attack`<br>`tests/unit/test_player_combat_resource_flow.py::test_casting_invisibility_ends_previous_invisibility_on_caster` |
+| `spell_gentle_repose` | Łagodny spoczynek | Tor eksploracyjny | Czar działa przez 10 dni i nie wymaga koncentracji.<br>Zwłoki nie rozkładają się i nie mogą zostać przemienione w nieumarłego.<br>Czas ochrony nie pomniejsza limitu czasu dostępnego dla wskrzeszenia. | `tests/unit/test_spell_catalog.py::test_invisibility_and_gentle_repose_match_srd_metadata`<br>`tests/unit/test_spellcasting_schema.py::test_spell_duration_converts_to_exploration_minutes`<br>`tests/unit/test_exploration_spell_casting_flow.py::test_gentle_repose_targets_corpse_for_ten_days_without_concentration` |
+| `spell_feather_fall` | Powolne opadanie | Tor eksploracyjny | Reakcja pojawia się wyłącznie przy zagrożeniu będącym upadkiem.<br>Legalny czarujący w zasięgu 60 stóp zużywa slot i chroni spadający cel.<br>Chroniony cel nie otrzymuje obrażeń ani skutków nieudanego lądowania. | `tests/unit/test_mechanics_playground.py::test_playground_feather_fall_reaction_prevents_fall_hazard` |
+| `spell_mirror_image` | Lustrzane odbicia | Arena walki | Przekierowany atak porównuje wynik ataku z KP duplikatu równym 10 + modyfikator Zręczności celu.<br>Trafiony duplikat znika i chroniona postać nie otrzymuje obrażeń ani ridera trafienia.<br>Nietrafiony duplikat nie znika; atak bez przekierowania jest rozstrzygany przeciw właściwemu celowi. | `tests/unit/test_enemy_auto_attack.py::test_enemy_attack_can_destroy_mirror_image_instead_of_hurting_target`<br>`tests/unit/test_player_combat_action_flow.py::test_player_attack_uses_physical_mirror_image_roll_and_consumes_duplicate`<br>`tests/unit/test_combat_turn_finalization.py::test_commit_enemy_result_removes_destroyed_mirror_duplicate` |
+| `spell_sanctuary` | Sanktuarium | Arena walki | Napastnik wykonuje Wis save przeciw ST czarów rzucającego Sanktuarium.<br>Porażka wymusza inny legalny cel albo utratę ataku; cel zablokowany nie jest podświetlany ponownie w tej turze.<br>Ofensywna akcja chronionego kończy efekt; leczenie i działania nieszkodliwe go nie kończą. | `tests/unit/test_player_combat_action_flow.py::test_failed_sanctuary_save_blocks_target_and_board_keeps_alternative`<br>`tests/unit/test_enemy_auto_attack.py::test_enemy_failing_sanctuary_save_retargets_another_legal_hero`<br>`tests/unit/test_enemy_auto_attack.py::test_enemy_failing_sanctuary_save_without_alternative_loses_attack`<br>`tests/unit/test_scene_interactions.py::test_sanctuary_ends_when_protected_actor_makes_attack` |
+| `spell_levitate` | Lewitacja | Arena walki | Cel chętny zostaje uniesiony bez rzutu, a cel niechętny wykonuje Constitution save.<br>Efekt reprezentuje wysokość do 20 ft i blokuje zwykły ruch poziomy, dopóki trwa koncentracja.<br>Przesuwanie się przez odpychanie od stałego obiektu wymaga jawnej interakcji sceny. | `tests/unit/test_player_combat_resource_flow.py::test_levitate_allows_willing_ally_but_hostile_target_makes_constitution_save` |
+| `spell_locate_animals_or_plants` | Odnalezienie zwierząt lub roślin | Tor eksploracyjny | Runtime przeszukuje także ukryte, jawnie otagowane cele sceny w promieniu 5 mil.<br>Zwracany jest najbliższy pasujący gatunek oraz jego aktualny kierunek i dystans.<br>Brak celu daje jednoznaczną odpowiedź bez ujawniania niepasujących punktów. | `tests/unit/test_exploration_divination.py::test_locate_animals_or_plants_returns_nearest_matching_authored_species`<br>`tests/unit/test_exploration_divination.py::test_locate_animals_or_plants_ritual_records_instantaneous_query_without_slot` |
+| `spell_locate_object` | Odnalezienie przedmiotu | Tor eksploracyjny | Wyszukiwanie obejmuje otagowane, znane cele w promieniu 1000 ft.<br>Warstwa ołowiu blokuje wykrycie celu.<br>Aktywny efekt przechowuje zapytanie i dynamicznie przelicza kierunek względem pozycji drużyny. | `tests/unit/test_exploration_divination.py::test_locate_object_ignores_lead_shielding_and_keeps_query_for_concentration` |
+| `spell_magic_mouth` | Magiczne usta | Tor eksploracyjny | Zaklęcie jest przypisane do konkretnego obiektu i trwa do rozproszenia bez koncentracji.<br>Wiadomość ma najwyżej 25 słów, a pusty wyzwalacz jest odrzucany.<br>Interakcja z zaczarowanym obiektem odtwarza wiadomość wielokrotnie; authored scena może wywołać ten sam kontrakt innym zdarzeniem. | `tests/unit/test_magic_mouth.py::test_magic_mouth_persists_object_message_and_repeatable_interaction_trigger`<br>`tests/unit/test_magic_mouth.py::test_magic_mouth_rejects_message_longer_than_twenty_five_words`<br>`tests/unit/test_magic_mouth.py::test_magic_mouth_ritual_consumes_costly_component_and_has_no_expiry` |
+| `spell_magic_weapon` | Magiczna broń | Arena walki | Czar nie przyjmuje pustego wyboru ani broni już magicznej.<br>Premia i magiczny charakter są przypisane do jednego konkretnego item_id, nie do wszystkich ataków właściciela.<br>Na poziomach dostępnych postaci premia wynosi +1; resolver obsługuje też +2/+3 dla slotów 4./6. poziomu. | `tests/unit/test_player_combat_resource_flow.py::test_magic_weapon_requires_and_records_one_specific_nonmagical_weapon`<br>`tests/unit/test_scene_interactions.py::test_magic_weapon_bonus_applies_only_to_enchanted_weapon_source` |
+| `spell_misty_step` | Mglisty krok | Arena walki | Teleport obejmuje wyłącznie rzucającego i kończy się na wolnym polu widocznym w zasięgu 30 ft.<br>Czar zużywa bonus action i slot 2. poziomu, lecz nie ruch ani akcję.<br>Teleportacja nie przechodzi przez zwykły pipeline ruchu i nie prowokuje opportunity attack. | `tests/unit/test_spell_catalog.py::test_misty_step_adapts_to_thirty_foot_bonus_action_teleport`<br>`tests/unit/test_magic_movement_flow.py::test_teleport_uses_bonus_action_slot_and_does_not_spend_movement` |
+| `spell_moonbeam` | Księżycowy promień | Laboratorium czarów | Czar tworzy utrzymywaną strefę o promieniu 5 ft, również gdy początkowo nie ma w niej celu.<br>Obrażenia występują przy pierwszym wejściu w turze albo na początku tury, nie przy każdym kroku wewnątrz strefy.<br>Constitution save zmniejsza obrażenia o połowę, a wyższy slot dodaje 1k10.<br>Przesunięcie strefy odbywa się przez planszę, do 60 ft i zużywa akcję bez kolejnego slotu. | `tests/unit/test_spell_catalog.py::test_moonbeam_adapts_to_persistent_five_foot_radius_damage_zone`<br>`tests/unit/test_player_combat_resource_flow.py::test_moonbeam_creates_empty_board_zone_and_caster_can_move_it_with_action` |
+| `spell_pass_without_trace` | Przejście bez śladu | Tor eksploracyjny | Czar można rzucić w eksploracji, zużywa slot 2. poziomu i działa godzinę z koncentracją.<br>Premię +10 do Stealth otrzymują wyłącznie rzucający i sojusznicy w promieniu 30 ft; po wyjściu z aury premia znika dynamicznie.<br>Efekt przechodzi do walki jako normalny efekt koncentracyjny i wpływa na akcję Hide.<br>Brak śladów oraz odporność na niemagiczne tropienie są jawnym kontraktem narracyjnym scenariusza. | `tests/unit/test_spell_catalog.py::test_pass_without_trace_is_self_anchored_dynamic_stealth_aura`<br>`tests/unit/test_exploration_spell_casting_flow.py::test_pass_without_trace_can_start_before_encounter_and_lasts_one_hour`<br>`tests/unit/test_precombat_stealth_flow.py::test_pass_without_trace_dynamically_adds_ten_within_thirty_feet` |
+| `spell_prayer_of_healing` | Modlitwa leczenia | Stacja odpoczynku | Slot jest zużywany dopiero przy atomowym ukończeniu dziesięciominutowej czynności eksploracyjnej.<br>Każdy z maksymalnie 6 legalnych celów odzyskuje ten sam wynik kości + modyfikator cechy czarowania.<br>Wyższy slot dodaje 1k8, a runtime waliduje fizyczną sumę właściwej liczby k8.<br>Czar nie działa na konstrukty ani nieumarłych, a upływ czasu uruchamia zegary scenariusza i wygaszanie efektów. | `tests/unit/test_spell_catalog.py::test_prayer_of_healing_keeps_ten_minute_srd_casting_contract`<br>`tests/unit/test_prayer_of_healing_flow.py::test_prayer_of_healing_heals_up_to_six_legal_targets_after_ten_minutes`<br>`tests/unit/test_prayer_of_healing_flow.py::test_prayer_of_healing_rejects_illegal_explicit_target_without_spending_slot` |
+| `spell_protection_from_poison` | Ochrona przed trucizną | Laboratorium czarów | Czar działa przez godzinę bez koncentracji i może zostać rzucony również podczas eksploracji.<br>Jedna modelowana aktywna trucizna jest neutralizowana przez usunięcie stanu Zatruty.<br>Obrażenia poison są dzielone przez dwa z zaokrągleniem w dół, z zachowaniem zwykłych zasad odporności i podatności.<br>Rzuty obronne oznaczone poison albo dotyczące kończenia stanu Zatruty mają przewagę. | `tests/unit/test_spell_catalog.py::test_protection_from_poison_is_touch_hour_non_concentration_status`<br>`tests/unit/test_player_combat_resource_flow.py::test_protection_from_poison_neutralizes_poison_and_keeps_hour_effect`<br>`tests/unit/test_poison_protection.py::test_protection_from_poison_grants_poison_damage_resistance`<br>`tests/unit/test_poison_protection.py::test_protection_from_poison_grants_advantage_on_poison_saving_throw`<br>`tests/unit/test_poison_protection.py::test_protection_from_poison_grants_advantage_to_end_poisoned_condition` |
+| `spell_ray_of_enfeeblement` | Promień osłabienia | Arena walki | Efekt pojawia się wyłącznie po trafieniu ranged spell attack i wymaga koncentracji rzucającego.<br>Połowione są wyłącznie obrażenia ataków bronią, dla których ability wynosi strength.<br>Constitution save przeciw Spell Save DC rzucającego jest wymagany na końcu każdej tury celu.<br>Sukces save albo utrata koncentracji usuwa zarówno stan Osłabiony, jak i jego konsument obrażeń. | `tests/unit/test_spell_catalog.py::test_ray_of_enfeeblement_is_concentration_ranged_spell_attack`<br>`tests/unit/test_scene_interactions.py::test_ray_of_enfeeblement_halves_only_strength_weapon_damage`<br>`tests/unit/test_player_combat_action_flow.py::test_ray_of_enfeeblement_hit_creates_end_turn_constitution_save` |
+| `spell_rope_trick` | Sztuczka z liną | Tor eksploracyjny | Pozawymiarowa przestrzeń działa godzinę bez koncentracji i przechowuje listę maksymalnie 8 istot Medium lub mniejszych.<br>Wejście i wyjście są jawnymi, odtwarzalnymi operacjami, a wygaśnięcie efektu logicznie zwraca wszystkich na planszę.<br>Bezpośrednie ataki i czary nie przekraczają granicy portalu w żadnym kierunku.<br>Trzeci wymiar jest świadomie reprezentowany stanem przestrzeni, a nie fałszywym polem 2D planszy. | `tests/unit/test_spell_catalog.py::test_rope_trick_keeps_hour_touch_non_concentration_contract`<br>`tests/unit/test_rope_trick.py::test_rope_trick_tracks_entry_exit_and_capacity`<br>`tests/unit/test_rope_trick.py::test_rope_trick_rejects_large_creatures_and_invalid_rope_length`<br>`tests/unit/test_rope_trick.py::test_attacks_cannot_cross_rope_trick_entrance` |
+| `spell_scorching_ray` | Palący promień | Arena walki | Bazowy czar tworzy dokładnie trzy niezależne ranged spell attacks w zasięgu 120 ft.<br>Każdy promień ma własny cel, wynik d20, trafienie i 2k6 obrażeń fire.<br>Każdy slot powyżej 2. poziomu dodaje jeden promień.<br>Akcja i slot są wydawane dopiero po potwierdzeniu kompletnego przydziału. | `tests/unit/test_spell_catalog.py::test_scorching_ray_defines_three_separate_upcastable_spell_attacks`<br>`tests/unit/test_player_multi_target_spell_flow.py::test_scorching_ray_resolves_a_separate_spell_attack_for_each_ray`<br>`tests/unit/test_player_multi_target_spell_flow.py::test_upcast_adds_projectile_and_cancel_is_free` |
+| `spell_see_invisibility` | Widzenie niewidzialnego | Laboratorium czarów | Tylko postać z Widzeniem niewidzialnego ignoruje przewagę/utrudnienie wynikające z Niewidzialności.<br>Pozostali uczestnicy nadal traktują cel jak niewidzialny.<br>Efekt można rozpocząć przed encounterem i zachować przez godzinę.<br>Sam stan Niewidzialności nie jest usuwany ani ujawniany globalnie. | `tests/unit/test_spell_catalog.py::test_see_invisibility_is_self_hour_non_concentration_status`<br>`tests/unit/test_scene_interactions.py::test_see_invisibility_cancels_only_invisibility_attack_modifiers` |
+| `spell_shatter` | Roztrzaskanie | Arena walki | Obszar ma promień 10 ft i jest wybierany wyłącznie przez planszę w zasięgu 60 ft.<br>Konstrukt wykonuje rzut obronny na Kondycję z utrudnieniem, a inne typy stworzeń normalnie.<br>Porażka zadaje 3k8 thunder, sukces połowę, a każdy wyższy slot dodaje 1k8. | `tests/unit/test_spell_catalog.py::test_shatter_is_radius_thunder_damage_with_construct_disadvantage`<br>`tests/unit/test_player_area_healing_flow.py::test_shatter_construct_save_uses_disadvantage` |
+| `spell_silence` | Cisza | Arena walki | Cisza jest trwałą, nieruchomą strefą planszy o promieniu 20 ft, a nie statusem przypiętym do celu.<br>Istota w strefie jest traktowana jako ogłuchła, a dźwięk nie jest dostępny dla authored interakcji wymagających słuchu.<br>Czar z komponentem werbalnym jest blokowany przed wydaniem akcji i slotu.<br>Subtle Spell omija komponent werbalny i może zostać rzucony; utrata koncentracji usuwa strefę. | `tests/unit/test_spell_catalog.py::test_silence_is_board_anchored_twenty_foot_concentration_zone`<br>`tests/unit/test_player_combat_resource_flow.py::test_silence_creates_board_anchored_twenty_foot_zone`<br>`tests/unit/test_spellcasting_schema.py::test_silence_blocks_verbal_spell_but_subtle_spell_ignores_components` |
+| `spell_spider_climb` | Pajęcza wspinaczka | Tor eksploracyjny | Efekt trafia w wybranego na planszy sojusznika w zasięgu dotyku i wymaga koncentracji.<br>Cel otrzymuje szybkość wspinania równą swojej zwykłej szybkości, więc wspinaczka nie kosztuje podwójnie.<br>Cel ma mechaniczną zgodę na ruch po pionowych powierzchniach i suficie bez używania rąk.<br>Utrata koncentracji natychmiast odbiera oba profity. | `tests/unit/test_spell_catalog.py::test_spider_climb_is_touch_concentration_mobility_effect`<br>`tests/unit/test_player_combat_resource_flow.py::test_spider_climb_applies_concentration_mobility_to_board_selected_ally`<br>`tests/unit/test_level_three_class_feature_rules.py::test_spider_climb_effect_grants_climb_speed_equal_to_normal_speed` |
+| `spell_spike_growth` | Kolczaste zarośla | Arena walki | Strefa jest kotwiczona do pustego pola, ma promień 20 ft i nie wymaga celu-aktora.<br>Każde pole strefy jest trudnym terenem i pathfinding nalicza 10 ft kosztu za standardowy krok.<br>Każde 5 ft ruchu wewnątrz strefy zadaje dokładnie 2k4 obrażeń kłutych.<br>Utrata koncentracji usuwa wszystkie konsekwencje strefy. | `tests/unit/test_spell_catalog.py::test_spike_growth_is_twenty_foot_persistent_board_zone`<br>`tests/unit/test_player_combat_resource_flow.py::test_spike_growth_creates_empty_board_anchored_twenty_foot_zone`<br>`tests/unit/test_combat_movement_flow.py::test_spike_growth_zone_is_difficult_terrain_for_pathfinding`<br>`tests/unit/test_spike_growth.py::test_spike_growth_rolls_two_d4_for_each_five_foot_step_inside_zone` |
+| `spell_warding_bond` | Więź ochronna | Arena walki | Czar działa godzinę bez koncentracji, wymaga innego stworzenia w dotyku oraz dwóch obrączek.<br>Cel ma +1 KP, +1 do wszystkich rzutów obronnych i odporność na wszystkie typy obrażeń.<br>Rzucający otrzymuje dokładnie tyle obrażeń, ile po odporności otrzymał chroniony cel.<br>Więź kończy się po oddaleniu ponad 60 ft albo pokonaniu jednego z uczestników. | `tests/unit/test_spell_catalog.py::test_warding_bond_is_touch_hour_non_concentration_status`<br>`tests/unit/test_warding_bond.py::test_warding_bond_grants_save_bonus_resistance_and_linked_damage`<br>`tests/unit/test_warding_bond.py::test_warding_bond_is_inactive_beyond_sixty_feet` |
+| `spell_web` | Sieć | Arena walki | Sieć jest trwałym sześcianem 20 ft kotwiczonym do pola i wymaga koncentracji.<br>Pola strefy są trudnym terenem, a wejście i początek tury wywołują Dex save.<br>Porażka nakłada Unieruchomienie; akcja i udany test Siły przeciw ST czaru je usuwają.<br>Utrata koncentracji usuwa strefę, ale nie jest zastępowana jednorazowym wyborem obecnych celów. | `tests/unit/test_spell_catalog.py::test_web_is_twenty_foot_persistent_cube_zone`<br>`tests/unit/test_web_zone.py::test_web_zone_is_twenty_foot_cube_and_failed_entry_save_restrains`<br>`tests/unit/test_combat_movement_flow.py::test_web_zone_is_difficult_terrain_for_pathfinding` |
+| `spell_acid_splash` | Kwasowy rozprysk | Arena walki | Oba sąsiednie cele wykonują osobne Dex save i otrzymują te same obrażenia za jedną akcję; odległy drugi cel nie jest legalny. | `tests/unit/test_player_combat_action_flow.py::test_acid_splash_optional_second_adjacent_target_shares_one_action` |
+| `spell_chill_touch` | Dotyk chłodu | Arena walki | 1k8 necrotic, brak leczenia do początku następnej tury rzucającego; undead atakuje rzucającego z utrudnieniem. | `tests/unit/test_combat_conditions.py::test_chill_touch_makes_undead_attack_caster_with_disadvantage` |
+| `spell_eldritch_blast` | Niesamowity podmuch | Arena walki | Jeden promień 1k10 force do poziomu 4; inwokacje dodają Charyzmę i opcjonalne odepchnięcie 10 ft. | `tests/unit/test_level_three_class_feature_rules.py::test_fiend_evoker_and_agonizing_blast_formulas`<br>`tests/unit/test_player_combat_action_flow.py::test_repelling_blast_opens_push_choice_after_damage` |
+| `spell_fire_bolt` | Ognisty pocisk | Arena walki | Atak 120 ft zadaje 1k10 fire; authored łatwopalny obiekt może zostać uszkodzony i zapalony przez tagi damage_object/ignite. | `tests/unit/test_spell_catalog.py::test_fire_bolt_and_burning_hands_adapt_to_attack_sources`<br>`tests/unit/test_spell_catalog.py::test_exploration_use_metadata_distinguishes_objects_from_creatures` |
+| `spell_guidance` | Wskazówki | Tor eksploracyjny | k4 dolicza się do pierwszego wybranego testu cechy, efekt znika po użyciu i wymaga koncentracji. | `tests/unit/test_guidance_spell.py::test_guidance_optional_physical_d4_is_added_to_one_ability_check` |
+| `spell_poison_spray` | Trujący rozprysk | Arena walki | Porażka zadaje 1k12 poison, sukces zero; odporności/immunitety rozstrzyga wspólny damage resolver. | `tests/unit/test_srd_character_manifest.py::test_every_combat_srd_spell_compiles_into_a_runtime_source` |
+| `spell_ray_of_frost` | Promień mrozu | Arena walki | Trafienie zadaje 1k8 cold i obniża szybkość celu o 10 ft do początku następnej tury rzucającego. | `tests/unit/test_enemy_auto_attack.py::test_damaging_attack_can_also_apply_temporary_on_hit_condition` |
+| `spell_resistance` | Odporność | Arena walki | k4 dolicza się do jednego wybranego rzutu obronnego i zostaje zużyte; czar wymaga koncentracji. | `tests/unit/test_player_combat_resource_flow.py::test_resistance_creates_physical_d4_save_bonus_on_selected_ally` |
+| `spell_sacred_flame` | Święty płomień | Arena walki | 1k8 radiant przy porażce; cel nie dodaje premii z cover do Dex save przeciw Świętemu płomieniowi. | `tests/unit/test_player_combat_action_flow.py::test_sacred_flame_ignores_scene_cover_bonus_on_dexterity_save` |
+| `spell_shillelagh` | Kostur | Arena walki | Legalna broń używa Mądrości, k8 i magicznych obrażeń; efekt kończy się po ponownym cast lub wypuszczeniu broni. | `tests/unit/test_scene_interactions.py::test_shillelagh_uses_spellcasting_modifier_and_d8_for_club` |
+| `spell_shocking_grasp` | Porażający dotyk | Arena walki | Przeciw metalowemu pancerzowi atak ma przewagę; trafienie 1k8 lightning odbiera reakcje do początku następnej tury celu. | `tests/unit/test_level_one_class_features.py::test_shocking_grasp_source_has_advantage_against_metal_armor` |
+| `spell_spare_the_dying` | Oszczędź umierającego | Arena walki | Żywy cel zostaje stabilny bez rzutu i slotu; construct i undead są odrzucane. | `tests/unit/test_combat_stabilization_flow.py::test_spare_the_dying_stabilizes_without_roll_or_slot` |
+| `spell_true_strike` | Prawdziwe uderzenie | Arena walki | Pierwszy atak w następnej turze ma przewagę tylko przeciw wskazanemu celowi; inny cel nie korzysta z efektu, a atak zużywa czar. | `tests/unit/test_player_combat_resource_flow.py::test_true_strike_effect_is_owned_by_caster_and_remembers_enemy_target`<br>`tests/unit/test_scene_interactions.py::test_true_strike_advantage_applies_only_against_declared_target` |
+| `spell_vicious_mockery` | Zjadliwa kpina | Arena walki | Następny atak bronią przed końcem następnej tury celu ma utrudnienie i zużywa efekt; spell attack nie jest objęty riderem. | `tests/unit/test_spell_catalog.py::test_vicious_mockery_compiles_next_weapon_attack_disadvantage`<br>`tests/unit/test_scene_interactions.py::test_vicious_mockery_disadvantages_only_next_weapon_attack` |
+| `spell_bane` | Zguba | Arena walki | Porażka odejmuje k4 od ataków i save tylko podczas koncentracji. | `tests/unit/test_exploration_ui_session.py::test_exploration_ui_session_upcasts_bless_for_multiple_targets` |
+| `spell_bless` | Błogosławieństwo | Arena walki | Do trzech celów otrzymuje k4; upcast dodaje cel; efekt znika po koncentracji. | `tests/unit/test_exploration_ui_session.py::test_exploration_ui_session_upcasts_bless_for_multiple_targets` |
+| `spell_burning_hands` | Płonące dłonie | Arena walki | Stożek 15 ft zadaje 3k6 fire, połowę po udanym save, z friendly fire. | `tests/unit/test_spell_catalog.py::test_fire_bolt_and_burning_hands_adapt_to_attack_sources` |
+| `spell_color_spray` | Barwna zasłona | Arena walki | Tylko cele w stożku 15 ft są oślepiane od najniższych PW do wyczerpania puli. | `tests/unit/test_spell_catalog.py::test_repaired_first_level_control_spells_keep_their_srd_board_contracts` |
+| `spell_command` | Rozkaz | Arena walki | Cel nie rusza się i nie wykonuje akcji w swojej następnej turze. | `tests/unit/test_spell_catalog.py::test_all_first_level_srd_spell_names_are_presented_in_polish` |
+| `spell_cure_wounds` | Leczenie ran | Arena walki | Leczenie 1k8 + cecha, skalowanie slotem i odrzucenie construct/undead. | `tests/unit/test_spell_catalog.py::test_cure_wounds_uses_touch_range_and_caster_ability` |
+| `spell_divine_favor` | Boska przychylność | Arena walki | Każde trafienie bronią rzucającego dodaje 1k4 radiant tylko podczas koncentracji. | `tests/unit/test_spell_catalog.py::test_all_first_level_srd_spell_names_are_presented_in_polish` |
+| `spell_entangle` | Oplątanie | Arena walki | Porażka daje Restrained; utrzymana strefa jest trudnym terenem do końca koncentracji. | `tests/unit/test_player_combat_resource_flow.py::test_area_control_spell_keeps_difficult_terrain_zone`<br>`tests/unit/test_combat_movement_flow.py::test_level_one_control_zone_is_difficult_terrain_for_pathfinding` |
+| `spell_expeditious_retreat` | Szybki odwrót | Arena walki | Dash zużywa bonus action, pozostawiając akcję; trwa podczas koncentracji. | `tests/unit/test_combat_session.py::test_expeditious_retreat_dash_uses_bonus_action` |
+| `spell_faerie_fire` | Baśniowy ogień | Arena walki | Porażka usuwa korzyści niewidzialności i daje przewagę ataków podczas koncentracji. | `tests/unit/test_spell_catalog.py::test_sleep_and_faerie_fire_define_board_selected_areas` |
+| `spell_false_life` | Fałszywe życie | Arena walki | Tymczasowe PW wynoszą k4+4, a wyższy slot dodaje 5. | `tests/unit/test_spell_catalog.py::test_all_first_level_srd_spell_names_are_presented_in_polish` |
+| `spell_fog_cloud` | Chmura mgły | Arena walki | Trwała strefa 20 ft kotwiczy się w wybranym polu i modyfikuje widoczność ataków. | `tests/unit/test_player_combat_resource_flow.py::test_fog_cloud_creates_empty_board_anchored_twenty_foot_zone` |
+| `spell_grease` | Śliskość | Arena walki | Porażka daje Prone, a strefa pozostaje trudnym terenem przez encounter. | `tests/unit/test_player_combat_resource_flow.py::test_area_control_spell_keeps_difficult_terrain_zone`<br>`tests/unit/test_combat_movement_flow.py::test_level_one_control_zone_is_difficult_terrain_for_pathfinding` |
+| `spell_guiding_bolt` | Pocisk przewodni | Arena walki | 4k6 radiant i przewaga dokładnie następnego ataku przeciw celowi. | `tests/unit/test_player_combat_action_flow.py::test_guiding_bolt_hit_marks_target_for_next_attack_advantage` |
+| `spell_healing_word` | Słowo leczenia | Arena walki | 1k4 + cecha, bonus action, skalowanie slotem i zachowana akcja. | `tests/unit/test_spell_catalog.py::test_all_first_level_srd_spell_names_are_presented_in_polish` |
+| `spell_hellish_rebuke` | Piekielna reprymenda | Arena walki | Reakcja i slot są zużywane raz; 2k10 fire albo połowa. | `tests/unit/test_exploration_ui_session.py::test_exploration_ui_session_hellish_rebuke_spends_reaction_and_slot_once` |
+| `spell_heroism` | Heroizm | Arena walki | Frightened znika, odporność trwa, a temp PW odnawiają się na początku tury. | `tests/unit/test_spell_catalog.py::test_all_first_level_srd_spell_names_are_presented_in_polish` |
+| `spell_hideous_laughter` | Ohydny śmiech | Arena walki | Prone + Incapacitated; powtórki save po obrażeniu i na końcu tury. | `tests/unit/test_spell_catalog.py::test_all_first_level_srd_spell_names_are_presented_in_polish` |
+| `spell_hunters_mark` | Znak łowcy | Arena walki | Tylko trafienie bronią rzucającego w oznaczony cel dodaje 1k6. | `tests/unit/test_scene_interactions.py::test_hunters_mark_adds_one_d6_only_to_casters_weapon_hits` |
+| `spell_inflict_wounds` | Zadawanie ran | Arena walki | 3k10 necrotic, +1k10 za poziom slotu, brak obrażeń przy pudle. | `tests/unit/test_spell_catalog.py::test_first_srd_spell_tranche_has_open_source_metadata` |
+| `spell_jump` | Skok | Tor eksploracyjny | Wszystkie dystanse skoku są potrojone, a skok z miejsca nadal dzieli wynik po modyfikacji. | `tests/unit/test_level_three_class_feature_rules.py::test_jump_spell_triples_all_jump_distances` |
+| `spell_longstrider` | Długie kroki | Arena walki | Dostępny ruch wzrasta do 40 ft bez koncentracji. | `tests/unit/test_combat_session.py::test_longstrider_effect_increases_available_board_movement` |
+| `spell_mage_armor` | Magiczny pancerz | Arena walki | Legalny cel ma bazowe KP 13 + Dex; opancerzony cel jest odrzucony. | `tests/unit/test_spell_catalog.py::test_all_first_level_srd_spell_names_are_presented_in_polish` |
+| `spell_magic_missile` | Magiczny pocisk | Arena walki | Każdy pocisk trafia bez ataku/save za k4+1; upcast dodaje pocisk; Tarcza blokuje. | `tests/unit/test_player_multi_target_spell_flow.py::test_magic_missile_selects_each_projectile_and_spends_only_on_confirm` |
+| `spell_protection_from_evil_and_good` | Ochrona przed dobrem i złem | Arena walki | Wymienione typy mają utrudnienie; humanoid nie; efekt wymaga koncentracji. | `tests/unit/test_scene_interactions.py::test_protection_from_evil_and_good_hinders_listed_creature_attacks`<br>`tests/unit/test_spell_catalog.py::test_repaired_first_level_control_spells_keep_their_srd_board_contracts` |
+| `spell_shield` | Tarcza | Arena walki | +5 KP ponownie ocenia atak do następnej tury i blokuje Magiczny pocisk. | `tests/unit/test_player_multi_target_spell_flow.py::test_magic_missile_selects_each_projectile_and_spends_only_on_confirm` |
+| `spell_shield_of_faith` | Tarcza wiary | Arena walki | Cel ma +2 KP wyłącznie podczas koncentracji. | `tests/unit/test_player_combat_resource_flow.py::test_targeted_status_spell_creates_typed_ac_effect_and_cast_flag` |
+| `spell_sleep` | Uśpienie | Arena walki | Pula działa od najniższych PW; wykluczenia obowiązują; obrażenia budzą. | `tests/unit/test_spell_catalog.py::test_sleep_and_faerie_fire_define_board_selected_areas`<br>`tests/unit/test_combat_conditions.py::test_magical_sleep_ends_when_the_sleeping_actor_takes_damage` |
+| `spell_thunderwave` | Fala gromu | Arena walki | 2k8 thunder/połowa; porażka odpycha 10 ft po legalnej linii. | `tests/unit/test_spell_catalog.py::test_all_first_level_srd_spell_names_are_presented_in_polish` |
+| `spell_acid_arrow` | Kwasowa strzała | Arena walki | Trafienie: 4k4 i 2k4 później; pudło: połowa początkowych obrażeń bez ridera. | `tests/unit/test_spell_catalog.py::test_repaired_second_level_spells_keep_runtime_specific_contracts` |
+| `spell_aid` | Wsparcie | Arena walki | Oba limity rosną o 5, a upcast dodaje kolejne 5. | `tests/unit/test_player_combat_resource_flow.py::test_aid_upcast_increases_current_and_maximum_hit_points` |
+| `spell_barkskin` | Kora | Arena walki | KP nigdy nie spada poniżej 16 podczas koncentracji, ale wyższe KP pozostaje. | `tests/unit/test_player_combat_resource_flow.py::test_targeted_status_spell_creates_typed_ac_effect_and_cast_flag` |
+| `spell_blindness_deafness` | Ślepota/Głuchota | Arena walki | Porażka nakłada wybrany stan bez koncentracji; repeated save usuwa go. | `tests/unit/test_spell_debuff_flow.py::test_repeated_turn_end_save_removes_applied_debuff` |
+| `spell_blur` | Rozmycie | Arena walki | Zwykły atak ma utrudnienie; blindsight/truesight je ignoruje. | `tests/unit/test_scene_interactions.py::test_blindsight_or_truesight_ignores_blur_within_sense_range` |
+| `spell_branding_smite` | Piętnujące porażenie | Arena walki | Następne trafienie dowolną bronią dodaje 2k6 radiant, usuwa niewidzialność i utrzymuje świecenie. | `tests/unit/test_scene_interactions.py::test_branding_smite_accepts_ranged_weapon_attack`<br>`tests/unit/test_player_combat_action_flow.py::test_branding_smite_hit_reveals_target_and_keeps_concentration_glow` |
+| `spell_darkness` | Ciemność | Arena walki | Trwała kula 15 ft blokuje normalne widzenie/darkvision; przewagi i utrudnienia się znoszą. | `tests/unit/test_player_combat_resource_flow.py::test_darkness_creates_empty_board_anchored_fifteen_foot_zone`<br>`tests/unit/test_exploration_visibility.py::test_magical_darkness_blocks_darkvision_but_not_devils_sight` |
+| `spell_darkvision` | Widzenie w ciemności | Tor eksploracyjny | Zwykła ciemność działa jak dim light do 60 ft przez 8 h; magiczna pozostaje blokadą. | `tests/unit/test_exploration_visibility.py::test_darkvision_treats_darkness_as_dim_light_within_range` |
+| `spell_enhance_ability` | Wzmocnienie cechy | Tor eksploracyjny | Przewaga działa tylko na wybraną cechę i cel; Kondycja daje 2k6 temp PW. | `tests/unit/test_enhance_ability_flow.py::test_enhance_ability_applies_only_to_selected_actor_and_ability`<br>`tests/unit/test_player_combat_resource_flow.py::test_enhance_ability_constitution_grants_advantage_effect_and_two_d6_temp_hp` |
+| `spell_flame_blade` | Ostrze płomieni | Arena walki | Źródło zmienia się w melee spell attack 3k6 fire używający cechy czarowania; zwykła broń nie dodaje obrażeń. | `tests/unit/test_scene_interactions.py::test_flame_blade_replaces_weapon_proxy_with_melee_spell_attack` |
+| `spell_flaming_sphere` | Płonąca kula | Arena walki | Trwała strefa 5 ft zadaje 2k6/połowę i przesuwa się bonus action. | `tests/unit/test_player_combat_resource_flow.py::test_flaming_sphere_zone_moves_thirty_feet_with_bonus_action`<br>`tests/unit/test_spell_catalog.py::test_repaired_second_level_spells_keep_runtime_specific_contracts` |
+| `spell_heat_metal` | Rozgrzanie metalu | Arena walki | Plansza pokazuje tylko posiadaczy metalu; 2k8 na cast/powtórkę, utrudnienie ataków noszącego. | `tests/unit/test_player_combat_resource_flow.py::test_heat_metal_board_targets_only_creatures_with_usable_metal_object`<br>`tests/unit/test_scene_interactions.py::test_heat_metal_penalty_disadvantages_wearers_attacks` |
+| `spell_hold_person` | Unieruchomienie osoby | Arena walki | Tylko humanoid: Paralyzed podczas koncentracji, repeated save; upcast dodaje cel. | `tests/unit/test_spell_debuff_flow.py::test_repeated_turn_end_save_removes_applied_debuff` |
+| `spell_lesser_restoration` | Pomniejsze przywrócenie | Arena walki | Dokładnie wybrany stan lub choroba kończy się; pozostałe trwają. | `tests/unit/test_player_combat_resource_flow.py::test_protection_from_poison_neutralizes_poison_and_keeps_hour_effect` |
 
-| Kontrola | Obecnie | Oczekiwane |
-|---|---|---|
-| Prezentacja | `Flankowanie +0` w liście modyfikatorów. | `Flankowanie — przewaga`; bez sugerowania premii liczbowej. |
-| Zdolność sojusznika do flankowania | Sprawdzane: frakcja, życie, sąsiedztwo, przeciwna strona i LOS. | Dodatkowo sojusznik nie może być `incapacitated`; docelowo powinien też realnie zagrażać celowi. |
-| Nakładanie przewag | Jedna przewaga, niezależnie od liczby źródeł. | To jest zgodne z D&D 5e; flankowanie nie dodaje trzeciej kości ani `+X`. |
-| Duże istoty | Każdy aktor zajmuje jedno pole. | Znana adaptacja projektu; pełna geometria rozmiaru wymaga footprintów. |
+### Cechy rasowe
 
-Wniosek: ostatnia flanka nie była policzona po złej stronie. Problem był przede
-wszystkim komunikacyjny, a evaluator ma dodatkową lukę dla obezwładnionego
-sojusznika.
+| ID | Nazwa | Moduł Areny | Aktualny efekt / oczekiwany rezultat | Dowód automatyczny |
+|---|---|---|---|---|
+| `species_human_versatility` | Człowiek — ludzka wszechstronność | Arena walki | Każda z sześciu cech otrzymuje dokładnie +1.<br>Postać zna Wspólny i dokładnie jeden legalnie wybrany dodatkowy język.<br>Premie są zapisane w końcowym Actor i wpływają na wszystkie dalsze kalkulatory. | `tests/unit/test_character_creation.py::test_fighter_build_derives_actor_rules_and_equipment` |
+| `species_high_elf_darkvision` | Wysoki elf — widzenie w ciemności | Tor eksploracyjny | Elf traktuje niemagiczną ciemność w 60 ft jak słabe światło; poza zasięgiem i w magicznej ciemności zmysł nie działa. | `tests/unit/test_exploration_visibility.py::test_darkvision_treats_darkness_as_dim_light_within_range` |
+| `species_high_elf_fey_ancestry` | Wysoki elf — fey ancestry | Arena walki | Elf ma przewagę przeciw charm, jest odporny na magiczny sen, ale nie na zwykłą nieprzytomność. | `tests/unit/test_level_one_class_features.py::test_species_save_traits_grant_tagged_advantage`<br>`tests/unit/test_level_one_class_features.py::test_fey_ancestry_blocks_magical_sleep_but_not_ordinary_unconsciousness` |
+| `species_high_elf_trance` | Wysoki elf — trans | Stacja odpoczynku | Elf kończy równoważny długi odpoczynek po 240 minutach, człowiek po 480. | `tests/unit/test_species_background_features.py::test_trance_shortens_individual_long_rest_requirement` |
+| `species_high_elf_weapon_training` | Wysoki elf — elfie wyszkolenie bronią | Arena walki | Każda z czterech biegłości jest zapisana na Actor i kompilator ataków dolicza premię biegłości. | `tests/unit/test_character_creation.py::test_rogue_combines_species_background_and_class_proficiencies` |
+| `species_high_elf_cantrip` | Wysoki elf — sztuczka wysokiego elfa | Laboratorium czarów | Wrodzona sztuczka nie zużywa slotu i zawsze używa Inteligencji z profilu rasowego. | `tests/unit/test_character_creation.py::test_rogue_combines_species_background_and_class_proficiencies` |
+| `species_hill_dwarf_darkvision` | Krasnolud wzgórzowy — widzenie w ciemności | Tor eksploracyjny | Darkvision działa do 60 ft tylko w niemagicznej ciemności. | `tests/unit/test_character_creation.py::test_cleric_builds_spell_slots_access_and_preparation`<br>`tests/unit/test_exploration_visibility.py::test_darkvision_treats_darkness_as_dim_light_within_range` |
+| `species_dwarf_resilience` | Krasnolud — krasnoludzka odporność | Arena walki | Krasnolud ma przewagę przeciw poison i otrzymuje 4 z 9 poison damage. | `tests/unit/test_level_one_class_features.py::test_species_save_traits_grant_tagged_advantage`<br>`tests/unit/test_character_creation.py::test_cleric_builds_spell_slots_access_and_preparation` |
+| `species_dwarf_speed` | Krasnolud — nieograniczona szybkość w ciężkim pancerzu | Arena walki | Krasnolud zachowuje bazowe 25 ft; cecha usuwa tylko karę za niewystarczającą Siłę. | `tests/unit/test_level_one_class_features.py::test_dwarven_speed_ignores_heavy_armor_strength_penalty` |
+| `species_dwarf_stonecunning` | Krasnolud — znajomość kamienia | Tor eksploracyjny | Tylko test wiedzy o kamieniarstwie otrzymuje podwójną premię biegłości. | `tests/unit/test_species_background_features.py::test_stonecunning_grants_double_proficiency_only_for_tagged_check` |
+| `species_hill_dwarf_toughness` | Krasnolud wzgórzowy — krasnoludzka wytrzymałość | Stacja odpoczynku | Krasnolud ma dokładnie +1 maks. PW za każdy poziom, także po awansie. | `tests/unit/test_character_creation.py::test_cleric_builds_spell_slots_access_and_preparation` |
+| `species_halfling_lucky` | Niziołek — szczęście | Arena walki | Każda naturalna 1 jest przerzucana przed wyborem kości przewagi/utrudnienia; nowy wynik musi zostać użyty. | `tests/unit/test_level_one_class_features.py::test_halfling_lucky_requires_and_uses_physical_reroll`<br>`tests/unit/test_level_one_class_features.py::test_halfling_lucky_rerolls_each_one_before_disadvantage_selection` |
+| `species_halfling_brave` | Niziołek — odwaga | Arena walki | Rzut używa przewagi wyłącznie dla efektu oznaczonego tagiem fear. | `tests/unit/test_level_one_class_features.py::test_species_save_traits_grant_tagged_advantage` |
+| `species_halfling_nimbleness` | Niziołek — zwinność niziołka | Arena walki | Niziołek przechodzi przez większą istotę jak przez trudny teren, nie kończy tam ruchu i nie przechodzi przez równy rozmiar. | `tests/unit/test_movement_blocking.py::test_halfling_nimbleness_crosses_larger_enemy_but_cannot_end_there`<br>`tests/unit/test_movement_blocking.py::test_small_actor_without_nimbleness_cannot_cross_medium_enemy` |
+| `species_lightfoot_naturally_stealthy` | Niziołek lekkostopy — naturalna skrytość | Arena walki | Większa istota może spełnić warunek ukrycia niziołka, ale nadal obowiązują LOS i test Stealth. | `tests/unit/test_combat_stealth.py::test_lightfoot_halfling_can_hide_behind_larger_creature` |
+| `species_dragonborn_breath_weapon` | Smocze dziecię — broń oddechowa | Arena walki | Akcja podświetla właściwy kształt, zadaje 2k6 lub połowę po save i zużywa jedno użycie odzyskiwane po odpoczynku. | `tests/unit/test_character_creation.py::test_dragonborn_ancestry_drives_resistance_and_breath_source`<br>`tests/unit/test_player_area_healing_flow.py` |
+| `species_dragonborn_ancestry` | Smocze dziecię — smocza genealogia | Arena walki | Dziesięć genealogii mapuje się na acid/lightning/fire/cold/poison, właściwy kształt, save i identyczną odporność. | `tests/unit/test_character_creation.py::test_dragonborn_ancestry_drives_resistance_and_breath_source` |
+| `species_rock_gnome_darkvision` | Gnom skalny — widzenie w ciemności | Tor eksploracyjny | Darkvision działa do 60 ft w niemagicznej ciemności. | `tests/unit/test_exploration_visibility.py::test_darkvision_treats_darkness_as_dim_light_within_range` |
+| `species_gnome_cunning` | Gnom — gnomi spryt | Arena walki | Przewaga działa wyłącznie na Int/Wis/Cha save przeciw magii. | `tests/unit/test_level_one_class_features.py::test_gnome_cunning_grants_advantage_only_to_mental_saves_against_magic` |
+| `species_rock_gnome_artificers_lore` | Gnom skalny — wiedza rzemieślnicza | Tor eksploracyjny | Tylko oznaczony test otrzymuje podwójną premię biegłości. | `tests/unit/test_species_background_features.py::test_artificers_lore_grants_double_proficiency_only_for_tagged_check` |
+| `species_half_elf_elven_traits` | Półelf — darkvision i fey ancestry | Arena walki | Obie cechy używają tych samych centralnych resolverów co u wysokiego elfa. | `tests/unit/test_character_creation.py::test_half_elf_applies_two_distinct_flexible_ability_bonuses`<br>`tests/unit/test_level_one_class_features.py::test_species_save_traits_grant_tagged_advantage`<br>`tests/unit/test_level_one_class_features.py::test_fey_ancestry_blocks_magical_sleep_but_not_ordinary_unconsciousness` |
+| `species_half_elf_skill_versatility` | Półelf — wszechstronność umiejętności | Tor eksploracyjny | Dokładnie dwie legalne, różne biegłości trafiają na Actor i doliczają proficiency. | `tests/unit/test_character_creation.py::test_half_elf_applies_two_distinct_flexible_ability_bonuses` |
+| `species_half_orc_darkvision` | Półork — widzenie w ciemności | Tor eksploracyjny | Darkvision działa do 60 ft zgodnie ze wspólnym resolverem. | `tests/unit/test_species_background_features.py::test_half_orc_relentless_endurance_prevents_first_non_instant_defeat`<br>`tests/unit/test_exploration_visibility.py::test_darkvision_treats_darkness_as_dim_light_within_range` |
+| `species_half_orc_relentless_endurance` | Półork — nieustępliwa wytrzymałość | Arena walki | Pierwszy zwykły spadek kończy się na 1 PW i zużywa zasób; drugi działa normalnie, a instant death nigdy nie jest zatrzymany. | `tests/unit/test_species_background_features.py::test_half_orc_relentless_endurance_prevents_first_non_instant_defeat` |
+| `species_half_orc_savage_attacks` | Półork — brutalne ataki | Arena walki | Bazowa kość broni zmienia się z 1k8 na 3k8 przy krytyku; obce komponenty są tylko normalnie podwajane. | `tests/unit/test_level_one_class_features.py::test_half_orc_savage_attacks_adds_one_weapon_die_only_on_critical` |
+| `species_tiefling_darkvision` | Diabelstwo — widzenie w ciemności | Tor eksploracyjny | Darkvision traktuje zwykłą ciemność jak słabe światło do 60 ft, ale nie przenika magicznej ciemności. | `tests/unit/test_character_creation.py::test_tiefling_infernal_legacy_is_level_gated_slotless_and_recovers`<br>`tests/unit/test_exploration_visibility.py::test_darkvision_treats_darkness_as_dim_light_within_range` |
+| `species_tiefling_hellish_resistance` | Diabelstwo — piekielna odporność | Arena walki | Ogień zostaje zmniejszony do 5 obrażeń, a obrażenia cięte pozostają bez zmian. | `tests/unit/test_character_creation.py::test_tiefling_infernal_legacy_is_level_gated_slotless_and_recovers`<br>`tests/unit/test_damage.py::test_damage_affinities_modify_each_damage_type` |
+| `species_tiefling_infernal_legacy` | Diabelstwo — piekielne dziedzictwo | Laboratorium czarów | Taumaturgia jest dostępna bez limitu; Piekielna nagana i Ciemność pojawiają się na właściwych poziomach, używają Charyzmy, nie zużywają slotów i każda odnawia jedno użycie po długim odpoczynku. | `tests/unit/test_character_creation.py::test_tiefling_infernal_legacy_is_level_gated_slotless_and_recovers` |
 
-## Czary — poziom 0
+### Cechy klasowe
 
-| Czar | Status | Efekt w grze i przykład użycia | Uwaga zgodności |
-|---|---|---|---|
-| Acid Splash / Kwasowy rozprysk | 🟠 | Cel na planszy wykonuje Dex save; porażka zadaje 1k6 kwasu. Przykład: rozprysk w goblina za barykadą. | Brak opcjonalnego drugiego celu stojącego do 5 ft od pierwszego. |
-| Chill Touch / Dotyk chłodu | ✅ | Ranged spell attack, 1k8 necrotic i zakaz leczenia do początku następnej tury rzucającego. | Rider jest reprezentowany stanem `no_healing`. |
-| Dancing Lights / Tańczące światła | 🟡 🧪 | Ustawia flagę użycia światła dla sceny. Przykład: wysłanie świateł w ciemny korytarz. | Brak czterech ruchomych źródeł na planszy i bonus-action przesuwania. |
-| Druidcraft / Druidztwo | 🟡 | Flaga sceny pozwala rozstrzygnąć drobny efekt natury. Przykład: przewidzenie pogody albo zapalenie świecy. | Właściwa adaptacja narracyjna, ale wymaga authored reakcji sceny. |
-| Eldritch Blast / Niesamowity podmuch | ✅ | Ranged spell attack za 1k10 force; na tym poziomie jeden promień. | Agonizing/Repelling Blast są dokładane przez cechy czarnoksiężnika. |
-| Fire Bolt / Ognisty pocisk | 🟠 | Ranged spell attack za 1k10 fire. Przykład: strzał w goblina. | Zapalenie nieprzymocowanego, łatwopalnego obiektu pozostaje riderem stołowym. |
-| Guidance / Wskazówki | 🔴 | Tworzy efekt `guidance_roll_bonus`. Przykład zamierzony: k4 do jednego testu cechy. | Brak ogólnego konsumenta tego efektu w testach cech; slot nie jest problemem, rezultat jest. |
-| Light / Światło | 🟡 | Flaga sceny uruchamia źródło światła w przygotowanych interakcjach. | Brak uniwersalnego, przenośnego zaczarowanego obiektu po dotknięciu. |
-| Mage Hand / Dłoń maga | 🟡 | Flaga/capability dla zdalnej manipulacji w scenie. Przykład: pociągnięcie dźwigni. | Limit 30 ft, ciężar 10 lb i zakazy są zależne od authored celu. |
-| Mending / Naprawa | 🟡 🧪 | Flaga naprawy obiektu. Przykład: sklejenie pękniętego bukłaka. | Jednominutowy cast i ograniczenia uszkodzenia nie mają uniwersalnego resolvera. |
-| Message / Wiadomość | 🟡 | Flaga komunikacji w scenie. Przykład: szept do sojusznika za drzwiami. | Droga dźwięku i blokujące materiały nie są obliczane uniwersalnie. |
-| Minor Illusion / Pomniejsza iluzja | 🟡 | Flaga iluzji dla authored interakcji/LLM. Przykład: odgłos kroków za strażnikiem. | Brak trwałego obiektu iluzji, testu Investigation i rozpoznania fizyczną interakcją. |
-| Poison Spray / Trujący rozprysk | ✅ 🧪 | Cel w zasięgu wykonuje Con save; porażka zadaje 1k12 poison. | Prosty resolver odpowiada SRD. |
-| Prestidigitation / Kuglarstwo | 🟡 🧪 | Flaga drobnej magii użytkowej. Przykład: zmiana smaku piwa lub oczyszczenie ubrania. | Celowo sceniczne; limity jednoczesnych efektów nie są śledzone. |
-| Produce Flame / Stworzenie płomienia | 🟠 🧪 | Można wykonać ranged spell attack za 1k8 fire. | Brak trzymanego źródła światła i decyzji „świeć albo rzuć”. |
-| Ray of Frost / Promień mrozu | ✅ | Ranged spell attack za 1k8 cold i redukcja szybkości o 10 ft do następnej tury. | Rider ma stan i wpływa na ruch. |
-| Resistance / Odporność | ✅ | Cel może dodać fizyczne k4 do jednego save podczas koncentracji. | UI ma ścieżkę zużycia efektu. |
-| Sacred Flame / Święty płomień | ✅ | Dex save bez korzyści z cover; porażka zadaje 1k8 radiant. | Należy utrzymać wyjątek ignorowania cover w testach regresji. |
-| Shillelagh / Kostur | ✅ | Pałka/kostur używa cechy czarowania, k8 i staje się magiczny. | Działa jako modyfikacja źródła broni. |
-| Shocking Grasp / Porażający dotyk | ✅ | Melee spell attack, przewaga przeciw metalowemu pancerzowi, trafiony traci reakcje. | Rider i warunek pancerza są wykonywalne. |
-| Spare the Dying / Oszczędź umierającego | ✅ | Dotknięty żywy cel z 0 PW zostaje ustabilizowany przez wybór figurki. | Nie działa na konstrukty i nieumarłych. |
-| Thaumaturgy / Taumaturgia | 🟡 | Flaga scenicznego cudu. Przykład: wzmocnienie głosu przy zastraszaniu. | Efekt zależy od opisu/sceny; brak śledzenia trzech efektów przez minutę. |
-| True Strike / Prawdziwe uderzenie | ✅ 🧪 | Koncentracja; w następnej turze pierwsza próba ataku przeciw wskazanemu celowi ma przewagę. | Efekt jest zużywany przez następny atak. |
-| Vicious Mockery / Zjadliwa kpina | 🔴 | Wis save i 1k4 psychic. Przykład: bard obraża goblina. | Brak utrudnienia do następnego ataku celu — istotna część czaru nie działa. |
+| ID | Nazwa | Moduł Areny | Aktualny efekt / oczekiwany rezultat | Dowód automatyczny |
+|---|---|---|---|---|
+| `class_barbarian_rage` | Barbarzyńca — szał | Arena walki | Zużywa jedno użycie i akcję dodatkową; daje przewagę Strength checks/saves, +2 do obrażeń Strength melee oraz odporność B/P/S. Ciężki pancerz wyłącza korzyści. | `tests/unit/test_level_one_class_features.py::test_barbarian_rage_spends_bonus_action_and_adds_melee_strength_damage`<br>`tests/unit/test_level_one_class_features.py::test_level_three_barbarian_has_three_rage_uses` |
+| `class_barbarian_unarmored_defense` | Barbarzyńca — obrona bez pancerza | Arena walki | Bez pancerza KP wynosi 10 + Dex + Con = 14, tarcza podnosi je do 16, a założony pancerz zastępuje formułę właściwą formułą pancerza. | `tests/unit/test_level_one_class_features.py::test_barbarian_unarmored_defense_uses_dexterity_constitution_and_allows_shield` |
+| `class_barbarian_reckless_attack` | Barbarzyńca — lekkomyślny atak | Arena walki | Ataki barbarzyńcy oparte na Sile w tej turze mają przewagę; wszystkie ataki przeciw niemu mają przewagę do początku następnej tury. Deklaracja po pierwszym ataku jest odrzucona. | `tests/unit/test_level_one_class_features.py::test_reckless_attack_grants_melee_strength_advantage_to_both_sides` |
+| `class_barbarian_danger_sense` | Barbarzyńca — wyczucie zagrożenia | Tor eksploracyjny | Przewaga występuje wyłącznie dla Dex save przeciw widocznemu zagrożeniu i znika przy blinded, deafened albo incapacitated. | `tests/unit/test_level_one_class_features.py::test_level_two_barbarian_has_advantage_on_visible_danger_dexterity_save` |
+| `class_bard_spellcasting` | Bard — rzucanie czarów | Laboratorium czarów | Bard używa Charyzmy, zna właściwą liczbę czarów, zużywa slot odpowiedniego poziomu i może użyć instrumentu jako focusu. | `tests/unit/test_character_creation.py::test_lore_bard_level_three_combines_bonus_skills_and_expertise`<br>`tests/unit/test_spellcasting_schema.py::test_spell_access_keeps_source_specific_casting_ability` |
+| `class_bard_bardic_inspiration` | Bard — inspiracja bardowska | Arena walki | Cel wybierany jest wyłącznie przez planszę; zasób i bonus action są zużyte, a kość znika po jednym faktycznym użyciu i nie może się dublować. | `tests/unit/test_level_three_class_feature_rules.py::test_bardic_inspiration_spends_bonus_action_and_grants_die`<br>`tests/unit/test_exploration_ui_session.py::test_bardic_inspiration_target_is_selected_on_the_board`<br>`tests/unit/test_enemy_turn_flow.py::test_enemy_save_flow_accepts_bardic_inspiration_modifier` |
+| `class_bard_jack_of_all_trades` | Bard — wszechstronność | Tor eksploracyjny | Połowa proficiency jest dodawana tylko do testów bez pełnej biegłości, w tym inicjatywy jako testu Zręczności. | `tests/unit/test_species_background_features.py::test_jack_of_all_trades_applies_only_without_proficiency` |
+| `class_bard_song_of_rest` | Bard — pieśń odpoczynku | Stacja odpoczynku | Dodatkowe leczenie k6 występuje tylko wtedy, gdy podczas odpoczynku co najmniej jedna kość wytrzymałości faktycznie leczy. | `tests/unit/test_short_rest_flow.py::test_song_of_rest_adds_one_optional_healing_die_to_hit_die_recovery` |
+| `class_cleric_spellcasting_life_domain` | Kleryk — rzucanie czarów i domena Życia | Laboratorium czarów | Limit przygotowania wynosi poziom + Wisdom modifier; czary domenowe nie zajmują limitu, kleryk używa Mądrości i właściwych slotów. | `tests/unit/test_character_creation.py::test_cleric_builds_spell_slots_access_and_preparation`<br>`tests/unit/test_character_creation.py::test_life_domain_level_three_gates_and_grants_domain_spells` |
+| `class_cleric_turn_undead` | Kleryk — odpędzanie nieumarłych | Arena walki | Tylko widoczne undead w 30 ft wykonują save; porażka nakłada Turned, które wymusza ucieczkę/ogranicza akcje i kończy się po otrzymaniu obrażeń. | `tests/unit/test_level_three_class_feature_rules.py::test_turn_undead_spends_channel_divinity_and_applies_turned_condition` |
+| `class_druid_spellcasting` | Druid — rzucanie czarów | Laboratorium czarów | Druid przygotowuje czary z pełnej listy dostępnego poziomu, używa Mądrości i zużywa właściwy slot; focus zastępuje legalne materiały bez kosztu. | `tests/unit/test_character_creation.py::test_druid_land_and_paladin_oath_level_three_choices_are_executable_grants`<br>`tests/unit/test_exploration_spell_casting_flow.py` |
+| `class_fighter_fighting_style` | Wojownik — styl walki | Arena walki | Wybrany styl jest trwałą cechą postaci i tylko jego legalne warunki modyfikują odpowiednie resolvery. | `tests/unit/test_character_creation_point_buy.py::test_every_class_skill_style_and_level_one_group_has_player_guidance`<br>`tests/unit/test_character_creation.py::test_fighter_requires_authored_fighting_style_choice` |
+| `class_fighter_archery` | Styl walki — łucznictwo | Arena walki | Dokładnie +2 do ranged weapon attack; bez premii do broni wręcz i ranged spell attack. | `tests/unit/test_level_one_class_features.py::test_archery_fighting_style_adds_two_only_to_ranged_weapon_attacks` |
+| `class_fighter_defense` | Styl walki — obrona | Arena walki | +1 KP działa tylko podczas noszenia body armor; tarcza może dać własne +2, ale sama nie aktywuje stylu. | `tests/unit/test_character_creation.py::test_fighter_build_derives_actor_rules_and_equipment` |
+| `class_fighter_dueling` | Styl walki — szermierka | Arena walki | +2 damage przy jednej jednoręcznej broni melee; tarcza jest legalna, druga broń i użycie oburącz wyłączają premię. | `tests/unit/test_level_one_class_features.py::test_dueling_fighting_style_adds_two_damage_with_a_shield` |
+| `class_fighter_two_weapon_fighting` | Styl walki — walka dwiema broniami | Arena walki | Bonusowy atak wymaga legalnego triggera i bonus action; styl zachowuje ability modifier w obrażeniach drugiej broni. | `tests/unit/test_two_weapon_fighting.py::test_two_weapon_fighting_style_keeps_ability_damage_modifier`<br>`tests/unit/test_exploration_ui_session.py::test_exploration_ui_session_exposes_and_resolves_two_weapon_bonus_attack` |
+| `class_fighter_second_wind` | Wojownik — drugi oddech | Arena walki | Leczy k10 + poziom wojownika, nie ponad maksimum; zużywa bonus action i jedno użycie, odnawiane po short rest. | `tests/unit/test_level_one_class_features.py::test_second_wind_spends_bonus_action_and_short_rest_resource` |
+| `class_fighter_action_surge` | Wojownik — przypływ sił | Arena walki | Raz/short rest przywraca dokładnie jedną action w tej turze; nie przywraca bonus action ani reaction. | `tests/unit/test_level_one_class_features.py::test_level_two_fighter_action_surge_restores_one_spent_action` |
+| `class_monk_unarmored_defense` | Mnich — obrona bez pancerza | Arena walki | Bez pancerza i tarczy KP = 10 + Dex + Wis; tarcza i pancerz wyłączają tę bazową formułę zamiast się z nią sumować. | `tests/unit/test_level_one_class_features.py::test_monk_unarmored_defense_and_movement_stop_with_armor_or_shield` |
+| `class_monk_martial_arts` | Mnich — sztuki walki | Arena walki | Legalnie używa Dex zamiast Str i co najmniej k4 dla unarmed/monk weapons oraz daje bonus unarmed po Attack; wszystkie te korzyści znikają w pancerzu lub z tarczą. | `tests/unit/test_level_one_class_features.py::test_monk_martial_arts_uses_dexterity_and_d4_for_unarmed_strike`<br>`tests/unit/test_level_three_class_feature_rules.py::test_martial_arts_and_flurry_queue_the_correct_unarmed_strikes` |
+| `class_monk_ki_actions` | Mnich — Ki: Flurry, Patient Defense i Step of the Wind | Arena walki | Każda opcja kosztuje 1 Ki i bonus action; Flurry daje dwa unarmed strikes, Patient Defense Dodge, Step Dash lub Disengage i podwaja wszystkie odległości skoku w turze. | `tests/unit/test_level_three_class_feature_rules.py::test_patient_defense_and_step_of_wind_spend_ki`<br>`tests/unit/test_level_three_class_feature_rules.py::test_martial_arts_and_flurry_queue_the_correct_unarmed_strikes` |
+| `class_monk_unarmored_movement` | Mnich — ruch bez pancerza | Arena walki | Bez pancerza i tarczy szybkość rośnie o 10 ft; każde z nich wyłącza premię. | `tests/unit/test_level_one_class_features.py::test_monk_unarmored_defense_and_movement_stop_with_armor_or_shield` |
+| `class_monk_deflect_missiles` | Mnich — odbijanie pocisków | Arena walki | Reakcja redukuje o k10 + Dex + poziom; tylko redukcja do 0 z wolną ręką pozwala wydać Ki na ranged monk-weapon attack o zasięgu 20/60. | `tests/unit/test_combat_reaction_flow.py::test_deflect_missiles_reduces_ranged_weapon_damage_and_catches_projectile` |
+| `class_paladin_style_spellcasting` | Paladyn — styl walki i rzucanie czarów | Laboratorium czarów | Styl używa wspólnych resolverów wojownika, czary używają Charyzmy od 2. poziomu, a przysięgowe nie zajmują limitu. | `tests/unit/test_character_creation.py::test_druid_land_and_paladin_oath_level_three_choices_are_executable_grants` |
+| `class_paladin_divine_smite` | Paladyn — boskie ugodzenie | Arena walki | Nie zużywa akcji; wydaje slot dopiero po melee weapon hit, daje 2k8 +1k8/wyższy slot i +1k8 przeciw undead/fiend, kości podwajają się na krytyku. | `tests/unit/test_level_three_class_feature_rules.py::test_divine_smite_scales_and_gets_fiend_or_undead_die`<br>`tests/unit/test_player_combat_action_flow.py` |
+| `class_paladin_divine_health` | Paladyn — boskie zdrowie | Tor eksploracyjny | Paladyn jest całkowicie odporny tylko na disease; poison damage i poisoned działają normalnie. | `tests/unit/test_species_background_features.py::test_divine_health_grants_disease_immunity` |
+| `class_ranger_favored_enemy` | Łowca — ulubiony wróg | Tor eksploracyjny | Przewaga działa tylko dla śledzenia Survival i recall Intelligence właściwego typu; humanoid wymaga jednej z dwóch wybranych ras. | `tests/unit/test_ranger_features.py::test_favored_enemy_applies_advantage_only_to_its_two_rule_contexts`<br>`tests/unit/test_ranger_features.py::test_humanoid_favored_enemy_requires_one_of_the_two_selected_races`<br>`tests/unit/test_ranger_features.py::test_authored_tracking_check_uses_favored_enemy_in_runtime_request` |
+| `class_ranger_natural_explorer` | Łowca — naturalny odkrywca | Tor eksploracyjny | W wybranym terenie: podwójna proficiency Int/Wis, brak difficult-terrain slowdown, brak zgubienia poza magią, stała czujność, normalny stealth pace solo, podwójny forage i dodatkowe dane tropów. | `tests/unit/test_ranger_features.py::test_natural_explorer_exposes_all_2014_overland_benefits_in_chosen_terrain` |
+| `class_ranger_style_spellcasting` | Łowca — styl walki i rzucanie czarów | Laboratorium czarów | Styl używa wspólnych resolverów, łowca zna właściwą liczbę czarów, używa Mądrości i odnawia sloty po long rest. | `tests/unit/test_character_creation.py::test_duplicate_starting_weapons_are_distinct_runtime_instances`<br>`tests/unit/test_spellcasting_schema.py::test_known_prepared_and_spellbook_access_have_distinct_semantics` |
+| `class_rogue_expertise` | Łotrzyk — ekspertyza | Tor eksploracyjny | Dwie legalne własne biegłości otrzymują jeden podwojony składnik proficiency; premia nie dubluje się ponownie. | `tests/unit/test_actor_proficiencies.py::test_skill_expertise_uses_one_double_proficiency_component`<br>`tests/unit/test_character_creation.py::test_rogue_expertise_requires_an_owned_skill_proficiency` |
+| `class_rogue_sneak_attack` | Łotrzyk — podstępny atak | Arena walki | Raz/turę po legalnym finesse/ranged hit daje 1k6/2k6; wymaga przewagi albo nie-incapacitated ally przy celu i zawsze odpada przy disadvantage. | `tests/unit/test_level_one_class_features.py::test_sneak_attack_adds_one_d6_and_is_marked_only_after_hit`<br>`tests/unit/test_level_one_class_features.py::test_level_three_rogue_sneak_attack_uses_two_d6`<br>`tests/unit/test_level_one_class_features.py::test_sneak_attack_rejects_disadvantage_even_with_adjacent_ally` |
+| `class_rogue_cunning_action` | Łotrzyk — przebiegła akcja | Arena walki | Każda opcja zużywa bonus action; Dash dodaje ruch, Disengage blokuje opportunity attacks, Hide wymaga legalnego ukrycia względem obserwatorów. | `tests/unit/test_exploration_ui_session.py::test_exploration_ui_session_cunning_action_keeps_mobility_after_action`<br>`tests/unit/test_combat_stealth.py::test_skill_profile_applies_proficiency_to_stealth_and_passive_perception` |
+| `class_sorcerer_spellcasting_draconic_resilience` | Czarownik — czary i smocza odporność | Laboratorium czarów | Czary używają Charyzmy; bez pancerza KP = 13 + Dex, a Smocza Odporność dodaje 1 maks. PW na każdy poziom czarownika. | `tests/unit/test_character_creation.py::test_sorcerer_level_up_collects_new_spell_and_metamagic_choices` |
+| `class_sorcerer_font_of_magic` | Czarownik — źródło magii | Stacja odpoczynku | Slot daje punkty równe poziomowi; nowy slot kosztuje 2/3/5/6/7 punktów dla poziomów 1–5, nie przekracza zasobów i znika po long rest. | `tests/unit/test_level_three_class_feature_rules.py::test_font_of_magic_converts_slots_and_creates_temporary_slots` |
+| `class_metamagic_careful` | Metamagia — ostrożny czar | Laboratorium czarów | Za 1 SP wybrane istoty automatycznie zdają pierwszy save przeciw czarowi; nadal otrzymują połowę obrażeń, jeśli czar tak działa. | `tests/unit/test_player_area_healing_flow.py::test_area_metamagic_careful_auto_succeeds_and_heightened_uses_disadvantage` |
+| `class_metamagic_distant` | Metamagia — odległy czar | Laboratorium czarów | Touch staje się 30 ft, a dodatni zasięg distance podwaja się; self i pozostałe rodzaje są nielegalne. | `tests/unit/test_level_three_class_feature_rules.py::test_metamagic_transforms_spell_source_and_charges_one_combined_resource` |
+| `class_metamagic_empowered` | Metamagia — wzmocniony czar | Laboratorium czarów | Kosztuje 1 SP po damage roll, pozwala przerzucić do Cha modifier kości i zachować nowe wyniki; jako jedyna może łączyć się z jedną inną metamagą. | `tests/unit/test_level_three_class_feature_rules.py::test_metamagic_transforms_spell_source_and_charges_one_combined_resource`<br>`tests/unit/test_level_three_class_feature_rules.py::test_metamagic_costs_match_2014_table` |
+| `class_metamagic_heightened` | Metamagia — spotęgowany czar | Laboratorium czarów | Tylko wskazany cel ma disadvantage do pierwszego save przeciw danemu castowi. | `tests/unit/test_player_area_healing_flow.py::test_area_metamagic_careful_auto_succeeds_and_heightened_uses_disadvantage` |
+| `class_metamagic_quickened` | Metamagia — przyspieszony czar | Laboratorium czarów | Action zmienia się na bonus action; w tej turze drugi czar akcją może być wyłącznie cantrip o czasie action. | `tests/unit/test_level_three_class_feature_rules.py::test_metamagic_transforms_spell_source_and_charges_one_combined_resource`<br>`tests/unit/test_action_resolution.py::test_bonus_action_spell_allows_only_an_action_cantrip_afterward` |
+| `class_metamagic_subtle` | Metamagia — subtelny czar | Laboratorium czarów | Ignoruje wyłącznie V i S, więc działa w Silence i bez wolnej ręki; material component nadal jest wymagany. | `tests/unit/test_spellcasting_schema.py::test_silence_blocks_verbal_spell_but_subtle_spell_ignores_components` |
+| `class_metamagic_twinned` | Metamagia — bliźniaczy czar | Laboratorium czarów | Jednym castem oddziałuje na drugi legalny cel; odrzuca self, area i czary mogące już targetować więcej niż jedną istotę. | `tests/unit/test_player_combat_action_flow.py::test_twinned_save_spell_spends_one_action_and_damages_two_targets`<br>`tests/unit/test_player_combat_action_flow.py::test_twinned_attack_spell_resolves_second_attack_without_second_action`<br>`tests/unit/test_level_three_class_feature_rules.py::test_metamagic_costs_match_2014_table` |
+| `class_warlock_pact_magic` | Czarnoksiężnik — magia paktu | Laboratorium czarów | Wszystkie sloty mają najwyższy dostępny poziom, czary używają Charyzmy, a sloty odnawiają się w całości po short rest. | `tests/unit/test_character_creation.py::test_warlock_invocations_grant_at_will_spells_skills_and_devils_sight`<br>`tests/unit/test_resting.py::test_short_rest_recovers_pact_magic_slots_only` |
+| `class_warlock_blast_invocations` | Inwokacje — Agonizing i Repelling Blast | Arena walki | Agonizing dodaje Cha tylko do Eldritch Blast; Repelling po każdym trafieniu może odepchnąć cel do 10 ft po legalnej drodze, bez save. | `tests/unit/test_level_three_class_feature_rules.py::test_fiend_evoker_and_agonizing_blast_formulas`<br>`tests/unit/test_player_combat_action_flow.py::test_repelling_blast_opens_push_choice_after_damage` |
+| `class_warlock_beguiling_influence` | Inwokacja — uwodzicielski wpływ | Pracownia rozmów | Przyznaje pełną biegłość w Deception i Persuasion, bez Expertise i bez dublowania proficiency. | `tests/unit/test_character_creation.py::test_warlock_invocations_grant_at_will_spells_skills_and_devils_sight` |
+| `class_warlock_devils_sight` | Inwokacja — diabelski wzrok | Tor eksploracyjny | Widzi normalnie w zwykłej i magicznej ciemności do 120 ft; Darkness nie blokuje tego zmysłu. | `tests/unit/test_character_creation.py::test_warlock_invocations_grant_at_will_spells_skills_and_devils_sight`<br>`tests/unit/test_exploration_visibility.py::test_magical_darkness_blocks_darkvision_but_not_devils_sight` |
+| `class_warlock_pact_blade` | Pakt Ostrza — broń paktu | Arena walki | Tworzy jedną wyposażoną melee pact weapon wybranego typu, automatycznie daje w niej biegłość i zastępuje poprzednią. | `tests/unit/test_level_three_class_feature_rules.py::test_pact_of_the_blade_creates_one_equipped_replaceable_weapon` |
+| `class_warlock_pact_tome` | Pakt Księgi — księga cieni | Laboratorium czarów | Przyznaje trzy różne cantrips dowolnych klas, dla czarnoksiężnika liczone jako warlock spells z Charyzmy i bez slotów. | `tests/unit/test_character_creation.py::test_warlock_pact_boons_grant_chain_ritual_or_tome_cantrips` |
+| `class_wizard_spellbook` | Czarodziej — Księga Czarów i przygotowanie | Laboratorium czarów | Czarodziej używa Inteligencji, przygotowuje INT mod + poziom czarodzieja czarów, zwykłe rzucenie nieprzygotowanego czaru jest blokowane, lecz rytuał z księgi nie wymaga przygotowania ani slotu. | `tests/unit/test_character_creation.py::test_wizard_builds_spellbook_character`<br>`tests/unit/test_spellcasting_schema.py::test_known_prepared_and_spellbook_access_have_distinct_semantics` |
+| `class_wizard_arcane_recovery` | Czarodziej — Odzyskiwanie magiczne | Stacja odpoczynku | Jednorazowo po krótkim odpoczynku odzyskuje kombinację slotów o sumie poziomów nie większej niż 2; druga próba jest blokowana, a długi odpoczynek odnawia użycie. | `tests/unit/test_level_three_class_feature_rules.py::test_level_three_arcane_recovery_can_restore_two_first_level_slots`<br>`tests/unit/test_level_one_class_features.py::test_arcane_recovery_restores_slot_once_between_long_rests` |
 
-## Czary — poziom 1
+### Cechy podklas
 
-| Czar | Status | Efekt w grze i przykład użycia | Uwaga zgodności |
-|---|---|---|---|
-| Alarm | 🟡 | Ustawia flagę chronionego obszaru. Przykład: alarm przy wejściu do obozu. | Brak uniwersalnej strefy 20 ft, whitelisty istot i automatycznego triggera przez 8 h. |
-| Animal Friendship | 🟡 | Flaga celu dla sceny z bestią. Przykład: uspokojenie psa strażniczego. | Save, Int < 4, czas 24 h i reakcja bestii wymagają authored sceny/LLM. |
-| Bane | ✅ | Do 3 celów: Cha save; porażka odejmuje fizyczne k4 od ataków i save podczas koncentracji. | Efekt jest konsumowany także w turze wroga. |
-| Bless | ✅ | Do 3 celów dodaje fizyczne k4 do ataków i save podczas koncentracji. | Upcast liczby celów jest modelowany. |
-| Burning Hands | ✅ | Wybór kierunku na planszy, stożek 15 ft, Dex save, 3k6/połowa. | Obszar i friendly fire są widoczne. |
-| Charm Person | 🟡 | Flaga zauroczenia humanoida w scenie. Przykład: próba udobruchania strażnika. | Przewaga save w walce, godzina i późniejsza świadomość celu nie są uniwersalnym stanem. |
-| Color Spray | 🔴 🧪 | Pula 6k10 ma oślepiać najsłabsze cele. | Brak stożka w danych obszaru; obecne celowanie może objąć aktorów w zasięgu zamiast w stożku. |
-| Command | 🟡 | Wariant `Halt`: Wis save, porażka odbiera akcje do następnej tury. | Grywalna, jawna adaptacja; pozostałe rozkazy SRD nie są dostępne. |
-| Comprehend Languages | 🟡 | Flaga rozumienia dosłownego znaczenia języka. | Brak uniwersalnego warunku dotykania pisma i tempa jednej strony/minutę. |
-| Create or Destroy Water | 🟡 🧪 | Flaga stworzenia/zniszczenia wody lub deszczu. | Ilość, pojemnik i usuwanie mgły są egzekwowane tylko przez scenę. |
-| Cure Wounds | ✅ | Dotknięty sojusznik odzyskuje 1k8 + cecha rzucania; skaluje się slotem. | Konstrukty i nieumarli wykluczeni. |
-| Detect Evil and Good | 🟡 🧪 | Flaga wykrywania typów istot i miejsc w 30 ft. | Brak automatycznego skanu pozycji, blokad i poświęconych/sprofanowanych miejsc. |
-| Detect Magic | 🟡 🧪 | Flaga wykrywania magii i aury. | Koncentracja jest w danych, ale wynik zależy od sceny. |
-| Detect Poison and Disease | 🟡 🧪 | Flaga wykrywania trucizn i chorób. | Brak uniwersalnego skanu oraz identyfikacji typu. |
-| Disguise Self | 🟡 🧪 | Flaga przebrania dla rozmów i eksploracji. | Investigation przeciw ST oraz fizyczna interakcja zależą od sceny. |
-| Divine Favor | ✅ 🧪 | Podczas koncentracji trafienia bronią dodają 1k4 radiant. | Efekt jest dokładany jako osobny komponent obrażeń. |
-| Entangle | 🔴 | Nakłada Restrained po Str save. | Brak faktycznej strefy 20-ft square i utrzymywanego difficult terrain; wybór aktorów zastępuje obszar. |
-| Expeditious Retreat | 🔴 🧪 | Po rzuceniu zapisuje `bonus_action_dash`. | Brak konsumenta udostępniającego Dash bonus action w kolejnych turach. |
-| Faerie Fire | ✅ | Wybór obszaru na planszy; Dex save, świecenie, brak korzyści z niewidzialności i przewaga ataków. | Sześcian jest przybliżony do pól siatki; warto doprecyzować kotwicę narożnika. |
-| False Life | ✅ 🧪 | Rzut k4+4 daje tymczasowe PW; wyższy slot +5. | Rdzeń efektu działa; czas godziny jest mapowany do granicy odpoczynku. |
-| Feather Fall | 🔴 🧪 | Można utworzyć znacznik ochrony do 5 celów. | Brak reakcyjnego triggera na upadek, prędkości opadania i automatycznego anulowania obrażeń. |
-| Find Familiar | 🟡 | Flaga przywołania chowańca. Przykład: wysłanie sowy na zwiad. | Brak pełnego aktora, form, telepatii, dismiss/resummon i dostarczania czarów dotykowych. |
-| Floating Disk | 🟡 🧪 | Flaga dysku transportowego. | Nośność, podążanie 20 ft, przeszkody i limit 100 ft nie są wykonywane. |
-| Fog Cloud | 🟠 🧪 | Efekt `obscuring_zone` wpływa na ataki. | Brak wyboru dowolnego środka pustego pola i trwałego wizualnego obszaru; kotwiczenie przy aktorze zniekształca czar. |
-| Goodberry | 🟡 🧪 | Flaga stworzenia 10 jagód. | Nie tworzy 10 rzeczywistych, 24-godzinnych przedmiotów z akcją leczenia 1 PW. |
-| Grease | 🔴 🧪 | Może nałożyć Prone po Dex save. | Brak kwadratu 10 ft, difficult terrain i ponawiania save przy wejściu/końcu tury. |
-| Guiding Bolt | ✅ | Ranged spell attack 4k6 radiant; następny atak przeciw celowi ma przewagę. | Znacznik znika po następnym ataku. |
-| Healing Word | ✅ | Bonus action, 60 ft, 1k4 + cecha rzucania; skaluje się slotem. | Cele wskazywane przez planszę. |
-| Hellish Rebuke | ✅ | Reakcja po obrażeniach; Dex save, 2k10 fire/połowa. | Reakcyjne okno i upcast są modelowane. |
-| Heroism | ✅ | Odporność na Frightened i odnawiane temp PW na początku tury. | Efekt działa w pętli tury; czas jest encounter zamiast dokładnej minuty. |
-| Hideous Laughter | ✅ 🧪 | Wis save; Prone + Incapacitated, powtórki save po obrażeniu i na końcu tury. | Wymaga testu całej ścieżki UI; rdzeń warunku jest obecny. |
-| Hunter's Mark | 🟠 🧪 | Oznaczony cel otrzymuje dodatkowe 1k6 od trafień bronią rzucającego. | Przeniesienie znaku po 0 PW i przewaga Perception/Survival nie mają pełnego flow. |
-| Identify | 🟡 | Flaga identyfikacji przedmiotu. | W przygotowanej scenie może ujawnić authored dane; brak uniwersalnego wyboru i pełnego raportu przedmiotu. |
-| Illusory Script | 🟡 | Flaga magicznego pisma. | Odbiorcy, 10 dni i True Seeing nie są śledzone. |
-| Inflict Wounds | ✅ | Melee spell attack za 3k10 necrotic; skaluje się slotem. | Prosty resolver zgodny. |
-| Jump | 🔴 🧪 | Zapisuje efekt `jump_multiplier`. | Kalkulator skoku nie konsumuje tego efektu. |
-| Longstrider | 🟠 🧪 | Efekt `speed_bonus` zwiększa szybkość. | Wymaga weryfikacji konsumenta dla aktywnego efektu; czas 1 h mapowany jest do short rest. |
-| Mage Armor | ✅ | Bazowe KP 13 + Dex dla nieopancerzonego celu. | Warunek pancerza i AC są egzekwowane; czas jest uproszczony. |
-| Magic Missile | ✅ | Gracz wskazuje na planszy cele dla trzech pocisków i rozdziela je; każdy 1k4+1 force. | Upcast dodaje pociski; brak ataku/save jest poprawny. |
-| Protection from Evil and Good | 🔴 🧪 | Tworzy nazwany efekt ochrony. | Brak pełnego konsumenta: utrudnienie ataków typów oraz odporność/wyjście z charm, frighten i possession. |
-| Purify Food and Drink | 🟡 🧪 | Flaga oczyszczenia żywności. | Działa w authored scenie, bez uniwersalnego zaznaczania wszystkich zasobów w 5 ft. |
-| Sanctuary | 🔴 🧪 | Tworzy efekt `sanctuary`. | Atakujący nie otrzymuje wymaganego Wis save, nie wybiera nowego celu, a ofensywna akcja nie kończy efektu. |
-| Shield | ✅ | Reakcja po trafieniu daje +5 KP do początku następnej tury i ponownie ocenia atak. | Magic Missile powinien być również blokowany — wymaga utrzymania osobnego testu. |
-| Shield of Faith | ✅ | +2 KP wskazanego celu podczas koncentracji. | Efekt jest używany przez kalkulator AC. |
-| Silent Image | 🟡 🧪 | Flaga iluzji dla sceny/LLM. | Brak obiektu 15-ft cube, przesuwania akcją i deterministycznego Investigation. |
-| Sleep | 🟠 | Wybór środka i obszaru; pula 5k8 od najniższych PW, undead i magic-sleep immunity wykluczone. | Brak ogólnej akcji obudzenia; dokładna minuta jest zastąpiona encounter. |
-| Speak with Animals | 🟡 🧪 | Flaga komunikacji z bestiami. | Odpowiedzi i zakres wiedzy bestii zależą od NPC/sceny. |
-| Thunderwave | ✅ 🧪 | Sześcian 15 ft od rzucającego, Con save, 2k8/połowa, porażka odpycha 10 ft. | Plansza pokazuje obszar i wymaga legalnego pola docelowego odepchnięcia. |
-| Unseen Servant | 🟡 🧪 | Flaga niewidzialnego sługi. | Brak tokena z KP/PW, bonus-action poleceń, zasięgu 60 ft i poruszania 15 ft. |
+| ID | Nazwa | Moduł Areny | Aktualny efekt / oczekiwany rezultat | Dowód automatyczny |
+|---|---|---|---|---|
+| `class_berserker_frenzy` | Berserker — szał bojowy | Arena walki | Frenzy można wybrać tylko podczas Szału; od następnej tury daje jeden bonusowy atak bronią wręcz, a zakończenie Szału dodaje 1 poziom wyczerpania. | `tests/unit/test_level_three_class_feature_rules.py::test_frenzy_activates_during_rage_and_grants_later_bonus_weapon_attack` |
+| `class_lore_bonus_proficiencies` | Kolegium Wiedzy — dodatkowe biegłości | Tor eksploracyjny | Kreator wymaga i przyznaje dokładnie trzy różne legalne biegłości, niezależnie od dwóch wyborów Expertise. | `tests/unit/test_character_creation.py::test_lore_bard_level_three_combines_bonus_skills_and_expertise` |
+| `class_life_disciple_of_life` | Domena Życia — uczeń życia | Laboratorium czarów | Każdy leveled healing spell otrzymuje dokładnie +2 + poziom użytego slotu; sztuczki i pozaczarowe leczenie nie dostają premii. | `tests/unit/test_level_one_class_features.py::test_life_domain_scales_healing_bonus_with_cast_level` |
+| `class_life_preserve_life` | Domena Życia — zachowanie życia | Arena walki | Łączna pula wynosi 5 × poziom kleryka, żaden cel nie przekracza połowy maksymalnych PW, undead/construct i cele poza zasięgiem są odrzucone. | `tests/unit/test_level_three_class_feature_rules.py::test_preserve_life_enforces_pool_and_half_hit_point_cap`<br>`tests/unit/test_level_three_class_feature_rules.py::test_preserve_life_spends_channel_and_heals_only_to_half` |
+| `class_land_bonus_cantrip` | Krąg Ziemi — dodatkowa sztuczka | Laboratorium czarów | Krąg Ziemi zna o jedną sztuczkę druida więcej niż bazowy druid, wszystkie używają Mądrości i nie zużywają slotów. | `tests/unit/test_character_creation.py::test_druid_land_and_paladin_oath_level_three_choices_are_executable_grants` |
+| `class_land_natural_recovery` | Krąg Ziemi — naturalne odzyskiwanie | Stacja odpoczynku | Raz pomiędzy długimi odpoczynkami odzyskuje sloty o sumie poziomów ≤2, żaden na poziomie 6+, i nie tworzy slotów ponad maksimum. | `tests/unit/test_level_three_class_feature_rules.py::test_level_three_druid_limits_and_natural_recovery` |
+| `class_land_terrain_spells` | Krąg Ziemi — czary terenu | Laboratorium czarów | Każda z ośmiu data-driven opcji przyznaje dokładnie właściwą parę czarów, nie liczy ich do limitu przygotowania i nadal wymaga slotu przy rzuceniu. | `tests/unit/test_character_creation.py::test_all_circle_of_land_terrain_choices_grant_level_three_spells` |
+| `class_champion_improved_critical` | Champion — ulepszone trafienie krytyczne | Arena walki | Champion uzyskuje automatyczne critical hit na naturalnym 19 lub 20; zwykła postać tylko na 20. | `tests/unit/test_attack_resolution.py::test_champion_improved_critical_expands_weapon_critical_range_to_nineteen` |
+| `class_open_hand_technique` | Droga Otwartej Dłoni — technika otwartej dłoni | Arena walki | Prone wymaga Dex save, push Str save i legalnej drogi 15 ft, no reactions nie wymaga save i trwa do końca następnej tury mnicha. | `tests/unit/test_level_three_class_feature_rules.py::test_open_hand_technique_applies_all_three_hit_options_and_long_reaction_lock` |
+| `class_devotion_turn_unholy` | Przysięga Oddania — odpędzenie plugawych | Arena walki | Fiend i undead po nieudanym save są Turned; humanoid i cel bez linii widzenia nie są targetami. Obrażenia kończą efekt. | `tests/unit/test_level_three_class_feature_rules.py::test_turn_undead_spends_channel_divinity_and_applies_turned_condition` |
+| `class_hunter_colossus_slayer` | Hunter — pogromca kolosów | Arena walki | Dokładnie +1k8 raz na turę po trafieniu celu poniżej maksymalnych PW; nie działa na pełnych PW. | `tests/unit/test_player_combat_action_flow.py` |
+| `class_hunter_giant_killer` | Hunter — zabójca olbrzymów | Arena walki | Po ataku Large+ istoty w 5 ft otwiera czytelne okno reakcyjnego ataku niezależnie od trafienia; wymaga dostępnej reakcji. | `tests/unit/test_enemy_turn_flow.py::test_large_enemy_attack_opens_giant_killer_reaction_for_adjacent_ranger` |
+| `class_hunter_horde_breaker` | Hunter — przełamanie hordy | Arena walki | Raz na turę daje drugi atak tą samą bronią przeciw innemu celowi w 5 ft od pierwszego i w legalnym zasięgu źródła. | `tests/unit/test_player_combat_action_flow.py::test_horde_breaker_queues_one_attack_against_adjacent_second_target` |
+| `class_thief_second_story_work` | Złodziej — praca na wysokości | Tor eksploracyjny | Wspinaczka nie kosztuje dodatkowego ruchu; running long i high jump zyskują Dex modifier, standing jumps są połową wyniku. | `tests/unit/test_level_three_class_feature_rules.py::test_second_story_work_removes_climbing_surcharge_and_extends_jumps` |
+| `class_fiend_dark_ones_blessing` | Patron Czart — błogosławieństwo Mrocznego | Arena walki | Gdy czarnoksiężnik sprowadza wroga do 0 PW, otrzymuje Cha modifier + poziom = 6 temp PW; nowe temp PW nie sumują się i nie zastępują większych. | `tests/unit/test_player_combat_action_flow.py::test_twinned_save_spell_spends_one_action_and_damages_two_targets`<br>`tests/unit/test_level_three_class_feature_rules.py::test_fiend_evoker_and_agonizing_blast_formulas` |
+| `class_evocation_sculpt_spells` | Tradycja Wywoływania — Rzeźbienie czarów | Arena walki | Można ochronić 1 + poziom czaru widocznych sojuszników; chroniona istota automatycznie zdaje rzut i nie otrzymuje obrażeń, a wróg rozstrzyga czar normalnie. | `tests/unit/test_level_three_class_feature_rules.py::test_fiend_evoker_and_agonizing_blast_formulas`<br>`tests/unit/test_player_area_healing_flow.py::test_sculpt_spells_protected_ally_is_excluded_from_saves_and_damage` |
 
-## Czary — poziom 2
+### Mechaniki przekrojowe
 
-| Czar | Status | Efekt w grze i przykład użycia | Uwaga zgodności |
-|---|---|---|---|
-| Acid Arrow | ✅ 🧪 | Ranged spell attack: 4k4 acid, kolejne 2k4; pudło połowę pierwszych obrażeń. | Wymaga testu timingu końca następnej tury celu. |
-| Aid | ✅ | Do 3 celów: +5 aktualnych i maksymalnych PW; upcast +5. | Czas do long rest jest rozsądną adaptacją 8 h. |
-| Alter Self | 🟡 🧪 | Flaga wybranego wariantu: wodny, broń naturalna lub wygląd. | Żaden wariant nie ma pełnego uniwersalnego resolvera walki/eksploracji. |
-| Animal Messenger | 🟡 🧪 | Flaga Tiny beast, odbiorcy i wiadomości. | Podróż, dystans dzienny i dostarczenie nie są symulowane. |
-| Arcane Lock | 🟡 | Flaga blokady obiektu i hasła. | Działa tylko, jeśli authored fixture respektuje flagę i +10 ST. |
-| Arcanist's Magic Aura | 🟡 🧪 | Flaga fałszywej aury/typu. | Efekt ma znaczenie tylko dla przygotowanych detektorów. |
-| Augury | 🟡 🧪 | Flaga pytania do MG/LLM. | Omen i kumulatywna szansa losowej odpowiedzi przy kolejnych castach nie są deterministycznie prowadzone. |
-| Barkskin | ✅ 🧪 | KP celu nie spada poniżej 16 podczas koncentracji. | Konsument AC istnieje. |
-| Blindness/Deafness | ✅ 🧪 | Con save, wybrany stan, ponowny save na końcu tury. | Board target działa; potrzeba testu obu wariantów i repeated save. |
-| Blur | 🟠 🧪 | Ataki przeciw celowi mają utrudnienie. | Wyjątek dla blindsight/truesight i napastników niewidzących celu nie jest pełny. |
-| Branding Smite | 🟠 🧪 | Następne trafienie bronią dodaje radiant i znacznik świecenia. | Kod ogranicza rider do melee weapon, podczas gdy SRD dopuszcza weapon attack; kończenie niewidzialności wymaga pełnego testu. |
-| Calm Emotions | 🟡 🧪 | Flaga stłumienia emocji albo zawieszenia charm/frightened. | Brak obszaru, Cha save i wyboru efektu jako deterministycznego stanu. |
-| Continual Flame | 🟡 | Flaga stałego światła na obiekcie. | Brak trwałej instancji zaczarowanego przedmiotu oraz interakcji z Darkness/Dispel. |
-| Darkness | 🟠 | `obscuring_zone` wpływa na ataki. | Brak wyboru dowolnego punktu/obiektu i trwałej strefy; zwykłe darkvision jest uproszczone. |
-| Darkvision | ✅ | Cel otrzymuje darkvision 60 ft. | Zmysł jest konsumowany przez widoczność; czas 8 h jest mapowany do odpoczynku. |
-| Detect Thoughts | 🟡 🧪 | Flaga odczytu myśli w scenie. | Brak automatycznego sondowania, Wis save i contested Intelligence. |
-| Enhance Ability | 🔴 🧪 | Tworzy `ability_check_advantage:<ability>`. | Brak ogólnego konsumenta przewagi i dodatkowych efektów sześciu wariantów. |
-| Enlarge/Reduce | 🟠 🧪 | Enlarge dodaje 1k4 do obrażeń, zapisuje zmianę rozmiaru. | Reduce, niechętny Con save, masa, zasięg i geometria rozmiaru są niepełne. |
-| Enthrall | 🟡 🧪 | Flaga rozproszenia uwagi. | Brak obszaru, wykluczeń, Wis save i filtrowanego utrudnienia Perception. |
-| Find Steed | 🟡 🧪 | Flaga przywołanego wierzchowca. | Brak pełnego aktora, formy, inteligencji, więzi i współdzielenia czarów self. |
-| Find Traps | 🟡 🧪 | Flaga zapytania o obecność zagrożeń. | Authored scena może odpowiedzieć; blokada LOS i „bez lokalizacji” muszą być pilnowane contentem. |
-| Flame Blade | 🟠 🧪 | Tworzy dodatkowe 3k6 fire przy ataku melee. | Powinien tworzyć osobny melee spell attack, nie rider zwykłej broni. |
-| Flaming Sphere | 🔴 🧪 | Nakłada okresowe 2k6 fire wskazanemu celowi. | Brak tokena kuli, pola startowego, końca tury w 5 ft, bonus-action ruchu i taranowania. |
-| Gentle Repose | 🔴 🧪 | Flaga zabezpieczenia zwłok. | Błędnie oznaczony jako koncentracyjny; SRD nie wymaga koncentracji. |
-| Gust of Wind | 🟠 🧪 | Linia i forced movement mają resolver. | Brak utrzymywanej kierunkowej strefy, podwójnego kosztu ruchu i bonusowej zmiany kierunku co turę. |
-| Heat Metal | 🟠 🧪 | Okresowe obrażenia fire na celu. | Brak wyboru konkretnego metalowego obiektu, wymuszenia upuszczenia i utrudnienia, gdy nie może upuścić. |
-| Hold Person | ✅ | Humanoid: Wis save, Paralyzed, powtórka na końcu tury; upcast dodaje cele. | Typ celu i repeated save są częścią kontraktu. |
-| Invisibility | 🔴 | Ataki celu/na cel respektują niewidzialność i efekt może wygasać przy ofensywie. | Krytyczny błąd danych: `concentration: false`; opis sam mówi o koncentracji. |
-| Knock | 🟡 | Flaga otwarcia blokady i hałasu. | Authored fixture musi obsłużyć otwarcie, tłumienie Arcane Lock i dźwięk 300 ft. |
-| Lesser Restoration | ✅ | Dotknięty cel usuwa jedną chorobę albo Blinded/Deafened/Paralyzed/Poisoned. | Stany są wybierane i usuwane; choroby zależą od modelu sceny. |
-| Levitate | 🔴 🧪 | Tworzy efekt `levitate`. | Brak wysokości, ograniczenia 500 lb, Con save dla wroga i reguł ruchu przez odpychanie. |
-| Locate Animals or Plants | 🟡 🧪 | Flaga wyszukiwanego gatunku. | Kierunek/dystans do 5 mil zależy od danych świata, których runtime nie indeksuje. |
-| Locate Object | 🟡 🧪 | Flaga wyszukiwanego obiektu. | Brak indeksu 1000 ft, ruchomego kierunku i blokady ołowiem. |
-| Magic Mouth | 🟡 | Flaga obiektu, wiadomości i wyzwalacza. | Brak trwałego triggera na dowolnym przedmiocie. |
-| Magic Weapon | ✅ | Niemagiczna broń ma +1 do ataku/obrażeń i staje się magiczna. | Trzeba utrzymać wybór konkretnej broni; wyższe sloty poza zakresem postaci 3. poziomu. |
-| Mirror Image | 🔴 | Tworzy licznik trzech duplikatów. | Ataki nie wykonują rzutu przekierowania i nie zużywają duplikatów. |
-| Misty Step | ✅ | Bonus action teleportuje rzucającego na podświetlone wolne pole do 30 ft. | Teleport nie prowokuje OA. |
-| Moonbeam | 🔴 🧪 | Okresowe obrażenia mogą zostać przypisane wskazanemu celowi. | Brak cylindra jako obiektu planszy, wejścia/startu tury, ruchu akcją i ridera dla shapechangerów. |
-| Pass without Trace | 🔴 🧪 | Tworzy `stealth_bonus_aura`. | Brak konsumenta +10 do Stealth i dynamicznego aura range; ślady pozostają warstwą narracyjną. |
-| Prayer of Healing | 🟡 🧪 | Flaga dziesięciominutowego leczenia. | Nie wykonuje deterministycznego wyboru do 6 celów, rzutu leczenia ani wydania slotu po long cast. |
-| Protection from Poison | 🔴 🧪 | Tworzy nazwany efekt ochronny. | Neutralizacja trucizny, przewaga save i resistance nie mają pełnego konsumenta. |
-| Ray of Enfeeblement | 🟠 🧪 | Trafienie zmniejsza o połowę obrażenia Strength weapon attacks. | Należy zweryfikować Con save na końcu każdej tury i zakończenie koncentracji. |
-| Rope Trick | 🟡 🧪 | Flaga extradimensional space. | Brak wejścia/wyjścia, pojemności 8 Medium, czasu i reguły ataków/czarów przez portal. |
-| Scorching Ray | ✅ | Trzy osobne ranged spell attacks; każdy 2k6 fire; cele przez planszę. | Upcast dodaje promień. |
-| See Invisibility | 🔴 🧪 | Tworzy efekt `see_invisibility`. | Widoczność nie konsumuje go uniwersalnie; Ethereal Plane również nie jest modelowany. |
-| Shatter | 🟠 🧪 | Wybór obszaru, Con save, 3k8 thunder/połowa. | Brak automatycznego utrudnienia dla nieorganicznych istot i obrażeń niemagicznym obiektom. |
-| Silence | 🔴 🧪 | Tworzy `silence_zone`. | Brak realnej strefy, Deafened w obszarze i blokady czarów z komponentem werbalnym. |
-| Spider Climb | 🔴 🧪 | Tworzy efekt `spider_climb`. | Pathfinding nie otrzymuje climb speed ani przejścia po ścianach/suficie. |
-| Spike Growth | 🟠 🧪 | UI nalicza obrażenia przy ruchu dla efektu strefy. | Brak poprawnego wyboru i prezentacji obszaru oraz pełnej obsługi ukrycia strefy/Perception. |
-| Spiritual Weapon | 🟠 | Przywołuje token z atakiem i ruchem. | Wymaga weryfikacji bonus-action ataku przy cast, ruchu 20 ft i braku koncentracji; model generic summon upraszcza zachowanie. |
-| Suggestion | 🟡 🧪 | Flaga sugestii dla sceny/LLM. | Wis save, rozsądność polecenia, warunki zakończenia i 8 h nie są deterministycznie prowadzone. |
-| Warding Bond | 🟠 🧪 | Cel otrzymuje +1 KP, a część defensywna jest widoczna kalkulatorowi. | Brak pełnego +1 do save, resistance i kopiowania każdej porcji obrażeń na rzucającego wraz z limitem 60 ft. |
-| Web | 🔴 🧪 | Może nałożyć Restrained po Dex save. | Brak prawdziwego sześcianu, wejścia/startu tury, difficult terrain, lekkiego zasłonięcia, podpór i palności. |
-| Zone of Truth | 🟡 🧪 | Flaga strefy prawdy dla rozmowy. | Brak 15-ft strefy, powtarzanego Cha save przy wejściu i listy wyników znanej rzucającemu. |
+| ID | Nazwa | Moduł Areny | Aktualny efekt / oczekiwany rezultat | Dowód automatyczny |
+|---|---|---|---|---|
+| `mechanic_flanking` | Flankowanie | Arena walki | Pierwszy atak ma jedną przewagę opisaną bez +0; obezwładniony sojusznik nie flankuje. | `tests/unit/test_attack_positioning.py::test_melee_attacker_flanks_with_living_ally_on_opposite_side_by_default`<br>`tests/unit/test_attack_positioning.py::test_incapacitated_ally_does_not_provide_flanking`<br>`tests/unit/test_attack_positioning.py::test_flanking_advantage_cancels_existing_disadvantage` |
+| `mechanic_spell_effect_consumers` | Rejestr wykonawców efektów czarów | Laboratorium czarów | Każdy combat_action ze 127 czarów ma zarejestrowaną granicę wykonawczą; nowy nieznany effect_kind łamie audyt. | `tests/unit/test_spell_effect_consumers.py::test_every_srd_combat_spell_effect_has_registered_runtime_consumer` |
 
-## Rasy
+## Świadomie odłożone przypadki
 
-Warianty smoczego pochodzenia o tym samym typie obrażeń są zgrupowane, ponieważ
-korzystają z tego samego resolvera kształtu, save i odporności.
+Poniższe mechaniki nie są przedstawiane jako kompletne. Każda ma zapisany
+preset i oczekiwany rezultat, ale wymaga większej granicy systemowej,
+authored contentu albo kontraktu LLM. Należy wrócić do niej dopiero wtedy,
+gdy korzystający z niej scenariusz wejdzie do produkcji.
 
-| Rasa / cecha | Status | Efekt i przykład użycia | Uwaga |
-|---|---|---|---|
-| Człowiek — Human Versatility | ✅ | +1 do wszystkich sześciu cech i dodatkowy język są rozliczane w kreatorze. | Naprawia wcześniejszy brak premii człowieka. |
-| Wysoki elf — Darkvision | ✅ | Widoczność do 60 ft w ciemności. | Silnik światła respektuje zmysł. |
-| Wysoki elf — Fey Ancestry | ✅ | Przewaga przeciw charm i odporność na magiczny sen. | Używane także przez `Sleep`. |
-| Wysoki elf — Trance | ✅ | Pełny odpoczynek po 4 h medytacji. | Adaptacja zakłada równoważność odpoczynku bez osobnego czuwania. |
-| Wysoki elf — Elf Weapon Training | ✅ | Biegłości broni są zapisane i wpływają na ataki. | Efekt kreatora. |
-| Wysoki elf — High Elf Cantrip | ✅ | Wybrana sztuczka czarodzieja używa Inteligencji. | Profil źródła zachowuje cechę rzucania. |
-| Krasnolud wzgórzowy — Darkvision | ✅ | Widoczność do 60 ft. | — |
-| Krasnolud — Dwarven Resilience | ✅ | Przewaga przeciw poison i resistance poison damage. | Obie części mają osobne hooki. |
-| Krasnolud — Dwarven Speed | ✅ | Ciężki pancerz nie obniża szybkości przez brak Siły. | Kara innego pochodzenia nadal może działać. |
-| Krasnolud — Stonecunning | 🟡 | Podwójna biegłość w History dla oznaczonych testów kamienia. | Wymaga poprawnego tagu scenariusza. |
-| Krasnolud wzgórzowy — Dwarven Toughness | ✅ | +1 maks. PW za każdy poziom. | Uwzględniane przy awansie. |
-| Niziołek lekkostopy — Lucky | ✅ | Naturalne 1 prosi o przerzut fizycznej k20. | Należy utrzymać we wszystkich trzech typach d20. |
-| Niziołek — Brave | ✅ | Przewaga przeciw Frightened. | — |
-| Niziołek — Halfling Nimbleness | ✅ | Może przechodzić przez pole większej istoty, bez kończenia tam ruchu. | Projekt traktuje to pole jako difficult terrain — jawna adaptacja. |
-| Niziołek lekkostopy — Naturally Stealthy | ✅ | Większa istota może zapewnić warunek Hide. | Zależne od LOS i rozmiaru. |
-| Smocze dziecię — Breath Weapon | ✅ | Akcja, linia/stożek na LED, save Con/Dex, 2k6 i połowa przy sukcesie. | Zasób odpoczynku działa. |
-| Smocze dziecię — ancestry acid/lightning/fire/cold/poison | ✅ | Genealogia ustawia typ, kształt, save i damage resistance. | Warianty korzystają ze wspólnego resolvera. |
-| Gnom skalny — Darkvision | ✅ | Widoczność do 60 ft. | — |
-| Gnom — Gnome Cunning | ✅ | Przewaga w Int/Wis/Cha save przeciw magii. | Efekt wymaga poprawnego tagu „magical”. |
-| Gnom skalny — Artificer's Lore | 🟡 | Podwójna biegłość w oznaczonych testach historii magicznych/alchemicznych/technicznych przedmiotów. | Zależne od tagów sceny. |
-| Gnom skalny — Tinker | 🟡 | Cecha i rekwizyty są zapisane; gracz może opisać użycie. | Świadomie stołowe, brak uniwersalnej mechaniki trzech urządzeń. |
-| Półelf — Darkvision/Fey Ancestry | ✅ | Jak u elfa. | — |
-| Półelf — Skill Versatility | ✅ | Dwie wybrane biegłości są dodawane w kreatorze. | — |
-| Półork — Darkvision | ✅ | Widoczność do 60 ft. | — |
-| Półork — Relentless Endurance | ✅ | Raz na long rest spadek do 0 PW zmienia się na 1 PW, z wyjątkami instant death. | Automatyczny trigger. |
-| Półork — Savage Attacks | ✅ | Krytyk broni dodaje jedną dodatkową kość obrażeń broni. | Nie powinien podwajać dodatkowych kości cech/czarów. |
-| Diabelstwo — Darkvision | ✅ | Widoczność do 60 ft. | — |
-| Diabelstwo — Hellish Resistance | ✅ | Resistance fire. | — |
-| Diabelstwo — Infernal Legacy | ✅ | Thaumaturgy na 1., Hellish Rebuke raz/long rest od 3. poziomu. | Cechą rzucania jest Charyzma. |
+### Czary poziomów 0–2
 
-## Klasy i podklasy do 3. poziomu
+| ID | Nazwa | Moduł Areny | Docelowy test | Powód odłożenia |
+|---|---|---|---|---|
+| `spell_spiritual_weapon` | Duchowa broń | Arena walki | Atak używa premii ataku czarami właściciela i zadaje 1k8 + modyfikator cechy obrażeń force.<br>Czar nie wymaga koncentracji, trwa minutę i ma szybkość przemieszczenia 20 ft.<br>Atak przy rzuceniu oraz późniejsze przesunięcie z atakiem należą do tej samej akcji bonusowej właściciela.<br>Broń nie jest stworzeniem, nie ma własnej inicjatywy i nie może być celem ataku. | Świadomie oznaczono jako SKIP po częściowej naprawie nazw, premii ataku, 1k8 + modyfikatora, ruchu 20 ft i braku koncentracji. Generic summon nadal tworzy aktora z własną inicjatywą, więc nie potrafi zgodnie z SRD połączyć ataku przy cast oraz późniejszego ruchu i ataku w akcję bonusową właściciela. Pełna naprawa wymaga osobnego modelu sterowalnego obiektu czaru zamiast dalszego rozbudowywania aktora-przywołania. |
+| `spell_suggestion` | Sugestia | Pracownia rozmów | Legalny cel musi słyszeć i rozumieć rzucającego; wykonuje Wisdom save przeciw ST czaru.<br>Jawnie szkodliwa sugestia nie uruchamia efektu i nie powinna być rozstrzygana samą flagą.<br>Efekt kończy się po wykonaniu polecenia, po utracie koncentracji, po ataku drużyny na cel albo po 8 godzinach.<br>Rzucający i UI znają konkretny cel, polecenie oraz stan wykonania. | SKIP: obecny model eksploracyjnego NPC nie przechowuje cech, języków, stanu koncentracyjnego polecenia ani relacji 'zaatakowany przez drużynę'. Dodanie samego Wisdom save i flagi cast_suggestion nadal byłoby fałszywą implementacją. Zachowano poprawny kontrakt katalogowy 30 ft / koncentracja / 8 h; pełny resolver wymaga najpierw ujednolicenia NPC z mechanicznym Actor/target state i klasyfikatora rozsądności polecenia. |
+| `spell_zone_of_truth` | Strefa prawdy | Pracownia rozmów | Strefa ma promień 15 ft, trwa 10 minut i nie wymaga koncentracji.<br>Cel powtarza Charisma save przy wejściu lub początku tury, dopóki nie poniesie porażki.<br>Rzucający zna każdy wynik, a po porażce cel nie może świadomie wypowiedzieć kłamstwa.<br>Cel nadal może milczeć, unikać odpowiedzi albo mówić prawdę wybiórczo. | SKIP po częściowej implementacji: pole, powtarzane save'y, wynik znany rzucającemu i trwały per-cel stan zakazu kłamstwa są gotowe. Brakuje jednak konsumenta tego stanu w swobodnej rozmowie LLM, więc model nadal mógłby wygenerować świadome kłamstwo. Pełne domknięcie wymaga przekazania truth-bound do kontraktu NPC/GM oraz walidacji wypowiedzi bez blokowania półprawd i odmowy odpowiedzi. |
+| `spell_dancing_lights` | Tańczące światła | Tor eksploracyjny | Cztery osobne źródła światła pozostają w 20 ft od siebie, mają zasięg 120 ft i można je przesuwać bonus action podczas koncentracji. | SKIP: istnieje flaga sceny i poprawne metadane koncentracji, ale nie ma czterech tokenów światła ani ich ruchu. |
+| `spell_druidcraft` | Druidztwo | Tor eksploracyjny | Authored scena/LLM rozpoznaje jeden drobny efekt zgodny z czarem i nie traktuje go jak dowolnej magii. | SKIP świadomy: czar użytkowy pozostaje kontraktem sceny; uniwersalny resolver wszystkich drobnych efektów nie jest celowy. |
+| `spell_light` | Światło | Tor eksploracyjny | Przedmiot jest trwałym, przenośnym źródłem jasnego/słabego światła przez godzinę; drugi cast kończy pierwszy. | SKIP: flaga authored sceny działa, ale brak zaczarowanej instancji przedmiotu i uniwersalnego źródła światła. |
+| `spell_mage_hand` | Dłoń maga | Tor eksploracyjny | Authored cele respektują 30 ft, 10 lb i zakaz ataku/aktywacji magicznych przedmiotów. | SKIP: capability jest dostępne scenom, ale brak uniwersalnego tokena dłoni, masy i manipulacji dowolnym obiektem. |
+| `spell_mending` | Naprawa | Tor eksploracyjny | Małe pojedyncze pęknięcie authored obiektu zostaje naprawione; magiczna właściwość i duże uszkodzenie nie są odtwarzane. | SKIP: istnieje flaga naprawy, ale brak ogólnego modelu geometrii uszkodzeń i jednominutowego postępu. |
+| `spell_message` | Wiadomość | Pracownia rozmów | Tylko cel słyszy szept i może odpowiedzieć; zasięg i materiały blokujące są przestrzegane. | SKIP: komunikacja jest flagą sceny; brak uniwersalnej analizy drogi przez materiały. |
+| `spell_minor_illusion` | Pomniejsza iluzja | Pracownia rozmów | Iluzja ma poprawne limity, Investigation przeciw spell DC i staje się przejrzysta po rozpoznaniu. | SKIP: authored/LLM opis działa, lecz trwały obiekt iluzji i deterministyczne rozpoznanie nie są zaimplementowane. |
+| `spell_prestidigitation` | Kuglarstwo | Pracownia rozmów | Scena/LLM uznaje wyłącznie drobne efekty SRD i maksymalnie trzy nieinstantaneous efekty jednocześnie. | SKIP świadomy: drobne efekty są opisowe, ale runtime nie prowadzi licznika trzech efektów. |
+| `spell_produce_flame` | Stworzenie płomienia | Arena walki | Płomień daje światło 10/20 ft do 10 min; rzut kończy światło i wykonuje ranged spell attack 1k8 fire do 30 ft. | SKIP częściowy: atak 1k8 działa, ale nie ma utrzymywanego przenośnego źródła światła ani wyboru „świeć albo rzuć”. |
+| `spell_thaumaturgy` | Taumaturgia | Pracownia rozmów | Scena/LLM interpretuje wyłącznie efekty z listy SRD; do trzech minutowych efektów może współistnieć. | SKIP świadomy: flaga sceny działa, ale runtime nie śledzi osobno trzech opisowych efektów. |
+| `spell_alarm` | Alarm | Tor eksploracyjny | Authored scena zapisuje alarm i reaguje na wejście; uniwersalny trigger 8 h pozostaje poza runtime. | SKIP świadomy: bez trwałego systemu triggerów świata efekt wymaga sceny. |
+| `spell_animal_friendship` | Przyjaźń ze zwierzętami | Pracownia rozmów | Scena respektuje typ i nastawienie bestii przez 24 h. | SKIP świadomy: długotrwałe zachowanie bestii jest authored/LLM. |
+| `spell_charm_person` | Zauroczenie osoby | Pracownia rozmów | Scena stosuje Wis save, przewagę w walce i późniejszą świadomość celu. | SKIP świadomy: godzinne relacje NPC i pamięć wymagają authored sceny. |
+| `spell_comprehend_languages` | Rozumienie języków | Tor eksploracyjny | Scena ujawnia dosłowne znaczenie, nie kod ani tajną wiadomość. | SKIP świadomy: rezultat zależy od treści scenariusza. |
+| `spell_create_or_destroy_water` | Stworzenie lub zniszczenie wody | Tor eksploracyjny | Authored fixture zmienia ilość wody albo usuwa właściwą mgłę. | SKIP świadomy: zasoby płynów nie mają uniwersalnego modelu. |
+| `spell_detect_evil_and_good` | Wykrycie dobra i zła | Tor eksploracyjny | Scena ujawnia właściwe typy/miejsca w 30 ft z uwzględnieniem blokad. | SKIP świadomy: brak światowego indeksu aur. |
+| `spell_detect_magic` | Wykrycie magii | Tor eksploracyjny | Scena ujawnia obecność i szkołę magii podczas koncentracji. | SKIP świadomy: aury są danymi scenariusza. |
+| `spell_detect_poison_and_disease` | Wykrycie trucizny i choroby | Tor eksploracyjny | Scena podaje obecność, położenie i typ zagrożenia. | SKIP świadomy: wymaga authored danych zagrożenia. |
+| `spell_disguise_self` | Zmiana wyglądu | Pracownia rozmów | Scena respektuje ograniczenia rozmiaru i iluzoryczność przebrania. | SKIP świadomy: percepcja NPC jest częścią authored interakcji. |
+| `spell_find_familiar` | Znalezienie chowańca | Tor eksploracyjny | Scena zapisuje obecność i wynik zwiadu. | SKIP świadomy: brak pełnego aktora, telepatii i dostarczania dotykowych czarów. |
+| `spell_floating_disk` | Lewitujący dysk | Tor eksploracyjny | Authored scena respektuje 500 lb, dystans podążania i przeszkody. | SKIP świadomy: brak uniwersalnego systemu ładunku podążającego. |
+| `spell_goodberry` | Dobre jagody | Stacja odpoczynku | Docelowo powstaje 10 przedmiotów po 1 PW i 24 h trwałości. | SKIP świadomy: obecnie jest flaga, nie 10 instancji przedmiotów. |
+| `spell_identify` | Identyfikacja | Tor eksploracyjny | Authored scena ujawnia właściwości, sposób użycia, ładunki i aktywne czary. | SKIP świadomy: brak uniwersalnego raportera dowolnego przedmiotu. |
+| `spell_illusory_script` | Iluzoryczne pismo | Pracownia rozmów | Authored dokument pokazuje właściwą treść przez 10 dni. | SKIP świadomy: trwałe dokumenty i True Seeing nie są modelowane. |
+| `spell_purify_food_and_drink` | Oczyszczenie jadła i napoju | Tor eksploracyjny | Authored zasoby stają się wolne od trucizny i choroby. | SKIP świadomy: nie ma uniwersalnej strefy zasobów konsumpcyjnych. |
+| `spell_silent_image` | Cichy obraz | Tor eksploracyjny | Scena/LLM ocenia wiarygodność, Investigation i ujawnienie iluzji. | SKIP świadomy: brak uniwersalnego obiektu iluzji 15 ft. |
+| `spell_speak_with_animals` | Rozmowa ze zwierzętami | Pracownia rozmów | NPC odpowiada wyłącznie w zakresie swojej percepcji i inteligencji. | SKIP świadomy: rozmowa jest celowo obsługiwana przez scenę/LLM. |
+| `spell_unseen_servant` | Niewidzialny sługa | Tor eksploracyjny | Authored scena wykonuje prostą czynność w dozwolonym zasięgu. | SKIP świadomy: brak tokena, KP/PW i bonus-action command loop. |
+| `spell_alter_self` | Zmiana siebie | Tor eksploracyjny | Authored scena interpretuje wybrany wariant podczas koncentracji. | SKIP świadomy: trzy odrębne systemy nie mają jeszcze jednego uniwersalnego resolvera. |
+| `spell_animal_messenger` | Zwierzęcy posłaniec | Tor eksploracyjny | Scena zapisuje wiadomość, czas i wynik dostarczenia. | SKIP świadomy: podróż poza planszą wymaga systemu świata. |
+| `spell_arcane_lock` | Magiczny zamek | Tor eksploracyjny | Fixture respektuje blokadę, hasło i +10 ST. | SKIP świadomy: efekt działa tylko na obiektach sceny z odpowiednim kontraktem. |
+| `spell_arcanists_magic_aura` | Magiczna aura arkanisty | Tor eksploracyjny | Authored detektor odczytuje fałszywą aurę przez 24 h. | SKIP świadomy: znaczenie zależy od przygotowanych detektorów. |
+| `spell_augury` | Wróżba | Pracownia rozmów | MG zwraca omen i uwzględnia rosnące ryzyko losowego wyniku. | SKIP świadomy: omen jest celowo decyzją MG/LLM. |
+| `spell_calm_emotions` | Uspokojenie emocji | Pracownia rozmów | Authored scena respektuje wybór do końca koncentracji. | SKIP świadomy: reakcje społeczne po wygaśnięciu są domeną sceny/LLM. |
+| `spell_continual_flame` | Wieczny płomień | Tor eksploracyjny | Docelowo powstaje trwała instancja źródła światła. | SKIP świadomy: aktualna flaga nie tworzy trwałego zaczarowanego przedmiotu. |
+| `spell_detect_thoughts` | Wykrycie myśli | Pracownia rozmów | Scena/LLM ujawnia tylko legalną warstwę informacji po save/contest. | SKIP świadomy: treść myśli jest fabularna. |
+| `spell_enlarge_reduce` | Powiększenie/Pomniejszenie | Arena walki | Powiększenie dodaje k4; pozostałe skutki są jawnie wskazane jako wspomagane. | SKIP świadomy: ujemny fizyczny k4 Pomniejszenia, masa i geometria tokena wymagają rozszerzenia modelu. |
+| `spell_enthrall` | Urzekająca przemowa | Pracownia rozmów | Authored scena filtruje cele i stosuje utrudnienie Perception po Wis save. | SKIP świadomy: selektywne społeczne Perception zależy od sceny. |
+| `spell_find_steed` | Przywołanie wierzchowca | Tor eksploracyjny | Docelowo powstaje trwały inteligentny aktor-wierzchowiec. | SKIP świadomy: pełny mounted combat i więź nie są jeszcze modelem runtime. |
+| `spell_find_traps` | Wykrycie pułapek | Tor eksploracyjny | Scena potwierdza obecność i rodzaj, nie położenie, tylko w LOS 120 ft. | SKIP świadomy: poprawność zależy od indeksu pułapek scenariusza. |
+| `spell_gust_of_wind` | Podmuch wiatru | Arena walki | Pierwszy push 15 ft działa; utrzymywana linia wymaga dalszej obsługi. | SKIP świadomy: brak trwałej kierunkowej strefy i bonusowej zmiany kierunku. |
+| `spell_knock` | Kołatka | Tor eksploracyjny | Authored fixture otwiera się i emituje konsekwencję 300 ft. | SKIP świadomy: semantyka jest poprawna, ale każdy fixture musi zadeklarować reakcję. |
 
-Wiersze „wybór” są poprawnymi markerami, jeśli ich konkretne opcje są później
-przyznawane i wykonywane.
+### Cechy rasowe
 
-| Klasa / cecha | Status | Efekt i przykład użycia | Uwaga |
-|---|---|---|---|
-| Barbarzyńca — Rage | ✅ | Bonus action; przewaga Strength, bonus melee Strength damage, resistance B/P/S. | Silnik śledzi zużycie i warunki utrzymania. |
-| Barbarzyńca — Unarmored Defense (Con) | ✅ | KP 10 + Dex + Con, tarcza dozwolona. | Kalkulator wybiera legalnie najlepsze KP. |
-| Barbarzyńca — Reckless Attack | ✅ | Pierwszy Strength melee attack może dostać przewagę; ataki przeciw barbarzyńcy mają przewagę do następnej tury. | Deklaracja jest osobną akcją UI przed atakiem. |
-| Barbarzyńca — Danger Sense | 🟠 | Przewaga w widocznych Dex saves. | Wymaga pełnego testu wykluczeń blinded/deafened/incapacitated. |
-| Berserker — Frenzy | ✅ | W rage udostępnia bonusowy melee attack; po rage dodaje exhaustion. | Nie mylić aktywacji frenzy z samym rage. |
-| Bard — Spellcasting | ✅ | Znane czary, sloty i Charisma. | Zastrzeżenia poszczególnych czarów są w tabeli wyżej. |
-| Bard — Bardic Inspiration | 🟠 | Bonus action, cel na planszy, k6 do ability check/attack/save. | W walce trwa do końca encounter zamiast dokładnych 10 min; trzeba potwierdzić pełne zużycie w eksploracji. |
-| Bard — Jack of All Trades | ✅ | Połowa proficiency do niebiegłych ability checks. | Powinno obejmować initiative jako Dex check. |
-| Bard — Song of Rest | ✅ | Dodatkowe k6 leczenia przy short rest, gdy wydano Hit Die. | — |
-| College of Lore — Bonus Proficiencies | ✅ | Trzy biegłości wybrane w kreatorze/awansie. | — |
-| College of Lore — Cutting Words | 🟠 | Reakcja przeciw attack roll działa. | Ability check i damage roll pozostają korektą stołową. |
-| Kleryk — Spellcasting/Life Domain | ✅ | Prepared Wisdom casting i always-prepared domain spells. | — |
-| Life — Disciple of Life | ✅ | +2 + poziom czaru do leczenia leveled spell. | Nakładane na źródło leczenia. |
-| Kleryk — Channel Divinity / Turn Undead | ✅ | Akcja, Wis save widocznych undead w 30 ft, stan odpędzenia. | Widoczność i zachowanie na turze muszą pozostać w testach. |
-| Life — Preserve Life | ✅ | Rozdziela 5 × poziom kleryka PW, maks. do połowy PW celu; bez undead/construct. | Cele i przydział przez planszę/UI. |
-| Druid — Druidic | 🟡 | Sekretny język jako permission sceny. | Świadomie stołowe. |
-| Druid — Spellcasting | ✅ | Prepared Wisdom casting. | — |
-| Druid — Wild Shape | ✅ | Wybór legalnej formy, statystyki bestii, PW formy, atak i powrót. | Dostępna lista form jest ograniczonym katalogiem; pełne SRD wymaga wszystkich legalnych bestii. |
-| Circle of the Land — Bonus Cantrip | ✅ | Dodatkowa sztuczka druida. | — |
-| Circle of the Land — Natural Recovery | ✅ | Po short rest odzyskuje legalną sumę poziomów slotów raz/dzień. | — |
-| Circle Land terrain choices | ✅ | Wybrany teren przyznaje właściwe always-prepared circle spells od poziomu 3. | Osiem opcji jest data-driven. |
-| Wojownik — Fighting Style | ⚪ | Wybór stylu w kreatorze. | Konkretne style poniżej. |
-| Archery | ✅ | +2 do ranged weapon attacks. | Nie do ranged spell attacks. |
-| Defense | ✅ | +1 KP podczas noszenia pancerza. | — |
-| Dueling | ✅ | +2 damage przy jednej broni jednoręcznej i bez innej broni. | Tarcza jest dozwolona. |
-| Two-Weapon Fighting | ✅ | Ability modifier do damage bonusowego ataku drugą bronią. | — |
-| Wojownik — Second Wind | ✅ | Bonus action, 1k10 + fighter level, short-rest resource. | Fizyczny k10. |
-| Wojownik — Action Surge | ✅ | Odzyskuje dodatkową akcję raz/short rest. | Nie dodaje bonus action. |
-| Champion — Improved Critical | ✅ | Krytyk na 19–20. | — |
-| Mnich — Unarmored Defense (Wis) | ✅ | KP 10 + Dex + Wis bez pancerza i tarczy. | — |
-| Mnich — Martial Arts | ✅ | Dex dla monk weapons/unarmed, k4, bonus unarmed po Attack. | Wymaga legalnego wyposażenia i braku pancerza/tarczy. |
-| Mnich — Ki: Flurry/Patient Defense/Step of the Wind | ✅ | Trzy akcje bonusowe wydają 1 Ki i uruchamiają właściwy efekt. | Step of the Wind powinien także podwajać jump distance. |
-| Mnich — Unarmored Movement +10 | ✅ | Zwiększa szybkość bez pancerza/tarczy. | — |
-| Mnich — Deflect Missiles | ✅ | Reakcja redukuje ranged weapon damage; przy redukcji do 0 może wydać Ki i odrzucić pocisk. | Target odrzutu powinien zawsze iść przez planszę. |
-| Open Hand Technique | ✅ | Po trafieniu Flurry: prone, push 15 ft albo brak reakcji. | Push i cel przez planszę; save DC z Ki. |
-| Paladyn — Divine Sense | 🟠 | Akcja wykrywa typy celestial/fiend/undead do 60 ft. | Brak pełnej kontroli total cover oraz consecrated/desecrated place. |
-| Paladyn — Lay on Hands | 🟠 | Dotyk i wydawanie puli leczenia działa. | Interfejs opisuje leczenie; neutralizacja poison/disease za 5 punktów wymaga osobnej, dobrze widocznej ścieżki. |
-| Paladyn — Fighting Style/Spellcasting | ✅ | Style i prepared Charisma casting od poziomu 2. | — |
-| Paladyn — Divine Smite | ✅ | Po melee weapon hit można wydać slot na radiant dice; więcej przeciw undead/fiend. | Nie zużywa akcji. |
-| Paladyn — Divine Health | ✅ | Odporność na disease. | Zależne od prawidłowego tagu efektu jako disease. |
-| Devotion — Sacred Weapon | 🟠 | Akcja dodaje Cha do ataku konkretnej broni. | Czas jest encounter zamiast 1 min; brak emisji światła. |
-| Devotion — Turn the Unholy | ✅ | Jak Turn Undead dla fiend/undead. | — |
-| Łowca — Favored Enemy | 🟡 | Przewaga do oznaczonych Survival/Intelligence checks; humanoid wybiera dwie rasy. | Wymaga `creature_type` i `race_tag` w contentcie. |
-| Łowca — Natural Explorer | 🟡 | Korzyści podróży na wybranym terenie. | Działa tylko dla prawidłowo otagowanych podróży; pełny pakiet śledzenia/foraging wymaga contentu. |
-| Łowca — Fighting Style/Spellcasting | ✅ | Styl i known Wisdom spells od poziomu 2. | — |
-| Łowca — Primeval Awareness | 🟠 | Wydaje slot i ujawnia obecność odpowiednich typów. | Obecny zakres jest związany z uczestnikami encounter; SRD mówi 1 milę/6 mil w favored terrain i bez liczby/lokalizacji. |
-| Hunter — Colossus Slayer | ✅ | Raz na turę +1k8, gdy cel ma mniej niż maks. PW. | Automatyczny rider po trafieniu. |
-| Hunter — Giant Killer | 🟠 | Reakcyjny atak na Large+ po ataku celu. | Wymaga pełnego, czytelnego okna reakcji i zasięgu 5 ft. |
-| Hunter — Horde Breaker | 🟠 | Drugi atak na inny cel do 5 ft od pierwszego raz/turę. | Wymaga podświetlenia tylko legalnych drugich celów. |
-| Łotrzyk — Expertise | ✅ | Dwie biegłości mają podwójne proficiency. | — |
-| Łotrzyk — Sneak Attack 1k6/2k6 | ✅ | Raz/turę po legalnym finesse/ranged hit z przewagą lub sąsiadującym sojusznikiem. | Flankowanie może dać przewagę, ale nie jest warunkiem samym w sobie. |
-| Łotrzyk — Thieves' Cant | 🟡 | Język/permission sceny. | Świadomie stołowe. |
-| Łotrzyk — Cunning Action | ✅ | Bonus action Dash/Disengage/Hide. | Hide tylko przy legalnej widoczności. |
-| Thief — Fast Hands | 🟠 | Bonus action dla interakcji/użycia obiektu. | Pełny wybór Sleight of Hand, thieves' tools i Use an Object wymaga konsekwentnego menu; nie może automatycznie obejmować magic items. |
-| Thief — Second-Story Work | ✅ | Szybsze wspinanie i dłuższy running jump. | Bonus skoku opiera się na Dex modifier zgodnie z SRD. |
-| Czarownik — Spellcasting/Draconic Resilience | ✅ | Charisma casting; bez pancerza KP 13+Dex i +1 PW/poziom. | — |
-| Czarownik — Font of Magic | ✅ | Bonus action konwertuje sloty i Sorcery Points według tabeli. | — |
-| Metamagic — Careful | ✅ | Wskazane cele automatycznie zdają pierwszy save obszaru. | Cel przez planszę. |
-| Metamagic — Distant | ✅ | Podwaja range albo zmienia touch na 30 ft. | — |
-| Metamagic — Empowered | ✅ | Przerzut do Cha modifier kości obrażeń. | Może łączyć się z inną metamagic. |
-| Metamagic — Extended | 🟠 | Zapisuje mnożnik czasu ×2. | Uproszczony zegar encounter/rest może uniemożliwić odczuwalny efekt. |
-| Metamagic — Heightened | ✅ | Wybrany cel ma utrudnienie do pierwszego save. | Cel przez planszę. |
-| Metamagic — Quickened | ✅ | Zmienia action na bonus action i respektuje bonus-action spell rule. | — |
-| Metamagic — Subtle | 🟠 | Legalność castu bez V/S jest zapisana. | Komponenty V/S nie są jeszcze konsekwentnie blokowane przez Silence/restrained hands. |
-| Metamagic — Twinned | ✅ | Drugi legalny cel pojedynczego czaru, wskazany przez planszę. | Waliduje brak self/area/multi-target. |
-| Czarnoksiężnik — Pact Magic | ✅ | Osobne sloty najwyższego poziomu odnawiane po short rest. | — |
-| Fiend — Dark One's Blessing | ✅ | Po pokonaniu wroga temp PW = Cha mod + warlock level. | Automatyczny trigger. |
-| Invocations — Agonizing/Repelling Blast | ✅ | Cha do obrażeń Eldritch Blast; trafiony może zostać odepchnięty 10 ft. | Cel/droga odepchnięcia przez planszę. |
-| Invocations — Armor of Shadows, Beast Speech, Eldritch Sight, Fiendish Vigor, Mask of Many Faces, Misty Visions | 🟠 | Przyznają at-will spell access. | Ostateczna zgodność zależy od niepełnych resolverów odpowiadających im czarów. |
-| Invocation — Beguiling Influence | ✅ | Biegłość Deception i Persuasion. | Efekt kreatora. |
-| Invocation — Devil's Sight | ✅ | Widzenie także w magicznej ciemności do 120 ft. | Musi współpracować z poprawioną strefą Darkness. |
-| Pact of the Blade | ✅ | Przywołanie wybranej pact weapon i biegłość. | Część rytualnego wiązania magicznej broni jest uproszczona. |
-| Pact of the Chain | 🟡 | Przyznaje Find Familiar i znacznik specjalnego paktu. | Specjalne formy, telepatia/atak chowańca pozostają stołowe. |
-| Pact of the Tome | ✅ | Trzy sztuczki dowolnych list używające Charisma. | — |
-| Czarodziej — Spellcasting/Spellbook | ✅ | Intelligence, księga, prepared spells i rytuały. | Poszczególne rytuały mogą mieć tylko flagę sceny. |
-| Czarodziej — Arcane Recovery | ✅ | Po short rest legalny wybór odzyskiwanych slotów raz/dzień. | — |
-| Evocation — Savant | 🟡 | Metadane kosztu/czasu kopiowania evocation. | Aplikacja nie ma jeszcze pełnego ekonomicznego flow kopiowania czarów do księgi. |
-| Evocation — Sculpt Spells | ✅ | Wybór do 1 + poziom czaru chronionych istot; save auto-success i zero damage. | Cele przez planszę. |
+| ID | Nazwa | Moduł Areny | Docelowy test | Powód odłożenia |
+|---|---|---|---|---|
+| `species_rock_gnome_tinker` | Gnom skalny — majsterkowicz | Tor eksploracyjny | Urządzenie kosztuje 10 gp i godzinę pracy, działa 24 h, a gnom może utrzymywać najwyżej trzy; konkretne użycie pozostaje authored. | SKIP: karta przyznaje biegłość w narzędziach i opis cechy, ale runtime nie ma receptur trzech urządzeń, kosztu 10 gp, zegara 1 h ani limitu trzech aktywnych konstrukcji. Wymaga małego modułu craftingu/rekwizytów; nie zastępujemy go dowolną flagą LLM. |
 
-## Luki w obecnych audytach automatycznych
+### Cechy klasowe
 
-| Audyt | Co obecnie udowadnia | Czego nie udowadnia |
-|---|---|---|
-| `audit_srd_character_coverage` | Istnieją 9 ras, 12 klas/podklas i 127 canonical spell IDs na właściwych poziomach/listach. | Poprawności koncentracji, zasięgu, czasu, komponentów ani efektu. |
-| `audit_character_implementation` | Każda cecha ma etykietę `executable/data_driven/marker/table_assisted`; każdy czar ma obsługiwany `effect.kind/action_type`. | Że `effect_kind` ma konsumenta albo że konsument realizuje opis. |
-| `audit_assisted_spell_plans` | Nie zostały stare wpisy `kind=assisted`. | Czy zamiana `assisted` na `exploration:set_flag` lub `targeted_status` rzeczywiście dodała mechanikę. |
-| Test kompilacji czarów | Każdy nieeksploracyjny czar kompiluje się do źródła akcji. | Że po użyciu źródła zmienia się właściwy stan i efekt wygasa w odpowiednim momencie. |
+| ID | Nazwa | Moduł Areny | Docelowy test | Powód odłożenia |
+|---|---|---|---|---|
+| `class_druid_druidic` | Druid — język druidów | Pracownia rozmów | Druid automatycznie zna sekretny język i rozpoznaje wiadomości; inni wykrywają obecność wiadomości testem Perception DC 15, ale nie rozumieją jej bez magii. | SKIP: cecha istnieje jako permission dla authored scen, ale Arena nie ma systemu zapisywania trwałych sekretnych wiadomości ani testu Perception DC 15 dla niedruidów. To funkcja contentu/języka, nie resolver walki. |
+| `class_druid_wild_shape` | Druid — dziki kształt | Arena walki | Legalna forma CR ≤1/4 bez swim/fly zastępuje fizyczne statystyki i PW, zachowuje umysł postaci; nadmiar obrażeń przechodzi na normalną formę, użycia wracają po short rest. | SKIP częściowy: transformacja, PW formy, overflow, ruch, podstawowy atak i powrót działają. Katalog ma osiem bezpiecznych form, ale nie cały SRD, a model pojedynczego ataku nie odwzorowuje jeszcze Pack Tactics, Charge, Keen Senses, poison i pozostałych cech bestii. Dodanie samych nazw/statystyk dawałoby fałszywe poczucie zgodności. |
+| `class_paladin_divine_sense` | Paladyn — boski zmysł | Arena walki | Do 60 ft wykrywa obecność i typ celestial/fiend/undead bez total cover oraz consecrated/desecrated place, ale nie liczbę ani lokalizację. | SKIP częściowy: akcja, zasób, 60 ft, typy, brak lokalizacji i total cover planszy działają po poprawce audytu. Sceny nie mają jeszcze danych consecrated/desecrated place, więc tej części nie da się wiarygodnie wykryć. |
+| `class_paladin_lay_on_hands` | Paladyn — nakładanie rąk | Arena walki | Pula 5 × poziom leczy 1:1 albo za 5 punktów neutralizuje jedną truciznę lub chorobę; akcja i dotyk są wymagane. | SKIP częściowy: leczenie, pula, akcja, dotyk i board target działają. Runtime nie ma jeszcze jawnego wyboru poison/disease ani trwałego modelu aktywnych chorób, więc opcja 5 punktów pozostaje brakująca zamiast udawanej flagą. |
+| `class_ranger_primeval_awareness` | Łowca — pierwotna świadomość | Tor eksploracyjny | Przez 1 min/poziom slotu wykrywa obecność typów w 1 mili albo 6 mil w favored terrain, bez liczby i lokalizacji. | SKIP częściowy: koszt slotu, czas i raport samych typów działają, lecz źródłem są tylko uczestnicy encountera. Runtime nie ma regionalnego indeksu istot dla promienia 1/6 mil, więc pełnego zakresu nie da się przetestować na Arenie. |
+| `class_rogue_thieves_cant` | Łotrzyk — żargon złodziejski | Pracownia rozmów | Wymiana ukrytej informacji trwa cztery razy dłużej; łotrzyk rozumie sekretny język i znaki. | SKIP: istnieje permission do authored dialogów, ale runtime nie modeluje czasu rozmowy ×4 ani uniwersalnego kodowania dowolnej wypowiedzi. To świadomie content/table-assisted. |
+| `class_metamagic_extended` | Metamagia — przedłużony czar | Laboratorium czarów | Podwaja czas trwania do maksimum 24 godzin; nie działa na instantaneous ani until dispelled. | SKIP częściowy: kompatybilność, koszt i duration_multiplier ×2 są zapisane. Encounter/rest nie ma jednolitego zegara absolutnego ani capu 24 h we wszystkich konsumentach, więc efekt nie zawsze jest odczuwalny i nie jest w pełni zgodny. |
+| `class_warlock_at_will_invocations` | Inwokacje — czary bez limitu | Laboratorium czarów | Mage Armor, Speak with Animals, Detect Magic, False Life, Disguise Self i Silent Image są rzucane at will bez slotu, używając Charyzmy i zwykłych komponentów. | SKIP częściowy: wszystkie sześć profili at-will, brak kosztu slotu i Charyzma są testowane. Pełna zgodność efektów zależy od nadal częściowych resolverów rozmowy ze zwierzętami, przebrania i dowolnej iluzji; te czary pozostają authored/LLM-assisted. |
+| `class_warlock_pact_chain` | Pakt Łańcucha — chowaniec | Laboratorium czarów | Przyznaje Find Familiar i specjalne formy paktu; chowaniec może atakować kosztem ataku właściciela oraz używa telepatii/percepcji zgodnie z czarem. | SKIP częściowy: spell access, rytuał i material 10 gp są poprawne. Specjalne formy, aktor chowańca, telepatia, zmysły i zamiana ataku nie mają jeszcze runtime summon/familiar. |
 
-## Zalecany plan napraw
+### Cechy podklas
 
-1. P0: poprawić błędne metadane koncentracji i dodać walidator zgodności
-   `instructions ↔ concentration ↔ duration`.
-2. P0: wprowadzić rejestr `effect_kind -> consumer` i sprawić, aby audyt odrzucał
-   efekt bojowy bez wykonującego go resolvera.
-3. P0: ujednolicić trwałe strefy czarów jako obiekty planszy z kotwicą,
-   geometrią, triggerami wejście/start/koniec tury i możliwością przesuwania.
-4. P0: domknąć wymienione efekty-marker (`Mirror Image`, `Sanctuary`,
-   `Feather Fall`, `Levitate`, `Silence` itd.).
-5. P1: dodać test behawioralny dla każdego z 127 czarów: cast, koszt, cel,
-   rezultat, upcast i wygaśnięcie.
-6. P1: rozszerzyć tooltipy/kartę awansu na wszystkie cechy poziomów 2–3.
-7. P1: poprawić flankowanie: wykluczyć `incapacitated`, zmienić komunikat
-   `+0` na `przewaga` i dodać test ostatniego układu `(9,6)-(10,6)-(11,6)`.
+| ID | Nazwa | Moduł Areny | Docelowy test | Powód odłożenia |
+|---|---|---|---|---|
+| `class_lore_cutting_words` | Kolegium Wiedzy — cięta riposta | Arena walki | W pełnym SRD k6 może po rzucie, ale przed rozstrzygnięciem obniżyć jeden attack roll, ability check albo damage roll słyszącego celu. | SKIP częściowy: reakcja na attack roll, zasięg, widoczność, zasób i reakcja działają. Arena nie ma wspólnego okna reakcji dla wrogich ability checks ani etapu przed zatwierdzeniem damage roll; dopisywanie redukcji po obrażeniach łamałoby kolejność SRD. Wymaga uogólnienia reaction pipeline, nie lokalnej flagi. |
+| `class_devotion_sacred_weapon` | Przysięga Oddania — święta broń | Arena walki | Akcja i Channel Divinity dają minimum +1/Cha modifier do attack rolls wybranej broni przez 1 minutę; broń świeci bright 20 + dim 20 i staje się magiczna. | SKIP częściowy: akcja, zasób, przypisanie do jednej broni i premia ataku działają. Efekt trwa konserwatywnie encounter zamiast dokładnych 10 rund, nie emituje jeszcze światła i nie oznacza obrażeń jako magical do odporności. |
+| `class_thief_fast_hands` | Złodziej — szybkie ręce | Tor eksploracyjny | Bonus action może wykonać Sleight of Hand, rozbroić/otworzyć thieves' tools albo Use an Object, ale nie Use a Magic Item. | SKIP częściowy: Use an Object prawidłowo zmienia koszt na bonus action. Uniwersalne menu nie obejmuje jeszcze osobnych ścieżek Sleight of Hand/thieves' tools ani jawnego zakazu magic-item activation. |
+| `class_evocation_savant` | Tradycja Wywoływania — Znawca wywoływania | Laboratorium czarów | Przepisywanie czaru wywoływania kosztuje o połowę mniej czasu i złota niż czaru innej szkoły. | SKIP: cecha i jej opis są przyznawane, ale gra nie ma jeszcze kompletnego przepływu pozyskania zwoju, przepisywania czaru, wydawania złota i upływu czasu. Sam mnożnik bez tego przepływu nie dawałby graczowi używalnej mechaniki. |
+
+## Jak odtwarzać przypadki na Arenie
+
+1. Uruchom scenariusz **Arena mechanik — laboratorium**.
+2. W panelu Areny wybierz wpis po nazwie lub identyfikatorze.
+3. Załaduj zapisany preset; parametry manekinów pochodzą z `arena_config`.
+4. Przygotuj postacie wskazane w `party_requirements`.
+5. Wykonaj `manual_steps` i porównaj rezultat z `expected_results`.
+6. Dla przypadku automatycznego użyj wskazanych w tabeli testów jako
+   regresji. Dla przypadku odłożonego najpierw zrealizuj system opisany
+   w kolumnie „Powód odłożenia”.
+
+## Walidacja raportu
+
+Rejestr Areny jest objęty testami sprawdzającymi pełny zbiór 236
+identyfikatorów, poprawność statusów, obecność presetów, instrukcji,
+oczekiwanych wyników i odwołań do testów. Końcowa regresja po naprawach
+objęła 783 zaliczone testy w kontrolowanych partiach, w tym 247 testów
+pełnej sesji UI oraz 77 testów aplikacji webowej.
+
+Aby sprawdzić, czy dokument odpowiada rejestrowi bez nadpisywania pliku:
+
+```bash
+python scripts/generate_srd_runtime_audit.py --check
+```
