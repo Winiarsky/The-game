@@ -122,6 +122,16 @@ Krótkie potwierdzenia pojawiają się jako toast lub wpis historii. Blokujący 
 jest używany tylko wtedy, gdy gracz musi coś zrobić przed kontynuacją. Jeden stan
 nie powinien być równocześnie powtarzany w nagłówku, karcie i historii.
 
+### Uniwersalne karty sterujące
+
+Czytnik QR może działać przez całą sesję jako wejście typu keyboard-wedge.
+`ACCEPT` wywołuje tę samą główną operację co Enter i widoczny przycisk
+potwierdzenia. `DECLINE` wywołuje bieżące odrzucenie, anulowanie albo pominięcie.
+Karty nie wskazują własnego endpointu reguł i nie omijają walidacji aktualnego
+stanu. Po skanie monitor pokazuje jeden krótki toast z nazwą karty i informacją,
+czy znaleziono pasującą operację. Nie dodajemy osobnego panelu skanera do głównego
+flow, a przyciski ekranowe pozostają równoważnym fallbackiem.
+
 ## Widok eksploracji
 
 Eksploracja jest pełnoekranową rozmową z MG.

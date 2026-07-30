@@ -4540,8 +4540,6 @@ def test_tavern_dice_game_resolves_wager_tool_check_and_can_be_replayed():
     session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
     session.active_paper_map_id = "village_overview"
     session.travel_to("tavern")
-    session.assign_exploration_point_position(Coordinate(3, 12))
-    session.confirm_exploration_setup_step()
 
     option = next(
         item
@@ -4585,8 +4583,6 @@ def test_village_interaction_pads_link_board_colors_to_ui_actions():
     session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
     session.active_paper_map_id = "village_overview"
     session.travel_to("tavern")
-    session.assign_exploration_point_position(Coordinate(3, 12))
-    session.confirm_exploration_setup_step()
 
     board = FakeBoardConnection()
     session.attach_board_connection(board, backend="simulator")
@@ -4628,8 +4624,6 @@ def test_board_pad_can_choose_an_npc_goal_without_free_text_guessing():
     session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
     session.active_paper_map_id = "village_overview"
     session.travel_to("tavern")
-    session.assign_exploration_point_position(Coordinate(3, 12))
-    session.confirm_exploration_setup_step()
     session.select_point("tavern_keeper")
 
     interaction = session.state_payload()["flow"]["board_interaction"]
@@ -4642,30 +4636,23 @@ def test_board_pad_can_choose_an_npc_goal_without_free_text_guessing():
         first_goal["target_id"]
     )
     assert selected["flow"]["board_interaction"]["selection_revision"] >= 1
-    assert selected["flow"]["board_interaction"]["actor_selection"]["active"] is True
     assert first_goal["label"]
 
 
-def test_village_npc_setup_and_travel_messages_use_current_location():
+def test_village_instances_open_without_intermediate_npc_placement():
     session = ExplorationUiSession("content/scenarios/village_square_mvp.json")
     session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
     session.active_paper_map_id = "village_overview"
 
     session._queue_current_zone_npc_setup()
 
-    setup = session.state_payload()
-    step = setup["exploration_setup"]["current_step"]
-    assert step["assignment_point_id"] == "elder_npc"
-    assert "Sołtys Bren" in step["message"]
-    assert "rannego człowieka" not in step["message"]
-    assert "dziedziń" not in step["message"].lower()
-
-    session.assign_exploration_point_position(Coordinate(8, 5))
-    active = session.confirm_exploration_setup_step()
-
-    assert active["flow"]["stage"] == "location_active"
-    assert "Rynek" in active["board"]["message"]
-    assert "dziedziń" not in active["board"]["message"].lower()
+    market = session.state_payload()
+    assert market["flow"]["stage"] == "location_active"
+    assert market["exploration_setup"] is None
+    assert any(
+        point["id"] == "elder_npc"
+        for point in market["current_zone_points"]
+    )
 
     traveled = session.travel_to("elder_house")
 
@@ -4673,6 +4660,16 @@ def test_village_npc_setup_and_travel_messages_use_current_location():
     assert traveled["flow"]["stage"] == "location_active"
     assert traveled["exploration_setup"] is None
     assert "Rozłóż papierową mapę" not in traveled["board"]["message"]
+
+    session.travel_to("market")
+    tavern = session.travel_to("tavern")
+
+    assert tavern["flow"]["stage"] == "location_active"
+    assert tavern["exploration_setup"] is None
+    assert any(
+        point["id"] == "tavern_keeper"
+        for point in tavern["current_zone_points"]
+    )
     assert "Dom sołtysa" in traveled["current_zone"]["name"]
 
 
@@ -4925,8 +4922,6 @@ def test_village_delay_triggers_clock_consequences_during_watchtower_travel(
     session.state = replace(session.state, flags=flags)
 
     session.travel_to("tavern")
-    session.confirm_exploration_setup_step()
-    session.assign_exploration_point_position(Coordinate(3, 12))
     session.confirm_exploration_setup_step()
     session.start_short_rest()
     rested = session.confirm_short_rest()

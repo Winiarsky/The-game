@@ -38,6 +38,10 @@ from dnd_board_game.character_creation import (
 )
 from dnd_board_game.core.player_labels_pl import PLAYER_LABELS_PL, player_label
 from dnd_board_game.inventory import effective_armor_class
+from dnd_board_game.physical_cards import (
+    normalize_decision_card_scanner_text,
+    resolve_universal_card_scan,
+)
 from dnd_board_game.rules import experience_progress
 from dnd_board_game.scenarios import discover_scenarios
 from dnd_board_game.world import Coordinate
@@ -376,6 +380,80 @@ def create_app(
     @app.get("/api/session-log")
     def api_session_log():
         return jsonify(_session_log_payload(session))
+
+    @app.post("/api/physical-cards/scan")
+    def api_physical_card_scan():
+        data = request.get_json(silent=True) or {}
+        payload = data.get("payload")
+        if not isinstance(payload, str) or not payload or len(payload) > 256:
+            return jsonify({"error": "Nieprawidłowy payload karty decyzji."}), 400
+        try:
+            card = resolve_universal_card_scan(
+                normalize_decision_card_scanner_text(payload)
+            )
+        except (TypeError, ValueError) as exc:
+            return jsonify({"error": str(exc)}), 400
+        declared_stage = session.ui_flow_stage.value
+        session._record(
+            "ui_physical_card_declared",
+            {
+                "action": card.action.value,
+                "label": card.player_label,
+                "payload": card.payload,
+                "flow_stage": declared_stage,
+            },
+        )
+        response: dict[str, object] = {
+            "action": card.action.value,
+            "label": card.player_label,
+            "payload": card.payload,
+            "applied": False,
+        }
+        try:
+            if card.action.value == "accept" and declared_stage == "ready_to_start":
+                response.update(
+                    applied=True,
+                    effect="start_session",
+                    state=session.start_session(),
+                )
+            elif card.action.value == "accept" and declared_stage == "party_setup":
+                setup = session.exploration_setup_flow
+                if (
+                    setup is not None
+                    and setup.current_step is not None
+                    and not (
+                        setup.assignment_point_id
+                        and setup.assigned_position is None
+                    )
+                ):
+                    response.update(
+                        applied=True,
+                        effect="confirm_exploration_setup",
+                        state=session.confirm_exploration_setup_step(),
+                    )
+        except Exception as exc:
+            session._record(
+                "ui_physical_card_resolved",
+                {
+                    "action": card.action.value,
+                    "applied": False,
+                    "error": str(exc),
+                    "declared_flow_stage": declared_stage,
+                    "result_flow_stage": session.ui_flow_stage.value,
+                },
+            )
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+        session._record(
+            "ui_physical_card_resolved",
+            {
+                "action": card.action.value,
+                "applied": bool(response["applied"]),
+                "effect": response.get("effect", ""),
+                "declared_flow_stage": declared_stage,
+                "result_flow_stage": session.ui_flow_stage.value,
+            },
+        )
+        return jsonify(response)
 
     @app.post("/api/npc-transition/resolve")
     def api_npc_transition_resolve():

@@ -39,6 +39,23 @@ let pendingClassFeatureActionId = '';
 let boardConnectionNotice = '';
 let selectedPlaygroundAuditCaseId = '';
 let autoAdvanceGoalKey = '';
+let physicalCardStatusTimer = null;
+let physicalCardScanInFlight = false;
+let lastPhysicalCardPayload = '';
+let lastPhysicalCardScanAt = 0;
+let physicalCardKeyBuffer = '';
+let physicalCardKeyTarget = null;
+let physicalCardLastKeyAt = 0;
+let physicalCardKeyTimer = null;
+let physicalCardRecentKeys = '';
+let physicalCardRecentKeyAt = 0;
+
+const PHYSICAL_CARD_PREFIX = 'dndbg:';
+const PHYSICAL_CARD_MAX_KEY_GAP_MS = 100;
+const PHYSICAL_CARD_BUFFER_TIMEOUT_MS = 140;
+const PHYSICAL_CARD_REPEAT_GUARD_MS = 1200;
+const PHYSICAL_CARD_RECENT_KEY_GAP_MS = 2000;
+const PHYSICAL_CARD_PAYLOAD_PATTERN = /dndbg:v[0-9]+:action:[a-z0-9_]+:[a-z][a-z0-9_]*/;
 
 function closeSlashCommandMenu() {
   const menu = document.getElementById('slash-command-menu');
@@ -6975,15 +6992,36 @@ function visiblePrimaryScanButton() {
 }
 function triggerPrimaryAction() {
   if (busy) return false;
+  if (!state) return false;
   if (isVisible('result-panel')) { ackResult(); return true; }
   if (isVisible('pending-panel')) { decision('accept'); return true; }
   if (isVisible('roll-panel')) { sendRolls(); return true; }
   const gmChatDialog = document.getElementById('gm-chat-dialog');
   if (gmChatDialog && gmChatDialog.open) { sendAction(); return true; }
+  const openDialog = document.querySelector('dialog[open]');
+  const dialogForm = openDialog ? openDialog.querySelector('form') : null;
+  if (dialogForm) {
+    dialogForm.requestSubmit();
+    return true;
+  }
   if (state.flow && state.flow.stage === 'short_rest') {
     if (state.short_rest && state.short_rest.pending && state.short_rest.pending.completed) finishShortRest();
     else confirmShortRest();
     return true;
+  }
+  if (isVisible('flow-panel')) {
+    const stage = state.flow ? state.flow.stage : '';
+    const preview = state.flow ? state.flow.preview_zone : null;
+    if (stage === 'spell_preparation') { confirmSpellPreparation(); return true; }
+    if (stage === 'location_preview' && preview && preview.available !== false) { confirmLocationPreview(); return true; }
+    if (stage === 'party_setup' && state.exploration_setup) {
+      const step = state.exploration_setup.current_step || {};
+      if (step.requires_board_assignment) scanBoard();
+      else confirmExplorationSetup();
+      return true;
+    }
+    if (stage === 'interaction_result') { finishInteraction(); return true; }
+    if (stage === 'ready_to_start') { startSession(); return true; }
   }
   const scanButton = visiblePrimaryScanButton();
   if (scanButton) { scanButton.click(); return true; }
@@ -7011,6 +7049,13 @@ function triggerPrimaryAction() {
       }
       if (defensiveSpellReaction(combat)) { castDefensiveSpellReaction(); return true; }
       if (classFeatureReaction(combat, 'retaliation_spell')) { castRetaliationSpellReaction(); return true; }
+      if (classFeatureReaction(combat, 'cutting_words')) { submitCuttingWordsReaction(); return true; }
+      if (classFeatureReaction(combat, 'deflect_missiles')) {
+        if (combat.reaction_window.stage === 'attack_roll') returnDeflectedMissile();
+        else if (combat.reaction_window.stage === 'damage_roll') submitDeflectedMissileDamage();
+        else submitDeflectMissilesReaction();
+        return true;
+      }
       if (combat.enemy_turn_result) { confirmEnemyTurnResult(); return true; }
       if (combat.pending_ready_attack) {
         if (combat.pending_ready_attack.stage === 'choice') startReadyAttack();
@@ -7074,15 +7119,6 @@ function triggerPrimaryAction() {
     if (setup && setup.status === 'active') { confirmEncounterSetup(); return true; }
     if (!setup) { startEncounterSetup(); return true; }
   }
-  if (isVisible('flow-panel')) {
-    const stage = state.flow ? state.flow.stage : '';
-    const preview = state.flow ? state.flow.preview_zone : null;
-    if (stage === 'spell_preparation') { confirmSpellPreparation(); return true; }
-    if (stage === 'location_preview' && preview && preview.available !== false) { confirmLocationPreview(); return true; }
-    if (stage === 'party_setup' && state.exploration_setup) { confirmExplorationSetup(); return true; }
-    if (stage === 'interaction_result') { finishInteraction(); return true; }
-    if (stage === 'ready_to_start') { startSession(); return true; }
-  }
   return false;
 }
 function cancelCurrentCombatStep() {
@@ -7107,6 +7143,237 @@ function cancelCurrentCombatStep() {
   if (combat.pending_area_spell) { cancelAreaSpell(); return true; }
   return false;
 }
+function triggerSecondaryAction() {
+  if (busy || !state) return false;
+  if (isVisible('pending-panel')) { decision('reject'); return true; }
+  const gmChatDialog = document.getElementById('gm-chat-dialog');
+  if (gmChatDialog && gmChatDialog.open) { closeGmChatDialog(); return true; }
+  const openDialog = document.querySelector('dialog[open]');
+  if (openDialog) {
+    openDialog.dispatchEvent(new Event('cancel', {cancelable: true}));
+    if (openDialog.open) openDialog.close();
+    return true;
+  }
+  const combat = state.combat;
+  if (combat && combat.status === 'active') {
+    if (counterspellReaction(combat)) { skipCounterspellReaction(); return true; }
+    if (defensiveSpellReaction(combat)) { skipDefensiveSpellReaction(); return true; }
+    if (classFeatureReaction(combat, 'retaliation_spell')) { skipRetaliationSpellReaction(); return true; }
+    if (classFeatureReaction(combat, 'cutting_words')) { skipCuttingWordsReaction(); return true; }
+    if (classFeatureReaction(combat, 'deflect_missiles')) { skipDeflectMissilesReaction(); return true; }
+    if (combat.pending_ready_attack && combat.pending_ready_attack.stage === 'choice') {
+      skipReadyAttack();
+      return true;
+    }
+    if (
+      combat.pending_enemy_opportunity_attack
+      && combat.pending_enemy_opportunity_attack.stage === 'choice'
+    ) {
+      skipEnemyOpportunityAttack();
+      return true;
+    }
+    if (combat.pending_player_attack && combat.pending_player_attack.stage === 'open_hand_choice') {
+      skipOpenHandTechnique();
+      return true;
+    }
+    if (combat.pending_player_attack && combat.pending_player_attack.stage === 'repelling_blast_choice') {
+      resolveRepellingBlast(false);
+      return true;
+    }
+  }
+  if (cancelCurrentCombatStep()) return true;
+  if (continuationPanelOpen) { closeContinuationPanel(); return true; }
+  if (downtimePanelOpen) { closeDowntimePanel(); return true; }
+  if (selectedZoneOptionId) { cancelZoneOptionGoal(); return true; }
+  if (selectedInteractionGoalId) { cancelInteractionGoal(); return true; }
+  const flow = state.flow || {};
+  if (flow.stage === 'location_preview') { cancelLocationPreview(); return true; }
+  if (
+    flow.stage === 'short_rest'
+    && state.short_rest
+    && state.short_rest.pending
+    && !state.short_rest.pending.completed
+  ) {
+    cancelShortRest();
+    return true;
+  }
+  return false;
+}
+function setPhysicalCardStatus(message, {error = false} = {}) {
+  const status = document.getElementById('physical-card-status');
+  if (!status) return;
+  clearTimeout(physicalCardStatusTimer);
+  status.textContent = message;
+  status.classList.toggle('error', error);
+  status.hidden = false;
+  physicalCardStatusTimer = window.setTimeout(() => {
+    status.hidden = true;
+  }, 3200);
+}
+async function handlePhysicalCardScan(payload) {
+  const now = Date.now();
+  if (
+    physicalCardScanInFlight
+    || (payload === lastPhysicalCardPayload && now - lastPhysicalCardScanAt < PHYSICAL_CARD_REPEAT_GUARD_MS)
+  ) {
+    return;
+  }
+  physicalCardScanInFlight = true;
+  lastPhysicalCardPayload = payload;
+  lastPhysicalCardScanAt = now;
+  try {
+    const response = await fetch('/api/physical-cards/scan', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({payload}),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      setPhysicalCardStatus(data.error || 'Nie udało się odczytać karty.', {error: true});
+      return;
+    }
+    let applied = Boolean(data.applied);
+    if (applied && data.state) {
+      state = data.state;
+      synchronizeBoardSelection();
+      render();
+      refreshSessionLog();
+      scheduleAutomaticBoardScan();
+    } else {
+      applied = data.action === 'accept'
+        ? triggerPrimaryAction()
+        : data.action === 'decline'
+          ? triggerSecondaryAction()
+          : false;
+    }
+    setPhysicalCardStatus(
+      applied
+        ? `Karta ${data.label}: wykonano aktualną akcję.`
+        : `Karta ${data.label}: teraz nie ma pasującej akcji.`,
+      {error: !applied},
+    );
+  } catch (_error) {
+    setPhysicalCardStatus('Czytnik wysłał kartę, ale aplikacja nie odpowiedziała.', {error: true});
+  } finally {
+    if (lastPhysicalCardPayload === payload) {
+      lastPhysicalCardScanAt = Date.now();
+    }
+    physicalCardScanInFlight = false;
+  }
+}
+function physicalCardEditableTarget(target) {
+  return Boolean(
+    target
+    && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')
+    && !target.readOnly
+    && !target.disabled
+  );
+}
+function insertPhysicalCardBufferFallback(text, target = physicalCardKeyTarget) {
+  if (!text || !physicalCardEditableTarget(target)) return;
+  const start = Number.isInteger(target.selectionStart) ? target.selectionStart : target.value.length;
+  const end = Number.isInteger(target.selectionEnd) ? target.selectionEnd : start;
+  target.setRangeText(text, start, end, 'end');
+  target.dispatchEvent(new Event('input', {bubbles: true}));
+}
+function clearPhysicalCardKeyBuffer() {
+  clearTimeout(physicalCardKeyTimer);
+  physicalCardKeyTimer = null;
+  physicalCardKeyBuffer = '';
+  physicalCardKeyTarget = null;
+  physicalCardLastKeyAt = 0;
+}
+function flushPhysicalCardKeyBuffer() {
+  const text = physicalCardKeyBuffer;
+  const target = physicalCardKeyTarget;
+  clearPhysicalCardKeyBuffer();
+  insertPhysicalCardBufferFallback(text, target);
+}
+function schedulePhysicalCardBufferFlush() {
+  clearTimeout(physicalCardKeyTimer);
+  physicalCardKeyTimer = window.setTimeout(
+    flushPhysicalCardKeyBuffer,
+    PHYSICAL_CARD_BUFFER_TIMEOUT_MS,
+  );
+}
+function normalizePhysicalCardScannerText(value) {
+  const normalized = String(value || '').trim().toLocaleLowerCase('en');
+  return normalized.startsWith('dndbg>') ? normalized.replaceAll('>', ':') : normalized;
+}
+function physicalCardPayloadFromRecentKeys() {
+  const normalized = normalizePhysicalCardScannerText(physicalCardRecentKeys);
+  const match = normalized.match(PHYSICAL_CARD_PAYLOAD_PATTERN);
+  physicalCardRecentKeys = '';
+  physicalCardRecentKeyAt = 0;
+  return match ? match[0] : '';
+}
+function consumePhysicalCardKey(event) {
+  if (event.defaultPrevented || event.isComposing || event.repeat) return false;
+  if (event.ctrlKey || event.metaKey || event.altKey) return false;
+  const now = performance.now();
+  if (
+    physicalCardRecentKeys
+    && now - physicalCardRecentKeyAt > PHYSICAL_CARD_RECENT_KEY_GAP_MS
+  ) {
+    physicalCardRecentKeys = '';
+  }
+  if (event.key.length === 1) {
+    physicalCardRecentKeys += event.key;
+    physicalCardRecentKeyAt = now;
+  }
+  if (event.key === 'Enter') {
+    const recentPayload = physicalCardPayloadFromRecentKeys();
+    if (recentPayload) {
+      clearPhysicalCardKeyBuffer();
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      handlePhysicalCardScan(recentPayload);
+      return true;
+    }
+  }
+  if (
+    physicalCardKeyBuffer
+    && now - physicalCardLastKeyAt > PHYSICAL_CARD_MAX_KEY_GAP_MS
+  ) {
+    flushPhysicalCardKeyBuffer();
+  }
+  if (event.key === 'Enter' && physicalCardKeyBuffer) {
+    const payload = normalizePhysicalCardScannerText(physicalCardKeyBuffer);
+    const target = physicalCardKeyTarget;
+    clearPhysicalCardKeyBuffer();
+    if (/^dndbg:v[0-9]+:action:[a-z0-9_]+:[a-z][a-z0-9_]*$/.test(payload)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      handlePhysicalCardScan(payload);
+      return true;
+    }
+    insertPhysicalCardBufferFallback(payload, target);
+    return false;
+  }
+  if (event.key.length !== 1) return false;
+  const key = event.key;
+  if (!physicalCardKeyBuffer) {
+    if (key.toLocaleLowerCase('en') !== PHYSICAL_CARD_PREFIX[0]) return false;
+    physicalCardKeyTarget = event.target;
+  }
+  physicalCardKeyBuffer += key;
+  physicalCardLastKeyAt = now;
+  const normalized = normalizePhysicalCardScannerText(physicalCardKeyBuffer);
+  const possiblePrefix = PHYSICAL_CARD_PREFIX.startsWith(normalized);
+  const possiblePayload = (
+    normalized.startsWith(PHYSICAL_CARD_PREFIX)
+    && /^[a-z0-9_:>]+$/.test(normalized)
+  );
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  if (!possiblePrefix && !possiblePayload) {
+    flushPhysicalCardKeyBuffer();
+    return true;
+  }
+  schedulePhysicalCardBufferFlush();
+  return true;
+}
+document.addEventListener('keydown', consumePhysicalCardKey, {capture: true});
 document.addEventListener('keydown', event => {
   if (event.defaultPrevented) return;
   const target = event.target;

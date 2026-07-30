@@ -610,6 +610,40 @@ składni stabilnych identyfikatorów `snake_case`. QR nie zawiera statystyk post
 kosztów ani reguł działania. Generator zapisuje obok obrazu metadane umożliwiające
 sprawdzenie payloadu, wersji, korekcji błędów i rozmiaru symbolu.
 
+Pierwsza talia kontrolna zawiera dwie uniwersalne karty:
+
+* `ACCEPT` (`universal:accept`) działa jak kontekstowy Enter: zatwierdza widoczną
+  decyzję, przechodzi dalej, wchodzi w przygotowaną interakcję albo potwierdza
+  aktualny preview; obejmuje też Start oraz instrukcyjne kroki setupu, natomiast
+  krok wymagający fizycznego przypisania figurki uruchamia skan planszy;
+* `DECLINE` (`universal:decline`) odrzuca decyzję, zamyka dialog albo anuluje
+  aktualny, jeszcze nierozstrzygnięty wybór, w tym czar, atak lub reakcję.
+
+Karta kontrolna działa tylko wtedy, gdy bieżący stan wystawia dokładnie
+odpowiadającą operację. Brak pasującej operacji daje krótki komunikat i nie zmienia
+stanu. `DECLINE` nie cofa kosztu ani działania, które zostało już rozstrzygnięte.
+Czytnik USB w trybie keyboard-wedge wysyła cały payload zakończony Enterem;
+przeglądarka buforuje szybki prefiks `dndbg:` także wtedy, gdy fokus znajduje się
+w polu tekstowym, dzięki czemu kod nie trafia do wiadomości gracza. Równoległy
+bufor ostatnich klawiszy rozpoznaje pełny payload również wtedy, gdy czytnik ma
+skonfigurowane wolniejsze odstępy między znakami. Adapter normalizuje też
+zaobserwowaną translację układu klawiatury `>` → `:`, na przykład
+`dndbg>v1>action>universal>accept`, zanim payload trafi do wspólnego parsera.
+Przyciski ekranowe pozostają potrzebnym fallbackiem przy braku lub awarii
+czytnika. Blokada powtórzeń jest liczona od zakończenia obsługi karty, dzięki
+czemu pojedynczy skan nie może zatwierdzić dwóch kolejnych etapów, nawet gdy
+pierwsza odpowiedź serwera trwa dłużej.
+
+W miejskich instancjach wybór lokacji prowadzi bezpośrednio do dostępnych
+kafelków interakcji. Nie wymaga dodatkowego ustawiania figurki NPC, ponieważ
+pozycja nie rozstrzyga tam ruchu, zasięgu ani celu mechanicznego. Fizyczny setup
+figurek pozostaje wymagany w scenach, w których położenie ma znaczenie regułowe.
+
+Warstwa ilustracyjna kart może korzystać z generowanych teł rastrowych, ale tekst,
+symbole, właściwy kod QR, spady i znaczniki cięcia są nakładane deterministycznie
+przez generator PDF. Dzięki temu stylistyka może się zmieniać bez ryzyka
+zniekształcenia payloadu lub utraty czytelności informacji użytkowych.
+
 Fizyczna karta postaci jest rozwijanym w trakcie gry artefaktem gracza. Zawiera
 generowane dane mechaniczne oraz miejsca uzupełniane ręcznie, między innymi
 notatki, historię, osobowość, więzi i decyzje rozwoju. Po zatwierdzonym awansie

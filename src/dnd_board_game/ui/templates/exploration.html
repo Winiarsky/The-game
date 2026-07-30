@@ -250,6 +250,7 @@
   </aside>
   <section>
     <div id="status" class="status" hidden></div>
+    <div id="physical-card-status" class="physical-card-status" aria-live="polite" hidden></div>
     <div id="board-input-global" data-board-input-status></div>
     <div class="card" id="flow-panel"></div>
     <div class="card scene-description" id="scene-description-card">
@@ -354,6 +355,6 @@
   </form>
 </dialog>
 <script>window.EXPLORATION_SLASH_COMMANDS = {{ slash_commands | tojson }};</script>
-<script src="{{ url_for('static', filename='exploration.js') }}"></script>
+<script src="{{ url_for('static', filename='exploration.js', v='physical-cards-20260730-3') }}"></script>
 </body>
 </html>

@@ -9,7 +9,9 @@ from dnd_board_game.physical_cards import (
     DecisionCardActionKind,
     build_decision_card_qr_payload,
     generate_decision_card_qr,
+    normalize_decision_card_scanner_text,
     parse_decision_card_qr_payload,
+    resolve_universal_card_scan,
 )
 
 
@@ -21,6 +23,14 @@ def test_decision_card_payload_round_trip() -> None:
         DecisionCardActionKind.SPELL
     )
     assert parse_decision_card_qr_payload(encoded).source_id == "eldritch_blast"
+
+
+def test_keyboard_wedge_scanner_separator_is_normalized() -> None:
+    scanned = "dndbg>v1>action>universal>accept"
+
+    assert normalize_decision_card_scanner_text(scanned) == (
+        "dndbg:v1:action:universal:accept"
+    )
 
 
 @pytest.mark.parametrize(
@@ -99,3 +109,20 @@ def test_generate_decision_card_qr_writes_deterministic_png(
 
     assert first.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
     assert first.read_bytes() == second.read_bytes()
+
+
+@pytest.mark.parametrize("action", ("accept", "decline"))
+def test_resolve_universal_control_card(action: str) -> None:
+    payload = build_decision_card_qr_payload("universal", action)
+
+    card = resolve_universal_card_scan(payload)
+
+    assert card.action.value == action
+    assert card.player_label == action.upper()
+
+
+def test_resolve_universal_control_card_rejects_other_card_kinds() -> None:
+    payload = build_decision_card_qr_payload("spell", "eldritch_blast")
+
+    with pytest.raises(ValueError, match="uniwersalną"):
+        resolve_universal_card_scan(payload)

@@ -434,7 +434,7 @@
         "visibility": "visible",
         "description": "Zadaszony stragan z bełtami, wyposażeniem podróżnym i kilkoma drogimi miksturami.",
         "interaction_label": "Handluj z Mirą",
-        "requires_setup": true,
+        "requires_setup": false,
         "merchant_id": "mira_market_stall"
       },
       {
@@ -446,7 +446,7 @@
         "color": "interactive",
         "visibility": "visible",
         "description": "Sołtys czeka przy rynku i nerwowo wypatruje pomocy.",
-        "requires_setup": true,
+        "requires_setup": false,
         "npc_interaction": {
           "id": "elder_bren",
           "name": "Sołtys Bren",
@@ -682,7 +682,7 @@
         "color": "marker",
         "visibility": "visible",
         "description": "Tablica z ostrzeżeniami i zleceniami dla podróżnych.",
-        "requires_setup": true
+        "requires_setup": false
       },
       {
         "id": "tavern_keeper",
@@ -694,7 +694,7 @@
         "visibility": "visible",
         "description": "Karczmarz wyciera kufel i uważnie słucha rozmów.",
         "interaction_label": "Porozmawiaj z Olanem",
-        "requires_setup": true,
+        "requires_setup": false,
         "npc_interaction": {
           "id": "keeper_olan",
           "name": "Karczmarz Olan",

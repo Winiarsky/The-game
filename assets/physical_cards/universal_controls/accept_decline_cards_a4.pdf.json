@@ -1,0 +1,37 @@
+{
+  "schema": "dnd_board_game.universal_decision_card_sheet",
+  "schema_version": 1,
+  "dpi": 300,
+  "page": {
+    "format": "A4",
+    "width_mm": 210,
+    "height_mm": 297
+  },
+  "card": {
+    "trim_width_mm": 63,
+    "trim_height_mm": 88,
+    "bleed_mm": 3,
+    "safe_margin_mm": 4,
+    "qr_target_mm": 20
+  },
+  "duplex": {
+    "pages": 2,
+    "flip": "long_edge"
+  },
+  "cards": [
+    {
+      "source_id": "accept",
+      "title": "ACCEPT",
+      "polish_title": "AKCEPTUJ",
+      "human_code": "AC-01",
+      "payload": "dndbg:v1:action:universal:accept"
+    },
+    {
+      "source_id": "decline",
+      "title": "DECLINE",
+      "polish_title": "ODRZUĆ",
+      "human_code": "DC-01",
+      "payload": "dndbg:v1:action:universal:decline"
+    }
+  ]
+}

@@ -67,6 +67,12 @@ combat -> WLED
   payload. `physical_cards/qr_generation.py` is the file-generation edge and uses
   the small pure-Python `segno` dependency to emit PNG or SVG without coupling card
   declarations to the web UI, scanner hardware, or `board/`.
+- `physical_cards/universal_actions.py` validates the first scanner-facing control
+  cards (`accept` and `decline`). A Flask route resolves the payload but does not
+  mutate game state; the browser keyboard-wedge adapter maps the resolved control
+  to the same primary/secondary dispatcher used by Enter, Escape and visible
+  fallback controls. `physical_cards/universal_card_sheet.py` uses Pillow and Segno
+  to generate the two-page A4 duplex print sheet.
 - `core/migrations.py` owns schema-neutral, sequential pure-data migrations.
   Snapshot and content loaders register explicit `vN -> vN+1` transforms and
   never silently skip an unknown version.

@@ -10,6 +10,7 @@ requires-python = ">=3.12"
 dependencies = [
   "Flask",
   "pydantic",
+  "Pillow>=10,<12",
   "pyserial",
   "requests",
   "segno>=1.6,<2",

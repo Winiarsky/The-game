@@ -133,6 +133,133 @@ def _page_assets(client) -> tuple[str, str, str]:
     return html, javascript, stylesheet
 
 
+def test_physical_control_card_scan_route_resolves_accept_and_decline() -> None:
+    session = _session()
+    client = create_app(session).test_client()
+
+    accept = client.post(
+        "/api/physical-cards/scan",
+        json={"payload": "dndbg:v1:action:universal:accept"},
+    )
+    decline = client.post(
+        "/api/physical-cards/scan",
+        json={"payload": "dndbg:v1:action:universal:decline"},
+    )
+
+    assert accept.status_code == 200
+    assert accept.get_json() == {
+        "action": "accept",
+        "applied": False,
+        "label": "ACCEPT",
+        "payload": "dndbg:v1:action:universal:accept",
+    }
+    assert decline.status_code == 200
+    assert decline.get_json()["action"] == "decline"
+    card_events = [
+        event
+        for event in client.get("/api/session-log").get_json()["events"]
+        if event["event_type"] == "ui_physical_card_declared"
+    ]
+    assert [event["payload"]["action"] for event in card_events] == [
+        "accept",
+        "decline",
+    ]
+    assert card_events[0]["payload"]["flow_stage"] == "location_active"
+
+
+def test_accept_card_applies_ready_start_and_instruction_setup_on_server() -> None:
+    session = _session(active=False)
+    session.attach_board_connection(FakeBoardConnection(), backend="simulator")
+    client = create_app(session).test_client()
+    payload = {"payload": "dndbg:v1:action:universal:accept"}
+
+    started = client.post("/api/physical-cards/scan", json=payload).get_json()
+    assert started["applied"] is True
+    assert started["effect"] == "start_session"
+    assert started["state"]["flow"]["stage"] == "party_setup"
+
+    setup_index = started["state"]["exploration_setup"]["current_index"]
+    confirmed = client.post("/api/physical-cards/scan", json=payload).get_json()
+    assert confirmed["applied"] is True
+    assert confirmed["effect"] == "confirm_exploration_setup"
+    assert confirmed["state"]["exploration_setup"]["current_index"] == setup_index + 1
+
+    resolved_events = [
+        event
+        for event in client.get("/api/session-log").get_json()["events"]
+        if event["event_type"] == "ui_physical_card_resolved"
+    ]
+    assert [event["payload"]["effect"] for event in resolved_events] == [
+        "start_session",
+        "confirm_exploration_setup",
+    ]
+
+
+def test_physical_card_route_accepts_keyboard_wedge_separator_translation() -> None:
+    response = _client().post(
+        "/api/physical-cards/scan",
+        json={"payload": "dndbg>v1>action>universal>accept"},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["action"] == "accept"
+    assert response.get_json()["payload"] == "dndbg:v1:action:universal:accept"
+
+
+def test_physical_control_card_scan_route_rejects_other_or_invalid_cards() -> None:
+    client = _client()
+
+    spell = client.post(
+        "/api/physical-cards/scan",
+        json={"payload": "dndbg:v1:action:spell:eldritch_blast"},
+    )
+    malformed = client.post(
+        "/api/physical-cards/scan",
+        json={"payload": "not-a-card"},
+    )
+
+    assert spell.status_code == 400
+    assert "uniwersalną" in spell.get_json()["error"]
+    assert malformed.status_code == 400
+
+
+def test_player_page_wires_hid_card_scans_to_primary_and_secondary_actions() -> None:
+    html, javascript, stylesheet = _page_assets(_client())
+
+    assert 'id="physical-card-status"' in html
+    assert "const PHYSICAL_CARD_PREFIX = 'dndbg:';" in javascript
+    assert "const PHYSICAL_CARD_RECENT_KEY_GAP_MS = 2000;" in javascript
+    assert "function normalizePhysicalCardScannerText(value)" in javascript
+    assert "normalized.replaceAll('>', ':')" in javascript
+    assert "function physicalCardPayloadFromRecentKeys()" in javascript
+    assert "const recentPayload = physicalCardPayloadFromRecentKeys();" in javascript
+    assert "function acceptsEnterAsUniversalCard()" not in javascript
+    assert "PHYSICAL_CARD_ACCEPT_PAYLOAD" not in javascript
+    assert "lastPhysicalCardScanAt = Date.now();" in javascript
+    assert "fetch('/api/physical-cards/scan'" in javascript
+    assert "if (applied && data.state)" in javascript
+    assert "triggerPrimaryAction()" in javascript
+    assert "triggerSecondaryAction()" in javascript
+    assert "document.addEventListener('keydown', consumePhysicalCardKey, {capture: true})" in javascript
+    assert ".physical-card-status" in stylesheet
+
+
+def test_accept_prioritizes_start_and_setup_confirmation_over_optional_board_scan() -> None:
+    _, javascript, _ = _page_assets(_client())
+    primary_start = javascript.index("function triggerPrimaryAction()")
+    primary_end = javascript.index("function cancelCurrentCombatStep()", primary_start)
+    primary_action = javascript[primary_start:primary_end]
+
+    assert primary_action.index("if (isVisible('flow-panel'))") < primary_action.index(
+        "const scanButton = visiblePrimaryScanButton();"
+    )
+    assert "if (stage === 'ready_to_start') { startSession(); return true; }" in primary_action
+    assert (
+        "if (step.requires_board_assignment) scanBoard();\n"
+        "      else confirmExplorationSetup();"
+    ) in primary_action
+
+
 def test_combat_context_menu_confirm_route_forwards_loot_quantity() -> None:
     session = _session()
     captured: dict[str, object] = {}
@@ -1172,7 +1299,10 @@ def test_exploration_ui_page_includes_gm_decision_correction_controls():
 
     html, javascript, _stylesheet = _page_assets(client)
 
-    assert '<script src="/static/exploration.js"></script>' in html
+    assert (
+        '<script src="/static/exploration.js?v=physical-cards-20260730-3"></script>'
+        in html
+    )
     assert "Popraw decyzję MG" in javascript
     assert "decisionCorrectionHtml" in javascript
     assert "correction-roll-mode" in javascript

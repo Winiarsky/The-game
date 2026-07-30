@@ -1048,12 +1048,7 @@ def test_load_village_square_mvp_builds_exploration_locations_setup_points_and_o
     }
 
     visible_setup_points = {point.id for point in exploration.points if point.visibility == SetupVisibility.VISIBLE and point.requires_setup}
-    assert visible_setup_points == {
-        "merchant_stall",
-        "elder_npc",
-        "notice_board",
-        "tavern_keeper",
-    }
+    assert visible_setup_points == set()
     hidden_point = next(point for point in exploration.points if point.id == "lost_pouch")
     assert hidden_point.visibility == SetupVisibility.HIDDEN
     assert hidden_point.requires_setup is False

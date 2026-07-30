@@ -173,6 +173,20 @@ najbliższy horyzont, a nie kopię całej roadmapy.
   action-catalog validation, board-based targeting, and a no-scanner UI fallback.
   - [x] Add the versioned decision-card QR payload and deterministic PNG/SVG generator
     with printable quiet zones, metadata sidecars, and focused unit tests.
+  - [x] Add the first duplex A4 control-card batch (`ACCEPT`/`DECLINE`) with real
+    QR payloads, poker-size trim, bleed, crop marks, mirrored backs, and a manifest.
+  - [x] Replace the flat control-card art with image-generated heroic dark-fantasy
+    front and back backgrounds while keeping text and QR layers deterministic.
+  - [x] Add the browser keyboard-wedge scanner adapter and route universal control
+    cards through the existing context-sensitive primary/secondary UI actions.
+  - [x] Make `ACCEPT` start a ready session and confirm instruction-only setup
+    steps before considering an optional board-scan button.
+  - [x] Normalize the keyboard-wedge scanner's observed `>` separator output to
+    canonical `:` payloads in the shared card input adapter.
+  - [x] Remove redundant physical NPC-placement setup from village instances so
+    selecting a city location opens its interaction tiles directly.
+  - [x] Anchor duplicate physical-card suppression to response completion so one
+    slow ACCEPT request cannot spill into and confirm the following UI stage.
 - [x] Fix the pre-combat Stealth transition renderer after encounter setup confirmation.
 - [x] Clarify rubble interaction targets, prioritize movement paths over object LEDs, and require visible acknowledgement of automatic enemy opportunity-attack results.
 - [x] Keep combat result acknowledgements inside the combat panel, name ranged-melee threats, clarify compound movement destinations, and surface defeated-enemy results.
