@@ -45,6 +45,17 @@ class LedColor:
     INVALID_SELECTION: RGBColor = (255, 0, 0)
 
 
+# Identity colors belong to party slots, not character records.  A character
+# keeps the same slot (and therefore color) for the whole loaded game.
+PARTY_IDENTITY_COLORS: tuple[RGBColor, ...] = (
+    (255, 45, 45),    # 1: red
+    (45, 120, 255),   # 2: blue
+    (40, 220, 105),   # 3: green
+    (190, 65, 255),   # 4: purple
+    (255, 180, 35),   # 5: orange
+)
+
+
 LED_COLOR_NAMES_PL: dict[RGBColor, str] = {
     LedColor.ACTIVE_ACTOR: "biały",
     LedColor.ATTACK_MISS: "czerwony",
@@ -58,6 +69,11 @@ LED_COLOR_NAMES_PL: dict[RGBColor, str] = {
     LedColor.MULTI_OPTION_TILE: "brązowy",
     LedColor.BLOCKING_TERRAIN: "ciemnoczerwony",
     LedColor.DIFFICULT_TERRAIN: "pomarańczowy",
+    PARTY_IDENTITY_COLORS[0]: "czerwony",
+    PARTY_IDENTITY_COLORS[1]: "niebieski",
+    PARTY_IDENTITY_COLORS[2]: "zielony",
+    PARTY_IDENTITY_COLORS[3]: "fioletowy",
+    PARTY_IDENTITY_COLORS[4]: "pomarańczowy",
 }
 
 

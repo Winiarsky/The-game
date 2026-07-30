@@ -358,7 +358,7 @@ def test_hardware_backend_stops_scan_after_rejected_press():
     assert fake_serial.writes == ["SCAN", "STOP", "SCAN"]
 
 
-def test_hardware_backend_recovers_idle_scan_with_soft_reset():
+def test_hardware_backend_recovers_idle_scan_with_soft_reset_during_bounded_scan():
     class _IdleSerial(_FakeSerial):
         def readline(self):
             if self.writes.count("SCAN") < 2:
@@ -376,7 +376,7 @@ def test_hardware_backend_recovers_idle_scan_with_soft_reset():
     backend.pre_scan_delay_s = 0.0
     backend.scan_recovery_timeout_s = 0.001
 
-    result = backend.scan_board([(2, 2)])
+    result = backend.scan_board([(2, 2)], timeout_s=0.05)
 
     assert result == (2, 2)
     assert fake_serial.writes == ["SCAN", "STOP", "SCAN"]

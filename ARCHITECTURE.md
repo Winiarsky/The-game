@@ -21,6 +21,7 @@ src/dnd_board_game/
   actions/                     # Action definitions and action resolution entry points
   combat/                      # Initiative, turns, attacks, damage, conditions
   inventory/                   # Items, equipment, attunement, charges, loot, currency, and trade
+  physical_cards/              # Stable decision-card payloads and printable QR generation
   scenarios/                   # Scenario loading and runtime encounter setup
   hardware/                    # Adapter from game events to board.Connection
   ui/                          # Application session, Flask transport, views, templates, and static assets
@@ -62,6 +63,10 @@ combat -> WLED
 - Small APIs with tests before adding feature breadth.
 - Data-driven content after the core behavior is stable.
 - Combat/exploration features should map to the action-mechanics hierarchy in `docs/MECHANICS_ARCHITECTURE.md` before UI-specific flow is added.
+- `physical_cards/qr_payload.py` owns the transport-neutral, versioned decision-card
+  payload. `physical_cards/qr_generation.py` is the file-generation edge and uses
+  the small pure-Python `segno` dependency to emit PNG or SVG without coupling card
+  declarations to the web UI, scanner hardware, or `board/`.
 - `core/migrations.py` owns schema-neutral, sequential pure-data migrations.
   Snapshot and content loaders register explicit `vN -> vN+1` transforms and
   never silently skip an unknown version.

@@ -693,6 +693,8 @@ def test_exploration_goal_ui_selects_participants_before_sending_method() -> Non
     assert "function selectWholePartyForInteraction" in javascript
     assert "participant_actor_ids:" in javascript
     assert "check_participants: selectedCheckParticipants" in javascript
+    assert "['no_actor', 'whole_party'].includes(selectedCheckParticipants)" in javascript
+    assert "To wspólna decyzja drużyny. Wybór bohatera nie jest wymagany." in javascript
     assert "Pierwsza wybrana postać prowadzi" in javascript
     assert "Cała drużyna" in javascript
     assert 'id="goal-action"' in javascript
@@ -778,6 +780,16 @@ def test_encounter_stealth_ui_uses_defined_modifier_formatter() -> None:
 
     assert "Modyfikator Stealth: ${signedNumber(Number(actor.modifier || 0))}" in javascript
     assert "Modyfikator Stealth: ${signed(Number(actor.modifier || 0))}" not in javascript
+
+
+def test_area_attack_preview_exposes_confirm_and_back_controls() -> None:
+    _html, javascript, _stylesheet = _page_assets(_client())
+
+    assert "source.source_type === 'spell'" in javascript
+    assert "Potwierdź atak" in javascript
+    assert "Cofnij wybór obszaru" in javascript
+    assert 'onclick="confirmAreaSpell()"' in javascript
+    assert 'onclick="cancelAreaSpell()"' in javascript
 
 
 def test_exploration_ui_page_includes_session_log_panel():
@@ -1283,12 +1295,14 @@ def test_exploration_ui_combat_turn_controls_remain_available_during_board_scan(
     assert "scanBoardAuto" not in html
     assert 'data-primary-scan="true" onclick="scanBoard()"' in html
     assert "visiblePrimaryScanButton()" in html
-    assert "playerTurnScanLoop" in html
+    assert "scheduleAutomaticBoardScan" in html
+    assert "boardSelectionCanAutoArm" in html
+    assert "boardSelectionStatusHtml" in html
     assert "boardScanInFlight" in html
     assert "boardScanToken" in html
     assert "stopBoardScanLoop()" in html
-    assert "playerTurnScanLoop = false;" in html
-    assert "isAllyCombatTurnActive()" in html
+    assert "lastAttemptedBoardRevision" in html
+    assert "expected_revision" not in html
     assert "pendingPlayerAttackHtml" in html
     assert "Potwierdzenie ataku" in html
     assert "confirmPlayerAttackTarget()" in html
@@ -1451,6 +1465,173 @@ def test_exploration_ui_state_endpoint_returns_json():
     assert response.get_json()["scenario"]["id"] == "abandoned_watchtower"
 
 
+def test_state_exposes_revisioned_automatic_board_selection_contract():
+    session = _session()
+    session.attach_board_connection(FakeBoardConnection(), backend="simulator")
+    state = create_app(session).test_client().get("/api/state").get_json()
+
+    selection = state["board_selection"]
+    assert selection["revision"]
+    assert selection["mode"] == "interaction"
+    assert selection["auto_arm"] is True
+    assert selection["connected"] is True
+    assert selection["confirmation_policy"] == "immediate"
+    assert selection["legal_position_count"] == len(selection["legal_positions"])
+    assert selection["legal_position_count"] > 0
+
+
+def test_board_scan_ignores_stale_frontend_revision_without_consuming_click():
+    session = _session()
+    board = FakeBoardConnection(clicks=[(6, 1)])
+    session.attach_board_connection(board, backend="simulator")
+    client = create_app(session).test_client()
+
+    response = client.post(
+        "/api/board/scan",
+        json={"revision": "stale-browser-state", "automatic": True},
+    )
+
+    assert response.status_code == 200
+    assert board.clicks == [(6, 1)]
+    events = client.get("/api/session-log").get_json()["events"]
+    stale = [event for event in events if event["event_type"] == "ui_board_scan_stale_before_start"]
+    assert stale[-1]["payload"]["automatic"] is True
+
+
+def test_selected_board_goal_continues_with_colored_actor_selection_then_pauses():
+    session = _session()
+    board = FakeBoardConnection(clicks=[(6, 1), (8, 1)])
+    session.attach_board_connection(board, backend="simulator")
+    client = create_app(session).test_client()
+
+    selected = client.post("/api/board/scan", json={}).get_json()
+
+    assert selected["flow"]["board_interaction"]["selected_goal_id"] == "force_entry"
+    actor_selection = selected["flow"]["board_interaction"]["actor_selection"]
+    assert actor_selection["active"] is True
+    assert [
+        (pad["actor_id"], pad["color"])
+        for pad in actor_selection["pads"]
+    ] == [
+        ("hero", "czerwony"),
+        ("rogue", "niebieski"),
+        ("cleric", "zielony"),
+    ]
+    assert selected["board_selection"]["mode"] == "exploration_actor"
+    assert selected["board_selection"]["auto_arm"] is True
+    assert selected["board_selection"]["confirmation_policy"] == "immediate"
+
+    actor_selected = client.post(
+        "/api/board/scan",
+        json={"revision": selected["board_selection"]["revision"]},
+    ).get_json()
+
+    resolved = actor_selected["flow"]["board_interaction"]["actor_selection"]
+    assert resolved["active"] is False
+    assert resolved["selected_actor_id"] == "rogue"
+    assert resolved["role"] == "lead"
+    assert actor_selected["board_selection"]["auto_arm"] is False
+    assert actor_selected["board_selection"]["confirmation_policy"] == "screen_input"
+
+    submitted = _submit_force_gate(client, actor_ids=("rogue",)).get_json()
+
+    assert submitted["flow"]["board_interaction"]["selected_goal_id"] is None
+    assert submitted["pending"]["stage"] == "decision"
+    assert submitted["board_selection"]["auto_arm"] is False
+
+
+def test_party_identity_colors_follow_new_game_party_order():
+    state = _session().state_payload()
+
+    assert [
+        (actor["id"], actor["party_slot"], actor["party_color"])
+        for actor in state["actors"]
+    ] == [
+        ("hero", 1, "czerwony"),
+        ("rogue", 2, "niebieski"),
+        ("cleric", 3, "zielony"),
+    ]
+
+
+def test_actor_selection_route_rejects_ineligible_character():
+    client = _client()
+
+    response = client.post(
+        "/api/exploration/actor-selection/select",
+        json={
+            "goal_id": "open_lock",
+            "actor_id": "hero",
+            "role": "lead",
+        },
+    )
+
+    assert response.status_code == 400
+    assert "nie może wykonać" in response.get_json()["error"]
+
+
+def test_helper_board_selection_excludes_lead_and_keeps_party_colors():
+    session = _session()
+    client = create_app(session).test_client()
+
+    started = client.post(
+        "/api/exploration/actor-selection/start",
+        json={
+            "goal_id": "force_entry",
+            "role": "helper",
+            "excluded_actor_ids": ["hero"],
+        },
+    ).get_json()
+
+    pads = started["flow"]["board_interaction"]["actor_selection"]["pads"]
+    assert [(pad["actor_id"], pad["color"]) for pad in pads] == [
+        ("rogue", "niebieski"),
+        ("cleric", "zielony"),
+    ]
+
+    selected = client.post(
+        "/api/board/select",
+        json={"col": pads[0]["position"][0], "row": pads[0]["position"][1]},
+    ).get_json()
+    actor_selection = selected["flow"]["board_interaction"]["actor_selection"]
+    assert actor_selection["selected_actor_id"] == "rogue"
+    assert actor_selection["role"] == "helper"
+
+
+def test_cancelled_screen_form_rearms_board_interaction_selection():
+    session = _session()
+    board = FakeBoardConnection(clicks=[(6, 1)])
+    session.attach_board_connection(board, backend="simulator")
+    client = create_app(session).test_client()
+    selected = client.post("/api/board/scan", json={}).get_json()
+    selected_revision = selected["board_selection"]["revision"]
+
+    cleared = client.post("/api/board/clear-selection", json={}).get_json()
+
+    assert cleared["flow"]["board_interaction"]["selected_goal_id"] is None
+    assert cleared["board_selection"]["auto_arm"] is True
+    assert cleared["board_selection"]["confirmation_policy"] == "immediate"
+    assert cleared["board_selection"]["revision"] != selected_revision
+
+
+def test_duplicate_board_scan_is_ignored_while_previous_scan_owns_hardware():
+    session = _session()
+    board = FakeBoardConnection(clicks=[(6, 1)])
+    session.attach_board_connection(board, backend="simulator")
+    session._board_scan_lock.acquire()
+    try:
+        state = session.scan_board_selection(
+            expected_revision=session.state_payload()["board_selection"]["revision"],
+            automatic=False,
+        )
+    finally:
+        session._board_scan_lock.release()
+
+    assert board.clicks == [(6, 1)]
+    assert state["flow"]["board_interaction"]["selected_goal_id"] is None
+    events = create_app(session).test_client().get("/api/session-log").get_json()["events"]
+    assert events[-1]["event_type"] == "ui_board_scan_duplicate_ignored"
+
+
 def test_gate_board_scan_selects_goal_and_records_activated_tile():
     session = _session()
     board = FakeBoardConnection(clicks=[(6, 1), (8, 1), (10, 1)])
@@ -1467,14 +1648,18 @@ def test_gate_board_scan_selects_goal_and_records_activated_tile():
         ([10, 1], "look_around"),
     ]
 
-    for revision, goal_id in enumerate(
-        ("force_entry", "open_lock", "look_around"),
-        start=1,
-    ):
+    previous_revision = 0
+    for goal_id in ("force_entry", "open_lock", "look_around"):
         selected = client.post("/api/board/scan", json={}).get_json()
         board_interaction = selected["flow"]["board_interaction"]
         assert board_interaction["selected_goal_id"] == goal_id
-        assert board_interaction["selection_revision"] == revision
+        assert board_interaction["selection_revision"] > previous_revision
+        previous_revision = board_interaction["selection_revision"]
+        if goal_id != "look_around":
+            cleared = client.post("/api/board/clear-selection", json={}).get_json()
+            previous_revision = cleared["flow"]["board_interaction"][
+                "selection_revision"
+            ]
 
     events = client.get("/api/session-log").get_json()["events"]
     activated = [
@@ -1487,11 +1672,11 @@ def test_gate_board_scan_selects_goal_and_records_activated_tile():
         "open_lock",
         "look_around",
     ]
-    assert [event["payload"]["selection_revision"] for event in activated] == [
-        1,
-        2,
-        3,
+    revisions = [
+        event["payload"]["selection_revision"] for event in activated
     ]
+    assert revisions == sorted(revisions)
+    assert len(set(revisions)) == 3
 
 
 def test_exploration_ui_initial_payload_requires_spell_preparation_and_hides_actions():

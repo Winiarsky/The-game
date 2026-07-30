@@ -790,6 +790,13 @@ def create_app(
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
+    @app.post("/api/board/clear-selection")
+    def api_board_clear_selection():
+        try:
+            return jsonify(session.clear_board_interaction_selection())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
     @app.post("/api/exploration/lead-actor")
     def api_exploration_lead_actor():
         data = request.get_json(silent=True) or {}
@@ -797,6 +804,37 @@ def create_app(
             return jsonify(
                 session.set_exploration_lead_actor(
                     str(data.get("actor_id", "")),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/exploration/actor-selection/start")
+    def api_exploration_actor_selection_start():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                session.start_exploration_actor_selection(
+                    goal_id=str(data.get("goal_id", "")),
+                    role=str(data.get("role", "lead")),
+                    excluded_actor_ids=tuple(
+                        str(actor_id)
+                        for actor_id in data.get("excluded_actor_ids", ())
+                    ),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/exploration/actor-selection/select")
+    def api_exploration_actor_selection_select():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                session.select_exploration_actor(
+                    goal_id=str(data.get("goal_id", "")),
+                    actor_id=str(data.get("actor_id", "")),
+                    role=str(data.get("role", "lead")),
                 )
             )
         except Exception as exc:
@@ -820,8 +858,14 @@ def create_app(
 
     @app.post("/api/board/scan")
     def api_board_scan():
+        data = request.get_json(silent=True) or {}
         try:
-            return jsonify(session.scan_board_selection())
+            return jsonify(
+                session.scan_board_selection(
+                    expected_revision=str(data.get("revision", "")),
+                    automatic=bool(data.get("automatic", False)),
+                )
+            )
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 

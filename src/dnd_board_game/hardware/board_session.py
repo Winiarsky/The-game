@@ -29,6 +29,7 @@ class BoardSessionAdapter:
             1,
             min(255, int(getattr(connection, "scan_brightness", 255))),
         )
+        self._base_feedback = LedFeedback(())
 
     @classmethod
     def connect(
@@ -75,6 +76,7 @@ class BoardSessionAdapter:
         raise ValueError("Aktualny backend planszy nie obsługuje resetu skanu.")
 
     def show_feedback(self, feedback: LedFeedback) -> None:
+        self._base_feedback = feedback
         self._replace_feedback(feedback, transition_ms=self.transition_ms)
 
     def show_scan_feedback(self, feedback: LedFeedback) -> None:
@@ -85,6 +87,7 @@ class BoardSessionAdapter:
         )
 
     def restore_feedback(self, feedback: LedFeedback) -> None:
+        self._base_feedback = feedback
         self._replace_feedback(feedback, transition_ms=self.transition_ms)
 
     def animate_projectile(
@@ -104,20 +107,22 @@ class BoardSessionAdapter:
             else 0
         )
         for position in path[1:]:
+            projectile = LedFrame(
+                (position,),
+                color,
+                LedRole.PROJECTILE,
+            )
             self._replace_feedback(
-                LedFeedback(
-                    (
-                        LedFrame(
-                            (position,),
-                            color,
-                            LedRole.DESTINATION,
-                        ),
-                    )
-                ),
+                LedFeedback((*self._base_feedback.frames, projectile)),
                 transition_ms=0,
             )
             if delay_s:
                 time.sleep(delay_s)
+        if self._base_feedback.frames:
+            self._replace_feedback(
+                self._base_feedback,
+                transition_ms=self.scan_transition_ms,
+            )
 
     def _replace_feedback(
         self,

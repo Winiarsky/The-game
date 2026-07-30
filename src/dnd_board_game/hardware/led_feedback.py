@@ -16,8 +16,10 @@ class LedRole(StrEnum):
     DIFFICULT_TERRAIN = "difficult_terrain"
     BLOCKING_TERRAIN = "blocking_terrain"
     INTERACTIVE_OBJECT = "interactive_object"
+    MARKER = "marker"
     ALLY = "ally"
     ENEMY = "enemy"
+    PROJECTILE = "projectile"
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,8 +56,10 @@ DEFAULT_COLORS: dict[LedRole, tuple[int, int, int]] = {
     LedRole.DIFFICULT_TERRAIN: LedColor.DIFFICULT_TERRAIN,
     LedRole.BLOCKING_TERRAIN: LedColor.BLOCKING_TERRAIN,
     LedRole.INTERACTIVE_OBJECT: LedColor.INTERACTIVE_OBJECT,
+    LedRole.MARKER: LedColor.MARKER,
     LedRole.ALLY: LedColor.ALLY,
     LedRole.ENEMY: LedColor.ENEMY,
+    LedRole.PROJECTILE: LedColor.RANGED_PROJECTILE,
 }
 
 
@@ -64,11 +68,13 @@ LED_ROLE_PRIORITY: dict[LedRole, int] = {
     LedRole.DIFFICULT_TERRAIN: 20,
     LedRole.ACTIVE_ACTOR: 25,
     LedRole.INTERACTIVE_OBJECT: 30,
+    LedRole.MARKER: 35,
     LedRole.SELECTED_PATH: 40,
     LedRole.DESTINATION: 50,
     LedRole.ALLY: 60,
     LedRole.ENEMY: 60,
     LedRole.BLOCKING_TERRAIN: 70,
+    LedRole.PROJECTILE: 100,
 }
 
 
@@ -153,6 +159,8 @@ class BoardLedAdapter:
         self.show_feedback(feedback)
 
     def clear(self) -> None:
+        if self._last_render == ():
+            return
         self.connection.leds_off()
-        self._last_render = None
+        self._last_render = ()
         self._last_brightness = None

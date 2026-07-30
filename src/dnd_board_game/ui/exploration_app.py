@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import random
+import threading
+import time
 import uuid
 from dataclasses import dataclass, field, fields, replace
 from enum import StrEnum
@@ -477,7 +481,7 @@ from dnd_board_game.llm import (
     validate_gm_classifier_proposal,
     validate_npc_interaction_proposal,
 )
-from dnd_board_game.hardware import BoardSessionAdapter, LedColor, LedFeedback, LedFrame, LedRole, led_color_name_pl, movement_led_feedback
+from dnd_board_game.hardware import PARTY_IDENTITY_COLORS, BoardSessionAdapter, LedColor, LedFeedback, LedFrame, LedRole, led_color_name_pl, movement_led_feedback
 from dnd_board_game.core.player_labels_pl import player_label
 from dnd_board_game.inventory import (
     advance_actor_light,
@@ -1098,6 +1102,33 @@ class BoardInteractionPad:
         }
 
 
+@dataclass(frozen=True, slots=True)
+class BoardActorSelection:
+    goal_id: str
+    role: str
+    eligible_actor_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class BoardActorSelectionPad:
+    actor_id: str
+    actor_name: str
+    party_slot: int
+    position: Coordinate
+    color: tuple[int, int, int]
+
+    def as_payload(self) -> dict[str, object]:
+        return {
+            "actor_id": self.actor_id,
+            "actor_name": self.actor_name,
+            "party_slot": self.party_slot,
+            "position": [self.position.col, self.position.row],
+            "coordinate_label": f"{self.position.col},{self.position.row}",
+            "color": led_color_name_pl(self.color),
+            "color_rgb": list(self.color),
+        }
+
+
 BOARD_INTERACTION_COLORS: tuple[tuple[int, int, int], ...] = (
     LedColor.INTERACTIVE_OBJECT,
     LedColor.MARKER,
@@ -1313,6 +1344,7 @@ class ExplorationUiSession:
             self.exploration_interaction_flow
         )
         self.npc_goal_execution = NpcGoalExecutionPlanner()
+        self._board_scan_lock = threading.Lock()
         self.reset()
 
     def reset(self) -> None:
@@ -1392,6 +1424,9 @@ class ExplorationUiSession:
         self.board_selected_panel = ""
         self.board_selected_action_kind = ""
         self.board_selected_action_id = ""
+        self.board_actor_selection: BoardActorSelection | None = None
+        self.board_selected_actor_id = ""
+        self.board_selected_actor_role = ""
         self.board_selection_revision = 0
         self.active_paper_map_id = ""
         self.exploration_setup_flow: ExplorationSetupFlow | None = None
@@ -2017,10 +2052,10 @@ class ExplorationUiSession:
                 ],
             ],
             discovered_sources=self._discovered_sources_payload(),
-            actors=[
-                _exploration_actor_payload(actor, self.state.condition_states)
-                for actor in self.exploration.actors
-            ],
+            actors=_exploration_actor_payloads(
+                self.exploration.actors,
+                self.state.condition_states,
+            ),
             active_effects=[
                 *[effect.as_payload() for effect in self.active_combat_effects],
                 *[
@@ -2095,6 +2130,7 @@ class ExplorationUiSession:
             if self.combat_state
             else None,
             board=self._board_payload(),
+            board_selection=self._board_selection_payload(),
             required_rolls=self.required_rolls_payload(),
             playground=(
                 {
@@ -2406,6 +2442,9 @@ class ExplorationUiSession:
         self.board_selected_panel = ""
         self.board_selected_action_kind = ""
         self.board_selected_action_id = ""
+        self.board_actor_selection = None
+        self.board_selected_actor_id = ""
+        self.board_selected_actor_role = ""
         self.board_selection_revision = 0
         self.exploration_board_selection_active = False
         restored_npc_transition = (
@@ -3470,16 +3509,60 @@ class ExplorationUiSession:
         )
         return self.confirm_exploration_setup_step()
 
-    def scan_board_selection(self) -> dict[str, object]:
+    def scan_board_selection(
+        self,
+        *,
+        expected_revision: str = "",
+        automatic: bool = False,
+    ) -> dict[str, object]:
+        if not self._board_scan_lock.acquire(blocking=False):
+            self._record(
+                "ui_board_scan_duplicate_ignored",
+                {
+                    "expected_revision": expected_revision,
+                    "automatic": automatic,
+                },
+            )
+            return self.state_payload()
+        try:
+            return self._scan_board_selection_locked(
+                expected_revision=expected_revision,
+                automatic=automatic,
+            )
+        finally:
+            self._board_scan_lock.release()
+
+    def _scan_board_selection_locked(
+        self,
+        *,
+        expected_revision: str,
+        automatic: bool,
+    ) -> dict[str, object]:
         if self.board_adapter is None:
             raise ValueError("Najpierw podłącz backend planszy.")
+        selection = self._board_selection_payload()
+        revision = str(selection["revision"])
+        if expected_revision and expected_revision != revision:
+            self._record(
+                "ui_board_scan_stale_before_start",
+                {
+                    "expected_revision": expected_revision,
+                    "current_revision": revision,
+                    "automatic": automatic,
+                },
+            )
+            return self.state_payload()
         target = self._current_board_scan_target()
         if not target.positions:
             raise ValueError(target.empty_message)
+        started_at = time.monotonic()
         self._record(
             "ui_board_scan_started",
             {
                 "stage": self.ui_flow_stage.value,
+                "revision": revision,
+                "automatic": automatic,
+                "position_count": len(target.positions),
                 "frames": [
                     {
                         "positions": [
@@ -3500,14 +3583,74 @@ class ExplorationUiSession:
                 target.positions,
                 timeout_s=self.scan_timeout_s,
             )
+        except TimeoutError as exc:
+            elapsed_ms = round((time.monotonic() - started_at) * 1000)
+            self.board_message = (
+                "Plansza nie odpowiedziała w wyznaczonym czasie. "
+                "Zresetowano nasłuchiwanie; spróbuj ponownie."
+            )
+            reset_action = ""
+            reset_error = ""
+            try:
+                reset_action = self.board_adapter.reset_scan()
+            except Exception as reset_exc:
+                reset_error = str(reset_exc)
+            self._record(
+                "ui_board_scan_timeout",
+                {
+                    "stage": self.ui_flow_stage.value,
+                    "revision": revision,
+                    "automatic": automatic,
+                    "elapsed_ms": elapsed_ms,
+                    "error": str(exc),
+                    "reset_action": reset_action,
+                    "reset_error": reset_error,
+                },
+            )
+            raise
         finally:
-            self.board_adapter.restore_feedback(target.feedback)
+            self.board_adapter.restore_feedback(
+                self._current_board_scan_target().feedback
+            )
         if selected_raw is None:
             self.board_message = "Nie wybrano pola na planszy."
-            self._record("ui_board_scan_timeout", {"stage": self.ui_flow_stage.value})
+            self._record(
+                "ui_board_scan_timeout",
+                {
+                    "stage": self.ui_flow_stage.value,
+                    "revision": revision,
+                    "automatic": automatic,
+                    "elapsed_ms": round(
+                        (time.monotonic() - started_at) * 1000
+                    ),
+                },
+            )
             return self.state_payload()
         selected = _coordinate_from_scan(selected_raw)
-        self._record("ui_board_scan_received", {"stage": self.ui_flow_stage.value, "position": [selected.col, selected.row]})
+        current_revision = str(self._board_selection_payload()["revision"])
+        elapsed_ms = round((time.monotonic() - started_at) * 1000)
+        if current_revision != revision:
+            self._record(
+                "ui_board_scan_stale_after_receive",
+                {
+                    "scan_revision": revision,
+                    "current_revision": current_revision,
+                    "automatic": automatic,
+                    "position": [selected.col, selected.row],
+                    "elapsed_ms": elapsed_ms,
+                },
+            )
+            return self.state_payload()
+        self._record(
+            "ui_board_scan_received",
+            {
+                "stage": self.ui_flow_stage.value,
+                "revision": revision,
+                "automatic": automatic,
+                "position": [selected.col, selected.row],
+                "elapsed_ms": elapsed_ms,
+            },
+        )
         return self._handle_board_position(selected)
 
     def set_exploration_board_selection(self, enabled: bool) -> dict[str, object]:
@@ -3518,6 +3661,9 @@ class ExplorationUiSession:
         self.board_selected_panel = ""
         self.board_selected_action_kind = ""
         self.board_selected_action_id = ""
+        self.board_actor_selection = None
+        self.board_selected_actor_id = ""
+        self.board_selected_actor_role = ""
         self.board_message = (
             "Tryb podróży aktywny. Uruchom skan i kliknij znacznik podświetlonej lokacji."
             if self.exploration_board_selection_active
@@ -3525,6 +3671,199 @@ class ExplorationUiSession:
         )
         self._sync_board_leds()
         return self.state_payload()
+
+    def clear_board_interaction_selection(self) -> dict[str, object]:
+        had_selection = bool(
+            self.board_selected_goal_id
+            or self.board_selected_panel
+            or self.board_selected_action_id
+            or self.board_actor_selection is not None
+            or self.board_selected_actor_id
+        )
+        self.board_selected_goal_id = ""
+        self.board_selected_panel = ""
+        self.board_selected_action_kind = ""
+        self.board_selected_action_id = ""
+        self.board_actor_selection = None
+        self.board_selected_actor_id = ""
+        self.board_selected_actor_role = ""
+        if had_selection:
+            self.board_selection_revision += 1
+            self._record(
+                "ui_board_interaction_selection_cleared",
+                {"selection_revision": self.board_selection_revision},
+            )
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def start_exploration_actor_selection(
+        self,
+        *,
+        goal_id: str,
+        role: str = "lead",
+        excluded_actor_ids: tuple[str, ...] = (),
+    ) -> dict[str, object]:
+        if self.ui_flow_stage != UiFlowStage.LOCATION_ACTIVE or self.combat_state is not None:
+            raise ValueError("Wybór bohatera nie jest teraz dostępny.")
+        if role not in {"lead", "helper"}:
+            raise ValueError("Nieznana rola bohatera w teście.")
+        goal = self._current_interaction_goal_payload(goal_id)
+        eligible_ids = {
+            str(actor_id) for actor_id in goal.get("eligible_actor_ids", ())
+        }
+        excluded_ids = {str(actor_id) for actor_id in excluded_actor_ids}
+        actors = tuple(
+            actor
+            for actor in self._party_actors()
+            if str(actor.id) in eligible_ids
+            and str(actor.id) not in excluded_ids
+            and not actor.is_defeated()
+        )
+        if not actors:
+            raise ValueError("Żaden bohater nie spełnia wymagań tej próby.")
+        self.board_selected_goal_id = goal_id
+        self.board_selected_actor_id = ""
+        self.board_selected_actor_role = ""
+        self.board_actor_selection = BoardActorSelection(
+            goal_id=goal_id,
+            role=role,
+            eligible_actor_ids=tuple(str(actor.id) for actor in actors),
+        )
+        self.board_selection_revision += 1
+        self.board_message = (
+            "Wybierz pomocnika na jednym z kolorowych pól planszy."
+            if role == "helper"
+            else "Wybierz wykonawcę testu na jednym z kolorowych pól planszy."
+        )
+        self._record(
+            "ui_exploration_actor_board_selection_started",
+            {
+                "goal_id": goal_id,
+                "role": role,
+                "eligible_actor_ids": list(self.board_actor_selection.eligible_actor_ids),
+                "selection_revision": self.board_selection_revision,
+            },
+        )
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def select_exploration_actor(
+        self,
+        *,
+        goal_id: str,
+        actor_id: str,
+        role: str = "lead",
+    ) -> dict[str, object]:
+        goal = self._current_interaction_goal_payload(goal_id)
+        if role == "whole_party":
+            allowed = tuple(
+                str(option)
+                for option in goal.get("allowed_check_participants", ())
+            )
+            if (
+                str(goal.get("check_participants", "")) != "whole_party"
+                and "whole_party" not in allowed
+            ):
+                raise ValueError("To działanie nie pozwala na test całej drużyny.")
+            self.board_selected_goal_id = goal_id
+            self.board_actor_selection = None
+            self.board_selected_actor_id = ""
+            self.board_selected_actor_role = "whole_party"
+            self.board_selection_revision += 1
+            self.board_message = "Wybrano test całej drużyny."
+            self._sync_board_leds()
+            return self.state_payload()
+        eligible_ids = {
+            str(candidate) for candidate in goal.get("eligible_actor_ids", ())
+        }
+        actor = next(
+            (
+                candidate
+                for candidate in self._party_actors()
+                if str(candidate.id) == actor_id
+                and str(candidate.id) in eligible_ids
+                and not candidate.is_defeated()
+            ),
+            None,
+        )
+        if actor is None:
+            raise ValueError("Ta postać nie może wykonać wybranej próby.")
+        if role not in {"lead", "helper"}:
+            raise ValueError("Nieznana rola bohatera w teście.")
+        self.board_selected_goal_id = goal_id
+        self.board_actor_selection = None
+        self.board_selected_actor_id = actor_id
+        self.board_selected_actor_role = role
+        self.board_selection_revision += 1
+        self.board_message = (
+            f"{actor.name} pomaga w teście."
+            if role == "helper"
+            else f"{actor.name} wykonuje test i ponosi jego konsekwencje."
+        )
+        self._record(
+            "ui_exploration_actor_selected",
+            {
+                "goal_id": goal_id,
+                "actor_id": actor_id,
+                "role": role,
+                "selection_revision": self.board_selection_revision,
+            },
+        )
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def _current_interaction_goal_payload(self, goal_id: str) -> dict[str, object]:
+        goals: tuple[dict[str, object], ...] = ()
+        if self.active_point is not None:
+            point_payload = _point_payload(
+                self.active_point,
+                _npc_state_for_point(self.state, self.active_point),
+                self.state.flags,
+                self.exploration.flows,
+            )
+            npc_payload = point_payload.get("npc") if point_payload else None
+            if isinstance(npc_payload, dict):
+                goals = tuple(
+                    goal
+                    for goal in npc_payload.get("goals", ())
+                    if isinstance(goal, dict)
+                )
+        elif self.active_challenge is not None:
+            challenge_payload = _challenge_payload(
+                self.state,
+                self.active_challenge,
+                self.exploration.actors,
+                self.exploration.flows,
+                self.exploration_interaction_flow,
+            )
+            goals = tuple(
+                goal
+                for goal in (challenge_payload or {}).get("goals", ())
+                if isinstance(goal, dict)
+            )
+        goal = next(
+            (candidate for candidate in goals if str(candidate.get("id")) == goal_id),
+            None,
+        )
+        if goal is None:
+            raise ValueError("Wybrane działanie nie jest już dostępne.")
+        if "eligible_actor_ids" not in goal:
+            goal = {
+                **goal,
+                "eligible_actor_ids": [
+                    str(actor.id)
+                    for actor in self._party_actors()
+                    if not actor.is_defeated()
+                ],
+            }
+        return goal
+
+    def _party_actors(self) -> tuple[Actor, ...]:
+        return tuple(
+            actor
+            for actor in self.exploration.actors
+            if actor.faction == Faction.ALLY
+        )
 
     def set_exploration_lead_actor(self, actor_id: str) -> dict[str, object]:
         actor = next(
@@ -3693,6 +4032,14 @@ class ExplorationUiSession:
             if selected_npc_execution is not None
             else None
         )
+        if (
+            selected_goal is not None
+            and self.board_selected_goal_id == selected_goal.id
+        ):
+            self.board_selected_goal_id = ""
+            self.board_actor_selection = None
+            self.board_selected_actor_id = ""
+            self.board_selected_actor_role = ""
         self._record(
             "ui_action_submitted",
             {
@@ -4140,6 +4487,9 @@ class ExplorationUiSession:
         self.board_selected_panel = ""
         self.board_selected_action_kind = ""
         self.board_selected_action_id = ""
+        self.board_actor_selection = None
+        self.board_selected_actor_id = ""
+        self.board_selected_actor_role = ""
         self.ui_flow_stage = UiFlowStage(transition.stage.value)
         self.exploration_board_selection_active = False
         self.board_message = transition.board_message
@@ -13994,6 +14344,127 @@ class ExplorationUiSession:
             "message": self.board_message,
         }
 
+    def _board_selection_payload(self) -> dict[str, object]:
+        target = self._current_board_scan_target()
+        positions = tuple(sorted(target.positions))
+        connected = self.board_adapter is not None
+        signature_payload = {
+            "flow_stage": self.ui_flow_stage.value,
+            "positions": [[position.col, position.row] for position in positions],
+            "prompt": target.empty_message,
+            "interaction_revision": self.board_selection_revision,
+            "actor_selection": repr(self.board_actor_selection),
+            "selected_board_actor": (
+                self.board_selected_actor_id,
+                self.board_selected_actor_role,
+            ),
+            "active_point_id": self.active_point_id,
+            "preview_zone_id": self.preview_zone_id,
+            "exploration_navigation": self.exploration_board_selection_active,
+            "pending_state": repr(self.pending_state),
+            "combat_round": (
+                self.combat_state.round_number
+                if self.combat_state is not None
+                else None
+            ),
+            "combat_actor": (
+                str(combat_current_actor(self.combat_state).id)
+                if self.combat_state is not None
+                else None
+            ),
+            "movement_preview": repr(self.selected_combat_movement_path),
+            "combat_selection": repr(
+                (
+                    self.pending_combat_context_menu,
+                    self.pending_player_attack,
+                    self.pending_player_healing,
+                    self.pending_area_spell,
+                    self.pending_multi_target_damage_spell,
+                    self.pending_combat_help,
+                    self.pending_combat_interaction,
+                    self.pending_concentration_action,
+                    self.pending_summon,
+                    self.pending_magic_movement,
+                    self.pending_spell_debuff,
+                    self.pending_spell_dispel,
+                    self.combat_targeting_attack_source_id,
+                    self.combat_targeting_class_feature_action_id,
+                    self.combat_selected_class_feature_target_id,
+                    self.combat_aux_targeting_mode,
+                )
+            ),
+        }
+        revision = hashlib.sha256(
+            json.dumps(
+                signature_payload,
+                ensure_ascii=False,
+                sort_keys=True,
+            ).encode("utf-8")
+        ).hexdigest()[:20]
+        actor_selection_active = self.board_actor_selection is not None
+        screen_choice_active = bool(
+            not actor_selection_active
+            and (
+                self.board_selected_goal_id
+                or self.board_selected_panel
+                or self.board_selected_action_id
+            )
+        )
+        return {
+            "revision": revision,
+            "mode": self._board_selection_mode(),
+            "legal_positions": [
+                [position.col, position.row] for position in positions
+            ],
+            "legal_position_count": len(positions),
+            "prompt": target.empty_message,
+            "auto_arm": bool(
+                connected
+                and positions
+                and not screen_choice_active
+            ),
+            "connected": connected,
+            "allow_retry": connected,
+            "confirmation_policy": (
+                "screen_input"
+                if screen_choice_active
+                else "immediate"
+            ),
+        }
+
+    def _board_selection_mode(self) -> str:
+        if self.encounter_setup_flow is not None:
+            return "encounter_setup"
+        if self.combat_state is not None:
+            if self.pending_multi_target_damage_spell is not None:
+                return "multiple_targets"
+            if (
+                self.pending_area_spell is not None
+                or self.pending_concentration_action is not None
+                or self.pending_spell_zone_move_effect_id
+            ):
+                return "spell_area"
+            if self.pending_combat_help is not None:
+                return "help_target"
+            if (
+                self.pending_player_attack is not None
+                or self.pending_spell_debuff is not None
+                or self.pending_spell_dispel is not None
+                or self.pending_magic_movement is not None
+                or self.pending_summon is not None
+            ):
+                return "combat_target"
+            return "combat_field"
+        if self.exploration_setup_flow is not None:
+            return "exploration_setup"
+        if self.exploration_board_selection_active:
+            return "navigation"
+        if self.board_actor_selection is not None:
+            return "exploration_actor"
+        if self.active_point is not None or self.active_challenge is not None:
+            return "interaction"
+        return "location_action"
+
     def _spell_preparation_payload(self) -> dict[str, object] | None:
         actors = tuple(actor for actor in self.exploration.actors if actor.spell_preparation is not None)
         if not actors:
@@ -14215,10 +14686,38 @@ class ExplorationUiSession:
             if index < len(BOARD_INTERACTION_COLORS)
         )
 
+    def _board_actor_selection_pads(self) -> tuple[BoardActorSelectionPad, ...]:
+        selection = self.board_actor_selection
+        if selection is None:
+            return ()
+        eligible_ids = set(selection.eligible_actor_ids)
+        positions = self.current_zone.interaction_pad_positions
+        pads: list[BoardActorSelectionPad] = []
+        for party_index, actor in enumerate(self._party_actors()):
+            if str(actor.id) not in eligible_ids:
+                continue
+            pad_index = len(pads)
+            if pad_index >= len(positions):
+                break
+            color = PARTY_IDENTITY_COLORS[
+                min(party_index, len(PARTY_IDENTITY_COLORS) - 1)
+            ]
+            pads.append(
+                BoardActorSelectionPad(
+                    actor_id=str(actor.id),
+                    actor_name=actor.name,
+                    party_slot=party_index + 1,
+                    position=positions[pad_index],
+                    color=color,
+                )
+            )
+        return tuple(pads)
+
     def _board_interaction_payload(self) -> dict[str, object]:
         interaction_mode = not self.exploration_board_selection_active
         pads = self._board_interaction_pads() if interaction_mode else ()
         actions = self._board_interaction_actions() if interaction_mode else ()
+        actor_pads = self._board_actor_selection_pads()
         return {
             "mode": (
                 "navigation"
@@ -14237,6 +14736,21 @@ class ExplorationUiSession:
             "selection_revision": self.board_selection_revision,
             "pads": [pad.as_payload() for pad in pads],
             "overflow_count": max(0, len(actions) - len(pads)),
+            "actor_selection": {
+                "active": self.board_actor_selection is not None,
+                "goal_id": (
+                    self.board_actor_selection.goal_id
+                    if self.board_actor_selection is not None
+                    else self.board_selected_goal_id or None
+                ),
+                "role": (
+                    self.board_actor_selection.role
+                    if self.board_actor_selection is not None
+                    else self.board_selected_actor_role or None
+                ),
+                "selected_actor_id": self.board_selected_actor_id or None,
+                "pads": [pad.as_payload() for pad in actor_pads],
+            },
         }
 
     def _activate_board_interaction_pad(
@@ -14248,6 +14762,9 @@ class ExplorationUiSession:
         self.board_selected_panel = ""
         self.board_selected_action_kind = ""
         self.board_selected_action_id = ""
+        self.board_actor_selection = None
+        self.board_selected_actor_id = ""
+        self.board_selected_actor_role = ""
         self.board_message = (
             f"Pole {pad.symbol} ({led_color_name_pl(pad.color)}): {pad.label}."
         )
@@ -14270,6 +14787,27 @@ class ExplorationUiSession:
             return self.state_payload()
         if pad.action_kind == "goal":
             self.board_selected_goal_id = pad.target_id
+            goal = self._current_interaction_goal_payload(pad.target_id)
+            participant_options = tuple(
+                str(option)
+                for option in goal.get("allowed_check_participants", ())
+            )
+            actor_selection_allowed = (
+                str(goal.get("check_participants", ""))
+                in {"single_actor", "lead_with_help"}
+                or bool(
+                    {"single_actor", "lead_with_help"}.intersection(
+                        participant_options
+                    )
+                )
+            )
+            eligible_ids = tuple(
+                str(actor_id) for actor_id in goal.get("eligible_actor_ids", ())
+            )
+            if actor_selection_allowed and len(eligible_ids) > 1:
+                return self.start_exploration_actor_selection(
+                    goal_id=pad.target_id,
+                )
             return self.state_payload()
         if pad.action_kind == "panel":
             self.board_selected_panel = pad.target_id
@@ -14971,6 +15509,27 @@ class ExplorationUiSession:
                 feedback=feedback,
                 empty_message="Nie ma teraz dostępnych lokacji do kliknięcia.",
             )
+        actor_pads = self._board_actor_selection_pads()
+        if actor_pads:
+            return BoardScanTarget(
+                positions=tuple(pad.position for pad in actor_pads),
+                feedback=LedFeedback(
+                    tuple(
+                        LedFrame(
+                            (pad.position,),
+                            pad.color,
+                            LedRole.ALLY,
+                        )
+                        for pad in actor_pads
+                    )
+                ),
+                empty_message=(
+                    "Kliknij kolorowe pole przypisane pomocnikowi."
+                    if self.board_actor_selection is not None
+                    and self.board_actor_selection.role == "helper"
+                    else "Kliknij kolorowe pole przypisane bohaterowi wykonującemu test."
+                ),
+            )
         if not self.exploration_board_selection_active:
             pads = self._board_interaction_pads()
             if pads:
@@ -15461,6 +16020,20 @@ class ExplorationUiSession:
                     return self.state_payload()
             self.board_message = f"Kliknięte pole {selected.as_tuple()} nie jest teraz dostępną lokacją."
             return self.state_payload()
+        actor_pad = next(
+            (
+                candidate
+                for candidate in self._board_actor_selection_pads()
+                if candidate.position == selected
+            ),
+            None,
+        )
+        if actor_pad is not None and self.board_actor_selection is not None:
+            return self.select_exploration_actor(
+                goal_id=self.board_actor_selection.goal_id,
+                actor_id=actor_pad.actor_id,
+                role=self.board_actor_selection.role,
+            )
         if not self.exploration_board_selection_active:
             pad = next(
                 (
@@ -15508,6 +16081,9 @@ class ExplorationUiSession:
         self.board_selected_panel = ""
         self.board_selected_action_kind = ""
         self.board_selected_action_id = ""
+        self.board_actor_selection = None
+        self.board_selected_actor_id = ""
+        self.board_selected_actor_role = ""
         if selection.point is None:
             return self.state_payload()
         self.pending = None
@@ -15825,6 +16401,9 @@ class ExplorationUiSession:
             raise ValueError(
                 "Opiszcie, jak wykonujecie wybrane działanie, zanim zostanie rozstrzygnięte."
             )
+        if self.board_selected_action_id == option.id:
+            self.board_selected_action_kind = ""
+            self.board_selected_action_id = ""
         effective_description = description or option.default_declaration or option.label
         describing_actor = self._trade_actor(actor_id) if actor_id else None
         if option.description_mode != InteractionDescriptionMode.NONE:
@@ -23207,7 +23786,11 @@ def _pending_area_spell_payload(
     if caster is None:
         return None
     source = next(
-        (candidate for candidate in encounter.attack_source_options_by_actor.get(caster.id, ()) if candidate.id == pending.source_id),
+        (
+            candidate
+            for candidate in _encounter_attack_sources(encounter, caster)
+            if candidate.id == pending.source_id
+        ),
         None,
     )
     if source is None:
@@ -25193,13 +25776,15 @@ def _challenge_goal_payload(
 def _exploration_actor_payload(
     actor: Actor,
     condition_states: tuple[ConditionState, ...] = (),
+    *,
+    party_slot: int | None = None,
 ) -> dict[str, object]:
     conditions = [
         _exploration_condition_payload(condition)
         for condition in condition_states
         if condition.actor_id == str(actor.id)
     ]
-    return {
+    payload = {
         "id": str(actor.id),
         "name": actor.name,
         "faction": actor.faction.value,
@@ -25277,6 +25862,35 @@ def _exploration_actor_payload(
         "features": [_feature_grant_payload(feature) for feature in actor.features],
         "background_permissions": list(actor_background_permission_ids(actor)),
     }
+    if party_slot is not None:
+        color = PARTY_IDENTITY_COLORS[
+            min(party_slot - 1, len(PARTY_IDENTITY_COLORS) - 1)
+        ]
+        payload["party_slot"] = party_slot
+        payload["party_color"] = led_color_name_pl(color)
+        payload["party_color_rgb"] = list(color)
+    return payload
+
+
+def _exploration_actor_payloads(
+    actors: tuple[Actor, ...],
+    condition_states: tuple[ConditionState, ...],
+) -> list[dict[str, object]]:
+    party_slots = {
+        str(actor.id): index
+        for index, actor in enumerate(
+            (candidate for candidate in actors if candidate.faction == Faction.ALLY),
+            start=1,
+        )
+    }
+    return [
+        _exploration_actor_payload(
+            actor,
+            condition_states,
+            party_slot=party_slots.get(str(actor.id)),
+        )
+        for actor in actors
+    ]
 
 
 def _feature_grant_payload(feature: FeatureGrant) -> dict[str, object]:

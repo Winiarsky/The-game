@@ -266,3 +266,35 @@ def test_board_session_animates_projectile_one_field_at_a_time():
     )
     assert all(call[2]["replace"] is True for call in connection.calls)
     assert all(call[2]["transition_ms"] == 0 for call in connection.calls)
+
+
+def test_projectile_animation_keeps_context_and_restores_base_frame():
+    class AtomicConnection:
+        def __init__(self):
+            self.calls = []
+
+        def set_leds(self, positions, rgb_color, **kwargs):
+            self.calls.append((tuple(positions), rgb_color, kwargs))
+
+        def leds_off(self):
+            raise AssertionError("Animacja z tłem nie powinna wygaszać planszy.")
+
+    connection = AtomicConnection()
+    adapter = BoardSessionAdapter(connection)
+    base = LedFeedback(
+        (LedFrame((Coordinate(1, 1),), LedColor.ACTIVE_ACTOR, LedRole.ACTIVE_ACTOR),)
+    )
+    adapter.show_feedback(base)
+    connection.calls.clear()
+
+    adapter.animate_projectile(
+        (Coordinate(1, 1), Coordinate(2, 1), Coordinate(3, 1)),
+        step_ms=0,
+    )
+
+    assert [call[0] for call in connection.calls] == [
+        ((1, 1), (2, 1)),
+        ((1, 1), (3, 1)),
+        ((1, 1),),
+    ]
+    assert connection.calls[-1][2]["transition_ms"] == 80

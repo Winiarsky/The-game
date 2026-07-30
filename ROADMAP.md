@@ -554,7 +554,56 @@ Powstaje jako rozszerzenie kreatora scenariusza:
 - questy i zakończenia,
 - migracje, wersjonowanie i publikacja pakietu kampanii.
 
-# Część V: Wydania I Bramki Produktowe
+# Część V: Fizyczny Interfejs Gracza
+
+## Etap P1: Karty Decyzji I Rozwijana Karta Postaci
+
+Ten etap dodaje fizyczne materiały jako kolejny, obok planszy i monitora, nośnik
+decyzji graczy. Nie tworzy osobnego silnika zasad. Karta zeskanowana przez czytnik
+QR wybiera intencję z tego samego katalogu legalnych działań, którego używa UI,
+a cel, obszar i pozycja nadal są wskazywane na fizycznej planszy.
+
+Kolejność:
+
+1. zdefiniować wersjonowany format stabilnego identyfikatora karty i rejestr
+   mapujący kartę na postać, akcję, czar, cechę albo przedmiot,
+2. dodać adapter czytnika QR jako osobne wejście gracza; czytnik nie należy do
+   niskopoziomowego pakietu `board/`,
+3. prowadzić zeskanowaną intencję przez istniejącą walidację aktualnej tury,
+   właściciela, wyposażenia, zasobów, ekonomii akcji i legalnych celów,
+4. generować gotowe do druku karty akcji z grafiką, tekstem mechanicznym, QR,
+   rewersem, marginesami i arkuszami PDF,
+5. wygenerować kartę postaci A4/A5 z danych wspólnego modelu bohatera oraz polami
+   wypełnianymi przez gracza na notatki, historię, osobowość i rozwój,
+6. połączyć level-up i trwały stan kampanii z podsumowaniem awansu, na podstawie
+   którego gracz uzupełnia poziom, nowe zdolności i wybory na fizycznej karcie;
+   generator może również przygotować odświeżony arkusz i talię,
+7. zachować ekranowe menu jako pełny i awaryjny sposób wyboru każdej legalnej
+   akcji, również gdy karta jest nieobecna, nieaktualna albo czytnik jest
+   odłączony,
+8. przeprowadzić przy stole vertical slice jednej postaci: karta postaci,
+   podstawowy atak, akcja uniwersalna, czar lub cecha klasowa, przedmiot,
+   wybór celu na planszy, fizyczny rzut i rozstrzygnięcie.
+
+Karta postaci jest trwałym artefaktem gracza i ma być uzupełniana w toku gry,
+zwłaszcza o fabułę, notatki i wybory rozwoju. Aplikacja oraz zapis kampanii
+pozostają jednak źródłem prawdy dla poziomu, statystyk, HP, zasobów, ekwipunku
+i legalności działań. Po awansie gracz uzupełnia własny arkusz na podstawie
+zatwierdzonego podsumowania, a generator może opcjonalnie utworzyć zaktualizowany
+wydruk lub wkładkę. Papier nie staje się drugim niezależnym zapisem mechanicznym.
+
+Kryterium wyjścia:
+
+- skan nigdy nie omija walidacji domenowej ani obowiązkowego preview,
+- karta jednej postaci działa w eksploracji i walce bez otwierania głównego menu
+  akcji dla objętego nią vertical slice'a,
+- QR pozostaje czytelny po wydruku w docelowym rozmiarze i można go odtworzyć z
+  trwałych danych postaci,
+- level-up daje graczowi jednoznaczne podsumowanie zmian do naniesienia na
+  fizyczną kartę, a opcjonalnie regenerowana talia odpowiada nowym zdolnościom,
+- odłączenie czytnika nie blokuje dalszej rozgrywki.
+
+# Część VI: Wydania I Bramki Produktowe
 
 ## Release R1: Stabilny Rules Kernel
 
@@ -614,8 +663,10 @@ Najbliższe etapy to:
 1. przejść bramkę content-production: scaffold, preflight, manifesty map i
    fizyczny playtest UI-5,
 2. stworzyć pierwszy docelowy, samodzielny scenariusz jako paczkę komponentową,
-3. uzupełniać katalog potworów i okazje backgroundów wyłącznie według potrzeb
+3. wdrożyć P1 jako stołowy vertical slice jednej postaci z rozwijaną kartą
+   postaci i kartami decyzji skanowanymi przez QR,
+4. uzupełniać katalog potworów i okazje backgroundów wyłącznie według potrzeb
    prawdziwego contentu,
-4. po pierwszym jednostrzale rozbudować M9 o trwały graf kampanii i wspólny
+5. po pierwszym jednostrzale rozbudować M9 o trwały graf kampanii i wspólny
    quest state,
-5. dopiero potem rozpocząć graficzny authoring suite.
+6. dopiero potem rozpocząć graficzny authoring suite.

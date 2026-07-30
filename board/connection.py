@@ -470,10 +470,13 @@ class _HardwareBackend:
         self.serial_port = self.port_result.port
 
     def _read_protocol_payload(self, *, timeout_s: float | None = None) -> dict[str, Any]:
-        deadline = None if timeout_s is None else (time.monotonic() + timeout_s)
-        idle_deadline = None
-        if timeout_s is None and self.scan_recovery_timeout_s > 0:
-            idle_deadline = time.monotonic() + self.scan_recovery_timeout_s
+        started_at = time.monotonic()
+        deadline = None if timeout_s is None else (started_at + timeout_s)
+        idle_deadline = (
+            started_at + self.scan_recovery_timeout_s
+            if self.scan_recovery_timeout_s > 0
+            else None
+        )
         while deadline is None or time.monotonic() < deadline:
             now = time.monotonic()
             if idle_deadline is not None and now >= idle_deadline:

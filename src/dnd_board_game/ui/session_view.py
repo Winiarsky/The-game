@@ -43,6 +43,7 @@ class UiSessionView:
     encounter_initiative: dict[str, object] | None
     combat: dict[str, object] | None
     board: dict[str, object]
+    board_selection: dict[str, object]
     required_rolls: list[dict[str, object]]
     playground: dict[str, object] | None = None
 
@@ -84,6 +85,7 @@ class UiSessionView:
             "encounter_initiative": self.encounter_initiative,
             "combat": self.combat,
             "board": self.board,
+            "board_selection": self.board_selection,
             "required_rolls": self.required_rolls,
             "playground": self.playground,
         }

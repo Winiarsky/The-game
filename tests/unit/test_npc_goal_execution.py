@@ -161,6 +161,25 @@ def test_village_elder_flow_locks_negotiation_to_social_intent():
     assert plan.participant_actor_ids == ("rogue", "hero")
 
 
+def test_village_elder_party_decision_does_not_require_selected_actor():
+    exploration, npc = _village_elder()
+
+    plan = NpcGoalExecutionPlanner().plan(
+        npc=npc,
+        flows=exploration.flows,
+        flags=set_scene_flag(SceneFlags(), "quest_hook_found", True),
+        actors=exploration.actors,
+        goal_id="accept_watchtower_quest",
+        requested_check_participants="no_actor",
+        requested_actor_ids=(),
+    )
+
+    assert plan.route.transition is not None
+    assert plan.route.transition.id == "accept_bren_watchtower_quest"
+    assert plan.check_participants == CheckParticipants.NO_ACTOR
+    assert plan.participant_actor_ids == ()
+
+
 def test_village_keeper_flow_hides_consumed_rumor_but_keeps_conversation():
     exploration, npc = _village_keeper()
     planner = NpcGoalExecutionPlanner()
@@ -196,15 +215,15 @@ def test_village_keeper_flow_locks_rumor_to_authored_information_route():
         flags=SceneFlags(),
         actors=exploration.actors,
         goal_id="ask_watchtower_rumors",
-        requested_check_participants="single_actor",
-        requested_actor_ids=("rogue",),
+        requested_check_participants="no_actor",
+        requested_actor_ids=(),
     )
 
     assert plan.route.transition is not None
     assert plan.route.transition.id == "ask_olan_about_watchtower"
     assert plan.route.intent_id == "information"
-    assert plan.check_participants == CheckParticipants.SINGLE_ACTOR
-    assert plan.participant_actor_ids == ("rogue",)
+    assert plan.check_participants == CheckParticipants.NO_ACTOR
+    assert plan.participant_actor_ids == ()
     assert plan.permission.effects_on_success == (
         {
             "type": "set_flag",

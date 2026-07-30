@@ -60,7 +60,7 @@ main { min-height: calc(100vh - var(--shell-header-height)); }
 .board-connection-indicator.simulator { color: #c8ddf0; }
 .board-connection-indicator.simulator .connection-dot { background: var(--color-blue); box-shadow: 0 0 0 3px rgba(94,158,214,.13); }
 .party-summary { min-width: 0; display: flex; justify-content: center; gap: 7px; overflow-x: auto; scrollbar-width: thin; }
-.party-summary-actor { position: relative; min-width: 138px; max-width: 190px; display: grid; grid-template-columns: 34px minmax(0, 1fr); align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text); background: #171a1c; text-align: left; }
+.party-summary-actor { position: relative; min-width: 138px; max-width: 190px; display: grid; grid-template-columns: 34px minmax(0, 1fr); align-items: center; gap: 8px; padding: 6px 8px 6px 11px; border: 1px solid var(--color-border); border-left: 4px solid var(--actor-identity, var(--color-border)); border-radius: var(--radius-sm); color: var(--color-text); background: #171a1c; text-align: left; }
 .party-summary-actor:hover { border-color: var(--color-gold); background: #211e18; }
 .party-summary-content { min-width: 0; }
 .party-summary-main { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
@@ -250,7 +250,17 @@ h1, h2, h3 { margin: 0 0 10px; }
 .chat-retry { display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid #79534e; border-radius: 12px; padding: 10px 12px; margin: 4px 0 10px; background: #271817; color: #f0c4bd; }
 .chat-retry[hidden] { display: none; }
 .chat-retry button { flex: 0 0 auto; }
+.chat-new-message { position: sticky; bottom: 8px; z-index: 3; display: block; width: fit-content; margin: 8px auto 0; border-radius: 999px; box-shadow: 0 8px 24px rgba(0,0,0,.45); }
+.chat-new-message[hidden] { display: none; }
 @keyframes chat-dot { 0%, 60%, 100% { transform: translateY(0); opacity: 0.45; } 30% { transform: translateY(-4px); opacity: 1; } }
+@keyframes board-listening-pulse {
+  0%, 100% { transform: scale(.82); opacity: .52; box-shadow: 0 0 0 0 rgba(82, 196, 125, .3); }
+  50% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 7px rgba(82, 196, 125, 0); }
+}
+@keyframes active-step-enter {
+  from { transform: translateY(4px); opacity: .2; }
+  to { transform: translateY(0); opacity: 1; }
+}
 body.chat-instance-mode { height: 100vh; overflow: hidden; }
 body.chat-instance-mode main > section { height: calc(100vh - var(--shell-header-height)); box-sizing: border-box; padding-top: 14px; padding-bottom: 14px; overflow: hidden; }
 body.chat-instance-mode #status,
@@ -278,6 +288,22 @@ body.chat-instance-mode #chat-stream { flex: 1 1 auto; min-height: 0; max-height
 .board-choice-toolbar span b { color: #f0d394; font-size: 11px; }
 .board-choice-toolbar span small { margin-top: 2px; color: var(--color-text-muted); font-size: 9px; }
 .board-choice-toolbar button { flex: 0 0 auto; padding: 6px 9px; }
+.board-choice-toolbar [data-board-input-status] { flex: 0 0 auto; }
+.board-listening-card { display: flex; align-items: center; gap: 9px; margin: 0 0 10px; padding: 9px 11px; border: 1px solid #3f5547; border-radius: 10px; color: #c5dfcb; background: #162019; animation: active-step-enter .18s ease-out; }
+.board-listening-card.compact { margin: 0; padding: 6px 9px; }
+.board-listening-card.error { border-color: #79534e; color: #f0c4bd; background: #271817; }
+.board-listening-card.resolved { border-color: #4b6e55; }
+.board-listening-card.ready { color: #cfc7b8; border-color: #4a4944; background: #202223; }
+.board-listening-pulse { width: 9px; height: 9px; flex: 0 0 auto; border-radius: 50%; background: #52c47d; animation: board-listening-pulse 1.35s infinite ease-in-out; }
+.board-listening-card.error .board-listening-pulse { background: #dc756b; animation: none; }
+.board-listening-card.ready .board-listening-pulse { background: #b19a68; animation-duration: 2.1s; }
+.board-listening-copy { min-width: 0; flex: 1; }
+.board-listening-copy b, .board-listening-copy small { display: block; }
+.board-listening-copy b { font-size: 11px; }
+.board-listening-copy small { margin-top: 2px; color: #aaa396; font-size: 10px; line-height: 1.35; }
+.board-listening-card button { flex: 0 0 auto; padding: 6px 8px; }
+.interaction-goals:not(:empty), .interaction-state-card:not([hidden]), .combat-current-step, .encounter-transition-current { animation: active-step-enter .18s ease-out; }
+body.board-auto-selection button[data-primary-scan="true"] { display: none; }
 .board-pad-badge { display: inline-flex !important; align-items: center; gap: 6px; width: fit-content; margin: 0 0 5px !important; color: #ddd5c7 !important; font-size: 9px !important; font-weight: 700; text-transform: uppercase; }
 .board-pad-badge strong { display: inline-grid; place-items: center; width: 20px; height: 20px; border: 2px solid var(--board-pad-color); border-radius: 50%; color: #fff; background: #111; box-shadow: 0 0 7px var(--board-pad-color); }
 .interaction-goal-card.board-linked-tile { border-width: 2px; border-color: var(--board-pad-color); box-shadow: inset 3px 0 0 var(--board-pad-color); }
@@ -304,6 +330,9 @@ body.chat-instance-mode #chat-stream { flex: 1 1 auto; min-height: 0; max-height
 .interaction-actor-card.selected small { color: #e4c36f; }
 .interaction-actor-card.locked { opacity: .8; cursor: default; }
 .interaction-actor-card.unavailable { opacity: .42; cursor: not-allowed; }
+.interaction-actor-card.actor-identity { border-left: 4px solid var(--actor-identity, #d6a72e); }
+.interaction-actor-card.actor-identity.selected { border-color: var(--actor-identity, var(--color-gold)); box-shadow: inset 3px 0 0 var(--actor-identity, var(--color-gold)); }
+.actor-board-helper { margin-top: 9px; }
 .goal-action-composer { margin-top: 10px; padding: 10px; border: 1px solid #6b5630; border-radius: 10px; background: #211d16; }
 .goal-action-composer label, .goal-action-composer label b, .goal-action-composer label span { display: block; }
 .goal-action-composer label span { margin-top: 3px; color: var(--color-text-muted); font-size: 11px; }

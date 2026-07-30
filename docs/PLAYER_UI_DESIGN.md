@@ -382,6 +382,44 @@ Renderuje ten sam wynik, z którego adapter planszy buduje LED-y. Jeśli plansza
 wskazuje pole nielegalne, monitor wyjaśnia jeden konkretny powód i pozostawia gracza
 w aktualnym stanie.
 
+## Płynny kontrakt wykonania
+
+Plansza jest domyślnym kontrolerem przestrzennym, dlatego legalny wybór uzbraja
+nasłuchiwanie automatycznie. Gracz nie powinien wykonywać osobnej czynności
+„uruchom skan” przed każdym ruchem, celem lub kafelkiem. Monitor pokazuje przy
+aktywnym kroku jeden z czterech stanów: przygotowanie, nasłuchiwanie, odczyt albo
+bezpieczne ponowienie. Przycisk ręcznego skanu pozostaje tylko jako fallback po
+timeoutcie lub utracie połączenia.
+
+Wybranie kafelka wymagającego testu może uzbroić jeszcze jeden krótki kontrakt
+planszy: wybór wykonawcy. Bohaterowie mają stałe kolory wynikające z kolejności
+drużyny (czerwony, niebieski, zielony, fioletowy, pomarańczowy), a pola wyboru
+oraz karty portretów pokazują to samo przypisanie. Po wskazaniu wykonawcy skan
+zostaje wstrzymany. Wybór źródła, wpisywanie opisu, akceptacja warunków oraz
+wpisywanie wyniku kości nie zużywają timeoutu planszy. Anulowanie formularza
+czyści także wybór po stronie backendu i dopiero wtedy ponownie uzbraja pola.
+
+Każdy kontrakt wyboru planszy ma stabilną rewizję i listę legalnych pól. Wynik
+otrzymany dla nieaktualnej rewizji jest ignorowany, więc spóźniony skan nie może
+uruchomić akcji należącej do poprzedniego promptu. Rozpoczęcie działania w UI
+anuluje oczekujący skan, a nowy stan uzbraja kolejne nasłuchiwanie.
+
+W czacie istnieje jedna aktywna karta kroku. Poprzednie wybory pozostają w historii
+jako wiadomości i wyniki, ale nie konkurują wizualnie z bieżącą decyzją. Działania
+deterministyczne bez opisu przechodzą dalej automatycznie, kiedy wykonawca, typ
+testu i źródło są jednoznaczne. Opis opcjonalny ma jawny wariant wykonania bez
+tekstu; opis wymagany i ocena LLM nadal zatrzymują flow.
+
+Oczekiwanie na Gemini od razu dopisuje deklarację graczy i pokazuje odpowiedź
+„NPC/MG zastanawia się…”. Aktywne kontrolki mechaniczne są wtedy zamrożone, ale
+historia i boczne karty postaci, czarów oraz ekwipunku pozostają dostępne. Timeout
+nie usuwa deklaracji i oferuje bezpieczne ponowienie.
+
+LED-y zmieniają pełne klatki z krótkim przejściem zamiast sekwencji
+wygaś–zapal. Animacja pocisku jest nakładana na kontekst pola walki i po przelocie
+przywraca bazowe podświetlenie. Powtórzenie identycznej klatki lub ponowne
+wyczyszczenie pustej planszy nie wysyła zbędnej komendy.
+
 ## Plan wdrożenia
 
 Przebudowę należy wykonywać bez zmiany reguł i bez szerokiego refaktoringu backendu.
@@ -431,6 +469,9 @@ Manualna checklista dla custom party:
 - w każdej lokacji liczba, kolejność i kolory LED-owych pól interakcji zgadzają
   się z kafelkami widocznymi w oknie rozmowy, a kliknięcie pola uruchamia
   dokładnie wskazany kafelek;
+- po wybraniu testu pola wykonawców świecą stałymi kolorami drużyny, kliknięta
+  postać trafia do formularza jako prowadząca, a podczas wpisywania opisu skan
+  pozostaje wyłączony;
 - setup walki pozwala kolejno ustawić 1, 3, 4 i 5 własnych bohaterów, bez pustego
   kroku i bez pola zajętego przez przeciwnika albo blokujący obiekt;
 - przy oczekującej pułapce, obserwacji i rzucie ekran prowadzi tylko do

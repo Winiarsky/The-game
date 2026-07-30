@@ -1,0 +1,15 @@
+{
+  "schema": "dnd_board_game.decision_card_qr",
+  "schema_version": 1,
+  "label": "EB-01",
+  "action_kind": "spell",
+  "source_id": "eldritch_blast",
+  "image_path": "assets/ui_reference/physical_cards/qr/niesamowity_podmuch_eb-01.svg",
+  "metadata_path": "assets/ui_reference/physical_cards/qr/niesamowity_podmuch_eb-01.svg.json",
+  "payload": "dndbg:v1:action:spell:eldritch_blast",
+  "module_count": 37,
+  "total_module_count": 45,
+  "scale": 6,
+  "quiet_zone_modules": 4,
+  "error_correction": "H"
+}

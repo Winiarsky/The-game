@@ -49,6 +49,12 @@ from dnd_board_game.combat import (
     set_scene_flag,
 )
 from dnd_board_game.combat.damage import DamageComponentInput, DamageType, apply_damage_result, resolve_damage
+from dnd_board_game.character_creation import (
+    build_character,
+    default_character_drafts,
+    load_character_catalog,
+    load_character_resources,
+)
 from dnd_board_game.exploration import (
     advance_exploration_time,
     CraftingComponentSelection,
@@ -4288,6 +4294,124 @@ def test_second_npc_fixture_uses_transition_without_starting_combat():
     assert scene_flag(session.state.flags, "elder_argument", True) is False
 
 
+def test_village_board_goal_stays_paused_during_description_and_advances_to_decision():
+    proposal = NpcInteractionProposal.model_validate(
+        {
+            "action_type": "social",
+            "target_id": "demand_advance_payment",
+            "quantity": 1,
+            "requires_roll": True,
+            "ability": "charisma",
+            "skill": "persuasion",
+            "dc": 12,
+            "player_narration": "Bren słucha argumentów drużyny.",
+        }
+    )
+    session = ExplorationUiSession(
+        "content/scenarios/village_square_mvp.json",
+        npc_client=FakeNpcClient(proposal),
+        debug_point_id="elder_npc",
+    )
+    board = FakeBoardConnection()
+    session.attach_board_connection(board, backend="simulator")
+    initial = session.state_payload()
+    negotiate_pad = next(
+        pad
+        for pad in initial["flow"]["board_interaction"]["pads"]
+        if pad["target_id"] == "negotiate_advance"
+    )
+    board.clicks.append(tuple(negotiate_pad["position"]))
+
+    selected = session.scan_board_selection()
+
+    assert selected["board_selection"]["auto_arm"] is False
+    assert selected["board_selection"]["confirmation_policy"] == "screen_input"
+    assert selected["flow"]["board_interaction"]["selected_goal_id"] == "negotiate_advance"
+
+    submitted = session.submit_action(
+        "Wyprawa jest ryzykowna, więc potrzebujemy środków na przygotowania.",
+        selected_goal_id="negotiate_advance",
+        selected_check_participants="single_actor",
+        participant_actor_ids=("hero",),
+    )
+
+    assert submitted["pending"]["stage"] == "decision"
+    assert submitted["flow"]["board_interaction"]["selected_goal_id"] is None
+    assert submitted["board_selection"]["auto_arm"] is False
+    assert submitted["required_rolls"] == []
+
+
+def test_village_board_party_decision_skips_actor_selection():
+    session = ExplorationUiSession(
+        "content/scenarios/village_square_mvp.json",
+        debug_point_id="elder_npc",
+    )
+    session.state = replace(
+        session.state,
+        flags=set_scene_flag(session.state.flags, "quest_hook_found", True),
+    )
+    board = FakeBoardConnection()
+    session.attach_board_connection(board, backend="simulator")
+    initial = session.state_payload()
+    accept_pad = next(
+        pad
+        for pad in initial["flow"]["board_interaction"]["pads"]
+        if pad["target_id"] == "accept_watchtower_quest"
+    )
+    board.clicks.append(tuple(accept_pad["position"]))
+
+    selected = session.scan_board_selection()
+
+    assert selected["flow"]["board_interaction"]["selected_goal_id"] == (
+        "accept_watchtower_quest"
+    )
+    assert selected["flow"]["board_interaction"]["actor_selection"]["active"] is False
+    assert selected["board_selection"]["confirmation_policy"] == "screen_input"
+
+    resolved = session.submit_action(
+        "Przyjmujemy zadanie Brena.",
+        selected_goal_id="accept_watchtower_quest",
+        selected_check_participants="no_actor",
+        participant_actor_ids=(),
+    )
+
+    assert scene_flag(session.state.flags, "quest_accepted", False) is True
+    assert resolved["flow"]["board_interaction"]["selected_goal_id"] is None
+
+
+def test_village_board_information_goal_skips_actor_selection():
+    session = ExplorationUiSession(
+        "content/scenarios/village_square_mvp.json",
+        debug_point_id="elder_npc",
+    )
+    board = FakeBoardConnection()
+    session.attach_board_connection(board, backend="simulator")
+    initial = session.state_payload()
+    question_pad = next(
+        pad
+        for pad in initial["flow"]["board_interaction"]["pads"]
+        if pad["target_id"] == "ask_watchtower_problem"
+    )
+    board.clicks.append(tuple(question_pad["position"]))
+
+    selected = session.scan_board_selection()
+
+    assert selected["flow"]["board_interaction"]["selected_goal_id"] == (
+        "ask_watchtower_problem"
+    )
+    assert selected["flow"]["board_interaction"]["actor_selection"]["active"] is False
+
+    resolved = session.submit_action(
+        "Pytamy Brena, co wydarzyło się przy strażnicy.",
+        selected_goal_id="ask_watchtower_problem",
+        selected_check_participants="no_actor",
+        participant_actor_ids=(),
+    )
+
+    assert scene_flag(session.state.flags, "quest_hook_found", False) is True
+    assert resolved["flow"]["board_interaction"]["selected_goal_id"] is None
+
+
 def test_village_elder_ui_goals_follow_guarded_flow_state():
     session = ExplorationUiSession(
         "content/scenarios/village_square_mvp.json",
@@ -4346,8 +4470,8 @@ def test_village_authored_npc_route_hides_gemini_invented_reward_and_purchase():
     state = session.submit_action(
         "Pytamy Brena, co wydarzyło się przy strażnicy.",
         selected_goal_id="ask_watchtower_problem",
-        selected_check_participants="single_actor",
-        participant_actor_ids=("hero",),
+        selected_check_participants="no_actor",
+        participant_actor_ids=(),
     )
 
     assert state["pending"] is None
@@ -4517,7 +4641,8 @@ def test_board_pad_can_choose_an_npc_goal_without_free_text_guessing():
     assert selected["flow"]["board_interaction"]["selected_goal_id"] == (
         first_goal["target_id"]
     )
-    assert selected["flow"]["board_interaction"]["selection_revision"] == 1
+    assert selected["flow"]["board_interaction"]["selection_revision"] >= 1
+    assert selected["flow"]["board_interaction"]["actor_selection"]["active"] is True
     assert first_goal["label"]
 
 
@@ -4636,8 +4761,8 @@ def test_village_quest_lifecycle_creates_guarded_watchtower_handoff(tmp_path):
     after_hook = session.submit_action(
         "Pytamy Brena, co dzieje się przy strażnicy.",
         selected_goal_id="ask_watchtower_problem",
-        selected_check_participants="single_actor",
-        participant_actor_ids=("hero",),
+        selected_check_participants="no_actor",
+        participant_actor_ids=(),
     )
     assert scene_flag(session.state.flags, "quest_hook_found", False) is True
     assert after_hook["flow"]["objectives"][0]["status"] == "active"
@@ -4648,8 +4773,8 @@ def test_village_quest_lifecycle_creates_guarded_watchtower_handoff(tmp_path):
     after_acceptance = session.submit_action(
         "Przyjmujemy zadanie i zajmiemy się strażnicą.",
         selected_goal_id="accept_watchtower_quest",
-        selected_check_participants="single_actor",
-        participant_actor_ids=("hero",),
+        selected_check_participants="no_actor",
+        participant_actor_ids=(),
     )
     assert scene_flag(session.state.flags, "quest_accepted", False) is True
     assert after_acceptance["flow"]["objectives"][0]["status"] == "active"
@@ -4660,8 +4785,8 @@ def test_village_quest_lifecycle_creates_guarded_watchtower_handoff(tmp_path):
     ready = session.submit_action(
         "Jesteśmy przygotowani. Ruszamy starym traktem.",
         selected_goal_id="confirm_watchtower_departure",
-        selected_check_participants="single_actor",
-        participant_actor_ids=("hero",),
+        selected_check_participants="no_actor",
+        participant_actor_ids=(),
     )
     assert scene_flag(session.state.flags, "ready_for_watchtower", False) is True
     assert ready["flow"]["objectives"][0]["status"] == "completed"
@@ -4916,8 +5041,8 @@ def test_village_keeper_rumor_uses_authored_route_completes_hook_and_hides_goal(
     pending = session.submit_action(
         "Pytamy Olana, co słyszał o starym trakcie i opuszczonej strażnicy.",
         selected_goal_id="ask_watchtower_rumors",
-        selected_check_participants="single_actor",
-        participant_actor_ids=("rogue",),
+        selected_check_participants="no_actor",
+        participant_actor_ids=(),
     )
 
     assert client.requests == []
@@ -5505,7 +5630,11 @@ def test_exploration_ui_session_board_click_on_enemy_prompts_manual_attack_and_d
     assert pending["hit"] is True
     assert pending["critical"] is True
     assert any(
-        positions != "off" and colors == list(LedColor.RANGED_PROJECTILE)
+        positions != "off"
+        and (
+            colors == list(LedColor.RANGED_PROJECTILE)
+            or list(LedColor.RANGED_PROJECTILE) in colors
+        )
         for positions, colors in board.led_calls
     )
     assert pending["target_ac"] == target["ac"]
@@ -6438,6 +6567,78 @@ def test_exploration_ui_session_cleric_area_spell_previews_line_and_consumes_slo
     assert damaged["combat"]["pending_area_spell"] is None
     assert damaged_goblin["hp"] == 8
     assert any(message["title"] == "Obrażenia obszarowe" and "HP 10 -> 8" in message["body"] for message in damaged["messages"])
+
+
+def test_exploration_ui_session_breath_weapon_exposes_confirm_and_cancel_preview():
+    catalog = load_character_catalog("content/character_creation/catalog.json")
+    resources = load_character_resources(catalog, "content")
+    rhogar_draft = next(
+        draft for draft in default_character_drafts() if draft.id == "rhogar"
+    )
+    rhogar = build_character(rhogar_draft, catalog, resources).actor
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    session.configure_custom_party((rhogar,))
+    _start_gate_skirmish(session)
+    assert session.combat_state is not None
+    while str(session.combat_state.initiative_order.current_actor.id) != "rhogar":
+        session.finish_combat_turn()
+
+    selected = session.select_combat_attack_source("breath_weapon")
+    anchor = selected["combat"]["legal_area_positions"][0]
+    actor_before = next(
+        actor for actor in selected["combat"]["actors"] if actor["id"] == "rhogar"
+    )
+    uses_before = next(
+        resource["current"]
+        for resource in actor_before["resource_pools"]
+        if resource["id"] == "breath_weapon_uses"
+    )
+
+    preview = session.select_player_area_spell_at_position(
+        Coordinate(anchor[0], anchor[1])
+    )
+
+    pending = preview["combat"]["pending_area_spell"]
+    assert pending["stage"] == "confirm_area"
+    assert pending["source"]["id"] == "breath_weapon"
+    assert pending["source"]["source_type"] == "custom"
+    assert preview["combat"]["turn_action"]["action_use"] == "action_available"
+    actor_during_preview = next(
+        actor for actor in preview["combat"]["actors"] if actor["id"] == "rhogar"
+    )
+    assert next(
+        resource["current"]
+        for resource in actor_during_preview["resource_pools"]
+        if resource["id"] == "breath_weapon_uses"
+    ) == uses_before
+
+    cancelled = session.cancel_player_area_spell()
+
+    assert cancelled["combat"]["pending_area_spell"] is None
+    assert cancelled["combat"]["turn_action"]["action_use"] == "action_available"
+    actor_after_cancel = next(
+        actor for actor in cancelled["combat"]["actors"] if actor["id"] == "rhogar"
+    )
+    assert next(
+        resource["current"]
+        for resource in actor_after_cancel["resource_pools"]
+        if resource["id"] == "breath_weapon_uses"
+    ) == uses_before
+
+    session.select_combat_attack_source("breath_weapon")
+    session.select_player_area_spell_at_position(Coordinate(anchor[0], anchor[1]))
+    confirmed = session.confirm_player_area_spell()
+
+    assert confirmed["combat"]["pending_area_spell"]["stage"] == "damage_roll"
+    assert confirmed["combat"]["turn_action"]["action_use"] == "action_used"
+    actor_after_confirm = next(
+        actor for actor in confirmed["combat"]["actors"] if actor["id"] == "rhogar"
+    )
+    assert next(
+        resource["current"]
+        for resource in actor_after_confirm["resource_pools"]
+        if resource["id"] == "breath_weapon_uses"
+    ) == uses_before - 1
 
 
 def test_exploration_ui_session_rejects_unprepared_leveled_spell():
@@ -8741,6 +8942,49 @@ def test_exploration_ui_session_can_reset_board_scan():
 
     assert board.reset_calls == ["reset_connection"]
     assert state["board"]["message"] == "Zresetowano oczekiwanie na kliknięcie planszy."
+
+
+def test_exploration_ui_session_records_and_resets_hardware_scan_timeout(
+    tmp_path,
+):
+    class TimeoutBoardConnection(FakeBoardConnection):
+        def scan_board(
+            self,
+            acceptable_responses=None,
+            *,
+            timeout_s=None,
+        ):  # noqa: ARG002
+            raise TimeoutError("Timeout oczekiwania na wybór pola na planszy.")
+
+    session = ExplorationUiSession(
+        "content/scenarios/village_square_mvp.json",
+        debug_point_id="elder_npc",
+        session_id="board_timeout_test",
+        observation_dir=tmp_path,
+    )
+    board = TimeoutBoardConnection()
+    session.attach_board_connection(board, backend="hardware")
+
+    with pytest.raises(TimeoutError, match="Timeout oczekiwania"):
+        session.scan_board_selection(automatic=True)
+
+    events = [
+        json.loads(line)
+        for line in session.observer.path.read_text(encoding="utf-8").splitlines()
+    ]
+    timeout_event = next(
+        event
+        for event in reversed(events)
+        if event["event_type"] == "ui_board_scan_timeout"
+    )
+
+    assert board.reset_calls == ["reset_connection"]
+    assert timeout_event["payload"]["automatic"] is True
+    assert timeout_event["payload"]["reset_action"] == "reset_connection"
+    assert timeout_event["payload"]["error"] == (
+        "Timeout oczekiwania na wybór pola na planszy."
+    )
+    assert "Zresetowano nasłuchiwanie" in session.board_message
 
 
 def test_exploration_ui_session_reset_restores_initial_state():

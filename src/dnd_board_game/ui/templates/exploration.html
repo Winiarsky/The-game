@@ -250,6 +250,7 @@
   </aside>
   <section>
     <div id="status" class="status" hidden></div>
+    <div id="board-input-global" data-board-input-status></div>
     <div class="card" id="flow-panel"></div>
     <div class="card scene-description" id="scene-description-card">
       <h3>Opis sceny</h3>
@@ -313,6 +314,9 @@
           </button>
           <span>Opcjonalna swobodna rozmowa — nie rozpoczyna testu ani działania.</span>
         </div>
+        <button id="chat-new-message" class="chat-new-message" type="button" hidden onclick="scrollChatToBottom(true)">
+          Nowy krok ↓
+        </button>
       </div>
     </div>
     <div class="card" id="encounter-panel">

@@ -213,7 +213,11 @@ def validate_goal_participants(
     if any(actor_id not in ally_ids for actor_id in requested):
         raise ValueError("Wybrano postać, która nie należy do drużyny.")
 
-    if check_participants == CheckParticipants.WHOLE_PARTY:
+    if check_participants == CheckParticipants.NO_ACTOR:
+        if requested:
+            raise ValueError("Ta decyzja nie jest przypisana do konkretnej postaci.")
+        selected = ()
+    elif check_participants == CheckParticipants.WHOLE_PARTY:
         if requested:
             raise ValueError("W teście grupowym rzuca automatycznie cała drużyna.")
         selected = ally_ids
@@ -232,7 +236,8 @@ def validate_goal_participants(
 
     if (
         eligible_actor_ids is not None
-        and check_participants != CheckParticipants.WHOLE_PARTY
+        and check_participants
+        not in {CheckParticipants.NO_ACTOR, CheckParticipants.WHOLE_PARTY}
     ):
         incapable = tuple(
             actor_id

@@ -16,6 +16,7 @@ from dnd_board_game.combat import (
     SpellCastingKind,
 )
 from dnd_board_game.exploration import (
+    CheckParticipants,
     FixtureKind,
     InteractionDescriptionMode,
     InteractionResolutionMode,
@@ -1082,6 +1083,10 @@ def test_load_village_square_mvp_builds_exploration_locations_setup_points_and_o
     }
     assert elder_goals["ask_watchtower_problem"].grounded_response is not None
     assert (
+        elder_goals["ask_watchtower_problem"].check_participants
+        == CheckParticipants.NO_ACTOR
+    )
+    assert (
         elder_goals["ask_watchtower_problem"].grounded_response.success_message
         == "Bren przekazuje drużynie sprawdzony trop o opuszczonej strażnicy."
     )
@@ -1093,6 +1098,14 @@ def test_load_village_square_mvp_builds_exploration_locations_setup_points_and_o
     } == {"map_and_warning", "plain_report"}
     assert elder_goals["negotiate_advance"].grounded_response is not None
     assert elder_goals["negotiate_advance"].grounded_response.npc_response == ""
+    assert (
+        elder_goals["accept_watchtower_quest"].check_participants
+        == CheckParticipants.NO_ACTOR
+    )
+    assert (
+        elder_goals["confirm_watchtower_departure"].check_participants
+        == CheckParticipants.NO_ACTOR
+    )
     elder_flow = next(flow for flow in exploration.flows if flow.npc_id == "elder_bren")
     assert elder_flow.id == "elder_bren_flow"
     assert {transition.id for transition in elder_flow.transitions} == {
@@ -1157,6 +1170,10 @@ def test_load_village_square_mvp_builds_exploration_locations_setup_points_and_o
     assert (
         keeper_goals["ask_watchtower_rumors"].resolution_mode
         == InteractionResolutionMode.AUTOMATIC
+    )
+    assert (
+        keeper_goals["ask_watchtower_rumors"].check_participants
+        == CheckParticipants.NO_ACTOR
     )
     assert (
         keeper_goals["chat_with_keeper"].resolution_mode

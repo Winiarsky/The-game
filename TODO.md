@@ -158,9 +158,21 @@ najbliższy horyzont, a nie kopię całej roadmapy.
 - [x] Make tall interaction composers scrollable and give every watchtower gate goal a responsive illustrated tile.
 - [x] UI-3: Rework encounter setup and combat around a compact turn HUD, board-context menus, and one preview/roll/result flow without a digital map.
 - [x] UI-4: Add on-demand character/state/spell/inventory drawers, information-overload priorities, keyboard navigation, and disconnected-board fallback.
+- [x] Add the smooth-play runtime contract: revision-safe automatic board listening,
+  one active chat step, automatic deterministic advances, non-blocking Gemini
+  feedback, redundant-frame suppression, and contextual projectile animation.
+- [x] [Hardware scan reliability] Apply idle recovery inside bounded hardware scans,
+  reset the listener after a final timeout, and persist the timeout reason in session
+  observations instead of leaving an unmatched scan-start event.
 - [x] Add passive board focus for physically placed initiative/Stealth actors and exploration objects, without treating exploration party members or NPCs as separate board pieces.
 - [x] Move prepared-spell selection to the final initial-setup step before first-location selection.
 - [ ] UI-5: Validate the complete board-first UI vertical slice with `abandoned_watchtower` and the manual hardware checklist.
+- [ ] P1: After the first target scenario, add the physical player-interface vertical
+  slice: a player-maintained A4/A5 character sheet updated through level-up, printable
+  illustrated decision cards with stable QR ids, a scanner input adapter, shared
+  action-catalog validation, board-based targeting, and a no-scanner UI fallback.
+  - [x] Add the versioned decision-card QR payload and deterministic PNG/SVG generator
+    with printable quiet zones, metadata sidecars, and focused unit tests.
 - [x] Fix the pre-combat Stealth transition renderer after encounter setup confirmation.
 - [x] Clarify rubble interaction targets, prioritize movement paths over object LEDs, and require visible acknowledgement of automatic enemy opportunity-attack results.
 - [x] Keep combat result acknowledgements inside the combat panel, name ranged-melee threats, clarify compound movement destinations, and surface defeated-enemy results.
@@ -311,6 +323,10 @@ obowiązują `Current Roadmap Focus` oraz etapy z `ROADMAP.md`.
 - [x] Consolidate the MVP into two printable black-and-white 20×30 overview maps (village and watchtower), tiled A4 and full-size PDFs; require physical-map confirmation only when the active paper map changes.
 - [x] Add authored interaction-pad pools, dynamic numbered/color-coded UI-to-LED bindings, and board-driven point/goal/zone-option selection.
 - [x] [Board interaction UX] Keep the entire interaction in one chat stream: one set of actionable tiles with board badges, a compact scan control, then an explicit per-action actor choice, player description, resolution, and result.
+- [x] [Board actor identity UX] Assign stable red/blue/green/purple/orange colors by new-game party order and route exploration test-performer selection through matching illuminated board pads, with screen-card fallback.
+- [x] [Party decision UX] Distinguish actor-owned actions and group checks from
+  `no_actor` party decisions; let automatic information requests, accepting Bren's
+  quest, and confirming departure resolve without an artificial hero-selection step.
 - [x] [Interaction resolution UX] Add data-driven automatic, deterministic-check, LLM-rubric, and conversation modes with none/optional/required descriptions; migrate every village/watchtower MVP interaction and bypass LLM for fully scripted challenge checks.
 - [x] [Board color fidelity] Stop reordering logical RGB values before sending them to the configured WLED API, so physical LEDs, Polish color labels, and UI borders use the same palette.
 - [x] [Village playtest regression] Synchronize physical board-pad selections with the chat exactly once per click, clear stale NPC presentation after board-driven transitions, keep navigation inside the chat, and disclose the authored watchtower departure gate.
@@ -454,6 +470,10 @@ obowiązują `Current Roadmap Focus` oraz etapy z `ROADMAP.md`.
 - [x] Define minimal item/equipment schema.
 
 ## Open Decisions
+
+- [x] Preserve dynamically granted area attacks (including Rhogar's Breath
+  Weapon) in the combat preview payload so the player can explicitly confirm
+  the attack or return to area selection before spending the action/resource.
 
 - [x] UI framework: local Flask/web UI for the current runtime and future authoring modules.
 - [x] Content licensing/source strategy for D&D 5e data.

@@ -99,6 +99,15 @@ jawnym uruchomieniu skanu te same legalne pola przechodzą na osobną, wyższą
 `scan_brightness`, żeby fizycznie odróżnić „informację” od „plansza czeka teraz na
 kliknięcie”. Po wyborze pola, anulowaniu albo timeoutcie jasność wraca do standardu.
 
+Każdy bohater otrzymuje na czas gry stały kolor tożsamości wynikający z kolejności
+wyboru drużyny: pierwszy czerwony, drugi niebieski, trzeci zielony, czwarty
+fioletowy, piąty pomarańczowy. Kolor nie jest cechą zapisaną w karcie postaci;
+należy do miejsca w bieżącej drużynie i po wczytaniu zachowuje się dzięki
+stabilnej kolejności aktorów. Gdy eksploracja wymaga wskazania wykonawcy testu,
+runtime chwilowo zamienia pola interakcji w kolorowe pola bohaterów. Gracz klika
+pole odpowiadające portretowi. Po wyborze skan zostaje wyłączony na czas opisu i
+rzutu. Karty ekranowe pozostają równoważnym wyborem awaryjnym.
+
 Docelowa hierarchia informacji, widoki eksploracji, NPC, encountera i walki oraz
 kontrakt plansza–monitor są opisane w `docs/PLAYER_UI_DESIGN.md`. Koncepcyjne mockupy
 ustalają klimat dark fantasy, ale cyfrowe mapy i pozycje figurek nie są częścią
@@ -574,6 +583,46 @@ Wszystkie istoty powinny używać wspólnego modelu `Actor`.
 * modyfikator inicjatywy
 * pozycja
 * dostępne akcje
+
+### Fizyczna Karta Postaci I Karty Decyzji
+
+Każdy gracz docelowo otrzymuje fizyczną kartę postaci A4/A5 oraz małą talię kart
+decyzji. Materiały te uzupełniają planszę i monitor:
+
+* plansza pozostaje interfejsem pozycji, ruchu, celów i obszarów,
+* karta z QR deklaruje intencję gracza, np. atak, czar, cechę, przedmiot albo
+  akcję uniwersalną,
+* fizyczne kości dostarczają naturalny wynik rzutu,
+* monitor pokazuje preview, wymagane koszty, kolejne kroki i rozstrzygnięcie.
+
+Zeskanowanie karty nie wykonuje działania bezpośrednio. QR zawiera wyłącznie
+stabilny, wersjonowany identyfikator, a warstwa aplikacyjna mapuje go na aktualny
+katalog legalnych działań i ponownie sprawdza aktywną postać, właściciela źródła,
+wyposażenie, zasoby, ekonomię akcji oraz legalność celu. Menu ekranowe pozostaje
+pełnym fallbackiem. Czytnik QR jest osobnym adapterem wejścia i nie należy do
+pakietu `board/`.
+
+Pierwsza wersja payloadu ma kanoniczny format
+`dndbg:v1:action:<rodzaj>:<source_id>`, na przykład
+`dndbg:v1:action:spell:eldritch_blast`. Rodzaj należy do zamkniętego katalogu
+`attack`, `spell`, `feature`, `item` i `universal`, a `source_id` używa wspólnej
+składni stabilnych identyfikatorów `snake_case`. QR nie zawiera statystyk postaci,
+kosztów ani reguł działania. Generator zapisuje obok obrazu metadane umożliwiające
+sprawdzenie payloadu, wersji, korekcji błędów i rozmiaru symbolu.
+
+Fizyczna karta postaci jest rozwijanym w trakcie gry artefaktem gracza. Zawiera
+generowane dane mechaniczne oraz miejsca uzupełniane ręcznie, między innymi
+notatki, historię, osobowość, więzi i decyzje rozwoju. Po zatwierdzonym awansie
+aplikacja pokazuje czytelne podsumowanie zmian, a gracz sam dopisuje na karcie
+nowy poziom, zdolności i podjęte wybory. Generator może też przygotować jej nową
+wersję lub wkładkę. Aplikacja pozostaje źródłem prawdy dla poziomu, HP, zasobów,
+statystyk, ekwipunku i legalności akcji, aby papier i zapis kampanii nie tworzyły
+dwóch sprzecznych stanów mechanicznych.
+
+Pierwszy zakres wdrożenia obejmuje jedną postać i małą talię reprezentującą
+podstawowy atak, akcję uniwersalną, czar lub cechę klasową oraz przedmiot.
+Karty powinny być generowane do gotowego do druku PDF z grafiką, tekstem,
+rewersem, marginesami i kodem QR sprawdzonym w docelowym rozmiarze.
 
 ### Potwory
 

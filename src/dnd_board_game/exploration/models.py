@@ -203,6 +203,7 @@ class ShortRestPolicy:
 
 
 class CheckParticipants(StrEnum):
+    NO_ACTOR = "no_actor"
     SINGLE_ACTOR = "single_actor"
     LEAD_WITH_HELP = "lead_with_help"
     WHOLE_PARTY = "whole_party"
@@ -1440,15 +1441,25 @@ class InteractionGoal:
             raise ValueError("Interaction goal cannot require and forbid the same flag.")
         if self.check_participants == CheckParticipants.SELECTED_ACTORS:
             raise ValueError(
-                "Interaction goal supports only single_actor, lead_with_help, or whole_party."
+                "Interaction goal supports only no_actor, single_actor, "
+                "lead_with_help, or whole_party."
             )
         if any(
             participants == CheckParticipants.SELECTED_ACTORS
             for participants in self.allowed_check_participants
         ):
             raise ValueError(
-                "Interaction goal supports only single_actor, lead_with_help, or whole_party."
+                "Interaction goal supports only no_actor, single_actor, "
+                "lead_with_help, or whole_party."
             )
+        if (
+            self.resolution_mode == InteractionResolutionMode.CHECK
+            and (
+                self.check_participants == CheckParticipants.NO_ACTOR
+                or CheckParticipants.NO_ACTOR in self.allowed_check_participants
+            )
+        ):
+            raise ValueError("A check interaction goal must identify who rolls.")
         if (
             self.participant_mode == InteractionParticipantMode.ALLOW
             and not self.allowed_check_participants

@@ -1,9 +1,13 @@
 let state = null;
 let busy = false;
 let resultAck = null;
-let playerTurnScanLoop = false;
 let boardScanInFlight = false;
 let boardScanToken = 0;
+let boardInputPhase = 'idle';
+let boardListeningRevision = '';
+let lastAttemptedBoardRevision = '';
+let boardScanError = '';
+let boardAutoArmTimer = null;
 let lastBoardSelectionRevision = 0;
 let sessionLog = null;
 let decisionCorrectionOpen = false;
@@ -34,6 +38,7 @@ let boardFallbackEnabled = localStorage.getItem('explorationBoardFallback') === 
 let pendingClassFeatureActionId = '';
 let boardConnectionNotice = '';
 let selectedPlaygroundAuditCaseId = '';
+let autoAdvanceGoalKey = '';
 
 function closeSlashCommandMenu() {
   const menu = document.getElementById('slash-command-menu');
@@ -164,7 +169,12 @@ function setBusy(message) {
   if (typing) typing.hidden = !waitingForGm;
   const typingLabel = document.getElementById('chat-typing-label');
   if (typingLabel && waitingForGm) {
-    typingLabel.textContent = 'MG zastanawia się nad odpowiedzią…';
+    const npcName = state && state.active_point && state.active_point.npc
+      ? state.active_point.npc.name
+      : '';
+    typingLabel.textContent = npcName
+      ? `${npcName} zastanawia się nad odpowiedzią…`
+      : 'MG zastanawia się nad odpowiedzią…';
   }
   const leaveButton = document.getElementById('leave-interaction-button');
   if (leaveButton) {
@@ -174,8 +184,22 @@ function setBusy(message) {
   document.querySelectorAll('button, textarea, input').forEach(el => {
     if (el.closest('.developer-panel')) return;
     if (el.dataset.allowBusy === 'true') return;
-    el.disabled = busy;
+    if (!busy) {
+      if (Object.hasOwn(el.dataset, 'busyWasDisabled')) {
+        el.disabled = el.dataset.busyWasDisabled === 'true';
+        delete el.dataset.busyWasDisabled;
+      }
+      return;
+    }
+    if (!Object.hasOwn(el.dataset, 'busyWasDisabled')) {
+      el.dataset.busyWasDisabled = el.disabled ? 'true' : 'false';
+    }
+    const gameplayControl = Boolean(el.closest(
+      '#action-panel, #flow-panel, #encounter-panel, #pending-panel, #roll-panel, #result-panel'
+    ));
+    el.disabled = el.disabled || !waitingForGm || gameplayControl;
   });
+  document.body.classList.toggle('gm-request-pending', waitingForGm);
 }
 let lastFailedGmRequest = null;
 let gmSlowResponseTimer = null;
@@ -209,6 +233,38 @@ function synchronizeBoardSelection({force = false} = {}) {
   const revision = Number(boardInteraction.selection_revision || 0);
   if (!force && revision <= lastBoardSelectionRevision) return false;
   lastBoardSelectionRevision = revision;
+  const actorSelection = boardInteraction.actor_selection || {};
+  const selectedActorId = actorSelection.selected_actor_id
+    ? String(actorSelection.selected_actor_id)
+    : '';
+  if (selectedActorId || actorSelection.role === 'whole_party') {
+    const goalId = String(actorSelection.goal_id || boardInteraction.selected_goal_id || '');
+    const goal = currentInteractionGoals().find(item => String(item.id) === goalId);
+    if (!goal) return false;
+    if (selectedInteractionGoalId !== goalId) {
+      resetInteractionSelection();
+      selectedInteractionGoalId = goalId;
+      selectedSocialSkill = (goal.social_skill_options || [])[0] || null;
+    }
+    if (actorSelection.role === 'whole_party') {
+      selectedInteractionActorIds = [];
+      selectedInteractionCheckParticipants = 'whole_party';
+    } else if (actorSelection.role === 'helper') {
+      selectedInteractionActorIds = [
+        ...selectedInteractionActorIds.filter(id => id !== selectedActorId),
+        selectedActorId,
+      ].slice(0, 2);
+      selectedInteractionCheckParticipants = 'lead_with_help';
+    } else {
+      selectedInteractionActorIds = [selectedActorId];
+      const options = goal.allowed_check_participants || [goal.check_participants || 'single_actor'];
+      selectedInteractionCheckParticipants = options.includes('single_actor')
+        ? 'single_actor'
+        : 'lead_with_help';
+    }
+    prepareObviousInteractionChoices(goal);
+    return true;
+  }
   resetInteractionSelection();
   if (boardInteraction.selected_goal_id) {
     const boardGoalId = String(boardInteraction.selected_goal_id);
@@ -219,6 +275,7 @@ function synchronizeBoardSelection({force = false} = {}) {
         ? goal.check_participants
         : null;
       selectedSocialSkill = (goal.social_skill_options || [])[0] || null;
+      prepareObviousInteractionChoices(goal);
     }
   }
   if (boardInteraction.selected_panel === 'downtime') downtimePanelOpen = true;
@@ -242,6 +299,9 @@ async function api(path, body, busyMessage) {
   const gmRequest = Boolean(busyMessage && (busyMessage.includes('MG') || busyMessage.includes('NPC')));
   const retryRequest = gmRequest ? {path, body: body || {}, busyMessage} : null;
   setBusy(busyMessage || 'Czekam na odpowiedź...');
+  if (boardScanInFlight && path !== '/api/board/reset-scan') {
+    await stopBoardScanLoop();
+  }
   if (gmRequest) {
     setChatRetry(null, '');
     clearTimeout(gmSlowResponseTimer);
@@ -273,11 +333,16 @@ async function api(path, body, busyMessage) {
     }
     synchronizeBoardSelection();
     if (path === '/api/action' && res.ok && !(body && body.conversation_only)) {
+      autoAdvanceGoalKey = '';
       selectedInteractionGoalId = null;
       selectedInteractionCheckParticipants = null;
       selectedInteractionActorIds = [];
       selectedSocialSkill = null;
       selectedInteractionActionSourceId = null;
+    }
+    if (path === '/api/exploration/option' && res.ok) {
+      selectedZoneOptionId = null;
+      selectedZoneOptionActorId = null;
     }
     activeInteractionId = nextInteractionId;
     optimisticPlayerMessage = null;
@@ -316,6 +381,7 @@ async function api(path, body, busyMessage) {
   } finally {
     clearTimeout(gmSlowResponseTimer);
     setBusy('');
+    scheduleAutomaticBoardScan();
   }
 }
 async function loadState() {
@@ -327,6 +393,7 @@ async function loadState() {
   chatInstanceOpen = true;
   render();
   refreshSessionLog();
+  scheduleAutomaticBoardScan();
 }
 function render() {
   const existingChatStream = document.getElementById('chat-stream');
@@ -429,6 +496,9 @@ function render() {
   document.getElementById('conversation-meta').innerHTML = conversationMetaHtml();
   document.getElementById('interaction-goals').innerHTML = interactionGoalsHtml();
   updateActivePanel();
+  updateBoardInputPresentation();
+  scheduleAutomaticBoardScan();
+  scheduleAutomaticGoalAdvance();
   scrollChatToBottom(followChatTail);
 }
 function setPlaygroundField(id, value) {
@@ -504,7 +574,13 @@ function resetPlaygroundTrial() {
 }
 function scrollChatToBottom(shouldFollow = true) {
   const chatStream = document.getElementById('chat-stream');
-  if (!chatStream || !shouldFollow) return;
+  const indicator = document.getElementById('chat-new-message');
+  if (!chatStream) return;
+  if (!shouldFollow) {
+    if (indicator) indicator.hidden = false;
+    return;
+  }
+  if (indicator) indicator.hidden = true;
   const applyScroll = () => { chatStream.scrollTop = chatStream.scrollHeight; };
   window.requestAnimationFrame(() => window.requestAnimationFrame(applyScroll));
   chatStream.querySelectorAll('img:not([data-chat-scroll-bound])').forEach(image => {
@@ -577,6 +653,15 @@ function actorPortraitHtml(actor, variant = '') {
   const modifier = variant ? ` actor-portrait-${variant}` : '';
   return `<img class="actor-portrait${modifier}" src="${esc(actor.portrait_url)}" alt="Portret: ${esc(actor.name || 'postać')}" loading="lazy">`;
 }
+function actorIdentityColor(actor) {
+  const rgb = actor && actor.party_color_rgb;
+  return Array.isArray(rgb) && rgb.length === 3
+    ? `rgb(${Number(rgb[0])}, ${Number(rgb[1])}, ${Number(rgb[2])})`
+    : '#d6a72e';
+}
+function actorIdentityStyle(actor) {
+  return `--actor-identity:${actorIdentityColor(actor)}`;
+}
 function partyPortraitStackHtml(actors) {
   const portraits = actors.filter(actor => actor.portrait_url);
   if (!portraits.length) return '';
@@ -635,7 +720,7 @@ function partySummaryActorHtml(actor) {
   const conditions = actorConditionLabels(actor);
   const hpText = `${hp}/${maximum} PW${temporary > 0 ? ` +${temporary}` : ''}`;
   return `
-    <button class="party-summary-actor ${actorHealthTone(actor)}" data-allow-busy="true" onclick="openActorPanel('${esc(actor.id)}', 'party')" title="${esc(actor.name)}: ${esc(hpText)}${conditions.length ? ` · ${esc(conditions.join(', '))}` : ''}">
+    <button class="party-summary-actor ${actorHealthTone(actor)}" style="${actorIdentityStyle(actor)}" data-allow-busy="true" onclick="openActorPanel('${esc(actor.id)}', 'party')" title="${esc(actor.name)}: ${esc(hpText)} · kolor drużyny: ${esc(actor.party_color || '')}${conditions.length ? ` · ${esc(conditions.join(', '))}` : ''}">
       ${actorPortraitHtml(actor, 'summary')}
       <span class="party-summary-content">
         <span class="party-summary-main">
@@ -1552,15 +1637,16 @@ function boardPadBadge(pad) {
 function boardChoiceToolbarHtml() {
   const interaction = boardInteractionState();
   if (!interaction || state.flow.stage !== 'location_active') return '';
+  if (boardSelectionPausedForScreenInput()) return '';
   if (interaction.mode === 'navigation') {
     return `<div class="board-choice-toolbar">
       <span><b>Wybierz drogę</b><small>Kliknij lokację tutaj albo jej znacznik na planszy.</small></span>
-      <button type="button" class="secondary" onclick="scanBoard()">Skanuj planszę</button>
+      <div data-board-input-status>${boardSelectionStatusHtml(true)}</div>
     </div>`;
   }
   return `<div class="board-choice-toolbar">
     <span><b>Wybierz kafelek</b><small>Kliknij tutaj albo przestaw figurkę na odpowiadające mu pole.</small></span>
-    <button type="button" class="secondary" onclick="scanBoard()">Skanuj planszę</button>
+    <div data-board-input-status>${boardSelectionStatusHtml(true)}</div>
   </div>`;
 }
 function navigationLocationBadge(zone) {
@@ -1637,10 +1723,18 @@ function selectZoneOptionGoal(optionId) {
   const option = (((state || {}).flow || {}).zone_options || []).find(
     candidate => String(candidate.id) === String(optionId)
   );
+  const eligibleActors = (state.actors || []).filter(
+    actor => actor.faction === 'ally' && !actor.defeated
+  );
+  if (option && option.check && eligibleActors.length === 1) {
+    selectedZoneOptionActorId = String(eligibleActors[0].id);
+  }
+  pauseBoardForScreenInput();
   if (
     option
     && option.resolution_mode === 'automatic'
     && option.description_mode === 'none'
+    && (!option.check || selectedZoneOptionActorId)
   ) {
     submitZoneOption();
     return;
@@ -1679,13 +1773,18 @@ function zoneOptionComposerHtml(option) {
       ${descriptionControl}
       <div class="row">
         <button type="button" onclick="submitZoneOption()">${option.resolution_mode === 'automatic' ? 'Wykonaj' : 'Przejdź do testu'}</button>
-        <button type="button" class="secondary" onclick="selectedZoneOptionId=null; selectedZoneOptionActorId=null; document.getElementById('interaction-goals').innerHTML=interactionGoalsHtml()">Wróć</button>
+        <button type="button" class="secondary" onclick="cancelZoneOptionGoal()">Wróć</button>
       </div>
     ` : `
       <p class="flow-note">Najpierw wybierzcie postać wykonującą test.</p>
-      <button type="button" class="secondary" onclick="selectedZoneOptionId=null; selectedZoneOptionActorId=null; document.getElementById('interaction-goals').innerHTML=interactionGoalsHtml()">Wróć</button>
+      <button type="button" class="secondary" onclick="cancelZoneOptionGoal()">Wróć</button>
     `}
   </div>`;
+}
+function cancelZoneOptionGoal() {
+  selectedZoneOptionId = null;
+  selectedZoneOptionActorId = null;
+  api('/api/board/clear-selection', {}, 'Wracam do wyboru działania...');
 }
 function submitZoneOption() {
   const option = ((((state || {}).flow || {}).zone_options) || []).find(
@@ -1815,7 +1914,7 @@ function interactionGoalsHtml() {
   const participantsReady = Boolean(
     selected
     && (
-      selectedParticipants === 'whole_party'
+      ['no_actor', 'whole_party'].includes(selectedParticipants)
       || (
         selectedParticipants
         && selectedInteractionActorIds.length > 0
@@ -1842,7 +1941,9 @@ function interactionGoalsHtml() {
       <b>${selected || selectedZoneOption ? 'Wybrane działanie' : 'Co chcecie zrobić?'}</b>
       <span>${selected
         ? descriptionMode === 'none'
-          ? 'Wybierzcie wykonawcę i potrzebne źródło. Opis nie jest wymagany.'
+          ? selectedParticipants === 'no_actor'
+            ? 'To wspólna decyzja drużyny. Wybór bohatera nie jest wymagany.'
+            : 'Wybierzcie wykonawcę i potrzebne źródło. Opis nie jest wymagany.'
           : esc(selected.followup_prompt)
         : selectedZoneOption
           ? 'Wybierzcie postać i wykonajcie wymagane kroki.'
@@ -1939,7 +2040,7 @@ function interactionGoalsHtml() {
         <textarea id="goal-action" placeholder="${descriptionMode === 'required' ? esc(selected.followup_prompt || 'Opiszcie metodę działania...') : 'Opcjonalny opis metody…'}"></textarea>
       `}
       <div class="row">
-        <button type="button" onclick="sendGoalAction()">${selected.resolution_mode === 'automatic' ? 'Wykonaj' : selected.resolution_mode === 'llm_rubric' ? 'Przekaż opis MG' : 'Przejdź dalej'}</button>
+        <button type="button" onclick="sendGoalAction()">${descriptionMode === 'optional' ? 'Wykonaj bez opisu lub z opisem' : selected.resolution_mode === 'automatic' ? 'Wykonaj' : selected.resolution_mode === 'llm_rubric' ? 'Przekaż opis MG' : 'Przejdź dalej'}</button>
         <button type="button" class="secondary" onclick="cancelInteractionGoal()">Anuluj wybór</button>
       </div>
     </div>` : ''}`;
@@ -2160,11 +2261,12 @@ function downtimePanelHtml() {
 }
 function openDowntimePanel() {
   downtimePanelOpen = true;
+  pauseBoardForScreenInput();
   document.getElementById('interaction-goals').innerHTML = interactionGoalsHtml();
 }
 function closeDowntimePanel() {
   downtimePanelOpen = false;
-  document.getElementById('interaction-goals').innerHTML = interactionGoalsHtml();
+  api('/api/board/clear-selection', {}, 'Wracam do wyboru działania...');
 }
 function selectDowntimeActor(actorId) {
   selectedDowntimeActorId = String(actorId || '');
@@ -2318,27 +2420,47 @@ function selectInteractionGoal(goalId) {
     selectedInteractionActionSourceId = null;
   }
   selectedInteractionGoalId = goalId;
+  pauseBoardForScreenInput();
+  prepareObviousInteractionChoices(goal);
   const panel = document.getElementById('interaction-goals');
   if (panel) panel.innerHTML = interactionGoalsHtml();
-  const input = document.getElementById('goal-action');
-  if (input) input.focus();
+  const options = goal.allowed_check_participants || [goal.check_participants || 'single_actor'];
+  const actors = (state.actors || []).filter(actor => !actor.defeated);
+  const eligibleIds = new Set((goal.eligible_actor_ids || actors.map(actor => actor.id)).map(String));
+  const eligible = actors.filter(actor => eligibleIds.has(String(actor.id)));
+  if ((options.includes('single_actor') || options.includes('lead_with_help')) && eligible.length > 1) {
+    api('/api/exploration/actor-selection/start', {
+      goal_id: goalId,
+      role: 'lead',
+      excluded_actor_ids: [],
+    }, 'Podświetlam wybór bohatera...');
+  } else {
+    const input = document.getElementById('goal-action');
+    if (input) input.focus();
+  }
+  scheduleAutomaticGoalAdvance();
 }
 function cancelInteractionGoal() {
+  autoAdvanceGoalKey = '';
+  window.clearTimeout(scheduleAutomaticGoalAdvance.timer);
   selectedInteractionGoalId = null;
   selectedInteractionCheckParticipants = null;
   selectedInteractionActorIds = [];
   selectedSocialSkill = null;
   selectedInteractionActionSourceId = null;
-  const panel = document.getElementById('interaction-goals');
-  if (panel) panel.innerHTML = interactionGoalsHtml();
+  api('/api/board/clear-selection', {}, 'Wracam do wyboru działania...');
 }
 function checkParticipantLabel(mode) {
+  if (mode === 'no_actor') return 'Decyzja drużyny';
   if (mode === 'whole_party') return 'Test grupowy';
   if (mode === 'lead_with_help') return 'Jedna postać z pomocą';
   return 'Jedna postać';
 }
 function goalParticipantLabel(goal) {
   const options = goal.allowed_check_participants || [goal.check_participants || 'single_actor'];
+  if (goal.participant_mode === 'must' && goal.check_participants === 'no_actor') {
+    return 'Decyzja drużyny';
+  }
   if (goal.participant_mode === 'allow') return `Wybór: ${options.map(checkParticipantLabel).join(' / ')}`;
   return `Wymagany: ${checkParticipantLabel(goal.check_participants)}`;
 }
@@ -2347,9 +2469,61 @@ function selectedGoalCheckParticipants(goal) {
     ? (goal.check_participants || 'single_actor')
     : selectedInteractionCheckParticipants;
 }
+function prepareObviousInteractionChoices(goal) {
+  if (!goal) return;
+  const participantOptions = goal.allowed_check_participants || [goal.check_participants || 'single_actor'];
+  if (goal.participant_mode === 'must') {
+    selectedInteractionCheckParticipants = goal.check_participants || participantOptions[0] || 'single_actor';
+  } else if (!selectedInteractionCheckParticipants && participantOptions.length === 1) {
+    selectedInteractionCheckParticipants = participantOptions[0];
+  }
+  if (['no_actor', 'whole_party'].includes(selectedInteractionCheckParticipants)) {
+    selectedInteractionActorIds = [];
+  } else if (!selectedInteractionActorIds.length) {
+    const actors = (state.actors || []).filter(actor => !actor.defeated);
+    const eligibleIds = new Set((goal.eligible_actor_ids || actors.map(actor => actor.id)).map(String));
+    const eligible = actors.filter(actor => eligibleIds.has(String(actor.id)));
+    if (eligible.length === 1) selectedInteractionActorIds = [String(eligible[0].id)];
+  }
+  if (goal.source_required && !selectedInteractionActionSourceId) {
+    const leadId = selectedInteractionActorIds.length ? String(selectedInteractionActorIds[0]) : null;
+    const available = (goal.action_sources || []).filter(source => (
+      source.available
+      && (!source.owner_actor_id || !leadId || String(source.owner_actor_id) === leadId)
+    ));
+    if (available.length === 1) selectedInteractionActionSourceId = available[0].id;
+  }
+}
+function scheduleAutomaticGoalAdvance() {
+  window.clearTimeout(scheduleAutomaticGoalAdvance.timer);
+  scheduleAutomaticGoalAdvance.timer = null;
+  if (busy || waitingForGm || !selectedInteractionGoalId || state.pending) return;
+  const goal = currentInteractionGoals().find(item => item.id === selectedInteractionGoalId);
+  if (!goal || goal.description_mode !== 'none' || goal.resolution_mode === 'llm_rubric') return;
+  prepareObviousInteractionChoices(goal);
+  const participants = selectedGoalCheckParticipants(goal);
+  const participantsReady = ['no_actor', 'whole_party'].includes(participants)
+    || (participants && selectedInteractionActorIds.length > 0);
+  const sourceReady = !goal.source_required || Boolean(selectedInteractionActionSourceId);
+  if (!participantsReady || !sourceReady) return;
+  const key = [
+    goal.id,
+    participants,
+    selectedInteractionActorIds.join(','),
+    selectedInteractionActionSourceId || '',
+    (state.board_selection || {}).revision || '',
+  ].join('|');
+  if (autoAdvanceGoalKey === key) return;
+  autoAdvanceGoalKey = key;
+  scheduleAutomaticGoalAdvance.timer = window.setTimeout(() => {
+    scheduleAutomaticGoalAdvance.timer = null;
+    sendGoalAction();
+  }, 180);
+}
 function interactionParticipantPickerHtml(goal) {
   if (!state.active_challenge && !(state.active_point && state.active_point.npc)) return '';
   const mode = selectedGoalCheckParticipants(goal);
+  if (mode === 'no_actor') return '';
   const actors = state.actors || [];
   const options = goal.allowed_check_participants || [goal.check_participants || 'single_actor'];
   const singleAllowed = options.includes('single_actor');
@@ -2357,6 +2531,10 @@ function interactionParticipantPickerHtml(goal) {
   const wholePartyAllowed = options.includes('whole_party');
   const eligibleIds = new Set((goal.eligible_actor_ids || actors.map(actor => actor.id)).map(String));
   const actorSelectionAllowed = singleAllowed || helpAllowed;
+  const boardActorSelection = (((state.flow || {}).board_interaction || {}).actor_selection || {});
+  const boardPads = new Map(
+    (boardActorSelection.pads || []).map(pad => [String(pad.actor_id), pad])
+  );
   const instruction = [
     actorSelectionAllowed
       ? helpAllowed
@@ -2374,12 +2552,19 @@ function interactionParticipantPickerHtml(goal) {
       const index = selectedInteractionActorIds.indexOf(String(actor.id));
       const eligible = eligibleIds.has(String(actor.id));
       const role = index === 0 ? 'prowadzi' : index === 1 ? 'pomaga' : 'wybierz';
-      return `<button type="button" class="interaction-actor-card${index >= 0 ? ' selected' : ''}${eligible ? '' : ' unavailable'}"
-        onclick="toggleInteractionActor('${esc(actor.id)}')"${eligible ? '' : ' disabled title="Ta postać nie spełnia wymagań tej próby."'}>${actorPortraitHtml(actor, 'choice')}<span><b>${esc(actor.name)}</b><small>${eligible ? role : 'brak wymaganych zdolności lub narzędzi'}</small></span></button>`;
+      const boardPad = boardPads.get(String(actor.id));
+      const boardHint = boardPad
+        ? ` · ${boardPad.color}, pole ${boardPad.coordinate_label}`
+        : ` · kolor ${actor.party_color || 'drużyny'}`;
+      return `<button type="button" class="interaction-actor-card actor-identity${index >= 0 ? ' selected' : ''}${eligible ? '' : ' unavailable'}"
+        style="${actorIdentityStyle(actor)}" onclick="toggleInteractionActor('${esc(actor.id)}')"${eligible ? '' : ' disabled title="Ta postać nie spełnia wymagań tej próby."'}>${actorPortraitHtml(actor, 'choice')}<span><b>${esc(actor.name)}</b><small>${eligible ? `${role}${esc(boardHint)}` : 'brak wymaganych zdolności lub narzędzi'}</small></span></button>`;
     }).join('') : ''}
     ${wholePartyAllowed ? `<button type="button" class="interaction-actor-card whole-party${mode === 'whole_party' ? ' selected' : ''}"
       onclick="selectWholePartyForInteraction()">${partyPortraitStackHtml(actors)}<span><b>Cała drużyna</b><small>${mode === 'whole_party' ? 'wszyscy rzucają' : 'test grupowy'}</small></span></button>` : ''}
     </div>
+    ${helpAllowed && selectedInteractionActorIds.length === 1
+      ? '<button type="button" class="secondary actor-board-helper" onclick="startInteractionHelperBoardSelection()">Wybierz pomocnika na planszy</button>'
+      : ''}
   </div>`;
 }
 function interactionActionSourcePickerHtml(goal) {
@@ -2429,6 +2614,7 @@ function selectInteractionActionSource(sourceId) {
   selectedInteractionActionSourceId = sourceId || null;
   const panel = document.getElementById('interaction-goals');
   if (panel) panel.innerHTML = interactionGoalsHtml();
+  scheduleAutomaticGoalAdvance();
 }
 function toggleInteractionActor(actorId) {
   const goal = currentInteractionGoals().find(item => item.id === selectedInteractionGoalId);
@@ -2443,11 +2629,14 @@ function toggleInteractionActor(actorId) {
   const currentIndex = selectedInteractionActorIds.indexOf(id);
   if (currentIndex >= 0) {
     selectedInteractionActorIds.splice(currentIndex, 1);
-  } else if (helpAllowed) {
-    if (selectedInteractionActorIds.length >= 2) selectedInteractionActorIds.pop();
-    selectedInteractionActorIds.push(id);
   } else {
-    selectedInteractionActorIds = [id];
+    const role = helpAllowed && selectedInteractionActorIds.length ? 'helper' : 'lead';
+    api('/api/exploration/actor-selection/select', {
+      goal_id: goal.id,
+      actor_id: id,
+      role,
+    }, role === 'helper' ? 'Wybieram pomocnika...' : 'Wybieram wykonawcę...');
+    return;
   }
   if (goal.participant_mode === 'must') {
     selectedInteractionCheckParticipants = goal.check_participants;
@@ -2469,18 +2658,30 @@ function toggleInteractionActor(actorId) {
   ) {
     selectedInteractionActionSourceId = null;
   }
+  prepareObviousInteractionChoices(goal);
   const panel = document.getElementById('interaction-goals');
   if (panel) panel.innerHTML = interactionGoalsHtml();
+  scheduleAutomaticGoalAdvance();
 }
 function selectWholePartyForInteraction() {
   const goal = currentInteractionGoals().find(item => item.id === selectedInteractionGoalId);
   if (!goal) return;
   const options = goal.allowed_check_participants || [goal.check_participants || 'single_actor'];
   if (!options.includes('whole_party')) return;
-  selectedInteractionActorIds = [];
-  selectedInteractionCheckParticipants = 'whole_party';
-  const panel = document.getElementById('interaction-goals');
-  if (panel) panel.innerHTML = interactionGoalsHtml();
+  api('/api/exploration/actor-selection/select', {
+    goal_id: goal.id,
+    actor_id: '',
+    role: 'whole_party',
+  }, 'Wybieram całą drużynę...');
+}
+function startInteractionHelperBoardSelection() {
+  const goal = currentInteractionGoals().find(item => item.id === selectedInteractionGoalId);
+  if (!goal || selectedInteractionActorIds.length !== 1) return;
+  api('/api/exploration/actor-selection/start', {
+    goal_id: goal.id,
+    role: 'helper',
+    excluded_actor_ids: [selectedInteractionActorIds[0]],
+  }, 'Podświetlam wybór pomocnika...');
 }
 function pendingHtml(pending) {
   if (!pending) return '';
@@ -3003,6 +3204,7 @@ function encounterHtml() {
       </header>
       ${encounterProgressHtml(opening, setup, stealth, initiative)}
       <div class="encounter-transition-current">
+        <div data-board-input-status>${boardSelectionStatusHtml()}</div>
         ${currentStepHtml}
       </div>
       <details class="debug-panel encounter-technical-details">
@@ -3143,6 +3345,7 @@ function combatStartHtml() {
       ${combatInitiativeRibbonHtml(combat, order)}
       ${combatTurnHudHtml(combat)}
       <div class="combat-stage">
+        <div data-board-input-status>${boardSelectionStatusHtml()}</div>
         ${interrupt ? `<div class="combat-interrupt-banner"><span>Przerwanie</span><b>${esc(interrupt)}</b></div>` : ''}
         ${combatCurrentStepHtml(combat, finished, isAllyTurn, isEnemyTurn, interrupt)}
       </div>
@@ -5141,6 +5344,7 @@ function d20RollResultText(result) {
 }
 function pendingAreaSpellHtml(pending) {
   const source = pending.source || {};
+  const isSpell = source.source_type === 'spell';
   const targets = pending.targets || [];
   const auxMode = (((state || {}).combat || {}).aux_targeting_mode) || '';
   const targetText = targets.map(target => `${target.name} (${target.position[0]},${target.position[1]})`).join(', ') || 'brak celów';
@@ -5196,8 +5400,8 @@ function pendingAreaSpellHtml(pending) {
     ${areaSpellCoverHtml(pending)}
     ${source.save_ability ? `<p>Rzut obronny: ${esc(abilityLabel(source.save_ability))} przeciw ST ${esc(pending.spell_save_dc || source.save_dc || '-')} | ${esc(saveSuccessLabel(source.save_damage_on_success))}</p>` : ''}
     <div class="row">
-      <button data-allow-busy="true" onclick="confirmAreaSpell()"${auxMode ? ' disabled' : ''}>Potwierdź czar</button>
-      <button class="secondary" data-allow-busy="true" onclick="cancelAreaSpell()">Anuluj czar</button>
+      <button data-allow-busy="true" onclick="confirmAreaSpell()"${auxMode ? ' disabled' : ''}>${isSpell ? 'Potwierdź czar' : 'Potwierdź atak'}</button>
+      <button class="secondary" data-allow-busy="true" onclick="cancelAreaSpell()">Cofnij wybór obszaru</button>
     </div>
   `;
 }
@@ -5696,6 +5900,7 @@ function closeGmChatDialog() {
   closeSlashCommandMenu();
   const dialog = document.getElementById('gm-chat-dialog');
   if (dialog && dialog.open) dialog.close();
+  window.setTimeout(scheduleAutomaticBoardScan, 0);
 }
 function submitGmChat(event) {
   event.preventDefault();
@@ -5720,7 +5925,11 @@ async function sendGoalAction() {
     alert('Najpierw wybierz typ testu.');
     return;
   }
-  if (selectedGoal && selectedCheckParticipants !== 'whole_party' && selectedInteractionActorIds.length < 1) {
+  if (
+    selectedGoal
+    && !['no_actor', 'whole_party'].includes(selectedCheckParticipants)
+    && selectedInteractionActorIds.length < 1
+  ) {
     alert('Najpierw wybierz postać, która wykonuje test.');
     return;
   }
@@ -5732,14 +5941,15 @@ async function sendGoalAction() {
     ? null
     : {role: 'player', title: 'Gracze', body: text};
   if (input) input.value = '';
-  render();
+  if (optimisticPlayerMessage) render();
   const result = await api(
     '/api/action',
     {
       text,
       selected_goal_id: selectedInteractionGoalId,
       check_participants: selectedCheckParticipants,
-      participant_actor_ids: selectedGoal && selectedCheckParticipants === 'whole_party'
+      participant_actor_ids: selectedGoal
+        && ['no_actor', 'whole_party'].includes(selectedCheckParticipants)
         ? []
         : selectedInteractionActorIds,
       selected_social_skill: (selectedGoal.social_skill_options || []).length
@@ -5747,7 +5957,9 @@ async function sendGoalAction() {
         : null,
       selected_action_source_id: selectedInteractionActionSourceId,
     },
-    'Czekam na odpowiedź MG...'
+    selectedGoal.resolution_mode === 'llm_rubric'
+      ? 'Czekam na odpowiedź MG...'
+      : 'Rozstrzygam działanie...'
   );
   if (result && !result.ok && input) input.value = text;
 }
@@ -5874,6 +6086,7 @@ function startScenarioHandoff() {
 }
 function openContinuationPanel() {
   continuationPanelOpen = true;
+  pauseBoardForScreenInput();
   chatInstanceOpen = true;
   setSidePanelOpen(false);
   render();
@@ -5881,7 +6094,7 @@ function openContinuationPanel() {
 }
 function closeContinuationPanel() {
   continuationPanelOpen = false;
-  render();
+  api('/api/board/clear-selection', {}, 'Wracam do wyboru działania...');
 }
 function requiredD20Value(id) {
   const input = document.getElementById(id);
@@ -5962,10 +6175,133 @@ function configureBoard() {
   }, 'Łączę z planszą...');
 }
 function startSession() { api('/api/start', {}, 'Rozpoczynam sesję...'); }
-function isAllyCombatTurnActive() {
-  const combat = state && state.combat ? state.combat : null;
-  const actor = combat && combat.current_actor ? combat.current_actor : {};
-  return Boolean(combat && combat.status === 'active' && actor.faction === 'ally' && !combat.context_menu && !combat.enemy_turn_preview && !combat.pending_player_attack && !combat.pending_player_healing && !combat.pending_area_spell && !combat.pending_combat_interaction && !combat.pending_combat_help && !combat.class_feature_targeting && !combat.pending_concentration_action && !combat.pending_multi_target_damage_spell && !combat.pending_summon && !combat.pending_magic_movement && !combat.pending_spell_debuff && !combat.pending_spell_dispel && !combat.pending_concentration_check && !combat.pending_combat_ready);
+function currentBoardSelection() {
+  return (state && state.board_selection) || null;
+}
+function boardSelectionPausedForScreenInput() {
+  const actorBoardSelection = Boolean(
+    state
+    && state.flow
+    && state.flow.board_interaction
+    && state.flow.board_interaction.actor_selection
+    && state.flow.board_interaction.actor_selection.active
+  );
+  if (
+    (selectedInteractionGoalId && !actorBoardSelection)
+    || selectedZoneOptionId
+    || downtimePanelOpen
+    || continuationPanelOpen
+    || (state && state.trade)
+  ) return true;
+  const focused = document.activeElement;
+  return Boolean(
+    focused
+    && focused.closest
+    && focused.closest('#action-panel')
+    && focused.matches('input, textarea, select')
+  );
+}
+function pauseBoardForScreenInput() {
+  clearTimeout(boardAutoArmTimer);
+  boardAutoArmTimer = null;
+  if (boardScanInFlight) {
+    stopBoardScanLoop();
+    return;
+  }
+  boardInputPhase = 'idle';
+  boardListeningRevision = '';
+  updateBoardInputPresentation();
+}
+function boardSelectionStatusHtml(compact = false) {
+  const selection = currentBoardSelection();
+  if (boardSelectionPausedForScreenInput()) return '';
+  if (!selection || !Number(selection.legal_position_count || 0)) return '';
+  const connected = Boolean(selection.connected);
+  const revision = String(selection.revision || '');
+  const activeRevision = boardListeningRevision === revision;
+  const phase = activeRevision ? boardInputPhase : (
+    revision === lastAttemptedBoardRevision && boardScanError ? 'error' : 'ready'
+  );
+  const labels = {
+    arming: ['Przygotowuję planszę…', 'Za chwilę zacznie nasłuchiwać.'],
+    listening: ['Plansza nasłuchuje', selection.prompt || 'Przestaw figurkę na podświetlone pole.'],
+    resolved: ['Wybór odczytany', 'Przechodzę do kolejnego kroku.'],
+    error: ['Nie odczytano wyboru', boardScanError || 'Spróbuj jeszcze raz albo użyj wyboru awaryjnego.'],
+    ready: connected
+      ? ['Plansza gotowa', selection.prompt || 'Przestaw figurkę na podświetlone pole.']
+      : ['Plansza nie jest połączona', 'Możesz użyć awaryjnego wyboru pola w panelu gry.'],
+  };
+  const [title, copy] = labels[phase] || labels.ready;
+  const retry = phase === 'error' || !connected;
+  return `<div class="board-listening-card ${esc(phase)}${compact ? ' compact' : ''}" aria-live="polite">
+    <span class="board-listening-pulse" aria-hidden="true"></span>
+    <span class="board-listening-copy"><b>${esc(title)}</b>${compact ? '' : `<small>${esc(copy)}</small>`}</span>
+    ${retry ? `<button type="button" class="secondary" onclick="scanBoard()">${connected ? 'Spróbuj ponownie' : 'Wybór awaryjny'}</button>` : ''}
+  </div>`;
+}
+function updateBoardInputPresentation() {
+  const selection = currentBoardSelection();
+  const hasBoardContract = Boolean(
+    selection
+    && Number(selection.legal_position_count || 0)
+    && !boardSelectionPausedForScreenInput()
+  );
+  document.body.classList.toggle('board-auto-selection', hasBoardContract);
+  document.querySelectorAll('[data-board-input-status]').forEach(container => {
+    const compact = Boolean(container.closest('.board-choice-toolbar'));
+    container.innerHTML = boardSelectionStatusHtml(compact);
+  });
+  const globalStatus = document.getElementById('board-input-global');
+  if (globalStatus) {
+    globalStatus.hidden = Boolean(
+      document.body.classList.contains('chat-instance-mode')
+      || (document.getElementById('encounter-panel') && !document.getElementById('encounter-panel').hidden)
+    );
+  }
+  document.querySelectorAll('button[data-primary-scan="true"]').forEach(button => {
+    button.hidden = hasBoardContract;
+  });
+}
+function boardSelectionCanAutoArm(selection = currentBoardSelection()) {
+  if (!selection || !selection.auto_arm || !selection.connected) return false;
+  if (!Number(selection.legal_position_count || 0)) return false;
+  if (boardSelectionPausedForScreenInput()) return false;
+  if (document.hidden || busy || waitingForGm) return false;
+  const openDialog = document.querySelector('dialog[open]');
+  return !openDialog;
+}
+function scheduleAutomaticBoardScan() {
+  clearTimeout(boardAutoArmTimer);
+  boardAutoArmTimer = null;
+  const selection = currentBoardSelection();
+  if (!boardSelectionCanAutoArm(selection)) {
+    if (
+      boardScanInFlight
+      && selection
+      && boardListeningRevision
+      && boardListeningRevision !== String(selection.revision || '')
+    ) {
+      stopBoardScanLoop();
+    }
+    updateBoardInputPresentation();
+    return;
+  }
+  const revision = String(selection.revision || '');
+  if (!revision || revision === lastAttemptedBoardRevision) {
+    updateBoardInputPresentation();
+    return;
+  }
+  if (boardScanInFlight) {
+    if (boardListeningRevision !== revision) stopBoardScanLoop();
+    return;
+  }
+  boardInputPhase = 'arming';
+  boardListeningRevision = revision;
+  updateBoardInputPresentation();
+  boardAutoArmTimer = setTimeout(() => {
+    boardAutoArmTimer = null;
+    scanBoardOnce({revision, automatic: true});
+  }, 120);
 }
 async function scanBoard() {
   if (boardScanInFlight) return;
@@ -5978,25 +6314,37 @@ async function scanBoard() {
     }
     return;
   }
-  const continuous = isAllyCombatTurnActive();
-  if (continuous) playerTurnScanLoop = true;
-  await scanBoardOnce();
+  const selection = currentBoardSelection();
+  const revision = String((selection || {}).revision || '');
+  lastAttemptedBoardRevision = '';
+  boardScanError = '';
+  await scanBoardOnce({revision, automatic: false});
 }
-async function scanBoardOnce() {
+async function scanBoardOnce({revision = '', automatic = false} = {}) {
   if (boardScanInFlight) return;
-  const token = boardScanToken;
+  const token = ++boardScanToken;
   const previousInteractionId = state && state.conversation ? state.conversation.interaction_id : null;
   boardScanInFlight = true;
-  setBusy('Czekam na kliknięcie pola na planszy...');
+  boardInputPhase = 'listening';
+  boardListeningRevision = revision;
+  boardScanError = '';
+  lastAttemptedBoardRevision = revision;
+  updateBoardInputPresentation();
   try {
-    const res = await fetch('/api/board/scan', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({})});
+    const res = await fetch('/api/board/scan', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({revision, automatic})
+    });
     const data = await res.json();
     if (token !== boardScanToken) return;
     if (!res.ok) {
-      playerTurnScanLoop = false;
-      alert(data.error || 'Błąd');
+      boardInputPhase = 'error';
+      boardScanError = data.error || 'Nie udało się odczytać planszy.';
+      if (!automatic) alert(boardScanError);
     }
     state = data.state || data;
+    const returnedRevision = String(((state || {}).board_selection || {}).revision || '');
     const nextInteractionId = state && state.conversation ? state.conversation.interaction_id : null;
     if (nextInteractionId !== previousInteractionId) resetInteractionSelection();
     activeInteractionId = nextInteractionId;
@@ -6004,23 +6352,36 @@ async function scanBoardOnce() {
     resultAck = null;
     chatInstanceOpen = true;
     const boardSelectionActivated = synchronizeBoardSelection({force: true});
-    if (!isAllyCombatTurnActive()) playerTurnScanLoop = false;
+    if (res.ok && revision && returnedRevision === revision) {
+      boardInputPhase = 'error';
+      boardScanError = 'Nie wykryto zmiany na żadnym z podświetlonych pól.';
+    } else if (res.ok) {
+      boardInputPhase = 'resolved';
+    }
     render();
     if (boardSelectionActivated) scrollChatToBottom(true);
     refreshSessionLog();
+  } catch (error) {
+    if (token !== boardScanToken) return;
+    boardInputPhase = 'error';
+    boardScanError = 'Połączenie z planszą zostało przerwane.';
+    updateBoardInputPresentation();
+    if (!automatic) alert(boardScanError);
   } finally {
     if (token === boardScanToken) {
       boardScanInFlight = false;
-      setBusy('');
+      if (boardInputPhase !== 'error') boardInputPhase = 'idle';
+      boardListeningRevision = '';
+      updateBoardInputPresentation();
+      scheduleAutomaticBoardScan();
     }
-  }
-  if (token === boardScanToken && playerTurnScanLoop && isAllyCombatTurnActive()) {
-    setTimeout(scanBoardOnce, 50);
   }
 }
 async function stopBoardScanLoop() {
-  playerTurnScanLoop = false;
+  clearTimeout(boardAutoArmTimer);
+  boardAutoArmTimer = null;
   boardScanToken += 1;
+  boardListeningRevision = '';
   if (boardScanInFlight) {
     try {
       await fetch('/api/board/reset-scan', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({})});
@@ -6028,8 +6389,10 @@ async function stopBoardScanLoop() {
       // Best effort: the next stale scan response is ignored by boardScanToken.
     }
     boardScanInFlight = false;
-    setBusy('');
   }
+  boardInputPhase = 'idle';
+  updateBoardInputPresentation();
+  window.setTimeout(scheduleAutomaticBoardScan, 0);
 }
 function selectBoardPosition(col, row) { api('/api/board/select', {col, row}, 'Wybieram pole planszy...'); }
 function resetBoardScan() { api('/api/board/reset-scan', {}, 'Resetuję oczekiwanie planszy...'); }
@@ -6097,6 +6460,7 @@ function requestTextInput(title, defaultValue = '', options = {}) {
       if (settled) return;
       settled = true;
       dialog.remove();
+      window.setTimeout(scheduleAutomaticBoardScan, 0);
       resolve(value);
     };
     cancel.addEventListener('click', () => {
@@ -6770,6 +7134,32 @@ document.addEventListener('keydown', event => {
   if (target && target.closest && target.closest('button, a, summary')) return;
   if (triggerPrimaryAction()) {
     event.preventDefault();
+  }
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) stopBoardScanLoop();
+  else scheduleAutomaticBoardScan();
+});
+document.addEventListener('focusin', event => {
+  const target = event.target;
+  if (
+    target
+    && target.closest
+    && target.closest('#action-panel')
+    && target.matches('input, textarea, select')
+  ) {
+    pauseBoardForScreenInput();
+  }
+});
+document.addEventListener('focusout', event => {
+  const target = event.target;
+  if (
+    target
+    && target.closest
+    && target.closest('#action-panel')
+    && target.matches('input, textarea, select')
+  ) {
+    window.setTimeout(scheduleAutomaticBoardScan, 0);
   }
 });
 const actionInput = document.getElementById('action');
