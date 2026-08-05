@@ -43,7 +43,9 @@ from dnd_board_game.combat import (
     resolve_divine_sense,
     resolve_flurry_of_blows,
     resolve_frenzy,
+    expire_turn_end_effects,
     resolve_martial_arts_bonus_attack,
+    resolve_limited_dodge,
     resolve_open_hand_technique,
     resolve_patient_defense,
     resolve_pact_weapon,
@@ -240,7 +242,7 @@ def test_wild_shape_manual_revert_uses_bonus_action():
         ),
     )
     enemy = replace(_actor(), id=ActorId("enemy"), faction=Faction.ENEMY)
-    transformed = resolve_wild_shape(_state(druid, enemy), form_id="panther")
+    transformed = resolve_wild_shape(_state(druid, enemy), form_id="brown_bear")
     next_turn = _state(transformed.actor_after, enemy)
 
     reverted = resolve_wild_shape(next_turn)
@@ -251,14 +253,14 @@ def test_wild_shape_manual_revert_uses_bonus_action():
     assert reverted.actor_after.resource_pools[0].current == 1
 
 
-def test_level_three_wild_shape_catalog_contains_only_legal_land_forms():
+def test_board_game_wild_shape_catalog_has_three_distinct_combat_forms():
     druid = _actor("wild_shape")
 
     forms = available_wild_shape_forms(druid)
 
-    assert {form.id for form in forms} >= {"wolf", "panther", "riding_horse"}
-    assert all(form.challenge_rating <= 0.25 for form in forms)
-    assert not any(form.has_swimming_speed or form.has_flying_speed for form in forms)
+    assert {form.id for form in forms} == {"brown_bear", "wolf", "giant_eagle"}
+    assert next(form for form in forms if form.id == "brown_bear").hit_points == 34
+    assert next(form for form in forms if form.id == "giant_eagle").has_flying_speed
 
 
 def test_turn_undead_spends_channel_divinity_and_applies_turned_condition():
@@ -389,9 +391,25 @@ def test_frenzy_activates_during_rage_and_grants_later_bonus_weapon_attack():
 
     assert activated.activated is True
     assert any(effect.kind == "frenzy" for effect in activated.active_effects)
+    with pytest.raises(ValueError, match="od następnej tury"):
+        resolve_frenzy(_state(activated.actor, enemy), activated.active_effects)
+
+    stopped = resolve_rage(_state(activated.actor, enemy), activated.active_effects)
+
+    assert stopped.activated is False
+    assert stopped.exhaustion_added is True
+    assert stopped.actor_after.exhaustion_level == 1
+    assert not any(
+        effect.kind in {"rage", "frenzy"}
+        for effect in stopped.active_effects
+    )
 
     next_turn = _state(activated.actor, enemy)
-    bonus = resolve_frenzy(next_turn, activated.active_effects)
+    next_turn_effects = expire_turn_end_effects(
+        activated.active_effects,
+        str(activated.actor.id),
+    )
+    bonus = resolve_frenzy(next_turn, next_turn_effects)
 
     assert bonus.activated is False
     assert bonus.bonus_attack_source_id == "greataxe"
@@ -825,6 +843,34 @@ def test_patient_defense_and_step_of_wind_spend_ki():
     step_jump = jump_distances(monk, step.active_effects)
     assert step_jump.running_long_jump_feet == base_jump.running_long_jump_feet * 2
     assert step_jump.running_high_jump_feet == base_jump.running_high_jump_feet * 2
+
+
+def test_archetype_limited_dodge_spends_short_rest_use_without_ki():
+    rogue = replace(
+        _actor("instinctive_dodge"),
+        resource_pools=(
+            ActorResourcePool(
+                "instinctive_dodge_uses",
+                "Unik instynktowny",
+                1,
+                1,
+                RecoveryPeriod.SHORT_REST,
+            ),
+        ),
+    )
+    enemy = replace(_actor(), id=ActorId("enemy"), faction=Faction.ENEMY)
+
+    result = resolve_limited_dodge(
+        _state(rogue, enemy),
+        (),
+        feature_id="instinctive_dodge",
+        resource_id="instinctive_dodge_uses",
+        label="Unik instynktowny",
+    )
+
+    assert result.actor_after.resource_pools[0].current == 0
+    assert result.state.turn_action.bonus_action_use == ActionUse.ACTION_USED
+    assert result.active_effects[0].kind == "dodge_until_next_turn"
 
 
 def test_martial_arts_and_flurry_queue_the_correct_unarmed_strikes():

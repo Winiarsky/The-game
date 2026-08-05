@@ -16,11 +16,16 @@ class SpellPreparationTransition:
 class SpellPreparationFlowService:
     """Coordinates a pre-scenario spell selection without knowing character classes."""
 
+    def __init__(self, fixed_deck_actor_ids: tuple[str, ...] = ()) -> None:
+        self.fixed_deck_actor_ids = frozenset(fixed_deck_actor_ids)
+
     def pending_actors(self, actors: tuple[Actor, ...]) -> tuple[Actor, ...]:
         return tuple(
             actor
             for actor in actors
-            if actor.spell_preparation is not None and not actor.spell_preparation.confirmed
+            if str(actor.id) not in self.fixed_deck_actor_ids
+            and actor.spell_preparation is not None
+            and not actor.spell_preparation.confirmed
         )
 
     def confirm(

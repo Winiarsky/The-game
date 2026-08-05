@@ -1,4 +1,15 @@
-from dnd_board_game.actors import Actor, ActorId, Faction
+from dataclasses import replace
+
+from dnd_board_game.actors import (
+    AbilityScores,
+    Actor,
+    ActorId,
+    ActorSenseProfile,
+    CreatureSize,
+    DamageAffinityProfile,
+    Faction,
+    WildShapeState,
+)
 from dnd_board_game.world import (
     DIFFICULT_MOVE_COST_FEET,
     NORMAL_MOVE_COST_FEET,
@@ -35,6 +46,31 @@ def test_difficult_terrain_costs_ten_feet():
     actor = _actor("hero", Coordinate(0, 0))
 
     assert movement_cost(board, actor, [actor], Coordinate(0, 1)) == DIFFICULT_MOVE_COST_FEET
+
+
+def test_giant_eagle_wild_shape_ignores_difficult_terrain_cost():
+    board = BoardState()
+    board.set_terrain(Coordinate(0, 1), DIFFICULT_TERRAIN)
+    actor = _actor("druid", Coordinate(0, 0))
+    actor = replace(
+        actor,
+        wild_shape=WildShapeState(
+            form_id="giant_eagle",
+            form_name="Olbrzymi orzeł",
+            original_ac=actor.ac,
+            original_hp=actor.hp,
+            original_max_hp=actor.max_hp,
+            original_speed_feet=actor.speed_feet,
+            original_ability_scores=AbilityScores(),
+            original_size=CreatureSize.MEDIUM,
+            original_senses=ActorSenseProfile(),
+            original_damage_affinities=DamageAffinityProfile(),
+            original_creature_type="humanoid",
+            remaining_minutes=60,
+        ),
+    )
+
+    assert movement_cost(board, actor, [actor], Coordinate(0, 1)) == NORMAL_MOVE_COST_FEET
 
 
 def test_ally_occupied_tile_costs_like_difficult_terrain():

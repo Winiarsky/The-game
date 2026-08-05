@@ -50,6 +50,7 @@ from dnd_board_game.application import (
     ExplorationSpellCastingFlowService,
     LongCastingFlowService,
     LongCastingTransition,
+    LongRestFlowService,
     NpcGoalExecutionPlan,
     NpcGoalExecutionPlanner,
     PendingAreaSpell,
@@ -92,6 +93,7 @@ from dnd_board_game.application import (
     SpellDispelTransition,
     remove_orphaned_summons,
     short_rest_count,
+    rest_policy_count,
     legal_stabilization_targets,
     resolve_combat_stabilization,
     resolve_encounter_opening,
@@ -120,6 +122,10 @@ from dnd_board_game.application.exploration_action_sources import (
     resource_for_action_source,
     selected_action_source,
 )
+from dnd_board_game.application.exploration_card_flow import (
+    ExplorationCardFlowService,
+    ExplorationCardFlowState,
+)
 from dnd_board_game.actors import (
     AbilityScores,
     Actor,
@@ -147,6 +153,11 @@ from dnd_board_game.actors import (
     spend_actor_resource,
     spell_is_prepared,
 )
+from dnd_board_game.character_creation import PLAYABLE_HERO_IDS
+from dnd_board_game.application.card_reminder_flow import (
+    action_selection_card_reminders,
+    reaction_card_reminder,
+)
 from dnd_board_game.combat import (
     ActorSetupEntry,
     ActionEconomyCost,
@@ -156,7 +167,9 @@ from dnd_board_game.combat import (
     apply_metamagic_to_source,
     attack_action_remaining,
     ActiveCombatEffect,
+    AttackSource,
     AttackKind,
+    AttackSourceType,
     AttackPositioning,
     DamageComponentInput,
     CombatState,
@@ -177,6 +190,7 @@ from dnd_board_game.combat import (
     InitiativeEntry,
     InitiativeOrder,
     HealingSource,
+    HealingSourceType,
     InitiativePrompt,
     ReactionKind,
     ReactionOption,
@@ -258,6 +272,7 @@ from dnd_board_game.combat import (
     resolve_martial_arts_bonus_attack,
     resolve_open_hand_technique,
     resolve_lay_on_hands,
+    resolve_limited_dodge,
     resolve_patient_defense,
     resolve_preserve_life,
     resolve_primeval_awareness,
@@ -280,6 +295,7 @@ from dnd_board_game.combat import (
     attack_sources_with_versatile_variants,
     eligible_two_weapon_bonus_sources,
     is_hidden_from,
+    reveal_all_to_observer,
     hide_eligibility,
     resolve_hide,
     has_condition,
@@ -316,9 +332,25 @@ from dnd_board_game.combat import (
     stow_weapon,
     two_weapon_bonus_attack_source,
     use_turn_action,
+    synchronize_dynamic_flaw_effects,
+    flaw_blocks_concentration_spell,
+    flaw_blocks_equipment_use,
 )
 from dnd_board_game.core.damage_types import DamageType, damage_type_label_pl
+from dnd_board_game.combat.conditions import add_condition
+from dnd_board_game.physical_cards import (
+    CURATED_CARD_OWNERS,
+    CardActionDefinition,
+    CardPhase,
+    CombatCardRoute,
+    DecisionCardActionKind,
+    card_action_definition,
+    validate_card_phase,
+)
 from dnd_board_game.exploration import (
+    ExplorationCardEffectKind,
+    ExplorationPrompt,
+    ExplorationPromptKind,
     advance_exploration_time,
     CheckAggregation,
     CheckParticipants,
@@ -381,6 +413,7 @@ from dnd_board_game.exploration import (
     PendingEncounter,
     PrecombatStealthAttempt,
     ShortRestPolicy,
+    LongRestPolicy,
     SceneSourceMatch,
     SceneSourceCollection,
     TemporaryItem,
@@ -404,7 +437,6 @@ from dnd_board_game.exploration import (
     collect_source,
     challenge_for_zone,
     challenge_state_for,
-    exploration_zone_feedback,
     exploration_visibility,
     fixture_runtime_state,
     fixture_scene_objects,
@@ -455,12 +487,14 @@ from dnd_board_game.exploration import (
     plan_npc_transition,
     resolve_npc_transition_reaction,
     restore_npc_transition_plan,
+    reveal_trap,
     set_npc_interaction_status,
     trap_state_for,
     trap_activates_for_challenge,
     trigger_trap,
     remove_exploration_condition,
     use_temporary_item,
+    exploration_card_handler,
 )
 from dnd_board_game.llm import (
     GmActionFlow,
@@ -612,23 +646,35 @@ EXPLORATION_DECISION_DC_MIN = 5
 EXPLORATION_DECISION_DC_MAX = 25
 EXPLORATION_DECISION_MAX_SITUATIONAL_MODIFIERS = 3
 PACT_WEAPON_FORM_IDS = (
-    "battleaxe", "club", "dagger", "flail", "glaive", "greataxe",
-    "greatclub", "greatsword", "halberd", "handaxe", "javelin",
-    "lance", "light_hammer", "longsword", "mace", "maul",
-    "morningstar", "pike", "quarterstaff", "rapier", "scimitar",
-    "shortsword", "sickle", "spear", "trident", "war_pick",
-    "warhammer", "whip",
+    "longsword",
+    "greataxe",
+    "rapier",
+)
+PHYSICAL_METAMAGIC_ACTION_IDS = frozenset(
+    {
+        "metamagic_careful",
+        "metamagic_distant",
+        "metamagic_empowered",
+        "metamagic_extended",
+        "metamagic_heightened",
+        "metamagic_quickened",
+        "metamagic_twinned",
+    }
 )
 COMBAT_CLASS_FEATURE_ACTION_IDS = frozenset(
     {
         "second_wind",
         "action_surge",
+        "defensive_stance",
+        "instinctive_dodge",
         "rage",
         "reckless_attack",
         "bardic_inspiration",
+        "defensive_stance",
         "lay_on_hands",
         "preserve_life",
         "patient_defense",
+        "instinctive_dodge",
         "step_of_the_wind",
         "font_of_magic",
         "martial_arts_bonus_attack",
@@ -641,6 +687,7 @@ COMBAT_CLASS_FEATURE_ACTION_IDS = frozenset(
         "primeval_awareness",
         "frenzy",
         "pact_weapon",
+        "cunning_action",
     }
 )
 BONUS_ACTION_CLASS_FEATURE_IDS = frozenset(
@@ -1087,6 +1134,8 @@ class BoardInteractionPad:
     target_id: str
     label: str
     description: str = ""
+    enabled: bool = True
+    unavailable_reason: str = ""
 
     def as_payload(self) -> dict[str, object]:
         return {
@@ -1099,6 +1148,8 @@ class BoardInteractionPad:
             "target_id": self.target_id,
             "label": self.label,
             "description": self.description,
+            "enabled": self.enabled,
+            "unavailable_reason": self.unavailable_reason,
         }
 
 
@@ -1133,12 +1184,15 @@ BOARD_INTERACTION_COLORS: tuple[tuple[int, int, int], ...] = (
     LedColor.INTERACTIVE_OBJECT,
     LedColor.MARKER,
     LedColor.MENU_PURPLE,
-    LedColor.MENU_PINK,
+    LedColor.MENU_WHITE,
     LedColor.MOVEMENT_RANGE,
     LedColor.ENEMY_MOVEMENT_DESTINATION,
     LedColor.PLAYER_START_ZONE,
     LedColor.MULTI_OPTION_TILE,
 )
+
+MAX_BOARD_INSTANCE_TILES = 8
+MAX_BOARD_INSTANCE_ACTIONS = MAX_BOARD_INSTANCE_TILES - 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -1335,10 +1389,12 @@ class ExplorationUiSession:
         self.player_reaction_flow = PlayerReactionFlowService()
         self.ritual_casting_flow = RitualCastingFlowService()
         self.exploration_spell_casting_flow = ExplorationSpellCastingFlowService()
-        self.spell_preparation_flow = SpellPreparationFlowService()
+        self.spell_preparation_flow = SpellPreparationFlowService(PLAYABLE_HERO_IDS)
         self.short_rest_flow = ShortRestFlowService()
+        self.long_rest_flow = LongRestFlowService()
         self.scenario_continuation_flow = ScenarioContinuationFlowService()
         self.exploration_flow = ExplorationFlowService()
+        self.exploration_card_flow = ExplorationCardFlowService()
         self.exploration_interaction_flow = ExplorationInteractionFlowService()
         self.exploration_goal_execution = ExplorationGoalExecutionPlanner(
             self.exploration_interaction_flow
@@ -1358,30 +1414,8 @@ class ExplorationUiSession:
                 self.exploration,
                 self.custom_party,
             )
-        long_rest_results = tuple(
-            complete_long_rest(
-                actor,
-                roll_die=lambda die_sides: self.encounter_rng.randint(1, die_sides),
-            )
-            for actor in self.exploration.actors
-            if actor.faction == Faction.ALLY
-        )
-        rested_actors = {result.actor_after.id: result.actor_after for result in long_rest_results}
-        rested_actor_values = tuple(
-            rested_actors.get(actor.id, actor) for actor in self.exploration.actors
-        )
-        long_rest_triggers = resolve_actor_trigger_events(
-            rested_actor_values,
-            (
-                EffectEvent(EffectEventType.LONG_REST_COMPLETED, actor_id=str(actor.id))
-                for actor in rested_actor_values
-                if actor.faction == Faction.ALLY
-            ),
-        )
-        self.exploration = replace(
-            self.exploration,
-            actors=long_rest_triggers.actors,
-        )
+        # Scenario loading preserves the authored or handed-off actor state.
+        # Rest is never an implicit side effect of entering another scenario.
         self.state = ExplorationState(
             self.exploration.zones,
             self.exploration.points,
@@ -1414,6 +1448,8 @@ class ExplorationUiSession:
         self.messages: list[UiMessage] = []
         self.conversation_entries: list[InteractionConversationEntry] = []
         self.pending_state = UiPendingState()
+        self.exploration_card_state = ExplorationCardFlowState()
+        self.pending_continuation_navigator_actor_id: str | None = None
         self.declaration_thread: list[GmDeclarationThreadEntry] = []
         self.active_preparation_effects: list[GmPreparationEffect] = []
         self.selected_lead_actor_id = str(self.exploration.actors[0].id)
@@ -1427,6 +1463,10 @@ class ExplorationUiSession:
         self.board_actor_selection: BoardActorSelection | None = None
         self.board_selected_actor_id = ""
         self.board_selected_actor_role = ""
+        self.board_interaction_slots: dict[
+            str,
+            dict[tuple[str, str], int],
+        ] = {}
         self.board_selection_revision = 0
         self.active_paper_map_id = ""
         self.exploration_setup_flow: ExplorationSetupFlow | None = None
@@ -1440,11 +1480,14 @@ class ExplorationUiSession:
         self.resolved_encounter_trigger_ids: set[str] = set()
         self.selected_attack_source_ids: dict[str, str] = {}
         self.combat_targeting_attack_source_id: str | None = None
+        self.combat_targeting_healing_source_id: str | None = None
         self.combat_targeting_class_feature_action_id: str | None = None
         self.combat_selected_class_feature_target_id: str | None = None
+        self.combat_selected_class_feature_target_ids: tuple[str, ...] = ()
         self.combat_aux_targeting_mode: str | None = None
         self.combat_stabilization_method: str | None = None
         self.combat_stabilization_target_id: str | None = None
+        self.pending_physical_feature_action_id: str | None = None
         self.selected_healing_source_ids: dict[str, str] = {}
         self.active_combat_effects: tuple[ActiveCombatEffect, ...] = ()
         board_defaults = _load_board_defaults()
@@ -1453,7 +1496,7 @@ class ExplorationUiSession:
         self.board_url = board_defaults["board_url"]
         self.board_serial_port = board_defaults["serial_port"]
         self.wled_url = board_defaults["wled_url"]
-        self.scan_timeout_s = 30.0
+        self.scan_timeout_s = 300.0
         self.board_adapter: BoardSessionAdapter | None = None
         self.board_message = (
             "Plansza niepodłączona. Domyślne ustawienia wczytane z board/config.json "
@@ -1477,29 +1520,9 @@ class ExplorationUiSession:
                 "debug_courtyard_entry": self.debug_courtyard_entry,
                 "initial_zone_id": self.state.party_position.zone_id,
                 "initial_resource_ids": list(self.state.inventory_resource_ids),
-                "automatic_long_rest": [
-                    {
-                        "actor_id": str(result.actor_after.id),
-                        "hp_recovered": result.hp_recovered,
-                        "hit_dice_recovered": result.hit_dice_recovered,
-                        "recovered_resource_ids": list(result.recovered_resource_ids),
-                    }
-                    for result in long_rest_results
-                ],
+                "automatic_long_rest": False,
             },
         )
-        self._record(
-            "ui_automatic_long_rest_completed",
-            {
-                "actor_ids": [str(result.actor_after.id) for result in long_rest_results],
-                "next_stage": self.ui_flow_stage.value,
-            },
-        )
-        self._add_message(
-            "Długi odpoczynek ukończony",
-            "Drużyna rozpoczyna scenariusz po long reście. Odnowiono HP, sloty i zasoby; teraz można przygotować czary.",
-        )
-        self._add_trigger_activation_notices(long_rest_triggers.activations)
         if self.debug_courtyard_entry:
             self._prepare_debug_courtyard_entry()
 
@@ -1777,6 +1800,34 @@ class ExplorationUiSession:
     def current_zone(self) -> ExplorationZone:
         return next(zone for zone in self.state.zones if zone.id == self.state.party_position.zone_id)
 
+    def _party_actor_for_option(self, option: ExplorationOption) -> Actor | None:
+        actor_id = option.assigned_actor_id or option.required_party_actor_id
+        if actor_id is None:
+            return None
+        return next(
+            (
+                actor
+                for actor in self.exploration.actors
+                if str(actor.id) == actor_id
+                and actor.faction == Faction.ALLY
+                and not actor.is_defeated()
+            ),
+            None,
+        )
+
+    def _zone_option_is_available(self, option: ExplorationOption) -> bool:
+        return (
+            option.required_party_actor_id is None
+            or self._party_actor_for_option(option) is not None
+        )
+
+    def _available_zone_options(self) -> tuple[ExplorationOption, ...]:
+        return tuple(
+            option
+            for option in self.current_zone.options
+            if self._zone_option_is_available(option)
+        )
+
     @property
     def active_point(self) -> ExplorationPoint | None:
         if not self.active_point_id:
@@ -1822,6 +1873,12 @@ class ExplorationUiSession:
             if self.pending_npc_transition is None:
                 self._refresh_pending_encounter()
         self._expire_invalid_combat_effects()
+        if self.combat_state is not None:
+            self.active_combat_effects = synchronize_dynamic_flaw_effects(
+                self.combat_state.actors,
+                self.combat_state.condition_states,
+                self.active_combat_effects,
+            )
         active_challenge = self.active_challenge if self.ui_flow_stage == UiFlowStage.LOCATION_ACTIVE else None
         current_zone_points = self.current_zone_points() if self.ui_flow_stage == UiFlowStage.LOCATION_ACTIVE else ()
         scene_status = _scene_status_payload(self.state)
@@ -1932,7 +1989,7 @@ class ExplorationUiSession:
                     and travel_payload.get("navigation_dc") is not None
                 )
         collected_source_ids = {item.source_id for item in self.state.source_collections}
-        return UiSessionView(
+        payload = UiSessionView(
             scenario={"id": self.exploration.scenario_id, "name": self.exploration.scenario_name},
             session_log={
                 "session_id": self.observer.session_id,
@@ -1975,8 +2032,9 @@ class ExplorationUiSession:
                             option,
                             self.state.flags,
                         ),
+                        assigned_actor=self._party_actor_for_option(option),
                     )
-                    for option in self.current_zone.options
+                    for option in self._available_zone_options()
                 ],
                 "board_interaction": self._board_interaction_payload(),
                 "continuation": continuation,
@@ -2018,6 +2076,7 @@ class ExplorationUiSession:
             },
             spell_preparation=self._spell_preparation_payload(),
             short_rest=self._short_rest_payload(),
+            long_rest=self._long_rest_payload(),
             current_zone=_zone_payload(self.current_zone, self._scenario_asset_root()),
             available_zones=[_zone_payload(zone, self._scenario_asset_root()) for zone in visible_exploration_zones(self.state.zones) if zone_is_ui_available(self.state, zone)],
             visible_environment=[_environment_entry_payload(entry) for entry in self.exploration.environment if entry.visibility == SetupVisibility.VISIBLE],
@@ -2117,15 +2176,22 @@ class ExplorationUiSession:
                 selected_attack_source_ids=self.selected_attack_source_ids,
                 selected_healing_source_ids=self.selected_healing_source_ids,
                 targeting_attack_source_id=self.combat_targeting_attack_source_id,
+                targeting_healing_source_id=self.combat_targeting_healing_source_id,
                 targeting_class_feature_action_id=(
                     self.combat_targeting_class_feature_action_id
                 ),
                 selected_class_feature_target_id=(
                     self.combat_selected_class_feature_target_id
                 ),
+                selected_class_feature_target_ids=(
+                    self.combat_selected_class_feature_target_ids
+                ),
                 aux_targeting_mode=self.combat_aux_targeting_mode,
                 stabilization_method=self.combat_stabilization_method,
                 stabilization_target_id=self.combat_stabilization_target_id,
+                pending_physical_feature_action_id=(
+                    self.pending_physical_feature_action_id
+                ),
             )
             if self.combat_state
             else None,
@@ -2153,7 +2219,64 @@ class ExplorationUiSession:
                 if self.exploration.scenario_id == "mechanics_playground"
                 else None
             ),
+            exploration_card=self._exploration_card_payload(),
         ).as_payload()
+        combat_payload = payload.get("combat")
+        if isinstance(combat_payload, dict) and self.combat_state is not None:
+            combat_payload["card_reminders"] = self._combat_card_reminders_payload()
+        return payload
+
+    def _combat_card_reminders_payload(self) -> list[dict[str, str]]:
+        """List only cards that the scanner can legally accept at this checkpoint."""
+
+        if self.combat_state is None or self.combat_state.status != CombatStatus.ACTIVE:
+            return []
+        actors_by_id = {str(actor.id): actor for actor in self.combat_state.actors}
+        reminders = []
+        window = self.pending_reaction_window
+        if window is not None:
+            option = window.current_option
+            owner = actors_by_id.get(option.reactor_actor_id)
+            if owner is not None:
+                reminder = reaction_card_reminder(
+                    source_id=option.effect_id,
+                    owner_actor_id=str(owner.id),
+                    owner_actor_name=owner.name,
+                    trigger_event=option.trigger_event,
+                    label=option.label,
+                )
+                if reminder is not None:
+                    reminders.append(reminder)
+
+        actor = combat_current_actor(self.combat_state)
+        if actor.faction == Faction.ALLY and not actor.is_defeated():
+            options = self._combat_context_options(actor, actor.position)
+            available_action_ids: set[str] = set()
+            labels_by_action_id: dict[str, str] = {}
+            for option in options:
+                action_id = option.source_id or option.action_id
+                if action_id is None or option.provider not in {
+                    "attack_source",
+                    "healing_source",
+                    "combat_action",
+                    "class_feature",
+                }:
+                    continue
+                available_action_ids.add(action_id)
+                option_label = option.label.rsplit(": ", 1)[-1].strip()
+                labels_by_action_id.setdefault(
+                    action_id,
+                    option_label or player_label(action_id),
+                )
+            reminders.extend(
+                action_selection_card_reminders(
+                    owner_actor_id=str(actor.id),
+                    owner_actor_name=actor.name,
+                    available_action_ids=available_action_ids,
+                    labels_by_action_id=labels_by_action_id,
+                )
+            )
+        return [reminder.as_payload() for reminder in reminders]
 
     def _pending_payload(self) -> dict[str, object] | None:
         if self.pending is None:
@@ -2475,11 +2598,13 @@ class ExplorationUiSession:
         return self.state_payload()
 
     def _snapshot_blocker(self) -> str | None:
+        if self.exploration_card_state.pending is not None:
+            return "Najpierw zaakceptuj albo odrzuć zeskanowaną kartę eksploracji."
         pending_fields = tuple(
             item.name
             for item in fields(self.pending_state)
             if item.name not in {"encounter", "npc_transition"}
-            and getattr(self.pending_state, item.name) is not None
+            and getattr(self.pending_state, item.name) not in (None, "")
         )
         if pending_fields:
             return "Najpierw dokończ albo anuluj rozpoczęty wybór, rzut lub odpoczynek."
@@ -2620,6 +2745,860 @@ class ExplorationUiSession:
         self._sync_board_leds()
         return self.state_payload()
 
+    def declare_spell_preparation_card(self, spell_id: str) -> dict[str, object]:
+        """Validate one physical spell card for the active preparation step."""
+
+        if self.ui_flow_stage != UiFlowStage.SPELL_PREPARATION:
+            raise ValueError("Przygotowanie czarów nie jest teraz aktywne.")
+        pending = self.spell_preparation_flow.pending_actors(self.exploration.actors)
+        if not pending:
+            raise ValueError("Wszystkie postacie przygotowały już czary.")
+        actor = pending[0]
+        profile = actor.spell_preparation
+        if profile is None:
+            raise ValueError(f"{actor.name} nie przygotowuje czarów.")
+        spell = next(
+            (
+                candidate
+                for candidate in profile.available_spells
+                if candidate.id == spell_id
+            ),
+            None,
+        )
+        if spell is None:
+            raise ValueError(
+                f"Karta tego czaru nie należy do listy przygotowań postaci {actor.name}."
+            )
+        if spell.id in profile.always_prepared_spell_ids:
+            raise ValueError(
+                f"{spell.label} jest zawsze przygotowany i nie zajmuje miejsca w limicie."
+            )
+        self._record(
+            "ui_spell_preparation_card_declared",
+            {
+                "actor_id": str(actor.id),
+                "spell_id": spell.id,
+            },
+        )
+        return {
+            "actor_id": str(actor.id),
+            "actor_name": actor.name,
+            "spell_id": spell.id,
+            "spell_label": spell.label,
+            "spell_level": spell.level,
+            "preparation_limit": profile.preparation_limit,
+        }
+
+    def _active_exploration_prompt(self) -> ExplorationPrompt:
+        """Project the current UI wait state into the shared card prompt contract."""
+
+        actor_ids = tuple(
+            str(actor.id)
+            for actor in self.exploration.actors
+            if actor.faction == Faction.ALLY and not actor.is_defeated()
+        )
+        zone_id = self.current_zone.id
+        instance_id = f"{self.exploration.scenario_id}:{zone_id}"
+        interaction_id = self._exploration_card_interaction_id()
+        if (
+            self.ui_flow_stage == UiFlowStage.SHORT_REST
+            and self.pending_short_rest is not None
+            and not self.pending_short_rest.completed
+        ):
+            return ExplorationPrompt(
+                id=f"{instance_id}:short_rest:{self.state.elapsed_minutes}",
+                kind=ExplorationPromptKind.REST,
+                tags=frozenset({"rest", "short_rest", "safe_break"}),
+                eligible_actor_ids=actor_ids,
+                instance_id=instance_id,
+                handler_ids=frozenset(self.current_zone.exploration_card_ids),
+            )
+        if self.pending is not None and self.pending.stage == PendingStage.ROLL:
+            plan = self.pending.check_plan
+            tags = {"check", "before_roll"}
+            if plan is not None:
+                tags.add(plan.ability)
+                if plan.skill:
+                    tags.add(plan.skill)
+                tags.update(plan.context_tags)
+            return ExplorationPrompt(
+                id=(
+                    f"{instance_id}:{self.pending.kind.value}:"
+                    f"{interaction_id or 'check'}:roll"
+                ),
+                kind=ExplorationPromptKind.BEFORE_ROLL,
+                tags=frozenset(tags),
+                eligible_actor_ids=actor_ids,
+                instance_id=instance_id,
+                interaction_id=interaction_id,
+                handler_ids=frozenset(self.current_zone.exploration_card_ids),
+            )
+        if (
+            self.exploration.continuation is not None
+            and self.pending_continuation_navigator_actor_id is not None
+            and self.ui_flow_stage == UiFlowStage.LOCATION_ACTIVE
+        ):
+            return ExplorationPrompt(
+                id=f"{instance_id}:scenario_continuation:before_roll",
+                kind=ExplorationPromptKind.BEFORE_ROLL,
+                tags=frozenset(
+                    {
+                        "check",
+                        "before_roll",
+                        "travel",
+                        "navigation",
+                        "survival",
+                        "route",
+                    }
+                ),
+                eligible_actor_ids=actor_ids,
+                instance_id=instance_id,
+                interaction_id="scenario_continuation",
+                handler_ids=frozenset(self.current_zone.exploration_card_ids),
+            )
+        if self.pending is not None or self.active_point is not None:
+            tags = {"interaction"}
+            interaction_id = interaction_id or "pending"
+            if self.pending is not None:
+                tags.add(self.pending.kind.value)
+                tags.update(
+                    {
+                        PendingKind.NPC: {"conversation", "npc", "negotiation"},
+                        PendingKind.FIXTURE: {"object", "fixture", "mechanism", "lock", "security", "closed"},
+                        PendingKind.TRAP: {"trap", "hazard", "mechanism"},
+                        PendingKind.CHALLENGE: {"tactical", "route", "hazard", "location"},
+                        PendingKind.ZONE_OPTION: {"location", "route", "travel"},
+                        PendingKind.OBSERVATION: {"search", "object", "location"},
+                    }.get(self.pending.kind, set())
+                )
+            if self.active_point is not None:
+                tags.update({"object", "target"})
+                if self.active_point.npc_interaction is not None:
+                    tags.update({"conversation", "npc", "negotiation"})
+                tags.update(self.active_point.divination_tags)
+            return ExplorationPrompt(
+                id=f"{instance_id}:{interaction_id}:decision",
+                kind=ExplorationPromptKind.INTERACTION,
+                tags=frozenset(tags),
+                eligible_actor_ids=actor_ids,
+                instance_id=instance_id,
+                interaction_id=interaction_id,
+                handler_ids=frozenset(self.current_zone.exploration_card_ids),
+            )
+        if self.ui_flow_stage == UiFlowStage.LOCATION_ACTIVE:
+            return ExplorationPrompt(
+                id=f"{instance_id}:free:{len(self.state.flags.values)}",
+                kind=ExplorationPromptKind.FREE_ACTION,
+                tags=frozenset(
+                    {
+                        "free_action", "location", "route", "travel", "search",
+                        "target", "object", "trap", "hazard", "tactical",
+                    }
+                ),
+                eligible_actor_ids=actor_ids,
+                instance_id=instance_id,
+                handler_ids=frozenset(self.current_zone.exploration_card_ids),
+            )
+        raise ValueError("Aplikacja nie oczekuje teraz na decyzję eksploracyjną.")
+
+    def _exploration_card_interaction_id(self) -> str | None:
+        if self.board_selected_goal_id:
+            return self.board_selected_goal_id
+        if self.pending is not None:
+            if self.pending.option is not None:
+                return self.pending.option.id
+            if self.pending.zone_option is not None:
+                return self.pending.zone_option.id
+            if self.pending.point is not None:
+                return self.pending.point.id
+        return self.active_point_id or None
+
+    def _exploration_card_actor(
+        self,
+        action_id: str,
+        owner_actor_id: str | None,
+    ) -> Actor:
+        alive = tuple(
+            actor
+            for actor in self.exploration.actors
+            if actor.faction == Faction.ALLY and not actor.is_defeated()
+        )
+        allowed_ids = CURATED_CARD_OWNERS.get(action_id, ())
+        if owner_actor_id is not None:
+            actor = next(
+                (candidate for candidate in alive if str(candidate.id) == owner_actor_id),
+                None,
+            )
+            if actor is None:
+                raise ValueError("Właściciel tej karty nie uczestniczy w scenie.")
+            if allowed_ids and owner_actor_id not in allowed_ids:
+                raise ValueError(
+                    "Ta karta nie należy do wskazanej postaci "
+                    f"({action_id}: {owner_actor_id}; dozwoleni: "
+                    f"{', '.join(allowed_ids)})."
+                )
+            return actor
+        candidates = tuple(
+            actor
+            for actor in alive
+            if not allowed_ids or str(actor.id) in allowed_ids
+        )
+        if len(candidates) != 1:
+            raise ValueError(
+                "Ta karta ma kilku możliwych właścicieli. Użyj karty z osobistym QR v2."
+            )
+        return candidates[0]
+
+    def _declare_exploration_card(
+        self,
+        definition: CardActionDefinition,
+        *,
+        owner_actor_id: str | None,
+    ) -> dict[str, object]:
+        handler = exploration_card_handler(definition.action_id)
+        if handler is None:
+            raise ValueError(
+                "Ta karta eksploracyjna nie reaguje na żaden obsługiwany prompt."
+            )
+        if definition.action_id == "bardic_inspiration" and owner_actor_id == "lorian":
+            flaw_key = f"flaw_lorian_approval_block:{self.active_point_id or 'scene'}"
+            if scene_flag(self.state.flags, flaw_key, False):
+                raise ValueError(
+                    "Lorian stracił pewność siebie po porażce w tej rozmowie. "
+                    "Najpierw potrzebuje Pomocy sojusznika albo szczerej próby naprawy relacji."
+                )
+        prompt = self._active_exploration_prompt()
+        actor = self._exploration_card_actor(handler.card_action_id, owner_actor_id)
+        persisted_attempts = scene_flag(
+            self.state.flags,
+            "exploration_card_attempt_keys",
+            (),
+        )
+        if not isinstance(persisted_attempts, (list, tuple)):
+            persisted_attempts = ()
+        self.exploration_card_state = replace(
+            self.exploration_card_state,
+            spent_attempt_keys=frozenset(str(key) for key in persisted_attempts),
+        )
+        transition = self.exploration_card_flow.declare(
+            state=self.exploration_card_state,
+            handler=handler,
+            prompt=prompt,
+            actor_id=str(actor.id),
+        )
+        self.exploration_card_state = transition.state
+        self.board_message = (
+            f"{handler.player_label or player_label(handler.card_action_id)} — "
+            "zeskanuj AKCEPTUJ, aby uruchomić efekt, albo ODRZUĆ, aby wrócić."
+        )
+        self._record(
+            "ui_exploration_card_declared",
+            {
+                "actor_id": str(actor.id),
+                "card_action_id": handler.card_action_id,
+                "prompt_id": prompt.id,
+                "prompt_kind": prompt.kind.value,
+            },
+        )
+        return self.state_payload()
+
+    def resolve_exploration_card(self, *, accept: bool) -> dict[str, object]:
+        pending = self.exploration_card_state.pending
+        if pending is None:
+            raise ValueError("Nie ma karty eksploracji oczekującej na decyzję.")
+        if not accept:
+            transition = self.exploration_card_flow.decline(self.exploration_card_state)
+            self.exploration_card_state = transition.state
+            self.board_message = "Odrzucono kartę eksploracji. Wrócono do poprzedniej decyzji."
+            self._record(
+                "ui_exploration_card_declined",
+                {"card_action_id": pending.card_action_id, "prompt_id": pending.prompt_id},
+            )
+            return self.state_payload()
+
+        actor = next(
+            candidate
+            for candidate in self.exploration.actors
+            if str(candidate.id) == pending.actor_id
+        )
+        resource_id = {
+            "guard_duty": "guard_duty_uses",
+            "bardic_inspiration": "bardic_inspiration_uses",
+            "tracking": "instinct",
+            "find_traps": "instinct" if pending.actor_id == "erynd" else "",
+            "locate_object": "instinct" if pending.actor_id == "erynd" else "",
+            "pass_without_trace": "instinct",
+        }.get(pending.card_action_id, "")
+        if resource_id:
+            actor = spend_actor_resource(actor, resource_id).actor_after
+            self.exploration = self._replace_exploration_actor(actor)
+        spell = next(
+            (item for item in actor.spells if item.id == pending.card_action_id),
+            None,
+        )
+        if (
+            spell is not None
+            and spell.level > 0
+            and pending.card_action_id not in {"detect_magic", "identify"}
+        ):
+            spell_use = consume_spell_resource(
+                actor,
+                spell.level,
+                spell_id=spell.id,
+                cast_level=spell.level,
+            )
+            actor = spell_use.actor_after
+            self.exploration = self._replace_exploration_actor(actor)
+
+        if pending.card_action_id == "guidance":
+            self._use_guidance_physical_card()
+        elif pending.card_action_id in {"guard_duty", "alarm"}:
+            self.state = replace(
+                self.state,
+                flags=set_scene_flag(self.state.flags, "short_rest_alarm_active", True),
+            )
+            self.board_message = (
+                "Warta zabezpiecza odpoczynek. Drużyna nie będzie Zaskoczona "
+                "przez napad podczas tego odpoczynku."
+            )
+        elif pending.card_action_id == "find_traps":
+            revealed = tuple(
+                trap
+                for trap in self.state.traps
+                if trap.zone_id == self.current_zone.id
+            )
+            for trap in revealed:
+                self.state = reveal_trap(self.state, trap.id)
+            self.board_message = (
+                f"Wykrycie pułapek ujawnia zagrożenia w tej lokacji: {len(revealed)}."
+            )
+        else:
+            result_flag = pending.handler.result_flag
+            if result_flag:
+                self.state = replace(
+                    self.state,
+                    flags=set_scene_flag(self.state.flags, result_flag, True),
+                )
+            self.board_message = (
+                f"{pending.handler.player_label or player_label(pending.card_action_id)}: "
+                "efekt został przekazany do aktywnej interakcji."
+            )
+        self._apply_authored_exploration_card_reaction(pending)
+        transition = self.exploration_card_flow.accept(self.exploration_card_state)
+        self.exploration_card_state = transition.state
+        self.state = replace(
+            self.state,
+            flags=set_scene_flag(
+                self.state.flags,
+                "exploration_card_attempt_keys",
+                tuple(sorted(self.exploration_card_state.spent_attempt_keys)),
+            ),
+        )
+        self._record(
+            "ui_exploration_card_accepted",
+            {
+                "actor_id": pending.actor_id,
+                "card_action_id": pending.card_action_id,
+                "prompt_id": pending.prompt_id,
+                "attempt_key": pending.attempt_key,
+            },
+        )
+        return self.state_payload()
+
+    def _apply_authored_exploration_card_reaction(self, pending) -> None:
+        prompt = self._active_exploration_prompt()
+        reaction = next(
+            (
+                item
+                for item in self.current_zone.exploration_card_reactions
+                if item.matches(
+                    card_action_id=pending.card_action_id,
+                    interaction_id=prompt.interaction_id,
+                    prompt_kind=prompt.kind.value,
+                    tags=prompt.tags,
+                )
+            ),
+            None,
+        )
+        if reaction is None:
+            return
+        for raw_effect in reaction.effects:
+            result = apply_exploration_effect(self.state, raw_effect)
+            self.state = result.state
+            self._record_effect_result(
+                result,
+                source=f"exploration_card_reaction:{reaction.id}",
+                raw_effect=raw_effect,
+            )
+        if reaction.check_modifier or reaction.roll_mode != RollMode.NORMAL:
+            kind = (
+                "exploration_card_check_advantage"
+                if reaction.roll_mode == RollMode.ADVANTAGE
+                else "exploration_card_check_disadvantage"
+                if reaction.roll_mode == RollMode.DISADVANTAGE
+                else "exploration_card_check_modifier"
+            )
+            effect = ActiveCombatEffect(
+                id=f"{kind}:{reaction.id}:{pending.actor_id}",
+                actor_id=pending.actor_id,
+                kind=kind,
+                label=reaction.message or pending.handler.player_label,
+                object_id=f"exploration_card_reaction:{reaction.id}",
+                value=reaction.check_modifier,
+                source=EffectSource(
+                    EffectSourceType.SCENE,
+                    reaction.id,
+                    reaction.message or pending.handler.player_label,
+                ),
+                duration=EffectDuration.UNTIL_SCENARIO_END,
+                stacking_key=f"exploration_card_reaction:{reaction.id}:{pending.actor_id}",
+            )
+            self.active_combat_effects = apply_active_effect(
+                self.active_combat_effects,
+                effect,
+            ).active_effects
+        if reaction.redirect_option_id and self.pending is not None:
+            if self.pending.challenge is not None:
+                option = next(
+                    (
+                        item
+                        for item in self.pending.challenge.options
+                        if item.id == reaction.redirect_option_id
+                    ),
+                    None,
+                )
+                if option is not None:
+                    self.pending = replace(self.pending, option=option)
+            self.state = replace(
+                self.state,
+                flags=set_scene_flag(
+                    self.state.flags,
+                    f"exploration_card_redirect:{reaction.redirect_option_id}",
+                    True,
+                ),
+            )
+        if reaction.message:
+            self.board_message = reaction.message
+            self._add_message("Karta eksploracji", reaction.message)
+        self._record(
+            "ui_exploration_card_reaction_applied",
+            {
+                "reaction_id": reaction.id,
+                "card_action_id": pending.card_action_id,
+                "interaction_id": prompt.interaction_id,
+                "redirect_option_id": reaction.redirect_option_id,
+                "check_modifier": reaction.check_modifier,
+                "roll_mode": reaction.roll_mode.value,
+            },
+        )
+
+    def _exploration_card_payload(self) -> dict[str, object]:
+        return {
+            "enabled": False,
+            "prompt": None,
+            "pending": None,
+            "spent_attempt_keys": [],
+            "message": (
+                "Karty eksploracji są wyłączone. Specjalne możliwości postaci "
+                "pojawiają się jako autorskie kafelki interakcji."
+            ),
+        }
+
+    def use_physical_action_card(
+        self,
+        action_kind: DecisionCardActionKind,
+        source_id: str,
+        owner_actor_id: str | None = None,
+    ) -> dict[str, object]:
+        """Route a scanned action card through the same domain flows as the UI."""
+
+        definition = card_action_definition(source_id, qr_kind=action_kind)
+        phase = (
+            CardPhase.COMBAT
+            if self.combat_state is not None
+            and self.combat_state.status == CombatStatus.ACTIVE
+            else CardPhase.EXPLORATION
+        )
+        validate_card_phase(definition, phase)
+
+        if phase is CardPhase.EXPLORATION:
+            raise ValueError(
+                "Karty eksploracji są obecnie wyłączone. Wybierz specjalny "
+                "kafelek postaci dostępny w tej interakcji."
+            )
+
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        if owner_actor_id is not None:
+            current_actor_id = str(combat_current_actor(self.combat_state).id)
+            window = self.pending_reaction_window
+            reaction_owner_is_legal = bool(
+                window is not None
+                and window.current_option.reactor_actor_id == owner_actor_id
+                and window.current_option.effect_id
+                in {definition.source_id, definition.action_id}
+            )
+            if owner_actor_id != current_actor_id and not reaction_owner_is_legal:
+                raise ValueError(
+                    "W walce kartę może zagrać wyłącznie aktualnie aktywna "
+                    "postać albo bohater wskazany przez otwarte okno reakcji."
+                )
+        if action_kind is DecisionCardActionKind.SPELL:
+            caster = combat_current_actor(self.combat_state)
+            spell = next(
+                (item for item in caster.spells if item.id == definition.action_id),
+                None,
+            )
+            if (
+                spell is not None
+                and getattr(spell, "concentration", False)
+                and flaw_blocks_concentration_spell(caster, self.active_combat_effects)
+            ):
+                raise ValueError(
+                    "Echo magicznego wycieku blokuje czary z Koncentracją do końca tury Nimry."
+                )
+        if action_kind is DecisionCardActionKind.FEATURE:
+            if definition.action_id in {
+                "bardic_inspiration",
+                "lay_on_hands",
+                "preserve_life",
+            }:
+                return self.start_combat_class_feature_targeting(definition.action_id)
+            if definition.action_id == "cutting_words":
+                window = self.pending_reaction_window
+                if (
+                    window is None
+                    or window.current_option.kind != ReactionKind.CUTTING_WORDS
+                ):
+                    raise ValueError(
+                        "Ciętą ripostę można zagrać dopiero po pokazaniu rzutu "
+                        "ataku albo obrażeń przeciwnika."
+                    )
+                self.board_message = (
+                    "Cięta riposta zadeklarowana. Wpisz wynik kości Inspiracji "
+                    "w otwartym oknie reakcji."
+                )
+                return self.state_payload()
+            if definition.action_id in PHYSICAL_METAMAGIC_ACTION_IDS:
+                return self.apply_physical_metamagic(definition.action_id)
+            if definition.action_id in {
+                "second_wind",
+                "sacred_weapon",
+                "turn_the_unholy",
+                "turn_undead",
+                "divine_smite",
+                "deflect_missiles",
+                "wild_shape",
+                "cunning_action",
+                "pact_weapon",
+            }:
+                if (
+                    definition.action_id == "wild_shape"
+                    and combat_current_actor(self.combat_state).wild_shape is not None
+                ):
+                    return self.use_combat_class_feature("wild_shape")
+                return self._queue_physical_feature_prompt(definition.action_id)
+            return self.use_combat_class_feature(definition.action_id)
+        if action_kind is DecisionCardActionKind.SPELL:
+            if definition.combat_route is not None:
+                return self._route_combat_spell_card(definition)
+            raise ValueError(
+                "Ten czar bojowy jest skatalogowany, ale jego skan nie został "
+                "jeszcze podłączony do dedykowanego przepływu."
+            )
+        raise ValueError("Ten rodzaj karty nie jest jeszcze obsługiwany przez skaner.")
+
+    def _route_combat_spell_card(
+        self,
+        definition: CardActionDefinition,
+    ) -> dict[str, object]:
+        """Enter an existing combat flow without duplicating spell mechanics."""
+
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        actor = combat_current_actor(self.combat_state)
+        route = definition.combat_route
+
+        if route is CombatCardRoute.ATTACK_SOURCE:
+            if not any(
+                source.id == definition.action_id
+                for source in self._attack_sources_for_actor(actor)
+            ):
+                raise ValueError(
+                    f"{actor.name} nie ma teraz dostępnego czaru {definition.source_id}."
+                )
+            return self.select_combat_attack_source(definition.action_id)
+
+        if route is CombatCardRoute.HEALING_SOURCE:
+            if not any(
+                source.id == definition.action_id
+                for source in self._healing_sources_for_actor(actor)
+            ):
+                raise ValueError(
+                    f"{actor.name} nie ma teraz dostępnego czaru {definition.source_id}."
+                )
+            return self.select_combat_healing_source(definition.action_id)
+
+        if route is CombatCardRoute.COMBAT_ACTION:
+            if definition.action_id == "spare_the_dying":
+                return self.start_combat_stabilization_targeting(
+                    StabilizationMethod.SPARE_THE_DYING.value,
+                )
+            if (
+                definition.action_id == "goodberry"
+                and (pool := actor_resource_pool(actor, "goodberry_charges"))
+                is not None
+                and pool.current > 0
+            ):
+                return self.select_combat_healing_source("goodberry_use")
+            if definition.action_id in {"moonbeam", "flaming_sphere"}:
+                movable_zone = next(
+                    (
+                        effect
+                        for effect in self.active_combat_effects
+                        if effect.source_actor_id == str(actor.id)
+                        and effect.object_id
+                        == f"combat_action:{definition.action_id}"
+                        and effect.kind.startswith("ongoing_damage_zone:")
+                    ),
+                    None,
+                )
+                if movable_zone is not None:
+                    return self.start_moonbeam_move(movable_zone.id)
+            action = self._combat_action_for_physical_card(
+                actor,
+                definition.action_id,
+            )
+            if action is None:
+                raise ValueError(
+                    f"{actor.name} nie ma teraz dostępnego czaru {definition.source_id}."
+                )
+            cast_level = action.spell_level if action.spell_level > 0 else None
+            self._start_combat_action(action, cast_level=cast_level)
+            pending = self.pending_concentration_action
+            actor_id = str(actor.id)
+            if (
+                (
+                    definition.targeting.startswith("self")
+                    or definition.action_id in {"find_traps", "goodberry"}
+                )
+                and pending is not None
+                and actor_id in pending.target_ids
+                and actor_id not in pending.selected_target_ids
+            ):
+                self.pending_concentration_action = (
+                    self.player_combat_resource_flow.toggle_concentration_target(
+                        pending,
+                        actor_id,
+                    )
+                )
+                self.board_message = (
+                    f"{action.label}: celem jest {actor.name}. "
+                    "Potwierdź użycie karty w panelu."
+                )
+                self._sync_board_leds()
+            return self.state_payload()
+
+        if route is CombatCardRoute.REACTION:
+            window = self.pending_reaction_window
+            if (
+                definition.action_id == "shield"
+                and window is not None
+                and window.current_option.kind == ReactionKind.DEFENSIVE_SPELL
+                and window.current_option.effect_id == definition.action_id
+            ):
+                return self.cast_defensive_spell_reaction()
+            if (
+                definition.action_id == "hellish_rebuke"
+                and window is not None
+                and window.current_option.kind == ReactionKind.RETALIATION_SPELL
+                and window.current_option.effect_id == definition.action_id
+            ):
+                return self.cast_retaliation_spell_reaction()
+            raise ValueError(
+                "Tę kartę można zagrać wyłącznie w aktywnym oknie właściwej reakcji."
+            )
+
+        raise ValueError("Ta karta nie ma obsługiwanego wejścia do walki.")
+
+    def _combat_action_for_physical_card(
+        self,
+        actor: Actor,
+        action_id: str,
+    ) -> Any | None:
+        encounter = self._active_encounter()
+        if encounter is None:
+            raise ValueError("Brak danych encountera dla aktywnej walki.")
+        actions = encounter.combat_actions_by_actor.get(actor.id, ())
+        return next(
+            (
+                action
+                for action in actions
+                if action.id == action_id or action.cast_flag == f"cast_{action_id}"
+            ),
+            None,
+        )
+
+    def _start_combat_action(
+        self,
+        action: Any,
+        *,
+        cast_level: int | None,
+    ) -> dict[str, object]:
+        """Shared execution router used by the screen menu and physical cards."""
+
+        if action.source_item_id and self.combat_state is not None:
+            actor = combat_current_actor(self.combat_state)
+            if flaw_blocks_equipment_use(actor, self.active_combat_effects):
+                raise ValueError(
+                    "Skaza Brakki: podczas Szału nie może korzystać z mikstur, zwojów ani aktywnych właściwości ekwipunku."
+                )
+
+        if action.action_type == "strength_potion":
+            return self.use_combat_strength_potion(action.id)
+        if action.action_type == "multi_target_damage":
+            return self.start_multi_target_damage_spell(
+                action.id,
+                cast_level=cast_level,
+            )
+        if action.action_type == "assisted_spell":
+            return self.use_assisted_combat_spell(
+                action.id,
+                cast_level=cast_level,
+            )
+        if action.action_type in {
+            "concentration_attack_bonus",
+            "targeted_status",
+        }:
+            return self.start_combat_concentration_action(
+                action.id,
+                cast_level=cast_level,
+            )
+        if action.action_type == "long_cast_effect":
+            return self.start_long_cast(action.id, cast_level=cast_level)
+        if action.action_type == "summon":
+            return self.start_summon(action.id, cast_level=cast_level)
+        if action.action_type == "spell_movement":
+            return self.start_magic_movement(action.id, cast_level=cast_level)
+        if action.action_type == "spell_debuff":
+            return self.start_spell_debuff(action.id, cast_level=cast_level)
+        if action.action_type == "spell_dispel":
+            return self.start_spell_dispel(action.id, cast_level=cast_level)
+        raise ValueError("Ten typ akcji nie ma jeszcze wykonawcy w menu walki.")
+
+    def _use_guidance_physical_card(self) -> dict[str, object]:
+        pending = self.pending
+        if (
+            pending is None
+            or pending.stage != PendingStage.ROLL
+            or pending.check_plan is None
+        ):
+            raise ValueError("Wskazówki można zagrać bezpośrednio przed testem k20.")
+        target_id = str(pending.check_plan.lead_actor_id or self.selected_lead_actor_id)
+        target = next(
+            (
+                actor
+                for actor in self.exploration.actors
+                if str(actor.id) == target_id and actor.faction == Faction.ALLY
+            ),
+            None,
+        )
+        if target is None:
+            raise ValueError("Nie znaleziono prowadzącego oczekującego testu.")
+        casters = tuple(
+            actor
+            for actor in self.exploration.actors
+            if actor.faction == Faction.ALLY
+            and not actor.is_defeated()
+            and (
+                (validation := actor_spell_cast_validation(actor, "guidance"))
+                is not None
+                and validation.valid
+            )
+        )
+        if not casters:
+            raise ValueError("Żaden bohater nie może teraz rzucić Wskazówek.")
+        caster = next(
+            (
+                actor
+                for actor in casters
+                if str(actor.id) == self.selected_lead_actor_id
+            ),
+            casters[0],
+        )
+        if grid_distance_feet(caster.position, target.position) > 5:
+            raise ValueError("Cel Wskazówek musi znajdować się w zasięgu dotyku.")
+        effect = ActiveCombatEffect(
+            id=f"guidance:{caster.id}:{target.id}:{uuid.uuid4().hex[:8]}",
+            actor_id=str(target.id),
+            kind="guidance_roll_bonus",
+            label="Wskazówki",
+            object_id="spell:guidance",
+            value=4,
+            source_actor_id=str(caster.id),
+            source=EffectSource(EffectSourceType.SPELL, "guidance", "Wskazówki"),
+            stacking_key=f"guidance_roll_bonus:{target.id}",
+        )
+        self.active_combat_effects = apply_active_effect(
+            self.active_combat_effects,
+            effect,
+        ).active_effects
+        self.board_message = (
+            f"{target.name} ma Wskazówki k4. Przy teście wpisz 0, aby zachować "
+            "efekt, albo wynik 1–4, aby go zużyć."
+        )
+        self._record(
+            "ui_physical_guidance_applied",
+            {"caster_id": str(caster.id), "target_id": str(target.id)},
+        )
+        return self.state_payload()
+
+    def _use_alarm_physical_card(self) -> dict[str, object]:
+        pending = self.pending_short_rest
+        if (
+            self.ui_flow_stage != UiFlowStage.SHORT_REST
+            or pending is None
+            or pending.completed
+        ):
+            raise ValueError("Alarm można zagrać w podglądzie krótkiego odpoczynku.")
+        casters = []
+        for actor in self.exploration.actors:
+            if actor.faction != Faction.ALLY or actor.is_defeated():
+                continue
+            validation = actor_spell_cast_validation(actor, "alarm", cast_level=1)
+            if validation is not None and validation.valid:
+                casters.append(actor)
+        if not casters:
+            raise ValueError("Żaden bohater nie może teraz rzucić Alarmu.")
+        caster = next(
+            (
+                actor
+                for actor in casters
+                if str(actor.id) == self.selected_lead_actor_id
+            ),
+            casters[0],
+        )
+        spell_use = consume_spell_resource(
+            caster,
+            1,
+            spell_id="alarm",
+            cast_level=1,
+        )
+        self.exploration = self._replace_exploration_actor(spell_use.actor_after)
+        self.state = replace(
+            self.state,
+            flags=set_scene_flag(self.state.flags, "short_rest_alarm_active", True),
+        )
+        self.board_message = (
+            f"{caster.name} zabezpiecza odpoczynek Alarmem. Jeśli dojdzie do "
+            "napadu, drużyna nie otrzyma kary za zaskoczenie."
+        )
+        self._record(
+            "ui_physical_alarm_armed",
+            {"caster_id": str(caster.id), "spell_level": 1},
+        )
+        return self.state_payload()
+
     def start_short_rest(self) -> dict[str, object]:
         if self.ui_flow_stage != UiFlowStage.LOCATION_ACTIVE:
             raise ValueError("Krótki odpoczynek można rozpocząć tylko podczas eksploracji.")
@@ -2643,6 +3622,55 @@ class ExplorationUiSession:
                 "safety": pending.policy.safety.value,
             },
         )
+        return self.state_payload()
+
+    def complete_long_rest(self) -> dict[str, object]:
+        """Resolve a long rest only when the active zone explicitly offers it."""
+        if self.ui_flow_stage != UiFlowStage.LOCATION_ACTIVE:
+            raise ValueError("Długi odpoczynek można rozpocząć tylko podczas eksploracji.")
+        if self.pending is not None or self.active_point is not None:
+            raise ValueError("Najpierw zakończ aktywną interakcję.")
+        self._refresh_pending_encounter()
+        transition = self.long_rest_flow.complete(
+            state=self.state,
+            zone=self.current_zone,
+            actors=self.exploration.actors,
+            encounter_pending=self.pending_encounter is not None,
+            active_effects=self.active_combat_effects,
+            roll_die=lambda die_sides: self.encounter_rng.randint(1, die_sides),
+        )
+        self.state = clear_exploration_hidden(transition.state)
+        self.exploration = replace(self.exploration, actors=transition.actors)
+        self.active_combat_effects = transition.active_effects
+        self._advance_party_lights(transition.policy.duration_minutes)
+        self._add_trigger_activation_notices(transition.trigger_activations)
+        self._add_expired_magic_effect_notices(transition.expired_magic_effects)
+        self._add_expired_condition_notices(
+            transition.expired_conditions,
+            prefix="Długi odpoczynek kończy stan",
+        )
+        self._add_clock_event_notices(transition.triggered_clock_events)
+        for effect, raw_effect in zip(
+            transition.effects,
+            transition.policy.completion_effects,
+            strict=True,
+        ):
+            self._record_effect_result(effect, source="long_rest_completion", raw_effect=raw_effect)
+        self.board_message = "Drużyna kończy długi odpoczynek. PW, komórki i zasoby zostały odnowione."
+        self._add_message("Długi odpoczynek", self.board_message)
+        self._record(
+            "ui_long_rest_completed",
+            {
+                "policy_id": transition.policy.id,
+                "zone_id": self.current_zone.id,
+                "duration_minutes": transition.policy.duration_minutes,
+                "elapsed_minutes": self.state.elapsed_minutes,
+            },
+        )
+        if self.custom_party and self.character_progress_sink is not None:
+            self.character_progress_sink(
+                tuple(actor for actor in self.exploration.actors if actor.faction == Faction.ALLY)
+            )
         return self.state_payload()
 
     def confirm_short_rest(
@@ -2746,6 +3774,68 @@ class ExplorationUiSession:
         self.board_message = "Odpoczynek ukończony. Wydaj Hit Dice albo zakończ odpoczynek."
         return self.state_payload()
 
+    def declare_continuation_navigator(self, actor_id: str) -> dict[str, object]:
+        """Validate a hero-card declaration for the active travel plan."""
+
+        if self.ui_flow_stage != UiFlowStage.LOCATION_ACTIVE:
+            raise ValueError("Wybór prowadzącego nie jest teraz dostępny.")
+        if self.pending_short_rest is not None or self.pending is not None:
+            raise ValueError("Najpierw zakończ aktywną decyzję albo odpoczynek.")
+        if self.active_point is not None:
+            raise ValueError("Najpierw zakończ aktywną rozmowę lub interakcję.")
+        plan = self.scenario_continuation_flow.plan(
+            self.exploration.continuation,
+            source_scenario_id=self.exploration.scenario_id,
+            flags=self.state.flags,
+            current_zone_id=self.current_zone.id,
+        )
+        policy = plan.continuation.travel_policy
+        if policy.navigation_dc is None:
+            raise ValueError("Ta podróż nie wymaga wyboru prowadzącego.")
+        natural_explorer = next(
+            (
+                actor
+                for actor in self.exploration.actors
+                if actor.faction == Faction.ALLY
+                and not actor.is_defeated()
+                and policy.terrain is not None
+                and natural_explorer_terrain(actor) == policy.terrain
+            ),
+            None,
+        )
+        if natural_explorer is not None:
+            raise ValueError(
+                f"{natural_explorer.name} prowadzi automatycznie dzięki Natural Explorer."
+            )
+        actor = next(
+            (
+                candidate
+                for candidate in self.exploration.actors
+                if str(candidate.id) == actor_id
+                and candidate.faction == Faction.ALLY
+                and not candidate.is_defeated()
+            ),
+            None,
+        )
+        if actor is None:
+            raise ValueError("Ta postać nie może prowadzić drużyny.")
+        self._record(
+            "ui_continuation_navigator_declared",
+            {
+                "actor_id": str(actor.id),
+                "continuation_id": plan.continuation.id,
+            },
+        )
+        self.pending_continuation_navigator_actor_id = str(actor.id)
+        return {
+            "actor_id": str(actor.id),
+            "actor_name": actor.name,
+            "continuation_id": plan.continuation.id,
+            "navigation_dc": policy.navigation_dc,
+            "navigation_ability": policy.navigation_ability,
+            "navigation_skill": policy.navigation_skill,
+        }
+
     def continue_scenario(
         self,
         *,
@@ -2756,6 +3846,8 @@ class ExplorationUiSession:
     ) -> dict[str, object]:
         if self.pending_short_rest is not None or self.pending is not None:
             raise ValueError("Najpierw zakończ aktywną decyzję albo odpoczynek.")
+        if navigator_actor_id is None:
+            navigator_actor_id = self.pending_continuation_navigator_actor_id
         plan = self.scenario_continuation_flow.plan(
             self.exploration.continuation,
             source_scenario_id=self.exploration.scenario_id,
@@ -2776,6 +3868,14 @@ class ExplorationUiSession:
                 _travel_d20_input(navigation_roll)
                 if navigation_roll is not None
                 else None
+            ),
+            navigation_roll_mode=(
+                RollMode.ADVANTAGE
+                if bool(scene_flag(self.state.flags, "travel_navigation_advantage", False))
+                else RollMode.NORMAL
+            ),
+            navigation_modifier=int(
+                scene_flag(self.state.flags, "travel_navigation_modifier", 0) or 0
             ),
             forced_march_rolls={
                 str(actor_id): tuple(
@@ -3188,6 +4288,10 @@ class ExplorationUiSession:
         if pending.completed:
             raise ValueError("Ukończonego odpoczynku nie można anulować.")
         self.pending_short_rest = None
+        self.state = replace(
+            self.state,
+            flags=set_scene_flag(self.state.flags, "short_rest_alarm_active", False),
+        )
         self.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
         self.board_message = "Krótki odpoczynek anulowany bez upływu czasu."
         self._record("ui_short_rest_cancelled", {"policy_id": pending.policy.id})
@@ -3203,6 +4307,16 @@ class ExplorationUiSession:
             raise ValueError("Najpierw ukończ krótki odpoczynek.")
         self.pending_short_rest = None
         self.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+        self._refresh_pending_encounter()
+        if self.pending_encounter is None:
+            self.state = replace(
+                self.state,
+                flags=set_scene_flag(
+                    self.state.flags,
+                    "short_rest_alarm_active",
+                    False,
+                ),
+            )
         self.board_message = "Krótki odpoczynek zakończony. Drużyna wraca do eksploracji."
         self._record("ui_short_rest_finished", {"policy_id": pending.policy.id})
         return self.state_payload()
@@ -3613,6 +4727,20 @@ class ExplorationUiSession:
                 self._current_board_scan_target().feedback
             )
         if selected_raw is None:
+            current_revision = str(self._board_selection_payload()["revision"])
+            if current_revision != revision:
+                self._record(
+                    "ui_board_scan_stale_after_cancel",
+                    {
+                        "scan_revision": revision,
+                        "current_revision": current_revision,
+                        "automatic": automatic,
+                        "elapsed_ms": round(
+                            (time.monotonic() - started_at) * 1000
+                        ),
+                    },
+                )
+                return self.state_payload()
             self.board_message = "Nie wybrano pola na planszy."
             self._record(
                 "ui_board_scan_timeout",
@@ -3731,9 +4859,9 @@ class ExplorationUiSession:
         )
         self.board_selection_revision += 1
         self.board_message = (
-            "Wybierz pomocnika na jednym z kolorowych pól planszy."
+            "Zeskanuj kartę bohatera, który pomaga w teście."
             if role == "helper"
-            else "Wybierz wykonawcę testu na jednym z kolorowych pól planszy."
+            else "Zeskanuj kartę bohatera, który wykonuje test."
         )
         self._record(
             "ui_exploration_actor_board_selection_started",
@@ -3791,14 +4919,42 @@ class ExplorationUiSession:
         if role not in {"lead", "helper"}:
             raise ValueError("Nieznana rola bohatera w teście.")
         self.board_selected_goal_id = goal_id
-        self.board_actor_selection = None
+        next_selection: BoardActorSelection | None = None
+        if role == "lead":
+            participant_options = {
+                str(option)
+                for option in goal.get("allowed_check_participants", ())
+            }
+            if (
+                str(goal.get("check_participants", "")) == "lead_with_help"
+                or "lead_with_help" in participant_options
+            ):
+                helper_ids = tuple(
+                    str(candidate.id)
+                    for candidate in self._party_actors()
+                    if str(candidate.id) in eligible_ids
+                    and str(candidate.id) != actor_id
+                    and not candidate.is_defeated()
+                )
+                if helper_ids:
+                    next_selection = BoardActorSelection(
+                        goal_id=goal_id,
+                        role="helper",
+                        eligible_actor_ids=helper_ids,
+                    )
+        self.board_actor_selection = next_selection
         self.board_selected_actor_id = actor_id
         self.board_selected_actor_role = role
         self.board_selection_revision += 1
         self.board_message = (
             f"{actor.name} pomaga w teście."
             if role == "helper"
-            else f"{actor.name} wykonuje test i ponosi jego konsekwencje."
+            else (
+                f"{actor.name} prowadzi. Zeskanuj kartę pomocnika albo ACCEPT, "
+                "aby przejść dalej bez pomocy."
+                if next_selection is not None
+                else f"{actor.name} wykonuje test i ponosi jego konsekwencje."
+            )
         )
         self._record(
             "ui_exploration_actor_selected",
@@ -4448,9 +5604,9 @@ class ExplorationUiSession:
     def travel_options(self) -> tuple[ExplorationZone, ...]:
         available_by_id = {zone.id: zone for zone in available_exploration_zones(self.state)}
         return tuple(
-            available_by_id[zone_id]
-            for zone_id in self.current_zone.adjacent_zone_ids
-            if zone_id in available_by_id and zone_id != self.current_zone.id
+            available_by_id[zone.id]
+            for zone in self._scene_location_zones()
+            if zone.id in available_by_id and zone.id != self.current_zone.id
         )
 
     def _preview_zone(self) -> ExplorationZone | None:
@@ -5262,6 +6418,27 @@ class ExplorationUiSession:
             opening is not None
             and opening.outcome == EncounterOpeningOutcome.ENEMIES_SURPRISE_PARTY
         )
+        if (
+            party_disadvantaged
+            and scene_flag(self.state.flags, "short_rest_alarm_active", False)
+        ):
+            party_disadvantaged = False
+            self.state = replace(
+                self.state,
+                flags=set_scene_flag(
+                    self.state.flags,
+                    "short_rest_alarm_active",
+                    False,
+                ),
+            )
+            self._add_message(
+                "Alarm",
+                "Alarm ostrzegł drużynę przed napadem; bohaterowie nie są zaskoczeni.",
+            )
+            self._record(
+                "ui_short_rest_alarm_prevented_surprise",
+                {"trigger_id": trigger_id},
+            )
         party_advantaged = bool(
             opening is not None
             and opening.outcome
@@ -5403,6 +6580,64 @@ class ExplorationUiSession:
             hidden_states,
             self.state.condition_states,
         )
+        if self.current_zone.ambient_light == LightLevel.DARKNESS:
+            self.active_combat_effects = apply_active_effect(
+                self.active_combat_effects,
+                ActiveCombatEffect(
+                    id=f"ambient_darkness:{self.current_zone.id}",
+                    actor_id="environment",
+                    kind="ambient_darkness",
+                    label="Niemagiczna ciemność",
+                    object_id=f"zone:{self.current_zone.id}",
+                    value=0,
+                    source=EffectSource(
+                        EffectSourceType.SCENE,
+                        self.current_zone.id,
+                        self.current_zone.name,
+                    ),
+                    duration=EffectDuration.UNTIL_ENCOUNTER_END,
+                ),
+            ).active_effects
+        if (
+            opening is not None
+            and opening.outcome == EncounterOpeningOutcome.ENEMIES_SURPRISE_PARTY
+        ):
+            enemies = tuple(
+                actor
+                for actor in self.combat_state.actors
+                if actor.faction == Faction.ENEMY and not actor.is_defeated()
+            )
+            erynd = next(
+                (
+                    actor
+                    for actor in self.combat_state.actors
+                    if actor_has_feature(actor, "flaw_ambush_survivor")
+                    and not actor.is_defeated()
+                ),
+                None,
+            )
+            if erynd is not None and enemies:
+                source = min(
+                    enemies,
+                    key=lambda enemy: grid_distance_feet(erynd.position, enemy.position),
+                )
+                condition_states = add_condition(
+                    self.combat_state.condition_states,
+                    str(erynd.id),
+                    CombatCondition.FRIGHTENED,
+                    source_actor_id=str(source.id),
+                    source_label="Skaza: Ocalały z zasadzki",
+                    duration=EffectDuration.UNTIL_TURN_END,
+                    expiration_actor_id=str(erynd.id),
+                )
+                self.combat_state = replace(
+                    self.combat_state,
+                    condition_states=condition_states,
+                )
+                self._add_message(
+                    "Skaza Erynda",
+                    f"Zasadzka przywołuje dawną traumę: Erynd jest Przerażony przez {source.name} do końca pierwszej tury.",
+                )
         for effect in self._timed_combat_effects():
             expired_effects = self.active_combat_effects
             if effect.duration == EffectDuration.CONCENTRATION:
@@ -5644,11 +6879,15 @@ class ExplorationUiSession:
     def _clear_player_pending_choices(self) -> None:
         self.pending_state.clear_player_choices()
         self.pending_spell_zone_move_effect_id = ""
+        self.combat_targeting_attack_source_id = None
+        self.combat_targeting_healing_source_id = None
         self.combat_targeting_class_feature_action_id = None
         self.combat_selected_class_feature_target_id = None
+        self.combat_selected_class_feature_target_ids = ()
         self.combat_aux_targeting_mode = None
         self.combat_stabilization_method = None
         self.combat_stabilization_target_id = None
+        self.pending_physical_feature_action_id = None
 
     def start_combat_stabilization_targeting(
         self,
@@ -5776,11 +7015,59 @@ class ExplorationUiSession:
             if self.combat_state is not None
             else 0
         )
-        return _encounter_attack_sources(
+        sources = _encounter_attack_sources(
             encounter,
             actor,
             reserved_hands=reserved_hands,
         )
+        familiar = next(
+            (
+                effect
+                for effect in self.active_combat_effects
+                if effect.source_actor_id == str(actor.id)
+                and effect.kind.startswith("familiar:")
+            ),
+            None,
+        )
+        if familiar is None:
+            return sources
+        if familiar.kind == "familiar:raven":
+            return tuple(
+                replace(
+                    source,
+                    attack_roll_request=replace(
+                        source.attack_roll_request,
+                        mode=RollMode.ADVANTAGE,
+                    ),
+                )
+                if source.source_type is AttackSourceType.SPELL
+                else source
+                for source in sources
+            )
+        if familiar.kind != "familiar:snake":
+            return sources
+        snake_attack = AttackSource(
+            id="familiar_snake_bite",
+            name="Ukąszenie chowańca",
+            source_type=AttackSourceType.SPELL,
+            range_feet=30,
+            attack_kind=AttackKind.RANGED,
+            attack_roll_request=D20RollRequest(
+                modifiers=(
+                    RollModifier(
+                        "Atak chowańca",
+                        max(0, actor.spell_save_dc - 8),
+                        RollModifierType.SPELL,
+                        "find_familiar",
+                    ),
+                ),
+            ),
+            damage_hint="1k6 trucizny",
+            damage_die_sides=6,
+            damage_type="poison",
+            action_cost=ActionEconomyCost.BONUS_ACTION,
+        )
+        return (*sources, snake_attack)
 
     def _selected_attack_source(self, actor: Actor):
         sources = self._attack_sources_for_actor(actor)
@@ -5882,6 +7169,8 @@ class ExplorationUiSession:
             source.resource_cost,
         ):
             return False
+        if source.id == "goodberry_use":
+            return True
         return can_consume_spell_resource(
             actor,
             getattr(source, "spell_level", 0),
@@ -5892,7 +7181,11 @@ class ExplorationUiSession:
         encounter = self._active_encounter()
         if encounter is None:
             return ()
-        return encounter.healing_sources_by_actor.get(actor.id, ())
+        sources = encounter.healing_sources_by_actor.get(actor.id, ())
+        goodberry = _goodberry_healing_source(actor)
+        if goodberry is None:
+            return sources
+        return (*sources, goodberry)
 
     def _selected_healing_source(self, actor: Actor) -> HealingSource | None:
         sources = self._healing_sources_for_actor(actor)
@@ -6526,6 +7819,7 @@ class ExplorationUiSession:
             cast_level,
             metamagic_ids,
         )
+        self.combat_targeting_healing_source_id = transition.source_id
         self.board_message = transition.board_message
         self._add_message(transition.message_title, transition.message_body)
         self._record(transition.event_type, dict(transition.event_payload))
@@ -6538,6 +7832,10 @@ class ExplorationUiSession:
         actor = combat_current_actor(self.combat_state)
         if actor.faction != Faction.ALLY:
             raise ValueError("To nie jest tura bohatera.")
+        if flaw_blocks_equipment_use(actor, self.active_combat_effects):
+            raise ValueError(
+                "Skaza Brakki: podczas Szału nie może korzystać z mikstur, zwojów ani aktywnych właściwości ekwipunku."
+            )
         encounter = self._active_encounter()
         if encounter is None:
             raise ValueError("Brak danych encountera dla aktywnej walki.")
@@ -6738,6 +8036,245 @@ class ExplorationUiSession:
         self._sync_board_leds()
         return self.state_payload()
 
+    def _queue_physical_feature_prompt(
+        self,
+        action_id: str,
+    ) -> dict[str, object]:
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        actor = combat_current_actor(self.combat_state)
+        available = {
+            feature_action_id
+            for feature in actor.features
+            for feature_action_id in feature.action_ids
+        }
+        if action_id == "cunning_action":
+            if not actor_has_feature(actor, "cunning_action"):
+                raise ValueError("Aktywna postać nie posiada Sprytnej akcji.")
+        elif action_id in {
+            "second_wind",
+            "sacred_weapon",
+            "turn_the_unholy",
+            "turn_undead",
+            "wild_shape",
+            "pact_weapon",
+        }:
+            if action_id not in available:
+                raise ValueError("Aktywna postać nie posiada tej akcji klasowej.")
+        elif action_id == "divine_smite":
+            pending = self.pending_player_attack
+            if (
+                not actor_has_feature(actor, "divine_smite")
+                or pending is None
+                or pending.stage != "damage_roll"
+                or not pending.hit
+            ):
+                raise ValueError(
+                    "Divine Smite można zagrać dopiero po potwierdzonym "
+                    "trafieniu bronią w zwarciu."
+                )
+            source = self._attack_source_by_id(
+                actor,
+                pending.source_id,
+                pending.cast_level,
+            )
+            if (
+                source is None
+                or source.source_type != AttackSourceType.WEAPON
+                or source.attack_kind != AttackKind.MELEE
+            ):
+                raise ValueError("Divine Smite wymaga trafienia bronią w zwarciu.")
+            if not available_cast_levels(actor, 1):
+                raise ValueError("Brak dostępnego slotu dla Divine Smite.")
+        elif action_id == "deflect_missiles":
+            window = self.pending_reaction_window
+            if (
+                window is None
+                or window.current_option.kind != ReactionKind.DEFLECT_MISSILES
+            ):
+                raise ValueError(
+                    "Deflect Missiles można zagrać wyłącznie po ujawnieniu "
+                    "obrażeń trafiającego ataku dystansowego bronią."
+                )
+        else:
+            raise ValueError("Ta karta nie korzysta z promptu cechy klasowej.")
+
+        if action_id not in {"divine_smite", "deflect_missiles"}:
+            self._clear_player_pending_choices()
+        else:
+            # These cards decorate an already pending hit/reaction. Clearing
+            # player choices here would erase the window they are required to use.
+            self.pending_physical_feature_action_id = None
+        self.pending_physical_feature_action_id = action_id
+        instructions = {
+            "second_wind": "Rzuć k10 i wpisz wynik leczenia.",
+            "sacred_weapon": "Wybierz wyposażoną broń, którą uświęcasz.",
+            "turn_the_unholy": (
+                "Wpisz rzuty obronne Mądrości podświetlonych czartów i nieumarłych."
+            ),
+            "turn_undead": "Wpisz rzuty obronne Mądrości podświetlonych nieumarłych.",
+            "wild_shape": "Wybierz jedną z trzech bojowych form bestii.",
+            "cunning_action": "Wybierz Sprint, Odwrót albo Ukrycie jako akcję bonusową.",
+            "pact_weapon": "Wybierz jedną z trzech form przywoływanej broni paktu.",
+            "divine_smite": "Wybierz poziom dostępnego slotu czaru.",
+            "deflect_missiles": "Rzuć k10 i wpisz wynik redukcji pocisku.",
+        }
+        self.board_message = f"{player_label(action_id)}: {instructions[action_id]}"
+        self._record(
+            "ui_physical_feature_prompt_opened",
+            {"actor_id": str(actor.id), "action_id": action_id},
+        )
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def cancel_physical_feature_prompt(self) -> dict[str, object]:
+        if self.pending_physical_feature_action_id is None:
+            raise ValueError("Nie ma oczekującej karty cechy klasowej.")
+        action_id = self.pending_physical_feature_action_id
+        self.pending_physical_feature_action_id = None
+        self.board_message = f"Anulowano kartę: {player_label(action_id)}."
+        self._record(
+            "ui_physical_feature_prompt_cancelled",
+            {"action_id": action_id},
+        )
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def apply_physical_metamagic(self, action_id: str) -> dict[str, object]:
+        """Attach a scanned Metamagic card to the spell already being prepared."""
+
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        if action_id not in PHYSICAL_METAMAGIC_ACTION_IDS:
+            raise ValueError("Nieznana karta Metamagii.")
+        if action_id == "metamagic_empowered":
+            return self.activate_empowered_spell()
+
+        caster = combat_current_actor(self.combat_state)
+        caster_id = str(caster.id)
+
+        def validated_attack_source(
+            source_id: str,
+            cast_level: int | None,
+            metamagic_ids: tuple[str, ...],
+        ):
+            source = next(
+                (
+                    candidate
+                    for candidate in self._attack_sources_for_actor(caster)
+                    if candidate.id == source_id
+                ),
+                None,
+            )
+            if source is None or source.source_type != AttackSourceType.SPELL:
+                raise ValueError("Metamagia wymaga przygotowanego czaru.")
+            if cast_level is not None:
+                source = attack_source_at_cast_level(source, cast_level)
+            apply_metamagic_to_source(caster, source, metamagic_ids)
+            return source
+
+        if self.combat_targeting_attack_source_id is not None:
+            encoded = self.selected_attack_source_ids.get(caster_id, "")
+            source_id, cast_level, current = _decode_source_selection(encoded)
+            if action_id in current:
+                raise ValueError("Ta Metamagia jest już przypisana do przygotowanego czaru.")
+            validated_attack_source(source_id, cast_level, (*current, action_id))
+            self.selected_attack_source_ids[caster_id] = _encode_cast_source_id(
+                source_id,
+                cast_level,
+                (*current, action_id),
+            )
+        elif self.combat_targeting_healing_source_id is not None:
+            encoded = self.selected_healing_source_ids.get(caster_id, "")
+            source_id, cast_level, current = _decode_source_selection(encoded)
+            source = next(
+                (
+                    candidate
+                    for candidate in self._healing_sources_for_actor(caster)
+                    if candidate.id == source_id
+                ),
+                None,
+            )
+            if source is None or source.source_type != HealingSourceType.SPELL:
+                raise ValueError("Metamagia wymaga przygotowanego czaru.")
+            if cast_level is not None:
+                source = healing_source_at_cast_level(source, cast_level)
+            apply_metamagic_to_source(caster, source, (*current, action_id))
+            if action_id in current:
+                raise ValueError("Ta Metamagia jest już przypisana do przygotowanego czaru.")
+            self.selected_healing_source_ids[caster_id] = _encode_cast_source_id(
+                source_id,
+                cast_level,
+                (*current, action_id),
+            )
+        elif self.pending_player_attack is not None:
+            pending = self.pending_player_attack
+            validated_attack_source(
+                pending.source_id,
+                pending.cast_level,
+                (*pending.metamagic_ids, action_id),
+            )
+            if action_id in pending.metamagic_ids:
+                raise ValueError("Ta Metamagia jest już przypisana do przygotowanego czaru.")
+            self.pending_player_attack = replace(
+                pending,
+                metamagic_ids=(*pending.metamagic_ids, action_id),
+            )
+        elif self.pending_area_spell is not None:
+            pending = self.pending_area_spell
+            validated_attack_source(
+                pending.source_id,
+                pending.cast_level,
+                (*pending.metamagic_ids, action_id),
+            )
+            if action_id in pending.metamagic_ids:
+                raise ValueError("Ta Metamagia jest już przypisana do przygotowanego czaru.")
+            self.pending_area_spell = replace(
+                pending,
+                metamagic_ids=(*pending.metamagic_ids, action_id),
+            )
+        elif self.pending_player_healing is not None:
+            pending = self.pending_player_healing
+            source = next(
+                (
+                    candidate
+                    for candidate in self._healing_sources_for_actor(caster)
+                    if candidate.id == pending.source_id
+                ),
+                None,
+            )
+            if source is None or source.source_type != HealingSourceType.SPELL:
+                raise ValueError("Metamagia wymaga przygotowanego czaru.")
+            if pending.cast_level is not None:
+                source = healing_source_at_cast_level(source, pending.cast_level)
+            apply_metamagic_to_source(
+                caster,
+                source,
+                (*pending.metamagic_ids, action_id),
+            )
+            if action_id in pending.metamagic_ids:
+                raise ValueError("Ta Metamagia jest już przypisana do przygotowanego czaru.")
+            self.pending_player_healing = replace(
+                pending,
+                metamagic_ids=(*pending.metamagic_ids, action_id),
+            )
+        else:
+            raise ValueError(
+                "Najpierw zagraj kartę czaru i przygotuj jego użycie, a dopiero potem zeskanuj Metamagię."
+            )
+
+        self.board_message = (
+            f"{player_label(action_id)} przypisane do przygotowanego czaru. "
+            "Dokończ wybór celów i rzut; koszt zostanie pobrany przy rozstrzygnięciu."
+        )
+        self._add_message("Metamagia", self.board_message)
+        self._record(
+            "ui_physical_metamagic_attached",
+            {"caster_id": caster_id, "metamagic_id": action_id},
+        )
+        self._sync_board_leds()
+        return self.state_payload()
+
     def use_combat_class_feature(
         self,
         action_id: str,
@@ -6760,6 +8297,16 @@ class ExplorationUiSession:
             for feature in actor.features
             for feature_action_id in feature.action_ids
         }
+        if action_id == "cunning_action":
+            if not actor_has_feature(actor, "cunning_action"):
+                raise ValueError("Aktywna postać nie posiada Sprytnej akcji.")
+            if mode == "dash":
+                return self.use_combat_dash()
+            if mode == "disengage":
+                return self.use_combat_disengage()
+            if mode == "hide":
+                return self.start_combat_hide()
+            raise ValueError("Sprytna akcja wymaga wyboru: Sprint, Odwrót albo Ukrycie.")
         if action_id not in available:
             raise ValueError("Aktywna postać nie posiada tej akcji klasowej.")
         self._clear_player_pending_choices()
@@ -6777,6 +8324,25 @@ class ExplorationUiSession:
             result = resolve_action_surge(self.combat_state)
             self.combat_state = result.state
             body = f"{actor.name} używa Action Surge i odzyskuje akcję."
+        elif action_id in {"defensive_stance", "instinctive_dodge"}:
+            resource_id, label = (
+                ("defensive_stance_uses", "Pozycja obronna")
+                if action_id == "defensive_stance"
+                else ("instinctive_dodge_uses", "Unik instynktowny")
+            )
+            result = resolve_limited_dodge(
+                self.combat_state,
+                self.active_combat_effects,
+                feature_id=action_id,
+                resource_id=resource_id,
+                label=label,
+            )
+            self.combat_state = result.state
+            self.active_combat_effects = result.active_effects
+            body = (
+                f"{actor.name} używa {label}. Ataki przeciw tej postaci mają "
+                "utrudnienie do początku jej następnej tury."
+            )
         elif action_id == "rage":
             result = resolve_rage(
                 self.combat_state,
@@ -6784,7 +8350,12 @@ class ExplorationUiSession:
             )
             self.combat_state = result.state
             self.active_combat_effects = result.active_effects
-            body = f"{actor.name} wpada w Rage."
+            if result.activated:
+                body = f"{actor.name} wpada w Rage."
+            else:
+                body = f"{actor.name} ręcznie kończy Rage."
+                if result.exhaustion_added:
+                    body += " Frenzy dodaje 1 poziom Wyczerpania."
         elif action_id == "reckless_attack":
             result = resolve_reckless_attack(
                 self.combat_state,
@@ -6980,9 +8551,9 @@ class ExplorationUiSession:
             self.combat_state = result.state
             self.active_combat_effects = result.active_effects
             body = (
-                f"{actor.name} aktywuje Frenzy. Po zakończeniu Rage otrzyma 1 poziom Exhaustion."
+                f"{actor.name} aktywuje Szał bojowy. Dodatkowy atak będzie dostępny od następnej tury; po zakończeniu Szału otrzyma 1 poziom Wyczerpania."
                 if result.activated
-                else f"{actor.name} wydaje bonus action na dodatkowy atak z Frenzy."
+                else f"{actor.name} wydaje akcję dodatkową na dodatkowy atak z Szału bojowego."
             )
         elif action_id == "pact_weapon":
             if form_id not in PACT_WEAPON_FORM_IDS:
@@ -7039,14 +8610,22 @@ class ExplorationUiSession:
             raise ValueError("Ta cecha nie korzysta jeszcze z tego trybu wyboru.")
         targets = self._class_feature_board_targets(action_id, actor)
         if not targets:
-            raise ValueError("Brak legalnego celu Bardowskiej Inspiracji.")
+            raise ValueError(f"Brak legalnego celu: {player_label(action_id)}.")
         self._clear_player_pending_choices()
         self.combat_targeting_attack_source_id = None
         self.combat_targeting_class_feature_action_id = action_id
         self.combat_selected_class_feature_target_id = None
+        self.combat_selected_class_feature_target_ids = ()
         self.board_message = (
             f"{player_label(action_id)}: zeskanuj planszę i kliknij "
-            "podświetloną figurkę legalnego celu."
+            "podświetloną figurkę legalnego celu. "
+            + (
+                "Koszt po wyborze: akcja bonusowa i 1 użycie Inspiracji."
+                if action_id == "bardic_inspiration"
+                else "Koszt po potwierdzeniu: akcja i 1 użycie Boskiej Mocy."
+                if action_id == "preserve_life"
+                else "Koszt zostanie pokazany przed potwierdzeniem."
+            )
         )
         self._record(
             "ui_combat_class_feature_targeting_started",
@@ -7064,6 +8643,7 @@ class ExplorationUiSession:
             raise ValueError("Nie trwa wybór celu cechy klasowej.")
         self.combat_targeting_class_feature_action_id = None
         self.combat_selected_class_feature_target_id = None
+        self.combat_selected_class_feature_target_ids = ()
         self.board_message = "Anulowano wybór celu cechy klasowej."
         self._sync_board_leds()
         return self.state_payload()
@@ -7721,6 +9301,10 @@ class ExplorationUiSession:
         if self.combat_state is None:
             raise ValueError("Walka nie została rozpoczęta.")
         actor = combat_current_actor(self.combat_state)
+        if flaw_blocks_equipment_use(actor, self.active_combat_effects):
+            raise ValueError(
+                "Skaza Brakki: podczas Szału nie może korzystać z mikstur, zwojów ani aktywnych właściwości ekwipunku."
+            )
         encounter = self._active_encounter()
         if encounter is None:
             raise ValueError("Brak danych encountera dla aktywnej walki.")
@@ -7800,6 +9384,102 @@ class ExplorationUiSession:
         )
         if action is None:
             raise ValueError("Nieznana akcja koncentracji.")
+        if action.id == "prayer_of_healing" and pending.casting_minutes == 0:
+            selected_target_ids = target_ids or (
+                (target_id,) if target_id else pending.selected_target_ids
+            )
+            if not selected_target_ids:
+                raise ValueError("Wybierz co najmniej jeden cel Modlitwy leczenia.")
+            if len(selected_target_ids) != len(set(selected_target_ids)):
+                raise ValueError("Ten sam cel Modlitwy został wybrany więcej niż raz.")
+            if len(selected_target_ids) > pending.maximum_targets:
+                raise ValueError(
+                    f"Modlitwa może objąć najwyżej {pending.maximum_targets} celów."
+                )
+            if set(selected_target_ids) - set(pending.target_ids):
+                raise ValueError("Wybrano nielegalny cel Modlitwy leczenia.")
+            dice_count = int(action.hit_point_pool_dice_count) + max(
+                0,
+                pending.cast_level - action.spell_level,
+            ) * int(action.upcast_hit_point_pool_dice_per_level)
+            die_sides = int(action.damage_die_sides)
+            if (
+                roll_total is None
+                or not dice_count <= int(roll_total) <= dice_count * die_sides
+            ):
+                raise ValueError(
+                    f"Wpisz sumę fizycznego rzutu {dice_count}k{die_sides}."
+                )
+            self.pending_concentration_action = replace(
+                pending,
+                selected_target_ids=tuple(selected_target_ids),
+                casting_minutes=10,
+                prepared_roll_total=int(roll_total),
+            )
+            ended_concentration = tuple(
+                effect
+                for effect in self.active_combat_effects
+                if effect.duration == EffectDuration.CONCENTRATION
+                and effect.source_actor_id == str(caster.id)
+            )
+            self.active_combat_effects = tuple(
+                effect
+                for effect in self.active_combat_effects
+                if not (
+                    effect.duration == EffectDuration.CONCENTRATION
+                    and effect.source_actor_id == str(caster.id)
+                )
+            )
+            casting_effect = ActiveCombatEffect(
+                id=f"timed-cast:{caster.id}:prayer_of_healing",
+                actor_id=str(caster.id),
+                kind="concentration_timed_cast",
+                label="Rzucanie: Modlitwa leczenia",
+                object_id="spell:prayer_of_healing",
+                value=10,
+                source_actor_id=str(caster.id),
+                source=EffectSource(
+                    EffectSourceType.SPELL,
+                    "prayer_of_healing",
+                    "Modlitwa leczenia",
+                ),
+                duration=EffectDuration.CONCENTRATION,
+                stacking_key=f"concentration:{caster.id}",
+            )
+            self.active_combat_effects = apply_active_effect(
+                self.active_combat_effects,
+                casting_effect,
+            ).active_effects
+            self.board_message = (
+                "Modlitwa leczenia rozpoczęta. Jeżeli drużyna ma 10 minut "
+                "spokoju, potwierdź ukończenie; przerwanie nie zużywa slotu."
+            )
+            if ended_concentration:
+                self.board_message += (
+                    " Poprzednia koncentracja zakończona: "
+                    + ", ".join(effect.label for effect in ended_concentration)
+                    + "."
+                )
+            self._add_message("Modlitwa leczenia", self.board_message)
+            self._record(
+                "ui_prayer_of_healing_cast_started",
+                {
+                    "caster_id": str(caster.id),
+                    "target_ids": list(selected_target_ids),
+                    "cast_level": pending.cast_level,
+                    "casting_minutes": 10,
+                },
+            )
+            self._sync_board_leds()
+            return self.state_payload()
+        self.active_combat_effects = tuple(
+            effect
+            for effect in self.active_combat_effects
+            if not (
+                effect.kind == "concentration_timed_cast"
+                and effect.source_actor_id == str(caster.id)
+            )
+        )
         transition = self.player_combat_resource_flow.confirm_concentration(
             state=self.combat_state,
             active_effects=self.active_combat_effects,
@@ -7811,7 +9491,91 @@ class ExplorationUiSession:
             roll_total=roll_total,
             effect_option=effect_option,
         )
-        return self._apply_combat_resource_transition(transition)
+        self._apply_combat_resource_transition(transition)
+        if action.effect_kind == "reveal_hidden_traps":
+            revealed_ids: list[str] = []
+            for trap in self.state.traps:
+                if trap_state_for(self.state, trap.id).status is not ExplorationTrapStatus.HIDDEN:
+                    continue
+                self.state = reveal_trap(self.state, trap.id)
+                revealed_ids.append(trap.id)
+            self._add_message(
+                "Wykrycie pułapek",
+                (
+                    "Ujawniono pułapki: " + ", ".join(revealed_ids) + "."
+                    if revealed_ids
+                    else "W bieżącym obszarze nie ma ukrytych pułapek."
+                ),
+            )
+        if action.effect_kind == "see_invisibility" and self.combat_state is not None:
+            hidden_before = self.combat_state.hidden_states
+            hidden_after = reveal_all_to_observer(
+                hidden_before,
+                str(caster.id),
+            )
+            self.combat_state = replace(
+                self.combat_state,
+                hidden_states=hidden_after,
+            )
+            if hidden_after != hidden_before:
+                self._add_message(
+                    "Widzenie niewidzialnego",
+                    f"{caster.name} ujawnia ukryte przed nim istoty.",
+                )
+            self._sync_board_leds()
+        return self.state_payload()
+
+    def complete_timed_combat_spell(self) -> dict[str, object]:
+        pending = self.pending_concentration_action
+        if pending is None or pending.casting_minutes <= 0:
+            raise ValueError("Nie ma oczekującego czaru czasowego do ukończenia.")
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        caster = combat_current_actor(self.combat_state)
+        encounter = self._active_encounter()
+        if encounter is None:
+            raise ValueError("Brak danych encountera dla aktywnej walki.")
+        action = _combat_action_by_id(encounter, caster, pending.action_id)
+        if action is None or action.id != "prayer_of_healing":
+            raise ValueError("Nieznany oczekujący czar czasowy.")
+        self.active_combat_effects = tuple(
+            effect
+            for effect in self.active_combat_effects
+            if not (
+                effect.kind == "concentration_timed_cast"
+                and effect.source_actor_id == str(caster.id)
+            )
+        )
+        transition = self.player_combat_resource_flow.confirm_concentration(
+            state=self.combat_state,
+            active_effects=self.active_combat_effects,
+            action=action,
+            pending=pending,
+            target_ids=pending.selected_target_ids,
+            rng=self.encounter_rng,
+            roll_total=pending.prepared_roll_total,
+        )
+        self._apply_combat_resource_transition(transition, sync_board=False)
+        self._advance_scenario_time(
+            pending.casting_minutes,
+            source="prayer_of_healing",
+        )
+        self.board_message = (
+            "Modlitwa leczenia ukończona: upłynęło 10 minut, cele zostały "
+            "uleczone, a slot czaru zużyty."
+        )
+        self._add_message("Modlitwa leczenia", self.board_message)
+        self._record(
+            "ui_prayer_of_healing_cast_completed",
+            {
+                "caster_id": str(caster.id),
+                "target_ids": list(pending.selected_target_ids),
+                "cast_level": pending.cast_level,
+                "elapsed_minutes": pending.casting_minutes,
+            },
+        )
+        self._sync_board_leds()
+        return self.state_payload()
 
     def cancel_combat_concentration_action(self) -> dict[str, object]:
         pending = self.pending_concentration_action
@@ -7819,6 +9583,15 @@ class ExplorationUiSession:
             raise ValueError("Nie ma czaru koncentracyjnego do anulowania.")
         if self.combat_state is None:
             raise ValueError("Walka nie została rozpoczęta.")
+        if pending.casting_minutes > 0:
+            self.active_combat_effects = tuple(
+                effect
+                for effect in self.active_combat_effects
+                if not (
+                    effect.kind == "concentration_timed_cast"
+                    and effect.source_actor_id == pending.caster_id
+                )
+            )
         transition = self.player_combat_resource_flow.cancel_concentration(
             state=self.combat_state,
             active_effects=self.active_combat_effects,
@@ -7862,6 +9635,28 @@ class ExplorationUiSession:
             natural_roll_2=natural_roll_2,
         )
         result = self._apply_combat_resource_transition(transition)
+        timed_cast = self.pending_concentration_action
+        if (
+            timed_cast is not None
+            and timed_cast.casting_minutes > 0
+            and not any(
+                effect.kind == "concentration_timed_cast"
+                and effect.source_actor_id == timed_cast.caster_id
+                for effect in self.active_combat_effects
+            )
+        ):
+            self.pending_concentration_action = None
+            self.board_message = (
+                "Koncentracja została przerwana — Modlitwa leczenia nie dochodzi "
+                "do skutku i nie zużywa slotu."
+            )
+            self._add_message("Modlitwa przerwana", self.board_message)
+            self._record(
+                "ui_prayer_of_healing_cast_interrupted",
+                {"caster_id": timed_cast.caster_id, "reason": "concentration_failed"},
+            )
+            self._sync_board_leds()
+            result = self.state_payload()
         if (
             (self.pending_approach_interaction is not None or self.pending_approach_pickup is not None)
             and self.pending_concentration_check is None
@@ -7980,6 +9775,12 @@ class ExplorationUiSession:
             natural_rerolls=natural_rerolls,
             damage=damage,
             scene_objects=encounter.scene_objects,
+        )
+        transition = self._activate_nimra_arcane_echo_on_natural_one(
+            transition,
+            attacker,
+            source,
+            (natural_roll, natural_roll_2),
         )
         return self._apply_player_attack_transition(transition)
 
@@ -8496,6 +10297,12 @@ class ExplorationUiSession:
             mirror_image_roll=mirror_image_roll,
             scene_objects=encounter.scene_objects,
         )
+        transition = self._activate_nimra_arcane_echo_on_natural_one(
+            transition,
+            attacker,
+            source,
+            (natural_roll, natural_roll_2),
+        )
         if inspiration is not None and bardic_inspiration_roll is not None:
             transition = replace(
                 transition,
@@ -8528,6 +10335,64 @@ class ExplorationUiSession:
         if target is not None:
             self._animate_ranged_projectile(attacker, target, source)
         return self._apply_player_attack_transition(transition)
+
+    def _activate_nimra_arcane_echo_on_natural_one(
+        self,
+        transition: PlayerAttackTransition,
+        attacker: Actor,
+        source: AttackSource,
+        natural_rolls: tuple[int | None, ...],
+    ) -> PlayerAttackTransition:
+        if (
+            not actor_has_feature(attacker, "flaw_arcane_echo")
+            or source.source_type != AttackSourceType.SPELL
+            or 1 not in natural_rolls
+            or any(
+                effect.actor_id == str(attacker.id)
+                and effect.kind == "flaw_arcane_echo_used"
+                for effect in transition.active_effects
+            )
+        ):
+            return transition
+        actor_id = str(attacker.id)
+        source_meta = EffectSource(
+            EffectSourceType.SYSTEM,
+            "flaw_arcane_echo",
+            "Skaza: Echo magicznego wycieku",
+        )
+        used = ActiveCombatEffect(
+            id=f"flaw_arcane_echo_used:{actor_id}",
+            actor_id=actor_id,
+            kind="flaw_arcane_echo_used",
+            label="Echo magicznego wycieku — wykorzystane",
+            object_id="feature:flaw_arcane_echo",
+            value=0,
+            source=source_meta,
+            duration=EffectDuration.UNTIL_ENCOUNTER_END,
+        )
+        active = ActiveCombatEffect(
+            id=f"flaw_arcane_echo_active:{actor_id}",
+            actor_id=actor_id,
+            kind="flaw_arcane_echo_active",
+            label="Echo magicznego wycieku",
+            object_id="feature:flaw_arcane_echo",
+            value=0,
+            source=source_meta,
+            duration=EffectDuration.UNTIL_TURN_END,
+            expiration_actor_id=actor_id,
+        )
+        effects = apply_active_effect(transition.active_effects, used).active_effects
+        effects = apply_active_effect(effects, active).active_effects
+        flaw_text = (
+            "Echo magicznego wycieku: Nimra nie może rzucać czarów z Koncentracją "
+            "do końca tej tury."
+        )
+        return replace(
+            transition,
+            active_effects=effects,
+            message_body=f"{transition.message_body} {flaw_text}",
+            event_payload=(*transition.event_payload, ("arcane_echo", True)),
+        )
 
     def submit_player_damage_roll(
         self,
@@ -8741,6 +10606,7 @@ class ExplorationUiSession:
             pending,
             divine_smite_slot_level=int(slot_level),
         )
+        self.pending_physical_feature_action_id = None
         self.board_message = (
             f"Divine Smite zadeklarowany ze slotu {slot_level}. poziomu. "
             "Rzuć wszystkie kości obrażeń."
@@ -8842,6 +10708,7 @@ class ExplorationUiSession:
             position=position,
         )
         self.combat_state = transition.state
+        self.combat_targeting_healing_source_id = None
         self.pending_player_healing = transition.pending
         self.pending_player_attack = None
         self.pending_combat_help = None
@@ -10159,7 +12026,14 @@ class ExplorationUiSession:
                 for action in encounter.combat_actions_by_actor.get(actor.id, ()):
                     if action.action_type == "targeted_item_effect":
                         continue
-                    action_payload = _combat_action_payload(action, actor)
+                    action_payload = _combat_action_payload(
+                        action,
+                        actor,
+                        equipment_blocked=flaw_blocks_equipment_use(
+                            actor,
+                            self.active_combat_effects,
+                        ),
+                    )
                     if (
                         not action_payload["available"]
                         or action.action_type not in CONTEXT_COMBAT_ACTION_TYPES
@@ -10281,7 +12155,14 @@ class ExplorationUiSession:
                 for action in encounter.combat_actions_by_actor.get(actor.id, ()):
                     if action.action_cost.value != "bonus_action":
                         continue
-                    action_payload = _combat_action_payload(action, actor)
+                    action_payload = _combat_action_payload(
+                        action,
+                        actor,
+                        equipment_blocked=flaw_blocks_equipment_use(
+                            actor,
+                            self.active_combat_effects,
+                        ),
+                    )
                     if not action_payload["available"]:
                         continue
                     options.append(
@@ -10869,54 +12750,7 @@ class ExplorationUiSession:
             cast_level = option.cast_level or (
                 action.spell_level if action.spell_level > 0 else None
             )
-            if action.action_type == "strength_potion":
-                return self.use_combat_strength_potion(option.action_id)
-            if action.action_type == "multi_target_damage":
-                return self.start_multi_target_damage_spell(
-                    option.action_id,
-                    cast_level=cast_level,
-                )
-            if action.action_type == "assisted_spell":
-                return self.use_assisted_combat_spell(
-                    option.action_id,
-                    cast_level=cast_level,
-                )
-            if action.action_type == "concentration_attack_bonus":
-                return self.start_combat_concentration_action(
-                    option.action_id,
-                    cast_level=cast_level,
-                )
-            if action.action_type == "targeted_status":
-                return self.start_combat_concentration_action(
-                    option.action_id,
-                    cast_level=cast_level,
-                )
-            if action.action_type == "long_cast_effect":
-                return self.start_long_cast(
-                    option.action_id,
-                    cast_level=cast_level,
-                )
-            if action.action_type == "summon":
-                return self.start_summon(
-                    option.action_id,
-                    cast_level=cast_level,
-                )
-            if action.action_type == "spell_movement":
-                return self.start_magic_movement(
-                    option.action_id,
-                    cast_level=cast_level,
-                )
-            if action.action_type == "spell_debuff":
-                return self.start_spell_debuff(
-                    option.action_id,
-                    cast_level=cast_level,
-                )
-            if action.action_type == "spell_dispel":
-                return self.start_spell_dispel(
-                    option.action_id,
-                    cast_level=cast_level,
-                )
-            raise ValueError("Ten typ akcji nie ma jeszcze wykonawcy w menu walki.")
+            return self._start_combat_action(action, cast_level=cast_level)
         if option.action == CombatMenuAction.CLASS_FEATURE and option.action_id:
             return self.use_combat_class_feature(option.action_id)
         if option.action == CombatMenuAction.DASH:
@@ -11908,7 +13742,7 @@ class ExplorationUiSession:
             if not (
                 effect.actor_id == actor_id
                 and effect.kind
-                in {"rage", "rage_duration", "rage_activity", "frenzy"}
+                in {"rage", "rage_duration", "rage_activity", "frenzy", "frenzy_pending"}
             )
         )
         if frenzied and self.combat_state is not None:
@@ -12159,6 +13993,7 @@ class ExplorationUiSession:
         self.pending_enemy_turn_result = result
         self.pending_state.counterspell_reaction_resolved = None
         self.pending_state.cutting_words_reaction_resolved = None
+        self.pending_state.cutting_words_reaction_stage = ""
         self.pending_state.defensive_spell_reaction_resolved = None
         self.pending_state.retaliation_spell_reaction_resolved = None
         self.pending_state.deflect_missiles_reaction_resolved = None
@@ -12235,6 +14070,7 @@ class ExplorationUiSession:
         self.pending_reaction_window = None
         self.pending_state.counterspell_reaction_resolved = None
         self.pending_state.cutting_words_reaction_resolved = None
+        self.pending_state.cutting_words_reaction_stage = ""
         self.pending_state.defensive_spell_reaction_resolved = None
         self.pending_state.retaliation_spell_reaction_resolved = None
         self.pending_state.deflect_missiles_reaction_resolved = None
@@ -12348,25 +14184,42 @@ class ExplorationUiSession:
         encounter = self._active_encounter()
         if encounter is None:
             return False
-        options = self.class_feature_reaction_flow.cutting_words_options(
-            board=encounter.board,
-            state=self.combat_state,
-            enemy_result=self.pending_enemy_turn_result,
+        damage_stage = self.pending_state.cutting_words_reaction_stage == "damage"
+        options = (
+            self.class_feature_reaction_flow.cutting_words_damage_options(
+                board=encounter.board,
+                state=self.combat_state,
+                enemy_result=self.pending_enemy_turn_result,
+            )
+            if damage_stage
+            else self.class_feature_reaction_flow.cutting_words_options(
+                board=encounter.board,
+                state=self.combat_state,
+                enemy_result=self.pending_enemy_turn_result,
+            )
         )
         if not options:
+            if not damage_stage:
+                self.pending_state.cutting_words_reaction_stage = "damage"
+                return self._maybe_open_cutting_words_reaction()
             self.pending_state.cutting_words_reaction_resolved = True
             return False
         self.pending_reaction_window = open_reaction_window(
             interrupted_actor_id=str(self.pending_enemy_turn_result.enemy.id),
-            trigger_event="enemy_attack_roll",
+            trigger_event=options[0].trigger_event,
             options=options,
         )
         option = options[0]
         bard = self._actor_by_string_id(option.reactor_actor_id)
-        attack_total = self.pending_enemy_turn_result.attack_roll.total
+        shown_total = (
+            self.pending_enemy_turn_result.damage.total_before_reduction
+            if damage_stage and self.pending_enemy_turn_result.damage is not None
+            else self.pending_enemy_turn_result.attack_roll.total
+        )
+        shown_label = "obrażeniom" if damage_stage else "wynikowi ataku"
         self.board_message = (
-            f"{bard.name} może użyć Cutting Words przeciw wynikowi ataku "
-            f"{attack_total}. Rzuć k{option.value} albo pomiń reakcję."
+            f"{bard.name} może użyć Cutting Words przeciw {shown_label} "
+            f"{shown_total}. Rzuć k{option.value} albo pomiń reakcję."
         )
         self._add_message("Cutting Words", self.board_message)
         self._record(
@@ -12375,7 +14228,10 @@ class ExplorationUiSession:
                 "actor_id": option.reactor_actor_id,
                 "attacker_id": option.target_actor_id,
                 "die_sides": option.value,
-                "attack_total": attack_total,
+                "resolution_stage": (
+                    "damage_roll_revealed" if damage_stage else "attack_roll_revealed"
+                ),
+                "shown_total": shown_total,
             },
         )
         self._sync_board_leds()
@@ -12408,6 +14264,9 @@ class ExplorationUiSession:
                 "previous_attack_total": resolution.previous_attack_total,
                 "attack_total": resolution.attack_total,
                 "prevented_hit": resolution.prevented_hit,
+                "resolution_stage": resolution.resolution_stage,
+                "previous_damage_total": resolution.previous_damage_total,
+                "damage_total": resolution.damage_total,
             },
         )
         return self._commit_pending_enemy_turn(resolution.result)
@@ -12440,8 +14299,11 @@ class ExplorationUiSession:
                 f"Rzuć k{option.value} albo pomiń reakcję."
             )
             return self.state_payload()
-        self.pending_state.cutting_words_reaction_resolved = True
         self.pending_reaction_window = None
+        if self.pending_state.cutting_words_reaction_stage != "damage":
+            self.pending_state.cutting_words_reaction_stage = "damage"
+            return self._commit_pending_enemy_turn()
+        self.pending_state.cutting_words_reaction_resolved = True
         return self._commit_pending_enemy_turn()
 
     def _maybe_open_deflect_missiles_reaction(self) -> bool:
@@ -12498,6 +14360,7 @@ class ExplorationUiSession:
             option=option,
             die_roll=int(die_roll),
         )
+        self.pending_physical_feature_action_id = None
         self.combat_state = resolution.state
         self.pending_enemy_turn_result = resolution.result
         self.pending_state.deflect_missiles_reaction_resolved = True
@@ -12538,6 +14401,7 @@ class ExplorationUiSession:
             raise ValueError("Brak oczekującej reakcji Deflect Missiles.")
         self.pending_state.deflect_missiles_reaction_resolved = True
         self.pending_reaction_window = None
+        self.pending_physical_feature_action_id = None
         self._record(
             "ui_combat_deflect_missiles_skipped",
             {"actor_id": window.current_option.reactor_actor_id},
@@ -14039,6 +15903,7 @@ class ExplorationUiSession:
         self._add_recharge_notices(transition.recharge_results)
         self.selected_combat_movement_path = None
         self.combat_targeting_attack_source_id = None
+        self.combat_targeting_healing_source_id = None
         self.pending_enemy_turn_intent = None
         self.pending_enemy_turn_result = None
         self.pending_enemy_turn_ack_result = None
@@ -14388,8 +16253,10 @@ class ExplorationUiSession:
                     self.pending_spell_debuff,
                     self.pending_spell_dispel,
                     self.combat_targeting_attack_source_id,
+                    self.combat_targeting_healing_source_id,
                     self.combat_targeting_class_feature_action_id,
                     self.combat_selected_class_feature_target_id,
+                    self.combat_selected_class_feature_target_ids,
                     self.combat_aux_targeting_mode,
                 )
             ),
@@ -14422,22 +16289,32 @@ class ExplorationUiSession:
                 connected
                 and positions
                 and not screen_choice_active
+                and not actor_selection_active
             ),
             "connected": connected,
             "allow_retry": connected,
             "confirmation_policy": (
-                "screen_input"
+                "actor_card"
+                if actor_selection_active
+                else "screen_input"
                 if screen_choice_active
                 else "immediate"
             ),
         }
 
     def _board_selection_mode(self) -> str:
-        if self.encounter_setup_flow is not None:
+        if (
+            self.encounter_setup_flow is not None
+            and not self.encounter_setup_flow.completed
+        ):
             return "encounter_setup"
         if self.combat_state is not None:
             if self.pending_multi_target_damage_spell is not None:
                 return "multiple_targets"
+            if self.combat_targeting_class_feature_action_id == "preserve_life":
+                return "multiple_targets"
+            if self.combat_targeting_class_feature_action_id is not None:
+                return "combat_target"
             if (
                 self.pending_area_spell is not None
                 or self.pending_concentration_action is not None
@@ -14452,6 +16329,7 @@ class ExplorationUiSession:
                 or self.pending_spell_dispel is not None
                 or self.pending_magic_movement is not None
                 or self.pending_summon is not None
+                or self.combat_targeting_healing_source_id is not None
             ):
                 return "combat_target"
             return "combat_field"
@@ -14460,7 +16338,7 @@ class ExplorationUiSession:
         if self.exploration_board_selection_active:
             return "navigation"
         if self.board_actor_selection is not None:
-            return "exploration_actor"
+            return "actor_card"
         if self.active_point is not None or self.active_challenge is not None:
             return "interaction"
         return "location_action"
@@ -14536,21 +16414,94 @@ class ExplorationUiSession:
             ),
         }
 
+    def _long_rest_payload(self) -> dict[str, object]:
+        policy = self.current_zone.long_rest_policy
+        completed_count = rest_policy_count(self.state, policy.id) if policy is not None else 0
+        unavailable_reason: str | None = None
+        if policy is None:
+            unavailable_reason = "W tej lokacji nie ma warunków do długiego odpoczynku."
+        elif policy.max_completions and completed_count >= policy.max_completions:
+            unavailable_reason = "Długi odpoczynek w tej lokacji został już wykorzystany."
+        elif self.pending_encounter is not None:
+            unavailable_reason = "Encounter czeka na rozpoczęcie."
+        elif self.pending is not None or self.active_point is not None:
+            unavailable_reason = "Najpierw zakończ aktywną interakcję."
+        elif self.ui_flow_stage != UiFlowStage.LOCATION_ACTIVE:
+            unavailable_reason = "Długi odpoczynek nie jest teraz dostępny."
+        return {
+            "available": unavailable_reason is None,
+            "unavailable_reason": unavailable_reason,
+            "policy": (
+                {
+                    "id": policy.id,
+                    "safety": policy.safety.value,
+                    "risk_summary": policy.risk_summary,
+                    "duration_minutes": policy.duration_minutes,
+                    "duration_label": _duration_minutes_label(policy.duration_minutes),
+                    "completed_count": completed_count,
+                    "max_completions": policy.max_completions,
+                }
+                if policy is not None
+                else None
+            ),
+        }
+
     def _sync_board_leds(self) -> None:
         if self.board_adapter is None:
             return
         target = self._current_board_scan_target()
         self._show_board_feedback(target.feedback)
 
-    def _board_interaction_actions(self) -> tuple[dict[str, str], ...]:
+    def _board_interaction_block_reason(self) -> str:
+        if self.pending is not None:
+            return "Najpierw zakończ bieżącą decyzję albo rzut."
+        if self.pending_npc_transition is not None:
+            return "Najpierw rozstrzygnij reakcję NPC."
+        if self.pending_encounter is not None:
+            return "Najpierw rozstrzygnij rozpoczęcie encountera."
+        if self.exploration_setup_flow is not None:
+            return "Najpierw zakończ bieżący setup planszy."
+        return ""
+
+    def _board_exit_action(self) -> dict[str, object] | None:
         if (
             self.ui_flow_stage != UiFlowStage.LOCATION_ACTIVE
             or self.combat_state is not None
-            or self.pending is not None
-            or self.pending_encounter is not None
-            or self.pending_npc_transition is not None
-            or self.exploration_setup_flow is not None
         ):
+            return None
+        point = self.active_point
+        if point is not None:
+            if point.npc_interaction is not None:
+                label = "Zakończ rozmowę"
+                description = "Wróć do działań dostępnych w tej lokacji."
+            elif point.merchant_id is not None:
+                label = "Zakończ handel"
+                description = "Odejdź od straganu i wróć do działań w lokacji."
+            else:
+                label = "Odejdź od obiektu"
+                description = "Wróć do działań dostępnych w tej lokacji."
+            target_id = point.id
+        else:
+            label = f"Opuść: {self.current_zone.name}"
+            description = "Wróć do wyboru lokacji na mapie."
+            target_id = self.current_zone.id
+        unavailable_reason = self._board_interaction_block_reason()
+        return {
+            "action_kind": "exit",
+            "target_id": target_id,
+            "label": label,
+            "description": description,
+            "enabled": not unavailable_reason,
+            "unavailable_reason": unavailable_reason,
+        }
+
+    def _board_interaction_actions(self) -> tuple[dict[str, object], ...]:
+        if (
+            self.ui_flow_stage != UiFlowStage.LOCATION_ACTIVE
+            or self.combat_state is not None
+        ):
+            return ()
+        if self._board_interaction_block_reason():
             return ()
 
         if self.active_point is not None:
@@ -14594,7 +16545,7 @@ class ExplorationUiSession:
                 if isinstance(goal, dict)
             )
 
-        actions: list[dict[str, str]] = []
+        actions: list[dict[str, object]] = []
         for point in self.current_zone_points():
             if point.npc_interaction is None and point.merchant_id is None:
                 continue
@@ -14606,7 +16557,7 @@ class ExplorationUiSession:
                     "description": point.description,
                 }
             )
-        for option in self.current_zone.options:
+        for option in self._available_zone_options():
             if _zone_option_is_completed(option, self.state.flags):
                 continue
             actions.append(
@@ -14650,6 +16601,16 @@ class ExplorationUiSession:
                     "description": "Otwórz podgląd kosztu i ryzyka odpoczynku.",
                 }
             )
+        long_rest = self._long_rest_payload()
+        if bool(long_rest.get("available")):
+            actions.append(
+                {
+                    "action_kind": "long_rest",
+                    "target_id": "long_rest",
+                    "label": "Długi odpoczynek",
+                    "description": "Odpocznij 8 godzin i odnów PW, komórki oraz zasoby.",
+                }
+            )
         if (
             self.current_zone.search_dc is not None
             and self.current_zone.id not in self.state.exhausted_search_zones
@@ -14669,49 +16630,93 @@ class ExplorationUiSession:
 
     def _board_interaction_pads(self) -> tuple[BoardInteractionPad, ...]:
         positions = self.current_zone.interaction_pad_positions
-        actions = self._board_interaction_actions()
-        return tuple(
-            BoardInteractionPad(
-                symbol=str(index + 1),
-                position=position,
-                color=BOARD_INTERACTION_COLORS[index],
-                action_kind=action["action_kind"],
-                target_id=action["target_id"],
-                label=action["label"],
-                description=action["description"],
-            )
-            for index, (position, action) in enumerate(
-                zip(positions, actions, strict=False)
-            )
-            if index < len(BOARD_INTERACTION_COLORS)
-        )
-
-    def _board_actor_selection_pads(self) -> tuple[BoardActorSelectionPad, ...]:
-        selection = self.board_actor_selection
-        if selection is None:
+        if not positions:
             return ()
-        eligible_ids = set(selection.eligible_actor_ids)
-        positions = self.current_zone.interaction_pad_positions
-        pads: list[BoardActorSelectionPad] = []
-        for party_index, actor in enumerate(self._party_actors()):
-            if str(actor.id) not in eligible_ids:
+        actions = self._board_interaction_actions()
+        action_capacity = min(
+            MAX_BOARD_INSTANCE_ACTIONS,
+            max(0, len(positions) - 1),
+        )
+        if len(actions) > action_capacity:
+            context = (
+                self.active_point.name
+                if self.active_point is not None
+                else self.current_zone.name
+            )
+            raise ValueError(
+                f"Instancja „{context}” udostępnia {len(actions)} działań, "
+                f"ale ma miejsce tylko na {action_capacity} oraz systemowe wyjście."
+            )
+        context_id = (
+            f"point:{self.active_point.id}"
+            if self.active_point is not None
+            else f"challenge:{self.active_challenge.id}"
+            if self.active_challenge is not None
+            else f"zone:{self.current_zone.id}"
+        )
+        slot_by_action = self.board_interaction_slots.setdefault(context_id, {})
+        used_slots = set(slot_by_action.values())
+        for action in actions:
+            action_key = (str(action["action_kind"]), str(action["target_id"]))
+            if action_key in slot_by_action:
                 continue
-            pad_index = len(pads)
-            if pad_index >= len(positions):
-                break
-            color = PARTY_IDENTITY_COLORS[
-                min(party_index, len(PARTY_IDENTITY_COLORS) - 1)
-            ]
-            pads.append(
-                BoardActorSelectionPad(
-                    actor_id=str(actor.id),
-                    actor_name=actor.name,
-                    party_slot=party_index + 1,
-                    position=positions[pad_index],
-                    color=color,
+            free_slot = next(
+                (
+                    slot
+                    for slot in range(action_capacity)
+                    if slot not in used_slots
+                ),
+                None,
+            )
+            if free_slot is None:
+                raise ValueError(
+                    f"Instancja „{context_id}” wykorzystała już wszystkie "
+                    "stałe sloty kafelków interakcji."
+                )
+            slot_by_action[action_key] = free_slot
+            used_slots.add(free_slot)
+        action_pads_list: list[BoardInteractionPad] = []
+        for action in actions:
+            action_kind = str(action["action_kind"])
+            target_id = str(action["target_id"])
+            slot = slot_by_action[(action_kind, target_id)]
+            action_pads_list.append(
+                BoardInteractionPad(
+                    symbol=str(slot + 1),
+                    position=positions[slot],
+                    color=BOARD_INTERACTION_COLORS[slot],
+                    action_kind=action_kind,
+                    target_id=target_id,
+                    label=str(action["label"]),
+                    description=str(action["description"]),
                 )
             )
-        return tuple(pads)
+        action_pads = tuple(action_pads_list)
+        exit_action = self._board_exit_action()
+        if exit_action is None:
+            return action_pads
+        exit_enabled = bool(exit_action["enabled"])
+        exit_pad = BoardInteractionPad(
+            symbol="↩",
+            position=positions[-1],
+            color=(
+                LedColor.INVALID_SELECTION
+                if exit_enabled
+                else LedColor.BLOCKING_TERRAIN
+            ),
+            action_kind="exit",
+            target_id=str(exit_action["target_id"]),
+            label=str(exit_action["label"]),
+            description=str(exit_action["description"]),
+            enabled=exit_enabled,
+            unavailable_reason=str(exit_action["unavailable_reason"]),
+        )
+        return (*action_pads, exit_pad)
+
+    def _board_actor_selection_pads(self) -> tuple[BoardActorSelectionPad, ...]:
+        # Hero identity is declared with a physical card. The board remains
+        # reserved for spatial positions, targets and areas.
+        return ()
 
     def _board_interaction_payload(self) -> dict[str, object]:
         interaction_mode = not self.exploration_board_selection_active
@@ -14735,7 +16740,11 @@ class ExplorationUiSession:
             "selected_action_id": self.board_selected_action_id or None,
             "selection_revision": self.board_selection_revision,
             "pads": [pad.as_payload() for pad in pads],
-            "overflow_count": max(0, len(actions) - len(pads)),
+            "action_capacity": min(
+                MAX_BOARD_INSTANCE_ACTIONS,
+                max(0, len(self.current_zone.interaction_pad_positions) - 1),
+            ),
+            "overflow_count": 0,
             "actor_selection": {
                 "active": self.board_actor_selection is not None,
                 "goal_id": (
@@ -14744,9 +16753,16 @@ class ExplorationUiSession:
                     else self.board_selected_goal_id or None
                 ),
                 "role": (
+                    self.board_selected_actor_role
+                    if self.board_selected_actor_id
+                    else self.board_actor_selection.role
+                    if self.board_actor_selection is not None
+                    else None
+                ),
+                "awaiting_role": (
                     self.board_actor_selection.role
                     if self.board_actor_selection is not None
-                    else self.board_selected_actor_role or None
+                    else None
                 ),
                 "selected_actor_id": self.board_selected_actor_id or None,
                 "pads": [pad.as_payload() for pad in actor_pads],
@@ -14757,6 +16773,10 @@ class ExplorationUiSession:
         self,
         pad: BoardInteractionPad,
     ) -> dict[str, object]:
+        if not pad.enabled:
+            raise ValueError(
+                pad.unavailable_reason or "To pole jest teraz nieaktywne."
+            )
         self.board_selection_revision += 1
         self.board_selected_goal_id = ""
         self.board_selected_panel = ""
@@ -14814,8 +16834,15 @@ class ExplorationUiSession:
             return self.state_payload()
         if pad.action_kind == "short_rest":
             return self.start_short_rest()
+        if pad.action_kind == "long_rest":
+            return self.complete_long_rest()
         if pad.action_kind == "search":
             return self.start_exploration_search(self.selected_lead_actor_id)
+        if pad.action_kind == "exit":
+            if self.active_point is not None:
+                self.board_message = f"{pad.label}. Wrócono do działań w lokacji."
+                return self.select_point("")
+            return self.set_exploration_board_selection(True)
         raise ValueError("To pole interakcji nie ma obsługiwanej akcji.")
 
     @staticmethod
@@ -14866,7 +16893,10 @@ class ExplorationUiSession:
         )
 
     def _current_board_scan_target(self) -> BoardScanTarget:
-        if self.encounter_setup_flow is not None:
+        if (
+            self.encounter_setup_flow is not None
+            and not self.encounter_setup_flow.completed
+        ):
             step = self.encounter_setup_flow.current_step
             if step is not None:
                 if self.encounter_setup_flow.is_player_start_step:
@@ -15321,12 +17351,53 @@ class ExplorationUiSession:
                     actor,
                 )
                 positions = tuple(target.position for target in targets)
+                selected_positions = tuple(
+                    target.position
+                    for target in targets
+                    if str(target.id) in self.combat_selected_class_feature_target_ids
+                )
+                return BoardScanTarget(
+                    positions=positions,
+                    feedback=LedFeedback(
+                        (
+                            LedFrame(positions, LedColor.ALLY, LedRole.ALLY),
+                            LedFrame(
+                                selected_positions,
+                                LedColor.MOVEMENT_DESTINATION,
+                                LedRole.DESTINATION,
+                            ),
+                        )
+                    ),
+                    empty_message="Kliknij podświetloną figurkę celu cechy klasowej.",
+                )
+            if self.combat_targeting_healing_source_id is not None:
+                source = self._selected_healing_source(actor)
+                if (
+                    encounter is None
+                    or source is None
+                    or source.id != self.combat_targeting_healing_source_id
+                ):
+                    self.combat_targeting_healing_source_id = None
+                    return BoardScanTarget(
+                        positions=(),
+                        feedback=active_actor_led_feedback(
+                            self.combat_state.initiative_order
+                        ),
+                        empty_message="Wybrane źródło leczenia nie jest już dostępne.",
+                    )
+                targets = legal_healing_targets(
+                    encounter.board,
+                    actor,
+                    self.combat_state.actors,
+                    source,
+                )
+                positions = tuple(target.position for target in targets)
                 return BoardScanTarget(
                     positions=positions,
                     feedback=LedFeedback(
                         (LedFrame(positions, LedColor.ALLY, LedRole.ALLY),)
                     ),
-                    empty_message="Kliknij podświetloną figurkę celu cechy klasowej.",
+                    empty_message="Kliknij podświetlonego sojusznika do leczenia.",
                 )
             if self.pending_combat_interaction is not None:
                 position = self.pending_combat_interaction.target_position
@@ -15499,15 +17570,29 @@ class ExplorationUiSession:
             )
         if self.ui_flow_stage == UiFlowStage.LOCATION_PREVIEW:
             zones = self._scene_location_zones()
-            if self.preview_zone_id:
-                zone = self._preview_zone()
-                feedback = _single_zone_feedback(zone) if zone is not None else exploration_zone_feedback(self.state)
-            else:
-                feedback = _zone_markers_feedback(zones)
+            feedback = _zone_preview_feedback(
+                zones,
+                selected_zone_id=self.preview_zone_id,
+            )
             return BoardScanTarget(
                 positions=tuple(zone.marker_position for zone in zones),
                 feedback=feedback,
-                empty_message="Nie ma teraz dostępnych lokacji do kliknięcia.",
+                empty_message=(
+                    "Kliknij ponownie pole oglądanej lokacji, aby wejść, "
+                    "albo wskaż inną podświetloną lokację."
+                    if self.preview_zone_id
+                    else "Wskaż jedną z podświetlonych lokacji, aby zobaczyć podgląd."
+                ),
+            )
+        if self.board_actor_selection is not None:
+            return BoardScanTarget(
+                positions=(),
+                feedback=LedFeedback(),
+                empty_message=(
+                    "Zeskanuj kartę bohatera pomagającego w teście."
+                    if self.board_actor_selection.role == "helper"
+                    else "Zeskanuj kartę bohatera wykonującego test."
+                ),
             )
         actor_pads = self._board_actor_selection_pads()
         if actor_pads:
@@ -15533,8 +17618,9 @@ class ExplorationUiSession:
         if not self.exploration_board_selection_active:
             pads = self._board_interaction_pads()
             if pads:
+                enabled_pads = tuple(pad for pad in pads if pad.enabled)
                 return BoardScanTarget(
-                    positions=tuple(pad.position for pad in pads),
+                    positions=tuple(pad.position for pad in enabled_pads),
                     feedback=LedFeedback(
                         tuple(
                             LedFrame(
@@ -15546,8 +17632,13 @@ class ExplorationUiSession:
                         )
                     ),
                     empty_message=(
-                        "Nie ma aktywnych pól interakcji. Wybierz tryb podróży "
-                        "albo zakończ bieżącą decyzję."
+                        "Wybierz jedno z podświetlonych działań. Czerwone pole "
+                        "kończy bieżącą interakcję."
+                        if enabled_pads
+                        else (
+                            pads[-1].unavailable_reason
+                            or "Najpierw zakończ bieżące działanie."
+                        )
                     ),
                 )
             point = self.active_point
@@ -15580,8 +17671,11 @@ class ExplorationUiSession:
 
     def _board_selectable_zones(self) -> tuple[ExplorationZone, ...]:
         available_by_id = {zone.id: zone for zone in available_exploration_zones(self.state)}
-        zone_ids = (self.current_zone.id, *(zone.id for zone in self.travel_options()))
-        return tuple(available_by_id[zone_id] for zone_id in zone_ids if zone_id in available_by_id)
+        return tuple(
+            available_by_id[zone.id]
+            for zone in self._scene_location_zones()
+            if zone.id in available_by_id
+        )
 
     def _scene_location_zones(self) -> tuple[ExplorationZone, ...]:
         visible = tuple(zone for zone in visible_exploration_zones(self.state.zones) if zone.id != "barracks")
@@ -15947,6 +18041,34 @@ class ExplorationUiSession:
                                 action_id,
                                 target_id=str(target.id),
                             )
+                        if action_id == "preserve_life":
+                            target_id = str(target.id)
+                            selected_ids = self.combat_selected_class_feature_target_ids
+                            self.combat_selected_class_feature_target_ids = (
+                                tuple(
+                                    candidate_id
+                                    for candidate_id in selected_ids
+                                    if candidate_id != target_id
+                                )
+                                if target_id in selected_ids
+                                else (*selected_ids, target_id)
+                            )
+                            self.combat_selected_class_feature_target_id = (
+                                self.combat_selected_class_feature_target_ids[-1]
+                                if self.combat_selected_class_feature_target_ids
+                                else None
+                            )
+                            selected_names = _actor_names_from_actors(
+                                self.combat_state.actors,
+                                self.combat_selected_class_feature_target_ids,
+                            )
+                            self.board_message = (
+                                "Zachowanie życia: wybrani: "
+                                + (", ".join(selected_names) if selected_names else "brak")
+                                + ". Wpisz leczenie dla każdego celu i potwierdź."
+                            )
+                            self._sync_board_leds()
+                            return self.state_payload()
                         self.combat_selected_class_feature_target_id = str(target.id)
                         self.board_message = (
                             f"Wybrano: {target.name}. Podaj liczbę punktów "
@@ -15968,6 +18090,17 @@ class ExplorationUiSession:
                         if source.area is not None:
                             return self.select_player_area_spell_at_position(selected)
                         return self.select_player_attack_target_at_position(selected)
+                    if self.combat_targeting_healing_source_id is not None:
+                        source = self._selected_healing_source(actor)
+                        if (
+                            source is None
+                            or source.id != self.combat_targeting_healing_source_id
+                        ):
+                            self.combat_targeting_healing_source_id = None
+                            raise ValueError(
+                                "Wybrane źródło leczenia nie jest już dostępne."
+                            )
+                        return self.select_player_healing_target_at_position(selected)
                     if (
                         self.selected_combat_movement_path is not None
                         and self.selected_combat_movement_path.valid
@@ -16006,15 +18139,25 @@ class ExplorationUiSession:
         if self.ui_flow_stage == UiFlowStage.LOCATION_PREVIEW:
             for zone in self._scene_location_zones():
                 if selected == zone.marker_position:
+                    repeated_selection = self.preview_zone_id == zone.id
+                    self.board_selection_revision += 1
                     if not zone_is_ui_available(self.state, zone):
                         self.preview_zone_id = zone.id
-                        self.board_message = _locked_zone_message(zone)
+                        self.board_message = (
+                            f"{_locked_zone_message(zone)} Wybierz inną podświetloną "
+                            "lokację; ponowne kliknięcie nie otworzy zablokowanego miejsca."
+                        )
                         self._sync_board_leds()
                         return self.state_payload()
+                    if repeated_selection:
+                        self.board_message = (
+                            f"Potwierdzono wejście do lokacji: {zone.name}."
+                        )
+                        return self.confirm_location_preview()
                     self.preview_zone_id = zone.id
                     self.board_message = (
-                        f"Podgląd lokacji: {zone.name}. Czy chcesz przejść do tej lokacji? "
-                        "Potwierdź Enterem albo przyciskiem w UI."
+                        f"Podgląd lokacji: {zone.name}. Kliknij jej pole ponownie, "
+                        "aby wejść, albo wskaż inną podświetloną lokację."
                     )
                     self._sync_board_leds()
                     return self.state_payload()
@@ -16052,14 +18195,12 @@ class ExplorationUiSession:
             return self.state_payload()
         for zone in self._board_selectable_zones():
             if selected == zone.marker_position:
-                if zone.id == self.current_zone.id:
-                    self.board_message = f"Wybrano aktualną lokację: {zone.name}."
-                    return self.state_payload()
                 self.ui_flow_stage = UiFlowStage.LOCATION_PREVIEW
                 self.preview_zone_id = zone.id
+                self.board_selection_revision += 1
                 self.board_message = (
-                    f"Podgląd lokacji: {zone.name}. Czy opuścić {self.current_zone.name} i przejść do {zone.name}? "
-                    "Kliknij tę samą lokację ponownie, aby potwierdzić."
+                    f"Podgląd lokacji: {zone.name}. Kliknij jej pole ponownie, "
+                    "aby potwierdzić, albo wskaż inną podświetloną lokację."
                 )
                 self._sync_board_leds()
                 return self.state_payload()
@@ -16085,6 +18226,7 @@ class ExplorationUiSession:
         self.board_selected_actor_id = ""
         self.board_selected_actor_role = ""
         if selection.point is None:
+            self._sync_board_leds()
             return self.state_payload()
         self.pending = None
         point = selection.point
@@ -16384,13 +18526,17 @@ class ExplorationUiSession:
         option = next(
             (
                 candidate
-                for candidate in self.current_zone.options
+                for candidate in self._available_zone_options()
                 if candidate.id == option_id
             ),
             None,
         )
         if option is None:
             raise ValueError("To działanie nie jest dostępne w aktualnej lokacji.")
+        if option.assigned_actor_id is not None:
+            if actor_id is not None and actor_id != option.assigned_actor_id:
+                raise ValueError("Ta indywidualna interakcja należy do innej postaci.")
+            actor_id = option.assigned_actor_id
         if _zone_option_is_completed(option, self.state.flags):
             raise ValueError("To działanie zostało już rozstrzygnięte.")
         description = player_description.strip()
@@ -17130,9 +19276,12 @@ class ExplorationUiSession:
                 profile,
                 check_participants=participants,
                 check_aggregation=(
-                    CheckAggregation.MAJORITY
-                    if participants == CheckParticipants.WHOLE_PARTY
-                    else CheckAggregation.LEAD_RESULT
+                    selected_goal.check_aggregation
+                    or (
+                        CheckAggregation.MAJORITY
+                        if participants == CheckParticipants.WHOLE_PARTY
+                        else CheckAggregation.LEAD_RESULT
+                    )
                 ),
             )
             self.pending = PendingInteraction(
@@ -19405,7 +21554,9 @@ class ExplorationUiSession:
             return self.state_payload()
         if self.pending is None or self.pending.stage != PendingStage.ROLL or self.pending.check_plan is None:
             raise ValueError("Brak oczekującego rzutu.")
-        plan = self.pending.check_plan
+        plan = self._check_plan_with_archetype_flaws(self.pending.check_plan)
+        if plan is not self.pending.check_plan:
+            self.pending = replace(self.pending, check_plan=plan)
         inputs = _check_inputs_from_payload(
             self.exploration.actors,
             plan,
@@ -19413,6 +21564,18 @@ class ExplorationUiSession:
             self.active_combat_effects,
         )
         check_result = resolve_exploration_check(plan, inputs)
+        consumed_card_reaction_ids = {
+            effect.id
+            for effect in self.active_combat_effects
+            if effect.actor_id in {str(item.actor.id) for item in inputs}
+            and effect.kind.startswith("exploration_card_check_")
+        }
+        if consumed_card_reaction_ids:
+            self.active_combat_effects = tuple(
+                effect
+                for effect in self.active_combat_effects
+                if effect.id not in consumed_card_reaction_ids
+            )
         consumed_optional_die_ids = {
             effect.id
             for effect in self.active_combat_effects
@@ -19468,6 +21631,75 @@ class ExplorationUiSession:
             self._write_stable_checkpoint(reason="exploration_roll_resolved")
         self._sync_board_leds()
         return self.state_payload()
+
+    def _check_plan_with_archetype_flaws(
+        self,
+        plan: ExplorationCheckPlan,
+    ) -> ExplorationCheckPlan:
+        """Apply scene-aware flaws immediately before physical dice are read."""
+        lead_id = plan.lead_actor_id or self.selected_lead_actor_id
+        actor = next(
+            (item for item in self.exploration.actors if str(item.id) == lead_id),
+            None,
+        )
+        if actor is None:
+            return plan
+        modes: list[RollMode] = []
+        if (
+            actor_has_feature(actor, "flaw_interrogation")
+            and plan.ability == "charisma"
+            and self.active_point is not None
+            and "authority" in self.active_point.divination_tags
+        ):
+            key = f"flaw_mira_interrogation_used:{self.active_point.id}"
+            disguised = bool(
+                scene_flag(self.state.flags, "alter_self", False)
+                or scene_flag(self.state.flags, "disguise_self", False)
+            )
+            helped = plan.participants == CheckParticipants.LEAD_WITH_HELP
+            if not scene_flag(self.state.flags, key, False) and not disguised and not helped:
+                modes.append(RollMode.DISADVANTAGE)
+                self.state = replace(
+                    self.state,
+                    flags=set_scene_flag(self.state.flags, key, True),
+                )
+                self._add_message(
+                    "Skaza Miry",
+                    "Obecność władzy przywołuje wspomnienie przesłuchania: pierwszy test ma utrudnienie.",
+                )
+        if actor_has_feature(actor, "flaw_leave_no_one"):
+            downed = any(
+                ally.id != actor.id
+                and ally.faction == actor.faction
+                and ally.hp <= 0
+                and not ally.is_dead()
+                and grid_distance_feet(actor.position, ally.position) <= 30
+                for ally in self.exploration.actors
+            )
+            rescue_test = plan.skill == "medicine" or "wounded" in plan.context_tags
+            if downed and not rescue_test:
+                modes.append(RollMode.DISADVANTAGE)
+        if (
+            actor_has_feature(actor, "flaw_approval")
+            and plan.participants == CheckParticipants.LEAD_WITH_HELP
+            and self.active_point is not None
+        ):
+            key = f"flaw_lorian_approval_block:{self.active_point.id}"
+            if scene_flag(self.state.flags, key, False):
+                self.state = replace(
+                    self.state,
+                    flags=set_scene_flag(self.state.flags, key, False),
+                )
+                self._add_message(
+                    "Skaza Loriana",
+                    "Pomoc sojusznika przywraca Lorianowi pewność siebie.",
+                )
+        if not modes:
+            return plan
+        return replace(
+            plan,
+            roll_mode=_combined_roll_mode(plan.roll_mode, tuple(modes)),
+        )
 
     def _resolve_exploration_search_roll(
         self,
@@ -20236,6 +22468,26 @@ class ExplorationUiSession:
             self._advance_pending_npc_time()
             return
         success = check_result.success
+        lead_id = self.pending.check_plan.lead_actor_id if self.pending.check_plan else ""
+        lead = next(
+            (actor for actor in self.exploration.actors if str(actor.id) == lead_id),
+            None,
+        )
+        if (
+            not success
+            and lead is not None
+            and actor_has_feature(lead, "flaw_approval")
+            and self.active_point is not None
+        ):
+            key = f"flaw_lorian_approval_block:{self.active_point.id}"
+            self.state = replace(
+                self.state,
+                flags=set_scene_flag(self.state.flags, key, True),
+            )
+            self._add_message(
+                "Skaza Loriana",
+                "Porażka odbiera Lorianowi pewność siebie; Inspiracja jest zablokowana w tej rozmowie.",
+            )
         message = proposal.success_message if success else proposal.failure_message
         self._add_message("Wynik interakcji NPC", message or ("Sukces." if success else "Porażka."))
         self._record("ui_npc_roll_resolved", {"success": success, "message": message})
@@ -21174,6 +23426,162 @@ def _automatic_d20_input(request: D20RollRequest, rng) -> D20RollInput:
     return D20RollInput(request, first, rng.randint(1, 20))
 
 
+def _goodberry_healing_source(actor: Actor) -> HealingSource | None:
+    pool = actor_resource_pool(actor, "goodberry_charges")
+    if pool is None or pool.current <= 0:
+        return None
+    return HealingSource(
+        id="goodberry_use",
+        name="Dobra jagoda",
+        source_type=HealingSourceType.CUSTOM,
+        range_feet=5,
+        healing_hint="1 PW",
+        healing_fixed=1,
+        resource_pool_id="goodberry_charges",
+        resource_cost=1,
+        excluded_creature_types=("construct", "undead"),
+    )
+
+
+def _physical_feature_prompt_payload(
+    action_id: str | None,
+    *,
+    actor: Actor,
+    state: CombatState,
+    encounter: LoadedEncounter | None,
+    pending_player_attack: PendingPlayerAttack | None,
+    pending_reaction_window: ReactionWindow | None,
+) -> dict[str, object] | None:
+    if not action_id:
+        return None
+    payload: dict[str, object] = {
+        "action_id": action_id,
+        "label": player_label(action_id),
+    }
+    if action_id == "second_wind":
+        payload.update({"input_kind": "die", "die_sides": 10})
+    elif action_id == "sacred_weapon":
+        payload.update(
+            {
+                "input_kind": "weapon",
+                "weapons": [
+                    {"id": item.id, "name": item.name}
+                    for item in actor.inventory
+                    if item.kind == "weapon"
+                    and item.equipped
+                    and item.available
+                    and not item.broken
+                ],
+            }
+        )
+    elif action_id in {"turn_undead", "turn_the_unholy"}:
+        payload.update(
+            {
+                "input_kind": "saving_rolls",
+                "targets": [
+                    {
+                        "id": str(target.id),
+                        "name": target.name,
+                        "ability": "wisdom",
+                        "dc": actor.spell_save_dc,
+                    }
+                    for target in state.actors
+                    if target.id != actor.id
+                    and not target.is_defeated()
+                    and (
+                        target.creature_type == "undead"
+                        if action_id == "turn_undead"
+                        else target.creature_type in {"fiend", "undead"}
+                    )
+                    and grid_distance_feet(actor.position, target.position) <= 30
+                    and (
+                        encounter is None
+                        or line_of_sight_clear(
+                            encounter.board,
+                            actor.position,
+                            target.position,
+                        )
+                    )
+                ],
+            }
+        )
+    elif action_id == "wild_shape":
+        payload.update(
+            {
+                "input_kind": "form",
+                "forms": [
+                    {
+                        "id": form.id,
+                        "name": form.name,
+                        "ac": form.ac,
+                        "hit_points": form.hit_points,
+                        "speed_feet": form.speed_feet,
+                        "role": (
+                            "tank"
+                            if form.id == "brown_bear"
+                            else "mobilny DPS"
+                            if form.id == "giant_eagle"
+                            else "skradanie i kontrola"
+                        ),
+                    }
+                    for form in available_wild_shape_forms(actor)
+                ],
+            }
+        )
+    elif action_id == "cunning_action":
+        payload.update(
+            {
+                "input_kind": "mode",
+                "modes": [
+                    {"id": "dash", "name": "Sprint"},
+                    {"id": "disengage", "name": "Odwrót"},
+                    {"id": "hide", "name": "Ukrycie"},
+                ],
+            }
+        )
+    elif action_id == "pact_weapon":
+        payload.update(
+            {
+                "input_kind": "form",
+                "forms": [
+                    {"id": form_id, "name": player_label(form_id)}
+                    for form_id in PACT_WEAPON_FORM_IDS
+                ],
+            }
+        )
+    elif action_id == "divine_smite":
+        payload.update(
+            {
+                "input_kind": "slot",
+                "available_slot_levels": list(available_cast_levels(actor, 1)),
+                "target_id": (
+                    pending_player_attack.target_id
+                    if pending_player_attack is not None
+                    else ""
+                ),
+            }
+        )
+    elif action_id == "deflect_missiles":
+        option = (
+            pending_reaction_window.current_option
+            if pending_reaction_window is not None
+            else None
+        )
+        payload.update(
+            {
+                "input_kind": "die",
+                "die_sides": 10,
+                "incoming_damage": (
+                    option.value
+                    if option is not None
+                    and option.kind == ReactionKind.DEFLECT_MISSILES
+                    else 0
+                ),
+            }
+        )
+    return payload
+
+
 def _combat_payload(
     state: CombatState | None,
     encounter: LoadedEncounter | None = None,
@@ -21208,11 +23616,14 @@ def _combat_payload(
     selected_attack_source_ids: dict[str, str] | None = None,
     selected_healing_source_ids: dict[str, str] | None = None,
     targeting_attack_source_id: str | None = None,
+    targeting_healing_source_id: str | None = None,
     targeting_class_feature_action_id: str | None = None,
     selected_class_feature_target_id: str | None = None,
+    selected_class_feature_target_ids: tuple[str, ...] = (),
     aux_targeting_mode: str | None = None,
     stabilization_method: str | None = None,
     stabilization_target_id: str | None = None,
+    pending_physical_feature_action_id: str | None = None,
 ) -> dict[str, object] | None:
     if state is None:
         return None
@@ -21291,6 +23702,8 @@ def _combat_payload(
     if attack_source is not None:
         attack_source = _effective_attack_source_for_effects(actor, attack_source, active_combat_effects)
     healing_sources = encounter.healing_sources_by_actor.get(actor.id, ()) if encounter is not None else ()
+    if (goodberry := _goodberry_healing_source(actor)) is not None:
+        healing_sources = (*healing_sources, goodberry)
     selected_healing_source_id = selected_healing_source_ids.get(str(actor.id))
     (
         selected_healing_base_id,
@@ -21530,6 +23943,15 @@ def _combat_payload(
                 "area_shape": attack_source.area.shape.value if attack_source.area is not None else None,
             }
             if attack_source is not None and targeting_attack_source_id == attack_source.id
+            else {
+                "active": True,
+                "source_id": healing_source.id,
+                "source_name": healing_source.name,
+                "kind": "healing",
+                "area_shape": None,
+            }
+            if healing_source is not None
+            and targeting_healing_source_id == healing_source.id
             else None
         ),
         "available_healing_sources": [_healing_source_payload(source, actor) for source in healing_sources],
@@ -21583,7 +24005,14 @@ def _combat_payload(
             ) and state.turn_action.action_use == ActionUse.ACTION_AVAILABLE,
         },
         "combat_actions": [
-            _combat_action_payload(action, actor)
+            _combat_action_payload(
+                action,
+                actor,
+                equipment_blocked=flaw_blocks_equipment_use(
+                    actor,
+                    active_combat_effects,
+                ),
+            )
             for action in (encounter.combat_actions_by_actor.get(actor.id, ()) if encounter is not None else ())
         ],
         "class_feature_actions": [
@@ -21674,6 +24103,14 @@ def _combat_payload(
                 for action_id in feature.action_ids
             )
         ],
+        "physical_feature_prompt": _physical_feature_prompt_payload(
+            pending_physical_feature_action_id,
+            actor=actor,
+            state=state,
+            encounter=encounter,
+            pending_player_attack=pending_player_attack,
+            pending_reaction_window=pending_reaction_window,
+        ),
         "class_feature_targeting": (
             {
                 "action_id": targeting_class_feature_action_id,
@@ -21686,6 +24123,13 @@ def _combat_payload(
                     if targeting_class_feature_action_id == "bardic_inspiration"
                     else "Wybierz na planszy rannego sojusznika w zasięgu "
                     "zdolności, a następnie określ liczbę wydawanych punktów leczenia."
+                ),
+                "cost": (
+                    "Akcja bonusowa · 1 użycie Inspiracji bardowskiej"
+                    if targeting_class_feature_action_id == "bardic_inspiration"
+                    else "Akcja · 1 użycie Boskiej Mocy"
+                    if targeting_class_feature_action_id == "preserve_life"
+                    else "Akcja · wybrane punkty puli leczenia"
                 ),
                 "selected_target": (
                     next(
@@ -21700,6 +24144,22 @@ def _combat_payload(
                         None,
                     )
                     if selected_class_feature_target_id
+                    else None
+                ),
+                "selected_targets": [
+                    {
+                        "id": str(target.id),
+                        "name": target.name,
+                        "hp": target.hp,
+                        "max_hp": target.max_hp,
+                        "maximum_healing": max(0, target.max_hp // 2 - target.hp),
+                    }
+                    for target in state.actors
+                    if str(target.id) in selected_class_feature_target_ids
+                ],
+                "healing_pool": (
+                    actor.level * 5
+                    if targeting_class_feature_action_id == "preserve_life"
                     else None
                 ),
             }
@@ -22399,11 +24859,21 @@ def _pending_concentration_action_payload(
             active_effects,
         ),
         "action": (
-            _combat_action_payload(action, caster)
+            _combat_action_payload(
+                action,
+                caster,
+                equipment_blocked=flaw_blocks_equipment_use(
+                    caster,
+                    active_effects,
+                ),
+            )
             if action is not None
             else None
         ),
         "cast_level": pending.cast_level,
+        "casting_minutes": pending.casting_minutes,
+        "casting_ready": pending.casting_minutes > 0,
+        "prepared_roll_total": pending.prepared_roll_total,
         "maximum_targets": pending.maximum_targets,
         "selected_target_ids": list(pending.selected_target_ids),
         "selection_mode": "area" if pending.legal_positions else "targets",
@@ -23277,7 +25747,12 @@ def _attack_context_category(source) -> CombatMenuCategory:
     return CombatMenuCategory.ATTACK
 
 
-def _combat_action_payload(action, actor: Actor | None = None) -> dict[str, object]:
+def _combat_action_payload(
+    action,
+    actor: Actor | None = None,
+    *,
+    equipment_blocked: bool = False,
+) -> dict[str, object]:
     from dnd_board_game.inventory import item_power_available
 
     quantity = _combat_action_item_quantity(action, actor)
@@ -23302,7 +25777,14 @@ def _combat_action_payload(action, actor: Actor | None = None) -> dict[str, obje
         if actor is not None and action.spell_level > 0
         else None
     )
-    available = prepared and has_spell_resource and has_item_resource and item_power_ready
+    item_blocked = equipment_blocked and action.source_item_id is not None
+    available = (
+        prepared
+        and has_spell_resource
+        and has_item_resource
+        and item_power_ready
+        and not item_blocked
+    )
     return {
         "id": action.id,
         "name": action.name,
@@ -23381,11 +25863,15 @@ def _combat_action_payload(action, actor: Actor | None = None) -> dict[str, obje
             if spell_validation is not None
             else [0] if action.spell_level == 0 else []
         ),
-        "unavailable_reason": _combat_action_unavailable_reason(
-            action,
-            actor,
-            quantity=quantity,
-            charges_current=charges_current,
+        "unavailable_reason": (
+            "Skaza Brakki: podczas Szału nie może korzystać z ekwipunku."
+            if item_blocked
+            else _combat_action_unavailable_reason(
+                action,
+                actor,
+                quantity=quantity,
+                charges_current=charges_current,
+            )
         ),
         "resource_label": (
             f"ładunki {charges_current}/{charges_maximum}"
@@ -25082,6 +27568,36 @@ def _check_inputs_from_payload(
         if actor_id not in raw_rolls:
             raise ValueError(f"Brakuje wyniku rzutu dla: {actor.name}.")
         request = _actor_check_request(actor, plan)
+        reaction_effects = tuple(
+            effect
+            for effect in active_effects
+            if effect.actor_id == actor_id
+            and effect.kind.startswith("exploration_card_check_")
+        )
+        if reaction_effects:
+            modes = tuple(
+                RollMode.ADVANTAGE
+                if effect.kind == "exploration_card_check_advantage"
+                else RollMode.DISADVANTAGE
+                if effect.kind == "exploration_card_check_disadvantage"
+                else RollMode.NORMAL
+                for effect in reaction_effects
+            )
+            modifiers = tuple(
+                RollModifier(
+                    effect.label,
+                    effect.value,
+                    RollModifierType.CUSTOM,
+                    stacking_key=effect.stacking_key,
+                )
+                for effect in reaction_effects
+                if effect.value
+            )
+            request = replace(
+                request,
+                mode=_combined_roll_mode(request.mode, modes),
+                modifiers=(*request.modifiers, *modifiers),
+            )
         raw_roll = raw_rolls[actor_id]
         if isinstance(raw_roll, Mapping):
             inspiration_roll_raw = raw_roll.get("bardic_inspiration_roll")
@@ -25558,6 +28074,7 @@ def _zone_option_payload(
     option: ExplorationOption,
     *,
     completed: bool,
+    assigned_actor: Actor | None = None,
 ) -> dict[str, object]:
     check = option.ability_check
     return {
@@ -25574,6 +28091,24 @@ def _zone_option_payload(
         "resolution_mode": option.resolution_mode.value,
         "description_mode": option.description_mode.value,
         "default_declaration": option.default_declaration,
+        "character_moment": option.character_moment,
+        "performer_mode": (
+            "fixed"
+            if option.assigned_actor_id is not None
+            else "choose"
+            if check is not None
+            else "none"
+        ),
+        "assigned_actor_id": option.assigned_actor_id,
+        "assigned_actor": (
+            {
+                "id": str(assigned_actor.id),
+                "name": assigned_actor.name,
+                "portrait": assigned_actor.portrait,
+            }
+            if assigned_actor is not None
+            else None
+        ),
         "check": (
             {
                 "ability": check.ability,
@@ -25600,6 +28135,34 @@ def _single_zone_feedback(zone: ExplorationZone | None) -> LedFeedback:
 
 def _zone_markers_feedback(zones: tuple[ExplorationZone, ...]) -> LedFeedback:
     return LedFeedback(tuple(LedFrame((zone.marker_position,), zone.color, LedRole.DESTINATION) for zone in zones))
+
+
+def _zone_preview_feedback(
+    zones: tuple[ExplorationZone, ...],
+    *,
+    selected_zone_id: str = "",
+) -> LedFeedback:
+    frames = [
+        LedFrame((zone.marker_position,), zone.color, LedRole.DESTINATION)
+        for zone in zones
+    ]
+    selected = next(
+        (zone for zone in zones if zone.id == selected_zone_id),
+        None,
+    )
+    if selected is not None:
+        selected_color = tuple(
+            min(255, round(channel + (255 - channel) * 0.42))
+            for channel in selected.color
+        )
+        frames.append(
+            LedFrame(
+                (selected.marker_position,),
+                selected_color,
+                LedRole.DESTINATION,
+            )
+        )
+    return LedFeedback(tuple(frames))
 
 
 def _npc_state_for_point(

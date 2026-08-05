@@ -32,7 +32,7 @@ def _watchtower():
     return exploration, challenge, state
 
 
-def test_planner_resolves_active_goal_and_player_selected_participants():
+def test_planner_resolves_force_gate_as_authored_whole_party_check():
     exploration, challenge, state = _watchtower()
     planner = ExplorationGoalExecutionPlanner()
 
@@ -42,14 +42,14 @@ def test_planner_resolves_active_goal_and_player_selected_participants():
         flags=state.flags,
         actors=exploration.actors,
         goal_id="force_entry",
-        requested_check_participants="lead_with_help",
-        requested_actor_ids=("hero", "cleric"),
+        requested_check_participants=None,
+        requested_actor_ids=(),
     )
 
     assert plan.route.transition.id == "force_gate"
     assert plan.route.resolution_option_id == "force_gate"
-    assert plan.check_participants == CheckParticipants.LEAD_WITH_HELP
-    assert plan.participant_actor_ids == ("hero", "cleric")
+    assert plan.check_participants == CheckParticipants.WHOLE_PARTY
+    assert plan.participant_actor_ids == ("hero", "rogue", "cleric")
 
 
 def test_planner_rejects_goal_whose_graph_node_is_not_active():

@@ -26,6 +26,7 @@ from dnd_board_game.character_creation import (
     SKILL_CHOICE_HELP,
     CharacterDraft,
     CharacterRoster,
+    CharacterRosterScan,
     LevelUpChoices,
     build_character,
     class_feature_help,
@@ -35,11 +36,17 @@ from dnd_board_game.character_creation import (
     level_up_character,
     origin_feature_help,
     validate_character_draft,
+    HERO_ARCHETYPES_BY_ID,
+    PLAYABLE_HERO_IDS,
+    apply_boardgame_archetype,
 )
 from dnd_board_game.core.player_labels_pl import PLAYER_LABELS_PL, player_label
 from dnd_board_game.inventory import effective_armor_class
 from dnd_board_game.physical_cards import (
+    DecisionCardActionKind,
     normalize_decision_card_scanner_text,
+    parse_actor_card_qr_payload,
+    parse_decision_card_qr_payload,
     resolve_universal_card_scan,
 )
 from dnd_board_game.rules import experience_progress
@@ -71,6 +78,7 @@ def create_app(
         character_class.id: character_class.name
         for character_class in character_catalog.classes
     }
+    scanned_new_game_party: list[str] = []
     app.jinja_env.globals["character_portrait_url"] = _character_portrait_url
 
     def persist_character_progress(actors) -> None:
@@ -87,10 +95,19 @@ def create_app(
 
     def new_game_context(**extra):
         choices = scenario_choices()
+        roster_scan = character_roster.scan()
+        roster = CharacterRosterScan(
+            tuple(
+            character
+            for character in roster_scan.characters
+            if str(character.actor.id) in PLAYABLE_HERO_IDS
+            ),
+            roster_scan.errors,
+        )
         return {
             "scenarios": choices,
             "active_scenario_id": session.exploration.scenario_id,
-            "roster": character_roster.scan(),
+            "roster": roster,
             "class_names": character_class_names,
             **extra,
         }
@@ -109,48 +126,90 @@ def create_app(
 
     @app.get("/new-game")
     def new_game():
+        scanned_new_game_party.clear()
         return render_template("new_game.html", **new_game_context())
 
-    @app.post("/new-game/start")
-    def start_new_game():
-        scenario_id = str(request.form.get("scenario_id", "")).strip()
-        scenarios_by_id = {entry.id: entry for entry in scenario_choices()}
-        selected_scenario = scenarios_by_id.get(scenario_id)
-        if selected_scenario is None:
-            return render_template(
-                "new_game.html",
-                **new_game_context(selected_scenario_id=scenario_id),
-                error="Wybrany scenariusz nie jest dostępny albo nie przeszedł walidacji.",
-            ), 400
-        character_ids = tuple(request.form.getlist("character_ids"))
-        if not 1 <= len(character_ids) <= 5 or len(character_ids) != len(
-            set(character_ids)
-        ):
-            return render_template(
-                "new_game.html",
-                **new_game_context(
-                    selected_scenario_id=scenario_id,
-                    selected_character_ids=character_ids,
-                ),
-                error="Wybierz od 1 do 5 różnych zapisanych postaci.",
-            ), 400
+    @app.post("/api/new-game/card-scan")
+    def api_new_game_card_scan():
+        data = request.get_json(silent=True) or {}
+        payload = data.get("payload")
+        if not isinstance(payload, str) or not payload or len(payload) > 256:
+            return jsonify({"error": "Nieprawidłowy payload karty."}), 400
+        normalized = normalize_decision_card_scanner_text(payload)
         try:
+            if ":actor:" in normalized:
+                actor_card = parse_actor_card_qr_payload(normalized)
+                if actor_card.actor_id not in PLAYABLE_HERO_IDS:
+                    raise ValueError("Ta karta nie należy do startowego zestawu bohaterów.")
+                character = character_roster.load(actor_card.actor_id)
+                if actor_card.actor_id not in scanned_new_game_party:
+                    if len(scanned_new_game_party) >= 5:
+                        raise ValueError("Drużyna może mieć maksymalnie 5 bohaterów.")
+                    scanned_new_game_party.append(actor_card.actor_id)
+                return jsonify(
+                    {
+                        "applied": True,
+                        "effect": "party_actor_selected",
+                        "actor_id": actor_card.actor_id,
+                        "actor_name": character.actor.name,
+                        "selected_actor_ids": list(scanned_new_game_party),
+                    }
+                )
+            universal = resolve_universal_card_scan(normalized)
+            if universal.action.value == "decline":
+                removed_id = scanned_new_game_party.pop() if scanned_new_game_party else None
+                return jsonify(
+                    {
+                        "applied": removed_id is not None,
+                        "effect": "party_actor_removed",
+                        "removed_actor_id": removed_id,
+                        "selected_actor_ids": list(scanned_new_game_party),
+                    }
+                )
+            scenario_id = str(data.get("scenario_id", "")).strip()
+            scenarios_by_id = {entry.id: entry for entry in scenario_choices()}
+            selected_scenario = scenarios_by_id.get(scenario_id)
+            if selected_scenario is None:
+                raise ValueError("Najpierw wybierz dostępny scenariusz.")
+            if not 1 <= len(scanned_new_game_party) <= 5:
+                raise ValueError("Zeskanuj od 1 do 5 kart różnych bohaterów.")
             party = tuple(
-                character_roster.load(character_id).actor
-                for character_id in character_ids
+                apply_boardgame_archetype(
+                    character_roster.load(actor_id).actor,
+                    spell_definitions=tuple(
+                        spell for _, spell in character_resources.spells
+                    ),
+                )
+                for actor_id in scanned_new_game_party
             )
             session.configure_scenario(selected_scenario.path)
             session.configure_custom_party(party)
-        except ValueError as exc:
-            return render_template(
-                "new_game.html",
-                **new_game_context(
-                    selected_scenario_id=scenario_id,
-                    selected_character_ids=character_ids,
-                ),
-                error=str(exc),
+            return jsonify(
+                {
+                    "applied": True,
+                    "effect": "start_new_game",
+                    "redirect": url_for("play"),
+                    "selected_actor_ids": list(scanned_new_game_party),
+                }
+            )
+        except (TypeError, ValueError) as exc:
+            return jsonify(
+                {
+                    "error": str(exc),
+                    "selected_actor_ids": list(scanned_new_game_party),
+                }
             ), 400
-        return redirect(url_for("play"))
+
+    @app.post("/new-game/start")
+    def start_new_game():
+        return render_template(
+            "new_game.html",
+            **new_game_context(),
+            error=(
+                "Drużynę można zatwierdzić wyłącznie skanami kart bohaterów "
+                "oraz fizyczną kartą ACCEPT."
+            ),
+        ), 409
 
     @app.get("/load-game")
     def load_game():
@@ -248,6 +307,7 @@ def create_app(
         return render_template(
             "character_detail.html",
             character=character,
+            archetype=HERO_ARCHETYPES_BY_ID.get(str(character.actor.id)),
             payload=character_record_payload(character),
             effective_ac=effective_armor_class(character.actor),
             experience=experience_progress(character.actor),
@@ -327,7 +387,18 @@ def create_app(
                     ),
                 ),
             )
-            character_roster.save(result.character_after, overwrite=True)
+            character_roster.save(
+                replace(
+                    result.character_after,
+                    actor=apply_boardgame_archetype(
+                        result.character_after.actor,
+                        spell_definitions=tuple(
+                            spell for _, spell in character_resources.spells
+                        ),
+                    ),
+                ),
+                overwrite=True,
+            )
         except ValueError as exc:
             try:
                 character = character_roster.load(character_id)
@@ -387,10 +458,313 @@ def create_app(
         payload = data.get("payload")
         if not isinstance(payload, str) or not payload or len(payload) > 256:
             return jsonify({"error": "Nieprawidłowy payload karty decyzji."}), 400
+        normalized = normalize_decision_card_scanner_text(payload)
+        if ":actor:" in normalized:
+            try:
+                actor_card = parse_actor_card_qr_payload(normalized)
+                context = data.get("context")
+                if (
+                    isinstance(context, dict)
+                    and context.get("continuation_stage") == "navigator"
+                ):
+                    navigator = session.declare_continuation_navigator(
+                        actor_card.actor_id
+                    )
+                    return jsonify(
+                        {
+                            "applied": False,
+                            "effect": "select_continuation_navigator",
+                            "label": navigator["actor_name"],
+                            "payload": normalized,
+                            **navigator,
+                            "feedback": {
+                                "status": "waiting",
+                                "next_step": "enter_navigation_roll",
+                                "message": (
+                                    f"{navigator['actor_name']} prowadzi drużynę. "
+                                    "Wpisz naturalny wynik rzutu na nawigację."
+                                ),
+                            },
+                        }
+                    )
+                selection = session.board_actor_selection
+                if selection is None:
+                    zone_option_id = (
+                        str(context.get("zone_option_id", ""))
+                        if isinstance(context, dict)
+                        else ""
+                    )
+                    state = session.state_payload()
+                    zone_option = next(
+                        (
+                            option
+                            for option in state.get("flow", {}).get(
+                                "zone_options",
+                                [],
+                            )
+                            if str(option.get("id")) == zone_option_id
+                            and option.get("check") is not None
+                        ),
+                        None,
+                    )
+                    actor = next(
+                        (
+                            candidate
+                            for candidate in state.get("actors", [])
+                            if str(candidate.get("id")) == actor_card.actor_id
+                            and candidate.get("faction") == "ally"
+                            and not candidate.get("defeated", False)
+                        ),
+                        None,
+                    )
+                    if zone_option is None:
+                        raise ValueError(
+                            "Aplikacja nie oczekuje teraz wyboru bohatera."
+                        )
+                    assigned_actor_id = zone_option.get("assigned_actor_id")
+                    if assigned_actor_id:
+                        assigned_actor = zone_option.get("assigned_actor")
+                        assigned_actor_name = (
+                            str(assigned_actor.get("name", assigned_actor_id))
+                            if isinstance(assigned_actor, dict)
+                            else str(assigned_actor_id)
+                        )
+                        raise ValueError(
+                            "Ta scena ma już przypisanego wykonawcę: "
+                            f"{assigned_actor_name}."
+                        )
+                    if actor is None:
+                        raise ValueError("Ta postać nie może teraz zostać wybrana.")
+                    session._record(
+                        "ui_actor_card_zone_option_declared",
+                        {
+                            "actor_id": actor_card.actor_id,
+                            "zone_option_id": zone_option_id,
+                        },
+                    )
+                    return jsonify(
+                        {
+                            "applied": False,
+                            "effect": "select_zone_option_actor",
+                            "actor_id": actor_card.actor_id,
+                            "label": str(actor.get("name", actor_card.actor_id)),
+                            "payload": normalized,
+                        }
+                    )
+                if actor_card.actor_id not in selection.eligible_actor_ids:
+                    raise ValueError("Ta postać nie może teraz zostać wybrana.")
+                state = session.select_exploration_actor(
+                    goal_id=selection.goal_id,
+                    actor_id=actor_card.actor_id,
+                    role=selection.role,
+                )
+                session._record(
+                    "ui_actor_card_selected",
+                    {
+                        "actor_id": actor_card.actor_id,
+                        "goal_id": selection.goal_id,
+                        "role": selection.role,
+                    },
+                )
+                return jsonify(
+                    {
+                        "applied": True,
+                        "effect": "select_actor",
+                        "actor_id": actor_card.actor_id,
+                        "label": actor_card.actor_id.upper(),
+                        "payload": normalized,
+                        "state": state,
+                    }
+                )
+            except (TypeError, ValueError) as exc:
+                return jsonify({"error": str(exc), "state": session.state_payload()}), 400
         try:
-            card = resolve_universal_card_scan(
-                normalize_decision_card_scanner_text(payload)
+            action_card = parse_decision_card_qr_payload(normalized)
+        except (TypeError, ValueError) as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+        if (
+            action_card.action_kind is DecisionCardActionKind.SPELL
+            and session.ui_flow_stage.value == "spell_preparation"
+        ):
+            context = data.get("context")
+            if (
+                not isinstance(context, dict)
+                or context.get("spell_preparation_mode") != "custom"
+            ):
+                return jsonify(
+                    {
+                        "error": (
+                            "Najpierw zeskanuj ODRZUĆ, aby rozpocząć własne "
+                            "przygotowywanie czarów."
+                        ),
+                        "state": session.state_payload(),
+                    }
+                ), 400
+            current_preparation = session.state_payload().get(
+                "spell_preparation",
+                {},
             )
+            current_actor_id = (
+                str(current_preparation.get("current_actor_id", ""))
+                if isinstance(current_preparation, dict)
+                else ""
+            )
+            if str(context.get("spell_preparation_actor_id", "")) != current_actor_id:
+                return jsonify(
+                    {
+                        "error": "Zmieniła się postać przygotowująca czary. Zeskanuj kartę ponownie.",
+                        "state": session.state_payload(),
+                    }
+                ), 409
+            try:
+                selection = session.declare_spell_preparation_card(
+                    action_card.source_id
+                )
+            except (TypeError, ValueError) as exc:
+                return jsonify(
+                    {"error": str(exc), "state": session.state_payload()}
+                ), 400
+            return jsonify(
+                {
+                    "applied": False,
+                    "effect": "select_preparation_spell",
+                    "label": selection["spell_label"],
+                    "payload": normalized,
+                    **selection,
+                    "feedback": {
+                        "status": "waiting",
+                        "next_step": "scan_preparation_spell",
+                        "message": (
+                            f"Dodano {selection['spell_label']} do przygotowań "
+                            f"postaci {selection['actor_name']}."
+                        ),
+                    },
+                }
+            )
+        if action_card.action_kind is not DecisionCardActionKind.UNIVERSAL:
+            declared_stage = session.ui_flow_stage.value
+            session._record(
+                "ui_physical_action_card_declared",
+                {
+                    "action_kind": action_card.action_kind.value,
+                    "source_id": action_card.source_id,
+                    "payload": normalized,
+                    "flow_stage": declared_stage,
+                },
+            )
+            try:
+                state = session.use_physical_action_card(
+                    action_card.action_kind,
+                    action_card.source_id,
+                    owner_actor_id=action_card.actor_id,
+                )
+            except Exception as exc:
+                session._record(
+                    "ui_physical_action_card_resolved",
+                    {
+                        "action_kind": action_card.action_kind.value,
+                        "source_id": action_card.source_id,
+                        "applied": False,
+                        "error": str(exc),
+                        "declared_flow_stage": declared_stage,
+                    },
+                )
+                return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+            session._record(
+                "ui_physical_action_card_resolved",
+                {
+                    "action_kind": action_card.action_kind.value,
+                    "source_id": action_card.source_id,
+                    "applied": True,
+                    "declared_flow_stage": declared_stage,
+                    "result_flow_stage": session.ui_flow_stage.value,
+                },
+            )
+            combat = state.get("combat") if isinstance(state, dict) else None
+            combat = combat if isinstance(combat, dict) else {}
+            next_step = "resolved"
+            stabilization = combat.get("stabilization")
+            if combat.get("physical_feature_prompt"):
+                next_step = "enter_feature_value"
+            elif (
+                combat.get("targeting")
+                or combat.get("class_feature_targeting")
+                or (
+                    isinstance(stabilization, dict)
+                    and stabilization.get("targeting_method")
+                )
+            ):
+                next_step = "select_board_target"
+            elif any(
+                combat.get(key)
+                for key in (
+                    "pending_area_spell",
+                    "pending_magic_movement",
+                    "pending_multi_target_damage_spell",
+                    "pending_spell_debuff",
+                    "pending_summon",
+                )
+            ):
+                next_step = "select_board_target"
+            elif combat.get("pending_concentration_action"):
+                pending_concentration = combat["pending_concentration_action"]
+                selected_ids = (
+                    pending_concentration.get("selected_target_ids", [])
+                    if isinstance(pending_concentration, dict)
+                    else []
+                )
+                next_step = (
+                    "confirm_action" if selected_ids else "select_board_target"
+                )
+            elif combat.get("reaction_window"):
+                next_step = "enter_reaction_roll"
+            elif (
+                isinstance(state.get("board_selection"), dict)
+                and state["board_selection"].get("mode") == "spell_area"
+                and state["board_selection"].get("legal_position_count", 0) > 0
+            ):
+                next_step = "select_board_target"
+            feedback = {
+                "status": "waiting" if next_step != "resolved" else "resolved",
+                "next_step": next_step,
+                "message": session.board_message,
+            }
+            current_actor = combat.get("current_actor")
+            if isinstance(current_actor, dict):
+                resources = [
+                    {
+                        "id": str(pool.get("id", "")),
+                        "label": str(pool.get("label", pool.get("id", ""))),
+                        "current": int(pool.get("current", 0)),
+                        "maximum": int(pool.get("maximum", 0)),
+                    }
+                    for pool in current_actor.get("resource_pools", [])
+                    if isinstance(pool, dict) and int(pool.get("maximum", 0)) > 0
+                ]
+                resources.extend(
+                    {
+                        "id": f"spell_slot_{int(slot.get('level', 0))}",
+                        "label": f"Slot {int(slot.get('level', 0))}. poziomu",
+                        "current": int(slot.get("remaining", 0)),
+                        "maximum": int(slot.get("maximum", 0)),
+                    }
+                    for slot in current_actor.get("spell_slots", [])
+                    if isinstance(slot, dict) and int(slot.get("maximum", 0)) > 0
+                )
+                feedback["resources"] = resources
+            return jsonify(
+                {
+                    "applied": True,
+                    "effect": "action_card",
+                    "action": action_card.source_id,
+                    "label": player_label(action_card.source_id),
+                    "payload": normalized,
+                    "feedback": feedback,
+                    "state": state,
+                }
+            )
+        try:
+            card = resolve_universal_card_scan(normalized)
         except (TypeError, ValueError) as exc:
             return jsonify({"error": str(exc)}), 400
         declared_stage = session.ui_flow_stage.value
@@ -410,7 +784,43 @@ def create_app(
             "applied": False,
         }
         try:
-            if card.action.value == "accept" and declared_stage == "ready_to_start":
+            if session.exploration_card_state.pending is not None:
+                state = session.resolve_exploration_card(
+                    accept=card.action.value == "accept",
+                )
+                response.update(
+                    applied=True,
+                    effect=(
+                        "accept_exploration_card"
+                        if card.action.value == "accept"
+                        else "decline_exploration_card"
+                    ),
+                    state=state,
+                    feedback={
+                        "status": "resolved",
+                        "next_step": "resume_prompt",
+                        "message": session.board_message,
+                    },
+                )
+                return jsonify(response)
+            if (
+                card.action.value == "accept"
+                and session.board_actor_selection is not None
+                and session.board_actor_selection.role == "helper"
+                and session.board_selected_actor_id
+            ):
+                session.board_actor_selection = None
+                session.board_selection_revision += 1
+                session.board_message = (
+                    "Wybrano test bez pomocnika. Karta prowadzącego pozostaje aktywna."
+                )
+                session._sync_board_leds()
+                response.update(
+                    applied=True,
+                    effect="skip_optional_helper",
+                    state=session.state_payload(),
+                )
+            elif card.action.value == "accept" and declared_stage == "ready_to_start":
                 response.update(
                     applied=True,
                     effect="start_session",
@@ -648,6 +1058,13 @@ def create_app(
     def api_short_rest_start():
         try:
             return jsonify(session.start_short_rest())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/rest/long/complete")
+    def api_long_rest_complete():
+        try:
+            return jsonify(session.complete_long_rest())
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
@@ -906,17 +1323,15 @@ def create_app(
 
     @app.post("/api/exploration/actor-selection/select")
     def api_exploration_actor_selection_select():
-        data = request.get_json(silent=True) or {}
-        try:
-            return jsonify(
-                session.select_exploration_actor(
-                    goal_id=str(data.get("goal_id", "")),
-                    actor_id=str(data.get("actor_id", "")),
-                    role=str(data.get("role", "lead")),
-                )
-            )
-        except Exception as exc:
-            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+        return jsonify(
+            {
+                "error": (
+                    "Wybór bohatera jest dostępny wyłącznie przez fizyczną "
+                    "kartę postaci."
+                ),
+                "state": session.state_payload(),
+            }
+        ), 409
 
     @app.post("/api/board/configure")
     def api_board_configure():
@@ -1490,6 +1905,13 @@ def create_app(
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
+    @app.post("/api/combat/physical-feature/cancel")
+    def api_combat_physical_feature_cancel():
+        try:
+            return jsonify(session.cancel_physical_feature_prompt())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
     @app.post("/api/combat/class-feature/targeting/cancel")
     def api_combat_class_feature_targeting_cancel():
         try:
@@ -1562,6 +1984,13 @@ def create_app(
     def api_combat_concentration_cancel():
         try:
             return jsonify(session.cancel_combat_concentration_action())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/timed-cast/complete")
+    def api_combat_timed_cast_complete():
+        try:
+            return jsonify(session.complete_timed_combat_spell())
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 

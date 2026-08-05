@@ -261,6 +261,15 @@
         "interaction_pad_positions": [[6, 2], [8, 2], [10, 2], [10, 4], [10, 6], [8, 6], [6, 6], [6, 4]],
         "color": "marker",
         "description": "Centralny plac wioski z tablicą ogłoszeń i kilkoma zaniepokojonymi mieszkańcami.",
+        "exploration_cards": ["intimidation", "break_in", "diagnosis", "charm_person", "suggestion", "mage_hand", "detect_magic", "guidance", "bardic_inspiration"],
+        "exploration_card_reactions": [
+          {"id": "market_intimidate_rumors", "card_action_id": "intimidation", "interaction_ids": ["ask_for_rumors"], "check_modifier": 2, "effects": [{"type": "set_flag", "parameters": {"key": "rumors_intimidated", "value": true}}], "message": "Brakka naciska na mieszkańców. Test otrzymuje +2, lecz porażka zapisze agresywny ton rozmowy."},
+          {"id": "bren_intimidate_advance", "card_action_id": "intimidation", "interaction_ids": ["negotiate_advance", "elder_npc"], "check_modifier": 2, "effects": [{"type": "set_flag", "parameters": {"key": "bren_intimidation_attempt", "value": true}}], "message": "Brakka może oprzeć negocjacje na fizycznej przewadze: +2 do tej próby; porażka pogorszy relację z Brenem."},
+          {"id": "bren_charm_advance", "card_action_id": "charm_person", "interaction_ids": ["negotiate_advance", "elder_npc"], "roll_mode": "advantage", "effects": [{"type": "set_flag", "parameters": {"key": "bren_charmed_attempt", "value": true}}], "message": "Magia zmiękcza nastawienie Brena. Najbliższy test społeczny ma przewagę."},
+          {"id": "bren_suggestion_advance", "card_action_id": "suggestion", "interaction_ids": ["negotiate_advance", "elder_npc"], "check_modifier": 2, "effects": [{"type": "set_flag", "parameters": {"key": "bren_suggestion_attempt", "value": true}}], "message": "Rozsądnie sformułowana Sugestia daje +2 do negocjacji, ale nie może zmusić Brena do działania wbrew bezpieczeństwu wioski."},
+          {"id": "market_break_in", "card_action_id": "break_in", "interaction_ids": ["merchant_stall", "elder_npc"], "roll_mode": "advantage", "effects": [{"type": "set_flag", "parameters": {"key": "market_pickpocket_attempt", "value": true}}], "message": "Mira dostrzega okazję do kradzieży kieszonkowej. Otwarta próba Zręczności ma przewagę, lecz porażka zostanie zauważona."},
+          {"id": "market_detect_magic", "card_action_id": "detect_magic", "prompt_kinds": ["free_action", "interaction"], "effects": [{"type": "set_flag", "parameters": {"key": "market_magic_scanned", "value": true}}], "message": "Nimra sprawdza rynek pod kątem magicznych aur; zwykła sakiewka nie świeci magią."}
+        ],
         "adjacent_zone_ids": ["tavern", "elder_house", "forest_road"],
         "travel_minutes": 5,
         "options": [
@@ -294,6 +303,23 @@
             "failure_message": "Mieszkańcy są nieufni i nie mówią nic konkretnego.",
             "success_flag": "rumors_collected",
             "failure_flag": "rumors_dry"
+          },
+          {
+            "id": "mira_market_pickpocket_child",
+            "label": "Mira zauważa młodą kieszonkowczynię",
+            "kind": "check",
+            "resolution_mode": "check",
+            "description_mode": "required",
+            "color": "interactive",
+            "description": "Mira widzi dziecko próbujące ukraść chleb dokładnie tą samą sztuczką, której sama kiedyś używała. Może zareagować po swojemu.",
+            "ability_check": {"ability": "wisdom", "skill": "insight", "dc": 10},
+            "success_message": "Mira zatrzymuje kradzież bez alarmowania straży i dowiaduje się, że dzieci widziały nocne światła na starym trakcie.",
+            "failure_message": "Dziecko odczytuje intencje Miry jako zagrożenie i znika między straganami.",
+            "success_flag": "mira_market_child_trusted",
+            "failure_flag": "mira_market_child_fled",
+            "required_party_actor_id": "mira",
+            "assigned_actor_id": "mira",
+            "character_moment": true
           }
         ],
         "search": {
@@ -320,12 +346,24 @@
         "interaction_pad_positions": [[1, 9], [3, 9], [5, 9], [5, 11], [5, 13], [3, 13], [1, 13], [1, 11]],
         "color": "warning",
         "description": "Głośna karczma, w której można odpocząć i posłuchać plotek.",
+        "exploration_cards": ["guard_duty", "alarm", "intimidation", "charm_person", "suggestion", "mage_hand", "identify", "guidance", "bardic_inspiration"],
+        "exploration_card_reactions": [
+          {"id": "olan_charm", "card_action_id": "charm_person", "interaction_ids": ["chat_with_keeper", "tavern_keeper"], "roll_mode": "advantage", "effects": [{"type": "set_flag", "parameters": {"key": "olan_charmed_attempt", "value": true}}], "message": "Olan staje się przychylny; najbliższy test społeczny ma przewagę."},
+          {"id": "olan_intimidation", "card_action_id": "intimidation", "interaction_ids": ["chat_with_keeper", "tavern_keeper"], "check_modifier": 2, "effects": [{"type": "set_flag", "parameters": {"key": "olan_intimidated_attempt", "value": true}}], "message": "Groźba daje +2 do próby wydobycia informacji, ale porażka pogorszy nastawienie Olana."},
+          {"id": "tavern_dice_mage_hand", "card_action_id": "mage_hand", "interaction_ids": ["tavern_dice_game"], "roll_mode": "advantage", "effects": [{"type": "set_flag", "parameters": {"key": "dice_game_cheating", "value": true}}], "message": "Magiczna dłoń próbuje wpłynąć na kości. Test ma przewagę; porażka oznacza wykrycie oszustwa."}
+        ],
         "adjacent_zone_ids": ["market"],
         "travel_minutes": 5,
         "short_rest": {
           "id": "village_tavern_rest",
           "safety": "safe",
           "duration_minutes": 60,
+          "max_completions": 1
+        },
+        "long_rest": {
+          "id": "village_tavern_long_rest",
+          "safety": "safe",
+          "duration_minutes": 480,
           "max_completions": 1
         },
         "options": [
@@ -348,6 +386,57 @@
             "time_cost_minutes": 15,
             "success_message": "Hazardzista kręci głową z uznaniem i przesuwa wygraną na waszą stronę stołu.",
             "failure_message": "Kości tym razem sprzyjają hazardziście, który zgarnia postawioną monetę."
+          },
+          {
+            "id": "garran_wounded_soldiers",
+            "label": "Garran zauważa rannych żołnierzy",
+            "kind": "check",
+            "resolution_mode": "check",
+            "description_mode": "required",
+            "color": "movement",
+            "description": "Przy bocznym stole siedzą żołnierze, którzy wrócili bez części oddziału. Garran może do nich przemówić albo po prostu z nimi usiąść.",
+            "ability_check": {"ability": "charisma", "skill": "persuasion", "dc": 11},
+            "success_message": "Słowa Garrana nie usuwają winy, ale pozwalają żołnierzom po raz pierwszy opowiedzieć o poległych bez spuszczania wzroku.",
+            "failure_message": "Rozmowa urywa się szybko. Garran rozpoznaje w ich milczeniu własne niewypowiedziane wspomnienia.",
+            "success_flag": "garran_wounded_soldiers_encouraged",
+            "failure_flag": "garran_wounded_soldiers_silent",
+            "required_party_actor_id": "garran",
+            "assigned_actor_id": "garran",
+            "character_moment": true
+          },
+          {
+            "id": "dagna_injured_caravaner",
+            "label": "Dagna dostrzega źle opatrzoną ranę",
+            "kind": "check",
+            "resolution_mode": "check",
+            "description_mode": "required",
+            "color": "success",
+            "description": "Jeden z woźniców ukrywa zakażone cięcie pod brudnym bandażem, bo nie stać go na medyka.",
+            "ability_check": {"ability": "wisdom", "skill": "medicine", "dc": 10},
+            "success_message": "Dagna oczyszcza ranę i uczy woźnicę zmieniać opatrunek. W zamian słyszy o niebezpiecznym ruchu na leśnym trakcie.",
+            "failure_message": "Dagna łagodzi ból, lecz bez lepszych warunków nie może zrobić więcej. Woźnica mimo to zapamiętuje, że spróbowała.",
+            "success_flag": "dagna_caravaner_treated",
+            "failure_flag": "dagna_caravaner_comforted",
+            "required_party_actor_id": "dagna",
+            "assigned_actor_id": "dagna",
+            "character_moment": true
+          },
+          {
+            "id": "lorian_soldiers_song",
+            "label": "Lorian rozpoznaje niedokończoną pieśń",
+            "kind": "check",
+            "resolution_mode": "check",
+            "description_mode": "required",
+            "color": "purple",
+            "description": "Ranny żołnierz bez przekonania nuci marszową melodię, ale nie potrafi dokończyć zwrotki o powrocie do domu.",
+            "ability_check": {"ability": "charisma", "skill": "performance", "dc": 10},
+            "success_message": "Lorian dopisuje prostą, niebohaterską zwrotkę o tych, którzy wracają. Karczma na chwilę śpiewa razem z nim.",
+            "failure_message": "Pieśń nie chwyta, lecz jeden z żołnierzy uśmiecha się do Loriana za samą próbę.",
+            "success_flag": "lorian_soldiers_song_shared",
+            "failure_flag": "lorian_soldiers_song_attempted",
+            "required_party_actor_id": "lorian",
+            "assigned_actor_id": "lorian",
+            "character_moment": true
           }
         ]
       },
@@ -366,6 +455,12 @@
         "interaction_pad_positions": [[12, 7], [14, 7], [16, 7], [16, 9], [16, 11], [14, 11], [12, 11], [12, 9]],
         "color": "interactive",
         "description": "Skromny dom sołtysa i miejsce rozmów o problemach wioski.",
+        "exploration_cards": ["intimidation", "tactical_assessment", "diagnosis", "charm_person", "suggestion", "detect_magic", "identify", "guidance", "bardic_inspiration"],
+        "exploration_card_reactions": [
+          {"id": "elder_map_tactics", "card_action_id": "tactical_assessment", "prompt_kinds": ["free_action", "interaction"], "effects": [{"type": "set_flag", "parameters": {"key": "travel_navigation_advantage", "value": true}}], "message": "Garran analizuje starą mapę. Rzut nawigacji do strażnicy będzie wykonywany z przewagą."},
+          {"id": "elder_map_magic", "card_action_id": "detect_magic", "prompt_kinds": ["free_action", "interaction"], "effects": [{"type": "set_flag", "parameters": {"key": "elder_map_magic_checked", "value": true}}], "message": "Mapa nie skrywa aktywnej magii, ale stary atrament wskazuje późniejsze poprawki trasy."},
+          {"id": "elder_map_identify", "card_action_id": "identify", "prompt_kinds": ["free_action", "interaction"], "effects": [{"type": "set_flag", "parameters": {"key": "elder_map_identified", "value": true}}, {"type": "set_flag", "parameters": {"key": "travel_navigation_modifier", "value": 2}}], "message": "Nimra rozpoznaje wojskowe oznaczenia na mapie: +2 do rzutu nawigacji."}
+        ],
         "adjacent_zone_ids": ["market"],
         "travel_minutes": 5,
         "options": [
@@ -379,6 +474,40 @@
             "color": "movement",
             "message": "Na starej mapie widać boczną ścieżkę do strażnicy.",
             "success_flag": "route_prepared"
+          },
+          {
+            "id": "brakka_bren_hard_truth",
+            "label": "Brakka może postawić Brenowi twarde warunki",
+            "kind": "check",
+            "resolution_mode": "check",
+            "description_mode": "required",
+            "color": "warning",
+            "description": "W domu Brena Brakka widzi, jak sołtys próbuje przerzucić całe ryzyko na cudze barki. Może skonfrontować go bez owijania w słowa.",
+            "ability_check": {"ability": "charisma", "skill": "intimidation", "dc": 12},
+            "success_message": "Bren przestaje mówić jak urzędnik i przyznaje, jak bardzo boi się o ludzi wysłanych wcześniej do strażnicy.",
+            "failure_message": "Bren zamyka się w sobie; presja Brakki przypomina mu bardziej groźbę niż uczciwą rozmowę.",
+            "success_flag": "brakka_bren_hard_truth_success",
+            "failure_flag": "brakka_bren_hard_truth_failure",
+            "required_party_actor_id": "brakka",
+            "assigned_actor_id": "brakka",
+            "character_moment": true
+          },
+          {
+            "id": "nimra_map_arcane_correction",
+            "label": "Nimra dostrzega poprawkę wykonaną magicznym atramentem",
+            "kind": "check",
+            "resolution_mode": "check",
+            "description_mode": "required",
+            "color": "interactive",
+            "description": "Jedna z linii na mapie została naniesiona atramentem reagującym na pozostałości magii podobne do tych z laboratorium Nimry.",
+            "ability_check": {"ability": "intelligence", "skill": "arcana", "dc": 11},
+            "success_message": "Nimra odczytuje poprawkę jako ostrzeżenie przed niestabilnym miejscem przy strażnicy, a nie zwykłe oznaczenie drogi.",
+            "failure_message": "Atrament budzi znajomy niepokój, ale wzór jest zbyt zatarty, by Nimra mogła go pewnie odczytać.",
+            "success_flag": "nimra_map_anomaly_recognized",
+            "failure_flag": "nimra_map_anomaly_uncertain",
+            "required_party_actor_id": "nimra",
+            "assigned_actor_id": "nimra",
+            "character_moment": true
           }
         ]
       },
@@ -397,6 +526,14 @@
         "interaction_pad_positions": [[15, 17], [17, 17], [19, 17], [19, 19], [19, 21], [17, 21], [15, 21], [15, 19]],
         "color": "movement",
         "description": "Droga prowadząca w stronę opuszczonej strażnicy.",
+        "exploration_cards": ["tracking", "tactical_assessment", "pass_without_trace", "find_traps", "locate_object", "detect_magic", "guidance", "bardic_inspiration"],
+        "exploration_card_reactions": [
+          {"id": "road_tracking", "card_action_id": "tracking", "interaction_ids": ["check_tracks"], "roll_mode": "advantage", "effects": [{"type": "set_flag", "parameters": {"key": "forest_tracks_profiled", "value": true}}], "message": "Erynd porządkuje tropy według wieku i kierunku. Test śladów ma przewagę."},
+          {"id": "road_tactical", "card_action_id": "tactical_assessment", "prompt_kinds": ["free_action", "interaction"], "effects": [{"type": "set_flag", "parameters": {"key": "travel_navigation_modifier", "value": 2}}], "message": "Ocena drogi wskazuje punkty orientacyjne: +2 do nawigacji."},
+          {"id": "road_pass_trace", "card_action_id": "pass_without_trace", "prompt_kinds": ["free_action", "interaction", "before_roll"], "effects": [{"type": "set_flag", "parameters": {"key": "watchtower_approach_concealed", "value": true}}], "message": "Drużyna zaciera ślady marszu; podejście do strażnicy nie zwiększy ryzyka wykrycia."},
+          {"id": "road_locate", "card_action_id": "locate_object", "prompt_kinds": ["free_action", "interaction"], "effects": [{"type": "set_flag", "parameters": {"key": "old_road_landmark_located", "value": true}}, {"type": "set_flag", "parameters": {"key": "travel_navigation_advantage", "value": true}}], "message": "Znany punkt orientacyjny wyznacza kierunek. Nawigacja ma przewagę."},
+          {"id": "road_find_traps", "card_action_id": "find_traps", "prompt_kinds": ["free_action", "interaction"], "effects": [{"type": "set_flag", "parameters": {"key": "forest_road_traps_checked", "value": true}}], "message": "Erynd sprawdza pobocza i zwężenia traktu; jawne pułapki w tej strefie zostają ujawnione."}
+        ],
         "adjacent_zone_ids": ["market"],
         "travel_minutes": 15,
         "options": [
@@ -419,6 +556,23 @@
             "failure_message": "Ślady mieszają się w błocie i nie dają pewnej odpowiedzi.",
             "success_flag": "forest_tracks_found",
             "failure_flag": "forest_tracks_unclear"
+          },
+          {
+            "id": "erynd_old_patrol_sign",
+            "label": "Erynd rozpoznaje znak dawnego patrolu",
+            "kind": "check",
+            "resolution_mode": "check",
+            "description_mode": "required",
+            "color": "movement",
+            "description": "Na korze starego drzewa Erynd widzi niemal zatarty znak ostrzegawczy używany przez zwiadowców po nieudanych zasadzkach.",
+            "ability_check": {"ability": "wisdom", "skill": "survival", "dc": 10},
+            "success_message": "Erynd rozpoznaje ostrzeżenie przed obserwatorem na wzgórzu i spokojnie wyjaśnia drużynie, jak podejść bez powtarzania dawnej zasadzki.",
+            "failure_message": "Znak jest zbyt stary. Erynd nie potrafi go odczytać, ale od tej chwili uważniej obserwuje linię drzew.",
+            "success_flag": "erynd_patrol_sign_understood",
+            "failure_flag": "erynd_patrol_sign_uncertain",
+            "required_party_actor_id": "erynd",
+            "assigned_actor_id": "erynd",
+            "character_moment": true
           }
         ]
       }
@@ -445,8 +599,9 @@
         "positions": [[8, 5]],
         "color": "interactive",
         "visibility": "visible",
-        "description": "Sołtys czeka przy rynku i nerwowo wypatruje pomocy.",
-        "requires_setup": false,
+      "description": "Sołtys czeka przy rynku i nerwowo wypatruje pomocy.",
+      "divination_tags": ["authority"],
+      "requires_setup": false,
         "npc_interaction": {
           "id": "elder_bren",
           "name": "Sołtys Bren",

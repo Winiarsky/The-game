@@ -50,6 +50,7 @@ from dnd_board_game.combat import (
 )
 from dnd_board_game.combat.damage import DamageComponentInput, DamageType, apply_damage_result, resolve_damage
 from dnd_board_game.character_creation import (
+    all_default_character_drafts,
     build_character,
     default_character_drafts,
     load_character_catalog,
@@ -60,6 +61,7 @@ from dnd_board_game.exploration import (
     CraftingComponentSelection,
     CraftingDraft,
     ExplorationChallengeState,
+    PartyPosition,
     challenge_state_for,
     add_exploration_condition,
     ExplorationTrapStatus,
@@ -77,6 +79,7 @@ from dnd_board_game.llm import (
     GmDeclarationAnalysisType,
     NpcInteractionProposal,
 )
+from dnd_board_game.physical_cards import DecisionCardActionKind
 from dnd_board_game.rules import (
     ActiveEffect,
     D20RollInput,
@@ -649,8 +652,6 @@ def test_exploration_ui_session_resolves_gate_challenge():
     state = session.submit_action(
         "Wyważamy bramę.",
         selected_goal_id="force_entry",
-        selected_check_participants="single_actor",
-        participant_actor_ids=("hero",),
     )
     assert state["pending"]["stage"] == "decision"
     assert state["active_challenge"]["current_progress"] == 0
@@ -664,15 +665,13 @@ def test_exploration_ui_session_resolves_gate_challenge():
 
     state = session.decide("accept")
     assert state["pending"]["stage"] == "roll"
-    roll = state["required_rolls"][0]
-    assert {key: roll[key] for key in ("actor_id", "actor_name", "die_sides", "label")} == {
-        "actor_id": "hero",
-        "actor_name": "Bohater",
-        "die_sides": 20,
-        "label": "d20",
-    }
+    assert [roll["actor_id"] for roll in state["required_rolls"]] == [
+        "hero",
+        "rogue",
+        "cleric",
+    ]
 
-    state = session.resolve_rolls({"hero": 16})
+    state = session.resolve_rolls({"hero": 16, "rogue": 1, "cleric": 1})
 
     assert state["pending"]["stage"] == "hazard_save"
     assert state["pending"]["trap"]["id"] == "gate_alarm_wire"
@@ -733,8 +732,6 @@ def test_open_lock_goal_is_consumed_and_makes_later_force_check_easier():
     force_preview = session.submit_action(
         "Teraz wyważamy to, co jeszcze trzyma.",
         selected_goal_id="force_entry",
-        selected_check_participants="lead_with_help",
-        participant_actor_ids=("hero",),
     )
 
     assert force_preview["pending"]["option"]["id"] == "force_gate"
@@ -773,8 +770,6 @@ def test_gate_flow_owns_check_mechanics_and_drops_llm_numeric_modifier():
     preview = session.submit_action(
         "Bohater bierze ciężką belkę i używa jej jak tarana.",
         selected_goal_id="force_entry",
-        selected_check_participants="single_actor",
-        participant_actor_ids=("hero",),
     )
 
     option = preview["pending"]["option"]
@@ -821,16 +816,14 @@ def test_gate_flow_accepts_reduced_llm_method_contract_without_check_fields():
     preview = session.submit_action(
         "Bohater z rozpędu wali barkiem w bramę.",
         selected_goal_id="force_entry",
-        selected_check_participants="single_actor",
-        participant_actor_ids=("hero",),
     )
 
     option = preview["pending"]["option"]
     assert option["ability"] == "strength"
     assert option["skill"] == "athletics"
     assert option["dc"] == 15
-    assert option["check_participants"] == "single_actor"
-    assert option["check_aggregation"] == "lead_result"
+    assert option["check_participants"] == "whole_party"
+    assert option["check_aggregation"] == "any_success"
 
 
 def test_goal_single_check_requires_exactly_one_capable_actor():
@@ -870,29 +863,10 @@ def test_goal_single_check_requires_exactly_one_capable_actor():
         )
 
 
-def test_allow_goal_accepts_player_selected_single_check():
+def test_force_gate_is_authored_as_a_fixed_whole_party_check():
     session = ExplorationUiSession(
         "content/scenarios/abandoned_watchtower.json",
         gm_client=FakeGmClient(_challenge_proposal()),
-    )
-    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
-
-    preview = session.submit_action(
-        "Bohater sam wyważa bramę.",
-        selected_goal_id="force_entry",
-        selected_check_participants="single_actor",
-        participant_actor_ids=("hero",),
-    )
-
-    assert preview["pending"]["option"]["check_participants"] == "single_actor"
-    assert preview["pending"]["option"]["check_aggregation"] == "lead_result"
-
-
-def test_goal_help_check_allows_optional_helper_and_only_lead_rolls():
-    proposal = _challenge_proposal()
-    session = ExplorationUiSession(
-        "content/scenarios/abandoned_watchtower.json",
-        gm_client=FakeGmClient(proposal),
     )
     session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
 
@@ -901,51 +875,30 @@ def test_goal_help_check_allows_optional_helper_and_only_lead_rolls():
         for goal in session.state_payload()["active_challenge"]["goals"]
         if goal["id"] == "force_entry"
     )
-    assert force_goal["participant_mode"] == "allow"
-    assert force_goal["allowed_check_participants"] == [
-        "single_actor",
-        "lead_with_help",
-        "whole_party",
-    ]
-    with pytest.raises(ValueError, match="wybierz typ testu"):
+
+    assert force_goal["participant_mode"] == "must"
+    assert force_goal["check_participants"] == "whole_party"
+    assert force_goal["check_aggregation"] == "any_success"
+    assert force_goal["allowed_check_participants"] == ["whole_party"]
+
+
+def test_force_gate_rejects_player_participant_override():
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        gm_client=FakeGmClient(_challenge_proposal()),
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+
+    with pytest.raises(ValueError, match="wymusza inny typ testu"):
         session.submit_action(
             "Wyważam bramę barkiem.",
             selected_goal_id="force_entry",
+            selected_check_participants="single_actor",
             participant_actor_ids=("hero",),
         )
-    without_help = session.submit_action(
-        "Wyważam bramę barkiem.",
-        selected_goal_id="force_entry",
-        selected_check_participants="lead_with_help",
-        participant_actor_ids=("hero",),
-    )
-    assert without_help["pending"]["option"]["check_participants"] == "lead_with_help"
-    session.decide("accept")
-    assert session.pending is not None and session.pending.check_plan is not None
-    assert session.pending.check_plan.roll_mode == RollMode.NORMAL
-    assert [roll["actor_id"] for roll in session.state_payload()["required_rolls"]] == ["hero"]
-
-    helped_session = ExplorationUiSession(
-        "content/scenarios/abandoned_watchtower.json",
-        gm_client=FakeGmClient(proposal),
-    )
-    helped_session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
-    preview = helped_session.submit_action(
-        "Bohater napiera, a Kapłan pomaga.",
-        selected_goal_id="force_entry",
-        selected_check_participants="lead_with_help",
-        participant_actor_ids=("hero", "cleric"),
-    )
-    assert preview["pending"]["participant_actor_ids"] == ["hero", "cleric"]
-    helped_session.decide("accept", lead_actor_id="rogue")
-    assert helped_session.pending is not None and helped_session.pending.check_plan is not None
-    assert helped_session.pending.check_plan.lead_actor_id == "hero"
-    assert helped_session.pending.check_plan.helper_actor_id == "cleric"
-    assert helped_session.pending.check_plan.roll_mode == RollMode.ADVANTAGE
-    assert [roll["actor_id"] for roll in helped_session.state_payload()["required_rolls"]] == ["hero"]
 
 
-def test_goal_group_check_rolls_for_everyone_and_uses_majority():
+def test_force_gate_rolls_for_everyone_and_one_success_is_enough():
     proposal = _challenge_proposal(
         approach_label="Wspólne wyważenie",
         approach_tags=["heavy_force"],
@@ -968,14 +921,15 @@ def test_goal_group_check_rolls_for_everyone_and_uses_majority():
     preview = session.submit_action(
         "Wszyscy wyważamy bramę.",
         selected_goal_id="force_entry",
-        selected_check_participants="whole_party",
     )
     assert preview["pending"]["participant_actor_ids"] == ["hero", "rogue", "cleric"]
     assert preview["pending"]["option"]["check_participants"] == "whole_party"
-    assert preview["pending"]["option"]["check_aggregation"] == "majority"
+    assert preview["pending"]["option"]["check_aggregation"] == "any_success"
     session.decide("accept")
     required = session.state_payload()["required_rolls"]
     assert [roll["actor_id"] for roll in required] == ["hero", "rogue", "cleric"]
+    session.resolve_rolls({"hero": 16, "rogue": 1, "cleric": 1})
+    assert challenge_state_for(session.state, "closed_gate").completed is True
 
 
 def test_absurd_but_possible_world_action_gets_fictional_response_and_alerts_goblins() -> None:
@@ -2422,6 +2376,159 @@ def test_open_zone_interaction_exposes_numbered_pads_then_navigation_markers() -
     assert session.current_zone.marker_position in selection_target.positions
 
 
+def test_location_board_sequence_switches_preview_and_confirms_same_zone_twice() -> None:
+    session = ExplorationUiSession("content/scenarios/village_square_mvp.json")
+    session.ui_flow_stage = UiFlowStage.LOCATION_PREVIEW
+    session.active_paper_map_id = "village_overview"
+    market = next(zone for zone in session.state.zones if zone.id == "market")
+    tavern = next(zone for zone in session.state.zones if zone.id == "tavern")
+    board = FakeBoardConnection(
+        clicks=[
+            market.marker_position.as_tuple(),
+            tavern.marker_position.as_tuple(),
+            tavern.marker_position.as_tuple(),
+        ]
+    )
+    session.attach_board_connection(board, backend="simulator")
+
+    market_preview = session.scan_board_selection()
+    target = session._current_board_scan_target()
+    assert market_preview["flow"]["preview_zone"]["id"] == "market"
+    assert set(target.positions) == {
+        zone.marker_position for zone in session._scene_location_zones()
+    }
+    assert len(target.feedback.frames) == len(session._scene_location_zones()) + 1
+
+    tavern_preview = session.scan_board_selection()
+    assert tavern_preview["flow"]["stage"] == "location_preview"
+    assert tavern_preview["flow"]["preview_zone"]["id"] == "tavern"
+
+    entered = session.scan_board_selection()
+    assert entered["flow"]["stage"] == "location_active"
+    assert entered["current_zone"]["id"] == "tavern"
+    assert entered["flow"]["preview_zone"] is None
+
+
+def test_leaving_tavern_exposes_every_available_location_in_the_scene() -> None:
+    session = ExplorationUiSession("content/scenarios/village_square_mvp.json")
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.state = replace(session.state, party_position=PartyPosition("tavern"))
+
+    navigation = session.set_exploration_board_selection(True)
+
+    assert {zone["id"] for zone in navigation["travel_options"]} == {
+        "market",
+        "elder_house",
+        "forest_road",
+    }
+    assert {
+        position.as_tuple()
+        for position in session._current_board_scan_target().positions
+    } == {
+        zone.marker_position.as_tuple()
+        for zone in session._scene_location_zones()
+    }
+
+
+def test_system_exit_pad_returns_one_level_and_reserves_last_position() -> None:
+    session = ExplorationUiSession("content/scenarios/village_square_mvp.json")
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.active_paper_map_id = "village_overview"
+    session.travel_to("tavern")
+
+    root_exit = session._board_interaction_pads()[-1]
+    assert root_exit.action_kind == "exit"
+    assert root_exit.position == session.current_zone.interaction_pad_positions[-1]
+    assert root_exit.color == LedColor.INVALID_SELECTION
+    assert root_exit.enabled is True
+
+    navigation = session.select_board_position(root_exit.position)
+    assert navigation["flow"]["board_interaction"]["mode"] == "navigation"
+
+    session.set_exploration_board_selection(False)
+    session.select_point("tavern_keeper")
+    conversation_exit = session._board_interaction_pads()[-1]
+    assert conversation_exit.label == "Zakończ rozmowę"
+
+    returned = session.select_board_position(conversation_exit.position)
+    assert returned["active_point"] is None
+    assert returned["flow"]["board_interaction"]["mode"] == "interaction"
+
+
+def test_instance_actions_keep_their_board_slot_and_color_when_a_tile_disappears() -> None:
+    session = ExplorationUiSession("content/scenarios/village_square_mvp.json")
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+
+    before = {
+        (pad.action_kind, pad.target_id): (pad.position, pad.color, pad.symbol)
+        for pad in session._board_interaction_pads()
+        if pad.action_kind != "exit"
+    }
+    assert ("zone_option", "read_notice_board") in before
+
+    session.state = replace(
+        session.state,
+        flags=set_scene_flag(session.state.flags, "notice_read", True),
+    )
+    after = {
+        (pad.action_kind, pad.target_id): (pad.position, pad.color, pad.symbol)
+        for pad in session._board_interaction_pads()
+        if pad.action_kind != "exit"
+    }
+
+    assert ("zone_option", "read_notice_board") not in after
+    assert after == {
+        action_key: board_identity
+        for action_key, board_identity in before.items()
+        if action_key != ("zone_option", "read_notice_board")
+    }
+
+
+def test_system_exit_pad_is_visible_but_not_scannable_while_flow_is_blocked(
+    monkeypatch,
+) -> None:
+    session = ExplorationUiSession("content/scenarios/village_square_mvp.json")
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    monkeypatch.setattr(
+        ExplorationUiSession,
+        "_board_interaction_block_reason",
+        lambda _self: "Najpierw zakończ bieżący test.",
+    )
+
+    pads = session._board_interaction_pads()
+    target = session._current_board_scan_target()
+
+    assert len(pads) == 1
+    assert pads[0].action_kind == "exit"
+    assert pads[0].enabled is False
+    assert target.positions == ()
+    assert target.feedback.frames[0].color == LedColor.BLOCKING_TERRAIN
+
+
+def test_instance_action_budget_rejects_eighth_action_beside_system_exit(
+    monkeypatch,
+) -> None:
+    session = ExplorationUiSession("content/scenarios/village_square_mvp.json")
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    actions = tuple(
+        {
+            "action_kind": "panel",
+            "target_id": f"action_{index}",
+            "label": f"Akcja {index}",
+            "description": "Test budżetu pól.",
+        }
+        for index in range(8)
+    )
+    monkeypatch.setattr(
+        ExplorationUiSession,
+        "_board_interaction_actions",
+        lambda _self: actions,
+    )
+
+    with pytest.raises(ValueError, match="miejsce tylko na 7"):
+        session._board_interaction_pads()
+
+
 def test_precombat_stealth_moves_passive_led_focus_after_each_roll() -> None:
     session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
     _prepare_gate_encounter_setup(session)
@@ -3422,11 +3529,9 @@ def test_exploration_ui_session_pending_encounter_waits_for_ui_setup_not_board_c
     session.submit_action(
         "Wyważamy bramę.",
         selected_goal_id="force_entry",
-        selected_check_participants="single_actor",
-        participant_actor_ids=("hero",),
     )
     session.decide("accept")
-    session.resolve_rolls({"hero": 16})
+    session.resolve_rolls({"hero": 16, "rogue": 1, "cleric": 1})
     session.finish_interaction_result()
     state = session.confirm_exploration_setup_step()
 
@@ -3594,6 +3699,31 @@ def test_exploration_ui_session_can_cancel_short_rest_without_advancing_time():
     assert cancelled["flow"]["stage"] == "location_active"
     assert cancelled["short_rest"]["elapsed_minutes"] == 0
     assert cancelled["short_rest"]["available"] is True
+
+
+def test_long_rest_is_available_only_in_authored_inn_and_recovers_party():
+    session = ExplorationUiSession("content/scenarios/village_square_mvp.json")
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.state = replace(session.state, party_position=PartyPosition("tavern"))
+    ally = next(actor for actor in session.exploration.actors if actor.faction == Faction.ALLY)
+    session.exploration = replace(
+        session.exploration,
+        actors=tuple(
+            replace(actor, hp=max(1, actor.hp - 3)) if actor.id == ally.id else actor
+            for actor in session.exploration.actors
+        ),
+    )
+
+    before = session.state_payload()
+    assert before["long_rest"]["available"] is True
+    assert before["long_rest"]["policy"]["duration_minutes"] == 480
+
+    after = session.complete_long_rest()
+    recovered = next(actor for actor in after["actors"] if actor["id"] == str(ally.id))
+    assert recovered["hp"] == recovered["max_hp"]
+    assert after["long_rest"]["available"] is False
+    assert after["short_rest"]["available"] is True
+    assert session.state.elapsed_minutes == 480
 
 
 def test_exploration_ui_session_finishes_scenario_and_expires_daily_effects():
@@ -4325,7 +4455,7 @@ def test_village_board_goal_stays_paused_during_description_and_advances_to_deci
     selected = session.scan_board_selection()
 
     assert selected["board_selection"]["auto_arm"] is False
-    assert selected["board_selection"]["confirmation_policy"] == "screen_input"
+    assert selected["board_selection"]["confirmation_policy"] == "actor_card"
     assert selected["flow"]["board_interaction"]["selected_goal_id"] == "negotiate_advance"
 
     submitted = session.submit_action(
@@ -4596,9 +4726,12 @@ def test_village_interaction_pads_link_board_colors_to_ui_actions():
         ("1", "point", "tavern_keeper"),
         ("2", "zone_option", "tavern_dice_game"),
         ("3", "short_rest", "short_rest"),
+        ("4", "long_rest", "long_rest"),
+        ("↩", "exit", "tavern"),
     ]
     assert interaction["pads"][0]["color"] != interaction["pads"][1]["color"]
-    assert len(session._current_board_scan_target().feedback.frames) == 3
+    assert interaction["pads"][3]["color"] == "biały"
+    assert len(session._current_board_scan_target().feedback.frames) == 5
 
     selected = session.select_board_position(Coordinate(3, 9))
 
@@ -5901,6 +6034,50 @@ def test_exploration_ui_session_can_select_attack_source_and_strength_potion_mod
     assert modified.damage_modifier == base_source.damage_modifier + 2
 
 
+def test_brakka_flaw_disables_strength_potion_while_raging() -> None:
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+    assert session.combat_state is not None
+    while str(session.combat_state.initiative_order.current_actor.id) != "hero":
+        session.finish_combat_turn()
+    hero = current_actor(session.combat_state)
+    hero = replace(
+        hero,
+        features=(
+            *hero.features,
+            FeatureGrant(
+                feature_id="flaw_chains",
+                label="Skaza: Bitewny amok",
+                source_kind=FeatureSourceKind.SCENARIO,
+                source_ref="brakka",
+            ),
+        ),
+    )
+    session.combat_state = replace_actor(session.combat_state, hero)
+    session.active_combat_effects = (
+        ActiveEffect(
+            id="rage:hero",
+            actor_id="hero",
+            kind="rage",
+            label="Szał",
+            object_id="class_feature:rage",
+            value=2,
+        ),
+    )
+
+    payload = session.state_payload()
+    potion = next(
+        action
+        for action in payload["combat"]["combat_actions"]
+        if action["id"] == "drink_strength_potion"
+    )
+
+    assert potion["available"] is False
+    assert "podczas Szału" in potion["unavailable_reason"]
+    with pytest.raises(ValueError, match="podczas Szału"):
+        session.use_combat_strength_potion("drink_strength_potion")
+
+
 def test_limited_attack_consumes_resource_and_becomes_unavailable_in_ui() -> None:
     session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
     _start_gate_skirmish(session)
@@ -6391,7 +6568,8 @@ def test_bardic_inspiration_target_is_selected_on_the_board():
     )
     session.combat_state = replace_actor(session.combat_state, bard)
 
-    started = session.start_combat_class_feature_targeting(
+    started = session.use_physical_action_card(
+        DecisionCardActionKind.FEATURE,
         "bardic_inspiration",
     )
     targeting = started["combat"]["class_feature_targeting"]
@@ -6409,6 +6587,302 @@ def test_bardic_inspiration_target_is_selected_on_the_board():
         for actor in resolved["combat"]["actors"]
         for effect in actor["effects"]
     )
+
+
+def test_preserve_life_physical_card_selects_multiple_board_targets():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+    assert session.combat_state is not None
+    cleric = session.combat_state.initiative_order.current_actor
+    cleric = replace(
+        cleric,
+        level=3,
+        features=(
+            *cleric.features,
+            FeatureGrant(
+                feature_id="preserve_life",
+                label="Zachowanie życia",
+                source_kind=FeatureSourceKind.SUBCLASS,
+                source_ref="life_domain",
+                resource_ids=("channel_divinity_uses",),
+                action_ids=("preserve_life",),
+            ),
+            FeatureGrant(
+                feature_id="channel_divinity_preserve_life",
+                label="Channel Divinity: Preserve Life",
+                source_kind=FeatureSourceKind.SUBCLASS,
+                source_ref="life_domain",
+            ),
+        ),
+        resource_pools=(
+            *cleric.resource_pools,
+            ActorResourcePool(
+                "channel_divinity_uses",
+                "Boska Moc",
+                1,
+                1,
+                RecoveryPeriod.SHORT_REST,
+            ),
+        ),
+    )
+    session.combat_state = replace_actor(session.combat_state, cleric)
+    allies = tuple(
+        actor
+        for actor in session.combat_state.actors
+        if actor.faction == Faction.ALLY
+    )
+    for ally in allies[:2]:
+        session.combat_state = replace_actor(
+            session.combat_state,
+            replace(ally, hp=1),
+        )
+
+    started = session.use_physical_action_card(
+        DecisionCardActionKind.FEATURE,
+        "preserve_life",
+    )
+    targets = session._class_feature_board_targets(
+        "preserve_life",
+        session.combat_state.initiative_order.current_actor,
+    )
+    assert started["combat"]["class_feature_targeting"]["action_id"] == "preserve_life"
+    assert len(targets) >= 2
+
+    session.select_board_position(targets[0].position)
+    selected = session.select_board_position(targets[1].position)
+
+    targeting = selected["combat"]["class_feature_targeting"]
+    assert {target["id"] for target in targeting["selected_targets"]} == {
+        str(targets[0].id),
+        str(targets[1].id),
+    }
+    resolved = session.use_combat_class_feature(
+        "preserve_life",
+        allocations=((str(targets[0].id), 2), (str(targets[1].id), 3)),
+    )
+    assert resolved["combat"]["class_feature_targeting"] is None
+    healed = {
+        actor["id"]: actor["hp"]
+        for actor in resolved["combat"]["actors"]
+        if actor["id"] in {str(targets[0].id), str(targets[1].id)}
+    }
+    assert healed[str(targets[0].id)] == 3
+    assert healed[str(targets[1].id)] == 4
+
+
+def test_cutting_words_card_requires_and_recognizes_named_reaction_window():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+    assert session.combat_state is not None
+    bard = session.combat_state.initiative_order.current_actor
+    enemy = next(
+        actor for actor in session.combat_state.actors if actor.faction == Faction.ENEMY
+    )
+    session.pending_reaction_window = open_reaction_window(
+        interrupted_actor_id=str(enemy.id),
+        trigger_event="damage_roll_revealed",
+        options=(
+            ReactionOption(
+                id=f"cutting-words:{bard.id}:{enemy.id}",
+                kind=ReactionKind.CUTTING_WORDS,
+                reactor_actor_id=str(bard.id),
+                target_actor_id=str(enemy.id),
+                trigger_event="damage_roll_revealed",
+                effect_id="cutting_words",
+                label="Cięta riposta",
+                value=6,
+            ),
+        ),
+    )
+
+    payload = session.use_physical_action_card(
+        DecisionCardActionKind.FEATURE,
+        "cutting_words",
+    )
+
+    assert payload["combat"]["reaction_window"]["trigger_event"] == (
+        "damage_roll_revealed"
+    )
+    assert "Wpisz wynik kości Inspiracji" in session.board_message
+
+
+def test_wild_shape_card_offers_three_forms_and_rescan_reverts():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+    assert session.combat_state is not None
+    druid = session.combat_state.initiative_order.current_actor
+    druid = replace(
+        druid,
+        features=(
+            *druid.features,
+            FeatureGrant(
+                feature_id="wild_shape",
+                label="Dziki kształt",
+                source_kind=FeatureSourceKind.CLASS,
+                source_ref="druid",
+                resource_ids=("wild_shape_uses",),
+                action_ids=("wild_shape",),
+            ),
+        ),
+        resource_pools=(
+            *druid.resource_pools,
+            ActorResourcePool(
+                "wild_shape_uses",
+                "Dziki kształt",
+                2,
+                2,
+                RecoveryPeriod.SHORT_REST,
+            ),
+        ),
+    )
+    session.combat_state = replace_actor(session.combat_state, druid)
+
+    prompted = session.use_physical_action_card(
+        DecisionCardActionKind.FEATURE,
+        "wild_shape",
+    )
+    prompt = prompted["combat"]["physical_feature_prompt"]
+    assert {form["id"] for form in prompt["forms"]} == {
+        "brown_bear",
+        "wolf",
+        "giant_eagle",
+    }
+
+    transformed = session.use_combat_class_feature(
+        "wild_shape",
+        form_id="brown_bear",
+    )
+    assert transformed["combat"]["current_actor"]["wild_shape"]["form_id"] == "brown_bear"
+
+    reverted = session.use_physical_action_card(
+        DecisionCardActionKind.FEATURE,
+        "wild_shape",
+    )
+    assert reverted["combat"]["current_actor"]["wild_shape"] is None
+
+
+def test_cunning_action_card_opens_choice_and_uses_bonus_action_dash():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+    assert session.combat_state is not None
+    rogue = session.combat_state.initiative_order.current_actor
+    rogue = replace(
+        rogue,
+        features=(
+            *rogue.features,
+            FeatureGrant(
+                feature_id="cunning_action",
+                label="Sprytna akcja",
+                source_kind=FeatureSourceKind.CLASS,
+                source_ref="rogue",
+            ),
+        ),
+    )
+    session.combat_state = replace_actor(session.combat_state, rogue)
+
+    prompted = session.use_physical_action_card(
+        DecisionCardActionKind.FEATURE,
+        "cunning_action",
+    )
+    assert [item["id"] for item in prompted["combat"]["physical_feature_prompt"]["modes"]] == [
+        "dash",
+        "disengage",
+        "hide",
+    ]
+
+    resolved = session.use_combat_class_feature("cunning_action", mode="dash")
+    assert resolved["combat"]["turn_action"]["bonus_action_use"] == "action_used"
+
+
+def test_pact_weapon_card_limits_choice_to_three_forms():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+    assert session.combat_state is not None
+    warlock = session.combat_state.initiative_order.current_actor
+    warlock = replace(
+        warlock,
+        features=(
+            *warlock.features,
+            FeatureGrant(
+                feature_id="pact_of_the_blade",
+                label="Pakt Ostrza",
+                source_kind=FeatureSourceKind.CLASS,
+                source_ref="warlock",
+                action_ids=("pact_weapon",),
+            ),
+        ),
+    )
+    session.combat_state = replace_actor(session.combat_state, warlock)
+
+    prompted = session.use_physical_action_card(
+        DecisionCardActionKind.FEATURE,
+        "pact_of_the_blade",
+    )
+    forms = prompted["combat"]["physical_feature_prompt"]["forms"]
+    assert [item["id"] for item in forms] == ["longsword", "greataxe", "rapier"]
+
+    resolved = session.use_combat_class_feature(
+        "pact_weapon",
+        form_id="rapier",
+    )
+    pact_weapon = next(
+        item
+        for item in resolved["combat"]["current_actor"]["inventory"]
+        if item["id"] == "pact_weapon"
+    )
+    assert pact_weapon["source_ref"] == "rapier"
+
+
+def test_metamagic_card_is_scanned_after_spell_source_card():
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    _start_gate_skirmish(session)
+    assert session.combat_state is not None
+    while str(session.combat_state.initiative_order.current_actor.id) != "cleric":
+        session.finish_combat_turn()
+    sorcerer = session.combat_state.initiative_order.current_actor
+    sorcerer = replace(
+        sorcerer,
+        features=(
+            *sorcerer.features,
+            FeatureGrant(
+                feature_id="metamagic_distant",
+                label="Distant Spell",
+                source_kind=FeatureSourceKind.CLASS,
+                source_ref="sorcerer",
+                action_ids=("metamagic_distant",),
+            ),
+        ),
+        resource_pools=(
+            *sorcerer.resource_pools,
+            ActorResourcePool(
+                "sorcery_points",
+                "Punkty Magii",
+                3,
+                3,
+                RecoveryPeriod.LONG_REST,
+            ),
+        ),
+    )
+    session.combat_state = replace_actor(session.combat_state, sorcerer)
+
+    with pytest.raises(ValueError, match="Najpierw zagraj kartę czaru"):
+        session.use_physical_action_card(
+            DecisionCardActionKind.FEATURE,
+            "metamagic_distant",
+        )
+
+    session.use_physical_action_card(
+        DecisionCardActionKind.SPELL,
+        "sacred_flame",
+    )
+    session.use_physical_action_card(
+        DecisionCardActionKind.FEATURE,
+        "metamagic_distant",
+    )
+
+    selected = session.selected_attack_source_ids[str(sorcerer.id)]
+    assert selected.endswith("#metamagic_distant")
+    assert "przypisane do przygotowanego czaru" in session.board_message
 
 
 def _cleric_casts_bless_on_hero(session: ExplorationUiSession) -> None:
@@ -6568,7 +7042,7 @@ def test_exploration_ui_session_breath_weapon_exposes_confirm_and_cancel_preview
     catalog = load_character_catalog("content/character_creation/catalog.json")
     resources = load_character_resources(catalog, "content")
     rhogar_draft = next(
-        draft for draft in default_character_drafts() if draft.id == "rhogar"
+        draft for draft in all_default_character_drafts() if draft.id == "rhogar"
     )
     rhogar = build_character(rhogar_draft, catalog, resources).actor
     session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
@@ -8419,7 +8893,10 @@ def test_exploration_ui_session_offers_and_casts_shield_before_enemy_damage():
     with pytest.raises(ValueError, match="oczekującą reakcję"):
         session._commit_pending_enemy_turn()
 
-    resolved = session.cast_defensive_spell_reaction()
+    resolved = session.use_physical_action_card(
+        DecisionCardActionKind.SPELL,
+        "shield",
+    )
 
     cleric_after = next(
         actor for actor in session.combat_state.actors if actor.id == cleric.id
@@ -8452,6 +8929,7 @@ def test_exploration_ui_session_hellish_rebuke_spends_reaction_and_slot_once():
     )
     rebuke = replace(
         counterspell,
+        id="hellish_rebuke",
         action_type="reaction_damage",
         label="Hellish Rebuke",
         save_ability="dexterity",
@@ -8503,7 +8981,10 @@ def test_exploration_ui_session_hellish_rebuke_spends_reaction_and_slot_once():
         "retaliation_spell"
     )
 
-    resolved = session.cast_retaliation_spell_reaction()
+    resolved = session.use_physical_action_card(
+        DecisionCardActionKind.SPELL,
+        "hellish_rebuke",
+    )
 
     cleric_after = next(
         actor for actor in session.combat_state.actors if actor.id == cleric.id
@@ -8959,6 +9440,7 @@ def test_exploration_ui_session_records_and_resets_hardware_scan_timeout(
     )
     board = TimeoutBoardConnection()
     session.attach_board_connection(board, backend="hardware")
+    assert session.state_payload()["board"]["scan_timeout_s"] == 300.0
 
     with pytest.raises(TimeoutError, match="Timeout oczekiwania"):
         session.scan_board_selection(automatic=True)
@@ -8980,6 +9462,39 @@ def test_exploration_ui_session_records_and_resets_hardware_scan_timeout(
         "Timeout oczekiwania na wybór pola na planszy."
     )
     assert "Zresetowano nasłuchiwanie" in session.board_message
+
+
+def test_exploration_ui_session_treats_cancelled_obsolete_scan_as_stale(tmp_path):
+    session = ExplorationUiSession(
+        "content/scenarios/village_square_mvp.json",
+        debug_point_id="elder_npc",
+        session_id="board_stale_cancel_test",
+        observation_dir=tmp_path,
+    )
+
+    class CancelledBoardConnection(FakeBoardConnection):
+        def scan_board(
+            self,
+            acceptable_responses=None,
+            *,
+            timeout_s=None,
+        ):  # noqa: ARG002
+            session.board_selection_revision += 1
+            return None
+
+    session.attach_board_connection(CancelledBoardConnection(), backend="hardware")
+
+    session.scan_board_selection(automatic=True)
+
+    events = [
+        json.loads(line)
+        for line in session.observer.path.read_text(encoding="utf-8").splitlines()
+    ]
+    assert events[-1]["event_type"] == "ui_board_scan_stale_after_cancel"
+    assert not any(
+        event["event_type"] == "ui_board_scan_timeout"
+        for event in events
+    )
 
 
 def test_exploration_ui_session_reset_restores_initial_state():

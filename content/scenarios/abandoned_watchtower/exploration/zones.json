@@ -12,6 +12,15 @@
       "interaction_pad_positions": [[6, 1], [8, 1], [10, 1], [12, 1], [12, 3], [10, 4], [8, 4], [6, 3]],
       "ambient_light": "dim",
       "allows_hiding": true,
+      "exploration_card_reactions": [
+        {"id": "gate_break_in", "card_action_id": "break_in", "interaction_ids": ["watchtower_gate", "gate_supply_chest"], "roll_mode": "advantage", "effects": [{"type": "set_flag", "parameters": {"key": "gate_lock_profiled", "value": true}}], "message": "Mira rozpoznaje mechanizm i słaby punkt zabezpieczenia. Najbliższa próba włamania ma przewagę."},
+        {"id": "gate_mage_hand", "card_action_id": "mage_hand", "interaction_ids": ["watchtower_gate", "gate_supply_chest"], "check_modifier": 2, "effects": [{"type": "set_flag", "parameters": {"key": "gate_mechanism_probed", "value": true}}], "message": "Magiczna dłoń bada rygiel bez narażania bohatera. Najbliższy test mechanizmu otrzymuje +2."},
+        {"id": "gate_tactical_assessment", "card_action_id": "tactical_assessment", "roll_mode": "advantage", "effects": [{"type": "set_flag", "parameters": {"key": "gate_approach_profiled", "value": true}}], "message": "Garran wskazuje osłoniętą drogę i punkt nacisku. Najbliższy test przy bramie ma przewagę."},
+        {"id": "gate_brutal_effort", "card_action_id": "brutal_effort", "interaction_ids": ["watchtower_gate"], "roll_mode": "advantage", "message": "Brakka bierze rozbieg i uderza w osłabione skrzydło. Próba siłowego sforsowania bramy ma przewagę."},
+        {"id": "gate_tracking", "card_action_id": "tracking", "roll_mode": "advantage", "effects": [{"type": "set_flag", "parameters": {"key": "gate_tracks_profiled", "value": true}}], "message": "Erynd odczytuje ślady ruchu przy murze. Najbliższy test znalezienia wejścia ma przewagę."},
+        {"id": "gate_detect_magic", "card_action_id": "detect_magic", "effects": [{"type": "set_flag", "parameters": {"key": "gate_magic_scanned", "value": true}}], "message": "Nimra wykrywa, że zabezpieczenia bramy są mechaniczne, nie magiczne."},
+        {"id": "gate_locate_object", "card_action_id": "locate_object", "effects": [{"type": "set_flag", "parameters": {"key": "gate_supplies_located", "value": true}}], "message": "Zaklęcie wskazuje najbliższy znany przedmiot za murem i potwierdza kierunek bocznego składu."}
+      ],
       "positions": [
         [
           6,
@@ -337,7 +346,25 @@
       "adjacent_zone_ids": [
         "courtyard"
       ],
-      "options": [],
+      "options": [
+        {
+          "id": "garran_gate_last_stand",
+          "label": "Garran odczytuje ślady ostatniej obrony",
+          "kind": "check",
+          "resolution_mode": "check",
+          "description_mode": "required",
+          "color": "movement",
+          "description": "Rozmieszczenie starych barykad przypomina Garranowi pozycję opuszczoną zbyt późno. Może odtworzyć decyzje dawnego dowódcy.",
+          "ability_check": {"ability": "intelligence", "skill": "history", "dc": 11},
+          "success_message": "Garran rozpoznaje odwrót osłaniany przez jednego żołnierza. Nie ocenia go jak bohatera ani tchórza — tylko jak człowieka bez dobrego wyboru.",
+          "failure_message": "Ślady są zbyt stare, lecz układ barykad przywołuje Garranowi ludzi, których sam nie zdołał wyprowadzić.",
+          "success_flag": "garran_gate_last_stand_understood",
+          "failure_flag": "garran_gate_last_stand_recalled",
+          "required_party_actor_id": "garran",
+          "assigned_actor_id": "garran",
+          "character_moment": true
+        }
+      ],
       "anchor_position": [
         9,
         2
@@ -381,6 +408,14 @@
       "interaction_pad_positions": [[5, 6], [7, 6], [10, 6], [12, 6], [14, 8], [14, 11], [12, 14], [5, 14]],
       "ambient_light": "dim",
       "allows_hiding": true,
+      "exploration_card_reactions": [
+        {"id": "courtyard_tracking", "card_action_id": "tracking", "interaction_ids": ["inspect_tracks", "search_courtyard"], "roll_mode": "advantage", "effects": [{"type": "set_flag", "parameters": {"key": "courtyard_tracks_profiled", "value": true}}], "message": "Erynd oddziela świeże tropy od starych. Test badania śladów ma przewagę."},
+        {"id": "courtyard_tactical", "card_action_id": "tactical_assessment", "roll_mode": "advantage", "effects": [{"type": "set_flag", "parameters": {"key": "courtyard_kill_zones_known", "value": true}}], "message": "Garran oznacza martwe pola, osłony i możliwe stanowiska strzelców. Najbliższy test rozpoznania ma przewagę."},
+        {"id": "courtyard_find_traps", "card_action_id": "find_traps", "effects": [{"type": "set_flag", "parameters": {"key": "courtyard_traps_scanned", "value": true}}], "message": "Erynd ujawnia wszystkie zaimplementowane pułapki w obrębie dziedzińca."},
+        {"id": "courtyard_locate_object", "card_action_id": "locate_object", "effects": [{"type": "set_flag", "parameters": {"key": "hidden_cache_direction_known", "value": true}}], "message": "Znany rodzaj zapasów odpowiada z kierunku ukrytej skrytki; jej dokładne otwarcie nadal wymaga interakcji."},
+        {"id": "courtyard_diagnosis", "card_action_id": "diagnosis", "roll_mode": "advantage", "effects": [{"type": "set_flag", "parameters": {"key": "courtyard_medical_clues", "value": true}}], "message": "Dagna rozpoznaje charakter ran i ślady walki. Najbliższy powiązany test ma przewagę."},
+        {"id": "courtyard_pass_without_trace", "card_action_id": "pass_without_trace", "effects": [{"type": "set_flag", "parameters": {"key": "watchtower_party_concealed", "value": true}}], "message": "Drużyna zaciera ślady i może przemieszczać się po ruinach bez pozostawiania łatwego tropu."}
+      ],
       "positions": [
         [
           4,
@@ -1027,6 +1062,40 @@
           "success_flag": "tracks_identified",
           "failure_flag": "tracks_unclear",
           "message": "Ślady prowadzą w stronę wieży."
+        },
+        {
+          "id": "dagna_abandoned_wounded_signs",
+          "label": "Dagna rozpoznaje ślady pozostawionych rannych",
+          "kind": "check",
+          "resolution_mode": "check",
+          "description_mode": "required",
+          "color": "success",
+          "description": "Zaschnięte bandaże i ślady ciągnięcia prowadzą pod zawalony wóz. Dagna może ustalić, czy ktoś mógł przeżyć.",
+          "ability_check": {"ability": "wisdom", "skill": "medicine", "dc": 11},
+          "success_message": "Dagna rozpoznaje oznaki żywego, choć osłabionego człowieka, i kieruje uwagę drużyny ku miejscu pod wozem.",
+          "failure_message": "Ślady przypominają chaotyczny odwrót. Dagna nie potrafi potwierdzić, czy kogokolwiek da się jeszcze uratować.",
+          "success_flag": "dagna_wounded_scout_signs_recognized",
+          "failure_flag": "dagna_wounded_scout_signs_uncertain",
+          "required_party_actor_id": "dagna",
+          "assigned_actor_id": "dagna",
+          "character_moment": true
+        },
+        {
+          "id": "erynd_reconstructs_ambush",
+          "label": "Erynd rekonstruuje przebieg zasadzki",
+          "kind": "check",
+          "resolution_mode": "check",
+          "description_mode": "required",
+          "color": "movement",
+          "description": "Cisza dziedzińca i kierunek śladów przypominają Eryndowi moment tuż przed dawną zasadzką. Może przejść przez wspomnienie i odtworzyć atak.",
+          "ability_check": {"ability": "wisdom", "skill": "survival", "dc": 11},
+          "success_message": "Erynd wskazuje, skąd nadszedł pierwszy atak i którędy napastnik wycofał się w stronę wieży.",
+          "failure_message": "Wspomnienie zagłusza szczegóły. Erynd potrzebuje chwili, zanim znów zaufa własnemu osądowi.",
+          "success_flag": "erynd_courtyard_ambush_reconstructed",
+          "failure_flag": "erynd_courtyard_ambush_triggered",
+          "required_party_actor_id": "erynd",
+          "assigned_actor_id": "erynd",
+          "character_moment": true
         }
       ],
       "anchor_position": [
@@ -1055,6 +1124,13 @@
       "interaction_pad_positions": [[6, 17], [8, 17], [10, 17], [12, 17], [12, 20], [10, 21], [8, 21], [6, 20]],
       "ambient_light": "darkness",
       "allows_hiding": true,
+      "exploration_card_reactions": [
+        {"id": "barracks_find_traps", "card_action_id": "find_traps", "effects": [{"type": "set_flag", "parameters": {"key": "barracks_traps_scanned", "value": true}}], "message": "Erynd ujawnia wszystkie zaimplementowane pułapki w koszarach."},
+        {"id": "barracks_detect_magic", "card_action_id": "detect_magic", "effects": [{"type": "set_flag", "parameters": {"key": "barracks_magic_scanned", "value": true}}], "message": "Nimra oddziela zwykłe pozostałości od przedmiotów noszących magiczną aurę."},
+        {"id": "barracks_locate_object", "card_action_id": "locate_object", "interaction_ids": ["search_barracks"], "roll_mode": "advantage", "message": "Zaklęcie zawęża obszar poszukiwań znanego przedmiotu. Test przeszukania ma przewagę."},
+        {"id": "barracks_mage_hand", "card_action_id": "mage_hand", "check_modifier": 2, "effects": [{"type": "set_flag", "parameters": {"key": "barracks_remote_probe", "value": true}}], "message": "Magiczna dłoń bezpiecznie porusza podejrzany element. Najbliższy test mechanizmu otrzymuje +2."},
+        {"id": "barracks_identify", "card_action_id": "identify", "effects": [{"type": "set_flag", "parameters": {"key": "barracks_item_identified", "value": true}}], "message": "Nimra identyfikuje wskazany przedmiot z ekwipunku lub zdobyty w koszarach łup."}
+      ],
       "positions": [
         [
           4,
@@ -1312,6 +1388,57 @@
           "default_declaration": "Przeszukujemy opuszczone koszary.",
           "color": "interactive",
           "message": "Znajdujecie zbutwiałe koce i pusty stojak na broń."
+        },
+        {
+          "id": "brakka_broken_manacles",
+          "label": "Brakka znajduje rozbite kajdany",
+          "kind": "check",
+          "resolution_mode": "check",
+          "description_mode": "required",
+          "color": "warning",
+          "description": "Pod pryczą leżą stare kajdany podobne do tych, które Brakka nosiła podczas niewoli. Jedno ogniwo nadal trzyma się ściennego uchwytu.",
+          "ability_check": {"ability": "strength", "skill": "athletics", "dc": 10},
+          "success_message": "Brakka wyrywa ostatnie ogniwo ze ściany. Tym razem to ona decyduje, kiedy łańcuch przestaje istnieć.",
+          "failure_message": "Metal nie ustępuje od razu. Brakka odchodzi od niego z własnej woli — co także jest zwycięstwem.",
+          "success_flag": "brakka_manacles_destroyed",
+          "failure_flag": "brakka_manacles_left_by_choice",
+          "required_party_actor_id": "brakka",
+          "assigned_actor_id": "brakka",
+          "character_moment": true
+        },
+        {
+          "id": "mira_smugglers_mark",
+          "label": "Mira rozpoznaje znak przemytników",
+          "kind": "check",
+          "resolution_mode": "check",
+          "description_mode": "required",
+          "color": "interactive",
+          "description": "Na spodzie pustego stojaka ktoś wyciął znak używany do oznaczania bezpiecznych skrytek i ludzi, którym nie należy ufać.",
+          "ability_check": {"ability": "intelligence", "skill": "investigation", "dc": 11},
+          "success_message": "Mira odczytuje znak i znajduje nazwisko dawnego pośrednika. To drobny trop do jej przeszłości, nie do głównego zadania.",
+          "failure_message": "Znak jest znajomy, ale Mira nie potrafi przypisać go do konkretnej siatki przemytniczej.",
+          "success_flag": "mira_smugglers_mark_identified",
+          "failure_flag": "mira_smugglers_mark_uncertain",
+          "required_party_actor_id": "mira",
+          "assigned_actor_id": "mira",
+          "character_moment": true
+        },
+        {
+          "id": "nimra_arcane_burn",
+          "label": "Nimra dostrzega ślad magicznego wycieku",
+          "kind": "check",
+          "resolution_mode": "check",
+          "description_mode": "required",
+          "color": "purple",
+          "description": "Na belce pozostał szklisty osad podobny do śladów po wypadku w laboratorium Nimry. Może zbadać go mimo narastającego niepokoju.",
+          "ability_check": {"ability": "intelligence", "skill": "arcana", "dc": 12},
+          "success_message": "Nimra odróżnia zwykłe zaklęcie od niestabilnego wycieku i odzyskuje kontrolę nad wspomnieniem, zanim ono przejmie kontrolę nad nią.",
+          "failure_message": "Osad reaguje krótkim błyskiem. Nimra cofa dłoń, pewna jedynie, że podobieństwo do dawnego wypadku nie jest przypadkowe.",
+          "success_flag": "nimra_arcane_burn_understood",
+          "failure_flag": "nimra_arcane_burn_unsettled",
+          "required_party_actor_id": "nimra",
+          "assigned_actor_id": "nimra",
+          "character_moment": true
         }
       ],
       "anchor_position": [
@@ -1334,6 +1461,13 @@
       "interaction_pad_positions": [[6, 23], [8, 23], [10, 23], [12, 23], [12, 26], [10, 27], [8, 27], [6, 26]],
       "ambient_light": "darkness",
       "allows_hiding": true,
+      "exploration_card_reactions": [
+        {"id": "tower_tactical", "card_action_id": "tactical_assessment", "interaction_ids": ["climb_tower"], "roll_mode": "advantage", "effects": [{"type": "set_flag", "parameters": {"key": "tower_climb_route_profiled", "value": true}}], "message": "Garran wyznacza bezpieczną kolejność wejścia i punkty podparcia. Test wspinaczki ma przewagę."},
+        {"id": "tower_brutal_effort", "card_action_id": "brutal_effort", "interaction_ids": ["climb_tower"], "roll_mode": "advantage", "message": "Brakka forsuje trudny odcinek wspinaczki siłą. Test ma przewagę."},
+        {"id": "tower_guidance", "card_action_id": "guidance", "interaction_ids": ["climb_tower"], "message": "Wskazówki Dagny dodają przygotowaną kość k4 do testu wskazanego bohatera."},
+        {"id": "tower_inspiration", "card_action_id": "bardic_inspiration", "interaction_ids": ["climb_tower"], "message": "Inspiracja Loriana przygotowuje dodatkowe okno kości k6 przy teście wspinaczki."},
+        {"id": "tower_mage_hand", "card_action_id": "mage_hand", "interaction_ids": ["climb_tower"], "check_modifier": 2, "message": "Magiczna dłoń stabilizuje linę lub usuwa drobną przeszkodę. Test otrzymuje +2."}
+      ],
       "positions": [
         [
           5,
@@ -1611,6 +1745,23 @@
           "success_flag": "tower_climbed",
           "failure_flag": "tower_climb_failed",
           "message": "Z wieży widać trakt i świeże ślady na dziedzińcu."
+        },
+        {
+          "id": "lorian_unfinished_watch_song",
+          "label": "Lorian odnajduje ostatnią zwrotkę wartownika",
+          "kind": "check",
+          "resolution_mode": "check",
+          "description_mode": "required",
+          "color": "purple",
+          "description": "Na belce wieży ktoś wydrapał początek pieśni o wartowniku, którego nikt nie słuchał. Ostatnia zwrotka nigdy nie powstała.",
+          "ability_check": {"ability": "charisma", "skill": "performance", "dc": 11},
+          "success_message": "Lorian dopisuje zakończenie, w którym ostrzeżenie wartownika dociera choć do jednej osoby. Nie potrzebuje oklasków, żeby uznać tę historię za wartą opowiedzenia.",
+          "failure_message": "Słowa brzmią obco. Lorian zostawia pieśń niedokończoną i po raz pierwszy nie próbuje wymusić lepszego finału.",
+          "success_flag": "lorian_watch_song_completed",
+          "failure_flag": "lorian_watch_song_left_unfinished",
+          "required_party_actor_id": "lorian",
+          "assigned_actor_id": "lorian",
+          "character_moment": true
         }
       ],
       "anchor_position": [

@@ -29,6 +29,7 @@ let downtimePanelOpen = false;
 let continuationPanelOpen = false;
 let selectedContinuationPace = 'normal';
 let selectedContinuationNavigatorId = '';
+let continuationStep = 'pace';
 let filteredSlashCommands = [];
 let activeSlashCommandIndex = 0;
 let sidePanelOpen = localStorage.getItem('explorationSidePanelOpen') === 'true';
@@ -38,7 +39,6 @@ let boardFallbackEnabled = localStorage.getItem('explorationBoardFallback') === 
 let pendingClassFeatureActionId = '';
 let boardConnectionNotice = '';
 let selectedPlaygroundAuditCaseId = '';
-let autoAdvanceGoalKey = '';
 let physicalCardStatusTimer = null;
 let physicalCardScanInFlight = false;
 let lastPhysicalCardPayload = '';
@@ -49,13 +49,14 @@ let physicalCardLastKeyAt = 0;
 let physicalCardKeyTimer = null;
 let physicalCardRecentKeys = '';
 let physicalCardRecentKeyAt = 0;
+let spellPreparationDraft = null;
 
 const PHYSICAL_CARD_PREFIX = 'dndbg:';
 const PHYSICAL_CARD_MAX_KEY_GAP_MS = 100;
 const PHYSICAL_CARD_BUFFER_TIMEOUT_MS = 140;
 const PHYSICAL_CARD_REPEAT_GUARD_MS = 1200;
 const PHYSICAL_CARD_RECENT_KEY_GAP_MS = 2000;
-const PHYSICAL_CARD_PAYLOAD_PATTERN = /dndbg:v[0-9]+:action:[a-z0-9_]+:[a-z][a-z0-9_]*/;
+const PHYSICAL_CARD_PAYLOAD_PATTERN = /dndbg:v[0-9]+:(?:action:[a-z0-9_]+:[a-z][a-z0-9_]*(?::[a-z][a-z0-9_]*)?|actor:[a-z][a-z0-9_]*)/;
 
 function closeSlashCommandMenu() {
   const menu = document.getElementById('slash-command-menu');
@@ -296,12 +297,25 @@ function synchronizeBoardSelection({force = false} = {}) {
     }
   }
   if (boardInteraction.selected_panel === 'downtime') downtimePanelOpen = true;
-  if (boardInteraction.selected_panel === 'continuation') continuationPanelOpen = true;
+  if (boardInteraction.selected_panel === 'continuation') {
+    if (!continuationPanelOpen) {
+      continuationStep = 'pace';
+      selectedContinuationPace = 'normal';
+      selectedContinuationNavigatorId = '';
+    }
+    continuationPanelOpen = true;
+  }
   if (
     boardInteraction.selected_action_kind === 'zone_option'
     && boardInteraction.selected_action_id
   ) {
     selectedZoneOptionId = String(boardInteraction.selected_action_id);
+    const selectedOption = (((state || {}).flow || {}).zone_options || []).find(
+      option => String(option.id) === selectedZoneOptionId
+    );
+    selectedZoneOptionActorId = selectedOption && selectedOption.assigned_actor_id
+      ? String(selectedOption.assigned_actor_id)
+      : '';
   }
   return Boolean(
     boardInteraction.selected_goal_id
@@ -350,7 +364,6 @@ async function api(path, body, busyMessage) {
     }
     synchronizeBoardSelection();
     if (path === '/api/action' && res.ok && !(body && body.conversation_only)) {
-      autoAdvanceGoalKey = '';
       selectedInteractionGoalId = null;
       selectedInteractionCheckParticipants = null;
       selectedInteractionActorIds = [];
@@ -364,7 +377,9 @@ async function api(path, body, busyMessage) {
     activeInteractionId = nextInteractionId;
     optimisticPlayerMessage = null;
     if (path === '/api/rolls' && res.ok) {
-      resultAck = state.flow && state.flow.stage === 'interaction_result' ? null : latestResultMessage(state);
+      resultAck = state.flow && state.flow.stage === 'interaction_result'
+        ? null
+        : latestResultMessageSince(state, previousMessageCount);
     } else if (path === '/api/combat/opportunity-movement/confirm' && res.ok) {
       resultAck = latestMessageWithTitle(state, 'Atak okazyjny');
     } else if (path === '/api/combat/player-attack-confirm' && res.ok) {
@@ -472,6 +487,7 @@ function render() {
   document.getElementById('scene-description').innerHTML = sceneHtml;
   document.getElementById('scene-description-card').hidden = !sceneHtml;
   const conversation = document.getElementById('scene-conversation');
+  renderExplorationCardPrompt();
   conversation.innerHTML = sceneConversationHtml();
   document.getElementById('chat-typing').hidden = !waitingForGm;
   document.getElementById('messages').innerHTML = state.messages.map(message => messageCardHtml(message)).join('');
@@ -515,8 +531,28 @@ function render() {
   updateActivePanel();
   updateBoardInputPresentation();
   scheduleAutomaticBoardScan();
-  scheduleAutomaticGoalAdvance();
   scrollChatToBottom(followChatTail);
+}
+function renderExplorationCardPrompt() {
+  const panel = document.getElementById('exploration-card-prompt');
+  if (!panel) return;
+  const cardState = state.exploration_card || {};
+  const pendingCard = cardState.pending;
+  panel.hidden = !pendingCard;
+  if (!pendingCard) {
+    panel.innerHTML = '';
+    return;
+  }
+  const actor = actorById(pendingCard.actor_id);
+  panel.innerHTML = `<div class="exploration-card-prompt-head">
+      ${actorPortraitHtml(actor, 'roll')}
+      <div><span class="muted">Karta reaguje na aktualną decyzję</span><h4>${esc(pendingCard.label || identifierLabel(pendingCard.card_action_id))}</h4></div>
+    </div>
+    <p>Efekt zostanie rozliczony przed powrotem do poprzedniego promptu.</p>
+    <div class="row">
+      <button onclick="handlePhysicalCardScan('dndbg:v1:action:universal:accept')">Akceptuj</button>
+      <button class="secondary" onclick="handlePhysicalCardScan('dndbg:v1:action:universal:decline')">Odrzuć</button>
+    </div>`;
 }
 function setPlaygroundField(id, value) {
   const field = document.getElementById(id);
@@ -1045,7 +1081,7 @@ function renderBoardPanel() {
   document.getElementById('board-url').value = board.board_url || 'http://127.0.0.1:5000';
   document.getElementById('board-serial-port').value = board.board_serial_port || '';
   document.getElementById('wled-url').value = board.wled_url || '';
-  document.getElementById('scan-timeout').value = board.scan_timeout_s || 30;
+  document.getElementById('scan-timeout').value = board.scan_timeout_s || 300;
 }
 function renderBoardConnectionIndicator() {
   const indicator = document.getElementById('board-connection-indicator');
@@ -1086,7 +1122,7 @@ async function retryBoardConnection() {
     const response = await fetch('/api/board/configure', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({backend, board_url: board.board_url || '', board_serial_port: board.board_serial_port || '', wled_url: board.wled_url || '', scan_timeout_s: Number(board.scan_timeout_s || 30)}),
+      body: JSON.stringify({backend, board_url: board.board_url || '', board_serial_port: board.board_serial_port || '', wled_url: board.wled_url || '', scan_timeout_s: Number(board.scan_timeout_s || 300)}),
     });
     const data = await response.json();
     state = data.state || data;
@@ -1332,8 +1368,8 @@ function flowPanelHtml() {
       return `
         <h3>Jawne elementy sceny</h3>
         ${availableLocationsHtml(flow.available_locations || [])}
-        <p>Kliknij Skanuj planszę, a potem wskaż element sceny.</p>
-        <button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button>
+        <p>Wskaż podświetloną lokację figurką, aby zobaczyć jej podgląd.</p>
+        <button class="secondary" data-primary-scan="true" onclick="scanBoard()">Awaryjnie odczytaj planszę</button>
       `;
     }
     const image = preview.image_url ? `<img class="location-preview-image" src="${esc(preview.image_url)}" alt="${esc(preview.name)}">` : '';
@@ -1344,7 +1380,8 @@ function flowPanelHtml() {
         <p><b>${esc(preview.name)}</b></p>
         <p>${esc(preview.description || preview.summary || '')}</p>
         <div class="status">${esc(preview.locked_reason || 'Ten element jest jeszcze zablokowany.')}</div>
-        <button class="secondary" data-allow-busy="true" onclick="cancelLocationPreview()">Wróć do wyboru elementów</button>
+        <p>Wskaż inną podświetloną lokację na planszy, aby zmienić podgląd.</p>
+        <button class="secondary" data-allow-busy="true" onclick="cancelLocationPreview()">Wyczyść podgląd</button>
       `;
     }
     return `
@@ -1352,8 +1389,8 @@ function flowPanelHtml() {
       ${image}
       <p><b>${esc(preview.name)}</b></p>
       <p>${esc(preview.description || preview.summary || '')}</p>
-      <p><b>Czy chcesz wejść w interakcję?</b> Potwierdź Enterem albo przyciskiem.</p>
-      <div class="row"><button onclick="confirmLocationPreview()">Wejdź w eksplorację</button><button class="secondary" data-allow-busy="true" onclick="cancelLocationPreview()">Wróć do wyboru elementów</button></div>
+      <p><b>Kliknij ponownie pole tej lokacji, aby wejść.</b> Możesz też wskazać inną podświetloną lokację i przełączyć podgląd.</p>
+      <div class="row"><button onclick="confirmLocationPreview()">Wejdź awaryjnie z ekranu</button><button class="secondary" data-allow-busy="true" onclick="cancelLocationPreview()">Wyczyść podgląd</button></div>
     `;
   }
   if (stage === 'interaction_result') {
@@ -1392,44 +1429,88 @@ function spellPreparationHtml() {
   const preparation = state.spell_preparation || {};
   const actor = (preparation.actors || []).find(entry => String(entry.actor_id) === String(preparation.current_actor_id));
   if (!actor) return '<p>Przygotowanie czarów zakończone.</p>';
+  synchronizeSpellPreparationDraft(actor);
   const selectable = (actor.spells || []).filter(spell => !spell.always_prepared);
   const alwaysPrepared = (actor.spells || []).filter(spell => spell.always_prepared);
+  const selectedIds = new Set((spellPreparationDraft && spellPreparationDraft.spellIds) || []);
+  const selected = selectable.filter(spell => selectedIds.has(String(spell.id)));
+  const customMode = spellPreparationDraft && spellPreparationDraft.mode === 'custom';
+  const cards = selected.map(spell => spellPreparationCardHtml(spell)).join('');
   return `
     <div class="start-panel"><div class="inner">
       <span class="eyebrow">OSTATNI KROK SETUPU</span>
       <h2>Przygotowanie czarów — ${esc(actor.actor_name)}</h2>
-      <p>Mapa jest już przygotowana. Na zakończenie setupu wybierz czary po odbytym długim odpoczynku.</p>
+      <p>${customMode
+        ? 'Skanuj kolejno fizyczne karty czarów. Po osiągnięciu limitu zestaw zostanie zapisany automatycznie.'
+        : 'Poniżej znajduje się proponowany zestaw po długim odpoczynku. Zeskanuj AKCEPTUJ, aby go zachować, albo ODRZUĆ, aby przygotować własny zestaw.'}</p>
       <p>Źródło: <b>${esc(actor.source_label)}</b>.</p>
-      <p><b>Wybrano:</b> <span id="spell-preparation-count">${esc(actor.selected_count)}</span>/${esc(actor.preparation_limit)}</p>
-      <div class="status-list spell-preparation-list">
-        ${selectable.map(spell => `
-          <label class="status-item spell-preparation-card">
-            <span class="spell-preparation-heading">
-              <span><input type="checkbox" data-preparation-spell="${esc(spell.id)}"${spell.prepared ? ' checked' : ''} onchange="updateSpellPreparationCount()"> <b>${esc(spell.label)}</b></span>
-              <span>${esc(spell.level)}. poziom${spell.concentration ? ' · koncentracja' : ''}${spell.ritual ? ' · rytuał' : ''}</span>
-            </span>
-            <span class="spell-flavor">${esc(spell.flavor_description || '')}</span>
-            <span class="spell-mechanics"><b>W grze:</b> ${esc(spell.mechanical_description || 'Szczegóły mechaniczne nie są dostępne.')}</span>
-          </label>
-        `).join('') || '<p class="muted">Brak czarów do wyboru.</p>'}
+      <p><b>${customMode ? 'Zeskanowano' : 'Zestaw domyślny'}:</b> <span id="spell-preparation-count">${esc(selected.length)}</span>/${esc(actor.preparation_limit)}</p>
+      <div class="spell-preparation-grid${customMode ? ' custom' : ''}">
+        ${cards || `<div class="spell-preparation-empty"><b>Czekam na pierwszą kartę czaru</b><span>Zeskanuj kartę należącą do listy ${esc(actor.actor_name)}.</span></div>`}
       </div>
-      ${alwaysPrepared.length ? `<div class="spell-always-prepared"><b>Zawsze przygotowane — nie zajmują limitu:</b>${alwaysPrepared.map(spell => `
-        <article class="status-item spell-preparation-card">
-          <span class="spell-preparation-heading"><b>${esc(spell.label)}</b><span>${esc(spell.level)}. poziom</span></span>
-          <span class="spell-flavor">${esc(spell.flavor_description || '')}</span>
-          <span class="spell-mechanics"><b>W grze:</b> ${esc(spell.mechanical_description || '')}</span>
-        </article>`).join('')}</div>` : ''}
+      ${alwaysPrepared.length ? `<div class="spell-always-prepared"><b>Zawsze przygotowane — nie zajmują limitu:</b><div class="spell-preparation-grid always">${alwaysPrepared.map(spell => spellPreparationCardHtml(spell, {alwaysPrepared: true})).join('')}</div></div>` : ''}
       <p class="muted">Po rozpoczęciu scenariusza zestaw pozostaje zablokowany do następnego długiego odpoczynku.</p>
-      <button id="spell-preparation-confirm" class="start-button" data-preparation-limit="${esc(actor.preparation_limit)}" onclick="confirmSpellPreparation()">Potwierdź przygotowanie</button>
+      <div class="row spell-preparation-fallback">
+        ${customMode
+          ? '<button class="secondary" onclick="startCustomSpellPreparation()">Wyczyść i zacznij ponownie</button>'
+          : '<button id="spell-preparation-confirm" class="start-button" onclick="confirmSpellPreparation()">Zaakceptuj zestaw domyślny</button><button class="secondary" onclick="startCustomSpellPreparation()">Przygotuj własny zestaw</button>'}
+      </div>
     </div></div>
   `;
 }
-function updateSpellPreparationCount() {
-  const count = document.querySelectorAll('[data-preparation-spell]:checked').length;
-  const target = document.getElementById('spell-preparation-count');
-  if (target) target.textContent = String(count);
-  const confirm = document.getElementById('spell-preparation-confirm');
-  if (confirm) confirm.disabled = count !== Number(confirm.dataset.preparationLimit || 0);
+function spellPreparationCardHtml(spell, {alwaysPrepared = false} = {}) {
+  const school = String(spell.school || 'magic').replaceAll('_', '-');
+  return `<article class="spell-preparation-card-tile school-${esc(school)}${alwaysPrepared ? ' always-prepared' : ''}">
+    <div class="spell-preparation-art" aria-hidden="true"><span>${esc(spell.level)}</span></div>
+    <div class="spell-preparation-copy">
+      <span class="spell-preparation-heading"><b>${esc(spell.label)}</b><span>${esc(spell.level)}. poziom${spell.concentration ? ' · koncentracja' : ''}${spell.ritual ? ' · rytuał' : ''}</span></span>
+      <span class="spell-flavor">${esc(spell.flavor_description || '')}</span>
+      <span class="spell-mechanics"><b>W grze:</b> ${esc(spell.mechanical_description || 'Szczegóły mechaniczne nie są dostępne.')}</span>
+    </div>
+  </article>`;
+}
+function synchronizeSpellPreparationDraft(actor) {
+  if (spellPreparationDraft && String(spellPreparationDraft.actorId) === String(actor.actor_id)) return;
+  spellPreparationDraft = {
+    actorId: String(actor.actor_id),
+    mode: 'default',
+    spellIds: (actor.spells || [])
+      .filter(spell => spell.prepared && !spell.always_prepared)
+      .map(spell => String(spell.id)),
+  };
+}
+function startCustomSpellPreparation() {
+  const preparation = state.spell_preparation || {};
+  const actor = (preparation.actors || []).find(entry => String(entry.actor_id) === String(preparation.current_actor_id));
+  if (!actor) return false;
+  spellPreparationDraft = {actorId: String(actor.actor_id), mode: 'custom', spellIds: []};
+  render();
+  setPhysicalCardStatus(`Własny zestaw ${actor.actor_name}: zeskanuj ${actor.preparation_limit} różnych kart czarów.`);
+  return true;
+}
+function selectSpellPreparationCard(data) {
+  const preparation = state.spell_preparation || {};
+  const actor = (preparation.actors || []).find(entry => String(entry.actor_id) === String(preparation.current_actor_id));
+  if (!actor) return false;
+  synchronizeSpellPreparationDraft(actor);
+  if (!spellPreparationDraft || spellPreparationDraft.mode !== 'custom') return false;
+  if (String(data.actor_id) !== String(actor.actor_id)) return false;
+  const spellId = String(data.spell_id || '');
+  if (!spellId || spellPreparationDraft.spellIds.includes(spellId)) {
+    setPhysicalCardStatus('Ten czar jest już w przygotowywanym zestawie.', {error: true});
+    return false;
+  }
+  if (spellPreparationDraft.spellIds.length >= Number(actor.preparation_limit || 0)) {
+    setPhysicalCardStatus('Limit przygotowanych czarów został już osiągnięty.', {error: true});
+    return false;
+  }
+  spellPreparationDraft.spellIds.push(spellId);
+  const complete = spellPreparationDraft.spellIds.length === Number(actor.preparation_limit || 0);
+  render();
+  if (complete) {
+    confirmSpellPreparation();
+  }
+  return true;
 }
 function shortRestHtml() {
   const rest = state.short_rest || {};
@@ -1489,13 +1570,22 @@ function shortRestHtml() {
 }
 function availableLocationsHtml(locations) {
   if (!locations.length) return '<p>Brak jawnych elementów sceny.</p>';
-  return `<ul>${locations.map(zone => {
-    const status = zone.available === false ? `zablokowane: ${esc(zone.locked_reason || '')}` : 'dostępne';
-    return `<li><b>${esc(zone.name)}</b>: kolor ${esc(colorNameForZone(zone))}, ${status}</li>`;
-  }).join('')}</ul>`;
-}
-function colorNameForZone(zone) {
-  return zone.color || 'kolor specjalny';
+  return `<div class="available-location-grid">${locations.map(zone => {
+    const rgb = Array.isArray(zone.color_rgb) ? zone.color_rgb.map(Number) : [];
+    const validRgb = rgb.length === 3 && rgb.every(value => Number.isFinite(value) && value >= 0 && value <= 255);
+    const frameColor = validRgb ? `rgb(${rgb.map(value => Math.round(value)).join(', ')})` : '#d6a72e';
+    const locked = zone.available === false;
+    const image = zone.image_url
+      ? `<img src="${esc(zone.image_url)}" alt="Widok lokacji: ${esc(zone.name)}" loading="lazy">`
+      : `<span class="available-location-image-fallback">Brak grafiki</span>`;
+    return `<article class="available-location-card${locked ? ' locked' : ''}" style="--location-frame-color: ${frameColor}">
+      <b>${esc(zone.name)}</b>
+      <div class="available-location-thumbnail">${image}</div>
+      ${locked
+        ? `<small>Zablokowane · ${esc(zone.locked_reason || 'jeszcze niedostępne')}</small>`
+        : '<small>Dostępne na planszy</small>'}
+    </article>`;
+  }).join('')}</div>`;
 }
 function visibleEnvironmentHtml() {
   const entries = state.visible_environment || [];
@@ -1662,7 +1752,7 @@ function boardChoiceToolbarHtml() {
     </div>`;
   }
   return `<div class="board-choice-toolbar">
-    <span><b>Wybierz kafelek</b><small>Kliknij tutaj albo przestaw figurkę na odpowiadające mu pole.</small></span>
+    <span><b>Wybierz kafelek</b><small>Kliknij działanie albo czerwone pole wyjścia.</small></span>
     <div data-board-input-status>${boardSelectionStatusHtml(true)}</div>
   </div>`;
 }
@@ -1696,7 +1786,7 @@ function navigationChoicesHtml() {
         ${navigationLocationBadge(zone)}
         <b>${esc(zone.name)}</b>
         <span>${esc(zone.description || zone.summary || '')}</span>
-        <small>Podgląd lokacji · potwierdź Enterem</small>
+        <small>Podgląd lokacji · wskaż ponownie, aby wejść</small>
       </button>`;
     }),
   ];
@@ -1716,6 +1806,7 @@ function zoneOptionCardsHtml(options) {
   return options.map(option => {
     const pad = boardPadFor('zone_option', option.id);
     const check = option.check || null;
+    const assignedActor = option.assigned_actor || null;
     const checkText = check
       ? `${abilityLabel(check.ability)}${check.skill ? ` (${skillLabel(check.skill)})` : ''}${check.tool_label ? ` + ${esc(check.tool_label)}` : ''}, ST ${esc(check.dc)}`
       : 'Bez rzutu';
@@ -1725,11 +1816,17 @@ function zoneOptionCardsHtml(options) {
     const timeCost = Number(option.time_cost_minutes || 0) > 0
       ? `${esc(option.time_cost_minutes)} min`
       : '';
-    return `<button type="button" class="interaction-goal-card zone-option-card${option.completed ? ' completed' : ''}${option.id === selectedZoneOptionId ? ' selected' : ''}${pad ? ' board-linked-tile' : ''}"${pad ? ` style="${boardPadCss(pad)}"` : ''}${option.completed ? ' disabled' : ` onclick="selectZoneOptionGoal('${esc(option.id)}')"`}>
+    return `<button type="button" class="interaction-goal-card zone-option-card${option.character_moment ? ' character-moment-card' : ''}${option.completed ? ' completed' : ''}${option.id === selectedZoneOptionId ? ' selected' : ''}${pad ? ' board-linked-tile' : ''}"${pad ? ` style="${boardPadCss(pad)}"` : ''}${option.completed ? ' disabled' : ` onclick="selectZoneOptionGoal('${esc(option.id)}')"`}>
       ${boardPadBadge(pad)}
+      ${assignedActor ? actorPortraitHtml(assignedActor, 'choice') : ''}
       <b>${esc(option.label)}</b>
       <span>${esc(option.description || option.message || '')}</span>
-      <small>${option.completed ? 'Ukończone' : esc([checkText, stakes, timeCost].filter(Boolean).join(' · '))}</small>
+      <small>${option.completed ? 'Ukończone' : esc([
+        assignedActor ? `Indywidualna interakcja · ${assignedActor.name}` : '',
+        checkText,
+        stakes,
+        timeCost,
+      ].filter(Boolean).join(' · '))}</small>
     </button>`;
   }).join('');
 }
@@ -1743,37 +1840,47 @@ function selectZoneOptionGoal(optionId) {
   const eligibleActors = (state.actors || []).filter(
     actor => actor.faction === 'ally' && !actor.defeated
   );
-  if (option && option.check && eligibleActors.length === 1) {
+  if (option && option.assigned_actor_id) {
+    selectedZoneOptionActorId = String(option.assigned_actor_id);
+  } else if (option && option.check && eligibleActors.length === 1) {
     selectedZoneOptionActorId = String(eligibleActors[0].id);
   }
   pauseBoardForScreenInput();
-  if (
-    option
-    && option.resolution_mode === 'automatic'
-    && option.description_mode === 'none'
-    && (!option.check || selectedZoneOptionActorId)
-  ) {
-    submitZoneOption();
-    return;
-  }
   const panel = document.getElementById('interaction-goals');
   if (panel) panel.innerHTML = interactionGoalsHtml();
 }
 function selectZoneOptionActor(actorId) {
+  const option = (((state || {}).flow || {}).zone_options || []).find(
+    candidate => String(candidate.id) === String(selectedZoneOptionId)
+  );
+  const actor = (state.actors || []).find(
+    candidate => String(candidate.id) === String(actorId)
+      && candidate.faction === 'ally'
+      && !candidate.defeated
+  );
+  if (
+    !option
+    || !option.check
+    || !actor
+    || (option.assigned_actor_id && String(option.assigned_actor_id) !== String(actorId))
+  ) return false;
   selectedZoneOptionActorId = String(actorId || '');
   const panel = document.getElementById('interaction-goals');
   if (panel) panel.innerHTML = interactionGoalsHtml();
   const input = document.getElementById('zone-option-description');
   if (input) input.focus();
+  return true;
 }
 function zoneOptionComposerHtml(option) {
   if (!option) return '';
   const allies = (state.actors || []).filter(actor => actor.faction === 'ally' && !actor.defeated);
+  const assignedActor = option.assigned_actor || null;
   const needsActor = Boolean(option.check);
   const descriptionMode = option.description_mode || 'required';
   const actorReady = !needsActor || Boolean(selectedZoneOptionActorId);
+  const descriptionStepLabel = needsActor && !assignedActor ? '2. Jak to robicie?' : 'Jak to robicie?';
   const descriptionControl = descriptionMode === 'none' ? '' : `
-    <label for="zone-option-description"><b>${descriptionMode === 'required' ? '2. Jak to robicie?' : 'Opcjonalnie: jak to robicie?'}</b>
+    <label for="zone-option-description"><b>${descriptionMode === 'required' ? descriptionStepLabel : 'Opcjonalnie: jak to robicie?'}</b>
       <span>${descriptionMode === 'required'
         ? 'Krótko opiszcie sposób działania.'
         : 'Możecie dodać metodę dla narracji lub autorskiej premii. Puste pole oznacza standardowe wykonanie.'}</span>
@@ -1781,11 +1888,14 @@ function zoneOptionComposerHtml(option) {
     <textarea id="zone-option-description" placeholder="${descriptionMode === 'required' ? 'Opiszcie sposób działania…' : 'Opcjonalny opis metody…'}"></textarea>
   `;
   return `<div class="goal-action-composer">
-    ${needsActor ? `<b>1. Kto podejmuje działanie?</b>
-    <span>Ta postać wykona test i poniesie jego konsekwencje.</span>
-    <div class="interaction-actor-grid">
-      ${allies.map(actor => `<button type="button" class="interaction-actor-card${String(actor.id) === String(selectedZoneOptionActorId) ? ' selected' : ''}" onclick="selectZoneOptionActor('${esc(actor.id)}')">${actorPortraitHtml(actor, 'choice')}<span><b>${esc(actor.name)}</b><small>${String(actor.id) === String(selectedZoneOptionActorId) ? 'wykonuje' : 'wybierz'}</small></span></button>`).join('')}
-    </div>` : ''}
+    ${assignedActor ? `<b>Ta scena należy do tej postaci</b>
+      <div class="interaction-actor-grid">
+        <div class="interaction-actor-card selected">${actorPortraitHtml(assignedActor, 'choice')}<span><b>${esc(assignedActor.name)}</b><small>automatyczny wykonawca</small></span></div>
+      </div>` : needsActor ? `<b>1. Kto podejmuje działanie?</b>
+      <span>Ta postać wykona test i poniesie jego konsekwencje.</span>
+      <div class="interaction-actor-grid">
+        ${allies.map(actor => `<button type="button" class="interaction-actor-card${String(actor.id) === String(selectedZoneOptionActorId) ? ' selected' : ''}" onclick="selectZoneOptionActor('${esc(actor.id)}')">${actorPortraitHtml(actor, 'choice')}<span><b>${esc(actor.name)}</b><small>${String(actor.id) === String(selectedZoneOptionActorId) ? 'wykonuje' : 'wybierz'}</small></span></button>`).join('')}
+      </div>` : ''}
     ${actorReady ? `
       ${descriptionControl}
       <div class="row">
@@ -1828,16 +1938,66 @@ function continuationPanelHtml(continuation) {
   if (!continuationPanelOpen || !continuation || !continuation.available) return '';
   const travel = continuation.travel || {};
   const allies = (state.actors || []).filter(actor => actor.faction === 'ally' && !actor.defeated);
-  if (!selectedContinuationNavigatorId && allies.length) selectedContinuationNavigatorId = String(allies[0].id);
-  const navigator = allies.find(actor => String(actor.id) === String(selectedContinuationNavigatorId)) || allies[0] || null;
+  const navigator = allies.find(actor => String(actor.id) === String(selectedContinuationNavigatorId)) || null;
+  const naturalExplorer = allies.find(actor => (travel.natural_explorer_actor_ids || []).map(String).includes(String(actor.id))) || null;
   const baseMinutes = Number(continuation.travel_minutes || 0);
-  const paceMinutes = selectedContinuationPace === 'fast'
-    ? Math.ceil(baseMinutes * 3 / 4)
-    : selectedContinuationPace === 'slow'
-      ? Math.ceil(baseMinutes * 4 / 3)
-      : baseMinutes;
+  const paceMinutes = continuationPaceMinutes(baseMinutes, selectedContinuationPace);
   const worstMinutes = paceMinutes + Number(travel.navigation_failure_delay_minutes || 0);
   const forcedCount = Math.max(0, Math.ceil((worstMinutes - Number(travel.safe_travel_minutes || 480)) / 60));
+  const steps = [
+    ['pace', '1', 'Tempo'],
+    ['navigator', '2', travel.navigation_automatic || travel.navigation_dc === null || travel.navigation_dc === undefined ? 'Prowadzenie automatyczne' : 'Prowadzący'],
+    ['roll', '3', 'Rzut i wymarsz'],
+  ];
+  const stepIndex = Math.max(0, steps.findIndex(([id]) => id === continuationStep));
+  const progress = `<div class="continuation-steps">${steps.map(([id, number, label], index) => `
+    <div class="continuation-step${id === continuationStep ? ' active' : ''}${index < stepIndex ? ' complete' : ''}">
+      <span>${esc(number)}</span><b>${esc(label)}</b>
+    </div>`).join('')}</div>`;
+  const paceOptions = [
+    {id: 'fast', label: 'Szybkie', minutes: continuationPaceMinutes(baseMinutes, 'fast'), detail: 'Pasywna Percepcja −5 · bez Stealth podczas drogi', tone: 'danger'},
+    {id: 'normal', label: 'Normalne', minutes: baseMinutes, detail: 'Bez modyfikatora Percepcji · bez Stealth podczas drogi', tone: 'normal'},
+    {id: 'slow', label: 'Wolne', minutes: continuationPaceMinutes(baseMinutes, 'slow'), detail: 'Pełna Percepcja · umożliwia Stealth podczas drogi', tone: 'safe'},
+  ];
+  const paceBody = `<div class="continuation-stage">
+    <span class="eyebrow">ETAP 1 Z 3</span>
+    <h4>Jak szybko maszerujecie?</h4>
+    <p>Tempo zmienia czas podróży, czujność drużyny i możliwość skradania się.</p>
+    <div class="continuation-pace-grid">${paceOptions.map(option => `
+      <button type="button" class="continuation-pace-card ${esc(option.tone)}${selectedContinuationPace === option.id ? ' selected' : ''}" onclick="selectContinuationPace('${esc(option.id)}')">
+        <b>${esc(option.label)}</b>
+        <strong>${esc(option.minutes)} min</strong>
+        <span>Dotarcie około ${esc(continuationArrivalTime(option.minutes))}</span>
+        <small>${esc(option.detail)}</small>
+      </button>`).join('')}</div>
+    <div class="flow-note"><b>Ryzyko zgubienia drogi:</b> porażka nawigatora doda ${esc(travel.navigation_failure_delay_minutes || 0)} min. ${forcedCount ? `Najgorszy wariant wymaga ${esc(forcedCount)} testów wymuszonego marszu na bohatera.` : 'Ta trasa nie przekracza bezpiecznego limitu marszu.'}</div>
+    <div class="row"><button type="button" onclick="advanceContinuationStep()">Dalej: wybór prowadzącego</button><button type="button" class="secondary" onclick="closeContinuationPanel()">Anuluj</button></div>
+  </div>`;
+  const navigationModifier = navigator
+    ? continuationNavigationModifier(navigator, travel.navigation_ability || 'wisdom', travel.navigation_skill)
+    : 0;
+  const navigatorBody = `<div class="continuation-stage">
+    <span class="eyebrow">ETAP 2 Z 3</span>
+    <h4>Kto prowadzi drużynę?</h4>
+    ${travel.navigation_automatic ? `
+      <div class="continuation-navigator-selected"><b>${esc(naturalExplorer ? naturalExplorer.name : 'Natural Explorer')}</b><span>Znajomy teren: ${esc(travel.terrain || '-')}. Drużyna nie może zgubić się niemagicznie.</span></div>
+      <div class="row"><button type="button" onclick="advanceContinuationStep()">Dalej: podsumowanie</button></div>
+    ` : travel.navigation_dc === null || travel.navigation_dc === undefined ? `
+      <div class="flow-note">Ta droga nie wymaga testu nawigacji ani wskazania prowadzącego.</div>
+      <div class="row"><button type="button" onclick="advanceContinuationStep()">Dalej: podsumowanie</button></div>
+    ` : `
+      <p>Zeskanuj kartę bohatera. Wybrana postać wykona test ${esc(abilityLabel(travel.navigation_ability || 'wisdom'))}${travel.navigation_skill ? ` (${esc(skillLabel(travel.navigation_skill))})` : ''} przeciw ST ${esc(travel.navigation_dc)}.</p>
+      <div class="continuation-navigator-grid">${allies.map(actor => `
+        <article class="continuation-navigator-card${navigator && String(actor.id) === String(navigator.id) ? ' selected' : ''}">
+          ${actor.portrait_url ? `<img src="${esc(actor.portrait_url)}" alt="">` : ''}
+          <b>${esc(actor.name)}</b>
+          <span>Modyfikator ${signedNumber(continuationNavigationModifier(actor, travel.navigation_ability || 'wisdom', travel.navigation_skill))}</span>
+          ${Number(actor.exhaustion_level || 0) >= 1 ? '<small>Utrudnienie przez wyczerpanie</small>' : '<small>Zeskanuj kartę bohatera</small>'}
+        </article>`).join('')}</div>
+      ${navigator ? `<div class="continuation-navigator-selected"><b>Wybrano: ${esc(navigator.name)}</b><span>Test ${signedNumber(navigationModifier)} przeciw ST ${esc(travel.navigation_dc)}.</span></div>` : '<div class="flow-note">Czytnik czeka na kartę prowadzącego.</div>'}
+    `}
+    <div class="row"><button type="button" class="secondary" onclick="retreatContinuationStep()">Wróć do tempa</button></div>
+  </div>`;
   const forcedInputs = forcedCount ? allies.map(actor => `
     <div class="status-item"><b>${esc(actor.name)} — wymuszony marsz</b>
       ${Array.from({length: forcedCount}, (_unused, index) => `
@@ -1848,40 +2008,57 @@ function continuationPanelHtml(continuation) {
       `).join('')}
     </div>
   `).join('') : '';
-  return `<div class="goal-action-composer continuation-composer">
-    <h3>${esc(continuation.label)}</h3>
-    <p>${esc(continuation.description || '')}</p>
+  const rollBody = `<div class="continuation-stage">
+    <span class="eyebrow">ETAP 3 Z 3</span>
+    <h4>Rzut podróży</h4>
+    <div class="continuation-summary">
+      <span><b>Tempo:</b> ${esc(paceOptions.find(option => option.id === selectedContinuationPace)?.label || 'Normalne')} · ${esc(paceMinutes)} min</span>
+      <span><b>Przewidywane dotarcie:</b> ${esc(continuationArrivalTime(paceMinutes))}</span>
+      ${navigator ? `<span><b>Prowadzący:</b> ${esc(navigator.name)} · test ${signedNumber(navigationModifier)}</span>` : naturalExplorer ? `<span><b>Prowadzący:</b> ${esc(naturalExplorer.name)} · automatyczny sukces Natural Explorer</span>` : ''}
+    </div>
     <div class="interaction-participants">
-      <label>Tempo:
-        <select id="continuation-pace" onchange="selectedContinuationPace = this.value; render()">
-          <option value="fast"${selectedContinuationPace === 'fast' ? ' selected' : ''}>Szybkie — ${Math.ceil(baseMinutes * 3 / 4)} min, Perception −5</option>
-          <option value="normal"${selectedContinuationPace === 'normal' ? ' selected' : ''}>Normalne — ${baseMinutes} min</option>
-          <option value="slow"${selectedContinuationPace === 'slow' ? ' selected' : ''}>Wolne — ${Math.ceil(baseMinutes * 4 / 3)} min, umożliwia Stealth</option>
-        </select>
-      </label>
       ${travel.navigation_automatic ? `
-        <p class="flow-note"><b>Natural Explorer:</b> wybrany teren (${esc(travel.terrain || '-')}) odpowiada specjalizacji Rangera. Drużyna nie może zgubić się niemagicznie, więc rzut na nawigację nie jest wymagany.</p>
+        <p class="flow-note"><b>Bez rzutu na nawigację:</b> Natural Explorer zapobiega niemagicznemu zgubieniu drogi.</p>
       ` : travel.navigation_dc !== null && travel.navigation_dc !== undefined ? `
-        <label>Nawigator:
-          <select id="continuation-navigator" onchange="selectedContinuationNavigatorId = this.value; render()">
-            ${allies.map(actor => `<option value="${esc(actor.id)}"${navigator && String(actor.id) === String(navigator.id) ? ' selected' : ''}>${esc(actor.name)}</option>`).join('')}
-          </select>
-        </label>
         <label>Naturalny wynik d20 — ${esc(skillLabel(travel.navigation_skill || 'survival'))}, ST ${esc(travel.navigation_dc)}:
-          <input id="continuation-navigation-roll-1" type="number" min="1" max="20" value="10">
+          <input id="continuation-navigation-roll-1" type="number" min="1" max="20" value="10" autofocus>
         </label>
         ${navigator && Number(navigator.exhaustion_level || 0) >= 1 ? `<label>Drugi d20 z utrudnienia:
           <input id="continuation-navigation-roll-2" type="number" min="1" max="20" value="10">
         </label>` : ''}
         <p class="muted">Nieudana nawigacja nie zatrzyma wyprawy, ale doda ${esc(travel.navigation_failure_delay_minutes || 0)} min opóźnienia.</p>
-      ` : ''}
-      ${forcedInputs ? `<h4>Wymuszony marsz</h4>${forcedInputs}` : ''}
+      ` : '<p class="flow-note">Ta trasa nie wymaga rzutu na nawigację.</p>'}
+      ${forcedInputs ? `<h4>Wymuszony marsz</h4><p class="muted">Wpisz zapasowe rzuty wymagane tylko wtedy, gdy ostateczny czas przekroczy bezpieczny limit.</p>${forcedInputs}` : ''}
     </div>
-    <div class="row">
-      <button type="button" onclick="submitContinuation()">Wyrusz i zapisz scenę</button>
-      <button type="button" class="secondary" onclick="closeContinuationPanel()">Anuluj</button>
-    </div>
+    <div class="row"><button type="button" onclick="submitContinuation()">Wyrusz i zapisz scenę</button><button type="button" class="secondary" onclick="retreatContinuationStep()">Wróć</button></div>
   </div>`;
+  return `<div class="goal-action-composer continuation-composer">
+    <h3>${esc(continuation.label)}</h3>
+    <p>${esc(continuation.description || '')}</p>
+    ${progress}
+    ${continuationStep === 'pace' ? paceBody : continuationStep === 'navigator' ? navigatorBody : rollBody}
+  </div>`;
+}
+function continuationPaceMinutes(baseMinutes, pace) {
+  if (pace === 'fast') return Math.ceil(Number(baseMinutes || 0) * 3 / 4);
+  if (pace === 'slow') return Math.ceil(Number(baseMinutes || 0) * 4 / 3);
+  return Number(baseMinutes || 0);
+}
+function continuationArrivalTime(durationMinutes) {
+  const clock = (state.flow && state.flow.clock) || {};
+  const start = Number(clock.hour || 0) * 60 + Number(clock.minute || 0);
+  const total = (start + Number(durationMinutes || 0)) % (24 * 60);
+  const hour = Math.floor(total / 60);
+  const minute = total % 60;
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+}
+function continuationNavigationModifier(actor, ability, skill) {
+  const score = Number(((actor || {}).ability_scores || {})[ability] || 10);
+  let modifier = Math.floor((score - 10) / 2);
+  const proficiencies = (actor || {}).proficiencies || {};
+  if ((proficiencies.expertise || []).includes(skill)) modifier += Number(actor.proficiency_bonus || 0) * 2;
+  else if ((proficiencies.skills || []).includes(skill)) modifier += Number(actor.proficiency_bonus || 0);
+  return modifier;
 }
 function continuationUnavailableText(continuation) {
   const locations = (state.flow && state.flow.available_locations) || [];
@@ -1922,9 +2099,12 @@ function interactionGoalsHtml() {
   const continuation = !state.active_point && state.flow ? state.flow.continuation : null;
   const hasContinuation = Boolean(continuation);
   const auxiliaryPads = ((boardInteractionState() || {}).pads || []).filter(
-    pad => pad.action_kind === 'short_rest' || pad.action_kind === 'search'
+    pad => ['short_rest', 'long_rest', 'search'].includes(pad.action_kind)
   );
-  if ((!goals.length && !pointCards.length && !hasDowntime && !zoneOptions.length && !hasContinuation && !auxiliaryPads.length && !boardToolbar) || state.pending || (state.required_rolls || []).length || resultAck) return '';
+  const exitPad = ((boardInteractionState() || {}).pads || []).find(
+    pad => pad.action_kind === 'exit'
+  ) || null;
+  if ((!goals.length && !pointCards.length && !hasDowntime && !zoneOptions.length && !hasContinuation && !auxiliaryPads.length && !exitPad && !boardToolbar) || state.pending || (state.required_rolls || []).length || resultAck) return '';
   const selected = goals.find(goal => goal.id === selectedInteractionGoalId) || null;
   const selectedZoneOption = zoneOptions.find(option => option.id === selectedZoneOptionId) || null;
   const selectedParticipants = selected ? selectedGoalCheckParticipants(selected) : null;
@@ -2005,11 +2185,13 @@ function interactionGoalsHtml() {
         <button type="button" class="interaction-goal-card board-linked-tile" style="${boardPadCss(pad)}"
           onclick="${pad.action_kind === 'short_rest'
             ? 'startShortRest()'
+            : pad.action_kind === 'long_rest'
+            ? 'completeLongRest()'
             : `startExplorationSearch('${esc((boardInteractionState() || {}).selected_actor_id || '')}')`}">
           ${boardPadBadge(pad)}
           <b>${esc(pad.label)}</b>
           <span>${esc(pad.description || '')}</span>
-          <small>${pad.action_kind === 'short_rest' ? 'Odpoczynek drużyny' : 'Test wybranej postaci'}</small>
+          <small>${['short_rest','long_rest'].includes(pad.action_kind) ? 'Odpoczynek drużyny' : 'Test wybranej postaci'}</small>
         </button>
       `).join('')}
       ${goals.map(goal => {
@@ -2023,6 +2205,14 @@ function interactionGoalsHtml() {
           <small>${esc(`${interactionContractLabel(goal)} · ${goalParticipantLabel(goal)}`)}</small>
         </button>`;
       }).join('')}
+      ${exitPad ? `
+        <button type="button" class="interaction-goal-card board-linked-tile system-exit-card${exitPad.enabled === false ? ' locked' : ''}" style="${boardPadCss(exitPad)}"
+          ${exitPad.enabled === false ? 'disabled' : 'onclick="leaveChatInstance()"'}>
+          ${boardPadBadge(exitPad)}
+          <b>${esc(exitPad.label)}</b>
+          <span>${esc(exitPad.enabled === false ? (exitPad.unavailable_reason || 'Najpierw zakończ bieżące działanie.') : exitPad.description || '')}</span>
+          <small>${exitPad.enabled === false ? 'Wyjście chwilowo zablokowane' : 'Systemowe wyjście'}</small>
+        </button>` : ''}
     </div>`}
     ${zoneOptionComposerHtml(selectedZoneOption)}
     ${continuationPanelHtml(continuation)}
@@ -2450,16 +2640,13 @@ function selectInteractionGoal(goalId) {
       goal_id: goalId,
       role: 'lead',
       excluded_actor_ids: [],
-    }, 'Podświetlam wybór bohatera...');
+    }, 'Czekam na kartę bohatera...');
   } else {
     const input = document.getElementById('goal-action');
     if (input) input.focus();
   }
-  scheduleAutomaticGoalAdvance();
 }
 function cancelInteractionGoal() {
-  autoAdvanceGoalKey = '';
-  window.clearTimeout(scheduleAutomaticGoalAdvance.timer);
   selectedInteractionGoalId = null;
   selectedInteractionCheckParticipants = null;
   selectedInteractionActorIds = [];
@@ -2511,32 +2698,6 @@ function prepareObviousInteractionChoices(goal) {
     if (available.length === 1) selectedInteractionActionSourceId = available[0].id;
   }
 }
-function scheduleAutomaticGoalAdvance() {
-  window.clearTimeout(scheduleAutomaticGoalAdvance.timer);
-  scheduleAutomaticGoalAdvance.timer = null;
-  if (busy || waitingForGm || !selectedInteractionGoalId || state.pending) return;
-  const goal = currentInteractionGoals().find(item => item.id === selectedInteractionGoalId);
-  if (!goal || goal.description_mode !== 'none' || goal.resolution_mode === 'llm_rubric') return;
-  prepareObviousInteractionChoices(goal);
-  const participants = selectedGoalCheckParticipants(goal);
-  const participantsReady = ['no_actor', 'whole_party'].includes(participants)
-    || (participants && selectedInteractionActorIds.length > 0);
-  const sourceReady = !goal.source_required || Boolean(selectedInteractionActionSourceId);
-  if (!participantsReady || !sourceReady) return;
-  const key = [
-    goal.id,
-    participants,
-    selectedInteractionActorIds.join(','),
-    selectedInteractionActionSourceId || '',
-    (state.board_selection || {}).revision || '',
-  ].join('|');
-  if (autoAdvanceGoalKey === key) return;
-  autoAdvanceGoalKey = key;
-  scheduleAutomaticGoalAdvance.timer = window.setTimeout(() => {
-    scheduleAutomaticGoalAdvance.timer = null;
-    sendGoalAction();
-  }, 180);
-}
 function interactionParticipantPickerHtml(goal) {
   if (!state.active_challenge && !(state.active_point && state.active_point.npc)) return '';
   const mode = selectedGoalCheckParticipants(goal);
@@ -2555,8 +2716,8 @@ function interactionParticipantPickerHtml(goal) {
   const instruction = [
     actorSelectionAllowed
       ? helpAllowed
-        ? 'Pierwsza wybrana postać prowadzi, druga opcjonalnie pomaga i daje przewagę.'
-        : 'Wybierz jedną postać, która wykona test.'
+        ? 'Zeskanuj kartę prowadzącego. Potem zeskanuj kartę pomocnika albo użyj ACCEPT, aby kontynuować bez pomocy.'
+        : 'Zeskanuj kartę postaci, która wykona test.'
       : '',
     wholePartyAllowed
       ? 'Możecie też wybrać całą drużynę — wtedy każdy rzuca.'
@@ -2573,15 +2734,13 @@ function interactionParticipantPickerHtml(goal) {
       const boardHint = boardPad
         ? ` · ${boardPad.color}, pole ${boardPad.coordinate_label}`
         : ` · kolor ${actor.party_color || 'drużyny'}`;
-      return `<button type="button" class="interaction-actor-card actor-identity${index >= 0 ? ' selected' : ''}${eligible ? '' : ' unavailable'}"
-        style="${actorIdentityStyle(actor)}" onclick="toggleInteractionActor('${esc(actor.id)}')"${eligible ? '' : ' disabled title="Ta postać nie spełnia wymagań tej próby."'}>${actorPortraitHtml(actor, 'choice')}<span><b>${esc(actor.name)}</b><small>${eligible ? `${role}${esc(boardHint)}` : 'brak wymaganych zdolności lub narzędzi'}</small></span></button>`;
+      return `<article class="interaction-actor-card actor-identity${index >= 0 ? ' selected' : ''}${eligible ? '' : ' unavailable'}"
+        style="${actorIdentityStyle(actor)}" aria-selected="${index >= 0 ? 'true' : 'false'}">${actorPortraitHtml(actor, 'choice')}<span><b>${esc(actor.name)}</b><small>${eligible ? `${role} · karta ${esc(actor.id)}` : 'brak wymaganych zdolności lub narzędzi'}</small></span></article>`;
     }).join('') : ''}
-    ${wholePartyAllowed ? `<button type="button" class="interaction-actor-card whole-party${mode === 'whole_party' ? ' selected' : ''}"
-      onclick="selectWholePartyForInteraction()">${partyPortraitStackHtml(actors)}<span><b>Cała drużyna</b><small>${mode === 'whole_party' ? 'wszyscy rzucają' : 'test grupowy'}</small></span></button>` : ''}
+    ${wholePartyAllowed ? `<article class="interaction-actor-card whole-party${mode === 'whole_party' ? ' selected' : ''}">
+      ${partyPortraitStackHtml(actors)}<span><b>Cała drużyna</b><small>${mode === 'whole_party' ? 'wszyscy rzucają' : 'dostępne tylko, gdy wymaga tego test'}</small></span></article>` : ''}
     </div>
-    ${helpAllowed && selectedInteractionActorIds.length === 1
-      ? '<button type="button" class="secondary actor-board-helper" onclick="startInteractionHelperBoardSelection()">Wybierz pomocnika na planszy</button>'
-      : ''}
+    ${actorSelectionAllowed ? '<p class="muted">Wybór postaci nie ma ekranowego ani planszowego zamiennika.</p>' : ''}
   </div>`;
 }
 function interactionActionSourcePickerHtml(goal) {
@@ -2631,7 +2790,6 @@ function selectInteractionActionSource(sourceId) {
   selectedInteractionActionSourceId = sourceId || null;
   const panel = document.getElementById('interaction-goals');
   if (panel) panel.innerHTML = interactionGoalsHtml();
-  scheduleAutomaticGoalAdvance();
 }
 function toggleInteractionActor(actorId) {
   const goal = currentInteractionGoals().find(item => item.id === selectedInteractionGoalId);
@@ -2678,7 +2836,6 @@ function toggleInteractionActor(actorId) {
   prepareObviousInteractionChoices(goal);
   const panel = document.getElementById('interaction-goals');
   if (panel) panel.innerHTML = interactionGoalsHtml();
-  scheduleAutomaticGoalAdvance();
 }
 function selectWholePartyForInteraction() {
   const goal = currentInteractionGoals().find(item => item.id === selectedInteractionGoalId);
@@ -3151,12 +3308,13 @@ function rollPromptHtml() {
   const toolProficiencyHtml = plan.tool ? `<p><b>Biegłość narzędzia:</b> ${esc(plan.tool_label || plan.tool)}.</p>` : '';
   return `${mechanicHtml}${roleHtml}${rollModeHtml}<p><b>Rozstrzygnięcie:</b> ${esc(participants)}${aggregation ? `; ${esc(aggregation)}` : ''}.</p>${toolProficiencyHtml}${rollBreakdowns ? `<ul>${rollBreakdowns}</ul>` : ''}${resourceHtml}${situationalHtml}${improvisedHtml}${bonusHtml}`;
 }
-function latestResultMessage(state) {
+function latestResultMessageSince(state, startIndex) {
   const messages = state.messages || [];
-  for (let i = messages.length - 1; i >= 0; i -= 1) {
+  const firstNewMessage = Math.max(0, Number(startIndex || 0));
+  for (let i = messages.length - 1; i >= firstNewMessage; i -= 1) {
     if (messages[i].title && messages[i].title.startsWith('Wynik')) return messages[i];
   }
-  return messages[messages.length - 1] || null;
+  return messages.length > firstNewMessage ? messages[messages.length - 1] : null;
 }
 function latestMessageWithTitle(state, title) {
   const messages = state.messages || [];
@@ -3494,10 +3652,42 @@ function combatCurrentStepHtml(combat, finished, isAllyTurn, isEnemyTurn, interr
       ${combatPhaseStepsHtml(phase)}
       ${resultAck ? '' : combatMainPromptHtml(combat, finished, isAllyTurn, isEnemyTurn)}
       ${phase === 'result' && !resultAck ? `<div class="combat-inline-result">${latestCombatMessageHtml()}</div>` : ''}
+      ${combatCardReminderHtml(combat, phase, isAllyTurn)}
       <div class="combat-action-card">
         ${finished ? '<button onclick="resolveCombatOutcome()">Zastosuj wynik encountera</button>' : combatPrimaryActionHtml(combat, isAllyTurn, isEnemyTurn)}
       </div>
     </div>
+  `;
+}
+function combatCardReminderHtml(combat, phase, isAllyTurn) {
+  const reminders = (combat.card_reminders || []).filter(reminder => {
+    if (reminder.trigger_window === 'action_selection') return isAllyTurn && phase === 'choice';
+    return true;
+  });
+  if (!reminders.length) return '';
+  const reactions = reminders.filter(reminder => reminder.trigger_window !== 'action_selection');
+  if (reactions.length) {
+    return reactions.map(reminder => `
+      <aside class="combat-card-reminder reaction" role="status" aria-label="Możliwa reakcja kartą">
+        <span class="combat-card-reminder-icon" aria-hidden="true"></span>
+        <div>
+          <small>Możliwa reakcja</small>
+          <b>${esc(reminder.owner_actor_name)} — ${esc(reminder.label)}</b>
+          <p>Zeskanuj kartę albo kontynuuj bez niej.</p>
+        </div>
+      </aside>
+    `).join('');
+  }
+  const names = reminders.map(reminder => reminder.label);
+  return `
+    <aside class="combat-card-reminder action" role="status" aria-label="Dostępne karty walki">
+      <span class="combat-card-reminder-icon" aria-hidden="true"></span>
+      <div>
+        <small>Dostępne karty ${esc(reminders[0].owner_actor_name)}</small>
+        <b>${names.map(esc).join(' · ')}</b>
+        <p>Możesz zeskanować kartę albo wybrać zwykłą akcję na planszy.</p>
+      </div>
+    </aside>
   `;
 }
 function combatPresentationPhase(combat, finished, isAllyTurn, isEnemyTurn) {
@@ -4312,6 +4502,7 @@ function combatActionDetailsHtml(combat, isAllyTurn, isEnemyTurn) {
   if (combat.death_save_required) return '<p>Naturalne 1 daje dwie porażki. Naturalne 20 przywraca 1 HP. Trzy sukcesy stabilizują, a trzy porażki oznaczają śmierć.</p>';
   if (combat.context_menu) return combatContextMenuDetailsHtml(combat.context_menu);
   if (combat.pending_concentration_check) return pendingConcentrationCheckDetailsHtml(combat.pending_concentration_check);
+  if (combat.physical_feature_prompt) return physicalFeaturePromptHtml(combat.physical_feature_prompt);
   if (isEnemyTurn && combat.pending_enemy_saving_throw) return pendingEnemySavingThrowDetailsHtml(combat.pending_enemy_saving_throw);
   if (isEnemyTurn) return enemyTurnDetailsHtml(combat);
   if (!isAllyTurn) return '<p class="muted">Brak dodatkowych szczegółów dla tego aktora.</p>';
@@ -4330,6 +4521,62 @@ function combatActionDetailsHtml(combat, isAllyTurn, isEnemyTurn) {
   if (combat.pending_combat_interaction) return pendingCombatInteractionDetailsHtml(combat.pending_combat_interaction);
   return playerTurnDetailsHtml(combat);
 }
+function physicalFeaturePromptHtml(prompt) {
+  const actionId = prompt.action_id || '';
+  let controls = '';
+  if (prompt.input_kind === 'die') {
+    controls = `<label>Wynik k${Number(prompt.die_sides || 10)}<input id="physical-feature-roll" type="number" min="1" max="${Number(prompt.die_sides || 10)}" required></label>`;
+  } else if (prompt.input_kind === 'weapon') {
+    controls = `<label>Broń<select id="physical-feature-weapon" required>${(prompt.weapons || []).map(item => `<option value="${esc(item.id)}">${esc(item.name)}</option>`).join('')}</select></label>`;
+  } else if (prompt.input_kind === 'slot') {
+    controls = `<label>Poziom slotu<select id="physical-feature-slot" required>${(prompt.available_slot_levels || []).map(level => `<option value="${Number(level)}">${Number(level)}. poziom</option>`).join('')}</select></label>`;
+  } else if (prompt.input_kind === 'saving_rolls') {
+    controls = (prompt.targets || []).length
+      ? `<div class="status-list">${(prompt.targets || []).map(target => `<label>${esc(target.name)} · Mądrość ST ${Number(target.dc || 0)}<input class="physical-feature-saving-roll" data-target-id="${esc(target.id)}" type="number" min="1" max="20" required></label>`).join('')}</div>`
+      : '<p>Brak właściwych celów w zasięgu. Potwierdzenie nadal zużyje akcję i Boską Moc.</p>';
+  } else if (prompt.input_kind === 'form') {
+    controls = `<label>Forma<select id="physical-feature-form" required>${(prompt.forms || []).map(item => `<option value="${esc(item.id)}">${esc(item.name)}${item.role ? ` · ${esc(item.role)}` : ''}${item.hit_points ? ` · KP ${Number(item.ac)} · PW ${Number(item.hit_points)}` : ''}</option>`).join('')}</select></label>`;
+  } else if (prompt.input_kind === 'mode') {
+    controls = `<label>Wariant<select id="physical-feature-mode" required>${(prompt.modes || []).map(item => `<option value="${esc(item.id)}">${esc(item.name)}</option>`).join('')}</select></label>`;
+  }
+  return `
+    <div class="status-item">
+      <h3>${esc(prompt.label || identifierLabel(actionId))}</h3>
+      ${prompt.incoming_damage ? `<p>Ujawnione obrażenia pocisku: <b>${Number(prompt.incoming_damage)}</b>.</p>` : ''}
+      ${controls}
+      <div class="panel-actions">
+        <button class="secondary" onclick="cancelPhysicalFeaturePrompt()">Anuluj</button>
+        <button onclick="submitPhysicalFeaturePrompt('${esc(actionId)}')">Potwierdź</button>
+      </div>
+    </div>`;
+}
+function submitPhysicalFeaturePrompt(actionId) {
+  const roll = Number((document.getElementById('physical-feature-roll') || {}).value || 0);
+  if (actionId === 'divine_smite') {
+    const slot = Number((document.getElementById('physical-feature-slot') || {}).value || 0);
+    api('/api/combat/divine-smite', {slot_level: slot}, 'Dodaję Divine Smite...');
+    return;
+  }
+  if (actionId === 'deflect_missiles') {
+    api('/api/combat/deflect-missiles/roll', {die_roll: roll}, 'Redukuję obrażenia pocisku...');
+    return;
+  }
+  const payload = {action_id: actionId};
+  if (actionId === 'second_wind') payload.natural_roll = roll;
+  if (actionId === 'sacred_weapon') payload.source_item_id = (document.getElementById('physical-feature-weapon') || {}).value || '';
+  if (actionId === 'turn_the_unholy' || actionId === 'turn_undead') {
+    payload.saving_rolls = Array.from(document.querySelectorAll('.physical-feature-saving-roll')).map(input => ({
+      target_id: input.dataset.targetId,
+      natural_roll: Number(input.value),
+    }));
+  }
+  if (actionId === 'wild_shape' || actionId === 'pact_weapon') payload.form_id = (document.getElementById('physical-feature-form') || {}).value || '';
+  if (actionId === 'cunning_action') payload.mode = (document.getElementById('physical-feature-mode') || {}).value || '';
+  api('/api/combat/class-feature', payload, 'Rozstrzygam kartę cechy klasowej...');
+}
+function cancelPhysicalFeaturePrompt() {
+  api('/api/combat/physical-feature/cancel', {}, 'Anuluję kartę cechy klasowej...');
+}
 function combatSourceButtonsHtml(combat) {
   const attacks = combat.available_attack_sources || [];
   const selectedAttack = combat.selected_attack_source_id || '';
@@ -4342,10 +4589,7 @@ function combatSourceButtonsHtml(combat) {
       const baseSelectionId = level === null ? source.id : `${source.id}@${level}`;
       const levelLabel = level === null ? '' : ` · slot ${level}`;
       const argument = level === null ? 'null' : Number(level);
-      const variants = [{ids: [], label: ''}, ...(source.metamagic_options || []).filter(option => option.id !== 'metamagic_empowered').map(option => ({
-        ids: [option.id],
-        label: ` · ${option.name} (${option.id === 'metamagic_twinned' ? Math.max(1, Number(level || source.spell_level || 0)) : option.sorcery_point_cost} SP)`,
-      }))];
+      const variants = [{ids: [], label: ''}];
       return variants.map(variant => {
         const selectionId = variant.ids.length ? `${baseSelectionId}#${variant.ids.join(',')}` : baseSelectionId;
         const selected = selectionId === selectedAttack ? ' selected' : '';
@@ -4364,10 +4608,7 @@ function combatSourceButtonsHtml(combat) {
       const baseSelectionId = level === null ? source.id : `${source.id}@${level}`;
       const levelLabel = level === null ? '' : ` · slot ${level}`;
       const argument = level === null ? 'null' : Number(level);
-      const variants = [{ids: [], label: ''}, ...(source.metamagic_options || []).filter(option => option.id !== 'metamagic_empowered').map(option => ({
-        ids: [option.id],
-        label: ` · ${option.name} (${option.id === 'metamagic_twinned' ? Math.max(1, Number(level || source.spell_level || 0)) : option.sorcery_point_cost} SP)`,
-      }))];
+      const variants = [{ids: [], label: ''}];
       return variants.map(variant => {
         const selectionId = variant.ids.length ? `${baseSelectionId}#${variant.ids.join(',')}` : baseSelectionId;
         const selected = selectionId === selectedHealing ? ' selected' : '';
@@ -4398,10 +4639,7 @@ function combatSourceButtonsHtml(combat) {
       const levels = Number(action.spell_level || 0) > 0 ? (action.available_cast_levels || []) : [0];
       return levels.flatMap(level => {
         const levelLabel = Number(action.spell_level || 0) > 0 ? ` · slot ${level}` : '';
-        const variants = [{ids: [], label: ''}, ...(action.metamagic_options || []).map(option => ({
-          ids: [option.id],
-          label: ` · ${option.name} (${option.sorcery_point_cost} SP)`,
-        }))];
+        const variants = [{ids: [], label: ''}];
         return variants.map(variant => {
           const ids = JSON.stringify(variant.ids).replace(/"/g, '&quot;');
           return `<button class="secondary"${disabled}${hint} data-allow-busy="true" onclick="useAssistedSpell('${esc(action.id)}', ${Number(level)}, ${ids})">${label}${esc(levelLabel)}${esc(variant.label)} · rozstrzygnij przy stole</button>`;
@@ -4814,16 +5052,22 @@ function classFeatureReaction(combat, kind) {
   return options.find(option => option.id === window.current_option_id && option.kind === kind) || null;
 }
 function cuttingWordsReactionHtml(option, preview) {
+  const damageStage = option.trigger_event === 'damage_roll_revealed';
   const attackTotal = preview.total === undefined || preview.total === null ? '?' : preview.total;
+  const damageTotal = ((preview.damage || {}).total_before_reduction
+    ?? (preview.damage || {}).total_applied
+    ?? '?');
   return `
-    <p><b>Wrogi atak uzyskał ${esc(attackTotal)}.</b></p>
-    <p>${esc(option.label || 'Cutting Words')} może obniżyć wynik przed rozliczeniem trafienia. Zużywa reakcję i jedno użycie Bardic Inspiration.</p>
+    <p><b>${damageStage
+      ? `Wrogi atak zadaje ${esc(damageTotal)} obrażeń.`
+      : `Wrogi atak uzyskał ${esc(attackTotal)}.`}</b></p>
+    <p>${esc(option.label || 'Cutting Words')} może obniżyć ${damageStage ? 'obrażenia przed ich zastosowaniem' : 'test ataku przed rozliczeniem trafienia'}. Zużywa reakcję i jedno użycie Bardic Inspiration.</p>
     <div class="row">
       <label>Wynik k${esc(option.value || 6)}:
         <input id="cutting-words-roll" type="number" min="1" max="${esc(option.value || 6)}" value="1">
       </label>
       <button data-allow-busy="true" onclick="submitCuttingWordsReaction()">Użyj Cutting Words</button>
-      <button class="secondary" data-allow-busy="true" onclick="skipCuttingWordsReaction()">Nie reaguj</button>
+      <button class="secondary" data-allow-busy="true" onclick="skipCuttingWordsReaction()">${damageStage ? 'Przyjmij obrażenia' : 'Nie obniżaj trafienia'}</button>
     </div>
   `;
 }
@@ -5014,17 +5258,38 @@ function pendingCombatHelpDetailsHtml(pending) {
 }
 function pendingClassFeatureTargetingHtml(pending) {
   const selected = pending.selected_target || null;
+  const selectedTargets = pending.selected_targets || [];
   const needsPoints = ['lay_on_hands', 'preserve_life'].includes(pending.action_id);
+  const preserveLife = pending.action_id === 'preserve_life';
+  let remainingHealing = Number(pending.healing_pool || 0);
+  const allocationRows = selectedTargets.map(target => {
+    const maximum = Number(target.maximum_healing || 0);
+    const suggested = Math.min(maximum, remainingHealing);
+    remainingHealing = Math.max(0, remainingHealing - suggested);
+    return `
+      <label>${esc(target.name)} · ${esc(target.hp)}/${esc(target.max_hp)} PW
+        <input class="preserve-life-allocation" data-target-id="${esc(target.id)}" type="number" min="0" max="${esc(maximum)}" value="${esc(suggested)}" required>
+      </label>`;
+  }).join('');
+  const healingInputs = preserveLife && selectedTargets.length ? `
+    <p><b>Pula leczenia:</b> ${esc(pending.healing_pool || 0)} PW. Każdy cel można uleczyć najwyżej do połowy maksymalnych PW.</p>
+    <div class="status-list">
+      ${allocationRows}
+    </div>` : '';
   return `
     <div class="combat-action-box">
       <p><b>${esc(pending.label || 'Cecha klasowa')}</b></p>
       <p><b>Efekt w grze:</b> ${esc(pending.instructions || '')}</p>
+      <p><b>Koszt:</b> ${esc(pending.cost || '-')}</p>
       <p class="muted">Legalne figurki zostaną podświetlone. Kliknięcie figurki zatwierdzi cel bez wpisywania technicznego ID.</p>
-      ${selected ? `<p><b>Wybrany cel:</b> ${esc(selected.name)}</p>` : ''}
+      ${preserveLife
+        ? `<p><b>Wybrane cele:</b> ${selectedTargets.map(target => esc(target.name)).join(', ') || 'brak'}</p>`
+        : selected ? `<p><b>Wybrany cel:</b> ${esc(selected.name)}</p>` : ''}
+      ${healingInputs}
       <div class="row">
         <button data-primary-scan="true" onclick="scanBoard()">Pokaż legalne cele</button>
-        ${needsPoints ? `<label>Punkty leczenia<input id="class-feature-board-points" type="number" min="1" required></label>
-          <button data-allow-busy="true" onclick="confirmClassFeatureBoardTarget()"${selected ? '' : ' disabled'}>Potwierdź użycie</button>` : ''}
+        ${needsPoints && !preserveLife ? `<label>Punkty leczenia<input id="class-feature-board-points" type="number" min="1" required></label>` : ''}
+        ${needsPoints ? `<button data-allow-busy="true" onclick="confirmClassFeatureBoardTarget()"${(preserveLife ? selectedTargets.length : selected) ? '' : ' disabled'}>Potwierdź użycie</button>` : ''}
         <button class="secondary" data-allow-busy="true" onclick="cancelClassFeatureTargeting()">Anuluj</button>
       </div>
     </div>
@@ -5032,6 +5297,18 @@ function pendingClassFeatureTargetingHtml(pending) {
 }
 function pendingConcentrationActionHtml(pending) {
   const action = pending.action || {};
+  if (pending.casting_ready) {
+    return `
+      <div class="combat-action-box">
+        <p><b>${esc(action.label || action.name || 'Czar')}</b> jest przygotowany.</p>
+        <p>Wybrane cele i wynik rzutu zostały zapisane. Ukończenie przesunie zegar scenariusza o ${esc(pending.casting_minutes || 10)} minut, następnie zużyje slot i zastosuje leczenie.</p>
+        <p class="muted">Jeżeli modlitwa została przerwana przez zagrożenie, ruch albo inną czynność, anuluj ją — slot nie zostanie zużyty.</p>
+        <div class="row">
+          <button data-allow-busy="true" onclick="completeTimedCombatSpell()">Minęło 10 minut — ukończ</button>
+          <button class="secondary" data-allow-busy="true" onclick="cancelConcentrationAction()">Przerwij bez zużycia slotu</button>
+        </div>
+      </div>`;
+  }
   const targets = pending.targets || [];
   const selected = new Set(pending.selected_target_ids || []);
   const selectedTargets = targets.filter(actor => selected.has(actor.id));
@@ -5882,13 +6159,29 @@ async function leaveChatInstance() {
   }
   if ((state.pending && state.pending.stage) || (state.required_rolls || []).length) return;
   if (state.active_point) {
-    const leaveResult = await api('/api/point/leave', {}, 'Kończę rozmowę...');
-    if (leaveResult && !leaveResult.ok) return;
-    await setBoardSelectionMode(true);
+    await api('/api/point/leave', {}, 'Wracam do działań w lokacji...');
     return;
   }
   const navigationActive = (boardInteractionState() || {}).mode === 'navigation';
   await setBoardSelectionMode(!navigationActive);
+}
+function closeCurrentExplorationInstance() {
+  const flow = state.flow || {};
+  const unresolved = Boolean(
+    (state.pending && state.pending.stage)
+    || state.pending_npc_transition
+    || (state.required_rolls || []).length
+  );
+  if (unresolved || state.combat) return false;
+  if (flow.stage === 'interaction_result') {
+    finishInteraction();
+    return true;
+  }
+  if (flow.stage === 'location_active') {
+    leaveChatInstance();
+    return true;
+  }
+  return false;
 }
 async function sendAction() {
   const input = document.getElementById('action');
@@ -5981,6 +6274,10 @@ async function sendGoalAction() {
   if (result && !result.ok && input) input.value = text;
 }
 function startShortRest() { api('/api/rest/short/start', {}, 'Przygotowuję podgląd odpoczynku...'); }
+function completeLongRest() {
+  if (!window.confirm('Długi odpoczynek przesunie czas o 8 godzin i odnowi zasoby drużyny. Kontynuować?')) return;
+  api('/api/rest/long/complete', {}, 'Mija osiem godzin odpoczynku...');
+}
 function confirmShortRest() {
   const attunementChoices = [...document.querySelectorAll('[data-short-rest-attunement]')]
     .filter(select => select.value)
@@ -6015,8 +6312,16 @@ function signedNumber(value) {
 }
 function confirmSpellPreparation() {
   const preparation = state.spell_preparation || {};
-  const spell_ids = Array.from(document.querySelectorAll('[data-preparation-spell]:checked')).map(input => input.dataset.preparationSpell);
+  const actor = (preparation.actors || []).find(entry => String(entry.actor_id) === String(preparation.current_actor_id));
+  if (!actor) return false;
+  synchronizeSpellPreparationDraft(actor);
+  const spell_ids = [...((spellPreparationDraft && spellPreparationDraft.spellIds) || [])];
+  if (spell_ids.length !== Number(actor.preparation_limit || 0)) {
+    setPhysicalCardStatus(`Zeskanuj dokładnie ${actor.preparation_limit} różnych kart czarów.`, {error: true});
+    return false;
+  }
   api('/api/spell-preparation/confirm', {actor_id: preparation.current_actor_id, spell_ids}, 'Zapisuję przygotowane czary...');
+  return true;
 }
 function decision(value) {
   const labels = {
@@ -6103,6 +6408,9 @@ function startScenarioHandoff() {
 }
 function openContinuationPanel() {
   continuationPanelOpen = true;
+  continuationStep = 'pace';
+  selectedContinuationPace = 'normal';
+  selectedContinuationNavigatorId = '';
   pauseBoardForScreenInput();
   chatInstanceOpen = true;
   setSidePanelOpen(false);
@@ -6111,7 +6419,74 @@ function openContinuationPanel() {
 }
 function closeContinuationPanel() {
   continuationPanelOpen = false;
+  continuationStep = 'pace';
+  selectedContinuationNavigatorId = '';
   api('/api/board/clear-selection', {}, 'Wracam do wyboru działania...');
+}
+function selectContinuationPace(pace) {
+  if (!['fast', 'normal', 'slow'].includes(pace)) return false;
+  selectedContinuationPace = pace;
+  render();
+  return true;
+}
+function continuationRequiresNavigator() {
+  const continuation = state.flow && state.flow.continuation;
+  const travel = (continuation && continuation.travel) || {};
+  return !travel.navigation_automatic
+    && travel.navigation_dc !== null
+    && travel.navigation_dc !== undefined;
+}
+function advanceContinuationStep() {
+  if (!continuationPanelOpen) return false;
+  if (continuationStep === 'pace') {
+    continuationStep = continuationRequiresNavigator() ? 'navigator' : 'roll';
+    render();
+    return true;
+  }
+  if (continuationStep === 'navigator') {
+    if (!selectedContinuationNavigatorId) {
+      setPhysicalCardStatus('Zeskanuj kartę bohatera, który poprowadzi drużynę.', {error: true});
+      return false;
+    }
+    continuationStep = 'roll';
+    render();
+    return true;
+  }
+  if (continuationStep === 'roll') {
+    submitContinuation();
+    return true;
+  }
+  return false;
+}
+function retreatContinuationStep() {
+  if (!continuationPanelOpen) return false;
+  if (continuationStep === 'roll') {
+    continuationStep = continuationRequiresNavigator() ? 'navigator' : 'pace';
+    render();
+    return true;
+  }
+  if (continuationStep === 'navigator') {
+    selectedContinuationNavigatorId = '';
+    continuationStep = 'pace';
+    render();
+    return true;
+  }
+  closeContinuationPanel();
+  return true;
+}
+function selectContinuationNavigator(actorId) {
+  if (!continuationPanelOpen || continuationStep !== 'navigator') return false;
+  const actor = (state.actors || []).find(
+    candidate => String(candidate.id) === String(actorId)
+      && candidate.faction === 'ally'
+      && !candidate.defeated
+  );
+  if (!actor) return false;
+  selectedContinuationNavigatorId = String(actor.id);
+  continuationStep = 'roll';
+  render();
+  window.requestAnimationFrame(() => document.getElementById('continuation-navigation-roll-1')?.focus());
+  return true;
 }
 function requiredD20Value(id) {
   const input = document.getElementById(id);
@@ -6188,7 +6563,7 @@ function configureBoard() {
     board_url: document.getElementById('board-url').value,
     board_serial_port: document.getElementById('board-serial-port').value,
     wled_url: document.getElementById('wled-url').value,
-    scan_timeout_s: Number(document.getElementById('scan-timeout').value || 30)
+    scan_timeout_s: Number(document.getElementById('scan-timeout').value || 300)
   }, 'Łączę z planszą...');
 }
 function startSession() { api('/api/start', {}, 'Rozpoczynam sesję...'); }
@@ -6695,11 +7070,12 @@ function useClassFeature(actionId) {
   const needsSavingRolls = ['turn_undead', 'turn_the_unholy'].includes(actionId);
   const needsPrimevalAwareness = actionId === 'primeval_awareness';
   const needsPactWeapon = actionId === 'pact_weapon';
+  const needsCunningAction = actionId === 'cunning_action';
   if (needsTarget) {
     api('/api/combat/class-feature/targeting', {action_id: actionId}, 'Podświetlam legalne cele zdolności...');
     return;
   }
-  if (!needsRoll && !needsTarget && !needsPoints && !needsFont && !needsWildShape && !needsSavingRolls && !needsPrimevalAwareness && !needsPactWeapon) {
+  if (!needsRoll && !needsTarget && !needsPoints && !needsFont && !needsWildShape && !needsSavingRolls && !needsPrimevalAwareness && !needsPactWeapon && !needsCunningAction) {
     api('/api/combat/class-feature', {action_id: actionId}, 'Używam cechy klasowej...');
     return;
   }
@@ -6737,6 +7113,11 @@ function useClassFeature(actionId) {
       ${needsPactWeapon ? `<label>Forma Pact Weapon<select id="class-feature-form-id" required>
         ${(action.pact_weapon_forms || []).map(form => `<option value="${esc(form.id)}">${esc(form.name)}</option>`).join('')}
       </select></label>` : ''}
+      ${needsCunningAction ? `<label>Wariant Sprytnej akcji<select id="class-feature-mode" required>
+        <option value="dash">Sprint</option>
+        <option value="disengage">Odwrót</option>
+        <option value="hide">Ukrycie</option>
+      </select></label>` : ''}
       <div class="panel-actions">
         <button type="button" class="secondary" onclick="closeClassFeatureDialog()">Anuluj</button>
         <button type="submit">Potwierdź</button>
@@ -6751,6 +7132,17 @@ function confirmClassFeatureBoardTarget() {
   const pending = (((state || {}).combat || {}).class_feature_targeting) || {};
   const selected = pending.selected_target || {};
   const points = Number((document.getElementById('class-feature-board-points') || {}).value || 0);
+  if (pending.action_id === 'preserve_life') {
+    const allocations = Array.from(document.querySelectorAll('.preserve-life-allocation'))
+      .map(input => ({target_id: input.dataset.targetId, points: Number(input.value || 0)}))
+      .filter(entry => entry.target_id && entry.points > 0);
+    if (!allocations.length) return;
+    api('/api/combat/class-feature', {
+      action_id: pending.action_id,
+      allocations,
+    }, 'Rozdzielam pulę Zachowania życia...');
+    return;
+  }
   if (!selected.id || points < 1) return;
   api('/api/combat/class-feature', {
     action_id: pending.action_id,
@@ -6811,6 +7203,7 @@ function confirmConcentrationAction() {
   api('/api/combat/concentration/confirm', {roll_total: roll, effect_option: effectOption}, 'Potwierdzam czar...');
 }
 function cancelConcentrationAction() { api('/api/combat/concentration/cancel', {}, 'Anuluję czar koncentracyjny...'); }
+function completeTimedCombatSpell() { api('/api/combat/timed-cast/complete', {}, 'Kończę dziesięciominutowe rzucanie...'); }
 function submitConcentrationCheck() {
   const roll = document.getElementById('concentration-check-roll');
   const roll2 = document.getElementById('concentration-check-roll-2');
@@ -7004,6 +7397,9 @@ function triggerPrimaryAction() {
     dialogForm.requestSubmit();
     return true;
   }
+  if (selectedZoneOptionId) { submitZoneOption(); return true; }
+  if (selectedInteractionGoalId) { sendGoalAction(); return true; }
+  if (continuationPanelOpen) return advanceContinuationStep();
   if (state.flow && state.flow.stage === 'short_rest') {
     if (state.short_rest && state.short_rest.pending && state.short_rest.pending.completed) finishShortRest();
     else confirmShortRest();
@@ -7074,7 +7470,11 @@ function triggerPrimaryAction() {
       if (combat.pending_combat_shove) { submitCombatShove(); return true; }
       if (combat.pending_combat_grapple) { submitCombatGrapple(); return true; }
       if (combat.pending_combat_skill_check) { submitCombatSkillCheck(); return true; }
-      if (combat.pending_concentration_action) { confirmConcentrationAction(); return true; }
+      if (combat.pending_concentration_action) {
+        if (combat.pending_concentration_action.casting_ready) completeTimedCombatSpell();
+        else confirmConcentrationAction();
+        return true;
+      }
       if (combat.pending_multi_target_damage_spell) {
         if (Number(combat.pending_multi_target_damage_spell.selected_count || 0) === Number(combat.pending_multi_target_damage_spell.projectile_count || 0)) confirmMultiTargetDamageSpell();
         else scanBoard();
@@ -7146,6 +7546,9 @@ function cancelCurrentCombatStep() {
 function triggerSecondaryAction() {
   if (busy || !state) return false;
   if (isVisible('pending-panel')) { decision('reject'); return true; }
+  if (state.flow && state.flow.stage === 'spell_preparation') {
+    return startCustomSpellPreparation();
+  }
   const gmChatDialog = document.getElementById('gm-chat-dialog');
   if (gmChatDialog && gmChatDialog.open) { closeGmChatDialog(); return true; }
   const openDialog = document.querySelector('dialog[open]');
@@ -7182,11 +7585,12 @@ function triggerSecondaryAction() {
     }
   }
   if (cancelCurrentCombatStep()) return true;
-  if (continuationPanelOpen) { closeContinuationPanel(); return true; }
+  if (continuationPanelOpen) return retreatContinuationStep();
   if (downtimePanelOpen) { closeDowntimePanel(); return true; }
   if (selectedZoneOptionId) { cancelZoneOptionGoal(); return true; }
   if (selectedInteractionGoalId) { cancelInteractionGoal(); return true; }
   const flow = state.flow || {};
+  if (closeCurrentExplorationInstance()) return true;
   if (flow.stage === 'location_preview') { cancelLocationPreview(); return true; }
   if (
     flow.stage === 'short_rest'
@@ -7222,33 +7626,106 @@ async function handlePhysicalCardScan(payload) {
   lastPhysicalCardPayload = payload;
   lastPhysicalCardScanAt = now;
   try {
+    const preparationActor = state && state.spell_preparation
+      ? (state.spell_preparation.actors || []).find(
+        actor => String(actor.actor_id) === String(state.spell_preparation.current_actor_id)
+      )
+      : null;
+    const scanContext = selectedZoneOptionId
+      ? {zone_option_id: selectedZoneOptionId}
+      : {};
+    if (
+      state
+      && state.flow
+      && state.flow.stage === 'spell_preparation'
+      && preparationActor
+      && spellPreparationDraft
+      && spellPreparationDraft.mode === 'custom'
+    ) {
+      scanContext.spell_preparation_mode = 'custom';
+      scanContext.spell_preparation_actor_id = String(preparationActor.actor_id);
+    }
+    if (continuationPanelOpen && continuationStep === 'navigator') {
+      scanContext.continuation_stage = 'navigator';
+    }
     const response = await fetch('/api/physical-cards/scan', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({payload}),
+      body: JSON.stringify({
+        payload,
+        context: scanContext,
+      }),
     });
     const data = await response.json();
     if (!response.ok) {
       setPhysicalCardStatus(data.error || 'Nie udało się odczytać karty.', {error: true});
       return;
     }
-    let applied = Boolean(data.applied);
-    if (applied && data.state) {
+    const clientActorSelectionApplied = data.effect === 'select_zone_option_actor'
+      ? selectZoneOptionActor(data.actor_id)
+      : false;
+    const clientSpellPreparationApplied = data.effect === 'select_preparation_spell'
+      ? selectSpellPreparationCard(data)
+      : false;
+    const clientContinuationNavigatorApplied = data.effect === 'select_continuation_navigator'
+      ? selectContinuationNavigator(data.actor_id)
+      : false;
+    let applied = Boolean(
+      data.applied
+      || clientActorSelectionApplied
+      || clientSpellPreparationApplied
+      || clientContinuationNavigatorApplied
+    );
+    if (data.applied && data.state) {
       state = data.state;
       synchronizeBoardSelection();
       render();
       refreshSessionLog();
       scheduleAutomaticBoardScan();
-    } else {
-      applied = data.action === 'accept'
-        ? triggerPrimaryAction()
-        : data.action === 'decline'
-          ? triggerSecondaryAction()
-          : false;
+    } else if (
+      !clientActorSelectionApplied
+      && !clientSpellPreparationApplied
+      && !clientContinuationNavigatorApplied
+    ) {
+      const flowStage = state && state.flow ? state.flow.stage : '';
+      const boardInteraction = state && state.flow
+        ? (state.flow.board_interaction || {})
+        : {};
+      const explorationNavigationCardBlocked = Boolean(
+        !state.combat
+        && (
+          flowStage === 'location_preview'
+          || (flowStage === 'location_active' && boardInteraction.mode === 'navigation')
+        )
+        && !(state.pending && state.pending.stage === 'decision')
+        && !continuationPanelOpen
+        && ['accept', 'decline'].includes(data.action)
+      );
+      applied = explorationNavigationCardBlocked
+        ? false
+        : data.action === 'accept'
+          ? triggerPrimaryAction()
+          : data.action === 'decline'
+            ? triggerSecondaryAction()
+            : false;
+      if (explorationNavigationCardBlocked) {
+        setPhysicalCardStatus(
+          'Nawigację i wychodzenie z instancji obsługuje teraz plansza. Karty ACCEPT/DECLINE działają przy właściwych decyzjach.',
+          {error: true},
+        );
+        return;
+      }
     }
+    const resourceText = data.feedback && Array.isArray(data.feedback.resources)
+      ? data.feedback.resources
+        .filter(item => Number(item.maximum || 0) > 0)
+        .map(item => `${item.label || identifierLabel(item.id)} ${Number(item.current || 0)}/${Number(item.maximum || 0)}`)
+        .join(' · ')
+      : '';
     setPhysicalCardStatus(
       applied
-        ? `Karta ${data.label}: wykonano aktualną akcję.`
+        ? `${((data.feedback && data.feedback.message)
+          || `Karta ${data.label}: wykonano aktualną akcję.`)}${resourceText ? ` · ${resourceText}` : ''}`
         : `Karta ${data.label}: teraz nie ma pasującej akcji.`,
       {error: !applied},
     );
@@ -7341,7 +7818,7 @@ function consumePhysicalCardKey(event) {
     const payload = normalizePhysicalCardScannerText(physicalCardKeyBuffer);
     const target = physicalCardKeyTarget;
     clearPhysicalCardKeyBuffer();
-    if (/^dndbg:v[0-9]+:action:[a-z0-9_]+:[a-z][a-z0-9_]*$/.test(payload)) {
+    if (/^dndbg:v[0-9]+:(?:action:[a-z0-9_]+:[a-z][a-z0-9_]*(?::[a-z][a-z0-9_]*)?|actor:[a-z][a-z0-9_]*)$/.test(payload)) {
       event.preventDefault();
       event.stopImmediatePropagation();
       handlePhysicalCardScan(payload);

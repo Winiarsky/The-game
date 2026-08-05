@@ -1,7 +1,10 @@
+from dataclasses import replace
 from unittest.mock import Mock
 
+from dnd_board_game.combat import set_scene_flag
+from dnd_board_game.actors import ActorId
 from dnd_board_game.llm import GmClassifierProposal, GmDeclarationAnalysis, GmDeclarationAnalysisType, NpcInteractionProposal
-from dnd_board_game.exploration import reveal_exploration_points
+from dnd_board_game.exploration import PartyPosition, reveal_exploration_points
 from dnd_board_game.ui.exploration_app import ExplorationUiSession, UiFlowStage, create_app
 
 
@@ -112,17 +115,20 @@ def _submit_force_gate(
     client,
     text: str = "Wyważamy bramę.",
     *,
-    check_participants: str = "single_actor",
-    actor_ids: tuple[str, ...] = ("hero",),
+    check_participants: str | None = None,
+    actor_ids: tuple[str, ...] = (),
 ):
+    payload: dict[str, object] = {
+        "text": text,
+        "selected_goal_id": "force_entry",
+    }
+    if check_participants is not None:
+        payload["check_participants"] = check_participants
+    if actor_ids:
+        payload["participant_actor_ids"] = list(actor_ids)
     return client.post(
         "/api/action",
-        json={
-            "text": text,
-            "selected_goal_id": "force_entry",
-            "check_participants": check_participants,
-            "participant_actor_ids": list(actor_ids),
-        },
+        json=payload,
     )
 
 
@@ -165,6 +171,275 @@ def test_physical_control_card_scan_route_resolves_accept_and_decline() -> None:
         "decline",
     ]
     assert card_events[0]["payload"]["flow_stage"] == "location_active"
+
+
+def test_exploration_action_cards_are_disabled_without_removing_combat_cards() -> None:
+    session = _session()
+    first, *remaining = session.exploration.actors
+    session.exploration = replace(
+        session.exploration,
+        actors=(replace(first, id=ActorId("garran")), *remaining),
+    )
+    session.selected_lead_actor_id = "garran"
+    client = create_app(session).test_client()
+
+    declared = client.post(
+        "/api/physical-cards/scan",
+        json={
+            "payload": "dndbg:v2:action:feature:tactical_assessment:garran",
+        },
+    )
+
+    assert declared.status_code == 400
+    payload = declared.get_json()
+    assert "Karty eksploracji są obecnie wyłączone" in payload["error"]
+    assert payload["state"]["exploration_card"]["enabled"] is False
+
+
+def test_character_interaction_tile_is_party_gated_and_auto_assigns_actor() -> None:
+    session = ExplorationUiSession(
+        "content/scenarios/village_square_mvp.json",
+        gm_client=FakeGmClient(),
+        npc_client=FakeNpcClient(),
+    )
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.active_paper_map_id = "village_overview"
+    first, second, *remaining = session.exploration.actors
+    session.exploration = replace(
+        session.exploration,
+        actors=(
+            replace(first, id=ActorId("brakka"), name="Brakka"),
+            replace(second, id=ActorId("garran"), name="Garran"),
+            *remaining,
+        ),
+    )
+    session.selected_lead_actor_id = "brakka"
+    session.travel_to("elder_house")
+
+    options = {
+        option["id"]: option
+        for option in session.state_payload()["flow"]["zone_options"]
+    }
+    assert "brakka_bren_hard_truth" in options
+    assert "mira_market_pickpocket_child" not in options
+    brakka_tile = options["brakka_bren_hard_truth"]
+    assert brakka_tile["character_moment"] is True
+    assert brakka_tile["assigned_actor"] == {
+        "id": "brakka",
+        "name": "Brakka",
+        "portrait": first.portrait,
+    }
+
+    pending = session.select_exploration_option(
+        "brakka_bren_hard_truth",
+        player_description="Brakka żąda od Brena szczerej odpowiedzi.",
+    )
+    assert pending["pending"]["check_plan"]["lead_actor_id"] == "brakka"
+
+    resolved = session.resolve_rolls({"brakka": 20})
+    flags = {item["key"]: item["value"] for item in resolved["flags"]}
+    assert flags["brakka_bren_hard_truth_success"] is True
+
+
+def test_every_mvp_character_moment_is_visible_only_for_its_assigned_hero() -> None:
+    expected = {
+        "content/scenarios/village_square_mvp.json": {
+            "garran": ("tavern", "garran_wounded_soldiers"),
+            "brakka": ("elder_house", "brakka_bren_hard_truth"),
+            "mira": ("market", "mira_market_pickpocket_child"),
+            "dagna": ("tavern", "dagna_injured_caravaner"),
+            "lorian": ("tavern", "lorian_soldiers_song"),
+            "nimra": ("elder_house", "nimra_map_arcane_correction"),
+            "erynd": ("forest_road", "erynd_old_patrol_sign"),
+        },
+        "content/scenarios/abandoned_watchtower.json": {
+            "garran": ("gate", "garran_gate_last_stand"),
+            "brakka": ("barracks", "brakka_broken_manacles"),
+            "mira": ("barracks", "mira_smugglers_mark"),
+            "dagna": ("courtyard", "dagna_abandoned_wounded_signs"),
+            "lorian": ("tower", "lorian_unfinished_watch_song"),
+            "nimra": ("barracks", "nimra_arcane_burn"),
+            "erynd": ("courtyard", "erynd_reconstructs_ambush"),
+        },
+    }
+
+    for scenario_path, actor_moments in expected.items():
+        session = ExplorationUiSession(scenario_path)
+        original = session.exploration.actors
+        for actor_id, (zone_id, option_id) in actor_moments.items():
+            session.exploration = replace(
+                session.exploration,
+                actors=(
+                    replace(original[0], id=ActorId(actor_id), name=actor_id.title()),
+                    *original[1:],
+                ),
+            )
+            session.state = replace(
+                session.state,
+                party_position=PartyPosition(zone_id),
+            )
+            options = session.state_payload()["flow"]["zone_options"]
+            visible_moments = {
+                option["id"]: option
+                for option in options
+                if option["character_moment"]
+            }
+
+            assert option_id in visible_moments
+            assert {
+                option["assigned_actor_id"] for option in visible_moments.values()
+            } == {actor_id}
+
+
+def test_player_ui_marks_character_moments_and_fixed_performer() -> None:
+    session = ExplorationUiSession("content/scenarios/village_square_mvp.json")
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.exploration = replace(
+        session.exploration,
+        actors=(
+            replace(session.exploration.actors[0], id=ActorId("mira"), name="Mira"),
+            *session.exploration.actors[1:],
+        ),
+    )
+    client = create_app(session).test_client()
+    _html, javascript, _stylesheet = _page_assets(client)
+
+    assert "character-moment-card" in javascript
+    assert "Indywidualna interakcja" in javascript
+    assert "automatyczny wykonawca" in javascript
+    assert "selectedOption && selectedOption.assigned_actor_id" in javascript
+    state = client.get("/api/state").get_json()
+    moment = next(
+        option
+        for option in state["flow"]["zone_options"]
+        if option["id"] == "mira_market_pickpocket_child"
+    )
+    assert moment["performer_mode"] == "fixed"
+
+
+def test_location_selection_uses_image_tiles_with_board_color_frames() -> None:
+    _html, javascript, stylesheet = _page_assets(_client())
+
+    assert 'class="available-location-grid"' in javascript
+    assert 'class="available-location-thumbnail"' in javascript
+    assert "zone.image_url" in javascript
+    assert "zone.color_rgb" in javascript
+    assert "--location-frame-color" in javascript
+    assert ".available-location-thumbnail" in stylesheet
+    assert "border: 5px solid var(--location-frame-color" in stylesheet
+    assert "Kliknij ponownie pole tej lokacji" in javascript
+    assert "explorationNavigationCardBlocked" in javascript
+    assert "&& !continuationPanelOpen" in javascript
+    assert "system-exit-card" in javascript
+    assert ".interaction-goal-card.system-exit-card" in stylesheet
+
+
+def test_all_fourteen_character_moments_resolve_with_the_fixed_performer() -> None:
+    cases = {
+        "content/scenarios/village_square_mvp.json": (
+            ("garran", "tavern", "garran_wounded_soldiers"),
+            ("brakka", "elder_house", "brakka_bren_hard_truth"),
+            ("mira", "market", "mira_market_pickpocket_child"),
+            ("dagna", "tavern", "dagna_injured_caravaner"),
+            ("lorian", "tavern", "lorian_soldiers_song"),
+            ("nimra", "elder_house", "nimra_map_arcane_correction"),
+            ("erynd", "forest_road", "erynd_old_patrol_sign"),
+        ),
+        "content/scenarios/abandoned_watchtower.json": (
+            ("garran", "gate", "garran_gate_last_stand"),
+            ("brakka", "barracks", "brakka_broken_manacles"),
+            ("mira", "barracks", "mira_smugglers_mark"),
+            ("dagna", "courtyard", "dagna_abandoned_wounded_signs"),
+            ("lorian", "tower", "lorian_unfinished_watch_song"),
+            ("nimra", "barracks", "nimra_arcane_burn"),
+            ("erynd", "courtyard", "erynd_reconstructs_ambush"),
+        ),
+    }
+
+    for scenario_path, scenario_cases in cases.items():
+        for actor_id, zone_id, option_id in scenario_cases:
+            session = ExplorationUiSession(scenario_path)
+            session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+            first, *remaining = session.exploration.actors
+            session.exploration = replace(
+                session.exploration,
+                actors=(
+                    replace(first, id=ActorId(actor_id), name=actor_id.title()),
+                    *remaining,
+                ),
+            )
+            session.state = replace(
+                session.state,
+                party_position=PartyPosition(zone_id),
+            )
+            option = next(
+                item
+                for item in session.current_zone.options
+                if item.id == option_id
+            )
+
+            pending = session.select_exploration_option(
+                option_id,
+                player_description="Bohater reaguje zgodnie ze swoją historią.",
+            )
+            assert pending["pending"]["check_plan"]["lead_actor_id"] == actor_id
+
+            resolved = session.resolve_rolls({actor_id: 20})
+            flags = {item["key"]: item["value"] for item in resolved["flags"]}
+            assert option.success_flag is not None
+            assert flags[option.success_flag] is True
+
+
+def test_mvp_and_arena_instances_fit_seven_actions_plus_system_exit() -> None:
+    hero_ids = ("garran", "brakka", "mira", "dagna", "lorian", "nimra", "erynd")
+    scenario_paths = (
+        "content/scenarios/village_square_mvp.json",
+        "content/scenarios/abandoned_watchtower.json",
+        "content/scenarios/mechanics_playground/scenario.json",
+    )
+
+    for scenario_path in scenario_paths:
+        session = ExplorationUiSession(scenario_path)
+        originals = session.exploration.actors
+        session.exploration = replace(
+            session.exploration,
+            actors=tuple(
+                replace(
+                    originals[index % len(originals)],
+                    id=ActorId(actor_id),
+                    name=actor_id.title(),
+                )
+                for index, actor_id in enumerate(hero_ids)
+            ),
+        )
+        session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+        for zone in session.state.zones:
+            session.state = replace(
+                session.state,
+                party_position=PartyPosition(zone.id),
+            )
+            session.active_point_id = ""
+            root_pads = session._board_interaction_pads()
+            assert len(root_pads) <= min(8, len(zone.interaction_pad_positions))
+            if zone.interaction_pad_positions:
+                assert root_pads[-1].action_kind == "exit"
+            for point in session.current_zone_points():
+                session.active_point_id = point.id
+                point_pads = session._board_interaction_pads()
+                assert len(point_pads) <= min(8, len(zone.interaction_pad_positions))
+                if zone.interaction_pad_positions:
+                    assert point_pads[-1].action_kind == "exit"
+            session.active_point_id = ""
+
+
+def test_wrong_owner_cannot_use_personal_exploration_card() -> None:
+    response = _client().post(
+        "/api/physical-cards/scan",
+        json={"payload": "dndbg:v2:action:feature:intimidation:hero"},
+    )
+
+    assert response.status_code == 400
+    assert "Karty eksploracji są obecnie wyłączone" in response.get_json()["error"]
 
 
 def test_accept_card_applies_ready_start_and_instruction_setup_on_server() -> None:
@@ -219,8 +494,156 @@ def test_physical_control_card_scan_route_rejects_other_or_invalid_cards() -> No
     )
 
     assert spell.status_code == 400
-    assert "uniwersalną" in spell.get_json()["error"]
+    assert "wyłącznie podczas walki" in spell.get_json()["error"]
     assert malformed.status_code == 400
+
+
+def test_actor_card_selects_performer_for_open_checked_zone_option() -> None:
+    session = ExplorationUiSession("content/scenarios/village_square_mvp.json")
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    client = create_app(session).test_client()
+
+    response = client.post(
+        "/api/physical-cards/scan",
+        json={
+            "payload": "dndbg:v1:actor:rogue",
+            "context": {"zone_option_id": "ask_for_rumors"},
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.get_json() == {
+        "actor_id": "rogue",
+        "applied": False,
+        "effect": "select_zone_option_actor",
+        "label": "Łotrzyca",
+        "payload": "dndbg:v1:actor:rogue",
+    }
+    events = client.get("/api/session-log").get_json()["events"]
+    assert events[-1]["event_type"] == "ui_actor_card_zone_option_declared"
+    assert events[-1]["payload"] == {
+        "actor_id": "rogue",
+        "zone_option_id": "ask_for_rumors",
+    }
+
+
+def test_actor_card_cannot_override_fixed_character_moment_performer() -> None:
+    session = ExplorationUiSession("content/scenarios/village_square_mvp.json")
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.exploration = replace(
+        session.exploration,
+        actors=(
+            replace(session.exploration.actors[0], id=ActorId("mira"), name="Mira"),
+            *session.exploration.actors[1:],
+        ),
+    )
+    client = create_app(session).test_client()
+
+    response = client.post(
+        "/api/physical-cards/scan",
+        json={
+            "payload": "dndbg:v1:actor:rogue",
+            "context": {"zone_option_id": "mira_market_pickpocket_child"},
+        },
+    )
+
+    assert response.status_code == 400
+    assert "przypisanego wykonawcę: Mira" in response.get_json()["error"]
+
+
+def test_actor_card_rejects_zone_option_without_a_performer_check() -> None:
+    session = ExplorationUiSession("content/scenarios/village_square_mvp.json")
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    client = create_app(session).test_client()
+
+    response = client.post(
+        "/api/physical-cards/scan",
+        json={
+            "payload": "dndbg:v1:actor:rogue",
+            "context": {"zone_option_id": "read_notice_board"},
+        },
+    )
+
+    assert response.status_code == 400
+    assert "nie oczekuje" in response.get_json()["error"]
+
+
+def test_spell_card_builds_a_custom_preparation_set_for_current_actor() -> None:
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    session.ui_flow_stage = UiFlowStage.SPELL_PREPARATION
+    client = create_app(session).test_client()
+
+    response = client.post(
+        "/api/physical-cards/scan",
+        json={
+            "payload": "dndbg:v1:action:spell:healing_word",
+            "context": {
+                "spell_preparation_mode": "custom",
+                "spell_preparation_actor_id": "cleric",
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["applied"] is False
+    assert data["effect"] == "select_preparation_spell"
+    assert data["actor_id"] == "cleric"
+    assert data["spell_id"] == "healing_word"
+    assert data["preparation_limit"] == 2
+    cleric = next(actor for actor in session.exploration.actors if str(actor.id) == "cleric")
+    assert cleric.spell_preparation is not None
+    assert cleric.spell_preparation.confirmed is False
+    events = client.get("/api/session-log").get_json()["events"]
+    assert events[-1]["event_type"] == "ui_spell_preparation_card_declared"
+
+
+def test_spell_card_requires_declining_default_preparation_first() -> None:
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    session.ui_flow_stage = UiFlowStage.SPELL_PREPARATION
+    client = create_app(session).test_client()
+
+    response = client.post(
+        "/api/physical-cards/scan",
+        json={"payload": "dndbg:v1:action:spell:healing_word"},
+    )
+
+    assert response.status_code == 400
+    assert "Najpierw zeskanuj ODRZUĆ" in response.get_json()["error"]
+
+
+def test_actor_card_selects_navigator_for_open_continuation_step() -> None:
+    session = ExplorationUiSession("content/scenarios/village_square_mvp.json")
+    session.state = replace(
+        session.state,
+        flags=set_scene_flag(session.state.flags, "ready_for_watchtower", True),
+    )
+    session.travel_to("forest_road")
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    client = create_app(session).test_client()
+
+    response = client.post(
+        "/api/physical-cards/scan",
+        json={
+            "payload": "dndbg>v1>actor>hero",
+            "context": {"continuation_stage": "navigator"},
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["applied"] is False
+    assert data["effect"] == "select_continuation_navigator"
+    assert data["actor_id"] == "hero"
+    assert data["navigation_dc"] == 12
+    assert data["navigation_ability"] == "wisdom"
+    assert data["navigation_skill"] == "survival"
+    prompt = session._active_exploration_prompt()
+    assert prompt.kind.value == "before_roll"
+    assert prompt.interaction_id == "scenario_continuation"
+    assert {"travel", "navigation", "survival"} <= set(prompt.tags)
+    events = client.get("/api/session-log").get_json()["events"]
+    assert events[-1]["event_type"] == "ui_continuation_navigator_declared"
 
 
 def test_player_page_wires_hid_card_scans_to_primary_and_secondary_actions() -> None:
@@ -229,7 +652,18 @@ def test_player_page_wires_hid_card_scans_to_primary_and_secondary_actions() -> 
     assert 'id="physical-card-status"' in html
     assert "const PHYSICAL_CARD_PREFIX = 'dndbg:';" in javascript
     assert "const PHYSICAL_CARD_RECENT_KEY_GAP_MS = 2000;" in javascript
+    assert "|actor:[a-z][a-z0-9_]*" in javascript
+    assert "(?::[a-z][a-z0-9_]*)?" in javascript
     assert "function normalizePhysicalCardScannerText(value)" in javascript
+    assert "data.effect === 'select_preparation_spell'" in javascript
+    assert "data.effect === 'select_continuation_navigator'" in javascript
+    assert "scanContext.continuation_stage = 'navigator'" in javascript
+    assert "startCustomSpellPreparation()" in javascript
+    assert "data-preparation-spell" not in javascript
+    assert ".spell-preparation-card-tile" in stylesheet
+    assert "data.feedback && data.feedback.message" in javascript
+    assert "preserve-life-allocation" in javascript
+    assert "option.trigger_event === 'damage_roll_revealed'" in javascript
     assert "normalized.replaceAll('>', ':')" in javascript
     assert "function physicalCardPayloadFromRecentKeys()" in javascript
     assert "const recentPayload = physicalCardPayloadFromRecentKeys();" in javascript
@@ -237,9 +671,17 @@ def test_player_page_wires_hid_card_scans_to_primary_and_secondary_actions() -> 
     assert "PHYSICAL_CARD_ACCEPT_PAYLOAD" not in javascript
     assert "lastPhysicalCardScanAt = Date.now();" in javascript
     assert "fetch('/api/physical-cards/scan'" in javascript
-    assert "if (applied && data.state)" in javascript
+    assert "if (data.applied && data.state)" in javascript
+    assert "const scanContext = selectedZoneOptionId" in javascript
+    assert "data.effect === 'select_zone_option_actor'" in javascript
     assert "triggerPrimaryAction()" in javascript
     assert "triggerSecondaryAction()" in javascript
+    assert "if (selectedZoneOptionId) { submitZoneOption(); return true; }" in javascript
+    assert "if (selectedInteractionGoalId) { sendGoalAction(); return true; }" in javascript
+    assert "boardInteraction.mode === 'navigation'" in javascript
+    assert "scheduleAutomaticGoalAdvance" not in javascript
+    assert "latestResultMessageSince(state, previousMessageCount)" in javascript
+    assert "i >= firstNewMessage" in javascript
     assert "document.addEventListener('keydown', consumePhysicalCardKey, {capture: true})" in javascript
     assert ".physical-card-status" in stylesheet
 
@@ -766,6 +1208,15 @@ def test_combat_ui_exposes_manual_enemy_saving_throw_endpoint() -> None:
     assert "/static/exploration.js" in html
 
 
+def test_combat_ui_renders_subtle_physical_card_reminders() -> None:
+    _html, javascript, stylesheet = _page_assets(_client())
+
+    assert "combatCardReminderHtml(combat, phase, isAllyTurn)" in javascript
+    assert "Zeskanuj kartę albo kontynuuj bez niej." in javascript
+    assert "wybrać zwykłą akcję na planszy" in javascript
+    assert ".combat-card-reminder" in stylesheet
+
+
 def test_courtyard_interaction_tile_images_are_served() -> None:
     client = _client()
 
@@ -822,7 +1273,8 @@ def test_exploration_goal_ui_selects_participants_before_sending_method() -> Non
     assert "check_participants: selectedCheckParticipants" in javascript
     assert "['no_actor', 'whole_party'].includes(selectedCheckParticipants)" in javascript
     assert "To wspólna decyzja drużyny. Wybór bohatera nie jest wymagany." in javascript
-    assert "Pierwsza wybrana postać prowadzi" in javascript
+    assert "Zeskanuj kartę prowadzącego" in javascript
+    assert "Wybór postaci nie ma ekranowego ani planszowego zamiennika." in javascript
     assert "Cała drużyna" in javascript
     assert 'id="goal-action"' in javascript
     assert "function sendGoalAction" in javascript
@@ -1015,7 +1467,8 @@ def test_exploration_ui_page_includes_spell_preparation_flow():
     _html, javascript, _stylesheet = _page_assets(client)
 
     assert "Przygotowanie czarów" in javascript
-    assert "data-preparation-spell" in javascript
+    assert "spellPreparationCardHtml" in javascript
+    assert "spellPreparationDraft" in javascript
     assert "spell.flavor_description" in javascript
     assert "spell.mechanical_description" in javascript
     assert "confirmSpellPreparation()" in javascript
@@ -1118,7 +1571,7 @@ def test_exploration_ui_page_is_fiction_first_and_accepts_questions():
     assert html.index('id="chat-stream"') < html.index('id="pending-panel"') < html.index('id="chat-utility-actions"')
     assert html.index('id="chat-stream"') < html.index('id="gm-chat-dialog"') < html.index('id="chat-composer"')
     assert html.index('id="pending-panel"') < html.index('id="roll-panel"') < html.index('id="result-panel"')
-    assert html.count('conversation-system-card') == 2
+    assert html.count('conversation-system-card') == 3
     assert '<h3>Propozycja MG</h3>' not in html
     assert "Co robicie lub o co pytacie?" in html
     assert "Napisz wiadomość do MG" in html
@@ -1143,7 +1596,16 @@ def test_exploration_ui_page_is_fiction_first_and_accepts_questions():
     assert "/api/npc-transition/resolve" in javascript
     assert "/api/exploration/option" in javascript
     assert "boardChoiceToolbarHtml" in javascript
-    assert 'id="continuation-pace"' in javascript
+    assert "function continuationPanelHtml" in javascript
+    assert "continuationStep === 'pace'" in javascript
+    assert "continuationStep === 'navigator'" in javascript
+    assert "continuationStep === 'roll'" in javascript
+    assert "function selectContinuationNavigator" in javascript
+    assert "function advanceContinuationStep" in javascript
+    assert "function retreatContinuationStep" in javascript
+    assert "if (continuationPanelOpen) return advanceContinuationStep();" in javascript
+    assert "if (continuationPanelOpen) return retreatContinuationStep();" in javascript
+    assert "Dotarcie około" in javascript
     assert "target_scenario_name" in javascript
     assert "Zdobyte i zabezpieczone rzeczy" in javascript
     assert "Rozpocznij ponownie" in javascript
@@ -1164,6 +1626,9 @@ def test_exploration_ui_page_is_fiction_first_and_accepts_questions():
     assert ".physical-roll-inputs" in stylesheet
     assert ".board-choice-toolbar" in stylesheet
     assert ".continuation-composer" in stylesheet
+    assert ".continuation-pace-grid" in stylesheet
+    assert ".continuation-navigator-grid" in stylesheet
+    assert ".continuation-steps" in stylesheet
     assert "body.chat-instance-mode { height: 100vh; overflow: hidden; }" in stylesheet
     assert "function pendingTitle" in javascript
     assert "if (proposal.player_narration) lines.push" not in javascript
@@ -1198,10 +1663,29 @@ def test_point_leave_route_clears_active_interaction_before_board_selection() ->
     leave_end = javascript.index("async function sendAction()", leave_start)
     leave_body = javascript[leave_start:leave_end]
     assert "/api/point/leave" in leave_body
-    assert leave_body.index("/api/point/leave") < leave_body.index(
-        "setBoardSelectionMode(true)"
-    )
+    assert "await setBoardSelectionMode(true)" not in leave_body
+    assert "setBoardSelectionMode(!navigationActive)" in leave_body
     assert "chatInstanceOpen = false" not in leave_body
+
+    close_start = javascript.index("function closeCurrentExplorationInstance()")
+    close_end = javascript.index("async function sendAction()", close_start)
+    close_body = javascript[close_start:close_end]
+    assert "flow.stage === 'interaction_result'" in close_body
+    assert "finishInteraction()" in close_body
+    assert "flow.stage === 'location_active'" in close_body
+    assert "leaveChatInstance()" in close_body
+    assert "state.pending_npc_transition" in close_body
+
+    secondary_start = javascript.index("function triggerSecondaryAction()")
+    secondary_end = javascript.index("function setPhysicalCardStatus", secondary_start)
+    secondary_body = javascript[secondary_start:secondary_end]
+    assert "if (closeCurrentExplorationInstance()) return true;" in secondary_body
+    assert secondary_body.index("if (selectedZoneOptionId)") < secondary_body.index(
+        "if (closeCurrentExplorationInstance())"
+    )
+    assert secondary_body.index("if (selectedInteractionGoalId)") < secondary_body.index(
+        "if (closeCurrentExplorationInstance())"
+    )
 
 
 def test_exploration_ui_page_and_api_include_scenario_end_lifecycle():
@@ -1294,13 +1778,27 @@ def test_exploration_ui_short_rest_api_accepts_attunement_choice():
     assert wand["attuned"] is True
 
 
+def test_exploration_ui_long_rest_api_is_content_gated_and_advances_eight_hours():
+    session = ExplorationUiSession("content/scenarios/village_square_mvp.json")
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.state = replace(session.state, party_position=PartyPosition("tavern"))
+    client = create_app(session).test_client()
+
+    completed = client.post("/api/rest/long/complete", json={})
+
+    assert completed.status_code == 200
+    payload = completed.get_json()
+    assert payload["long_rest"]["available"] is False
+    assert session.state.elapsed_minutes == 480
+
+
 def test_exploration_ui_page_includes_gm_decision_correction_controls():
     client = _client()
 
     html, javascript, _stylesheet = _page_assets(client)
 
     assert (
-        '<script src="/static/exploration.js?v=physical-cards-20260730-3"></script>'
+        '<script src="/static/exploration.js?v=stable-instance-slots-20260804-2"></script>'
         in html
     )
     assert "Popraw decyzję MG" in javascript
@@ -1517,8 +2015,8 @@ def test_exploration_ui_combat_turn_controls_remain_available_during_board_scan(
     assert "/api/location/confirm-preview" in html
     assert "/api/exploration/board-selection" in html
     assert "setBoardSelectionMode(false)" in html
-    assert "setBoardSelectionMode(true)" in html
-    assert "drugim kliknięciem" not in html
+    assert "setBoardSelectionMode(!navigationActive)" in html
+    assert "Kliknij ponownie pole tej lokacji" in html
 
 
 def test_idle_player_turn_keeps_end_turn_next_to_board_scan_and_routes_other_actions_through_own_tile():
@@ -1628,9 +2126,9 @@ def test_board_scan_ignores_stale_frontend_revision_without_consuming_click():
     assert stale[-1]["payload"]["automatic"] is True
 
 
-def test_selected_board_goal_continues_with_colored_actor_selection_then_pauses():
+def test_selected_force_gate_goal_skips_actor_selection_for_fixed_group_check():
     session = _session()
-    board = FakeBoardConnection(clicks=[(6, 1), (8, 1)])
+    board = FakeBoardConnection(clicks=[(6, 1)])
     session.attach_board_connection(board, backend="simulator")
     client = create_app(session).test_client()
 
@@ -1638,32 +2136,13 @@ def test_selected_board_goal_continues_with_colored_actor_selection_then_pauses(
 
     assert selected["flow"]["board_interaction"]["selected_goal_id"] == "force_entry"
     actor_selection = selected["flow"]["board_interaction"]["actor_selection"]
-    assert actor_selection["active"] is True
-    assert [
-        (pad["actor_id"], pad["color"])
-        for pad in actor_selection["pads"]
-    ] == [
-        ("hero", "czerwony"),
-        ("rogue", "niebieski"),
-        ("cleric", "zielony"),
-    ]
-    assert selected["board_selection"]["mode"] == "exploration_actor"
-    assert selected["board_selection"]["auto_arm"] is True
-    assert selected["board_selection"]["confirmation_policy"] == "immediate"
+    assert actor_selection["active"] is False
+    assert actor_selection["pads"] == []
+    assert selected["board_selection"]["mode"] == "interaction"
+    assert selected["board_selection"]["auto_arm"] is False
+    assert selected["board_selection"]["confirmation_policy"] == "screen_input"
 
-    actor_selected = client.post(
-        "/api/board/scan",
-        json={"revision": selected["board_selection"]["revision"]},
-    ).get_json()
-
-    resolved = actor_selected["flow"]["board_interaction"]["actor_selection"]
-    assert resolved["active"] is False
-    assert resolved["selected_actor_id"] == "rogue"
-    assert resolved["role"] == "lead"
-    assert actor_selected["board_selection"]["auto_arm"] is False
-    assert actor_selected["board_selection"]["confirmation_policy"] == "screen_input"
-
-    submitted = _submit_force_gate(client, actor_ids=("rogue",)).get_json()
+    submitted = _submit_force_gate(client).get_json()
 
     assert submitted["flow"]["board_interaction"]["selected_goal_id"] is None
     assert submitted["pending"]["stage"] == "decision"
@@ -1683,7 +2162,7 @@ def test_party_identity_colors_follow_new_game_party_order():
     ]
 
 
-def test_actor_selection_route_rejects_ineligible_character():
+def test_screen_actor_selection_route_is_disabled():
     client = _client()
 
     response = client.post(
@@ -1695,11 +2174,11 @@ def test_actor_selection_route_rejects_ineligible_character():
         },
     )
 
-    assert response.status_code == 400
-    assert "nie może wykonać" in response.get_json()["error"]
+    assert response.status_code == 409
+    assert "wyłącznie przez fizyczną kartę" in response.get_json()["error"]
 
 
-def test_helper_board_selection_excludes_lead_and_keeps_party_colors():
+def test_helper_actor_card_selection_excludes_lead_and_uses_no_board_pads():
     session = _session()
     client = create_app(session).test_client()
 
@@ -1712,16 +2191,15 @@ def test_helper_board_selection_excludes_lead_and_keeps_party_colors():
         },
     ).get_json()
 
-    pads = started["flow"]["board_interaction"]["actor_selection"]["pads"]
-    assert [(pad["actor_id"], pad["color"]) for pad in pads] == [
-        ("rogue", "niebieski"),
-        ("cleric", "zielony"),
-    ]
+    selection = started["flow"]["board_interaction"]["actor_selection"]
+    assert selection["pads"] == []
+    assert started["board_selection"]["mode"] == "actor_card"
+    assert started["board_selection"]["auto_arm"] is False
 
     selected = client.post(
-        "/api/board/select",
-        json={"col": pads[0]["position"][0], "row": pads[0]["position"][1]},
-    ).get_json()
+        "/api/physical-cards/scan",
+        json={"payload": "dndbg:v1:actor:rogue"},
+    ).get_json()["state"]
     actor_selection = selected["flow"]["board_interaction"]["actor_selection"]
     assert actor_selection["selected_actor_id"] == "rogue"
     assert actor_selection["role"] == "helper"
@@ -1776,6 +2254,7 @@ def test_gate_board_scan_selects_goal_and_records_activated_tile():
         ([6, 1], "force_entry"),
         ([8, 1], "open_lock"),
         ([10, 1], "look_around"),
+        ([6, 3], "gate"),
     ]
 
     previous_revision = 0
@@ -1977,13 +2456,9 @@ def test_exploration_ui_start_preview_location_and_confirm_from_ui_updates_leds(
     assert preview["active_challenge"] is None
 
     repeated_preview = client.post("/api/board/scan", json={}).get_json()
-    assert repeated_preview["flow"]["stage"] == "location_preview"
-    assert repeated_preview["flow"]["preview_zone"]["id"] == "gate"
-    assert repeated_preview["active_challenge"] is None
-
-    active = client.post("/api/location/confirm-preview", json={}).get_json()
-    assert active["flow"]["stage"] == "location_active"
-    assert active["active_challenge"]["id"] == "closed_gate"
+    assert repeated_preview["flow"]["stage"] == "location_active"
+    assert repeated_preview["flow"]["preview_zone"] is None
+    assert repeated_preview["active_challenge"]["id"] == "closed_gate"
 
 
 def test_exploration_ui_blocked_visible_location_shows_locked_preview():
@@ -2006,6 +2481,15 @@ def test_exploration_ui_blocked_visible_location_shows_locked_preview():
     assert preview["flow"]["preview_zone"]["available"] is False
     assert "Najpierw trzeba otworzyć bramę" in preview["flow"]["preview_zone"]["locked_reason"]
     assert preview["active_challenge"] is None
+
+    revision = preview["board_selection"]["revision"]
+    board.clicks.append((9, 10))
+    repeated = client.post("/api/board/scan", json={}).get_json()
+
+    assert repeated["flow"]["stage"] == "location_preview"
+    assert repeated["flow"]["preview_zone"]["id"] == "courtyard"
+    assert repeated["board_selection"]["revision"] != revision
+    assert "ponowne kliknięcie nie otworzy" in repeated["board"]["message"]
 
 
 def test_exploration_ui_action_rejects_empty_text():
@@ -2037,7 +2521,7 @@ def test_exploration_ui_action_accept_and_roll_flow():
     assert decision_response.status_code == 200
     assert decision_response.get_json()["required_rolls"][0]["actor_id"] == "hero"
 
-    rolls_response = client.post("/api/rolls", json={"rolls": {"hero": 16}})
+    rolls_response = client.post("/api/rolls", json={"rolls": {"hero": 16, "rogue": 1, "cleric": 1}})
     assert rolls_response.status_code == 200
     data = rolls_response.get_json()
     assert data["flow"]["stage"] == "interaction_result"
@@ -2057,18 +2541,18 @@ def test_exploration_ui_action_accept_and_roll_flow():
     assert data["pending_encounter"]["trigger_id"] == "gate_open_skirmish"
 
 
-def test_exploration_ui_accept_can_select_lead_actor():
+def test_exploration_ui_accept_queues_rolls_for_the_whole_party():
     client = _client()
 
-    _submit_force_gate(client, actor_ids=("rogue",))
-    response = client.post("/api/decision", json={"decision": "accept", "lead_actor_id": "rogue"})
+    _submit_force_gate(client)
+    response = client.post("/api/decision", json={"decision": "accept"})
 
     assert response.status_code == 200
-    roll = response.get_json()["required_rolls"][0]
-    assert roll["actor_id"] == "rogue"
-    assert roll["actor_name"] == "Łotrzyca"
-    assert roll["die_sides"] == 20
-    assert roll["label"] == "d20"
+    assert [roll["actor_id"] for roll in response.get_json()["required_rolls"]] == [
+        "hero",
+        "rogue",
+        "cleric",
+    ]
 
 
 def test_exploration_ui_decision_correction_endpoint_updates_pending_option():
@@ -2077,17 +2561,15 @@ def test_exploration_ui_decision_correction_endpoint_updates_pending_option():
     _submit_force_gate(
         client,
         "Wyważamy bramę z pomocą.",
-        check_participants="lead_with_help",
-        actor_ids=("rogue", "hero"),
     )
     response = client.post(
         "/api/decision/correction",
         json={
-            "mechanic_id": "lead_with_help_check",
-            "check_participants": "lead_with_help",
-            "check_aggregation": "lead_result",
-            "lead_actor_id": "rogue",
-            "helper_actor_id": "hero",
+            "mechanic_id": "group_check",
+            "check_participants": "whole_party",
+            "check_aggregation": "any_success",
+            "lead_actor_id": "hero",
+            "helper_actor_id": None,
             "ability": "dexterity",
             "skill": "acrobatics",
             "dc": 13,
@@ -2106,10 +2588,10 @@ def test_exploration_ui_decision_correction_endpoint_updates_pending_option():
 
     assert response.status_code == 200
     data = response.get_json()
-    assert data["selected_lead_actor_id"] == "rogue"
-    assert data["selected_helper_actor_id"] == "hero"
-    assert data["pending"]["option"]["mechanic"]["id"] == "lead_with_help_check"
-    assert data["pending"]["option"]["check_participants"] == "lead_with_help"
+    assert data["selected_lead_actor_id"] == "hero"
+    assert data["selected_helper_actor_id"] is None
+    assert data["pending"]["option"]["mechanic"]["id"] == "group_check"
+    assert data["pending"]["option"]["check_participants"] == "whole_party"
     assert data["pending"]["option"]["ability"] == "dexterity"
     assert data["pending"]["option"]["skill"] == "acrobatics"
     assert data["pending"]["option"]["dc"] == 13
@@ -2117,7 +2599,7 @@ def test_exploration_ui_decision_correction_endpoint_updates_pending_option():
     assert data["pending"]["option"]["situational_modifiers"][0]["label"] == "Mokra lina"
 
 
-def test_exploration_ui_decision_correction_endpoint_updates_improvised_tool():
+def test_exploration_ui_decision_correction_cannot_replace_authored_group_model():
     client = _client()
 
     _submit_force_gate(client, "Używam starej deski jak dźwigni.")
@@ -2144,18 +2626,15 @@ def test_exploration_ui_decision_correction_endpoint_updates_improvised_tool():
         },
     )
 
-    assert response.status_code == 200
-    data = response.get_json()
-    assert data["pending"]["option"]["mechanic"]["id"] == "improvised_tool_check"
-    assert data["pending"]["option"]["improvised_tool"]["label"] == "Stara deska"
-    assert data["pending"]["option"]["improvised_tool"]["effect_modifier"] == 1
+    assert response.status_code == 400
+    assert "przypisane do wybranego kafelka" in response.get_json()["error"]
 
 
 def test_exploration_ui_reset_endpoint_restores_state():
     client = _client()
     _submit_force_gate(client)
     client.post("/api/decision", json={"decision": "accept"})
-    client.post("/api/rolls", json={"rolls": {"hero": 16}})
+    client.post("/api/rolls", json={"rolls": {"hero": 16, "rogue": 1, "cleric": 1}})
 
     response = client.post("/api/reset", json={})
 
@@ -2197,7 +2676,7 @@ def test_exploration_ui_shows_and_handles_travel_after_completed_challenge():
     client = _client()
     _submit_force_gate(client)
     client.post("/api/decision", json={"decision": "accept"})
-    completed = client.post("/api/rolls", json={"rolls": {"hero": 16}}).get_json()
+    completed = client.post("/api/rolls", json={"rolls": {"hero": 16, "rogue": 1, "cleric": 1}}).get_json()
 
     assert completed["active_challenge"] is None
     assert completed["flow"]["stage"] == "interaction_result"
@@ -2219,7 +2698,7 @@ def test_exploration_ui_finish_interaction_returns_to_location_selection():
     client = _client()
     _submit_force_gate(client)
     client.post("/api/decision", json={"decision": "accept"})
-    completed = client.post("/api/rolls", json={"rolls": {"hero": 16}}).get_json()
+    completed = client.post("/api/rolls", json={"rolls": {"hero": 16, "rogue": 1, "cleric": 1}}).get_json()
     assert completed["flow"]["stage"] == "interaction_result"
 
     response = client.post("/api/interaction/finish", json={})
@@ -2243,7 +2722,7 @@ def test_exploration_ui_can_cancel_location_preview():
     client = create_app(session).test_client()
     _submit_force_gate(client)
     client.post("/api/decision", json={"decision": "accept"})
-    client.post("/api/rolls", json={"rolls": {"hero": 16}})
+    client.post("/api/rolls", json={"rolls": {"hero": 16, "rogue": 1, "cleric": 1}})
     _confirm_fallen_gate_setup(client)
     session.resolved_encounter_trigger_ids.add("gate_open_skirmish")
     session.pending_encounter = None
@@ -2264,7 +2743,7 @@ def test_exploration_ui_reveals_selects_and_resolves_npc_point():
     client = create_app(session).test_client()
     _submit_force_gate(client)
     client.post("/api/decision", json={"decision": "accept"})
-    client.post("/api/rolls", json={"rolls": {"hero": 16}})
+    client.post("/api/rolls", json={"rolls": {"hero": 16, "rogue": 1, "cleric": 1}})
     _confirm_fallen_gate_setup(client)
     session.state, _ = reveal_exploration_points(session.state, ("wounded_scout",))
     client.post("/api/travel", json={"zone_id": "courtyard"})
@@ -2300,7 +2779,7 @@ def test_exploration_ui_applies_authored_npc_key_issue_without_roll():
     client = create_app(session).test_client()
     _submit_force_gate(client)
     client.post("/api/decision", json={"decision": "accept"})
-    client.post("/api/rolls", json={"rolls": {"hero": 16}})
+    client.post("/api/rolls", json={"rolls": {"hero": 16, "rogue": 1, "cleric": 1}})
     _confirm_fallen_gate_setup(client)
     session.state, _ = reveal_exploration_points(session.state, ("wounded_scout",))
     client.post("/api/travel", json={"zone_id": "courtyard"})
@@ -2337,7 +2816,7 @@ def test_exploration_ui_points_are_board_first_and_text_redirects_to_point_led()
     client = create_app(session).test_client()
     _submit_force_gate(client)
     client.post("/api/decision", json={"decision": "accept"})
-    client.post("/api/rolls", json={"rolls": {"hero": 16}})
+    client.post("/api/rolls", json={"rolls": {"hero": 16, "rogue": 1, "cleric": 1}})
     _confirm_fallen_gate_setup(client)
     session.state, _ = reveal_exploration_points(session.state, ("wounded_scout",))
     client.post("/api/travel", json={"zone_id": "courtyard"})
@@ -2363,7 +2842,7 @@ def test_exploration_ui_sets_pending_gate_skirmish_after_gate_opens():
     client = _client()
     _submit_force_gate(client, "Hałasujemy przy bramie.")
     client.post("/api/decision", json={"decision": "accept"})
-    data = client.post("/api/rolls", json={"rolls": {"hero": 16}}).get_json()
+    data = client.post("/api/rolls", json={"rolls": {"hero": 16, "rogue": 1, "cleric": 1}}).get_json()
 
     assert data["pending_encounter"] is None
     data = _confirm_fallen_gate_setup(client)
@@ -2380,7 +2859,7 @@ def test_exploration_ui_runs_guided_encounter_setup_after_trigger():
     client = create_app(session).test_client()
     _submit_force_gate(client, "Hałasujemy przy bramie.")
     client.post("/api/decision", json={"decision": "accept"})
-    client.post("/api/rolls", json={"rolls": {"hero": 16}})
+    client.post("/api/rolls", json={"rolls": {"hero": 16, "rogue": 1, "cleric": 1}})
     _confirm_fallen_gate_setup(client)
     opening = _resolve_encounter_opening(client)
 
@@ -2431,7 +2910,7 @@ def test_exploration_ui_can_assign_player_start_from_ui_position_buttons():
     client = create_app(session).test_client()
     _submit_force_gate(client, "Hałasujemy przy bramie.")
     client.post("/api/decision", json={"decision": "accept"})
-    client.post("/api/rolls", json={"rolls": {"hero": 16}})
+    client.post("/api/rolls", json={"rolls": {"hero": 16, "rogue": 1, "cleric": 1}})
     _confirm_fallen_gate_setup(client)
     _resolve_encounter_opening(client)
 
@@ -2460,7 +2939,7 @@ def test_exploration_ui_starts_combat_after_setup_and_initiative():
     client = create_app(session).test_client()
     _submit_force_gate(client, "Hałasujemy przy bramie.")
     client.post("/api/decision", json={"decision": "accept"})
-    client.post("/api/rolls", json={"rolls": {"hero": 16}})
+    client.post("/api/rolls", json={"rolls": {"hero": 16, "rogue": 1, "cleric": 1}})
     _confirm_fallen_gate_setup(client)
     _resolve_encounter_opening(client)
     client.post("/api/encounter/setup/start")
@@ -2529,7 +3008,7 @@ def test_exploration_ui_happy_path_returns_to_player_after_enemy_turns():
     assert accepted["required_rolls"][0]["actor_name"] == "Bohater"
     assert accepted["required_rolls"][0]["die_sides"] == 20
 
-    resolved = client.post("/api/rolls", json={"rolls": {"hero": 16}}).get_json()
+    resolved = client.post("/api/rolls", json={"rolls": {"hero": 16, "rogue": 1, "cleric": 1}}).get_json()
     assert resolved["flow"]["stage"] == "interaction_result"
 
     setup_ready = _confirm_fallen_gate_setup(client)
@@ -2609,7 +3088,7 @@ def test_exploration_ui_board_scan_selects_travel_zone_and_updates_leds():
 
     _submit_force_gate(client, "Wyważamy bramę głośno.")
     client.post("/api/decision", json={"decision": "accept"})
-    client.post("/api/rolls", json={"rolls": {"hero": 16}})
+    client.post("/api/rolls", json={"rolls": {"hero": 16, "rogue": 1, "cleric": 1}})
     _confirm_fallen_gate_setup(client)
     session.resolved_encounter_trigger_ids.add("gate_open_skirmish")
     session.pending_encounter = None

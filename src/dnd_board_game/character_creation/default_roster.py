@@ -7,7 +7,7 @@ from dnd_board_game.actors import AbilityScores
 from .models import CharacterDraft
 
 
-def default_character_drafts() -> tuple[CharacterDraft, ...]:
+def all_default_character_drafts() -> tuple[CharacterDraft, ...]:
     return (
         CharacterDraft(
             id="brakka",
@@ -20,7 +20,7 @@ def default_character_drafts() -> tuple[CharacterDraft, ...]:
             equipment_package_id="barbarian_greataxe",
             selected_background_tool_ids=("drum",),
             selected_background_language_ids=("giant",),
-            portrait="character_uploads/default_roster/brakka.png",
+            portrait="character_uploads/default_roster_v2/brakka.png",
         ),
         CharacterDraft(
             id="lorian",
@@ -47,7 +47,7 @@ def default_character_drafts() -> tuple[CharacterDraft, ...]:
                 "bard_instrument_viol",
             ),
             selected_background_tool_ids=("drum",),
-            portrait="character_uploads/default_roster/lorian.png",
+            portrait="character_uploads/default_roster_v2/lorian.png",
         ),
         CharacterDraft(
             id="dagna",
@@ -68,7 +68,7 @@ def default_character_drafts() -> tuple[CharacterDraft, ...]:
             selected_subclass_id="life_domain",
             selected_species_tool_ids=("smiths_tools",),
             selected_background_language_ids=("celestial", "elvish"),
-            portrait="character_uploads/default_roster/dagna.png",
+            portrait="character_uploads/default_roster_v2/dagna.png",
         ),
         CharacterDraft(
             id="sylwen",
@@ -84,7 +84,7 @@ def default_character_drafts() -> tuple[CharacterDraft, ...]:
             selected_species_language_ids=("sylvan",),
             selected_species_cantrip_ids=("mage_hand",),
             selected_background_language_ids=("primordial",),
-            portrait="character_uploads/default_roster/sylwen.png",
+            portrait="character_uploads/default_roster_v2/sylwen.png",
         ),
         CharacterDraft(
             id="garran",
@@ -98,7 +98,7 @@ def default_character_drafts() -> tuple[CharacterDraft, ...]:
             equipment_package_id="fighter_sword_and_board",
             selected_species_language_ids=("elvish",),
             selected_background_tool_ids=("dice_set",),
-            portrait="character_uploads/default_roster/garran.png",
+            portrait="character_uploads/default_roster_v2/garran.png",
         ),
         CharacterDraft(
             id="pim",
@@ -109,7 +109,7 @@ def default_character_drafts() -> tuple[CharacterDraft, ...]:
             base_ability_scores=AbilityScores(12, 15, 13, 10, 14, 8),
             selected_skill_ids=("acrobatics", "insight"),
             equipment_package_id="monk_staff",
-            portrait="character_uploads/default_roster/pim.png",
+            portrait="character_uploads/default_roster_v2/pim.png",
         ),
         CharacterDraft(
             id="rhogar",
@@ -123,7 +123,7 @@ def default_character_drafts() -> tuple[CharacterDraft, ...]:
             selected_species_variant_id="red_dragon_ancestry",
             selected_background_tool_ids=("dragonchess_set",),
             selected_background_language_ids=("celestial",),
-            portrait="character_uploads/default_roster/rhogar.png",
+            portrait="character_uploads/default_roster_v2/rhogar.png",
         ),
         CharacterDraft(
             id="erynd",
@@ -141,7 +141,7 @@ def default_character_drafts() -> tuple[CharacterDraft, ...]:
                 "natural_explorer_forest",
             ),
             selected_background_tool_ids=("woodcarvers_tools",),
-            portrait="character_uploads/default_roster/erynd.png",
+            portrait="character_uploads/default_roster_v2/erynd.png",
         ),
         CharacterDraft(
             id="mira",
@@ -156,10 +156,10 @@ def default_character_drafts() -> tuple[CharacterDraft, ...]:
                 "perception",
                 "sleight_of_hand",
             ),
-            selected_expertise_ids=("stealth", "perception"),
+            selected_expertise_ids=("investigation", "sleight_of_hand"),
             equipment_package_id="rogue_burglar",
             selected_background_tool_ids=("playing_card_set",),
-            portrait="character_uploads/default_roster/mira.png",
+            portrait="character_uploads/default_roster_v2/mira.png",
         ),
         CharacterDraft(
             id="veyra",
@@ -178,7 +178,7 @@ def default_character_drafts() -> tuple[CharacterDraft, ...]:
             ),
             selected_spell_ids=("magic_missile", "shield"),
             selected_subclass_id="draconic_bloodline",
-            portrait="character_uploads/default_roster/veyra.png",
+            portrait="character_uploads/default_roster_v2/veyra.png",
         ),
         CharacterDraft(
             id="kael",
@@ -196,7 +196,7 @@ def default_character_drafts() -> tuple[CharacterDraft, ...]:
             selected_species_skill_ids=("perception", "persuasion"),
             selected_species_language_ids=("dwarvish",),
             selected_background_language_ids=("celestial", "draconic"),
-            portrait="character_uploads/default_roster/kael.png",
+            portrait="character_uploads/default_roster_v2/kael.png",
         ),
         CharacterDraft(
             id="nimra",
@@ -207,25 +207,32 @@ def default_character_drafts() -> tuple[CharacterDraft, ...]:
             base_ability_scores=AbilityScores(8, 14, 13, 15, 12, 10),
             selected_skill_ids=("investigation", "insight"),
             equipment_package_id="wizard_scholar",
-            selected_cantrip_ids=("fire_bolt", "mage_hand", "minor_illusion"),
+            selected_cantrip_ids=("ray_of_frost", "mage_hand", "minor_illusion"),
             selected_spell_ids=(
-                "magic_missile",
+                "grease",
                 "shield",
-                "mage_armor",
                 "detect_magic",
                 "sleep",
-                "find_familiar",
+                "fog_cloud",
+                "identify",
             ),
             selected_prepared_spell_ids=(
-                "magic_missile",
+                "grease",
                 "shield",
-                "mage_armor",
                 "sleep",
+                "fog_cloud",
             ),
             selected_background_language_ids=("elvish", "draconic"),
-            portrait="character_uploads/default_roster/nimra.png",
+            portrait="character_uploads/default_roster_v2/nimra.png",
         ),
     )
 
 
-__all__ = ["default_character_drafts"]
+def default_character_drafts() -> tuple[CharacterDraft, ...]:
+    """The seven role-first heroes visible in a new board-game campaign."""
+
+    playable = {"garran", "brakka", "mira", "dagna", "lorian", "nimra", "erynd"}
+    return tuple(draft for draft in all_default_character_drafts() if draft.id in playable)
+
+
+__all__ = ["all_default_character_drafts", "default_character_drafts"]

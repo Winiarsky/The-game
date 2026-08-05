@@ -71,6 +71,19 @@ def combat_action_mechanic_from_definition(action: Any) -> ActionMechanic:
             ),
             tags=("spell", "status", "buff"),
         )
+    if action_type == "stabilize":
+        return CombatActionMechanic(
+            id=str(getattr(action, "id", "spare_the_dying")),
+            name=str(getattr(action, "label", "Stabilizacja")),
+            scope=MechanicScope.COMBAT,
+            resource=ActionResource.ACTION,
+            targeting=TargetingMode.ALLY,
+            summary=(
+                "Wybiera przyległego żywego sojusznika z 0 PW i ustawia go "
+                "jako stabilnego bez testu Medycyny."
+            ),
+            tags=("spell", "stabilization", "rescue"),
+        )
     if action_type == "targeted_item_effect":
         return targeted_item_effect_mechanic(
             str(getattr(action, "id", "targeted_item_effect")),
@@ -80,6 +93,19 @@ def combat_action_mechanic_from_definition(action: Any) -> ActionMechanic:
         return defensive_spell_reaction_mechanic(
             str(getattr(action, "id", "shield")),
             str(getattr(action, "label", "Czar obronny")),
+        )
+    if action_type == "reaction_damage":
+        return CombatActionMechanic(
+            id=f"spell.{getattr(action, 'id', 'reaction_damage')}",
+            name=str(getattr(action, "label", "Czar odwetowy")),
+            scope=MechanicScope.COMBAT,
+            resource=ActionResource.REACTION,
+            targeting=TargetingMode.ENEMY,
+            summary=(
+                "Czar jest oferowany po otrzymaniu obrażeń od przeciwnika; "
+                "zużywa reakcję i wybraną komórkę czaru."
+            ),
+            tags=("spell", "reaction", "damage", "retaliation"),
         )
     if action_type == "spell_counter":
         return spell_counter_reaction_mechanic(

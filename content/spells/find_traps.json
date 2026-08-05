@@ -25,10 +25,13 @@
   "concentration": false,
   "ritual": false,
   "effect": {
-    "kind": "exploration",
-    "effect_type": "set_flag",
-    "flag_key": "cast_find_traps",
-    "flag_value": true,
-    "instructions": "MG potwierdza obecność pułapki w linii widzenia do 120 stóp i ogólny rodzaj zagrożenia, ale nie wskazuje miejsca."
+    "kind": "combat_action",
+    "action_type": "targeted_status",
+    "label": "Wykrycie pułapek",
+    "effect_kind": "reveal_hidden_traps",
+    "target_faction": "self",
+    "target_count": 1,
+    "cast_flag": "cast_find_traps",
+    "instructions": "Ujawnij wszystkie ukryte pułapki bieżącego obszaru, ich pola, obszary rażenia i znane wyzwalacze. Czar ich nie rozbraja."
   }
 }

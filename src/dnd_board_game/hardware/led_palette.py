@@ -29,6 +29,7 @@ class LedColor:
 
     ENEMY: RGBColor = (255, 0, 80)
     MENU_PINK: RGBColor = (255, 0, 180)
+    MENU_WHITE: RGBColor = (255, 255, 255)
     VISIBLE_ENEMY_OUT_OF_RANGE: RGBColor = (120, 0, 45)
     ENEMY_MOVEMENT_PATH: RGBColor = (220, 0, 0)
     ENEMY_MOVEMENT_DESTINATION: RGBColor = (255, 120, 0)
@@ -65,6 +66,7 @@ LED_COLOR_NAMES_PL: dict[RGBColor, str] = {
     LedColor.ENEMY_MOVEMENT_DESTINATION: "pomarańczowy",
     LedColor.MENU_PURPLE: "fioletowy",
     LedColor.MENU_PINK: "różowy",
+    LedColor.MENU_WHITE: "biały",
     LedColor.PLAYER_START_ZONE: "turkusowy",
     LedColor.MULTI_OPTION_TILE: "brązowy",
     LedColor.BLOCKING_TERRAIN: "ciemnoczerwony",

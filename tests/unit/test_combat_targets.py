@@ -1,4 +1,12 @@
-from dnd_board_game.actors import Actor, ActorId, Faction
+from dataclasses import replace
+
+from dnd_board_game.actors import (
+    Actor,
+    ActorId,
+    Faction,
+    FeatureGrant,
+    FeatureSourceKind,
+)
 from dnd_board_game.combat import (
     CombatTarget,
     CombatTargetType,
@@ -69,3 +77,59 @@ def test_attackable_false_and_hidden_visibility_block_targeting():
     assert is_public_attack_target(object_with_hp) is False
     assert is_public_attack_target(hidden) is False
     assert is_public_attack_target(conditional) is False
+
+
+def test_iron_line_protects_only_the_ally_opposite_garran() -> None:
+    enemy = _actor()
+    ally = replace(
+        _actor(),
+        id=ActorId("ally"),
+        faction=Faction.ALLY,
+        position=Coordinate(0, 0),
+    )
+    garran = replace(
+        ally,
+        id=ActorId("garran"),
+        position=Coordinate(2, 0),
+        features=(
+            FeatureGrant(
+                "iron_line",
+                "Żelazna linia",
+                FeatureSourceKind.SCENARIO,
+                "test",
+            ),
+        ),
+    )
+
+    protected = actor_as_combat_target(
+        ally,
+        attacker=enemy,
+        actors=(enemy, ally, garran),
+    )
+    broken_flank = actor_as_combat_target(
+        ally,
+        attacker=enemy,
+        actors=(enemy, ally, replace(garran, position=Coordinate(2, 1))),
+    )
+
+    assert protected.ac == ally.ac + 1
+    assert broken_flank.ac == ally.ac
+
+
+def test_halfling_nimbleness_adds_ac_only_against_opportunity_attack() -> None:
+    mira = replace(
+        _actor(),
+        id=ActorId("mira"),
+        faction=Faction.ALLY,
+        features=(
+            FeatureGrant(
+                "halfling_nimbleness",
+                "Niziołcza zwinność",
+                FeatureSourceKind.SPECIES,
+                "halfling",
+            ),
+        ),
+    )
+
+    assert actor_as_combat_target(mira).ac == mira.ac
+    assert actor_as_combat_target(mira, opportunity_attack=True).ac == mira.ac + 1

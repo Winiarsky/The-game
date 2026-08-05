@@ -25,6 +25,7 @@ from dnd_board_game.exploration import (
     SceneMode,
 )
 from dnd_board_game.inventory import HandSlot, effective_armor_class
+from dnd_board_game.rules import RollMode
 from dnd_board_game.scenarios import (
     RULESET_DND_5E_2014,
     SCENARIO_SCHEMA,
@@ -618,6 +619,19 @@ def test_load_abandoned_watchtower_builds_exploration_scene():
     assert len(exploration.environment) == 2
     assert exploration.board.terrain_at(Coordinate(8, 5)).blocks_movement is False
     assert len(exploration.zones) == 4
+    gate = next(zone for zone in exploration.zones if zone.id == "gate")
+    gate_break_in = next(
+        reaction
+        for reaction in gate.exploration_card_reactions
+        if reaction.id == "gate_break_in"
+    )
+    assert gate_break_in.matches(
+        card_action_id="break_in",
+        interaction_id="watchtower_gate",
+        prompt_kind="interaction",
+        tags=frozenset({"fixture", "lock"}),
+    )
+    assert gate_break_in.roll_mode == RollMode.ADVANTAGE
     assert len(exploration.challenges) == 2
     assert len(exploration.observations) == 6
     gate_observation = next(
@@ -1045,7 +1059,25 @@ def test_load_village_square_mvp_builds_exploration_locations_setup_points_and_o
     assert {option.id for option in market.options} == {
         "read_notice_board",
         "ask_for_rumors",
+        "mira_market_pickpocket_child",
     }
+    elder_house = next(zone for zone in exploration.zones if zone.id == "elder_house")
+    brakka_moment = next(
+        option
+        for option in elder_house.options
+        if option.id == "brakka_bren_hard_truth"
+    )
+    assert brakka_moment.required_party_actor_id == "brakka"
+    assert brakka_moment.assigned_actor_id == "brakka"
+    assert brakka_moment.character_moment is True
+    rumor_reaction = next(
+        reaction
+        for reaction in market.exploration_card_reactions
+        if reaction.id == "market_intimidate_rumors"
+    )
+    assert rumor_reaction.check_modifier == 2
+    tavern = next(zone for zone in exploration.zones if zone.id == "tavern")
+    assert {"guard_duty", "alarm"} <= set(tavern.exploration_card_ids)
 
     visible_setup_points = {point.id for point in exploration.points if point.visibility == SetupVisibility.VISIBLE and point.requires_setup}
     assert visible_setup_points == set()
@@ -1245,6 +1277,49 @@ def test_load_village_square_mvp_builds_exploration_locations_setup_points_and_o
         for variant in transition.variants
         for reaction in variant.reactions
     )
+
+
+def test_mvp_has_two_authored_character_moments_for_each_playable_hero() -> None:
+    village = build_exploration_from_scenario(
+        load_scenario("content/scenarios/village_square_mvp.json")
+    )
+    watchtower = build_exploration_from_scenario(
+        load_scenario("content/scenarios/abandoned_watchtower.json")
+    )
+    moments = tuple(
+        option
+        for exploration in (village, watchtower)
+        for zone in exploration.zones
+        for option in zone.options
+        if option.character_moment
+    )
+
+    assert len(moments) == 14
+    assert {
+        actor_id: sum(option.assigned_actor_id == actor_id for option in moments)
+        for actor_id in {option.assigned_actor_id for option in moments}
+    } == {
+        "garran": 2,
+        "brakka": 2,
+        "mira": 2,
+        "dagna": 2,
+        "lorian": 2,
+        "nimra": 2,
+        "erynd": 2,
+    }
+
+
+def test_loader_rejects_more_than_eight_interaction_pad_positions(tmp_path) -> None:
+    data = _village_square_data_without_refs()
+    market = next(
+        zone for zone in data["exploration"]["zones"] if zone["id"] == "market"
+    )
+    market["interaction_pad_positions"].append([0, 0])
+    scenario_path = tmp_path / "too_many_interaction_pads.json"
+    scenario_path.write_text(json.dumps(data), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="at most eight interaction pad"):
+        load_scenario(scenario_path)
 
 
 def test_scenario_continuation_rejects_target_id_mismatch(tmp_path):

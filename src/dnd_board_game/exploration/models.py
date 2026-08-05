@@ -202,6 +202,28 @@ class ShortRestPolicy:
             raise ValueError("A contested short rest requires a risk summary.")
 
 
+@dataclass(frozen=True, slots=True)
+class LongRestPolicy:
+    """A safe, content-authored opportunity for the party to sleep."""
+
+    id: str
+    safety: RestSafety = RestSafety.SAFE
+    risk_summary: str = ""
+    duration_minutes: int = 480
+    max_completions: int = 0
+    completion_effects: tuple[dict[str, object], ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.id.strip():
+            raise ValueError("Long rest policy id cannot be empty.")
+        if self.duration_minutes < 480:
+            raise ValueError("A party long rest must last at least 480 minutes.")
+        if self.max_completions < 0:
+            raise ValueError("Long rest max_completions cannot be negative.")
+        if self.safety == RestSafety.CONTESTED and not self.risk_summary.strip():
+            raise ValueError("A contested long rest requires a risk summary.")
+
+
 class CheckParticipants(StrEnum):
     NO_ACTOR = "no_actor"
     SINGLE_ACTOR = "single_actor"
@@ -573,6 +595,9 @@ class ExplorationOption:
     resolution_mode: InteractionResolutionMode = InteractionResolutionMode.CHECK
     description_mode: InteractionDescriptionMode = InteractionDescriptionMode.REQUIRED
     default_declaration: str = ""
+    required_party_actor_id: str | None = None
+    assigned_actor_id: str | None = None
+    character_moment: bool = False
 
     def __post_init__(self) -> None:
         if self.entry_cost_cp < 0 or self.success_reward_cp < 0:
@@ -585,6 +610,18 @@ class ExplorationOption:
         ):
             raise ValueError(
                 "An exploration option without description input requires default_declaration."
+            )
+        if self.required_party_actor_id is not None and not self.required_party_actor_id.strip():
+            raise ValueError("Exploration option required actor id cannot be empty.")
+        if self.assigned_actor_id is not None and not self.assigned_actor_id.strip():
+            raise ValueError("Exploration option assigned actor id cannot be empty.")
+        if (
+            self.assigned_actor_id is not None
+            and self.required_party_actor_id is not None
+            and self.assigned_actor_id != self.required_party_actor_id
+        ):
+            raise ValueError(
+                "A character interaction must require the actor assigned to it."
             )
 
 
@@ -875,6 +912,44 @@ class PaperMap:
 
 
 @dataclass(frozen=True, slots=True)
+class ExplorationCardReaction:
+    id: str
+    card_action_id: str
+    interaction_ids: tuple[str, ...] = ()
+    prompt_kinds: tuple[str, ...] = ()
+    required_tags: tuple[str, ...] = ()
+    message: str = ""
+    effects: tuple[dict[str, object], ...] = ()
+    redirect_option_id: str | None = None
+    check_modifier: int = 0
+    roll_mode: RollMode = RollMode.NORMAL
+
+    def __post_init__(self) -> None:
+        if not self.id.strip() or not self.card_action_id.strip():
+            raise ValueError("Exploration card reaction requires id and card_action_id.")
+        if not -5 <= self.check_modifier <= 5:
+            raise ValueError("Exploration card reaction modifier must be between -5 and 5.")
+        selectors = (*self.interaction_ids, *self.prompt_kinds, *self.required_tags)
+        if any(not item.strip() for item in selectors):
+            raise ValueError("Exploration card reaction selectors cannot be empty.")
+
+    def matches(
+        self,
+        *,
+        card_action_id: str,
+        interaction_id: str | None,
+        prompt_kind: str,
+        tags: frozenset[str],
+    ) -> bool:
+        return (
+            self.card_action_id == card_action_id
+            and (not self.interaction_ids or interaction_id in self.interaction_ids)
+            and (not self.prompt_kinds or prompt_kind in self.prompt_kinds)
+            and (not self.required_tags or bool(set(self.required_tags).intersection(tags)))
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class ExplorationZone:
     id: str
     name: str
@@ -902,6 +977,9 @@ class ExplorationZone:
     search_failure_flag: str | None = None
     llm_context: LlmContext = LlmContext()
     short_rest_policy: ShortRestPolicy | None = None
+    long_rest_policy: LongRestPolicy | None = None
+    exploration_card_ids: tuple[str, ...] = ("*",)
+    exploration_card_reactions: tuple[ExplorationCardReaction, ...] = ()
     item_instances: tuple[ItemInstance, ...] = ()
     fixtures: tuple[SceneFixture, ...] = ()
 
@@ -914,10 +992,19 @@ class ExplorationZone:
             set(self.interaction_pad_positions)
         ):
             raise ValueError("Exploration interaction pad positions must be unique.")
+        if len(self.interaction_pad_positions) > 8:
+            raise ValueError(
+                "Exploration zones support at most eight interaction pad positions."
+            )
         if self.marker_position in self.interaction_pad_positions:
             raise ValueError(
                 "Exploration interaction pads cannot use the zone anchor position."
             )
+        if any(not card_id.strip() for card_id in self.exploration_card_ids):
+            raise ValueError("Exploration card handler ids cannot be empty.")
+        reaction_ids = tuple(item.id for item in self.exploration_card_reactions)
+        if len(reaction_ids) != len(set(reaction_ids)):
+            raise ValueError("Exploration card reaction ids must be unique per zone.")
 
     @property
     def marker_position(self) -> Coordinate:
@@ -1421,6 +1508,7 @@ class InteractionGoal:
     source_actions: tuple[InteractionSourceAction, ...] = ()
     participant_mode: InteractionParticipantMode = InteractionParticipantMode.MUST
     check_participants: CheckParticipants = CheckParticipants.SINGLE_ACTOR
+    check_aggregation: CheckAggregation | None = None
     allowed_check_participants: tuple[CheckParticipants, ...] = ()
     custom: bool = False
     narrative_style: NarrativeStyle | None = None
@@ -1528,6 +1616,11 @@ class InteractionGoal:
             "source_actions": [action.as_payload() for action in self.source_actions],
             "participant_mode": self.participant_mode.value,
             "check_participants": self.check_participants.value,
+            "check_aggregation": (
+                self.check_aggregation.value
+                if self.check_aggregation is not None
+                else None
+            ),
             "allowed_check_participants": [
                 participants.value for participants in self.participant_options
             ],

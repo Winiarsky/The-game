@@ -8,9 +8,11 @@ import pytest
 from dnd_board_game.physical_cards import (
     DecisionCardActionKind,
     build_decision_card_qr_payload,
+    build_actor_card_qr_payload,
     generate_decision_card_qr,
     normalize_decision_card_scanner_text,
     parse_decision_card_qr_payload,
+    parse_actor_card_qr_payload,
     resolve_universal_card_scan,
 )
 
@@ -23,6 +25,37 @@ def test_decision_card_payload_round_trip() -> None:
         DecisionCardActionKind.SPELL
     )
     assert parse_decision_card_qr_payload(encoded).source_id == "eldritch_blast"
+
+
+def test_owned_decision_card_payload_round_trip_uses_v2() -> None:
+    encoded = build_decision_card_qr_payload(
+        "spell",
+        "mage_hand",
+        actor_id="nimra",
+    )
+
+    assert encoded == "dndbg:v2:action:spell:mage_hand:nimra"
+    parsed = parse_decision_card_qr_payload(encoded)
+    assert parsed.version == 2
+    assert parsed.actor_id == "nimra"
+
+
+def test_owned_v2_payload_requires_owner() -> None:
+    with pytest.raises(ValueError, match="must contain an actor owner"):
+        build_decision_card_qr_payload("spell", "mage_hand", version=2)
+
+
+def test_actor_card_payload_round_trip() -> None:
+    encoded = build_actor_card_qr_payload("kael")
+
+    assert encoded == "dndbg:v1:actor:kael"
+    assert parse_actor_card_qr_payload(encoded).actor_id == "kael"
+
+
+def test_actor_card_payload_normalizes_keyboard_wedge_separator() -> None:
+    assert normalize_decision_card_scanner_text("dndbg>v1>actor>kael") == (
+        "dndbg:v1:actor:kael"
+    )
 
 
 def test_keyboard_wedge_scanner_separator_is_normalized() -> None:

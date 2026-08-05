@@ -21,6 +21,7 @@ from dnd_board_game.combat import (
     hide_eligibility,
     is_hidden_from,
     legal_attack_targets,
+    reveal_all_to_observer,
     refresh_hidden_after_movement,
     resolve_hide,
     resolve_search,
@@ -64,6 +65,17 @@ def test_skill_profile_applies_proficiency_to_stealth_and_passive_perception() -
 
     assert skill_modifier(rogue, "stealth") == 5
     assert passive_skill_score(scout, "perception") == 14
+
+
+def test_reveal_all_to_observer_preserves_other_observers() -> None:
+    states = (
+        HiddenState("goblin", 18, ("wizard", "cleric")),
+        HiddenState("rogue", 21, ("wizard",)),
+    )
+
+    revealed = reveal_all_to_observer(states, "wizard")
+
+    assert revealed == (HiddenState("goblin", 18, ("cleric",)),)
 
 
 def test_hide_requires_breaking_clear_sight_but_three_quarters_cover_is_enough() -> None:

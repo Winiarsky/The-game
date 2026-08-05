@@ -20,6 +20,34 @@
     </header>
 
     <section class="character-sheet">
+      {% if archetype %}
+        <section class="form-section">
+          <span class="eyebrow">{{ archetype.role }}</span>
+          <h2>{{ archetype.tagline }}</h2>
+          <p><b>Historia:</b> {{ archetype.history }}</p>
+          <p><b>Dlaczego rusza na wyprawy:</b> {{ archetype.motivation }}</p>
+          <p><b>Cel osobisty:</b> {{ archetype.personal_goal }}</p>
+          <p><b>Karta bohatera:</b> {{ archetype.helper_code }}</p>
+        </section>
+        <section class="sheet-columns">
+          <section>
+            <h2>Jak grać</h2>
+            <ol>{% for step in archetype.turn_plan %}<li>{{ step }}</li>{% endfor %}</ol>
+          </section>
+          <section>
+            <h2>Zasoby</h2>
+            <ul>{% for item in archetype.resources %}<li>{{ item }}</li>{% endfor %}</ul>
+          </section>
+          <section>
+            <h2>Mocne strony</h2>
+            <ul>{% for item in archetype.strengths %}<li>{{ item }}</li>{% endfor %}</ul>
+          </section>
+          <section>
+            <h2>Uważaj na</h2>
+            <ul>{% for item in archetype.pitfalls %}<li>{{ item }}</li>{% endfor %}</ul>
+          </section>
+        </section>
+      {% endif %}
       <div class="vital-grid">
         <span><small>PW</small><b>{{ character.actor.max_hp }}</b></span>
         <span><small>KP</small><b>{{ effective_ac }}</b></span>
@@ -61,15 +89,13 @@
     </section>
 
     <div class="flow-actions split-actions">
-      <form method="post" action="{{ url_for('delete_character', character_id=character.actor.id) }}" onsubmit="return confirm('Usunąć postać z rosteru? Zapis trafi do lokalnego kosza.')">
-        <button class="danger-button" type="submit">Usuń</button>
-      </form>
+      <span></span>
       <div>
         <a class="button secondary" href="{{ url_for('characters') }}">Wróć</a>
         {% if experience.level_up_available %}
           <a class="button" href="{{ url_for('character_level_up', character_id=character.actor.id) }}">Awansuj postać</a>
         {% endif %}
-        <a class="button" href="{{ url_for('copy_character', character_id=character.actor.id) }}">Edytuj jako kopię</a>
+        {% if not archetype %}<a class="button" href="{{ url_for('copy_character', character_id=character.actor.id) }}">Edytuj jako kopię</a>{% endif %}
       </div>
     </div>
   </main>

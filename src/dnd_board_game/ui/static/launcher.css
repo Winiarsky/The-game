@@ -180,6 +180,12 @@ button:disabled { border-color: #504a3e; color: #8f887b; background: #2b2a27; cu
   text-decoration: none;
 }
 .roster-card:hover { border-color: var(--gold); background: #292318; }
+.roster-card.selected,
+.roster-card[aria-selected="true"] {
+  border-color: #6db98d;
+  background: #1d3028;
+  box-shadow: inset 0 0 0 1px rgba(109, 185, 141, .35);
+}
 .roster-card > span:last-child { display: grid; gap: 4px; min-width: 0; }
 .roster-card b { font-family: Georgia, "Times New Roman", serif; color: #f1e5cc; font-size: 21px; }
 .roster-card small { color: var(--muted); }

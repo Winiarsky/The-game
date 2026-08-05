@@ -134,6 +134,26 @@ def reveal_actor(hidden_states: Sequence[HiddenState], actor_id: str) -> tuple[H
     return tuple(state for state in hidden_states if state.actor_id != actor_id)
 
 
+def reveal_all_to_observer(
+    hidden_states: Sequence[HiddenState],
+    observer_id: str,
+) -> tuple[HiddenState, ...]:
+    """Remove one observer from every per-observer hidden relationship."""
+
+    updated: list[HiddenState] = []
+    for state in hidden_states:
+        remaining = tuple(
+            candidate
+            for candidate in state.hidden_from_actor_ids
+            if candidate != observer_id
+        )
+        if remaining:
+            updated.append(
+                HiddenState(state.actor_id, state.stealth_total, remaining)
+            )
+    return tuple(updated)
+
+
 def hidden_state_for(hidden_states: Sequence[HiddenState], actor_id: str) -> HiddenState | None:
     return next((state for state in hidden_states if state.actor_id == actor_id), None)
 

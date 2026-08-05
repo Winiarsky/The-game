@@ -77,7 +77,16 @@ from .choice_help import (
     FightingStyleHelp,
     SkillChoiceHelp,
 )
-from .default_roster import default_character_drafts
+from .default_roster import all_default_character_drafts, default_character_drafts
+from .boardgame_profiles import apply_boardgame_archetype
+from .archetypes import (
+    HERO_ARCHETYPES,
+    HERO_ARCHETYPES_BY_ID,
+    PLAYABLE_HERO_ARCHETYPES,
+    PLAYABLE_HERO_IDS,
+    HeroArchetype,
+    hero_archetype,
+)
 from .assisted_spell_audit import (
     ASSISTED_SPELL_PLANS,
     AssistedSpellAudit,
@@ -162,6 +171,14 @@ __all__ = [
     "FightingStyleHelp",
     "SkillChoiceHelp",
     "default_character_drafts",
+    "all_default_character_drafts",
+    "apply_boardgame_archetype",
+    "HERO_ARCHETYPES",
+    "HERO_ARCHETYPES_BY_ID",
+    "PLAYABLE_HERO_ARCHETYPES",
+    "PLAYABLE_HERO_IDS",
+    "HeroArchetype",
+    "hero_archetype",
     "ASSISTED_SPELL_PLANS",
     "AssistedSpellAudit",
     "AssistedSpellFamily",

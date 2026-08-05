@@ -546,7 +546,12 @@ def legal_attack_targets(
             for effect in active_effects
         ):
             continue
-        target = actor_as_combat_target(actor, active_effects)
+        target = actor_as_combat_target(
+            actor,
+            active_effects,
+            attacker=attacker,
+            actors=actors,
+        )
         if not is_public_attack_target(target):
             continue
         if _target_in_range(attacker.position, actor.position, attack_range_feet(source)) and line_of_sight_clear(

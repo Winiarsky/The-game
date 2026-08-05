@@ -83,6 +83,26 @@ def test_navigation_success_and_failure_control_authored_delay() -> None:
     assert failure.navigation.delay_minutes == 30
 
 
+def test_exploration_cards_can_modify_navigation_roll_and_mode() -> None:
+    party = _party()
+    navigator_id = str(party[0].id)
+
+    prepared = resolve_travel(
+        _route(),
+        party,
+        pace=TravelPace.NORMAL,
+        navigator_actor_id=navigator_id,
+        navigation_roll=TravelD20Input(1, 12),
+        navigation_roll_mode=RollMode.ADVANTAGE,
+        navigation_modifier=2,
+    )
+
+    assert prepared.navigation.success is True
+    assert prepared.navigation.roll is not None
+    assert prepared.navigation.roll.natural_roll == 12
+    assert prepared.navigation.roll.total >= 14
+
+
 def test_natural_explorer_prevents_nonmagical_navigation_failure() -> None:
     party = _party()
     ranger = replace(

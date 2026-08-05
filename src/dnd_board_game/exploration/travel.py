@@ -19,6 +19,9 @@ from dnd_board_game.rules import (
     D20RollInput,
     D20RollRequest,
     D20RollResult,
+    RollMode,
+    RollModifier,
+    RollModifierType,
     resolve_ability_check,
     resolve_d20_roll,
 )
@@ -137,6 +140,8 @@ def resolve_travel(
     pace: TravelPace,
     navigator_actor_id: str | None = None,
     navigation_roll: TravelD20Input | None = None,
+    navigation_roll_mode: RollMode = RollMode.NORMAL,
+    navigation_modifier: int = 0,
     forced_march_rolls: Mapping[str, tuple[TravelD20Input, ...]] | None = None,
 ) -> TravelResolution:
     policy = continuation.travel_policy
@@ -150,6 +155,8 @@ def resolve_travel(
         actors,
         navigator_actor_id=navigator_actor_id,
         navigation_roll=navigation_roll,
+        navigation_roll_mode=navigation_roll_mode,
+        navigation_modifier=navigation_modifier,
     )
     total_minutes = pace_minutes + navigation.delay_minutes
     check_count = forced_march_check_count(
@@ -230,6 +237,8 @@ def _resolve_navigation(
     *,
     navigator_actor_id: str | None,
     navigation_roll: TravelD20Input | None,
+    navigation_roll_mode: RollMode,
+    navigation_modifier: int,
 ) -> TravelNavigationResult:
     if dc is None:
         return TravelNavigationResult(required=False, success=True)
@@ -262,14 +271,26 @@ def _resolve_navigation(
         raise ValueError("Podróż wymaga wskazania nawigatora.")
     if navigation_roll is None:
         raise ValueError("Podróż wymaga wyniku rzutu na nawigację.")
+    situational_modifiers = (
+        (
+            RollModifier(
+                label="Karty eksploracji i przygotowanie trasy",
+                value=navigation_modifier,
+                modifier_type=RollModifierType.SITUATIONAL,
+                stacking_key="travel_navigation_preparation",
+            ),
+        )
+        if navigation_modifier
+        else ()
+    )
     request = apply_exhaustion_to_roll_request(
         navigator,
         D20RollRequest(
-            modifiers=ability_check_roll_modifiers(
-                navigator,
-                ability,
-                skill=skill,
-            )
+            mode=navigation_roll_mode,
+            modifiers=(
+                *ability_check_roll_modifiers(navigator, ability, skill=skill),
+                *situational_modifiers,
+            ),
         ),
         ExhaustionRollKind.ABILITY_CHECK,
     )

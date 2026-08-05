@@ -590,8 +590,8 @@ Każdy gracz docelowo otrzymuje fizyczną kartę postaci A4/A5 oraz małą tali�
 decyzji. Materiały te uzupełniają planszę i monitor:
 
 * plansza pozostaje interfejsem pozycji, ruchu, celów i obszarów,
-* karta z QR deklaruje intencję gracza, np. atak, czar, cechę, przedmiot albo
-  akcję uniwersalną,
+* karta z QR deklaruje szczególną intencję gracza, np. czar, cechę, manewr,
+  przedmiot albo akcję uniwersalną,
 * fizyczne kości dostarczają naturalny wynik rzutu,
 * monitor pokazuje preview, wymagane koszty, kolejne kroki i rozstrzygnięcie.
 
@@ -610,6 +610,34 @@ składni stabilnych identyfikatorów `snake_case`. QR nie zawiera statystyk post
 kosztów ani reguł działania. Generator zapisuje obok obrazu metadane umożliwiające
 sprawdzenie payloadu, wersji, korekcji błędów i rozmiaru symbolu.
 
+Podstawowy atak bronią jest świadomym wyjątkiem od przepływu kart. Gracz wskazuje
+pole przeciwnika na planszy, a kontekstowe menu pokazuje legalne warianty ataku
+aktywną bronią; gdy nie ma aktywnej broni, wystawia atak bez broni. Jeśli pole
+łączy przeciwnika z obiektem lub inną intencją, to samo menu rozdziela atak,
+ruch i interakcję. Karty nadal wybierają czary, cechy i manewry specjalne, po
+czym plansza służy wyłącznie do wskazania ich celu albo obszaru. Wycofana karta
+`attack:basic_attack` nie jest częścią aktywnego katalogu skanera.
+
+Zagrywanie fizycznych kart eksploracji jest obecnie wyłączone. Ich definicje,
+QR-y i pliki pozostają w repozytorium jako materiał projektowy, ale skan poza
+walką nie tworzy efektu ani nie zużywa zasobu. Eksploracja korzysta zamiast tego
+z autorskich kafelków contentu. Kafelek może wymagać obecności konkretnego
+bohatera w aktywnej drużynie i automatycznie przypisać go jako wykonawcę. Dzięki
+temu scena może wystawić zarówno funkcjonalne podejście, jak i opcjonalny moment
+rozwoju postaci bez globalnej reguły próbującej zastosować tę samą zdolność w
+każdej lokacji. Nieobecność bohatera ukrywa kafelek i nigdy nie blokuje głównego
+przebiegu scenariusza. Fizyczne karty pozostają aktywnym interfejsem walki.
+
+Walka pokazuje nienachalne przypomnienie o kartach dokładnie w chwili, w której
+skaner może je legalnie przyjąć. W kroku wyboru jest to zwarta lista kart
+bieżącego bohatera wyliczona z tego samego katalogu legalnych akcji co menu
+planszy. W oknie reakcji pasek wskazuje konkretną postać i kartę, na przykład
+`Lorian — Cięta riposta`. Przypomnienie nie otwiera modala, nie zużywa zasobu i
+nie blokuje zwykłego przycisku kontynuacji. Legalność uwzględnia właściciela,
+aktualne okno rozstrzygnięcia, ekonomię akcji i dostępność źródła; karta bohatera
+nieaktywnego w inicjatywie jest dozwolona wyłącznie wtedy, gdy otwarte okno
+reakcji wskazuje właśnie jego jako reagującego.
+
 Pierwsza talia kontrolna zawiera dwie uniwersalne karty:
 
 * `ACCEPT` (`universal:accept`) działa jak kontekstowy Enter: zatwierdza widoczną
@@ -617,7 +645,10 @@ Pierwsza talia kontrolna zawiera dwie uniwersalne karty:
   aktualny preview; obejmuje też Start oraz instrukcyjne kroki setupu, natomiast
   krok wymagający fizycznego przypisania figurki uruchamia skan planszy;
 * `DECLINE` (`universal:decline`) odrzuca decyzję, zamyka dialog albo anuluje
-  aktualny, jeszcze nierozstrzygnięty wybór, w tym czar, atak lub reakcję.
+  aktualny, jeszcze nierozstrzygnięty wybór, w tym czar, atak lub reakcję. Gdy
+  nie ma już głębszego wyboru, zamyka ukończoną interakcję, kończy rozmowę z NPC
+  albo wychodzi z bieżącej instancji eksploracyjnej do wyboru lokacji. Kolejny
+  skan może więc najpierw anulować formularz, a dopiero następny zakończyć scenę.
 
 Karta kontrolna działa tylko wtedy, gdy bieżący stan wystawia dokładnie
 odpowiadającą operację. Brak pasującej operacji daje krótki komunikat i nie zmienia
@@ -654,7 +685,8 @@ statystyk, ekwipunku i legalności akcji, aby papier i zapis kampanii nie tworzy
 dwóch sprzecznych stanów mechanicznych.
 
 Pierwszy zakres wdrożenia obejmuje jedną postać i małą talię reprezentującą
-podstawowy atak, akcję uniwersalną, czar lub cechę klasową oraz przedmiot.
+akcję uniwersalną, czar lub cechę klasową oraz przedmiot. Podstawowy atak wybiera
+się bez karty przez pole przeciwnika na planszy.
 Karty powinny być generowane do gotowego do druku PDF z grafiką, tekstem,
 rewersem, marginesami i kodem QR sprawdzonym w docelowym rozmiarze.
 
@@ -968,7 +1000,7 @@ Jeżeli wybrany element ekwipunku ma pasującą flagę bonusu, może dodać efek
 
 Zasób sceny z `consume_on_use: true` jest jednorazowy. Silnik usuwa go dopiero po faktycznie wykonanym rzucie, także przy porażce. Sam wybór zasobu, korekta decyzji MG albo anulowanie próby nie zmieniają ekwipunku drużyny. Zasoby bez tej flagi, np. lina lub narzędzie wielokrotnego użytku, pozostają dostępne po próbie.
 
-Scenariusz pełni także rolę pojedynczego dnia przygody. Jeśli postać korzysta z przygotowywanych czarów, wybiera listę na ten scenariusz jako ostatni krok setupu: po podłączeniu planszy i ustawieniu mapy, ale przed wyborem pierwszej lokacji. Mechanicznie wybór nadal odpowiada przygotowaniu po zakończonym długim odpoczynku w D&D 5e. Ten etap jest generyczną mechaniką aktora, a nie implementacją konkretnej klasy; cantripy nie wchodzą do wyboru, a czary zawsze przygotowane nie zajmują limitu.
+Scenariusz pełni także rolę pojedynczego dnia przygody. Jeśli postać korzysta z przygotowywanych czarów, wybiera listę na ten scenariusz jako ostatni krok setupu: po podłączeniu planszy i ustawieniu mapy, ale przed wyborem pierwszej lokacji. Mechanicznie wybór nadal odpowiada przygotowaniu po zakończonym długim odpoczynku w D&D 5e. Ten etap jest generyczną mechaniką aktora, a nie implementacją konkretnej klasy; cantripy nie wchodzą do wyboru, a czary zawsze przygotowane nie zajmują limitu. UI pokazuje domyślny zestaw jako karty: `AKCEPTUJ` zatwierdza go, a `ODRZUĆ` rozpoczyna własne przygotowanie przez skanowanie kolejnych legalnych kart czarów. Po zeskanowaniu dokładnie tylu różnych kart, ile wynosi limit, aplikacja zapisuje zestaw automatycznie. Klasy korzystające z czarów znanych zamiast przygotowywanych nie otrzymują tego kroku.
 
 Long rest odbywa się automatycznie bezpośrednio przed scenariuszem. Short rest jest decyzją drużyny podczas eksploracji: UI pokazuje godzinny koszt, bezpieczeństwo miejsca, jawne zagrożenie i zasoby możliwe do odzyskania. Po ukończeniu gracze wydają Hit Dice pojedynczo. Zagrożenie nie jest uniwersalnym losowym encounterem; wynika z contentu lokacji, np. odpoczynek przed bramą zwiększa hałas, a zawalone koszary zapewniają jedno bezpieczne miejsce odpoczynku.
 
@@ -1796,6 +1828,13 @@ rzutu. Aktywacja deleguje konsekwencje do ogólnego silnika hazardów.
   te właściwości są jawnym metadanym dla kolejnych zdarzeń podróży.
 - Nawigator wykonuje fizyczny ability check. Porażka jest fail-forward: drużyna
   dociera do celu, ale zegar przesuwa się o autorskie opóźnienie.
+- Panel przejścia między scenariuszami rozdziela decyzje na tempo, prowadzącego
+  i rzuty podróży. Tempo wybiera się z trzech jawnych kafelków pokazujących czas
+  oraz Perception/Stealth. Jeśli nawigacja nie jest automatyczna, prowadzącego
+  wskazuje wyłącznie karta bohatera. `ACCEPT` przechodzi do następnego etapu i
+  zatwierdza końcowe rzuty, a `DECLINE` cofa dokładnie o jeden etap. Natural
+  Explorer pomija zbędny wybór i rzut na nawigację; wymagane rzuty forced march
+  pozostają sekwencją w końcowym etapie.
 - Po rozliczeniu czasu i nawigacji continuation wybiera pierwszą pasującą
   autorską gałąź `success`, `partial_success` albo `fail_forward`. Gałąź może
   zależeć od końcowych flag i wyniku nawigacji, przekazuje nazwany rezultat
@@ -1842,6 +1881,61 @@ rzutu. Aktywacja deleguje konsekwencje do ogólnego silnika hazardów.
 - Pierwszy zakres działa w aktywnej walce i celuje w istoty. Rozpraszanie
   samodzielnych efektów obszarowych, obiektów oraz magii eksploracyjnej pozostaje
   do przyszłego wspólnego modelu takich celów.
+
+## Planszowa nawigacja eksploracji i budżet instancji
+
+- Karty akcji eksploracyjnych pozostają w katalogu jako wyłączone dziedzictwo,
+  ale nie trafiają do aktualnych zestawów siedmiu bohaterów i runtime nie
+  wykonuje ich podczas eksploracji. Zdolności postaci pojawiają się jako
+  authored kafelki zależne od składu drużyny. Drukowane karty aktywne są bojowe.
+- `ACCEPT` i `DECLINE` rozstrzygają właściwe decyzje, reakcje i przygotowanie
+  czarów. Nie służą do wybierania lokacji, kończenia rozmowy ani opuszczania
+  instancji.
+- Pierwsze wskazanie znacznika lokacji pokazuje jej podgląd. Powtórne wskazanie
+  tej samej lokacji potwierdza wejście. Wskazanie innego znacznika przełącza
+  podgląd, a wszystkie znaczniki pozostają podświetlone. Zablokowana lokacja może
+  pokazać podgląd, lecz nie przyjmuje potwierdzenia.
+- Wyjście z lokacji pokazuje wszystkie odblokowane lokacje należące do tej
+  samej sceny. Graf sąsiedztwa pozostaje danymi świata, ale nie ogranicza menu
+  lokalnych instancji sceny.
+- Wybór kafelka nigdy sam nie wykonuje automatycznego celu NPC ani działania bez
+  opisu. Najpierw pokazuje podgląd, a wykonanie wymaga przycisku, Entera albo
+  `ACCEPT`. Kafelek z przypisanym bohaterem ma stałego wykonawcę i nie uruchamia
+  ani nie przyjmuje dodatkowego wyboru karty bohatera.
+- Jednoczesne pola interakcji używają barw rozróżnialnych na fizycznych LED-ach;
+  biały zastępuje różowy w zestawie, w którym występuje już fioletowy.
+  Konkretna akcja zachowuje ten sam numer, pole i kolor przez cały czas życia
+  instancji. Zniknięcie ukończonej akcji pozostawia pusty slot i nie przesuwa
+  pozostałych kafelków.
+- Ekranowe potwierdzenie wyniku może korzystać wyłącznie z wiadomości dodanych
+  przez aktualnie rozstrzygany rzut. Nie wolno ponownie wyświetlić starszego
+  wyniku NPC znalezionego w historii rozmowy.
+- Instancja wykorzystuje najwyżej osiem authored pozycji interakcji. Ostatnia
+  pozycja jest zawsze zarezerwowana na czerwone systemowe wyjście; pozostaje więc
+  najwyżej siedem jednoczesnych działań. Runtime odrzuca przepełnienie zamiast
+  ukrywać albo stronicować działania.
+- Systemowe wyjście cofa o jeden poziom: rozmowa/obiekt → działania lokacji,
+  działania lokacji → wybór lokacji. Nierozliczony rzut, decyzja, reakcja NPC,
+  encounter albo setup blokuje wyjście bez cofania wykonanych kosztów i efektów.
+
+## Budżet decyzji startowych archetypów
+
+- Podstawowy atak bronią nadal wybiera się przez planszę i nie ma osobnej karty.
+- Każdy z siedmiu startowych archetypów ma kilka aktywnych decyzji bojowych;
+  wyrównujemy liczbę znaczących wyborów, a nie dosłowną liczbę kart czarów.
+- Pełne talie poziomów 1–3 mają 7–9 kart bojowych: Garran 8, Brakka 7, Mira 7,
+  Dagna 9, Lorian 8, Nimra 9 i Erynd 8. Różnica wynika z ekonomii: czarujący
+  dzielą więcej kart między komórki, a wojownicy mają częściej odnawiane akcje.
+- Zdolności przeniesione z innych klas są przedstawiane jako osobiste techniki
+  archetypu. Wykorzystują istniejące resolvery, lecz mają własne nazwy i pule.
+- Pozycja obronna Garrana i Unik instynktowny Miry kosztują akcję dodatkową,
+  mają po jednym użyciu na krótki odpoczynek i nadają utrudnienie atakom do
+  początku następnej tury bohatera.
+- Mira ma 2 Fortele na długi odpoczynek, od 3. poziomu 3, zasilające wszystkie
+  jej magicznie przedstawione sztuczki. Erynd analogicznie używa Instynktu.
+  Garran od 2. poziomu używa Taktyki, a Brakka od 3. — Dzikości.
+- Karty czarów 2. poziomu Nimry są wymagane dopiero od 3. poziomu bohatera,
+  kiedy postać ma komórki 2. poziomu.
 
 ## Poza Zakresem Pierwszej Wersji
 

@@ -366,6 +366,7 @@ Implementacja MVP:
 - Źródła czarów mają jawne `casting_kind`: `cantrip` albo `leveled`; jeśli content go nie poda, loader wylicza go ze `source_type=spell` i `spell_level`.
 - Aktor wymagający przygotowywania czarów ma generyczny `SpellPreparationProfile`: listę dostępnych czarów poziomu 1+, limit, wybór zajmujący limit oraz czary zawsze przygotowane poza limitem.
 - Przed setupem scenariusza UI wymaga wybrania dokładnie tylu czarów, ile wynosi limit profilu. Jest to projektowy odpowiednik przygotowania czarów po zakończonym długim odpoczynku; wybór pozostaje zablokowany do końca scenariusza.
+- Fizyczny przepływ podaje legalny zestaw domyślny jako karty. `AKCEPTUJ` zatwierdza go, `ODRZUĆ` przełącza na pusty zestaw własny, a każda kolejna karta czaru dodaje jeden unikalny czar należący do bieżącego profilu. Osiągnięcie limitu zapisuje zestaw automatycznie; cantripy, czary spoza listy oraz czary zawsze przygotowane nie mogą zająć miejsca w limicie.
 - Cantripy nie wymagają przygotowania. Nieprzygotowany czar poziomu 1+ nie daje bonusu eksploracyjnego i nie może zostać użyty jako atak, leczenie ani akcja czarowa, nawet jeśli aktor ma wolny slot.
 - Profil jest źródłowy: kreator wylicza listę, rodzaj dostępu
   (`known`, `spellbook`, `prepared`), limit przygotowania i cechę czarującą z
@@ -951,6 +952,11 @@ Implementacja MVP:
 - Nawigacja jest zwykłym fizycznym ability checkiem wybranego aktora przeciw
   authored DC. Porażka nie zatrzymuje przejścia: dodaje authored delay przed
   obliczeniem forced march i progów zegara.
+- UI zbiera continuation etapami: jawne tempo, prowadzący wskazany kartą
+  bohatera oraz naturalny wynik fizycznego d20. `ACCEPT` zatwierdza bieżący
+  etap, `DECLINE` cofa o jeden. Natural Explorer pomija wybór i rzut, gdy teren
+  pasuje; forced-march saves są zbierane w końcowym etapie bez zmiany ich
+  deterministycznej kolejności.
 - Forced march liczy każdą rozpoczętą godzinę ponad `safe_travel_minutes`.
   Każdy żywy członek drużyny wykonuje Constitution save o rosnącym ST
   `10 + numer dodatkowej godziny`; porażka zwiększa exhaustion o jeden.
@@ -1114,6 +1120,169 @@ Poza zakresem MVP:
   efektu utrzymującego summon usuwa powiązanego dynamicznego aktora.
 - Obecny przepływ celuje w istoty podczas walki. Obiekty, samodzielne magiczne
   obszary i efekty eksploracyjne wymagają przyszłego wspólnego modelu celu magii.
+
+## Fizyczne karty akcji: fazy i okna rozstrzygnięcia
+
+- Każda nieuniwersalna karta ma jedną fazę: `combat`, `exploration` albo
+  `removed`. Skaner odrzuca kartę zagraną w niewłaściwej fazie przed zużyciem
+  akcji, zasobu lub slotu.
+- Karty nie omijają mechaniki gry. Skan uruchamia ten sam resolver, wybór celu
+  na planszy i walidację zasobów co odpowiadająca mu opcja ekranowa.
+- Szał jest przełącznikiem: pierwszy skan go aktywuje, a ponowny skan podczas
+  walki kończy. Frenzy można aktywować wyłącznie podczas Szału; ręczne
+  zakończenie Frenzy dodaje poziom Wyczerpania.
+- Bardic Inspiration i Guidance przechowują rozmiar opcjonalnej kości. Wartość
+  `0` w oknie testu oznacza zachowanie efektu; dopiero wpisanie wyniku zużywa
+  znacznik.
+- Cutting Words ma dwa jawne okna: `attack_roll_revealed` i — jeśli gracz
+  pominął pierwsze — `damage_roll_revealed`. W drugim oknie odejmowana jest
+  wartość od obrażeń, nie od testu trafienia.
+- Alarm można zagrać w podglądzie krótkiego odpoczynku. Zużywa legalny slot i
+  kasuje karę zaskoczenia, jeżeli odpoczynek zakończy się napadem.
+- Ogólna karta Ataku bronią wybiera aktualnie dobytą, legalną broń. Jeżeli
+  postać nie ma aktywnej broni, ten sam skan przechodzi na Atak bez broni;
+  ostatnio wybrany czar nigdy nie zastępuje w ten sposób broni.
+- Zachowanie życia pozostawia spatial selection planszy: kolejne kliknięcia
+  dodają albo usuwają cele, a panel przyjmuje osobną wartość leczenia dla
+  każdej figurki. Resolver nadal sprawdza wspólną pulę oraz limit połowy PW.
+- Odpowiedź skanera niesie jawny następny krok (`select_board_target`,
+  `confirm_action`, `enter_reaction_roll` albo `resolved`) oraz komunikat z
+  kosztem. Dzięki temu karta nie wygląda na zużytą, gdy dopiero otworzyła wybór.
+- Pierwsza wspólna paczka czarów bojowych nie ma osobnych resolverów kart.
+  `Magic Missile`, `Fire Bolt`, `Eldritch Blast`, `Sacred Flame`, `Guiding Bolt`,
+  `Cure Wounds`, `Healing Word`, `Bless`, `Shield of Faith`, `Shield`,
+  `Misty Step`, `Sleep`, `Hold Person`, `Thunderwave` i `Spiritual Weapon`
+  wchodzą przez ten sam router źródeł ataku, leczenia, akcji czaru i reakcji,
+  którego używa menu walki. Koszt jest nadal pobierany dopiero przez docelowy
+  resolver zgodnie z jego istniejącym momentem zatwierdzenia.
+- Karta `Shield` jest legalna wyłącznie w otwartym oknie reakcji obronnej po
+  ujawnieniu trafienia. Skan od razu rozstrzyga istniejącą reakcję: zużywa
+  reakcję i slot, dodaje +5 KP oraz ponownie ocenia trafienie przed obrażeniami.
+- Druga paczka korzysta z tego samego routera dla `Acid Arrow`, `Acid Splash`,
+  `Burning Hands`, `Chill Touch`, `Inflict Wounds`, `Poison Spray`,
+  `Ray of Frost`, `Scorching Ray`, `Shatter`, `Shocking Grasp`, `Entangle`,
+  `Grease`, `Web`, `Faerie Fire` i `Fog Cloud`. Skan nie upraszcza riderów:
+  trwające obrażenia, blokada leczenia/reakcji, spowolnienie, osobne promienie,
+  rzuty obronne, trudny teren, zasłonięcie i koncentracja pozostają domeną
+  istniejących resolverów.
+- Ukończony setup encountera nie jest już aktywnym źródłem pól planszy. Po
+  rozpoczęciu walki kliknięcia są walidowane względem bieżącego celu lub obszaru
+  czaru, dzięki czemu ostatnie pole ustawiania figurki nie może przejąć wyboru
+  środka trwałej strefy.
+- Trzecia paczka obejmuje `Aid`, `Barkskin`, `Blur`, `Darkness`, `Darkvision`,
+  `False Life`, `Hellish Rebuke`, `Heroism`, `Lesser Restoration`, `Mage Armor`,
+  `Mirror Image`, `Protection from Evil and Good`, `Protection from Poison`,
+  `Sanctuary` i `See Invisibility`. Czary o celu `self` automatycznie wiążą
+  aktywnego bohatera i przechodzą do potwierdzenia; nie wymagają klikania jego
+  własnej figurki.
+- `Hellish Rebuke` ma okno `after_damage_applied`. Karta jest odrzucana poza
+  otwartą reakcją ofensywną; legalny skan zużywa reakcję oraz slot i rozstrzyga
+  Dex save oraz obrażenia przeciw sprawcy przed wznowieniem tury przeciwnika.
+- Zgodnie z uproszczeniem przyjętym dla fizycznej gry `See Invisibility`
+  ujawnia rzucającemu zarówno aktywną niewidzialność, jak i przeciwników
+  zapisanych jako ukryci przed nim. Usuwany jest tylko identyfikator tego
+  obserwatora; ukrycie względem pozostałych bohaterów pozostaje bez zmian.
+- Czwarta paczka obejmuje `Bane`, `Blindness/Deafness`, `Command`,
+  `Color Spray`, `Hideous Laughter`, `Ray of Enfeeblement`, `Vicious Mockery`,
+  `Heat Metal`, `Moonbeam`, `Flaming Sphere`, `Spike Growth`, `Silence`,
+  `Gust of Wind`, `Flame Blade` i `Hunter's Mark`. Karta wyłącznie deklaruje
+  źródło; rzuty ponawiane, opóźnione ridery, obrażenia przy ruchu lub początku
+  tury i blokada komponentów werbalnych pozostają w istniejących resolverach.
+- Ponowne zeskanowanie aktywnego `Moonbeam` albo `Flaming Sphere` nie rzuca
+  drugiego czaru i nie zużywa slotu. Otwiera planszowy wybór nowego środka;
+  docelowy resolver nadal wymusza odpowiednio akcję albo akcję dodatkową oraz
+  maksymalny dystans przesunięcia.
+- Celowanie leczeniem ma własny jawny stan, niezależny od celowania atakiem.
+  Skan `Cure Wounds` lub `Healing Word` podświetla wyłącznie legalne cele i nie
+  może korzystać z pozostawionego trybu poprzedniego ataku.
+- Piąta paczka obejmuje `Divine Favor`, `Enlarge/Reduce`,
+  `Expeditious Retreat`, `Levitate`, `Magic Weapon`, `Shillelagh`,
+  `True Strike`, `Resistance`, `Warding Bond`, `Find Familiar`, `Find Traps`,
+  `Goodberry`, `Prayer of Healing`, `Spare the Dying` i `Produce Flame`.
+  Skan korzysta z tych samych efektów broni, ruchu, obron i stabilizacji co
+  menu; `Magic Weapon` nadal wymaga wskazania konkretnej niemagicznej broni.
+- `Find Familiar` nie tworzy aktora ani figurki. Wariant Kot daje +2 do obron
+  Zręczności, Kruk daje przewagę atakom czarem, a Wąż dodaje dystansowe
+  ukąszenie 1k6 trucizny jako akcję dodatkową. Ponowne rzucenie zastępuje
+  poprzednią formę.
+- Pierwsze potwierdzenie `Goodberry` tworzy zasób 10 jagód i zastępuje starą
+  pulę. Kolejny skan tej samej karty otwiera planszowy wybór celu leczenia;
+  potwierdzone użycie kosztuje akcję, leczy 1 PW i zmniejsza pulę o 1.
+- `Find Traps` po potwierdzeniu ujawnia wszystkie ukryte pułapki bieżącego
+  obszaru, ale nie zmienia ich stanu rozbrojenia. `Spare the Dying` otwiera
+  istniejące celowanie stabilizacji i wymaga przyległego żywego sojusznika z
+  0 PW.
+- `Prayer of Healing` ma planszowy wybór maksymalnie sześciu legalnych celów
+  i wspólny fizyczny rzut 2k8 (+1k8 za wyższy slot). Pierwsze potwierdzenie
+  zapisuje cele i wynik oraz rozpoczyna wymagającą koncentracji modlitwę;
+  kończy też wcześniejszą koncentrację rzucającego. Dopiero potwierdzenie
+  10 nieprzerwanych minut przesuwa zegar, leczy każdy cel o rzut + modyfikator
+  cechy czarowania i zużywa slot. Anulowanie lub utrata koncentracji przed
+  ukończeniem nie leczy i nie zużywa slotu.
+- Odpowiedź skanera karty zawiera aktualne liczniki zasobów aktywnego bohatera
+  oraz komórek czarów. Dzięki temu po skanie w tym samym komunikacie widać m.in.
+  Ki, Boską Moc, Inspirację, Punkty Magii, Wild Shape i pulę Goodberry, o ile
+  postać posiada dany zasób.
+- Pierwsza paczka fizycznych cech klas walczących obejmuje `Action Surge`,
+  `Second Wind`, `Rage`, `Reckless Attack`, `Frenzy`, `Martial Arts`,
+  `Flurry of Blows`, `Patient Defense`, `Step of the Wind`, `Deflect Missiles`,
+  `Lay on Hands`, `Divine Smite`, `Sacred Weapon` oraz `Turn the Unholy`.
+  Karta korzysta z tego samego resolvera i tej samej puli zasobów co przycisk
+  ekranowy; skaner nie odejmuje Ki, Boskiej Mocy, slotu ani użycia przed
+  właściwym potwierdzeniem.
+- Karty wymagające wartości niefizycznej na planszy otwierają wspólny prompt:
+  `Second Wind` i `Deflect Missiles` oczekują wyniku k10, `Sacred Weapon`
+  konkretnej wyposażonej broni, `Turn the Unholy` osobnych rzutów obronnych
+  Mądrości, a `Divine Smite` poziomu dostępnego slotu. Anulowanie promptu nie
+  zużywa akcji ani zasobu.
+- `Divine Smite` jest legalne dopiero po potwierdzonym trafieniu bronią w
+  zwarciu i przed rzutem obrażeń. Otwarcie promptu nie usuwa oczekującego
+  ataku. Analogicznie `Deflect Missiles` jest legalne tylko w aktywnym oknie
+  ujawnionych obrażeń ataku dystansowego bronią i nie usuwa reakcji przeciwnika.
+- `Rage` pozostaje ręcznym przełącznikiem, `Frenzy` wymaga aktywnego Rage, a
+  `Reckless Attack` musi zostać zadeklarowane przed pierwszym atakiem.
+  `Martial Arts` i `Flurry of Blows` wymagają wcześniejszego ataku w akcji
+  Attack; odpowiednio ustawiają jeden albo dwa oczekujące ataki bez broni.
+- Druga paczka fizycznych cech klasowych domyka planszowe cele Bardic
+  Inspiration i Preserve Life, dwustopniowe okna Cutting Words oraz rzuty
+  Turn Undead. Cunning Action po skanie wybiera Sprint, Odwrót albo Ukrycie,
+  a Pact Weapon ogranicza kartę do trzech czytelnych form: longsword,
+  greataxe i rapier.
+- Wild Shape ma świadomie uproszczony profil planszowy trzech ról ze statystykami
+  bestii SRD: brown bear (tank), wolf (mobilność/kontrola) i giant eagle
+  (mobilny DPS). Dostęp do niedźwiedzia i latającej formy przed zwykłymi progami
+  2014 jest regułą autorską tej gry. Giant eagle ignoruje koszt trudnego terenu,
+  a ponowne zeskanowanie karty ręcznie kończy formę.
+- Bojową Metamagię deklaruje się po przygotowaniu karty czaru. Skan modyfikatora
+  dopina go do oczekującego źródła ataku, leczenia albo czaru obszarowego;
+  cele, rzuty i koszt są rozliczane później przez istniejący resolver. Interfejs
+  nie pokazuje już wariantów Metamagii przed wyborem czaru. Empowered Spell
+  zachowuje własne okno po ujawnieniu rzutu obrażeń.
+- Siedem planszowych archetypów celowo odchodzi od progów klas SRD, aby każda
+  postać miała od 1. poziomu porównywalny budżet decyzji. Zryw akcji, Ratunek
+  polowy, Lekkomyślny atak, Szał bojowy i Przebiegła akcja mogą więc pojawić się
+  wcześniej albo u innego archetypu niż w stołowym D&D. Nadal używają tych
+  samych kosztów akcji, efektów, koncentracji i zasad odpoczynku.
+- Pozycja obronna i Unik instynktowny są osobistymi, limitowanymi wariantami
+  Uniku: akcja dodatkowa, 1 użycie na krótki odpoczynek, utrudnienie ataków do
+  początku następnej tury. Nie zużywają Ki.
+- Zniknięcie w dymie oraz Wykrycie pułapek Miry zużywają wspólną pulę 2 Forteli
+  na długi odpoczynek. Oznaczenie celu, Dobre jagody i Wykrycie pułapek Erynda
+  zużywają Instynkt. Są kartami technik archetypu, więc ich bezkosztowe
+  komponenty materialne nie są wymagane przez ekwipunek.
+- Aktualne zestawy siedmiu grywalnych bohaterów nie drukują kart eksploracji.
+  Inspiracja bardowska i Wykrycie pułapek są w tych taliach kartami walki;
+  eksploracja korzysta z authored kafelków postaci i pasywów.
+- Pełne pule poziomów 1–3 zawierają od 7 do 9 kart bojowych na bohatera. Każdy
+  czar z wydrukowanej talii ma trasę runtime, a reakcje zachowują właściwe okno:
+  Tarcza po ujawnieniu trafienia oraz Cięta riposta po ujawnieniu trafienia lub
+  obrażeń.
+- Taktyka Garrana (2/3), Dzikość Brakki (2), Fortele Miry (2/3) i Instynkt
+  Erynda (2/3) odnawiają się po długim odpoczynku. Technika zużywa punkt dopiero
+  przy potwierdzeniu efektu; anulowany prompt nie płaci kosztu.
+- Kolorowy rewers karty bohatera i czarno-biały awers zawierają kompletną listę
+  istotnych pasywów oraz mechaniczną skazę. Tonerowy zestaw bez rewersów zawiera
+  również osobne białe dossier i aktualny arkusz statystyk.
 
 Testy:
 

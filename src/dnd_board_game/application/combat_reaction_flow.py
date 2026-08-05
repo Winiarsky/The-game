@@ -20,6 +20,7 @@ from dnd_board_game.combat import (
     AttackSourceType,
     CombatState,
     CombatStatus,
+    CombatResolutionStage,
     DamageComponentInput,
     DamageResult,
     EnemyAutoTurnResult,
@@ -316,6 +317,9 @@ class CuttingWordsReactionResolution:
     attack_total: int
     prevented_hit: bool
     message: str
+    resolution_stage: str = "attack_roll_revealed"
+    previous_damage_total: int | None = None
+    damage_total: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -367,7 +371,42 @@ class ClassFeatureReactionFlowService:
                 kind=ReactionKind.CUTTING_WORDS,
                 reactor_actor_id=str(actor.id),
                 target_actor_id=str(enemy.id),
-                trigger_event="enemy_attack_roll",
+                trigger_event=CombatResolutionStage.ATTACK_ROLL_REVEALED.value,
+                effect_id="cutting_words",
+                label="Cutting Words",
+                value=bardic_inspiration_die_sides(actor),
+            )
+            for actor in state.actors
+            if actor.faction != enemy.faction
+            and not actor.is_defeated()
+            and actor_has_feature(actor, "cutting_words")
+            and can_spend_actor_resource(actor, "bardic_inspiration_uses")
+            and reaction_available_for(state, actor)
+            and grid_distance_feet(actor.position, enemy.position) <= 60
+            and line_of_sight_clear(board, actor.position, enemy.position)
+        )
+
+    def cutting_words_damage_options(
+        self,
+        *,
+        board: BoardState,
+        state: CombatState,
+        enemy_result: EnemyAutoTurnResult,
+    ) -> tuple[ReactionOption, ...]:
+        if (
+            enemy_result.damage is None
+            or enemy_result.target is None
+            or enemy_result.damage.total_before_reduction <= 0
+        ):
+            return ()
+        enemy = _actor_by_string_id(enemy_result.state, str(enemy_result.enemy.id))
+        return tuple(
+            ReactionOption(
+                id=f"cutting-words-damage:{actor.id}:{enemy.id}",
+                kind=ReactionKind.CUTTING_WORDS,
+                reactor_actor_id=str(actor.id),
+                target_actor_id=str(enemy.id),
+                trigger_event=CombatResolutionStage.DAMAGE_ROLL_REVEALED.value,
                 effect_id="cutting_words",
                 label="Cutting Words",
                 value=bardic_inspiration_die_sides(actor),
@@ -417,6 +456,58 @@ class ClassFeatureReactionFlowService:
             "bardic_inspiration_uses",
         )
         reaction_state = replace_actor(reaction.state, spent.actor_after)
+
+        if option.trigger_event == CombatResolutionStage.DAMAGE_ROLL_REVEALED.value:
+            if enemy_result.damage is None or enemy_result.target is None:
+                raise ValueError("Brak oczekujących obrażeń przeciwnika.")
+            previous_damage = enemy_result.damage.total_before_reduction
+            reduced_damage = _damage_after_flat_reduction(
+                enemy_result.damage,
+                int(die_roll),
+            )
+            target_before = _actor_by_string_id(
+                reaction_state,
+                enemy_result.target.id,
+            )
+            applied_damage = apply_damage_result(
+                target_before,
+                reduced_damage,
+                critical=bool(
+                    enemy_result.attack_resolution
+                    and enemy_result.attack_resolution.critical
+                ),
+            )
+            merged_state = replace(
+                enemy_result.state,
+                spent_reaction_actor_ids=reaction_state.spent_reaction_actor_ids,
+            )
+            merged_state = replace_actor(merged_state, spent.actor_after)
+            merged_state = replace_actor(merged_state, applied_damage.actor_after)
+            message = (
+                f"{bard.name} używa Cutting Words (k{die_sides}: {die_roll}): "
+                f"obrażenia {previous_damage} spadają do "
+                f"{reduced_damage.total_before_reduction}."
+            )
+            updated_result = replace(
+                enemy_result,
+                state=merged_state,
+                damage=reduced_damage,
+                applied_damage=applied_damage,
+                updated_target=applied_damage.actor_after,
+                message=message,
+            )
+            return CuttingWordsReactionResolution(
+                state=reaction_state,
+                result=updated_result,
+                die_roll=int(die_roll),
+                previous_attack_total=enemy_result.attack_roll.total,
+                attack_total=enemy_result.attack_roll.total,
+                prevented_hit=False,
+                message=message,
+                resolution_stage="damage_roll_revealed",
+                previous_damage_total=previous_damage,
+                damage_total=reduced_damage.total_before_reduction,
+            )
 
         previous_total = enemy_result.attack_roll.total
         adjusted_roll = replace(
@@ -1028,7 +1119,7 @@ class CombatReactionFlowService:
             )
             declaration = AttackDeclaration(
                 attacker=attacker,
-                target=actor_as_combat_target(actor),
+                target=actor_as_combat_target(actor, opportunity_attack=True),
                 source=source,
             )
             resolution = resolve_attack(declaration, attack_roll, ActionUse.ACTION_AVAILABLE)

@@ -379,6 +379,27 @@ Problemy:
 
 Następne poprawki:
 ```
+## P1 — karty bohaterów i czytnik QR
+
+- [ ] Na ekranie nowej gry wybierz scenariusz i potwierdź, że nie ma checkboxów
+  postaci ani ekranowego przycisku rozpoczęcia.
+- [ ] Zeskanuj dwie różne karty bohaterów. Ekran powinien pokazać kolejność 1–2,
+  a ponowny skan tej samej karty nie może utworzyć duplikatu.
+- [ ] Zeskanuj `DECLINE`: ostatnia postać ma zniknąć. Zeskanuj ją ponownie, a
+  następnie `ACCEPT`: aplikacja ma przejść do przygotowania z właściwą drużyną.
+- [ ] Spróbuj zatwierdzić pustą drużynę oraz dodać szóstą postać. Obie deklaracje
+  muszą zostać odrzucone czytelnym komunikatem.
+- [ ] Przy teście z jednym wykonawcą zeskanuj kartę postaci legalnej i nielegalnej.
+  Legalna ma zostać wybrana, a nielegalna odrzucona bez zmiany stanu.
+- [ ] Przy teście z opcjonalną Pomocą zeskanuj prowadzącego i pomocnika. Powtórz,
+  skanując prowadzącego i `ACCEPT`; drugi przebieg ma kontynuować bez pomocnika.
+- [ ] Podczas oczekiwania na kartę bohatera plansza nie może podświetlać pól
+  postaci ani automatycznie uruchamiać skanu pola.
+- [ ] Odłącz czytnik. Dostępne mają być ponowienie połączenia, anulowanie lub
+  powrót, ale nie ekranowy i nie planszowy wybór bohatera.
+- [ ] Wydrukuj `assets/physical_cards/heroes/hero_cards_a4_v1.pdf` w skali 100%,
+  odwracając po długiej krawędzi. Sprawdź wymiar 63 × 88 mm oraz odczyt każdego QR.
+
 ## M8.6 — światło i widzenie
 
 - [ ] W `abandoned_watchtower` sprawdź, że brama pokazuje półmrok, a obserwacja

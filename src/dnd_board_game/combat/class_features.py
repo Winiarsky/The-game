@@ -8,6 +8,7 @@ from dnd_board_game.actors import (
     Actor,
     actor_has_feature,
     can_spend_actor_resource,
+    increase_exhaustion,
     spend_actor_resource,
 )
 from dnd_board_game.inventory import WeaponProperty, normalize_hand_equipment
@@ -87,6 +88,8 @@ class RageResolution:
     active_effects: tuple[ActiveEffect, ...]
     actor_before: Actor
     actor_after: Actor
+    activated: bool
+    exhaustion_added: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,6 +131,15 @@ class PreserveLifeResolution:
 
 @dataclass(frozen=True, slots=True)
 class KiDefenseResolution:
+    state: CombatState
+    active_effects: tuple[ActiveEffect, ...]
+    actor_before: Actor
+    actor_after: Actor
+    feature_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class LimitedDodgeResolution:
     state: CombatState
     active_effects: tuple[ActiveEffect, ...]
     actor_before: Actor
@@ -299,7 +311,29 @@ def resolve_frenzy(
             duration=EffectDuration.UNTIL_ENCOUNTER_END,
         )
         effects = apply_active_effect(active_effects, effect).active_effects
+        pending = ActiveEffect(
+            id=f"frenzy_pending:{actor.id}",
+            actor_id=str(actor.id),
+            kind="frenzy_pending",
+            label="Szał bojowy — oczekiwanie",
+            object_id="class_feature:frenzy",
+            value=0,
+            source_actor_id=str(actor.id),
+            source=EffectSource(
+                EffectSourceType.ACTION,
+                "frenzy",
+                "Szał bojowy",
+            ),
+            duration=EffectDuration.UNTIL_TURN_END,
+            expiration_actor_id=str(actor.id),
+        )
+        effects = apply_active_effect(effects, pending).active_effects
         return FrenzyResolution(state, effects, actor, True, None)
+    if any(
+        effect.actor_id == str(actor.id) and effect.kind == "frenzy_pending"
+        for effect in active_effects
+    ):
+        raise ValueError("Dodatkowy atak Szału bojowego jest dostępny od następnej tury.")
     weapons = tuple(
         item
         for item in normalize_hand_equipment(actor.inventory)
@@ -938,6 +972,48 @@ def resolve_patient_defense(
     )
 
 
+def resolve_limited_dodge(
+    state: CombatState,
+    active_effects: tuple[ActiveEffect, ...],
+    *,
+    feature_id: str,
+    resource_id: str,
+    label: str,
+) -> LimitedDodgeResolution:
+    """Use a short-rest archetype defense without introducing Ki."""
+
+    actor = current_actor(state)
+    if not actor_has_feature(actor, feature_id):
+        raise ValueError(f"Aktywna postać nie posiada cechy {label}.")
+    if not can_spend_actor_resource(actor, resource_id):
+        raise ValueError(f"Brak użyć: {label}.")
+    action = use_action_economy_cost(state, ActionEconomyCost.BONUS_ACTION)
+    if not action.accepted:
+        raise ValueError(action.message)
+    spent = spend_actor_resource(current_actor(action.state), resource_id)
+    updated = replace_actor(action.state, spent.actor_after)
+    effect = ActiveEffect(
+        id=f"dodge_until_next_turn:{actor.id}",
+        actor_id=str(actor.id),
+        kind="dodge_until_next_turn",
+        label=label,
+        object_id=f"class_feature:{feature_id}",
+        value=0,
+        source_actor_id=str(actor.id),
+        source=EffectSource(EffectSourceType.ACTION, feature_id, label),
+        duration=EffectDuration.UNTIL_TURN_START,
+        expiration_actor_id=str(actor.id),
+    )
+    effects = apply_active_effect(active_effects, effect).active_effects
+    return LimitedDodgeResolution(
+        updated,
+        effects,
+        actor,
+        spent.actor_after,
+        feature_id,
+    )
+
+
 def resolve_step_of_the_wind(
     state: CombatState,
     active_effects: tuple[ActiveEffect, ...],
@@ -1038,11 +1114,39 @@ def resolve_rage(
     actor = current_actor(state)
     if not actor_has_feature(actor, "rage"):
         raise ValueError("Aktywna postać nie posiada cechy Rage.")
-    if any(
+    rage_active = any(
         effect.actor_id == str(actor.id) and effect.kind == "rage"
         for effect in active_effects
-    ):
-        raise ValueError("Postać już jest w Rage.")
+    )
+    if rage_active:
+        action = use_action_economy_cost(state, ActionEconomyCost.BONUS_ACTION)
+        if not action.accepted:
+            raise ValueError(action.message)
+        frenzied = any(
+            effect.actor_id == str(actor.id) and effect.kind == "frenzy"
+            for effect in active_effects
+        )
+        actor_after = current_actor(action.state)
+        if frenzied:
+            actor_after = increase_exhaustion(actor_after)
+        updated_state = replace_actor(action.state, actor_after)
+        updated_effects = tuple(
+            effect
+            for effect in active_effects
+            if not (
+                effect.actor_id == str(actor.id)
+                and effect.kind
+                in {"rage", "rage_duration", "rage_activity", "frenzy", "frenzy_pending"}
+            )
+        )
+        return RageResolution(
+            updated_state,
+            updated_effects,
+            actor,
+            actor_after,
+            False,
+            frenzied,
+        )
     if not can_spend_actor_resource(actor, "rage_uses"):
         raise ValueError("Brak użyć Rage.")
     action = use_action_economy_cost(state, ActionEconomyCost.BONUS_ACTION)
@@ -1082,6 +1186,7 @@ def resolve_rage(
         effects,
         actor,
         spent.actor_after,
+        True,
     )
 
 

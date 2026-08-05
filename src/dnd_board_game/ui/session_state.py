@@ -79,6 +79,7 @@ class UiPendingState:
     opportunity_movement: PendingOpportunityMovement | None = None
     reaction_window: ReactionWindow | None = None
     cutting_words_reaction_resolved: bool | None = None
+    cutting_words_reaction_stage: str = ""
     defensive_spell_reaction_resolved: bool | None = None
     deflect_missiles_reaction_resolved: bool | None = None
     counterspell_reaction_resolved: bool | None = None

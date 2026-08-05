@@ -35,6 +35,6 @@
     "effect_type": "set_flag",
     "flag_key": "cast_alarm",
     "flag_value": true,
-    "instructions": "Wyznacz obszar do 20 stóp. Przez 8 godzin alarm ostrzega mentalnie lub dźwiękiem, gdy nieuprawniona istota wejdzie do obszaru."
+    "instructions": "Zagraj podczas promptu krótkiego odpoczynku. Po ACCEPT zużyj komórkę 1. poziomu i ustaw short_rest_alarm_active. Jeśli podczas tego odpoczynku dojdzie do napadu, drużyna nie otrzymuje stanu Zaskoczony. Efekt wygasa po zakończeniu albo przerwaniu odpoczynku."
   }
 }

@@ -612,6 +612,24 @@ def attack_source_with_combat_effects(actor: Actor, source, active_effects: tupl
                 stacking_key=effect.id,
             )
         )
+    command_guilt = next(
+        (
+            effect
+            for effect in active_effects
+            if effect.actor_id == str(actor.id)
+            and effect.kind == "flaw_command_guilt_active"
+        ),
+        None,
+    )
+    if command_guilt is not None:
+        modifiers.append(
+            RollModifier(
+                command_guilt.label,
+                command_guilt.value,
+                RollModifierType.CUSTOM,
+                stacking_key=command_guilt.kind,
+            )
+        )
     damage_bonus = sum(
         effect.value
         for effect in active_effects
@@ -674,6 +692,10 @@ def attack_source_with_combat_effects(actor: Actor, source, active_effects: tupl
         and effect.kind == "heat_metal_disadvantage"
         for effect in active_effects
     )
+    triage_disadvantage = any(
+        effect.actor_id == str(actor.id) and effect.kind == "flaw_triage_active"
+        for effect in active_effects
+    )
     extra_components: list[DamageComponentSpec] = []
     if getattr(getattr(source, "source_type", None), "value", "") == "weapon":
         for effect in active_effects:
@@ -730,12 +752,13 @@ def attack_source_with_combat_effects(actor: Actor, source, active_effects: tupl
         and not vicious_mockery_disadvantage
         and not extra_components
         and not heat_metal_disadvantage
+        and not triage_disadvantage
     ):
         return source
     mode = source.attack_roll_request.mode
     if reckless or next_attack_advantage:
         mode = _with_advantage(mode)
-    if vicious_mockery_disadvantage or heat_metal_disadvantage:
+    if vicious_mockery_disadvantage or heat_metal_disadvantage or triage_disadvantage:
         mode = _with_disadvantage(mode)
     return replace(
         source,
@@ -785,6 +808,34 @@ def attack_source_with_target_combat_effects(
             mode = _with_disadvantage(mode)
         if grid_distance_feet(target.position, zone.anchor_position) <= zone.value:
             mode = _with_advantage(mode)
+    distance = grid_distance_feet(attacker.position, target.position)
+    ambient_darkness = any(effect.kind == "ambient_darkness" for effect in active_effects)
+    darkness_zones = tuple(
+        effect
+        for effect in active_effects
+        if effect.kind == "nonmagical_darkness_zone"
+        and effect.anchor_position is not None
+    )
+    attacker_in_darkness = ambient_darkness or any(
+        grid_distance_feet(attacker.position, zone.anchor_position) <= zone.value
+        for zone in darkness_zones
+    )
+    target_in_darkness = ambient_darkness or any(
+        grid_distance_feet(target.position, zone.anchor_position) <= zone.value
+        for zone in darkness_zones
+    )
+    if target_in_darkness and max(
+        attacker.senses.darkvision_feet,
+        attacker.senses.blindsight_feet,
+        attacker.senses.truesight_feet,
+    ) < distance:
+        mode = _with_disadvantage(mode)
+    if attacker_in_darkness and max(
+        target.senses.darkvision_feet,
+        target.senses.blindsight_feet,
+        target.senses.truesight_feet,
+    ) < distance:
+        mode = _with_advantage(mode)
     if getattr(source, "advantage_against_metal_armor", False) and _wears_metal_armor(target):
         mode = _with_advantage(mode)
     attacker_sees_invisible = any(

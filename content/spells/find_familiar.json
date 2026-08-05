@@ -32,10 +32,14 @@
   "concentration": false,
   "ritual": true,
   "effect": {
-    "kind": "exploration",
-    "effect_type": "set_flag",
-    "flag_key": "cast_find_familiar",
-    "flag_value": true,
-    "instructions": "Po godzinie przywołaj ducha w formie wybranej Tiny beast. Zapisz formę, statblock, więź telepatyczną i możliwość dostarczania czarów dotykowych."
+    "kind": "combat_action",
+    "action_type": "targeted_status",
+    "label": "Przywołanie chowańca",
+    "effect_kind": "familiar",
+    "effect_options": ["cat", "raven", "snake"],
+    "target_faction": "self",
+    "target_count": 1,
+    "cast_flag": "cast_find_familiar",
+    "instructions": "Wybierz formę do końca walki: kot +2 do obron Zręczności, kruk przewaga ataków czarem, wąż odblokowuje bonusowy atak 1k6 trucizny. Nowa forma zastępuje poprzednią."
   }
 }

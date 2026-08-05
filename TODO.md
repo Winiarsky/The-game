@@ -53,6 +53,7 @@ najbliższy horyzont, a nie kopię całej roadmapy.
 - [x] Add M8.7 exploration awareness: active zone Search with time and light rules, passive trap detection, typed trap detection DC/range, persistent zone Hide totals, reveal-on-light/time/travel, encounter stealth handoff, UI controls, and snapshot v21.
 - [x] Add M8.8 interactive exploration fixtures: typed doors, locks and containers; local unlock/open/close/loot flows; object AC, HP and damage thresholds; persistent state, combat movement/cover projection, UI controls, reference content, and snapshot v22.
 - [x] Add M8.9 overland travel: fast/normal/slow pace, authored navigation checks and fail-forward delay, forced-march Constitution saves, six exhaustion levels shared by exploration/combat/resting, village-to-watchtower UI handoff, and snapshot v23.
+- [x] Audit Brakka's combat identity: apply 60-foot darkvision to nonmagical combat darkness, keep Relentless Endurance as an automatic first-drop long-rest resource, replace the restraint flaw with Rage-time active-equipment blocking, enforce Frenzy's next-turn timing, and regenerate color/toner card sets.
 - [x] Close M8.10 social interaction rules: persistent NPC state and attitude, deterministic 2014 reaction thresholds, authored retries/outcomes/transitions, visible stakes, and player-authoritative Persuasion/Deception/Intimidation selection.
 - [x] Add M8.11 formal downtime crafting: location-bound data-driven recipes, tool ownership and proficiency, half-price materials, 5 gp workdays, permanent inventory results, shared-clock consequences, and player confirmation.
 - [x] Add M8.12 shared condition boundaries: exploration hazards can author persistent Poisoned/Restrained states with source and duration; conditions enter combat, return to exploration, and expire consistently on encounter, rest, long-rest, and scenario events.
@@ -64,6 +65,13 @@ najbliższy horyzont, a nie kopię całej roadmapy.
 - [x] Replace character-creator standard-array-only input with D&D 5e 2014 27-point buy, show base score/cost/origin bonus/final modifier separately, and add audited Polish tooltips for every level-1 class feature.
 - [x] Rebuild class choices as a guided player step with skill use/proficiency explanations, fighting-style rule cards, automatic expanded starting packages, origin-skill conflict prevention, and a final live character-sheet review.
 - [ ] [Deferred character creator] Add an optional starting-wealth mode with class-specific wealth generation, a restricted pre-game shop, affordability/carrying-capacity checks, and an explicit choice between wealth and the automatic class package.
+- [ ] [Deferred subclass expansion] Add real multi-option subclass branches and
+  corresponding level-up card pools only from a registered lawful source pack;
+  do not source catalogue text or definitions directly from the Player's
+  Handbook. If no additional licensed pack is established, author
+  `project_original` subclasses with original names, descriptions and mechanics,
+  then cover their grants with runtime resolvers, Polish help, audits and focused
+  tests.
 - [ ] [Deferred mounted combat] Let a mounted wielder use a lance in one hand; until an explicit mounted actor state exists, the lance correctly uses two hands and retains its close-range disadvantage.
 - [ ] [Deferred destructible equipment] Model the net as an AC 10 object with 5 HP that can be cut using slashing damage; Strength DC 10 escape is implemented.
 - [ ] [Deferred attunement fidelity] End attunement automatically after the official distance/time, death, prerequisite-loss, or another-creature-attunement conditions.
@@ -170,7 +178,8 @@ najbliższy horyzont, a nie kopię całej roadmapy.
 - [ ] P1: After the first target scenario, add the physical player-interface vertical
   slice: a player-maintained A4/A5 character sheet updated through level-up, printable
   illustrated decision cards with stable QR ids, a scanner input adapter, shared
-  action-catalog validation, board-based targeting, and a no-scanner UI fallback.
+  action-catalog validation, and board-based spatial targeting. Hero identity has no
+  screen or board fallback; recovery may retry, reconnect, cancel, or return to menu.
   - [x] Add the versioned decision-card QR payload and deterministic PNG/SVG generator
     with printable quiet zones, metadata sidecars, and focused unit tests.
   - [x] Add the first duplex A4 control-card batch (`ACCEPT`/`DECLINE`) with real
@@ -187,6 +196,26 @@ najbliższy horyzont, a nie kopię całej roadmapy.
     selecting a city location opens its interaction tiles directly.
   - [x] Anchor duplicate physical-card suppression to response completion so one
     slow ACCEPT request cannot spill into and confirm the following UI stage.
+  - [x] Replace the player-facing character creator entry with twelve level-1
+    archetypes while preserving the dormant creator and player-chosen legal level-up
+    choices through level 3.
+  - [x] Add player-facing histories, motivations, personal goals, turn guidance,
+    resources, strengths, and pitfalls for every starter archetype.
+  - [x] Refresh all twelve starter portraits as a versioned, comic dark-fantasy set.
+  - [x] Add stable `dndbg:v1:actor:<actor_id>` hero-card payloads and use scans as
+    the exclusive party-selection and exploration check-participant input.
+  - [x] Generate the twelve-card duplex poker-size A4 hero set with real QR codes,
+    bleed, crop marks, mirrored backs, previews, and a machine-readable manifest.
+  - [x] Generate the first complete character-specific card sets for Garran and
+    Dagna through level 3, with unique themed art treatments, stable QR payloads,
+    concise mechanics, level requirements, duplex backs, and narrative dossiers.
+  - [x] Extend the class-themed card sets to all twelve starter heroes and add a
+    printable level-1 statistics, saves, proficiencies, spell, and equipment page
+    to every character PDF.
+  - [x] Audit all level 0–2 class spells: keep combat damage/status effects
+    executable and record narrative-fidelity follow-ups without disabling combat magic.
+  - [ ] Extend hero-card participant declarations to any remaining combat/support
+    prompts that still introduce a separate choice of acting hero.
 - [x] Fix the pre-combat Stealth transition renderer after encounter setup confirmation.
 - [x] Clarify rubble interaction targets, prioritize movement paths over object LEDs, and require visible acknowledgement of automatic enemy opportunity-attack results.
 - [x] Keep combat result acknowledgements inside the combat panel, name ranged-melee threats, clarify compound movement destinations, and surface defeated-enemy results.
@@ -450,6 +479,15 @@ obowiązują `Current Roadmap Focus` oraz etapy z `ROADMAP.md`.
   - [x] Route stabilization and secondary spell selections (Twinned, Sculpt,
     Careful and Heightened) through illuminated figures on the board; keep only
     dice values and non-spatial effect variants in the UI.
+  - [x] Connect the second physical class-feature batch: Bardic Inspiration,
+    Cutting Words, Preserve Life, Turn Undead, three-form Wild Shape with
+    rescan-to-revert, Cunning Action, three-form Pact Weapon, and spell-first
+    scanned Metamagic without pre-cast digital variant buttons.
+  - [x] Complete the physical-card timing/resource follow-up: stage Prayer of
+    Healing targets and dice before a cancellable 10-minute completion, use
+    concentration while casting, advance the scenario clock only on completion,
+    retain Goodberry's replaceable 10-charge pool, and return live class/slot
+    counters in scanner feedback.
   - [x] Show an explicit mechanical effect while resolving every spell family
     and remove duplicate target selectors from status, movement, summon,
     debuff, and dispel panels.
@@ -484,6 +522,121 @@ obowiązują `Current Roadmap Focus` oraz etapy z `ROADMAP.md`.
 - [x] Define minimal item/equipment schema.
 
 ## Open Decisions
+
+- [x] [Physical card vertical slice] Add the reviewed action phase catalog,
+  scanner routing, named combat checkpoints, Rage/Frenzy toggling, optional
+  Bardic Inspiration/Guidance dice, two-stage Cutting Words, Preserve Life
+  board targeting, short-rest Alarm protection, and combat Invisibility routing;
+  complete scan-to-board-to-confirm flows and scanner
+  feedback, then exercise them in the Mechanics Playground.
+- [x] [Board-first basic attack] Retire the redundant `basic_attack` card and
+  keep ordinary weapon/unarmed attacks behind contextual enemy-field selection;
+  reserve physical cards for spells, class features and special maneuvers.
+- [x] [Seven board-game archetypes] Replace the visible twelve-class starter
+  roster with seven role-first level 1–3 builds defined in
+  `docs/BOARDGAME_ARCHETYPES_LEVELS_1_3.md`: fixed level-1 combat/exploration
+  kits, compact level-up pools, fixed caster decks without preparation, a
+  content-authored `ExplorationCardIntent` handler/attempt contract, short and
+  long rests exposed only by eligible instances, hidden legacy starters and
+  regenerated physical card sets. The runtime installs the fixed level-1 kits;
+  the documented level 2–3 cards form the current test pool.
+- [x] [Archetype flaws and exploration reactions] Give each of the seven
+  archetypes one deterministic flaw, synchronize its combat/exploration
+  trigger, add data-driven card reactions to the village and abandoned
+  watchtower, connect route preparation to the navigation roll, and regenerate
+  color plus black-and-white playtest PDFs with the flaw rules on hero cards.
+- [x] [Character-dependent exploration tiles] Disable physical exploration-card
+  declarations without deleting their assets; let authored zone options require
+  and auto-assign a party hero, show that hero on the tile, and add two optional
+  narrative interactions for each of the seven playable archetypes across the
+  village and abandoned-watchtower MVP.
+- [ ] [Archetype progression persistence] Add the player-facing level 2–3
+  choice screen, store stable selected option ids in character saves, rebuild
+  the chosen grants after loading, and generate a personal PDF containing only
+  the selected progression cards instead of the whole test pool.
+- [x] [Physical combat-card batch 1] Route 15 common spell cards through one
+  shared attack/healing/combat-action/reaction dispatcher reused by the screen
+  menu; cover single-target attacks, saves, healing, areas, movement, statuses,
+  summons, multi-projectile damage and Shield in the Mechanics Playground.
+- [x] [Physical combat-card batch 2] Route 15 damage and battlefield-control
+  spell cards through the shared dispatcher; cover attack/save riders,
+  directional and radial areas, separate Scorching Ray attacks, persistent
+  difficult/obscuring zones and concentration, including scan-to-board Fog
+  Cloud resolution in the Mechanics Playground.
+- [x] [Physical combat-card batch 3] Route 15 defense, support and reaction
+  spell cards through the shared dispatcher; auto-bind self spells, add scanned
+  Hellish Rebuke after applied enemy damage, and make See Invisibility reveal
+  both invisible and per-observer hidden enemies in the Mechanics Playground.
+- [x] [Physical combat-card batch 4] Route 15 debuff and persistent battlefield
+  spell cards through the shared dispatcher; support repeated saves, delayed
+  riders, movement/start-turn zones, explicit healing targeting, and Moonbeam/
+  Flaming Sphere rescan-to-move without spending another slot.
+- [x] [Physical combat-card batch 5] Route 15 weapon buffs, mobility, rescue and
+  utility spell cards through the shared dispatcher; bind selected weapons,
+  support three emulated familiar forms, create/spend the Goodberry pool,
+  stabilize from a scan, and exercise scanning plus representative resolutions
+  in the Mechanics Playground.
+- [x] [Physical martial-feature batch 1] Route Fighter, Barbarian, Monk and
+  Paladin cards through their existing class-feature resolvers; add a shared
+  scanner prompt for physical dice, weapon, saving-roll and spell-slot input,
+  preserve pending hit/reaction windows for Divine Smite and Deflect Missiles,
+  and cover all four classes in the Mechanics Playground.
+- [x] [Physical card Arena smoke matrix] Start a fresh Mechanics Playground
+  encounter for every one of the 12 classes and scan a real card from each
+  starter set; verify scanner routing, next-step prompts and resource feedback.
+- [x] [Martial archetype decision budget] Expand the level-1 combat decks for
+  Garran, Brakka, Mira and Erynd using existing resolvers, add short/long-rest
+  resources for their remixed techniques, and verify scans plus resource spend
+  in fresh Mechanics Playground encounters.
+- [x] [Seven-hero combat deck audit] Remove exploration cards from the seven
+  current print decks; balance each level 1–3 pool to 7–9 tactical combat
+  cards; synchronize level gates, named resources, passives, flaws, dossiers
+  and statistics; verify routes, reaction windows and resource spending in the
+  Mechanics Playground; regenerate color and toner-ready print sets.
+- [x] [Physical card timing reminders] Add the compact inline combat reminder
+  driven by the legal contextual-action catalogue and ordered reaction window;
+  cover every printable combat card in the seven active decks, allow an
+  explicitly selected non-active reaction owner, and verify action plus reaction
+  reminders in the Mechanics Playground.
+- [x] [Physical card print synchronization] Regenerate all 12 character-set
+  PDFs from the current phase/effect catalogue, omit removed cards, validate
+  every QR/manifest/page count, and add individual plus combined toner-friendly
+  black-and-white A4 character sheets for the starter roster.
+- [x] [Physical card low-toner playtest edition] Add illustration-free,
+  front-only black-and-white card layouts with crop marks and validated QR
+  payloads; generate 12 per-character PDFs and one combined 100-page test PDF.
+- [x] [Exploration performer card scan] Let a scanned hero card select the
+  performer for a checked zone option exactly like clicking that hero in the
+  local action composer, while rejecting defeated, hostile or invalid actors.
+- [x] [Physical spell preparation] Replace setup checkboxes with a visual
+  default card set accepted by `ACCEPT`; let `DECLINE` start a scanner-only
+  custom set that validates each spell and completes at the actor's limit.
+- [x] [Board-native exploration navigation] Stop using `ACCEPT`/`DECLINE` for
+  location and instance navigation; keep all location markers lit, use repeated
+  `A → A` selection to confirm entry, reserve one red system-exit pad beside at
+  most seven authored actions, and block that exit during unresolved flow.
+- [x] [Exploration interaction input regression] Route the visible action button,
+  Enter and `ACCEPT` through the same open-composer action; require explicit
+  confirmation for automatic NPC goals, lock authored character moments to their
+  assigned performer, expose all unlocked locations of the current scene after
+  leaving an instance, and separate purple interaction LEDs from the fourth white
+  option.
+- [x] [Stable instance tiles and scoped results] Keep every interaction action on
+  its initially assigned board position, number and color when sibling actions
+  disappear; scope roll acknowledgements to messages created by the current
+  request so an earlier NPC result cannot leak into a later location.
+- [x] [Brakka QR and gate group-check regression] Accept owner-bound v2 combat
+  card payloads from the keyboard scanner, keep board selection listening for
+  five minutes, ignore cancelled stale scans, and make force-entry a fixed
+  whole-party check resolved by any single success.
+- [x] [Staged scenario travel] Split continuation into pace, hero-card
+  navigator and physical-roll stages; show arrival/perception/stealth tradeoffs,
+  preserve Natural Explorer and forced-march shortcuts, and make control cards
+  advance or retreat one stage at a time.
+- [ ] [Physical card timing follow-up] Give 10-minute Prayer of Healing a
+  dedicated encounter-time/long-cast presentation instead of resolving its
+  already-tested multi-target healing immediately after confirmation, and
+  expire unused Goodberries after 24 hours of exploration time.
 
 - [x] Preserve dynamically granted area attacks (including Rhogar's Breath
   Weapon) in the combat preview payload so the player can explicitly confirm

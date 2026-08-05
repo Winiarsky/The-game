@@ -1606,9 +1606,12 @@ def _apply_authored_participant_model(
         return proposal
     participants = request.selected_check_participants or goal.check_participants
     aggregation = (
-        CheckAggregation.MAJORITY
-        if participants == CheckParticipants.WHOLE_PARTY
-        else CheckAggregation.LEAD_RESULT
+        goal.check_aggregation
+        or (
+            CheckAggregation.MAJORITY
+            if participants == CheckParticipants.WHOLE_PARTY
+            else CheckAggregation.LEAD_RESULT
+        )
     )
     mechanic = {
         CheckParticipants.SINGLE_ACTOR: ExplorationMechanicId.SINGLE_ACTOR_CHECK,

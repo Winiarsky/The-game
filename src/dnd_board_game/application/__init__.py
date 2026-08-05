@@ -188,6 +188,7 @@ from .short_rest_flow import (
     ShortRestHitDieTransition,
     short_rest_count,
 )
+from .long_rest_flow import LongRestFlowService, LongRestTransition, rest_policy_count
 from .scenario_continuation_flow import (
     ScenarioContinuationFlowService,
     ScenarioContinuationOutcomeResolution,
@@ -214,6 +215,8 @@ __all__ = [
     "CombatMovementFlowService",
     "CombatMovementPreview",
     "CombatMovementSubmission",
+    "LongRestFlowService",
+    "LongRestTransition",
     "CombatReactionFlowService",
     "CombatReactionResolution",
     "ClassFeatureReactionFlowService",
@@ -248,6 +251,7 @@ __all__ = [
     "PlayerReactionFlowService",
     "ReadyAttackTrigger",
     "ReadyPreparation",
+    "rest_policy_count",
     "StabilizationMethod",
     "ShoveMode",
     "ShoveResolution",

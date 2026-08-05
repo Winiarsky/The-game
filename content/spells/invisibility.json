@@ -35,7 +35,7 @@
     "label": "Niewidzialność",
     "target_count": 1,
     "cast_flag": "cast_invisibility",
-    "instructions": "Cel i noszone przez niego przedmioty są Invisible podczas koncentracji do godziny; efekt kończy się po ataku lub rzuceniu czaru.",
+    "instructions": "Cel i noszone przez niego przedmioty stają się niewidzialne podczas koncentracji do godziny; efekt kończy się po ataku lub rzuceniu czaru.",
     "effect_kind": "invisibility",
     "value": 0,
     "target_faction": "ally"

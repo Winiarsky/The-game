@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import Sequence
 
 from dnd_board_game.actors import Actor
 from dnd_board_game.inventory import effective_armor_class
@@ -103,12 +104,23 @@ def combat_armor_class(
 def actor_as_combat_target(
     actor: Actor,
     active_effects: tuple[ActiveEffect, ...] = (),
+    *,
+    attacker: Actor | None = None,
+    actors: Sequence[Actor] = (),
+    opportunity_attack: bool = False,
 ) -> CombatTarget:
+    contextual_ac = 0
+    if opportunity_attack and any(
+        feature.feature_id == "halfling_nimbleness" for feature in actor.features
+    ):
+        contextual_ac += 1
+    if attacker is not None:
+        contextual_ac += iron_line_armor_class_bonus(attacker, actor, actors)
     return CombatTarget(
         id=str(actor.id),
         name=actor.name,
         position=actor.position,
-        ac=combat_armor_class(actor, active_effects),
+        ac=combat_armor_class(actor, active_effects) + contextual_ac,
         hp=actor.hp,
         target_type=CombatTargetType.ACTOR,
         visibility=CombatTargetVisibility.VISIBLE,
@@ -118,6 +130,36 @@ def actor_as_combat_target(
         defeated=actor.is_defeated(),
         unconscious=actor.is_unconscious(),
     )
+
+
+def iron_line_armor_class_bonus(
+    attacker: Actor,
+    target: Actor,
+    actors: Sequence[Actor],
+) -> int:
+    """Grant the ally +1 AC while the ally and Garran flank this attacker."""
+    if attacker.faction == target.faction or target.is_defeated():
+        return 0
+    target_delta = (
+        target.position.col - attacker.position.col,
+        target.position.row - attacker.position.row,
+    )
+    if max(abs(target_delta[0]), abs(target_delta[1])) != 1:
+        return 0
+    for protector in actors:
+        if protector.id == target.id or protector.faction != target.faction:
+            continue
+        if protector.is_defeated() or not any(
+            feature.feature_id == "iron_line" for feature in protector.features
+        ):
+            continue
+        protector_delta = (
+            protector.position.col - attacker.position.col,
+            protector.position.row - attacker.position.row,
+        )
+        if protector_delta == (-target_delta[0], -target_delta[1]):
+            return 1
+    return 0
 
 
 def target_is_defeated(target: CombatTarget) -> bool:

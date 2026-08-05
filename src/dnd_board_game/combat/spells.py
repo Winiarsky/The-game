@@ -23,6 +23,7 @@ from dnd_board_game.rules import (
     SpellCastValidation,
     SpellAccessKind,
     RollModifier,
+    RollModifierType,
     RollMode,
     apply_actor_d20_traits,
     resolve_d20_roll,
@@ -498,6 +499,7 @@ def resolve_actor_saving_throw(
     active_effects: Sequence[object] = (),
 ) -> SavingThrowResult:
     from .auras import saving_throw_aura_modifiers
+    from .archetype_flaws import flaw_saving_throw_modifiers
     from .poison_protection import poison_protection_roll_mode
     from .warding_bond import warding_bond_saving_throw_modifiers
 
@@ -513,6 +515,24 @@ def resolve_actor_saving_throw(
         mode=roll_mode,
         modifiers=(
             *saving_throw_roll_modifiers(actor, saving_throw.ability),
+            *flaw_saving_throw_modifiers(actor, active_effects),
+            *(
+                (
+                    RollModifier(
+                        "Chowaniec: kot",
+                        2,
+                        RollModifierType.SPELL,
+                        "find_familiar",
+                    ),
+                )
+                if saving_throw.ability == "dexterity"
+                and any(
+                    getattr(effect, "actor_id", "") == str(actor.id)
+                    and getattr(effect, "kind", "") == "familiar:cat"
+                    for effect in active_effects
+                )
+                else ()
+            ),
             *saving_throw_aura_modifiers(combat_actors, actor),
             *warding_bond_saving_throw_modifiers(
                 actor,

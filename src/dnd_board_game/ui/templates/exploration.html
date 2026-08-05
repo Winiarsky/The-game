@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Eksploracja</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='exploration.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='exploration.css', v='instance-navigation-20260803-1') }}">
 </head>
 <body>
 <header class="app-shell-header">
@@ -143,7 +143,7 @@
         <label>URL symulatora <input id="board-url" class="wide-input" value="http://127.0.0.1:5000"></label>
         <label>Port hardware <input id="board-serial-port" class="wide-input" placeholder="/dev/ttyUSB0"></label>
         <label>WLED URL <input id="wled-url" class="wide-input" placeholder="http://adres-wled"></label>
-        <label>Timeout skanu <input id="scan-timeout" type="number" min="1" max="120" value="30"></label>
+        <label>Timeout skanu <input id="scan-timeout" type="number" min="1" max="600" value="300"></label>
         <div class="row panel-actions-row">
           <button onclick="configureBoard()">Zastosuj</button>
           <button class="secondary" onclick="scanBoard()">Skanuj</button>
@@ -267,6 +267,7 @@
         <button id="leave-interaction-button" class="secondary" data-allow-busy="true" onclick="leaveChatInstance()">Opuść interakcję</button>
       </div>
       <div id="chat-stream">
+        <div id="exploration-card-prompt" class="exploration-card-prompt conversation-system-card" hidden></div>
         <div id="scene-conversation"></div>
         <div id="chat-typing" class="chat-typing" hidden>
           <span></span><span></span><span></span>
@@ -355,6 +356,6 @@
   </form>
 </dialog>
 <script>window.EXPLORATION_SLASH_COMMANDS = {{ slash_commands | tojson }};</script>
-<script src="{{ url_for('static', filename='exploration.js', v='physical-cards-20260730-3') }}"></script>
+<script src="{{ url_for('static', filename='exploration.js', v='stable-instance-slots-20260804-2') }}"></script>
 </body>
 </html>

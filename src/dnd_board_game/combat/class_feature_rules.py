@@ -75,6 +75,19 @@ class WildShapeForm:
 
 WILD_SHAPE_FORMS: tuple[WildShapeForm, ...] = (
     WildShapeForm(
+        "brown_bear", "Niedźwiedź brunatny", 1.0, 11, 34, 40,
+        AbilityScores(19, 10, 16, 2, 13, 7), CreatureSize.LARGE,
+        "Ugryzienie", DiceExpression(1, 8), DamageType.PIERCING,
+        attack_damage_modifier=4,
+    ),
+    WildShapeForm(
+        "giant_eagle", "Olbrzymi orzeł", 1.0, 13, 26, 80,
+        AbilityScores(16, 17, 13, 8, 14, 10), CreatureSize.LARGE,
+        "Szpony", DiceExpression(2, 6), DamageType.SLASHING,
+        attack_damage_modifier=3,
+        has_flying_speed=True,
+    ),
+    WildShapeForm(
         "badger", "Borsuk", 0.0, 10, 3, 20,
         AbilityScores(4, 11, 12, 2, 12, 5), CreatureSize.TINY,
         "Ugryzienie", None, DamageType.PIERCING, attack_damage_fixed=1,
@@ -125,14 +138,12 @@ WILD_SHAPE_FORMS: tuple[WildShapeForm, ...] = (
 
 
 def available_wild_shape_forms(actor: Actor) -> tuple[WildShapeForm, ...]:
-    limits = wild_shape_limits(actor)
-    return tuple(
-        form
-        for form in WILD_SHAPE_FORMS
-        if form.challenge_rating <= limits.maximum_challenge_rating
-        and (limits.swimming_allowed or not form.has_swimming_speed)
-        and (limits.flying_allowed or not form.has_flying_speed)
-    )
+    _require_feature(actor, "wild_shape")
+    # Board-game profile: three deliberately distinct combat roles. Their
+    # statistics come from the SRD, while early access to the bear and eagle is
+    # an explicit campaign simplification rather than the tabletop CR schedule.
+    form_ids = {"brown_bear", "wolf", "giant_eagle"}
+    return tuple(form for form in WILD_SHAPE_FORMS if form.id in form_ids)
 
 
 def wild_shape_form(form_id: str) -> WildShapeForm:

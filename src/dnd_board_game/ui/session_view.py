@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True, slots=True)
@@ -13,6 +13,7 @@ class UiSessionView:
     flow: dict[str, object]
     spell_preparation: dict[str, object] | None
     short_rest: dict[str, object] | None
+    long_rest: dict[str, object] | None
     current_zone: dict[str, object]
     available_zones: list[dict[str, object]]
     visible_environment: list[dict[str, object]]
@@ -43,9 +44,10 @@ class UiSessionView:
     encounter_initiative: dict[str, object] | None
     combat: dict[str, object] | None
     board: dict[str, object]
-    board_selection: dict[str, object]
-    required_rolls: list[dict[str, object]]
+    board_selection: dict[str, object] = field(default_factory=dict)
+    required_rolls: list[dict[str, object]] = field(default_factory=list)
     playground: dict[str, object] | None = None
+    exploration_card: dict[str, object] | None = None
 
     def as_payload(self) -> dict[str, object]:
         return {
@@ -55,6 +57,7 @@ class UiSessionView:
             "flow": self.flow,
             "spell_preparation": self.spell_preparation,
             "short_rest": self.short_rest,
+            "long_rest": self.long_rest,
             "current_zone": self.current_zone,
             "available_zones": self.available_zones,
             "visible_environment": self.visible_environment,
@@ -88,4 +91,5 @@ class UiSessionView:
             "board_selection": self.board_selection,
             "required_rolls": self.required_rolls,
             "playground": self.playground,
+            "exploration_card": self.exploration_card,
         }

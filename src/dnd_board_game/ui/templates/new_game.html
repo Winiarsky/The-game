@@ -17,7 +17,7 @@
 
     {% if error %}<div class="flow-error" role="alert">{{ error }}</div>{% endif %}
 
-    <form method="post" action="{{ url_for('start_new_game') }}">
+    <div id="new-game-card-flow">
       {% for scenario in scenarios %}
         <label class="scenario-card">
           <input type="radio" name="scenario_id" value="{{ scenario.id }}" {% if scenario.id == (selected_scenario_id or active_scenario_id) %}checked{% endif %}>
@@ -36,28 +36,95 @@
       {% endfor %}
 
       <section class="form-section">
-        <h2>Wybierz drużynę — 1 do 5 postaci</h2>
+        <h2>Zeskanuj drużynę — 1 do 5 kart bohaterów</h2>
+        <p>Kolejność skanowania ustala kolejność drużyny. Karta DECLINE usuwa ostatni wybór, a ACCEPT zatwierdza skład i rozpoczyna przygotowanie.</p>
+        <div id="card-scan-status" class="flow-note" aria-live="polite">Czytnik gotowy. Zeskanuj pierwszą kartę bohatera.</div>
         {% if roster.characters %}
           <div class="roster-grid">
             {% for character in roster.characters %}
-              <label class="roster-card">
-                <input type="checkbox" name="character_ids" value="{{ character.actor.id }}" {% if character.actor.id|string in (selected_character_ids or []) %}checked{% endif %}>
+              <article class="roster-card" data-actor-id="{{ character.actor.id }}" aria-selected="false">
                 {% set portrait_url = character_portrait_url(character.actor.portrait) %}
                 <span class="roster-avatar">{% if portrait_url %}<img src="{{ portrait_url }}" alt="Portret: {{ character.actor.name }}">{% else %}{{ character.actor.name[:1]|upper }}{% endif %}</span>
-                <span><b>{{ character.actor.name }}</b><small>Poziom {{ character.actor.level }} · {{ class_names.get(character.class_id, character.class_id) }}</small><em>{{ character.actor.experience_points }} XP</em></span>
-              </label>
+                <span><b>{{ character.actor.name }}</b><small>Poziom {{ character.actor.level }} · {{ class_names.get(character.class_id, character.class_id) }}</small><em data-selection-order>zeskanuj kartę</em></span>
+              </article>
             {% endfor %}
           </div>
         {% else %}
-          <aside class="flow-note">Roster jest pusty. <a href="{{ url_for('new_character') }}">Najpierw stwórz postać</a>.</aside>
+          <aside class="flow-note">Brakuje zainstalowanego zestawu archetypów.</aside>
         {% endif %}
       </section>
 
       <div class="flow-actions">
         <a class="button secondary" href="{{ url_for('index') }}">Anuluj</a>
-        <button type="submit" {% if not roster.characters or not scenarios %}disabled{% endif %}>Rozpocznij przygotowanie</button>
+        <span>Zatwierdzenie wyłącznie fizyczną kartą ACCEPT.</span>
       </div>
-    </form>
+    </div>
   </main>
+  <script>
+    (() => {
+      let buffer = '';
+      let lastKeyAt = 0;
+      let inFlight = false;
+      const status = document.getElementById('card-scan-status');
+      const updateSelection = ids => {
+        const order = new Map((ids || []).map((id, index) => [String(id), index + 1]));
+        document.querySelectorAll('[data-actor-id]').forEach(card => {
+          const selected = order.has(card.dataset.actorId);
+          card.setAttribute('aria-selected', selected ? 'true' : 'false');
+          card.classList.toggle('selected', selected);
+          const copy = card.querySelector('[data-selection-order]');
+          if (copy) copy.textContent = selected ? `wybór ${order.get(card.dataset.actorId)}` : 'zeskanuj kartę';
+        });
+      };
+      const send = async payload => {
+        if (inFlight) return;
+        inFlight = true;
+        const scenario = document.querySelector('input[name="scenario_id"]:checked');
+        try {
+          const response = await fetch('/api/new-game/card-scan', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({payload, scenario_id: scenario ? scenario.value : ''}),
+          });
+          const data = await response.json();
+          updateSelection(data.selected_actor_ids || []);
+          if (!response.ok) {
+            status.textContent = data.error || 'Nie udało się odczytać karty.';
+            return;
+          }
+          if (data.redirect) {
+            window.location.assign(data.redirect);
+            return;
+          }
+          status.textContent = data.actor_name
+            ? `${data.actor_name}: dodano do drużyny.`
+            : data.removed_actor_id
+              ? 'Usunięto ostatniego bohatera.'
+              : 'Karta odczytana; skład bez zmian.';
+        } catch (_error) {
+          status.textContent = 'Czytnik wysłał kartę, ale aplikacja nie odpowiedziała.';
+        } finally {
+          inFlight = false;
+        }
+      };
+      window.addEventListener('keydown', event => {
+        const now = Date.now();
+        if (now - lastKeyAt > 120) buffer = '';
+        lastKeyAt = now;
+        if (event.key === 'Enter') {
+          const payload = buffer.trim();
+          buffer = '';
+          if (payload.startsWith('dndbg')) {
+            event.preventDefault();
+            send(payload);
+          }
+          return;
+        }
+        if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+          buffer += event.key;
+        }
+      }, true);
+    })();
+  </script>
 </body>
 </html>

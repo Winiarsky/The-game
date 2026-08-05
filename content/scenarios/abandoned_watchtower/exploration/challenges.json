@@ -24,9 +24,9 @@
           "followup_prompt": "Czego używacie i jak zabieracie się do wyważania?",
           "suggested_tags": ["heavy_force", "lever", "weak_point"],
           "accepted_source_tags": ["break", "damage_object", "ignite", "pry"],
-          "participant_mode": "allow",
-          "check_participants": "lead_with_help",
-          "allowed_check_participants": ["single_actor", "lead_with_help", "whole_party"],
+          "participant_mode": "must",
+          "check_participants": "whole_party",
+          "check_aggregation": "any_success",
           "narrative_style": {
             "preset": "heroic_charge",
             "tone": "Pełne rozmachu, bohaterskie power fantasy. Uderzenia mają ciężar, drewno pamięta je do końca swojej krótkiej kariery, a drużyna wygląda jak taran z własnym motywem muzycznym.",

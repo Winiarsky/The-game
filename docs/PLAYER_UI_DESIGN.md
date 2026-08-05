@@ -132,11 +132,25 @@ stanu. Po skanie monitor pokazuje jeden krótki toast z nazwą karty i informacj
 czy znaleziono pasującą operację. Nie dodajemy osobnego panelu skanera do głównego
 flow, a przyciski ekranowe pozostają równoważnym fallbackiem.
 
+Wyjątkiem jest nawigacja eksploracji: karty sterujące nie wybierają lokacji i
+nie opuszczają instancji. Te odwracalne operacje wykonuje się figurką na planszy;
+`ACCEPT`/`DECLINE` pozostają zarezerwowane dla właściwych decyzji.
+Otwarty formularz kafelka jest właściwą decyzją: jego widoczny przycisk,
+Enter oraz `ACCEPT` muszą przechodzić przez ten sam dispatcher i tę samą
+walidację. `Shift+Enter` pozostaje znakiem nowej linii.
+
 ## Widok eksploracji
 
 Eksploracja jest pełnoekranową rozmową z MG.
 
 ### Wejście do interakcji
+
+Jedno wskazanie znacznika pokazuje podgląd lokacji. Drugie kolejne wskazanie tego
+samego znacznika potwierdza wejście; wskazanie innego przełącza podgląd. Wszystkie
+legalne znaczniki pozostają zapalone, a oglądany jest wyróżniony jaśniejszym
+wariantem własnego koloru. Plansza automatycznie uzbraja kolejny odczyt.
+Po wyjściu z instancji dostępne są wszystkie odblokowane lokacje tej samej
+sceny, a nie wyłącznie bezpośredni sąsiedzi bieżącej lokacji.
 
 Pierwszą wiadomością MG jest:
 
@@ -188,8 +202,12 @@ zabrać albo przekształcić. Lista wszystkich odkryć jest dostępna w panelu d
 
 ### Opuszczenie interakcji
 
-Stały przycisk „Opuść interakcję” wraca do prostego wyboru odkrytych lokacji i
-punktów. Nie kasuje historii rozmowy ani jej kontekstu.
+Ostatnie fizyczne pole każdej instancji jest czerwonym systemowym wyjściem.
+Pozostałe pozycje mieszczą najwyżej siedem działań. Wyjście cofa dokładnie o jeden
+poziom: rozmowa lub obiekt → działania lokacji, a lokacja → wybór znaczników.
+Nie kasuje historii ani kontekstu i nie cofa rozliczonych konsekwencji. Podczas
+nierozliczonego rzutu albo obowiązkowej decyzji jest widoczne w UI, ale nie jest
+legalnym celem skanu. Przycisk ekranowy pozostaje fallbackiem.
 
 ## Widok rozmowy z NPC
 
@@ -479,6 +497,10 @@ Manualna checklista dla custom party:
 - w każdej lokacji liczba, kolejność i kolory LED-owych pól interakcji zgadzają
   się z kafelkami widocznymi w oknie rozmowy, a kliknięcie pola uruchamia
   dokładnie wskazany kafelek;
+- pojedyncze wskazanie lokacji przełącza podgląd, `A → A` wchodzi do A, a
+  `A → B → B` wchodzi do B bez ponownego ręcznego uruchamiania skanu;
+- każda instancja pokazuje najwyżej siedem działań i czerwone wyjście na ostatnim
+  polu; wyjście z NPC wraca do lokacji, a wyjście z lokacji do jej mapy wyboru;
 - po wybraniu testu pola wykonawców świecą stałymi kolorami drużyny, kliknięta
   postać trafia do formularza jako prowadząca, a podczas wpisywania opisu skan
   pozostaje wyłączony;

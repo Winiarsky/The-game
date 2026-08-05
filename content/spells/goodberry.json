@@ -29,10 +29,14 @@
   "concentration": false,
   "ritual": false,
   "effect": {
-    "kind": "exploration",
-    "effect_type": "set_flag",
-    "flag_key": "cast_goodberry",
-    "flag_value": true,
-    "instructions": "Powstaje 10 jagód na 24 godziny. Akcja zjedzenia leczy 1 PW i zapewnia dzienne wyżywienie."
+    "kind": "combat_action",
+    "action_type": "targeted_status",
+    "label": "Dobre jagody",
+    "effect_kind": "goodberry_pool",
+    "target_faction": "self",
+    "target_count": 1,
+    "value": 10,
+    "cast_flag": "cast_goodberry",
+    "instructions": "Rzucenie tworzy 10 jagód i zastępuje poprzednią pulę. Kolejne skanowanie wybiera bohatera; jego akcja i 1 jagoda przywracają 1 PW."
   }
 }

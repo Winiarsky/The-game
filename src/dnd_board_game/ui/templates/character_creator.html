@@ -11,8 +11,8 @@
     <header class="flow-header">
       <a class="back-link" href="{{ url_for('index') }}">← Menu główne</a>
       <span class="step-label">Roster bohaterów</span>
-      <h1>Twoje postacie</h1>
-      <p>Każda postać jest odbudowywana z zapisanych wyborów przez aktualny katalog zasad.</p>
+      <h1>Gotowi bohaterowie</h1>
+      <p>Wybierz profil, aby przeczytać historię, rolę i instrukcję gry. Drużynę wybiera się fizycznymi kartami podczas rozpoczynania przygody.</p>
     </header>
 
     {% if request.args.get('deleted') %}
@@ -42,14 +42,13 @@
       </section>
     {% else %}
       <section class="empty-state">
-        <b>Roster jest pusty</b>
-        <p>Stwórz pierwszą postać poziomu 1. Nie musisz jeszcze rozpoczynać scenariusza.</p>
+        <b>Brakuje zestawu archetypów</b>
+        <p>Uruchom instalator domyślnego rosteru przed rozpoczęciem gry.</p>
       </section>
     {% endif %}
 
     <div class="flow-actions">
       <a class="button secondary" href="{{ url_for('index') }}">Wróć</a>
-      <a class="button" href="{{ url_for('new_character') }}">Stwórz nową postać</a>
     </div>
   </main>
 </body>

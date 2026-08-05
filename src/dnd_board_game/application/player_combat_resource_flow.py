@@ -7,9 +7,12 @@ from typing import Protocol
 from dnd_board_game.actions import ActionResourceResolver
 from dnd_board_game.actors import (
     Actor,
+    ActorResourcePool,
     ExhaustionRollKind,
     Faction,
+    RecoveryPeriod,
     apply_exhaustion_to_roll_request,
+    actor_has_feature,
     saving_throw_roll_modifiers,
     spell_is_prepared,
 )
@@ -19,10 +22,13 @@ from dnd_board_game.combat import (
     AppliedDamageResult,
     CombatState,
     CombatStatus,
+    HealingSource,
+    HealingSourceType,
     SpellArea,
     SpellAreaShape,
     area_positions_for_center,
     area_positions_for_direction,
+    apply_healing_result,
     legal_area_centers,
     direction_anchor_positions,
     end_invisibility_effects,
@@ -111,6 +117,8 @@ class PendingConcentrationAction:
     legal_positions: tuple[Coordinate, ...] = ()
     anchor: Coordinate | None = None
     area_positions: tuple[Coordinate, ...] = ()
+    casting_minutes: int = 0
+    prepared_roll_total: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -579,6 +587,15 @@ class PlayerCombatResourceFlowService:
             if is_concentration
             else effects_after_cast
         )
+        if action.id == "find_familiar":
+            updated_effects = tuple(
+                effect
+                for effect in updated_effects
+                if not (
+                    effect.source_actor_id == str(caster.id)
+                    and effect.kind.startswith("familiar:")
+                )
+            )
         applied_effects: list[ActiveCombatEffect] = []
         die_sides = int(getattr(action, "damage_die_sides", 0))
         pool_dice_count = int(
@@ -671,7 +688,7 @@ class PlayerCombatResourceFlowService:
                 if save.success:
                     continue
             affected_targets.append(target)
-        if pool_dice_count:
+        if pool_dice_count and action.id != "prayer_of_healing":
             remaining_pool = effect_value
             pooled_targets: list[Actor] = []
             for target in sorted(affected_targets, key=lambda actor: actor.hp):
@@ -784,6 +801,12 @@ class PlayerCombatResourceFlowService:
                 continue
             if base_effect_kind == "remove_condition":
                 continue
+            if base_effect_kind in {
+                "goodberry_pool",
+                "prayer_healing",
+                "reveal_hidden_traps",
+            }:
+                continue
             if base_effect_kind == "apply_condition" and not is_concentration:
                 continue
             effect = ActiveCombatEffect(
@@ -853,6 +876,54 @@ class PlayerCombatResourceFlowService:
                 ).active_effects
                 applied_effects.append(heat_penalty)
         updated_state = resource_use.state
+        if base_effect_kind == "goodberry_pool":
+            current_caster = _actor_by_id(updated_state, str(caster.id))
+            pool = ActorResourcePool(
+                id="goodberry_charges",
+                label="Dobre jagody",
+                current=10,
+                maximum=10,
+                recovery=RecoveryPeriod.NEVER,
+            )
+            updated_caster = replace(
+                current_caster,
+                resource_pools=(
+                    *tuple(
+                        item
+                        for item in current_caster.resource_pools
+                        if item.id != pool.id
+                    ),
+                    pool,
+                ),
+            )
+            updated_state = replace_actor(updated_state, updated_caster)
+        elif base_effect_kind == "prayer_healing":
+            modifier = max(
+                0,
+                caster.spell_save_dc - 8 - caster.proficiency_bonus,
+            )
+            healing_source = HealingSource(
+                id="prayer_of_healing",
+                name=action.label,
+                source_type=HealingSourceType.SPELL,
+                range_feet=30,
+                healing_hint="",
+                healing_fixed=effect_value + modifier,
+                spell_level=action.spell_level,
+                cast_level=pending.cast_level,
+                excluded_creature_types=("construct", "undead"),
+            )
+            for target in affected_targets:
+                if target.creature_type in healing_source.excluded_creature_types:
+                    continue
+                current = _actor_by_id(updated_state, str(target.id))
+                healed = apply_healing_result(
+                    current,
+                    healing_source,
+                    effect_value + modifier,
+                    condition_states=updated_state.condition_states,
+                )
+                updated_state = replace_actor(updated_state, healed.actor_after)
         if (
             base_effect_kind == "ongoing_damage"
             and bool(getattr(action, "damage_on_cast", False))
@@ -1177,6 +1248,41 @@ class PlayerCombatResourceFlowService:
             removed_effect_ids = [
                 effect.id for effect in removed if effect.id in effect_ids
             ]
+            if actor_has_feature(actor, "flaw_arcane_echo") and not any(
+                effect.actor_id == actor_id and effect.kind == "flaw_arcane_echo_used"
+                for effect in active_effects
+            ):
+                used = ActiveCombatEffect(
+                    id=f"flaw_arcane_echo_used:{actor_id}",
+                    actor_id=actor_id,
+                    kind="flaw_arcane_echo_used",
+                    label="Echo magicznego wycieku — wykorzystane",
+                    object_id="feature:flaw_arcane_echo",
+                    value=0,
+                    source=EffectSource(
+                        EffectSourceType.SYSTEM,
+                        "flaw_arcane_echo",
+                        "Skaza: Echo magicznego wycieku",
+                    ),
+                    duration=EffectDuration.UNTIL_ENCOUNTER_END,
+                )
+                echo = ActiveCombatEffect(
+                    id=f"flaw_arcane_echo_active:{actor_id}",
+                    actor_id=actor_id,
+                    kind="flaw_arcane_echo_active",
+                    label="Echo magicznego wycieku",
+                    object_id="feature:flaw_arcane_echo",
+                    value=0,
+                    source=EffectSource(
+                        EffectSourceType.SYSTEM,
+                        "flaw_arcane_echo",
+                        "Skaza: Echo magicznego wycieku",
+                    ),
+                    duration=EffectDuration.UNTIL_TURN_END,
+                    expiration_actor_id=actor_id,
+                )
+                updated_effects = apply_active_effect(updated_effects, used).active_effects
+                updated_effects = apply_active_effect(updated_effects, echo).active_effects
         result_text = (
             "koncentracja utrzymana"
             if success

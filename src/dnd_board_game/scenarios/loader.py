@@ -88,6 +88,7 @@ from dnd_board_game.exploration import (
     CheckAggregation,
     CheckParticipants,
     ExplorationChallenge,
+    ExplorationCardReaction,
     ExplorationChallengeOption,
     ExplorationEncounterTrigger,
     ExplorationHazard,
@@ -171,6 +172,7 @@ from dnd_board_game.exploration import (
     ScenarioContinuationOutcome,
     TravelPolicy,
     ShortRestPolicy,
+    LongRestPolicy,
     TemporaryItemTemplate,
     EncounterTriggerCondition,
     mechanic_tool,
@@ -3140,9 +3142,57 @@ def _parse_exploration_zone(
         search_failure_flag=str(search_data["failure_flag"]) if "failure_flag" in search_data else None,
         llm_context=_parse_llm_context(data.get("llm_context", {}), f"exploration zone {zone_id}.llm_context"),
         short_rest_policy=_parse_short_rest_policy(data.get("short_rest"), zone_id),
+        long_rest_policy=_parse_long_rest_policy(data.get("long_rest"), zone_id),
+        exploration_card_ids=tuple(
+            str(card_id) for card_id in data.get("exploration_cards", ["*"])
+        ),
+        exploration_card_reactions=_parse_exploration_card_reactions(
+            data.get("exploration_card_reactions", []),
+            zone_id,
+        ),
         item_instances=item_instances,
         fixtures=fixtures,
     )
+
+
+def _parse_exploration_card_reactions(
+    data: object,
+    zone_id: str,
+) -> tuple[ExplorationCardReaction, ...]:
+    field = f"exploration zone {zone_id}.exploration_card_reactions"
+    if not isinstance(data, list):
+        raise ValueError(f"{field} must be an array.")
+    reactions: list[ExplorationCardReaction] = []
+    for index, raw in enumerate(data):
+        item_field = f"{field}[{index}]"
+        if not isinstance(raw, dict):
+            raise ValueError(f"{item_field} must be an object.")
+        effects = raw.get("effects", [])
+        if not isinstance(effects, list) or any(not isinstance(effect, dict) for effect in effects):
+            raise ValueError(f"{item_field}.effects must be an array of objects.")
+        reactions.append(
+            ExplorationCardReaction(
+                id=str(_required(raw, "id", item_field)),
+                card_action_id=str(_required(raw, "card_action_id", item_field)),
+                interaction_ids=tuple(str(value) for value in raw.get("interaction_ids", [])),
+                prompt_kinds=tuple(str(value) for value in raw.get("prompt_kinds", [])),
+                required_tags=tuple(str(value) for value in raw.get("required_tags", [])),
+                message=str(raw.get("message", "")),
+                effects=tuple(dict(effect) for effect in effects),
+                redirect_option_id=(
+                    str(raw["redirect_option_id"])
+                    if raw.get("redirect_option_id") is not None
+                    else None
+                ),
+                check_modifier=int(raw.get("check_modifier", 0)),
+                roll_mode=_enum_value(
+                    RollMode,
+                    str(raw.get("roll_mode", RollMode.NORMAL.value)),
+                    f"{item_field}.roll_mode",
+                ),
+            )
+        )
+    return tuple(reactions)
 
 
 def _parse_paper_map(data: Any, field: str) -> PaperMap | None:
@@ -3617,6 +3667,30 @@ def _parse_short_rest_policy(data: Any, zone_id: str) -> ShortRestPolicy | None:
     )
 
 
+def _parse_long_rest_policy(data: Any, zone_id: str) -> LongRestPolicy | None:
+    if data is None:
+        return None
+    if not isinstance(data, dict):
+        raise ValueError(f"exploration zone {zone_id}.long_rest must be an object.")
+    effects = data.get("completion_effects", [])
+    if not isinstance(effects, list) or any(not isinstance(effect, dict) for effect in effects):
+        raise ValueError(
+            f"exploration zone {zone_id}.long_rest.completion_effects must be a list of objects."
+        )
+    return LongRestPolicy(
+        id=str(data.get("id") or f"long_rest:{zone_id}"),
+        safety=_enum_value(
+            RestSafety,
+            str(data.get("safety", RestSafety.SAFE.value)),
+            f"exploration zone {zone_id}.long_rest.safety",
+        ),
+        risk_summary=str(data.get("risk_summary", "")),
+        duration_minutes=int(data.get("duration_minutes", 480)),
+        max_completions=int(data.get("max_completions", 0)),
+        completion_effects=tuple(effects),
+    )
+
+
 def _parse_exploration_option(data: Any, zone_id: str) -> ExplorationOption:
     if not isinstance(data, dict):
         raise ValueError(f"exploration zone {zone_id}.options entries must be objects.")
@@ -3665,6 +3739,17 @@ def _parse_exploration_option(data: Any, zone_id: str) -> ExplorationOption:
             )
         ),
         default_declaration=str(data.get("default_declaration", "")),
+        required_party_actor_id=(
+            str(data["required_party_actor_id"])
+            if "required_party_actor_id" in data
+            else None
+        ),
+        assigned_actor_id=(
+            str(data["assigned_actor_id"])
+            if "assigned_actor_id" in data
+            else None
+        ),
+        character_moment=bool(data.get("character_moment", False)),
     )
 
 
@@ -4102,6 +4187,11 @@ def _parse_interaction_goals(
                             CheckParticipants.SINGLE_ACTOR.value,
                         )
                     )
+                ),
+                check_aggregation=(
+                    CheckAggregation(str(raw_goal["check_aggregation"]))
+                    if raw_goal.get("check_aggregation")
+                    else None
                 ),
                 allowed_check_participants=tuple(
                     CheckParticipants(str(item))

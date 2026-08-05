@@ -25,10 +25,16 @@
   "concentration": false,
   "ritual": false,
   "effect": {
-    "kind": "exploration",
-    "effect_type": "set_flag",
-    "flag_key": "cast_prayer_of_healing",
-    "flag_value": true,
-    "instructions": "Po 10 minutach do 6 istot w 30 stopach odzyskuje 2k8 + modyfikator cechy rzucania PW; +1k8 za wyższy slot."
+    "kind": "combat_action",
+    "action_type": "targeted_status",
+    "label": "Modlitwa leczenia",
+    "effect_kind": "prayer_healing",
+    "target_faction": "ally",
+    "target_count": 6,
+    "hit_point_pool_dice_count": 2,
+    "upcast_hit_point_pool_dice_per_level": 1,
+    "damage_die_sides": 8,
+    "cast_flag": "cast_prayer_of_healing",
+    "instructions": "Najpierw wybierz maksymalnie 6 żywych celów i wpisz wspólny rzut 2k8 (+1k8 za wyższy slot). Ukończenie po 10 nieprzerwanych minutach leczy każdy cel o wynik + modyfikator cechy czarowania i zużywa slot; przerwanie przed ukończeniem nie zużywa slotu."
   }
 }

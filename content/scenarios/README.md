@@ -380,7 +380,10 @@ przejściu do strefy używającej innej mapy UI pokazuje podgląd i linki do dru
 a rozgrywka pozostaje zatrzymana do potwierdzenia rozłożenia mapy. Strefy na tej
 samej mapie nie wymagają jej ponownego rozkładania. `interaction_pad_positions`
 określa pola, na których runtime pokazuje dynamiczne, kolorowe opcje powiązane
-numerem i kolorem z kafelkami UI. Dopiero później uruchamiane są kroki ustawiania
+numerem i kolorem z kafelkami UI. Strefa może zadeklarować najwyżej osiem takich
+pozycji. Runtime rezerwuje ostatnią na czerwone systemowe wyjście, dlatego content
+może jednocześnie udostępnić najwyżej `min(7, liczba_pozycji - 1)` działań. Nadmiar
+jest błędem autora, a nie listą stronicowaną ani cicho uciętą. Dopiero później uruchamiane są kroki ustawiania
 NPC, elementów sceny i pasywnego wykrywania.
 Standard projektu to plansza 20×30 pól, pole 2,5 cm i mapa 50×75 cm bez
 nadrukowanej kratki. Kafelkowe PDF-y A4 należy drukować w skali 100%.

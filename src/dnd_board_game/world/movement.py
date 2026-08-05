@@ -62,7 +62,10 @@ def movement_cost(
         if not _can_move_through_occupant(actor, occupant):
             return None
         return DIFFICULT_MOVE_COST_FEET
-    if terrain.is_difficult:
+    if terrain.is_difficult and not (
+        actor.wild_shape is not None
+        and actor.wild_shape.form_id == "giant_eagle"
+    ):
         return DIFFICULT_MOVE_COST_FEET
     return NORMAL_MOVE_COST_FEET
 

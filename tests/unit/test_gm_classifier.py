@@ -280,8 +280,8 @@ def test_selected_flow_adds_authored_tags_before_narration_consistency_check():
         selected_flow_transition_id="force_gate",
         selected_flow_route_kind="challenge_option",
         selected_flow_option_id="force_gate",
-        selected_check_participants=CheckParticipants.LEAD_WITH_HELP,
-        selected_participant_actor_ids=("hero", "cleric"),
+        selected_check_participants=CheckParticipants.WHOLE_PARTY,
+        selected_participant_actor_ids=("hero", "rogue", "cleric"),
     )
     proposal = _proposal(
         approach_label="Wspólne uderzenie",
@@ -327,23 +327,25 @@ def test_selected_goal_sends_authored_participant_model_and_actor_roles_to_gm():
         player_action="Bohater napiera na bramę, a Kapłan podpiera mu ramię.",
         actors=exploration.actors,
         selected_goal_id="force_entry",
-        selected_check_participants=CheckParticipants.LEAD_WITH_HELP,
-        selected_participant_actor_ids=("hero", "cleric"),
+        selected_check_participants=CheckParticipants.WHOLE_PARTY,
+        selected_participant_actor_ids=("hero", "rogue", "cleric"),
     )
 
     challenge = request.to_prompt_payload()["challenge"]
     validated = validate_gm_classifier_proposal(_proposal(), request)
 
-    assert challenge["selected_goal"]["check_participants"] == "lead_with_help"
-    assert challenge["selected_goal"]["participant_mode"] == "allow"
-    assert challenge["selected_check_participants"] == "lead_with_help"
+    assert challenge["selected_goal"]["check_participants"] == "whole_party"
+    assert challenge["selected_goal"]["check_aggregation"] == "any_success"
+    assert challenge["selected_goal"]["participant_mode"] == "must"
+    assert challenge["selected_check_participants"] == "whole_party"
     assert challenge["selected_participants"] == [
-        {"actor_id": "hero", "actor_name": "Bohater", "role": "lead"},
-        {"actor_id": "cleric", "actor_name": "Kapłan", "role": "helper"},
+        {"actor_id": "hero", "actor_name": "Bohater", "role": "group_member"},
+        {"actor_id": "rogue", "actor_name": "Łotrzyca", "role": "group_member"},
+        {"actor_id": "cleric", "actor_name": "Kapłan", "role": "group_member"},
     ]
-    assert validated.proposal.check_participants.value == "lead_with_help"
-    assert validated.proposal.check_aggregation.value == "lead_result"
-    assert validated.proposal.selected_mechanic.value == "lead_with_help_check"
+    assert validated.proposal.check_participants.value == "whole_party"
+    assert validated.proposal.check_aggregation.value == "any_success"
+    assert validated.proposal.selected_mechanic.value == "group_check"
 
 
 def test_fixture_action_mechanics_are_grounded_from_fixture_policy():

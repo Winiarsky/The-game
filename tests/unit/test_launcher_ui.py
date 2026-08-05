@@ -28,10 +28,10 @@ def test_main_menu_exposes_separate_application_flows(tmp_path) -> None:
     assert 'href="/characters"' in html
     assert "Nowa gra" in html
     assert "Wczytaj grę" in html
-    assert "Stwórz postać" in html
+    assert "Bohaterowie" in html
 
 
-def test_new_game_requires_a_roster_party(tmp_path) -> None:
+def test_legacy_screen_party_submission_is_disabled(tmp_path) -> None:
     session = _session(tmp_path)
     session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
     client = create_app(session).test_client()
@@ -41,8 +41,8 @@ def test_new_game_requires_a_roster_party(tmp_path) -> None:
         data={"scenario_id": session.exploration.scenario_id},
     )
 
-    assert response.status_code == 400
-    assert "Wybierz od 1 do 5" in response.get_data(as_text=True)
+    assert response.status_code == 409
+    assert "wyłącznie skanami kart bohaterów" in response.get_data(as_text=True)
 
 
 def test_new_game_lists_real_exploration_scenario_catalog(tmp_path) -> None:
@@ -56,6 +56,45 @@ def test_new_game_lists_real_exploration_scenario_catalog(tmp_path) -> None:
     assert 'value="abandoned_watchtower"' not in html
     assert 'value="gate_skirmish"' not in html
     assert "Opuszczona strażnica" in html
+    assert 'name="character_ids"' not in html
+    assert "Zatwierdzenie wyłącznie fizyczną kartą ACCEPT" in html
+
+
+def test_new_game_party_is_selected_only_with_hero_cards(tmp_path) -> None:
+    session = _session(tmp_path)
+    client = create_app(session).test_client()
+    client.get("/new-game")
+
+    first = client.post(
+        "/api/new-game/card-scan",
+        json={"payload": "dndbg>v1>actor>garran"},
+    )
+    duplicate = client.post(
+        "/api/new-game/card-scan",
+        json={"payload": "dndbg:v1:actor:garran"},
+    )
+    second = client.post(
+        "/api/new-game/card-scan",
+        json={"payload": "dndbg:v1:actor:dagna"},
+    )
+    removed = client.post(
+        "/api/new-game/card-scan",
+        json={"payload": "dndbg:v1:action:universal:decline"},
+    )
+    accepted = client.post(
+        "/api/new-game/card-scan",
+        json={
+            "payload": "dndbg:v1:action:universal:accept",
+            "scenario_id": session.exploration.scenario_id,
+        },
+    )
+
+    assert first.get_json()["selected_actor_ids"] == ["garran"]
+    assert duplicate.get_json()["selected_actor_ids"] == ["garran"]
+    assert second.get_json()["selected_actor_ids"] == ["garran", "dagna"]
+    assert removed.get_json()["selected_actor_ids"] == ["garran"]
+    assert accepted.status_code == 200
+    assert accepted.get_json()["redirect"] == "/play"
 
 
 def test_load_game_empty_state_is_player_facing(tmp_path) -> None:
@@ -284,7 +323,7 @@ def test_character_creator_rejects_invalid_portrait_file(tmp_path) -> None:
     assert not tuple(character_dir.glob("*.character.json"))
 
 
-def test_new_game_replaces_fixture_party_with_selected_character(tmp_path) -> None:
+def test_custom_character_cannot_enter_game_through_legacy_screen_form(tmp_path) -> None:
     character_dir = tmp_path / "characters"
     session = _session(tmp_path)
     client = create_app(session, character_dir=character_dir).test_client()
@@ -319,24 +358,13 @@ def test_new_game_replaces_fixture_party_with_selected_character(tmp_path) -> No
         },
     )
 
-    assert response.status_code == 302
-    assert response.headers["Location"].endswith("/play")
+    assert response.status_code == 409
     allies = [
         actor
         for actor in session.exploration.actors
         if actor.faction.value == "ally"
     ]
-    assert [str(actor.id) for actor in allies] == ["aldren"]
-
-    session.save_snapshot()
-    restored = _session(tmp_path)
-    restored.load_snapshot()
-    restored_allies = [
-        actor
-        for actor in restored.exploration.actors
-        if actor.faction.value == "ally"
-    ]
-    assert [str(actor.id) for actor in restored_allies] == ["aldren"]
+    assert [str(actor.id) for actor in allies] != ["aldren"]
 
 
 def test_character_creator_returns_domain_validation_messages(tmp_path) -> None:

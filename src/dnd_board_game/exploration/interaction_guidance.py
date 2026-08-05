@@ -187,13 +187,16 @@ def apply_goal_resolution_profile(
             else option.check_participants
         ),
         check_aggregation=(
-            CheckAggregation.MAJORITY
-            if selected_goal_id is not None
-            and (selected_check_participants or goal.check_participants)
-            == CheckParticipants.WHOLE_PARTY
-            else CheckAggregation.LEAD_RESULT
-            if selected_goal_id is not None
-            else option.check_aggregation
+            goal.check_aggregation
+            or (
+                CheckAggregation.MAJORITY
+                if selected_goal_id is not None
+                and (selected_check_participants or goal.check_participants)
+                == CheckParticipants.WHOLE_PARTY
+                else CheckAggregation.LEAD_RESULT
+                if selected_goal_id is not None
+                else option.check_aggregation
+            )
         ),
         ability_check=replace(
             authored_check,

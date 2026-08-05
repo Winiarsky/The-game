@@ -37,3 +37,12 @@ def test_flow_confirms_only_actor_requiring_preparation() -> None:
     assert transition.actors[0].spell_preparation is not None
     assert transition.actors[0].spell_preparation.confirmed is True
     assert service.pending_actors(transition.actors) == ()
+
+
+def test_fixed_personal_deck_skips_pre_scenario_preparation() -> None:
+    service = SpellPreparationFlowService(("dagna", "nimra"))
+    actors = (_actor("dagna"), _actor("nimra"), _actor("custom_cleric"))
+
+    assert tuple(str(actor.id) for actor in service.pending_actors(actors)) == (
+        "custom_cleric",
+    )

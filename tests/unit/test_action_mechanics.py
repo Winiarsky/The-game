@@ -115,6 +115,38 @@ def test_combat_action_definition_maps_to_concentration_action():
     assert "concentration" in mechanic.tags
 
 
+def test_stabilize_spell_definition_maps_to_ally_rescue_action():
+    action = ScenarioCombatActionDefinition(
+        id="spare_the_dying",
+        name="Oszczędź umierającego",
+        action_type="stabilize",
+        label="Oszczędź umierającego",
+    )
+
+    mechanic = combat_action_mechanic_from_definition(action)
+
+    assert mechanic.targeting.value == "ally"
+    assert mechanic.resource.value == "action"
+    assert "stabilization" in mechanic.tags
+
+
+def test_retaliation_spell_definition_maps_to_enemy_reaction_damage():
+    action = ScenarioCombatActionDefinition(
+        id="hellish_rebuke",
+        name="Piekielna reprymenda",
+        action_type="reaction_damage",
+        label="Piekielna reprymenda",
+        spell_level=1,
+    )
+
+    mechanic = combat_action_mechanic_from_definition(action)
+
+    assert mechanic.id == "spell.hellish_rebuke"
+    assert mechanic.targeting.value == "enemy"
+    assert mechanic.resource.value == "reaction"
+    assert "retaliation" in mechanic.tags
+
+
 def test_builtin_combat_mechanics_cover_current_turn_actions():
     ids = {mechanic.id for mechanic in builtin_combat_mechanics()}
 

@@ -256,6 +256,57 @@ def test_cutting_words_spends_reaction_and_inspiration_to_turn_hit_into_miss() -
     assert not reaction_available_for(resolution.state, updated_bard)
 
 
+def test_cutting_words_can_reduce_damage_after_attack_result_is_kept() -> None:
+    enemy = replace(_actor("enemy", Faction.ENEMY, Coordinate(2, 0)), ac=10)
+    target = replace(_actor("target", Faction.ALLY, Coordinate(1, 0)), ac=12)
+    bard = replace(
+        _actor("bard", Faction.ALLY, Coordinate(0, 0)),
+        level=3,
+        features=(
+            _class_feature("bardic_inspiration"),
+            _class_feature("cutting_words"),
+        ),
+        resource_pools=(
+            ActorResourcePool(
+                "bardic_inspiration_uses",
+                "Bardic Inspiration",
+                2,
+                2,
+                RecoveryPeriod.LONG_REST,
+            ),
+        ),
+    )
+    state = _state(enemy, target, bard)
+    enemy_result = _enemy_weapon_result(
+        state,
+        enemy,
+        target,
+        attack_total=18,
+        damage_amount=5,
+    )
+    service = ClassFeatureReactionFlowService()
+
+    options = service.cutting_words_damage_options(
+        board=BoardState(),
+        state=state,
+        enemy_result=enemy_result,
+    )
+    resolution = service.apply_cutting_words(
+        state=state,
+        enemy_result=enemy_result,
+        option=options[0],
+        die_roll=3,
+    )
+
+    updated_target = next(
+        actor for actor in resolution.result.state.actors if actor.id == target.id
+    )
+    assert resolution.resolution_stage == "damage_roll_revealed"
+    assert resolution.previous_damage_total == 5
+    assert resolution.damage_total == 2
+    assert updated_target.hp == target.hp - 2
+
+
 def test_deflect_missiles_reduces_ranged_weapon_damage_and_catches_projectile() -> None:
     enemy = replace(_actor("enemy", Faction.ENEMY, Coordinate(3, 0)), ac=10)
     monk = replace(

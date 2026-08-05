@@ -662,6 +662,62 @@ def test_blindsight_or_truesight_ignores_blur_within_sense_range() -> None:
     assert sighted_attack.attack_roll_request.mode == RollMode.NORMAL
 
 
+def test_darkvision_negates_nonmagical_ambient_darkness_within_range() -> None:
+    from dnd_board_game.actors.senses import ActorSenseProfile
+
+    brakka = replace(
+        _actor("brakka", Faction.ALLY, Coordinate(0, 0)),
+        senses=ActorSenseProfile(darkvision_feet=60),
+    )
+    enemy = _actor("enemy", Faction.ENEMY, Coordinate(6, 0))
+    source = AttackSource("Topór", AttackSourceType.WEAPON, 5, D20RollRequest())
+    darkness = ActiveCombatEffect(
+        id="ambient_darkness:crypt",
+        actor_id="environment",
+        kind="ambient_darkness",
+        label="Niemagiczna ciemność",
+        object_id="zone:crypt",
+        value=0,
+    )
+
+    effective = attack_source_with_target_combat_effects(
+        brakka,
+        enemy,
+        source,
+        (darkness,),
+    )
+
+    assert effective.attack_roll_request.mode == RollMode.ADVANTAGE
+
+
+def test_darkvision_does_not_reach_beyond_sixty_feet_in_ambient_darkness() -> None:
+    from dnd_board_game.actors.senses import ActorSenseProfile
+
+    brakka = replace(
+        _actor("brakka", Faction.ALLY, Coordinate(0, 0)),
+        senses=ActorSenseProfile(darkvision_feet=60),
+    )
+    enemy = _actor("enemy", Faction.ENEMY, Coordinate(13, 0))
+    source = AttackSource("Topór", AttackSourceType.WEAPON, 5, D20RollRequest())
+    darkness = ActiveCombatEffect(
+        id="ambient_darkness:crypt",
+        actor_id="environment",
+        kind="ambient_darkness",
+        label="Niemagiczna ciemność",
+        object_id="zone:crypt",
+        value=0,
+    )
+
+    effective = attack_source_with_target_combat_effects(
+        brakka,
+        enemy,
+        source,
+        (darkness,),
+    )
+
+    assert effective.attack_roll_request.mode == RollMode.NORMAL
+
+
 def test_shillelagh_uses_spellcasting_modifier_and_d8_for_club() -> None:
     hero = replace(
         _actor("hero", Faction.ALLY, Coordinate(1, 1)),

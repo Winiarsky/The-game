@@ -180,6 +180,8 @@ FEATURE_LABELS_PL = {
     "sculpt_spells": "Rzeźbienie czarów",
     "second_story_work": "Praca na wysokości",
     "second_wind": "Drugi oddech",
+    "defensive_stance": "Pozycja obronna",
+    "instinctive_dodge": "Unik instynktowny",
     "sneak_attack": "Podstępny atak",
     "sorcerous_origin": "Pochodzenie czarodzieja",
     "spellcasting": "Rzucanie czarów",
