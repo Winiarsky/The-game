@@ -9,6 +9,8 @@ from .qr_payload import DecisionCardActionKind, parse_decision_card_qr_payload
 class UniversalCardAction(StrEnum):
     ACCEPT = "accept"
     DECLINE = "decline"
+    MANEUVERS = "maneuvers"
+    EQUIPMENT = "equipment"
 
 
 @dataclass(frozen=True, slots=True)
@@ -18,7 +20,12 @@ class ScannedUniversalCard:
 
     @property
     def player_label(self) -> str:
-        return self.action.value.upper()
+        return {
+            UniversalCardAction.ACCEPT: "AKCEPTUJ",
+            UniversalCardAction.DECLINE: "ODRZUĆ",
+            UniversalCardAction.MANEUVERS: "MANEWRY",
+            UniversalCardAction.EQUIPMENT: "EKWIPUNEK",
+        }[self.action]
 
 
 def resolve_universal_card_scan(payload: str) -> ScannedUniversalCard:

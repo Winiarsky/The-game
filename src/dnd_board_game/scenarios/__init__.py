@@ -20,6 +20,7 @@ from .content_audit import (
 from .catalog import ScenarioCatalogEntry, discover_scenarios
 from .loader import (
     CompiledActorCombatContent,
+    EncounterPartySizeVariant,
     LoadedExploration,
     LoadedEncounter,
     LoadedScenario,
@@ -32,6 +33,7 @@ from .loader import (
     build_encounter_from_scenario,
     compile_actor_combat_content,
     encounter_with_custom_party,
+    encounter_for_party_size,
     load_scenario,
 )
 from .preflight import ScenarioPreflightIssue, preflight_scenario
@@ -43,6 +45,7 @@ __all__ = [
     "ContentAuditReport",
     "ContentHeader",
     "CompiledActorCombatContent",
+    "EncounterPartySizeVariant",
     "LoadedEncounter",
     "LoadedExploration",
     "LoadedScenario",
@@ -61,6 +64,7 @@ __all__ = [
     "compile_actor_combat_content",
     "discover_scenarios",
     "encounter_with_custom_party",
+    "encounter_for_party_size",
     "build_exploration_from_scenario",
     "audit_content",
     "load_scenario",

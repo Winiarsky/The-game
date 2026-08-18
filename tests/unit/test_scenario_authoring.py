@@ -62,8 +62,16 @@ def test_catalog_lists_only_exploration_scenarios() -> None:
 
     assert [entry.id for entry in entries] == [
         "mechanics_playground",
+        "ostatni_transport_00_gildia",
         "village_square_mvp",
     ]
+    guild = next(
+        entry for entry in entries if entry.id == "ostatni_transport_00_gildia"
+    )
+    assert guild.continuation_scene_names == (
+        "Ostatni transport — Zawalona droga",
+    )
+    assert guild.scene_count == 2
     village = next(entry for entry in entries if entry.id == "village_square_mvp")
     assert village.continuation_scene_names == ("Opuszczona strażnica",)
     assert village.scene_count == 2

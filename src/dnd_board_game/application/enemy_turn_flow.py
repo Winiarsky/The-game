@@ -11,7 +11,9 @@ from dnd_board_game.combat import (
     AttackSource,
     CombatState,
     CombatStatus,
+    CombatCondition,
     EnemyAutoTurnResult,
+    EnemyAiProfile,
     EnemyTurnPlan,
     OpportunityAttackThreat,
     ReactionKind,
@@ -21,13 +23,15 @@ from dnd_board_game.combat import (
     DamageComponentInput,
     DamageType,
     apply_damage_result,
+    apply_condition,
     apply_save_damage_amount,
     attack_source_with_target_combat_effects,
     current_actor,
     opportunity_attackers_for_movement,
     open_reaction_window,
     plan_enemy_turn,
-    resolve_enemy_auto_turn,
+    plan_utility_enemy_turn,
+    resolve_planned_enemy_turn,
     resolve_actor_saving_throw,
     resolve_damage,
     replace_actor,
@@ -113,6 +117,9 @@ class EnemyTurnFlowService:
         attack_sources_by_actor: Mapping[ActorId, AttackSource],
         multiattack_sources_by_actor: Mapping[ActorId, tuple[AttackSource, ...]] | None = None,
         scene_objects: tuple[SceneObject, ...] = (),
+        ai_profile: EnemyAiProfile | None = None,
+        ai_roles: Mapping[str, str] | None = None,
+        ai_zone_positions: Mapping[str, tuple[Coordinate, ...]] | None = None,
     ) -> EnemyTurnIntentTransition:
         enemy = _active_enemy(state)
         source = _enemy_attack_source(
@@ -123,7 +130,26 @@ class EnemyTurnFlowService:
         )
         if source is None:
             raise ValueError(f"Aktor {enemy.name} nie ma zdefiniowanego ataku.")
-        intent = plan_enemy_turn(board, state, enemy, source)
+        role_by_actor = dict(ai_roles or {})
+        zones = dict(ai_zone_positions or {})
+        role_id = role_by_actor.get(str(enemy.id), "")
+        intent = (
+            plan_utility_enemy_turn(
+                board,
+                state,
+                enemy,
+                source,
+                profile=ai_profile,
+                role_id=role_id,
+                actor_roles=role_by_actor,
+                escape_positions=zones.get(ai_profile.escape_zone_tag, ()),
+                guard_positions=zones.get(ai_profile.guard_zone_tag, ()),
+                hazard_positions=zones.get(ai_profile.hazard_zone_tag, ()),
+                scene_objects=scene_objects,
+            )
+            if ai_profile is not None and role_id
+            else plan_enemy_turn(board, state, enemy, source)
+        )
         return EnemyTurnIntentTransition(
             intent=intent,
             enemy_id=str(enemy.id),
@@ -135,6 +161,9 @@ class EnemyTurnFlowService:
                 ("enemy_id", str(enemy.id)),
                 ("target_id", intent.target.id if intent.target is not None else None),
                 ("message", intent.message),
+                ("intent", intent.intent),
+                ("utility_score", intent.utility_score),
+                ("utility_breakdown", list(intent.utility_breakdown)),
             ),
         )
 
@@ -198,10 +227,9 @@ class EnemyTurnFlowService:
                     ),
                 ),
             )
-        result = resolve_enemy_auto_turn(
+        result = resolve_planned_enemy_turn(
             board,
-            state,
-            enemy,
+            intent,
             source,
             rng,
             scene_objects,
@@ -212,6 +240,7 @@ class EnemyTurnFlowService:
                 and multiattack_sources_by_actor.get(enemy.id)
                 else None
             ),
+            original_state=state,
         )
         ready_attacks = (
             *self._player_reactions.detect_ready_attacks(
@@ -449,11 +478,29 @@ class EnemyTurnFlowService:
             active_effects=active_effects,
         )
         updated_state = replace_actor(result.state, applied.actor_after)
+        condition_message = ""
+        if (
+            not saving_throw.success
+            and source.conditional_on_hit_save_condition is not None
+        ):
+            condition = apply_condition(
+                updated_state.condition_states,
+                applied.actor_after,
+                CombatCondition(source.conditional_on_hit_save_condition),
+                source_actor_id=str(result.enemy.id),
+                source_label=source.name,
+            )
+            updated_state = replace(
+                updated_state,
+                condition_states=condition.condition_states,
+            )
+            condition_message = f" {condition.message}"
         outcome = "sukces" if saving_throw.success else "porażka"
         message = (
             f"{target.name}: {request.ability} save d20 {saving_throw.natural_roll}, "
             f"modyfikator {saving_throw.modifier:+d}, razem {saving_throw.total} przeciw "
             f"ST {request.dc}: {outcome}. {applied_damage_message(applied)}"
+            f"{condition_message}"
         )
         updated_result = replace(
             result,

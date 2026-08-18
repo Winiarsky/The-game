@@ -404,6 +404,12 @@ class _HardwareBackend:
         self.pre_scan_stop_s = max(0.0, float(self.scan_cfg.get("pre_scan_stop_s", 0.08)))
         self.pre_scan_delay_s = max(0.0, float(self.scan_cfg.get("pre_scan_delay_s") or 0.12))
         self.scan_recovery_timeout_s = max(0.0, float(self.scan_cfg.get("scan_recovery_timeout_s") or 0.0))
+        # STOP is used both as a real cancellation request and as a defensive
+        # preamble before SCAN.  Firmware acknowledges both with the same
+        # protocol event, so remember only cancellations explicitly requested
+        # by the application.  A delayed acknowledgement for the defensive
+        # STOP must not cancel the newly armed scan.
+        self._cancel_generation = 0
         self.port_result = _open_serial_probe(self.scan_cfg)
         self.ser = self.port_result.serial_handle
         self.wled = _WledClient(wled_cfg)
@@ -438,6 +444,7 @@ class _HardwareBackend:
             time.sleep(self.pre_scan_delay_s)
 
     def cancel_scan(self) -> None:
+        self._cancel_generation = getattr(self, "_cancel_generation", 0) + 1
         try:
             self._send_stop_command()
         except Exception:
@@ -452,12 +459,11 @@ class _HardwareBackend:
     def reset_connection(self, *, reopen: bool = False) -> None:
         try:
             self.cancel_scan()
-            self._reset_input_buffer()
-            try:
-                self.ser.reset_output_buffer()
-            except Exception:
-                pass
             if not reopen:
+                # Keep the firmware's STOP acknowledgement in the input buffer.
+                # A concurrent scan_board() owns the serial reader and needs that
+                # acknowledgement to return from its blocking read. Clearing the
+                # buffer here can strand the scan and its application-level lock.
                 return
         except Exception:
             logger.debug("Miękki reset połączenia planszy nie powiódł się.", exc_info=True)
@@ -502,6 +508,7 @@ class _HardwareBackend:
     ) -> tuple[int, int] | None:
         deadline = None if timeout_s is None else (time.monotonic() + max(0.0, float(timeout_s)))
         while True:
+            cancel_generation = getattr(self, "_cancel_generation", 0)
             remaining = None if deadline is None else max(0.0, deadline - time.monotonic())
             if remaining is not None and remaining <= 0:
                 raise TimeoutError("Timeout oczekiwania na wybór pola na planszy.")
@@ -532,9 +539,14 @@ class _HardwareBackend:
                     if remaining is not None:
                         raise TimeoutError("Timeout oczekiwania na wybór pola na planszy.") from exc
                     raise
+                if getattr(self, "_cancel_generation", 0) != cancel_generation:
+                    return None
                 event = str(payload.get("event") or "").lower()
                 if event in {"cancel", "cancelled", "stop", "abort"} or bool(payload.get("cancelled")):
-                    return None
+                    logger.debug(
+                        "Pomijam potwierdzenie technicznego STOP sprzed aktywnego SCAN."
+                    )
+                    continue
                 if event != "press":
                     continue
                 result = (int(payload["col"]), int(payload["row"]))

@@ -17,6 +17,8 @@ from dnd_board_game.exploration import (
     ExplorationState,
     ExplorationZone,
     NpcAttemptPlan,
+    NpcArgumentAssessment,
+    NpcArgumentLeverageClaim,
     NpcIntentActionPlan,
     SOCIAL_CHECK_SKILLS,
     SocialInteractionPlan,
@@ -25,6 +27,7 @@ from dnd_board_game.exploration import (
     interaction_goal,
     effective_narrative_style,
     plan_npc_attempt,
+    evaluate_npc_argument,
     plan_npc_intent_action,
     plan_social_interaction,
     validate_policy_exploration_effect,
@@ -63,6 +66,18 @@ class NpcEffect(BaseModel):
         return {"type": self.type, "parameters": dict(self.parameters)}
 
 
+class NpcArgumentLeverageClaimProposal(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    id: str = Field(max_length=120)
+    strength: int = Field(ge=0, le=2)
+
+    @field_validator("id")
+    @classmethod
+    def _normalize_id(cls, value: str) -> str:
+        return value.strip().lower()
+
+
 class NpcInteractionProposal(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -72,6 +87,18 @@ class NpcInteractionProposal(BaseModel):
     quantity: int = Field(default=1, ge=1)
     grounded_response_variant_id: str | None = Field(default=None, max_length=120)
     rubric_outcome: str | None = Field(default=None, pattern="^(success|failure)$")
+    argument_intent_fit: int | None = Field(default=None, ge=-2, le=1)
+    argument_specificity: int | None = Field(default=None, ge=0, le=1)
+    argument_credibility: int | None = Field(default=None, ge=-2, le=0)
+    argument_leverages: tuple[NpcArgumentLeverageClaimProposal, ...] = ()
+    argument_unsupported_claims: tuple[str, ...] = ()
+    argument_score: int | None = None
+    argument_modifier: int = Field(default=0, ge=-2, le=2)
+    argument_roll_mode: str = Field(default="normal", pattern="^(normal|advantage|disadvantage)$")
+    declaration_class: str | None = Field(
+        default=None,
+        pattern="^(valid_argument|weak_argument|off_topic|disruptive)$",
+    )
     player_narration: str = Field(default="", max_length=1000)
     npc_response: str = Field(default="", max_length=1000)
     requires_roll: bool = False
@@ -97,6 +124,7 @@ class NpcInteractionProposal(BaseModel):
         "target_id",
         "grounded_response_variant_id",
         "rubric_outcome",
+        "declaration_class",
     )
     @classmethod
     def _lower_optional(cls, value: str | None) -> str | None:
@@ -112,6 +140,29 @@ class NpcInteractionProposal(BaseModel):
     def _unique_information_ids(cls, value: tuple[str, ...]) -> tuple[str, ...]:
         return tuple(dict.fromkeys(item.strip() for item in value if item.strip()))
 
+    @field_validator("argument_unsupported_claims")
+    @classmethod
+    def _unique_unsupported_claims(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        return tuple(dict.fromkeys(item.strip() for item in value if item.strip()))
+
+
+class NpcOutcomeRenderProposal(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    gm_narration: str = Field(default="", max_length=1000)
+    npc_response: str = Field(default="", max_length=1000)
+    acknowledged_mechanical_summary: str = Field(default="", max_length=1000)
+
+    @field_validator(
+        "gm_narration",
+        "npc_response",
+        "acknowledged_mechanical_summary",
+        mode="before",
+    )
+    @classmethod
+    def _none_to_empty_text(cls, value: object) -> object:
+        return "" if value is None else value
+
 
 @dataclass(frozen=True, slots=True)
 class NpcInteractionRequest:
@@ -125,6 +176,7 @@ class NpcInteractionRequest:
     selected_goal_id: str | None = None
     routed_intent_id: str | None = None
     selected_social_skill: str | None = None
+    participant_actor_ids: tuple[str, ...] = ()
     conversation_only: bool = False
 
     def __post_init__(self) -> None:
@@ -226,6 +278,7 @@ class NpcInteractionRequest:
             "selected_goal": selected_goal.as_payload() if selected_goal is not None else None,
             "routed_intent_id": self.routed_intent_id,
             "selected_social_skill": self.selected_social_skill,
+            "participant_actor_ids": list(self.participant_actor_ids),
             "conversation_only": self.conversation_only,
             "effective_narrative_style": narrative_style.as_payload(),
             "grounding_contract": {
@@ -276,6 +329,48 @@ class NpcInteractionRequest:
 
 
 @dataclass(frozen=True, slots=True)
+class NpcOutcomeRenderRequest:
+    interaction: NpcInteractionRequest
+    outcome: str
+    mechanical_summary: str
+    target_label: str
+    declaration_class: str
+    unsupported_claims: tuple[str, ...] = ()
+    correction_note: str = ""
+
+    def to_prompt_payload(self) -> dict[str, Any]:
+        base = self.interaction.to_prompt_payload()
+        return {
+            "mode": "render_resolved_npc_outcome",
+            "player_action": self.interaction.player_action,
+            "npc": base["npc"],
+            "npc_runtime_state": base["npc_runtime_state"],
+            "conversation_thread": base["conversation_thread"],
+            "effective_narrative_style": base["effective_narrative_style"],
+            "selected_social_skill": self.interaction.selected_social_skill,
+            "resolved_outcome": {
+                "outcome": self.outcome,
+                "target_label": self.target_label,
+                "declaration_class": self.declaration_class,
+                "mechanical_summary": self.mechanical_summary,
+                "unsupported_claims": list(self.unsupported_claims),
+            },
+            "rendering_contract": {
+                "mechanics_are_final": True,
+                "do_not_add_facts_rewards_items_or_effects": True,
+                "react_directly_to_player_action": True,
+                "output_fields": [
+                    "gm_narration",
+                    "npc_response",
+                    "acknowledged_mechanical_summary",
+                ],
+                "acknowledge_exact_mechanical_summary": self.mechanical_summary,
+                "correction_note": self.correction_note,
+            },
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class NpcValidatedInteraction:
     proposal: NpcInteractionProposal
     point: ExplorationPoint
@@ -288,6 +383,12 @@ class NpcInteractionClient(Protocol):
     model: str
 
     def interact_npc(self, request: NpcInteractionRequest) -> NpcInteractionProposal:
+        ...
+
+    def render_npc_outcome(
+        self,
+        request: NpcOutcomeRenderRequest,
+    ) -> NpcOutcomeRenderProposal:
         ...
 
 
@@ -336,6 +437,35 @@ class GroqNpcInteractionClient:
             return NpcInteractionProposal.model_validate_json(str(response.json()["choices"][0]["message"]["content"]))
         except (KeyError, IndexError, TypeError, ValidationError) as exc:
             raise GmProposalValidationError(f"LLM returned invalid NPC interaction proposal: {exc}") from exc
+
+    def render_npc_outcome(
+        self,
+        request: NpcOutcomeRenderRequest,
+    ) -> NpcOutcomeRenderProposal:
+        if not self.api_key:
+            raise RuntimeError("Missing GROQ_API_KEY. Ustaw klucz w .env i uruchom `source .env`.")
+        payload = {
+            "model": self.model,
+            "temperature": 0.55,
+            "response_format": {"type": "json_object"},
+            "messages": [
+                {"role": "system", "content": load_prompt(PromptId.GM_NPC_INTERACTION)},
+                {"role": "user", "content": json.dumps(request.to_prompt_payload(), ensure_ascii=False)},
+            ],
+        }
+        response = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
+            json=payload,
+            timeout=self.timeout_s,
+        )
+        response.raise_for_status()
+        try:
+            return NpcOutcomeRenderProposal.model_validate_json(
+                str(response.json()["choices"][0]["message"]["content"])
+            )
+        except (KeyError, IndexError, TypeError, ValidationError) as exc:
+            raise GmProposalValidationError(f"LLM returned invalid NPC outcome narration: {exc}") from exc
 
 
 class GeminiNpcInteractionClient:
@@ -387,6 +517,34 @@ class GeminiNpcInteractionClient:
         except (KeyError, IndexError, TypeError, ValidationError) as exc:
             raise GmProposalValidationError(f"Gemini returned invalid NPC interaction proposal: {exc}") from exc
 
+    def render_npc_outcome(
+        self,
+        request: NpcOutcomeRenderRequest,
+    ) -> NpcOutcomeRenderProposal:
+        if not self.api_key:
+            raise RuntimeError("Missing GEMINI_API_KEY. Ustaw klucz w .env i uruchom `source .env`.")
+        payload = {
+            "system_instruction": {"parts": [{"text": load_prompt(PromptId.GM_NPC_INTERACTION)}]},
+            "contents": [{
+                "role": "user",
+                "parts": [{"text": json.dumps(request.to_prompt_payload(), ensure_ascii=False)}],
+            }],
+            "generation_config": {"temperature": 0.55, "response_mime_type": "application/json"},
+        }
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent"
+        response = requests.post(
+            url,
+            headers={"Content-Type": "application/json", "x-goog-api-key": self.api_key},
+            json=payload,
+            timeout=self.timeout_s,
+        )
+        response.raise_for_status()
+        try:
+            content = str(response.json()["candidates"][0]["content"]["parts"][0]["text"])
+            return NpcOutcomeRenderProposal.model_validate_json(content)
+        except (KeyError, IndexError, TypeError, ValidationError) as exc:
+            raise GmProposalValidationError(f"Gemini returned invalid NPC outcome narration: {exc}") from exc
+
 
 def build_npc_interaction_request(
     *,
@@ -400,6 +558,7 @@ def build_npc_interaction_request(
     selected_goal_id: str | None = None,
     routed_intent_id: str | None = None,
     selected_social_skill: str | None = None,
+    participant_actor_ids: tuple[str, ...] = (),
     conversation_only: bool = False,
 ) -> NpcInteractionRequest:
     return NpcInteractionRequest(
@@ -417,6 +576,7 @@ def build_npc_interaction_request(
             if selected_social_skill is not None
             else None
         ),
+        participant_actor_ids=participant_actor_ids,
         conversation_only=conversation_only,
     )
 
@@ -485,6 +645,54 @@ def validate_npc_interaction_proposal(
                 )
     elif policy.allowed_actions and proposal.action_type not in policy.allowed_actions:
         raise ValueError(f"NPC action is not allowed here: {proposal.action_type}.")
+    if permission is not None and permission.argument_evaluation is not None:
+        if proposal.declaration_class is None:
+            raise ValueError("Argument evaluation requires declaration_class.")
+        if request.selected_social_skill is None:
+            raise ValueError("Argument evaluation requires a player-selected social skill.")
+        if any(
+            value is None
+            for value in (
+                proposal.argument_intent_fit,
+                proposal.argument_specificity,
+                proposal.argument_credibility,
+            )
+        ):
+            raise ValueError("NPC argument evaluation requires all assessment criteria.")
+        adjustment = evaluate_npc_argument(
+            permission.argument_evaluation,
+            NpcArgumentAssessment(
+                intent_fit=int(proposal.argument_intent_fit),
+                specificity=int(proposal.argument_specificity),
+                credibility=(
+                    -2
+                    if proposal.argument_unsupported_claims
+                    else int(proposal.argument_credibility)
+                ),
+                leverage_claims=tuple(
+                    NpcArgumentLeverageClaim(item.id, item.strength)
+                    for item in proposal.argument_leverages
+                ),
+            ),
+            selected_skill=request.selected_social_skill,
+            flags=request.state.flags,
+        )
+        proposal = proposal.model_copy(
+            update={
+                "requires_roll": True,
+                "ability": permission.check_ability or "charisma",
+                "skill": request.selected_social_skill,
+                "dc": permission.check_dc,
+                "argument_score": adjustment.score,
+                "argument_modifier": adjustment.modifier,
+                "argument_roll_mode": adjustment.roll_mode.value,
+                "argument_leverages": tuple(
+                    item
+                    for item in proposal.argument_leverages
+                    if item.id in adjustment.accepted_leverage_ids
+                ),
+            }
+        )
     social_plan = None
     rubric_mode = (
         selected_goal is not None
@@ -492,7 +700,13 @@ def validate_npc_interaction_proposal(
     )
     if (
         request.selected_social_skill is not None
-        and (permission is None or not permission.uses_social_reaction)
+        and (
+            permission is None
+            or not (
+                permission.uses_social_reaction
+                or permission.argument_evaluation is not None
+            )
+        )
     ):
         raise ValueError(
             "A player-selected social skill can only be used by a social reaction route."
@@ -549,6 +763,15 @@ def validate_npc_interaction_proposal(
             quantity=proposal.quantity,
         )
         target = action_plan.target
+        if (
+            permission.argument_evaluation is not None
+            and request.selected_social_skill is not None
+            and target.skill != request.selected_social_skill
+        ):
+            raise ValueError(
+                f"NPC argument target {target.id} does not match selected social skill "
+                f"{request.selected_social_skill}."
+            )
         if target.ability is not None and not permission.uses_social_reaction:
             proposal = proposal.model_copy(
                 update={
@@ -595,6 +818,11 @@ def validate_npc_interaction_proposal(
             request.state,
             npc_id=npc.id,
             policy=permission.attempt_policy,
+            actor_id=(
+                request.participant_actor_ids[0]
+                if request.participant_actor_ids
+                else None
+            ),
         )
     allowed_flags = set(policy.allowed_flags)
     for change in (*proposal.flag_changes_on_success, *proposal.flag_changes_on_failure):

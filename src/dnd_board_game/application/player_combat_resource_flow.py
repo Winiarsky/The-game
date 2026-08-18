@@ -22,6 +22,7 @@ from dnd_board_game.combat import (
     AppliedDamageResult,
     CombatState,
     CombatStatus,
+    ConditionState,
     HealingSource,
     HealingSourceType,
     SpellArea,
@@ -181,6 +182,7 @@ class PlayerCombatResourceFlowService:
             actor,
             action,
             selected_level,
+            condition_states=state.condition_states,
             active_effects=active_effects,
         )
         resource_use = self._resources.consume_action_and_source_resource(
@@ -366,6 +368,7 @@ class PlayerCombatResourceFlowService:
             actor,
             action,
             selected_cast_level,
+            condition_states=state.condition_states,
             active_effects=active_effects,
         )
         area = getattr(action, "area", None)
@@ -530,6 +533,7 @@ class PlayerCombatResourceFlowService:
             caster,
             action,
             pending.cast_level,
+            condition_states=state.condition_states,
             active_effects=active_effects,
         )
         targets = tuple(
@@ -1377,6 +1381,7 @@ def _require_usable_action(
     action: CombatActionSpec,
     cast_level: int | None = None,
     *,
+    condition_states: tuple[ConditionState, ...] = (),
     active_effects: tuple[ActiveCombatEffect, ...] = (),
 ) -> None:
     casting_kind = getattr(action, "casting_kind", None)
@@ -1406,27 +1411,11 @@ def _require_usable_action(
         ignore_verbal_somatic=(
             "metamagic_subtle" in getattr(action, "metamagic_ids", ())
         ),
-        verbal_components_blocked=_verbal_components_blocked(
-            actor,
-            action,
-            active_effects,
-        ),
+        condition_states=condition_states,
+        active_effects=active_effects,
     )
     if validation is not None and not validation.valid:
         raise ValueError(" ".join(validation.errors))
-
-
-def _verbal_components_blocked(
-    actor: Actor,
-    action: CombatActionSpec,
-    active_effects: tuple[ActiveCombatEffect, ...],
-) -> bool:
-    from dnd_board_game.combat import actor_in_silence_zone
-
-    return (
-        "metamagic_subtle" not in getattr(action, "metamagic_ids", ())
-        and actor_in_silence_zone(actor, active_effects)
-    )
 
 
 def _selected_cast_level(

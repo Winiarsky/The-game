@@ -61,6 +61,27 @@ def evaluate_attack_positioning(
     cover_level = cover.cover_level
     cover_bonus = cover.cover_bonus
     cover_sources = cover.cover_sources
+    defensive_spots = tuple(
+        scene_object
+        for scene_object in scene_objects
+        if scene_object.cover_bonus > 0 and target.position in scene_object.positions
+    )
+    if defensive_spots:
+        defensive_bonus = max(scene.cover_bonus for scene in defensive_spots)
+        if defensive_bonus > cover_bonus:
+            cover_bonus = defensive_bonus
+            cover_sources = tuple(
+                scene.name
+                for scene in defensive_spots
+                if scene.cover_bonus == defensive_bonus
+            )
+        elif defensive_bonus == cover_bonus:
+            cover_sources = tuple(
+                dict.fromkeys(
+                    (*cover_sources, *(scene.name for scene in defensive_spots))
+                )
+            )
+        cover_level = _cover_level_for_bonus(cover_bonus)
 
     ranged_threats: tuple[str, ...] = ()
     if effective_attack_kind(source) == AttackKind.RANGED:
@@ -156,17 +177,21 @@ def evaluate_cover_from_origin(
     cover_sources = tuple(
         dict.fromkeys(label for value, label in cover_candidates if value == cover_bonus)
     )
-    cover_level = {
-        0: CoverLevel.NONE,
-        2: CoverLevel.HALF,
-        5: CoverLevel.THREE_QUARTERS,
-    }.get(cover_bonus, CoverLevel.THREE_QUARTERS if cover_bonus > 2 else CoverLevel.HALF)
+    cover_level = _cover_level_for_bonus(cover_bonus)
 
     return AttackPositioning(
         cover_level=cover_level,
         cover_bonus=cover_bonus,
         cover_sources=cover_sources,
     )
+
+
+def _cover_level_for_bonus(cover_bonus: int) -> CoverLevel:
+    return {
+        0: CoverLevel.NONE,
+        2: CoverLevel.HALF,
+        5: CoverLevel.THREE_QUARTERS,
+    }.get(cover_bonus, CoverLevel.THREE_QUARTERS if cover_bonus > 2 else CoverLevel.HALF)
 
 
 def dexterity_save_cover_modifiers(

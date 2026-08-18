@@ -405,6 +405,7 @@ def validate_spell_cast(
     has_free_hand: bool = True,
     ignore_verbal_somatic: bool = False,
     verbal_components_blocked: bool = False,
+    somatic_components_blocked: bool = False,
     ritual: bool = False,
     slotless: bool = False,
 ) -> SpellCastValidation:
@@ -434,8 +435,7 @@ def validate_spell_cast(
         and not ignore_verbal_somatic
     ):
         errors.append(
-            f"Czar {spell.name} ma komponent werbalny i nie może zostać "
-            "rzucony w obszarze Ciszy."
+            f"Komponent werbalny czaru {spell.name} jest zablokowany."
         )
     if not ritual and selected_level not in levels:
         errors.append(
@@ -460,10 +460,16 @@ def validate_spell_cast(
         else:
             errors.append(f"Brak komponentu materialnego: {material.label}.")
 
-    material_hand_available = bool(material_uses or focus is not None)
-    if spell.components.somatic and not ignore_verbal_somatic and not has_free_hand:
-        if not (spell.components.materials and material_hand_available):
-            errors.append("Brak wolnej dłoni do wykonania komponentu somatycznego.")
+    # The board-game runtime deliberately does not model moment-to-moment hand
+    # juggling for spell gestures. Somatic components are blocked only by an
+    # explicit actor state, never merely by equipped weapons or a shield.
+    _ = has_free_hand
+    if (
+        spell.components.somatic
+        and somatic_components_blocked
+        and not ignore_verbal_somatic
+    ):
+        errors.append(f"Komponent somatyczny czaru {spell.name} jest zablokowany.")
 
     return SpellCastValidation(
         valid=not errors,

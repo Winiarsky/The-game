@@ -216,3 +216,29 @@ def test_encounter_detection_respects_blocking_and_resolved_ids() -> None:
         blocked=False,
         current_encounter=None,
     ) is None
+
+
+def test_always_encounter_triggers_without_a_scene_flag() -> None:
+    service = ExplorationFlowService()
+    state = _state(unlocked=True)
+    trigger = ExplorationEncounterTrigger(
+        id="road_ambush",
+        name="Zasadzka",
+        description="Stado wychodzi spomiędzy wozów.",
+        encounter_scenario="content/scenarios/gate_skirmish.json",
+        condition=EncounterTriggerCondition.ALWAYS,
+    )
+
+    detection = service.detect_encounter(
+        state=state,
+        triggers=(trigger,),
+        resolved_trigger_ids=set(),
+        blocked=False,
+        current_encounter=None,
+    )
+
+    assert detection is not None
+    assert detection.encounter.trigger_id == "road_ambush"
+    assert detection.encounter.reason == (
+        "Encounter rozpoczyna się natychmiast po wejściu do sceny."
+    )

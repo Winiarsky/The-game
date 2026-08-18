@@ -1,0 +1,203 @@
+{
+  "schema": "dnd_board_game.enemy_ai_profile",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["project_original"],
+  "id": "hungry_shadow_pack",
+  "name": "Stado Głodnych Cieni",
+  "model": "weighted_utility_v1",
+  "score_bounds": [0.0, 100.0],
+  "candidate_limits": {
+    "per_intent": 8,
+    "total": 32
+  },
+  "noise": {
+    "distribution": "uniform",
+    "minimum": -3.0,
+    "maximum": 3.0,
+    "seed_scope": "encounter_round_actor_decision_candidate"
+  },
+  "memory": {
+    "remember_previous_target": true,
+    "rounds": 1
+  },
+  "zone_tags": {
+    "guard": "pack_den",
+    "escape": "pack_escape",
+    "hazard": "pack_hazard"
+  },
+  "forced_behaviors": {
+    "broken_with_escape": "flee",
+    "broken_without_escape": "cornered"
+  },
+  "fallback_behaviors": {
+    "no_visible_opponent": "search"
+  },
+  "morale": {
+    "minimum": 0,
+    "maximum": 4,
+    "starting_by_party_size": {
+      "1": 1,
+      "2": 2,
+      "3": 3,
+      "4": 4,
+      "5": 4
+    },
+    "events": {
+      "leader_bloodied": {
+        "delta": -1,
+        "once": true
+      },
+      "leader_defeated": {
+        "delta": -2,
+        "once": true
+      },
+      "leader_escaped": {
+        "delta": -2,
+        "once": true
+      },
+      "half_skirmishers_defeated": {
+        "delta": -1,
+        "once": true
+      },
+      "old_bell_rung": {
+        "delta": -2,
+        "once": true
+      },
+      "persistent_fire_barrier": {
+        "delta": -1,
+        "once": true
+      },
+      "food_lure_reached": {
+        "delta": -2,
+        "once": true
+      }
+    }
+  },
+  "roles": {
+    "skirmisher": {
+      "base_scores": {
+        "engage": 28.0,
+        "advance": 18.0,
+        "regroup": 8.0,
+        "guard": 6.0,
+        "flee": 4.0
+      },
+      "weights": {
+        "engage": {
+          "can_attack": 18.0,
+          "distance_progress": 6.0,
+          "target_isolation": 20.0,
+          "target_injury": 5.0,
+          "ally_support": 10.0,
+          "threat_to_guard_zone": 8.0,
+          "end_in_cover": 5.0,
+          "pack_separation": -12.0,
+          "self_injury": -18.0,
+          "opportunity_risk": -20.0,
+          "hazard_exposure": -30.0,
+          "repeats_target": 3.0
+        },
+        "advance": {
+          "distance_progress": 18.0,
+          "target_isolation": 8.0,
+          "threat_to_guard_zone": 6.0,
+          "end_in_cover": 8.0,
+          "pack_separation": -10.0,
+          "self_injury": -10.0,
+          "opportunity_risk": -18.0,
+          "hazard_exposure": -28.0
+        },
+        "regroup": {
+          "end_in_cover": 12.0,
+          "ranged_cover_response": 45.0,
+          "end_near_leader": 18.0,
+          "pack_separation": -8.0,
+          "cohesion_gain": 18.0,
+          "self_injury": 34.0,
+          "opportunity_risk": -12.0,
+          "hazard_exposure": -30.0
+        },
+        "guard": {
+          "threat_to_guard_zone": 12.0,
+          "guard_position_quality": 10.0,
+          "end_in_cover": 8.0,
+          "end_near_leader": 8.0,
+          "self_injury": 8.0,
+          "opportunity_risk": -14.0,
+          "hazard_exposure": -30.0
+        },
+        "flee": {
+          "self_injury": 50.0,
+          "morale_pressure": 25.0,
+          "escape_progress": 18.0,
+          "threat_to_guard_zone": -10.0,
+          "opportunity_risk": -16.0,
+          "hazard_exposure": -35.0
+        }
+      }
+    },
+    "leader": {
+      "base_scores": {
+        "engage": 24.0,
+        "advance": 10.0,
+        "regroup": 10.0,
+        "guard": 8.0,
+        "flee": 0.0
+      },
+      "weights": {
+        "engage": {
+          "can_attack": 16.0,
+          "distance_progress": 4.0,
+          "target_isolation": 8.0,
+          "target_injury": 3.0,
+          "ally_support": 8.0,
+          "threat_to_guard_zone": 24.0,
+          "end_in_cover": 5.0,
+          "pack_separation": -8.0,
+          "self_injury": -14.0,
+          "opportunity_risk": -22.0,
+          "hazard_exposure": -32.0,
+          "repeats_target": 4.0
+        },
+        "advance": {
+          "distance_progress": 10.0,
+          "threat_to_guard_zone": 18.0,
+          "end_in_cover": 7.0,
+          "pack_separation": -6.0,
+          "self_injury": -10.0,
+          "opportunity_risk": -20.0,
+          "hazard_exposure": -32.0
+        },
+        "regroup": {
+          "end_in_cover": 14.0,
+          "ranged_cover_response": 45.0,
+          "end_near_leader": 0.0,
+          "pack_separation": -6.0,
+          "cohesion_gain": 10.0,
+          "guard_position_quality": 8.0,
+          "self_injury": 30.0,
+          "opportunity_risk": -14.0,
+          "hazard_exposure": -32.0
+        },
+        "guard": {
+          "threat_to_guard_zone": 32.0,
+          "guard_position_quality": 24.0,
+          "end_in_cover": 10.0,
+          "pack_separation": -4.0,
+          "self_injury": -4.0,
+          "opportunity_risk": -16.0,
+          "hazard_exposure": -32.0
+        },
+        "flee": {
+          "self_injury": 50.0,
+          "morale_pressure": 20.0,
+          "escape_progress": 15.0,
+          "threat_to_guard_zone": -35.0,
+          "opportunity_risk": -18.0,
+          "hazard_exposure": -38.0
+        }
+      }
+    }
+  }
+}

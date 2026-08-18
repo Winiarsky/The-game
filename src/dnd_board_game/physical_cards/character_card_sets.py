@@ -14,6 +14,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageOps
 from dnd_board_game.character_creation import (
     ABILITY_IDS,
     HERO_ARCHETYPES_BY_ID,
+    PLAYABLE_HERO_IDS,
     SRD_CLASS_SPELL_IDS,
     build_character,
     apply_boardgame_archetype,
@@ -94,7 +95,6 @@ class CharacterDeckSpec:
     dossier_intro: str
     dossier_campaign: str
     passives: tuple[str, ...]
-    progression: tuple[str, ...]
 
     @property
     def profile(self):
@@ -287,11 +287,6 @@ GARRAN_DECK = CharacterDeckSpec(
         "Wszechstronność człowieka i wojskowa ranga wspierają testy wynikające z pochodzenia.",
         "Poziom 3, Czempion: trafienie krytyczne przy naturalnym 19–20.",
     ),
-    progression=(
-        "Poziom 1: Drugi oddech.",
-        "Poziom 2: Zryw akcji.",
-        "Poziom 3: archetyp Czempiona i Ulepszone trafienie krytyczne (pasywne).",
-    ),
 )
 
 
@@ -328,11 +323,6 @@ DAGNA_DECK = CharacterDeckSpec(
         "Krasnoludzka odporność: przewaga przeciw truciznom i odporność na obrażenia od trucizny.",
         "Mroczne widzenie, kamieniarska wiedza i krasnoludzka wytrzymałość.",
         "Schronienie Wiernych: wsparcie świątyń i wspólnot własnej wiary.",
-    ),
-    progression=(
-        "Poziom 1: sztuczki, czary 1. poziomu, Domena Życia.",
-        "Poziom 2: Boska Moc — Odpędzenie Nieumarłych albo Zachowanie Życia.",
-        "Poziom 3: czary 2. poziomu; zawsze przygotowane Pomniejsze Przywrócenie i Duchowa Broń.",
     ),
 )
 
@@ -1013,7 +1003,6 @@ def _additional_deck(actor_id: str) -> CharacterDeckSpec:
         dossier_intro=str(meta["intro"]),
         dossier_campaign=str(meta["campaign"]),
         passives=tuple(meta["passives"]),
-        progression=tuple(meta["progression"]),
     )
 
 
@@ -1073,7 +1062,7 @@ CURATED_ACTION_CARDS: dict[str, tuple[CharacterActionCardSpec, ...]] = {
         _curated_action("garran", "command", "ROZKAZ: STAĆ!", "spell", 2, "AKCJA · 60 STÓP", "Wskaż przeciwnika i wydaj rozkaz zatrzymania. Koszt: 1 Taktyka.", "„Jedno słowo w odpowiedniej chwili potrafi zatrzymać szarżę.”"),
         _curated_action("garran", "shield_of_faith", "OSŁONA TARCZĄ", "spell", 2, "AKCJA DOD. · SOJUSZNIK", "Wzmocnij obronę wybranego sojusznika. Koszt: 1 Taktyka.", "„Stań za mną i pilnuj lewej strony.”"),
         _curated_action("garran", "heroism", "MOWA DOWÓDCY", "spell", 3, "AKCJA · SOJUSZNIK", "Uodpornij sojusznika na strach i podtrzymuj jego wolę walki. Koszt: 1 Taktyka.", "„Nie musicie być bez strachu. Musicie zrobić następny krok.”"),
-        _curated_action("garran", "warding_bond", "OSŁONA TOWARZYSZA", "spell", 3, "AKCJA · DOTYK", "Sąsiadujący sojusznik otrzymuje +1 KP, +1 do obron i odporność na obrażenia; Garran otrzymuje taką samą liczbę obrażeń. 1 użycie na długi odpoczynek.", "„Jeśli cios ma przejść, niech przejdzie także przeze mnie.”"),
+        _curated_action("garran", "warding_bond", "OSŁONA TOWARZYSZA", "spell", 3, "AKCJA · DOTYK", "Sąsiadujący sojusznik otrzymuje +1 KP, +1 do obron i odporność na obrażenia; Garran otrzymuje taką samą liczbę obrażeń. Koszt: 1 Taktyka.", "„Jeśli cios ma przejść, niech przejdzie także przeze mnie.”"),
     ),
     "brakka": (
         _curated_action("brakka", "rage", "SZAŁ", "feature", 1, "AKCJA DOD. · PRZEŁĄCZNIK", "Włącz Szał: przewaga w testach i obronach Siły, +2 do obrażeń ataków wręcz opartych na Sile oraz odporność na kłute, cięte i obuchowe. Zeskanuj ponownie, aby wyłączyć.", "„Nie jestem burzą. Jestem tym, co po niej nadal stoi.”"),
@@ -1090,7 +1079,7 @@ CURATED_ACTION_CARDS: dict[str, tuple[CharacterActionCardSpec, ...]] = {
         _curated_action("mira", "invisibility", "ZNIKNIĘCIE W DYMIE", "spell", 1, "AKCJA · WŁASNY", "Mira otrzymuje status Niewidzialna zgodnie z efektem karty. Koszt: 1 Fortel; pula 2/2 odnawia się po długim odpoczynku.", "„Najpierw dym. Potem już tylko brak Miry.”"),
         _curated_action("mira", "find_traps", "WYKRYCIE PUŁAPEK", "spell", 1, "AKCJA · OBSZAR", "W walce wskaż obszar na planszy i ujawnij wszystkie znajdujące się w nim pułapki. Koszt: 1 Fortel; pula 2/2 odnawia się po długim odpoczynku.", "„Mechanizm zawsze zostawia ślad dla kogoś, kto wie, gdzie nie stawiać dłoni.”"),
         _curated_action("mira", "vicious_mockery", "BRUDNA SZTUCZKA", "spell", 2, "AKCJA · 60 STÓP", "Zdezorientuj przeciwnika i utrudnij jego następny atak. Koszt: 1 Fortel.", "„Patrzysz na ostrze. Błąd był o pół kroku wcześniej.”"),
-        _curated_action("mira", "true_strike", "WYKORZYSTANIE SŁABOŚCI", "spell", 2, "AKCJA · KONCENTRACJA", "Wskaż przeciwnika i przygotuj przewagę do następnego ataku. Koszt: 1 Fortel.", "„Każda garda ma szew. Trzeba tylko poczekać, aż pęknie.”"),
+        _curated_action("mira", "exploit_weakness", "WYKORZYSTANIE SŁABOŚCI", "feature", 2, "AKCJA DOD. · WŁASNA TURA", "Koszt: 1 Fortel. Następny atak Miry w tej turze ma przewagę; po ataku efekt znika.", "„Każda garda ma szew. Trzeba tylko trafić, zanim znów się zamknie.”"),
         _curated_action("mira", "mirror_image", "ZMYŁKA", "spell", 3, "AKCJA · WŁASNY", "Utwórz mylące duplikaty przechwytujące ataki. Koszt: 1 Fortel.", "„Jeśli widzisz trzy Miry, żadna nie stoi tam przypadkiem.”"),
     ),
     "dagna": (
@@ -1130,7 +1119,7 @@ CURATED_ACTION_CARDS: dict[str, tuple[CharacterActionCardSpec, ...]] = {
         _curated_action("erynd", "goodberry", "DOBRE JAGODY", "spell", 1, "AKCJA", "Utwórz pulę 10 jagód. Każda użyta w walce akcją leczy 1 PW. Koszt: 1 Instynkt.", "„Mały zapas jest różnicą między odwrotem a grobem.”"),
         _curated_action("erynd", "cunning_action", "ZWIADOWCZA MOBILNOŚĆ", "feature", 1, "AKCJA DOD. · WŁASNA TURA", "Wybierz Sprint, Odstąpienie albo Ukrycie jako akcję dodatkową.", "„Zwiadowca wraca z wiadomością albo nie był zwiadowcą.”"),
         _curated_action("erynd", "find_traps", "WYKRYCIE PUŁAPEK", "spell", 1, "AKCJA · OBSZAR", "Wskaż obszar na planszy i ujawnij wszystkie znajdujące się w nim pułapki. Koszt: 1 Instynkt.", "„Najgroźniejszy ślad jest zrobiony przez kogoś, kto chciał go ukryć.”"),
-        _curated_action("erynd", "true_strike", "STRZELECKA CIERPLIWOŚĆ", "spell", 2, "AKCJA · KONCENTRACJA", "Wskaż przeciwnika i przygotuj przewagę do następnego ataku. Koszt: 1 Instynkt.", "„Najlepszy strzał zaczyna się od decyzji, żeby jeszcze nie strzelać.”"),
+        _curated_action("erynd", "patient_shot", "STRZELECKA CIERPLIWOŚĆ", "feature", 2, "AKCJA DOD. · WŁASNA TURA", "Koszt: 1 Instynkt. Następny atak Erynda w tej turze ma przewagę; po ataku efekt znika.", "„Najlepszy strzał zaczyna się od jednej spokojnej chwili.”"),
         _curated_action("erynd", "misty_step", "LEŚNY KROK", "spell", 2, "AKCJA DOD. · POLE", "Przenieś się na widoczne legalne pole. Koszt: 1 Instynkt.", "„Między dwoma cieniami zawsze istnieje krótsza droga.”"),
         _curated_action("erynd", "spike_growth", "KOLCZASTE POSZYCIE", "spell", 3, "AKCJA · OBSZAR", "Utwórz niebezpieczny trudny teren zadający obrażenia podczas ruchu. Koszt: 1 Instynkt.", "„Las nie ściga intruzów. Pozwala im wejść głębiej.”"),
         _curated_action("erynd", "see_invisibility", "OKO ŁOWCY", "spell", 3, "AKCJA · WŁASNY", "Ujawnij niewidzialnych i ukrytych przeciwników. Koszt: 1 Instynkt.", "„Nie wszystko, czego nie widać, potrafi przestać zostawiać ślady.”"),
@@ -1193,45 +1182,7 @@ CURATED_PASSIVES: dict[str, tuple[str, ...]] = {
         "Ekspertyza zwiadowcy — podwójna biegłość w Skradaniu i Sztuce przetrwania.",
         "Naturalny odkrywca — korzyści nawigacji i podróży w wybranym terenie.",
         "Fey Ancestry — przewaga przeciw zauroczeniu i odporność na magiczny sen.",
-        "Skaza: Ocalały z zasadzki — gdy przeciwnicy zaskakują drużynę, Erynd jest Przerażony do końca swojej pierwszej tury; Warta lub Alarm temu zapobiegają.",
-    ),
-}
-
-CURATED_PROGRESSION: dict[str, tuple[str, ...]] = {
-    "garran": (
-        "Poziom 1: Drugi oddech, Zryw akcji, Ratunek polowy i Pozycja obronna.",
-        "Poziom 2: 2 Taktyki — Rozkaz: Stać! oraz Osłona tarczą.",
-        "Poziom 3: 3 Taktyki — Mowa dowódcy i Osłona towarzysza; Czempion daje krytyk 19–20.",
-    ),
-    "brakka": (
-        "Poziom 1: Szał, Lekkomyślny atak i Szał bojowy.",
-        "Poziom 2: Niepowstrzymany impet oraz Drapieżny pęd.",
-        "Poziom 3: 2 Dzikości — Nie do zdarcia oraz Ogłuszający ryk. Każdy zakończony Szał bojowy daje 1 poziom Wyczerpania; długi odpoczynek usuwa 1 poziom.",
-    ),
-    "mira": (
-        "Poziom 1: Przebiegła akcja, Unik instynktowny, Niewidzialność i Wykrycie pułapek; 2 Fortele.",
-        "Poziom 2: Brudna sztuczka oraz Wykorzystanie słabości.",
-        "Poziom 3: Zmyłka; pula rośnie do 3 Forteli, a Atak ukradkowy do 2k6.",
-    ),
-    "dagna": (
-        "Poziom 1: Święty płomień, Leczące słowo, Błogosławieństwo i Sanktuarium.",
-        "Poziom 2: Zachowanie życia oraz Pocisk przewodni.",
-        "Poziom 3: Pomoc, Pomniejsze przywrócenie i Więź ochronna.",
-    ),
-    "lorian": (
-        "Poziom 1: Inspiracja, Zjadliwa kpina, Grzmiący refren i Leczące słowo.",
-        "Poziom 2: Ogniki oraz Bohaterski refren.",
-        "Poziom 3: Cięta riposta oraz Obezwładniający żart.",
-    ),
-    "nimra": (
-        "Poziom 1: Promień mrozu, Pętające korzenie, Tarcza i Sen.",
-        "Poziom 2: Mgła.",
-        "Poziom 3: Pajęczyna, Unieruchomienie osoby, Mglisty krok i Roztrzaskanie.",
-    ),
-    "erynd": (
-        "Poziom 1: Oznaczenie celu, Dobre jagody, Zwiadowcza mobilność i Wykrycie pułapek; 2 Instynkty.",
-        "Poziom 2: Strzelecka cierpliwość oraz Leśny krok.",
-        "Poziom 3: Kolczaste poszycie i Oko łowcy; pula rośnie do 3 Instynktów.",
+        "Skaza: Ocalały z zasadzki — gdy przeciwnicy zaskakują drużynę, Erynd jest Przerażony przez najbliższego wroga do końca swojej pierwszej tury.",
     ),
 }
 
@@ -1239,7 +1190,6 @@ for _actor_id, _passives in CURATED_PASSIVES.items():
     CHARACTER_DECKS[_actor_id] = replace(
         CHARACTER_DECKS[_actor_id],
         passives=_passives,
-        progression=CURATED_PROGRESSION[_actor_id],
     )
 
 # Backward-compatible aliases must point at the fully curated versions, not the
@@ -1269,11 +1219,35 @@ def _synchronized_action_card(
         return card
     spell_path = PROJECT_ROOT / "content" / "spells" / f"{card.source_id}.json"
     spell_data = json.loads(spell_path.read_text(encoding="utf-8"))
-    mechanic = _spell_mechanic(spell_data)
+    mechanic = {
+        ("vicious_mockery"): (
+            "Cel wykonuje rzut obronny na Mądrość. Porażka: 1k4 obrażeń "
+            "psychicznych i utrudnienie do następnego ataku celu; sukces: bez efektu."
+        ),
+        ("guiding_bolt"): (
+            "Wykonaj dystansowy atak czarem. Trafienie: 4k6 obrażeń "
+            "promienistych; następny atak przeciw celowi ma przewagę."
+        ),
+        ("shatter"): (
+            "Istoty w promieniu 10 stóp wykonują rzut obronny na Kondycję "
+            "(konstrukty z utrudnieniem). Porażka: 3k8 obrażeń od grzmotu; "
+            "sukces: połowa."
+        ),
+        ("thunderwave"): (
+            "Istoty w sześcianie 15 stóp wykonują rzut obronny na Kondycję. "
+            "Porażka: 2k8 obrażeń od grzmotu i odepchnięcie o 10 stóp; "
+            "sukces: połowa obrażeń bez odepchnięcia."
+        ),
+        ("heroism"): (
+            "Dobrowolny cel jest odporny na Przerażenie i na początku każdej "
+            "swojej tury otrzymuje tymczasowe PW równe modyfikatorowi cechy "
+            "czarowania. Wymaga Koncentracji."
+        ),
+    }.get(card.source_id, _spell_mechanic(spell_data))
     resource_note = {
         **{
             ("garran", source_id): (
-                " Koszt: 1 Taktyka (2/2; od poziomu 3: 3/3; długi odpoczynek)."
+                " Koszt: 1 Taktyka (3/3; długi odpoczynek)."
             )
             for source_id in {"command", "shield_of_faith", "heroism", "warding_bond"}
         },
@@ -1284,19 +1258,18 @@ def _synchronized_action_card(
             for source_id in {"false_life", "thunderwave"}
         },
         ("mira", "invisibility"): (
-            " Koszt: 1 Fortel (2/2; od poziomu 3: 3/3; długi odpoczynek)."
+            " Koszt: 1 Fortel (3/3; długi odpoczynek)."
         ),
         ("mira", "find_traps"): (
-            " Koszt: 1 Fortel (2/2; od poziomu 3: 3/3; długi odpoczynek)."
+            " Koszt: 1 Fortel (3/3; długi odpoczynek)."
         ),
         **{
             ("mira", source_id): " Koszt: 1 Fortel."
-            for source_id in {"vicious_mockery", "true_strike", "mirror_image"}
+            for source_id in {"vicious_mockery", "mirror_image"}
         },
         ("erynd", "hunters_mark"): " Koszt: 1 Instynkt.",
         ("erynd", "goodberry"): " Koszt: 1 Instynkt.",
         ("erynd", "find_traps"): " Koszt: 1 Instynkt.",
-        ("erynd", "true_strike"): " Koszt: 1 Instynkt.",
         ("erynd", "misty_step"): " Koszt: 1 Instynkt.",
         ("erynd", "spike_growth"): " Koszt: 1 Instynkt.",
         ("erynd", "see_invisibility"): " Koszt: 1 Instynkt.",
@@ -1329,6 +1302,122 @@ def _phase_label(spec: CharacterActionCardSpec) -> str:
         CardPhase.BOTH: "WALKA/EKSPL.",
         CardPhase.REMOVED: "WYCOFANA",
     }[phase]
+
+
+def _access_badge(deck: CharacterDeckSpec, spec: CharacterActionCardSpec) -> str:
+    """Show current access policy while retaining origin level in metadata."""
+
+    if deck.actor_id in PLAYABLE_HERO_IDS:
+        return "OD STARTU"
+    return f"POZIOM {spec.required_level}"
+
+
+_CARD_RESOURCE_POOLS: dict[str, tuple[tuple[str, str, tuple[str, ...]], ...]] = {
+    "garran": (
+        ("second_wind_uses", "Drugi oddech", ("second_wind",)),
+        ("action_surge_uses", "Zryw akcji", ("action_surge",)),
+        ("lay_on_hands_points", "Ratunek polowy", ("lay_on_hands",)),
+        ("defensive_stance_uses", "Pozycja obronna", ("defensive_stance",)),
+        (
+            "tactics_uses",
+            "Taktyka",
+            ("command", "shield_of_faith", "heroism", "warding_bond"),
+        ),
+    ),
+    "brakka": (
+        ("rage_uses", "Szał", ("rage",)),
+        ("action_surge_uses", "Niepowstrzymany impet", ("action_surge",)),
+        ("ferocity_uses", "Dzikość", ("false_life", "thunderwave")),
+    ),
+    "mira": (
+        ("instinctive_dodge_uses", "Unik instynktowny", ("instinctive_dodge",)),
+        (
+            "trick_uses",
+            "Fortele",
+            (
+                "invisibility",
+                "find_traps",
+                "vicious_mockery",
+                "exploit_weakness",
+                "mirror_image",
+            ),
+        ),
+    ),
+    "dagna": (
+        ("channel_divinity_uses", "Boska Moc", ("preserve_life",)),
+    ),
+    "lorian": (
+        (
+            "bardic_inspiration_uses",
+            "Inspiracja bardowska",
+            ("bardic_inspiration", "cutting_words"),
+        ),
+    ),
+    "nimra": (
+        ("arcane_recovery_uses", "Odzyskiwanie magiczne", ()),
+    ),
+    "erynd": (
+        (
+            "instinct",
+            "Instynkt",
+            (
+                "hunters_mark",
+                "goodberry",
+                "find_traps",
+                "patient_shot",
+                "misty_step",
+                "spike_growth",
+                "see_invisibility",
+            ),
+        ),
+    ),
+}
+
+_RESOURCE_EXTRA_LINES = {
+    "brakka": "Szał bojowy nie wydaje punktu, ale po zakończeniu daje 1 Wyczerpanie.",
+    "nimra": "Odzyskiwanie magiczne: raz na długi odpoczynek odzyskaj komórki podczas krótkiego odpoczynku.",
+}
+
+
+def _card_resource_lines(deck: CharacterDeckSpec) -> tuple[str, ...]:
+    """Summarize exactly what a player marks when using this physical deck."""
+
+    _catalog, builds = _starter_builds()
+    actor = builds[deck.actor_id][1].actor
+    cards = {card.source_id: card for card in printable_action_cards(deck)}
+    lines: list[str] = []
+    if actor.spell_slots:
+        slot_text = ", ".join(
+            f"{slot.maximum}× {slot.level}. poziomu" for slot in actor.spell_slots
+        )
+        spells_by_id = {spell.id: spell for spell in actor.spells}
+        leveled_spell_titles = [
+            card.title.title()
+            for card in printable_action_cards(deck)
+            if card.kind == "spell" and spells_by_id[card.source_id].level > 0
+        ]
+        lines.append(f"Komórki czarów: {slot_text}; odnawia długi odpoczynek.")
+        if leveled_spell_titles:
+            lines.append("Komórkę wydają: " + ", ".join(leveled_spell_titles) + ".")
+    for pool_id, label, source_ids in _CARD_RESOURCE_POOLS.get(deck.actor_id, ()):
+        pool = next((item for item in actor.resource_pools if item.id == pool_id), None)
+        if pool is None:
+            continue
+        recovery = (
+            "krótki odpoczynek"
+            if pool.recovery.value == "short_rest"
+            else "długi odpoczynek"
+        )
+        card_titles = [cards[source_id].title.title() for source_id in source_ids]
+        usage = f": {', '.join(card_titles)}" if card_titles else ""
+        lines.append(
+            f"{label} {pool.maximum}/{pool.maximum} ({recovery}){usage}."
+        )
+    extra = _RESOURCE_EXTRA_LINES.get(deck.actor_id)
+    if extra is not None:
+        lines.append(extra)
+    lines.append("Karty niewymienione wyżej nie zużywają puli ani komórki.")
+    return tuple(lines)
 
 
 @dataclass(frozen=True, slots=True)
@@ -1661,7 +1750,7 @@ def render_character_action_card(
         stroke_width=max(1, _mm(0.12)),
         stroke_fill=(4, 6, 8),
     )
-    level_text = f"POZIOM {spec.required_level}"
+    level_text = _access_badge(deck, spec)
     draw.rounded_rectangle(
         (trim_left + safe, panel_top + _mm(8), trim_right - safe, panel_top + _mm(13.5)),
         radius=_mm(1.2),
@@ -2016,10 +2105,10 @@ def render_character_dossier(deck: CharacterDeckSpec) -> Image.Image:
         left=right_x,
         top=right_top,
         width=column_width,
-        title="Rozwój 1–3",
-        text="\n".join(f"• {entry}" for entry in deck.progression),
+        title="Zasoby kart",
+        text="\n".join(f"• {entry}" for entry in _card_resource_lines(deck)),
         accent=deck.secondary,
-        font_size_mm=2.55,
+        font_size_mm=2.35,
     )
     draw.rounded_rectangle(
         (margin, _mm(268), A4_SIZE_PX[0] - margin, _mm(283)),
@@ -2086,8 +2175,9 @@ def _signed(value: int) -> str:
 
 def _stat_lines(deck: CharacterDeckSpec) -> dict[str, str]:
     catalog, builds = _starter_builds()
-    draft, created = builds[deck.actor_id]
+    _draft, created = builds[deck.actor_id]
     actor = created.actor
+    cards = {card.source_id: card for card in printable_action_cards(deck)}
     character_class = catalog.class_by_id(created.class_id)
     species = catalog.species_by_id(created.species_id)
     background = catalog.background_by_id(created.background_id)
@@ -2116,37 +2206,47 @@ def _stat_lines(deck: CharacterDeckSpec) -> dict[str, str]:
         TOOL_LABELS_PL.get(tool_id, tool_id.replace("_", " "))
         for tool_id in actor.proficiencies.tools
     ) or "brak"
-    known = tuple(dict.fromkeys((
-        *draft.selected_cantrip_ids,
-        *draft.selected_species_cantrip_ids,
-        *draft.selected_spell_ids,
-    )))
-    prepared = tuple(dict.fromkeys(draft.selected_prepared_spell_ids))
+    accessible_spell_ids = tuple(
+        dict.fromkeys(
+            spell_id
+            for profile in actor.spell_access
+            for spell_id in profile.spell_ids
+        )
+    )
+    spells_by_id = {spell.id: spell for spell in actor.spells}
     spell_lines = []
-    if known:
-        spell_lines.append(
-            "Znane / księga: "
-            + ", ".join(SPELL_NAMES_PL.get(spell_id, spell_id) for spell_id in known)
+    cantrips = tuple(
+        spell_id
+        for spell_id in accessible_spell_ids
+        if spells_by_id[spell_id].level == 0
+    )
+    leveled_by_level = {
+        level: tuple(
+            spell_id
+            for spell_id in accessible_spell_ids
+            if spells_by_id[spell_id].level == level
         )
-    if prepared:
+        for level in (1, 2)
+    }
+    if cantrips:
         spell_lines.append(
-            "Przygotowane: "
-            + ", ".join(SPELL_NAMES_PL.get(spell_id, spell_id) for spell_id in prepared)
+            "Sztuczki (bez komórki): "
+            + ", ".join(cards[spell_id].title.title() for spell_id in cantrips)
         )
-    if actor.spell_slots:
-        spell_lines.append(
-            "Komórki: "
-            + ", ".join(f"{slot.level}. poziom — {slot.maximum}" for slot in actor.spell_slots)
-        )
+    for level, spell_ids in leveled_by_level.items():
+        if spell_ids:
+            spell_lines.append(
+                f"Karty {level}. poziomu: "
+                + ", ".join(cards[spell_id].title.title() for spell_id in spell_ids)
+            )
     if actor.spell_save_dc:
         spell_attack = actor.spell_save_dc - 8
         spell_lines.append(f"ST czarów {actor.spell_save_dc}; atak czarem {_signed(spell_attack)}")
-    if not spell_lines:
-        spell_lines.append("Brak czarów na 1. poziomie.")
+    spell_lines.extend(_card_resource_lines(deck))
     return {
         "identity": f"{species.name} · {character_class.name} · {background.name}",
         "combat": (
-            f"Poziom 1  |  PB +{actor.proficiency_bonus}  |  PW {actor.max_hp}/{actor.max_hp}  |  "
+            f"Poziom {actor.level}  |  PB +{actor.proficiency_bonus}  |  PW {actor.max_hp}/{actor.max_hp}  |  "
             f"KP {effective_armor_class(actor)}  |  Inicjatywa {_signed(ability_modifier(scores.dexterity))}  |  "
             f"Szybkość {effective_speed_feet(actor)} stóp  |  Kość Wytrzymałości k{character_class.hit_die}"
         ),
@@ -2154,7 +2254,7 @@ def _stat_lines(deck: CharacterDeckSpec) -> dict[str, str]:
         "skills": "\n".join(skills),
         "equipment": "\n".join(equipment),
         "tools": tools,
-        "spells": "\n".join(spell_lines),
+        "spells": "\n".join(f"• {line}" for line in spell_lines),
         "gold": f"Startowe monety: {actor.currency.gp} sz.",
     }
 
@@ -2237,7 +2337,7 @@ def render_character_statistics(deck: CharacterDeckSpec) -> Image.Image:
     )
     draw.text(
         (A4_SIZE_PX[0] // 2, _mm(272)),
-        "Przepisz te wartości na kartę postaci. Po awansie aktualizuj poziom, PW, zasoby, czary i wybrane zdolności.",
+        "Arkusz pokazuje pełny zestaw startowy poziomu 3. Wszystkie wydrukowane karty są dostępne od początku.",
         font=_font(_mm(2.55), serif=True),
         fill=(229, 219, 201),
         anchor="ma",
@@ -2442,7 +2542,7 @@ def render_character_sheet_bw(deck: CharacterDeckSpec) -> Image.Image:
     _draw_bw_section(
         draw,
         (margin, _mm(257), A4_SIZE_PX[0] - margin, _mm(286)),
-        "Notatki, rozwój i zmiany ekwipunku",
+        "Notatki i zmiany ekwipunku",
         "\n\n\n",
         font_size_mm=2.2,
     )
@@ -2527,9 +2627,9 @@ def render_character_dossier_bw(deck: CharacterDeckSpec) -> Image.Image:
     _draw_bw_section(
         draw,
         (margin, _mm(182), margin + column_width, _mm(258)),
-        "Rozwój poziomy 1–3",
-        "\n".join(f"• {entry}" for entry in deck.progression),
-        font_size_mm=2.0,
+        "Zasoby kart",
+        "\n".join(f"• {entry}" for entry in _card_resource_lines(deck)),
+        font_size_mm=1.85,
     )
     _draw_bw_section(
         draw,
@@ -2639,7 +2739,7 @@ def render_character_action_card_bw_test(
     )
     draw.text(
         (content_right, trim_top + _mm(16)),
-        f"POZIOM {spec.required_level}",
+        _access_badge(deck, spec),
         font=_font(_mm(2.15), bold=True),
         fill="black",
         anchor="ra",

@@ -6,6 +6,7 @@ from dnd_board_game.ui.exploration_app import (
     UiFlowStage,
     create_app,
 )
+from dnd_board_game.runtime.exploration_ui import build_parser
 
 
 def _session(tmp_path) -> ExplorationUiSession:
@@ -14,6 +15,12 @@ def _session(tmp_path) -> ExplorationUiSession:
         save_dir=tmp_path / "saves",
         observation_dir=tmp_path / "observations",
     )
+
+
+def test_player_runtime_defaults_to_last_transport_campaign() -> None:
+    args = build_parser().parse_args([])
+
+    assert args.scenario == "content/scenarios/ostatni_transport_00_gildia.json"
 
 
 def test_main_menu_exposes_separate_application_flows(tmp_path) -> None:
@@ -52,11 +59,19 @@ def test_new_game_lists_real_exploration_scenario_catalog(tmp_path) -> None:
     html = response.get_data(as_text=True)
 
     assert response.status_code == 200
-    assert 'value="village_square_mvp"' in html
+    assert 'value="ostatni_transport_00_gildia"' in html
+    assert 'value="village_square_mvp"' not in html
+    assert 'value="mechanics_playground"' not in html
     assert 'value="abandoned_watchtower"' not in html
     assert 'value="gate_skirmish"' not in html
-    assert "Opuszczona strażnica" in html
+    assert "Ostatni transport — Gildia Szlaków i Ekspedycji" in html
+    assert "Zawalona droga" in html
     assert 'name="character_ids"' not in html
+    assert "Wybierz drużynę" in html
+    assert "krok 1 z 2" in html
+    assert 'class="launcher-page new-game-page"' in html
+    assert "viewport-fit-20260813-1" in html
+    assert 'id="scenario-selection-step" class="form-section" hidden' in html
     assert "Zatwierdzenie wyłącznie fizyczną kartą ACCEPT" in html
 
 
@@ -81,11 +96,17 @@ def test_new_game_party_is_selected_only_with_hero_cards(tmp_path) -> None:
         "/api/new-game/card-scan",
         json={"payload": "dndbg:v1:action:universal:decline"},
     )
+    party_confirmed = client.post(
+        "/api/new-game/card-scan",
+        json={
+            "payload": "dndbg:v1:action:universal:accept",
+        },
+    )
     accepted = client.post(
         "/api/new-game/card-scan",
         json={
             "payload": "dndbg:v1:action:universal:accept",
-            "scenario_id": session.exploration.scenario_id,
+            "scenario_id": "ostatni_transport_00_gildia",
         },
     )
 
@@ -93,8 +114,62 @@ def test_new_game_party_is_selected_only_with_hero_cards(tmp_path) -> None:
     assert duplicate.get_json()["selected_actor_ids"] == ["garran"]
     assert second.get_json()["selected_actor_ids"] == ["garran", "dagna"]
     assert removed.get_json()["selected_actor_ids"] == ["garran"]
+    assert party_confirmed.status_code == 200
+    assert party_confirmed.get_json()["effect"] == "party_confirmed"
+    assert party_confirmed.get_json()["stage"] == "scenario"
+    assert "redirect" not in party_confirmed.get_json()
     assert accepted.status_code == 200
     assert accepted.get_json()["redirect"] == "/play"
+    assert session.exploration.scenario_id == "ostatni_transport_00_gildia"
+    selected = {
+        str(actor.id): actor
+        for actor in session.exploration.actors
+        if str(actor.id) == "garran"
+    }
+    assert selected["garran"].level == 3
+    assert selected["garran"].ability_scores.strength == 18
+
+
+def test_decline_from_scenario_step_returns_to_party_without_removing_heroes(
+    tmp_path,
+) -> None:
+    client = create_app(_session(tmp_path)).test_client()
+    client.get("/new-game")
+    client.post(
+        "/api/new-game/card-scan",
+        json={"payload": "dndbg:v1:actor:garran"},
+    )
+    client.post(
+        "/api/new-game/card-scan",
+        json={"payload": "dndbg:v1:action:universal:accept"},
+    )
+
+    returned = client.post(
+        "/api/new-game/card-scan",
+        json={"payload": "dndbg:v1:action:universal:decline"},
+    )
+
+    assert returned.status_code == 200
+    assert returned.get_json()["effect"] == "new_game_back_to_party"
+    assert returned.get_json()["stage"] == "party"
+    assert returned.get_json()["selected_actor_ids"] == ["garran"]
+
+
+def test_new_game_rejects_combat_menu_cards_without_changing_party(tmp_path) -> None:
+    client = create_app(_session(tmp_path)).test_client()
+    client.get("/new-game")
+    client.post(
+        "/api/new-game/card-scan",
+        json={"payload": "dndbg:v1:actor:garran"},
+    )
+
+    response = client.post(
+        "/api/new-game/card-scan",
+        json={"payload": "dndbg:v1:action:universal:maneuvers"},
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["selected_actor_ids"] == ["garran"]
 
 
 def test_load_game_empty_state_is_player_facing(tmp_path) -> None:

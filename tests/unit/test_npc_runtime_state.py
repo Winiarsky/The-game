@@ -129,3 +129,57 @@ def test_npc_attempt_requires_changed_context_and_then_exhausts_limit() -> None:
     assert exhausted.available is False
     assert exhausted.blocked_reason == "Zwiadowca nie zmieni już zdania."
     assert exhausted.attempts_remaining == 0
+
+
+def test_npc_attempt_can_require_a_different_actor_and_close_on_critical_failure() -> None:
+    policy = NpcAttemptPolicy(
+        attempt_id="read_nessa",
+        max_attempts=3,
+        unique_actor_per_attempt=True,
+        close_on_critical_failure=True,
+        retry_locked_message="Ten bohater już próbował.",
+        exhausted_message="Nessa zauważyła, że drużyna ją analizuje.",
+    )
+    first = resolve_npc_runtime_interaction(
+        _state(),
+        npc_id="scout",
+        intent="insight",
+        success=False,
+        summary="Pierwsza próba zawodzi.",
+        attempt_id="read_nessa",
+        actor_id="erynd",
+    )
+
+    same_actor = plan_npc_attempt(
+        first.state,
+        npc_id="scout",
+        policy=policy,
+        actor_id="erynd",
+    )
+    other_actor = plan_npc_attempt(
+        first.state,
+        npc_id="scout",
+        policy=policy,
+        actor_id="dagna",
+    )
+    assert same_actor.available is False
+    assert other_actor.available is True
+
+    critical = resolve_npc_runtime_interaction(
+        first.state,
+        npc_id="scout",
+        intent="insight",
+        success=False,
+        summary="Nessa zauważa próbę.",
+        attempt_id="read_nessa",
+        actor_id="dagna",
+        critical_failure=True,
+    )
+    closed = plan_npc_attempt(
+        critical.state,
+        npc_id="scout",
+        policy=policy,
+        actor_id="brakka",
+    )
+    assert closed.available is False
+    assert closed.blocked_reason == "Nessa zauważyła, że drużyna ją analizuje."

@@ -30,6 +30,7 @@ from dnd_board_game.combat import (
     CombatState,
     CombatStatus,
     CombatCondition,
+    ConditionState,
     ConditionSaveTiming,
     DamageComponentInput,
     HealingSource,
@@ -186,7 +187,11 @@ class PlayerCombatActionFlowService:
         source = next((candidate for candidate in sources if candidate.id == source_id), None)
         if source is None:
             raise ValueError("Nieznane źródło ataku.")
-        _require_usable_source(actor, source)
+        _require_usable_source(
+            actor,
+            source,
+            condition_states=state.condition_states,
+        )
         return CombatSourceSelectionTransition(
             actor_id=str(actor.id),
             source_id=source.id,
@@ -211,7 +216,11 @@ class PlayerCombatActionFlowService:
         source = next((candidate for candidate in sources if candidate.id == source_id), None)
         if source is None:
             raise ValueError("Nieznane źródło leczenia.")
-        _require_usable_source(actor, source)
+        _require_usable_source(
+            actor,
+            source,
+            condition_states=state.condition_states,
+        )
         return CombatSourceSelectionTransition(
             actor_id=str(actor.id),
             source_id=source.id,
@@ -241,6 +250,7 @@ class PlayerCombatActionFlowService:
         _require_usable_source(
             attacker,
             source,
+            condition_states=state.condition_states,
             active_effects=active_effects,
         )
         _require_attack_economy(
@@ -435,6 +445,7 @@ class PlayerCombatActionFlowService:
             _require_usable_source(
                 attacker,
                 effective_source,
+                condition_states=state.condition_states,
                 active_effects=active_effects,
             )
             offensive_effects = end_sanctuary_effects(
@@ -1420,6 +1431,7 @@ class PlayerCombatActionFlowService:
         _require_usable_source(
             attacker,
             source,
+            condition_states=state.condition_states,
             active_effects=active_effects,
         )
         pending = PendingPlayerAttack(
@@ -1622,6 +1634,7 @@ def _require_usable_source(
     actor: Actor,
     source: AttackSource | HealingSource,
     *,
+    condition_states: tuple[ConditionState, ...] = (),
     active_effects: tuple[ActiveCombatEffect, ...] = (),
 ) -> None:
     source_item_id = getattr(source, "source_item_id", None)
@@ -1656,10 +1669,8 @@ def _require_usable_source(
         ignore_verbal_somatic=(
             "metamagic_subtle" in getattr(source, "metamagic_ids", ())
         ),
-        verbal_components_blocked=(
-            "metamagic_subtle" not in getattr(source, "metamagic_ids", ())
-            and _actor_is_silenced(actor, active_effects)
-        ),
+        condition_states=condition_states,
+        active_effects=active_effects,
     )
     if cast_validation is not None and not cast_validation.valid:
         raise ValueError(" ".join(cast_validation.errors))
@@ -1691,15 +1702,6 @@ def _require_usable_source(
             raise ValueError(
                 f"{source.name} wymaga wolnej drugiej ręki do załadowania amunicji."
             )
-
-
-def _actor_is_silenced(
-    actor: Actor,
-    active_effects: tuple[ActiveCombatEffect, ...],
-) -> bool:
-    from dnd_board_game.combat import actor_in_silence_zone
-
-    return actor_in_silence_zone(actor, active_effects)
 
 
 def _consume_attack_source_resource(

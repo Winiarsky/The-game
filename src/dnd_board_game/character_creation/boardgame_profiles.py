@@ -38,12 +38,14 @@ _ACTIVE_FEATURES: dict[str, tuple[tuple[str, str], ...]] = {
         ("break_in", "Włamanie"),
         ("cunning_action", "Przebiegła akcja"),
         ("instinctive_dodge", "Unik instynktowny"),
+        ("exploit_weakness", "Wykorzystanie słabości"),
     ),
     "dagna": (("diagnosis", "Diagnoza"),),
     "erynd": (
         ("tracking", "Tropienie"),
         ("fighting_style_archery", "Styl walki: Łucznictwo"),
         ("cunning_action", "Zwiadowcza mobilność"),
+        ("patient_shot", "Strzelecka cierpliwość"),
     ),
 }
 
@@ -67,7 +69,6 @@ _FIXED_DECK_SPELLS: dict[str, tuple[tuple[int, str, str | None], ...]] = {
         (1, "invisibility", "trick_uses"),
         (1, "find_traps", "trick_uses"),
         (2, "vicious_mockery", "trick_uses"),
-        (2, "true_strike", "trick_uses"),
         (3, "mirror_image", "trick_uses"),
     ),
     "dagna": (
@@ -103,7 +104,6 @@ _FIXED_DECK_SPELLS: dict[str, tuple[tuple[int, str, str | None], ...]] = {
         (1, "hunters_mark", "instinct"),
         (1, "goodberry", "instinct"),
         (1, "find_traps", "instinct"),
-        (2, "true_strike", "instinct"),
         (2, "misty_step", "instinct"),
         (3, "spike_growth", "instinct"),
         (3, "see_invisibility", "instinct"),
@@ -128,11 +128,37 @@ _ACTION_IDS_BY_FEATURE: dict[str, tuple[str, ...]] = {
     "frenzy": ("frenzy",),
     "cunning_action": ("cunning_action",),
     "instinctive_dodge": ("instinctive_dodge",),
+    "exploit_weakness": ("exploit_weakness",),
+    "patient_shot": ("patient_shot",),
     "guard_duty": ("guard_duty",),
     "intimidation": ("intimidation",),
     "break_in": ("break_in",),
     "diagnosis": ("diagnosis",),
     "tracking": ("tracking",),
+}
+
+_RESOURCE_IDS_BY_FEATURE: dict[str, tuple[str, ...]] = {
+    "exploit_weakness": ("trick_uses",),
+    "patient_shot": ("instinct",),
+}
+
+_PRIMARY_ABILITY_BOOSTS = {
+    "garran": "strength",
+    "brakka": "strength",
+    "mira": "dexterity",
+    "dagna": "wisdom",
+    "lorian": "charisma",
+    "nimra": "intelligence",
+    "erynd": "dexterity",
+}
+_ABILITY_BOOST_FEATURE_ID = "boardgame_level_3_ability_boost"
+_ABILITY_LABELS_PL = {
+    "strength": "Siła",
+    "dexterity": "Zręczność",
+    "constitution": "Kondycja",
+    "intelligence": "Inteligencja",
+    "wisdom": "Mądrość",
+    "charisma": "Charyzma",
 }
 
 _FLAW_FEATURES: dict[str, tuple[str, str]] = {
@@ -154,6 +180,33 @@ def apply_boardgame_archetype(
     actor_id = str(actor.id)
     features = list(actor.features)
     existing_feature_ids = {feature.feature_id for feature in features}
+    boost_ability = _PRIMARY_ABILITY_BOOSTS.get(actor_id)
+    if (
+        actor.level >= 3
+        and boost_ability is not None
+        and _ABILITY_BOOST_FEATURE_ID not in existing_feature_ids
+    ):
+        actor = replace(
+            actor,
+            ability_scores=replace(
+                actor.ability_scores,
+                **{
+                    boost_ability: min(
+                        20,
+                        getattr(actor.ability_scores, boost_ability) + 2,
+                    )
+                },
+            ),
+        )
+        features.append(
+            FeatureGrant(
+                feature_id=_ABILITY_BOOST_FEATURE_ID,
+                label=f"Premia archetypu: +2 {_ABILITY_LABELS_PL[boost_ability]}",
+                source_kind=FeatureSourceKind.SCENARIO,
+                source_ref=f"boardgame_archetype:{actor_id}",
+            )
+        )
+        existing_feature_ids.add(_ABILITY_BOOST_FEATURE_ID)
     for feature_id, label in _ACTIVE_FEATURES.get(actor_id, ()):
         if actor.level < _FEATURE_MIN_LEVEL.get((actor_id, feature_id), 1):
             continue
@@ -166,6 +219,7 @@ def apply_boardgame_archetype(
                 source_kind=FeatureSourceKind.SCENARIO,
                 source_ref=f"boardgame_archetype:{actor_id}",
                 action_ids=_ACTION_IDS_BY_FEATURE.get(feature_id, ()),
+                resource_ids=_RESOURCE_IDS_BY_FEATURE.get(feature_id, ()),
             )
         )
 
@@ -286,16 +340,42 @@ def apply_boardgame_archetype(
                 RecoveryPeriod.LONG_REST,
             )
         )
+    if actor_id == "lorian":
+        inspiration_maximum = max(
+            1,
+            (actor.ability_scores.charisma - 10) // 2,
+        )
+        pools = [
+            replace(
+                pool,
+                current=max(
+                    0,
+                    inspiration_maximum - (pool.maximum - pool.current),
+                ),
+                maximum=inspiration_maximum,
+            )
+            if pool.id == "bardic_inspiration_uses"
+            else pool
+            for pool in pools
+        ]
     spells = list(actor.spells)
     spell_ids = list(actor.spell_ids)
     spell_access = list(actor.spell_access)
     spell_save_dc = actor.spell_save_dc
+    casting_ability = _DECK_CASTING_ABILITIES.get(actor_id)
+    if casting_ability is not None and spell_save_dc is not None:
+        ability_score = getattr(actor.ability_scores, casting_ability)
+        spell_save_dc = 8 + actor.proficiency_bonus + (ability_score - 10) // 2
     deck_spell_specs = tuple(
         (spell_id, resource_id)
         for minimum_level, spell_id, resource_id in _FIXED_DECK_SPELLS.get(actor_id, ())
         if actor.level >= minimum_level
     )
     if deck_spell_specs:
+        # The physical deck is the complete decision interface for a curated
+        # hero.  Keep spells on the actor for descriptive/narrative use, but do
+        # not leave additional class-preparation profiles mechanically castable.
+        spell_access = []
         added_spell_ids: list[str] = []
         resource_mappings: list[tuple[str, str]] = []
         for spell_id, resource_id in deck_spell_specs:
@@ -310,7 +390,14 @@ def apply_boardgame_archetype(
                     spell,
                     components=SpellComponents(verbal=True),
                 )
-            if spell.id not in spell_ids:
+            if spell.id in spell_ids:
+                spell_index = next(
+                    index
+                    for index, existing_spell in enumerate(spells)
+                    if existing_spell.id == spell.id
+                )
+                spells[spell_index] = spell
+            else:
                 spells.append(spell)
                 spell_ids.append(spell.id)
             added_spell_ids.append(spell.id)
@@ -357,6 +444,9 @@ def apply_boardgame_archetype(
         spells=tuple(spells),
         spell_ids=tuple(spell_ids),
         spell_access=tuple(spell_access),
+        spell_preparation=(None if deck_spell_specs else actor.spell_preparation),
+        # Erynd's spell-shaped techniques spend Instinct, never ranger slots.
+        spell_slots=() if actor_id == "erynd" else actor.spell_slots,
         spell_save_dc=spell_save_dc,
         proficiencies=proficiencies,
     )

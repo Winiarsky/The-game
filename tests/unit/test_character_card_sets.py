@@ -15,10 +15,13 @@ from dnd_board_game.physical_cards.character_card_sets import (
     CARD_SIZE_PX,
     SAFE_MARGIN_MM,
     _art_panel_for,
+    _access_badge,
+    _card_resource_lines,
     _fit_timing_font,
     _font,
     _mm,
     _phase_label,
+    _stat_lines,
     _wrapped_lines,
     generate_character_sheet_bw_pdf,
     generate_character_card_set_bw_test,
@@ -76,10 +79,17 @@ def test_seven_archetypes_have_balanced_combat_only_decks() -> None:
         "mira": {
             "cunning_action",
             "instinctive_dodge",
+            "exploit_weakness",
             "invisibility",
             "find_traps",
         },
-        "erynd": {"hunters_mark", "goodberry", "cunning_action", "find_traps"},
+        "erynd": {
+            "hunters_mark",
+            "goodberry",
+            "cunning_action",
+            "patient_shot",
+            "find_traps",
+        },
         "dagna": {"sacred_flame", "healing_word", "bless", "sanctuary"},
         "lorian": {"bardic_inspiration", "vicious_mockery", "thunderwave", "healing_word"},
         "nimra": {"ray_of_frost", "grease", "shield", "sleep"},
@@ -91,7 +101,7 @@ def test_seven_archetypes_have_balanced_combat_only_decks() -> None:
             for card in printable_action_cards(CHARACTER_DECKS[actor_id])
         }
         assert source_ids <= set(cards)
-        assert all(cards[source_id].required_level == 1 for source_id in source_ids)
+        assert all(cards[source_id].required_level <= 3 for source_id in source_ids)
         combat_cards = tuple(
             card for card in cards.values() if card.kind != "universal"
         )
@@ -110,8 +120,10 @@ def test_seven_archetypes_have_balanced_combat_only_decks() -> None:
         card.source_id: card
         for card in printable_action_cards(CHARACTER_DECKS["erynd"])
     }
-    assert "2/2" in mira["invisibility"].mechanic
+    assert "3/3" in mira["invisibility"].mechanic
     assert "1 Instynkt" in erynd["goodberry"].mechanic
+    assert "true_strike" not in mira
+    assert "true_strike" not in erynd
 
 
 def test_every_playable_hero_card_lists_passives_and_mechanical_flaw() -> None:
@@ -189,6 +201,45 @@ def test_printable_cards_follow_current_phase_and_spell_content() -> None:
             for card in printable_action_cards(deck)
         )
 
+    lorian_cards = {
+        card.source_id: card
+        for card in printable_action_cards(CHARACTER_DECKS["lorian"])
+    }
+    nimra_cards = {
+        card.source_id: card
+        for card in printable_action_cards(CHARACTER_DECKS["nimra"])
+    }
+    assert "utrudnienie" in lorian_cards["vicious_mockery"].mechanic
+    assert "10 stóp" in nimra_cards["shatter"].mechanic
+    assert "konstrukty" in nimra_cards["shatter"].mechanic
+
+
+def test_dossiers_list_exact_card_resources_instead_of_level_progression() -> None:
+    expected = {
+        "garran": ("Taktyka 3/3", "Ratunek polowy 15/15"),
+        "brakka": ("Szał 3/3", "Dzikość 2/2"),
+        "mira": ("Fortele 3/3", "Unik instynktowny 1/1"),
+        "dagna": ("Komórki czarów: 4× 1. poziomu, 2× 2. poziomu", "Boska Moc 1/1"),
+        "lorian": ("Komórki czarów: 4× 1. poziomu, 2× 2. poziomu", "Inspiracja bardowska 4/4"),
+        "nimra": ("Komórki czarów: 4× 1. poziomu, 2× 2. poziomu", "Odzyskiwanie magiczne 1/1"),
+        "erynd": ("Instynkt 3/3", "Karty niewymienione"),
+    }
+    for actor_id, required_fragments in expected.items():
+        text = "\n".join(_card_resource_lines(CHARACTER_DECKS[actor_id]))
+        assert all(fragment in text for fragment in required_fragments)
+        assert "rozwój" not in text.lower()
+
+
+def test_character_sheet_lists_only_spells_available_from_physical_deck() -> None:
+    lorian = _stat_lines(CHARACTER_DECKS["lorian"])["spells"]
+    nimra = _stat_lines(CHARACTER_DECKS["nimra"])["spells"]
+
+    assert "Zauroczenie osoby" not in lorian
+    assert "Wykrycie magii" not in nimra
+    assert "Identyfikacja" not in nimra
+    assert "Obezwładniający Żart" in lorian
+    assert "Pajęczyna" in nimra
+
 
 def test_black_and_white_character_sheet_is_toner_friendly(tmp_path) -> None:
     sheet = render_character_sheet_bw(GARRAN_DECK)
@@ -224,7 +275,7 @@ def test_every_timing_label_fits_before_the_level_badge() -> None:
     draw = ImageDraw.Draw(canvas)
     safe = _mm(SAFE_MARGIN_MM)
     level_font = _font(_mm(1.95), bold=True)
-    level_width = draw.textbbox((0, 0), "POZIOM 3", font=level_font)[2]
+    level_width = draw.textbbox((0, 0), "OD STARTU", font=level_font)[2]
     timing_room = CARD_SIZE_PX[0] - 2 * safe - level_width - _mm(8)
 
     for actor_id in PLAYABLE_HERO_IDS:
@@ -239,6 +290,7 @@ def test_every_timing_label_fits_before_the_level_badge() -> None:
                 card.source_id,
                 timing_text,
             )
+            assert _access_badge(deck, card) == "OD STARTU"
     canvas.close()
 
 

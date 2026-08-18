@@ -67,6 +67,48 @@ def test_keyboard_wedge_scanner_separator_is_normalized() -> None:
 
 
 @pytest.mark.parametrize(
+    "canonical",
+    (
+        "dndbg:v2:action:feature:bardic_inspiration:lorian",
+        "dndbg:v2:action:spell:healing_word:guild_bard",
+        "dndbg:v1:actor:guild_scout",
+    ),
+)
+def test_keyboard_wedge_scanner_normalizes_underscores_for_every_card_payload(
+    canonical: str,
+) -> None:
+    scanned = canonical.replace(":", ">").replace("_", "?")
+
+    normalized = normalize_decision_card_scanner_text(scanned)
+
+    assert normalized == canonical
+
+
+def test_reported_bardic_inspiration_scan_round_trips() -> None:
+    normalized = normalize_decision_card_scanner_text(
+        "dndbg>v2>action>feature>bardic?inspiration>lorian"
+    )
+
+    parsed = parse_decision_card_qr_payload(normalized)
+
+    assert parsed.action_kind is DecisionCardActionKind.FEATURE
+    assert parsed.source_id == "bardic_inspiration"
+    assert parsed.actor_id == "lorian"
+
+
+def test_reported_hunters_mark_scan_round_trips() -> None:
+    normalized = normalize_decision_card_scanner_text(
+        "dndbg>v2>action>spell>hunters?mark>erynd"
+    )
+
+    parsed = parse_decision_card_qr_payload(normalized)
+
+    assert parsed.action_kind is DecisionCardActionKind.SPELL
+    assert parsed.source_id == "hunters_mark"
+    assert parsed.actor_id == "erynd"
+
+
+@pytest.mark.parametrize(
     "payload",
     (
         "other:v1:action:spell:eldritch_blast",
@@ -144,14 +186,20 @@ def test_generate_decision_card_qr_writes_deterministic_png(
     assert first.read_bytes() == second.read_bytes()
 
 
-@pytest.mark.parametrize("action", ("accept", "decline"))
+@pytest.mark.parametrize("action", ("accept", "decline", "maneuvers", "equipment"))
 def test_resolve_universal_control_card(action: str) -> None:
     payload = build_decision_card_qr_payload("universal", action)
 
     card = resolve_universal_card_scan(payload)
 
     assert card.action.value == action
-    assert card.player_label == action.upper()
+    expected_label = {
+        "accept": "AKCEPTUJ",
+        "decline": "ODRZUĆ",
+        "maneuvers": "MANEWRY",
+        "equipment": "EKWIPUNEK",
+    }[action]
+    assert card.player_label == expected_label
 
 
 def test_resolve_universal_control_card_rejects_other_card_kinds() -> None:

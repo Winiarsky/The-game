@@ -1,0 +1,5491 @@
+{
+  "active_effects": [],
+  "actors": [
+    {
+      "ability_scores": {
+        "charisma": 12,
+        "constitution": 16,
+        "dexterity": 10,
+        "intelligence": 8,
+        "strength": 13,
+        "wisdom": 18
+      },
+      "ac": 10,
+      "active_light": null,
+      "attacks_per_action": 1,
+      "auras": [],
+      "condition_immunities": [],
+      "creature_type": "humanoid",
+      "currency": {
+        "cp": 0,
+        "ep": 0,
+        "gp": 15,
+        "pp": 0,
+        "sp": 0,
+        "total_cp": 1500,
+        "weight_lb": 0.3
+      },
+      "damage_affinities": {
+        "immunities": [],
+        "resistances": [
+          "poison"
+        ],
+        "vulnerabilities": []
+      },
+      "death_saves": {
+        "dead": false,
+        "failures": 0,
+        "stable": false,
+        "successes": 0
+      },
+      "exhaustion_level": 0,
+      "experience_points": 0,
+      "faction": "ally",
+      "features": [
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "darkvision",
+          "label": "Widzenie w ciemności",
+          "resource_ids": [],
+          "source_kind": "species",
+          "source_ref": "dwarf",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "dwarven_resilience",
+          "label": "Dwarven resilience",
+          "resource_ids": [],
+          "source_kind": "species",
+          "source_ref": "dwarf",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "dwarven_speed",
+          "label": "Dwarven speed",
+          "resource_ids": [],
+          "source_kind": "species",
+          "source_ref": "dwarf",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "stonecunning",
+          "label": "Stonecunning",
+          "resource_ids": [],
+          "source_kind": "species",
+          "source_ref": "dwarf",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "dwarven_toughness",
+          "label": "Dwarven toughness",
+          "resource_ids": [],
+          "source_kind": "species",
+          "source_ref": "dwarf",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [
+            "request_faithful_shelter",
+            "request_faithful_care"
+          ],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "shelter_of_the_faithful",
+          "label": "Shelter of the faithful",
+          "resource_ids": [],
+          "source_kind": "background",
+          "source_ref": "acolyte",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "spellcasting",
+          "label": "Rzucanie czarów",
+          "resource_ids": [],
+          "source_kind": "class",
+          "source_ref": "cleric",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "divine_domain",
+          "label": "Domena boska",
+          "resource_ids": [],
+          "source_kind": "class",
+          "source_ref": "cleric",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "channel_divinity",
+          "label": "Channel divinity",
+          "resource_ids": [
+            "channel_divinity_uses"
+          ],
+          "source_kind": "class",
+          "source_ref": "cleric",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [
+            "turn_undead"
+          ],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "turn_undead",
+          "label": "Turn undead",
+          "resource_ids": [
+            "channel_divinity_uses"
+          ],
+          "source_kind": "class",
+          "source_ref": "cleric",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "life_domain",
+          "label": "Domena Życia",
+          "resource_ids": [],
+          "source_kind": "subclass",
+          "source_ref": "life_domain",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "disciple_of_life",
+          "label": "Uczeń życia",
+          "resource_ids": [],
+          "source_kind": "subclass",
+          "source_ref": "life_domain",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [
+            "preserve_life"
+          ],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "channel_divinity_preserve_life",
+          "label": "Channel divinity preserve life",
+          "resource_ids": [
+            "channel_divinity_uses"
+          ],
+          "source_kind": "subclass",
+          "source_ref": "life_domain",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "boardgame_level_3_ability_boost",
+          "label": "Premia archetypu: +2 Mądrość",
+          "resource_ids": [],
+          "source_kind": "scenario",
+          "source_ref": "boardgame_archetype:dagna",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [
+            "diagnosis"
+          ],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "diagnosis",
+          "label": "Diagnoza",
+          "resource_ids": [],
+          "source_kind": "scenario",
+          "source_ref": "boardgame_archetype:dagna",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "flaw_leave_no_one",
+          "label": "Skaza: Nikogo nie zostawiam",
+          "resource_ids": [],
+          "source_kind": "scenario",
+          "source_ref": "boardgame_archetype:dagna",
+          "trigger_ids": []
+        }
+      ],
+      "hit_dice": [
+        {
+          "die_sides": 8,
+          "maximum": 3,
+          "remaining": 3
+        }
+      ],
+      "hp": 30,
+      "id": "dagna",
+      "inventory": [
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "",
+          "durability": null,
+          "equipped": true,
+          "gear_category": null,
+          "hands_required": 1,
+          "held_in": [
+            "main_hand"
+          ],
+          "id": "mace",
+          "kind": "weapon",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Buława",
+          "portable": true,
+          "properties": [],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "mace",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 500,
+          "total_weight_lb": 4.0,
+          "value_cp": 500,
+          "versatile_damage_dice": null,
+          "weapon_category": "simple",
+          "weapon_properties": [],
+          "weight_lb": 4.0
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 2,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": "shield",
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "Metalowa tarcza zajmująca jedną rękę i zapewniająca +2 do KP.",
+          "durability": null,
+          "equipped": true,
+          "gear_category": null,
+          "hands_required": 1,
+          "held_in": [
+            "off_hand"
+          ],
+          "id": "shield",
+          "kind": "shield",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Tarcza",
+          "portable": true,
+          "properties": [
+            "rigid",
+            "hard",
+            "metallic"
+          ],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "shield",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 1000,
+          "total_weight_lb": 6.0,
+          "value_cp": 1000,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 6.0
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": 14,
+          "armor_category": "medium",
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": 2,
+          "armor_proficiency": "medium",
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "Średni pancerz: KP 14 + modyfikator Zręczności, maksymalnie +2; utrudnienie do Stealth.",
+          "durability": null,
+          "equipped": true,
+          "gear_category": null,
+          "hands_required": 0,
+          "held_in": [],
+          "id": "scale_mail",
+          "kind": "armor",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Zbroja łuskowa",
+          "portable": true,
+          "properties": [
+            "metallic",
+            "hard"
+          ],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "scale_mail",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": true,
+          "tool_proficiency_id": null,
+          "total_value_cp": 5000,
+          "total_weight_lb": 45.0,
+          "value_cp": 5000,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 45.0
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "Dwuręczna lekka kusza strzelająca bełtami.",
+          "durability": null,
+          "equipped": false,
+          "gear_category": null,
+          "hands_required": 2,
+          "held_in": [],
+          "id": "crossbow",
+          "kind": "weapon",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Kusza",
+          "portable": true,
+          "properties": [
+            "rigid",
+            "wooden",
+            "metallic"
+          ],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "crossbow",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 2500,
+          "total_weight_lb": 5.0,
+          "value_cp": 2500,
+          "versatile_damage_dice": null,
+          "weapon_category": "simple",
+          "weapon_properties": [
+            "ammunition",
+            "loading",
+            "two_handed"
+          ],
+          "weight_lb": 5.0
+        },
+        {
+          "ammunition_type": "bolt",
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "Krótki metalowo-drewniany pocisk przeznaczony do kuszy.",
+          "durability": null,
+          "equipped": false,
+          "gear_category": null,
+          "hands_required": 0,
+          "held_in": [],
+          "id": "crossbow_bolt",
+          "kind": "ammunition",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Bełt do kuszy",
+          "portable": true,
+          "properties": [
+            "rigid",
+            "wooden",
+            "metallic"
+          ],
+          "quantity": 20,
+          "requires_attunement": false,
+          "source_ref": "crossbow_bolt",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 100,
+          "total_weight_lb": 1.5,
+          "value_cp": 5,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 0.075
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "",
+          "durability": null,
+          "equipped": true,
+          "gear_category": "holy_symbol",
+          "hands_required": 0,
+          "held_in": [],
+          "id": "holy_symbol_amulet",
+          "kind": "focus",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Amulet ze świętym symbolem",
+          "portable": true,
+          "properties": [],
+          "quantity": 2,
+          "requires_attunement": false,
+          "source_ref": "holy_symbol_amulet",
+          "spellcasting_focus_kind": "holy_symbol",
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 1000,
+          "total_weight_lb": 2.0,
+          "value_cp": 500,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 1.0
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [
+            {
+              "item_id": "backpack",
+              "quantity": 1
+            },
+            {
+              "item_id": "blanket",
+              "quantity": 1
+            },
+            {
+              "item_id": "candle",
+              "quantity": 10
+            },
+            {
+              "item_id": "tinderbox",
+              "quantity": 1
+            },
+            {
+              "item_id": "alms_box",
+              "quantity": 1
+            },
+            {
+              "item_id": "incense_block",
+              "quantity": 2
+            },
+            {
+              "item_id": "censer",
+              "quantity": 1
+            },
+            {
+              "item_id": "vestments",
+              "quantity": 1
+            },
+            {
+              "item_id": "rations",
+              "quantity": 2
+            },
+            {
+              "item_id": "waterskin",
+              "quantity": 1
+            }
+          ],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "",
+          "durability": null,
+          "equipped": false,
+          "gear_category": "equipment_pack",
+          "hands_required": 0,
+          "held_in": [],
+          "id": "priests_pack",
+          "kind": "equipment_pack",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Pakiet kapłana",
+          "portable": true,
+          "properties": [],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "priests_pack",
+          "spellcasting_focus_kind": null,
+          "stackable": false,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 1900,
+          "total_weight_lb": 0.0,
+          "value_cp": 1900,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 0.0
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "",
+          "durability": null,
+          "equipped": false,
+          "gear_category": "clothing",
+          "hands_required": 0,
+          "held_in": [],
+          "id": "vestments",
+          "kind": "clothing",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Szaty liturgiczne",
+          "portable": true,
+          "properties": [
+            "textile"
+          ],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "vestments",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 0,
+          "total_weight_lb": 0.0,
+          "value_cp": 0,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 0.0
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "",
+          "durability": null,
+          "equipped": false,
+          "gear_category": "clothing",
+          "hands_required": 0,
+          "held_in": [],
+          "id": "common_clothes",
+          "kind": "clothing",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Zwykłe ubranie",
+          "portable": true,
+          "properties": [
+            "textile"
+          ],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "common_clothes",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 50,
+          "total_weight_lb": 3.0,
+          "value_cp": 50,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 3.0
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": {
+            "ammunition_count": null,
+            "ammunition_type": null,
+            "liquid_pints": null,
+            "maximum_weight_lb": 6.0,
+            "sheet_count": null,
+            "volume_cubic_feet": 0.2
+          },
+          "description": "",
+          "durability": null,
+          "equipped": false,
+          "gear_category": "container",
+          "hands_required": 0,
+          "held_in": [],
+          "id": "pouch",
+          "kind": "container",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Sakiewka",
+          "portable": true,
+          "properties": [
+            "container",
+            "textile"
+          ],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "pouch",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 50,
+          "total_weight_lb": 1.0,
+          "value_cp": 50,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 1.0
+        }
+      ],
+      "level": 3,
+      "max_hp": 30,
+      "name": "Dagna",
+      "portrait": "character_uploads/default_roster_v2/dagna.png",
+      "position": [
+        0,
+        0
+      ],
+      "proficiencies": {
+        "armor": [
+          "light",
+          "medium",
+          "shield",
+          "heavy"
+        ],
+        "expertise": [],
+        "saving_throws": [
+          "wisdom",
+          "charisma"
+        ],
+        "skills": [
+          "insight",
+          "religion",
+          "medicine",
+          "persuasion"
+        ],
+        "tools": [
+          "smiths_tools"
+        ],
+        "weapons": [
+          "unarmed_strike",
+          "battleaxe",
+          "handaxe",
+          "light_hammer",
+          "warhammer",
+          "mace",
+          "crossbow",
+          "dagger"
+        ]
+      },
+      "proficiency_bonus": 2,
+      "resource_pools": [
+        {
+          "current": 1,
+          "id": "channel_divinity_uses",
+          "label": "Channel Divinity",
+          "maximum": 1,
+          "recharge": null,
+          "recovery": "short_rest"
+        }
+      ],
+      "senses": {
+        "blindsight_feet": 0,
+        "darkvision_feet": 60,
+        "magical_darkness_vision_feet": 0,
+        "tremorsense_feet": 0,
+        "truesight_feet": 0
+      },
+      "size": "medium",
+      "speed_feet": 25,
+      "spell_access": [
+        {
+          "allowed_focus_kinds": [
+            "component_pouch",
+            "holy_symbol"
+          ],
+          "casting_ability": "wisdom",
+          "kind": "known",
+          "resource_ids_by_spell": {},
+          "spell_ids": [
+            "sacred_flame",
+            "healing_word",
+            "bless",
+            "sanctuary",
+            "guiding_bolt",
+            "aid",
+            "lesser_restoration",
+            "warding_bond"
+          ]
+        }
+      ],
+      "spell_ids": [
+        "sacred_flame",
+        "guidance",
+        "spare_the_dying",
+        "bane",
+        "bless",
+        "command",
+        "create_or_destroy_water",
+        "cure_wounds",
+        "detect_evil_and_good",
+        "detect_magic",
+        "detect_poison_and_disease",
+        "guiding_bolt",
+        "healing_word",
+        "inflict_wounds",
+        "protection_from_evil_and_good",
+        "purify_food_and_drink",
+        "sanctuary",
+        "shield_of_faith",
+        "aid",
+        "augury",
+        "blindness_deafness",
+        "calm_emotions",
+        "continual_flame",
+        "enhance_ability",
+        "find_traps",
+        "gentle_repose",
+        "hold_person",
+        "lesser_restoration",
+        "locate_object",
+        "prayer_of_healing",
+        "protection_from_poison",
+        "silence",
+        "spiritual_weapon",
+        "warding_bond",
+        "zone_of_truth"
+      ],
+      "spell_preparation": null,
+      "spell_save_dc": 14,
+      "spell_slots": [
+        {
+          "level": 1,
+          "maximum": 4,
+          "recovery": "long_rest",
+          "remaining": 4,
+          "temporary": false
+        },
+        {
+          "level": 2,
+          "maximum": 2,
+          "recovery": "long_rest",
+          "remaining": 2,
+          "temporary": false
+        }
+      ],
+      "spells": [
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "instantaneous"
+          },
+          "effect_kind": "attack",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "sacred_flame",
+          "level": 0,
+          "name": "Święty płomień",
+          "range": {
+            "feet": 60,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": {
+            "cantrip_damage_dice_per_tier": 1,
+            "damage_dice_per_slot_level": 0,
+            "healing_dice_per_slot_level": 0,
+            "targets_per_slot_level": 0
+          },
+          "school": "evocation"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": true,
+          "duration": {
+            "amount": 1,
+            "kind": "minute"
+          },
+          "effect_kind": "combat_action",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "guidance",
+          "level": 0,
+          "name": "Wskazówki",
+          "range": {
+            "feet": 0,
+            "kind": "touch"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "divination"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "instantaneous"
+          },
+          "effect_kind": "combat_action",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "spare_the_dying",
+          "level": 0,
+          "name": "Oszczędzenie umierającego",
+          "range": {
+            "feet": 0,
+            "kind": "touch"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "necromancy"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [
+              {
+                "consumed": false,
+                "item_id": "spell_component_bane",
+                "label": "a drop of blood",
+                "minimum_value_cp": 0,
+                "quantity": 1
+              }
+            ],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": true,
+          "duration": {
+            "amount": 1,
+            "kind": "minute"
+          },
+          "effect_kind": "combat_action",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "bane",
+          "level": 1,
+          "name": "Zguba",
+          "range": {
+            "feet": 30,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "enchantment"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [
+              {
+                "consumed": false,
+                "item_id": "spell_component_bless",
+                "label": "a sprinkling of holy water",
+                "minimum_value_cp": 0,
+                "quantity": 1
+              }
+            ],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": true,
+          "duration": {
+            "amount": 1,
+            "kind": "minute"
+          },
+          "effect_kind": "combat_action",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "bless",
+          "level": 1,
+          "name": "Błogosławieństwo",
+          "range": {
+            "feet": 30,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "enchantment"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": false,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "round"
+          },
+          "effect_kind": "combat_action",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "command",
+          "level": 1,
+          "name": "Rozkaz",
+          "range": {
+            "feet": 60,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "enchantment"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [
+              {
+                "consumed": false,
+                "item_id": "spell_component_create_or_destroy_water",
+                "label": "a drop of water if creating water or a few grains of sand if destroying it",
+                "minimum_value_cp": 0,
+                "quantity": 1
+              }
+            ],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "instantaneous"
+          },
+          "effect_kind": "exploration",
+          "exploration_consequence_tags": [],
+          "exploration_effect": {
+            "flag_key": "cast_create_or_destroy_water",
+            "flag_value": true,
+            "kind": "set_flag"
+          },
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "create_or_destroy_water",
+          "level": 1,
+          "name": "Stworzenie lub zniszczenie wody",
+          "range": {
+            "feet": 30,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "transmutation"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "instantaneous"
+          },
+          "effect_kind": "healing",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "cure_wounds",
+          "level": 1,
+          "name": "Leczenie ran",
+          "range": {
+            "feet": 0,
+            "kind": "touch"
+          },
+          "ritual": false,
+          "scaling": {
+            "cantrip_damage_dice_per_tier": 0,
+            "damage_dice_per_slot_level": 0,
+            "healing_dice_per_slot_level": 1,
+            "targets_per_slot_level": 0
+          },
+          "school": "evocation"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": true,
+          "duration": {
+            "amount": 1,
+            "kind": "ten_minutes"
+          },
+          "effect_kind": "exploration",
+          "exploration_consequence_tags": [],
+          "exploration_effect": {
+            "flag_key": "cast_detect_evil_and_good",
+            "flag_value": true,
+            "kind": "set_flag"
+          },
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "detect_evil_and_good",
+          "level": 1,
+          "name": "Wykrycie dobra i zła",
+          "range": {
+            "feet": 0,
+            "kind": "self"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "divination"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": true,
+          "duration": {
+            "amount": 1,
+            "kind": "ten_minutes"
+          },
+          "effect_kind": "exploration",
+          "exploration_consequence_tags": [],
+          "exploration_effect": {
+            "flag_key": "cast_detect_magic",
+            "flag_value": true,
+            "kind": "set_flag"
+          },
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "detect_magic",
+          "level": 1,
+          "name": "Wykrycie magii",
+          "range": {
+            "feet": 0,
+            "kind": "self"
+          },
+          "ritual": true,
+          "scaling": null,
+          "school": "divination"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [
+              {
+                "consumed": false,
+                "item_id": "spell_component_detect_poison_and_disease",
+                "label": "a yew leaf",
+                "minimum_value_cp": 0,
+                "quantity": 1
+              }
+            ],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": true,
+          "duration": {
+            "amount": 1,
+            "kind": "ten_minutes"
+          },
+          "effect_kind": "exploration",
+          "exploration_consequence_tags": [],
+          "exploration_effect": {
+            "flag_key": "cast_detect_poison_and_disease",
+            "flag_value": true,
+            "kind": "set_flag"
+          },
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "detect_poison_and_disease",
+          "level": 1,
+          "name": "Wykrycie trucizny i choroby",
+          "range": {
+            "feet": 0,
+            "kind": "self"
+          },
+          "ritual": true,
+          "scaling": null,
+          "school": "divination"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "round"
+          },
+          "effect_kind": "attack",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "guiding_bolt",
+          "level": 1,
+          "name": "Naprowadzający pocisk",
+          "range": {
+            "feet": 120,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": {
+            "cantrip_damage_dice_per_tier": 0,
+            "damage_dice_per_slot_level": 1,
+            "healing_dice_per_slot_level": 0,
+            "targets_per_slot_level": 0
+          },
+          "school": "evocation"
+        },
+        {
+          "casting_time": "bonus_action",
+          "components": {
+            "materials": [],
+            "somatic": false,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "instantaneous"
+          },
+          "effect_kind": "healing",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "healing_word",
+          "level": 1,
+          "name": "Słowo leczenia",
+          "range": {
+            "feet": 60,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": {
+            "cantrip_damage_dice_per_tier": 0,
+            "damage_dice_per_slot_level": 0,
+            "healing_dice_per_slot_level": 1,
+            "targets_per_slot_level": 0
+          },
+          "school": "evocation"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "instantaneous"
+          },
+          "effect_kind": "attack",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "inflict_wounds",
+          "level": 1,
+          "name": "Zadawanie ran",
+          "range": {
+            "feet": 0,
+            "kind": "touch"
+          },
+          "ritual": false,
+          "scaling": {
+            "cantrip_damage_dice_per_tier": 0,
+            "damage_dice_per_slot_level": 1,
+            "healing_dice_per_slot_level": 0,
+            "targets_per_slot_level": 0
+          },
+          "school": "necromancy"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [
+              {
+                "consumed": true,
+                "item_id": "spell_component_protection_from_evil_and_good",
+                "label": "holy water or powdered silver and iron, which the spell consumes",
+                "minimum_value_cp": 0,
+                "quantity": 1
+              }
+            ],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": true,
+          "duration": {
+            "amount": 1,
+            "kind": "hour"
+          },
+          "effect_kind": "combat_action",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "protection_from_evil_and_good",
+          "level": 1,
+          "name": "Ochrona przed dobrem i złem",
+          "range": {
+            "feet": 0,
+            "kind": "touch"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "abjuration"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "instantaneous"
+          },
+          "effect_kind": "exploration",
+          "exploration_consequence_tags": [],
+          "exploration_effect": {
+            "flag_key": "cast_purify_food_and_drink",
+            "flag_value": true,
+            "kind": "set_flag"
+          },
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "purify_food_and_drink",
+          "level": 1,
+          "name": "Oczyszczenie jadła i napoju",
+          "range": {
+            "feet": 10,
+            "kind": "distance"
+          },
+          "ritual": true,
+          "scaling": null,
+          "school": "transmutation"
+        },
+        {
+          "casting_time": "bonus_action",
+          "components": {
+            "materials": [
+              {
+                "consumed": false,
+                "item_id": "spell_component_sanctuary",
+                "label": "a small silver mirror",
+                "minimum_value_cp": 0,
+                "quantity": 1
+              }
+            ],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "minute"
+          },
+          "effect_kind": "combat_action",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "sanctuary",
+          "level": 1,
+          "name": "Sanktuarium",
+          "range": {
+            "feet": 30,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "abjuration"
+        },
+        {
+          "casting_time": "bonus_action",
+          "components": {
+            "materials": [
+              {
+                "consumed": false,
+                "item_id": "spell_component_shield_of_faith",
+                "label": "a small parchment with a bit of holy text written on it",
+                "minimum_value_cp": 0,
+                "quantity": 1
+              }
+            ],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": true,
+          "duration": {
+            "amount": 1,
+            "kind": "ten_minutes"
+          },
+          "effect_kind": "combat_action",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "shield_of_faith",
+          "level": 1,
+          "name": "Tarcza wiary",
+          "range": {
+            "feet": 60,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "abjuration"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [
+              {
+                "consumed": false,
+                "item_id": "spell_component_aid",
+                "label": "a tiny strip of white cloth",
+                "minimum_value_cp": 0,
+                "quantity": 1
+              }
+            ],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "eight_hours"
+          },
+          "effect_kind": "combat_action",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "aid",
+          "level": 2,
+          "name": "Wsparcie",
+          "range": {
+            "feet": 30,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "abjuration"
+        },
+        {
+          "casting_time": "minute",
+          "components": {
+            "materials": [
+              {
+                "consumed": false,
+                "item_id": "spell_component_augury",
+                "label": "specially marked sticks, bones, or similar tokens worth at least 25 gp",
+                "minimum_value_cp": 2500,
+                "quantity": 1
+              }
+            ],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "instantaneous"
+          },
+          "effect_kind": "exploration",
+          "exploration_consequence_tags": [],
+          "exploration_effect": {
+            "flag_key": "cast_augury",
+            "flag_value": true,
+            "kind": "set_flag"
+          },
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "augury",
+          "level": 2,
+          "name": "Wróżba",
+          "range": {
+            "feet": 0,
+            "kind": "self"
+          },
+          "ritual": true,
+          "scaling": null,
+          "school": "divination"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": false,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "minute"
+          },
+          "effect_kind": "combat_action",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "blindness_deafness",
+          "level": 2,
+          "name": "Ślepota/Głuchota",
+          "range": {
+            "feet": 30,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "necromancy"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": true,
+          "duration": {
+            "amount": 1,
+            "kind": "minute"
+          },
+          "effect_kind": "exploration",
+          "exploration_consequence_tags": [],
+          "exploration_effect": {
+            "flag_key": "cast_calm_emotions",
+            "flag_value": true,
+            "kind": "set_flag"
+          },
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "calm_emotions",
+          "level": 2,
+          "name": "Uspokojenie emocji",
+          "range": {
+            "feet": 60,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "enchantment"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [
+              {
+                "consumed": true,
+                "item_id": "spell_component_continual_flame",
+                "label": "ruby dust worth 50 gp, which the spell consumes",
+                "minimum_value_cp": 5000,
+                "quantity": 1
+              }
+            ],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "until_dispelled"
+          },
+          "effect_kind": "exploration",
+          "exploration_consequence_tags": [],
+          "exploration_effect": {
+            "flag_key": "cast_continual_flame",
+            "flag_value": true,
+            "kind": "set_flag"
+          },
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "continual_flame",
+          "level": 2,
+          "name": "Wieczny płomień",
+          "range": {
+            "feet": 0,
+            "kind": "touch"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "evocation"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [
+              {
+                "consumed": false,
+                "item_id": "spell_component_enhance_ability",
+                "label": "fur or a feather from a beast",
+                "minimum_value_cp": 0,
+                "quantity": 1
+              }
+            ],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": true,
+          "duration": {
+            "amount": 1,
+            "kind": "hour"
+          },
+          "effect_kind": "combat_action",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "enhance_ability",
+          "level": 2,
+          "name": "Wzmocnienie cechy",
+          "range": {
+            "feet": 0,
+            "kind": "touch"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "transmutation"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "instantaneous"
+          },
+          "effect_kind": "combat_action",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "find_traps",
+          "level": 2,
+          "name": "Wykrycie pułapek",
+          "range": {
+            "feet": 120,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "divination"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [
+              {
+                "consumed": false,
+                "item_id": "spell_component_gentle_repose",
+                "label": "a pinch of salt and one copper piece placed on each of the corpse’s eyes, which must remain there for the duration",
+                "minimum_value_cp": 0,
+                "quantity": 1
+              }
+            ],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "ten_days"
+          },
+          "effect_kind": "exploration",
+          "exploration_consequence_tags": [],
+          "exploration_effect": {
+            "flag_key": "cast_gentle_repose",
+            "flag_value": true,
+            "kind": "set_flag"
+          },
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "gentle_repose",
+          "level": 2,
+          "name": "Łagodny spoczynek",
+          "range": {
+            "feet": 0,
+            "kind": "touch"
+          },
+          "ritual": true,
+          "scaling": null,
+          "school": "necromancy"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [
+              {
+                "consumed": false,
+                "item_id": "spell_component_hold_person",
+                "label": "a small, straight piece of iron",
+                "minimum_value_cp": 0,
+                "quantity": 1
+              }
+            ],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": true,
+          "duration": {
+            "amount": 1,
+            "kind": "minute"
+          },
+          "effect_kind": "combat_action",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "hold_person",
+          "level": 2,
+          "name": "Unieruchomienie osoby",
+          "range": {
+            "feet": 60,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "enchantment"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "instantaneous"
+          },
+          "effect_kind": "combat_action",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "lesser_restoration",
+          "level": 2,
+          "name": "Pomniejsze przywrócenie",
+          "range": {
+            "feet": 0,
+            "kind": "touch"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "abjuration"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [
+              {
+                "consumed": false,
+                "item_id": "spell_component_locate_object",
+                "label": "a forked twig",
+                "minimum_value_cp": 0,
+                "quantity": 1
+              }
+            ],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": true,
+          "duration": {
+            "amount": 1,
+            "kind": "ten_minutes"
+          },
+          "effect_kind": "exploration",
+          "exploration_consequence_tags": [],
+          "exploration_effect": {
+            "flag_key": "cast_locate_object",
+            "flag_value": true,
+            "kind": "set_flag"
+          },
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "locate_object",
+          "level": 2,
+          "name": "Odnalezienie przedmiotu",
+          "range": {
+            "feet": 0,
+            "kind": "self"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "divination"
+        },
+        {
+          "casting_time": "ten_minutes",
+          "components": {
+            "materials": [],
+            "somatic": false,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "instantaneous"
+          },
+          "effect_kind": "combat_action",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "prayer_of_healing",
+          "level": 2,
+          "name": "Modlitwa leczenia",
+          "range": {
+            "feet": 30,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "evocation"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "hour"
+          },
+          "effect_kind": "combat_action",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "protection_from_poison",
+          "level": 2,
+          "name": "Ochrona przed trucizną",
+          "range": {
+            "feet": 0,
+            "kind": "touch"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "abjuration"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": true,
+          "duration": {
+            "amount": 1,
+            "kind": "ten_minutes"
+          },
+          "effect_kind": "combat_action",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "silence",
+          "level": 2,
+          "name": "Cisza",
+          "range": {
+            "feet": 120,
+            "kind": "distance"
+          },
+          "ritual": true,
+          "scaling": null,
+          "school": "illusion"
+        },
+        {
+          "casting_time": "bonus_action",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "minute"
+          },
+          "effect_kind": "combat_action",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "spiritual_weapon",
+          "level": 2,
+          "name": "Duchowa broń",
+          "range": {
+            "feet": 60,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "evocation"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [
+              {
+                "consumed": false,
+                "item_id": "spell_component_warding_bond",
+                "label": "a pair of platinum rings worth at least 50 gp each, which you and the target must wear for the duration",
+                "minimum_value_cp": 5000,
+                "quantity": 2
+              }
+            ],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "hour"
+          },
+          "effect_kind": "combat_action",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "warding_bond",
+          "level": 2,
+          "name": "Więź ochronna",
+          "range": {
+            "feet": 0,
+            "kind": "touch"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "abjuration"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "ten_minutes"
+          },
+          "effect_kind": "combat_action",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "zone_of_truth",
+          "level": 2,
+          "name": "Strefa prawdy",
+          "range": {
+            "feet": 60,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "enchantment"
+        }
+      ],
+      "temp_hp": 0,
+      "triggers": [],
+      "uses_death_saves": true,
+      "wild_shape": null
+    },
+    {
+      "ability_scores": {
+        "charisma": 19,
+        "constitution": 14,
+        "dexterity": 15,
+        "intelligence": 12,
+        "strength": 8,
+        "wisdom": 10
+      },
+      "ac": 12,
+      "active_light": null,
+      "attacks_per_action": 1,
+      "auras": [],
+      "condition_immunities": [],
+      "creature_type": "humanoid",
+      "currency": {
+        "cp": 0,
+        "ep": 0,
+        "gp": 15,
+        "pp": 0,
+        "sp": 0,
+        "total_cp": 1500,
+        "weight_lb": 0.3
+      },
+      "damage_affinities": {
+        "immunities": [],
+        "resistances": [],
+        "vulnerabilities": []
+      },
+      "death_saves": {
+        "dead": false,
+        "failures": 0,
+        "stable": false,
+        "successes": 0
+      },
+      "exhaustion_level": 0,
+      "experience_points": 0,
+      "faction": "ally",
+      "features": [
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "darkvision",
+          "label": "Widzenie w ciemności",
+          "resource_ids": [],
+          "source_kind": "species",
+          "source_ref": "half_elf",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "fey_ancestry",
+          "label": "Fey ancestry",
+          "resource_ids": [],
+          "source_kind": "species",
+          "source_ref": "half_elf",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "skill_versatility",
+          "label": "Skill versatility",
+          "resource_ids": [],
+          "source_kind": "species",
+          "source_ref": "half_elf",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [
+            "secure_performance_lodging"
+          ],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "by_popular_demand",
+          "label": "By popular demand",
+          "resource_ids": [],
+          "source_kind": "background",
+          "source_ref": "entertainer",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "spellcasting",
+          "label": "Rzucanie czarów",
+          "resource_ids": [],
+          "source_kind": "class",
+          "source_ref": "bard",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [
+            "bardic_inspiration"
+          ],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "bardic_inspiration",
+          "label": "Inspiracja bardowska",
+          "resource_ids": [
+            "bardic_inspiration_uses"
+          ],
+          "source_kind": "class",
+          "source_ref": "bard",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "jack_of_all_trades",
+          "label": "Jack of all trades",
+          "resource_ids": [],
+          "source_kind": "class",
+          "source_ref": "bard",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "song_of_rest",
+          "label": "Song of rest",
+          "resource_ids": [],
+          "source_kind": "class",
+          "source_ref": "bard",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "bard_college",
+          "label": "Bard college",
+          "resource_ids": [],
+          "source_kind": "class",
+          "source_ref": "bard",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "bonus_proficiencies",
+          "label": "Dodatkowe biegłości",
+          "resource_ids": [],
+          "source_kind": "subclass",
+          "source_ref": "college_of_lore",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [
+            "cutting_words"
+          ],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "cutting_words",
+          "label": "Cięta riposta",
+          "resource_ids": [],
+          "source_kind": "subclass",
+          "source_ref": "college_of_lore",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "boardgame_level_3_ability_boost",
+          "label": "Premia archetypu: +2 Charyzma",
+          "resource_ids": [],
+          "source_kind": "scenario",
+          "source_ref": "boardgame_archetype:lorian",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "flaw_approval",
+          "label": "Skaza: Głód aprobaty",
+          "resource_ids": [],
+          "source_kind": "scenario",
+          "source_ref": "boardgame_archetype:lorian",
+          "trigger_ids": []
+        }
+      ],
+      "hit_dice": [
+        {
+          "die_sides": 8,
+          "maximum": 3,
+          "remaining": 3
+        }
+      ],
+      "hp": 24,
+      "id": "lorian",
+      "inventory": [
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "",
+          "durability": null,
+          "equipped": true,
+          "gear_category": null,
+          "hands_required": 1,
+          "held_in": [
+            "main_hand"
+          ],
+          "id": "rapier",
+          "kind": "weapon",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Rapier",
+          "portable": true,
+          "properties": [],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "rapier",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 2500,
+          "total_weight_lb": 2.0,
+          "value_cp": 2500,
+          "versatile_damage_dice": null,
+          "weapon_category": "martial",
+          "weapon_properties": [
+            "finesse"
+          ],
+          "weight_lb": 2.0
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": 11,
+          "armor_category": "light",
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": "light",
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "Lekki skórzany pancerz. KP 11 + pełny modyfikator ze Zręczności.",
+          "durability": null,
+          "equipped": true,
+          "gear_category": null,
+          "hands_required": 0,
+          "held_in": [],
+          "id": "leather_armor",
+          "kind": "armor",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Skórzana zbroja",
+          "portable": true,
+          "properties": [
+            "flexible",
+            "light"
+          ],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "leather_armor",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 1000,
+          "total_weight_lb": 10.0,
+          "value_cp": 1000,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 10.0
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "",
+          "durability": null,
+          "equipped": true,
+          "gear_category": "musical_instrument",
+          "hands_required": 0,
+          "held_in": [],
+          "id": "lute",
+          "kind": "instrument",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Lutnia",
+          "portable": true,
+          "properties": [],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "lute",
+          "spellcasting_focus_kind": "musical_instrument",
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": "lute",
+          "total_value_cp": 3500,
+          "total_weight_lb": 2.0,
+          "value_cp": 3500,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 2.0
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "Krótki nóż o sztywnym metalowym ostrzu.",
+          "durability": null,
+          "equipped": false,
+          "gear_category": null,
+          "hands_required": 1,
+          "held_in": [],
+          "id": "dagger",
+          "kind": "weapon",
+          "light_source": null,
+          "light_weapon": true,
+          "magic_effects": [],
+          "name": "Sztylet",
+          "portable": true,
+          "properties": [
+            "short",
+            "light",
+            "rigid",
+            "metallic",
+            "sharp",
+            "cutting"
+          ],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "dagger",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 200,
+          "total_weight_lb": 1.0,
+          "value_cp": 200,
+          "versatile_damage_dice": null,
+          "weapon_category": "simple",
+          "weapon_properties": [
+            "finesse",
+            "light",
+            "thrown"
+          ],
+          "weight_lb": 1.0
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [
+            {
+              "item_id": "chest",
+              "quantity": 1
+            },
+            {
+              "item_id": "map_scroll_case",
+              "quantity": 2
+            },
+            {
+              "item_id": "fine_clothes",
+              "quantity": 1
+            },
+            {
+              "item_id": "ink",
+              "quantity": 1
+            },
+            {
+              "item_id": "ink_pen",
+              "quantity": 1
+            },
+            {
+              "item_id": "lamp",
+              "quantity": 1
+            },
+            {
+              "item_id": "oil_flask",
+              "quantity": 2
+            },
+            {
+              "item_id": "paper",
+              "quantity": 5
+            },
+            {
+              "item_id": "perfume",
+              "quantity": 1
+            },
+            {
+              "item_id": "sealing_wax",
+              "quantity": 1
+            },
+            {
+              "item_id": "soap",
+              "quantity": 1
+            }
+          ],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "",
+          "durability": null,
+          "equipped": false,
+          "gear_category": "equipment_pack",
+          "hands_required": 0,
+          "held_in": [],
+          "id": "diplomats_pack",
+          "kind": "equipment_pack",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Pakiet dyplomaty",
+          "portable": true,
+          "properties": [],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "diplomats_pack",
+          "spellcasting_focus_kind": null,
+          "stackable": false,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 3900,
+          "total_weight_lb": 0.0,
+          "value_cp": 3900,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 0.0
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "",
+          "durability": null,
+          "equipped": false,
+          "gear_category": "tool",
+          "hands_required": 0,
+          "held_in": [],
+          "id": "disguise_kit",
+          "kind": "tool",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Zestaw do charakteryzacji",
+          "portable": true,
+          "properties": [],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "disguise_kit",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": "disguise_kit",
+          "total_value_cp": 2500,
+          "total_weight_lb": 3.0,
+          "value_cp": 2500,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 3.0
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "",
+          "durability": null,
+          "equipped": false,
+          "gear_category": "clothing",
+          "hands_required": 0,
+          "held_in": [],
+          "id": "costume_clothes",
+          "kind": "clothing",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Kostium",
+          "portable": true,
+          "properties": [
+            "textile"
+          ],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "costume_clothes",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 500,
+          "total_weight_lb": 4.0,
+          "value_cp": 500,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 4.0
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": {
+            "ammunition_count": null,
+            "ammunition_type": null,
+            "liquid_pints": null,
+            "maximum_weight_lb": 6.0,
+            "sheet_count": null,
+            "volume_cubic_feet": 0.2
+          },
+          "description": "",
+          "durability": null,
+          "equipped": false,
+          "gear_category": "container",
+          "hands_required": 0,
+          "held_in": [],
+          "id": "pouch",
+          "kind": "container",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Sakiewka",
+          "portable": true,
+          "properties": [
+            "container",
+            "textile"
+          ],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "pouch",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 50,
+          "total_weight_lb": 1.0,
+          "value_cp": 50,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 1.0
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "",
+          "durability": null,
+          "equipped": true,
+          "gear_category": "musical_instrument",
+          "hands_required": 0,
+          "held_in": [],
+          "id": "drum",
+          "kind": "instrument",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Bęben",
+          "portable": true,
+          "properties": [],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "drum",
+          "spellcasting_focus_kind": "musical_instrument",
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": "drum",
+          "total_value_cp": 600,
+          "total_weight_lb": 3.0,
+          "value_cp": 600,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 3.0
+        }
+      ],
+      "level": 3,
+      "max_hp": 24,
+      "name": "Lorian",
+      "portrait": "character_uploads/default_roster_v2/lorian.png",
+      "position": [
+        0,
+        1
+      ],
+      "proficiencies": {
+        "armor": [
+          "light"
+        ],
+        "expertise": [
+          "persuasion",
+          "stealth"
+        ],
+        "saving_throws": [
+          "dexterity",
+          "charisma"
+        ],
+        "skills": [
+          "insight",
+          "perception",
+          "acrobatics",
+          "performance",
+          "deception",
+          "persuasion",
+          "stealth",
+          "arcana",
+          "history",
+          "investigation"
+        ],
+        "tools": [
+          "disguise_kit",
+          "drum",
+          "flute",
+          "lute",
+          "viol"
+        ],
+        "weapons": [
+          "unarmed_strike",
+          "simple",
+          "hand_crossbow",
+          "longsword",
+          "rapier",
+          "shortsword"
+        ]
+      },
+      "proficiency_bonus": 2,
+      "resource_pools": [
+        {
+          "current": 4,
+          "id": "bardic_inspiration_uses",
+          "label": "Bardic Inspiration",
+          "maximum": 4,
+          "recharge": null,
+          "recovery": "long_rest"
+        }
+      ],
+      "senses": {
+        "blindsight_feet": 0,
+        "darkvision_feet": 60,
+        "magical_darkness_vision_feet": 0,
+        "tremorsense_feet": 0,
+        "truesight_feet": 0
+      },
+      "size": "medium",
+      "speed_feet": 30,
+      "spell_access": [
+        {
+          "allowed_focus_kinds": [
+            "component_pouch",
+            "musical_instrument"
+          ],
+          "casting_ability": "charisma",
+          "kind": "known",
+          "resource_ids_by_spell": {},
+          "spell_ids": [
+            "vicious_mockery",
+            "thunderwave",
+            "healing_word",
+            "faerie_fire",
+            "heroism",
+            "hideous_laughter"
+          ]
+        }
+      ],
+      "spell_ids": [
+        "vicious_mockery",
+        "mage_hand",
+        "healing_word",
+        "faerie_fire",
+        "thunderwave",
+        "charm_person",
+        "heroism",
+        "hideous_laughter"
+      ],
+      "spell_preparation": null,
+      "spell_save_dc": 14,
+      "spell_slots": [
+        {
+          "level": 1,
+          "maximum": 4,
+          "recovery": "long_rest",
+          "remaining": 4,
+          "temporary": false
+        },
+        {
+          "level": 2,
+          "maximum": 2,
+          "recovery": "long_rest",
+          "remaining": 2,
+          "temporary": false
+        }
+      ],
+      "spells": [
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": false,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "instantaneous"
+          },
+          "effect_kind": "attack",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "vicious_mockery",
+          "level": 0,
+          "name": "Zjadliwa kpina",
+          "range": {
+            "feet": 60,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": {
+            "cantrip_damage_dice_per_tier": 1,
+            "damage_dice_per_slot_level": 0,
+            "healing_dice_per_slot_level": 0,
+            "targets_per_slot_level": 0
+          },
+          "school": "enchantment"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "minute"
+          },
+          "effect_kind": "exploration",
+          "exploration_consequence_tags": [],
+          "exploration_effect": {
+            "flag_key": "spell_mage_hand_active",
+            "flag_value": true,
+            "kind": "set_flag"
+          },
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "mage_hand",
+          "level": 0,
+          "name": "Dłoń maga",
+          "range": {
+            "feet": 30,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "conjuration"
+        },
+        {
+          "casting_time": "bonus_action",
+          "components": {
+            "materials": [],
+            "somatic": false,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "instantaneous"
+          },
+          "effect_kind": "healing",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "healing_word",
+          "level": 1,
+          "name": "Słowo leczenia",
+          "range": {
+            "feet": 60,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": {
+            "cantrip_damage_dice_per_tier": 0,
+            "damage_dice_per_slot_level": 0,
+            "healing_dice_per_slot_level": 1,
+            "targets_per_slot_level": 0
+          },
+          "school": "evocation"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": false,
+            "verbal": true
+          },
+          "concentration": true,
+          "duration": {
+            "amount": 1,
+            "kind": "minute"
+          },
+          "effect_kind": "combat_action",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "faerie_fire",
+          "level": 1,
+          "name": "Baśniowy ogień",
+          "range": {
+            "feet": 60,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "evocation"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "instantaneous"
+          },
+          "effect_kind": "attack",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "thunderwave",
+          "level": 1,
+          "name": "Fala gromu",
+          "range": {
+            "feet": 0,
+            "kind": "self"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "evocation"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "hour"
+          },
+          "effect_kind": "exploration",
+          "exploration_consequence_tags": [],
+          "exploration_effect": {
+            "flag_key": "cast_charm_person",
+            "flag_value": true,
+            "kind": "set_flag"
+          },
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "charm_person",
+          "level": 1,
+          "name": "Zauroczenie osoby",
+          "range": {
+            "feet": 30,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "enchantment"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": true,
+          "duration": {
+            "amount": 1,
+            "kind": "minute"
+          },
+          "effect_kind": "combat_action",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "heroism",
+          "level": 1,
+          "name": "Heroizm",
+          "range": {
+            "feet": 0,
+            "kind": "touch"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "enchantment"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [
+              {
+                "consumed": false,
+                "item_id": "spell_component_hideous_laughter",
+                "label": "tiny tarts and a feather that is waved in the air",
+                "minimum_value_cp": 0,
+                "quantity": 1
+              }
+            ],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": true,
+          "duration": {
+            "amount": 1,
+            "kind": "minute"
+          },
+          "effect_kind": "combat_action",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "hideous_laughter",
+          "level": 1,
+          "name": "Ohydny śmiech",
+          "range": {
+            "feet": 30,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "enchantment"
+        }
+      ],
+      "temp_hp": 0,
+      "triggers": [],
+      "uses_death_saves": true,
+      "wild_shape": null
+    },
+    {
+      "ability_scores": {
+        "charisma": 8,
+        "constitution": 13,
+        "dexterity": 19,
+        "intelligence": 11,
+        "strength": 12,
+        "wisdom": 14
+      },
+      "ac": 13,
+      "active_light": null,
+      "attacks_per_action": 1,
+      "auras": [],
+      "condition_immunities": [],
+      "creature_type": "humanoid",
+      "currency": {
+        "cp": 0,
+        "ep": 0,
+        "gp": 10,
+        "pp": 0,
+        "sp": 0,
+        "total_cp": 1000,
+        "weight_lb": 0.2
+      },
+      "damage_affinities": {
+        "immunities": [],
+        "resistances": [],
+        "vulnerabilities": []
+      },
+      "death_saves": {
+        "dead": false,
+        "failures": 0,
+        "stable": false,
+        "successes": 0
+      },
+      "exhaustion_level": 0,
+      "experience_points": 0,
+      "faction": "ally",
+      "features": [
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "darkvision",
+          "label": "Widzenie w ciemności",
+          "resource_ids": [],
+          "source_kind": "species",
+          "source_ref": "elf",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "fey_ancestry",
+          "label": "Fey ancestry",
+          "resource_ids": [],
+          "source_kind": "species",
+          "source_ref": "elf",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "trance",
+          "label": "Trance",
+          "resource_ids": [],
+          "source_kind": "species",
+          "source_ref": "elf",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "elf_weapon_training",
+          "label": "Elf weapon training",
+          "resource_ids": [],
+          "source_kind": "species",
+          "source_ref": "elf",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "high_elf_cantrip",
+          "label": "High elf cantrip",
+          "resource_ids": [],
+          "source_kind": "species",
+          "source_ref": "elf",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [
+            "request_commoner_shelter"
+          ],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "rustic_hospitality",
+          "label": "Rustic hospitality",
+          "resource_ids": [],
+          "source_kind": "background",
+          "source_ref": "folk_hero",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "favored_enemy",
+          "label": "Ulubiony wróg",
+          "resource_ids": [],
+          "source_kind": "class",
+          "source_ref": "ranger",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "natural_explorer",
+          "label": "Naturalny odkrywca",
+          "resource_ids": [],
+          "source_kind": "class",
+          "source_ref": "ranger",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "spellcasting",
+          "label": "Rzucanie czarów",
+          "resource_ids": [],
+          "source_kind": "class",
+          "source_ref": "ranger",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "ranger_archetype",
+          "label": "Ranger archetype",
+          "resource_ids": [],
+          "source_kind": "class",
+          "source_ref": "ranger",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [
+            "primeval_awareness"
+          ],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "primeval_awareness",
+          "label": "Primeval awareness",
+          "resource_ids": [],
+          "source_kind": "class",
+          "source_ref": "ranger",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "hunters_prey",
+          "label": "Łup myśliwego",
+          "resource_ids": [],
+          "source_kind": "subclass",
+          "source_ref": "hunter",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "fighting_style_archery",
+          "label": "Styl walki: Łucznictwo",
+          "resource_ids": [],
+          "source_kind": "class",
+          "source_ref": "ranger",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "favored_enemy_beast",
+          "label": "Bestie",
+          "resource_ids": [],
+          "source_kind": "class",
+          "source_ref": "ranger",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "natural_explorer_forest",
+          "label": "Las",
+          "resource_ids": [],
+          "source_kind": "class",
+          "source_ref": "ranger",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "colossus_slayer",
+          "label": "Colossus slayer",
+          "resource_ids": [],
+          "source_kind": "class",
+          "source_ref": "ranger",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "boardgame_level_3_ability_boost",
+          "label": "Premia archetypu: +2 Zręczność",
+          "resource_ids": [],
+          "source_kind": "scenario",
+          "source_ref": "boardgame_archetype:erynd",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [
+            "tracking"
+          ],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "tracking",
+          "label": "Tropienie",
+          "resource_ids": [],
+          "source_kind": "scenario",
+          "source_ref": "boardgame_archetype:erynd",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [
+            "cunning_action"
+          ],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "cunning_action",
+          "label": "Zwiadowcza mobilność",
+          "resource_ids": [],
+          "source_kind": "scenario",
+          "source_ref": "boardgame_archetype:erynd",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [
+            "patient_shot"
+          ],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "patient_shot",
+          "label": "Strzelecka cierpliwość",
+          "resource_ids": [
+            "instinct"
+          ],
+          "source_kind": "scenario",
+          "source_ref": "boardgame_archetype:erynd",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "flaw_ambush_survivor",
+          "label": "Skaza: Ocalały z zasadzki",
+          "resource_ids": [],
+          "source_kind": "scenario",
+          "source_ref": "boardgame_archetype:erynd",
+          "trigger_ids": []
+        }
+      ],
+      "hit_dice": [
+        {
+          "die_sides": 10,
+          "maximum": 3,
+          "remaining": 3
+        }
+      ],
+      "hp": 25,
+      "id": "erynd",
+      "inventory": [
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "",
+          "durability": null,
+          "equipped": true,
+          "gear_category": null,
+          "hands_required": 2,
+          "held_in": [
+            "main_hand",
+            "off_hand"
+          ],
+          "id": "longbow",
+          "kind": "weapon",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Długi łuk",
+          "portable": true,
+          "properties": [],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "longbow",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 5000,
+          "total_weight_lb": 2.0,
+          "value_cp": 5000,
+          "versatile_damage_dice": null,
+          "weapon_category": "martial",
+          "weapon_properties": [
+            "ammunition",
+            "heavy",
+            "two_handed"
+          ],
+          "weight_lb": 2.0
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "",
+          "durability": null,
+          "equipped": false,
+          "gear_category": null,
+          "hands_required": 1,
+          "held_in": [],
+          "id": "shortsword",
+          "kind": "weapon",
+          "light_source": null,
+          "light_weapon": true,
+          "magic_effects": [],
+          "name": "Krótki miecz",
+          "portable": true,
+          "properties": [],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "shortsword",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 1000,
+          "total_weight_lb": 2.0,
+          "value_cp": 1000,
+          "versatile_damage_dice": null,
+          "weapon_category": "martial",
+          "weapon_properties": [
+            "finesse",
+            "light"
+          ],
+          "weight_lb": 2.0
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "",
+          "durability": null,
+          "equipped": false,
+          "gear_category": null,
+          "hands_required": 1,
+          "held_in": [],
+          "id": "shortsword_2",
+          "kind": "weapon",
+          "light_source": null,
+          "light_weapon": true,
+          "magic_effects": [],
+          "name": "Krótki miecz",
+          "portable": true,
+          "properties": [],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "shortsword",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 1000,
+          "total_weight_lb": 2.0,
+          "value_cp": 1000,
+          "versatile_damage_dice": null,
+          "weapon_category": "martial",
+          "weapon_properties": [
+            "finesse",
+            "light"
+          ],
+          "weight_lb": 2.0
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": 14,
+          "armor_category": "medium",
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": 2,
+          "armor_proficiency": "medium",
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "Średni pancerz: KP 14 + modyfikator Zręczności, maksymalnie +2; utrudnienie do Stealth.",
+          "durability": null,
+          "equipped": true,
+          "gear_category": null,
+          "hands_required": 0,
+          "held_in": [],
+          "id": "scale_mail",
+          "kind": "armor",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Zbroja łuskowa",
+          "portable": true,
+          "properties": [
+            "metallic",
+            "hard"
+          ],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "scale_mail",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": true,
+          "tool_proficiency_id": null,
+          "total_value_cp": 5000,
+          "total_weight_lb": 45.0,
+          "value_cp": 5000,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 45.0
+        },
+        {
+          "ammunition_type": "arrow",
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "Amunicja do krótkich i długich łuków.",
+          "durability": null,
+          "equipped": false,
+          "gear_category": null,
+          "hands_required": 0,
+          "held_in": [],
+          "id": "arrow",
+          "kind": "ammunition",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Strzała",
+          "portable": true,
+          "properties": [],
+          "quantity": 20,
+          "requires_attunement": false,
+          "source_ref": "arrow",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 100,
+          "total_weight_lb": 1.0,
+          "value_cp": 5,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 0.05
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [
+            {
+              "item_id": "backpack",
+              "quantity": 1
+            },
+            {
+              "item_id": "bedroll",
+              "quantity": 1
+            },
+            {
+              "item_id": "mess_kit",
+              "quantity": 1
+            },
+            {
+              "item_id": "tinderbox",
+              "quantity": 1
+            },
+            {
+              "item_id": "torch",
+              "quantity": 10
+            },
+            {
+              "item_id": "rations",
+              "quantity": 10
+            },
+            {
+              "item_id": "waterskin",
+              "quantity": 1
+            },
+            {
+              "item_id": "hempen_rope",
+              "quantity": 1
+            }
+          ],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "",
+          "durability": null,
+          "equipped": false,
+          "gear_category": "equipment_pack",
+          "hands_required": 0,
+          "held_in": [],
+          "id": "explorers_pack",
+          "kind": "equipment_pack",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Pakiet odkrywcy",
+          "portable": true,
+          "properties": [],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "explorers_pack",
+          "spellcasting_focus_kind": null,
+          "stackable": false,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 1000,
+          "total_weight_lb": 0.0,
+          "value_cp": 1000,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 0.0
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "",
+          "durability": null,
+          "equipped": false,
+          "gear_category": "tool",
+          "hands_required": 0,
+          "held_in": [],
+          "id": "shovel",
+          "kind": "tool",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Łopata",
+          "portable": true,
+          "properties": [],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "shovel",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 200,
+          "total_weight_lb": 5.0,
+          "value_cp": 200,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 5.0
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": {
+            "ammunition_count": null,
+            "ammunition_type": null,
+            "liquid_pints": 8.0,
+            "maximum_weight_lb": null,
+            "sheet_count": null,
+            "volume_cubic_feet": null
+          },
+          "description": "",
+          "durability": null,
+          "equipped": false,
+          "gear_category": "container",
+          "hands_required": 0,
+          "held_in": [],
+          "id": "iron_pot",
+          "kind": "container",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Żelazny garnek",
+          "portable": true,
+          "properties": [
+            "container",
+            "metallic"
+          ],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "iron_pot",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 200,
+          "total_weight_lb": 10.0,
+          "value_cp": 200,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 10.0
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "",
+          "durability": null,
+          "equipped": false,
+          "gear_category": "clothing",
+          "hands_required": 0,
+          "held_in": [],
+          "id": "common_clothes",
+          "kind": "clothing",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Zwykłe ubranie",
+          "portable": true,
+          "properties": [
+            "textile"
+          ],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "common_clothes",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 50,
+          "total_weight_lb": 3.0,
+          "value_cp": 50,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 3.0
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": {
+            "ammunition_count": null,
+            "ammunition_type": null,
+            "liquid_pints": null,
+            "maximum_weight_lb": 6.0,
+            "sheet_count": null,
+            "volume_cubic_feet": 0.2
+          },
+          "description": "",
+          "durability": null,
+          "equipped": false,
+          "gear_category": "container",
+          "hands_required": 0,
+          "held_in": [],
+          "id": "pouch",
+          "kind": "container",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Sakiewka",
+          "portable": true,
+          "properties": [
+            "container",
+            "textile"
+          ],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "pouch",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 50,
+          "total_weight_lb": 1.0,
+          "value_cp": 50,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 1.0
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "",
+          "durability": null,
+          "equipped": true,
+          "gear_category": "artisans_tool",
+          "hands_required": 0,
+          "held_in": [],
+          "id": "woodcarvers_tools",
+          "kind": "tool",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Narzędzia snycerza",
+          "portable": true,
+          "properties": [],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "woodcarvers_tools",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": "woodcarvers_tools",
+          "total_value_cp": 100,
+          "total_weight_lb": 5.0,
+          "value_cp": 100,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 5.0
+        }
+      ],
+      "level": 3,
+      "max_hp": 25,
+      "name": "Erynd",
+      "portrait": "character_uploads/default_roster_v2/erynd.png",
+      "position": [
+        0,
+        2
+      ],
+      "proficiencies": {
+        "armor": [
+          "light",
+          "medium",
+          "shield"
+        ],
+        "expertise": [
+          "stealth",
+          "survival"
+        ],
+        "saving_throws": [
+          "strength",
+          "dexterity"
+        ],
+        "skills": [
+          "perception",
+          "animal_handling",
+          "survival",
+          "investigation",
+          "nature",
+          "stealth"
+        ],
+        "tools": [
+          "land_vehicles",
+          "woodcarvers_tools"
+        ],
+        "weapons": [
+          "unarmed_strike",
+          "longsword",
+          "shortsword",
+          "shortbow",
+          "longbow",
+          "simple",
+          "martial"
+        ]
+      },
+      "proficiency_bonus": 2,
+      "resource_pools": [
+        {
+          "current": 3,
+          "id": "instinct",
+          "label": "Instynkt",
+          "maximum": 3,
+          "recharge": null,
+          "recovery": "long_rest"
+        }
+      ],
+      "senses": {
+        "blindsight_feet": 0,
+        "darkvision_feet": 60,
+        "magical_darkness_vision_feet": 0,
+        "tremorsense_feet": 0,
+        "truesight_feet": 0
+      },
+      "size": "medium",
+      "speed_feet": 30,
+      "spell_access": [
+        {
+          "allowed_focus_kinds": [
+            "component_pouch"
+          ],
+          "casting_ability": "wisdom",
+          "kind": "innate",
+          "resource_ids_by_spell": {
+            "find_traps": "instinct",
+            "goodberry": "instinct",
+            "hunters_mark": "instinct",
+            "misty_step": "instinct",
+            "see_invisibility": "instinct",
+            "spike_growth": "instinct"
+          },
+          "spell_ids": [
+            "hunters_mark",
+            "goodberry",
+            "find_traps",
+            "misty_step",
+            "spike_growth",
+            "see_invisibility"
+          ]
+        }
+      ],
+      "spell_ids": [
+        "light",
+        "hunters_mark",
+        "goodberry",
+        "cure_wounds",
+        "find_traps",
+        "misty_step",
+        "spike_growth",
+        "see_invisibility"
+      ],
+      "spell_preparation": null,
+      "spell_save_dc": 12,
+      "spell_slots": [],
+      "spells": [
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [
+              {
+                "consumed": false,
+                "item_id": "spell_component_light",
+                "label": "robaczek świętojański lub fosforyzujący mech",
+                "minimum_value_cp": 0,
+                "quantity": 1
+              }
+            ],
+            "somatic": false,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "hour"
+          },
+          "effect_kind": "exploration",
+          "exploration_consequence_tags": [],
+          "exploration_effect": {
+            "flag_key": "spell_light_active",
+            "flag_value": true,
+            "kind": "set_flag"
+          },
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "light",
+          "level": 0,
+          "name": "Światło",
+          "range": {
+            "feet": 0,
+            "kind": "touch"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "evocation"
+        },
+        {
+          "casting_time": "bonus_action",
+          "components": {
+            "materials": [],
+            "somatic": false,
+            "verbal": true
+          },
+          "concentration": true,
+          "duration": {
+            "amount": 1,
+            "kind": "hour"
+          },
+          "effect_kind": "combat_action",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "hunters_mark",
+          "level": 1,
+          "name": "Znak łowcy",
+          "range": {
+            "feet": 90,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "divination"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": false,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "instantaneous"
+          },
+          "effect_kind": "combat_action",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "goodberry",
+          "level": 1,
+          "name": "Dobre jagody",
+          "range": {
+            "feet": 0,
+            "kind": "touch"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "transmutation"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "instantaneous"
+          },
+          "effect_kind": "healing",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "cure_wounds",
+          "level": 1,
+          "name": "Leczenie ran",
+          "range": {
+            "feet": 0,
+            "kind": "touch"
+          },
+          "ritual": false,
+          "scaling": {
+            "cantrip_damage_dice_per_tier": 0,
+            "damage_dice_per_slot_level": 0,
+            "healing_dice_per_slot_level": 1,
+            "targets_per_slot_level": 0
+          },
+          "school": "evocation"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": false,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "instantaneous"
+          },
+          "effect_kind": "combat_action",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "find_traps",
+          "level": 2,
+          "name": "Wykrycie pułapek",
+          "range": {
+            "feet": 120,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "divination"
+        },
+        {
+          "casting_time": "bonus_action",
+          "components": {
+            "materials": [],
+            "somatic": false,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "instantaneous"
+          },
+          "effect_kind": "combat_action",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "misty_step",
+          "level": 2,
+          "name": "Mglisty krok",
+          "range": {
+            "feet": 0,
+            "kind": "self"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "conjuration"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": false,
+            "verbal": true
+          },
+          "concentration": true,
+          "duration": {
+            "amount": 1,
+            "kind": "ten_minutes"
+          },
+          "effect_kind": "combat_action",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "spike_growth",
+          "level": 2,
+          "name": "Kolczaste zarośla",
+          "range": {
+            "feet": 150,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "transmutation"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": false,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "hour"
+          },
+          "effect_kind": "combat_action",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "see_invisibility",
+          "level": 2,
+          "name": "Widzenie niewidzialnego",
+          "range": {
+            "feet": 0,
+            "kind": "self"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "divination"
+        }
+      ],
+      "temp_hp": 0,
+      "triggers": [],
+      "uses_death_saves": true,
+      "wild_shape": null
+    },
+    {
+      "ability_scores": {
+        "charisma": 11,
+        "constitution": 15,
+        "dexterity": 14,
+        "intelligence": 9,
+        "strength": 18,
+        "wisdom": 13
+      },
+      "ac": 12,
+      "active_light": null,
+      "attacks_per_action": 1,
+      "auras": [],
+      "condition_immunities": [],
+      "creature_type": "humanoid",
+      "currency": {
+        "cp": 0,
+        "ep": 0,
+        "gp": 10,
+        "pp": 0,
+        "sp": 0,
+        "total_cp": 1000,
+        "weight_lb": 0.2
+      },
+      "damage_affinities": {
+        "immunities": [],
+        "resistances": [],
+        "vulnerabilities": []
+      },
+      "death_saves": {
+        "dead": false,
+        "failures": 0,
+        "stable": false,
+        "successes": 0
+      },
+      "exhaustion_level": 0,
+      "experience_points": 0,
+      "faction": "ally",
+      "features": [
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "human_versatility",
+          "label": "Human versatility",
+          "resource_ids": [],
+          "source_kind": "species",
+          "source_ref": "human",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [
+            "invoke_military_rank",
+            "request_military_aid"
+          ],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "military_rank",
+          "label": "Military rank",
+          "resource_ids": [],
+          "source_kind": "background",
+          "source_ref": "soldier",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [
+            "second_wind"
+          ],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "second_wind",
+          "label": "Drugi oddech",
+          "resource_ids": [
+            "second_wind_uses"
+          ],
+          "source_kind": "class",
+          "source_ref": "fighter",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [
+            "action_surge"
+          ],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "action_surge",
+          "label": "Action surge",
+          "resource_ids": [
+            "action_surge_uses"
+          ],
+          "source_kind": "class",
+          "source_ref": "fighter",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "martial_archetype",
+          "label": "Martial archetype",
+          "resource_ids": [],
+          "source_kind": "class",
+          "source_ref": "fighter",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "improved_critical",
+          "label": "Ulepszone trafienie krytyczne",
+          "resource_ids": [],
+          "source_kind": "subclass",
+          "source_ref": "champion",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "fighting_style_defense",
+          "label": "Styl walki: Obrona",
+          "resource_ids": [],
+          "source_kind": "class",
+          "source_ref": "fighter",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "boardgame_level_3_ability_boost",
+          "label": "Premia archetypu: +2 Siła",
+          "resource_ids": [],
+          "source_kind": "scenario",
+          "source_ref": "boardgame_archetype:garran",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [
+            "guard_duty"
+          ],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "guard_duty",
+          "label": "Warta",
+          "resource_ids": [],
+          "source_kind": "scenario",
+          "source_ref": "boardgame_archetype:garran",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "iron_line",
+          "label": "Żelazna linia",
+          "resource_ids": [],
+          "source_kind": "scenario",
+          "source_ref": "boardgame_archetype:garran",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [
+            "lay_on_hands"
+          ],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "lay_on_hands",
+          "label": "Ratunek polowy",
+          "resource_ids": [],
+          "source_kind": "scenario",
+          "source_ref": "boardgame_archetype:garran",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [
+            "defensive_stance"
+          ],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "defensive_stance",
+          "label": "Pozycja obronna",
+          "resource_ids": [],
+          "source_kind": "scenario",
+          "source_ref": "boardgame_archetype:garran",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "flaw_command_guilt",
+          "label": "Skaza: Wina dowódcy",
+          "resource_ids": [],
+          "source_kind": "scenario",
+          "source_ref": "boardgame_archetype:garran",
+          "trigger_ids": []
+        }
+      ],
+      "hit_dice": [
+        {
+          "die_sides": 10,
+          "maximum": 3,
+          "remaining": 3
+        }
+      ],
+      "hp": 28,
+      "id": "garran",
+      "inventory": [
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "Uniwersalna jednoręczna broń sieczna.",
+          "durability": null,
+          "equipped": true,
+          "gear_category": null,
+          "hands_required": 1,
+          "held_in": [
+            "main_hand"
+          ],
+          "id": "longsword",
+          "kind": "weapon",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Miecz",
+          "portable": true,
+          "properties": [
+            "long",
+            "rigid",
+            "metallic",
+            "sharp",
+            "cutting"
+          ],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "longsword",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 1500,
+          "total_weight_lb": 3.0,
+          "value_cp": 1500,
+          "versatile_damage_dice": "1d10",
+          "weapon_category": "martial",
+          "weapon_properties": [
+            "versatile"
+          ],
+          "weight_lb": 3.0
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 2,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": "shield",
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "Metalowa tarcza zajmująca jedną rękę i zapewniająca +2 do KP.",
+          "durability": null,
+          "equipped": true,
+          "gear_category": null,
+          "hands_required": 1,
+          "held_in": [
+            "off_hand"
+          ],
+          "id": "shield",
+          "kind": "shield",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Tarcza",
+          "portable": true,
+          "properties": [
+            "rigid",
+            "hard",
+            "metallic"
+          ],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "shield",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 1000,
+          "total_weight_lb": 6.0,
+          "value_cp": 1000,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 6.0
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": 16,
+          "armor_category": "heavy",
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": 0,
+          "armor_proficiency": "heavy",
+          "armor_strength_requirement": 13,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "Ciężki pancerz o KP 16. Siła poniżej 13 zmniejsza szybkość o 10 ft; testy Stealth mają utrudnienie.",
+          "durability": null,
+          "equipped": true,
+          "gear_category": null,
+          "hands_required": 0,
+          "held_in": [],
+          "id": "chain_mail",
+          "kind": "armor",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Kolczuga",
+          "portable": true,
+          "properties": [
+            "heavy",
+            "metallic",
+            "hard"
+          ],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "chain_mail",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": true,
+          "tool_proficiency_id": null,
+          "total_value_cp": 7500,
+          "total_weight_lb": 55.0,
+          "value_cp": 7500,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 55.0
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "Dwuręczna lekka kusza strzelająca bełtami.",
+          "durability": null,
+          "equipped": false,
+          "gear_category": null,
+          "hands_required": 2,
+          "held_in": [],
+          "id": "crossbow",
+          "kind": "weapon",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Kusza",
+          "portable": true,
+          "properties": [
+            "rigid",
+            "wooden",
+            "metallic"
+          ],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "crossbow",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 2500,
+          "total_weight_lb": 5.0,
+          "value_cp": 2500,
+          "versatile_damage_dice": null,
+          "weapon_category": "simple",
+          "weapon_properties": [
+            "ammunition",
+            "loading",
+            "two_handed"
+          ],
+          "weight_lb": 5.0
+        },
+        {
+          "ammunition_type": "bolt",
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "Krótki metalowo-drewniany pocisk przeznaczony do kuszy.",
+          "durability": null,
+          "equipped": false,
+          "gear_category": null,
+          "hands_required": 0,
+          "held_in": [],
+          "id": "crossbow_bolt",
+          "kind": "ammunition",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Bełt do kuszy",
+          "portable": true,
+          "properties": [
+            "rigid",
+            "wooden",
+            "metallic"
+          ],
+          "quantity": 20,
+          "requires_attunement": false,
+          "source_ref": "crossbow_bolt",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 100,
+          "total_weight_lb": 1.5,
+          "value_cp": 5,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 0.075
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [
+            {
+              "item_id": "backpack",
+              "quantity": 1
+            },
+            {
+              "item_id": "bedroll",
+              "quantity": 1
+            },
+            {
+              "item_id": "mess_kit",
+              "quantity": 1
+            },
+            {
+              "item_id": "tinderbox",
+              "quantity": 1
+            },
+            {
+              "item_id": "torch",
+              "quantity": 10
+            },
+            {
+              "item_id": "rations",
+              "quantity": 10
+            },
+            {
+              "item_id": "waterskin",
+              "quantity": 1
+            },
+            {
+              "item_id": "hempen_rope",
+              "quantity": 1
+            }
+          ],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "",
+          "durability": null,
+          "equipped": false,
+          "gear_category": "equipment_pack",
+          "hands_required": 0,
+          "held_in": [],
+          "id": "explorers_pack",
+          "kind": "equipment_pack",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Pakiet odkrywcy",
+          "portable": true,
+          "properties": [],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "explorers_pack",
+          "spellcasting_focus_kind": null,
+          "stackable": false,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 1000,
+          "total_weight_lb": 0.0,
+          "value_cp": 1000,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 0.0
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "",
+          "durability": null,
+          "equipped": false,
+          "gear_category": "clothing",
+          "hands_required": 0,
+          "held_in": [],
+          "id": "common_clothes",
+          "kind": "clothing",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Zwykłe ubranie",
+          "portable": true,
+          "properties": [
+            "textile"
+          ],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "common_clothes",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 50,
+          "total_weight_lb": 3.0,
+          "value_cp": 50,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 3.0
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": {
+            "ammunition_count": null,
+            "ammunition_type": null,
+            "liquid_pints": null,
+            "maximum_weight_lb": 6.0,
+            "sheet_count": null,
+            "volume_cubic_feet": 0.2
+          },
+          "description": "",
+          "durability": null,
+          "equipped": false,
+          "gear_category": "container",
+          "hands_required": 0,
+          "held_in": [],
+          "id": "pouch",
+          "kind": "container",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Sakiewka",
+          "portable": true,
+          "properties": [
+            "container",
+            "textile"
+          ],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "pouch",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 50,
+          "total_weight_lb": 1.0,
+          "value_cp": 50,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 1.0
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "",
+          "durability": null,
+          "equipped": true,
+          "gear_category": "gaming_set",
+          "hands_required": 0,
+          "held_in": [],
+          "id": "dice_set",
+          "kind": "tool",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Zestaw kości",
+          "portable": true,
+          "properties": [],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "dice_set",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": "dice_set",
+          "total_value_cp": 10,
+          "total_weight_lb": 0.0,
+          "value_cp": 10,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 0.0
+        }
+      ],
+      "level": 3,
+      "max_hp": 28,
+      "name": "Garran",
+      "portrait": "character_uploads/default_roster_v2/garran.png",
+      "position": [
+        0,
+        3
+      ],
+      "proficiencies": {
+        "armor": [
+          "light",
+          "medium",
+          "heavy",
+          "shield"
+        ],
+        "expertise": [],
+        "saving_throws": [
+          "strength",
+          "constitution"
+        ],
+        "skills": [
+          "athletics",
+          "intimidation",
+          "perception",
+          "survival"
+        ],
+        "tools": [
+          "land_vehicles",
+          "dice_set"
+        ],
+        "weapons": [
+          "unarmed_strike",
+          "longsword",
+          "crossbow",
+          "dagger",
+          "javelin",
+          "battleaxe",
+          "handaxe",
+          "warhammer",
+          "shortbow",
+          "longbow"
+        ]
+      },
+      "proficiency_bonus": 2,
+      "resource_pools": [
+        {
+          "current": 1,
+          "id": "second_wind_uses",
+          "label": "Second Wind",
+          "maximum": 1,
+          "recharge": null,
+          "recovery": "short_rest"
+        },
+        {
+          "current": 1,
+          "id": "action_surge_uses",
+          "label": "Action Surge",
+          "maximum": 1,
+          "recharge": null,
+          "recovery": "short_rest"
+        },
+        {
+          "current": 3,
+          "id": "guard_duty_uses",
+          "label": "Warta",
+          "maximum": 3,
+          "recharge": null,
+          "recovery": "long_rest"
+        },
+        {
+          "current": 15,
+          "id": "lay_on_hands_points",
+          "label": "Ratunek polowy",
+          "maximum": 15,
+          "recharge": null,
+          "recovery": "long_rest"
+        },
+        {
+          "current": 1,
+          "id": "defensive_stance_uses",
+          "label": "Pozycja obronna",
+          "maximum": 1,
+          "recharge": null,
+          "recovery": "short_rest"
+        },
+        {
+          "current": 3,
+          "id": "tactics_uses",
+          "label": "Taktyka",
+          "maximum": 3,
+          "recharge": null,
+          "recovery": "long_rest"
+        }
+      ],
+      "senses": {
+        "blindsight_feet": 0,
+        "darkvision_feet": 0,
+        "magical_darkness_vision_feet": 0,
+        "tremorsense_feet": 0,
+        "truesight_feet": 0
+      },
+      "size": "medium",
+      "speed_feet": 30,
+      "spell_access": [
+        {
+          "allowed_focus_kinds": [],
+          "casting_ability": "strength",
+          "kind": "innate",
+          "resource_ids_by_spell": {
+            "command": "tactics_uses",
+            "heroism": "tactics_uses",
+            "shield_of_faith": "tactics_uses",
+            "warding_bond": "tactics_uses"
+          },
+          "spell_ids": [
+            "command",
+            "shield_of_faith",
+            "heroism",
+            "warding_bond"
+          ]
+        }
+      ],
+      "spell_ids": [
+        "command",
+        "shield_of_faith",
+        "heroism",
+        "warding_bond"
+      ],
+      "spell_preparation": null,
+      "spell_save_dc": 14,
+      "spell_slots": [],
+      "spells": [
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": false,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "round"
+          },
+          "effect_kind": "combat_action",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "command",
+          "level": 1,
+          "name": "Rozkaz",
+          "range": {
+            "feet": 60,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "enchantment"
+        },
+        {
+          "casting_time": "bonus_action",
+          "components": {
+            "materials": [],
+            "somatic": false,
+            "verbal": true
+          },
+          "concentration": true,
+          "duration": {
+            "amount": 1,
+            "kind": "ten_minutes"
+          },
+          "effect_kind": "combat_action",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "shield_of_faith",
+          "level": 1,
+          "name": "Tarcza wiary",
+          "range": {
+            "feet": 60,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "abjuration"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": false,
+            "verbal": true
+          },
+          "concentration": true,
+          "duration": {
+            "amount": 1,
+            "kind": "minute"
+          },
+          "effect_kind": "combat_action",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "heroism",
+          "level": 1,
+          "name": "Heroizm",
+          "range": {
+            "feet": 0,
+            "kind": "touch"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "enchantment"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": false,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "hour"
+          },
+          "effect_kind": "combat_action",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "warding_bond",
+          "level": 2,
+          "name": "Więź ochronna",
+          "range": {
+            "feet": 0,
+            "kind": "touch"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "abjuration"
+        }
+      ],
+      "temp_hp": 0,
+      "triggers": [],
+      "uses_death_saves": true,
+      "wild_shape": null
+    }
+  ],
+  "combat": null,
+  "content": {
+    "ruleset_id": "dnd_5e_2014",
+    "scenario_schema": "dnd_board_game.scenario",
+    "scenario_schema_version": 1,
+    "source_pack_ids": [
+      "project_original"
+    ]
+  },
+  "conversation_entries": [],
+  "exploration": {
+    "challenge_states": [],
+    "condition_states": [],
+    "elapsed_minutes": 14,
+    "encounter_edges": [],
+    "exhausted_search_zones": [],
+    "fixture_states": [],
+    "flags": [
+      {
+        "key": "black_ford_transport_quest_active",
+        "value": true
+      },
+      {
+        "key": "contract.base_reward_gp_per_hero",
+        "value": 10
+      },
+      {
+        "key": "travel.pace.slow",
+        "value": true
+      }
+    ],
+    "hidden_actor_states": [],
+    "inventory_resource_ids": [],
+    "magic_effects": [],
+    "merchants": [],
+    "npc_states": [],
+    "party_position": {
+      "marker_position": [
+        7,
+        7
+      ],
+      "zone_id": "blocked_road"
+    },
+    "point_positions": [
+      {
+        "id": "road_aftermath",
+        "positions": [
+          [
+            9,
+            8
+          ]
+        ]
+      }
+    ],
+    "point_visibility": [
+      {
+        "id": "road_aftermath",
+        "visibility": "hidden"
+      }
+    ],
+    "short_rest_counts": [],
+    "source_collections": [],
+    "source_discoveries": [],
+    "temporary_items": [],
+    "trap_states": []
+  },
+  "pending_encounter": null,
+  "pending_npc_transition": null,
+  "resolved_encounter_trigger_ids": [],
+  "scenario_id": "ostatni_transport_01_zawalona_droga",
+  "schema": "dnd_board_game.session",
+  "schema_version": 31,
+  "selected_attack_source_ids": {},
+  "selected_healing_source_ids": {},
+  "ui": {
+    "active_point_id": "",
+    "interaction_result": null,
+    "preview_zone_id": "",
+    "selected_helper_actor_id": null,
+    "selected_lead_actor_id": "dagna",
+    "stage": "ready_to_start"
+  }
+}

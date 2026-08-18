@@ -172,6 +172,21 @@ najbliższy horyzont, a nie kopię całej roadmapy.
 - [x] [Hardware scan reliability] Apply idle recovery inside bounded hardware scans,
   reset the listener after a final timeout, and persist the timeout reason in session
   observations instead of leaving an unmatched scan-start event.
+- [x] [Hardware scan reliability] Preserve the firmware STOP acknowledgement during a
+  soft reset so a cancelled scan releases its lock before the next combat turn, and
+  normalize keyboard-wedge `?` underscores in the browser before card validation.
+- [x] [Hardware scan reliability] Ignore delayed acknowledgements of the defensive
+  pre-scan STOP while still honoring explicit scan cancellation, so a newly armed
+  hardware scan cannot terminate before the player presses a field.
+- [x] Replace the fixed 2×4 hotspot grid with the visible continuation composer as soon
+  as its board tile is selected, instead of hiding the composer below a clipped grid
+  while board listening is intentionally paused.
+- [x] Make travel pace a three-tile board choice anchored beside the departure hotspot;
+  selecting fast, normal or slow pace advances directly to navigator selection.
+- [x] Show player-visible mechanical rules for every highlighted environment group
+  during encounter setup, including difficult terrain, cover, blockers and interactions.
+- [x] Make universal ACCEPT trigger the sole visible forward action and replace
+  spell hand-juggling restrictions with explicit hands-bound, gagged and Silence states.
 - [x] Add passive board focus for physically placed initiative/Stealth actors and exploration objects, without treating exploration party members or NPCs as separate board pieces.
 - [x] Move prepared-spell selection to the final initial-setup step before first-location selection.
 - [ ] UI-5: Validate the complete board-first UI vertical slice with `abandoned_watchtower` and the manual hardware checklist.
@@ -234,6 +249,31 @@ najbliższy horyzont, a nie kopię całej roadmapy.
 - [x] [Combat playtest] Block ending a turn with an unresolved action, expose executable spells and active class features in the board context menu, explain prepared spells from their real resolver contracts, and animate ranged projectiles across LEDs.
 - [x] [Progression playtest] Award every player hero 300 XP after the gate-goblin victory, persist custom-character progress, and expose direct level-up actions in the encounter result.
 - [x] Add a selectable mechanics playground with configurable training dummies, normal board-first combat setup, spell/area targets, exploration fixtures, a social-test NPC, repeatable short rests, and a one-click trial reset.
+- [x] Remove the playground hotspot/location overlap and align its card tests with
+  canonical level-3 archetypes, including replacement of inherited spell
+  definitions by their resource-powered physical-deck variants.
+- [x] Open the guild map directly into widely spaced interaction hotspots after
+  paper-map acceptance, remove Nessa miniature setup, and confirm hotspot previews
+  with a second click on the same board field.
+- [x] Keep map hotspots widely separated while placing an entered point's action
+  tiles and exit locally around that point's physical board field.
+- [x] Keep automatic board listening armed during hotspot previews and enrich
+  character feature lists with player-facing rules text plus runtime mechanics.
+- [x] Fit the desktop New Game party/scenario selection flow into one responsive
+  viewport while preserving normal document scrolling on narrow screens.
+- [x] Split desktop hotspot previews and active conversations into a responsive
+  two-pane workspace with a fixed 4-by-2 board-tile grid, independent dialogue
+  scrolling, compact portrait/HP party HUD, and content-aware image cropping.
+- [x] Execute description-free interaction goals immediately once their required
+  participant/source choices are resolved, without a redundant confirmation card.
+- [x] Use the compact portrait-and-HP party HUD throughout desktop exploration,
+  hiding the campaign title and fitting the full party without horizontal scrolling.
+- [x] Normalize the fixed keyboard-wedge scanner's `?` output back to `_` for
+  every D&D board-game QR signature, including owned action cards.
+- [x] Skip redundant participant selection for actor-assigned interaction tests
+  and stage social checks as actor, approach, authored description, then test preview.
+- [x] Keep authored setup LEDs passive on instruction-only encounter/map steps,
+  preventing false board-scan errors while retaining scans for actual placement choices.
 
 ## Completed Work And Deferred Backlog
 
@@ -533,13 +573,13 @@ obowiązują `Current Roadmap Focus` oraz etapy z `ROADMAP.md`.
   keep ordinary weapon/unarmed attacks behind contextual enemy-field selection;
   reserve physical cards for spells, class features and special maneuvers.
 - [x] [Seven board-game archetypes] Replace the visible twelve-class starter
-  roster with seven role-first level 1–3 builds defined in
-  `docs/BOARDGAME_ARCHETYPES_LEVELS_1_3.md`: fixed level-1 combat/exploration
-  kits, compact level-up pools, fixed caster decks without preparation, a
+  roster with seven role-first level-3 builds defined in
+  `docs/BOARDGAME_ARCHETYPES_LEVELS_1_3.md`: complete combat/exploration kits,
+  fixed caster decks without preparation, a
   content-authored `ExplorationCardIntent` handler/attempt contract, short and
   long rests exposed only by eligible instances, hidden legacy starters and
-  regenerated physical card sets. The runtime installs the fixed level-1 kits;
-  the documented level 2–3 cards form the current test pool.
+  regenerated physical card set. The runtime installs complete level-3 kits
+  and every personal card is available from the start.
 - [x] [Archetype flaws and exploration reactions] Give each of the seven
   archetypes one deterministic flaw, synchronize its combat/exploration
   trigger, add data-driven card reactions to the village and abandoned
@@ -550,10 +590,10 @@ obowiązują `Current Roadmap Focus` oraz etapy z `ROADMAP.md`.
   and auto-assign a party hero, show that hero on the tile, and add two optional
   narrative interactions for each of the seven playable archetypes across the
   village and abandoned-watchtower MVP.
-- [ ] [Archetype progression persistence] Add the player-facing level 2–3
-  choice screen, store stable selected option ids in character saves, rebuild
-  the chosen grants after loading, and generate a personal PDF containing only
-  the selected progression cards instead of the whole test pool.
+- [ ] [Deferred archetype progression] Design progression only after scenario
+  playtests establish whether levels, card unlocks, upgrades, or a hybrid are
+  the better reward loop. Until then all seven heroes remain level 3 with their
+  complete personal decks.
 - [x] [Physical combat-card batch 1] Route 15 common spell cards through one
   shared attack/healing/combat-action/reaction dispatcher reused by the screen
   menu; cover single-target attacks, saves, healing, areas, movement, statuses,
@@ -598,6 +638,109 @@ obowiązują `Current Roadmap Focus` oraz etapy z `ROADMAP.md`.
   cover every printable combat card in the seven active decks, allow an
   explicitly selected non-active reaction owner, and verify action plus reaction
   reminders in the Mechanics Playground.
+- [x] [Level-3 hero gameplay review] Start all seven heroes at level 3, add +2
+  to each primary ability, expose every personal card immediately, replace the
+  weak True Strike variants with same-turn attack setup, make MANEWRY and
+  EKWIPUNEK cards open real menus, align spell riders/flaws/deck access with the
+  runtime, and show finite resources in legal-card reminders.
+- [x] [Level-3 dossier resource pass] Remove the obsolete level 1–3 progression
+  section, replace it with exact card pools/slots and recovery rules, list only
+  physical-deck spells on character sheets, and recalculate Lorian's Inspiration
+  pool after the archetype Charisma bonus.
+- [x] [Target campaign flow authoring] Extract the complete `Ostatni transport do
+  Czarnego Brodu` map/NPC/interaction/player-tile flow into editable Mermaid and
+  generate a multi-page `.drawio` workspace with individually movable nodes,
+  collapsible instance groups, typed colors and regeneration coverage; model
+  the reusable Guild hub as Map 0 with mandatory Nessa briefing, gated departure
+  and visibly reserved but mechanically inactive future facilities.
+- [x] [Guild Map 0 implementation spec] Create the living technical source for
+  Nessa's mandatory briefing, optional information cards, persistent flags,
+  departure flow and cross-scene knowledge callbacks that reward players for
+  deliberately applying remembered details without blocking ordinary discovery.
+- [x] [Guild Map 0 mechanical runtime] Add deterministic, knowledge-gated LLM
+  argument scoring before a physical social roll; support unique performers,
+  critical-failure/exhaustion effects and assigned NPC-goal actors; implement
+  the loadable Nessa briefing, three negotiation outcomes, Erynd document check,
+  persistent knowledge flags and gated departure to a Map 1 placeholder; render
+  Nessa's negotiation response in a second, post-roll LLM phase while keeping
+  the authored mechanical result immutable and providing safe fallbacks.
+- [x] [Guild Map 0 authored briefing] Complete Nessa's opening assignment,
+  disappearance, cargo, personnel, Insight, Erynd document-check and departure
+  text; align route marks, medicine-cache details, caravan roster and propagated
+  knowledge flags with the living campaign specification.
+- [x] [Guild Map 0 art pack] Define the shared gothic-comic art direction and
+  production prompts, generate the guild map, Nessa portrait, desk scene, seven
+  interaction tiles and three future-feature placeholders, and bind the current
+  zone, NPC point and authored goals to their scenario-local assets.
+- [x] [Guild Map 0 hotspot and contract closure] Bind Nessa, Archive,
+  Quartermaster, Training and the departure gate to stable board positions
+  matching the isometric map; keep the locked gate inspectable, summarize only
+  learned departure facts, define level-3-scale contract values, pay advances
+  to every living party member, persist preparation packs, and verify the full
+  Map 0 → Map 1 handoff.
+- [x] [Guild Map 0 physical setup parity] Add the MVP-style paper-map setup,
+  portrait 50 × 75 cm print source, eight-page A4 and full-size PDFs, location
+  preview/confirmation, immediate single-field Nessa placement after unfolding
+  the map, portrait preview before accepting her interaction, and illustrated
+  Archive, Quartermaster and Training hotspots on the same physical map.
+- [x] [Player campaign launcher] Make Ostatni transport the default runtime
+  campaign; enforce New Game as physical-card party selection followed by
+  scenario selection; expose only the Guild Map 0 campaign in the player
+  catalog while retaining MVP, arenas and playgrounds as direct test content.
+- [ ] [Black Ford Map 1 implementation] Replace the Zawalona Droga placeholder
+  with the authored locations, interactions, encounter flow and callbacks from
+  the campaign graph, consuming the knowledge flags propagated from Map 0.
+  - [x] Add the encounter-first phase contract: immediate arrival trigger,
+    exploration hidden until victory, and content-driven terminal Game Over on
+    defeat, retreat or surrender.
+  - [x] Add a dedicated encounter-start checkpoint and exact Game Over retry
+    that restores party resources, actors, positions, terrain and initiative
+    without overwriting the ordinary scenario save, then repeats the physical
+    hero, enemy and terrain setup before reactivating combat.
+  - [x] Add approach-mode and Erynd-knowledge opening variants.
+  - [x] Add final tactical terrain, monster scaling, statblocks and AI profiles.
+    - [x] Define the encounter fiction, tactical zones, provisional stat targets,
+      party-size presets, morale sources, low-HP behavior, flee flow and
+      exploration handoff in `MAPA_1_GLODNE_CIENIE_ENCOUNTER_SPEC.md`.
+    - [x] Replace the bespoke behavior tree with the implementable
+      `weighted_utility_v1` contract and a tunable Hungry Shadow pack JSON
+      profile covering roles, fuzzy features, seeded noise and morale.
+    - [x] Prepare the top-down encounter map base and editable tactical-zone
+      overlay, AI decision diagram, complete skirmisher/leader statblocks and
+      the LED feedback storyboard/semantic-role contract.
+    - [x] Produce the comic-style v2 battlemap with stronger linework and
+      saturated colors, plus explicit enemy start fields and party-size setup
+      groups in the editable overlay and tactical layout JSON.
+    - [x] Revise the battlemap to v3 with a restrained dark-fantasy palette and
+      lower texture density while retaining the tactical layout and enemy slots.
+    - [x] Wire the v3 map into encounter setup, add data-driven party-size
+      variants 1–5, apply the tactical terrain to pathfinding, expose the map
+      preview, and preserve the selected setup through Game Over Retry.
+    - [x] Connect the `weighted_utility_v1` runtime baseline: profile/role/tag
+      loading, deterministic intent scoring, pack morale, regroup/guard,
+      forced flee/cornered behavior, escape fields, dead/escaped outcome ledger,
+      victory without killing every beast, and snapshot persistence.
+    - [x] Complete the remaining tactical scoring inputs (cover, isolation,
+      opportunity risk, hazards and guard-zone threat) and tune voluntary flee
+      behavior with simulated parties before the manual balance pass.
+    - [x] Add the production-AI playtest runner, execute and persist 64 seeded
+      fights across eight compositions and party sizes 1–5, fix repeated
+      pathfinding, idle regroup/guard/flee loops, Dash approach, fixed-deck
+      preparation and spell-handling regressions, and publish the result table.
+    - [x] Add three walkable passive defensive spots granting automatic +2 AC,
+      revise the battlemap/layout to v4, raise Hungry Shadow HP slightly, let
+      guard/regroup attack after movement, and tune ranged-fire cover response
+      so reachable attacks and low-HP/low-morale flee behavior take priority;
+      rerun the 64-fight matrix with no timeout or deadlock.
+    - [x] Add a data-driven `attack_bonus` that raises only attack rolls, give
+      every Hungry Shadow attack `+1` (`+5` skirmisher, `+6` leader), and rerun
+      the 64-fight matrix: 517 total damage, 64 resolved fights, no timeout.
+    - [x] Add a deterministic end-to-end campaign walkthrough covering New Game,
+      physical-card party selection, Guild setup, the complete useful Nessa
+      briefing, checked knowledge, negotiation, quest activation, travel,
+      same-session Map 1 handoff, encounter setup/initiative/checkpoint and
+      victory-gated aftermath; publish its audit report and regression command.
+  - [ ] Replace the aftermath placeholder with the authored exploration points.
 - [x] [Physical card print synchronization] Regenerate all 12 character-set
   PDFs from the current phase/effect catalogue, omit removed cards, validate
   every QR/manifest/page count, and add individual plus combined toner-friendly

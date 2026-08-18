@@ -1,0 +1,278 @@
+{
+  "schema": "dnd_board_game.scenario",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["project_original"],
+  "id": "ostatni_transport_01_glodne_cienie",
+  "name": "Ostatni transport — Głodne Cienie",
+  "encounter_map_asset": "maps/ostatni_transport_01/glodne_cienie_battlemap_base_v4.png",
+  "encounter_ai": {"profile_ref": "hungry_shadow_pack"},
+  "board": {"cols": 20, "rows": 30},
+  "actors": [
+    {
+      "id": "hero",
+      "name": "Bohater",
+      "kind": "player_character",
+      "faction": "ally",
+      "level": 3,
+      "ac": 15,
+      "hp": 24,
+      "speed_feet": 30,
+      "position": [8, 27],
+      "ability_scores": {
+        "strength": 14,
+        "dexterity": 14,
+        "constitution": 14,
+        "intelligence": 10,
+        "wisdom": 12,
+        "charisma": 10
+      },
+      "proficiency_bonus": 2,
+      "item_refs": ["longsword"]
+    },
+    {"id": "hungry_shadow_s1", "name": "Głodny Cień S1", "source_ref": "hungry_shadow", "ai_role": "skirmisher", "position": [6, 17]},
+    {"id": "hungry_shadow_s2", "name": "Głodny Cień S2", "source_ref": "hungry_shadow", "ai_role": "skirmisher", "position": [13, 17]},
+    {"id": "hungry_shadow_s3", "name": "Głodny Cień S3", "source_ref": "hungry_shadow", "ai_role": "skirmisher", "position": [13, 14]},
+    {"id": "hungry_shadow_s4", "name": "Głodny Cień S4", "source_ref": "hungry_shadow", "ai_role": "skirmisher", "position": [5, 12]},
+    {"id": "hungry_shadow_leader", "name": "Przewodnica Głodnych Cieni", "source_ref": "hungry_shadow_leader", "ai_role": "leader", "position": [6, 13]},
+    {"id": "hungry_shadow_solo", "name": "Osłabiony Głodny Cień", "source_ref": "hungry_shadow", "ai_role": "skirmisher", "position": [10, 17]}
+  ],
+  "player_start_zones": [
+    [[8, 27], [9, 27], [10, 27], [11, 27], [12, 27]]
+  ],
+  "encounter_party_size_variants": [
+    {
+      "party_size": 1,
+      "enemy_actor_ids": ["hungry_shadow_solo"],
+      "hit_point_overrides": {"hungry_shadow_solo": 12}
+    },
+    {
+      "party_size": 2,
+      "enemy_actor_ids": ["hungry_shadow_leader", "hungry_shadow_s2"],
+      "hit_point_overrides": {"hungry_shadow_leader": 24}
+    },
+    {
+      "party_size": 3,
+      "enemy_actor_ids": ["hungry_shadow_leader", "hungry_shadow_s1", "hungry_shadow_s2"]
+    },
+    {
+      "party_size": 4,
+      "enemy_actor_ids": ["hungry_shadow_leader", "hungry_shadow_s1", "hungry_shadow_s2", "hungry_shadow_s3"]
+    },
+    {
+      "party_size": 5,
+      "enemy_actor_ids": ["hungry_shadow_leader", "hungry_shadow_s1", "hungry_shadow_s2", "hungry_shadow_s3", "hungry_shadow_s4"]
+    }
+  ],
+  "environment": [
+    {
+      "id": "muddy_rut_rules",
+      "name": "Błotnista koleina — zasady",
+      "type": "difficult_terrain",
+      "positions": [
+        [6,17],[7,17],[8,17],[9,17],[10,17],[11,17],[12,17],[13,17],
+        [6,18],[7,18],[8,18],[9,18],[10,18],[11,18],[12,18],[13,18],
+        [6,19],[7,19],[8,19],[9,19],[10,19],[11,19],[12,19],[13,19],
+        [5,20],[6,20],[7,20],[8,20],[9,20],[10,20],[11,20],[12,20],[13,20],[14,20],
+        [5,21],[6,21],[7,21],[8,21],[9,21],[10,21],[11,21],[12,21],[13,21],[14,21],
+        [5,22],[6,22],[7,22],[8,22],[9,22],[10,22],[11,22],[12,22],[13,22],[14,22],
+        [5,23],[6,23],[7,23],[8,23],[9,23],[10,23],[11,23],[12,23],[13,23],[14,23]
+      ],
+      "visibility": "hidden",
+      "description": "Każde 5 ft ruchu kosztuje 10 ft."
+    },
+    {
+      "id": "stream_rules",
+      "name": "Strumień — zasady",
+      "type": "difficult_terrain",
+      "positions": [
+        [0,0],[1,0],[2,0],[3,0],[4,0],[5,0],[6,0],[7,0],
+        [0,1],[1,1],[2,1],[3,1],[4,1],[5,1],[6,1],[7,1],
+        [0,2],[1,2],[2,2],[3,2],[4,2],[5,2],[6,2],
+        [0,3],[1,3],[2,3],[3,3],[4,3],[5,3],[6,3],
+        [0,4],[1,4],[2,4],[3,4],[4,4],[5,4],
+        [0,5],[1,5],[2,5],[3,5],[4,5],[5,5],
+        [0,6],[1,6],[2,6],[3,6],[4,6],
+        [0,7],[1,7],[2,7],[3,7],[4,7],
+        [0,8],[1,8],[2,8],[3,8],
+        [0,9],[1,9],[2,9],[3,9],
+        [0,10],[1,10],[2,10]
+      ],
+      "visibility": "hidden",
+      "tags": ["pack_hazard"],
+      "description": "Strumień jest trudnym terenem."
+    },
+    {
+      "id": "ridge_approach_rules",
+      "name": "Podejście na skarpę — zasady",
+      "type": "difficult_terrain",
+      "positions": [[14,14],[14,15],[15,15],[14,16],[15,16],[14,17],[15,17]],
+      "visibility": "hidden",
+      "description": "Oznaczone podejście na skarpę jest trudnym terenem."
+    },
+    {
+      "id": "overturned_wagon_core",
+      "name": "Przewrócony wóz — blokada",
+      "type": "blocking_terrain",
+      "positions": [
+        [8,11],[9,11],[10,11],
+        [7,12],[8,12],[9,12],[10,12],[11,12],
+        [7,13],[8,13],[9,13],[10,13],[11,13],[12,13],
+        [8,14],[9,14],[10,14],[11,14],[12,14],
+        [9,15],[10,15],[11,15]
+      ],
+      "visibility": "hidden",
+      "description": "Środek wraku blokuje ruch i linię widzenia."
+    },
+    {
+      "id": "overturned_wagon_cover_rules",
+      "name": "Krawędzie przewróconego wozu — zasady osłony",
+      "type": "cover",
+      "positions": [[7,11],[11,11],[6,12],[12,12],[6,14],[13,14],[8,15],[12,15]],
+      "visibility": "hidden",
+      "blocks_movement": false,
+      "projectile_cover_bonus": 2,
+      "description": "Krawędź wozu daje połowiczną osłonę, jeżeli znajduje się między atakującym a celem."
+    },
+    {
+      "id": "overturned_wagon_cover_setup",
+      "name": "Krawędzie przewróconego wozu",
+      "type": "cover",
+      "positions": [[7,11],[12,12],[6,14],[12,15]],
+      "visibility": "visible",
+      "blocks_movement": false,
+      "description": "Potwierdź położenie wraku według nadruku mapy.",
+      "setup_mechanics": [
+        "Krawędź wozu między atakującym a celem zapewnia połowiczną osłonę: +2 do KP i rzutów obronnych na Zręczność.",
+        "Środek wraku blokuje ruch i linię widzenia."
+      ]
+    },
+    {
+      "id": "western_fallen_tree_defensive_spots",
+      "name": "Zwalony pień — pola obronne",
+      "type": "cover",
+      "positions": [[3,16],[4,16],[5,16],[6,16]],
+      "visibility": "hidden",
+      "blocks_movement": false,
+      "cover_bonus": 2,
+      "description": "Przechodnie pola obronne. Każda stojąca tu figurka automatycznie otrzymuje +2 KP; nie wymaga to akcji."
+    },
+    {
+      "id": "spilled_cargo_defensive_spots",
+      "name": "Rozsypane skrzynie — pola obronne",
+      "type": "cover",
+      "positions": [[5,19],[6,19],[7,19]],
+      "visibility": "hidden",
+      "blocks_movement": false,
+      "cover_bonus": 2,
+      "description": "Przechodnie pola obronne. Każda stojąca tu figurka automatycznie otrzymuje +2 KP; nie wymaga to akcji."
+    },
+    {
+      "id": "eastern_debris_defensive_spots",
+      "name": "Szczątki wozu — pola obronne",
+      "type": "cover",
+      "positions": [[12,19],[13,19],[14,19]],
+      "visibility": "hidden",
+      "blocks_movement": false,
+      "cover_bonus": 2,
+      "description": "Przechodnie pola obronne. Każda stojąca tu figurka automatycznie otrzymuje +2 KP; nie wymaga to akcji."
+    },
+    {
+      "id": "muddy_rut_setup",
+      "name": "Granice błotnistej koleiny",
+      "type": "custom",
+      "positions": [[6,17],[14,23]],
+      "visibility": "visible",
+      "description": "Potwierdź położenie błota według nadruku mapy.",
+      "setup_mechanics": ["Błotnista koleina jest trudnym terenem: każde 5 ft ruchu kosztuje 10 ft."]
+    },
+    {
+      "id": "stream_setup",
+      "name": "Granice strumienia",
+      "type": "custom",
+      "positions": [[2,10]],
+      "visibility": "visible",
+      "description": "Potwierdź bieg strumienia według nadruku mapy.",
+      "setup_mechanics": ["Strumień jest trudnym terenem: każde 5 ft ruchu kosztuje 10 ft."]
+    },
+    {
+      "id": "ridge_setup",
+      "name": "Podejście na wschodnią skarpę",
+      "type": "custom",
+      "positions": [[14,17]],
+      "visibility": "visible",
+      "description": "Potwierdź podejście i górny poziom skarpy.",
+      "setup_mechanics": ["Podejście na skarpę jest trudnym terenem: każde 5 ft ruchu kosztuje 10 ft."]
+    },
+    {
+      "id": "resonant_cargo",
+      "name": "Rozsypany ładunek",
+      "type": "container",
+      "positions": [[8,8],[9,8],[10,8],[11,9]],
+      "visibility": "visible",
+      "blocks_movement": false,
+      "description": "Skrzynie są podczas walki elementem sceny, ale nie można ich jeszcze przeszukiwać.",
+      "setup_mechanics": ["Pola skrzyń są przechodnie. Podczas tej walki nie można ich przeszukiwać."]
+    },
+    {
+      "id": "old_bell",
+      "name": "Stary dzwon",
+      "type": "interactable",
+      "positions": [[17,3]],
+      "visibility": "visible",
+      "blocks_movement": false,
+      "interaction_label": "Uderz w stary dzwon",
+      "description": "Metaliczny ton dzwonu nakłada się na Rezonans i dezorientuje stado.",
+      "setup_mechanics": ["Bohater stojący obok może zużyć akcję, aby uderzyć w dzwon. Pierwsze uderzenie obniża morale stada o 2; kolejne są tylko hałasem."],
+      "interactions": [
+        {
+          "id": "ring_old_bell",
+          "label": "Uderz w stary dzwon",
+          "description": "Bohater poświęca akcję. Dzwon obniża morale stada o 2; każde kolejne uderzenie jest już tylko hałasem.",
+          "conditions": [
+            {"type": "action_available"},
+            {"type": "actor_adjacent_to_object"}
+          ],
+          "effects": [
+            {
+              "type": "enemy_ai_morale_event",
+              "parameters": {
+                "event_id": "old_bell_rung",
+                "delta": -2,
+                "minimum": 0,
+                "message": "Dźwięk starego dzwonu rozrywa rytm stada. Morale Głodnych Cieni spada o 2."
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "north_escape",
+      "name": "Północna droga ucieczki",
+      "type": "marker",
+      "positions": [[8,0],[9,0],[10,0],[11,0],[12,0]],
+      "visibility": "hidden",
+      "tags": ["pack_escape"],
+      "description": "Tag projektowy przyszłego AI ucieczki."
+    },
+    {
+      "id": "west_escape",
+      "name": "Zachodnia droga ucieczki",
+      "type": "marker",
+      "positions": [[0,6],[0,7],[0,8],[0,9]],
+      "visibility": "hidden",
+      "tags": ["pack_escape"],
+      "description": "Tag projektowy przyszłego AI ucieczki."
+    },
+    {
+      "id": "western_culvert_guard",
+      "name": "Wejście do legowiska",
+      "type": "marker",
+      "positions": [[4,11],[4,12],[4,13],[5,13]],
+      "visibility": "hidden",
+      "tags": ["pack_den"],
+      "description": "Strefa chroniona przez przewodniczkę stada."
+    }
+  ]
+}

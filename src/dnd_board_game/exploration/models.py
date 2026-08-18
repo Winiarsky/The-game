@@ -281,9 +281,15 @@ class ConsequenceTarget(StrEnum):
 
 
 class EncounterTriggerCondition(StrEnum):
+    ALWAYS = "always"
     NOISE_AT_LEAST = "noise_at_least"
     FLAG_EQUALS = "flag_equals"
     POINT_REVEALED = "point_revealed"
+
+
+class EncounterDefeatPolicy(StrEnum):
+    RETURN_TO_EXPLORATION = "return_to_exploration"
+    GAME_OVER = "game_over"
 
 
 class EncounterOpeningOutcome(StrEnum):
@@ -451,6 +457,7 @@ class ExplorationEncounterTrigger:
     flag_key: str | None = None
     flag_value: object = True
     point_id: str | None = None
+    defeat_policy: EncounterDefeatPolicy = EncounterDefeatPolicy.RETURN_TO_EXPLORATION
     opening_policy: EncounterOpeningPolicy | None = None
     outcome_on_victory: EncounterOutcome | None = None
     outcome_on_defeat: EncounterOutcome | None = None
@@ -580,6 +587,7 @@ class ExplorationOption:
     label: str
     kind: ExplorationOptionKind
     color: tuple[int, int, int]
+    image: str = ""
     description: str = ""
     message: str = ""
     success_message: str = ""
@@ -795,6 +803,18 @@ class ScenarioContinuationOutcome:
 
 
 @dataclass(frozen=True, slots=True)
+class ContinuationSummaryItem:
+    label: str
+    required_flag: str | None = None
+
+    def __post_init__(self) -> None:
+        if not self.label.strip():
+            raise ValueError("Continuation summary labels cannot be empty.")
+        if self.required_flag is not None and not self.required_flag.strip():
+            raise ValueError("Continuation summary flags cannot be empty.")
+
+
+@dataclass(frozen=True, slots=True)
 class ScenarioContinuation:
     id: str
     label: str
@@ -806,6 +826,7 @@ class ScenarioContinuation:
     unavailable_hint: str = ""
     available_if_flags: tuple[str, ...] = ()
     propagate_flags: tuple[str, ...] = ()
+    departure_summary: tuple[ContinuationSummaryItem, ...] = ()
     outcomes: tuple[ScenarioContinuationOutcome, ...] = ()
     travel_minutes: int = 0
     travel_policy: TravelPolicy = TravelPolicy()
@@ -959,6 +980,7 @@ class ExplorationZone:
     description: str = ""
     image: str = ""
     paper_map: PaperMap | None = None
+    activate_after_setup: bool = False
     visibility: SetupVisibility = SetupVisibility.VISIBLE
     available_if_flag: str | None = None
     available_if_value: object = True
@@ -1071,6 +1093,8 @@ class NpcRelationshipEvent:
     outcome: str
     summary: str
     attempt_id: str | None = None
+    actor_id: str | None = None
+    critical_failure: bool = False
 
     def __post_init__(self) -> None:
         if self.sequence < 1:
@@ -1081,6 +1105,8 @@ class NpcRelationshipEvent:
             raise ValueError("NPC relationship event summary cannot be empty.")
         if self.attempt_id is not None and not self.attempt_id.strip():
             raise ValueError("NPC relationship event attempt id cannot be empty.")
+        if self.actor_id is not None and not self.actor_id.strip():
+            raise ValueError("NPC relationship event actor id cannot be empty.")
 
     def as_payload(self) -> dict[str, object]:
         return {
@@ -1089,6 +1115,8 @@ class NpcRelationshipEvent:
             "outcome": self.outcome,
             "summary": self.summary,
             "attempt_id": self.attempt_id,
+            "actor_id": self.actor_id,
+            "critical_failure": self.critical_failure,
         }
 
 
@@ -1137,6 +1165,10 @@ class NpcRuntimeState:
 class NpcAttemptPolicy:
     attempt_id: str
     max_attempts: int = 1
+    unique_actor_per_attempt: bool = False
+    close_on_critical_failure: bool = False
+    effects_on_exhaustion: tuple[dict[str, object], ...] = ()
+    effects_on_critical_failure: tuple[dict[str, object], ...] = ()
     retry_requires_any_flags: tuple[str, ...] = ()
     retry_locked_message: str = "NPC nie zgadza się ponownie rozmawiać o tym bez zmiany sytuacji."
     exhausted_message: str = "To podejście zostało wyczerpane."
@@ -1157,9 +1189,72 @@ class NpcAttemptPolicy:
         return {
             "attempt_id": self.attempt_id,
             "max_attempts": self.max_attempts,
+            "unique_actor_per_attempt": self.unique_actor_per_attempt,
+            "close_on_critical_failure": self.close_on_critical_failure,
+            "effects_on_exhaustion": list(self.effects_on_exhaustion),
+            "effects_on_critical_failure": list(self.effects_on_critical_failure),
             "retry_requires_any_flags": list(self.retry_requires_any_flags),
             "retry_locked_message": self.retry_locked_message,
             "exhausted_message": self.exhausted_message,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class NpcArgumentLeverage:
+    id: str
+    label: str
+    required_flags: tuple[str, ...] = ()
+    compatible_skills: tuple[str, ...] = ()
+    max_strength: int = 2
+
+    def __post_init__(self) -> None:
+        if not self.id.strip() or not self.label.strip():
+            raise ValueError("NPC argument leverage requires id and label.")
+        if not 1 <= self.max_strength <= 2:
+            raise ValueError("NPC argument leverage max_strength must be 1 or 2.")
+        if any(skill not in {"persuasion", "deception", "intimidation"} for skill in self.compatible_skills):
+            raise ValueError("NPC argument leverage uses an unsupported social skill.")
+
+    def as_payload(self) -> dict[str, object]:
+        return {
+            "id": self.id,
+            "label": self.label,
+            "required_flags": list(self.required_flags),
+            "compatible_skills": list(self.compatible_skills),
+            "max_strength": self.max_strength,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class NpcArgumentEvaluationPolicy:
+    leverages: tuple[NpcArgumentLeverage, ...] = ()
+    flag_modifiers: tuple[tuple[str, int], ...] = ()
+
+    def __post_init__(self) -> None:
+        ids = tuple(item.id for item in self.leverages)
+        if len(ids) != len(set(ids)):
+            raise ValueError("NPC argument evaluation cannot repeat leverage ids.")
+        if any(not flag.strip() or not -2 <= modifier <= 2 for flag, modifier in self.flag_modifiers):
+            raise ValueError("NPC argument flag modifiers require a flag and value from -2 to +2.")
+
+    def as_payload(self) -> dict[str, object]:
+        return {
+            "criteria": {
+                "intent_fit": [-2, 0, 1],
+                "specificity": [0, 1],
+                "credibility": [-2, -1, 0],
+            },
+            "leverages": [item.as_payload() for item in self.leverages],
+            "flag_modifiers": {flag: modifier for flag, modifier in self.flag_modifiers},
+            "score_mapping": {
+                "4_or_more": "advantage",
+                "3": 2,
+                "1_to_2": 1,
+                "0": 0,
+                "minus_1": -1,
+                "minus_2": -2,
+                "minus_3_or_less": "disadvantage",
+            },
         }
 
 
@@ -1179,12 +1274,15 @@ class NpcOutcomeBranch:
     state_update: NpcStateUpdate | None = None
     revealed_information_ids: tuple[str, ...] = ()
     transition_id: str | None = None
+    currency_reward_cp_per_actor: int = 0
 
     def __post_init__(self) -> None:
         if not self.message.strip():
             raise ValueError("NPC outcome branch requires a player-facing message.")
         if self.transition_id is not None and not self.transition_id.strip():
             raise ValueError("NPC outcome branch transition id cannot be empty.")
+        if self.currency_reward_cp_per_actor < 0:
+            raise ValueError("NPC outcome currency reward cannot be negative.")
 
     def as_payload(self) -> dict[str, object]:
         payload: dict[str, object] = {
@@ -1193,6 +1291,7 @@ class NpcOutcomeBranch:
             "effects": list(self.effects),
             "revealed_information_ids": list(self.revealed_information_ids),
             "transition_id": self.transition_id,
+            "currency_reward_cp_per_actor": self.currency_reward_cp_per_actor,
         }
         if self.state_update is not None:
             payload["state_update"] = _npc_state_update_payload(self.state_update)
@@ -1519,6 +1618,8 @@ class InteractionGoal:
     description_mode: InteractionDescriptionMode = InteractionDescriptionMode.REQUIRED
     default_declaration: str = ""
     llm_rubric: tuple[str, ...] = ()
+    required_party_actor_id: str | None = None
+    assigned_actor_id: str | None = None
 
     def __post_init__(self) -> None:
         if not self.id.strip() or not self.label.strip() or not self.description.strip():
@@ -1527,6 +1628,16 @@ class InteractionGoal:
             raise ValueError("Interaction goal followup_prompt cannot be empty.")
         if set(self.required_flags).intersection(self.forbidden_flags):
             raise ValueError("Interaction goal cannot require and forbid the same flag.")
+        if self.required_party_actor_id is not None and not self.required_party_actor_id.strip():
+            raise ValueError("Interaction goal required actor id cannot be empty.")
+        if self.assigned_actor_id is not None and not self.assigned_actor_id.strip():
+            raise ValueError("Interaction goal assigned actor id cannot be empty.")
+        if (
+            self.assigned_actor_id is not None
+            and self.required_party_actor_id is not None
+            and self.assigned_actor_id != self.required_party_actor_id
+        ):
+            raise ValueError("Interaction goal must be assigned to its required actor.")
         if self.check_participants == CheckParticipants.SELECTED_ACTORS:
             raise ValueError(
                 "Interaction goal supports only no_actor, single_actor, "
@@ -1631,6 +1742,8 @@ class InteractionGoal:
             "description_mode": self.description_mode.value,
             "default_declaration": self.default_declaration,
             "llm_rubric": list(self.llm_rubric),
+            "required_party_actor_id": self.required_party_actor_id,
+            "assigned_actor_id": self.assigned_actor_id,
         }
 
 
@@ -1725,6 +1838,8 @@ class NpcIntentPermission:
     effects_on_failure: tuple[dict[str, object], ...] = ()
     uses_social_reaction: bool = False
     attempt_policy: NpcAttemptPolicy | None = None
+    argument_evaluation: NpcArgumentEvaluationPolicy | None = None
+    dynamic_outcome_response: bool = False
     targets: tuple[NpcIntentTarget, ...] = ()
     time_cost_minutes: int = 0
 
@@ -1758,6 +1873,10 @@ class NpcIntentPermission:
             payload["consequences"] = self.consequences
         if self.attempt_policy is not None:
             payload["attempt_policy"] = self.attempt_policy.as_payload()
+        if self.argument_evaluation is not None:
+            payload["argument_evaluation"] = self.argument_evaluation.as_payload()
+        if self.dynamic_outcome_response:
+            payload["dynamic_outcome_response"] = True
         if self.targets:
             payload["targets"] = [target.as_payload() for target in self.targets]
         if self.state_on_success is not None:

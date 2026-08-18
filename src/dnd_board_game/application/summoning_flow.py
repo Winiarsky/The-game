@@ -96,6 +96,8 @@ class SummoningFlowService:
             caster,
             action.id,
             cast_level=cast_level,
+            condition_states=state.condition_states,
+            active_effects=active_effects,
         )
         if validation is None or not validation.valid:
             raise ValueError(
@@ -161,6 +163,8 @@ class SummoningFlowService:
             caster,
             action.id,
             cast_level=pending.cast_level,
+            condition_states=state.condition_states,
+            active_effects=active_effects,
         )
         if validation is None or not validation.valid:
             raise ValueError(

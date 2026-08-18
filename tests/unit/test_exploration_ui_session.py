@@ -51,6 +51,7 @@ from dnd_board_game.combat import (
 from dnd_board_game.combat.damage import DamageComponentInput, DamageType, apply_damage_result, resolve_damage
 from dnd_board_game.character_creation import (
     all_default_character_drafts,
+    apply_boardgame_archetype,
     build_character,
     default_character_drafts,
     load_character_catalog,
@@ -3563,6 +3564,8 @@ def test_exploration_ui_session_starts_with_map_setup_before_location_preview():
     assert state["exploration_setup"]["current_step"]["label"] == "elementy mapy"
     assert state["exploration_setup"]["current_step"]["has_positions"] is False
     assert state["exploration_setup"]["current_step"]["color"] is None
+    assert state["board_selection"]["legal_position_count"] == 0
+    assert state["board_selection"]["auto_arm"] is False
 
     while session.exploration_setup_flow is not None:
         state = session.confirm_exploration_setup_step()
@@ -4066,6 +4069,69 @@ def test_selected_intimidation_goal_always_offers_authored_roll_without_technica
         and "dokładnie opisuje" in message["body"]
         for message in resolved["messages"]
     )
+
+
+def test_character_feature_payload_includes_rules_and_runtime_mechanics():
+    catalog = load_character_catalog("content/character_creation/catalog.json")
+    resources = load_character_resources(catalog, "content")
+    draft = next(item for item in default_character_drafts() if item.id == "dagna")
+    dagna = apply_boardgame_archetype(
+        build_character(draft, catalog, resources).actor,
+        spell_definitions=tuple(spell for _, spell in resources.spells),
+    )
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    session.configure_custom_party((dagna,))
+
+    actor = session.state_payload()["actors"][0]
+    features = {feature["id"]: feature for feature in actor["features"]}
+
+    assert "2 + poziom użytego czaru" in features["disciple_of_life"][
+        "mechanics"
+    ]
+    assert "30 ft" in features["flaw_leave_no_one"]["mechanics"]
+    assert features["diagnosis"]["description"]
+    assert features["boardgame_level_3_ability_boost"]["mechanics"]
+
+
+def test_lorian_approval_flaw_triggers_after_failed_structured_social_outcome():
+    proposal = NpcInteractionProposal.model_validate(
+        {
+            "action_type": "intimidation",
+            "request_risk": "significant_risk",
+            "target_id": "scout_information",
+            "player_narration": "Lorian próbuje zmusić zwiadowcę do odpowiedzi.",
+            "requires_roll": False,
+        }
+    )
+    catalog = load_character_catalog("content/character_creation/catalog.json")
+    resources = load_character_resources(catalog, "content")
+    draft = next(item for item in default_character_drafts() if item.id == "lorian")
+    lorian = apply_boardgame_archetype(
+        build_character(draft, catalog, resources).actor,
+        spell_definitions=tuple(spell for _, spell in resources.spells),
+    )
+    session = ExplorationUiSession(
+        "content/scenarios/abandoned_watchtower.json",
+        npc_client=FakeNpcClient(proposal),
+        debug_point_id="wounded_scout",
+    )
+    session.configure_custom_party((lorian,))
+
+    session.submit_action(
+        "Mów natychmiast.",
+        selected_goal_id="pressure_scout",
+        selected_check_participants="single_actor",
+        participant_actor_ids=("lorian",),
+    )
+    session.decide("accept")
+    state = session.resolve_rolls({"lorian": 1})
+
+    assert scene_flag(
+        session.state.flags,
+        "flaw_lorian_approval_block:wounded_scout",
+        False,
+    ) is True
+    assert any(message["title"] == "Skaza Loriana" for message in state["messages"])
 
 
 def test_npc_instance_gm_chat_does_not_address_npc_or_apply_effects():
@@ -9491,6 +9557,30 @@ def test_exploration_ui_session_treats_cancelled_obsolete_scan_as_stale(tmp_path
         for line in session.observer.path.read_text(encoding="utf-8").splitlines()
     ]
     assert events[-1]["event_type"] == "ui_board_scan_stale_after_cancel"
+    assert not any(
+        event["event_type"] == "ui_board_scan_timeout"
+        for event in events
+    )
+
+
+def test_exploration_ui_session_records_current_scan_cancellation_separately_from_timeout(
+    tmp_path,
+):
+    session = ExplorationUiSession(
+        "content/scenarios/village_square_mvp.json",
+        debug_point_id="elder_npc",
+        session_id="board_current_cancel_test",
+        observation_dir=tmp_path,
+    )
+    session.attach_board_connection(FakeBoardConnection(), backend="hardware")
+
+    session.scan_board_selection(automatic=True)
+
+    events = [
+        json.loads(line)
+        for line in session.observer.path.read_text(encoding="utf-8").splitlines()
+    ]
+    assert events[-1]["event_type"] == "ui_board_scan_cancelled"
     assert not any(
         event["event_type"] == "ui_board_scan_timeout"
         for event in events

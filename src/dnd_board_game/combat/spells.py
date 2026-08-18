@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from enum import StrEnum
-from typing import Iterable, Sequence
+from typing import TYPE_CHECKING, Iterable, Sequence
 
 from dnd_board_game.actors import (
     Actor,
@@ -14,6 +14,7 @@ from dnd_board_game.actors import (
     spend_actor_resource,
 )
 from dnd_board_game.rules import (
+    ActiveEffect,
     D20RollInput,
     D20RollKind,
     D20RollRequest,
@@ -33,8 +34,10 @@ from dnd_board_game.rules import (
     spell_is_accessible,
     validate_spell_cast,
 )
-from dnd_board_game.inventory import free_hand_count
 from dnd_board_game.world import BoardState, Coordinate, line_of_sight_clear
+
+if TYPE_CHECKING:
+    from .conditions import ConditionState
 
 
 class SpellAreaShape(StrEnum):
@@ -234,11 +237,41 @@ def actor_spell_cast_validation(
     ritual: bool = False,
     ignore_verbal_somatic: bool = False,
     verbal_components_blocked: bool = False,
+    somatic_components_blocked: bool = False,
+    condition_states: Sequence[ConditionState] = (),
+    active_effects: Sequence[ActiveEffect] = (),
 ) -> SpellCastValidation | None:
-    """Validate access, slot level, focus/material and somatic-hand requirements."""
+    """Validate access, slots, materials and explicit component restrictions."""
     spell = next((candidate for candidate in actor.spells if candidate.id == spell_id), None)
     if spell is None:
         return None
+    if condition_states:
+        from .conditions import (
+            condition_blocks_somatic_components,
+            condition_blocks_verbal_components,
+        )
+
+        somatic_components_blocked = (
+            somatic_components_blocked
+            or condition_blocks_somatic_components(
+                condition_states,
+                str(actor.id),
+            )
+        )
+        verbal_components_blocked = (
+            verbal_components_blocked
+            or condition_blocks_verbal_components(
+                condition_states,
+                str(actor.id),
+            )
+        )
+    if active_effects:
+        from .silence import actor_in_silence_zone
+
+        verbal_components_blocked = (
+            verbal_components_blocked
+            or actor_in_silence_zone(actor, active_effects)
+        )
     if actor.wild_shape is not None:
         return replace(
             validate_spell_cast(
@@ -249,6 +282,7 @@ def actor_spell_cast_validation(
                 ritual=ritual,
                 ignore_verbal_somatic=ignore_verbal_somatic,
                 verbal_components_blocked=verbal_components_blocked,
+                somatic_components_blocked=somatic_components_blocked,
             ),
             valid=False,
             errors=("Nie można rzucać czarów w formie Wild Shape.",),
@@ -277,6 +311,7 @@ def actor_spell_cast_validation(
                 ritual=ritual,
                 ignore_verbal_somatic=ignore_verbal_somatic,
                 verbal_components_blocked=verbal_components_blocked,
+                somatic_components_blocked=somatic_components_blocked,
             ),
             valid=False,
             errors=(f"Aktor nie ma dostępu do czaru {spell.name}.",),
@@ -300,10 +335,10 @@ def actor_spell_cast_validation(
                 inventory=actor.inventory,
                 cast_level=spell.level,
                 allowed_focus_kinds=allowed_focus_kinds,
-                has_free_hand=free_hand_count(actor.inventory) > 0,
                 slotless=True,
                 ignore_verbal_somatic=ignore_verbal_somatic,
                 verbal_components_blocked=verbal_components_blocked,
+                somatic_components_blocked=somatic_components_blocked,
             ),
             valid=False,
             errors=(f"Wykorzystano już wrodzone użycie czaru {spell.name}.",),
@@ -314,11 +349,11 @@ def actor_spell_cast_validation(
         inventory=actor.inventory,
         cast_level=cast_level,
         allowed_focus_kinds=allowed_focus_kinds,
-        has_free_hand=free_hand_count(actor.inventory) > 0,
         ritual=ritual,
         slotless=innate_resource_id is not None or at_will,
         ignore_verbal_somatic=ignore_verbal_somatic,
         verbal_components_blocked=verbal_components_blocked,
+        somatic_components_blocked=somatic_components_blocked,
     )
 
 

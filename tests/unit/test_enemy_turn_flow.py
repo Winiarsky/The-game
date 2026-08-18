@@ -21,10 +21,12 @@ from dnd_board_game.combat import (
     AttackSource,
     AttackSourceType,
     CombatState,
+    CombatCondition,
     InitiativeEntry,
     InitiativeOrder,
     DamageType,
     start_combat,
+    has_condition,
 )
 from dnd_board_game.rules import (
     D20RollInput,
@@ -121,6 +123,44 @@ def test_adjacent_enemy_result_is_classified_as_attack_confirmation() -> None:
     assert transition.result.target is not None
     assert transition.result.target.id == "hero"
     assert transition.message_title == "Atak przeciwnika"
+
+
+def test_pack_leap_requests_save_after_charge_and_prones_on_failure() -> None:
+    service = EnemyTurnFlowService()
+    enemy = _actor("enemy", Faction.ENEMY, Coordinate(0, 0))
+    hero = _actor("hero", Faction.ALLY, Coordinate(3, 0))
+    pack_ally = _actor("pack_ally", Faction.ENEMY, Coordinate(3, 1))
+    source = replace(
+        _source(),
+        attack_roll_request=D20RollRequest(
+            modifiers=(RollModifier("pewne trafienie", 20, RollModifierType.CUSTOM),)
+        ),
+        conditional_on_hit_save_ability="strength",
+        conditional_on_hit_save_dc=12,
+        conditional_on_hit_save_condition="prone",
+        conditional_on_hit_minimum_movement_feet=10,
+        conditional_on_hit_requires_adjacent_ally=True,
+    )
+    state = _state(enemy, hero, pack_ally)
+    sources = {enemy.id: source}
+    intent = service.plan(state=state, board=BoardState(), attack_sources_by_actor=sources)
+
+    transition = service.resolve(
+        state=state,
+        intent=intent.intent,
+        board=BoardState(),
+        attack_sources_by_actor=sources,
+        active_effects=(),
+        rng=Random(3),
+    )
+
+    assert transition.result.saving_throw_request is not None
+    assert transition.result.saving_throw_request.dc == 12
+    saved = service.resolve_player_saving_throw(
+        result=transition.result,
+        natural_roll=1,
+    )
+    assert has_condition(saved.result.state.condition_states, "hero", CombatCondition.PRONE)
 
 
 def test_large_enemy_attack_opens_giant_killer_reaction_for_adjacent_ranger() -> None:

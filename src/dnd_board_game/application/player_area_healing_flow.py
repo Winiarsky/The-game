@@ -18,6 +18,7 @@ from dnd_board_game.combat import (
     AttackSource,
     CombatState,
     CombatStatus,
+    ConditionState,
     DamageComponentInput,
     HealingSource,
     SceneObject,
@@ -157,7 +158,12 @@ class PlayerAreaHealingFlowService:
         healer = _active_hero(state)
         if str(healer.id) != pending.healer_id:
             raise ValueError("Oczekujące leczenie nie należy do aktywnego aktora.")
-        _require_usable_source(healer, source, active_effects=active_effects)
+        _require_usable_source(
+            healer,
+            source,
+            condition_states=state.condition_states,
+            active_effects=active_effects,
+        )
         resolution = self._healing.apply_healing(
             state,
             healer=healer,
@@ -253,7 +259,12 @@ class PlayerAreaHealingFlowService:
         caster = _active_hero(state)
         if source.area is None:
             raise ValueError("Wybrane źródło ataku nie jest czarem obszarowym.")
-        _require_usable_source(caster, source, active_effects=active_effects)
+        _require_usable_source(
+            caster,
+            source,
+            condition_states=state.condition_states,
+            active_effects=active_effects,
+        )
         if source.area.shape == SpellAreaShape.RADIUS:
             centers = legal_area_centers(board, caster.position, source.range_feet)
             if position not in centers:
@@ -356,7 +367,12 @@ class PlayerAreaHealingFlowService:
         caster = _active_hero(state)
         if str(caster.id) != pending.caster_id:
             raise ValueError("Oczekujący czar nie należy do aktywnego aktora.")
-        _require_usable_source(caster, source, active_effects=active_effects)
+        _require_usable_source(
+            caster,
+            source,
+            condition_states=state.condition_states,
+            active_effects=active_effects,
+        )
         confirmation = self._area_spells.confirm_area_spell(
             state,
             caster=caster,
@@ -550,6 +566,7 @@ def _require_usable_source(
     actor: Actor,
     source: AttackSource | HealingSource,
     *,
+    condition_states: tuple[ConditionState, ...] = (),
     active_effects: tuple[ActiveCombatEffect, ...] = (),
 ) -> None:
     if not spell_is_prepared(
@@ -575,10 +592,8 @@ def _require_usable_source(
         ignore_verbal_somatic=(
             "metamagic_subtle" in getattr(source, "metamagic_ids", ())
         ),
-        verbal_components_blocked=(
-            "metamagic_subtle" not in getattr(source, "metamagic_ids", ())
-            and _actor_is_silenced(actor, active_effects)
-        ),
+        condition_states=condition_states,
+        active_effects=active_effects,
     )
     if cast_validation is not None and not cast_validation.valid:
         raise ValueError(" ".join(cast_validation.errors))
@@ -588,15 +603,6 @@ def _require_usable_source(
         source.resource_cost,
     ):
         raise ValueError(f"Brak dostępnych użyć: {source.name}.")
-
-
-def _actor_is_silenced(
-    actor: Actor,
-    active_effects: tuple[ActiveCombatEffect, ...],
-) -> bool:
-    from dnd_board_game.combat import actor_in_silence_zone
-
-    return actor_in_silence_zone(actor, active_effects)
 
 
 def _spell_save_message(save: SpellSaveResult) -> str:

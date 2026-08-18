@@ -42,6 +42,7 @@ from dnd_board_game.combat import (
     ConditionSaveTiming,
     DamageComponentSpec,
     DamageType,
+    EnemyAiProfile,
     HealingSource,
     HealingSourceType,
     MagicMovementDefinition,
@@ -54,6 +55,7 @@ from dnd_board_game.combat import (
     SummonDefinition,
     EnvironmentSetupEntry,
     EnvironmentSetupType,
+    enemy_ai_profile_from_payload,
     SceneAbilityCheck,
     SceneInteraction,
     SceneInteractionCondition,
@@ -111,6 +113,7 @@ from dnd_board_game.exploration import (
     ExplorationSituationalModifier,
     ExplorationSituationalModifierSource,
     EncounterOutcome,
+    EncounterDefeatPolicy,
     EncounterOpeningOutcome,
     EncounterOpeningPolicy,
     EncounterOpeningRule,
@@ -121,6 +124,7 @@ from dnd_board_game.exploration import (
     DowntimeCraftingRecipe,
     DowntimePolicy,
     ContinuationNavigationResult,
+    ContinuationSummaryItem,
     ContinuationOutcomeKind,
     ExplorationOption,
     ExplorationOptionKind,
@@ -144,6 +148,8 @@ from dnd_board_game.exploration import (
     NpcKeyIssue,
     NpcAttitude,
     NpcAttemptPolicy,
+    NpcArgumentEvaluationPolicy,
+    NpcArgumentLeverage,
     NpcIntentTarget,
     NpcIntentPermission,
     NpcInteractionPolicy,
@@ -264,6 +270,7 @@ class ScenarioAttackDefinition:
     damage_type: str
     damage_components: tuple[DamageComponentSpec, ...]
     ability: str | None = None
+    attack_bonus: int = 0
     spell_level: int = 0
     area: SpellArea | None = None
     save_ability: str | None = None
@@ -286,6 +293,11 @@ class ScenarioAttackDefinition:
     on_hit_condition: str | None = None
     on_hit_condition_duration: EffectDuration = EffectDuration.PERMANENT
     on_hit_condition_expiration: str = "target"
+    conditional_on_hit_save_ability: str | None = None
+    conditional_on_hit_save_dc: int = 0
+    conditional_on_hit_save_condition: str | None = None
+    conditional_on_hit_minimum_movement_feet: int = 0
+    conditional_on_hit_requires_adjacent_ally: bool = False
     advantage_against_metal_armor: bool = False
     limited_attacks: bool = False
     thrown: bool = False
@@ -422,6 +434,7 @@ class ScenarioActorDefinition:
     source_ref: str | None = None
     portrait: str = ""
     creature_type: str = "humanoid"
+    ai_role: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -443,6 +456,7 @@ class ScenarioEnvironmentDefinition:
     positions: tuple[Coordinate, ...]
     visibility: SetupVisibility
     description: str = ""
+    setup_mechanics: tuple[str, ...] = ()
     interaction_label: str | None = None
     objective_id: str | None = None
     interactions: tuple[SceneInteraction, ...] = ()
@@ -450,6 +464,7 @@ class ScenarioEnvironmentDefinition:
     allow_interaction_when_occupied_by_enemy: bool = False
     cover_bonus: int = 0
     projectile_cover_bonus: int = 0
+    tags: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -465,6 +480,13 @@ class ScenarioObjectiveDefinition:
 
 
 @dataclass(frozen=True, slots=True)
+class EncounterPartySizeVariant:
+    party_size: int
+    enemy_actor_ids: tuple[str, ...]
+    hit_point_overrides: tuple[tuple[str, int], ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
 class ScenarioDefinition:
     content_header: ContentHeader
     id: str
@@ -473,7 +495,10 @@ class ScenarioDefinition:
     actors: tuple[ScenarioActorDefinition, ...]
     environment: tuple[ScenarioEnvironmentDefinition, ...]
     scene_mode: SceneMode = SceneMode.ENCOUNTER
+    encounter_map_asset: str = ""
     player_start_zones: tuple[tuple[Coordinate, ...], ...] = ()
+    encounter_party_size_variants: tuple[EncounterPartySizeVariant, ...] = ()
+    enemy_ai_profile: EnemyAiProfile | None = None
     objectives: tuple[ScenarioObjectiveDefinition, ...] = ()
     exploration_zones: tuple[ExplorationZone, ...] = ()
     exploration_points: tuple[ExplorationPoint, ...] = ()
@@ -514,7 +539,12 @@ class LoadedEncounter:
     healing_sources_by_actor: dict[ActorId, tuple[HealingSource, ...]]
     combat_actions_by_actor: dict[ActorId, tuple[ScenarioCombatActionDefinition, ...]]
     environment: tuple[EnvironmentSetupEntry, ...]
+    map_asset: str = ""
     player_start_zones: tuple[tuple[Coordinate, ...], ...] = ()
+    party_size_variants: tuple[EncounterPartySizeVariant, ...] = ()
+    enemy_ai_profile: EnemyAiProfile | None = None
+    enemy_ai_roles: tuple[tuple[str, str], ...] = ()
+    enemy_ai_zone_positions: tuple[tuple[str, tuple[Coordinate, ...]], ...] = ()
     objectives: tuple[SceneObjective, ...] = ()
     scene_objects: tuple[SceneObject, ...] = ()
 
@@ -634,6 +664,7 @@ def build_encounter_from_scenario(loaded: LoadedScenario) -> LoadedEncounter:
             positions=entry.positions,
             visibility=entry.visibility,
             description=entry.description,
+            mechanics=_environment_setup_mechanics(entry),
         )
         for entry in definition.environment
     )
@@ -653,7 +684,11 @@ def build_encounter_from_scenario(loaded: LoadedScenario) -> LoadedEncounter:
             projectile_cover_bonus=entry.projectile_cover_bonus,
         )
         for entry in definition.environment
-        if entry.interaction_label is not None or entry.projectile_cover_bonus > 0
+        if (
+            entry.interaction_label is not None
+            or entry.cover_bonus > 0
+            or entry.projectile_cover_bonus > 0
+        )
     )
     objectives = tuple(
         SceneObjective(
@@ -683,7 +718,20 @@ def build_encounter_from_scenario(loaded: LoadedScenario) -> LoadedEncounter:
         healing_sources_by_actor=healing_sources_by_actor,
         combat_actions_by_actor=combat_actions_by_actor,
         environment=environment,
+        map_asset=definition.encounter_map_asset,
         player_start_zones=definition.player_start_zones,
+        party_size_variants=definition.encounter_party_size_variants,
+        enemy_ai_profile=definition.enemy_ai_profile,
+        enemy_ai_roles=tuple(
+            (actor.id, actor.ai_role)
+            for actor in definition.actors
+            if actor.ai_role
+        ),
+        enemy_ai_zone_positions=tuple(
+            (tag, entry.positions)
+            for entry in definition.environment
+            for tag in entry.tags
+        ),
         objectives=objectives,
         scene_objects=scene_objects,
     )
@@ -837,6 +885,78 @@ def encounter_with_custom_party(
     )
 
 
+def encounter_for_party_size(
+    encounter: LoadedEncounter,
+    party_size: int,
+) -> LoadedEncounter:
+    """Select one authored enemy composition for the current party size."""
+
+    if not encounter.party_size_variants:
+        return encounter
+    variant = next(
+        (
+            candidate
+            for candidate in encounter.party_size_variants
+            if candidate.party_size == party_size
+        ),
+        None,
+    )
+    if variant is None:
+        raise ValueError(
+            f"Encounter {encounter.scenario_id} nie definiuje wariantu dla "
+            f"{party_size} bohaterów."
+        )
+    active_enemy_ids = set(variant.enemy_actor_ids)
+    hp_overrides = dict(variant.hit_point_overrides)
+    actors = tuple(
+        replace(
+            actor,
+            hp=hp_overrides[str(actor.id)],
+            max_hp=hp_overrides[str(actor.id)],
+        )
+        if str(actor.id) in hp_overrides
+        else actor
+        for actor in encounter.actors
+        if actor.faction != Faction.ENEMY or str(actor.id) in active_enemy_ids
+    )
+    active_actor_ids = {actor.id for actor in actors}
+    active_actor_id_strings = {str(actor_id) for actor_id in active_actor_ids}
+    return replace(
+        encounter,
+        actors=actors,
+        enemy_ai_roles=tuple(
+            (actor_id, role_id)
+            for actor_id, role_id in encounter.enemy_ai_roles
+            if actor_id in active_actor_id_strings
+        ),
+        attack_sources_by_actor={
+            actor_id: source
+            for actor_id, source in encounter.attack_sources_by_actor.items()
+            if actor_id in active_actor_ids
+        },
+        attack_source_options_by_actor={
+            actor_id: sources
+            for actor_id, sources in encounter.attack_source_options_by_actor.items()
+            if actor_id in active_actor_ids
+        },
+        multiattack_sources_by_actor={
+            actor_id: sources
+            for actor_id, sources in encounter.multiattack_sources_by_actor.items()
+            if actor_id in active_actor_ids
+        },
+        healing_sources_by_actor={
+            actor_id: sources
+            for actor_id, sources in encounter.healing_sources_by_actor.items()
+            if actor_id in active_actor_ids
+        },
+        combat_actions_by_actor={
+            actor_id: sources
+            for actor_id, sources in encounter.combat_actions_by_actor.items()
+            if actor_id in active_actor_ids
+        },
+    )
+
+
 def build_exploration_from_scenario(loaded: LoadedScenario) -> LoadedExploration:
     definition = loaded.definition
     if definition.scene_mode != SceneMode.EXPLORATION:
@@ -885,6 +1005,7 @@ def build_exploration_from_scenario(loaded: LoadedScenario) -> LoadedExploration
                 positions=entry.positions,
                 visibility=entry.visibility,
                 description=entry.description,
+                mechanics=_environment_setup_mechanics(entry),
             )
             for entry in definition.environment
         ),
@@ -913,6 +1034,20 @@ def _parse_scenario(data: dict[str, Any], scenario_path: Path) -> ScenarioDefini
     start_zones_data = data.get("player_start_zones", [])
     if not isinstance(start_zones_data, list):
         raise ValueError("scenario.player_start_zones must be a list.")
+    party_variants_data = data.get("encounter_party_size_variants", [])
+    if not isinstance(party_variants_data, list):
+        raise ValueError("scenario.encounter_party_size_variants must be a list.")
+    encounter_ai_data = data.get("encounter_ai")
+    enemy_ai_profile = None
+    if encounter_ai_data is not None:
+        if not isinstance(encounter_ai_data, dict):
+            raise ValueError("scenario.encounter_ai must be an object.")
+        profile_ref = str(_required(encounter_ai_data, "profile_ref", "scenario.encounter_ai"))
+        profile_payload = _read_content_definition(
+            _content_ref_path(scenario_path, "ai_profiles", profile_ref),
+            "dnd_board_game.enemy_ai_profile",
+        )
+        enemy_ai_profile = enemy_ai_profile_from_payload(profile_payload)
     objectives_data = data.get("objectives", [])
     if not isinstance(objectives_data, list):
         raise ValueError("scenario.objectives must be a list.")
@@ -938,9 +1073,15 @@ def _parse_scenario(data: dict[str, Any], scenario_path: Path) -> ScenarioDefini
         name=str(_required(data, "name", "scenario")),
         board_dimensions=BoardDimensions(cols=cols, rows=rows),
         scene_mode=scene_mode,
+        encounter_map_asset=str(data.get("encounter_map_asset", "")).strip(),
         actors=tuple(_parse_actor(actor_data, scenario_path, property_catalog) for actor_data in actors_data),
         environment=tuple(_parse_environment(entry) for entry in environment_data),
         player_start_zones=tuple(_parse_start_zone(zone, "scenario.player_start_zones") for zone in start_zones_data),
+        encounter_party_size_variants=tuple(
+            _parse_encounter_party_size_variant(entry)
+            for entry in party_variants_data
+        ),
+        enemy_ai_profile=enemy_ai_profile,
         objectives=tuple(_parse_objective(entry) for entry in objectives_data),
         exploration_zones=tuple(
             _parse_exploration_zone(entry, scenario_path, property_catalog)
@@ -1271,6 +1412,7 @@ def _parse_actor(
         source_ref=str(source_ref) if source_ref is not None else None,
         portrait=str(merged.get("portrait", "")).strip(),
         creature_type=str(merged.get("creature_type", "humanoid")),
+        ai_role=str(merged.get("ai_role", "")).strip(),
     )
 
 
@@ -2435,6 +2577,16 @@ def _parse_attack(data: dict[str, Any], actor_id: str) -> ScenarioAttackDefiniti
         raise ValueError(
             f"attack {attack_id}.save_ability must be a D&D ability, got {save_ability!r}."
         )
+    conditional_save_ability = (
+        str(data["conditional_on_hit_save_ability"])
+        if data.get("conditional_on_hit_save_ability") is not None
+        else None
+    )
+    if conditional_save_ability is not None and conditional_save_ability not in ABILITY_NAMES:
+        raise ValueError(
+            f"attack {attack_id}.conditional_on_hit_save_ability must be a D&D ability, "
+            f"got {conditional_save_ability!r}."
+        )
     try:
         save_damage_on_success = SaveDamageOnSuccess(
             str(data.get("save_damage_on_success", "none"))
@@ -2489,6 +2641,7 @@ def _parse_attack(data: dict[str, Any], actor_id: str) -> ScenarioAttackDefiniti
         damage_type=primary_damage.damage_type.value,
         damage_components=damage_components,
         ability=str(data["ability"]) if "ability" in data else None,
+        attack_bonus=int(data.get("attack_bonus", 0)),
         spell_level=spell_level,
         area=_parse_spell_area(data.get("area"), f"attack {attack_id}.area"),
         save_ability=save_ability,
@@ -2538,6 +2691,19 @@ def _parse_attack(data: dict[str, Any], actor_id: str) -> ScenarioAttackDefiniti
         ),
         on_hit_condition_expiration=str(
             data.get("on_hit_condition_expiration", "target")
+        ),
+        conditional_on_hit_save_ability=conditional_save_ability,
+        conditional_on_hit_save_dc=int(data.get("conditional_on_hit_save_dc", 0)),
+        conditional_on_hit_save_condition=(
+            str(data["conditional_on_hit_save_condition"])
+            if data.get("conditional_on_hit_save_condition") is not None
+            else None
+        ),
+        conditional_on_hit_minimum_movement_feet=int(
+            data.get("conditional_on_hit_minimum_movement_feet", 0)
+        ),
+        conditional_on_hit_requires_adjacent_ally=bool(
+            data.get("conditional_on_hit_requires_adjacent_ally", False)
         ),
         advantage_against_metal_armor=bool(
             data.get("advantage_against_metal_armor", False)
@@ -2990,6 +3156,11 @@ def _parse_environment(data: dict[str, Any]) -> ScenarioEnvironmentDefinition:
     entry_id = str(_required(data, "id", "environment"))
     positions_data = _required_list(data, "positions", f"environment {entry_id}")
     projectile_cover_bonus = int(data.get("projectile_cover_bonus", 0))
+    tags_data = data.get("tags", [])
+    if not isinstance(tags_data, list) or any(
+        not isinstance(tag, str) or not tag.strip() for tag in tags_data
+    ):
+        raise ValueError(f"environment {entry_id}.tags must be a list of non-empty strings.")
     if projectile_cover_bonus not in {0, 2, 5}:
         raise ValueError(
             f"environment {entry_id}.projectile_cover_bonus must be 0, 2, or 5."
@@ -3009,6 +3180,10 @@ def _parse_environment(data: dict[str, Any]) -> ScenarioEnvironmentDefinition:
             f"environment {entry_id}.visibility",
         ),
         description=str(data.get("description", "")),
+        setup_mechanics=_parse_string_tuple(
+            data.get("setup_mechanics", []),
+            f"environment {entry_id}.setup_mechanics",
+        ),
         interaction_label=str(data["interaction_label"]) if "interaction_label" in data else None,
         objective_id=str(data["objective_id"]) if "objective_id" in data else None,
         interactions=_parse_interactions(data.get("interactions", []), entry_id),
@@ -3016,13 +3191,72 @@ def _parse_environment(data: dict[str, Any]) -> ScenarioEnvironmentDefinition:
         allow_interaction_when_occupied_by_enemy=bool(data.get("allow_interaction_when_occupied_by_enemy", False)),
         cover_bonus=int(data.get("cover_bonus", data.get("cover", 0))),
         projectile_cover_bonus=projectile_cover_bonus,
+        tags=tuple(str(tag) for tag in tags_data),
     )
+
+
+def _environment_setup_mechanics(
+    entry: ScenarioEnvironmentDefinition,
+) -> tuple[str, ...]:
+    """Return player-visible rules shown while this setup marker is lit."""
+
+    if entry.setup_mechanics:
+        return entry.setup_mechanics
+
+    mechanics: list[str] = []
+    if entry.setup_type == EnvironmentSetupType.DIFFICULT_TERRAIN:
+        mechanics.append(
+            "Trudny teren: każde 5 ft ruchu przez to pole kosztuje 10 ft."
+        )
+    if _environment_blocks_movement(entry):
+        mechanics.append(
+            "Pole blokuje ruch; figurka nie może wejść ani zakończyć na nim ruchu."
+        )
+    if entry.cover_bonus:
+        mechanics.append(
+            f"Figurka stojąca na tym polu otrzymuje +{entry.cover_bonus} do KP."
+        )
+    if entry.projectile_cover_bonus:
+        mechanics.append(
+            "Osłona między atakującym a celem zapewnia "
+            f"+{entry.projectile_cover_bonus} do KP przeciw atakom dystansowym."
+        )
+    mechanics.extend(
+        interaction.description.strip()
+        for interaction in entry.interactions
+        if interaction.description.strip()
+    )
+    return tuple(dict.fromkeys(mechanics))
 
 
 def _parse_start_zone(data: Any, field: str) -> tuple[Coordinate, ...]:
     if not isinstance(data, list):
         raise ValueError(f"{field} entries must be lists.")
     return tuple(_parse_coordinate(position, field) for position in data)
+
+
+def _parse_encounter_party_size_variant(data: Any) -> EncounterPartySizeVariant:
+    if not isinstance(data, dict):
+        raise ValueError("scenario.encounter_party_size_variants entries must be objects.")
+    party_size = int(_required(data, "party_size", "encounter party-size variant"))
+    raw_actor_ids = _required_list(
+        data,
+        "enemy_actor_ids",
+        f"encounter party-size variant {party_size}",
+    )
+    raw_overrides = data.get("hit_point_overrides", {})
+    if not isinstance(raw_overrides, dict):
+        raise ValueError(
+            f"encounter party-size variant {party_size}.hit_point_overrides must be an object."
+        )
+    return EncounterPartySizeVariant(
+        party_size=party_size,
+        enemy_actor_ids=tuple(str(actor_id) for actor_id in raw_actor_ids),
+        hit_point_overrides=tuple(
+            (str(actor_id), int(hit_points))
+            for actor_id, hit_points in raw_overrides.items()
+        ),
+    )
 
 
 def _parse_objective(data: dict[str, Any]) -> ScenarioObjectiveDefinition:
@@ -3110,6 +3344,7 @@ def _parse_exploration_zone(
             data.get("paper_map"),
             f"exploration zone {zone_id}.paper_map",
         ),
+        activate_after_setup=bool(data.get("activate_after_setup", False)),
         visibility=_enum_value(
             SetupVisibility,
             str(data.get("visibility", SetupVisibility.VISIBLE.value)),
@@ -3705,6 +3940,7 @@ def _parse_exploration_option(data: Any, zone_id: str) -> ExplorationOption:
             f"exploration option {option_id}.kind",
         ),
         color=_parse_color(data.get("color", "interactive"), f"exploration option {option_id}.color"),
+        image=str(data.get("image", "")),
         description=str(data.get("description", "")),
         message=str(data.get("message", "")),
         success_message=str(data.get("success_message", "")),
@@ -3811,6 +4047,14 @@ def _parse_scenario_continuation(
         data.get("outcomes", []),
         continuation_id,
     )
+    raw_departure_summary = data.get("departure_summary", [])
+    if not isinstance(raw_departure_summary, list) or any(
+        not isinstance(item, dict) for item in raw_departure_summary
+    ):
+        raise ValueError(
+            f"scenario continuation {continuation_id}.departure_summary "
+            "must be an array of objects."
+        )
     return ScenarioContinuation(
         id=continuation_id,
         label=str(
@@ -3838,6 +4082,17 @@ def _parse_scenario_continuation(
         propagate_flags=_parse_string_tuple(
             data.get("propagate_flags", []),
             f"scenario continuation {continuation_id}.propagate_flags",
+        ),
+        departure_summary=tuple(
+            ContinuationSummaryItem(
+                label=str(_required(item, "label", f"scenario continuation {continuation_id}.departure_summary")),
+                required_flag=(
+                    str(item["required_flag"])
+                    if item.get("required_flag") is not None
+                    else None
+                ),
+            )
+            for item in raw_departure_summary
         ),
         outcomes=outcomes,
         travel_minutes=int(data.get("travel_minutes", 0)),
@@ -4176,6 +4431,16 @@ def _parse_interaction_goals(
                     str(item).strip()
                     for item in raw_goal.get("llm_rubric", [])
                     if str(item).strip()
+                ),
+                required_party_actor_id=(
+                    str(raw_goal["required_party_actor_id"])
+                    if raw_goal.get("required_party_actor_id")
+                    else None
+                ),
+                assigned_actor_id=(
+                    str(raw_goal["assigned_actor_id"])
+                    if raw_goal.get("assigned_actor_id")
+                    else None
                 ),
                 participant_mode=InteractionParticipantMode(
                     str(raw_goal.get("participant_mode", InteractionParticipantMode.MUST.value))
@@ -4578,6 +4843,13 @@ def _parse_npc_intent_permissions(data: Any, point_id: str) -> tuple[NpcIntentPe
                     permission_data.get("attempt_policy"),
                     f"exploration point {point_id}.npc_interaction.policy.intent_permissions.{intent}.attempt_policy",
                 ),
+                argument_evaluation=_parse_npc_argument_evaluation(
+                    permission_data.get("argument_evaluation"),
+                    f"exploration point {point_id}.npc_interaction.policy.intent_permissions.{intent}.argument_evaluation",
+                ),
+                dynamic_outcome_response=bool(
+                    permission_data.get("dynamic_outcome_response", False)
+                ),
                 targets=_parse_npc_intent_targets(
                     permission_data.get("targets"),
                     f"exploration point {point_id}.npc_interaction.policy.intent_permissions.{intent}.targets",
@@ -4602,9 +4874,26 @@ def _parse_npc_attempt_policy(data: Any, field: str) -> NpcAttemptPolicy | None:
     retry_flags = data.get("retry_requires_any_flags", [])
     if not isinstance(retry_flags, list):
         raise ValueError(f"{field}.retry_requires_any_flags must be an array.")
+    for effect_field in (
+        "effects_on_exhaustion",
+        "effects_on_critical_failure",
+    ):
+        raw_effects = data.get(effect_field, [])
+        if not isinstance(raw_effects, list) or any(
+            not isinstance(item, dict) for item in raw_effects
+        ):
+            raise ValueError(f"{field}.{effect_field} must be an array of objects.")
     return NpcAttemptPolicy(
         attempt_id=attempt_id,
         max_attempts=raw_max_attempts,
+        unique_actor_per_attempt=bool(data.get("unique_actor_per_attempt", False)),
+        close_on_critical_failure=bool(data.get("close_on_critical_failure", False)),
+        effects_on_exhaustion=tuple(
+            dict(item) for item in data.get("effects_on_exhaustion", [])
+        ),
+        effects_on_critical_failure=tuple(
+            dict(item) for item in data.get("effects_on_critical_failure", [])
+        ),
         retry_requires_any_flags=tuple(
             str(item).strip()
             for item in retry_flags
@@ -4618,6 +4907,43 @@ def _parse_npc_attempt_policy(data: Any, field: str) -> NpcAttemptPolicy | None:
         exhausted_message=str(
             data.get("exhausted_message", "To podejście zostało wyczerpane.")
         ),
+    )
+
+
+def _parse_npc_argument_evaluation(
+    data: Any,
+    field: str,
+) -> NpcArgumentEvaluationPolicy | None:
+    if data is None:
+        return None
+    if not isinstance(data, dict):
+        raise ValueError(f"{field} must be an object.")
+    raw_leverages = data.get("leverages", [])
+    if not isinstance(raw_leverages, list):
+        raise ValueError(f"{field}.leverages must be an array.")
+    raw_flag_modifiers = data.get("flag_modifiers", {})
+    if not isinstance(raw_flag_modifiers, dict):
+        raise ValueError(f"{field}.flag_modifiers must be an object.")
+    leverages: list[NpcArgumentLeverage] = []
+    for index, raw in enumerate(raw_leverages):
+        item_field = f"{field}.leverages[{index}]"
+        if not isinstance(raw, dict):
+            raise ValueError(f"{item_field} must be an object.")
+        leverages.append(
+            NpcArgumentLeverage(
+                id=str(_required(raw, "id", item_field)).strip().lower(),
+                label=str(_required(raw, "label", item_field)),
+                required_flags=tuple(str(item) for item in raw.get("required_flags", [])),
+                compatible_skills=tuple(
+                    str(item).strip().lower()
+                    for item in raw.get("compatible_skills", [])
+                ),
+                max_strength=int(raw.get("max_strength", 2)),
+            )
+        )
+    return NpcArgumentEvaluationPolicy(
+        tuple(leverages),
+        tuple((str(flag), int(modifier)) for flag, modifier in raw_flag_modifiers.items()),
     )
 
 
@@ -4665,6 +4991,9 @@ def _parse_npc_intent_targets(data: Any, field: str) -> tuple[NpcIntentTarget, .
                         str(raw_branch["transition_id"]).strip().lower()
                         if raw_branch.get("transition_id")
                         else None
+                    ),
+                    currency_reward_cp_per_actor=int(
+                        raw_branch.get("currency_reward_cp_per_actor", 0)
                     ),
                 )
             )
@@ -5310,6 +5639,16 @@ def _parse_exploration_encounter_trigger(data: Any) -> ExplorationEncounterTrigg
         flag_key=str(data["flag_key"]) if "flag_key" in data else None,
         flag_value=data.get("flag_value", True),
         point_id=str(data["point_id"]) if "point_id" in data else None,
+        defeat_policy=_enum_value(
+            EncounterDefeatPolicy,
+            str(
+                data.get(
+                    "defeat_policy",
+                    EncounterDefeatPolicy.RETURN_TO_EXPLORATION.value,
+                )
+            ),
+            f"exploration encounter trigger {trigger_id}.defeat_policy",
+        ),
         opening_policy=_parse_encounter_opening_policy(
             data.get("opening_policy"),
             f"exploration encounter trigger {trigger_id}.opening_policy",
@@ -5896,6 +6235,16 @@ def _attack_source_from_definition(
                 stacking_key=stacking_key,
             ),
         )
+    if definition.attack_bonus:
+        modifiers = (
+            *modifiers,
+            RollModifier(
+                f"Premia ataku: {definition.name}",
+                definition.attack_bonus,
+                RollModifierType.CUSTOM,
+                stacking_key=f"{stacking_key}:attack_bonus",
+            ),
+        )
     source = AttackSource(
         name=definition.name,
         source_type=definition.source_type,
@@ -5932,6 +6281,15 @@ def _attack_source_from_definition(
         on_hit_condition=definition.on_hit_condition,
         on_hit_condition_duration=definition.on_hit_condition_duration,
         on_hit_condition_expiration=definition.on_hit_condition_expiration,
+        conditional_on_hit_save_ability=definition.conditional_on_hit_save_ability,
+        conditional_on_hit_save_dc=definition.conditional_on_hit_save_dc,
+        conditional_on_hit_save_condition=definition.conditional_on_hit_save_condition,
+        conditional_on_hit_minimum_movement_feet=(
+            definition.conditional_on_hit_minimum_movement_feet
+        ),
+        conditional_on_hit_requires_adjacent_ally=(
+            definition.conditional_on_hit_requires_adjacent_ally
+        ),
         advantage_against_metal_armor=definition.advantage_against_metal_armor,
         limited_attacks=definition.limited_attacks,
         thrown=definition.thrown,
@@ -6022,6 +6380,68 @@ def _validate_scenario(definition: ScenarioDefinition) -> None:
         for position in zone:
             if not definition.board_dimensions.in_bounds(position):
                 raise ValueError("scenario.player_start_zones contains out of bounds coordinate.")
+    variants = definition.encounter_party_size_variants
+    party_sizes = tuple(variant.party_size for variant in variants)
+    if len(party_sizes) != len(set(party_sizes)):
+        raise ValueError("scenario.encounter_party_size_variants repeats a party size.")
+    actor_by_id = {actor.id: actor for actor in definition.actors}
+    for variant in variants:
+        if not 1 <= variant.party_size <= 5:
+            raise ValueError("Encounter party-size variants support parties from 1 to 5.")
+        if not variant.enemy_actor_ids:
+            raise ValueError("Encounter party-size variant must include at least one enemy.")
+        if len(variant.enemy_actor_ids) != len(set(variant.enemy_actor_ids)):
+            raise ValueError("Encounter party-size variant cannot repeat enemy actor ids.")
+        unknown_ids = set(variant.enemy_actor_ids) - set(actor_by_id)
+        if unknown_ids:
+            raise ValueError(
+                "Encounter party-size variant references unknown actors: "
+                f"{', '.join(sorted(unknown_ids))}."
+            )
+        non_enemy_ids = {
+            actor_id
+            for actor_id in variant.enemy_actor_ids
+            if actor_by_id[actor_id].faction != Faction.ENEMY
+        }
+        if non_enemy_ids:
+            raise ValueError(
+                "Encounter party-size variant may select only enemies: "
+                f"{', '.join(sorted(non_enemy_ids))}."
+            )
+        override_ids = {actor_id for actor_id, _hit_points in variant.hit_point_overrides}
+        if override_ids - set(variant.enemy_actor_ids):
+            raise ValueError("Hit-point overrides must reference active enemies in the variant.")
+        if any(hit_points <= 0 for _actor_id, hit_points in variant.hit_point_overrides):
+            raise ValueError("Hit-point overrides must be positive.")
+    if definition.enemy_ai_profile is not None:
+        profile = definition.enemy_ai_profile
+        known_roles = set(dict(profile.roles))
+        enemy_definitions = tuple(
+            actor for actor in definition.actors if actor.faction == Faction.ENEMY
+        )
+        missing_roles = tuple(actor.id for actor in enemy_definitions if not actor.ai_role)
+        if missing_roles:
+            raise ValueError(
+                "Profile-backed encounter enemies require ai_role: "
+                f"{', '.join(missing_roles)}."
+            )
+        unknown_roles = {
+            actor.ai_role for actor in enemy_definitions if actor.ai_role not in known_roles
+        }
+        if unknown_roles:
+            raise ValueError(
+                "Encounter actors reference unknown AI roles: "
+                f"{', '.join(sorted(unknown_roles))}."
+            )
+        environment_tags = {tag for entry in definition.environment for tag in entry.tags}
+        for label, required_tag in (
+            ("guard", profile.guard_zone_tag),
+            ("escape", profile.escape_zone_tag),
+        ):
+            if required_tag and required_tag not in environment_tags:
+                raise ValueError(
+                    f"Enemy AI profile requires missing {label} zone tag: {required_tag}."
+                )
     environment_ids = {entry.id for entry in definition.environment}
     objective_ids = {objective.id for objective in definition.objectives}
     for entry in definition.environment:

@@ -47,7 +47,7 @@ def install_default_roster(
             current = roster.load(draft.id)
             base_actor = (
                 build_character(draft, catalog, resources).actor
-                if current.actor.level == 1
+                if current.actor.level < draft.level
                 else current.actor
             )
             profiled = apply_boardgame_archetype(
@@ -56,7 +56,7 @@ def install_default_roster(
             )
             refreshed = (
                 replace(build_character(draft, catalog, resources), actor=profiled)
-                if current.actor.level == 1
+                if current.actor.level < draft.level
                 else replace(current, actor=profiled)
             )
             roster.save(refreshed, overwrite=True)

@@ -54,7 +54,12 @@ class InitiativeOrder:
     def current_actor(self) -> Actor:
         return self.current_entry.actor
 
-    def advance_turn(self, *, skip_defeated: bool = True) -> InitiativeOrder:
+    def advance_turn(
+        self,
+        *,
+        skip_defeated: bool = True,
+        skip_actor_ids: frozenset[str] = frozenset(),
+    ) -> InitiativeOrder:
         if not self.entries:
             raise ValueError("Initiative order is empty.")
         index = self.current_index
@@ -64,6 +69,8 @@ class InitiativeOrder:
             if index >= len(self.entries):
                 index = 0
                 round_number += 1
+            if str(self.entries[index].actor.id) in skip_actor_ids:
+                continue
             if not skip_defeated or self.entries[index].actor.can_take_combat_turn():
                 return InitiativeOrder(self.entries, index, round_number)
         return InitiativeOrder(self.entries, self.current_index, self.round_number)

@@ -232,6 +232,34 @@ class BattlefieldLoot:
 
 
 @dataclass(frozen=True, slots=True)
+class EnemyOutcome:
+    actor_id: str
+    actor_name: str
+    outcome: str
+    round_number: int
+
+
+@dataclass(frozen=True, slots=True)
+class EnemyAiRuntimeState:
+    profile_id: str = ""
+    encounter_seed: int = 7
+    starting_morale: int = 0
+    morale: int = 0
+    used_morale_events: tuple[str, ...] = ()
+    previous_targets: tuple[tuple[str, str], ...] = ()
+    decision_counts: tuple[tuple[str, int], ...] = ()
+    outcomes: tuple[EnemyOutcome, ...] = ()
+
+    @property
+    def escaped_actor_ids(self) -> frozenset[str]:
+        return frozenset(
+            outcome.actor_id
+            for outcome in self.outcomes
+            if outcome.outcome == "escaped"
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class CombatState:
     actors: tuple[Actor, ...]
     initiative_order: InitiativeOrder
@@ -246,6 +274,7 @@ class CombatState:
     battlefield_loot: tuple[BattlefieldLoot, ...] = ()
     long_casts: tuple[LongCastState, ...] = ()
     summoned_creatures: tuple[SummonedCreatureState, ...] = ()
+    enemy_ai: EnemyAiRuntimeState = EnemyAiRuntimeState()
 
     @property
     def round_number(self) -> int:
@@ -314,6 +343,28 @@ def replace_actor(state: CombatState, updated_actor: Actor) -> CombatState:
     hidden_states = state.hidden_states
     if updated_actor.is_defeated():
         hidden_states = reveal_actor(hidden_states, str(updated_actor.id))
+    enemy_ai = state.enemy_ai
+    if (
+        previous_actor.faction == Faction.ENEMY
+        and previous_actor.hp > 0
+        and updated_actor.hp <= 0
+        and all(
+            outcome.actor_id != str(updated_actor.id)
+            for outcome in enemy_ai.outcomes
+        )
+    ):
+        enemy_ai = replace(
+            enemy_ai,
+            outcomes=(
+                *enemy_ai.outcomes,
+                EnemyOutcome(
+                    actor_id=str(updated_actor.id),
+                    actor_name=updated_actor.name,
+                    outcome="dead",
+                    round_number=state.round_number,
+                ),
+            ),
+        )
     synced = replace(
         state,
         actors=actors,
@@ -321,6 +372,7 @@ def replace_actor(state: CombatState, updated_actor: Actor) -> CombatState:
         dropped_weapons=dropped_weapons,
         hidden_states=hidden_states,
         condition_states=normalize_grapple_conditions(condition_states, actors),
+        enemy_ai=enemy_ai,
     )
     return _with_finished_status(synced)
 
@@ -1209,7 +1261,13 @@ def finish_turn(state: CombatState) -> CombatState:
     finished_state = _with_finished_status(state)
     if finished_state.status != CombatStatus.ACTIVE:
         return finished_state
-    order = _sync_order_actor_states(finished_state.initiative_order, finished_state.actors).advance_turn(skip_defeated=True)
+    order = _sync_order_actor_states(
+        finished_state.initiative_order,
+        finished_state.actors,
+    ).advance_turn(
+        skip_defeated=True,
+        skip_actor_ids=finished_state.enemy_ai.escaped_actor_ids,
+    )
     next_actor = actor_by_id(finished_state, order.current_actor.id)
     spent = frozenset(actor_id for actor_id in finished_state.spent_reaction_actor_ids if actor_id != next_actor.id)
     return replace(
@@ -1253,7 +1311,9 @@ def combat_winner(state: CombatState) -> Faction | None:
         for actor in state.actors
     )
     enemies_alive = any(
-        actor.faction == Faction.ENEMY and actor.can_take_combat_turn()
+        actor.faction == Faction.ENEMY
+        and str(actor.id) not in state.enemy_ai.escaped_actor_ids
+        and actor.can_take_combat_turn()
         for actor in state.actors
     )
     if allies_alive and not enemies_alive:
@@ -1261,6 +1321,90 @@ def combat_winner(state: CombatState) -> Faction | None:
     if enemies_alive and not allies_alive:
         return Faction.ENEMY
     return None
+
+
+def initialize_enemy_ai(
+    state: CombatState,
+    *,
+    profile_id: str,
+    starting_morale: int,
+    encounter_seed: int = 7,
+) -> CombatState:
+    if not profile_id:
+        return state
+    return replace(
+        state,
+        enemy_ai=EnemyAiRuntimeState(
+            profile_id=profile_id,
+            encounter_seed=encounter_seed,
+            starting_morale=starting_morale,
+            morale=starting_morale,
+        ),
+    )
+
+
+def apply_enemy_ai_morale_delta(
+    state: CombatState,
+    *,
+    event_id: str,
+    delta: int,
+    minimum: int = 0,
+    maximum: int | None = None,
+) -> CombatState:
+    """Apply a one-shot authored morale event without loading content in rules code."""
+
+    if not state.enemy_ai.profile_id or event_id in state.enemy_ai.used_morale_events:
+        return state
+    upper = state.enemy_ai.starting_morale if maximum is None else maximum
+    morale = max(minimum, min(upper, state.enemy_ai.morale + delta))
+    return replace(
+        state,
+        enemy_ai=replace(
+            state.enemy_ai,
+            morale=morale,
+            used_morale_events=(*state.enemy_ai.used_morale_events, event_id),
+        ),
+    )
+
+
+def escape_enemy(state: CombatState, actor_id: ActorId) -> CombatState:
+    actor = actor_by_id(state, actor_id)
+    if actor.faction != Faction.ENEMY:
+        raise ValueError("Only an active enemy can escape an encounter.")
+    if actor.is_defeated():
+        raise ValueError("A defeated enemy cannot escape.")
+    if str(actor.id) in state.enemy_ai.escaped_actor_ids:
+        return state
+    enemy_ai = replace(
+        state.enemy_ai,
+        outcomes=(
+            *state.enemy_ai.outcomes,
+            EnemyOutcome(
+                actor_id=str(actor.id),
+                actor_name=actor.name,
+                outcome="escaped",
+                round_number=state.round_number,
+            ),
+        ),
+    )
+    escaped_actor = replace(actor, faction=Faction.NEUTRAL)
+    return _with_finished_status(
+        replace(
+            state,
+            actors=tuple(
+                escaped_actor if candidate.id == actor.id else candidate
+                for candidate in state.actors
+            ),
+            initiative_order=_sync_order_actor_states(
+                state.initiative_order,
+                tuple(
+                    escaped_actor if candidate.id == actor.id else candidate
+                    for candidate in state.actors
+                ),
+            ),
+            enemy_ai=enemy_ai,
+        )
+    )
 
 
 def _with_finished_status(state: CombatState) -> CombatState:

@@ -8,6 +8,7 @@ from dnd_board_game.actions import ActionResourceResolver
 from dnd_board_game.actors import Actor
 from dnd_board_game.combat import (
     ActionEconomyCost,
+    ActiveCombatEffect,
     CombatState,
     MagicMovementDefinition,
     MagicMovementKind,
@@ -86,6 +87,7 @@ class MagicMovementFlowService:
         action: MagicMovementActionSpec,
         cast_level: int | None = None,
         scene_objects: tuple[SceneObject, ...] = (),
+        active_effects: tuple[ActiveCombatEffect, ...] = (),
     ) -> MagicMovementTransition:
         caster = current_actor(state)
         definition = _movement_definition(action)
@@ -93,6 +95,8 @@ class MagicMovementFlowService:
             caster,
             action.id,
             cast_level=cast_level,
+            condition_states=state.condition_states,
+            active_effects=active_effects,
         )
         if validation is None or not validation.valid:
             raise ValueError(
@@ -160,6 +164,7 @@ class MagicMovementFlowService:
         position: Coordinate | None = None,
         target_id: str | None = None,
         scene_objects: tuple[SceneObject, ...] = (),
+        active_effects: tuple[ActiveCombatEffect, ...] = (),
     ) -> MagicMovementTransition:
         caster = current_actor(state)
         definition = _movement_definition(action)
@@ -173,6 +178,8 @@ class MagicMovementFlowService:
             caster,
             action.id,
             cast_level=pending.cast_level,
+            condition_states=state.condition_states,
+            active_effects=active_effects,
         )
         if validation is None or not validation.valid:
             raise ValueError(

@@ -6,6 +6,7 @@ from dnd_board_game.exploration import ScenarioContinuation
 from dnd_board_game.exploration import (
     ContinuationNavigationResult,
     ContinuationOutcomeKind,
+    ContinuationSummaryItem,
     ScenarioContinuationOutcome,
 )
 
@@ -19,6 +20,10 @@ def _continuation() -> ScenarioContinuation:
         target_scenario_id="watchtower",
         target_scenario_path="watchtower.json",
         available_if_flags=("quest_accepted", "ready"),
+        departure_summary=(
+            ContinuationSummaryItem("Stały cel wyprawy."),
+            ContinuationSummaryItem("Poznany sekretny skrót.", "knows_shortcut"),
+        ),
     )
 
 
@@ -73,6 +78,10 @@ def test_continuation_requires_authored_flags_and_departure_zone():
     assert payload["available"] is False
     assert payload["missing_flags"] == ["ready"]
     assert payload["requires_departure_zone"] is True
+    assert payload["departure_summary"] == [
+        {"label": "Stały cel wyprawy.", "known": True},
+        {"label": "Poznany sekretny skrót.", "known": False},
+    ]
 
     with pytest.raises(ValueError, match="nie jest jeszcze gotowa"):
         service.plan(

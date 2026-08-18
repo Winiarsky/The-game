@@ -49,8 +49,8 @@ HERO_ARCHETYPES = (
         ),
         (
             "Szał: 2 użycia, wracają po długim odpoczynku.",
-            "Niepowstrzymany impet: 1 użycie na krótki odpoczynek od 2. poziomu.",
-            "Dzikość: 2 użycia na długi odpoczynek od 3. poziomu.",
+            "Niepowstrzymany impet: 1 użycie na krótki odpoczynek.",
+            "Dzikość: 2 użycia na długi odpoczynek.",
         ),
         ("dużo PW", "wysokie obrażenia wręcz", "odporność podczas Szału"),
         (
@@ -162,7 +162,7 @@ HERO_ARCHETYPES = (
         (
             "Drugi oddech, Zryw akcji i Pozycja obronna: wracają po krótkim odpoczynku.",
             "Ratunek polowy: 5 × poziom punktów na długi odpoczynek.",
-            "Taktyka: 2 użycia od 2. poziomu, 3 od 3.; wraca po długim odpoczynku.",
+            "Taktyka: 3 użycia; wraca po długim odpoczynku.",
         ),
         ("wysoki KP", "niezawodny atak", "kontrola pozycji"),
         (
@@ -229,7 +229,7 @@ HERO_ARCHETYPES = (
             "Oznaczenie celu wzmacnia serię strzałów, a Zwiadowcza mobilność pomaga utrzymać dystans.",
             "Instynkt wydawaj na kontrolę terenu, mobilność albo wykrycie ukrytego zagrożenia.",
         ),
-        ("Instynkt: 2 użycia na długi odpoczynek; od poziomu 3 — 3 użycia.",),
+        ("Instynkt: 3 użycia na długi odpoczynek.",),
         ("atak dystansowy", "zwiad", "tropienie i skradanie"),
         (
             "walka w zwarciu utrudnia strzelanie",
@@ -261,7 +261,7 @@ HERO_ARCHETYPES = (
         ),
         (
             "Atak ukradkowy: raz na turę po spełnieniu warunków, bez osobnej puli.",
-            "Fortele: 2 użycia na długi odpoczynek; od 3. poziomu — 3 użycia.",
+            "Fortele: 3 użycia na długi odpoczynek.",
             "Unik instynktowny: 1 użycie na krótki odpoczynek.",
         ),
         ("wysokie obrażenia jednego trafienia", "ekspertyza", "pułapki i zamki"),

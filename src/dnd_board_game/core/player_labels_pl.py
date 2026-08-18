@@ -182,6 +182,8 @@ FEATURE_LABELS_PL = {
     "second_wind": "Drugi oddech",
     "defensive_stance": "Pozycja obronna",
     "instinctive_dodge": "Unik instynktowny",
+    "exploit_weakness": "Wykorzystanie słabości",
+    "patient_shot": "Strzelecka cierpliwość",
     "sneak_attack": "Podstępny atak",
     "sorcerous_origin": "Pochodzenie czarodzieja",
     "spellcasting": "Rzucanie czarów",

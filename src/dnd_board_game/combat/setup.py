@@ -50,6 +50,7 @@ class EnvironmentSetupEntry:
     positions: tuple[Coordinate, ...] = field(default_factory=tuple)
     visibility: SetupVisibility = SetupVisibility.VISIBLE
     description: str = ""
+    mechanics: tuple[str, ...] = field(default_factory=tuple)
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,6 +68,7 @@ class SetupStep:
     color: tuple[int, int, int]
     message: str
     visibility: SetupVisibility = SetupVisibility.VISIBLE
+    mechanics: tuple[str, ...] = field(default_factory=tuple)
 
 
 SETUP_COLORS: dict[str, tuple[int, int, int]] = {
@@ -113,6 +115,9 @@ def build_setup_steps(setup: EncounterSetup) -> tuple[SetupStep, ...]:
     for setup_type in sorted(grouped_environment, key=lambda item: item.value):
         entries = grouped_environment[setup_type]
         positions = tuple(_unique_positions(position for entry in entries for position in entry.positions))
+        mechanics = _unique_text(
+            mechanic for entry in entries for mechanic in entry.mechanics
+        )
         names = ", ".join(entry.name for entry in entries)
         label = _environment_label(setup_type)
         steps.append(
@@ -122,6 +127,7 @@ def build_setup_steps(setup: EncounterSetup) -> tuple[SetupStep, ...]:
                 positions=positions,
                 color=_environment_color(setup_type),
                 message=f"Ustaw {label}: {names}{_positions_text(positions)}.",
+                mechanics=mechanics,
             )
         )
 
@@ -169,6 +175,18 @@ def _unique_positions(positions: Iterable[Coordinate | None]) -> tuple[Coordinat
         seen.add(position)
         result.append(position)
     return tuple(sorted(result))
+
+
+def _unique_text(values: Iterable[str]) -> tuple[str, ...]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        normalized = value.strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        result.append(normalized)
+    return tuple(result)
 
 
 def _environment_label(setup_type: EnvironmentSetupType) -> str:

@@ -52,7 +52,13 @@ def test_encounter_setup_batches_visible_environment_and_hides_secret_entries():
             ActorSetupEntry(hidden_enemy, "przeciwnik", Coordinate(5, 5), SetupVisibility.HIDDEN),
         ),
         environment=(
-            EnvironmentSetupEntry("rubble", "Rumowisko", EnvironmentSetupType.DIFFICULT_TERRAIN, (Coordinate(2, 1),)),
+            EnvironmentSetupEntry(
+                "rubble",
+                "Rumowisko",
+                EnvironmentSetupType.DIFFICULT_TERRAIN,
+                (Coordinate(2, 1),),
+                mechanics=("Każde 5 ft ruchu kosztuje 10 ft.",),
+            ),
             EnvironmentSetupEntry("crate", "Skrzynia", EnvironmentSetupType.CONTAINER, (Coordinate(3, 1),)),
             EnvironmentSetupEntry(
                 "secret",
@@ -78,6 +84,40 @@ def test_encounter_setup_batches_visible_environment_and_hides_secret_entries():
     assert "Ukryty łucznik" not in messages
     assert "Ukryta pułapka" not in messages
     assert "Warunkowy NPC" not in messages
+
+    difficult_step = next(
+        step for step in build_setup_steps(setup) if step.label == "trudny teren"
+    )
+    assert difficult_step.mechanics == ("Każde 5 ft ruchu kosztuje 10 ft.",)
+
+
+def test_encounter_setup_deduplicates_mechanics_in_a_group() -> None:
+    shared_rule = "Figurka stojąca na tym polu otrzymuje +2 do KP."
+    setup = EncounterSetup(
+        name="Pola obronne",
+        environment=(
+            EnvironmentSetupEntry(
+                "tree",
+                "Zwalony pień",
+                EnvironmentSetupType.COVER,
+                (Coordinate(1, 1),),
+                mechanics=(shared_rule,),
+            ),
+            EnvironmentSetupEntry(
+                "crates",
+                "Skrzynie",
+                EnvironmentSetupType.COVER,
+                (Coordinate(2, 1),),
+                mechanics=(shared_rule,),
+            ),
+        ),
+    )
+
+    cover_step = next(
+        step for step in build_setup_steps(setup) if step.label == "osłony"
+    )
+
+    assert cover_step.mechanics == (shared_rule,)
 
 
 def test_encounter_setup_handles_actor_without_start_position():

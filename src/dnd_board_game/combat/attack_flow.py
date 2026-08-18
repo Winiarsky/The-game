@@ -99,6 +99,11 @@ class AttackSource:
     on_hit_condition: str | None = None
     on_hit_condition_duration: EffectDuration = EffectDuration.PERMANENT
     on_hit_condition_expiration: str = "target"
+    conditional_on_hit_save_ability: str | None = None
+    conditional_on_hit_save_dc: int = 0
+    conditional_on_hit_save_condition: str | None = None
+    conditional_on_hit_minimum_movement_feet: int = 0
+    conditional_on_hit_requires_adjacent_ally: bool = False
     advantage_against_metal_armor: bool = False
     limited_attacks: bool = False
     thrown: bool = False
@@ -159,6 +164,13 @@ class AttackSource:
                 raise ValueError("long_range_feet must be greater than normal range.")
         if self.on_hit_condition_expiration not in {"source", "target"}:
             raise ValueError("On-hit condition expiration must be source or target.")
+        if self.conditional_on_hit_save_ability is not None:
+            if self.conditional_on_hit_save_dc <= 0:
+                raise ValueError("Conditional on-hit save DC must be positive.")
+            if self.conditional_on_hit_save_condition is None:
+                raise ValueError("Conditional on-hit save requires a failed-save condition.")
+        if self.conditional_on_hit_minimum_movement_feet < 0:
+            raise ValueError("Conditional on-hit movement cannot be negative.")
         components = self.damage_components
         if self.damage_fixed is not None and self.damage_die_sides is not None:
             object.__setattr__(self, "damage_die_sides", None)

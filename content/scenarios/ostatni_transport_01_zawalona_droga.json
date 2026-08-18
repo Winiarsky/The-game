@@ -1,0 +1,168 @@
+{
+  "schema": "dnd_board_game.scenario",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["project_original"],
+  "id": "ostatni_transport_01_zawalona_droga",
+  "name": "Ostatni transport — Zawalona droga",
+  "scene_mode": "exploration",
+  "board": {
+    "cols": 20,
+    "rows": 30
+  },
+  "objectives": [
+    {
+      "id": "survive_road_ambush",
+      "name": "Przetrwajcie zasadzkę",
+      "description": "Odeprzyjcie Głodne Cienie, zanim będzie można bezpiecznie zbadać zawaloną drogę.",
+      "condition": "flag_equals",
+      "flag_key": "map1_encounter_cleared",
+      "flag_value": true
+    }
+  ],
+  "actors": [
+    {"id":"brakka","name":"Brakka","kind":"player_character","faction":"ally","level":3,"ac":15,"hp":35,"speed_feet":30,"position":[0,0],"ability_scores":{"strength":17,"dexterity":14,"constitution":15,"intelligence":8,"wisdom":12,"charisma":10},"item_refs":["dagger"]},
+    {"id":"lorian","name":"Lorian","kind":"player_character","faction":"ally","level":3,"ac":14,"hp":24,"speed_feet":30,"position":[0,1],"ability_scores":{"strength":8,"dexterity":16,"constitution":14,"intelligence":12,"wisdom":10,"charisma":17},"item_refs":["dagger"]},
+    {"id":"dagna","name":"Dagna","kind":"player_character","faction":"ally","level":3,"ac":18,"hp":27,"speed_feet":25,"position":[0,2],"ability_scores":{"strength":14,"dexterity":10,"constitution":16,"intelligence":8,"wisdom":17,"charisma":12},"item_refs":["dagger"]},
+    {"id":"garran","name":"Garran","kind":"player_character","faction":"ally","level":3,"ac":19,"hp":31,"speed_feet":30,"position":[0,3],"ability_scores":{"strength":17,"dexterity":14,"constitution":15,"intelligence":8,"wisdom":12,"charisma":10},"item_refs":["dagger"]},
+    {"id":"mira","name":"Mira","kind":"player_character","faction":"ally","level":3,"ac":15,"hp":24,"speed_feet":25,"position":[0,4],"ability_scores":{"strength":8,"dexterity":17,"constitution":14,"intelligence":15,"wisdom":12,"charisma":10},"item_refs":["dagger"]},
+    {"id":"erynd","name":"Erynd","kind":"player_character","faction":"ally","level":3,"ac":15,"hp":28,"speed_feet":30,"position":[0,5],"ability_scores":{"strength":12,"dexterity":17,"constitution":14,"intelligence":10,"wisdom":16,"charisma":8},"item_refs":["dagger"]},
+    {"id":"nimra","name":"Nimra","kind":"player_character","faction":"ally","level":3,"ac":13,"hp":20,"speed_feet":25,"position":[0,6],"ability_scores":{"strength":8,"dexterity":16,"constitution":14,"intelligence":17,"wisdom":12,"charisma":10},"item_refs":["dagger"]}
+  ],
+  "environment": [],
+  "llm_context": {
+    "summary": "Stary trakt za miastem. Osuwisko i porzucone wozy tworzą miejsce zasadzki. Po wejściu drużyna zostaje natychmiast zaatakowana; eksploracja zaczyna się dopiero po zwycięstwie.",
+    "available_materials": ["kamienie", "błoto", "połamane gałęzie", "szczątki wozów"],
+    "forbidden_assumptions": ["hotspoty eksploracyjne są dostępne podczas walki"],
+    "risk_notes": ["Głodne Cienie blokują bezpieczne przeszukanie drogi"]
+  },
+  "exploration": {
+    "party_start_zone": "blocked_road",
+    "zones": [
+      {
+        "id": "blocked_road",
+        "name": "Zawalona droga",
+        "positions": [[7,7],[8,7],[9,7],[10,7]],
+        "interaction_pad_positions": [[6,8]],
+        "color": "marker",
+        "description": "Osuwisko przecięło trakt, a między porzuconymi wozami poruszają się wygłodniałe kształty.",
+        "options": []
+      }
+    ],
+    "points": [
+      {
+        "id": "road_aftermath",
+        "name": "Pobojowisko przy wozach",
+        "zone_id": "blocked_road",
+        "positions": [[9,8]],
+        "color": "success",
+        "visibility": "hidden",
+        "requires_setup": false,
+        "description": "Po odparciu stada można bezpiecznie obejrzeć wozy, ślady i osuwisko.",
+        "interaction_label": "Rozpocznij eksplorację pobojowiska"
+      }
+    ],
+    "challenges": [
+      {
+        "id": "arrival_to_blocked_road",
+        "zone_id": "blocked_road",
+        "name": "Podejście do zawalonej drogi",
+        "progress_required": 1,
+        "completed_flag": "map1_arrival_resolved",
+        "options": [
+          {
+            "id": "observe_arrival",
+            "label": "Rozejrzyjcie się przy wejściu",
+            "ability_check": {"ability": "wisdom", "skill": "perception", "dc": 10},
+            "progress_on_success": 1,
+            "progress_on_failure": 1,
+            "description": "Techniczny zapis podejścia używany przez politykę otwarcia encountera."
+          }
+        ]
+      }
+    ],
+    "encounter_triggers": [
+      {
+        "id": "hungry_shadows_ambush",
+        "name": "Głodne Cienie",
+        "description": "Zanim drużyna zdąży zbadać porzucone wozy, spomiędzy rumowiska wychodzą wyniszczone, nienaturalnie poruszające się bestie.",
+        "encounter_scenario": "content/scenarios/ostatni_transport_01_glodne_cienie.json",
+        "condition": "always",
+        "defeat_policy": "game_over",
+        "opening_policy": {
+          "challenge_id": "arrival_to_blocked_road",
+          "default_outcome": "no_surprise",
+          "default_title": "Stado wychodzi na trakt",
+          "default_narration": "Bohaterowie i Głodne Cienie dostrzegają się niemal jednocześnie po przeciwnych stronach błotnistej koleiny.",
+          "rules": [
+            {
+              "id": "erynd_warned_slow_approach",
+              "outcome": "party_initiative_advantage_and_can_hide",
+              "title": "Erynd rozpoznaje teren polowania",
+              "narration": "Powolne podejście pozwala Eryndowi połączyć ślady z ostrzeżeniem drwali. Drużyna zatrzymuje się przed linią zasadzki, może się ukryć i rzuca inicjatywę z przewagą.",
+              "required_flags": ["knowledge.convoy_route_magic_suspected", "travel.pace.slow"]
+            },
+            {
+              "id": "erynd_warned_party",
+              "outcome": "party_initiative_advantage",
+              "title": "Ostrzeżenie Erynda",
+              "narration": "Erynd rozpoznaje charakterystyczne ślady i ostrzega drużynę chwilę przed pierwszym skokiem bestii. Bohaterowie rzucają inicjatywę z przewagą.",
+              "required_flags": ["knowledge.convoy_route_magic_suspected"]
+            },
+            {
+              "id": "slow_approach",
+              "outcome": "party_can_hide",
+              "title": "Ostrożne wejście w wąwóz",
+              "narration": "Drużyna porusza się wystarczająco wolno, aby spróbować zająć ukryte pozycje przed rozpoczęciem starcia.",
+              "required_flags": ["travel.pace.slow"]
+            },
+            {
+              "id": "fast_unwarned_ambush",
+              "outcome": "enemies_surprise_party",
+              "title": "Wprost w linię polowania",
+              "narration": "Szybki marsz wnosi drużynę pomiędzy porzucone wozy, zanim ktokolwiek rozpozna ruch w cieniu. Przeciwnicy rozpoczynają z przewagą do inicjatywy.",
+              "required_flags": ["travel.pace.fast"],
+              "forbidden_flags": ["knowledge.convoy_route_magic_suspected"]
+            }
+          ]
+        },
+        "outcome_on_victory": {
+          "title": "Droga ucichła",
+          "body": "Ostatnie z Głodnych Cieni padają albo znikają między drzewami. Dopiero teraz można bezpiecznie zbadać wozy i osuwisko.",
+          "next_instruction": "Zakończ wynik, aby przejść do eksploracji pobojowiska.",
+          "effects": [
+            {"type":"set_flag","parameters":{"key":"map1_encounter_cleared","value":true}},
+            {"type":"reveal_point","parameters":{"point_id":"road_aftermath"}}
+          ]
+        },
+        "outcome_on_defeat": {
+          "title": "Drużyna została rozszarpana",
+          "body": "Głodne Cienie przełamują obronę drużyny. Zawalona droga pozostaje w ich władaniu.",
+          "next_instruction": "Wróć do menu.",
+          "effects": [
+            {"type":"set_flag","parameters":{"key":"map1_encounter_failed","value":true}}
+          ]
+        },
+        "outcome_on_retreat": {
+          "title": "Odwrót nie powiódł się",
+          "body": "Stado dopada wycofującą się drużynę na otwartym trakcie.",
+          "next_instruction": "Wróć do menu."
+        },
+        "outcome_on_surrender": {
+          "title": "Tu nie ma komu się poddać",
+          "body": "Głodne Cienie nie przyjmują kapitulacji.",
+          "next_instruction": "Wróć do menu."
+        }
+      }
+    ],
+    "npc_transitions": [],
+    "observations": [],
+    "flows": [],
+    "traps": [],
+    "resources": [
+      {"id":"guild_medical_pack","label":"Pakiet medyczny Gildii","bonus_tags":["medicine","stabilize","treat_wounds"],"advantage":true,"consume_on_use":true,"portable":true},
+      {"id":"guild_supply_pack","label":"Pakiet zaopatrzenia Gildii","bonus_tags":["survival","route_preparation","camp"],"modifier":2,"consume_on_use":true,"portable":true}
+    ],
+    "initial_resources": []
+  }
+}

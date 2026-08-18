@@ -85,7 +85,7 @@ def test_silence_blocks_verbal_spell_but_subtle_spell_ignores_components() -> No
     )
 
     assert blocked.valid is False
-    assert "obszarze Ciszy" in blocked.errors[0]
+    assert "werbalny" in blocked.errors[0]
     assert subtle.valid is True
 
 
@@ -337,7 +337,7 @@ def test_ritual_consumes_material_but_not_spell_slot() -> None:
     assert result.actor_after.inventory[0].quantity == 1
 
 
-def test_somatic_only_spell_requires_a_free_hand() -> None:
+def test_somatic_only_spell_does_not_require_inventory_hand_juggling() -> None:
     spell = _spell(components=SpellComponents(somatic=True))
 
     result = validate_spell_cast(
@@ -346,5 +346,32 @@ def test_somatic_only_spell_requires_a_free_hand() -> None:
         has_free_hand=False,
     )
 
-    assert not result.valid
-    assert "wolnej dłoni" in result.errors[0]
+    assert result.valid
+
+
+def test_explicit_component_restrictions_block_matching_spell_components() -> None:
+    slots = (SpellSlotState(1, 1, 1),)
+
+    somatic = validate_spell_cast(
+        _spell(components=SpellComponents(somatic=True)),
+        slots=slots,
+        somatic_components_blocked=True,
+    )
+    verbal = validate_spell_cast(
+        _spell(components=SpellComponents(verbal=True)),
+        slots=slots,
+        verbal_components_blocked=True,
+    )
+    subtle = validate_spell_cast(
+        _spell(components=SpellComponents(verbal=True, somatic=True)),
+        slots=slots,
+        verbal_components_blocked=True,
+        somatic_components_blocked=True,
+        ignore_verbal_somatic=True,
+    )
+
+    assert somatic.valid is False
+    assert "somatyczny" in somatic.errors[0]
+    assert verbal.valid is False
+    assert "werbalny" in verbal.errors[0]
+    assert subtle.valid is True

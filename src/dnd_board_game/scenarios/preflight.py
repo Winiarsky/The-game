@@ -30,6 +30,16 @@ def preflight_scenario(
         for point in definition.exploration_points
         for position in point.positions
     }
+    interactive_point_positions_by_zone = {
+        zone.id: {
+            position
+            for point in definition.exploration_points
+            if point.zone_id == zone.id
+            and (point.npc_interaction is not None or point.merchant_id is not None)
+            for position in point.positions
+        }
+        for zone in definition.exploration_zones
+    }
     for zone in definition.exploration_zones:
         pads = zone.interaction_pad_positions
         for position in pads:
@@ -41,7 +51,10 @@ def preflight_scenario(
                         f"Pole {position.as_tuple()} leży poza planszą.",
                     )
                 )
-            if position in occupied_markers or position in occupied_points:
+            if position in occupied_markers or (
+                position in occupied_points
+                and position not in interactive_point_positions_by_zone[zone.id]
+            ):
                 issues.append(
                     ScenarioPreflightIssue(
                         "interaction_pad_overlaps_marker",

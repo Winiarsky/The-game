@@ -53,6 +53,8 @@ class CombatCondition(StrEnum):
     NO_HEALING = "no_healing"
     TURNED = "turned"
     ENFEEBLED = "enfeebled"
+    HANDS_BOUND = "hands_bound"
+    GAGGED = "gagged"
 
 
 class ConditionSaveTiming(StrEnum):
@@ -79,6 +81,8 @@ class ConditionDefinition:
     actions_blocked: bool = False
     auto_fail_strength_dexterity_saves: bool = False
     critical_within_five_feet: bool = False
+    somatic_components_blocked: bool = False
+    verbal_components_blocked: bool = False
 
 
 CONDITION_DEFINITIONS: dict[CombatCondition, ConditionDefinition] = {
@@ -222,6 +226,18 @@ CONDITION_DEFINITIONS: dict[CombatCondition, ConditionDefinition] = {
         CombatCondition.ENFEEBLED,
         "Osłabiony",
         "Ataki bronią oparte na Sile zadają połowę obrażeń; Constitution save na końcu tury kończy efekt.",
+    ),
+    CombatCondition.HANDS_BOUND: ConditionDefinition(
+        CombatCondition.HANDS_BOUND,
+        "Związane ręce",
+        "Nie może wykonywać komponentów somatycznych czarów.",
+        somatic_components_blocked=True,
+    ),
+    CombatCondition.GAGGED: ConditionDefinition(
+        CombatCondition.GAGGED,
+        "Zakneblowany",
+        "Nie może wykonywać komponentów werbalnych czarów.",
+        verbal_components_blocked=True,
     ),
 }
 
@@ -717,6 +733,28 @@ def condition_blocks_actions(
     return any(
         state.actor_id == actor_id
         and condition_definition(state.condition).actions_blocked
+        for state in states
+    )
+
+
+def condition_blocks_somatic_components(
+    states: Sequence[ConditionState],
+    actor_id: str,
+) -> bool:
+    return any(
+        state.actor_id == actor_id
+        and condition_definition(state.condition).somatic_components_blocked
+        for state in states
+    )
+
+
+def condition_blocks_verbal_components(
+    states: Sequence[ConditionState],
+    actor_id: str,
+) -> bool:
+    return any(
+        state.actor_id == actor_id
+        and condition_definition(state.condition).verbal_components_blocked
         for state in states
     )
 

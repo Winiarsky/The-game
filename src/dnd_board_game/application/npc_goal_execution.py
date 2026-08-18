@@ -49,12 +49,32 @@ class NpcGoalExecutionPlanner:
         npc: NpcInteraction,
         flows: tuple[ExplorationFlowGraph, ...],
         flags: SceneFlags,
+        actors: tuple[Actor, ...] = (),
     ) -> tuple[InteractionGoal, ...]:
         flow = exploration_flow_for_npc(flows, npc.id)
         if flow is None:
-            return available_interaction_goals(npc.goals, flags)
+            available = available_interaction_goals(npc.goals, flags)
+            return self._filter_required_actors(available, actors)
         goal_ids = set(flow.available_goal_ids(flags))
-        return tuple(goal for goal in npc.goals if goal.id in goal_ids)
+        return self._filter_required_actors(
+            tuple(goal for goal in npc.goals if goal.id in goal_ids),
+            actors,
+        )
+
+    @staticmethod
+    def _filter_required_actors(
+        goals: tuple[InteractionGoal, ...],
+        actors: tuple[Actor, ...],
+    ) -> tuple[InteractionGoal, ...]:
+        if not actors:
+            return goals
+        party_ids = {str(actor.id) for actor in actors}
+        return tuple(
+            goal
+            for goal in goals
+            if goal.required_party_actor_id is None
+            or goal.required_party_actor_id in party_ids
+        )
 
     def plan(
         self,
@@ -84,6 +104,15 @@ class NpcGoalExecutionPlanner:
             requested_actor_ids,
             check_participants=participants,
         )
+        party_actor_ids = {str(actor.id) for actor in actors}
+        required_actor_id = route.goal.required_party_actor_id
+        if required_actor_id is not None and required_actor_id not in party_actor_ids:
+            raise ValueError("Wymagany bohater nie znajduje się w drużynie.")
+        assigned_actor_id = route.goal.assigned_actor_id
+        if assigned_actor_id is not None and actor_ids != (assigned_actor_id,):
+            raise ValueError(
+                f"Ten test jest przypisany bohaterowi {assigned_actor_id}."
+            )
         permission = npc.policy.intent_permission(route.intent_id)
         if permission is None:
             raise ValueError(

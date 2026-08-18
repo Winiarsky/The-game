@@ -14,6 +14,7 @@ from dnd_board_game.actors import (
 from dnd_board_game.inventory import WeaponProperty, normalize_hand_equipment
 from dnd_board_game.rules import (
     ActiveEffect,
+    AdditionalEffectExpiration,
     DiceExpression,
     EffectDuration,
     EffectSource,
@@ -1003,6 +1004,54 @@ def resolve_limited_dodge(
         source=EffectSource(EffectSourceType.ACTION, feature_id, label),
         duration=EffectDuration.UNTIL_TURN_START,
         expiration_actor_id=str(actor.id),
+    )
+    effects = apply_active_effect(active_effects, effect).active_effects
+    return LimitedDodgeResolution(
+        updated,
+        effects,
+        actor,
+        spent.actor_after,
+        feature_id,
+    )
+
+
+def resolve_archetype_attack_focus(
+    state: CombatState,
+    active_effects: tuple[ActiveEffect, ...],
+    *,
+    feature_id: str,
+    resource_id: str,
+    label: str,
+) -> LimitedDodgeResolution:
+    """Spend a curated resource and bonus action for the next attack this turn."""
+
+    actor = current_actor(state)
+    if not actor_has_feature(actor, feature_id):
+        raise ValueError(f"Aktywna postać nie posiada cechy {label}.")
+    if not can_spend_actor_resource(actor, resource_id):
+        raise ValueError(f"Brak użyć: {label}.")
+    action = use_action_economy_cost(state, ActionEconomyCost.BONUS_ACTION)
+    if not action.accepted:
+        raise ValueError(action.message)
+    spent = spend_actor_resource(current_actor(action.state), resource_id)
+    updated = replace_actor(action.state, spent.actor_after)
+    effect = ActiveEffect(
+        id=f"next_attack_advantage:{feature_id}:{actor.id}",
+        actor_id=str(actor.id),
+        kind="next_attack_advantage",
+        label=label,
+        object_id=f"class_feature:{feature_id}",
+        value=0,
+        source_actor_id=str(actor.id),
+        source=EffectSource(EffectSourceType.ACTION, feature_id, label),
+        duration=EffectDuration.UNTIL_NEXT_ATTACK,
+        expiration_actor_id=str(actor.id),
+        additional_expirations=(
+            AdditionalEffectExpiration(
+                EffectDuration.UNTIL_TURN_END,
+                actor_id=str(actor.id),
+            ),
+        ),
     )
     effects = apply_active_effect(active_effects, effect).active_effects
     return LimitedDodgeResolution(

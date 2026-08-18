@@ -59,7 +59,7 @@
       "id": "training_compass",
       "name": "Mosiężny kompas",
       "zone_id": "exploration_course",
-      "positions": [[12,18]],
+      "positions": [[6,18]],
       "color": "warning",
       "description": "Znany przedmiot treningowy służący do testu Odnalezienia przedmiotu.",
       "interaction_label": "Obejrzyj kompas",

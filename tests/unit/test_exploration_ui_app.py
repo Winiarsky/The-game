@@ -156,7 +156,7 @@ def test_physical_control_card_scan_route_resolves_accept_and_decline() -> None:
     assert accept.get_json() == {
         "action": "accept",
         "applied": False,
-        "label": "ACCEPT",
+        "label": "AKCEPTUJ",
         "payload": "dndbg:v1:action:universal:accept",
     }
     assert decline.status_code == 200
@@ -655,6 +655,7 @@ def test_player_page_wires_hid_card_scans_to_primary_and_secondary_actions() -> 
     assert "|actor:[a-z][a-z0-9_]*" in javascript
     assert "(?::[a-z][a-z0-9_]*)?" in javascript
     assert "function normalizePhysicalCardScannerText(value)" in javascript
+    assert "normalized.replaceAll('?', '_')" in javascript
     assert "data.effect === 'select_preparation_spell'" in javascript
     assert "data.effect === 'select_continuation_navigator'" in javascript
     assert "scanContext.continuation_stage = 'navigator'" in javascript
@@ -700,6 +701,20 @@ def test_accept_prioritizes_start_and_setup_confirmation_over_optional_board_sca
         "if (step.requires_board_assignment) scanBoard();\n"
         "      else confirmExplorationSetup();"
     ) in primary_action
+
+
+def test_accept_uses_the_only_visible_forward_button_including_enemy_intent() -> None:
+    _, javascript, _ = _page_assets(_client())
+    primary_start = javascript.index("function triggerPrimaryAction()")
+    primary_end = javascript.index("function cancelCurrentCombatStep()", primary_start)
+    primary_action = javascript[primary_start:primary_end]
+
+    assert "function visibleSingleAcceptButton()" in javascript
+    assert "return candidates.length === 1 ? candidates[0] : null;" in javascript
+    assert "data-card-action=\"accept\" onclick=\"resolveEnemyTurn()\"" in javascript
+    assert primary_action.index("singleAcceptButton.click()") < primary_action.index(
+        "if (combat.enemy_turn_preview) return false;"
+    )
 
 
 def test_combat_context_menu_confirm_route_forwards_loot_quantity() -> None:
@@ -1286,9 +1301,19 @@ def test_exploration_goal_ui_selects_participants_before_sending_method() -> Non
     assert "if (state.pending)" in javascript
     assert "Jak chcecie wpłynąć na NPC?" in javascript
     assert "Ten wybór należy do graczy" in javascript
+    assert "function socialInteractionProgressHtml" in javascript
+    assert "function interactionSocialApproachHtml" in javascript
+    assert "function selectInteractionSocialSkill" in javascript
+    assert "Przedstawcie szczere argumenty" in javascript
+    assert "Zbudujcie wiarygodne kłamstwo" in javascript
+    assert "Wywrzyjcie presję groźbą" in javascript
+    assert "Przejdź do warunków testu" in javascript
+    assert "if (goal.assigned_actor_id) return '';" in javascript
+    assert "selectedInteractionActorIds = assigned ? [String(assigned.id)] : [];" in javascript
     assert "{text, conversation_only: true}" in javascript
     assert "Nie wybiera kafelka, nie deklaruje działania i nie uruchamia rzutu." in html
     assert ".interaction-actor-card.selected" in stylesheet
+    assert ".social-approach-grid" in stylesheet
     assert "state.active_challenge.uses_progress" in javascript
 
 
@@ -1318,7 +1343,7 @@ def test_interaction_screen_keeps_full_flow_in_chat_and_gm_composer_in_dialog() 
     assert "board-interaction-panel" not in javascript
     assert "auxiliaryPads" in javascript
     assert html.index('id="interaction-goals"') < html.index('id="chat-composer"')
-    assert html.index('id="interaction-goals"') < html.index('id="chat-utility-actions"')
+    assert html.index('id="chat-utility-actions"') < html.index('id="interaction-goals"')
     assert 'id="gm-chat-dialog"' in html
     assert "function openGmChatDialog" in javascript
     assert "function closeGmChatDialog" in javascript
@@ -1338,6 +1363,47 @@ def test_interaction_screen_keeps_full_flow_in_chat_and_gm_composer_in_dialog() 
     assert ".gm-chat-dialog::backdrop" in stylesheet
     assert "object-fit: cover" in stylesheet
     assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in stylesheet
+
+
+def test_interaction_workspace_splits_conversation_preview_and_eight_action_tiles() -> None:
+    html, javascript, stylesheet = _page_assets(_client())
+
+    assert 'class="interaction-workspace"' in html
+    assert 'id="chat-conversation-scroll"' in html
+    assert 'id="point-preview-pane"' in html
+    assert 'id="interaction-actions-scroll"' in html
+    assert 'id="actions-pane-title"' in html
+    assert "function renderInteractionWorkspace" in javascript
+    assert "function selectedPointPreview" in javascript
+    assert "Pole ${esc(position[0])},${esc(position[1])} wskazane" in javascript
+    assert "Wskazanie innego hotspotu zmieni podgląd" in javascript
+    assert "Najnowsza odpowiedź" in javascript
+    assert "const chatStream = document.getElementById('chat-conversation-scroll')" in javascript
+    assert "grid-template-columns: repeat(4, minmax(0, 1fr))" in stylesheet
+    assert "grid-template-rows: repeat(2, minmax(0, 1fr))" in stylesheet
+    assert "body.interaction-grid-mode .actions-workspace-scroll { overflow: hidden;" in stylesheet
+    assert ".app-shell-context { display: none; }" in stylesheet
+    assert ".party-summary-name { display: none; }" in stylesheet
+    assert ".party-summary::-webkit-scrollbar { display: none; }" in stylesheet
+    assert "flex: 1 1 0" in stylesheet
+    assert "object-position: var(--interaction-image-position" in stylesheet
+    assert "'nessa_portrait.png': variant === 'preview' ? '50% 9%' : '50% 14%'" in javascript
+    assert "selectedZoneOption || selected || continuationPanelOpen ? ''" in javascript
+    assert "continuationPanelOpen ? 'Wymarsz drużyny'" in javascript
+    assert "boardPadFor('continuation_pace', option.id)" in javascript
+    assert "boardInteraction.selected_action_kind === 'continuation_pace'" in javascript
+    assert "continuationStep = continuationRequiresNavigator() ? 'navigator' : 'roll';" in javascript
+    assert "continuationPanelOpen && continuationStep !== 'pace'" in javascript
+
+
+def test_description_free_interaction_goals_skip_redundant_confirmation() -> None:
+    _html, javascript, _stylesheet = _page_assets(_client())
+
+    assert "function interactionGoalExecutesImmediately" in javascript
+    assert "function scheduleImmediateInteractionGoal" in javascript
+    assert "if (interactionGoalExecutesImmediately(goal))" in javascript
+    assert "scheduleImmediateInteractionGoal(goal);" in javascript
+    assert "To działanie ma zdefiniowany sposób wykonania" not in javascript
 
 
 def test_actor_portrait_ui_covers_party_tests_combat_and_messages() -> None:
@@ -1568,7 +1634,7 @@ def test_exploration_ui_page_is_fiction_first_and_accepts_questions():
     assert 'id="chat-stream"' in html
     assert 'id="interaction-state-card"' in html
     assert 'id="pending-title"' in html
-    assert html.index('id="chat-stream"') < html.index('id="pending-panel"') < html.index('id="chat-utility-actions"')
+    assert html.index('id="chat-stream"') < html.index('id="chat-utility-actions"') < html.index('id="pending-panel"')
     assert html.index('id="chat-stream"') < html.index('id="gm-chat-dialog"') < html.index('id="chat-composer"')
     assert html.index('id="pending-panel"') < html.index('id="roll-panel"') < html.index('id="result-panel"')
     assert html.count('conversation-system-card') == 3
@@ -1610,7 +1676,7 @@ def test_exploration_ui_page_is_fiction_first_and_accepts_questions():
     assert "Zdobyte i zabezpieczone rzeczy" in javascript
     assert "Rozpocznij ponownie" in javascript
     assert "window.prompt" not in javascript
-    assert "'Zmień lokację'" in javascript
+    assert "'Menu lokacji'" in javascript
     assert "'Wróć do działań'" in javascript
     assert "navigationChoicesHtml" in javascript
     assert "synchronizeBoardSelection" in javascript
@@ -1798,10 +1864,13 @@ def test_exploration_ui_page_includes_gm_decision_correction_controls():
     html, javascript, _stylesheet = _page_assets(client)
 
     assert (
-        '<script src="/static/exploration.js?v=stable-instance-slots-20260804-2"></script>'
+        '<script src="/static/exploration.js?v=card-components-20260816-1"></script>'
         in html
     )
     assert "Popraw decyzję MG" in javascript
+    assert "kliknij ponownie pole" in javascript
+    assert "Mechanika:" in javascript
+    assert "Mechanika pól" in javascript
     assert "decisionCorrectionHtml" in javascript
     assert "correction-roll-mode" in javascript
     assert "correction-resource" in javascript
@@ -1820,7 +1889,10 @@ def test_exploration_ui_combat_turn_controls_remain_available_during_board_scan(
     html = "\n".join((html, javascript, stylesheet))
 
     assert 'data-allow-busy="true" onclick="finishCombatTurn()"' in html
-    assert 'data-allow-busy="true" onclick="resolveEnemyTurn()"' in html
+    assert (
+        'data-allow-busy="true" data-card-action="accept" '
+        'onclick="resolveEnemyTurn()"'
+    ) in html
     assert 'id="side-panel-toggle"' in html
     assert 'id="side-panel"' in html
     assert 'id="side-panel-scrim"' in html
@@ -2891,9 +2963,12 @@ def test_exploration_ui_runs_guided_encounter_setup_after_trigger():
     assert cleric_step["current_step"]["available_positions"] == [[7, 6]]
 
     board.clicks.append((7, 6))
-    enemy_step = client.post("/api/board/scan").get_json()["encounter_setup"]
+    enemy_state = client.post("/api/board/scan").get_json()
+    enemy_step = enemy_state["encounter_setup"]
     assert enemy_step["current_step"]["label"] == "jawnych przeciwników i NPC"
     assert enemy_step["current_step"]["positions"] == [[7, 9], [11, 7]]
+    assert enemy_state["board_selection"]["legal_position_count"] == 0
+    assert enemy_state["board_selection"]["auto_arm"] is False
 
     while True:
         state = _advance_encounter_setup(client, board)

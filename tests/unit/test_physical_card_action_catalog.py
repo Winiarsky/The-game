@@ -21,7 +21,7 @@ def test_catalog_covers_every_non_universal_character_card() -> None:
         if card.kind != DecisionCardActionKind.UNIVERSAL.value
     }
 
-    assert len(cards) == 136
+    assert len(cards) == 138
     assert "basic_attack" not in CARD_ACTION_CATALOG
     assert {source_id for source_id, _kind in cards} <= set(CARD_ACTION_CATALOG)
     for source_id, kind in cards:
@@ -35,7 +35,7 @@ def test_catalog_phase_totals_match_reviewed_table() -> None:
     assert sum(
         definition.phase is CardPhase.COMBAT
         for definition in CARD_ACTION_CATALOG.values()
-    ) == 105
+    ) == 107
     assert sum(
         definition.phase is CardPhase.EXPLORATION
         for definition in CARD_ACTION_CATALOG.values()

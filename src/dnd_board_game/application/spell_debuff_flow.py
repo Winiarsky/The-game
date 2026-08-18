@@ -93,6 +93,7 @@ class SpellDebuffFlowService:
         state: CombatState,
         action: SpellDebuffActionSpec,
         cast_level: int | None = None,
+        active_effects: tuple[ActiveCombatEffect, ...] = (),
     ) -> SpellDebuffTransition:
         caster = current_actor(state)
         _validate_action(action)
@@ -100,6 +101,8 @@ class SpellDebuffFlowService:
             caster,
             action.id,
             cast_level=cast_level,
+            condition_states=state.condition_states,
+            active_effects=active_effects,
         )
         if validation is None or not validation.valid:
             raise ValueError(
@@ -143,6 +146,7 @@ class SpellDebuffFlowService:
         target_id: str,
         rng: Random,
         condition: str = "",
+        active_effects: tuple[ActiveCombatEffect, ...] = (),
     ) -> SpellDebuffTransition:
         caster = current_actor(state)
         _validate_action(action)
@@ -158,6 +162,8 @@ class SpellDebuffFlowService:
             caster,
             action.id,
             cast_level=pending.cast_level,
+            condition_states=state.condition_states,
+            active_effects=active_effects,
         )
         if validation is None or not validation.valid:
             raise ValueError(

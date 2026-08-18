@@ -1,0 +1,60 @@
+{
+  "schema": "dnd_board_game.monster",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["project_original"],
+  "id": "hungry_shadow",
+  "name": "Głodny Cień",
+  "kind": "monster",
+  "faction": "enemy",
+  "creature_type": "beast",
+  "size": "medium",
+  "ac": 13,
+  "hp": 16,
+  "temp_hp": 0,
+  "speed_feet": 40,
+  "uses_death_saves": false,
+  "senses": {
+    "darkvision_feet": 60
+  },
+  "ability_scores": {
+    "strength": 12,
+    "dexterity": 14,
+    "constitution": 12,
+    "intelligence": 3,
+    "wisdom": 13,
+    "charisma": 6
+  },
+  "proficiency_bonus": 2,
+  "proficiencies": {
+    "saving_throws": [],
+    "skills": ["perception", "stealth"],
+    "expertise": [],
+    "weapons": ["hungry_shadow_rend"],
+    "armor": [],
+    "tools": []
+  },
+  "attacks": [
+    {
+      "id": "hungry_shadow_rend",
+      "name": "Rozdarcie",
+      "source_type": "weapon",
+      "attack_kind": "melee",
+      "ability": "dexterity",
+      "attack_bonus": 1,
+      "proficiency_id": "hungry_shadow_rend",
+      "range_feet": 5,
+      "reach_feet": 5,
+      "conditional_on_hit_save_ability": "strength",
+      "conditional_on_hit_save_dc": 12,
+      "conditional_on_hit_save_condition": "prone",
+      "conditional_on_hit_minimum_movement_feet": 10,
+      "conditional_on_hit_requires_adjacent_ally": true,
+      "damage": {
+        "dice": "1d6",
+        "modifier": 2,
+        "damage_type": "slashing"
+      }
+    }
+  ]
+}

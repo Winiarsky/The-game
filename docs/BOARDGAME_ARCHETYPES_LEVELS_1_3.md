@@ -1,10 +1,16 @@
-# Siedem archetypów planszowych — talie poziomów 1–3
+# Siedem archetypów planszowych — start na poziomie 3
 
 ## Obowiązujący model
 
 W wyborze nowej gry widocznych jest siedem bohaterów: Garran, Brakka, Mira,
 Dagna, Lorian, Nimra i Erynd. Pozostałe klasy są ukryte, ale ich istniejące
 resolvery mogą zasilać osobiste techniki tej siódemki.
+
+Każdy z siedmiu bohaterów zaczyna na poziomie 3, ma dodatkowe `+2` w głównym
+atrybucie i od razu korzysta ze wszystkich kart osobistej talii. Dawne progi
+1–3 są zachowane niżej jako informacja o pochodzeniu mechanik, nie jako system
+odblokowywania. Awans i rozwój talii są odłożone do osobnego projektu. Z puli
+siedmiu bohaterów do pojedynczego scenariusza wybiera się nadal od 1 do 5.
 
 - Podstawowy atak bronią wybiera się przez figurkę i pole przeciwnika; nie ma
   karty ataku.
@@ -140,5 +146,8 @@ wraca po długim odpoczynku.
 Każdy kolorowy `card_set_<bohater>.pdf` zawiera dwustronne karty, dossier i
 tonerowy arkusz statystyk. Każdy `bw_test/card_set_<bohater>_bw_test.pdf`
 zawiera wyłącznie czarno-białe awersy kart, bez rewersów, oraz osobne tonerowe
-dossier i arkusz statystyk. Manifest JSON zapisuje listę kart, poziom, fazę,
-timing, QR, panel grafiki i miejsce pasywów karty bohatera.
+dossier i arkusz statystyk. Dossier nie zawiera sekcji rozwoju; w jej miejscu
+pokazuje dokładne pule kart, komórki oraz odpoczynek, który je odnawia. Arkusz
+statystyk wymienia wyłącznie czary obecne w fizycznej talii. Manifest JSON
+zapisuje listę kart, poziom pochodzenia, fazę, timing, QR, panel grafiki i
+miejsce pasywów karty bohatera.

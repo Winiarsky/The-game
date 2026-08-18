@@ -201,6 +201,14 @@ zaczyna walkę ukryty. Bazowa kara zaskoczenia nadal obejmuje całą stronę i j
 uproszczeniem D&D 5e 2014: zamiast utraty ruchu, akcji i reakcji daje utrudnienie do
 inicjatywy. Po ustaleniu kolejności obie strony rozgrywają pełne tury.
 
+Scenariusz może oznaczyć porażkę encountera jako terminalne `game_over` zamiast
+powrotu do eksploracji. Gdy automatyczne checkpointy są aktywne, runtime zapisuje
+osobny checkpoint bezpośrednio po setupie i ustaleniu inicjatywy, ale przed
+pierwszą akcją. Retry odtwarza dokładnie skład, zasoby, pozycje, teren i kolejność
+inicjatywy, ale nie przechodzi od razu do aktywnej tury: najpierw ponownie prowadzi
+graczy przez grupowy setup bohaterów, jawnych przeciwników i elementów terenu na
+zapisanych polach. Checkpoint encountera nie zastępuje zwykłego zapisu scenariusza.
+
 W MVP pola z `blocking_terrain` i przeszkodami blokującymi ruch są niewchodzalne. Pola obiektów sceny typu `container`, np. rozbity wóz, mogą być zajmowane, dopóki content nie oznaczy ich jako blokujące.
 
 ---
@@ -658,8 +666,9 @@ przeglądarka buforuje szybki prefiks `dndbg:` także wtedy, gdy fokus znajduje 
 w polu tekstowym, dzięki czemu kod nie trafia do wiadomości gracza. Równoległy
 bufor ostatnich klawiszy rozpoznaje pełny payload również wtedy, gdy czytnik ma
 skonfigurowane wolniejsze odstępy między znakami. Adapter normalizuje też
-zaobserwowaną translację układu klawiatury `>` → `:`, na przykład
-`dndbg>v1>action>universal>accept`, zanim payload trafi do wspólnego parsera.
+zaobserwowane translacje układu klawiatury `>` → `:` oraz `?` → `_`, na
+przykład `dndbg>v2>action>spell>hunters?mark>erynd`, zanim payload trafi do
+wspólnego parsera.
 Przyciski ekranowe pozostają potrzebnym fallbackiem przy braku lub awarii
 czytnika. Blokada powtórzeń jest liczona od zakończenia obsługi karty, dzięki
 czemu pojedynczy skan nie może zatwierdzić dwóch kolejnych etapów, nawet gdy
@@ -675,14 +684,13 @@ symbole, właściwy kod QR, spady i znaczniki cięcia są nakładane determinist
 przez generator PDF. Dzięki temu stylistyka może się zmieniać bez ryzyka
 zniekształcenia payloadu lub utraty czytelności informacji użytkowych.
 
-Fizyczna karta postaci jest rozwijanym w trakcie gry artefaktem gracza. Zawiera
-generowane dane mechaniczne oraz miejsca uzupełniane ręcznie, między innymi
-notatki, historię, osobowość, więzi i decyzje rozwoju. Po zatwierdzonym awansie
-aplikacja pokazuje czytelne podsumowanie zmian, a gracz sam dopisuje na karcie
-nowy poziom, zdolności i podjęte wybory. Generator może też przygotować jej nową
-wersję lub wkładkę. Aplikacja pozostaje źródłem prawdy dla poziomu, HP, zasobów,
-statystyk, ekwipunku i legalności akcji, aby papier i zapis kampanii nie tworzyły
-dwóch sprzecznych stanów mechanicznych.
+Fizyczna karta postaci jest artefaktem gracza. Zawiera generowane dane
+mechaniczne oraz miejsca uzupełniane ręcznie, między innymi notatki, historię,
+osobowość i więzi. Aktualnie bohaterowie zaczynają na poziomie 3 z pełną talią,
+a system dalszego rozwoju jest odłożony. Gdy zostanie zaprojektowany, aplikacja
+pozostanie źródłem prawdy dla poziomu, PW, zasobów, statystyk, ekwipunku i
+legalności akcji, aby papier i zapis kampanii nie tworzyły dwóch sprzecznych
+stanów mechanicznych.
 
 Pierwszy zakres wdrożenia obejmuje jedną postać i małą talię reprezentującą
 akcję uniwersalną, czar lub cechę klasową oraz przedmiot. Podstawowy atak wybiera
@@ -1923,7 +1931,10 @@ rzutu. Aktywacja deleguje konsekwencje do ogólnego silnika hazardów.
 - Podstawowy atak bronią nadal wybiera się przez planszę i nie ma osobnej karty.
 - Każdy z siedmiu startowych archetypów ma kilka aktywnych decyzji bojowych;
   wyrównujemy liczbę znaczących wyborów, a nie dosłowną liczbę kart czarów.
-- Pełne talie poziomów 1–3 mają 7–9 kart bojowych: Garran 8, Brakka 7, Mira 7,
+- Bohaterowie startują na poziomie 3, dostają autorską premię `+2` do głównego
+  atrybutu i od pierwszej sceny mają dostęp do pełnej osobistej talii. System
+  awansu oraz odblokowywania kart jest odłożony do osobnego projektu.
+- Pełne talie startowe mają 7–9 kart bojowych: Garran 8, Brakka 7, Mira 7,
   Dagna 9, Lorian 8, Nimra 9 i Erynd 8. Różnica wynika z ekonomii: czarujący
   dzielą więcej kart między komórki, a wojownicy mają częściej odnawiane akcje.
 - Zdolności przeniesione z innych klas są przedstawiane jako osobiste techniki
@@ -1931,11 +1942,10 @@ rzutu. Aktywacja deleguje konsekwencje do ogólnego silnika hazardów.
 - Pozycja obronna Garrana i Unik instynktowny Miry kosztują akcję dodatkową,
   mają po jednym użyciu na krótki odpoczynek i nadają utrudnienie atakom do
   początku następnej tury bohatera.
-- Mira ma 2 Fortele na długi odpoczynek, od 3. poziomu 3, zasilające wszystkie
-  jej magicznie przedstawione sztuczki. Erynd analogicznie używa Instynktu.
-  Garran od 2. poziomu używa Taktyki, a Brakka od 3. — Dzikości.
-- Karty czarów 2. poziomu Nimry są wymagane dopiero od 3. poziomu bohatera,
-  kiedy postać ma komórki 2. poziomu.
+- Mira zaczyna z 3 Fortelami, Erynd z 3 Instynktami, Garran z 3 Taktykami, a
+  Brakka z 2 punktami Dzikości. Wszystkie te pule wracają po długim odpoczynku.
+- Nimra zaczyna z komórkami 2. poziomu i od razu może używać wszystkich swoich
+  dziewięciu kart.
 
 ## Poza Zakresem Pierwszej Wersji
 

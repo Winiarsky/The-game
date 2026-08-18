@@ -70,6 +70,42 @@ def test_intervening_scene_object_grants_half_cover() -> None:
     assert positioning.cover_sources == ("Wóz",)
 
 
+def test_walkable_defensive_spot_passively_grants_two_ac() -> None:
+    attacker = _actor("hero", Faction.ALLY, Coordinate(0, 0))
+    target = _actor("goblin", Faction.ENEMY, Coordinate(4, 0))
+    defensive_spot = SceneObject(
+        "crates",
+        "Rozsypane skrzynie",
+        (target.position,),
+        "",
+        visibility=SetupVisibility.HIDDEN,
+        blocks_movement=False,
+        cover_bonus=2,
+    )
+
+    protected = evaluate_attack_positioning(
+        BoardState(),
+        attacker,
+        target,
+        _source(kind=AttackKind.MELEE),
+        (attacker, target),
+        (defensive_spot,),
+    )
+    unprotected = evaluate_attack_positioning(
+        BoardState(),
+        attacker,
+        replace(target, position=Coordinate(4, 1)),
+        _source(kind=AttackKind.MELEE),
+        (attacker, target),
+        (defensive_spot,),
+    )
+
+    assert protected.cover_level == CoverLevel.HALF
+    assert protected.cover_bonus == 2
+    assert protected.cover_sources == ("Rozsypane skrzynie",)
+    assert unprotected.cover_bonus == 0
+
+
 def test_three_quarters_cover_wins_without_stacking_with_half_cover() -> None:
     attacker = _actor("hero", Faction.ALLY, Coordinate(0, 0))
     target = _actor("goblin", Faction.ENEMY, Coordinate(5, 0))

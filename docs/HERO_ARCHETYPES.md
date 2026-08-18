@@ -1,6 +1,6 @@
 # Bohaterowie startowi
 
-Gra rozpoczyna się dwunastoma gotowymi archetypami na poziomie 1. Nie są
+Gra rozpoczyna się wyborem spośród siedmiu gotowych archetypów na poziomie 3. Nie są
 wybrańcami sterującymi losami wojny. To ludzie, którzy próbują wykonywać swoją
 pracę, realizować osobiste cele i przeżyć w świecie zamkniętych granic,
 przesiedleń, kryzysów i cudzych konfliktów.
@@ -21,14 +21,9 @@ Pełne, wyświetlane graczowi instrukcje są wersjonowane w
 | BR-01 | Brakka | Barbarzyńca | pierwsza linia i ochrona |
 | LO-01 | Lorian | Bard | wsparcie, rozmowa i kontrola |
 | DA-01 | Dagna | Kleryczka | pancerne wsparcie i ratunek |
-| SY-01 | Sylwen | Druidka | kontrola terenu i przetrwanie |
 | GA-01 | Garran | Wojownik | stabilna pierwsza linia |
-| PI-01 | Pim | Mnich | mobilny napastnik |
-| RH-01 | Rhogar | Paladyn | obrońca i awaryjne leczenie |
 | ER-01 | Erynd | Łowca | zwiad i ostrzał |
 | MI-01 | Mira | Łotrzyca | ekspertka i precyzyjne obrażenia |
-| VE-01 | Veyra | Czarownica | artyleria magiczna |
-| KA-01 | Kael | Czarnoksiężnik | stały ostrzał i ryzykowna magia |
 | NI-01 | Nimra | Czarodziejka | elastyczna magia i wiedza |
 
 ## Rozpoczęcie gry
@@ -50,10 +45,14 @@ Jeżeli dozwolona jest Pomoc, drugi skan wybiera pomocnika. Po wyborze
 prowadzącego karta `ACCEPT` przechodzi dalej bez pomocnika. Plansza nadal służy
 do ruchu, pozycji, celów i obszarów, lecz nie do deklarowania tożsamości.
 
-## Awans
+## Poziom startowy i rozwój
 
-Wszystkie postacie zaczynają na poziomie 1. Po zdobyciu odpowiedniego XP gracz
-sam wybiera legalny rozwój na poziomie 2 i 3: czary, przygotowanie, styl walki,
-ekspertyzę, opcje klasowe i podklasę, jeśli dana klasa wymaga ich na tym
-poziomie. Nie ma z góry narzuconej ścieżki archetypu.
+Wszyscy bohaterowie zaczynają na poziomie 3, otrzymują premię archetypu `+2`
+do głównego atrybutu i od pierwszej sceny mogą korzystać ze wszystkich kart
+swojej talii. System awansu oraz odblokowywania kart jest świadomie odłożony
+do osobnego etapu projektowego. Drukowane karty mają plakietkę `OD STARTU`;
+poziom pochodzenia zdolności pozostaje wyłącznie w manifeście technicznym.
 
+Siedem kart bohaterów to pula dostępnych postaci, nie rozmiar jednej drużyny.
+Ze względu na obecną planszę i interfejs scenariusz nadal przyjmuje od 1 do 5
+bohaterów.

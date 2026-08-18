@@ -2,10 +2,10 @@ import json
 from dataclasses import replace
 from pathlib import Path
 
+import pytest
+
 from dnd_board_game.actors import (
     Faction,
-    FeatureGrant,
-    FeatureSourceKind,
     PreparableSpell,
 )
 from dnd_board_game.combat import (
@@ -458,19 +458,21 @@ def test_playground_arena_scans_a_real_starting_card_for_all_seven_archetypes(
 def test_playground_arena_scans_new_martial_archetype_cards(tmp_path) -> None:
     catalog = load_character_catalog("content/character_creation/catalog.json")
     resources = load_character_resources(catalog, "content")
-    cases = {
-        "fighter": ("garran", "defensive_stance", "resolved"),
-        "barbarian": ("brakka", "reckless_attack", "resolved"),
-        "rogue": ("mira", "instinctive_dodge", "resolved"),
-        "ranger": ("erynd", "cunning_action", "enter_feature_value"),
-    }
+    cases = (
+        ("fighter", "garran", "defensive_stance", "resolved"),
+        ("barbarian", "brakka", "reckless_attack", "resolved"),
+        ("rogue", "mira", "instinctive_dodge", "resolved"),
+        ("ranger", "erynd", "cunning_action", "enter_feature_value"),
+        ("rogue", "mira", "exploit_weakness", "resolved"),
+        ("ranger", "erynd", "patient_shot", "resolved"),
+    )
 
-    for class_id, (actor_id, source_id, expected_next_step) in cases.items():
+    for class_id, actor_id, source_id, expected_next_step in cases:
         session = ExplorationUiSession(
             SCENARIO_PATH,
-            session_id=f"arena_new_martial_card_{actor_id}",
-            observation_dir=tmp_path / actor_id / "observations",
-            save_dir=tmp_path / actor_id / "saves",
+            session_id=f"arena_new_martial_card_{actor_id}_{source_id}",
+            observation_dir=tmp_path / actor_id / source_id / "observations",
+            save_dir=tmp_path / actor_id / source_id / "saves",
         )
         draft = next(
             candidate
@@ -515,6 +517,18 @@ def test_playground_arena_scans_new_martial_archetype_cards(tmp_path) -> None:
                 item for item in current["resource_pools"] if item["id"] == resource_id
             )
             assert pool["current"] == 0
+        if source_id in {"exploit_weakness", "patient_shot"}:
+            resource_id = (
+                "trick_uses" if source_id == "exploit_weakness" else "instinct"
+            )
+            pool = next(
+                item for item in current["resource_pools"] if item["id"] == resource_id
+            )
+            assert pool["current"] == 2
+            assert any(
+                effect["kind"] == "next_attack_advantage"
+                for effect in payload["state"]["combat"]["active_effects"]
+            )
 
 
 def test_playground_arena_scans_new_mira_and_erynd_resource_cards(tmp_path) -> None:
@@ -588,7 +602,8 @@ def test_playground_arena_scans_new_mira_and_erynd_resource_cards(tmp_path) -> N
             for item in confirmed["combat"]["current_actor"]["resource_pools"]
             if item["id"] == resource_id
         )
-        assert pool["current"] == 1
+        assert pool["maximum"] == 3
+        assert pool["current"] == pool["maximum"] - 1
 
 
 def test_playground_arena_spends_new_level_three_tactical_resources(tmp_path) -> None:
@@ -766,15 +781,15 @@ def test_playground_reaction_reminder_accepts_non_active_owners_card(tmp_path) -
         json={"payload": "dndbg:v2:action:feature:cutting_words:lorian"},
     )
 
-    assert reminder == [
-        {
-            "source_id": "cutting_words",
-            "label": "Cięta riposta",
-            "owner_actor_id": "lorian",
-            "owner_actor_name": lorian.name,
-            "trigger_window": "attack_roll_revealed",
-        }
-    ]
+    assert len(reminder) == 1
+    assert {
+        "source_id": "cutting_words",
+        "label": "Cięta riposta",
+        "owner_actor_id": "lorian",
+        "owner_actor_name": lorian.name,
+        "trigger_window": "attack_roll_revealed",
+    }.items() <= reminder[0].items()
+    assert "Inspir" in str(reminder[0].get("resource_note"))
     assert response.status_code == 200, response.get_json()
     assert "Wpisz wynik kości Inspiracji" in response.get_json()["feedback"]["message"]
 
@@ -811,33 +826,9 @@ def test_playground_arena_routes_rage_and_frenzy_physical_cards(tmp_path) -> Non
         for draft in default_character_drafts()
         if draft.class_id == "barbarian"
     )
-    barbarian = build_character(draft, catalog, resources).actor
-    barbarian = replace(
-        barbarian,
-        level=3,
-        features=(
-            *barbarian.features,
-            FeatureGrant(
-                feature_id="flaw_chains",
-                label="Skaza: Bitewny amok",
-                source_kind=FeatureSourceKind.SCENARIO,
-                source_ref="brakka",
-            ),
-            FeatureGrant(
-                feature_id="frenzy",
-                label="Frenzy",
-                source_kind=FeatureSourceKind.SUBCLASS,
-                source_ref="berserker",
-                action_ids=("frenzy",),
-            ),
-            FeatureGrant(
-                feature_id="reckless_attack",
-                label="Reckless Attack",
-                source_kind=FeatureSourceKind.CLASS,
-                source_ref="barbarian",
-                action_ids=("reckless_attack",),
-            ),
-        ),
+    barbarian = apply_boardgame_archetype(
+        build_character(draft, catalog, resources).actor,
+        spell_definitions=tuple(spell for _, spell in resources.spells),
     )
     session.configure_custom_party((barbarian,))
     session.configure_playground_trial(
@@ -1296,6 +1287,40 @@ def test_playground_arena_exposes_only_legal_card_reminders(tmp_path) -> None:
         "action_surge",
         "defensive_stance",
     }
+
+
+@pytest.mark.parametrize("menu_id", ("maneuvers", "equipment"))
+def test_playground_arena_opens_physical_menu_cards(tmp_path, menu_id: str) -> None:
+    session = _session(tmp_path)
+    catalog = load_character_catalog("content/character_creation/catalog.json")
+    resources = load_character_resources(catalog, "content")
+    draft = next(item for item in default_character_drafts() if item.id == "garran")
+    actor = apply_boardgame_archetype(
+        build_character(draft, catalog, resources).actor,
+        spell_definitions=tuple(spell for _, spell in resources.spells),
+    )
+    session.configure_custom_party((actor,))
+    session.configure_playground_trial(
+        dummy_count=1,
+        armor_class=12,
+        hit_points=20,
+        speed_feet=0,
+        ability_score=10,
+        creature_type="construct",
+        affinity="none",
+        damage_type="slashing",
+    )
+    _start_configured_playground_encounter(session)
+    client = create_app(session, character_dir=tmp_path / "characters").test_client()
+
+    response = client.post(
+        "/api/physical-cards/scan",
+        json={"payload": f"dndbg:v1:action:universal:{menu_id}"},
+    )
+
+    assert response.status_code == 200, response.get_json()
+    assert response.get_json()["effect"] == f"open_{menu_id}_menu"
+    assert response.get_json()["feedback"]["next_step"] == "select_menu_option"
 
 
 def test_playground_enemy_field_falls_back_to_unarmed_attack(tmp_path) -> None:

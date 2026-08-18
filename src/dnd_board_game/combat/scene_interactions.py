@@ -38,7 +38,13 @@ from dnd_board_game.world import Coordinate
 from .scene import SceneInteraction, SceneObject, available_scene_interactions, visible_scene_objects
 from .action_economy import ActionEconomyCost, action_economy_cost_label
 from .attack_flow import AttackSourceType
-from .session import ActionUse, CombatState, can_pay_action_economy_cost, replace_actor
+from .session import (
+    ActionUse,
+    CombatState,
+    apply_enemy_ai_morale_delta,
+    can_pay_action_economy_cost,
+    replace_actor,
+)
 from .damage import DamageComponentSpec
 from .spells import grid_distance_feet
 
@@ -455,6 +461,31 @@ def apply_combat_interaction_effects(
                 ),
             )
             messages.append(f"{label}: {target.name} ma {value} do następnego ataku.")
+        elif effect.effect_type == "enemy_ai_morale_event":
+            event_id = str(params.get("event_id", ""))
+            if not event_id:
+                raise ValueError("Efekt morale przeciwników wymaga event_id.")
+            before = updated_state.enemy_ai.morale
+            updated_state = apply_enemy_ai_morale_delta(
+                updated_state,
+                event_id=event_id,
+                delta=int(params.get("delta", 0)),
+                minimum=int(params.get("minimum", 0)),
+                maximum=(
+                    int(params["maximum"])
+                    if params.get("maximum") is not None
+                    else None
+                ),
+            )
+            after = updated_state.enemy_ai.morale
+            messages.append(
+                str(
+                    params.get(
+                        "message",
+                        f"Morale przeciwników: {before} → {after}.",
+                    )
+                )
+            )
         else:
             raise ValueError(f"Nieznany efekt interakcji walki: {effect.effect_type}.")
     return AppliedCombatInteraction(

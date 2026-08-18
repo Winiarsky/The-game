@@ -16,6 +16,7 @@ from dnd_board_game.combat import (
     CombatState,
     CombatStatus,
     EnemyAutoTurnResult,
+    escape_enemy,
     TriggerActivation,
     consume_next_attack_effects,
     current_actor,
@@ -71,6 +72,17 @@ class CombatTurnFinalizationService:
         active_effects: tuple[ActiveCombatEffect, ...],
     ) -> EnemyTurnCommitTransition:
         updated_effects = active_effects
+        if result.escaped:
+            escaped_state = escape_enemy(result.state, result.enemy.id)
+            escaped_enemy = next(
+                actor for actor in escaped_state.actors if actor.id == result.enemy.id
+            )
+            result = replace(
+                result,
+                state=escaped_state,
+                enemy=escaped_enemy,
+                moved_enemy=escaped_enemy,
+            )
         if result.attack_roll is not None:
             updated_effects = consume_next_attack_effects(
                 active_effects,

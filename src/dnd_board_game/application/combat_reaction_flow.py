@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import Callable, Mapping, Protocol
+from typing import Callable, Mapping, Protocol, Sequence
 
 from dnd_board_game.actors import (
     Actor,
@@ -20,6 +20,7 @@ from dnd_board_game.combat import (
     AttackSourceType,
     CombatState,
     CombatStatus,
+    ConditionState,
     CombatResolutionStage,
     DamageComponentInput,
     DamageResult,
@@ -169,7 +170,11 @@ class DefensiveSpellReactionFlowService:
                 for candidate in actions_by_actor.get(actor.id, ())
                 if candidate.action_type == "reaction_ac_bonus"
                 and candidate.value > 0
-                and _spell_action_is_available(actor, candidate)
+                and _spell_action_is_available(
+                    actor,
+                    candidate,
+                    condition_states=state.condition_states,
+                )
             ),
             None,
         )
@@ -831,7 +836,11 @@ class CounterspellReactionFlowService:
                     candidate
                     for candidate in actions_by_actor.get(actor.id, ())
                     if candidate.action_type == "spell_counter"
-                    and _counterspell_cast_levels(actor, candidate)
+                    and _counterspell_cast_levels(
+                        actor,
+                        candidate,
+                        condition_states=state.condition_states,
+                    )
                 ),
                 None,
             )
@@ -846,7 +855,11 @@ class CounterspellReactionFlowService:
                 effect_id=action.id,
                 label=action.label,
                 spell_level=action.spell_level,
-                cast_levels=_counterspell_cast_levels(actor, action),
+                cast_levels=_counterspell_cast_levels(
+                    actor,
+                    action,
+                    condition_states=state.condition_states,
+                ),
             )
         return None
 
@@ -873,7 +886,11 @@ class CounterspellReactionFlowService:
         )
         if action is None:
             raise ValueError("Kontrczar nie jest dostępny dla tego aktora.")
-        if cast_level not in _counterspell_cast_levels(caster, action):
+        if cast_level not in _counterspell_cast_levels(
+            caster,
+            action,
+            condition_states=state.condition_states,
+        ):
             raise ValueError("Wybrany poziom slotu Kontrczaru nie jest dostępny.")
         source = enemy_result.source
         if source is None or source.source_type != AttackSourceType.SPELL:
@@ -1427,22 +1444,34 @@ def _ready_trigger_for_enemy_result(result: EnemyAutoTurnResult) -> str | None:
 def _spell_action_is_available(
     actor: Actor,
     action: DefensiveSpellActionSpec,
+    *,
+    condition_states: Sequence[ConditionState] = (),
 ) -> bool:
     action_cost = getattr(action, "action_cost", None)
     if getattr(action_cost, "value", action_cost) != "reaction":
         return False
-    validation = actor_spell_cast_validation(actor, action.id)
+    validation = actor_spell_cast_validation(
+        actor,
+        action.id,
+        condition_states=condition_states,
+    )
     return validation is not None and validation.valid
 
 
 def _counterspell_cast_levels(
     actor: Actor,
     action: DefensiveSpellActionSpec,
+    *,
+    condition_states: Sequence[ConditionState] = (),
 ) -> tuple[int, ...]:
     action_cost = getattr(action, "action_cost", None)
     if getattr(action_cost, "value", action_cost) != "reaction":
         return ()
-    validation = actor_spell_cast_validation(actor, action.id)
+    validation = actor_spell_cast_validation(
+        actor,
+        action.id,
+        condition_states=condition_states,
+    )
     if validation is None or not validation.valid:
         return ()
     return validation.available_cast_levels

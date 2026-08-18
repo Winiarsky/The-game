@@ -57,6 +57,9 @@ if TYPE_CHECKING:
     from .exploration_app import ExplorationUiSession
 
 
+PLAYER_SCENARIO_IDS = ("ostatni_transport_00_gildia",)
+
+
 def create_app(
     session: ExplorationUiSession,
     *,
@@ -79,6 +82,7 @@ def create_app(
         for character_class in character_catalog.classes
     }
     scanned_new_game_party: list[str] = []
+    new_game_stage = {"value": "party"}
     app.jinja_env.globals["character_portrait_url"] = _character_portrait_url
 
     def persist_character_progress(actors) -> None:
@@ -91,7 +95,15 @@ def create_app(
     session.character_progress_sink = persist_character_progress
 
     def scenario_choices():
-        return discover_scenarios(scenario_dir)
+        discovered = {
+            scenario.id: scenario
+            for scenario in discover_scenarios(scenario_dir)
+        }
+        return tuple(
+            discovered[scenario_id]
+            for scenario_id in PLAYER_SCENARIO_IDS
+            if scenario_id in discovered
+        )
 
     def new_game_context(**extra):
         choices = scenario_choices()
@@ -107,6 +119,7 @@ def create_app(
         return {
             "scenarios": choices,
             "active_scenario_id": session.exploration.scenario_id,
+            "selected_scenario_id": choices[0].id if len(choices) == 1 else "",
             "roster": roster,
             "class_names": character_class_names,
             **extra,
@@ -127,6 +140,7 @@ def create_app(
     @app.get("/new-game")
     def new_game():
         scanned_new_game_party.clear()
+        new_game_stage["value"] = "party"
         return render_template("new_game.html", **new_game_context())
 
     @app.post("/api/new-game/card-scan")
@@ -138,6 +152,10 @@ def create_app(
         normalized = normalize_decision_card_scanner_text(payload)
         try:
             if ":actor:" in normalized:
+                if new_game_stage["value"] != "party":
+                    raise ValueError(
+                        "Skład drużyny jest już zatwierdzony. Użyj DECLINE, aby wrócić."
+                    )
                 actor_card = parse_actor_card_qr_payload(normalized)
                 if actor_card.actor_id not in PLAYABLE_HERO_IDS:
                     raise ValueError("Ta karta nie należy do startowego zestawu bohaterów.")
@@ -153,10 +171,21 @@ def create_app(
                         "actor_id": actor_card.actor_id,
                         "actor_name": character.actor.name,
                         "selected_actor_ids": list(scanned_new_game_party),
+                        "stage": new_game_stage["value"],
                     }
                 )
             universal = resolve_universal_card_scan(normalized)
             if universal.action.value == "decline":
+                if new_game_stage["value"] == "scenario":
+                    new_game_stage["value"] = "party"
+                    return jsonify(
+                        {
+                            "applied": True,
+                            "effect": "new_game_back_to_party",
+                            "selected_actor_ids": list(scanned_new_game_party),
+                            "stage": new_game_stage["value"],
+                        }
+                    )
                 removed_id = scanned_new_game_party.pop() if scanned_new_game_party else None
                 return jsonify(
                     {
@@ -164,15 +193,30 @@ def create_app(
                         "effect": "party_actor_removed",
                         "removed_actor_id": removed_id,
                         "selected_actor_ids": list(scanned_new_game_party),
+                        "stage": new_game_stage["value"],
+                    }
+                )
+            if universal.action.value != "accept":
+                raise ValueError(
+                    "Na etapie wyboru drużyny użyj karty bohatera, AKCEPTUJ albo ODRZUĆ."
+                )
+            if new_game_stage["value"] == "party":
+                if not 1 <= len(scanned_new_game_party) <= 5:
+                    raise ValueError("Zeskanuj od 1 do 5 kart różnych bohaterów.")
+                new_game_stage["value"] = "scenario"
+                return jsonify(
+                    {
+                        "applied": True,
+                        "effect": "party_confirmed",
+                        "selected_actor_ids": list(scanned_new_game_party),
+                        "stage": new_game_stage["value"],
                     }
                 )
             scenario_id = str(data.get("scenario_id", "")).strip()
             scenarios_by_id = {entry.id: entry for entry in scenario_choices()}
             selected_scenario = scenarios_by_id.get(scenario_id)
             if selected_scenario is None:
-                raise ValueError("Najpierw wybierz dostępny scenariusz.")
-            if not 1 <= len(scanned_new_game_party) <= 5:
-                raise ValueError("Zeskanuj od 1 do 5 kart różnych bohaterów.")
+                raise ValueError("Wybierz dostępny scenariusz.")
             party = tuple(
                 apply_boardgame_archetype(
                     character_roster.load(actor_id).actor,
@@ -190,6 +234,7 @@ def create_app(
                     "effect": "start_new_game",
                     "redirect": url_for("play"),
                     "selected_actor_ids": list(scanned_new_game_party),
+                    "stage": new_game_stage["value"],
                 }
             )
         except (TypeError, ValueError) as exc:
@@ -197,6 +242,7 @@ def create_app(
                 {
                     "error": str(exc),
                     "selected_actor_ids": list(scanned_new_game_party),
+                    "stage": new_game_stage["value"],
                 }
             ), 400
 
@@ -639,6 +685,32 @@ def create_app(
                             f"postaci {selection['actor_name']}."
                         ),
                     },
+                }
+            )
+        if (
+            action_card.action_kind is DecisionCardActionKind.UNIVERSAL
+            and action_card.source_id in {"maneuvers", "equipment"}
+        ):
+            try:
+                state = session.open_physical_combat_menu(action_card.source_id)
+            except (TypeError, ValueError) as exc:
+                return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+            return jsonify(
+                {
+                    "applied": True,
+                    "effect": f"open_{action_card.source_id}_menu",
+                    "label": (
+                        "MANEWRY"
+                        if action_card.source_id == "maneuvers"
+                        else "EKWIPUNEK"
+                    ),
+                    "payload": normalized,
+                    "feedback": {
+                        "status": "waiting",
+                        "next_step": "select_menu_option",
+                        "message": session.board_message,
+                    },
+                    "state": state,
                 }
             )
         if action_card.action_kind is not DecisionCardActionKind.UNIVERSAL:
@@ -2809,6 +2881,13 @@ def create_app(
     def api_encounter_combat_resolve():
         try:
             return jsonify(session.resolve_active_combat())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/encounter/retry")
+    def api_encounter_retry():
+        try:
+            return jsonify(session.retry_encounter())
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 

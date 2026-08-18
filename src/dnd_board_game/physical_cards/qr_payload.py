@@ -12,6 +12,7 @@ OWNED_DECISION_CARD_QR_VERSION = 2
 _ACTION_SEGMENT = "action"
 _ACTOR_SEGMENT = "actor"
 _KEYBOARD_WEDGE_SEPARATOR = ">"
+_KEYBOARD_WEDGE_UNDERSCORE = "?"
 
 
 class DecisionCardActionKind(StrEnum):
@@ -107,6 +108,11 @@ def normalize_decision_card_scanner_text(value: str) -> str:
     normalized = value.strip().lower()
     if normalized.startswith(f"{DECISION_CARD_QR_PREFIX}{_KEYBOARD_WEDGE_SEPARATOR}"):
         normalized = normalized.replace(_KEYBOARD_WEDGE_SEPARATOR, ":")
+    if normalized.startswith(f"{DECISION_CARD_QR_PREFIX}:"):
+        # The fixed scanner keyboard layout emits ``?`` for the underscore key.
+        # Question marks are not part of the QR grammar or stable identifiers,
+        # so translating them here is unambiguous for every dndbg card type.
+        normalized = normalized.replace(_KEYBOARD_WEDGE_UNDERSCORE, "_")
     return normalized
 
 

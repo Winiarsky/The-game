@@ -20,6 +20,11 @@ class LedRole(StrEnum):
     ALLY = "ally"
     ENEMY = "enemy"
     PROJECTILE = "projectile"
+    ENEMY_FLEE_PATH = "enemy_flee_path"
+    ENEMY_ESCAPE_DESTINATION = "enemy_escape_destination"
+    ENEMY_REGROUP_PATH = "enemy_regroup_path"
+    ENEMY_GUARD_DESTINATION = "enemy_guard_destination"
+    ACTOR_DEFEATED = "actor_defeated"
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,6 +65,11 @@ DEFAULT_COLORS: dict[LedRole, tuple[int, int, int]] = {
     LedRole.ALLY: LedColor.ALLY,
     LedRole.ENEMY: LedColor.ENEMY,
     LedRole.PROJECTILE: LedColor.RANGED_PROJECTILE,
+    LedRole.ENEMY_FLEE_PATH: LedColor.ENEMY_FLEE_PATH,
+    LedRole.ENEMY_ESCAPE_DESTINATION: LedColor.ENEMY_ESCAPE_DESTINATION,
+    LedRole.ENEMY_REGROUP_PATH: LedColor.ENEMY_REGROUP_PATH,
+    LedRole.ENEMY_GUARD_DESTINATION: LedColor.ENEMY_GUARD_DESTINATION,
+    LedRole.ACTOR_DEFEATED: LedColor.ACTOR_DEFEATED,
 }
 
 
@@ -75,6 +85,11 @@ LED_ROLE_PRIORITY: dict[LedRole, int] = {
     LedRole.ENEMY: 60,
     LedRole.BLOCKING_TERRAIN: 70,
     LedRole.PROJECTILE: 100,
+    LedRole.ENEMY_FLEE_PATH: 42,
+    LedRole.ENEMY_REGROUP_PATH: 42,
+    LedRole.ENEMY_ESCAPE_DESTINATION: 52,
+    LedRole.ENEMY_GUARD_DESTINATION: 52,
+    LedRole.ACTOR_DEFEATED: 110,
 }
 
 

@@ -1284,6 +1284,29 @@ Poza zakresem MVP:
   istotnych pasywów oraz mechaniczną skazę. Tonerowy zestaw bez rewersów zawiera
   również osobne białe dossier i aktualny arkusz statystyk.
 
+## Start siedmiu bohaterów na poziomie 3
+
+- Garran, Brakka, Mira, Dagna, Lorian, Nimra i Erynd zaczynają na poziomie 3.
+  Każdy otrzymuje jednorazową, idempotentną premię `+2` do głównego atrybutu,
+  maksymalnie do 20. Premia jest jawnym odstępstwem planszowego archetypu od
+  standardowej progresji D&D 5e 2014.
+- Każdy bohater ma od startu dostęp do wszystkich kart swojej osobistej talii.
+  Drukowane karty mają plakietkę `OD STARTU`; dawne poziomy pochodzenia zostają
+  tylko w manifeście technicznym. Awans i odblokowywanie kart są odłożone.
+- Stała talia jest mechaniczną listą dostępnych czarów. Dodatkowe czary użyte
+  przy budowaniu legalnej klasy mogą pozostać w danych opisowych aktora, ale nie
+  tworzą akcji. Erynd płaci Instynktem i nie ma równoległych komórek łowcy.
+- `Wykorzystanie słabości` Miry i `Strzelecka cierpliwość` Erynda kosztują akcję
+  dodatkową oraz 1 punkt osobistego zasobu. Dają przewagę następnemu atakowi w
+  tej samej turze i zastępują wcześniejsze, niegrywalne warianty True Strike.
+- Karty `MANEWRY` i `EKWIPUNEK` otwierają odpowiednio legalne menu manewrów i
+  menu wyposażenia aktywnego bohatera. Podpowiedź kart pokazuje tylko legalne w
+  danym oknie karty oraz aktualny licznik ich skończonego zasobu.
+- Dossier nie pokazuje pozornej progresji poziomów 1–3. Sekcja `Zasoby kart`
+  podaje maksymalną pulę, sposób odnowienia i nazwy kart, które ją wydają.
+  Klasy pełnoczarujące zaczynają z 4 komórkami 1. poziomu i 2 komórkami 2.
+  poziomu. Arkusz postaci wymienia wyłącznie czary obecne w osobistej talii.
+
 Testy:
 
 - `tests/unit/test_exploration_setup.py`

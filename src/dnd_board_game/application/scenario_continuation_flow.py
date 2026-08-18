@@ -71,6 +71,16 @@ class ScenarioContinuationFlowService:
             "available": not missing_flags and not wrong_zone,
             "missing_flags": list(missing_flags),
             "requires_departure_zone": wrong_zone,
+            "departure_summary": [
+                {
+                    "label": item.label,
+                    "known": (
+                        item.required_flag is None
+                        or bool(scene_flag(flags, item.required_flag, False))
+                    ),
+                }
+                for item in continuation.departure_summary
+            ],
         }
 
     def plan(

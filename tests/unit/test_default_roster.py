@@ -9,7 +9,13 @@ from dnd_board_game.character_creation import (
     load_character_resources,
     validate_character_draft,
 )
-from dnd_board_game.inventory import effective_armor_class
+from dnd_board_game.combat import (
+    ActiveCombatEffect,
+    CombatCondition,
+    ConditionState,
+    actor_spell_cast_validation,
+)
+from dnd_board_game.inventory import effective_armor_class, free_hand_count
 from dnd_board_game.scenarios.loader import compile_actor_combat_content
 
 
@@ -27,7 +33,7 @@ def test_default_roster_has_seven_valid_role_first_heroes():
         assert validation.valid, (draft.id, validation.issues)
         character = build_character(draft, catalog, resources)
         actor = character.actor
-        assert actor.level == 1
+        assert actor.level == 3
         assert actor.hp == actor.max_hp > 0
         assert effective_armor_class(actor) >= 10
         assert actor.proficiencies.skills
@@ -75,6 +81,71 @@ def test_default_roster_spellcasters_have_legal_actions_and_resources():
         assert actor.spell_slots is not None
 
 
+def test_dagna_can_cast_guiding_bolt_while_holding_mace_and_shield() -> None:
+    catalog = load_character_catalog("content/character_creation/catalog.json")
+    resources = load_character_resources(catalog, "content")
+    draft = next(draft for draft in default_character_drafts() if draft.id == "dagna")
+    actor = build_character(draft, catalog, resources).actor
+
+    validation = actor_spell_cast_validation(actor, "guiding_bolt")
+
+    assert free_hand_count(actor.inventory) == 0
+    assert validation is not None
+    assert validation.valid is True
+
+
+def test_explicit_actor_states_block_matching_guiding_bolt_components() -> None:
+    catalog = load_character_catalog("content/character_creation/catalog.json")
+    resources = load_character_resources(catalog, "content")
+    draft = next(draft for draft in default_character_drafts() if draft.id == "dagna")
+    actor = build_character(draft, catalog, resources).actor
+
+    bound = actor_spell_cast_validation(
+        actor,
+        "guiding_bolt",
+        condition_states=(
+            ConditionState(str(actor.id), CombatCondition.HANDS_BOUND),
+        ),
+    )
+    gagged = actor_spell_cast_validation(
+        actor,
+        "guiding_bolt",
+        condition_states=(
+            ConditionState(str(actor.id), CombatCondition.GAGGED),
+        ),
+    )
+
+    assert bound is not None and bound.valid is False
+    assert "somatyczny" in bound.errors[0]
+    assert gagged is not None and gagged.valid is False
+    assert "werbalny" in gagged.errors[0]
+
+
+def test_magic_silence_blocks_dagnas_verbal_spell_component() -> None:
+    catalog = load_character_catalog("content/character_creation/catalog.json")
+    resources = load_character_resources(catalog, "content")
+    draft = next(draft for draft in default_character_drafts() if draft.id == "dagna")
+    actor = build_character(draft, catalog, resources).actor
+    silence = ActiveCombatEffect(
+        id="silence-zone",
+        actor_id=str(actor.id),
+        kind="silence_zone",
+        label="Cisza",
+        object_id="",
+        value=20,
+        anchor_position=actor.position,
+    )
+
+    validation = actor_spell_cast_validation(
+        actor,
+        "guiding_bolt",
+        active_effects=(silence,),
+    )
+
+    assert validation is not None and validation.valid is False
+    assert "werbalny" in validation.errors[0]
+
+
 def test_default_roster_core_class_mechanics_are_attached():
     catalog = load_character_catalog("content/character_creation/catalog.json")
     resources = load_character_resources(catalog, "content")
@@ -98,6 +169,6 @@ def test_default_roster_core_class_mechanics_are_attached():
         }
 
     assert any(
-        pool.id == "rage_uses" and pool.maximum == 2
+        pool.id == "rage_uses" and pool.maximum == 3
         for pool in actors["barbarian"].resource_pools
     )

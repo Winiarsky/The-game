@@ -1,4 +1,8 @@
-"""Curated level-1 starter characters covering every supported class."""
+"""Curated starter characters covering every supported class.
+
+The seven board-game heroes start at level 3.  The remaining dormant SRD
+templates stay at level 1 for creator and rules regression coverage.
+"""
 
 from __future__ import annotations
 
@@ -20,6 +24,8 @@ def all_default_character_drafts() -> tuple[CharacterDraft, ...]:
             equipment_package_id="barbarian_greataxe",
             selected_background_tool_ids=("drum",),
             selected_background_language_ids=("giant",),
+            selected_subclass_id="path_of_the_berserker",
+            level=3,
             portrait="character_uploads/default_roster_v2/brakka.png",
         ),
         CharacterDraft(
@@ -37,7 +43,11 @@ def all_default_character_drafts() -> tuple[CharacterDraft, ...]:
                 "faerie_fire",
                 "thunderwave",
                 "charm_person",
+                "heroism",
+                "hideous_laughter",
             ),
+            selected_expertise_ids=("persuasion", "stealth"),
+            selected_subclass_id="college_of_lore",
             selected_species_bonus_ability_ids=("dexterity", "constitution"),
             selected_species_skill_ids=("insight", "perception"),
             selected_species_language_ids=("dwarvish",),
@@ -45,8 +55,12 @@ def all_default_character_drafts() -> tuple[CharacterDraft, ...]:
                 "bard_instrument_lute",
                 "bard_instrument_flute",
                 "bard_instrument_viol",
+                "lore_skill_arcana",
+                "lore_skill_history",
+                "lore_skill_investigation",
             ),
             selected_background_tool_ids=("drum",),
+            level=3,
             portrait="character_uploads/default_roster_v2/lorian.png",
         ),
         CharacterDraft(
@@ -64,10 +78,13 @@ def all_default_character_drafts() -> tuple[CharacterDraft, ...]:
                 "guiding_bolt",
                 "shield_of_faith",
                 "sanctuary",
+                "aid",
+                "warding_bond",
             ),
             selected_subclass_id="life_domain",
             selected_species_tool_ids=("smiths_tools",),
             selected_background_language_ids=("celestial", "elvish"),
+            level=3,
             portrait="character_uploads/default_roster_v2/dagna.png",
         ),
         CharacterDraft(
@@ -98,6 +115,8 @@ def all_default_character_drafts() -> tuple[CharacterDraft, ...]:
             equipment_package_id="fighter_sword_and_board",
             selected_species_language_ids=("elvish",),
             selected_background_tool_ids=("dice_set",),
+            selected_subclass_id="champion",
+            level=3,
             portrait="character_uploads/default_roster_v2/garran.png",
         ),
         CharacterDraft(
@@ -139,8 +158,13 @@ def all_default_character_drafts() -> tuple[CharacterDraft, ...]:
             selected_class_option_ids=(
                 "favored_enemy_beast",
                 "natural_explorer_forest",
+                "colossus_slayer",
             ),
+            selected_fighting_style_id="archery",
+            selected_spell_ids=("hunters_mark", "goodberry", "cure_wounds"),
+            selected_subclass_id="hunter",
             selected_background_tool_ids=("woodcarvers_tools",),
+            level=3,
             portrait="character_uploads/default_roster_v2/erynd.png",
         ),
         CharacterDraft(
@@ -159,6 +183,8 @@ def all_default_character_drafts() -> tuple[CharacterDraft, ...]:
             selected_expertise_ids=("investigation", "sleight_of_hand"),
             equipment_package_id="rogue_burglar",
             selected_background_tool_ids=("playing_card_set",),
+            selected_subclass_id="thief",
+            level=3,
             portrait="character_uploads/default_roster_v2/mira.png",
         ),
         CharacterDraft(
@@ -215,14 +241,22 @@ def all_default_character_drafts() -> tuple[CharacterDraft, ...]:
                 "sleep",
                 "fog_cloud",
                 "identify",
+                "web",
+                "hold_person",
+                "misty_step",
+                "shatter",
             ),
             selected_prepared_spell_ids=(
                 "grease",
                 "shield",
                 "sleep",
                 "fog_cloud",
+                "web",
+                "hold_person",
             ),
+            selected_subclass_id="school_of_evocation",
             selected_background_language_ids=("elvish", "draconic"),
+            level=3,
             portrait="character_uploads/default_roster_v2/nimra.png",
         ),
     )

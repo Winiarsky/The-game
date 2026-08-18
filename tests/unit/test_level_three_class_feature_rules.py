@@ -30,6 +30,7 @@ from dnd_board_game.combat import (
     convert_spell_slot_to_sorcery_points,
     create_spell_slot_from_sorcery_points,
     climbing_movement_cost,
+    consume_next_attack_effects,
     dark_ones_blessing_temporary_hit_points,
     deflect_missiles,
     divine_smite_damage,
@@ -45,6 +46,7 @@ from dnd_board_game.combat import (
     resolve_frenzy,
     expire_turn_end_effects,
     resolve_martial_arts_bonus_attack,
+    resolve_archetype_attack_focus,
     resolve_limited_dodge,
     resolve_open_hand_technique,
     resolve_patient_defense,
@@ -871,6 +873,36 @@ def test_archetype_limited_dodge_spends_short_rest_use_without_ki():
     assert result.actor_after.resource_pools[0].current == 0
     assert result.state.turn_action.bonus_action_use == ActionUse.ACTION_USED
     assert result.active_effects[0].kind == "dodge_until_next_turn"
+
+
+def test_archetype_attack_focus_spends_resource_and_grants_same_turn_advantage():
+    rogue = replace(
+        _actor("exploit_weakness"),
+        resource_pools=(
+            ActorResourcePool(
+                "trick_uses",
+                "Fortele",
+                3,
+                3,
+                RecoveryPeriod.LONG_REST,
+            ),
+        ),
+    )
+    enemy = replace(_actor(), id=ActorId("enemy"), faction=Faction.ENEMY)
+
+    result = resolve_archetype_attack_focus(
+        _state(rogue, enemy),
+        (),
+        feature_id="exploit_weakness",
+        resource_id="trick_uses",
+        label="Wykorzystanie słabości",
+    )
+
+    assert result.actor_after.resource_pools[0].current == 2
+    assert result.state.turn_action.bonus_action_use == ActionUse.ACTION_USED
+    assert result.active_effects[0].kind == "next_attack_advantage"
+    assert result.active_effects[0].duration.value == "until_next_attack"
+    assert consume_next_attack_effects(result.active_effects, "hero", "enemy") == ()
 
 
 def test_martial_arts_and_flurry_queue_the_correct_unarmed_strikes():

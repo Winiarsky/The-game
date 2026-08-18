@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Eksploracja</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='exploration.css', v='instance-navigation-20260803-1') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='exploration.css', v='card-components-20260816-1') }}">
 </head>
 <body>
 <header class="app-shell-header">
@@ -260,65 +260,84 @@
     <div class="card scene-action" id="action-panel">
       <div class="chat-instance-head">
         <div>
-          <span class="muted">Rozmowa z MG</span>
+          <span id="chat-instance-kicker" class="muted">Rozmowa z MG</span>
           <h3 id="action-title">Co robicie lub o co pytacie?</h3>
           <div id="conversation-meta" class="conversation-meta"></div>
         </div>
         <button id="leave-interaction-button" class="secondary" data-allow-busy="true" onclick="leaveChatInstance()">Opuść interakcję</button>
       </div>
-      <div id="chat-stream">
-        <div id="exploration-card-prompt" class="exploration-card-prompt conversation-system-card" hidden></div>
-        <div id="scene-conversation"></div>
-        <div id="chat-typing" class="chat-typing" hidden>
-          <span></span><span></span><span></span>
-          <em id="chat-typing-label">MG zastanawia się nad odpowiedzią…</em>
-        </div>
-        <div id="chat-retry" class="chat-retry" hidden>
-          <span id="chat-retry-message">Nie udało się uzyskać odpowiedzi MG.</span>
-          <button class="secondary" data-allow-busy="true" onclick="retryLastGmRequest()">Spróbuj ponownie</button>
-        </div>
-        <div id="interaction-goals" class="interaction-goals conversation-system-card chat-flow-entry"></div>
-        <div id="interaction-state-card" class="chat-resolution conversation-system-card interaction-state-card" aria-live="polite" hidden>
-          <div class="interaction-state-head">
-            <div>
-              <span class="interaction-state-kicker">Rozstrzygnięcie</span>
-              <b id="interaction-state-title" class="conversation-system-title">Warunki próby</b>
-            </div>
-            <div id="interaction-state-steps" class="interaction-state-steps" aria-label="Etap rozstrzygnięcia">
-              <span data-interaction-step="decision">1 · Decyzja</span>
-              <span data-interaction-step="roll">2 · Rzut</span>
-              <span data-interaction-step="result">3 · Wynik</span>
+      <div id="chat-stream" class="interaction-workspace">
+        <section class="interaction-workspace-pane conversation-workspace-pane" aria-labelledby="conversation-pane-title">
+          <header class="interaction-workspace-pane-head">
+            <b id="conversation-pane-title">Rozmowa</b>
+            <span id="conversation-pane-status">Historia interakcji</span>
+          </header>
+          <div id="chat-conversation-scroll" class="interaction-workspace-scroll conversation-workspace-scroll">
+            <div id="point-preview-pane" class="point-preview-pane" hidden></div>
+            <div id="conversation-content">
+              <div id="exploration-card-prompt" class="exploration-card-prompt conversation-system-card" hidden></div>
+              <div id="scene-conversation"></div>
+              <div id="chat-typing" class="chat-typing" hidden>
+                <span></span><span></span><span></span>
+                <em id="chat-typing-label">MG zastanawia się nad odpowiedzią…</em>
+              </div>
+              <div id="chat-retry" class="chat-retry" hidden>
+                <span id="chat-retry-message">Nie udało się uzyskać odpowiedzi MG.</span>
+                <button class="secondary" data-allow-busy="true" onclick="retryLastGmRequest()">Spróbuj ponownie</button>
+              </div>
+              <div id="chat-utility-actions" class="chat-utility-actions">
+                <button id="gm-chat-trigger" class="secondary" type="button" onclick="openGmChatDialog()">
+                  Zapytaj MG
+                </button>
+                <span>Opcjonalna swobodna rozmowa — nie rozpoczyna testu ani działania.</span>
+              </div>
+              <button id="chat-new-message" class="chat-new-message" type="button" hidden onclick="scrollChatToBottom(true)">
+                Nowa odpowiedź ↓
+              </button>
             </div>
           </div>
-          <section id="pending-panel" class="interaction-state-phase">
-            <b id="pending-title" class="sr-only">Warunki próby</b>
-            <div id="pending"></div>
-            <div id="lead-actor-choice"></div>
-            <div class="row conversation-system-actions">
-              <button id="pending-accept-button" onclick="decision('accept')">Akceptuj</button>
-              <button id="pending-reject-button" class="danger" onclick="decision('reject')">Odrzuć</button>
-              <button class="secondary" onclick="decision('explain')">Wyjaśnij</button>
+        </section>
+        <section class="interaction-workspace-pane actions-workspace-pane" aria-labelledby="actions-pane-title">
+          <header class="interaction-workspace-pane-head">
+            <b id="actions-pane-title">Dostępne działania</b>
+            <div data-board-input-status></div>
+          </header>
+          <div id="interaction-actions-scroll" class="interaction-workspace-scroll actions-workspace-scroll">
+            <div id="interaction-goals" class="interaction-goals conversation-system-card chat-flow-entry"></div>
+            <div id="interaction-state-card" class="chat-resolution conversation-system-card interaction-state-card" aria-live="polite" hidden>
+              <div class="interaction-state-head">
+                <div>
+                  <span class="interaction-state-kicker">Rozstrzygnięcie</span>
+                  <b id="interaction-state-title" class="conversation-system-title">Warunki próby</b>
+                </div>
+                <div id="interaction-state-steps" class="interaction-state-steps" aria-label="Etap rozstrzygnięcia">
+                  <span data-interaction-step="decision">1 · Decyzja</span>
+                  <span data-interaction-step="roll">2 · Rzut</span>
+                  <span data-interaction-step="result">3 · Wynik</span>
+                </div>
+              </div>
+              <section id="pending-panel" class="interaction-state-phase">
+                <b id="pending-title" class="sr-only">Warunki próby</b>
+                <div id="pending"></div>
+                <div id="lead-actor-choice"></div>
+                <div class="row conversation-system-actions">
+                  <button id="pending-accept-button" onclick="decision('accept')">Akceptuj</button>
+                  <button id="pending-reject-button" class="danger" onclick="decision('reject')">Odrzuć</button>
+                  <button class="secondary" onclick="decision('explain')">Wyjaśnij</button>
+                </div>
+              </section>
+              <section id="roll-panel" class="interaction-state-phase">
+                <div id="roll-prompt"></div>
+                <div id="rolls" class="physical-roll-inputs"></div>
+                <button onclick="sendRolls()">Rozstrzygnij rzuty</button>
+              </section>
+              <section id="result-panel" class="interaction-state-phase">
+                <div id="result"></div>
+                <button id="result-ack-button" onclick="ackResult()">Kontynuuj rozmowę</button>
+              </section>
             </div>
-          </section>
-          <section id="roll-panel" class="interaction-state-phase">
-            <div id="roll-prompt"></div>
-            <div id="rolls" class="physical-roll-inputs"></div>
-            <button onclick="sendRolls()">Rozstrzygnij rzuty</button>
-          </section>
-          <section id="result-panel" class="interaction-state-phase">
-            <div id="result"></div>
-            <button id="result-ack-button" onclick="ackResult()">Kontynuuj rozmowę</button>
-          </section>
-        </div>
-        <div id="chat-utility-actions" class="chat-utility-actions">
-          <button id="gm-chat-trigger" class="secondary" type="button" onclick="openGmChatDialog()">
-            Zapytaj MG
-          </button>
-          <span>Opcjonalna swobodna rozmowa — nie rozpoczyna testu ani działania.</span>
-        </div>
-        <button id="chat-new-message" class="chat-new-message" type="button" hidden onclick="scrollChatToBottom(true)">
-          Nowy krok ↓
-        </button>
+          </div>
+        </section>
       </div>
     </div>
     <div class="card" id="encounter-panel">
@@ -356,6 +375,6 @@
   </form>
 </dialog>
 <script>window.EXPLORATION_SLASH_COMMANDS = {{ slash_commands | tojson }};</script>
-<script src="{{ url_for('static', filename='exploration.js', v='stable-instance-slots-20260804-2') }}"></script>
+<script src="{{ url_for('static', filename='exploration.js', v='card-components-20260816-1') }}"></script>
 </body>
 </html>

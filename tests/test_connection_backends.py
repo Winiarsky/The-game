@@ -319,6 +319,58 @@ def test_hardware_backend_stops_previous_scan_before_new_scan():
     assert fake_serial.reset_input_calls == 1
 
 
+def test_hardware_backend_ignores_delayed_defensive_stop_acknowledgement():
+    backend = _HardwareBackend.__new__(_HardwareBackend)
+    fake_serial = _FakeSerial()
+    backend.ser = fake_serial
+    backend.protocol_name = "board_scan_usb_v1"
+    backend.scan_command = "SCAN"
+    backend.stop_command = "STOP"
+    backend.stop_before_scan = True
+    backend.pre_scan_stop_s = 0.0
+    backend.pre_scan_delay_s = 0.0
+    backend.scan_recovery_timeout_s = 0.0
+    backend._cancel_generation = 0
+    payloads = iter(
+        [
+            {"protocol": "board_scan_usb_v1", "event": "cancel", "cancelled": True},
+            {"protocol": "board_scan_usb_v1", "event": "press", "col": 2, "row": 2},
+        ]
+    )
+    backend._read_protocol_payload = lambda *, timeout_s=None: next(payloads)  # noqa: ARG005
+
+    result = backend.scan_board([(2, 2)])
+
+    assert result == (2, 2)
+    assert fake_serial.writes == ["STOP", "SCAN"]
+
+
+def test_hardware_backend_honors_explicit_cancel_during_active_scan():
+    backend = _HardwareBackend.__new__(_HardwareBackend)
+    fake_serial = _FakeSerial()
+    backend.ser = fake_serial
+    backend.protocol_name = "board_scan_usb_v1"
+    backend.scan_command = "SCAN"
+    backend.stop_command = "STOP"
+    backend.stop_before_scan = False
+    backend.pre_scan_delay_s = 0.0
+    backend.scan_recovery_timeout_s = 0.0
+    backend._cancel_generation = 0
+
+    def cancelled_payload(*, timeout_s=None):  # noqa: ARG001
+        backend.cancel_scan()
+        # A press already buffered before the STOP acknowledgement must not win
+        # the race with the explicit cancellation request.
+        return {"protocol": "board_scan_usb_v1", "event": "press", "col": 2, "row": 2}
+
+    backend._read_protocol_payload = cancelled_payload
+
+    result = backend.scan_board([(2, 2)])
+
+    assert result is None
+    assert fake_serial.writes == ["SCAN", "STOP"]
+
+
 def test_hardware_backend_rearm_scan_sends_stop_then_scan():
     backend = _HardwareBackend.__new__(_HardwareBackend)
     fake_serial = _FakeSerial()
@@ -333,6 +385,18 @@ def test_hardware_backend_rearm_scan_sends_stop_then_scan():
 
     assert fake_serial.writes == ["STOP", "SCAN"]
     assert fake_serial.reset_input_calls == 1
+
+
+def test_hardware_soft_reset_preserves_stop_acknowledgement_for_active_scan():
+    backend = _HardwareBackend.__new__(_HardwareBackend)
+    fake_serial = _FakeSerial()
+    backend.ser = fake_serial
+    backend.stop_command = "STOP"
+
+    backend.reset_connection()
+
+    assert fake_serial.writes == ["STOP"]
+    assert fake_serial.reset_input_calls == 0
 
 
 def test_hardware_backend_stops_scan_after_rejected_press():

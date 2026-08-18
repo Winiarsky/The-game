@@ -64,6 +64,7 @@ def plan_npc_attempt(
     *,
     npc_id: str,
     policy: NpcAttemptPolicy,
+    actor_id: str | None = None,
 ) -> NpcAttemptPlan:
     current = npc_runtime_state_for(state, npc_id)
     if current is None:
@@ -74,6 +75,20 @@ def plan_npc_attempt(
         and event.attempt_id.strip().lower() == attempt_id
         for event in current.relationship_events
     )
+    if policy.close_on_critical_failure and any(
+        event.attempt_id is not None
+        and event.attempt_id.strip().lower() == attempt_id
+        and event.critical_failure
+        for event in current.relationship_events
+    ):
+        return NpcAttemptPlan(
+            attempt_id,
+            attempts_used,
+            policy.max_attempts,
+            False,
+            policy.exhausted_message,
+            policy.retry_requires_any_flags,
+        )
     if attempts_used == 0 and attempt_id in current.used_attempt_ids:
         # Backwards-compatible snapshots recorded only unique used ids.
         attempts_used = 1
@@ -86,6 +101,26 @@ def plan_npc_attempt(
             policy.exhausted_message,
             policy.retry_requires_any_flags,
         )
+    normalized_actor_id = actor_id.strip() if actor_id is not None else ""
+    if policy.unique_actor_per_attempt:
+        if not normalized_actor_id:
+            raise ValueError("This NPC attempt requires a selected actor.")
+        used_actor_ids = {
+            event.actor_id
+            for event in current.relationship_events
+            if event.attempt_id is not None
+            and event.attempt_id.strip().lower() == attempt_id
+            and event.actor_id is not None
+        }
+        if normalized_actor_id in used_actor_ids:
+            return NpcAttemptPlan(
+                attempt_id,
+                attempts_used,
+                policy.max_attempts,
+                False,
+                policy.retry_locked_message,
+                policy.retry_requires_any_flags,
+            )
     if attempts_used > 0 and policy.retry_requires_any_flags:
         retry_unlocked = any(
             bool(scene_flag(state.flags, flag, False))
@@ -119,6 +154,8 @@ def resolve_npc_runtime_interaction(
     update: NpcStateUpdate | None = None,
     revealed_information_ids: tuple[str, ...] = (),
     attempt_id: str | None = None,
+    actor_id: str | None = None,
+    critical_failure: bool = False,
 ) -> NpcRuntimeResolution:
     current = npc_runtime_state_for(state, npc_id)
     if current is None:
@@ -135,6 +172,8 @@ def resolve_npc_runtime_interaction(
         outcome="success" if success else "failure",
         summary=normalized_summary,
         attempt_id=(attempt_id.strip().lower() if attempt_id and attempt_id.strip() else None),
+        actor_id=(actor_id.strip() if actor_id and actor_id.strip() else None),
+        critical_failure=critical_failure,
     )
     revealed = tuple(
         dict.fromkeys((*current.revealed_information_ids, *revealed_information_ids))

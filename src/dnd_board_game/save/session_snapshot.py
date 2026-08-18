@@ -40,6 +40,8 @@ from dnd_board_game.combat import (
     ConditionSaveTiming,
     ConditionState,
     DroppedWeapon,
+    EnemyAiRuntimeState,
+    EnemyOutcome,
     HiddenState,
     InitiativeEntry,
     InitiativeOrder,
@@ -2020,6 +2022,11 @@ def _exploration_from_payload(base: ExplorationState, raw: object) -> Exploratio
                             event.get("attempt_id"),
                             "npc_relationship_event.attempt_id",
                         ),
+                        actor_id=_optional_string(
+                            event.get("actor_id"),
+                            "npc_relationship_event.actor_id",
+                        ),
+                        critical_failure=bool(event.get("critical_failure", False)),
                     )
                     for raw_event in _sequence(
                         item.get("relationship_events", []),
@@ -2474,6 +2481,24 @@ def _combat_payload(state: CombatState | None) -> dict[str, object] | None:
         },
         "turn_action": {"action_use": state.turn_action.action_use.value, "bonus_action_use": state.turn_action.bonus_action_use.value, "reaction_available": state.turn_action.reaction_available, "movement_used_feet": state.turn_action.movement_used_feet, "extra_movement_feet": state.turn_action.extra_movement_feet, "object_interaction_available": state.turn_action.object_interaction_available, "two_weapon_trigger_item_id": state.turn_action.two_weapon_trigger_item_id, "attack_action_active": state.turn_action.attack_action_active, "attacks_used": state.turn_action.attacks_used, "attacks_maximum": state.turn_action.attacks_maximum, "bonus_attacks_remaining": state.turn_action.bonus_attacks_remaining, "bonus_attack_source_id": state.turn_action.bonus_attack_source_id, "bonus_action_spell_cast": state.turn_action.bonus_action_spell_cast, "leveled_action_spell_cast": state.turn_action.leveled_action_spell_cast},
         "status": state.status.value, "winner": state.winner.value if state.winner else None,
+        "enemy_ai": {
+            "profile_id": state.enemy_ai.profile_id,
+            "encounter_seed": state.enemy_ai.encounter_seed,
+            "starting_morale": state.enemy_ai.starting_morale,
+            "morale": state.enemy_ai.morale,
+            "used_morale_events": list(state.enemy_ai.used_morale_events),
+            "previous_targets": [list(item) for item in state.enemy_ai.previous_targets],
+            "decision_counts": [list(item) for item in state.enemy_ai.decision_counts],
+            "outcomes": [
+                {
+                    "actor_id": outcome.actor_id,
+                    "actor_name": outcome.actor_name,
+                    "outcome": outcome.outcome,
+                    "round_number": outcome.round_number,
+                }
+                for outcome in state.enemy_ai.outcomes
+            ],
+        },
         "spent_reaction_actor_ids": sorted(str(item) for item in state.spent_reaction_actor_ids),
         "ammunition_expenditures": [
             {
@@ -2700,6 +2725,7 @@ def _combat_from_payload(raw: object) -> CombatState | None:
     if not entries or not 0 <= current_index < len(entries):
         raise SnapshotValidationError("Zapis zawiera nieprawidłowy indeks inicjatywy.")
     turn = _mapping(data.get("turn_action"), "combat.turn_action")
+    enemy_ai_raw = _mapping(data.get("enemy_ai", {}), "combat.enemy_ai")
     return CombatState(
         actors=actors,
         initiative_order=InitiativeOrder(
@@ -2779,6 +2805,64 @@ def _combat_from_payload(raw: object) -> CombatState | None:
                 data.get("summoned_creatures", []),
                 "combat.summoned_creatures",
             )
+        ),
+        enemy_ai=EnemyAiRuntimeState(
+            profile_id=_string(
+                enemy_ai_raw.get("profile_id", ""),
+                "combat.enemy_ai.profile_id",
+                allow_empty=True,
+            ),
+            encounter_seed=_integer(
+                enemy_ai_raw.get("encounter_seed", 7),
+                "combat.enemy_ai.encounter_seed",
+            ),
+            starting_morale=_integer(
+                enemy_ai_raw.get("starting_morale", 0),
+                "combat.enemy_ai.starting_morale",
+            ),
+            morale=_integer(
+                enemy_ai_raw.get("morale", 0),
+                "combat.enemy_ai.morale",
+            ),
+            used_morale_events=_string_tuple(
+                enemy_ai_raw.get("used_morale_events", []),
+                "combat.enemy_ai.used_morale_events",
+            ),
+            previous_targets=tuple(
+                (
+                    _string(item[0], "combat.enemy_ai.previous_target.actor_id"),
+                    _string(item[1], "combat.enemy_ai.previous_target.target_id"),
+                )
+                for item in _sequence(
+                    enemy_ai_raw.get("previous_targets", []),
+                    "combat.enemy_ai.previous_targets",
+                )
+                if isinstance(item, list | tuple) and len(item) == 2
+            ),
+            decision_counts=tuple(
+                (
+                    _string(item[0], "combat.enemy_ai.decision_count.actor_id"),
+                    _integer(item[1], "combat.enemy_ai.decision_count.value"),
+                )
+                for item in _sequence(
+                    enemy_ai_raw.get("decision_counts", []),
+                    "combat.enemy_ai.decision_counts",
+                )
+                if isinstance(item, list | tuple) and len(item) == 2
+            ),
+            outcomes=tuple(
+                EnemyOutcome(
+                    actor_id=_string(item.get("actor_id"), "combat.enemy_ai.outcome.actor_id"),
+                    actor_name=_string(item.get("actor_name"), "combat.enemy_ai.outcome.actor_name"),
+                    outcome=_string(item.get("outcome"), "combat.enemy_ai.outcome.outcome"),
+                    round_number=_integer(item.get("round_number"), "combat.enemy_ai.outcome.round_number"),
+                )
+                for raw_item in _sequence(
+                    enemy_ai_raw.get("outcomes", []),
+                    "combat.enemy_ai.outcomes",
+                )
+                for item in (_mapping(raw_item, "combat.enemy_ai.outcome"),)
+            ),
         ),
         ammunition_expenditures=tuple(
             AmmunitionExpenditure(

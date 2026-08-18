@@ -25,6 +25,8 @@ from dnd_board_game.combat import (
     ConditionSaveTiming,
     ConditionState,
     HiddenState,
+    EnemyAiRuntimeState,
+    EnemyOutcome,
     LongCastState,
     SummonedCreatureState,
     add_summoned_creature,
@@ -1608,6 +1610,33 @@ def test_snapshot_round_trip_preserves_dropped_weapon(tmp_path):
     assert dropped.source_actor_id == armed.id
     assert dropped.weapon.equipped is False
     assert dropped.position == armed.position
+
+
+def test_snapshot_round_trip_preserves_enemy_ai_morale_memory_and_outcomes(tmp_path):
+    session = _session(tmp_path)
+    _start_scout_combat(session)
+    assert session.combat_state is not None
+    session.combat_state = replace(
+        session.combat_state,
+        enemy_ai=EnemyAiRuntimeState(
+            profile_id="hungry_shadow_pack",
+            encounter_seed=13,
+            starting_morale=3,
+            morale=1,
+            used_morale_events=("leader_bloodied",),
+            previous_targets=(("shadow_1", "hero"),),
+            decision_counts=(("shadow_1", 2),),
+            outcomes=(EnemyOutcome("shadow_2", "Głodny cień", "escaped", 2),),
+        ),
+    )
+
+    restored = SessionSnapshot.from_dict(
+        session.create_snapshot().as_dict(),
+        base_state=session.state,
+    )
+
+    assert restored.combat_state is not None
+    assert restored.combat_state.enemy_ai == session.combat_state.enemy_ai
 
 
 def test_snapshot_rejects_unknown_version(tmp_path):

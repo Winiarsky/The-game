@@ -29,6 +29,7 @@ class ExplorationFlowStage(StrEnum):
     LOCATION_ACTIVE = "location_active"
     SHORT_REST = "short_rest"
     INTERACTION_RESULT = "interaction_result"
+    GAME_OVER = "game_over"
     SCENARIO_COMPLETE = "scenario_complete"
 
 
@@ -316,6 +317,8 @@ class ExplorationFlowService:
 
     @staticmethod
     def trigger_reason(state: ExplorationState, trigger: ExplorationEncounterTrigger) -> str:
+        if trigger.condition.value == "always":
+            return "Encounter rozpoczyna się natychmiast po wejściu do sceny."
         if trigger.condition.value == "noise_at_least" and trigger.challenge_id is not None and trigger.noise is not None:
             noise = challenge_state_for(state, trigger.challenge_id).noise
             if noise >= trigger.noise:

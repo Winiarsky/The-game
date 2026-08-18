@@ -1,0 +1,12 @@
+{
+  "schema": "dnd_board_game.print_map_manifest",
+  "schema_version": 1,
+  "output_root": "assets/print_maps/ostatni_transport_00_gildia",
+  "maps": [
+    {
+      "id": "guild_hall_overview",
+      "title": "Siedziba Gildii",
+      "source": "assets/guild_hall_map_print.png"
+    }
+  ]
+}

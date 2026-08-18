@@ -21,7 +21,7 @@ from dnd_board_game.rules import (
     SavingThrowResult,
     resolve_d20_roll,
 )
-from dnd_board_game.world import BoardState, PathResult, find_path, movement_range
+from dnd_board_game.world import BoardState, PathResult, movement_range
 from dnd_board_game.inventory import consume_ammunition, has_ammunition
 
 from .action_economy import ActionUse
@@ -118,6 +118,10 @@ class EnemyAutoTurnResult:
     counterspell_actor_id: str | None = None
     mirror_image_outcome: MirrorImageOutcome | None = None
     sanctuary_saves: tuple[SavingThrowResult, ...] = ()
+    intent: str = "fallback"
+    utility_score: float | None = None
+    utility_breakdown: tuple[tuple[str, float], ...] = ()
+    escaped: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -129,6 +133,10 @@ class EnemyTurnPlan:
     movement_path: PathResult | None = None
     moved_enemy: Actor | None = None
     action_used: bool = False
+    intent: str = "fallback"
+    utility_score: float | None = None
+    utility_breakdown: tuple[tuple[str, float], ...] = ()
+    escaped: bool = False
 
 
 def resolve_enemy_auto_attack(
@@ -592,8 +600,42 @@ def resolve_enemy_auto_turn(
     maximum_attacks: int | None = None,
 ) -> EnemyAutoTurnResult:
     plan = plan_enemy_turn(board, state, enemy, source)
+    return resolve_planned_enemy_turn(
+        board,
+        plan,
+        source,
+        rng,
+        scene_objects,
+        active_effects,
+        maximum_attacks=maximum_attacks,
+        original_state=state,
+    )
+
+
+def resolve_planned_enemy_turn(
+    board: BoardState,
+    plan: EnemyTurnPlan,
+    source: AttackSource,
+    rng: random.Random,
+    scene_objects: tuple[SceneObject, ...] = (),
+    active_effects: tuple[ActiveEffect, ...] = (),
+    *,
+    maximum_attacks: int | None = None,
+    original_state: CombatState | None = None,
+) -> EnemyAutoTurnResult:
+    enemy = plan.enemy
+    state = plan.state
+    original_state = original_state or state
+    original_enemy = next(
+        (actor for actor in original_state.actors if actor.id == enemy.id),
+        enemy,
+    )
     stood_up = (
-        has_condition(state.condition_states, str(enemy.id), CombatCondition.PRONE)
+        has_condition(
+            original_state.condition_states,
+            str(original_enemy.id),
+            CombatCondition.PRONE,
+        )
         and not has_condition(plan.state.condition_states, str(enemy.id), CombatCondition.PRONE)
     )
     movement_message = (
@@ -602,6 +644,20 @@ def resolve_enemy_auto_turn(
         else ""
     )
     if plan.target is None:
+        if plan.intent in {"flee", "regroup", "guard", "cornered"}:
+            return EnemyAutoTurnResult(
+                plan.state,
+                plan.enemy,
+                None,
+                plan.message,
+                movement_path=plan.movement_path,
+                moved_enemy=plan.moved_enemy,
+                action_used=plan.action_used,
+                intent=plan.intent,
+                utility_score=plan.utility_score,
+                utility_breakdown=plan.utility_breakdown,
+                escaped=plan.escaped,
+            )
         if plan.movement_path is not None:
             follow_up = resolve_enemy_auto_attack(
                 board,
@@ -692,7 +748,7 @@ def resolve_enemy_auto_turn(
             moved_enemy=plan.moved_enemy,
             action_used=attack.action_used,
         )
-    return EnemyAutoTurnResult(
+    result = EnemyAutoTurnResult(
         state=attack.state,
         enemy=plan.enemy,
         target=attack.target,
@@ -710,8 +766,61 @@ def resolve_enemy_auto_turn(
         saving_throw_request=attack.saving_throw_request,
         saving_throw_result=attack.saving_throw_result,
         base_damage=attack.base_damage,
+        base_damage_components=attack.base_damage_components,
         mirror_image_outcome=attack.mirror_image_outcome,
         sanctuary_saves=attack.sanctuary_saves,
+    )
+    return _with_conditional_on_hit_save(result, plan, source)
+
+
+def _with_conditional_on_hit_save(
+    result: EnemyAutoTurnResult,
+    plan: EnemyTurnPlan,
+    source: AttackSource,
+) -> EnemyAutoTurnResult:
+    ability = source.conditional_on_hit_save_ability
+    condition = source.conditional_on_hit_save_condition
+    if (
+        ability is None
+        or condition is None
+        or result.attack_resolution is None
+        or not result.attack_resolution.hit
+        or result.target is None
+        or plan.movement_path is None
+        or plan.movement_path.cost_feet
+        < source.conditional_on_hit_minimum_movement_feet
+    ):
+        return result
+    if source.conditional_on_hit_requires_adjacent_ally:
+        target_position = result.target.position
+        has_pack_ally = any(
+            actor.id != plan.enemy.id
+            and actor.faction == plan.enemy.faction
+            and not actor.is_defeated()
+            and max(
+                abs(actor.position.col - target_position.col),
+                abs(actor.position.row - target_position.row),
+            ) <= 1
+            for actor in result.state.actors
+        )
+        if not has_pack_ally:
+            return result
+    request = SavingThrowRequest(
+        ability=ability,
+        dc=source.conditional_on_hit_save_dc,
+        source_label=source.name,
+        dc_source_label=f"ST efektu: {source.name}",
+        damage_on_success=SaveDamageOnSuccess.NONE,
+    )
+    return replace(
+        result,
+        saving_throw_request=request,
+        base_damage=0,
+        base_damage_components=(),
+        message=(
+            f"{result.message} Skok stada: cel wykonuje {ability} save "
+            f"przeciw ST {request.dc}."
+        ),
     )
 
 
@@ -856,7 +965,13 @@ def _plan_turned_enemy_turn(
             position.row,
         ),
     )
-    path = find_path(board, movement_actor, dash.state.actors, destination)
+    path = PathResult(
+        enemy.position,
+        destination,
+        movement.paths_by_tile[destination],
+        movement.costs_by_tile[destination],
+        True,
+    )
     path = path_with_condition_cost(
         path,
         dash.state.condition_states,
@@ -951,7 +1066,16 @@ def _best_enemy_movement_path(
             ),
             default=999,
         )
-        path = find_path(board, movement_actor, state.actors, destination)
+        # ``movement_range`` has already solved every reachable path.  Calling
+        # ``find_path`` here used to recompute the complete range once per
+        # candidate tile, making a single AI turn take several seconds.
+        path = PathResult(
+            enemy.position,
+            destination,
+            movement.paths_by_tile[destination],
+            movement.costs_by_tile[destination],
+            True,
+        )
         path = path_with_condition_cost(
             path,
             state.condition_states,

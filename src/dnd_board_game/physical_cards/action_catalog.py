@@ -56,6 +56,7 @@ class CardActionDefinition:
 _COMBAT_IDS = frozenset(
     """
     action_surge second_wind defensive_stance instinctive_dodge
+    exploit_weakness patient_shot
     rage reckless_attack frenzy
     bardic_inspiration cutting_words preserve_life turn_undead wild_shape
     martial_arts_strike flurry_of_blows patient_defense step_of_the_wind
@@ -118,6 +119,7 @@ _REMOVED_IDS = frozenset(
 _FEATURE_IDS = frozenset(
     """
     action_surge second_wind defensive_stance instinctive_dodge
+    exploit_weakness patient_shot
     rage reckless_attack frenzy bardic_inspiration
     cutting_words preserve_life turn_undead wild_shape natural_recovery
     martial_arts_strike flurry_of_blows patient_defense step_of_the_wind
@@ -794,6 +796,7 @@ CURATED_CARD_OWNERS: dict[str, tuple[str, ...]] = {
     "thunderwave": ("brakka", "lorian"),
     "break_in": ("mira",),
     "instinctive_dodge": ("mira",),
+    "exploit_weakness": ("mira",),
     "cunning_action": ("brakka", "mira", "erynd"),
     "disguise_self": ("mira", "lorian"),
     "invisibility": ("mira",),
@@ -836,6 +839,7 @@ CURATED_CARD_OWNERS: dict[str, tuple[str, ...]] = {
     "shatter": ("nimra",),
     "hunters_mark": ("erynd",),
     "tracking": ("erynd",),
+    "patient_shot": ("erynd",),
     "pass_without_trace": ("erynd",),
     "goodberry": ("erynd",),
     "spike_growth": ("erynd",),
