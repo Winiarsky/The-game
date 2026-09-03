@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Eksploracja</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='exploration.css', v='card-components-20260816-1') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='exploration.css', v='combat-two-stage-20260903-1') }}">
 </head>
 <body>
 <header class="app-shell-header">
@@ -264,7 +264,7 @@
           <h3 id="action-title">Co robicie lub o co pytacie?</h3>
           <div id="conversation-meta" class="conversation-meta"></div>
         </div>
-        <button id="leave-interaction-button" class="secondary" data-allow-busy="true" onclick="leaveChatInstance()">Opuść interakcję</button>
+        <button id="leave-interaction-button" class="secondary" data-allow-busy="true" data-numpad-key="0" onclick="leaveChatInstance()"><kbd>0</kbd> Opuść interakcję</button>
       </div>
       <div id="chat-stream" class="interaction-workspace">
         <section class="interaction-workspace-pane conversation-workspace-pane" aria-labelledby="conversation-pane-title">
@@ -325,6 +325,7 @@
                   <button id="pending-reject-button" class="danger" onclick="decision('reject')">Odrzuć</button>
                   <button class="secondary" onclick="decision('explain')">Wyjaśnij</button>
                 </div>
+                <div class="numpad-combat-hint"><span><kbd>Enter</kbd> akceptuj / dalej</span><span><kbd>−</kbd> odrzuć / cofnij</span></div>
               </section>
               <section id="roll-panel" class="interaction-state-phase">
                 <div id="roll-prompt"></div>
@@ -375,6 +376,6 @@
   </form>
 </dialog>
 <script>window.EXPLORATION_SLASH_COMMANDS = {{ slash_commands | tojson }};</script>
-<script src="{{ url_for('static', filename='exploration.js', v='card-components-20260816-1') }}"></script>
+<script src="{{ url_for('static', filename='exploration.js', v='combat-two-stage-20260903-1') }}"></script>
 </body>
 </html>

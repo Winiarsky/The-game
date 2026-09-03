@@ -7,6 +7,7 @@ from dnd_board_game.actors import Actor, ActorId, Faction
 from dnd_board_game.combat import (
     ActiveCombatEffect,
     AttackSource,
+    CombatCondition,
     CombatState,
     CombatStatus,
     SceneObject,
@@ -17,6 +18,7 @@ from dnd_board_game.combat import (
     opportunity_attackers_for_movement,
     path_with_condition_cost,
     refresh_hidden_after_movement,
+    stand_up,
     use_movement,
 )
 from dnd_board_game.world import (
@@ -65,8 +67,9 @@ class CombatMovementFlowService:
         destination: Coordinate,
         active_effects: tuple[ActiveCombatEffect, ...] = (),
     ) -> CombatMovementPreview:
+        movement_state, standing_cost = self._prepare_movement_state(state)
         actor, path = self._plan_path(
-            state=state,
+            state=movement_state,
             board=board,
             destination=destination,
             active_effects=active_effects,
@@ -78,6 +81,11 @@ class CombatMovementFlowService:
             if dragged is not None
             else ""
         )
+        standing_message = (
+            f" Automatyczne wstanie kosztuje {standing_cost} ft ruchu."
+            if standing_cost
+            else ""
+        )
         return CombatMovementPreview(
             actor_id=str(actor.id),
             destination=destination,
@@ -85,11 +93,17 @@ class CombatMovementFlowService:
             board_message=(
                 f"Wybrano ścieżkę ruchu {actor.name} -> {destination.as_tuple()} "
                 f"({path.cost_feet} ft). Kliknij to pole ponownie, żeby zatwierdzić."
+                f"{standing_message}"
                 f"{dragged_message}"
             ),
             event_type="ui_combat_movement_previewed",
             event_payload=(
                 *_movement_event_payload(actor, destination, path),
+                *(
+                    (("standing_cost_feet", standing_cost),)
+                    if standing_cost
+                    else ()
+                ),
                 *(_dragged_event_payload(dragged, path) if dragged is not None else ()),
             ),
         )
@@ -104,15 +118,16 @@ class CombatMovementFlowService:
         destination: Coordinate,
         scene_objects: tuple[SceneObject, ...] = (),
     ) -> CombatMovementSubmission:
+        movement_state, standing_cost = self._prepare_movement_state(state)
         actor, path = self._plan_path(
-            state=state,
+            state=movement_state,
             board=board,
             destination=destination,
             active_effects=active_effects,
             invalid_path_message="Nie można wykonać ruchu na wybrane pole.",
         )
         threats = opportunity_attackers_for_movement(
-            state,
+            movement_state,
             actor,
             actor.position,
             destination,
@@ -123,12 +138,12 @@ class CombatMovementFlowService:
             threat_actor_ids = tuple(str(threat.attacker.id) for threat in threats)
             threat_names = ", ".join(threat.attacker.name for threat in threats)
             return CombatMovementSubmission(
-                state=state,
+                state=movement_state,
                 actor_id=str(actor.id),
                 destination=destination,
                 path=path,
                 movement_remaining_feet=movement_remaining(
-                    state,
+                    movement_state,
                     actor,
                     active_effects,
                 ),
@@ -148,11 +163,16 @@ class CombatMovementFlowService:
                     ("actor_id", str(actor.id)),
                     ("destination", [destination.col, destination.row]),
                     ("threat_actor_ids", list(threat_actor_ids)),
+                    *(
+                        (("standing_cost_feet", standing_cost),)
+                        if standing_cost
+                        else ()
+                    ),
                 ),
             )
 
-        dragged = _dragged_actor_for_path(state, actor, path)
-        movement = use_movement(state, actor, path, active_effects)
+        dragged = _dragged_actor_for_path(movement_state, actor, path)
+        movement = use_movement(movement_state, actor, path, active_effects)
         if not movement.accepted:
             raise ValueError(movement.message)
         moved_actor = current_actor(movement.state)
@@ -178,11 +198,32 @@ class CombatMovementFlowService:
             event_type="ui_combat_player_moved",
             event_payload=(
                 *_movement_event_payload(actor, destination, path),
+                *(
+                    (("standing_cost_feet", standing_cost),)
+                    if standing_cost
+                    else ()
+                ),
                 *(_dragged_event_payload(dragged, path) if dragged is not None else ()),
                 ("movement_remaining_feet", movement.movement_remaining_feet),
                 ("revealed_to_actor_ids", list(hidden.revealed_to_actor_ids)),
             ),
         )
+
+    @staticmethod
+    def _prepare_movement_state(state: CombatState) -> tuple[CombatState, int]:
+        """Stand a prone hero automatically when they begin a movement choice."""
+
+        actor = current_actor(state)
+        if not any(
+            condition.actor_id == str(actor.id)
+            and condition.condition == CombatCondition.PRONE
+            for condition in state.condition_states
+        ):
+            return state, 0
+        standing = stand_up(state, actor)
+        if not standing.accepted:
+            raise ValueError(standing.message)
+        return standing.state, standing.movement_cost_feet
 
     @staticmethod
     def _plan_path(
@@ -265,6 +306,8 @@ def _position_in_difficult_zone(
     zone: ActiveCombatEffect,
 ) -> bool:
     assert zone.anchor_position is not None
+    if position in zone.excluded_positions:
+        return False
     if zone.kind in {"web_zone", "entangle_zone", "grease_zone"}:
         side = max(1, zone.value // 5)
         before = (side - 1) // 2

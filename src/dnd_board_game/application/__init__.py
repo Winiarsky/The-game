@@ -155,6 +155,7 @@ from .player_combat_resource_flow import (
     PendingConcentrationAction,
     PendingConcentrationCheck,
     PlayerCombatResourceFlowService,
+    can_transfer_hunters_mark,
     concentration_effects_for_actor,
 )
 from .player_area_healing_flow import (
@@ -322,6 +323,7 @@ __all__ = [
     "PlayerAreaSpellTransition",
     "PlayerCombatActionFlowService",
     "PlayerCombatResourceFlowService",
+    "can_transfer_hunters_mark",
     "PlayerHealingTransition",
     "SetupStepTransition",
     "StartSessionTransition",

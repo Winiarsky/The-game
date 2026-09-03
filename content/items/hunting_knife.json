@@ -1,0 +1,23 @@
+{
+  "schema": "dnd_board_game.item",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["project_original"],
+  "id": "hunting_knife",
+  "name": "Nóż myśliwski",
+  "kind": "weapon",
+  "value_cp": 100,
+  "weight_lb": 1,
+  "description": "Awaryjne ostrze Erynda. Atak i obrażenia korzystają z Siły.",
+  "properties": ["short", "light", "rigid", "metallic", "sharp", "cutting"],
+  "weapon": {
+    "category": "simple",
+    "attack_kind": "melee",
+    "attack_id": "hunting_knife_slash",
+    "properties": ["light"],
+    "damage": {
+      "dice": "1d4",
+      "damage_type": "slashing"
+    }
+  }
+}

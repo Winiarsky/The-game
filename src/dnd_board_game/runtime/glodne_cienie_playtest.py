@@ -1,7 +1,7 @@
 """Deterministic automated playtests for the Głodne Cienie encounter.
 
-The runner deliberately uses the same board, attack resolution and weighted
-utility enemy AI as the application.  The player policy is intentionally
+The runner deliberately uses the same board, attack resolution and configured
+enemy AI as the application.  The player policy is intentionally
 small: move to a legal attack position and use the strongest currently usable
 attack.  It is a balance/regression probe, not a replacement for human play.
 """
@@ -39,8 +39,6 @@ from dnd_board_game.combat import (
     has_condition,
     initialize_enemy_ai,
     legal_attack_targets,
-    plan_utility_enemy_turn,
-    resolve_planned_enemy_turn,
     stand_up,
     stow_weapon,
     start_combat,
@@ -147,6 +145,12 @@ def run_playtest_case(
     events: list[dict[str, object]] = []
     intent_counts: dict[str, int] = {}
     active_effects = ()
+    enemy_flow = EnemyTurnFlowService()
+    primary_sources = {
+        actor_id: sources[0]
+        for actor_id, sources in sources_by_actor.items()
+        if sources
+    }
     turns = 0
 
     while state.status == CombatStatus.ACTIVE and state.round_number <= max_rounds:
@@ -161,30 +165,28 @@ def run_playtest_case(
                 rng,
             )
         else:
-            source = sources_by_actor[actor.id][0]
-            plan = plan_utility_enemy_turn(
-                encounter.board,
-                state,
-                actor,
-                source,
-                profile=profile,
-                role_id=roles[str(actor.id)],
-                actor_roles=roles,
-                escape_positions=zones.get(profile.escape_zone_tag, ()),
-                guard_positions=zones.get(profile.guard_zone_tag, ()),
-                hazard_positions=zones.get(profile.hazard_zone_tag, ()),
+            planned = enemy_flow.plan(
+                state=state,
+                board=encounter.board,
+                attack_sources_by_actor=primary_sources,
+                attack_source_options_by_actor=sources_by_actor,
                 scene_objects=encounter.scene_objects,
+                ai_profile=profile,
+                ai_roles=roles,
+                ai_zone_positions=zones,
             )
+            plan = planned.intent
             intent_counts[plan.intent] = intent_counts.get(plan.intent, 0) + 1
-            result = resolve_planned_enemy_turn(
-                encounter.board,
-                plan,
-                source,
-                rng,
-                encounter.scene_objects,
-                active_effects,
-                original_state=state,
-            )
+            result = enemy_flow.resolve(
+                state=state,
+                intent=plan,
+                board=encounter.board,
+                attack_sources_by_actor=primary_sources,
+                attack_source_options_by_actor=sources_by_actor,
+                active_effects=active_effects,
+                rng=rng,
+                scene_objects=encounter.scene_objects,
+            ).result
             save_payload: dict[str, object] | None = None
             if result.saving_throw_request is not None:
                 save_transition = EnemyTurnFlowService().resolve_player_saving_throw(

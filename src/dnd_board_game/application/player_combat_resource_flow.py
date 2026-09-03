@@ -4,7 +4,7 @@ from dataclasses import dataclass, replace
 from random import Random
 from typing import Protocol
 
-from dnd_board_game.actions import ActionResourceResolver
+from dnd_board_game.actions import ActionResourceResolution, ActionResourceResolver
 from dnd_board_game.actors import (
     Actor,
     ActorResourcePool,
@@ -54,12 +54,14 @@ from dnd_board_game.rules import (
     EffectSourceType,
     EffectStackingPolicy,
     RollModifier,
+    RollMode,
     apply_active_effect,
     expire_active_effects,
     resolve_d20_roll,
     spell_target_count,
     actor_is_immune_to_effect,
     SavingThrowEffectTag,
+    ability_modifier,
 )
 from dnd_board_game.combat.auras import saving_throw_aura_modifiers
 
@@ -105,6 +107,11 @@ class CombatActionSpec(Protocol):
     save_damage_on_success: str
     damage_on_cast: bool
     area: SpellArea | None
+    aura_radius_feet: int
+    duration_rounds: int
+    activation_count_ability: str | None
+    bonus_die_sides: int
+    bonus_modifier_ability: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,6 +127,8 @@ class PendingConcentrationAction:
     area_positions: tuple[Coordinate, ...] = ()
     casting_minutes: int = 0
     prepared_roll_total: int | None = None
+    excluded_positions: tuple[Coordinate, ...] = ()
+    unsculpted_target_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -363,14 +372,25 @@ class PlayerCombatResourceFlowService:
             "targeted_status",
         }:
             raise ValueError("Nieznana akcja statusowa.")
-        selected_cast_level = _selected_cast_level(actor, action, cast_level)
-        _require_usable_action(
+        free_hunters_mark_transfer = can_transfer_hunters_mark(
+            state,
+            active_effects,
             actor,
             action,
-            selected_cast_level,
-            condition_states=state.condition_states,
-            active_effects=active_effects,
         )
+        if free_hunters_mark_transfer:
+            selected_cast_level = action.spell_level
+            if cast_level not in {None, selected_cast_level}:
+                raise ValueError("Przeniesienie Znaku łowcy zachowuje jego poziom.")
+        else:
+            selected_cast_level = _selected_cast_level(actor, action, cast_level)
+            _require_usable_action(
+                actor,
+                action,
+                selected_cast_level,
+                condition_states=state.condition_states,
+                active_effects=active_effects,
+            )
         area = getattr(action, "area", None)
         if area is not None and board is None:
             raise ValueError("Obszarowy czar statusowy wymaga aktywnej planszy.")
@@ -404,6 +424,13 @@ class PlayerCombatResourceFlowService:
             cast_level=selected_cast_level,
             maximum_targets=maximum_targets,
             legal_positions=legal_positions,
+            selected_target_ids=(
+                (str(actor.id),)
+                if area is None
+                and action.target_faction == "self"
+                and len(targets) == 1
+                else ()
+            ),
         )
         return CombatResourceTransition(
             state=state,
@@ -417,6 +444,11 @@ class PlayerCombatResourceFlowService:
             message_title="Koncentracja",
             message_body=(
                 f"{actor.name} przygotowuje {action.label}. "
+                + (
+                    "Pokonany cel pozwala bez kosztu przenieść aktywny znak. "
+                    if free_hunters_mark_transfer
+                    else ""
+                )
                 + (
                     "Wybierz podświetlony środek lub kierunek obszaru na planszy."
                     if area is not None
@@ -475,6 +507,8 @@ class PlayerCombatResourceFlowService:
             pending,
             target_ids=target_ids,
             selected_target_ids=target_ids,
+            unsculpted_target_ids=target_ids,
+            excluded_positions=(),
             anchor=position,
             area_positions=area_positions,
         )
@@ -529,17 +563,44 @@ class PlayerCombatResourceFlowService:
             )
         if set(selected_target_ids) - set(pending.target_ids):
             raise ValueError("Wybrano nielegalny cel czaru koncentracyjnego.")
-        _require_usable_action(
+        free_hunters_mark_transfer = can_transfer_hunters_mark(
+            state,
+            active_effects,
             caster,
             action,
-            pending.cast_level,
-            condition_states=state.condition_states,
-            active_effects=active_effects,
         )
+        if not free_hunters_mark_transfer:
+            _require_usable_action(
+                caster,
+                action,
+                pending.cast_level,
+                condition_states=state.condition_states,
+                active_effects=active_effects,
+            )
         targets = tuple(
             _actor_by_id(state, selected_id)
             for selected_id in selected_target_ids
         )
+        base_effect_kind = str(
+            getattr(action, "effect_kind", None)
+            or "concentration_attack_bonus"
+        )
+        if base_effect_kind == "remove_condition":
+            if len(targets) != 1:
+                raise ValueError("Pomniejsze Przywrócenie wymaga dokładnie jednego celu.")
+            removable_options = removable_condition_options(
+                state.condition_states,
+                str(targets[0].id),
+                tuple(getattr(action, "effect_options", ())),
+            )
+            if not removable_options:
+                raise ValueError("Wybrany cel nie ma negatywnego stanu, który ten czar może usunąć.")
+            if not effect_option:
+                if len(removable_options) > 1:
+                    raise ValueError("Wybierz jeden z negatywnych stanów celu do usunięcia.")
+                effect_option = removable_options[0]
+            elif effect_option not in removable_options:
+                raise ValueError("Wybrany negatywny stan nie jest obecnie nałożony na cel.")
         magic_weapon_item_id = ""
         if action.id == "magic_weapon":
             if len(targets) != 1:
@@ -561,13 +622,25 @@ class PlayerCombatResourceFlowService:
                 or "magical" in weapon.properties
             ):
                 raise ValueError("Magiczna broń działa wyłącznie na niemagiczną broń.")
-        resource_use = self._resources.consume_action_and_source_resource(
-            state,
-            caster,
-            spell_level=action.spell_level,
-            spell_id=action.id,
-            cast_level=pending.cast_level,
-            action_cost=_action_cost(action),
+        resource_use = (
+            ActionResourceResolution(
+                state=state,
+                actor_before=caster,
+                actor_after=caster,
+                spell_level=pending.cast_level,
+                spell_resource_consumed=False,
+            )
+            if free_hunters_mark_transfer
+            else self._resources.consume_action_and_source_resource(
+                state,
+                caster,
+                spell_level=action.spell_level,
+                spell_id=action.id,
+                cast_level=pending.cast_level,
+                action_cost=_action_cost(action),
+                resource_pool_id=getattr(action, "resource_pool_id", None),
+                resource_cost=int(getattr(action, "resource_cost", 1)),
+            )
         )
         is_concentration = bool(getattr(action, "concentration", False)) or (
             action.action_type == "concentration_attack_bonus"
@@ -640,12 +713,21 @@ class PlayerCombatResourceFlowService:
             0,
             pending.cast_level - action.spell_level,
         ) * int(getattr(action, "upcast_value_per_level", 0))
+        if base_effect_kind == "divine_care_aura_source":
+            effect_value = max(
+                1,
+                ability_modifier(caster.ability_scores.wisdom) // 2,
+            )
+        elif base_effect_kind == "healing_grace_aura_source":
+            ability_name = str(
+                getattr(action, "activation_count_ability", None) or "wisdom"
+            )
+            effect_value = max(
+                1,
+                ability_modifier(getattr(caster.ability_scores, ability_name)),
+            )
         if action.id == "magic_weapon":
             effect_value = min(3, 1 + max(0, (pending.cast_level - 2) // 2))
-        base_effect_kind = str(
-            getattr(action, "effect_kind", None)
-            or "concentration_attack_bonus"
-        )
         options = tuple(getattr(action, "effect_options", ()))
         if options:
             if effect_option not in options:
@@ -685,8 +767,31 @@ class PlayerCombatResourceFlowService:
                     dc=getattr(action, "save_dc", None)
                     or caster.spell_save_dc,
                     natural_roll=rng.randint(1, 20),
+                    natural_roll_2=(
+                        rng.randint(1, 20)
+                        if (
+                            "nimra_forced_weave"
+                            in getattr(action, "metamagic_ids", ())
+                            or (
+                                save_ability == "wisdom"
+                                and any(
+                                    effect.actor_id == str(target.id)
+                                    and effect.kind == "lorian_mocked_wisdom"
+                                    for effect in updated_effects
+                                )
+                            )
+                        )
+                        else None
+                    ),
+                    roll_mode=(
+                        RollMode.DISADVANTAGE
+                        if "nimra_forced_weave"
+                        in getattr(action, "metamagic_ids", ())
+                        else RollMode.NORMAL
+                    ),
                     condition_states=resource_use.state.condition_states,
                     combat_actors=resource_use.state.actors,
+                    active_effects=updated_effects,
                 )
                 save_results.append((str(target.id), save.as_payload()))
                 if save.success:
@@ -749,6 +854,7 @@ class PlayerCombatResourceFlowService:
                     else f"spell-zone:{caster.id}:{action.id}"
                 ),
                 spell_level=pending.cast_level,
+                excluded_positions=pending.excluded_positions,
             )
             updated_effects = apply_active_effect(
                 updated_effects,
@@ -787,6 +893,7 @@ class PlayerCombatResourceFlowService:
                     else f"spell-zone:{caster.id}:{action.id}"
                 ),
                 spell_level=pending.cast_level,
+                excluded_positions=pending.excluded_positions,
             )
             updated_effects = apply_active_effect(
                 updated_effects,
@@ -848,6 +955,27 @@ class PlayerCombatResourceFlowService:
                 stacking=EffectStackingPolicy.STACK,
                 stacking_key=f"concentration:{caster.id}",
                 spell_level=pending.cast_level,
+                radius_feet=int(getattr(action, "aura_radius_feet", 0)),
+                die_sides=int(getattr(action, "bonus_die_sides", 0)),
+                modifier=(
+                    ability_modifier(
+                        getattr(
+                            caster.ability_scores,
+                            str(getattr(action, "bonus_modifier_ability", None)),
+                        )
+                    )
+                    if getattr(action, "bonus_modifier_ability", None)
+                    else 0
+                ),
+                uses_maximum=(
+                    effect_value
+                    if base_effect_kind == "healing_grace_aura_source"
+                    else 0
+                ),
+                remaining_rounds=(
+                    int(getattr(action, "duration_rounds", 0)) or None
+                ),
+                excluded_positions=pending.excluded_positions,
             )
             updated_effects = apply_active_effect(
                 updated_effects,
@@ -1073,7 +1201,11 @@ class PlayerCombatResourceFlowService:
             else f"{effect_value:+d} do efektu"
         )
         message = (
-            f"{caster.name} rzuca {action.label} ze slotu {pending.cast_level}. poziomu. "
+            (
+                f"{caster.name} przenosi {action.label} z pokonanego celu bez kosztu. "
+                if free_hunters_mark_transfer
+                else f"{caster.name} rzuca {action.label} ze slotu {pending.cast_level}. poziomu. "
+            )
             + (
                 f"Środek strefy: {pending.anchor.as_tuple()}; "
                 if base_effect_kind == "ongoing_damage_zone"
@@ -1104,6 +1236,7 @@ class PlayerCombatResourceFlowService:
                 ("effect_ids", [effect.id for effect in applied_effects]),
                 ("saving_throws", dict(save_results)),
                 ("removed_effect_ids", [effect.id for effect in removed]),
+                ("free_transfer", free_hunters_mark_transfer),
             ),
             clear_pending_action=True,
             clear_movement_preview=True,
@@ -1252,41 +1385,6 @@ class PlayerCombatResourceFlowService:
             removed_effect_ids = [
                 effect.id for effect in removed if effect.id in effect_ids
             ]
-            if actor_has_feature(actor, "flaw_arcane_echo") and not any(
-                effect.actor_id == actor_id and effect.kind == "flaw_arcane_echo_used"
-                for effect in active_effects
-            ):
-                used = ActiveCombatEffect(
-                    id=f"flaw_arcane_echo_used:{actor_id}",
-                    actor_id=actor_id,
-                    kind="flaw_arcane_echo_used",
-                    label="Echo magicznego wycieku — wykorzystane",
-                    object_id="feature:flaw_arcane_echo",
-                    value=0,
-                    source=EffectSource(
-                        EffectSourceType.SYSTEM,
-                        "flaw_arcane_echo",
-                        "Skaza: Echo magicznego wycieku",
-                    ),
-                    duration=EffectDuration.UNTIL_ENCOUNTER_END,
-                )
-                echo = ActiveCombatEffect(
-                    id=f"flaw_arcane_echo_active:{actor_id}",
-                    actor_id=actor_id,
-                    kind="flaw_arcane_echo_active",
-                    label="Echo magicznego wycieku",
-                    object_id="feature:flaw_arcane_echo",
-                    value=0,
-                    source=EffectSource(
-                        EffectSourceType.SYSTEM,
-                        "flaw_arcane_echo",
-                        "Skaza: Echo magicznego wycieku",
-                    ),
-                    duration=EffectDuration.UNTIL_TURN_END,
-                    expiration_actor_id=actor_id,
-                )
-                updated_effects = apply_active_effect(updated_effects, used).active_effects
-                updated_effects = apply_active_effect(updated_effects, echo).active_effects
         result_text = (
             "koncentracja utrzymana"
             if success
@@ -1368,6 +1466,7 @@ def _status_effect_duration(value: str) -> EffectDuration:
         "next_turn_start": EffectDuration.UNTIL_TURN_START,
         "next_attack": EffectDuration.UNTIL_NEXT_ATTACK,
         "turn_end": EffectDuration.UNTIL_TURN_END,
+        "next_turn_end": EffectDuration.UNTIL_TURN_END,
         "encounter": EffectDuration.UNTIL_ENCOUNTER_END,
         "short_rest": EffectDuration.UNTIL_SHORT_REST,
         "long_rest": EffectDuration.UNTIL_LONG_REST,
@@ -1448,6 +1547,26 @@ def _selected_cast_level(
     return selected
 
 
+def can_transfer_hunters_mark(
+    state: CombatState,
+    active_effects: tuple[ActiveCombatEffect, ...],
+    caster: Actor,
+    action: CombatActionSpec,
+) -> bool:
+    """Allow the active mark to move for free only after its target falls."""
+
+    if action.id != "hunters_mark":
+        return False
+    actors_by_id = {str(actor.id): actor for actor in state.actors}
+    return any(
+        effect.kind == "hunters_mark"
+        and effect.source_actor_id == str(caster.id)
+        and (target := actors_by_id.get(effect.actor_id)) is not None
+        and target.is_defeated()
+        for effect in active_effects
+    )
+
+
 def _concentration_targets(
     state: CombatState,
     actor: Actor,
@@ -1479,6 +1598,16 @@ def _concentration_targets(
                 or _actor_has_usable_metal_object(candidate)
             )
             and (
+                str(getattr(action, "effect_kind", "")) != "remove_condition"
+                or bool(
+                    removable_condition_options(
+                        state.condition_states,
+                        str(candidate.id),
+                        tuple(getattr(action, "effect_options", ())),
+                    )
+                )
+            )
+            and (
                 candidate.id == actor.id
                 or (
                     not enforce_range
@@ -1491,6 +1620,21 @@ def _concentration_targets(
             )
         )
     return (actor,)
+
+
+def removable_condition_options(
+    condition_states: tuple[ConditionState, ...],
+    actor_id: str,
+    allowed_options: tuple[str, ...],
+) -> tuple[str, ...]:
+    """Return supported removable conditions currently affecting one actor."""
+
+    present = {
+        condition_state.condition.value
+        for condition_state in condition_states
+        if condition_state.actor_id == actor_id
+    }
+    return tuple(option for option in allowed_options if option in present)
 
 
 def _actor_has_usable_metal_object(actor: Actor) -> bool:

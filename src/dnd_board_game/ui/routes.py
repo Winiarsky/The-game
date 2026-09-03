@@ -81,8 +81,6 @@ def create_app(
         character_class.id: character_class.name
         for character_class in character_catalog.classes
     }
-    scanned_new_game_party: list[str] = []
-    new_game_stage = {"value": "party"}
     app.jinja_env.globals["character_portrait_url"] = _character_portrait_url
 
     def persist_character_progress(actors) -> None:
@@ -139,84 +137,41 @@ def create_app(
 
     @app.get("/new-game")
     def new_game():
-        scanned_new_game_party.clear()
-        new_game_stage["value"] = "party"
         return render_template("new_game.html", **new_game_context())
 
-    @app.post("/api/new-game/card-scan")
-    def api_new_game_card_scan():
-        data = request.get_json(silent=True) or {}
-        payload = data.get("payload")
-        if not isinstance(payload, str) or not payload or len(payload) > 256:
-            return jsonify({"error": "Nieprawidłowy payload karty."}), 400
-        normalized = normalize_decision_card_scanner_text(payload)
+    @app.post("/new-game/start")
+    def start_new_game():
+        selected_actor_ids = tuple(
+            str(actor_id).strip()
+            for actor_id in request.form.getlist("character_ids")
+            if str(actor_id).strip()
+        )
+        scenario_id = str(request.form.get("scenario_id", "")).strip()
+
+        def selection_error(message: str):
+            return render_template(
+                "new_game.html",
+                **new_game_context(
+                    selected_character_ids=selected_actor_ids,
+                    selected_scenario_id=scenario_id,
+                    initial_stage="scenario" if selected_actor_ids else "party",
+                ),
+                error=message,
+            ), 400
+
+        if not 1 <= len(selected_actor_ids) <= 5:
+            return selection_error("Wybierz od 1 do 5 bohaterów.")
+        if len(set(selected_actor_ids)) != len(selected_actor_ids):
+            return selection_error("Każdego bohatera można wybrać tylko raz.")
+        if any(actor_id not in PLAYABLE_HERO_IDS for actor_id in selected_actor_ids):
+            return selection_error("Wybrano bohatera spoza dostępnego zestawu.")
+
+        scenarios_by_id = {entry.id: entry for entry in scenario_choices()}
+        selected_scenario = scenarios_by_id.get(scenario_id)
+        if selected_scenario is None:
+            return selection_error("Wybierz dostępny scenariusz.")
+
         try:
-            if ":actor:" in normalized:
-                if new_game_stage["value"] != "party":
-                    raise ValueError(
-                        "Skład drużyny jest już zatwierdzony. Użyj DECLINE, aby wrócić."
-                    )
-                actor_card = parse_actor_card_qr_payload(normalized)
-                if actor_card.actor_id not in PLAYABLE_HERO_IDS:
-                    raise ValueError("Ta karta nie należy do startowego zestawu bohaterów.")
-                character = character_roster.load(actor_card.actor_id)
-                if actor_card.actor_id not in scanned_new_game_party:
-                    if len(scanned_new_game_party) >= 5:
-                        raise ValueError("Drużyna może mieć maksymalnie 5 bohaterów.")
-                    scanned_new_game_party.append(actor_card.actor_id)
-                return jsonify(
-                    {
-                        "applied": True,
-                        "effect": "party_actor_selected",
-                        "actor_id": actor_card.actor_id,
-                        "actor_name": character.actor.name,
-                        "selected_actor_ids": list(scanned_new_game_party),
-                        "stage": new_game_stage["value"],
-                    }
-                )
-            universal = resolve_universal_card_scan(normalized)
-            if universal.action.value == "decline":
-                if new_game_stage["value"] == "scenario":
-                    new_game_stage["value"] = "party"
-                    return jsonify(
-                        {
-                            "applied": True,
-                            "effect": "new_game_back_to_party",
-                            "selected_actor_ids": list(scanned_new_game_party),
-                            "stage": new_game_stage["value"],
-                        }
-                    )
-                removed_id = scanned_new_game_party.pop() if scanned_new_game_party else None
-                return jsonify(
-                    {
-                        "applied": removed_id is not None,
-                        "effect": "party_actor_removed",
-                        "removed_actor_id": removed_id,
-                        "selected_actor_ids": list(scanned_new_game_party),
-                        "stage": new_game_stage["value"],
-                    }
-                )
-            if universal.action.value != "accept":
-                raise ValueError(
-                    "Na etapie wyboru drużyny użyj karty bohatera, AKCEPTUJ albo ODRZUĆ."
-                )
-            if new_game_stage["value"] == "party":
-                if not 1 <= len(scanned_new_game_party) <= 5:
-                    raise ValueError("Zeskanuj od 1 do 5 kart różnych bohaterów.")
-                new_game_stage["value"] = "scenario"
-                return jsonify(
-                    {
-                        "applied": True,
-                        "effect": "party_confirmed",
-                        "selected_actor_ids": list(scanned_new_game_party),
-                        "stage": new_game_stage["value"],
-                    }
-                )
-            scenario_id = str(data.get("scenario_id", "")).strip()
-            scenarios_by_id = {entry.id: entry for entry in scenario_choices()}
-            selected_scenario = scenarios_by_id.get(scenario_id)
-            if selected_scenario is None:
-                raise ValueError("Wybierz dostępny scenariusz.")
             party = tuple(
                 apply_boardgame_archetype(
                     character_roster.load(actor_id).actor,
@@ -224,38 +179,14 @@ def create_app(
                         spell for _, spell in character_resources.spells
                     ),
                 )
-                for actor_id in scanned_new_game_party
+                for actor_id in selected_actor_ids
             )
-            session.configure_scenario(selected_scenario.path)
-            session.configure_custom_party(party)
-            return jsonify(
-                {
-                    "applied": True,
-                    "effect": "start_new_game",
-                    "redirect": url_for("play"),
-                    "selected_actor_ids": list(scanned_new_game_party),
-                    "stage": new_game_stage["value"],
-                }
-            )
-        except (TypeError, ValueError) as exc:
-            return jsonify(
-                {
-                    "error": str(exc),
-                    "selected_actor_ids": list(scanned_new_game_party),
-                    "stage": new_game_stage["value"],
-                }
-            ), 400
+        except (FileNotFoundError, TypeError, ValueError):
+            return selection_error("Nie udało się wczytać wybranego bohatera.")
 
-    @app.post("/new-game/start")
-    def start_new_game():
-        return render_template(
-            "new_game.html",
-            **new_game_context(),
-            error=(
-                "Drużynę można zatwierdzić wyłącznie skanami kart bohaterów "
-                "oraz fizyczną kartą ACCEPT."
-            ),
-        ), 409
+        session.configure_scenario(selected_scenario.path)
+        session.configure_custom_party(party)
+        return redirect(url_for("play"))
 
     @app.get("/load-game")
     def load_game():
@@ -1991,6 +1922,13 @@ def create_app(
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
+    @app.post("/api/combat/class-feature/targeting/confirm")
+    def api_combat_class_feature_targeting_confirm():
+        try:
+            return jsonify(session.confirm_combat_class_feature_targeting())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
     @app.post("/api/combat/aux-targeting/start")
     def api_combat_aux_targeting_start():
         data = request.get_json(silent=True) or {}
@@ -2103,6 +2041,64 @@ def create_app(
         data = request.get_json(silent=True) or {}
         try:
             return jsonify(session.move_combat_context_menu_selection(int(data.get("delta", 0))))
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/turn-actions/select")
+    def api_combat_turn_actions_select():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                session.move_combat_turn_action_selection(int(data.get("delta", 0)))
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/turn-actions/confirm")
+    def api_combat_turn_actions_confirm():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                session.confirm_combat_turn_action(str(data.get("option_id", "")))
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/turn-actions/cancel-preview")
+    def api_combat_turn_actions_cancel_preview():
+        try:
+            return jsonify(session.cancel_combat_turn_action_preview())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/item-target/confirm")
+    def api_combat_item_target_confirm():
+        try:
+            return jsonify(session.confirm_combat_item_target())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/item-target/cancel")
+    def api_combat_item_target_cancel():
+        try:
+            return jsonify(session.cancel_combat_item_targeting())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/pending-board-selection/confirm")
+    def api_combat_pending_board_selection_confirm():
+        try:
+            return jsonify(session.confirm_combat_pending_board_selection())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/aura-preview")
+    def api_combat_aura_preview():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                session.set_combat_aura_preview(str(data.get("aura_id", "")))
+            )
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
@@ -2336,6 +2332,20 @@ def create_app(
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
+    @app.post("/api/combat/instinctive-dodge/use")
+    def api_combat_instinctive_dodge_use():
+        try:
+            return jsonify(session.use_instinctive_dodge_reaction())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/instinctive-dodge/skip")
+    def api_combat_instinctive_dodge_skip():
+        try:
+            return jsonify(session.skip_instinctive_dodge_reaction())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
     @app.post("/api/combat/defensive-spell/cast")
     def api_combat_defensive_spell_cast():
         try:
@@ -2373,6 +2383,25 @@ def create_app(
     def api_combat_cutting_words_skip():
         try:
             return jsonify(session.skip_cutting_words_reaction())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/distracting-shout/roll")
+    def api_combat_distracting_shout_roll():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(
+                session.resolve_distracting_shout_reaction(
+                    die_roll=int(data.get("die_roll", 0)),
+                )
+            )
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/distracting-shout/skip")
+    def api_combat_distracting_shout_skip():
+        try:
+            return jsonify(session.skip_distracting_shout_reaction())
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
@@ -2932,24 +2961,8 @@ def create_app(
 
     @app.post("/api/scenario/continue")
     def api_scenario_continue():
-        data = request.get_json(silent=True) or {}
         try:
-            return jsonify(
-                session.continue_scenario(
-                    pace=str(data.get("pace", "normal")),
-                    navigator_actor_id=(
-                        str(data["navigator_actor_id"])
-                        if data.get("navigator_actor_id") is not None
-                        else None
-                    ),
-                    navigation_roll=data.get("navigation_roll"),
-                    forced_march_rolls=(
-                        data.get("forced_march_rolls")
-                        if isinstance(data.get("forced_march_rolls"), dict)
-                        else None
-                    ),
-                )
-            )
+            return jsonify(session.continue_scenario())
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
@@ -3198,6 +3211,10 @@ _CHARACTER_FEATURE_LABELS = {
     "gnome_cunning": "Gnomi spryt",
     "guild_membership": "Członkostwo w gildii",
     "halfling_nimbleness": "Niziołcza zwinność",
+    "mira_shadow_stealth": "Mistrzyni ukrycia",
+    "mira_shadow_killer": "Atak z cienia",
+    "mira_opportunity_evasion": "Zwinny odskok",
+    "flaw_exposed_panic": "Skaza: Panika po zdemaskowaniu",
     "hellish_resistance": "Odporność na ogień",
     "high_elf_cantrip": "Elficki cantrip",
     "human_versatility": "Ludzka wszechstronność",

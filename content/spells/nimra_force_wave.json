@@ -1,0 +1,8 @@
+{
+  "schema": "dnd_board_game.spell", "schema_version": 1, "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["project_original"], "id": "nimra_force_wave", "name": "Fala odrzutu",
+  "level": 1, "school": "evocation", "casting_time": "action", "range": {"kind": "self"},
+  "components": {"verbal": true, "somatic": true, "materials": []},
+  "duration": {"kind": "instantaneous"}, "concentration": false, "ritual": false,
+  "effect": {"kind": "attack", "ability": "intelligence", "save_ability": "strength", "save_damage_on_success": "half", "area": {"shape": "line", "length_feet": 30, "width_feet": 5, "target_mode": "all_creatures"}, "damage": {"dice": "2d6", "modifier": 0, "damage_type": "force"}, "failed_save_push_feet": 5}
+}

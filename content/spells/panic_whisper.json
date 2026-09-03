@@ -1,0 +1,27 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["project_original"],
+  "id": "panic_whisper",
+  "name": "Podszept paniki",
+  "level": 1,
+  "school": "enchantment",
+  "casting_time": "action",
+  "range": {"kind": "distance", "feet": 45},
+  "components": {"verbal": true, "somatic": false, "materials": []},
+  "duration": {"kind": "instantaneous"},
+  "concentration": false,
+  "ritual": false,
+  "effect": {
+    "kind": "attack",
+    "save_ability": "wisdom",
+    "save_damage_on_success": "half",
+    "damage": {"dice": "2d6", "modifier": 0, "damage_type": "psychic"},
+    "failed_save_push_feet": 15,
+    "cast_flag": "cast_panic_whisper",
+    "instructions": "Cel wykonuje obronę na Mądrość. Porażka: 2k6 obrażeń psychicznych i do 15 stóp wymuszonego ruchu bezpośrednio od Loriena; sukces: połowa obrażeń bez ruchu. Ruch kończy się przed przeszkodą lub zajętym polem.",
+    "resolution_mode": "automatic",
+    "board_relevance": "direct"
+  }
+}

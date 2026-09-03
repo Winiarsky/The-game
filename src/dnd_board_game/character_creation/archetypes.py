@@ -63,7 +63,7 @@ HERO_ARCHETYPES = (
     HeroArchetype(
         "lorian",
         "bard",
-        "Inspirator — wsparcie i rozmowa",
+        "Bard-wynalazca — kusza, kontrola i improwizacja",
         "Oczywiście, że sytuacja jest beznadziejna. Inaczej nie potrzebowalibyście barda.",
         (
             "Podczas oblężenia przeciętny muzyk Lorian zapragnął dotrzeć do ludzi, którzy "
@@ -77,16 +77,16 @@ HERO_ARCHETYPES = (
         ),
         "Zrozumieć Gościa Ostatniego Rzędu i stworzyć pieśń poruszającą ludzi bez pomocy paktu.",
         (
-            "Najpierw zdecyduj, czy ważniejsze jest wsparcie, kontrola pola czy obrażenia.",
-            "Inspiruj bohatera, którego następny test lub atak ma największe znaczenie.",
-            "Trzymaj się za pierwszą linią; Leczące słowo podnosi sojusznika z dystansu.",
+            "Ustaw się blisko sojusznika i wybierz techniczny ostrzał pasujący do sytuacji.",
+            "Luneta nagradza pozostanie w miejscu, a Oplatający ostrzał zamyka obszar także kosztem sojuszników.",
+            "Inspiruj bohatera, którego kolejny ważny test uruchomi też reakcje Loriena.",
         ),
-        ("Bardic Inspiration: użycia zależne od Charyzmy.", "Komórki czarów: wracają po długim odpoczynku."),
-        ("rozmowy", "pomoc drużynie", "kontrola wielu celów"),
+        ("Inspiracja: użycia zależne od Charyzmy i wracają po krótkim odpoczynku.", "Komórki czarów: wracają po długim odpoczynku."),
+        ("dwa ataki kuszą", "testy Charyzmy", "kontrola obszaru"),
         (
             "mało wytrzymały",
             "nie potrafi przestać występować ani pozostawić ciszy w spokoju",
-            "odrzucenie uruchamia Głód aprobaty i odcina Inspirację w tej interakcji",
+            "bez przytomnego sojusznika w pobliżu traci dostęp do zdolności specjalnych",
         ),
         "LO-01",
     ),

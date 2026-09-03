@@ -176,6 +176,8 @@ from dnd_board_game.exploration import (
     ScenarioClockPolicy,
     ScenarioContinuation,
     ScenarioContinuationOutcome,
+    TravelPace,
+    TravelPaceDetail,
     TravelPolicy,
     ShortRestPolicy,
     LongRestPolicy,
@@ -391,6 +393,11 @@ class ScenarioCombatActionDefinition:
     upcast_hit_point_pool_dice_per_level: int = 0
     excluded_creature_types: tuple[str, ...] = ()
     area: SpellArea | None = None
+    aura_radius_feet: int = 0
+    duration_rounds: int = 0
+    activation_count_ability: str | None = None
+    bonus_die_sides: int = 0
+    bonus_modifier_ability: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -787,6 +794,7 @@ def compile_actor_combat_content(
         )
         for definition in attack_definitions
     )
+    attack_sources = _unique_compiled_attack_source_ids(attack_sources)
     return CompiledActorCombatContent(
         attack_sources=attack_sources,
         healing_sources=tuple(
@@ -795,6 +803,28 @@ def compile_actor_combat_content(
         ),
         combat_actions=tuple(combat_actions),
     )
+
+
+def _unique_compiled_attack_source_ids(
+    sources: tuple[AttackSource, ...],
+) -> tuple[AttackSource, ...]:
+    """Disambiguate attacks supplied by separate copies of the same weapon."""
+
+    used_ids: set[str] = set()
+    unique_sources: list[AttackSource] = []
+    for source in sources:
+        source_id = source.id
+        if source_id in used_ids:
+            item_suffix = source.source_item_id or "source"
+            candidate = f"{source_id}:{item_suffix}"
+            serial = 2
+            while candidate in used_ids:
+                candidate = f"{source_id}:{item_suffix}:{serial}"
+                serial += 1
+            source = replace(source, id=candidate)
+        used_ids.add(source.id)
+        unique_sources.append(source)
+    return tuple(unique_sources)
 
 
 def encounter_with_custom_party(
@@ -1712,6 +1742,7 @@ def _spell_effect_payload(
             "encounter"
             if spell.duration.kind
             in {
+                SpellDurationKind.ENCOUNTER,
                 SpellDurationKind.ROUND,
                 SpellDurationKind.MINUTE,
                 SpellDurationKind.TEN_MINUTES,
@@ -2809,6 +2840,36 @@ def _parse_combat_action(data: dict[str, Any], actor_id: str) -> ScenarioCombatA
     range_feet = int(data.get("range_feet", 0))
     if range_feet < 0:
         raise ValueError(f"combat action {action_id}.range_feet must be non-negative.")
+    aura_radius_feet = int(data.get("aura_radius_feet", 0))
+    if aura_radius_feet < 0 or aura_radius_feet % 5 != 0:
+        raise ValueError(
+            f"combat action {action_id}.aura_radius_feet must be a non-negative multiple of 5."
+        )
+    duration_rounds = int(data.get("duration_rounds", 0))
+    if duration_rounds < 0:
+        raise ValueError(f"combat action {action_id}.duration_rounds cannot be negative.")
+    bonus_die_sides = int(data.get("bonus_die_sides", 0))
+    if bonus_die_sides < 0:
+        raise ValueError(f"combat action {action_id}.bonus_die_sides cannot be negative.")
+    activation_count_ability = (
+        str(data["activation_count_ability"])
+        if data.get("activation_count_ability") is not None
+        else None
+    )
+    bonus_modifier_ability = (
+        str(data["bonus_modifier_ability"])
+        if data.get("bonus_modifier_ability") is not None
+        else None
+    )
+    for field_name, ability_name in (
+        ("activation_count_ability", activation_count_ability),
+        ("bonus_modifier_ability", bonus_modifier_ability),
+    ):
+        if ability_name is not None and ability_name not in ABILITY_NAMES:
+            raise ValueError(
+                f"combat action {action_id}.{field_name} must be a D&D ability, "
+                f"got {ability_name!r}."
+            )
     effect_kind = str(data["effect_kind"]) if "effect_kind" in data else None
     charge_cost = int(data.get("charge_cost", 0))
     if charge_cost < 0:
@@ -3088,6 +3149,11 @@ def _parse_combat_action(data: dict[str, Any], actor_id: str) -> ScenarioCombatA
             data.get("area"),
             f"combat action {action_id}.area",
         ),
+        aura_radius_feet=aura_radius_feet,
+        duration_rounds=duration_rounds,
+        activation_count_ability=activation_count_ability,
+        bonus_die_sides=bonus_die_sides,
+        bonus_modifier_ability=bonus_modifier_ability,
     )
 
 
@@ -3949,6 +4015,14 @@ def _parse_exploration_option(data: Any, zone_id: str) -> ExplorationOption:
         allow_help=bool(data.get("allow_help", False)),
         success_flag=str(data["success_flag"]) if "success_flag" in data else None,
         failure_flag=str(data["failure_flag"]) if "failure_flag" in data else None,
+        success_flags=_parse_string_tuple(
+            data.get("success_flags", []),
+            f"exploration option {option_id}.success_flags",
+        ),
+        failure_flags=_parse_string_tuple(
+            data.get("failure_flags", []),
+            f"exploration option {option_id}.failure_flags",
+        ),
         reveals=tuple(str(item) for item in data.get("reveals", [])),
         entry_cost_cp=int(data.get("entry_cost_cp", 0)),
         success_reward_cp=int(data.get("success_reward_cp", 0)),
@@ -4043,6 +4117,27 @@ def _parse_scenario_continuation(
         raise ValueError(
             f"scenario continuation {continuation_id}.travel must be an object."
         )
+    raw_pace_details = raw_travel.get("pace_details", {})
+    if not isinstance(raw_pace_details, dict) or any(
+        not isinstance(detail, dict) for detail in raw_pace_details.values()
+    ):
+        raise ValueError(
+            f"scenario continuation {continuation_id}.travel.pace_details "
+            "must be an object of pace detail objects."
+        )
+    pace_details = tuple(
+        TravelPaceDetail(
+            pace=_enum_value(
+                TravelPace,
+                str(pace_id),
+                f"scenario continuation {continuation_id}.travel.pace_details",
+            ),
+            approach_consequence=str(detail.get("approach_consequence", "")),
+            combat_consequence=str(detail.get("combat_consequence", "")),
+            campaign_consequence=str(detail.get("campaign_consequence", "")),
+        )
+        for pace_id, detail in raw_pace_details.items()
+    )
     outcomes = _parse_scenario_continuation_outcomes(
         data.get("outcomes", []),
         continuation_id,
@@ -4121,6 +4216,7 @@ def _parse_scenario_continuation(
                 if raw_travel.get("terrain") is not None
                 else None
             ),
+            pace_details=pace_details,
         ),
     )
 

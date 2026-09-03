@@ -498,6 +498,7 @@ def resolve_spell_save(
     condition_states: Sequence = (),
     combat_actors: Sequence[Actor] = (),
     roll_mode: RollMode = RollMode.NORMAL,
+    active_effects: Sequence[object] = (),
 ) -> SpellSaveResult:
     request = SavingThrowRequest(
         ability=ability,
@@ -517,6 +518,7 @@ def resolve_spell_save(
         condition_states=condition_states,
         combat_actors=combat_actors,
         roll_mode=roll_mode,
+        active_effects=active_effects,
     )
 
 
@@ -544,6 +546,33 @@ def resolve_actor_saving_throw(
         saving_throw.effect_tags,
         roll_mode,
     )
+    if any(
+        getattr(effect, "actor_id", "") == str(actor.id)
+        and getattr(effect, "kind", "") == "garran_rally_advantage"
+        for effect in active_effects
+    ):
+        roll_mode = (
+            RollMode.NORMAL
+            if roll_mode == RollMode.DISADVANTAGE
+            else RollMode.ADVANTAGE
+            if roll_mode == RollMode.NORMAL
+            else roll_mode
+        )
+    if (
+        saving_throw.ability == "wisdom"
+        and any(
+            getattr(effect, "actor_id", "") == str(actor.id)
+            and getattr(effect, "kind", "") == "lorian_mocked_wisdom"
+            for effect in active_effects
+        )
+    ):
+        roll_mode = (
+            RollMode.NORMAL
+            if roll_mode == RollMode.ADVANTAGE
+            else RollMode.DISADVANTAGE
+            if roll_mode == RollMode.NORMAL
+            else roll_mode
+        )
 
     roll_request = D20RollRequest(
         ability=saving_throw.ability,

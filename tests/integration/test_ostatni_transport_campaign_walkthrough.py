@@ -28,6 +28,15 @@ class WalkthroughNessaClient:
     model = "walkthrough-nessa"
 
     def interact_npc(self, request):
+        if request.point.id == "teren":
+            return NpcInteractionProposal(
+                action_type={
+                    "aid_teren": "aid",
+                    "question_teren": "question",
+                    "take_teren": "take_along",
+                    "shelter_teren": "leave_sheltered",
+                }[str(request.selected_goal_id)]
+            )
         return NpcInteractionProposal.model_validate(
             {
                 "action_type": "contract_negotiation",
@@ -56,16 +65,7 @@ def _complete_guild_setup(session: ExplorationUiSession) -> None:
     assert started["flow"]["stage"] == "party_setup"
     assert started["exploration_setup"]["paper_map"]["id"] == "guild_hall_overview"
     nessa_setup = session.confirm_exploration_setup_step()
-    assert nessa_setup["flow"]["stage"] == "party_setup"
-    assert nessa_setup["exploration_setup"]["current_step"]["assignment_point_id"] == (
-        "nessa_desk"
-    )
-    assert session.select_board_position(Coordinate(8, 3))["flow"]["stage"] == (
-        "location_active"
-    )
-    preview = session.select_board_position(Coordinate(8, 3))
-    assert preview["active_point"] is None
-    assert preview["flow"]["board_interaction"]["selected_action_id"] == "nessa_desk"
+    assert nessa_setup["flow"]["stage"] == "location_active"
     session.select_point("nessa_desk")
 
 
@@ -127,31 +127,21 @@ def test_complete_new_game_to_first_encounter_victory_walkthrough(tmp_path) -> N
     )
     client = create_app(session).test_client()
 
-    # Launcher: only physical hero cards, then the single campaign entry.
+    # Launcher: select heroes on screen, then start the single campaign entry.
     launcher = client.get("/new-game")
     assert launcher.status_code == 200
     html = launcher.get_data(as_text=True)
     assert 'value="ostatni_transport_00_gildia"' in html
     assert 'value="village_square_mvp"' not in html
-    for actor_id in ("garran", "erynd"):
-        scanned = client.post(
-            "/api/new-game/card-scan",
-            json={"payload": f"dndbg:v1:actor:{actor_id}"},
-        )
-        assert scanned.status_code == 200
-    assert client.post(
-        "/api/new-game/card-scan",
-        json={"payload": "dndbg:v1:action:universal:accept"},
-    ).get_json()["stage"] == "scenario"
     accepted = client.post(
-        "/api/new-game/card-scan",
-        json={
-            "payload": "dndbg:v1:action:universal:accept",
+        "/new-game/start",
+        data={
+            "character_ids": ["garran", "erynd"],
             "scenario_id": "ostatni_transport_00_gildia",
         },
     )
-    assert accepted.status_code == 200
-    assert accepted.get_json()["redirect"] == "/play"
+    assert accepted.status_code == 302
+    assert accepted.headers["Location"] == "/play"
     assert {str(actor.id) for actor in session.exploration.actors} == {
         "garran",
         "erynd",
@@ -207,7 +197,7 @@ def test_complete_new_game_to_first_encounter_victory_walkthrough(tmp_path) -> N
 
     # Departure, travel and the same-session handoff to the ambush.
     session.select_point("")
-    completed = session.continue_scenario(pace="normal")
+    completed = session.continue_scenario()
     assert completed["flow"]["stage"] == "scenario_complete"
     assert completed["flow"]["scenario_handoff"]["target_scenario_id"] == (
         "ostatni_transport_01_zawalona_droga"
@@ -216,7 +206,7 @@ def test_complete_new_game_to_first_encounter_victory_walkthrough(tmp_path) -> N
     assert started_map1["scenario"]["id"] == "ostatni_transport_01_zawalona_droga"
     assert started_map1["pending_encounter"]["trigger_id"] == "hungry_shadows_ambush"
     assert started_map1["visible_points"] == []
-    assert scene_flag(session.state.flags, "travel.pace.normal") is True
+    assert scene_flag(session.state.flags, "travel.pace.normal") is None
 
     # Encounter setup, initiative, authored scaling and victory handoff.
     _start_map1_combat(session)
@@ -252,5 +242,47 @@ def test_complete_new_game_to_first_encounter_victory_walkthrough(tmp_path) -> N
     victory = session.resolve_active_combat()
     assert scene_flag(session.state.flags, "map1_encounter_cleared") is True
     assert {point["id"] for point in victory["visible_points"]} == {
-        "road_aftermath"
+        "road_aftermath",
+        "teren",
     }
+
+    # Same-map aftermath: evidence, tracks, Teren, the young beast and route.
+    session.travel_to("overturned_wagon")
+    session.select_exploration_option("search_convoy_wagon", actor_id="garran")
+    session.resolve_rolls({"garran": 20})
+    session.travel_to("stream_tracks")
+    session.select_exploration_option("follow_northern_tracks", actor_id="erynd")
+    session.resolve_rolls({"erynd": 20})
+    session.travel_to("western_culvert")
+    session.select_exploration_option("spare_young_shadow")
+
+    session.travel_to("teren_shelter")
+    session.select_point("teren")
+    _resolve_checked_goal(
+        session,
+        goal_id="aid_teren",
+        actor_id="garran",
+        declaration="Opatrujemy ranę i dajemy Terenowi wodę.",
+    )
+    _resolve_checked_goal(
+        session,
+        goal_id="question_teren",
+        actor_id="erynd",
+        declaration="Prosimy Terena o pełną relację z ataku.",
+    )
+    session.submit_action(
+        "Teren idzie z nami.",
+        selected_goal_id="take_teren",
+        selected_check_participants="no_actor",
+    )
+    session.select_point("")
+
+    session.travel_to("black_ford_route")
+    session.select_exploration_option("choose_main_route")
+    map1_complete = session.continue_scenario()
+    assert map1_complete["flow"]["scenario_handoff"]["target_scenario_id"] == (
+        "ostatni_transport_02_czarny_brod"
+    )
+    map2 = session.start_scenario_handoff()
+    assert map2["scenario"]["id"] == "ostatni_transport_02_czarny_brod"
+    assert scene_flag(session.state.flags, "arrival.route.main") is True

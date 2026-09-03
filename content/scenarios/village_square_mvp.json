@@ -261,7 +261,7 @@
         "interaction_pad_positions": [[6, 2], [8, 2], [10, 2], [10, 4], [10, 6], [8, 6], [6, 6], [6, 4]],
         "color": "marker",
         "description": "Centralny plac wioski z tablicą ogłoszeń i kilkoma zaniepokojonymi mieszkańcami.",
-        "exploration_cards": ["intimidation", "break_in", "diagnosis", "charm_person", "suggestion", "mage_hand", "detect_magic", "guidance", "bardic_inspiration"],
+        "exploration_cards": ["intimidation", "break_in", "charm_person", "suggestion", "mage_hand", "detect_magic", "guidance", "bardic_inspiration"],
         "exploration_card_reactions": [
           {"id": "market_intimidate_rumors", "card_action_id": "intimidation", "interaction_ids": ["ask_for_rumors"], "check_modifier": 2, "effects": [{"type": "set_flag", "parameters": {"key": "rumors_intimidated", "value": true}}], "message": "Brakka naciska na mieszkańców. Test otrzymuje +2, lecz porażka zapisze agresywny ton rozmowy."},
           {"id": "bren_intimidate_advance", "card_action_id": "intimidation", "interaction_ids": ["negotiate_advance", "elder_npc"], "check_modifier": 2, "effects": [{"type": "set_flag", "parameters": {"key": "bren_intimidation_attempt", "value": true}}], "message": "Brakka może oprzeć negocjacje na fizycznej przewadze: +2 do tej próby; porażka pogorszy relację z Brenem."},
@@ -455,7 +455,7 @@
         "interaction_pad_positions": [[12, 7], [14, 7], [16, 7], [16, 9], [16, 11], [14, 11], [12, 11], [12, 9]],
         "color": "interactive",
         "description": "Skromny dom sołtysa i miejsce rozmów o problemach wioski.",
-        "exploration_cards": ["intimidation", "tactical_assessment", "diagnosis", "charm_person", "suggestion", "detect_magic", "identify", "guidance", "bardic_inspiration"],
+        "exploration_cards": ["intimidation", "tactical_assessment", "charm_person", "suggestion", "detect_magic", "identify", "guidance", "bardic_inspiration"],
         "exploration_card_reactions": [
           {"id": "elder_map_tactics", "card_action_id": "tactical_assessment", "prompt_kinds": ["free_action", "interaction"], "effects": [{"type": "set_flag", "parameters": {"key": "travel_navigation_advantage", "value": true}}], "message": "Garran analizuje starą mapę. Rzut nawigacji do strażnicy będzie wykonywany z przewagą."},
           {"id": "elder_map_magic", "card_action_id": "detect_magic", "prompt_kinds": ["free_action", "interaction"], "effects": [{"type": "set_flag", "parameters": {"key": "elder_map_magic_checked", "value": true}}], "message": "Mapa nie skrywa aktywnej magii, ale stary atrament wskazuje późniejsze poprawki trasy."},

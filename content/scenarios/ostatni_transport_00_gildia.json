@@ -26,7 +26,7 @@
     {"id":"dagna","name":"Dagna","kind":"player_character","faction":"ally","level":3,"ac":18,"hp":27,"speed_feet":25,"position":[0,2],"ability_scores":{"strength":14,"dexterity":10,"constitution":16,"intelligence":8,"wisdom":17,"charisma":12},"item_refs":["dagger"]},
     {"id":"garran","name":"Garran","kind":"player_character","faction":"ally","level":3,"ac":19,"hp":31,"speed_feet":30,"position":[0,3],"ability_scores":{"strength":17,"dexterity":14,"constitution":15,"intelligence":8,"wisdom":12,"charisma":10},"item_refs":["dagger"]},
     {"id":"mira","name":"Mira","kind":"player_character","faction":"ally","level":3,"ac":15,"hp":24,"speed_feet":25,"position":[0,4],"ability_scores":{"strength":8,"dexterity":17,"constitution":14,"intelligence":15,"wisdom":12,"charisma":10},"item_refs":["dagger"]},
-    {"id":"erynd","name":"Erynd","kind":"player_character","faction":"ally","level":3,"ac":15,"hp":28,"speed_feet":30,"position":[0,5],"ability_scores":{"strength":12,"dexterity":17,"constitution":14,"intelligence":10,"wisdom":16,"charisma":8},"item_refs":["dagger"]},
+    {"id":"erynd","name":"Erynd","kind":"player_character","faction":"ally","level":3,"ac":15,"hp":28,"speed_feet":30,"position":[0,5],"ability_scores":{"strength":12,"dexterity":17,"constitution":14,"intelligence":10,"wisdom":16,"charisma":8},"proficiencies":{"skills":["perception","survival"]},"item_refs":["dagger"]},
     {"id":"nimra","name":"Nimra","kind":"player_character","faction":"ally","level":3,"ac":13,"hp":20,"speed_feet":25,"position":[0,6],"ability_scores":{"strength":8,"dexterity":16,"constitution":14,"intelligence":17,"wisdom":12,"charisma":10},"item_refs":["dagger"]}
   ],
   "llm_context": {
@@ -58,8 +58,8 @@
         {"label":"Erynd podejrzewa magiczne źródło zagrożenia na trasie.","required_flag":"knowledge.convoy_route_magic_suspected"}
       ],
       "propagate_flags": ["black_ford_transport_quest_active", "knowledge.transport_last_contact_details", "knowledge.convoy_route_marks", "knowledge.transport_cargo_summary", "knowledge.hidden_medicine_cache", "knowledge.transport_roster", "knowledge.alven_is_trusted_guild_accountant", "knowledge.nessa_true_priority_known", "knowledge.convoy_route_magic_suspected", "nessa_contract_outcome", "contract.base_reward_gp_per_hero", "contract.hazard_bonus_gp_per_hero", "contract.survivor_bonus_gp_each", "contract.advance_gp_per_hero", "contract.expense_policy", "contract.preparation_package"],
-      "outcomes": [{"id":"road_departure","kind":"success","label":"W drogę","narration":"Drzwi gildii zamykają się za drużyną. Przed nimi stary trakt i transport, który nie dotarł do celu."}],
-      "travel_minutes": 10
+      "outcomes": [{"id":"road_departure","kind":"success","label":"W drogę","narration":"Drzwi gildii zamykają się za drużyną. Przed nimi godzina starego traktu i transport, który nie dotarł do celu."}],
+      "travel_minutes": 60
     },
     "zones": [{
       "id": "guild_hall",

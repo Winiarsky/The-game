@@ -3,6 +3,11 @@
 Status: kontrakt implementacyjny pierwszego encountera  
 Powiązane: `MAPA_1_GLODNE_CIENIE_ENCOUNTER_SPEC.md`, `docs/UTILITY_ENEMY_AI.md`
 
+> Aktualizacja 2026-08-26: runtime używa `coordinated_pack_v1`. Opisy starego
+> dzwonu, Skoku stada oraz punktowanego `weighted_utility_v1` w dalszej części
+> dokumentu są historycznym uzasadnieniem wcześniejszego prototypu i nie
+> definiują już mechaniki encountera.
+
 ## 1. Granica Gemini
 
 Tura przeciwnika nie wysyła zapytania do Gemini. Lokalny silnik wyznacza:
@@ -30,7 +35,7 @@ Rola AI: `skirmisher`
 |---|---:|
 | Rozmiar / typ | Medium beast |
 | KP | 13 |
-| PW | 14 |
+| PW | 16 |
 | Szybkość | 40 ft |
 | STR | 12 (`+1`) |
 | DEX | 14 (`+2`) |
@@ -50,18 +55,15 @@ Rola AI: `skirmisher`
 - melee weapon attack;
 - zasięg 5 ft;
 - premia ataku `+5` (`+1` scenariuszowej premii do trafienia);
-- trafienie: `1d6 + 2` slashing, średnio 5.5;
+- trafienie: `1d4 + 2` slashing, średnio 4.5;
 - jedna akcja ataku, bez Multiattack.
 
-### Skok stada
+### Premia stada
 
-Warunek: Cień przemieścił się w tej turze co najmniej 10 ft, trafia Rozdarciem, a przy celu stoi co najmniej jeden żywy członek stada.
-
-Efekt: cel wykonuje Strength save ST 12. Porażka nakłada `prone`; sukces nie daje dodatkowego skutku. Obrażenia nie rosną.
-
-Zaimplementowane przez generyczny hook `conditional_on_hit_save`: runtime
-sprawdza przebyty dystans i sąsiedztwo sojusznika, a następnie otwiera fizyczny
-rzut obronny i nakłada `prone` po porażce.
+Cel otrzymuje najwyższy priorytet, jeżeli stoją już przy nim inne żywe Cienie.
+Każdy inny poplecznik sąsiadujący z celem daje napastnikowi `+1` do testu ataku
+i `+1` do obrażeń. Napastnik nie liczy sam siebie; przewodnica nie jest
+poplecznikiem. Flankowanie daje niezależnie advantage i sumuje się z premią.
 
 ## 3. Przewodnica Głodnych Cieni
 
@@ -72,7 +74,7 @@ Rola AI: `leader`
 |---|---:|
 | Rozmiar / typ | Medium beast |
 | KP | 14 |
-| PW | 30 |
+| PW | 34 (24 w wariancie dwuosobowym) |
 | Szybkość | 40 ft |
 | STR | 14 (`+2`) |
 | DEX | 16 (`+3`) |
@@ -88,27 +90,24 @@ Rola AI: `leader`
 | Darkvision | 60 ft |
 | Death saves | nie |
 
-### Atak: Rozdarcie przewodnicy
+### Ataki i regeneracja przewodnicy
 
-- melee weapon attack;
-- zasięg 5 ft;
-- premia ataku `+6` (`+1` scenariuszowej premii do trafienia);
-- trafienie: `1d8 + 3` slashing, średnio 7.5;
-- jedna akcja ataku, bez Multiattack.
+- **Duchowy pocisk:** ranged custom attack, `+5`, 60 ft, `1d6 + 2` psychic;
+- **Wysysające rozdarcie:** melee custom attack, `+3`, 5 ft, `1d4 + 2`
+  necrotic; po trafieniu przewodnica odzyskuje połowę faktycznie zadanych
+  obrażeń, zaokrągloną w dół;
+- gdy bohater stoi obok, przewodnica zawsze wybiera zwarcie i nie regeneruje
+  poplecznika;
+- po Duchowym pocisku bez ruchu leczy najbardziej rannego żywego poplecznika
+  w zasięgu 60 ft i linii widzenia o `1d6 + 2` PW.
 
-### Skok stada przewodnicy
+### Załamanie stada
 
-Identyczny zaimplementowany warunek jak u harcownika. Strength save ma ST 13.
-
-### Kotwica morale
-
-To nie jest akcja aktora, tylko zdarzenia encountera:
-
-- pierwszy spadek do połowy PW: morale `−1`;
-- śmierć: morale `−2`;
-- ucieczka przewodnicy: morale `−2`.
-
-Każde zdarzenie działa najwyżej raz. Nie wprowadzamy aktywnego skowytu przesuwającego kilka figurek — komplikowałby ekonomię akcji, reakcje i fizyczne potwierdzenia, a rola przewodnicy jest już czytelna przez wagi `guard` i morale.
+Śmierć lub ucieczka przewodnicy przełącza żywych popleczników w nieodwracalny
+odwrót. Śmierć lub ucieczka wszystkich popleczników przełącza przewodnicę w
+odwrót. Pole `pack_escape` jest podświetlane; dojście usuwa aktora z planszy.
+Brak osiągalnego postępu daje `cornered`, bez zerowego ruchu i bez oscylowania
+między walką a ucieczką.
 
 ## 4. Ekonomia ruchu
 

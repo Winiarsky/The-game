@@ -1,0 +1,10 @@
+{
+  "schema": "dnd_board_game.spell", "schema_version": 1, "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["project_original"], "id": "nimra_mind_spike", "name": "Szpilka umysłu",
+  "level": 0, "school": "enchantment", "casting_time": "action",
+  "range": {"kind": "distance", "feet": 45},
+  "components": {"verbal": true, "somatic": true, "materials": []},
+  "duration": {"kind": "instantaneous"}, "concentration": false, "ritual": false,
+  "scaling": {"cantrip_damage_dice_per_tier": 1},
+  "effect": {"kind": "attack", "ability": "intelligence", "save_ability": "wisdom", "save_damage_on_success": "none", "damage": {"dice": "1d6", "modifier": 0, "damage_type": "psychic"}, "on_hit_condition": "no_reactions", "on_hit_condition_duration": "until_turn_start", "on_hit_condition_expiration": "source"}
+}

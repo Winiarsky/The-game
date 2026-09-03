@@ -1,0 +1,10 @@
+{
+  "schema": "dnd_board_game.spell", "schema_version": 1, "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["project_original"], "id": "nimra_frost_pulse", "name": "Lodowy impuls",
+  "level": 0, "school": "evocation", "casting_time": "action",
+  "range": {"kind": "distance", "feet": 50},
+  "components": {"verbal": true, "somatic": true, "materials": []},
+  "duration": {"kind": "instantaneous"}, "concentration": false, "ritual": false,
+  "scaling": {"cantrip_damage_dice_per_tier": 1},
+  "effect": {"kind": "attack", "ability": "intelligence", "save_ability": "constitution", "save_damage_on_success": "none", "damage": {"dice": "1d8", "modifier": 0, "damage_type": "cold"}, "on_hit_condition": "ray_of_frost_slow", "on_hit_condition_duration": "until_turn_start", "on_hit_condition_expiration": "source"}
+}

@@ -16,97 +16,123 @@ from dnd_board_game.rules import (
     SpellAccessProfile,
     SpellComponents,
     SpellDefinition,
+    ability_modifier,
 )
 
 
 _ACTIVE_FEATURES: dict[str, tuple[tuple[str, str], ...]] = {
     "garran": (
-        ("guard_duty", "Warta"),
         ("iron_line", "Żelazna linia"),
         ("action_surge", "Zryw akcji"),
-        ("lay_on_hands", "Ratunek polowy"),
+        ("shield_bash", "Uderzenie tarczą"),
         ("defensive_stance", "Pozycja obronna"),
+        ("garran_command_halt", "Rozkaz: Stać"),
+        ("garran_shield_wall", "Osłona tarczą"),
+        ("garran_rally", "Mowa dowódcy"),
+        ("garran_guard_companion", "Osłona towarzysza"),
     ),
     "brakka": (
         ("intimidation", "Zastraszanie siłą"),
         ("reckless_attack", "Lekkomyślny atak"),
-        ("frenzy", "Szał bojowy"),
-        ("action_surge", "Niepowstrzymany impet"),
-        ("cunning_action", "Drapieżny pęd"),
+        ("powerful_strike", "Potężne uderzenie"),
+        ("shoulder_check", "Z bara"),
+        ("brakka_grapple", "Chwyt"),
+        ("hard_as_rock", "Twarda jak skała"),
+        ("acceleration", "Przyspieszenie"),
+        ("deafening_roar", "Ogłuszający ryk"),
     ),
     "mira": (
-        ("break_in", "Włamanie"),
-        ("cunning_action", "Przebiegła akcja"),
+        ("mira_shadow_stealth", "Mistrzyni ukrycia"),
+        ("mira_shadow_killer", "Atak z cienia"),
+        ("mira_ranged_evasion", "Ruchomy cel"),
         ("instinctive_dodge", "Unik instynktowny"),
-        ("exploit_weakness", "Wykorzystanie słabości"),
+        ("smoke_screen", "Zasłona dymna"),
+        ("hamstring_cut", "Cięcie ścięgna"),
+        ("piercing_attack", "Przeszywający atak"),
+        ("guard_vault", "Przeskok przez gardę"),
+        ("blade_mistress", "Mistrzyni ostrzy"),
+        ("combat_trap_detection", "Wykrycie pułapek"),
     ),
-    "dagna": (("diagnosis", "Diagnoza"),),
+    "dagna": (
+        ("field_medic_step", "Krok ratowniczki"),
+    ),
+    "lorian": (
+        ("crossbowman", "Kusznik"),
+        ("optical_scope", "Luneta optyczna"),
+        ("mocking_shot", "Ostrzał destabilizujący"),
+        ("provoking_shot", "Prowokujący ostrzał"),
+        ("entangling_shot", "Oplatający ostrzał"),
+        ("counterpoint", "Kontrapunkt"),
+        ("distracting_shout", "Rozpraszający okrzyk"),
+        ("social_grace_bargaining", "Obycie i targowanie"),
+        ("improvisation", "Improwizacja"),
+    ),
     "erynd": (
-        ("tracking", "Tropienie"),
         ("fighting_style_archery", "Styl walki: Łucznictwo"),
+        ("first_blood", "Pierwsza krew"),
+        ("scouts_vigilance", "Czujność zwiadowcy"),
         ("cunning_action", "Zwiadowcza mobilność"),
-        ("patient_shot", "Strzelecka cierpliwość"),
+        ("aim", "Celowanie"),
+        ("anchoring_arrow", "Strzała kotwicząca"),
+        ("exposing_arrow", "Strzała odsłaniająca"),
+        ("disrupting_arrow", "Strzała zakłócająca"),
+        ("double_shot", "Podwójny strzał"),
+    ),
+    "nimra": (
+        ("nimra_catalogue", "Katalog niemożliwego"),
+        ("nimra_sculpt_field", "Rzeźbienie pola"),
+        ("nimra_distant_spell", "Odległy czar"),
+        ("nimra_overcharged_spell", "Przeciążony czar"),
+        ("nimra_forced_weave", "Wymuszony splot"),
+        ("nimra_energy_transmutation", "Transmutacja energii"),
     ),
 }
 
-_FEATURE_MIN_LEVEL: dict[tuple[str, str], int] = {
-    ("brakka", "action_surge"): 2,
-    ("brakka", "cunning_action"): 2,
-}
+_FEATURE_MIN_LEVEL: dict[tuple[str, str], int] = {}
 
 _FIXED_DECK_SPELLS: dict[str, tuple[tuple[int, str, str | None], ...]] = {
-    "garran": (
-        (2, "command", "tactics_uses"),
-        (2, "shield_of_faith", "tactics_uses"),
-        (3, "heroism", "tactics_uses"),
-        (3, "warding_bond", "tactics_uses"),
-    ),
-    "brakka": (
-        (3, "false_life", "ferocity_uses"),
-        (3, "thunderwave", "ferocity_uses"),
-    ),
-    "mira": (
-        (1, "invisibility", "trick_uses"),
-        (1, "find_traps", "trick_uses"),
-        (2, "vicious_mockery", "trick_uses"),
-        (3, "mirror_image", "trick_uses"),
-    ),
+    "garran": (),
+    "brakka": (),
+    "mira": (),
     "dagna": (
         (1, "sacred_flame", None),
         (1, "healing_word", None),
         (1, "bless", None),
-        (1, "sanctuary", None),
+        (1, "divine_care_aura", None),
         (2, "guiding_bolt", None),
-        (3, "aid", None),
+        (3, "healing_grace_aura", None),
         (3, "lesser_restoration", None),
-        (3, "warding_bond", None),
+        (3, "spiritual_weapon", None),
     ),
     "lorian": (
-        (1, "vicious_mockery", None),
         (1, "thunderwave", None),
-        (1, "healing_word", None),
-        (2, "faerie_fire", None),
-        (2, "heroism", None),
+        (1, "faerie_fire", None),
+        (1, "panic_whisper", None),
         (3, "hideous_laughter", None),
+        (3, "stage_command", None),
+        (3, "accelerated_refrain", None),
     ),
     "nimra": (
-        (1, "ray_of_frost", None),
-        (1, "grease", None),
+        (1, "nimra_frost_pulse", None),
+        (1, "nimra_acid_splash", None),
+        (1, "nimra_mind_spike", None),
+        (1, "nimra_flame_fan", None),
+        (1, "nimra_force_wave", None),
+        (1, "nimra_sticky_matrix", None),
         (1, "shield", None),
-        (1, "sleep", None),
-        (2, "fog_cloud", None),
-        (3, "web", None),
-        (3, "hold_person", None),
+        (1, "nimra_sleep", None),
+        (2, "nimra_fog", None),
+        (3, "nimra_web", None),
+        (3, "nimra_lightning_path", None),
+        (3, "nimra_mind_break", None),
+        (3, "nimra_stasis", None),
         (3, "misty_step", None),
         (3, "shatter", None),
     ),
     "erynd": (
         (1, "hunters_mark", "instinct"),
-        (1, "goodberry", "instinct"),
-        (1, "find_traps", "instinct"),
         (2, "misty_step", "instinct"),
         (3, "spike_growth", "instinct"),
-        (3, "see_invisibility", "instinct"),
     ),
 }
 
@@ -122,24 +148,66 @@ _DECK_CASTING_ABILITIES = {
 
 _ACTION_IDS_BY_FEATURE: dict[str, tuple[str, ...]] = {
     "action_surge": ("action_surge",),
-    "lay_on_hands": ("lay_on_hands",),
+    "shield_bash": ("shield_bash",),
     "defensive_stance": ("defensive_stance",),
+    "garran_command_halt": ("garran_command_halt",),
+    "garran_shield_wall": ("garran_shield_wall",),
+    "garran_rally": ("garran_rally",),
+    "garran_guard_companion": ("garran_guard_companion",),
     "reckless_attack": ("reckless_attack",),
-    "frenzy": ("frenzy",),
+    "powerful_strike": ("powerful_strike",),
+    "shoulder_check": ("shoulder_check",),
+    "hard_as_rock": ("hard_as_rock",),
+    "acceleration": ("acceleration",),
+    "deafening_roar": ("deafening_roar",),
     "cunning_action": ("cunning_action",),
     "instinctive_dodge": ("instinctive_dodge",),
-    "exploit_weakness": ("exploit_weakness",),
-    "patient_shot": ("patient_shot",),
+    "smoke_screen": ("smoke_screen",),
+    "hamstring_cut": ("hamstring_cut",),
+    "piercing_attack": ("piercing_attack",),
+    "guard_vault": ("guard_vault",),
+    "blade_mistress": ("blade_mistress",),
+    "combat_trap_detection": ("combat_trap_detection",),
+    "aim": ("aim",),
+    "anchoring_arrow": ("anchoring_arrow",),
+    "exposing_arrow": ("exposing_arrow",),
+    "disrupting_arrow": ("disrupting_arrow",),
+    "double_shot": ("double_shot",),
+    "mocking_shot": ("mocking_shot",),
+    "provoking_shot": ("provoking_shot",),
+    "optical_scope": ("optical_scope",),
+    "entangling_shot": ("entangling_shot",),
+    "counterpoint": ("counterpoint",),
+    "distracting_shout": ("distracting_shout",),
+    "improvisation": ("improvisation",),
     "guard_duty": ("guard_duty",),
     "intimidation": ("intimidation",),
-    "break_in": ("break_in",),
-    "diagnosis": ("diagnosis",),
     "tracking": ("tracking",),
 }
 
 _RESOURCE_IDS_BY_FEATURE: dict[str, tuple[str, ...]] = {
-    "exploit_weakness": ("trick_uses",),
-    "patient_shot": ("instinct",),
+    "garran_command_halt": ("tactics_uses",),
+    "garran_shield_wall": ("tactics_uses",),
+    "garran_rally": ("tactics_uses",),
+    "garran_guard_companion": ("tactics_uses",),
+    "powerful_strike": ("ferocity_uses",),
+    "hard_as_rock": ("ferocity_uses",),
+    "acceleration": ("ferocity_uses",),
+    "deafening_roar": ("ferocity_uses",),
+    "instinctive_dodge": ("trick_uses",),
+    "smoke_screen": ("trick_uses",),
+    "hamstring_cut": ("trick_uses",),
+    "piercing_attack": ("trick_uses",),
+    "blade_mistress": ("trick_uses",),
+    "anchoring_arrow": ("instinct",),
+    "exposing_arrow": ("instinct",),
+    "disrupting_arrow": ("instinct",),
+    "double_shot": ("instinct",),
+    "nimra_sculpt_field": ("metamagic_points",),
+    "nimra_distant_spell": ("metamagic_points",),
+    "nimra_overcharged_spell": ("metamagic_points",),
+    "nimra_forced_weave": ("metamagic_points",),
+    "nimra_energy_transmutation": ("metamagic_points",),
 }
 
 _PRIMARY_ABILITY_BOOSTS = {
@@ -162,13 +230,82 @@ _ABILITY_LABELS_PL = {
 }
 
 _FLAW_FEATURES: dict[str, tuple[str, str]] = {
-    "garran": ("flaw_command_guilt", "Skaza: Wina dowódcy"),
+    "garran": ("flaw_remorse", "Skaza: Wyrzuty sumienia"),
     "brakka": ("flaw_chains", "Skaza: Bitewny amok"),
-    "mira": ("flaw_interrogation", "Skaza: Lęk przed przesłuchaniem"),
+    "mira": ("flaw_exposed_panic", "Skaza: Panika po zdemaskowaniu"),
     "dagna": ("flaw_leave_no_one", "Skaza: Nikogo nie zostawiam"),
-    "lorian": ("flaw_approval", "Skaza: Głód aprobaty"),
+    "lorian": ("flaw_needs_audience", "Skaza: Potrzeba publiczności"),
     "nimra": ("flaw_arcane_echo", "Skaza: Echo magicznego wycieku"),
-    "erynd": ("flaw_ambush_survivor", "Skaza: Ocalały z zasadzki"),
+    "erynd": ("flaw_friendly_fire_trauma", "Skaza: Trauma bratobójczego strzału"),
+}
+
+_REMOVED_FEATURE_IDS: dict[str, frozenset[str]] = {
+    "garran": frozenset(
+        {
+            "guard_duty",
+            "lay_on_hands",
+            "military_rank",
+            "flaw_command_guilt",
+        }
+    ),
+    "brakka": frozenset(
+        {"frenzy", "action_surge", "cunning_action", "danger_sense"}
+    ),
+    "mira": frozenset(
+        {
+            "brave",
+            "cunning_action",
+            "halfling_nimbleness",
+            "naturally_stealthy",
+            "flaw_interrogation",
+            "mira_opportunity_evasion",
+            "break_in",
+            "exploit_weakness",
+            "criminal_contact",
+            "thieves_cant",
+            "fast_hands",
+            "second_story_work",
+            "sneak_attack",
+            "sneak_attack_2d6",
+            "roguish_archetype",
+        }
+    ),
+    "dagna": frozenset({"stonecunning", "shelter_of_the_faithful"}),
+    "lorian": frozenset(
+        {
+            "skill_versatility",
+            "by_popular_demand",
+            "jack_of_all_trades",
+            "song_of_rest",
+            "bard_college",
+            "bonus_proficiencies",
+            "flaw_approval",
+        }
+    ),
+    "erynd": frozenset(
+        {
+            "favored_enemy_beast",
+            "favored_enemy",
+            "natural_explorer_forest",
+            "natural_explorer",
+            "colossus_slayer",
+            "hunters_prey",
+            "primeval_awareness",
+            "tracking",
+            "patient_shot",
+            "high_elf_cantrip",
+            "flaw_ambush_survivor",
+        }
+    ),
+    "nimra": frozenset(
+        {
+            "artificers_lore",
+            "tinker",
+            "researcher",
+            "evocation_savant",
+            "sculpt_spells",
+        }
+    ),
 }
 
 
@@ -177,6 +314,7 @@ def apply_boardgame_archetype(
     *,
     spell_definitions: tuple[SpellDefinition, ...] = (),
 ) -> Actor:
+    actor = reconcile_boardgame_feature_removals(actor)
     actor_id = str(actor.id)
     features = list(actor.features)
     existing_feature_ids = {feature.feature_id for feature in features}
@@ -236,17 +374,6 @@ def apply_boardgame_archetype(
 
     pools = list(actor.resource_pools)
     existing_pool_ids = {pool.id for pool in pools}
-    if actor_id == "garran" and "guard_duty_uses" not in existing_pool_ids:
-        maximum = 3 if actor.level >= 3 else 2
-        pools.append(
-            ActorResourcePool(
-                "guard_duty_uses",
-                "Warta",
-                maximum,
-                maximum,
-                RecoveryPeriod.LONG_REST,
-            )
-        )
     if actor_id == "garran" and "action_surge_uses" not in existing_pool_ids:
         pools.append(
             ActorResourcePool(
@@ -257,89 +384,95 @@ def apply_boardgame_archetype(
                 RecoveryPeriod.SHORT_REST,
             )
         )
-    if actor_id == "garran" and "lay_on_hands_points" not in existing_pool_ids:
-        pools.append(
-            ActorResourcePool(
-                "lay_on_hands_points",
-                "Ratunek polowy",
-                actor.level * 5,
-                actor.level * 5,
-                RecoveryPeriod.LONG_REST,
+    if actor_id == "mira":
+        maximum = max(1, ability_modifier(actor.ability_scores.dexterity))
+        existing = next((pool for pool in pools if pool.id == "trick_uses"), None)
+        pools = [
+            pool
+            for pool in pools
+            if pool.id != "instinctive_dodge_uses"
+        ]
+        if existing is None:
+            pools.append(
+                ActorResourcePool(
+                    "trick_uses",
+                    "Fortele",
+                    maximum,
+                    maximum,
+                    RecoveryPeriod.LONG_REST,
+                )
             )
-        )
-    if actor_id == "garran" and "defensive_stance_uses" not in existing_pool_ids:
-        pools.append(
-            ActorResourcePool(
-                "defensive_stance_uses",
-                "Pozycja obronna",
-                1,
-                1,
-                RecoveryPeriod.SHORT_REST,
+        else:
+            pools = [
+                replace(
+                    pool,
+                    current=max(0, maximum - (pool.maximum - pool.current)),
+                    maximum=maximum,
+                    recovery=RecoveryPeriod.LONG_REST,
+                )
+                if pool.id == "trick_uses"
+                else pool
+                for pool in pools
+            ]
+    if actor_id == "garran" and actor.level >= 2:
+        maximum = max(1, ability_modifier(actor.ability_scores.strength))
+        existing = next((pool for pool in pools if pool.id == "tactics_uses"), None)
+        if existing is None:
+            pools.append(
+                ActorResourcePool(
+                    "tactics_uses",
+                    "Taktyka",
+                    maximum,
+                    maximum,
+                    RecoveryPeriod.LONG_REST,
+                )
             )
-        )
-    if actor_id == "mira" and "instinctive_dodge_uses" not in existing_pool_ids:
-        pools.append(
-            ActorResourcePool(
-                "instinctive_dodge_uses",
-                "Unik instynktowny",
-                1,
-                1,
-                RecoveryPeriod.SHORT_REST,
-            )
-        )
-    if actor_id == "mira" and "trick_uses" not in existing_pool_ids:
-        maximum = 3 if actor.level >= 3 else 2
-        pools.append(
-            ActorResourcePool(
-                "trick_uses",
-                "Fortele",
-                maximum,
-                maximum,
-                RecoveryPeriod.LONG_REST,
-            )
-        )
-    if actor_id == "garran" and actor.level >= 2 and "tactics_uses" not in existing_pool_ids:
-        maximum = 3 if actor.level >= 3 else 2
-        pools.append(
-            ActorResourcePool(
-                "tactics_uses",
-                "Taktyka",
-                maximum,
-                maximum,
-                RecoveryPeriod.LONG_REST,
-            )
-        )
-    if actor_id == "brakka" and actor.level >= 2 and "action_surge_uses" not in existing_pool_ids:
-        pools.append(
-            ActorResourcePool(
-                "action_surge_uses",
-                "Niepowstrzymany impet",
-                1,
-                1,
-                RecoveryPeriod.SHORT_REST,
-            )
-        )
+        else:
+            pools = [
+                replace(
+                    pool,
+                    current=max(0, maximum - (pool.maximum - pool.current)),
+                    maximum=maximum,
+                )
+                if pool.id == "tactics_uses"
+                else pool
+                for pool in pools
+            ]
     if actor_id == "brakka" and actor.level >= 3 and "ferocity_uses" not in existing_pool_ids:
+        maximum = max(1, ability_modifier(actor.ability_scores.constitution))
         pools.append(
             ActorResourcePool(
                 "ferocity_uses",
                 "Dzikość",
-                2,
-                2,
-                RecoveryPeriod.LONG_REST,
+                0,
+                maximum,
+                RecoveryPeriod.NEVER,
             )
         )
-    if actor_id == "erynd" and "instinct" not in existing_pool_ids:
-        maximum = 3 if actor.level >= 3 else 2
-        pools.append(
-            ActorResourcePool(
-                "instinct",
-                "Instynkt",
-                maximum,
-                maximum,
-                RecoveryPeriod.LONG_REST,
+    if actor_id == "erynd":
+        maximum = max(1, ability_modifier(actor.ability_scores.dexterity))
+        existing = next((pool for pool in pools if pool.id == "instinct"), None)
+        if existing is None:
+            pools.append(
+                ActorResourcePool(
+                    "instinct",
+                    "Instynkt",
+                    maximum,
+                    maximum,
+                    RecoveryPeriod.LONG_REST,
+                )
             )
-        )
+        else:
+            pools = [
+                replace(
+                    pool,
+                    current=max(0, maximum - (pool.maximum - pool.current)),
+                    maximum=maximum,
+                )
+                if pool.id == "instinct"
+                else pool
+                for pool in pools
+            ]
     if actor_id == "lorian":
         inspiration_maximum = max(
             1,
@@ -353,14 +486,72 @@ def apply_boardgame_archetype(
                     inspiration_maximum - (pool.maximum - pool.current),
                 ),
                 maximum=inspiration_maximum,
+                recovery=RecoveryPeriod.SHORT_REST,
             )
             if pool.id == "bardic_inspiration_uses"
             else pool
             for pool in pools
         ]
+    if actor_id == "nimra":
+        maximum = max(1, ability_modifier(actor.ability_scores.intelligence))
+        existing = next(
+            (pool for pool in pools if pool.id == "metamagic_points"),
+            None,
+        )
+        if existing is None:
+            pools.append(
+                ActorResourcePool(
+                    "metamagic_points",
+                    "Punkty Metamagii",
+                    maximum,
+                    maximum,
+                    RecoveryPeriod.LONG_REST,
+                )
+            )
+        else:
+            pools = [
+                replace(
+                    pool,
+                    current=max(0, maximum - (pool.maximum - pool.current)),
+                    maximum=maximum,
+                    recovery=RecoveryPeriod.LONG_REST,
+                )
+                if pool.id == "metamagic_points"
+                else pool
+                for pool in pools
+            ]
     spells = list(actor.spells)
     spell_ids = list(actor.spell_ids)
     spell_access = list(actor.spell_access)
+    if actor_id == "garran":
+        retired_spell_ids = {"command", "shield_of_faith", "heroism", "warding_bond"}
+        spells = [spell for spell in spells if spell.id not in retired_spell_ids]
+        spell_ids = [spell_id for spell_id in spell_ids if spell_id not in retired_spell_ids]
+    if actor_id == "lorian":
+        retired_spell_ids = {
+            "vicious_mockery",
+            "mage_hand",
+            "healing_word",
+            "charm_person",
+            "heroism",
+        }
+        spells = [spell for spell in spells if spell.id not in retired_spell_ids]
+        spell_ids = [spell_id for spell_id in spell_ids if spell_id not in retired_spell_ids]
+        spell_access = []
+    if actor_id == "mira":
+        retired_spell_ids = {
+            "invisibility",
+            "find_traps",
+            "vicious_mockery",
+            "mirror_image",
+        }
+        spells = [spell for spell in spells if spell.id not in retired_spell_ids]
+        spell_ids = [spell_id for spell_id in spell_ids if spell_id not in retired_spell_ids]
+        spell_access = []
+    if actor_id == "erynd":
+        retired_spell_ids = {"goodberry", "find_traps", "see_invisibility", "cure_wounds", "light"}
+        spells = [spell for spell in spells if spell.id not in retired_spell_ids]
+        spell_ids = [spell_id for spell_id in spell_ids if spell_id not in retired_spell_ids]
     spell_save_dc = actor.spell_save_dc
     casting_ability = _DECK_CASTING_ABILITIES.get(actor_id)
     if casting_ability is not None and spell_save_dc is not None:
@@ -437,6 +628,25 @@ def apply_boardgame_archetype(
                 dict.fromkeys((*proficiencies.expertise, "stealth", "survival"))
             ),
         )
+    inventory = actor.inventory
+    if actor_id == "lorian":
+        allowed_items = {"rapier", "hand_crossbow", "leather_armor", "lute"}
+        inventory = tuple(
+            item
+            for item in actor.inventory
+            if (item.source_ref or item.id) in allowed_items
+        )
+        # Obycie i targowanie owns the social specialization. Keeping an
+        # additional Expertise multiplier here would apply the same concept
+        # twice and make the scenario DCs effectively meaningless.
+        proficiencies = replace(
+            proficiencies,
+            expertise=tuple(
+                skill
+                for skill in proficiencies.expertise
+                if skill not in {"persuasion", "stealth"}
+            ),
+        )
     return replace(
         actor,
         features=tuple(features),
@@ -444,12 +654,61 @@ def apply_boardgame_archetype(
         spells=tuple(spells),
         spell_ids=tuple(spell_ids),
         spell_access=tuple(spell_access),
-        spell_preparation=(None if deck_spell_specs else actor.spell_preparation),
+        spell_preparation=(
+            None if deck_spell_specs or actor_id in {"mira", "erynd"}
+            else actor.spell_preparation
+        ),
         # Erynd's spell-shaped techniques spend Instinct, never ranger slots.
-        spell_slots=() if actor_id == "erynd" else actor.spell_slots,
+        spell_slots=() if actor_id in {"erynd", "mira"} else actor.spell_slots,
         spell_save_dc=spell_save_dc,
         proficiencies=proficiencies,
+        inventory=inventory,
     )
 
 
-__all__ = ["apply_boardgame_archetype"]
+def reconcile_boardgame_feature_removals(actor: Actor) -> Actor:
+    """Migrate retired curated features in restored actors without resetting state."""
+
+    actor_id = str(actor.id)
+    removed_feature_ids = _REMOVED_FEATURE_IDS.get(actor_id, frozenset())
+    retired_resource_ids = (
+        {"guard_duty_uses", "lay_on_hands_points", "defensive_stance_uses"}
+        if actor_id == "garran"
+        else {"primeval_awareness_uses"} if actor_id == "erynd"
+        else {"instinctive_dodge_uses"} if actor_id == "mira"
+        else set()
+    )
+    features = [
+        feature
+        for feature in actor.features
+        if feature.feature_id not in removed_feature_ids
+    ]
+    current_flaw = _FLAW_FEATURES.get(actor_id)
+    if current_flaw is not None and current_flaw[0] not in {
+        feature.feature_id for feature in features
+    }:
+        features.append(
+            FeatureGrant(
+                feature_id=current_flaw[0],
+                label=current_flaw[1],
+                source_kind=FeatureSourceKind.SCENARIO,
+                source_ref=f"boardgame_archetype:{actor_id}",
+            )
+        )
+    migrated_features = tuple(features)
+    resource_pools = tuple(
+        pool for pool in actor.resource_pools if pool.id not in retired_resource_ids
+    )
+    return (
+        actor
+        if migrated_features == actor.features
+        and resource_pools == actor.resource_pools
+        else replace(
+            actor,
+            features=migrated_features,
+            resource_pools=resource_pools,
+        )
+    )
+
+
+__all__ = ["apply_boardgame_archetype", "reconcile_boardgame_feature_removals"]

@@ -55,6 +55,8 @@ class CombatCondition(StrEnum):
     ENFEEBLED = "enfeebled"
     HANDS_BOUND = "hands_bound"
     GAGGED = "gagged"
+    HAMSTRUNG = "hamstrung"
+    BLEEDING = "bleeding"
 
 
 class ConditionSaveTiming(StrEnum):
@@ -76,6 +78,7 @@ class ConditionDefinition:
     ability_check_disadvantage: bool = False
     dexterity_save_disadvantage: bool = False
     speed_penalty_feet: int = 0
+    speed_halved: bool = False
     reactions_blocked: bool = False
     healing_blocked: bool = False
     actions_blocked: bool = False
@@ -238,6 +241,17 @@ CONDITION_DEFINITIONS: dict[CombatCondition, ConditionDefinition] = {
         "Zakneblowany",
         "Nie może wykonywać komponentów werbalnych czarów.",
         verbal_components_blocked=True,
+    ),
+    CombatCondition.HAMSTRUNG: ConditionDefinition(
+        CombatCondition.HAMSTRUNG,
+        "Przecięte ścięgno",
+        "Szybkość jest zmniejszona o połowę do otrzymania leczenia albo oczyszczenia statusu.",
+        speed_halved=True,
+    ),
+    CombatCondition.BLEEDING: ConditionDefinition(
+        CombatCondition.BLEEDING,
+        "Krwawienie",
+        "Na początku swojej tury otrzymuje 1k4 obrażeń do otrzymania leczenia albo oczyszczenia statusu.",
     ),
 }
 
@@ -681,6 +695,27 @@ def effective_movement_speed(
         if state.actor_id == str(actor.id)
     ):
         return 0
+    if any(
+        effect.actor_id == str(actor.id) and effect.kind == "roar_no_movement"
+        for effect in active_effects
+    ):
+        return 0
+    if any(
+        effect.actor_id == str(actor.id)
+        and effect.kind == "garran_command_no_movement"
+        for effect in active_effects
+    ):
+        return 0
+    if any(
+        effect.actor_id == str(actor.id)
+        and effect.kind in {
+            "erynd_anchored",
+            "erynd_anchor_pending",
+            "lorian_entangled_no_movement",
+        }
+        for effect in active_effects
+    ):
+        return 0
     if levitation_altitude_feet(str(actor.id), active_effects) > 0:
         # Levitate does not grant horizontal movement. Pulling along a fixed
         # object is handled as an explicit scene interaction, never as normal
@@ -696,7 +731,67 @@ def effective_movement_speed(
         ),
         default=0,
     )
-    return max(0, base_speed - penalty)
+    speed = max(0, base_speed - penalty)
+    caps = tuple(
+        effect.value
+        for effect in active_effects
+        if effect.actor_id == str(actor.id)
+        and effect.kind == "movement_speed_cap"
+        and effect.value >= 0
+    )
+    if caps:
+        speed = min(speed, min(caps))
+    if any(
+        condition_definition(state.condition).speed_halved
+        for state in states
+        if state.actor_id == str(actor.id)
+    ):
+        speed //= 2
+    if any(
+        effect.actor_id == str(actor.id)
+        and effect.kind == "garran_command_half_movement"
+        for effect in active_effects
+    ):
+        speed //= 2
+    if any(
+        effect.actor_id == str(actor.id)
+        and effect.kind in {
+            "erynd_anchor_half_movement",
+            "lorian_entangled_half_movement",
+        }
+        for effect in active_effects
+    ):
+        speed //= 2
+    return speed
+
+
+def remove_wound_conditions_after_healing(
+    states: Sequence[ConditionState],
+    actor_id: str,
+    effective_healing: int,
+) -> tuple[ConditionState, ...]:
+    """Actual HP recovery closes Mira's persistent wound riders."""
+
+    if effective_healing <= 0:
+        return tuple(states)
+    removable = {CombatCondition.HAMSTRUNG, CombatCondition.BLEEDING}
+    return tuple(
+        state
+        for state in states
+        if not (state.actor_id == actor_id and state.condition in removable)
+    )
+
+
+def bleeding_damage_at_turn_start(
+    states: Sequence[ConditionState],
+    actor_id: str,
+    d4_roll: int,
+) -> int:
+    """Return deterministic bleeding damage for a physical/automatic d4 roll."""
+
+    if not 1 <= int(d4_roll) <= 4:
+        raise ValueError("Krwawienie wymaga wyniku k4 od 1 do 4.")
+    return int(d4_roll) if has_condition(states, actor_id, CombatCondition.BLEEDING) else 0
 
 
 def levitation_altitude_feet(

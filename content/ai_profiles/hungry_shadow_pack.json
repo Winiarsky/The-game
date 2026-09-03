@@ -5,7 +5,7 @@
   "source_pack_ids": ["project_original"],
   "id": "hungry_shadow_pack",
   "name": "Stado Głodnych Cieni",
-  "model": "weighted_utility_v1",
+  "model": "coordinated_pack_v1",
   "score_bounds": [0.0, 100.0],
   "candidate_limits": {
     "per_intent": 8,
@@ -60,10 +60,6 @@
         "delta": -1,
         "once": true
       },
-      "old_bell_rung": {
-        "delta": -2,
-        "once": true
-      },
       "persistent_fire_barrier": {
         "delta": -1,
         "once": true
@@ -89,6 +85,8 @@
           "distance_progress": 6.0,
           "target_isolation": 20.0,
           "target_injury": 5.0,
+          "target_saturation": -55.0,
+          "target_prone": -8.0,
           "ally_support": 10.0,
           "threat_to_guard_zone": 8.0,
           "end_in_cover": 5.0,
@@ -96,10 +94,11 @@
           "self_injury": -18.0,
           "opportunity_risk": -20.0,
           "hazard_exposure": -30.0,
-          "repeats_target": 3.0
+          "repeats_target": -4.0
         },
         "advance": {
           "distance_progress": 18.0,
+          "idle_advance": -80.0,
           "target_isolation": 8.0,
           "threat_to_guard_zone": 6.0,
           "end_in_cover": 8.0,
@@ -137,6 +136,110 @@
         }
       }
     },
+    "flanker": {
+      "base_scores": {
+        "engage": 27.0,
+        "advance": 20.0,
+        "regroup": 7.0,
+        "guard": 4.0,
+        "flee": 4.0
+      },
+      "weights": {
+        "engage": {
+          "can_attack": 18.0,
+          "distance_progress": 8.0,
+          "target_isolation": 28.0,
+          "target_injury": 3.0,
+          "target_saturation": -60.0,
+          "target_prone": -10.0,
+          "ally_support": 5.0,
+          "end_in_cover": 4.0,
+          "pack_separation": -7.0,
+          "self_injury": -18.0,
+          "opportunity_risk": -20.0,
+          "hazard_exposure": -30.0,
+          "repeats_target": -8.0
+        },
+        "advance": {
+          "distance_progress": 30.0,
+          "idle_advance": -90.0,
+          "target_isolation": 12.0,
+          "end_in_cover": 3.0,
+          "pack_separation": -5.0,
+          "self_injury": -10.0,
+          "opportunity_risk": -18.0,
+          "hazard_exposure": -28.0
+        },
+        "regroup": {
+          "end_in_cover": 10.0,
+          "ranged_cover_response": 38.0,
+          "end_near_leader": 12.0,
+          "cohesion_gain": 14.0,
+          "self_injury": 34.0
+        },
+        "guard": {
+          "guard_position_quality": 6.0,
+          "end_in_cover": 6.0
+        },
+        "flee": {
+          "self_injury": 50.0,
+          "morale_pressure": 25.0,
+          "escape_progress": 18.0
+        }
+      }
+    },
+    "harrier": {
+      "base_scores": {
+        "engage": 25.0,
+        "advance": 21.0,
+        "regroup": 9.0,
+        "guard": 5.0,
+        "flee": 4.0
+      },
+      "weights": {
+        "engage": {
+          "can_attack": 18.0,
+          "distance_progress": 10.0,
+          "target_isolation": 14.0,
+          "target_injury": 8.0,
+          "target_saturation": -65.0,
+          "target_prone": -12.0,
+          "ally_support": 4.0,
+          "end_in_cover": 8.0,
+          "pack_separation": -6.0,
+          "self_injury": -16.0,
+          "opportunity_risk": -18.0,
+          "hazard_exposure": -30.0,
+          "repeats_target": -10.0
+        },
+        "advance": {
+          "distance_progress": 26.0,
+          "idle_advance": -90.0,
+          "target_isolation": 8.0,
+          "end_in_cover": 10.0,
+          "pack_separation": -5.0,
+          "self_injury": -9.0,
+          "opportunity_risk": -16.0,
+          "hazard_exposure": -28.0
+        },
+        "regroup": {
+          "end_in_cover": 16.0,
+          "ranged_cover_response": 42.0,
+          "end_near_leader": 10.0,
+          "cohesion_gain": 12.0,
+          "self_injury": 34.0
+        },
+        "guard": {
+          "guard_position_quality": 5.0,
+          "end_in_cover": 10.0
+        },
+        "flee": {
+          "self_injury": 50.0,
+          "morale_pressure": 25.0,
+          "escape_progress": 18.0
+        }
+      }
+    },
     "leader": {
       "base_scores": {
         "engage": 24.0,
@@ -151,6 +254,8 @@
           "distance_progress": 4.0,
           "target_isolation": 8.0,
           "target_injury": 3.0,
+          "target_saturation": -35.0,
+          "target_prone": -8.0,
           "ally_support": 8.0,
           "threat_to_guard_zone": 24.0,
           "end_in_cover": 5.0,
@@ -158,10 +263,11 @@
           "self_injury": -14.0,
           "opportunity_risk": -22.0,
           "hazard_exposure": -32.0,
-          "repeats_target": 4.0
+          "repeats_target": -2.0
         },
         "advance": {
           "distance_progress": 10.0,
+          "idle_advance": -60.0,
           "threat_to_guard_zone": 18.0,
           "end_in_cover": 7.0,
           "pack_separation": -6.0,

@@ -34,6 +34,7 @@ from dnd_board_game.combat import (
     EnemyAutoTurnResult,
     InitiativeEntry,
     InitiativeOrder,
+    HiddenState,
     actor_as_combat_target,
     apply_damage_result,
     combat_armor_class,
@@ -201,7 +202,7 @@ def _enemy_weapon_result(
     )
 
 
-def test_cutting_words_spends_reaction_and_inspiration_to_turn_hit_into_miss() -> None:
+def test_cutting_words_spends_reaction_but_not_inspiration_to_turn_hit_into_miss() -> None:
     enemy = replace(_actor("enemy", Faction.ENEMY, Coordinate(2, 0)), ac=10)
     target = replace(_actor("target", Faction.ALLY, Coordinate(1, 0)), ac=12)
     bard = replace(
@@ -252,7 +253,7 @@ def test_cutting_words_spends_reaction_and_inspiration_to_turn_hit_into_miss() -
     assert resolution.prevented_hit
     assert resolution.attack_total == 11
     assert updated_target.hp == target.hp
-    assert updated_bard.resource_pools[0].current == 1
+    assert updated_bard.resource_pools[0].current == 2
     assert not reaction_available_for(resolution.state, updated_bard)
 
 
@@ -623,6 +624,43 @@ def test_hit_applies_damage_and_completes_movement() -> None:
     assert moved.hp == 7
     assert len(resolution.applied_damages) == 1
     assert "trafienie" in resolution.message_body
+
+
+def test_exposed_panic_advantage_also_applies_to_enemy_opportunity_attacks() -> None:
+    service = CombatReactionFlowService()
+    mira = replace(
+        _actor("mira", Faction.ALLY, Coordinate(0, 0)),
+        features=(
+            FeatureGrant(
+                "flaw_exposed_panic",
+                "Skaza: Panika po zdemaskowaniu",
+                FeatureSourceKind.SCENARIO,
+                "test:mira",
+            ),
+        ),
+    )
+    goblin = _actor("goblin", Faction.ENEMY, Coordinate(1, 0))
+    state = replace(
+        _state(mira, goblin),
+        hidden_states=(HiddenState("mira", 18, ("other_enemy",)),),
+    )
+
+    resolution = service.resolve_opportunity_movement(
+        state=state,
+        actor_id="mira",
+        path=_path(state, mira),
+        threat_actor_ids=("goblin",),
+        attack_sources_by_actor={goblin.id: _source()},
+        active_effects=(),
+        roll_d20=lambda request: D20RollInput(request, 11, 13),
+        roll_damage=lambda _sides: 1,
+    )
+
+    updated_mira = next(
+        actor for actor in resolution.state.actors if actor.id == mira.id
+    )
+    assert updated_mira.hp == 7
+    assert "razem 13, trafienie" in resolution.message_body
 
 
 def test_lethal_opportunity_attack_stops_movement() -> None:

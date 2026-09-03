@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 
 from dnd_board_game.actors import Actor, spell_is_prepared
@@ -16,7 +16,7 @@ from dnd_board_game.combat import (
     set_scene_flag,
 )
 from dnd_board_game.hardware import LedColor, LedFeedback, LedFrame, LedRole
-from dnd_board_game.inventory import ItemInstance, MerchantState
+from dnd_board_game.inventory import ItemInstance, LootBundle, MerchantState
 from dnd_board_game.rules import (
     D20RollInput,
     D20RollRequest,
@@ -596,6 +596,8 @@ class ExplorationOption:
     allow_help: bool = False
     success_flag: str | None = None
     failure_flag: str | None = None
+    success_flags: tuple[str, ...] = ()
+    failure_flags: tuple[str, ...] = ()
     reveals: tuple[str, ...] = ()
     entry_cost_cp: int = 0
     success_reward_cp: int = 0
@@ -612,6 +614,14 @@ class ExplorationOption:
             raise ValueError("Exploration option currency values cannot be negative.")
         if self.time_cost_minutes < 0:
             raise ValueError("Exploration option time cost cannot be negative.")
+        for field_name, values in (
+            ("success_flags", self.success_flags),
+            ("failure_flags", self.failure_flags),
+        ):
+            if len(values) != len(set(values)) or any(not value.strip() for value in values):
+                raise ValueError(
+                    f"Exploration option {self.id} has invalid {field_name}."
+                )
         if (
             self.description_mode == InteractionDescriptionMode.NONE
             and not self.default_declaration.strip()
@@ -671,6 +681,40 @@ class TravelPace(StrEnum):
     SLOW = "slow"
 
 
+class TravelArrivalTiming(StrEnum):
+    EARLY = "early"
+    ON_TIME = "on_time"
+    LATE = "late"
+
+
+@dataclass(frozen=True, slots=True)
+class TravelPaceDetail:
+    pace: TravelPace
+    approach_consequence: str = ""
+    combat_consequence: str = ""
+    campaign_consequence: str = ""
+
+    def __post_init__(self) -> None:
+        if not any(
+            value.strip()
+            for value in (
+                self.approach_consequence,
+                self.combat_consequence,
+                self.campaign_consequence,
+            )
+        ):
+            raise ValueError(
+                f"Travel pace detail {self.pace.value} requires a visible consequence."
+            )
+
+    def as_payload(self) -> dict[str, object]:
+        return {
+            "approach_consequence": self.approach_consequence,
+            "combat_consequence": self.combat_consequence,
+            "campaign_consequence": self.campaign_consequence,
+        }
+
+
 @dataclass(frozen=True, slots=True)
 class TravelPolicy:
     navigation_dc: int | None = None
@@ -679,6 +723,7 @@ class TravelPolicy:
     navigation_failure_delay_minutes: int = 0
     safe_travel_minutes: int = 480
     terrain: str | None = None
+    pace_details: tuple[TravelPaceDetail, ...] = ()
 
     def __post_init__(self) -> None:
         if self.navigation_dc is not None and not 5 <= self.navigation_dc <= 30:
@@ -696,6 +741,9 @@ class TravelPolicy:
             raise ValueError("Travel safe duration must be positive.")
         if self.terrain is not None and not self.terrain.strip():
             raise ValueError("Travel terrain cannot be empty.")
+        pace_ids = tuple(detail.pace for detail in self.pace_details)
+        if len(pace_ids) != len(set(pace_ids)):
+            raise ValueError("Travel pace details must use unique pace ids.")
 
     def as_payload(self) -> dict[str, object]:
         return {
@@ -713,21 +761,31 @@ class TravelPolicy:
                     "label": "Szybkie",
                     "passive_perception_modifier": -5,
                     "allows_stealth": False,
+                    **self._pace_detail_payload(TravelPace.FAST),
                 },
                 {
                     "id": TravelPace.NORMAL.value,
                     "label": "Normalne",
                     "passive_perception_modifier": 0,
                     "allows_stealth": False,
+                    **self._pace_detail_payload(TravelPace.NORMAL),
                 },
                 {
                     "id": TravelPace.SLOW.value,
                     "label": "Wolne",
                     "passive_perception_modifier": 0,
                     "allows_stealth": True,
+                    **self._pace_detail_payload(TravelPace.SLOW),
                 },
             ],
         }
+
+    def _pace_detail_payload(self, pace: TravelPace) -> dict[str, object]:
+        detail = next(
+            (item for item in self.pace_details if item.pace == pace),
+            None,
+        )
+        return detail.as_payload() if detail is not None else {}
 
 
 class ContinuationOutcomeKind(StrEnum):
@@ -1128,6 +1186,7 @@ class NpcRuntimeState:
     emotional_state: str = ""
     revealed_information_ids: tuple[str, ...] = ()
     used_attempt_ids: tuple[str, ...] = ()
+    used_feature_ids: tuple[str, ...] = ()
     relationship_events: tuple[NpcRelationshipEvent, ...] = ()
     interaction_status: NpcInteractionStatus = NpcInteractionStatus.ACTIVE
     closure_reason: str = ""
@@ -1138,6 +1197,7 @@ class NpcRuntimeState:
         for field_name, values in (
             ("revealed_information_ids", self.revealed_information_ids),
             ("used_attempt_ids", self.used_attempt_ids),
+            ("used_feature_ids", self.used_feature_ids),
         ):
             if any(not value.strip() for value in values):
                 raise ValueError(f"NPC {field_name} cannot contain empty ids.")
@@ -1155,6 +1215,7 @@ class NpcRuntimeState:
             "emotional_state": self.emotional_state,
             "revealed_information_ids": list(self.revealed_information_ids),
             "used_attempt_ids": list(self.used_attempt_ids),
+            "used_feature_ids": list(self.used_feature_ids),
             "relationship_events": [event.as_payload() for event in self.relationship_events],
             "interaction_status": self.interaction_status.value,
             "closure_reason": self.closure_reason,
@@ -2736,6 +2797,9 @@ class ExplorationState:
     npc_states: tuple[NpcRuntimeState, ...] = ()
     merchants: tuple[MerchantState, ...] = ()
     magic_effects: tuple[TimedMagicEffect, ...] = ()
+    party_loot: LootBundle = field(
+        default_factory=lambda: LootBundle("party_stash", "Łup drużyny")
+    )
     clock_policy: ScenarioClockPolicy = ScenarioClockPolicy()
 
     def __post_init__(self) -> None:

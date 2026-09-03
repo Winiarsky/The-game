@@ -116,6 +116,24 @@ def test_board_session_adapter_owns_scan_reset_and_led_transport():
     assert connection.calls
 
 
+def test_board_session_adapter_turns_leds_off_before_closing_connection():
+    class CloseableConnection:
+        def __init__(self):
+            self.events = []
+
+        def leds_off(self):
+            self.events.append("leds_off")
+
+        def close(self):
+            self.events.append("close")
+
+    connection = CloseableConnection()
+
+    BoardSessionAdapter(connection).close()
+
+    assert connection.events == ["leds_off", "close"]
+
+
 def test_board_session_uses_boosted_brightness_only_for_active_scan():
     class BrightnessConnection:
         scan_brightness = 240

@@ -6,16 +6,20 @@ from dnd_board_game.application import (
     remove_orphaned_summons,
 )
 from dnd_board_game.combat import (
+    AttackKind,
     DamageType,
     InitiativeEntry,
     InitiativeOrder,
     current_actor,
+    evaluate_attack_positioning,
+    legal_attack_targets,
     replace_actor,
     start_combat,
     summon_attack_source,
 )
 from dnd_board_game.rules import D20RollInput, D20RollRequest, resolve_d20_roll
 from dnd_board_game.scenarios import build_encounter_from_scenario, load_scenario
+from dnd_board_game.world import Coordinate, movement_range
 
 
 def _fixture():
@@ -109,6 +113,62 @@ def test_spiritual_weapon_attack_uses_owner_spell_attack_and_damage_modifier():
     assert source.damage_modifier == 5
     assert source.damage_hint == "1d8 + 5"
     assert source.damage_type == "force"
+
+
+def test_summoned_actor_blocks_a_tile_flanks_and_can_be_targeted() -> None:
+    encounter, cleric, enemy, action, state = _fixture()
+    service = SummoningFlowService()
+    prepared = service.prepare(
+        board=encounter.board,
+        state=state,
+        active_effects=(),
+        action=action,
+        cast_level=1,
+    )
+    assert prepared.pending is not None
+    confirmed = service.confirm(
+        board=encounter.board,
+        state=state,
+        active_effects=(),
+        action=action,
+        pending=prepared.pending,
+        position=prepared.pending.legal_positions[0],
+    )
+    summon_state = confirmed.state.summoned_creatures[0]
+    summoned = next(
+        actor
+        for actor in confirmed.state.actors
+        if actor.id == summon_state.actor_id
+    )
+    cleric = replace(cleric, position=Coordinate(0, 1))
+    enemy = replace(enemy, position=Coordinate(1, 1))
+    summoned = replace(summoned, position=Coordinate(2, 1))
+    actors = (cleric, enemy, summoned)
+    cleric_source = next(
+        source
+        for source in encounter.attack_source_options_by_actor[cleric.id]
+        if source.attack_kind == AttackKind.MELEE
+    )
+    enemy_source = encounter.attack_sources_by_actor[enemy.id]
+
+    positioning = evaluate_attack_positioning(
+        encounter.board,
+        cleric,
+        enemy,
+        cleric_source,
+        actors,
+    )
+    enemy_targets = legal_attack_targets(
+        encounter.board,
+        enemy,
+        actors,
+        enemy_source,
+    )
+    movement = movement_range(encounter.board, enemy, actors)
+
+    assert str(summoned.id) in positioning.flanking_ally_ids
+    assert str(summoned.id) in {target.id for target in enemy_targets}
+    assert summoned.position not in movement.reachable_tiles
 
 
 def test_lost_concentration_removes_summon_and_its_initiative_entry():

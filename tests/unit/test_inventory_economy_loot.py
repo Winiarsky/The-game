@@ -10,6 +10,7 @@ from dnd_board_game.inventory.economy import (
 from dnd_board_game.inventory.loot import (
     LootBundle,
     loot_bundle_from_actor,
+    merge_loot_bundles,
     transfer_actor_loot,
     transfer_all_actor_loot,
     transfer_all_loot,
@@ -122,6 +123,32 @@ def test_generic_loot_bundle_supports_found_corpse_or_container_sources():
     assert result.bundle.is_empty
     assert result.recipient.inventory[0].id == "letter"
     assert result.recipient.currency.cp == 7
+
+
+def test_shared_loot_merge_namespaces_items_and_never_equips_them() -> None:
+    stash = LootBundle("party_stash", "Łup drużyny")
+    bundle = LootBundle(
+        "actor:goblin",
+        "Goblin",
+        items=(
+            InventoryItem(
+                "knife",
+                "Nóż",
+                "weapon",
+                quantity=2,
+                equipped=True,
+            ),
+        ),
+        currency=CurrencyWallet(sp=3),
+    )
+
+    merged = merge_loot_bundles(stash, (bundle,))
+
+    assert merged.items[0].id == "actor:goblin:knife"
+    assert merged.items[0].quantity == 2
+    assert not merged.items[0].equipped
+    assert merged.items[0].held_in == ()
+    assert merged.currency == CurrencyWallet(sp=3)
 
 
 def test_partial_stack_transfer_preserves_remaining_items_and_currency():

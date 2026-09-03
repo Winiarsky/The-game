@@ -1,0 +1,28 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["project_original"],
+  "id": "divine_care_aura",
+  "name": "Aura Boskiej Opieki",
+  "level": 1,
+  "school": "abjuration",
+  "casting_time": "action",
+  "range": {"kind": "self"},
+  "components": {"verbal": true, "somatic": true, "materials": []},
+  "duration": {"kind": "round", "amount": 5},
+  "concentration": true,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "targeted_status",
+    "label": "Aura Boskiej Opieki",
+    "target_faction": "self",
+    "target_count": 1,
+    "effect_kind": "divine_care_aura_source",
+    "aura_radius_feet": 5,
+    "duration_rounds": 5,
+    "cast_flag": "cast_divine_care_aura",
+    "instructions": "Przeciwnicy w promieniu 5 stóp otrzymują karę do ataków i obrażeń równą połowie modyfikatora Mądrości Dagny, zaokrągloną w dół, minimum 1."
+  }
+}

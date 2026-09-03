@@ -170,14 +170,6 @@ EXPLORATION_CARD_HANDLERS: dict[str, ExplorationCardHandler] = {
         "break_in_attempt",
         "Włamanie",
     ),
-    "diagnosis": ExplorationCardHandler(
-        "diagnosis", frozenset({ExplorationPromptKind.INTERACTION}),
-        ExplorationCardEffectKind.START_CHECK,
-        frozenset({"wounded", "disease", "poison", "medicine", "npc"}),
-        CardRetryPolicy.ONCE_PER_PROMPT,
-        "diagnosis_attempt",
-        "Diagnoza",
-    ),
     "tracking": ExplorationCardHandler(
         "tracking", _FREE_OR_INTERACTION,
         ExplorationCardEffectKind.START_CHECK,

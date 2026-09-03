@@ -12,7 +12,7 @@
   "casting_time": "action",
   "range": {
     "kind": "distance",
-    "feet": 150
+    "feet": 50
   },
   "components": {
     "verbal": true,

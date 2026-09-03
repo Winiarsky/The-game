@@ -214,7 +214,7 @@ DAGNA_ACTION_CARDS = (
     _card("decline", "ODRZUĆ", "universal", 1, "REAKCJA STOŁU", "Anuluj bieżący wybór lub wróć. Karta nie cofa akcji, która została już rozstrzygnięta.", "„Nie każda ofiara jest konieczna.”", "dagna_mercy_plate.png", (166, 78, 72)),
     _card("maneuvers", "MANEWRY", "universal", 1, "MENU AKCJI", "Otwórz dostępne manewry, m.in. Sprint, Unik, Odstąpienie, Pomoc, Ukrycie, Szukanie, Grapple i Shove.", "„Czasem najlepszym cudem jest zrobić komuś miejsce.”", "dagna_mercy_plate.png", DAGNA_TEAL),
     _card("equipment", "EKWIPUNEK", "universal", 1, "MENU WŁASNE", "Otwórz ekwipunek. Możesz zmienić broń, tarczę lub użyć dostępnego przedmiotu i zapasów.", "„Bandaże, woda, światło. Dopiero potem relikwie.”", "dagna_mercy_plate.png", (163, 117, 66)),
-    _card("sacred_flame", "ŚWIĘTY PŁOMIEŃ", "spell", 1, "AKCJA · 60 STÓP", "Cel wykonuje rzut obronny na Zręczność. Porażka: 1k8 obrażeń promienistych; sukces: bez obrażeń. Osłona nie daje premii do tego rzutu.", "„Światło znajduje drogę nawet przez dym pobojowiska.”", "dagna_miracles_plate.png", (239, 192, 78)),
+    _card("sacred_flame", "ŚWIĘTY PŁOMIEŃ", "spell", 1, "AKCJA · STOŻEK 15 STÓP", "Wrogowie w stożku wykonują rzut obronny na Zręczność. Porażka: 1k8 obrażeń promienistych; sukces: bez obrażeń.", "„Światło znajduje drogę nawet przez dym pobojowiska.”", "dagna_miracles_plate.png", (239, 192, 78)),
     _card("guidance", "WSKAZÓWKI", "spell", 1, "AKCJA · DOTYK · KONC.", "Przez minutę cel może dodać 1k4 do jednego wybranego testu cechy. Potem czar się kończy.", "„Nie dam ci pewności. Dam ci spokojniejszą dłoń.”", "dagna_mercy_plate.png", (103, 177, 161)),
     _card("spare_the_dying", "OSZCZĘDŹ UMIERAJĄCEGO", "spell", 1, "AKCJA · DOTYK", "Stabilizujesz żywą istotę mającą 0 PW. Czar nie działa na nieumarłych ani konstrukty.", "„Jeszcze nie. Jeszcze możesz wrócić.”", "dagna_mercy_plate.png", (230, 204, 151)),
     _card("bane", "ZGUBA", "spell", 1, "AKCJA · 30 STÓP · KONC.", "Do 3 celów: rzut obronny na Charyzmę. Porażka: odejmują 1k4 od każdego rzutu ataku i rzutu obronnego przez 1 minutę.", "„Niech ciężar cudzych krzywd zadrży w waszych rękach.”", "dagna_miracles_plate.png", (151, 91, 135)),
@@ -225,8 +225,8 @@ DAGNA_ACTION_CARDS = (
     _card("detect_evil_and_good", "WYKRYCIE DOBRA I ZŁA", "spell", 1, "AKCJA · WŁASNY · KONC.", "Przez 10 minut wyczuwasz w 30 stopach określone istoty nadnaturalne oraz miejsca poświęcone lub zbezczeszczone.", "„Nie wszystko, co nosi ludzką twarz, należy do tego świata.”", "dagna_miracles_plate.png", (184, 141, 194)),
     _card("detect_magic", "WYKRYCIE MAGII", "spell", 1, "AKCJA · WŁASNY · RYTUAŁ", "Przez 10 minut wyczuwasz magię w 30 stopach; akcją widzisz aurę widocznego źródła i poznajesz szkołę. Wymaga koncentracji.", "„Pęknięcia rzeczywistości zostawiają blask jak gorączka.”", "dagna_miracles_plate.png", (113, 126, 207)),
     _card("detect_poison_and_disease", "WYKRYCIE TRUCIZNY I CHOROBY", "spell", 1, "AKCJA · WŁASNY · RYTUAŁ", "Przez 10 minut wyczuwasz w 30 stopach trucizny, jadowite istoty i choroby oraz rozpoznajesz ich rodzaj. Wymaga koncentracji.", "„Najgroźniejszy wróg często nie nosi barw żadnej armii.”", "dagna_miracles_plate.png", (111, 158, 91)),
-    _card("guiding_bolt", "POCISK PRZEWODNI", "spell", 1, "AKCJA · 120 STÓP", "Wykonaj dystansowy rzut ataku czarem. Trafienie: 4k6 obrażeń promienistych; następny rzut ataku przeciw celowi przed końcem twojej następnej tury ma przewagę.", "„Zostawiam światło tam, gdzie inni mają uderzyć.”", "dagna_miracles_plate.png", (242, 190, 73)),
-    _card("healing_word", "SŁOWO LECZENIA", "spell", 1, "AKCJA DOD. · 60 STÓP", "Żywa istota odzyskuje 1k4 + twój modyfikator z Mądrości PW. Wyższy slot: +1k4 za poziom.", "„Słyszysz mnie? To wracaj. Resztę zrobimy później.”", "dagna_mercy_plate.png", (94, 181, 146)),
+    _card("guiding_bolt", "POCISK PRZEWODNI", "spell", 1, "AKCJA · 75 STÓP", "Wykonaj dystansowy rzut ataku czarem. Trafienie: 2k6 obrażeń promienistych; następny rzut ataku przeciw celowi przed końcem twojej następnej tury ma przewagę.", "„Zostawiam światło tam, gdzie inni mają uderzyć.”", "dagna_miracles_plate.png", (242, 190, 73)),
+    _card("healing_word", "SŁOWO LECZENIA", "spell", 1, "AKCJA DOD. · 60 STÓP", "Żywa istota odzyskuje 1k4 + Mądrość + 2 + poziom użytej komórki PW. Na 1. poziomie Dagna leczy 1k4+7; wyższa komórka dodaje 1k4 i 1 PW za poziom.", "„Słyszysz mnie? To wracaj. Resztę zrobimy później.”", "dagna_mercy_plate.png", (94, 181, 146)),
     _card("inflict_wounds", "ZADAWANIE RAN", "spell", 1, "AKCJA · DOTYK", "Wykonaj rzut ataku czarem w zwarciu. Trafienie: 3k10 obrażeń nekrotycznych. Wyższy slot: +1k10 za poziom.", "„Ta sama dłoń, która leczy, wie też gdzie boli najbardziej.”", "dagna_miracles_plate.png", (145, 84, 119)),
     _card("protection_from_evil_and_good", "OCHRONA PRZED DOBREM I ZŁEM", "spell", 1, "AKCJA · DOTYK · KONC.", "Przez 1 godzinę wskazane typy istot mają utrudnienie w atakach przeciw celowi i nie mogą go opętać, zauroczyć ani przestraszyć.", "„Nie przekroczysz tej granicy, choćby świat pękł na pół.”", "dagna_miracles_plate.png", (204, 174, 107)),
     _card("purify_food_and_drink", "OCZYSZCZENIE JADŁA I NAPOJU", "spell", 1, "AKCJA · 10 STÓP · RYTUAŁ", "Niemagiczne jedzenie i napoje w promieniu 5 stóp od wybranego punktu stają się wolne od trucizn i chorób.", "„Czysta miska zupy też potrafi ocalić kompanię.”", "dagna_mercy_plate.png", (102, 157, 124)),
@@ -234,7 +234,7 @@ DAGNA_ACTION_CARDS = (
     _card("shield_of_faith", "TARCZA WIARY", "spell", 1, "AKCJA DOD. · 60 STÓP · KONC.", "Wybrana istota otrzymuje +2 do KP przez maksymalnie 10 minut.", "„Nie zatrzymam wojny. Zatrzymam ten jeden cios.”", "dagna_mercy_plate.png", (205, 173, 75)),
     _card("turn_undead", "ODPĘDZENIE NIEUMARŁYCH", "feature", 2, "AKCJA · BOSKA MOC", "Nieumarli w 30 stopach, którzy cię widzą lub słyszą: rzut obronny na Mądrość. Porażka: uciekają przez 1 minutę lub do otrzymania obrażeń.", "„Zmarli mają dość własnych wojen. Odejdźcie.”", "dagna_miracles_plate.png", (231, 197, 124)),
     _card("preserve_life", "ZACHOWANIE ŻYCIA", "feature", 2, "AKCJA · BOSKA MOC", "Rozdziel 5 × poziom kleryka punktów leczenia między istoty w 30 stopach. Nie leczysz ponad połowę maksimum PW ani nieumarłych i konstruktów.", "„Najpierw ci, którzy nie przeżyją kolejnej minuty.”", "dagna_mercy_plate.png", (91, 184, 143)),
-    _card("aid", "WSPARCIE", "spell", 3, "AKCJA · 30 STÓP", "Maksymalne i aktualne PW maksymalnie 3 istot rosną o 5 na 8 godzin. Wyższy slot zwiększa premię o kolejne 5.", "„Nie obiecuję bezpieczeństwa. Daję wam większą szansę.”", "dagna_mercy_plate.png", (110, 176, 134)),
+    _card("aid", "WSPARCIE", "spell", 3, "AKCJA · 30 STÓP", "Do końca walki maksymalne i aktualne PW maksymalnie 3 istot rosną o 5. Wyższy slot zwiększa premię o kolejne 5.", "„Nie obiecuję bezpieczeństwa. Daję wam większą szansę.”", "dagna_mercy_plate.png", (110, 176, 134)),
     _card("augury", "WRÓŻBA", "spell", 3, "1 MIN · WŁASNY · RYTUAŁ", "Otrzymujesz omen dobra, zła, obu lub żadnego dla działania planowanego w ciągu 30 minut. Wymaga znaczonych kości lub żetonów wartych 25 gp.", "„Kości nie mówią, kto wygra wojnę. Mówią, czy wrócimy z drogi.”", "dagna_miracles_plate.png", (184, 139, 91)),
     _card("blindness_deafness", "ŚLEPOTA / GŁUCHOTA", "spell", 3, "AKCJA · 30 STÓP", "Cel: rzut obronny na Kondycję. Porażka: wybierasz oślepienie albo ogłuchnięcie na 1 minutę; cel ponawia rzut na końcu każdej swojej tury.", "„Odbieram ci tylko to, czym krzywdzisz innych.”", "dagna_miracles_plate.png", (137, 111, 151)),
     _card("calm_emotions", "USPOKOJENIE EMOCJI", "spell", 3, "AKCJA · 60 STÓP · KONC.", "Humanoidy w sferze o promieniu 20 stóp: rzut obronny na Charyzmę. Możesz stłumić zauroczenie/strach albo wrogość przez 1 minutę.", "„Gniew dowódców nie musi stać się grobem zwykłych ludzi.”", "dagna_mercy_plate.png", (105, 151, 170)),
@@ -248,7 +248,7 @@ DAGNA_ACTION_CARDS = (
     _card("prayer_of_healing", "MODLITWA LECZENIA", "spell", 3, "10 MIN · 30 STÓP", "Do 6 żywych istot odzyskuje po 2k8 + twój modyfikator z Mądrości PW. Wyższy slot: +1k8 za poziom.", "„Usiądźcie. Przez dziesięć minut świat poradzi sobie bez nas.”", "dagna_mercy_plate.png", (103, 188, 147)),
     _card("protection_from_poison", "OCHRONA PRZED TRUCIZNĄ", "spell", 3, "AKCJA · DOTYK", "Neutralizujesz jedną truciznę w celu. Przez 1 godzinę ma przewagę w rzutach obronnych przeciw truciźnie i odporność na obrażenia od trucizny.", "„Jad nie pyta o sztandar. Ja też nie pytam, zanim pomogę.”", "dagna_mercy_plate.png", (118, 166, 83)),
     _card("silence", "CISZA", "spell", 3, "AKCJA · 120 STÓP · RYTUAŁ", "W sferze 20 stóp przez 10 minut nie powstaje ani nie przechodzi dźwięk. Istoty są ogłuszone słuchowo, a komponenty werbalne nie działają. Koncentracja.", "„Czasem trzeba uciszyć świat, żeby usłyszeć rannych.”", "dagna_miracles_plate.png", (115, 129, 150)),
-    _card("spiritual_weapon", "DUCHOWA BROŃ", "spell", 3, "AKCJA DOD. · 60 STÓP", "Tworzysz broń na 1 minutę. Wykonaj rzut ataku czarem w zwarciu; trafienie: 1k8 + modyfikator Mądrości obrażeń od mocy. Akcją dodatkową przesuń ją o 20 stóp i zaatakuj ponownie.", "„Mój młot może być daleko. Moja odpowiedzialność — nigdy.”", "dagna_miracles_plate.png", (225, 171, 66)),
+    _card("spiritual_weapon", "DUCHOWA BROŃ", "spell", 3, "AKCJA DOD. · 60 STÓP", "Ma 1 PW, KP 18, zajmuje pole, flankuje i może być celem. Zaraz po Dagnie ma turę: ruch 20 stóp i atak za 1k8 + Mądrość obrażeń od mocy.", "„Mój młot może być daleko. Moja odpowiedzialność — nigdy.”", "dagna_miracles_plate.png", (225, 171, 66)),
     _card("warding_bond", "WIĘŹ OCHRONNA", "spell", 3, "AKCJA · DOTYK", "Przez 1 godzinę cel ma +1 do KP i rzutów obronnych oraz odporność na obrażenia; ty otrzymujesz tyle samo obrażeń. Koniec powyżej 60 stóp.", "„Jeśli masz nieść ten ból, poniesiemy go razem.”", "dagna_mercy_plate.png", (205, 157, 99)),
     _card("zone_of_truth", "STREFA PRAWDY", "spell", 3, "AKCJA · 60 STÓP", "Przez 10 minut istota w sferze 15 stóp wykonuje rzut obronny na Charyzmę. Porażka: nie może świadomie kłamać. Zna efekt; ty znasz wynik.", "„Prawda nie kończy wojny. Ale odbiera jej jedną kryjówkę.”", "dagna_miracles_plate.png", (231, 190, 91)),
 )
@@ -321,8 +321,7 @@ DAGNA_DECK = CharacterDeckSpec(
         "Domena Życia: ciężki pancerz i zawsze przygotowane czary domenowe.",
         "Uczeń Życia: czary leczenia 1. poziomu lub wyższe przywracają dodatkowe 2 + poziom czaru PW.",
         "Krasnoludzka odporność: przewaga przeciw truciznom i odporność na obrażenia od trucizny.",
-        "Mroczne widzenie, kamieniarska wiedza i krasnoludzka wytrzymałość.",
-        "Schronienie Wiernych: wsparcie świątyń i wspólnot własnej wiary.",
+        "Mroczne widzenie i krasnoludzka wytrzymałość.",
     ),
 )
 
@@ -1056,73 +1055,91 @@ def _curated_menu_cards(actor_id: str) -> tuple[CharacterActionCardSpec, ...]:
 CURATED_ACTION_CARDS: dict[str, tuple[CharacterActionCardSpec, ...]] = {
     "garran": (
         _curated_action("garran", "second_wind", "DRUGI ODDECH", "feature", 1, "AKCJA DOD. · WŁASNY", "Rzuć k10. Odzyskaj wynik + poziom Garrana PW. 1 użycie; odnawia krótki lub długi odpoczynek.", "„Linia stoi tak długo, jak długo ktoś potrafi wstać.”"),
-        _curated_action("garran", "action_surge", "ZRYW AKCJI", "feature", 1, "PO WYKORZYSTANIU AKCJI", "Natychmiast odzyskaj zużytą akcję tej tury. 1 użycie; odnawia krótki lub długi odpoczynek.", "„Jeszcze jeden krok. Jeszcze jeden rozkaz.”"),
-        _curated_action("garran", "lay_on_hands", "RATUNEK POLOWY", "feature", 1, "AKCJA · DOTYK", "Wybierz na planszy rannego sojusznika i liczbę PW z puli 5 × poziom Garrana. Pula odnawia się po długim odpoczynku.", "„Najpierw zatamuj krew. Bohaterstwo może poczekać.”"),
-        _curated_action("garran", "defensive_stance", "POZYCJA OBRONNA", "feature", 1, "AKCJA DOD. · WŁASNY", "Ataki przeciw Garranowi mają utrudnienie do początku jego następnej tury. 1 użycie; odnawia krótki lub długi odpoczynek.", "„Tarcza nie musi wygrać. Musi wytrzymać.”"),
-        _curated_action("garran", "command", "ROZKAZ: STAĆ!", "spell", 2, "AKCJA · 60 STÓP", "Wskaż przeciwnika i wydaj rozkaz zatrzymania. Koszt: 1 Taktyka.", "„Jedno słowo w odpowiedniej chwili potrafi zatrzymać szarżę.”"),
-        _curated_action("garran", "shield_of_faith", "OSŁONA TARCZĄ", "spell", 2, "AKCJA DOD. · SOJUSZNIK", "Wzmocnij obronę wybranego sojusznika. Koszt: 1 Taktyka.", "„Stań za mną i pilnuj lewej strony.”"),
-        _curated_action("garran", "heroism", "MOWA DOWÓDCY", "spell", 3, "AKCJA · SOJUSZNIK", "Uodpornij sojusznika na strach i podtrzymuj jego wolę walki. Koszt: 1 Taktyka.", "„Nie musicie być bez strachu. Musicie zrobić następny krok.”"),
-        _curated_action("garran", "warding_bond", "OSŁONA TOWARZYSZA", "spell", 3, "AKCJA · DOTYK", "Sąsiadujący sojusznik otrzymuje +1 KP, +1 do obron i odporność na obrażenia; Garran otrzymuje taką samą liczbę obrażeń. Koszt: 1 Taktyka.", "„Jeśli cios ma przejść, niech przejdzie także przeze mnie.”"),
+        _curated_action("garran", "action_surge", "ZRYW AKCJI", "feature", 1, "AKCJA DOD. · PO AKCJI", "Po zużyciu akcji głównej wydaj akcję dodatkową, aby natychmiast ją odzyskać. 1 użycie na krótki odpoczynek.", "„Jeszcze jeden krok. Jeszcze jeden rozkaz.”"),
+        _curated_action("garran", "shield_bash", "UDERZENIE TARCZĄ", "feature", 1, "AKCJA RUCHU · 5 STÓP", "Przed ruchem wykonaj sporny test Siły. Wygrana zadaje 1k4 + Siła obrażeń obuchowych i odpycha cel o jedno wolne pole od Garrana; remis wygrywa obrońca.", "„Tarcza także potrafi otworzyć drogę.”"),
+        _curated_action("garran", "defensive_stance", "POZYCJA OBRONNA", "feature", 1, "AKCJA RUCHU · WŁASNY", "Zamiast ruchu zyskaj +2 KP do początku następnej tury. Efekt kończy się wcześniej po każdej zmianie pola.", "„Tarcza nie musi wygrać. Musi wytrzymać.”"),
+        _curated_action("garran", "garran_command_halt", "ROZKAZ: STAĆ!", "feature", 2, "AKCJA · 60 STÓP · 1 TAKTYKA", "Mądrość ST 14. Sukces: połowa ruchu w następnej turze. Porażka: brak dobrowolnego ruchu. Naturalne 1 daje też −2 do ataków; naturalne 20 neguje efekt.", "„Jedno słowo w odpowiedniej chwili potrafi zatrzymać szarżę.”"),
+        _curated_action("garran", "garran_shield_wall", "OSŁONA TARCZĄ", "feature", 2, "AKCJA DOD. · 1 TAKTYKA", "Do początku następnej tury Garrana wszyscy sąsiadujący sojusznicy otrzymują +2 KP. Premia porusza się z Garranem; Garran jej nie otrzymuje.", "„Stań za mną i pilnuj lewej strony.”"),
+        _curated_action("garran", "garran_rally", "MOWA DOWÓDCY", "feature", 3, "AKCJA · 30 STÓP · 1 TAKTYKA", "Garran i słyszący sojusznicy usuwają Strach i zyskują przewagę na pierwszy atak, test albo rzut obronny do końca swojej następnej tury.", "„Nie musicie być bez strachu. Musicie zrobić następny krok.”"),
+        _curated_action("garran", "garran_guard_companion", "OSŁONA TOWARZYSZA", "feature", 3, "AKCJA · 5 STÓP · 1 TAKTYKA", "Wybierz sąsiadującego sojusznika. Pierwszy pojedynczy wrogi atak, czar lub efekt przeciw niemu zostaje w całości przekierowany na Garrana i zużywa osłonę.", "„Jeśli cios ma przejść, niech przejdzie przeze mnie.”"),
     ),
     "brakka": (
-        _curated_action("brakka", "rage", "SZAŁ", "feature", 1, "AKCJA DOD. · PRZEŁĄCZNIK", "Włącz Szał: przewaga w testach i obronach Siły, +2 do obrażeń ataków wręcz opartych na Sile oraz odporność na kłute, cięte i obuchowe. Zeskanuj ponownie, aby wyłączyć.", "„Nie jestem burzą. Jestem tym, co po niej nadal stoi.”"),
-        _curated_action("brakka", "reckless_attack", "LEKKOMYŚLNY ATAK", "feature", 1, "PRZED PIERWSZYM ATAKIEM", "Pierwszy atak wręcz oparty na Sile ma przewagę. Ataki przeciw Brakce mają przewagę do początku jej następnej tury.", "„Jeśli odsłonię gardę, zobaczę, kto naprawdę chce podejść.”"),
-        _curated_action("brakka", "frenzy", "SZAŁ BOJOWY", "feature", 1, "TYLKO PODCZAS SZAŁU", "Zeskanuj podczas Szału, aby włączyć. Od następnej swojej tury ponowny skan wydaje akcję dodatkową i daje 1 dodatkowy atak trzymaną bronią wręcz. Kończy się ze Szałem: otrzymujesz 1 poziom Wyczerpania (poziom 1: utrudnienie w testach cech). Długi odpoczynek usuwa 1 poziom.", "„Gniew ma jeszcze drugi bieg.”"),
-        _curated_action("brakka", "action_surge", "NIEPOWSTRZYMANY IMPET", "feature", 2, "PO WYKORZYSTANIU AKCJI", "Natychmiast odzyskaj zużytą akcję. 1 użycie; odnawia krótki lub długi odpoczynek.", "„Jeszcze jeden zamach. Mur już pęka.”"),
-        _curated_action("brakka", "cunning_action", "DRAPIEŻNY PĘD", "feature", 2, "AKCJA DOD. · WŁASNA TURA", "Wybierz Sprint, Odstąpienie albo Ukrycie jako akcję dodatkową.", "„Nie uciekam. Wybieram miejsce następnego uderzenia.”"),
-        _curated_action("brakka", "false_life", "NIE DO ZDARCIA", "spell", 3, "AKCJA · WŁASNY", "Zyskaj tymczasowe PW. Koszt: 1 Dzikość.", "„Jeszcze stoję, więc jeszcze nie skończyliśmy.”"),
-        _curated_action("brakka", "thunderwave", "OGŁUSZAJĄCY RYK", "spell", 3, "AKCJA · OBSZAR", "Uderz falą siły i odepchnij pobliskich przeciwników. Koszt: 1 Dzikość.", "„Kiedy ryczę, nawet kamień robi krok w tył.”"),
+        _curated_action("brakka", "rage", "SZAŁ", "feature", 1, "AKCJA DOD. · 3/DŁUGI ODPOCZYNEK", "Włącz Szał: odnów Dzikość do modyfikatora Kondycji (3), zyskaj przewagę w testach i obronach Siły, +2 do obrażeń ataków wręcz opartych na Sile oraz odporność na kłute, cięte i obuchowe. Niewydana Dzikość znika wraz ze Szałem.", "„Nie jestem burzą. Jestem tym, co po niej nadal stoi.”"),
+        _curated_action("brakka", "reckless_attack", "LEKKOMYŚLNY ATAK", "feature", 1, "AKCJA · ATAK WRĘCZ", "Natychmiast wykonaj jeden atak bronią wręcz oparty na Sile z przewagą. Do początku następnej tury Brakki ataki przeciw niej mają przewagę. Nie wymaga Szału ani Dzikości.", "„Jeśli odsłonię gardę, zobaczę, kto naprawdę chce podejść.”"),
+        _curated_action("brakka", "powerful_strike", "POTĘŻNE UDERZENIE", "feature", 1, "AKCJA · SZAŁ · 2 DZIKOŚCI", "Wykonaj jeden atak bronią wręcz oparty na Sile z premią +10 do testu ataku. Obrażenia pozostają normalne.", "„Najpierw pęka garda. Potem wszystko inne.”"),
+        _curated_action("brakka", "shoulder_check", "Z BARA", "feature", 1, "AKCJA · 5 STÓP", "Wybierz sąsiadującego przeciwnika najwyżej o jeden rozmiar większego. Sporny test Atletyki; remis wygrywa obrońca. Odepchnij o 5 stóp i dalsze 5 za każde pełne 5 punktów przewagi, maksymalnie 30 stóp.", "„Droga była zajęta. Już nie jest.”"),
+        _curated_action("brakka", "hard_as_rock", "TWARDA JAK SKAŁA", "feature", 2, "REAKCJA · SZAŁ · 1 DZIKOŚĆ", "Po obliczeniu obrażeń i odporności zmniejsz pozostałe obrażenia o 1k12 + modyfikator Kondycji. Przy braku Szału albo Dzikości system nie proponuje reakcji.", "„Kamień też pęka. Tylko znacznie później.”"),
+        _curated_action("brakka", "acceleration", "PRZYSPIESZENIE", "feature", 2, "AKCJA DOD. · SZAŁ · 1 DZIKOŚĆ", "Do końca bieżącej tury podwój bazowy limit ruchu. Wykonany już ruch pozostaje wydany, trudny teren działa normalnie, a Sprint nie jest ponownie podwajany.", "„Jeszcze jeden oddech. Jeszcze trzy kroki.”"),
+        _curated_action("brakka", "deafening_roar", "OGŁUSZAJĄCY RYK", "feature", 3, "AKCJA · STOŻEK 15 STÓP · 2 DZIKOŚCI", "Wrogowie wykonują obronę Kondycji przeciw ST 15. Porażka: 2k6 i brak dobrowolnego ruchu do końca najbliższej tury celu; sukces: połowa obrażeń. Naturalne 1 daje też utrudnienie ataków, naturalne 20 neguje obrażenia.", "„Kiedy ryczę, nawet cień zapomina ruszyć.”"),
     ),
     "mira": (
-        _curated_action("mira", "cunning_action", "PRZEBIEGŁA AKCJA", "feature", 1, "AKCJA DOD. · WŁASNA TURA", "Wybierz Sprint, Odstąpienie albo Ukrycie jako akcję dodatkową.", "„Najlepsze wyjście jest zwykle tam, gdzie nikt nie patrzy.”"),
-        _curated_action("mira", "instinctive_dodge", "UNIK INSTYNKTOWNY", "feature", 1, "AKCJA DOD. · WŁASNY", "Ataki przeciw Mirze mają utrudnienie do początku jej następnej tury. 1 użycie; odnawia krótki lub długi odpoczynek.", "„Cios trafia tylko tam, gdzie byłam chwilę temu.”"),
-        _curated_action("mira", "invisibility", "ZNIKNIĘCIE W DYMIE", "spell", 1, "AKCJA · WŁASNY", "Mira otrzymuje status Niewidzialna zgodnie z efektem karty. Koszt: 1 Fortel; pula 2/2 odnawia się po długim odpoczynku.", "„Najpierw dym. Potem już tylko brak Miry.”"),
-        _curated_action("mira", "find_traps", "WYKRYCIE PUŁAPEK", "spell", 1, "AKCJA · OBSZAR", "W walce wskaż obszar na planszy i ujawnij wszystkie znajdujące się w nim pułapki. Koszt: 1 Fortel; pula 2/2 odnawia się po długim odpoczynku.", "„Mechanizm zawsze zostawia ślad dla kogoś, kto wie, gdzie nie stawiać dłoni.”"),
-        _curated_action("mira", "vicious_mockery", "BRUDNA SZTUCZKA", "spell", 2, "AKCJA · 60 STÓP", "Zdezorientuj przeciwnika i utrudnij jego następny atak. Koszt: 1 Fortel.", "„Patrzysz na ostrze. Błąd był o pół kroku wcześniej.”"),
-        _curated_action("mira", "exploit_weakness", "WYKORZYSTANIE SŁABOŚCI", "feature", 2, "AKCJA DOD. · WŁASNA TURA", "Koszt: 1 Fortel. Następny atak Miry w tej turze ma przewagę; po ataku efekt znika.", "„Każda garda ma szew. Trzeba tylko trafić, zanim znów się zamknie.”"),
-        _curated_action("mira", "mirror_image", "ZMYŁKA", "spell", 3, "AKCJA · WŁASNY", "Utwórz mylące duplikaty przechwytujące ataki. Koszt: 1 Fortel.", "„Jeśli widzisz trzy Miry, żadna nie stoi tam przypadkiem.”"),
+        _curated_action("mira", "instinctive_dodge", "UNIK INSTYNKTOWNY", "feature", 1, "REAKCJA · 1 FORTEL", "Gdy widzący Mirę wróg wybiera ją jako cel ataku podczas jej skradania, przed rzutem nadaj temu jednemu atakowi utrudnienie. Reakcja nie znosi premii +2 ze skazy.", "„Cios trafia tylko tam, gdzie byłam chwilę temu.”"),
+        _curated_action("mira", "smoke_screen", "ZASŁONA DYMNA", "feature", 1, "AKCJA · RUCH 15 STÓP · 1 FORTEL", "Przemieść Mirę bez ataków okazyjnych, po czym wykonaj nowy test Ukrycia nawet obok wroga. Wrogowie testują Percepcję z karą równą połowie Zręczności Miry.", "„Najpierw dym. Potem już tylko brak Miry.”"),
+        _curated_action("mira", "guard_vault", "PRZESKOK PRZEZ GARDĘ", "feature", 1, "AKCJA · ATAK WRĘCZ", "Jeśli dokładnie za sąsiadującym celem jest wolne legalne pole, zaatakuj z +2 do testu i obrażeń, po czym przenieś Mirę na to pole. Skok nie prowokuje; późniejszy atak okazyjny tego celu ma przeciw Mirze −2 do trafienia.", "„Garda jest przeszkodą tylko wtedy, kiedy stoi się przed nią.”"),
+        _curated_action("mira", "combat_trap_detection", "WYKRYCIE PUŁAPEK", "feature", 1, "AKCJA · PROMIEŃ 45 STÓP", "W walce przeskanuj obszar wokół Miry i wykonaj fizyczny test Spostrzegawczości. Wykryte pułapki zostają ujawnione oraz zaznaczone na planszy. Bez kosztu Fortelu.", "„Mechanizm zawsze zostawia ślad dla kogoś, kto wie, gdzie nie stawiać dłoni.”"),
+        _curated_action("mira", "hamstring_cut", "CIĘCIE ŚCIĘGNA", "feature", 2, "AKCJA · FLANKA · 1 FORTEL", "Atak wręcz. Jeśli trafi i zada co najmniej 1 obrażenie, cel porusza się z połową szybkości do chwili otrzymania leczenia albo oczyszczenia statusu.", "„Nie muszę cię zatrzymać. Wystarczy, że każdy krok będzie decyzją.”"),
+        _curated_action("mira", "piercing_attack", "PRZESZYWAJĄCY ATAK", "feature", 2, "AKCJA · FLANKA · 1 FORTEL", "Sojusznik angażujący pierwszy cel z sąsiedniego pola tworzy otwarcie. Po raniącym trafieniu zaatakuj osobno wroga dokładnie za pierwszym; drugi atak zachowuje premie i nie tworzy łańcucha.", "„Jedna linia. Dwa cele. Żadnego zmarnowanego ruchu.”"),
+        _curated_action("mira", "blade_mistress", "MISTRZYNI OSTRZY", "feature", 3, "ULEPSZENIE ATAKU · 1 FORTEL", "Po raniącym trafieniu nożem z ukrycia w cel, który nie widzi Miry, nałóż Krwawienie: 1k4 na początku jego tur do otrzymania leczenia albo oczyszczenia. Nie kumuluje się.", "„Małe ostrze zostawia długi problem.”"),
     ),
     "dagna": (
-        _curated_action("dagna", "sacred_flame", "ŚWIĘTY PŁOMIEŃ", "spell", 1, "AKCJA · 60 STÓP", "Cel wykonuje obronę na Zręczność. Porażka: 1k8 obrażeń promienistych; sukces: bez obrażeń.", "„Światło nie pyta, po której stronie stoi cień.”"),
-        _curated_action("dagna", "healing_word", "LECZĄCE SŁOWO", "spell", 1, "AKCJA DOD. · 60 STÓP", "Legalny żywy cel odzyskuje 1k4 + modyfikator Mądrości PW. Zużywa komórkę 1. poziomu lub wyższą.", "„Jeszcze nie. Wrócisz, kiedy sama ci pozwolę.”"),
-        _curated_action("dagna", "bless", "BŁOGOSŁAWIEŃSTWO", "spell", 1, "AKCJA · KONCENTRACJA", "Do 3 sojuszników dodaje k4 do ataków i rzutów obronnych przez maks. 1 minutę. Wynik kości wpisuje gracz przy rzucie.", "„Niech każdy z was znajdzie o pół kroku więcej odwagi.”"),
+        _curated_action("dagna", "sacred_flame", "ŚWIĘTY PŁOMIEŃ", "spell", 1, "AKCJA · STOŻEK 15 STÓP", "Wrogowie w stożku wykonują obronę na Zręczność. Porażka: 1k8 obrażeń promienistych; sukces: bez obrażeń.", "„Światło nie pyta, po której stronie stoi cień.”"),
+        _curated_action("dagna", "healing_word", "LECZĄCE SŁOWO", "spell", 1, "AKCJA DOD. · 60 STÓP", "Legalny żywy cel odzyskuje 1k4 + Mądrość + 2 + poziom użytej komórki PW. Na 1. poziomie: 1k4+7. Wyższa komórka dodaje 1k4 i 1 PW za poziom.", "„Jeszcze nie. Wrócisz, kiedy sama ci pozwolę.”"),
+        _curated_action("dagna", "bless", "BŁOGOSŁAWIEŃSTWO", "spell", 1, "AKCJA · AURA 10 STÓP · KONC.", "Przez 5 rund Dagna i wszyscy sojusznicy znajdujący się w aurze dodają k4 do każdego ataku i rzutu obronnego. Aura porusza się z Dagną.", "„Niech każdy z was znajdzie o pół kroku więcej odwagi.”"),
         _curated_action("dagna", "preserve_life", "ZACHOWANIE ŻYCIA", "feature", 2, "AKCJA · CELE NA PLANSZY", "Rozdziel 5 × poziom Dagny PW pomiędzy wskazane cele, ale nie lecz żadnego powyżej połowy maksymalnych PW. 1 Boska Moc.", "„Nie musicie być cali. Musicie być żywi.”"),
-        _curated_action("dagna", "sanctuary", "SANKTUARIUM", "spell", 1, "AKCJA DOD. · 30 STÓP", "Atakujący chroniony cel wykonuje obronę na Mądrość; porażka wymusza zmianę celu albo utratę ataku. Kończy się, gdy chroniony atakuje lub szkodzi.", "„Przez chwilę wojna ominie właśnie ciebie.”"),
-        _curated_action("dagna", "guiding_bolt", "POCISK PRZEWODNI", "spell", 2, "AKCJA · 120 STÓP", "Dystansowy atak czarem. Trafienie: 4k6 obrażeń promienistych; następny atak przeciw celowi ma przewagę.", "„Za tym światłem pójdą pozostali.”"),
-        _curated_action("dagna", "aid", "POMOC", "spell", 3, "AKCJA · 30 STÓP", "Trzem celom zwiększ aktualne i maksymalne PW o 5 na 8 godzin.", "„Siła pożyczona na dziś nadal może ocalić jutro.”"),
-        _curated_action("dagna", "lesser_restoration", "POMNIEJSZE PRZYWRÓCENIE", "spell", 3, "AKCJA · DOTYK", "Usuń jeden obsługiwany stan: Oślepiony, Ogłuchnięty, Sparaliżowany albo Zatruty.", "„Ciało pamięta drogę powrotną. Trzeba mu ją tylko pokazać.”"),
-        _curated_action("dagna", "warding_bond", "WIĘŹ OCHRONNA", "spell", 3, "AKCJA · DOTYK", "Cel otrzymuje +1 KP, +1 do obron i odporność na obrażenia; Dagna otrzymuje taką samą liczbę obrażeń.", "„Ból podzielony nadal boli. Ale rzadziej zabija.”"),
+        _curated_action("dagna", "divine_care_aura", "AURA BOSKIEJ OPIEKI", "spell", 1, "AKCJA · AURA 5 STÓP · KONC.", "Przez 5 rund wrogowie w aurze mają karę do ataku i obrażeń równą połowie Mądrości Dagny, minimum 1. Obecnie kara wynosi −2.", "„Podejdź bliżej. Zobaczymy, czy twoja ręka nadal będzie taka pewna.”"),
+        _curated_action("dagna", "guiding_bolt", "POCISK PRZEWODNI", "spell", 2, "AKCJA · 75 STÓP", "Dystansowy atak czarem. Trafienie: 2k6 obrażeń promienistych; następny atak przeciw celowi ma przewagę.", "„Za tym światłem pójdą pozostali.”"),
+        _curated_action("dagna", "healing_grace_aura", "AURA UZDRAWIAJĄCEJ ŁASKI", "spell", 3, "AKCJA · AURA 10 STÓP · KONC.", "Przez 3 rundy leczenie w aurze otrzymuje +1k8+Mądrość. Liczba aktywacji jest równa modyfikatorowi Mądrości Dagny; obecnie 4.", "„Zostańcie blisko. Dopóki stoję, żadna rana nie ma ostatniego słowa.”"),
+        _curated_action("dagna", "lesser_restoration", "POMNIEJSZE PRZYWRÓCENIE", "spell", 3, "AKCJA · DOTYK", "Usuń obsługiwany negatywny stan. Jeden stan jest usuwany automatycznie; przy kilku wybierz jeden z listy.", "„Ciało pamięta drogę powrotną. Trzeba mu ją tylko pokazać.”"),
+        _curated_action("dagna", "spiritual_weapon", "DUCHOWA BROŃ", "spell", 3, "AKCJA DOD. · 60 STÓP", "Ma 1 PW, KP 18, zajmuje pole, flankuje i może być celem. Zaraz po Dagnie ma turę: ruch 20 stóp i atak z premią czarów za 1k8+4 obrażeń od mocy.", "„Mój młot może być daleko. Moja odpowiedzialność — nigdy.”"),
     ),
     "lorian": (
-        _curated_action("lorian", "bardic_inspiration", "INSPIRACJA BARDOWSKA", "feature", 1, "AKCJA DOD. / PROMPT PRZED RZUTEM", "Sojusznik otrzymuje k6 do jednego testu, ataku lub obrony przez 10 minut. Wpisanie 0 zachowuje efekt; 1–6 zużywa go.", "„Jeszcze nie znasz końca tej historii.”"),
-        _curated_action("lorian", "vicious_mockery", "ZJADLIWA KPINA", "spell", 1, "AKCJA · 60 STÓP", "Cel wykonuje obronę na Mądrość. Porażka: 1k4 obrażeń psychicznych i utrudnienie następnego ataku.", "„To nie twoja zbroja skrzypi. To odwaga.”"),
-        _curated_action("lorian", "thunderwave", "GRZMIĄCY REFREN", "spell", 1, "AKCJA · OBSZAR", "Uderz pobliskich przeciwników falą dźwięku i odepchnij ich.", "„Refren powinien poruszyć publiczność. Czasem dosłownie.”"),
-        _curated_action("lorian", "healing_word", "LECZĄCE SŁOWO", "spell", 1, "AKCJA DOD. · 60 STÓP", "Legalny żywy cel odzyskuje 1k4 + modyfikator Charyzmy PW.", "„Wstawaj. Publiczność jeszcze nie wyszła.”"),
-        _curated_action("lorian", "faerie_fire", "OGNIKI", "spell", 2, "AKCJA · KONCENTRACJA", "Cele w obszarze wykonują obronę na Zręczność. Porażka: ataki przeciw nim mają przewagę i nie korzystają z Niewidzialności.", "„Skoro chcą się ukryć, dajmy im lepsze światło.”"),
-        _curated_action("lorian", "heroism", "BOHATERSKI REFREN", "spell", 2, "AKCJA · SOJUSZNIK", "Uodpornij sojusznika na strach i odnawiaj jego tymczasowe PW podczas koncentracji.", "„Odwaga lepiej trzyma rytm, kiedy nie śpiewa sama.”"),
-        _curated_action("lorian", "cutting_words", "CIĘTA RIPOSTA", "feature", 3, "REAKCJA PO UJAWNIENIU RZUTU", "Po ujawnieniu ataku przeciwnika odejmij k6 od testu trafienia; po ujawnieniu obrażeń zamiast tego odejmij k6 od obrażeń.", "„Prawie imponujące. Prawie.”"),
-        _curated_action("lorian", "hideous_laughter", "OBEZWŁADNIAJĄCY ŻART", "spell", 3, "AKCJA · KONTROLA", "Powal przeciwnika śmiechem i wyłącz go z działania do udanej obrony.", "„Najgorszy moment na śmiech jest zwykle najlepszym momentem dla mnie.”"),
+        _curated_action("lorian", "bardic_inspiration", "INSPIRACJA BARDOWSKA", "feature", 1, "AKCJA DOD. · 60 STÓP", "Sojusznik otrzymuje k6 do jednego wybranego testu, ataku lub obrony. Puste pole zachowuje efekt; wpisanie 1–6 zużywa kość. Użycia: modyfikator Charyzmy na krótki odpoczynek.", "„Jeszcze nie znasz końca tej historii.”"),
+        _curated_action("lorian", "optical_scope", "LUNETA OPTYCZNA", "feature", 1, "AKCJA · KUSZA · 60 STÓP · CAŁY RUCH", "Tylko przed ruchem. Wykonaj dwa strzały w jeden cel; oba traktują jego KP jako niższe o 2. Użycie zużywa cały ruch Loriena, także gdy strzały chybią.", "„Odległość to tylko niedokładnie ustawiona soczewka.”"),
+        _curated_action("lorian", "mocking_shot", "OSTRZAŁ DESTABILIZUJĄCY", "feature", 1, "AKCJA · KUSZA · 45 STÓP", "Zamiast dwóch strzałów wykonaj jeden. Trafienie: utrudnienie pierwszego ataku celu oraz obron na Mądrość do początku następnej tury Loriena.", "„Najpierw rozreguluj rytm. Resztę zrobi drużyna.”"),
+        _curated_action("lorian", "provoking_shot", "PROWOKUJĄCY OSTRZAŁ", "feature", 1, "AKCJA · KUSZA · 45 STÓP", "Zamiast dwóch strzałów wykonaj jeden. Trafienie: do początku następnej tury Loriena premia celu do ataków przeciw niemu i kara przeciw pozostałym są równe zadanym obrażeniom.", "„Tutaj. Spróbuj trafić kogoś, kto odpowie.”"),
+        _curated_action("lorian", "entangling_shot", "OPLATAJĄCY OSTRZAŁ", "feature", 2, "AKCJA · OBSZAR 3×3 · 45 STÓP", "Wszyscy w obszarze, także sojusznicy, wykonują obronę na Zręczność. Sukces: połowa ruchu; porażka: brak ruchu do początku następnej tury Loriena. Bez obrażeń.", "„Nie każdy wynalazek ma zabijać. Niektóre po prostu nie pozwalają odejść.”"),
+        _curated_action("lorian", "counterpoint", "KONTRAPUNKT", "feature", 1, "REAKCJA · 45 STÓP", "Gdy zainspirowany sojusznik bezpośrednio zrani wroga, Lorian może zaatakować tego samego, nadal żywego i legalnego celu kuszą. Raz między turami Loriena; nie zużywa Inspiracji.", "„Twój cios był początkiem zdania.”"),
+        _curated_action("lorian", "distracting_shout", "ROZPRASZAJĄCY OKRZYK", "feature", 1, "REAKCJA · PO RZUCIE OBRAŻEŃ", "Gdy atak trafia zainspirowanego sojusznika, przed odjęciem PW zmniejsz obrażenia o 1k6+2, minimum do 0. Nie zużywa Inspiracji.", "„Patrz na mnie, nie na ostrze!”"),
+        _curated_action("lorian", "panic_whisper", "PODSZEPT PANIKI", "spell", 1, "AKCJA · 45 STÓP", "Mądrość ST 14. Porażka: 2k6 psychicznych i do 15 stóp ruchu bezpośrednio od Loriena; sukces: połowa bez ruchu. Przeszkoda zatrzymuje ruch.", "„Jedno ciche zdanie potrafi opróżnić całą scenę.”"),
+        _curated_action("lorian", "thunderwave", "GRZMIĄCY REFREN", "spell", 1, "AKCJA · STOŻEK 15 STÓP", "Kondycja ST 14. Porażka: 2k8 grzmotu i odepchnięcie 10 stóp; sukces: połowa obrażeń bez odepchnięcia.", "„Refren powinien poruszyć publiczność. Czasem dosłownie.”"),
+        _curated_action("lorian", "faerie_fire", "OGNIKI", "spell", 1, "AKCJA · OBSZAR · KONC.", "Istoty w sześcianie 20 stóp wykonują obronę na Zręczność. Porażka: ataki przeciw nim mają przewagę i nie korzystają z niewidzialności.", "„Skoro chcą się ukryć, dajmy im lepsze światło.”"),
+        _curated_action("lorian", "hideous_laughter", "OBEZWŁADNIAJĄCY ŻART", "spell", 1, "AKCJA · 30 STÓP · KONC.", "Mądrość ST 14. Porażka powala i obezwładnia cel; ponawia obronę po obrażeniach i na końcu swojej tury.", "„Najgorszy moment na śmiech jest zwykle najlepszym momentem dla mnie.”"),
+        _curated_action("lorian", "cutting_words", "CIĘTA RIPOSTA", "feature", 3, "REAKCJA PO UJAWNIENIU RZUTU", "Odejmij k6 od ujawnionego testu ataku albo od ujawnionych obrażeń przeciwnika. Nie zużywa Inspiracji, ale konkuruje z pozostałymi reakcjami.", "„Prawie imponujące. Prawie.”"),
+        _curated_action("lorian", "stage_command", "ROZKAZ SCENICZNY", "spell", 3, "AKCJA · 45 STÓP", "Mądrość ST 14. Wybierz: Podejdź, Odejdź albo Milcz. Wymuszony ruch ma najwyżej 15 stóp, omija śmiertelne pola i nie odbiera całej tury celu.", "„Wejście, zejście albo cisza. Kolejność należy do mnie.”"),
+        _curated_action("lorian", "accelerated_refrain", "PRZYSPIESZONY REFREN", "spell", 3, "AKCJA · KONC. · 3 RUNDY", "Po rzuceniu wykonaj jeden atak kuszą. Potem po Szybkim ostrzale możesz wydać akcję dodatkową na trzeci strzał. Konkuruje z Inspiracją i Prowokacją.", "„Tempo nie musi być rozsądne. Musi być moje.”"),
     ),
     "nimra": (
-        _curated_action("nimra", "ray_of_frost", "PROMIEŃ MROZU", "spell", 1, "AKCJA · 60 STÓP", "Dystansowy atak czarem. Trafienie: 1k8 obrażeń od zimna i szybkość celu spada o 10 stóp do następnej tury Nimry.", "„Ruch jest tylko ciepłem, któremu odebrano argumenty.”"),
-        _curated_action("nimra", "grease", "PĘTAJĄCE KORZENIE", "spell", 1, "AKCJA · 60 STÓP", "Wskaż obszar 10 × 10 stóp. Staje się trudnym terenem; istoty po nieudanej obronie na Zręczność zostają Powalone.", "„Natura i geometria zgadzają się częściej, niż sądzisz.”"),
+        _curated_action("nimra", "nimra_frost_pulse", "LODOWY IMPULS", "spell", 1, "AKCJA · 50 STÓP", "Kondycja przeciw ST czarów. Porażka: 1k8 zimna i −10 stóp ruchu do początku następnej tury Nimry; sukces: brak efektu.", "„Ruch jest tylko ciepłem, któremu odebrano argumenty.”"),
+        _curated_action("nimra", "nimra_acid_splash", "KWASOWY ROZPRYSK", "spell", 1, "AKCJA · 40 STÓP · PROMIEŃ 5", "Wszystkie istoty w obszarze wykonują obronę Zręczności. Porażka: 1k6 kwasu; sukces: 0.", "„Reakcję można przyspieszyć. Szczególnie cudzą.”"),
+        _curated_action("nimra", "nimra_mind_spike", "SZPILKA UMYSŁU", "spell", 1, "AKCJA · 45 STÓP", "Mądrość przeciw ST czarów. Porażka: 1k6 psychicznych i brak reakcji do początku następnej tury Nimry; sukces: brak efektu.", "„To nie ból. To korekta.”"),
+        _curated_action("nimra", "nimra_flame_fan", "WACHLARZ PŁOMIENI", "spell", 1, "AKCJA · STOŻEK 15", "Wszystkie istoty w stożku: Zręczność. Porażka 2k6 ognia, sukces połowa.", "„Geometria jest uprzejma tylko dla przygotowanych.”"),
+        _curated_action("nimra", "nimra_force_wave", "FALA ODRZUTU", "spell", 1, "AKCJA · LINIA 30", "Siła. Porażka: 2k6 mocy i odepchnięcie 5 stóp; sukces: połowa bez odepchnięcia. Zablokowane pole anuluje tylko ruch.", "„Proszę zachować właściwy odstęp.”"),
+        _curated_action("nimra", "nimra_sticky_matrix", "LEPKA MATRYCA", "spell", 1, "AKCJA · 50 STÓP", "Kwadrat 10 stóp jest trudnym terenem przez 3 rundy. Obrona Zręczności przy rzuceniu, wejściu i początku tury; porażka Powala.", "„Chaos najlepiej przykleić do podłogi.”"),
         _curated_action("nimra", "shield", "TARCZA", "spell", 1, "REAKCJA PO TRAFIENIU", "Po ujawnieniu trafienia, przed obrażeniami, zyskaj +5 KP do początku następnej tury. Atak zostaje oceniony ponownie.", "„Nie neguję ataku. Neguję jego wniosek.”"),
-        _curated_action("nimra", "sleep", "SEN", "spell", 1, "AKCJA · 90 STÓP", "Rzuć 5k8. Usypiaj cele w obszarze od najniższych aktualnych PW, odejmując pełne PW każdego uśpionego celu.", "„Czasem najlepszą kontrolą jest bardzo przekonująca cisza.”"),
-        _curated_action("nimra", "fog_cloud", "MGŁA", "spell", 2, "AKCJA · KONCENTRACJA", "Wskazany obszar staje się silnie przesłonięty. Blokuje widzenie i wymagające go cele do zakończenia koncentracji.", "„Jeśli nie można zmienić pola bitwy, można zmienić to, kto je widzi.”"),
-        _curated_action("nimra", "web", "PAJĘCZYNA", "spell", 3, "AKCJA · KONCENTRACJA", "Tworzy trudny teren; cele po nieudanej obronie na Zręczność są Unieruchomione i mogą próbować się uwolnić.", "„Chaos jest znośniejszy, kiedy przyklei się go do podłogi.”"),
-        _curated_action("nimra", "hold_person", "UNIERUCHOMIENIE OSOBY", "spell", 3, "AKCJA · KONCENTRACJA", "Humanoid po nieudanej obronie na Mądrość jest Sparaliżowany. Ponawia obronę na końcu swojej tury.", "„Proszę pozostać dokładnie tam, gdzie kończy się pański argument.”"),
+        _curated_action("nimra", "nimra_sleep", "SEN", "spell", 1, "AKCJA · 50 STÓP", "Rzuć 5k8. Usypiaj cele od najniższych aktualnych PW; nie działa na nieumarłych ani odpornych na zauroczenie.", "„Czasem najlepszą kontrolą jest bardzo przekonująca cisza.”"),
+        _curated_action("nimra", "nimra_fog", "MGŁA", "spell", 2, "AKCJA · 50 STÓP · KONCENTRACJA", "Promień 15 stóp staje się silnie przesłonięty do zakończenia koncentracji.", "„Jeśli nie można zmienić pola bitwy, można zmienić to, kto je widzi.”"),
+        _curated_action("nimra", "nimra_web", "SIEĆ", "spell", 3, "AKCJA · 50 STÓP · KONCENTRACJA", "Sześcian 20 stóp jest trudnym terenem; porażka obrony Zręczności Unieruchamia.", "„Chaos jest znośniejszy, kiedy przyklei się go do podłogi.”"),
+        _curated_action("nimra", "nimra_lightning_path", "PIORUNOWY SZLAK", "spell", 3, "AKCJA · 60 STÓP", "Wybierz cel: obrona Zręczności, 3k6 błyskawic lub połowa. Piorun przeskakuje do najbliższej istoty w 15 stopach; w remisie preferuje wroga, ale może trafić sojusznika.", "„Najkrótsza droga bywa cudzym problemem.”"),
+        _curated_action("nimra", "nimra_mind_break", "ZAŁAMANIE WOLI", "spell", 3, "AKCJA · 50 STÓP · PROMIEŃ 10", "Mądrość. Porażka: 2k6 psychicznych, brak reakcji i utrudnienie pierwszego ataku; sukces: połowa bez statusu.", "„Wątpliwość to klin. Ja tylko dobieram kąt.”"),
+        _curated_action("nimra", "nimra_stasis", "STAZA ISTOTY", "spell", 3, "AKCJA · 50 STÓP · KONCENTRACJA", "Mądrość. Porażka: ruch 0 i brak akcji ruchu; ponowna obrona na końcu tury, maksymalnie 3 rundy.", "„Nie ruszaj się. To część dowodu.”"),
         _curated_action("nimra", "misty_step", "MGLISTY KROK", "spell", 3, "AKCJA DOD. · WŁASNY", "Teleportuj Nimrę na widoczne, legalne pole w 30 stopach wskazane na planszy.", "„Odległość nie jest przeszkodą. Jest błędem indeksowania.”"),
         _curated_action("nimra", "shatter", "ROZTRZASKANIE", "spell", 3, "AKCJA · OBSZAR", "Cele wykonują obronę na Kondycję. Porażka: 3k8 obrażeń od grzmotu; sukces: połowa.", "„Rezonans to elegancka nazwa na właściwe pytanie zadane zbyt głośno.”"),
+        _curated_action("nimra", "nimra_sculpt_field", "RZEŹBIENIE POLA", "feature", 1, "METAMAGIA · 1 PUNKT", "Wyłącz do 4 pól z obszaru czaru. Wycięcia pozostają w efektach trwających.", "„Błąd pomiaru można po prostu wykreślić.”"),
+        _curated_action("nimra", "nimra_distant_spell", "ODLEGŁY CZAR", "feature", 1, "METAMAGIA · 1 PUNKT", "Zwiększ planszowy zasięg czaru o 15 stóp, maksymalnie do 75 stóp.", "„Odległość jest parametrem.”"),
+        _curated_action("nimra", "nimra_overcharged_spell", "PRZECIĄŻONY CZAR", "feature", 2, "METAMAGIA · 1 PUNKT", "Dodaj jedną kość tego samego typu do podstawowych obrażeń czaru.", "„Margines bezpieczeństwa był tylko sugestią.”"),
+        _curated_action("nimra", "nimra_forced_weave", "WYMUSZONY SPLOT", "feature", 2, "METAMAGIA · 2 PUNKTY", "Jeden wybrany cel ma utrudnienie pierwszego rzutu obronnego przeciw czarowi.", "„Wynik był nieunikniony. Pomogłam mu.”"),
+        _curated_action("nimra", "nimra_energy_transmutation", "TRANSMUTACJA ENERGII", "feature", 3, "METAMAGIA · 1 PUNKT", "Zmień kwas, zimno, ogień, błyskawice albo grzmot na jeden z tych typów. Nie zmienia mocy ani obrażeń psychicznych.", "„Żywioły różnią się głównie zapisem.”"),
     ),
     "erynd": (
-        _curated_action("erynd", "hunters_mark", "OZNACZENIE CELU", "spell", 1, "AKCJA DOD. · KONCENTRACJA", "Oznacz przeciwnika wskazanego na planszy. Trafienia bronią zadają mu dodatkowe 1k6 obrażeń. Koszt: 1 Instynkt.", "„Cel może uciekać. Ślad już nie.”"),
-        _curated_action("erynd", "goodberry", "DOBRE JAGODY", "spell", 1, "AKCJA", "Utwórz pulę 10 jagód. Każda użyta w walce akcją leczy 1 PW. Koszt: 1 Instynkt.", "„Mały zapas jest różnicą między odwrotem a grobem.”"),
-        _curated_action("erynd", "cunning_action", "ZWIADOWCZA MOBILNOŚĆ", "feature", 1, "AKCJA DOD. · WŁASNA TURA", "Wybierz Sprint, Odstąpienie albo Ukrycie jako akcję dodatkową.", "„Zwiadowca wraca z wiadomością albo nie był zwiadowcą.”"),
-        _curated_action("erynd", "find_traps", "WYKRYCIE PUŁAPEK", "spell", 1, "AKCJA · OBSZAR", "Wskaż obszar na planszy i ujawnij wszystkie znajdujące się w nim pułapki. Koszt: 1 Instynkt.", "„Najgroźniejszy ślad jest zrobiony przez kogoś, kto chciał go ukryć.”"),
-        _curated_action("erynd", "patient_shot", "STRZELECKA CIERPLIWOŚĆ", "feature", 2, "AKCJA DOD. · WŁASNA TURA", "Koszt: 1 Instynkt. Następny atak Erynda w tej turze ma przewagę; po ataku efekt znika.", "„Najlepszy strzał zaczyna się od jednej spokojnej chwili.”"),
+        _curated_action("erynd", "hunters_mark", "OZNACZENIE CELU", "spell", 1, "AKCJA DOD. · KONCENTRACJA", "Oznacz przeciwnika wskazanego na planszy. Trafienia bronią zadają mu dodatkowe 1k6 obrażeń. Koszt: 1 Instynkt; po pokonaniu celu przenieś aktywny znak bez kosztu.", "„Cel może uciekać. Ślad już nie.”"),
+        _curated_action("erynd", "cunning_action", "ZWIADOWCZA MOBILNOŚĆ", "feature", 1, "AKCJA DOD. · WŁASNA TURA", "Wybierz Sprint albo Odstąpienie jako akcję dodatkową. Bojowe Ukrycie jest unikalną akcją Miry.", "„Zwiadowca wraca z wiadomością albo nie był zwiadowcą.”"),
+        _curated_action("erynd", "aim", "CELOWANIE", "feature", 1, "CAŁY RUCH · PRZED RUCHEM", "Poświęć cały niewykorzystany ruch. Następny atak z długiego łuku w tej turze ma przewagę.", "„Najlepszy strzał zaczyna się od jednej spokojnej chwili.”"),
+        _curated_action("erynd", "anchoring_arrow", "STRZAŁA KOTWICZĄCA", "feature", 2, "AKCJA · 1 INSTYNKT", "Rzuć k4 i podaj wynik. Trafienie: Siła ST 14; porażka blokuje ruch, sukces zmniejsza go o połowę przez tyle rund.", "„Przyszpil ruch, a reszta drużyny zrobi swoje.”"),
+        _curated_action("erynd", "exposing_arrow", "STRZAŁA ODSŁANIAJĄCA", "feature", 2, "AKCJA · 1 INSTYNKT", "Rzuć k8 i podaj wynik. Trafienie obniża KP celu o wynik do początku następnej tury Erynda.", "„Pancerz ma szwy. Trzeba tylko wiedzieć, gdzie patrzeć.”"),
+        _curated_action("erynd", "disrupting_arrow", "STRZAŁA ZAKŁÓCAJĄCA", "feature", 3, "AKCJA · 1 INSTYNKT", "Trafienie odbiera reakcje i daje utrudnienie do następnego ataku celu, najpóźniej do końca jego następnej tury.", "„Nie muszę przerwać ataku. Wystarczy zepsuć rytm.”"),
+        _curated_action("erynd", "double_shot", "PODWÓJNY STRZAŁ", "feature", 3, "AKCJA · 2 INSTYNKT", "Wykonaj jeden test przeciw jednemu celowi. Trafienie: 2k8 + 2×DEX; Znak łowcy i Pierwsza krew dodają kość tylko raz. Amunicja nie jest liczona.", "„Jedna decyzja. Dwie cięciwy powietrza.”"),
         _curated_action("erynd", "misty_step", "LEŚNY KROK", "spell", 2, "AKCJA DOD. · POLE", "Przenieś się na widoczne legalne pole. Koszt: 1 Instynkt.", "„Między dwoma cieniami zawsze istnieje krótsza droga.”"),
         _curated_action("erynd", "spike_growth", "KOLCZASTE POSZYCIE", "spell", 3, "AKCJA · OBSZAR", "Utwórz niebezpieczny trudny teren zadający obrażenia podczas ruchu. Koszt: 1 Instynkt.", "„Las nie ściga intruzów. Pozwala im wejść głębiej.”"),
-        _curated_action("erynd", "see_invisibility", "OKO ŁOWCY", "spell", 3, "AKCJA · WŁASNY", "Ujawnij niewidzialnych i ukrytych przeciwników. Koszt: 1 Instynkt.", "„Nie wszystko, czego nie widać, potrafi przestać zostawiać ślady.”"),
     ),
 }
 
@@ -1138,9 +1155,9 @@ for _actor_id, _cards in CURATED_ACTION_CARDS.items():
 CURATED_PASSIVES: dict[str, tuple[str, ...]] = {
     "garran": (
         "Styl walki: Obrona — +1 KP podczas noszenia pancerza.",
+        "Ulepszony krytyk — ataki bronią trafiają krytycznie przy naturalnym 19 albo 20.",
         "Żelazna linia — sojusznik flankujący z Garranem tego samego przeciwnika ma +1 KP przeciw jego atakom.",
-        "Stopień wojskowy — sceny rozpoznające Garrana mogą udostępnić mu wojskową opcję interakcji.",
-        "Skaza: Wina dowódcy — gdy żywy sojusznik w 30 stopach ma 0 PW i nie leży obok Garrana, Garran ma −1 do ataków i rzutów obronnych.",
+        "Skaza: Wyrzuty sumienia — gdy Garran otrzymał najmniej obrażeń w drużynie, a ktoś otrzymał więcej, ma −2 do ataków, obron i testów. Leczenie nie cofa licznika.",
     ),
     "brakka": (
         "Widzenie w ciemności — w niemagicznej ciemności do 60 stóp widzi jak w półmroku; nie przenika magicznej ciemności ani mgły.",
@@ -1150,39 +1167,45 @@ CURATED_PASSIVES: dict[str, tuple[str, ...]] = {
         "Skaza: Bitewny amok — podczas Szału Brakka nie może używać mikstur, zwojów ani aktywnych właściwości przedmiotów. Może nadal atakować trzymaną bronią.",
     ),
     "mira": (
-        "Ekspertyza — podwójna biegłość w Śledztwie i Zwinnych dłoniach.",
-        "Atak ukradkowy — raz na turę +1k6 po spełnieniu warunków przewagi albo obecności sojusznika przy celu.",
+        "Mistrzyni ukrycia — tylko Mira ma bojową akcję Ukryj się bez osłony. Blokuje ją sąsiadujący wróg lub status. Wrogowie testują Percepcję osobno.",
+        "Skradanie — limit ruchu 20 stóp. Dobrowolne wyjście przywraca limit 25 stóp, ale nie zwraca wykonanego ruchu ani akcji.",
+        "Atak z cienia — raz na turę rapier lub nóż daje +2k6 i przewagę przeciw celowi, który nie widzi Miry. Atak kończy ukrycie.",
+        "Flanka zabójczyni — osobista flanka daje +1k6; razem z ukryciem daje +3k6.",
         "Szczęście niziołka — ponów naturalną 1 w ataku, teście albo obronie.",
-        "Odważna — przewaga w rzutach obronnych przeciw Przerażeniu.",
-        "Niziołcza zwinność — przechodź przez większe istoty; +1 KP tylko przeciw atakom okazyjnym.",
-        "Skaza: Lęk przed przesłuchaniem — pierwszy test Charyzmy wobec autorytetu w instancji ma utrudnienie, chyba że Mira jest przebrana albo otrzymuje Pomoc.",
+        "Ruchomy cel — Mira ma +2 KP przeciw dystansowym testom ataku bronią i czarem; nie działa przeciw obszarom ani rzutom obronnym.",
+        "Skaza: Panika po zdemaskowaniu — podczas tej sesji skradania widzący Mirę wróg ma +2 do testów ataku przeciw niej. Gdy widzą ją wszyscy, skradanie się kończy i premia znika.",
     ),
     "dagna": (
         "Widzenie w ciemności — widzi w ciemności do 60 stóp; ciężki pancerz nie zmniejsza jej szybkości.",
         "Uczeń Życia — czar leczenia przywraca dodatkowe 2 + poziom czaru PW.",
+        "Krok ratowniczki — raz na turę, po uleczeniu lub oczyszczeniu pobliskiego sojusznika, może przesunąć się o 5 stóp bez ataków okazyjnych.",
         "Krasnoludzka wytrzymałość — +1 maksymalnego PW na każdy poziom.",
         "Krasnoludzka odporność — przewaga przeciw truciźnie i odporność na obrażenia od trucizny.",
-        "Skaza: Nikogo nie zostawiam — gdy sojusznik w 30 stopach ma 0 PW, Dagna ma utrudnienie w atakach i testach innych niż Medycyna lub pomoc rannemu.",
+        "Skaza: Nikogo nie zostawiam — gdy sojusznik w 30 stopach ma 0 PW, Dagna ma utrudnienie w atakach i testach innych niż ratunek; cele jej wrogich czarów mają przewagę w obronach.",
     ),
     "lorian": (
         "Widzenie w ciemności — widzi w ciemności do 60 stóp.",
-        "Wszechstronność półelfa — dodatkowe biegłości wspierają rozmowę, obserwację i skradanie.",
         "Fey Ancestry — przewaga przeciw zauroczeniu i odporność na magiczny sen.",
-        "Skaza: Głód aprobaty — po nieudanym teście społecznym Lorian nie może użyć Inspiracji bardowskiej w tej interakcji, dopóki sojusznik nie udzieli mu Pomocy.",
+        "Kusznik — zwykła akcja Ataku kuszą ręczną daje dwa osobne strzały; każdy może mieć inny legalny cel. Ostrzały specjalne określają własną liczbę celów.",
+        "Obycie i targowanie — +2 do każdego pozabojowego testu Charyzmy. Nie tworzy nowych nagród ani możliwości fabularnych.",
+        "Improwizacja — raz na NPC przerzuć nieudany pozabojowy test Charyzmy przed konsekwencjami; drugi wynik jest ostateczny. Zużycie jest zapisywane.",
+        "Skaza: Potrzeba publiczności — Lorian nie może używać zdolności specjalnych bez żywego i przytomnego sojusznika w 10 stopach.",
     ),
     "nimra": (
         "Widzenie w ciemności — widzi w ciemności do 60 stóp.",
         "Gnomia przebiegłość — przewaga w obronach INT, MĄD i CHA przeciw magii.",
+        "Katalog niemożliwego — wszystkie czary z talii są stale dostępne; Nimra nie przygotowuje ich po odpoczynku.",
         "Odzyskiwanie magiczne — raz na długi odpoczynek odzyskaj komórki podczas krótkiego odpoczynku.",
-        "Skaza: Echo magicznego wycieku — pierwsza naturalna 1 w ataku czarem lub utrata Koncentracji blokuje nowe czary z Koncentracją do końca tury; raz na walkę.",
+        "Skaza: Echo magicznego wycieku — w następnej turze Nimra nie może powtórzyć żadnego czaru ani Metamagii użytych w poprzedniej rundzie.",
     ),
     "erynd": (
         "Widzenie w ciemności — widzi w ciemności do 60 stóp.",
         "Styl walki: Łucznictwo — +2 do dystansowych ataków bronią.",
         "Ekspertyza zwiadowcy — podwójna biegłość w Skradaniu i Sztuce przetrwania.",
-        "Naturalny odkrywca — korzyści nawigacji i podróży w wybranym terenie.",
+        "Pierwsza krew — raz na turę trafienie z łuku w cel z pełnymi PW zadaje dodatkowe 1k8.",
+        "Czujność zwiadowcy — +2 do inicjatywy i wykrywania ukrytych przeciwników.",
         "Fey Ancestry — przewaga przeciw zauroczeniu i odporność na magiczny sen.",
-        "Skaza: Ocalały z zasadzki — gdy przeciwnicy zaskakują drużynę, Erynd jest Przerażony przez najbliższego wroga do końca swojej pierwszej tury.",
+        "Skaza: Trauma bratobójczego strzału — −1 do ataków z łuku za każdego przytomnego bohatera stojącego obok Erynda.",
     ),
 }
 
@@ -1225,8 +1248,12 @@ def _synchronized_action_card(
             "psychicznych i utrudnienie do następnego ataku celu; sukces: bez efektu."
         ),
         ("guiding_bolt"): (
-            "Wykonaj dystansowy atak czarem. Trafienie: 4k6 obrażeń "
+            "Wykonaj dystansowy atak czarem. Trafienie: 2k6 obrażeń "
             "promienistych; następny atak przeciw celowi ma przewagę."
+        ),
+        ("sacred_flame"): (
+            "Wrogowie w stożku 15 stóp wykonują rzut obronny na Zręczność. "
+            "Porażka: 1k8 obrażeń promienistych; sukces: bez obrażeń."
         ),
         ("shatter"): (
             "Istoty w promieniu 10 stóp wykonują rzut obronny na Kondycję "
@@ -1244,6 +1271,12 @@ def _synchronized_action_card(
             "czarowania. Wymaga Koncentracji."
         ),
     }.get(card.source_id, _spell_mechanic(spell_data))
+    if actor_id == "dagna" and card.source_id == "healing_word":
+        mechanic = (
+            "Legalny żywy cel odzyskuje 1k4 + Mądrość + 2 + poziom użytej "
+            "komórki PW. Na 1. poziomie: 1k4+7. Wyższa komórka dodaje 1k4 "
+            "i 1 PW za poziom."
+        )
     resource_note = {
         **{
             ("garran", source_id): (
@@ -1274,9 +1307,14 @@ def _synchronized_action_card(
         ("erynd", "spike_growth"): " Koszt: 1 Instynkt.",
         ("erynd", "see_invisibility"): " Koszt: 1 Instynkt.",
     }.get((actor_id, card.source_id), "")
+    timing = _spell_timing(spell_data)
+    if actor_id == "dagna" and card.source_id == "guiding_bolt":
+        timing = timing.replace("120 STÓP", "75 STÓP")
+    if actor_id == "dagna" and card.source_id == "sacred_flame":
+        timing = "AKCJA · STOŻEK 15 STÓP"
     return replace(
         card,
-        timing=_spell_timing(spell_data),
+        timing=timing,
         mechanic=f"{mechanic}{resource_note}",
     )
 
@@ -1316,30 +1354,26 @@ _CARD_RESOURCE_POOLS: dict[str, tuple[tuple[str, str, tuple[str, ...]], ...]] = 
     "garran": (
         ("second_wind_uses", "Drugi oddech", ("second_wind",)),
         ("action_surge_uses", "Zryw akcji", ("action_surge",)),
-        ("lay_on_hands_points", "Ratunek polowy", ("lay_on_hands",)),
-        ("defensive_stance_uses", "Pozycja obronna", ("defensive_stance",)),
         (
             "tactics_uses",
             "Taktyka",
-            ("command", "shield_of_faith", "heroism", "warding_bond"),
+            ("garran_command_halt", "garran_shield_wall", "garran_rally", "garran_guard_companion"),
         ),
     ),
     "brakka": (
         ("rage_uses", "Szał", ("rage",)),
-        ("action_surge_uses", "Niepowstrzymany impet", ("action_surge",)),
-        ("ferocity_uses", "Dzikość", ("false_life", "thunderwave")),
+        ("ferocity_uses", "Dzikość", ("powerful_strike", "hard_as_rock", "acceleration", "deafening_roar")),
     ),
     "mira": (
-        ("instinctive_dodge_uses", "Unik instynktowny", ("instinctive_dodge",)),
         (
             "trick_uses",
             "Fortele",
             (
-                "invisibility",
-                "find_traps",
-                "vicious_mockery",
-                "exploit_weakness",
-                "mirror_image",
+                "instinctive_dodge",
+                "smoke_screen",
+                "hamstring_cut",
+                "piercing_attack",
+                "blade_mistress",
             ),
         ),
     ),
@@ -1350,11 +1384,12 @@ _CARD_RESOURCE_POOLS: dict[str, tuple[tuple[str, str, tuple[str, ...]], ...]] = 
         (
             "bardic_inspiration_uses",
             "Inspiracja bardowska",
-            ("bardic_inspiration", "cutting_words"),
+            ("bardic_inspiration",),
         ),
     ),
     "nimra": (
         ("arcane_recovery_uses", "Odzyskiwanie magiczne", ()),
+        ("metamagic_points", "Punkty Metamagii", ("nimra_sculpt_field", "nimra_distant_spell", "nimra_overcharged_spell", "nimra_forced_weave", "nimra_energy_transmutation")),
     ),
     "erynd": (
         (
@@ -1362,19 +1397,19 @@ _CARD_RESOURCE_POOLS: dict[str, tuple[tuple[str, str, tuple[str, ...]], ...]] = 
             "Instynkt",
             (
                 "hunters_mark",
-                "goodberry",
-                "find_traps",
-                "patient_shot",
                 "misty_step",
                 "spike_growth",
-                "see_invisibility",
+                "anchoring_arrow",
+                "exposing_arrow",
+                "disrupting_arrow",
+                "double_shot",
             ),
         ),
     ),
 }
 
 _RESOURCE_EXTRA_LINES = {
-    "brakka": "Szał bojowy nie wydaje punktu, ale po zakończeniu daje 1 Wyczerpanie.",
+    "brakka": "Każdy Szał odnawia Dzikość do 3; niewydane punkty znikają po jego zakończeniu.",
     "nimra": "Odzyskiwanie magiczne: raz na długi odpoczynek odzyskaj komórki podczas krótkiego odpoczynku.",
 }
 
@@ -1407,11 +1442,13 @@ def _card_resource_lines(deck: CharacterDeckSpec) -> tuple[str, ...]:
             "krótki odpoczynek"
             if pool.recovery.value == "short_rest"
             else "długi odpoczynek"
+            if pool.recovery.value == "long_rest"
+            else "początek każdego Szału"
         )
         card_titles = [cards[source_id].title.title() for source_id in source_ids]
         usage = f": {', '.join(card_titles)}" if card_titles else ""
         lines.append(
-            f"{label} {pool.maximum}/{pool.maximum} ({recovery}){usage}."
+            f"{label} {pool.current}/{pool.maximum} ({recovery}){usage}."
         )
     extra = _RESOURCE_EXTRA_LINES.get(deck.actor_id)
     if extra is not None:

@@ -25,6 +25,7 @@ from dnd_board_game.combat import (
     expire_condition_states,
     finish_turn,
     resolve_combat_triggers,
+    remove_wound_conditions_after_healing,
     replace_actor,
 )
 from dnd_board_game.rules import EffectEvent, EffectEventType, expire_active_effects
@@ -71,6 +72,7 @@ class CombatTurnFinalizationService:
         result: EnemyAutoTurnResult,
         active_effects: tuple[ActiveCombatEffect, ...],
     ) -> EnemyTurnCommitTransition:
+        result = _apply_coordinated_pack_healing(result)
         updated_effects = active_effects
         if result.escaped:
             escaped_state = escape_enemy(result.state, result.enemy.id)
@@ -180,6 +182,64 @@ class CombatTurnFinalizationService:
             event_type="ui_combat_turn_finished",
             event_payload=(("actor_id", str(actor.id)),),
         )
+
+
+def _apply_coordinated_pack_healing(result: EnemyAutoTurnResult) -> EnemyAutoTurnResult:
+    """Apply deferred pack healing only after all player reaction windows closed."""
+    acting = next(
+        (actor for actor in result.state.actors if actor.id == result.enemy.id),
+        result.enemy,
+    )
+    if acting.is_defeated():
+        return result
+    state = result.state
+    messages: list[str] = []
+    if result.life_drain and result.applied_damage is not None:
+        amount = result.applied_damage.damage.total_applied // 2
+        healed = min(amount, max(0, acting.max_hp - acting.hp))
+        if healed > 0:
+            acting = replace(acting, hp=acting.hp + healed)
+            state = replace_actor(state, acting)
+            state = replace(
+                state,
+                condition_states=remove_wound_conditions_after_healing(
+                    state.condition_states,
+                    str(acting.id),
+                    healed,
+                ),
+            )
+            messages.append(f"{acting.name} odzyskuje {healed} PW z wysysania życia.")
+    if result.pack_heal_target_id and result.pack_heal_amount > 0:
+        follower = next(
+            (
+                actor
+                for actor in state.actors
+                if str(actor.id) == result.pack_heal_target_id
+            ),
+            None,
+        )
+        if follower is not None and not follower.is_defeated() and follower.hp < follower.max_hp:
+            healed = min(result.pack_heal_amount, follower.max_hp - follower.hp)
+            follower = replace(follower, hp=follower.hp + healed)
+            state = replace_actor(state, follower)
+            state = replace(
+                state,
+                condition_states=remove_wound_conditions_after_healing(
+                    state.condition_states,
+                    str(follower.id),
+                    healed,
+                ),
+            )
+            messages.append(f"{acting.name} regeneruje {follower.name}: +{healed} PW.")
+    if not messages:
+        return replace(result, enemy=acting, state=state)
+    return replace(
+        result,
+        state=state,
+        enemy=acting,
+        moved_enemy=(acting if result.moved_enemy is not None else None),
+        message=f"{result.message} {' '.join(messages)}",
+    )
 
 
 def _advance_turn(

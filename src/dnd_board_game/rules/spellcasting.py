@@ -37,6 +37,7 @@ class SpellRangeKind(StrEnum):
 
 class SpellDurationKind(StrEnum):
     INSTANTANEOUS = "instantaneous"
+    ENCOUNTER = "encounter"
     ROUND = "round"
     MINUTE = "minute"
     TEN_MINUTES = "ten_minutes"
@@ -143,7 +144,10 @@ def spell_duration_minutes(duration: SpellDuration) -> int | None:
     }
     if duration.kind == SpellDurationKind.INSTANTANEOUS:
         return 0
-    if duration.kind == SpellDurationKind.UNTIL_DISPELLED:
+    if duration.kind in {
+        SpellDurationKind.ENCOUNTER,
+        SpellDurationKind.UNTIL_DISPELLED,
+    }:
         return None
     return duration.amount * multipliers[duration.kind]
 

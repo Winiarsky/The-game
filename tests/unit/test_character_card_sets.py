@@ -72,27 +72,40 @@ def test_seven_archetypes_have_balanced_combat_only_decks() -> None:
         "garran": {
             "second_wind",
             "action_surge",
-            "lay_on_hands",
+            "shield_bash",
             "defensive_stance",
+            "garran_command_halt",
+            "garran_shield_wall",
+            "garran_rally",
+            "garran_guard_companion",
         },
-        "brakka": {"rage", "reckless_attack", "frenzy"},
+        "brakka": {
+            "rage", "reckless_attack", "powerful_strike", "shoulder_check",
+            "hard_as_rock", "acceleration", "deafening_roar",
+        },
         "mira": {
-            "cunning_action",
             "instinctive_dodge",
-            "exploit_weakness",
-            "invisibility",
-            "find_traps",
+            "smoke_screen",
+            "guard_vault",
+            "combat_trap_detection",
+            "hamstring_cut",
+            "piercing_attack",
+            "blade_mistress",
         },
         "erynd": {
             "hunters_mark",
-            "goodberry",
             "cunning_action",
-            "patient_shot",
-            "find_traps",
+            "aim",
+            "anchoring_arrow",
+            "exposing_arrow",
+            "disrupting_arrow",
+            "double_shot",
+            "misty_step",
+            "spike_growth",
         },
-        "dagna": {"sacred_flame", "healing_word", "bless", "sanctuary"},
-        "lorian": {"bardic_inspiration", "vicious_mockery", "thunderwave", "healing_word"},
-        "nimra": {"ray_of_frost", "grease", "shield", "sleep"},
+        "dagna": {"sacred_flame", "healing_word", "bless", "divine_care_aura"},
+        "lorian": {"bardic_inspiration", "optical_scope", "mocking_shot", "provoking_shot", "entangling_shot", "thunderwave", "panic_whisper"},
+        "nimra": {"nimra_frost_pulse", "nimra_acid_splash", "nimra_mind_spike", "nimra_flame_fan", "shield", "nimra_sleep"},
     }
 
     for actor_id, source_ids in expected.items():
@@ -105,7 +118,8 @@ def test_seven_archetypes_have_balanced_combat_only_decks() -> None:
         combat_cards = tuple(
             card for card in cards.values() if card.kind != "universal"
         )
-        assert 7 <= len(combat_cards) <= 9
+        maximum = 20 if actor_id == "nimra" else 15 if actor_id == "lorian" else 9
+        assert 7 <= len(combat_cards) <= maximum
         assert all(
             card_action_definition(card.source_id).phase
             is CardPhase.COMBAT
@@ -120,8 +134,11 @@ def test_seven_archetypes_have_balanced_combat_only_decks() -> None:
         card.source_id: card
         for card in printable_action_cards(CHARACTER_DECKS["erynd"])
     }
-    assert "3/3" in mira["invisibility"].mechanic
-    assert "1 Instynkt" in erynd["goodberry"].mechanic
+    assert "45 STÓP" in mira["combat_trap_detection"].timing
+    assert "1 FORTEL" in mira["blade_mistress"].timing
+    assert "Rzuć k4" in erynd["anchoring_arrow"].mechanic
+    assert "Rzuć k8" in erynd["exposing_arrow"].mechanic
+    assert "2 INSTYNKT" in erynd["double_shot"].timing
     assert "true_strike" not in mira
     assert "true_strike" not in erynd
 
@@ -137,7 +154,19 @@ def test_every_playable_hero_card_lists_passives_and_mechanical_flaw() -> None:
         flaws = tuple(entry for entry in passives if entry.startswith("Skaza:"))
         assert len(flaws) == 1
         assert "—" in flaws[0]
-        assert any(token in flaws[0] for token in ("−1", "utrudnienie", "nie może", "Przerażony", "blokuje"))
+        assert any(
+            token in flaws[0]
+            for token in (
+                "−1",
+                "−2",
+                "+2",
+                "przewagę",
+                "utrudnienie",
+                "nie może",
+                "Przerażony",
+                "blokuje",
+            )
+        )
         assert all(
             len(_wrapped_lines(draw, entry, passive_font, passive_width)) <= 4
             for entry in passives
@@ -185,6 +214,20 @@ def test_printable_cards_follow_current_phase_and_spell_content() -> None:
     assert "gentle_repose" not in dagna_cards
     assert "guidance" not in dagna_cards
     assert "prayer_of_healing" not in dagna_cards
+    assert "warding_bond" not in dagna_cards
+    assert "spiritual_weapon" in dagna_cards
+    assert "1k4+7" in dagna_cards["healing_word"].mechanic
+    assert "75 STÓP" in dagna_cards["guiding_bolt"].timing
+    assert "2k6" in dagna_cards["guiding_bolt"].mechanic
+    assert "STOŻEK 15 STÓP" in dagna_cards["sacred_flame"].timing
+    assert "Liczba aktywacji" in dagna_cards["healing_grace_aura"].mechanic
+    assert "minimum 1" in dagna_cards["divine_care_aura"].mechanic
+    assert "1 PW" in dagna_cards["spiritual_weapon"].mechanic
+    assert "KP 18" in dagna_cards["spiritual_weapon"].mechanic
+    assert "własną krótką turę" in dagna_cards["spiritual_weapon"].mechanic
+    dagna_passives = " ".join(DAGNA_DECK.passives).lower()
+    assert "kamien" not in dagna_passives
+    assert "schronienie wiernych" not in dagna_passives
     assert dagna_cards["accept"].mechanic == ""
     all_mechanics = " ".join(
         card.mechanic
@@ -209,20 +252,23 @@ def test_printable_cards_follow_current_phase_and_spell_content() -> None:
         card.source_id: card
         for card in printable_action_cards(CHARACTER_DECKS["nimra"])
     }
-    assert "utrudnienie" in lorian_cards["vicious_mockery"].mechanic
+    assert "utrudnienie" in lorian_cards["mocking_shot"].mechanic
+    assert "dwa strzały w jeden cel" in lorian_cards["optical_scope"].mechanic
+    assert "obszarze" in lorian_cards["entangling_shot"].mechanic
+    assert "2k6" in lorian_cards["panic_whisper"].mechanic
     assert "10 stóp" in nimra_cards["shatter"].mechanic
     assert "konstrukty" in nimra_cards["shatter"].mechanic
 
 
 def test_dossiers_list_exact_card_resources_instead_of_level_progression() -> None:
     expected = {
-        "garran": ("Taktyka 3/3", "Ratunek polowy 15/15"),
-        "brakka": ("Szał 3/3", "Dzikość 2/2"),
-        "mira": ("Fortele 3/3", "Unik instynktowny 1/1"),
+        "garran": ("Taktyka 4/4", "Karty niewymienione"),
+        "brakka": ("Szał 3/3", "Dzikość 0/3", "Każdy Szał odnawia Dzikość do 3"),
+        "mira": ("Fortele 4/4", "długi odpoczynek"),
         "dagna": ("Komórki czarów: 4× 1. poziomu, 2× 2. poziomu", "Boska Moc 1/1"),
         "lorian": ("Komórki czarów: 4× 1. poziomu, 2× 2. poziomu", "Inspiracja bardowska 4/4"),
         "nimra": ("Komórki czarów: 4× 1. poziomu, 2× 2. poziomu", "Odzyskiwanie magiczne 1/1"),
-        "erynd": ("Instynkt 3/3", "Karty niewymienione"),
+        "erynd": ("Instynkt 4/4", "Karty niewymienione"),
     }
     for actor_id, required_fragments in expected.items():
         text = "\n".join(_card_resource_lines(CHARACTER_DECKS[actor_id]))
@@ -238,7 +284,8 @@ def test_character_sheet_lists_only_spells_available_from_physical_deck() -> Non
     assert "Wykrycie magii" not in nimra
     assert "Identyfikacja" not in nimra
     assert "Obezwładniający Żart" in lorian
-    assert "Pajęczyna" in nimra
+    assert "Sieć" in nimra
+    assert "Piorunowy Szlak" in nimra
 
 
 def test_black_and_white_character_sheet_is_toner_friendly(tmp_path) -> None:
@@ -347,9 +394,9 @@ def test_generate_front_only_black_and_white_test_deck(tmp_path) -> None:
         ("dagna", 14, 10),
         ("brakka", 12, 8),
         ("mira", 12, 8),
-        ("lorian", 13, 10),
-        ("nimra", 14, 10),
-        ("erynd", 13, 10),
+        ("lorian", 19, 12),
+        ("nimra", 25, 16),
+        ("erynd", 14, 10),
     ),
 )
 def test_generate_character_card_set(

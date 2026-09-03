@@ -4,7 +4,7 @@ import random
 from dataclasses import dataclass
 from typing import Iterable, Mapping
 
-from dnd_board_game.actors import Actor, Faction
+from dnd_board_game.actors import Actor, Faction, actor_has_feature
 from dnd_board_game.hardware import DEFAULT_COLORS, LedFeedback, LedFrame, LedRole
 from dnd_board_game.rules import (
     D20RollInput,
@@ -85,7 +85,9 @@ def build_player_initiative_prompts(
     for actor in actors:
         if actor.faction != Faction.ALLY or actor.is_defeated():
             continue
-        modifier = dexterity_modifier(actor)
+        modifier = dexterity_modifier(actor) + (
+            2 if actor_has_feature(actor, "scouts_vigilance") else 0
+        )
         request = apply_actor_d20_traits(
             actor,
             _initiative_request(
@@ -111,7 +113,9 @@ def build_enemy_initiative_prompt(
     actor: Actor,
     mode: RollMode = RollMode.NORMAL,
 ) -> InitiativePrompt:
-    modifier = dexterity_modifier(actor)
+    modifier = dexterity_modifier(actor) + (
+        2 if actor_has_feature(actor, "scouts_vigilance") else 0
+    )
     request = apply_actor_d20_traits(
         actor,
         _initiative_request(modifier, mode),
@@ -188,7 +192,7 @@ def _initiative_request(dex_modifier: int, mode: RollMode = RollMode.NORMAL) -> 
     return D20RollRequest(
         modifiers=(
             RollModifier(
-                "Modyfikator ze Zręczności",
+                "Inicjatywa (Zręczność i cechy)",
                 dex_modifier,
                 RollModifierType.ABILITY,
                 stacking_key="initiative_dexterity",

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Nowa gra</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='launcher.css', v='viewport-fit-20260813-1') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='launcher.css', v='character-picker-20260822-1') }}">
 </head>
 <body class="launcher-page new-game-page">
   <main class="flow-shell">
@@ -12,24 +12,25 @@
       <a class="back-link" href="{{ url_for('index') }}">← Menu główne</a>
       <span id="new-game-step-label" class="step-label">Nowa gra · krok 1 z 2</span>
       <h1 id="new-game-title">Wybierz drużynę</h1>
-      <p id="new-game-description">Zeskanuj od 1 do 5 kart bohaterów. Kolejność skanowania ustala kolejność drużyny.</p>
+      <p id="new-game-description">Kliknij od 1 do 5 bohaterów, którzy wezmą udział w grze.</p>
     </header>
 
     {% if error %}<div class="flow-error" role="alert">{{ error }}</div>{% endif %}
 
-    <div id="new-game-card-flow">
+    <form id="new-game-card-flow" method="post" action="{{ url_for('start_new_game') }}" data-initial-stage="{{ initial_stage|default('party') }}">
       <section id="party-selection-step" class="form-section">
-        <h2>Zeskanuj drużynę — 1 do 5 kart bohaterów</h2>
-        <p>Karta DECLINE usuwa ostatni wybór. Karta ACCEPT zatwierdza skład i przechodzi do wyboru scenariusza.</p>
-        <div id="card-scan-status" class="flow-note" aria-live="polite">Czytnik gotowy. Zeskanuj pierwszą kartę bohatera.</div>
+        <h2>Wybierz drużynę — od 1 do 5 bohaterów</h2>
+        <p>Zaznacz portrety wybranych postaci, a następnie przejdź dalej.</p>
+        <div id="party-selection-status" class="flow-note" aria-live="polite">Nie wybrano jeszcze żadnego bohatera.</div>
         {% if roster.characters %}
           <div class="roster-grid">
             {% for character in roster.characters %}
-              <article class="roster-card" data-actor-id="{{ character.actor.id }}" aria-selected="false">
+              <label class="roster-card" data-actor-id="{{ character.actor.id }}">
+                <input type="checkbox" name="character_ids" value="{{ character.actor.id }}" {% if character.actor.id|string in selected_character_ids|default(()) %}checked{% endif %}>
                 {% set portrait_url = character_portrait_url(character.actor.portrait) %}
                 <span class="roster-avatar">{% if portrait_url %}<img src="{{ portrait_url }}" alt="Portret: {{ character.actor.name }}">{% else %}{{ character.actor.name[:1]|upper }}{% endif %}</span>
-                <span><b>{{ character.actor.name }}</b><small>Poziom {{ character.actor.level }} · {{ class_names.get(character.class_id, character.class_id) }}</small><em data-selection-order>zeskanuj kartę</em></span>
-              </article>
+                <span><b>{{ character.actor.name }}</b><small>Poziom {{ character.actor.level }} · {{ class_names.get(character.class_id, character.class_id) }}</small><em data-selection-state>kliknij, aby wybrać</em></span>
+              </label>
             {% endfor %}
           </div>
         {% else %}
@@ -56,105 +57,69 @@
         {% else %}
           <aside class="flow-note">Brak dostępnej kampanii.</aside>
         {% endfor %}
-        <div id="scenario-scan-status" class="flow-note" aria-live="polite">Zeskanuj ACCEPT, aby rozpocząć wybrany scenariusz. DECLINE wraca do drużyny.</div>
       </section>
 
       <div class="flow-actions">
-        <a class="button secondary" href="{{ url_for('index') }}">Anuluj</a>
-        <span>Zatwierdzenie wyłącznie fizyczną kartą ACCEPT.</span>
+        <a id="cancel-new-game" class="button secondary" href="{{ url_for('index') }}">Anuluj</a>
+        <button id="back-to-party" class="button secondary" type="button" hidden>Wróć</button>
+        <button id="continue-to-scenario" type="button" disabled>Dalej</button>
+        <button id="start-new-game" type="submit" hidden>Rozpocznij grę</button>
       </div>
-    </div>
+    </form>
   </main>
   <script>
     (() => {
-      let buffer = '';
-      let lastKeyAt = 0;
-      let inFlight = false;
-      const status = document.getElementById('card-scan-status');
-      const scenarioStatus = document.getElementById('scenario-scan-status');
+      const form = document.getElementById('new-game-card-flow');
       const partyStep = document.getElementById('party-selection-step');
       const scenarioStep = document.getElementById('scenario-selection-step');
       const stepLabel = document.getElementById('new-game-step-label');
       const title = document.getElementById('new-game-title');
       const description = document.getElementById('new-game-description');
-      let stage = 'party';
-      const setStage = nextStage => {
-        stage = nextStage === 'scenario' ? 'scenario' : 'party';
+      const status = document.getElementById('party-selection-status');
+      const cancel = document.getElementById('cancel-new-game');
+      const back = document.getElementById('back-to-party');
+      const next = document.getElementById('continue-to-scenario');
+      const start = document.getElementById('start-new-game');
+      const actorInputs = [...document.querySelectorAll('input[name="character_ids"]')];
+
+      const updateSelection = changedInput => {
+        const selected = actorInputs.filter(input => input.checked);
+        if (selected.length > 5 && changedInput) changedInput.checked = false;
+        const accepted = actorInputs.filter(input => input.checked);
+        actorInputs.forEach(input => {
+          const card = input.closest('.roster-card');
+          card.classList.toggle('selected', input.checked);
+          card.setAttribute('aria-selected', input.checked ? 'true' : 'false');
+          card.querySelector('[data-selection-state]').textContent = input.checked
+            ? 'wybrano'
+            : 'kliknij, aby wybrać';
+        });
+        next.disabled = accepted.length < 1;
+        status.textContent = accepted.length
+          ? `Wybrano: ${accepted.length} z 5 bohaterów.`
+          : 'Nie wybrano jeszcze żadnego bohatera.';
+      };
+
+      const setStage = stage => {
         const choosingScenario = stage === 'scenario';
         partyStep.hidden = choosingScenario;
         scenarioStep.hidden = !choosingScenario;
+        cancel.hidden = choosingScenario;
+        next.hidden = choosingScenario;
+        back.hidden = !choosingScenario;
+        start.hidden = !choosingScenario;
         stepLabel.textContent = choosingScenario ? 'Nowa gra · krok 2 z 2' : 'Nowa gra · krok 1 z 2';
         title.textContent = choosingScenario ? 'Wybierz scenariusz' : 'Wybierz drużynę';
         description.textContent = choosingScenario
-          ? 'Wybierz dostępną kampanię i zeskanuj ACCEPT, aby rozpocząć.'
-          : 'Zeskanuj od 1 do 5 kart bohaterów. Kolejność skanowania ustala kolejność drużyny.';
+          ? 'Sprawdź scenariusz i rozpocznij grę wybraną drużyną.'
+          : 'Kliknij od 1 do 5 bohaterów, którzy wezmą udział w grze.';
       };
-      const updateSelection = ids => {
-        const order = new Map((ids || []).map((id, index) => [String(id), index + 1]));
-        document.querySelectorAll('[data-actor-id]').forEach(card => {
-          const selected = order.has(card.dataset.actorId);
-          card.setAttribute('aria-selected', selected ? 'true' : 'false');
-          card.classList.toggle('selected', selected);
-          const copy = card.querySelector('[data-selection-order]');
-          if (copy) copy.textContent = selected ? `wybór ${order.get(card.dataset.actorId)}` : 'zeskanuj kartę';
-        });
-      };
-      const send = async payload => {
-        if (inFlight) return;
-        inFlight = true;
-        const scenario = document.querySelector('input[name="scenario_id"]:checked');
-        try {
-          const response = await fetch('/api/new-game/card-scan', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({payload, scenario_id: scenario ? scenario.value : ''}),
-          });
-          const data = await response.json();
-          updateSelection(data.selected_actor_ids || []);
-          setStage(data.stage || stage);
-          if (!response.ok) {
-            (stage === 'scenario' ? scenarioStatus : status).textContent = data.error || 'Nie udało się odczytać karty.';
-            return;
-          }
-          if (data.redirect) {
-            window.location.assign(data.redirect);
-            return;
-          }
-          if (data.effect === 'party_confirmed') {
-            scenarioStatus.textContent = 'Drużyna zatwierdzona. Wybierz scenariusz i ponownie zeskanuj ACCEPT.';
-          } else if (data.effect === 'new_game_back_to_party') {
-            status.textContent = 'Wrócono do wyboru drużyny.';
-          } else {
-            status.textContent = data.actor_name
-              ? `${data.actor_name}: dodano do drużyny.`
-              : data.removed_actor_id
-                ? 'Usunięto ostatniego bohatera.'
-                : 'Karta odczytana; skład bez zmian.';
-          }
-        } catch (_error) {
-          status.textContent = 'Czytnik wysłał kartę, ale aplikacja nie odpowiedziała.';
-        } finally {
-          inFlight = false;
-        }
-      };
-      window.addEventListener('keydown', event => {
-        const now = Date.now();
-        if (now - lastKeyAt > 120) buffer = '';
-        lastKeyAt = now;
-        if (event.key === 'Enter') {
-          const payload = buffer.trim();
-          buffer = '';
-          if (payload.startsWith('dndbg')) {
-            event.preventDefault();
-            send(payload);
-          }
-          return;
-        }
-        if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
-          buffer += event.key;
-        }
-      }, true);
-      setStage('party');
+
+      actorInputs.forEach(input => input.addEventListener('change', () => updateSelection(input)));
+      next.addEventListener('click', () => setStage('scenario'));
+      back.addEventListener('click', () => setStage('party'));
+      updateSelection();
+      setStage(form.dataset.initialStage === 'scenario' ? 'scenario' : 'party');
     })();
   </script>
 </body>

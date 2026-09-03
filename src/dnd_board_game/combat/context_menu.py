@@ -33,10 +33,14 @@ class CombatMenuAction(StrEnum):
     LOOT_ITEM = "loot_item"
     LOOT_CURRENCY = "loot_currency"
     EQUIP_WEAPON = "equip_weapon"
+    CHANGE_WEAPON = "change_weapon"
     STOW_WEAPON = "stow_weapon"
     DROP_WEAPON = "drop_weapon"
     DON_SHIELD = "don_shield"
     DOFF_SHIELD = "doff_shield"
+    OPEN_WEAPON_MENU = "open_weapon_menu"
+    OPEN_ITEM_MENU = "open_item_menu"
+    SELECT_ITEM_ACTION = "select_item_action"
     SELECT_ATTACK_SOURCE = "select_attack_source"
     SELECT_HEALING_SOURCE = "select_healing_source"
     COMBAT_ACTION = "combat_action"
@@ -48,6 +52,7 @@ class CombatMenuAction(StrEnum):
     HELP = "help"
     READY = "ready"
     HIDE = "hide"
+    END_HIDE = "end_hide"
     SEARCH = "search"
     ESCAPE_NET = "escape_net"
     SHOVE = "shove"
@@ -81,6 +86,7 @@ class CombatMenuOption:
     shove_mode: str | None = None
     grapple_mode: str | None = None
     provider: str = ""
+    group_label: str = ""
 
     def as_payload(self) -> dict[str, object]:
         return {
@@ -106,6 +112,7 @@ class CombatMenuOption:
             "shove_mode": self.shove_mode,
             "grapple_mode": self.grapple_mode,
             "provider": self.provider,
+            "group_label": self.group_label,
         }
 
 

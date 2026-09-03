@@ -5,7 +5,7 @@
   "source_pack_ids": ["project_original"],
   "id": "ostatni_transport_01_glodne_cienie",
   "name": "Ostatni transport — Głodne Cienie",
-  "encounter_map_asset": "maps/ostatni_transport_01/glodne_cienie_battlemap_base_v4.png",
+  "encounter_map_asset": "maps/ostatni_transport_01/glodne_cienie_battlemap_base_v5.png",
   "encounter_ai": {"profile_ref": "hungry_shadow_pack"},
   "board": {"cols": 20, "rows": 30},
   "actors": [
@@ -30,15 +30,20 @@
       "proficiency_bonus": 2,
       "item_refs": ["longsword"]
     },
-    {"id": "hungry_shadow_s1", "name": "Głodny Cień S1", "source_ref": "hungry_shadow", "ai_role": "skirmisher", "position": [6, 17]},
-    {"id": "hungry_shadow_s2", "name": "Głodny Cień S2", "source_ref": "hungry_shadow", "ai_role": "skirmisher", "position": [13, 17]},
-    {"id": "hungry_shadow_s3", "name": "Głodny Cień S3", "source_ref": "hungry_shadow", "ai_role": "skirmisher", "position": [13, 14]},
-    {"id": "hungry_shadow_s4", "name": "Głodny Cień S4", "source_ref": "hungry_shadow", "ai_role": "skirmisher", "position": [5, 12]},
-    {"id": "hungry_shadow_leader", "name": "Przewodnica Głodnych Cieni", "source_ref": "hungry_shadow_leader", "ai_role": "leader", "position": [6, 13]},
-    {"id": "hungry_shadow_solo", "name": "Osłabiony Głodny Cień", "source_ref": "hungry_shadow", "ai_role": "skirmisher", "position": [10, 17]}
+    {"id": "hungry_shadow_s1", "name": "Głodny Cień S1", "source_ref": "hungry_shadow", "ai_role": "skirmisher", "position": [6, 21]},
+    {"id": "hungry_shadow_s2", "name": "Głodny Cień S2", "source_ref": "hungry_shadow", "ai_role": "skirmisher", "position": [13, 21]},
+    {"id": "hungry_shadow_s3", "name": "Głodny Cień S3", "source_ref": "hungry_shadow", "ai_role": "flanker", "position": [14, 19]},
+    {"id": "hungry_shadow_s4", "name": "Głodny Cień S4", "source_ref": "hungry_shadow", "ai_role": "harrier", "position": [4, 18]},
+    {"id": "hungry_shadow_leader", "name": "Przewodnica Głodnych Cieni", "source_ref": "hungry_shadow_leader", "ai_role": "leader", "position": [6, 15]},
+    {"id": "hungry_shadow_solo", "name": "Osłabiony Głodny Cień", "source_ref": "hungry_shadow", "ai_role": "skirmisher", "position": [10, 21]}
   ],
   "player_start_zones": [
-    [[8, 27], [9, 27], [10, 27], [11, 27], [12, 27]]
+    [
+      [8,26], [9,26], [10,26], [11,26], [12,26],
+      [8,27], [9,27], [10,27], [11,27], [12,27],
+      [8,28], [9,28], [10,28], [11,28], [12,28],
+      [8,29], [9,29], [10,29], [11,29], [12,29]
+    ]
   ],
   "encounter_party_size_variants": [
     {
@@ -213,39 +218,6 @@
       "blocks_movement": false,
       "description": "Skrzynie są podczas walki elementem sceny, ale nie można ich jeszcze przeszukiwać.",
       "setup_mechanics": ["Pola skrzyń są przechodnie. Podczas tej walki nie można ich przeszukiwać."]
-    },
-    {
-      "id": "old_bell",
-      "name": "Stary dzwon",
-      "type": "interactable",
-      "positions": [[17,3]],
-      "visibility": "visible",
-      "blocks_movement": false,
-      "interaction_label": "Uderz w stary dzwon",
-      "description": "Metaliczny ton dzwonu nakłada się na Rezonans i dezorientuje stado.",
-      "setup_mechanics": ["Bohater stojący obok może zużyć akcję, aby uderzyć w dzwon. Pierwsze uderzenie obniża morale stada o 2; kolejne są tylko hałasem."],
-      "interactions": [
-        {
-          "id": "ring_old_bell",
-          "label": "Uderz w stary dzwon",
-          "description": "Bohater poświęca akcję. Dzwon obniża morale stada o 2; każde kolejne uderzenie jest już tylko hałasem.",
-          "conditions": [
-            {"type": "action_available"},
-            {"type": "actor_adjacent_to_object"}
-          ],
-          "effects": [
-            {
-              "type": "enemy_ai_morale_event",
-              "parameters": {
-                "event_id": "old_bell_rung",
-                "delta": -2,
-                "minimum": 0,
-                "message": "Dźwięk starego dzwonu rozrywa rytm stada. Morale Głodnych Cieni spada o 2."
-              }
-            }
-          ]
-        }
-      ]
     },
     {
       "id": "north_escape",

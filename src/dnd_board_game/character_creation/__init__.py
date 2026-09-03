@@ -78,7 +78,10 @@ from .choice_help import (
     SkillChoiceHelp,
 )
 from .default_roster import all_default_character_drafts, default_character_drafts
-from .boardgame_profiles import apply_boardgame_archetype
+from .boardgame_profiles import (
+    apply_boardgame_archetype,
+    reconcile_boardgame_feature_removals,
+)
 from .archetypes import (
     HERO_ARCHETYPES,
     HERO_ARCHETYPES_BY_ID,
@@ -173,6 +176,7 @@ __all__ = [
     "default_character_drafts",
     "all_default_character_drafts",
     "apply_boardgame_archetype",
+    "reconcile_boardgame_feature_removals",
     "HERO_ARCHETYPES",
     "HERO_ARCHETYPES_BY_ID",
     "PLAYABLE_HERO_ARCHETYPES",

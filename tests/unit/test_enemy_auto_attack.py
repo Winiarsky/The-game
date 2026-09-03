@@ -9,6 +9,8 @@ from dnd_board_game.actors import (
     DamageAffinityProfile,
     DeathSaveState,
     Faction,
+    FeatureGrant,
+    FeatureSourceKind,
     RecoveryPeriod,
 )
 from dnd_board_game.combat import (
@@ -100,6 +102,39 @@ def test_enemy_auto_attack_hits_with_deterministic_rng_and_applies_damage():
     assert updated_hero.max_hp == 20
     assert "trafia" in result.message
     assert "HP 20 -> 16" in result.message
+
+
+def test_enemy_who_sees_stealthing_mira_gets_exposed_panic_flat_bonus() -> None:
+    enemy = _actor("goblin", Faction.ENEMY, Coordinate(1, 0))
+    mira = replace(
+        _actor("mira", Faction.ALLY, Coordinate(0, 0), hp=20),
+        features=(
+            FeatureGrant(
+                "flaw_exposed_panic",
+                "Skaza: Panika po zdemaskowaniu",
+                FeatureSourceKind.SCENARIO,
+                "test:mira",
+            ),
+        ),
+    )
+    state = replace(
+        start_combat((enemy, mira), _order(enemy, mira)),
+        hidden_states=(HiddenState("mira", 18, ("other_enemy",)),),
+    )
+
+    result = resolve_enemy_auto_attack(
+        BoardState(), state, enemy, _source(), random.Random(7)
+    )
+
+    assert result.attack_roll is not None
+    assert result.attack_roll.natural_roll == 11
+    assert result.attack_roll.mode == RollMode.NORMAL
+    assert result.attack_roll.total == 17
+    assert result.source is not None
+    assert any(
+        modifier.stacking_key == "flaw_exposed_panic_bonus"
+        for modifier in result.source.attack_roll_request.modifiers
+    )
 
 
 def test_damaging_attack_can_also_apply_temporary_on_hit_condition():

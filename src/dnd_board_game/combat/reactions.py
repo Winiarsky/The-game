@@ -11,8 +11,11 @@ class ReactionKind(StrEnum):
     DEFENSIVE_SPELL = "defensive_spell"
     SPELL_COUNTER = "spell_counter"
     CUTTING_WORDS = "cutting_words"
+    DISTRACTING_SHOUT = "distracting_shout"
+    COUNTERPOINT = "counterpoint"
     DEFLECT_MISSILES = "deflect_missiles"
     RETALIATION_SPELL = "retaliation_spell"
+    INSTINCTIVE_DODGE = "instinctive_dodge"
 
 
 class ReactionStage(StrEnum):

@@ -50,6 +50,33 @@ def test_active_effect_payload_exposes_source_duration_and_stacking() -> None:
     assert "źródło: Czar próbny" in str(payload["summary"])
 
 
+def test_round_limited_concentration_effect_counts_down_and_expires() -> None:
+    effect = ActiveEffect(
+        id="aura",
+        actor_id="dagna",
+        kind="bless_aura_source",
+        label="Błogosławieństwo",
+        object_id="spell:bless",
+        value=4,
+        duration=EffectDuration.CONCENTRATION,
+        radius_feet=10,
+        die_sides=4,
+        remaining_rounds=2,
+    )
+
+    first = expire_active_effects(
+        (effect,), EffectEvent(EffectEventType.ROUND_ENDED)
+    )
+    assert first.expired_effects == ()
+    assert first.active_effects[0].remaining_rounds == 1
+
+    second = expire_active_effects(
+        first.active_effects, EffectEvent(EffectEventType.ROUND_ENDED)
+    )
+    assert second.active_effects == ()
+    assert second.expired_effects == first.active_effects
+
+
 def test_apply_effect_replaces_or_refreshes_shared_stacking_key() -> None:
     old = _effect("old")
     replacement = _effect("new")

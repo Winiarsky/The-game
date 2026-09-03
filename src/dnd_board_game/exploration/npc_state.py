@@ -59,6 +59,43 @@ def npc_runtime_state_for(
     return next((item for item in state.npc_states if item.npc_id == npc_id), None)
 
 
+def npc_feature_used(
+    state: ExplorationState,
+    *,
+    npc_id: str,
+    feature_id: str,
+) -> bool:
+    current = npc_runtime_state_for(state, npc_id)
+    if current is None:
+        raise ValueError(f"Unknown NPC runtime state: {npc_id}.")
+    normalized = feature_id.strip().lower()
+    if not normalized:
+        raise ValueError("NPC feature id cannot be empty.")
+    return normalized in current.used_feature_ids
+
+
+def mark_npc_feature_used(
+    state: ExplorationState,
+    *,
+    npc_id: str,
+    feature_id: str,
+) -> ExplorationState:
+    current = npc_runtime_state_for(state, npc_id)
+    if current is None:
+        raise ValueError(f"Unknown NPC runtime state: {npc_id}.")
+    normalized = feature_id.strip().lower()
+    if not normalized:
+        raise ValueError("NPC feature id cannot be empty.")
+    updated = replace(
+        current,
+        used_feature_ids=tuple(dict.fromkeys((*current.used_feature_ids, normalized))),
+    )
+    return replace(
+        state,
+        npc_states=tuple(updated if item.npc_id == npc_id else item for item in state.npc_states),
+    )
+
+
 def plan_npc_attempt(
     state: ExplorationState,
     *,
@@ -234,6 +271,8 @@ __all__ = [
     "NpcAttemptPlan",
     "NpcRuntimeResolution",
     "npc_runtime_state_for",
+    "npc_feature_used",
+    "mark_npc_feature_used",
     "plan_npc_attempt",
     "resolve_npc_runtime_interaction",
     "set_npc_interaction_status",

@@ -45,6 +45,7 @@ from dnd_board_game.combat import (
     can_use_attack_action,
     consume_next_attack_effects,
     colossus_slayer_damage,
+    condition_blocks_actions,
     condition_hit_is_automatic_critical,
     commit_colossus_slayer_hit,
     commit_sneak_attack_hit,
@@ -62,6 +63,7 @@ from dnd_board_game.combat import (
     grid_distance_feet,
     is_hidden_from,
     plan_sneak_attack,
+    sneak_attack_source_with_dice,
     reveal_actor,
     replace_actor,
     record_ammunition_expenditure,
@@ -78,6 +80,7 @@ from dnd_board_game.combat import (
     use_bonus_action,
     use_bonus_attack,
     use_attack_action,
+    use_movement_action,
     versatile_two_handed_source_is_legal,
     apply_condition,
 )
@@ -97,6 +100,7 @@ from dnd_board_game.rules import (
     roll_instruction,
 )
 from dnd_board_game.inventory import (
+    ammunition_quantity,
     consume_ammunition,
     free_hand_count,
     has_ammunition,
@@ -104,6 +108,24 @@ from dnd_board_game.inventory import (
     item_power_available,
 )
 from dnd_board_game.world import BoardState, Coordinate
+
+from dnd_board_game.combat.erynd_features import (
+    commit_first_blood_hit,
+    first_blood_damage,
+    is_longbow_source,
+)
+from dnd_board_game.combat.mira_features import (
+    apply_mira_wound_rider,
+    collinear_second_target,
+    legal_rear_tile,
+)
+from dnd_board_game.combat.lorian_features import (
+    apply_lorian_optical_target_lock,
+    apply_lorian_shot_companion_effects,
+    is_lorian_hand_crossbow_source,
+    lorian_attacks_per_action,
+    validate_lorian_optical_target,
+)
 
 from .damage_presentation import applied_damage_message, applied_damage_payload
 from .player_combat_resource_flow import remove_concentration_effects
@@ -129,7 +151,10 @@ class PendingPlayerAttack:
     two_weapon_bonus: bool = False
     cast_level: int | None = None
     sneak_attack: bool = False
+    sneak_attack_dice: int = 0
     colossus_slayer: bool = False
+    first_blood: bool = False
+    on_hit_save_success: bool | None = None
     divine_smite_slot_level: int = 0
     class_bonus_attack: bool = False
     open_hand_technique: bool = False
@@ -139,6 +164,9 @@ class PendingPlayerAttack:
     twinned_second_attack: bool = False
     repelling_blast: bool = False
     miss_half_damage: bool = False
+    mira_rear_destination: Coordinate | None = None
+    mira_piercing_second_target_id: str | None = None
+    mira_piercing_second: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -263,6 +291,12 @@ class PlayerCombatActionFlowService:
         action = start_attack_action(board, attacker, state.actors, source, state.hidden_states)
         selected = select_attack_target(action, position=position)
         assert selected.selected_target is not None
+        validate_lorian_optical_target(
+            active_effects,
+            attacker_id=str(attacker.id),
+            target_id=selected.selected_target.id,
+            source=source,
+        )
         horde_breaker_effect = next(
             (
                 effect
@@ -354,6 +388,12 @@ class PlayerCombatActionFlowService:
             state, board, source, pending, scene_objects
         )
         effective_source = _source_for_pending(attacker, source, pending)
+        validate_lorian_optical_target(
+            active_effects,
+            attacker_id=str(attacker.id),
+            target_id=str(target.id),
+            source=effective_source,
+        )
         effective_source = attack_source_with_target_combat_effects(
             attacker,
             target,
@@ -452,6 +492,11 @@ class PlayerCombatActionFlowService:
                 active_effects,
                 str(attacker.id),
             )
+            triage_hampers_spell = any(
+                effect.actor_id == str(attacker.id)
+                and effect.kind == "flaw_triage_active"
+                for effect in active_effects
+            )
             if pending.twinned_target_id is not None:
                 twin = _actor_by_id(state, pending.twinned_target_id)
                 confirmation = self._area_spells.confirm_area_spell(
@@ -466,6 +511,16 @@ class PlayerCombatActionFlowService:
                             positioning,
                         ),
                     },
+                    advantaged_target_ids=(
+                        (pending.target_id, pending.twinned_target_id)
+                        if triage_hampers_spell
+                        else ()
+                    ),
+                    heightened_target_id=(
+                        pending.target_id
+                        if "nimra_forced_weave" in effective_source.metamagic_ids
+                        else None
+                    ),
                 )
                 saves = confirmation.saving_throws
             else:
@@ -484,7 +539,11 @@ class PlayerCombatActionFlowService:
                         effective_source,
                         positioning,
                     ),
-                    heightened="metamagic_heightened" in effective_source.metamagic_ids,
+                    heightened=bool(
+                        {"metamagic_heightened", "nimra_forced_weave"}
+                        & set(effective_source.metamagic_ids)
+                    ),
+                    target_advantaged=triage_hampers_spell,
                 )
                 confirmation = single
                 saves = (single.saving_throw,)
@@ -546,6 +605,14 @@ class PlayerCombatActionFlowService:
         updated_pending = replace(
             pending,
             stage="attack_roll",
+            **_mira_pending_fields(
+                board=board,
+                state=state,
+                attacker=attacker,
+                target=target,
+                source=effective_source,
+                positioning=positioning,
+            ),
             **_positioning_pending_fields(positioning),
         )
         instruction = roll_instruction(effective_source.attack_roll_request)
@@ -610,10 +677,15 @@ class PlayerCombatActionFlowService:
         natural_roll_2: int | None = None,
         natural_rerolls: tuple[int, ...] = (),
         mirror_image_roll: int | None = None,
+        rider_saving_roll: int | None = None,
         scene_objects: tuple[SceneObject, ...] = (),
     ) -> PlayerAttackTransition:
         if pending.stage != "attack_roll":
             raise ValueError("Nie ma oczekującego rzutu ataku gracza.")
+        if pending.mira_piercing_second:
+            # The follow-through reaches the tile immediately behind the
+            # adjacent first target, i.e. 10 feet from Mira.
+            source = replace(source, range_feet=max(10, source.range_feet))
         attacker, target, selected, positioning = _validated_attack(
             state, board, source, pending, scene_objects
         )
@@ -635,11 +707,22 @@ class PlayerCombatActionFlowService:
             attacker,
             target,
         )
+        sneak_attack_effects = (
+            tuple(
+                effect
+                for effect in active_effects
+                if not (
+                    pending.mira_piercing_second
+                    and effect.actor_id == str(attacker.id)
+                    and effect.kind == "sneak_attack_used"
+                )
+            )
+        )
         sneak_attack = plan_sneak_attack(
             state=state,
-            active_effects=active_effects,
+            active_effects=sneak_attack_effects,
             attacker=attacker,
-            target=selected.selected_target,
+            target=target,
             source=effective_source,
             roll_mode=effective_source.attack_roll_request.mode,
         )
@@ -671,6 +754,32 @@ class PlayerCombatActionFlowService:
                     f"{effective_source.damage_hint} + "
                     f"{colossus_component.hint()}"
                 ),
+            )
+        first_blood_component = (
+            first_blood_damage(
+                attacker,
+                selected.selected_target,
+                effective_source.damage_components[0].damage_type,
+            )
+            if is_longbow_source(effective_source)
+            and effective_source.damage_components
+            and not any(
+                effect.actor_id == str(attacker.id)
+                and effect.kind == "first_blood_used"
+                for effect in active_effects
+            )
+            else None
+        )
+        if first_blood_component is not None:
+            if effective_source.id == "double_shot":
+                first_blood_component = replace(
+                    first_blood_component,
+                    doubles_on_critical=False,
+                )
+            effective_source = replace(
+                effective_source,
+                damage_components=(*effective_source.damage_components, first_blood_component),
+                damage_hint=f"{effective_source.damage_hint} + {first_blood_component.hint()}",
             )
         attack_roll = resolve_d20_roll(
             _manual_d20_input(
@@ -708,6 +817,25 @@ class PlayerCombatActionFlowService:
             if not bonus_use.accepted:
                 raise ValueError(bonus_use.message)
             state_after_resource = bonus_use.state
+            accelerated_refrain_third_shot = (
+                str(attacker.id) == "lorian"
+                and is_lorian_hand_crossbow_source(effective_source)
+                and any(
+                    effect.actor_id == str(attacker.id)
+                    and effect.kind == "accelerated_refrain"
+                    for effect in active_effects
+                )
+                and not any(
+                    effect.actor_id == str(attacker.id)
+                    and effect.kind == "accelerated_refrain_cast_attack"
+                    for effect in active_effects
+                )
+            )
+            if accelerated_refrain_third_shot:
+                bonus_action_use = use_bonus_action(state_after_resource)
+                if not bonus_action_use.accepted:
+                    raise ValueError(bonus_action_use.message)
+                state_after_resource = bonus_action_use.state
         elif pending.two_weapon_bonus:
             bonus_use = use_bonus_action(state)
             if not bonus_use.accepted:
@@ -715,12 +843,23 @@ class PlayerCombatActionFlowService:
             state_after_resource = bonus_use.state
         else:
             if _uses_attack_action(effective_source):
+                state_for_attack = state
+                if (
+                    effective_source.id == "optical_scope"
+                    and state.turn_action.attacks_used == 0
+                ):
+                    movement_use = use_movement_action(state, attacker)
+                    if not movement_use.accepted:
+                        raise ValueError(movement_use.message)
+                    state_for_attack = movement_use.state
                 attack_use = use_attack_action(
-                    state,
+                    state_for_attack,
                     attacker,
-                    maximum_attacks=1
-                    if effective_source.loading or effective_source.limited_attacks
-                    else None,
+                    maximum_attacks=(
+                        1
+                        if effective_source.loading or effective_source.limited_attacks
+                        else lorian_attacks_per_action(attacker, effective_source)
+                    ),
                 )
                 if not attack_use.accepted:
                     raise ValueError(attack_use.message)
@@ -810,6 +949,30 @@ class PlayerCombatActionFlowService:
             str(attacker.id),
             selected.selected_target.id,
         )
+        updated_effects = apply_lorian_optical_target_lock(
+            updated_effects,
+            attacker_id=str(attacker.id),
+            target_id=selected.selected_target.id,
+            source=effective_source,
+        )
+        if effective_source.id == "guard_vault" and pending.mira_rear_destination is not None:
+            updated_effects = apply_active_effect(
+                updated_effects,
+                ActiveCombatEffect(
+                    id=f"guard-vault-escape:{attacker.id}:{target.id}",
+                    actor_id=str(attacker.id),
+                    kind="guard_vault_opportunity_ac",
+                    label="Przeskok przez gardę: osłona odejścia",
+                    object_id="class_feature:guard_vault",
+                    value=2,
+                    source_actor_id=str(attacker.id),
+                    target_actor_id=str(target.id),
+                    duration=EffectDuration.UNTIL_TURN_END,
+                    expiration_actor_id=str(attacker.id),
+                    stacking=EffectStackingPolicy.REPLACE,
+                    stacking_key=f"guard_vault_opportunity_ac:{attacker.id}:{target.id}",
+                ),
+            ).active_effects
         updated_effects = apply_mirror_image_outcome(
             updated_effects,
             mirror_outcome,
@@ -938,11 +1101,22 @@ class PlayerCombatActionFlowService:
                 ),
             ),
         )
-        revealed_state = replace(
-            state_after_resource,
-            hidden_states=reveal_actor(state_after_resource.hidden_states, str(attacker.id)),
+        defer_reveal = effective_source.id == "piercing_attack" and not pending.mira_piercing_second
+        revealed_state = (
+            state_after_resource
+            if defer_reveal and resolution.hit
+            else replace(
+                state_after_resource,
+                hidden_states=reveal_actor(state_after_resource.hidden_states, str(attacker.id)),
+            )
         )
         if not resolution.hit:
+            if effective_source.id == "guard_vault" and pending.mira_rear_destination is not None:
+                moved = _actor_by_id(revealed_state, str(attacker.id))
+                revealed_state = replace_actor(
+                    revealed_state,
+                    replace(moved, position=pending.mira_rear_destination),
+                )
             if effective_source.miss_damage_on_failure == "half":
                 return PlayerAttackTransition(
                     state=revealed_state,
@@ -979,6 +1153,35 @@ class PlayerCombatActionFlowService:
                 event_payload=event_payload,
                 clear_combat_help=True,
                 clear_movement_preview=True,
+            )
+        on_hit_save_success: bool | None = None
+        if effective_source.on_hit_save_ability is not None:
+            if rider_saving_roll is None or not 1 <= rider_saving_roll <= 20:
+                raise ValueError("Efekt trafienia wymaga legalnego rzutu obronnego k20.")
+            rider_save = resolve_actor_saving_throw(
+                target,
+                SavingThrowRequest(
+                    effective_source.on_hit_save_ability,
+                    effective_source.on_hit_save_dc,
+                    effective_source.name,
+                ),
+                natural_roll=rider_saving_roll,
+                condition_states=state.condition_states,
+                combat_actors=state.actors,
+            )
+            on_hit_save_success = rider_save.success
+            outcome = (
+                "sukces — ruch spada o połowę"
+                if rider_save.success
+                else "porażka — dobrowolny ruch spada do zera"
+            )
+            message += (
+                f" {target.name}: obrona Siły {rider_save.total} przeciw "
+                f"ST {rider_save.dc}, {outcome}."
+            )
+            event_payload = (
+                *event_payload,
+                ("rider_saving_throw", rider_save.as_payload()),
             )
         if effective_source.on_hit_condition is not None:
             target_actor = _actor_by_id(revealed_state, pending.target_id)
@@ -1044,7 +1247,21 @@ class PlayerCombatActionFlowService:
             hit=True,
             critical=resolution.critical,
             sneak_attack=sneak_attack.eligible,
+            sneak_attack_dice=(
+                next(
+                    (
+                        component.dice.count
+                        for component in sneak_attack.source.damage_components
+                        if component.id == "sneak_attack" and component.dice is not None
+                    ),
+                    0,
+                )
+                if sneak_attack.eligible
+                else 0
+            ),
             colossus_slayer=colossus_component is not None,
+            first_blood=first_blood_component is not None,
+            on_hit_save_success=on_hit_save_success,
             open_hand_technique=(
                 pending.class_bonus_attack
                 and effective_source.id == "unarmed_strike"
@@ -1104,14 +1321,18 @@ class PlayerCombatActionFlowService:
             active_effects,
         )
         if pending.sneak_attack:
-            effective_source = plan_sneak_attack(
-                state=state,
-                active_effects=active_effects,
-                attacker=attacker,
-                target=target,
-                source=effective_source,
-                roll_mode=RollMode.NORMAL,
-            ).source
+            effective_source = (
+                sneak_attack_source_with_dice(effective_source, pending.sneak_attack_dice)
+                if pending.sneak_attack_dice > 0
+                else plan_sneak_attack(
+                    state=state,
+                    active_effects=active_effects,
+                    attacker=attacker,
+                    target=target,
+                    source=effective_source,
+                    roll_mode=RollMode.NORMAL,
+                ).source
+            )
         if pending.colossus_slayer and effective_source.damage_components:
             component = colossus_slayer_damage(
                 attacker,
@@ -1124,6 +1345,28 @@ class PlayerCombatActionFlowService:
                     damage_components=(*effective_source.damage_components, component),
                     damage_hint=f"{effective_source.damage_hint} + {component.hint()}",
                 )
+        if pending.first_blood and effective_source.damage_components:
+            component = first_blood_damage(
+                attacker,
+                target,
+                effective_source.damage_components[0].damage_type,
+            )
+            if component is not None:
+                if effective_source.id == "double_shot":
+                    component = replace(component, doubles_on_critical=False)
+                effective_source = replace(
+                    effective_source,
+                    damage_components=(*effective_source.damage_components, component),
+                    damage_hint=f"{effective_source.damage_hint} + {component.hint()}",
+                )
+        if (
+            pending.on_hit_save_success
+            and effective_source.on_hit_save_success_effect_kind is not None
+        ):
+            effective_source = replace(
+                effective_source,
+                on_hit_effect_kind=effective_source.on_hit_save_success_effect_kind,
+            )
         state_for_damage = state
         if pending.divine_smite_slot_level:
             if (
@@ -1202,6 +1445,24 @@ class PlayerCombatActionFlowService:
         )
         applied = resolution.applied_damage
         resolved_state = resolution.state
+        wound = apply_mira_wound_rider(
+            resolved_state.condition_states,
+            _actor_by_id(resolved_state, pending.target_id),
+            action_id=effective_source.id,
+            source_actor_id=str(attacker.id),
+            applied_damage=applied.damage.total_applied,
+        )
+        if wound.applied:
+            resolved_state = replace(
+                resolved_state,
+                condition_states=wound.condition_states,
+            )
+        if effective_source.id == "guard_vault" and pending.mira_rear_destination is not None:
+            moved = _actor_by_id(resolved_state, str(attacker.id))
+            resolved_state = replace_actor(
+                resolved_state,
+                replace(moved, position=pending.mira_rear_destination),
+            )
         additional_applied: list[AppliedDamageResult] = []
         if pending.twinned_target_id is not None and pending.saving_throws:
             twin_save = next(
@@ -1263,6 +1524,11 @@ class PlayerCombatActionFlowService:
                 updated_effects,
                 str(attacker.id),
             )
+        if pending.first_blood:
+            updated_effects = commit_first_blood_hit(
+                updated_effects,
+                str(attacker.id),
+            )
         if applied.damage.total_applied > 0:
             updated_effects = tuple(
                 effect
@@ -1316,12 +1582,26 @@ class PlayerCombatActionFlowService:
                 actor_id=str(target.id),
                 kind=effective_source.on_hit_effect_kind,
                 label=effective_source.name,
-                object_id=f"spell:{effective_source.id}",
-                value=effective_source.on_hit_effect_value,
+                object_id=(
+                    f"spell:{effective_source.id}"
+                    if effective_source.source_type == AttackSourceType.SPELL
+                    else f"class_feature:{effective_source.id}"
+                ),
+                value=(
+                    applied.damage.total_applied
+                    if effective_source.on_hit_effect_kind == "lorian_provoked"
+                    and applied is not None
+                    else effective_source.on_hit_effect_value
+                ),
+                remaining_rounds=effective_source.on_hit_effect_remaining_rounds,
                 source_actor_id=str(attacker.id),
                 target_actor_id=str(target.id),
                 source=EffectSource(
-                    EffectSourceType.SPELL,
+                    (
+                        EffectSourceType.SPELL
+                        if effective_source.source_type == AttackSourceType.SPELL
+                        else EffectSourceType.ACTION
+                    ),
                     effective_source.id,
                     effective_source.name,
                 ),
@@ -1329,8 +1609,8 @@ class PlayerCombatActionFlowService:
                 expiration_actor_id=(
                     str(attacker.id)
                     if effective_source.on_hit_effect_kind
-                    == "guiding_bolt_mark"
-                    else None
+                    in {"guiding_bolt_mark", "erynd_exposed_ac", "lorian_provoked"}
+                    else str(target.id)
                 ),
                 additional_expirations=(
                     (
@@ -1341,6 +1621,13 @@ class PlayerCombatActionFlowService:
                     )
                     if effective_source.on_hit_effect_kind
                     == "guiding_bolt_mark"
+                    else (
+                        AdditionalEffectExpiration(
+                            EffectDuration.UNTIL_TURN_END,
+                            actor_id=str(target.id),
+                        ),
+                    )
+                    if effective_source.on_hit_effect_kind == "erynd_disrupted"
                     else ()
                 ),
                 stacking=EffectStackingPolicy.REFRESH,
@@ -1354,6 +1641,26 @@ class PlayerCombatActionFlowService:
                 updated_effects,
                 on_hit_effect,
             ).active_effects
+            updated_effects = apply_lorian_shot_companion_effects(
+                updated_effects,
+                attacker_id=str(attacker.id),
+                target_id=str(target.id),
+                source=effective_source,
+            )
+            if effective_source.on_hit_effect_kind == "erynd_disrupted":
+                application = apply_condition(
+                    resolved_state.condition_states,
+                    _actor_by_id(resolved_state, str(target.id)),
+                    CombatCondition.NO_REACTIONS,
+                    source_actor_id=str(attacker.id),
+                    source_label=effective_source.name,
+                    duration=EffectDuration.UNTIL_TURN_END,
+                    expiration_actor_id=str(target.id),
+                )
+                resolved_state = replace(
+                    resolved_state,
+                    condition_states=application.condition_states,
+                )
             if effective_source.on_hit_effect_kind == "ray_of_enfeeblement":
                 target_actor = _actor_by_id(resolved_state, str(target.id))
                 application = apply_condition(
@@ -1376,7 +1683,34 @@ class PlayerCombatActionFlowService:
                     resolved_state,
                     condition_states=application.condition_states,
                 )
-        next_pending = (
+        piercing_pending = (
+            replace(
+                pending,
+                target_id=pending.mira_piercing_second_target_id,
+                stage="attack_roll",
+                natural_roll=None,
+                natural_rolls=(),
+                total=None,
+                hit=None,
+                critical=False,
+                sneak_attack=False,
+                sneak_attack_dice=0,
+                mira_piercing_second_target_id=None,
+                mira_piercing_second=True,
+                twinned_second_attack=True,
+            )
+            if effective_source.id == "piercing_attack"
+            and not pending.mira_piercing_second
+            and pending.mira_piercing_second_target_id is not None
+            and applied.damage.total_applied > 0
+            else None
+        )
+        if effective_source.id == "piercing_attack" and piercing_pending is None:
+            resolved_state = replace(
+                resolved_state,
+                hidden_states=reveal_actor(resolved_state.hidden_states, str(attacker.id)),
+            )
+        next_pending = piercing_pending or (
             _twinned_second_attack_pending(pending)
             if pending.twinned_target_id is not None
             and not pending.saving_throws
@@ -1445,6 +1779,12 @@ class PlayerCombatActionFlowService:
         attacker, target, selected, positioning = _validated_attack(
             state, board, source, pending, scene_objects
         )
+        validate_lorian_optical_target(
+            active_effects,
+            attacker_id=str(attacker.id),
+            target_id=str(target.id),
+            source=source,
+        )
         effective_source = attack_source_with_target_combat_effects(
             attacker,
             target,
@@ -1471,12 +1811,20 @@ class PlayerCombatActionFlowService:
             )
         )
         if _uses_attack_action(effective_source):
+            state_for_attack = state
+            if effective_source.id == "optical_scope" and state.turn_action.attacks_used == 0:
+                movement_use = use_movement_action(state, attacker)
+                if not movement_use.accepted:
+                    raise ValueError(movement_use.message)
+                state_for_attack = movement_use.state
             attack_use = use_attack_action(
-                state,
+                state_for_attack,
                 attacker,
-                maximum_attacks=1
-                if effective_source.loading or effective_source.limited_attacks
-                else None,
+                maximum_attacks=(
+                    1
+                    if effective_source.loading or effective_source.limited_attacks
+                    else lorian_attacks_per_action(attacker, effective_source)
+                ),
             )
             if not attack_use.accepted:
                 raise ValueError(attack_use.message)
@@ -1520,6 +1868,12 @@ class PlayerCombatActionFlowService:
             active_effects,
             str(attacker.id),
             selected.selected_target.id,
+        )
+        updated_effects = apply_lorian_optical_target_lock(
+            updated_effects,
+            attacker_id=str(attacker.id),
+            target_id=selected.selected_target.id,
+            source=effective_source,
         )
         triggered_state = set_two_weapon_trigger(
             state_after_resource,
@@ -1589,6 +1943,53 @@ class PlayerCombatActionFlowService:
                 updated_state = damage_resolution.state
                 applied = damage_resolution.applied_damage
                 message = f"{message} {_damage_application_message(applied)}"
+            if effective_source.on_hit_effect_kind in {
+                "lorian_mocked_attack",
+                "lorian_provoked",
+            }:
+                lorian_effect = ActiveCombatEffect(
+                    id=(
+                        f"{effective_source.on_hit_effect_kind}:"
+                        f"{attacker.id}:{target.id}:{effective_source.id}"
+                    ),
+                    actor_id=str(target.id),
+                    kind=effective_source.on_hit_effect_kind,
+                    label=effective_source.name,
+                    object_id=f"class_feature:{effective_source.id}",
+                    value=(
+                        applied.damage.total_applied
+                        if effective_source.on_hit_effect_kind == "lorian_provoked"
+                        and applied is not None
+                        else effective_source.on_hit_effect_value
+                    ),
+                    source_actor_id=str(attacker.id),
+                    target_actor_id=str(target.id),
+                    source=EffectSource(
+                        EffectSourceType.ACTION,
+                        effective_source.id,
+                        effective_source.name,
+                    ),
+                    duration=effective_source.on_hit_effect_duration,
+                    expiration_actor_id=(
+                        str(attacker.id)
+                        if effective_source.on_hit_effect_kind == "lorian_provoked"
+                        else str(target.id)
+                    ),
+                    stacking=EffectStackingPolicy.REFRESH,
+                    stacking_key=(
+                        f"{effective_source.on_hit_effect_kind}:{target.id}"
+                    ),
+                )
+                updated_effects = apply_active_effect(
+                    updated_effects,
+                    lorian_effect,
+                ).active_effects
+                updated_effects = apply_lorian_shot_companion_effects(
+                    updated_effects,
+                    attacker_id=str(attacker.id),
+                    target_id=str(target.id),
+                    source=effective_source,
+                )
         return PlayerAttackTransition(
             state=updated_state,
             active_effects=updated_effects,
@@ -1683,8 +2084,11 @@ def _require_usable_source(
     ):
         raise ValueError(f"Brak dostępnych użyć: {source.name}.")
     ammunition_type = getattr(source, "ammunition_type", None)
-    if ammunition_type is not None and not has_ammunition(actor, ammunition_type):
-        raise ValueError(f"Brak amunicji typu {ammunition_type} dla {source.name}.")
+    ammunition_cost = int(getattr(source, "ammunition_cost", 1))
+    if ammunition_type is not None and ammunition_quantity(actor, ammunition_type) < ammunition_cost:
+        raise ValueError(
+            f"{source.name} wymaga {ammunition_cost} szt. amunicji typu {ammunition_type}."
+        )
     if ammunition_type is not None and source_item_id is not None:
         weapon = next(
             (
@@ -1723,10 +2127,13 @@ def _consume_attack_ammunition(
 ) -> CombatState:
     if source.ammunition_type is None:
         return state
-    actor = _actor_by_id(state, actor_id)
-    usage = consume_ammunition(actor, source.ammunition_type)
-    recorded = record_ammunition_expenditure(state, actor, usage)
-    return replace_actor(recorded, usage.actor_after)
+    updated = state
+    for _ in range(source.ammunition_cost):
+        actor = _actor_by_id(updated, actor_id)
+        usage = consume_ammunition(actor, source.ammunition_type)
+        updated = record_ammunition_expenditure(updated, actor, usage)
+        updated = replace_actor(updated, usage.actor_after)
+    return updated
 
 
 def _validated_attack(
@@ -1758,8 +2165,42 @@ def _validated_attack(
         scene_objects,
         state.condition_states,
     )
+    if source.id == "piercing_attack" and not positioning.flanking_ally_ids:
+        # A strict opposite-side flank would occupy the exact tile required by
+        # the second target.  For this technique an ally engaging the first
+        # target from another adjacent tile creates the flanking opening.
+        support_ids = tuple(
+            str(candidate.id)
+            for candidate in state.actors
+            if candidate.id not in {attacker.id, target.id}
+            and candidate.faction == attacker.faction
+            and candidate.faction != Faction.NEUTRAL
+            and not candidate.is_defeated()
+            and not condition_blocks_actions(
+                state.condition_states,
+                str(candidate.id),
+            )
+            and grid_distance_feet(candidate.position, target.position) <= 5
+        )
+        if support_ids:
+            positioning = replace(positioning, flanking_ally_ids=support_ids)
     if positioning.total_cover:
         raise ValueError("Cel ma pełną osłonę i nie może zostać zaatakowany.")
+    if source.id in {"hamstring_cut", "piercing_attack"} and not positioning.flanking_ally_ids:
+        raise ValueError(f"{source.name} wymaga osobistej flanki Miry.")
+    if source.id == "blade_mistress" and not is_hidden_from(
+        state.hidden_states,
+        str(attacker.id),
+        str(target.id),
+    ):
+        raise ValueError("Mistrzyni ostrzy wymaga celu, który nie widzi ukrytej Miry.")
+    if source.id == "guard_vault" and legal_rear_tile(
+        board,
+        attacker,
+        target,
+        state.actors,
+    ) is None:
+        raise ValueError("Za celem nie ma wolnego legalnego pola dla Przeskoku przez gardę.")
     selected = replace(
         selected,
         selected_target=replace(
@@ -1768,6 +2209,34 @@ def _validated_attack(
         ),
     )
     return attacker, target, selected, positioning
+
+
+def _mira_pending_fields(
+    *,
+    board: BoardState,
+    state: CombatState,
+    attacker: Actor,
+    target: Actor,
+    source: AttackSource,
+    positioning: AttackPositioning,
+) -> dict[str, object]:
+    if source.id == "guard_vault":
+        return {
+            "mira_rear_destination": legal_rear_tile(
+                board,
+                attacker,
+                target,
+                state.actors,
+            )
+        }
+    if source.id == "piercing_attack":
+        second = collinear_second_target(attacker, target, state.actors)
+        return {
+            "mira_piercing_second_target_id": (
+                str(second.id) if second is not None else None
+            )
+        }
+    return {}
 
 
 def _positioning_pending_fields(positioning: AttackPositioning) -> dict[str, object]:

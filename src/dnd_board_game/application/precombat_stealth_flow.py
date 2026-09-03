@@ -8,6 +8,7 @@ from dnd_board_game.actors import (
     ExhaustionRollKind,
     Faction,
     apply_exhaustion_to_roll_request,
+    actor_has_feature,
     skill_modifier,
     skill_roll_modifiers,
 )
@@ -69,6 +70,8 @@ def resolve_precombat_stealth(
         raise ValueError(f"Nieznany bohater próby skradania: {actor_id}.")
     if actor.faction != Faction.ALLY or actor.is_defeated():
         raise ValueError("Przed starciem może skradać się tylko przytomny bohater drużyny.")
+    if not actor_has_feature(actor, "mira_shadow_stealth"):
+        raise ValueError("Spośród bohaterów tylko Mira może korzystać z mechaniki ukrycia.")
     if any(attempt.actor_id == actor_id for attempt in attempts):
         raise ValueError(f"{actor.name} wykorzystał już próbę skradania przed tym starciem.")
 

@@ -1,0 +1,31 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["project_original"],
+  "id": "healing_grace_aura",
+  "name": "Aura Uzdrawiającej Łaski",
+  "level": 2,
+  "school": "evocation",
+  "casting_time": "action",
+  "range": {"kind": "self"},
+  "components": {"verbal": true, "somatic": true, "materials": []},
+  "duration": {"kind": "round", "amount": 3},
+  "concentration": true,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "targeted_status",
+    "label": "Aura Uzdrawiającej Łaski",
+    "target_faction": "self",
+    "target_count": 1,
+    "effect_kind": "healing_grace_aura_source",
+    "aura_radius_feet": 10,
+    "duration_rounds": 3,
+    "activation_count_ability": "wisdom",
+    "bonus_die_sides": 8,
+    "bonus_modifier_ability": "wisdom",
+    "cast_flag": "cast_healing_grace_aura",
+    "instructions": "Przez 3 rundy leczenie sojusznika w promieniu 10 stóp otrzymuje premię 1k8 + Mądrość Dagny. Liczba aktywacji jest równa jej modyfikatorowi Mądrości, minimum 1."
+  }
+}

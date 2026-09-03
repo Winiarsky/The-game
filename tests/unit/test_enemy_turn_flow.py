@@ -25,6 +25,7 @@ from dnd_board_game.combat import (
     InitiativeEntry,
     InitiativeOrder,
     DamageType,
+    HiddenState,
     start_combat,
     has_condition,
 )
@@ -78,6 +79,18 @@ def _source() -> AttackSource:
     )
 
 
+def _stage_command(variant: str, target_id: str = "enemy") -> ActiveCombatEffect:
+    return ActiveCombatEffect(
+        id=f"stage-command:{variant}:{target_id}",
+        actor_id=target_id,
+        kind=f"stage_command:{variant}",
+        label=f"Rozkaz sceniczny: {variant}",
+        object_id="combat_action:stage_command",
+        value=0,
+        source_actor_id="lorian",
+    )
+
+
 def test_plan_validates_enemy_turn_and_preserves_intent_event() -> None:
     service = EnemyTurnFlowService()
     enemy = _actor("enemy", Faction.ENEMY, Coordinate(0, 0))
@@ -100,6 +113,163 @@ def test_plan_validates_enemy_turn_and_preserves_intent_event() -> None:
             board=BoardState(),
             attack_sources_by_actor={enemy.id: _source()},
         )
+
+
+@pytest.mark.parametrize(
+    ("variant", "enemy_col", "expected_col"),
+    [("approach", 8, 5), ("retreat", 3, 6)],
+)
+def test_stage_command_forces_at_most_fifteen_feet_then_enemy_still_acts(
+    variant: str,
+    enemy_col: int,
+    expected_col: int,
+) -> None:
+    service = EnemyTurnFlowService()
+    enemy = _actor("enemy", Faction.ENEMY, Coordinate(enemy_col, 0))
+    lorian = _actor("lorian", Faction.ALLY, Coordinate(0, 0))
+    ranged = replace(
+        _source(),
+        id="bow",
+        range_feet=60,
+        attack_kind=AttackKind.RANGED,
+    )
+
+    transition = service.plan(
+        state=_state(enemy, lorian),
+        board=BoardState(),
+        attack_sources_by_actor={enemy.id: ranged},
+        active_effects=(_stage_command(variant),),
+    )
+
+    assert transition.intent.enemy.position == Coordinate(expected_col, 0)
+    assert transition.intent.movement_path is not None
+    assert transition.intent.movement_path.cost_feet == 15
+    assert transition.intent.target is not None
+    assert transition.intent.target.id == "lorian"
+    assert "Rozkaz sceniczny" in transition.board_message
+
+
+def test_stage_command_silence_uses_weapon_instead_of_spell() -> None:
+    service = EnemyTurnFlowService()
+    enemy = _actor("enemy", Faction.ENEMY, Coordinate(0, 0))
+    lorian = _actor("lorian", Faction.ALLY, Coordinate(1, 0))
+    spell = replace(_source(), id="spell", source_type=AttackSourceType.SPELL)
+    weapon = replace(_source(), id="weapon")
+
+    transition = service.plan(
+        state=_state(enemy, lorian),
+        board=BoardState(),
+        attack_sources_by_actor={enemy.id: spell},
+        attack_source_options_by_actor={enemy.id: (spell, weapon)},
+        active_effects=(_stage_command("silence"),),
+    )
+
+    assert transition.intent.source_id in {"", "weapon"}
+    assert transition.intent.target is not None
+    resolved = service.resolve(
+        state=_state(enemy, lorian),
+        intent=transition.intent,
+        board=BoardState(),
+        attack_sources_by_actor={enemy.id: spell},
+        attack_source_options_by_actor={enemy.id: (spell, weapon)},
+        active_effects=(_stage_command("silence"),),
+        rng=Random(1),
+    )
+    assert resolved.result.source is not None
+    assert resolved.result.source.id == "weapon"
+
+
+def test_stage_command_silence_without_nonverbal_attack_finishes_without_loop() -> None:
+    service = EnemyTurnFlowService()
+    enemy = _actor("enemy", Faction.ENEMY, Coordinate(0, 0))
+    lorian = _actor("lorian", Faction.ALLY, Coordinate(1, 0))
+    spell = replace(_source(), id="spell", source_type=AttackSourceType.SPELL)
+
+    transition = service.plan(
+        state=_state(enemy, lorian),
+        board=BoardState(),
+        attack_sources_by_actor={enemy.id: spell},
+        active_effects=(_stage_command("silence"),),
+    )
+
+    assert transition.intent.target is None
+    assert transition.intent.action_used is True
+    assert transition.intent.intent == "stage_command_silence"
+
+
+def test_provoking_shot_prefers_lorian_only_when_he_is_a_legal_target() -> None:
+    service = EnemyTurnFlowService()
+    enemy = _actor("enemy", Faction.ENEMY, Coordinate(0, 0))
+    nearest = _actor("nearest", Faction.ALLY, Coordinate(1, 0))
+    lorian = _actor("lorian", Faction.ALLY, Coordinate(2, 0))
+    ranged = replace(
+        _source(),
+        id="bow",
+        range_feet=15,
+        attack_kind=AttackKind.RANGED,
+    )
+    provoked = ActiveCombatEffect(
+        id="provoked:enemy",
+        actor_id="enemy",
+        kind="lorian_provoked",
+        label="Prowokujący ostrzał",
+        object_id="class_feature:provoking_shot",
+        value=2,
+        source_actor_id="lorian",
+    )
+
+    transition = service.plan(
+        state=_state(enemy, nearest, lorian),
+        board=BoardState(),
+        attack_sources_by_actor={enemy.id: ranged},
+        active_effects=(provoked,),
+    )
+
+    assert transition.intent.target is not None
+    assert transition.intent.target.id == "lorian"
+
+
+def test_enemy_path_collision_reveals_only_that_observer_and_requires_replan() -> None:
+    service = EnemyTurnFlowService()
+    enemy = _actor("enemy", Faction.ENEMY, Coordinate(0, 0))
+    mira = replace(
+        _actor("mira", Faction.ALLY, Coordinate(1, 0)),
+        features=(
+            FeatureGrant(
+                "mira_shadow_stealth",
+                "Mistrzyni ukrycia",
+                FeatureSourceKind.SCENARIO,
+                "boardgame_archetype:mira",
+            ),
+        ),
+    )
+    visible_hero = _actor("hero", Faction.ALLY, Coordinate(4, 0))
+    state = replace(
+        _state(enemy, mira, visible_hero),
+        hidden_states=(HiddenState("mira", 18, ("enemy",)),),
+    )
+    sources = {enemy.id: _source()}
+
+    intent = service.plan(
+        state=state,
+        board=BoardState(),
+        attack_sources_by_actor=sources,
+    )
+    transition = service.resolve(
+        state=state,
+        intent=intent.intent,
+        board=BoardState(),
+        attack_sources_by_actor=sources,
+        active_effects=(),
+        rng=Random(1),
+    )
+
+    assert transition.kind == EnemyTurnTransitionKind.MOVEMENT
+    assert transition.message_title == "Przypadkowe wykrycie"
+    assert transition.result.accidentally_detected_actor_id == "mira"
+    assert transition.result.movement_path.destination == enemy.position
+    assert transition.result.state.hidden_states == ()
+    assert "skradanie automatycznie się kończy" in transition.message_body
 
 
 def test_adjacent_enemy_result_is_classified_as_attack_confirmation() -> None:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
@@ -107,6 +107,12 @@ class ActiveEffect:
     expiration_actor_id: str | None = None
     additional_expirations: tuple[AdditionalEffectExpiration, ...] = ()
     spell_level: int | None = None
+    radius_feet: int = 0
+    die_sides: int = 0
+    modifier: int = 0
+    uses_maximum: int = 0
+    remaining_rounds: int | None = None
+    excluded_positions: tuple[Coordinate, ...] = ()
 
     def __post_init__(self) -> None:
         duration_was_explicit = self.duration is not None
@@ -118,6 +124,12 @@ class ActiveEffect:
             raise ValueError("Active effect kind cannot be empty.")
         if self.spell_level is not None and self.spell_level < 0:
             raise ValueError("Active effect spell level cannot be negative.")
+        if self.radius_feet < 0 or self.radius_feet % 5 != 0:
+            raise ValueError("Active effect radius must be a non-negative multiple of 5 feet.")
+        if self.die_sides < 0 or self.uses_maximum < 0:
+            raise ValueError("Active effect dice and use limits cannot be negative.")
+        if self.remaining_rounds is not None and self.remaining_rounds < 1:
+            raise ValueError("Active effect remaining rounds must be positive.")
         if self.source is None:
             object.__setattr__(self, "source", _legacy_effect_source(self))
         if self.duration is None:
@@ -185,6 +197,15 @@ class ActiveEffect:
                 for expiration in self.additional_expirations
             ],
             "spell_level": self.spell_level,
+            "radius_feet": self.radius_feet,
+            "die_sides": self.die_sides,
+            "modifier": self.modifier,
+            "uses_maximum": self.uses_maximum,
+            "remaining_rounds": self.remaining_rounds,
+            "excluded_positions": [
+                [position.col, position.row]
+                for position in self.excluded_positions
+            ],
         }
         if self.anchor_position is not None:
             payload["anchor_position"] = [self.anchor_position.col, self.anchor_position.row]
@@ -244,7 +265,17 @@ def expire_active_effects(
 ) -> EffectExpirationResult:
     expired = tuple(effect for effect in active_effects if _expires_on(effect, event))
     expired_ids = {effect.id for effect in expired}
-    remaining = tuple(effect for effect in active_effects if effect.id not in expired_ids)
+    remaining = tuple(
+        replace(effect, remaining_rounds=effect.remaining_rounds - 1)
+        if (
+            event.event_type == EffectEventType.ROUND_ENDED
+            and effect.id not in expired_ids
+            and effect.remaining_rounds is not None
+        )
+        else effect
+        for effect in active_effects
+        if effect.id not in expired_ids
+    )
     return EffectExpirationResult(remaining, expired, event)
 
 
@@ -269,8 +300,33 @@ def effect_value_label(effect: ActiveEffect) -> str:
         return f"{_format_signed(effect.value)} do ataku"
     if effect.kind == "bless_roll_bonus":
         return f"k{effect.value} do ataków i rzutów obronnych"
+    if effect.kind == "bless_aura_source":
+        return f"aura {effect.radius_feet} ft, k{effect.die_sides or effect.value} do ataków i save'ów"
+    if effect.kind == "divine_care_aura_source":
+        return f"aura {effect.radius_feet} ft, -{abs(effect.value)} do ataku i obrażeń wrogów"
+    if effect.kind == "healing_grace_aura_source":
+        return (
+            f"aura {effect.radius_feet} ft, {effect.value}/{effect.uses_maximum} aktywacje, "
+            f"+1k{effect.die_sides}+{effect.modifier} do leczenia"
+        )
+    if effect.kind == "divine_care_aura_penalty":
+        return f"-{abs(effect.value)} do ataku i obrażeń"
+    if effect.kind == "healing_grace_aura_member":
+        return f"+1k{effect.die_sides}+{effect.modifier} do następnego leczenia w aurze"
     if effect.kind == "spell_ac_bonus":
         return f"{_format_signed(effect.value)} AC"
+    if effect.kind in {"garran_defensive_stance_ac", "garran_shield_wall_member"}:
+        return f"{_format_signed(effect.value)} KP"
+    if effect.kind == "garran_shield_wall_source":
+        return f"aura {effect.radius_feet} ft, +{effect.value} KP sojusznikom"
+    if effect.kind == "garran_rally_advantage":
+        return "przewaga na pierwszy test k20"
+    if effect.kind == "garran_guard_companion":
+        return "następny pojedynczy wrogi efekt trafia Garrana"
+    if effect.kind == "garran_command_half_movement":
+        return "połowa ruchu"
+    if effect.kind == "garran_command_no_movement":
+        return "brak dobrowolnego ruchu"
     return _format_signed(effect.value)
 
 
@@ -289,6 +345,15 @@ def effect_expiration_label(effect: ActiveEffect) -> str:
         "bless_roll_bonus": "znika po utracie koncentracji albo rzuceniu nowego czaru koncentracyjnego",
         "spell_ac_bonus": "znika na początku następnej tury chronionego aktora",
     }
+    if effect.remaining_rounds is not None:
+        suffix = (
+            "runda"
+            if effect.remaining_rounds == 1
+            else "rundy"
+            if 2 <= effect.remaining_rounds <= 4
+            else "rund"
+        )
+        return f"pozostało {effect.remaining_rounds} {suffix} albo do utraty koncentracji"
     if effect.kind in legacy_labels:
         return legacy_labels[effect.kind]
     labels = {
@@ -320,6 +385,12 @@ def _expires_on(effect: ActiveEffect, event: EffectEvent) -> bool:
     assert effect.duration is not None
     if event.event_type == EffectEventType.EFFECT_CONSUMED:
         return bool(event.effect_id) and effect.id == event.effect_id
+    if (
+        event.event_type == EffectEventType.ROUND_ENDED
+        and effect.remaining_rounds is not None
+        and effect.remaining_rounds <= 1
+    ):
+        return True
     if (
         effect.kind == "guiding_bolt_mark"
         and event.event_type == EffectEventType.ATTACK_RESOLVED

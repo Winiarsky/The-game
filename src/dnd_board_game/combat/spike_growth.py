@@ -26,7 +26,8 @@ def spike_growth_damaging_steps(
         1
         for position in path[1:]
         if any(
-            grid_distance_feet(position, zone.anchor_position) <= zone.value
+            position not in zone.excluded_positions
+            and grid_distance_feet(position, zone.anchor_position) <= zone.value
             for zone in zones
         )
     )

@@ -1,0 +1,8 @@
+{
+  "schema": "dnd_board_game.spell", "schema_version": 1, "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["project_original"], "id": "nimra_sticky_matrix", "name": "Lepka matryca",
+  "level": 1, "school": "conjuration", "casting_time": "action", "range": {"kind": "distance", "feet": 50},
+  "components": {"verbal": true, "somatic": true, "materials": []},
+  "duration": {"kind": "round", "amount": 3}, "concentration": false, "ritual": false,
+  "effect": {"kind": "combat_action", "action_type": "targeted_status", "label": "Lepka matryca", "effect_kind": "apply_condition", "condition": "prone", "save_ability": "dexterity", "target_faction": "any", "duration_rounds": 3, "area": {"shape": "cube", "length_feet": 10, "width_feet": 10, "target_mode": "all_creatures"}, "cast_flag": "cast_nimra_sticky_matrix", "instructions": "Kwadrat 10 stóp jest trudnym terenem przez 3 rundy. Istota przy rzuceniu, wejściu albo początku tury wykonuje obronę Zręczności; porażka Powala.", "resolution_mode": "automatic", "board_relevance": "direct"}
+}

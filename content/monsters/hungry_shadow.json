@@ -45,13 +45,8 @@
       "proficiency_id": "hungry_shadow_rend",
       "range_feet": 5,
       "reach_feet": 5,
-      "conditional_on_hit_save_ability": "strength",
-      "conditional_on_hit_save_dc": 12,
-      "conditional_on_hit_save_condition": "prone",
-      "conditional_on_hit_minimum_movement_feet": 10,
-      "conditional_on_hit_requires_adjacent_ally": true,
       "damage": {
-        "dice": "1d6",
+        "dice": "1d4",
         "modifier": 2,
         "damage_type": "slashing"
       }

@@ -10,10 +10,7 @@
   "level": 1,
   "school": "enchantment",
   "casting_time": "action",
-  "range": {
-    "kind": "distance",
-    "feet": 30
-  },
+  "range": {"kind": "self"},
   "components": {
     "verbal": true,
     "somatic": true,
@@ -24,22 +21,21 @@
       }
     ]
   },
-  "duration": {
-    "kind": "minute",
-    "amount": 1
-  },
+  "duration": {"kind": "round", "amount": 5},
   "concentration": true,
   "ritual": false,
   "effect": {
     "kind": "combat_action",
-    "action_type": "concentration_attack_bonus",
+    "action_type": "targeted_status",
     "label": "Błogosławieństwo",
     "value": 4,
-    "effect_kind": "bless_roll_bonus",
-    "target_faction": "ally",
-    "target_count": 3,
-    "upcast_targets_per_level": 1,
+    "effect_kind": "bless_aura_source",
+    "target_faction": "self",
+    "target_count": 1,
+    "aura_radius_feet": 10,
+    "duration_rounds": 5,
+    "bonus_die_sides": 4,
     "cast_flag": "cast_bless",
-    "instructions": "Wybrane cele dodają fizyczne k4 do rzutów ataku i rzutów obronnych podczas koncentracji."
+    "instructions": "Przez 5 rund Dagna i wszyscy sojusznicy w promieniu 10 stóp dodają fizyczne k4 do każdego ataku i rzutu obronnego. Aura porusza się razem z Dagną."
   }
 }

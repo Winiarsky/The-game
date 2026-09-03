@@ -80,10 +80,13 @@ class UiPendingState:
     reaction_window: ReactionWindow | None = None
     cutting_words_reaction_resolved: bool | None = None
     cutting_words_reaction_stage: str = ""
+    distracting_shout_reaction_resolved: bool | None = None
     defensive_spell_reaction_resolved: bool | None = None
     deflect_missiles_reaction_resolved: bool | None = None
+    hard_as_rock_reaction_resolved: bool | None = None
     counterspell_reaction_resolved: bool | None = None
     retaliation_spell_reaction_resolved: bool | None = None
+    instinctive_dodge_reaction_resolved: bool | None = None
     enemy_opportunity_attack: PendingEnemyOpportunityAttack | None = None
     ready_attack: PendingReadyAttack | None = None
     short_rest: PendingShortRest | None = None

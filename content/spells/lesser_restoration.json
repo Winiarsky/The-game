@@ -37,7 +37,7 @@
     "target_faction": "ally",
     "target_count": 1,
     "cast_flag": "cast_lesser_restoration",
-    "instructions": "Dotknięta istota kończy jedną chorobę albo jeden stan: Blinded, Deafened, Paralyzed lub Poisoned.",
+    "instructions": "Usuwa jeden obsługiwany negatywny stan celu. Jeśli cel ma jeden taki stan, system usuwa go automatycznie; przy kilku gracz wybiera jeden z listy.",
     "resolution_mode": "automatic",
     "board_relevance": "direct"
   }

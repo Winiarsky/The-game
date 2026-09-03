@@ -1,0 +1,25 @@
+{
+  "schema": "dnd_board_game.item",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["project_original"],
+  "id": "throwing_knife",
+  "name": "Nóż do rzucania",
+  "kind": "weapon",
+  "value_cp": 100,
+  "weight_lb": 0.5,
+  "description": "Wyważony nóż Miry. Ma planszowy zasięg 15 stóp i może korzystać z ataku z ukrycia.",
+  "properties": ["short", "light", "rigid", "metallic", "sharp", "cutting"],
+  "weapon": {
+    "category": "simple",
+    "attack_kind": "melee",
+    "attack_id": "throwing_knife_stab",
+    "properties": ["finesse", "light", "thrown"],
+    "normal_range_feet": 15,
+    "long_range_feet": 20,
+    "damage": {
+      "dice": "1d4",
+      "damage_type": "piercing"
+    }
+  }
+}

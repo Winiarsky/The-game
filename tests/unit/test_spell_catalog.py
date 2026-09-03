@@ -185,6 +185,26 @@ def test_repaired_first_level_control_spells_keep_their_srd_board_contracts() ->
     assert protection.duration.kind == SpellDurationKind.HOUR
 
 
+def test_lorians_thunderwave_uses_a_fifteen_foot_cone() -> None:
+    effect = _spell_data("thunderwave")["effect"]
+
+    assert effect["area"]["shape"] == "cone"
+    assert effect["area"]["length_feet"] == 15
+
+
+def test_nimras_lightning_path_has_board_chain_base_damage() -> None:
+    spell = _spell_data("nimra_lightning_path")
+
+    assert spell["range"] == {"kind": "distance", "feet": 60}
+    assert spell["effect"]["save_ability"] == "dexterity"
+    assert spell["effect"]["save_damage_on_success"] == "half"
+    assert spell["effect"]["damage"] == {
+        "dice": "3d6",
+        "modifier": 0,
+        "damage_type": "lightning",
+    }
+
+
 def test_all_second_level_srd_spell_names_are_presented_in_polish() -> None:
     assert {
         spell_id: _spell_data(spell_id)["name"]
@@ -448,7 +468,7 @@ def test_spike_growth_is_twenty_foot_persistent_board_zone() -> None:
     action = _parse_combat_action(effect, "catalog_caster")
 
     assert spell.name == "Kolczaste zarośla"
-    assert spell.range.feet == 150
+    assert spell.range.feet == 50
     assert spell.concentration is True
     assert collection == "combat_action"
     assert action.effect_kind == "spike_growth_zone"
@@ -473,9 +493,58 @@ def test_spiritual_weapon_is_non_concentration_bonus_action_summon() -> None:
     assert action.action_cost == ActionEconomyCost.BONUS_ACTION
     assert action.summon is not None
     assert action.summon.id == "spiritual_weapon"
+    assert action.summon.hp == 1
+    assert action.summon.ac == 18
     assert action.summon.speed_feet == 20
     assert action.summon.attack_range_feet == 5
     assert action.summon.attack_damage_type.value == "force"
+
+
+def test_dagna_board_spell_adjustments_are_data_driven() -> None:
+    sacred_data = _spell_data("sacred_flame")
+    sacred_spell = _parse_spell_definition(sacred_data, "sacred_flame")
+    sacred_collection, sacred_effect = _spell_effect_payload(
+        sacred_data,
+        sacred_spell,
+    )
+    sacred = _parse_attack(sacred_effect, "dagna")
+    guiding_data = _spell_data("guiding_bolt")
+    guiding_spell = _parse_spell_definition(guiding_data, "guiding_bolt")
+    guiding_collection, guiding_effect = _spell_effect_payload(
+        guiding_data,
+        guiding_spell,
+    )
+    guiding = _parse_attack(guiding_effect, "dagna")
+    bless_data = _spell_data("bless")
+    bless_spell = _parse_spell_definition(bless_data, "bless")
+    bless_collection, bless_effect = _spell_effect_payload(bless_data, bless_spell)
+    bless = _parse_combat_action(bless_effect, "dagna")
+    care_data = _spell_data("divine_care_aura")
+    care_spell = _parse_spell_definition(care_data, "divine_care_aura")
+    care_collection, care_effect = _spell_effect_payload(care_data, care_spell)
+    care = _parse_combat_action(care_effect, "dagna")
+    grace_data = _spell_data("healing_grace_aura")
+    grace_spell = _parse_spell_definition(grace_data, "healing_grace_aura")
+    grace_collection, grace_effect = _spell_effect_payload(grace_data, grace_spell)
+    grace = _parse_combat_action(grace_effect, "dagna")
+
+    assert sacred_collection == "attack"
+    assert sacred.area is not None
+    assert sacred.area.shape == SpellAreaShape.CONE
+    assert sacred.area.length_feet == 15
+    assert sacred.area.target_mode.value == "enemies"
+    assert guiding_collection == "attack"
+    assert guiding.damage_components[0].dice is not None
+    assert guiding.damage_components[0].dice.format() == "2d6"
+    assert bless_collection == care_collection == grace_collection == "combat_action"
+    assert bless.effect_kind == "bless_aura_source"
+    assert (bless.aura_radius_feet, bless.duration_rounds) == (10, 5)
+    assert care.effect_kind == "divine_care_aura_source"
+    assert (care.aura_radius_feet, care.duration_rounds) == (5, 5)
+    assert grace.effect_kind == "healing_grace_aura_source"
+    assert (grace.aura_radius_feet, grace.duration_rounds) == (10, 3)
+    assert grace.activation_count_ability == "wisdom"
+    assert (grace.bonus_die_sides, grace.bonus_modifier_ability) == (8, "wisdom")
 
 
 def test_suggestion_keeps_eight_hour_concentration_exploration_contract() -> None:

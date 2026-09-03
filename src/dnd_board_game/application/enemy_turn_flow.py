@@ -9,6 +9,7 @@ from dnd_board_game.actors import Actor, ActorId, Faction, actor_has_feature
 from dnd_board_game.combat import (
     ActiveCombatEffect,
     AttackSource,
+    AttackSourceType,
     CombatState,
     CombatStatus,
     CombatCondition,
@@ -25,19 +26,29 @@ from dnd_board_game.combat import (
     apply_damage_result,
     apply_condition,
     apply_save_damage_amount,
+    actor_as_combat_target,
     attack_source_with_target_combat_effects,
     current_actor,
     opportunity_attackers_for_movement,
     open_reaction_window,
     plan_enemy_turn,
+    plan_coordinated_pack_turn,
     plan_utility_enemy_turn,
     resolve_planned_enemy_turn,
     resolve_actor_saving_throw,
     resolve_damage,
     replace_actor,
+    redirect_guarded_single_target,
     reaction_available_for,
     start_attack_action,
     grid_distance_feet,
+    is_hidden_from,
+    legal_attack_targets,
+    movement_remaining,
+    path_with_condition_cost,
+    reveal_to_observer,
+    use_movement,
+    use_turn_action,
 )
 from dnd_board_game.rules import (
     RollModifier,
@@ -45,7 +56,9 @@ from dnd_board_game.rules import (
     SavingThrowRequest,
     SavingThrowResult,
 )
-from dnd_board_game.world import BoardState, Coordinate
+from dnd_board_game.world import BoardState, Coordinate, PathResult, movement_range
+
+from dnd_board_game.combat.stealth import actors_visible_for_pathfinding
 
 from .combat_reaction_flow import PlayerReactionFlowService, ReadyAttackTrigger
 from .damage_presentation import applied_damage_message, applied_damage_payload
@@ -83,6 +96,7 @@ class EnemyTurnResolutionTransition:
     threat_actor_ids: tuple[str, ...] = ()
     event_type: str = ""
     event_payload: tuple[tuple[str, object], ...] = ()
+    active_effects: tuple[ActiveCombatEffect, ...] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,25 +129,80 @@ class EnemyTurnFlowService:
         state: CombatState,
         board: BoardState,
         attack_sources_by_actor: Mapping[ActorId, AttackSource],
+        attack_source_options_by_actor: Mapping[ActorId, tuple[AttackSource, ...]] | None = None,
         multiattack_sources_by_actor: Mapping[ActorId, tuple[AttackSource, ...]] | None = None,
         scene_objects: tuple[SceneObject, ...] = (),
         ai_profile: EnemyAiProfile | None = None,
         ai_roles: Mapping[str, str] | None = None,
         ai_zone_positions: Mapping[str, tuple[Coordinate, ...]] | None = None,
+        active_effects: tuple[ActiveCombatEffect, ...] = (),
     ) -> EnemyTurnIntentTransition:
         enemy = _active_enemy(state)
+        role_by_actor = dict(ai_roles or {})
+        zones = dict(ai_zone_positions or {})
+        hazard_positions = (
+            zones.get(ai_profile.hazard_zone_tag, ())
+            if ai_profile is not None
+            else ()
+        )
+        state, enemy, command_path, command_message = _apply_stage_command_movement(
+            board,
+            state,
+            enemy,
+            active_effects,
+            hazard_positions=hazard_positions,
+        )
         source = _enemy_attack_source(
             state,
             enemy,
             attack_sources_by_actor,
             multiattack_sources_by_actor,
         )
-        if source is None:
-            raise ValueError(f"Aktor {enemy.name} nie ma zdefiniowanego ataku.")
-        role_by_actor = dict(ai_roles or {})
-        zones = dict(ai_zone_positions or {})
         role_id = role_by_actor.get(str(enemy.id), "")
+        source_options = (
+            tuple(attack_source_options_by_actor.get(enemy.id, ()))
+            if attack_source_options_by_actor is not None
+            else ()
+        ) or (source,)
+        if _stage_command_variant(active_effects, str(enemy.id)) == "silence":
+            source_options = tuple(
+                option
+                for option in source_options
+                if option is not None
+                and option.source_type != AttackSourceType.SPELL
+            )
+            if source is not None and source.source_type == AttackSourceType.SPELL:
+                source = source_options[0] if source_options else None
+        if source is None:
+            action = use_turn_action(state)
+            message = (
+                f"{command_message}{enemy.name} jest objęty rozkazem Milcz i nie ma "
+                "dostępnego ataku niewymagającego mowy."
+            )
+            intent = EnemyTurnPlan(
+                action.state,
+                enemy,
+                None,
+                message,
+                action_used=action.accepted,
+                intent="stage_command_silence",
+            )
+            return _intent_transition(intent, enemy)
         intent = (
+            plan_coordinated_pack_turn(
+                board,
+                state,
+                enemy,
+                source_options,
+                role_id=role_id,
+                actor_roles=role_by_actor,
+                escape_positions=zones.get(ai_profile.escape_zone_tag, ()),
+            )
+            if ai_profile is not None
+            and ai_profile.model == "coordinated_pack_v1"
+            and role_id
+            and "leader" in role_by_actor.values()
+            else
             plan_utility_enemy_turn(
                 board,
                 state,
@@ -150,22 +219,26 @@ class EnemyTurnFlowService:
             if ai_profile is not None and role_id
             else plan_enemy_turn(board, state, enemy, source)
         )
-        return EnemyTurnIntentTransition(
-            intent=intent,
-            enemy_id=str(enemy.id),
-            board_message=intent.message,
-            message_title="Zamiar przeciwnika",
-            message_body=f"{intent.message} Potwierdź Enterem albo przyciskiem.",
-            event_type="ui_combat_enemy_turn_intent",
-            event_payload=(
-                ("enemy_id", str(enemy.id)),
-                ("target_id", intent.target.id if intent.target is not None else None),
-                ("message", intent.message),
-                ("intent", intent.intent),
-                ("utility_score", intent.utility_score),
-                ("utility_breakdown", list(intent.utility_breakdown)),
-            ),
+        if not intent.source_id and source.id:
+            intent = replace(intent, source_id=source.id)
+        if command_message:
+            intent = replace(
+                intent,
+                movement_path=(
+                    _combined_movement_path(command_path, intent.movement_path)
+                    if command_path is not None
+                    else intent.movement_path
+                ),
+                moved_enemy=(intent.enemy if command_path is not None else intent.moved_enemy),
+                message=f"{command_message}{intent.message}",
+            )
+        intent = _prefer_provoked_lorian_target(
+            board,
+            intent,
+            source,
+            active_effects,
         )
+        return _intent_transition(intent, enemy)
 
     def resolve(
         self,
@@ -174,6 +247,7 @@ class EnemyTurnFlowService:
         intent: EnemyTurnPlan,
         board: BoardState,
         attack_sources_by_actor: Mapping[ActorId, AttackSource],
+        attack_source_options_by_actor: Mapping[ActorId, tuple[AttackSource, ...]] | None = None,
         multiattack_sources_by_actor: Mapping[ActorId, tuple[AttackSource, ...]] | None = None,
         active_effects: tuple[ActiveCombatEffect, ...],
         rng: Random,
@@ -188,6 +262,37 @@ class EnemyTurnFlowService:
         )
         if source is None:
             raise ValueError(f"Aktor {enemy.name} nie ma zdefiniowanego ataku.")
+        if intent.source_id and attack_source_options_by_actor is not None:
+            source = next(
+                (
+                    option
+                    for option in attack_source_options_by_actor.get(enemy.id, ())
+                    if option.id == intent.source_id
+                ),
+                source,
+            )
+        if intent.pack_attack_bonus > 0:
+            bonus = intent.pack_attack_bonus
+            source = replace(
+                source,
+                attack_roll_request=replace(
+                    source.attack_roll_request,
+                    modifiers=(
+                        *source.attack_roll_request.modifiers,
+                        RollModifier(
+                            "Premia stada",
+                            bonus,
+                            RollModifierType.FEATURE,
+                            stacking_key="hungry_shadow_pack_bonus",
+                        ),
+                    ),
+                ),
+                damage_components=tuple(
+                    replace(component, modifier=component.modifier + bonus)
+                    for component in source.damage_components
+                ),
+                damage_modifier=source.damage_modifier + bonus,
+            )
         target_actor = None
         if intent.target is not None:
             target_actor = next(
@@ -195,6 +300,28 @@ class EnemyTurnFlowService:
                 None,
             )
         if target_actor is not None:
+            if source.area is None:
+                guard = redirect_guarded_single_target(
+                    state,
+                    active_effects,
+                    str(target_actor.id),
+                )
+                active_effects = guard.active_effects
+                if guard.redirected:
+                    target_actor = guard.target
+                    intent = replace(
+                        intent,
+                        target=actor_as_combat_target(
+                            target_actor,
+                            active_effects,
+                            attacker=enemy,
+                            actors=state.actors,
+                        ),
+                        message=(
+                            f"Osłona towarzysza przekierowuje efekt na "
+                            f"{target_actor.name}."
+                        ),
+                    )
             source = attack_source_with_target_combat_effects(
                 enemy,
                 target_actor,
@@ -227,21 +354,29 @@ class EnemyTurnFlowService:
                     ),
                 ),
             )
-        result = resolve_planned_enemy_turn(
-            board,
+        result = _accidental_hidden_collision(
+            state,
             intent,
-            source,
-            rng,
-            scene_objects,
+            enemy,
+            board,
             active_effects,
-            maximum_attacks=(
-                len(multiattack_sources_by_actor.get(enemy.id, ()))
-                if multiattack_sources_by_actor
-                and multiattack_sources_by_actor.get(enemy.id)
-                else None
-            ),
-            original_state=state,
         )
+        if result is None:
+            result = resolve_planned_enemy_turn(
+                board,
+                intent,
+                source,
+                rng,
+                scene_objects,
+                active_effects,
+                maximum_attacks=(
+                    len(multiattack_sources_by_actor.get(enemy.id, ()))
+                    if multiattack_sources_by_actor
+                    and multiattack_sources_by_actor.get(enemy.id)
+                    else None
+                ),
+                original_state=state,
+            )
         ready_attacks = (
             *self._player_reactions.detect_ready_attacks(
                 state=state,
@@ -368,6 +503,42 @@ class EnemyTurnFlowService:
                 message_body=message_body,
                 event_type=event_type,
                 event_payload=event_payload,
+                active_effects=active_effects,
+            )
+        if result.accidentally_detected_actor_id is not None:
+            detected = next(
+                actor
+                for actor in state.actors
+                if str(actor.id) == result.accidentally_detected_actor_id
+            )
+            stealth_continues = any(
+                hidden.actor_id == str(detected.id)
+                for hidden in result.state.hidden_states
+            )
+            detection_consequence = (
+                "Dopóki trwa ta sesja skradania, ma przewagę w atakach przeciw niej."
+                if stealth_continues
+                else "Był ostatnim niewidzącym jej wrogiem, więc skradanie automatycznie się kończy."
+            )
+            return EnemyTurnResolutionTransition(
+                result=result,
+                kind=EnemyTurnTransitionKind.MOVEMENT,
+                board_message=(
+                    f"{enemy.name} wpada na ślad {detected.name}. Przestaw figurkę "
+                    f"na {result.movement_path.destination.as_tuple()} i potwierdź pole."
+                ),
+                message_title="Przypadkowe wykrycie",
+                message_body=(
+                    f"{enemy.name} zatrzymuje się przed zajętym polem i wykrywa {detected.name}. "
+                    f"{detection_consequence} "
+                    "Po Enterze ponownie zaplanuje pozostałą część tury."
+                ),
+                event_type="ui_combat_hidden_actor_path_collision",
+                event_payload=(
+                    ("enemy_id", str(enemy.id)),
+                    ("detected_actor_id", str(detected.id)),
+                ),
+                active_effects=active_effects,
             )
         if _result_has_movement(result, enemy.position):
             destination = result.movement_path.destination
@@ -383,6 +554,7 @@ class EnemyTurnFlowService:
                     f"{enemy.name} planuje ruch na {destination.as_tuple()}. "
                     "Potwierdź pole docelowe na planszy."
                 ),
+                active_effects=active_effects,
             )
         if result.target is not None:
             if result.saving_throw_request is not None:
@@ -401,6 +573,7 @@ class EnemyTurnFlowService:
                         f"Po potwierdzeniu celu {result.target.name} wykona "
                         f"{ability_label} save przeciw ST {request.dc}."
                     ),
+                    active_effects=active_effects,
                 )
             return EnemyTurnResolutionTransition(
                 result=result,
@@ -414,6 +587,7 @@ class EnemyTurnFlowService:
                     f"{enemy.name} atakuje {result.target.name}. {_enemy_roll_summary(result)} "
                     "Potwierdź atak klikając pole celu."
                 ),
+                active_effects=active_effects,
             )
         return EnemyTurnResolutionTransition(
             result=result,
@@ -421,7 +595,9 @@ class EnemyTurnFlowService:
             board_message="",
             message_title="",
             message_body="",
+            active_effects=active_effects,
         )
+
 
     def resolve_player_saving_throw(
         self,
@@ -529,6 +705,70 @@ class EnemyTurnFlowService:
         )
 
 
+def _accidental_hidden_collision(
+    state: CombatState,
+    intent: EnemyTurnPlan,
+    enemy: Actor,
+    board: BoardState,
+    active_effects: tuple[ActiveCombatEffect, ...],
+) -> EnemyAutoTurnResult | None:
+    path = intent.movement_path
+    if path is None or not path.valid or len(path.path) < 2:
+        return None
+    hidden_by_position = {
+        actor.position: actor
+        for actor in state.actors
+        if is_hidden_from(state.hidden_states, str(actor.id), str(enemy.id))
+        and not actor.is_defeated()
+    }
+    collision_index = next(
+        (index for index, tile in enumerate(path.path[1:], 1) if tile in hidden_by_position),
+        None,
+    )
+    if collision_index is None:
+        return None
+    hidden_actor = hidden_by_position[path.path[collision_index]]
+    prefix = path.path[:collision_index]
+    destination = prefix[-1]
+    base_cost = sum(
+        10 if board.terrain_at(tile).is_difficult else 5
+        for tile in prefix[1:]
+    )
+    stopped_path = path_with_condition_cost(
+        PathResult(enemy.position, destination, prefix, base_cost, True),
+        state.condition_states,
+        str(enemy.id),
+        movement_budget_feet=movement_remaining(state, enemy, active_effects),
+    )
+    moved_state = state
+    moved_enemy = enemy
+    if stopped_path.cost_feet > 0:
+        movement = use_movement(state, enemy, stopped_path, active_effects)
+        if not movement.accepted:
+            return None
+        moved_state = movement.state
+        moved_enemy = next(actor for actor in moved_state.actors if actor.id == enemy.id)
+    moved_state = replace(
+        moved_state,
+        hidden_states=reveal_to_observer(
+            moved_state.hidden_states,
+            str(hidden_actor.id),
+            str(enemy.id),
+        ),
+    )
+    return EnemyAutoTurnResult(
+        state=moved_state,
+        enemy=enemy,
+        target=None,
+        message=f"{enemy.name} przypadkiem wykrywa {hidden_actor.name}.",
+        movement_path=stopped_path,
+        moved_enemy=moved_enemy,
+        source=None,
+        intent="accidental_detection",
+        accidentally_detected_actor_id=str(hidden_actor.id),
+    )
+
+
 def _enemy_attack_source(
     state: CombatState,
     enemy: Actor,
@@ -544,6 +784,228 @@ def _enemy_attack_source(
         return attack_sources_by_actor.get(enemy.id)
     used = state.turn_action.attacks_used if state.turn_action.attack_action_active else 0
     return sequence[min(used, len(sequence) - 1)]
+
+
+def _stage_command_variant(
+    active_effects: tuple[ActiveCombatEffect, ...],
+    actor_id: str,
+) -> str:
+    prefix = "stage_command:"
+    effect = next(
+        (
+            effect
+            for effect in active_effects
+            if effect.actor_id == actor_id and effect.kind.startswith(prefix)
+        ),
+        None,
+    )
+    return effect.kind.removeprefix(prefix) if effect is not None else ""
+
+
+def _apply_stage_command_movement(
+    board: BoardState,
+    state: CombatState,
+    enemy: Actor,
+    active_effects: tuple[ActiveCombatEffect, ...],
+    *,
+    hazard_positions: tuple[Coordinate, ...],
+) -> tuple[CombatState, Actor, PathResult | None, str]:
+    """Apply the bounded movement part of Lorian's command before normal AI."""
+
+    variant = _stage_command_variant(active_effects, str(enemy.id))
+    if variant not in {"approach", "retreat"}:
+        return state, enemy, None, ""
+    effect = next(
+        effect
+        for effect in active_effects
+        if effect.actor_id == str(enemy.id)
+        and effect.kind == f"stage_command:{variant}"
+    )
+    commander = next(
+        (
+            actor
+            for actor in state.actors
+            if str(actor.id) == effect.source_actor_id and not actor.is_defeated()
+        ),
+        None,
+    )
+    if commander is None:
+        return (
+            state,
+            enemy,
+            None,
+            f"Rozkaz sceniczny ({variant}) nie może poruszyć {enemy.name}: brak źródła rozkazu. ",
+        )
+    budget = min(15, movement_remaining(state, enemy, active_effects))
+    if budget < 5:
+        return (
+            state,
+            enemy,
+            None,
+            f"Rozkaz sceniczny nie może poruszyć {enemy.name}: brak dostępnego ruchu. ",
+        )
+    movement_actor = replace(enemy, speed_feet=budget)
+    movement = movement_range(
+        board,
+        movement_actor,
+        actors_visible_for_pathfinding(
+            state.actors,
+            state.hidden_states,
+            str(enemy.id),
+        ),
+    )
+    hazards = set(hazard_positions)
+    candidates = tuple(
+        position
+        for position in movement.reachable_tiles
+        if position != enemy.position
+        and position not in hazards
+        and not any(tile in hazards for tile in movement.paths_by_tile[position])
+    )
+    if not candidates:
+        return (
+            state,
+            enemy,
+            None,
+            f"Rozkaz sceniczny nie znajduje bezpiecznego pola dla {enemy.name}. ",
+        )
+    distance = lambda position: max(  # noqa: E731 - compact deterministic key
+        abs(position.col - commander.position.col),
+        abs(position.row - commander.position.row),
+    )
+    current_distance = distance(enemy.position)
+    directional = tuple(
+        position
+        for position in candidates
+        if (
+            distance(position) < current_distance
+            if variant == "approach"
+            else distance(position) > current_distance
+        )
+    )
+    if not directional:
+        return (
+            state,
+            enemy,
+            None,
+            f"{enemy.name} nie może bezpiecznie wykonać rozkazu scenicznego. ",
+        )
+    destination = (
+        min(
+            directional,
+            key=lambda position: (
+                distance(position),
+                -movement.costs_by_tile[position],
+                position.col,
+                position.row,
+            ),
+        )
+        if variant == "approach"
+        else max(
+            directional,
+            key=lambda position: (
+                distance(position),
+                movement.costs_by_tile[position],
+                -position.col,
+                -position.row,
+            ),
+        )
+    )
+    path = PathResult(
+        enemy.position,
+        destination,
+        movement.paths_by_tile[destination],
+        movement.costs_by_tile[destination],
+        True,
+    )
+    path = path_with_condition_cost(
+        path,
+        state.condition_states,
+        str(enemy.id),
+        movement_budget_feet=budget,
+    )
+    moved = use_movement(state, enemy, path, active_effects)
+    if not moved.accepted:
+        return (
+            state,
+            enemy,
+            None,
+            f"{enemy.name} nie może wykonać wymuszonego ruchu: {moved.message} ",
+        )
+    moved_enemy = next(actor for actor in moved.state.actors if actor.id == enemy.id)
+    label = "podchodzi" if variant == "approach" else "oddala się"
+    return (
+        moved.state,
+        moved_enemy,
+        path,
+        f"Rozkaz sceniczny: {enemy.name} {label} o {path.cost_feet} stóp. ",
+    )
+
+
+def _combined_movement_path(
+    first: PathResult,
+    second: PathResult | None,
+) -> PathResult:
+    if second is None:
+        return first
+    suffix = second.path[1:] if second.path and second.path[0] == first.destination else second.path
+    return PathResult(
+        first.origin,
+        second.destination,
+        (*first.path, *suffix),
+        first.cost_feet + second.cost_feet,
+        first.valid and second.valid,
+    )
+
+
+def _prefer_provoked_lorian_target(
+    board: BoardState,
+    intent: EnemyTurnPlan,
+    source: AttackSource,
+    active_effects: tuple[ActiveCombatEffect, ...],
+) -> EnemyTurnPlan:
+    provoked = any(
+        effect.actor_id == str(intent.enemy.id)
+        and effect.kind == "lorian_provoked"
+        for effect in active_effects
+    )
+    if not provoked:
+        return intent
+    legal = legal_attack_targets(
+        board,
+        intent.enemy,
+        intent.state.actors,
+        source,
+        intent.state.hidden_states,
+        active_effects,
+    )
+    lorian = next((target for target in legal if target.id == "lorian"), None)
+    if lorian is None or (intent.target is not None and intent.target.id == "lorian"):
+        return intent
+    return replace(
+        intent,
+        target=lorian,
+        message=f"{intent.message} Prowokujący ostrzał kieruje atak na Loriena.",
+    )
+
+
+def _intent_transition(intent: EnemyTurnPlan, enemy: Actor) -> EnemyTurnIntentTransition:
+    return EnemyTurnIntentTransition(
+        intent=intent,
+        enemy_id=str(enemy.id),
+        board_message=intent.message,
+        message_title="Zamiar przeciwnika",
+        message_body=intent.message,
+        event_type="ui_combat_enemy_turn_intent",
+        event_payload=(
+            ("enemy_id", str(enemy.id)),
+            ("target_id", intent.target.id if intent.target is not None else None),
+            ("message", intent.message),
+            ("intent", intent.intent),
+            ("utility_score", intent.utility_score),
+            ("utility_breakdown", list(intent.utility_breakdown)),
+        ),
+    )
 
 
 def _reaction_window_trigger(

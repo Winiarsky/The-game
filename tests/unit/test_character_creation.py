@@ -1072,6 +1072,17 @@ def test_duplicate_starting_weapons_are_distinct_runtime_instances(
     arrows = next(item for item in ranger.inventory if item.source_ref == "arrow")
     assert arrows.quantity == 20
 
+    attack_sources = compile_actor_combat_content(ranger).attack_sources
+    attack_source_ids = [source.id for source in attack_sources]
+    assert len(attack_source_ids) == len(set(attack_source_ids))
+    second_shortsword_sources = tuple(
+        source
+        for source in attack_sources
+        if source.source_item_id == "shortsword_2"
+    )
+    assert second_shortsword_sources
+    assert all("shortsword_2" in source.id for source in second_shortsword_sources)
+
 
 def test_ranger_humanoid_favored_enemy_requires_exactly_two_races(
     catalog,

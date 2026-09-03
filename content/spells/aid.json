@@ -24,10 +24,7 @@
       }
     ]
   },
-  "duration": {
-    "kind": "eight_hours",
-    "amount": 1
-  },
+  "duration": {"kind": "encounter"},
   "concentration": false,
   "ritual": false,
   "effect": {
@@ -39,8 +36,8 @@
     "upcast_value_per_level": 5,
     "target_faction": "ally",
     "target_count": 3,
-    "duration": "long_rest",
+    "duration": "encounter",
     "cast_flag": "cast_aid",
-    "instructions": "Do 3 celów zwiększa aktualne i maksymalne PW o 5, plus 5 za każdy poziom slotu powyżej 2."
+    "instructions": "Do końca walki zwiększa aktualne i maksymalne PW maksymalnie 3 celów o 5, plus 5 za każdy poziom slotu powyżej 2."
   }
 }

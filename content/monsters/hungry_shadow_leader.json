@@ -30,30 +30,36 @@
     "saving_throws": ["dexterity"],
     "skills": ["perception", "stealth"],
     "expertise": [],
-    "weapons": ["hungry_shadow_leader_rend"],
+    "weapons": [],
     "armor": [],
     "tools": []
   },
   "attacks": [
     {
-      "id": "hungry_shadow_leader_rend",
-      "name": "Rozdarcie przewodnicy",
-      "source_type": "weapon",
+      "id": "hungry_shadow_leader_life_drain",
+      "name": "Wysysające rozdarcie",
+      "source_type": "custom",
       "attack_kind": "melee",
-      "ability": "dexterity",
-      "attack_bonus": 1,
-      "proficiency_id": "hungry_shadow_leader_rend",
+      "attack_modifier": 3,
       "range_feet": 5,
       "reach_feet": 5,
-      "conditional_on_hit_save_ability": "strength",
-      "conditional_on_hit_save_dc": 13,
-      "conditional_on_hit_save_condition": "prone",
-      "conditional_on_hit_minimum_movement_feet": 10,
-      "conditional_on_hit_requires_adjacent_ally": true,
       "damage": {
-        "dice": "1d8",
-        "modifier": 3,
-        "damage_type": "slashing"
+        "dice": "1d4",
+        "modifier": 2,
+        "damage_type": "necrotic"
+      }
+    },
+    {
+      "id": "hungry_shadow_leader_spirit_bolt",
+      "name": "Duchowy pocisk",
+      "source_type": "custom",
+      "attack_kind": "ranged",
+      "attack_modifier": 5,
+      "range_feet": 60,
+      "damage": {
+        "dice": "1d6",
+        "modifier": 2,
+        "damage_type": "psychic"
       }
     }
   ]

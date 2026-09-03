@@ -162,18 +162,18 @@ The exploration web surface is split into explicit responsibilities:
   destructible scene fixtures. It resolves authored state transitions, HP and
   damage thresholds, releases contained items, and projects the current
   exploration state into combat `SceneObject`s for movement and cover,
-- `exploration/travel.py` owns deterministic overland pace, navigation and
-  forced-march resolution. It consumes explicit physical d20 input and returns
-  updated actors plus timing metadata; UI only gathers choices and rolls,
+- `exploration/travel.py` retains isolated deterministic travel rules for authored
+  systems that may need them; the current scenario-continuation UI does not expose
+  pace, navigator or forced-march choices,
 - `application/spell_preparation_flow.py` owns the pre-scenario confirmation sequence for
   actors with generic prepared-spell profiles,
 - `application/short_rest_flow.py` owns content-driven short-rest preview, completion,
   exploration consequences, and sequential Hit Dice spending,
 - `application/scenario_continuation_flow.py` validates content-authored exits between
   scenarios from deterministic flags and the current departure zone. The UI advances
-  the pace-adjusted travel duration and navigation delay, resolves forced march, then
-  selects an ordered success/partial-success/fail-forward outcome from the final flags
-  and navigation result. The verified handoff contains source objective results,
+  one content-authored fixed travel duration, then selects an ordered
+  success/partial-success/fail-forward outcome from the final flags. The verified
+  handoff contains source objective results,
   explicitly propagated flags and validated target effects. The UI expires
   scenario-scoped effects and saves the complete source snapshot before exposing the
   target. The current local runtime can immediately start that target and merges
@@ -196,7 +196,11 @@ The exploration web surface is split into explicit responsibilities:
   provide dice/input policy but do not duplicate condition rules,
 - `actors/auras.py` defines serializable actor aura data, while `combat/auras.py`
   derives live coverage and roll modifiers from actor positions, factions, and life state;
-  aura membership is never stored as mutable combat state,
+  aura membership is never stored as authoritative mutable combat state. Temporary
+  spell auras keep only their caster-owned source effect; `combat/auras.py` rebuilds
+  actor-facing member statuses after movement, healing, loading and concentration
+  changes. Limited aura activations are spent on the source effect, while UI/LED
+  previews consume the derived coverage and never decide rules,
 - `actors/triggers.py` defines serializable feature triggers without importing the rules
   package; `combat/triggers.py` matches stable event ids to runtime `EffectEvent`s and
   applies deterministic ordered outcomes to combat or standalone actor collections.
@@ -220,6 +224,8 @@ The exploration web surface is split into explicit responsibilities:
   runtime replaces generated prose with the exact authorized facts so semantic
   spoilers cannot bypass id validation.
   conversation history and NPC state remain separate persisted concerns.
+  Jednorazowe zdolności przypisane do konkretnego NPC (np. Improwizacja Loriana)
+  są zapisywane w `NpcRuntimeState.used_feature_ids`, a nie w przejściowych flagach UI.
   `exploration/social_interactions.py` maps current
   NPC attitude and content-classified request risk to the deterministic 2014
   conversation reaction threshold; the LLM cannot choose this DC. Both are
@@ -286,7 +292,7 @@ The exploration web surface is split into explicit responsibilities:
 - `combat/action_economy.py` defines shared action costs, while `combat/session.py`
   consumes action, individual attacks within the Attack action, bonus action, reaction
   and free object-interaction resources; movement remains available between attacks,
-  and Shove or Grapple can replace one attack,
+  and legacy Shove or Brakka's Grapple can replace one attack,
   content and UI only declare or display those costs,
 - `inventory/armor.py` owns body-armor AC formulas, Strength-based speed penalties,
   Stealth disadvantage and exploration don/doff transitions; combat movement and
@@ -336,6 +342,14 @@ The exploration web surface is split into explicit responsibilities:
 - `ui/session_state.py` groups transient pending choices with explicit flow-owned types,
 - `ui/session_view.py` defines the top-level `/api/state` payload contract,
 - `ui/templates/` and `ui/static/` own HTML, CSS, and JavaScript.
+
+Player combat input is an explicit state machine at the UI/session boundary:
+`list -> preview -> board selection -> resolution`. Numpad 2/8 only changes the
+local list selection; Enter arms or confirms, and minus cancels back to the list.
+LED ranges are derived only from the armed preview. Board clicks update transient
+selection state and must not spend resources or resolve an action by themselves.
+This transport protocol belongs to `ui/`; deterministic legality and resolution
+remain in the application/combat services listed above.
 
 `ExplorationUiSession` applies the returned transition, then performs edge effects in the
 existing order: message/log recording, LED synchronization, and payload rendering. The

@@ -25,6 +25,8 @@ from dnd_board_game.world import BoardState, PathResult, movement_range
 from dnd_board_game.inventory import consume_ammunition, has_ammunition
 
 from .action_economy import ActionUse
+from .archetype_flaws import attack_source_with_exposed_mira_bonus
+from .targets import mira_ranged_armor_class_bonus
 from .attack_flow import (
     AttackDeclaration,
     AttackResolution,
@@ -47,7 +49,12 @@ from .conditions import (
 from .scene import SceneObject
 from .scene_interactions import MirrorImageOutcome, resolve_mirror_image_redirect
 from .spells import resolve_actor_saving_throw
-from .stealth import is_hidden_from, resolve_search, reveal_actor
+from .stealth import (
+    actors_visible_for_pathfinding,
+    is_hidden_from,
+    resolve_search,
+    reveal_actor,
+)
 from .damage import (
     AppliedDamageResult,
     DamageComponentInput,
@@ -122,6 +129,10 @@ class EnemyAutoTurnResult:
     utility_score: float | None = None
     utility_breakdown: tuple[tuple[str, float], ...] = ()
     escaped: bool = False
+    pack_heal_target_id: str | None = None
+    pack_heal_amount: int = 0
+    life_drain: bool = False
+    accidentally_detected_actor_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -137,6 +148,11 @@ class EnemyTurnPlan:
     utility_score: float | None = None
     utility_breakdown: tuple[tuple[str, float], ...] = ()
     escaped: bool = False
+    source_id: str = ""
+    pack_attack_bonus: int = 0
+    pack_heal_target_id: str | None = None
+    escape_target: Coordinate | None = None
+    life_drain: bool = False
 
 
 def resolve_enemy_auto_attack(
@@ -149,6 +165,7 @@ def resolve_enemy_auto_attack(
     active_effects: tuple[ActiveEffect, ...] = (),
     *,
     maximum_attacks: int | None = None,
+    preferred_target_id: str | None = None,
 ) -> EnemyAutoAttackResult:
     enemy = _actor_for_id(state, enemy.id)
     if source.resource_pool_id is not None and not can_spend_actor_resource(
@@ -230,7 +247,10 @@ def resolve_enemy_auto_attack(
             action_used=True,
         )
 
-    target = _select_enemy_target(enemy, targets)
+    target = next(
+        (candidate for candidate in targets if candidate.id == preferred_target_id),
+        None,
+    ) or _select_enemy_target(enemy, targets)
     sanctuary_saves: list[SavingThrowResult] = []
     remaining_targets = tuple(targets)
     while True:
@@ -330,7 +350,20 @@ def resolve_enemy_auto_attack(
         enemy,
         target_actor,
     )
-    target = replace(target, ac=target.ac + positioning.cover_bonus)
+    source = attack_source_with_exposed_mira_bonus(
+        action_result.state.hidden_states,
+        enemy,
+        target_actor,
+        source,
+    )
+    target = replace(
+        target,
+        ac=(
+            target.ac
+            + positioning.cover_bonus
+            + mira_ranged_armor_class_bonus(target_actor, source)
+        ),
+    )
     if source.save_ability is not None:
         dc = int(source.save_dc or enemy.spell_save_dc)
         if dc <= 0:
@@ -735,9 +768,18 @@ def resolve_planned_enemy_turn(
         scene_objects,
         active_effects,
         maximum_attacks=maximum_attacks,
+        preferred_target_id=plan.target.id,
     )
     if plan.movement_path is None:
-        return _turn_result_from_attack(attack)
+        return replace(
+            _turn_result_from_attack(attack),
+            intent=plan.intent,
+            utility_score=plan.utility_score,
+            utility_breakdown=plan.utility_breakdown,
+            pack_heal_target_id=plan.pack_heal_target_id,
+            pack_heal_amount=(rng.randint(1, 6) + 2 if plan.pack_heal_target_id else 0),
+            life_drain=plan.life_drain,
+        )
     if attack.target is None:
         return EnemyAutoTurnResult(
             attack.state,
@@ -769,6 +811,12 @@ def resolve_planned_enemy_turn(
         base_damage_components=attack.base_damage_components,
         mirror_image_outcome=attack.mirror_image_outcome,
         sanctuary_saves=attack.sanctuary_saves,
+        intent=plan.intent,
+        utility_score=plan.utility_score,
+        utility_breakdown=plan.utility_breakdown,
+        pack_heal_target_id=plan.pack_heal_target_id,
+        pack_heal_amount=(rng.randint(1, 6) + 2 if plan.pack_heal_target_id else 0),
+        life_drain=plan.life_drain,
     )
     return _with_conditional_on_hit_save(result, plan, source)
 
@@ -939,7 +987,15 @@ def _plan_turned_enemy_turn(
         )
     budget = movement_remaining(dash.state, enemy)
     movement_actor = replace(enemy, speed_feet=budget)
-    movement = movement_range(board, movement_actor, dash.state.actors)
+    movement = movement_range(
+        board,
+        movement_actor,
+        actors_visible_for_pathfinding(
+            dash.state.actors,
+            dash.state.hidden_states,
+            str(enemy.id),
+        ),
+    )
     destinations = tuple(
         destination
         for destination in movement.reachable_tiles
@@ -1025,7 +1081,15 @@ def _best_enemy_movement_path(
 ) -> PathResult | None:
     budget = movement_remaining(state, enemy)
     movement_actor = replace(enemy, speed_feet=budget)
-    movement = movement_range(board, movement_actor, state.actors)
+    movement = movement_range(
+        board,
+        movement_actor,
+        actors_visible_for_pathfinding(
+            state.actors,
+            state.hidden_states,
+            str(enemy.id),
+        ),
+    )
     opponents = tuple(
         actor
         for actor in state.actors

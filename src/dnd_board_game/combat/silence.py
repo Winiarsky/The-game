@@ -19,6 +19,7 @@ def actor_in_silence_zone(
     return any(
         effect.kind == "silence_zone"
         and effect.anchor_position is not None
+        and actor.position not in effect.excluded_positions
         and grid_distance_feet(actor.position, effect.anchor_position) <= effect.value
         for effect in active_effects
     )

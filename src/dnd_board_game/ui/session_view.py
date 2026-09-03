@@ -26,6 +26,7 @@ class UiSessionView:
     downtime: dict[str, object] | None
     resources: list[dict[str, object]]
     discovered_sources: list[dict[str, object]]
+    party_loot: dict[str, object]
     actors: list[dict[str, object]]
     active_effects: list[dict[str, object]]
     scene_status: list[dict[str, object]]
@@ -70,6 +71,7 @@ class UiSessionView:
             "downtime": self.downtime,
             "resources": self.resources,
             "discovered_sources": self.discovered_sources,
+            "party_loot": self.party_loot,
             "actors": self.actors,
             "active_effects": self.active_effects,
             "scene_status": self.scene_status,

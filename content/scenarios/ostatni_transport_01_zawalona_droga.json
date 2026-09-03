@@ -6,6 +6,7 @@
   "id": "ostatni_transport_01_zawalona_droga",
   "name": "Ostatni transport — Zawalona droga",
   "scene_mode": "exploration",
+  "encounter_map_asset": "maps/ostatni_transport_01/glodne_cienie_battlemap_base_v5.png",
   "board": {
     "cols": 20,
     "rows": 30
@@ -17,6 +18,38 @@
       "description": "Odeprzyjcie Głodne Cienie, zanim będzie można bezpiecznie zbadać zawaloną drogę.",
       "condition": "flag_equals",
       "flag_key": "map1_encounter_cleared",
+      "flag_value": true
+    },
+    {
+      "id": "inspect_convoy_wreck",
+      "name": "Zbadajcie przewrócony wóz",
+      "description": "Sprawdźcie manifest, skrytkę z lekarstwami i ślady pozostawione przy transporcie.",
+      "condition": "flag_equals",
+      "flag_key": "map1_wagon_examined",
+      "flag_value": true
+    },
+    {
+      "id": "learn_teren_account",
+      "name": "Pomóżcie Terenowi",
+      "description": "Opatrzcie rannego strażnika, poznajcie jego wersję wydarzeń i zdecydujcie o jego dalszej drodze.",
+      "condition": "flag_equals",
+      "flag_key": "map1_teren_fate_decided",
+      "flag_value": true
+    },
+    {
+      "id": "resolve_young_shadow",
+      "name": "Rozstrzygnijcie los młodej bestii",
+      "description": "W legowisku pozostało osłabione młode. Zdecydujcie, czy je oszczędzić, czy dobić.",
+      "condition": "flag_equals",
+      "flag_key": "map1_young_beast_decided",
+      "flag_value": true
+    },
+    {
+      "id": "choose_black_ford_route",
+      "name": "Wybierzcie drogę do Czarnego Brodu",
+      "description": "Na podstawie zebranych śladów wybierzcie główny trakt albo leśny szlak.",
+      "condition": "flag_equals",
+      "flag_key": "map1_route_selected",
       "flag_value": true
     }
   ],
@@ -43,10 +76,200 @@
         "id": "blocked_road",
         "name": "Zawalona droga",
         "positions": [[7,7],[8,7],[9,7],[10,7]],
+        "anchor_position": [9,7],
         "interaction_pad_positions": [[6,8]],
         "color": "marker",
         "description": "Osuwisko przecięło trakt, a między porzuconymi wozami poruszają się wygłodniałe kształty.",
         "options": []
+      },
+      {
+        "id": "overturned_wagon",
+        "name": "Przewrócony wóz",
+        "positions": [[10,10]],
+        "anchor_position": [10,10],
+        "interaction_pad_positions": [[7,9],[13,10],[10,16]],
+        "available_if_flag": "map1_encounter_cleared",
+        "color": "interactive",
+        "description": "Roztrzaskany prowadzący wóz nadal kryje dokumenty, ślady walki i skrytkę pod kozłem.",
+        "options": [
+          {
+            "id": "search_convoy_wagon",
+            "label": "Przeszukaj wóz i skrytkę",
+            "kind": "check",
+            "resolution_mode": "check",
+            "description_mode": "optional",
+            "default_declaration": "Przeszukujemy wóz, manifest i skrzynię narzędziową pod kozłem.",
+            "color": "success",
+            "description": "Investigation ST 11. Sukces odzyskuje manifest i ukryte lekarstwa; porażka nadal odsłania ślady gwałtownej grabieży.",
+            "ability_check": {"ability":"intelligence","skill":"investigation","dc":11},
+            "allow_help": true,
+            "success_flag": "map1_wagon_examined",
+            "success_flags": ["knowledge.transport_manifest_found","knowledge.hidden_medicine_recovered"],
+            "failure_flag": "map1_wagon_examined",
+            "failure_flags": ["knowledge.wagon_violent_looting"],
+            "success_message": "Pod rozdartym płótnem znajdujecie manifest z brakującymi pozycjami oraz nienaruszony pakiet lekarstw oznaczony miedzianym gwoździem.",
+            "failure_message": "Dokumenty przemokły, ale sposób rozbicia skrzyń pokazuje, że napastnicy szukali konkretnego ładunku, a nie żywności.",
+            "time_cost_minutes": 10
+          },
+          {
+            "id": "inspect_wagon_blood",
+            "label": "Odczytaj ślady krwi",
+            "kind": "check",
+            "resolution_mode": "check",
+            "description_mode": "optional",
+            "default_declaration": "Porównujemy ślady krwi, błota i przeciągania ciał.",
+            "color": "warning",
+            "description": "Survival ST 10. Pozwala ustalić, że część ludzi przeżyła atak i została poprowadzona ku strażnicy.",
+            "ability_check": {"ability":"wisdom","skill":"survival","dc":10},
+            "success_flag": "map1_blood_trail_examined",
+            "success_flags": ["knowledge.convoy_survivors_moved_north"],
+            "failure_flag": "map1_blood_trail_examined",
+            "failure_message": "Deszcz zatarł dokładny kierunek, lecz ilość krwi nie odpowiada liczbie ludzi z manifestu — ktoś przeżył.",
+            "success_message": "Ślady rannych, podparte kroki i brak ciał wskazują, że ocalali ruszyli albo zostali zabrani w stronę Czarnego Brodu.",
+            "time_cost_minutes": 5
+          }
+        ]
+      },
+      {
+        "id": "western_culvert",
+        "name": "Stary przepust i legowisko",
+        "positions": [[4,12]],
+        "anchor_position": [4,12],
+        "interaction_pad_positions": [[3,11],[3,13],[5,12]],
+        "available_if_flag": "map1_encounter_cleared",
+        "color": "warning",
+        "description": "W wilgotnym przepuście znajduje się legowisko stada i osłabione młode, które nie zaatakowało drużyny.",
+        "options": [
+          {
+            "id": "spare_young_shadow",
+            "label": "Oszczędź młodą bestię",
+            "kind": "message",
+            "resolution_mode": "automatic",
+            "description_mode": "none",
+            "default_declaration": "Zostawiamy młodą bestię przy życiu i wycofujemy się z legowiska.",
+            "color": "success",
+            "success_flag": "map1_young_beast_decided",
+            "success_flags": ["map1_young_beast_spared"],
+            "message": "Młode cofa się w ciemność. Nie ufa wam, ale zapamiętuje, że ostrze nie spadło. Ta decyzja może mieć znaczenie dla Salki i uchodźców."
+          },
+          {
+            "id": "kill_young_shadow",
+            "label": "Dobij młodą bestię",
+            "kind": "message",
+            "resolution_mode": "automatic",
+            "description_mode": "none",
+            "default_declaration": "Nie zostawiamy niebezpiecznej bestii za plecami.",
+            "color": "danger",
+            "success_flag": "map1_young_beast_decided",
+            "success_flags": ["map1_young_beast_killed"],
+            "message": "Legowisko cichnie. Teren i ludzie przy brodzie mogą uznać to za rozsądek albo okrucieństwo — zależnie od tego, czego dowiedzą się później."
+          }
+        ]
+      },
+      {
+        "id": "stream_tracks",
+        "name": "Strumień i północne ślady",
+        "positions": [[2,7]],
+        "anchor_position": [2,7],
+        "interaction_pad_positions": [[1,6],[3,7]],
+        "available_if_flag": "map1_encounter_cleared",
+        "color": "movement",
+        "description": "Przy bocznym zejściu błoto zachowało świeże tropy prowadzące ku strażnicy.",
+        "options": [
+          {
+            "id": "follow_northern_tracks",
+            "label": "Zbadaj północne tropy",
+            "kind": "check",
+            "resolution_mode": "check",
+            "description_mode": "optional",
+            "default_declaration": "Sprawdzamy kierunek, liczbę i wiek tropów przy strumieniu.",
+            "color": "movement",
+            "description": "Survival ST 11. Niezależnie od wyniku drużyna ustala drogę, ale sukces ujawnia bezpieczniejsze leśne obejście.",
+            "ability_check": {"ability":"wisdom","skill":"survival","dc":11},
+            "success_flag": "map1_route_clue_found",
+            "success_flags": ["knowledge.forest_route_tracks"],
+            "failure_flag": "map1_route_clue_found",
+            "success_message": "Rozpoznajecie świeże ślady ludzi i wozu oraz suchszy leśny szlak biegnący równolegle do głównego traktu.",
+            "failure_message": "Woda zatarła szczegóły, ale kierunek jest pewny: ku Strażnicy Czarnego Brodu.",
+            "time_cost_minutes": 5
+          }
+        ]
+      },
+      {
+        "id": "teren_shelter",
+        "name": "Schronienie rannego strażnika",
+        "positions": [[15,18]],
+        "anchor_position": [15,18],
+        "interaction_pad_positions": [[14,11],[16,11],[14,13],[16,13],[15,14]],
+        "available_if_flag": "map1_encounter_cleared",
+        "color": "purple",
+        "description": "Za osłoną skarpy ukrywa się ranny i odwodniony strażnik Teren.",
+        "options": []
+      },
+      {
+        "id": "signal_tower",
+        "name": "Stara wieża sygnałowa",
+        "positions": [[17,3]],
+        "anchor_position": [17,3],
+        "interaction_pad_positions": [[16,4],[18,4]],
+        "available_if_flag": "map1_encounter_cleared",
+        "color": "multi",
+        "description": "Dzwon i platforma górują nad traktem; z góry widać oba podejścia do Czarnego Brodu.",
+        "options": [
+          {
+            "id": "survey_from_signal_tower",
+            "label": "Obejrzyj drogę z platformy",
+            "kind": "check",
+            "resolution_mode": "check",
+            "description_mode": "optional",
+            "default_declaration": "Wchodzimy na platformę i porównujemy oba szlaki.",
+            "color": "multi",
+            "description": "Perception ST 10. Sukces ujawnia dym i ruch przy głównym trakcie.",
+            "ability_check": {"ability":"wisdom","skill":"perception","dc":10},
+            "success_flag": "map1_tower_surveyed",
+            "success_flags": ["knowledge.main_route_observed"],
+            "failure_flag": "map1_tower_surveyed",
+            "success_message": "Na północy widać dym i krótki błysk metalu. Główny trakt jest szybszy, ale każdy przy bramie zobaczy nadchodzącą drużynę.",
+            "failure_message": "Mgła zasłania strażnicę. Wiecie tylko, że główny trakt pozostaje przejezdny.",
+            "time_cost_minutes": 5
+          }
+        ]
+      },
+      {
+        "id": "black_ford_route",
+        "name": "Rozwidlenie do Czarnego Brodu",
+        "positions": [[10,2]],
+        "anchor_position": [10,2],
+        "interaction_pad_positions": [[9,1],[11,1],[10,3],[12,2]],
+        "available_if_flag": "map1_encounter_cleared",
+        "color": "marker",
+        "description": "Główny trakt prowadzi prosto ku bramie; leśny szlak daje osłonę i zbliża się do źródła anomalii.",
+        "options": [
+          {
+            "id": "choose_main_route",
+            "label": "Wybierz główny trakt",
+            "kind": "message",
+            "resolution_mode": "automatic",
+            "description_mode": "none",
+            "default_declaration": "Idziemy głównym traktem do Strażnicy Czarnego Brodu.",
+            "color": "warning",
+            "success_flag": "map1_route_selected",
+            "success_flags": ["map1_route_main"],
+            "message": "Główny trakt jest najszybszy i najpewniejszy, ale strażnicy zobaczą drużynę na długo przed podejściem do bramy."
+          },
+          {
+            "id": "choose_forest_route",
+            "label": "Wybierz leśny szlak",
+            "kind": "message",
+            "resolution_mode": "automatic",
+            "description_mode": "none",
+            "default_declaration": "Obchodzimy strażnicę leśnym szlakiem.",
+            "color": "success",
+            "success_flag": "map1_route_selected",
+            "success_flags": ["map1_route_forest"],
+            "message": "Leśny szlak ukrywa podejście, ale prowadzi bliżej miejsca, z którego dobiega nienaturalny rezonans."
+          }
+        ]
       }
     ],
     "points": [
@@ -60,6 +283,136 @@
         "requires_setup": false,
         "description": "Po odparciu stada można bezpiecznie obejrzeć wozy, ślady i osuwisko.",
         "interaction_label": "Rozpocznij eksplorację pobojowiska"
+      },
+      {
+        "id": "teren",
+        "name": "Teren",
+        "zone_id": "teren_shelter",
+        "positions": [[15,12]],
+        "color": "purple",
+        "visibility": "hidden",
+        "requires_setup": false,
+        "description": "Młody strażnik z transportu, ranny w bok, odwodniony i przerażony tym, co wydarzyło się przy wozach.",
+        "interaction_label": "Pomóż Terenowi i poznaj jego relację",
+        "npc_interaction": {
+          "id": "teren",
+          "name": "Teren",
+          "public_description": "Ranny strażnik transportu. Kurczowo trzyma pusty bukłak i z trudem utrzymuje kontakt z otoczeniem.",
+          "gm_context": "Teren przeżył atak. Najpierw potrzebuje pomocy. Wie, że strażnicy próbowali odebrać wodę uchodźcom, bójka poprzedziła atak bestii, a od strony brodu słychać było śpiew przypominający studnię.",
+          "personality": "Przestraszony, zawstydzony i lojalny wobec poległych. Początkowo minimalizuje udział strażników w bójce.",
+          "current_state": "Ranny, odwodniony i w szoku.",
+          "initial_attitude": "indifferent",
+          "initial_physical_state": "Krwawiąca rana boku, odwodnienie i wyczerpanie.",
+          "initial_emotional_state": "Strach oraz poczucie winy.",
+          "dialogue_intro": "Teren podnosi pusty bukłak. „Nie podchodźcie... Nie, czekajcie. Jesteście z Gildii? Wozy... reszta poszła ku brodowi.”",
+          "capabilities": ["can_talk","can_receive_aid"],
+          "goals": [
+            {
+              "id": "aid_teren",
+              "label": "Opatrz ranę i podaj wodę",
+              "description": "Medicine ST 10. Pakiet medyczny Gildii może pomóc zgodnie ze swoim kontraktem zasobu.",
+              "intent_ids": ["aid"],
+              "resolution_mode": "check",
+              "description_mode": "optional",
+              "default_declaration": "Oczyszczamy ranę, zakładamy opatrunek i dajemy Terenowi wodę.",
+              "check_participants": "single_actor",
+              "forbidden_flags": ["teren_aid_resolved"],
+              "grounded_response": {
+                "success_message": "Krwawienie ustaje, a Teren odzyskuje oddech i zaczyna mówić pełnymi zdaniami.",
+                "failure_message": "Prowizoryczny opatrunek nie jest dobry, ale stabilizuje Terena na tyle, by mógł odpowiedzieć na pytania."
+              }
+            },
+            {
+              "id": "question_teren",
+              "label": "Zapytaj, co wydarzyło się przy wozach",
+              "description": "Insight ST 11 pozwala oddzielić strach od przemilczanej prawdy.",
+              "intent_ids": ["question"],
+              "resolution_mode": "check",
+              "description_mode": "optional",
+              "default_declaration": "Spokojnie prosimy Terena o pełną relację z ataku.",
+              "check_participants": "single_actor",
+              "required_flags": ["teren_aid_resolved"],
+              "forbidden_flags": ["map1_teren_questioned"],
+              "grounded_response": {
+                "success_message": "Teren przyznaje, że strażnicy próbowali odebrać wodę uchodźcom. Bójka rozbiła szyk tuż przed atakiem, a od strony brodu dochodził dźwięk przypominający śpiew studni.",
+                "failure_message": "Teren mówi tylko, że ludzie wpadli w panikę, a bestie przyszły chwilę później. Wyraźnie pomija część wydarzeń."
+              }
+            },
+            {
+              "id": "take_teren",
+              "label": "Zabierz Terena ze sobą",
+              "description": "Ranny strażnik pójdzie z drużyną do Czarnego Brodu.",
+              "intent_ids": ["take_along"],
+              "resolution_mode": "automatic",
+              "description_mode": "none",
+              "default_declaration": "Teren idzie z nami; nie zostawimy go samego na trakcie.",
+              "check_participants": "no_actor",
+              "required_flags": ["map1_teren_questioned"],
+              "forbidden_flags": ["map1_teren_fate_decided"],
+              "grounded_response": {"success_message":"Teren podnosi się z pomocą drużyny i rusza z nią ku strażnicy."}
+            },
+            {
+              "id": "shelter_teren",
+              "label": "Ukryj Terena przy wozach",
+              "description": "Teren zostanie w osłoniętym miejscu z wodą i opatrunkiem.",
+              "intent_ids": ["leave_sheltered"],
+              "resolution_mode": "automatic",
+              "description_mode": "none",
+              "default_declaration": "Ukrywamy Terena w bezpiecznym miejscu i zostawiamy mu wodę.",
+              "check_participants": "no_actor",
+              "required_flags": ["map1_teren_questioned"],
+              "forbidden_flags": ["map1_teren_fate_decided"],
+              "grounded_response": {"success_message":"Teren zostaje pod osłoną przewróconego wozu, z wodą i znakiem dla wracającej drużyny."}
+            }
+          ],
+          "locked_information": [],
+          "policy": {
+            "allowed_flags": ["teren_aid_resolved","teren_stabilized","map1_teren_questioned","knowledge.teren_truth","knowledge.teren_partial_account","map1_teren_fate_decided","teren.traveling_with_party","teren.left_sheltered"],
+            "allowed_effect_types": ["set_flag"],
+            "allowed_abilities": ["wisdom"],
+            "allowed_skills": ["medicine","insight"],
+            "dc_range": [5,20],
+            "intent_permissions": {
+              "aid": {
+                "status": "allowed",
+                "check": {"ability":"wisdom","skill":"medicine","dc":10},
+                "effects_on_success": [
+                  {"type":"set_flag","parameters":{"key":"teren_aid_resolved","value":true}},
+                  {"type":"set_flag","parameters":{"key":"teren_stabilized","value":true}}
+                ],
+                "effects_on_failure": [
+                  {"type":"set_flag","parameters":{"key":"teren_aid_resolved","value":true}}
+                ]
+              },
+              "question": {
+                "status": "allowed",
+                "check": {"ability":"wisdom","skill":"insight","dc":11},
+                "effects_on_success": [
+                  {"type":"set_flag","parameters":{"key":"map1_teren_questioned","value":true}},
+                  {"type":"set_flag","parameters":{"key":"knowledge.teren_truth","value":true}}
+                ],
+                "effects_on_failure": [
+                  {"type":"set_flag","parameters":{"key":"map1_teren_questioned","value":true}},
+                  {"type":"set_flag","parameters":{"key":"knowledge.teren_partial_account","value":true}}
+                ]
+              },
+              "take_along": {
+                "status": "allowed",
+                "effects_on_success": [
+                  {"type":"set_flag","parameters":{"key":"map1_teren_fate_decided","value":true}},
+                  {"type":"set_flag","parameters":{"key":"teren.traveling_with_party","value":true}}
+                ]
+              },
+              "leave_sheltered": {
+                "status": "allowed",
+                "effects_on_success": [
+                  {"type":"set_flag","parameters":{"key":"map1_teren_fate_decided","value":true}},
+                  {"type":"set_flag","parameters":{"key":"teren.left_sheltered","value":true}}
+                ]
+              }
+            }
+          }
+        }
       }
     ],
     "challenges": [
@@ -96,33 +449,11 @@
           "default_narration": "Bohaterowie i Głodne Cienie dostrzegają się niemal jednocześnie po przeciwnych stronach błotnistej koleiny.",
           "rules": [
             {
-              "id": "erynd_warned_slow_approach",
-              "outcome": "party_initiative_advantage_and_can_hide",
-              "title": "Erynd rozpoznaje teren polowania",
-              "narration": "Powolne podejście pozwala Eryndowi połączyć ślady z ostrzeżeniem drwali. Drużyna zatrzymuje się przed linią zasadzki, może się ukryć i rzuca inicjatywę z przewagą.",
-              "required_flags": ["knowledge.convoy_route_magic_suspected", "travel.pace.slow"]
-            },
-            {
               "id": "erynd_warned_party",
               "outcome": "party_initiative_advantage",
               "title": "Ostrzeżenie Erynda",
               "narration": "Erynd rozpoznaje charakterystyczne ślady i ostrzega drużynę chwilę przed pierwszym skokiem bestii. Bohaterowie rzucają inicjatywę z przewagą.",
               "required_flags": ["knowledge.convoy_route_magic_suspected"]
-            },
-            {
-              "id": "slow_approach",
-              "outcome": "party_can_hide",
-              "title": "Ostrożne wejście w wąwóz",
-              "narration": "Drużyna porusza się wystarczająco wolno, aby spróbować zająć ukryte pozycje przed rozpoczęciem starcia.",
-              "required_flags": ["travel.pace.slow"]
-            },
-            {
-              "id": "fast_unwarned_ambush",
-              "outcome": "enemies_surprise_party",
-              "title": "Wprost w linię polowania",
-              "narration": "Szybki marsz wnosi drużynę pomiędzy porzucone wozy, zanim ktokolwiek rozpozna ruch w cieniu. Przeciwnicy rozpoczynają z przewagą do inicjatywy.",
-              "required_flags": ["travel.pace.fast"],
-              "forbidden_flags": ["knowledge.convoy_route_magic_suspected"]
             }
           ]
         },
@@ -132,7 +463,8 @@
           "next_instruction": "Zakończ wynik, aby przejść do eksploracji pobojowiska.",
           "effects": [
             {"type":"set_flag","parameters":{"key":"map1_encounter_cleared","value":true}},
-            {"type":"reveal_point","parameters":{"point_id":"road_aftermath"}}
+            {"type":"reveal_point","parameters":{"point_id":"road_aftermath"}},
+            {"type":"reveal_point","parameters":{"point_id":"teren"}}
           ]
         },
         "outcome_on_defeat": {
@@ -159,6 +491,50 @@
     "observations": [],
     "flows": [],
     "traps": [],
+    "continuation": {
+      "id": "depart_for_black_ford_keep",
+      "label": "Wyruszcie do Strażnicy Czarnego Brodu",
+      "description": "Drużyna opuszcza zawaloną drogę wybranym szlakiem i rusza ku strażnicy.",
+      "departure_zone_id": "black_ford_route",
+      "target_scenario_id": "ostatni_transport_02_czarny_brod",
+      "target_scenario_path": "ostatni_transport_02_czarny_brod.json",
+      "target_scenario_name": "Strażnica Czarnego Brodu",
+      "unavailable_hint": "Najpierw zbadajcie wóz i północne tropy, pomóżcie Terenowi, rozstrzygnijcie los młodej bestii oraz wybierzcie trasę.",
+      "available_if_flags": ["map1_encounter_cleared","map1_wagon_examined","map1_route_clue_found","map1_teren_fate_decided","map1_young_beast_decided","map1_route_selected"],
+      "departure_summary": [
+        {"label":"Manifest lub ślady grabieży zostały zbadane.","required_flag":"map1_wagon_examined"},
+        {"label":"Północny kierunek marszu został potwierdzony.","required_flag":"map1_route_clue_found"},
+        {"label":"Teren przekazał relację, a jego dalszy los został ustalony.","required_flag":"map1_teren_fate_decided"},
+        {"label":"Los młodej bestii został rozstrzygnięty.","required_flag":"map1_young_beast_decided"},
+        {"label":"Drużyna wybrała drogę do Czarnego Brodu.","required_flag":"map1_route_selected"}
+      ],
+      "propagate_flags": ["knowledge.transport_manifest_found","knowledge.hidden_medicine_recovered","knowledge.wagon_violent_looting","knowledge.convoy_survivors_moved_north","knowledge.forest_route_tracks","knowledge.main_route_observed","knowledge.teren_truth","knowledge.teren_partial_account","teren.traveling_with_party","teren.left_sheltered","map1_young_beast_spared","map1_young_beast_killed","map1_route_main","map1_route_forest"],
+      "outcomes": [
+        {
+          "id":"forest_approach",
+          "kind":"success",
+          "label":"Ukryte podejście leśnym szlakiem",
+          "narration":"Drużyna schodzi z głównego traktu i pod osłoną drzew zbliża się do Czarnego Brodu od strony źródła dziwnego rezonansu.",
+          "required_flags":["map1_route_forest"],
+          "target_effects":[{"type":"set_flag","parameters":{"key":"arrival.route.forest","value":true}}]
+        },
+        {
+          "id":"main_road_approach",
+          "kind":"success",
+          "label":"Szybkie podejście głównym traktem",
+          "narration":"Drużyna rusza prosto ku bramie Czarnego Brodu. Droga jest pewna, lecz obserwatorzy w strażnicy mogą zauważyć ją z daleka.",
+          "required_flags":["map1_route_main"],
+          "target_effects":[{"type":"set_flag","parameters":{"key":"arrival.route.main","value":true}}]
+        },
+        {
+          "id":"black_ford_approach_fallback",
+          "kind":"fail_forward",
+          "label":"Podejście do Czarnego Brodu",
+          "narration":"Drużyna opuszcza zawaloną drogę i dociera na skraj terenu Strażnicy Czarnego Brodu."
+        }
+      ],
+      "travel_minutes": 30
+    },
     "resources": [
       {"id":"guild_medical_pack","label":"Pakiet medyczny Gildii","bonus_tags":["medicine","stabilize","treat_wounds"],"advantage":true,"consume_on_use":true,"portable":true},
       {"id":"guild_supply_pack","label":"Pakiet zaopatrzenia Gildii","bonus_tags":["survival","route_preparation","camp"],"modifier":2,"consume_on_use":true,"portable":true}

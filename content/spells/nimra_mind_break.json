@@ -1,0 +1,7 @@
+{
+  "schema": "dnd_board_game.spell", "schema_version": 1, "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["project_original"], "id": "nimra_mind_break", "name": "Załamanie woli",
+  "level": 2, "school": "enchantment", "casting_time": "action", "range": {"kind": "distance", "feet": 50},
+  "components": {"verbal": true, "somatic": true, "materials": []}, "duration": {"kind": "instantaneous"}, "concentration": false, "ritual": false,
+  "effect": {"kind": "attack", "ability": "intelligence", "save_ability": "wisdom", "save_damage_on_success": "half", "area": {"shape": "radius", "radius_feet": 10, "target_mode": "all_creatures"}, "damage": {"dice": "2d6", "modifier": 0, "damage_type": "psychic"}, "on_hit_condition": "no_reactions", "on_hit_condition_duration": "until_turn_start", "on_hit_condition_expiration": "source"}
+}

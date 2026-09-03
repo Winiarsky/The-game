@@ -170,6 +170,7 @@ button:disabled { border-color: #504a3e; color: #8f887b; background: #2b2a27; cu
 
 .roster-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 12px; }
 .roster-card {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 14px;
@@ -178,7 +179,10 @@ button:disabled { border-color: #504a3e; color: #8f887b; background: #2b2a27; cu
   border-radius: 8px;
   background: var(--panel);
   text-decoration: none;
+  cursor: pointer;
 }
+.roster-card input { position: absolute; opacity: 0; pointer-events: none; }
+.roster-card:has(input:focus-visible) { outline: 2px solid var(--gold); outline-offset: 3px; }
 .roster-card:hover { border-color: var(--gold); background: #292318; }
 .roster-card.selected,
 .roster-card[aria-selected="true"] {

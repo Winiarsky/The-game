@@ -505,7 +505,12 @@ def expire_invalid_combat_effects(
     kept: list[ActiveCombatEffect] = []
     for effect in active_effects:
         actor = maybe_actor_by_id(updated_state, effect.actor_id)
-        valid = actor is not None and not actor.is_defeated()
+        # Hunter's Mark must remain attached to its defeated target until the
+        # ranger transfers it.  Removing it here made the free transfer vanish
+        # while the UI payload was being built.
+        valid = actor is not None and (
+            not actor.is_defeated() or effect.kind == "hunters_mark"
+        )
         if valid and effect.kind == "grant_ac_bonus_until_move":
             valid = not expire_active_effects(
                 (effect,),
@@ -543,6 +548,20 @@ def expire_combat_effects(
 
 def attack_source_with_combat_effects(actor: Actor, source, active_effects: tuple[ActiveCombatEffect, ...]):
     modifiers = []
+    from .archetype_flaws import flaw_attack_roll_modifiers
+
+    modifiers.extend(flaw_attack_roll_modifiers(actor, active_effects, source))
+    modifiers.extend(
+        RollModifier(
+            effect.label,
+            effect.value,
+            RollModifierType.CUSTOM,
+            stacking_key=effect.kind,
+        )
+        for effect in active_effects
+        if effect.actor_id == str(actor.id)
+        and effect.kind == "garran_command_attack_penalty"
+    )
     flame_blade = next(
         (
             effect
@@ -621,13 +640,25 @@ def attack_source_with_combat_effects(actor: Actor, source, active_effects: tupl
             "concentration_attack_bonus",
             "sacred_weapon_attack_bonus",
             "magic_weapon",
+            "powerful_strike",
+            "divine_care_aura_penalty",
         }:
             continue
         if effect.kind == "strength_potion" and getattr(source, "ability", None) != "strength":
             continue
+        if effect.kind == "divine_care_aura_penalty" and getattr(
+            source, "save_ability", None
+        ):
+            continue
         if (
             effect.kind == "sacred_weapon_attack_bonus"
             and effect.object_id != f"weapon:{getattr(source, 'source_item_id', '')}"
+        ):
+            continue
+        if effect.kind == "powerful_strike" and not (
+            getattr(source, "ability", None) == "strength"
+            and getattr(getattr(source, "attack_kind", None), "value", "") == "melee"
+            and getattr(getattr(source, "source_type", None), "value", "") == "weapon"
         ):
             continue
         if (
@@ -681,6 +712,10 @@ def attack_source_with_combat_effects(actor: Actor, source, active_effects: tupl
                 and effect.object_id
                 == f"weapon:{getattr(source, 'source_item_id', '')}"
             )
+            or (
+                effect.kind == "divine_care_aura_penalty"
+                and not getattr(source, "save_ability", None)
+            )
         )
     )
     if shillelagh:
@@ -701,15 +736,22 @@ def attack_source_with_combat_effects(actor: Actor, source, active_effects: tupl
             )
     reckless = any(
         effect.actor_id == str(actor.id)
-        and effect.kind == "reckless_attack"
+        and effect.kind == "reckless_attack_advantage"
         and getattr(source, "ability", None) == "strength"
         and getattr(getattr(source, "attack_kind", None), "value", "") == "melee"
         for effect in active_effects
     )
     next_attack_advantage = any(
         effect.actor_id == str(actor.id)
-        and effect.kind == "next_attack_advantage"
+        and effect.kind in {"next_attack_advantage", "garran_rally_advantage"}
         and effect.target_actor_id is None
+        for effect in active_effects
+    )
+    erynd_aim_advantage = any(
+        effect.actor_id == str(actor.id)
+        and effect.kind == "erynd_aim_advantage"
+        and getattr(source, "source_item_id", None) == "longbow"
+        and getattr(getattr(source, "attack_kind", None), "value", "") == "ranged"
         for effect in active_effects
     )
     vicious_mockery_disadvantage = any(
@@ -725,6 +767,20 @@ def attack_source_with_combat_effects(actor: Actor, source, active_effects: tupl
     )
     triage_disadvantage = any(
         effect.actor_id == str(actor.id) and effect.kind == "flaw_triage_active"
+        for effect in active_effects
+    )
+    roar_disadvantage = any(
+        effect.actor_id == str(actor.id)
+        and effect.kind == "roar_attack_disadvantage"
+        for effect in active_effects
+    )
+    disrupted_disadvantage = any(
+        effect.actor_id == str(actor.id) and effect.kind == "erynd_disrupted"
+        for effect in active_effects
+    )
+    lorian_mocked_disadvantage = any(
+        effect.actor_id == str(actor.id)
+        and effect.kind == "lorian_mocked_attack"
         for effect in active_effects
     )
     extra_components: list[DamageComponentSpec] = []
@@ -780,16 +836,27 @@ def attack_source_with_combat_effects(actor: Actor, source, active_effects: tupl
         and damage_bonus == 0
         and not reckless
         and not next_attack_advantage
+        and not erynd_aim_advantage
         and not vicious_mockery_disadvantage
         and not extra_components
         and not heat_metal_disadvantage
         and not triage_disadvantage
+        and not roar_disadvantage
+        and not disrupted_disadvantage
+        and not lorian_mocked_disadvantage
     ):
         return source
     mode = source.attack_roll_request.mode
-    if reckless or next_attack_advantage:
+    if reckless or next_attack_advantage or erynd_aim_advantage:
         mode = _with_advantage(mode)
-    if vicious_mockery_disadvantage or heat_metal_disadvantage or triage_disadvantage:
+    if (
+        vicious_mockery_disadvantage
+        or heat_metal_disadvantage
+        or triage_disadvantage
+        or roar_disadvantage
+        or disrupted_disadvantage
+        or lorian_mocked_disadvantage
+    ):
         mode = _with_disadvantage(mode)
     return replace(
         source,
@@ -821,6 +888,26 @@ def attack_source_with_target_combat_effects(
     source = attack_source_with_combat_effects(attacker, source, active_effects)
     modifiers = []
     mode = source.attack_roll_request.mode
+    provocation = next(
+        (
+            effect
+            for effect in active_effects
+            if effect.actor_id == str(attacker.id)
+            and effect.kind == "lorian_provoked"
+        ),
+        None,
+    )
+    if provocation is not None:
+        attacks_lorian = provocation.source_actor_id == str(target.id)
+        provocation_value = max(0, int(provocation.value))
+        modifiers.append(
+            RollModifier(
+                "Prowokujący ostrzał",
+                provocation_value if attacks_lorian else -provocation_value,
+                RollModifierType.FEATURE,
+                stacking_key="lorian_provoked",
+            )
+        )
     if any(
         effect.actor_id == str(attacker.id)
         and effect.kind == "next_attack_advantage"
@@ -835,9 +922,15 @@ def attack_source_with_target_combat_effects(
         and effect.anchor_position is not None
     )
     for zone in obscuring_zones:
-        if grid_distance_feet(attacker.position, zone.anchor_position) <= zone.value:
+        if (
+            attacker.position not in zone.excluded_positions
+            and grid_distance_feet(attacker.position, zone.anchor_position) <= zone.value
+        ):
             mode = _with_disadvantage(mode)
-        if grid_distance_feet(target.position, zone.anchor_position) <= zone.value:
+        if (
+            target.position not in zone.excluded_positions
+            and grid_distance_feet(target.position, zone.anchor_position) <= zone.value
+        ):
             mode = _with_advantage(mode)
     distance = grid_distance_feet(attacker.position, target.position)
     ambient_darkness = any(effect.kind == "ambient_darkness" for effect in active_effects)
@@ -898,6 +991,12 @@ def attack_source_with_target_combat_effects(
             >= grid_distance_feet(attacker.position, target.position)
         )
         if (
+            effect.actor_id == str(attacker.id)
+            and effect.kind == "mira_instinctive_dodge"
+            and effect.target_actor_id == str(target.id)
+        ):
+            mode = _with_disadvantage(mode)
+        if (
             effect.actor_id == str(target.id)
             and effect.kind
             in {"dodge_until_next_turn", "attacks_against_disadvantage"}
@@ -927,7 +1026,10 @@ def attack_source_with_target_combat_effects(
             and effect.target_actor_id == str(target.id)
         ):
             mode = _with_advantage(mode)
-        if effect.actor_id == str(target.id) and effect.kind == "reckless_attack":
+        if effect.actor_id == str(target.id) and effect.kind in {
+            "reckless_attack",
+            "reckless_attack_exposure",
+        }:
             mode = _with_advantage(mode)
         if (
             effect.actor_id == str(target.id)
@@ -945,6 +1047,7 @@ def attack_source_with_target_combat_effects(
                 damage_type=source.damage_components[0].damage_type,
                 dice=DiceExpression(1, 6),
                 label="Znak łowcy",
+                doubles_on_critical=source.id != "double_shot",
             )
             source = replace(
                 source,
@@ -999,7 +1102,10 @@ def consume_next_attack_effects(
     return tuple(
         effect
         for effect in end_invisibility_effects(remaining, actor_id)
-        if not (effect.actor_id == actor_id and effect.kind == "sanctuary")
+        if not (
+            effect.actor_id == actor_id
+            and effect.kind in {"sanctuary", "garran_rally_advantage"}
+        )
     )
 
 

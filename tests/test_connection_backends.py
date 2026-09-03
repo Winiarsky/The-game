@@ -1,5 +1,6 @@
 from pathlib import Path
 import sys
+import threading
 import time
 
 
@@ -337,7 +338,9 @@ def test_hardware_backend_ignores_delayed_defensive_stop_acknowledgement():
             {"protocol": "board_scan_usb_v1", "event": "press", "col": 2, "row": 2},
         ]
     )
-    backend._read_protocol_payload = lambda *, timeout_s=None: next(payloads)  # noqa: ARG005
+    backend._read_protocol_payload = (  # type: ignore[method-assign]
+        lambda *, timeout_s=None, cancel_generation=None: next(payloads)  # noqa: ARG005
+    )
 
     result = backend.scan_board([(2, 2)])
 
@@ -357,7 +360,7 @@ def test_hardware_backend_honors_explicit_cancel_during_active_scan():
     backend.scan_recovery_timeout_s = 0.0
     backend._cancel_generation = 0
 
-    def cancelled_payload(*, timeout_s=None):  # noqa: ARG001
+    def cancelled_payload(*, timeout_s=None, cancel_generation=None):  # noqa: ARG001
         backend.cancel_scan()
         # A press already buffered before the STOP acknowledgement must not win
         # the race with the explicit cancellation request.
@@ -368,6 +371,41 @@ def test_hardware_backend_honors_explicit_cancel_during_active_scan():
     result = backend.scan_board([(2, 2)])
 
     assert result is None
+    assert fake_serial.writes == ["SCAN", "STOP"]
+
+
+def test_hardware_backend_cancel_does_not_require_stop_acknowledgement():
+    read_started = threading.Event()
+
+    class _SilentSerial(_FakeSerial):
+        def readline(self):
+            read_started.set()
+            time.sleep(0.005)
+            return b""
+
+    backend = _HardwareBackend.__new__(_HardwareBackend)
+    fake_serial = _SilentSerial()
+    backend.ser = fake_serial
+    backend.protocol_name = "board_scan_usb_v1"
+    backend.scan_command = "SCAN"
+    backend.stop_command = "STOP"
+    backend.stop_before_scan = False
+    backend.pre_scan_delay_s = 0.0
+    backend.scan_recovery_timeout_s = 0.0
+    backend._cancel_generation = 0
+    results = []
+
+    scan_thread = threading.Thread(
+        target=lambda: results.append(backend.scan_board([(2, 2)], timeout_s=1.0))
+    )
+    scan_thread.start()
+    assert read_started.wait(timeout=0.2)
+
+    backend.cancel_scan()
+    scan_thread.join(timeout=0.2)
+
+    assert not scan_thread.is_alive()
+    assert results == [None]
     assert fake_serial.writes == ["SCAN", "STOP"]
 
 
@@ -414,7 +452,9 @@ def test_hardware_backend_stops_scan_after_rejected_press():
             {"protocol": "board_scan_usb_v1", "event": "press", "col": 2, "row": 2},
         ]
     )
-    backend._read_protocol_payload = lambda *, timeout_s=None: next(payloads)  # noqa: ARG005
+    backend._read_protocol_payload = (  # type: ignore[method-assign]
+        lambda *, timeout_s=None, cancel_generation=None: next(payloads)  # noqa: ARG005
+    )
 
     result = backend.scan_board([(2, 2)])
 

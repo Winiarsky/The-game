@@ -12,6 +12,7 @@ from dnd_board_game.combat import (
     InitiativeEntry,
     InitiativeOrder,
     current_actor,
+    change_weapon,
     drop_weapon,
     equip_weapon,
     expend_thrown_weapon,
@@ -263,6 +264,56 @@ def test_weapon_swap_cannot_fit_after_free_interaction_was_already_spent() -> No
         "axe": True,
         "hammer": False,
     }
+
+
+def test_simplified_weapon_change_is_atomic_and_available_once_per_turn() -> None:
+    sword = InventoryItem(
+        "sword",
+        "Miecz",
+        "weapon",
+        equipped=True,
+        hands_required=1,
+        held_in=(HandSlot.MAIN_HAND,),
+    )
+    shield = InventoryItem(
+        "shield",
+        "Tarcza",
+        "shield",
+        equipped=True,
+        hands_required=1,
+        held_in=(HandSlot.OFF_HAND,),
+    )
+    axe = InventoryItem("axe", "Topór", "weapon", equipped=False, hands_required=1)
+    bow = InventoryItem("bow", "Łuk", "weapon", equipped=False, hands_required=2)
+    hero = replace(
+        _actor("hero", Faction.ALLY, 0),
+        inventory=(sword, shield, axe, bow),
+    )
+    goblin = _actor("goblin", Faction.ENEMY, 1)
+    state = start_combat((hero, goblin), _order(hero, goblin))
+
+    first = change_weapon(state, "axe")
+    second = change_weapon(first.state, "bow")
+
+    assert first.accepted
+    assert not first.state.turn_action.weapon_change_available
+    loadout = {item.id: item for item in current_actor(first.state).inventory}
+    assert loadout["axe"].equipped
+    assert loadout["shield"].equipped
+    assert not loadout["sword"].equipped
+    assert not second.accepted
+    assert "już wykorzystana" in second.message
+
+
+def test_selecting_current_weapon_does_not_spend_weapon_change() -> None:
+    sword = InventoryItem("sword", "Miecz", "weapon", equipped=True)
+    hero = replace(_actor("hero", Faction.ALLY, 0), inventory=(sword,))
+    goblin = _actor("goblin", Faction.ENEMY, 1)
+
+    result = change_weapon(start_combat((hero, goblin), _order(hero, goblin)), "sword")
+
+    assert result.accepted
+    assert result.state.turn_action.weapon_change_available
 
 
 def test_action_economy_cost_dispatches_action_bonus_and_free_costs() -> None:

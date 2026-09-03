@@ -19,7 +19,10 @@ def all_default_character_drafts() -> tuple[CharacterDraft, ...]:
             species_id="half_orc",
             class_id="barbarian",
             background_id="outlander",
-            base_ability_scores=AbilityScores(15, 13, 14, 8, 12, 10),
+            # Half-orc bonuses and the board-game level-3 boost produce
+            # STR 18 / CON 16.  This keeps the +6 weapon attack while making
+            # Brakka's per-Rage Ferocity pool equal to 3.
+            base_ability_scores=AbilityScores(14, 13, 15, 8, 12, 10),
             selected_skill_ids=("animal_handling", "perception"),
             equipment_package_id="barbarian_greataxe",
             selected_background_tool_ids=("drum",),
@@ -79,7 +82,7 @@ def all_default_character_drafts() -> tuple[CharacterDraft, ...]:
                 "shield_of_faith",
                 "sanctuary",
                 "aid",
-                "warding_bond",
+                "prayer_of_healing",
             ),
             selected_subclass_id="life_domain",
             selected_species_tool_ids=("smiths_tools",),
@@ -152,9 +155,12 @@ def all_default_character_drafts() -> tuple[CharacterDraft, ...]:
             background_id="folk_hero",
             base_ability_scores=AbilityScores(12, 15, 13, 10, 14, 8),
             selected_skill_ids=("investigation", "nature", "stealth"),
-            equipment_package_id="ranger_archer",
+            equipment_package_id="erynd_mobile_hunter",
             selected_species_language_ids=("sylvan",),
             selected_species_cantrip_ids=("light",),
+            # Required ranger choices remain valid at construction time, then
+            # the curated profile retires them in favour of Erynd's board-game
+            # passives (First Blood and Scout's Vigilance).
             selected_class_option_ids=(
                 "favored_enemy_beast",
                 "natural_explorer_forest",
@@ -180,8 +186,8 @@ def all_default_character_drafts() -> tuple[CharacterDraft, ...]:
                 "perception",
                 "sleight_of_hand",
             ),
-            selected_expertise_ids=("investigation", "sleight_of_hand"),
-            equipment_package_id="rogue_burglar",
+            selected_expertise_ids=("stealth", "sleight_of_hand"),
+            equipment_package_id="mira_shadow_killer",
             selected_background_tool_ids=("playing_card_set",),
             selected_subclass_id="thief",
             level=3,

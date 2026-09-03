@@ -6,15 +6,18 @@ from dataclasses import dataclass, replace
 
 from dnd_board_game.actors import (
     Actor,
+    actor_resource_pool,
     actor_has_feature,
     can_spend_actor_resource,
     increase_exhaustion,
     spend_actor_resource,
 )
 from dnd_board_game.inventory import WeaponProperty, normalize_hand_equipment
+from dnd_board_game.actors import skill_modifier
 from dnd_board_game.rules import (
     ActiveEffect,
     AdditionalEffectExpiration,
+    D20RollRequest,
     DiceExpression,
     EffectDuration,
     EffectSource,
@@ -39,6 +42,7 @@ from .session import (
     use_action_economy_cost,
 )
 from .spells import consume_spell_resource, grid_distance_feet
+from .spells import SpellArea, SpellAreaShape, SpellAreaTargetMode
 from .spells import resolve_actor_saving_throw
 from .class_feature_rules import (
     FontOfMagicConversion,
@@ -109,6 +113,39 @@ class RecklessAttackResolution:
     state: CombatState
     active_effects: tuple[ActiveEffect, ...]
     actor: Actor
+
+
+@dataclass(frozen=True, slots=True)
+class BrakkaFeatureResolution:
+    state: CombatState
+    active_effects: tuple[ActiveEffect, ...]
+    actor_before: Actor
+    actor_after: Actor
+    feature_id: str
+    ferocity_spent: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class HardAsRockResolution:
+    state: CombatState
+    actor_before: Actor
+    actor_after: Actor
+    incoming_damage: int
+    reduction: int
+    remaining_damage: int
+    die_roll: int
+
+
+@dataclass(frozen=True, slots=True)
+class ShoulderCheckResolution:
+    state: CombatState
+    attacker: Actor
+    target_before: Actor
+    target_after: Actor
+    attacker_total: int
+    defender_total: int
+    push_distance_feet: int
+    succeeded: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -407,6 +444,37 @@ def resolve_primeval_awareness(
     )
 
 
+def channel_turn_targets(
+    state: CombatState,
+    *,
+    action_id: str,
+    board: BoardState | None = None,
+    actor: Actor | None = None,
+) -> tuple[Actor, ...]:
+    source = actor or current_actor(state)
+    target_types = (
+        {"undead"}
+        if action_id == "turn_undead"
+        else {"fiend", "undead"}
+        if action_id == "turn_the_unholy"
+        else set()
+    )
+    if not target_types:
+        return ()
+    return tuple(
+        target
+        for target in state.actors
+        if target.id != source.id
+        and not target.is_defeated()
+        and target.creature_type in target_types
+        and grid_distance_feet(source.position, target.position) <= 30
+        and (
+            board is None
+            or line_of_sight_clear(board, source.position, target.position)
+        )
+    )
+
+
 def resolve_channel_turn(
     state: CombatState,
     *,
@@ -431,17 +499,11 @@ def resolve_channel_turn(
         raise ValueError("Aktywna postać nie posiada wybranego odpędzania.")
     if not can_spend_actor_resource(actor, "channel_divinity_uses"):
         raise ValueError("Brak użyć Channel Divinity.")
-    eligible = tuple(
-        target
-        for target in state.actors
-        if target.id != actor.id
-        and not target.is_defeated()
-        and target.creature_type in target_types
-        and grid_distance_feet(actor.position, target.position) <= 30
-        and (
-            board is None
-            or line_of_sight_clear(board, actor.position, target.position)
-        )
+    eligible = channel_turn_targets(
+        state,
+        action_id=action_id,
+        board=board,
+        actor=actor,
     )
     eligible_ids = tuple(str(target.id) for target in eligible)
     if set(saving_rolls) != set(eligible_ids):
@@ -1133,7 +1195,7 @@ def _resolve_ki_defense(
 
 
 def resolve_action_surge(state: CombatState) -> ActionSurgeResolution:
-    """Spend Action Surge and make one new action available this turn."""
+    """Spend a bonus action and Action Surge to restore the main action."""
     actor = current_actor(state)
     if not actor_has_feature(actor, "action_surge"):
         raise ValueError("Aktywna postać nie posiada cechy Action Surge.")
@@ -1141,8 +1203,11 @@ def resolve_action_surge(state: CombatState) -> ActionSurgeResolution:
         raise ValueError("Action Surge można użyć po wykorzystaniu zwykłej akcji.")
     if not can_spend_actor_resource(actor, "action_surge_uses"):
         raise ValueError("Action Surge zostało już wykorzystane.")
-    spent = spend_actor_resource(actor, "action_surge_uses")
-    updated_state = replace_actor(state, spent.actor_after)
+    bonus_action = use_action_economy_cost(state, ActionEconomyCost.BONUS_ACTION)
+    if not bonus_action.accepted:
+        raise ValueError(bonus_action.message)
+    spent = spend_actor_resource(current_actor(bonus_action.state), "action_surge_uses")
+    updated_state = replace_actor(bonus_action.state, spent.actor_after)
     updated_state = replace(
         updated_state,
         turn_action=replace(
@@ -1178,6 +1243,7 @@ def resolve_rage(
         actor_after = current_actor(action.state)
         if frenzied:
             actor_after = increase_exhaustion(actor_after)
+        actor_after = _set_ferocity(actor_after, 0)
         updated_state = replace_actor(action.state, actor_after)
         updated_effects = tuple(
             effect
@@ -1185,7 +1251,16 @@ def resolve_rage(
             if not (
                 effect.actor_id == str(actor.id)
                 and effect.kind
-                in {"rage", "rage_duration", "rage_activity", "frenzy", "frenzy_pending"}
+                in {
+                    "rage",
+                    "rage_duration",
+                    "rage_activity",
+                    "brakka_acceleration",
+                    "powerful_strike",
+                    "reckless_attack_advantage",
+                    "frenzy",
+                    "frenzy_pending",
+                }
             )
         )
         return RageResolution(
@@ -1203,7 +1278,11 @@ def resolve_rage(
         raise ValueError(action.message)
     actor_after_action = current_actor(action.state)
     spent = spend_actor_resource(actor_after_action, "rage_uses")
-    updated_state = replace_actor(action.state, spent.actor_after)
+    actor_after = _set_ferocity(
+        spent.actor_after,
+        max(1, ability_modifier(spent.actor_after.ability_scores.constitution)),
+    )
+    updated_state = replace_actor(action.state, actor_after)
     effect = ActiveEffect(
         id=f"rage:{actor.id}",
         actor_id=str(actor.id),
@@ -1234,7 +1313,7 @@ def resolve_rage(
         updated_state,
         effects,
         actor,
-        spent.actor_after,
+        actor_after,
         True,
     )
 
@@ -1243,22 +1322,25 @@ def resolve_reckless_attack(
     state: CombatState,
     active_effects: tuple[ActiveEffect, ...],
 ) -> RecklessAttackResolution:
-    """Declare Reckless Attack for the current turn and exposure until next turn."""
+    """Prepare exactly one melee Strength attack with advantage.
+
+    The ordinary attack flow spends the action.  This resolver only marks the
+    chosen attack and the exposure created by using the special action.
+    """
     actor = current_actor(state)
     if not actor_has_feature(actor, "reckless_attack"):
         raise ValueError("Aktywna postać nie posiada cechy Reckless Attack.")
-    if state.turn_action.attacks_used > 0:
-        raise ValueError("Reckless Attack trzeba zadeklarować przed pierwszym atakiem w turze.")
     if any(
-        effect.actor_id == str(actor.id) and effect.kind == "reckless_attack"
+        effect.actor_id == str(actor.id)
+        and effect.kind == "reckless_attack_advantage"
         for effect in active_effects
     ):
-        raise ValueError("Reckless Attack jest już aktywny.")
-    effect = ActiveEffect(
-        id=f"reckless_attack:{actor.id}",
+        raise ValueError("Lekkomyślny atak jest już przygotowany.")
+    advantage = ActiveEffect(
+        id=f"reckless_attack_advantage:{actor.id}",
         actor_id=str(actor.id),
-        kind="reckless_attack",
-        label="Reckless Attack",
+        kind="reckless_attack_advantage",
+        label="Lekkomyślny atak",
         object_id="class_feature:reckless_attack",
         value=0,
         source_actor_id=str(actor.id),
@@ -1267,11 +1349,343 @@ def resolve_reckless_attack(
             "reckless_attack",
             "Reckless Attack",
         ),
+        duration=EffectDuration.UNTIL_NEXT_ATTACK,
+        expiration_actor_id=str(actor.id),
+        additional_expirations=(
+            AdditionalEffectExpiration(
+                EffectDuration.UNTIL_TURN_END,
+                actor_id=str(actor.id),
+            ),
+        ),
+    )
+    exposure = ActiveEffect(
+        id=f"reckless_attack_exposure:{actor.id}",
+        actor_id=str(actor.id),
+        kind="reckless_attack_exposure",
+        label="Odsłonięta garda",
+        object_id="class_feature:reckless_attack",
+        value=0,
+        source_actor_id=str(actor.id),
+        source=EffectSource(
+            EffectSourceType.ACTION,
+            "reckless_attack",
+            "Lekkomyślny atak",
+        ),
         duration=EffectDuration.UNTIL_TURN_START,
         expiration_actor_id=str(actor.id),
     )
-    effects = apply_active_effect(active_effects, effect).active_effects
+    effects = apply_active_effect(active_effects, advantage).active_effects
+    effects = apply_active_effect(effects, exposure).active_effects
     return RecklessAttackResolution(state, effects, actor)
+
+
+def resolve_powerful_strike(
+    state: CombatState,
+    active_effects: tuple[ActiveEffect, ...],
+) -> BrakkaFeatureResolution:
+    """Spend 2 Ferocity and prepare one melee Strength attack at +10."""
+
+    actor = current_actor(state)
+    _require_brakka_rage_feature(actor, active_effects, "powerful_strike")
+    if not can_spend_actor_resource(actor, "ferocity_uses", 2):
+        raise ValueError("Potężne uderzenie wymaga 2 punktów Dzikości.")
+    spent = spend_actor_resource(actor, "ferocity_uses", 2)
+    updated = replace_actor(state, spent.actor_after)
+    effect = ActiveEffect(
+        id=f"powerful_strike:{actor.id}",
+        actor_id=str(actor.id),
+        kind="powerful_strike",
+        label="Potężne uderzenie",
+        object_id="class_feature:powerful_strike",
+        value=10,
+        source_actor_id=str(actor.id),
+        source=EffectSource(
+            EffectSourceType.ACTION,
+            "powerful_strike",
+            "Potężne uderzenie",
+        ),
+        duration=EffectDuration.UNTIL_NEXT_ATTACK,
+        expiration_actor_id=str(actor.id),
+        additional_expirations=(
+            AdditionalEffectExpiration(
+                EffectDuration.UNTIL_TURN_END,
+                actor_id=str(actor.id),
+            ),
+        ),
+    )
+    effects = apply_active_effect(active_effects, effect).active_effects
+    return BrakkaFeatureResolution(
+        updated,
+        effects,
+        actor,
+        spent.actor_after,
+        "powerful_strike",
+        2,
+    )
+
+
+def resolve_acceleration(
+    state: CombatState,
+    active_effects: tuple[ActiveEffect, ...],
+) -> BrakkaFeatureResolution:
+    """Increase this turn's total movement cap by Brakka's base speed."""
+
+    actor = current_actor(state)
+    _require_brakka_rage_feature(actor, active_effects, "acceleration")
+    if not can_spend_actor_resource(actor, "ferocity_uses"):
+        raise ValueError("Przyspieszenie wymaga 1 punktu Dzikości.")
+    action = use_action_economy_cost(state, ActionEconomyCost.BONUS_ACTION)
+    if not action.accepted:
+        raise ValueError(action.message)
+    spent = spend_actor_resource(current_actor(action.state), "ferocity_uses")
+    updated = replace_actor(action.state, spent.actor_after)
+    updated = replace(
+        updated,
+        turn_action=replace(
+            updated.turn_action,
+            extra_movement_feet=updated.turn_action.extra_movement_feet + actor.speed_feet,
+        ),
+    )
+    effect = ActiveEffect(
+        id=f"brakka_acceleration:{actor.id}",
+        actor_id=str(actor.id),
+        kind="brakka_acceleration",
+        label="Przyspieszenie",
+        object_id="class_feature:acceleration",
+        value=actor.speed_feet,
+        source_actor_id=str(actor.id),
+        duration=EffectDuration.UNTIL_TURN_END,
+        expiration_actor_id=str(actor.id),
+    )
+    effects = apply_active_effect(active_effects, effect).active_effects
+    return BrakkaFeatureResolution(
+        updated,
+        effects,
+        actor,
+        spent.actor_after,
+        "acceleration",
+        1,
+    )
+
+
+def resolve_hard_as_rock(
+    state: CombatState,
+    active_effects: tuple[ActiveEffect, ...],
+    *,
+    actor_id: str,
+    incoming_damage: int,
+    die_roll: int,
+) -> HardAsRockResolution:
+    """Reduce already-resisted damage by 1d12 + Constitution modifier."""
+
+    if not 1 <= die_roll <= 12:
+        raise ValueError("Twarda jak skała wymaga wyniku k12 od 1 do 12.")
+    if incoming_damage < 0:
+        raise ValueError("Obrażenia nie mogą być ujemne.")
+    actor = next(
+        (candidate for candidate in state.actors if str(candidate.id) == actor_id),
+        None,
+    )
+    if actor is None or not actor_has_feature(actor, "hard_as_rock"):
+        raise ValueError("Postać nie posiada cechy Twarda jak skała.")
+    _require_active_rage(actor, active_effects)
+    if actor.id in state.spent_reaction_actor_ids:
+        raise ValueError("Reakcja tej postaci została już wykorzystana.")
+    if not can_spend_actor_resource(actor, "ferocity_uses"):
+        raise ValueError("Brak punktów Dzikości.")
+    spent = spend_actor_resource(actor, "ferocity_uses")
+    reduction = die_roll + ability_modifier(actor.ability_scores.constitution)
+    updated = replace_actor(state, spent.actor_after)
+    updated = replace(
+        updated,
+        spent_reaction_actor_ids=frozenset((*updated.spent_reaction_actor_ids, actor.id)),
+    )
+    return HardAsRockResolution(
+        updated,
+        actor,
+        spent.actor_after,
+        incoming_damage,
+        reduction,
+        max(0, incoming_damage - reduction),
+        die_roll,
+    )
+
+
+def shoulder_check_push_distance(attacker_total: int, defender_total: int) -> int:
+    """Return 0 on a tie/loss, otherwise 5 ft plus 5 per full 5 margin."""
+
+    margin = int(attacker_total) - int(defender_total)
+    return 0 if margin <= 0 else min(30, 5 + (margin // 5) * 5)
+
+
+def legal_shoulder_check_destinations(
+    board: BoardState,
+    state: CombatState,
+    attacker: Actor,
+    target: Actor,
+    *,
+    distance_feet: int,
+) -> tuple[Coordinate, ...]:
+    """Legal free destinations that do not pull the target toward Brakka."""
+
+    if distance_feet <= 0:
+        return ()
+    origin_distance = grid_distance_feet(attacker.position, target.position)
+    occupied = {
+        candidate.position
+        for candidate in state.actors
+        if candidate.id != target.id and not candidate.is_defeated()
+    }
+    return tuple(
+        position
+        for row in range(board.dimensions.rows)
+        for col in range(board.dimensions.cols)
+        for position in (Coordinate(col, row),)
+        if position != target.position
+        and position not in occupied
+        and not board.terrain_at(position).blocks_movement
+        and grid_distance_feet(target.position, position) <= distance_feet
+        and grid_distance_feet(attacker.position, position) >= origin_distance
+        and line_of_sight_clear(board, target.position, position)
+    )
+
+
+def resolve_shoulder_check(
+    state: CombatState,
+    *,
+    board: BoardState,
+    target_id: str,
+    attacker_roll: int,
+    defender_roll: int,
+    destination: Coordinate | None = None,
+) -> ShoulderCheckResolution:
+    actor = current_actor(state)
+    if not actor_has_feature(actor, "shoulder_check"):
+        raise ValueError("Aktywna postać nie posiada zdolności Z bara.")
+    target = next((item for item in state.actors if str(item.id) == target_id), None)
+    if target is None or target.faction == actor.faction or target.is_defeated():
+        raise ValueError("Z bara wymaga żywego przeciwnika.")
+    if grid_distance_feet(actor.position, target.position) > 5:
+        raise ValueError("Cel Z bara musi znajdować się w odległości 5 stóp.")
+    sizes = ("tiny", "small", "medium", "large", "huge", "gargantuan")
+    if sizes.index(target.size.value) > sizes.index(actor.size.value) + 1:
+        raise ValueError("Cel Z bara jest o więcej niż jeden rozmiar większy.")
+    action = use_action_economy_cost(state, ActionEconomyCost.ACTION)
+    if not action.accepted:
+        raise ValueError(action.message)
+    attacker_total = int(attacker_roll) + skill_modifier(actor, "athletics")
+    defender_total = int(defender_roll) + skill_modifier(target, "athletics")
+    distance = shoulder_check_push_distance(attacker_total, defender_total)
+    legal = legal_shoulder_check_destinations(
+        board,
+        action.state,
+        actor,
+        target,
+        distance_feet=distance,
+    )
+    if distance == 0 or not legal:
+        distance = 0
+        destination = target.position
+    elif destination not in legal:
+        raise ValueError("Wybrane pole nie jest legalnym celem odepchnięcia Z bara.")
+    target_after = replace(target, position=destination or target.position)
+    updated = replace_actor(action.state, target_after)
+    return ShoulderCheckResolution(
+        updated,
+        actor,
+        target,
+        target_after,
+        attacker_total,
+        defender_total,
+        distance,
+        distance > 0,
+    )
+
+
+def deafening_roar_attack_source(
+    actor: Actor,
+    active_effects: tuple[ActiveEffect, ...],
+) -> AttackSource | None:
+    """Build Brakka's 15-foot hostile cone while it is currently usable."""
+
+    if not actor_has_feature(actor, "deafening_roar"):
+        return None
+    if not any(
+        effect.actor_id == str(actor.id) and effect.kind == "rage"
+        for effect in active_effects
+    ):
+        return None
+    if not can_spend_actor_resource(actor, "ferocity_uses", 2):
+        return None
+    area = SpellArea(
+        shape=SpellAreaShape.CONE,
+        length_feet=15,
+        width_feet=15,
+        target_mode=SpellAreaTargetMode.ENEMIES,
+    )
+    return AttackSource(
+        id="deafening_roar",
+        name="Ogłuszający ryk",
+        source_type=AttackSourceType.CUSTOM,
+        range_feet=15,
+        attack_kind=AttackKind.RANGED,
+        attack_roll_request=D20RollRequest(),
+        damage_hint="2k6 thunder",
+        damage_components=(
+            DamageComponentSpec(
+                id="deafening_roar",
+                damage_type=DamageType.THUNDER,
+                dice=DiceExpression(2, 6),
+                label="Ogłuszający ryk",
+            ),
+        ),
+        area=area,
+        save_ability="constitution",
+        save_dc=12 + ability_modifier(actor.ability_scores.constitution),
+        save_damage_on_success="half",
+        resource_pool_id="ferocity_uses",
+        resource_cost=2,
+        action_cost=ActionEconomyCost.ACTION,
+        tabletop_riders=(
+            "Porażka: brak dobrowolnego ruchu do końca najbliższej tury celu.",
+            "Naturalne 1: dodatkowo utrudnienie ataków; naturalne 20: bez obrażeń.",
+        ),
+    )
+def _require_brakka_rage_feature(
+    actor: Actor,
+    active_effects: tuple[ActiveEffect, ...],
+    feature_id: str,
+) -> None:
+    if not actor_has_feature(actor, feature_id):
+        raise ValueError("Aktywna postać nie posiada tej zdolności Brakki.")
+    _require_active_rage(actor, active_effects)
+
+
+def _require_active_rage(
+    actor: Actor,
+    active_effects: tuple[ActiveEffect, ...],
+) -> None:
+    if not any(
+        effect.actor_id == str(actor.id) and effect.kind == "rage"
+        for effect in active_effects
+    ):
+        raise ValueError("Ta zdolność wymaga aktywnego Szału.")
+
+
+def _set_ferocity(actor: Actor, current: int) -> Actor:
+    pool = actor_resource_pool(actor, "ferocity_uses")
+    if pool is None:
+        return actor
+    bounded = max(0, min(pool.maximum, current))
+    return replace(
+        actor,
+        resource_pools=tuple(
+            replace(candidate, current=bounded)
+            if candidate.id == "ferocity_uses"
+            else candidate
+            for candidate in actor.resource_pools
+        ),
+    )
 
 
 def apply_life_domain_to_healing_source(
@@ -1429,7 +1843,8 @@ def plan_sneak_attack(
     source: AttackSource,
     roll_mode: RollMode,
 ) -> SneakAttackPlan:
-    if not actor_has_feature(attacker, "sneak_attack"):
+    mira_killer = actor_has_feature(attacker, "mira_shadow_killer")
+    if not actor_has_feature(attacker, "sneak_attack") and not mira_killer:
         return SneakAttackPlan(False, "Postać nie posiada cechy Sneak Attack.", source)
     if target.faction == attacker.faction:
         return SneakAttackPlan(False, "Sneak Attack wymaga wrogiego celu.", source)
@@ -1439,10 +1854,46 @@ def plan_sneak_attack(
         for effect in active_effects
     ):
         return SneakAttackPlan(False, "Sneak Attack wykorzystano już w tej turze.", source)
-    if not _sneak_attack_weapon_is_eligible(attacker, source):
+    if not mira_killer and not _sneak_attack_weapon_is_eligible(attacker, source):
         return SneakAttackPlan(False, "Sneak Attack wymaga broni finesse albo ataku dystansowego.", source)
     if roll_mode == RollMode.DISADVANTAGE:
         return SneakAttackPlan(False, "Sneak Attack nie działa przy disadvantage.", source)
+    modifier_keys = {
+        modifier.stacking_key
+        for modifier in source.attack_roll_request.modifiers
+    }
+    hidden_attack = "hidden_attacker_advantage" in modifier_keys
+    mira_flank = "flanking_advantage" in modifier_keys
+    if mira_killer:
+        weapon_name = source.name.casefold()
+        eligible_weapon = (
+            source.source_type == AttackSourceType.WEAPON
+            and (
+                "rapier" in weapon_name
+                or "nóż do rzucania" in weapon_name
+                or "throwing_knife" in source.id
+                or source.source_item_id in {"rapier", "throwing_knife"}
+                or source.proficiency_id in {"rapier", "throwing_knife"}
+            )
+        )
+        if not eligible_weapon:
+            return SneakAttackPlan(
+                False,
+                "Premia Miry wymaga rapiera albo noża do rzucania.",
+                source,
+            )
+        sneak_attack_dice = (2 if hidden_attack else 0) + (1 if mira_flank else 0)
+        if sneak_attack_dice <= 0:
+            return SneakAttackPlan(
+                False,
+                "Mira musi atakować z ukrycia lub osobiście flankować cel.",
+                source,
+            )
+        return SneakAttackPlan(
+            True,
+            f"Premia zabójczyni {sneak_attack_dice}d6 jest dostępna.",
+            sneak_attack_source_with_dice(source, sneak_attack_dice),
+        )
     has_adjacent_ally = any(
         other.id != attacker.id
         and other.faction == attacker.faction
@@ -1474,6 +1925,23 @@ def plan_sneak_attack(
         True,
         f"Sneak Attack {sneak_attack_dice}d6 jest dostępny.",
         enhanced,
+    )
+
+
+def sneak_attack_source_with_dice(
+    source: AttackSource,
+    dice_count: int,
+) -> AttackSource:
+    component = DamageComponentSpec(
+        id="sneak_attack",
+        damage_type=DamageType(source.damage_type),
+        dice=DiceExpression(dice_count, 6),
+        label="Atak z ukrycia / flanki",
+    )
+    return replace(
+        source,
+        damage_components=(*source.damage_components, component),
+        damage_hint=f"{source.damage_hint} + {component.hint()}".strip(" +"),
     )
 
 

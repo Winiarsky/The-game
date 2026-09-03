@@ -32,7 +32,7 @@
     "kind": "attack",
     "attack_kind": "ranged",
     "damage": {
-      "dice": "4d6",
+      "dice": "2d6",
       "modifier": 0,
       "damage_type": "radiant"
     },

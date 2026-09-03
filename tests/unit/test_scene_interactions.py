@@ -63,6 +63,38 @@ def test_interaction_without_check_sets_success_flag():
     assert result.message == "Skrzynia została otwarta."
 
 
+def test_divine_care_aura_penalizes_attack_roll_and_damage_but_not_save_spell() -> None:
+    enemy = _actor("enemy", Faction.ENEMY, Coordinate(0, 0))
+    penalty = ActiveCombatEffect(
+        id="divine-care:enemy",
+        actor_id="enemy",
+        kind="divine_care_aura_penalty",
+        label="Aura Boskiej Opieki",
+        object_id="spell:divine_care_aura",
+        value=-2,
+        duration=EffectDuration.CONCENTRATION,
+    )
+    weapon = AttackSource(
+        name="Rozdarcie",
+        source_type=AttackSourceType.WEAPON,
+        range_feet=5,
+        attack_roll_request=D20RollRequest(),
+        damage_modifier=2,
+    )
+    save_spell = replace(weapon, source_type=AttackSourceType.SPELL, save_ability="wisdom")
+
+    weakened = attack_source_with_combat_effects(enemy, weapon, (penalty,))
+    unaffected_save = attack_source_with_combat_effects(
+        enemy, save_spell, (penalty,)
+    )
+
+    assert weakened.damage_modifier == 0
+    assert [modifier.value for modifier in weakened.attack_roll_request.modifiers] == [
+        -2
+    ]
+    assert unaffected_save == save_spell
+
+
 def test_interaction_with_ability_check_succeeds_on_total_at_least_dc():
     interaction = SceneInteraction(
         "inspect_crate",
@@ -523,6 +555,34 @@ def test_hunters_mark_adds_one_d6_only_to_casters_weapon_hits() -> None:
     assert len(marked_source_again.damage_components) == 2
     assert len(wrong_attacker.damage_components) == 1
     assert len(wrong_target.damage_components) == 1
+
+
+def test_invalid_effect_cleanup_keeps_hunters_mark_on_defeated_target_for_transfer() -> None:
+    ranger = _actor("ranger", Faction.ALLY, Coordinate(0, 0))
+    defeated_target = replace(
+        _actor("marked", Faction.ENEMY, Coordinate(1, 0)),
+        hp=0,
+    )
+    state = _combat_state(ranger, defeated_target)
+    mark = ActiveCombatEffect(
+        id="hunters-mark:ranger:marked",
+        actor_id=str(defeated_target.id),
+        kind="hunters_mark",
+        label="Znak łowcy",
+        object_id="spell:hunters_mark",
+        value=6,
+        source_actor_id=str(ranger.id),
+        target_actor_id=str(defeated_target.id),
+    )
+
+    updated_state, active_effects = expire_invalid_combat_effects(
+        state,
+        (),
+        (mark,),
+    )
+
+    assert updated_state == state
+    assert active_effects == (mark,)
 
 
 def test_branding_smite_accepts_ranged_weapon_attack() -> None:

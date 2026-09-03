@@ -21,7 +21,7 @@ def test_catalog_covers_every_non_universal_character_card() -> None:
         if card.kind != DecisionCardActionKind.UNIVERSAL.value
     }
 
-    assert len(cards) == 138
+    assert len(cards) == 180
     assert "basic_attack" not in CARD_ACTION_CATALOG
     assert {source_id for source_id, _kind in cards} <= set(CARD_ACTION_CATALOG)
     for source_id, kind in cards:
@@ -35,11 +35,11 @@ def test_catalog_phase_totals_match_reviewed_table() -> None:
     assert sum(
         definition.phase is CardPhase.COMBAT
         for definition in CARD_ACTION_CATALOG.values()
-    ) == 107
+    ) == 153
     assert sum(
         definition.phase is CardPhase.EXPLORATION
         for definition in CARD_ACTION_CATALOG.values()
-    ) == 53
+    ) == 52
     assert sum(
         definition.phase is CardPhase.BOTH
         for definition in CARD_ACTION_CATALOG.values()
@@ -47,7 +47,7 @@ def test_catalog_phase_totals_match_reviewed_table() -> None:
     assert sum(
         definition.phase is CardPhase.REMOVED
         for definition in CARD_ACTION_CATALOG.values()
-    ) == 8
+    ) == 9
 
 
 def test_retired_basic_attack_card_is_not_scanner_playable() -> None:
@@ -193,6 +193,8 @@ def test_third_combat_spell_batch_uses_support_and_reaction_routes() -> None:
         "protection_from_poison",
         "sanctuary",
         "see_invisibility",
+        "divine_care_aura",
+        "healing_grace_aura",
     }
 
     assert all(
@@ -282,7 +284,11 @@ def test_first_martial_class_feature_batch_has_precise_card_contracts() -> None:
         "second_wind",
         "rage",
         "reckless_attack",
-        "frenzy",
+        "powerful_strike",
+        "shoulder_check",
+        "hard_as_rock",
+        "acceleration",
+        "deafening_roar",
         "martial_arts_strike",
         "flurry_of_blows",
         "patient_defense",
@@ -310,6 +316,30 @@ def test_first_martial_class_feature_batch_has_precise_card_contracts() -> None:
     assert card_action_definition("deflect_missiles").trigger_windows == (
         CardTriggerWindow.AFTER_DAMAGE_APPLIED,
     )
+
+
+def test_mira_redesign_cards_have_explicit_runtime_contracts() -> None:
+    expected_effects = {
+        "instinctive_dodge": "stealth_reaction_spend_trick_single_attack_disadvantage",
+        "smoke_screen": "spend_trick_move_then_forced_hide",
+        "hamstring_cut": "flanking_melee_attack_persistent_half_speed",
+        "piercing_attack": "flanking_melee_attack_then_collinear_attack",
+        "guard_vault": "melee_attack_then_move_behind_target",
+        "blade_mistress": "hidden_throwing_knife_bleeding_rider",
+        "combat_trap_detection": "physical_perception_reveal_traps_in_radius",
+    }
+
+    assert {
+        source_id: card_action_definition(source_id).effect_type
+        for source_id in expected_effects
+    } == expected_effects
+    dodge = card_action_definition("instinctive_dodge")
+    assert dodge.combat_route is CombatCardRoute.REACTION
+    assert dodge.trigger_windows == (CardTriggerWindow.ATTACK_ROLL_REVEALED,)
+    assert card_action_definition("combat_trap_detection").targeting == (
+        "self_radius_45"
+    )
+    assert card_action_definition("break_in").phase is CardPhase.REMOVED
 
 
 def test_removed_and_wrong_phase_cards_are_rejected() -> None:

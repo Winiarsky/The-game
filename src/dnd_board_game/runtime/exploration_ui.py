@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import sys
 
 from dnd_board_game.llm import GeminiGmClassifierClient, GeminiNpcInteractionClient, GroqGmClassifierClient, GroqNpcInteractionClient
 from dnd_board_game.ui.exploration_app import ExplorationUiSession, create_app
@@ -53,7 +54,14 @@ def main(argv: list[str] | None = None) -> int:
         )
     app = create_app(session)
     print(f"Exploration UI: http://{args.host}:{args.port}")
-    app.run(host=args.host, port=args.port, debug=args.debug)
+    try:
+        app.run(host=args.host, port=args.port, debug=args.debug)
+    finally:
+        try:
+            if session.shutdown_board():
+                print("Plansza rozłączona, LED-y wygaszone.")
+        except Exception as exc:  # pragma: no cover - depends on transport failure
+            print(f"Nie udało się wygasić LED-ów podczas zamykania: {exc}", file=sys.stderr)
     return 0
 
 

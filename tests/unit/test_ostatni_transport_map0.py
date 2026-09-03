@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+from dnd_board_game.actors import ActorId
 from dnd_board_game.combat import (
     CombatStatus,
     SceneFlags,
@@ -81,6 +82,9 @@ def test_map0_loads_with_seven_heroes_nessa_and_departure_gate() -> None:
     assert len(nessa.goals) == 7
     assert exploration.continuation is not None
     assert exploration.continuation.available_if_flags == ("guild_departure_unlocked",)
+    assert exploration.continuation.travel_minutes == 60
+    assert exploration.continuation.travel_policy.navigation_dc is None
+    assert exploration.continuation.travel_policy.pace_details == ()
     review = next(goal for goal in nessa.goals if goal.id == "review_transport_documents")
     assert review.required_party_actor_id == "erynd"
     assert review.assigned_actor_id == "erynd"
@@ -281,16 +285,16 @@ def test_map1_first_encounter_setup_includes_figures_and_tactical_terrain() -> N
         "skrzynie i pojemniki",
         "osłony",
         "elementy otoczenia",
-        "obiekty interaktywne",
     ]
     payload = session.encounter_setup_flow.as_payload()
     assert payload["map_asset_url"] == (
         "/game-assets/maps/ostatni_transport_01/"
-        "glodne_cienie_battlemap_base_v4.png"
+        "glodne_cienie_battlemap_base_v5.png"
     )
     steps_by_label = {
         step.label: step for step in session.encounter_setup_flow.steps
     }
+    assert len(steps_by_label["pola startowe bohaterów"].positions) == 20
     environment_by_id = {
         entry.id: entry for entry in session.encounter_setup_flow.encounter.environment
     }
@@ -309,10 +313,6 @@ def test_map1_first_encounter_setup_includes_figures_and_tactical_terrain() -> N
         "Strumień jest trudnym terenem: każde 5 ft ruchu kosztuje 10 ft.",
         "Podejście na skarpę jest trudnym terenem: każde 5 ft ruchu kosztuje 10 ft.",
     )
-    assert steps_by_label["obiekty interaktywne"].mechanics == (
-        "Bohater stojący obok może zużyć akcję, aby uderzyć w dzwon. Pierwsze uderzenie obniża morale stada o 2; kolejne są tylko hałasem.",
-    )
-
     while session.encounter_setup_flow.current_step.label != "elementy otoczenia":
         if session.encounter_setup_flow.is_player_start_step:
             session.assign_encounter_player_start_position(
@@ -370,35 +370,84 @@ def test_map1_encounter_selects_authored_party_size_variant(
     }
 
 
-def test_hungry_shadows_receive_only_the_authored_plus_one_attack_bonus() -> None:
+def test_map1_heroes_choose_their_formation_inside_a_five_by_four_zone() -> None:
+    encounter = build_encounter_from_scenario(load_scenario(MAP1_ENCOUNTER_PATH))
+
+    assert len(encounter.player_start_zones) == 1
+    assert {position.as_tuple() for position in encounter.player_start_zones[0]} == {
+        (col, row)
+        for row in range(26, 30)
+        for col in range(8, 13)
+    }
+    assert all(
+        not encounter.board.terrain_at(position).blocks_movement
+        for position in encounter.player_start_zones[0]
+    )
+    assert dict(encounter.enemy_ai_roles) == {
+        "hungry_shadow_s1": "skirmisher",
+        "hungry_shadow_s2": "skirmisher",
+        "hungry_shadow_s3": "flanker",
+        "hungry_shadow_s4": "harrier",
+        "hungry_shadow_leader": "leader",
+        "hungry_shadow_solo": "skirmisher",
+    }
+
+
+def test_map1_setup_keeps_the_whole_start_zone_available_for_each_hero() -> None:
+    session = ExplorationUiSession(MAP1_SCENARIO_PATH)
+    party = tuple(session.exploration.actors[:4])
+    session.configure_custom_party(party)
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    _resolve_map1_opening(session)
+
+    session.start_encounter_setup()
+    flow = session.encounter_setup_flow
+    assert flow is not None
+    while flow.current_step is not None and not flow.is_player_start_step:
+        session.confirm_encounter_setup_step()
+
+    assert flow.current_step is not None
+    assert flow.current_step.label == "pola startowe bohaterów"
+    assert len(flow.remaining_player_start_positions()) == 20
+    first = Coordinate(12, 29)
+    session.assign_encounter_player_start_position(first)
+
+    assert len(flow.remaining_player_start_positions()) == 19
+    assert Coordinate(8, 26) in flow.remaining_player_start_positions()
+    assert first not in flow.remaining_player_start_positions()
+
+
+def test_hungry_shadows_use_coordinated_pack_attack_statblocks() -> None:
     encounter = encounter_for_party_size(
         build_encounter_from_scenario(load_scenario(MAP1_ENCOUNTER_PATH)),
         3,
     )
-    modifiers = {
-        str(actor_id): sum(
-            modifier.value
-            for modifier in source.attack_roll_request.modifiers
-        )
-        for actor_id, source in encounter.attack_sources_by_actor.items()
-        if str(actor_id).startswith("hungry_shadow")
+    leader_sources = encounter.attack_source_options_by_actor[ActorId("hungry_shadow_leader")]
+    assert {
+        source.id: (sum(modifier.value for modifier in source.attack_roll_request.modifiers), source.damage_components[0].formula())
+        for source in leader_sources
+    } == {
+        "hungry_shadow_leader_life_drain": (3, "1d4 + 2"),
+        "hungry_shadow_leader_spirit_bolt": (5, "1d6 + 2"),
     }
-
-    assert modifiers == {
-        "hungry_shadow_leader": 6,
-        "hungry_shadow_s1": 5,
-        "hungry_shadow_s2": 5,
+    assert {
+        str(actor_id): source.damage_components[0].formula()
+        for actor_id, source in encounter.attack_sources_by_actor.items()
+        if str(actor_id).startswith("hungry_shadow_s")
+    } == {
+        "hungry_shadow_s1": "1d4 + 2",
+        "hungry_shadow_s2": "1d4 + 2",
     }
 
 
 @pytest.mark.parametrize(
     ("party_size", "enemy_positions"),
     (
-        (1, {(10, 17)}),
-        (2, {(6, 13), (13, 17)}),
-        (3, {(6, 13), (6, 17), (13, 17)}),
-        (4, {(6, 13), (6, 17), (13, 17), (13, 14)}),
-        (5, {(6, 13), (6, 17), (13, 17), (13, 14), (5, 12)}),
+        (1, {(10, 21)}),
+        (2, {(6, 15), (13, 21)}),
+        (3, {(6, 15), (6, 21), (13, 21)}),
+        (4, {(6, 15), (6, 21), (13, 21), (14, 19)}),
+        (5, {(6, 15), (6, 21), (13, 21), (14, 19), (4, 18)}),
     ),
 )
 def test_map1_runtime_setup_lights_only_selected_enemy_variant(
@@ -512,7 +561,8 @@ def test_map1_victory_is_the_only_gate_to_aftermath_exploration(tmp_path) -> Non
 
     assert resolved["flow"]["stage"] == "interaction_result"
     assert {point["id"] for point in resolved["visible_points"]} == {
-        "road_aftermath"
+        "road_aftermath",
+        "teren",
     }
     assert scene_flag(session.state.flags, "map1_encounter_cleared", False) is True
 
@@ -581,7 +631,6 @@ def test_map1_defeat_enters_game_over_without_revealing_exploration(tmp_path) ->
         "skrzynie i pojemniki",
         "osłony",
         "elementy otoczenia",
-        "obiekty interaktywne",
     ]
     assert restored.combat_state is not None
     assert restored.combat_state.status == CombatStatus.ACTIVE
@@ -901,7 +950,7 @@ def test_guild_hotspots_match_the_isometric_map_and_gate_keeps_its_slot() -> Non
     assert unlocked_gate.enabled is True
 
 
-def test_departure_pace_is_selected_by_board_tile_and_advances_to_navigator() -> None:
+def test_departure_opens_screen_confirmation_without_pace_board_tiles() -> None:
     session = ExplorationUiSession(SCENARIO_PATH, debug_point_id="nessa_desk")
     session.submit_action(
         "Jesteśmy gotowi wyruszyć.",
@@ -917,29 +966,13 @@ def test_departure_pace_is_selected_by_board_tile_and_advances_to_navigator() ->
         for pad in session._board_interaction_pads()
         if pad.action_kind == "continuation_pace"
     )
-    assert [pad.target_id for pad in pace_pads] == ["fast", "normal", "slow"]
-    assert [pad.position.as_tuple() for pad in pace_pads] == [
-        (9, 2),
-        (10, 2),
-        (11, 2),
-    ]
-
-    board = FakeBoardConnection(clicks=[pace_pads[2].position.as_tuple()])
-    session.attach_board_connection(board, backend="simulator")
-    awaiting_pace = session.state_payload()
-    assert awaiting_pace["board_selection"]["auto_arm"] is True
-
-    selected = session.scan_board_selection(
-        expected_revision=awaiting_pace["board_selection"]["revision"],
-        automatic=True,
-    )
-
+    assert pace_pads == ()
+    selected = session.state_payload()
     interaction = selected["flow"]["board_interaction"]
     assert interaction["selected_panel"] == "continuation"
-    assert interaction["selected_action_kind"] == "continuation_pace"
-    assert interaction["selected_action_id"] == "slow"
+    assert interaction["selected_action_kind"] is None
+    assert interaction["selected_action_id"] is None
     assert selected["board_selection"]["auto_arm"] is False
-    assert "wyboru prowadzącego" in selected["board"]["message"]
 
 
 def test_departure_summary_contains_only_information_the_party_learned() -> None:
@@ -1007,7 +1040,7 @@ def test_map0_full_quest_acceptance_and_gate_handoff_reaches_map1(tmp_path) -> N
     )
     session.select_point("")
 
-    completed = session.continue_scenario(pace="normal")
+    completed = session.continue_scenario()
     handoff = completed["flow"]["scenario_handoff"]
     assert completed["flow"]["stage"] == "scenario_complete"
     assert handoff["target_scenario_id"] == "ostatni_transport_01_zawalona_droga"
@@ -1025,17 +1058,51 @@ def test_map0_full_quest_acceptance_and_gate_handoff_reaches_map1(tmp_path) -> N
         session.state.flags,
         "contract.base_reward_gp_per_hero",
     ) == 10
-    assert scene_flag(session.state.flags, "travel.pace.normal") is True
+    assert scene_flag(session.state.flags, "travel.pace.normal") is None
+    assert handoff["travel"] == {
+        "mode": "fixed",
+        "base_minutes": 60,
+        "total_minutes": 60,
+        "navigation": {"required": False, "success": True},
+    }
 
 
-def test_map1_opening_rewards_erynd_warning_and_slow_approach() -> None:
+def test_map0_legacy_travel_inputs_do_not_change_fixed_transition(tmp_path) -> None:
+    session = ExplorationUiSession(
+        SCENARIO_PATH,
+        debug_point_id="nessa_desk",
+        observation_dir=tmp_path / "observations",
+        save_dir=tmp_path / "saves",
+    )
+    session.submit_action(
+        "Jesteśmy gotowi wyruszyć.",
+        selected_goal_id="finish_nessa_briefing",
+        selected_check_participants="no_actor",
+    )
+    session.select_point("")
+
+    completed = session.continue_scenario(
+        pace="fast",
+        navigator_actor_id="brakka",
+        navigation_roll=1,
+    )
+    travel = completed["flow"]["scenario_handoff"]["travel"]
+
+    assert travel["mode"] == "fixed"
+    assert travel["total_minutes"] == 60
+    assert travel["navigation"] == {"required": False, "success": True}
+
+    session.start_scenario_handoff()
+    assert scene_flag(session.state.flags, "travel.pace.fast") is None
+    assert scene_flag(session.state.flags, "travel.arrival.late") is None
+
+
+def test_map1_opening_rewards_erynd_warning_without_travel_pace() -> None:
     exploration = build_exploration_from_scenario(load_scenario(MAP1_SCENARIO_PATH))
     trigger = exploration.encounter_triggers[0]
     assert trigger.opening_policy is not None
     flags = set_scene_flag(
-        set_scene_flag(SceneFlags(), "knowledge.convoy_route_magic_suspected", True),
-        "travel.pace.slow",
-        True,
+        SceneFlags(), "knowledge.convoy_route_magic_suspected", True
     )
     state = ExplorationState(
         exploration.zones,
@@ -1046,11 +1113,11 @@ def test_map1_opening_rewards_erynd_warning_and_slow_approach() -> None:
 
     result = resolve_encounter_opening(state, trigger.opening_policy)
 
-    assert result.rule_id == "erynd_warned_slow_approach"
-    assert result.outcome == EncounterOpeningOutcome.PARTY_INITIATIVE_ADVANTAGE_AND_CAN_HIDE
+    assert result.rule_id == "erynd_warned_party"
+    assert result.outcome == EncounterOpeningOutcome.PARTY_INITIATIVE_ADVANTAGE
 
 
-def test_map1_fast_unwarned_approach_gives_enemies_opening_edge() -> None:
+def test_map1_unwarned_approach_uses_default_opening() -> None:
     exploration = build_exploration_from_scenario(load_scenario(MAP1_SCENARIO_PATH))
     policy = exploration.encounter_triggers[0].opening_policy
     assert policy is not None
@@ -1058,10 +1125,9 @@ def test_map1_fast_unwarned_approach_gives_enemies_opening_edge() -> None:
         exploration.zones,
         exploration.points,
         exploration.party_position,
-        flags=set_scene_flag(SceneFlags(), "travel.pace.fast", True),
+        flags=SceneFlags(),
     )
 
     result = resolve_encounter_opening(state, policy)
 
-    assert result.rule_id == "fast_unwarned_ambush"
-    assert result.outcome == EncounterOpeningOutcome.ENEMIES_SURPRISE_PARTY
+    assert result.outcome == EncounterOpeningOutcome.NO_SURPRISE

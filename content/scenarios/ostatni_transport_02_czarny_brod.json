@@ -1,0 +1,77 @@
+{
+  "schema": "dnd_board_game.scenario",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["project_original"],
+  "id": "ostatni_transport_02_czarny_brod",
+  "name": "Ostatni transport — Strażnica Czarnego Brodu",
+  "scene_mode": "exploration",
+  "encounter_map_asset": "maps/ostatni_transport_01/glodne_cienie_battlemap_base_v5.png",
+  "board": {"cols": 20, "rows": 30},
+  "objectives": [],
+  "actors": [
+    {
+      "id": "hero",
+      "name": "Bohater",
+      "kind": "player_character",
+      "faction": "ally",
+      "level": 3,
+      "ac": 15,
+      "hp": 24,
+      "speed_feet": 30,
+      "position": [9, 26],
+      "ability_scores": {
+        "strength": 10,
+        "dexterity": 10,
+        "constitution": 10,
+        "intelligence": 10,
+        "wisdom": 10,
+        "charisma": 10
+      },
+      "item_refs": ["dagger"]
+    }
+  ],
+  "environment": [],
+  "llm_context": {
+    "summary": "Drużyna dociera na skraj podejścia do Strażnicy Czarnego Brodu. Ten punkt przejścia zachowuje stan wyprawy przed wdrożeniem pełnej Mapy 2.",
+    "available_materials": ["kamienie", "gałęzie", "błoto", "pozostałości traktu"],
+    "forbidden_assumptions": ["wnętrze strażnicy zostało już zbadane"],
+    "risk_notes": ["sposób podejścia zależy od trasy wybranej przy zawalonej drodze"]
+  },
+  "exploration": {
+    "party_start_zone": "black_ford_approach",
+    "zones": [
+      {
+        "id": "black_ford_approach",
+        "name": "Podejście do Czarnego Brodu",
+        "positions": [[9,26],[10,26]],
+        "anchor_position": [9,26],
+        "interaction_pad_positions": [[10,25]],
+        "activate_after_setup": true,
+        "color": "marker",
+        "description": "Za kolejnym zakrętem zaczyna się teren Strażnicy Czarnego Brodu. Stan drużyny i wszystkie decyzje z zawalonej drogi zostały zachowane.",
+        "options": [
+          {
+            "id": "review_black_ford_arrival",
+            "label": "Podsumuj podejście do strażnicy",
+            "kind": "message",
+            "resolution_mode": "automatic",
+            "description_mode": "none",
+            "default_declaration": "Oceniamy podejście do Strażnicy Czarnego Brodu.",
+            "color": "interactive",
+            "message": "Drużyna dotarła do wejścia Mapy 2. Pełna eksploracja strażnicy będzie rozwijana jako kolejny pakiet scenariusza."
+          }
+        ]
+      }
+    ],
+    "points": [],
+    "challenges": [],
+    "encounter_triggers": [],
+    "npc_transitions": [],
+    "observations": [],
+    "flows": [],
+    "traps": [],
+    "resources": [],
+    "initial_resources": []
+  }
+}

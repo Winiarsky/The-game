@@ -47,11 +47,23 @@ def combat_effect_armor_class_bonus(
     actor: Actor,
     active_effects: tuple[ActiveEffect, ...] = (),
 ) -> int:
-    return sum(
-        effect.value
-        for effect in active_effects
-        if effect.actor_id == str(actor.id)
-        and effect.kind == "spell_ac_bonus"
+    return (
+        sum(
+            effect.value
+            for effect in active_effects
+            if effect.actor_id == str(actor.id)
+            and effect.kind in {
+                "spell_ac_bonus",
+                "garran_defensive_stance_ac",
+                "garran_shield_wall_member",
+            }
+        )
+        - sum(
+            effect.value
+            for effect in active_effects
+            if effect.actor_id == str(actor.id)
+            and effect.kind == "erynd_exposed_ac"
+        )
     )
 
 
@@ -110,10 +122,20 @@ def actor_as_combat_target(
     opportunity_attack: bool = False,
 ) -> CombatTarget:
     contextual_ac = 0
-    if opportunity_attack and any(
-        feature.feature_id == "halfling_nimbleness" for feature in actor.features
-    ):
-        contextual_ac += 1
+    if opportunity_attack:
+        if any(
+            feature.feature_id == "halfling_nimbleness"
+            for feature in actor.features
+        ):
+            contextual_ac += 1
+        if attacker is not None:
+            contextual_ac += sum(
+                effect.value
+                for effect in active_effects
+                if effect.actor_id == str(actor.id)
+                and effect.target_actor_id == str(attacker.id)
+                and effect.kind == "guard_vault_opportunity_ac"
+            )
     if attacker is not None:
         contextual_ac += iron_line_armor_class_bonus(attacker, actor, actors)
     return CombatTarget(
@@ -130,6 +152,18 @@ def actor_as_combat_target(
         defeated=actor.is_defeated(),
         unconscious=actor.is_unconscious(),
     )
+
+
+def mira_ranged_armor_class_bonus(actor: Actor, source: object) -> int:
+    """Return Mira's contextual AC bonus against ranged attack rolls only."""
+
+    if not any(
+        feature.feature_id == "mira_ranged_evasion" for feature in actor.features
+    ):
+        return 0
+    attack_kind = getattr(getattr(source, "attack_kind", None), "value", "")
+    save_ability = getattr(source, "save_ability", None)
+    return 2 if attack_kind == "ranged" and save_ability is None else 0
 
 
 def iron_line_armor_class_bonus(

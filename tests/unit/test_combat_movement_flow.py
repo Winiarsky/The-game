@@ -94,7 +94,7 @@ def test_submit_applies_safe_movement_and_tracks_remaining_speed() -> None:
     assert submission.event_type == "ui_combat_player_moved"
 
 
-def test_prone_actor_crawls_at_double_normal_movement_cost() -> None:
+def test_prone_actor_stands_automatically_before_moving() -> None:
     service = CombatMovementFlowService()
     hero = _actor("hero", Faction.ALLY, Coordinate(0, 0))
     goblin = _actor("goblin", Faction.ENEMY, Coordinate(5, 0))
@@ -116,8 +116,41 @@ def test_prone_actor_crawls_at_double_normal_movement_cost() -> None:
         destination=Coordinate(2, 0),
     )
 
-    assert preview.path.cost_feet == 20
-    assert submission.movement_remaining_feet == 10
+    assert preview.path.cost_feet == 10
+    assert dict(preview.event_payload)["standing_cost_feet"] == 15
+    assert "Automatyczne wstanie kosztuje 15 ft" in preview.board_message
+    assert submission.movement_remaining_feet == 5
+    assert not any(
+        condition.actor_id == "hero"
+        and condition.condition == CombatCondition.PRONE
+        for condition in submission.state.condition_states
+    )
+
+
+def test_prone_actor_is_already_standing_while_opportunity_prompt_waits() -> None:
+    service = CombatMovementFlowService()
+    hero = _actor("hero", Faction.ALLY, Coordinate(0, 0))
+    goblin = _actor("goblin", Faction.ENEMY, Coordinate(1, 0))
+    state = replace(
+        _state(hero, goblin),
+        condition_states=(ConditionState("hero", CombatCondition.PRONE),),
+    )
+
+    submission = service.submit(
+        state=state,
+        board=BoardState(),
+        attack_sources_by_actor={goblin.id: _melee_source()},
+        active_effects=(),
+        destination=Coordinate(0, 2),
+    )
+
+    assert submission.requires_opportunity_confirmation
+    assert submission.movement_remaining_feet == 15
+    assert not any(
+        condition.actor_id == "hero"
+        and condition.condition == CombatCondition.PRONE
+        for condition in submission.state.condition_states
+    )
 
 
 def test_spike_growth_zone_is_difficult_terrain_for_pathfinding() -> None:

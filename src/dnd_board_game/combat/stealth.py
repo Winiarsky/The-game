@@ -21,6 +21,7 @@ class HiddenState:
     actor_id: str
     stealth_total: int
     hidden_from_actor_ids: tuple[str, ...]
+    observer_perception_totals: tuple[tuple[str, int], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,6 +55,15 @@ def hide_eligibility(
     actors: Sequence[Actor],
     scene_objects: Sequence[SceneObject] = (),
 ) -> HideEligibility:
+    if actor_has_feature(actor, "mira_shadow_stealth"):
+        blockers = tuple(
+            str(observer.id)
+            for observer in actors
+            if _hostile(actor, observer)
+            and not observer.is_defeated()
+            and _adjacent(actor, observer)
+        )
+        return HideEligibility(not blockers, blockers)
     blockers = tuple(
         str(observer.id)
         for observer in actors
@@ -72,6 +82,7 @@ def resolve_hide(
     *,
     passive_perception_adjustments: Mapping[str, int] | None = None,
     automatically_hidden_from_actor_ids: Sequence[str] = (),
+    observer_perception_totals: Mapping[str, int] | None = None,
 ) -> HideResolution:
     opponents = tuple(
         observer
@@ -79,6 +90,7 @@ def resolve_hide(
         if _hostile(actor, observer) and not observer.is_defeated()
     )
     adjustments = passive_perception_adjustments or {}
+    perception_totals = observer_perception_totals or {}
     automatic = set(automatically_hidden_from_actor_ids)
     hidden_from = tuple(
         str(observer.id)
@@ -87,8 +99,12 @@ def resolve_hide(
             str(observer.id) in automatic
             or stealth_total
             > (
-                passive_skill_score(observer, "perception")
-                + adjustments.get(str(observer.id), 0)
+                perception_totals.get(
+                    str(observer.id),
+                    passive_skill_score(observer, "perception")
+                    + (2 if actor_has_feature(observer, "scouts_vigilance") else 0)
+                    + adjustments.get(str(observer.id), 0),
+                )
             )
         )
     )
@@ -96,7 +112,16 @@ def resolve_hide(
         str(observer.id) for observer in opponents if str(observer.id) not in hidden_from
     )
     remaining = tuple(state for state in hidden_states if state.actor_id != str(actor.id))
-    state = HiddenState(str(actor.id), stealth_total, hidden_from) if hidden_from else None
+    recorded_totals = tuple(
+        (str(observer.id), perception_totals[str(observer.id)])
+        for observer in opponents
+        if str(observer.id) in perception_totals
+    )
+    state = (
+        HiddenState(str(actor.id), stealth_total, hidden_from, recorded_totals)
+        if hidden_from
+        else None
+    )
     return HideResolution(
         (*remaining, state) if state is not None else remaining,
         state,
@@ -119,7 +144,14 @@ def resolve_search(
         found.append(state.actor_id)
         remaining = tuple(actor_id for actor_id in state.hidden_from_actor_ids if actor_id != searcher_id)
         if remaining:
-            updated.append(HiddenState(state.actor_id, state.stealth_total, remaining))
+            updated.append(
+                HiddenState(
+                    state.actor_id,
+                    state.stealth_total,
+                    remaining,
+                    state.observer_perception_totals,
+                )
+            )
     return SearchResolution(tuple(updated), tuple(found))
 
 
@@ -149,13 +181,62 @@ def reveal_all_to_observer(
         )
         if remaining:
             updated.append(
-                HiddenState(state.actor_id, state.stealth_total, remaining)
+                HiddenState(
+                    state.actor_id,
+                    state.stealth_total,
+                    remaining,
+                    state.observer_perception_totals,
+                )
             )
     return tuple(updated)
 
 
 def hidden_state_for(hidden_states: Sequence[HiddenState], actor_id: str) -> HiddenState | None:
     return next((state for state in hidden_states if state.actor_id == actor_id), None)
+
+
+def reveal_to_observer(
+    hidden_states: Sequence[HiddenState],
+    actor_id: str,
+    observer_id: str,
+) -> tuple[HiddenState, ...]:
+    """Reveal one hidden actor to one observer without ending stealth mode."""
+
+    updated: list[HiddenState] = []
+    for state in hidden_states:
+        if state.actor_id != actor_id:
+            updated.append(state)
+            continue
+        remaining = tuple(
+            candidate
+            for candidate in state.hidden_from_actor_ids
+            if candidate != observer_id
+        )
+        if remaining:
+            updated.append(
+                HiddenState(
+                    state.actor_id,
+                    state.stealth_total,
+                    remaining,
+                    state.observer_perception_totals,
+                )
+            )
+    return tuple(updated)
+
+
+def actors_visible_for_pathfinding(
+    actors: Sequence[Actor],
+    hidden_states: Sequence[HiddenState],
+    observer_id: str,
+) -> tuple[Actor, ...]:
+    """Occupied tiles known to an observer; hidden actors are not AI obstacles."""
+
+    return tuple(
+        actor
+        for actor in actors
+        if str(actor.id) == observer_id
+        or not is_hidden_from(hidden_states, str(actor.id), observer_id)
+    )
 
 
 def refresh_hidden_after_movement(
@@ -167,6 +248,10 @@ def refresh_hidden_after_movement(
 ) -> HiddenMovementResolution:
     current = hidden_state_for(hidden_states, str(moved_actor.id))
     if current is None:
+        return HiddenMovementResolution(tuple(hidden_states), ())
+    if actor_has_feature(moved_actor, "mira_shadow_stealth"):
+        # Mira's roll establishes per-observer knowledge. Ordinary movement does
+        # not leak her location; attacks, Search and path collisions reveal her.
         return HiddenMovementResolution(tuple(hidden_states), ())
     observers = {str(actor.id): actor for actor in actors}
     revealed = tuple(
@@ -192,9 +277,21 @@ def refresh_hidden_after_movement(
     if remaining_observers:
         remaining_states = (
             *remaining_states,
-            HiddenState(current.actor_id, current.stealth_total, remaining_observers),
+            HiddenState(
+                current.actor_id,
+                current.stealth_total,
+                remaining_observers,
+                current.observer_perception_totals,
+            ),
         )
     return HiddenMovementResolution(remaining_states, revealed)
+
+
+def _adjacent(first: Actor, second: Actor) -> bool:
+    return max(
+        abs(first.position.col - second.position.col),
+        abs(first.position.row - second.position.row),
+    ) <= 1
 
 
 def _sees_clearly(

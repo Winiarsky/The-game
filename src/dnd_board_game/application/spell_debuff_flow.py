@@ -25,6 +25,7 @@ from dnd_board_game.rules import (
     EffectSource,
     EffectSourceType,
     EffectStackingPolicy,
+    RollMode,
 )
 from dnd_board_game.world import BoardState, line_of_sight_clear
 
@@ -178,6 +179,8 @@ class SpellDebuffFlowService:
             spell_id=action.id,
             cast_level=pending.cast_level,
             action_cost=action.action_cost,
+            resource_pool_id=getattr(action, "resource_pool_id", None),
+            resource_cost=int(getattr(action, "resource_cost", 1)),
         )
         target = _actor_by_id(resource.state, target_id)
         save_dc = action.save_dc or caster.spell_save_dc
@@ -186,6 +189,16 @@ class SpellDebuffFlowService:
             ability=action.save_ability or "constitution",
             dc=save_dc,
             natural_roll=rng.randint(1, 20),
+            natural_roll_2=(
+                rng.randint(1, 20)
+                if "nimra_forced_weave" in getattr(action, "metamagic_ids", ())
+                else None
+            ),
+            roll_mode=(
+                RollMode.DISADVANTAGE
+                if "nimra_forced_weave" in getattr(action, "metamagic_ids", ())
+                else RollMode.NORMAL
+            ),
             condition_states=resource.state.condition_states,
             combat_actors=resource.state.actors,
         )

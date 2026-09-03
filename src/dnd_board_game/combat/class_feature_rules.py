@@ -653,6 +653,25 @@ def apply_metamagic_to_source(
     selected = tuple(dict.fromkeys(str(value) for value in metamagic_ids if str(value)))
     if not selected:
         return source
+    from .nimra_features import NIMRA_METAMAGIC_IDS, apply_nimra_metamagic
+
+    normalized_nimra_ids = tuple(value.partition("@")[0] for value in selected)
+    if any(feature_id in NIMRA_METAMAGIC_IDS for feature_id in normalized_nimra_ids):
+        if len(selected) != 1 or not isinstance(source, AttackSource):
+            raise ValueError("Nimra może dołączyć do czaru dokładnie jedną Metamagię.")
+        raw_id = selected[0]
+        feature_id, separator, damage_type_id = raw_id.partition("@")
+        from dnd_board_game.core.damage_types import DamageType
+
+        return apply_nimra_metamagic(
+            actor,
+            source,
+            feature_id,
+            transmuted_damage_type=(
+                DamageType(damage_type_id) if separator else None
+            ),
+            validate_resources=validate_resources,
+        )
     unknown = set(selected) - set(METAMAGIC_FEATURE_IDS)
     if unknown:
         raise ValueError(f"Nieznana opcja Metamagic: {sorted(unknown)[0]}.")

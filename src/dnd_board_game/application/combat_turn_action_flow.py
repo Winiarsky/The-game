@@ -28,9 +28,11 @@ from dnd_board_game.combat import (
     condition_roll_request,
     drop_prone,
     hide_eligibility,
+    has_condition,
     pass_without_trace_bonus,
     resolve_hide,
     resolve_search,
+    reveal_actor,
     remove_condition,
     stand_up,
     use_dash,
@@ -245,10 +247,40 @@ class CombatTurnActionFlowService:
         active_effects: tuple[ActiveCombatEffect, ...] = (),
     ) -> PendingCombatSkillCheck:
         actor = _active_hero(state)
-        if not _mobility_action_available(state, actor):
+        if not actor_has_feature(actor, "mira_shadow_stealth"):
+            raise ValueError("Tylko Mira może używać bojowej akcji Ukryj się.")
+        smoke_screen = any(
+            effect.actor_id == str(actor.id)
+            and effect.kind == "smoke_screen_hide_pending"
+            for effect in active_effects
+        )
+        if not smoke_screen and state.turn_action.action_use != ActionUse.ACTION_AVAILABLE:
             raise ValueError("Akcja w tej turze została już zużyta.")
+        blocking_conditions = (
+            CombatCondition.GRAPPLED,
+            CombatCondition.RESTRAINED,
+            CombatCondition.INCAPACITATED,
+            CombatCondition.PARALYZED,
+            CombatCondition.PETRIFIED,
+            CombatCondition.STUNNED,
+            CombatCondition.UNCONSCIOUS,
+        )
+        if any(
+            has_condition(state.condition_states, str(actor.id), condition)
+            for condition in blocking_conditions
+        ):
+            raise ValueError("Mira nie może się ukryć pod działaniem obecnego statusu.")
+        if any(
+            effect.actor_id == str(actor.id)
+            and (
+                effect.kind in {"branding_smite_glow", "faerie_fire_glow", "revealing_light"}
+                or "faerie_fire" in (effect.object_id or "")
+            )
+            for effect in active_effects
+        ):
+            raise ValueError("Mira jest oznaczona ujawniającym światłem i nie może się ukryć.")
         eligibility = hide_eligibility(board, actor, state.actors, scene_objects)
-        if not eligibility.allowed:
+        if not smoke_screen and not eligibility.allowed:
             names = ", ".join(
                 _actor_by_string_id(state, actor_id).name
                 for actor_id in eligibility.blocking_observer_ids
@@ -286,12 +318,18 @@ class CombatTurnActionFlowService:
         pending: PendingCombatSkillCheck,
         natural_roll: int,
         natural_roll_2: int | None = None,
+        opposing_natural_rolls: Mapping[str, int] | None = None,
         active_effects: tuple[ActiveCombatEffect, ...],
         scene_objects: tuple[SceneObject, ...] = (),
     ) -> CombatTurnActionTransition:
         actor = _validate_pending_skill_actor(state, pending, "hide")
+        smoke_screen = any(
+            effect.actor_id == str(actor.id)
+            and effect.kind == "smoke_screen_hide_pending"
+            for effect in active_effects
+        )
         eligibility = hide_eligibility(board, actor, state.actors, scene_objects)
-        if not eligibility.allowed:
+        if not smoke_screen and not eligibility.allowed:
             raise ValueError("Warunki zmieniły się i nie można już wykonać Hide.")
         request = _skill_request(state, actor, "stealth")
         request = _with_pass_without_trace(
@@ -303,24 +341,57 @@ class CombatTurnActionFlowService:
         if request.mode.value != "normal" and natural_roll_2 is None:
             raise ValueError("Ten test wymaga wpisania dwóch wyników d20.")
         result = resolve_d20_roll(D20RollInput(request, natural_roll, natural_roll_2))
-        hiding = resolve_hide(state.hidden_states, actor, state.actors, result.total)
+        opposing_rolls = opposing_natural_rolls or {}
+        smoke_penalty = (
+            -(max(0, ability_roll_modifier(actor, "dexterity").value) // 2)
+            if smoke_screen
+            else 0
+        )
+        perception_totals = {
+            str(observer.id): natural + skill_modifier(observer, "perception") + smoke_penalty
+            + (2 if actor_has_feature(observer, "scouts_vigilance") else 0)
+            for observer in state.actors
+            if (natural := opposing_rolls.get(str(observer.id))) is not None
+        }
+        hiding = resolve_hide(
+            state.hidden_states,
+            actor,
+            state.actors,
+            result.total,
+            observer_perception_totals=perception_totals,
+        )
         updated_state = replace(
-            _consume_mobility_action(state, actor),
+            state if smoke_screen else _consume_action(state),
             hidden_states=hiding.hidden_states,
+        )
+        remaining_effects = tuple(
+            effect
+            for effect in active_effects
+            if not (
+                smoke_screen
+                and effect.actor_id == str(actor.id)
+                and effect.kind in {"smoke_screen_hide_pending", "movement_speed_cap"}
+            )
         )
         hidden_names = _actor_names(state, hiding.hidden_state.hidden_from_actor_ids) if hiding.hidden_state else ()
         detected_names = _actor_names(state, hiding.detected_by_actor_ids)
         if hidden_names:
             body = f"{actor.name} ukrywa się z wynikiem {result.total} przed: {', '.join(hidden_names)}."
             if detected_names:
-                body += f" Nadal wykrywają go: {', '.join(detected_names)}."
+                body += (
+                    f" Nadal widzą Mirę: {', '.join(detected_names)}; "
+                    "dopóki trwa ta sesja skradania, mają +2 do ataków przeciw niej."
+                )
         else:
-            body = f"{actor.name} uzyskuje {result.total}, ale każdy przeciwnik go wykrywa."
+            body = (
+                f"{actor.name} uzyskuje {result.total}, ale każdy przeciwnik ją widzi. "
+                "Skradanie automatycznie się kończy i nikt nie otrzymuje premii ze skazy."
+            )
         return CombatTurnActionTransition(
             state=updated_state,
-            active_effects=active_effects,
+            active_effects=remaining_effects,
             actor_id=str(actor.id),
-            message_title="Hide",
+            message_title="Ukrycie Miry",
             message_body=body,
             event_type="ui_combat_hide_resolved",
             event_payload=(
@@ -329,7 +400,29 @@ class CombatTurnActionFlowService:
                 ("total", result.total),
                 ("hidden_from_actor_ids", list(hiding.hidden_state.hidden_from_actor_ids) if hiding.hidden_state else []),
                 ("detected_by_actor_ids", list(hiding.detected_by_actor_ids)),
+                ("observer_perception_totals", dict(perception_totals)),
             ),
+        )
+
+    def end_hide(
+        self,
+        *,
+        state: CombatState,
+        active_effects: tuple[ActiveCombatEffect, ...],
+    ) -> CombatTurnActionTransition:
+        actor = _active_hero(state)
+        if not actor_has_feature(actor, "mira_shadow_stealth") or not any(
+            hidden.actor_id == str(actor.id) for hidden in state.hidden_states
+        ):
+            raise ValueError("Mira nie jest obecnie w trybie skradania.")
+        return CombatTurnActionTransition(
+            state=replace(state, hidden_states=reveal_actor(state.hidden_states, str(actor.id))),
+            active_effects=active_effects,
+            actor_id=str(actor.id),
+            message_title="Przerwanie skradania",
+            message_body="Mira dobrowolnie wychodzi z ukrycia. Wykorzystana akcja nie wraca.",
+            event_type="ui_combat_hide_ended",
+            event_payload=(("actor_id", str(actor.id)),),
         )
 
     def prepare_search(self, *, state: CombatState) -> PendingCombatSkillCheck:
@@ -344,13 +437,64 @@ class CombatTurnActionFlowService:
         if not hidden_actor_ids:
             raise ValueError("Nie ma obecnie ukrytego przeciwnika, którego można aktywnie szukać.")
         request = _skill_request(state, actor, "perception")
+        request = _with_scouts_vigilance(request, actor)
         return PendingCombatSkillCheck(
             actor_id=str(actor.id),
             action="search",
             skill="perception",
-            modifier=skill_modifier(actor, "perception"),
+            modifier=skill_modifier(actor, "perception") + (
+                2 if actor_has_feature(actor, "scouts_vigilance") else 0
+            ),
             instruction=roll_instruction(request).message,
             opposing_actor_ids=hidden_actor_ids,
+        )
+
+    def prepare_trap_detection(self, *, state: CombatState) -> PendingCombatSkillCheck:
+        actor = _active_hero(state)
+        if not actor_has_feature(actor, "combat_trap_detection"):
+            raise ValueError("Aktywna postać nie posiada bojowego Wykrycia pułapek.")
+        if state.turn_action.action_use != ActionUse.ACTION_AVAILABLE:
+            raise ValueError("Akcja w tej turze została już zużyta.")
+        request = _skill_request(state, actor, "perception")
+        return PendingCombatSkillCheck(
+            actor_id=str(actor.id),
+            action="detect_traps",
+            skill="perception",
+            modifier=skill_modifier(actor, "perception"),
+            instruction=roll_instruction(request).message,
+            opposing_actor_ids=(),
+            roll_mode=request.mode.value,
+        )
+
+    def resolve_trap_detection(
+        self,
+        *,
+        state: CombatState,
+        pending: PendingCombatSkillCheck,
+        natural_roll: int,
+        natural_roll_2: int | None,
+        active_effects: tuple[ActiveCombatEffect, ...],
+    ) -> CombatTurnActionTransition:
+        actor = _validate_pending_skill_actor(state, pending, "detect_traps")
+        request = _skill_request(state, actor, "perception")
+        if request.mode.value != "normal" and natural_roll_2 is None:
+            raise ValueError("Ten test wymaga wpisania dwóch wyników d20.")
+        result = resolve_d20_roll(D20RollInput(request, natural_roll, natural_roll_2))
+        return CombatTurnActionTransition(
+            state=_consume_action(state),
+            active_effects=active_effects,
+            actor_id=str(actor.id),
+            message_title="Wykrycie pułapek",
+            message_body=(
+                f"{actor.name} przeszukuje obszar 45 stóp z wynikiem {result.total}."
+            ),
+            event_type="ui_combat_trap_detection_resolved",
+            event_payload=(
+                ("actor_id", str(actor.id)),
+                ("natural_roll", result.natural_roll),
+                ("total", result.total),
+                ("radius_feet", 45),
+            ),
         )
 
     def resolve_search(
@@ -362,7 +506,11 @@ class CombatTurnActionFlowService:
         active_effects: tuple[ActiveCombatEffect, ...],
     ) -> CombatTurnActionTransition:
         actor = _validate_pending_skill_actor(state, pending, "search")
-        result = resolve_d20_roll(D20RollInput(_skill_request(state, actor, "perception"), natural_roll))
+        request = _with_scouts_vigilance(
+            _skill_request(state, actor, "perception"),
+            actor,
+        )
+        result = resolve_d20_roll(D20RollInput(request, natural_roll))
         search = resolve_search(state.hidden_states, actor, result.total)
         updated_state = replace(_consume_action(state), hidden_states=search.hidden_states)
         found_names = _actor_names(state, search.found_actor_ids)
@@ -719,6 +867,28 @@ def _with_pass_without_trace(
             ),
         ),
     )
+
+
+def _with_scouts_vigilance(
+    request: D20RollRequest,
+    actor: Actor,
+) -> D20RollRequest:
+    if not actor_has_feature(actor, "scouts_vigilance"):
+        return request
+    return replace(
+        request,
+        modifiers=(
+            *request.modifiers,
+            RollModifier(
+                "Czujność zwiadowcy — ukryci przeciwnicy",
+                2,
+                RollModifierType.FEATURE,
+                "scouts_vigilance",
+            ),
+        ),
+    )
+
+
 def _actor_is_restrained_by_net(state: CombatState, actor: Actor) -> bool:
     return _net_restraint(state, actor) is not None
 

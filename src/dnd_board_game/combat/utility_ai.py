@@ -18,6 +18,7 @@ from .session import (
     use_movement,
     use_turn_action,
 )
+from .stealth import actors_visible_for_pathfinding
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,8 +73,11 @@ class EnemyAiProfile:
 
 
 def enemy_ai_profile_from_payload(payload: Mapping[str, Any]) -> EnemyAiProfile:
-    if str(payload.get("model", "")) != "weighted_utility_v1":
-        raise ValueError("Enemy AI profile must use weighted_utility_v1.")
+    model = str(payload.get("model", ""))
+    if model not in {"weighted_utility_v1", "coordinated_pack_v1"}:
+        raise ValueError(
+            "Enemy AI profile must use weighted_utility_v1 or coordinated_pack_v1."
+        )
     score_bounds = payload.get("score_bounds", [0.0, 100.0])
     noise = payload.get("noise", {})
     morale = payload.get("morale", {})
@@ -110,7 +114,7 @@ def enemy_ai_profile_from_payload(payload: Mapping[str, Any]) -> EnemyAiProfile:
     zone_tags = payload.get("zone_tags", {})
     return EnemyAiProfile(
         id=str(payload.get("id", "")),
-        model="weighted_utility_v1",
+        model=model,
         score_minimum=float(score_bounds[0]),
         score_maximum=float(score_bounds[1]),
         noise_minimum=float(noise.get("minimum", 0.0)),
@@ -153,7 +157,7 @@ def refresh_pack_morale(
     skirmisher_ids = tuple(
         actor_id
         for actor_id, role in actor_roles.items()
-        if role == "skirmisher" and actor_id in known_actor_ids
+        if role != "leader" and actor_id in known_actor_ids
     )
     events: list[str] = []
     for leader_id in leader_ids:
@@ -223,15 +227,16 @@ def plan_utility_enemy_turn(
     fallback = plan_enemy_turn(board, state, enemy, source)
     fallback_intent = "engage" if fallback.target is not None else "advance"
     fallback = replace(fallback, intent=fallback_intent)
+    fallback_variants = _attack_target_variants(board, fallback, source)
     candidates = [
         _score_plan(
-            fallback,
+            variant,
             profile,
             role,
             _features_for_plan(
                 state,
                 enemy,
-                fallback,
+                variant,
                 fallback_intent,
                 escape_positions=escape_positions,
                 guard_positions=guard_positions,
@@ -240,6 +245,7 @@ def plan_utility_enemy_turn(
                 actor_roles=actor_roles,
             ),
         )
+        for variant in fallback_variants
     ]
     # A fast melee predator that cannot attack after a normal move should be
     # able to spend its action on Dash.  Without this candidate the pack took
@@ -434,7 +440,13 @@ def plan_utility_enemy_turn(
                 ),
             )
         )
-    if state.enemy_ai.morale <= profile.morale_minimum:
+    if (
+        state.enemy_ai.morale <= profile.morale_minimum
+        or (
+            state.enemy_ai.morale < state.enemy_ai.starting_morale
+            and state.enemy_ai.morale <= profile.morale_minimum + 1
+        )
+    ):
         selected = (
             replace(flee, utility_score=profile.score_maximum)
             if flee is not None
@@ -477,7 +489,15 @@ def _movement_plan_toward(
         for actor in planning_state.actors
         if str(actor.id) not in planning_state.enemy_ai.escaped_actor_ids
     )
-    reachable = movement_range(board, movement_actor, active_actors)
+    reachable = movement_range(
+        board,
+        movement_actor,
+        actors_visible_for_pathfinding(
+            active_actors,
+            planning_state.hidden_states,
+            str(enemy.id),
+        ),
+    )
     destinations = tuple(
         position
         for position in reachable.reachable_tiles
@@ -578,6 +598,40 @@ def _regroup_targets(
     return leaders or allies or guard_positions
 
 
+def _attack_target_variants(
+    board: BoardState,
+    plan: EnemyTurnPlan,
+    source: AttackSource,
+) -> tuple[EnemyTurnPlan, ...]:
+    """Expose each currently legal prey as a utility-scored engage candidate."""
+
+    targets = legal_attack_targets(
+        board,
+        plan.enemy,
+        plan.state.actors,
+        source,
+        plan.state.hidden_states,
+    )
+    if len(targets) <= 1:
+        return (plan,)
+    destination = (
+        plan.movement_path.destination.as_tuple()
+        if plan.movement_path is not None
+        else plan.enemy.position.as_tuple()
+    )
+    return tuple(
+        replace(
+            plan,
+            target=target,
+            message=(
+                f"{plan.enemy.name} zajmuje pozycję {destination} "
+                f"i atakuje {target.name}."
+            ),
+        )
+        for target in targets
+    )
+
+
 def _features_for_plan(
     state: CombatState,
     enemy: Actor,
@@ -618,6 +672,8 @@ def _features_for_plan(
     target_isolation = 0.0
     ally_support = 0.0
     repeats_target = 0.0
+    target_saturation = 0.0
+    target_prone = 0.0
     target_actor = None
     if plan.target is not None:
         target_actor = next(
@@ -658,15 +714,35 @@ def _features_for_plan(
         repeats_target = float(
             dict(state.enemy_ai.previous_targets).get(str(enemy.id)) == plan.target.id
         )
-    movement_tiles = max(1.0, enemy.speed_feet / 5.0)
-    distance_progress = 0.0
-    if target_actor is not None:
-        distance_progress = _normalized_progress(
-            enemy.position,
-            destination,
-            (target_actor.position,),
-            movement_tiles,
+        pack_target_count = sum(
+            actor_id != str(enemy.id) and target_id == plan.target.id
+            for actor_id, target_id in state.enemy_ai.previous_targets
         )
+        target_saturation = min(1.0, pack_target_count / 2.0)
+        target_prone = float(
+            any(
+                condition.actor_id == plan.target.id
+                and condition.condition.value == "prone"
+                for condition in state.condition_states
+            )
+        )
+    movement_tiles = max(1.0, enemy.speed_feet / 5.0)
+    progress_targets = (
+        (target_actor.position,)
+        if target_actor is not None
+        else tuple(actor.position for actor in living_opponents)
+    )
+    distance_progress = _normalized_progress(
+        enemy.position,
+        destination,
+        progress_targets,
+        movement_tiles,
+    )
+    idle_advance = float(
+        intent == "advance"
+        and plan.movement_path is not None
+        and distance_progress <= 0.0
+    )
     pack_distance_before = min(
         (_tile_distance(enemy.position, actor.position) for actor in living_allies),
         default=0,
@@ -746,6 +822,8 @@ def _features_for_plan(
         "distance_progress": distance_progress,
         "target_isolation": target_isolation,
         "target_injury": max(0.0, min(1.0, target_injury)),
+        "target_saturation": target_saturation,
+        "target_prone": target_prone,
         "ally_support": ally_support,
         "threat_to_guard_zone": threat_to_guard_zone,
         "end_in_cover": end_in_cover,
@@ -762,6 +840,7 @@ def _features_for_plan(
         "escape_progress": escape_progress if intent == "flee" else 0.0,
         "morale_pressure": max(0.0, min(1.0, morale_pressure)),
         "repeats_target": repeats_target,
+        "idle_advance": idle_advance,
     }
 
 

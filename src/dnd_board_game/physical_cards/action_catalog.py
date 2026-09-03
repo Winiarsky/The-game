@@ -55,16 +55,22 @@ class CardActionDefinition:
 
 _COMBAT_IDS = frozenset(
     """
-    action_surge second_wind defensive_stance instinctive_dodge
-    exploit_weakness patient_shot
-    rage reckless_attack frenzy
-    bardic_inspiration cutting_words preserve_life turn_undead wild_shape
+    action_surge second_wind shield_bash defensive_stance
+    garran_command_halt garran_shield_wall garran_rally garran_guard_companion
+    instinctive_dodge smoke_screen hamstring_cut piercing_attack guard_vault
+    blade_mistress combat_trap_detection
+    aim anchoring_arrow exposing_arrow disrupting_arrow double_shot
+    rage reckless_attack powerful_strike shoulder_check hard_as_rock
+    acceleration deafening_roar
+    bardic_inspiration cutting_words optical_scope mocking_shot provoking_shot entangling_shot counterpoint
+    distracting_shout preserve_life turn_undead wild_shape
     martial_arts_strike flurry_of_blows patient_defense step_of_the_wind
     deflect_missiles lay_on_hands divine_smite channel_divinity_sacred_weapon
     channel_divinity_turn_the_unholy cunning_action metamagic_careful
     metamagic_distant metamagic_empowered metamagic_extended
     metamagic_heightened metamagic_quickened metamagic_twinned
     pact_of_the_blade acid_arrow acid_splash aid bane barkskin bless
+    divine_care_aura healing_grace_aura
     blindness_deafness blur burning_hands chill_touch color_spray command
     cure_wounds darkness darkvision divine_favor eldritch_blast enlarge_reduce
     entangle expeditious_retreat faerie_fire false_life find_familiar find_traps
@@ -77,7 +83,13 @@ _COMBAT_IDS = frozenset(
     ray_of_enfeeblement ray_of_frost resistance sacred_flame sanctuary
     scorching_ray see_invisibility shatter shield shield_of_faith shillelagh
     shocking_grasp silence sleep spare_the_dying spike_growth spiritual_weapon
-    thunderwave true_strike vicious_mockery warding_bond web
+    thunderwave true_strike vicious_mockery warding_bond web panic_whisper
+    stage_command accelerated_refrain
+    nimra_frost_pulse nimra_acid_splash nimra_mind_spike nimra_flame_fan
+    nimra_force_wave nimra_sticky_matrix nimra_sleep nimra_fog nimra_web
+    nimra_lightning_path nimra_mind_break nimra_stasis
+    nimra_sculpt_field nimra_distant_spell nimra_overcharged_spell
+    nimra_forced_weave nimra_energy_transmutation
     """.split()
 )
 
@@ -93,7 +105,7 @@ _EXPLORATION_IDS = frozenset(
     minor_illusion pass_without_trace prestidigitation purify_food_and_drink
     rope_trick silent_image speak_with_animals spider_climb suggestion
     unseen_servant zone_of_truth guard_duty tactical_assessment intimidation
-    brutal_effort break_in diagnosis tracking
+    brutal_effort tracking improvisation
     """.split()
 )
 
@@ -113,15 +125,21 @@ _REMOVED_IDS = frozenset(
         "jump",
         "magic_mouth",
         "message",
+        "break_in",
     }
 )
 
 _FEATURE_IDS = frozenset(
     """
-    action_surge second_wind defensive_stance instinctive_dodge
-    exploit_weakness patient_shot
-    rage reckless_attack frenzy bardic_inspiration
-    cutting_words preserve_life turn_undead wild_shape natural_recovery
+    action_surge second_wind shield_bash defensive_stance
+    garran_command_halt garran_shield_wall garran_rally garran_guard_companion
+    instinctive_dodge smoke_screen hamstring_cut piercing_attack guard_vault
+    blade_mistress combat_trap_detection
+    aim anchoring_arrow exposing_arrow disrupting_arrow double_shot
+    rage reckless_attack powerful_strike shoulder_check hard_as_rock
+    acceleration deafening_roar bardic_inspiration optical_scope mocking_shot provoking_shot entangling_shot
+    counterpoint distracting_shout cutting_words preserve_life turn_undead
+    wild_shape natural_recovery
     martial_arts_strike flurry_of_blows patient_defense step_of_the_wind
     deflect_missiles divine_sense lay_on_hands divine_smite
     channel_divinity_sacred_weapon channel_divinity_turn_the_unholy
@@ -129,7 +147,9 @@ _FEATURE_IDS = frozenset(
     metamagic_distant metamagic_empowered metamagic_extended
     metamagic_heightened metamagic_quickened metamagic_subtle
     metamagic_twinned pact_of_the_blade arcane_recovery guard_duty
-    tactical_assessment intimidation brutal_effort break_in diagnosis tracking
+    tactical_assessment intimidation brutal_effort tracking improvisation
+    nimra_sculpt_field nimra_distant_spell nimra_overcharged_spell
+    nimra_forced_weave nimra_energy_transmutation
     """.split()
 )
 
@@ -151,29 +171,121 @@ _PROTOTYPE_OVERRIDES: dict[str, dict[str, object]] = {
         "effect_type": "restore_spent_action",
         "targeting": "self",
     },
+    "shield_bash": {
+        "effect_type": "movement_action_opposed_strength_damage_push",
+        "targeting": "board_enemy",
+    },
     "second_wind": {
         "effect_type": "physical_die_self_healing",
         "targeting": "self_then_d10",
     },
     "defensive_stance": {
-        "effect_type": "spend_short_rest_use_then_dodge",
+        "effect_type": "movement_action_ac_bonus_until_move",
         "targeting": "self",
         "duration": "until_next_turn",
+    },
+    "garran_command_halt": {
+        "effect_type": "spend_tactic_wisdom_save_movement_debuff",
+        "targeting": "board_enemy",
+        "duration": "until_target_turn_end",
+    },
+    "garran_shield_wall": {
+        "effect_type": "spend_tactic_dynamic_adjacent_ally_ac_aura",
+        "targeting": "self",
+        "duration": "until_next_turn",
+    },
+    "garran_rally": {
+        "effect_type": "spend_tactic_remove_fear_next_roll_advantage",
+        "targeting": "allies_in_radius",
+        "duration": "until_recipient_next_turn_end",
+    },
+    "garran_guard_companion": {
+        "effect_type": "spend_tactic_redirect_single_hostile_target",
+        "targeting": "board_ally",
+        "duration": "until_trigger_or_adjacency_breaks",
     },
     "instinctive_dodge": {
-        "effect_type": "spend_short_rest_use_then_dodge",
+        "effect_type": "stealth_reaction_spend_trick_single_attack_disadvantage",
+        "targeting": "self_when_targeted",
+        "trigger_windows": (CardTriggerWindow.ATTACK_ROLL_REVEALED,),
+        "duration": "single_attack",
+        "combat_route": CombatCardRoute.REACTION,
+    },
+    "smoke_screen": {
+        "effect_type": "spend_trick_move_then_forced_hide",
+        "targeting": "self_then_board_destination",
+    },
+    "hamstring_cut": {
+        "effect_type": "flanking_melee_attack_persistent_half_speed",
+        "targeting": "board_enemy",
+    },
+    "piercing_attack": {
+        "effect_type": "flanking_melee_attack_then_collinear_attack",
+        "targeting": "board_enemy",
+    },
+    "guard_vault": {
+        "effect_type": "melee_attack_then_move_behind_target",
+        "targeting": "board_enemy_with_free_rear_tile",
+    },
+    "blade_mistress": {
+        "effect_type": "hidden_throwing_knife_bleeding_rider",
+        "targeting": "prepared_attack",
+    },
+    "combat_trap_detection": {
+        "effect_type": "physical_perception_reveal_traps_in_radius",
+        "targeting": "self_radius_45",
+    },
+    "aim": {
+        "effect_type": "spend_movement_for_next_longbow_advantage",
         "targeting": "self",
-        "duration": "until_next_turn",
+        "duration": "until_next_attack_or_turn_end",
+    },
+    "anchoring_arrow": {
+        "effect_type": "instinct_longbow_attack_movement_lock",
+        "targeting": "board_enemy",
+        "duration": "d4_rounds",
+    },
+    "exposing_arrow": {
+        "effect_type": "instinct_longbow_attack_reduce_ac",
+        "targeting": "board_enemy",
+        "duration": "until_next_erynd_turn",
+    },
+    "disrupting_arrow": {
+        "effect_type": "instinct_longbow_attack_disrupt",
+        "targeting": "board_enemy",
+        "duration": "until_target_turn_end",
+    },
+    "double_shot": {
+        "effect_type": "instinct_double_ammunition_single_roll",
+        "targeting": "board_enemy",
     },
     "reckless_attack": {
-        "effect_type": "grant_mutual_attack_advantage",
-        "targeting": "self",
+        "effect_type": "melee_weapon_attack_with_advantage_and_exposure",
+        "targeting": "board_enemy",
         "duration": "until_next_turn",
     },
-    "frenzy": {
-        "effect_type": "require_status_then_enable",
+    "powerful_strike": {
+        "effect_type": "rage_ferocity_melee_attack_bonus",
+        "targeting": "board_enemy",
+    },
+    "shoulder_check": {
+        "effect_type": "opposed_strength_forced_movement",
+        "targeting": "board_enemy_then_destination",
+    },
+    "hard_as_rock": {
+        "effect_type": "reaction_reduce_post_resistance_damage",
         "targeting": "self",
-        "duration": "while_rage",
+        "trigger_windows": (CardTriggerWindow.DAMAGE_ROLL_REVEALED,),
+        "combat_route": CombatCardRoute.REACTION,
+    },
+    "acceleration": {
+        "effect_type": "rage_ferocity_double_turn_movement",
+        "targeting": "self",
+        "duration": "until_turn_end",
+    },
+    "deafening_roar": {
+        "effect_type": "rage_ferocity_cone_save_damage_debuff",
+        "targeting": "board_cone",
     },
     "martial_arts_strike": {
         "effect_type": "queue_bonus_unarmed_attack",
@@ -222,6 +334,62 @@ _PROTOTYPE_OVERRIDES: dict[str, dict[str, object]] = {
         "targeting": "board_ally",
         "duration": "10_minutes_or_consumed",
     },
+    "mocking_shot": {
+        "effect_type": "single_crossbow_attack_mocking_debuff",
+        "targeting": "board_enemy",
+        "duration": "until_next_lorian_turn",
+        "combat_route": CombatCardRoute.ATTACK_SOURCE,
+    },
+    "optical_scope": {
+        "effect_type": "double_crossbow_attack_single_scoped_target",
+        "targeting": "board_enemy",
+        "combat_route": CombatCardRoute.ATTACK_SOURCE,
+    },
+    "provoking_shot": {
+        "effect_type": "single_crossbow_attack_provocation",
+        "targeting": "board_enemy",
+        "duration": "until_next_lorian_turn",
+        "combat_route": CombatCardRoute.ATTACK_SOURCE,
+    },
+    "entangling_shot": {
+        "effect_type": "area_crossbow_movement_control",
+        "targeting": "board_area_all_creatures",
+        "duration": "until_next_lorian_turn",
+        "combat_route": CombatCardRoute.ATTACK_SOURCE,
+    },
+    "counterpoint": {
+        "effect_type": "reaction_crossbow_attack_inspired_ally_target",
+        "targeting": "damaged_enemy",
+        "trigger_windows": (CardTriggerWindow.AFTER_DAMAGE_APPLIED,),
+        "combat_route": CombatCardRoute.REACTION,
+    },
+    "distracting_shout": {
+        "effect_type": "reaction_reduce_damage_to_inspired_ally",
+        "targeting": "inspired_ally_hit_by_attack",
+        "trigger_windows": (CardTriggerWindow.DAMAGE_ROLL_REVEALED,),
+        "combat_route": CombatCardRoute.REACTION,
+    },
+    "improvisation": {
+        "effect_type": "reroll_failed_noncombat_charisma_check",
+        "targeting": "self_failed_check",
+        "trigger_windows": (CardTriggerWindow.BEFORE_EXPLORATION_CHECK,),
+    },
+    "panic_whisper": {
+        "effect_type": "saving_throw_damage_and_forced_retreat",
+        "targeting": "board_enemy",
+        "combat_route": CombatCardRoute.ATTACK_SOURCE,
+    },
+    "stage_command": {
+        "effect_type": "saving_throw_selected_bounded_command",
+        "targeting": "board_enemy_then_command",
+        "combat_route": CombatCardRoute.COMBAT_ACTION,
+    },
+    "accelerated_refrain": {
+        "effect_type": "concentration_crossbow_extra_attack_sequence",
+        "targeting": "self",
+        "duration": "three_rounds",
+        "combat_route": CombatCardRoute.COMBAT_ACTION,
+    },
     "cutting_words": {
         "effect_type": "reduce_revealed_roll",
         "targeting": "reacting_enemy",
@@ -247,7 +415,7 @@ _PROTOTYPE_OVERRIDES: dict[str, dict[str, object]] = {
     },
     "cunning_action": {
         "effect_type": "choose_bonus_action_mobility",
-        "targeting": "self_then_dash_disengage_or_hide",
+        "targeting": "self_then_dash_or_disengage",
         "duration": "current_turn",
     },
     "pact_of_the_blade": {
@@ -341,6 +509,18 @@ _PROTOTYPE_OVERRIDES: dict[str, dict[str, object]] = {
         "effect_type": "grant_roll_bonus",
         "targeting": "board_allies",
         "duration": "concentration_up_to_1_minute",
+        "combat_route": CombatCardRoute.COMBAT_ACTION,
+    },
+    "divine_care_aura": {
+        "effect_type": "self_centered_enemy_attack_penalty_aura",
+        "targeting": "self_aura",
+        "duration": "concentration_5_rounds",
+        "combat_route": CombatCardRoute.COMBAT_ACTION,
+    },
+    "healing_grace_aura": {
+        "effect_type": "self_centered_limited_healing_bonus_aura",
+        "targeting": "self_aura",
+        "duration": "concentration_3_rounds",
         "combat_route": CombatCardRoute.COMBAT_ACTION,
     },
     "shield_of_faith": {
@@ -733,6 +913,18 @@ _PROTOTYPE_OVERRIDES: dict[str, dict[str, object]] = {
         "targeting": "board_enemy",
         "combat_route": CombatCardRoute.ATTACK_SOURCE,
     },
+    "nimra_frost_pulse": {"effect_type": "saving_throw_damage_then_slow", "targeting": "board_enemy", "combat_route": CombatCardRoute.ATTACK_SOURCE},
+    "nimra_acid_splash": {"effect_type": "area_saving_throw_damage", "targeting": "board_area", "combat_route": CombatCardRoute.ATTACK_SOURCE},
+    "nimra_mind_spike": {"effect_type": "saving_throw_damage_then_status", "targeting": "board_enemy", "combat_route": CombatCardRoute.ATTACK_SOURCE},
+    "nimra_flame_fan": {"effect_type": "area_saving_throw_damage", "targeting": "board_directional_area", "combat_route": CombatCardRoute.ATTACK_SOURCE},
+    "nimra_force_wave": {"effect_type": "area_saving_throw_damage_and_push", "targeting": "board_directional_area", "combat_route": CombatCardRoute.ATTACK_SOURCE},
+    "nimra_lightning_path": {"effect_type": "chain_saving_throw_damage", "targeting": "board_enemy", "combat_route": CombatCardRoute.ATTACK_SOURCE},
+    "nimra_mind_break": {"effect_type": "area_saving_throw_damage_then_status", "targeting": "board_area", "combat_route": CombatCardRoute.ATTACK_SOURCE},
+    "nimra_sticky_matrix": {"effect_type": "persistent_difficult_terrain_and_status_zone", "targeting": "board_area", "combat_route": CombatCardRoute.COMBAT_ACTION},
+    "nimra_sleep": {"effect_type": "sleep_hit_point_pool", "targeting": "board_area", "combat_route": CombatCardRoute.COMBAT_ACTION},
+    "nimra_fog": {"effect_type": "persistent_obscuring_zone", "targeting": "board_area", "combat_route": CombatCardRoute.COMBAT_ACTION},
+    "nimra_web": {"effect_type": "persistent_obscuring_difficult_terrain_and_status_zone", "targeting": "board_area", "combat_route": CombatCardRoute.COMBAT_ACTION},
+    "nimra_stasis": {"effect_type": "saving_throw_status", "targeting": "board_enemy", "combat_route": CombatCardRoute.COMBAT_ACTION},
 }
 
 
@@ -779,44 +971,55 @@ CARD_ACTION_CATALOG = {
 CURATED_CARD_OWNERS: dict[str, tuple[str, ...]] = {
     "second_wind": ("garran",),
     "defensive_stance": ("garran",),
-    "guard_duty": ("garran",),
-    "action_surge": ("garran", "brakka"),
-    "lay_on_hands": ("garran",),
-    "tactical_assessment": ("garran",),
-    "warding_bond": ("garran", "dagna"),
-    "command": ("garran",),
-    "shield_of_faith": ("garran",),
-    "heroism": ("garran", "lorian"),
+    "action_surge": ("garran",),
+    "shield_bash": ("garran",),
+    "garran_command_halt": ("garran",),
+    "garran_shield_wall": ("garran",),
+    "garran_rally": ("garran",),
+    "garran_guard_companion": ("garran",),
     "rage": ("brakka",),
     "intimidation": ("brakka",),
     "reckless_attack": ("brakka",),
     "brutal_effort": ("brakka",),
-    "frenzy": ("brakka",),
-    "false_life": ("brakka",),
-    "thunderwave": ("brakka", "lorian"),
-    "break_in": ("mira",),
+    "powerful_strike": ("brakka",),
+    "shoulder_check": ("brakka",),
+    "hard_as_rock": ("brakka",),
+    "acceleration": ("brakka",),
+    "deafening_roar": ("brakka",),
+    "thunderwave": ("lorian",),
+    "mocking_shot": ("lorian",),
+    "provoking_shot": ("lorian",),
+    "counterpoint": ("lorian",),
+    "distracting_shout": ("lorian",),
+    "panic_whisper": ("lorian",),
+    "stage_command": ("lorian",),
+    "accelerated_refrain": ("lorian",),
     "instinctive_dodge": ("mira",),
-    "exploit_weakness": ("mira",),
-    "cunning_action": ("brakka", "mira", "erynd"),
+    "smoke_screen": ("mira",),
+    "hamstring_cut": ("mira",),
+    "piercing_attack": ("mira",),
+    "guard_vault": ("mira",),
+    "blade_mistress": ("mira",),
+    "combat_trap_detection": ("mira",),
+    "cunning_action": ("erynd",),
     "disguise_self": ("mira", "lorian"),
-    "invisibility": ("mira",),
-    "find_traps": ("mira", "erynd"),
     "sacred_flame": ("dagna",),
-    "healing_word": ("dagna", "lorian"),
+    "healing_word": ("dagna",),
     "bless": ("dagna",),
+    "divine_care_aura": ("dagna",),
+    "healing_grace_aura": ("dagna",),
     "guidance": ("dagna",),
-    "diagnosis": ("dagna",),
     "preserve_life": ("dagna",),
     "sanctuary": ("dagna",),
     "guiding_bolt": ("dagna",),
     "aid": ("dagna",),
     "lesser_restoration": ("dagna",),
+    "spiritual_weapon": ("dagna",),
     "prayer_of_healing": ("dagna",),
     "bardic_inspiration": ("lorian",),
-    "vicious_mockery": ("mira", "lorian"),
-    "true_strike": ("mira", "erynd"),
-    "mirror_image": ("mira",),
-    "charm_person": ("lorian",),
+    "optical_scope": ("lorian",),
+    "entangling_shot": ("lorian",),
+    "true_strike": ("erynd",),
     "mage_hand": ("lorian", "nimra"),
     "faerie_fire": ("lorian",),
     "hideous_laughter": ("lorian",),
@@ -837,14 +1040,30 @@ CURATED_CARD_OWNERS: dict[str, tuple[str, ...]] = {
     "hold_person": ("nimra",),
     "misty_step": ("nimra", "erynd"),
     "shatter": ("nimra",),
+    "nimra_frost_pulse": ("nimra",),
+    "nimra_acid_splash": ("nimra",),
+    "nimra_mind_spike": ("nimra",),
+    "nimra_flame_fan": ("nimra",),
+    "nimra_force_wave": ("nimra",),
+    "nimra_sticky_matrix": ("nimra",),
+    "nimra_sleep": ("nimra",),
+    "nimra_fog": ("nimra",),
+    "nimra_web": ("nimra",),
+    "nimra_lightning_path": ("nimra",),
+    "nimra_mind_break": ("nimra",),
+    "nimra_stasis": ("nimra",),
+    "nimra_sculpt_field": ("nimra",),
+    "nimra_distant_spell": ("nimra",),
+    "nimra_overcharged_spell": ("nimra",),
+    "nimra_forced_weave": ("nimra",),
+    "nimra_energy_transmutation": ("nimra",),
     "hunters_mark": ("erynd",),
-    "tracking": ("erynd",),
-    "patient_shot": ("erynd",),
-    "pass_without_trace": ("erynd",),
-    "goodberry": ("erynd",),
+    "aim": ("erynd",),
+    "anchoring_arrow": ("erynd",),
+    "exposing_arrow": ("erynd",),
+    "disrupting_arrow": ("erynd",),
+    "double_shot": ("erynd",),
     "spike_growth": ("erynd",),
-    "see_invisibility": ("erynd",),
-    "locate_object": ("erynd",),
 }
 
 

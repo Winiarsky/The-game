@@ -553,6 +553,7 @@
         "healing_word",
         "heroism",
         "hideous_laughter",
+        "panic_whisper",
         "identify",
         "illusory_script",
         "longstrider",
@@ -579,7 +580,9 @@
         "shatter",
         "silence",
         "suggestion",
-        "zone_of_truth"
+        "zone_of_truth",
+        "stage_command",
+        "accelerated_refrain"
       ],
       "spell_slots": {
         "1": 2
@@ -838,10 +841,14 @@
       "equipment_packages": [
         {
           "id": "bard_diplomat",
-          "label": "Rapier i wyposażenie dyplomaty",
+          "label": "Kusza ręczna, rapier i lutnia",
           "items": [
             {
               "item_id": "rapier",
+              "equipped": false
+            },
+            {
+              "item_id": "hand_crossbow",
               "equipped": true
             },
             {
@@ -851,14 +858,6 @@
             {
               "item_id": "lute",
               "equipped": true
-            },
-            {
-              "item_id": "dagger",
-              "equipped": false
-            },
-            {
-              "item_id": "diplomats_pack",
-              "equipped": false
             }
           ]
         }
@@ -950,6 +949,7 @@
         "detect_evil_and_good",
         "detect_magic",
         "detect_poison_and_disease",
+        "divine_care_aura",
         "guiding_bolt",
         "healing_word",
         "inflict_wounds",
@@ -965,6 +965,7 @@
         "enhance_ability",
         "find_traps",
         "gentle_repose",
+        "healing_grace_aura",
         "hold_person",
         "lesser_restoration",
         "locate_object",
@@ -2085,6 +2086,33 @@
               "equipped": false
             }
           ]
+        },
+        {
+          "id": "erynd_mobile_hunter",
+          "label": "Długi łuk, nóż myśliwski i ćwiekowana skóra",
+          "items": [
+            {
+              "item_id": "longbow",
+              "equipped": true
+            },
+            {
+              "item_id": "hunting_knife",
+              "equipped": false
+            },
+            {
+              "item_id": "studded_leather_armor",
+              "equipped": true
+            },
+            {
+              "item_id": "arrow",
+              "equipped": false,
+              "quantity": 20
+            },
+            {
+              "item_id": "explorers_pack",
+              "equipped": false
+            }
+          ]
         }
       ]
     },
@@ -2177,6 +2205,31 @@
             {
               "item_id": "dagger",
               "quantity": 2,
+              "separate_instances": true
+            },
+            {
+              "item_id": "leather_armor",
+              "equipped": true
+            },
+            {
+              "item_id": "thieves_tools"
+            },
+            {
+              "item_id": "burglars_pack"
+            }
+          ]
+        },
+        {
+          "id": "mira_shadow_killer",
+          "label": "Rapier i noże do rzucania",
+          "items": [
+            {
+              "item_id": "rapier",
+              "equipped": true
+            },
+            {
+              "item_id": "throwing_knife",
+              "quantity": 4,
               "separate_instances": true
             },
             {
@@ -2775,6 +2828,9 @@
         "mending",
         "message",
         "minor_illusion",
+        "nimra_acid_splash",
+        "nimra_frost_pulse",
+        "nimra_mind_spike",
         "poison_spray",
         "prestidigitation",
         "ray_of_frost",
@@ -2833,6 +2889,15 @@
         "magic_weapon",
         "mirror_image",
         "misty_step",
+        "nimra_flame_fan",
+        "nimra_force_wave",
+        "nimra_sticky_matrix",
+        "nimra_sleep",
+        "nimra_fog",
+        "nimra_web",
+        "nimra_lightning_path",
+        "nimra_mind_break",
+        "nimra_stasis",
         "ray_of_enfeeblement",
         "rope_trick",
         "scorching_ray",

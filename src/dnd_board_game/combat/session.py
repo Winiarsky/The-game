@@ -30,7 +30,7 @@ from .conditions import (
 )
 from .initiative import InitiativeEntry, InitiativeOrder
 from .long_casting import LongCastState
-from .stealth import HiddenState, reveal_actor
+from .stealth import HiddenState, reveal_actor, reveal_to_observer
 from .summoning import SummonedCreatureState
 
 
@@ -56,6 +56,8 @@ class TurnActionState:
     bonus_attack_source_id: str = ""
     bonus_action_spell_cast: bool = False
     leveled_action_spell_cast: bool = False
+    movement_action_used: bool = False
+    weapon_change_available: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,6 +120,16 @@ class EquipWeaponResult:
     weapon: InventoryItem | None
     replaced_weapons: tuple[InventoryItem, ...]
     used_action: bool
+    message: str
+
+
+@dataclass(frozen=True, slots=True)
+class ChangeWeaponResult:
+    state: CombatState
+    accepted: bool
+    actor: Actor
+    weapon: InventoryItem | None
+    replaced_items: tuple[InventoryItem, ...]
     message: str
 
 
@@ -275,6 +287,7 @@ class CombatState:
     long_casts: tuple[LongCastState, ...] = ()
     summoned_creatures: tuple[SummonedCreatureState, ...] = ()
     enemy_ai: EnemyAiRuntimeState = EnemyAiRuntimeState()
+    damage_received_by_actor: tuple[tuple[str, int], ...] = ()
 
     @property
     def round_number(self) -> int:
@@ -319,6 +332,11 @@ def actor_by_id(state: CombatState, actor_id: ActorId) -> Actor:
 
 def replace_actor(state: CombatState, updated_actor: Actor) -> CombatState:
     previous_actor = actor_by_id(state, updated_actor.id)
+    damage_received = dict(state.damage_received_by_actor)
+    hp_lost = max(0, previous_actor.hp - updated_actor.hp)
+    if hp_lost:
+        actor_id = str(updated_actor.id)
+        damage_received[actor_id] = damage_received.get(actor_id, 0) + hp_lost
     condition_states = state.condition_states
     if updated_actor.hp < previous_actor.hp:
         condition_states = tuple(
@@ -373,6 +391,7 @@ def replace_actor(state: CombatState, updated_actor: Actor) -> CombatState:
         hidden_states=hidden_states,
         condition_states=normalize_grapple_conditions(condition_states, actors),
         enemy_ai=enemy_ai,
+        damage_received_by_actor=tuple(sorted(damage_received.items())),
     )
     return _with_finished_status(synced)
 
@@ -853,6 +872,94 @@ def equip_weapon(
     )
 
 
+def change_weapon(state: CombatState, weapon_id: str) -> ChangeWeaponResult:
+    """Select one active weapon using the simplified once-per-turn loadout change.
+
+    The older object-interaction based equip/stow functions remain available to
+    rules fixtures, but the board-game combat UI uses this atomic operation.
+    A one-handed weapon preserves an equipped shield when possible; a two-handed
+    weapon puts away every other held item.
+    """
+
+    actor = current_actor(state)
+    if actor.faction != Faction.ALLY or actor.is_defeated():
+        return ChangeWeaponResult(
+            state, False, actor, None, (), "Ten aktor nie może zmienić broni."
+        )
+    weapon = next((item for item in actor.inventory if item.id == weapon_id), None)
+    if weapon is None:
+        return ChangeWeaponResult(
+            state, False, actor, None, (), "Tej broni nie ma w ekwipunku bohatera."
+        )
+    if weapon.kind != "weapon" or not weapon.available or weapon.quantity <= 0:
+        return ChangeWeaponResult(
+            state, False, actor, weapon, (), "Ten przedmiot nie jest dostępną bronią."
+        )
+    if weapon.equipped:
+        return ChangeWeaponResult(
+            state,
+            True,
+            actor,
+            weapon,
+            (),
+            f"{weapon.name} jest już aktywną bronią {actor.name}.",
+        )
+    if not state.turn_action.weapon_change_available:
+        return ChangeWeaponResult(
+            state,
+            False,
+            actor,
+            weapon,
+            (),
+            "Darmowa zmiana broni w tej turze została już wykorzystana.",
+        )
+
+    # The simplified selector represents a complete loadout swap, not a series
+    # of individual stow/draw interactions. Keep a shield for a one-handed
+    # weapon, but free both hands for a two-handed weapon.
+    required_hands = max(1, weapon.hands_required)
+    retained_shield_ids = {
+        item.id
+        for item in actor.inventory
+        if required_hands == 1 and item.kind == "shield" and item.equipped
+    }
+    replaced = tuple(
+        item
+        for item in actor.inventory
+        if item.equipped and item.id != weapon_id and item.id not in retained_shield_ids
+    )
+    base_inventory = tuple(
+        replace(item, equipped=False, held_in=())
+        if item.id in {entry.id for entry in replaced}
+        else item
+        for item in actor.inventory
+    )
+    plan = plan_hand_equip(base_inventory, weapon_id)
+    updated_actor = replace(actor, inventory=plan.inventory)
+    updated_state = replace_actor(
+        replace(
+            state,
+            turn_action=replace(
+                state.turn_action,
+                weapon_change_available=False,
+                two_weapon_trigger_item_id=None,
+            ),
+        ),
+        updated_actor,
+    )
+    equipped = next(item for item in updated_actor.inventory if item.id == weapon_id)
+    previous = ", ".join(item.name for item in replaced)
+    detail = f"; odłożono: {previous}" if previous else ""
+    return ChangeWeaponResult(
+        updated_state,
+        True,
+        updated_actor,
+        equipped,
+        replaced,
+        f"{actor.name} wybiera broń: {equipped.name}{detail}. Darmowa zmiana broni została wykorzystana.",
+    )
+
+
 def stow_weapon(state: CombatState, weapon_id: str) -> StowWeaponResult:
     actor = current_actor(state)
     if actor.faction != Faction.ALLY or actor.is_defeated():
@@ -1102,8 +1209,37 @@ def movement_remaining(
     actor: Actor,
     active_effects: tuple[ActiveEffect, ...] = (),
 ) -> int:
+    if state.turn_action.movement_action_used:
+        return 0
     speed = effective_movement_speed(actor, state.condition_states, active_effects)
+    if actor_has_feature(actor, "mira_shadow_stealth") and any(
+        hidden.actor_id == str(actor.id) for hidden in state.hidden_states
+    ):
+        speed = min(speed, 20)
     return max(0, speed + state.turn_action.extra_movement_feet - state.turn_action.movement_used_feet)
+
+
+def use_movement_action(state: CombatState, actor: Actor) -> TurnMovementUseResult:
+    """Spend the whole voluntary movement budget on a Garran movement technique."""
+
+    if state.status != CombatStatus.ACTIVE or actor.id != current_actor(state).id:
+        return TurnMovementUseResult(state, False, "To nie jest aktywna tura tego aktora.", 0)
+    if actor.is_defeated():
+        return TurnMovementUseResult(state, False, "Pokonany aktor nie może działać.", 0)
+    if state.turn_action.movement_action_used:
+        return TurnMovementUseResult(state, False, "Akcja ruchu została już wykorzystana.", 0)
+    if state.turn_action.movement_used_feet > 0:
+        return TurnMovementUseResult(
+            state,
+            False,
+            "Technikę ruchową trzeba wybrać przed dobrowolnym ruchem.",
+            movement_remaining(state, actor),
+        )
+    updated = replace(
+        state,
+        turn_action=replace(state.turn_action, movement_action_used=True),
+    )
+    return TurnMovementUseResult(updated, True, "Wykorzystano akcję ruchu.", 0)
 
 
 def use_dash(
@@ -1261,6 +1397,24 @@ def finish_turn(state: CombatState) -> CombatState:
     finished_state = _with_finished_status(state)
     if finished_state.status != CombatStatus.ACTIVE:
         return finished_state
+    ending_actor = current_actor(finished_state)
+    if actor_has_feature(ending_actor, "mira_shadow_stealth"):
+        hidden_states = finished_state.hidden_states
+        for observer in finished_state.actors:
+            if (
+                observer.faction not in {ending_actor.faction, Faction.NEUTRAL}
+                and not observer.is_defeated()
+                and max(
+                    abs(observer.position.col - ending_actor.position.col),
+                    abs(observer.position.row - ending_actor.position.row),
+                ) <= 1
+            ):
+                hidden_states = reveal_to_observer(
+                    hidden_states,
+                    str(ending_actor.id),
+                    str(observer.id),
+                )
+        finished_state = replace(finished_state, hidden_states=hidden_states)
     order = _sync_order_actor_states(
         finished_state.initiative_order,
         finished_state.actors,

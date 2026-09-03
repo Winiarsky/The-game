@@ -19,5 +19,17 @@ def test_playtest_is_reproducible_and_uses_production_enemy_ai() -> None:
     assert first_log == second_log
     enemy_events = [event for event in first_log if event.get("kind") == "enemy_ai"]
     assert enemy_events
-    assert all(event["intent"] in {"advance", "engage", "guard", "regroup", "flee", "cornered"} for event in enemy_events)
+    assert all(
+        event["intent"]
+        in {
+            "leader_melee",
+            "leader_ranged",
+            "leader_advance",
+            "pack_attack",
+            "pack_advance",
+            "flee",
+            "cornered",
+        }
+        for event in enemy_events
+    )
     assert all("utility_breakdown" in event for event in enemy_events)

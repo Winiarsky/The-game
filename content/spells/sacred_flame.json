@@ -8,7 +8,7 @@
   "level": 0,
   "school": "evocation",
   "casting_time": "action",
-  "range": {"kind": "distance", "feet": 60},
+  "range": {"kind": "self"},
   "components": {"verbal": true, "somatic": true, "materials": []},
   "duration": {"kind": "instantaneous"},
   "concentration": false,
@@ -19,6 +19,12 @@
     "ability": "wisdom",
     "save_ability": "dexterity",
     "save_damage_on_success": "none",
+    "area": {
+      "shape": "cone",
+      "length_feet": 15,
+      "width_feet": 5,
+      "target_mode": "enemies"
+    },
     "damage": {"dice": "1d8", "modifier": 0, "damage_type": "radiant"}
   }
 }

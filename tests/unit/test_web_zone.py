@@ -93,3 +93,10 @@ def test_web_zone_is_twenty_foot_cube_and_failed_entry_save_restrains() -> None:
     condition = resolution.state.condition_states[0]
     assert condition.save_dc == 14
     assert condition.source_spell_id == "web"
+
+
+def test_sculpted_web_field_is_a_persistent_hole_in_the_zone() -> None:
+    zone = replace(_zone(), excluded_positions=(Coordinate(4, 4),))
+
+    assert not web_zone_contains(zone, Coordinate(4, 4))
+    assert web_zone_contains(zone, Coordinate(5, 4))

@@ -69,16 +69,22 @@ Gracz powinien wskazywać intencję przez kliknięcie podświetlonego pola na pl
 * kliknięcie pola interakcji wykonuje albo otwiera odpowiednią interakcję sceny,
 * gdy pole ma jedną legalną intencję, aplikacja przechodzi bezpośrednio do jej podglądu lub wykonania,
 * gdy pole ma kilka legalnych intencji, monitor pokazuje kontekstowe menu wybierane strzałkami i Enterem,
-* kliknięcie aktualnego pola bohatera zawsze otwiera menu własne: lokalne interakcje, ataki i czary,
-  ekwipunek, akcje podstawowe oraz zakończenie tury.
+* kliknięcie aktualnego pola bohatera otwiera skrócone menu własne: ataki i
+  zdolności postaci, `Zmiana broni`, `Użyj przedmiotu` oraz zakończenie tury.
 
-Kontekstowe menu celu jest wspólnym katalogiem składanym z niezależnych źródeł.
-Grupuje ataki każdą dostępną bronią, manewry, czary, przedmioty oraz wsparcie i
-leczenie. Broń niesiona, ale niewyposażona, może wystawić złożoną opcję „wyposaż i
-zaatakuj”, jeżeli bohater ma jeszcze darmową interakcję z obiektem oraz wolną
-wymaganą dłoń; schowanie innego przedmiotu byłoby drugą interakcją i zużyłoby akcję. Po wykonaniu
-zwykłego ataku lekką bronią do walki wręcz menu celu może wystawić osobną opcję ataku
-inną lekką bronią trzymaną w drugiej dłoni. Opcja zużywa akcję bonusową.
+Kontekstowe menu nadal jest składane z niezależnych źródeł, lecz interfejs
+board-game wystawia tylko aktualnie wspierany, krótki katalog. Zwykłe
+`Sprint`, `Odwrót`, `Unik`, Shove, Padnij/Wstań, Szukaj, podnoszenie/upuszczanie
+broni, atak drugą bronią i ręczne przeszukiwanie pokonanych są ukrytym legacy —
+ich resolvery pozostają w silniku do ewentualnego ponownego użycia. `Sprint` i
+`Odwrót` są dostępne Eryndowi przez `Zwiadowczą mobilność`, `Unik instynktowny`
+pozostaje reakcją Miry, a rozpoczęcie Chwytu jest zdolnością Brakki. Ucieczka z
+istniejącego chwytu lub sieci pozostaje akcją kontekstową.
+
+`Zmiana broni` otwiera jedną listę wszystkich dostępnych broni w ekwipunku.
+Pierwsza faktyczna zmiana w turze jest darmowa i atomowo odkłada poprzednią broń;
+ponowne wskazanie aktualnej broni niczego nie zużywa. `Użyj przedmiotu` otwiera
+wyłącznie przedmioty z zakodowaną po ich stronie akcją bojową i legalnymi celami.
 
 Opcja interakcji wskazana poza aktualnym zasięgiem obsługi jest intencją złożoną, a nie
 zdalnym użyciem obiektu. Silnik wybiera najtańsze osiągalne pole spełniające warunki
@@ -748,6 +754,9 @@ rozliczeniu.
 
 ### Shove
 
+Resolver Shove pozostaje przetestowaną mechaniką legacy, ale nie jest obecnie
+wystawiany na liście działań bohaterów.
+
 Gracz wybiera sąsiedniego przeciwnika bezpośrednio na jego polu, a następnie
 decyduje, czy chce go powalić, czy odepchnąć o 5 ft. Atakujący wykonuje Strength
 (Athletics), cel broni się korzystniejszym Strength (Athletics) albo Dexterity
@@ -760,7 +769,8 @@ przez teren, ścianę albo obiekt sceny.
 
 ### Grapple
 
-Gracz wybiera sąsiedniego przeciwnika z kontekstowego menu celu. Chwytający wykonuje
+Rozpoczęcie chwytu jest aktywną zdolnością specjalną Brakki. Brakka wybiera
+sąsiedniego przeciwnika z listy/trybu celu. Chwytający wykonuje
 Strength (Athletics), a cel broni się lepszym Strength (Athletics) albo Dexterity
 (Acrobatics). Wyłącznie wyższy wynik chwytającego nakłada `Grappled`; remis broni
 celu. W obecnym modelu manewr zużywa całą akcję, dopóki Attack action nie obsługuje
@@ -893,6 +903,12 @@ Domyślnym modelem jest `fail-forward`:
 * sukces może dać postęp bez kosztu,
 * wysoki sukces może dać dodatkową korzyść,
 * poważna porażka może dodać komplikację.
+
+Jedno autorskie działanie lokacji może ustawić kilka flag wyniku. Służy to
+decyzjom bez rzutu, które jednocześnie zamykają wspólny wybór i zachowują jego
+konkretny wariant, oraz testom fail-forward zapisującym zarówno obowiązkowy
+postęp, jak i dodatkową wiedzę. Wspólna flaga wyniku uniemożliwia późniejsze
+wybranie sprzeczne z już podjętą decyzją.
 
 ### Wyzwanie Z Postępem
 
@@ -1589,6 +1605,11 @@ Każda tura aktora zawiera:
 ataki dystansowe deklarują `attack_kind: ranged` oraz `range_feet`. Legalne cele,
 podświetlenie planszy i podgląd akcji korzystają z tej samej wartości efektywnej.
 
+Na fizycznej planszy efekty dystansowe mają maksymalny zasięg 75 feet (15 pól),
+nawet jeżeli źródło D&D deklaruje większy zasięg normalny lub daleki. Jest to
+świadome skalowanie do pola gry 20×30: ten sam limit obowiązuje legalne cele,
+podświetlenie LED i rozstrzygnięcie ataku. Zasięg wręcz pozostaje bez zmian.
+
 Reach wyznacza również strefę zagrożenia: dobrowolne opuszczenie jej może uruchomić
 atak okazyjny, ale przesunięcie między polami nadal znajdującymi się w reach nie.
 Krótki atak dystansowy nigdy nie tworzy takiej strefy. AI z atakiem o wydłużonym
@@ -1617,6 +1638,23 @@ Gracz wskazuje środek `radius` albo jedno z ośmiu sąsiednich pól wyznaczają
 kierunek `line` lub `cone`. Linia wykorzystuje długość i szerokość z contentu;
 stożek rośnie warstwami 1, 2, 3... pól. Wszystkie pola są widoczne na planszy
 przed potwierdzeniem.
+
+W turze bohatera lista działań ma jawne etapy `list` i `preview`. Ruch jest wyborem
+startowym, a Numpad 8/2 przełącza kolejno ataki bronią, zdolności specjalne,
+czary, `Zmianę broni`, `Użyj przedmiotu`, akcje kontekstowe i zakończenie tury.
+Poruszanie się po liście nie uruchamia skanowania planszy ani podświetlenia
+zasięgu. Pierwszy Enter uzbraja podgląd wybranej akcji i dopiero wtedy pokazuje
+legalne pola lub cele. Kliknięcie planszy wybiera albo zmienia pole/cel, ale nie
+wykonuje akcji. Następny Enter zatwierdza bieżący podgląd; minus wraca do listy
+bez zużycia akcji, slotu, przedmiotu ani zasobu klasowego. `Zakończ turę` używa
+tego samego podwójnego potwierdzenia i nie ma osobnego skrótu Numpad 0.
+
+Akcja bez legalnego celu nie przechodzi do `preview`: UI podaje przyczynę i
+pozostaje na liście, dzięki czemu plansza nie oczekuje bezskutecznego kliknięcia.
+Dla czaru obszarowego legalne środki pozostają lekko podświetlone, gdy wybrany
+środek pokazuje właściwy obszar i objęte cele. Kolejne kliknięcia zmieniają
+środek bez wydawania zasobu, a Enter zatwierdza bieżący podgląd. Wieloetapowe
+zdolności zachowują tę zasadę na każdym etapie wymagającym wyboru planszy.
 
 Obszar nie przechodzi przez ściany, zamknięte krawędzie ani blocking terrain.
 Content jawnie wybiera `target_mode`: wszystkie istoty, przeciwników albo
@@ -1827,30 +1865,17 @@ rzutu. Aktywacja deleguje konsekwencje do ogólnego silnika hazardów.
 - Ten pionowy zakres obsługuje czary sojusznika przeciw przeciwnikom; fizyczne
   save'y bohaterów na efekty wrogów nadal przechodzą przez istniejący przepływ.
 
-## Podróż i wyczerpanie
+## Przejście między scenariuszami
 
-- Continuation może deklarować bazowy czas drogi, ST nawigacji, używaną cechę
-  i skill, opóźnienie po porażce oraz bezpieczny limit marszu.
-- Tempo szybkie skraca czas do 3/4, normalne go nie zmienia, a wolne wydłuża do
-  4/3. Szybkie tempo obniża passive Perception o 5, a wolne pozwala na Stealth;
-  te właściwości są jawnym metadanym dla kolejnych zdarzeń podróży.
-- Nawigator wykonuje fizyczny ability check. Porażka jest fail-forward: drużyna
-  dociera do celu, ale zegar przesuwa się o autorskie opóźnienie.
-- Panel przejścia między scenariuszami rozdziela decyzje na tempo, prowadzącego
-  i rzuty podróży. Tempo wybiera się z trzech jawnych kafelków pokazujących czas
-  oraz Perception/Stealth. Jeśli nawigacja nie jest automatyczna, prowadzącego
-  wskazuje wyłącznie karta bohatera. `ACCEPT` przechodzi do następnego etapu i
-  zatwierdza końcowe rzuty, a `DECLINE` cofa dokładnie o jeden etap. Natural
-  Explorer pomija zbędny wybór i rzut na nawigację; wymagane rzuty forced march
-  pozostają sekwencją w końcowym etapie.
-- Po rozliczeniu czasu i nawigacji continuation wybiera pierwszą pasującą
-  autorską gałąź `success`, `partial_success` albo `fail_forward`. Gałąź może
-  zależeć od końcowych flag i wyniku nawigacji, przekazuje nazwany rezultat
-  graczom oraz typowane konsekwencje przyszłej scenie.
+- Continuation deklaruje jeden autorski, stały czas przejścia do kolejnej sceny.
+- Panel pokazuje cel i czas, a pojedynczy przycisk `Wyrusz` zatwierdza przejście.
+  Gracze nie wybierają tempa ani nawigatora i nie wykonują osobnych rzutów podróży.
+- Po przesunięciu zegara continuation wybiera pierwszą pasującą autorską gałąź
+  `success`, `partial_success` albo `fail_forward` na podstawie końcowych flag.
+  Gałąź przekazuje nazwany rezultat graczom oraz typowane konsekwencje przyszłej
+  scenie.
 - Handoff zawiera rozstrzygnięcie celów sceny źródłowej. Wybrane flagi mogą być
   propagowane jawnie; runtime nie kopiuje całego prywatnego stanu scenariusza.
-- Każda rozpoczęta godzina ponad bezpieczny limit wymaga od każdego żywego
-  członka drużyny Constitution save o ST `10 + numer dodatkowej godziny`.
 - Exhaustion 1–6 nakłada kolejno: disadvantage na ability checks, połowę
   szybkości, disadvantage na ataki i save'y, połowę maksimum HP, szybkość 0
   oraz śmierć. Long rest usuwa jeden poziom.
@@ -1934,18 +1959,195 @@ rzutu. Aktywacja deleguje konsekwencje do ogólnego silnika hazardów.
 - Bohaterowie startują na poziomie 3, dostają autorską premię `+2` do głównego
   atrybutu i od pierwszej sceny mają dostęp do pełnej osobistej talii. System
   awansu oraz odblokowywania kart jest odłożony do osobnego projektu.
-- Pełne talie startowe mają 7–9 kart bojowych: Garran 8, Brakka 7, Mira 7,
-  Dagna 9, Lorian 8, Nimra 9 i Erynd 8. Różnica wynika z ekonomii: czarujący
-  dzielą więcej kart między komórki, a wojownicy mają częściej odnawiane akcje.
+- Wielkość pełnej talii zależy od roli bohatera. Wyrównujemy liczbę znaczących
+  wyborów, ale nie ścinamy technicznych wariantów tylko po to, by każda postać
+  miała identyczną liczbę kart.
 - Zdolności przeniesione z innych klas są przedstawiane jako osobiste techniki
   archetypu. Wykorzystują istniejące resolvery, lecz mają własne nazwy i pule.
-- Pozycja obronna Garrana i Unik instynktowny Miry kosztują akcję dodatkową,
-  mają po jednym użyciu na krótki odpoczynek i nadają utrudnienie atakom do
-  początku następnej tury bohatera.
-- Mira zaczyna z 3 Fortelami, Erynd z 3 Instynktami, Garran z 3 Taktykami, a
-  Brakka z 2 punktami Dzikości. Wszystkie te pule wracają po długim odpoczynku.
+- Pozycja obronna Garrana kosztuje cały niewykorzystany ruch, nie ma limitu i
+  daje `+2 KP` do początku następnej tury albo do zmiany pola. Unik instynktowny
+  Miry jest proponowaną przed rzutem reakcją, która kosztuje 1 Fortel.
+- Mira zaczyna z liczbą Forteli równą modyfikatorowi Zręczności (obecnie 4),
+  Erynd z 4 Instynktami, a Garran z liczbą Taktyk
+  równą modyfikatorowi Siły (obecnie 4). Brakka zaczyna każdy Szał z 3 punktami
+  Dzikości; Taktyki, Fortele i Instynkt wracają po długim odpoczynku.
 - Nimra zaczyna z komórkami 2. poziomu i od razu może używać wszystkich swoich
   dziewięciu kart.
+
+### Lorian — bard-wynalazca
+
+- `Kusznik` daje dwa niezależne ataki kuszą ręczną w zwykłej akcji Ataku.
+- Specjalne ostrzały nie mają puli użyć. `Luneta optyczna` wymaga pozostania w
+  miejscu, zużywa cały ruch, wydłuża zasięg o 15 stóp, obniża efektywne KP celu
+  o 2 i kieruje oba strzały w ten sam cel.
+- `Ostrzał destabilizujący` zakłóca pierwszy atak i obrony na Mądrość, a
+  `Prowokujący ostrzał` skaluje premię przeciw Lorianowi i karę przeciw innym
+  celom z faktycznie zadanymi obrażeniami.
+- `Oplatający ostrzał` wybiera środek obszaru 3×3 w zasięgu 45 stóp. Wszystkie
+  istoty w obszarze, również sojusznicy, bronią się Zręcznością; sukces daje
+  połowę ruchu, a porażka blokuje ruch do początku następnej tury Loriana.
+- Zdolności specjalne wymagają żywego i przytomnego sojusznika w promieniu
+  10 stóp. Ograniczenie nie dotyczy zwykłych ataków ani czarów.
+- `Obycie i targowanie` daje +2 do każdego pozabojowego testu Charyzmy.
+  `Improwizacja` pozwala raz na konkretnego NPC przerzucić nieudany taki test;
+  drugi wynik jest ostateczny, a zużycie pozostaje w zapisie sesji.
+- Inspiracja ma liczbę użyć równą modyfikatorowi Charyzmy i odnawia się po
+  krótkim odpoczynku. Pozostałe specjalne akcje i reakcje nie wydają Inspiracji.
+
+### Garran — wieża i koordynator linii
+
+- `Zryw akcji` jest dostępny dopiero po wydaniu akcji głównej, kosztuje akcję
+  dodatkową, przywraca akcję główną i ma jedno użycie na krótki odpoczynek.
+- `Uderzenie tarczą` kosztuje cały ruch i musi zostać zadeklarowane przed
+  dobrowolnym ruchem. Wygrany sporny test Siły zadaje `1k4 + Siła` obuchowych;
+  cel jest odpychany dokładnie o jedno przeciwległe pole, jeżeli jest legalne.
+  Zablokowane pole nie anuluje obrażeń, a remis wygrywa obrońca.
+- Garran ma cztery Taktyki po 1 punkcie: `Rozkaz: Stać` ogranicza najbliższy
+  ruch celu po obronie Mądrości ST 14, `Osłona tarczą` dynamicznie daje `+2 KP`
+  sąsiadującym sojusznikom, `Mowa dowódcy` zdejmuje Strach ze słyszących
+  sojuszników i wzmacnia ich pierwszy test k20, a `Osłona towarzysza`
+  przekierowuje na Garrana pierwszy pojedynczy wrogi atak, czar albo efekt.
+- `Wyrzuty sumienia` śledzą nieodwracalną przez leczenie sumę utraconych PW w
+  bieżącej walce. Gdy Garran jest w grupie bohaterów z najmniejszą liczbą ran i
+  przynajmniej jeden sojusznik otrzymał więcej, Garran ma `−2` do ataków,
+  rzutów obronnych i testów; kara nie dotyczy KP, obrażeń ani leczenia.
+- Warta, Stopień wojskowy, Ratunek polowy oraz czaropodobne wersje dawnych
+  Taktyk nie należą już do archetypu Garrana.
+
+### Dagna — mobilne wsparcie pola walki
+
+- `Błogosławieństwo` jest autorską aurą koncentracji o promieniu 10 stóp przez
+  5 rund. Dagna i sojusznicy aktualnie znajdujący się w aurze dodają fizyczne
+  `k4` do każdego ataku i rzutu obronnego; premia pojawia się i znika wraz ze
+  zmianą pozycji.
+- `Aura Boskiej Opieki` jest czarem 1. poziomu, koncentracją przez 5 rund i ma
+  promień 5 stóp. Wrogie ataki wykonywane z aury otrzymują karę do testu ataku
+  i obrażeń równą połowie modyfikatora Mądrości Dagny, zaokrągloną w dół,
+  minimum 1. Efekt nie obniża obrażeń czarów opartych wyłącznie na rzucie
+  obronnym.
+- `Aura Uzdrawiającej Łaski` jest czarem 2. poziomu, koncentracją przez 3 rundy
+  i ma promień 10 stóp. Faktyczne leczenie sojusznika z dowolnego bojowego
+  źródła automatycznie otrzymuje `1k8 + Mądrość Dagny`; aura ma liczbę
+  aktywacji równą jej modyfikatorowi Mądrości, minimum 1. Premia nie uruchamia
+  się od temporary HP, stabilizacji ani zwiększenia maksymalnych PW i nie
+  wywołuje samej siebie.
+- `Krok ratowniczki` raz na turę Dagny proponuje opcjonalny ruch 5 stóp po
+  faktycznym uleczeniu innego sojusznika w promieniu 10 stóp albo zdjęciu z
+  niego negatywnego stanu. Ruch nie zużywa szybkości ani reakcji i nie prowokuje
+  ataków okazyjnych; brak legalnego pola pomija prompt.
+- Zasięgi aur są komunikowane przede wszystkim statusami figur. Gracz może
+  chwilowo włączyć LED-owy podgląd konkretnej aury, ale wybór akcji natychmiast
+  przywraca podgląd ruchu, celu lub obszaru tej akcji.
+
+### Erynd — mobilny łucznik kontroli pola
+
+- Erynd walczy długim łukiem w ćwiekowanej skórze bez kary do Skradania; jego
+  awaryjny nóż myśliwski zadaje `1k4 + Siła`. Dawne dwa miecze, Dobre jagody,
+  Wykrycie pułapek, Tropienie, Naturalny odkrywca i Ulubiony wróg nie należą do
+  jego aktywnego zestawu.
+- Instynkt ma maksimum równe modyfikatorowi Zręczności (obecnie 4) i odnawia się
+  po długim odpoczynku. `Celowanie` zużywa cały niewykorzystany ruch przed
+  ruszeniem się i daje przewagę wyłącznie następnemu atakowi z długiego łuku w
+  tej turze.
+- `Pierwsza krew` raz na turę dodaje `1k8` do trafienia długim łukiem w cel,
+  który przed obrażeniami miał pełne PW. `Czujność zwiadowcy` daje `+2` do
+  inicjatywy oraz wykrywania ukrytych przeciwników, ale nie pułapek.
+- `Strzała kotwicząca` kosztuje 1 Instynkt; gracz rzuca `k4` i wpisuje liczbę
+  rund. Trafiony cel broni się Siłą przeciw `ST 8 + biegłość + Zręczność`:
+  porażka zeruje ruch, sukces zmniejsza go o połowę na podany czas.
+- `Strzała odsłaniająca` kosztuje 1 Instynkt; gracz rzuca `k8`, a trafienie
+  obniża KP celu o wynik do początku następnej tury Erynda. `Strzała
+  zakłócająca` kosztuje 1 Instynkt, odbiera reakcje do końca następnej tury celu
+  i daje utrudnienie do jego następnego ataku, nie dłużej niż do końca tej tury.
+- `Podwójny strzał` kosztuje 2 Instynktu i dwie strzały. Jeden test przeciw
+  jednemu celowi zadaje `2k8 + 2 × Zręczność`; pudło traci obie strzały, a Znak
+  łowcy i Pierwsza krew dodają swoje kości tylko raz. Trafienie krytyczne
+  podwaja wyłącznie bazowe kości dwóch strzał, nie kości tych dwóch dodatków.
+- `Znak łowcy` kosztuje 1 Instynkt przy pierwszym nałożeniu. Jeśli oznaczony cel
+  zostanie pokonany, podczas trwającej koncentracji znak można przenieść na
+  kolejny legalny cel bez akcji i bez dodatkowego Instynktu.
+- Skaza `Trauma bratobójczego strzału` daje `−1` do testu ataku z łuku za
+  każdego sąsiadującego, przytomnego bohatera gracza. Nie liczy pokonanych,
+  przywołań ani NPC i nie wpływa na nóż ani inne testy.
+
+### Mira — ukrycie zależne od obserwatora
+
+- Spośród bohaterów tylko Mira ma bojową akcję `Ukryj się`. Kosztuje akcję
+  główną, nie wymaga osłony ani przerwania linii wzroku, lecz jest niedostępna
+  przy przytomnym wrogu w 5 stopach, stanie blokującym ruch lub ujawniającym
+  świetle. Mira nie ma wspólnego Sprintu/Odstąpienia; obie akcje należą wyłącznie
+  do `Zwiadowczej mobilności` Erynda.
+- Mira wykonuje jeden fizyczny test Skradania. Każdy aktywny przeciwnik wykonuje
+  osobny automatyczny test Percepcji; remis oznacza wykrycie. Stan zapisuje
+  widoczność i wynik osobno dla każdego obserwatora. Gdy widzą ją wszyscy
+  aktywni przeciwnicy, tryb skradania kończy się automatycznie.
+- W trybie skradania limit całego ruchu w turze wynosi 20 stóp. Dobrowolne
+  przerwanie trybu przywraca normalny limit 25 stóp, ale nie zwraca akcji ani
+  już wydanego ruchu. Podczas podglądu ruchu turkusowe figurki nie widzą Miry,
+  a pomarańczowe ją widzą.
+- Rapier i nóż do rzucania (zasięg 15 stóp) korzystają z premii zabójczyni raz
+  na turę: osobista flanka daje `+1k6`, cel niewidzący Miry daje przewagę i
+  `+2k6`, a oba warunki sumują się do `+3k6`. Atak kończy ukrycie globalnie.
+- Wróg niewidzący Miry ignoruje ją przy wyborze celu i atakach okazyjnych, ale
+  nie może zakończyć ruchu na jej polu. Gdy zaplanowana trasa przechodzi przez
+  to pole, wróg zatrzymuje się przed Mirą, wydaje przebyty ruch, wykrywa ją tylko
+  dla siebie i po potwierdzeniu ponownie planuje pozostałą część tury.
+- Skaza `Panika po zdemaskowaniu`: w ramach bieżącej sesji skradania każdy
+  przeciwnik, który widzi Mirę (po teście Percepcji, wyszukaniu albo przypadkowym
+  wejściu na jej pole), ma płaską premię `+2` do testów ataku przeciw niej.
+  Efekt nie działa dla
+  obserwatorów, przed którymi nadal jest ukryta. Dobrowolne wyjście kończy sesję;
+  jeżeli wykryje ją ostatni niewidzący jej wróg, sesja kończy się automatycznie.
+  Kolejne użycie `Ukryj się` tworzy nową sesję i wykonuje nowe testy Percepcji.
+- `Ruchomy cel` daje Mirze `+2 KP` przeciw dystansowym testom ataku bronią i
+  czarem, lecz nie przeciw obszarom ani efektom wymagającym rzutu obronnego.
+  Jeśli zakończy turę obok przeciwnika, który jej dotąd nie widział, ten
+  przeciwnik ją wykrywa.
+- `Unik instynktowny` może zostać zaproponowany tylko podczas aktywnego
+  skradania, gdy widzący Mirę wróg wybiera ją jako cel testu ataku. Wydaje
+  reakcję i 1 Fortel, dając pojedynczemu atakowi utrudnienie; nie usuwa płaskiej
+  premii `+2` ze skazy. Bez reakcji albo Fortelu prompt się nie pojawia.
+- `Zasłona dymna` kosztuje akcję i 1 Fortel. Mira przemieszcza się do 15 stóp
+  bez ataków okazyjnych, a następnie rozpoczyna nową sesję skradania nawet obok
+  przeciwnika. Każdy wróg ponawia test Percepcji z karą równą połowie dodatniego
+  modyfikatora Zręczności Miry, zaokrągloną w dół.
+- `Cięcie ścięgna` wymaga osobistej flanki, rapiera i 1 Fortelu. Raniące
+  trafienie połowi szybkość celu aż do faktycznego leczenia albo oczyszczenia.
+  `Przeszywający atak` wymaga sojusznika angażującego pierwszy cel z dowolnego
+  sąsiedniego pola; to specjalne otwarcie liczy się jako flanka, ponieważ ścisła
+  flanka po przeciwnej stronie zajęłaby pole drugiego celu. Po raniącym
+  trafieniu wykonuje osobny, niełańcuchowy atak przeciw jedynemu wrogowi
+  dokładnie za pierwszym, z ponownym naliczeniem właściwych premii ukrycia.
+- `Przeskok przez gardę` nie kosztuje Fortelu. Wymaga sąsiadującego celu i
+  wolnego legalnego pola dokładnie za nim, daje `+2` do ataku i obrażeń, po czym
+  przenosi Mirę na to pole bez prowokowania ataku za sam skok.
+- `Mistrzyni ostrzy` kosztuje 1 Fortel i wymaga rzutu nożem z ukrycia przeciw
+  celowi, który Miry nie widzi. Raniące trafienie nakłada niekumulujące się
+  Krwawienie `1k4` na początku tur celu, usuwane leczeniem albo oczyszczeniem.
+- Bojowe `Wykrycie pułapek` kosztuje akcję, nie Fortel: uruchamia fizyczny test
+  Percepcji, podświetla i skanuje promień 45 stóp oraz ujawnia wykryte pułapki
+  w bieżącej strefie. `Włamanie` oraz dawny pakiet czarów Miry są wycofane.
+- Z rasowych pasywek Miry pozostaje `Szczęście niziołka`; wycofane są `Odważny`,
+  `Zwinność niziołka` i `Naturalne ukrywanie`.
+
+### Nimra — kontrola obszaru i Metamagia
+
+- Nimra ma pulę Punktów Metamagii równą dodatniemu modyfikatorowi Inteligencji;
+  odzyskuje ją po długim odpoczynku. Do jednego czaru można dołączyć jedną
+  Metamagię. Wybór i podgląd nie wydają punktów, akcji ani slotu — zasoby są
+  rozliczane atomowo dopiero przy ostatecznym potwierdzeniu czaru.
+- `Rzeźbienie pola`, `Odległy czar`, `Przeciążony czar`, `Wymuszony splot` i
+  `Transmutacja energii` są wybierane przed czarem. Interfejs pokazuje wyłącznie
+  zgodne czary, zachowując zwykły podgląd legalnego zasięgu, obszaru i celów.
+- `Piorunowy szlak` ma zasięg 60 stóp. Wybrany cel wykonuje obronę Zręczności
+  przeciw `3k6` obrażeń od błyskawic (połowa przy sukcesie), po czym piorun raz
+  przeskakuje na najbliższą inną żywą istotę w 15 stopach. Odległość ma
+  pierwszeństwo; przy remisie wybierany jest wróg, a dalszy remis rozstrzyga
+  stabilny identyfikator. Gdy jedynym albo najbliższym celem jest sojusznik,
+  piorun trafia sojusznika.
+- Skaza `Echo magicznego wycieku` blokuje w następnej rundzie zarówno czar,
+  jak i wariant Metamagii użyte w poprzedniej rundzie. Blokada powstaje dopiero
+  po wykonaniu czaru; anulowany podgląd nie zapisuje Echa.
 
 ## Poza Zakresem Pierwszej Wersji
 

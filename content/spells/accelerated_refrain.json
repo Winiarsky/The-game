@@ -1,0 +1,29 @@
+{
+  "schema": "dnd_board_game.spell",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["project_original"],
+  "id": "accelerated_refrain",
+  "name": "Przyspieszony refren",
+  "level": 2,
+  "school": "transmutation",
+  "casting_time": "action",
+  "range": {"kind": "self"},
+  "components": {"verbal": true, "somatic": true, "materials": []},
+  "duration": {"kind": "round", "amount": 3},
+  "concentration": true,
+  "ritual": false,
+  "effect": {
+    "kind": "combat_action",
+    "action_type": "targeted_status",
+    "label": "Przyspieszony refren",
+    "target_faction": "self",
+    "target_count": 1,
+    "effect_kind": "accelerated_refrain",
+    "duration_rounds": 3,
+    "cast_flag": "cast_accelerated_refrain",
+    "instructions": "Po rzuceniu wykonaj natychmiast jeden atak kuszą ręczną. Przez 3 rundy, po zwykłej akcji Szybki ostrzał, możesz wydać akcję dodatkową na trzeci atak kuszą. Dodatkowy atak konkuruje z Inspiracją i innymi akcjami dodatkowymi.",
+    "resolution_mode": "automatic",
+    "board_relevance": "direct"
+  }
+}

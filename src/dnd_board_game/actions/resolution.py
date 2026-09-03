@@ -246,6 +246,7 @@ class SpellSaveAttackResolver(AttackActionResolver):
         rng: random.Random,
         saving_throw_modifiers: tuple[RollModifier, ...] = (),
         heightened: bool = False,
+        target_advantaged: bool = False,
     ) -> SingleTargetSaveSpellConfirmation:
         if not source.save_ability:
             raise ValueError(f"Czar {source.name} nie ma zdefiniowanego rzutu obronnego.")
@@ -261,6 +262,18 @@ class SpellSaveAttackResolver(AttackActionResolver):
         )
         caster_after = _actor_by_id(resource_use.state, str(caster.id))
         target_after = _actor_by_id(resource_use.state, str(target.id))
+        target_restrained = (
+            source.save_ability == "dexterity"
+            and has_condition(
+                resource_use.state.condition_states,
+                str(target_after.id),
+                CombatCondition.RESTRAINED,
+            )
+        )
+        roll_mode = _opposed_roll_mode(
+            advantage=target_advantaged,
+            disadvantage=heightened,
+        )
         saving_throw = resolve_spell_save(
             target_after,
             ability=source.save_ability,
@@ -268,15 +281,7 @@ class SpellSaveAttackResolver(AttackActionResolver):
             natural_roll=rng.randint(1, 20),
             natural_roll_2=(
                 rng.randint(1, 20)
-                if heightened
-                or (
-                    source.save_ability == "dexterity"
-                    and has_condition(
-                        resource_use.state.condition_states,
-                        str(target_after.id),
-                        CombatCondition.RESTRAINED,
-                    )
-                )
+                if roll_mode != RollMode.NORMAL or target_restrained
                 else None
             ),
             damage_on_success=source.save_damage_on_success,
@@ -288,7 +293,7 @@ class SpellSaveAttackResolver(AttackActionResolver):
             situational_modifiers=saving_throw_modifiers,
             condition_states=resource_use.state.condition_states,
             combat_actors=resource_use.state.actors,
-            roll_mode=RollMode.DISADVANTAGE if heightened else RollMode.NORMAL,
+            roll_mode=roll_mode,
         )
         return SingleTargetSaveSpellConfirmation(resource_use.state, resource_use, saving_throw)
 
@@ -305,6 +310,7 @@ class AreaSpellResolver(ActionResourceResolver):
         saving_throw_modifiers_by_target: Mapping[str, tuple[RollModifier, ...]] | None = None,
         careful_target_ids: tuple[str, ...] = (),
         heightened_target_id: str | None = None,
+        advantaged_target_ids: tuple[str, ...] = (),
     ) -> AreaSpellConfirmation:
         resource_use = self.consume_action_and_source_resource(
             state,
@@ -324,6 +330,7 @@ class AreaSpellResolver(ActionResourceResolver):
             rng=rng,
             saving_throw_modifiers_by_target=saving_throw_modifiers_by_target,
             heightened_target_id=heightened_target_id,
+            advantaged_target_ids=advantaged_target_ids,
         )
         careful = set(careful_target_ids)
         saves = tuple(
@@ -433,6 +440,7 @@ def roll_spell_saves_for_targets(
     rng: random.Random,
     saving_throw_modifiers_by_target: Mapping[str, tuple[RollModifier, ...]] | None = None,
     heightened_target_id: str | None = None,
+    advantaged_target_ids: tuple[str, ...] = (),
 ) -> tuple[SpellSaveResult, ...]:
     if not source.save_ability:
         return ()
@@ -451,7 +459,19 @@ def roll_spell_saves_for_targets(
             "save_disadvantage_creature_types",
             (),
         )
+        target_restrained = (
+            source.save_ability == "dexterity"
+            and has_condition(
+                state.condition_states,
+                str(target.id),
+                CombatCondition.RESTRAINED,
+            )
+        )
         disadvantage = heightened or creature_disadvantage
+        roll_mode = _opposed_roll_mode(
+            advantage=target_id in advantaged_target_ids,
+            disadvantage=disadvantage,
+        )
         saves.append(
             resolve_spell_save(
                 target,
@@ -460,15 +480,7 @@ def roll_spell_saves_for_targets(
                 natural_roll=rng.randint(1, 20),
                 natural_roll_2=(
                     rng.randint(1, 20)
-                    if disadvantage
-                    or (
-                        source.save_ability == "dexterity"
-                        and has_condition(
-                            state.condition_states,
-                            str(target.id),
-                            CombatCondition.RESTRAINED,
-                        )
-                    )
+                    if roll_mode != RollMode.NORMAL or target_restrained
                     else None
                 ),
                 natural_rerolls=(),
@@ -484,14 +496,16 @@ def roll_spell_saves_for_targets(
                 ),
                 condition_states=state.condition_states,
                 combat_actors=state.actors,
-                roll_mode=(
-                    RollMode.DISADVANTAGE
-                    if disadvantage
-                    else RollMode.NORMAL
-                ),
+                roll_mode=roll_mode,
             )
         )
     return tuple(saves)
+
+
+def _opposed_roll_mode(*, advantage: bool, disadvantage: bool) -> RollMode:
+    if advantage == disadvantage:
+        return RollMode.NORMAL
+    return RollMode.ADVANTAGE if advantage else RollMode.DISADVANTAGE
 
 
 def spell_save_for_actor(saves: tuple[SpellSaveResult, ...], actor_id: str) -> SpellSaveResult | None:

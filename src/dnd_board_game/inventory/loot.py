@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Iterable
 
 from .economy import CurrencyWallet, carried_weight_lb, carrying_capacity_lb
 
@@ -38,6 +38,55 @@ class LootBundleTransferResult:
     recipient: Actor
     items: tuple[InventoryItem, ...]
     currency: CurrencyWallet
+
+
+def merge_loot_bundles(
+    stash: LootBundle,
+    bundles: Iterable[LootBundle],
+) -> LootBundle:
+    """Merge loot into a shared stash without equipping anything.
+
+    Item ids are namespaced by their source bundle. This preserves distinct
+    drops while making repeated persistence and later distribution predictable.
+    Equal stacks from the same source are combined.
+    """
+
+    items = list(stash.items)
+    currency = stash.currency
+    for bundle in bundles:
+        currency = currency.add(bundle.currency)
+        for source_item in bundle.items:
+            base_id = f"{bundle.id}:{source_item.id}"
+            incoming = replace(
+                source_item,
+                id=base_id,
+                equipped=False,
+                held_in=(),
+            )
+            matching_index = next(
+                (
+                    index
+                    for index, item in enumerate(items)
+                    if replace(item, id="", quantity=1)
+                    == replace(incoming, id="", quantity=1)
+                ),
+                None,
+            )
+            if matching_index is not None:
+                current = items[matching_index]
+                items[matching_index] = replace(
+                    current,
+                    quantity=current.quantity + incoming.quantity,
+                )
+                continue
+            occupied_ids = {item.id for item in items}
+            unique_id = base_id
+            suffix = 2
+            while unique_id in occupied_ids:
+                unique_id = f"{base_id}:{suffix}"
+                suffix += 1
+            items.append(replace(incoming, id=unique_id))
+    return replace(stash, items=tuple(items), currency=currency)
 
 
 def loot_bundle_from_actor(

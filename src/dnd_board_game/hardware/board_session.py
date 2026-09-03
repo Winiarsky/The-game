@@ -75,6 +75,16 @@ class BoardSessionAdapter:
             return "cancel_scan"
         raise ValueError("Aktualny backend planszy nie obsługuje resetu skanu.")
 
+    def close(self) -> None:
+        """Turn every LED off before releasing the underlying connection."""
+
+        closer = getattr(self.connection, "close", None)
+        try:
+            self.connection.leds_off()
+        finally:
+            if callable(closer):
+                closer()
+
     def show_feedback(self, feedback: LedFeedback) -> None:
         self._base_feedback = feedback
         self._replace_feedback(feedback, transition_ms=self.transition_ms)

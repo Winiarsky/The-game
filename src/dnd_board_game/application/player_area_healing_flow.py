@@ -72,6 +72,8 @@ class PendingAreaSpell:
     careful_target_ids: tuple[str, ...] = ()
     heightened_target_id: str | None = None
     metamagic_ids: tuple[str, ...] = ()
+    excluded_positions: tuple[Coordinate, ...] = ()
+    unsculpted_target_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -265,7 +267,7 @@ class PlayerAreaHealingFlowService:
             condition_states=state.condition_states,
             active_effects=active_effects,
         )
-        if source.area.shape == SpellAreaShape.RADIUS:
+        if source.area.shape in {SpellAreaShape.RADIUS, SpellAreaShape.CUBE}:
             centers = legal_area_centers(board, caster.position, source.range_feet)
             if position not in centers:
                 raise ValueError("Wybrane pole nie jest legalnym środkiem obszaru czaru.")
@@ -282,7 +284,7 @@ class PlayerAreaHealingFlowService:
             )
         effect_origin = (
             position
-            if source.area.shape == SpellAreaShape.RADIUS
+            if source.area.shape in {SpellAreaShape.RADIUS, SpellAreaShape.CUBE}
             else caster.position
         )
         area_targets = actors_in_area(
@@ -362,7 +364,7 @@ class PlayerAreaHealingFlowService:
         rng: Random,
         active_effects: tuple[ActiveCombatEffect, ...] = (),
     ) -> PlayerAreaSpellTransition:
-        if pending.stage != "confirm_area":
+        if pending.stage not in {"confirm_area", "select_sculpt_fields"}:
             raise ValueError("Nie ma czaru obszarowego do potwierdzenia.")
         caster = _active_hero(state)
         if str(caster.id) != pending.caster_id:
@@ -380,14 +382,27 @@ class PlayerAreaHealingFlowService:
             target_ids=pending.target_ids,
             rng=rng,
             saving_throw_modifiers_by_target={
-                actor_id: dexterity_save_cover_modifiers(
-                    source.save_ability,
-                    positioning,
+                actor_id: (
+                    ()
+                    if source.id == "sacred_flame"
+                    else dexterity_save_cover_modifiers(
+                        source.save_ability,
+                        positioning,
+                    )
                 )
                 for actor_id, positioning in pending.target_positioning
             },
             careful_target_ids=pending.careful_target_ids,
             heightened_target_id=pending.heightened_target_id,
+            advantaged_target_ids=(
+                pending.target_ids
+                if any(
+                    effect.actor_id == str(caster.id)
+                    and effect.kind == "flaw_triage_active"
+                    for effect in active_effects
+                )
+                else ()
+            ),
         )
         saves = confirmation.saving_throws
         updated_pending = replace(pending, stage="damage_roll", saving_throws=saves)

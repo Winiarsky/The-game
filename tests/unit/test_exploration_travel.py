@@ -10,6 +10,7 @@ from dnd_board_game.actors import (
 )
 from dnd_board_game.exploration import (
     ScenarioContinuation,
+    TravelArrivalTiming,
     TravelD20Input,
     TravelPace,
     TravelPolicy,
@@ -77,8 +78,12 @@ def test_navigation_success_and_failure_control_authored_delay() -> None:
     )
 
     assert success.total_minutes == 45
+    assert success.schedule_delta_minutes == 0
+    assert success.arrival_timing == TravelArrivalTiming.ON_TIME
     assert success.navigation.success is True
     assert failure.total_minutes == 75
+    assert failure.schedule_delta_minutes == 30
+    assert failure.arrival_timing == TravelArrivalTiming.LATE
     assert failure.navigation.success is False
     assert failure.navigation.delay_minutes == 30
 
@@ -159,8 +164,12 @@ def test_fast_and_slow_pace_expose_perception_and_stealth_rules() -> None:
 
     assert fast.passive_perception_modifier == -5
     assert fast.allows_stealth is False
+    assert fast.schedule_delta_minutes == -11
+    assert fast.arrival_timing == TravelArrivalTiming.EARLY
     assert slow.passive_perception_modifier == 0
     assert slow.allows_stealth is True
+    assert slow.schedule_delta_minutes == 15
+    assert slow.arrival_timing == TravelArrivalTiming.LATE
 
 
 def test_forced_march_applies_one_exhaustion_level_per_failed_hour() -> None:

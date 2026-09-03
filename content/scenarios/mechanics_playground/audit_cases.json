@@ -2890,7 +2890,7 @@
     {
       "id": "spell_guiding_bolt", "category": "spell", "subject_id": "guiding_bolt", "label": "Pocisk przewodni", "status": "tested_automatically", "module": "combat_arena",
       "arena_config": {"dummy_count": 2, "armor_class": 14, "hit_points": 40, "speed_feet": 0, "ability_score": 10, "creature_type": "undead", "affinity": "none", "damage_type": "radiant", "condition_immunity": ""},
-      "party_requirements": ["Dwóch napastników i jeden cel"], "manual_steps": ["Traf czarem, potem wykonaj kolejny atak na oznaczony cel."], "expected_results": ["4k6 radiant i przewaga dokładnie następnego ataku przeciw celowi."], "automatic_tests": ["tests/unit/test_player_combat_action_flow.py::test_guiding_bolt_hit_marks_target_for_next_attack_advantage"], "notes": "Znacznik jest konsumowany przez następny atak."
+      "party_requirements": ["Dwóch napastników i jeden cel"], "manual_steps": ["Traf czarem, potem wykonaj kolejny atak na oznaczony cel."], "expected_results": ["2k6 radiant i przewaga dokładnie następnego ataku przeciw celowi."], "automatic_tests": ["tests/unit/test_player_combat_action_flow.py::test_guiding_bolt_hit_marks_target_for_next_attack_advantage"], "notes": "Znacznik jest konsumowany przez następny atak."
     },
     {
       "id": "spell_healing_word", "category": "spell", "subject_id": "healing_word", "label": "Słowo leczenia", "status": "tested_automatically", "module": "combat_arena",

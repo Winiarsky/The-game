@@ -133,3 +133,28 @@ def test_halfling_nimbleness_adds_ac_only_against_opportunity_attack() -> None:
 
     assert actor_as_combat_target(mira).ac == mira.ac
     assert actor_as_combat_target(mira, opportunity_attack=True).ac == mira.ac + 1
+
+
+def test_mira_zwinny_odskok_replaces_species_bonus_with_plus_two() -> None:
+    mira = replace(
+        _actor(),
+        id=ActorId("mira"),
+        faction=Faction.ALLY,
+        features=(
+            FeatureGrant(
+                "halfling_nimbleness",
+                "Niziołcza zwinność",
+                FeatureSourceKind.SPECIES,
+                "halfling",
+            ),
+            FeatureGrant(
+                "mira_opportunity_evasion",
+                "Zwinny odskok",
+                FeatureSourceKind.SCENARIO,
+                "boardgame_archetype:mira",
+            ),
+        ),
+    )
+
+    assert actor_as_combat_target(mira).ac == mira.ac
+    assert actor_as_combat_target(mira, opportunity_attack=True).ac == mira.ac + 2

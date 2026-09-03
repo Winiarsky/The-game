@@ -3,7 +3,14 @@ from random import Random
 
 import pytest
 
-from dnd_board_game.actors import AbilityScores, Actor, ActorId, Faction
+from dnd_board_game.actors import (
+    AbilityScores,
+    Actor,
+    ActorId,
+    ActorResourcePool,
+    Faction,
+    RecoveryPeriod,
+)
 from dnd_board_game.application import PlayerCombatResourceFlowService
 from dnd_board_game.combat import (
     ActionUse,
@@ -19,6 +26,7 @@ from dnd_board_game.combat import (
     SpellAreaShape,
     SpellSlotState,
     apply_damage_result,
+    expire_combat_effects,
     replace_actor,
     resolve_damage,
     move_moonbeam_zone,
@@ -30,6 +38,8 @@ from dnd_board_game.rules import (
     D20RollInput,
     D20RollRequest,
     EffectDuration,
+    EffectEvent,
+    EffectEventType,
     resolve_d20_roll,
 )
 from dnd_board_game.world import BoardDimensions, BoardState, Coordinate
@@ -63,6 +73,14 @@ class _Action:
     ongoing_damage_dice_count: int = 0
     damage_type: str = ""
     save_damage_on_success: str = "none"
+    aura_radius_feet: int = 0
+    duration_rounds: int = 0
+    activation_count_ability: str | None = None
+    bonus_die_sides: int = 0
+    bonus_modifier_ability: str | None = None
+    resource_pool_id: str | None = None
+    resource_cost: int = 1
+    metamagic_ids: tuple[str, ...] = ()
 
 
 def _actor(
@@ -73,6 +91,7 @@ def _actor(
     constitution: int = 10,
     inventory: tuple[InventoryItem, ...] = (),
     spell_slots: tuple[SpellSlotState, ...] = (),
+    resource_pools: tuple[ActorResourcePool, ...] = (),
 ) -> Actor:
     return Actor(
         id=ActorId(actor_id),
@@ -86,6 +105,7 @@ def _actor(
         ability_scores=AbilityScores(constitution=constitution),
         inventory=inventory,
         spell_slots=spell_slots,
+        resource_pools=resource_pools,
     )
 
 
@@ -191,6 +211,56 @@ def test_concentration_start_and_confirmation_consume_slot_and_create_effect() -
     assert confirmed.event_type == "ui_combat_concentration_confirmed"
 
 
+def test_concentration_metamagic_is_spent_only_on_confirmation() -> None:
+    service = PlayerCombatResourceFlowService()
+    pool = ActorResourcePool(
+        "metamagic_points",
+        "Punkty Metamagii",
+        4,
+        4,
+        RecoveryPeriod.LONG_REST,
+    )
+    nimra = _actor(
+        "nimra",
+        Faction.ALLY,
+        Coordinate(0, 0),
+        resource_pools=(pool,),
+    )
+    enemy = _actor("enemy", Faction.ENEMY, Coordinate(1, 0))
+    action = _Action(
+        id="nimra_test_field",
+        action_type="targeted_status",
+        label="Pole testowe",
+        value=1,
+        target_faction="enemy",
+        range_feet=30,
+        effect_kind="attack_roll_penalty",
+        resource_pool_id="metamagic_points",
+        resource_cost=2,
+        metamagic_ids=("nimra_forced_weave",),
+    )
+    state = _state(nimra, enemy)
+
+    started = service.start_concentration(
+        state=state,
+        active_effects=(),
+        action=action,
+    )
+    nimra_after_preview = next(actor for actor in started.state.actors if str(actor.id) == "nimra")
+    assert nimra_after_preview.resource_pools[0].current == 4
+
+    assert started.pending_action is not None
+    confirmed = service.confirm_concentration(
+        state=started.state,
+        active_effects=(),
+        action=action,
+        pending=started.pending_action,
+        target_id="enemy",
+    )
+    nimra_after_cast = next(actor for actor in confirmed.state.actors if str(actor.id) == "nimra")
+    assert nimra_after_cast.resource_pools[0].current == 2
+
+
 def test_targeted_status_spell_creates_typed_ac_effect_and_cast_flag() -> None:
     from dnd_board_game.combat import combat_armor_class
 
@@ -235,6 +305,52 @@ def test_targeted_status_spell_creates_typed_ac_effect_and_cast_flag() -> None:
     assert confirmed.active_effects[0].kind == "spell_ac_bonus"
     assert combat_armor_class(ally, confirmed.active_effects) == 14
     assert confirmed.scene_flag_changes == (("cast_shield_of_faith", True),)
+
+
+def test_stage_command_option_expires_at_commanded_targets_turn_end() -> None:
+    service = PlayerCombatResourceFlowService()
+    lorian = _actor(
+        "lorian",
+        Faction.ALLY,
+        Coordinate(0, 0),
+        spell_slots=(SpellSlotState(2, 1, 1),),
+    )
+    enemy = _actor("enemy", Faction.ENEMY, Coordinate(3, 0))
+    state = _state(lorian, enemy)
+    action = _Action(
+        id="stage_command",
+        action_type="targeted_status",
+        label="Rozkaz sceniczny",
+        value=0,
+        target_faction="enemy",
+        range_feet=45,
+        spell_level=2,
+        effect_kind="stage_command",
+        effect_options=("approach", "retreat", "silence"),
+        save_ability="wisdom",
+        save_dc=99,
+        duration="next_turn_end",
+    )
+    started = service.start_concentration(
+        state=state,
+        active_effects=(),
+        action=action,
+    )
+
+    confirmed = service.confirm_concentration(
+        state=state,
+        active_effects=(),
+        action=action,
+        pending=started.pending_action,
+        target_id="enemy",
+        effect_option="retreat",
+        rng=Random(1),
+    )
+
+    effect = confirmed.active_effects[0]
+    assert effect.kind == "stage_command:retreat"
+    assert effect.duration == EffectDuration.UNTIL_TURN_END
+    assert effect.expiration_actor_id == "enemy"
 
 
 def test_true_strike_effect_is_owned_by_caster_and_remembers_enemy_target() -> None:
@@ -896,6 +1012,64 @@ def test_area_control_spell_keeps_difficult_terrain_zone(
     )
 
 
+def test_sculpted_persistent_zone_keeps_excluded_board_fields() -> None:
+    service = PlayerCombatResourceFlowService()
+    caster = _actor(
+        "nimra",
+        Faction.ALLY,
+        Coordinate(0, 0),
+        spell_slots=(SpellSlotState(2, 1, 1),),
+    )
+    enemy = _actor("enemy", Faction.ENEMY, Coordinate(5, 5))
+    state = _state(caster, enemy)
+    board = BoardState(BoardDimensions(cols=12, rows=12))
+    action = _Action(
+        id="nimra_web",
+        action_type="targeted_status",
+        label="Sieć",
+        value=0,
+        target_faction="any",
+        target_count=20,
+        range_feet=50,
+        spell_level=2,
+        effect_kind="web_zone",
+        concentration=True,
+        duration="concentration",
+        area=SpellArea(SpellAreaShape.CUBE, length_feet=20),
+        metamagic_ids=("nimra_sculpt_field",),
+    )
+    started = service.start_concentration(
+        state=state,
+        active_effects=(),
+        action=action,
+        board=board,
+    )
+    assert started.pending_action is not None
+    selected = service.select_concentration_area(
+        state=state,
+        board=board,
+        action=action,
+        pending=started.pending_action,
+        position=Coordinate(5, 5),
+    )
+    sculpted = replace(
+        selected,
+        excluded_positions=(enemy.position,),
+        target_ids=(),
+        selected_target_ids=(),
+    )
+
+    confirmed = service.confirm_concentration(
+        state=state,
+        active_effects=(),
+        action=action,
+        pending=sculpted,
+    )
+
+    zone = next(effect for effect in confirmed.active_effects if effect.kind == "web_zone")
+    assert zone.excluded_positions == (enemy.position,)
+
+
 def test_spider_climb_applies_concentration_mobility_to_board_selected_ally() -> None:
     service = PlayerCombatResourceFlowService()
     wizard = _actor(
@@ -957,7 +1131,7 @@ def test_spike_growth_creates_empty_board_anchored_twenty_foot_zone() -> None:
         label="Kolczaste zarośla",
         value=0,
         target_faction="any",
-        range_feet=150,
+        range_feet=50,
         spell_level=2,
         effect_kind="spike_growth_zone",
         concentration=True,
@@ -972,6 +1146,8 @@ def test_spike_growth_creates_empty_board_anchored_twenty_foot_zone() -> None:
         board=board,
     )
     assert started.pending_action is not None
+    assert Coordinate(10, 0) in started.pending_action.legal_positions
+    assert Coordinate(11, 0) not in started.pending_action.legal_positions
     selected = service.select_concentration_area(
         state=state,
         board=board,
@@ -979,16 +1155,25 @@ def test_spike_growth_creates_empty_board_anchored_twenty_foot_zone() -> None:
         pending=started.pending_action,
         position=Coordinate(5, 5),
     )
+    repositioned = service.select_concentration_area(
+        state=state,
+        board=board,
+        action=action,
+        pending=selected,
+        position=Coordinate(6, 5),
+    )
+    assert repositioned.anchor == Coordinate(6, 5)
+    assert repositioned.area_positions != selected.area_positions
     confirmed = service.confirm_concentration(
         state=state,
         active_effects=(),
         action=action,
-        pending=selected,
+        pending=repositioned,
     )
 
     zone = confirmed.active_effects[0]
     assert zone.kind == "spike_growth_zone"
-    assert zone.anchor_position == Coordinate(5, 5)
+    assert zone.anchor_position == Coordinate(6, 5)
     assert zone.value == 20
 
 
@@ -1163,7 +1348,7 @@ def test_aid_upcast_increases_current_and_maximum_hit_points() -> None:
         range_feet=30,
         spell_level=2,
         effect_kind="max_hit_points_bonus",
-        duration="long_rest",
+        duration="encounter",
         cast_flag="cast_aid",
         upcast_value_per_level=5,
     )
@@ -1187,6 +1372,172 @@ def test_aid_upcast_increases_current_and_maximum_hit_points() -> None:
     )
     assert updated.hp == 30
     assert updated.max_hp == 30
+    assert confirmed.active_effects[0].duration == EffectDuration.UNTIL_ENCOUNTER_END
+
+    expired_state, remaining_effects, expired_effects = expire_combat_effects(
+        confirmed.state,
+        confirmed.active_effects,
+        EffectEvent(EffectEventType.ENCOUNTER_ENDED),
+    )
+    restored = next(
+        actor for actor in expired_state.actors if str(actor.id) == "ally"
+    )
+
+    assert restored.hp == 20
+    assert restored.max_hp == 20
+    assert remaining_effects == ()
+    assert expired_effects == confirmed.active_effects
+
+
+def test_self_aura_is_preselected_and_stores_dynamic_spell_parameters() -> None:
+    service = PlayerCombatResourceFlowService()
+    cleric = replace(
+        _actor(
+            "dagna",
+            Faction.ALLY,
+            Coordinate(0, 0),
+            spell_slots=(SpellSlotState(2, 1, 1),),
+        ),
+        ability_scores=AbilityScores(wisdom=18),
+    )
+    state = _state(cleric, _actor("enemy", Faction.ENEMY, Coordinate(1, 0)))
+    action = _Action(
+        id="healing_grace_aura",
+        action_type="targeted_status",
+        label="Aura Uzdrawiającej Łaski",
+        value=0,
+        target_faction="self",
+        spell_level=2,
+        effect_kind="healing_grace_aura_source",
+        concentration=True,
+        duration="concentration",
+        aura_radius_feet=10,
+        duration_rounds=3,
+        activation_count_ability="wisdom",
+        bonus_die_sides=8,
+        bonus_modifier_ability="wisdom",
+    )
+
+    started = service.start_concentration(
+        state=state,
+        active_effects=(),
+        action=action,
+    )
+    assert started.pending_action.selected_target_ids == ("dagna",)
+
+    confirmed = service.confirm_concentration(
+        state=state,
+        active_effects=(),
+        action=action,
+        pending=started.pending_action,
+    )
+    effect = confirmed.active_effects[0]
+    assert effect.kind == "healing_grace_aura_source"
+    assert (effect.value, effect.uses_maximum) == (4, 4)
+    assert (effect.radius_feet, effect.remaining_rounds) == (10, 3)
+    assert (effect.die_sides, effect.modifier) == (8, 4)
+
+
+def test_lesser_restoration_automatically_removes_the_only_supported_condition() -> None:
+    service = PlayerCombatResourceFlowService()
+    cleric = _actor(
+        "cleric",
+        Faction.ALLY,
+        Coordinate(0, 0),
+        spell_slots=(SpellSlotState(2, 1, 1),),
+    )
+    ally = _actor("ally", Faction.ALLY, Coordinate(1, 0))
+    enemy = _actor("enemy", Faction.ENEMY, Coordinate(3, 0))
+    state = replace(
+        _state(cleric, ally, enemy),
+        condition_states=(
+            ConditionState("ally", CombatCondition.POISONED, source_label="Test"),
+        ),
+    )
+    action = _Action(
+        id="lesser_restoration",
+        action_type="targeted_status",
+        label="Pomniejsze przywrócenie",
+        value=0,
+        target_faction="ally",
+        range_feet=5,
+        spell_level=2,
+        effect_kind="remove_condition",
+        effect_options=("blinded", "deafened", "paralyzed", "poisoned"),
+    )
+
+    started = service.start_concentration(
+        state=state,
+        active_effects=(),
+        action=action,
+    )
+    confirmed = service.confirm_concentration(
+        state=state,
+        active_effects=(),
+        action=action,
+        pending=started.pending_action,
+        target_id="ally",
+    )
+
+    assert started.pending_action.target_ids == ("ally",)
+    assert confirmed.state.condition_states == ()
+
+
+def test_lesser_restoration_requires_a_choice_only_when_several_conditions_are_present() -> None:
+    service = PlayerCombatResourceFlowService()
+    cleric = _actor(
+        "cleric",
+        Faction.ALLY,
+        Coordinate(0, 0),
+        spell_slots=(SpellSlotState(2, 1, 1),),
+    )
+    ally = _actor("ally", Faction.ALLY, Coordinate(1, 0))
+    enemy = _actor("enemy", Faction.ENEMY, Coordinate(3, 0))
+    state = replace(
+        _state(cleric, ally, enemy),
+        condition_states=(
+            ConditionState("ally", CombatCondition.BLINDED, source_label="Test"),
+            ConditionState("ally", CombatCondition.POISONED, source_label="Test"),
+        ),
+    )
+    action = _Action(
+        id="lesser_restoration",
+        action_type="targeted_status",
+        label="Pomniejsze przywrócenie",
+        value=0,
+        target_faction="ally",
+        range_feet=5,
+        spell_level=2,
+        effect_kind="remove_condition",
+        effect_options=("blinded", "deafened", "paralyzed", "poisoned"),
+    )
+    started = service.start_concentration(
+        state=state,
+        active_effects=(),
+        action=action,
+    )
+
+    with pytest.raises(ValueError, match="Wybierz jeden z negatywnych stanów"):
+        service.confirm_concentration(
+            state=state,
+            active_effects=(),
+            action=action,
+            pending=started.pending_action,
+            target_id="ally",
+        )
+
+    confirmed = service.confirm_concentration(
+        state=state,
+        active_effects=(),
+        action=action,
+        pending=started.pending_action,
+        target_id="ally",
+        effect_option="poisoned",
+    )
+
+    assert tuple(item.condition for item in confirmed.state.condition_states) == (
+        CombatCondition.BLINDED,
+    )
 
 
 def test_upcast_concentration_spell_applies_one_effect_per_selected_target() -> None:

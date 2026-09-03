@@ -36,6 +36,7 @@ class DamageComponentSpec:
     modifier: int = 0
     label: str = ""
     critical_bonus_dice: int = 0
+    doubles_on_critical: bool = True
 
     def __post_init__(self) -> None:
         if not self.id.strip():
@@ -51,7 +52,9 @@ class DamageComponentSpec:
 
     def formula(self, *, critical: bool = False) -> str:
         if self.dice is not None:
-            dice_count = self.dice.count * (2 if critical else 1)
+            dice_count = self.dice.count * (
+                2 if critical and self.doubles_on_critical else 1
+            )
             if critical:
                 dice_count += self.critical_bonus_dice
             base = f"{dice_count}d{self.dice.sides}"
@@ -78,7 +81,7 @@ class DamageComponentSpec:
             "damage_type_label": damage_type_label_pl(self.damage_type),
             "dice": (
                 (
-                    f"{self.dice.count * (2 if critical else 1) + (self.critical_bonus_dice if critical else 0)}"
+                    f"{self.dice.count * (2 if critical and self.doubles_on_critical else 1) + (self.critical_bonus_dice if critical else 0)}"
                     f"d{self.dice.sides}"
                 )
                 if self.dice is not None
@@ -113,7 +116,9 @@ def roll_damage_components(
     results: list[DamageComponentInput] = []
     for component in components:
         if component.dice is not None:
-            dice_count = component.dice.count * (2 if critical else 1)
+            dice_count = component.dice.count * (
+                2 if critical and component.doubles_on_critical else 1
+            )
             if critical:
                 dice_count += component.critical_bonus_dice
             rolls = DiceExpression(dice_count, component.dice.sides).roll(roll_die)

@@ -395,6 +395,7 @@ def test_level_two_fighter_action_surge_restores_one_spent_action(content):
     result = resolve_action_surge(after_action)
 
     assert result.state.turn_action.action_use == ActionUse.ACTION_AVAILABLE
+    assert result.state.turn_action.bonus_action_use == ActionUse.ACTION_USED
     assert next(
         pool for pool in result.actor_after.resource_pools
         if pool.id == "action_surge_uses"

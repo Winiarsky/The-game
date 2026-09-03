@@ -143,7 +143,7 @@ from dnd_board_game.scenarios.content_contract import (
 
 
 SNAPSHOT_SCHEMA = "dnd_board_game.session"
-SNAPSHOT_SCHEMA_VERSION = 31
+SNAPSHOT_SCHEMA_VERSION = 33
 
 
 def _migrate_snapshot_v1_to_v2(data: dict[str, Any]) -> dict[str, Any]:
@@ -554,6 +554,34 @@ def _migrate_snapshot_v30_to_v31(data: dict[str, Any]) -> dict[str, Any]:
     return migrated
 
 
+def _migrate_snapshot_v31_to_v32(data: dict[str, Any]) -> dict[str, Any]:
+    """Active effects gained optional spell-aura geometry and use counters."""
+    migrated = dict(data)
+    migrated["schema_version"] = 32
+    return migrated
+
+
+def _migrate_snapshot_v32_to_v33(data: dict[str, Any]) -> dict[str, Any]:
+    """Exploration gained a persistent shared post-combat loot pool."""
+
+    migrated = dict(data)
+    migrated["schema_version"] = 33
+    exploration = migrated.get("exploration")
+    if isinstance(exploration, dict):
+        exploration_v33 = dict(exploration)
+        exploration_v33.setdefault(
+            "party_loot",
+            {
+                "id": "party_stash",
+                "label": "Łup drużyny",
+                "items": [],
+                "currency": {"cp": 0, "sp": 0, "ep": 0, "gp": 0, "pp": 0},
+            },
+        )
+        migrated["exploration"] = exploration_v33
+    return migrated
+
+
 _SNAPSHOT_MIGRATIONS = MigrationRegistry(
     schema=SNAPSHOT_SCHEMA,
     current_version=SNAPSHOT_SCHEMA_VERSION,
@@ -588,6 +616,8 @@ _SNAPSHOT_MIGRATIONS.register(27, _migrate_snapshot_v27_to_v28)
 _SNAPSHOT_MIGRATIONS.register(28, _migrate_snapshot_v28_to_v29)
 _SNAPSHOT_MIGRATIONS.register(29, _migrate_snapshot_v29_to_v30)
 _SNAPSHOT_MIGRATIONS.register(30, _migrate_snapshot_v30_to_v31)
+_SNAPSHOT_MIGRATIONS.register(31, _migrate_snapshot_v31_to_v32)
+_SNAPSHOT_MIGRATIONS.register(32, _migrate_snapshot_v32_to_v33)
 
 
 class SnapshotValidationError(ValueError):
@@ -1507,6 +1537,14 @@ def _exploration_payload(state: ExplorationState) -> dict[str, object]:
             for point in state.points
         ],
         "exhausted_search_zones": list(state.exhausted_search_zones),
+        "party_loot": {
+            "id": state.party_loot.id,
+            "label": state.party_loot.label,
+            "items": [
+                inventory_item_payload(item) for item in state.party_loot.items
+            ],
+            "currency": state.party_loot.currency.as_payload(),
+        },
         "challenge_states": [
             {"challenge_id": item.challenge_id, "current_progress": item.current_progress, "noise": item.noise,
              "complications": list(item.complications), "completed": item.completed,
@@ -1694,6 +1732,36 @@ def _exploration_from_payload(base: ExplorationState, raw: object) -> Exploratio
     resources = _string_tuple(data.get("inventory_resource_ids", []), "inventory_resource_ids")
     if set(resources) - {item.id for item in base.resources}:
         raise SnapshotValidationError("Zapis zawiera nieznane zasoby scenariusza.")
+    party_loot_raw = _mapping(
+        data.get(
+            "party_loot",
+            {
+                "id": "party_stash",
+                "label": "Łup drużyny",
+                "items": [],
+                "currency": {},
+            },
+        ),
+        "exploration.party_loot",
+    )
+    party_loot = LootBundle(
+        id=_string(party_loot_raw.get("id"), "exploration.party_loot.id"),
+        label=_string(
+            party_loot_raw.get("label"),
+            "exploration.party_loot.label",
+        ),
+        items=tuple(
+            _inventory_item_from_payload(
+                item,
+                "exploration.party_loot.item",
+            )
+            for item in _sequence(
+                party_loot_raw.get("items", []),
+                "exploration.party_loot.items",
+            )
+        ),
+        currency=_currency_from_payload(party_loot_raw.get("currency", {})),
+    )
     short_counts = tuple(
         (_string(item.get("policy_id"), "short_rest.policy_id"), _integer(item.get("count"), "short_rest.count"))
         for raw_item in _sequence(data.get("short_rest_counts", []), "short_rest_counts")
@@ -2012,6 +2080,10 @@ def _exploration_from_payload(base: ExplorationState, raw: object) -> Exploratio
                     item.get("used_attempt_ids", []),
                     "exploration.npc_state.used_attempt_ids",
                 ),
+                used_feature_ids=_string_tuple(
+                    item.get("used_feature_ids", []),
+                    "exploration.npc_state.used_feature_ids",
+                ),
                 relationship_events=tuple(
                     NpcRelationshipEvent(
                         sequence=_integer(event.get("sequence"), "npc_relationship_event.sequence"),
@@ -2107,6 +2179,7 @@ def _exploration_from_payload(base: ExplorationState, raw: object) -> Exploratio
         npc_states=npc_states,
         merchants=merchants,
         magic_effects=magic_effects,
+        party_loot=party_loot,
     )
 
 
@@ -2148,6 +2221,14 @@ def _effect_payload(effect: ActiveEffect) -> dict[str, object]:
         "expiration_actor_id": effect.expiration_actor_id,
         "additional_expirations": [{"duration": item.duration.value, "actor_id": item.actor_id, "target_actor_id": item.target_actor_id} for item in effect.additional_expirations],
         "spell_level": effect.spell_level,
+        "radius_feet": effect.radius_feet,
+        "die_sides": effect.die_sides,
+        "modifier": effect.modifier,
+        "uses_maximum": effect.uses_maximum,
+        "remaining_rounds": effect.remaining_rounds,
+        "excluded_positions": [
+            _coordinate_payload(position) for position in effect.excluded_positions
+        ],
     }
 
 
@@ -2165,6 +2246,18 @@ def _effect_from_payload(raw: object) -> ActiveEffect:
         stacking_key=_string(data.get("stacking_key"), "effect.stacking_key"), expiration_actor_id=_optional_string(data.get("expiration_actor_id"), "effect.expiration_actor_id"),
         additional_expirations=tuple(AdditionalEffectExpiration(_enum(EffectDuration, item.get("duration"), "expiration.duration"), _optional_string(item.get("actor_id"), "expiration.actor_id"), _optional_string(item.get("target_actor_id"), "expiration.target_actor_id")) for value in _sequence(data.get("additional_expirations", []), "additional_expirations") for item in (_mapping(value, "expiration"),)),
         spell_level=_optional_integer(data.get("spell_level"), "effect.spell_level"),
+        radius_feet=_integer(data.get("radius_feet", 0), "effect.radius_feet"),
+        die_sides=_integer(data.get("die_sides", 0), "effect.die_sides"),
+        modifier=_integer(data.get("modifier", 0), "effect.modifier"),
+        uses_maximum=_integer(data.get("uses_maximum", 0), "effect.uses_maximum"),
+        remaining_rounds=_optional_integer(data.get("remaining_rounds"), "effect.remaining_rounds"),
+        excluded_positions=tuple(
+            _coordinate(value, "effect.excluded_positions[]")
+            for value in _sequence(
+                data.get("excluded_positions", []),
+                "effect.excluded_positions",
+            )
+        ),
     )
 
 
@@ -2479,7 +2572,7 @@ def _combat_payload(state: CombatState | None) -> dict[str, object] | None:
             "current_index": state.initiative_order.current_index, "round_number": state.initiative_order.round_number,
             "entries": [{"actor_id": str(entry.actor.id), "natural_roll": entry.roll.natural_roll, "natural_rolls": list(entry.roll.natural_rolls), "total": entry.roll.total, "mode": entry.roll.mode.value, "dexterity_modifier": entry.dexterity_modifier, "stable_order": entry.stable_order} for entry in state.initiative_order.entries],
         },
-        "turn_action": {"action_use": state.turn_action.action_use.value, "bonus_action_use": state.turn_action.bonus_action_use.value, "reaction_available": state.turn_action.reaction_available, "movement_used_feet": state.turn_action.movement_used_feet, "extra_movement_feet": state.turn_action.extra_movement_feet, "object_interaction_available": state.turn_action.object_interaction_available, "two_weapon_trigger_item_id": state.turn_action.two_weapon_trigger_item_id, "attack_action_active": state.turn_action.attack_action_active, "attacks_used": state.turn_action.attacks_used, "attacks_maximum": state.turn_action.attacks_maximum, "bonus_attacks_remaining": state.turn_action.bonus_attacks_remaining, "bonus_attack_source_id": state.turn_action.bonus_attack_source_id, "bonus_action_spell_cast": state.turn_action.bonus_action_spell_cast, "leveled_action_spell_cast": state.turn_action.leveled_action_spell_cast},
+        "turn_action": {"action_use": state.turn_action.action_use.value, "bonus_action_use": state.turn_action.bonus_action_use.value, "reaction_available": state.turn_action.reaction_available, "movement_used_feet": state.turn_action.movement_used_feet, "extra_movement_feet": state.turn_action.extra_movement_feet, "object_interaction_available": state.turn_action.object_interaction_available, "two_weapon_trigger_item_id": state.turn_action.two_weapon_trigger_item_id, "attack_action_active": state.turn_action.attack_action_active, "attacks_used": state.turn_action.attacks_used, "attacks_maximum": state.turn_action.attacks_maximum, "bonus_attacks_remaining": state.turn_action.bonus_attacks_remaining, "bonus_attack_source_id": state.turn_action.bonus_attack_source_id, "bonus_action_spell_cast": state.turn_action.bonus_action_spell_cast, "leveled_action_spell_cast": state.turn_action.leveled_action_spell_cast, "movement_action_used": state.turn_action.movement_action_used, "weapon_change_available": state.turn_action.weapon_change_available},
         "status": state.status.value, "winner": state.winner.value if state.winner else None,
         "enemy_ai": {
             "profile_id": state.enemy_ai.profile_id,
@@ -2500,6 +2593,7 @@ def _combat_payload(state: CombatState | None) -> dict[str, object] | None:
             ],
         },
         "spent_reaction_actor_ids": sorted(str(item) for item in state.spent_reaction_actor_ids),
+        "damage_received_by_actor": [list(item) for item in state.damage_received_by_actor],
         "ammunition_expenditures": [
             {
                 "shooter_actor_id": str(entry.shooter_actor_id),
@@ -2564,6 +2658,10 @@ def _combat_payload(state: CombatState | None) -> dict[str, object] | None:
                 "actor_id": hidden.actor_id,
                 "stealth_total": hidden.stealth_total,
                 "hidden_from_actor_ids": list(hidden.hidden_from_actor_ids),
+                "observer_perception_totals": [
+                    [actor_id, total]
+                    for actor_id, total in hidden.observer_perception_totals
+                ],
             }
             for hidden in state.hidden_states
         ],
@@ -2759,6 +2857,14 @@ def _combat_from_payload(raw: object) -> CombatState | None:
                 turn.get("leveled_action_spell_cast", False),
                 "turn_action.leveled_action_spell_cast",
             ),
+            _boolean(
+                turn.get("movement_action_used", False),
+                "turn_action.movement_action_used",
+            ),
+            _boolean(
+                turn.get("weapon_change_available", True),
+                "turn_action.weapon_change_available",
+            ),
         ),
         status=_enum(CombatStatus, data.get("status"), "combat.status"),
         winner=_optional_enum(Faction, data.get("winner"), "combat.winner"),
@@ -2864,6 +2970,17 @@ def _combat_from_payload(raw: object) -> CombatState | None:
                 for item in (_mapping(raw_item, "combat.enemy_ai.outcome"),)
             ),
         ),
+        damage_received_by_actor=tuple(
+            (
+                _string(item[0], "combat.damage_received.actor_id"),
+                _integer(item[1], "combat.damage_received.amount"),
+            )
+            for item in _sequence(
+                data.get("damage_received_by_actor", []),
+                "combat.damage_received_by_actor",
+            )
+            if isinstance(item, list | tuple) and len(item) == 2
+        ),
         ammunition_expenditures=tuple(
             AmmunitionExpenditure(
                 shooter_actor_id=ActorId(
@@ -2951,6 +3068,17 @@ def _combat_from_payload(raw: object) -> CombatState | None:
                 hidden_from_actor_ids=_string_tuple(
                     item.get("hidden_from_actor_ids", []),
                     "hidden_state.hidden_from_actor_ids",
+                ),
+                observer_perception_totals=tuple(
+                    (
+                        _string(pair[0], "hidden_state.observer_perception_totals.actor_id"),
+                        _integer(pair[1], "hidden_state.observer_perception_totals.total"),
+                    )
+                    for pair in _sequence(
+                        item.get("observer_perception_totals", []),
+                        "hidden_state.observer_perception_totals",
+                    )
+                    if isinstance(pair, (list, tuple)) and len(pair) == 2
                 ),
             )
             for raw_item in _sequence(data.get("hidden_states", []), "combat.hidden_states")

@@ -1,0 +1,7 @@
+{
+  "schema": "dnd_board_game.spell", "schema_version": 1, "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": ["project_original"], "id": "nimra_lightning_path", "name": "Piorunowy szlak",
+  "level": 2, "school": "evocation", "casting_time": "action", "range": {"kind": "distance", "feet": 60},
+  "components": {"verbal": true, "somatic": true, "materials": []}, "duration": {"kind": "instantaneous"}, "concentration": false, "ritual": false,
+  "effect": {"kind": "attack", "ability": "intelligence", "save_ability": "dexterity", "save_damage_on_success": "half", "damage": {"dice": "3d6", "modifier": 0, "damage_type": "lightning"}}
+}

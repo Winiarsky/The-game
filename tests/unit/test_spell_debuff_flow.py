@@ -1,4 +1,6 @@
-from dnd_board_game.actors import Faction
+from dataclasses import replace
+
+from dnd_board_game.actors import ActorResourcePool, Faction, RecoveryPeriod
 from dnd_board_game.application import SpellDebuffFlowService
 from dnd_board_game.combat import (
     ActionUse,
@@ -21,6 +23,14 @@ class FixedRng:
 
     def randint(self, _minimum: int, _maximum: int) -> int:
         return self.value
+
+
+class SequenceRng:
+    def __init__(self, *values: int) -> None:
+        self.values = list(values)
+
+    def randint(self, _minimum: int, _maximum: int) -> int:
+        return self.values.pop(0)
 
 
 def _fixture(action_id: str):
@@ -143,3 +153,49 @@ def test_repeated_turn_end_save_removes_applied_debuff():
 
     assert resolution.removed
     assert resolution.condition_states == ()
+
+
+def test_forced_weave_uses_disadvantage_and_spends_metamagic_on_commit() -> None:
+    encounter, caster, enemy, action, state = _fixture("weakening_miasma")
+    pool = ActorResourcePool(
+        "metamagic_points",
+        "Punkty Metamagii",
+        4,
+        4,
+        RecoveryPeriod.LONG_REST,
+    )
+    caster = replace(caster, resource_pools=(pool,))
+    state = replace(
+        state,
+        actors=tuple(caster if str(actor.id) == str(caster.id) else actor for actor in state.actors),
+    )
+    action = replace(
+        action,
+        metamagic_ids=("nimra_forced_weave",),
+        resource_pool_id="metamagic_points",
+        resource_cost=2,
+    )
+    service = SpellDebuffFlowService()
+    prepared = service.prepare(
+        board=encounter.board,
+        state=state,
+        action=action,
+        cast_level=1,
+    )
+    assert prepared.pending is not None
+
+    rng = SequenceRng(20, 1)
+    confirmed = service.confirm(
+        board=encounter.board,
+        state=state,
+        action=action,
+        pending=prepared.pending,
+        target_id=str(enemy.id),
+        rng=rng,
+    )
+
+    save = dict(confirmed.event_payload)["save"]
+    assert save["natural_roll"] == 1
+    assert rng.values == []
+    caster_after = current_actor(confirmed.state)
+    assert caster_after.resource_pools[0].current == 2

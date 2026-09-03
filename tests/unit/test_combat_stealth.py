@@ -59,6 +59,92 @@ def _source() -> AttackSource:
     return AttackSource("Łuk", AttackSourceType.WEAPON, 80, D20RollRequest())
 
 
+def _as_mira(actor: Actor) -> Actor:
+    return replace(
+        actor,
+        id=ActorId("mira"),
+        name="Mira",
+        features=(
+            *actor.features,
+            FeatureGrant(
+                feature_id="mira_shadow_stealth",
+                label="Mistrzyni ukrycia",
+                source_kind=FeatureSourceKind.SCENARIO,
+                source_ref="boardgame_archetype:mira",
+            ),
+        ),
+    )
+
+
+def test_mira_can_hide_in_clear_sight_but_not_beside_a_conscious_enemy() -> None:
+    mira = _as_mira(_actor("hero", Faction.ALLY, Coordinate(0, 0)))
+    distant = _actor("distant", Faction.ENEMY, Coordinate(3, 0))
+    adjacent = replace(distant, id=ActorId("adjacent"), position=Coordinate(1, 0))
+
+    assert hide_eligibility(BoardState(), mira, (mira, distant)).allowed is True
+    blocked = hide_eligibility(BoardState(), mira, (mira, adjacent))
+    assert blocked.allowed is False
+    assert blocked.blocking_observer_ids == ("adjacent",)
+
+
+def test_mira_records_individual_perception_and_ends_stealth_when_seen_by_all() -> None:
+    mira = _as_mira(_actor("hero", Faction.ALLY, Coordinate(0, 0)))
+    first = _actor("first", Faction.ENEMY, Coordinate(3, 0))
+    second = _actor("second", Faction.ENEMY, Coordinate(4, 0))
+
+    result = resolve_hide(
+        (),
+        mira,
+        (mira, first, second),
+        stealth_total=12,
+        observer_perception_totals={"first": 11, "second": 12},
+    )
+
+    assert result.hidden_state == HiddenState(
+        "mira",
+        12,
+        ("first",),
+        (("first", 11), ("second", 12)),
+    )
+    assert result.detected_by_actor_ids == ("second",)
+
+    seen_by_all = resolve_hide(
+        (),
+        mira,
+        (mira, first),
+        stealth_total=5,
+        observer_perception_totals={"first": 15},
+    )
+    assert seen_by_all.hidden_state is None
+    assert seen_by_all.hidden_states == ()
+    assert seen_by_all.detected_by_actor_ids == ("first",)
+
+
+def test_mira_new_stealth_session_rebuilds_observer_results_after_last_detection() -> None:
+    mira = _as_mira(_actor("hero", Faction.ALLY, Coordinate(0, 0)))
+    first = _actor("first", Faction.ENEMY, Coordinate(3, 0))
+    second = _actor("second", Faction.ENEMY, Coordinate(4, 0))
+    previous_session = (HiddenState("mira", 18, ("first",)),)
+
+    ended = resolve_search(previous_session, first, perception_total=18)
+    restarted = resolve_hide(
+        ended.hidden_states,
+        mira,
+        (mira, first, second),
+        stealth_total=14,
+        observer_perception_totals={"first": 15, "second": 10},
+    )
+
+    assert ended.hidden_states == ()
+    assert restarted.hidden_state == HiddenState(
+        "mira",
+        14,
+        ("second",),
+        (("first", 15), ("second", 10)),
+    )
+    assert restarted.detected_by_actor_ids == ("first",)
+
+
 def test_skill_profile_applies_proficiency_to_stealth_and_passive_perception() -> None:
     rogue = _actor("rogue", Faction.ALLY, Coordinate(0, 0), dexterity=16, skills=("stealth",))
     scout = _actor("scout", Faction.ENEMY, Coordinate(4, 0), wisdom=14, skills=("perception",))

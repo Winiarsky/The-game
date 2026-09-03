@@ -7,10 +7,12 @@ from dnd_board_game.actors import (
     AbilityScores,
     Actor,
     ActorId,
+    ActorResourcePool,
     DamageAffinityProfile,
     Faction,
     FeatureGrant,
     FeatureSourceKind,
+    RecoveryPeriod,
 )
 from dnd_board_game.application import PlayerCombatActionFlowService
 from dnd_board_game.combat import (
@@ -45,6 +47,14 @@ from dnd_board_game.rules import (
     resolve_d20_roll,
 )
 from dnd_board_game.world import BoardState, Coordinate
+
+
+class SequenceRng:
+    def __init__(self, *values: int) -> None:
+        self.values = list(values)
+
+    def randint(self, _minimum: int, _maximum: int) -> int:
+        return self.values.pop(0)
 
 
 def _actor(actor_id: str, faction: Faction, position: Coordinate) -> Actor:
@@ -205,6 +215,152 @@ def test_staged_attack_moves_from_target_preview_through_damage() -> None:
     assert damaged.pending is None
     assert damaged.applied_damage is not None
     assert damaged.event_type == "ui_combat_player_damage_roll"
+
+
+def test_guard_vault_moves_behind_target_even_on_miss_and_marks_only_its_oa_bonus() -> None:
+    service = PlayerCombatActionFlowService()
+    mira = _actor("mira", Faction.ALLY, Coordinate(1, 1))
+    enemy = _actor("enemy", Faction.ENEMY, Coordinate(2, 1))
+    state = _state(mira, enemy)
+    source = replace(
+        _source(),
+        id="guard_vault",
+        name="Przeskok przez gardę",
+    )
+
+    selected = service.select_attack_target(
+        state=state,
+        board=BoardState(),
+        source=source,
+        position=enemy.position,
+        active_effects=(),
+    )
+    confirmed = service.confirm_attack_target(
+        state=state,
+        board=BoardState(),
+        source=source,
+        pending=selected.pending,
+        active_effects=(),
+        rng=Random(1),
+    )
+    rolled = service.submit_attack_roll(
+        state=state,
+        board=BoardState(),
+        source=source,
+        pending=confirmed.pending,
+        active_effects=(),
+        natural_roll=1,
+    )
+
+    moved_mira = next(actor for actor in rolled.state.actors if actor.id == mira.id)
+    assert rolled.pending is None
+    assert moved_mira.position == Coordinate(3, 1)
+    escape = next(effect for effect in rolled.active_effects if effect.kind == "guard_vault_opportunity_ac")
+    assert escape.actor_id == "mira"
+    assert escape.target_actor_id == "enemy"
+    assert escape.value == 2
+
+
+def test_piercing_attack_uses_side_engagement_and_spends_one_fortel_for_both_hits() -> None:
+    service = PlayerCombatActionFlowService()
+    mira = replace(
+        _actor("mira", Faction.ALLY, Coordinate(1, 1)),
+        features=(
+            FeatureGrant(
+                "mira_shadow_killer",
+                "Atak z cienia",
+                FeatureSourceKind.SCENARIO,
+                "test:mira",
+            ),
+        ),
+        resource_pools=(
+            ActorResourcePool(
+                "trick_uses", "Fortele", 4, 4, RecoveryPeriod.LONG_REST
+            ),
+        ),
+    )
+    ally = _actor("ally", Faction.ALLY, Coordinate(2, 2))
+    first = _actor("first", Faction.ENEMY, Coordinate(2, 1))
+    second = _actor("second", Faction.ENEMY, Coordinate(3, 1))
+    state = _state(mira, ally, first, second)
+    source = replace(
+        _source(),
+        id="piercing_attack",
+        name="Przeszywający atak",
+        proficiency_id="rapier",
+        resource_pool_id="trick_uses",
+        resource_cost=1,
+        damage_components=(
+            DamageComponentSpec(
+                "rapier",
+                DamageType.PIERCING,
+                DiceExpression(1, 8),
+                modifier=0,
+            ),
+        ),
+        damage_hint="1d8",
+        damage_type=DamageType.PIERCING.value,
+    )
+
+    selected = service.select_attack_target(
+        state=state,
+        board=BoardState(),
+        source=source,
+        position=first.position,
+        active_effects=(),
+    )
+    confirmed = service.confirm_attack_target(
+        state=state,
+        board=BoardState(),
+        source=source,
+        pending=selected.pending,
+        active_effects=(),
+        rng=Random(1),
+    )
+    assert confirmed.pending.mira_piercing_second_target_id == "second"
+    assert confirmed.pending.flanking_ally_ids == ("ally",)
+
+    first_roll = service.submit_attack_roll(
+        state=state,
+        board=BoardState(),
+        source=source,
+        pending=confirmed.pending,
+        active_effects=(),
+        natural_roll=15,
+        natural_roll_2=10,
+    )
+    first_damage = service.submit_damage(
+        state=first_roll.state,
+        source=source,
+        pending=first_roll.pending,
+        active_effects=first_roll.active_effects,
+        component_totals={"rapier": 1, "sneak_attack": 1},
+    )
+    assert first_damage.pending is not None
+    assert first_damage.pending.target_id == "second"
+    assert first_damage.pending.mira_piercing_second is True
+    mira_after_first = next(actor for actor in first_damage.state.actors if actor.id == mira.id)
+    assert next(pool for pool in mira_after_first.resource_pools if pool.id == "trick_uses").current == 3
+
+    second_roll = service.submit_attack_roll(
+        state=first_damage.state,
+        board=BoardState(),
+        source=source,
+        pending=first_damage.pending,
+        active_effects=first_damage.active_effects,
+        natural_roll=15,
+        natural_roll_2=10,
+    )
+    second_damage = service.submit_damage(
+        state=second_roll.state,
+        source=source,
+        pending=second_roll.pending,
+        active_effects=second_roll.active_effects,
+        component_totals={"rapier": 1, "sneak_attack": 1},
+    )
+    mira_after_second = next(actor for actor in second_damage.state.actors if actor.id == mira.id)
+    assert second_damage.pending is None
+    assert next(pool for pool in mira_after_second.resource_pools if pool.id == "trick_uses").current == 3
 
 
 def test_player_attack_uses_physical_mirror_image_roll_and_consumes_duplicate() -> None:
@@ -685,6 +841,89 @@ def test_sacred_flame_ignores_scene_cover_bonus_on_dexterity_save() -> None:
     assert not any(modifier.label == "Połowa osłony" for modifier in save.modifiers)
 
 
+def test_dagna_triage_gives_target_advantage_against_save_spell() -> None:
+    service = PlayerCombatActionFlowService()
+    dagna = _actor("dagna", Faction.ALLY, Coordinate(0, 0))
+    enemy = _actor("enemy", Faction.ENEMY, Coordinate(4, 0))
+    state = _state(dagna, enemy)
+    source = _dexterity_save_source()
+    selected = service.select_attack_target(
+        state=state,
+        board=BoardState(),
+        source=source,
+        position=enemy.position,
+        active_effects=(),
+    )
+    assert selected.pending is not None
+
+    confirmed = service.confirm_attack_target(
+        state=state,
+        board=BoardState(),
+        source=source,
+        pending=selected.pending,
+        active_effects=(
+            ActiveCombatEffect(
+                id="flaw_triage_active:dagna",
+                actor_id="dagna",
+                kind="flaw_triage_active",
+                label="Nikogo nie zostawiam",
+                object_id="feature:flaw_triage_active",
+                value=0,
+            ),
+        ),
+        rng=Random(1),
+    )
+
+    assert confirmed.pending is not None
+    assert confirmed.pending.saving_throws[0].natural_roll == 19
+
+
+def test_dagna_triage_advantage_cancels_restrained_save_disadvantage() -> None:
+    service = PlayerCombatActionFlowService()
+    dagna = _actor("dagna", Faction.ALLY, Coordinate(0, 0))
+    enemy = _actor("enemy", Faction.ENEMY, Coordinate(4, 0))
+    state = replace(
+        _state(dagna, enemy),
+        condition_states=(
+            ConditionState(
+                str(enemy.id),
+                CombatCondition.RESTRAINED,
+                source_actor_id="trap",
+            ),
+        ),
+    )
+    source = _dexterity_save_source()
+    selected = service.select_attack_target(
+        state=state,
+        board=BoardState(),
+        source=source,
+        position=enemy.position,
+        active_effects=(),
+    )
+    assert selected.pending is not None
+
+    confirmed = service.confirm_attack_target(
+        state=state,
+        board=BoardState(),
+        source=source,
+        pending=selected.pending,
+        active_effects=(
+            ActiveCombatEffect(
+                id="flaw_triage_active:dagna",
+                actor_id="dagna",
+                kind="flaw_triage_active",
+                label="Nikogo nie zostawiam",
+                object_id="feature:flaw_triage_active",
+                value=0,
+            ),
+        ),
+        rng=Random(1),
+    )
+
+    assert confirmed.pending is not None
+    assert confirmed.pending.saving_throws[0].natural_roll == 5
+
+
 def test_twinned_save_spell_spends_one_action_and_damages_two_targets() -> None:
     service = PlayerCombatActionFlowService()
     hero = replace(
@@ -797,6 +1036,48 @@ def test_acid_splash_optional_second_adjacent_target_shares_one_action() -> None
     assert next(actor for actor in damaged.state.actors if actor.id == first.id).hp == 6
     assert next(actor for actor in damaged.state.actors if actor.id == second.id).hp == 6
     assert len(damaged.additional_applied_damages) == 1
+
+
+def test_lightning_chain_forced_weave_hampers_only_primary_target() -> None:
+    service = PlayerCombatActionFlowService()
+    caster = _actor("nimra", Faction.ALLY, Coordinate(0, 0))
+    primary = _actor("primary", Faction.ENEMY, Coordinate(2, 0))
+    jumped = _actor("jumped", Faction.ENEMY, Coordinate(3, 0))
+    state = _state(caster, primary, jumped)
+    source = replace(
+        _dexterity_save_source(),
+        id="nimra_lightning_path",
+        name="Piorunowy szlak",
+        damage_hint="3d6",
+        metamagic_ids=("nimra_forced_weave",),
+    )
+    selected = service.select_attack_target(
+        state=state,
+        board=BoardState(),
+        source=source,
+        position=primary.position,
+        active_effects=(),
+    )
+    assert selected.pending is not None
+    pending = replace(selected.pending, twinned_target_id=str(jumped.id))
+    rng = SequenceRng(20, 1, 20)
+
+    confirmed = service.confirm_attack_target(
+        state=state,
+        board=BoardState(),
+        source=source,
+        pending=pending,
+        active_effects=(),
+        rng=rng,
+    )
+
+    assert confirmed.pending is not None
+    saves = {save.actor_id: save for save in confirmed.pending.saving_throws}
+    assert saves["primary"].natural_roll == 1
+    assert saves["primary"].success is False
+    assert saves["jumped"].natural_roll == 20
+    assert saves["jumped"].success is True
+    assert rng.values == []
 
 
 def test_twinned_attack_spell_resolves_second_attack_without_second_action() -> None:

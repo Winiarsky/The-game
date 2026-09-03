@@ -89,6 +89,7 @@ class AttackSource:
     resource_pool_id: str | None = None
     resource_cost: int = 1
     ammunition_type: str | None = None
+    ammunition_cost: int = 1
     loading: bool = False
     long_range_feet: int | None = None
     heavy: bool = False
@@ -117,6 +118,10 @@ class AttackSource:
     on_hit_effect_kind: str | None = None
     on_hit_effect_duration: EffectDuration = EffectDuration.UNTIL_NEXT_ATTACK
     on_hit_effect_value: int = 0
+    on_hit_effect_remaining_rounds: int | None = None
+    on_hit_save_ability: str | None = None
+    on_hit_save_dc: int = 0
+    on_hit_save_success_effect_kind: str | None = None
     failed_save_push_feet: int = 0
     damage_divisor: int = 1
     concentration: bool = False
@@ -157,6 +162,10 @@ class AttackSource:
             raise ValueError("Attack resource_cost must be positive.")
         if self.ammunition_type is not None and not self.ammunition_type.strip():
             raise ValueError("Attack ammunition_type cannot be empty.")
+        if self.ammunition_cost < 1:
+            raise ValueError("Attack ammunition_cost must be positive.")
+        if self.ammunition_cost != 1 and self.ammunition_type is None:
+            raise ValueError("Extra ammunition cost requires ammunition_type.")
         if self.ammunition_type is not None and self.attack_kind != AttackKind.RANGED:
             raise ValueError("Only ranged attacks can require ammunition.")
         if self.long_range_feet is not None:
@@ -171,6 +180,11 @@ class AttackSource:
                 raise ValueError("Conditional on-hit save requires a failed-save condition.")
         if self.conditional_on_hit_minimum_movement_feet < 0:
             raise ValueError("Conditional on-hit movement cannot be negative.")
+        if self.on_hit_effect_remaining_rounds is not None and self.on_hit_effect_remaining_rounds < 1:
+            raise ValueError("On-hit effect remaining rounds must be positive.")
+        if self.on_hit_save_ability is not None:
+            if self.on_hit_save_dc <= 0 or self.on_hit_save_success_effect_kind is None:
+                raise ValueError("An on-hit save requires a DC and success effect kind.")
         components = self.damage_components
         if self.damage_fixed is not None and self.damage_die_sides is not None:
             object.__setattr__(self, "damage_die_sides", None)

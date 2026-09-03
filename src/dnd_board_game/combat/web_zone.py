@@ -23,6 +23,8 @@ from .spells import resolve_spell_save
 def web_zone_contains(effect: ActiveEffect, position: Coordinate) -> bool:
     if effect.kind != "web_zone" or effect.anchor_position is None:
         return False
+    if position in effect.excluded_positions:
+        return False
     side = max(1, effect.value // 5)
     before = (side - 1) // 2
     after = side - before - 1

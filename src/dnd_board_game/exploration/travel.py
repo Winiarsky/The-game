@@ -26,7 +26,7 @@ from dnd_board_game.rules import (
     resolve_d20_roll,
 )
 
-from .models import ScenarioContinuation, TravelPace
+from .models import ScenarioContinuation, TravelArrivalTiming, TravelPace
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,6 +89,8 @@ class TravelResolution:
     base_minutes: int
     pace_minutes: int
     total_minutes: int
+    schedule_delta_minutes: int
+    arrival_timing: TravelArrivalTiming
     passive_perception_modifier: int
     allows_stealth: bool
     navigation: TravelNavigationResult
@@ -100,6 +102,8 @@ class TravelResolution:
             "base_minutes": self.base_minutes,
             "pace_minutes": self.pace_minutes,
             "total_minutes": self.total_minutes,
+            "schedule_delta_minutes": self.schedule_delta_minutes,
+            "arrival_timing": self.arrival_timing.value,
             "passive_perception_modifier": self.passive_perception_modifier,
             "allows_stealth": self.allows_stealth,
             "navigation": self.navigation.as_payload(),
@@ -159,6 +163,14 @@ def resolve_travel(
         navigation_modifier=navigation_modifier,
     )
     total_minutes = pace_minutes + navigation.delay_minutes
+    schedule_delta_minutes = total_minutes - continuation.travel_minutes
+    arrival_timing = (
+        TravelArrivalTiming.EARLY
+        if schedule_delta_minutes < 0
+        else TravelArrivalTiming.LATE
+        if schedule_delta_minutes > 0
+        else TravelArrivalTiming.ON_TIME
+    )
     check_count = forced_march_check_count(
         total_minutes,
         safe_travel_minutes=policy.safe_travel_minutes,
@@ -220,6 +232,8 @@ def resolve_travel(
         base_minutes=continuation.travel_minutes,
         pace_minutes=pace_minutes,
         total_minutes=total_minutes,
+        schedule_delta_minutes=schedule_delta_minutes,
+        arrival_timing=arrival_timing,
         passive_perception_modifier=-5 if pace == TravelPace.FAST else 0,
         allows_stealth=pace == TravelPace.SLOW,
         navigation=navigation,

@@ -30,12 +30,14 @@ from dnd_board_game.combat import (
     convert_spell_slot_to_sorcery_points,
     create_spell_slot_from_sorcery_points,
     climbing_movement_cost,
+    channel_turn_targets,
     consume_next_attack_effects,
     dark_ones_blessing_temporary_hit_points,
     deflect_missiles,
     divine_smite_damage,
     metamagic_sorcery_point_cost,
     metamagic_options_for_source,
+    plan_sneak_attack,
     jump_distances,
     natural_recovery_capacity,
     preserve_life_capacity,
@@ -54,6 +56,11 @@ from dnd_board_game.combat import (
     resolve_preserve_life,
     resolve_primeval_awareness,
     resolve_rage,
+    resolve_acceleration,
+    resolve_hard_as_rock,
+    resolve_powerful_strike,
+    resolve_reckless_attack,
+    shoulder_check_push_distance,
     resolve_sacred_weapon,
     resolve_wild_shape,
     resolve_damage,
@@ -75,6 +82,9 @@ from dnd_board_game.rules import (
     D20RollInput,
     D20RollRequest,
     DiceExpression,
+    RollMode,
+    RollModifier,
+    RollModifierType,
     EffectEvent,
     EffectEventType,
     SpellComponents,
@@ -128,6 +138,58 @@ def _state(*actors: Actor):
         for index, actor in enumerate(actors)
     )
     return start_combat(tuple(actors), InitiativeOrder(entries))
+
+
+@pytest.mark.parametrize(
+    ("modifier_keys", "expected_dice"),
+    (
+        (("flanking_advantage",), 1),
+        (("hidden_attacker_advantage",), 2),
+        (("flanking_advantage", "hidden_attacker_advantage"), 3),
+    ),
+)
+def test_mira_damage_bonus_stacks_flank_and_hidden_attack(
+    modifier_keys: tuple[str, ...],
+    expected_dice: int,
+) -> None:
+    mira = replace(_actor("mira_shadow_killer"), id=ActorId("mira"), name="Mira")
+    enemy = replace(
+        _actor(),
+        id=ActorId("enemy"),
+        name="Wróg",
+        faction=Faction.ENEMY,
+        position=Coordinate(2, 1),
+    )
+    source = AttackSource(
+        id="rapier",
+        name="Rapier",
+        source_type=AttackSourceType.WEAPON,
+        range_feet=5,
+        attack_roll_request=D20RollRequest(
+            mode=RollMode.ADVANTAGE,
+            modifiers=tuple(
+                RollModifier(key, 0, RollModifierType.SITUATIONAL, key)
+                for key in modifier_keys
+            ),
+        ),
+        damage_type="piercing",
+        damage_components=(
+            DamageComponentSpec("base", DamageType.PIERCING, dice=DiceExpression(1, 8)),
+        ),
+    )
+
+    plan = plan_sneak_attack(
+        state=_state(mira, enemy),
+        active_effects=(),
+        attacker=mira,
+        target=enemy,
+        source=source,
+        roll_mode=RollMode.ADVANTAGE,
+    )
+
+    bonus = next(component for component in plan.source.damage_components if component.id == "sneak_attack")
+    assert plan.eligible is True
+    assert bonus.dice == DiceExpression(expected_dice, 6)
 
 
 def test_level_three_druid_limits_and_natural_recovery():
@@ -333,6 +395,28 @@ def test_turn_undead_spends_channel_divinity_and_applies_turned_condition():
     )
 
 
+def test_turn_undead_targets_are_empty_without_visible_undead_in_range():
+    cleric = _actor("turn_undead")
+    living_enemy = replace(
+        _actor(),
+        id=ActorId("bandit"),
+        faction=Faction.ENEMY,
+        creature_type="humanoid",
+        position=Coordinate(2, 1),
+    )
+    distant_undead = replace(
+        living_enemy,
+        id=ActorId("distant_zombie"),
+        creature_type="undead",
+        position=Coordinate(10, 1),
+    )
+
+    assert channel_turn_targets(
+        _state(cleric, living_enemy, distant_undead),
+        action_id="turn_undead",
+    ) == ()
+
+
 def test_primeval_awareness_spends_selected_slot_and_reveals_only_types():
     ranger = replace(
         _actor("primeval_awareness"),
@@ -417,6 +501,83 @@ def test_frenzy_activates_during_rage_and_grants_later_bonus_weapon_attack():
     assert bonus.bonus_attack_source_id == "greataxe"
     assert bonus.state.turn_action.bonus_action_use == ActionUse.ACTION_USED
     assert bonus.state.turn_action.bonus_attacks_remaining == 1
+
+
+def test_brakka_rage_refills_and_then_clears_per_rage_ferocity():
+    brakka = replace(
+        _actor("rage", "powerful_strike"),
+        ability_scores=AbilityScores(18, 13, 16, 8, 12, 10),
+        resource_pools=(
+            ActorResourcePool("rage_uses", "Szał", 3, 3, RecoveryPeriod.LONG_REST),
+            ActorResourcePool("ferocity_uses", "Dzikość", 0, 3, RecoveryPeriod.NEVER),
+        ),
+    )
+    enemy = replace(_actor(), id=ActorId("enemy"), faction=Faction.ENEMY)
+
+    rage = resolve_rage(_state(brakka, enemy), ())
+    pools = {pool.id: pool.current for pool in rage.actor_after.resource_pools}
+    assert pools == {"rage_uses": 2, "ferocity_uses": 3}
+
+    strike = resolve_powerful_strike(rage.state, rage.active_effects)
+    assert next(pool.current for pool in strike.actor_after.resource_pools if pool.id == "ferocity_uses") == 1
+    assert next(effect for effect in strike.active_effects if effect.kind == "powerful_strike").value == 10
+
+    next_turn = replace(
+        strike.state,
+        turn_action=replace(strike.state.turn_action, bonus_action_use=ActionUse.ACTION_AVAILABLE),
+    )
+    stopped = resolve_rage(next_turn, strike.active_effects)
+    assert next(pool.current for pool in stopped.actor_after.resource_pools if pool.id == "ferocity_uses") == 0
+
+
+def test_brakka_acceleration_increases_cap_without_refunding_spent_movement():
+    brakka = replace(
+        _actor("acceleration"),
+        ability_scores=AbilityScores(18, 13, 16, 8, 12, 10),
+        resource_pools=(
+            ActorResourcePool("ferocity_uses", "Dzikość", 2, 3, RecoveryPeriod.NEVER),
+        ),
+    )
+    enemy = replace(_actor(), id=ActorId("enemy"), faction=Faction.ENEMY)
+    base_state = _state(brakka, enemy)
+    state = replace(base_state, turn_action=replace(base_state.turn_action, movement_used_feet=20))
+    rage_effect = ActiveCombatEffect("rage:hero", "hero", "rage", "Szał", "class_feature:rage", 2)
+
+    result = resolve_acceleration(state, (rage_effect,))
+
+    assert result.state.turn_action.extra_movement_feet == 30
+    assert result.state.turn_action.movement_used_feet == 20
+    assert result.state.turn_action.bonus_action_use == ActionUse.ACTION_USED
+
+
+def test_hard_as_rock_uses_reaction_and_reduces_post_resistance_damage():
+    brakka = replace(
+        _actor("hard_as_rock"),
+        ability_scores=AbilityScores(18, 13, 16, 8, 12, 10),
+        resource_pools=(
+            ActorResourcePool("ferocity_uses", "Dzikość", 1, 3, RecoveryPeriod.NEVER),
+        ),
+    )
+    rage_effect = ActiveCombatEffect("rage:hero", "hero", "rage", "Szał", "class_feature:rage", 2)
+
+    result = resolve_hard_as_rock(
+        _state(brakka, replace(_actor(), id=ActorId("enemy"), faction=Faction.ENEMY)),
+        (rage_effect,), actor_id="hero", incoming_damage=8, die_roll=4,
+    )
+
+    assert (result.reduction, result.remaining_damage) == (7, 1)
+    assert ActorId("hero") in result.state.spent_reaction_actor_ids
+    assert result.actor_after.resource_pools[0].current == 0
+
+
+@pytest.mark.parametrize(
+    ("attacker_total", "defender_total", "distance"),
+    [(10, 10, 0), (11, 10, 5), (15, 10, 10), (40, 1, 30)],
+)
+def test_shoulder_check_distance_is_bounded_and_defender_wins_ties(
+    attacker_total, defender_total, distance,
+):
+    assert shoulder_check_push_distance(attacker_total, defender_total) == distance
 
 
 def test_pact_of_the_blade_creates_one_equipped_replaceable_weapon():

@@ -28,7 +28,7 @@
     "save_ability": "constitution",
     "save_damage_on_success": "half",
     "area": {
-      "shape": "cube",
+      "shape": "cone",
       "length_feet": 15,
       "width_feet": 15,
       "target_mode": "all_creatures"
@@ -40,7 +40,7 @@
     },
     "failed_save_push_feet": 10,
     "cast_flag": "cast_thunderwave",
-    "instructions": "Istoty w sześcianie 15 stóp wykonują Con save; 2k8 thunder i odepchnięcie 10 stóp, połowa bez odepchnięcia przy sukcesie.",
+    "instructions": "Istoty w stożku 15 stóp wykonują Con save; 2k8 thunder i odepchnięcie 10 stóp, połowa bez odepchnięcia przy sukcesie.",
     "resolution_mode": "automatic",
     "board_relevance": "direct"
   }

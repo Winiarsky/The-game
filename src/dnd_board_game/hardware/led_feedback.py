@@ -25,6 +25,9 @@ class LedRole(StrEnum):
     ENEMY_REGROUP_PATH = "enemy_regroup_path"
     ENEMY_GUARD_DESTINATION = "enemy_guard_destination"
     ACTOR_DEFEATED = "actor_defeated"
+    AREA_CENTER_RANGE = "area_center_range"
+    AREA_EFFECT = "area_effect"
+    AREA_ANCHOR = "area_anchor"
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,6 +73,9 @@ DEFAULT_COLORS: dict[LedRole, tuple[int, int, int]] = {
     LedRole.ENEMY_REGROUP_PATH: LedColor.ENEMY_REGROUP_PATH,
     LedRole.ENEMY_GUARD_DESTINATION: LedColor.ENEMY_GUARD_DESTINATION,
     LedRole.ACTOR_DEFEATED: LedColor.ACTOR_DEFEATED,
+    LedRole.AREA_CENTER_RANGE: LedColor.AREA_CENTER_RANGE,
+    LedRole.AREA_EFFECT: LedColor.AREA_EFFECT,
+    LedRole.AREA_ANCHOR: LedColor.AREA_ANCHOR,
 }
 
 
@@ -90,6 +96,9 @@ LED_ROLE_PRIORITY: dict[LedRole, int] = {
     LedRole.ENEMY_ESCAPE_DESTINATION: 52,
     LedRole.ENEMY_GUARD_DESTINATION: 52,
     LedRole.ACTOR_DEFEATED: 110,
+    LedRole.AREA_CENTER_RANGE: 10,
+    LedRole.AREA_EFFECT: 40,
+    LedRole.AREA_ANCHOR: 50,
 }
 
 

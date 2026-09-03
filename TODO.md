@@ -131,6 +131,7 @@ najbliższy horyzont, a nie kopię całej roadmapy.
 - [x] Add explicit equip/swap/drop weapon actions to the self-action equipment menu.
 - [x] Add geometric projectile cover and ranged-attack-in-melee disadvantage with visible combat previews.
 - [x] Add D&D 5e 2014 Hide/Search with per-observer detection, passive Perception, movement/attack reveal, and enemy Search.
+- [x] Replace Mira's interrogation flaw with session-scoped `Panika po zdemaskowaniu`: visible enemies gain `+2` to attack rolls until Mira ends stealth or every active enemy detects her.
 - [x] Add a shared combat condition state and D&D 5e 2014 Prone rules for movement, attacks, AI, UI, and snapshots.
 - [x] Complete the actor proficiency-profile vertical slice for skills, expertise, saves, weapons, armor, and tools.
 - [x] Add tool proficiency checks and a generic opposed-check resolver as groundwork for Grapple and Shove.
@@ -178,11 +179,35 @@ najbliższy horyzont, a nie kopię całej roadmapy.
 - [x] [Hardware scan reliability] Ignore delayed acknowledgements of the defensive
   pre-scan STOP while still honoring explicit scan cancellation, so a newly armed
   hardware scan cannot terminate before the player presses a field.
+- [x] [Hardware scan reliability] Release a cancelled serial scan locally without
+  requiring a firmware STOP acknowledgement, and wait for that request to finish
+  before the browser arms the next board revision.
+- [x] [Combat action preview responsiveness] Debounce Numpad action changes,
+  update the highlighted row optimistically, refresh LED previews without waiting
+  for the obsolete scan, tint action sections, and keep the 5×4 hero start zone whole.
+- [x] [Combat action list stability] Update only the selected action row during
+  Numpad preview changes and keep scrolling inside the list, avoiding full-screen
+  rerenders and page-level scroll flashes.
+- [x] [Enemy attack result acknowledgement] Keep hit, damage, HP and effect results
+  visible after board confirmation until the players explicitly acknowledge them.
+- [x] [Combat preview scan handoff] Keep Numpad preview changes optimistic, but wait
+  for the obsolete hardware scan to release its lock before arming the selected
+  movement or ranged-attack revision.
+- [x] [Board shutdown safety] Send the all-LEDs-off command and close the board
+  transport when the exploration runtime exits, including terminal Ctrl+C.
+- [x] [Area preview and scan lifecycle] Limit Spike Growth center placement to
+  50 feet, retain dim legal centers under the stronger selected spell area,
+  allow repeated repositioning before Enter, and centrally re-arm cancelled scans.
+- [x] [Combat action section order] Keep movement first, followed by weapon
+  attacks, hero abilities, spells, equipment, maneuvers and basic actions.
+- [x] [Black Ford aftermath] Keep the battlemap active after the Hungry Shadows,
+  reveal the wagon, tracks, Teren, young beast and route choice, gate departure
+  on their fail-forward outcomes, and provide a working Map 2 entry handoff.
+- [x] [Simple scenario continuation] Replace pace, navigator and travel-roll
+  selection with one fixed-duration handoff confirmation.
 - [x] Replace the fixed 2×4 hotspot grid with the visible continuation composer as soon
   as its board tile is selected, instead of hiding the composer below a clipped grid
   while board listening is intentionally paused.
-- [x] Make travel pace a three-tile board choice anchored beside the departure hotspot;
-  selecting fast, normal or slow pace advances directly to navigator selection.
 - [x] Show player-visible mechanical rules for every highlighted environment group
   during encounter setup, including difficult terrain, cover, blockers and interactions.
 - [x] Make universal ACCEPT trigger the sole visible forward action and replace
@@ -190,6 +215,12 @@ najbliższy horyzont, a nie kopię całej roadmapy.
 - [x] Add passive board focus for physically placed initiative/Stealth actors and exploration objects, without treating exploration party members or NPCs as separate board pieces.
 - [x] Move prepared-spell selection to the final initial-setup step before first-location selection.
 - [ ] UI-5: Validate the complete board-first UI vertical slice with `abandoned_watchtower` and the manual hardware checklist.
+- [ ] [Post-scenario control experiment] After completing the first target
+  scenario, playtest an optional LED-only board mode without figurine detection:
+  keep LEDs as spatial output, use the numpad/UI for declared positions and
+  confirmations, provide fast position correction, and compare reliability,
+  pace and player experience against the scanner-driven mode before deciding
+  whether detection remains required or becomes an optional enhancement.
 - [ ] P1: After the first target scenario, add the physical player-interface vertical
   slice: a player-maintained A4/A5 character sheet updated through level-up, printable
   illustrated decision cards with stable QR ids, a scanner input adapter, shared
@@ -232,6 +263,9 @@ najbliższy horyzont, a nie kopię całej roadmapy.
   - [ ] Extend hero-card participant declarations to any remaining combat/support
     prompts that still introduce a separate choice of acting hero.
 - [x] Fix the pre-combat Stealth transition renderer after encounter setup confirmation.
+- [x] Remove physical-card gating from the New Game launcher and restore on-screen party and scenario confirmation.
+- [x] Keep exploration numpad actions on stable board-backed numbers and restore readable, uncropped action tiles in the NPC workspace.
+- [x] Reserve Numpad 0 as the visible, stable shortcut for leaving an NPC conversation.
 - [x] Clarify rubble interaction targets, prioritize movement paths over object LEDs, and require visible acknowledgement of automatic enemy opportunity-attack results.
 - [x] Keep combat result acknowledgements inside the combat panel, name ranged-melee threats, clarify compound movement destinations, and surface defeated-enemy results.
 - [x] Keep the idle combat panel board-first by moving hero spells, common actions, equipment, and turn ending behind the active hero's board tile menu.
@@ -740,7 +774,9 @@ obowiązują `Current Roadmap Focus` oraz etapy z `ROADMAP.md`.
       briefing, checked knowledge, negotiation, quest activation, travel,
       same-session Map 1 handoff, encounter setup/initiative/checkpoint and
       victory-gated aftermath; publish its audit report and regression command.
-  - [ ] Replace the aftermath placeholder with the authored exploration points.
+  - [x] Replace the aftermath placeholder with same-map wagon and track
+    investigation, Teren aid/question/fate, young-beast choice, route selection
+    and a validated handoff to the Black Ford entry shell.
 - [x] [Physical card print synchronization] Regenerate all 12 character-set
   PDFs from the current phase/effect catalogue, omit removed cards, validate
   every QR/manifest/page count, and add individual plus combined toner-friendly
@@ -758,6 +794,10 @@ obowiązują `Current Roadmap Focus` oraz etapy z `ROADMAP.md`.
   location and instance navigation; keep all location markers lit, use repeated
   `A → A` selection to confirm entry, reserve one red system-exit pad beside at
   most seven authored actions, and block that exit during unresolved flow.
+- [x] [Hybrid board and numpad controls] Mirror exploration choices on numeric
+  keypad keys, navigate combat context actions with Numpad 8/2, Enter and minus,
+  keep the visible combat list compact with explicit overflow indicators, and
+  require repeated board selection for movement, hotspots and area anchors.
 - [x] [Exploration interaction input regression] Route the visible action button,
   Enter and `ACCEPT` through the same open-composer action; require explicit
   confirmation for automatic NPC goals, lock authored character moments to their
@@ -776,6 +816,10 @@ obowiązują `Current Roadmap Focus` oraz etapy z `ROADMAP.md`.
   navigator and physical-roll stages; show arrival/perception/stealth tradeoffs,
   preserve Natural Explorer and forced-march shortcuts, and make control cards
   advance or retreat one stage at a time.
+- [x] [Ostatni transport travel consequences] Turn the Guild departure into a
+  60-minute time-versus-readiness decision with authored pace explanations,
+  Survival navigation delay, distinct Hungry Shadows combat openings, and
+  persisted arrival-window/timing flags for later campaign maps.
 - [ ] [Physical card timing follow-up] Give 10-minute Prayer of Healing a
   dedicated encounter-time/long-cast presentation instead of resolving its
   already-tested multi-target healing immediately after confirmation, and
@@ -784,6 +828,91 @@ obowiązują `Current Roadmap Focus` oraz etapy z `ROADMAP.md`.
 - [x] Preserve dynamically granted area attacks (including Rhogar's Breath
   Weapon) in the combat preview payload so the player can explicitly confirm
   the attack or return to area selection before spending the action/resource.
+- [x] Replace the idle hero combat view with a persistent Numpad-driven action
+  mode list, movement-first LED previews, Enter-confirmed area placement that
+  retains legal anchors, Numpad 0 turn ending, and a 75-foot board range cap.
+- [x] Present spell-backed starter-deck actions under their hero archetype
+  groups (Taktyki, Dzikość, Fortele and Instynkt), label class actions as
+  special abilities, and keep attacks from duplicate weapon copies uniquely
+  selectable.
+- [x] Accelerate the Hungry Shadows encounter with a player-chosen 5×4
+  deployment zone, closer asymmetric enemy positions, flanker/harrier roles,
+  real approach-progress scoring, anti-dogpile prey memory and one board
+  confirmation for ordinary enemy turns; reduce ordinary Hungry Shadow Rend
+  damage to `1d4 + 2` for the coordinated-pack rebalance.
+- [x] Replace Hungry Shadows utility tactics with deterministic coordinated-pack
+  focus fire, per-support attack/damage bonuses, leader ranged/melee and deferred
+  healing, irreversible leader/follower retreat, illuminated escape targets,
+  zero-progress dead-loop guards, and removal of the obsolete old bell.
+- [x] Make targetless combat previews non-blocking: keep the active-hero LED
+  passive, stop automatic scanning when an attack or healing action has no legal
+  target, show an explicit player-facing explanation, move the action chooser
+  into a compact list/stats layout, and prevent Numpad minus from cancelling a
+  healing roll while its numeric input is focused.
+- [x] Rebuild Brakka around three per-long-rest Rages and a three-point
+  per-Rage Ferocity pool; replace Frenzy/Action Surge/Cunning Action and the
+  two pseudo-spells with Reckless Attack, Powerful Strike, Shoulder Check,
+  Hard as Rock, Acceleration and Deafening Roar, including board targeting,
+  reaction timing, critical-save riders and edge-case tests.
+- [x] Remove Danger Sense from Brakka's board-game archetype so her runtime
+  passive rules match the deliberately reduced printed passive set.
+- [x] Rebalance Dagna's starter kit: replace Warding Bond with Spiritual
+  Weapon, expose Life Domain healing in card text, use the 75-foot board range
+  for Guiding Bolt, hide Turn Undead without a legal target, and make her
+  rescue flaw grant enemy saves advantage against her hostile spells.
+- [x] Remove Dagna's non-playable Diagnosis feature, its card route and stale
+  authored scenario references while retaining ordinary Medicine checks.
+- [x] Rebalance Dagna's active spells: reduce Guiding Bolt to `2d6`, turn
+  Sacred Flame into a 15-foot enemy-only cone, make Aid expire at encounter
+  end, select Lesser Restoration conditions from actual target state, and
+  verify Spiritual Weapon as a targetable 1 HP / AC 18 blocking flanker with
+  owner-adjacent initiative.
+- [x] Remove Stonecunning and Shelter of the Faithful from Dagna's curated
+  board-game archetype and passive card while preserving her flaw.
+- [x] Rebuild Dagna around mobile combat support: make Bless a moving 10-foot
+  aura, replace Sanctuary with the 5-foot Divine Care attack/damage penalty
+  aura, replace Aid with the limited-use Healing Grace aura, add the
+  once-per-turn Field Medic Step prompt, dynamic actor statuses and optional
+  LED aura inspection, with action previews retaining display priority.
+- [x] Rebuild Garran as a stationary shield commander: make Action Surge spend
+  a bonus action, replace field healing with Shield Bash, make Defensive Stance
+  consume movement, add four Strength-scaled Tactics with board targeting and
+  one-shot protection redirection, replace Command Guilt with cumulative-wound
+  Remorse, remove Guard Duty/Military Rank, and cover edge cases and saves.
+- [x] Rebuild Erynd as a mobile ranged controller: replace swords and travel
+  passives with a Strength-based hunting knife, First Blood, Scout's Vigilance,
+  movement-cost Aim and four Instinct arrows; collect the physical d4/d8 rider
+  rolls, enforce ammunition/resources, statuses and expiry, allow free Hunter's
+  Mark transfer after defeat, and cover profile, scanner and edge-case tests.
+- [x] Make combat Hide unique to Mira with per-observer active Perception,
+  20/25-foot stealth movement, visibility LEDs, manual exit, observer-aware AI
+  targeting and accidental path-collision replanning; replace her shortbow with
+  15-foot throwing knives and stack flank/hidden damage as `+1d6/+2d6/+3d6`.
+- [x] Complete Mira's stealth-killer rebuild: Dexterity-scaled Fortels, ranged
+  AC, Instinctive Dodge and Smoke Screen, Hamstring/Piercing/Vault/Blade attacks,
+  persistent wound statuses, 45-foot combat trap detection, and retirement of
+  Break In plus the obsolete rogue/spell package, with edge-case tests.
+- [x] Rebuild Lorian as a social crossbow tactician: two-shot Crossbowman,
+  Mocking/Provoking shots, Inspiration-linked Counterpoint and Distracting
+  Shout reactions, narrow social expertise with one final Improvisation reroll,
+  Panic Whisper, Stage Command and Accelerated Refrain, including bounded AI
+  movement, silence fallbacks, bonus-action competition and edge-case tests.
+- [x] Recast Lorian as a bard-inventor: reusable optical, destabilizing,
+  provoking and entangling crossbow techniques; nearby-ally flaw; broad
+  non-combat Charisma expertise; short-rest Inspiration; and persisted
+  once-per-NPC Improvisation.
+- [x] Rebuild Nimra as a save-based area controller with an Intelligence-scaled
+  Metamagic pool, immediate board previews and atomic confirmation; add a
+  deterministic ally-risking Lightning Path chain and make Arcane Leak Echo
+  prevent repeating either the previous round's spell or Metamagic.
+- [x] Simplify the shared combat action surface to Move, weapon attacks,
+  character abilities/spells, Change Weapon, Use Item and End Turn; keep
+  retired actions as hidden legacy resolvers, move Dash/Disengage to Erynd,
+  Grapple to Brakka, auto-stand on movement, and collect victory loot into a
+  persisted shared party pool.
+- [x] Replace eager combat action previews with an explicit list/preview/selection
+  protocol: Numpad 2/8 navigates without LED churn, first Enter arms the preview,
+  board clicks only select, second Enter commits, and minus cancels without cost.
 
 - [x] UI framework: local Flask/web UI for the current runtime and future authoring modules.
 - [x] Content licensing/source strategy for D&D 5e data.

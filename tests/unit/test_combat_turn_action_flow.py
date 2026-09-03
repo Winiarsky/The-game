@@ -2,7 +2,17 @@ from dataclasses import replace
 
 import pytest
 
-from dnd_board_game.actors import AbilityScores, Actor, ActorId, Faction, ProficiencyProfile
+from dnd_board_game.actors import (
+    AbilityScores,
+    Actor,
+    ActorId,
+    ActorResourcePool,
+    Faction,
+    FeatureGrant,
+    FeatureSourceKind,
+    ProficiencyProfile,
+    RecoveryPeriod,
+)
 from dnd_board_game.application import CombatTurnActionFlowService
 from dnd_board_game.combat import (
     AttackSource,
@@ -15,6 +25,9 @@ from dnd_board_game.combat import (
     InitiativeOrder,
     start_combat,
     has_condition,
+    finish_turn,
+    movement_remaining,
+    resolve_smoke_screen,
 )
 from dnd_board_game.inventory import ArmorCategory, InventoryItem
 from dnd_board_game.rules import D20RollInput, D20RollRequest, resolve_d20_roll
@@ -49,6 +62,23 @@ def _state(*actors: Actor) -> CombatState:
         )
     )
     return start_combat(tuple(actors), order)
+
+
+def _mira(actor: Actor) -> Actor:
+    return replace(
+        actor,
+        id=ActorId("mira"),
+        name="Mira",
+        features=(
+            *actor.features,
+            FeatureGrant(
+                "mira_shadow_stealth",
+                "Mistrzyni ukrycia",
+                FeatureSourceKind.SCENARIO,
+                "boardgame_archetype:mira",
+            ),
+        ),
+    )
 
 
 def _source() -> AttackSource:
@@ -153,10 +183,11 @@ def test_ready_preparation_and_confirmation_create_trigger_effect() -> None:
 
 def test_hide_uses_action_and_preserves_per_observer_hidden_state() -> None:
     service = CombatTurnActionFlowService()
-    hero = replace(
+    hero = _mira(replace(
         _actor("hero", Faction.ALLY, Coordinate(0, 0)),
+        speed_feet=25,
         proficiencies=ProficiencyProfile(skills=("stealth",)),
-    )
+    ))
     goblin = _actor("goblin", Faction.ENEMY, Coordinate(4, 0))
     board = BoardState()
     board.set_terrain(Coordinate(2, 0), BLOCKING_TERRAIN)
@@ -175,6 +206,80 @@ def test_hide_uses_action_and_preserves_per_observer_hidden_state() -> None:
     assert hidden.state.turn_action.action_use.value == "action_used"
     assert hidden.state.hidden_states[0].hidden_from_actor_ids == ("goblin",)
     assert hidden.state.hidden_states[0].stealth_total == 16
+    assert movement_remaining(hidden.state, hero) == 20
+
+    after_twenty_feet = replace(
+        hidden.state,
+        turn_action=replace(hidden.state.turn_action, movement_used_feet=20),
+    )
+    assert movement_remaining(after_twenty_feet, hero) == 0
+
+    ended = service.end_hide(state=after_twenty_feet, active_effects=())
+    assert ended.state.hidden_states == ()
+    assert movement_remaining(ended.state, hero) == 5
+    assert ended.state.turn_action.action_use.value == "action_used"
+
+    adjacent_state = replace(
+        hidden.state,
+        actors=tuple(
+            replace(candidate, position=Coordinate(3, 0))
+            if candidate.id == hero.id
+            else candidate
+            for candidate in hidden.state.actors
+        ),
+    )
+    after_turn = finish_turn(adjacent_state)
+    assert after_turn.hidden_states == ()
+
+
+def test_smoke_screen_allows_fresh_hide_beside_enemy_after_action_was_spent() -> None:
+    service = CombatTurnActionFlowService()
+    base_mira = _mira(_actor("hero", Faction.ALLY, Coordinate(0, 0)))
+    mira = replace(
+        base_mira,
+        features=(
+            *base_mira.features,
+            FeatureGrant(
+                "smoke_screen",
+                "Zasłona dymna",
+                FeatureSourceKind.SCENARIO,
+                "boardgame_archetype:mira",
+            ),
+        ),
+        resource_pools=(
+            ActorResourcePool(
+                "trick_uses",
+                "Fortele",
+                2,
+                2,
+                RecoveryPeriod.LONG_REST,
+            ),
+        ),
+    )
+    goblin = _actor("goblin", Faction.ENEMY, Coordinate(1, 0))
+    state = _state(mira, goblin)
+    smoke = resolve_smoke_screen(state, ())
+
+    pending = service.prepare_hide(
+        state=smoke.state,
+        board=BoardState(),
+        active_effects=smoke.active_effects,
+    )
+    hidden = service.resolve_hide(
+        state=smoke.state,
+        board=BoardState(),
+        pending=pending,
+        natural_roll=20,
+        opposing_natural_rolls={"goblin": 20},
+        active_effects=smoke.active_effects,
+    )
+
+    assert hidden.state.turn_action.action_use.value == "action_used"
+    assert hidden.state.hidden_states[0].hidden_from_actor_ids == ("goblin",)
+    assert all(
+        effect.kind not in {"smoke_screen_hide_pending", "movement_speed_cap"}
+        for effect in hidden.active_effects
+    )
 
 
 def test_heavy_armor_applies_speed_penalty_and_requires_two_stealth_rolls() -> None:
@@ -191,12 +296,12 @@ def test_heavy_armor_applies_speed_penalty_and_requires_two_stealth_rolls() -> N
         stealth_disadvantage=True,
         armor_proficiency="heavy",
     )
-    hero = replace(
+    hero = _mira(replace(
         _actor("hero", Faction.ALLY, Coordinate(0, 0)),
         inventory=(armor,),
         ability_scores=AbilityScores(strength=12, dexterity=14),
         proficiencies=ProficiencyProfile(armor=("heavy",)),
-    )
+    ))
     goblin = _actor("goblin", Faction.ENEMY, Coordinate(4, 0))
     board = BoardState()
     board.set_terrain(Coordinate(2, 0), BLOCKING_TERRAIN)
@@ -224,6 +329,7 @@ def test_heavy_armor_applies_speed_penalty_and_requires_two_stealth_rolls() -> N
         active_effects=(),
     )
     assert hidden.state.hidden_states == ()
+    assert "automatycznie się kończy" in hidden.message_body
 
 
 def test_search_uses_action_and_reveals_hidden_enemy_to_searcher() -> None:
@@ -246,6 +352,64 @@ def test_search_uses_action_and_reveals_hidden_enemy_to_searcher() -> None:
     assert searched.state.turn_action.action_use.value == "action_used"
     assert searched.state.hidden_states == ()
     assert dict(searched.event_payload)["found_actor_ids"] == ["goblin"]
+
+
+def test_mira_combat_trap_detection_scans_45_feet_and_consumes_action() -> None:
+    service = CombatTurnActionFlowService()
+    base_mira = _mira(_actor("hero", Faction.ALLY, Coordinate(0, 0)))
+    mira = replace(
+        base_mira,
+        features=(
+            *base_mira.features,
+            FeatureGrant(
+                "combat_trap_detection",
+                "Wykrycie pułapek",
+                FeatureSourceKind.SCENARIO,
+                "boardgame_archetype:mira",
+            ),
+        ),
+    )
+    goblin = _actor("goblin", Faction.ENEMY, Coordinate(4, 0))
+    state = _state(mira, goblin)
+
+    pending = service.prepare_trap_detection(state=state)
+    resolved = service.resolve_trap_detection(
+        state=state,
+        pending=pending,
+        natural_roll=14,
+        natural_roll_2=None,
+        active_effects=(),
+    )
+
+    assert pending.action == "detect_traps"
+    assert resolved.state.turn_action.action_use.value == "action_used"
+    assert dict(resolved.event_payload)["radius_feet"] == 45
+    assert "obszar 45 stóp" in resolved.message_body
+
+
+def test_trap_detection_rejects_other_heroes_and_an_already_spent_action() -> None:
+    service = CombatTurnActionFlowService()
+    hero = _actor("hero", Faction.ALLY, Coordinate(0, 0))
+    goblin = _actor("goblin", Faction.ENEMY, Coordinate(4, 0))
+    with pytest.raises(ValueError, match="nie posiada"):
+        service.prepare_trap_detection(state=_state(hero, goblin))
+
+    base_mira = _mira(hero)
+    mira = replace(
+        base_mira,
+        features=(
+            *base_mira.features,
+            FeatureGrant(
+                "combat_trap_detection",
+                "Wykrycie pułapek",
+                FeatureSourceKind.SCENARIO,
+                "boardgame_archetype:mira",
+            ),
+        ),
+    )
+    spent = service.use_dodge(state=_state(mira, goblin), active_effects=()).state
+    with pytest.raises(ValueError, match="już zużyta"):
+        service.prepare_trap_detection(state=spent)
 
 
 def test_net_escape_uses_plain_strength_check_and_consumes_action() -> None:

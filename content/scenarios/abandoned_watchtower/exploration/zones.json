@@ -413,7 +413,6 @@
         {"id": "courtyard_tactical", "card_action_id": "tactical_assessment", "roll_mode": "advantage", "effects": [{"type": "set_flag", "parameters": {"key": "courtyard_kill_zones_known", "value": true}}], "message": "Garran oznacza martwe pola, osłony i możliwe stanowiska strzelców. Najbliższy test rozpoznania ma przewagę."},
         {"id": "courtyard_find_traps", "card_action_id": "find_traps", "effects": [{"type": "set_flag", "parameters": {"key": "courtyard_traps_scanned", "value": true}}], "message": "Erynd ujawnia wszystkie zaimplementowane pułapki w obrębie dziedzińca."},
         {"id": "courtyard_locate_object", "card_action_id": "locate_object", "effects": [{"type": "set_flag", "parameters": {"key": "hidden_cache_direction_known", "value": true}}], "message": "Znany rodzaj zapasów odpowiada z kierunku ukrytej skrytki; jej dokładne otwarcie nadal wymaga interakcji."},
-        {"id": "courtyard_diagnosis", "card_action_id": "diagnosis", "roll_mode": "advantage", "effects": [{"type": "set_flag", "parameters": {"key": "courtyard_medical_clues", "value": true}}], "message": "Dagna rozpoznaje charakter ran i ślady walki. Najbliższy powiązany test ma przewagę."},
         {"id": "courtyard_pass_without_trace", "card_action_id": "pass_without_trace", "effects": [{"type": "set_flag", "parameters": {"key": "watchtower_party_concealed", "value": true}}], "message": "Drużyna zaciera ślady i może przemieszczać się po ruinach bez pozostawiania łatwego tropu."}
       ],
       "positions": [

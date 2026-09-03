@@ -748,6 +748,20 @@ def test_combat_context_menu_confirm_route_forwards_loot_quantity() -> None:
     assert "całkowitą" in invalid.get_json()["error"]
 
 
+def test_combat_aura_preview_route_forwards_selected_effect_id() -> None:
+    session = _session()
+    session.set_combat_aura_preview = Mock(return_value=session.state_payload())
+    client = create_app(session).test_client()
+
+    response = client.post(
+        "/api/combat/aura-preview",
+        json={"aura_id": "bless-aura:dagna"},
+    )
+
+    assert response.status_code == 200
+    session.set_combat_aura_preview.assert_called_once_with("bless-aura:dagna")
+
+
 def test_concentration_routes_forward_cast_level_and_multiple_targets() -> None:
     session = _session()
     captured: dict[str, object] = {}
@@ -1288,8 +1302,7 @@ def test_exploration_goal_ui_selects_participants_before_sending_method() -> Non
     assert "check_participants: selectedCheckParticipants" in javascript
     assert "['no_actor', 'whole_party'].includes(selectedCheckParticipants)" in javascript
     assert "To wspólna decyzja drużyny. Wybór bohatera nie jest wymagany." in javascript
-    assert "Zeskanuj kartę prowadzącego" in javascript
-    assert "Wybór postaci nie ma ekranowego ani planszowego zamiennika." in javascript
+    assert "Wybierz numpadem postać, która wykona test." in javascript
     assert "Cała drużyna" in javascript
     assert 'id="goal-action"' in javascript
     assert "function sendGoalAction" in javascript
@@ -1390,10 +1403,24 @@ def test_interaction_workspace_splits_conversation_preview_and_eight_action_tile
     assert "'nessa_portrait.png': variant === 'preview' ? '50% 9%' : '50% 14%'" in javascript
     assert "selectedZoneOption || selected || continuationPanelOpen ? ''" in javascript
     assert "continuationPanelOpen ? 'Wymarsz drużyny'" in javascript
-    assert "boardPadFor('continuation_pace', option.id)" in javascript
-    assert "boardInteraction.selected_action_kind === 'continuation_pace'" in javascript
-    assert "continuationStep = continuationRequiresNavigator() ? 'navigator' : 'roll';" in javascript
-    assert "continuationPanelOpen && continuationStep !== 'pace'" in javascript
+    assert "simpleContinuationPanelHtml(continuation)" in javascript
+    assert "Nie wymaga wyboru tempa ani rzutu podróży." in javascript
+
+
+def test_interaction_goal_numpad_uses_stable_board_slots_and_readable_tiles() -> None:
+    html, javascript, stylesheet = _page_assets(_client())
+
+    assert 'data-numpad-key="0" onclick="leaveChatInstance()"' in html
+    assert "^Numpad[0-9]$" in javascript
+    assert "<kbd>0</kbd> zakończ rozmowę" in javascript
+    assert 'leaveButton.innerHTML = `<kbd aria-hidden="true">0</kbd>' in javascript
+    assert "numpadKey: /^[1-9]$/.test(stableSymbol)" in javascript
+    assert "occupiedGoalNumpadKeys" in javascript
+    assert "goalNumpadChoices.map(choice => choice.numpadKey)" in javascript
+    assert "body.interaction-grid-mode .interaction-numpad-choice" in stylesheet
+    assert "object-fit: contain" in stylesheet
+    assert "grid-template-columns: minmax(310px, 38fr) minmax(0, 62fr)" in stylesheet
+    assert "chat-instance-head .conversation-meta { display: none; }" in stylesheet
 
 
 def test_description_free_interaction_goals_skip_redundant_confirmation() -> None:
@@ -1573,7 +1600,7 @@ def test_exploration_ui_page_exposes_level_up_after_experience_reward():
 def test_exploration_ui_page_includes_short_rest_flow():
     client = _client()
 
-    html, javascript, _stylesheet = _page_assets(client)
+    html, javascript, stylesheet = _page_assets(client)
 
     assert 'id="short-rest-button"' not in html
     assert "'startShortRest()'" in javascript
@@ -1662,16 +1689,14 @@ def test_exploration_ui_page_is_fiction_first_and_accepts_questions():
     assert "/api/npc-transition/resolve" in javascript
     assert "/api/exploration/option" in javascript
     assert "boardChoiceToolbarHtml" in javascript
-    assert "function continuationPanelHtml" in javascript
-    assert "continuationStep === 'pace'" in javascript
-    assert "continuationStep === 'navigator'" in javascript
-    assert "continuationStep === 'roll'" in javascript
-    assert "function selectContinuationNavigator" in javascript
+    assert "function simpleContinuationPanelHtml" in javascript
     assert "function advanceContinuationStep" in javascript
     assert "function retreatContinuationStep" in javascript
     assert "if (continuationPanelOpen) return advanceContinuationStep();" in javascript
     assert "if (continuationPanelOpen) return retreatContinuationStep();" in javascript
-    assert "Dotarcie około" in javascript
+    assert "Przejście do kolejnej lokacji zajmie" in javascript
+    assert "api('/api/scenario/continue', {}, 'Przygotowuję kolejną lokację...')" in javascript
+    assert "Skutek podróży" in javascript
     assert "target_scenario_name" in javascript
     assert "Zdobyte i zabezpieczone rzeczy" in javascript
     assert "Rozpocznij ponownie" in javascript
@@ -1693,6 +1718,7 @@ def test_exploration_ui_page_is_fiction_first_and_accepts_questions():
     assert ".board-choice-toolbar" in stylesheet
     assert ".continuation-composer" in stylesheet
     assert ".continuation-pace-grid" in stylesheet
+    assert ".continuation-pace-consequences" in stylesheet
     assert ".continuation-navigator-grid" in stylesheet
     assert ".continuation-steps" in stylesheet
     assert "body.chat-instance-mode { height: 100vh; overflow: hidden; }" in stylesheet
@@ -1774,7 +1800,7 @@ def test_exploration_ui_page_and_api_include_scenario_end_lifecycle():
     assert response.get_json()["flow"]["stage"] == "scenario_complete"
 
 
-def test_scenario_continue_api_forwards_travel_choices_and_physical_rolls():
+def test_scenario_continue_api_ignores_legacy_travel_choices():
     session = Mock()
     session.continue_scenario.return_value = {"ok": True}
     client = create_app(session).test_client()
@@ -1793,14 +1819,7 @@ def test_scenario_continue_api_forwards_travel_choices_and_physical_rolls():
 
     assert response.status_code == 200
     assert response.get_json() == {"ok": True}
-    session.continue_scenario.assert_called_once_with(
-        pace="slow",
-        navigator_actor_id="hero",
-        navigation_roll={"natural_roll": 14, "natural_roll_2": 8},
-        forced_march_rolls={
-            "hero": [{"natural_roll": 12, "natural_roll_2": 4}],
-        },
-    )
+    session.continue_scenario.assert_called_once_with()
 
 
 def test_exploration_ui_short_rest_api_advances_time_and_returns_to_exploration():
@@ -1861,10 +1880,10 @@ def test_exploration_ui_long_rest_api_is_content_gated_and_advances_eight_hours(
 def test_exploration_ui_page_includes_gm_decision_correction_controls():
     client = _client()
 
-    html, javascript, _stylesheet = _page_assets(client)
+    html, javascript, stylesheet = _page_assets(client)
 
     assert (
-        '<script src="/static/exploration.js?v=card-components-20260816-1"></script>'
+        '<script src="/static/exploration.js?v=combat-two-stage-20260903-1"></script>'
         in html
     )
     assert "Popraw decyzję MG" in javascript
@@ -1873,6 +1892,42 @@ def test_exploration_ui_page_includes_gm_decision_correction_controls():
     assert "Mechanika pól" in javascript
     assert "decisionCorrectionHtml" in javascript
     assert "correction-roll-mode" in javascript
+    assert "event.code === 'Numpad2'" in javascript
+    assert "event.code === 'Numpad8'" in javascript
+    assert "event.code === 'NumpadSubtract'" in javascript
+    assert "event.code === 'NumpadSubtract'\n    && !typing" in javascript
+    assert "event.code === 'NumpadEnter'" in javascript
+    assert "event.code === 'Numpad0'" not in javascript
+    assert "/api/combat/turn-actions/select" in javascript
+    assert "flushCombatTurnActionMove" in javascript
+    assert "applyOptimisticCombatTurnActionDelta" in javascript
+    assert "updateCombatTurnActionSelectionDom" in javascript
+    assert "data-action-index" in javascript
+    assert ".combat-turn-action.selected')?.scrollIntoView" not in javascript
+    assert "const obsoleteScanStop = boardScanInFlight" not in javascript
+    assert "await obsoleteScanStop" not in javascript
+    assert "settleCombatTurnActionMove" in javascript
+    assert "selected_option_id || ''" in javascript
+    assert "combatTurnActionMoveInFlight || combatTurnActionMoveTimer" in javascript
+    assert "/api/combat/turn-actions/confirm" in javascript
+    assert "/api/combat/turn-actions/cancel-preview" in javascript
+    assert "/api/combat/item-target/confirm" in javascript
+    assert "/api/combat/class-feature/targeting/confirm" in javascript
+    assert "/api/combat/pending-board-selection/confirm" in javascript
+    assert "/api/combat/aura-preview" in javascript
+    assert "Pokaż zasięg" in javascript
+    assert ".combat-aura-row" in stylesheet
+    assert "option.group_label || combatMenuCategoryLabel" in javascript
+    assert "combat-turn-command-layout" in javascript
+    assert "combatTurnActorStatsHtml" in javascript
+    assert "Ta akcja jest teraz niedostępna" in javascript
+    assert 'id="combat-healing-roll"' in javascript
+    assert "autofocus" in javascript
+    assert ".combat-turn-command-layout" in stylesheet
+    assert ".combat-turn-actor-stats" in stylesheet
+    assert ".combat-action-unavailable" in stylesheet
+    assert "data-numpad-key" in javascript
+    assert "potwierdź aktualny podgląd Enterem" in javascript
     assert "correction-resource" in javascript
     assert "Zasób sceny" in javascript
     assert "zostanie zużyty po rzucie" in javascript
@@ -1999,6 +2054,9 @@ def test_exploration_ui_combat_turn_controls_remain_available_during_board_scan(
     assert "boardSelectionCanAutoArm" in html
     assert "boardSelectionStatusHtml" in html
     assert "boardScanInFlight" in html
+    assert "boardScanPromise" in html
+    assert "await pendingScan" in html
+    assert "lastAttemptedBoardRevision = '';" in html
     assert "boardScanToken" in html
     assert "stopBoardScanLoop()" in html
     assert "lastAttemptedBoardRevision" in html
@@ -2044,6 +2102,11 @@ def test_exploration_ui_combat_turn_controls_remain_available_during_board_scan(
     assert "damageComponentPayload(pending, 'ready-damage')" in html
     assert "useCombatDash()" in html
     assert "useCombatDodge()" in html
+    assert "useInstinctiveDodgeReaction()" in html
+    assert "skipInstinctiveDodgeReaction()" in html
+    assert "/api/combat/instinctive-dodge/use" in html
+    assert "/api/combat/instinctive-dodge/skip" in html
+    assert "Premia +2 ze skazy nadal obowiązuje" in html
     assert "useCombatDisengage()" in html
     assert "startCombatHelp()" in html
     assert "confirmCombatHelp()" in html
@@ -2073,7 +2136,7 @@ def test_exploration_ui_combat_turn_controls_remain_available_during_board_scan(
     assert "Przeciwnik nie musi być celem tego ataku" in html
     assert "PRZECIWNIK POKONANY" in html
     assert "Boolean(resultAck) && !state.combat" in html
-    assert "resultAck ? '' : combatMainPromptHtml" in html
+    assert "resultAck || actionMenuStep ? '' : combatMainPromptHtml" in html
     assert "phase === 'result' && !resultAck" in html
     assert "enemyRollSummaryHtml" in html
     assert "enemyTurnIntentHtml" in html
@@ -2314,7 +2377,7 @@ def test_duplicate_board_scan_is_ignored_while_previous_scan_owns_hardware():
 
 def test_gate_board_scan_selects_goal_and_records_activated_tile():
     session = _session()
-    board = FakeBoardConnection(clicks=[(6, 1), (8, 1), (10, 1)])
+    board = FakeBoardConnection(clicks=[(6, 1), (12, 3), (10, 4)])
     session.attach_board_connection(board, backend="simulator")
     client = create_app(session).test_client()
 
@@ -2324,8 +2387,8 @@ def test_gate_board_scan_selects_goal_and_records_activated_tile():
         for pad in interaction["pads"]
     ] == [
         ([6, 1], "force_entry"),
-        ([8, 1], "open_lock"),
-        ([10, 1], "look_around"),
+        ([12, 3], "open_lock"),
+        ([10, 4], "look_around"),
         ([6, 3], "gate"),
     ]
 
@@ -3118,7 +3181,16 @@ def test_exploration_ui_happy_path_returns_to_player_after_enemy_turns():
     assert moved["combat"]["movement"]["remaining_feet"] == 25
     assert moved["combat"]["turn_action"]["action_use"] == "action_available"
 
-    target = moved["combat"]["legal_targets"][0]
+    attack_option = next(
+        option
+        for option in moved["combat"]["turn_action_menu"]["options"]
+        if option["action"] == "select_attack_source"
+    )
+    targeting = client.post(
+        "/api/combat/turn-actions/confirm",
+        json={"option_id": attack_option["id"]},
+    ).get_json()
+    target = targeting["combat"]["legal_targets"][0]
     selected = client.post(
         "/api/board/select",
         json={"col": target["position"][0], "row": target["position"][1]},

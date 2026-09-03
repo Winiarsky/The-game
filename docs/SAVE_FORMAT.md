@@ -30,10 +30,10 @@ zapisuje ogólne opcje klasowe (`selected_class_option_ids`). Wersja v7 dodaje
 wybrane narzędzia i języki backgroundu. Migracje uzupełniają starsze dokumenty
 deterministycznymi, kompatybilnymi wyborami.
 
-## Zakres v31
+## Zakres v33
 
 Snapshot sesji używa identyfikatora schematu `dnd_board_game.session` i pola
-`schema_version: 31`. Zapis obejmuje mechaniczny stan potrzebny do deterministycznego
+`schema_version: 33`. Zapis obejmuje mechaniczny stan potrzebny do deterministycznego
 wznowienia scenariusza:
 
 - kontrakt contentu: schemat scenariusza, jego wersję, ruleset i wymagane source packi,
@@ -43,9 +43,12 @@ wznowienia scenariusza:
 - pozycję drużyny, flagi, widoczność punktów, postęp wyzwań, czas i odpoczynki,
 - aktywne czasowe efekty magii eksploracyjnej wraz z czarem, aktorem, flagą,
   minutą rozpoczęcia i opcjonalną minutą wygaśnięcia,
-- aktywne efekty wraz ze źródłem, poziomem źródłowego czaru, czasem trwania i regułą stackowania,
+- aktywne efekty wraz ze źródłem, poziomem źródłowego czaru, czasem trwania,
+  regułą stackowania oraz opcjonalnym promieniem aury, kością premii,
+  modyfikatorem, limitem użyć i licznikiem pozostałych rund,
 - oczekujący encounter oraz opcjonalny stan aktywnej walki,
-- kolejność inicjatywy, rundę, bieżącą turę, ekonomię akcji, darmową interakcję z obiektem i zużyte reakcje,
+- kolejność inicjatywy, rundę, bieżącą turę, ekonomię akcji, darmową interakcję
+  z obiektem, dostępność darmowej zmiany broni i zużyte reakcje,
 - ograniczenie czaru rzucanego akcją bonusową oraz informację o poziomowym
   czarze rzuconym akcją w bieżącej turze,
 - rozdzielenie zwykłego darkvision od widzenia w magicznej ciemności
@@ -56,6 +59,8 @@ wznowienia scenariusza:
   definicją statystyk/ataku potrzebną do wznowienia dynamicznego aktora,
 - broń upuszczoną podczas aktywnej walki wraz z polem, właścicielem źródłowym i rundą,
 - rejestr wystrzelonej amunicji oraz pozostałe stosy łupu pola walki,
+- trwałą wspólną pulę łupu drużyny, do której automatycznie trafiają przenośne
+  przedmioty i monety pokonanych przeciwników po zwycięskiej walce,
 - bieżący towar, portfel i procent odkupu każdego kupca,
 - wynik Stealth oraz listę obserwatorów, przed którymi każdy aktor pozostaje ukryty,
 - jawne stany warunków walki przypisane do aktorów wraz ze źródłem, czasem trwania
@@ -140,12 +145,18 @@ aktualnego contentu i odrzuca zapis, jeśli nie można go jednoznacznie odtworzy
 - Migracja `v26 -> v27` nadaje starszym aktorom domyślny typ `humanoid`.
 - Migracja `v27 -> v28` dodaje opcjonalne mapowanie wrodzonych czarów na ich
   zasoby odnawiane podczas odpoczynku.
+- Migracja `v31 -> v32` zachowuje starsze efekty z bezpiecznymi wartościami
+  domyślnymi pól aur; nowe efekty zapisują geometrię, licznik rund i limity
+  aktywacji.
+- Migracja `v32 -> v33` dodaje pustą wspólną pulę łupu drużyny. Brak pola
+  `weapon_change_available` w stanie tury oznacza, że darmowa zmiana broni jest
+  jeszcze dostępna.
   Nowe zapisy utrwalają `creature_type`, potrzebny m.in. Turn Undead,
   Favored Enemy i pełnemu efektowi Chill Touch.
 - Migracje są wykonywane kolejno, bez pomijania wersji, przed budową modeli domeny.
 - Migracja nie może uruchamiać odpoczynku, losowania, sprzętu, Flask ani LLM.
 
-Snapshot v28 jest zapisem pojedynczego scenariusza. Stan drużyny pomiędzy
+Snapshot v33 jest zapisem pojedynczego scenariusza. Stan drużyny pomiędzy
 scenariuszami, kampania i migracje rzeczywistych starszych formatów należą do M9.
 Sekcja eksploracji zapisuje również opcjonalne `temporary_items`: przedmioty
 zbudowane z materiałów sceny, wraz z pozostałą liczbą użyć, źródłowymi materiałami
@@ -253,6 +264,10 @@ Każdy wpis `resource_pools` zapisuje bieżącą i maksymalną wartość oraz re
 Opcjonalny obiekt `recharge` zawiera `die_sides` i `minimum_roll`; brak tego pola
 oznacza zasób bez recharge i zachowuje zgodność ze starszymi snapshotami v1.
 
+Aktywny efekt obszarowy może zapisywać `excluded_positions`: pola wycięte z
+obszaru przez Rzeźbienie pola Nimry. Brak listy oznacza zwykły, pełny obszar;
+zapisane wycięcia pozostają nieaktywne przez cały czas życia strefy.
+
 Aktor może zapisywać listę `features`. Snapshot przechowuje grant cechy: stabilne
 `feature_id`, etykietę, opis, `source_kind`, `source_ref` oraz identyfikatory
 przyznanych zasobów, akcji, triggerów i aur. Definicje mechaniki pozostają w
@@ -264,6 +279,8 @@ scenariusza. Wpis zawiera `npc_id`, nastawienie, stan fizyczny i emocjonalny,
 ujawnione informacje, wykorzystane próby oraz uporządkowaną historię ważnych
 zdarzeń relacji. Brak pola w starszym snapshotcie v1 odtwarza stan początkowy z
 contentu. Nieznane NPC albo identyfikatory informacji powodują odrzucenie zapisu.
+Pole `used_feature_ids` przechowuje jednorazowe zdolności zużyte wobec tego NPC,
+np. `lorian:improvisation`; brak pola w starszym zapisie oznacza pustą listę.
 Zdarzenie powstałe po rzucie może zawierać `attempt_id`, używany do liczenia
 contentowych limitów prób. Starsze zdarzenie bez tego pola korzysta z
 `used_attempt_ids` jako zgodnego wstecznie potwierdzenia co najmniej jednej próby.

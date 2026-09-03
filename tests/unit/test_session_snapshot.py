@@ -54,6 +54,8 @@ from dnd_board_game.exploration import (
     NpcAttemptPolicy,
     NpcStateUpdate,
     npc_runtime_state_for,
+    npc_feature_used,
+    mark_npc_feature_used,
     plan_npc_attempt,
     plan_npc_transition,
     resolve_npc_runtime_interaction,
@@ -72,6 +74,7 @@ from dnd_board_game.inventory import (
     LightSource,
     SpellcastingFocusKind,
 )
+from dnd_board_game.inventory.economy import CurrencyWallet
 from dnd_board_game.save import (
     SNAPSHOT_SCHEMA_VERSION,
     SessionSnapshot,
@@ -176,6 +179,34 @@ def test_snapshot_json_round_trip_is_deterministic(tmp_path):
     )
     assert ritual.exploration_effect is not None
     assert ritual.exploration_effect.flag_key == "comprehend_languages_active"
+
+
+def test_snapshot_round_trip_preserves_shared_party_loot(tmp_path):
+    session = _session(tmp_path)
+    session.state = replace(
+        session.state,
+        party_loot=LootBundle(
+            "party_stash",
+            "Łup drużyny",
+            items=(
+                InventoryItem(
+                    "actor:goblin:knife",
+                    "Nóż goblina",
+                    "weapon",
+                    equipped=False,
+                    hands_required=1,
+                ),
+            ),
+            currency=CurrencyWallet(sp=4),
+        ),
+    )
+
+    restored = SessionSnapshot.from_dict(
+        session.create_snapshot().as_dict(),
+        base_state=session.state,
+    )
+
+    assert restored.exploration_state.party_loot == session.state.party_loot
 
 
 def test_stable_checkpoint_writes_reloadable_snapshot_and_records_reason(tmp_path):
@@ -349,6 +380,11 @@ def test_snapshot_v18_round_trip_preserves_dispellable_spell_level(tmp_path):
         ),
         duration=EffectDuration.CONCENTRATION,
         spell_level=3,
+        radius_feet=10,
+        die_sides=8,
+        modifier=4,
+        uses_maximum=4,
+        remaining_rounds=3,
     )
     session.active_combat_effects = (effect,)
 
@@ -359,6 +395,25 @@ def test_snapshot_v18_round_trip_preserves_dispellable_spell_level(tmp_path):
 
     assert restored.active_effects == (effect,)
     assert restored.active_effects[0].spell_level == 3
+    assert restored.active_effects[0].radius_feet == 10
+    assert restored.active_effects[0].uses_maximum == 4
+
+
+def test_snapshot_v31_migrates_spell_aura_fields_to_safe_defaults(tmp_path):
+    session = _session(tmp_path)
+    raw = session.create_snapshot().as_dict()
+    raw["schema_version"] = 31
+    for effect in raw["active_effects"]:
+        effect.pop("radius_feet", None)
+        effect.pop("die_sides", None)
+        effect.pop("modifier", None)
+        effect.pop("uses_maximum", None)
+        effect.pop("remaining_rounds", None)
+
+    restored = SessionSnapshot.from_dict(raw, base_state=session.state)
+
+    assert restored.as_dict()["schema_version"] == SNAPSHOT_SCHEMA_VERSION
+    assert all(effect.radius_feet == 0 for effect in restored.active_effects)
 
 
 def test_snapshot_v19_migrates_actor_senses_and_v20_round_trip_preserves_them(
@@ -406,6 +461,21 @@ def test_snapshot_v20_migrates_empty_exploration_hiding_state(tmp_path):
 
 def test_snapshot_v21_round_trip_preserves_exploration_hiding_state(tmp_path):
     session = _session(tmp_path)
+    rogue = next(actor for actor in session.exploration.actors if str(actor.id) == "rogue")
+    session.exploration = session._replace_exploration_actor(
+        replace(
+            rogue,
+            features=(
+                *rogue.features,
+                FeatureGrant(
+                    "mira_shadow_stealth",
+                    "Mistrzyni ukrycia",
+                    FeatureSourceKind.SCENARIO,
+                    "test:mira",
+                ),
+            ),
+        )
+    )
     session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
     session.start_exploration_hide("rogue")
     session.resolve_rolls({"rogue": 15})
@@ -1136,6 +1206,26 @@ def test_snapshot_round_trip_preserves_npc_runtime_state(tmp_path):
     assert npc.relationship_events[0].attempt_id == "medical"
 
 
+def test_snapshot_round_trip_preserves_lorian_improvisation_used_per_npc(tmp_path):
+    session = _session(tmp_path)
+    session.state = mark_npc_feature_used(
+        session.state,
+        npc_id="wounded_scout",
+        feature_id="lorian:improvisation",
+    )
+
+    restored = SessionSnapshot.from_dict(
+        session.create_snapshot().as_dict(),
+        base_state=session.state,
+    )
+
+    assert npc_feature_used(
+        restored.exploration_state,
+        npc_id="wounded_scout",
+        feature_id="lorian:improvisation",
+    )
+
+
 def test_older_snapshot_without_npc_states_uses_content_defaults(tmp_path):
     session = _session(tmp_path)
     raw = session.create_snapshot().as_dict()
@@ -1268,6 +1358,7 @@ def test_snapshot_round_trip_preserves_skill_profile_and_combat_hidden_state(tmp
             attack_action_active=True,
             attacks_used=1,
             attacks_maximum=2,
+            weapon_change_available=False,
         ),
         hidden_states=(HiddenState("hero", 21, ("goblin_a", "goblin_b")),),
         condition_states=(
@@ -1328,6 +1419,7 @@ def test_snapshot_round_trip_preserves_skill_profile_and_combat_hidden_state(tmp
     assert restored.combat_state.turn_action.attack_action_active is True
     assert restored.combat_state.turn_action.attacks_used == 1
     assert restored.combat_state.turn_action.attacks_maximum == 2
+    assert restored.combat_state.turn_action.weapon_change_available is False
     assert restored.combat_state.hidden_states == (
         HiddenState("hero", 21, ("goblin_a", "goblin_b")),
     )

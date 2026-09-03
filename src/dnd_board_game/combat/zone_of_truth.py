@@ -24,6 +24,7 @@ def zone_of_truth_contains(effect: ActiveEffect, position: Coordinate) -> bool:
     return (
         effect.kind == "zone_of_truth_zone"
         and effect.anchor_position is not None
+        and position not in effect.excluded_positions
         and grid_distance_feet(effect.anchor_position, position) <= effect.value
     )
 

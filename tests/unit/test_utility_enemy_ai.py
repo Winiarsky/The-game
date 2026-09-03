@@ -3,14 +3,13 @@ from random import Random
 
 import pytest
 
-from dnd_board_game.actors import Faction
+from dnd_board_game.actors import ActorId, Faction
 from dnd_board_game.application import CombatTurnFinalizationService
 from dnd_board_game.combat import (
     CombatStatus,
     InitiativeEntry,
     InitiativeOrder,
     combat_winner,
-    apply_combat_interaction_effects,
     initialize_enemy_ai,
     plan_utility_enemy_turn,
     refresh_pack_morale,
@@ -218,41 +217,86 @@ def test_same_seed_and_state_produce_same_utility_decision() -> None:
     assert first.movement_path == second.movement_path
 
 
-def test_old_bell_spends_its_morale_event_only_once() -> None:
+def test_advancing_shadow_scores_real_progress_toward_distant_hero() -> None:
+    encounter = _encounter(1)
+    profile = encounter.enemy_ai_profile
+    assert profile is not None
+    source_enemy = next(actor for actor in encounter.actors if actor.faction == Faction.ENEMY)
+    source_hero = next(actor for actor in encounter.actors if actor.faction == Faction.ALLY)
+    enemy = replace(source_enemy, position=Coordinate(0, 0))
+    hero = replace(source_hero, position=Coordinate(10, 0))
+    state = initialize_enemy_ai(
+        _state(enemy, hero),
+        profile_id=profile.id,
+        starting_morale=1,
+        encounter_seed=9,
+    )
+
+    plan = plan_utility_enemy_turn(
+        BoardState(),
+        state,
+        enemy,
+        encounter.attack_sources_by_actor[source_enemy.id],
+        profile=profile,
+        role_id="skirmisher",
+        actor_roles={str(enemy.id): "skirmisher"},
+        escape_positions=(Coordinate(0, 10),),
+    )
+
+    assert plan.intent == "advance"
+    assert plan.movement_path is not None
+    assert plan.movement_path.destination != enemy.position
+    assert dict(plan.utility_breakdown)["distance_progress"] > 0
+
+
+def test_pack_pressure_moves_third_shadow_to_an_unsaturated_target() -> None:
+    encounter = _encounter(1)
+    profile = encounter.enemy_ai_profile
+    assert profile is not None
+    source_enemy = next(actor for actor in encounter.actors if actor.faction == Faction.ENEMY)
+    source_hero = next(actor for actor in encounter.actors if actor.faction == Faction.ALLY)
+    enemy = replace(source_enemy, position=Coordinate(1, 1))
+    first_hero = replace(source_hero, id=ActorId("first_hero"), position=Coordinate(1, 2))
+    second_hero = replace(source_hero, id=ActorId("second_hero"), position=Coordinate(2, 1))
+    state = initialize_enemy_ai(
+        _state(enemy, first_hero),
+        profile_id=profile.id,
+        starting_morale=1,
+        encounter_seed=12,
+    )
+    state = replace(
+        state,
+        actors=(enemy, first_hero, second_hero),
+        enemy_ai=replace(
+            state.enemy_ai,
+            previous_targets=(
+                ("pack_a", str(first_hero.id)),
+                ("pack_b", str(first_hero.id)),
+            ),
+        ),
+    )
+
+    plan = plan_utility_enemy_turn(
+        BoardState(),
+        state,
+        enemy,
+        encounter.attack_sources_by_actor[source_enemy.id],
+        profile=profile,
+        role_id="skirmisher",
+        actor_roles={str(enemy.id): "skirmisher"},
+        escape_positions=(Coordinate(0, 10),),
+    )
+
+    assert plan.target is not None
+    assert plan.target.id == str(second_hero.id)
+
+
+def test_obsolete_old_bell_and_its_morale_event_are_removed() -> None:
     encounter = _encounter(3)
     profile = encounter.enemy_ai_profile
     assert profile is not None
-    enemy = next(actor for actor in encounter.actors if actor.faction == Faction.ENEMY)
-    source_hero = next(actor for actor in encounter.actors if actor.faction == Faction.ALLY)
-    hero = replace(source_hero, position=Coordinate(16, 3))
-    state = initialize_enemy_ai(
-        _state(hero, enemy),
-        profile_id=profile.id,
-        starting_morale=3,
-    )
-    bell = next(item for item in encounter.scene_objects if item.id == "old_bell")
-    interaction = bell.interactions[0]
-
-    first = apply_combat_interaction_effects(
-        state=state,
-        actor=hero,
-        scene_object=bell,
-        interaction=interaction,
-        target_position=bell.primary_position,
-        active_effects=(),
-    )
-    second = apply_combat_interaction_effects(
-        state=first.state,
-        actor=hero,
-        scene_object=bell,
-        interaction=interaction,
-        target_position=bell.primary_position,
-        active_effects=(),
-    )
-
-    assert first.state.enemy_ai.morale == 1
-    assert second.state.enemy_ai.morale == 1
-    assert second.state.enemy_ai.used_morale_events == ("old_bell_rung",)
+    assert all(item.id != "old_bell" for item in encounter.scene_objects)
+    assert all(event.event_id != "old_bell_rung" for event in profile.morale_events)
 
 
 @pytest.mark.parametrize("intent", ("guard", "regroup"))

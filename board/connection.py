@@ -41,6 +41,10 @@ class _BoardScanResponseTimeout(TimeoutError):
     pass
 
 
+class _BoardScanCancelled(RuntimeError):
+    pass
+
+
 class _BoardSerialError(RuntimeError):
     pass
 
@@ -475,7 +479,12 @@ class _HardwareBackend:
         self.ser = self.port_result.serial_handle
         self.serial_port = self.port_result.port
 
-    def _read_protocol_payload(self, *, timeout_s: float | None = None) -> dict[str, Any]:
+    def _read_protocol_payload(
+        self,
+        *,
+        timeout_s: float | None = None,
+        cancel_generation: int | None = None,
+    ) -> dict[str, Any]:
         started_at = time.monotonic()
         deadline = None if timeout_s is None else (started_at + timeout_s)
         idle_deadline = (
@@ -484,6 +493,11 @@ class _HardwareBackend:
             else None
         )
         while deadline is None or time.monotonic() < deadline:
+            if (
+                cancel_generation is not None
+                and getattr(self, "_cancel_generation", 0) != cancel_generation
+            ):
+                raise _BoardScanCancelled
             now = time.monotonic()
             if idle_deadline is not None and now >= idle_deadline:
                 raise _BoardScanIdleTimeout("Brak odpowiedzi z planszy podczas aktywnego skanu.")
@@ -491,6 +505,11 @@ class _HardwareBackend:
                 raw = self.ser.readline().decode("utf-8", errors="replace").strip()
             except Exception as exc:
                 raise _BoardSerialError(f"Błąd odczytu z portu planszy: {exc}") from exc
+            if (
+                cancel_generation is not None
+                and getattr(self, "_cancel_generation", 0) != cancel_generation
+            ):
+                raise _BoardScanCancelled
             if not raw:
                 continue
             if idle_deadline is not None:
@@ -523,7 +542,12 @@ class _HardwareBackend:
                 if remaining is not None and remaining <= 0:
                     raise TimeoutError("Timeout oczekiwania na wybór pola na planszy.")
                 try:
-                    payload = self._read_protocol_payload(timeout_s=remaining)
+                    payload = self._read_protocol_payload(
+                        timeout_s=remaining,
+                        cancel_generation=cancel_generation,
+                    )
+                except _BoardScanCancelled:
+                    return None
                 except _BoardScanIdleTimeout:
                     logger.warning(
                         "Skan planszy nie zwrócił żadnych danych przez %.1fs; resetuję skan i ponawiam.",

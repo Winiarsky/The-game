@@ -28,6 +28,7 @@ from dnd_board_game.combat import (
     ReactionKind,
     ReactionOption,
     apply_damage_result,
+    attack_source_with_exposed_mira_bonus,
     advance_reaction_window,
     attack_source_with_target_combat_effects,
     attack_source_with_hidden_advantage,
@@ -77,6 +78,7 @@ from dnd_board_game.inventory import (
     has_ammunition,
 )
 from dnd_board_game.world import BoardState, PathResult, line_of_sight_clear
+from dnd_board_game.combat.lorian_features import require_lorian_audience
 
 from .damage_presentation import applied_damage_message
 
@@ -328,6 +330,17 @@ class CuttingWordsReactionResolution:
 
 
 @dataclass(frozen=True, slots=True)
+class DistractingShoutReactionResolution:
+    state: CombatState
+    result: EnemyAutoTurnResult
+    die_roll: int
+    reduction: int
+    damage_before: int
+    damage_after: int
+    message: str
+
+
+@dataclass(frozen=True, slots=True)
 class DeflectMissilesReactionResolution:
     state: CombatState
     result: EnemyAutoTurnResult
@@ -385,10 +398,144 @@ class ClassFeatureReactionFlowService:
             if actor.faction != enemy.faction
             and not actor.is_defeated()
             and actor_has_feature(actor, "cutting_words")
-            and can_spend_actor_resource(actor, "bardic_inspiration_uses")
+            and _lorian_audience_available(
+                actor,
+                state.actors,
+                "cutting_words",
+                condition_states=state.condition_states,
+            )
             and reaction_available_for(state, actor)
             and grid_distance_feet(actor.position, enemy.position) <= 60
             and line_of_sight_clear(board, actor.position, enemy.position)
+        )
+
+    def distracting_shout_options(
+        self,
+        *,
+        board: BoardState,
+        state: CombatState,
+        active_effects: tuple[ActiveCombatEffect, ...],
+        enemy_result: EnemyAutoTurnResult,
+    ) -> tuple[ReactionOption, ...]:
+        """Offer the shout only for direct attack damage to an inspired ally."""
+
+        target = enemy_result.target
+        if (
+            target is None
+            or enemy_result.damage is None
+            or enemy_result.damage.total_before_reduction <= 0
+            or enemy_result.attack_resolution is None
+            or not enemy_result.attack_resolution.hit
+        ):
+            return ()
+        target_actor = _actor_by_string_id(state, target.id)
+        enemy = _actor_by_string_id(state, str(enemy_result.enemy.id))
+        return tuple(
+            ReactionOption(
+                id=f"distracting-shout:{bard.id}:{target_actor.id}",
+                kind=ReactionKind.DISTRACTING_SHOUT,
+                reactor_actor_id=str(bard.id),
+                target_actor_id=str(target_actor.id),
+                trigger_event=CombatResolutionStage.DAMAGE_ROLL_REVEALED.value,
+                effect_id="distracting_shout",
+                label="Rozpraszający okrzyk",
+                value=6,
+            )
+            for bard in state.actors
+            if bard.faction == target_actor.faction
+            and bard.id != target_actor.id
+            and not bard.is_defeated()
+            and actor_has_feature(bard, "distracting_shout")
+            and _lorian_audience_available(
+                bard,
+                state.actors,
+                "distracting_shout",
+                condition_states=state.condition_states,
+            )
+            and reaction_available_for(state, bard)
+            and grid_distance_feet(bard.position, target_actor.position) <= 60
+            and line_of_sight_clear(board, bard.position, enemy.position)
+            and any(
+                effect.actor_id == str(target_actor.id)
+                and effect.kind == "bardic_inspiration"
+                and effect.source_actor_id == str(bard.id)
+                for effect in active_effects
+            )
+        )
+
+    def apply_distracting_shout(
+        self,
+        *,
+        state: CombatState,
+        enemy_result: EnemyAutoTurnResult,
+        option: ReactionOption,
+        die_roll: int,
+    ) -> DistractingShoutReactionResolution:
+        if option.kind != ReactionKind.DISTRACTING_SHOUT:
+            raise ValueError("Aktualna reakcja nie jest Rozpraszającym okrzykiem.")
+        if not 1 <= int(die_roll) <= 6:
+            raise ValueError("Rozpraszający okrzyk wymaga wyniku k6 od 1 do 6.")
+        if (
+            enemy_result.damage is None
+            or enemy_result.target is None
+            or enemy_result.attack_resolution is None
+            or not enemy_result.attack_resolution.hit
+        ):
+            raise ValueError("Brak trafionego ataku z oczekującymi obrażeniami.")
+        bard = _actor_by_string_id(state, option.reactor_actor_id)
+        if not actor_has_feature(bard, "distracting_shout"):
+            raise ValueError("Aktor nie posiada Rozpraszającego okrzyku.")
+        require_lorian_audience(
+            bard,
+            state.actors,
+            "distracting_shout",
+            condition_states=state.condition_states,
+        )
+        reaction = use_actor_reaction(state, bard)
+        if not reaction.accepted:
+            raise ValueError(reaction.message)
+
+        reduction = int(die_roll) + 2
+        previous_damage = enemy_result.damage.total_before_reduction
+        reduced_damage = _damage_after_flat_reduction(
+            enemy_result.damage,
+            reduction,
+        )
+        target_before = _actor_by_string_id(
+            reaction.state,
+            enemy_result.target.id,
+        )
+        applied = apply_damage_result(
+            target_before,
+            reduced_damage,
+            critical=enemy_result.attack_resolution.critical,
+        )
+        merged_state = replace(
+            enemy_result.state,
+            spent_reaction_actor_ids=reaction.state.spent_reaction_actor_ids,
+        )
+        merged_state = replace_actor(merged_state, applied.actor_after)
+        updated_result = replace(
+            enemy_result,
+            state=merged_state,
+            damage=reduced_damage,
+            applied_damage=applied,
+            updated_target=applied.actor_after,
+        )
+        message = (
+            f"{bard.name} używa Rozpraszającego okrzyku (k6: {die_roll}): "
+            f"obrażenia {previous_damage} spadają do "
+            f"{reduced_damage.total_before_reduction}."
+        )
+        updated_result = replace(updated_result, message=message)
+        return DistractingShoutReactionResolution(
+            state=reaction.state,
+            result=updated_result,
+            die_roll=int(die_roll),
+            reduction=reduction,
+            damage_before=previous_damage,
+            damage_after=reduced_damage.total_before_reduction,
+            message=message,
         )
 
     def cutting_words_damage_options(
@@ -420,7 +567,12 @@ class ClassFeatureReactionFlowService:
             if actor.faction != enemy.faction
             and not actor.is_defeated()
             and actor_has_feature(actor, "cutting_words")
-            and can_spend_actor_resource(actor, "bardic_inspiration_uses")
+            and _lorian_audience_available(
+                actor,
+                state.actors,
+                "cutting_words",
+                condition_states=state.condition_states,
+            )
             and reaction_available_for(state, actor)
             and grid_distance_feet(actor.position, enemy.position) <= 60
             and line_of_sight_clear(board, actor.position, enemy.position)
@@ -439,6 +591,12 @@ class ClassFeatureReactionFlowService:
         bard = _actor_by_string_id(state, option.reactor_actor_id)
         if not actor_has_feature(bard, "cutting_words"):
             raise ValueError("Aktor nie posiada Cutting Words.")
+        require_lorian_audience(
+            bard,
+            state.actors,
+            "cutting_words",
+            condition_states=state.condition_states,
+        )
         die_sides = bardic_inspiration_die_sides(bard)
         if not 1 <= int(die_roll) <= die_sides:
             raise ValueError(f"Cutting Words wymaga wyniku k{die_sides} od 1 do {die_sides}.")
@@ -452,15 +610,7 @@ class ClassFeatureReactionFlowService:
         reaction = use_actor_reaction(state, bard)
         if not reaction.accepted:
             raise ValueError(reaction.message)
-        bard_after_reaction = _actor_by_string_id(
-            reaction.state,
-            option.reactor_actor_id,
-        )
-        spent = spend_actor_resource(
-            bard_after_reaction,
-            "bardic_inspiration_uses",
-        )
-        reaction_state = replace_actor(reaction.state, spent.actor_after)
+        reaction_state = reaction.state
 
         if option.trigger_event == CombatResolutionStage.DAMAGE_ROLL_REVEALED.value:
             if enemy_result.damage is None or enemy_result.target is None:
@@ -486,7 +636,6 @@ class ClassFeatureReactionFlowService:
                 enemy_result.state,
                 spent_reaction_actor_ids=reaction_state.spent_reaction_actor_ids,
             )
-            merged_state = replace_actor(merged_state, spent.actor_after)
             merged_state = replace_actor(merged_state, applied_damage.actor_after)
             message = (
                 f"{bard.name} używa Cutting Words (k{die_sides}: {die_roll}): "
@@ -538,7 +687,6 @@ class ClassFeatureReactionFlowService:
                 else state.condition_states
             ),
         )
-        merged_state = replace_actor(merged_state, spent.actor_after)
         applied_damage = None
         updated_target = None
         damage = enemy_result.damage if adjusted_attack.hit else None
@@ -1120,6 +1268,12 @@ class CombatReactionFlowService:
                 source,
                 is_hidden_from(updated_state.hidden_states, str(attacker.id), str(actor.id)),
             )
+            source = attack_source_with_exposed_mira_bonus(
+                updated_state.hidden_states,
+                attacker,
+                actor,
+                source,
+            )
             source = attack_source_with_prone(
                 source,
                 updated_state.condition_states,
@@ -1136,7 +1290,13 @@ class CombatReactionFlowService:
             )
             declaration = AttackDeclaration(
                 attacker=attacker,
-                target=actor_as_combat_target(actor, opportunity_attack=True),
+                target=actor_as_combat_target(
+                    actor,
+                    updated_effects,
+                    attacker=attacker,
+                    actors=updated_state.actors,
+                    opportunity_attack=True,
+                ),
                 source=source,
             )
             resolution = resolve_attack(declaration, attack_roll, ActionUse.ACTION_AVAILABLE)
@@ -1255,6 +1415,12 @@ class PlayerReactionFlowService:
         source = attack_source_with_hidden_advantage(
             source,
             is_hidden_from(updated_state.hidden_states, str(attacker.id), str(target.id)),
+        )
+        source = attack_source_with_exposed_mira_bonus(
+            updated_state.hidden_states,
+            attacker,
+            target,
+            source,
         )
         source = attack_source_with_prone(
             source,
@@ -1547,6 +1713,25 @@ def _actor_by_string_id(state: CombatState, actor_id: str) -> Actor:
     if actor is None:
         raise ValueError(f"Nieznany aktor walki: {actor_id}.")
     return actor
+
+
+def _lorian_audience_available(
+    actor: Actor,
+    actors: Sequence[Actor],
+    action_id: str,
+    *,
+    condition_states: Sequence[ConditionState] = (),
+) -> bool:
+    try:
+        require_lorian_audience(
+            actor,
+            actors,
+            action_id,
+            condition_states=condition_states,
+        )
+    except ValueError:
+        return False
+    return True
 
 
 def _manual_d20_input(

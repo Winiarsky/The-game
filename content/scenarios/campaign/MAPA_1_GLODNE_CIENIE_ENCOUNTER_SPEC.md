@@ -6,6 +6,31 @@ Encounter: `ostatni_transport_01_glodne_cienie`
 Docelowa drużyna: 3–5 bohaterów na poziomie 3  
 Tryb sceny: encounter natychmiast po wejściu na Mapę 1, eksploracja dopiero po jego rozstrzygnięciu
 
+## Obowiązująca rewizja walki (2026-08-26)
+
+Ta rewizja zastępuje niżej opisany prototyp dzwonu, Skoku stada, morale i
+`weighted_utility_v1`:
+
+- stary dzwon nie jest obiektem ani interakcją encountera;
+- profil działa jako deterministyczny `coordinated_pack_v1`;
+- poplecznicy koncentrują się na bohaterze otoczonym przez największą liczbę
+  innych popleczników, następnie wybierają najbliższego, bardziej rannego i
+  stabilnie losowany remis; każdy inny poplecznik przy celu daje `+1` do ataku
+  i obrażeń, niezależnie od flankowania;
+- przewodnica używa Duchowego pocisku (`+5`, 60 ft, `1d6 + 2` psychic), a przy
+  sąsiadującym bohaterze Wysysającego rozdarcia (`+3`, `1d4 + 2` necrotic),
+  które leczy ją o połowę faktycznych obrażeń;
+- po ataku dystansowym bez ruchu może uleczyć najbardziej rannego żywego
+  poplecznika w 60 ft i linii widzenia o `1d6 + 2`; obecność bohatera przy niej
+  blokuje tę regenerację;
+- utrata przewodnicy albo wszystkich popleczników uruchamia nieodwracalny
+  odwrót przez `pack_escape`. Nieosiągalne wyjście daje `cornered` i ponowną
+  ocenę w kolejnej turze, bez ruchu zerowego i bez pętli stanów.
+
+Źródłem wykonawczym pozostają pliki contentu i
+`src/dnd_board_game/combat/coordinated_pack_ai.py`. Starsze sekcje poniżej
+zachowano jako historię projektu mapy, nie jako aktywny kontrakt zasad.
+
 ## 1. Cel sceny
 
 Encounter ma w pierwszych minutach pokazać najważniejsze cechy walki tej gry:
@@ -77,7 +102,7 @@ Wstępny profil do playtestu:
 | PW | 14 |
 | Szybkość | 40 ft |
 | Atak | +5 |
-| Obrażenia | `1d6 + 2` cięte |
+| Obrażenia | `1d4 + 2` cięte |
 | Save zdolności | ST 12 |
 
 Zdolności robocze:
@@ -241,7 +266,7 @@ Współrzędne są zapisane jako `[kolumna, rząd]` i służą pierwszemu testow
 
 Nakładka `glodne_cienie_tactical_zones_v3.svg` zachowuje krótkie oznaczenia
 slotów `S1–S4`, `P` i `1P`; nowe defensive spots są zapisane w
-`glodne_cienie_tactical_layout_v4.json` i nadrukowane na battlemapie v4.
+`glodne_cienie_tactical_layout_v5.json` i nadrukowane na battlemapie v5 bez starego dzwonu.
 Runtime podświetla tylko pola należące do wariantu wybranego dla aktualnej
 liczby bohaterów; komplet oznaczeń startowych jest widoczny wyłącznie na
 grafice projektowej.

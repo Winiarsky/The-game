@@ -119,6 +119,25 @@ opisanej flagi, odkryciu informacji albo obecności odpowiedniego bohatera.
    albo testem koncentracji, nie losowym anulowaniem kart.
 10. Każda z czterech skrzyń pyłu ma własny, policzalny stan.
 
+## Tempo pierwszej podróży
+
+Droga z Gildii do zawalonego traktu ma bazowo 60 minut. Wybór tempa jest
+decyzją między czasem a przygotowaniem do najbliższej walki, a nie wyłącznie
+kosmetycznym mnożnikiem:
+
+| Tempo | Udana nawigacja | Otwarcie walki z Głodnymi Cieniami | Stan dla dalszych map |
+| --- | ---: | --- | --- |
+| Szybkie | 45 min | bez ostrzeżenia Erynda przeciwnicy mają przewagę do inicjatywy; ostrzeżenie tylko neutralizuje zasadzkę | `travel.arrival.early`, jeśli nie było opóźnienia |
+| Normalne | 60 min | domyślnie bez przewagi; ostrzeżenie Erynda daje przewagę drużynie | `travel.arrival.on_time` |
+| Wolne | 80 min | drużyna może wykonać Stealth; z ostrzeżeniem Erynda ma również przewagę do inicjatywy | `travel.arrival.late` |
+
+Test Wisdom (Survival) ST 12 rozstrzyga nawigację. Porażka nie blokuje
+przygody, ale dodaje 30 minut i ponownie wylicza okno przybycia. Handoff zapisuje
+też `travel.total_minutes`, `travel.schedule_delta_minutes`, wynik nawigacji,
+modyfikator Pasywnej Percepcji i dostępność skradania. Późniejsze mapy mają
+używać okna przybycia do stanu tropów, ocalałych i czasu uzyskanego przez
+przeciwników; konkretne gałęzie należy uruchamiać dopiero wraz z ich contentem.
+
 ---
 
 # Graf całej przygody
