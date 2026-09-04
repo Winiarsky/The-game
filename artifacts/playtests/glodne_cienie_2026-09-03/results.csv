@@ -1,0 +1,161 @@
+case_id,seed,hero_ids,party_size,outcome,rounds,turns,hero_casualties,hero_hp_remaining,hero_hp_maximum,enemies_dead,enemies_escaped,enemy_intents,morale_events
+solo_frontliner,93000,garran,1,victory,5,9,0,23,28,0,1,"{""engage"": 3, ""flee"": 2}",half_skirmishers_defeated
+solo_frontliner,93001,garran,1,victory,3,5,0,28,28,0,1,"{""engage"": 1, ""flee"": 2}",half_skirmishers_defeated
+solo_frontliner,93002,garran,1,victory,2,4,0,28,28,0,1,"{""flee"": 2}",half_skirmishers_defeated
+solo_frontliner,93003,garran,1,victory,2,4,0,28,28,1,0,"{""engage"": 2}",
+solo_frontliner,93004,garran,1,victory,4,8,0,22,28,0,1,"{""engage"": 2, ""flee"": 2}",half_skirmishers_defeated
+solo_frontliner,93005,garran,1,victory,3,5,0,28,28,0,1,"{""engage"": 1, ""flee"": 2}",half_skirmishers_defeated
+solo_frontliner,93006,garran,1,victory,5,10,0,28,28,0,1,"{""engage"": 3, ""flee"": 2}",half_skirmishers_defeated
+solo_frontliner,93007,garran,1,victory,4,8,0,24,28,0,1,"{""engage"": 2, ""flee"": 2}",half_skirmishers_defeated
+solo_frontliner,93008,garran,1,victory,4,8,0,28,28,0,1,"{""engage"": 2, ""flee"": 2}",half_skirmishers_defeated
+solo_frontliner,93009,garran,1,victory,2,4,0,28,28,0,1,"{""flee"": 2}",half_skirmishers_defeated
+solo_frontliner,93010,garran,1,victory,2,3,0,28,28,1,0,"{""engage"": 1}",
+solo_frontliner,93011,garran,1,victory,3,6,0,22,28,0,1,"{""engage"": 1, ""flee"": 2}",half_skirmishers_defeated
+solo_frontliner,93012,garran,1,victory,4,8,0,15,28,0,1,"{""engage"": 2, ""flee"": 2}",half_skirmishers_defeated
+solo_frontliner,93013,garran,1,victory,2,4,0,28,28,0,1,"{""flee"": 2}",half_skirmishers_defeated
+solo_frontliner,93014,garran,1,victory,3,6,0,23,28,0,1,"{""engage"": 1, ""flee"": 2}",half_skirmishers_defeated
+solo_frontliner,93015,garran,1,victory,4,7,0,28,28,0,1,"{""engage"": 2, ""flee"": 2}",half_skirmishers_defeated
+solo_frontliner,93016,garran,1,victory,8,15,0,9,28,0,1,"{""engage"": 6, ""flee"": 2}",half_skirmishers_defeated
+solo_frontliner,93017,garran,1,victory,3,6,0,28,28,0,1,"{""engage"": 1, ""flee"": 2}",half_skirmishers_defeated
+solo_frontliner,93018,garran,1,victory,3,5,0,28,28,0,1,"{""engage"": 1, ""flee"": 2}",half_skirmishers_defeated
+solo_frontliner,93019,garran,1,victory,2,4,0,28,28,0,1,"{""flee"": 2}",half_skirmishers_defeated
+duo_frontline_support,94000,"brakka,dagna",2,victory,3,10,0,56,65,1,1,"{""flee"": 1, ""leader_ranged"": 2, ""pack_attack"": 2}",coordinated_pack_retreat:followers_lost
+duo_frontline_support,94001,"brakka,dagna",2,victory,8,31,0,22,65,1,1,"{""flee"": 1, ""leader_ranged"": 7, ""pack_attack"": 8}",coordinated_pack_retreat:followers_lost
+duo_frontline_support,94002,"brakka,dagna",2,victory,4,13,0,49,65,1,1,"{""flee"": 1, ""leader_ranged"": 3, ""pack_attack"": 3}",coordinated_pack_retreat:followers_lost
+duo_frontline_support,94003,"brakka,dagna",2,victory,3,9,0,49,65,1,1,"{""flee"": 1, ""leader_ranged"": 2, ""pack_attack"": 2}",coordinated_pack_retreat:followers_lost
+duo_frontline_support,94004,"brakka,dagna",2,victory,7,27,0,27,65,1,1,"{""flee"": 2, ""leader_ranged"": 6, ""pack_attack"": 5}",coordinated_pack_retreat:leader_lost
+duo_frontline_support,94005,"brakka,dagna",2,victory,12,46,0,46,65,1,1,"{""flee"": 1, ""leader_ranged"": 11, ""pack_attack"": 11}",coordinated_pack_retreat:followers_lost
+duo_frontline_support,94006,"brakka,dagna",2,victory,7,24,0,32,65,1,1,"{""flee"": 1, ""leader_ranged"": 6, ""pack_attack"": 5}",coordinated_pack_retreat:followers_lost
+duo_frontline_support,94007,"brakka,dagna",2,victory,3,12,0,43,65,1,1,"{""flee"": 1, ""leader_ranged"": 2, ""pack_attack"": 3}",coordinated_pack_retreat:followers_lost
+duo_frontline_support,94008,"brakka,dagna",2,timeout,15,54,1,2,65,0,0,"{""leader_ranged"": 15, ""pack_attack"": 15}",
+duo_frontline_support,94009,"brakka,dagna",2,victory,4,12,0,47,65,1,1,"{""flee"": 1, ""leader_ranged"": 3, ""pack_attack"": 2}",coordinated_pack_retreat:followers_lost
+duo_frontline_support,94010,"brakka,dagna",2,victory,4,15,0,51,65,1,1,"{""flee"": 2, ""leader_ranged"": 3, ""pack_attack"": 2}",coordinated_pack_retreat:leader_lost
+duo_frontline_support,94011,"brakka,dagna",2,timeout,15,51,2,0,65,0,0,"{""leader_ranged"": 15, ""pack_attack"": 15}",
+duo_frontline_support,94012,"brakka,dagna",2,defeat,14,50,2,0,65,0,0,"{""leader_ranged"": 14, ""pack_attack"": 14}",
+duo_frontline_support,94013,"brakka,dagna",2,victory,7,28,0,25,65,1,1,"{""flee"": 1, ""leader_ranged"": 6, ""pack_attack"": 7}",coordinated_pack_retreat:followers_lost
+duo_frontline_support,94014,"brakka,dagna",2,victory,4,13,0,38,65,1,1,"{""flee"": 1, ""leader_ranged"": 3, ""pack_attack"": 3}",coordinated_pack_retreat:followers_lost
+duo_frontline_support,94015,"brakka,dagna",2,defeat,12,42,2,0,65,0,0,"{""leader_ranged"": 11, ""pack_attack"": 12}",
+duo_frontline_support,94016,"brakka,dagna",2,victory,5,17,0,46,65,1,1,"{""flee"": 1, ""leader_ranged"": 4, ""pack_attack"": 4}",coordinated_pack_retreat:followers_lost
+duo_frontline_support,94017,"brakka,dagna",2,victory,8,29,0,16,65,1,1,"{""flee"": 1, ""leader_ranged"": 7, ""pack_attack"": 7}",coordinated_pack_retreat:followers_lost
+duo_frontline_support,94018,"brakka,dagna",2,timeout,15,55,1,12,65,0,0,"{""leader_ranged"": 15, ""pack_attack"": 15}",
+duo_frontline_support,94019,"brakka,dagna",2,victory,7,25,0,33,65,1,1,"{""flee"": 2, ""leader_ranged"": 5, ""pack_attack"": 5}",coordinated_pack_retreat:leader_lost
+duo_mobile,95000,"mira,erynd",2,defeat,12,39,2,0,46,0,0,"{""leader_ranged"": 11, ""pack_attack"": 12}",
+duo_mobile,95001,"mira,erynd",2,victory,8,30,0,26,46,1,1,"{""flee"": 2, ""leader_ranged"": 6, ""pack_attack"": 6}",coordinated_pack_retreat:leader_lost
+duo_mobile,95002,"mira,erynd",2,timeout,15,52,1,6,46,0,0,"{""leader_ranged"": 15, ""pack_attack"": 15}",
+duo_mobile,95003,"mira,erynd",2,victory,8,28,1,12,46,1,1,"{""flee"": 2, ""leader_ranged"": 6, ""pack_attack"": 6}",coordinated_pack_retreat:leader_lost
+duo_mobile,95004,"mira,erynd",2,victory,7,23,1,25,46,1,1,"{""flee"": 2, ""leader_ranged"": 5, ""pack_attack"": 5}",coordinated_pack_retreat:leader_lost
+duo_mobile,95005,"mira,erynd",2,victory,11,35,1,6,46,1,1,"{""flee"": 2, ""leader_ranged"": 9, ""pack_attack"": 9}",coordinated_pack_retreat:leader_lost
+duo_mobile,95006,"mira,erynd",2,victory,5,17,1,25,46,1,1,"{""flee"": 2, ""leader_ranged"": 3, ""pack_attack"": 3}",coordinated_pack_retreat:leader_lost
+duo_mobile,95007,"mira,erynd",2,victory,11,39,1,25,46,1,1,"{""flee"": 2, ""leader_ranged"": 9, ""pack_attack"": 9}",coordinated_pack_retreat:leader_lost
+duo_mobile,95008,"mira,erynd",2,victory,6,22,1,25,46,1,1,"{""flee"": 2, ""leader_ranged"": 4, ""pack_attack"": 4}",coordinated_pack_retreat:leader_lost
+duo_mobile,95009,"mira,erynd",2,defeat,15,50,2,0,46,0,0,"{""leader_ranged"": 14, ""pack_attack"": 15}",
+duo_mobile,95010,"mira,erynd",2,victory,4,15,0,31,46,1,1,"{""flee"": 1, ""leader_ranged"": 3, ""pack_attack"": 3}",coordinated_pack_retreat:followers_lost
+duo_mobile,95011,"mira,erynd",2,victory,9,29,1,10,46,1,1,"{""flee"": 2, ""leader_ranged"": 7, ""pack_attack"": 7}",coordinated_pack_retreat:leader_lost
+duo_mobile,95012,"mira,erynd",2,victory,10,33,1,22,46,1,1,"{""flee"": 2, ""leader_ranged"": 8, ""pack_attack"": 8}",coordinated_pack_retreat:leader_lost
+duo_mobile,95013,"mira,erynd",2,defeat,11,38,2,0,46,0,0,"{""leader_ranged"": 11, ""pack_attack"": 11}",
+duo_mobile,95014,"mira,erynd",2,defeat,12,41,2,0,46,0,0,"{""leader_ranged"": 11, ""pack_attack"": 12}",
+duo_mobile,95015,"mira,erynd",2,defeat,9,32,2,0,46,0,0,"{""leader_ranged"": 9, ""pack_attack"": 9}",
+duo_mobile,95016,"mira,erynd",2,victory,8,31,1,25,46,1,1,"{""flee"": 2, ""leader_ranged"": 7, ""pack_attack"": 6}",coordinated_pack_retreat:leader_lost
+duo_mobile,95017,"mira,erynd",2,victory,5,18,0,27,46,1,1,"{""flee"": 2, ""leader_ranged"": 3, ""pack_attack"": 3}",coordinated_pack_retreat:leader_lost
+duo_mobile,95018,"mira,erynd",2,victory,10,35,1,21,46,1,1,"{""flee"": 2, ""leader_ranged"": 8, ""pack_attack"": 8}",coordinated_pack_retreat:leader_lost
+duo_mobile,95019,"mira,erynd",2,victory,9,27,1,16,46,1,1,"{""flee"": 2, ""leader_ranged"": 6, ""pack_attack"": 7}",coordinated_pack_retreat:leader_lost
+trio_balanced,96000,"garran,dagna,erynd",3,defeat,13,66,3,0,83,0,0,"{""leader_ranged"": 13, ""pack_attack"": 25}",
+trio_balanced,96001,"garran,dagna,erynd",3,defeat,13,60,3,0,83,0,0,"{""leader_ranged"": 13, ""pack_attack"": 24}",
+trio_balanced,96002,"garran,dagna,erynd",3,defeat,12,60,3,0,83,0,0,"{""leader_ranged"": 12, ""pack_attack"": 24}",
+trio_balanced,96003,"garran,dagna,erynd",3,victory,9,49,0,60,83,1,2,"{""flee"": 4, ""leader_ranged"": 7, ""pack_advance"": 1, ""pack_attack"": 12}",coordinated_pack_retreat:leader_lost
+trio_balanced,96004,"garran,dagna,erynd",3,defeat,15,71,3,0,83,0,0,"{""leader_ranged"": 15, ""pack_advance"": 1, ""pack_attack"": 27}",
+trio_balanced,96005,"garran,dagna,erynd",3,timeout,15,71,2,1,83,1,0,"{""leader_ranged"": 15, ""pack_attack"": 22}",
+trio_balanced,96006,"garran,dagna,erynd",3,defeat,12,58,3,0,83,0,0,"{""leader_ranged"": 12, ""pack_attack"": 24}",
+trio_balanced,96007,"garran,dagna,erynd",3,defeat,14,67,3,0,83,0,0,"{""leader_ranged"": 14, ""pack_advance"": 1, ""pack_attack"": 27}",
+trio_balanced,96008,"garran,dagna,erynd",3,defeat,13,62,3,0,83,0,0,"{""leader_ranged"": 12, ""pack_attack"": 25}",
+trio_balanced,96009,"garran,dagna,erynd",3,victory,6,35,0,58,83,1,2,"{""flee"": 4, ""leader_ranged"": 5, ""pack_advance"": 1, ""pack_attack"": 7}",coordinated_pack_retreat:leader_lost
+trio_balanced,96010,"garran,dagna,erynd",3,defeat,11,52,3,0,83,0,0,"{""leader_ranged"": 11, ""pack_attack"": 21}",
+trio_balanced,96011,"garran,dagna,erynd",3,defeat,14,69,3,0,83,0,0,"{""leader_ranged"": 14, ""pack_attack"": 27}",
+trio_balanced,96012,"garran,dagna,erynd",3,defeat,14,69,3,0,83,0,0,"{""leader_ranged"": 14, ""pack_attack"": 28}",
+trio_balanced,96013,"garran,dagna,erynd",3,victory,13,65,2,17,83,1,2,"{""flee"": 4, ""leader_ranged"": 10, ""pack_attack"": 21}",coordinated_pack_retreat:leader_lost
+trio_balanced,96014,"garran,dagna,erynd",3,defeat,12,58,3,0,83,0,0,"{""leader_ranged"": 12, ""pack_attack"": 23}",
+trio_balanced,96015,"garran,dagna,erynd",3,defeat,14,70,3,0,83,1,0,"{""leader_ranged"": 14, ""pack_attack"": 25}",
+trio_balanced,96016,"garran,dagna,erynd",3,victory,3,16,0,70,83,2,1,"{""flee"": 3, ""leader_ranged"": 1, ""pack_advance"": 1, ""pack_attack"": 2}",coordinated_pack_retreat:leader_lost
+trio_balanced,96017,"garran,dagna,erynd",3,defeat,14,70,3,0,83,0,0,"{""leader_ranged"": 14, ""pack_advance"": 1, ""pack_attack"": 26}",
+trio_balanced,96018,"garran,dagna,erynd",3,timeout,15,74,3,0,83,0,0,"{""leader_ranged"": 15, ""pack_attack"": 30}",
+trio_balanced,96019,"garran,dagna,erynd",3,defeat,15,73,3,0,83,0,0,"{""leader_ranged"": 15, ""pack_attack"": 28}",
+trio_fragile,97000,"lorian,mira,nimra",3,victory,4,17,0,51,65,1,2,"{""flee"": 4, ""leader_ranged"": 1, ""pack_attack"": 3}",coordinated_pack_retreat:leader_lost
+trio_fragile,97001,"lorian,mira,nimra",3,victory,4,16,1,45,65,2,1,"{""flee"": 1, ""leader_ranged"": 3, ""pack_attack"": 3}",coordinated_pack_retreat:followers_lost
+trio_fragile,97002,"lorian,mira,nimra",3,defeat,10,51,3,0,65,0,0,"{""leader_ranged"": 10, ""pack_advance"": 1, ""pack_attack"": 18}",
+trio_fragile,97003,"lorian,mira,nimra",3,victory,5,23,1,35,65,2,1,"{""flee"": 1, ""leader_ranged"": 4, ""pack_attack"": 6}",coordinated_pack_retreat:followers_lost
+trio_fragile,97004,"lorian,mira,nimra",3,defeat,14,58,3,0,65,1,0,"{""leader_ranged"": 14, ""pack_attack"": 19}",
+trio_fragile,97005,"lorian,mira,nimra",3,defeat,8,40,3,0,65,0,0,"{""leader_ranged"": 8, ""pack_advance"": 1, ""pack_attack"": 15}",
+trio_fragile,97006,"lorian,mira,nimra",3,timeout,15,59,3,0,65,1,0,"{""leader_ranged"": 15, ""pack_attack"": 18}",
+trio_fragile,97007,"lorian,mira,nimra",3,victory,5,26,0,46,65,2,1,"{""flee"": 1, ""leader_ranged"": 4, ""pack_attack"": 7}",coordinated_pack_retreat:followers_lost
+trio_fragile,97008,"lorian,mira,nimra",3,defeat,13,49,3,0,65,1,0,"{""leader_ranged"": 13, ""pack_attack"": 15}",
+trio_fragile,97009,"lorian,mira,nimra",3,timeout,15,61,3,0,65,1,0,"{""leader_ranged"": 15, ""pack_attack"": 18}",
+trio_fragile,97010,"lorian,mira,nimra",3,victory,6,25,1,37,65,2,1,"{""flee"": 1, ""leader_ranged"": 5, ""pack_attack"": 7}",coordinated_pack_retreat:followers_lost
+trio_fragile,97011,"lorian,mira,nimra",3,victory,6,29,1,29,65,2,1,"{""flee"": 1, ""leader_ranged"": 5, ""pack_attack"": 9}",coordinated_pack_retreat:followers_lost
+trio_fragile,97012,"lorian,mira,nimra",3,defeat,14,54,3,0,65,1,0,"{""leader_ranged"": 14, ""pack_attack"": 15}",
+trio_fragile,97013,"lorian,mira,nimra",3,victory,5,23,1,30,65,2,1,"{""flee"": 1, ""leader_ranged"": 4, ""pack_attack"": 6}",coordinated_pack_retreat:followers_lost
+trio_fragile,97014,"lorian,mira,nimra",3,defeat,9,44,3,0,65,0,0,"{""leader_ranged"": 9, ""pack_advance"": 1, ""pack_attack"": 17}",
+trio_fragile,97015,"lorian,mira,nimra",3,defeat,9,38,3,0,65,1,0,"{""leader_ranged"": 9, ""pack_attack"": 13}",
+trio_fragile,97016,"lorian,mira,nimra",3,victory,6,27,1,29,65,2,1,"{""flee"": 1, ""leader_ranged"": 5, ""pack_advance"": 1, ""pack_attack"": 6}",coordinated_pack_retreat:followers_lost
+trio_fragile,97017,"lorian,mira,nimra",3,defeat,13,52,3,0,65,1,0,"{""leader_ranged"": 12, ""pack_attack"": 16}",
+trio_fragile,97018,"lorian,mira,nimra",3,victory,6,28,1,29,65,2,1,"{""flee"": 1, ""leader_ranged"": 5, ""pack_attack"": 9}",coordinated_pack_retreat:followers_lost
+trio_fragile,97019,"lorian,mira,nimra",3,defeat,13,54,3,0,65,1,0,"{""leader_ranged"": 12, ""pack_attack"": 18}",
+four_mixed,98000,"brakka,dagna,erynd,nimra",4,defeat,14,74,4,0,110,2,0,"{""leader_ranged"": 14, ""pack_advance"": 1, ""pack_attack"": 30}",
+four_mixed,98001,"brakka,dagna,erynd,nimra",4,defeat,9,53,4,0,110,0,0,"{""leader_ranged"": 9, ""pack_attack"": 25}",
+four_mixed,98002,"brakka,dagna,erynd,nimra",4,victory,3,21,0,110,110,2,2,"{""flee"": 4, ""leader_ranged"": 1, ""pack_advance"": 2, ""pack_attack"": 2}",coordinated_pack_retreat:leader_lost
+four_mixed,98003,"brakka,dagna,erynd,nimra",4,defeat,13,68,4,0,110,1,0,"{""leader_ranged"": 13, ""pack_attack"": 28}",
+four_mixed,98004,"brakka,dagna,erynd,nimra",4,victory,3,20,0,83,110,3,1,"{""flee"": 3, ""leader_ranged"": 1, ""pack_attack"": 4}",coordinated_pack_retreat:leader_lost
+four_mixed,98005,"brakka,dagna,erynd,nimra",4,victory,6,41,1,58,110,1,3,"{""flee"": 6, ""leader_ranged"": 4, ""pack_attack"": 12}",coordinated_pack_retreat:leader_lost
+four_mixed,98006,"brakka,dagna,erynd,nimra",4,victory,7,44,2,60,110,1,3,"{""flee"": 6, ""leader_ranged"": 5, ""pack_attack"": 15}",coordinated_pack_retreat:leader_lost
+four_mixed,98007,"brakka,dagna,erynd,nimra",4,defeat,13,66,4,0,110,2,0,"{""leader_ranged"": 13, ""pack_advance"": 1, ""pack_attack"": 28}",
+four_mixed,98008,"brakka,dagna,erynd,nimra",4,victory,4,25,1,90,110,2,2,"{""flee"": 5, ""leader_ranged"": 2, ""pack_attack"": 5}",coordinated_pack_retreat:leader_lost
+four_mixed,98009,"brakka,dagna,erynd,nimra",4,defeat,15,70,4,0,110,2,0,"{""leader_ranged"": 15, ""pack_attack"": 26}",
+four_mixed,98010,"brakka,dagna,erynd,nimra",4,victory,3,22,0,88,110,1,3,"{""flee"": 6, ""leader_ranged"": 2, ""pack_advance"": 2, ""pack_attack"": 1}",coordinated_pack_retreat:leader_lost
+four_mixed,98011,"brakka,dagna,erynd,nimra",4,victory,4,28,0,83,110,2,2,"{""flee"": 4, ""leader_ranged"": 3, ""pack_advance"": 2, ""pack_attack"": 5}",coordinated_pack_retreat:leader_lost
+four_mixed,98012,"brakka,dagna,erynd,nimra",4,victory,7,44,1,58,110,2,2,"{""flee"": 4, ""leader_ranged"": 5, ""pack_attack"": 12}",coordinated_pack_retreat:leader_lost
+four_mixed,98013,"brakka,dagna,erynd,nimra",4,victory,4,28,1,90,110,1,3,"{""flee"": 6, ""leader_ranged"": 2, ""pack_advance"": 2, ""pack_attack"": 4}",coordinated_pack_retreat:leader_lost
+four_mixed,98014,"brakka,dagna,erynd,nimra",4,defeat,9,54,4,0,110,0,0,"{""leader_ranged"": 9, ""pack_attack"": 26}",
+four_mixed,98015,"brakka,dagna,erynd,nimra",4,defeat,9,51,4,0,110,0,0,"{""leader_ranged"": 8, ""pack_attack"": 25}",
+four_mixed,98016,"brakka,dagna,erynd,nimra",4,victory,4,30,0,81,110,1,3,"{""flee"": 6, ""leader_ranged"": 2, ""pack_advance"": 2, ""pack_attack"": 4}",coordinated_pack_retreat:leader_lost
+four_mixed,98017,"brakka,dagna,erynd,nimra",4,victory,6,39,1,63,110,1,3,"{""flee"": 6, ""leader_ranged"": 4, ""pack_advance"": 2, ""pack_attack"": 9}",coordinated_pack_retreat:leader_lost
+four_mixed,98018,"brakka,dagna,erynd,nimra",4,victory,5,30,1,74,110,2,2,"{""flee"": 5, ""leader_ranged"": 3, ""pack_attack"": 9}",coordinated_pack_retreat:leader_lost
+four_mixed,98019,"brakka,dagna,erynd,nimra",4,defeat,9,54,4,0,110,0,0,"{""leader_ranged"": 8, ""pack_attack"": 25}",
+five_balanced,99000,"garran,brakka,dagna,mira,erynd",5,victory,9,65,1,73,139,3,2,"{""flee"": 4, ""leader_ranged"": 7, ""pack_advance"": 3, ""pack_attack"": 16}",coordinated_pack_retreat:leader_lost
+five_balanced,99001,"garran,brakka,dagna,mira,erynd",5,victory,11,77,4,25,139,2,3,"{""flee"": 6, ""leader_ranged"": 9, ""pack_advance"": 2, ""pack_attack"": 29}",coordinated_pack_retreat:leader_lost
+five_balanced,99002,"garran,brakka,dagna,mira,erynd",5,victory,6,43,1,100,139,5,0,"{""leader_ranged"": 6, ""pack_advance"": 2, ""pack_attack"": 11}",
+five_balanced,99003,"garran,brakka,dagna,mira,erynd",5,timeout,15,88,4,18,139,3,0,"{""leader_ranged"": 15, ""pack_advance"": 2, ""pack_attack"": 30}",
+five_balanced,99004,"garran,brakka,dagna,mira,erynd",5,timeout,15,89,4,17,139,3,0,"{""leader_ranged"": 15, ""pack_advance"": 2, ""pack_attack"": 32}",
+five_balanced,99005,"garran,brakka,dagna,mira,erynd",5,defeat,9,71,5,0,139,0,0,"{""leader_ranged"": 9, ""pack_advance"": 2, ""pack_attack"": 32}",
+five_balanced,99006,"garran,brakka,dagna,mira,erynd",5,timeout,15,85,4,25,139,3,0,"{""leader_ranged"": 15, ""pack_advance"": 2, ""pack_attack"": 26}",
+five_balanced,99007,"garran,brakka,dagna,mira,erynd",5,victory,7,52,2,83,139,3,2,"{""flee"": 5, ""leader_ranged"": 5, ""pack_advance"": 2, ""pack_attack"": 14}",coordinated_pack_retreat:leader_lost
+five_balanced,99008,"garran,brakka,dagna,mira,erynd",5,victory,12,71,2,76,139,4,1,"{""flee"": 1, ""leader_ranged"": 11, ""pack_advance"": 1, ""pack_attack"": 18}",coordinated_pack_retreat:followers_lost
+five_balanced,99009,"garran,brakka,dagna,mira,erynd",5,victory,10,65,2,93,139,4,1,"{""flee"": 1, ""leader_ranged"": 9, ""pack_advance"": 2, ""pack_attack"": 16}",coordinated_pack_retreat:followers_lost
+five_balanced,99010,"garran,brakka,dagna,mira,erynd",5,victory,5,42,1,111,139,2,3,"{""flee"": 6, ""leader_ranged"": 3, ""pack_advance"": 2, ""pack_attack"": 8}",coordinated_pack_retreat:leader_lost
+five_balanced,99011,"garran,brakka,dagna,mira,erynd",5,victory,4,33,1,111,139,2,3,"{""flee"": 7, ""leader_ranged"": 2, ""pack_advance"": 2, ""pack_attack"": 4}",coordinated_pack_retreat:leader_lost
+five_balanced,99012,"garran,brakka,dagna,mira,erynd",5,victory,5,37,1,113,139,2,3,"{""flee"": 7, ""leader_ranged"": 2, ""pack_advance"": 2, ""pack_attack"": 7}",coordinated_pack_retreat:leader_lost
+five_balanced,99013,"garran,brakka,dagna,mira,erynd",5,defeat,11,78,5,0,139,1,0,"{""leader_ranged"": 10, ""pack_advance"": 2, ""pack_attack"": 36}",
+five_balanced,99014,"garran,brakka,dagna,mira,erynd",5,victory,6,50,2,90,139,3,2,"{""flee"": 5, ""leader_ranged"": 4, ""pack_advance"": 2, ""pack_attack"": 13}",coordinated_pack_retreat:leader_lost
+five_balanced,99015,"garran,brakka,dagna,mira,erynd",5,defeat,9,64,5,0,139,0,0,"{""leader_ranged"": 8, ""pack_advance"": 2, ""pack_attack"": 31}",
+five_balanced,99016,"garran,brakka,dagna,mira,erynd",5,defeat,9,71,5,0,139,0,0,"{""leader_ranged"": 9, ""pack_advance"": 1, ""pack_attack"": 35}",
+five_balanced,99017,"garran,brakka,dagna,mira,erynd",5,victory,7,53,2,69,139,2,3,"{""flee"": 7, ""leader_ranged"": 4, ""pack_advance"": 2, ""pack_attack"": 15}",coordinated_pack_retreat:leader_lost
+five_balanced,99018,"garran,brakka,dagna,mira,erynd",5,defeat,12,78,5,0,139,2,0,"{""leader_ranged"": 12, ""pack_advance"": 2, ""pack_attack"": 35}",
+five_balanced,99019,"garran,brakka,dagna,mira,erynd",5,victory,8,63,1,68,139,3,2,"{""flee"": 4, ""leader_ranged"": 7, ""pack_advance"": 1, ""pack_attack"": 16}",coordinated_pack_retreat:leader_lost
+five_ranged,100000,"lorian,dagna,mira,nimra,erynd",5,victory,7,57,3,49,120,1,4,"{""flee"": 8, ""leader_ranged"": 5, ""pack_advance"": 2, ""pack_attack"": 18}",coordinated_pack_retreat:leader_lost
+five_ranged,100001,"lorian,dagna,mira,nimra,erynd",5,victory,5,37,1,83,120,2,3,"{""flee"": 7, ""leader_ranged"": 3, ""pack_advance"": 1, ""pack_attack"": 8}",coordinated_pack_retreat:leader_lost
+five_ranged,100002,"lorian,dagna,mira,nimra,erynd",5,defeat,8,60,5,0,120,0,0,"{""leader_ranged"": 7, ""pack_advance"": 2, ""pack_attack"": 28}",
+five_ranged,100003,"lorian,dagna,mira,nimra,erynd",5,victory,8,62,3,43,120,1,4,"{""flee"": 8, ""leader_ranged"": 6, ""pack_advance"": 1, ""pack_attack"": 21}",coordinated_pack_retreat:leader_lost
+five_ranged,100004,"lorian,dagna,mira,nimra,erynd",5,victory,4,34,1,92,120,1,4,"{""flee"": 8, ""leader_ranged"": 2, ""pack_advance"": 2, ""pack_attack"": 6}",coordinated_pack_retreat:leader_lost
+five_ranged,100005,"lorian,dagna,mira,nimra,erynd",5,defeat,10,72,5,0,120,1,0,"{""leader_ranged"": 10, ""pack_advance"": 1, ""pack_attack"": 31}",
+five_ranged,100006,"lorian,dagna,mira,nimra,erynd",5,defeat,10,70,5,0,120,1,0,"{""leader_ranged"": 10, ""pack_advance"": 2, ""pack_attack"": 32}",
+five_ranged,100007,"lorian,dagna,mira,nimra,erynd",5,victory,3,29,1,100,120,1,4,"{""flee"": 8, ""leader_ranged"": 2, ""pack_advance"": 2, ""pack_attack"": 2}",coordinated_pack_retreat:leader_lost
+five_ranged,100008,"lorian,dagna,mira,nimra,erynd",5,victory,3,28,0,111,120,2,3,"{""flee"": 7, ""leader_ranged"": 2, ""pack_advance"": 2, ""pack_attack"": 2}",coordinated_pack_retreat:leader_lost
+five_ranged,100009,"lorian,dagna,mira,nimra,erynd",5,defeat,8,61,5,0,120,0,0,"{""leader_ranged"": 7, ""pack_advance"": 1, ""pack_attack"": 31}",
+five_ranged,100010,"lorian,dagna,mira,nimra,erynd",5,victory,6,52,2,70,120,1,4,"{""flee"": 8, ""leader_ranged"": 4, ""pack_advance"": 2, ""pack_attack"": 14}",coordinated_pack_retreat:leader_lost
+five_ranged,100011,"lorian,dagna,mira,nimra,erynd",5,defeat,10,69,5,0,120,1,0,"{""leader_ranged"": 10, ""pack_advance"": 2, ""pack_attack"": 32}",
+five_ranged,100012,"lorian,dagna,mira,nimra,erynd",5,defeat,9,70,5,0,120,0,0,"{""leader_ranged"": 9, ""pack_advance"": 2, ""pack_attack"": 33}",
+five_ranged,100013,"lorian,dagna,mira,nimra,erynd",5,defeat,14,86,5,0,120,2,0,"{""leader_ranged"": 14, ""pack_advance"": 2, ""pack_attack"": 34}",
+five_ranged,100014,"lorian,dagna,mira,nimra,erynd",5,victory,4,32,1,99,120,2,3,"{""flee"": 6, ""leader_ranged"": 2, ""pack_advance"": 2, ""pack_attack"": 4}",coordinated_pack_retreat:leader_lost
+five_ranged,100015,"lorian,dagna,mira,nimra,erynd",5,defeat,8,64,5,0,120,0,0,"{""leader_ranged"": 8, ""pack_advance"": 2, ""pack_attack"": 30}",
+five_ranged,100016,"lorian,dagna,mira,nimra,erynd",5,defeat,11,76,5,0,120,1,0,"{""leader_ranged"": 11, ""pack_advance"": 1, ""pack_attack"": 35}",
+five_ranged,100017,"lorian,dagna,mira,nimra,erynd",5,victory,4,30,1,99,120,2,3,"{""flee"": 7, ""leader_ranged"": 2, ""pack_advance"": 2, ""pack_attack"": 5}",coordinated_pack_retreat:leader_lost
+five_ranged,100018,"lorian,dagna,mira,nimra,erynd",5,victory,4,34,1,84,120,2,3,"{""flee"": 7, ""leader_ranged"": 2, ""pack_advance"": 1, ""pack_attack"": 7}",coordinated_pack_retreat:leader_lost
+five_ranged,100019,"lorian,dagna,mira,nimra,erynd",5,victory,3,29,0,107,120,2,3,"{""flee"": 7, ""leader_ranged"": 2, ""pack_advance"": 1, ""pack_attack"": 4}",coordinated_pack_retreat:leader_lost

@@ -183,6 +183,11 @@ _ACTION_IDS_BY_FEATURE: dict[str, tuple[str, ...]] = {
     "guard_duty": ("guard_duty",),
     "intimidation": ("intimidation",),
     "tracking": ("tracking",),
+    "nimra_sculpt_field": ("nimra_sculpt_field",),
+    "nimra_distant_spell": ("nimra_distant_spell",),
+    "nimra_overcharged_spell": ("nimra_overcharged_spell",),
+    "nimra_forced_weave": ("nimra_forced_weave",),
+    "nimra_energy_transmutation": ("nimra_energy_transmutation",),
 }
 
 _RESOURCE_IDS_BY_FEATURE: dict[str, tuple[str, ...]] = {

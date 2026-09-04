@@ -4212,8 +4212,8 @@ function combatInstructionText(combat, finished, isAllyTurn, isEnemyTurn) {
     const menu = combat.turn_action_menu;
     const selected = (menu.options || [])[Number(menu.selected_index || 0)] || {};
     return menu.stage === 'preview'
-      ? `${selected.label || 'Akcja'} — podgląd aktywny. Wskaż cel lub pole na planszy, następnie naciśnij Enter. Numpad − wraca do listy bez kosztu.`
-      : `${selected.label || 'Ruch'} — ${selected.description || 'wybierz działanie'}. Numpad 8/2 zmienia pozycję listy; Enter otwiera podgląd bez wykonywania akcji.`;
+      ? `${selected.label || 'Akcja'} — podgląd aktywny. Wskaż cel lub pole na planszy, następnie naciśnij Enter. Esc lub Backspace anuluje bez kosztu.`
+      : 'Wybierz akcję skrótem z karty postaci. Naciśnięcie skrótu otwiera podgląd bez zużywania akcji ani zasobu.';
   }
   if (combat.targeting) {
     const targeting = combat.targeting;
@@ -6308,12 +6308,12 @@ function combatTurnActionUnavailableHtml(menu, combat) {
     const hasTarget = (combat.legal_targets || []).length > 0;
     const hasArea = (combat.legal_area_positions || []).length > 0;
     if (!hasTarget && !hasArea) {
-      message = 'Brak legalnych celów dla tej akcji. Enter nie uruchomi skanowania; wybierz inną akcję klawiszami 8/2 albo najpierw zmień pozycję.';
+      message = 'Brak legalnych celów dla tej akcji. Enter nie uruchomi skanowania; wybierz inną akcję skrótem z karty albo najpierw zmień pozycję.';
     }
   } else if (selected.action === 'select_healing_source' && !(combat.legal_healing_targets || []).length) {
-    message = 'Brak rannego, legalnego celu leczenia w zasięgu. Skan planszy został zatrzymany — wybierz inną akcję klawiszami 8/2.';
+    message = 'Brak rannego, legalnego celu leczenia w zasięgu. Skan planszy został zatrzymany — wybierz inną akcję skrótem z karty.';
   } else if (selected.action === 'move' && !(combat.movement && (combat.movement.destinations || []).length)) {
-    message = 'Brak legalnego pola ruchu. Wybierz inną akcję klawiszami 8/2.';
+    message = 'Brak legalnego pola ruchu. Wybierz inną akcję skrótem z karty.';
   }
   return message ? `<div class="combat-action-unavailable" role="status"><b>Ta akcja jest teraz niedostępna</b><span>${esc(message)}</span></div>` : '';
 }
@@ -6345,25 +6345,35 @@ function combatTurnActionMenuHtml(menu, combat = {}) {
   if (!options.length) return '<p>Brak dostępnych działań.</p>';
   const selectedIndex = Math.max(0, Math.min(options.length - 1, Number(menu.selected_index || 0)));
   const previewActive = menu.stage === 'preview';
-  let previousCategory = '';
-  const rows = options.map((option, index) => {
-    const groupLabel = option.group_label || combatMenuCategoryLabel(option.category);
-    const heading = groupLabel !== previousCategory
-      ? `<div class="combat-context-category category-${esc(option.category || 'basic')}">${esc(groupLabel)}</div>`
-      : '';
-    previousCategory = groupLabel;
-    const selected = index === selectedIndex;
-    return `${heading}<button class="combat-context-option combat-turn-action category-${esc(option.category || 'basic')}${selected ? ' selected' : ''}${selected && previewActive ? ' preview-active' : ''}" data-action-index="${index}" data-allow-busy="true" onclick="confirmCombatTurnAction('${esc(option.id)}')" aria-current="${selected ? 'true' : 'false'}"${previewActive && !selected ? ' disabled' : ''}><b>${esc(option.label)}</b><span>${esc(option.description || '')}</span></button>`;
-  }).join('');
+  const selected = options[selectedIndex] || {};
+  if (!previewActive) {
+    const fallbackRows = options.map(option => `
+      <button class="combat-keyboard-fallback-option category-${esc(option.category || 'basic')}" data-allow-busy="true" onclick="confirmCombatTurnAction('${esc(option.id)}')">
+        ${option.shortcut ? `<kbd>${esc(option.shortcut === 'SPACE' ? 'SPACJA' : option.shortcut)}</kbd>` : ''}
+        <span><b>${esc(option.label)}</b><small>${esc(option.description || '')}</small></span>
+      </button>`).join('');
+    return `
+      <div class="combat-turn-command-layout combat-keyboard-idle">
+        <section class="combat-keyboard-waiting" role="status" aria-live="polite">
+          <small>Tura ${esc((combat.current_actor || {}).name || 'bohatera')}</small>
+          <h3>Wybierz akcję na karcie postaci</h3>
+          <p>Naciśnij przypisany klawisz, aby otworzyć podgląd. Dopiero <kbd>Enter</kbd> zatwierdzi działanie.</p>
+          <div class="numpad-combat-hint"><span><kbd>M</kbd> ruch</span><span><kbd>Spacja</kbd> atak</span><span><kbd>0</kbd> koniec tury</span></div>
+          <details class="combat-touch-fallback">
+            <summary>Awaryjny wybór ekranowy</summary>
+            <div class="combat-keyboard-fallback-list">${fallbackRows}</div>
+          </details>
+        </section>
+        ${combatTurnActorStatsHtml(combat)}
+      </div>`;
+  }
   return `
     <div class="combat-turn-command-layout">
       <div class="combat-turn-command-list">
-        <div class="combat-context-heading"><span id="combat-turn-action-position">${previewActive ? 'Podgląd działania' : 'Lista działań'} · ${esc(selectedIndex + 1)} z ${esc(options.length)}</span><b>${esc(menu.title || 'Dostępne działania')}</b></div>
+        <div class="combat-context-heading"><span>Podgląd działania${selected.shortcut ? ` · klawisz ${esc(selected.shortcut === 'SPACE' ? 'SPACJA' : selected.shortcut)}` : ''}</span><b>${esc(selected.label || menu.title || 'Wybrana akcja')}</b></div>
         <div id="combat-turn-action-availability">${combatTurnActionUnavailableHtml(menu, combat)}</div>
-        <div class="combat-context-menu combat-turn-action-list">${rows}</div>
-        <div class="numpad-combat-hint">${previewActive
-          ? '<span><kbd>plansza</kbd> wskaż cel / pole</span><span><kbd>Enter</kbd> wykonaj</span><span><kbd>−</kbd> wróć bez kosztu</span>'
-          : '<span><kbd>8</kbd> góra</span><span><kbd>2</kbd> dół</span><span><kbd>Enter</kbd> otwórz podgląd</span>'}</div>
+        <div class="combat-keyboard-preview"><b>${esc(selected.label || '')}</b><p>${esc(selected.description || '')}</p></div>
+        <div class="numpad-combat-hint"><span><kbd>plansza</kbd> wskaż cel / pole</span><span><kbd>Enter</kbd> wykonaj</span><span><kbd>Esc / Backspace</kbd> anuluj bez kosztu</span></div>
       </div>
       ${combatTurnActorStatsHtml(combat)}
     </div>
@@ -7631,7 +7641,37 @@ async function confirmCombatTurnAction(optionId = '') {
   api('/api/combat/turn-actions/confirm', {option_id: selectedOptionId}, '');
 }
 function cancelCombatTurnActionPreview() {
-  api('/api/combat/turn-actions/cancel-preview', {}, 'Wracam do listy działań...');
+  api('/api/combat/turn-actions/cancel-preview', {}, 'Anuluję podgląd bez kosztu...');
+}
+function combatShortcutFromEvent(event) {
+  if (event.code === 'Space') return 'SPACE';
+  if (/^(Digit|Numpad)[0-9]$/.test(event.code)) return event.code.slice(-1);
+  if (/^Key[A-Z]$/.test(event.code)) {
+    const letter = event.code.slice(-1);
+    return event.shiftKey ? `SHIFT+${letter}` : letter;
+  }
+  return '';
+}
+function triggerCombatActionShortcut(event) {
+  if (busy || event.repeat || event.ctrlKey || event.metaKey || event.altKey) return false;
+  return triggerCombatActionShortcutKey(combatShortcutFromEvent(event));
+}
+function triggerCombatActionShortcutKey(shortcut) {
+  const combat = state && state.combat ? state.combat : null;
+  if (!combat || combat.context_menu) return false;
+  const menu = state && state.combat ? state.combat.turn_action_menu : null;
+  if (!menu || menu.stage !== 'list') return false;
+  if (!shortcut) return false;
+  const option = (menu.options || []).find(candidate => candidate.shortcut === shortcut);
+  if (!option) {
+    const isKnownShortcut = (menu.bindings || []).some(binding => binding.key === shortcut)
+      || shortcut === 'SPACE';
+    if (!isKnownShortcut) return false;
+    window.alert('Ta akcja nie jest teraz dostępna. Wybierz inny skrót z karty postaci.');
+    return true;
+  }
+  confirmCombatTurnAction(option.id);
+  return true;
 }
 function confirmCombatItemTarget() {
   api('/api/combat/item-target/confirm', {}, 'Potwierdzam użycie przedmiotu...');
@@ -8124,7 +8164,13 @@ function triggerPrimaryAction() {
     if (combat && combat.status === 'active') {
       if (resultAck) { ackResult(); return true; }
       if (combat.context_menu) { confirmCombatContextMenu(''); return true; }
-      if (combat.turn_action_menu) { confirmCombatTurnAction(''); return true; }
+      if (combat.turn_action_menu) {
+        if (combat.turn_action_menu.stage === 'preview') {
+          confirmCombatTurnAction('');
+          return true;
+        }
+        return false;
+      }
       if (combat.item_targeting) { confirmCombatItemTarget(); return true; }
       if (combat.class_feature_targeting) {
         if (['lay_on_hands', 'preserve_life'].includes(combat.class_feature_targeting.action_id)) {
@@ -8244,6 +8290,13 @@ function cancelCurrentCombatStep() {
   if (!combat) return false;
   if (combat.context_menu) { cancelCombatContextMenu(); return true; }
   if (combat.turn_action_menu && combat.turn_action_menu.stage === 'preview') {
+    cancelCombatTurnActionPreview();
+    return true;
+  }
+  if (
+    combat.turn_action_menu
+    && (combat.turn_action_menu.options || []).some(option => option.action_id === 'nimra_metamagic_cancel')
+  ) {
     cancelCombatTurnActionPreview();
     return true;
   }
@@ -8490,7 +8543,13 @@ function flushPhysicalCardKeyBuffer() {
   const text = physicalCardKeyBuffer;
   const target = physicalCardKeyTarget;
   clearPhysicalCardKeyBuffer();
+  if (triggerBufferedCombatShortcut(text, target)) return;
   insertPhysicalCardBufferFallback(text, target);
+}
+function triggerBufferedCombatShortcut(text, target) {
+  if (physicalCardEditableTarget(target)) return false;
+  if (String(text || '').toLocaleUpperCase('en') !== 'D') return false;
+  return triggerCombatActionShortcutKey('D');
 }
 function schedulePhysicalCardBufferFlush() {
   clearTimeout(physicalCardKeyTimer);
@@ -8557,6 +8616,25 @@ function consumePhysicalCardKey(event) {
   }
   if (event.key.length !== 1) return false;
   const key = event.key;
+  if (physicalCardKeyBuffer) {
+    const candidate = normalizePhysicalCardScannerText(physicalCardKeyBuffer + key);
+    const continuesCardPayload = (
+      PHYSICAL_CARD_PREFIX.startsWith(candidate)
+      || (
+        candidate.startsWith(PHYSICAL_CARD_PREFIX)
+        && /^[a-z0-9_:>]+$/.test(candidate)
+      )
+    );
+    if (!continuesCardPayload) {
+      const bufferedText = physicalCardKeyBuffer;
+      const bufferedTarget = physicalCardKeyTarget;
+      clearPhysicalCardKeyBuffer();
+      if (!triggerBufferedCombatShortcut(bufferedText, bufferedTarget)) {
+        insertPhysicalCardBufferFallback(bufferedText, bufferedTarget);
+      }
+      return false;
+    }
+  }
   if (!physicalCardKeyBuffer) {
     if (key.toLocaleLowerCase('en') !== PHYSICAL_CARD_PREFIX[0]) return false;
     physicalCardKeyTarget = event.target;
@@ -8585,6 +8663,10 @@ document.addEventListener('keydown', event => {
   const combatMenu = state && state.combat ? state.combat.context_menu : null;
   const combatTurnMenu = state && state.combat ? state.combat.turn_action_menu : null;
   const typing = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT');
+  if (!typing && !combatMenu && triggerCombatActionShortcut(event)) {
+    event.preventDefault();
+    return;
+  }
   if (!typing && combatMenu && (event.code === 'Numpad2' || event.code === 'Numpad8')) {
     moveCombatContextMenu(event.code === 'Numpad2' ? 1 : -1);
     event.preventDefault();
@@ -8592,16 +8674,6 @@ document.addEventListener('keydown', event => {
   }
   if (combatMenu && !typing && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
     moveCombatContextMenu(event.key === 'ArrowDown' ? 1 : -1);
-    event.preventDefault();
-    return;
-  }
-  if (!typing && combatTurnMenu && combatTurnMenu.stage === 'list' && (event.code === 'Numpad2' || event.code === 'Numpad8')) {
-    moveCombatTurnAction(event.code === 'Numpad2' ? 1 : -1);
-    event.preventDefault();
-    return;
-  }
-  if (combatTurnMenu && combatTurnMenu.stage === 'list' && !typing && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
-    moveCombatTurnAction(event.key === 'ArrowDown' ? 1 : -1);
     event.preventDefault();
     return;
   }
@@ -8632,7 +8704,7 @@ document.addEventListener('keydown', event => {
     event.preventDefault();
     return;
   }
-  if (!typing && event.key === 'Escape') {
+  if (!typing && (event.key === 'Escape' || event.key === 'Backspace')) {
     if (sidePanelOpen) setSidePanelOpen(false);
     else if (!cancelCurrentCombatStep()) return;
     event.preventDefault();

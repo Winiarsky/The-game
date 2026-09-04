@@ -1,0 +1,139 @@
+[
+  {
+    "case_id": "solo_frontliner",
+    "hero_ids": [
+      "garran"
+    ],
+    "party_size": 1,
+    "runs": 20,
+    "victories": 20,
+    "defeats": 0,
+    "timeouts": 0,
+    "win_rate": 1.0,
+    "mean_rounds": 3.4,
+    "mean_casualties": 0.0,
+    "mean_hp_ratio": 0.896
+  },
+  {
+    "case_id": "duo_frontline_support",
+    "hero_ids": [
+      "brakka",
+      "dagna"
+    ],
+    "party_size": 2,
+    "runs": 20,
+    "victories": 15,
+    "defeats": 2,
+    "timeouts": 3,
+    "win_rate": 0.75,
+    "mean_rounds": 7.85,
+    "mean_casualties": 0.4,
+    "mean_hp_ratio": 0.457
+  },
+  {
+    "case_id": "duo_mobile",
+    "hero_ids": [
+      "mira",
+      "erynd"
+    ],
+    "party_size": 2,
+    "runs": 20,
+    "victories": 14,
+    "defeats": 5,
+    "timeouts": 1,
+    "win_rate": 0.7,
+    "mean_rounds": 9.25,
+    "mean_casualties": 1.1,
+    "mean_hp_ratio": 0.328
+  },
+  {
+    "case_id": "trio_balanced",
+    "hero_ids": [
+      "garran",
+      "dagna",
+      "erynd"
+    ],
+    "party_size": 3,
+    "runs": 20,
+    "victories": 4,
+    "defeats": 14,
+    "timeouts": 2,
+    "win_rate": 0.2,
+    "mean_rounds": 12.35,
+    "mean_casualties": 2.45,
+    "mean_hp_ratio": 0.124
+  },
+  {
+    "case_id": "trio_fragile",
+    "hero_ids": [
+      "lorian",
+      "mira",
+      "nimra"
+    ],
+    "party_size": 3,
+    "runs": 20,
+    "victories": 9,
+    "defeats": 9,
+    "timeouts": 2,
+    "win_rate": 0.45,
+    "mean_rounds": 9.0,
+    "mean_casualties": 2.0,
+    "mean_hp_ratio": 0.255
+  },
+  {
+    "case_id": "four_mixed",
+    "hero_ids": [
+      "brakka",
+      "dagna",
+      "erynd",
+      "nimra"
+    ],
+    "party_size": 4,
+    "runs": 20,
+    "victories": 12,
+    "defeats": 8,
+    "timeouts": 0,
+    "win_rate": 0.6,
+    "mean_rounds": 7.35,
+    "mean_casualties": 2.0,
+    "mean_hp_ratio": 0.426
+  },
+  {
+    "case_id": "five_balanced",
+    "hero_ids": [
+      "garran",
+      "brakka",
+      "dagna",
+      "mira",
+      "erynd"
+    ],
+    "party_size": 5,
+    "runs": 20,
+    "victories": 12,
+    "defeats": 5,
+    "timeouts": 3,
+    "win_rate": 0.6,
+    "mean_rounds": 9.25,
+    "mean_casualties": 2.85,
+    "mean_hp_ratio": 0.386
+  },
+  {
+    "case_id": "five_ranged",
+    "hero_ids": [
+      "lorian",
+      "dagna",
+      "mira",
+      "nimra",
+      "erynd"
+    ],
+    "party_size": 5,
+    "runs": 20,
+    "victories": 11,
+    "defeats": 9,
+    "timeouts": 0,
+    "win_rate": 0.55,
+    "mean_rounds": 6.95,
+    "mean_casualties": 2.95,
+    "mean_hp_ratio": 0.39
+  }
+]

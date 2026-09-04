@@ -913,6 +913,32 @@ obowiązują `Current Roadmap Focus` oraz etapy z `ROADMAP.md`.
 - [x] Replace eager combat action previews with an explicit list/preview/selection
   protocol: Numpad 2/8 navigates without LED churn, first Enter arms the preview,
   board clicks only select, second Enter commits, and minus cancels without cost.
+- [x] Route Bardic Inspiration selected from Lorian's own combat-field menu through
+  board target selection instead of resolving it prematurely without an ally.
+- [x] Generate the seven print-ready keyboard character sheets with shared basic
+  action keys, hero-specific shortcuts, automatic-reaction reminders and Nimra's
+  metamagia-first flow; keep exact Polish text in a reproducible render script.
+- [x] Implement the keyboard-first combat input contract used by the new sheets:
+  shortcut opens preview, Enter commits, Esc/Backspace cancels without cost, and
+  the idle UI shows only the active hero and a prompt to use the character sheet.
+- [x] Extend each keyboard character sheet with a second A4 dossier page containing
+  history, motivation, personal goal, passives, flaw, resources and turn guidance;
+  keep active skill descriptions on the first quick-reference page.
+- [x] Improve the keyboard sheets' three-column readability with larger display-font
+  headings, stronger parchment contrast and adaptive vertical spacing for dense heroes.
+- [x] Replace Nimra's number and Shift combinations with single-letter shortcuts for
+  all Metamagic options and spells; synchronize the runtime bindings and print sheet.
+- [x] Generate a separate low-ink, grayscale A4 edition of all keyboard sheets and
+  dossiers for inexpensive home-printed playtests.
+- [x] Resolve the keyboard playtest blockers found in review: defer the `D` shortcut
+  around HID-card prefixes, cancel pending Nimra Metamagic with Esc/Backspace, ignore
+  modified/repeated shortcuts and remove stale 8/2/minus guidance from the main flow.
+- [ ] [Hungry Shadows balance] Revisit the three-hero scaling and coordinated-pack
+  pressure against the 2026-09-03 baseline (20% wins for Garran/Dagna/Erynd and
+  45% for Lorian/Mira/Nimra across 20 seeded runs per composition).
+- [ ] [Mobile combat UX] Remove the tall empty board/workspace gap that pushes the
+  active hero's action list below the first viewport at 390×844, then repeat the
+  desktop/mobile render and keyboard/touch smoke test.
 
 - [x] UI framework: local Flask/web UI for the current runtime and future authoring modules.
 - [x] Content licensing/source strategy for D&D 5e data.

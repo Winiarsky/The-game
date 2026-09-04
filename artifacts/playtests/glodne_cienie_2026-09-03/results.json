@@ -1,0 +1,4018 @@
+[
+  {
+    "case_id": "solo_frontliner",
+    "seed": 93000,
+    "hero_ids": [
+      "garran"
+    ],
+    "party_size": 1,
+    "outcome": "victory",
+    "rounds": 5,
+    "turns": 9,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 23,
+    "hero_hp_maximum": 28,
+    "enemies_dead": 0,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "engage": 3,
+      "flee": 2
+    },
+    "morale_events": [
+      "half_skirmishers_defeated"
+    ]
+  },
+  {
+    "case_id": "solo_frontliner",
+    "seed": 93001,
+    "hero_ids": [
+      "garran"
+    ],
+    "party_size": 1,
+    "outcome": "victory",
+    "rounds": 3,
+    "turns": 5,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 28,
+    "hero_hp_maximum": 28,
+    "enemies_dead": 0,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "engage": 1,
+      "flee": 2
+    },
+    "morale_events": [
+      "half_skirmishers_defeated"
+    ]
+  },
+  {
+    "case_id": "solo_frontliner",
+    "seed": 93002,
+    "hero_ids": [
+      "garran"
+    ],
+    "party_size": 1,
+    "outcome": "victory",
+    "rounds": 2,
+    "turns": 4,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 28,
+    "hero_hp_maximum": 28,
+    "enemies_dead": 0,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 2
+    },
+    "morale_events": [
+      "half_skirmishers_defeated"
+    ]
+  },
+  {
+    "case_id": "solo_frontliner",
+    "seed": 93003,
+    "hero_ids": [
+      "garran"
+    ],
+    "party_size": 1,
+    "outcome": "victory",
+    "rounds": 2,
+    "turns": 4,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 28,
+    "hero_hp_maximum": 28,
+    "enemies_dead": 1,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "engage": 2
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "solo_frontliner",
+    "seed": 93004,
+    "hero_ids": [
+      "garran"
+    ],
+    "party_size": 1,
+    "outcome": "victory",
+    "rounds": 4,
+    "turns": 8,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 22,
+    "hero_hp_maximum": 28,
+    "enemies_dead": 0,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "engage": 2,
+      "flee": 2
+    },
+    "morale_events": [
+      "half_skirmishers_defeated"
+    ]
+  },
+  {
+    "case_id": "solo_frontliner",
+    "seed": 93005,
+    "hero_ids": [
+      "garran"
+    ],
+    "party_size": 1,
+    "outcome": "victory",
+    "rounds": 3,
+    "turns": 5,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 28,
+    "hero_hp_maximum": 28,
+    "enemies_dead": 0,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "engage": 1,
+      "flee": 2
+    },
+    "morale_events": [
+      "half_skirmishers_defeated"
+    ]
+  },
+  {
+    "case_id": "solo_frontliner",
+    "seed": 93006,
+    "hero_ids": [
+      "garran"
+    ],
+    "party_size": 1,
+    "outcome": "victory",
+    "rounds": 5,
+    "turns": 10,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 28,
+    "hero_hp_maximum": 28,
+    "enemies_dead": 0,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "engage": 3,
+      "flee": 2
+    },
+    "morale_events": [
+      "half_skirmishers_defeated"
+    ]
+  },
+  {
+    "case_id": "solo_frontliner",
+    "seed": 93007,
+    "hero_ids": [
+      "garran"
+    ],
+    "party_size": 1,
+    "outcome": "victory",
+    "rounds": 4,
+    "turns": 8,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 24,
+    "hero_hp_maximum": 28,
+    "enemies_dead": 0,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "engage": 2,
+      "flee": 2
+    },
+    "morale_events": [
+      "half_skirmishers_defeated"
+    ]
+  },
+  {
+    "case_id": "solo_frontliner",
+    "seed": 93008,
+    "hero_ids": [
+      "garran"
+    ],
+    "party_size": 1,
+    "outcome": "victory",
+    "rounds": 4,
+    "turns": 8,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 28,
+    "hero_hp_maximum": 28,
+    "enemies_dead": 0,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "engage": 2,
+      "flee": 2
+    },
+    "morale_events": [
+      "half_skirmishers_defeated"
+    ]
+  },
+  {
+    "case_id": "solo_frontliner",
+    "seed": 93009,
+    "hero_ids": [
+      "garran"
+    ],
+    "party_size": 1,
+    "outcome": "victory",
+    "rounds": 2,
+    "turns": 4,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 28,
+    "hero_hp_maximum": 28,
+    "enemies_dead": 0,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 2
+    },
+    "morale_events": [
+      "half_skirmishers_defeated"
+    ]
+  },
+  {
+    "case_id": "solo_frontliner",
+    "seed": 93010,
+    "hero_ids": [
+      "garran"
+    ],
+    "party_size": 1,
+    "outcome": "victory",
+    "rounds": 2,
+    "turns": 3,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 28,
+    "hero_hp_maximum": 28,
+    "enemies_dead": 1,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "engage": 1
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "solo_frontliner",
+    "seed": 93011,
+    "hero_ids": [
+      "garran"
+    ],
+    "party_size": 1,
+    "outcome": "victory",
+    "rounds": 3,
+    "turns": 6,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 22,
+    "hero_hp_maximum": 28,
+    "enemies_dead": 0,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "engage": 1,
+      "flee": 2
+    },
+    "morale_events": [
+      "half_skirmishers_defeated"
+    ]
+  },
+  {
+    "case_id": "solo_frontliner",
+    "seed": 93012,
+    "hero_ids": [
+      "garran"
+    ],
+    "party_size": 1,
+    "outcome": "victory",
+    "rounds": 4,
+    "turns": 8,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 15,
+    "hero_hp_maximum": 28,
+    "enemies_dead": 0,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "engage": 2,
+      "flee": 2
+    },
+    "morale_events": [
+      "half_skirmishers_defeated"
+    ]
+  },
+  {
+    "case_id": "solo_frontliner",
+    "seed": 93013,
+    "hero_ids": [
+      "garran"
+    ],
+    "party_size": 1,
+    "outcome": "victory",
+    "rounds": 2,
+    "turns": 4,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 28,
+    "hero_hp_maximum": 28,
+    "enemies_dead": 0,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 2
+    },
+    "morale_events": [
+      "half_skirmishers_defeated"
+    ]
+  },
+  {
+    "case_id": "solo_frontliner",
+    "seed": 93014,
+    "hero_ids": [
+      "garran"
+    ],
+    "party_size": 1,
+    "outcome": "victory",
+    "rounds": 3,
+    "turns": 6,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 23,
+    "hero_hp_maximum": 28,
+    "enemies_dead": 0,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "engage": 1,
+      "flee": 2
+    },
+    "morale_events": [
+      "half_skirmishers_defeated"
+    ]
+  },
+  {
+    "case_id": "solo_frontliner",
+    "seed": 93015,
+    "hero_ids": [
+      "garran"
+    ],
+    "party_size": 1,
+    "outcome": "victory",
+    "rounds": 4,
+    "turns": 7,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 28,
+    "hero_hp_maximum": 28,
+    "enemies_dead": 0,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "engage": 2,
+      "flee": 2
+    },
+    "morale_events": [
+      "half_skirmishers_defeated"
+    ]
+  },
+  {
+    "case_id": "solo_frontliner",
+    "seed": 93016,
+    "hero_ids": [
+      "garran"
+    ],
+    "party_size": 1,
+    "outcome": "victory",
+    "rounds": 8,
+    "turns": 15,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 9,
+    "hero_hp_maximum": 28,
+    "enemies_dead": 0,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "engage": 6,
+      "flee": 2
+    },
+    "morale_events": [
+      "half_skirmishers_defeated"
+    ]
+  },
+  {
+    "case_id": "solo_frontliner",
+    "seed": 93017,
+    "hero_ids": [
+      "garran"
+    ],
+    "party_size": 1,
+    "outcome": "victory",
+    "rounds": 3,
+    "turns": 6,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 28,
+    "hero_hp_maximum": 28,
+    "enemies_dead": 0,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "engage": 1,
+      "flee": 2
+    },
+    "morale_events": [
+      "half_skirmishers_defeated"
+    ]
+  },
+  {
+    "case_id": "solo_frontliner",
+    "seed": 93018,
+    "hero_ids": [
+      "garran"
+    ],
+    "party_size": 1,
+    "outcome": "victory",
+    "rounds": 3,
+    "turns": 5,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 28,
+    "hero_hp_maximum": 28,
+    "enemies_dead": 0,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "engage": 1,
+      "flee": 2
+    },
+    "morale_events": [
+      "half_skirmishers_defeated"
+    ]
+  },
+  {
+    "case_id": "solo_frontliner",
+    "seed": 93019,
+    "hero_ids": [
+      "garran"
+    ],
+    "party_size": 1,
+    "outcome": "victory",
+    "rounds": 2,
+    "turns": 4,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 28,
+    "hero_hp_maximum": 28,
+    "enemies_dead": 0,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 2
+    },
+    "morale_events": [
+      "half_skirmishers_defeated"
+    ]
+  },
+  {
+    "case_id": "duo_frontline_support",
+    "seed": 94000,
+    "hero_ids": [
+      "brakka",
+      "dagna"
+    ],
+    "party_size": 2,
+    "outcome": "victory",
+    "rounds": 3,
+    "turns": 10,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 56,
+    "hero_hp_maximum": 65,
+    "enemies_dead": 1,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 1,
+      "leader_ranged": 2,
+      "pack_attack": 2
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:followers_lost"
+    ]
+  },
+  {
+    "case_id": "duo_frontline_support",
+    "seed": 94001,
+    "hero_ids": [
+      "brakka",
+      "dagna"
+    ],
+    "party_size": 2,
+    "outcome": "victory",
+    "rounds": 8,
+    "turns": 31,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 22,
+    "hero_hp_maximum": 65,
+    "enemies_dead": 1,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 1,
+      "leader_ranged": 7,
+      "pack_attack": 8
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:followers_lost"
+    ]
+  },
+  {
+    "case_id": "duo_frontline_support",
+    "seed": 94002,
+    "hero_ids": [
+      "brakka",
+      "dagna"
+    ],
+    "party_size": 2,
+    "outcome": "victory",
+    "rounds": 4,
+    "turns": 13,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 49,
+    "hero_hp_maximum": 65,
+    "enemies_dead": 1,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 1,
+      "leader_ranged": 3,
+      "pack_attack": 3
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:followers_lost"
+    ]
+  },
+  {
+    "case_id": "duo_frontline_support",
+    "seed": 94003,
+    "hero_ids": [
+      "brakka",
+      "dagna"
+    ],
+    "party_size": 2,
+    "outcome": "victory",
+    "rounds": 3,
+    "turns": 9,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 49,
+    "hero_hp_maximum": 65,
+    "enemies_dead": 1,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 1,
+      "leader_ranged": 2,
+      "pack_attack": 2
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:followers_lost"
+    ]
+  },
+  {
+    "case_id": "duo_frontline_support",
+    "seed": 94004,
+    "hero_ids": [
+      "brakka",
+      "dagna"
+    ],
+    "party_size": 2,
+    "outcome": "victory",
+    "rounds": 7,
+    "turns": 27,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 27,
+    "hero_hp_maximum": 65,
+    "enemies_dead": 1,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 2,
+      "leader_ranged": 6,
+      "pack_attack": 5
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "duo_frontline_support",
+    "seed": 94005,
+    "hero_ids": [
+      "brakka",
+      "dagna"
+    ],
+    "party_size": 2,
+    "outcome": "victory",
+    "rounds": 12,
+    "turns": 46,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 46,
+    "hero_hp_maximum": 65,
+    "enemies_dead": 1,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 1,
+      "leader_ranged": 11,
+      "pack_attack": 11
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:followers_lost"
+    ]
+  },
+  {
+    "case_id": "duo_frontline_support",
+    "seed": 94006,
+    "hero_ids": [
+      "brakka",
+      "dagna"
+    ],
+    "party_size": 2,
+    "outcome": "victory",
+    "rounds": 7,
+    "turns": 24,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 32,
+    "hero_hp_maximum": 65,
+    "enemies_dead": 1,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 1,
+      "leader_ranged": 6,
+      "pack_attack": 5
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:followers_lost"
+    ]
+  },
+  {
+    "case_id": "duo_frontline_support",
+    "seed": 94007,
+    "hero_ids": [
+      "brakka",
+      "dagna"
+    ],
+    "party_size": 2,
+    "outcome": "victory",
+    "rounds": 3,
+    "turns": 12,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 43,
+    "hero_hp_maximum": 65,
+    "enemies_dead": 1,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 1,
+      "leader_ranged": 2,
+      "pack_attack": 3
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:followers_lost"
+    ]
+  },
+  {
+    "case_id": "duo_frontline_support",
+    "seed": 94008,
+    "hero_ids": [
+      "brakka",
+      "dagna"
+    ],
+    "party_size": 2,
+    "outcome": "timeout",
+    "rounds": 15,
+    "turns": 54,
+    "hero_casualties": 1,
+    "hero_hp_remaining": 2,
+    "hero_hp_maximum": 65,
+    "enemies_dead": 0,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 15,
+      "pack_attack": 15
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "duo_frontline_support",
+    "seed": 94009,
+    "hero_ids": [
+      "brakka",
+      "dagna"
+    ],
+    "party_size": 2,
+    "outcome": "victory",
+    "rounds": 4,
+    "turns": 12,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 47,
+    "hero_hp_maximum": 65,
+    "enemies_dead": 1,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 1,
+      "leader_ranged": 3,
+      "pack_attack": 2
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:followers_lost"
+    ]
+  },
+  {
+    "case_id": "duo_frontline_support",
+    "seed": 94010,
+    "hero_ids": [
+      "brakka",
+      "dagna"
+    ],
+    "party_size": 2,
+    "outcome": "victory",
+    "rounds": 4,
+    "turns": 15,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 51,
+    "hero_hp_maximum": 65,
+    "enemies_dead": 1,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 2,
+      "leader_ranged": 3,
+      "pack_attack": 2
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "duo_frontline_support",
+    "seed": 94011,
+    "hero_ids": [
+      "brakka",
+      "dagna"
+    ],
+    "party_size": 2,
+    "outcome": "timeout",
+    "rounds": 15,
+    "turns": 51,
+    "hero_casualties": 2,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 65,
+    "enemies_dead": 0,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 15,
+      "pack_attack": 15
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "duo_frontline_support",
+    "seed": 94012,
+    "hero_ids": [
+      "brakka",
+      "dagna"
+    ],
+    "party_size": 2,
+    "outcome": "defeat",
+    "rounds": 14,
+    "turns": 50,
+    "hero_casualties": 2,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 65,
+    "enemies_dead": 0,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 14,
+      "pack_attack": 14
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "duo_frontline_support",
+    "seed": 94013,
+    "hero_ids": [
+      "brakka",
+      "dagna"
+    ],
+    "party_size": 2,
+    "outcome": "victory",
+    "rounds": 7,
+    "turns": 28,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 25,
+    "hero_hp_maximum": 65,
+    "enemies_dead": 1,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 1,
+      "leader_ranged": 6,
+      "pack_attack": 7
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:followers_lost"
+    ]
+  },
+  {
+    "case_id": "duo_frontline_support",
+    "seed": 94014,
+    "hero_ids": [
+      "brakka",
+      "dagna"
+    ],
+    "party_size": 2,
+    "outcome": "victory",
+    "rounds": 4,
+    "turns": 13,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 38,
+    "hero_hp_maximum": 65,
+    "enemies_dead": 1,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 1,
+      "leader_ranged": 3,
+      "pack_attack": 3
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:followers_lost"
+    ]
+  },
+  {
+    "case_id": "duo_frontline_support",
+    "seed": 94015,
+    "hero_ids": [
+      "brakka",
+      "dagna"
+    ],
+    "party_size": 2,
+    "outcome": "defeat",
+    "rounds": 12,
+    "turns": 42,
+    "hero_casualties": 2,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 65,
+    "enemies_dead": 0,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 11,
+      "pack_attack": 12
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "duo_frontline_support",
+    "seed": 94016,
+    "hero_ids": [
+      "brakka",
+      "dagna"
+    ],
+    "party_size": 2,
+    "outcome": "victory",
+    "rounds": 5,
+    "turns": 17,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 46,
+    "hero_hp_maximum": 65,
+    "enemies_dead": 1,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 1,
+      "leader_ranged": 4,
+      "pack_attack": 4
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:followers_lost"
+    ]
+  },
+  {
+    "case_id": "duo_frontline_support",
+    "seed": 94017,
+    "hero_ids": [
+      "brakka",
+      "dagna"
+    ],
+    "party_size": 2,
+    "outcome": "victory",
+    "rounds": 8,
+    "turns": 29,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 16,
+    "hero_hp_maximum": 65,
+    "enemies_dead": 1,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 1,
+      "leader_ranged": 7,
+      "pack_attack": 7
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:followers_lost"
+    ]
+  },
+  {
+    "case_id": "duo_frontline_support",
+    "seed": 94018,
+    "hero_ids": [
+      "brakka",
+      "dagna"
+    ],
+    "party_size": 2,
+    "outcome": "timeout",
+    "rounds": 15,
+    "turns": 55,
+    "hero_casualties": 1,
+    "hero_hp_remaining": 12,
+    "hero_hp_maximum": 65,
+    "enemies_dead": 0,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 15,
+      "pack_attack": 15
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "duo_frontline_support",
+    "seed": 94019,
+    "hero_ids": [
+      "brakka",
+      "dagna"
+    ],
+    "party_size": 2,
+    "outcome": "victory",
+    "rounds": 7,
+    "turns": 25,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 33,
+    "hero_hp_maximum": 65,
+    "enemies_dead": 1,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 2,
+      "leader_ranged": 5,
+      "pack_attack": 5
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "duo_mobile",
+    "seed": 95000,
+    "hero_ids": [
+      "mira",
+      "erynd"
+    ],
+    "party_size": 2,
+    "outcome": "defeat",
+    "rounds": 12,
+    "turns": 39,
+    "hero_casualties": 2,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 46,
+    "enemies_dead": 0,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 11,
+      "pack_attack": 12
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "duo_mobile",
+    "seed": 95001,
+    "hero_ids": [
+      "mira",
+      "erynd"
+    ],
+    "party_size": 2,
+    "outcome": "victory",
+    "rounds": 8,
+    "turns": 30,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 26,
+    "hero_hp_maximum": 46,
+    "enemies_dead": 1,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 2,
+      "leader_ranged": 6,
+      "pack_attack": 6
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "duo_mobile",
+    "seed": 95002,
+    "hero_ids": [
+      "mira",
+      "erynd"
+    ],
+    "party_size": 2,
+    "outcome": "timeout",
+    "rounds": 15,
+    "turns": 52,
+    "hero_casualties": 1,
+    "hero_hp_remaining": 6,
+    "hero_hp_maximum": 46,
+    "enemies_dead": 0,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 15,
+      "pack_attack": 15
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "duo_mobile",
+    "seed": 95003,
+    "hero_ids": [
+      "mira",
+      "erynd"
+    ],
+    "party_size": 2,
+    "outcome": "victory",
+    "rounds": 8,
+    "turns": 28,
+    "hero_casualties": 1,
+    "hero_hp_remaining": 12,
+    "hero_hp_maximum": 46,
+    "enemies_dead": 1,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 2,
+      "leader_ranged": 6,
+      "pack_attack": 6
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "duo_mobile",
+    "seed": 95004,
+    "hero_ids": [
+      "mira",
+      "erynd"
+    ],
+    "party_size": 2,
+    "outcome": "victory",
+    "rounds": 7,
+    "turns": 23,
+    "hero_casualties": 1,
+    "hero_hp_remaining": 25,
+    "hero_hp_maximum": 46,
+    "enemies_dead": 1,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 2,
+      "leader_ranged": 5,
+      "pack_attack": 5
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "duo_mobile",
+    "seed": 95005,
+    "hero_ids": [
+      "mira",
+      "erynd"
+    ],
+    "party_size": 2,
+    "outcome": "victory",
+    "rounds": 11,
+    "turns": 35,
+    "hero_casualties": 1,
+    "hero_hp_remaining": 6,
+    "hero_hp_maximum": 46,
+    "enemies_dead": 1,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 2,
+      "leader_ranged": 9,
+      "pack_attack": 9
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "duo_mobile",
+    "seed": 95006,
+    "hero_ids": [
+      "mira",
+      "erynd"
+    ],
+    "party_size": 2,
+    "outcome": "victory",
+    "rounds": 5,
+    "turns": 17,
+    "hero_casualties": 1,
+    "hero_hp_remaining": 25,
+    "hero_hp_maximum": 46,
+    "enemies_dead": 1,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 2,
+      "leader_ranged": 3,
+      "pack_attack": 3
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "duo_mobile",
+    "seed": 95007,
+    "hero_ids": [
+      "mira",
+      "erynd"
+    ],
+    "party_size": 2,
+    "outcome": "victory",
+    "rounds": 11,
+    "turns": 39,
+    "hero_casualties": 1,
+    "hero_hp_remaining": 25,
+    "hero_hp_maximum": 46,
+    "enemies_dead": 1,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 2,
+      "leader_ranged": 9,
+      "pack_attack": 9
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "duo_mobile",
+    "seed": 95008,
+    "hero_ids": [
+      "mira",
+      "erynd"
+    ],
+    "party_size": 2,
+    "outcome": "victory",
+    "rounds": 6,
+    "turns": 22,
+    "hero_casualties": 1,
+    "hero_hp_remaining": 25,
+    "hero_hp_maximum": 46,
+    "enemies_dead": 1,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 2,
+      "leader_ranged": 4,
+      "pack_attack": 4
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "duo_mobile",
+    "seed": 95009,
+    "hero_ids": [
+      "mira",
+      "erynd"
+    ],
+    "party_size": 2,
+    "outcome": "defeat",
+    "rounds": 15,
+    "turns": 50,
+    "hero_casualties": 2,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 46,
+    "enemies_dead": 0,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 14,
+      "pack_attack": 15
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "duo_mobile",
+    "seed": 95010,
+    "hero_ids": [
+      "mira",
+      "erynd"
+    ],
+    "party_size": 2,
+    "outcome": "victory",
+    "rounds": 4,
+    "turns": 15,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 31,
+    "hero_hp_maximum": 46,
+    "enemies_dead": 1,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 1,
+      "leader_ranged": 3,
+      "pack_attack": 3
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:followers_lost"
+    ]
+  },
+  {
+    "case_id": "duo_mobile",
+    "seed": 95011,
+    "hero_ids": [
+      "mira",
+      "erynd"
+    ],
+    "party_size": 2,
+    "outcome": "victory",
+    "rounds": 9,
+    "turns": 29,
+    "hero_casualties": 1,
+    "hero_hp_remaining": 10,
+    "hero_hp_maximum": 46,
+    "enemies_dead": 1,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 2,
+      "leader_ranged": 7,
+      "pack_attack": 7
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "duo_mobile",
+    "seed": 95012,
+    "hero_ids": [
+      "mira",
+      "erynd"
+    ],
+    "party_size": 2,
+    "outcome": "victory",
+    "rounds": 10,
+    "turns": 33,
+    "hero_casualties": 1,
+    "hero_hp_remaining": 22,
+    "hero_hp_maximum": 46,
+    "enemies_dead": 1,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 2,
+      "leader_ranged": 8,
+      "pack_attack": 8
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "duo_mobile",
+    "seed": 95013,
+    "hero_ids": [
+      "mira",
+      "erynd"
+    ],
+    "party_size": 2,
+    "outcome": "defeat",
+    "rounds": 11,
+    "turns": 38,
+    "hero_casualties": 2,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 46,
+    "enemies_dead": 0,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 11,
+      "pack_attack": 11
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "duo_mobile",
+    "seed": 95014,
+    "hero_ids": [
+      "mira",
+      "erynd"
+    ],
+    "party_size": 2,
+    "outcome": "defeat",
+    "rounds": 12,
+    "turns": 41,
+    "hero_casualties": 2,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 46,
+    "enemies_dead": 0,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 11,
+      "pack_attack": 12
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "duo_mobile",
+    "seed": 95015,
+    "hero_ids": [
+      "mira",
+      "erynd"
+    ],
+    "party_size": 2,
+    "outcome": "defeat",
+    "rounds": 9,
+    "turns": 32,
+    "hero_casualties": 2,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 46,
+    "enemies_dead": 0,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 9,
+      "pack_attack": 9
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "duo_mobile",
+    "seed": 95016,
+    "hero_ids": [
+      "mira",
+      "erynd"
+    ],
+    "party_size": 2,
+    "outcome": "victory",
+    "rounds": 8,
+    "turns": 31,
+    "hero_casualties": 1,
+    "hero_hp_remaining": 25,
+    "hero_hp_maximum": 46,
+    "enemies_dead": 1,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 2,
+      "leader_ranged": 7,
+      "pack_attack": 6
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "duo_mobile",
+    "seed": 95017,
+    "hero_ids": [
+      "mira",
+      "erynd"
+    ],
+    "party_size": 2,
+    "outcome": "victory",
+    "rounds": 5,
+    "turns": 18,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 27,
+    "hero_hp_maximum": 46,
+    "enemies_dead": 1,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 2,
+      "leader_ranged": 3,
+      "pack_attack": 3
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "duo_mobile",
+    "seed": 95018,
+    "hero_ids": [
+      "mira",
+      "erynd"
+    ],
+    "party_size": 2,
+    "outcome": "victory",
+    "rounds": 10,
+    "turns": 35,
+    "hero_casualties": 1,
+    "hero_hp_remaining": 21,
+    "hero_hp_maximum": 46,
+    "enemies_dead": 1,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 2,
+      "leader_ranged": 8,
+      "pack_attack": 8
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "duo_mobile",
+    "seed": 95019,
+    "hero_ids": [
+      "mira",
+      "erynd"
+    ],
+    "party_size": 2,
+    "outcome": "victory",
+    "rounds": 9,
+    "turns": 27,
+    "hero_casualties": 1,
+    "hero_hp_remaining": 16,
+    "hero_hp_maximum": 46,
+    "enemies_dead": 1,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 2,
+      "leader_ranged": 6,
+      "pack_attack": 7
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "trio_balanced",
+    "seed": 96000,
+    "hero_ids": [
+      "garran",
+      "dagna",
+      "erynd"
+    ],
+    "party_size": 3,
+    "outcome": "defeat",
+    "rounds": 13,
+    "turns": 66,
+    "hero_casualties": 3,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 83,
+    "enemies_dead": 0,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 13,
+      "pack_attack": 25
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "trio_balanced",
+    "seed": 96001,
+    "hero_ids": [
+      "garran",
+      "dagna",
+      "erynd"
+    ],
+    "party_size": 3,
+    "outcome": "defeat",
+    "rounds": 13,
+    "turns": 60,
+    "hero_casualties": 3,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 83,
+    "enemies_dead": 0,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 13,
+      "pack_attack": 24
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "trio_balanced",
+    "seed": 96002,
+    "hero_ids": [
+      "garran",
+      "dagna",
+      "erynd"
+    ],
+    "party_size": 3,
+    "outcome": "defeat",
+    "rounds": 12,
+    "turns": 60,
+    "hero_casualties": 3,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 83,
+    "enemies_dead": 0,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 12,
+      "pack_attack": 24
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "trio_balanced",
+    "seed": 96003,
+    "hero_ids": [
+      "garran",
+      "dagna",
+      "erynd"
+    ],
+    "party_size": 3,
+    "outcome": "victory",
+    "rounds": 9,
+    "turns": 49,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 60,
+    "hero_hp_maximum": 83,
+    "enemies_dead": 1,
+    "enemies_escaped": 2,
+    "enemy_intents": {
+      "flee": 4,
+      "leader_ranged": 7,
+      "pack_advance": 1,
+      "pack_attack": 12
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "trio_balanced",
+    "seed": 96004,
+    "hero_ids": [
+      "garran",
+      "dagna",
+      "erynd"
+    ],
+    "party_size": 3,
+    "outcome": "defeat",
+    "rounds": 15,
+    "turns": 71,
+    "hero_casualties": 3,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 83,
+    "enemies_dead": 0,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 15,
+      "pack_advance": 1,
+      "pack_attack": 27
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "trio_balanced",
+    "seed": 96005,
+    "hero_ids": [
+      "garran",
+      "dagna",
+      "erynd"
+    ],
+    "party_size": 3,
+    "outcome": "timeout",
+    "rounds": 15,
+    "turns": 71,
+    "hero_casualties": 2,
+    "hero_hp_remaining": 1,
+    "hero_hp_maximum": 83,
+    "enemies_dead": 1,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 15,
+      "pack_attack": 22
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "trio_balanced",
+    "seed": 96006,
+    "hero_ids": [
+      "garran",
+      "dagna",
+      "erynd"
+    ],
+    "party_size": 3,
+    "outcome": "defeat",
+    "rounds": 12,
+    "turns": 58,
+    "hero_casualties": 3,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 83,
+    "enemies_dead": 0,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 12,
+      "pack_attack": 24
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "trio_balanced",
+    "seed": 96007,
+    "hero_ids": [
+      "garran",
+      "dagna",
+      "erynd"
+    ],
+    "party_size": 3,
+    "outcome": "defeat",
+    "rounds": 14,
+    "turns": 67,
+    "hero_casualties": 3,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 83,
+    "enemies_dead": 0,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 14,
+      "pack_advance": 1,
+      "pack_attack": 27
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "trio_balanced",
+    "seed": 96008,
+    "hero_ids": [
+      "garran",
+      "dagna",
+      "erynd"
+    ],
+    "party_size": 3,
+    "outcome": "defeat",
+    "rounds": 13,
+    "turns": 62,
+    "hero_casualties": 3,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 83,
+    "enemies_dead": 0,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 12,
+      "pack_attack": 25
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "trio_balanced",
+    "seed": 96009,
+    "hero_ids": [
+      "garran",
+      "dagna",
+      "erynd"
+    ],
+    "party_size": 3,
+    "outcome": "victory",
+    "rounds": 6,
+    "turns": 35,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 58,
+    "hero_hp_maximum": 83,
+    "enemies_dead": 1,
+    "enemies_escaped": 2,
+    "enemy_intents": {
+      "flee": 4,
+      "leader_ranged": 5,
+      "pack_advance": 1,
+      "pack_attack": 7
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "trio_balanced",
+    "seed": 96010,
+    "hero_ids": [
+      "garran",
+      "dagna",
+      "erynd"
+    ],
+    "party_size": 3,
+    "outcome": "defeat",
+    "rounds": 11,
+    "turns": 52,
+    "hero_casualties": 3,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 83,
+    "enemies_dead": 0,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 11,
+      "pack_attack": 21
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "trio_balanced",
+    "seed": 96011,
+    "hero_ids": [
+      "garran",
+      "dagna",
+      "erynd"
+    ],
+    "party_size": 3,
+    "outcome": "defeat",
+    "rounds": 14,
+    "turns": 69,
+    "hero_casualties": 3,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 83,
+    "enemies_dead": 0,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 14,
+      "pack_attack": 27
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "trio_balanced",
+    "seed": 96012,
+    "hero_ids": [
+      "garran",
+      "dagna",
+      "erynd"
+    ],
+    "party_size": 3,
+    "outcome": "defeat",
+    "rounds": 14,
+    "turns": 69,
+    "hero_casualties": 3,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 83,
+    "enemies_dead": 0,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 14,
+      "pack_attack": 28
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "trio_balanced",
+    "seed": 96013,
+    "hero_ids": [
+      "garran",
+      "dagna",
+      "erynd"
+    ],
+    "party_size": 3,
+    "outcome": "victory",
+    "rounds": 13,
+    "turns": 65,
+    "hero_casualties": 2,
+    "hero_hp_remaining": 17,
+    "hero_hp_maximum": 83,
+    "enemies_dead": 1,
+    "enemies_escaped": 2,
+    "enemy_intents": {
+      "flee": 4,
+      "leader_ranged": 10,
+      "pack_attack": 21
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "trio_balanced",
+    "seed": 96014,
+    "hero_ids": [
+      "garran",
+      "dagna",
+      "erynd"
+    ],
+    "party_size": 3,
+    "outcome": "defeat",
+    "rounds": 12,
+    "turns": 58,
+    "hero_casualties": 3,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 83,
+    "enemies_dead": 0,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 12,
+      "pack_attack": 23
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "trio_balanced",
+    "seed": 96015,
+    "hero_ids": [
+      "garran",
+      "dagna",
+      "erynd"
+    ],
+    "party_size": 3,
+    "outcome": "defeat",
+    "rounds": 14,
+    "turns": 70,
+    "hero_casualties": 3,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 83,
+    "enemies_dead": 1,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 14,
+      "pack_attack": 25
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "trio_balanced",
+    "seed": 96016,
+    "hero_ids": [
+      "garran",
+      "dagna",
+      "erynd"
+    ],
+    "party_size": 3,
+    "outcome": "victory",
+    "rounds": 3,
+    "turns": 16,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 70,
+    "hero_hp_maximum": 83,
+    "enemies_dead": 2,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 3,
+      "leader_ranged": 1,
+      "pack_advance": 1,
+      "pack_attack": 2
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "trio_balanced",
+    "seed": 96017,
+    "hero_ids": [
+      "garran",
+      "dagna",
+      "erynd"
+    ],
+    "party_size": 3,
+    "outcome": "defeat",
+    "rounds": 14,
+    "turns": 70,
+    "hero_casualties": 3,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 83,
+    "enemies_dead": 0,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 14,
+      "pack_advance": 1,
+      "pack_attack": 26
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "trio_balanced",
+    "seed": 96018,
+    "hero_ids": [
+      "garran",
+      "dagna",
+      "erynd"
+    ],
+    "party_size": 3,
+    "outcome": "timeout",
+    "rounds": 15,
+    "turns": 74,
+    "hero_casualties": 3,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 83,
+    "enemies_dead": 0,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 15,
+      "pack_attack": 30
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "trio_balanced",
+    "seed": 96019,
+    "hero_ids": [
+      "garran",
+      "dagna",
+      "erynd"
+    ],
+    "party_size": 3,
+    "outcome": "defeat",
+    "rounds": 15,
+    "turns": 73,
+    "hero_casualties": 3,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 83,
+    "enemies_dead": 0,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 15,
+      "pack_attack": 28
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "trio_fragile",
+    "seed": 97000,
+    "hero_ids": [
+      "lorian",
+      "mira",
+      "nimra"
+    ],
+    "party_size": 3,
+    "outcome": "victory",
+    "rounds": 4,
+    "turns": 17,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 51,
+    "hero_hp_maximum": 65,
+    "enemies_dead": 1,
+    "enemies_escaped": 2,
+    "enemy_intents": {
+      "flee": 4,
+      "leader_ranged": 1,
+      "pack_attack": 3
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "trio_fragile",
+    "seed": 97001,
+    "hero_ids": [
+      "lorian",
+      "mira",
+      "nimra"
+    ],
+    "party_size": 3,
+    "outcome": "victory",
+    "rounds": 4,
+    "turns": 16,
+    "hero_casualties": 1,
+    "hero_hp_remaining": 45,
+    "hero_hp_maximum": 65,
+    "enemies_dead": 2,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 1,
+      "leader_ranged": 3,
+      "pack_attack": 3
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:followers_lost"
+    ]
+  },
+  {
+    "case_id": "trio_fragile",
+    "seed": 97002,
+    "hero_ids": [
+      "lorian",
+      "mira",
+      "nimra"
+    ],
+    "party_size": 3,
+    "outcome": "defeat",
+    "rounds": 10,
+    "turns": 51,
+    "hero_casualties": 3,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 65,
+    "enemies_dead": 0,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 10,
+      "pack_advance": 1,
+      "pack_attack": 18
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "trio_fragile",
+    "seed": 97003,
+    "hero_ids": [
+      "lorian",
+      "mira",
+      "nimra"
+    ],
+    "party_size": 3,
+    "outcome": "victory",
+    "rounds": 5,
+    "turns": 23,
+    "hero_casualties": 1,
+    "hero_hp_remaining": 35,
+    "hero_hp_maximum": 65,
+    "enemies_dead": 2,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 1,
+      "leader_ranged": 4,
+      "pack_attack": 6
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:followers_lost"
+    ]
+  },
+  {
+    "case_id": "trio_fragile",
+    "seed": 97004,
+    "hero_ids": [
+      "lorian",
+      "mira",
+      "nimra"
+    ],
+    "party_size": 3,
+    "outcome": "defeat",
+    "rounds": 14,
+    "turns": 58,
+    "hero_casualties": 3,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 65,
+    "enemies_dead": 1,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 14,
+      "pack_attack": 19
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "trio_fragile",
+    "seed": 97005,
+    "hero_ids": [
+      "lorian",
+      "mira",
+      "nimra"
+    ],
+    "party_size": 3,
+    "outcome": "defeat",
+    "rounds": 8,
+    "turns": 40,
+    "hero_casualties": 3,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 65,
+    "enemies_dead": 0,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 8,
+      "pack_advance": 1,
+      "pack_attack": 15
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "trio_fragile",
+    "seed": 97006,
+    "hero_ids": [
+      "lorian",
+      "mira",
+      "nimra"
+    ],
+    "party_size": 3,
+    "outcome": "timeout",
+    "rounds": 15,
+    "turns": 59,
+    "hero_casualties": 3,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 65,
+    "enemies_dead": 1,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 15,
+      "pack_attack": 18
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "trio_fragile",
+    "seed": 97007,
+    "hero_ids": [
+      "lorian",
+      "mira",
+      "nimra"
+    ],
+    "party_size": 3,
+    "outcome": "victory",
+    "rounds": 5,
+    "turns": 26,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 46,
+    "hero_hp_maximum": 65,
+    "enemies_dead": 2,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 1,
+      "leader_ranged": 4,
+      "pack_attack": 7
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:followers_lost"
+    ]
+  },
+  {
+    "case_id": "trio_fragile",
+    "seed": 97008,
+    "hero_ids": [
+      "lorian",
+      "mira",
+      "nimra"
+    ],
+    "party_size": 3,
+    "outcome": "defeat",
+    "rounds": 13,
+    "turns": 49,
+    "hero_casualties": 3,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 65,
+    "enemies_dead": 1,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 13,
+      "pack_attack": 15
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "trio_fragile",
+    "seed": 97009,
+    "hero_ids": [
+      "lorian",
+      "mira",
+      "nimra"
+    ],
+    "party_size": 3,
+    "outcome": "timeout",
+    "rounds": 15,
+    "turns": 61,
+    "hero_casualties": 3,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 65,
+    "enemies_dead": 1,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 15,
+      "pack_attack": 18
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "trio_fragile",
+    "seed": 97010,
+    "hero_ids": [
+      "lorian",
+      "mira",
+      "nimra"
+    ],
+    "party_size": 3,
+    "outcome": "victory",
+    "rounds": 6,
+    "turns": 25,
+    "hero_casualties": 1,
+    "hero_hp_remaining": 37,
+    "hero_hp_maximum": 65,
+    "enemies_dead": 2,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 1,
+      "leader_ranged": 5,
+      "pack_attack": 7
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:followers_lost"
+    ]
+  },
+  {
+    "case_id": "trio_fragile",
+    "seed": 97011,
+    "hero_ids": [
+      "lorian",
+      "mira",
+      "nimra"
+    ],
+    "party_size": 3,
+    "outcome": "victory",
+    "rounds": 6,
+    "turns": 29,
+    "hero_casualties": 1,
+    "hero_hp_remaining": 29,
+    "hero_hp_maximum": 65,
+    "enemies_dead": 2,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 1,
+      "leader_ranged": 5,
+      "pack_attack": 9
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:followers_lost"
+    ]
+  },
+  {
+    "case_id": "trio_fragile",
+    "seed": 97012,
+    "hero_ids": [
+      "lorian",
+      "mira",
+      "nimra"
+    ],
+    "party_size": 3,
+    "outcome": "defeat",
+    "rounds": 14,
+    "turns": 54,
+    "hero_casualties": 3,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 65,
+    "enemies_dead": 1,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 14,
+      "pack_attack": 15
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "trio_fragile",
+    "seed": 97013,
+    "hero_ids": [
+      "lorian",
+      "mira",
+      "nimra"
+    ],
+    "party_size": 3,
+    "outcome": "victory",
+    "rounds": 5,
+    "turns": 23,
+    "hero_casualties": 1,
+    "hero_hp_remaining": 30,
+    "hero_hp_maximum": 65,
+    "enemies_dead": 2,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 1,
+      "leader_ranged": 4,
+      "pack_attack": 6
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:followers_lost"
+    ]
+  },
+  {
+    "case_id": "trio_fragile",
+    "seed": 97014,
+    "hero_ids": [
+      "lorian",
+      "mira",
+      "nimra"
+    ],
+    "party_size": 3,
+    "outcome": "defeat",
+    "rounds": 9,
+    "turns": 44,
+    "hero_casualties": 3,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 65,
+    "enemies_dead": 0,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 9,
+      "pack_advance": 1,
+      "pack_attack": 17
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "trio_fragile",
+    "seed": 97015,
+    "hero_ids": [
+      "lorian",
+      "mira",
+      "nimra"
+    ],
+    "party_size": 3,
+    "outcome": "defeat",
+    "rounds": 9,
+    "turns": 38,
+    "hero_casualties": 3,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 65,
+    "enemies_dead": 1,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 9,
+      "pack_attack": 13
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "trio_fragile",
+    "seed": 97016,
+    "hero_ids": [
+      "lorian",
+      "mira",
+      "nimra"
+    ],
+    "party_size": 3,
+    "outcome": "victory",
+    "rounds": 6,
+    "turns": 27,
+    "hero_casualties": 1,
+    "hero_hp_remaining": 29,
+    "hero_hp_maximum": 65,
+    "enemies_dead": 2,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 1,
+      "leader_ranged": 5,
+      "pack_advance": 1,
+      "pack_attack": 6
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:followers_lost"
+    ]
+  },
+  {
+    "case_id": "trio_fragile",
+    "seed": 97017,
+    "hero_ids": [
+      "lorian",
+      "mira",
+      "nimra"
+    ],
+    "party_size": 3,
+    "outcome": "defeat",
+    "rounds": 13,
+    "turns": 52,
+    "hero_casualties": 3,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 65,
+    "enemies_dead": 1,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 12,
+      "pack_attack": 16
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "trio_fragile",
+    "seed": 97018,
+    "hero_ids": [
+      "lorian",
+      "mira",
+      "nimra"
+    ],
+    "party_size": 3,
+    "outcome": "victory",
+    "rounds": 6,
+    "turns": 28,
+    "hero_casualties": 1,
+    "hero_hp_remaining": 29,
+    "hero_hp_maximum": 65,
+    "enemies_dead": 2,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 1,
+      "leader_ranged": 5,
+      "pack_attack": 9
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:followers_lost"
+    ]
+  },
+  {
+    "case_id": "trio_fragile",
+    "seed": 97019,
+    "hero_ids": [
+      "lorian",
+      "mira",
+      "nimra"
+    ],
+    "party_size": 3,
+    "outcome": "defeat",
+    "rounds": 13,
+    "turns": 54,
+    "hero_casualties": 3,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 65,
+    "enemies_dead": 1,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 12,
+      "pack_attack": 18
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "four_mixed",
+    "seed": 98000,
+    "hero_ids": [
+      "brakka",
+      "dagna",
+      "erynd",
+      "nimra"
+    ],
+    "party_size": 4,
+    "outcome": "defeat",
+    "rounds": 14,
+    "turns": 74,
+    "hero_casualties": 4,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 110,
+    "enemies_dead": 2,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 14,
+      "pack_advance": 1,
+      "pack_attack": 30
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "four_mixed",
+    "seed": 98001,
+    "hero_ids": [
+      "brakka",
+      "dagna",
+      "erynd",
+      "nimra"
+    ],
+    "party_size": 4,
+    "outcome": "defeat",
+    "rounds": 9,
+    "turns": 53,
+    "hero_casualties": 4,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 110,
+    "enemies_dead": 0,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 9,
+      "pack_attack": 25
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "four_mixed",
+    "seed": 98002,
+    "hero_ids": [
+      "brakka",
+      "dagna",
+      "erynd",
+      "nimra"
+    ],
+    "party_size": 4,
+    "outcome": "victory",
+    "rounds": 3,
+    "turns": 21,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 110,
+    "hero_hp_maximum": 110,
+    "enemies_dead": 2,
+    "enemies_escaped": 2,
+    "enemy_intents": {
+      "flee": 4,
+      "leader_ranged": 1,
+      "pack_advance": 2,
+      "pack_attack": 2
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "four_mixed",
+    "seed": 98003,
+    "hero_ids": [
+      "brakka",
+      "dagna",
+      "erynd",
+      "nimra"
+    ],
+    "party_size": 4,
+    "outcome": "defeat",
+    "rounds": 13,
+    "turns": 68,
+    "hero_casualties": 4,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 110,
+    "enemies_dead": 1,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 13,
+      "pack_attack": 28
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "four_mixed",
+    "seed": 98004,
+    "hero_ids": [
+      "brakka",
+      "dagna",
+      "erynd",
+      "nimra"
+    ],
+    "party_size": 4,
+    "outcome": "victory",
+    "rounds": 3,
+    "turns": 20,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 83,
+    "hero_hp_maximum": 110,
+    "enemies_dead": 3,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 3,
+      "leader_ranged": 1,
+      "pack_attack": 4
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "four_mixed",
+    "seed": 98005,
+    "hero_ids": [
+      "brakka",
+      "dagna",
+      "erynd",
+      "nimra"
+    ],
+    "party_size": 4,
+    "outcome": "victory",
+    "rounds": 6,
+    "turns": 41,
+    "hero_casualties": 1,
+    "hero_hp_remaining": 58,
+    "hero_hp_maximum": 110,
+    "enemies_dead": 1,
+    "enemies_escaped": 3,
+    "enemy_intents": {
+      "flee": 6,
+      "leader_ranged": 4,
+      "pack_attack": 12
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "four_mixed",
+    "seed": 98006,
+    "hero_ids": [
+      "brakka",
+      "dagna",
+      "erynd",
+      "nimra"
+    ],
+    "party_size": 4,
+    "outcome": "victory",
+    "rounds": 7,
+    "turns": 44,
+    "hero_casualties": 2,
+    "hero_hp_remaining": 60,
+    "hero_hp_maximum": 110,
+    "enemies_dead": 1,
+    "enemies_escaped": 3,
+    "enemy_intents": {
+      "flee": 6,
+      "leader_ranged": 5,
+      "pack_attack": 15
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "four_mixed",
+    "seed": 98007,
+    "hero_ids": [
+      "brakka",
+      "dagna",
+      "erynd",
+      "nimra"
+    ],
+    "party_size": 4,
+    "outcome": "defeat",
+    "rounds": 13,
+    "turns": 66,
+    "hero_casualties": 4,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 110,
+    "enemies_dead": 2,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 13,
+      "pack_advance": 1,
+      "pack_attack": 28
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "four_mixed",
+    "seed": 98008,
+    "hero_ids": [
+      "brakka",
+      "dagna",
+      "erynd",
+      "nimra"
+    ],
+    "party_size": 4,
+    "outcome": "victory",
+    "rounds": 4,
+    "turns": 25,
+    "hero_casualties": 1,
+    "hero_hp_remaining": 90,
+    "hero_hp_maximum": 110,
+    "enemies_dead": 2,
+    "enemies_escaped": 2,
+    "enemy_intents": {
+      "flee": 5,
+      "leader_ranged": 2,
+      "pack_attack": 5
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "four_mixed",
+    "seed": 98009,
+    "hero_ids": [
+      "brakka",
+      "dagna",
+      "erynd",
+      "nimra"
+    ],
+    "party_size": 4,
+    "outcome": "defeat",
+    "rounds": 15,
+    "turns": 70,
+    "hero_casualties": 4,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 110,
+    "enemies_dead": 2,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 15,
+      "pack_attack": 26
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "four_mixed",
+    "seed": 98010,
+    "hero_ids": [
+      "brakka",
+      "dagna",
+      "erynd",
+      "nimra"
+    ],
+    "party_size": 4,
+    "outcome": "victory",
+    "rounds": 3,
+    "turns": 22,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 88,
+    "hero_hp_maximum": 110,
+    "enemies_dead": 1,
+    "enemies_escaped": 3,
+    "enemy_intents": {
+      "flee": 6,
+      "leader_ranged": 2,
+      "pack_advance": 2,
+      "pack_attack": 1
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "four_mixed",
+    "seed": 98011,
+    "hero_ids": [
+      "brakka",
+      "dagna",
+      "erynd",
+      "nimra"
+    ],
+    "party_size": 4,
+    "outcome": "victory",
+    "rounds": 4,
+    "turns": 28,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 83,
+    "hero_hp_maximum": 110,
+    "enemies_dead": 2,
+    "enemies_escaped": 2,
+    "enemy_intents": {
+      "flee": 4,
+      "leader_ranged": 3,
+      "pack_advance": 2,
+      "pack_attack": 5
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "four_mixed",
+    "seed": 98012,
+    "hero_ids": [
+      "brakka",
+      "dagna",
+      "erynd",
+      "nimra"
+    ],
+    "party_size": 4,
+    "outcome": "victory",
+    "rounds": 7,
+    "turns": 44,
+    "hero_casualties": 1,
+    "hero_hp_remaining": 58,
+    "hero_hp_maximum": 110,
+    "enemies_dead": 2,
+    "enemies_escaped": 2,
+    "enemy_intents": {
+      "flee": 4,
+      "leader_ranged": 5,
+      "pack_attack": 12
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "four_mixed",
+    "seed": 98013,
+    "hero_ids": [
+      "brakka",
+      "dagna",
+      "erynd",
+      "nimra"
+    ],
+    "party_size": 4,
+    "outcome": "victory",
+    "rounds": 4,
+    "turns": 28,
+    "hero_casualties": 1,
+    "hero_hp_remaining": 90,
+    "hero_hp_maximum": 110,
+    "enemies_dead": 1,
+    "enemies_escaped": 3,
+    "enemy_intents": {
+      "flee": 6,
+      "leader_ranged": 2,
+      "pack_advance": 2,
+      "pack_attack": 4
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "four_mixed",
+    "seed": 98014,
+    "hero_ids": [
+      "brakka",
+      "dagna",
+      "erynd",
+      "nimra"
+    ],
+    "party_size": 4,
+    "outcome": "defeat",
+    "rounds": 9,
+    "turns": 54,
+    "hero_casualties": 4,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 110,
+    "enemies_dead": 0,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 9,
+      "pack_attack": 26
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "four_mixed",
+    "seed": 98015,
+    "hero_ids": [
+      "brakka",
+      "dagna",
+      "erynd",
+      "nimra"
+    ],
+    "party_size": 4,
+    "outcome": "defeat",
+    "rounds": 9,
+    "turns": 51,
+    "hero_casualties": 4,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 110,
+    "enemies_dead": 0,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 8,
+      "pack_attack": 25
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "four_mixed",
+    "seed": 98016,
+    "hero_ids": [
+      "brakka",
+      "dagna",
+      "erynd",
+      "nimra"
+    ],
+    "party_size": 4,
+    "outcome": "victory",
+    "rounds": 4,
+    "turns": 30,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 81,
+    "hero_hp_maximum": 110,
+    "enemies_dead": 1,
+    "enemies_escaped": 3,
+    "enemy_intents": {
+      "flee": 6,
+      "leader_ranged": 2,
+      "pack_advance": 2,
+      "pack_attack": 4
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "four_mixed",
+    "seed": 98017,
+    "hero_ids": [
+      "brakka",
+      "dagna",
+      "erynd",
+      "nimra"
+    ],
+    "party_size": 4,
+    "outcome": "victory",
+    "rounds": 6,
+    "turns": 39,
+    "hero_casualties": 1,
+    "hero_hp_remaining": 63,
+    "hero_hp_maximum": 110,
+    "enemies_dead": 1,
+    "enemies_escaped": 3,
+    "enemy_intents": {
+      "flee": 6,
+      "leader_ranged": 4,
+      "pack_advance": 2,
+      "pack_attack": 9
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "four_mixed",
+    "seed": 98018,
+    "hero_ids": [
+      "brakka",
+      "dagna",
+      "erynd",
+      "nimra"
+    ],
+    "party_size": 4,
+    "outcome": "victory",
+    "rounds": 5,
+    "turns": 30,
+    "hero_casualties": 1,
+    "hero_hp_remaining": 74,
+    "hero_hp_maximum": 110,
+    "enemies_dead": 2,
+    "enemies_escaped": 2,
+    "enemy_intents": {
+      "flee": 5,
+      "leader_ranged": 3,
+      "pack_attack": 9
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "four_mixed",
+    "seed": 98019,
+    "hero_ids": [
+      "brakka",
+      "dagna",
+      "erynd",
+      "nimra"
+    ],
+    "party_size": 4,
+    "outcome": "defeat",
+    "rounds": 9,
+    "turns": 54,
+    "hero_casualties": 4,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 110,
+    "enemies_dead": 0,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 8,
+      "pack_attack": 25
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "five_balanced",
+    "seed": 99000,
+    "hero_ids": [
+      "garran",
+      "brakka",
+      "dagna",
+      "mira",
+      "erynd"
+    ],
+    "party_size": 5,
+    "outcome": "victory",
+    "rounds": 9,
+    "turns": 65,
+    "hero_casualties": 1,
+    "hero_hp_remaining": 73,
+    "hero_hp_maximum": 139,
+    "enemies_dead": 3,
+    "enemies_escaped": 2,
+    "enemy_intents": {
+      "flee": 4,
+      "leader_ranged": 7,
+      "pack_advance": 3,
+      "pack_attack": 16
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "five_balanced",
+    "seed": 99001,
+    "hero_ids": [
+      "garran",
+      "brakka",
+      "dagna",
+      "mira",
+      "erynd"
+    ],
+    "party_size": 5,
+    "outcome": "victory",
+    "rounds": 11,
+    "turns": 77,
+    "hero_casualties": 4,
+    "hero_hp_remaining": 25,
+    "hero_hp_maximum": 139,
+    "enemies_dead": 2,
+    "enemies_escaped": 3,
+    "enemy_intents": {
+      "flee": 6,
+      "leader_ranged": 9,
+      "pack_advance": 2,
+      "pack_attack": 29
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "five_balanced",
+    "seed": 99002,
+    "hero_ids": [
+      "garran",
+      "brakka",
+      "dagna",
+      "mira",
+      "erynd"
+    ],
+    "party_size": 5,
+    "outcome": "victory",
+    "rounds": 6,
+    "turns": 43,
+    "hero_casualties": 1,
+    "hero_hp_remaining": 100,
+    "hero_hp_maximum": 139,
+    "enemies_dead": 5,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 6,
+      "pack_advance": 2,
+      "pack_attack": 11
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "five_balanced",
+    "seed": 99003,
+    "hero_ids": [
+      "garran",
+      "brakka",
+      "dagna",
+      "mira",
+      "erynd"
+    ],
+    "party_size": 5,
+    "outcome": "timeout",
+    "rounds": 15,
+    "turns": 88,
+    "hero_casualties": 4,
+    "hero_hp_remaining": 18,
+    "hero_hp_maximum": 139,
+    "enemies_dead": 3,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 15,
+      "pack_advance": 2,
+      "pack_attack": 30
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "five_balanced",
+    "seed": 99004,
+    "hero_ids": [
+      "garran",
+      "brakka",
+      "dagna",
+      "mira",
+      "erynd"
+    ],
+    "party_size": 5,
+    "outcome": "timeout",
+    "rounds": 15,
+    "turns": 89,
+    "hero_casualties": 4,
+    "hero_hp_remaining": 17,
+    "hero_hp_maximum": 139,
+    "enemies_dead": 3,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 15,
+      "pack_advance": 2,
+      "pack_attack": 32
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "five_balanced",
+    "seed": 99005,
+    "hero_ids": [
+      "garran",
+      "brakka",
+      "dagna",
+      "mira",
+      "erynd"
+    ],
+    "party_size": 5,
+    "outcome": "defeat",
+    "rounds": 9,
+    "turns": 71,
+    "hero_casualties": 5,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 139,
+    "enemies_dead": 0,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 9,
+      "pack_advance": 2,
+      "pack_attack": 32
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "five_balanced",
+    "seed": 99006,
+    "hero_ids": [
+      "garran",
+      "brakka",
+      "dagna",
+      "mira",
+      "erynd"
+    ],
+    "party_size": 5,
+    "outcome": "timeout",
+    "rounds": 15,
+    "turns": 85,
+    "hero_casualties": 4,
+    "hero_hp_remaining": 25,
+    "hero_hp_maximum": 139,
+    "enemies_dead": 3,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 15,
+      "pack_advance": 2,
+      "pack_attack": 26
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "five_balanced",
+    "seed": 99007,
+    "hero_ids": [
+      "garran",
+      "brakka",
+      "dagna",
+      "mira",
+      "erynd"
+    ],
+    "party_size": 5,
+    "outcome": "victory",
+    "rounds": 7,
+    "turns": 52,
+    "hero_casualties": 2,
+    "hero_hp_remaining": 83,
+    "hero_hp_maximum": 139,
+    "enemies_dead": 3,
+    "enemies_escaped": 2,
+    "enemy_intents": {
+      "flee": 5,
+      "leader_ranged": 5,
+      "pack_advance": 2,
+      "pack_attack": 14
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "five_balanced",
+    "seed": 99008,
+    "hero_ids": [
+      "garran",
+      "brakka",
+      "dagna",
+      "mira",
+      "erynd"
+    ],
+    "party_size": 5,
+    "outcome": "victory",
+    "rounds": 12,
+    "turns": 71,
+    "hero_casualties": 2,
+    "hero_hp_remaining": 76,
+    "hero_hp_maximum": 139,
+    "enemies_dead": 4,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 1,
+      "leader_ranged": 11,
+      "pack_advance": 1,
+      "pack_attack": 18
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:followers_lost"
+    ]
+  },
+  {
+    "case_id": "five_balanced",
+    "seed": 99009,
+    "hero_ids": [
+      "garran",
+      "brakka",
+      "dagna",
+      "mira",
+      "erynd"
+    ],
+    "party_size": 5,
+    "outcome": "victory",
+    "rounds": 10,
+    "turns": 65,
+    "hero_casualties": 2,
+    "hero_hp_remaining": 93,
+    "hero_hp_maximum": 139,
+    "enemies_dead": 4,
+    "enemies_escaped": 1,
+    "enemy_intents": {
+      "flee": 1,
+      "leader_ranged": 9,
+      "pack_advance": 2,
+      "pack_attack": 16
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:followers_lost"
+    ]
+  },
+  {
+    "case_id": "five_balanced",
+    "seed": 99010,
+    "hero_ids": [
+      "garran",
+      "brakka",
+      "dagna",
+      "mira",
+      "erynd"
+    ],
+    "party_size": 5,
+    "outcome": "victory",
+    "rounds": 5,
+    "turns": 42,
+    "hero_casualties": 1,
+    "hero_hp_remaining": 111,
+    "hero_hp_maximum": 139,
+    "enemies_dead": 2,
+    "enemies_escaped": 3,
+    "enemy_intents": {
+      "flee": 6,
+      "leader_ranged": 3,
+      "pack_advance": 2,
+      "pack_attack": 8
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "five_balanced",
+    "seed": 99011,
+    "hero_ids": [
+      "garran",
+      "brakka",
+      "dagna",
+      "mira",
+      "erynd"
+    ],
+    "party_size": 5,
+    "outcome": "victory",
+    "rounds": 4,
+    "turns": 33,
+    "hero_casualties": 1,
+    "hero_hp_remaining": 111,
+    "hero_hp_maximum": 139,
+    "enemies_dead": 2,
+    "enemies_escaped": 3,
+    "enemy_intents": {
+      "flee": 7,
+      "leader_ranged": 2,
+      "pack_advance": 2,
+      "pack_attack": 4
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "five_balanced",
+    "seed": 99012,
+    "hero_ids": [
+      "garran",
+      "brakka",
+      "dagna",
+      "mira",
+      "erynd"
+    ],
+    "party_size": 5,
+    "outcome": "victory",
+    "rounds": 5,
+    "turns": 37,
+    "hero_casualties": 1,
+    "hero_hp_remaining": 113,
+    "hero_hp_maximum": 139,
+    "enemies_dead": 2,
+    "enemies_escaped": 3,
+    "enemy_intents": {
+      "flee": 7,
+      "leader_ranged": 2,
+      "pack_advance": 2,
+      "pack_attack": 7
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "five_balanced",
+    "seed": 99013,
+    "hero_ids": [
+      "garran",
+      "brakka",
+      "dagna",
+      "mira",
+      "erynd"
+    ],
+    "party_size": 5,
+    "outcome": "defeat",
+    "rounds": 11,
+    "turns": 78,
+    "hero_casualties": 5,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 139,
+    "enemies_dead": 1,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 10,
+      "pack_advance": 2,
+      "pack_attack": 36
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "five_balanced",
+    "seed": 99014,
+    "hero_ids": [
+      "garran",
+      "brakka",
+      "dagna",
+      "mira",
+      "erynd"
+    ],
+    "party_size": 5,
+    "outcome": "victory",
+    "rounds": 6,
+    "turns": 50,
+    "hero_casualties": 2,
+    "hero_hp_remaining": 90,
+    "hero_hp_maximum": 139,
+    "enemies_dead": 3,
+    "enemies_escaped": 2,
+    "enemy_intents": {
+      "flee": 5,
+      "leader_ranged": 4,
+      "pack_advance": 2,
+      "pack_attack": 13
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "five_balanced",
+    "seed": 99015,
+    "hero_ids": [
+      "garran",
+      "brakka",
+      "dagna",
+      "mira",
+      "erynd"
+    ],
+    "party_size": 5,
+    "outcome": "defeat",
+    "rounds": 9,
+    "turns": 64,
+    "hero_casualties": 5,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 139,
+    "enemies_dead": 0,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 8,
+      "pack_advance": 2,
+      "pack_attack": 31
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "five_balanced",
+    "seed": 99016,
+    "hero_ids": [
+      "garran",
+      "brakka",
+      "dagna",
+      "mira",
+      "erynd"
+    ],
+    "party_size": 5,
+    "outcome": "defeat",
+    "rounds": 9,
+    "turns": 71,
+    "hero_casualties": 5,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 139,
+    "enemies_dead": 0,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 9,
+      "pack_advance": 1,
+      "pack_attack": 35
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "five_balanced",
+    "seed": 99017,
+    "hero_ids": [
+      "garran",
+      "brakka",
+      "dagna",
+      "mira",
+      "erynd"
+    ],
+    "party_size": 5,
+    "outcome": "victory",
+    "rounds": 7,
+    "turns": 53,
+    "hero_casualties": 2,
+    "hero_hp_remaining": 69,
+    "hero_hp_maximum": 139,
+    "enemies_dead": 2,
+    "enemies_escaped": 3,
+    "enemy_intents": {
+      "flee": 7,
+      "leader_ranged": 4,
+      "pack_advance": 2,
+      "pack_attack": 15
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "five_balanced",
+    "seed": 99018,
+    "hero_ids": [
+      "garran",
+      "brakka",
+      "dagna",
+      "mira",
+      "erynd"
+    ],
+    "party_size": 5,
+    "outcome": "defeat",
+    "rounds": 12,
+    "turns": 78,
+    "hero_casualties": 5,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 139,
+    "enemies_dead": 2,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 12,
+      "pack_advance": 2,
+      "pack_attack": 35
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "five_balanced",
+    "seed": 99019,
+    "hero_ids": [
+      "garran",
+      "brakka",
+      "dagna",
+      "mira",
+      "erynd"
+    ],
+    "party_size": 5,
+    "outcome": "victory",
+    "rounds": 8,
+    "turns": 63,
+    "hero_casualties": 1,
+    "hero_hp_remaining": 68,
+    "hero_hp_maximum": 139,
+    "enemies_dead": 3,
+    "enemies_escaped": 2,
+    "enemy_intents": {
+      "flee": 4,
+      "leader_ranged": 7,
+      "pack_advance": 1,
+      "pack_attack": 16
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "five_ranged",
+    "seed": 100000,
+    "hero_ids": [
+      "lorian",
+      "dagna",
+      "mira",
+      "nimra",
+      "erynd"
+    ],
+    "party_size": 5,
+    "outcome": "victory",
+    "rounds": 7,
+    "turns": 57,
+    "hero_casualties": 3,
+    "hero_hp_remaining": 49,
+    "hero_hp_maximum": 120,
+    "enemies_dead": 1,
+    "enemies_escaped": 4,
+    "enemy_intents": {
+      "flee": 8,
+      "leader_ranged": 5,
+      "pack_advance": 2,
+      "pack_attack": 18
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "five_ranged",
+    "seed": 100001,
+    "hero_ids": [
+      "lorian",
+      "dagna",
+      "mira",
+      "nimra",
+      "erynd"
+    ],
+    "party_size": 5,
+    "outcome": "victory",
+    "rounds": 5,
+    "turns": 37,
+    "hero_casualties": 1,
+    "hero_hp_remaining": 83,
+    "hero_hp_maximum": 120,
+    "enemies_dead": 2,
+    "enemies_escaped": 3,
+    "enemy_intents": {
+      "flee": 7,
+      "leader_ranged": 3,
+      "pack_advance": 1,
+      "pack_attack": 8
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "five_ranged",
+    "seed": 100002,
+    "hero_ids": [
+      "lorian",
+      "dagna",
+      "mira",
+      "nimra",
+      "erynd"
+    ],
+    "party_size": 5,
+    "outcome": "defeat",
+    "rounds": 8,
+    "turns": 60,
+    "hero_casualties": 5,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 120,
+    "enemies_dead": 0,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 7,
+      "pack_advance": 2,
+      "pack_attack": 28
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "five_ranged",
+    "seed": 100003,
+    "hero_ids": [
+      "lorian",
+      "dagna",
+      "mira",
+      "nimra",
+      "erynd"
+    ],
+    "party_size": 5,
+    "outcome": "victory",
+    "rounds": 8,
+    "turns": 62,
+    "hero_casualties": 3,
+    "hero_hp_remaining": 43,
+    "hero_hp_maximum": 120,
+    "enemies_dead": 1,
+    "enemies_escaped": 4,
+    "enemy_intents": {
+      "flee": 8,
+      "leader_ranged": 6,
+      "pack_advance": 1,
+      "pack_attack": 21
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "five_ranged",
+    "seed": 100004,
+    "hero_ids": [
+      "lorian",
+      "dagna",
+      "mira",
+      "nimra",
+      "erynd"
+    ],
+    "party_size": 5,
+    "outcome": "victory",
+    "rounds": 4,
+    "turns": 34,
+    "hero_casualties": 1,
+    "hero_hp_remaining": 92,
+    "hero_hp_maximum": 120,
+    "enemies_dead": 1,
+    "enemies_escaped": 4,
+    "enemy_intents": {
+      "flee": 8,
+      "leader_ranged": 2,
+      "pack_advance": 2,
+      "pack_attack": 6
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "five_ranged",
+    "seed": 100005,
+    "hero_ids": [
+      "lorian",
+      "dagna",
+      "mira",
+      "nimra",
+      "erynd"
+    ],
+    "party_size": 5,
+    "outcome": "defeat",
+    "rounds": 10,
+    "turns": 72,
+    "hero_casualties": 5,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 120,
+    "enemies_dead": 1,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 10,
+      "pack_advance": 1,
+      "pack_attack": 31
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "five_ranged",
+    "seed": 100006,
+    "hero_ids": [
+      "lorian",
+      "dagna",
+      "mira",
+      "nimra",
+      "erynd"
+    ],
+    "party_size": 5,
+    "outcome": "defeat",
+    "rounds": 10,
+    "turns": 70,
+    "hero_casualties": 5,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 120,
+    "enemies_dead": 1,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 10,
+      "pack_advance": 2,
+      "pack_attack": 32
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "five_ranged",
+    "seed": 100007,
+    "hero_ids": [
+      "lorian",
+      "dagna",
+      "mira",
+      "nimra",
+      "erynd"
+    ],
+    "party_size": 5,
+    "outcome": "victory",
+    "rounds": 3,
+    "turns": 29,
+    "hero_casualties": 1,
+    "hero_hp_remaining": 100,
+    "hero_hp_maximum": 120,
+    "enemies_dead": 1,
+    "enemies_escaped": 4,
+    "enemy_intents": {
+      "flee": 8,
+      "leader_ranged": 2,
+      "pack_advance": 2,
+      "pack_attack": 2
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "five_ranged",
+    "seed": 100008,
+    "hero_ids": [
+      "lorian",
+      "dagna",
+      "mira",
+      "nimra",
+      "erynd"
+    ],
+    "party_size": 5,
+    "outcome": "victory",
+    "rounds": 3,
+    "turns": 28,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 111,
+    "hero_hp_maximum": 120,
+    "enemies_dead": 2,
+    "enemies_escaped": 3,
+    "enemy_intents": {
+      "flee": 7,
+      "leader_ranged": 2,
+      "pack_advance": 2,
+      "pack_attack": 2
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "five_ranged",
+    "seed": 100009,
+    "hero_ids": [
+      "lorian",
+      "dagna",
+      "mira",
+      "nimra",
+      "erynd"
+    ],
+    "party_size": 5,
+    "outcome": "defeat",
+    "rounds": 8,
+    "turns": 61,
+    "hero_casualties": 5,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 120,
+    "enemies_dead": 0,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 7,
+      "pack_advance": 1,
+      "pack_attack": 31
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "five_ranged",
+    "seed": 100010,
+    "hero_ids": [
+      "lorian",
+      "dagna",
+      "mira",
+      "nimra",
+      "erynd"
+    ],
+    "party_size": 5,
+    "outcome": "victory",
+    "rounds": 6,
+    "turns": 52,
+    "hero_casualties": 2,
+    "hero_hp_remaining": 70,
+    "hero_hp_maximum": 120,
+    "enemies_dead": 1,
+    "enemies_escaped": 4,
+    "enemy_intents": {
+      "flee": 8,
+      "leader_ranged": 4,
+      "pack_advance": 2,
+      "pack_attack": 14
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "five_ranged",
+    "seed": 100011,
+    "hero_ids": [
+      "lorian",
+      "dagna",
+      "mira",
+      "nimra",
+      "erynd"
+    ],
+    "party_size": 5,
+    "outcome": "defeat",
+    "rounds": 10,
+    "turns": 69,
+    "hero_casualties": 5,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 120,
+    "enemies_dead": 1,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 10,
+      "pack_advance": 2,
+      "pack_attack": 32
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "five_ranged",
+    "seed": 100012,
+    "hero_ids": [
+      "lorian",
+      "dagna",
+      "mira",
+      "nimra",
+      "erynd"
+    ],
+    "party_size": 5,
+    "outcome": "defeat",
+    "rounds": 9,
+    "turns": 70,
+    "hero_casualties": 5,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 120,
+    "enemies_dead": 0,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 9,
+      "pack_advance": 2,
+      "pack_attack": 33
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "five_ranged",
+    "seed": 100013,
+    "hero_ids": [
+      "lorian",
+      "dagna",
+      "mira",
+      "nimra",
+      "erynd"
+    ],
+    "party_size": 5,
+    "outcome": "defeat",
+    "rounds": 14,
+    "turns": 86,
+    "hero_casualties": 5,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 120,
+    "enemies_dead": 2,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 14,
+      "pack_advance": 2,
+      "pack_attack": 34
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "five_ranged",
+    "seed": 100014,
+    "hero_ids": [
+      "lorian",
+      "dagna",
+      "mira",
+      "nimra",
+      "erynd"
+    ],
+    "party_size": 5,
+    "outcome": "victory",
+    "rounds": 4,
+    "turns": 32,
+    "hero_casualties": 1,
+    "hero_hp_remaining": 99,
+    "hero_hp_maximum": 120,
+    "enemies_dead": 2,
+    "enemies_escaped": 3,
+    "enemy_intents": {
+      "flee": 6,
+      "leader_ranged": 2,
+      "pack_advance": 2,
+      "pack_attack": 4
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "five_ranged",
+    "seed": 100015,
+    "hero_ids": [
+      "lorian",
+      "dagna",
+      "mira",
+      "nimra",
+      "erynd"
+    ],
+    "party_size": 5,
+    "outcome": "defeat",
+    "rounds": 8,
+    "turns": 64,
+    "hero_casualties": 5,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 120,
+    "enemies_dead": 0,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 8,
+      "pack_advance": 2,
+      "pack_attack": 30
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "five_ranged",
+    "seed": 100016,
+    "hero_ids": [
+      "lorian",
+      "dagna",
+      "mira",
+      "nimra",
+      "erynd"
+    ],
+    "party_size": 5,
+    "outcome": "defeat",
+    "rounds": 11,
+    "turns": 76,
+    "hero_casualties": 5,
+    "hero_hp_remaining": 0,
+    "hero_hp_maximum": 120,
+    "enemies_dead": 1,
+    "enemies_escaped": 0,
+    "enemy_intents": {
+      "leader_ranged": 11,
+      "pack_advance": 1,
+      "pack_attack": 35
+    },
+    "morale_events": []
+  },
+  {
+    "case_id": "five_ranged",
+    "seed": 100017,
+    "hero_ids": [
+      "lorian",
+      "dagna",
+      "mira",
+      "nimra",
+      "erynd"
+    ],
+    "party_size": 5,
+    "outcome": "victory",
+    "rounds": 4,
+    "turns": 30,
+    "hero_casualties": 1,
+    "hero_hp_remaining": 99,
+    "hero_hp_maximum": 120,
+    "enemies_dead": 2,
+    "enemies_escaped": 3,
+    "enemy_intents": {
+      "flee": 7,
+      "leader_ranged": 2,
+      "pack_advance": 2,
+      "pack_attack": 5
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "five_ranged",
+    "seed": 100018,
+    "hero_ids": [
+      "lorian",
+      "dagna",
+      "mira",
+      "nimra",
+      "erynd"
+    ],
+    "party_size": 5,
+    "outcome": "victory",
+    "rounds": 4,
+    "turns": 34,
+    "hero_casualties": 1,
+    "hero_hp_remaining": 84,
+    "hero_hp_maximum": 120,
+    "enemies_dead": 2,
+    "enemies_escaped": 3,
+    "enemy_intents": {
+      "flee": 7,
+      "leader_ranged": 2,
+      "pack_advance": 1,
+      "pack_attack": 7
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  },
+  {
+    "case_id": "five_ranged",
+    "seed": 100019,
+    "hero_ids": [
+      "lorian",
+      "dagna",
+      "mira",
+      "nimra",
+      "erynd"
+    ],
+    "party_size": 5,
+    "outcome": "victory",
+    "rounds": 3,
+    "turns": 29,
+    "hero_casualties": 0,
+    "hero_hp_remaining": 107,
+    "hero_hp_maximum": 120,
+    "enemies_dead": 2,
+    "enemies_escaped": 3,
+    "enemy_intents": {
+      "flee": 7,
+      "leader_ranged": 2,
+      "pack_advance": 1,
+      "pack_attack": 4
+    },
+    "morale_events": [
+      "coordinated_pack_retreat:leader_lost"
+    ]
+  }
+]

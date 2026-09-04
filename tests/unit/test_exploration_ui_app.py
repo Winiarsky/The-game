@@ -1883,7 +1883,7 @@ def test_exploration_ui_page_includes_gm_decision_correction_controls():
     html, javascript, stylesheet = _page_assets(client)
 
     assert (
-        '<script src="/static/exploration.js?v=combat-two-stage-20260903-1"></script>'
+        '<script src="/static/exploration.js?v=keyboard-first-20260904-2"></script>'
         in html
     )
     assert "Popraw decyzję MG" in javascript
@@ -1897,7 +1897,18 @@ def test_exploration_ui_page_includes_gm_decision_correction_controls():
     assert "event.code === 'NumpadSubtract'" in javascript
     assert "event.code === 'NumpadSubtract'\n    && !typing" in javascript
     assert "event.code === 'NumpadEnter'" in javascript
-    assert "event.code === 'Numpad0'" not in javascript
+    assert "function combatShortcutFromEvent(event)" in javascript
+    assert "function triggerCombatActionShortcut(event)" in javascript
+    assert "function triggerCombatActionShortcutKey(shortcut)" in javascript
+    assert "event.repeat || event.ctrlKey || event.metaKey || event.altKey" in javascript
+    assert "function triggerBufferedCombatShortcut(text, target)" in javascript
+    assert "triggerBufferedCombatShortcut(text, target)" in javascript
+    assert "triggerCombatActionShortcutKey('D')" in javascript
+    assert "option.action_id === 'nimra_metamagic_cancel'" in javascript
+    assert "event.key === 'Backspace'" in javascript
+    assert "Wybierz akcję na karcie postaci" in javascript
+    assert "Awaryjny wybór ekranowy" in javascript
+    assert "Numpad 8/2 zmienia pozycję listy" not in javascript
     assert "/api/combat/turn-actions/select" in javascript
     assert "flushCombatTurnActionMove" in javascript
     assert "applyOptimisticCombatTurnActionDelta" in javascript
@@ -1926,6 +1937,7 @@ def test_exploration_ui_page_includes_gm_decision_correction_controls():
     assert ".combat-turn-command-layout" in stylesheet
     assert ".combat-turn-actor-stats" in stylesheet
     assert ".combat-action-unavailable" in stylesheet
+    assert ".combat-keyboard-waiting" in stylesheet
     assert "data-numpad-key" in javascript
     assert "potwierdź aktualny podgląd Enterem" in javascript
     assert "correction-resource" in javascript

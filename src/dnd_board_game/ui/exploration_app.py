@@ -698,6 +698,7 @@ from dnd_board_game.combat.lorian_features import (
 from .session_state import UiPendingState
 from .session_view import UiSessionView
 from .conversation import InteractionConversationEntry
+from .combat_keyboard import shortcut_bindings, shortcut_for_option
 
 
 class PendingKind(StrEnum):
@@ -8902,7 +8903,7 @@ class ExplorationUiSession:
         return self.state_payload()
 
     def start_nimra_metamagic(self, metamagic_id: str) -> dict[str, object]:
-        """Open Nimra's spell-first Metamagic sub-list without spending it."""
+        """Open Nimra's Metamagic-first spell sub-list without spending it."""
 
         if self.combat_state is None:
             raise ValueError("Walka nie została rozpoczęta.")
@@ -15213,6 +15214,20 @@ class ExplorationUiSession:
             self.combat_turn_preview_option_id = None
         self.combat_turn_menu_index %= len(options)
         selected = options[self.combat_turn_menu_index]
+        selected_attack_source = self._selected_attack_source(actor)
+        option_payloads: list[dict[str, object]] = []
+        for option in options:
+            payload = option.as_payload()
+            payload["shortcut"] = shortcut_for_option(
+                actor_id,
+                option,
+                selected_attack_source_id=(
+                    selected_attack_source.id
+                    if selected_attack_source is not None
+                    else None
+                ),
+            )
+            option_payloads.append(payload)
         return {
             "actor_id": actor_id,
             "title": f"Działanie: {actor.name}",
@@ -15224,7 +15239,11 @@ class ExplorationUiSession:
                 else "list"
             ),
             "preview_option_id": self.combat_turn_preview_option_id,
-            "options": [option.as_payload() for option in options],
+            "bindings": [
+                {"key": binding.key, "action_ref": binding.action_ref}
+                for binding in shortcut_bindings(actor_id)
+            ],
+            "options": option_payloads,
         }
 
     def _combat_turn_maneuver_targets(self) -> tuple[Actor, ...]:
@@ -15311,7 +15330,7 @@ class ExplorationUiSession:
             self.combat_targeting_healing_source_id = option.source_id
             self.board_message = f"{source.name}: wskaż legalnego sojusznika."
         elif option.action == CombatMenuAction.MOVE:
-            self.board_message = "Ruch: wskaż legalne pole, a potem kliknij je ponownie."
+            self.board_message = "Ruch: wskaż legalne pole, a potem naciśnij Enter."
         elif option.provider == "turn_maneuver":
             self.combat_turn_maneuver_mode = (
                 f"shove:{option.shove_mode}"
@@ -15322,7 +15341,7 @@ class ExplorationUiSession:
         else:
             self.board_message = (
                 f"Podgląd: {option.label}. {option.description} "
-                "Naciśnij Enter ponownie, aby wykonać, albo minus, aby wrócić."
+                "Naciśnij Enter ponownie, aby wykonać, albo Esc/Backspace, aby wrócić."
             )
 
     def _combat_turn_option_unavailable_reason(
@@ -15415,7 +15434,7 @@ class ExplorationUiSession:
         started_at = time.monotonic()
         if self.combat_turn_preview_option_id is not None:
             raise ValueError(
-                "Najpierw wróć z podglądu klawiszem minus, a potem zmień akcję."
+                "Najpierw wróć z podglądu klawiszem Esc/Backspace, a potem zmień akcję."
             )
         self.selected_combat_aura_preview_id = None
         options = self._combat_turn_action_options()
@@ -15439,6 +15458,16 @@ class ExplorationUiSession:
         return self.state_payload()
 
     def cancel_combat_turn_action_preview(self) -> dict[str, object]:
+        if (
+            self.combat_turn_preview_option_id is None
+            and self.pending_nimra_metamagic_id is not None
+        ):
+            self.pending_nimra_metamagic_id = None
+            self.combat_turn_menu_index = 0
+            self.board_message = "Anulowano wybór Metamagii bez wydawania zasobów."
+            self._record("ui_nimra_metamagic_cancelled", {})
+            self._sync_board_leds()
+            return self.state_payload()
         if self.combat_turn_preview_option_id is None:
             raise ValueError("Nie ma aktywnego podglądu akcji.")
         self.combat_turn_preview_option_id = None
@@ -15447,7 +15476,7 @@ class ExplorationUiSession:
         self.combat_targeting_healing_source_id = None
         self.combat_turn_maneuver_mode = None
         self.board_message = (
-            "Wrócono do listy działań. Wybierz pozycję klawiszami 8/2."
+            "Podgląd anulowany bez kosztu. Wybierz akcję skrótem z karty postaci."
         )
         self._record("ui_combat_turn_action_preview_cancelled", {})
         self._sync_board_leds()
@@ -15475,7 +15504,7 @@ class ExplorationUiSession:
             and self.combat_turn_preview_option_id != option.id
         ):
             raise ValueError(
-                "Najpierw wróć z bieżącego podglądu klawiszem minus."
+                "Najpierw wróć z bieżącego podglądu klawiszem Esc/Backspace."
             )
 
         navigation_actions = {
@@ -15506,7 +15535,7 @@ class ExplorationUiSession:
             if reason is not None:
                 self.board_message = (
                     f"Nie można otworzyć podglądu: {reason} "
-                    "Wybierz inną akcję klawiszami 8/2."
+                    "Wybierz inną akcję skrótem z karty postaci."
                 )
                 self._record(
                     "ui_combat_turn_action_preview_rejected",
@@ -15566,7 +15595,7 @@ class ExplorationUiSession:
         }:
             self.board_message = (
                 f"{option.label} jest w podglądzie. Wskaż legalny cel na planszy "
-                "albo wróć klawiszem minus."
+                "albo wróć klawiszem Esc/Backspace."
             )
             return self.state_payload()
 
@@ -15844,6 +15873,7 @@ class ExplorationUiSession:
             if option.action_id in NIMRA_METAMAGIC_IDS:
                 return self.start_nimra_metamagic(option.action_id)
             if option.action_id in {
+                "bardic_inspiration",
                 "shoulder_check",
                 "shield_bash",
                 "garran_command_halt",
@@ -21463,7 +21493,7 @@ class ExplorationUiSession:
                     empty_message=(
                         "Kliknij podświetlonego sojusznika do leczenia."
                         if positions
-                        else f"{source.name}: brak rannego, legalnego celu leczenia w zasięgu. Zmień akcję klawiszami 8/2."
+                        else f"{source.name}: brak rannego, legalnego celu leczenia w zasięgu. Wybierz inną akcję skrótem z karty."
                     ),
                 )
             if self.pending_combat_interaction is not None:
@@ -21557,7 +21587,7 @@ class ExplorationUiSession:
                         ),
                         empty_message=(
                             f"Podgląd {effect.label}: promień {effect.radius_feet} ft. "
-                            "Wybierz akcję 8/2, aby wrócić do jej podglądu."
+                            "Zamknij podgląd aury, aby wybrać kolejną akcję."
                         ),
                     )
             if encounter is not None and actor.faction == Faction.ALLY and self.combat_state.status.value == "active":
@@ -21582,8 +21612,8 @@ class ExplorationUiSession:
                             self.combat_state.initiative_order
                         ),
                         empty_message=(
-                            "Lista działań jest aktywna. Wybierz akcję klawiszami "
-                            "8/2 i naciśnij Enter, aby otworzyć podgląd planszy."
+                            "Wybierz akcję skrótem z karty postaci. Skrót otworzy "
+                            "podgląd planszy bez zużywania akcji ani zasobu."
                         ),
                     )
                 if (
@@ -21653,11 +21683,11 @@ class ExplorationUiSession:
                         positions=selectable_positions,
                         feedback=LedFeedback(tuple(frames)),
                         empty_message=(
-                            f"{attack_source.name}: brak legalnego miejsca dla środka lub kierunku obszaru. Zmień akcję klawiszami 8/2."
+                            f"{attack_source.name}: brak legalnego miejsca dla środka lub kierunku obszaru. Wybierz inną akcję skrótem z karty."
                             if area_positions == () and attack_source.area is not None
                             else f"{attack_source.name}: wybierz podświetlony kierunek lub środek obszaru."
                             if area_positions
-                            else f"{attack_source.name}: brak legalnych celów. Zmień akcję klawiszami 8/2 albo zmień pozycję."
+                            else f"{attack_source.name}: brak legalnych celów. Wybierz inną akcję skrótem z karty albo zmień pozycję."
                             if not target_positions
                             else f"{attack_source.name}: wybierz podświetlony cel."
                         ),
@@ -21677,7 +21707,7 @@ class ExplorationUiSession:
                     ),
                     empty_message=(
                         f"Podgląd: {selected_turn_option.label}. "
-                        "Naciśnij Enter ponownie, aby wykonać, albo minus, aby wrócić."
+                        "Naciśnij Enter ponownie, aby wykonać, albo Esc/Backspace, aby wrócić."
                     ),
                 )
                 bonus_sources = eligible_two_weapon_bonus_sources(
@@ -22084,7 +22114,7 @@ class ExplorationUiSession:
                         self.combat_selected_item_target_id = str(target.id)
                         self.board_message = (
                             f"Wybrano cel: {target.name}. Naciśnij Enter, aby użyć "
-                            "przedmiotu, albo minus, aby anulować."
+                            "przedmiotu, albo Esc/Backspace, aby anulować."
                         )
                         self._sync_board_leds()
                         return self.state_payload()
@@ -22447,7 +22477,7 @@ class ExplorationUiSession:
                             self.combat_selected_class_feature_target_id = str(target.id)
                             self.board_message = (
                                 f"Wybrano cel: {target.name}. Naciśnij Enter, aby "
-                                f"wykonać {player_label(action_id)}, albo minus, aby anulować."
+                                f"wykonać {player_label(action_id)}, albo Esc/Backspace, aby anulować."
                             )
                             self._sync_board_leds()
                             return self.state_payload()
@@ -22723,7 +22753,7 @@ class ExplorationUiSession:
                             self.selected_combat_movement_path = None
                             self.board_message = (
                                 "Ruch pozostaje w podglądzie. Wskaż inne pole albo "
-                                "wróć do listy klawiszem minus."
+                                "wróć klawiszem Esc/Backspace."
                             )
                             self._sync_board_leds()
                             return self.state_payload()

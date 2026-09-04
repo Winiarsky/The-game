@@ -6763,7 +6763,7 @@ def test_exploration_ui_session_upcasts_bless_for_multiple_targets():
     assert blessed_targets == set(target_ids)
 
 
-def test_bardic_inspiration_target_is_selected_on_the_board():
+def test_bardic_inspiration_from_self_menu_selects_target_on_the_board():
     session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
     _start_gate_skirmish(session)
     assert session.combat_state is not None
@@ -6794,9 +6794,13 @@ def test_bardic_inspiration_target_is_selected_on_the_board():
     )
     session.combat_state = replace_actor(session.combat_state, bard)
 
-    started = session.use_physical_action_card(
-        DecisionCardActionKind.FEATURE,
-        "bardic_inspiration",
+    opened = session.select_board_position(bard.position)
+    assert "class-feature:bardic_inspiration" in {
+        option["id"] for option in opened["combat"]["context_menu"]["options"]
+    }
+
+    started = session.confirm_combat_context_menu(
+        "class-feature:bardic_inspiration",
     )
     targeting = started["combat"]["class_feature_targeting"]
     legal_positions = session._current_board_scan_target().positions
@@ -8347,6 +8351,71 @@ def test_combat_turn_action_list_exposes_mira_specials_without_erynd_mobility():
     }
     assert all(not option["label"].startswith("Rzuć czar") for option in options)
     assert not any(option["action_id"] == "cunning_action" for option in options)
+
+
+def test_combat_turn_action_payload_exposes_keyboard_shortcuts_for_nimra():
+    catalog = load_character_catalog("content/character_creation/catalog.json")
+    resources = load_character_resources(catalog, "content")
+    draft = next(item for item in default_character_drafts() if item.id == "nimra")
+    nimra = apply_boardgame_archetype(
+        build_character(draft, catalog, resources).actor,
+        spell_definitions=tuple(spell for _, spell in resources.spells),
+    )
+    session = ExplorationUiSession("content/scenarios/abandoned_watchtower.json")
+    session.configure_custom_party((nimra,))
+    _start_gate_skirmish(session)
+
+    options = session.state_payload()["combat"]["turn_action_menu"]["options"]
+    bindings = session.state_payload()["combat"]["turn_action_menu"]["bindings"]
+    by_shortcut = {
+        option["shortcut"]: option
+        for option in options
+        if option["shortcut"] is not None
+    }
+
+    assert by_shortcut["M"]["id"] == "turn:move"
+    assert by_shortcut["SPACE"]["action"] == "select_attack_source"
+    assert by_shortcut["0"]["id"] == "turn:end"
+    assert {binding["key"] for binding in bindings} >= {
+        "M", "B", "I", "0", "T", "Y", "U", "G", "H", "Q", "J", "K"
+    }
+    assert {
+        by_shortcut[key]["action_id"] for key in ("T", "Y", "U", "G", "H")
+    } == {
+        "nimra_sculpt_field",
+        "nimra_distant_spell",
+        "nimra_overcharged_spell",
+        "nimra_forced_weave",
+        "nimra_energy_transmutation",
+    }
+
+    preview = session.confirm_combat_turn_action(by_shortcut["Y"]["id"])
+    assert preview["combat"]["turn_action_menu"]["stage"] == "preview"
+    opened = session.confirm_combat_turn_action()
+    assert session.pending_nimra_metamagic_id == "nimra_distant_spell"
+    assert opened["combat"]["turn_action_menu"]["stage"] == "list"
+    assert any(
+        option["shortcut"] == "Q"
+        and option["source_id"] == "nimra_frost_pulse"
+        for option in opened["combat"]["turn_action_menu"]["options"]
+    )
+
+    metamagic_before_cancel = next(
+        pool.current
+        for pool in session.combat_state.initiative_order.current_actor.resource_pools
+        if pool.id == "metamagic_points"
+    )
+    cancelled = session.cancel_combat_turn_action_preview()
+    metamagic_after_cancel = next(
+        pool.current
+        for pool in session.combat_state.initiative_order.current_actor.resource_pools
+        if pool.id == "metamagic_points"
+    )
+
+    assert session.pending_nimra_metamagic_id is None
+    assert cancelled["combat"]["turn_action_menu"]["stage"] == "list"
+    assert metamagic_after_cancel == metamagic_before_cancel
+    assert "bez wydawania zasobów" in cancelled["board"]["message"]
 
 
 def test_spike_growth_keeps_center_range_while_repositioning_area_preview():
