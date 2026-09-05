@@ -58,6 +58,7 @@ let physicalCardKeyTimer = null;
 let physicalCardRecentKeys = '';
 let physicalCardRecentKeyAt = 0;
 let spellPreparationDraft = null;
+let keyboardRollWizard = null;
 
 const PHYSICAL_CARD_PREFIX = 'dndbg:';
 const PHYSICAL_CARD_MAX_KEY_GAP_MS = 100;
@@ -453,6 +454,7 @@ async function loadState() {
   scheduleAutomaticBoardScan();
 }
 function render() {
+  closeKeyboardRollWizard();
   const existingConversationScroll = document.getElementById('chat-conversation-scroll');
   const followChatTail = !existingConversationScroll
     || existingConversationScroll.scrollHeight - existingConversationScroll.scrollTop - existingConversationScroll.clientHeight < 120;
@@ -558,8 +560,357 @@ function render() {
   document.getElementById('interaction-goals').innerHTML = interactionGoalsHtml();
   updateActivePanel();
   updateBoardInputPresentation();
+  initializeKeyboardRollWizard();
   scheduleAutomaticBoardScan();
   scrollChatToBottom(followChatTail);
+}
+
+function isKeyboardRollInput(input) {
+  if (!input || input.type !== 'number' || input.disabled) return false;
+  if (input.closest('#rolls')) return true;
+  if (!input.closest('#encounter')) return false;
+  const id = String(input.id || '');
+  return (
+    /(?:^|-)roll(?:-|$)/.test(id)
+    || /(?:^|-)damage(?:-|$)/.test(id)
+    || input.classList.contains('physical-feature-saving-roll')
+    || input.classList.contains('class-feature-saving-roll')
+  );
+}
+
+function visibleKeyboardRollInputs() {
+  return Array.from(document.querySelectorAll('input[type="number"]')).filter(input => (
+    isKeyboardRollInput(input)
+    && input.offsetParent !== null
+  ));
+}
+
+function keyboardRollSubmitButton(inputs) {
+  const first = inputs[0];
+  if (!first) return null;
+  const root = first.closest('#roll-panel, .combat-action-card');
+  if (!root) return null;
+  const buttons = Array.from(root.querySelectorAll('button')).filter(button => (
+    !button.disabled
+    && !button.classList.contains('secondary')
+    && button.dataset.primaryScan !== 'true'
+    && button.offsetParent !== null
+  ));
+  const preferred = buttons.filter(button => /^(submit|confirm|send|spend|resolve|return)/i.test(
+    String(button.getAttribute('onclick') || '')
+  ));
+  return preferred.length === 1 ? preferred[0] : (buttons.length === 1 ? buttons[0] : null);
+}
+
+function parseKeyboardDice(dice) {
+  const match = String(dice || '').match(/(\d+)\s*[dk]\s*(\d+)/i);
+  if (!match) return null;
+  const count = Number(match[1]);
+  const sides = Number(match[2]);
+  if (!Number.isInteger(count) || !Number.isInteger(sides) || count < 1 || sides < 2) return null;
+  return {count, sides, label: `${count}k${sides}`};
+}
+
+function keyboardRollInputLabel(input, index) {
+  if (input.dataset.rollLabel) return input.dataset.rollLabel;
+  const label = input.closest('label');
+  if (label) {
+    const clone = label.cloneNode(true);
+    clone.querySelectorAll('input, select, button, small').forEach(element => element.remove());
+    const text = clone.textContent.replace(/\s+/g, ' ').trim().replace(/:\s*$/, '');
+    if (text) return text;
+  }
+  return `Rzut ${index + 1}`;
+}
+
+function keyboardRollStep(input, index) {
+  const dice = parseKeyboardDice(input.dataset.rollDice);
+  const modifier = Number(input.dataset.rollModifier || 0);
+  const fixedText = input.dataset.rollFixed;
+  const fixed = fixedText === undefined ? null : Number(fixedText);
+  const optional = !input.required && Boolean(input.placeholder);
+  const originalMin = input.min === '' ? null : Number(input.min);
+  const originalMax = input.max === '' ? null : Number(input.max);
+  return {
+    input,
+    label: keyboardRollInputLabel(input, index),
+    dice,
+    modifier,
+    fixed,
+    source: input.dataset.rollSource || '',
+    optional,
+    min: dice ? dice.count : originalMin,
+    max: dice ? dice.count * dice.sides : originalMax,
+    raw: null,
+    total: null,
+  };
+}
+
+function keyboardRollContextLines(root) {
+  const nodes = [];
+  const prompt = document.querySelector('.combat-current-step .combat-prompt');
+  if (prompt && root.closest('.combat-current-step')) nodes.push(prompt);
+  if (root.id === 'roll-panel') {
+    const rollPrompt = document.getElementById('roll-prompt');
+    if (rollPrompt) nodes.push(...rollPrompt.querySelectorAll('p'));
+  } else {
+    nodes.push(...root.querySelectorAll(':scope > p, :scope > .combat-action-box > p, :scope > .combat-warning'));
+  }
+  const seen = new Set();
+  return nodes.map(node => node.textContent.replace(/\s+/g, ' ').trim()).filter(text => {
+    if (!text || seen.has(text)) return false;
+    seen.add(text);
+    return true;
+  }).slice(0, 5);
+}
+
+function activeKeyboardRollPending(input) {
+  const combat = (state && state.combat) || {};
+  const id = String(input.id || '');
+  if (input.dataset.rollKind || /(?:inspiration|bless|mirror-image)/.test(id)) return {};
+  if (input.closest('#rolls')) {
+    return (state.required_rolls || []).find(required => (
+      String(required.actor_id) === String(input.dataset.actor || '')
+    )) || {};
+  }
+  if (id.startsWith('combat-attack-') || id.startsWith('combat-damage-')) return combat.pending_player_attack || {};
+  if (id.startsWith('area-spell-')) return combat.pending_area_spell || {};
+  if (id.startsWith('ready-')) return combat.pending_ready_attack || {};
+  if (id.startsWith('enemy-opportunity-')) return combat.pending_enemy_opportunity_attack || {};
+  if (id.startsWith('enemy-saving-throw-')) return combat.pending_enemy_saving_throw || {};
+  if (id.startsWith('combat-condition-save-')) return (combat.condition_saves || [])[0] || {};
+  if (id.startsWith('concentration-check-')) return combat.pending_concentration_check || {};
+  if (id.startsWith('combat-shove-')) return combat.pending_combat_shove || {};
+  if (id.startsWith('combat-grapple-')) return combat.pending_combat_grapple || {};
+  if (id.startsWith('combat-skill-check-')) return combat.pending_combat_skill_check || {};
+  return {};
+}
+
+function keyboardRollModifierSummary(step) {
+  if (step.input.dataset.rollModifier !== undefined) {
+    return {
+      total: step.modifier,
+      items: step.modifier
+        ? [`${step.source || 'Modyfikator składnika'} ${signedNumber(step.modifier)}`]
+        : [],
+    };
+  }
+  const pending = activeKeyboardRollPending(step.input);
+  const items = pending.active_modifiers || pending.modifier_components || [];
+  const total = pending.attack_modifier ?? pending.modifier_total ?? pending.modifier ?? null;
+  return {
+    total: total === null ? null : Number(total),
+    items: items.map(item => `${item.label || item.name || 'Modyfikator'} ${signedNumber(item.value || 0)}`),
+  };
+}
+
+function closeKeyboardRollWizard() {
+  const overlay = document.getElementById('keyboard-roll-wizard');
+  if (overlay) overlay.remove();
+  keyboardRollWizard = null;
+}
+
+function initializeKeyboardRollWizard() {
+  if (!state || busy || document.querySelector('dialog[open]')) return false;
+  const inputs = visibleKeyboardRollInputs();
+  const submitButton = keyboardRollSubmitButton(inputs);
+  if (!inputs.length || !submitButton) return false;
+  const allSteps = inputs.map(keyboardRollStep);
+  const automatic = allSteps.filter(step => step.fixed !== null && Number.isFinite(step.fixed));
+  automatic.forEach(step => {
+    step.raw = step.fixed;
+    step.total = Math.max(0, step.fixed + step.modifier);
+    step.input.value = String(step.total);
+  });
+  const steps = allSteps.filter(step => step.fixed === null || !Number.isFinite(step.fixed));
+  steps.forEach(step => { step.input.value = ''; });
+  keyboardRollWizard = {
+    allSteps,
+    steps,
+    automatic,
+    index: 0,
+    review: steps.length === 0,
+    submitButton,
+    contextLines: keyboardRollContextLines(submitButton.closest('#roll-panel, .combat-action-card')),
+  };
+  const overlay = document.createElement('div');
+  overlay.id = 'keyboard-roll-wizard';
+  overlay.className = 'keyboard-roll-wizard';
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+  overlay.setAttribute('aria-labelledby', 'keyboard-roll-wizard-title');
+  overlay.addEventListener('keydown', handleKeyboardRollWizardKeydown);
+  document.body.appendChild(overlay);
+  renderKeyboardRollWizard();
+  return true;
+}
+
+function keyboardRollStepPrompt(step) {
+  if (step.dice) return `Rzuć ${step.dice.label} i wpisz sumę z kości.`;
+  const maximum = Number.isFinite(step.max) ? ` (od ${step.min ?? 0} do ${step.max})` : '';
+  return `Wpisz wynik rzutu${maximum}.`;
+}
+
+function renderKeyboardRollWizard(message = '') {
+  const wizard = keyboardRollWizard;
+  const overlay = document.getElementById('keyboard-roll-wizard');
+  if (!wizard || !overlay) return;
+  const totalSteps = wizard.steps.length;
+  if (wizard.review) {
+    const rows = wizard.allSteps.map(step => {
+      if (step.raw === null) return `<li><span>${esc(step.label)}</span><b>pominięto</b></li>`;
+      const modifier = keyboardRollModifierSummary(step);
+      const appliedModifier = step.modifier || (modifier.total !== null ? modifier.total : 0);
+      const calculation = appliedModifier
+        ? `${step.raw} ${signedNumber(appliedModifier)} = ${step.modifier ? step.total : step.raw + appliedModifier}`
+        : `${step.total}`;
+      const source = modifier.items.length ? `<small>${esc(modifier.items.join(' · '))}</small>` : '';
+      return `<li><span>${esc(step.label)}${source}</span><b>${esc(calculation)}</b></li>`;
+    }).join('');
+    overlay.innerHTML = `
+      <div class="keyboard-roll-wizard-backdrop"></div>
+      <section class="keyboard-roll-wizard-card" tabindex="-1">
+        <span class="keyboard-roll-wizard-kicker">Podsumowanie rzutu</span>
+        <h2 id="keyboard-roll-wizard-title">Sprawdź wpisane wyniki</h2>
+        <ul class="keyboard-roll-wizard-summary">${rows}</ul>
+        <p class="keyboard-roll-wizard-help"><kbd>Enter</kbd> zastosuj wyniki${wizard.steps.length ? ' · <kbd>Backspace</kbd> popraw ostatni' : ''}</p>
+        <div class="keyboard-roll-wizard-actions">${wizard.steps.length ? '<button type="button" class="secondary" onclick="previousKeyboardRollStep()">Wróć</button>' : ''}<button type="button" onclick="submitKeyboardRollWizard()">Zastosuj wyniki</button></div>
+      </section>`;
+    window.requestAnimationFrame(() => {
+      const card = overlay.querySelector('.keyboard-roll-wizard-card');
+      if (card) card.focus();
+    });
+    return;
+  }
+  const step = wizard.steps[wizard.index];
+  const modifier = keyboardRollModifierSummary(step);
+  const modifierText = modifier.items.length
+    ? modifier.items.join(' · ')
+    : (modifier.total !== null ? `Łączna premia ${signedNumber(modifier.total)}` : 'Brak automatycznych premii do tego pola.');
+  const context = wizard.contextLines.map(line => `<p>${esc(line)}</p>`).join('');
+  overlay.innerHTML = `
+    <div class="keyboard-roll-wizard-backdrop"></div>
+    <section class="keyboard-roll-wizard-card">
+      <span class="keyboard-roll-wizard-kicker">Rzut ${wizard.index + 1} z ${totalSteps}</span>
+      <h2 id="keyboard-roll-wizard-title">${esc(step.label)}</h2>
+      <div class="keyboard-roll-wizard-context">${context}</div>
+      <p class="keyboard-roll-wizard-instruction">${esc(keyboardRollStepPrompt(step))}</p>
+      <label class="keyboard-roll-wizard-entry">
+        <span>Wynik kości${step.optional ? ' (opcjonalnie)' : ''}</span>
+        <input id="keyboard-roll-wizard-input" type="number" inputmode="numeric" autocomplete="off"
+          ${Number.isFinite(step.min) ? `min="${step.min}"` : ''}
+          ${Number.isFinite(step.max) ? `max="${step.max}"` : ''}
+          value="${step.raw === null ? '' : esc(step.raw)}"
+          placeholder="${step.optional ? 'Enter = pomiń' : 'wpisz wynik'}">
+      </label>
+      <p class="keyboard-roll-wizard-modifiers"><b>Aplikacja doliczy:</b> ${esc(modifierText)}</p>
+      <p id="keyboard-roll-wizard-error" class="keyboard-roll-wizard-error" aria-live="assertive">${esc(message)}</p>
+      <p class="keyboard-roll-wizard-help"><kbd>Enter</kbd> dalej${wizard.index ? ' · <kbd>Backspace</kbd> poprzedni rzut' : ''} · <kbd>Esc</kbd> anuluj akcję</p>
+      <div class="keyboard-roll-wizard-actions">${wizard.index ? '<button type="button" class="secondary" onclick="previousKeyboardRollStep()">Wróć</button>' : ''}<button type="button" onclick="confirmKeyboardRollStep()">${wizard.index + 1 === totalSteps ? 'Podsumowanie' : 'Dalej'}</button></div>
+    </section>`;
+  const entry = document.getElementById('keyboard-roll-wizard-input');
+  if (entry) {
+    entry.addEventListener('input', () => {
+      const error = document.getElementById('keyboard-roll-wizard-error');
+      if (error) error.textContent = '';
+    });
+    window.requestAnimationFrame(() => {
+      entry.focus();
+      entry.select();
+    });
+  }
+}
+
+function confirmKeyboardRollStep() {
+  const wizard = keyboardRollWizard;
+  const entry = document.getElementById('keyboard-roll-wizard-input');
+  if (!wizard || wizard.review || !entry) return false;
+  const step = wizard.steps[wizard.index];
+  const valueText = entry.value.trim();
+  if (!valueText && step.optional) {
+    step.raw = null;
+    step.total = null;
+    step.input.value = '';
+  } else {
+    const value = Number(valueText);
+    if (!valueText || !Number.isInteger(value)) {
+      renderKeyboardRollWizard('Wpisz pełną liczbę i naciśnij Enter.');
+      return false;
+    }
+    if (Number.isFinite(step.min) && value < step.min) {
+      renderKeyboardRollWizard(`Najmniejszy możliwy wynik tego rzutu to ${step.min}.`);
+      return false;
+    }
+    if (Number.isFinite(step.max) && value > step.max) {
+      renderKeyboardRollWizard(`Największy możliwy wynik tego rzutu to ${step.max}.`);
+      return false;
+    }
+    step.raw = value;
+    step.total = Math.max(0, value + step.modifier);
+    step.input.value = String(step.total);
+  }
+  if (wizard.index + 1 < wizard.steps.length) wizard.index += 1;
+  else wizard.review = true;
+  renderKeyboardRollWizard();
+  return true;
+}
+
+function previousKeyboardRollStep() {
+  const wizard = keyboardRollWizard;
+  if (!wizard || !wizard.steps.length) return false;
+  if (wizard.review) {
+    wizard.review = false;
+    wizard.index = Math.max(0, wizard.steps.length - 1);
+  } else if (wizard.index > 0) {
+    wizard.index -= 1;
+  } else {
+    return false;
+  }
+  renderKeyboardRollWizard();
+  return true;
+}
+
+function submitKeyboardRollWizard() {
+  const wizard = keyboardRollWizard;
+  if (!wizard || !wizard.review || busy) return false;
+  const submitButton = wizard.submitButton;
+  closeKeyboardRollWizard();
+  submitButton.click();
+  return true;
+}
+
+function cancelKeyboardRollWizard() {
+  if (!keyboardRollWizard) return false;
+  if (state && state.combat && cancelCurrentCombatStep()) {
+    closeKeyboardRollWizard();
+    return true;
+  }
+  renderKeyboardRollWizard('Ten rzut jest obowiązkowy. Wpisz wynik albo wróć do wcześniejszej decyzji.');
+  return false;
+}
+
+function handleKeyboardRollWizardKeydown(event) {
+  if (!keyboardRollWizard) return;
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    event.stopPropagation();
+    cancelKeyboardRollWizard();
+    return;
+  }
+  if (event.key === 'Backspace') {
+    const entry = document.getElementById('keyboard-roll-wizard-input');
+    if (keyboardRollWizard.review || (entry && !entry.value && keyboardRollWizard.index > 0)) {
+      event.preventDefault();
+      event.stopPropagation();
+      previousKeyboardRollStep();
+    }
+    return;
+  }
+  if (event.key !== 'Enter') return;
+  event.preventDefault();
+  event.stopPropagation();
+  if (keyboardRollWizard.review) submitKeyboardRollWizard();
+  else confirmKeyboardRollStep();
 }
 function renderExplorationCardPrompt() {
   const panel = document.getElementById('exploration-card-prompt');
@@ -6221,7 +6572,7 @@ function pendingPlayerHealingHtml(pending) {
     <p>${esc(pending.healing_instruction || 'Rzuć leczenie i wpisz wynik.')}</p>
     ${twinnedControls}
     <div class="row">
-      <label>Leczenie: <input id="combat-healing-roll" type="number" min="0" inputmode="numeric" value="${esc(defaultHealingValue(source))}" autofocus></label>
+      <label>Leczenie: <input id="combat-healing-roll" type="number" min="0" inputmode="numeric" value="${esc(defaultHealingValue(source))}" data-roll-label="Leczenie" data-roll-dice="${esc(source.healing_die_sides ? `${source.healing_dice_count || 1}d${source.healing_die_sides}` : '')}" data-roll-modifier="${esc(source.healing_modifier || 0)}" data-roll-source="${esc(source.name || 'Źródło leczenia')}"${source.healing_fixed !== null && source.healing_fixed !== undefined ? ` data-roll-fixed="${esc(source.healing_fixed)}"` : ''}></label>
       <button onclick="submitPlayerHealingRoll()">Zapisz leczenie</button>
       <button class="secondary" data-allow-busy="true" onclick="cancelPlayerHealing()">Anuluj</button>
     </div>
@@ -6347,6 +6698,15 @@ function combatTurnActionMenuHtml(menu, combat = {}) {
   const previewActive = menu.stage === 'preview';
   const selected = options[selectedIndex] || {};
   if (!previewActive) {
+    const keyboardOptions = options.filter(option => option.shortcut);
+    const shortcutIndex = keyboardOptions.length ? `
+      <div class="combat-keyboard-action-index" aria-label="Wszystkie skróty akcji aktywnego bohatera">
+        ${keyboardOptions.map(option => `
+          <span class="combat-keyboard-action-index-item category-${esc(option.category || 'basic')}">
+            <kbd>${esc(option.shortcut === 'SPACE' ? 'SPACJA' : option.shortcut)}</kbd>
+            <b>${esc(option.label)}</b>
+          </span>`).join('')}
+      </div>` : '';
     const fallbackRows = options.map(option => `
       <button class="combat-keyboard-fallback-option category-${esc(option.category || 'basic')}" data-allow-busy="true" onclick="confirmCombatTurnAction('${esc(option.id)}')">
         ${option.shortcut ? `<kbd>${esc(option.shortcut === 'SPACE' ? 'SPACJA' : option.shortcut)}</kbd>` : ''}
@@ -6358,7 +6718,7 @@ function combatTurnActionMenuHtml(menu, combat = {}) {
           <small>Tura ${esc((combat.current_actor || {}).name || 'bohatera')}</small>
           <h3>Wybierz akcję na karcie postaci</h3>
           <p>Naciśnij przypisany klawisz, aby otworzyć podgląd. Dopiero <kbd>Enter</kbd> zatwierdzi działanie.</p>
-          <div class="numpad-combat-hint"><span><kbd>M</kbd> ruch</span><span><kbd>Spacja</kbd> atak</span><span><kbd>0</kbd> koniec tury</span></div>
+          ${shortcutIndex}
           <details class="combat-touch-fallback">
             <summary>Awaryjny wybór ekranowy</summary>
             <div class="combat-keyboard-fallback-list">${fallbackRows}</div>
@@ -6593,7 +6953,7 @@ function defaultDamageValue(source) {
 function damageComponentInputsHtml(pending, prefix, source) {
   const components = (pending && pending.damage_components) || [];
   if (!components.length) {
-    return `<label>Obrażenia: <input id="${esc(prefix)}-legacy" type="number" min="0" value="${esc(defaultDamageValue(source))}"></label>`;
+    return `<label>Obrażenia: <input id="${esc(prefix)}-legacy" type="number" min="0" value="${esc(defaultDamageValue(source))}" data-roll-label="Obrażenia" data-roll-source="${esc((source && source.name) || 'Źródło obrażeń')}"></label>`;
   }
   return components.map((component, index) => {
     const fixed = component.fixed;
@@ -6602,7 +6962,9 @@ function damageComponentInputsHtml(pending, prefix, source) {
       ? Math.max(0, Number(fixed) + modifier)
       : Math.max(0, modifier);
     const label = component.label || component.damage_type_label || component.damage_type || `Składnik ${index + 1}`;
-    return `<label>${esc(label)} (${esc(component.formula || '')}): <input id="${esc(prefix)}-${index}" type="number" min="0" value="${esc(value)}"></label>`;
+    const dice = component.dice || '';
+    const fixedAttribute = fixed !== null && fixed !== undefined ? ` data-roll-fixed="${esc(fixed)}"` : '';
+    return `<label>${esc(label)} (${esc(component.formula || '')}): <input id="${esc(prefix)}-${index}" type="number" min="0" value="${esc(value)}" data-roll-label="${esc(label)}" data-roll-dice="${esc(dice)}" data-roll-modifier="${esc(modifier)}" data-roll-source="${esc((source && source.name) || label)}"${fixedAttribute}></label>`;
   }).join('');
 }
 function damageComponentPayload(pending, prefix) {
@@ -8117,6 +8479,11 @@ function visibleSingleAcceptButton() {
 function triggerPrimaryAction() {
   if (busy) return false;
   if (!state) return false;
+  if (keyboardRollWizard) {
+    return keyboardRollWizard.review
+      ? submitKeyboardRollWizard()
+      : confirmKeyboardRollStep();
+  }
   if (isVisible('result-panel')) { ackResult(); return true; }
   if (isVisible('pending-panel')) { decision('accept'); return true; }
   if (isVisible('roll-panel')) { sendRolls(); return true; }
@@ -8322,6 +8689,7 @@ function cancelCurrentCombatStep() {
 }
 function triggerSecondaryAction() {
   if (busy || !state) return false;
+  if (keyboardRollWizard) return cancelKeyboardRollWizard();
   if (isVisible('pending-panel')) { decision('reject'); return true; }
   if (state.flow && state.flow.stage === 'spell_preparation') {
     return startCustomSpellPreparation();

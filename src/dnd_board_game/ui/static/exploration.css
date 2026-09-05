@@ -722,6 +722,19 @@ button.status-chip { cursor: pointer; font-weight: 750; }
 .combat-keyboard-waiting h3 { margin: 8px 0 5px; color: #f4ead8; font-family: Georgia, "Times New Roman", serif; font-size: clamp(22px, 3vw, 34px); }
 .combat-keyboard-waiting > p { max-width: 590px; margin: 0 auto; color: #b8c1cb; line-height: 1.5; }
 .combat-keyboard-waiting .numpad-combat-hint { justify-content: center; }
+.combat-keyboard-action-index { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 6px; width: min(100%, 820px); margin: 18px auto 0; text-align: left; }
+.combat-keyboard-action-index-item { --action-section-color: #aeb8c5; display: grid; grid-template-columns: 47px minmax(0, 1fr); align-items: center; gap: 7px; min-height: 34px; padding: 5px 8px; border: 1px solid color-mix(in srgb, var(--action-section-color) 45%, #313a44); border-left: 3px solid var(--action-section-color); border-radius: 5px; background: #11171d; }
+.combat-keyboard-action-index-item.category-field { --action-section-color: #4a9dff; }
+.combat-keyboard-action-index-item.category-basic { --action-section-color: #e7bc48; }
+.combat-keyboard-action-index-item.category-attack { --action-section-color: #ef625d; }
+.combat-keyboard-action-index-item.category-magic { --action-section-color: #b275e8; }
+.combat-keyboard-action-index-item.category-support { --action-section-color: #55cdd2; }
+.combat-keyboard-action-index-item.category-maneuver { --action-section-color: #e6924c; }
+.combat-keyboard-action-index-item.category-item { --action-section-color: #66bd7b; }
+.combat-keyboard-action-index-item.category-equipment { --action-section-color: #aeb8c5; }
+.combat-keyboard-action-index-item.category-turn { --action-section-color: #d7dbe0; }
+.combat-keyboard-action-index-item kbd { min-width: 0; padding-inline: 5px; color: #fff4d1; text-align: center; }
+.combat-keyboard-action-index-item b { overflow: hidden; color: #dce2e8; font-size: 11px; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
 .combat-keyboard-preview { min-height: 160px; padding: 22px; border: 1px solid #4c5968; border-left: 4px solid #91bde5; border-radius: 7px; background: #111820; }
 .combat-keyboard-preview > b { color: #f4ead8; font-family: Georgia, "Times New Roman", serif; font-size: 24px; }
 .combat-keyboard-preview p { margin: 8px 0 0; color: #bdc7d1; font-size: 15px; line-height: 1.55; }
@@ -1047,6 +1060,8 @@ pre { white-space: pre-wrap; overflow: auto; }
   .combat-turn-command-layout { grid-template-columns: 1fr; }
   .combat-turn-actor-stats { position: static; grid-row: 1; }
   .combat-keyboard-waiting { min-height: 220px; padding: 18px 12px; }
+  .combat-keyboard-action-index { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .combat-keyboard-action-index-item { grid-template-columns: 42px minmax(0, 1fr); padding-inline: 6px; }
   .combat-keyboard-fallback-list { grid-template-columns: 1fr; }
   .combat-turn-vitals { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .combat-turn-action { grid-template-columns: 1fr; }
@@ -1122,10 +1137,146 @@ pre { white-space: pre-wrap; overflow: auto; }
   border-left-color: var(--danger);
 }
 
+.keyboard-roll-wizard {
+  position: fixed;
+  z-index: 160;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+
+.keyboard-roll-wizard-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(4, 6, 7, .78);
+  backdrop-filter: blur(3px);
+}
+
+.keyboard-roll-wizard-card {
+  position: relative;
+  width: min(680px, calc(100vw - 32px));
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  padding: clamp(22px, 4vw, 38px);
+  border: 1px solid #a77d32;
+  border-left: 5px solid var(--color-gold-bright, #e0bd6d);
+  border-radius: 12px;
+  background: linear-gradient(145deg, #181a1b, #0d0f10 72%);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, .72), inset 0 1px rgba(255, 255, 255, .04);
+  color: var(--text);
+}
+
+.keyboard-roll-wizard-card:focus { outline: none; }
+.keyboard-roll-wizard-card h2 { margin: 5px 0 14px; color: #f6dfa7; font-size: clamp(24px, 4vw, 34px); }
+
+.keyboard-roll-wizard-kicker {
+  color: var(--color-gold-bright, #e0bd6d);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+}
+
+.keyboard-roll-wizard-context {
+  padding: 10px 13px;
+  border: 1px solid #353534;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .025);
+  color: #c8c5bd;
+}
+
+.keyboard-roll-wizard-context:empty { display: none; }
+.keyboard-roll-wizard-context p { margin: 3px 0; }
+.keyboard-roll-wizard-instruction { margin: 18px 0 9px; font-size: 19px; color: #f2eee3; }
+
+.keyboard-roll-wizard-entry {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) minmax(150px, 220px);
+  align-items: center;
+  gap: 16px;
+  margin: 8px 0 14px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.keyboard-roll-wizard-entry input {
+  width: 100%;
+  min-height: 68px;
+  border: 2px solid #b88934;
+  border-radius: 9px;
+  background: #080909;
+  color: #fff4ce;
+  font-size: 34px;
+  font-weight: 800;
+  text-align: center;
+  box-shadow: 0 0 0 4px rgba(224, 189, 109, .12);
+}
+
+.keyboard-roll-wizard-entry input:focus {
+  outline: 2px solid #f0cc78;
+  outline-offset: 2px;
+}
+
+.keyboard-roll-wizard-modifiers {
+  margin: 8px 0;
+  color: #d8d2c3;
+}
+
+.keyboard-roll-wizard-error {
+  min-height: 22px;
+  margin: 8px 0;
+  color: #ff8d82;
+  font-weight: 700;
+}
+
+.keyboard-roll-wizard-help {
+  margin: 14px 0 0;
+  color: #9f9d97;
+  font-size: 13px;
+}
+
+.keyboard-roll-wizard-help kbd {
+  border-color: #706342;
+  color: #f3d58e;
+  background: #22201a;
+}
+
+.keyboard-roll-wizard-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.keyboard-roll-wizard-summary {
+  display: grid;
+  gap: 7px;
+  margin: 16px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.keyboard-roll-wizard-summary li {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #36342f;
+  color: #cfcbc1;
+}
+
+.keyboard-roll-wizard-summary b { color: #f4d98f; white-space: nowrap; }
+.keyboard-roll-wizard-summary span { display: grid; gap: 3px; }
+.keyboard-roll-wizard-summary small { color: #98958d; font-weight: 400; }
+
 @media (max-width: 700px) {
   .paper-map-setup {
     grid-template-columns: 1fr;
   }
+  .keyboard-roll-wizard { padding: 8px; }
+  .keyboard-roll-wizard-card { width: calc(100vw - 16px); max-height: calc(100vh - 16px); padding: 20px 16px; }
+  .keyboard-roll-wizard-entry { grid-template-columns: 1fr; gap: 7px; }
 }
 .exploration-card-prompt {
   border: 1px solid #c99a3d;

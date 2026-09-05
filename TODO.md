@@ -1,5 +1,9 @@
 # TODO
 
+- [x] Replace the combat waiting screen's three example keys with a compact,
+  character-specific index of every currently exposed keyboard action, showing
+  only its shortcut and title while keeping full rules text on character cards.
+
 ## Setup
 
 - [x] Remove the obsolete previous application from the active tree after the
@@ -933,6 +937,11 @@ obowiązują `Current Roadmap Focus` oraz etapy z `ROADMAP.md`.
 - [x] Resolve the keyboard playtest blockers found in review: defer the `D` shortcut
   around HID-card prefixes, cancel pending Nimra Metamagic with Esc/Backspace, ignore
   modified/repeated shortcuts and remove stale 8/2/minus guidance from the main flow.
+- [x] Replace click-heavy physical-roll forms with a centered keyboard wizard that
+  collects one die result at a time, validates die bounds, adds visible sourced
+  modifiers, supports Backspace correction, and confirms a final roll summary.
+- [x] Keep the physical board LEDs off during non-combat point interactions and
+  exploration resolutions, restoring hotspot guidance after returning to the zone.
 - [ ] [Hungry Shadows balance] Revisit the three-hero scaling and coordinated-pack
   pressure against the 2026-09-03 baseline (20% wins for Garran/Dagna/Erynd and
   45% for Lorian/Mira/Nimra across 20 seeded runs per composition).

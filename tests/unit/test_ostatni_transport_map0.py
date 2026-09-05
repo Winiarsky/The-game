@@ -178,9 +178,9 @@ def test_map0_opens_spread_hotspots_without_placing_nessa() -> None:
         [6, 22], [5, 22], [4, 22], [4, 21],
     ]
     nessa_target = session._current_board_scan_target()
-    assert Coordinate(5, 21) not in nessa_target.positions
-    assert nessa_target.feedback.frames[0].positions == (Coordinate(5, 21),)
-    assert len(nessa_target.feedback.frames) == 9
+    assert nessa_target.positions == ()
+    assert nessa_target.feedback.frames == ()
+    assert "pozostaje wygaszona" in nessa_target.empty_message
 
     session.select_point("")
     archive_preview = session.select_board_position(Coordinate(16, 7))

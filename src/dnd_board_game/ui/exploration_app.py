@@ -20755,6 +20755,19 @@ class ExplorationUiSession:
             empty_message=message,
         )
 
+    def _noncombat_interaction_hides_board_leds(self) -> bool:
+        """Keep the physical board dark while an exploration interaction uses the UI."""
+
+        return (
+            self.combat_state is None
+            and self.ui_flow_stage == UiFlowStage.LOCATION_ACTIVE
+            and (
+                self.active_point is not None
+                or self.pending is not None
+                or self.pending_npc_transition is not None
+            )
+        )
+
     def _show_board_feedback(self, feedback: LedFeedback) -> None:
         if self.board_adapter is None:
             return
@@ -21849,6 +21862,15 @@ class ExplorationUiSession:
                     "albo wskaż inną podświetloną lokację."
                     if self.preview_zone_id
                     else "Wskaż jedną z podświetlonych lokacji, aby zobaczyć podgląd."
+                ),
+            )
+        if self._noncombat_interaction_hides_board_leds():
+            return BoardScanTarget(
+                positions=(),
+                feedback=LedFeedback(),
+                empty_message=(
+                    "Interakcja trwa w UI. Plansza pozostaje wygaszona do jej "
+                    "zakończenia."
                 ),
             )
         if self.board_actor_selection is not None:

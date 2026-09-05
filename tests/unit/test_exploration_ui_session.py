@@ -2400,6 +2400,35 @@ def test_open_zone_interaction_exposes_numbered_pads_then_navigation_markers() -
     assert session.current_zone.marker_position in selection_target.positions
 
 
+def test_noncombat_point_interaction_turns_leds_off_until_returning_to_zone() -> None:
+    session = ExplorationUiSession("content/scenarios/village_square_mvp.json")
+    session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    session.active_paper_map_id = "village_overview"
+    session.travel_to("tavern")
+    board = FakeBoardConnection()
+    session.attach_board_connection(board, backend="simulator")
+    session._sync_board_leds()
+
+    entered = session.select_point("tavern_keeper")
+    interaction_target = session._current_board_scan_target()
+
+    assert entered["active_point"]["id"] == "tavern_keeper"
+    assert interaction_target.positions == ()
+    assert interaction_target.feedback.frames == ()
+    assert interaction_target.empty_message == (
+        "Interakcja trwa w UI. Plansza pozostaje wygaszona do jej zakończenia."
+    )
+    assert board.led_calls[-1] == ("off", None)
+
+    returned = session.select_point("")
+    zone_target = session._current_board_scan_target()
+
+    assert returned["active_point"] is None
+    assert zone_target.positions
+    assert zone_target.feedback.frames
+    assert board.led_calls[-1] != ("off", None)
+
+
 def test_location_board_sequence_switches_preview_and_confirms_same_zone_twice() -> None:
     session = ExplorationUiSession("content/scenarios/village_square_mvp.json")
     session.ui_flow_stage = UiFlowStage.LOCATION_PREVIEW
@@ -2608,7 +2637,9 @@ def test_exploration_roll_does_not_focus_selected_actor_on_party_token_board() -
 
     target = session._current_board_scan_target()
     assert target.positions == ()
+    assert target.feedback.frames == ()
     assert all(frame.role != LedRole.ACTIVE_ACTOR for frame in target.feedback.frames)
+    assert board.led_calls[-1] == ("off", None)
 
     session.resolve_rolls({str(actor.id): 10})
 

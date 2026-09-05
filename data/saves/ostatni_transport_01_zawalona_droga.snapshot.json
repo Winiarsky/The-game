@@ -131,8 +131,8 @@
           "action_ids": [],
           "aura_ids": [],
           "description": "",
-          "feature_id": "danger_sense",
-          "label": "Danger sense",
+          "feature_id": "primal_path",
+          "label": "Primal path",
           "resource_ids": [],
           "source_kind": "class",
           "source_ref": "barbarian",
@@ -142,24 +142,11 @@
           "action_ids": [],
           "aura_ids": [],
           "description": "",
-          "feature_id": "primal_path",
-          "label": "Primal path",
+          "feature_id": "flaw_chains",
+          "label": "Skaza: Bitewny amok",
           "resource_ids": [],
-          "source_kind": "class",
-          "source_ref": "barbarian",
-          "trigger_ids": []
-        },
-        {
-          "action_ids": [
-            "frenzy"
-          ],
-          "aura_ids": [],
-          "description": "",
-          "feature_id": "frenzy",
-          "label": "Szał bojowy",
-          "resource_ids": [],
-          "source_kind": "subclass",
-          "source_ref": "path_of_the_berserker",
+          "source_kind": "scenario",
+          "source_ref": "boardgame_archetype:brakka",
           "trigger_ids": []
         },
         {
@@ -188,25 +175,27 @@
         },
         {
           "action_ids": [
-            "action_surge"
+            "powerful_strike"
           ],
           "aura_ids": [],
           "description": "",
-          "feature_id": "action_surge",
-          "label": "Niepowstrzymany impet",
-          "resource_ids": [],
+          "feature_id": "powerful_strike",
+          "label": "Potężne uderzenie",
+          "resource_ids": [
+            "ferocity_uses"
+          ],
           "source_kind": "scenario",
           "source_ref": "boardgame_archetype:brakka",
           "trigger_ids": []
         },
         {
           "action_ids": [
-            "cunning_action"
+            "shoulder_check"
           ],
           "aura_ids": [],
           "description": "",
-          "feature_id": "cunning_action",
-          "label": "Drapieżny pęd",
+          "feature_id": "shoulder_check",
+          "label": "Z bara",
           "resource_ids": [],
           "source_kind": "scenario",
           "source_ref": "boardgame_archetype:brakka",
@@ -216,9 +205,54 @@
           "action_ids": [],
           "aura_ids": [],
           "description": "",
-          "feature_id": "flaw_chains",
-          "label": "Skaza: Bitewny amok",
+          "feature_id": "brakka_grapple",
+          "label": "Chwyt",
           "resource_ids": [],
+          "source_kind": "scenario",
+          "source_ref": "boardgame_archetype:brakka",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [
+            "hard_as_rock"
+          ],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "hard_as_rock",
+          "label": "Twarda jak skała",
+          "resource_ids": [
+            "ferocity_uses"
+          ],
+          "source_kind": "scenario",
+          "source_ref": "boardgame_archetype:brakka",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [
+            "acceleration"
+          ],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "acceleration",
+          "label": "Przyspieszenie",
+          "resource_ids": [
+            "ferocity_uses"
+          ],
+          "source_kind": "scenario",
+          "source_ref": "boardgame_archetype:brakka",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [
+            "deafening_roar"
+          ],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "deafening_roar",
+          "label": "Ogłuszający ryk",
+          "resource_ids": [
+            "ferocity_uses"
+          ],
           "source_kind": "scenario",
           "source_ref": "boardgame_archetype:brakka",
           "trigger_ids": []
@@ -820,20 +854,12 @@
           "recovery": "long_rest"
         },
         {
-          "current": 1,
-          "id": "action_surge_uses",
-          "label": "Niepowstrzymany impet",
-          "maximum": 1,
-          "recharge": null,
-          "recovery": "short_rest"
-        },
-        {
-          "current": 2,
+          "current": 0,
           "id": "ferocity_uses",
           "label": "Dzikość",
           "maximum": 2,
           "recharge": null,
-          "recovery": "long_rest"
+          "recovery": "never"
         }
       ],
       "senses": {
@@ -845,2196 +871,12 @@
       },
       "size": "medium",
       "speed_feet": 30,
-      "spell_access": [
-        {
-          "allowed_focus_kinds": [],
-          "casting_ability": "constitution",
-          "kind": "innate",
-          "resource_ids_by_spell": {
-            "false_life": "ferocity_uses",
-            "thunderwave": "ferocity_uses"
-          },
-          "spell_ids": [
-            "false_life",
-            "thunderwave"
-          ]
-        }
-      ],
-      "spell_ids": [
-        "false_life",
-        "thunderwave"
-      ],
+      "spell_access": [],
+      "spell_ids": [],
       "spell_preparation": null,
       "spell_save_dc": 12,
       "spell_slots": [],
-      "spells": [
-        {
-          "casting_time": "action",
-          "components": {
-            "materials": [],
-            "somatic": false,
-            "verbal": true
-          },
-          "concentration": false,
-          "duration": {
-            "amount": 1,
-            "kind": "hour"
-          },
-          "effect_kind": "combat_action",
-          "exploration_consequence_tags": [],
-          "exploration_effect": null,
-          "exploration_tags": [],
-          "exploration_target_tags": [],
-          "id": "false_life",
-          "level": 1,
-          "name": "Fałszywe życie",
-          "range": {
-            "feet": 0,
-            "kind": "self"
-          },
-          "ritual": false,
-          "scaling": null,
-          "school": "necromancy"
-        },
-        {
-          "casting_time": "action",
-          "components": {
-            "materials": [],
-            "somatic": false,
-            "verbal": true
-          },
-          "concentration": false,
-          "duration": {
-            "amount": 1,
-            "kind": "instantaneous"
-          },
-          "effect_kind": "attack",
-          "exploration_consequence_tags": [],
-          "exploration_effect": null,
-          "exploration_tags": [],
-          "exploration_target_tags": [],
-          "id": "thunderwave",
-          "level": 1,
-          "name": "Fala gromu",
-          "range": {
-            "feet": 0,
-            "kind": "self"
-          },
-          "ritual": false,
-          "scaling": null,
-          "school": "evocation"
-        }
-      ],
-      "temp_hp": 0,
-      "triggers": [],
-      "uses_death_saves": true,
-      "wild_shape": null
-    },
-    {
-      "ability_scores": {
-        "charisma": 12,
-        "constitution": 16,
-        "dexterity": 10,
-        "intelligence": 8,
-        "strength": 13,
-        "wisdom": 18
-      },
-      "ac": 10,
-      "active_light": null,
-      "attacks_per_action": 1,
-      "auras": [],
-      "condition_immunities": [],
-      "creature_type": "humanoid",
-      "currency": {
-        "cp": 0,
-        "ep": 0,
-        "gp": 15,
-        "pp": 0,
-        "sp": 0,
-        "total_cp": 1500,
-        "weight_lb": 0.3
-      },
-      "damage_affinities": {
-        "immunities": [],
-        "resistances": [
-          "poison"
-        ],
-        "vulnerabilities": []
-      },
-      "death_saves": {
-        "dead": false,
-        "failures": 0,
-        "stable": false,
-        "successes": 0
-      },
-      "exhaustion_level": 0,
-      "experience_points": 0,
-      "faction": "ally",
-      "features": [
-        {
-          "action_ids": [],
-          "aura_ids": [],
-          "description": "",
-          "feature_id": "darkvision",
-          "label": "Widzenie w ciemności",
-          "resource_ids": [],
-          "source_kind": "species",
-          "source_ref": "dwarf",
-          "trigger_ids": []
-        },
-        {
-          "action_ids": [],
-          "aura_ids": [],
-          "description": "",
-          "feature_id": "dwarven_resilience",
-          "label": "Dwarven resilience",
-          "resource_ids": [],
-          "source_kind": "species",
-          "source_ref": "dwarf",
-          "trigger_ids": []
-        },
-        {
-          "action_ids": [],
-          "aura_ids": [],
-          "description": "",
-          "feature_id": "dwarven_speed",
-          "label": "Dwarven speed",
-          "resource_ids": [],
-          "source_kind": "species",
-          "source_ref": "dwarf",
-          "trigger_ids": []
-        },
-        {
-          "action_ids": [],
-          "aura_ids": [],
-          "description": "",
-          "feature_id": "stonecunning",
-          "label": "Stonecunning",
-          "resource_ids": [],
-          "source_kind": "species",
-          "source_ref": "dwarf",
-          "trigger_ids": []
-        },
-        {
-          "action_ids": [],
-          "aura_ids": [],
-          "description": "",
-          "feature_id": "dwarven_toughness",
-          "label": "Dwarven toughness",
-          "resource_ids": [],
-          "source_kind": "species",
-          "source_ref": "dwarf",
-          "trigger_ids": []
-        },
-        {
-          "action_ids": [
-            "request_faithful_shelter",
-            "request_faithful_care"
-          ],
-          "aura_ids": [],
-          "description": "",
-          "feature_id": "shelter_of_the_faithful",
-          "label": "Shelter of the faithful",
-          "resource_ids": [],
-          "source_kind": "background",
-          "source_ref": "acolyte",
-          "trigger_ids": []
-        },
-        {
-          "action_ids": [],
-          "aura_ids": [],
-          "description": "",
-          "feature_id": "spellcasting",
-          "label": "Rzucanie czarów",
-          "resource_ids": [],
-          "source_kind": "class",
-          "source_ref": "cleric",
-          "trigger_ids": []
-        },
-        {
-          "action_ids": [],
-          "aura_ids": [],
-          "description": "",
-          "feature_id": "divine_domain",
-          "label": "Domena boska",
-          "resource_ids": [],
-          "source_kind": "class",
-          "source_ref": "cleric",
-          "trigger_ids": []
-        },
-        {
-          "action_ids": [],
-          "aura_ids": [],
-          "description": "",
-          "feature_id": "channel_divinity",
-          "label": "Channel divinity",
-          "resource_ids": [
-            "channel_divinity_uses"
-          ],
-          "source_kind": "class",
-          "source_ref": "cleric",
-          "trigger_ids": []
-        },
-        {
-          "action_ids": [
-            "turn_undead"
-          ],
-          "aura_ids": [],
-          "description": "",
-          "feature_id": "turn_undead",
-          "label": "Turn undead",
-          "resource_ids": [
-            "channel_divinity_uses"
-          ],
-          "source_kind": "class",
-          "source_ref": "cleric",
-          "trigger_ids": []
-        },
-        {
-          "action_ids": [],
-          "aura_ids": [],
-          "description": "",
-          "feature_id": "life_domain",
-          "label": "Domena Życia",
-          "resource_ids": [],
-          "source_kind": "subclass",
-          "source_ref": "life_domain",
-          "trigger_ids": []
-        },
-        {
-          "action_ids": [],
-          "aura_ids": [],
-          "description": "",
-          "feature_id": "disciple_of_life",
-          "label": "Uczeń życia",
-          "resource_ids": [],
-          "source_kind": "subclass",
-          "source_ref": "life_domain",
-          "trigger_ids": []
-        },
-        {
-          "action_ids": [
-            "preserve_life"
-          ],
-          "aura_ids": [],
-          "description": "",
-          "feature_id": "channel_divinity_preserve_life",
-          "label": "Channel divinity preserve life",
-          "resource_ids": [
-            "channel_divinity_uses"
-          ],
-          "source_kind": "subclass",
-          "source_ref": "life_domain",
-          "trigger_ids": []
-        },
-        {
-          "action_ids": [],
-          "aura_ids": [],
-          "description": "",
-          "feature_id": "boardgame_level_3_ability_boost",
-          "label": "Premia archetypu: +2 Mądrość",
-          "resource_ids": [],
-          "source_kind": "scenario",
-          "source_ref": "boardgame_archetype:dagna",
-          "trigger_ids": []
-        },
-        {
-          "action_ids": [
-            "diagnosis"
-          ],
-          "aura_ids": [],
-          "description": "",
-          "feature_id": "diagnosis",
-          "label": "Diagnoza",
-          "resource_ids": [],
-          "source_kind": "scenario",
-          "source_ref": "boardgame_archetype:dagna",
-          "trigger_ids": []
-        },
-        {
-          "action_ids": [],
-          "aura_ids": [],
-          "description": "",
-          "feature_id": "flaw_leave_no_one",
-          "label": "Skaza: Nikogo nie zostawiam",
-          "resource_ids": [],
-          "source_kind": "scenario",
-          "source_ref": "boardgame_archetype:dagna",
-          "trigger_ids": []
-        }
-      ],
-      "hit_dice": [
-        {
-          "die_sides": 8,
-          "maximum": 3,
-          "remaining": 3
-        }
-      ],
-      "hp": 30,
-      "id": "dagna",
-      "inventory": [
-        {
-          "ammunition_type": null,
-          "armor_base_ac": null,
-          "armor_category": null,
-          "armor_class_bonus": 0,
-          "armor_dexterity_cap": null,
-          "armor_proficiency": null,
-          "armor_strength_requirement": null,
-          "attuned": false,
-          "available": true,
-          "broken": false,
-          "bundle_contents": [],
-          "charges_current": null,
-          "charges_maximum": null,
-          "charges_recovery": "never",
-          "charges_recovery_dice": null,
-          "charges_recovery_modifier": 0,
-          "check_modifiers": [],
-          "container_capacity": null,
-          "description": "",
-          "durability": null,
-          "equipped": true,
-          "gear_category": null,
-          "hands_required": 1,
-          "held_in": [
-            "main_hand"
-          ],
-          "id": "mace",
-          "kind": "weapon",
-          "light_source": null,
-          "light_weapon": false,
-          "magic_effects": [],
-          "name": "Buława",
-          "portable": true,
-          "properties": [],
-          "quantity": 1,
-          "requires_attunement": false,
-          "source_ref": "mace",
-          "spellcasting_focus_kind": null,
-          "stackable": true,
-          "stealth_disadvantage": false,
-          "tool_proficiency_id": null,
-          "total_value_cp": 500,
-          "total_weight_lb": 4.0,
-          "value_cp": 500,
-          "versatile_damage_dice": null,
-          "weapon_category": "simple",
-          "weapon_properties": [],
-          "weight_lb": 4.0
-        },
-        {
-          "ammunition_type": null,
-          "armor_base_ac": null,
-          "armor_category": null,
-          "armor_class_bonus": 2,
-          "armor_dexterity_cap": null,
-          "armor_proficiency": "shield",
-          "armor_strength_requirement": null,
-          "attuned": false,
-          "available": true,
-          "broken": false,
-          "bundle_contents": [],
-          "charges_current": null,
-          "charges_maximum": null,
-          "charges_recovery": "never",
-          "charges_recovery_dice": null,
-          "charges_recovery_modifier": 0,
-          "check_modifiers": [],
-          "container_capacity": null,
-          "description": "Metalowa tarcza zajmująca jedną rękę i zapewniająca +2 do KP.",
-          "durability": null,
-          "equipped": true,
-          "gear_category": null,
-          "hands_required": 1,
-          "held_in": [
-            "off_hand"
-          ],
-          "id": "shield",
-          "kind": "shield",
-          "light_source": null,
-          "light_weapon": false,
-          "magic_effects": [],
-          "name": "Tarcza",
-          "portable": true,
-          "properties": [
-            "rigid",
-            "hard",
-            "metallic"
-          ],
-          "quantity": 1,
-          "requires_attunement": false,
-          "source_ref": "shield",
-          "spellcasting_focus_kind": null,
-          "stackable": true,
-          "stealth_disadvantage": false,
-          "tool_proficiency_id": null,
-          "total_value_cp": 1000,
-          "total_weight_lb": 6.0,
-          "value_cp": 1000,
-          "versatile_damage_dice": null,
-          "weapon_category": null,
-          "weapon_properties": [],
-          "weight_lb": 6.0
-        },
-        {
-          "ammunition_type": null,
-          "armor_base_ac": 14,
-          "armor_category": "medium",
-          "armor_class_bonus": 0,
-          "armor_dexterity_cap": 2,
-          "armor_proficiency": "medium",
-          "armor_strength_requirement": null,
-          "attuned": false,
-          "available": true,
-          "broken": false,
-          "bundle_contents": [],
-          "charges_current": null,
-          "charges_maximum": null,
-          "charges_recovery": "never",
-          "charges_recovery_dice": null,
-          "charges_recovery_modifier": 0,
-          "check_modifiers": [],
-          "container_capacity": null,
-          "description": "Średni pancerz: KP 14 + modyfikator Zręczności, maksymalnie +2; utrudnienie do Stealth.",
-          "durability": null,
-          "equipped": true,
-          "gear_category": null,
-          "hands_required": 0,
-          "held_in": [],
-          "id": "scale_mail",
-          "kind": "armor",
-          "light_source": null,
-          "light_weapon": false,
-          "magic_effects": [],
-          "name": "Zbroja łuskowa",
-          "portable": true,
-          "properties": [
-            "metallic",
-            "hard"
-          ],
-          "quantity": 1,
-          "requires_attunement": false,
-          "source_ref": "scale_mail",
-          "spellcasting_focus_kind": null,
-          "stackable": true,
-          "stealth_disadvantage": true,
-          "tool_proficiency_id": null,
-          "total_value_cp": 5000,
-          "total_weight_lb": 45.0,
-          "value_cp": 5000,
-          "versatile_damage_dice": null,
-          "weapon_category": null,
-          "weapon_properties": [],
-          "weight_lb": 45.0
-        },
-        {
-          "ammunition_type": null,
-          "armor_base_ac": null,
-          "armor_category": null,
-          "armor_class_bonus": 0,
-          "armor_dexterity_cap": null,
-          "armor_proficiency": null,
-          "armor_strength_requirement": null,
-          "attuned": false,
-          "available": true,
-          "broken": false,
-          "bundle_contents": [],
-          "charges_current": null,
-          "charges_maximum": null,
-          "charges_recovery": "never",
-          "charges_recovery_dice": null,
-          "charges_recovery_modifier": 0,
-          "check_modifiers": [],
-          "container_capacity": null,
-          "description": "Dwuręczna lekka kusza strzelająca bełtami.",
-          "durability": null,
-          "equipped": false,
-          "gear_category": null,
-          "hands_required": 2,
-          "held_in": [],
-          "id": "crossbow",
-          "kind": "weapon",
-          "light_source": null,
-          "light_weapon": false,
-          "magic_effects": [],
-          "name": "Kusza",
-          "portable": true,
-          "properties": [
-            "rigid",
-            "wooden",
-            "metallic"
-          ],
-          "quantity": 1,
-          "requires_attunement": false,
-          "source_ref": "crossbow",
-          "spellcasting_focus_kind": null,
-          "stackable": true,
-          "stealth_disadvantage": false,
-          "tool_proficiency_id": null,
-          "total_value_cp": 2500,
-          "total_weight_lb": 5.0,
-          "value_cp": 2500,
-          "versatile_damage_dice": null,
-          "weapon_category": "simple",
-          "weapon_properties": [
-            "ammunition",
-            "loading",
-            "two_handed"
-          ],
-          "weight_lb": 5.0
-        },
-        {
-          "ammunition_type": "bolt",
-          "armor_base_ac": null,
-          "armor_category": null,
-          "armor_class_bonus": 0,
-          "armor_dexterity_cap": null,
-          "armor_proficiency": null,
-          "armor_strength_requirement": null,
-          "attuned": false,
-          "available": true,
-          "broken": false,
-          "bundle_contents": [],
-          "charges_current": null,
-          "charges_maximum": null,
-          "charges_recovery": "never",
-          "charges_recovery_dice": null,
-          "charges_recovery_modifier": 0,
-          "check_modifiers": [],
-          "container_capacity": null,
-          "description": "Krótki metalowo-drewniany pocisk przeznaczony do kuszy.",
-          "durability": null,
-          "equipped": false,
-          "gear_category": null,
-          "hands_required": 0,
-          "held_in": [],
-          "id": "crossbow_bolt",
-          "kind": "ammunition",
-          "light_source": null,
-          "light_weapon": false,
-          "magic_effects": [],
-          "name": "Bełt do kuszy",
-          "portable": true,
-          "properties": [
-            "rigid",
-            "wooden",
-            "metallic"
-          ],
-          "quantity": 20,
-          "requires_attunement": false,
-          "source_ref": "crossbow_bolt",
-          "spellcasting_focus_kind": null,
-          "stackable": true,
-          "stealth_disadvantage": false,
-          "tool_proficiency_id": null,
-          "total_value_cp": 100,
-          "total_weight_lb": 1.5,
-          "value_cp": 5,
-          "versatile_damage_dice": null,
-          "weapon_category": null,
-          "weapon_properties": [],
-          "weight_lb": 0.075
-        },
-        {
-          "ammunition_type": null,
-          "armor_base_ac": null,
-          "armor_category": null,
-          "armor_class_bonus": 0,
-          "armor_dexterity_cap": null,
-          "armor_proficiency": null,
-          "armor_strength_requirement": null,
-          "attuned": false,
-          "available": true,
-          "broken": false,
-          "bundle_contents": [],
-          "charges_current": null,
-          "charges_maximum": null,
-          "charges_recovery": "never",
-          "charges_recovery_dice": null,
-          "charges_recovery_modifier": 0,
-          "check_modifiers": [],
-          "container_capacity": null,
-          "description": "",
-          "durability": null,
-          "equipped": true,
-          "gear_category": "holy_symbol",
-          "hands_required": 0,
-          "held_in": [],
-          "id": "holy_symbol_amulet",
-          "kind": "focus",
-          "light_source": null,
-          "light_weapon": false,
-          "magic_effects": [],
-          "name": "Amulet ze świętym symbolem",
-          "portable": true,
-          "properties": [],
-          "quantity": 2,
-          "requires_attunement": false,
-          "source_ref": "holy_symbol_amulet",
-          "spellcasting_focus_kind": "holy_symbol",
-          "stackable": true,
-          "stealth_disadvantage": false,
-          "tool_proficiency_id": null,
-          "total_value_cp": 1000,
-          "total_weight_lb": 2.0,
-          "value_cp": 500,
-          "versatile_damage_dice": null,
-          "weapon_category": null,
-          "weapon_properties": [],
-          "weight_lb": 1.0
-        },
-        {
-          "ammunition_type": null,
-          "armor_base_ac": null,
-          "armor_category": null,
-          "armor_class_bonus": 0,
-          "armor_dexterity_cap": null,
-          "armor_proficiency": null,
-          "armor_strength_requirement": null,
-          "attuned": false,
-          "available": true,
-          "broken": false,
-          "bundle_contents": [
-            {
-              "item_id": "backpack",
-              "quantity": 1
-            },
-            {
-              "item_id": "blanket",
-              "quantity": 1
-            },
-            {
-              "item_id": "candle",
-              "quantity": 10
-            },
-            {
-              "item_id": "tinderbox",
-              "quantity": 1
-            },
-            {
-              "item_id": "alms_box",
-              "quantity": 1
-            },
-            {
-              "item_id": "incense_block",
-              "quantity": 2
-            },
-            {
-              "item_id": "censer",
-              "quantity": 1
-            },
-            {
-              "item_id": "vestments",
-              "quantity": 1
-            },
-            {
-              "item_id": "rations",
-              "quantity": 2
-            },
-            {
-              "item_id": "waterskin",
-              "quantity": 1
-            }
-          ],
-          "charges_current": null,
-          "charges_maximum": null,
-          "charges_recovery": "never",
-          "charges_recovery_dice": null,
-          "charges_recovery_modifier": 0,
-          "check_modifiers": [],
-          "container_capacity": null,
-          "description": "",
-          "durability": null,
-          "equipped": false,
-          "gear_category": "equipment_pack",
-          "hands_required": 0,
-          "held_in": [],
-          "id": "priests_pack",
-          "kind": "equipment_pack",
-          "light_source": null,
-          "light_weapon": false,
-          "magic_effects": [],
-          "name": "Pakiet kapłana",
-          "portable": true,
-          "properties": [],
-          "quantity": 1,
-          "requires_attunement": false,
-          "source_ref": "priests_pack",
-          "spellcasting_focus_kind": null,
-          "stackable": false,
-          "stealth_disadvantage": false,
-          "tool_proficiency_id": null,
-          "total_value_cp": 1900,
-          "total_weight_lb": 0.0,
-          "value_cp": 1900,
-          "versatile_damage_dice": null,
-          "weapon_category": null,
-          "weapon_properties": [],
-          "weight_lb": 0.0
-        },
-        {
-          "ammunition_type": null,
-          "armor_base_ac": null,
-          "armor_category": null,
-          "armor_class_bonus": 0,
-          "armor_dexterity_cap": null,
-          "armor_proficiency": null,
-          "armor_strength_requirement": null,
-          "attuned": false,
-          "available": true,
-          "broken": false,
-          "bundle_contents": [],
-          "charges_current": null,
-          "charges_maximum": null,
-          "charges_recovery": "never",
-          "charges_recovery_dice": null,
-          "charges_recovery_modifier": 0,
-          "check_modifiers": [],
-          "container_capacity": null,
-          "description": "",
-          "durability": null,
-          "equipped": false,
-          "gear_category": "clothing",
-          "hands_required": 0,
-          "held_in": [],
-          "id": "vestments",
-          "kind": "clothing",
-          "light_source": null,
-          "light_weapon": false,
-          "magic_effects": [],
-          "name": "Szaty liturgiczne",
-          "portable": true,
-          "properties": [
-            "textile"
-          ],
-          "quantity": 1,
-          "requires_attunement": false,
-          "source_ref": "vestments",
-          "spellcasting_focus_kind": null,
-          "stackable": true,
-          "stealth_disadvantage": false,
-          "tool_proficiency_id": null,
-          "total_value_cp": 0,
-          "total_weight_lb": 0.0,
-          "value_cp": 0,
-          "versatile_damage_dice": null,
-          "weapon_category": null,
-          "weapon_properties": [],
-          "weight_lb": 0.0
-        },
-        {
-          "ammunition_type": null,
-          "armor_base_ac": null,
-          "armor_category": null,
-          "armor_class_bonus": 0,
-          "armor_dexterity_cap": null,
-          "armor_proficiency": null,
-          "armor_strength_requirement": null,
-          "attuned": false,
-          "available": true,
-          "broken": false,
-          "bundle_contents": [],
-          "charges_current": null,
-          "charges_maximum": null,
-          "charges_recovery": "never",
-          "charges_recovery_dice": null,
-          "charges_recovery_modifier": 0,
-          "check_modifiers": [],
-          "container_capacity": null,
-          "description": "",
-          "durability": null,
-          "equipped": false,
-          "gear_category": "clothing",
-          "hands_required": 0,
-          "held_in": [],
-          "id": "common_clothes",
-          "kind": "clothing",
-          "light_source": null,
-          "light_weapon": false,
-          "magic_effects": [],
-          "name": "Zwykłe ubranie",
-          "portable": true,
-          "properties": [
-            "textile"
-          ],
-          "quantity": 1,
-          "requires_attunement": false,
-          "source_ref": "common_clothes",
-          "spellcasting_focus_kind": null,
-          "stackable": true,
-          "stealth_disadvantage": false,
-          "tool_proficiency_id": null,
-          "total_value_cp": 50,
-          "total_weight_lb": 3.0,
-          "value_cp": 50,
-          "versatile_damage_dice": null,
-          "weapon_category": null,
-          "weapon_properties": [],
-          "weight_lb": 3.0
-        },
-        {
-          "ammunition_type": null,
-          "armor_base_ac": null,
-          "armor_category": null,
-          "armor_class_bonus": 0,
-          "armor_dexterity_cap": null,
-          "armor_proficiency": null,
-          "armor_strength_requirement": null,
-          "attuned": false,
-          "available": true,
-          "broken": false,
-          "bundle_contents": [],
-          "charges_current": null,
-          "charges_maximum": null,
-          "charges_recovery": "never",
-          "charges_recovery_dice": null,
-          "charges_recovery_modifier": 0,
-          "check_modifiers": [],
-          "container_capacity": {
-            "ammunition_count": null,
-            "ammunition_type": null,
-            "liquid_pints": null,
-            "maximum_weight_lb": 6.0,
-            "sheet_count": null,
-            "volume_cubic_feet": 0.2
-          },
-          "description": "",
-          "durability": null,
-          "equipped": false,
-          "gear_category": "container",
-          "hands_required": 0,
-          "held_in": [],
-          "id": "pouch",
-          "kind": "container",
-          "light_source": null,
-          "light_weapon": false,
-          "magic_effects": [],
-          "name": "Sakiewka",
-          "portable": true,
-          "properties": [
-            "container",
-            "textile"
-          ],
-          "quantity": 1,
-          "requires_attunement": false,
-          "source_ref": "pouch",
-          "spellcasting_focus_kind": null,
-          "stackable": true,
-          "stealth_disadvantage": false,
-          "tool_proficiency_id": null,
-          "total_value_cp": 50,
-          "total_weight_lb": 1.0,
-          "value_cp": 50,
-          "versatile_damage_dice": null,
-          "weapon_category": null,
-          "weapon_properties": [],
-          "weight_lb": 1.0
-        }
-      ],
-      "level": 3,
-      "max_hp": 30,
-      "name": "Dagna",
-      "portrait": "character_uploads/default_roster_v2/dagna.png",
-      "position": [
-        0,
-        1
-      ],
-      "proficiencies": {
-        "armor": [
-          "light",
-          "medium",
-          "shield",
-          "heavy"
-        ],
-        "expertise": [],
-        "saving_throws": [
-          "wisdom",
-          "charisma"
-        ],
-        "skills": [
-          "insight",
-          "religion",
-          "medicine",
-          "persuasion"
-        ],
-        "tools": [
-          "smiths_tools"
-        ],
-        "weapons": [
-          "unarmed_strike",
-          "battleaxe",
-          "handaxe",
-          "light_hammer",
-          "warhammer",
-          "mace",
-          "crossbow",
-          "dagger"
-        ]
-      },
-      "proficiency_bonus": 2,
-      "resource_pools": [
-        {
-          "current": 1,
-          "id": "channel_divinity_uses",
-          "label": "Channel Divinity",
-          "maximum": 1,
-          "recharge": null,
-          "recovery": "short_rest"
-        }
-      ],
-      "senses": {
-        "blindsight_feet": 0,
-        "darkvision_feet": 60,
-        "magical_darkness_vision_feet": 0,
-        "tremorsense_feet": 0,
-        "truesight_feet": 0
-      },
-      "size": "medium",
-      "speed_feet": 25,
-      "spell_access": [
-        {
-          "allowed_focus_kinds": [
-            "component_pouch",
-            "holy_symbol"
-          ],
-          "casting_ability": "wisdom",
-          "kind": "known",
-          "resource_ids_by_spell": {},
-          "spell_ids": [
-            "sacred_flame",
-            "healing_word",
-            "bless",
-            "sanctuary",
-            "guiding_bolt",
-            "aid",
-            "lesser_restoration",
-            "warding_bond"
-          ]
-        }
-      ],
-      "spell_ids": [
-        "sacred_flame",
-        "guidance",
-        "spare_the_dying",
-        "bane",
-        "bless",
-        "command",
-        "create_or_destroy_water",
-        "cure_wounds",
-        "detect_evil_and_good",
-        "detect_magic",
-        "detect_poison_and_disease",
-        "guiding_bolt",
-        "healing_word",
-        "inflict_wounds",
-        "protection_from_evil_and_good",
-        "purify_food_and_drink",
-        "sanctuary",
-        "shield_of_faith",
-        "aid",
-        "augury",
-        "blindness_deafness",
-        "calm_emotions",
-        "continual_flame",
-        "enhance_ability",
-        "find_traps",
-        "gentle_repose",
-        "hold_person",
-        "lesser_restoration",
-        "locate_object",
-        "prayer_of_healing",
-        "protection_from_poison",
-        "silence",
-        "spiritual_weapon",
-        "warding_bond",
-        "zone_of_truth"
-      ],
-      "spell_preparation": null,
-      "spell_save_dc": 14,
-      "spell_slots": [
-        {
-          "level": 1,
-          "maximum": 4,
-          "recovery": "long_rest",
-          "remaining": 4,
-          "temporary": false
-        },
-        {
-          "level": 2,
-          "maximum": 2,
-          "recovery": "long_rest",
-          "remaining": 2,
-          "temporary": false
-        }
-      ],
-      "spells": [
-        {
-          "casting_time": "action",
-          "components": {
-            "materials": [],
-            "somatic": true,
-            "verbal": true
-          },
-          "concentration": false,
-          "duration": {
-            "amount": 1,
-            "kind": "instantaneous"
-          },
-          "effect_kind": "attack",
-          "exploration_consequence_tags": [],
-          "exploration_effect": null,
-          "exploration_tags": [],
-          "exploration_target_tags": [],
-          "id": "sacred_flame",
-          "level": 0,
-          "name": "Święty płomień",
-          "range": {
-            "feet": 60,
-            "kind": "distance"
-          },
-          "ritual": false,
-          "scaling": {
-            "cantrip_damage_dice_per_tier": 1,
-            "damage_dice_per_slot_level": 0,
-            "healing_dice_per_slot_level": 0,
-            "targets_per_slot_level": 0
-          },
-          "school": "evocation"
-        },
-        {
-          "casting_time": "action",
-          "components": {
-            "materials": [],
-            "somatic": true,
-            "verbal": true
-          },
-          "concentration": true,
-          "duration": {
-            "amount": 1,
-            "kind": "minute"
-          },
-          "effect_kind": "combat_action",
-          "exploration_consequence_tags": [],
-          "exploration_effect": null,
-          "exploration_tags": [],
-          "exploration_target_tags": [],
-          "id": "guidance",
-          "level": 0,
-          "name": "Wskazówki",
-          "range": {
-            "feet": 0,
-            "kind": "touch"
-          },
-          "ritual": false,
-          "scaling": null,
-          "school": "divination"
-        },
-        {
-          "casting_time": "action",
-          "components": {
-            "materials": [],
-            "somatic": true,
-            "verbal": true
-          },
-          "concentration": false,
-          "duration": {
-            "amount": 1,
-            "kind": "instantaneous"
-          },
-          "effect_kind": "combat_action",
-          "exploration_consequence_tags": [],
-          "exploration_effect": null,
-          "exploration_tags": [],
-          "exploration_target_tags": [],
-          "id": "spare_the_dying",
-          "level": 0,
-          "name": "Oszczędzenie umierającego",
-          "range": {
-            "feet": 0,
-            "kind": "touch"
-          },
-          "ritual": false,
-          "scaling": null,
-          "school": "necromancy"
-        },
-        {
-          "casting_time": "action",
-          "components": {
-            "materials": [
-              {
-                "consumed": false,
-                "item_id": "spell_component_bane",
-                "label": "a drop of blood",
-                "minimum_value_cp": 0,
-                "quantity": 1
-              }
-            ],
-            "somatic": true,
-            "verbal": true
-          },
-          "concentration": true,
-          "duration": {
-            "amount": 1,
-            "kind": "minute"
-          },
-          "effect_kind": "combat_action",
-          "exploration_consequence_tags": [],
-          "exploration_effect": null,
-          "exploration_tags": [],
-          "exploration_target_tags": [],
-          "id": "bane",
-          "level": 1,
-          "name": "Zguba",
-          "range": {
-            "feet": 30,
-            "kind": "distance"
-          },
-          "ritual": false,
-          "scaling": null,
-          "school": "enchantment"
-        },
-        {
-          "casting_time": "action",
-          "components": {
-            "materials": [
-              {
-                "consumed": false,
-                "item_id": "spell_component_bless",
-                "label": "a sprinkling of holy water",
-                "minimum_value_cp": 0,
-                "quantity": 1
-              }
-            ],
-            "somatic": true,
-            "verbal": true
-          },
-          "concentration": true,
-          "duration": {
-            "amount": 1,
-            "kind": "minute"
-          },
-          "effect_kind": "combat_action",
-          "exploration_consequence_tags": [],
-          "exploration_effect": null,
-          "exploration_tags": [],
-          "exploration_target_tags": [],
-          "id": "bless",
-          "level": 1,
-          "name": "Błogosławieństwo",
-          "range": {
-            "feet": 30,
-            "kind": "distance"
-          },
-          "ritual": false,
-          "scaling": null,
-          "school": "enchantment"
-        },
-        {
-          "casting_time": "action",
-          "components": {
-            "materials": [],
-            "somatic": false,
-            "verbal": true
-          },
-          "concentration": false,
-          "duration": {
-            "amount": 1,
-            "kind": "round"
-          },
-          "effect_kind": "combat_action",
-          "exploration_consequence_tags": [],
-          "exploration_effect": null,
-          "exploration_tags": [],
-          "exploration_target_tags": [],
-          "id": "command",
-          "level": 1,
-          "name": "Rozkaz",
-          "range": {
-            "feet": 60,
-            "kind": "distance"
-          },
-          "ritual": false,
-          "scaling": null,
-          "school": "enchantment"
-        },
-        {
-          "casting_time": "action",
-          "components": {
-            "materials": [
-              {
-                "consumed": false,
-                "item_id": "spell_component_create_or_destroy_water",
-                "label": "a drop of water if creating water or a few grains of sand if destroying it",
-                "minimum_value_cp": 0,
-                "quantity": 1
-              }
-            ],
-            "somatic": true,
-            "verbal": true
-          },
-          "concentration": false,
-          "duration": {
-            "amount": 1,
-            "kind": "instantaneous"
-          },
-          "effect_kind": "exploration",
-          "exploration_consequence_tags": [],
-          "exploration_effect": {
-            "flag_key": "cast_create_or_destroy_water",
-            "flag_value": true,
-            "kind": "set_flag"
-          },
-          "exploration_tags": [],
-          "exploration_target_tags": [],
-          "id": "create_or_destroy_water",
-          "level": 1,
-          "name": "Stworzenie lub zniszczenie wody",
-          "range": {
-            "feet": 30,
-            "kind": "distance"
-          },
-          "ritual": false,
-          "scaling": null,
-          "school": "transmutation"
-        },
-        {
-          "casting_time": "action",
-          "components": {
-            "materials": [],
-            "somatic": true,
-            "verbal": true
-          },
-          "concentration": false,
-          "duration": {
-            "amount": 1,
-            "kind": "instantaneous"
-          },
-          "effect_kind": "healing",
-          "exploration_consequence_tags": [],
-          "exploration_effect": null,
-          "exploration_tags": [],
-          "exploration_target_tags": [],
-          "id": "cure_wounds",
-          "level": 1,
-          "name": "Leczenie ran",
-          "range": {
-            "feet": 0,
-            "kind": "touch"
-          },
-          "ritual": false,
-          "scaling": {
-            "cantrip_damage_dice_per_tier": 0,
-            "damage_dice_per_slot_level": 0,
-            "healing_dice_per_slot_level": 1,
-            "targets_per_slot_level": 0
-          },
-          "school": "evocation"
-        },
-        {
-          "casting_time": "action",
-          "components": {
-            "materials": [],
-            "somatic": true,
-            "verbal": true
-          },
-          "concentration": true,
-          "duration": {
-            "amount": 1,
-            "kind": "ten_minutes"
-          },
-          "effect_kind": "exploration",
-          "exploration_consequence_tags": [],
-          "exploration_effect": {
-            "flag_key": "cast_detect_evil_and_good",
-            "flag_value": true,
-            "kind": "set_flag"
-          },
-          "exploration_tags": [],
-          "exploration_target_tags": [],
-          "id": "detect_evil_and_good",
-          "level": 1,
-          "name": "Wykrycie dobra i zła",
-          "range": {
-            "feet": 0,
-            "kind": "self"
-          },
-          "ritual": false,
-          "scaling": null,
-          "school": "divination"
-        },
-        {
-          "casting_time": "action",
-          "components": {
-            "materials": [],
-            "somatic": true,
-            "verbal": true
-          },
-          "concentration": true,
-          "duration": {
-            "amount": 1,
-            "kind": "ten_minutes"
-          },
-          "effect_kind": "exploration",
-          "exploration_consequence_tags": [],
-          "exploration_effect": {
-            "flag_key": "cast_detect_magic",
-            "flag_value": true,
-            "kind": "set_flag"
-          },
-          "exploration_tags": [],
-          "exploration_target_tags": [],
-          "id": "detect_magic",
-          "level": 1,
-          "name": "Wykrycie magii",
-          "range": {
-            "feet": 0,
-            "kind": "self"
-          },
-          "ritual": true,
-          "scaling": null,
-          "school": "divination"
-        },
-        {
-          "casting_time": "action",
-          "components": {
-            "materials": [
-              {
-                "consumed": false,
-                "item_id": "spell_component_detect_poison_and_disease",
-                "label": "a yew leaf",
-                "minimum_value_cp": 0,
-                "quantity": 1
-              }
-            ],
-            "somatic": true,
-            "verbal": true
-          },
-          "concentration": true,
-          "duration": {
-            "amount": 1,
-            "kind": "ten_minutes"
-          },
-          "effect_kind": "exploration",
-          "exploration_consequence_tags": [],
-          "exploration_effect": {
-            "flag_key": "cast_detect_poison_and_disease",
-            "flag_value": true,
-            "kind": "set_flag"
-          },
-          "exploration_tags": [],
-          "exploration_target_tags": [],
-          "id": "detect_poison_and_disease",
-          "level": 1,
-          "name": "Wykrycie trucizny i choroby",
-          "range": {
-            "feet": 0,
-            "kind": "self"
-          },
-          "ritual": true,
-          "scaling": null,
-          "school": "divination"
-        },
-        {
-          "casting_time": "action",
-          "components": {
-            "materials": [],
-            "somatic": true,
-            "verbal": true
-          },
-          "concentration": false,
-          "duration": {
-            "amount": 1,
-            "kind": "round"
-          },
-          "effect_kind": "attack",
-          "exploration_consequence_tags": [],
-          "exploration_effect": null,
-          "exploration_tags": [],
-          "exploration_target_tags": [],
-          "id": "guiding_bolt",
-          "level": 1,
-          "name": "Naprowadzający pocisk",
-          "range": {
-            "feet": 120,
-            "kind": "distance"
-          },
-          "ritual": false,
-          "scaling": {
-            "cantrip_damage_dice_per_tier": 0,
-            "damage_dice_per_slot_level": 1,
-            "healing_dice_per_slot_level": 0,
-            "targets_per_slot_level": 0
-          },
-          "school": "evocation"
-        },
-        {
-          "casting_time": "bonus_action",
-          "components": {
-            "materials": [],
-            "somatic": false,
-            "verbal": true
-          },
-          "concentration": false,
-          "duration": {
-            "amount": 1,
-            "kind": "instantaneous"
-          },
-          "effect_kind": "healing",
-          "exploration_consequence_tags": [],
-          "exploration_effect": null,
-          "exploration_tags": [],
-          "exploration_target_tags": [],
-          "id": "healing_word",
-          "level": 1,
-          "name": "Słowo leczenia",
-          "range": {
-            "feet": 60,
-            "kind": "distance"
-          },
-          "ritual": false,
-          "scaling": {
-            "cantrip_damage_dice_per_tier": 0,
-            "damage_dice_per_slot_level": 0,
-            "healing_dice_per_slot_level": 1,
-            "targets_per_slot_level": 0
-          },
-          "school": "evocation"
-        },
-        {
-          "casting_time": "action",
-          "components": {
-            "materials": [],
-            "somatic": true,
-            "verbal": true
-          },
-          "concentration": false,
-          "duration": {
-            "amount": 1,
-            "kind": "instantaneous"
-          },
-          "effect_kind": "attack",
-          "exploration_consequence_tags": [],
-          "exploration_effect": null,
-          "exploration_tags": [],
-          "exploration_target_tags": [],
-          "id": "inflict_wounds",
-          "level": 1,
-          "name": "Zadawanie ran",
-          "range": {
-            "feet": 0,
-            "kind": "touch"
-          },
-          "ritual": false,
-          "scaling": {
-            "cantrip_damage_dice_per_tier": 0,
-            "damage_dice_per_slot_level": 1,
-            "healing_dice_per_slot_level": 0,
-            "targets_per_slot_level": 0
-          },
-          "school": "necromancy"
-        },
-        {
-          "casting_time": "action",
-          "components": {
-            "materials": [
-              {
-                "consumed": true,
-                "item_id": "spell_component_protection_from_evil_and_good",
-                "label": "holy water or powdered silver and iron, which the spell consumes",
-                "minimum_value_cp": 0,
-                "quantity": 1
-              }
-            ],
-            "somatic": true,
-            "verbal": true
-          },
-          "concentration": true,
-          "duration": {
-            "amount": 1,
-            "kind": "hour"
-          },
-          "effect_kind": "combat_action",
-          "exploration_consequence_tags": [],
-          "exploration_effect": null,
-          "exploration_tags": [],
-          "exploration_target_tags": [],
-          "id": "protection_from_evil_and_good",
-          "level": 1,
-          "name": "Ochrona przed dobrem i złem",
-          "range": {
-            "feet": 0,
-            "kind": "touch"
-          },
-          "ritual": false,
-          "scaling": null,
-          "school": "abjuration"
-        },
-        {
-          "casting_time": "action",
-          "components": {
-            "materials": [],
-            "somatic": true,
-            "verbal": true
-          },
-          "concentration": false,
-          "duration": {
-            "amount": 1,
-            "kind": "instantaneous"
-          },
-          "effect_kind": "exploration",
-          "exploration_consequence_tags": [],
-          "exploration_effect": {
-            "flag_key": "cast_purify_food_and_drink",
-            "flag_value": true,
-            "kind": "set_flag"
-          },
-          "exploration_tags": [],
-          "exploration_target_tags": [],
-          "id": "purify_food_and_drink",
-          "level": 1,
-          "name": "Oczyszczenie jadła i napoju",
-          "range": {
-            "feet": 10,
-            "kind": "distance"
-          },
-          "ritual": true,
-          "scaling": null,
-          "school": "transmutation"
-        },
-        {
-          "casting_time": "bonus_action",
-          "components": {
-            "materials": [
-              {
-                "consumed": false,
-                "item_id": "spell_component_sanctuary",
-                "label": "a small silver mirror",
-                "minimum_value_cp": 0,
-                "quantity": 1
-              }
-            ],
-            "somatic": true,
-            "verbal": true
-          },
-          "concentration": false,
-          "duration": {
-            "amount": 1,
-            "kind": "minute"
-          },
-          "effect_kind": "combat_action",
-          "exploration_consequence_tags": [],
-          "exploration_effect": null,
-          "exploration_tags": [],
-          "exploration_target_tags": [],
-          "id": "sanctuary",
-          "level": 1,
-          "name": "Sanktuarium",
-          "range": {
-            "feet": 30,
-            "kind": "distance"
-          },
-          "ritual": false,
-          "scaling": null,
-          "school": "abjuration"
-        },
-        {
-          "casting_time": "bonus_action",
-          "components": {
-            "materials": [
-              {
-                "consumed": false,
-                "item_id": "spell_component_shield_of_faith",
-                "label": "a small parchment with a bit of holy text written on it",
-                "minimum_value_cp": 0,
-                "quantity": 1
-              }
-            ],
-            "somatic": true,
-            "verbal": true
-          },
-          "concentration": true,
-          "duration": {
-            "amount": 1,
-            "kind": "ten_minutes"
-          },
-          "effect_kind": "combat_action",
-          "exploration_consequence_tags": [],
-          "exploration_effect": null,
-          "exploration_tags": [],
-          "exploration_target_tags": [],
-          "id": "shield_of_faith",
-          "level": 1,
-          "name": "Tarcza wiary",
-          "range": {
-            "feet": 60,
-            "kind": "distance"
-          },
-          "ritual": false,
-          "scaling": null,
-          "school": "abjuration"
-        },
-        {
-          "casting_time": "action",
-          "components": {
-            "materials": [
-              {
-                "consumed": false,
-                "item_id": "spell_component_aid",
-                "label": "a tiny strip of white cloth",
-                "minimum_value_cp": 0,
-                "quantity": 1
-              }
-            ],
-            "somatic": true,
-            "verbal": true
-          },
-          "concentration": false,
-          "duration": {
-            "amount": 1,
-            "kind": "eight_hours"
-          },
-          "effect_kind": "combat_action",
-          "exploration_consequence_tags": [],
-          "exploration_effect": null,
-          "exploration_tags": [],
-          "exploration_target_tags": [],
-          "id": "aid",
-          "level": 2,
-          "name": "Wsparcie",
-          "range": {
-            "feet": 30,
-            "kind": "distance"
-          },
-          "ritual": false,
-          "scaling": null,
-          "school": "abjuration"
-        },
-        {
-          "casting_time": "minute",
-          "components": {
-            "materials": [
-              {
-                "consumed": false,
-                "item_id": "spell_component_augury",
-                "label": "specially marked sticks, bones, or similar tokens worth at least 25 gp",
-                "minimum_value_cp": 2500,
-                "quantity": 1
-              }
-            ],
-            "somatic": true,
-            "verbal": true
-          },
-          "concentration": false,
-          "duration": {
-            "amount": 1,
-            "kind": "instantaneous"
-          },
-          "effect_kind": "exploration",
-          "exploration_consequence_tags": [],
-          "exploration_effect": {
-            "flag_key": "cast_augury",
-            "flag_value": true,
-            "kind": "set_flag"
-          },
-          "exploration_tags": [],
-          "exploration_target_tags": [],
-          "id": "augury",
-          "level": 2,
-          "name": "Wróżba",
-          "range": {
-            "feet": 0,
-            "kind": "self"
-          },
-          "ritual": true,
-          "scaling": null,
-          "school": "divination"
-        },
-        {
-          "casting_time": "action",
-          "components": {
-            "materials": [],
-            "somatic": false,
-            "verbal": true
-          },
-          "concentration": false,
-          "duration": {
-            "amount": 1,
-            "kind": "minute"
-          },
-          "effect_kind": "combat_action",
-          "exploration_consequence_tags": [],
-          "exploration_effect": null,
-          "exploration_tags": [],
-          "exploration_target_tags": [],
-          "id": "blindness_deafness",
-          "level": 2,
-          "name": "Ślepota/Głuchota",
-          "range": {
-            "feet": 30,
-            "kind": "distance"
-          },
-          "ritual": false,
-          "scaling": null,
-          "school": "necromancy"
-        },
-        {
-          "casting_time": "action",
-          "components": {
-            "materials": [],
-            "somatic": true,
-            "verbal": true
-          },
-          "concentration": true,
-          "duration": {
-            "amount": 1,
-            "kind": "minute"
-          },
-          "effect_kind": "exploration",
-          "exploration_consequence_tags": [],
-          "exploration_effect": {
-            "flag_key": "cast_calm_emotions",
-            "flag_value": true,
-            "kind": "set_flag"
-          },
-          "exploration_tags": [],
-          "exploration_target_tags": [],
-          "id": "calm_emotions",
-          "level": 2,
-          "name": "Uspokojenie emocji",
-          "range": {
-            "feet": 60,
-            "kind": "distance"
-          },
-          "ritual": false,
-          "scaling": null,
-          "school": "enchantment"
-        },
-        {
-          "casting_time": "action",
-          "components": {
-            "materials": [
-              {
-                "consumed": true,
-                "item_id": "spell_component_continual_flame",
-                "label": "ruby dust worth 50 gp, which the spell consumes",
-                "minimum_value_cp": 5000,
-                "quantity": 1
-              }
-            ],
-            "somatic": true,
-            "verbal": true
-          },
-          "concentration": false,
-          "duration": {
-            "amount": 1,
-            "kind": "until_dispelled"
-          },
-          "effect_kind": "exploration",
-          "exploration_consequence_tags": [],
-          "exploration_effect": {
-            "flag_key": "cast_continual_flame",
-            "flag_value": true,
-            "kind": "set_flag"
-          },
-          "exploration_tags": [],
-          "exploration_target_tags": [],
-          "id": "continual_flame",
-          "level": 2,
-          "name": "Wieczny płomień",
-          "range": {
-            "feet": 0,
-            "kind": "touch"
-          },
-          "ritual": false,
-          "scaling": null,
-          "school": "evocation"
-        },
-        {
-          "casting_time": "action",
-          "components": {
-            "materials": [
-              {
-                "consumed": false,
-                "item_id": "spell_component_enhance_ability",
-                "label": "fur or a feather from a beast",
-                "minimum_value_cp": 0,
-                "quantity": 1
-              }
-            ],
-            "somatic": true,
-            "verbal": true
-          },
-          "concentration": true,
-          "duration": {
-            "amount": 1,
-            "kind": "hour"
-          },
-          "effect_kind": "combat_action",
-          "exploration_consequence_tags": [],
-          "exploration_effect": null,
-          "exploration_tags": [],
-          "exploration_target_tags": [],
-          "id": "enhance_ability",
-          "level": 2,
-          "name": "Wzmocnienie cechy",
-          "range": {
-            "feet": 0,
-            "kind": "touch"
-          },
-          "ritual": false,
-          "scaling": null,
-          "school": "transmutation"
-        },
-        {
-          "casting_time": "action",
-          "components": {
-            "materials": [],
-            "somatic": true,
-            "verbal": true
-          },
-          "concentration": false,
-          "duration": {
-            "amount": 1,
-            "kind": "instantaneous"
-          },
-          "effect_kind": "combat_action",
-          "exploration_consequence_tags": [],
-          "exploration_effect": null,
-          "exploration_tags": [],
-          "exploration_target_tags": [],
-          "id": "find_traps",
-          "level": 2,
-          "name": "Wykrycie pułapek",
-          "range": {
-            "feet": 120,
-            "kind": "distance"
-          },
-          "ritual": false,
-          "scaling": null,
-          "school": "divination"
-        },
-        {
-          "casting_time": "action",
-          "components": {
-            "materials": [
-              {
-                "consumed": false,
-                "item_id": "spell_component_gentle_repose",
-                "label": "a pinch of salt and one copper piece placed on each of the corpse’s eyes, which must remain there for the duration",
-                "minimum_value_cp": 0,
-                "quantity": 1
-              }
-            ],
-            "somatic": true,
-            "verbal": true
-          },
-          "concentration": false,
-          "duration": {
-            "amount": 1,
-            "kind": "ten_days"
-          },
-          "effect_kind": "exploration",
-          "exploration_consequence_tags": [],
-          "exploration_effect": {
-            "flag_key": "cast_gentle_repose",
-            "flag_value": true,
-            "kind": "set_flag"
-          },
-          "exploration_tags": [],
-          "exploration_target_tags": [],
-          "id": "gentle_repose",
-          "level": 2,
-          "name": "Łagodny spoczynek",
-          "range": {
-            "feet": 0,
-            "kind": "touch"
-          },
-          "ritual": true,
-          "scaling": null,
-          "school": "necromancy"
-        },
-        {
-          "casting_time": "action",
-          "components": {
-            "materials": [
-              {
-                "consumed": false,
-                "item_id": "spell_component_hold_person",
-                "label": "a small, straight piece of iron",
-                "minimum_value_cp": 0,
-                "quantity": 1
-              }
-            ],
-            "somatic": true,
-            "verbal": true
-          },
-          "concentration": true,
-          "duration": {
-            "amount": 1,
-            "kind": "minute"
-          },
-          "effect_kind": "combat_action",
-          "exploration_consequence_tags": [],
-          "exploration_effect": null,
-          "exploration_tags": [],
-          "exploration_target_tags": [],
-          "id": "hold_person",
-          "level": 2,
-          "name": "Unieruchomienie osoby",
-          "range": {
-            "feet": 60,
-            "kind": "distance"
-          },
-          "ritual": false,
-          "scaling": null,
-          "school": "enchantment"
-        },
-        {
-          "casting_time": "action",
-          "components": {
-            "materials": [],
-            "somatic": true,
-            "verbal": true
-          },
-          "concentration": false,
-          "duration": {
-            "amount": 1,
-            "kind": "instantaneous"
-          },
-          "effect_kind": "combat_action",
-          "exploration_consequence_tags": [],
-          "exploration_effect": null,
-          "exploration_tags": [],
-          "exploration_target_tags": [],
-          "id": "lesser_restoration",
-          "level": 2,
-          "name": "Pomniejsze przywrócenie",
-          "range": {
-            "feet": 0,
-            "kind": "touch"
-          },
-          "ritual": false,
-          "scaling": null,
-          "school": "abjuration"
-        },
-        {
-          "casting_time": "action",
-          "components": {
-            "materials": [
-              {
-                "consumed": false,
-                "item_id": "spell_component_locate_object",
-                "label": "a forked twig",
-                "minimum_value_cp": 0,
-                "quantity": 1
-              }
-            ],
-            "somatic": true,
-            "verbal": true
-          },
-          "concentration": true,
-          "duration": {
-            "amount": 1,
-            "kind": "ten_minutes"
-          },
-          "effect_kind": "exploration",
-          "exploration_consequence_tags": [],
-          "exploration_effect": {
-            "flag_key": "cast_locate_object",
-            "flag_value": true,
-            "kind": "set_flag"
-          },
-          "exploration_tags": [],
-          "exploration_target_tags": [],
-          "id": "locate_object",
-          "level": 2,
-          "name": "Odnalezienie przedmiotu",
-          "range": {
-            "feet": 0,
-            "kind": "self"
-          },
-          "ritual": false,
-          "scaling": null,
-          "school": "divination"
-        },
-        {
-          "casting_time": "ten_minutes",
-          "components": {
-            "materials": [],
-            "somatic": false,
-            "verbal": true
-          },
-          "concentration": false,
-          "duration": {
-            "amount": 1,
-            "kind": "instantaneous"
-          },
-          "effect_kind": "combat_action",
-          "exploration_consequence_tags": [],
-          "exploration_effect": null,
-          "exploration_tags": [],
-          "exploration_target_tags": [],
-          "id": "prayer_of_healing",
-          "level": 2,
-          "name": "Modlitwa leczenia",
-          "range": {
-            "feet": 30,
-            "kind": "distance"
-          },
-          "ritual": false,
-          "scaling": null,
-          "school": "evocation"
-        },
-        {
-          "casting_time": "action",
-          "components": {
-            "materials": [],
-            "somatic": true,
-            "verbal": true
-          },
-          "concentration": false,
-          "duration": {
-            "amount": 1,
-            "kind": "hour"
-          },
-          "effect_kind": "combat_action",
-          "exploration_consequence_tags": [],
-          "exploration_effect": null,
-          "exploration_tags": [],
-          "exploration_target_tags": [],
-          "id": "protection_from_poison",
-          "level": 2,
-          "name": "Ochrona przed trucizną",
-          "range": {
-            "feet": 0,
-            "kind": "touch"
-          },
-          "ritual": false,
-          "scaling": null,
-          "school": "abjuration"
-        },
-        {
-          "casting_time": "action",
-          "components": {
-            "materials": [],
-            "somatic": true,
-            "verbal": true
-          },
-          "concentration": true,
-          "duration": {
-            "amount": 1,
-            "kind": "ten_minutes"
-          },
-          "effect_kind": "combat_action",
-          "exploration_consequence_tags": [],
-          "exploration_effect": null,
-          "exploration_tags": [],
-          "exploration_target_tags": [],
-          "id": "silence",
-          "level": 2,
-          "name": "Cisza",
-          "range": {
-            "feet": 120,
-            "kind": "distance"
-          },
-          "ritual": true,
-          "scaling": null,
-          "school": "illusion"
-        },
-        {
-          "casting_time": "bonus_action",
-          "components": {
-            "materials": [],
-            "somatic": true,
-            "verbal": true
-          },
-          "concentration": false,
-          "duration": {
-            "amount": 1,
-            "kind": "minute"
-          },
-          "effect_kind": "combat_action",
-          "exploration_consequence_tags": [],
-          "exploration_effect": null,
-          "exploration_tags": [],
-          "exploration_target_tags": [],
-          "id": "spiritual_weapon",
-          "level": 2,
-          "name": "Duchowa broń",
-          "range": {
-            "feet": 60,
-            "kind": "distance"
-          },
-          "ritual": false,
-          "scaling": null,
-          "school": "evocation"
-        },
-        {
-          "casting_time": "action",
-          "components": {
-            "materials": [
-              {
-                "consumed": false,
-                "item_id": "spell_component_warding_bond",
-                "label": "a pair of platinum rings worth at least 50 gp each, which you and the target must wear for the duration",
-                "minimum_value_cp": 5000,
-                "quantity": 2
-              }
-            ],
-            "somatic": true,
-            "verbal": true
-          },
-          "concentration": false,
-          "duration": {
-            "amount": 1,
-            "kind": "hour"
-          },
-          "effect_kind": "combat_action",
-          "exploration_consequence_tags": [],
-          "exploration_effect": null,
-          "exploration_tags": [],
-          "exploration_target_tags": [],
-          "id": "warding_bond",
-          "level": 2,
-          "name": "Więź ochronna",
-          "range": {
-            "feet": 0,
-            "kind": "touch"
-          },
-          "ritual": false,
-          "scaling": null,
-          "school": "abjuration"
-        },
-        {
-          "casting_time": "action",
-          "components": {
-            "materials": [],
-            "somatic": true,
-            "verbal": true
-          },
-          "concentration": false,
-          "duration": {
-            "amount": 1,
-            "kind": "ten_minutes"
-          },
-          "effect_kind": "combat_action",
-          "exploration_consequence_tags": [],
-          "exploration_effect": null,
-          "exploration_tags": [],
-          "exploration_target_tags": [],
-          "id": "zone_of_truth",
-          "level": 2,
-          "name": "Strefa prawdy",
-          "range": {
-            "feet": 60,
-            "kind": "distance"
-          },
-          "ritual": false,
-          "scaling": null,
-          "school": "enchantment"
-        }
-      ],
+      "spells": [],
       "temp_hp": 0,
       "triggers": [],
       "uses_death_saves": true,
@@ -3124,17 +966,6 @@
           "trigger_ids": []
         },
         {
-          "action_ids": [],
-          "aura_ids": [],
-          "description": "",
-          "feature_id": "high_elf_cantrip",
-          "label": "High elf cantrip",
-          "resource_ids": [],
-          "source_kind": "species",
-          "source_ref": "elf",
-          "trigger_ids": []
-        },
-        {
           "action_ids": [
             "request_commoner_shelter"
           ],
@@ -3145,28 +976,6 @@
           "resource_ids": [],
           "source_kind": "background",
           "source_ref": "folk_hero",
-          "trigger_ids": []
-        },
-        {
-          "action_ids": [],
-          "aura_ids": [],
-          "description": "",
-          "feature_id": "favored_enemy",
-          "label": "Ulubiony wróg",
-          "resource_ids": [],
-          "source_kind": "class",
-          "source_ref": "ranger",
-          "trigger_ids": []
-        },
-        {
-          "action_ids": [],
-          "aura_ids": [],
-          "description": "",
-          "feature_id": "natural_explorer",
-          "label": "Naturalny odkrywca",
-          "resource_ids": [],
-          "source_kind": "class",
-          "source_ref": "ranger",
           "trigger_ids": []
         },
         {
@@ -3192,30 +1001,6 @@
           "trigger_ids": []
         },
         {
-          "action_ids": [
-            "primeval_awareness"
-          ],
-          "aura_ids": [],
-          "description": "",
-          "feature_id": "primeval_awareness",
-          "label": "Primeval awareness",
-          "resource_ids": [],
-          "source_kind": "class",
-          "source_ref": "ranger",
-          "trigger_ids": []
-        },
-        {
-          "action_ids": [],
-          "aura_ids": [],
-          "description": "",
-          "feature_id": "hunters_prey",
-          "label": "Łup myśliwego",
-          "resource_ids": [],
-          "source_kind": "subclass",
-          "source_ref": "hunter",
-          "trigger_ids": []
-        },
-        {
           "action_ids": [],
           "aura_ids": [],
           "description": "",
@@ -3230,33 +1015,11 @@
           "action_ids": [],
           "aura_ids": [],
           "description": "",
-          "feature_id": "favored_enemy_beast",
-          "label": "Bestie",
+          "feature_id": "flaw_friendly_fire_trauma",
+          "label": "Skaza: Trauma bratobójczego strzału",
           "resource_ids": [],
-          "source_kind": "class",
-          "source_ref": "ranger",
-          "trigger_ids": []
-        },
-        {
-          "action_ids": [],
-          "aura_ids": [],
-          "description": "",
-          "feature_id": "natural_explorer_forest",
-          "label": "Las",
-          "resource_ids": [],
-          "source_kind": "class",
-          "source_ref": "ranger",
-          "trigger_ids": []
-        },
-        {
-          "action_ids": [],
-          "aura_ids": [],
-          "description": "",
-          "feature_id": "colossus_slayer",
-          "label": "Colossus slayer",
-          "resource_ids": [],
-          "source_kind": "class",
-          "source_ref": "ranger",
+          "source_kind": "scenario",
+          "source_ref": "boardgame_archetype:erynd",
           "trigger_ids": []
         },
         {
@@ -3271,13 +1034,22 @@
           "trigger_ids": []
         },
         {
-          "action_ids": [
-            "tracking"
-          ],
+          "action_ids": [],
           "aura_ids": [],
           "description": "",
-          "feature_id": "tracking",
-          "label": "Tropienie",
+          "feature_id": "first_blood",
+          "label": "Pierwsza krew",
+          "resource_ids": [],
+          "source_kind": "scenario",
+          "source_ref": "boardgame_archetype:erynd",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "scouts_vigilance",
+          "label": "Czujność zwiadowcy",
           "resource_ids": [],
           "source_kind": "scenario",
           "source_ref": "boardgame_archetype:erynd",
@@ -3298,12 +1070,25 @@
         },
         {
           "action_ids": [
-            "patient_shot"
+            "aim"
           ],
           "aura_ids": [],
           "description": "",
-          "feature_id": "patient_shot",
-          "label": "Strzelecka cierpliwość",
+          "feature_id": "aim",
+          "label": "Celowanie",
+          "resource_ids": [],
+          "source_kind": "scenario",
+          "source_ref": "boardgame_archetype:erynd",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [
+            "anchoring_arrow"
+          ],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "anchoring_arrow",
+          "label": "Strzała kotwicząca",
           "resource_ids": [
             "instinct"
           ],
@@ -3312,12 +1097,46 @@
           "trigger_ids": []
         },
         {
-          "action_ids": [],
+          "action_ids": [
+            "exposing_arrow"
+          ],
           "aura_ids": [],
           "description": "",
-          "feature_id": "flaw_ambush_survivor",
-          "label": "Skaza: Ocalały z zasadzki",
-          "resource_ids": [],
+          "feature_id": "exposing_arrow",
+          "label": "Strzała odsłaniająca",
+          "resource_ids": [
+            "instinct"
+          ],
+          "source_kind": "scenario",
+          "source_ref": "boardgame_archetype:erynd",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [
+            "disrupting_arrow"
+          ],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "disrupting_arrow",
+          "label": "Strzała zakłócająca",
+          "resource_ids": [
+            "instinct"
+          ],
+          "source_kind": "scenario",
+          "source_ref": "boardgame_archetype:erynd",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [
+            "double_shot"
+          ],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "double_shot",
+          "label": "Podwójny strzał",
+          "resource_ids": [
+            "instinct"
+          ],
           "source_kind": "scenario",
           "source_ref": "boardgame_archetype:erynd",
           "trigger_ids": []
@@ -3939,7 +1758,7 @@
       "portrait": "character_uploads/default_roster_v2/erynd.png",
       "position": [
         0,
-        2
+        1
       ],
       "proficiencies": {
         "armor": [
@@ -3980,10 +1799,10 @@
       "proficiency_bonus": 2,
       "resource_pools": [
         {
-          "current": 3,
+          "current": 4,
           "id": "instinct",
           "label": "Instynkt",
-          "maximum": 3,
+          "maximum": 4,
           "recharge": null,
           "recovery": "long_rest"
         }
@@ -4005,77 +1824,26 @@
           "casting_ability": "wisdom",
           "kind": "innate",
           "resource_ids_by_spell": {
-            "find_traps": "instinct",
-            "goodberry": "instinct",
             "hunters_mark": "instinct",
             "misty_step": "instinct",
-            "see_invisibility": "instinct",
             "spike_growth": "instinct"
           },
           "spell_ids": [
             "hunters_mark",
-            "goodberry",
-            "find_traps",
             "misty_step",
-            "spike_growth",
-            "see_invisibility"
+            "spike_growth"
           ]
         }
       ],
       "spell_ids": [
-        "light",
         "hunters_mark",
-        "goodberry",
-        "cure_wounds",
-        "find_traps",
         "misty_step",
-        "spike_growth",
-        "see_invisibility"
+        "spike_growth"
       ],
       "spell_preparation": null,
       "spell_save_dc": 12,
       "spell_slots": [],
       "spells": [
-        {
-          "casting_time": "action",
-          "components": {
-            "materials": [
-              {
-                "consumed": false,
-                "item_id": "spell_component_light",
-                "label": "robaczek świętojański lub fosforyzujący mech",
-                "minimum_value_cp": 0,
-                "quantity": 1
-              }
-            ],
-            "somatic": false,
-            "verbal": true
-          },
-          "concentration": false,
-          "duration": {
-            "amount": 1,
-            "kind": "hour"
-          },
-          "effect_kind": "exploration",
-          "exploration_consequence_tags": [],
-          "exploration_effect": {
-            "flag_key": "spell_light_active",
-            "flag_value": true,
-            "kind": "set_flag"
-          },
-          "exploration_tags": [],
-          "exploration_target_tags": [],
-          "id": "light",
-          "level": 0,
-          "name": "Światło",
-          "range": {
-            "feet": 0,
-            "kind": "touch"
-          },
-          "ritual": false,
-          "scaling": null,
-          "school": "evocation"
-        },
         {
           "casting_time": "bonus_action",
           "components": {
@@ -4098,95 +1866,6 @@
           "name": "Znak łowcy",
           "range": {
             "feet": 90,
-            "kind": "distance"
-          },
-          "ritual": false,
-          "scaling": null,
-          "school": "divination"
-        },
-        {
-          "casting_time": "action",
-          "components": {
-            "materials": [],
-            "somatic": false,
-            "verbal": true
-          },
-          "concentration": false,
-          "duration": {
-            "amount": 1,
-            "kind": "instantaneous"
-          },
-          "effect_kind": "combat_action",
-          "exploration_consequence_tags": [],
-          "exploration_effect": null,
-          "exploration_tags": [],
-          "exploration_target_tags": [],
-          "id": "goodberry",
-          "level": 1,
-          "name": "Dobre jagody",
-          "range": {
-            "feet": 0,
-            "kind": "touch"
-          },
-          "ritual": false,
-          "scaling": null,
-          "school": "transmutation"
-        },
-        {
-          "casting_time": "action",
-          "components": {
-            "materials": [],
-            "somatic": true,
-            "verbal": true
-          },
-          "concentration": false,
-          "duration": {
-            "amount": 1,
-            "kind": "instantaneous"
-          },
-          "effect_kind": "healing",
-          "exploration_consequence_tags": [],
-          "exploration_effect": null,
-          "exploration_tags": [],
-          "exploration_target_tags": [],
-          "id": "cure_wounds",
-          "level": 1,
-          "name": "Leczenie ran",
-          "range": {
-            "feet": 0,
-            "kind": "touch"
-          },
-          "ritual": false,
-          "scaling": {
-            "cantrip_damage_dice_per_tier": 0,
-            "damage_dice_per_slot_level": 0,
-            "healing_dice_per_slot_level": 1,
-            "targets_per_slot_level": 0
-          },
-          "school": "evocation"
-        },
-        {
-          "casting_time": "action",
-          "components": {
-            "materials": [],
-            "somatic": false,
-            "verbal": true
-          },
-          "concentration": false,
-          "duration": {
-            "amount": 1,
-            "kind": "instantaneous"
-          },
-          "effect_kind": "combat_action",
-          "exploration_consequence_tags": [],
-          "exploration_effect": null,
-          "exploration_tags": [],
-          "exploration_target_tags": [],
-          "id": "find_traps",
-          "level": 2,
-          "name": "Wykrycie pułapek",
-          "range": {
-            "feet": 120,
             "kind": "distance"
           },
           "ritual": false,
@@ -4248,34 +1927,6 @@
           "ritual": false,
           "scaling": null,
           "school": "transmutation"
-        },
-        {
-          "casting_time": "action",
-          "components": {
-            "materials": [],
-            "somatic": false,
-            "verbal": true
-          },
-          "concentration": false,
-          "duration": {
-            "amount": 1,
-            "kind": "hour"
-          },
-          "effect_kind": "combat_action",
-          "exploration_consequence_tags": [],
-          "exploration_effect": null,
-          "exploration_tags": [],
-          "exploration_target_tags": [],
-          "id": "see_invisibility",
-          "level": 2,
-          "name": "Widzenie niewidzialnego",
-          "range": {
-            "feet": 0,
-            "kind": "self"
-          },
-          "ritual": false,
-          "scaling": null,
-          "school": "divination"
         }
       ],
       "temp_hp": 0,
@@ -4335,20 +1986,6 @@
         },
         {
           "action_ids": [
-            "invoke_military_rank",
-            "request_military_aid"
-          ],
-          "aura_ids": [],
-          "description": "",
-          "feature_id": "military_rank",
-          "label": "Military rank",
-          "resource_ids": [],
-          "source_kind": "background",
-          "source_ref": "soldier",
-          "trigger_ids": []
-        },
-        {
-          "action_ids": [
             "second_wind"
           ],
           "aura_ids": [],
@@ -4369,7 +2006,7 @@
           "aura_ids": [],
           "description": "",
           "feature_id": "action_surge",
-          "label": "Action surge",
+          "label": "Zryw akcji",
           "resource_ids": [
             "action_surge_uses"
           ],
@@ -4414,21 +2051,19 @@
           "action_ids": [],
           "aura_ids": [],
           "description": "",
-          "feature_id": "boardgame_level_3_ability_boost",
-          "label": "Premia archetypu: +2 Siła",
+          "feature_id": "flaw_remorse",
+          "label": "Skaza: Wyrzuty sumienia",
           "resource_ids": [],
           "source_kind": "scenario",
           "source_ref": "boardgame_archetype:garran",
           "trigger_ids": []
         },
         {
-          "action_ids": [
-            "guard_duty"
-          ],
+          "action_ids": [],
           "aura_ids": [],
           "description": "",
-          "feature_id": "guard_duty",
-          "label": "Warta",
+          "feature_id": "boardgame_level_3_ability_boost",
+          "label": "Premia archetypu: +2 Siła",
           "resource_ids": [],
           "source_kind": "scenario",
           "source_ref": "boardgame_archetype:garran",
@@ -4447,12 +2082,12 @@
         },
         {
           "action_ids": [
-            "lay_on_hands"
+            "shield_bash"
           ],
           "aura_ids": [],
           "description": "",
-          "feature_id": "lay_on_hands",
-          "label": "Ratunek polowy",
+          "feature_id": "shield_bash",
+          "label": "Uderzenie tarczą",
           "resource_ids": [],
           "source_kind": "scenario",
           "source_ref": "boardgame_archetype:garran",
@@ -4472,12 +2107,61 @@
           "trigger_ids": []
         },
         {
-          "action_ids": [],
+          "action_ids": [
+            "garran_command_halt"
+          ],
           "aura_ids": [],
           "description": "",
-          "feature_id": "flaw_command_guilt",
-          "label": "Skaza: Wina dowódcy",
-          "resource_ids": [],
+          "feature_id": "garran_command_halt",
+          "label": "Rozkaz: Stać",
+          "resource_ids": [
+            "tactics_uses"
+          ],
+          "source_kind": "scenario",
+          "source_ref": "boardgame_archetype:garran",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [
+            "garran_shield_wall"
+          ],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "garran_shield_wall",
+          "label": "Osłona tarczą",
+          "resource_ids": [
+            "tactics_uses"
+          ],
+          "source_kind": "scenario",
+          "source_ref": "boardgame_archetype:garran",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [
+            "garran_rally"
+          ],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "garran_rally",
+          "label": "Mowa dowódcy",
+          "resource_ids": [
+            "tactics_uses"
+          ],
+          "source_kind": "scenario",
+          "source_ref": "boardgame_archetype:garran",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [
+            "garran_guard_companion"
+          ],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "garran_guard_companion",
+          "label": "Osłona towarzysza",
+          "resource_ids": [
+            "tactics_uses"
+          ],
           "source_kind": "scenario",
           "source_ref": "boardgame_archetype:garran",
           "trigger_ids": []
@@ -5009,7 +2693,7 @@
       "portrait": "character_uploads/default_roster_v2/garran.png",
       "position": [
         0,
-        3
+        2
       ],
       "proficiencies": {
         "armor": [
@@ -5065,34 +2749,10 @@
           "recovery": "short_rest"
         },
         {
-          "current": 3,
-          "id": "guard_duty_uses",
-          "label": "Warta",
-          "maximum": 3,
-          "recharge": null,
-          "recovery": "long_rest"
-        },
-        {
-          "current": 15,
-          "id": "lay_on_hands_points",
-          "label": "Ratunek polowy",
-          "maximum": 15,
-          "recharge": null,
-          "recovery": "long_rest"
-        },
-        {
-          "current": 1,
-          "id": "defensive_stance_uses",
-          "label": "Pozycja obronna",
-          "maximum": 1,
-          "recharge": null,
-          "recovery": "short_rest"
-        },
-        {
-          "current": 3,
+          "current": 4,
           "id": "tactics_uses",
           "label": "Taktyka",
-          "maximum": 3,
+          "maximum": 4,
           "recharge": null,
           "recovery": "long_rest"
         }
@@ -5106,40 +2766,1062 @@
       },
       "size": "medium",
       "speed_feet": 30,
+      "spell_access": [],
+      "spell_ids": [],
+      "spell_preparation": null,
+      "spell_save_dc": 14,
+      "spell_slots": [],
+      "spells": [],
+      "temp_hp": 0,
+      "triggers": [],
+      "uses_death_saves": true,
+      "wild_shape": null
+    },
+    {
+      "ability_scores": {
+        "charisma": 10,
+        "constitution": 14,
+        "dexterity": 14,
+        "intelligence": 19,
+        "strength": 8,
+        "wisdom": 12
+      },
+      "ac": 12,
+      "active_light": null,
+      "attacks_per_action": 1,
+      "auras": [],
+      "condition_immunities": [],
+      "creature_type": "humanoid",
+      "currency": {
+        "cp": 0,
+        "ep": 0,
+        "gp": 10,
+        "pp": 0,
+        "sp": 0,
+        "total_cp": 1000,
+        "weight_lb": 0.2
+      },
+      "damage_affinities": {
+        "immunities": [],
+        "resistances": [],
+        "vulnerabilities": []
+      },
+      "death_saves": {
+        "dead": false,
+        "failures": 0,
+        "stable": false,
+        "successes": 0
+      },
+      "exhaustion_level": 0,
+      "experience_points": 0,
+      "faction": "ally",
+      "features": [
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "darkvision",
+          "label": "Widzenie w ciemności",
+          "resource_ids": [],
+          "source_kind": "species",
+          "source_ref": "gnome",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "gnome_cunning",
+          "label": "Gnome cunning",
+          "resource_ids": [],
+          "source_kind": "species",
+          "source_ref": "gnome",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "spellcasting",
+          "label": "Rzucanie czarów",
+          "resource_ids": [],
+          "source_kind": "class",
+          "source_ref": "wizard",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [
+            "arcane_recovery"
+          ],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "arcane_recovery",
+          "label": "Odzyskiwanie magiczne",
+          "resource_ids": [
+            "arcane_recovery_uses"
+          ],
+          "source_kind": "class",
+          "source_ref": "wizard",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "arcane_tradition",
+          "label": "Arcane tradition",
+          "resource_ids": [],
+          "source_kind": "class",
+          "source_ref": "wizard",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "flaw_arcane_echo",
+          "label": "Skaza: Echo magicznego wycieku",
+          "resource_ids": [],
+          "source_kind": "scenario",
+          "source_ref": "boardgame_archetype:nimra",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "boardgame_level_3_ability_boost",
+          "label": "Premia archetypu: +2 Inteligencja",
+          "resource_ids": [],
+          "source_kind": "scenario",
+          "source_ref": "boardgame_archetype:nimra",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "nimra_catalogue",
+          "label": "Katalog niemożliwego",
+          "resource_ids": [],
+          "source_kind": "scenario",
+          "source_ref": "boardgame_archetype:nimra",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [
+            "nimra_sculpt_field"
+          ],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "nimra_sculpt_field",
+          "label": "Rzeźbienie pola",
+          "resource_ids": [
+            "metamagic_points"
+          ],
+          "source_kind": "scenario",
+          "source_ref": "boardgame_archetype:nimra",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [
+            "nimra_distant_spell"
+          ],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "nimra_distant_spell",
+          "label": "Odległy czar",
+          "resource_ids": [
+            "metamagic_points"
+          ],
+          "source_kind": "scenario",
+          "source_ref": "boardgame_archetype:nimra",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [
+            "nimra_overcharged_spell"
+          ],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "nimra_overcharged_spell",
+          "label": "Przeciążony czar",
+          "resource_ids": [
+            "metamagic_points"
+          ],
+          "source_kind": "scenario",
+          "source_ref": "boardgame_archetype:nimra",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [
+            "nimra_forced_weave"
+          ],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "nimra_forced_weave",
+          "label": "Wymuszony splot",
+          "resource_ids": [
+            "metamagic_points"
+          ],
+          "source_kind": "scenario",
+          "source_ref": "boardgame_archetype:nimra",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [
+            "nimra_energy_transmutation"
+          ],
+          "aura_ids": [],
+          "description": "",
+          "feature_id": "nimra_energy_transmutation",
+          "label": "Transmutacja energii",
+          "resource_ids": [
+            "metamagic_points"
+          ],
+          "source_kind": "scenario",
+          "source_ref": "boardgame_archetype:nimra",
+          "trigger_ids": []
+        }
+      ],
+      "hit_dice": [
+        {
+          "die_sides": 6,
+          "maximum": 3,
+          "remaining": 3
+        }
+      ],
+      "hp": 20,
+      "id": "nimra",
+      "inventory": [
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "",
+          "durability": null,
+          "equipped": true,
+          "gear_category": null,
+          "hands_required": 1,
+          "held_in": [
+            "main_hand"
+          ],
+          "id": "quarterstaff",
+          "kind": "weapon",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Kostur",
+          "portable": true,
+          "properties": [],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "quarterstaff",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 20,
+          "total_weight_lb": 4.0,
+          "value_cp": 20,
+          "versatile_damage_dice": "1d8",
+          "weapon_category": "simple",
+          "weapon_properties": [
+            "versatile"
+          ],
+          "weight_lb": 4.0
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "Krótki nóż o sztywnym metalowym ostrzu.",
+          "durability": null,
+          "equipped": false,
+          "gear_category": null,
+          "hands_required": 1,
+          "held_in": [],
+          "id": "dagger",
+          "kind": "weapon",
+          "light_source": null,
+          "light_weapon": true,
+          "magic_effects": [],
+          "name": "Sztylet",
+          "portable": true,
+          "properties": [
+            "short",
+            "light",
+            "rigid",
+            "metallic",
+            "sharp",
+            "cutting"
+          ],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "dagger",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 200,
+          "total_weight_lb": 1.0,
+          "value_cp": 200,
+          "versatile_damage_dice": null,
+          "weapon_category": "simple",
+          "weapon_properties": [
+            "finesse",
+            "light",
+            "thrown"
+          ],
+          "weight_lb": 1.0
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "",
+          "durability": null,
+          "equipped": true,
+          "gear_category": "spellcasting_gear",
+          "hands_required": 0,
+          "held_in": [],
+          "id": "component_pouch",
+          "kind": "focus",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Sakiewka na komponenty",
+          "portable": true,
+          "properties": [
+            "container"
+          ],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "component_pouch",
+          "spellcasting_focus_kind": "component_pouch",
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 2500,
+          "total_weight_lb": 2.0,
+          "value_cp": 2500,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 2.0
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "",
+          "durability": null,
+          "equipped": false,
+          "gear_category": "spellcasting_gear",
+          "hands_required": 0,
+          "held_in": [],
+          "id": "spellbook",
+          "kind": "spellbook",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Księga czarów",
+          "portable": true,
+          "properties": [
+            "flammable"
+          ],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "spellbook",
+          "spellcasting_focus_kind": null,
+          "stackable": false,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 5000,
+          "total_weight_lb": 3.0,
+          "value_cp": 5000,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 3.0
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [
+            {
+              "item_id": "backpack",
+              "quantity": 1
+            },
+            {
+              "item_id": "book",
+              "quantity": 1
+            },
+            {
+              "item_id": "ink",
+              "quantity": 1
+            },
+            {
+              "item_id": "ink_pen",
+              "quantity": 1
+            },
+            {
+              "item_id": "parchment",
+              "quantity": 10
+            },
+            {
+              "item_id": "sand_pouch",
+              "quantity": 1
+            },
+            {
+              "item_id": "small_knife",
+              "quantity": 1
+            }
+          ],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "",
+          "durability": null,
+          "equipped": false,
+          "gear_category": "equipment_pack",
+          "hands_required": 0,
+          "held_in": [],
+          "id": "scholars_pack",
+          "kind": "equipment_pack",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Pakiet uczonego",
+          "portable": true,
+          "properties": [],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "scholars_pack",
+          "spellcasting_focus_kind": null,
+          "stackable": false,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 4000,
+          "total_weight_lb": 0.0,
+          "value_cp": 4000,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 0.0
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "",
+          "durability": null,
+          "equipped": false,
+          "gear_category": "consumable",
+          "hands_required": 0,
+          "held_in": [],
+          "id": "ink",
+          "kind": "consumable",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Atrament (butelka 1 uncja)",
+          "portable": true,
+          "properties": [
+            "container"
+          ],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "ink",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 1000,
+          "total_weight_lb": 0.0,
+          "value_cp": 1000,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 0.0
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "",
+          "durability": null,
+          "equipped": false,
+          "gear_category": "tool",
+          "hands_required": 0,
+          "held_in": [],
+          "id": "ink_pen",
+          "kind": "tool",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Pióro do pisania",
+          "portable": true,
+          "properties": [
+            "short"
+          ],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "ink_pen",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 2,
+          "total_weight_lb": 0.0,
+          "value_cp": 2,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 0.0
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "",
+          "durability": null,
+          "equipped": false,
+          "gear_category": "adventuring_gear",
+          "hands_required": 0,
+          "held_in": [],
+          "id": "small_knife",
+          "kind": "gear",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Mały nożyk",
+          "portable": true,
+          "properties": [
+            "sharp"
+          ],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "small_knife",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 0,
+          "total_weight_lb": 0.0,
+          "value_cp": 0,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 0.0
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": null,
+          "description": "",
+          "durability": null,
+          "equipped": false,
+          "gear_category": "clothing",
+          "hands_required": 0,
+          "held_in": [],
+          "id": "common_clothes",
+          "kind": "clothing",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Zwykłe ubranie",
+          "portable": true,
+          "properties": [
+            "textile"
+          ],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "common_clothes",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 50,
+          "total_weight_lb": 3.0,
+          "value_cp": 50,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 3.0
+        },
+        {
+          "ammunition_type": null,
+          "armor_base_ac": null,
+          "armor_category": null,
+          "armor_class_bonus": 0,
+          "armor_dexterity_cap": null,
+          "armor_proficiency": null,
+          "armor_strength_requirement": null,
+          "attuned": false,
+          "available": true,
+          "broken": false,
+          "bundle_contents": [],
+          "charges_current": null,
+          "charges_maximum": null,
+          "charges_recovery": "never",
+          "charges_recovery_dice": null,
+          "charges_recovery_modifier": 0,
+          "check_modifiers": [],
+          "container_capacity": {
+            "ammunition_count": null,
+            "ammunition_type": null,
+            "liquid_pints": null,
+            "maximum_weight_lb": 6.0,
+            "sheet_count": null,
+            "volume_cubic_feet": 0.2
+          },
+          "description": "",
+          "durability": null,
+          "equipped": false,
+          "gear_category": "container",
+          "hands_required": 0,
+          "held_in": [],
+          "id": "pouch",
+          "kind": "container",
+          "light_source": null,
+          "light_weapon": false,
+          "magic_effects": [],
+          "name": "Sakiewka",
+          "portable": true,
+          "properties": [
+            "container",
+            "textile"
+          ],
+          "quantity": 1,
+          "requires_attunement": false,
+          "source_ref": "pouch",
+          "spellcasting_focus_kind": null,
+          "stackable": true,
+          "stealth_disadvantage": false,
+          "tool_proficiency_id": null,
+          "total_value_cp": 50,
+          "total_weight_lb": 1.0,
+          "value_cp": 50,
+          "versatile_damage_dice": null,
+          "weapon_category": null,
+          "weapon_properties": [],
+          "weight_lb": 1.0
+        }
+      ],
+      "level": 3,
+      "max_hp": 20,
+      "name": "Nimra",
+      "portrait": "character_uploads/default_roster_v2/nimra.png",
+      "position": [
+        0,
+        3
+      ],
+      "proficiencies": {
+        "armor": [],
+        "expertise": [],
+        "saving_throws": [
+          "intelligence",
+          "wisdom"
+        ],
+        "skills": [
+          "arcana",
+          "history",
+          "investigation",
+          "insight"
+        ],
+        "tools": [
+          "tinkers_tools"
+        ],
+        "weapons": [
+          "unarmed_strike",
+          "dagger",
+          "dart",
+          "sling",
+          "quarterstaff",
+          "crossbow"
+        ]
+      },
+      "proficiency_bonus": 2,
+      "resource_pools": [
+        {
+          "current": 1,
+          "id": "arcane_recovery_uses",
+          "label": "Arcane Recovery",
+          "maximum": 1,
+          "recharge": null,
+          "recovery": "long_rest"
+        },
+        {
+          "current": 4,
+          "id": "metamagic_points",
+          "label": "Punkty Metamagii",
+          "maximum": 4,
+          "recharge": null,
+          "recovery": "long_rest"
+        }
+      ],
+      "senses": {
+        "blindsight_feet": 0,
+        "darkvision_feet": 60,
+        "magical_darkness_vision_feet": 0,
+        "tremorsense_feet": 0,
+        "truesight_feet": 0
+      },
+      "size": "small",
+      "speed_feet": 25,
       "spell_access": [
         {
-          "allowed_focus_kinds": [],
-          "casting_ability": "strength",
-          "kind": "innate",
-          "resource_ids_by_spell": {
-            "command": "tactics_uses",
-            "heroism": "tactics_uses",
-            "shield_of_faith": "tactics_uses",
-            "warding_bond": "tactics_uses"
-          },
+          "allowed_focus_kinds": [
+            "component_pouch",
+            "arcane"
+          ],
+          "casting_ability": "intelligence",
+          "kind": "known",
+          "resource_ids_by_spell": {},
           "spell_ids": [
-            "command",
-            "shield_of_faith",
-            "heroism",
-            "warding_bond"
+            "nimra_frost_pulse",
+            "nimra_acid_splash",
+            "nimra_mind_spike",
+            "nimra_flame_fan",
+            "nimra_force_wave",
+            "nimra_sticky_matrix",
+            "shield",
+            "nimra_sleep",
+            "nimra_fog",
+            "nimra_web",
+            "nimra_lightning_path",
+            "nimra_mind_break",
+            "nimra_stasis",
+            "misty_step",
+            "shatter"
           ]
         }
       ],
       "spell_ids": [
-        "command",
-        "shield_of_faith",
-        "heroism",
-        "warding_bond"
+        "ray_of_frost",
+        "mage_hand",
+        "minor_illusion",
+        "grease",
+        "shield",
+        "detect_magic",
+        "sleep",
+        "fog_cloud",
+        "identify",
+        "web",
+        "hold_person",
+        "misty_step",
+        "shatter",
+        "nimra_frost_pulse",
+        "nimra_acid_splash",
+        "nimra_mind_spike",
+        "nimra_flame_fan",
+        "nimra_force_wave",
+        "nimra_sticky_matrix",
+        "nimra_sleep",
+        "nimra_fog",
+        "nimra_web",
+        "nimra_lightning_path",
+        "nimra_mind_break",
+        "nimra_stasis"
       ],
       "spell_preparation": null,
       "spell_save_dc": 14,
-      "spell_slots": [],
+      "spell_slots": [
+        {
+          "level": 1,
+          "maximum": 4,
+          "recovery": "long_rest",
+          "remaining": 4,
+          "temporary": false
+        },
+        {
+          "level": 2,
+          "maximum": 2,
+          "recovery": "long_rest",
+          "remaining": 2,
+          "temporary": false
+        }
+      ],
       "spells": [
         {
           "casting_time": "action",
           "components": {
             "materials": [],
-            "somatic": false,
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "instantaneous"
+          },
+          "effect_kind": "attack",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "ray_of_frost",
+          "level": 0,
+          "name": "Promień mrozu",
+          "range": {
+            "feet": 60,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": {
+            "cantrip_damage_dice_per_tier": 1,
+            "damage_dice_per_slot_level": 0,
+            "healing_dice_per_slot_level": 0,
+            "targets_per_slot_level": 0
+          },
+          "school": "evocation"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "minute"
+          },
+          "effect_kind": "exploration",
+          "exploration_consequence_tags": [],
+          "exploration_effect": {
+            "flag_key": "spell_mage_hand_active",
+            "flag_value": true,
+            "kind": "set_flag"
+          },
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "mage_hand",
+          "level": 0,
+          "name": "Dłoń maga",
+          "range": {
+            "feet": 30,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "conjuration"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [
+              {
+                "consumed": false,
+                "item_id": "spell_component_minor_illusion",
+                "label": "odrobina runa",
+                "minimum_value_cp": 0,
+                "quantity": 1
+              }
+            ],
+            "somatic": true,
+            "verbal": false
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "minute"
+          },
+          "effect_kind": "exploration",
+          "exploration_consequence_tags": [],
+          "exploration_effect": {
+            "flag_key": "spell_minor_illusion_active",
+            "flag_value": true,
+            "kind": "set_flag"
+          },
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "minor_illusion",
+          "level": 0,
+          "name": "Pomniejsza iluzja",
+          "range": {
+            "feet": 30,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "illusion"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [
+              {
+                "consumed": false,
+                "item_id": "spell_component_grease",
+                "label": "a bit of pork rind or butter",
+                "minimum_value_cp": 0,
+                "quantity": 1
+              }
+            ],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "minute"
+          },
+          "effect_kind": "combat_action",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "grease",
+          "level": 1,
+          "name": "Śliskość",
+          "range": {
+            "feet": 60,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "conjuration"
+        },
+        {
+          "casting_time": "reaction",
+          "components": {
+            "materials": [],
+            "somatic": true,
             "verbal": true
           },
           "concentration": false,
@@ -5152,9 +3834,217 @@
           "exploration_effect": null,
           "exploration_tags": [],
           "exploration_target_tags": [],
-          "id": "command",
+          "id": "shield",
           "level": 1,
-          "name": "Rozkaz",
+          "name": "Tarcza",
+          "range": {
+            "feet": 0,
+            "kind": "self"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "abjuration"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": true,
+          "duration": {
+            "amount": 1,
+            "kind": "ten_minutes"
+          },
+          "effect_kind": "exploration",
+          "exploration_consequence_tags": [],
+          "exploration_effect": {
+            "flag_key": "cast_detect_magic",
+            "flag_value": true,
+            "kind": "set_flag"
+          },
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "detect_magic",
+          "level": 1,
+          "name": "Wykrycie magii",
+          "range": {
+            "feet": 0,
+            "kind": "self"
+          },
+          "ritual": true,
+          "scaling": null,
+          "school": "divination"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [
+              {
+                "consumed": false,
+                "item_id": "spell_component_sleep",
+                "label": "a pinch of fine sand, rose petals, or a cricket",
+                "minimum_value_cp": 0,
+                "quantity": 1
+              }
+            ],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "minute"
+          },
+          "effect_kind": "combat_action",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "sleep",
+          "level": 1,
+          "name": "Sen",
+          "range": {
+            "feet": 90,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "enchantment"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": true,
+          "duration": {
+            "amount": 1,
+            "kind": "hour"
+          },
+          "effect_kind": "combat_action",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "fog_cloud",
+          "level": 1,
+          "name": "Chmura mgły",
+          "range": {
+            "feet": 120,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "conjuration"
+        },
+        {
+          "casting_time": "minute",
+          "components": {
+            "materials": [
+              {
+                "consumed": false,
+                "item_id": "spell_component_identify",
+                "label": "a pearl worth at least 100 gp and an owl feather",
+                "minimum_value_cp": 10000,
+                "quantity": 1
+              }
+            ],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "instantaneous"
+          },
+          "effect_kind": "exploration",
+          "exploration_consequence_tags": [],
+          "exploration_effect": {
+            "flag_key": "cast_identify",
+            "flag_value": true,
+            "kind": "set_flag"
+          },
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "identify",
+          "level": 1,
+          "name": "Identyfikacja",
+          "range": {
+            "feet": 0,
+            "kind": "touch"
+          },
+          "ritual": true,
+          "scaling": null,
+          "school": "divination"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [
+              {
+                "consumed": false,
+                "item_id": "spell_component_web",
+                "label": "a bit of spiderweb",
+                "minimum_value_cp": 0,
+                "quantity": 1
+              }
+            ],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": true,
+          "duration": {
+            "amount": 1,
+            "kind": "hour"
+          },
+          "effect_kind": "combat_action",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "web",
+          "level": 2,
+          "name": "Sieć",
+          "range": {
+            "feet": 60,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "conjuration"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [
+              {
+                "consumed": false,
+                "item_id": "spell_component_hold_person",
+                "label": "a small, straight piece of iron",
+                "minimum_value_cp": 0,
+                "quantity": 1
+              }
+            ],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": true,
+          "duration": {
+            "amount": 1,
+            "kind": "minute"
+          },
+          "effect_kind": "combat_action",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "hold_person",
+          "level": 2,
+          "name": "Unieruchomienie osoby",
           "range": {
             "feet": 60,
             "kind": "distance"
@@ -5170,32 +4060,284 @@
             "somatic": false,
             "verbal": true
           },
-          "concentration": true,
+          "concentration": false,
           "duration": {
             "amount": 1,
-            "kind": "ten_minutes"
+            "kind": "instantaneous"
           },
           "effect_kind": "combat_action",
           "exploration_consequence_tags": [],
           "exploration_effect": null,
           "exploration_tags": [],
           "exploration_target_tags": [],
-          "id": "shield_of_faith",
-          "level": 1,
-          "name": "Tarcza wiary",
+          "id": "misty_step",
+          "level": 2,
+          "name": "Mglisty krok",
+          "range": {
+            "feet": 0,
+            "kind": "self"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "conjuration"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [
+              {
+                "consumed": false,
+                "item_id": "spell_component_shatter",
+                "label": "a chip of mica",
+                "minimum_value_cp": 0,
+                "quantity": 1
+              }
+            ],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "instantaneous"
+          },
+          "effect_kind": "attack",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "shatter",
+          "level": 2,
+          "name": "Roztrzaskanie",
           "range": {
             "feet": 60,
             "kind": "distance"
           },
           "ritual": false,
-          "scaling": null,
-          "school": "abjuration"
+          "scaling": {
+            "cantrip_damage_dice_per_tier": 0,
+            "damage_dice_per_slot_level": 1,
+            "healing_dice_per_slot_level": 0,
+            "targets_per_slot_level": 0
+          },
+          "school": "evocation"
         },
         {
           "casting_time": "action",
           "components": {
             "materials": [],
-            "somatic": false,
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "instantaneous"
+          },
+          "effect_kind": "attack",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "nimra_frost_pulse",
+          "level": 0,
+          "name": "Lodowy impuls",
+          "range": {
+            "feet": 50,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": {
+            "cantrip_damage_dice_per_tier": 1,
+            "damage_dice_per_slot_level": 0,
+            "healing_dice_per_slot_level": 0,
+            "targets_per_slot_level": 0
+          },
+          "school": "evocation"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "instantaneous"
+          },
+          "effect_kind": "attack",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "nimra_acid_splash",
+          "level": 0,
+          "name": "Kwasowy rozprysk",
+          "range": {
+            "feet": 40,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": {
+            "cantrip_damage_dice_per_tier": 1,
+            "damage_dice_per_slot_level": 0,
+            "healing_dice_per_slot_level": 0,
+            "targets_per_slot_level": 0
+          },
+          "school": "conjuration"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "instantaneous"
+          },
+          "effect_kind": "attack",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "nimra_mind_spike",
+          "level": 0,
+          "name": "Szpilka umysłu",
+          "range": {
+            "feet": 45,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": {
+            "cantrip_damage_dice_per_tier": 1,
+            "damage_dice_per_slot_level": 0,
+            "healing_dice_per_slot_level": 0,
+            "targets_per_slot_level": 0
+          },
+          "school": "enchantment"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "instantaneous"
+          },
+          "effect_kind": "attack",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "nimra_flame_fan",
+          "level": 1,
+          "name": "Wachlarz płomieni",
+          "range": {
+            "feet": 0,
+            "kind": "self"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "evocation"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "instantaneous"
+          },
+          "effect_kind": "attack",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "nimra_force_wave",
+          "level": 1,
+          "name": "Fala odrzutu",
+          "range": {
+            "feet": 0,
+            "kind": "self"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "evocation"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 3,
+            "kind": "round"
+          },
+          "effect_kind": "combat_action",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "nimra_sticky_matrix",
+          "level": 1,
+          "name": "Lepka matryca",
+          "range": {
+            "feet": 50,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "conjuration"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "minute"
+          },
+          "effect_kind": "combat_action",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "nimra_sleep",
+          "level": 1,
+          "name": "Sen",
+          "range": {
+            "feet": 50,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "enchantment"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": true,
             "verbal": true
           },
           "concentration": true,
@@ -5208,25 +4350,25 @@
           "exploration_effect": null,
           "exploration_tags": [],
           "exploration_target_tags": [],
-          "id": "heroism",
+          "id": "nimra_fog",
           "level": 1,
-          "name": "Heroizm",
+          "name": "Mgła",
           "range": {
-            "feet": 0,
-            "kind": "touch"
+            "feet": 50,
+            "kind": "distance"
           },
           "ritual": false,
           "scaling": null,
-          "school": "enchantment"
+          "school": "conjuration"
         },
         {
           "casting_time": "action",
           "components": {
             "materials": [],
-            "somatic": false,
+            "somatic": true,
             "verbal": true
           },
-          "concentration": false,
+          "concentration": true,
           "duration": {
             "amount": 1,
             "kind": "hour"
@@ -5236,16 +4378,100 @@
           "exploration_effect": null,
           "exploration_tags": [],
           "exploration_target_tags": [],
-          "id": "warding_bond",
+          "id": "nimra_web",
           "level": 2,
-          "name": "Więź ochronna",
+          "name": "Sieć",
           "range": {
-            "feet": 0,
-            "kind": "touch"
+            "feet": 50,
+            "kind": "distance"
           },
           "ritual": false,
           "scaling": null,
-          "school": "abjuration"
+          "school": "conjuration"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "instantaneous"
+          },
+          "effect_kind": "attack",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "nimra_lightning_path",
+          "level": 2,
+          "name": "Piorunowy szlak",
+          "range": {
+            "feet": 60,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "evocation"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": false,
+          "duration": {
+            "amount": 1,
+            "kind": "instantaneous"
+          },
+          "effect_kind": "attack",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "nimra_mind_break",
+          "level": 2,
+          "name": "Załamanie woli",
+          "range": {
+            "feet": 50,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "enchantment"
+        },
+        {
+          "casting_time": "action",
+          "components": {
+            "materials": [],
+            "somatic": true,
+            "verbal": true
+          },
+          "concentration": true,
+          "duration": {
+            "amount": 3,
+            "kind": "round"
+          },
+          "effect_kind": "combat_action",
+          "exploration_consequence_tags": [],
+          "exploration_effect": null,
+          "exploration_tags": [],
+          "exploration_target_tags": [],
+          "id": "nimra_stasis",
+          "level": 2,
+          "name": "Staza istoty",
+          "range": {
+            "feet": 50,
+            "kind": "distance"
+          },
+          "ritual": false,
+          "scaling": null,
+          "school": "enchantment"
         }
       ],
       "temp_hp": 0,
@@ -5279,6 +4505,22 @@
       {
         "key": "contract.base_reward_gp_per_hero",
         "value": 10
+      },
+      {
+        "key": "knowledge.convoy_route_marks",
+        "value": true
+      },
+      {
+        "key": "knowledge.hidden_medicine_cache",
+        "value": true
+      },
+      {
+        "key": "knowledge.transport_cargo_summary",
+        "value": true
+      },
+      {
+        "key": "knowledge.transport_last_contact_details",
+        "value": true
       }
     ],
     "hidden_actor_states": [],
@@ -5295,9 +4537,24 @@
         "physical_state": "Krwawiąca rana boku, odwodnienie i wyczerpanie.",
         "relationship_events": [],
         "revealed_information_ids": [],
-        "used_attempt_ids": []
+        "used_attempt_ids": [],
+        "used_feature_ids": []
       }
     ],
+    "party_loot": {
+      "currency": {
+        "cp": 0,
+        "ep": 0,
+        "gp": 0,
+        "pp": 0,
+        "sp": 0,
+        "total_cp": 0,
+        "weight_lb": 0.0
+      },
+      "id": "party_stash",
+      "items": [],
+      "label": "Łup drużyny"
+    },
     "party_position": {
       "marker_position": [
         9,
@@ -5346,7 +4603,7 @@
   "resolved_encounter_trigger_ids": [],
   "scenario_id": "ostatni_transport_01_zawalona_droga",
   "schema": "dnd_board_game.session",
-  "schema_version": 31,
+  "schema_version": 33,
   "selected_attack_source_ids": {},
   "selected_healing_source_ids": {},
   "ui": {

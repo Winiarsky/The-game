@@ -1883,7 +1883,7 @@ def test_exploration_ui_page_includes_gm_decision_correction_controls():
     html, javascript, stylesheet = _page_assets(client)
 
     assert (
-        '<script src="/static/exploration.js?v=keyboard-first-20260904-2"></script>'
+        '<script src="/static/exploration.js?v=action-index-20260904-1"></script>'
         in html
     )
     assert "Popraw decyzję MG" in javascript
@@ -1908,6 +1908,9 @@ def test_exploration_ui_page_includes_gm_decision_correction_controls():
     assert "event.key === 'Backspace'" in javascript
     assert "Wybierz akcję na karcie postaci" in javascript
     assert "Awaryjny wybór ekranowy" in javascript
+    assert "Wszystkie skróty akcji aktywnego bohatera" in javascript
+    assert "combat-keyboard-action-index-item" in javascript
+    assert '<kbd>M</kbd> ruch' not in javascript
     assert "Numpad 8/2 zmienia pozycję listy" not in javascript
     assert "/api/combat/turn-actions/select" in javascript
     assert "flushCombatTurnActionMove" in javascript
@@ -1933,11 +1936,19 @@ def test_exploration_ui_page_includes_gm_decision_correction_controls():
     assert "combatTurnActorStatsHtml" in javascript
     assert "Ta akcja jest teraz niedostępna" in javascript
     assert 'id="combat-healing-roll"' in javascript
-    assert "autofocus" in javascript
+    assert "function initializeKeyboardRollWizard()" in javascript
+    assert "function confirmKeyboardRollStep()" in javascript
+    assert "function previousKeyboardRollStep()" in javascript
+    assert "function submitKeyboardRollWizard()" in javascript
+    assert "Największy możliwy wynik tego rzutu" in javascript
+    assert 'data-roll-dice="${esc(dice)}"' in javascript
+    assert 'data-roll-modifier="${esc(modifier)}"' in javascript
+    assert ".keyboard-roll-wizard-card" in stylesheet
     assert ".combat-turn-command-layout" in stylesheet
     assert ".combat-turn-actor-stats" in stylesheet
     assert ".combat-action-unavailable" in stylesheet
     assert ".combat-keyboard-waiting" in stylesheet
+    assert ".combat-keyboard-action-index" in stylesheet
     assert "data-numpad-key" in javascript
     assert "potwierdź aktualny podgląd Enterem" in javascript
     assert "correction-resource" in javascript
