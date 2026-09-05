@@ -215,114 +215,121 @@ button:disabled { border-color: #504a3e; color: #8f887b; background: #2b2a27; cu
   object-position: 50% 24%;
 }
 
-/* Wide player screens use New Game as one application viewport.  The cards
-   become denser as height decreases; narrow/mobile layouts keep document
-   scrolling because squeezing touch targets there would hurt usability. */
+/* Hero selection keeps readable cards; on desktop the list scrolls while
+   navigation stays visible. Other launcher/character pages retain their layout. */
+.new-game-page [hidden] { display: none !important; }
+.new-game-page { scrollbar-color: #756649 #191a17; }
+.new-game-page .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.new-game-page .roster-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+  align-items: start;
+  gap: 14px;
+  margin-top: 16px;
+}
+.new-game-page .roster-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 0;
+  gap: 0;
+  padding: 0;
+  cursor: default;
+  overflow-wrap: anywhere;
+}
+.new-game-page .roster-card:hover { border-color: #80704f; background: var(--panel); }
+.new-game-page .roster-card.selected { border-color: #6db98d; background: #1d3028; }
+.hero-choice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 8px 8px 0 0;
+  cursor: pointer;
+}
+.hero-choice:hover { background: rgba(208, 169, 80, .08); }
+.new-game-page .hero-choice input {
+  position: static;
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  opacity: 1;
+  pointer-events: auto;
+  accent-color: #6db98d;
+}
+.hero-identity { display: grid; min-width: 0; gap: 5px; }
+.new-game-page .roster-card b { font-size: 24px; }
+.new-game-page .roster-card small { font-size: 13px; }
+.new-game-page .roster-card em { font-size: 13px; color: #d4c5a6; }
+.hero-overview { display: grid; gap: 10px; padding: 0 16px 16px; }
+.hero-role { color: var(--gold-bright); font-size: 15px; }
+.hero-overview p, .hero-details-body p { margin: 0; line-height: 1.5; }
+.hero-overview p { font-size: 15px; color: #d4cab7; }
+.hero-complexity { color: #bdb4a2; font-size: 13px; }
+.hero-complexity strong { color: var(--ink); font-weight: 600; }
+.hero-details { border-top: 1px solid #4d473b; }
+.hero-details summary {
+  padding: 12px 16px;
+  min-height: 44px;
+  color: #dfc994;
+  font-size: 14px;
+  cursor: pointer;
+}
+.hero-details summary:hover { background: rgba(208, 169, 80, .08); }
+.hero-details summary:focus-visible { outline: 2px solid var(--gold); outline-offset: -3px; }
+.hero-details-body { padding: 0 16px 16px; color: #d4cab7; font-size: 14px; }
+.hero-details-body ul { margin: 14px 0; padding-left: 20px; line-height: 1.5; }
+.hero-details-body li + li { margin-top: 10px; }
+.hero-flaw { padding-top: 12px; border-top: 1px solid #4d473b; }
+.hero-flaw > strong { display: block; margin-bottom: 6px; color: #e8b5a5; }
+
 @media (min-width: 761px) {
-  .new-game-page {
-    height: 100vh;
-    height: 100dvh;
-    min-height: 0;
-    overflow: hidden;
-  }
+  .new-game-page { height: 100dvh; min-height: 0; overflow: hidden; }
   .new-game-page .flow-shell {
-    width: min(1080px, calc(100% - 32px));
-    height: 100vh;
+    width: min(1180px, calc(100% - 32px));
     height: 100dvh;
     min-height: 0;
-    display: grid;
-    grid-template-rows: auto auto minmax(0, 1fr);
+    display: flex;
+    flex-direction: column;
     padding: clamp(12px, 2.6vh, 28px) 0;
   }
-  .new-game-page .flow-header {
-    margin-bottom: clamp(10px, 1.8vh, 20px);
-    padding-bottom: clamp(9px, 1.5vh, 16px);
-  }
-  .new-game-page .back-link {
-    margin-bottom: clamp(8px, 1.7vh, 18px);
-  }
-  .new-game-page .flow-header h1 {
-    margin: clamp(3px, .7vh, 7px) 0 clamp(4px, .9vh, 9px);
-    font-size: clamp(34px, min(5vw, 6vh), 54px);
-    line-height: .98;
-  }
-  .new-game-page .flow-header p { margin: 0; line-height: 1.35; }
+  .new-game-page .flow-header { flex-shrink: 0; margin-bottom: 16px; padding-bottom: 14px; }
+  .new-game-page .back-link { margin-bottom: 12px; }
+  .new-game-page .flow-header h1 { margin: 6px 0 8px; font-size: 42px; line-height: 1.1; }
+  .new-game-page .flow-header p { margin: 0; line-height: 1.4; }
   .new-game-page #new-game-card-flow {
+    flex: 1;
     min-height: 0;
     display: grid;
     grid-template-rows: minmax(0, 1fr) auto;
   }
-  .new-game-page .form-section {
-    min-height: 0;
-    padding: clamp(10px, 1.7vh, 17px);
-  }
-  .new-game-page .form-section h2 {
-    margin-bottom: clamp(4px, .8vh, 9px);
-    font-size: clamp(19px, 2.6vh, 24px);
-  }
-  .new-game-page .form-section > p {
-    margin: 0 0 clamp(5px, 1vh, 10px);
-    line-height: 1.3;
-  }
-  .new-game-page .flow-note {
-    margin-top: clamp(5px, 1vh, 10px);
-    padding: clamp(8px, 1.2vh, 12px) 14px;
-    line-height: 1.3;
-  }
-  .new-game-page .roster-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: clamp(6px, 1vh, 10px);
-    margin-top: 0;
-  }
-  .new-game-page .roster-card {
-    min-width: 0;
-    gap: clamp(8px, 1vw, 12px);
-    padding: clamp(8px, 1.35vh, 13px);
-  }
-  .new-game-page .roster-avatar {
-    width: clamp(38px, 5.6vh, 48px);
-    height: clamp(38px, 5.6vh, 48px);
-  }
-  .new-game-page .roster-card b {
-    overflow: hidden;
-    font-size: clamp(16px, 2.3vh, 20px);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .new-game-page .roster-card small,
-  .new-game-page .roster-card em { font-size: clamp(10px, 1.45vh, 12px); }
-  .new-game-page .flow-actions {
-    align-items: center;
-    margin-top: clamp(7px, 1.2vh, 14px);
-  }
-  .new-game-page .flow-actions .button { min-height: clamp(34px, 5vh, 44px); }
-  .new-game-page #scenario-selection-step {
-    align-self: start;
-  }
+  .new-game-page .form-section { min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
+  .new-game-page .roster-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .new-game-page .flow-actions { margin-top: 12px; }
+  .new-game-page > .flow-shell > .flow-error { flex-shrink: 0; margin: 0 0 12px; }
 }
-
-@media (min-width: 761px) and (max-width: 980px) {
+@media (min-width: 1120px) {
   .new-game-page .roster-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
-
 @media (min-width: 761px) and (max-height: 640px) {
   .new-game-page .flow-shell { padding-block: 8px; }
-  .new-game-page .flow-header { margin-bottom: 7px; padding-bottom: 7px; }
-  .new-game-page .back-link { margin-bottom: 5px; }
-  .new-game-page .flow-header h1 { font-size: 31px; }
-  .new-game-page .flow-header p,
-  .new-game-page .form-section > p,
-  .new-game-page .flow-actions span { font-size: 12px; }
-  .new-game-page .form-section { padding: 8px 10px; }
-  .new-game-page .form-section h2 { font-size: 18px; }
-  .new-game-page .flow-note { margin-top: 4px; padding: 6px 10px; font-size: 12px; }
-  .new-game-page .roster-grid { gap: 5px; }
-  .new-game-page .roster-card { padding: 6px 8px; }
-  .new-game-page .roster-avatar { width: 34px; height: 34px; }
-  .new-game-page .roster-card b { font-size: 15px; }
-  .new-game-page .roster-card small,
-  .new-game-page .roster-card em { font-size: 9px; }
-  .new-game-page .flow-actions { margin-top: 5px; }
+  .new-game-page .flow-header { margin-bottom: 8px; padding-bottom: 8px; }
+  .new-game-page .back-link { margin-bottom: 6px; }
+  .new-game-page .flow-header h1 { font-size: 32px; }
+}
+@media (max-width: 760px) {
+  .new-game-page .roster-grid { grid-template-columns: minmax(0, 1fr); }
+  .new-game-page .flow-shell { padding-top: 24px; }
+  .new-game-page .flow-header { margin-bottom: 16px; padding-bottom: 14px; }
+  .new-game-page .back-link { margin-bottom: 14px; }
 }
 .character-title {
   display: flex;

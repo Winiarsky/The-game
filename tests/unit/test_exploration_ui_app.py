@@ -1883,7 +1883,7 @@ def test_exploration_ui_page_includes_gm_decision_correction_controls():
     html, javascript, stylesheet = _page_assets(client)
 
     assert (
-        '<script src="/static/exploration.js?v=action-index-20260904-1"></script>'
+        '<script src="/static/exploration.js?v=combat-hud-20260905-1"></script>'
         in html
     )
     assert "Popraw decyzję MG" in javascript

@@ -1,5 +1,45 @@
 # Ostatni transport — automatyczny walkthrough kampanii
 
+## Ponowna weryfikacja — 2026-09-05
+
+Aktualny walkthrough przechodzi od wyboru drużyny, przez odprawę Nessy,
+podróż, setup i inicjatywę Głodnych Cieni, wymuszone zwycięstwo, eksplorację
+Mapy 1 oraz decyzje dotyczące Terena, aż do wejścia na Mapę 2 — Czarny Bród.
+Nie oznacza to rozegrania całej kampanii ani pełnej walki przez UI.
+
+Naprawiono nieaktualną asercję premii ataku przewodnicy. Commit `dd5d4bf`
+z 2026-09-03 zastąpił historyczne Rozdarcie `+6` dwoma atakami, zgodnie
+z obowiązującą specyfikacją `coordinated_pack_v1`:
+
+- `hungry_shadow_leader_life_drain`: `+3`;
+- `hungry_shadow_leader_spirit_bolt`: `+5`;
+- poplecznik zachowuje `hungry_shadow_rend`: bazowe `+5`, przed premią stada.
+
+Test sprawdza teraz kompletny zestaw źródeł każdego przeciwnika po stabilnych
+identyfikatorach, w tym atak dystansowy przewodnicy. Nie zmieniano contentu,
+balansu ani reguł. Szczegółowy kontrakt pozostaje w
+[`GLODNE_CIENIE_COMBAT_TECHNICAL.md`](GLODNE_CIENIE_COMBAT_TECHNICAL.md).
+
+Uruchomienie pełnego pliku integracyjnego przez bezpieczny wrapper dało
+**1 passed**:
+
+```bash
+scripts/safe_pytest.sh --timeout 60 tests/integration/test_ostatni_transport_campaign_walkthrough.py
+```
+
+Dodatkowo osobne uruchomienie `tests/unit/test_coordinated_pack_ai.py` przez
+ten sam wrapper z timeoutem 60 s dało **10 passed**. Obejmuje wybór zwarcia
+i ataku dystansowego, premię stada, regenerację oraz odwrót.
+
+Walkthrough nadal korzysta z deterministycznego klienta NPC i wymusza wynik
+zwycięstwa po inicjatywie. Weryfikuje ciągłość stanu oraz przejścia scenariuszy;
+ocena trudności walki wymaga osobnego playtestu.
+
+## Historyczny zapis audytu — 2026-08-10
+
+Poniższe wyniki 74 testów, stary profil ataku `+6` i zakres placeholderów
+opisują pierwotny audyt. Bieżący zakres i poprawkę opisano powyżej.
+
 Data audytu: 2026-08-10  
 Zakres: uruchomienie gry → Nessa → kontrakt → podróż → Głodne Cienie → zwycięstwo  
 Test wykonywalny: `tests/integration/test_ostatni_transport_campaign_walkthrough.py`

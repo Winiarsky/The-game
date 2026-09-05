@@ -16,7 +16,7 @@ from dnd_board_game.rules import (
     RollMode,
 )
 
-from .conditions import ConditionState
+from .conditions import CombatCondition, ConditionState
 from .spells import grid_distance_feet
 
 
@@ -51,7 +51,7 @@ class FlawActivation:
 
     def as_effect(self) -> ActiveEffect:
         return ActiveEffect(
-            id=f"{self.kind}:{self.actor_id}",
+            id=f"{self.kind}:{self.actor_id}" + (f":{self.target_actor_id}" if self.target_actor_id else ""),
             actor_id=self.actor_id,
             kind=self.kind,
             label=self.label,
@@ -121,25 +121,35 @@ def dynamic_flaw_activations(
                 )
             )
         if actor_has_feature(actor, "flaw_friendly_fire_trauma"):
-            adjacent_allies = sum(
-                1
-                for ally in actors
-                if ally.id != actor.id
-                and ally.faction == actor.faction == Faction.ALLY
-                and ally.uses_death_saves
-                and not ally.is_defeated()
-                and ally.hp > 0
-                and grid_distance_feet(actor.position, ally.position) <= 5
-            )
-            if adjacent_allies:
-                activations.append(
-                    FlawActivation(
-                        actor_id,
-                        "flaw_friendly_fire_trauma_active",
-                        "Trauma bratobójczego strzału",
-                        -adjacent_allies,
-                    )
+            unconscious_ids = {
+                condition.actor_id
+                for condition in condition_states
+                if condition.condition == CombatCondition.UNCONSCIOUS
+            }
+            for target in actors:
+                if target.faction in {actor.faction, Faction.NEUTRAL} or target.is_defeated():
+                    continue
+                adjacent_allies = sum(
+                    1
+                    for ally in actors
+                    if ally.id != actor.id
+                    and ally.faction == actor.faction == Faction.ALLY
+                    and ally.uses_death_saves
+                    and not ally.is_defeated()
+                    and ally.hp > 0
+                    and str(ally.id) not in unconscious_ids
+                    and grid_distance_feet(target.position, ally.position) <= 5
                 )
+                if adjacent_allies:
+                    activations.append(
+                        FlawActivation(
+                            actor_id,
+                            "flaw_friendly_fire_trauma_active",
+                            f"Trauma bratobójczego strzału: {target.name}",
+                            -adjacent_allies,
+                            target_actor_id=str(target.id),
+                        )
+                    )
     return tuple(activations)
 
 
@@ -185,13 +195,17 @@ def flaw_attack_roll_modifiers(
     actor: Actor,
     active_effects: Sequence[ActiveEffect],
     source: object | None = None,
+    *,
+    target: Actor | None = None,
 ) -> tuple[RollModifier, ...]:
     modifiers = list(_remorse_roll_modifiers(actor, active_effects))
-    bow_attack = source is None or (
-        getattr(source, "source_item_id", None) == "longbow"
+    bow_attack = (
+        getattr(getattr(source, "source_type", None), "value", "") == "weapon"
+        and (getattr(source, "source_item_id", None) == "longbow"
+             or getattr(source, "proficiency_id", None) == "longbow")
         and getattr(getattr(source, "attack_kind", None), "value", "") == "ranged"
     )
-    if bow_attack:
+    if bow_attack and target is not None:
         modifiers.extend(
             RollModifier(
                 effect.label,
@@ -202,6 +216,7 @@ def flaw_attack_roll_modifiers(
             for effect in active_effects
             if effect.actor_id == str(actor.id)
             and effect.kind == "flaw_friendly_fire_trauma_active"
+            and effect.target_actor_id == str(target.id)
         )
     return tuple(modifiers)
 

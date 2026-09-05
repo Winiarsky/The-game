@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import json
 import sys
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Iterable
 
@@ -18,6 +18,10 @@ sys.path.insert(0, str(ROOT / "src"))
 from dnd_board_game.character_creation.archetypes import (  # noqa: E402
     HERO_ARCHETYPES_BY_ID,
 )
+from dnd_board_game.character_creation.boardgame_help import HERO_FLAWS, HERO_PASSIVES
+from dnd_board_game.core.player_labels_pl import player_label
+from dnd_board_game.physical_cards.character_card_sets import _starter_builds
+from dnd_board_game.inventory import effective_armor_class
 from dnd_board_game.ui.combat_keyboard import HERO_SHORTCUTS  # noqa: E402
 ASSET_ROOT = ROOT / "assets/physical_cards/character_sets/keyboard_v1"
 BACKGROUND_ROOT = ASSET_ROOT / "backgrounds"
@@ -50,6 +54,7 @@ class Action:
     name: str
     meta: str
     body: str
+    source_id: str = ""
 
 
 @dataclass(frozen=True)
@@ -74,12 +79,6 @@ class Hero:
     sections: tuple[Section, Section, Section]
 
 
-@dataclass(frozen=True)
-class RuleNote:
-    name: str
-    body: str
-
-
 COMMON_KEYS: tuple[tuple[str, str], ...] = (
     ("SPACJA", "ATAK"),
     ("M", "RUCH"),
@@ -91,8 +90,15 @@ COMMON_KEYS: tuple[tuple[str, str], ...] = (
 )
 
 
-def a(key: str, name: str, meta: str, body: str) -> Action:
-    return Action(key, name, meta, body)
+def a(hero_id: str, key: str, meta: str, body: str) -> Action:
+    source_id = next(binding.action_ref for binding in HERO_SHORTCUTS[hero_id] if binding.key == key)
+    name = {"@hide": "Ukryj się / przerwij skradanie", "@grapple": "Chwyt"}.get(source_id)
+    name = name or player_label(source_id)
+    actor = _starter_builds()[1][hero_id][1].actor
+    spell = next((spell for spell in actor.spells if spell.id == source_id), None)
+    if spell is not None and hero_id != "erynd":
+        meta += f" · KOMÓRKA {spell.level}+" if spell.level else " · SZTUCZKA"
+    return Action(key, name.upper(), meta, body, source_id)
 
 
 HEROES: tuple[Hero, ...] = (
@@ -104,19 +110,19 @@ HEROES: tuple[Hero, ...] = (
         (91, 135, 168),
         (
             Section("PRZETRWANIE", (
-                a("Q", "DRUGI ODDECH", "AKCJA DOD. · 1/ODPOCZYNEK", "Odzyskaj 1k10 + poziom PW."),
-                a("W", "ZRYW AKCJI", "AKCJA DOD. · 1/ODPOCZYNEK", "Po wykonaniu akcji odzyskaj akcję."),
-                a("E", "UDERZENIE TARCZĄ", "AKCJA RUCHU · 5 STÓP", "Próba Siły. Wygrana: 1k4+SIŁ i odepchnięcie o 1 pole."),
+                a('garran', 'Q', 'AKCJA DOD. · 1/ODPOCZYNEK', 'Odzyskaj 1k10 + poziom PW.'),
+                a('garran', 'W', 'AKCJA DOD. · 1/ODPOCZYNEK', 'Po wykonaniu akcji odzyskaj akcję.'),
+                a('garran', 'E', 'CAŁY RUCH · PRZED RUCHEM · 5 STÓP', 'Sporny test Siły; wygrana: 1k4+SIŁ i odepchnięcie o wolne pole. Remis: obrońca.'),
             )),
             Section("OBRONA I ROZKAZY", (
-                a("R", "POZYCJA OBRONNA", "AKCJA RUCHU", "Rezygnujesz z ruchu: +2 KP do następnej tury lub do ruchu."),
-                a("A", "ROZKAZ: STAĆ!", "AKCJA · 60 STÓP · 1 TAKTYKA", "MDR ST 14. Porażka: cel nie porusza się dobrowolnie."),
-                a("S", "OSŁONA TARCZĄ", "BONUS · 1 TAKTYKA", "Sąsiedni sojusznicy mają +2 KP do twojej następnej tury."),
+                a('garran', 'R', 'AKCJA RUCHU', 'Rezygnujesz z ruchu: +2 KP do następnej tury lub do ruchu.'),
+                a('garran', 'A', 'AKCJA · 60 STÓP · 1 TAKTYKA', 'MDR ST 14: porażka blokuje ruch, sukces połowi. Naturalne 1: także -2 do ataków; 20: bez efektu.'),
+                a('garran', 'S', 'BONUS · 1 TAKTYKA', 'Sąsiedni sojusznicy mają +2 KP do twojej następnej tury.'),
             )),
             Section("WSPARCIE", (
-                a("D", "MOWA DOWÓDCY", "AKCJA · 30 STÓP · 1 TAKTYKA", "Usuń strach; przewaga przy pierwszym ataku, teście lub rzucie obronnym."),
-                a("F", "OSŁONA TOWARZYSZA", "AKCJA · 5 STÓP · 1 TAKTYKA", "Pierwszy pojedynczy atak lub efekt na wybranego sojusznika trafia Garrana."),
-                a("AUTO", "REAKCJE", "GRA WYŚWIETLI PYTANIE", "Gdy reakcja jest możliwa, wybierz ją w oknie i potwierdź Enterem."),
+                a('garran', 'D', 'AKCJA · 30 STÓP · 1 TAKTYKA', 'Usuń strach; przewaga przy pierwszym ataku, teście lub rzucie obronnym.'),
+                a('garran', 'F', 'AKCJA · 5 STÓP · 1 TAKTYKA', 'Pierwszy pojedynczy atak lub efekt na wybranego sojusznika trafia Garrana.'),
+                Action('AUTO', 'REAKCJE', 'GRA WYŚWIETLI PYTANIE', 'Gdy reakcja jest możliwa, wybierz ją w oknie i potwierdź Enterem.'),
             )),
         ),
     ),
@@ -124,22 +130,22 @@ HEROES: tuple[Hero, ...] = (
         "brakka", "BRAKKA", "PÓŁORKA · BARBARZYNKA · ŁAMACZKA LINII", 3, 35, 14, 30,
         "SIŁ 18  ZRC 13  KON 16  INT 8  MDR 12  CHA 10",
         "TOPÓR +6 · 1K12+4   |   OSZCZEP +6 · 1K6+4",
-        "ZASOBY: SZAŁ 3 · FURIA 3 W SZALE · NIEUGIĘTOŚĆ 1",
+        "ZASOBY: SZAŁ 3 · DZIKOŚĆ 3 W SZALE · NIEUSTĘPLIWOŚĆ 1",
         (198, 77, 54),
         (
             Section("WEJŚCIE W SZAŁ", (
-                a("Q", "SZAŁ", "BONUS · 3/DŁUGI ODPOCZYNEK", "+2 obrażeń wręcz, odporność na kłute/cięte/obuchowe; odnawia 3 Furii."),
-                a("W", "LEKKOMYŚLNY ATAK", "AKCJA · ATAK WRĘCZ", "Atak z przewagą. Ataki przeciw Brakce mają przewagę do jej następnej tury."),
+                a('brakka', 'Q', 'BONUS · 3/DŁUGI ODPOCZYNEK', 'Odnów 3 Dzikości; przewaga testów/obron SIŁ, +2 obrażeń wręcz i odporność na kłute/cięte/obuchowe.'),
+                a('brakka', 'W', 'AKCJA · ATAK WRĘCZ', 'Atak z przewagą. Ataki przeciw Brakce mają przewagę do jej następnej tury.'),
             )),
             Section("NACISK", (
-                a("E", "POTĘŻNE UDERZENIE", "AKCJA · SZAŁ · 2 FURII", "Wykonaj atak wręcz z premią +10 do trafienia."),
-                a("R", "Z BARA", "AKCJA · 5 STÓP", "Próba Atletyki. Odepchnij 5 stóp + 5 za każde 5 punktów przewagi, maks. 30."),
-                a("A", "PRZYSPIESZENIE", "BONUS · SZAŁ · 1 FURII", "Podwój bazowy ruch Brakki w tej turze."),
+                a('brakka', 'E', 'AKCJA · SZAŁ · 2 DZIKOŚCI', 'Wykonaj atak wręcz z premią +10 do trafienia.'),
+                a('brakka', 'R', 'AKCJA · 5 STÓP', 'Próba Atletyki. Odepchnij 5 stóp + 5 za każde 5 punktów przewagi, maks. 30.'),
+                a('brakka', 'A', 'BONUS · SZAŁ · 1 DZIKOŚCI', 'Podwój bazowy ruch Brakki w tej turze.'),
             )),
             Section("KONTROLA", (
-                a("S", "OGŁUSZAJĄCY RYK", "AKCJA · STOŻEK 15 · 2 FURII", "KON ST 15. 2k6 i brak ruchu; sukces: połowa obrażeń."),
-                a("AUTO", "TWARDA JAK SKAŁA", "REAKCJA · SZAŁ · 1 FURII", "Po odporności zmniejsz otrzymane obrażenia o 1k12+KON."),
-                a("AUTO", "REAKCJE", "GRA WYŚWIETLI PYTANIE", "Nie naciskaj skrótu: zaakceptuj albo odrzuć reakcję w oknie."),
+                a('brakka', 'S', 'AKCJA · SZAŁ · STOŻEK 15 · 2 DZIKOŚCI', 'KON ST 15: 2k6 i brak ruchu; sukces pół. Naturalne 1: utrudnienie ataków; 20: brak obrażeń.'),
+                Action('AUTO', 'TWARDA JAK SKAŁA', 'REAKCJA · SZAŁ · 1 DZIKOŚCI', 'Po odporności zmniejsz otrzymane obrażenia o 1k12+KON.'),
+                a('brakka', 'D', 'AKCJA · 5 STÓP · WOLNA RĘKA', 'Sporny test Atletyki przeciw Atletyce/Akrobatyce. Sukces zeruje ruch celu do uwolnienia.'),
             )),
         ),
     ),
@@ -151,17 +157,18 @@ HEROES: tuple[Hero, ...] = (
         (126, 88, 169),
         (
             Section("MOBILNOŚĆ", (
-                a("Q", "ZASŁONA DYMNA", "AKCJA · RUCH 15 · 1 FORTEL", "Bez ataków okazyjnych, potem Ukrycie nawet obok wroga."),
-                a("W", "PRZESKOK PRZEZ GARDĘ", "AKCJA · WRĘCZ", "Jeśli pole za celem jest wolne: +2 do ataku i obrażeń, potem przejdź za cel."),
+                a('mira', 'D', 'AKCJA / DARMOWE WYJŚCIE', 'Test Skradania przeciw Percepcji każdego wroga. Ukrycie: ruch 20 stóp; wyjście przywraca limit 25.'),
+                a('mira', 'Q', 'AKCJA · RUCH 15 · 1 FORTEL', 'Bez ataków okazyjnych, potem Ukrycie nawet obok wroga.'),
+                a('mira', 'W', 'AKCJA · WRĘCZ', 'Jeśli pole za celem jest wolne: +2 do ataku i obrażeń, potem przejdź za cel.'),
             )),
             Section("KONTROLA", (
-                a("E", "WYKRYCIE PUŁAPEK", "AKCJA · PROMIEŃ 45 STÓP", "Fizyczny test Percepcji wykrywa pułapki w walce."),
-                a("R", "CIĘCIE ŚCIĘGNA", "AKCJA · FLANKA · 1 FORTEL", "Po trafieniu wręcz prędkość celu spada o połowę aż do leczenia."),
+                a('mira', 'E', 'AKCJA · PROMIEŃ 45 STÓP', 'Fizyczny test Percepcji wykrywa pułapki w walce.'),
+                a('mira', 'R', 'AKCJA · FLANKA · 1 FORTEL', 'Po trafieniu wręcz prędkość celu spada o połowę aż do leczenia.'),
             )),
             Section("SKRYTOBÓJSTWO", (
-                a("A", "PRZESZYWAJĄCY ATAK", "AKCJA · FLANKA · 1 FORTEL", "Po trafieniu zaatakuj też wroga stojącego dokładnie za pierwszym."),
-                a("S", "MISTRZYNI OSTRZY", "WZMOCNIENIE · 1 FORTEL", "Ukryty trafiony nożem cel krwawi 1k4 na początku tur do leczenia."),
-                a("AUTO", "UNIK INSTYNKTOWNY", "REAKCJA · 1 FORTEL", "Gdy widoczny wróg atakuje ukrytą Mirę, jego atak ma utrudnienie."),
+                a('mira', 'A', 'AKCJA · SOJUSZNIK PRZY CELU · 1 FORTEL', 'Po raniącym trafieniu rapierem zaatakuj osobno wroga dokładnie za pierwszym. Bez dalszego łańcucha.'),
+                a('mira', 'S', 'AKCJA · NÓŻ Z UKRYCIA · 1 FORTEL', 'Cel, który cię nie widzi, po raniącym trafieniu krwawi 1k4 na początku tur do leczenia.'),
+                Action('AUTO', 'UNIK INSTYNKTOWNY', 'REAKCJA · 1 FORTEL', 'Gdy widoczny wróg atakuje ukrytą Mirę, jego atak ma utrudnienie.'),
             )),
         ),
     ),
@@ -173,19 +180,20 @@ HEROES: tuple[Hero, ...] = (
         (218, 168, 72),
         (
             Section("MODLITWY", (
-                a("Q", "ŚWIĘTY PŁOMIEŃ", "AKCJA · STOŻEK 15 · ZRC ST 14", "Wrogowie odnoszą 1k8 obrażeń od blasku przy porażce."),
-                a("W", "LECZĄCE SŁOWO", "BONUS · 60 STÓP", "Wybrany cel odzyskuje 1k4+7 PW."),
-                a("E", "BŁOGOSŁAWIEŃSTWO", "AKCJA · AURA 10 · KONC. · 5 RUND", "Ty i sojusznicy w aurze dodajecie 1k4 do ataków i rzutów obronnych."),
+                a('dagna', 'Q', 'AKCJA · STOŻEK 15 · ZRC ST 14', 'Wrogowie odnoszą 1k8 obrażeń od blasku przy porażce.'),
+                a('dagna', 'W', 'BONUS · 60 STÓP', 'Wybrany cel odzyskuje 1k4+7 PW.'),
+                a('dagna', 'E', 'AKCJA · AURA 10 · KONC. · 5 RUND', 'Ty i sojusznicy w aurze dodajecie 1k4 do ataków i rzutów obronnych.'),
             )),
             Section("BOSKA MOC", (
-                a("R", "ZACHOWANIE ŻYCIA", "AKCJA · 1 BOSKA MOC", "Rozdziel 15 PW między cele; nie lecz powyżej połowy maks. PW."),
-                a("A", "AURA BOSKIEJ OPIEKI", "AKCJA · AURA 5 · KONC. · 5 RUND", "Wrogowie w aurze mają −2 do ataków i obrażeń."),
-                a("S", "POCISK PRZEWODNI", "AKCJA · 75 STÓP · ATAK CZAREM", "2k6 blasku; następny atak przeciw celowi ma przewagę."),
+                a('dagna', 'R', 'AKCJA · 1 BOSKA MOC', 'Rozdziel 15 PW między cele; nie lecz powyżej połowy maks. PW.'),
+                a('dagna', 'A', 'AKCJA · AURA 5 · KONC. · 5 RUND', 'Wrogowie w aurze mają -2 do ataków i obrażeń.'),
+                a('dagna', 'S', 'AKCJA · 75 STÓP · ATAK CZAREM', '2k6 blasku; następny atak przeciw celowi ma przewagę.'),
             )),
             Section("CZARY WSPARCIA", (
-                a("D", "AURA UZDRAWIAJĄCEJ ŁASKI", "AKCJA · AURA 10 · KONC. · 3 RUNDY", "Cztery pierwsze leczenia w aurze zyskują +1k8+MDR."),
-                a("F", "POMNIEJSZE PRZYWRÓCENIE", "AKCJA · DOTYK", "Usuń jedną obsługiwaną negatywną kondycję."),
-                a("Z", "DUCHOWA BROŃ", "BONUS · 60 STÓP", "Przywołaj broń: ruch 20, atak sąsiedni 1k8+4, KP 18."),
+                a('dagna', 'D', 'AKCJA · AURA 10 · KONC. · 3 RUNDY', 'Cztery pierwsze leczenia w aurze zyskują +1k8+MDR.'),
+                a('dagna', 'F', 'AKCJA · DOTYK', 'Usuń jedną obsługiwaną negatywną kondycję.'),
+                a('dagna', 'T', 'AKCJA · BOSKA MOC 1 · 30 STÓP', 'Nieumarli wykonują obronę MDR ST 14; porażka odpędza. Dostępne tylko przy legalnym celu.'),
+                a('dagna', 'Z', 'BONUS · 60 STÓP', 'Przywołaj broń: ruch 20, atak sąsiedni 1k8+4, KP 18.'),
             )),
         ),
     ),
@@ -197,22 +205,22 @@ HEROES: tuple[Hero, ...] = (
         (187, 86, 181),
         (
             Section("KUSZA TAKTYCZNA", (
-                a("Q", "BARDOWSKA INSPIRACJA", "BONUS · 60 STÓP", "Sojusznik zachowuje 1k6 do testu, ataku lub rzutu obronnego."),
-                a("W", "CELOWNIK OPTYCZNY", "AKCJA · CAŁY RUCH · 60 STÓP", "Przed ruchem: dwa strzały w jeden cel, jego KP jest niższe o 2."),
-                a("E", "KPIĄCY STRZAŁ", "AKCJA · 45 STÓP", "Trafienie: utrudnienie pierwszego ataku celu i jego rzutów MDR."),
-                a("R", "PROWOKUJĄCY STRZAŁ", "AKCJA · 45 STÓP", "Cel zyskuje premię przeciw Lorianowi, lecz karę przeciw innym równą obrażeniom."),
+                a('lorian', 'Q', 'BONUS · 60 STÓP', 'Sojusznik zachowuje 1k6 do testu, ataku lub rzutu obronnego.'),
+                a('lorian', 'W', 'AKCJA · CAŁY RUCH · 60 STÓP', 'Przed ruchem: dwa strzały w jeden cel, jego KP jest niższe o 2.'),
+                a('lorian', 'E', 'AKCJA · 45 STÓP', 'Trafienie: utrudnienie pierwszego ataku celu i jego rzutów MDR.'),
+                a('lorian', 'R', 'AKCJA · 45 STÓP', 'Cel zyskuje premię przeciw Lorianowi, lecz karę przeciw innym równą obrażeniom.'),
             )),
             Section("KONTROLA I CZARY", (
-                a("A", "WIĄŻĄCY STRZAŁ", "AKCJA · OBSZAR 3×3 · 45 STÓP", "Wszyscy w obszarze: ZRC; sukces pół ruchu, porażka brak ruchu."),
-                a("S", "SZEPT PANIKI", "AKCJA · 45 STÓP · MDR ST 14", "2k6 psychicznych i ruch 15 stóp od Loriana; sukces: połowa."),
-                a("D", "GRZMIĄCY REFREN", "AKCJA · STOŻEK 15 · KON ST 14", "2k8 i odepchnięcie 10 stóp; sukces: połowa bez odepchnięcia."),
-                a("F", "OGNIKI", "AKCJA · SZEŚCIAN 20 · KONC.", "ZRC: porażka daje przewagę atakującym i blokuje niewidzialność."),
+                a('lorian', 'A', 'AKCJA · OBSZAR 3×3 · 45 STÓP', 'Wszyscy w obszarze: ZRC; sukces pół ruchu, porażka brak ruchu.'),
+                a('lorian', 'S', 'AKCJA · 45 STÓP · MDR ST 14', '2k6 psychicznych i ruch 15 stóp od Loriana; sukces: połowa.'),
+                a('lorian', 'D', 'AKCJA · SZEŚCIAN 15 · KON ST 14', '2k8 grzmotu i odepchnięcie 10 stóp; sukces: połowa bez odepchnięcia. Także sojusznicy.'),
+                a('lorian', 'F', 'AKCJA · SZEŚCIAN 20 · KONC.', 'ZRC: porażka daje przewagę atakującym i blokuje niewidzialność.'),
             )),
             Section("SCENA I REAKCJE", (
-                a("Z", "OBEZWŁADNIAJĄCY ŻART", "AKCJA · 30 STÓP · KONC. · MDR ST 14", "Porażka: cel pada i jest obezwładniony."),
-                a("X", "KOMENDA SCENICZNA", "AKCJA · 45 STÓP · MDR ST 14", "Wybierz: podejdź, odejdź albo zamilknij; ruch do 15 stóp."),
-                a("C", "PRZYSPIESZONY REFREN", "AKCJA · KONC. · 3 RUNDY", "Przy rzuceniu jeden strzał; potem bonus daje trzeci strzał salwy."),
-                a("AUTO", "KONTRAPUNKT / CIĘTA RIPOSTA", "REAKCJE · PYTANIE NA EKRANIE", "Gra sama zaproponuje dostępny strzał, redukcję obrażeń albo kość 1k6."),
+                a('lorian', 'Z', 'AKCJA · 30 STÓP · KONC. · MDR ST 14', 'Porażka: cel pada i jest obezwładniony.'),
+                a('lorian', 'X', 'AKCJA · 45 STÓP · MDR ST 14', 'Podejdź/odejdź/milcz; ruch do 15 stóp. Cel odporny na mowę: 1k6 psychicznych bez save, zamiast rozkazu.'),
+                a('lorian', 'C', 'AKCJA · KONC. · 3 RUNDY', 'Przy rzuceniu jeden strzał; potem bonus daje trzeci strzał salwy.'),
+                Action('AUTO', 'KONTRAPUNKT / OKRZYK / CIĘTE SŁOWA', 'REAKCJE · PYTANIE NA EKRANIE', 'Reakcje: strzał po zranieniu przez inspirowanego sojusznika, redukcja 1k6+2 lub odjęcie k6 od rzutu. Bez kosztu Inspiracji.'),
             )),
         ),
     ),
@@ -224,107 +232,73 @@ HEROES: tuple[Hero, ...] = (
         (74, 127, 205),
         (
             Section("METAMAGIA · T Y U G H", (
-                a("T", "RZEŹBIENIE POLA", "1 PUNKT", "Wyklucz z obszaru czaru do 4 pól."),
-                a("Y", "ODLEGŁY CZAR", "1 PUNKT", "+15 stóp zasięgu, maksymalnie 75."),
-                a("U", "PRZECIĄŻONY CZAR", "1 PUNKT", "Dodaj jedną bazową kość obrażeń."),
-                a("G", "WYMUSZONY SPLOT", "2 PUNKTY", "Jeden cel ma utrudnienie pierwszego rzutu obronnego."),
-                a("H", "TRANSMUTACJA ENERGII", "1 PUNKT", "Zmień typ: kwas, zimno, ogień, błyskawice lub grzmot."),
+                a('nimra', 'T', '1 PUNKT', 'Wyklucz z obszaru czaru do 4 pól.'),
+                a('nimra', 'Y', '1 PUNKT', '+15 stóp zasięgu, maksymalnie 75.'),
+                a('nimra', 'U', '1 PUNKT', 'Dodaj jedną bazową kość obrażeń.'),
+                a('nimra', 'G', '2 PUNKTY', 'Jeden cel ma utrudnienie pierwszego rzutu obronnego.'),
+                a('nimra', 'H', '1 PUNKT', 'Zmień typ: kwas, zimno, ogień, błyskawice lub grzmot.'),
             )),
             Section("CZARY Q–S + J", (
-                a("Q", "LODOWY IMPULS", "AKCJA · 50 STÓP · KON ST 14", "1k8 zimna i −10 stóp ruchu przy porażce."),
-                a("W", "KWASOWY ROZPRYSK", "AKCJA · 40 STÓP · PROMIEŃ 5", "ZRC: 1k6 kwasu przy porażce."),
-                a("E", "SZPILKA UMYSŁU", "AKCJA · 45 STÓP · MDR ST 14", "1k6 psychicznych i brak reakcji przy porażce."),
-                a("R", "WACHLARZ PŁOMIENI", "AKCJA · STOŻEK 15 · ZRC ST 14", "2k6 ognia; sukces: połowa."),
-                a("A", "FALA ODRZUTU", "AKCJA · LINIA 30 · SIŁ ST 14", "2k6 mocy i odepchnięcie 5 stóp; sukces: połowa."),
-                a("S", "LEPKA MATRYCA", "AKCJA · 50 · OBSZAR 10 · 3 RUNDY", "Trudny teren; ZRC przy wejściu/starcie, porażka przewraca."),
-                a("J", "MGLISTY KROK", "BONUS · TELEPORT 30 STÓP", "Wybierz wolne pole w zasięgu."),
+                a('nimra', 'Q', 'AKCJA · 50 STÓP · KON ST 14', '1k8 zimna i -10 stóp ruchu przy porażce.'),
+                a('nimra', 'W', 'AKCJA · 40 STÓP · PROMIEŃ 5', 'ZRC: 1k6 kwasu przy porażce.'),
+                a('nimra', 'E', 'AKCJA · 45 STÓP · MDR ST 14', '1k6 psychicznych i brak reakcji przy porażce.'),
+                a('nimra', 'R', 'AKCJA · STOŻEK 15 · ZRC ST 14', '2k6 ognia; sukces: połowa.'),
+                a('nimra', 'A', 'AKCJA · LINIA 30 · SIŁ ST 14', '2k6 mocy i odepchnięcie 5 stóp; sukces: połowa.'),
+                a('nimra', 'S', 'AKCJA · 50 · OBSZAR 10 · 3 RUNDY', 'Trudny teren; ZRC przy wejściu/starcie, porażka przewraca.'),
+                a('nimra', 'J', 'BONUS · TELEPORT 30 STÓP', 'Wybierz wolne pole w zasięgu.'),
             )),
             Section("CZARY D–V + K", (
-                a("D", "SEN", "AKCJA · 50 STÓP", "Pula 5k8 usypia cele od najniższych PW."),
-                a("F", "MGŁA", "AKCJA · 50 · PROMIEŃ 15 · KONC.", "Obszar jest całkowicie zasłonięty."),
-                a("Z", "SIEĆ", "AKCJA · 50 · SZEŚCIAN 20 · KONC.", "Trudny teren; ZRC przy porażce unieruchamia."),
-                a("X", "PIORUNOWY SZLAK", "AKCJA · 60 STÓP · ZRC ST 14", "3k6/połowa; łańcuch do najbliższych, także sojuszników."),
-                a("C", "ZAŁAMANIE WOLI", "AKCJA · 50 · PROMIEŃ 10 · MDR ST 14", "2k6, brak reakcji i utrudnienie pierwszego ataku; sukces połowa."),
-                a("V", "STAZA ISTOTY", "AKCJA · 50 · KONC. · MDR ST 14", "Ruch 0 i brak akcji ruchu; ponawiany rzut, maks. 3 rundy."),
-                a("K", "ROZTRZASKANIE", "AKCJA · OBSZAR · KON ST 14", "3k8 grzmotu; sukces: połowa."),
+                a('nimra', 'D', 'AKCJA · 50 STÓP', 'Pula 5k8 usypia cele od najniższych PW.'),
+                a('nimra', 'F', 'AKCJA · 50 · PROMIEŃ 15 · KONC.', 'Obszar jest całkowicie zasłonięty.'),
+                a('nimra', 'Z', 'AKCJA · 50 · SZEŚCIAN 20 · KONC.', 'Trudny teren; ZRC przy porażce unieruchamia.'),
+                a('nimra', 'X', 'AKCJA · 60 STÓP · ZRC ST 14', '3k6/połowa. Jeden przeskok do najbliższej istoty w 15 stopach, także sojusznika; remis preferuje wroga.'),
+                a('nimra', 'C', 'AKCJA · 50 · PROMIEŃ 10 · MDR ST 14', '2k6, brak reakcji i utrudnienie pierwszego ataku; sukces połowa.'),
+                a('nimra', 'V', 'AKCJA · 50 · KONC. · MDR ST 14', 'Ruch 0 i brak akcji ruchu; ponawiany rzut, maks. 3 rundy.'),
+                a('nimra', 'K', 'AKCJA · OBSZAR · KON ST 14', '3k8 grzmotu; sukces: połowa.'),
             )),
         ),
     ),
     Hero(
         "erynd", "ERYND", "ELF · ŁOWCA · MOBILNY STRZELEC", 3, 25, 16, 30,
         "SIŁ 12  ZRC 19  KON 13  INT 11  MDR 14  CHA 8",
-        "DŁUGI ŁUK +6 · 1K8+4   |   NÓŻ +3 · 1K4+1",
+        "DŁUGI ŁUK +8 · 1K8+4   |   NÓŻ +3 · 1K4+1",
         "ZASOBY: INSTYNKT 4 · ZNACZNIK ŁOWCY: +1K6",
         (78, 132, 98),
         (
             Section("POZYCJA", (
-                a("Q", "OZNACZENIE CELU", "BONUS · KONC. · 1 INSTYNKT", "+1k6 obrażeń bronią. Po pokonaniu celu przeniesienie jest darmowe."),
-                a("W", "ZWIADOWCZA MOBILNOŚĆ", "BONUS", "Wybierz: Sprint albo Odstąpienie."),
-                a("E", "CELOWANIE", "CAŁY RUCH · PRZED RUCHEM", "Następny atak długim łukiem ma przewagę."),
+                a('erynd', 'Q', 'BONUS · KONC. · 1 INSTYNKT', '+1k6 obrażeń bronią. Po pokonaniu celu przeniesienie jest darmowe.'),
+                a('erynd', 'W', 'BONUS', 'Wybierz: Sprint albo Odstąpienie.'),
+                a('erynd', 'E', 'CAŁY RUCH · PRZED RUCHEM', 'Następny atak długim łukiem ma przewagę.'),
             )),
             Section("STRZAŁY INSTYNKTU", (
-                a("R", "KOTWICZĄCA STRZAŁA", "AKCJA · 1 INSTYNKT · RZUT 1K4", "Trafienie: SIŁ ST 14; blokada ruchu albo pół ruchu przez wynik rund."),
-                a("A", "OBNAŻAJĄCA STRZAŁA", "AKCJA · 1 INSTYNKT · RZUT 1K8", "Trafienie obniża KP celu o wynik do następnej tury Erynda."),
-                a("S", "ZAKŁÓCAJĄCA STRZAŁA", "AKCJA · 1 INSTYNKT", "Trafienie odbiera reakcje i utrudnia następny atak celu."),
+                a('erynd', 'R', 'AKCJA · 1 INSTYNKT · RZUT 1K4', 'Trafienie: SIŁ ST 14; blokada ruchu albo pół ruchu przez wynik rund.'),
+                a('erynd', 'A', 'AKCJA · 1 INSTYNKT · RZUT 1K8', 'Trafienie obniża KP celu o wynik do następnej tury Erynda.'),
+                a('erynd', 'S', 'AKCJA · 1 INSTYNKT', 'Trafienie odbiera reakcje i utrudnia następny atak celu.'),
             )),
             Section("SALWA I TEREN", (
-                a("D", "PODWÓJNY STRZAŁ", "AKCJA · 2 INSTYNKTU", "Jeden test: 2k8 + 2×ZRC. Znacznik i Pierwsza Krew tylko raz."),
-                a("F", "LEŚNY KROK", "BONUS · 1 INSTYNKT", "Teleportuj się na wybrane wolne pole."),
-                a("Z", "KOLCZASTE POSZYCIE", "AKCJA · 1 INSTYNKT", "Utwórz niebezpieczny trudny teren w wybranym obszarze."),
+                a('erynd', 'D', 'AKCJA · 2 INSTYNKTU', 'Jeden test: 2k8 + 2×ZRC. Znak i Pierwsza krew tylko raz; krytyk podwaja wyłącznie bazowe kości.'),
+                a('erynd', 'F', 'BONUS · 1 INSTYNKT', 'Teleportuj się na wybrane wolne pole.'),
+                a('erynd', 'Z', 'AKCJA · 1 INSTYNKT', 'Utwórz niebezpieczny trudny teren w wybranym obszarze.'),
             )),
         ),
     ),
 )
 
 
-PASSIVES: dict[str, tuple[RuleNote, ...]] = {
-    "garran": (
-        RuleNote("Żelazna linia", "Sojusznik flankujący z Garranem tego samego przeciwnika ma przeciw niemu +1 KP."),
-        RuleNote("Styl: Obrona", "+1 KP podczas noszenia pancerza; premia jest już uwzględniona na karcie."),
-        RuleNote("Reakcje ochronne", "Gdy pojawi się legalna reakcja, gra sama wyświetli pytanie. Enter akceptuje, Esc odrzuca."),
-    ),
-    "brakka": (
-        RuleNote("Nieustępliwa wytrzymałość", "Gdy obrażenia miałyby sprowadzić Brakkę do 0 PW, raz na długi odpoczynek pozostaje z 1 PW."),
-        RuleNote("Odporność w Szale", "Podczas Szału otrzymuje połowę obrażeń kłutych, ciętych i obuchowych."),
-        RuleNote("Twarda jak skała", "Po otrzymaniu obrażeń gra może zaproponować reakcję zmniejszającą je o 1k12 + KON za 1 Furię."),
-    ),
-    "mira": (
-        RuleNote("Mistrzyni ukrycia", "Ukrycie Miry rośnie przy kolejnych udanych testach; przeciwnicy rozliczają wykrycie osobno."),
-        RuleNote("Atak z cienia", "Trafienie z ukrycia lub przy właściwym wsparciu sojusznika zadaje dodatkowe obrażenia raz na turę."),
-        RuleNote("Ruchomy cel", "Mira otrzymuje +2 KP przeciw zwykłym atakom dystansowym."),
-    ),
-    "dagna": (
-        RuleNote("Uczeń Życia", "Czar leczenia poziomu 1 lub wyższego przywraca dodatkowo 2 + poziom czaru PW."),
-        RuleNote("Krok ratowniczki", "Po uleczeniu innego sojusznika w promieniu 10 stóp lub usunięciu mu statusu może przesunąć się o 5 stóp bez ataku okazyjnego."),
-        RuleNote("Odporność krasnoludzka", "Przewaga w rzutach obronnych przeciw truciźnie i odporność na obrażenia od trucizny."),
-    ),
-    "lorian": (
-        RuleNote("Kusznik", "Akcja ataku kuszą ręczną wykonuje dwa strzały; broń ma zasięg 45 stóp i nie rozlicza amunicji."),
-        RuleNote("Kontrapunkt i riposta", "Gdy spełniony jest warunek reakcji, gra sama proponuje strzał, redukcję obrażeń albo kość Inspiracji."),
-        RuleNote("Improwizacja", "Po nieudanym teście interakcji może pojawić się możliwość improwizowanego przerzutu."),
-    ),
-    "nimra": (
-        RuleNote("Katalog niemożliwego", "Nimra korzysta ze stałego zestawu czarów i pięciu modyfikacji Metamagii opisanych na stronie skrótów."),
-        RuleNote("Gnomia przebiegłość", "Przewaga w rzutach obronnych na INT, MDR i CHA przeciw magii."),
-        RuleNote("Tarcza", "Po trafieniu gra może zaproponować reakcję dającą +5 KP; nie wymaga osobnego skrótu."),
-    ),
-    "erynd": (
-        RuleNote("Styl: Łucznictwo", "+2 do testów ataku bronią dystansową; premia jest już uwzględniona na karcie."),
-        RuleNote("Pierwsza krew", "Pierwsze trafienie w pełni zdrowego celu zadaje dodatkowe 1k8 obrażeń, najwyżej raz na turę Erynda."),
-        RuleNote("Czujność zwiadowcy", "+2 do inicjatywy i skuteczniejsze wykrywanie ukrytych przeciwników."),
-    ),
-}
+HEROES = tuple(
+    replace(hero,
+            level=(actor := _starter_builds()[1][hero.hero_id][1].actor).level,
+            hp=actor.max_hp, ac=effective_armor_class(actor), speed=actor.speed_feet,
+            abilities="  ".join(f"{label} {getattr(actor.ability_scores, ability)}" for ability, label in (
+                ("strength", "SIŁ"), ("dexterity", "ZRC"), ("constitution", "KON"),
+                ("intelligence", "INT"), ("wisdom", "MDR"), ("charisma", "CHA"),
+            )))
+    for hero in HEROES
+)
 
 
-FLAWS: dict[str, RuleNote] = {
-    "garran": RuleNote("Wyrzuty sumienia", "Jeśli każdy sojusznik otrzymał co najmniej tyle obrażeń co Garran, a któryś więcej, Garran ma −2 do ataków, testów i rzutów obronnych."),
-    "brakka": RuleNote("Bitewny amok", "Podczas Szału nie może używać mikstur, zwojów ani aktywnych właściwości przedmiotów; może nadal atakować trzymaną bronią."),
-    "mira": RuleNote("Panika po zdemaskowaniu", "Przeciwnik, który przejrzał jej ukrycie, ma +2 do ataków przeciw Mirze; gdy widzą ją wszyscy, ukrycie się kończy."),
-    "dagna": RuleNote("Nikogo nie zostawiam", "Gdy sojusznik w promieniu 30 stóp ma 0 PW, Dagna ma utrudnienie w działaniach innych niż ratunek."),
-    "lorian": RuleNote("Potrzeba publiczności", "Zdolności specjalne wymagają żywego, przytomnego sojusznika w promieniu 10 stóp. Zwykłe ataki i czary działają normalnie."),
-    "nimra": RuleNote("Echo magicznego wycieku", "Nie może użyć tego samego czaru ani tej samej Metamagii runda po rundzie."),
-    "erynd": RuleNote("Trauma bratobójczego strzału", "Każdy przytomny sojusznik stojący obok celu daje Eryndowi −1 do ataku długim łukiem przeciw temu celowi."),
-}
+PASSIVES = HERO_PASSIVES
+FLAWS = HERO_FLAWS
 
 
 def font(path: Path, size: int) -> ImageFont.FreeTypeFont:
@@ -490,8 +464,16 @@ def draw_section(
         meta_face = font(FONT_ACTION, meta_size)
         body_face = font(FONT_BODY, body_size)
         meta_lines = wrap(draw, action.meta, meta_face, inner_right - inner_left)
-        body_lines = wrap(draw, action.body, body_face, inner_right - inner_left)[:max_body_lines]
-        text_height = key_height + 8 + len(meta_lines) * (meta_size + 4) + 4 + len(body_lines) * (body_size + 4)
+        fitted_body_size = body_size
+        while True:
+            body_face = font(FONT_BODY, fitted_body_size)
+            body_lines = wrap(draw, action.body, body_face, inner_right - inner_left)
+            text_height = key_height + 8 + len(meta_lines) * (meta_size + 4) + 4 + len(body_lines) * (fitted_body_size + 4)
+            if text_height <= cell_bottom - cell_top - 10:
+                break
+            fitted_body_size -= 1
+            if fitted_body_size < 16:
+                raise ValueError(f"Opis nie mieści się na karcie: {hero.hero_id} / {action.name}")
         y = cell_top + max(5, (cell_bottom - cell_top - text_height) // 2)
         draw_keycap(
             draw,
@@ -509,7 +491,7 @@ def draw_section(
         y += 2
         for line in body_lines:
             draw.text((inner_left, y), line, font=body_face, fill=INK)
-            y += body_size + 4
+            y += fitted_body_size + 4
 
 
 def render(hero: Hero) -> Image.Image:
@@ -544,6 +526,16 @@ def draw_wrapped_text(
     return y
 
 
+def fit_paragraph_font(draw: ImageDraw.ImageDraw, text: str, path: Path, size: int, width: int, height: int) -> ImageFont.FreeTypeFont:
+    while size >= 18:
+        face = font(path, size)
+        needed = sum(size // 2 if not paragraph else len(wrap(draw, paragraph, face, width)) * (size + 7) for paragraph in text.splitlines())
+        if needed <= height:
+            return face
+        size -= 1
+    raise ValueError("Tekst dossier nie mieści się w sekcji.")
+
+
 def draw_dossier_section(
     draw: ImageDraw.ImageDraw,
     hero: Hero,
@@ -564,7 +556,7 @@ def draw_dossier_section(
     draw.text(
         (x0 + 24, y0 + 18),
         title,
-        font=font(FONT_CONDENSED_BOLD, 33),
+        font=fit_font(draw, title, FONT_CONDENSED_BOLD, 33, x1 - x0 - 48),
         fill=(*hero.accent, 255),
     )
     draw_wrapped_text(
@@ -572,7 +564,7 @@ def draw_dossier_section(
         body,
         xy=(x0 + 24, y0 + 66),
         width=x1 - x0 - 48,
-        face=font(FONT_CONDENSED, body_size),
+        face=fit_paragraph_font(draw, body, FONT_CONDENSED, body_size, x1 - x0 - 48, y1 - y0 - 90),
         fill=MUTED_INK,
         line_gap=7,
     )
@@ -709,9 +701,11 @@ def render_minimal_keyboard(hero: Hero) -> Image.Image:
                 draw.text((left + 18, y), line, font=meta_face, fill=45)
                 y += meta_size + 5
             y += 3
-            for line in wrap(draw, action.body, body_face, right - left - 36)[:body_lines]:
+            for line in wrap(draw, action.body, body_face, right - left - 36):
                 draw.text((left + 18, y), line, font=body_face, fill=0)
                 y += body_size + 5
+            if y > cell_top + row_height - 10:
+                raise ValueError(f"Opis nie mieści się na karcie BW: {hero.hero_id} / {action.name}")
     return image
 
 
@@ -723,17 +717,17 @@ def draw_minimal_dossier_section(
     box: tuple[int, int, int, int],
     body_size: int = 28,
 ) -> None:
-    x0, y0, x1, _y1 = box
+    x0, y0, x1, y1 = box
     draw.rectangle(box, outline=0, width=3)
     draw.rectangle((x0, y0, x1, y0 + 65), fill=238)
     draw.line((x0, y0 + 65, x1, y0 + 65), fill=0, width=2)
-    draw.text((x0 + 18, y0 + 13), title, font=font(FONT_ACTION, 28), fill=0)
+    draw.text((x0 + 18, y0 + 13), title, font=fit_font(draw, title, FONT_ACTION, 28, x1 - x0 - 36), fill=0)
     draw_wrapped_text(
         draw,
         body,
         xy=(x0 + 20, y0 + 85),
         width=x1 - x0 - 40,
-        face=font(FONT_BODY, body_size),
+        face=fit_paragraph_font(draw, body, FONT_BODY, body_size, x1 - x0 - 40, y1 - y0 - 105),
         fill=0,
         line_gap=7,
     )
@@ -870,6 +864,47 @@ def write_manifest(heroes: Iterable[Hero]) -> None:
     )
 
 
+def write_hero_reference(heroes: Iterable[Hero]) -> None:
+    """Keep the current descriptive reference synchronized with the print source."""
+    lines = [
+        "# Siedem archetypów planszowych — aktualne zasady postaci",
+        "",
+        "Źródło: `scripts/generate_keyboard_character_sheets.py`, profile gry i wspólny katalog `character_creation/boardgame_help.py`.",
+        "Dokument jest odtwarzany razem z wydrukami. Poprzednie wersje zestawów są dostępne w historii Git.",
+        "",
+        "Wszyscy bohaterowie zaczynają na poziomie 3 z premią +2 do głównej cechy, już wliczoną w statystyki. Wybierz 1–5 z siedmiu postaci, potem scenariusz. Awans talii pozostaje osobnym etapem projektu.",
+        "",
+        "W walce klawisz otwiera podgląd, Enter zatwierdza, Esc lub Backspace wraca bez kosztu. Plansza wskazuje pozycje, cele i obszary. Mysz jest awaryjnym mechanizmem. Działania oznaczone AUTO są proponowanymi reakcjami, nie skrótami.",
+        "",
+        "Komórka N+ oznacza komórkę co najmniej poziomu N. Sztuczki nie zużywają komórek. Koncentracja utrzymuje jeden efekt naraz; wydanie komórki, zasobu i akcji następuje dopiero przy wykonaniu. Szał odnawia Dzikość; przejście między scenariuszami nie odnawia zasobów.",
+        "",
+        "W aktualnej grze nie liczymy strzał ani bełtów. Długi łuk Erynda ma +8 do ataku (łącznie z Łucznictwem); nóż Erynda +3, a noże Miry +6 (łącznie z biegłością). Kara skazy Erynda zależy od sojuszników przy wybranym celu.",
+        "",
+    ]
+    for hero in heroes:
+        profile = HERO_ARCHETYPES_BY_ID[hero.hero_id]
+        lines.extend([f"## {hero.name.title()} — {profile.role}", "",
+                      f"PW {hero.hp} · KP {hero.ac} · ruch {hero.speed} stóp. {hero.abilities}.", "",
+                      "### Zasoby i plan tury", "",
+                      *(f"- {item}" for item in profile.resources), "",
+                      *(f"{i}. {item}" for i, item in enumerate(profile.turn_plan, 1)), "",
+                      "### Zdolności i skróty", "",
+                      "| Klawisz | Zdolność | Koszt i warunki | Działanie |",
+                      "|---|---|---|---|"])
+        for section in hero.sections:
+            for action in section.actions:
+                cells = (action.key, action.name.title(), action.meta, action.body)
+                lines.append("| " + " | ".join(cell.replace("|", " / ") for cell in cells) + " |")
+        lines.extend(["", "### Pasywy i skaza", "",
+                      *(f"- **{note.name}:** {note.body}" for note in PASSIVES[hero.hero_id]), "",
+                      f"**Skaza — {FLAWS[hero.hero_id].name}:** {FLAWS[hero.hero_id].body}", ""])
+    lines.extend(["## Aktualne wydruki", "",
+                  "Kolorowe: `assets/physical_cards/character_sets/keyboard_v1/pdf/keyboard_character_sheets_v1.pdf`.",
+                  "Oszczędne: `assets/physical_cards/character_sets/keyboard_v1/minimal_bw/pdf/minimal_bw_character_sheets_v1.pdf`.",
+                  "Każdy zestaw zawiera siedem par: skróty i dossier. Manifest w `keyboard_v1/keyboard_character_cards_v1.json` wiąże skróty ze stabilnymi identyfikatorami zdolności.", ""])
+    (ROOT / "docs/BOARDGAME_ARCHETYPES_LEVELS_1_3.md").write_text("\n".join(lines), encoding="utf-8")
+
+
 def main() -> None:
     PNG_ROOT.mkdir(parents=True, exist_ok=True)
     PDF_ROOT.mkdir(parents=True, exist_ok=True)
@@ -903,6 +938,7 @@ def main() -> None:
         contact.paste(thumb, ((index % 4) * 384, (index // 4) * 576))
     contact.save(ASSET_ROOT / "keyboard_character_sheets_v1_contact.png", compress_level=4)
     write_manifest(HEROES)
+    write_hero_reference(HEROES)
     write_minimal_print_set(HEROES)
 
 

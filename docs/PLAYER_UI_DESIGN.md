@@ -72,6 +72,20 @@ Informacje dzielimy na trzy poziomy:
 Jeżeli informacja nie zmienia bieżącej decyzji, nie powinna rywalizować z głównym
 promptem. Powinna trafić do panelu szczegółów albo historii.
 
+## Wybór bohaterów przed grą
+
+Wdrożenie 2026-09-05: karty siedmiu bohaterów w Nowej grze pokazują rolę,
+krótki opis stylu gry oraz złożoność obsługi. Złożoność jest wskazówką redakcyjną
+dotyczącą decyzji gracza, a nie oceną siły postaci. Rozwijane „Zdolności i skaza”
+zawierają trzy przykłady zdolności, uzasadnienie złożoności i konsekwencje skazy.
+Opisy znajdują się w `ui/hero_selection.py`; nazwy skaz pochodzą z kontraktu walki.
+
+Portret, nazwa i checkbox tworzą pole wyboru. Szczegóły są osobnym elementem,
+więc ich otwarcie myszą lub klawiaturą nie zmienia drużyny. Obowiązuje limit
+1–5 bohaterów, a powrót z wyboru scenariusza zachowuje zaznaczenia. Na komputerze
+lista przewija się wewnątrz panelu, pozostawiając nawigację widoczną; telefon
+korzysta ze zwykłego przewijania strony i jednej kolumny kart.
+
 ## Wspólna powłoka aplikacji
 
 Wszystkie tryby korzystają z jednej powłoki, dzięki czemu przejście eksploracja →
@@ -252,6 +266,19 @@ Monitor stale pokazuje:
 - jedną instrukcję następnego kroku.
 
 Plansza pokazuje aktywną figurkę i legalne pola. Monitor nie rysuje mapy.
+
+Aktualny układ (2026-09-05) ma jeden HUD nad kartą bieżącej decyzji. PW, KP,
+ruch oraz ekonomia akcji nie są powtarzane w dodatkowej kolumnie postaci.
+Najważniejsze stany pozostają w HUD-zie, a licznik pozostałych otwiera panel
+stanów. Pod decyzją znajduje się domyślnie zwinięte „Szczegóły postaci”:
+poziom, sloty, zasoby i pełna lista efektów. Rozwinięcie jest zachowywane przy
+odświeżaniu tej samej postaci; zmiana aktywnego aktora zwija szczegóły.
+
+Lista skrótów pokazuje pełne nazwy akcji z zawijaniem tekstu. Na telefonie
+korzysta z jednej kolumny. Przy aktywnej liście skrótów nie powtarzamy nad nią
+listy dostępnych kart; kontekstowe przypomnienia reakcji pozostają widoczne.
+Klawiatura i papierowa karta są głównym sterowaniem. Przyciski myszy pozostają
+w domyślnie zwiniętym „Awaryjnym wyborze ekranowym”, także w podglądzie akcji.
 
 ### Wskazanie pustego pola
 

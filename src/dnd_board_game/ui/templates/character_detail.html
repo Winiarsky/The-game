@@ -78,7 +78,7 @@
             <details class="sheet-feature">
               <summary>{{ feature.name }}</summary>
               <p>{{ feature.rule_text }}</p>
-              <small><b>W grze:</b> {{ feature.game_text }}{% if feature.use_mode %} · {{ feature.use_mode }}{% endif %}</small>
+              {% if feature.game_text or feature.use_mode %}<small><b>W grze:</b> {{ feature.game_text }}{% if feature.use_mode %} · {{ feature.use_mode }}{% endif %}</small>{% endif %}
             </details>
           {% else %}
             <p>Brak</p>

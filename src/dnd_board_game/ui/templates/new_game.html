@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Nowa gra</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='launcher.css', v='character-picker-20260822-1') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='launcher.css', v='hero-guides-20260905-1') }}">
 </head>
 <body class="launcher-page new-game-page">
   <main class="flow-shell">
@@ -19,18 +19,37 @@
 
     <form id="new-game-card-flow" method="post" action="{{ url_for('start_new_game') }}" data-initial-stage="{{ initial_stage|default('party') }}">
       <section id="party-selection-step" class="form-section">
-        <h2>Wybierz drużynę — od 1 do 5 bohaterów</h2>
-        <p>Zaznacz portrety wybranych postaci, a następnie przejdź dalej.</p>
+        <h2>Poznaj bohaterów</h2>
+        <p>Porównaj role i styl gry. Złożoność opisuje liczbę decyzji, które trzeba połączyć podczas gry.</p>
         <div id="party-selection-status" class="flow-note" aria-live="polite">Nie wybrano jeszcze żadnego bohatera.</div>
         {% if roster.characters %}
           <div class="roster-grid">
             {% for character in roster.characters %}
-              <label class="roster-card" data-actor-id="{{ character.actor.id }}">
-                <input type="checkbox" name="character_ids" value="{{ character.actor.id }}" {% if character.actor.id|string in selected_character_ids|default(()) %}checked{% endif %}>
-                {% set portrait_url = character_portrait_url(character.actor.portrait) %}
-                <span class="roster-avatar">{% if portrait_url %}<img src="{{ portrait_url }}" alt="Portret: {{ character.actor.name }}">{% else %}{{ character.actor.name[:1]|upper }}{% endif %}</span>
-                <span><b>{{ character.actor.name }}</b><small>Poziom {{ character.actor.level }} · {{ class_names.get(character.class_id, character.class_id) }}</small><em data-selection-state>kliknij, aby wybrać</em></span>
-              </label>
+              {% set actor_id = character.actor.id|string %}
+              {% set guide = hero_guides.get(actor_id) %}
+              <article class="roster-card" data-actor-id="{{ actor_id }}" aria-labelledby="hero-name-{{ actor_id }}">
+                <label class="hero-choice">
+                  <input type="checkbox" name="character_ids" value="{{ actor_id }}" aria-labelledby="hero-name-{{ actor_id }}" {% if actor_id in selected_character_ids|default(()) %}checked{% endif %}>
+                  {% set portrait_url = character_portrait_url(character.actor.portrait) %}
+                  <span class="roster-avatar" aria-hidden="true">{% if portrait_url %}<img src="{{ portrait_url }}" alt="">{% else %}{{ character.actor.name[:1]|upper }}{% endif %}</span>
+                  <span class="hero-identity"><b id="hero-name-{{ actor_id }}">{{ character.actor.name }}</b><small>Poziom {{ character.actor.level }} · {{ class_names.get(character.class_id, character.class_id) }}</small><em data-selection-state>Wybierz do drużyny</em></span>
+                </label>
+                {% if guide %}
+                  <div class="hero-overview">
+                    <strong class="hero-role">{{ guide.role }}</strong>
+                    <p>{{ guide.play_style }}</p>
+                    <span class="hero-complexity">Złożoność: <strong>{{ guide.complexity }}</strong></span>
+                  </div>
+                  <details class="hero-details">
+                    <summary>Zdolności i skaza<span class="sr-only"> — {{ character.actor.name }}</span></summary>
+                    <div class="hero-details-body">
+                      <p>{{ guide.complexity_reason }}</p>
+                      <ul>{% for ability in guide.abilities %}<li>{{ ability }}</li>{% endfor %}</ul>
+                      <div class="hero-flaw"><strong>{{ hero_flaws[actor_id][1] }}</strong><p>{{ guide.flaw }}</p></div>
+                    </div>
+                  </details>
+                {% endif %}
+              </article>
             {% endfor %}
           </div>
         {% else %}
@@ -89,13 +108,14 @@
         actorInputs.forEach(input => {
           const card = input.closest('.roster-card');
           card.classList.toggle('selected', input.checked);
-          card.setAttribute('aria-selected', input.checked ? 'true' : 'false');
           card.querySelector('[data-selection-state]').textContent = input.checked
-            ? 'wybrano'
-            : 'kliknij, aby wybrać';
+            ? '✓ W drużynie · kliknij, aby usunąć'
+            : 'Wybierz do drużyny';
         });
         next.disabled = accepted.length < 1;
-        status.textContent = accepted.length
+        status.textContent = selected.length > 5
+          ? 'Drużyna może liczyć maksymalnie 5 bohaterów. Odznacz kogoś, aby wybrać inną postać.'
+          : accepted.length
           ? `Wybrano: ${accepted.length} z 5 bohaterów.`
           : 'Nie wybrano jeszcze żadnego bohatera.';
       };

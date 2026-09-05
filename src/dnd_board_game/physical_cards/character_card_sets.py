@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from dnd_board_game.character_creation.boardgame_help import HERO_FLAWS, HERO_PASSIVES
+from dnd_board_game.core.player_labels_pl import player_label
+
 import json
 import re
 from dataclasses import dataclass, replace
@@ -1031,7 +1034,7 @@ def _curated_action(
     deck = CHARACTER_DECKS[actor_id]
     return _card(
         source_id,
-        title,
+        player_label(source_id, title).upper(),
         kind,
         level,
         timing,
@@ -1058,7 +1061,7 @@ CURATED_ACTION_CARDS: dict[str, tuple[CharacterActionCardSpec, ...]] = {
         _curated_action("garran", "action_surge", "ZRYW AKCJI", "feature", 1, "AKCJA DOD. · PO AKCJI", "Po zużyciu akcji głównej wydaj akcję dodatkową, aby natychmiast ją odzyskać. 1 użycie na krótki odpoczynek.", "„Jeszcze jeden krok. Jeszcze jeden rozkaz.”"),
         _curated_action("garran", "shield_bash", "UDERZENIE TARCZĄ", "feature", 1, "AKCJA RUCHU · 5 STÓP", "Przed ruchem wykonaj sporny test Siły. Wygrana zadaje 1k4 + Siła obrażeń obuchowych i odpycha cel o jedno wolne pole od Garrana; remis wygrywa obrońca.", "„Tarcza także potrafi otworzyć drogę.”"),
         _curated_action("garran", "defensive_stance", "POZYCJA OBRONNA", "feature", 1, "AKCJA RUCHU · WŁASNY", "Zamiast ruchu zyskaj +2 KP do początku następnej tury. Efekt kończy się wcześniej po każdej zmianie pola.", "„Tarcza nie musi wygrać. Musi wytrzymać.”"),
-        _curated_action("garran", "garran_command_halt", "ROZKAZ: STAĆ!", "feature", 2, "AKCJA · 60 STÓP · 1 TAKTYKA", "Mądrość ST 14. Sukces: połowa ruchu w następnej turze. Porażka: brak dobrowolnego ruchu. Naturalne 1 daje też −2 do ataków; naturalne 20 neguje efekt.", "„Jedno słowo w odpowiedniej chwili potrafi zatrzymać szarżę.”"),
+        _curated_action("garran", "garran_command_halt", "ROZKAZ: STAĆ!", "feature", 2, "AKCJA · 60 STÓP · 1 TAKTYKA", "Mądrość ST 14. Sukces: połowa ruchu w następnej turze. Porażka: brak dobrowolnego ruchu. Naturalne 1 daje też -2 do ataków; naturalne 20 neguje efekt.", "„Jedno słowo w odpowiedniej chwili potrafi zatrzymać szarżę.”"),
         _curated_action("garran", "garran_shield_wall", "OSŁONA TARCZĄ", "feature", 2, "AKCJA DOD. · 1 TAKTYKA", "Do początku następnej tury Garrana wszyscy sąsiadujący sojusznicy otrzymują +2 KP. Premia porusza się z Garranem; Garran jej nie otrzymuje.", "„Stań za mną i pilnuj lewej strony.”"),
         _curated_action("garran", "garran_rally", "MOWA DOWÓDCY", "feature", 3, "AKCJA · 30 STÓP · 1 TAKTYKA", "Garran i słyszący sojusznicy usuwają Strach i zyskują przewagę na pierwszy atak, test albo rzut obronny do końca swojej następnej tury.", "„Nie musicie być bez strachu. Musicie zrobić następny krok.”"),
         _curated_action("garran", "garran_guard_companion", "OSŁONA TOWARZYSZA", "feature", 3, "AKCJA · 5 STÓP · 1 TAKTYKA", "Wybierz sąsiadującego sojusznika. Pierwszy pojedynczy wrogi atak, czar lub efekt przeciw niemu zostaje w całości przekierowany na Garrana i zużywa osłonę.", "„Jeśli cios ma przejść, niech przejdzie przeze mnie.”"),
@@ -1074,8 +1077,8 @@ CURATED_ACTION_CARDS: dict[str, tuple[CharacterActionCardSpec, ...]] = {
     ),
     "mira": (
         _curated_action("mira", "instinctive_dodge", "UNIK INSTYNKTOWNY", "feature", 1, "REAKCJA · 1 FORTEL", "Gdy widzący Mirę wróg wybiera ją jako cel ataku podczas jej skradania, przed rzutem nadaj temu jednemu atakowi utrudnienie. Reakcja nie znosi premii +2 ze skazy.", "„Cios trafia tylko tam, gdzie byłam chwilę temu.”"),
-        _curated_action("mira", "smoke_screen", "ZASŁONA DYMNA", "feature", 1, "AKCJA · RUCH 15 STÓP · 1 FORTEL", "Przemieść Mirę bez ataków okazyjnych, po czym wykonaj nowy test Ukrycia nawet obok wroga. Wrogowie testują Percepcję z karą równą połowie Zręczności Miry.", "„Najpierw dym. Potem już tylko brak Miry.”"),
-        _curated_action("mira", "guard_vault", "PRZESKOK PRZEZ GARDĘ", "feature", 1, "AKCJA · ATAK WRĘCZ", "Jeśli dokładnie za sąsiadującym celem jest wolne legalne pole, zaatakuj z +2 do testu i obrażeń, po czym przenieś Mirę na to pole. Skok nie prowokuje; późniejszy atak okazyjny tego celu ma przeciw Mirze −2 do trafienia.", "„Garda jest przeszkodą tylko wtedy, kiedy stoi się przed nią.”"),
+        _curated_action("mira", "smoke_screen", "ZASŁONA DYMNA", "feature", 1, "AKCJA · RUCH 15 STÓP · 1 FORTEL", "Przemieść Mirę bez ataków okazyjnych, po czym wykonaj nowy test Ukrycia nawet obok wroga. Wrogowie testują Percepcję z karą równą połowie modyfikatora Zręczności Miry, w dół.", "„Najpierw dym. Potem już tylko brak Miry.”"),
+        _curated_action("mira", "guard_vault", "PRZESKOK PRZEZ GARDĘ", "feature", 1, "AKCJA · ATAK WRĘCZ", "Jeśli dokładnie za sąsiadującym celem jest wolne legalne pole, zaatakuj z +2 do testu i obrażeń, po czym przenieś Mirę na to pole. Skok nie prowokuje; późniejszy atak okazyjny tego celu ma przeciw Mirze -2 do trafienia.", "„Garda jest przeszkodą tylko wtedy, kiedy stoi się przed nią.”"),
         _curated_action("mira", "combat_trap_detection", "WYKRYCIE PUŁAPEK", "feature", 1, "AKCJA · PROMIEŃ 45 STÓP", "W walce przeskanuj obszar wokół Miry i wykonaj fizyczny test Spostrzegawczości. Wykryte pułapki zostają ujawnione oraz zaznaczone na planszy. Bez kosztu Fortelu.", "„Mechanizm zawsze zostawia ślad dla kogoś, kto wie, gdzie nie stawiać dłoni.”"),
         _curated_action("mira", "hamstring_cut", "CIĘCIE ŚCIĘGNA", "feature", 2, "AKCJA · FLANKA · 1 FORTEL", "Atak wręcz. Jeśli trafi i zada co najmniej 1 obrażenie, cel porusza się z połową szybkości do chwili otrzymania leczenia albo oczyszczenia statusu.", "„Nie muszę cię zatrzymać. Wystarczy, że każdy krok będzie decyzją.”"),
         _curated_action("mira", "piercing_attack", "PRZESZYWAJĄCY ATAK", "feature", 2, "AKCJA · FLANKA · 1 FORTEL", "Sojusznik angażujący pierwszy cel z sąsiedniego pola tworzy otwarcie. Po raniącym trafieniu zaatakuj osobno wroga dokładnie za pierwszym; drugi atak zachowuje premie i nie tworzy łańcucha.", "„Jedna linia. Dwa cele. Żadnego zmarnowanego ruchu.”"),
@@ -1086,7 +1089,7 @@ CURATED_ACTION_CARDS: dict[str, tuple[CharacterActionCardSpec, ...]] = {
         _curated_action("dagna", "healing_word", "LECZĄCE SŁOWO", "spell", 1, "AKCJA DOD. · 60 STÓP", "Legalny żywy cel odzyskuje 1k4 + Mądrość + 2 + poziom użytej komórki PW. Na 1. poziomie: 1k4+7. Wyższa komórka dodaje 1k4 i 1 PW za poziom.", "„Jeszcze nie. Wrócisz, kiedy sama ci pozwolę.”"),
         _curated_action("dagna", "bless", "BŁOGOSŁAWIEŃSTWO", "spell", 1, "AKCJA · AURA 10 STÓP · KONC.", "Przez 5 rund Dagna i wszyscy sojusznicy znajdujący się w aurze dodają k4 do każdego ataku i rzutu obronnego. Aura porusza się z Dagną.", "„Niech każdy z was znajdzie o pół kroku więcej odwagi.”"),
         _curated_action("dagna", "preserve_life", "ZACHOWANIE ŻYCIA", "feature", 2, "AKCJA · CELE NA PLANSZY", "Rozdziel 5 × poziom Dagny PW pomiędzy wskazane cele, ale nie lecz żadnego powyżej połowy maksymalnych PW. 1 Boska Moc.", "„Nie musicie być cali. Musicie być żywi.”"),
-        _curated_action("dagna", "divine_care_aura", "AURA BOSKIEJ OPIEKI", "spell", 1, "AKCJA · AURA 5 STÓP · KONC.", "Przez 5 rund wrogowie w aurze mają karę do ataku i obrażeń równą połowie Mądrości Dagny, minimum 1. Obecnie kara wynosi −2.", "„Podejdź bliżej. Zobaczymy, czy twoja ręka nadal będzie taka pewna.”"),
+        _curated_action("dagna", "divine_care_aura", "AURA BOSKIEJ OPIEKI", "spell", 1, "AKCJA · AURA 5 STÓP · KONC.", "Przez 5 rund wrogowie w aurze mają karę do ataku i obrażeń równą połowie Mądrości Dagny, minimum 1. Obecnie kara wynosi -2.", "„Podejdź bliżej. Zobaczymy, czy twoja ręka nadal będzie taka pewna.”"),
         _curated_action("dagna", "guiding_bolt", "POCISK PRZEWODNI", "spell", 2, "AKCJA · 75 STÓP", "Dystansowy atak czarem. Trafienie: 2k6 obrażeń promienistych; następny atak przeciw celowi ma przewagę.", "„Za tym światłem pójdą pozostali.”"),
         _curated_action("dagna", "healing_grace_aura", "AURA UZDRAWIAJĄCEJ ŁASKI", "spell", 3, "AKCJA · AURA 10 STÓP · KONC.", "Przez 3 rundy leczenie w aurze otrzymuje +1k8+Mądrość. Liczba aktywacji jest równa modyfikatorowi Mądrości Dagny; obecnie 4.", "„Zostańcie blisko. Dopóki stoję, żadna rana nie ma ostatniego słowa.”"),
         _curated_action("dagna", "lesser_restoration", "POMNIEJSZE PRZYWRÓCENIE", "spell", 3, "AKCJA · DOTYK", "Usuń obsługiwany negatywny stan. Jeden stan jest usuwany automatycznie; przy kilku wybierz jeden z listy.", "„Ciało pamięta drogę powrotną. Trzeba mu ją tylko pokazać.”"),
@@ -1094,13 +1097,13 @@ CURATED_ACTION_CARDS: dict[str, tuple[CharacterActionCardSpec, ...]] = {
     ),
     "lorian": (
         _curated_action("lorian", "bardic_inspiration", "INSPIRACJA BARDOWSKA", "feature", 1, "AKCJA DOD. · 60 STÓP", "Sojusznik otrzymuje k6 do jednego wybranego testu, ataku lub obrony. Puste pole zachowuje efekt; wpisanie 1–6 zużywa kość. Użycia: modyfikator Charyzmy na krótki odpoczynek.", "„Jeszcze nie znasz końca tej historii.”"),
-        _curated_action("lorian", "optical_scope", "LUNETA OPTYCZNA", "feature", 1, "AKCJA · KUSZA · 60 STÓP · CAŁY RUCH", "Tylko przed ruchem. Wykonaj dwa strzały w jeden cel; oba traktują jego KP jako niższe o 2. Użycie zużywa cały ruch Loriena, także gdy strzały chybią.", "„Odległość to tylko niedokładnie ustawiona soczewka.”"),
-        _curated_action("lorian", "mocking_shot", "OSTRZAŁ DESTABILIZUJĄCY", "feature", 1, "AKCJA · KUSZA · 45 STÓP", "Zamiast dwóch strzałów wykonaj jeden. Trafienie: utrudnienie pierwszego ataku celu oraz obron na Mądrość do początku następnej tury Loriena.", "„Najpierw rozreguluj rytm. Resztę zrobi drużyna.”"),
-        _curated_action("lorian", "provoking_shot", "PROWOKUJĄCY OSTRZAŁ", "feature", 1, "AKCJA · KUSZA · 45 STÓP", "Zamiast dwóch strzałów wykonaj jeden. Trafienie: do początku następnej tury Loriena premia celu do ataków przeciw niemu i kara przeciw pozostałym są równe zadanym obrażeniom.", "„Tutaj. Spróbuj trafić kogoś, kto odpowie.”"),
-        _curated_action("lorian", "entangling_shot", "OPLATAJĄCY OSTRZAŁ", "feature", 2, "AKCJA · OBSZAR 3×3 · 45 STÓP", "Wszyscy w obszarze, także sojusznicy, wykonują obronę na Zręczność. Sukces: połowa ruchu; porażka: brak ruchu do początku następnej tury Loriena. Bez obrażeń.", "„Nie każdy wynalazek ma zabijać. Niektóre po prostu nie pozwalają odejść.”"),
-        _curated_action("lorian", "counterpoint", "KONTRAPUNKT", "feature", 1, "REAKCJA · 45 STÓP", "Gdy zainspirowany sojusznik bezpośrednio zrani wroga, Lorian może zaatakować tego samego, nadal żywego i legalnego celu kuszą. Raz między turami Loriena; nie zużywa Inspiracji.", "„Twój cios był początkiem zdania.”"),
+        _curated_action("lorian", "optical_scope", "LUNETA OPTYCZNA", "feature", 1, "AKCJA · KUSZA · 60 STÓP · CAŁY RUCH", "Tylko przed ruchem. Wykonaj dwa strzały w jeden cel; oba traktują jego KP jako niższe o 2. Użycie zużywa cały ruch Loriana, także gdy strzały chybią.", "„Odległość to tylko niedokładnie ustawiona soczewka.”"),
+        _curated_action("lorian", "mocking_shot", "OSTRZAŁ DESTABILIZUJĄCY", "feature", 1, "AKCJA · KUSZA · 45 STÓP", "Zamiast dwóch strzałów wykonaj jeden. Trafienie: utrudnienie pierwszego ataku celu oraz obron na Mądrość do początku następnej tury Loriana.", "„Najpierw rozreguluj rytm. Resztę zrobi drużyna.”"),
+        _curated_action("lorian", "provoking_shot", "PROWOKUJĄCY OSTRZAŁ", "feature", 1, "AKCJA · KUSZA · 45 STÓP", "Zamiast dwóch strzałów wykonaj jeden. Trafienie: do początku następnej tury Loriana premia celu do ataków przeciw niemu i kara przeciw pozostałym są równe zadanym obrażeniom.", "„Tutaj. Spróbuj trafić kogoś, kto odpowie.”"),
+        _curated_action("lorian", "entangling_shot", "OPLATAJĄCY OSTRZAŁ", "feature", 2, "AKCJA · OBSZAR 3×3 · 45 STÓP", "Wszyscy w obszarze, także sojusznicy, wykonują obronę na Zręczność. Sukces: połowa ruchu; porażka: brak ruchu do początku następnej tury Loriana. Bez obrażeń.", "„Nie każdy wynalazek ma zabijać. Niektóre po prostu nie pozwalają odejść.”"),
+        _curated_action("lorian", "counterpoint", "KONTRAPUNKT", "feature", 1, "REAKCJA · 45 STÓP", "Gdy zainspirowany sojusznik bezpośrednio zrani wroga, Lorian może zaatakować tego samego, nadal żywego i legalnego celu kuszą. Raz między turami Loriana; nie zużywa Inspiracji.", "„Twój cios był początkiem zdania.”"),
         _curated_action("lorian", "distracting_shout", "ROZPRASZAJĄCY OKRZYK", "feature", 1, "REAKCJA · PO RZUCIE OBRAŻEŃ", "Gdy atak trafia zainspirowanego sojusznika, przed odjęciem PW zmniejsz obrażenia o 1k6+2, minimum do 0. Nie zużywa Inspiracji.", "„Patrz na mnie, nie na ostrze!”"),
-        _curated_action("lorian", "panic_whisper", "PODSZEPT PANIKI", "spell", 1, "AKCJA · 45 STÓP", "Mądrość ST 14. Porażka: 2k6 psychicznych i do 15 stóp ruchu bezpośrednio od Loriena; sukces: połowa bez ruchu. Przeszkoda zatrzymuje ruch.", "„Jedno ciche zdanie potrafi opróżnić całą scenę.”"),
+        _curated_action("lorian", "panic_whisper", "PODSZEPT PANIKI", "spell", 1, "AKCJA · 45 STÓP", "Mądrość ST 14. Porażka: 2k6 psychicznych i do 15 stóp ruchu bezpośrednio od Loriana; sukces: połowa bez ruchu. Przeszkoda zatrzymuje ruch.", "„Jedno ciche zdanie potrafi opróżnić całą scenę.”"),
         _curated_action("lorian", "thunderwave", "GRZMIĄCY REFREN", "spell", 1, "AKCJA · STOŻEK 15 STÓP", "Kondycja ST 14. Porażka: 2k8 grzmotu i odepchnięcie 10 stóp; sukces: połowa obrażeń bez odepchnięcia.", "„Refren powinien poruszyć publiczność. Czasem dosłownie.”"),
         _curated_action("lorian", "faerie_fire", "OGNIKI", "spell", 1, "AKCJA · OBSZAR · KONC.", "Istoty w sześcianie 20 stóp wykonują obronę na Zręczność. Porażka: ataki przeciw nim mają przewagę i nie korzystają z niewidzialności.", "„Skoro chcą się ukryć, dajmy im lepsze światło.”"),
         _curated_action("lorian", "hideous_laughter", "OBEZWŁADNIAJĄCY ŻART", "spell", 1, "AKCJA · 30 STÓP · KONC.", "Mądrość ST 14. Porażka powala i obezwładnia cel; ponawia obronę po obrażeniach i na końcu swojej tury.", "„Najgorszy moment na śmiech jest zwykle najlepszym momentem dla mnie.”"),
@@ -1109,7 +1112,7 @@ CURATED_ACTION_CARDS: dict[str, tuple[CharacterActionCardSpec, ...]] = {
         _curated_action("lorian", "accelerated_refrain", "PRZYSPIESZONY REFREN", "spell", 3, "AKCJA · KONC. · 3 RUNDY", "Po rzuceniu wykonaj jeden atak kuszą. Potem po Szybkim ostrzale możesz wydać akcję dodatkową na trzeci strzał. Konkuruje z Inspiracją i Prowokacją.", "„Tempo nie musi być rozsądne. Musi być moje.”"),
     ),
     "nimra": (
-        _curated_action("nimra", "nimra_frost_pulse", "LODOWY IMPULS", "spell", 1, "AKCJA · 50 STÓP", "Kondycja przeciw ST czarów. Porażka: 1k8 zimna i −10 stóp ruchu do początku następnej tury Nimry; sukces: brak efektu.", "„Ruch jest tylko ciepłem, któremu odebrano argumenty.”"),
+        _curated_action("nimra", "nimra_frost_pulse", "LODOWY IMPULS", "spell", 1, "AKCJA · 50 STÓP", "Kondycja przeciw ST czarów. Porażka: 1k8 zimna i -10 stóp ruchu do początku następnej tury Nimry; sukces: brak efektu.", "„Ruch jest tylko ciepłem, któremu odebrano argumenty.”"),
         _curated_action("nimra", "nimra_acid_splash", "KWASOWY ROZPRYSK", "spell", 1, "AKCJA · 40 STÓP · PROMIEŃ 5", "Wszystkie istoty w obszarze wykonują obronę Zręczności. Porażka: 1k6 kwasu; sukces: 0.", "„Reakcję można przyspieszyć. Szczególnie cudzą.”"),
         _curated_action("nimra", "nimra_mind_spike", "SZPILKA UMYSŁU", "spell", 1, "AKCJA · 45 STÓP", "Mądrość przeciw ST czarów. Porażka: 1k6 psychicznych i brak reakcji do początku następnej tury Nimry; sukces: brak efektu.", "„To nie ból. To korekta.”"),
         _curated_action("nimra", "nimra_flame_fan", "WACHLARZ PŁOMIENI", "spell", 1, "AKCJA · STOŻEK 15", "Wszystkie istoty w stożku: Zręczność. Porażka 2k6 ognia, sukces połowa.", "„Geometria jest uprzejma tylko dla przygotowanych.”"),
@@ -1153,60 +1156,11 @@ for _actor_id, _cards in CURATED_ACTION_CARDS.items():
 
 
 CURATED_PASSIVES: dict[str, tuple[str, ...]] = {
-    "garran": (
-        "Styl walki: Obrona — +1 KP podczas noszenia pancerza.",
-        "Ulepszony krytyk — ataki bronią trafiają krytycznie przy naturalnym 19 albo 20.",
-        "Żelazna linia — sojusznik flankujący z Garranem tego samego przeciwnika ma +1 KP przeciw jego atakom.",
-        "Skaza: Wyrzuty sumienia — gdy Garran otrzymał najmniej obrażeń w drużynie, a ktoś otrzymał więcej, ma −2 do ataków, obron i testów. Leczenie nie cofa licznika.",
-    ),
-    "brakka": (
-        "Widzenie w ciemności — w niemagicznej ciemności do 60 stóp widzi jak w półmroku; nie przenika magicznej ciemności ani mgły.",
-        "Obrona bez pancerza — KP 10 + Zręczność + Kondycja; tarcza jest dozwolona.",
-        "Nieustępliwość półorka — automatycznie przy pierwszym zejściu do 0 PW pozostawia Brakkę z 1 PW, o ile obrażenia nie zabijają jej natychmiast; 1 użycie na długi odpoczynek.",
-        "Dzikie ataki — krytyczny atak bronią wręcz dodaje jedną kość broni.",
-        "Skaza: Bitewny amok — podczas Szału Brakka nie może używać mikstur, zwojów ani aktywnych właściwości przedmiotów. Może nadal atakować trzymaną bronią.",
-    ),
-    "mira": (
-        "Mistrzyni ukrycia — tylko Mira ma bojową akcję Ukryj się bez osłony. Blokuje ją sąsiadujący wróg lub status. Wrogowie testują Percepcję osobno.",
-        "Skradanie — limit ruchu 20 stóp. Dobrowolne wyjście przywraca limit 25 stóp, ale nie zwraca wykonanego ruchu ani akcji.",
-        "Atak z cienia — raz na turę rapier lub nóż daje +2k6 i przewagę przeciw celowi, który nie widzi Miry. Atak kończy ukrycie.",
-        "Flanka zabójczyni — osobista flanka daje +1k6; razem z ukryciem daje +3k6.",
-        "Szczęście niziołka — ponów naturalną 1 w ataku, teście albo obronie.",
-        "Ruchomy cel — Mira ma +2 KP przeciw dystansowym testom ataku bronią i czarem; nie działa przeciw obszarom ani rzutom obronnym.",
-        "Skaza: Panika po zdemaskowaniu — podczas tej sesji skradania widzący Mirę wróg ma +2 do testów ataku przeciw niej. Gdy widzą ją wszyscy, skradanie się kończy i premia znika.",
-    ),
-    "dagna": (
-        "Widzenie w ciemności — widzi w ciemności do 60 stóp; ciężki pancerz nie zmniejsza jej szybkości.",
-        "Uczeń Życia — czar leczenia przywraca dodatkowe 2 + poziom czaru PW.",
-        "Krok ratowniczki — raz na turę, po uleczeniu lub oczyszczeniu pobliskiego sojusznika, może przesunąć się o 5 stóp bez ataków okazyjnych.",
-        "Krasnoludzka wytrzymałość — +1 maksymalnego PW na każdy poziom.",
-        "Krasnoludzka odporność — przewaga przeciw truciźnie i odporność na obrażenia od trucizny.",
-        "Skaza: Nikogo nie zostawiam — gdy sojusznik w 30 stopach ma 0 PW, Dagna ma utrudnienie w atakach i testach innych niż ratunek; cele jej wrogich czarów mają przewagę w obronach.",
-    ),
-    "lorian": (
-        "Widzenie w ciemności — widzi w ciemności do 60 stóp.",
-        "Fey Ancestry — przewaga przeciw zauroczeniu i odporność na magiczny sen.",
-        "Kusznik — zwykła akcja Ataku kuszą ręczną daje dwa osobne strzały; każdy może mieć inny legalny cel. Ostrzały specjalne określają własną liczbę celów.",
-        "Obycie i targowanie — +2 do każdego pozabojowego testu Charyzmy. Nie tworzy nowych nagród ani możliwości fabularnych.",
-        "Improwizacja — raz na NPC przerzuć nieudany pozabojowy test Charyzmy przed konsekwencjami; drugi wynik jest ostateczny. Zużycie jest zapisywane.",
-        "Skaza: Potrzeba publiczności — Lorian nie może używać zdolności specjalnych bez żywego i przytomnego sojusznika w 10 stopach.",
-    ),
-    "nimra": (
-        "Widzenie w ciemności — widzi w ciemności do 60 stóp.",
-        "Gnomia przebiegłość — przewaga w obronach INT, MĄD i CHA przeciw magii.",
-        "Katalog niemożliwego — wszystkie czary z talii są stale dostępne; Nimra nie przygotowuje ich po odpoczynku.",
-        "Odzyskiwanie magiczne — raz na długi odpoczynek odzyskaj komórki podczas krótkiego odpoczynku.",
-        "Skaza: Echo magicznego wycieku — w następnej turze Nimra nie może powtórzyć żadnego czaru ani Metamagii użytych w poprzedniej rundzie.",
-    ),
-    "erynd": (
-        "Widzenie w ciemności — widzi w ciemności do 60 stóp.",
-        "Styl walki: Łucznictwo — +2 do dystansowych ataków bronią.",
-        "Ekspertyza zwiadowcy — podwójna biegłość w Skradaniu i Sztuce przetrwania.",
-        "Pierwsza krew — raz na turę trafienie z łuku w cel z pełnymi PW zadaje dodatkowe 1k8.",
-        "Czujność zwiadowcy — +2 do inicjatywy i wykrywania ukrytych przeciwników.",
-        "Fey Ancestry — przewaga przeciw zauroczeniu i odporność na magiczny sen.",
-        "Skaza: Trauma bratobójczego strzału — −1 do ataków z łuku za każdego przytomnego bohatera stojącego obok Erynda.",
-    ),
+    actor_id: (
+        *(f"{note.name} — {note.body}" for note in notes),
+        f"Skaza: {HERO_FLAWS[actor_id].name} — {HERO_FLAWS[actor_id].body}",
+    )
+    for actor_id, notes in HERO_PASSIVES.items()
 }
 
 for _actor_id, _passives in CURATED_PASSIVES.items():
@@ -1234,7 +1188,7 @@ def _synchronized_action_card(
     definition = card_action_definition(card.source_id)
     if definition.phase is CardPhase.REMOVED:
         return None
-    if card.kind != "spell":
+    if card.kind != "spell" or card.source_id.startswith("nimra_"):
         return card
     # Alarm is intentionally adapted to the board game's short-rest prompt;
     # its SRD area/duration text would describe a flow the runtime does not use.
@@ -1307,7 +1261,11 @@ def _synchronized_action_card(
         ("erynd", "spike_growth"): " Koszt: 1 Instynkt.",
         ("erynd", "see_invisibility"): " Koszt: 1 Instynkt.",
     }.get((actor_id, card.source_id), "")
+    if actor_id == "erynd" and card.source_id == "hunters_mark":
+        mechanic = card.mechanic
+        resource_note = ""
     timing = _spell_timing(spell_data)
+    timing = timing.replace("90 STÓP", "75 STÓP").replace("120 STÓP", "75 STÓP")
     if actor_id == "dagna" and card.source_id == "guiding_bolt":
         timing = timing.replace("120 STÓP", "75 STÓP")
     if actor_id == "dagna" and card.source_id == "sacred_flame":
@@ -1635,6 +1593,17 @@ def _wrapped_lines(
     return lines
 
 
+def _fit_rule_text(draw: ImageDraw.ImageDraw, text: str, width: int, height: int, size_mm: float, *, spacing_mm: float = 0.45) -> tuple[ImageFont.FreeTypeFont, list[str]]:
+    """Fit complete rules text; refuse a print that would silently omit rules."""
+    for size in range(_mm(size_mm), _mm(1.15) - 1, -1):
+        face = _font(size)
+        lines = _wrapped_lines(draw, text, face, width)
+        box = draw.multiline_textbbox((0, 0), "\n".join(lines), font=face, spacing=_mm(spacing_mm))
+        if box[2] <= width and box[3] <= height:
+            return face, lines
+    raise ValueError("Opis zasad nie mieści się w polu wydruku.")
+
+
 def _fit_title_font(draw: ImageDraw.ImageDraw, title: str, max_width: int):
     for size_mm in (4.25, 3.9, 3.55, 3.2, 2.9):
         font = _font(_mm(size_mm), serif=True, bold=True)
@@ -1937,31 +1906,18 @@ def render_character_hero_back(deck: CharacterDeckSpec) -> Image.Image:
         fill=(*deck.accent, 210),
         width=_mm(0.3),
     )
-    passive_font = _font(_mm(2.05))
-    y = trim_top + _mm(18)
-    for passive in deck.passives:
-        lines = _wrapped_lines(
-            draw,
-            passive,
-            passive_font,
-            CARD_SIZE_PX[0] - 2 * safe - _mm(4),
-            max_lines=4,
-        )
-        draw.ellipse(
-            (trim_left + safe, y + _mm(1), trim_left + safe + _mm(1.4), y + _mm(2.4)),
-            fill=deck.accent,
-        )
-        draw.multiline_text(
-            (trim_left + safe + _mm(3), y),
-            "\n".join(lines),
-            font=passive_font,
-            fill=(222, 218, 205),
-            spacing=_mm(0.45),
-        )
-        y += len(lines) * _mm(2.8) + _mm(2.0)
+    passive_font, lines = _fit_rule_text(
+        draw, "\n".join(f"• {entry}" for entry in deck.passives),
+        CARD_SIZE_PX[0] - 2 * safe - _mm(4),
+        trim_bottom - _mm(14) - (trim_top + _mm(18)), 2.05,
+    )
+    draw.multiline_text(
+        (trim_left + safe, trim_top + _mm(18)), "\n".join(lines),
+        font=passive_font, fill=(222, 218, 205), spacing=_mm(0.45),
+    )
     draw.text(
         (width // 2, trim_bottom - _mm(9)),
-        "Szczegóły rozwoju znajdują się w dossier.",
+        "Zasoby i plan tury znajdują się w dossier.",
         font=_font(_mm(1.85), serif=True),
         fill=deck.accent,
         anchor="ma",
@@ -2438,10 +2394,8 @@ def _draw_bw_section(
     )
     rule_y = top + _mm(7)
     draw.line((left, rule_y, right, rule_y), fill="black", width=max(1, _mm(0.2)))
-    font = _font(_mm(font_size_mm))
     max_width = right - left - _mm(6)
-    max_lines = max(1, (bottom - rule_y - _mm(4)) // _mm(font_size_mm + 0.9))
-    lines = _wrapped_lines(draw, text, font, max_width, max_lines=max_lines)
+    font, lines = _fit_rule_text(draw, text, max_width, bottom - rule_y - _mm(4), font_size_mm, spacing_mm=0.55)
     draw.multiline_text(
         (left + _mm(3), rule_y + _mm(2)),
         "\n".join(lines),
@@ -2806,13 +2760,9 @@ def render_character_action_card_bw_test(
         font=_font(_mm(1.8), bold=True),
         fill="black",
     )
-    mechanic_font = _font(_mm(1.8))
-    mechanic_lines = _wrapped_lines(
-        draw,
-        spec.mechanic,
-        mechanic_font,
-        content_right - content_left - _mm(4),
-        max_lines=10,
+    mechanic_font, mechanic_lines = _fit_rule_text(
+        draw, spec.mechanic, content_right - content_left - _mm(4),
+        mechanic_bottom - mechanic_top - _mm(9), 1.8,
     )
     draw.multiline_text(
         (content_left + _mm(2), mechanic_top + _mm(7)),
@@ -2888,14 +2838,10 @@ def render_character_hero_card_bw_test(deck: CharacterDeckSpec) -> Image.Image:
         font=_font(_mm(2.0), bold=True),
         fill="black",
     )
-    passive_font = _font(_mm(1.55))
-    passive_text = "\n".join(f"• {entry}" for entry in deck.passives)
-    passive_lines = _wrapped_lines(
-        draw,
-        passive_text,
-        passive_font,
+    passive_font, passive_lines = _fit_rule_text(
+        draw, "\n".join(f"• {entry}" for entry in deck.passives),
         content_right - content_left,
-        max_lines=15,
+        trim_bottom - safe - _mm(23) - (trim_top + _mm(35)), 1.55,
     )
     draw.multiline_text(
         (content_left, trim_top + _mm(35)),

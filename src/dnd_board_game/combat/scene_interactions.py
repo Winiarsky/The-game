@@ -546,11 +546,14 @@ def expire_combat_effects(
     return updated_state, expiration.active_effects, expiration.expired_effects
 
 
-def attack_source_with_combat_effects(actor: Actor, source, active_effects: tuple[ActiveCombatEffect, ...]):
+def attack_source_with_combat_effects(
+    actor: Actor, source, active_effects: tuple[ActiveCombatEffect, ...],
+    *, target: Actor | None = None,
+):
     modifiers = []
     from .archetype_flaws import flaw_attack_roll_modifiers
 
-    modifiers.extend(flaw_attack_roll_modifiers(actor, active_effects, source))
+    modifiers.extend(flaw_attack_roll_modifiers(actor, active_effects, source, target=target))
     modifiers.extend(
         RollModifier(
             effect.label,
@@ -885,7 +888,7 @@ def attack_source_with_target_combat_effects(
     source,
     active_effects: tuple[ActiveCombatEffect, ...],
 ):
-    source = attack_source_with_combat_effects(attacker, source, active_effects)
+    source = attack_source_with_combat_effects(attacker, source, active_effects, target=target)
     modifiers = []
     mode = source.attack_roll_request.mode
     provocation = next(

@@ -321,6 +321,13 @@ def apply_boardgame_archetype(
 ) -> Actor:
     actor = reconcile_boardgame_feature_removals(actor)
     actor_id = str(actor.id)
+    # Curated knives were added after the class catalogue expanded simple-weapon
+    # proficiencies into individual ids. Give their intended wielders proficiency.
+    weapon_id = {"mira": "throwing_knife", "erynd": "hunting_knife"}.get(actor_id)
+    if weapon_id and not actor.proficiencies.is_weapon_proficient(weapon_id):
+        actor = replace(actor, proficiencies=replace(
+            actor.proficiencies, weapons=(*actor.proficiencies.weapons, weapon_id),
+        ))
     features = list(actor.features)
     existing_feature_ids = {feature.feature_id for feature in features}
     boost_ability = _PRIMARY_ABILITY_BOOSTS.get(actor_id)

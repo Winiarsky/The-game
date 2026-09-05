@@ -8,6 +8,8 @@ let boardScanToken = 0;
 let combatTurnActionMoveDelta = 0;
 let combatTurnActionMoveTimer = null;
 let combatTurnActionMoveInFlight = false;
+let combatScreenFallbackOpen = false;
+let combatActorDetailsActorId = '';
 let boardInputPhase = 'idle';
 let boardListeningRevision = '';
 let lastAttemptedBoardRevision = '';
@@ -4212,6 +4214,7 @@ function combatStartHtml() {
         ${interrupt ? `<div class="combat-interrupt-banner"><span>Przerwanie</span><b>${esc(interrupt)}</b></div>` : ''}
         ${combatCurrentStepHtml(combat, finished, isAllyTurn, isEnemyTurn, interrupt)}
       </div>
+      ${combatTurnActorStatsHtml(combat)}
     </div>
     <details class="combat-details">
       <summary>Pole walki, ostatni wynik i szczegóły</summary>
@@ -4291,7 +4294,7 @@ function combatTurnHudHtml(combat) {
         </div>
       </div>
       <div class="combat-hp" aria-label="Punkty życia ${esc(actorHpLabel(actor))}">
-        <span><b>HP ${esc(actorHpLabel(actor))}</b><small>KP ${esc(actorAcLabel(actor))}</small></span>
+        <span><b>PW ${esc(actorHpLabel(actor))}</b><small>KP ${esc(actorAcLabel(actor))}</small></span>
         <i><em style="width:${hpPercent}%"></em></i>
       </div>
       <div class="combat-turn-resources">${combatMiniStatusHtml(combat)}</div>
@@ -4350,7 +4353,7 @@ function combatCurrentStepHtml(combat, finished, isAllyTurn, isEnemyTurn, interr
 }
 function combatCardReminderHtml(combat, phase, isAllyTurn) {
   const reminders = (combat.card_reminders || []).filter(reminder => {
-    if (reminder.trigger_window === 'action_selection') return isAllyTurn && phase === 'choice';
+    if (reminder.trigger_window === 'action_selection') return isAllyTurn && phase === 'choice' && !combat.turn_action_menu;
     return true;
   });
   if (!reminders.length) return '';
@@ -6668,10 +6671,11 @@ function combatTurnActionUnavailableHtml(menu, combat) {
   }
   return message ? `<div class="combat-action-unavailable" role="status"><b>Ta akcja jest teraz niedostępna</b><span>${esc(message)}</span></div>` : '';
 }
+function rememberCombatActorDetails(details) {
+  if (details.isConnected) combatActorDetailsActorId = details.open ? details.dataset.actorId : '';
+}
 function combatTurnActorStatsHtml(combat) {
   const actor = combat.current_actor || {};
-  const movement = combat.movement || {};
-  const turn = combat.turn_action || {};
   const slots = (actor.spell_slots || []).filter(slot => Number(slot.maximum || 0) > 0);
   const pools = (actor.resource_pools || []).filter(pool => Number(pool.maximum || 0) > 0);
   const slotText = slots.length
@@ -6681,15 +6685,25 @@ function combatTurnActorStatsHtml(combat) {
     ? pools.map(pool => `${esc(pool.label)} ${esc(pool.current)}/${esc(pool.maximum)}`).join(' · ')
     : 'brak zasobów specjalnych';
   return `
-    <aside class="combat-turn-actor-stats" aria-label="Statystyki aktywnego bohatera">
-      <div class="combat-turn-actor-stats-heading">${actorPortraitHtml(actor, 'detail')}<div><small>Aktywny bohater</small><b>${esc(actor.name || '-')}</b><span>Poziom ${esc(actor.level || '-')} · pole (${esc((actor.position || [])[0] ?? '-')}, ${esc((actor.position || [])[1] ?? '-')})</span></div></div>
-      <div class="combat-turn-vitals"><span><small>PW</small><b>${esc(actorHpLabel(actor))}</b></span><span><small>KP</small><b>${esc(actorAcLabel(actor))}</b></span><span><small>Ruch</small><b>${esc(movement.remaining_feet || 0)} ft</b></span></div>
-      <div class="combat-turn-economy"><span class="${turn.action_use === 'action_used' ? 'spent' : 'ready'}">Akcja ${turn.action_use === 'action_used' ? 'zużyta' : 'gotowa'}</span><span class="${turn.bonus_action_use === 'action_used' ? 'spent' : 'ready'}">Bonus ${turn.bonus_action_use === 'action_used' ? 'zużyty' : 'gotowy'}</span><span class="${turn.reaction_available === false ? 'spent' : 'ready'}">Reakcja ${turn.reaction_available === false ? 'zużyta' : 'gotowa'}</span></div>
-      <div class="combat-turn-stat-block"><small>Sloty czarów</small><span>${slotText}</span></div>
-      <div class="combat-turn-stat-block"><small>Zasoby</small><span>${poolText}</span></div>
-      ${statusChipsHtml(combatActorChips(actor), 'Brak aktywnych efektów.')}
-    </aside>
+    <details class="combat-actor-details" data-actor-id="${esc(actor.id || '')}" ontoggle="rememberCombatActorDetails(this)"${combatActorDetailsActorId === String(actor.id) ? ' open' : ''}>
+      <summary data-allow-busy="true">Szczegóły postaci · ${esc(actor.name || '-')}</summary>
+      <div class="combat-turn-actor-stats">
+        <div class="combat-turn-stat-block"><small>Poziom</small><span>${esc(actor.level || '-')}</span></div>
+        <div class="combat-turn-stat-block"><small>Sloty czarów</small><span>${slotText}</span></div>
+        <div class="combat-turn-stat-block"><small>Zasoby</small><span>${poolText}</span></div>
+        <div class="combat-turn-stat-block combat-turn-all-effects"><small>Stany i efekty</small>${statusChipsHtml(combatActorChips(actor).filter(chip => !isTurnResourceChip(chip)), 'Brak aktywnych efektów.')}</div>
+      </div>
+    </details>
   `;
+}
+function rememberCombatScreenFallback(details) {
+  if (details.isConnected) combatScreenFallbackOpen = details.open;
+}
+function combatScreenFallbackHtml(content) {
+  return `<details class="combat-touch-fallback" ontoggle="rememberCombatScreenFallback(this)"${combatScreenFallbackOpen ? ' open' : ''}>
+    <summary data-allow-busy="true">Awaryjny wybór ekranowy</summary>
+    ${content}
+  </details>`;
 }
 function combatTurnActionMenuHtml(menu, combat = {}) {
   const options = menu.options || [];
@@ -6715,27 +6729,25 @@ function combatTurnActionMenuHtml(menu, combat = {}) {
     return `
       <div class="combat-turn-command-layout combat-keyboard-idle">
         <section class="combat-keyboard-waiting" role="status" aria-live="polite">
-          <small>Tura ${esc((combat.current_actor || {}).name || 'bohatera')}</small>
           <h3>Wybierz akcję na karcie postaci</h3>
-          <p>Naciśnij przypisany klawisz, aby otworzyć podgląd. Dopiero <kbd>Enter</kbd> zatwierdzi działanie.</p>
+          <p>Skrót otwiera podgląd. <kbd>Enter</kbd> zatwierdza.</p>
           ${shortcutIndex}
-          <details class="combat-touch-fallback">
-            <summary>Awaryjny wybór ekranowy</summary>
-            <div class="combat-keyboard-fallback-list">${fallbackRows}</div>
-          </details>
+          ${combatScreenFallbackHtml(`<div class="combat-keyboard-fallback-list">${fallbackRows}</div>`)}
         </section>
-        ${combatTurnActorStatsHtml(combat)}
       </div>`;
   }
   return `
     <div class="combat-turn-command-layout">
       <div class="combat-turn-command-list">
-        <div class="combat-context-heading"><span>Podgląd działania${selected.shortcut ? ` · klawisz ${esc(selected.shortcut === 'SPACE' ? 'SPACJA' : selected.shortcut)}` : ''}</span><b>${esc(selected.label || menu.title || 'Wybrana akcja')}</b></div>
+        <div class="combat-context-heading"><span>Podgląd działania${selected.shortcut ? ` · klawisz ${esc(selected.shortcut === 'SPACE' ? 'SPACJA' : selected.shortcut)}` : ''}</span></div>
         <div id="combat-turn-action-availability">${combatTurnActionUnavailableHtml(menu, combat)}</div>
         <div class="combat-keyboard-preview"><b>${esc(selected.label || '')}</b><p>${esc(selected.description || '')}</p></div>
         <div class="numpad-combat-hint"><span><kbd>plansza</kbd> wskaż cel / pole</span><span><kbd>Enter</kbd> wykonaj</span><span><kbd>Esc / Backspace</kbd> anuluj bez kosztu</span></div>
+        ${combatScreenFallbackHtml(`<div class="row combat-fallback-actions">
+          <button type="button" data-allow-busy="true" onclick="confirmCombatTurnAction()">Potwierdź · Enter</button>
+          <button type="button" class="secondary" data-allow-busy="true" onclick="cancelCombatTurnActionPreview()">Wróć · Esc</button>
+        </div>`)}
       </div>
-      ${combatTurnActorStatsHtml(combat)}
     </div>
   `;
 }

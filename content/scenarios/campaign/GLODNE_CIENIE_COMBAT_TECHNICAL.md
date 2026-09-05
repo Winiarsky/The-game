@@ -92,6 +92,13 @@ Rola AI: `leader`
 
 ### Ataki i regeneracja przewodnicy
 
+Obowiązujący zestaw zastępuje historyczne Rozdarcie przewodnicy `+6`
+(`1d8 + 3` slashing). Zmianę contentu i tego kontraktu zapisano razem w
+commicie `dd5d4bf` z 2026-09-03. Wartości `attack_modifier` ataków `custom`
+poniżej są pełnymi premiami — nie dodajemy do nich ponownie DEX ani biegłości.
+Walkthrough kampanii sprawdza oba źródła po ich stabilnych identyfikatorach,
+zamiast zakładać jeden atak dla przewodnicy.
+
 - **Duchowy pocisk:** ranged custom attack, `+5`, 60 ft, `1d6 + 2` psychic;
 - **Wysysające rozdarcie:** melee custom attack, `+3`, 5 ft, `1d4 + 2`
   necrotic; po trafieniu przewodnica odzyskuje połowę faktycznie zadanych

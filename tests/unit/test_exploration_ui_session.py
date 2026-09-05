@@ -4162,12 +4162,12 @@ def test_character_feature_payload_includes_rules_and_runtime_mechanics():
     actor = session.state_payload()["actors"][0]
     features = {feature["id"]: feature for feature in actor["features"]}
 
-    assert "2 + poziom użytego czaru" in features["disciple_of_life"][
+    assert "2 + poziom użytej komórki" in features["disciple_of_life"][
         "mechanics"
     ]
-    assert "30 ft" in features["flaw_leave_no_one"]["mechanics"]
+    assert "30 stopach" in features["flaw_leave_no_one"]["mechanics"]
     assert "Raz na turę Dagny" in features["field_medic_step"]["mechanics"]
-    assert "5 ft" in features["field_medic_step"]["mechanics"]
+    assert "5 stóp" in features["field_medic_step"]["mechanics"]
     assert "diagnosis" not in features
     assert features["boardgame_level_3_ability_boost"]["mechanics"]
 

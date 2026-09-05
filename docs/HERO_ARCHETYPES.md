@@ -28,15 +28,19 @@ Pełne, wyświetlane graczowi instrukcje są wersjonowane w
 
 ## Rozpoczęcie gry
 
-1. Na ekranie wybierz scenariusz.
-2. Zeskanuj od jednej do pięciu kart bohaterów. Kolejność skanów jest
-   kolejnością drużyny.
-3. Powtórny skan tej samej karty niczego nie duplikuje.
-4. `DECLINE` usuwa ostatnio dodaną postać.
-5. `ACCEPT` zatwierdza drużynę i rozpoczyna przygotowanie.
+1. W Nowej grze porównaj role, styl gry, złożoność, zdolności i skazy.
+2. Zaznacz od 1 do 5 bohaterów myszą lub klawiaturą, a następnie wybierz Dalej.
+3. Wybierz scenariusz i rozpocznij przygotowanie planszy.
+4. Powrót do wyboru drużyny zachowuje zaznaczenia.
 
-Nie ma ekranowego wyboru postaci. Awaria czytnika pozwala ponowić połączenie,
-anulować rozpoczęcie lub wrócić do menu, ale nie zmienia źródła deklaracji.
+W walce korzystamy z klawiatury i arkuszy postaci: skrót otwiera podgląd,
+Enter zatwierdza, Esc lub Backspace wraca bez kosztu. Cele i ruch wskazuje się
+na fizycznej planszy. Mysz pozostaje w rozwijanym wyborze awaryjnym.
+
+Aktualne opisy zasad, zasobów i skrótów całej siódemki znajdują się w
+[referencji archetypów](BOARDGAME_ARCHETYPES_LEVELS_1_3.md), odtwarzanej przez
+generator arkuszy. Wspólne pasywy i skazy aplikacji oraz wydruków pochodzą z
+`src/dnd_board_game/character_creation/boardgame_help.py`.
 
 ## Wybór wykonawcy testu
 

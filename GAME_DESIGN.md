@@ -1972,7 +1972,7 @@ rzutu. Aktywacja deleguje konsekwencje do ogólnego silnika hazardów.
   równą modyfikatorowi Siły (obecnie 4). Brakka zaczyna każdy Szał z 3 punktami
   Dzikości; Taktyki, Fortele i Instynkt wracają po długim odpoczynku.
 - Nimra zaczyna z komórkami 2. poziomu i od razu może używać wszystkich swoich
-  dziewięciu kart.
+  piętnastu czarów i pięciu wariantów Metamagii.
 
 ### Lorian — bard-wynalazca
 
@@ -2041,6 +2041,11 @@ rzutu. Aktywacja deleguje konsekwencje do ogólnego silnika hazardów.
 
 ### Erynd — mobilny łucznik kontroli pola
 
+- Premia Łucznictwa pozostaje uwzględniona po ponownym związaniu broni z
+  aktorem: obecnie długi łuk ma +8 do ataku. Autorski nóż jest bronią, w której
+  Erynd ma biegłość; atakuje z Siły z premią +3. Mira analogicznie ma biegłość
+  w autorskich nożach do rzucania (+6 ze Zręczności).
+
 - Erynd walczy długim łukiem w ćwiekowanej skórze bez kary do Skradania; jego
   awaryjny nóż myśliwski zadaje `1k4 + Siła`. Dawne dwa miecze, Dobre jagody,
   Wykrycie pułapek, Tropienie, Naturalny odkrywca i Ulubiony wróg nie należą do
@@ -2059,15 +2064,16 @@ rzutu. Aktywacja deleguje konsekwencje do ogólnego silnika hazardów.
   obniża KP celu o wynik do początku następnej tury Erynda. `Strzała
   zakłócająca` kosztuje 1 Instynkt, odbiera reakcje do końca następnej tury celu
   i daje utrudnienie do jego następnego ataku, nie dłużej niż do końca tej tury.
-- `Podwójny strzał` kosztuje 2 Instynktu i dwie strzały. Jeden test przeciw
-  jednemu celowi zadaje `2k8 + 2 × Zręczność`; pudło traci obie strzały, a Znak
+- `Podwójny strzał` kosztuje 2 Instynktu; amunicja nie jest liczona. Jeden test przeciw
+  jednemu celowi zadaje `2k8 + 2 × Zręczność`; Znak
   łowcy i Pierwsza krew dodają swoje kości tylko raz. Trafienie krytyczne
   podwaja wyłącznie bazowe kości dwóch strzał, nie kości tych dwóch dodatków.
 - `Znak łowcy` kosztuje 1 Instynkt przy pierwszym nałożeniu. Jeśli oznaczony cel
   zostanie pokonany, podczas trwającej koncentracji znak można przenieść na
   kolejny legalny cel bez akcji i bez dodatkowego Instynktu.
 - Skaza `Trauma bratobójczego strzału` daje `−1` do testu ataku z łuku za
-  każdego sąsiadującego, przytomnego bohatera gracza. Nie liczy pokonanych,
+  każdego przytomnego bohatera drużyny w 5 stopach od wybranego celu.
+  Nie liczy Erynda, pokonanych,
   przywołań ani NPC i nie wpływa na nóż ani inne testy.
 
 ### Mira — ukrycie zależne od obserwatora

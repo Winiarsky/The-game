@@ -8,11 +8,11 @@ kreatora i reguł, a nie częścią aktualnego rosteru gry.
 | Postać | Build | Rola na start |
 |---|---|---|
 | Brakka | półork, barbarzyńca, wędrowiec | prosty frontliner; Szał i ciężka broń |
-| Lorian | półelf, bard, artysta | wsparcie, leczenie i kontrola |
+| Lorian | półelf, bard, artysta | kusza, wsparcie, rozmowa i kontrola |
 | Dagna | krasnolud wzgórzowy, kleryk Domeny Życia | opancerzony obrońca i uzdrowiciel |
 | Garran | człowiek, wojownik | najbardziej przystępny tank z tarczą |
 | Erynd | wysoki elf, łowca | zwiad i walka z dystansu |
-| Mira | niziołek lekkostopy, łotrzyca | skradanie, narzędzia i Podstępny atak |
+| Mira | niziołek lekkostopy, łotrzyca | ukrycie, flankowanie i Atak z cienia |
 | Nimra | gnom skalny, czarodziejka | szeroki zestaw czarów kontroli i narzędzi |
 
 ## Instalacja

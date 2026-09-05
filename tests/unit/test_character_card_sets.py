@@ -154,23 +154,16 @@ def test_every_playable_hero_card_lists_passives_and_mechanical_flaw() -> None:
         flaws = tuple(entry for entry in passives if entry.startswith("Skaza:"))
         assert len(flaws) == 1
         assert "—" in flaws[0]
-        assert any(
-            token in flaws[0]
-            for token in (
-                "−1",
-                "−2",
-                "+2",
-                "przewagę",
-                "utrudnienie",
-                "nie może",
-                "Przerażony",
-                "blokuje",
-            )
-        )
-        assert all(
-            len(_wrapped_lines(draw, entry, passive_font, passive_width)) <= 4
-            for entry in passives
-        )
+        from dnd_board_game.character_creation.boardgame_help import HERO_FLAWS
+        from dnd_board_game.physical_cards.character_card_sets import _fit_rule_text
+
+        note = HERO_FLAWS[actor_id]
+        assert flaws[0] == f"Skaza: {note.name} — {note.body}"
+        text = "\n".join(f"• {entry}" for entry in passives)
+        face, lines = _fit_rule_text(draw, text, passive_width, CARD_SIZE_PX[1] - _mm(32), 2.05)
+        assert " ".join(text.split()) == " ".join(" ".join(lines).split())
+        bounds = draw.multiline_textbbox((0, 0), "\n".join(lines), font=face, spacing=_mm(0.45))
+        assert bounds[3] <= CARD_SIZE_PX[1] - _mm(32)
     canvas.close()
 
 
@@ -283,7 +276,7 @@ def test_character_sheet_lists_only_spells_available_from_physical_deck() -> Non
     assert "Zauroczenie osoby" not in lorian
     assert "Wykrycie magii" not in nimra
     assert "Identyfikacja" not in nimra
-    assert "Obezwładniający Żart" in lorian
+    assert "Ohydny Śmiech" in lorian
     assert "Sieć" in nimra
     assert "Piorunowy Szlak" in nimra
 

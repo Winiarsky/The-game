@@ -50,6 +50,7 @@ HERO_SHORTCUTS: dict[str, tuple[HeroShortcut, ...]] = {
         HeroShortcut("R", "shoulder_check"),
         HeroShortcut("A", "acceleration"),
         HeroShortcut("S", "deafening_roar"),
+        HeroShortcut("D", "@grapple"),
     ),
     "mira": (
         HeroShortcut("Q", "smoke_screen"),
@@ -58,6 +59,7 @@ HERO_SHORTCUTS: dict[str, tuple[HeroShortcut, ...]] = {
         HeroShortcut("R", "hamstring_cut"),
         HeroShortcut("A", "piercing_attack"),
         HeroShortcut("S", "blade_mistress"),
+        HeroShortcut("D", "@hide"),
     ),
     "dagna": (
         HeroShortcut("Q", "sacred_flame"),
@@ -69,6 +71,7 @@ HERO_SHORTCUTS: dict[str, tuple[HeroShortcut, ...]] = {
         HeroShortcut("D", "healing_grace_aura"),
         HeroShortcut("F", "lesser_restoration"),
         HeroShortcut("Z", "spiritual_weapon"),
+        HeroShortcut("T", "turn_undead"),
     ),
     "lorian": (
         HeroShortcut("Q", "bardic_inspiration"),
@@ -125,7 +128,10 @@ def shortcut_bindings(actor_id: str) -> tuple[HeroShortcut, ...]:
 
 
 def _option_matches_ref(option: _CombatOption, action_ref: str) -> bool:
+    if action_ref == "@hide":
+        return option.id in {"basic:hide", "basic:end-hide"}
     special_option_ids = {
+        "@grapple": "turn:grapple",
         "@move": "turn:move",
         "@weapons": "menu:weapons",
         "@items": "menu:items",

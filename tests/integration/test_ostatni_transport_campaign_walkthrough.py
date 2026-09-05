@@ -225,14 +225,20 @@ def test_complete_new_game_to_first_encounter_victory_walkthrough(tmp_path) -> N
     assert session.encounter_initiative_flow is not None
     encounter = session.encounter_initiative_flow.encounter
     assert {
-        str(actor_id): sum(
-            modifier.value for modifier in source.attack_roll_request.modifiers
-        )
-        for actor_id, source in encounter.attack_sources_by_actor.items()
+        str(actor_id): {
+            source.id: sum(
+                modifier.value for modifier in source.attack_roll_request.modifiers
+            )
+            for source in sources
+        }
+        for actor_id, sources in encounter.attack_source_options_by_actor.items()
         if str(actor_id).startswith("hungry_shadow")
     } == {
-        "hungry_shadow_leader": 6,
-        "hungry_shadow_s2": 5,
+        "hungry_shadow_leader": {
+            "hungry_shadow_leader_life_drain": 3,
+            "hungry_shadow_leader_spirit_bolt": 5,
+        },
+        "hungry_shadow_s2": {"hungry_shadow_rend": 5},
     }
     for actor in enemies:
         session.combat_state = replace_actor(

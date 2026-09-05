@@ -945,9 +945,54 @@ obowiązują `Current Roadmap Focus` oraz etapy z `ROADMAP.md`.
 - [ ] [Hungry Shadows balance] Revisit the three-hero scaling and coordinated-pack
   pressure against the 2026-09-03 baseline (20% wins for Garran/Dagna/Erynd and
   45% for Lorian/Mira/Nimra across 20 seeded runs per composition).
-- [ ] [Mobile combat UX] Remove the tall empty board/workspace gap that pushes the
+- [x] [Mobile combat UX] Remove the tall empty board/workspace gap that pushes the
   active hero's action list below the first viewport at 390×844, then repeat the
   desktop/mobile render and keyboard/touch smoke test.
+  Fixed 2026-09-05: scoped drawer styles to `#side-panel`, allowed combat grid
+  children to shrink, and placed mobile actor details after the decision. Chrome
+  checks passed at 1440×1000, 768×1024 and 390×844 for both connection-banner
+  presentation states, internal overflow, drawer isolation, keyboard preview/cancel
+  and screen-fallback selection; six focused pytest checks also passed.
+- [x] [Combat touch continuity] Add screen confirmation/cancellation to combat
+  action previews through the existing dispatcher. Keep mouse controls in the
+  default-collapsed "Awaryjny wybór ekranowy" disclosure; preserve its explicit
+  open/closed choice across list/preview transitions without replacing keyboard
+  and paper-sheet input. Verified desktop/mobile mouse selection, cancellation
+  without resource cost, explicit end-turn confirmation and unchanged shortcuts;
+  ten focused pytest checks passed.
+- [x] [Combat shortcut readability] Let shortcut badges size to their text and
+  wrap full action labels; use a single-column index on phones. Verified SPACJA
+  and Nimra's 26 visible shortcuts without overlap or clipped labels.
+- [x] [Combat HUD clarity] Keep one turn HUD and one current-decision card; move
+  level, slots, resources and the full effect list into collapsed actor details.
+  Preserve critical HUD statuses and reaction reminders, hide duplicate action-card
+  reminders while the shortcut menu is present, retain details for the same actor
+  and collapse them on actor change. Verified 320/390/768/1440 px layouts, connected
+  and disconnected presentation states, keyboard preview/cancel and mouse fallback;
+  eight focused pytest checks passed. Documented the layout in PLAYER_UI_DESIGN.md.
+- [x] [Campaign walkthrough contract] Confirmed the documented replacement of
+  the historical +6 leader attack in commit `dd5d4bf`: life drain uses +3 and
+  spirit bolt +5. The walkthrough now checks all enemy attack sources by id;
+  content and balance are unchanged. Complete walkthrough to Black Ford entry
+  and ten coordinated-pack AI tests passed on 2026-09-05. Updated the technical
+  contract and separated current walkthrough results from the historical audit.
+
+- [x] [Hero selection guidance] Add role, play style, editorial complexity and
+  separately expandable ability/flaw summaries for the seven playable heroes.
+  Preserve mouse/keyboard selection and the 1–5 party contract; scroll desktop
+  cards without hiding navigation and keep readable mobile cards. Launcher tests
+  and browser checks cover selection, disclosures, limits and scenario/back flow.
+- [x] [Hero guidance consistency] Reconcile all seven playable heroes with the
+  current board-game rules: shared flaw/passive/feature help, actual resource
+  recovery, spell costs, canonical names, keyboard access and generated reference.
+  Erynd's longbow flaw now counts conscious player allies beside each target.
+  Fix custom-knife proficiency and preserve Archery when rebuilding attack sources.
+  Hide spells outside curated decks in the exploration sidebar. Regenerate color
+  and monochrome cards with complete text, including keyboard sheets/dossiers.
+  Focused rules, UI, print consistency and campaign walkthrough checks passed.
+  Evidence: `docs/HERO_RULES_CONSISTENCY_2026-09-05.md`.
+
+Review evidence and UI/gameplay proposals: `docs/PROJECT_REVIEW_2026-09-05.md`.
 
 - [x] UI framework: local Flask/web UI for the current runtime and future authoring modules.
 - [x] Content licensing/source strategy for D&D 5e data.

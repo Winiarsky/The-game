@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from dnd_board_game.character_creation.boardgame_help import (
+    ACTIVE_FEATURE_HELP, FLAW_HELP, HERO_FLAWS, PASSIVE_HELP,
+)
+
 import hashlib
 import json
 import random
@@ -29731,7 +29735,7 @@ def _combat_actor_payload(
             }
             for trigger in actor.triggers
         ],
-        "features": [_feature_grant_payload(feature) for feature in actor.features],
+        "features": [_feature_grant_payload(feature, str(actor.id)) for feature in actor.features],
         "background_permissions": list(actor_background_permission_ids(actor)),
         "ranger_exploration": {
             "favored_enemy_creature_type": favored_enemy_creature_type(actor),
@@ -34209,6 +34213,13 @@ def _exploration_actor_payload(
         for condition in condition_states
         if condition.actor_id == str(actor.id)
     ]
+    visible_spell_ids = (
+        tuple(dict.fromkeys(
+            spell_id for access in actor.spell_access for spell_id in access.spell_ids
+        ))
+        if str(actor.id) in HERO_FLAWS
+        else actor.spell_ids
+    )
     payload = {
         "id": str(actor.id),
         "name": actor.name,
@@ -34256,12 +34267,15 @@ def _exploration_actor_payload(
         "currency": actor.currency.as_payload(),
         "carrying": carrying_payload(actor),
         "hands": hand_loadout_payload(actor.inventory),
-        "spell_ids": list(actor.spell_ids),
+        "spell_ids": list(visible_spell_ids),
         "spell_slots": [
             {"level": slot.level, "remaining": slot.remaining, "maximum": slot.maximum}
             for slot in actor.spell_slots
         ],
-        "spells": [_spell_payload(actor, spell) for spell in actor.spells],
+        "spells": [
+            _spell_payload(actor, spell) for spell in actor.spells
+            if spell.id in visible_spell_ids
+        ],
         "hit_dice": [
             {"die_sides": pool.die_sides, "remaining": pool.remaining, "maximum": pool.maximum}
             for pool in actor.hit_dice
@@ -34284,7 +34298,7 @@ def _exploration_actor_payload(
             }
             for pool in actor.resource_pools
         ],
-        "features": [_feature_grant_payload(feature) for feature in actor.features],
+        "features": [_feature_grant_payload(feature, str(actor.id)) for feature in actor.features],
         "background_permissions": list(actor_background_permission_ids(actor)),
     }
     if party_slot is not None:
@@ -34318,67 +34332,34 @@ def _exploration_actor_payloads(
     ]
 
 
-_FEATURE_MECHANICAL_HELP: dict[str, tuple[str, str]] = {
-    "field_medic_step": (
-        "Po udzieleniu pomocy Dagna może natychmiast poprawić swoją pozycję.",
-        "Raz na turę Dagny, po faktycznym uleczeniu innego sojusznika w promieniu 10 ft albo usunięciu mu negatywnego statusu, pojawia się wybór Tak/Nie. Tak pozwala przesunąć Dagnę o 5 ft bez zużycia ruchu i bez ataków okazyjnych.",
-    ),
-    "channel_divinity": (
-        "Boska Moc zasila specjalne zdolności domeny kapłana.",
-        "Wydaje 1 użycie Boskiej Mocy. Użycia wracają po krótkim lub długim odpoczynku.",
-    ),
-    "turn_undead": (
-        "Kapłan odpędza nieumarłych znajdujących się w pobliżu.",
-        "Akcja; kosztuje 1 użycie Boskiej Mocy. Nieumarli w zasięgu wykonują rzut obronny na Mądrość, a niezdani zostają odpędzeni.",
-    ),
-    "life_domain": (
-        "Domena Życia wzmacnia leczenie i przygotowuje kapłana do ochrony rannych.",
-        "Zapewnia ciężki pancerz, czary domenowe oraz dostęp do Ucznia Życia i Zachowania Życia.",
-    ),
-    "disciple_of_life": (
-        "Magia lecznicza kapłana Domeny Życia przywraca więcej punktów wytrzymałości.",
-        "Czar leczenia poziomu 1 lub wyższego przywraca dodatkowo 2 + poziom użytego czaru PW.",
-    ),
-    "channel_divinity_preserve_life": (
-        "Kapłan rozdziela boską energię pomiędzy ciężko rannych sojuszników.",
-        "Akcja; kosztuje 1 użycie Boskiej Mocy. Rozdziela pulę 5 × poziom kapłana, ale nie leczy celu powyżej połowy maksymalnych PW.",
-    ),
-    "boardgame_level_3_ability_boost": (
-        "Archetyp otrzymuje stałą premię +2 do swojej najważniejszej cechy.",
-        "Premia jest już wliczona w wartość cechy, modyfikator, testy, rzuty obronne oraz ST zależnych zdolności.",
-    ),
-    "flaw_leave_no_one": (
-        "Dagna nie potrafi zignorować sojusznika, którego może jeszcze uratować.",
-        "Gdy sojusznik w promieniu 30 ft ma 0 PW, Dagna ma utrudnienie w atakach i testach innych niż ratunek, a cele jej wrogich czarów mają przewagę w rzutach obronnych.",
-    ),
-    "flaw_command_guilt": (
-        "Garran bierze na siebie winę za każdego powalonego towarzysza.",
-        "Gdy żywy sojusznik w promieniu 30 ft ma 0 PW i nie leży obok Garrana, Garran otrzymuje −1 do ataków i rzutów obronnych.",
-    ),
-    "flaw_chains": (
-        "Bitewny amok utrudnia Brakce korzystanie z wyposażenia.",
-        "Podczas Szału nie może używać mikstur, zwojów ani aktywnych właściwości przedmiotów; może nadal atakować trzymaną bronią.",
-    ),
-    "flaw_exposed_panic": (
-        "Mira traci rytm, gdy przeciwnik przejrzy jej skradanie.",
-        "W bieżącej sesji skradania każdy przeciwnik, który widzi Mirę, ma przewagę w atakach przeciw niej. Gdy zobaczą ją wszyscy, skradanie automatycznie się kończy.",
-    ),
-    "flaw_needs_audience": (
-        "Wynalazki Loriana działają najlepiej, gdy ma dla kogo robić przedstawienie.",
-        "Zdolności specjalne wymagają żywego i przytomnego sojusznika w promieniu 10 stóp. Zwykłe ataki i czary nie są blokowane.",
-    ),
-    "flaw_arcane_echo": (
-        "Niestabilna magia Nimry odbija się echem po poważnym błędzie.",
-        "Pierwsza naturalna 1 w ataku czarem lub utrata Koncentracji blokuje nowe czary z Koncentracją do końca tury; raz na walkę.",
-    ),
-    "flaw_ambush_survivor": (
-        "Erynd reaguje panicznie na dobrze przygotowane zasadzki.",
-        "Gdy przeciwnicy zaskakują drużynę, Erynd jest Przerażony przez najbliższego wroga do końca swojej pierwszej tury.",
-    ),
-}
+_FEATURE_MECHANICAL_HELP: dict[str, tuple[str, str]] = {'field_medic_step': ('Po udzieleniu pomocy Dagna może natychmiast poprawić swoją pozycję.',
+                      'Raz na turę Dagny, po faktycznym uleczeniu innego sojusznika w promieniu 10 ft albo '
+                      'usunięciu mu negatywnego statusu, pojawia się wybór Tak/Nie. Tak pozwala przesunąć '
+                      'Dagnę o 5 ft bez zużycia ruchu i bez ataków okazyjnych.'),
+ 'channel_divinity': ('Boska Moc zasila specjalne zdolności domeny kapłana.',
+                      'Wydaje 1 użycie Boskiej Mocy. Użycia wracają po krótkim lub długim odpoczynku.'),
+ 'turn_undead': ('Kapłan odpędza nieumarłych znajdujących się w pobliżu.',
+                 'Akcja; kosztuje 1 użycie Boskiej Mocy. Nieumarli w zasięgu wykonują rzut obronny na '
+                 'Mądrość, a niezdani zostają odpędzeni.'),
+ 'life_domain': ('Domena Życia wzmacnia leczenie i przygotowuje kapłana do ochrony rannych.',
+                 'Zapewnia ciężki pancerz, czary domenowe oraz dostęp do Ucznia Życia i Zachowania Życia.'),
+ 'disciple_of_life': ('Magia lecznicza kapłana Domeny Życia przywraca więcej punktów wytrzymałości.',
+                      'Czar leczenia poziomu 1 lub wyższego przywraca dodatkowo 2 + poziom użytego czaru '
+                      'PW.'),
+ 'channel_divinity_preserve_life': ('Kapłan rozdziela boską energię pomiędzy ciężko rannych sojuszników.',
+                                    'Akcja; kosztuje 1 użycie Boskiej Mocy. Rozdziela pulę 5 × poziom '
+                                    'kapłana, ale nie leczy celu powyżej połowy maksymalnych PW.'),
+ 'boardgame_level_3_ability_boost': ('Archetyp otrzymuje stałą premię +2 do swojej najważniejszej cechy.',
+                                     'Premia jest już wliczona w wartość cechy, modyfikator, testy, rzuty '
+                                     'obronne oraz ST zależnych zdolności.')}
 
 
-def _feature_help_text(feature: FeatureGrant) -> tuple[str, str]:
+def _feature_help_text(feature: FeatureGrant, actor_id: str | None = None) -> tuple[str, str]:
+    note = FLAW_HELP.get(feature.feature_id) or PASSIVE_HELP.get(feature.feature_id)
+    if note is None and (actor_id in HERO_FLAWS or feature.source_ref.startswith("boardgame_archetype:")):
+        note = ACTIVE_FEATURE_HELP.get(feature.feature_id)
+    if note is not None:
+        return note.name, note.body
     if feature.feature_id in _FEATURE_MECHANICAL_HELP:
         return _FEATURE_MECHANICAL_HELP[feature.feature_id]
     help_entry = class_feature_help(feature.feature_id) or origin_feature_help(
@@ -34410,8 +34391,8 @@ def _feature_help_text(feature: FeatureGrant) -> tuple[str, str]:
     )
 
 
-def _feature_grant_payload(feature: FeatureGrant) -> dict[str, object]:
-    description, mechanics = _feature_help_text(feature)
+def _feature_grant_payload(feature: FeatureGrant, actor_id: str | None = None) -> dict[str, object]:
+    description, mechanics = _feature_help_text(feature, actor_id)
     return {
         "id": feature.feature_id,
         "label": feature.label,

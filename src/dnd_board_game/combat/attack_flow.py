@@ -463,6 +463,15 @@ def attack_source_for_actor(source: AttackSource, actor: Actor) -> AttackSource:
         source.ability,
         proficient=proficient,
     )
+    # Rebinding rebuilds attack modifiers, so restore Archery exactly once for
+    # the current wielder instead of losing the loader's Fighting Style bonus.
+    if actor_has_feature(actor, "fighting_style_archery") and source.attack_kind == AttackKind.RANGED:
+        from dnd_board_game.rules import RollModifier, RollModifierType
+
+        modifiers = (*modifiers, RollModifier(
+            "Styl walki: Łucznictwo", 2, RollModifierType.FEATURE,
+            stacking_key="fighting_style_archery",
+        ))
     if source.heavy and actor.size.value == "small":
         from dnd_board_game.rules import RollMode, RollModifier, RollModifierType
 

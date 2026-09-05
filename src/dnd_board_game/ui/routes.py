@@ -16,7 +16,7 @@ from flask import (
 )
 
 from dnd_board_game.actions import slash_commands_payload
-from dnd_board_game.actors import AbilityScores
+from dnd_board_game.actors import AbilityScores, FeatureGrant
 from dnd_board_game.character_creation import (
     ABILITY_IDS,
     CLASS_CHOICE_GROUP_HELP,
@@ -40,6 +40,7 @@ from dnd_board_game.character_creation import (
     PLAYABLE_HERO_IDS,
     apply_boardgame_archetype,
 )
+from dnd_board_game.combat.archetype_flaws import FLAW_FEATURE_IDS
 from dnd_board_game.core.player_labels_pl import PLAYER_LABELS_PL, player_label
 from dnd_board_game.inventory import effective_armor_class
 from dnd_board_game.physical_cards import (
@@ -52,6 +53,9 @@ from dnd_board_game.physical_cards import (
 from dnd_board_game.rules import experience_progress
 from dnd_board_game.scenarios import discover_scenarios
 from dnd_board_game.world import Coordinate
+
+from .hero_selection import HERO_SELECTION_GUIDES
+from dnd_board_game.character_creation.boardgame_help import ACTIVE_FEATURE_HELP, FLAW_HELP, HERO_FLAWS, PASSIVE_HELP
 
 if TYPE_CHECKING:
     from .exploration_app import ExplorationUiSession
@@ -120,6 +124,8 @@ def create_app(
             "selected_scenario_id": choices[0].id if len(choices) == 1 else "",
             "roster": roster,
             "class_names": character_class_names,
+            "hero_guides": HERO_SELECTION_GUIDES,
+            "hero_flaws": FLAW_FEATURE_IDS,
             **extra,
         }
 
@@ -293,7 +299,7 @@ def create_app(
             background=character_catalog.background_by_id(character.background_id),
             labels=_PLAYER_LABELS,
             feature_entries=_character_sheet_feature_entries(
-                character.actor.features
+                character.actor.features, actor_id=str(character.actor.id)
             ),
         )
 
@@ -3388,9 +3394,18 @@ def _feature_labels(feature_ids: tuple[str, ...]) -> str:
     )
 
 
-def _character_sheet_feature_entries(features) -> tuple[dict[str, str], ...]:
+def _character_sheet_feature_entries(
+    features: tuple[FeatureGrant, ...], *, actor_id: str | None = None,
+) -> tuple[dict[str, str], ...]:
     entries: list[dict[str, str]] = []
     for feature in features:
+        note = FLAW_HELP.get(feature.feature_id) or PASSIVE_HELP.get(feature.feature_id)
+        if note is None and actor_id in HERO_FLAWS:
+            note = ACTIVE_FEATURE_HELP.get(feature.feature_id)
+        if note is not None:
+            entries.append({"name": note.name, "rule_text": note.body,
+                            "game_text": "", "use_mode": ""})
+            continue
         help_entry = (
             origin_feature_help(feature.feature_id)
             or class_feature_help(feature.feature_id)
