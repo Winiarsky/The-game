@@ -78,7 +78,7 @@ HERO_PASSIVES = {
 ACTIVE_FEATURE_HELP: dict[str, RuleNote] = {
     'second_wind': RuleNote('Drugi oddech', 'AKCJA DOD. · WŁASNY. Rzuć k10. Odzyskaj wynik + poziom Garrana PW. 1 użycie; odnawia krótki lub długi odpoczynek.'),
     'action_surge': RuleNote('Zryw akcji', 'AKCJA DOD. · PO AKCJI. Po zużyciu akcji głównej wydaj akcję dodatkową, aby natychmiast ją odzyskać. 1 użycie na krótki odpoczynek.'),
-    'shield_bash': RuleNote('Uderzenie tarczą', 'AKCJA RUCHU · 5 STÓP. Przed ruchem wykonaj sporny test Siły. Wygrana zadaje 1k4 + Siła obrażeń obuchowych i odpycha cel o jedno wolne pole od Garrana; remis wygrywa obrońca.'),
+    'shield_bash': RuleNote('Uderzenie tarczą', 'AKCJA DODATKOWA · 5 STÓP. Wykonaj sporny test Siły; aplikacja rzuca za przeciwnika. Wygrana zadaje 1k6 + modyfikator Siły obrażeń obuchowych i odpycha cel o jedno wolne pole od Garrana; remis wygrywa obrońca.'),
     'defensive_stance': RuleNote('Pozycja obronna', 'AKCJA RUCHU · WŁASNY. Zamiast ruchu zyskaj +2 KP do początku następnej tury. Efekt kończy się wcześniej po każdej zmianie pola.'),
     'garran_command_halt': RuleNote('Rozkaz: Stać', 'AKCJA · 60 STÓP · 1 TAKTYKA. Mądrość ST 14. Sukces: połowa ruchu w następnej turze. Porażka: brak dobrowolnego ruchu. Naturalne 1 daje też -2 do ataków; naturalne 20 neguje efekt.'),
     'garran_shield_wall': RuleNote('Osłona tarczą', 'AKCJA DOD. · 1 TAKTYKA. Do początku następnej tury Garrana wszyscy sąsiadujący sojusznicy otrzymują +2 KP. Premia porusza się z Garranem; Garran jej nie otrzymuje.'),

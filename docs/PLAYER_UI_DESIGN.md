@@ -555,3 +555,64 @@ Docelowy UI można uznać za spójny, gdy:
 - reakcja lub obowiązkowy save nie gubią stanu przerwanej tury,
 - informacje drugorzędne są dostępne, ale nie konkurują z aktualnym promptem,
 - debug i konfiguracja hardware są dostępne dla twórcy, lecz niewidoczne w normalnej grze.
+
+## Kolumny kosztu akcji — 2026-09-07
+
+Kafelki w turze bohatera są ułożone według ekonomii tury, niezależnie od
+tego, czy przedstawiają działanie podstawowe, zdolność czy czar:
+
+- lewa kolumna: akcja główna;
+- środkowa: akcja dodatkowa (bonusowa), a pod nią reakcje, jeśli menu je udostępnia;
+- prawa: działania bez osobnej akcji, w tym modyfikacje ataku/czaru, następnie ruch.
+
+Ekwipunek i zakończenie tury mają własny pasek poniżej. Nazwy sekcji pozostają
+widoczne również wtedy, gdy nie ma dostępnego działania danego rodzaju.
+Licznik pokazuje liczbę pozycji; długą listę można przewijać wewnątrz sekcji
+bez zmniejszania czcionek. Przy szerokości do 900 px kolumny przechodzą w
+pionową listę i korzystają ze zwykłego przewijania strony.
+
+Klasyfikacja wynika z aktualnego kosztu zdolności, nie jej nazwy: Mglisty krok
+jest akcją dodatkową, przeniesienie Znaku łowcy po pokonaniu celu nie zużywa
+akcji, a Metamagia nie zabiera osobnej akcji głównej. Koszt many nadal jest
+widoczny na kafelku. Podgląd pokazuje także pełną nazwę rodzaju akcji.
+Skróty nie zmieniają się; awaryjny wybór myszą korzysta z tych samych grup
+oraz dotychczasowego potwierdzenia Enterem i anulowania Esc.
+
+Walidacja: 9 testów grupowania, 10 testów menu many, 4 testy skrótów;
+Chrome: wszystkie siedem postaci przy 1280 i 390 px, brak zgubionych lub
+powielonych kafelków, brak poziomego przepełnienia, podgląd/anulowanie
+klawiaturą i myszą oraz zachowanie otwartego wyboru awaryjnego.
+
+### Dostępność po wykorzystaniu akcji — 2026-09-07
+
+Po zużyciu akcji głównej lub dodatkowej wszystkie inne działania wymagające
+tego samego zasobu znikają z kafelków, skrótów i wyboru awaryjnego. Pusta
+sekcja zawiera tylko informację o braku dostępnych działań. Filtr działa
+na liście używanej przez backend do zatwierdzania, więc stary identyfikator
+opcji również zostaje odrzucony. Modyfikacje ataku/czaru nie są proponowane,
+gdy nie można już wykonać ich działania podstawowego.
+
+Ruch pozostaje dostępny po częściowym przemieszczeniu, dopóki starcza go
+na przynajmniej jedno pole. Całkowite wykorzystanie ruchu usuwa kafelek M.
+Rozpoczęta seria Loriana lub technika z kilkoma atakami zachowuje pozostałe
+uderzenia tej samej akcji; nie daje możliwości wybrania innej zdolności.
+Nowa tura ponownie udostępnia odnowione zasoby.
+
+Sprawdzenie: 11 regresji zużycia zasobów, 8 testów Uderzenia tarczą,
+13 testów serii ataków i 9 testów grupowania. Przeglądarka: siedem postaci,
+cztery stany zużycia, 1280/390 px oraz rzeczywiste użycie Pozycji obronnej
+skrótami R i Enter; zużytej akcji nie można ponownie otworzyć skrótem.
+
+### Powrót do wyboru po ruchu — 2026-09-07
+
+Każdy zatwierdzony odcinek zwykłego ruchu zamyka podgląd i przywraca listę
+aktualnie dostępnych działań. Pozostały dystans zachowuje się do końca tury;
+ponowne M otwiera wybór kolejnego odcinka, bez ponownej opłaty many.
+Po wyczerpaniu ruchu kafelek znika. Akcja główna i dodatkowa pozostają
+niezużyte przez zwykły ruch.
+
+Atak okazyjny wymaga najpierw rozstrzygnięcia; po nim podgląd ruchu także
+się zamyka. Obowiązkowe rzuty i efekty wejścia w teren zachowują pierwszeństwo.
+Nieudany wybór pola nie zamyka podglądu ani nie zmienia położenia postaci.
+Regresje: `tests/unit/test_movement_returns_to_menu.py` — wszystkie siedem
+postaci, dwa odcinki, wybór ataku, wyczerpanie ruchu, atak okazyjny i błędne pole.

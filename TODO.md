@@ -1,5 +1,20 @@
 # TODO
 
+- [x] [Po teście walki 2026-09-06] Doprecyzować ukrycie Miry i priorytet LED, naprawić stary ekwipunek, wydłużyć Szał z licznikiem rund, poprawić „Z bara”, symbole many, pojedyncze kości z akceptacją i wspólny wynik przeciwnika. Uaktualnić wydruki. Walidacja: 122 celowane testy, Chrome 390/1280/1440 px i 28 HTML/PDF; szczegóły w `docs/COMBAT_PLAYTEST_POLISH_2026-09-06.md`.
+
+- [x] [Seria zwykłych ataków] Ograniczyć deklarację liczby ataków do Loriana. Pozostali bohaterowie przechodzą bez formularza do pojedynczego ataku; API i stare zapisy przestrzegają ograniczenia, techniki zachowują własną liczbę uderzeń. Uaktualnić Zryw, Lekkomyślny atak, opisy, karty i zbiorcze PDF-y. Walidacja: 61 celowanych testów i kontrola 28 PDF-ów.
+
+- [x] [Garran / Nieustępliwość] Zastąpić Wyrzuty sumienia w profilu fizycznej many kosztem 2 dowolnych many za zwykły ruch rozpoczęty obok przeciwnika. Dodać podpowiedź przy ruchu i w panelu many, zachować cenę przy dzieleniu ruchu oraz zapisie gry; zaktualizować cztery wydania karty i kompletne PDF-y. Walidacja: 69 celowanych testów, 28 HTML/PDF bez przepełnień, podgląd statusu 390/1440 px.
+
+- [x] [Przed testem z wydrukami] Zaktualizować generatory i komplet PDF-ów siedmiu postaci dla `physical_mana_v02`: kolorowe i minimalistyczne arkusze oraz karty do wycięcia, wszystkie 77 zdolności, skróty, koszty, pasywy, skazy i dobór. Aktualne pliki: `assets/physical_cards/character_sets/physical_mana_v02/`; dotychczasowe ścieżki PDF także zaktualizowane. Walidacja: 48 testów, kontrola 28 HTML/PDF. Dokumentacja: `docs/PHYSICAL_MANA_PRINTS_V02.md`.
+
+- [x] Przebudować Głodne Cienie v6: rozstawienie, spójny teren i mapa do druku, role skrzydeł, setup terenu przed szykiem, instrukcje dla graczy i kotwice eksploracji. Dokumentacja: `docs/HUNGRY_SHADOWS_REDESIGN_V6.md`.
+
+- [x] [Scena walki / zapis] Naprawić rozbieżność testu ponowienia Mapy 1: przy wczytaniu checkpointu `reconcile_boardgame_feature_removals` dodaje Brakce `flaw_chains`, mimo że aktor źródłowy scenariusza miał puste `features`. Test: `test_map1_defeat_enters_game_over_without_revealing_exploration`.
+
+- [x] Dopracować odprawę Nessy: stałe tematy i bezpieczne przypomnienia, jedna lokalna próba Intuicji bez kary, spójny sekret/osobowość, Perswazja za ryzyko, poznane argumenty, karta umowy i osobne zakończenie odprawy.
+- [ ] Rozegrać poprawioną odprawę i walkę v6 przy fizycznej planszy; sprawdzić czytelność nadruku/LED, użycie obu flank, tempo pierwszego kontaktu i balans many dla 1–5 graczy.
+
 - [x] Replace the combat waiting screen's three example keys with a compact,
   character-specific index of every currently exposed keyboard action, showing
   only its shortcut and title while keeping full rules text on character cards.
@@ -19,6 +34,17 @@
 Master kolejności znajduje się w `ROADMAP.md`. Aktualny stan rodzin zasad jest
 prowadzony w `docs/DND_IMPLEMENTATION_MATRIX.md`. Ta sekcja powinna zawierać tylko
 najbliższy horyzont, a nie kopię całej roadmapy.
+
+- [x] [Physical mana] Add an explicit profile for new games with the seven heroes:
+  physical-only card economy, full ability costs/help, independent attack series,
+  Lorian support and larger reserve, revised combat effects, reported end-round
+  waves and a printable instruction/ability catalog at `/rules/physical-mana`.
+  Preserve generic 5e actors and legacy saves. Implementation evidence:
+  `docs/PHYSICAL_MANA_IMPLEMENTATION_2026-09-05.md`.
+- [ ] [Physical mana balance] Playtest the complete 0.2 economy with 1–5 heroes:
+  attack-series duration, market contention, Lorian recovery, reaction reserves,
+  repeatable healing/control and deck-cycle pressure. Tune numerical values
+  against actual table results before preparing a final graphical card edition.
 
 - [x] Replace the historical milestone roadmap with the mechanics-first master roadmap.
 - [x] Add a living D&D implementation matrix separating stable MVP, partial, fixture, and missing systems.
@@ -998,3 +1024,82 @@ Review evidence and UI/gameplay proposals: `docs/PROJECT_REVIEW_2026-09-05.md`.
 - [x] Content licensing/source strategy for D&D 5e data.
 - [x] Save file format and state versioning.
 - [x] Whether diagonal movement follows 5e optional grid rules or simplified board rules.
+
+- [x] [Recruitment arena] Add optional Map 0 with Nessa and one fresh hero at
+  a time, all seven heroes, dummy 50 HP / AC 10 / +5 hit / zero damage,
+  normal board setup and combat, finish by defeating dummies or talking to
+  adjacent Nessa. Include repeatable support/area variants, creature-type
+  selection, manual physical mana, isolated saves and completed-trial markers.
+  Rules, save/load, board-selection and browser checks documented in
+  `docs/RECRUITMENT_ARENA.md`.
+
+- [x] [Recruitment terrain] Add a central rubble strip with double movement cost,
+  tall crates and a 2×2 pillar; preserve clear detours and Nessa access.
+  Synchronize scenario setup, SVG symbols/legend and player instructions.
+
+- [x] [Setup rule clarity] Separate environment steps by their rules as well
+  as type. Classify the arena's passable low cover as cover and explicitly
+  distinguish its AC bonuses from solid obstacles that forbid entry.
+
+- [x] [Action tile mana] Show structured mana symbols on every physical-mana
+  action tile, fallback row and preview, including free actions, movement
+  continuation and Metamagic surcharges. Remove duplicate class-feature aliases
+  when the same ability already has an attack/healing source selector.
+  Checked all seven menus, Brakka's Q/S/Esc flow and 1280/390 px browser layouts;
+  28 focused tests passed (menu mana 10, keyboard 4, Garran movement 14).
+
+- [x] [Dice iconography] Add distinct local SVG icons for k4/k6/k8/k10/k12/k20
+  to the physical-roll wizard and review, including bounded d20 inputs and
+  multi-die counts. Browser checks cover all six dice, advantage, split 2k6,
+  fixed values without dice, validation, autofocus, back/review/submission
+  and 390/1280 px layouts; JavaScript compilation and diff checks pass.
+
+- [x] [Active rage availability] Hide Brakka's Rage activation throughout an
+  active physical-mana rage, both before and after spending the main action.
+  Reject stale/direct activation without toggling rage or spending a bonus;
+  restore availability when rage ends. Save/load and legacy rage regressions
+  pass: 8 playtest checks plus 2 generic rage/Frenzy checks.
+
+- [x] [Shield Bash physical rolls] Replace silent automatic k20/k20/k4 rolls
+  after selecting Garran's target with a staged flow: physical hero k20/k4,
+  automatic enemy k20 (clarified 2026-09-07). Ask for
+  damage only after winning the contest, show damage/HP/push in a persistent
+  result card and commit only on confirmation. Preserve terrain-entry effects,
+  reject duplicate/out-of-range submissions and block saving unfinished rolls.
+  Six flow regressions, seven Garran rules tests and full browser Enter flow
+  at 1280/390 px passed; add explicit structured observation events.
+  Enemy rolls are generated once on the server, shown in the result and cannot
+  be supplied by the client; invalid/repeated inputs do not reroll the enemy.
+
+- [x] [Shield Bash bonus action and mana wording, 2026-09-07] Make Garran's
+  Shield Bash a bonus action with d6 + Strength modifier damage and the existing
+  push. Keep it available after a basic attack; prevent a second bonus action.
+  Clarify all seven mana passives/flaws, add Garran payment examples, and use
+  matching SVG mana symbols in color/minimal sheets and color/BW cutout cards.
+  Regenerate the canonical PDFs and familiar legacy print links.
+
+- [x] [Combat action economy columns, 2026-09-07] Group combat shortcuts and
+  screen fallback by main action, bonus action, and free options above movement.
+  Keep equipment/end-turn controls below the columns. Use canonical ability
+  timing, preserve shortcut/preview/confirmation behavior, and stack columns on
+  narrow screens. Verify all seven heroes, mana symbols and browser navigation.
+
+- [x] [Spent action choices, 2026-09-07] Filter the authoritative turn menu by
+  remaining action/bonus/reaction/movement budgets; reject stale option IDs.
+  Remove unusable modifiers after the main action and movement below one step.
+  Preserve partial movement and the remaining attacks of the already-started
+  Lorian series or multiattack technique, without exposing a different action.
+  Verify all seven heroes, fresh-turn restoration and actual keyboard use.
+
+- [x] [Black mana and MTG-style symbols, 2026-09-07] Replace purple mana
+  with black in costs, combat UI, wave 5, rules help and all character prints.
+  Use sun/drop/skull/flame/tree and a circled 1 for generic payment. Explain
+  basic-land playtest cards; preserve internal cost IDs and saved wave labels.
+  Regenerate all 28 hero PDFs, four collections and existing print aliases.
+  Verify 45 focused tests, browser icons and all 28 page layouts.
+
+- [x] [Return to actions after movement, 2026-09-07] Close the movement
+  preview after each resolved segment, including opportunity attacks, and
+  show the updated action menu. Preserve remaining movement and the original
+  mana payment; exhausted movement disappears. Cover all seven heroes,
+  repeated segments, selecting an attack and invalid movement destinations.

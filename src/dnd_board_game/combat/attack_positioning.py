@@ -83,6 +83,11 @@ def evaluate_attack_positioning(
             )
         cover_level = _cover_level_for_bonus(cover_bonus)
 
+    from dnd_board_game.actors.resources import uses_physical_mana
+    if uses_physical_mana(attacker) and source.id == "optical_scope":
+        cover_bonus = 0
+        cover_level = CoverLevel.NONE
+        cover_sources = ()
     ranged_threats: tuple[str, ...] = ()
     if effective_attack_kind(source) == AttackKind.RANGED:
         ranged_threats = tuple(

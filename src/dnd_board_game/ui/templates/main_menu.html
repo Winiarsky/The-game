@@ -23,6 +23,12 @@
         <span>Wczytaj grę</span>
         <small>{% if save_exists %}Dostępny jest zapis: {{ scenario_name }}{% else %}Brak zapisu dla aktywnego scenariusza{% endif %}</small>
       </a>
+      <form action="{{ url_for('open_training_arena') }}" method="post">
+        <button class="menu-action" type="submit" style="width:100%;text-align:left;font:inherit;cursor:pointer">
+          <span>Mapa 0 · Rekrutacja u Nessy</span>
+          <small>Przetrenuj każdą z siedmiu postaci na arenie, pojedynczo</small>
+        </button>
+      </form>
       <a class="menu-action" href="{{ url_for('characters') }}">
         <span>Bohaterowie</span>
         <small>Poznaj gotowe archetypy i ich instrukcje gry</small>

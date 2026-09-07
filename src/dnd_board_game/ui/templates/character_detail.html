@@ -20,6 +20,7 @@
     </header>
 
     <section class="character-sheet">
+      {% if mana_profile %}<p><b>Fizyczna mana:</b> zachowaj do {{ mana_profile.keep }} starych kart, dobierz do 3 na końcu tury; pojemność {{ mana_profile.capacity }}. <a href="{{ url_for('physical_mana_rules') }}#{{ character.actor.id }}">Pełna talia i koszty do wydruku</a></p>{% endif %}
       {% if archetype %}
         <section class="form-section">
           <span class="eyebrow">{{ archetype.role }}</span>

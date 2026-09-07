@@ -353,7 +353,7 @@ def effect_expiration_label(effect: ActiveEffect) -> str:
             if 2 <= effect.remaining_rounds <= 4
             else "rund"
         )
-        return f"pozostało {effect.remaining_rounds} {suffix} albo do utraty koncentracji"
+        return f"pozostało {effect.remaining_rounds} {suffix}" + (" albo do utraty koncentracji" if effect.duration == EffectDuration.CONCENTRATION else "")
     if effect.kind in legacy_labels:
         return legacy_labels[effect.kind]
     labels = {

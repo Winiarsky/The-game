@@ -38,37 +38,29 @@ def heroes() -> dict[str, Actor]:
 
 @pytest.mark.parametrize("actor_id", PLAYABLE_HERO_IDS)
 def test_printed_hero_matches_build_shortcuts_spell_costs_and_shared_flaw(heroes: dict[str, Actor], actor_id: str) -> None:
-    actor = heroes[actor_id]
+    from dnd_board_game.character_creation.physical_mana import apply_physical_mana_profile
+    from dnd_board_game.character_creation.physical_mana_help import physical_mana_flaw
+    from dnd_board_game.rules.physical_mana import hero_abilities
+    from dnd_board_game.physical_cards.mana_print import ability_key
+
+    actor = apply_physical_mana_profile(heroes[actor_id])
     manifest = json.loads(Path(
         "assets/physical_cards/character_sets/keyboard_v1/keyboard_character_cards_v1.json"
     ).read_text())
-    sheet = next(hero for hero in manifest["heroes"] if hero["hero_id"] == actor_id)
+    assert manifest["rules_profile"] == "physical_mana_v02"
+    sheet = next(hero for hero in manifest["heroes"] if hero["id"] == actor_id)
     assert (sheet["level"], sheet["hp"], sheet["ac"], sheet["speed"]) == (
         actor.level, actor.max_hp, effective_armor_class(actor), actor.speed_feet,
     )
-    actions = [action for section in sheet["sections"] for action in section["actions"] if action["key"] != "AUTO"]
-    assert {action["key"]: action["source_id"] for action in actions} == {
-        binding.key: binding.action_ref for binding in HERO_SHORTCUTS[actor_id]
-    }
-    spells = {spell.id: spell for spell in actor.spells}
-    for action in actions:
-        if not action["source_id"].startswith("@"):
-            assert action["name"] == PLAYER_LABELS_PL[action["source_id"]].upper()
-        spell = spells.get(action["source_id"])
-        if spell and spell.level and actor_id != "erynd":
-            assert f"KOMÓRKA {spell.level}+" in action["meta"]
-        if actor_id == "erynd":
-            assert "KOMÓRKA" not in action["meta"]
-    assert sheet["flaw"] == {"name": HERO_FLAWS[actor_id].name, "body": HERO_FLAWS[actor_id].body}
-    assert HERO_SELECTION_GUIDES[actor_id].flaw == sheet["flaw"]["body"]
-    feature = next(f for f in actor.features if f.feature_id == HERO_FLAW_IDS[actor_id])
-    assert _feature_help_text(feature, actor_id)[1] == sheet["flaw"]["body"]
-    entries = _character_sheet_feature_entries(actor.features, actor_id=actor_id)
-    assert any(entry["rule_text"] == sheet["flaw"]["body"] for entry in entries)
-    visible_spells = set().union(*(set(access.spell_ids) for access in actor.spell_access))
-    payload = _exploration_actor_payload(actor)
-    assert set(payload["spell_ids"]) == visible_spells
-    assert {spell["id"] for spell in payload["spells"]} == visible_spells
+    expected = {a.id: a for a in hero_abilities(actor_id)}
+    assert {card["id"] for card in sheet["cards"]} == set(expected)
+    for card in sheet["cards"]:
+        rule = expected[card["id"]]
+        assert card["cost"] == list(rule.cost)
+        assert card["description"] == rule.description
+        assert card["key"] == ability_key(actor_id, rule.id, rule.timing)
+    flaw = physical_mana_flaw(actor_id)
+    assert sheet["flaw"] == [flaw.name, flaw.body]
 
 
 def test_custom_knives_and_archery_survive_live_source_rebinding(heroes: dict[str, Actor], tmp_path: Path) -> None:

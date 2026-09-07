@@ -1,5 +1,20 @@
 from __future__ import annotations
 
+from dnd_board_game.application.recruitment_arena import ARENA_ID, HELPER_ID, NESSA_POSITION, TrainingConfig, configure_training_encounter
+from dnd_board_game.ui.training_arena import training_payload, remember_training_result, can_talk_to_nessa
+
+from dnd_board_game.application.battle_setup import battle_briefing, order_battle_setup
+
+from dnd_board_game.ui.nessa_briefing import decorate_nessa_briefing
+
+from dnd_board_game.actors.resources import uses_physical_mana
+from dnd_board_game.character_creation.loadout_repair import repair_mira_loadout
+from dnd_board_game.combat.session import use_bonus_action
+from dnd_board_game.combat.conditions import condition_blocks_actions
+from dnd_board_game.rules.physical_mana import MANA_PASSIVES, mana_ability, hero_abilities, turn_supply, FLAWS
+from dnd_board_game.combat.physical_mana_movement import movement_mana_notice, declare_ordinary_movement
+from dnd_board_game.combat.physical_mana import (can_declare_attack_series, reconcile_attack_series, reconcile_rage_rounds, declare_series, series_count, is_basic_weapon, mana_payload, report_wave, resolve_mana_support, effect as mana_effect)
+
 from dnd_board_game.character_creation.boardgame_help import (
     ACTIVE_FEATURE_HELP, FLAW_HELP, HERO_FLAWS, PASSIVE_HELP,
 )
@@ -299,7 +314,6 @@ from dnd_board_game.combat import (
     resolve_garran_guard_companion,
     resolve_garran_rally,
     resolve_garran_shield_wall,
-    resolve_shield_bash,
     resolve_flurry_of_blows,
     resolve_martial_arts_bonus_attack,
     resolve_open_hand_technique,
@@ -703,6 +717,11 @@ from .session_state import UiPendingState
 from .session_view import UiSessionView
 from .conversation import InteractionConversationEntry
 from .combat_keyboard import shortcut_bindings, shortcut_for_option
+from .combat_menu_mana import distinct_action_options, menu_mana_payload
+from dnd_board_game.application.shield_bash_flow import ShieldBashFlow
+from .shield_bash import shield_bash_payload, start_shield_bash
+from .combat_menu_layout import menu_action_economy_payload, menu_cost_available
+from dnd_board_game.combat.class_features import rage_activation_block_reason
 
 
 class PendingKind(StrEnum):
@@ -829,11 +848,12 @@ BONUS_ACTION_CLASS_FEATURE_IDS = frozenset(
         "rage",
         "acceleration",
         "second_wind",
+        "shield_bash",
         "step_of_the_wind",
     }
 )
 FREE_CLASS_FEATURE_ACTION_IDS = frozenset()
-MOVEMENT_CLASS_FEATURE_ACTION_IDS = frozenset({"shield_bash", "defensive_stance", "aim"})
+MOVEMENT_CLASS_FEATURE_ACTION_IDS = frozenset({"defensive_stance", "aim"})
 CONTEXT_COMBAT_ACTION_TYPES = frozenset(
     {
         "assisted_spell",
@@ -1140,6 +1160,10 @@ class EncounterSetupFlow:
             "scenario_id": self.encounter.scenario_id,
             "scenario_name": self.encounter.scenario_name,
             "map_asset": self.encounter.map_asset,
+            "battle_briefing": list(battle_briefing(
+                self.encounter.environment,
+                solo=any(str(actor.id) == "hungry_shadow_solo" for actor in self.encounter.actors),
+            )),
             "map_asset_url": (
                 f"/game-assets/{self.encounter.map_asset.lstrip('/')}"
                 if self.encounter.map_asset
@@ -1634,6 +1658,7 @@ class ExplorationUiSession:
         self.combat_turn_maneuver_mode: str | None = None
         self.combat_selected_class_feature_target_id: str | None = None
         self.combat_selected_class_feature_target_ids: tuple[str, ...] = ()
+        self.shield_bash_flow: ShieldBashFlow | None = None
         self.brakka_shoulder_check_rolls: tuple[int, int, int] = ()
         self.brakka_shoulder_check_destination: Coordinate | None = None
         self._combat_class_feature_confirmation_requested = False
@@ -2010,7 +2035,7 @@ class ExplorationUiSession:
             raise ValueError("Każdą postać można wybrać tylko raz.")
         if any(actor.faction != Faction.ALLY for actor in actors):
             raise ValueError("Drużyna może zawierać wyłącznie bohaterów.")
-        self.custom_party = tuple(actors)
+        self.custom_party = tuple(repair_mira_loadout(actor) for actor in actors)
         self.reset()
 
     def configure_scenario(self, scenario_path: str | Path) -> None:
@@ -2030,6 +2055,9 @@ class ExplorationUiSession:
                 self._refresh_pending_encounter()
         self._expire_invalid_combat_effects()
         if self.combat_state is not None:
+            self.combat_state, self.active_combat_effects = reconcile_attack_series(
+                self.combat_state, self.active_combat_effects
+            )
             self.active_combat_effects = synchronize_dynamic_flaw_effects(
                 self.combat_state.actors,
                 self.combat_state.condition_states,
@@ -2418,13 +2446,34 @@ class ExplorationUiSession:
         ).as_payload()
         combat_payload = payload.get("combat")
         if isinstance(combat_payload, dict) and self.combat_state is not None:
+            encounter_flow = self.encounter_setup_flow or self.encounter_initiative_flow
+            if encounter_flow is not None:
+                encounter = encounter_flow.encounter
+                combat_payload["battle_briefing"] = list(battle_briefing(
+                    encounter.environment,
+                    solo=any(str(actor.id) == "hungry_shadow_solo" for actor in encounter.actors),
+                ))
+            combat_payload["shield_bash"] = shield_bash_payload(self)
             combat_payload["card_reminders"] = self._combat_card_reminders_payload()
+            mana_actor = combat_current_actor(self.combat_state)
+            combat_payload["physical_mana"] = mana_payload(
+                self.combat_state, self.active_combat_effects,
+                self._selected_attack_source(mana_actor),
+                targeting=self.combat_targeting_attack_source_id is not None,
+            )
+        if self.exploration.scenario_id == ARENA_ID and isinstance(combat_payload, dict):
+            if combat_payload.get("physical_mana"):
+                combat_payload["physical_mana"]["setup"] = {"deck": 20, "market": 5, "start": 3}
+        payload["training_arena"] = training_payload(self)
         return payload
 
     @staticmethod
     def _physical_card_resource_note(actor: Actor, source_id: str) -> str | None:
         """Describe the finite resource behind a currently legal physical card."""
 
+        if uses_physical_mana(actor):
+            ability = mana_ability(str(actor.id), source_id)
+            return f"Wydaj: {ability.cost_label}." if ability else "Mana rozliczana przy stole."
         resource_ids = {
             resource_id
             for feature in actor.features
@@ -2678,15 +2727,15 @@ class ExplorationUiSession:
         )
         snapshot = read_snapshot(snapshot_path, base_state=base_state)
         snapshot_actors = tuple(
-            reconcile_boardgame_feature_removals(actor)
+            repair_mira_loadout(reconcile_boardgame_feature_removals(actor))
             for actor in snapshot.actors
         )
         snapshot_combat_state = snapshot.combat_state
         if snapshot_combat_state is not None:
             for combat_actor in snapshot_combat_state.actors:
-                reconciled_actor = reconcile_boardgame_feature_removals(
+                reconciled_actor = repair_mira_loadout(reconcile_boardgame_feature_removals(
                     combat_actor
-                )
+                ))
                 if reconciled_actor != combat_actor:
                     snapshot_combat_state = replace_actor(
                         snapshot_combat_state,
@@ -2821,6 +2870,7 @@ class ExplorationUiSession:
                 encounter,
                 sum(actor.faction == Faction.ALLY for actor in encounter.actors),
             )
+            encounter = configure_training_encounter(encounter, TrainingConfig.from_flags(snapshot.exploration_state.flags))
             combat_by_id = {actor.id: actor for actor in snapshot.combat_state.actors}
             encounter = replace(
                 encounter,
@@ -2846,6 +2896,8 @@ class ExplorationUiSession:
         self.state = snapshot.exploration_state
         self.active_combat_effects = snapshot.active_effects
         self.combat_state = snapshot.combat_state
+        if self.combat_state is not None:
+            self.active_combat_effects = reconcile_rage_rounds(self.combat_state, self.active_combat_effects)
         self.resolved_encounter_trigger_ids = set(snapshot.resolved_encounter_trigger_ids)
         self.selected_attack_source_ids = dict(snapshot.selected_attack_source_ids)
         self.selected_healing_source_ids = dict(snapshot.selected_healing_source_ids)
@@ -2879,6 +2931,11 @@ class ExplorationUiSession:
             encounter=snapshot.pending_encounter,
             npc_transition=restored_npc_transition,
         )
+        self.shield_bash_flow = None
+        if self.combat_targeting_class_feature_action_id == "shield_bash":
+            self.combat_targeting_class_feature_action_id = None
+            self.combat_selected_class_feature_target_id = None
+            self.combat_turn_preview_option_id = None
         self.declaration_thread = []
         self.active_preparation_effects = []
         self.exploration_setup_flow = None
@@ -3005,6 +3062,8 @@ class ExplorationUiSession:
         return self.state_payload()
 
     def _snapshot_blocker(self) -> str | None:
+        if self.shield_bash_flow is not None:
+            return "Najpierw dokończ Uderzenie tarczą albo anuluj wpisywanie rzutów."
         if self.exploration_card_state.pending is not None:
             return "Najpierw zaakceptuj albo odrzuć zeskanowaną kartę eksploracji."
         pending_fields = tuple(
@@ -5533,6 +5592,10 @@ class ExplorationUiSession:
         ):
             raise ValueError("Swobodna wiadomość do MG nie może jednocześnie deklarować akcji.")
         point = self.active_point
+        if selected_goal_id and point is not None and point.npc_interaction is not None:
+            selected_payload = self._current_interaction_goal_payload(selected_goal_id)
+            if selected_payload.get("read_only"):
+                raise ValueError("Ten temat jest dostępny tylko do przypomnienia; nie można rozstrzygnąć go ponownie.")
         if selected_social_skill is not None and (
             point is None or point.npc_interaction is None
         ):
@@ -6287,6 +6350,7 @@ class ExplorationUiSession:
         )
         encounter = _encounter_with_session_actor_state(encounter, self.exploration.actors)
         encounter = self._configure_playground_encounter(encounter)
+        encounter = configure_training_encounter(encounter, TrainingConfig.from_flags(self.state.flags))
         projected_fixtures = fixture_scene_objects(
             self.state,
             zone_id=self.current_zone.id,
@@ -6303,7 +6367,7 @@ class ExplorationUiSession:
                 ),
             ),
         )
-        steps = _build_encounter_setup_steps(encounter)
+        steps = _build_encounter_setup_steps(encounter, fixed_player_positions=self.exploration.scenario_id == ARENA_ID)
         if not steps:
             raise ValueError("Scenariusz encountera nie ma elementów do setupu.")
         self.encounter_setup_flow = EncounterSetupFlow(
@@ -6367,6 +6431,7 @@ class ExplorationUiSession:
         )
         if not encounter_result.finished:
             raise ValueError("Encounter nie ma jeszcze końcowego wyniku.")
+        remember_training_result(self)
         outcome = _encounter_outcome_for_result(
             trigger,
             self.pending_encounter.name,
@@ -6955,7 +7020,8 @@ class ExplorationUiSession:
                 else RollMode.ADVANTAGE
             )
         prompts = build_player_initiative_prompts(
-            encounter.actors,
+            tuple(a for a in encounter.actors if not (
+                self.exploration.scenario_id == ARENA_ID and str(a.id) == HELPER_ID)),
             roll_modes_by_actor_id,
         )
         self.encounter_initiative_flow = EncounterInitiativeFlow(
@@ -7067,6 +7133,12 @@ class ExplorationUiSession:
             hidden_states,
             self.state.condition_states,
         )
+        if self.exploration.scenario_id == ARENA_ID and TrainingConfig.from_flags(self.state.flags).mode == "support":
+            self.combat_state = replace(self.combat_state, condition_states=(
+                *self.combat_state.condition_states,
+                ConditionState(actor_id=HELPER_ID, condition=CombatCondition.POISONED,
+                               source_label="Treningowy znacznik zatrucia"),
+            ))
         if flow.encounter.enemy_ai_profile is not None:
             party_size = sum(
                 actor.faction == Faction.ALLY
@@ -7392,6 +7464,7 @@ class ExplorationUiSession:
         return self.state_payload()
 
     def _clear_player_pending_choices(self) -> None:
+        self.shield_bash_flow = None
         self.pending_state.clear_player_choices()
         self.combat_turn_preview_option_id = None
         self.pending_spell_zone_move_effect_id = ""
@@ -7568,6 +7641,14 @@ class ExplorationUiSession:
         roar = deafening_roar_attack_source(actor, self.active_combat_effects)
         if roar is not None:
             sources = (*sources, roar)
+        if uses_physical_mana(actor):
+            from dnd_board_game.combat.physical_mana_sources import adapt_attack, powerful_strike_source
+            if any(e.actor_id == str(actor.id) and e.kind == "powerful_strike" for e in self.active_combat_effects) or (self.pending_player_attack is not None and self.pending_player_attack.source_id == "powerful_strike"):
+                base = next((s for s in sources if s.source_type == AttackSourceType.WEAPON and s.ability == "strength"
+                             and s.attack_kind == AttackKind.MELEE and s.damage_components), None)
+                if base is not None:
+                    sources = (*sources, powerful_strike_source(actor, base))
+            sources = tuple(adapt_attack(actor, s) for s in sources)
         familiar = next(
             (
                 effect
@@ -8300,6 +8381,87 @@ class ExplorationUiSession:
             effects = apply_active_effect(effects, effect).active_effects
         return effects
 
+    def report_physical_mana_wave(self, event: int) -> dict[str, object]:
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        self.active_combat_effects = report_wave(self.combat_state, self.active_combat_effects, event)
+        self._add_message("Fala many", "Zapisano falę. Efekt wejdzie na końcu rundy, po odpływie rynku. Wyłóżcie nową zapowiedź z k6.")
+        return self.state_payload()
+
+    def skip_physical_damage_bonus(self, bonus_id: str) -> dict[str, object]:
+        pending = self.pending_player_attack
+        if self.combat_state is None or pending is None or pending.stage != "damage_roll":
+            raise ValueError("Premię wybierz po trafieniu, przed rzutem obrażeń.")
+        actor = combat_current_actor(self.combat_state)
+        if not uses_physical_mana(actor):
+            raise ValueError("Ta walka nie korzysta z fizycznej many.")
+        if bonus_id == "sneak_attack" and pending.sneak_attack:
+            self.pending_player_attack = replace(pending, sneak_attack=False, sneak_attack_dice=0)
+        elif bonus_id == "first_blood" and pending.first_blood:
+            self.pending_player_attack = replace(pending, first_blood=False)
+        elif bonus_id in {"hunters_mark", "mana_double_shot"}:
+            kind = "mana_hunters_mark_skipped" if bonus_id == "hunters_mark" else "mana_double_shot_skipped"
+            self.active_combat_effects = apply_active_effect(self.active_combat_effects,
+                mana_effect(str(actor.id), kind, "Premia zachowana na kolejne trafienie")).active_effects
+        else:
+            raise ValueError("Ta premia nie jest dostępna przy tym trafieniu.")
+        self._add_message("Premia zachowana", "Nie doliczaj tej premii do bieżących obrażeń. Możesz wykorzystać ją przy kolejnym kwalifikującym się trafieniu we własnej turze.")
+        return self.state_payload()
+
+    def activate_mana_weapon(self) -> dict[str, object]:
+        from dnd_board_game.combat.physical_mana_summon import activate_weapon
+        if self.combat_state is None or self._combat_has_pending_resolution():
+            raise ValueError("Najpierw dokończ bieżące rozstrzygnięcie.")
+        self.combat_state, self.active_combat_effects = activate_weapon(self.combat_state, self.active_combat_effects)
+        self._add_message("Duchowa broń · D · B", "Wydaj B. Przesuń broń do 20 ft i wykonaj jeden atak. Zakończenie aktywacji wraca do tury Dagny.")
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def use_mana_loan(self) -> dict[str, object]:
+        from dnd_board_game.combat.physical_mana import loan_reactor
+        from dnd_board_game.combat.session import use_actor_reaction
+        if self.combat_state is None:
+            raise ValueError("Walka nie została rozpoczęta.")
+        reactor = loan_reactor(self.combat_state)
+        if reactor is None:
+            raise ValueError("Lorian nie może teraz użyć Awaryjnej pożyczki.")
+        if self._combat_has_pending_resolution() and not (self.pending_player_attack and self.pending_player_attack.stage == "attack_roll"):
+            raise ValueError("Pożyczkę deklaruj przed wykonaniem działania i jego rzutami.")
+        result = use_actor_reaction(self.combat_state, reactor)
+        if not result.accepted:
+            raise ValueError(result.message)
+        self.combat_state = result.state
+        self._add_message("Awaryjna pożyczka · reakcja Loriana", "Lorian wydaje B i przekazuje dodatkową własną kartę aktywnemu bohaterowi. Łącznie traci dwie karty. Zachowaj pojemność odbiorcy; liczba rozpoczętej serii nie rośnie.")
+        return self.state_payload()
+
+    def declare_blue_movement(self) -> dict[str, object]:
+        if self.combat_state is None or self._combat_has_pending_resolution():
+            raise ValueError("Najpierw zakończ bieżące rozstrzygnięcie.")
+        actor = combat_current_actor(self.combat_state)
+        if not uses_physical_mana(actor) or actor.is_defeated() or condition_blocks_actions(self.combat_state.condition_states, str(actor.id)):
+            raise ValueError("Postać nie może deklarować ruchu.")
+        if self.combat_state.turn_action.movement_used_feet:
+            raise ValueError("Wariant ruchu wybierz przed pierwszym krokiem.")
+        self.active_combat_effects = apply_active_effect(self.active_combat_effects,
+            mana_effect(str(actor.id), "mana_blue_movement", "Ruch N: odporność na Ciężkie powietrze")).active_effects
+        self._add_message("Ruch", "Wydaj jedną niebieską manę za zwykły ruch w tej turze; pomiń spowolnienie Ciężkiego powietrza.")
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def declare_physical_attack_series(self, count: int) -> dict[str, object]:
+        if self.combat_state is None or self._combat_has_pending_resolution():
+            raise ValueError("Najpierw zakończ bieżące rozstrzygnięcie.")
+        actor = combat_current_actor(self.combat_state)
+        source = self._selected_attack_source(actor)
+        if source is None or not is_basic_weapon(actor, source):
+            raise ValueError("Liczbę ataków deklarujesz dla zwykłej broni.")
+        self.active_combat_effects = declare_series(self.combat_state, self.active_combat_effects, count)
+        self.combat_targeting_attack_source_id = source.id
+        self.board_message = f"Seria {count} ataków: wydaj {count} dowolnej many przy wykonaniu. Wybierz pierwszy cel."
+        self._add_message("Seria ataków", self.board_message)
+        self._sync_board_leds()
+        return self.state_payload()
+
     def select_combat_attack_source(
         self,
         source_id: str,
@@ -8660,6 +8822,7 @@ class ExplorationUiSession:
             if not actor_has_feature(actor, "cunning_action"):
                 raise ValueError("Aktywna postać nie posiada Zwiadowczej mobilności.")
         elif action_id in {
+            "mana_inspiration", "mana_transfer",
             "second_wind",
             "sacred_weapon",
             "turn_the_unholy",
@@ -8932,7 +9095,7 @@ class ExplorationUiSession:
         self.combat_turn_menu_index = 0
         self.board_message = (
             f"{NIMRA_METAMAGIC_NAMES[metamagic_id]}: wybierz zgodny czar. "
-            "Wycofanie nie zużywa punktów, slotu ani akcji."
+            + ("Dopłatę many wydaj razem z kosztem czaru. Anulowanie nie kosztuje many ani akcji." if uses_physical_mana(actor) else "Wycofanie nie zużywa punktów, slotu ani akcji.")
         )
         self._record(
             "ui_nimra_metamagic_opened",
@@ -8977,11 +9140,29 @@ class ExplorationUiSession:
             raise ValueError("Zwiadowcza mobilność wymaga wyboru: Sprint albo Odwrót.")
         if action_id not in available:
             raise ValueError("Aktywna postać nie posiada tej akcji klasowej.")
+        if action_id == "rage":
+            blocked = rage_activation_block_reason(actor, self.active_combat_effects)
+            if blocked:
+                raise ValueError(blocked)
         state_before_feature = self.combat_state
         healing_target_ids: tuple[str, ...] = ()
         self._clear_player_pending_choices()
         title = "Cecha klasowa"
-        if action_id == "second_wind":
+        if uses_physical_mana(actor) and action_id.startswith("mana_"):
+            self.combat_state, self.active_combat_effects, body = resolve_mana_support(
+                self.combat_state, self.active_combat_effects, action_id, target_id)
+            title = mana_ability(str(actor.id), action_id).name
+        elif uses_physical_mana(actor) and action_id == "action_surge":
+            if self.combat_state.turn_action.attack_action_active:
+                raise ValueError("Zryw przygotuj przed zwykłym atakiem.")
+            spent = use_bonus_action(self.combat_state)
+            if not spent.accepted:
+                raise ValueError(spent.message)
+            self.combat_state = spent.state
+            self.active_combat_effects = apply_active_effect(self.active_combat_effects,
+                mana_effect(str(actor.id), "mana_surge", "Zryw: +2 do następnego zwykłego ataku", 1)).active_effects
+            body = "Zryw akcji · wydaj czerwoną manę. Następny zwykły atak w tej turze ma +2 do trafienia."
+        elif action_id == "second_wind":
             if natural_roll is None:
                 raise ValueError("Second Wind wymaga wyniku k10.")
             result = resolve_second_wind(self.combat_state, int(natural_roll))
@@ -9382,7 +9563,7 @@ class ExplorationUiSession:
             self.active_combat_effects = result.active_effects
         else:
             raise ValueError("Nieznany specjalny atak Brakki.")
-        response = self.select_combat_attack_source(source.id)
+        response = self.select_combat_attack_source("powerful_strike" if uses_physical_mana(actor) and action_id == "powerful_strike" else source.id)
         self.board_message = (
             f"{player_label(action_id)}: wybierz legalny cel na planszy. "
             "Enter potwierdza cel i przechodzi do rzutu ataku."
@@ -9419,7 +9600,7 @@ class ExplorationUiSession:
         self.select_combat_attack_source(action_id)
         self.board_message = (
             f"{player_label(action_id)}: wybierz legalny cel na planszy. "
-            "Koszt Instynktu, akcja i amunicja zostaną pobrane przy rzucie ataku."
+            + (f"Wydaj: {mana_ability(str(actor.id), action_id).cost_label} przy rzucie ataku." if uses_physical_mana(actor) else "Koszt Instynktu, akcja i amunicja zostaną pobrane przy rzucie ataku.")
         )
         self._add_message(player_label(action_id), self.board_message)
         self._sync_board_leds()
@@ -9506,6 +9687,8 @@ class ExplorationUiSession:
         }
         if action_id not in available:
             raise ValueError("Aktywna postać nie posiada tej akcji klasowej.")
+        if action_id == "shield_bash" and self.combat_state.turn_action.bonus_action_use != ActionUse.ACTION_AVAILABLE:
+            raise ValueError("Uderzenie tarczą wymaga dostępnej akcji dodatkowej.")
         require_lorian_audience(
             actor,
             self.combat_state.actors,
@@ -9553,6 +9736,9 @@ class ExplorationUiSession:
         return self.state_payload()
 
     def cancel_combat_class_feature_targeting(self) -> dict[str, object]:
+        if self.shield_bash_flow is not None and self.shield_bash_flow.stage == "result":
+            raise ValueError("Rzuty rozstrzygnięte. Potwierdź wynik Uderzenia tarczą.")
+        self.shield_bash_flow = None
         if self.combat_targeting_class_feature_action_id is None:
             raise ValueError("Nie trwa wybór celu cechy klasowej.")
         self.combat_targeting_class_feature_action_id = None
@@ -10291,6 +10477,10 @@ class ExplorationUiSession:
         self.combat_state = transition.state
         self.active_combat_effects = transition.active_effects
         self.pending_summon = transition.pending
+        if transition.pending is None and transition.event_type == "ui_combat_summon_confirmed":
+            from dnd_board_game.combat.physical_mana_summon import available_weapon, activate_weapon
+            if available_weapon(self.combat_state) is not None:
+                self.combat_state, self.active_combat_effects = activate_weapon(self.combat_state, self.active_combat_effects, on_cast=True)
         self.selected_combat_movement_path = None
         self.board_message = transition.message_body
         self._add_message(transition.message_title, transition.message_body)
@@ -11590,6 +11780,11 @@ class ExplorationUiSession:
         source = self._selected_attack_source(attacker)
         if source is None:
             raise ValueError(f"Aktor {attacker.name} nie ma zdefiniowanego ataku.")
+        if (can_declare_attack_series(attacker) and is_basic_weapon(attacker, source)
+                and series_count(attacker, self.active_combat_effects) is None):
+            self.combat_targeting_attack_source_id = source.id
+            self.board_message = "Podaj liczbę ataków. Każdy to osobny test i 1 dowolna mana."
+            return self.state_payload()
         class_bonus_attack = (
             self.combat_state.turn_action.bonus_attacks_remaining > 0
             and self.combat_state.turn_action.bonus_attack_source_id == source.id
@@ -12152,9 +12347,12 @@ class ExplorationUiSession:
                     effect.actor_id == str(dict(transition.event_payload).get("attacker_id", ""))
                     and effect.kind in {"erynd_arrow_prepared", "mira_attack_prepared"}
                     and not (
-                        effect.kind == "mira_attack_prepared"
+                        (effect.kind == "erynd_arrow_prepared" and effect.object_id == "class_feature:double_shot"
+                         and uses_physical_mana(combat_current_actor(self.combat_state))
+                         and self.combat_state.turn_action.attacks_used < 2)
+                        or (effect.kind == "mira_attack_prepared"
                         and transition.pending is not None
-                        and transition.pending.mira_piercing_second
+                        and transition.pending.mira_piercing_second)
                     )
                 )
             )
@@ -12547,6 +12745,12 @@ class ExplorationUiSession:
                     current.hp - before.hp,
                 ),
             )
+            if uses_physical_mana(current) and any(e.kind == "mana_wave_4" for e in self.active_combat_effects) and not any(e.actor_id == target_id and e.kind == "mana_white_healed" for e in self.active_combat_effects):
+                extra = min(2, current.max_hp - current.hp)
+                current = replace(current, hp=current.hp + extra)
+                self.combat_state = replace_actor(self.combat_state, current)
+                self.active_combat_effects = apply_active_effect(self.active_combat_effects, mana_effect(target_id, "mana_white_healed", "Blada osłona: pierwsze leczenie", 1, EffectDuration.UNTIL_ROUND_END)).active_effects
+                notices.append(f"Blada osłona: {current.name} +{extra} PW.")
             grace = resolve_healing_grace_bonus(
                 self.combat_state.actors,
                 self.active_combat_effects,
@@ -12779,7 +12983,8 @@ class ExplorationUiSession:
         )
         self.pending_opportunity_movement = None
         self.selected_combat_movement_path = preview.path
-        self.board_message = preview.board_message
+        notice = movement_mana_notice(self.combat_state, self.active_combat_effects)
+        self.board_message = preview.board_message + (f" {notice.description}" if notice else "")
         self._record(preview.event_type, dict(preview.event_payload))
         self._sync_board_leds()
         return self.state_payload()
@@ -12814,7 +13019,17 @@ class ExplorationUiSession:
             self._record(submission.event_type, dict(submission.event_payload))
             self._sync_board_leds()
             return self.state_payload()
+        if (
+            len(submission.path.path) > 1
+            or submission.state.turn_action.movement_used_feet > self.combat_state.turn_action.movement_used_feet
+        ):
+            self.active_combat_effects = declare_ordinary_movement(
+                self.combat_state, self.active_combat_effects
+            )
         self.combat_state = submission.state
+        self.combat_turn_preview_option_id = None
+        self.combat_turn_menu_index = 0
+        self.board_message = "Ruch wykonany. Wybierz kolejne dostępne działanie."
         self._apply_spike_growth_movement_damage(
             submission.actor_id,
             submission.path,
@@ -12888,10 +13103,14 @@ class ExplorationUiSession:
             roll_d20=lambda request: _automatic_d20_input(request, self.encounter_rng),
             roll_damage=lambda die_sides: self.encounter_rng.randint(1, die_sides),
         )
+        movement_effects = declare_ordinary_movement(self.combat_state, resolution.active_effects)
         self.combat_state = resolution.state
-        self.active_combat_effects = resolution.active_effects
+        self.active_combat_effects = movement_effects
         self.pending_opportunity_movement = None
         self.selected_combat_movement_path = None
+        self.combat_turn_preview_option_id = None
+        self.combat_turn_menu_index = 0
+        self.board_message = "Rozstrzygnięto ruch i ataki okazyjne. Wybierz kolejne dostępne działanie."
         self.pending_combat_interaction = None
         if resolution.movement_performed:
             self._apply_spike_growth_movement_damage(
@@ -14190,11 +14409,15 @@ class ExplorationUiSession:
                         if feature_action_id in {"hard_as_rock", "instinctive_dodge"}:
                             # Reakcja pojawia się wyłącznie w oknie obrażeń.
                             continue
+                        if feature_action_id == "rage" and rage_activation_block_reason(
+                            actor, self.active_combat_effects
+                        ):
+                            continue
                         if feature_action_id == "action_surge":
                             # This option is deliberately revealed only after
                             # Garran has spent his main action.
                             continue
-                        if feature_action_id in MOVEMENT_CLASS_FEATURE_ACTION_IDS and (
+                        if feature_action_id in (MOVEMENT_CLASS_FEATURE_ACTION_IDS - {"shield_bash", "defensive_stance"} if uses_physical_mana(actor) else MOVEMENT_CLASS_FEATURE_ACTION_IDS) and (
                             self.combat_state.turn_action.movement_action_used
                             or self.combat_state.turn_action.movement_used_feet > 0
                         ):
@@ -14228,7 +14451,7 @@ class ExplorationUiSession:
                         ):
                             continue
                         if (
-                            feature_action_id in BONUS_ACTION_CLASS_FEATURE_IDS
+                            feature_action_id in (BONUS_ACTION_CLASS_FEATURE_IDS - {"second_wind"} if uses_physical_mana(actor) else BONUS_ACTION_CLASS_FEATURE_IDS)
                             and not bonus_action_available
                         ):
                             continue
@@ -14284,7 +14507,7 @@ class ExplorationUiSession:
                         )
                     )
                 hiding = hide_eligibility(encounter.board, actor, self.combat_state.actors, encounter.scene_objects)
-                if actor_has_feature(actor, "mira_shadow_stealth") and hiding.allowed:
+                if actor_has_feature(actor, "mira_shadow_stealth") and hiding.allowed and not any(h.actor_id == str(actor.id) for h in self.combat_state.hidden_states):
                     options.append(
                         CombatMenuOption("basic:hide", "Ukryj się", "Akcja Miry: test Skradania przeciw osobnej Percepcji każdego przeciwnika.", CombatMenuCategory.BASIC, CombatMenuAction.HIDE)
                     )
@@ -14370,6 +14593,10 @@ class ExplorationUiSession:
                 for feature in actor.features:
                     for feature_action_id in feature.action_ids:
                         if feature_action_id not in available_feature_actions:
+                            continue
+                        if feature_action_id == "rage" and rage_activation_block_reason(
+                            actor, self.active_combat_effects
+                        ):
                             continue
                         if feature_action_id == "acceleration" and (
                             not any(
@@ -14933,6 +15160,9 @@ class ExplorationUiSession:
             action=CombatMenuAction.MOVE,
             provider="turn_mode",
         )
+        notice = movement_mana_notice(self.combat_state, self.active_combat_effects)
+        if notice is not None:
+            move = replace(move, label=notice.label, description=notice.description + " " + move.description)
         source_options = self._combat_context_options(actor, actor.position)
         if self.pending_nimra_metamagic_id is not None:
             metamagic_id = self.pending_nimra_metamagic_id
@@ -15057,7 +15287,7 @@ class ExplorationUiSession:
                     group_label="Metamagia",
                 )
             )
-            return tuple(metamagic_options)
+            return self._available_turn_options(tuple(metamagic_options))
         maneuver_options: list[CombatMenuOption] = []
         encounter = self._active_encounter()
         if encounter is not None and not any(
@@ -15161,6 +15391,39 @@ class ExplorationUiSession:
                         ),
                     )
             enriched_options.append(option)
+        if uses_physical_mana(actor):
+            existing = {o.action_id for o in enriched_options}
+            for ability in hero_abilities(str(actor.id)):
+                if (ability.id.startswith("mana_") and ability.timing != "R") or ability.id in {"action_surge", "shield_bash", "defensive_stance", "garran_shield_wall"}:
+                    available = (self.combat_state.turn_action.action_use if ability.timing == "A"
+                                 else self.combat_state.turn_action.bonus_action_use) == ActionUse.ACTION_AVAILABLE
+                    if available and ability.id not in existing:
+                        enriched_options.append(CombatMenuOption(
+                            id=f"class-feature:{ability.id}", label=ability.name, description=ability.description,
+                            category=CombatMenuCategory.SUPPORT, action=CombatMenuAction.CLASS_FEATURE,
+                            action_id=ability.id, provider="class_feature", group_label="Zdolności specjalne"))
+            physical_options = []
+            for option in enriched_options:
+                ability = mana_ability(str(actor.id), option.action_id or option.source_id or "")
+                if ability:
+                    turn = self.combat_state.turn_action
+                    if ability.timing == "D" and turn.bonus_action_use != ActionUse.ACTION_AVAILABLE:
+                        continue
+                    if ability.timing == "A" and turn.action_use != ActionUse.ACTION_AVAILABLE:
+                        locked = next((e.object_id for e in self.active_combat_effects if e.actor_id == str(actor.id) and e.kind == "mana_series_source"), "")
+                        continuation = turn.attack_action_active and turn.attacks_used < turn.attacks_maximum and locked == ability.id
+                        transfer = option.id == "combat-action:hunters_mark:transfer"
+                        if not continuation and not transfer:
+                            continue
+                    if ability.id == "reckless_attack" and turn.attacks_used:
+                        continue
+                    physical_options.append(replace(option, label=ability.name,
+                        description=f"{ability.timing} · Wydaj: {ability.cost_label}. {ability.description}" + (f" Dopłata Metamagii: {mana_ability(str(actor.id), option.provider.split(':', 1)[1].split('@')[0]).cost_label}." if option.provider.startswith("nimra_metamagic:") and mana_ability(str(actor.id), option.provider.split(':', 1)[1].split('@')[0]) else "")))
+                else:
+                    free = option.id in {"turn:end", "menu:weapons", "menu:items"} or option.action in {CombatMenuAction.OPEN_WEAPON_MENU, CombatMenuAction.OPEN_ITEM_MENU, CombatMenuAction.END_HIDE}
+                    price = "Bez many. " if free else "Wydaj 1 dowolną manę" + (" za każdy atak. " if option.action == CombatMenuAction.SELECT_ATTACK_SOURCE else " raz na turę za zwykły ruch. " if option.action == CombatMenuAction.MOVE else ". ")
+                    physical_options.append(replace(option, description=price + option.description))
+            enriched_options = physical_options
         source_options = tuple(enriched_options)
         def section_order(option: CombatMenuOption) -> int:
             if option.action == CombatMenuAction.SELECT_ATTACK_SOURCE:
@@ -15202,7 +15465,54 @@ class ExplorationUiSession:
                 key=lambda entry: (section_order(entry[1]), entry[0]),
             )
         )
-        return (move, *ordered)
+        return self._available_turn_options(distinct_action_options((move, *ordered)))
+
+    def _turn_option_economy(self, options: tuple[CombatMenuOption, ...]) -> dict[str, dict[str, str]]:
+        actor = combat_current_actor(self.combat_state)
+        encounter = self._active_encounter()
+        combat_actions = encounter.combat_actions_by_actor.get(actor.id, ()) if encounter else ()
+        source_costs = {
+            source.id: source.action_cost.value
+            for source in (*self._attack_sources_for_actor(actor), *self._healing_sources_for_actor(actor),
+                           *combat_actions)
+        }
+        result = {}
+        for option in options:
+            default_cost = source_costs.get(option.source_id or option.action_id, "action")
+            if option.action == CombatMenuAction.CLASS_FEATURE:
+                if option.action_id in BONUS_ACTION_CLASS_FEATURE_IDS:
+                    default_cost = "bonus_action"
+                elif option.action_id in MOVEMENT_CLASS_FEATURE_ACTION_IDS:
+                    default_cost = "movement"
+                elif option.action_id in FREE_CLASS_FEATURE_ACTION_IDS:
+                    default_cost = "free"
+            result[option.id] = menu_action_economy_payload(option, actor, default_cost=default_cost)
+        return result
+
+    def _available_turn_options(self, options: tuple[CombatMenuOption, ...]) -> tuple[CombatMenuOption, ...]:
+        from dnd_board_game.combat.physical_mana import validate_series_source
+
+        actor = combat_current_actor(self.combat_state)
+        groups = self._turn_option_economy(options)
+        sources = {source.id: source for source in self._attack_sources_for_actor(actor)}
+        remaining = movement_remaining(self.combat_state, actor, self.active_combat_effects)
+        result = []
+        for option in options:
+            continuation = False
+            source = sources.get(option.source_id)
+            if (source is not None and option.action == CombatMenuAction.SELECT_ATTACK_SOURCE
+                    and source.source_type == AttackSourceType.WEAPON and source.area is None
+                    and self.combat_state.turn_action.attack_action_active
+                    and can_use_attack_action(self.combat_state, actor)):
+                try:
+                    validate_series_source(self.combat_state, source, self.active_combat_effects)
+                    continuation = True
+                except ValueError:
+                    pass
+            if menu_cost_available(self.combat_state, groups[option.id]["action_economy"],
+                                   movement_feet=remaining, continues_attack=continuation):
+                result.append(option)
+        return tuple(result)
 
     def _combat_turn_action_menu_payload(self) -> dict[str, object] | None:
         if self._combat_has_pending_resolution():
@@ -15219,9 +15529,12 @@ class ExplorationUiSession:
         self.combat_turn_menu_index %= len(options)
         selected = options[self.combat_turn_menu_index]
         selected_attack_source = self._selected_attack_source(actor)
+        groups = self._turn_option_economy(options)
         option_payloads: list[dict[str, object]] = []
         for option in options:
             payload = option.as_payload()
+            payload.update(groups[option.id])
+            payload.update(menu_mana_payload(option, self.combat_state, self.active_combat_effects))
             payload["shortcut"] = shortcut_for_option(
                 actor_id,
                 option,
@@ -15334,7 +15647,8 @@ class ExplorationUiSession:
             self.combat_targeting_healing_source_id = option.source_id
             self.board_message = f"{source.name}: wskaż legalnego sojusznika."
         elif option.action == CombatMenuAction.MOVE:
-            self.board_message = "Ruch: wskaż legalne pole, a potem naciśnij Enter."
+            notice = movement_mana_notice(self.combat_state, self.active_combat_effects)
+            self.board_message = "Ruch: wskaż legalne pole, a potem naciśnij Enter." + (f" {notice.description}" if notice else "")
         elif option.provider == "turn_maneuver":
             self.combat_turn_maneuver_mode = (
                 f"shove:{option.shove_mode}"
@@ -15462,6 +15776,14 @@ class ExplorationUiSession:
         return self.state_payload()
 
     def cancel_combat_turn_action_preview(self) -> dict[str, object]:
+        if self.combat_state is not None and not self.combat_state.turn_action.attack_action_active:
+            actor_id = str(combat_current_actor(self.combat_state).id)
+            self.active_combat_effects = tuple(e for e in self.active_combat_effects
+                if not (e.actor_id == actor_id and e.kind == "mana_attack_series"))
+            if self.combat_targeting_attack_source_id and self.combat_turn_preview_option_id is None:
+                self.combat_targeting_attack_source_id = None
+                self._sync_board_leds()
+                return self.state_payload()
         if (
             self.combat_turn_preview_option_id is None
             and self.pending_nimra_metamagic_id is not None
@@ -15736,6 +16058,7 @@ class ExplorationUiSession:
         *,
         quantity: int | None = None,
     ) -> dict[str, object]:
+        actor = combat_current_actor(self.combat_state)
         if quantity is not None and option.loot_quantity_max is None:
             raise ValueError("Liczbę sztuk można podać tylko dla wybranego stosu lub nominału.")
         if option.action == CombatMenuAction.OPEN_WEAPON_MENU:
@@ -15868,6 +16191,10 @@ class ExplorationUiSession:
             )
             return self._start_combat_action(action, cast_level=cast_level)
         if option.action == CombatMenuAction.CLASS_FEATURE and option.action_id:
+            if uses_physical_mana(actor) and option.action_id in {"mana_inspiration", "mana_transfer"}:
+                return self._queue_physical_feature_prompt(option.action_id)
+            if uses_physical_mana(actor) and option.action_id in {"anchoring_arrow", "exposing_arrow"}:
+                return self.use_combat_class_feature(option.action_id)
             if option.action_id == "nimra_metamagic_cancel":
                 self.pending_nimra_metamagic_id = None
                 self.combat_turn_menu_index = 0
@@ -16881,7 +17208,7 @@ class ExplorationUiSession:
             ),
             None,
         )
-        if rage is not None:
+        if rage is not None and not uses_physical_mana(actor):
             active_this_cycle = any(
                 effect.actor_id == str(actor.id)
                 and effect.kind == "rage_activity"
@@ -19603,6 +19930,15 @@ class ExplorationUiSession:
             raise ValueError(
                 "Najpierw dokończ albo anuluj rozpoczętą akcję, rzut lub wybór celu."
             )
+        from dnd_board_game.combat.physical_mana_summon import finish_weapon_activation
+        restored = finish_weapon_activation(self.combat_state, self.active_combat_effects)
+        if restored is not None:
+            self.combat_state, self.active_combat_effects = restored
+            self._clear_player_pending_choices()
+            self.combat_turn_preview_option_id = None
+            self._add_message("Duchowa broń", "Aktywacja zakończona. Kontynuuj turę Dagny; nie dobieraj jeszcze many.")
+            self._sync_board_leds()
+            return self.state_payload()
         actor = combat_current_actor(self.combat_state)
         active_long_cast = next(
             (
@@ -19629,6 +19965,8 @@ class ExplorationUiSession:
             ConditionSaveTiming.TURN_END,
         ):
             raise ValueError("Najpierw wykonaj rzut obronny końca tury przeciw aktywnemu warunkowi.")
+        supply = turn_supply(str(actor.id), green_surge=any(e.kind == "mana_wave_3" for e in self.active_combat_effects))
+        can_draw_mana = not actor.is_defeated() and not actor.is_unconscious() and not condition_blocks_actions(self.combat_state.condition_states, str(actor.id))
         transition = self.combat_turn_finalization.finish_active_turn(
             state=self.combat_state,
             active_effects=self.active_combat_effects,
@@ -19654,6 +19992,13 @@ class ExplorationUiSession:
         self.pending_approach_interaction = None
         self.pending_approach_pickup = None
         self._clear_player_pending_choices()
+        if uses_physical_mana(actor) and not can_draw_mana:
+            self._add_message("Mana — koniec tury: " + actor.name, "Zachowaj posiadane karty. Stan postaci uniemożliwia dobór w tej turze.")
+        if uses_physical_mana(actor) and can_draw_mana:
+            self._add_message("Mana — koniec tury: " + actor.name,
+                f"Rozlicz skazę, zachowaj do {supply['keep']} niewydanych kart, "
+                f"dobierz do 3 z rynku i uzupełnij rynek. Limit po doborze: {supply['capacity']}. "
+                "Na początku następnej tury nie dobierasz ponownie.")
         self._add_message(transition.message_title, transition.message_body)
         self._record(transition.event_type, dict(transition.event_payload))
         self._resolve_starting_enemy_condition_saves()
@@ -20234,8 +20579,12 @@ class ExplorationUiSession:
         point = self.active_point
         if point is not None:
             if point.npc_interaction is not None:
-                label = "Zakończ rozmowę"
-                description = "Wróć do działań dostępnych w tej lokacji."
+                label = "Wróć do Gildii" if point.npc_interaction.id == "nessa" else "Zakończ rozmowę"
+                description = (
+                    "Odejdź od biurka. Sam powrót do Gildii nie zamyka odprawy ani nie rozpoczyna podróży."
+                    if point.npc_interaction.id == "nessa"
+                    else "Wróć do działań dostępnych w tej lokacji."
+                )
             elif point.merchant_id is not None:
                 label = "Zakończ handel"
                 description = "Odejdź od straganu i wróć do działań w lokacji."
@@ -20275,6 +20624,7 @@ class ExplorationUiSession:
                 _npc_state_for_point(self.state, self.active_point),
                 self.state.flags,
                 self.exploration.flows,
+                self.exploration.actors,
             )
             npc_payload = point_payload.get("npc") if point_payload else None
             if not isinstance(npc_payload, dict):
@@ -20802,6 +21152,13 @@ class ExplorationUiSession:
         )
 
     def _current_board_scan_target(self) -> BoardScanTarget:
+        if self.shield_bash_flow is not None:
+            result = self.shield_bash_flow.result
+            destination = result.push_destination if result else None
+            feedback = (LedFeedback((LedFrame((destination,), LedColor.MOVEMENT_DESTINATION, LedRole.DESTINATION),))
+                        if destination else LedFeedback())
+            return BoardScanTarget(positions=(), feedback=feedback,
+                                   empty_message="Wpisz rzuty lub potwierdź wynik Uderzenia tarczą na ekranie.")
         if (
             self.encounter_setup_flow is not None
             and not self.encounter_setup_flow.completed
@@ -21623,11 +21980,14 @@ class ExplorationUiSession:
                     else None
                 )
                 if selected_turn_option is None:
+                    feedback = _idle_stealth_led_feedback(self.combat_state, actor)
+                    can_talk = can_talk_to_nessa(self)
+                    if can_talk:
+                        feedback = LedFeedback((*feedback.frames, LedFrame(
+                            (NESSA_POSITION,), LedColor.INTERACTIVE_OBJECT, LedRole.INTERACTIVE_OBJECT)))
                     return BoardScanTarget(
-                        positions=(),
-                        feedback=active_actor_led_feedback(
-                            self.combat_state.initiative_order
-                        ),
+                        positions=(NESSA_POSITION,) if can_talk else (),
+                        feedback=feedback,
                         empty_message=(
                             "Wybierz akcję skrótem z karty postaci. Skrót otworzy "
                             "podgląd planszy bez zużywania akcji ani zasobu."
@@ -22014,6 +22374,9 @@ class ExplorationUiSession:
         return (*ordered, *rest)
 
     def _handle_board_position(self, selected: Coordinate) -> dict[str, object]:
+        if self.shield_bash_flow is not None:
+            self.board_message = "Uderzenie tarczą: dokończ rzuty i potwierdzenie wyniku na ekranie."
+            return self.state_payload()
         if (
             self.exploration_setup_flow is not None
             and self.exploration_setup_flow.assignment_point_id
@@ -22029,6 +22392,8 @@ class ExplorationUiSession:
             self.board_message = f"Wskazano aktora do inicjatywy: {prompt.actor.name}. Wpisz wynik d20 w UI."
             return self.state_payload()
         if self.combat_state is not None:
+            if selected == NESSA_POSITION and can_talk_to_nessa(self):
+                return self.select_combat_interaction_at_position(selected)
             actor = combat_current_actor(self.combat_state)
             if self.pending_enemy_opportunity_attack is not None:
                 self.board_message = "Najpierw rozstrzygnij albo pomiń atak okazyjny bohatera w UI."
@@ -22508,72 +22873,7 @@ class ExplorationUiSession:
                             self._sync_board_leds()
                             return self.state_payload()
                         if action_id == "shield_bash":
-                            encounter = self._active_encounter()
-                            if encounter is None:
-                                raise ValueError("Brak danych encountera.")
-                            result = resolve_shield_bash(
-                                self.combat_state,
-                                board=encounter.board,
-                                target_id=str(target.id),
-                                attacker_roll=self.encounter_rng.randint(1, 20),
-                                defender_roll=self.encounter_rng.randint(1, 20),
-                                damage_roll=self.encounter_rng.randint(1, 4),
-                            )
-                            self.combat_state = result.state
-                            self.combat_targeting_class_feature_action_id = None
-                            self.combat_selected_class_feature_target_id = None
-                            if result.succeeded:
-                                damage = result.damage.damage.total_applied if result.damage else 0
-                                push = (
-                                    f" i odpycha na ({result.target_after.position.col}, "
-                                    f"{result.target_after.position.row})"
-                                    if result.push_destination is not None
-                                    else "; pole za celem jest zablokowane"
-                                )
-                                self.board_message = (
-                                    f"Uderzenie tarczą: {result.attacker_total} przeciw "
-                                    f"{result.defender_total}, {damage} obrażeń{push}."
-                                )
-                            else:
-                                self.board_message = (
-                                    f"Uderzenie tarczą: {result.attacker_total} przeciw "
-                                    f"{result.defender_total}. Obrońca wygrywa."
-                                )
-                            if result.push_destination is not None:
-                                forced_path = PathResult(
-                                    origin=result.target_before.position,
-                                    destination=result.target_after.position,
-                                    path=(
-                                        result.target_before.position,
-                                        result.target_after.position,
-                                    ),
-                                    cost_feet=5,
-                                    valid=True,
-                                )
-                                self._apply_spike_growth_movement_damage(
-                                    str(result.target_after.id), forced_path
-                                )
-                                self._apply_moonbeam_entry_damage(
-                                    str(result.target_after.id), forced_path
-                                )
-                                self._apply_web_entry_save(
-                                    str(result.target_after.id), forced_path
-                                )
-                                self._apply_zone_of_truth_entry_save(
-                                    str(result.target_after.id), forced_path
-                                )
-                                self._apply_combat_trigger_events(
-                                    (
-                                        EffectEvent(
-                                            EffectEventType.ACTOR_MOVED,
-                                            actor_id=str(result.target_after.id),
-                                            position=result.target_after.position,
-                                        ),
-                                    )
-                                )
-                            self._add_message("Uderzenie tarczą", self.board_message)
-                            self._sync_board_leds()
-                            return self.state_payload()
+                            return start_shield_bash(self, str(target.id))
                         if action_id == "garran_command_halt":
                             result = resolve_garran_command_halt(
                                 self.combat_state,
@@ -24986,7 +25286,17 @@ class ExplorationUiSession:
                 point,
                 goal_execution,
             )
-        client = self._npc_client()
+        local_check = bool(
+            goal_execution is not None
+            and goal_execution.route.goal.description_mode == InteractionDescriptionMode.NONE
+            and goal_execution.route.goal.grounded_response is not None
+            and goal_execution.permission.check_ability is not None
+            and not goal_execution.permission.targets
+            and not goal_execution.permission.uses_social_reaction
+            and goal_execution.permission.argument_evaluation is None
+            and declared_spell is None
+        )
+        client = None if local_check else self._npc_client()
         zone = next(zone for zone in self.exploration.zones if zone.id == point.zone_id)
         request_data = build_npc_interaction_request(
             scenario_id=self.exploration.scenario_id,
@@ -25327,6 +25637,19 @@ class ExplorationUiSession:
                     }
                 )
             return proposal
+
+        if client is None:
+            assert goal_execution is not None
+            response = goal_execution.route.goal.grounded_response
+            assert response is not None
+            proposal = prepare(NpcInteractionProposal(
+                action_type=goal_execution.route.intent_id,
+                player_narration=response.player_narration,
+                npc_response=response.npc_response,
+                success_message=response.success_message,
+                failure_message=response.failure_message,
+            ))
+            return proposal, validate_npc_interaction_proposal(proposal, request_data)
 
         try:
             proposal = prepare(client.interact_npc(request_data))
@@ -28083,7 +28406,11 @@ def _build_encounter_setup_steps(
                 )
             )
         steps.extend(environment_steps[1:])
-        return tuple(_split_large_setup_steps(tuple(steps), max_positions=5))
+        ordered_steps = order_battle_setup(
+            tuple(steps), encounter.environment,
+            solo=any(str(actor.id) == "hungry_shadow_solo" for actor in encounter.actors),
+        )
+        return tuple(_split_large_setup_steps(ordered_steps, max_positions=5))
 
     setup = EncounterSetup(
         name=encounter.scenario_name,
@@ -28119,7 +28446,11 @@ def _build_encounter_setup_steps(
                 ),
             ),
         )
-    return tuple(_split_large_setup_steps(tuple(steps), max_positions=5))
+    ordered_steps = order_battle_setup(
+        tuple(steps), encounter.environment,
+        solo=any(str(actor.id) == "hungry_shadow_solo" for actor in encounter.actors),
+    )
+    return tuple(_split_large_setup_steps(ordered_steps, max_positions=5))
 
 
 def _enemy_ai_zone_map(
@@ -28591,6 +28922,14 @@ def _physical_feature_prompt_payload(
         "action_id": action_id,
         "label": player_label(action_id),
     }
+    if uses_physical_mana(actor) and action_id in {"mana_inspiration", "mana_transfer"}:
+        ability = mana_ability(str(actor.id), action_id)
+        payload.update({"label": ability.name, "input_kind": "mana_target",
+                        "instruction": f"Wydaj: {ability.cost_label}. {ability.description}",
+                        "targets": [{"id": str(a.id), "name": a.name} for a in state.actors
+                                    if a.id != actor.id and a.faction == actor.faction and not a.is_defeated()
+                                    and not a.is_unconscious() and grid_distance_feet(actor.position, a.position) <= 30]})
+        return payload
     if action_id == "second_wind":
         payload.update({"input_kind": "die", "die_sides": 10})
     elif action_id == "anchoring_arrow":
@@ -29367,8 +29706,12 @@ def _combat_payload(
             {
                 "action_id": targeting_class_feature_action_id,
                 "label": player_label(targeting_class_feature_action_id),
+                "mana_cost": (list(mana_ability(str(actor.id), targeting_class_feature_action_id).cost)
+                              if uses_physical_mana(actor) and mana_ability(str(actor.id), targeting_class_feature_action_id) else None),
                 "instructions": (
-                    "Wybierz na planszy innego, przytomnego sojusznika "
+                    mana_ability(str(actor.id), targeting_class_feature_action_id).description
+                    if uses_physical_mana(actor) and mana_ability(str(actor.id), targeting_class_feature_action_id)
+                    else "Wybierz na planszy innego, przytomnego sojusznika "
                     "w zasięgu 60 stóp. Otrzyma kość Bardowskiej Inspiracji, "
                     "którą może dodać do jednego rzutu ataku, testu cechy "
                     "albo rzutu obronnego."
@@ -29377,7 +29720,9 @@ def _combat_payload(
                     "zdolności, a następnie określ liczbę wydawanych punktów leczenia."
                 ),
                 "cost": (
-                    "Akcja bonusowa · 1 użycie Inspiracji bardowskiej"
+                    mana_ability(str(actor.id), targeting_class_feature_action_id).timing
+                    if uses_physical_mana(actor) and mana_ability(str(actor.id), targeting_class_feature_action_id)
+                    else "Akcja bonusowa · 1 użycie Inspiracji bardowskiej"
                     if targeting_class_feature_action_id == "bardic_inspiration"
                     else "Akcja · 1 użycie Boskiej Mocy"
                     if targeting_class_feature_action_id == "preserve_life"
@@ -30020,7 +30365,7 @@ def _hidden_actor_payload(state: CombatState, actor: Actor) -> dict[str, object]
     return {
         "stealth_total": hidden.stealth_total,
         "hidden_from_actor_ids": list(hidden.hidden_from_actor_ids),
-        "visible_observer_attack_advantage": actor_has_feature(
+        "visible_observer_attack_advantage": not uses_physical_mana(actor) and actor_has_feature(
             actor, "flaw_exposed_panic"
         ),
         "observer_perception_totals": dict(hidden.observer_perception_totals),
@@ -30030,7 +30375,7 @@ def _hidden_actor_payload(state: CombatState, actor: Actor) -> dict[str, object]
                 "name": observer.name,
                 "sees_actor": str(observer.id) not in hidden.hidden_from_actor_ids,
                 "has_attack_advantage_against_actor": (
-                    actor_has_feature(actor, "flaw_exposed_panic")
+                    not uses_physical_mana(actor) and actor_has_feature(actor, "flaw_exposed_panic")
                     and str(observer.id) not in hidden.hidden_from_actor_ids
                 ),
                 "perception_total": dict(hidden.observer_perception_totals).get(str(observer.id)),
@@ -30114,6 +30459,16 @@ def _combat_actor_status_chips(
             )
         )
     for effect in actor_effects:
+        if effect.get("kind") == "rage_duration" and effect.get("remaining_rounds") is not None:
+            continue
+        if effect.get("kind") == "rage" and effect.get("remaining_rounds") is not None:
+            rounds = int(effect["remaining_rounds"])
+            unit = "runda" if rounds == 1 else "rundy" if 2 <= rounds <= 4 else "rund"
+            chips.append(_status_chip(
+                f"Szał · {rounds} {unit}", tone="buff",
+                title="Pozostałe rundy Szału, wliczając bieżącą. Koszt many zapłacony przy uruchomieniu.",
+            ))
+            continue
         label = str(effect.get("label") or effect.get("kind") or "Efekt")
         value = str(effect.get("value_label") or "")
         chip_label = f"{label}: {value}" if value else label
@@ -30532,6 +30887,13 @@ def _healing_source_payload(
 
 
 def _source_resource_label(source, actor: Actor | None = None) -> str:
+    if actor is not None and uses_physical_mana(actor):
+        ability = mana_ability(str(actor.id), getattr(source, "id", ""))
+        if ability:
+            extras = [mana_ability(str(actor.id), str(token).split("@")[0]) for token in getattr(source, "metamagic_ids", ())]
+            labels = [ability.cost_label, *(a.cost_label for a in extras if a is not None)]
+            return "Mana: " + " + ".join(labels)
+        return "Mana: 1 dowolna za atak"
     resource_pool_id = getattr(source, "resource_pool_id", None)
     if resource_pool_id is not None:
         pool = actor_resource_pool(actor, resource_pool_id) if actor is not None else None
@@ -31419,6 +31781,14 @@ def _pending_player_attack_payload(
     )
     if prepared_lorian is not None:
         sources = (*sources, prepared_lorian)
+    if uses_physical_mana(attacker):
+        from dnd_board_game.combat.physical_mana_sources import adapt_attack, powerful_strike_source
+        if pending.source_id == "powerful_strike":
+            base = next((s for s in sources if s.source_type == AttackSourceType.WEAPON and s.ability == "strength"
+                         and s.attack_kind == AttackKind.MELEE and s.damage_components), None)
+            if base is not None:
+                sources = (*sources, powerful_strike_source(attacker, base))
+        sources = tuple(adapt_attack(attacker, s) for s in sources)
     source = next((candidate for candidate in sources if candidate.id == pending.source_id), None) or (
         sources[0] if sources else None
     )
@@ -31435,7 +31805,7 @@ def _pending_player_attack_payload(
         )
     if pending.two_weapon_bonus:
         source = two_weapon_bonus_attack_source(attacker, source)
-    source = attack_source_with_target_combat_effects(attacker, target, source, active_combat_effects)
+    source = attack_source_with_target_combat_effects(attacker, target, source, active_combat_effects, allow_physical_turn_bonuses=combat_current_actor(state).id == attacker.id)
     source = attack_source_with_hidden_advantage(
         source,
         is_hidden_from(state.hidden_states, str(attacker.id), str(target.id)),
@@ -31481,7 +31851,7 @@ def _pending_player_attack_payload(
             source.damage_components[0].damage_type,
         )
         if component is not None:
-            if source.id == "double_shot":
+            if source.id == "double_shot" and not uses_physical_mana(attacker):
                 component = replace(component, doubles_on_critical=False)
             source = replace(
                 source,
@@ -31910,7 +32280,7 @@ def _pending_enemy_opportunity_attack_payload(
     source = encounter.attack_sources_by_actor.get(attacker.id)
     if source is None:
         return None
-    source = attack_source_with_target_combat_effects(attacker, target, source, active_combat_effects)
+    source = attack_source_with_target_combat_effects(attacker, target, source, active_combat_effects, allow_physical_turn_bonuses=combat_current_actor(state).id == attacker.id)
     instruction = roll_instruction(source.attack_roll_request)
     threats = [
         _combat_actor_payload(actor, active_combat_effects)
@@ -31998,7 +32368,7 @@ def _pending_ready_attack_payload(
     source = encounter.attack_sources_by_actor.get(attacker.id)
     if source is None:
         return None
-    source = attack_source_with_target_combat_effects(attacker, target, source, active_combat_effects)
+    source = attack_source_with_target_combat_effects(attacker, target, source, active_combat_effects, allow_physical_turn_bonuses=combat_current_actor(state).id == attacker.id)
     instruction = roll_instruction(source.attack_roll_request)
     return {
         "stage": pending.stage,
@@ -32166,6 +32536,18 @@ def _board_scaled_attack_source(source):
     )
 
 
+def _idle_stealth_led_feedback(state: CombatState, actor: Actor) -> LedFeedback:
+    frames = list(active_actor_led_feedback(state.initiative_order).frames)
+    hidden = _hidden_actor_payload(state, actor)
+    if hidden is not None and actor_has_feature(actor, "mira_shadow_stealth"):
+        for sees, color in ((False, LedColor.STEALTH_OBSERVER_UNAWARE), (True, LedColor.STEALTH_OBSERVER_SEES)):
+            ids = {o["actor_id"] for o in hidden["observers"] if o["sees_actor"] == sees}
+            positions = tuple(a.position for a in state.actors if str(a.id) in ids)
+            if positions:
+                frames.append(LedFrame(positions, color, LedRole.ENEMY))
+    return LedFeedback(tuple(frames))
+
+
 def _combat_choice_led_feedback(
     movement: MovementRangeResult,
     attack_targets,
@@ -32193,33 +32575,6 @@ def _combat_choice_led_feedback(
     target_positions = tuple(sorted(target.position for target in attack_targets))
     if target_positions:
         frames.append(LedFrame(target_positions, LedColor.ENEMY, LedRole.ENEMY))
-    if state is not None and active_actor is not None:
-        hidden = next(
-            (
-                hidden
-                for hidden in state.hidden_states
-                if hidden.actor_id == str(active_actor.id)
-            ),
-            None,
-        )
-        if hidden is not None and actor_has_feature(active_actor, "mira_shadow_stealth"):
-            unaware = tuple(
-                observer.position
-                for observer in state.actors
-                if str(observer.id) in hidden.hidden_from_actor_ids
-                and not observer.is_defeated()
-            )
-            aware = tuple(
-                observer.position
-                for observer in state.actors
-                if observer.faction not in {active_actor.faction, Faction.NEUTRAL}
-                and str(observer.id) not in hidden.hidden_from_actor_ids
-                and not observer.is_defeated()
-            )
-            if unaware:
-                frames.append(LedFrame(unaware, LedColor.STEALTH_OBSERVER_UNAWARE, LedRole.ENEMY))
-            if aware:
-                frames.append(LedFrame(aware, LedColor.STEALTH_OBSERVER_SEES, LedRole.ENEMY))
     healing_positions = tuple(sorted(target.position for target in healing_targets))
     if healing_positions:
         frames.append(LedFrame(healing_positions, LedColor.ALLY, LedRole.ALLY))
@@ -34075,6 +34430,10 @@ def _point_payload(
                 )
             ],
         }
+        if point.npc_interaction.id == "nessa" and flags is not None:
+            decorate_nessa_briefing(
+                payload["npc"], point.npc_interaction, flags, npc_state, actors,
+            )
     return payload
 
 
@@ -34355,6 +34714,15 @@ _FEATURE_MECHANICAL_HELP: dict[str, tuple[str, str]] = {'field_medic_step': ('Po
 
 
 def _feature_help_text(feature: FeatureGrant, actor_id: str | None = None) -> tuple[str, str]:
+    if feature.source_ref == "physical_mana:v02":
+        flaw = FLAWS.get(actor_id or "")
+        if flaw and feature.feature_id == flaw[0]:
+            return flaw[1], flaw[2]
+        passive = MANA_PASSIVES.get(actor_id or "")
+        if passive and feature.feature_id == passive[0]:
+            return passive[1], passive[2]
+        ability = mana_ability(actor_id or "", feature.feature_id)
+        return feature.label, (f"{ability.timing} · Wydaj: {ability.cost_label}. {ability.description}" if ability else feature.description)
     note = FLAW_HELP.get(feature.feature_id) or PASSIVE_HELP.get(feature.feature_id)
     if note is None and (actor_id in HERO_FLAWS or feature.source_ref.startswith("boardgame_archetype:")):
         note = ACTIVE_FEATURE_HELP.get(feature.feature_id)
@@ -34393,9 +34761,10 @@ def _feature_help_text(feature: FeatureGrant, actor_id: str | None = None) -> tu
 
 def _feature_grant_payload(feature: FeatureGrant, actor_id: str | None = None) -> dict[str, object]:
     description, mechanics = _feature_help_text(feature, actor_id)
+    flaw = FLAWS.get(actor_id or "") if feature.source_ref == "physical_mana:v02" else None
     return {
         "id": feature.feature_id,
-        "label": feature.label,
+        "label": flaw[1] if flaw and feature.feature_id == flaw[0] else feature.label,
         "description": description,
         "mechanics": mechanics,
         "source_kind": feature.source_kind.value,

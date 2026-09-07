@@ -71,7 +71,7 @@ def combat_armor_class(
     actor: Actor,
     active_effects: tuple[ActiveEffect, ...] = (),
 ) -> int:
-    armor_class = effective_armor_class(actor) + combat_effect_armor_class_bonus(
+    armor_class = int(any(e.kind == "mana_wave_4" for e in active_effects)) + effective_armor_class(actor) + combat_effect_armor_class_bonus(
         actor,
         active_effects,
     )

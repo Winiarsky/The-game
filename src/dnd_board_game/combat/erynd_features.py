@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dnd_board_game.actors.resources import uses_physical_mana
+
 from dataclasses import dataclass, replace
 from typing import Sequence
 
@@ -20,7 +22,7 @@ from dnd_board_game.rules import (
 
 from .attack_flow import AttackKind, AttackSource, AttackSourceType
 from .damage import DamageComponentSpec
-from .session import CombatState, current_actor, use_movement_action
+from .session import CombatState, current_actor, use_movement_action, use_bonus_action
 
 
 ERYND_ARROW_ACTION_IDS = frozenset(
@@ -55,6 +57,8 @@ def prepare_erynd_arrow(
     actor = current_actor(state)
     if action_id not in ERYND_ARROW_ACTION_IDS or not actor_has_feature(actor, action_id):
         raise ValueError("Aktywna postać nie posiada tej strzały Erynda.")
+    if uses_physical_mana(actor):
+        die_roll = 1 if action_id == "anchoring_arrow" else 2 if action_id == "exposing_arrow" else None
     die_sides = 4 if action_id == "anchoring_arrow" else 8 if action_id == "exposing_arrow" else 0
     if die_sides and (die_roll is None or not 1 <= die_roll <= die_sides):
         raise ValueError(f"{_arrow_label(action_id)} wymaga wyniku k{die_sides}.")
@@ -104,7 +108,7 @@ def prepared_erynd_arrow_source(
     if base is None:
         return None
     components = base.damage_components
-    if action_id == "double_shot" and components:
+    if action_id == "double_shot" and components and not uses_physical_mana(actor):
         dexterity = ability_modifier(actor.ability_scores.dexterity)
         first = components[0]
         first = replace(
@@ -227,6 +231,11 @@ def resolve_erynd_aim(
     actor = current_actor(state)
     if not actor_has_feature(actor, "aim"):
         raise ValueError("Aktywna postać nie posiada Celowania.")
+    if uses_physical_mana(actor):
+        bonus = use_bonus_action(state)
+        if not bonus.accepted:
+            raise ValueError(bonus.message)
+        state = bonus.state
     movement = use_movement_action(state, actor)
     if not movement.accepted:
         raise ValueError(movement.message)
@@ -258,7 +267,7 @@ def first_blood_damage(actor: Actor, target: Actor, damage_type) -> DamageCompon
     return DamageComponentSpec(
         id="first_blood",
         damage_type=damage_type,
-        dice=DiceExpression(1, 8),
+        dice=DiceExpression(1, 6 if uses_physical_mana(actor) else 8),
         label="Pierwsza krew",
     )
 

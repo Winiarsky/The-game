@@ -1,0 +1,251 @@
+{
+  "schema": "dnd_board_game.scenario",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "project_original"
+  ],
+  "board": {
+    "cols": 20,
+    "rows": 30
+  },
+  "id": "recruitment_arena_combat",
+  "name": "Rekrutacja — próba na arenie",
+  "encounter_map_asset": "maps/recruitment_arena/arena.svg",
+  "actors": [
+    {
+      "id": "garran",
+      "name": "Garran",
+      "kind": "player_character",
+      "faction": "ally",
+      "ac": 10,
+      "hp": 30,
+      "speed_feet": 30,
+      "position": [
+        9,
+        18
+      ],
+      "item_refs": [
+        "longsword"
+      ],
+      "ability_scores": {
+        "strength": 10,
+        "dexterity": 10,
+        "constitution": 10,
+        "intelligence": 10,
+        "wisdom": 10,
+        "charisma": 10
+      }
+    },
+    {
+      "id": "recruitment_dummy",
+      "name": "Kukła rekrutacyjna",
+      "kind": "monster",
+      "faction": "enemy",
+      "creature_type": "humanoid",
+      "ac": 10,
+      "hp": 50,
+      "speed_feet": 20,
+      "position": [
+        10,
+        12
+      ],
+      "ability_scores": {
+        "strength": 10,
+        "dexterity": 10,
+        "constitution": 10,
+        "intelligence": 10,
+        "wisdom": 10,
+        "charisma": 10
+      },
+      "attacks": [
+        {
+          "id": "training_tap",
+          "name": "Uderzenie treningowe",
+          "source_type": "weapon",
+          "attack_kind": "melee",
+          "attack_modifier": 5,
+          "range_feet": 5,
+          "reach_feet": 5,
+          "damage": {
+            "fixed": 0,
+            "damage_type": "bludgeoning"
+          }
+        }
+      ]
+    }
+  ],
+  "player_start_zones": [
+    [
+      [
+        9,
+        18
+      ]
+    ]
+  ],
+  "objectives": [
+    {
+      "id": "report_to_nessa",
+      "name": "Zakończ pokaz u Nessy",
+      "description": "Alternatywnie do pokonania kukły: podejdź na sąsiednie pole Nessy i porozmawiaj z nią.",
+      "condition": "interact_with_object",
+      "target_id": "recruitment_nessa"
+    }
+  ],
+  "environment": [
+    {
+      "id": "recruitment_nessa",
+      "name": "Nessa — prowadząca rekrutację",
+      "type": "interactable",
+      "positions": [
+        [
+          3,
+          18
+        ]
+      ],
+      "visibility": "visible",
+      "interaction_label": "Porozmawiaj z Nessą",
+      "objective_id": "report_to_nessa",
+      "description": "Nessa obserwuje próbę. Podejdź na sąsiednie pole i potwierdź rozmowę, aby ją zakończyć. Rozmowa nie kosztuje many.",
+      "blocks_movement": true,
+      "interactions": [
+        {
+          "id": "finish_recruitment",
+          "label": "Nesso, kończę pokaz",
+          "description": "Zakończ trening tej postaci bez pokonywania kukły.",
+          "action_cost": "free",
+          "success_message": "Nessa: Dziękuję. Zapisuję zakończenie pokazu. Następny kandydat!"
+        }
+      ]
+    },
+    {
+      "id": "arena_screen",
+      "name": "Zasłona do skradania",
+      "type": "blocking_terrain",
+      "positions": [
+        [
+          6,
+          14
+        ],
+        [
+          6,
+          15
+        ],
+        [
+          6,
+          16
+        ]
+      ],
+      "visibility": "visible",
+      "description": "Pełna zasłona do ćwiczenia ukrycia i linii widzenia. Można obejść ją z obu stron."
+    },
+    {
+      "id": "arena_low_cover",
+      "name": "Niska osłona strzelecka",
+      "type": "cover",
+      "positions": [
+        [
+          13,
+          15
+        ],
+        [
+          14,
+          15
+        ]
+      ],
+      "visibility": "visible",
+      "blocks_movement": false,
+      "cover_bonus": 2,
+      "projectile_cover_bonus": 2,
+      "description": "Niska osłona: można wejść na pole i zakończyć na nim ruch. Stojąca tam figurka otrzymuje +2 KP. Osłona na linii ataku dystansowego daje celowi +2 KP.",
+      "setup_mechanics": [
+        "Na pole niskiej osłony można wejść i zakończyć na nim ruch; nie jest blokadą ani trudnym terenem.",
+        "Figurka stojąca na tym polu otrzymuje +2 do KP.",
+        "Osłona między atakującym a celem zapewnia +2 do KP przeciw atakom dystansowym."
+      ]
+    },
+    {
+      "id": "arena_crates",
+      "name": "Wysoki stos skrzyń",
+      "type": "blocking_terrain",
+      "positions": [
+        [
+          4,
+          11
+        ],
+        [
+          5,
+          11
+        ]
+      ],
+      "visibility": "visible",
+      "description": "Pełna przeszkoda: blokuje ruch i widoczność. Obejdź stos, aby odsłonić cel lub schować się przed kukłą."
+    },
+    {
+      "id": "arena_pillar",
+      "name": "Kamienny filar",
+      "type": "blocking_terrain",
+      "positions": [
+        [
+          13,
+          11
+        ],
+        [
+          14,
+          11
+        ],
+        [
+          13,
+          12
+        ],
+        [
+          14,
+          12
+        ]
+      ],
+      "visibility": "visible",
+      "description": "Pełna przeszkoda 2×2: blokuje ruch i widoczność. Obie strony pozostają dostępne do obejścia."
+    },
+    {
+      "id": "arena_rubble",
+      "name": "Pas gruzu — trudny teren",
+      "type": "difficult_terrain",
+      "positions": [
+        [
+          8,
+          14
+        ],
+        [
+          9,
+          14
+        ],
+        [
+          10,
+          14
+        ],
+        [
+          11,
+          14
+        ],
+        [
+          8,
+          15
+        ],
+        [
+          9,
+          15
+        ],
+        [
+          10,
+          15
+        ],
+        [
+          11,
+          15
+        ]
+      ],
+      "visibility": "visible",
+      "description": "Luźny gruz pomiędzy bohaterem a kukłą. Ruch na tych polach kosztuje podwójnie (prosty krok 10 ft zamiast 5 ft). Nie blokuje widoczności i nie daje osłony. Możesz obejść go z obu stron."
+    }
+  ]
+}

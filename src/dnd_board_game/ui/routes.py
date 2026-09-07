@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+from .shield_bash import submit_shield_bash, confirm_shield_bash
+from dnd_board_game.physical_cards.mana_symbols import mana_text
+from dnd_board_game.physical_cards.mana_print_html import chips
+
+from dnd_board_game.application.recruitment_arena import ARENA_ID, NESSA_POSITION
+from dnd_board_game.ui.training_arena import training_hero, start_training_trial, can_talk_to_nessa
+
 from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -15,6 +22,7 @@ from flask import (
     url_for,
 )
 
+from dnd_board_game.character_creation.physical_mana import apply_physical_mana_profile
 from dnd_board_game.actions import slash_commands_payload
 from dnd_board_game.actors import AbilityScores, FeatureGrant
 from dnd_board_game.character_creation import (
@@ -54,7 +62,10 @@ from dnd_board_game.rules import experience_progress
 from dnd_board_game.scenarios import discover_scenarios
 from dnd_board_game.world import Coordinate
 
-from .hero_selection import HERO_SELECTION_GUIDES
+from .hero_selection import HERO_SELECTION_GUIDES, physical_mana_guides
+from dnd_board_game.rules.physical_mana import mana_ability, hero_abilities, FLAWS, MANA_PASSIVES, turn_supply
+from dnd_board_game.character_creation.physical_mana_help import physical_mana_passives
+from dnd_board_game.combat.physical_mana import WAVES
 from dnd_board_game.character_creation.boardgame_help import ACTIVE_FEATURE_HELP, FLAW_HELP, HERO_FLAWS, PASSIVE_HELP
 
 if TYPE_CHECKING:
@@ -88,6 +99,8 @@ def create_app(
     app.jinja_env.globals["character_portrait_url"] = _character_portrait_url
 
     def persist_character_progress(actors) -> None:
+        if session.exploration.scenario_id == ARENA_ID:
+            return
         for actor in actors:
             character_roster.update_experience(
                 str(actor.id),
@@ -124,10 +137,18 @@ def create_app(
             "selected_scenario_id": choices[0].id if len(choices) == 1 else "",
             "roster": roster,
             "class_names": character_class_names,
-            "hero_guides": HERO_SELECTION_GUIDES,
+            "hero_guides": physical_mana_guides(),
             "hero_flaws": FLAW_FEATURE_IDS,
             **extra,
         }
+
+    @app.get("/rules/physical-mana")
+    def physical_mana_rules():
+        names = {"garran": "Garran", "brakka": "Brakka", "mira": "Mira", "dagna": "Dagna", "lorian": "Lorian", "nimra": "Nimra", "erynd": "Erynd"}
+        return render_template("physical_mana.html", waves=WAVES, mana_text=mana_text, mana_chips=chips,
+            heroes=[{"id": hero_id, "name": name, "abilities": hero_abilities(hero_id),
+                     "flaw": FLAWS[hero_id], "passive": MANA_PASSIVES[hero_id], "notes": "\n".join(f"{note.name}: {note.body}" for note in physical_mana_passives(hero_id)[:-1]), "supply": turn_supply(hero_id)}
+                    for hero_id,name in names.items()])
 
     @app.get("/")
     def index():
@@ -136,6 +157,27 @@ def create_app(
             scenario_name=session.exploration.scenario_name,
             save_exists=session.snapshot_path.exists(),
         )
+
+    @app.post("/training/open")
+    def open_training_arena():
+        session.configure_scenario(Path("content/scenarios/recruitment_arena.json"))
+        session.configure_custom_party((training_hero("garran"),))
+        return redirect(url_for("play"))
+
+    @app.post("/api/training/nessa")
+    def talk_to_training_nessa():
+        if not can_talk_to_nessa(session):
+            return jsonify(error="Podejdź do Nessy w swojej turze i zakończ bieżącą akcję.", state=session.state_payload()), 400
+        return jsonify(session.select_combat_interaction_at_position(NESSA_POSITION))
+
+    @app.post("/api/training/start")
+    def start_training():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(start_training_trial(session, str(data.get("hero_id", "")),
+                           str(data.get("mode", "basic")), str(data.get("creature_type", "humanoid"))))
+        except ValueError as error:
+            return jsonify(error=str(error), state=session.state_payload()), 400
 
     @app.get("/play")
     def play():
@@ -191,7 +233,7 @@ def create_app(
             return selection_error("Nie udało się wczytać wybranego bohatera.")
 
         session.configure_scenario(selected_scenario.path)
-        session.configure_custom_party(party)
+        session.configure_custom_party(tuple(apply_physical_mana_profile(actor) for actor in party))
         return redirect(url_for("play"))
 
     @app.get("/load-game")
@@ -287,10 +329,12 @@ def create_app(
                 "character_not_found.html",
                 message=str(exc),
             ), 404
+        character = replace(character, actor=apply_physical_mana_profile(character.actor))
         return render_template(
             "character_detail.html",
             character=character,
-            archetype=HERO_ARCHETYPES_BY_ID.get(str(character.actor.id)),
+            archetype=_physical_mana_archetype(str(character.actor.id)),
+            mana_profile=turn_supply(str(character.actor.id)) if hero_abilities(str(character.actor.id)) else None,
             payload=character_record_payload(character),
             effective_ac=effective_armor_class(character.actor),
             experience=experience_progress(character.actor),
@@ -1485,6 +1529,57 @@ def create_app(
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
+    @app.post("/api/combat/mana-wave")
+    def api_combat_mana_wave():
+        data = request.get_json(silent=True) or {}
+        try:
+            event = data.get("event")
+            if isinstance(event, bool) or not isinstance(event, int):
+                raise ValueError("Podaj numer wydarzenia 1–6.")
+            return jsonify(session.report_physical_mana_wave(event))
+        except (TypeError, ValueError) as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/mana-damage-bonus/skip")
+    def api_combat_mana_damage_bonus_skip():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(session.skip_physical_damage_bonus(str(data.get("bonus_id", ""))))
+        except ValueError as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/mana-weapon")
+    def api_combat_mana_weapon():
+        try:
+            return jsonify(session.activate_mana_weapon())
+        except ValueError as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/mana-loan")
+    def api_combat_mana_loan():
+        try:
+            return jsonify(session.use_mana_loan())
+        except ValueError as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/mana-blue-movement")
+    def api_combat_mana_blue_movement():
+        try:
+            return jsonify(session.declare_blue_movement())
+        except ValueError as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/attack-series")
+    def api_combat_attack_series():
+        data = request.get_json(silent=True) or {}
+        try:
+            count = data.get("count")
+            if isinstance(count, bool) or not isinstance(count, int):
+                raise ValueError("Podaj całkowitą liczbę ataków.")
+            return jsonify(session.declare_physical_attack_series(count))
+        except (TypeError, ValueError) as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
     @app.post("/api/combat/attack-source")
     def api_combat_attack_source():
         data = request.get_json(silent=True) or {}
@@ -1901,6 +1996,20 @@ def create_app(
             )
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/shield-bash/rolls")
+    def api_shield_bash_rolls():
+        try:
+            return jsonify(submit_shield_bash(session, request.get_json(silent=True) or {}))
+        except ValueError as exc:
+            return jsonify(error=str(exc), state=session.state_payload()), 400
+
+    @app.post("/api/combat/shield-bash/confirm")
+    def api_shield_bash_confirm():
+        try:
+            return jsonify(confirm_shield_bash(session))
+        except ValueError as exc:
+            return jsonify(error=str(exc), state=session.state_payload()), 400
 
     @app.post("/api/combat/class-feature/targeting")
     def api_combat_class_feature_targeting():
@@ -3399,6 +3508,14 @@ def _character_sheet_feature_entries(
 ) -> tuple[dict[str, str], ...]:
     entries: list[dict[str, str]] = []
     for feature in features:
+        if feature.source_ref == "physical_mana:v02":
+            flaw = FLAWS.get(actor_id or "")
+            name, text = (flaw[1], flaw[2]) if flaw and feature.feature_id == flaw[0] else (feature.label, feature.description)
+            ability = mana_ability(actor_id or "", feature.feature_id)
+            if ability is not None:
+                name, text = ability.name, ability.description
+            entries.append({"name": name, "rule_text": text, "game_text": "", "use_mode": ""})
+            continue
         note = FLAW_HELP.get(feature.feature_id) or PASSIVE_HELP.get(feature.feature_id)
         if note is None and actor_id in HERO_FLAWS:
             note = ACTIVE_FEATURE_HELP.get(feature.feature_id)
@@ -4066,3 +4183,15 @@ def _form_integer(value: object) -> int:
         return int(str(value))
     except (TypeError, ValueError):
         return 0
+
+
+def _physical_mana_archetype(hero_id: str):
+    archetype = HERO_ARCHETYPES_BY_ID.get(hero_id)
+    if archetype is None or not hero_abilities(hero_id):
+        return archetype
+    supply = turn_supply(hero_id)
+    return replace(archetype,
+        turn_plan=("Sprawdź pozycję, rynek i posiadane kombinacje many.", "Wybierz serię zwykłych ataków albo jedną zdolność główną; zaplanuj ruch i akcję dodatkową.",
+                   f"Na końcu zachowaj do {supply['keep']} starych kart, dobierz do 3 i uzupełnij rynek."),
+        resources=(f"Pojemność {supply['capacity']} fizycznych kart many; aplikacja nie prowadzi ręki.", "C, N, Z, B, F — pięć kolorów; 2 dowolne zastępują jeden kolor.", MANA_PASSIVES[hero_id][2]),
+        pitfalls=(FLAWS[hero_id][2], "Reakcje wydają karty przygotowane na następną turę."))

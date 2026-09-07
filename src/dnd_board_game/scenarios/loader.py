@@ -795,13 +795,14 @@ def compile_actor_combat_content(
         for definition in attack_definitions
     )
     attack_sources = _unique_compiled_attack_source_ids(attack_sources)
+    from dnd_board_game.combat.physical_mana_sources import adapt_action, adapt_attack
     return CompiledActorCombatContent(
-        attack_sources=attack_sources,
+        attack_sources=tuple(adapt_attack(actor, s) for s in attack_sources),
         healing_sources=tuple(
             _healing_source_from_definition(definition, actor)
             for definition in healing_definitions
         ),
-        combat_actions=tuple(combat_actions),
+        combat_actions=tuple(adapt_action(actor, a) for a in combat_actions),
     )
 
 

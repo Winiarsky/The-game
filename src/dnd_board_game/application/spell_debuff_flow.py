@@ -274,6 +274,7 @@ class SpellDebuffFlowService:
                 stacking=EffectStackingPolicy.STACK,
                 stacking_key=f"concentration:{caster.id}",
                 spell_level=pending.cast_level,
+                remaining_rounds=int(getattr(action, "duration_rounds", 0)) or None,
             )
             if applied_conditions and action.concentration
             else None

@@ -689,6 +689,10 @@ def effective_movement_speed(
         if effect.actor_id == str(actor.id)
         and effect.kind == "speed_bonus"
     )
+    if any(e.kind == "mana_wave_2" for e in active_effects) and not any(
+        e.actor_id == str(actor.id) and e.kind == "mana_blue_movement" for e in active_effects
+    ):
+        base_speed = max(5, base_speed - 10)
     if any(
         condition_definition(state.condition).speed_zero
         for state in states

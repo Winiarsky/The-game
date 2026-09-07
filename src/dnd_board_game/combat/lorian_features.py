@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dnd_board_game.actors.resources import uses_physical_mana
+
 from dataclasses import dataclass, replace
 from typing import Sequence
 
@@ -333,7 +335,7 @@ def lorian_has_live_audience(
 ) -> bool:
     """Return whether Lorian's inventor tricks have a conscious ally nearby."""
 
-    if not actor_has_feature(actor, "flaw_needs_audience"):
+    if uses_physical_mana(actor) or not actor_has_feature(actor, "flaw_needs_audience"):
         return True
     return any(
         candidate.id != actor.id

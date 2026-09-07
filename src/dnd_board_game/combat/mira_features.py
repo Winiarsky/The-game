@@ -279,6 +279,7 @@ def apply_mira_wound_rider(
     action_id: str,
     source_actor_id: str,
     applied_damage: int,
+    physical_mana: bool = False,
 ) -> ConditionApplicationResult:
     condition = (
         CombatCondition.HAMSTRUNG
@@ -295,7 +296,10 @@ def apply_mira_wound_rider(
         condition,
         source_actor_id=source_actor_id,
         source_label=mira_action_label(action_id),
-        duration=EffectDuration.PERMANENT,
+        duration=(EffectDuration.UNTIL_TURN_START if action_id == "hamstring_cut" else EffectDuration.UNTIL_TURN_END)
+                 if physical_mana else EffectDuration.PERMANENT,
+        expiration_actor_id=source_actor_id if action_id == "hamstring_cut" else str(target.id),
+        expiration_event_count=2 if physical_mana and action_id == "blade_mistress" else 1,
     )
 
 

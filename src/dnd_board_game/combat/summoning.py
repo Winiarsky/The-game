@@ -195,6 +195,10 @@ def add_summoned_creature(
     )
     if owner_index is None:
         raise ValueError("Summon owner is absent from initiative.")
+    from dnd_board_game.actors.resources import uses_physical_mana
+    owner = next(a for a in state.actors if a.id == summon.owner_actor_id)
+    if uses_physical_mana(owner) and summon.spell_id == "spiritual_weapon":
+        return replace(state, actors=(*state.actors, actor), summoned_creatures=(*state.summoned_creatures, summon))
     owner_entry = state.initiative_order.entries[owner_index]
     entry = InitiativeEntry(
         actor=actor,

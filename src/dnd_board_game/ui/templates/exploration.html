@@ -4,7 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Eksploracja</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='exploration.css', v='combat-hud-20260905-1') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='nessa_briefing.css', v='nessa-1') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='physical_mana.css', v='black-mana-20260907') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='exploration.css', v='black-mana-20260907') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='training_arena.css') }}?v=1">
 </head>
 <body>
 <header class="app-shell-header">
@@ -252,6 +255,7 @@
     <div id="status" class="status" hidden></div>
     <div id="physical-card-status" class="physical-card-status" aria-live="polite" hidden></div>
     <div id="board-input-global" data-board-input-status></div>
+    <section class="card" id="training-arena-panel" hidden></section>
     <div class="card" id="flow-panel"></div>
     <div class="card scene-description" id="scene-description-card">
       <h3>Opis sceny</h3>
@@ -303,6 +307,7 @@
             <div data-board-input-status></div>
           </header>
           <div id="interaction-actions-scroll" class="interaction-workspace-scroll actions-workspace-scroll">
+            <div id="briefing-contract"></div>
             <div id="interaction-goals" class="interaction-goals conversation-system-card chat-flow-entry"></div>
             <div id="interaction-state-card" class="chat-resolution conversation-system-card interaction-state-card" aria-live="polite" hidden>
               <div class="interaction-state-head">
@@ -376,6 +381,10 @@
   </form>
 </dialog>
 <script>window.EXPLORATION_SLASH_COMMANDS = {{ slash_commands | tojson }};</script>
-<script src="{{ url_for('static', filename='exploration.js', v='combat-hud-20260905-1') }}"></script>
+<script src="{{ url_for('static', filename='physical_mana.js', v='black-mana-20260907') }}"></script>
+<script src="{{ url_for('static', filename='training_arena.js') }}?v=terrain-3"></script>
+<script src="{{ url_for('static', filename='dice_icons.js', v='black-mana-20260907') }}"></script>
+<script src="{{ url_for('static', filename='shield_bash.js', v='black-mana-20260907') }}"></script>
+<script src="{{ url_for('static', filename='exploration.js', v='black-mana-20260907') }}"></script>
 </body>
 </html>

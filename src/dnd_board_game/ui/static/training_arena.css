@@ -1,0 +1,17 @@
+.training-arena-mode #flow-panel,
+.training-arena-mode #scene-description-card,
+.training-arena-mode #action-panel,
+.training-arena-mode #travel-panel,
+.training-arena-mode #points-panel {display:none!important;}
+#training-arena-panel {border:1px solid #8b744b;}
+.training-heading {display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;}
+.training-heading h2 {margin:4px 0;font-family:Georgia,serif;}
+.training-heading small {color:#d2ae70;letter-spacing:.1em;}
+.training-options {display:flex;flex-wrap:wrap;gap:16px;margin:16px 0;}
+.training-options label {display:grid;gap:6px;flex:1;min-width:220px;}
+.training-options select {width:100%;padding:10px;}
+.training-roster {display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px;margin:16px 0;}
+.training-roster button {display:grid;gap:4px;text-align:left;padding:12px;}
+.training-roster small {font-weight:normal;}
+#training-arena-panel details p {line-height:1.5;max-width:90ch;}
+#training-arena-panel a {color:#a8cdf0;}

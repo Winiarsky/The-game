@@ -249,6 +249,7 @@ class SummoningFlowService:
                 else f"summon:{caster.id}:{action.id}"
             ),
             spell_level=pending.cast_level,
+            remaining_rounds=int(getattr(action, "duration_rounds", 0)) or None,
         )
         updated_effects = apply_active_effect(updated_effects, effect).active_effects
         ended_text = (

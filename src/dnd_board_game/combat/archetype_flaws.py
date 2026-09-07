@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dnd_board_game.actors.resources import uses_physical_mana
+
 from dataclasses import dataclass, replace
 from typing import Sequence
 
@@ -84,7 +86,7 @@ def dynamic_flaw_activations(
     activations: list[FlawActivation] = []
     for actor in actors:
         actor_id = str(actor.id)
-        if actor.is_defeated():
+        if actor.is_defeated() or uses_physical_mana(actor):
             continue
         downed = _living_downed_allies(actor, actors)
         if actor_has_feature(actor, "flaw_remorse"):
@@ -179,6 +181,8 @@ def _remorse_roll_modifiers(
     actor: Actor,
     active_effects: Sequence[ActiveEffect],
 ) -> tuple[RollModifier, ...]:
+    if uses_physical_mana(actor):
+        return ()
     return tuple(
         RollModifier(
             effect.label,
@@ -230,7 +234,8 @@ def attack_source_with_exposed_mira_bonus(
     """Grant +2 to an observer who exposed Mira in this stealth session."""
 
     if (
-        attacker.faction == target.faction
+        uses_physical_mana(target)
+        or attacker.faction == target.faction
         or not actor_has_feature(target, "flaw_exposed_panic")
     ):
         return source
@@ -299,7 +304,7 @@ def flaw_blocks_equipment_use(
     powers, not ordinary attacks made with already equipped weapons.
     """
 
-    return actor_has_feature(actor, "flaw_chains") and any(
+    return not uses_physical_mana(actor) and actor_has_feature(actor, "flaw_chains") and any(
         effect.actor_id == str(actor.id) and effect.kind == "rage"
         for effect in active_effects
     )

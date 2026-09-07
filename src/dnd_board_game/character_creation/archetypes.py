@@ -164,19 +164,19 @@ HERO_ARCHETYPES = (
         "Znaleźć własne zasady przyzwoitego działania bez obietnicy pewnego, dobrego rezultatu.",
         (
             'Zajmij przejście i osłoń sojuszników; ustawienie tarczy jest twoją główną decyzją.',
-            'Przed ruchem wybierz Uderzenie tarczą albo Pozycję obronną; oba zużywają cały ruch.',
+            'Uderzenie tarczą zużywa akcję dodatkową: możesz połączyć je ze zwykłym atakiem. Pozycję obronną wybierz przed ruchem.',
             'Taktykę wydawaj na rozkazy i osłonę. Po wykonaniu akcji możesz użyć Zrywu akcji akcją dodatkową.',
         ),
         (
             'Taktyka: 4 punkty (modyfikator Siły); długi odpoczynek.',
             'Drugi oddech i Zryw akcji: po 1 użyciu; krótki lub długi odpoczynek.',
-            'Pozycja obronna i Uderzenie tarczą: cały ruch, bez puli użyć.',
+            'Pozycja obronna: cały ruch. Uderzenie tarczą: akcja dodatkowa, bez puli użyć.',
         ),
         ("wysoki KP", "niezawodny atak", "kontrola pozycji"),
         (
             'mało opcji dystansowych',
             'leczenie nie cofa sumy ran śledzonej przez Wyrzuty sumienia',
-            'Pozycja obronna i Uderzenie tarczą wymagają niewydanego ruchu',
+            'Pozycja obronna wymaga niewydanego ruchu; Uderzenie tarczą wymaga wolnej akcji dodatkowej',
         ),
         "GA-01",
     ),

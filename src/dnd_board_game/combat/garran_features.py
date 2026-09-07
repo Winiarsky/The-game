@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dnd_board_game.actors.resources import uses_physical_mana
+
 from dataclasses import dataclass, replace
 from typing import Sequence
 
@@ -117,7 +119,8 @@ def resolve_garran_defensive_stance(
     actor = current_actor(state)
     if not actor_has_feature(actor, "defensive_stance"):
         raise ValueError("Aktywna postać nie posiada Pozycji obronnej.")
-    movement = use_movement_action(state, actor)
+    movement = (use_action_economy_cost(state, ActionEconomyCost.BONUS_ACTION)
+                if uses_physical_mana(actor) else use_movement_action(state, actor))
     if not movement.accepted:
         raise ValueError(movement.message)
     effect = ActiveEffect(
@@ -189,16 +192,16 @@ def resolve_shield_bash(
         raise ValueError("Cel Uderzenia tarczą musi znajdować się w odległości 5 stóp.")
     if not 1 <= attacker_roll <= 20 or not 1 <= defender_roll <= 20:
         raise ValueError("Rzuty sporne muszą mieścić się w zakresie 1–20.")
-    if not 1 <= damage_roll <= 4:
-        raise ValueError("Rzut obrażeń Uderzenia tarczą musi być wynikiem k4.")
-    movement = use_movement_action(state, actor)
-    if not movement.accepted:
-        raise ValueError(movement.message)
+    if type(damage_roll) is not int or not 1 <= damage_roll <= 6:
+        raise ValueError("Rzut obrażeń Uderzenia tarczą musi być wynikiem k6.")
+    action = use_action_economy_cost(state, ActionEconomyCost.BONUS_ACTION)
+    if not action.accepted:
+        raise ValueError(action.message)
     attacker_total = attacker_roll + ability_modifier(actor.ability_scores.strength)
     defender_total = defender_roll + ability_modifier(target.ability_scores.strength)
     if attacker_total <= defender_total:
         return ShieldBashResolution(
-            movement.state, actor, target, target, attacker_total, defender_total, None, None
+            action.state, actor, target, target, attacker_total, defender_total, None, None
         )
     damage = apply_damage_result(
         target,
@@ -213,12 +216,12 @@ def resolve_shield_bash(
             target.damage_affinities,
         ),
     )
-    destination = shield_bash_destination(board, movement.state, actor, target)
+    destination = shield_bash_destination(board, action.state, actor, target)
     target_after = replace(
         damage.actor_after,
         position=destination or damage.actor_after.position,
     )
-    updated = replace_actor(movement.state, target_after)
+    updated = replace_actor(action.state, target_after)
     return ShieldBashResolution(
         updated,
         actor,

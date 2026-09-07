@@ -46,6 +46,11 @@ Gracze mają zachować charakter gry planszowej:
 - przesuwają figurki po fizycznej planszy,
 - reagują na podświetlenia LED i komunikaty aplikacji.
 
+Gracze wpisują wyłącznie rzuty swoich bohaterów. Za przeciwników aplikacja
+zawsze rzuca automatycznie — również w testach spornych, takich jak Uderzenie
+tarczą. Wynik przeciwnika i jego modyfikatory pokazujemy w podsumowaniu;
+nie prosimy gracza o rzut ani wpisanie wyniku za przeciwnika.
+
 ## Plansza I Hardware
 
 Plansza:
@@ -168,3 +173,15 @@ Na tym etapie nie robimy:
 - Snapshot pojedynczego scenariusza ma wersjonowany format v24 opisany w `docs/SAVE_FORMAT.md`;
   stan kampanii oraz migracje przyszłych wersji pozostają do zaprojektowania w M9.
 - Bazową wersją zasad dla pierwszego pełnego wydania jest D&D 5e 2014. Odstępstwa wymagane przez fizyczną planszę albo tempo gry zapisujemy jawnie w `GAME_DESIGN.md` i `docs/RULES_DECISIONS.md`.
+
+
+## Physical mana profile (2026-09-05)
+
+New-game party selection explicitly applies `physical_mana_v02` to the seven
+curated heroes. Cards, market, mana payments and physical passive/flaw markers
+remain outside the application. Combat tracks only declared actions/attack
+sequences, effects and reported waves; existing saves are not silently migrated.
+The current economy is documented in `docs/PHYSICAL_MANA_DESIGN_V0_2.md`.
+Player help and printable ability sets are served at `/rules/physical-mana`.
+A temporary spiritual-weapon activation returns to the owner's saved turn state;
+it does not grant the weapon an unpaid recurring initiative turn.

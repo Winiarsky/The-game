@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from dnd_board_game.actors.resources import uses_physical_mana
 from random import Random
 from typing import Protocol
 
@@ -726,6 +727,8 @@ class PlayerCombatResourceFlowService:
                 1,
                 ability_modifier(getattr(caster.ability_scores, ability_name)),
             )
+        if uses_physical_mana(caster) and base_effect_kind == "healing_grace_aura_source":
+            effect_value = 2
         if action.id == "magic_weapon":
             effect_value = min(3, 1 + max(0, (pending.cast_level - 2) // 2))
         options = tuple(getattr(action, "effect_options", ()))
@@ -802,7 +805,7 @@ class PlayerCombatResourceFlowService:
             pooled_targets: list[Actor] = []
             for target in sorted(affected_targets, key=lambda actor: actor.hp):
                 if (
-                    action.id == "sleep"
+                    action.id in {"sleep", "nimra_sleep"}
                     and actor_is_immune_to_effect(
                         target,
                         SavingThrowEffectTag.MAGICAL_SLEEP.value,
@@ -854,6 +857,7 @@ class PlayerCombatResourceFlowService:
                     else f"spell-zone:{caster.id}:{action.id}"
                 ),
                 spell_level=pending.cast_level,
+                remaining_rounds=int(getattr(action, "duration_rounds", 0)) or None,
                 excluded_positions=pending.excluded_positions,
             )
             updated_effects = apply_active_effect(
@@ -893,6 +897,7 @@ class PlayerCombatResourceFlowService:
                     else f"spell-zone:{caster.id}:{action.id}"
                 ),
                 spell_level=pending.cast_level,
+                remaining_rounds=int(getattr(action, "duration_rounds", 0)) or None,
                 excluded_positions=pending.excluded_positions,
             )
             updated_effects = apply_active_effect(
@@ -1119,6 +1124,8 @@ class PlayerCombatResourceFlowService:
                     ),
                     source_spell_id=action.id,
                     source_spell_level=pending.cast_level,
+                    expiration_actor_id=str(caster.id) if uses_physical_mana(caster) and action.id == "nimra_sleep" else None,
+                    expiration_event_count=2 if uses_physical_mana(caster) and action.id == "nimra_sleep" else 1,
                 )
                 updated_state = replace(
                     updated_state,

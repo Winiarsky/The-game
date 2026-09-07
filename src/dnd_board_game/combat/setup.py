@@ -106,18 +106,19 @@ def build_setup_steps(setup: EncounterSetup) -> tuple[SetupStep, ...]:
     if enemy_entries:
         steps.append(_actor_step(SetupStepKind.ENEMIES, "jawnych przeciwników i NPC", enemy_entries, SETUP_COLORS["enemies"]))
 
-    grouped_environment: dict[EnvironmentSetupType, list[EnvironmentSetupEntry]] = defaultdict(list)
+    # A shared type does not imply shared rules (e.g. passable and solid cover).
+    grouped_environment: dict[
+        tuple[EnvironmentSetupType, tuple[str, ...]], list[EnvironmentSetupEntry]
+    ] = defaultdict(list)
     for entry in setup.environment:
         if entry.visibility != SetupVisibility.VISIBLE:
             continue
-        grouped_environment[entry.setup_type].append(entry)
+        grouped_environment[(entry.setup_type, _unique_text(entry.mechanics))].append(entry)
 
-    for setup_type in sorted(grouped_environment, key=lambda item: item.value):
-        entries = grouped_environment[setup_type]
+    for group_key in sorted(grouped_environment, key=lambda item: item[0].value):
+        setup_type, mechanics = group_key
+        entries = grouped_environment[group_key]
         positions = tuple(_unique_positions(position for entry in entries for position in entry.positions))
-        mechanics = _unique_text(
-            mechanic for entry in entries for mechanic in entry.mechanics
-        )
         names = ", ".join(entry.name for entry in entries)
         label = _environment_label(setup_type)
         steps.append(

@@ -279,62 +279,22 @@ def test_map1_first_encounter_setup_includes_figures_and_tactical_terrain() -> N
 
     assert session.encounter_setup_flow is not None
     assert [step.label for step in session.encounter_setup_flow.steps] == [
-        "Start walki",
-        "pola startowe bohaterów",
-        "jawnych przeciwników i NPC",
-        "skrzynie i pojemniki",
-        "osłony",
-        "elementy otoczenia",
+        "Start walki", "Wrak i skarpa", "Osłony kierunkowe", "Błoto i strumień",
+        "pola startowe bohaterów", "jawnych przeciwników i NPC", "Cel i zasady starcia",
     ]
     payload = session.encounter_setup_flow.as_payload()
-    assert payload["map_asset_url"] == (
-        "/game-assets/maps/ostatni_transport_01/"
-        "glodne_cienie_battlemap_base_v5.png"
-    )
-    steps_by_label = {
-        step.label: step for step in session.encounter_setup_flow.steps
-    }
-    assert len(steps_by_label["pola startowe bohaterów"].positions) == 20
-    environment_by_id = {
-        entry.id: entry for entry in session.encounter_setup_flow.encounter.environment
-    }
-    assert environment_by_id["muddy_rut_rules"].mechanics == (
-        "Trudny teren: każde 5 ft ruchu przez to pole kosztuje 10 ft.",
-    )
-    assert environment_by_id["western_fallen_tree_defensive_spots"].mechanics == (
-        "Figurka stojąca na tym polu otrzymuje +2 do KP.",
-    )
-    assert steps_by_label["osłony"].mechanics == (
-        "Krawędź wozu między atakującym a celem zapewnia połowiczną osłonę: +2 do KP i rzutów obronnych na Zręczność.",
-        "Środek wraku blokuje ruch i linię widzenia.",
-    )
-    assert steps_by_label["elementy otoczenia"].mechanics == (
-        "Błotnista koleina jest trudnym terenem: każde 5 ft ruchu kosztuje 10 ft.",
-        "Strumień jest trudnym terenem: każde 5 ft ruchu kosztuje 10 ft.",
-        "Podejście na skarpę jest trudnym terenem: każde 5 ft ruchu kosztuje 10 ft.",
-    )
-    while session.encounter_setup_flow.current_step.label != "elementy otoczenia":
-        if session.encounter_setup_flow.is_player_start_step:
-            session.assign_encounter_player_start_position(
-                session.encounter_setup_flow.remaining_player_start_positions()[0]
-            )
-        else:
-            session.confirm_encounter_setup_step()
-
-    environment_step = session.state_payload()
-    assert environment_step["encounter_setup"]["current_step"]["positions"] == [
-        [2, 10],
-        [6, 17],
-        [14, 17],
-        [14, 23],
-    ]
-    assert environment_step["encounter_setup"]["current_step"]["mechanics"] == [
-        "Błotnista koleina jest trudnym terenem: każde 5 ft ruchu kosztuje 10 ft.",
-        "Strumień jest trudnym terenem: każde 5 ft ruchu kosztuje 10 ft.",
-        "Podejście na skarpę jest trudnym terenem: każde 5 ft ruchu kosztuje 10 ft.",
-    ]
-    assert environment_step["board_selection"]["legal_position_count"] == 0
-    assert environment_step["board_selection"]["auto_arm"] is False
+    assert payload["map_asset_url"].endswith("glodne_cienie_battlemap_v6.svg")
+    steps = {step.label: step for step in session.encounter_setup_flow.steps}
+    assert len(steps["pola startowe bohaterów"].positions) == 40
+    assert any("Samo stanie" in rule for rule in steps["Osłony kierunkowe"].mechanics)
+    assert tuple(payload["battle_briefing"]) == steps["Cel i zasady starcia"].mechanics
+    while session.encounter_setup_flow.current_step.label != "Błoto i strumień":
+        session.confirm_encounter_setup_step()
+    payload = session.state_payload()
+    assert payload["encounter_setup"]["current_step"]["positions"] == [[9, 17], [1, 7]]
+    assert payload["encounter_setup"]["current_step"]["mechanics"]
+    assert payload["board_selection"]["legal_position_count"] == 0
+    assert payload["board_selection"]["auto_arm"] is False
 
 
 @pytest.mark.parametrize(
@@ -370,14 +330,14 @@ def test_map1_encounter_selects_authored_party_size_variant(
     }
 
 
-def test_map1_heroes_choose_their_formation_inside_a_five_by_four_zone() -> None:
+def test_map1_heroes_choose_their_formation_inside_a_ten_by_four_zone() -> None:
     encounter = build_encounter_from_scenario(load_scenario(MAP1_ENCOUNTER_PATH))
 
     assert len(encounter.player_start_zones) == 1
     assert {position.as_tuple() for position in encounter.player_start_zones[0]} == {
         (col, row)
-        for row in range(26, 30)
-        for col in range(8, 13)
+        for row in range(19, 23)
+        for col in range(5, 15)
     }
     assert all(
         not encounter.board.terrain_at(position).blocks_movement
@@ -385,7 +345,7 @@ def test_map1_heroes_choose_their_formation_inside_a_five_by_four_zone() -> None
     )
     assert dict(encounter.enemy_ai_roles) == {
         "hungry_shadow_s1": "skirmisher",
-        "hungry_shadow_s2": "skirmisher",
+        "hungry_shadow_s2": "flanker",
         "hungry_shadow_s3": "flanker",
         "hungry_shadow_s4": "harrier",
         "hungry_shadow_leader": "leader",
@@ -408,12 +368,12 @@ def test_map1_setup_keeps_the_whole_start_zone_available_for_each_hero() -> None
 
     assert flow.current_step is not None
     assert flow.current_step.label == "pola startowe bohaterów"
-    assert len(flow.remaining_player_start_positions()) == 20
-    first = Coordinate(12, 29)
+    assert len(flow.remaining_player_start_positions()) == 40
+    first = Coordinate(14, 22)
     session.assign_encounter_player_start_position(first)
 
-    assert len(flow.remaining_player_start_positions()) == 19
-    assert Coordinate(8, 26) in flow.remaining_player_start_positions()
+    assert len(flow.remaining_player_start_positions()) == 39
+    assert Coordinate(5, 19) in flow.remaining_player_start_positions()
     assert first not in flow.remaining_player_start_positions()
 
 
@@ -443,11 +403,11 @@ def test_hungry_shadows_use_coordinated_pack_attack_statblocks() -> None:
 @pytest.mark.parametrize(
     ("party_size", "enemy_positions"),
     (
-        (1, {(10, 21)}),
-        (2, {(6, 15), (13, 21)}),
-        (3, {(6, 15), (6, 21), (13, 21)}),
-        (4, {(6, 15), (6, 21), (13, 21), (14, 19)}),
-        (5, {(6, 15), (6, 21), (13, 21), (14, 19), (4, 18)}),
+        (1, {(10, 17)}),
+        (2, {(11, 10), (13, 17)}),
+        (3, {(11, 10), (6, 17), (13, 17)}),
+        (4, {(11, 10), (6, 17), (13, 17), (17, 15)}),
+        (5, {(11, 10), (6, 17), (13, 17), (17, 15), (3, 14)}),
     ),
 )
 def test_map1_runtime_setup_lights_only_selected_enemy_variant(
@@ -488,12 +448,12 @@ def test_map1_layout_applies_difficult_terrain_and_blocking_wagon_to_pathfinding
     encounter = build_encounter_from_scenario(load_scenario(MAP1_ENCOUNTER_PATH))
     hero = next(actor for actor in encounter.actors if actor.faction.value == "ally")
 
-    muddy_hero = replace(hero, position=Coordinate(10, 24))
+    muddy_hero = replace(hero, position=Coordinate(9, 19))
     muddy_path = find_path(
         encounter.board,
         muddy_hero,
         (muddy_hero,),
-        Coordinate(10, 22),
+        Coordinate(9, 17),
     )
     blocked_path = find_path(
         encounter.board,
@@ -626,11 +586,10 @@ def test_map1_defeat_enters_game_over_without_revealing_exploration(tmp_path) ->
 
     assert setup_labels == [
         "Start walki",
+        "Wrak i skarpa", "Osłony kierunkowe", "Błoto i strumień",
         "bohater: Brakka",
         "przeciwnik lub NPC: Osłabiony Głodny Cień",
-        "skrzynie i pojemniki",
-        "osłony",
-        "elementy otoczenia",
+        "Cel i zasady starcia",
     ]
     assert restored.combat_state is not None
     assert restored.combat_state.status == CombatStatus.ACTIVE
@@ -1131,3 +1090,16 @@ def test_map1_unwarned_approach_uses_default_opening() -> None:
     result = resolve_encounter_opening(state, policy)
 
     assert result.outcome == EncounterOpeningOutcome.NO_SURPRISE
+
+
+def test_map1_battle_briefing_survives_loading_combat_checkpoint(tmp_path) -> None:
+    session = ExplorationUiSession(MAP1_SCENARIO_PATH, save_dir=tmp_path)
+    session.configure_custom_party((session.exploration.actors[0],))
+    _start_map1_combat(session)
+    expected = session.state_payload()["combat"]["battle_briefing"]
+    session.save_snapshot()
+    restored = ExplorationUiSession(MAP1_SCENARIO_PATH, save_dir=tmp_path)
+    payload = restored.load_snapshot()
+    assert restored.encounter_setup_flow is None
+    assert payload["combat"]["battle_briefing"] == expected
+    assert expected

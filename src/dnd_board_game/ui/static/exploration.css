@@ -1279,3 +1279,92 @@ pre { white-space: pre-wrap; overflow: auto; }
   gap: .7rem;
 }
 .exploration-card-prompt h4 { margin: .15rem 0 0; }
+
+/* Keep the entire playable map visible during terrain setup. */
+.battle-map-preview, .battle-rules { margin: 12px 0; padding: 12px; border: 1px solid #705c2c; border-radius: 8px; }
+.battle-map-preview summary, .battle-rules summary { cursor: pointer; font-weight: 700; }
+.battle-map-preview .location-preview-image { object-fit: contain; background: #111; max-height: 520px; }
+.battle-map-preview a { display: inline-block; margin: 4px 0; }
+.battle-rules li { margin: 8px 0; line-height: 1.45; }
+
+/* Playtest readability: reserve the first viewport for the current decision. */
+.combat-current-step, .combat-turn-hud {scroll-margin-top: calc(var(--shell-header-height) + 12px);}
+.mira-stealth-status {display:grid;gap:4px;padding:10px 14px;border:1px solid #63857c;border-radius:8px;background:#182423;font-size:14px;}
+.mira-stealth-status small {color:var(--color-text-muted);}
+.stealth-unaware {color:#66dcf2;} .stealth-aware {color:#ffc178;}
+.enemy-outcome {font-size:clamp(22px,3vw,32px);margin:0 0 8px;color:#efcf85;}
+.enemy-attack-summary button {margin-top:12px;}
+@media (max-height:850px) and (min-width:700px) {
+  .combat-shell {gap:10px;}
+  .combat-current-step {padding:14px 18px;}
+  .combat-turn-hud {padding:10px 14px;}
+  .combat-keyboard-waiting {padding:16px;}
+  .combat-keyboard-waiting h3 {font-size:28px;margin:6px 0;}
+}
+.keyboard-roll-wizard-card {max-height:calc(100dvh - 24px);overflow-y:auto;}
+
+@media (max-height:700px) and (min-width:1000px) {
+  .combat-keyboard-waiting {padding:8px;}
+  .combat-keyboard-waiting h3 {font-size:22px;margin:2px 0;}
+  .combat-keyboard-waiting > p {font-size:14px;}
+  .combat-keyboard-waiting .combat-keyboard-action-index {margin-top:10px;}
+  .mira-stealth-status {padding:8px 12px;gap:2px;}
+}
+.mira-stealth-status details {font-size:13px;}
+.mira-stealth-status details p {margin:6px 0;font-size:14px;line-height:1.45;}
+
+.combat-hp b {white-space:nowrap;}
+
+/* Keep the complete mana price visible beside each keyboard action. */
+.combat-action-tile-content {display:grid;gap:5px;min-width:0;}
+.combat-action-mana {display:flex;flex-wrap:wrap;align-items:center;gap:3px 6px;min-width:0;}
+.combat-action-mana-symbols {display:inline-flex;flex-wrap:wrap;align-items:center;gap:1px;}
+.combat-action-mana .mana-chip {width:23px;height:23px;padding:3px;margin:0;}
+.combat-action-mana .mana-chip svg {width:17px;height:17px;}
+.combat-action-mana .mana-plus {margin:0 1px;font-size:11px;}
+.combat-action-mana small {font-size:11px;font-weight:400;line-height:1.25;color:#b8c5d3;}
+
+/* Stable economy columns: main action, bonus action, free options then movement. */
+.combat-keyboard-action-index {grid-template-columns:repeat(3,minmax(0,1fr));width:100%;align-items:start;gap:14px;}
+.combat-economy-column,.combat-economy-section {min-width:0;}
+.combat-economy-section + .combat-economy-section {margin-top:18px;}
+.combat-economy-heading {display:flex;align-items:center;justify-content:space-between;gap:8px;border-bottom:1px solid #56616b;padding-bottom:7px;}
+.combat-economy-heading h4 {margin:0;color:#f2dcaa;font-size:17px;}
+.combat-economy-heading > span {color:#b8c5d3;font-size:13px;}
+.combat-keyboard-waiting .combat-economy-hint {font-size:12px;color:#b8c5d3;margin:7px 0 10px;text-align:left;}
+.combat-economy-options {display:grid;align-content:start;gap:8px;max-height:min(52dvh,600px);overflow-y:auto;scrollbar-gutter:stable;padding:2px 4px 3px 1px;}
+.combat-economy-options:focus-visible {outline:2px solid #e7bc48;outline-offset:3px;}
+.combat-economy-options .combat-economy-empty {font-size:13px;color:#a4adb7;text-align:left;margin:5px 0;}
+.combat-economy-controls {display:flex;flex-wrap:wrap;gap:8px;border-top:1px solid #39424b;margin-top:16px;padding-top:12px;text-align:left;}
+.combat-economy-controls > * {flex:1 1 190px;max-width:320px;}
+.combat-economy-options .combat-keyboard-fallback-option {width:100%;margin:0;}
+.combat-preview-economy {display:block;color:#e7bc48;margin-bottom:8px;}
+@media(max-width:900px) {
+  .combat-keyboard-action-index {grid-template-columns:minmax(0,1fr);gap:20px;}
+  .combat-economy-options {max-height:none;overflow:visible;scrollbar-gutter:auto;padding-right:0;}
+  .combat-economy-controls > * {max-width:none;}
+}
+.combat-keyboard-fallback-option .combat-action-mana {display:flex;}
+.combat-keyboard-fallback-option .combat-action-mana-symbols {display:inline-flex;}
+.combat-keyboard-preview > .combat-action-mana {margin-top:10px;}
+
+/* Dice remain identifiable by silhouette and explicit k-number at every size. */
+.dice-icon-group {display:inline-flex;align-items:center;gap:4px;color:#e5bf69;flex-shrink:0;}
+.dice-icon {display:block;width:72px;height:72px;overflow:visible;flex-shrink:0;}
+.dice-icon-outline {fill:#28251d;stroke:currentColor;stroke-width:2.2;stroke-linejoin:round;}
+.dice-icon-facets {fill:none;stroke:currentColor;stroke-width:1;stroke-linejoin:round;opacity:.5;}
+.dice-icon text {fill:#ffedbd;stroke:#28251d;stroke-width:4px;paint-order:stroke;stroke-linejoin:round;font:700 16px system-ui,sans-serif;}
+.dice-icon-count {font-size:14px;white-space:nowrap;}
+.keyboard-roll-wizard-heading {display:flex;align-items:center;gap:18px;margin-bottom:14px;}
+.keyboard-roll-wizard-heading > div {min-width:0;}
+.keyboard-roll-wizard-heading h2 {margin:5px 0 0;overflow-wrap:anywhere;}
+.keyboard-roll-wizard-summary .keyboard-roll-summary-identity {display:flex;align-items:center;gap:9px;}
+.keyboard-roll-wizard-summary .dice-icon-group {display:inline-flex;gap:4px;}
+.keyboard-roll-wizard-summary .dice-icon {width:38px;height:38px;}
+.keyboard-roll-wizard-summary .dice-icon-count {color:#e5bf69;}
+@media (max-width:480px) {
+  .keyboard-roll-wizard-heading {gap:12px;}
+  .keyboard-roll-wizard-heading .dice-icon {width:58px;height:58px;}
+  .keyboard-roll-wizard-summary li {flex-wrap:wrap;gap:6px;}
+  .keyboard-roll-wizard-summary b {white-space:normal;overflow-wrap:anywhere;}
+}

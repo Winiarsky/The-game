@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from dnd_board_game.actors.resources import uses_physical_mana
 from typing import Callable, Mapping, Protocol, Sequence
 
 from dnd_board_game.actors import (
@@ -222,6 +223,8 @@ class DefensiveSpellReactionFlowService:
         if enemy_result.target is None or enemy_result.target.id != str(target.id):
             raise ValueError("Oczekujący atak nie jest wymierzony w tego aktora.")
 
+        if uses_physical_mana(target) and action.id == "shield":
+            action = replace(action, value=3)
         reaction = use_actor_reaction(state, target)
         if not reaction.accepted:
             raise ValueError(reaction.message)
@@ -248,7 +251,8 @@ class DefensiveSpellReactionFlowService:
             stacking_key=f"spell_ac_bonus:{target.id}",
             spell_level=action.spell_level,
         )
-        updated_effects = apply_active_effect(active_effects, effect).active_effects
+        updated_effects = (active_effects if uses_physical_mana(target) and action.id == "shield"
+                           else apply_active_effect(active_effects, effect).active_effects)
 
         target_snapshot = replace(
             enemy_result.target,
@@ -1263,7 +1267,7 @@ class CombatReactionFlowService:
                     actor.position,
                 )
                 attacker = _actor_by_string_id(updated_state, str(attacker.id))
-            source = attack_source_with_target_combat_effects(attacker, actor, source, updated_effects)
+            source = attack_source_with_target_combat_effects(attacker, actor, source, updated_effects, allow_physical_turn_bonuses=False)
             source = attack_source_with_hidden_advantage(
                 source,
                 is_hidden_from(updated_state.hidden_states, str(attacker.id), str(actor.id)),
@@ -1411,6 +1415,7 @@ class PlayerReactionFlowService:
             target,
             source,
             active_effects,
+            allow_physical_turn_bonuses=False,
         )
         source = attack_source_with_hidden_advantage(
             source,
@@ -1493,6 +1498,7 @@ class PlayerReactionFlowService:
             target,
             source,
             active_effects,
+            allow_physical_turn_bonuses=False,
         )
         if component_totals is not None:
             components = damage_components_from_totals(

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dnd_board_game.actors.resources import uses_physical_mana
+
 from dataclasses import dataclass, replace
 from random import Random
 from typing import Mapping
@@ -551,6 +553,18 @@ def attack_source_with_combat_effects(
     *, target: Actor | None = None,
 ):
     modifiers = []
+    if (actor.faction == Faction.ENEMY and source.damage_components
+        and not actor_has_feature(actor, "training_fixed_damage")
+        and not any(m.stacking_key == "mana_threat_damage" for m in source.attack_roll_request.modifiers)):
+        bonus = max((e.value for e in active_effects if e.kind == "mana_threat"), default=0)
+        bonus += int(any(e.kind == "mana_wave_1" for e in active_effects))
+        if bonus:
+            first = source.damage_components[0]
+            source = replace(source, damage_components=(replace(first, modifier=first.modifier + bonus), *source.damage_components[1:]),
+                             damage_modifier=source.damage_modifier + bonus,
+                             damage_hint=f"{source.damage_hint} + {bonus} (Zagrożenie i fala)",
+                             attack_roll_request=replace(source.attack_roll_request, modifiers=(*source.attack_roll_request.modifiers,
+                                 RollModifier("Zagrożenie: premia do obrażeń", 0, RollModifierType.CUSTOM, stacking_key="mana_threat_damage"))))
     from .archetype_flaws import flaw_attack_roll_modifiers
 
     modifiers.extend(flaw_attack_roll_modifiers(actor, active_effects, source, target=target))
@@ -644,8 +658,11 @@ def attack_source_with_combat_effects(
             "sacred_weapon_attack_bonus",
             "magic_weapon",
             "powerful_strike",
+            "mana_surge",
             "divine_care_aura_penalty",
         }:
+            continue
+        if effect.kind == "mana_surge" and (effect.value <= 0 or not _physical_basic_weapon(actor, source)):
             continue
         if effect.kind == "strength_potion" and getattr(source, "ability", None) != "strength":
             continue
@@ -672,7 +689,7 @@ def attack_source_with_combat_effects(
         modifiers.append(
             RollModifier(
                 effect.label,
-                effect.value,
+                2 if effect.kind == "mana_surge" else effect.value,
                 RollModifierType.CUSTOM,
                 stacking_key=effect.id,
             )
@@ -739,7 +756,8 @@ def attack_source_with_combat_effects(
             )
     reckless = any(
         effect.actor_id == str(actor.id)
-        and effect.kind == "reckless_attack_advantage"
+        and effect.kind in {"reckless_attack_advantage", "mana_reckless"}
+        and (effect.kind != "mana_reckless" or (effect.value > 0 and _physical_basic_weapon(actor, source)))
         and getattr(source, "ability", None) == "strength"
         and getattr(getattr(source, "attack_kind", None), "value", "") == "melee"
         for effect in active_effects
@@ -887,6 +905,7 @@ def attack_source_with_target_combat_effects(
     target: Actor,
     source,
     active_effects: tuple[ActiveCombatEffect, ...],
+    *, allow_physical_turn_bonuses: bool = True,
 ):
     source = attack_source_with_combat_effects(attacker, source, active_effects, target=target)
     modifiers = []
@@ -1037,7 +1056,9 @@ def attack_source_with_target_combat_effects(
         if (
             effect.actor_id == str(target.id)
             and effect.kind == "hunters_mark"
+            and (not uses_physical_mana(attacker) or allow_physical_turn_bonuses)
             and effect.source_actor_id == str(attacker.id)
+            and not (uses_physical_mana(attacker) and any(e.actor_id == str(attacker.id) and e.kind in {"mana_hunters_mark_used", "mana_hunters_mark_skipped"} for e in active_effects))
             and getattr(getattr(source, "source_type", None), "value", "") == "weapon"
             and source.damage_components
             and all(
@@ -1050,13 +1071,19 @@ def attack_source_with_target_combat_effects(
                 damage_type=source.damage_components[0].damage_type,
                 dice=DiceExpression(1, 6),
                 label="Znak łowcy",
-                doubles_on_critical=source.id != "double_shot",
+                doubles_on_critical=uses_physical_mana(attacker) or source.id != "double_shot",
             )
             source = replace(
                 source,
                 damage_components=(*source.damage_components, component),
                 damage_hint=f"{source.damage_hint} + {component.hint()}",
             )
+    if uses_physical_mana(attacker) and source.id == "double_shot" and source.damage_components and not any(
+        e.actor_id == str(attacker.id) and e.kind in {"mana_double_shot_used", "mana_double_shot_skipped"} for e in active_effects
+    ) and not any(c.id == "mana_double_shot" for c in source.damage_components):
+        component = DamageComponentSpec("mana_double_shot", source.damage_components[0].damage_type,
+                                        dice=DiceExpression(1, 6), label="Podwójny strzał: wybrane trafienie")
+        source = replace(source, damage_components=(*source.damage_components, component), damage_hint=f"{source.damage_hint} + 1k6")
     if target.is_unconscious():
         mode = _with_advantage(mode)
     if not modifiers and mode == source.attack_roll_request.mode:
@@ -1094,6 +1121,10 @@ def consume_next_attack_effects(
     actor_id: str,
     target_actor_id: str | None = None,
 ) -> tuple[ActiveCombatEffect, ...]:
+    active_effects = tuple(
+        replace(e, value=e.value - 1) if e.actor_id == actor_id and e.kind in {"mana_surge", "mana_reckless"} and e.value > 0 else e
+        for e in active_effects
+    )
     remaining = expire_active_effects(
         active_effects,
         EffectEvent(
@@ -1303,3 +1334,8 @@ def condition_label(condition_type: str) -> str:
         "adjacent_enemy_exists": "sąsiedni przeciwnik istnieje",
         "target_tile_free": "pole docelowe jest wolne",
     }.get(condition_type, condition_type)
+
+
+def _physical_basic_weapon(actor: Actor, source: object) -> bool:
+    from .physical_mana import is_basic_weapon
+    return is_basic_weapon(actor, source)

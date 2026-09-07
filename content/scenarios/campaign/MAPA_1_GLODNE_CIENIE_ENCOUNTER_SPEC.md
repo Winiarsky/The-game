@@ -6,14 +6,37 @@ Encounter: `ostatni_transport_01_glodne_cienie`
 Docelowa drużyna: 3–5 bohaterów na poziomie 3  
 Tryb sceny: encounter natychmiast po wejściu na Mapę 1, eksploracja dopiero po jego rozstrzygnięciu
 
-## Obowiązująca rewizja walki (2026-08-26)
+## Obowiązująca rewizja v6 — 2026-09-05
+
+Wdrożona geometria, setup i zachowanie skrzydeł: `docs/HUNGRY_SHADOWS_REDESIGN_V6.md`.
+Ta sekcja i wskazany dokument zastępują starsze współrzędne, ilustracje,
+przypisania osłon i regułę wspólnego celu wszystkich popleczników.
+
+- Start bohaterów: wspólna strefa kolumny 5–14, wiersze 19–22.
+- S1 (6,17) wiąże front, S2 (13,17) i S3 (17,15) obchodzą boki,
+  S4 (3,14) naciska zachód. Przewodnica stoi na (11,10), Cień solo na (10,17).
+- Mały centralny wrak, dwie grupy skrzyń, pień, lokalne koleiny i krótka
+  skała ze wschodnim obejściem połączonym z drogą na obu końcach.
+- Osłony są kierunkowe; brak automatycznego +2 KP za stanie na polu.
+  Skarpa nie daje osobnego bonusu wysokości.
+- Setup: instrukcja → blokady → osłony → trudny teren → szyk bohaterów →
+  przeciwnicy → cel i zasady. Mapa, legenda i wydruk są dostępne w UI.
+- Skrzydłowi preferują pobliski, mniej naciskany i odizolowany cel;
+  przeciwnik już w zwarciu pozostaje przy sąsiadującym bohaterze.
+- Statystyki i mechanika przewodnicy, wsparcie stada i odwrót opisane niżej
+  pozostają aktywne. Wariant 1 gracza: jeden Cień 12 PW bez przewodnicy;
+  wariant 2 graczy: przewodnica 24 PW + S2; każdy kolejny wariant dodaje Cień.
+- Aktywny zasób mapy: `glodne_cienie_battlemap_v6.svg`; źródłem pól jest
+  runtime JSON. `scripts/build_hungry_shadows_map.py` odtwarza nakładkę.
+
+## Zachowane reguły stada z rewizji 2026-08-26
 
 Ta rewizja zastępuje niżej opisany prototyp dzwonu, Skoku stada, morale i
 `weighted_utility_v1`:
 
 - stary dzwon nie jest obiektem ani interakcją encountera;
 - profil działa jako deterministyczny `coordinated_pack_v1`;
-- poplecznicy koncentrują się na bohaterze otoczonym przez największą liczbę
+- poplecznicy frontowi (`skirmisher`) koncentrują się na bohaterze otoczonym przez największą liczbę
   innych popleczników, następnie wybierają najbliższego, bardziej rannego i
   stabilnie losowany remis; każdy inny poplecznik przy celu daje `+1` do ataku
   i obrażeń, niezależnie od flankowania;

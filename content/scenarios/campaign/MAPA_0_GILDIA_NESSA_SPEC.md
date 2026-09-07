@@ -1,6 +1,6 @@
 # Mapa 0 — Siedziba Gildii i odprawa Nessy
 
-Status: żywa specyfikacja techniczno-fabularna, przed implementacją  
+Status: scena wdrożona; dopracowanie odprawy 2026-09-05
 Kampania: `Ostatni transport do Czarnego Brodu`  
 Zakres: wejście do Gildii, pierwsza interakcja z Nessą, aktywacja zadania i
 odblokowanie wyjazdu na Mapę 1
@@ -11,6 +11,8 @@ flowgraf, testy runtime, teksty dialogowe i assety. Ogólny przebieg kampanii
 pozostaje w [`ostatni_transport_graf.md`](ostatni_transport_graf.md), a kanon
 organizacji w
 [`GILDIA_SZLAKOW_I_EKSPEDYCJI.md`](GILDIA_SZLAKOW_I_EKSPEDYCJI.md).
+
+Aktualny opis wdrożenia i testów: [`NESSA_BRIEFING_POLISH.md`](../../../docs/NESSA_BRIEFING_POLISH.md).
 
 ## 1. Cel doświadczenia
 
@@ -33,8 +35,7 @@ informacje przydatne później.
 
 1. Punkt interakcji `nessa`.
 2. Automatyczny rdzeń odprawy przy pierwszym wejściu.
-3. Siedem widocznych kafelków Nessy, znikających po wykorzystaniu tam, gdzie to
-   zasadne.
+3. Siedem stałych kafelków Nessy; omówione tematy zachowują numer i pole jako podgląd bez ponownego rozstrzygnięcia.
 4. Aktywacja zadania bez możliwości odmowy.
 5. Zapis poznanych faktów i szczegółów operacyjnych.
 6. Kafelek kończący odprawę.
@@ -189,7 +190,7 @@ Cele jawne w tej scenie:
 
 Cel skrywany, lecz możliwy do odczytania:
 
-- odzyskanie czterech skrzyń szarego pyłu jest dla niej ważniejsze, niż wynika
+- odzyskanie czterech skrzyń szarego pyłu ma większe znaczenie, niż wynika
   z oficjalnego tonu odprawy. Utrata pyłu grozi nie tylko stratą pieniędzy, ale
   zerwaniem ważnego kontraktu, kryzysem w Raven i podważeniem wiarygodności jej
   domu Gildii.
@@ -343,7 +344,7 @@ krótkie powitanie zależne od stanu, którego treść pozostaje `TBD`.
 ## 6. Kafelki widoczne dla graczy
 
 Po obowiązkowym wprowadzeniu widocznych jest maksymalnie siedem kafelków.
-Kafelki informacyjne są jednorazowe i znikają po wykorzystaniu. Zakończenie
+Kafelki informacyjne rozstrzyga się raz; potem pozostają jako „Omówione”. Zakończenie
 odprawy jest dostępne od razu.
 
 | Goal id | Etykieta | Resolver | Opis metody | Stan |
@@ -387,7 +388,7 @@ knowledge.transport_last_contact_details = true
 knowledge.convoy_route_marks = true
 ```
 
-Kafelek znika po wykorzystaniu.
+Kafelek pozostaje w swoim slocie jako „Omówione”, z podglądem odpowiedzi.
 
 ### 7.2. Co przewoził transport?
 
@@ -415,7 +416,7 @@ knowledge.transport_cargo_summary = true
 knowledge.hidden_medicine_cache = true
 ```
 
-Kafelek znika po wykorzystaniu.
+Kafelek pozostaje w swoim slocie jako „Omówione”, z podglądem odpowiedzi.
 
 ### 7.3. Kto podróżował z karawaną?
 
@@ -445,7 +446,7 @@ knowledge.transport_roster = true
 knowledge.alven_is_trusted_guild_accountant = true
 ```
 
-Kafelek znika po wykorzystaniu.
+Kafelek pozostaje w swoim slocie jako „Omówione”, z podglądem odpowiedzi.
 
 ### 7.4. Przyszła funkcja Alvena przy raporcie końcowym
 
@@ -653,7 +654,8 @@ a sukces krytyczny dwie.
 
 | Droga | Mocne argumenty | Krytyczna porażka | Porażka | Sukces | Krytyczny sukces |
 |---|---|---|---|---|---|
-| **Twarde warunki — Zastraszanie** | Realne ryzyko wyprawy; koszt wysłania nieprzygotowanej ekipy; znaczenie pyłu dla Gildii; konkretny warunek bez grożenia Nessie przemocą. | Stawka podstawowa; zwrot tylko wydatków zatwierdzonych przed wyprawą. | Stawka podstawowa i zwykłe rozliczenie. | `+5 gp` na bohatera po wykonaniu misji. | `+10 gp` na bohatera po misji oraz `3 gp` zaliczki na bohatera od razu. |
+| **Dopłata za ryzyko — Perswazja** | Rzeczowe ryzyko i koszty wyprawy. | Stawka podstawowa i zwykłe rozliczenie. | Stawka podstawowa. | `+5 gp` na bohatera po misji. | `+10 gp` na bohatera i `3 gp` zaliczki odliczanej od wypłaty. |
+| **Nacisk i groźba — Zastraszanie** | Faktyczna presja, np. groźba ujawnienia niewygodnej informacji; bez groźby bezpośredniej przemocy. | Stawka podstawowa; zwrot tylko wydatków zatwierdzonych przed wyprawą. | Stawka podstawowa i zwykłe rozliczenie. | `+5 gp` na bohatera po wykonaniu misji. | `+10 gp` na bohatera po misji oraz `3 gp` zaliczki na bohatera od razu. |
 | **Prośba — Perswazja** | Ratowanie ludzi; sprowadzenie Alvena; rozsądne koszty; pokazanie, że wsparcie zwiększa szanse realizacji celów Gildii. | Stawka podstawowa; temat premii zamknięty. | Stawka podstawowa. | `5 gp` do wspólnej puli za każdą uratowaną osobę z transportu. | Premia za ocalałych oraz jednorazowy `guild_medical_pack`, dający przewagę przy jednej pasującej próbie medycznej. |
 | **Kłamstwo — Oszustwo** | Konkretna, możliwa do utrzymania okoliczność; zawyżony, lecz wiarygodny koszt; twierdzenie niesprzeczne z dokumentami znanymi Nessie. | Stawka podstawowa; zwrot kosztów tylko na podstawie zaakceptowanych rachunków. | Stawka podstawowa. | `3 gp` zaliczki na bohatera od razu, odliczanej od wypłaty końcowej. | `5 gp` zaliczki na bohatera oraz jednorazowy `guild_supply_pack`, dający `+2` do jednej pasującej próby przygotowania trasy lub przetrwania. |
 
@@ -705,7 +707,7 @@ idempotentne i nie mogą zostać ponownie przyznane po powrocie do Nessy.
 flowchart TB
     OPEN["Negocjuj wynagrodzenie"]
     ROUTE{"Wybierz metodę"}
-    HARD["Twarde warunki · Zastraszanie"]
+    HARD["Nacisk i groźba · Zastraszanie"]
     REQUEST["Prośba · Perswazja"]
     LIE["Kłamstwo · Oszustwo"]
     HERO["Wybierz jednego bohatera"]
@@ -723,120 +725,44 @@ flowchart TB
     HERO --> METHOD --> RUBRIC --> VALIDATE --> ROLL --> OUTCOME --> LOCK
 ```
 
-### 7.6. Oceń prawdziwe priorytety Nessy
+### 7.6. Obserwuj Nessę
 
-Id: `read_nessa_priorities`  
-Resolver: `check`  
-Cecha i umiejętność: Mądrość (Wnikliwość)  
-Trudność: `DC 16` (wartość robocza)  
-Opis metody: brak  
-LLM: nieużywany  
-Uczestnicy: jeden wybrany bohater na próbę  
-Limit: maksymalnie trzy próby całej drużyny
+Id: `read_nessa_priorities`. Jedna próba Mądrości (Intuicji), ST 16,
+wykonana przez wybranego bohatera. Bez opisu metody i bez wywołania LLM.
+Zwykłe pytanie o ładunek podaje manifest i skrytkę lekarstw, bez sygnału
+zdradzającego szczególne znaczenie pyłu. Przy obserwacji narrator zwraca uwagę
+na ostrożny dobór słów, bez wskazania sekretnego tematu przed rzutem.
 
-To jest intuicyjne odczytanie zachowania Nessy podczas odprawy, a nie osobna
-scena śledcza. Po wybraniu kafelka gracz wskazuje bohatera i od razu przechodzi
-do fizycznego rzutu d20. UI nie pokazuje pola tekstowego ani pytania „jak to
-robisz?”.
+Sukces: pył jest dla Gildii wyjątkowo cenny; nie ujawnia przyczyny ani nie
+podważa szczerej troski Nessy o pracowników. Zapisuje
+`knowledge.nessa_true_priority_known`. Fakt można świadomie wykorzystać w
+negocjacjach jako istniejącą dźwignię o maksymalnej sile 2.
 
-#### Zasady ponawiania
-
-- każdy bohater może podjąć tę próbę najwyżej raz;
-- drużyna może wykonać łącznie najwyżej trzy próby;
-- zwykła porażka zużywa próbę i pozwala wybrać innego bohatera;
-- sukces albo sukces krytyczny natychmiast kończy interakcję;
-- krytyczna porażka natychmiast kończy interakcję niezależnie od liczby
-  pozostałych prób;
-- po trzech zwykłych porażkach interakcja również zostaje zakończona;
-- odpoczynek i ponowne wejście do Nessy nie odnawiają prób;
-- próba nie jest dostępna po rozstrzygnięciu negocjacji, ponieważ jej główną
-  funkcją jest dostarczenie argumentu przed ustaleniem warunków kontraktu.
-
-Wymóg różnych bohaterów zapobiega wielokrotnemu przerzucaniu testu przez postać
-z najwyższą Wnikliwością i daje drużynie decyzję, komu powierzyć kolejne próby.
-Pomocnik oraz test grupowy są niedozwolone w pierwszej wersji.
-
-#### Wyniki
-
-| Wynik | Informacja dla graczy | Efekt |
-|---|---|---|
-| Krytyczna porażka | Nessa zauważa, że drużyna próbuje ją rozczytać, i staje się wyraźnie bardziej formalna oraz ostrożna. | Zamknij test; ustaw karę negocjacyjną `-1`. |
-| Porażka, próby nadal dostępne | Nessa zachowuje zawodowy spokój; bohater nie potrafi wskazać niczego pewnego. | Zwiększ licznik i zablokuj tego bohatera dla kolejnych prób. |
-| Trzecia porażka | Przedłużająca się obserwacja staje się zauważalna. Nessa przejmuje kontrolę nad tempem odprawy. | Zamknij test; ustaw karę negocjacyjną `-1`. |
-| Sukces | Gdy rozmowa schodzi na cztery skrzynie szarego pyłu, Nessa reaguje wyraźnie mocniej niż przy lekarstwach, żywności i nawet pozostałych członkach transportu. Skrzynie muszą być dla Gildii bardzo cenne. | Ujawnij `nessa_true_priority_known`; zamknij test. |
-| Krytyczny sukces | Bohater dostrzega nie tylko napięcie, ale również próbę świadomego umniejszania znaczenia pyłu. Oficjalny opis zlecenia nie mówi wszystkiego o wartości ładunku. | Jak sukces; mocniejsza narracja nie tworzy drugiej premii. |
-
-Nie przekazujemy fałszywej informacji przy porażce. Niepowodzenie oznacza brak
-pewnego odczytu, a jego koszt wynika z tego, że Nessa zauważa powtarzające się
-próby obserwowania jej.
-
-#### Wpływ na negocjacje
-
-Poznany fakt:
-
-```text
-knowledge.nessa_true_priority_known = true
-```
-
-jest autorską dźwignią o `maximum_strength = 2`, zgodną ze wszystkimi trzema
-drogami negocjacji. Premia nie działa automatycznie. Gracz musi bezpośrednio
-powiązać lepsze warunki kontraktu z odzyskaniem szarego pyłu.
-
-Przykładowe zastosowania:
-
-- Zastraszanie: brak odpowiedniego wsparcia zwiększa ryzyko utraty skrzyń;
-- Perswazja: skoro odzyskanie pyłu jest priorytetem Gildii, dodatkowe środki
-  zwiększają szansę wykonania jej najważniejszego celu;
-- Oszustwo: gracz opiera wiarygodne zawyżenie potrzeb na presji, jaką Nessa sama
-  ujawniła przy temacie pyłu.
-
-Kara za krytyczną porażkę albo wyczerpanie trzech prób:
-
-```text
-nessa_negotiation_scrutiny_penalty = -1
-```
-
-jest stosowana po ocenie argumentu negocjacyjnego. Nie kumuluje się: trzy
-porażki i krytyczna porażka nie mogą utworzyć kary większej niż `-1`.
-
-#### Flagi i stan
-
-```text
-nessa_insight_attempt_count = 0..3
-nessa_insight_attempted_actor_ids = []
-nessa_insight_closed = true | false
-knowledge.nessa_true_priority_known = true | false
-nessa_negotiation_scrutiny_penalty = 0 | -1
-```
-
-#### Flow
+Porażka (także naturalne 1): intencje pozostają niejasne, bez kary do
+negocjacji. Ustawia `nessa_priorities_closed`. Kolejny bohater, odpoczynek ani
+ponowne wejście nie odnawiają próby. Jawne zdolności przerzutu działają
+zgodnie ze swoimi ograniczeniami; nie dodajemy nowego prawa do przerzutu.
+Po rozstrzygnięciu temat pozostaje jako „Omówione”, z rzeczywistym wynikiem.
+Po zamknięciu kontraktu nierozstrzygnięta obserwacja jest niedostępna i nie
+ujawnia sekretu w podglądzie.
 
 ```mermaid
-flowchart TB
-    OPEN["Oceń priorytety Nessy"]
-    HERO["Wybierz bohatera, który jeszcze nie próbował"]
-    ROLL["Wnikliwość · DC 16"]
-    RESULT{"Wynik"}
-    RETRY["Zapisz porażkę · kolejna próba"]
-    PENALTY["Zamknij · kara -1 do negocjacji"]
-    CLUE["Ujawnij: szary pył jest prawdziwym priorytetem"]
-
-    OPEN --> HERO --> ROLL --> RESULT
-    RESULT -->|porażka 1–2| RETRY --> HERO
-    RESULT -->|porażka 3| PENALTY
-    RESULT -->|krytyczna porażka| PENALTY
-    RESULT -->|sukces| CLUE
-    RESULT -->|krytyczny sukces| CLUE
+flowchart LR
+    OBS[Obserwuj Nessę] --> HERO[Wybierz bohatera] --> ROLL[Intuicja ST 16]
+    ROLL -->|sukces| CLUE[Pył ma szczególne znaczenie]
+    ROLL -->|porażka| UNKNOWN[Intencje niejasne, bez kary]
+    CLUE --> REVIEW[Omówione: tylko przypomnienie]
+    UNKNOWN --> REVIEW
 ```
 
 ### 7.7. Przejrzyj papiery przewozowe
 
 Id: `review_transport_documents`  
-Etykieta: `Przejrzyj papiery przewozowe`  
+Etykieta: `Dokumenty`
 Resolver: `check`  
 Opis metody: brak  
 LLM: nieużywany  
-Widoczność: tylko jeśli Erynd jest w drużynie
+Dostępność testu: tylko jeśli Erynd jest w drużynie; bez niego slot pozostaje z wyjaśnieniem
 
 Warunek widoczności:
 
@@ -869,15 +795,12 @@ knowledge.convoy_route_magic_suspected = true
 
 Porażka:
 
-> Mapa jest zbyt ogólna, a opowieść drwali zbyt nieprecyzyjna. Erynd nie jest w
-> stanie uczciwie stwierdzić, czy chodziło o ten sam odcinek lasu.
+> Dokumenty potwierdzają trasę do Czarnego Brodu i ostatni kontakt przy Kamiennym Słupie. Mapa jest zbyt ogólna, aby Erynd powiązał ją pewnie z opowieściami drwali. Magiczne zagrożenie pozostaje niepotwierdzone.
 
 Porażka nie ustawia żadnej flagi fabularnej. Niezależnie od wyniku kafelek jest
-jednorazowy i znika po rozstrzygnięciu, zgodnie ze standardowym stanem zużycia
-celu interakcji.
+jednorazowy, ale pozostaje w swoim slocie jako przypomnienie wyniku. Podstawową trasę i ostatni punkt kontaktu można też poznać bez Erynda, pytając o zaginięcie.
 
-Flaga `knowledge.convoy_route_magic_suspected` na razie nie daje premii ani nie
-zmienia encountera. Jej zastosowanie ustalimy później.
+Flaga `knowledge.convoy_route_magic_suspected` pozwala uzasadnić ryzyko w negocjacjach i jest przekazywana do przygotowanego otwarcia spotkania na Mapie 1.
 
 #### Flow
 
@@ -1030,20 +953,20 @@ Węzły są wyprowadzane z flag, nie przechowywane jako drugi niezależny stan.
 |---|---|---:|---|
 | `guild_nessa_core_briefing_seen` | kampania | nie | Nie odtwarzaj ponownie obowiązkowego intro. |
 | `black_ford_transport_quest_active` | kampania | nie | Zadanie jest aktywne. |
-| `nessa_disappearance_info_learned` | kampania | nie | Ukryj wykorzystany kafelek. |
-| `nessa_cargo_info_learned` | kampania | nie | Ukryj wykorzystany kafelek. |
-| `nessa_personnel_info_learned` | kampania | nie | Ukryj wykorzystany kafelek. |
+| `nessa_disappearance_info_learned` | kampania | nie | Oznacz kafelek „Omówione”; zachowaj podgląd. |
+| `nessa_cargo_info_learned` | kampania | nie | Oznacz kafelek „Omówione”; zachowaj podgląd. |
+| `nessa_personnel_info_learned` | kampania | nie | Oznacz kafelek „Omówione”; zachowaj podgląd. |
 | `knowledge.convoy_route_marks` | kampania | nie | Można wykorzystać callback znaków. |
 | `knowledge.transport_last_contact_details` | kampania | nie | Można użyć szczegółów zaginięcia jako argumentu. |
 | `knowledge.hidden_medicine_cache` | kampania | nie | Można wykorzystać callback skrytki. |
 | `knowledge.transport_cargo_summary` | kampania | nie | Drużyna zna oficjalny skład i znaczenie ładunku. |
 | `knowledge.transport_roster` | kampania | nie | Drużyna zna skład osobowy transportu. |
 | `knowledge.alven_is_trusted_guild_accountant` | kampania | nie | Drużyna zna rolę i znaczenie Alvena. |
-| `nessa_insight_attempt_count` | kampania | nie | Liczba wykorzystanych prób Wnikliwości, maksymalnie trzy. |
+| `nessa_insight_attempt_count` | kampania | nie | Historyczny identyfikator; runtime zapisuje jedną próbę w stanie NPC. |
 | `nessa_insight_attempted_actor_ids` | kampania | nie | Bohaterowie, którzy nie mogą ponowić testu. |
 | `nessa_insight_closed` | kampania | nie | Test zakończony sukcesem, krytyczną porażką albo limitem prób. |
 | `knowledge.nessa_true_priority_known` | kampania | nie | Drużyna rozpoznała szczególne znaczenie szarego pyłu. |
-| `nessa_negotiation_scrutiny_penalty` | kampania | nie | Niekumulująca się kara `-1` do negocjacji. |
+| `nessa_negotiation_scrutiny_penalty` | kampania | nie | Historyczna flaga; nowe negocjacje jej nie uwzględniają. |
 | `knowledge.convoy_route_magic_suspected` | kampania | nie | Drużyna podejrzewa magiczne źródło zagrożenia. |
 | `contract.base_reward_gp_per_hero` | kampania | nie | Podstawowe `10 gp` na bohatera po misji. |
 | `contract.hazard_bonus_gp_per_hero` | kampania | nie | Dopłata `5` albo `10 gp` na bohatera. |
@@ -1108,7 +1031,7 @@ specjalnej logiki zaszytej wyłącznie dla tej kampanii.
 ### Kafelki i trwałość
 
 - jednocześnie widocznych jest najwyżej siedem kafelków;
-- wykorzystany temat informacyjny znika;
+- wykorzystany temat informacyjny pozostaje jako przypomnienie;
 - niewykorzystane tematy pozostają dostępne po zakończeniu i ponownym wejściu;
 - zapis i odczyt nie powtarzają nagród ani automatycznej odprawy.
 
@@ -1162,12 +1085,10 @@ specjalnej logiki zaszytej wyłącznie dla tej kampanii.
 - Alven może zweryfikować końcowy raport wyłącznie w granicach poznanych przez
   siebie faktów z wyprawy; nie ma dostępu do przebiegu negocjacji z Nessą.
 - Priorytety Nessy odczytuje się czystym testem Wnikliwości `DC 16`, bez LLM;
-  drużyna ma do trzech prób wykonywanych przez różnych bohaterów.
+  drużyna ma jedną próbę wybranego bohatera.
 - Sukces ujawnia szczególną wartość szarego pyłu jako dźwignię `+2` dostępną we
-  wszystkich drogach negocjacji; krytyczna porażka lub trzy porażki dają jedną
-  niekumulującą się karę `-1`.
-- Kafelek `Przejrzyj papiery przewozowe` jest widoczny tylko z Eryndem w
-  drużynie i prowadzi do jednego łatwego testu Przetrwania `DC 10`.
+  wszystkich drogach negocjacji; porażka nie nakłada kary.
+- Kafelek `Dokumenty` prowadzi do jednego testu Erynda (Przetrwanie, ST 10); bez niego pozostaje niedostępny, z wyjaśnieniem.
 - Tylko sukces Erynda zapisuje podejrzenie magicznego zagrożenia; każda porażka
   kończy kafelek bez flagi, kary i fałszywej informacji.
 - Brak notatki nigdy nie blokuje głównego postępu.

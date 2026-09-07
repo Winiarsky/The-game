@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dnd_board_game.actors.resources import uses_physical_mana
+
 from dataclasses import dataclass, replace
 
 from dnd_board_game.actors import (
@@ -552,8 +554,9 @@ def resolve_channel_turn(
                 if action_id == "turn_undead"
                 else "Turn the Unholy"
             ),
-            duration=EffectDuration.UNTIL_ENCOUNTER_END,
+            duration=EffectDuration.UNTIL_TURN_END if uses_physical_mana(actor) else EffectDuration.UNTIL_ENCOUNTER_END,
             expiration_actor_id=str(actor.id),
+            expiration_event_count=2 if uses_physical_mana(actor) else 1,
         )
         conditions = applied.condition_states
         if applied.applied:
@@ -1197,6 +1200,8 @@ def _resolve_ki_defense(
 def resolve_action_surge(state: CombatState) -> ActionSurgeResolution:
     """Spend a bonus action and Action Surge to restore the main action."""
     actor = current_actor(state)
+    if uses_physical_mana(actor):
+        raise ValueError("W profilu fizycznej many Zryw przygotowuje premię ataku, nie odnawia akcji.")
     if not actor_has_feature(actor, "action_surge"):
         raise ValueError("Aktywna postać nie posiada cechy Action Surge.")
     if state.turn_action.action_use != ActionUse.ACTION_USED:
@@ -1221,6 +1226,18 @@ def resolve_action_surge(state: CombatState) -> ActionSurgeResolution:
     return ActionSurgeResolution(updated_state, actor, spent.actor_after)
 
 
+def rage_activation_block_reason(
+    actor: Actor, active_effects: tuple[ActiveEffect, ...]
+) -> str | None:
+    """The physical-mana action starts a timed rage; it is not an on/off switch."""
+    if uses_physical_mana(actor) and any(
+        effect.actor_id == str(actor.id) and effect.kind == "rage"
+        for effect in active_effects
+    ):
+        return "Szał już trwa. Możesz uruchomić go ponownie dopiero po zakończeniu efektu."
+    return None
+
+
 def resolve_rage(
     state: CombatState,
     active_effects: tuple[ActiveEffect, ...],
@@ -1228,6 +1245,9 @@ def resolve_rage(
     actor = current_actor(state)
     if not actor_has_feature(actor, "rage"):
         raise ValueError("Aktywna postać nie posiada cechy Rage.")
+    blocked = rage_activation_block_reason(actor, active_effects)
+    if blocked:
+        raise ValueError(blocked)
     rage_active = any(
         effect.actor_id == str(actor.id) and effect.kind == "rage"
         for effect in active_effects
@@ -1283,16 +1303,22 @@ def resolve_rage(
         max(1, ability_modifier(spent.actor_after.ability_scores.constitution)),
     )
     updated_state = replace_actor(action.state, actor_after)
+    rage_rounds = (
+        max(1, ability_modifier(actor.ability_scores.constitution)
+            + ability_modifier(actor.ability_scores.strength))
+        if uses_physical_mana(actor) else None
+    )
     effect = ActiveEffect(
         id=f"rage:{actor.id}",
         actor_id=str(actor.id),
         kind="rage",
-        label="Rage",
+        label="Szał",
         object_id="class_feature:rage",
         value=2,
         source_actor_id=str(actor.id),
         source=EffectSource(EffectSourceType.ACTION, "rage", "Rage"),
         duration=EffectDuration.UNTIL_ENCOUNTER_END,
+        remaining_rounds=rage_rounds,
     )
     effects = apply_active_effect(active_effects, effect).active_effects
     effects = apply_active_effect(
@@ -1307,6 +1333,7 @@ def resolve_rage(
             source_actor_id=str(actor.id),
             source=EffectSource(EffectSourceType.ACTION, "rage", "Rage"),
             duration=EffectDuration.UNTIL_ENCOUNTER_END,
+            remaining_rounds=rage_rounds,
         ),
     ).active_effects
     return RageResolution(
@@ -1332,24 +1359,24 @@ def resolve_reckless_attack(
         raise ValueError("Aktywna postać nie posiada cechy Reckless Attack.")
     if any(
         effect.actor_id == str(actor.id)
-        and effect.kind == "reckless_attack_advantage"
+        and effect.kind in {"reckless_attack_advantage", "mana_reckless"}
         for effect in active_effects
     ):
         raise ValueError("Lekkomyślny atak jest już przygotowany.")
     advantage = ActiveEffect(
         id=f"reckless_attack_advantage:{actor.id}",
         actor_id=str(actor.id),
-        kind="reckless_attack_advantage",
+        kind=("mana_reckless" if uses_physical_mana(actor) else "reckless_attack_advantage"),
         label="Lekkomyślny atak",
         object_id="class_feature:reckless_attack",
-        value=0,
+        value=1 if uses_physical_mana(actor) else 2,
         source_actor_id=str(actor.id),
         source=EffectSource(
             EffectSourceType.ACTION,
             "reckless_attack",
             "Reckless Attack",
         ),
-        duration=EffectDuration.UNTIL_NEXT_ATTACK,
+        duration=(EffectDuration.UNTIL_TURN_END if uses_physical_mana(actor) else EffectDuration.UNTIL_NEXT_ATTACK),
         expiration_actor_id=str(actor.id),
         additional_expirations=(
             AdditionalEffectExpiration(
@@ -1397,7 +1424,7 @@ def resolve_powerful_strike(
         kind="powerful_strike",
         label="Potężne uderzenie",
         object_id="class_feature:powerful_strike",
-        value=10,
+        value=2 if uses_physical_mana(actor) else 10,
         source_actor_id=str(actor.id),
         source=EffectSource(
             EffectSourceType.ACTION,
@@ -1699,6 +1726,9 @@ def apply_life_domain_to_healing_source(
         or source.spell_level < 1
     ):
         return source
+    if uses_physical_mana(actor):
+        return replace(source, healing_modifier=7, action_cost=ActionEconomyCost.ACTION,
+                       healing_hint="1k4+7", healing_modifier_per_cast_level=0) if source.id == "healing_word" else source
     modifier = source.healing_modifier + 2 + source.spell_level
     hint = source.healing_hint
     if hint:
@@ -1724,7 +1754,7 @@ def resolve_second_wind(
         raise ValueError("Wynik Second Wind musi mieścić się w zakresie 1–10.")
     if not can_spend_actor_resource(actor, "second_wind_uses"):
         raise ValueError("Second Wind zostało już wykorzystane.")
-    action = use_action_economy_cost(state, ActionEconomyCost.BONUS_ACTION)
+    action = use_action_economy_cost(state, (ActionEconomyCost.ACTION if uses_physical_mana(actor) else ActionEconomyCost.BONUS_ACTION))
     if not action.accepted:
         raise ValueError(action.message)
     actor_after_action = current_actor(action.state)
@@ -1737,7 +1767,7 @@ def resolve_second_wind(
         healing_hint=f"1d10 + {actor.level}",
         healing_die_sides=10,
         healing_modifier=actor.level,
-        action_cost=ActionEconomyCost.BONUS_ACTION,
+        action_cost=(ActionEconomyCost.ACTION if uses_physical_mana(actor) else ActionEconomyCost.BONUS_ACTION),
     )
     healing = apply_healing_result(
         spent.actor_after,
@@ -1843,6 +1873,8 @@ def plan_sneak_attack(
     source: AttackSource,
     roll_mode: RollMode,
 ) -> SneakAttackPlan:
+    if uses_physical_mana(attacker) and current_actor(state).id != attacker.id:
+        return SneakAttackPlan(False, "Atak z cienia działa raz we własnej turze.", source)
     mira_killer = actor_has_feature(attacker, "mira_shadow_killer")
     if not actor_has_feature(attacker, "sneak_attack") and not mira_killer:
         return SneakAttackPlan(False, "Postać nie posiada cechy Sneak Attack.", source)
@@ -1882,7 +1914,7 @@ def plan_sneak_attack(
                 "Premia Miry wymaga rapiera albo noża do rzucania.",
                 source,
             )
-        sneak_attack_dice = (2 if hidden_attack else 0) + (1 if mira_flank else 0)
+        sneak_attack_dice = ((1 if uses_physical_mana(attacker) else 2) if hidden_attack else 0) + (1 if mira_flank else 0)
         if sneak_attack_dice <= 0:
             return SneakAttackPlan(
                 False,

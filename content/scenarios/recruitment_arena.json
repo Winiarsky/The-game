@@ -1,0 +1,97 @@
+{
+  "schema": "dnd_board_game.scenario",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "project_original"
+  ],
+  "board": {
+    "cols": 20,
+    "rows": 30
+  },
+  "id": "recruitment_arena",
+  "name": "Mapa 0 — Rekrutacja u Nessy",
+  "scene_mode": "exploration",
+  "actors": [
+    {
+      "id": "garran",
+      "name": "Garran",
+      "kind": "player_character",
+      "faction": "ally",
+      "ac": 10,
+      "hp": 30,
+      "speed_feet": 30,
+      "position": [
+        9,
+        18
+      ],
+      "item_refs": [
+        "longsword"
+      ],
+      "ability_scores": {
+        "strength": 10,
+        "dexterity": 10,
+        "constitution": 10,
+        "intelligence": 10,
+        "wisdom": 10,
+        "charisma": 10
+      }
+    }
+  ],
+  "environment": [],
+  "llm_context": {
+    "summary": "Nessa prowadzi indywidualny nabór na arenie Gildii. To bezpieczna próba umiejętności, bez doświadczenia, łupu i kosztów kampanii."
+  },
+  "exploration": {
+    "party_start_zone": "arena",
+    "zones": [
+      {
+        "id": "arena",
+        "name": "Arena rekrutacyjna",
+        "positions": [
+          [
+            9,
+            18
+          ]
+        ],
+        "anchor_position": [
+          9,
+          18
+        ],
+        "description": "Nessa: Pokaż, co potrafisz. Pokonaj kukłę albo podejdź do mnie, gdy zechcesz zakończyć próbę. Potem zaproszę następną osobę.",
+        "options": []
+      }
+    ],
+    "points": [],
+    "encounter_triggers": [
+      {
+        "id": "recruitment_trial",
+        "name": "Próba rekrutacyjna",
+        "description": "Jeden kandydat, kukła i Nessa. Rozstaw elementy zgodnie z podświetleniem.",
+        "encounter_scenario": "content/scenarios/recruitment_arena_combat.json",
+        "condition": "flag_equals",
+        "flag_key": "training_requested",
+        "flag_value": true,
+        "outcome_on_victory": {
+          "title": "Nessa: próba zakończona",
+          "body": "Dziękuję. Widziałam już Twoje możliwości. Możesz powtórzyć próbę albo zaprosić kolejną osobę.",
+          "next_instruction": "Wybierz bohatera w panelu rekrutacji.",
+          "effects": [
+            {
+              "type": "set_flag",
+              "parameters": {
+                "key": "training_finished",
+                "value": true
+              }
+            }
+          ]
+        },
+        "outcome_on_defeat": {
+          "title": "Nessa przerywa próbę",
+          "body": "To tylko ćwiczenie. Odpocznij i spróbuj ponownie.",
+          "next_instruction": "Wybierz ponownie bohatera; przywrócimy PW i cały zestaw treningowy."
+        }
+      }
+    ]
+  }
+}

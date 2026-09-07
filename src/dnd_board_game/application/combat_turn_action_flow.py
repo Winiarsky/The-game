@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dnd_board_game.actors.resources import uses_physical_mana
+
 from dataclasses import dataclass, replace
 from typing import Mapping
 
@@ -379,8 +381,8 @@ class CombatTurnActionFlowService:
             body = f"{actor.name} ukrywa się z wynikiem {result.total} przed: {', '.join(hidden_names)}."
             if detected_names:
                 body += (
-                    f" Nadal widzą Mirę: {', '.join(detected_names)}; "
-                    "dopóki trwa ta sesja skradania, mają +2 do ataków przeciw niej."
+                    f" Nadal widzą Mirę: {', '.join(detected_names)}."
+                    + ("" if uses_physical_mana(actor) else " Dopóki trwa ta sesja skradania, mają +2 do ataków przeciw niej.")
                 )
         else:
             body = (

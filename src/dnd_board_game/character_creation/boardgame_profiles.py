@@ -681,6 +681,11 @@ def apply_boardgame_archetype(
 def reconcile_boardgame_feature_removals(actor: Actor) -> Actor:
     """Migrate retired curated features in restored actors without resetting state."""
 
+    # A scenario placeholder can share a hero id without being a built archetype.
+    # Loading a checkpoint must not add class/flaw features to such an actor.
+    if not actor.features:
+        return actor
+
     actor_id = str(actor.id)
     removed_feature_ids = _REMOVED_FEATURE_IDS.get(actor_id, frozenset())
     retired_resource_ids = (

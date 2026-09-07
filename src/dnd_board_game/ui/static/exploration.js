@@ -408,6 +408,8 @@ async function api(path, body, busyMessage) {
       resultAck = state.flow && state.flow.stage === 'interaction_result'
         ? null
         : latestResultMessageSince(state, previousMessageCount);
+    } else if (path === '/api/combat/skill-check' && res.ok) {
+      resultAck = latestMessageWithTitleSince(state, 'Ukrycie Miry', previousMessageCount);
     } else if (path === '/api/combat/opportunity-movement/confirm' && res.ok) {
       resultAck = latestMessageWithTitle(state, 'Atak okazyjny');
     } else if (path === '/api/combat/player-attack-confirm' && res.ok) {
@@ -441,6 +443,8 @@ async function api(path, body, busyMessage) {
   } finally {
     clearTimeout(gmSlowResponseTimer);
     setBusy('');
+    initializeKeyboardRollWizard();
+    focusCombatDecision();
     scheduleAutomaticBoardScan();
   }
 }
@@ -453,6 +457,7 @@ async function loadState() {
   chatInstanceOpen = true;
   render();
   refreshSessionLog();
+  focusCombatDecision();
   scheduleAutomaticBoardScan();
 }
 function render() {
@@ -461,6 +466,7 @@ function render() {
   const followChatTail = !existingConversationScroll
     || existingConversationScroll.scrollHeight - existingConversationScroll.scrollTop - existingConversationScroll.clientHeight < 120;
   const inCombat = Boolean(state.combat);
+  renderTrainingArena();
   const interactionId = state.conversation ? state.conversation.interaction_id : null;
   if (activeInteractionId === null) activeInteractionId = interactionId;
   if (interactionId && interactionId !== activeInteractionId) {
@@ -479,6 +485,7 @@ function render() {
   document.getElementById('zone').textContent = state.current_zone.name;
   document.getElementById('panel-zone-name').textContent = state.current_zone.name;
   document.getElementById('scene-status-summary').innerHTML = sceneStatusSummaryHtml();
+  document.getElementById('briefing-contract').innerHTML = briefingContractHtml();
   renderPartyShell();
   document.getElementById('challenge').textContent = state.active_challenge
     ? state.active_challenge.uses_progress
@@ -569,7 +576,7 @@ function render() {
 
 function isKeyboardRollInput(input) {
   if (!input || input.type !== 'number' || input.disabled) return false;
-  if (input.closest('#rolls')) return true;
+  if (input.closest('#rolls') || input.closest('.precombat-stealth-roll')) return true;
   if (!input.closest('#encounter')) return false;
   const id = String(input.id || '');
   return (
@@ -590,7 +597,7 @@ function visibleKeyboardRollInputs() {
 function keyboardRollSubmitButton(inputs) {
   const first = inputs[0];
   if (!first) return null;
-  const root = first.closest('#roll-panel, .combat-action-card');
+  const root = first.closest('#roll-panel, .combat-action-card, .precombat-stealth-roll, #encounter');
   if (!root) return null;
   const buttons = Array.from(root.querySelectorAll('button')).filter(button => (
     !button.disabled
@@ -669,6 +676,10 @@ function keyboardRollContextLines(root) {
 function activeKeyboardRollPending(input) {
   const combat = (state && state.combat) || {};
   const id = String(input.id || '');
+  if (id.startsWith('shield-bash-') && combat.shield_bash) {
+    const modifier = combat.shield_bash.attacker_modifier;
+    return {modifier_total:modifier, active_modifiers:[{label:'Siła', value:modifier}]};
+  }
   if (input.dataset.rollKind || /(?:inspiration|bless|mirror-image)/.test(id)) return {};
   if (input.closest('#rolls')) {
     return (state.required_rolls || []).find(required => (
@@ -713,7 +724,7 @@ function closeKeyboardRollWizard() {
 }
 
 function initializeKeyboardRollWizard() {
-  if (!state || busy || document.querySelector('dialog[open]')) return false;
+  if (!state || busy || keyboardRollWizard || document.querySelector('dialog[open]')) return false;
   const inputs = visibleKeyboardRollInputs();
   const submitButton = keyboardRollSubmitButton(inputs);
   if (!inputs.length || !submitButton) return false;
@@ -724,7 +735,15 @@ function initializeKeyboardRollWizard() {
     step.total = Math.max(0, step.fixed + step.modifier);
     step.input.value = String(step.total);
   });
-  const steps = allSteps.filter(step => step.fixed === null || !Number.isFinite(step.fixed));
+  const steps = allSteps.filter(step => step.fixed === null || !Number.isFinite(step.fixed)).flatMap(step => {
+    if (!step.dice || step.dice.count === 1) return [step];
+    step.parts = Array.from({length: step.dice.count}, (_, index) => ({
+      ...step, parent: step, label: `${step.label} · kość ${index + 1}/${step.dice.count}`,
+      dice: {...step.dice, count: 1, label: `1k${step.dice.sides}`},
+      modifier: 0, min: 1, max: step.dice.sides,
+    }));
+    return step.parts;
+  });
   steps.forEach(step => { step.input.value = ''; });
   keyboardRollWizard = {
     allSteps,
@@ -733,7 +752,7 @@ function initializeKeyboardRollWizard() {
     index: 0,
     review: steps.length === 0,
     submitButton,
-    contextLines: keyboardRollContextLines(submitButton.closest('#roll-panel, .combat-action-card')),
+    contextLines: keyboardRollContextLines(submitButton.closest('#roll-panel, .combat-action-card, .precombat-stealth-roll, #encounter')),
   };
   const overlay = document.createElement('div');
   overlay.id = 'keyboard-roll-wizard';
@@ -748,7 +767,8 @@ function initializeKeyboardRollWizard() {
 }
 
 function keyboardRollStepPrompt(step) {
-  if (step.dice) return `Rzuć ${step.dice.label} i wpisz sumę z kości.`;
+  const sides = rollStepDieSides(step);
+  if (sides) return `Rzuć k${sides} i wpisz wynik tej kości.`;
   const maximum = Number.isFinite(step.max) ? ` (od ${step.min ?? 0} do ${step.max})` : '';
   return `Wpisz wynik rzutu${maximum}.`;
 }
@@ -760,14 +780,16 @@ function renderKeyboardRollWizard(message = '') {
   const totalSteps = wizard.steps.length;
   if (wizard.review) {
     const rows = wizard.allSteps.map(step => {
-      if (step.raw === null) return `<li><span>${esc(step.label)}</span><b>pominięto</b></li>`;
+      const identity = `<span class="keyboard-roll-summary-identity">${rollStepDiceIconHtml(step)}<span>${esc(step.label)}</span></span>`;
+      if (step.raw === null) return `<li>${identity}<b>pominięto</b></li>`;
       const modifier = keyboardRollModifierSummary(step);
       const appliedModifier = step.modifier || (modifier.total !== null ? modifier.total : 0);
+      const rolled = step.parts ? step.parts.map(part => part.raw ?? '—').join(' + ') : step.raw;
       const calculation = appliedModifier
-        ? `${step.raw} ${signedNumber(appliedModifier)} = ${step.modifier ? step.total : step.raw + appliedModifier}`
-        : `${step.total}`;
+        ? `${rolled} ${signedNumber(appliedModifier)} = ${step.modifier ? step.total : step.raw + appliedModifier}`
+        : `${rolled}${step.parts ? ` = ${step.total}` : ''}`;
       const source = modifier.items.length ? `<small>${esc(modifier.items.join(' · '))}</small>` : '';
-      return `<li><span>${esc(step.label)}${source}</span><b>${esc(calculation)}</b></li>`;
+      return `<li><span>${identity}${source}</span><b>${esc(calculation)}</b></li>`;
     }).join('');
     overlay.innerHTML = `
       <div class="keyboard-roll-wizard-backdrop"></div>
@@ -785,17 +807,23 @@ function renderKeyboardRollWizard(message = '') {
     return;
   }
   const step = wizard.steps[wizard.index];
-  const modifier = keyboardRollModifierSummary(step);
+  const modifier = keyboardRollModifierSummary(step.parent || step);
   const modifierText = modifier.items.length
     ? modifier.items.join(' · ')
     : (modifier.total !== null ? `Łączna premia ${signedNumber(modifier.total)}` : 'Brak automatycznych premii do tego pola.');
   const context = wizard.contextLines.map(line => `<p>${esc(line)}</p>`).join('');
+  const bonusChoices = wizard.index === 0 && state?.combat?.pending_player_attack?.stage === 'damage_roll'
+    ? physicalDamageBonusChoicesHtml(state.combat.pending_player_attack) : '';
   overlay.innerHTML = `
     <div class="keyboard-roll-wizard-backdrop"></div>
     <section class="keyboard-roll-wizard-card">
-      <span class="keyboard-roll-wizard-kicker">Rzut ${wizard.index + 1} z ${totalSteps}</span>
-      <h2 id="keyboard-roll-wizard-title">${esc(step.label)}</h2>
+      <div class="keyboard-roll-wizard-heading">
+        ${rollStepDiceIconHtml(step)}
+        <div><span class="keyboard-roll-wizard-kicker">Rzut ${wizard.index + 1} z ${totalSteps}</span>
+        <h2 id="keyboard-roll-wizard-title">${esc(step.label)}</h2></div>
+      </div>
       <div class="keyboard-roll-wizard-context">${context}</div>
+      ${bonusChoices}
       <p class="keyboard-roll-wizard-instruction">${esc(keyboardRollStepPrompt(step))}</p>
       <label class="keyboard-roll-wizard-entry">
         <span>Wynik kości${step.optional ? ' (opcjonalnie)' : ''}</span>
@@ -851,6 +879,19 @@ function confirmKeyboardRollStep() {
     step.total = Math.max(0, value + step.modifier);
     step.input.value = String(step.total);
   }
+  if (step.parent) {
+    const parent = step.parent;
+    if (step.raw === null) {
+      parent.parts.forEach(part => {part.raw = null; part.total = null;});
+      parent.raw = parent.total = null;
+      parent.input.value = '';
+      wizard.index = wizard.steps.lastIndexOf(parent.parts[parent.parts.length - 1]);
+    } else {
+      parent.raw = parent.parts.reduce((sum, part) => sum + (part.raw || 0), 0);
+      parent.total = Math.max(0, parent.raw + parent.modifier);
+      parent.input.value = String(parent.total);
+    }
+  }
   if (wizard.index + 1 < wizard.steps.length) wizard.index += 1;
   else wizard.review = true;
   renderKeyboardRollWizard();
@@ -883,6 +924,12 @@ function submitKeyboardRollWizard() {
 
 function cancelKeyboardRollWizard() {
   if (!keyboardRollWizard) return false;
+  const precombat = keyboardRollWizard.submitButton.closest('.precombat-stealth-roll');
+  if (precombat) {
+    precombat.hidden = true;
+    closeKeyboardRollWizard();
+    return true;
+  }
   if (state && state.combat && cancelCurrentCombatStep()) {
     closeKeyboardRollWizard();
     return true;
@@ -1119,9 +1166,13 @@ function actorForMessage(message) {
 }
 function messageCardHtml(message, extraClass = '') {
   const actor = actorForMessage(message);
-  return `<div class="${extraClass || 'message'}${actor ? ' with-portrait' : ''}">
+  const nessa = state.active_point?.npc?.briefing_contract;
+  const npcSpeech = nessa && ['Nessa', 'Odpowiedź NPC'].includes(message.title);
+  const title = npcSpeech ? 'Nessa' : message.title;
+  const tone = nessa ? (npcSpeech ? ' npc-speech' : message.title === 'Narracja MG' ? ' npc-gesture' : /Wynik interakcji|Rezultat mechaniczny/.test(message.title || '') ? ' npc-outcome' : '') : '';
+  return `<div class="${extraClass || 'message'}${actor ? ' with-portrait' : ''}${tone}">
     ${actorPortraitHtml(actor, 'message')}
-    <div class="message-copy"><b>${esc(message.title || '')}</b><span>${esc(message.body || '')}</span></div>
+    <div class="message-copy"><b>${esc(title || '')}</b><span>${esc(message.body || '')}</span></div>
   </div>`;
 }
 function selectPanelActor(actorId) {
@@ -2098,6 +2149,18 @@ function resolveNpcTransition(reactionId) {
   api('/api/npc-transition/resolve', {reaction_id: reactionId}, 'Rozstrzygam reakcję drużyny...');
 }
 function sceneIntroMessageHtml() {
+  const briefingPoint = state.active_point;
+  if (briefingPoint?.npc?.briefing_contract) {
+    const npc = briefingPoint.npc;
+    const entries = state.conversation?.entries || [];
+    const hasIntro = entries.some(entry => entry.body === npc.dialogue_intro);
+    return `<article class="briefing-npc-intro">
+      ${scenarioInteractionImage(briefingPoint.image, npc.name, 'portrait')}
+      <div><span class="eyebrow">Odprawa w Gildii</span><h3>${esc(npc.name)}</h3>
+        <p>${esc(npc.public_description)}</p></div>
+      ${!hasIntro && !entries.length ? `<p class="briefing-opening">${esc(npc.dialogue_intro)}</p>` : ''}
+    </article>`;
+  }
   const zone = state.current_zone || {};
   const point = state.active_point || null;
   const title = point ? point.name : zone.name;
@@ -2134,6 +2197,36 @@ function currentInteractionGoals() {
   const point = state.active_point || null;
   if (point && point.npc) return point.npc.goals || [];
   return state.active_challenge ? (state.active_challenge.goals || []) : [];
+}
+function briefingContractHtml() {
+  const contract = state.active_point?.npc?.briefing_contract;
+  if (!contract) return '';
+  const expanded = document.querySelector('.briefing-contract')?.open;
+  return `<details class="briefing-contract"${expanded ? ' open' : ''}>
+    <summary>Umowa z Gildią <span>${esc(contract.status)}</span></summary>
+    <dl>${contract.rows.map(row => `<div><dt>${esc(row.label)}</dt><dd>${esc(row.value)}</dd></div>`).join('')}</dl>
+  </details>`;
+}
+function briefingRecapHtml(goal) {
+  const recap = goal.recap || {};
+  return `<article class="briefing-recap" aria-live="polite">
+    <span class="eyebrow">${esc(goal.topic_status)} · przypomnienie</span>
+    <h3>${esc(goal.label)}</h3>
+    ${recap.narration ? `<p class="npc-gesture">${esc(recap.narration)}</p>` : ''}
+    ${recap.speech ? `<blockquote>${esc(recap.speech)}</blockquote>` : ''}
+    <p class="npc-outcome">${esc(recap.result || '')}</p>
+    <button type="button" class="secondary" onclick="cancelInteractionGoal()">Wróć do tematów</button>
+  </article>`;
+}
+function briefingArgumentHelpHtml(goal) {
+  if (!goal.negotiation_targets) return '';
+  const targets = goal.negotiation_targets.filter(target => target.skill === selectedSocialSkill);
+  return `<div class="briefing-argument-help">
+    <b>O co możecie się ubiegać?</b>
+    ${targets.map(target => `<p><strong>${esc(target.label)}</strong> — ${esc(target.description)}</p>`).join('')}
+    ${goal.known_arguments?.length ? `<b>Poznane fakty, których możecie użyć</b><ul>${goal.known_arguments.map(fact => `<li>${esc(fact)}</li>`).join('')}</ul>` : ''}
+    <small>Liczy się sens argumentu. Nie musicie pisać długiej przemowy. Jedna rozstrzygnięta negocjacja zamyka warunki umowy.</small>
+  </div>`;
 }
 function currentInteractionPointCards() {
   if (state.active_point) return [];
@@ -2672,7 +2765,7 @@ function interactionGoalsHtml() {
     return {
       goal,
       pad,
-      numpadKey: /^[1-9]$/.test(stableSymbol) ? Number(stableSymbol) : index + 1,
+      numpadKey: /^[1-9]$/.test(stableSymbol) ? Number(stableSymbol) : (goal.slot || index + 1),
     };
   });
   const occupiedGoalNumpadKeys = new Set(
@@ -2680,6 +2773,7 @@ function interactionGoalsHtml() {
   );
   if ((!goals.length && !pointCards.length && !hasDowntime && !zoneOptions.length && !hasContinuation && !auxiliaryPads.length && !exitPad && !boardToolbar) || state.pending || (state.required_rolls || []).length || resultAck) return '';
   const selected = goals.find(goal => goal.id === selectedInteractionGoalId) || null;
+  if (selected?.read_only) return `${boardToolbar}${briefingRecapHtml(selected)}`;
   const selectedZoneOption = zoneOptions.find(option => option.id === selectedZoneOptionId) || null;
   const selectedParticipants = selected ? selectedGoalCheckParticipants(selected) : null;
   const participantsReady = Boolean(
@@ -2781,13 +2875,13 @@ function interactionGoalsHtml() {
       ${goals.length ? `<div class="interaction-numpad-grid">
       ${goalNumpadChoices.map(({goal, pad, numpadKey}) => {
         return `
-        <button type="button" class="interaction-goal-card interaction-numpad-choice${goal.id === selectedInteractionGoalId ? ' selected' : ''}${pad ? ' board-linked-tile' : ''}" data-numpad-key="${numpadKey}"${pad ? ` style="${boardPadCss(pad)}"` : ''}
+        <button type="button" class="interaction-goal-card interaction-numpad-choice${goal.read_only ? ' topic-reviewed' : ''}${goal.id === selectedInteractionGoalId ? ' selected' : ''}${pad ? ' board-linked-tile' : ''}" data-numpad-key="${numpadKey}"${pad ? ` style="${boardPadCss(pad)}"` : ''}
           onclick="selectInteractionGoal('${esc(goal.id)}')">
           ${numpadChoiceBadge(numpadKey)}
           ${scenarioInteractionImage(goal.image, goal.label)}
           <b>${esc(goal.label)}</b>
           <span>${esc(goal.description)}</span>
-          <small>${esc(`${interactionContractLabel(goal)} · ${goalParticipantLabel(goal)}`)}</small>
+          <small>${esc(goal.badge ? `${goal.topic_status || goal.badge}${goal.read_only ? ' · przypomnij' : ''}` : `${interactionContractLabel(goal)} · ${goalParticipantLabel(goal)}`)}</small>
         </button>`;
       }).join('')}
       ${Array.from({length: 9}, (_unused, offset) => offset + 1).filter(
@@ -2814,6 +2908,8 @@ function interactionGoalsHtml() {
     ${selected && !participantsReady ? `<p class="flow-note">Najpierw wskażcie postać. Potem opiszecie jej podejście.</p>` : ''}
     ${selected && participantsReady && !actionSourceReady ? `<p class="flow-note">Wybierzcie wymagany czar, przedmiot albo narzędzie. Potem opiszcie jego użycie.</p>` : ''}
     ${selected && participantsReady && actionSourceReady && (!socialFlow || socialStep === 'description') && !interactionGoalExecutesImmediately(selected) ? `<div class="goal-action-composer">
+      ${briefingArgumentHelpHtml(selected)}
+      ${selected.confirmation_note ? `<p class="flow-note">${esc(selected.confirmation_note)}</p>` : ''}
       ${selected.resolution_mode === 'llm_rubric' && (selected.llm_rubric || []).length ? `
         <div class="flow-note">
           <b>Na co zwróci uwagę MG:</b>
@@ -2861,6 +2957,7 @@ function interactionSocialApproachHtml(options, labels, goal) {
         ${numpadChoiceBadge(index + 1)}
         <b>${esc(labels[skill] || skill)}</b>
         <span>${esc(descriptions[skill] || 'Opiszcie, jak wywieracie wpływ na rozmówcę.')}</span>
+        ${goal.negotiation_targets ? `<small>${esc(goal.negotiation_targets.filter(target => target.skill === skill).map(target => target.label).join(' · '))}</small>` : ''}
       </button>`).join('')}
     </div>
     ${numpadChoiceHint(options.length, 'wybierz podejście')}
@@ -3272,6 +3369,11 @@ function selectInteractionGoal(goalId) {
   }
   selectedInteractionGoalId = goalId;
   pauseBoardForScreenInput();
+  if (goal.read_only) {
+    const panel = document.getElementById('interaction-goals');
+    if (panel) panel.innerHTML = interactionGoalsHtml();
+    return;
+  }
   prepareObviousInteractionChoices(goal);
   if ((goal.social_skill_options || []).length && selectedInteractionActorIds.length) {
     interactionComposerStep = 'approach';
@@ -3296,6 +3398,7 @@ function selectInteractionGoal(goalId) {
 }
 
 function interactionGoalExecutesImmediately(goal) {
+  if (goal?.read_only || goal?.confirmation_note) return false;
   if (!goal || goal.description_mode !== 'none') return false;
   if ((goal.social_skill_options || []).length) return false;
   if ((goal.accepted_source_tags || []).length) {
@@ -4120,14 +4223,17 @@ function encounterSetupHtml(setup) {
     return '<div class="result"><b>Setup zakończony</b><br>Plansza jest przygotowana do inicjatywy i walki.</div>';
   }
   const step = setup.current_step || {};
-  const mapPreview = Number(setup.current_index || 0) === 0 && setup.map_asset_url
-    ? `<img class="location-preview-image" src="${esc(setup.map_asset_url)}" alt="Mapa encountera: ${esc(setup.scenario_name || '')}">`
+  const terrainGuide = setup.battle_briefing?.length
+    ? '<p><b>Legenda:</b> czerwony ciągły obrys — blokada ruchu i widoczności; złoty przerywany — osłona kierunkowa; niebieski kropkowany — trudny teren. Pozostałe pola są przechodnie.</p><p>Siatka 20 × 30; wydruk 50 × 75 cm (pole 2,5 cm). Obrysy wyznaczają pola terenu, a LED wskazuje obiekty.</p><a href="/game-assets/maps/ostatni_transport_01/glodne_cienie_print_v6.html" target="_blank" rel="noopener">Wersja do druku — skala 100%, bez marginesów</a> · <a href="/game-assets/maps/ostatni_transport_01/glodne_cienie_print_v6.pdf" target="_blank" rel="noopener">Pobierz PDF 50 × 75 cm</a>'
+    : '';
+  const mapPreview = setup.map_asset_url
+    ? `<details class="battle-map-preview"${Number(setup.current_index || 0) === 0 ? ' open' : ''}><summary>Mapa i obrysy terenu</summary><img class="location-preview-image" src="${esc(setup.map_asset_url)}" alt="Mapa encountera: ${esc(setup.scenario_name || '')}"><a href="${esc(setup.map_asset_url)}" target="_blank" rel="noopener">Otwórz mapę w pełnym rozmiarze</a>${terrainGuide}</details>`
     : '';
   const hasPositions = Boolean(step.has_positions);
   const requiresBoardAssignment = Boolean(step.requires_board_assignment);
   const mechanics = Array.isArray(step.mechanics) ? step.mechanics : [];
   const mechanicsHtml = mechanics.length
-    ? `<div class="setup-mechanics"><b>Mechanika pól</b><ul>${mechanics.map(item => `<li>${esc(item)}</li>`).join('')}</ul></div>`
+    ? `<div class="setup-mechanics"><b>Zasady tego kroku</b><ul>${mechanics.map(item => `<li>${esc(item)}</li>`).join('')}</ul></div>`
     : '';
   const assignmentButtons = (step.available_positions || []).map(pos =>
     `<button class="secondary" onclick="selectBoardPosition(${Number(pos[0])}, ${Number(pos[1])})">(${Number(pos[0])},${Number(pos[1])})</button>`
@@ -4137,14 +4243,15 @@ function encounterSetupHtml(setup) {
       <b>Krok ${Number(setup.current_index) + 1}/${setup.step_count}: ${esc(step.label || '')}</b><br>
       ${esc(step.message || '')}
       ${requiresBoardAssignment ? `<p><b>Aktualnie ustaw:</b> ${esc(step.assignment_actor_name || '-')}</p><p>Wybierz jedno z podświetlonych wolnych pól na fizycznej planszy.</p>` : ''}
+      ${requiresBoardAssignment && setup.battle_briefing?.length ? '<p><b>Wybór szyku:</b> lewy bok prowadzi do osłon, środek do krótkiego podejścia przez koleiny, prawy bok do suchego obejścia. Możecie swobodnie rozdzielić bohaterów w całej strefie.</p>' : ''}
       ${hasPositions && !requiresBoardAssignment ? `<p>Sprawdź pola podświetlone na planszy kolorem ${esc(step.color || 'wskazanym przez grę')}.</p>` : ''}
       ${mechanicsHtml}
       ${!hasPositions ? '<p class="muted">Ten krok jest tylko instrukcją i nie podświetla pól na planszy.</p>' : ''}
     </div>
-    ${mapPreview}
     ${requiresBoardAssignment
       ? `<div class="row"><button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button></div><p class="muted">Postaw figurkę wskazanego bohatera na podświetlonym polu i uruchom skan. Po ostatnim bohaterze gra przejdzie dalej.</p><details class="encounter-position-fallback"><summary>Awaryjny wybór bez skanu</summary><div class="row">${assignmentButtons}</div></details>`
       : '<button onclick="confirmEncounterSetup()">Potwierdź krok setupu</button>'}
+    ${mapPreview}
   `;
 }
 function encounterStealthHtml(setup, stealth) {
@@ -4160,7 +4267,7 @@ function encounterStealthHtml(setup, stealth) {
       const detected = (result.detected_by || []).map(item => item.actor_name).join(', ') || 'nikt';
       return `<div class="status-item"><b>${esc(actor.actor_name)}</b><span>Stealth ${Number(result.total)} — ukryty przed: ${esc(hidden)}; wykrywają: ${esc(detected)}.</span></div>`;
     }
-    return `<div class="status-item"><b>${esc(actor.actor_name)}</b><span>Modyfikator Stealth: ${signedNumber(Number(actor.modifier || 0))}${actor.roll_mode === 'disadvantage' ? ' · utrudnienie' : ''}</span>${actor.can_attempt ? `<div class="row">${d20RollInputsHtml(`precombat-stealth-${actor.actor_id}`, actor.roll_mode)}<button onclick="submitPrecombatStealth('${esc(actor.actor_id)}')">Spróbuj się ukryć</button></div>` : ''}</div>`;
+    return `<div class="status-item"><b>${esc(actor.actor_name)}</b><span>Modyfikator Stealth: ${signedNumber(Number(actor.modifier || 0))}${actor.roll_mode === 'disadvantage' ? ' · utrudnienie' : ''}</span>${actor.can_attempt ? `<button onclick="startPrecombatStealthRoll('${esc(actor.actor_id)}')">Spróbuj się ukryć</button><div class="precombat-stealth-roll" id="precombat-roll-${esc(actor.actor_id)}" hidden>${d20RollInputsHtml(`precombat-stealth-${actor.actor_id}`, actor.roll_mode)}<button onclick="submitPrecombatStealth('${esc(actor.actor_id)}')">Zapisz rzut</button></div>` : ''}</div>`;
   }).join('');
   return `
     <div class="message"><b>Skradanie przed walką</b><br>${esc(stealth.instruction || '')}</div>
@@ -4208,12 +4315,15 @@ function combatStartHtml() {
   return `
     <div class="combat-shell${interrupt ? ' has-interrupt' : ''}">
       ${combatInitiativeRibbonHtml(combat, order)}
+      ${combat.battle_briefing?.length ? `<details class="battle-rules"><summary>Cel starcia i zasady terenu</summary><ul>${combat.battle_briefing.map(rule => `<li>${esc(rule)}</li>`).join('')}</ul></details>` : ''}
       ${combatTurnHudHtml(combat)}
+      ${miraStealthStatusHtml(combat)}
       <div class="combat-stage">
         <div data-board-input-status>${boardSelectionStatusHtml()}</div>
         ${interrupt ? `<div class="combat-interrupt-banner"><span>Przerwanie</span><b>${esc(interrupt)}</b></div>` : ''}
         ${combatCurrentStepHtml(combat, finished, isAllyTurn, isEnemyTurn, interrupt)}
       </div>
+      ${physicalManaHtml(combat)}
       ${combatTurnActorStatsHtml(combat)}
     </div>
     <details class="combat-details">
@@ -4251,6 +4361,29 @@ function combatStartHtml() {
     </details>
   `;
 }
+function miraStealthStatusHtml(combat) {
+  const actor = combat.current_actor || {};
+  if (actor.id !== 'mira' || !actor.hidden) return '';
+  const observers = actor.hidden.observers || [];
+  const list = sees => observers.filter(o => Boolean(o.sees_actor) === sees).map(o => esc(o.name)).join(', ') || 'nikt';
+  const passive = combat.physical_mana ? '+1k6 za ukrycie przed celem lub flankę; +2k6 za oba, raz we własnej turze.' : 'Premia Ataku z cienia zależy od ukrycia przed wybranym celem i flanki.';
+  return `<aside class="mira-stealth-status" role="status"><b>Ukrycie Miry · wynik ${actor.hidden.stealth_total}</b>
+    <span class="stealth-unaware">Turkusowe · nie widzą Miry: ${list(false)}</span><span class="stealth-aware">Pomarańczowe · widzą Mirę: ${list(true)}</span>
+    <details><summary>Atak z cienia i kolory planszy</summary><p>${passive} Atak kończy ukrycie. Podgląd akcji zastępuje kolory obserwatorów; po anulowaniu wracają.</p></details></aside>`;
+}
+function focusCombatDecision() {
+  if (!state?.combat || keyboardRollWizard || busy) return;
+  requestAnimationFrame(() => {
+    const card = document.querySelector('.combat-current-step');
+    if (!card) return;
+    const idle = Boolean(card.querySelector('.combat-keyboard-waiting'));
+    const anchor = idle ? document.querySelector('.combat-turn-hud') || card : card;
+    const rect = anchor.getBoundingClientRect();
+    const header = document.querySelector('.app-shell-header')?.getBoundingClientRect().bottom || 0;
+    if (rect.top < header || card.getBoundingClientRect().bottom > window.innerHeight || rect.top > window.innerHeight * .5) anchor.scrollIntoView({block:'start', behavior:'auto'});
+  });
+}
+
 function combatInitiativeRibbonHtml(combat, order) {
   const actors = combat.actors || [];
   const actorById = new Map(actors.map(actor => [String(actor.id), actor]));
@@ -4342,8 +4475,8 @@ function combatCurrentStepHtml(combat, finished, isAllyTurn, isEnemyTurn, interr
   return `
     <div class="combat-current-step${interrupt ? ' combat-interrupt-dialog' : ''}${combat.enemy_turn_result ? ' enemy-attack-result' : ''}${actionMenuStep ? ' action-menu-step' : ''}" data-stage="${esc(phase)}"${interrupt ? ' role="dialog" aria-modal="true" aria-label="Przerwanie walki"' : ''}>
       ${actionMenuStep ? '' : combatPhaseStepsHtml(phase)}
-      ${resultAck || actionMenuStep ? '' : combatMainPromptHtml(combat, finished, isAllyTurn, isEnemyTurn)}
-      ${phase === 'result' && !resultAck ? `<div class="combat-inline-result">${latestCombatMessageHtml()}</div>` : ''}
+      ${resultAck || actionMenuStep || combat.enemy_turn_result ? '' : combatMainPromptHtml(combat, finished, isAllyTurn, isEnemyTurn)}
+      ${phase === 'result' && !resultAck && !combat.enemy_turn_result && !combat.shield_bash ? `<div class="combat-inline-result">${latestCombatMessageHtml()}</div>` : ''}
       ${combatCardReminderHtml(combat, phase, isAllyTurn)}
       <div class="combat-action-card">
         ${finished ? '<button onclick="resolveCombatOutcome()">Zastosuj wynik encountera</button>' : combatPrimaryActionHtml(combat, isAllyTurn, isEnemyTurn)}
@@ -4388,6 +4521,7 @@ function combatCardReminderHtml(combat, phase, isAllyTurn) {
 }
 function combatPresentationPhase(combat, finished, isAllyTurn, isEnemyTurn) {
   if (resultAck) return 'result';
+  if (combat.shield_bash) return combat.shield_bash.stage === 'result' ? 'result' : 'roll';
   if (finished || combat.enemy_turn_result) return 'result';
   if (defensiveSpellReaction(combat) || combat.death_save_required || combat.pending_concentration_check || combat.pending_enemy_saving_throw || (combat.pending_spell_dispel && combat.pending_spell_dispel.stage === 'ability_check') || (combat.condition_saves || []).length) return 'roll';
   const rollPending = [
@@ -4416,7 +4550,7 @@ function combatMainPromptHtml(combat, finished, isAllyTurn, isEnemyTurn) {
   return `
     <div class="combat-prompt">
       <b>${esc(combatPromptTitle(combat, finished, isAllyTurn, isEnemyTurn))}</b>
-      <span>${esc(combatInstructionText(combat, finished, isAllyTurn, isEnemyTurn))}</span>
+      <span>${manaTextHtml(combatInstructionText(combat, finished, isAllyTurn, isEnemyTurn))}</span>
     </div>
   `;
 }
@@ -4475,6 +4609,8 @@ function combatPromptTitle(combat, finished, isAllyTurn, isEnemyTurn) {
       ? `Tura ${actor.name || 'gracza'}: test rozproszenia`
       : `Tura ${actor.name || 'gracza'}: wybierz cel rozproszenia`;
   }
+  if (combat.shield_bash) return combat.shield_bash.stage === 'result' ? 'Uderzenie tarczą: wynik' : 'Uderzenie tarczą: wpisz rzuty';
+  if (isAllyTurn && combat.class_feature_targeting) return `${combat.class_feature_targeting.label}: wybierz cel`;
   if (isAllyTurn && combat.context_menu) return `Tura ${actor.name || 'gracza'}: wybierz akcję`;
   if (isAllyTurn && combat.targeting) {
     return combat.targeting.kind === 'area'
@@ -4497,6 +4633,7 @@ function combatPromptTitle(combat, finished, isAllyTurn, isEnemyTurn) {
   return `Tura ${actor.name || '-'}`;
 }
 function combatInstructionText(combat, finished, isAllyTurn, isEnemyTurn) {
+  if (combat.shield_bash) return combat.shield_bash.stage === 'result' ? 'Sprawdź test, obrażenia i pole odepchnięcia. Enter zastosuje wynik.' : 'Rzucaj wskazaną kością, wpisuj naturalny wynik i potwierdzaj Enterem.';
   if (resultAck) return resultAck.body || 'Przeczytaj wynik i potwierdź.';
   if (finished) {
     const result = combat.encounter_result || {};
@@ -4506,7 +4643,9 @@ function combatInstructionText(combat, finished, isAllyTurn, isEnemyTurn) {
       : '';
     return (result.message || 'Zastosuj wynik encountera, żeby wrócić do eksploracji.') + recoveryText;
   }
+  if (isAllyTurn && combat.class_feature_targeting) return 'Wybierz podświetlony cel na planszy. Enter potwierdza, Esc anuluje.';
   const actor = combat.current_actor || {};
+  if (combat.physical_mana?.needs_attack_count) return "Zadeklaruj liczbę oddzielnych ataków. Każdy kosztuje 1 dowolną manę.";
   if (combat.death_save_required) {
     const saves = actor.death_saves || {};
     return `Rzuć d20. Wynik 10 lub więcej to sukces. Sukcesy: ${saves.successes || 0}/3, porażki: ${saves.failures || 0}/3.`;
@@ -4561,13 +4700,6 @@ function combatInstructionText(combat, finished, isAllyTurn, isEnemyTurn) {
   if (!isAllyTurn) return 'Ten aktor nie ma automatycznych kontrolek w MVP. Możesz zakończyć turę.';
   if (combat.context_menu) {
     return 'Numpad 8/2 zmienia zaznaczenie, Enter wybiera lub potwierdza, a Numpad − cofa do planszy.';
-  }
-  if (combat.turn_action_menu) {
-    const menu = combat.turn_action_menu;
-    const selected = (menu.options || [])[Number(menu.selected_index || 0)] || {};
-    return menu.stage === 'preview'
-      ? `${selected.label || 'Akcja'} — podgląd aktywny. Wskaż cel lub pole na planszy, następnie naciśnij Enter. Esc lub Backspace anuluje bez kosztu.`
-      : 'Wybierz akcję skrótem z karty postaci. Naciśnięcie skrótu otwiera podgląd bez zużywania akcji ani zasobu.';
   }
   if (combat.targeting) {
     const targeting = combat.targeting;
@@ -4676,6 +4808,13 @@ function combatInstructionText(combat, finished, isAllyTurn, isEnemyTurn) {
       : '';
     return `Wybrano ruch na (${preview.destination[0]},${preview.destination[1]}). Uruchom skan i kliknij pole docelowe, żeby zatwierdzić.${draggedInstruction}`;
   }
+  if (combat.turn_action_menu) {
+    const menu = combat.turn_action_menu;
+    const selected = (menu.options || [])[Number(menu.selected_index || 0)] || {};
+    return menu.stage === 'preview'
+      ? `${selected.label || 'Akcja'} — podgląd aktywny. Wskaż cel lub pole na planszy, następnie naciśnij Enter. Esc lub Backspace anuluje bez kosztu.`
+      : 'Wybierz akcję skrótem z karty postaci. Naciśnięcie skrótu otwiera podgląd bez zużywania akcji ani zasobu.';
+  }
   const selfActionHint = ` Kliknij pole ${actor.name || 'aktywnego bohatera'}, aby otworzyć jego czary, akcje i ekwipunek. Turę możesz zakończyć także przyciskiem obok skanowania.`;
   if (actionUsed && remaining > 0) return `Akcja zużyta. Możesz jeszcze ruszyć się (${remaining} ft).${selfActionHint}`;
   if (actionUsed) return `Akcja zużyta.${selfActionHint}`;
@@ -4745,11 +4884,11 @@ function combatActorChips(actor) {
     chips.push({
       label: exposedPanic
         ? `Panika po zdemaskowaniu (${actor.hidden.stealth_total})`
-        : `${hiddenLabel} (${actor.hidden.stealth_total})`,
+        : `${hiddenLabel} przed ${hiddenFrom.length}/${observerStates.length} wrogów`,
       tone: exposedPanic ? 'danger' : 'ready',
       title: exposedPanic
         ? `Widzą Mirę: ${detectingNames}. Mają przewagę w atakach przeciw niej w tej sesji skradania.${hiddenNames ? ` Nadal ukryta przed: ${hiddenNames}.` : ''}`
-        : (hiddenNames ? `${hiddenLabel} przed: ${hiddenNames}` : 'Tryb skradania aktywny'),
+        : (hiddenNames ? `${hiddenLabel} przed: ${hiddenNames}. Wynik ukrycia: ${actor.hidden.stealth_total}.` : 'Tryb skradania aktywny'),
     });
   }
   return chips;
@@ -4970,7 +5109,7 @@ function actorAcLabel(actor) {
   return equipmentBonus > 0 ? `${ac} (${base} + ekwipunek ${equipmentBonus})` : `${ac}`;
 }
 function latestCombatMessageHtml() {
-  const combatTitles = new Set(['Atak', 'Czar', 'Obrażenia', 'Kontrczar', 'Ruch', 'Koniec tury', 'Atak przeciwnika', 'Efekt przeciwnika', 'Obrażenia przeciwnika', 'Ruch przeciwnika', 'Tura przeciwnika', 'Rzut obronny', 'Atak okazyjny', 'Pomoc', 'Ready', 'Leczenie', 'Eliksir', 'Rzut śmierci', 'Stabilizacja']);
+  const combatTitles = new Set(['Uderzenie tarczą', 'Atak', 'Czar', 'Obrażenia', 'Kontrczar', 'Ruch', 'Koniec tury', 'Atak przeciwnika', 'Efekt przeciwnika', 'Obrażenia przeciwnika', 'Ruch przeciwnika', 'Tura przeciwnika', 'Rzut obronny', 'Atak okazyjny', 'Pomoc', 'Ready', 'Leczenie', 'Eliksir', 'Rzut śmierci', 'Stabilizacja']);
   const messages = state.messages || [];
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     if (!combatTitles.has(messages[i].title)) continue;
@@ -4979,6 +5118,7 @@ function latestCombatMessageHtml() {
   return '<p class="combat-empty">Brak rezultatu w tej walce.</p>';
 }
 function combatPrimaryActionHtml(combat, isAllyTurn, isEnemyTurn) {
+  if (!resultAck && combat.physical_mana?.needs_attack_count) return physicalAttackSeriesHtml(combat);
   if (resultAck) {
     return `
       <div class="combat-result-ack"><b>${esc(resultAck.title || 'Wynik')}</b><p>${esc(resultAck.body || '')}</p></div>
@@ -5059,7 +5199,7 @@ function combatPrimaryActionHtml(combat, isAllyTurn, isEnemyTurn) {
     if (instinctiveDodge) {
       return `
         <p><b>Unik instynktowny Miry</b></p>
-        <p>Wydaj 1 Fortel i reakcję, aby nadać temu jednemu atakowi utrudnienie. Premia +2 ze skazy nadal obowiązuje.</p>
+        <p>${combat.physical_mana ? 'Wydaj Z (zieloną manę) i reakcję. Ten jeden atak otrzymuje utrudnienie.' : 'Wydaj 1 Fortel i reakcję, aby nadać temu jednemu atakowi utrudnienie. Premia +2 ze skazy nadal obowiązuje.'}</p>
         <div class="row">
           <button data-allow-busy="true" onclick="useInstinctiveDodgeReaction()">Wykonaj unik</button>
           <button class="secondary" data-allow-busy="true" onclick="skipInstinctiveDodgeReaction()">Nie reaguj</button>
@@ -5120,6 +5260,7 @@ function combatPrimaryActionHtml(combat, isAllyTurn, isEnemyTurn) {
   if (combat.pending_combat_help) {
     return pendingCombatHelpHtml(combat.pending_combat_help);
   }
+  if (combat.shield_bash) return shieldBashHtml(combat.shield_bash);
   if (combat.class_feature_targeting) {
     return pendingClassFeatureTargetingHtml(combat.class_feature_targeting);
   }
@@ -5303,8 +5444,11 @@ function combatActionDetailsHtml(combat, isAllyTurn, isEnemyTurn) {
 }
 function physicalFeaturePromptHtml(prompt) {
   const actionId = prompt.action_id || '';
+  const ability = (state?.combat?.physical_mana?.abilities || []).find(a => a.id === actionId);
   let controls = '';
-  if (prompt.input_kind === 'die') {
+  if (prompt.input_kind === 'mana_target') {
+    controls = `<label>Bohater w 30 ft<select id="physical-feature-mana-target" required>${(prompt.targets || []).map(t => `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('')}</select></label>`;
+  } else if (prompt.input_kind === 'die') {
     controls = `<label>Wynik k${Number(prompt.die_sides || 10)}<input id="physical-feature-roll" type="number" min="1" max="${Number(prompt.die_sides || 10)}" required></label>`;
   } else if (prompt.input_kind === 'weapon') {
     controls = `<label>Broń<select id="physical-feature-weapon" required>${(prompt.weapons || []).map(item => `<option value="${esc(item.id)}">${esc(item.name)}</option>`).join('')}</select></label>`;
@@ -5322,6 +5466,7 @@ function physicalFeaturePromptHtml(prompt) {
   return `
     <div class="status-item">
       <h3>${esc(prompt.label || identifierLabel(actionId))}</h3>
+      ${ability ? `<p class="mana-prompt-cost">${manaCostHtml(ability.cost)} · ${esc(ability.timing)}</p>` : ''}
       ${prompt.incoming_damage ? `<p>Ujawnione obrażenia pocisku: <b>${Number(prompt.incoming_damage)}</b>.</p>` : ''}
       ${controls}
       <div class="panel-actions">
@@ -5342,6 +5487,7 @@ function submitPhysicalFeaturePrompt(actionId) {
     return;
   }
   const payload = {action_id: actionId};
+  if (actionId.startsWith('mana_')) payload.target_id = (document.getElementById('physical-feature-mana-target') || {}).value || '';
   if (['second_wind', 'hard_as_rock', 'anchoring_arrow', 'exposing_arrow'].includes(actionId)) payload.natural_roll = roll;
   if (actionId === 'sacred_weapon') payload.source_item_id = (document.getElementById('physical-feature-weapon') || {}).value || '';
   if (actionId === 'turn_the_unholy' || actionId === 'turn_undead') {
@@ -5367,7 +5513,7 @@ function combatSourceButtonsHtml(combat) {
     const levels = Number(source.spell_level || 0) > 0 ? (source.available_cast_levels || []) : [null];
     return levels.flatMap(level => {
       const baseSelectionId = level === null ? source.id : `${source.id}@${level}`;
-      const levelLabel = level === null ? '' : ` · slot ${level}`;
+      const levelLabel = level === null || state.combat?.physical_mana ? '' : ` · slot ${level}`;
       const argument = level === null ? 'null' : Number(level);
       const variants = [{ids: [], label: ''}];
       return variants.map(variant => {
@@ -5386,7 +5532,7 @@ function combatSourceButtonsHtml(combat) {
     const levels = Number(source.spell_level || 0) > 0 ? (source.available_cast_levels || []) : [null];
     return levels.flatMap(level => {
       const baseSelectionId = level === null ? source.id : `${source.id}@${level}`;
-      const levelLabel = level === null ? '' : ` · slot ${level}`;
+      const levelLabel = level === null || state.combat?.physical_mana ? '' : ` · slot ${level}`;
       const argument = level === null ? 'null' : Number(level);
       const variants = [{ids: [], label: ''}];
       return variants.map(variant => {
@@ -5404,7 +5550,7 @@ function combatSourceButtonsHtml(combat) {
       const label = esc(action.name || action.label || action.id);
       const levels = Number(action.spell_level || 0) > 0 ? (action.available_cast_levels || []) : [0];
       return levels.map(level => {
-        const levelLabel = Number(action.spell_level || 0) > 0 ? ` · slot ${level}` : '';
+        const levelLabel = !state.combat?.physical_mana && Number(action.spell_level || 0) > 0 ? ` · slot ${level}` : '';
         const missiles = Number(action.projectile_count || 0)
           + Math.max(0, Number(level) - Number(action.spell_level || 0))
           * Number(action.upcast_projectiles_per_level || 0);
@@ -5418,7 +5564,7 @@ function combatSourceButtonsHtml(combat) {
       const hint = action.instructions ? ` title="${esc(action.instructions)}"` : '';
       const levels = Number(action.spell_level || 0) > 0 ? (action.available_cast_levels || []) : [0];
       return levels.flatMap(level => {
-        const levelLabel = Number(action.spell_level || 0) > 0 ? ` · slot ${level}` : '';
+        const levelLabel = !state.combat?.physical_mana && Number(action.spell_level || 0) > 0 ? ` · slot ${level}` : '';
         const variants = [{ids: [], label: ''}];
         return variants.map(variant => {
           const ids = JSON.stringify(variant.ids).replace(/"/g, '&quot;');
@@ -5438,7 +5584,7 @@ function combatSourceButtonsHtml(combat) {
       const label = esc(action.name || action.label || action.id);
       const levels = Number(action.spell_level || 0) > 0 ? (action.available_cast_levels || []) : [0];
       return levels.map(level => {
-        const levelLabel = Number(action.spell_level || 0) > 0 ? ` · slot ${level}` : '';
+        const levelLabel = !state.combat?.physical_mana && Number(action.spell_level || 0) > 0 ? ` · slot ${level}` : '';
         return `<button class="secondary"${disabled} data-allow-busy="true" onclick="startConcentrationAction('${esc(action.id)}', ${Number(level)})">${label}${esc(levelLabel)}</button>`;
       }).join('');
     }
@@ -5448,7 +5594,7 @@ function combatSourceButtonsHtml(combat) {
       const label = esc(action.name || action.label || action.id);
       const levels = Number(action.spell_level || 0) > 0 ? (action.available_cast_levels || []) : [0];
       return levels.map(level => {
-        const levelLabel = Number(action.spell_level || 0) > 0 ? ` · slot ${level}` : '';
+        const levelLabel = !state.combat?.physical_mana && Number(action.spell_level || 0) > 0 ? ` · slot ${level}` : '';
         return `<button class="secondary"${disabled} data-allow-busy="true" onclick="startLongCast('${esc(action.id)}', ${Number(level)})">${label}${esc(levelLabel)} · rozpocznij</button>`;
       }).join('');
     }
@@ -5458,7 +5604,7 @@ function combatSourceButtonsHtml(combat) {
       const label = esc(action.name || action.label || action.id);
       const levels = Number(action.spell_level || 0) > 0 ? (action.available_cast_levels || []) : [0];
       return levels.map(level => {
-        const levelLabel = Number(action.spell_level || 0) > 0 ? ` · slot ${level}` : '';
+        const levelLabel = !state.combat?.physical_mana && Number(action.spell_level || 0) > 0 ? ` · slot ${level}` : '';
         return `<button class="secondary"${disabled} data-allow-busy="true" onclick="startSummon('${esc(action.id)}', ${Number(level)})">${label}${esc(levelLabel)} · wybierz pole</button>`;
       }).join('');
     }
@@ -5468,7 +5614,7 @@ function combatSourceButtonsHtml(combat) {
       const label = esc(action.name || action.label || action.id);
       const levels = Number(action.spell_level || 0) > 0 ? (action.available_cast_levels || []) : [0];
       return levels.map(level => {
-        const levelLabel = Number(action.spell_level || 0) > 0 ? ` · slot ${level}` : '';
+        const levelLabel = !state.combat?.physical_mana && Number(action.spell_level || 0) > 0 ? ` · slot ${level}` : '';
         return `<button class="secondary"${disabled} data-allow-busy="true" onclick="startMagicMovement('${esc(action.id)}', ${Number(level)})">${label}${esc(levelLabel)} · wybierz</button>`;
       }).join('');
     }
@@ -5478,7 +5624,7 @@ function combatSourceButtonsHtml(combat) {
       const label = esc(action.name || action.label || action.id);
       const levels = Number(action.spell_level || 0) > 0 ? (action.available_cast_levels || []) : [0];
       return levels.map(level => {
-        const levelLabel = Number(action.spell_level || 0) > 0 ? ` · slot ${level}` : '';
+        const levelLabel = !state.combat?.physical_mana && Number(action.spell_level || 0) > 0 ? ` · slot ${level}` : '';
         return `<button class="secondary"${disabled} data-allow-busy="true" onclick="startSpellDebuff('${esc(action.id)}', ${Number(level)})">${label}${esc(levelLabel)} · wybierz cel</button>`;
       }).join('');
     }
@@ -5488,7 +5634,7 @@ function combatSourceButtonsHtml(combat) {
       const label = esc(action.name || action.label || action.id);
       const levels = Number(action.spell_level || 0) > 0 ? (action.available_cast_levels || []) : [0];
       return levels.map(level => {
-        const levelLabel = Number(action.spell_level || 0) > 0 ? ` · slot ${level}` : '';
+        const levelLabel = !state.combat?.physical_mana && Number(action.spell_level || 0) > 0 ? ` · slot ${level}` : '';
         return `<button class="secondary"${disabled} data-allow-busy="true" onclick="startSpellDispel('${esc(action.id)}', ${Number(level)})">${label}${esc(levelLabel)} · wybierz cel</button>`;
       }).join('');
     }
@@ -5514,6 +5660,7 @@ function sourceUnavailableReason(source, actor) {
     if (source.source_item_id) return 'Ten przedmiot został zużyty.';
     return 'Ta opcja nie jest dostępna.';
   }
+  if ((source.resource_label || '').startsWith('Mana:')) return '';
   const spellLevel = Number(source.spell_level || 0);
   if (spellLevel <= 0) return '';
   const slots = actor.spell_slots || [];
@@ -5696,23 +5843,26 @@ function enemyTurnIntentHtml(intent) {
 function enemyTurnResultHtml(result) {
   const target = result.target_name || 'cel';
   const hasAttack = result.hit !== null && result.hit !== undefined;
-  const outcome = hasAttack ? (result.hit ? (result.critical ? 'TRAFIENIE KRYTYCZNE' : 'TRAFIENIE') : 'PUDŁO') : 'BRAK ATAKU';
+  const save = result.saving_throw_result;
+  const outcome = save ? (save.success ? 'UDANA OBRONA' : 'NIEUDANA OBRONA') : hasAttack ? (result.hit ? (result.critical ? 'TRAFIENIE KRYTYCZNE' : 'TRAFIENIE') : 'PUDŁO') : 'BRAK ATAKU';
   const damage = result.damage === null || result.damage === undefined ? 0 : result.damage;
   const roll = result.natural_roll === null || result.natural_roll === undefined
     ? ''
     : `<p><b>Rzut:</b> d20 ${esc(d20RollResultText(result))}, razem ${esc(result.total)} — ${outcome}.</p>`;
   const hp = result.damage_result
-    ? `<p><b>HP ${esc(target)}:</b> ${esc(result.damage_result.hp_before)} → ${esc(result.damage_result.hp_after)}${result.damage_result.defeated_by_damage ? ' — cel pokonany' : ''}.</p>`
+    ? `<p><b>PW ${esc(target)}:</b> ${esc(result.damage_result.hp_before)} → ${esc(result.damage_result.hp_after)}${result.damage_result.defeated_by_damage ? ' — cel pokonany' : ''}.</p>`
     : '';
   return `
     <div class="enemy-attack-summary">
+      <h3 class="enemy-outcome">${outcome}</h3>
       <p><b>${esc(result.enemy_name || 'Przeciwnik')} → ${esc(target)}</b></p>
       ${roll}
+      ${save ? spellSavesHtml([save]) : ''}
       <p class="enemy-damage-value"><b>Obrażenia: ${esc(damage)}</b></p>
       ${hp}
+      <details><summary>Szczegóły trafienia i obrażeń</summary>${damageBreakdownHtml(result.damage_result)}<p>${esc(result.message || '')}</p></details>
+      <button data-allow-busy="true" data-card-action="accept" onclick="confirmEnemyTurnResult()">Przeczytałem · Enter</button>
     </div>
-    <p class="combat-warning"><b>Atak został już rozstrzygnięty.</b> Potwierdzenie poniżej tylko zamyka wynik i przechodzi dalej.</p>
-    <button data-allow-busy="true" data-card-action="accept" onclick="confirmEnemyTurnResult()">Przeczytałem — zakończ turę przeciwnika</button>
   `;
 }
 function longCastHtml(cast, combat) {
@@ -5960,7 +6110,7 @@ function defensiveSpellReactionHtml(option, preview) {
   const nextAc = currentAc === '?' ? '?' : Number(currentAc) + Number(option.value || 0);
   return `
     <p><b>Atak ${esc(attackTotal)} przeciw AC ${esc(currentAc)} trafił.</b></p>
-    <p>${esc(option.label || 'Czar obronny')} podniesie AC do ${esc(nextAc)} aż do początku następnej tury bohatera. Zużyje reakcję i slot poziomu ${esc(option.spell_level || 1)}.</p>
+    <p>${state.combat?.physical_mana ? `Tarcza: +3 KP przeciw temu jednemu atakowi. Wydaj ${manaCostHtml(['B'])} i reakcję. KP: ${currentAc === '?' ? '?' : Number(currentAc)+3}.` : `${esc(option.label || 'Czar obronny')} podniesie AC do ${esc(nextAc)} aż do początku następnej tury bohatera. Zużyje reakcję i slot poziomu ${esc(option.spell_level || 1)}.`}</p>
     <div class="row">
       <button data-allow-busy="true" onclick="castDefensiveSpellReaction()">Rzuć ${esc(option.label || 'czar obronny')}</button>
       <button class="secondary" data-allow-busy="true" onclick="skipDefensiveSpellReaction()">Przyjmij trafienie</button>
@@ -6023,6 +6173,7 @@ function pendingEnemyOpportunityAttackHtml(pending) {
   if (pending.stage === 'damage_roll') {
     return `
       <p>${esc(pending.damage_instruction || 'Wpisz obrażenia po trafieniu.')}</p>
+      ${physicalDamageBonusChoicesHtml(pending)}
       <div class="row">
         ${damageComponentInputsHtml(pending, 'enemy-opportunity-damage', source)}
         <button onclick="submitEnemyOpportunityDamageRoll()">Zapisz obrażenia</button>
@@ -6100,7 +6251,7 @@ function pendingClassFeatureTargetingHtml(pending) {
     <div class="combat-action-box">
       <p><b>${esc(pending.label || 'Cecha klasowa')}</b></p>
       <p><b>Efekt w grze:</b> ${esc(pending.instructions || '')}</p>
-      <p><b>Koszt:</b> ${esc(pending.cost || '-')}</p>
+      <p><b>Koszt:</b> ${pending.mana_cost ? manaCostHtml(pending.mana_cost) : manaTextHtml(pending.cost || '-')}</p>
       <p class="muted">Legalne figurki zostaną podświetlone. Kliknięcie wybiera cel; dopiero Enter wykonuje albo rozwija akcję.</p>
       ${preserveLife
         ? `<p><b>Wybrane cele:</b> ${selectedTargets.map(target => esc(target.name)).join(', ') || 'brak'}</p>`
@@ -6168,7 +6319,7 @@ function pendingConcentrationActionHtml(pending) {
   const chosenNames = selectedTargets.map(actor => esc(actor.name)).join(', ');
   const hasSelection = selected.size > 0;
   return `
-    <p><b>${esc(action.label || action.name || 'Czar')}</b> · slot ${esc(pending.cast_level || action.spell_level || '-')}</p>
+    <p><b>${esc(action.label || action.name || 'Czar')}</b> ${state.combat?.physical_mana ? '' : `· slot ${esc(pending.cast_level || action.spell_level || '-')}`} </p>
     <p><b>Efekt w grze:</b> ${esc(action.instructions || 'Brak opisu mechanicznego — zgłoś błąd zawartości.')}</p>
     <p>${choosingArea
       ? 'Zeskanuj planszę i kliknij podświetlony środek albo kierunek obszaru.'
@@ -6191,7 +6342,7 @@ function pendingConcentrationActionDetailsHtml(pending) {
   const targets = pending.targets || [];
   return `
     <p><b>Rzucający:</b> ${esc(caster.name || '-')}</p>
-    <p><b>Czar:</b> ${esc(action.label || action.name || '-')} · slot ${esc(pending.cast_level || action.spell_level || '-')}</p>
+    <p><b>Czar:</b> ${esc(action.label || action.name || '-')} ${state.combat?.physical_mana ? '' : `· slot ${esc(pending.cast_level || action.spell_level || '-')}`} </p>
     <p><b>Koncentracja:</b> ${action.concentration ? 'tak' : 'nie'} | <b>Efekt:</b> ${esc(signedNumber(action.value || 0))} do ataku celu</p>
     <p><b>Limit celów:</b> ${esc(pending.maximum_targets || 1)}</p>
     <p><b>Legalni sojusznicy:</b> ${targets.map(actor => `${esc(actor.name)} (${esc(actor.position[0])},${esc(actor.position[1])})`).join(', ') || 'brak'}</p>
@@ -6641,7 +6792,7 @@ function combatContextMenuHtml(menu) {
     if (option.loot_quantity_max !== null && option.loot_quantity_max !== undefined) {
       return `${heading}${combatLootQuantityOptionHtml(option, index, selected)}`;
     }
-    return `${heading}<button class="combat-context-option${selected ? ' selected' : ''}" data-allow-busy="true" onclick="confirmCombatContextMenu('${esc(option.id)}', ${index})" aria-current="${selected ? 'true' : 'false'}"><b>${esc(option.label)}</b><span>${esc(option.description || '')}</span></button>`;
+    return `${heading}<button class="combat-context-option${selected ? ' selected' : ''}" data-allow-busy="true" onclick="confirmCombatContextMenu('${esc(option.id)}', ${index})" aria-current="${selected ? 'true' : 'false'}"><b>${manaTextHtml(option.label)}</b><span>${manaTextHtml(option.description || '')}</span></button>`;
   }).join('');
   return `
     <div class="combat-context-heading"><span>Wskazane pole na planszy · opcja ${esc(selectedIndex + 1)} z ${esc(options.length)}</span><b>${esc(menu.title || 'Dostępne akcje')}</b></div>
@@ -6689,8 +6840,7 @@ function combatTurnActorStatsHtml(combat) {
       <summary data-allow-busy="true">Szczegóły postaci · ${esc(actor.name || '-')}</summary>
       <div class="combat-turn-actor-stats">
         <div class="combat-turn-stat-block"><small>Poziom</small><span>${esc(actor.level || '-')}</span></div>
-        <div class="combat-turn-stat-block"><small>Sloty czarów</small><span>${slotText}</span></div>
-        <div class="combat-turn-stat-block"><small>Zasoby</small><span>${poolText}</span></div>
+        ${combat.physical_mana?.active_hero ? `<div class="combat-turn-stat-block"><small>Mana fizyczna</small><span>Karty na stole · pojemność ${combat.physical_mana.supply.capacity}</span></div>` : `<div class="combat-turn-stat-block"><small>Sloty czarów</small><span>${slotText}</span></div><div class="combat-turn-stat-block"><small>Zasoby</small><span>${poolText}</span></div>`}
         <div class="combat-turn-stat-block combat-turn-all-effects"><small>Stany i efekty</small>${statusChipsHtml(combatActorChips(actor).filter(chip => !isTurnResourceChip(chip)), 'Brak aktywnych efektów.')}</div>
       </div>
     </details>
@@ -6705,6 +6855,30 @@ function combatScreenFallbackHtml(content) {
     ${content}
   </details>`;
 }
+function combatEconomyGroupsHtml(options, renderOption) {
+  const matching = groups => options.filter(o => groups.includes(o.action_economy || 'action'));
+  const section = (groups, label, hint, always = true) => {
+    const entries = matching(groups);
+    if (!always && !entries.length) return '';
+    return `<section class="combat-economy-section" data-economy="${groups[0]}" aria-label="${label}">
+      <div class="combat-economy-heading"><h4>${label}</h4><span>${entries.length}</span></div>
+      <p class="combat-economy-hint">${hint}</p>
+      <div class="combat-economy-options" tabindex="0" role="region" aria-label="${label} — dostępne działania">${entries.length ? entries.map(renderOption).join('') : '<p class="combat-economy-empty">Brak dostępnych działań.</p>'}</div>
+    </section>`;
+  };
+  const controls = matching(['control']);
+  return `<div class="combat-keyboard-action-index" aria-label="Działania według kosztu akcji">
+    <div class="combat-economy-column">${section(['action'], 'Akcja główna', 'Atak, zdolność lub czar.')}</div>
+    <div class="combat-economy-column">${section(['bonus_action'], 'Akcja dodatkowa', 'Najwyżej jedna w turze.')}${section(['reaction'], 'Reakcja', 'W odpowiedzi na zdarzenie.', false)}</div>
+    <div class="combat-economy-column">${section(['free', 'modifier', 'object_interaction'], 'Bez osobnej akcji', 'Wzmocnienia mają własny koszt many i limity.', false)}${section(['movement'], 'Ruch', 'Możesz dzielić go na odcinki.')}</div>
+  </div>${controls.length ? `<div class="combat-economy-controls" aria-label="Ekwipunek i zakończenie tury">${controls.map(renderOption).join('')}</div>` : ''}`;
+}
+function combatKeyboardTileHtml(option) {
+  return `<span class="combat-keyboard-action-index-item category-${esc(option.category || 'basic')}" data-option-id="${esc(option.id)}">
+    <kbd>${esc(option.shortcut === 'SPACE' ? 'SPACJA' : option.shortcut)}</kbd>
+    <span class="combat-action-tile-content"><b>${manaTextHtml(combatActionTileLabel(option))}</b>${actionManaCostHtml(option)}</span>
+  </span>`;
+}
 function combatTurnActionMenuHtml(menu, combat = {}) {
   const options = menu.options || [];
   if (!options.length) return '<p>Brak dostępnych działań.</p>';
@@ -6713,26 +6887,19 @@ function combatTurnActionMenuHtml(menu, combat = {}) {
   const selected = options[selectedIndex] || {};
   if (!previewActive) {
     const keyboardOptions = options.filter(option => option.shortcut);
-    const shortcutIndex = keyboardOptions.length ? `
-      <div class="combat-keyboard-action-index" aria-label="Wszystkie skróty akcji aktywnego bohatera">
-        ${keyboardOptions.map(option => `
-          <span class="combat-keyboard-action-index-item category-${esc(option.category || 'basic')}">
-            <kbd>${esc(option.shortcut === 'SPACE' ? 'SPACJA' : option.shortcut)}</kbd>
-            <b>${esc(option.label)}</b>
-          </span>`).join('')}
-      </div>` : '';
-    const fallbackRows = options.map(option => `
-      <button class="combat-keyboard-fallback-option category-${esc(option.category || 'basic')}" data-allow-busy="true" onclick="confirmCombatTurnAction('${esc(option.id)}')">
+    const shortcutIndex = keyboardOptions.length ? combatEconomyGroupsHtml(keyboardOptions, combatKeyboardTileHtml) : '';
+    const fallbackRows = combatEconomyGroupsHtml(options, option => `
+      <button class="combat-keyboard-fallback-option category-${esc(option.category || 'basic')}" data-option-id="${esc(option.id)}" data-allow-busy="true" onclick="confirmCombatTurnAction('${esc(option.id)}')">
         ${option.shortcut ? `<kbd>${esc(option.shortcut === 'SPACE' ? 'SPACJA' : option.shortcut)}</kbd>` : ''}
-        <span><b>${esc(option.label)}</b><small>${esc(option.description || '')}</small></span>
-      </button>`).join('');
+        <span><b>${manaTextHtml(combatActionTileLabel(option))}</b>${actionManaCostHtml(option)}<small>${manaTextHtml(option.description || '')}</small></span>
+      </button>`);
     return `
       <div class="combat-turn-command-layout combat-keyboard-idle">
         <section class="combat-keyboard-waiting" role="status" aria-live="polite">
           <h3>Wybierz akcję na karcie postaci</h3>
           <p>Skrót otwiera podgląd. <kbd>Enter</kbd> zatwierdza.</p>
           ${shortcutIndex}
-          ${combatScreenFallbackHtml(`<div class="combat-keyboard-fallback-list">${fallbackRows}</div>`)}
+          ${combatScreenFallbackHtml(fallbackRows)}
         </section>
       </div>`;
   }
@@ -6741,7 +6908,7 @@ function combatTurnActionMenuHtml(menu, combat = {}) {
       <div class="combat-turn-command-list">
         <div class="combat-context-heading"><span>Podgląd działania${selected.shortcut ? ` · klawisz ${esc(selected.shortcut === 'SPACE' ? 'SPACJA' : selected.shortcut)}` : ''}</span></div>
         <div id="combat-turn-action-availability">${combatTurnActionUnavailableHtml(menu, combat)}</div>
-        <div class="combat-keyboard-preview"><b>${esc(selected.label || '')}</b><p>${esc(selected.description || '')}</p></div>
+        <div class="combat-keyboard-preview">${selected.action_economy_label ? `<small class="combat-preview-economy">${esc(selected.action_economy_label)}</small>` : ''}<b>${manaTextHtml(combatActionTileLabel(selected) || '')}</b>${actionManaCostHtml(selected)}<p>${manaTextHtml(selected.description || '')}</p></div>
         <div class="numpad-combat-hint"><span><kbd>plansza</kbd> wskaż cel / pole</span><span><kbd>Enter</kbd> wykonaj</span><span><kbd>Esc / Backspace</kbd> anuluj bez kosztu</span></div>
         ${combatScreenFallbackHtml(`<div class="row combat-fallback-actions">
           <button type="button" data-allow-busy="true" onclick="confirmCombatTurnAction()">Potwierdź · Enter</button>
@@ -6762,8 +6929,8 @@ function combatLootQuantityOptionHtml(option, index, selected) {
   if (maximum < 1) {
     return `
       <div class="combat-context-option${selected ? ' selected' : ''}" aria-current="${selected ? 'true' : 'false'}">
-        <b>${esc(option.label)}</b>
-        <span>${esc(option.description || '')}</span>
+        <b>${manaTextHtml(option.label)}</b>
+        <span>${manaTextHtml(option.description || '')}</span>
         <span class="combat-warning">Brak wolnego udźwigu na choćby jedną sztukę.</span>
       </div>
     `;
@@ -6771,8 +6938,8 @@ function combatLootQuantityOptionHtml(option, index, selected) {
   const selectedWeight = maximum * unitWeight;
   return `
     <div class="combat-context-option${selected ? ' selected' : ''}" aria-current="${selected ? 'true' : 'false'}">
-      <b>${esc(option.label)}</b>
-      <span>${esc(option.description || '')}</span>
+      <b>${manaTextHtml(option.label)}</b>
+      <span>${manaTextHtml(option.description || '')}</span>
       <div class="row">
         <label>Ilość:
           <input id="combat-loot-quantity-${index}" type="number" min="1" max="${esc(maximum)}" value="${esc(maximum)}" oninput="updateCombatLootQuantity(${index})">
@@ -6798,14 +6965,14 @@ function updateCombatLootQuantity(index) {
 function combatContextMenuDetailsHtml(menu) {
   const selected = (menu.options || [])[Number(menu.selected_index || 0)] || null;
   if (!selected) return '<p>Brak wybranej akcji.</p>';
-  return `<p><b>${esc(selected.label)}</b></p><p>${esc(selected.description || '')}</p><p><b>Kategoria:</b> ${esc(combatMenuCategoryLabel(selected.category))}</p>`;
+  return `<p><b>${manaTextHtml(selected.label)}</b></p><p>${manaTextHtml(selected.description || '')}</p><p><b>Kategoria:</b> ${esc(combatMenuCategoryLabel(selected.category))}</p>`;
 }
 function pendingCombatInteractionDetailsHtml(pending) {
   const options = pending.options || [];
   if (!options.length) return '<p>Brak szczegółów interakcji.</p>';
   return options.map(option => `
-    <p><b>${esc(option.label)}</b></p>
-    <p>${esc(option.description || '')}</p>
+    <p><b>${manaTextHtml(option.label)}</b></p>
+    <p>${manaTextHtml(option.description || '')}</p>
     <p><b>Warunki:</b> ${(option.conditions || []).map(condition => esc(condition)).join(', ') || 'brak'}</p>
   `).join('');
 }
@@ -7064,7 +7231,7 @@ function updateActivePanel() {
   const leaveButtonLabel = stage === 'interaction_result'
     ? 'Zakończ interakcję'
     : state.active_point
-      ? 'Zakończ rozmowę'
+      ? (state.active_point.npc?.briefing_contract ? 'Wróć do Gildii' : 'Zakończ rozmowę')
       : ((boardInteractionState() || {}).mode === 'navigation'
         ? 'Wróć do działań'
         : 'Menu lokacji');
@@ -7465,6 +7632,7 @@ function currentBoardSelection() {
   return (state && state.board_selection) || null;
 }
 function boardSelectionPausedForScreenInput() {
+  if (keyboardRollWizard || resultAck) return true;
   const boardInteraction = state && state.flow
     ? state.flow.board_interaction
     : null;
@@ -7674,6 +7842,8 @@ async function performBoardScan({revision, automatic, token, previousInteraction
       if (boardInputPhase !== 'error') boardInputPhase = 'idle';
       boardListeningRevision = '';
       updateBoardInputPresentation();
+      initializeKeyboardRollWizard();
+      focusCombatDecision();
       scheduleAutomaticBoardScan();
     }
   }
@@ -7720,6 +7890,13 @@ function startEncounterSetup() { api('/api/encounter/setup/start', {}, 'Przygoto
 function resolveEncounterOpening() { api('/api/encounter/opening/resolve', {}, 'Rozstrzygam rozpoczęcie starcia...'); }
 function confirmEncounterSetup() { api('/api/encounter/setup/confirm', {}, 'Potwierdzam krok setupu...'); }
 function startEncounterInitiative() { api('/api/encounter/initiative/start', {}, 'Rozpoczynam inicjatywę...'); }
+function startPrecombatStealthRoll(actorId) {
+  if (busy || keyboardRollWizard) return;
+  const root = document.getElementById(`precombat-roll-${actorId}`);
+  if (!root) return;
+  root.hidden = false;
+  initializeKeyboardRollWizard();
+}
 function submitPrecombatStealth(actorId) {
   api('/api/encounter/stealth/roll', {
     actor_id: actorId,
@@ -8507,6 +8684,7 @@ function triggerPrimaryAction() {
     dialogForm.requestSubmit();
     return true;
   }
+  if (state.combat?.physical_mana?.needs_attack_count) return declareManaAttackSeries();
   if (selectedZoneOptionId) { submitZoneOption(); return true; }
   if (selectedInteractionGoalId) { sendGoalAction(); return true; }
   if (continuationPanelOpen) return advanceContinuationStep();
@@ -8551,6 +8729,11 @@ function triggerPrimaryAction() {
         return false;
       }
       if (combat.item_targeting) { confirmCombatItemTarget(); return true; }
+      if (combat.shield_bash) {
+        if (combat.shield_bash.stage === 'result') confirmShieldBashResult();
+        else submitShieldBashRolls();
+        return true;
+      }
       if (combat.class_feature_targeting) {
         if (['lay_on_hands', 'preserve_life'].includes(combat.class_feature_targeting.action_id)) {
           confirmClassFeatureBoardTarget();
@@ -8680,6 +8863,7 @@ function cancelCurrentCombatStep() {
     return true;
   }
   if (combat.item_targeting) { cancelCombatItemTargeting(); return true; }
+  if (combat.shield_bash?.stage === 'result') return true;
   if (combat.class_feature_targeting) { cancelClassFeatureTargeting(); return true; }
   if (combat.pending_opportunity_movement) { cancelOpportunityMovement(); return true; }
   if (combat.pending_combat_help) { cancelCombatHelp(); return true; }

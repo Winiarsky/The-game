@@ -172,7 +172,7 @@ _PROTOTYPE_OVERRIDES: dict[str, dict[str, object]] = {
         "targeting": "self",
     },
     "shield_bash": {
-        "effect_type": "movement_action_opposed_strength_damage_push",
+        "effect_type": "bonus_action_opposed_strength_damage_push",
         "targeting": "board_enemy",
     },
     "second_wind": {

@@ -905,7 +905,7 @@ def write_hero_reference(heroes: Iterable[Hero]) -> None:
     (ROOT / "docs/BOARDGAME_ARCHETYPES_LEVELS_1_3.md").write_text("\n".join(lines), encoding="utf-8")
 
 
-def main() -> None:
+def legacy_main() -> None:
     PNG_ROOT.mkdir(parents=True, exist_ok=True)
     PDF_ROOT.mkdir(parents=True, exist_ok=True)
     rendered: list[Image.Image] = []
@@ -942,5 +942,11 @@ def main() -> None:
     write_minimal_print_set(HEROES)
 
 
+def main() -> int:
+    """Default exports always use the current physical-mana profile."""
+    from dnd_board_game.physical_cards.mana_print_files import main as print_current
+    return print_current(default_formats=('color', 'minimal'))
+
+
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

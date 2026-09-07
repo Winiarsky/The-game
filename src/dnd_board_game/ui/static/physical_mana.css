@@ -1,0 +1,23 @@
+.physical-mana {margin: 12px 0; padding: 12px 16px; background: var(--panel, #202631); border: 1px solid #8295af; border-radius: 10px; line-height: 1.5;}
+.mana-summary {display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: center;}
+.physical-mana details {margin-top: 10px;}
+.physical-mana summary {cursor: pointer; font-weight: 600;}
+.mana-ability-list {display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-top: 12px;}
+.mana-ability-list article {padding: 12px; border: 1px solid #63758f; border-radius: 8px;}
+.mana-ability-list article p {margin-bottom: 0;}
+.mana-chip {display: inline-block; border-radius: 4px; padding: 2px 5px; margin-top: 4px; color: #fff; font-size: .85em; border: 1px solid currentColor;}
+.mana-C {background: #862f36;} .mana-N {background: #154b7e;} .mana-Z {background: #215b39;} .mana-B {background: #e4e5e7; color: #202631;} .mana-F {background: #202124;} .mana-any {background: #444c57;}
+.mana-hero-notes {white-space: pre-line;}
+.mana-wave, .mana-series {padding: 8px; border-left: 3px solid #b1c9ed;}
+.mana-attack-declaration {padding: 18px; border: 2px solid #8bc0ef; border-radius: 10px;}
+.mana-attack-declaration input {max-width: 130px; margin: 8px;}
+.mana-wave-report form {display: flex; gap: 10px; align-items: end; flex-wrap: wrap;}
+
+.mana-movement {padding: 8px 12px; border-left: 3px solid #b1c9ed; overflow-wrap: anywhere;}
+.mana-flaw-active {border-left-color: #efb05d;}
+
+.mana-chip {display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;padding:4px;vertical-align:middle;margin:0 2px;border-radius:50%;}
+.mana-chip svg {width:20px;height:20px;overflow:visible;}
+.mana-chip path {fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+.mana-plus {display:inline-block;margin:0 2px;vertical-align:middle;}
+.mana-legend {line-height:2.4;}

@@ -130,3 +130,29 @@ def test_encounter_setup_handles_actor_without_start_position():
     messages = [step.message for step in build_setup_steps(setup)]
 
     assert any(message == "Ustaw bohaterów: Bohater." for message in messages)
+
+
+def test_environment_with_different_rules_is_not_merged() -> None:
+    blocking_rule = "Pole blokuje ruch."
+    passable_rule = "Na pole można wejść; osłona daje +2 KP."
+    setup = EncounterSetup(
+        name="Różne osłony",
+        environment=(
+            EnvironmentSetupEntry(
+                "wall", "Mur", EnvironmentSetupType.COVER,
+                (Coordinate(1, 1),), mechanics=(blocking_rule,),
+            ),
+            EnvironmentSetupEntry(
+                "low", "Niska osłona", EnvironmentSetupType.COVER,
+                (Coordinate(2, 1),), mechanics=(passable_rule,),
+            ),
+        ),
+    )
+    steps = [step for step in build_setup_steps(setup) if step.label == "osłony"]
+    assert len(steps) == 2
+    wall = next(step for step in steps if Coordinate(1, 1) in step.positions)
+    low = next(step for step in steps if Coordinate(2, 1) in step.positions)
+    assert wall.mechanics == (blocking_rule,)
+    assert low.mechanics == (passable_rule,)
+    assert "Niska osłona" not in wall.message
+    assert "Mur" not in low.message

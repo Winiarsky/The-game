@@ -15,7 +15,7 @@ from dnd_board_game.physical_cards.character_card_sets import (
 from dnd_board_game.character_creation import PLAYABLE_HERO_IDS
 
 
-def main() -> int:
+def legacy_main() -> int:
     parser = argparse.ArgumentParser(
         description="Wygeneruj osobne zestawy kart dla siedmiu grywalnych archetypów."
     )
@@ -92,6 +92,12 @@ def main() -> int:
     )
     print(f"zbiorczy: {combined_path} ({len(actor_ids)} stron A4)")
     return 0
+
+
+def main() -> int:
+    """Default exports always use the current physical-mana profile."""
+    from dnd_board_game.physical_cards.mana_print_files import main as print_current
+    return print_current(default_formats=('cards', 'bw_test'))
 
 
 if __name__ == "__main__":

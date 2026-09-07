@@ -105,3 +105,18 @@ HERO_SELECTION_GUIDES: dict[str, HeroSelectionGuide] = {
         flaw=HERO_FLAWS['erynd'].body,
     ),
 }
+
+
+def physical_mana_guides() -> dict[str, HeroSelectionGuide]:
+    """The new-game picker describes the physical profile; old saves keep old help."""
+    from dataclasses import replace
+    from dnd_board_game.rules.physical_mana import FLAWS, hero_abilities
+    result = {}
+    for hero_id, guide in HERO_SELECTION_GUIDES.items():
+        abilities = hero_abilities(hero_id)
+        result[hero_id] = replace(guide, flaw=FLAWS[hero_id][2],
+            complexity_reason='Wybieraj kombinacje kolorów, pozycję i karty pozostawione na reakcje.',
+            play_style=('Zarządzaj wspólnym rynkiem: wymieniaj, przekazuj i odzyskuj manę. Zachowujesz 3 stare karty i mieścisz 6; dobierasz tyle samo co inni.'
+                        if hero_id == 'lorian' else guide.play_style.replace('Dzikość', 'czerwona mana')),
+            abilities=tuple(f'{a.name} — {a.timing}, {a.cost_label}. {a.description}' for a in abilities[:3]))
+    return result

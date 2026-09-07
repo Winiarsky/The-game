@@ -10,6 +10,77 @@ Aplikacja nie jest pełnym wirtualnym stołem RPG. W pierwszej wersji ma działa
 
 ---
 
+## Opcjonalna Mapa 0 — arena rekrutacyjna (2026-09-06)
+
+Nessa prowadzi indywidualne próby wszystkich siedmiu bohaterów. Osobna
+arena używa normalnej walki i fizycznej many; trening kończy pokonanie
+kukły (50 PW, KP 10, +5 do trafienia, 0 obrażeń) albo rozmowa z Nessą
+po podejściu. Dostępne są dodatkowe próby wsparcia i obszarowa. Świeże
+kopie postaci pozwalają powtarzać testy bez zmiany postępu kampanii.
+Opis, rozstawienie i instrukcja: `docs/RECRUITMENT_ARENA.md`.
+
+## Fizyczna mana dla siedmiu bohaterów — 2026-09-05
+
+Od 2026-09-07 fioletową manę zastępuje czarna. Symbole: biała — słońce,
+niebieska — kropla, czarna — czaszka, czerwona — płomień, zielona — drzewo;
+cyfra 1 w kółku oznacza dowolny kolor. Do testów używamy podstawowych lądów
+MTG: Plains, Island, Swamp, Mountain i Forest. Każdy ląd jest jedną kartą
+many; wydany trafia na stos odrzuconych. Koszty, dobór i fale pozostają
+według zasad fizycznej many. Wydarzenie 5 nazywa się „Czarne zakłócenie”.
+Mapowanie lądów i kolorów: [Wizards of the Coast](https://magic.wizards.com/en/news/feature/anatomy-magic-card-2006-10-21).
+
+Nowe rozgrywki gotowymi bohaterami używają profilu `physical_mana_v02`.
+Jest to jawne, zlecone przez użytkownika odstępstwo od ekonomii zasobów 5e.
+Pełny opis: `docs/PHYSICAL_MANA_DESIGN_V0_2.md`; katalog wykonawczy kosztów:
+`src/dnd_board_game/rules/physical_mana.py`. Poniższe historyczne opisy pul
+punktów i komórek nie obowiązują w tym profilu. Generyczne postacie oraz
+zapisane wcześniej walki zachowują dotychczasowe reguły.
+
+Karty, rynek, rezerwy, dopłaty skaz i limity pasywów karcianych są prowadzone
+fizycznie przez graczy. Aplikacja nie przechowuje ręki ani historii płatności
+oraz nie sprawdza legalności many. Waliduje tury, akcje, reakcje, wyposażenie,
+pozycje i skutki. Zwykły Atak to jedno uderzenie za jedną dowolną manę. Tylko Lorian
+może zadeklarować w ramach tej akcji dodatnią liczbę osobnych zwykłych
+ataków za po jednej dowolnej manie. Techniki zachowują własne liczby ataków. Czary działają na poziomie bazowym.
+Ruch kosztuje bazowo jedną dowolną manę raz na turę. Skaza Garrana
+„Nieustępliwość” (2026-09-06): pierwszy zwykły Ruch rozpoczęty obok
+niepokonanego przeciwnika kosztuje 2 dowolne many. Dalsze odcinki nie
+zmieniają tej ceny; ruch ze zdolności i wymuszone przemieszczenia nie
+uruchamiają skazy. Aplikacja pamięta deklarację ruchu i pokazuje koszt,
+bez sprawdzania zapłaty. Ta reguła zastępuje Wyrzuty sumienia w profilu many.
+
+Zmiana Garrana (2026-09-07): Uderzenie tarczą zużywa akcję dodatkową i zadaje
+1k6 + modyfikator Siły obrażeń obuchowych po wygranym teście Siły. Odepchnięcie
+o jedno wolne pole pozostaje; remis wygrywa obrońca. Za przeciwnika rzuca
+aplikacja. Zwykły atak i tarczę można wykonać w jednej turze, w dowolnej
+kolejności, o ile cel pozostaje w zasięgu. Koszt many tarczy: C + N; atak
+opłacany osobno. Uderzenie tarczą nie zużywa ruchu, ale konkuruje o akcję
+dodatkową z Pozycją obronną, Zrywem akcji i Osłoną tarczą.
+
+Koniec tury: zachowaj do 2 starych kart (Lorian 3), dobierz do 3, uzupełnij
+rynek. Pojemność 5 (Lorian 6); bez dodatkowego doboru na początku tury/rundy.
+Fale zgłaszają gracze. Rozliczenie na granicy rund podnosi Zagrożenie do 3
+i uruchamia jawne wydarzenie. Materiał do wydruku: `/rules/physical-mana`.
+Koszty wymagają jeszcze testów balansu przy stole.
+
+Doprecyzowanie po teście 2026-09-06: Szał Brakki trwa KON mod + SIŁ mod
+rund (minimum 1), licząc rundę uruchomienia. Koszt jednorazowy; utrata
+przytomności kończy efekt. Bitewny amok rozliczamy w każdej turze w Szale.
+Ukrycie Miry pozostaje relacją względem poszczególnych wrogów: turkusowe LED
+oznaczają nieświadomych, pomarańczowe świadomych. W jej turze podgląd akcji
+zastępuje te kolory, a powrót do wyboru przywraca je, jeśli ukrycie nadal trwa.
+Opis zmian i walidacja: `docs/COMBAT_PLAYTEST_POLISH_2026-09-06.md`.
+
+## Głodne Cienie: układ walki v6 — 2026-09-05
+
+Mapa 1 ma wspólną szeroką strefę startową bliżej wraku, trzy podejścia,
+lokalne koleiny i krótką skałę z połączeniem suchego obejścia na obu końcach.
+Osłony działają między źródłem ataku a celem, a nie jako premia za stanie na
+polu. Front stada skupia ataki, skrzydła szukają pobliskich odsłoniętych celów.
+Setup wyjaśnia teren przed wyborem szyku, potem prowadzi przez przeciwników
+i końcową instrukcję. Skład i instrukcja uwzględniają wariant 1–5 graczy.
+Pełny kontrakt i materiały do druku: `docs/HUNGRY_SHADOWS_REDESIGN_V6.md`.
+
 ## Filozofia Projektu
 
 Aplikacja powinna stosować zasady Dungeons & Dragons 5e wszędzie tam, gdzie jest to możliwe.
@@ -881,6 +952,18 @@ Pathfinding musi być:
 ---
 
 ## Eksploracja I Wyzwania
+
+### Odprawa Nessy — dopracowanie 2026-09-05
+
+Siedem tematów ma stałe numery/pola. Omówione tematy udostępniają wyłącznie
+odczyt rzeczywistego wyniku; nie ponawiają nagród, rzutów ani efektów.
+Nierozstrzygnięty temat zamkniętej odprawy nie ujawnia ukrytej odpowiedzi.
+Obserwacja Nessy to jedna próba Intuicji ST 16, bez kary za porażkę.
+Rzeczowe negocjowanie ryzyka używa Perswazji; Zastraszanie wymaga nacisku.
+Umowa pokazuje należności, wypłaconą zaliczkę odliczaną od wypłaty i warunki.
+Zakończenie odprawy zamyka jej testy i negocjacje; wymarsz następuje osobno przy
+bramie. Bez many i toru presji. Szczegóły: `docs/NESSA_BRIEFING_POLISH.md`.
+
 
 Tryb eksploracji nie powinien działać jak walka bez przeciwników.
 
@@ -1998,8 +2081,8 @@ rzutu. Aktywacja deleguje konsekwencje do ogólnego silnika hazardów.
 
 - `Zryw akcji` jest dostępny dopiero po wydaniu akcji głównej, kosztuje akcję
   dodatkową, przywraca akcję główną i ma jedno użycie na krótki odpoczynek.
-- `Uderzenie tarczą` kosztuje cały ruch i musi zostać zadeklarowane przed
-  dobrowolnym ruchem. Wygrany sporny test Siły zadaje `1k4 + Siła` obuchowych;
+- `Uderzenie tarczą` od 2026-09-07 kosztuje akcję dodatkową i nie zużywa ruchu.
+  Wygrany sporny test Siły zadaje `1k6 + modyfikator Siły` obuchowych;
   cel jest odpychany dokładnie o jedno przeciwległe pole, jeżeli jest legalne.
   Zablokowane pole nie anuluje obrażeń, a remis wygrywa obrońca.
 - Garran ma cztery Taktyki po 1 punkcie: `Rozkaz: Stać` ogranicza najbliższy

@@ -290,7 +290,8 @@ def _advance_turn(
                     expired_at_round,
                 )
             )
-        updated_effects = after_round
+        from dnd_board_game.combat.physical_mana import resolve_waves
+        updated_effects = resolve_waves(updated_state, after_round)
     if updated_state.status == CombatStatus.ACTIVE:
         starting_actor = current_actor(updated_state)
         condition_states, _ = expire_condition_states(

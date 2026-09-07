@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dnd_board_game.actors.resources import uses_physical_mana
+
 from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import TYPE_CHECKING, Iterable, Sequence
@@ -226,6 +228,8 @@ def actors_in_area(
 
 def available_cast_levels(actor: Actor, spell_level: int) -> tuple[int, ...]:
     """Return legal slot levels, including higher-level slots used for upcasting."""
+    if uses_physical_mana(actor):
+        return (spell_level,)
     return available_spell_slot_levels(actor.spell_slots, spell_level)
 
 
@@ -350,7 +354,7 @@ def actor_spell_cast_validation(
         cast_level=cast_level,
         allowed_focus_kinds=allowed_focus_kinds,
         ritual=ritual,
-        slotless=innate_resource_id is not None or at_will,
+        slotless=innate_resource_id is not None or at_will or uses_physical_mana(actor),
         ignore_verbal_somatic=ignore_verbal_somatic,
         verbal_components_blocked=verbal_components_blocked,
         somatic_components_blocked=somatic_components_blocked,
@@ -363,6 +367,8 @@ def can_consume_spell_resource(
     cast_level: int | None = None,
     spell_id: str | None = None,
 ) -> bool:
+    if uses_physical_mana(actor):
+        return cast_level is None or cast_level == spell_level
     innate_resource_id = (
         _innate_spell_resource_id(actor, spell_id)
         if spell_id is not None
@@ -421,6 +427,7 @@ def consume_spell_resource(
             actor_after_components = replace(actor, inventory=tuple(inventory))
     if (
         ritual
+        or uses_physical_mana(actor)
         or spell_level <= 0
         or (spell_id is not None and _spell_is_at_will(actor_after_components, spell_id))
     ):

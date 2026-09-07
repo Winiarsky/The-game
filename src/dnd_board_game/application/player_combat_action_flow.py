@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from dnd_board_game.actors.resources import uses_physical_mana
+from dnd_board_game.combat.physical_mana import attack_maximum, validate_series_source, bind_series_source
+
 from dataclasses import dataclass, replace
 from random import Random
 from typing import Mapping
@@ -682,6 +685,7 @@ class PlayerCombatActionFlowService:
     ) -> PlayerAttackTransition:
         if pending.stage != "attack_roll":
             raise ValueError("Nie ma oczekującego rzutu ataku gracza.")
+        active_effects = tuple(e for e in active_effects if not (e.actor_id == pending.attacker_id and e.kind in {"mana_hunters_mark_skipped", "mana_double_shot_skipped"}))
         if pending.mira_piercing_second:
             # The follow-through reaches the tile immediately behind the
             # adjacent first target, i.e. 10 feet from Mira.
@@ -690,6 +694,10 @@ class PlayerCombatActionFlowService:
             state, board, source, pending, scene_objects
         )
         effective_source = _source_for_pending(attacker, source, pending)
+        if pending.mira_piercing_second and uses_physical_mana(attacker):
+            effective_source = replace(effective_source, attack_roll_request=replace(effective_source.attack_roll_request,
+                modifiers=(*effective_source.attack_roll_request.modifiers,
+                    RollModifier("Przeszywający atak: drugi cel", 2, RollModifierType.FEATURE, stacking_key="mana_piercing_second"))))
         effective_source = attack_source_with_target_combat_effects(
             attacker,
             target,
@@ -771,7 +779,7 @@ class PlayerCombatActionFlowService:
             else None
         )
         if first_blood_component is not None:
-            if effective_source.id == "double_shot":
+            if effective_source.id == "double_shot" and not uses_physical_mana(attacker):
                 first_blood_component = replace(
                     first_blood_component,
                     doubles_on_critical=False,
@@ -843,6 +851,7 @@ class PlayerCombatActionFlowService:
             state_after_resource = bonus_use.state
         else:
             if _uses_attack_action(effective_source):
+                validate_series_source(state, effective_source, active_effects)
                 state_for_attack = state
                 if (
                     effective_source.id == "optical_scope"
@@ -855,10 +864,10 @@ class PlayerCombatActionFlowService:
                 attack_use = use_attack_action(
                     state_for_attack,
                     attacker,
-                    maximum_attacks=(
-                        1
-                        if effective_source.loading or effective_source.limited_attacks
-                        else lorian_attacks_per_action(attacker, effective_source)
+                    maximum_attacks=attack_maximum(
+                        attacker, effective_source, active_effects,
+                        1 if effective_source.loading or effective_source.limited_attacks
+                        else lorian_attacks_per_action(attacker, effective_source),
                     ),
                 )
                 if not attack_use.accepted:
@@ -944,6 +953,7 @@ class PlayerCombatActionFlowService:
             ),
         ):
             resolution = replace(resolution, critical=True)
+        active_effects = bind_series_source(attacker, effective_source, active_effects)
         updated_effects = consume_next_attack_effects(
             active_effects,
             str(attacker.id),
@@ -1352,7 +1362,7 @@ class PlayerCombatActionFlowService:
                 effective_source.damage_components[0].damage_type,
             )
             if component is not None:
-                if effective_source.id == "double_shot":
+                if effective_source.id == "double_shot" and not uses_physical_mana(attacker):
                     component = replace(component, doubles_on_critical=False)
                 effective_source = replace(
                     effective_source,
@@ -1451,6 +1461,7 @@ class PlayerCombatActionFlowService:
             action_id=effective_source.id,
             source_actor_id=str(attacker.id),
             applied_damage=applied.damage.total_applied,
+            physical_mana=uses_physical_mana(attacker),
         )
         if wound.applied:
             resolved_state = replace(
@@ -1524,6 +1535,12 @@ class PlayerCombatActionFlowService:
                 updated_effects,
                 str(attacker.id),
             )
+        if uses_physical_mana(attacker):
+            from dnd_board_game.combat.physical_mana import effect as mana_effect
+            for component in effective_source.damage_components:
+                kind = {"hunters_mark": "mana_hunters_mark_used", "mana_double_shot": "mana_double_shot_used"}.get(component.id)
+                if kind:
+                    updated_effects = apply_active_effect(updated_effects, mana_effect(str(attacker.id), kind, "Premia wykorzystana w tej turze", 1)).active_effects
         if pending.first_blood:
             updated_effects = commit_first_blood_hit(
                 updated_effects,
@@ -1811,6 +1828,7 @@ class PlayerCombatActionFlowService:
             )
         )
         if _uses_attack_action(effective_source):
+            validate_series_source(state, effective_source, active_effects)
             state_for_attack = state
             if effective_source.id == "optical_scope" and state.turn_action.attacks_used == 0:
                 movement_use = use_movement_action(state, attacker)
@@ -1820,11 +1838,11 @@ class PlayerCombatActionFlowService:
             attack_use = use_attack_action(
                 state_for_attack,
                 attacker,
-                maximum_attacks=(
-                    1
-                    if effective_source.loading or effective_source.limited_attacks
-                    else lorian_attacks_per_action(attacker, effective_source)
-                ),
+                maximum_attacks=attack_maximum(
+                        attacker, effective_source, active_effects,
+                        1 if effective_source.loading or effective_source.limited_attacks
+                        else lorian_attacks_per_action(attacker, effective_source),
+                    ),
             )
             if not attack_use.accepted:
                 raise ValueError(attack_use.message)
@@ -1864,6 +1882,7 @@ class PlayerCombatActionFlowService:
             attack_roll,
             selected.action_use,
         )
+        active_effects = bind_series_source(attacker, effective_source, active_effects)
         updated_effects = consume_next_attack_effects(
             active_effects,
             str(attacker.id),
@@ -2294,6 +2313,7 @@ def _require_attack_economy(
     if _uses_attack_action(source):
         if (
             (source.loading or source.limited_attacks)
+            and not uses_physical_mana(actor)
             and state.turn_action.attack_action_active
             and state.turn_action.attacks_used >= 1
         ):

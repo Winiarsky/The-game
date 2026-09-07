@@ -65,7 +65,7 @@ def plan_coordinated_pack_turn(
         )
     if role_id == LEADER_ROLE:
         return _plan_leader(board, state, enemy, sources, living_followers)
-    return _plan_follower(board, state, enemy, sources[0], living_followers)
+    return _plan_follower(board, state, enemy, sources[0], living_followers, role_id=role_id)
 
 
 def _plan_leader(
@@ -173,9 +173,15 @@ def _plan_follower(
     enemy: Actor,
     source: AttackSource,
     followers: Sequence[Actor],
+    *,
+    role_id: str = "skirmisher",
 ) -> EnemyTurnPlan:
     opponents = _visible_opponents(state, enemy)
-    target_actor = _pack_actor_target(state, enemy, opponents, followers)
+    uses_flank = role_id in {"flanker", "harrier"}
+    target_actor = (
+        _flank_actor_target(state, enemy, opponents, followers)
+        if uses_flank else _pack_actor_target(state, enemy, opponents, followers)
+    )
     if target_actor is None:
         action = use_turn_action(state)
         return EnemyTurnPlan(
@@ -202,7 +208,8 @@ def _plan_follower(
         )
 
     reachable = _reachable(state, board, enemy)
-    attack_tiles: list[tuple[int, int, Coordinate, CombatTarget]] = []
+    side = (-1 if enemy.position.col < target_actor.position.col else 1) if uses_flank else 0
+    attack_tiles: list[tuple[int, int, int, Coordinate, CombatTarget]] = []
     for position in reachable.reachable_tiles:
         if position == enemy.position:
             continue
@@ -220,9 +227,10 @@ def _plan_follower(
         if target is None:
             continue
         flanking = int(_is_flanking(position, target_actor.position, followers, enemy))
-        attack_tiles.append((-flanking, reachable.costs_by_tile[position], position, target))
+        opposite_side = int(side != 0 and (position.col - target_actor.position.col) * side < 0)
+        attack_tiles.append((-flanking, opposite_side, reachable.costs_by_tile[position], position, target))
     if attack_tiles:
-        _, _, destination, target = min(attack_tiles)
+        _, _, _, destination, target = min(attack_tiles)
         moved_state, moved_enemy, path = _move_to(state, board, enemy, destination)
         moved_target = next(actor for actor in moved_state.actors if str(actor.id) == target.id)
         bonus = _support_count(followers, enemy, moved_target.position)
@@ -231,7 +239,7 @@ def _plan_follower(
             moved_enemy,
             target,
             (
-                f"{enemy.name} skupia się na {target.name}, rusza na "
+                f"{enemy.name} {'obchodzi front ku' if uses_flank else 'skupia się na'} {target.name}, rusza na "
                 f"{destination.as_tuple()} i atakuje. Premia stada: +{bonus}."
             ),
             movement_path=path,
@@ -240,7 +248,30 @@ def _plan_follower(
             source_id=source.id,
             pack_attack_bonus=bonus,
         )
-    return _dash_toward(board, state, enemy, target_actor, source, "pack_advance")
+    return _dash_toward(board, state, enemy, target_actor, source, "pack_advance", flank_side=side)
+
+
+def _flank_actor_target(
+    state: CombatState,
+    enemy: Actor,
+    opponents: Sequence[Actor],
+    followers: Sequence[Actor],
+) -> Actor | None:
+    """Threaten a nearby exposed flank instead of reinforcing a crowded front."""
+    if not opponents:
+        return None
+    adjacent = tuple(actor for actor in opponents if _tile_distance(enemy.position, actor.position) <= 1)
+    if adjacent:
+        return _injury_tiebreak(state, enemy, adjacent)
+    nearest = min(_tile_distance(enemy.position, actor.position) for actor in opponents)
+    candidates = tuple(actor for actor in opponents if _tile_distance(enemy.position, actor.position) <= nearest + 3)
+    return min(candidates, key=lambda actor: (
+        _adjacent_followers(followers, enemy, actor.position),
+        sum(other.id != actor.id and _tile_distance(other.position, actor.position) <= 1 for other in opponents),
+        _tile_distance(enemy.position, actor.position),
+        actor.hp / max(1, actor.max_hp),
+        _stable_tie(state, enemy, actor),
+    ))
 
 
 def _plan_retreat(
@@ -367,6 +398,8 @@ def _dash_toward(
     target: Actor,
     source: AttackSource,
     intent: str,
+    *,
+    flank_side: int = 0,
 ) -> EnemyTurnPlan:
     dashed = use_dash(state, enemy)
     planning_state = dashed.state if dashed.accepted else state
@@ -382,7 +415,8 @@ def _dash_toward(
     destination = min(
         progressing,
         key=lambda position: (
-            _tile_distance(position, target.position),
+            _tile_distance(position, target.position)
+            + (2 if flank_side and (position.col - target.position.col) * flank_side < 0 else 0),
             reachable.costs_by_tile[position],
             position.col,
             position.row,
@@ -393,7 +427,7 @@ def _dash_toward(
         moved_state,
         moved_enemy,
         None,
-        f"{enemy.name} pędzi ku {target.name} na {destination.as_tuple()}.",
+        f"{enemy.name} {'obiega flankę ku' if flank_side else 'pędzi ku'} {target.name} na {destination.as_tuple()}.",
         movement_path=path,
         moved_enemy=moved_enemy,
         action_used=dashed.accepted,

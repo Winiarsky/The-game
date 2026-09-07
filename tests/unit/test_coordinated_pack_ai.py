@@ -328,3 +328,33 @@ def test_life_drain_heals_half_applied_damage_rounded_down() -> None:
     committed = CombatTurnFinalizationService().commit_enemy_result(result=result, active_effects=())
     healed_leader = next(actor for actor in committed.state.actors if actor.id == leader.id)
     assert healed_leader.hp == 12
+
+
+def test_flanker_threatens_exposed_hero_while_front_reinforces_pack() -> None:
+    _, source = _sources()
+    leader = _actor('leader', Faction.ENEMY, Coordinate(1, 1))
+    hunter = _actor('hunter', Faction.ENEMY, Coordinate(9, 8))
+    support = _actor('support', Faction.ENEMY, Coordinate(6, 9))
+    front = _actor('front', Faction.ALLY, Coordinate(6, 10))
+    isolated = _actor('isolated', Faction.ALLY, Coordinate(12, 10))
+    state = _state(hunter, leader, support, front, isolated)
+    roles = {'leader': 'leader', 'hunter': 'flanker', 'support': 'skirmisher'}
+    flank = plan_coordinated_pack_turn(BoardState(), state, hunter, (source,), role_id='flanker', actor_roles=roles)
+    frontal = plan_coordinated_pack_turn(BoardState(), state, hunter, (source,), role_id='skirmisher', actor_roles=roles)
+    assert flank.target is not None and flank.target.id == 'isolated'
+    assert frontal.target is not None and frontal.target.id == 'front'
+    assert flank.movement_path is not None and flank.movement_path.valid
+    assert flank.moved_enemy.position.col <= isolated.position.col
+
+
+def test_engaged_flanker_keeps_adjacent_target() -> None:
+    _, source = _sources()
+    leader = _actor('leader', Faction.ENEMY, Coordinate(1, 1))
+    hunter = _actor('hunter', Faction.ENEMY, Coordinate(9, 8))
+    support = _actor('support', Faction.ENEMY, Coordinate(8, 9))
+    front = _actor('front', Faction.ALLY, Coordinate(9, 9))
+    isolated = _actor('isolated', Faction.ALLY, Coordinate(12, 10))
+    state = _state(hunter, leader, support, front, isolated)
+    plan = plan_coordinated_pack_turn(BoardState(), state, hunter, (source,), role_id='harrier', actor_roles={'leader': 'leader', 'hunter': 'harrier', 'support': 'skirmisher'})
+    assert plan.target is not None and plan.target.id == 'front'
+    assert plan.movement_path is None

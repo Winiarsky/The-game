@@ -76,7 +76,12 @@ data/characters/
 
 # Local visual assets and generated printable character materials.
 # Keep these files in the workspace, but do not publish them with the code.
-/assets/
+/assets/*
+!/assets/maps/
+/assets/maps/*
+!/assets/maps/recruitment_arena/
+/assets/maps/recruitment_arena/*
+!/assets/maps/recruitment_arena/arena.svg
 /content/**/assets/
 *.png
 *.jpg

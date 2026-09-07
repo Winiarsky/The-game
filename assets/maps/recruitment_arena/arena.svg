@@ -1,0 +1,176 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 1040">
+<title>Arena rekrutacyjna Nessy — rozstawienie 20 na 30 pól</title>
+<desc>Nessa po lewej, bohater na południu, kukła na środku. Szare przeszkody blokują ruch i widoczność, brązowa osłona daje +2 KP, pomarańczowy gruz podwaja koszt ruchu. Znaczniki P, 2 i 3 dotyczą dodatkowych wariantów.</desc>
+<rect width="680" height="1040" fill="#171e22"/>
+<text x="340" y="28" fill="#efd6a1" text-anchor="middle" font-family="sans-serif" font-size="19">MAPA 0 · ARENA REKRUTACYJNA</text>
+<g transform="translate(40 50)">
+<rect width="600" height="900" fill="#b4a17d"/>
+<path d="M0 0v900" stroke="#746b55" stroke-width=".7"/>
+<path d="M30 0v900" stroke="#746b55" stroke-width=".7"/>
+<path d="M60 0v900" stroke="#746b55" stroke-width=".7"/>
+<path d="M90 0v900" stroke="#746b55" stroke-width=".7"/>
+<path d="M120 0v900" stroke="#746b55" stroke-width=".7"/>
+<path d="M150 0v900" stroke="#746b55" stroke-width=".7"/>
+<path d="M180 0v900" stroke="#746b55" stroke-width=".7"/>
+<path d="M210 0v900" stroke="#746b55" stroke-width=".7"/>
+<path d="M240 0v900" stroke="#746b55" stroke-width=".7"/>
+<path d="M270 0v900" stroke="#746b55" stroke-width=".7"/>
+<path d="M300 0v900" stroke="#746b55" stroke-width=".7"/>
+<path d="M330 0v900" stroke="#746b55" stroke-width=".7"/>
+<path d="M360 0v900" stroke="#746b55" stroke-width=".7"/>
+<path d="M390 0v900" stroke="#746b55" stroke-width=".7"/>
+<path d="M420 0v900" stroke="#746b55" stroke-width=".7"/>
+<path d="M450 0v900" stroke="#746b55" stroke-width=".7"/>
+<path d="M480 0v900" stroke="#746b55" stroke-width=".7"/>
+<path d="M510 0v900" stroke="#746b55" stroke-width=".7"/>
+<path d="M540 0v900" stroke="#746b55" stroke-width=".7"/>
+<path d="M570 0v900" stroke="#746b55" stroke-width=".7"/>
+<path d="M600 0v900" stroke="#746b55" stroke-width=".7"/>
+<path d="M0 0h600" stroke="#746b55" stroke-width=".7"/>
+<path d="M0 30h600" stroke="#746b55" stroke-width=".7"/>
+<path d="M0 60h600" stroke="#746b55" stroke-width=".7"/>
+<path d="M0 90h600" stroke="#746b55" stroke-width=".7"/>
+<path d="M0 120h600" stroke="#746b55" stroke-width=".7"/>
+<path d="M0 150h600" stroke="#746b55" stroke-width=".7"/>
+<path d="M0 180h600" stroke="#746b55" stroke-width=".7"/>
+<path d="M0 210h600" stroke="#746b55" stroke-width=".7"/>
+<path d="M0 240h600" stroke="#746b55" stroke-width=".7"/>
+<path d="M0 270h600" stroke="#746b55" stroke-width=".7"/>
+<path d="M0 300h600" stroke="#746b55" stroke-width=".7"/>
+<path d="M0 330h600" stroke="#746b55" stroke-width=".7"/>
+<path d="M0 360h600" stroke="#746b55" stroke-width=".7"/>
+<path d="M0 390h600" stroke="#746b55" stroke-width=".7"/>
+<path d="M0 420h600" stroke="#746b55" stroke-width=".7"/>
+<path d="M0 450h600" stroke="#746b55" stroke-width=".7"/>
+<path d="M0 480h600" stroke="#746b55" stroke-width=".7"/>
+<path d="M0 510h600" stroke="#746b55" stroke-width=".7"/>
+<path d="M0 540h600" stroke="#746b55" stroke-width=".7"/>
+<path d="M0 570h600" stroke="#746b55" stroke-width=".7"/>
+<path d="M0 600h600" stroke="#746b55" stroke-width=".7"/>
+<path d="M0 630h600" stroke="#746b55" stroke-width=".7"/>
+<path d="M0 660h600" stroke="#746b55" stroke-width=".7"/>
+<path d="M0 690h600" stroke="#746b55" stroke-width=".7"/>
+<path d="M0 720h600" stroke="#746b55" stroke-width=".7"/>
+<path d="M0 750h600" stroke="#746b55" stroke-width=".7"/>
+<path d="M0 780h600" stroke="#746b55" stroke-width=".7"/>
+<path d="M0 810h600" stroke="#746b55" stroke-width=".7"/>
+<path d="M0 840h600" stroke="#746b55" stroke-width=".7"/>
+<path d="M0 870h600" stroke="#746b55" stroke-width=".7"/>
+<path d="M0 900h600" stroke="#746b55" stroke-width=".7"/>
+<text x="15" y="-6" font-size="10" fill="#dedbd2" text-anchor="middle">0</text>
+<text x="45" y="-6" font-size="10" fill="#dedbd2" text-anchor="middle">1</text>
+<text x="75" y="-6" font-size="10" fill="#dedbd2" text-anchor="middle">2</text>
+<text x="105" y="-6" font-size="10" fill="#dedbd2" text-anchor="middle">3</text>
+<text x="135" y="-6" font-size="10" fill="#dedbd2" text-anchor="middle">4</text>
+<text x="165" y="-6" font-size="10" fill="#dedbd2" text-anchor="middle">5</text>
+<text x="195" y="-6" font-size="10" fill="#dedbd2" text-anchor="middle">6</text>
+<text x="225" y="-6" font-size="10" fill="#dedbd2" text-anchor="middle">7</text>
+<text x="255" y="-6" font-size="10" fill="#dedbd2" text-anchor="middle">8</text>
+<text x="285" y="-6" font-size="10" fill="#dedbd2" text-anchor="middle">9</text>
+<text x="315" y="-6" font-size="10" fill="#dedbd2" text-anchor="middle">10</text>
+<text x="345" y="-6" font-size="10" fill="#dedbd2" text-anchor="middle">11</text>
+<text x="375" y="-6" font-size="10" fill="#dedbd2" text-anchor="middle">12</text>
+<text x="405" y="-6" font-size="10" fill="#dedbd2" text-anchor="middle">13</text>
+<text x="435" y="-6" font-size="10" fill="#dedbd2" text-anchor="middle">14</text>
+<text x="465" y="-6" font-size="10" fill="#dedbd2" text-anchor="middle">15</text>
+<text x="495" y="-6" font-size="10" fill="#dedbd2" text-anchor="middle">16</text>
+<text x="525" y="-6" font-size="10" fill="#dedbd2" text-anchor="middle">17</text>
+<text x="555" y="-6" font-size="10" fill="#dedbd2" text-anchor="middle">18</text>
+<text x="585" y="-6" font-size="10" fill="#dedbd2" text-anchor="middle">19</text>
+<text x="-8" y="20" font-size="10" fill="#dedbd2" text-anchor="end">0</text>
+<text x="-8" y="50" font-size="10" fill="#dedbd2" text-anchor="end">1</text>
+<text x="-8" y="80" font-size="10" fill="#dedbd2" text-anchor="end">2</text>
+<text x="-8" y="110" font-size="10" fill="#dedbd2" text-anchor="end">3</text>
+<text x="-8" y="140" font-size="10" fill="#dedbd2" text-anchor="end">4</text>
+<text x="-8" y="170" font-size="10" fill="#dedbd2" text-anchor="end">5</text>
+<text x="-8" y="200" font-size="10" fill="#dedbd2" text-anchor="end">6</text>
+<text x="-8" y="230" font-size="10" fill="#dedbd2" text-anchor="end">7</text>
+<text x="-8" y="260" font-size="10" fill="#dedbd2" text-anchor="end">8</text>
+<text x="-8" y="290" font-size="10" fill="#dedbd2" text-anchor="end">9</text>
+<text x="-8" y="320" font-size="10" fill="#dedbd2" text-anchor="end">10</text>
+<text x="-8" y="350" font-size="10" fill="#dedbd2" text-anchor="end">11</text>
+<text x="-8" y="380" font-size="10" fill="#dedbd2" text-anchor="end">12</text>
+<text x="-8" y="410" font-size="10" fill="#dedbd2" text-anchor="end">13</text>
+<text x="-8" y="440" font-size="10" fill="#dedbd2" text-anchor="end">14</text>
+<text x="-8" y="470" font-size="10" fill="#dedbd2" text-anchor="end">15</text>
+<text x="-8" y="500" font-size="10" fill="#dedbd2" text-anchor="end">16</text>
+<text x="-8" y="530" font-size="10" fill="#dedbd2" text-anchor="end">17</text>
+<text x="-8" y="560" font-size="10" fill="#dedbd2" text-anchor="end">18</text>
+<text x="-8" y="590" font-size="10" fill="#dedbd2" text-anchor="end">19</text>
+<text x="-8" y="620" font-size="10" fill="#dedbd2" text-anchor="end">20</text>
+<text x="-8" y="650" font-size="10" fill="#dedbd2" text-anchor="end">21</text>
+<text x="-8" y="680" font-size="10" fill="#dedbd2" text-anchor="end">22</text>
+<text x="-8" y="710" font-size="10" fill="#dedbd2" text-anchor="end">23</text>
+<text x="-8" y="740" font-size="10" fill="#dedbd2" text-anchor="end">24</text>
+<text x="-8" y="770" font-size="10" fill="#dedbd2" text-anchor="end">25</text>
+<text x="-8" y="800" font-size="10" fill="#dedbd2" text-anchor="end">26</text>
+<text x="-8" y="830" font-size="10" fill="#dedbd2" text-anchor="end">27</text>
+<text x="-8" y="860" font-size="10" fill="#dedbd2" text-anchor="end">28</text>
+<text x="-8" y="890" font-size="10" fill="#dedbd2" text-anchor="end">29</text>
+<g id="arena-terrain">
+<g id="arena_screen"><title>Zasłona do skradania</title>
+<rect x="181" y="421" width="28" height="28" fill="#4e514d" stroke="#e6d2aa" stroke-width="1"/>
+<path d="M187 427l16 16 M203 427l-16 16" stroke="#d2d6d0" stroke-width="2"/>
+<rect x="181" y="451" width="28" height="28" fill="#4e514d" stroke="#e6d2aa" stroke-width="1"/>
+<path d="M187 457l16 16 M203 457l-16 16" stroke="#d2d6d0" stroke-width="2"/>
+<rect x="181" y="481" width="28" height="28" fill="#4e514d" stroke="#e6d2aa" stroke-width="1"/>
+<path d="M187 487l16 16 M203 487l-16 16" stroke="#d2d6d0" stroke-width="2"/>
+</g>
+<g id="arena_low_cover"><title>Niska osłona strzelecka</title>
+<rect x="391" y="451" width="28" height="28" fill="#846f4b" stroke="#e6d2aa" stroke-width="1"/>
+<text x="405" y="470" text-anchor="middle" font-size="12" fill="white">+2</text>
+<rect x="421" y="451" width="28" height="28" fill="#846f4b" stroke="#e6d2aa" stroke-width="1"/>
+<text x="435" y="470" text-anchor="middle" font-size="12" fill="white">+2</text>
+</g>
+<g id="arena_crates"><title>Wysoki stos skrzyń</title>
+<rect x="121" y="331" width="28" height="28" fill="#4e514d" stroke="#e6d2aa" stroke-width="1"/>
+<path d="M127 337l16 16 M143 337l-16 16" stroke="#d2d6d0" stroke-width="2"/>
+<rect x="151" y="331" width="28" height="28" fill="#4e514d" stroke="#e6d2aa" stroke-width="1"/>
+<path d="M157 337l16 16 M173 337l-16 16" stroke="#d2d6d0" stroke-width="2"/>
+</g>
+<g id="arena_pillar"><title>Kamienny filar</title>
+<rect x="391" y="331" width="28" height="28" fill="#4e514d" stroke="#e6d2aa" stroke-width="1"/>
+<path d="M397 337l16 16 M413 337l-16 16" stroke="#d2d6d0" stroke-width="2"/>
+<rect x="421" y="331" width="28" height="28" fill="#4e514d" stroke="#e6d2aa" stroke-width="1"/>
+<path d="M427 337l16 16 M443 337l-16 16" stroke="#d2d6d0" stroke-width="2"/>
+<rect x="391" y="361" width="28" height="28" fill="#4e514d" stroke="#e6d2aa" stroke-width="1"/>
+<path d="M397 367l16 16 M413 367l-16 16" stroke="#d2d6d0" stroke-width="2"/>
+<rect x="421" y="361" width="28" height="28" fill="#4e514d" stroke="#e6d2aa" stroke-width="1"/>
+<path d="M427 367l16 16 M443 367l-16 16" stroke="#d2d6d0" stroke-width="2"/>
+</g>
+<g id="arena_rubble"><title>Pas gruzu — trudny teren</title>
+<rect x="241" y="421" width="28" height="28" fill="#b96f2d" stroke="#e6d2aa" stroke-width="1"/>
+<path d="M246 439l5 -9 5 7z M258 430l5 -4 2 7z" fill="#f0cb85"/>
+<rect x="271" y="421" width="28" height="28" fill="#b96f2d" stroke="#e6d2aa" stroke-width="1"/>
+<path d="M276 439l5 -9 5 7z M288 430l5 -4 2 7z" fill="#f0cb85"/>
+<rect x="301" y="421" width="28" height="28" fill="#b96f2d" stroke="#e6d2aa" stroke-width="1"/>
+<path d="M306 439l5 -9 5 7z M318 430l5 -4 2 7z" fill="#f0cb85"/>
+<rect x="331" y="421" width="28" height="28" fill="#b96f2d" stroke="#e6d2aa" stroke-width="1"/>
+<path d="M336 439l5 -9 5 7z M348 430l5 -4 2 7z" fill="#f0cb85"/>
+<rect x="241" y="451" width="28" height="28" fill="#b96f2d" stroke="#e6d2aa" stroke-width="1"/>
+<path d="M246 469l5 -9 5 7z M258 460l5 -4 2 7z" fill="#f0cb85"/>
+<rect x="271" y="451" width="28" height="28" fill="#b96f2d" stroke="#e6d2aa" stroke-width="1"/>
+<path d="M276 469l5 -9 5 7z M288 460l5 -4 2 7z" fill="#f0cb85"/>
+<rect x="301" y="451" width="28" height="28" fill="#b96f2d" stroke="#e6d2aa" stroke-width="1"/>
+<path d="M306 469l5 -9 5 7z M318 460l5 -4 2 7z" fill="#f0cb85"/>
+<rect x="331" y="451" width="28" height="28" fill="#b96f2d" stroke="#e6d2aa" stroke-width="1"/>
+<path d="M336 469l5 -9 5 7z M348 460l5 -4 2 7z" fill="#f0cb85"/>
+</g>
+</g>
+<rect x="92" y="542" width="26" height="26" rx="5" fill="#a175ac"/>
+<text x="105" y="561" text-anchor="middle" font-family="sans-serif" font-size="18" fill="white">N</text>
+<rect x="272" y="542" width="26" height="26" rx="5" fill="#316faf"/>
+<text x="285" y="561" text-anchor="middle" font-family="sans-serif" font-size="18" fill="white">H</text>
+<rect x="302" y="362" width="26" height="26" rx="5" fill="#963d35"/>
+<text x="315" y="381" text-anchor="middle" font-family="sans-serif" font-size="18" fill="white">K</text>
+<rect x="272" y="482" width="26" height="26" rx="5" fill="#39998a"/>
+<text x="285" y="501" text-anchor="middle" font-family="sans-serif" font-size="18" fill="white">P</text>
+<rect x="332" y="362" width="26" height="26" rx="5" fill="#963d35"/>
+<text x="345" y="381" text-anchor="middle" font-family="sans-serif" font-size="18" fill="white">2</text>
+<rect x="302" y="332" width="26" height="26" rx="5" fill="#963d35"/>
+<text x="315" y="351" text-anchor="middle" font-family="sans-serif" font-size="18" fill="white">3</text>
+</g>
+<text x="40" y="978" fill="#dedbd2" font-size="12" font-family="sans-serif">N: Nessa · H: bohater · K: kukła · P: pomocnik (wsparcie) · 2/3: próba obszarowa</text>
+<text x="40" y="1002" fill="#dedbd2" font-size="12" font-family="sans-serif">Szare ×: brak przejścia i widoczności · Brązowe +2: niska osłona</text>
+<text x="40" y="1022" fill="#f0cb85" font-size="12" font-family="sans-serif">Pomarańczowe kamienie: trudny teren · podwójny koszt ruchu, bez osłony</text>
+</svg>

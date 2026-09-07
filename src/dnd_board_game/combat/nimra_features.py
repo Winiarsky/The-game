@@ -7,6 +7,8 @@ costs and Arcane Echo cannot diverge between input transports.
 
 from __future__ import annotations
 
+from dnd_board_game.actors.resources import uses_physical_mana
+
 from dataclasses import dataclass, replace
 from typing import Sequence
 
@@ -296,7 +298,7 @@ def arcane_echo_block_reason(
 ) -> str:
     """Return a player-facing reason when last round's spell/meta is repeated."""
 
-    if not actor_has_feature(actor, "flaw_arcane_echo"):
+    if uses_physical_mana(actor) or not actor_has_feature(actor, "flaw_arcane_echo"):
         return ""
     for effect in active_effects:
         if effect.actor_id != str(actor.id) or effect.value + 1 != round_number:

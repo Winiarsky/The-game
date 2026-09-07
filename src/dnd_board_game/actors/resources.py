@@ -71,6 +71,8 @@ def actor_resource_pool(actor: Actor, resource_id: str) -> ActorResourcePool | N
 
 
 def can_spend_actor_resource(actor: Actor, resource_id: str, cost: int = 1) -> bool:
+    if physically_managed_resource(actor, resource_id):
+        return cost > 0
     pool = actor_resource_pool(actor, resource_id)
     return cost > 0 and pool is not None and pool.current >= cost
 
@@ -82,6 +84,8 @@ def spend_actor_resource(
 ) -> ActorResourceUseResult:
     if cost < 1:
         raise ValueError("Actor resource cost must be positive.")
+    if physically_managed_resource(actor, resource_id):
+        return ActorResourceUseResult(actor, actor, resource_id, cost)
     pools = tuple(getattr(actor, "resource_pools", ()))
     pool = actor_resource_pool(actor, resource_id)
     if pool is None:
@@ -94,6 +98,22 @@ def spend_actor_resource(
         resource_pools=tuple(updated_pool if item.id == resource_id else item for item in pools),
     )
     return ActorResourceUseResult(actor, updated_actor, resource_id, cost)
+
+
+PHYSICAL_MANA_RESOURCES = frozenset({
+    "tactics_uses", "rogue_tricks", "trick_uses", "instinct", "ferocity_uses", "rage_uses",
+    "second_wind_uses", "action_surge_uses", "channel_divinity_uses",
+    "bardic_inspiration_uses", "nimra_metamagic_points", "metamagic_points",
+})
+
+
+def uses_physical_mana(actor: object) -> bool:
+    return any(feature.feature_id == "physical_mana_v02"
+               for feature in getattr(actor, "features", ()))
+
+
+def physically_managed_resource(actor: object, resource_id: str) -> bool:
+    return uses_physical_mana(actor) and resource_id in PHYSICAL_MANA_RESOURCES
 
 
 def depleted_recharge_resource_ids(actor: Actor) -> tuple[str, ...]:

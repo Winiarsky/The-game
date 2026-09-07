@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dnd_board_game.actors.resources import uses_physical_mana
+
 import random
 from dataclasses import dataclass, replace
 from typing import Mapping
@@ -108,7 +110,7 @@ class ActionResourceResolver:
             spell_id
             and any(spell.id == spell_id for spell in actor.spells)
         )
-        if is_spell:
+        if is_spell and not uses_physical_mana(actor):
             if (
                 action_cost == ActionEconomyCost.BONUS_ACTION
                 and state.turn_action.leveled_action_spell_cast
@@ -149,7 +151,7 @@ class ActionResourceResolver:
             )
             actor_after_resource = usage.actor_after
             state_after_resource = replace_actor(state_after_resource, actor_after_resource)
-        if is_spell:
+        if is_spell and not uses_physical_mana(actor):
             state_after_resource = replace(
                 state_after_resource,
                 turn_action=replace(

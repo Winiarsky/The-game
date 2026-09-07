@@ -150,6 +150,10 @@ def shortcut_for_option(
 ) -> str | None:
     """Return the displayed shortcut for an option, if it has one."""
 
+    if actor_id == "lorian":
+        physical = {"mana_inspiration": "Q", "mana_tuning": "R", "mana_transmutation": "F", "mana_transfer": "Z", "mana_reservation": "X", "mana_recovery": "C", "mana_refresh": "V"}
+        if option.action_id in physical:
+            return physical[option.action_id]
     for binding in shortcut_bindings(actor_id):
         if _option_matches_ref(option, binding.action_ref):
             return binding.key
