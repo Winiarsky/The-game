@@ -4,6 +4,34 @@
 .training-arena-mode #travel-panel,
 .training-arena-mode #points-panel {display:none!important;}
 #training-arena-panel {border:1px solid #8b744b;}
+.training-exploration-mode #encounter-panel {display:none!important;}
+.mana-exploration-entry {border-top:1px solid #8b744b;margin-top:24px;padding-top:12px;}
+.exploration-roster {display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;}
+.mana-hero-entry {display:grid;align-content:start;gap:8px;padding:10px;border:1px solid #ffffff25;border-radius:8px;}
+.mana-hero-entry details button {width:100%;margin-top:6px;}
+.mana-methods {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr));gap:12px;}
+.mana-methods article {border:1px solid #ffffff35;border-radius:8px;padding:14px;}
+.mana-score {display:flex;gap:20px;align-items:center;flex-wrap:wrap;margin:18px 0;}
+.mana-score strong {font-size:2.5rem;color:#f2cc72;}
+.mana-score small {font-size:1rem;}
+.exploration-mana-values,.mana-color-buttons,.mana-decisions {display:flex;flex-wrap:wrap;gap:10px;margin:16px 0;}
+.mana-value {display:grid;gap:6px;min-width:110px;padding:10px;border:1px solid #ffffff40;border-radius:8px;}
+.mana-value svg,.mana-color-buttons svg {width:26px;height:26px;}
+.mana-color-buttons button {display:flex;align-items:center;gap:8px;min-height:48px;}
+.mana-inline-notice {max-height:none;width:100%;box-shadow:none;}
+#exploration-mana-roll {display:flex;flex-wrap:wrap;gap:16px;align-items:end;}
+#exploration-mana-roll label {display:grid;gap:8px;}
+#exploration-mana-roll input {max-width:110px;font-size:1.4rem;padding:12px;}
+.mana-lesson-help {margin:20px 0;}
+.training-notice-active #encounter-panel,
+.training-setup-active #training-arena-panel {display:none!important;}
+.training-guided-mode:not(.training-notice-active) #training-arena-panel:has(.training-course) {padding:12px 18px;}
+.training-guided-mode #training-arena-panel:has(.training-course) .training-heading {display:none;}
+.training-guided-mode .training-course {border:0;margin:0;padding:0;}
+.training-lesson-help {margin-top:8px;}
+.training-setup-focus .setup-current-command {margin-top:0;}
+.setup-current-command {scroll-margin-top:calc(var(--shell-header-height, 80px) + 12px);}
+.setup-current-command:focus {outline:2px solid #e4c36a;outline-offset:4px;}
 .training-heading {display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;}
 .training-heading h2 {margin:4px 0;font-family:Georgia,serif;}
 .training-heading small {color:#d2ae70;letter-spacing:.1em;}
@@ -13,5 +41,35 @@
 .training-roster {display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:8px;margin:16px 0;}
 .training-roster button {display:grid;gap:4px;text-align:left;padding:12px;}
 .training-roster small {font-weight:normal;}
+.training-roster .panel-symbol {width:34px;height:34px;color:#f2cc72;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+.training-back {display:inline-block;margin-top:12px;padding:10px 14px;border:1px solid #8b744b;border-radius:5px;text-decoration:none;}
 #training-arena-panel details p {line-height:1.5;max-width:90ch;}
 #training-arena-panel a {color:#a8cdf0;}
+.training-course {border-top:1px solid #8b744b;margin-top:16px;padding-top:16px;}
+.training-progress {display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+.training-progress progress {accent-color:#d2ae70;flex:1;min-width:100px;max-width:320px;}
+.training-next {padding:12px;border-left:3px solid #d2ae70;background:#d2ae7010;}
+.training-command {margin:20px 0;padding:16px 18px;border:1px solid #b89347;border-left:5px solid #f2cc72;border-radius:8px;background:#352b19;color:#fff1ce;}
+.training-command-label {display:block;margin-bottom:8px;color:#f2cc72;font-size:.78rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase;}
+.training-command p {margin:0;font-size:1.2rem;font-weight:700;line-height:1.5;overflow-wrap:anywhere;}
+.training-lesson {padding:10px 0;border-top:1px solid #ffffff18;}
+.training-lesson summary {display:flex;align-items:center;gap:10px;flex-wrap:wrap;cursor:pointer;}
+.training-lesson.completed summary {color:#92d5aa;}
+.training-notice {position:fixed;inset:0;z-index:1500;display:grid;place-items:center;background:#000a;padding:16px;}
+.training-notice-card {box-sizing:border-box;width:min(650px,100%);max-height:90vh;overflow:auto;padding:24px;background:#171d21;border:1px solid #b89347;border-radius:12px;box-shadow:0 12px 60px #0008;}
+.training-notice-card h2 {font-family:Georgia,serif;color:#f2d59c;}
+.training-notice-card p {line-height:1.5;}
+.training-notice-card small {color:#d2ae70;letter-spacing:.08em;}
+.training-notice-card button {min-height:46px;}
+.training-options label[hidden] {display:none;}
+.training-lesson summary svg, .training-notice-cost svg {width:30px;height:30px;flex:none;}
+.training-notice-cost {display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+
+.mana-rune-choice {display:inline-flex;align-items:center;gap:10px;text-align:left;}
+.mana-rune-choice .panel-symbol {width:34px;height:34px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+.mana-rune-choice small {display:block;font-weight:normal;margin-top:4px;}
+
+.mana-condition, .mana-debrief {border:1px solid #8b744b;border-radius:8px;padding:14px;margin:12px 0;}
+.mana-condition p {margin:8px 0;line-height:1.5;}
+.mana-goal-progress, .mana-obligation {font-weight:600;color:#f2cc72;}
+.mana-condition-action {border-left:3px solid #d2ae70;padding:12px;}

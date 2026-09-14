@@ -50,6 +50,39 @@ SPELL_AURA_MEMBER_KINDS = frozenset(
 )
 
 
+def aura_effect_strength(effect: ActiveEffect) -> tuple[int, int, str, str]:
+    """Rank one complete aura variant; radius determines coverage, not power."""
+    if effect.kind == "divine_care_aura_penalty":
+        damage_penalty = (
+            effect.modifier
+            if effect.object_id.startswith("shared_combat_action:")
+            else effect.value
+        )
+        power = (abs(effect.value), abs(damage_penalty))
+    elif effect.kind in {"healing_grace_aura_source", "healing_grace_aura_member"}:
+        sides = effect.die_sides or 8
+        # Twice the expected healing avoids floating point and ignores charges.
+        power = (sides + 1 + 2 * effect.modifier, sides)
+    else:
+        power = (effect.value, 0)
+    return (*power, effect.source_actor_id or effect.actor_id, effect.id)
+
+
+def strongest_aura_members(effects: Sequence[ActiveEffect]) -> tuple[ActiveEffect, ...]:
+    """Keep one recipient effect per aura kind, preserving distinct abilities.
+
+    Call with derived member effects only. Sources must remain alive so the
+    weaker aura can take over when the stronger one expires or moves away.
+    """
+    members: dict[tuple[str, str], ActiveEffect] = {}
+    for effect in effects:
+        key = (effect.actor_id, effect.kind)
+        previous = members.get(key)
+        if previous is None or aura_effect_strength(effect) > aura_effect_strength(previous):
+            members[key] = effect
+    return tuple(members.values())
+
+
 def active_auras(actors: Sequence[Actor]) -> tuple[ActiveAura, ...]:
     result: list[ActiveAura] = []
     for source in actors:
@@ -164,7 +197,7 @@ def synchronize_spell_aura_effects(
                     remaining_rounds=source_effect.remaining_rounds,
                 )
             )
-    return (*retained, *members)
+    return (*retained, *strongest_aura_members(members))
 
 
 def resolve_healing_grace_bonus(
@@ -177,7 +210,7 @@ def resolve_healing_grace_bonus(
     """Spend one nearby Healing Grace activation and roll its bonus."""
 
     synchronized = synchronize_spell_aura_effects(actors, active_effects)
-    candidate = next(
+    candidate = max(
         (
             active
             for active in active_spell_auras(actors, synchronized)
@@ -185,7 +218,8 @@ def resolve_healing_grace_bonus(
             and active.effect.value > 0
             and str(target.id) in active.affected_actor_ids
         ),
-        None,
+        key=lambda active: aura_effect_strength(active.effect),
+        default=None,
     )
     if candidate is None:
         return HealingGraceResolution(synchronized)

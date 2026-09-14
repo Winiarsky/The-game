@@ -29,7 +29,8 @@ def is_basic_weapon(actor: Actor, source: object) -> bool:
 
 def can_declare_attack_series(actor: Actor) -> bool:
     """Only Lorian may buy multiple ordinary attacks with physical mana."""
-    return uses_physical_mana(actor) and str(actor.id) == "lorian"
+    from dnd_board_game.actors.resources import uses_shared_mana
+    return uses_physical_mana(actor) and not uses_shared_mana(actor) and str(actor.id) == "lorian"
 
 
 def reconcile_attack_series(
@@ -100,7 +101,7 @@ def series_count(actor: Actor, effects: Sequence[ActiveEffect]) -> int | None:
                  and e.kind == "mana_attack_series"), None)
 
 
-def attack_maximum(actor: Actor, source: object, effects: Sequence[ActiveEffect], fallback: int) -> int:
+def attack_maximum(actor: Actor, source: object, effects: Sequence[ActiveEffect], fallback: int, state: CombatState | None = None) -> int:
     if not uses_physical_mana(actor):
         return fallback
     if is_basic_weapon(actor, source):
@@ -110,6 +111,12 @@ def attack_maximum(actor: Actor, source: object, effects: Sequence[ActiveEffect]
         if count is None:
             raise ValueError("Najpierw zadeklaruj liczbę ataków. Każdy kosztuje 1 dowolną manę.")
         return count
+    if state is not None and state.shared_mana is not None:
+        key = getattr(source, 'id', '')
+        boosts = dict(state.shared_mana.pending_boosts)
+        if key in {'optical_scope', 'anchoring_arrow'}:
+            return 1 + boosts.get('shot', 0)
+        return {'double_shot': 2, 'reaper': 3, 'unstoppable': 2, 'blade_dance': 2}.get(key, 1)
     return 2 if getattr(source, "id", "") in {"double_shot", "optical_scope"} else 1
 
 
@@ -215,8 +222,10 @@ def resolve_mana_support(state: CombatState, effects: tuple[ActiveEffect, ...], 
         raise ValueError(spent.message)
     if action_id == "mana_inspiration" and target is not None:
         effects = apply_active_effect(effects, replace(
-            effect(str(target.id), "mana_inspiration", "Inspiracja barw: jedna karta jako dowolny kolor", 1,
-                   EffectDuration.UNTIL_TURN_START), source_actor_id=str(actor.id), expiration_actor_id=str(actor.id)
+            effect(str(target.id), "bardic_inspiration" if state.shared_mana else "mana_inspiration",
+                   "Inspiracja: +1k4 do jednego ataku albo obrony" if state.shared_mana else "Inspiracja barw: jedna karta jako dowolny kolor", 4 if state.shared_mana else 1,
+                   EffectDuration.UNTIL_TURN_START), source_actor_id=str(actor.id), expiration_actor_id=str(actor.id), die_sides=4 if state.shared_mana else None,
+                   object_id="class_feature:mana_inspiration"
         )).active_effects
     return spent.state, effects, f"{ability.name} · wydaj: {ability.cost_label}. {ability.description}"
 

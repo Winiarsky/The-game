@@ -20,8 +20,9 @@ from dnd_board_game.inventory.armor import effective_speed_feet
 from dnd_board_game.rules import ability_modifier
 from dnd_board_game.rules.physical_mana import hero_abilities, turn_supply
 from dnd_board_game.ui.combat_keyboard import shortcut_for_option
+from dnd_board_game.ui.board_panel_symbols import ability_panel_slot
 
-PROFILE = "physical_mana_v02"
+PROFILE = "shared_mana_v03"
 TIMING = {"A": "Akcja główna", "D": "Akcja dodatkowa", "R": "Reakcja", "MOD": "Modyfikacja"}
 COLORS = {
     "C": "Czerwona",
@@ -32,33 +33,24 @@ COLORS = {
     "*": "Dowolna",
 }
 COMMON_KEYS = (
-    (
-        "SPACJA",
-        "Atak",
-        "Jedna akcja: jeden zwykły atak za 1 dowolną manę. Tylko Lorian deklaruje serię: po 1 dowolnej za atak, osobne cele i rzuty.",
-    ),
-    (
-        "M",
-        "Ruch",
-        "1 dowolna mana raz na turę. Trudny teren zwiększa koszt w stopach; 1 pole = 5 ft.",
-    ),
-    ("B", "Broń", "Otwórz wybór broni; koszt wykonania pokazuje aplikacja."),
-    (
-        "I",
-        "Przedmiot",
-        "Otwórz wybór przedmiotu; użycie podstawowe kosztuje 1 dowolną manę, a czas działania wskazuje aplikacja.",
-    ),
-    ("0", "Koniec tury", "Rozlicz skazę, zachowaj rezerwę, dobierz do 3 i uzupełnij rynek."),
-    ("ENTER", "Potwierdź", "Wykonaj wybrane działanie; płatność kartami rozliczacie przy stole."),
-    ("ESC", "Wróć", "Anuluj podgląd bez płatności. Backspace także wraca."),
+    ("", "Atak", "Jedna akcja główna: jeden zwykły atak bez many. Skaza może wymagać dopłaty przed rzutem."),
+    ("", "Ruch", "Bez many. Możesz dzielić ruch na odcinki; pole to 5 ft. Trudny teren zwiększa koszt w stopach."),
+    ("", "Broń", "Wybierz broń lub chwyt; aplikacja pokazuje koszt zmiany."),
+    ("", "Przedmiot", "Otwórz ekwipunek; czas działania i koszt wskazuje opis przedmiotu."),
+    ("", "Koniec tury", "Rozlicz efekty i uzupełnij wspólny rynek do pięciu kart, potem potwierdź fizyczny dobór."),
+    ("✓", "Potwierdź", "Potwierdź wybór, płatność, wynik rzutu lub fizyczną operację kart przyciskiem w rogu planszy."),
+    ("↩", "Wróć", "Anuluj podgląd przed płatnością. Opłacone działanie trzeba rozstrzygnąć."),
 )
 TURN_REMINDERS = (
-    "Jedna akcja główna, najwyżej jedna dodatkowa i jedna reakcja między własnymi turami. Mana nie przyznaje dodatkowych akcji.",
-    "Start walki: 3 karty. Na początku tury nie dobierasz. Po skazie zachowaj starą rezerwę i wybierz do 3 kart rynku; uzupełnij go dopiero po wyborze.",
-    "Koszt techniki zawiera wskazane ataki i ruch. Zwykły Atak: jedno uderzenie. Tylko Lorian wybiera liczbę zwykłych ataków; każdy kosztuje 1 dowolną manę. Zwrot many nie dodaje ataków.",
-    "Dwie dowolne karty zastępują wymagany kolor. Raz w swojej turze przeciąż kartę: dowolny kolor za odrzucenie 2 wierzchnich kart talii.",
-    "Karty wydaj przy wykonaniu, przed rzutem. Aplikacja nie kontroluje ręki ani płatności. Limity pasywów karcianych oznaczacie przy stole.",
-    "Koniec rundy: odrzuć lewą kartę rynku i uzupełnij. Przewinięcia talii zgłaszaj jako fale w aplikacji.",
+    "Wspólna talia: 25 kart, po 5 każdego koloru. Wyłóż rynek 5 kart, w talii pozostaje 20; bez prywatnych rąk.",
+    "Zadeklaruj akcję, cele i podbicia. Pełny koszt, razem ze skazami, mieści się w 5 kartach. Symbol dowolny opłać wybranym kolorem.",
+    "Odłóż koszt z rynku na odrzucone i potwierdź, potem wykonaj akcję. Odzysk może zwrócić karty wydane na tę samą akcję.",
+    "Nie uzupełniaj rynku w środku akcji. Po efektach końca tury uzupełnij go do 5 kart, na ile wystarczy talii, i potwierdź dobór.",
+    "Po wyczerpaniu talii, jeśli bohater nie wydał many w swojej turze, po doborze odrzuć 1 kartę rynku bez ponownego uzupełniania. Pusty rynek i talia otwierają odświeżenie po zakończeniu akcji.",
+    "Odświeżenie: zbierz wszystkie 25 kart, także rynek, przetasuj i wyłóż nowy rynek 5. Zgłoś odświeżenie w aplikacji i potwierdź ✓.",
+    "T: do początku następnej tury bohatera będącego źródłem. O: do potwierdzonego odświeżenia talii. Koncentracja i opisane warunki mogą zakończyć efekt wcześniej.",
+    "Jedna akcja główna, jedna dodatkowa i jedna reakcja między własnymi turami. Hymn daje drugą akcję dodatkową; nadal płać manę i zachowuj limity użyć.",
+    "Dolny pasek run na mapie jest wyłączony. Używaj ikon w aplikacji; −, +, ✓ i ↩ pozostają aktywne w dotychczasowym rogu.",
 )
 
 
@@ -69,6 +61,18 @@ class PrintAbility:
     key: str
     timing: str
     cost: tuple[str, ...]
+    description: str
+    panel_slot: int | None
+
+
+@dataclass(frozen=True, slots=True)
+class PrintExploration:
+    id: str
+    name: str
+    kind: str
+    ability: str
+    modifier: int
+    components: tuple[tuple[str, int], ...]
     description: str
 
 
@@ -94,6 +98,7 @@ class PrintHero:
     passives: tuple[tuple[str, str], ...]
     flaw: tuple[str, str]
     story: tuple[tuple[str, str], ...]
+    exploration: tuple[PrintExploration, ...] = ()
 
     def as_payload(self) -> dict[str, object]:
         return {"rules_profile": PROFILE, **asdict(self)}
@@ -121,6 +126,8 @@ def build_print_hero(hero_id: str) -> PrintHero:
     from .character_card_sets import _starter_builds, _SKILL_ABILITIES
     from dnd_board_game.scenarios.loader import compile_actor_combat_content
     from dnd_board_game.combat import attack_source_for_actor
+    from dnd_board_game.application.exploration_mana_flow import method_modifiers
+    from dnd_board_game.rules.exploration_mana_catalog import hero_methods
 
     if hero_id not in PLAYABLE_HERO_IDS:
         raise ValueError(f"Nieznany bohater: {hero_id}")
@@ -158,7 +165,8 @@ def build_print_hero(hero_id: str) -> PrintHero:
     supply = turn_supply(hero_id)
     cards = tuple(
         PrintAbility(
-            a.id, a.name, ability_key(hero_id, a.id, a.timing), a.timing, a.cost, a.description
+            a.id, a.name, ability_key(hero_id, a.id, a.timing), a.timing, a.cost, a.description,
+            ability_panel_slot(hero_id, a.id),
         )
         for a in hero_abilities(hero_id)
     )
@@ -179,7 +187,7 @@ def build_print_hero(hero_id: str) -> PrintHero:
         weapons,
         saves,
         skills,
-        tuple(f"{item.name} ×{item.quantity}" for item in actor.inventory),
+        tuple(f"{item.name} ×{item.quantity}" for item in actor.inventory) + (("Święty symbol: A · niebieska + biała. Nieumarli w 15 ft: obrona MDR; porażka odpędza do początku następnej tury Dagny. Obrażenia kończą wcześniej.",) if hero_id == "dagna" else ()),
         supply["keep"],
         supply["capacity"],
         cards,
@@ -190,4 +198,8 @@ def build_print_hero(hero_id: str) -> PrintHero:
             ("Dlaczego podróżuje", profile.motivation),
             ("Cel osobisty", profile.personal_goal),
         ),
+        tuple(PrintExploration(m.id, m.name, m.kind, ABILITY_LABELS_PL[m.ability],
+              sum(part.value for part in method_modifiers(actor, m)),
+              tuple((part.label, part.value) for part in method_modifiers(actor, m)), m.description)
+              for m in hero_methods(hero_id)),
     )

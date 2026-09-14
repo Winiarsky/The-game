@@ -151,7 +151,7 @@ class CombatMovementFlowService:
                 threat_actor_ids=threat_actor_ids,
                 board_message=(
                     f"Ten ruch prowokuje atak okazyjny: {threat_names}. "
-                    "Potwierdź Enterem albo przyciskiem."
+                    "Potwierdź przyciskiem ✓."
                 ),
                 message_title="Atak okazyjny",
                 message_body=(
@@ -247,6 +247,8 @@ class CombatMovementFlowService:
             board,
             active_effects,
         )
+        from dnd_board_game.combat.shared_mana_techniques import technique_board
+        movement_board = technique_board(movement_board, state)
         path = find_path(
             movement_board,
             movement_actor,

@@ -713,7 +713,7 @@ def attack_source_with_combat_effects(
             )
         )
     damage_bonus = sum(
-        effect.value
+        (effect.modifier if effect.kind == "divine_care_aura_penalty" and effect.object_id.startswith("shared_combat_action:") else effect.value)
         for effect in active_effects
         if effect.actor_id == str(actor.id)
         and (
@@ -1078,7 +1078,11 @@ def attack_source_with_target_combat_effects(
                 damage_components=(*source.damage_components, component),
                 damage_hint=f"{source.damage_hint} + {component.hint()}",
             )
-    if uses_physical_mana(attacker) and source.id == "double_shot" and source.damage_components and not any(
+    from dnd_board_game.actors.resources import uses_shared_mana
+    if uses_shared_mana(attacker) and source.id == "double_shot" and any(e.actor_id == str(attacker.id) and e.kind in {"mana_double_shot_used", "mana_double_shot_skipped"} for e in active_effects):
+        components = tuple(c for c in source.damage_components if c.id != "mana_double_shot")
+        source = replace(source, damage_components=components, damage_hint=" + ".join(c.hint() for c in components))
+    if uses_physical_mana(attacker) and not uses_shared_mana(attacker) and source.id == "double_shot" and source.damage_components and not any(
         e.actor_id == str(attacker.id) and e.kind in {"mana_double_shot_used", "mana_double_shot_skipped"} for e in active_effects
     ) and not any(c.id == "mana_double_shot" for c in source.damage_components):
         component = DamageComponentSpec("mana_double_shot", source.damage_components[0].damage_type,

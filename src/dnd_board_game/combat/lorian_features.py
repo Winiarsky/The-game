@@ -290,10 +290,11 @@ def apply_lorian_shot_companion_effects(
     attacker_id: str,
     target_id: str,
     source: AttackSource,
+    shared_mana: bool = False,
 ) -> tuple[ActiveEffect, ...]:
     """Add status parts which cannot share the primary on-hit expiration."""
 
-    if source.on_hit_effect_kind != "lorian_mocked_attack":
+    if shared_mana or source.on_hit_effect_kind != "lorian_mocked_attack":
         return active_effects
     effect = ActiveEffect(
         id=f"lorian_mocked_wisdom:{attacker_id}:{target_id}",
@@ -361,6 +362,10 @@ def require_lorian_audience(
     *,
     condition_states: Sequence[ConditionState] = (),
 ) -> None:
+    from dnd_board_game.actors.resources import uses_shared_mana
+    # Shared mana prices the flaw in quote_ability; it is not an ability lock.
+    if uses_shared_mana(actor):
+        return
     if (
         action_id in LORIAN_AUDIENCE_ACTION_IDS
         and not lorian_has_live_audience(
@@ -429,19 +434,24 @@ def apply_lorian_entangling_effects(
     *,
     attacker_id: str,
     saving_throws: Sequence[SpellSaveResult],
+    shared_root: bool | None = None,
 ) -> tuple[ActiveEffect, ...]:
     """Apply the movement result of Oplatający ostrzał to every saved target."""
 
     updated = active_effects
     for saving_throw in saving_throws:
+        if shared_root is not None and saving_throw.success:
+            continue
         kind = (
             "lorian_entangled_half_movement"
             if saving_throw.success
             else "lorian_entangled_no_movement"
         )
+        if shared_root is not None:
+            kind = "lorian_entangled_no_movement" if shared_root else "lorian_entangled_half_movement"
         label = (
             "Oplatający ostrzał: połowa ruchu"
-            if saving_throw.success
+            if kind == "lorian_entangled_half_movement"
             else "Oplatający ostrzał: brak ruchu"
         )
         effect = ActiveEffect(

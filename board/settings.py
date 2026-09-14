@@ -19,17 +19,12 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "simulator_url": "http://127.0.0.1:5000",
     },
     "hardware": {
-        "protocol": "board_scan_usb_v1",
+        "protocol": "board_scan_usb_v2",
         "serial_port": "",
         "baud_rate": 115200,
-        "scan_command": "SCAN",
-        "stop_command": "STOP",
-        "stop_before_scan": True,
-        "pre_scan_stop_s": 0.08,
         "probe_timeout_s": 6.0,
         "line_timeout_s": 0.25,
         "write_timeout_s": 0.5,
-        "scan_recovery_timeout_s": 10.0,
     },
     "wled": {
         "base_url": "http://wled.local",
@@ -94,17 +89,6 @@ def _apply_env_overrides(config: dict[str, Any]) -> dict[str, Any]:
         hardware_cfg["serial_port"] = str(os.environ["BOARD_SERIAL_PORT"]).strip()
     if os.environ.get("BOARD_SERIAL_BAUD"):
         hardware_cfg["baud_rate"] = int(os.environ["BOARD_SERIAL_BAUD"])
-    if os.environ.get("BOARD_SCAN_COMMAND"):
-        hardware_cfg["scan_command"] = str(os.environ["BOARD_SCAN_COMMAND"]).strip()
-    if os.environ.get("BOARD_STOP_COMMAND"):
-        hardware_cfg["stop_command"] = str(os.environ["BOARD_STOP_COMMAND"]).strip()
-    if os.environ.get("BOARD_STOP_BEFORE_SCAN"):
-        raw = str(os.environ["BOARD_STOP_BEFORE_SCAN"]).strip().lower()
-        hardware_cfg["stop_before_scan"] = raw not in {"0", "false", "no", "off"}
-    if os.environ.get("BOARD_PRE_SCAN_STOP_S"):
-        hardware_cfg["pre_scan_stop_s"] = float(os.environ["BOARD_PRE_SCAN_STOP_S"])
-    if os.environ.get("BOARD_SCAN_RECOVERY_TIMEOUT_S"):
-        hardware_cfg["scan_recovery_timeout_s"] = float(os.environ["BOARD_SCAN_RECOVERY_TIMEOUT_S"])
     if os.environ.get("WLED_URL"):
         wled_cfg["base_url"] = str(os.environ["WLED_URL"]).strip()
     if os.environ.get("WLED_SEGMENT_ID"):

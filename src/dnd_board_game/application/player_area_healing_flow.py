@@ -43,6 +43,7 @@ from dnd_board_game.combat import (
 from dnd_board_game.world import BoardState, Coordinate
 
 from .damage_presentation import applied_damage_payload
+from dnd_board_game.combat.shared_volley import VolleyHit
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,6 +75,8 @@ class PendingAreaSpell:
     metamagic_ids: tuple[str, ...] = ()
     excluded_positions: tuple[Coordinate, ...] = ()
     unsculpted_target_ids: tuple[str, ...] = ()
+    volley_total: int | None = None
+    volley_hits: tuple[VolleyHit, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -287,6 +290,8 @@ class PlayerAreaHealingFlowService:
             if source.area.shape in {SpellAreaShape.RADIUS, SpellAreaShape.CUBE}
             else caster.position
         )
+        if source.id == "arrow_rain":
+            effect_origin = caster.position
         area_targets = actors_in_area(
             state.actors,
             area_positions,
@@ -331,7 +336,7 @@ class PlayerAreaHealingFlowService:
             pending=pending,
             board_message=(
                 f"{source.name}: podgląd obszaru gotowy. Cele: {target_names}. "
-                "Potwierdź Enterem albo przyciskiem."
+                "Potwierdź przyciskiem ✓."
             ),
             message_title="Czar obszarowy",
             message_body=(
@@ -394,6 +399,7 @@ class PlayerAreaHealingFlowService:
             },
             careful_target_ids=pending.careful_target_ids,
             heightened_target_id=pending.heightened_target_id,
+            active_effects=active_effects,
             advantaged_target_ids=(
                 pending.target_ids
                 if any(
@@ -480,7 +486,7 @@ class PlayerAreaHealingFlowService:
             for target_result in resolution.targets:
                 if target_result.saving_throw.success:
                     continue
-                target = _actor_by_id(resolved_state, target_result.target_id)
+                target = next(a for a in resolved_state.actors if str(a.id) == target_result.target_id)
                 destination = forced_movement_destination(
                     board,
                     resolved_state,

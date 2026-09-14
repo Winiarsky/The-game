@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Kroniki Pogranicza</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='launcher.css') }}">
+  <link rel="stylesheet" href="{{ static_asset_url('launcher.css') }}">
 </head>
 <body class="launcher-page main-menu-page">
   <main class="launcher-shell">
@@ -15,27 +15,31 @@
     </section>
 
     <nav class="main-menu" aria-label="Menu główne">
-      <a class="menu-action primary" href="{{ url_for('new_game') }}">
+      <a class="menu-action primary" data-board-rune="6" href="{{ url_for('new_game') }}">
+        {{ panel_icon(6)|safe }}
         <span>Nowa gra</span>
         <small>Wybierz scenariusz i rozpocznij przygotowanie stołu</small>
       </a>
-      <a class="menu-action{% if not save_exists %} quiet{% endif %}" href="{{ url_for('load_game') }}">
+      <a class="menu-action{% if not save_exists %} quiet{% endif %}" data-board-rune="7" href="{{ url_for('load_game') }}">
+        {{ panel_icon(7)|safe }}
         <span>Wczytaj grę</span>
         <small>{% if save_exists %}Dostępny jest zapis: {{ scenario_name }}{% else %}Brak zapisu dla aktywnego scenariusza{% endif %}</small>
       </a>
       <form action="{{ url_for('open_training_arena') }}" method="post">
-        <button class="menu-action" type="submit" style="width:100%;text-align:left;font:inherit;cursor:pointer">
-          <span>Mapa 0 · Rekrutacja u Nessy</span>
-          <small>Przetrenuj każdą z siedmiu postaci na arenie, pojedynczo</small>
+        <button class="menu-action" data-board-rune="8" type="submit" style="width:100%;text-align:left;font:inherit;cursor:pointer">
+          {{ panel_icon(8)|safe }}
+          <span>Arena · Samouczki postaci</span>
+          <small>Poznaj zdolności krok po kroku, potem wygraj samodzielny pojedynek</small>
         </button>
       </form>
-      <a class="menu-action" href="{{ url_for('characters') }}">
+      <a class="menu-action" data-board-rune="9" href="{{ url_for('characters') }}">
+        {{ panel_icon(9)|safe }}
         <span>Bohaterowie</span>
         <small>Poznaj gotowe archetypy i ich instrukcje gry</small>
       </a>
     </nav>
 
-    <footer>Aktywny scenariusz runtime: {{ scenario_name }}</footer>
+    <footer>{% include 'launcher_board.html' %}Aktywny scenariusz runtime: {{ scenario_name }}</footer>
   </main>
 </body>
 </html>

@@ -4,10 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Eksploracja</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='nessa_briefing.css', v='nessa-1') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='physical_mana.css', v='black-mana-20260907') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='exploration.css', v='black-mana-20260907') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='training_arena.css') }}?v=1">
+  <link rel="stylesheet" href="{{ static_asset_url('nessa_briefing.css') }}">
+  <link rel="stylesheet" href="{{ static_asset_url('physical_mana.css') }}">
+  <link rel="stylesheet" href="{{ static_asset_url('exploration.css') }}">
+  <link rel="stylesheet" href="{{ static_asset_url('training_arena.css') }}">
 </head>
 <body>
 <header class="app-shell-header">
@@ -249,7 +249,7 @@
       </details>
       <button class="danger developer-reset" onclick="resetSession()">Resetuj sesję</button>
     </div>
-    <div class="side-panel-keyboard-hint"><kbd>I</kbd> panel · <kbd>Esc</kbd> zamknij · <kbd>←</kbd><kbd>→</kbd> zakładki</div>
+    <div class="side-panel-keyboard-hint">Wybierz zakładkę na ekranie · × zamyka panel</div>
   </aside>
   <section>
     <div id="status" class="status" hidden></div>
@@ -330,7 +330,7 @@
                   <button id="pending-reject-button" class="danger" onclick="decision('reject')">Odrzuć</button>
                   <button class="secondary" onclick="decision('explain')">Wyjaśnij</button>
                 </div>
-                <div class="numpad-combat-hint"><span><kbd>Enter</kbd> akceptuj / dalej</span><span><kbd>−</kbd> odrzuć / cofnij</span></div>
+                <div class="numpad-combat-hint"><span>✓ akceptuj / dalej</span><span>↩ odrzuć / wróć</span></div>
               </section>
               <section id="roll-panel" class="interaction-state-phase">
                 <div id="roll-prompt"></div>
@@ -381,10 +381,13 @@
   </form>
 </dialog>
 <script>window.EXPLORATION_SLASH_COMMANDS = {{ slash_commands | tojson }};</script>
-<script src="{{ url_for('static', filename='physical_mana.js', v='black-mana-20260907') }}"></script>
-<script src="{{ url_for('static', filename='training_arena.js') }}?v=terrain-3"></script>
-<script src="{{ url_for('static', filename='dice_icons.js', v='black-mana-20260907') }}"></script>
-<script src="{{ url_for('static', filename='shield_bash.js', v='black-mana-20260907') }}"></script>
-<script src="{{ url_for('static', filename='exploration.js', v='black-mana-20260907') }}"></script>
+<script src="{{ static_asset_url('shared_mana.js') }}"></script>
+<script src="{{ static_asset_url('physical_mana.js') }}"></script>
+<script src="{{ static_asset_url('training_arena.js') }}"></script>
+<script src="{{ static_asset_url('exploration_mana.js') }}"></script>
+<script src="{{ static_asset_url('dice_icons.js') }}"></script>
+<script src="{{ static_asset_url('shield_bash.js') }}"></script>
+<script src="{{ static_asset_url('board_panel.js') }}"></script>
+<script src="{{ static_asset_url('exploration.js') }}"></script>
 </body>
 </html>

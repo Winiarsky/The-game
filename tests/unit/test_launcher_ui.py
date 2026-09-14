@@ -78,7 +78,7 @@ def test_new_game_lists_real_exploration_scenario_catalog(tmp_path) -> None:
     assert "Wybierz drużynę" in html
     assert "krok 1 z 2" in html
     assert 'class="launcher-page new-game-page"' in html
-    assert "hero-guides-20260905-1" in html
+    assert 'launcher.css?v=' in html
     assert 'id="scenario-selection-step" class="form-section" hidden' in html
     assert "Kliknij od 1 do 5 bohaterów" in html
     assert "ACCEPT" not in html

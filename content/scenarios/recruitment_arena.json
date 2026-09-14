@@ -40,7 +40,7 @@
   ],
   "environment": [],
   "llm_context": {
-    "summary": "Nessa prowadzi indywidualny nabór na arenie Gildii. To bezpieczna próba umiejętności, bez doświadczenia, łupu i kosztów kampanii."
+    "summary": "Nessa objaśnia ćwiczenia siedmiu bohaterów jako narratorka. Samouczki są oddzielone od kampanii."
   },
   "exploration": {
     "party_start_zone": "arena",
@@ -58,7 +58,7 @@
           9,
           18
         ],
-        "description": "Nessa: Pokaż, co potrafisz. Pokonaj kukłę albo podejdź do mnie, gdy zechcesz zakończyć próbę. Potem zaproszę następną osobę.",
+        "description": "Wybierz postać. Nessa przeprowadzi cię przez kolejne ćwiczenia i końcowy pojedynek.",
         "options": []
       }
     ],
@@ -67,7 +67,7 @@
       {
         "id": "recruitment_trial",
         "name": "Próba rekrutacyjna",
-        "description": "Jeden kandydat, kukła i Nessa. Rozstaw elementy zgodnie z podświetleniem.",
+        "description": "Ustaw bohatera oraz wskazane kukły i pomocników. Nessa prowadzi narrację; nie wymaga figurki.",
         "encounter_scenario": "content/scenarios/recruitment_arena_combat.json",
         "condition": "flag_equals",
         "flag_key": "training_requested",

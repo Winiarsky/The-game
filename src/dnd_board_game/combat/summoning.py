@@ -138,6 +138,10 @@ def summon_attack_source(
         if owner_spell_attack
         else 0
     )
+    from dnd_board_game.actors.resources import uses_shared_mana
+    from dnd_board_game.rules import DiceExpression
+    from .damage import DamageComponentSpec
+    shared_weapon = owner_spell_attack and uses_shared_mana(owner)
     return AttackSource(
         name=definition.attack_name,
         source_type=AttackSourceType.CUSTOM,
@@ -155,8 +159,9 @@ def summon_attack_source(
                 ),
             )
         ),
+        damage_components=(DamageComponentSpec("spiritual_weapon", definition.attack_damage_type, dice=DiceExpression(2, 8), modifier=damage_modifier, label="Duchowy oręż"),) if shared_weapon else (),
         damage_hint=(
-            f"1d8 + {damage_modifier}"
+            f"{2 if shared_weapon else 1}d8 + {damage_modifier}"
             if owner_spell_attack
             else ""
         ),

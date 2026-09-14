@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import inspect
 import time
-from typing import Any
+from typing import Any, Callable
 
 from dnd_board_game.world import Coordinate
 
@@ -54,11 +54,30 @@ class BoardSessionAdapter:
             raise ValueError(f"Unsupported connected board backend: {backend}.")
         return cls(connection)
 
-    def scan(self, positions: tuple[Coordinate, ...], *, timeout_s: float) -> Any:
-        scan_board = getattr(self.connection, "scan_board", None)
-        if not callable(scan_board):
-            raise ValueError("Aktualny backend planszy nie obsługuje scan_board.")
-        return scan_board([position.as_tuple() for position in positions], timeout_s=timeout_s)
+    @property
+    def connected(self) -> bool:
+        return bool(getattr(self.connection, "connected", True))
+
+    def scan(self, positions: tuple[Coordinate, ...], *, timeout_s: float | None,
+             context_key: str = "", mode: str = "single",
+             finish_positions: tuple[Coordinate, ...] = ()) -> Any:
+        kwargs = {"timeout_s": timeout_s}
+        if context_key:
+            kwargs.update(context_key=context_key, mode=mode,
+                          finish_positions=tuple(position.as_tuple() for position in finish_positions))
+        return self.connection.scan_board([position.as_tuple() for position in positions], **kwargs)
+
+    def prepare_scan(self, positions: tuple[Coordinate, ...], *, context_key: str,
+                     mode: str, finish_positions: tuple[Coordinate, ...]) -> Callable[..., Any]:
+        prepare = getattr(self.connection, "prepare_scan", None)
+        if callable(prepare):
+            return prepare([p.as_tuple() for p in positions], context_key=context_key,
+                           mode=mode, finish_positions=tuple(p.as_tuple() for p in finish_positions))
+        # In-memory test devices have no persistent transport to arm.
+        return lambda timeout_s=None: self.scan(positions, timeout_s=timeout_s)
+
+    def cancel_input(self) -> None:
+        self.connection.cancel_scan()
 
     def reset_scan(self) -> str:
         resetter = getattr(self.connection, "reset_connection", None)
@@ -89,10 +108,10 @@ class BoardSessionAdapter:
         self._base_feedback = feedback
         self._replace_feedback(feedback, transition_ms=self.transition_ms)
 
-    def show_scan_feedback(self, feedback: LedFeedback) -> None:
+    def show_scan_feedback(self, feedback: LedFeedback, *, boost_brightness: bool = True) -> None:
         self._replace_feedback(
             feedback,
-            brightness=self.scan_brightness,
+            brightness=self.scan_brightness if boost_brightness else None,
             transition_ms=self.scan_transition_ms,
         )
 
@@ -117,6 +136,7 @@ class BoardSessionAdapter:
             else 0
         )
         for position in path[1:]:
+            frame_started = time.monotonic()
             projectile = LedFrame(
                 (position,),
                 color,
@@ -127,7 +147,9 @@ class BoardSessionAdapter:
                 transition_ms=0,
             )
             if delay_s:
-                time.sleep(delay_s)
+                remaining = delay_s - (time.monotonic() - frame_started)
+                if remaining > 0:
+                    time.sleep(remaining)
         if self._base_feedback.frames:
             self._replace_feedback(
                 self._base_feedback,

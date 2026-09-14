@@ -294,13 +294,15 @@ class EnemyTurnFlowService:
                 damage_modifier=source.damage_modifier + bonus,
             )
         target_actor = None
+        intercepted_target = None
+        interception_message = ''
         if intent.target is not None:
             target_actor = next(
                 (actor for actor in state.actors if str(actor.id) == intent.target.id),
                 None,
             )
         if target_actor is not None:
-            if source.area is None:
+            if source.area is None and source.save_ability is None:
                 guard = redirect_guarded_single_target(
                     state,
                     active_effects,
@@ -308,6 +310,7 @@ class EnemyTurnFlowService:
                 )
                 active_effects = guard.active_effects
                 if guard.redirected:
+                    protected_name = target_actor.name
                     target_actor = guard.target
                     intent = replace(
                         intent,
@@ -322,6 +325,8 @@ class EnemyTurnFlowService:
                             f"{target_actor.name}."
                         ),
                     )
+                    intercepted_target = intent.target
+                    interception_message = f'{enemy.name} atakował {protected_name}. {target_actor.name} przejmuje ten atak; używamy KP obrońcy. '
             source = attack_source_with_target_combat_effects(
                 enemy,
                 target_actor,
@@ -376,7 +381,10 @@ class EnemyTurnFlowService:
                     else None
                 ),
                 original_state=state,
+                intercepted_target=intercepted_target,
             )
+        if interception_message:
+            result = replace(result, message=interception_message + result.message)
         ready_attacks = (
             *self._player_reactions.detect_ready_attacks(
                 state=state,

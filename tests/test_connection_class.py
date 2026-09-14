@@ -18,7 +18,7 @@ class _FakeHardwareBackend:
         self.led_updates = []
         self.closed = False
 
-    def scan_board(self, acceptable_responses=None, *, timeout_s=None):
+    def scan_board(self, acceptable_responses=None, *, timeout_s=None, **kwargs):
         if acceptable_responses:
             return acceptable_responses[0]
         return (0, 0)

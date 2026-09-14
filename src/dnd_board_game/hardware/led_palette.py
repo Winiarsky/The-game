@@ -9,10 +9,22 @@ class LedColor:
     Keep game/rules code talking about intent instead of raw RGB values.
     """
 
+    PANEL_ACTION: RGBColor = (30, 110, 255)
+    PANEL_BONUS_ACTION: RGBColor = (255, 120, 20)
+    PANEL_MOVEMENT: RGBColor = (40, 220, 95)
+    PANEL_TURN_CONTROL: RGBColor = (255, 255, 255)
+    PANEL_FREE_ACTION: RGBColor = (200, 170, 65)
+    PANEL_MINUS: RGBColor = (217, 0, 0)
+    PANEL_PLUS: RGBColor = (0, 217, 0)
+    PANEL_ACCEPT: RGBColor = (0, 68, 217)
+    PANEL_BACK: RGBColor = (217, 136, 0)
+
     ACTIVE_ACTOR: RGBColor = (255, 255, 255)
     PLAYER_START_ZONE: RGBColor = (0, 220, 255)
     ALLY: RGBColor = (0, 220, 255)
     VISIBLE_ALLY: RGBColor = (80, 180, 200)
+    LEGAL_ABILITY_TARGET: RGBColor = (0, 65, 75)
+    SELECTED_ABILITY_TARGET: RGBColor = (0, 220, 255)
 
     LEGAL_MOVEMENT: RGBColor = (0, 110, 160)
     MOVEMENT_RANGE: RGBColor = (0, 80, 220)

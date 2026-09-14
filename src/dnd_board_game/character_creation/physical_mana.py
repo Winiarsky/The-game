@@ -23,7 +23,15 @@ def apply_physical_mana_profile(actor: Actor) -> Actor:
         if feature.feature_id in known else feature
         for feature in actor.features
         if feature.feature_id != "physical_mana_v02"
-        and not (str(actor.id) == "lorian" and feature.feature_id in RETIRED_LORIAN)
+        and not (str(actor.id) == "lorian" and feature.feature_id in RETIRED_LORIAN and feature.feature_id not in known)
+    )
+    from dnd_board_game.rules.shared_mana_catalog import HOLY_SYMBOL
+    if str(actor.id) == "dagna":
+        from dnd_board_game.rules.physical_mana import mana_ability
+        known[HOLY_SYMBOL.id] = mana_ability("dagna", HOLY_SYMBOL.id)
+    features = tuple(
+        replace(f, action_ids=tuple(a for a in f.action_ids if a in known))
+        for f in features if f.feature_id != "shared_mana_v03"
     )
     flaw_id, flaw_name, flaw_text = FLAWS[str(actor.id)]
     passive_id, passive_name, passive_text = MANA_PASSIVES[str(actor.id)]
@@ -36,22 +44,24 @@ def apply_physical_mana_profile(actor: Actor) -> Actor:
                      for f in features if not (str(actor.id) == "nimra" and f.feature_id == "arcane_recovery"))
     if not any(f.feature_id == passive_id for f in features):
         features += (FeatureGrant(passive_id, passive_name, FeatureSourceKind.CLASS, "physical_mana:v02", passive_text),)
-    existing = {f.feature_id for f in features}
+    existing = {f.feature_id for f in features} | {action for f in features for action in f.action_ids}
     features += tuple(
         FeatureGrant(ability.id, ability.name, FeatureSourceKind.CLASS,
                      "physical_mana:v02", ability.description, action_ids=(ability.id,))
-        for ability in abilities if ability.id.startswith("mana_") and ability.id not in existing
+        for ability in known.values() if ability.id not in existing
     )
     features += (FeatureGrant("physical_mana_v02", "Fizyczna mana",
                               FeatureSourceKind.SCENARIO, "physical_mana:v02",
-                              "Karty rozliczają gracze. Dobór na końcu tury: 3."),)
+                              "Wspólny rynek pięciu kart. Płatność przed efektem, uzupełnienie na końcu tury."),
+                 FeatureGrant("shared_mana_v03", "Wspólna mana 0.3", FeatureSourceKind.SCENARIO,
+                              "shared_mana:v03", "25 kart, po pięć każdego koloru; liczony rynek i odświeżenie talii."))
     spell_ids = tuple(spell_id for spell_id in actor.spell_ids if spell_id in known)
     return repair_mira_loadout(replace(
         actor, features=features, attacks_per_action=1,
         resource_pools=tuple(p for p in actor.resource_pools if p.id not in PHYSICAL_MANA_RESOURCES),
         spell_slots=(), spell_ids=spell_ids,
         spells=tuple(spell for spell in actor.spells if spell.id in spell_ids),
-        spell_access=tuple(replace(access, spell_ids=tuple(
+        spell_access=tuple(replace(access, resource_ids_by_spell=(), spell_ids=tuple(
             spell_id for spell_id in access.spell_ids if spell_id in spell_ids
         )) for access in actor.spell_access if any(i in spell_ids for i in access.spell_ids)),
     ))

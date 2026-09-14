@@ -625,6 +625,13 @@ details.debug-panel summary { cursor: pointer; color: #a9a298; }
 .combat-prompt { max-width: 820px; border-left: 4px solid #f5c542; background: #211f16; color: #f5e3a1; padding: 12px 14px; margin: 0 0 12px; }
 .combat-prompt b { display: block; font-family: Georgia, "Times New Roman", serif; font-size: 20px; margin-bottom: 5px; }
 .combat-prompt span { line-height: 1.45; }
+.shared-command-step { display: grid; gap: 10px; }
+.shared-command-step > b { margin: 0; }
+.shared-command-step strong { display: flex; align-items: center; gap: 8px; }
+.shared-command-step strong .panel-symbol { flex-shrink: 0; }
+.shared-command-movement, .shared-command-attack { display: grid; gap: 6px; }
+.shared-command-movement { color: #d6d0c4; }
+.shared-command-attack { padding: 12px; border: 1px solid #ad8734; border-radius: 6px; background: #302612; }
 .combat-mini-status { display: flex; gap: 6px; flex-wrap: wrap; margin: 0; color: #d6d0c4; font-size: 13px; }
 .combat-mini-status span { display: inline-flex; align-items: baseline; gap: 4px; border: 1px solid #34383d; border-radius: 999px; padding: 4px 7px; background: #111417; }
 .combat-mini-status span.ready { border-color: #376346; color: #bce0c6; }
@@ -1324,26 +1331,38 @@ pre { white-space: pre-wrap; overflow: auto; }
 .combat-action-mana .mana-plus {margin:0 1px;font-size:11px;}
 .combat-action-mana small {font-size:11px;font-weight:400;line-height:1.25;color:#b8c5d3;}
 
-/* Stable economy columns: main action, bonus action, free options then movement. */
-.combat-keyboard-action-index {grid-template-columns:repeat(3,minmax(0,1fr));width:100%;align-items:start;gap:14px;}
-.combat-economy-column,.combat-economy-section {min-width:0;}
-.combat-economy-section + .combat-economy-section {margin-top:18px;}
-.combat-economy-heading {display:flex;align-items:center;justify-content:space-between;gap:8px;border-bottom:1px solid #56616b;padding-bottom:7px;}
-.combat-economy-heading h4 {margin:0;color:#f2dcaa;font-size:17px;}
-.combat-economy-heading > span {color:#b8c5d3;font-size:13px;}
-.combat-keyboard-waiting .combat-economy-hint {font-size:12px;color:#b8c5d3;margin:7px 0 10px;text-align:left;}
-.combat-economy-options {display:grid;align-content:start;gap:8px;max-height:min(52dvh,600px);overflow-y:auto;scrollbar-gutter:stable;padding:2px 4px 3px 1px;}
-.combat-economy-options:focus-visible {outline:2px solid #e7bc48;outline-offset:3px;}
-.combat-economy-options .combat-economy-empty {font-size:13px;color:#a4adb7;text-align:left;margin:5px 0;}
-.combat-economy-controls {display:flex;flex-wrap:wrap;gap:8px;border-top:1px solid #39424b;margin-top:16px;padding-top:12px;text-align:left;}
-.combat-economy-controls > * {flex:1 1 190px;max-width:320px;}
-.combat-economy-options .combat-keyboard-fallback-option {width:100%;margin:0;}
-.combat-preview-economy {display:block;color:#e7bc48;margin-bottom:8px;}
-@media(max-width:900px) {
-  .combat-keyboard-action-index {grid-template-columns:minmax(0,1fr);gap:20px;}
-  .combat-economy-options {max-height:none;overflow:visible;scrollbar-gutter:auto;padding-right:0;}
-  .combat-economy-controls > * {max-width:none;}
+/* One flowing index; action economy is identified by color and a text label. */
+.combat-keyboard-action-index {grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));width:100%;align-items:stretch;gap:7px;margin-top:12px;}
+.combat-keyboard-action-index-item {gap:3px 6px;padding:7px 8px;align-content:start;}
+.combat-keyboard-action-index-item .combat-panel-icon {width:34px;height:36px;grid-row:1 / 3;}
+.combat-keyboard-action-index-item .combat-action-tile-content {display:contents;}
+.combat-keyboard-action-index-item .combat-tile-economy {margin-bottom:0;line-height:1.2;grid-column:2;}
+.combat-keyboard-action-index-item .combat-action-mana {grid-column:1 / -1;}
+.combat-keyboard-action-index-item b {font-size:14px;line-height:1.25;}
+.combat-keyboard-waiting > .muted {font-size:12px;margin-top:8px;}
+.combat-keyboard-waiting {padding:8px;}
+.combat-keyboard-waiting h3 {font-size:24px;margin:2px 0 4px;}
+.combat-keyboard-waiting > p {font-size:14px;}
+.combat-keyboard-waiting .combat-touch-fallback {margin-top:10px;}
+@media (min-width:1200px) and (max-height:850px) {
+  .combat-keyboard-waiting > .combat-keyboard-action-index {grid-template-columns:repeat(auto-fit,minmax(155px,1fr));}
 }
+.combat-touch-fallback .combat-keyboard-action-index {grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));}
+.combat-keyboard-action-index-item,.combat-keyboard-fallback-option,.combat-keyboard-preview {--economy-bg:#11171d;--action-section-color:#8297ac;background:var(--economy-bg);}
+.economy-action {--economy-bg:#182f49;--action-section-color:#a7d1ff;}
+.economy-bonus_action {--economy-bg:#422a17;--action-section-color:#efb277;}
+.economy-movement {--economy-bg:#183529;--action-section-color:#9cddb3;}
+.economy-control {--economy-bg:#242526;--action-section-color:#898c90;}
+.economy-free,.economy-modifier,.economy-reaction,.economy-object_interaction {--economy-bg:#282315;--action-section-color:#ac965a;}
+.combat-panel-icon {display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;width:44px;height:44px;color:#b6d9ed;}
+.panel-symbol {width:34px;height:34px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+.combat-tile-economy {display:block;margin-bottom:3px;color:var(--action-section-color);font-size:11px;}
+.combat-preview-economy {display:block;color:var(--action-section-color);margin-bottom:8px;}
+.roll-panel-controls {display:flex;justify-content:center;flex-wrap:wrap;gap:12px;margin:16px 0;}
+.roll-panel-controls button {min-width:64px;min-height:48px;}
+button.panel-minus {background:#361919;color:#ff9999;border-color:#a64646;}
+button.panel-plus {background:#153322;color:#95e2af;border-color:#388b55;}
+button.panel-accept {background:#172e49;color:#b4dcff;border-color:#437fb7;}
 .combat-keyboard-fallback-option .combat-action-mana {display:flex;}
 .combat-keyboard-fallback-option .combat-action-mana-symbols {display:inline-flex;}
 .combat-keyboard-preview > .combat-action-mana {margin-top:10px;}
@@ -1368,3 +1387,5 @@ pre { white-space: pre-wrap; overflow: auto; }
   .keyboard-roll-wizard-summary li {flex-wrap:wrap;gap:6px;}
   .keyboard-roll-wizard-summary b {white-space:normal;overflow-wrap:anywhere;}
 }
+
+.combat-keyboard-action-index-item.unavailable {opacity:.48;}

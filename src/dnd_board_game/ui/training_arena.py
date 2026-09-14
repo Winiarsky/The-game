@@ -29,7 +29,35 @@ from dnd_board_game.application.exploration_flow import (
 )
 
 if TYPE_CHECKING:
-    from .exploration_app import ExplorationUiSession
+    from .exploration_app import ExplorationUiSession, BoardScanTarget
+    from dnd_board_game.world import Coordinate
+
+
+def roster_active(session: ExplorationUiSession) -> bool:
+    return session.exploration.scenario_id == ARENA_ID and not scene_flag(session.state.flags, 'training_requested', False)
+
+
+def roster_target() -> BoardScanTarget:
+    from .exploration_app import BoardScanTarget
+    from dnd_board_game.hardware.board_panel import panel_feedback, panel_position
+    slots = tuple(range(6, 6 + len(HERO_ORDER)))
+    return BoardScanTarget(positions=tuple(panel_position(slot) for slot in (*slots, 29)),
+        feedback=panel_feedback(slots, control_slots=(29,)),
+        empty_message='Naciśnij runę bohatera, aby rozpocząć samouczek. ↩ wraca do menu głównego.')
+
+
+def select_roster(session: ExplorationUiSession, position: Coordinate) -> dict[str, object]:
+    from dnd_board_game.hardware.board_panel import panel_position
+    if position == panel_position(29):
+        from .launcher_board import begin
+        begin(session)
+        return {'navigate': '/'}
+    slot = 29 - position.row
+    if position.col != 19 or not 6 <= slot < 6 + len(HERO_ORDER):
+        raise ValueError('Wybierz runę jednego z siedmiu bohaterów.')
+    hero = HERO_ORDER[slot - 6]
+    return start_training_trial(session, hero, 'walkthrough', 'humanoid',
+        reset_progress=bool(scene_flag(session.state.flags, f'walkthrough_completed_{hero}', False)))
 
 
 @lru_cache(maxsize=7)
@@ -48,6 +76,13 @@ def training_hero(hero_id: str) -> Actor:
 
 
 def trial_won(session: ExplorationUiSession) -> bool:
+    from .training_walkthrough import enabled as guided, current_step
+    if guided(session):
+        return bool(current_step(session) is None and session.combat_state and session.combat_state.status.value == "finished" and combat_winner(session.combat_state) == Faction.ALLY)
+    from .training_tutorial import enabled, completed, abilities
+    if enabled(session):
+        hero_id = str(session.custom_party[0].id) if session.custom_party else ""
+        return bool(hero_id and len(completed(session, hero_id)) == len(abilities(hero_id)))
     combat = session.combat_state
     return bool(
         combat is not None
@@ -80,8 +115,11 @@ def remember_training_result(session: ExplorationUiSession) -> None:
 
 
 def start_training_trial(
-    session: ExplorationUiSession, hero_id: str, mode: str, creature_type: str
+    session: ExplorationUiSession, hero_id: str, mode: str, creature_type: str, *, reset_progress: bool = False
 ) -> dict[str, object]:
+    if mode == "walkthrough":
+        from .training_walkthrough import start
+        return start(session, hero_id, reset_progress=reset_progress)
     if session.exploration.scenario_id != ARENA_ID:
         raise ValueError("Próby są dostępne wyłącznie na arenie rekrutacyjnej.")
     if (
@@ -91,15 +129,17 @@ def start_training_trial(
         raise ValueError("Najpierw zakończ pokaz u Nessy albo pokonaj kukłę.")
     if session.pending_encounter is not None and session.combat_state is None:
         raise ValueError("Najpierw ukończ przygotowanie bieżącej próby.")
-    config = TrainingConfig(mode, creature_type)
+    config = TrainingConfig(mode, creature_type, hero_id)
     hero = training_hero(hero_id)
     remember_training_result(session)
     completed = tuple(
         (key, value)
         for key, value in session.state.flags.values
-        if key.startswith("training_completed_")
+        if key.startswith(("training_completed_", "walkthrough_", "exploration_mana_", "trap_lesson_done_")) or (
+            key.startswith("training_tutorial_done_")
+            and not (reset_progress and key.startswith(f"training_tutorial_done_{hero_id}_")))
     )
-    if mode == "support":
+    if mode == "support" or (mode == "tutorial" and hero_id in {"garran", "dagna"}):
         hero = replace(hero, hp=max(1, hero.max_hp - 8))
     session.configure_custom_party((hero,))
     flags = session.state.flags
@@ -107,10 +147,14 @@ def start_training_trial(
         *completed,
         ("training_mode", config.mode),
         ("training_creature_type", config.creature_type),
+        ("training_hero", hero_id),
         ("training_requested", True),
     ):
         flags = set_scene_flag(flags, key, value)
     session.state = replace(session.state, flags=flags)
+    if mode == "traps":
+        from .simple_traps import initialize
+        initialize(session)
     session.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
     session._refresh_pending_encounter()
     if session.pending_encounter is not None:
@@ -119,7 +163,11 @@ def start_training_trial(
         )
     session._add_message(
         "Nessa: zapraszam na arenę",
-        f"{hero.name}, pokaż swoje umiejętności. Pokonaj kukłę albo podejdź do mnie i zakończ pokaz. Przygotuj świeżą talię many: 20 kart, rynek 5, start 3 karty.",
+        (f"{hero.name}, wykonaj wszystkie ćwiczenia z listy samouczka. Kolejność jest dowolna; "
+         "zaliczamy rozstrzygnięcie zdolności, również przy pudle lub udanej obronie celu. "
+         "Rozmowa z Nessą pozwala przerwać próbę bez zaliczenia brakujących ćwiczeń. "
+         if mode == "tutorial" else f"{hero.name}, pokonaj kukłę albo podejdź do mnie i zakończ pokaz. ")
+        + "Przygotuj 25 kart many: po 5 każdego koloru. Wyłóż rynek 5 kart; pozostałe 20 tworzy talię. Nie ma prywatnej ręki.",
     )
     session._record(
         "training_trial_started",
@@ -129,6 +177,9 @@ def start_training_trial(
 
 
 def can_talk_to_nessa(session: ExplorationUiSession) -> bool:
+    from .training_walkthrough import enabled as guided
+    if guided(session):
+        return False
     if session.exploration.scenario_id != ARENA_ID or session.combat_state is None:
         return False
     if (
@@ -152,12 +203,36 @@ def can_talk_to_nessa(session: ExplorationUiSession) -> bool:
 def training_payload(session: ExplorationUiSession) -> dict[str, object] | None:
     if session.exploration.scenario_id != ARENA_ID:
         return None
+    from .exploration_mana import active as exploration_active
+    if exploration_active(session):
+        return dict(mode="exploration", can_start=False, tutorial=None, heroes=[], completed=[],
+                    current_hero_id=str(scene_flag(session.state.flags, "training_hero", "garran")), finished=False)
+    from .simple_traps import enabled as trap_enabled, notice as trap_notice, payload as trap_payload
+    if trap_enabled(session):
+        return dict(mode="traps", can_start=False, tutorial=dict(notice=trap_notice(session)),
+                    trap=trap_payload(session), heroes=[], completed=[], current_hero_id=str(scene_flag(session.state.flags, "training_hero", "garran")))
+    from . import training_walkthrough as guided
+    from .board_panel_symbols import panel_icon
+    from dnd_board_game.application.training_walkthrough import steps
+    if guided.enabled(session) or not scene_flag(session.state.flags, "training_requested", False):
+        active = guided.enabled(session)
+        finished = bool(session.combat_state and session.combat_state.status.value == "finished")
+        done = [h for h in HERO_ORDER if scene_flag(session.state.flags, f"walkthrough_completed_{h}", False) or (active and h == guided.hero_id(session) and trial_won(session))]
+        return dict(current_hero_id=guided.hero_id(session), completed=done,
+            heroes=[dict(id=h, name=training_hero(h).name, panel_slot=6+i, icon=panel_icon(6+i), tutorial_count=int(scene_flag(session.state.flags, f"walkthrough_progress_{h}", 0)), tutorial_total=len(steps(h)), completed=h in done) for i,h in enumerate(HERO_ORDER)],
+            can_start=not active, can_talk=False, finished=finished, mode="walkthrough",
+            tutorial=guided.payload(session) if active else None, creature_type="humanoid",
+            won=trial_won(session) if active else False, map_url="/game-assets/maps/recruitment_arena/arena.svg")
     current_id = str(session.custom_party[0].id) if session.custom_party else "garran"
+    from .training_tutorial import completed as skills_completed, abilities, payload as tutorial_payload
+    config = TrainingConfig.from_flags(session.state.flags)
+    is_tutorial = config.mode == "tutorial" or not scene_flag(session.state.flags, "training_requested", False)
     completed = [
         hero_id
         for hero_id in HERO_ORDER
-        if scene_flag(session.state.flags, f"training_completed_{hero_id}", False)
-        or (hero_id == current_id and trial_won(session))
+        if (len(skills_completed(session, hero_id)) == len(abilities(hero_id)) if is_tutorial else (
+            scene_flag(session.state.flags, f"training_completed_{hero_id}", False)
+            or (hero_id == current_id and trial_won(session))))
     ]
     finished = bool(
         session.combat_state and session.combat_state.status.value == "finished"
@@ -170,18 +245,19 @@ def training_payload(session: ExplorationUiSession) -> dict[str, object] | None:
         )
         and not finished
     )
-    config = TrainingConfig.from_flags(session.state.flags)
     return {
         "current_hero_id": current_id,
         "completed": completed,
         "heroes": [
-            {"id": hero_id, "name": training_hero(hero_id).name}
+            {"id": hero_id, "name": training_hero(hero_id).name,
+             "tutorial_count": len(skills_completed(session, hero_id)), "tutorial_total": len(abilities(hero_id))}
             for hero_id in HERO_ORDER
         ],
         "can_start": not busy,
         "can_talk": can_talk_to_nessa(session),
         "finished": finished,
-        "mode": config.mode,
+        "mode": "tutorial" if is_tutorial else config.mode,
+        "tutorial": tutorial_payload(session, current_id) if is_tutorial else None,
         "creature_type": config.creature_type,
         "map_url": "/game-assets/maps/recruitment_arena/arena.svg",
     }

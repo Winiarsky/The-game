@@ -1,0 +1,87 @@
+{
+  "version": 1,
+  "narrator": "Nessa",
+  "heroes": {
+    "garran": {
+      "second_wind": "Nawet doświadczony obrońca zbiera ciosy. Garran potrafi złapać drugi oddech i odzyskać część sił. Zaczynasz z raną: zobacz, jak wynik k10 i Kondycja zmieniają twoje PW.",
+      "shield_bash": "Tarcza służy również do ataku. Kukła stoi obok ciebie, a za nią jest wolne pole. Wygraj sporny test Siły, zadaj obrażenia i przestaw odepchniętą kukłę. Jeśli obroni się przed pchnięciem, przygotujemy ponowną próbę.",
+      "defensive_stance": "Czas stanąć mocno na nogach. Pozycja obronna podnosi KP Garrana. Sprawdź premię po wykonaniu zdolności; pamiętaj, że zmiana pola zakończy postawę.",
+      "garran_command_halt": "Nie zawsze trzeba podejść z mieczem. Wydaj kukle rozkaz i sprawdź wynik jej obrony Mądrości: nieudana obrona ograniczy jej ruch i odbierze reakcję.",
+      "garran_guard_companion": "Kukła zaatakuje pomocnika stojącego obok Garrana. W oknie Osłony towarzysza odłóż koszt i zatwierdź ✓. Garran przejmie atak bez przestawiania figurki: aplikacja porówna wynik z jego KP, a obrażenia otrzyma on zamiast pomocnika. W tej lekcji przygotowaliśmy trafienie i 6 obrażeń, aby pokazać ochronę w działaniu. Poza ćwiczeniem taki atak może też chybić.",
+      "garran_shield_wall": "Obok stoi pomocnik, którego możesz osłonić tarczą. Ta osłona poprawia KP sąsiadów, nie twoją. Po użyciu sprawdź jego ochronę.",
+      "garran_rally": "Dobry dowódca dodaje odwagi całej grupie. Pomocnik jest w zasięgu i ma ranę. Wygłoś mowę; po rozstrzygnięciu sprawdź przewagę pierwszego ataku uczestników.",
+      "iron_bastion": "Możesz stać się punktem oparcia dla drużyny. Uruchom Żelazny bastion przy pomocniku. W aurze 10 ft oboje otrzymacie premię KP równą modyfikatorowi Siły Garrana: przy Sile 18 jest to +4 KP. Aura chroni też przed przymusowym przesunięciem.",
+      "counterattack_command": "Ten rozkaz ma dwie części. Wybierz podświetlone pole pomocnika i opłać rozkaz raz. Najpierw działa Garran (1/2), potem pomocnik (2/2). Dla każdej figurki aplikacja od razu podświetli pola ruchu. Wskaż pole, przestaw figurkę i zakończ ruch przyciskiem ✓. Możesz też nacisnąć ✓ bez wybierania pola, aby zostać w miejscu. Potem automatycznie pojawią się cele ataku wyposażoną bronią: wskaż kukłę, zatwierdź ✓ i rozstrzygnij rzuty. Koszt jest już opłacony dla obu postaci. Aplikacja sama zmieni aktywną figurkę po pierwszym ataku; biały LED wskaże, kto teraz działa. Ruch do 10 ft jest opcjonalny i nie wywołuje ataków okazyjnych. Tutaj kukła jest już w zasięgu obu postaci. Pomocnik zużywa reakcję. Lekcja kończy się po obu atakach, również gdy spudłujesz."
+    },
+    "brakka": {
+      "rage": "Siłą Brakki jest Szał. Włącz go i obejrzyj premie oraz odporności. W walce podtrzymasz go ofensywą; utrata przytomności także go zakończy.",
+      "reckless_attack": "Możesz zaryzykować, by łatwiej trafić. Przygotuj Lekkomyślny atak. Daje przewagę następnego zwykłego ciosu Siłą, lecz odsłania cię przed atakami wrogów.",
+      "acceleration": "Rozpędzona Brakka szybciej dociera do przeciwników. Użyj Przyspieszenia i sprawdź dostępny ruch. Ta zdolność nie cofa drogi już przebytej w turze.",
+      "hard_as_rock": "Za chwilę kukła cię zaatakuje. Gdy zada obrażenia, użyj reakcji Twarda jak skała i rzuć k12. Najpierw działa odporność Szału, potem redukcja tej reakcji.",
+      "powerful_strike": "Kukła jest w zasięgu. Połącz zwykły cios bronią z dodatkową kością Potężnego uderzenia. Rozstrzygnij trafienie i wszystkie kości obrażeń.",
+      "shoulder_check": "Zrób miejsce na polu walki. Kukła stoi obok ciebie, a za nią jest wolna przestrzeń. Wygraj sporny test Atletyki i potwierdź przestawienie celu.",
+      "deafening_roar": "Przed tobą stoi grupa kukieł. Ustaw stożek ryku tak, żeby je objąć. Każdy przeciwnik osobno broni się Kondycją.",
+      "reaper": "Jedna technika daje trzy osobne ciosy. Rozdziel je między dostępne kukły i doprowadź całą serię do końca. Sam pierwszy atak nie zalicza ćwiczenia.",
+      "unstoppable": "Przebij się przez grupę. Wyznacz ruch, wskaż dwóch różnych przeciwników i wykonaj oba ataki. Trafione cele muszą jeszcze obronić się przed powaleniem."
+    },
+    "mira": {
+      "hide": "Mira wykorzystuje zasłony, zamiast przyjmować ciosy. Stoisz za istniejącą zasłoną, poza sąsiedztwem kukły. Wykonaj test Skradania i sprawdź, czy cel cię zauważył.",
+      "instinctive_dodge": "Nie każdy atak musi dosięgnąć Miry. Kukła zaraz zaatakuje; użyj Uniku instynktownego w oknie reakcji. Nadajesz utrudnienie temu atakowi, bez własnego rzutu.",
+      "feint": "Zwód otwiera drogę odwrotu. Wskaż sąsiadującą kukłę. Do początku twojej następnej tury nie wykona przeciw Mirze ataku okazyjnego.",
+      "hamstring_cut": "Pomocnik stoi dokładnie po drugiej stronie kukły: masz własną flankę. Wykonaj Cięcie ścięgna. Trafienie ograniczy ruch przeciwnika.",
+      "smoke_screen": "Dym pomaga zniknąć nawet w bliskiej walce. Wybierz trasę, zakończ ruch i wykonaj próbę ukrycia. Potwierdź wszystkie etapy zdolności.",
+      "guard_vault": "Za sąsiadującą kukłą zostawiliśmy wolne pole. Wykonaj atak i przeskocz na drugą stronę. Przestaw Mirę zgodnie z końcowym wskazaniem.",
+      "blade_mistress": "Pomocnik zapewnia własną flankę, a Mira ma przygotowany nóż. Wykonaj Mistrzynię ostrzy i rozlicz dodatkową kość obrażeń.",
+      "shadow_verdict": "Połącz dwa warunki: ukrycie i własną flankę. W tej sytuacji oba są już przygotowane. Wykonaj Wyrok z cienia i rozlicz potężne dodatkowe obrażenia.",
+      "blade_dance": "Zamień ruch w serię cięć. Przejdź obok dwóch różnych kukieł i wykonaj oba ataki. Atak z cienia może zadziałać najwyżej raz w tej technice."
+    },
+    "dagna": {
+      "healing_word": "Dagna potrafi pomóc bez podchodzenia do rannego. Wskaż pomocnika, rzuć kością leczenia i sprawdź odzyskane PW.",
+      "caring_gesture": "Ochrona może wyprzedzić kolejne obrażenia. Sąsiadujący pomocnik otrzyma tymczasowe PW. To osobna osłona: nie leczy jego ran i nie dodaje się do innej puli tymczasowych PW.",
+      "lesser_restoration": "Pomocnik ma przygotowany znacznik zatrucia i stoi w zasięgu dotyku. Użyj Pomniejszego przywrócenia i sprawdź, że zatrucie zniknęło.",
+      "bless": "Wzmocnij siebie i pobliskiego pomocnika. Błogosławieństwo daje kość do ataków i obron, ale wymaga koncentracji. Sprawdź jej znacznik i zasięg aury.",
+      "sacred_flame": "Ustaw stożek Świętego płomienia na kukłach. Obszar może objąć także sojuszników. Przed potwierdzeniem obejrzyj wskazane pola.",
+      "divine_care_aura": "Kukła stoi blisko Dagny. Uruchom aurę i sprawdź karę do ataków wroga w jej zasięgu. Ten efekt również wymaga koncentracji.",
+      "guiding_bolt": "Naprowadzający pocisk wspiera kolejny atak drużyny. Wskaż kukłę, wykonaj atak czarem i rozlicz obrażenia. Trafienie pozostawia przewagę następnego ataku przeciw celowi.",
+      "preserve_life": "Dagna i pomocnik są ranni. Rozdziel pulę 40 PW między uczestników bez przekraczania ich maksymalnych PW. Zatwierdź cały przydział leczenia.",
+      "spiritual_weapon": "Przygotuj dodatkową figurkę duchowego oręża. Przywołaj broń na wskazanym polu, wykonaj jej atak i zakończ aktywację. Kolejne aktywacje w normalnej walce mają osobny koszt.",
+      "turn_undead": "Te kukły naśladują nieumarłych. Otwórz przedmioty i użyj osobistego Świętego symbolu Dagny. Odpędzenie działa w promieniu, a obrażenia kończą je wcześniej."
+    },
+    "lorian": {
+      "mana_inspiration": "Lorian pomaga innym wykorzystać okazję. Wskaż pomocnika i daj mu Inspirację. Zachowa k4 do jednego ataku albo obrony do początku twojej następnej tury.",
+      "mana_tuning": "Teraz poćwiczymy operację na kartach. Po odłożeniu kosztu usuń dodatkową kartę rynku, dobierz dwie i rozdziel je zgodnie z instrukcją. Zaliczenie nastąpi po potwierdzeniu całej wymiany.",
+      "mocking_shot": "Kusza potrafi utrudnić przeciwnikowi odpowiedź. Strzel do kukły. Trafienie nada utrudnienie jej następnego ataku.",
+      "cutting_words": "Kukła za chwilę spróbuje cię zranić. W oknie reakcji użyj Rozpraszającego okrzyku i wpisz k6. Charyzma zwiększa redukcję obrażeń.",
+      "mana_recovery": "Na stosie odrzuconych są już karty. Najpierw zapłać koszt, potem wybierz odzyskiwane karty i połóż je na wierzchu talii. Możesz odzyskać także właśnie wydany koszt.",
+      "optical_scope": "Lorian jeszcze się nie poruszył. Poświęć ruch, aby strzelić z lunetą: zyskujesz premię do trafienia i ignorujesz częściową osłonę.",
+      "entangling_shot": "Grupa kukieł nadaje się do przećwiczenia obszaru. Wskaż pola oplatającego ostrzału i rozstrzygnij obrony. Ten efekt ogranicza ruch, nie zadaje obrażeń.",
+      "mana_great_tuning": "Przygotuj rynek 5 kart. Odłożenie czterech kart kosztu zrobi miejsce na odzysk: przenieś trzy odrzucone karty do pustych miejsc rynku i potwierdź operację.",
+      "victory_hymn": "Pomocnik stoi obok Loriana. Hymn obejmuje Loriana i sojuszników w 30 ft: każdy może użyć jednej dodatkowej akcji dodatkowej we własnej turze, będąc w aurze. Podświetlenie pokaże zasięg i odbiorców. Wyjście i powrót do aury nie odnawia zużytej akcji. Utrata koncentracji kończy Hymn. W normalnej walce nadal płacisz za każdą używaną zdolność."
+    },
+    "nimra": {
+      "nimra_frost_pulse": "Lodowy impuls może zranić i spowolnić. Wskaż kukłę; przeciwnik broni się Kondycją. Sprawdź wynik obrony i ewentualny znacznik spowolnienia.",
+      "nimra_mind_spike": "Atak na umysł może odebrać reakcję. Wskaż kukłę i rozstrzygnij jej obronę Mądrości, potem sprawdź obrażenia i efekt.",
+      "nimra_sticky_matrix": "Możesz zmienić warunki na polach walki. Rozłóż matrycę pod grupą kukieł. Powstaje trudny teren, a wejście lub początek tury uruchamia obronę przed powaleniem.",
+      "misty_step": "Teleport omija drogę między polami. Wybierz wolne, widoczne pole w zasięgu, potwierdź Mglisty krok i przestaw Nimrę.",
+      "shield": "Kukła za chwilę cię zaatakuje. Gdy pojawi się reakcja, użyj Tarczy. Aplikacja ponownie oceni trafienie po zwiększeniu KP o 3.",
+      "nimra_flame_fan": "Przed tobą grupa kukieł. Ustaw stożek Wachlarza płomieni i obejrzyj wszystkie objęte pola. W ogniu mogą znaleźć się także sojusznicy.",
+      "nimra_force_wave": "Kukły stoją w linii, z wolnym miejscem za nimi. Wyceluj Falę odrzutu. Obrona Siły decyduje o pełnych obrażeniach i odepchnięciu.",
+      "nimra_web": "Sieć pozwala zatrzymać grupę. Rozmieść obszar na kukłach i rozstrzygnij ich obrony. Sprawdź koncentrację i unieruchomienie; uwolnienie kosztuje akcję.",
+      "nimra_mind_break": "Załamanie woli może zranić i odebrać reakcję. Wybierz kukłę, rozstrzygnij obronę Mądrości i sprawdź wynik.",
+      "nimra_lightning_path": "Błyskawica przeskakuje do najbliższych nieporażonych istot. Wybierz pierwszy cel i prześledź łańcuch. W walce może on dosięgnąć również sojusznika.",
+      "shatter": "Wskaż środek Roztrzaskania, obejmij kukły promieniem i rozstrzygnij obrażenia oraz obrony Kondycji. Przed potwierdzeniem sprawdź cały obszar.",
+      "nimra_stasis": "Staza odbiera przeciwnikowi działania po nieudanej obronie Mądrości. Wskaż kukłę i sprawdź wynik oraz koncentrację Nimry."
+    },
+    "erynd": {
+      "hunters_mark": "Najpierw wyznacz swoją zdobycz. Oznacz kukłę Znakiem łowcy. Trafienie jej bronią doda k6 raz we własnej turze; utrzymujesz koncentrację.",
+      "cunning_action": "Łowca potrzebuje miejsca do strzału. Wybierz Sprint albo Odstąpienie w ramach Zwiadowczej mobilności i sprawdź uzyskany efekt ruchowy.",
+      "aim": "Erynd jeszcze się nie poruszył. Poświęć ruch na Celowanie, aby otrzymać przewagę następnego ataku łukiem w tej turze.",
+      "disrupting_arrow": "Strzała może zakłócić plany przeciwnika. Strzel do kukły: trafienie odbiera reakcje i utrudnia jej następny atak.",
+      "anchoring_arrow": "Kukły stoją blisko siebie. Strzel strzałą kotwiczącą i po trafieniu rozstrzygnij obronę Siły przed zatrzymaniem ruchu.",
+      "exposing_arrow": "Odsłoń słaby punkt kukły. Po trafieniu Strzałą odsłaniającą sprawdź obniżenie jej KP o 2.",
+      "double_shot": "Wykonaj dwa osobne strzały. Możesz wybrać jedną kukłę albo różne cele; ćwiczenie kończy się po rozliczeniu obu ataków.",
+      "arrow_rain": "Obejmij kukły obszarem Deszczu strzał. Wpisz wspólny test łuku i obrażenia; aplikacja osobno sprawdzi trafienie i osłonę każdego celu.",
+      "spike_growth": "Zarośla pozwalają kontrolować drogę przeciwnika. Rozmieść obszar i sprawdź koncentrację. Obrażenia powstają przy przemieszczaniu się, także wymuszonym i także u sojuszników."
+    }
+  }
+}

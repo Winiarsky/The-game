@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ character.actor.name }}</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='launcher.css') }}">
+  <link rel="stylesheet" href="{{ static_asset_url('launcher.css') }}">
 </head>
 <body class="launcher-page">
   <main class="flow-shell creator-shell">
     <header class="flow-header character-heading">
-      <a class="back-link" href="{{ url_for('characters') }}">← Roster postaci</a>
+      <a class="back-link" data-board-back href="{{ url_for('characters') }}">↩ Roster postaci</a>
       <span class="step-label">Gotowa postać · poziom {{ character.actor.level }}</span>
       <div class="character-title">
         {% set portrait_url = character_portrait_url(character.actor.portrait) %}
@@ -100,5 +100,6 @@
       </div>
     </div>
   </main>
+{% include 'launcher_board.html' %}
 </body>
 </html>

@@ -166,6 +166,7 @@ def resolve_enemy_auto_attack(
     *,
     maximum_attacks: int | None = None,
     preferred_target_id: str | None = None,
+    intercepted_target: CombatTarget | None = None,
 ) -> EnemyAutoAttackResult:
     enemy = _actor_for_id(state, enemy.id)
     if source.resource_pool_id is not None and not can_spend_actor_resource(
@@ -238,6 +239,10 @@ def resolve_enemy_auto_attack(
         action_result.state.hidden_states,
         active_effects,
     )
+    # A validated interception replaces this one declared attack even when
+    # the protector stands beyond the attacker's normal reach.
+    if intercepted_target is not None:
+        targets = (intercepted_target,)
     if not targets:
         return EnemyAutoAttackResult(
             action_result.state,
@@ -655,6 +660,7 @@ def resolve_planned_enemy_turn(
     *,
     maximum_attacks: int | None = None,
     original_state: CombatState | None = None,
+    intercepted_target: CombatTarget | None = None,
 ) -> EnemyAutoTurnResult:
     enemy = plan.enemy
     state = plan.state
@@ -769,6 +775,7 @@ def resolve_planned_enemy_turn(
         active_effects,
         maximum_attacks=maximum_attacks,
         preferred_target_id=plan.target.id,
+        intercepted_target=intercepted_target,
     )
     if plan.movement_path is None:
         return replace(

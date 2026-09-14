@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from dnd_board_game.actors.resources import uses_physical_mana
+from dnd_board_game.actors.resources import uses_physical_mana, uses_shared_mana
 from typing import Callable, Mapping, Protocol, Sequence
 
 from dnd_board_game.actors import (
     Actor,
     ActorId,
+    ability_roll_modifier,
     actor_has_feature,
     can_spend_actor_resource,
     spend_actor_resource,
@@ -25,6 +26,7 @@ from dnd_board_game.combat import (
     CombatResolutionStage,
     DamageComponentInput,
     DamageResult,
+    DamageType,
     EnemyAutoTurnResult,
     ReactionKind,
     ReactionOption,
@@ -399,7 +401,8 @@ class ClassFeatureReactionFlowService:
                 value=bardic_inspiration_die_sides(actor),
             )
             for actor in state.actors
-            if actor.faction != enemy.faction
+            if not uses_shared_mana(actor)
+            and actor.faction != enemy.faction
             and not actor.is_defeated()
             and actor_has_feature(actor, "cutting_words")
             and _lorian_audience_available(
@@ -565,7 +568,7 @@ class ClassFeatureReactionFlowService:
                 trigger_event=CombatResolutionStage.DAMAGE_ROLL_REVEALED.value,
                 effect_id="cutting_words",
                 label="Cutting Words",
-                value=bardic_inspiration_die_sides(actor),
+                value=6 if uses_shared_mana(actor) else bardic_inspiration_die_sides(actor),
             )
             for actor in state.actors
             if actor.faction != enemy.faction
@@ -578,8 +581,8 @@ class ClassFeatureReactionFlowService:
                 condition_states=state.condition_states,
             )
             and reaction_available_for(state, actor)
-            and grid_distance_feet(actor.position, enemy.position) <= 60
-            and line_of_sight_clear(board, actor.position, enemy.position)
+            and grid_distance_feet(actor.position, enemy_result.target.position if uses_shared_mana(actor) else enemy.position) <= (30 if uses_shared_mana(actor) else 60)
+            and line_of_sight_clear(board, actor.position, enemy_result.target.position if uses_shared_mana(actor) else enemy.position)
         )
 
     def apply_cutting_words(
@@ -601,7 +604,7 @@ class ClassFeatureReactionFlowService:
             "cutting_words",
             condition_states=state.condition_states,
         )
-        die_sides = bardic_inspiration_die_sides(bard)
+        die_sides = 6 if uses_shared_mana(bard) else bardic_inspiration_die_sides(bard)
         if not 1 <= int(die_roll) <= die_sides:
             raise ValueError(f"Cutting Words wymaga wyniku k{die_sides} od 1 do {die_sides}.")
         if (
@@ -622,7 +625,7 @@ class ClassFeatureReactionFlowService:
             previous_damage = enemy_result.damage.total_before_reduction
             reduced_damage = _damage_after_flat_reduction(
                 enemy_result.damage,
-                int(die_roll),
+                int(die_roll) + (ability_roll_modifier(bard, "charisma").value if uses_shared_mana(bard) else 0),
             )
             target_before = _actor_by_string_id(
                 reaction_state,
@@ -639,6 +642,7 @@ class ClassFeatureReactionFlowService:
             merged_state = replace(
                 enemy_result.state,
                 spent_reaction_actor_ids=reaction_state.spent_reaction_actor_ids,
+                shared_mana=reaction_state.shared_mana,
             )
             merged_state = replace_actor(merged_state, applied_damage.actor_after)
             message = (

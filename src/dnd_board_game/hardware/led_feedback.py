@@ -51,9 +51,9 @@ class BoardConnectionLike(Protocol):
         brightness: int | None = None,
         replace: bool = False,
         transition_ms: int | None = None,
-    ) -> None: ...
+    ) -> bool | None: ...
 
-    def leds_off(self) -> None: ...
+    def leds_off(self) -> bool | None: ...
 
 
 DEFAULT_COLORS: dict[LedRole, tuple[int, int, int]] = {
@@ -157,7 +157,7 @@ class BoardLedAdapter:
         colors = [list(color) for color in updates.values()]
         color_payload = colors[0] if len({tuple(color) for color in colors}) == 1 else colors
         try:
-            self.connection.set_leds(
+            accepted = self.connection.set_leds(
                 positions,
                 color_payload,
                 brightness=brightness,
@@ -166,16 +166,19 @@ class BoardLedAdapter:
             )
         except TypeError:
             if brightness is None:
-                self.connection.set_leds(positions, color_payload)
+                accepted = self.connection.set_leds(positions, color_payload)
             else:
                 try:
-                    self.connection.set_leds(
+                    accepted = self.connection.set_leds(
                         positions,
                         color_payload,
                         brightness=brightness,
                     )
                 except TypeError:
-                    self.connection.set_leds(positions, color_payload)
+                    accepted = self.connection.set_leds(positions, color_payload)
+        if accepted is False:
+            self._last_render = None
+            return
         self._last_render = rendered
         self._last_brightness = brightness
 
@@ -185,6 +188,8 @@ class BoardLedAdapter:
     def clear(self) -> None:
         if self._last_render == ():
             return
-        self.connection.leds_off()
+        if self.connection.leds_off() is False:
+            self._last_render = None
+            return
         self._last_render = ()
         self._last_brightness = None

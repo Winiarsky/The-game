@@ -8,18 +8,15 @@
         "simulator_url": "http://127.0.0.1:5000"
     },
     "hardware": {
-        "protocol": "board_scan_usb_v1",
+        "protocol": "board_scan_usb_v2",
         "serial_port": "/dev/ttyUSB0",
         "baud_rate": 115200,
-        "scan_command": "SCAN",
-        "stop_command": "STOP",
         "probe_timeout_s": 6.0,
-        "line_timeout_s": 0.25,
-        "write_timeout_s": 0.5,
-        "scan_recovery_timeout_s": 10.0
+        "line_timeout_s": 0.05,
+        "write_timeout_s": 0.5
     },
     "wled": {
-        "base_url": "http://192.168.0.165",
+        "base_url": "http://192.168.50.2",
         "segment_id": 0,
         "led_offset": 0,
         "led_count": 620,

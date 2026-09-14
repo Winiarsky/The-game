@@ -11,7 +11,6 @@ from dnd_board_game.actors import Faction
 from dnd_board_game.actors.resources import uses_physical_mana
 from dnd_board_game.combat import current_actor, replace_actor
 from dnd_board_game.combat.enemy_ai import plan_enemy_turn, resolve_planned_enemy_turn
-from dnd_board_game.combat.physical_mana import resolve_mana_support
 from dnd_board_game.ui.exploration_app import ExplorationUiSession
 from dnd_board_game.ui.training_arena import training_hero, start_training_trial
 from dnd_board_game.world import Coordinate
@@ -153,11 +152,15 @@ def test_support_has_passive_wounded_recipient_for_lorian_and_survives_save(
         str(e.actor.id) for e in s.combat_state.initiative_order.entries
     }
     assert current_actor(s.combat_state).hp < current_actor(s.combat_state).max_hp
-    resolve_mana_support(s.combat_state, (), "mana_transfer", HELPER_ID)
+    from tests.unit.test_shared_mana_runtime import send
+    s.use_combat_class_feature('mana_inspiration')
+    send(s, 'parameters', target_id=HELPER_ID)
+    send(s, 'pay')
+    assert any(e.kind == 'bardic_inspiration' and e.actor_id == HELPER_ID for e in s.active_combat_effects)
     s.save_snapshot()
     s.load_snapshot()
     assert len(s.combat_state.actors) == 3
-    assert s.state_payload()["combat"]["physical_mana"]["setup"]["deck"] == 20
+    assert s.combat_state.shared_mana.deck == 20
     source = s._active_encounter().attack_sources_by_actor["recruitment_dummy"]
     assert source.damage_fixed == 1
 
@@ -308,6 +311,25 @@ def test_arena_terrain_keeps_all_variant_starts_clear(
     for actor in encounter.actors:
         terrain = encounter.board.terrain_at(actor.position)
         assert not terrain.blocks_movement and not terrain.is_difficult
+
+
+def test_terrain_setup_lights_only_the_requested_printed_token_kind(tmp_path: Path) -> None:
+    from dnd_board_game.combat.setup import setup_led_feedback
+
+    session = arena(tmp_path)
+    start_training_trial(session, "garran", "basic", "humanoid")
+    flow = session.encounter_setup_flow
+    terrain = [e for e in flow.encounter.environment if e.id.startswith("arena_")]
+    assert len(terrain) == 5
+    for entry in terrain:
+        matching = [step for step in flow.steps if entry.name in step.message]
+        assert matching
+        assert {p for step in matching for p in step.positions} == set(entry.positions)
+        for step in matching:
+            assert set(step.positions) <= set(entry.positions)
+            assert "Połóż po jednym znaczniku" in step.mechanics[0]
+            feedback = setup_led_feedback(step)
+            assert set(feedback.frames[0].positions) == set(step.positions)
 
 
 def test_low_cover_setup_never_inherits_blocking_obstacle_rules(tmp_path: Path) -> None:

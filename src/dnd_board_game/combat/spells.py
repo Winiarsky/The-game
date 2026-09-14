@@ -547,13 +547,16 @@ def resolve_actor_saving_throw(
     from .poison_protection import poison_protection_roll_mode
     from .warding_bond import warding_bond_saving_throw_modifiers
 
+    from dnd_board_game.actors.resources import uses_shared_mana
+    if uses_shared_mana(actor) and str(actor.id) == "mira" and any(getattr(e, "kind", "") == "shared_hidden" and getattr(e, "actor_id", "") == str(actor.id) for e in active_effects):
+        roll_mode = RollMode.NORMAL if roll_mode == RollMode.ADVANTAGE else RollMode.DISADVANTAGE
     roll_mode = poison_protection_roll_mode(
         actor,
         active_effects,
         saving_throw.effect_tags,
         roll_mode,
     )
-    if any(
+    if not uses_shared_mana(actor) and any(
         getattr(effect, "actor_id", "") == str(actor.id)
         and getattr(effect, "kind", "") == "garran_rally_advantage"
         for effect in active_effects

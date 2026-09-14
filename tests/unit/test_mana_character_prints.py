@@ -17,9 +17,9 @@ def test_all_abilities_costs_and_reaction_labels_reach_every_format(hero_id: str
     hero = build_print_hero(hero_id)
     catalog = hero_abilities(hero_id)
     assert {a.id for a in hero.cards} == {a.id for a in catalog}
-    keys = [a.key for a in hero.cards if a.timing != "R"]
-    assert "MENU" not in keys
-    assert len(keys) == len(set(keys))
+    slots = [a.panel_slot for a in hero.cards]
+    assert None not in slots
+    assert len(slots) == len(set(slots))
     for card, rule in zip(hero.cards, catalog, strict=True):
         assert (card.cost, card.timing, card.description) == (
             rule.cost,
@@ -42,40 +42,23 @@ def test_all_abilities_costs_and_reaction_labels_reach_every_format(hero_id: str
     assert hero.flaw[1] == physical_mana_flaw(hero_id).body
 
 
-def test_lorian_has_current_mana_keyboard_and_larger_reserve() -> None:
+def test_lorian_has_nine_shared_market_abilities() -> None:
     hero = build_print_hero("lorian")
     cards = {c.id: c for c in hero.cards}
-    assert len(cards) == 14
-    assert {
-        i: cards[i].key
-        for i in (
-            "mana_inspiration",
-            "mana_tuning",
-            "mana_transmutation",
-            "mana_recovery",
-            "mana_refresh",
-        )
-    } == {
-        "mana_inspiration": "Q",
-        "mana_tuning": "R",
-        "mana_transmutation": "F",
-        "mana_recovery": "C",
-        "mana_refresh": "V",
-    }
-    assert "bardic_inspiration" not in cards and "faerie_fire" not in cards
-    assert (hero.keep, hero.capacity) == (3, 6)
-    assert not any(name == "Kusznik" for name, _ in hero.passives)
+    assert len(cards) == 9
+    assert {"mana_inspiration", "mana_tuning", "mana_recovery", "mana_great_tuning", "victory_hymn"} <= cards.keys()
+    assert "mana_transmutation" not in cards and "mana_refresh" not in cards
+    assert "prywatnych" in render_hero_html(hero, "minimal")
 
 
-def test_garran_card_explains_bonus_shield_and_mana_exchange() -> None:
+def test_garran_card_explains_contest_and_boost() -> None:
     hero = build_print_hero("garran")
     shield = next(c for c in hero.cards if c.id == "shield_bash")
-    assert (shield.key, shield.timing, shield.cost) == ("E", "D", ("C", "N"))
-    assert "1k6 + modyfikator Siły" in shield.description
-    assert "aplikacja rzuci za cel" in shield.description
-    html = render_hero_html(hero, "minimal")
-    assert "dwiema niebieskimi kartami" in html
-    assert "jedynego sąsiadującego wroga" in html
+    assert (shield.timing, shield.cost) == ("D", ("N", "C"))
+    assert "k20 + SIŁ" in shield.description
+    assert "automatyczny rzut wroga" in shield.description
+    assert "+1k6" in shield.description
+    assert "mniej niż połowę" in build_print_hero("dagna").flaw[1]
 
 
 def test_mana_symbols_escape_text_and_match_combat_icon_shapes() -> None:
@@ -109,11 +92,25 @@ def test_retired_passives_are_replaced_and_new_damage_limits_are_explicit() -> N
     assert "1k6" in dict(build_print_hero("erynd").passives)["Pierwsza krew"]
 
 
+def test_exploration_cards_share_runtime_methods_and_passives() -> None:
+    from dnd_board_game.rules.exploration_mana_catalog import HEROES, hero_methods
+    from dnd_board_game.application.exploration_mana_flow import method_modifiers
+    from dnd_board_game.ui.training_arena import training_hero
+    for hero in HEROES:
+        cards = build_print_hero(hero).exploration
+        assert len(cards) == 2 and {c.kind for c in cards} == {'npc', 'object'}
+        for card, method in zip(cards, hero_methods(hero)):
+            assert card.id == method.id
+            assert card.modifier == sum(m.value for m in method_modifiers(training_hero(hero), method))
+    assert build_print_hero('brakka').exploration[0].ability == 'Kondycja'
+    assert 'Praktyka terenowa' in dict(build_print_hero('erynd').passives)
+
+
 def test_descriptions_are_standalone_and_finite_effects_are_named() -> None:
     nimra = {c.id: c for c in build_print_hero("nimra").cards}
     assert "2k6" in nimra["nimra_flame_fan"].description
     assert "15 ft" in nimra["nimra_flame_fan"].description
-    assert "najbliższą" in nimra["nimra_lightning_path"].description
+    assert "najbliższej" in nimra["nimra_lightning_path"].description
     assert "sojusznika" in nimra["nimra_lightning_path"].description
     for hero_id in PLAYABLE_HERO_IDS:
         for card in build_print_hero(hero_id).cards:
@@ -124,8 +121,8 @@ def test_descriptions_are_standalone_and_finite_effects_are_named() -> None:
 def test_html_export_uses_all_four_layouts_without_raster_dependency(tmp_path: Path) -> None:
     for format_id in FORMATS:
         html = render_hero_html(build_print_hero("nimra"), format_id)
-        assert html.count("data-card-id=") == 20
-        assert html.count("data-page=") == (7 if format_id in ("cards", "bw_test") else 5)
+        assert html.count("data-card-id=") == 12
+        assert html.count("data-page=") == (8 if format_id in ("cards", "bw_test") else 7)
         assert "<img" not in html
     with pytest.raises(ValueError):
         render_hero_html(build_print_hero("nimra"), "unknown")
@@ -146,9 +143,10 @@ def test_app_print_page_exposes_current_pdfs_and_same_passive_text(tmp_path: Pat
     assert response.status_code == 200
     html = response.get_data(as_text=True)
     for format_id in FORMATS:
-        assert f"{PROFILE}/{format_id}/all_heroes.pdf" in html
+        assert f"physical_mana_v02/{format_id}/all_heroes.pdf" in html
     assert "1k6 obrażeń" in html
-    assert "Pojemność 6" in html
+    assert "Talia 25 kart" in html
+    assert "prywatnych rezerw" in html
     assert "Swamp — czarna" in html
     assert "Cyfra 1 w kółku" in html
     assert "Fioletow" not in html and "fioletow" not in html
@@ -175,3 +173,46 @@ def test_black_mana_preserves_cost_codes_and_prints_in_every_format() -> None:
             assert 'aria-label="1 mana czarna"' in html
             assert "fiolet" not in html.lower()
             assert "#e9d6f3" not in html
+
+
+@pytest.mark.parametrize("hero_id", PLAYABLE_HERO_IDS)
+def test_panel_cards_share_stable_symbols_with_arena(hero_id: str) -> None:
+    from dnd_board_game.ui.board_panel_symbols import (
+        HERO_PANEL_ABILITIES, SYMBOLS, ability_panel_slot, panel_icon,
+    )
+
+    hero = build_print_hero(hero_id)
+    active = list(hero.cards)
+    assert set(HERO_PANEL_ABILITIES[hero_id]) - {""} == {c.id for c in active}
+    assert len(active) <= 20
+    assert len({c.panel_slot for c in active}) == len(active)
+    for card in reversed(active):
+        assert card.panel_slot == ability_panel_slot(hero_id, card.id)
+        assert 6 <= card.panel_slot < 26
+        assert SYMBOLS[card.panel_slot][0] in panel_icon(card.panel_slot)
+    for format_id in FORMATS:
+        html = render_hero_html(hero, format_id)
+        for card in active:
+            assert panel_icon(card.panel_slot) in html
+        for key in ("SPACJA", "ENTER", "ESC", "Q", "W", "E", "R"):
+            assert f'<span class="key">{key}</span>' not in html
+        assert "wyłączony" in html
+        for slot in (0, 1, 2, 3, 5, 26, 27, 28, 29):
+            assert panel_icon(slot) in html
+
+
+def test_removed_interaction_slot_is_blank_without_moving_other_symbols() -> None:
+    from dnd_board_game.ui.board_panel_symbols import SYMBOLS, PANEL_CONTROLS, panel_icon
+
+    assert len(SYMBOLS) == 30
+    assert SYMBOLS[4] == ("Puste pole", "")
+    assert panel_icon(4) == ""
+    assert SYMBOLS[5][0] == "Koniec tury"
+    assert SYMBOLS[6][0] == "Rozwidlenie"
+    assert SYMBOLS[26][0] == "Zmniejsz"
+    assert all(slot != 4 for slot, _, _ in PANEL_CONTROLS)
+    for hero_id in PLAYABLE_HERO_IDS:
+        for format_id in FORMATS:
+            html = render_hero_html(build_print_hero(hero_id), format_id)
+            assert 'data-panel-slot="4"' not in html
+            assert '>Interakcja<' not in html

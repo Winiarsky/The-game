@@ -260,3 +260,34 @@ def test_cancel_and_invalid_selection_preserve_combat_state() -> None:
             position=Coordinate(4, 4),
             active_effects=(),
         )
+
+
+@pytest.mark.parametrize('action_used', [False, True])
+def test_approach_searches_board_once_and_preserves_cheapest_legal_path(monkeypatch, action_used: bool) -> None:
+    from unittest.mock import patch
+
+    from dnd_board_game.world import find_path, movement_range
+    import dnd_board_game.application.combat_scene_interaction_flow as flow_module
+    import dnd_board_game.world.movement as movement_module
+
+    hero = _actor('hero', Faction.ALLY, Coordinate(13, 15))
+    enemy = _actor('enemy', Faction.ENEMY, Coordinate(12, 14))
+    state = _state(hero, enemy)
+    if action_used:
+        state = replace(state, turn_action=replace(state.turn_action, action_use=ActionUse.ACTION_USED))
+    cart = replace(_cart(), positions=(Coordinate(15, 15),))
+    board = BoardState()
+    expected = find_path(board, hero, state.actors, Coordinate(14, 14))
+    with patch.object(flow_module, 'movement_range', wraps=movement_range) as search:
+        # A per-destination find_path would call the world module's search again.
+        monkeypatch.setattr(movement_module, 'movement_range', lambda *args: pytest.fail('Repeated full movement search'))
+        plan = CombatSceneInteractionFlowService().plan_approach(
+            state=state, board=board, scene_objects=(cart,), actor=hero, position=cart.positions[0],
+        )
+    assert search.call_count == 1
+    if action_used:
+        assert plan is None
+    else:
+        assert plan is not None
+        assert plan.path == expected
+        assert plan.destination == Coordinate(14, 14)

@@ -339,7 +339,8 @@ def divine_smite_damage(
 
 def preserve_life_capacity(actor: Actor) -> int:
     _require_feature(actor, "channel_divinity_preserve_life")
-    return actor.level * 5
+    from dnd_board_game.actors.resources import uses_shared_mana
+    return 40 if uses_shared_mana(actor) else actor.level * 5
 
 
 def validate_preserve_life_allocations(
@@ -359,10 +360,11 @@ def validate_preserve_life_allocations(
             raise ValueError(f"Nieznany cel Preserve Life: {allocation.target_id}.")
         if allocation.healing < 1:
             raise ValueError("Przydział Preserve Life musi być dodatni.")
-        maximum_healing = max(0, target.max_hp // 2 - target.hp)
+        from dnd_board_game.actors.resources import uses_shared_mana
+        maximum_healing = max(0, (target.max_hp if uses_shared_mana(actor) else target.max_hp // 2) - target.hp)
         if allocation.healing > maximum_healing:
             raise ValueError(
-                "Preserve Life nie może podnieść celu powyżej połowy maksymalnych PW."
+                "Przydział leczenia przekracza dopuszczalny limit PW celu."
             )
 
 

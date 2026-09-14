@@ -24,6 +24,7 @@ def shield_bash_payload(session: ExplorationUiSession) -> dict[str, object] | No
     result = flow.result
     return {
         "stage": flow.stage,
+        "damage_dice": 1 + (dict(session.combat_state.shared_mana.pending_boosts).get("damage", 0) if session.combat_state.shared_mana else 0),
         "cost_note": "Potwierdzenie zużyje akcję dodatkową. Możesz też wykonać zwykły atak, jeśli masz jeszcze akcję główną. Ruch rozliczasz osobno.",
         "actor_name": actor.name,
         "target_name": target.name,
@@ -90,7 +91,7 @@ def submit_shield_bash(
         },
     )
     session.board_message = (
-        "Wygrany test Siły. Rzuć k6 obrażeń."
+        f"Wygrany test Siły. Rzuć {1 + (dict(session.combat_state.shared_mana.pending_boosts).get('damage', 0) if session.combat_state.shared_mana else 0)}k6 obrażeń."
         if session.shield_bash_flow.stage == "damage"
         else "Sprawdź wynik Uderzenia tarczą i potwierdź jego zastosowanie."
     )

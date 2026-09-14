@@ -2567,12 +2567,13 @@ def _combat_payload(state: CombatState | None) -> dict[str, object] | None:
     if state is None:
         return None
     return {
+        "shared_mana": state.shared_mana.as_payload() if state.shared_mana else None,
         "actors": [_actor_payload(actor) for actor in state.actors],
         "initiative": {
             "current_index": state.initiative_order.current_index, "round_number": state.initiative_order.round_number,
             "entries": [{"actor_id": str(entry.actor.id), "natural_roll": entry.roll.natural_roll, "natural_rolls": list(entry.roll.natural_rolls), "total": entry.roll.total, "mode": entry.roll.mode.value, "dexterity_modifier": entry.dexterity_modifier, "stable_order": entry.stable_order} for entry in state.initiative_order.entries],
         },
-        "turn_action": {"action_use": state.turn_action.action_use.value, "bonus_action_use": state.turn_action.bonus_action_use.value, "reaction_available": state.turn_action.reaction_available, "movement_used_feet": state.turn_action.movement_used_feet, "extra_movement_feet": state.turn_action.extra_movement_feet, "object_interaction_available": state.turn_action.object_interaction_available, "two_weapon_trigger_item_id": state.turn_action.two_weapon_trigger_item_id, "attack_action_active": state.turn_action.attack_action_active, "attacks_used": state.turn_action.attacks_used, "attacks_maximum": state.turn_action.attacks_maximum, "bonus_attacks_remaining": state.turn_action.bonus_attacks_remaining, "bonus_attack_source_id": state.turn_action.bonus_attack_source_id, "bonus_action_spell_cast": state.turn_action.bonus_action_spell_cast, "leveled_action_spell_cast": state.turn_action.leveled_action_spell_cast, "movement_action_used": state.turn_action.movement_action_used, "weapon_change_available": state.turn_action.weapon_change_available},
+        "turn_action": {"shared_speed_halved": state.turn_action.shared_speed_halved, "shared_bonus_actions_used": state.turn_action.shared_bonus_actions_used, "action_use": state.turn_action.action_use.value, "bonus_action_use": state.turn_action.bonus_action_use.value, "reaction_available": state.turn_action.reaction_available, "movement_used_feet": state.turn_action.movement_used_feet, "extra_movement_feet": state.turn_action.extra_movement_feet, "object_interaction_available": state.turn_action.object_interaction_available, "two_weapon_trigger_item_id": state.turn_action.two_weapon_trigger_item_id, "attack_action_active": state.turn_action.attack_action_active, "attacks_used": state.turn_action.attacks_used, "attacks_maximum": state.turn_action.attacks_maximum, "bonus_attacks_remaining": state.turn_action.bonus_attacks_remaining, "bonus_attack_source_id": state.turn_action.bonus_attack_source_id, "bonus_action_spell_cast": state.turn_action.bonus_action_spell_cast, "leveled_action_spell_cast": state.turn_action.leveled_action_spell_cast, "movement_action_used": state.turn_action.movement_action_used, "weapon_change_available": state.turn_action.weapon_change_available},
         "status": state.status.value, "winner": state.winner.value if state.winner else None,
         "enemy_ai": {
             "profile_id": state.enemy_ai.profile_id,
@@ -2824,7 +2825,10 @@ def _combat_from_payload(raw: object) -> CombatState | None:
         raise SnapshotValidationError("Zapis zawiera nieprawidłowy indeks inicjatywy.")
     turn = _mapping(data.get("turn_action"), "combat.turn_action")
     enemy_ai_raw = _mapping(data.get("enemy_ai", {}), "combat.enemy_ai")
+    from dnd_board_game.rules.shared_mana import SharedMana
+    mana_raw = data.get("shared_mana")
     return CombatState(
+        shared_mana=SharedMana.from_payload(_mapping(mana_raw, "combat.shared_mana")) if mana_raw is not None else None,
         actors=actors,
         initiative_order=InitiativeOrder(
             tuple(entries), current_index, _integer(initiative.get("round_number"), "initiative.round_number")
@@ -2865,6 +2869,8 @@ def _combat_from_payload(raw: object) -> CombatState | None:
                 turn.get("weapon_change_available", True),
                 "turn_action.weapon_change_available",
             ),
+            _boolean(turn.get("shared_speed_halved", False), "turn_action.shared_speed_halved"),
+            _integer(turn.get("shared_bonus_actions_used", 0), "turn_action.shared_bonus_actions_used"),
         ),
         status=_enum(CombatStatus, data.get("status"), "combat.status"),
         winner=_optional_enum(Faction, data.get("winner"), "combat.winner"),

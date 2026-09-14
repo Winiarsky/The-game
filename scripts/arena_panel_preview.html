@@ -1,0 +1,101 @@
+<!doctype html><html lang="pl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Arena Nessy — podgląd panelu 30 pól</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#0c1215;color:#e4e9e7;font:15px/1.45 system-ui,sans-serif}header{padding:18px 24px;border-bottom:1px solid #334145;display:flex;gap:30px;justify-content:space-between;align-items:center}h1{font:26px Georgia,serif;color:#efd6a1;margin:0}p{margin:8px 0}small,.muted{color:#a6b9b6}button,select{font:inherit;color:inherit;background:#1c282e;border:1px solid #566c73;border-radius:5px;padding:7px 10px}button{cursor:pointer}button:hover{border-color:#efd6a1}button:disabled{opacity:.3;cursor:default}button:focus-visible,select:focus-visible{outline:2px solid #efd6a1;outline-offset:2px}.workspace{display:grid;grid-template-columns:minmax(650px,1fr) 350px;gap:18px;padding:18px 24px}.board>svg{width:100%;display:block}.legend{display:flex;gap:18px;flex-wrap:wrap;padding:12px;border:1px solid #334145;border-radius:6px}.legend span{display:flex;align-items:center;gap:6px}.glyph{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}.mana-symbol{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.8;vertical-align:middle;margin-right:4px}aside{border:1px solid #465450;border-radius:8px;background:#141e22;padding:18px;height:fit-content;position:sticky;top:15px}h2{font:24px Georgia,serif;margin:0 0 12px;color:#efd6a1}h3{font-size:16px;margin:18px 0 8px}.toolbar{padding:14px 24px;background:#141d20;display:flex;align-items:center;gap:12px;flex-wrap:wrap}.toolbar label{display:flex;align-items:center;gap:7px}.cards{padding:0 24px 26px}.catalog{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px}.card{background:#152126;border:1px solid #3e5157;border-radius:6px;padding:12px;min-height:104px;cursor:pointer}.card:hover{border-color:#efd6a1}.card.disabled{opacity:.3;cursor:default}.card.selected{border:2px solid #efd6a1}.card-title{display:flex;align-items:center;gap:10px;font-weight:600}.badge{border:1px solid #8aa4aa;border-radius:4px;padding:5px;display:inline-flex;color:#efd6a1}.card small{display:block;margin:8px 0}.hint{padding:10px;border-left:3px solid #dcb966;background:#202c2c}.value{font-size:88px;line-height:1.2;color:#efd6a1;display:block;text-align:center;font-variant-numeric:tabular-nums;margin:12px 0}.controls{display:flex;gap:8px;justify-content:center;margin:16px 0}.controls button{min-width:54px;min-height:48px;display:flex;align-items:center;justify-content:center}.choice{display:flex;gap:10px;align-items:center;text-align:left;width:100%;margin:9px 0}.choice.selected{border-color:#efd6a1}.status{min-height:30px;color:#a8d8b3}.pill{border:1px solid #55665e;border-radius:20px;padding:3px 10px;font-size:12px}.settings-label{color:#f0c879;font-size:12px;text-transform:uppercase;letter-spacing:1px}.comparison-note{max-width:1000px;margin:0 24px 25px;color:#a6b9b6}summary{cursor:pointer;color:#b8cbd0}details p{font-size:13px}.map-target[data-target="Nessa"]{cursor:pointer}.board-note{margin:8px 0 0;font-size:12px;color:#a6b9b6}.mini{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}@media(max-width:1050px){.workspace{grid-template-columns:1fr}.catalog{grid-template-columns:repeat(3,minmax(0,1fr))}aside{position:static}.board{overflow-x:auto}.board>svg{min-width:720px}}@media(max-width:600px){.catalog{grid-template-columns:1fr 1fr}header{display:block}.workspace,.cards{padding:12px}}
+
+.pad{transition:opacity .12s ease,filter .12s ease}
+.board .pad[data-light="off"]{opacity:.16;filter:none}
+.board .pad[data-light="available"]{opacity:.65;filter:drop-shadow(0 0 2px currentColor)}
+.board .pad[data-light="dimmed"]{opacity:.35;filter:none}
+.board .pad[data-light="selected"]{opacity:1;filter:drop-shadow(0 0 5px #fff)}
+.board .pad[data-light="control"]{opacity:.85;filter:drop-shadow(0 0 3px currentColor)}
+.pad.disabled:hover rect{stroke:currentColor;stroke-width:1}
+.led-legend{font-size:13px;padding:9px 0;color:#bacbc9}
+@media(prefers-reduced-motion:reduce){.pad{transition:none}}
+</style></head><body>
+<header><div><h1>Arena Nessy · panel gracza</h1><p class="muted">Cały dolny rząd: 5 ikon + puste pole + 20 run + 4 przyciski.</p></div><div><span class="pill">PROTOTYP DO OCENY</span><p><small>Symulacja panelu — bez połączenia z walką i fizycznymi LED-ami.</small></p></div></header>
+<div class="toolbar"><span class="settings-label">Ustawienia podglądu</span><label>Postać <select id="hero"></select></label><button id="combat-mode">Menu akcji</button><button id="dialog-mode">Dialog z Nessą</button><label>Kość <select id="die"><option>4</option><option>6</option><option>8</option><option>10</option><option>12</option><option selected>20</option></select></label><label>Kości <select id="count"><option>1</option><option>2</option><option>3</option></select></label><button id="roll-mode">Przetestuj wpisywanie rzutu</button></div>
+<div class="workspace"><main><div class="board"><!-- ARENA --></div><div class="legend" id="legend"></div><p class="led-legend">Podświetlenie: dostępne → świecą · wybrana → najjaśniejsza · pozostałe dostępne → przygaszone · niedostępne → zgaszone. ↩ wraca do menu.</p><p class="board-note">Obrócony widok istniejącej areny. Pomocnik i dodatkowe kukły pokazują pozycje wariantów. Kliknij symbol w dolnym rzędzie, aby wypróbować panel. Rozmowę rozpocznij przez wskazanie Nessy na mapie.</p></main><aside id="screen" aria-live="polite"></aside></div>
+<section class="cards"><h2 id="catalog-title">Karty i menu — te same symbole</h2><p class="muted">Runy są stałymi adresami zdolności. Zgaszone miejsca pozostają puste; nic nie przesuwa się po użyciu akcji.</p><div class="catalog" id="catalog"></div></section>
+<p class="comparison-note">Podgląd pokazuje nowe oznaczenia na wszystkich siedmiu taliach. Aktualne PDF-y używają tych samych run. Panel czeka na podłączenie do rozgrywki na arenie. W tej próbie zatwierdzenie zdolności tylko symuluje zużycie jej rodzaju akcji; nie rozstrzyga celów, obrażeń ani efektów.</p>
+<script>
+const HEROES=__HERO_DATA__, ICONS=__ICONS__, NAMES=__SYMBOL_NAMES__;
+const $=id=>document.getElementById(id), esc=s=>String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;');
+const basic=[
+{name:'Ruch',timing:'ruch',description:'Wybierasz pole na mapie i zatwierdzasz odcinek. Potem wracasz do menu; niewykorzystany dystans zostaje.'},
+{name:'Atak',timing:'A',description:'Atak aktualną bronią. Cel wybierasz na mapie. Chwyt i wariant broni ustawiasz w wyposażeniu; Lorian dodatkowo określa liczbę ataków.'},
+{name:'Zmiana broni',timing:'menu',description:'Otwiera wybór broni i jej chwytu. Każda pozycja otrzymuje runę w tym podmenu.'},
+{name:'Przedmiot',timing:'menu',description:'Otwiera ekwipunek z runami przy opcjach użycia.'},
+null,
+{name:'Koniec tury',timing:'koniec',description:'Potwierdź zakończenie tury. Rezerwę, dobór i manę rozliczasz na stole.'}];
+const timings={A:'Akcja główna',D:'Akcja dodatkowa',MOD:'Modyfikacja',ruch:'Ruch',menu:'Wybór',koniec:'Porządkowanie tury'};
+const replies=['Chcę sprawdzić się w walce.','Najpierw wyjaśnij zasady próby.','Na dziś wystarczy.'];
+let hero=HEROES.find(h=>h.id==='nimra'), phase='menu', selected=null, actionUsed=false, bonusUsed=false, movement=30, die=20, count=1, values=[], value=10, notice='';
+$('hero').innerHTML=HEROES.map(h=>`<option value="${h.id}"${h===hero?' selected':''}>${h.name}</option>`).join('');
+$('legend').innerHTML=[0,1,2,3,5,26,27,28,29].map(i=>`<span>${ICONS[i]} ${NAMES[i]}</span>`).join('');
+function option(slot){return slot<6?basic[slot]:hero.cards.find(c=>c.slot===slot);}
+function available(slot){
+ if(slot===4)return false;
+ if(phase==='roll')return slot===26?value>1:slot===27?value<die:slot>=28;
+ if(phase==='summary')return slot>=28;
+ if(phase==='detail'&&slot>=26)return slot>=28;
+ if(phase==='dialog')return (slot>=6&&slot<9)||slot===29||(slot===28&&selected!==null);
+ if(phase==='dialog-result')return slot===28||slot===29;
+ if(slot>=26)return false;
+ const o=option(slot);if(!o)return false;
+ return !(o.timing==='A'&&actionUsed||o.timing==='MOD'&&actionUsed||o.timing==='D'&&bonusUsed||slot===0&&movement<5);
+}
+function reset(){phase='menu';selected=null;actionUsed=false;bonusUsed=false;movement=30;notice='';render();}
+function startRoll(){phase='roll';selected=null;die=Number($('die').value);count=Number($('count').value);values=[];value=die/2;notice='';render();}
+function press(slot){
+ if(!available(slot))return;
+ if(phase==='detail'&&slot<26){selected=slot;render();return;}
+ if(slot===29){
+  if(phase==='summary'){phase='roll';value=values.pop();}
+  else if(phase==='roll'&&values.length){value=values.pop();}
+  else {phase='menu';selected=null;}
+ }else if(phase==='roll'){
+  if(slot===26)value--;else if(slot===27)value++;
+  else if(slot===28){values.push(value);if(values.length===count)phase='summary';else value=die/2;}
+ }else if(phase==='summary'){
+  notice=`Zapisano próbny wynik: ${values.join(' + ')} = ${values.reduce((a,b)=>a+b,0)}. Powrót do wyboru.`;phase='menu';
+ }else if(phase==='dialog-result'){phase='menu';selected=null;}
+ else if(phase==='dialog'){
+  if(slot===28)phase='dialog-result';else selected=slot;
+ }else if(phase==='detail'){
+  const o=option(selected);
+  if(o.timing==='A')actionUsed=true;if(o.timing==='D')bonusUsed=true;
+  if(selected===0)movement=Math.max(0,movement-5);
+  if(selected===5){reset();notice='Nowa próbna tura — pola znów są dostępne.';}
+  else notice=`Próba zatwierdzenia: ${o.name}. Powrót do menu.`;
+  phase='menu';selected=null;
+ }
+ else {phase='detail';selected=slot;}
+ render();
+}
+function controls(){return '<div class="controls">'+[26,27,28,29].map(i=>`<button data-control="${i}" title="${NAMES[i]}" aria-label="${NAMES[i]}" ${available(i)?'':'disabled'}>${ICONS[i]}</button>`).join('')+'</div>';}
+function panelLight(slot){
+ if(!available(slot))return {state:'off',level:0};
+ if(slot>=26)return {state:'control',level:85};
+ const preview=(phase==='detail'||phase==='dialog')&&selected!==null&&available(selected);
+ if(preview&&slot===selected)return {state:'selected',level:100};
+ return preview?{state:'dimmed',level:35}:{state:'available',level:65};
+}
+function render(){
+ document.querySelectorAll('.pad').forEach(p=>{const slot=Number(p.dataset.slot), light=panelLight(slot);p.dataset.light=light.state;p.dataset.ledLevel=light.level;p.setAttribute('aria-pressed',light.state==='selected');p.classList.toggle('disabled',!available(slot));p.classList.toggle('selected',slot===selected);p.setAttribute('aria-disabled',!available(slot));p.setAttribute('aria-label',slot>=26?NAMES[slot]:phase==='dialog'&&slot>=6&&slot<9?replies[slot-6]:option(slot)?.name||NAMES[slot]);});
+ let body='';
+ if(phase==='roll')body=`<small>WYNIK KOŚCI ${values.length+1} Z ${count}</small><h2>Rzuć k${die}</h2><p>Ustaw fizyczny wynik przyciskami − / +.</p><output class="value">${value}</output><p class="muted">Zakres 1–${die} · start ${die/2}. Zatwierdź również wtedy, gdy wypadło ${die/2}.</p>${controls()}<p class="hint">Jedno dotknięcie = jedna zmiana. Cyfry są tylko wyświetlane; nie służą do sterowania.</p>`;
+ else if(phase==='summary')body=`<h2>Sprawdź wyniki</h2>${values.map((v,i)=>`<p>Kość ${i+1}: <b>${v}</b></p>`).join('')}<p>Suma kości: <b>${values.reduce((a,b)=>a+b,0)}</b></p><p class="muted">W grze aplikacja doliczy właściwe modyfikatory. Tutaj testujesz wyłącznie wpisywanie.</p>${controls()}<p>✓ akceptuje komplet · ↩ pozwala poprawić ostatnią kość.</p>`;
+ else if(phase==='detail'){const o=option(selected);body=`<span class="badge">${ICONS[selected]}</span><h2>${esc(o.name)}</h2><p>${timings[o.timing]||esc(o.timing)}</p><p>${o.mana||''}</p><p>${esc(o.description)}</p><p class="hint">Inna ikona lub runa przełącza podgląd bez kosztu. ↩ wraca do menu. ✓ symuluje wykonanie.</p>${controls()}`;}
+ else if(phase==='dialog')body=`<small>DIALOG · NESSA</small><h2>Gotów do próby?</h2><p>„Pokaż, co potrafisz. Możesz też najpierw poznać zasady.”</p>${replies.map((r,i)=>`<button data-choice="${i+6}" class="choice ${selected===i+6?'selected':''}">${ICONS[i+6]}<span>${r}</span></button>`).join('')}${controls()}<p class="muted">Runy oznaczają odpowiedzi w tej rozmowie. Brak wpisywania tekstu i oceny LLM.</p>`;
+ else if(phase==='dialog-result')body=`<h2>Nessa</h2><p>${['„Podejdź do kukły. Zobaczymy, jak walczysz.”','„Kukła wytrzyma wiele trafień. Gdy skończysz, wróć do mnie.”','„Dobrze. Wróć, kiedy będziesz gotów.”'][selected-6]}</p>${controls()}`;
+ else body=`<small>AKTYWNY GRACZ</small><h2>${hero.name}</h2><p><span class="pill">Akcja ${actionUsed?'zużyta':'gotowa'}</span> <span class="pill">Dodatkowa ${bonusUsed?'zużyta':'gotowa'}</span></p><p>Ruch: <b>${movement} ft</b></p><p class="hint">Wybierz ikonę lub runę na dolnym pasku. Ten sam znak jest na karcie i przy nazwie zdolności.</p><p>Po wykonaniu wracasz tutaj. Pozostałe symbole zachowują swoje miejsca.</p><p class="status">${esc(notice)}</p><div class="mini"><button onclick="startRoll()">Próba rzutu</button><button onclick="phase='dialog';selected=null;render()">Próba dialogu</button></div>`;
+ $('screen').innerHTML=body;
+ $('catalog-title').textContent=phase.startsWith('dialog')?'Dialog — runy odpowiadają polom panelu':`${hero.name} — przykładowe karty z runami`;
+ const entries=phase.startsWith('dialog')?replies.map((name,i)=>({slot:i+6,name,timing:'dialog'})):[...basic.flatMap((o,slot)=>o?[{...o,slot}]:[]),...hero.cards];
+ $('catalog').innerHTML=entries.map(o=>`<article class="card ${available(o.slot)?'':'disabled'} ${selected===o.slot?'selected':''}" data-choice="${o.slot}" aria-label="${esc(o.name)}"><div class="card-title"><span class="badge">${ICONS[o.slot]}</span>${esc(o.name)}</div><small>${timings[o.timing]||'Odpowiedź'} · ${o.slot<6?'ikona podstawowa':NAMES[o.slot]}</small>${o.mana||''}${o.description?`<details><summary>Opis karty</summary><p>${esc(o.description)}</p></details>`:''}</article>`).join('');
+}
+document.addEventListener('click',e=>{if(e.target.closest('details'))return;if(phase==='menu'&&e.target.closest('.map-target')?.dataset.target==='Nessa'){phase='dialog';selected=null;render();return;}const p=e.target.closest('[data-slot],[data-control],[data-choice]');if(p)press(Number(p.dataset.slot??p.dataset.control??p.dataset.choice));});
+document.querySelectorAll('.pad').forEach(p=>p.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();press(Number(p.dataset.slot));}}));
+$('hero').onchange=()=>{hero=HEROES.find(h=>h.id===$('hero').value);reset();};$('combat-mode').onclick=reset;$('dialog-mode').onclick=()=>{phase='dialog';selected=null;render();};$('roll-mode').onclick=startRoll;
+render();
+</script></body></html>

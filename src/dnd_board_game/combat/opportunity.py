@@ -34,6 +34,8 @@ def opportunity_attackers_for_movement(
     for attacker in state.actors:
         if attacker.id == mover.id or attacker.faction in {mover.faction, Faction.NEUTRAL}:
             continue
+        if any(e.kind == "feint" and e.actor_id == str(attacker.id) and e.source_actor_id == str(mover.id) for e in active_effects):
+            continue
         if attacker.is_defeated() or not reaction_available_for(state, attacker):
             continue
         if is_hidden_from(state.hidden_states, str(mover.id), str(attacker.id)):

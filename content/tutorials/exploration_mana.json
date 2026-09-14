@@ -1,0 +1,2248 @@
+{
+  "version": 2,
+  "scenes": [
+    {
+      "id": "irena",
+      "kind": "npc",
+      "name": "Irena — świadectwo",
+      "description": "Irena dokarmiała żeraki, aby zagrożenie utrzymywało pomoc dla osady. Znacie już prawdę; chcecie, żeby sama złożyła świadectwo Nessie.",
+      "dc": 16,
+      "position": [
+        8,
+        18
+      ],
+      "options": [
+        {
+          "method_id": "authority",
+          "profile": "balanced",
+          "obstacle": "none",
+          "description": "Przejmij odpowiedzialność za bezpieczne złożenie świadectwa.",
+          "cost": "",
+          "success": "Irena zgadza się złożyć świadectwo Nessie.",
+          "failure": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+          "success_flag": "irena_testimony",
+          "failure_flag": "irena_own_report"
+        },
+        {
+          "method_id": "intimidation",
+          "profile": "coarse",
+          "obstacle": "after_red",
+          "description": "Pokaż Irenie, że nie ustąpisz. Wymuszona zgoda ochłodzi relację.",
+          "cost": "Zgoda jest wymuszona; relacja z Ireną się ochładza.",
+          "success": "Irena zgadza się złożyć świadectwo Nessie.",
+          "failure": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+          "success_flag": "irena_testimony",
+          "failure_flag": "irena_own_report"
+        },
+        {
+          "method_id": "deception",
+          "profile": "balanced",
+          "obstacle": "repeat",
+          "description": "Przekonaj Irenę, że Witek już zdecydował się zeznawać. To blef; jego ujawnienie podważy zaufanie.",
+          "cost": "Kłamstwo pozostaje częścią porozumienia.",
+          "success": "Irena zgadza się złożyć świadectwo Nessie.",
+          "failure": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+          "success_flag": "irena_testimony",
+          "failure_flag": "irena_own_report"
+        },
+        {
+          "method_id": "empathy",
+          "profile": "fine",
+          "obstacle": "none",
+          "description": "Wysłuchaj jej obaw o mieszkańców i zaproponuj wspólne wystąpienie.",
+          "cost": "",
+          "success": "Irena zgadza się złożyć świadectwo Nessie.",
+          "failure": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+          "success_flag": "irena_testimony",
+          "failure_flag": "irena_own_report"
+        },
+        {
+          "method_id": "inspiration",
+          "profile": "balanced",
+          "obstacle": "four",
+          "description": "Pokaż, jak świadectwo może pomóc naprawić część szkód.",
+          "cost": "",
+          "success": "Irena zgadza się złożyć świadectwo Nessie.",
+          "failure": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+          "success_flag": "irena_testimony",
+          "failure_flag": "irena_own_report"
+        },
+        {
+          "method_id": "argument",
+          "profile": "balanced",
+          "obstacle": "none",
+          "description": "Uporządkuj dowody i wyjaśnij, dlaczego wspólne świadectwo jest potrzebne.",
+          "cost": "",
+          "success": "Irena zgadza się złożyć świadectwo Nessie.",
+          "failure": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+          "success_flag": "irena_testimony",
+          "failure_flag": "irena_own_report"
+        },
+        {
+          "method_id": "inquiry",
+          "profile": "fine",
+          "obstacle": "repeat",
+          "description": "Wskaż niespójność w opowieści i zapytaj o to, co Irena próbuje chronić.",
+          "cost": "",
+          "success": "Irena zgadza się złożyć świadectwo Nessie.",
+          "failure": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+          "success_flag": "irena_testimony",
+          "failure_flag": "irena_own_report"
+        }
+      ]
+    },
+    {
+      "id": "medicine_chest",
+      "kind": "object",
+      "name": "Skrzynia lekarstw",
+      "description": "Wieko skrzyni wypaczyło się. Solanka zaschła przy obejmie, a pieczęć transportowa blokuje zatrzaski. Obok leżą klin, deseczka, narzędzia i zestaw do oczyszczenia opakowań.",
+      "dc": 15,
+      "position": [
+        10,
+        18
+      ],
+      "options": [
+        {
+          "method_id": "secure",
+          "profile": "balanced",
+          "obstacle": "none",
+          "description": "Przytrzymaj wypaczone wieko, odciążając blokadę.",
+          "cost": "",
+          "success": "Lekarstwa są dostępne i zabezpieczone do zabrania.",
+          "failure": "Blokada wymaga demontażu obejmy. Możecie skorzystać z warsztatu i materiałów zapasowych.",
+          "success_flag": "medicine_accessible",
+          "failure_flag": "medicine_workshop_route"
+        },
+        {
+          "method_id": "force",
+          "profile": "coarse",
+          "obstacle": "after_red",
+          "description": "Wyłam obejmę. Otworzysz skrzynię, ale zniszczysz zamek i narobisz hałasu.",
+          "cost": "Zamek zostaje zniszczony; hałas jest nieunikniony.",
+          "success": "Lekarstwa są dostępne i zabezpieczone do zabrania.",
+          "failure": "Blokada wymaga demontażu obejmy. Możecie skorzystać z warsztatu i materiałów zapasowych.",
+          "success_flag": "medicine_accessible",
+          "failure_flag": "medicine_workshop_route"
+        },
+        {
+          "method_id": "manipulate",
+          "profile": "balanced",
+          "obstacle": "repeat",
+          "description": "Użyj narzędzi złodziejskich do zwolnienia drobnych zatrzasków.",
+          "cost": "",
+          "success": "Lekarstwa są dostępne i zabezpieczone do zabrania.",
+          "failure": "Blokada wymaga demontażu obejmy. Możecie skorzystać z warsztatu i materiałów zapasowych.",
+          "success_flag": "medicine_accessible",
+          "failure_flag": "medicine_workshop_route"
+        },
+        {
+          "method_id": "cleanse",
+          "profile": "fine",
+          "obstacle": "none",
+          "description": "Oczyść zaschniętą solankę przy obejmie i zabezpiecz skażone opakowania dostępnym zestawem medycznym.",
+          "cost": "",
+          "success": "Lekarstwa są dostępne i zabezpieczone do zabrania.",
+          "failure": "Blokada wymaga demontażu obejmy. Możecie skorzystać z warsztatu i materiałów zapasowych.",
+          "success_flag": "medicine_accessible",
+          "failure_flag": "medicine_workshop_route"
+        },
+        {
+          "method_id": "improvise",
+          "profile": "balanced",
+          "obstacle": "four",
+          "description": "Z dostępnej deseczki i klina przygotuj dźwignię odciążającą wieko.",
+          "cost": "",
+          "success": "Lekarstwa są dostępne i zabezpieczone do zabrania.",
+          "failure": "Blokada wymaga demontażu obejmy. Możecie skorzystać z warsztatu i materiałów zapasowych.",
+          "success_flag": "medicine_accessible",
+          "failure_flag": "medicine_workshop_route"
+        },
+        {
+          "method_id": "analyze",
+          "profile": "balanced",
+          "obstacle": "none",
+          "description": "Odczytaj symbole transportowej pieczęci i zwolnij blokady we właściwej kolejności.",
+          "cost": "",
+          "success": "Lekarstwa są dostępne i zabezpieczone do zabrania.",
+          "failure": "Blokada wymaga demontażu obejmy. Możecie skorzystać z warsztatu i materiałów zapasowych.",
+          "success_flag": "medicine_accessible",
+          "failure_flag": "medicine_workshop_route"
+        },
+        {
+          "method_id": "survey",
+          "profile": "fine",
+          "obstacle": "repeat",
+          "description": "Ze śladów zużycia odczytaj, jak zwalniano blokadę podczas transportu.",
+          "cost": "",
+          "success": "Lekarstwa są dostępne i zabezpieczone do zabrania.",
+          "failure": "Blokada wymaga demontażu obejmy. Możecie skorzystać z warsztatu i materiałów zapasowych.",
+          "success_flag": "medicine_accessible",
+          "failure_flag": "medicine_workshop_route"
+        }
+      ]
+    },
+    {
+      "id": "irena_compromise",
+      "kind": "npc",
+      "name": "Irena — Coś pewnego czy szansa na więcej?",
+      "description": "Irena dokarmiała żeraki, aby zagrożenie utrzymywało pomoc dla osady. Znacie już prawdę; chcecie, żeby sama złożyła świadectwo Nessie.",
+      "dc": 16,
+      "position": [
+        8,
+        18
+      ],
+      "options": [
+        {
+          "method_id": "authority",
+          "profile": "balanced",
+          "obstacle": "none",
+          "description": "Przejmij odpowiedzialność za bezpieczne złożenie świadectwa.",
+          "cost": "",
+          "success": "Irena zgadza się złożyć świadectwo Nessie.",
+          "failure": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+          "success_flag": "irena_testimony",
+          "failure_flag": "irena_own_report",
+          "variants": [
+            {
+              "kind": "success",
+              "message": "Irena osobiście składa świadectwo Nessie. Możecie poprosić ją o dalsze wyjaśnienia.",
+              "cost": "",
+              "flags": [
+                "irena_testimony"
+              ],
+              "followups": [
+                {
+                  "id": "ask_irena",
+                  "label": "Zapytaj Irenę o dostawy",
+                  "message": "Irena wskazuje młyn jako miejsce odbioru karmy. Nessa otwiera możliwość sprawdzenia dostaw.",
+                  "flag": "mill_route"
+                }
+              ]
+            },
+            {
+              "kind": "failure",
+              "message": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+              "cost": "",
+              "flags": [
+                "irena_own_report"
+              ],
+              "followups": [
+                {
+                  "id": "verify_report",
+                  "label": "Poproś Nessę o weryfikację",
+                  "message": "Nessa kieruje was do rejestru wydawanej karmy. To kolejna droga sprawdzenia własnego raportu.",
+                  "flag": "records_route"
+                }
+              ]
+            },
+            {
+              "kind": "compromise",
+              "message": "Irena podpisuje świadectwo, ale nie idzie z wami do Nessy. Macie dokument, bez możliwości zadania jej pytań na miejscu.",
+              "cost": "",
+              "flags": [
+                "irena_written_testimony"
+              ],
+              "followups": [
+                {
+                  "id": "return_irena",
+                  "label": "Przygotuj pytania do Ireny",
+                  "message": "Nessa przyjmuje podpisany dokument i zapisuje pytania do wyjaśnienia podczas kolejnej wizyty u Ireny.",
+                  "flag": "return_to_irena"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "method_id": "intimidation",
+          "profile": "coarse",
+          "obstacle": "none",
+          "description": "Pokaż Irenie, że nie ustąpisz. Wymuszona zgoda ochłodzi relację.",
+          "cost": "Zgoda jest wymuszona; relacja z Ireną się ochładza.",
+          "success": "Irena zgadza się złożyć świadectwo Nessie.",
+          "failure": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+          "success_flag": "irena_testimony",
+          "failure_flag": "irena_own_report",
+          "variants": [
+            {
+              "kind": "success",
+              "message": "Irena osobiście składa świadectwo Nessie. Możecie poprosić ją o dalsze wyjaśnienia.",
+              "cost": "Zgoda jest wymuszona; relacja z Ireną się ochładza.",
+              "flags": [
+                "irena_testimony"
+              ],
+              "followups": [
+                {
+                  "id": "ask_irena",
+                  "label": "Zapytaj Irenę o dostawy",
+                  "message": "Irena wskazuje młyn jako miejsce odbioru karmy. Nessa otwiera możliwość sprawdzenia dostaw.",
+                  "flag": "mill_route"
+                }
+              ]
+            },
+            {
+              "kind": "failure",
+              "message": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+              "cost": "",
+              "flags": [
+                "irena_own_report"
+              ],
+              "followups": [
+                {
+                  "id": "verify_report",
+                  "label": "Poproś Nessę o weryfikację",
+                  "message": "Nessa kieruje was do rejestru wydawanej karmy. To kolejna droga sprawdzenia własnego raportu.",
+                  "flag": "records_route"
+                }
+              ]
+            },
+            {
+              "kind": "compromise",
+              "message": "Irena podpisuje świadectwo, ale nie idzie z wami do Nessy. Macie dokument, bez możliwości zadania jej pytań na miejscu.",
+              "cost": "Zgoda jest wymuszona; relacja z Ireną się ochładza.",
+              "flags": [
+                "irena_written_testimony"
+              ],
+              "followups": [
+                {
+                  "id": "return_irena",
+                  "label": "Przygotuj pytania do Ireny",
+                  "message": "Nessa przyjmuje podpisany dokument i zapisuje pytania do wyjaśnienia podczas kolejnej wizyty u Ireny.",
+                  "flag": "return_to_irena"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "method_id": "deception",
+          "profile": "balanced",
+          "obstacle": "none",
+          "description": "Przekonaj Irenę, że Witek już zdecydował się zeznawać. To blef; jego ujawnienie podważy zaufanie.",
+          "cost": "Kłamstwo pozostaje częścią porozumienia.",
+          "success": "Irena zgadza się złożyć świadectwo Nessie.",
+          "failure": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+          "success_flag": "irena_testimony",
+          "failure_flag": "irena_own_report",
+          "variants": [
+            {
+              "kind": "success",
+              "message": "Irena osobiście składa świadectwo Nessie. Możecie poprosić ją o dalsze wyjaśnienia.",
+              "cost": "Kłamstwo pozostaje częścią porozumienia.",
+              "flags": [
+                "irena_testimony"
+              ],
+              "followups": [
+                {
+                  "id": "ask_irena",
+                  "label": "Zapytaj Irenę o dostawy",
+                  "message": "Irena wskazuje młyn jako miejsce odbioru karmy. Nessa otwiera możliwość sprawdzenia dostaw.",
+                  "flag": "mill_route"
+                }
+              ]
+            },
+            {
+              "kind": "failure",
+              "message": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+              "cost": "",
+              "flags": [
+                "irena_own_report"
+              ],
+              "followups": [
+                {
+                  "id": "verify_report",
+                  "label": "Poproś Nessę o weryfikację",
+                  "message": "Nessa kieruje was do rejestru wydawanej karmy. To kolejna droga sprawdzenia własnego raportu.",
+                  "flag": "records_route"
+                }
+              ]
+            },
+            {
+              "kind": "compromise",
+              "message": "Irena podpisuje świadectwo, ale nie idzie z wami do Nessy. Macie dokument, bez możliwości zadania jej pytań na miejscu.",
+              "cost": "Kłamstwo pozostaje częścią porozumienia.",
+              "flags": [
+                "irena_written_testimony"
+              ],
+              "followups": [
+                {
+                  "id": "return_irena",
+                  "label": "Przygotuj pytania do Ireny",
+                  "message": "Nessa przyjmuje podpisany dokument i zapisuje pytania do wyjaśnienia podczas kolejnej wizyty u Ireny.",
+                  "flag": "return_to_irena"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "method_id": "empathy",
+          "profile": "fine",
+          "obstacle": "none",
+          "description": "Wysłuchaj jej obaw o mieszkańców i zaproponuj wspólne wystąpienie.",
+          "cost": "",
+          "success": "Irena zgadza się złożyć świadectwo Nessie.",
+          "failure": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+          "success_flag": "irena_testimony",
+          "failure_flag": "irena_own_report",
+          "variants": [
+            {
+              "kind": "success",
+              "message": "Irena osobiście składa świadectwo Nessie. Możecie poprosić ją o dalsze wyjaśnienia.",
+              "cost": "",
+              "flags": [
+                "irena_testimony"
+              ],
+              "followups": [
+                {
+                  "id": "ask_irena",
+                  "label": "Zapytaj Irenę o dostawy",
+                  "message": "Irena wskazuje młyn jako miejsce odbioru karmy. Nessa otwiera możliwość sprawdzenia dostaw.",
+                  "flag": "mill_route"
+                }
+              ]
+            },
+            {
+              "kind": "failure",
+              "message": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+              "cost": "",
+              "flags": [
+                "irena_own_report"
+              ],
+              "followups": [
+                {
+                  "id": "verify_report",
+                  "label": "Poproś Nessę o weryfikację",
+                  "message": "Nessa kieruje was do rejestru wydawanej karmy. To kolejna droga sprawdzenia własnego raportu.",
+                  "flag": "records_route"
+                }
+              ]
+            },
+            {
+              "kind": "compromise",
+              "message": "Irena podpisuje świadectwo, ale nie idzie z wami do Nessy. Macie dokument, bez możliwości zadania jej pytań na miejscu.",
+              "cost": "",
+              "flags": [
+                "irena_written_testimony"
+              ],
+              "followups": [
+                {
+                  "id": "return_irena",
+                  "label": "Przygotuj pytania do Ireny",
+                  "message": "Nessa przyjmuje podpisany dokument i zapisuje pytania do wyjaśnienia podczas kolejnej wizyty u Ireny.",
+                  "flag": "return_to_irena"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "method_id": "inspiration",
+          "profile": "balanced",
+          "obstacle": "none",
+          "description": "Pokaż, jak świadectwo może pomóc naprawić część szkód.",
+          "cost": "",
+          "success": "Irena zgadza się złożyć świadectwo Nessie.",
+          "failure": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+          "success_flag": "irena_testimony",
+          "failure_flag": "irena_own_report",
+          "variants": [
+            {
+              "kind": "success",
+              "message": "Irena osobiście składa świadectwo Nessie. Możecie poprosić ją o dalsze wyjaśnienia.",
+              "cost": "",
+              "flags": [
+                "irena_testimony"
+              ],
+              "followups": [
+                {
+                  "id": "ask_irena",
+                  "label": "Zapytaj Irenę o dostawy",
+                  "message": "Irena wskazuje młyn jako miejsce odbioru karmy. Nessa otwiera możliwość sprawdzenia dostaw.",
+                  "flag": "mill_route"
+                }
+              ]
+            },
+            {
+              "kind": "failure",
+              "message": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+              "cost": "",
+              "flags": [
+                "irena_own_report"
+              ],
+              "followups": [
+                {
+                  "id": "verify_report",
+                  "label": "Poproś Nessę o weryfikację",
+                  "message": "Nessa kieruje was do rejestru wydawanej karmy. To kolejna droga sprawdzenia własnego raportu.",
+                  "flag": "records_route"
+                }
+              ]
+            },
+            {
+              "kind": "compromise",
+              "message": "Irena podpisuje świadectwo, ale nie idzie z wami do Nessy. Macie dokument, bez możliwości zadania jej pytań na miejscu.",
+              "cost": "",
+              "flags": [
+                "irena_written_testimony"
+              ],
+              "followups": [
+                {
+                  "id": "return_irena",
+                  "label": "Przygotuj pytania do Ireny",
+                  "message": "Nessa przyjmuje podpisany dokument i zapisuje pytania do wyjaśnienia podczas kolejnej wizyty u Ireny.",
+                  "flag": "return_to_irena"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "method_id": "argument",
+          "profile": "balanced",
+          "obstacle": "none",
+          "description": "Uporządkuj dowody i wyjaśnij, dlaczego wspólne świadectwo jest potrzebne.",
+          "cost": "",
+          "success": "Irena zgadza się złożyć świadectwo Nessie.",
+          "failure": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+          "success_flag": "irena_testimony",
+          "failure_flag": "irena_own_report",
+          "variants": [
+            {
+              "kind": "success",
+              "message": "Irena osobiście składa świadectwo Nessie. Możecie poprosić ją o dalsze wyjaśnienia.",
+              "cost": "",
+              "flags": [
+                "irena_testimony"
+              ],
+              "followups": [
+                {
+                  "id": "ask_irena",
+                  "label": "Zapytaj Irenę o dostawy",
+                  "message": "Irena wskazuje młyn jako miejsce odbioru karmy. Nessa otwiera możliwość sprawdzenia dostaw.",
+                  "flag": "mill_route"
+                }
+              ]
+            },
+            {
+              "kind": "failure",
+              "message": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+              "cost": "",
+              "flags": [
+                "irena_own_report"
+              ],
+              "followups": [
+                {
+                  "id": "verify_report",
+                  "label": "Poproś Nessę o weryfikację",
+                  "message": "Nessa kieruje was do rejestru wydawanej karmy. To kolejna droga sprawdzenia własnego raportu.",
+                  "flag": "records_route"
+                }
+              ]
+            },
+            {
+              "kind": "compromise",
+              "message": "Irena podpisuje świadectwo, ale nie idzie z wami do Nessy. Macie dokument, bez możliwości zadania jej pytań na miejscu.",
+              "cost": "",
+              "flags": [
+                "irena_written_testimony"
+              ],
+              "followups": [
+                {
+                  "id": "return_irena",
+                  "label": "Przygotuj pytania do Ireny",
+                  "message": "Nessa przyjmuje podpisany dokument i zapisuje pytania do wyjaśnienia podczas kolejnej wizyty u Ireny.",
+                  "flag": "return_to_irena"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "method_id": "inquiry",
+          "profile": "fine",
+          "obstacle": "none",
+          "description": "Wskaż niespójność w opowieści i zapytaj o to, co Irena próbuje chronić.",
+          "cost": "",
+          "success": "Irena zgadza się złożyć świadectwo Nessie.",
+          "failure": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+          "success_flag": "irena_testimony",
+          "failure_flag": "irena_own_report",
+          "variants": [
+            {
+              "kind": "success",
+              "message": "Irena osobiście składa świadectwo Nessie. Możecie poprosić ją o dalsze wyjaśnienia.",
+              "cost": "",
+              "flags": [
+                "irena_testimony"
+              ],
+              "followups": [
+                {
+                  "id": "ask_irena",
+                  "label": "Zapytaj Irenę o dostawy",
+                  "message": "Irena wskazuje młyn jako miejsce odbioru karmy. Nessa otwiera możliwość sprawdzenia dostaw.",
+                  "flag": "mill_route"
+                }
+              ]
+            },
+            {
+              "kind": "failure",
+              "message": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+              "cost": "",
+              "flags": [
+                "irena_own_report"
+              ],
+              "followups": [
+                {
+                  "id": "verify_report",
+                  "label": "Poproś Nessę o weryfikację",
+                  "message": "Nessa kieruje was do rejestru wydawanej karmy. To kolejna droga sprawdzenia własnego raportu.",
+                  "flag": "records_route"
+                }
+              ]
+            },
+            {
+              "kind": "compromise",
+              "message": "Irena podpisuje świadectwo, ale nie idzie z wami do Nessy. Macie dokument, bez możliwości zadania jej pytań na miejscu.",
+              "cost": "",
+              "flags": [
+                "irena_written_testimony"
+              ],
+              "followups": [
+                {
+                  "id": "return_irena",
+                  "label": "Przygotuj pytania do Ireny",
+                  "message": "Nessa przyjmuje podpisany dokument i zapisuje pytania do wyjaśnienia podczas kolejnej wizyty u Ireny.",
+                  "flag": "return_to_irena"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "condition": {
+        "kind": "compromise"
+      },
+      "condition_title": "Coś pewnego czy szansa na więcej?",
+      "condition_text": "Gdy pula pierwszy raz wyniesie 15–17, Irena zaproponuje podpisane świadectwo bez osobistego wystąpienia. Przyjęcie kończy bez rzutu. Po odrzuceniu propozycja nie wraca.",
+      "obligation": ""
+    },
+    {
+      "id": "irena_sensitive_topic",
+      "kind": "npc",
+      "name": "Irena — Nazwiska mają cenę",
+      "description": "Irena dokarmiała żeraki, aby zagrożenie utrzymywało pomoc dla osady. Znacie już prawdę; chcecie, żeby sama złożyła świadectwo Nessie.",
+      "dc": 16,
+      "position": [
+        8,
+        18
+      ],
+      "options": [
+        {
+          "method_id": "authority",
+          "profile": "balanced",
+          "obstacle": "none",
+          "description": "Przejmij odpowiedzialność za bezpieczne złożenie świadectwa.",
+          "cost": "",
+          "success": "Irena zgadza się złożyć świadectwo Nessie.",
+          "failure": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+          "success_flag": "irena_testimony",
+          "failure_flag": "irena_own_report",
+          "variants": [
+            {
+              "kind": "success",
+              "message": "Irena osobiście składa świadectwo Nessie. Możecie poprosić ją o dalsze wyjaśnienia.",
+              "cost": "",
+              "flags": [
+                "irena_testimony"
+              ],
+              "followups": [
+                {
+                  "id": "ask_irena",
+                  "label": "Zapytaj Irenę o dostawy",
+                  "message": "Irena wskazuje młyn jako miejsce odbioru karmy. Nessa otwiera możliwość sprawdzenia dostaw.",
+                  "flag": "mill_route"
+                }
+              ]
+            },
+            {
+              "kind": "failure",
+              "message": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+              "cost": "",
+              "flags": [
+                "irena_own_report"
+              ],
+              "followups": [
+                {
+                  "id": "verify_report",
+                  "label": "Poproś Nessę o weryfikację",
+                  "message": "Nessa kieruje was do rejestru wydawanej karmy. To kolejna droga sprawdzenia własnego raportu.",
+                  "flag": "records_route"
+                }
+              ]
+            },
+            {
+              "kind": "sensitive_success",
+              "message": "Irena składa świadectwo i podaje nazwiska Witka i Olgi.",
+              "cost": "Irena odmawia dalszej prywatnej pomocy.",
+              "flags": [
+                "irena_testimony_names"
+              ],
+              "followups": [
+                {
+                  "id": "investigate_names",
+                  "label": "Wskaż kolejnych świadków",
+                  "message": "Nessa dopisuje Witka i Olgę do listy osób do przesłuchania. Ta lista jest teraz dostępna dzięki zeznaniu.",
+                  "flag": "named_witnesses_route"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "method_id": "intimidation",
+          "profile": "coarse",
+          "obstacle": "none",
+          "description": "Pokaż Irenie, że nie ustąpisz. Wymuszona zgoda ochłodzi relację.",
+          "cost": "Zgoda jest wymuszona; relacja z Ireną się ochładza.",
+          "success": "Irena zgadza się złożyć świadectwo Nessie.",
+          "failure": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+          "success_flag": "irena_testimony",
+          "failure_flag": "irena_own_report",
+          "variants": [
+            {
+              "kind": "success",
+              "message": "Irena osobiście składa świadectwo Nessie. Możecie poprosić ją o dalsze wyjaśnienia.",
+              "cost": "Zgoda jest wymuszona; relacja z Ireną się ochładza.",
+              "flags": [
+                "irena_testimony"
+              ],
+              "followups": [
+                {
+                  "id": "ask_irena",
+                  "label": "Zapytaj Irenę o dostawy",
+                  "message": "Irena wskazuje młyn jako miejsce odbioru karmy. Nessa otwiera możliwość sprawdzenia dostaw.",
+                  "flag": "mill_route"
+                }
+              ]
+            },
+            {
+              "kind": "failure",
+              "message": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+              "cost": "",
+              "flags": [
+                "irena_own_report"
+              ],
+              "followups": [
+                {
+                  "id": "verify_report",
+                  "label": "Poproś Nessę o weryfikację",
+                  "message": "Nessa kieruje was do rejestru wydawanej karmy. To kolejna droga sprawdzenia własnego raportu.",
+                  "flag": "records_route"
+                }
+              ]
+            },
+            {
+              "kind": "sensitive_success",
+              "message": "Irena składa świadectwo i podaje nazwiska Witka i Olgi.",
+              "cost": "Zgoda jest wymuszona; relacja z Ireną się ochładza. Irena odmawia dalszej prywatnej pomocy.",
+              "flags": [
+                "irena_testimony_names"
+              ],
+              "followups": [
+                {
+                  "id": "investigate_names",
+                  "label": "Wskaż kolejnych świadków",
+                  "message": "Nessa dopisuje Witka i Olgę do listy osób do przesłuchania. Ta lista jest teraz dostępna dzięki zeznaniu.",
+                  "flag": "named_witnesses_route"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "method_id": "deception",
+          "profile": "balanced",
+          "obstacle": "none",
+          "description": "Przekonaj Irenę, że Witek już zdecydował się zeznawać. To blef; jego ujawnienie podważy zaufanie.",
+          "cost": "Kłamstwo pozostaje częścią porozumienia.",
+          "success": "Irena zgadza się złożyć świadectwo Nessie.",
+          "failure": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+          "success_flag": "irena_testimony",
+          "failure_flag": "irena_own_report",
+          "variants": [
+            {
+              "kind": "success",
+              "message": "Irena osobiście składa świadectwo Nessie. Możecie poprosić ją o dalsze wyjaśnienia.",
+              "cost": "Kłamstwo pozostaje częścią porozumienia.",
+              "flags": [
+                "irena_testimony"
+              ],
+              "followups": [
+                {
+                  "id": "ask_irena",
+                  "label": "Zapytaj Irenę o dostawy",
+                  "message": "Irena wskazuje młyn jako miejsce odbioru karmy. Nessa otwiera możliwość sprawdzenia dostaw.",
+                  "flag": "mill_route"
+                }
+              ]
+            },
+            {
+              "kind": "failure",
+              "message": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+              "cost": "",
+              "flags": [
+                "irena_own_report"
+              ],
+              "followups": [
+                {
+                  "id": "verify_report",
+                  "label": "Poproś Nessę o weryfikację",
+                  "message": "Nessa kieruje was do rejestru wydawanej karmy. To kolejna droga sprawdzenia własnego raportu.",
+                  "flag": "records_route"
+                }
+              ]
+            },
+            {
+              "kind": "sensitive_success",
+              "message": "Irena składa świadectwo i podaje nazwiska Witka i Olgi.",
+              "cost": "Kłamstwo pozostaje częścią porozumienia. Irena odmawia dalszej prywatnej pomocy.",
+              "flags": [
+                "irena_testimony_names"
+              ],
+              "followups": [
+                {
+                  "id": "investigate_names",
+                  "label": "Wskaż kolejnych świadków",
+                  "message": "Nessa dopisuje Witka i Olgę do listy osób do przesłuchania. Ta lista jest teraz dostępna dzięki zeznaniu.",
+                  "flag": "named_witnesses_route"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "method_id": "empathy",
+          "profile": "fine",
+          "obstacle": "none",
+          "description": "Wysłuchaj jej obaw o mieszkańców i zaproponuj wspólne wystąpienie.",
+          "cost": "",
+          "success": "Irena zgadza się złożyć świadectwo Nessie.",
+          "failure": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+          "success_flag": "irena_testimony",
+          "failure_flag": "irena_own_report",
+          "variants": [
+            {
+              "kind": "success",
+              "message": "Irena osobiście składa świadectwo Nessie. Możecie poprosić ją o dalsze wyjaśnienia.",
+              "cost": "",
+              "flags": [
+                "irena_testimony"
+              ],
+              "followups": [
+                {
+                  "id": "ask_irena",
+                  "label": "Zapytaj Irenę o dostawy",
+                  "message": "Irena wskazuje młyn jako miejsce odbioru karmy. Nessa otwiera możliwość sprawdzenia dostaw.",
+                  "flag": "mill_route"
+                }
+              ]
+            },
+            {
+              "kind": "failure",
+              "message": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+              "cost": "",
+              "flags": [
+                "irena_own_report"
+              ],
+              "followups": [
+                {
+                  "id": "verify_report",
+                  "label": "Poproś Nessę o weryfikację",
+                  "message": "Nessa kieruje was do rejestru wydawanej karmy. To kolejna droga sprawdzenia własnego raportu.",
+                  "flag": "records_route"
+                }
+              ]
+            },
+            {
+              "kind": "sensitive_success",
+              "message": "Irena składa świadectwo i podaje nazwiska Witka i Olgi.",
+              "cost": "Irena odmawia dalszej prywatnej pomocy.",
+              "flags": [
+                "irena_testimony_names"
+              ],
+              "followups": [
+                {
+                  "id": "investigate_names",
+                  "label": "Wskaż kolejnych świadków",
+                  "message": "Nessa dopisuje Witka i Olgę do listy osób do przesłuchania. Ta lista jest teraz dostępna dzięki zeznaniu.",
+                  "flag": "named_witnesses_route"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "method_id": "inspiration",
+          "profile": "balanced",
+          "obstacle": "none",
+          "description": "Pokaż, jak świadectwo może pomóc naprawić część szkód.",
+          "cost": "",
+          "success": "Irena zgadza się złożyć świadectwo Nessie.",
+          "failure": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+          "success_flag": "irena_testimony",
+          "failure_flag": "irena_own_report",
+          "variants": [
+            {
+              "kind": "success",
+              "message": "Irena osobiście składa świadectwo Nessie. Możecie poprosić ją o dalsze wyjaśnienia.",
+              "cost": "",
+              "flags": [
+                "irena_testimony"
+              ],
+              "followups": [
+                {
+                  "id": "ask_irena",
+                  "label": "Zapytaj Irenę o dostawy",
+                  "message": "Irena wskazuje młyn jako miejsce odbioru karmy. Nessa otwiera możliwość sprawdzenia dostaw.",
+                  "flag": "mill_route"
+                }
+              ]
+            },
+            {
+              "kind": "failure",
+              "message": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+              "cost": "",
+              "flags": [
+                "irena_own_report"
+              ],
+              "followups": [
+                {
+                  "id": "verify_report",
+                  "label": "Poproś Nessę o weryfikację",
+                  "message": "Nessa kieruje was do rejestru wydawanej karmy. To kolejna droga sprawdzenia własnego raportu.",
+                  "flag": "records_route"
+                }
+              ]
+            },
+            {
+              "kind": "sensitive_success",
+              "message": "Irena składa świadectwo i podaje nazwiska Witka i Olgi.",
+              "cost": "Irena odmawia dalszej prywatnej pomocy.",
+              "flags": [
+                "irena_testimony_names"
+              ],
+              "followups": [
+                {
+                  "id": "investigate_names",
+                  "label": "Wskaż kolejnych świadków",
+                  "message": "Nessa dopisuje Witka i Olgę do listy osób do przesłuchania. Ta lista jest teraz dostępna dzięki zeznaniu.",
+                  "flag": "named_witnesses_route"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "method_id": "argument",
+          "profile": "balanced",
+          "obstacle": "none",
+          "description": "Uporządkuj dowody i wyjaśnij, dlaczego wspólne świadectwo jest potrzebne.",
+          "cost": "",
+          "success": "Irena zgadza się złożyć świadectwo Nessie.",
+          "failure": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+          "success_flag": "irena_testimony",
+          "failure_flag": "irena_own_report",
+          "variants": [
+            {
+              "kind": "success",
+              "message": "Irena osobiście składa świadectwo Nessie. Możecie poprosić ją o dalsze wyjaśnienia.",
+              "cost": "",
+              "flags": [
+                "irena_testimony"
+              ],
+              "followups": [
+                {
+                  "id": "ask_irena",
+                  "label": "Zapytaj Irenę o dostawy",
+                  "message": "Irena wskazuje młyn jako miejsce odbioru karmy. Nessa otwiera możliwość sprawdzenia dostaw.",
+                  "flag": "mill_route"
+                }
+              ]
+            },
+            {
+              "kind": "failure",
+              "message": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+              "cost": "",
+              "flags": [
+                "irena_own_report"
+              ],
+              "followups": [
+                {
+                  "id": "verify_report",
+                  "label": "Poproś Nessę o weryfikację",
+                  "message": "Nessa kieruje was do rejestru wydawanej karmy. To kolejna droga sprawdzenia własnego raportu.",
+                  "flag": "records_route"
+                }
+              ]
+            },
+            {
+              "kind": "sensitive_success",
+              "message": "Irena składa świadectwo i podaje nazwiska Witka i Olgi.",
+              "cost": "Irena odmawia dalszej prywatnej pomocy.",
+              "flags": [
+                "irena_testimony_names"
+              ],
+              "followups": [
+                {
+                  "id": "investigate_names",
+                  "label": "Wskaż kolejnych świadków",
+                  "message": "Nessa dopisuje Witka i Olgę do listy osób do przesłuchania. Ta lista jest teraz dostępna dzięki zeznaniu.",
+                  "flag": "named_witnesses_route"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "method_id": "inquiry",
+          "profile": "fine",
+          "obstacle": "none",
+          "description": "Wskaż niespójność w opowieści i zapytaj o to, co Irena próbuje chronić.",
+          "cost": "",
+          "success": "Irena zgadza się złożyć świadectwo Nessie.",
+          "failure": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+          "success_flag": "irena_testimony",
+          "failure_flag": "irena_own_report",
+          "variants": [
+            {
+              "kind": "success",
+              "message": "Irena osobiście składa świadectwo Nessie. Możecie poprosić ją o dalsze wyjaśnienia.",
+              "cost": "",
+              "flags": [
+                "irena_testimony"
+              ],
+              "followups": [
+                {
+                  "id": "ask_irena",
+                  "label": "Zapytaj Irenę o dostawy",
+                  "message": "Irena wskazuje młyn jako miejsce odbioru karmy. Nessa otwiera możliwość sprawdzenia dostaw.",
+                  "flag": "mill_route"
+                }
+              ]
+            },
+            {
+              "kind": "failure",
+              "message": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+              "cost": "",
+              "flags": [
+                "irena_own_report"
+              ],
+              "followups": [
+                {
+                  "id": "verify_report",
+                  "label": "Poproś Nessę o weryfikację",
+                  "message": "Nessa kieruje was do rejestru wydawanej karmy. To kolejna droga sprawdzenia własnego raportu.",
+                  "flag": "records_route"
+                }
+              ]
+            },
+            {
+              "kind": "sensitive_success",
+              "message": "Irena składa świadectwo i podaje nazwiska Witka i Olgi.",
+              "cost": "Irena odmawia dalszej prywatnej pomocy.",
+              "flags": [
+                "irena_testimony_names"
+              ],
+              "followups": [
+                {
+                  "id": "investigate_names",
+                  "label": "Wskaż kolejnych świadków",
+                  "message": "Nessa dopisuje Witka i Olgę do listy osób do przesłuchania. Ta lista jest teraz dostępna dzięki zeznaniu.",
+                  "flag": "named_witnesses_route"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "condition": {
+        "kind": "sensitive_topic",
+        "color": "C"
+      },
+      "condition_title": "Nazwiska mają cenę",
+      "condition_text": "Wybranie czerwonej karty oznacza nacisk na nazwiska. Przy sukcesie otrzymasz świadectwo i nazwiska, ale Irena odmówi dalszej prywatnej pomocy. Cena obowiązuje także przy 21. Przy porażce nie ma dodatkowej kary za kolor.",
+      "obligation": ""
+    },
+    {
+      "id": "irena_color_goal",
+      "kind": "npc",
+      "name": "Irena — Jeszcze jedna niebieska",
+      "description": "Irena dokarmiała żeraki, aby zagrożenie utrzymywało pomoc dla osady. Znacie już prawdę; chcecie, żeby sama złożyła świadectwo Nessie.",
+      "dc": 16,
+      "position": [
+        8,
+        18
+      ],
+      "options": [
+        {
+          "method_id": "authority",
+          "profile": "balanced",
+          "obstacle": "none",
+          "description": "Przejmij odpowiedzialność za bezpieczne złożenie świadectwa.",
+          "cost": "",
+          "success": "Irena zgadza się złożyć świadectwo Nessie.",
+          "failure": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+          "success_flag": "irena_testimony",
+          "failure_flag": "irena_own_report",
+          "variants": [
+            {
+              "kind": "success",
+              "message": "Irena osobiście składa świadectwo Nessie. Możecie poprosić ją o dalsze wyjaśnienia.",
+              "cost": "",
+              "flags": [
+                "irena_testimony"
+              ],
+              "followups": [
+                {
+                  "id": "ask_irena",
+                  "label": "Zapytaj Irenę o dostawy",
+                  "message": "Irena wskazuje młyn jako miejsce odbioru karmy. Nessa otwiera możliwość sprawdzenia dostaw.",
+                  "flag": "mill_route"
+                }
+              ]
+            },
+            {
+              "kind": "failure",
+              "message": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+              "cost": "",
+              "flags": [
+                "irena_own_report"
+              ],
+              "followups": [
+                {
+                  "id": "verify_report",
+                  "label": "Poproś Nessę o weryfikację",
+                  "message": "Nessa kieruje was do rejestru wydawanej karmy. To kolejna droga sprawdzenia własnego raportu.",
+                  "flag": "records_route"
+                }
+              ]
+            },
+            {
+              "kind": "goal_success",
+              "message": "Irena składa świadectwo i zdradza, że pomysł wyszedł od zarządcy spichlerza.",
+              "cost": "",
+              "flags": [
+                "irena_testimony_origin"
+              ],
+              "followups": [
+                {
+                  "id": "ask_irena",
+                  "label": "Zapytaj Irenę o dostawy",
+                  "message": "Irena wskazuje młyn jako miejsce odbioru karmy. Nessa otwiera możliwość sprawdzenia dostaw.",
+                  "flag": "mill_route"
+                },
+                {
+                  "id": "investigate_origin",
+                  "label": "Sprawdź pomysłodawcę",
+                  "message": "Irena wskazuje zarządcę spichlerza. Nessa otwiera możliwość skonfrontowania jego relacji z rejestrem zapasów.",
+                  "flag": "origin_route"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "method_id": "intimidation",
+          "profile": "coarse",
+          "obstacle": "none",
+          "description": "Pokaż Irenie, że nie ustąpisz. Wymuszona zgoda ochłodzi relację.",
+          "cost": "Zgoda jest wymuszona; relacja z Ireną się ochładza.",
+          "success": "Irena zgadza się złożyć świadectwo Nessie.",
+          "failure": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+          "success_flag": "irena_testimony",
+          "failure_flag": "irena_own_report",
+          "variants": [
+            {
+              "kind": "success",
+              "message": "Irena osobiście składa świadectwo Nessie. Możecie poprosić ją o dalsze wyjaśnienia.",
+              "cost": "Zgoda jest wymuszona; relacja z Ireną się ochładza.",
+              "flags": [
+                "irena_testimony"
+              ],
+              "followups": [
+                {
+                  "id": "ask_irena",
+                  "label": "Zapytaj Irenę o dostawy",
+                  "message": "Irena wskazuje młyn jako miejsce odbioru karmy. Nessa otwiera możliwość sprawdzenia dostaw.",
+                  "flag": "mill_route"
+                }
+              ]
+            },
+            {
+              "kind": "failure",
+              "message": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+              "cost": "",
+              "flags": [
+                "irena_own_report"
+              ],
+              "followups": [
+                {
+                  "id": "verify_report",
+                  "label": "Poproś Nessę o weryfikację",
+                  "message": "Nessa kieruje was do rejestru wydawanej karmy. To kolejna droga sprawdzenia własnego raportu.",
+                  "flag": "records_route"
+                }
+              ]
+            },
+            {
+              "kind": "goal_success",
+              "message": "Irena składa świadectwo i zdradza, że pomysł wyszedł od zarządcy spichlerza.",
+              "cost": "Zgoda jest wymuszona; relacja z Ireną się ochładza.",
+              "flags": [
+                "irena_testimony_origin"
+              ],
+              "followups": [
+                {
+                  "id": "ask_irena",
+                  "label": "Zapytaj Irenę o dostawy",
+                  "message": "Irena wskazuje młyn jako miejsce odbioru karmy. Nessa otwiera możliwość sprawdzenia dostaw.",
+                  "flag": "mill_route"
+                },
+                {
+                  "id": "investigate_origin",
+                  "label": "Sprawdź pomysłodawcę",
+                  "message": "Irena wskazuje zarządcę spichlerza. Nessa otwiera możliwość skonfrontowania jego relacji z rejestrem zapasów.",
+                  "flag": "origin_route"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "method_id": "deception",
+          "profile": "balanced",
+          "obstacle": "none",
+          "description": "Przekonaj Irenę, że Witek już zdecydował się zeznawać. To blef; jego ujawnienie podważy zaufanie.",
+          "cost": "Kłamstwo pozostaje częścią porozumienia.",
+          "success": "Irena zgadza się złożyć świadectwo Nessie.",
+          "failure": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+          "success_flag": "irena_testimony",
+          "failure_flag": "irena_own_report",
+          "variants": [
+            {
+              "kind": "success",
+              "message": "Irena osobiście składa świadectwo Nessie. Możecie poprosić ją o dalsze wyjaśnienia.",
+              "cost": "Kłamstwo pozostaje częścią porozumienia.",
+              "flags": [
+                "irena_testimony"
+              ],
+              "followups": [
+                {
+                  "id": "ask_irena",
+                  "label": "Zapytaj Irenę o dostawy",
+                  "message": "Irena wskazuje młyn jako miejsce odbioru karmy. Nessa otwiera możliwość sprawdzenia dostaw.",
+                  "flag": "mill_route"
+                }
+              ]
+            },
+            {
+              "kind": "failure",
+              "message": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+              "cost": "",
+              "flags": [
+                "irena_own_report"
+              ],
+              "followups": [
+                {
+                  "id": "verify_report",
+                  "label": "Poproś Nessę o weryfikację",
+                  "message": "Nessa kieruje was do rejestru wydawanej karmy. To kolejna droga sprawdzenia własnego raportu.",
+                  "flag": "records_route"
+                }
+              ]
+            },
+            {
+              "kind": "goal_success",
+              "message": "Irena składa świadectwo i zdradza, że pomysł wyszedł od zarządcy spichlerza.",
+              "cost": "Kłamstwo pozostaje częścią porozumienia.",
+              "flags": [
+                "irena_testimony_origin"
+              ],
+              "followups": [
+                {
+                  "id": "ask_irena",
+                  "label": "Zapytaj Irenę o dostawy",
+                  "message": "Irena wskazuje młyn jako miejsce odbioru karmy. Nessa otwiera możliwość sprawdzenia dostaw.",
+                  "flag": "mill_route"
+                },
+                {
+                  "id": "investigate_origin",
+                  "label": "Sprawdź pomysłodawcę",
+                  "message": "Irena wskazuje zarządcę spichlerza. Nessa otwiera możliwość skonfrontowania jego relacji z rejestrem zapasów.",
+                  "flag": "origin_route"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "method_id": "empathy",
+          "profile": "fine",
+          "obstacle": "none",
+          "description": "Wysłuchaj jej obaw o mieszkańców i zaproponuj wspólne wystąpienie.",
+          "cost": "",
+          "success": "Irena zgadza się złożyć świadectwo Nessie.",
+          "failure": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+          "success_flag": "irena_testimony",
+          "failure_flag": "irena_own_report",
+          "variants": [
+            {
+              "kind": "success",
+              "message": "Irena osobiście składa świadectwo Nessie. Możecie poprosić ją o dalsze wyjaśnienia.",
+              "cost": "",
+              "flags": [
+                "irena_testimony"
+              ],
+              "followups": [
+                {
+                  "id": "ask_irena",
+                  "label": "Zapytaj Irenę o dostawy",
+                  "message": "Irena wskazuje młyn jako miejsce odbioru karmy. Nessa otwiera możliwość sprawdzenia dostaw.",
+                  "flag": "mill_route"
+                }
+              ]
+            },
+            {
+              "kind": "failure",
+              "message": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+              "cost": "",
+              "flags": [
+                "irena_own_report"
+              ],
+              "followups": [
+                {
+                  "id": "verify_report",
+                  "label": "Poproś Nessę o weryfikację",
+                  "message": "Nessa kieruje was do rejestru wydawanej karmy. To kolejna droga sprawdzenia własnego raportu.",
+                  "flag": "records_route"
+                }
+              ]
+            },
+            {
+              "kind": "goal_success",
+              "message": "Irena składa świadectwo i zdradza, że pomysł wyszedł od zarządcy spichlerza.",
+              "cost": "",
+              "flags": [
+                "irena_testimony_origin"
+              ],
+              "followups": [
+                {
+                  "id": "ask_irena",
+                  "label": "Zapytaj Irenę o dostawy",
+                  "message": "Irena wskazuje młyn jako miejsce odbioru karmy. Nessa otwiera możliwość sprawdzenia dostaw.",
+                  "flag": "mill_route"
+                },
+                {
+                  "id": "investigate_origin",
+                  "label": "Sprawdź pomysłodawcę",
+                  "message": "Irena wskazuje zarządcę spichlerza. Nessa otwiera możliwość skonfrontowania jego relacji z rejestrem zapasów.",
+                  "flag": "origin_route"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "method_id": "inspiration",
+          "profile": "balanced",
+          "obstacle": "none",
+          "description": "Pokaż, jak świadectwo może pomóc naprawić część szkód.",
+          "cost": "",
+          "success": "Irena zgadza się złożyć świadectwo Nessie.",
+          "failure": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+          "success_flag": "irena_testimony",
+          "failure_flag": "irena_own_report",
+          "variants": [
+            {
+              "kind": "success",
+              "message": "Irena osobiście składa świadectwo Nessie. Możecie poprosić ją o dalsze wyjaśnienia.",
+              "cost": "",
+              "flags": [
+                "irena_testimony"
+              ],
+              "followups": [
+                {
+                  "id": "ask_irena",
+                  "label": "Zapytaj Irenę o dostawy",
+                  "message": "Irena wskazuje młyn jako miejsce odbioru karmy. Nessa otwiera możliwość sprawdzenia dostaw.",
+                  "flag": "mill_route"
+                }
+              ]
+            },
+            {
+              "kind": "failure",
+              "message": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+              "cost": "",
+              "flags": [
+                "irena_own_report"
+              ],
+              "followups": [
+                {
+                  "id": "verify_report",
+                  "label": "Poproś Nessę o weryfikację",
+                  "message": "Nessa kieruje was do rejestru wydawanej karmy. To kolejna droga sprawdzenia własnego raportu.",
+                  "flag": "records_route"
+                }
+              ]
+            },
+            {
+              "kind": "goal_success",
+              "message": "Irena składa świadectwo i zdradza, że pomysł wyszedł od zarządcy spichlerza.",
+              "cost": "",
+              "flags": [
+                "irena_testimony_origin"
+              ],
+              "followups": [
+                {
+                  "id": "ask_irena",
+                  "label": "Zapytaj Irenę o dostawy",
+                  "message": "Irena wskazuje młyn jako miejsce odbioru karmy. Nessa otwiera możliwość sprawdzenia dostaw.",
+                  "flag": "mill_route"
+                },
+                {
+                  "id": "investigate_origin",
+                  "label": "Sprawdź pomysłodawcę",
+                  "message": "Irena wskazuje zarządcę spichlerza. Nessa otwiera możliwość skonfrontowania jego relacji z rejestrem zapasów.",
+                  "flag": "origin_route"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "method_id": "argument",
+          "profile": "balanced",
+          "obstacle": "none",
+          "description": "Uporządkuj dowody i wyjaśnij, dlaczego wspólne świadectwo jest potrzebne.",
+          "cost": "",
+          "success": "Irena zgadza się złożyć świadectwo Nessie.",
+          "failure": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+          "success_flag": "irena_testimony",
+          "failure_flag": "irena_own_report",
+          "variants": [
+            {
+              "kind": "success",
+              "message": "Irena osobiście składa świadectwo Nessie. Możecie poprosić ją o dalsze wyjaśnienia.",
+              "cost": "",
+              "flags": [
+                "irena_testimony"
+              ],
+              "followups": [
+                {
+                  "id": "ask_irena",
+                  "label": "Zapytaj Irenę o dostawy",
+                  "message": "Irena wskazuje młyn jako miejsce odbioru karmy. Nessa otwiera możliwość sprawdzenia dostaw.",
+                  "flag": "mill_route"
+                }
+              ]
+            },
+            {
+              "kind": "failure",
+              "message": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+              "cost": "",
+              "flags": [
+                "irena_own_report"
+              ],
+              "followups": [
+                {
+                  "id": "verify_report",
+                  "label": "Poproś Nessę o weryfikację",
+                  "message": "Nessa kieruje was do rejestru wydawanej karmy. To kolejna droga sprawdzenia własnego raportu.",
+                  "flag": "records_route"
+                }
+              ]
+            },
+            {
+              "kind": "goal_success",
+              "message": "Irena składa świadectwo i zdradza, że pomysł wyszedł od zarządcy spichlerza.",
+              "cost": "",
+              "flags": [
+                "irena_testimony_origin"
+              ],
+              "followups": [
+                {
+                  "id": "ask_irena",
+                  "label": "Zapytaj Irenę o dostawy",
+                  "message": "Irena wskazuje młyn jako miejsce odbioru karmy. Nessa otwiera możliwość sprawdzenia dostaw.",
+                  "flag": "mill_route"
+                },
+                {
+                  "id": "investigate_origin",
+                  "label": "Sprawdź pomysłodawcę",
+                  "message": "Irena wskazuje zarządcę spichlerza. Nessa otwiera możliwość skonfrontowania jego relacji z rejestrem zapasów.",
+                  "flag": "origin_route"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "method_id": "inquiry",
+          "profile": "fine",
+          "obstacle": "none",
+          "description": "Wskaż niespójność w opowieści i zapytaj o to, co Irena próbuje chronić.",
+          "cost": "",
+          "success": "Irena zgadza się złożyć świadectwo Nessie.",
+          "failure": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+          "success_flag": "irena_testimony",
+          "failure_flag": "irena_own_report",
+          "variants": [
+            {
+              "kind": "success",
+              "message": "Irena osobiście składa świadectwo Nessie. Możecie poprosić ją o dalsze wyjaśnienia.",
+              "cost": "",
+              "flags": [
+                "irena_testimony"
+              ],
+              "followups": [
+                {
+                  "id": "ask_irena",
+                  "label": "Zapytaj Irenę o dostawy",
+                  "message": "Irena wskazuje młyn jako miejsce odbioru karmy. Nessa otwiera możliwość sprawdzenia dostaw.",
+                  "flag": "mill_route"
+                }
+              ]
+            },
+            {
+              "kind": "failure",
+              "message": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+              "cost": "",
+              "flags": [
+                "irena_own_report"
+              ],
+              "followups": [
+                {
+                  "id": "verify_report",
+                  "label": "Poproś Nessę o weryfikację",
+                  "message": "Nessa kieruje was do rejestru wydawanej karmy. To kolejna droga sprawdzenia własnego raportu.",
+                  "flag": "records_route"
+                }
+              ]
+            },
+            {
+              "kind": "goal_success",
+              "message": "Irena składa świadectwo i zdradza, że pomysł wyszedł od zarządcy spichlerza.",
+              "cost": "",
+              "flags": [
+                "irena_testimony_origin"
+              ],
+              "followups": [
+                {
+                  "id": "ask_irena",
+                  "label": "Zapytaj Irenę o dostawy",
+                  "message": "Irena wskazuje młyn jako miejsce odbioru karmy. Nessa otwiera możliwość sprawdzenia dostaw.",
+                  "flag": "mill_route"
+                },
+                {
+                  "id": "investigate_origin",
+                  "label": "Sprawdź pomysłodawcę",
+                  "message": "Irena wskazuje zarządcę spichlerza. Nessa otwiera możliwość skonfrontowania jego relacji z rejestrem zapasów.",
+                  "flag": "origin_route"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "condition": {
+        "kind": "color_goal",
+        "color": "N",
+        "count": 2
+      },
+      "condition_title": "Jeszcze jedna niebieska",
+      "condition_text": "Zbierz co najmniej dwie niebieskie karty w swojej puli. Przy sukcesie, także po przekroczeniu lub przy 21, poznasz dodatkowo pomysłodawcę dokarmiania żeraków. Odrzucone karty nie liczą się. Nagroda jest jednorazowa.",
+      "obligation": ""
+    },
+    {
+      "id": "irena_favor",
+      "kind": "npc",
+      "name": "Irena — Ile kosztuje pewność?",
+      "description": "Irena dokarmiała żeraki, aby zagrożenie utrzymywało pomoc dla osady. Znacie już prawdę; chcecie, żeby sama złożyła świadectwo Nessie.",
+      "dc": 16,
+      "position": [
+        8,
+        18
+      ],
+      "options": [
+        {
+          "method_id": "authority",
+          "profile": "balanced",
+          "obstacle": "none",
+          "description": "Przejmij odpowiedzialność za bezpieczne złożenie świadectwa.",
+          "cost": "",
+          "success": "Irena zgadza się złożyć świadectwo Nessie.",
+          "failure": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+          "success_flag": "irena_testimony",
+          "failure_flag": "irena_own_report",
+          "variants": [
+            {
+              "kind": "success",
+              "message": "Irena osobiście składa świadectwo Nessie. Możecie poprosić ją o dalsze wyjaśnienia.",
+              "cost": "",
+              "flags": [
+                "irena_testimony"
+              ],
+              "followups": [
+                {
+                  "id": "ask_irena",
+                  "label": "Zapytaj Irenę o dostawy",
+                  "message": "Irena wskazuje młyn jako miejsce odbioru karmy. Nessa otwiera możliwość sprawdzenia dostaw.",
+                  "flag": "mill_route"
+                }
+              ]
+            },
+            {
+              "kind": "failure",
+              "message": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+              "cost": "",
+              "flags": [
+                "irena_own_report"
+              ],
+              "followups": [
+                {
+                  "id": "verify_report",
+                  "label": "Poproś Nessę o weryfikację",
+                  "message": "Nessa kieruje was do rejestru wydawanej karmy. To kolejna droga sprawdzenia własnego raportu.",
+                  "flag": "records_route"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "method_id": "intimidation",
+          "profile": "coarse",
+          "obstacle": "none",
+          "description": "Pokaż Irenie, że nie ustąpisz. Wymuszona zgoda ochłodzi relację.",
+          "cost": "Zgoda jest wymuszona; relacja z Ireną się ochładza.",
+          "success": "Irena zgadza się złożyć świadectwo Nessie.",
+          "failure": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+          "success_flag": "irena_testimony",
+          "failure_flag": "irena_own_report",
+          "variants": [
+            {
+              "kind": "success",
+              "message": "Irena osobiście składa świadectwo Nessie. Możecie poprosić ją o dalsze wyjaśnienia.",
+              "cost": "Zgoda jest wymuszona; relacja z Ireną się ochładza.",
+              "flags": [
+                "irena_testimony"
+              ],
+              "followups": [
+                {
+                  "id": "ask_irena",
+                  "label": "Zapytaj Irenę o dostawy",
+                  "message": "Irena wskazuje młyn jako miejsce odbioru karmy. Nessa otwiera możliwość sprawdzenia dostaw.",
+                  "flag": "mill_route"
+                }
+              ]
+            },
+            {
+              "kind": "failure",
+              "message": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+              "cost": "",
+              "flags": [
+                "irena_own_report"
+              ],
+              "followups": [
+                {
+                  "id": "verify_report",
+                  "label": "Poproś Nessę o weryfikację",
+                  "message": "Nessa kieruje was do rejestru wydawanej karmy. To kolejna droga sprawdzenia własnego raportu.",
+                  "flag": "records_route"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "method_id": "deception",
+          "profile": "balanced",
+          "obstacle": "none",
+          "description": "Przekonaj Irenę, że Witek już zdecydował się zeznawać. To blef; jego ujawnienie podważy zaufanie.",
+          "cost": "Kłamstwo pozostaje częścią porozumienia.",
+          "success": "Irena zgadza się złożyć świadectwo Nessie.",
+          "failure": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+          "success_flag": "irena_testimony",
+          "failure_flag": "irena_own_report",
+          "variants": [
+            {
+              "kind": "success",
+              "message": "Irena osobiście składa świadectwo Nessie. Możecie poprosić ją o dalsze wyjaśnienia.",
+              "cost": "Kłamstwo pozostaje częścią porozumienia.",
+              "flags": [
+                "irena_testimony"
+              ],
+              "followups": [
+                {
+                  "id": "ask_irena",
+                  "label": "Zapytaj Irenę o dostawy",
+                  "message": "Irena wskazuje młyn jako miejsce odbioru karmy. Nessa otwiera możliwość sprawdzenia dostaw.",
+                  "flag": "mill_route"
+                }
+              ]
+            },
+            {
+              "kind": "failure",
+              "message": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+              "cost": "",
+              "flags": [
+                "irena_own_report"
+              ],
+              "followups": [
+                {
+                  "id": "verify_report",
+                  "label": "Poproś Nessę o weryfikację",
+                  "message": "Nessa kieruje was do rejestru wydawanej karmy. To kolejna droga sprawdzenia własnego raportu.",
+                  "flag": "records_route"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "method_id": "empathy",
+          "profile": "fine",
+          "obstacle": "none",
+          "description": "Wysłuchaj jej obaw o mieszkańców i zaproponuj wspólne wystąpienie.",
+          "cost": "",
+          "success": "Irena zgadza się złożyć świadectwo Nessie.",
+          "failure": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+          "success_flag": "irena_testimony",
+          "failure_flag": "irena_own_report",
+          "variants": [
+            {
+              "kind": "success",
+              "message": "Irena osobiście składa świadectwo Nessie. Możecie poprosić ją o dalsze wyjaśnienia.",
+              "cost": "",
+              "flags": [
+                "irena_testimony"
+              ],
+              "followups": [
+                {
+                  "id": "ask_irena",
+                  "label": "Zapytaj Irenę o dostawy",
+                  "message": "Irena wskazuje młyn jako miejsce odbioru karmy. Nessa otwiera możliwość sprawdzenia dostaw.",
+                  "flag": "mill_route"
+                }
+              ]
+            },
+            {
+              "kind": "failure",
+              "message": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+              "cost": "",
+              "flags": [
+                "irena_own_report"
+              ],
+              "followups": [
+                {
+                  "id": "verify_report",
+                  "label": "Poproś Nessę o weryfikację",
+                  "message": "Nessa kieruje was do rejestru wydawanej karmy. To kolejna droga sprawdzenia własnego raportu.",
+                  "flag": "records_route"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "method_id": "inspiration",
+          "profile": "balanced",
+          "obstacle": "none",
+          "description": "Pokaż, jak świadectwo może pomóc naprawić część szkód.",
+          "cost": "",
+          "success": "Irena zgadza się złożyć świadectwo Nessie.",
+          "failure": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+          "success_flag": "irena_testimony",
+          "failure_flag": "irena_own_report",
+          "variants": [
+            {
+              "kind": "success",
+              "message": "Irena osobiście składa świadectwo Nessie. Możecie poprosić ją o dalsze wyjaśnienia.",
+              "cost": "",
+              "flags": [
+                "irena_testimony"
+              ],
+              "followups": [
+                {
+                  "id": "ask_irena",
+                  "label": "Zapytaj Irenę o dostawy",
+                  "message": "Irena wskazuje młyn jako miejsce odbioru karmy. Nessa otwiera możliwość sprawdzenia dostaw.",
+                  "flag": "mill_route"
+                }
+              ]
+            },
+            {
+              "kind": "failure",
+              "message": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+              "cost": "",
+              "flags": [
+                "irena_own_report"
+              ],
+              "followups": [
+                {
+                  "id": "verify_report",
+                  "label": "Poproś Nessę o weryfikację",
+                  "message": "Nessa kieruje was do rejestru wydawanej karmy. To kolejna droga sprawdzenia własnego raportu.",
+                  "flag": "records_route"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "method_id": "argument",
+          "profile": "balanced",
+          "obstacle": "none",
+          "description": "Uporządkuj dowody i wyjaśnij, dlaczego wspólne świadectwo jest potrzebne.",
+          "cost": "",
+          "success": "Irena zgadza się złożyć świadectwo Nessie.",
+          "failure": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+          "success_flag": "irena_testimony",
+          "failure_flag": "irena_own_report",
+          "variants": [
+            {
+              "kind": "success",
+              "message": "Irena osobiście składa świadectwo Nessie. Możecie poprosić ją o dalsze wyjaśnienia.",
+              "cost": "",
+              "flags": [
+                "irena_testimony"
+              ],
+              "followups": [
+                {
+                  "id": "ask_irena",
+                  "label": "Zapytaj Irenę o dostawy",
+                  "message": "Irena wskazuje młyn jako miejsce odbioru karmy. Nessa otwiera możliwość sprawdzenia dostaw.",
+                  "flag": "mill_route"
+                }
+              ]
+            },
+            {
+              "kind": "failure",
+              "message": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+              "cost": "",
+              "flags": [
+                "irena_own_report"
+              ],
+              "followups": [
+                {
+                  "id": "verify_report",
+                  "label": "Poproś Nessę o weryfikację",
+                  "message": "Nessa kieruje was do rejestru wydawanej karmy. To kolejna droga sprawdzenia własnego raportu.",
+                  "flag": "records_route"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "method_id": "inquiry",
+          "profile": "fine",
+          "obstacle": "none",
+          "description": "Wskaż niespójność w opowieści i zapytaj o to, co Irena próbuje chronić.",
+          "cost": "",
+          "success": "Irena zgadza się złożyć świadectwo Nessie.",
+          "failure": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+          "success_flag": "irena_testimony",
+          "failure_flag": "irena_own_report",
+          "variants": [
+            {
+              "kind": "success",
+              "message": "Irena osobiście składa świadectwo Nessie. Możecie poprosić ją o dalsze wyjaśnienia.",
+              "cost": "",
+              "flags": [
+                "irena_testimony"
+              ],
+              "followups": [
+                {
+                  "id": "ask_irena",
+                  "label": "Zapytaj Irenę o dostawy",
+                  "message": "Irena wskazuje młyn jako miejsce odbioru karmy. Nessa otwiera możliwość sprawdzenia dostaw.",
+                  "flag": "mill_route"
+                }
+              ]
+            },
+            {
+              "kind": "failure",
+              "message": "Irena odmawia wspólnego wystąpienia. Możecie przekazać Nessie własny raport.",
+              "cost": "",
+              "flags": [
+                "irena_own_report"
+              ],
+              "followups": [
+                {
+                  "id": "verify_report",
+                  "label": "Poproś Nessę o weryfikację",
+                  "message": "Nessa kieruje was do rejestru wydawanej karmy. To kolejna droga sprawdzenia własnego raportu.",
+                  "flag": "records_route"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "condition": {
+        "kind": "favor"
+      },
+      "condition_title": "Ile kosztuje pewność?",
+      "condition_text": "Raz podczas wyboru karty możesz użyć Klucza i nadać jej wartość 1. W zamian zobowiążesz się dostarczyć list Ireny do obozu uchodźców. Dodatkowa droga pozostaje do wykonania także przy porażce. Gwiazda wyłącza ustępstwo przed wyborem koloru.",
+      "obligation": "Dostarcz list Ireny do obozu uchodźców; wymaga to dodatkowej drogi."
+    }
+  ],
+  "lessons": [
+    {
+      "id": "npc",
+      "name": "Porozmawiaj z NPC",
+      "kind": "npc",
+      "narration": "Nie każdą sprawę rozwiązuje miecz. Spróbuj uzyskać świadectwo Ireny swoją metodą. Zwykłe pytania nie wymagają many.",
+      "objective": "Rozstrzygnij rozmowę. Sukces lub porażka prowadzi dalej."
+    },
+    {
+      "id": "object",
+      "name": "Wejdź w interakcję z obiektem",
+      "kind": "object",
+      "narration": "Obejrzyj skrzynię lekarstw. Twoja postać ma własny sposób rozwiązania tego problemu. Poznasz go w działaniu.",
+      "objective": "Rozstrzygnij działanie przy skrzyni. Zwróć uwagę na cechę testu i stan obiektu."
+    },
+    {
+      "id": "stand",
+      "name": "Dwie karty, duplikat i pas",
+      "kind": "npc",
+      "narration": "Przygotujemy ofertę dwóch identycznych kolorów. Dociągnij do innej barwy i zachowaj tylko jedną kartę. Potem przećwiczymy pas przed doborem.",
+      "objective": "Wybierz wskazane karty, następnie spasuj i wykonaj test.",
+      "profile": "balanced",
+      "obstacle": "none",
+      "offers": [
+        [
+          "C",
+          "C",
+          "N"
+        ],
+        [
+          "N",
+          "B"
+        ]
+      ],
+      "choices": [
+        "C",
+        "N"
+      ],
+      "finish": "stand"
+    },
+    {
+      "id": "exact",
+      "name": "Dokładnie 21",
+      "kind": "object",
+      "narration": "Przygotowana kolejność pozwoli zobaczyć sukces bez rzutu. W zwykłej grze sam decydujesz, kiedy zatrzymać dobieranie.",
+      "objective": "Wybierz trzy czerwone karty po 7. Każdy kolejny dobór zadeklaruj przed ofertą.",
+      "profile": "balanced",
+      "obstacle": "none",
+      "offers": [
+        [
+          "C",
+          "N"
+        ],
+        [
+          "C",
+          "B"
+        ],
+        [
+          "C",
+          "Z"
+        ]
+      ],
+      "choices": [
+        "C",
+        "C",
+        "C"
+      ],
+      "finish": "exact"
+    },
+    {
+      "id": "bust",
+      "name": "Przekroczenie i utrudnienie",
+      "kind": "object",
+      "narration": "Ta przygotowana próba skończy się przekroczeniem. Nadal wykonasz test, ale rzucisz dwoma k20 i wybierzesz niższy wynik. Nie dostaniesz premii za karty.",
+      "objective": "Wybierz wskazane karty, po przekroczeniu rzuć dwoma k20 i wpisz oba wyniki.",
+      "profile": "balanced",
+      "obstacle": "none",
+      "offers": [
+        [
+          "C",
+          "B"
+        ],
+        [
+          "C",
+          "Z"
+        ],
+        [
+          "N",
+          "B"
+        ],
+        [
+          "F",
+          "N"
+        ]
+      ],
+      "choices": [
+        "C",
+        "C",
+        "N",
+        "F"
+      ],
+      "finish": "bust"
+    },
+    {
+      "id": "repeat",
+      "name": "Przeszkoda: Powtarzasz się",
+      "kind": "npc",
+      "narration": "Powtórzony kolor ma dodatkowe 2 punkty. Aplikacja pokazuje tę zmianę przed doborem; wcześniejsze karty nie zmieniają wartości.",
+      "objective": "Porównaj drugą czerwoną z pierwszą, potem spasuj.",
+      "profile": "balanced",
+      "obstacle": "repeat",
+      "offers": [
+        [
+          "C",
+          "N"
+        ],
+        [
+          "C",
+          "B"
+        ],
+        [
+          "B",
+          "Z"
+        ]
+      ],
+      "choices": [
+        "C",
+        "C",
+        "B"
+      ],
+      "finish": "stand"
+    },
+    {
+      "id": "after_red",
+      "name": "Przeszkoda: Rozchwianie",
+      "kind": "object",
+      "narration": "Czerwona sprawia, że następna wybrana karta ma +2. Po tej karcie efekt znika. Sprawdź wyświetlone wartości.",
+      "objective": "Po czerwonej wybierz białą i zobacz dopłatę. Dokończ przygotowaną próbę i spasuj.",
+      "profile": "balanced",
+      "obstacle": "after_red",
+      "offers": [
+        [
+          "C",
+          "N"
+        ],
+        [
+          "B",
+          "Z"
+        ],
+        [
+          "N",
+          "Z"
+        ],
+        [
+          "Z",
+          "F"
+        ]
+      ],
+      "choices": [
+        "C",
+        "B",
+        "N",
+        "Z"
+      ],
+      "finish": "stand"
+    },
+    {
+      "id": "four",
+      "name": "Przeszkoda: Krótka okazja",
+      "kind": "npc",
+      "narration": "Masz tylko cztery wybory kart. Po czwartym aplikacja zatrzyma dobieranie i poprosi o zwykły test. To nie jest przekroczenie.",
+      "objective": "Wybierz cztery wskazane karty i rozstrzygnij wymuszony pas.",
+      "profile": "balanced",
+      "obstacle": "four",
+      "offers": [
+        [
+          "B",
+          "N"
+        ],
+        [
+          "Z",
+          "N"
+        ],
+        [
+          "F",
+          "N"
+        ],
+        [
+          "B",
+          "N"
+        ]
+      ],
+      "choices": [
+        "B",
+        "Z",
+        "F",
+        "B"
+      ],
+      "finish": "limit"
+    },
+    {
+      "id": "lorian_reroll",
+      "name": "Lorian: Obycie i Improwizacja",
+      "kind": "npc",
+      "hero_id": "lorian",
+      "narration": "Teraz przećwiczymy przerzut. Ćwiczebny ST 30 celowo uniemożliwia pierwszy sukces przy przygotowanej sumie. Oba testy wykonasz naprawdę. Zaliczenie wymaga użycia Improwizacji, nie sukcesu.",
+      "objective": "Spasuj po dwóch wskazanych kartach. Po porażce wybierz Improwizację i rzuć ponownie.",
+      "profile": "balanced",
+      "obstacle": "none",
+      "dc": 30,
+      "offers": [
+        [
+          "C",
+          "B"
+        ],
+        [
+          "N",
+          "Z"
+        ]
+      ],
+      "choices": [
+        "C",
+        "N"
+      ],
+      "finish": "reroll"
+    },
+    {
+      "id": "condition_compromise",
+      "name": "Coś pewnego czy szansa na więcej?",
+      "kind": "npc",
+      "scene_id": "irena_compromise",
+      "narration": "Nessa: Gdy pula pierwszy raz wyniesie 15–17, Irena zaproponuje podpisane świadectwo bez osobistego wystąpienia. Przyjęcie kończy bez rzutu. Po odrzuceniu propozycja nie wraca.",
+      "objective": "Doprowadź pulę do 16, a potem sam zdecyduj: przyjąć dokument czy próbować uzyskać osobiste świadectwo. Obie decyzje zaliczają ćwiczenie po jego rozstrzygnięciu.",
+      "open_after_preparation": true,
+      "finish": "proposal",
+      "profile": "balanced",
+      "obstacle": "none",
+      "offers": [
+        [
+          "N",
+          "B"
+        ],
+        [
+          "C",
+          "B"
+        ],
+        [
+          "F",
+          "Z"
+        ]
+      ],
+      "choices": [
+        "N",
+        "C",
+        "F"
+      ]
+    },
+    {
+      "id": "practice_compromise",
+      "name": "Samodzielnie: Coś pewnego czy szansa na więcej?",
+      "kind": "npc",
+      "scene_id": "irena_compromise",
+      "narration": "Nessa: wybierz jedną z trzech metod i rozegraj rozmowę z tym warunkiem.",
+      "objective": "Doprowadź pulę do 16, a potem sam zdecyduj: przyjąć dokument czy próbować uzyskać osobiste świadectwo. Obie decyzje zaliczają ćwiczenie po jego rozstrzygnięciu.",
+      "practice": true
+    },
+    {
+      "id": "condition_sensitive_topic",
+      "name": "Nazwiska mają cenę",
+      "kind": "npc",
+      "scene_id": "irena_sensitive_topic",
+      "narration": "Nessa: Wybranie czerwonej karty oznacza nacisk na nazwiska. Przy sukcesie otrzymasz świadectwo i nazwiska, ale Irena odmówi dalszej prywatnej pomocy. Cena obowiązuje także przy 21. Przy porażce nie ma dodatkowej kary za kolor.",
+      "objective": "Sam zdecyduj, czy używać czerwonych kart. Rozstrzygnij próbę i sprawdź u Nessy, co zyskałeś i jakie dalsze opcje pozostały.",
+      "open_after_preparation": true,
+      "finish": "",
+      "profile": "balanced",
+      "obstacle": "none"
+    },
+    {
+      "id": "practice_sensitive_topic",
+      "name": "Samodzielnie: Nazwiska mają cenę",
+      "kind": "npc",
+      "scene_id": "irena_sensitive_topic",
+      "narration": "Nessa: wybierz jedną z trzech metod i rozegraj rozmowę z tym warunkiem.",
+      "objective": "Sam zdecyduj, czy używać czerwonych kart. Rozstrzygnij próbę i sprawdź u Nessy, co zyskałeś i jakie dalsze opcje pozostały.",
+      "practice": true
+    },
+    {
+      "id": "condition_color_goal",
+      "name": "Jeszcze jedna niebieska",
+      "kind": "npc",
+      "scene_id": "irena_color_goal",
+      "narration": "Nessa: Zbierz co najmniej dwie niebieskie karty w swojej puli. Przy sukcesie, także po przekroczeniu lub przy 21, poznasz dodatkowo pomysłodawcę dokarmiania żeraków. Odrzucone karty nie liczą się. Nagroda jest jednorazowa.",
+      "objective": "Wybieraj między dogodną sumą a dwiema niebieskimi. Dodatkowy cel jest opcjonalny; rozstrzygnięcie rozmowy zalicza ćwiczenie.",
+      "open_after_preparation": true,
+      "finish": "",
+      "profile": "balanced",
+      "obstacle": "none"
+    },
+    {
+      "id": "practice_color_goal",
+      "name": "Samodzielnie: Jeszcze jedna niebieska",
+      "kind": "npc",
+      "scene_id": "irena_color_goal",
+      "narration": "Nessa: wybierz jedną z trzech metod i rozegraj rozmowę z tym warunkiem.",
+      "objective": "Wybieraj między dogodną sumą a dwiema niebieskimi. Dodatkowy cel jest opcjonalny; rozstrzygnięcie rozmowy zalicza ćwiczenie.",
+      "practice": true
+    },
+    {
+      "id": "condition_favor",
+      "name": "Ile kosztuje pewność?",
+      "kind": "npc",
+      "scene_id": "irena_favor",
+      "narration": "Nessa: Raz podczas wyboru karty możesz użyć Klucza i nadać jej wartość 1. W zamian zobowiążesz się dostarczyć list Ireny do obozu uchodźców. Dodatkowa droga pozostaje do wykonania także przy porażce. Gwiazda wyłącza ustępstwo przed wyborem koloru.",
+      "objective": "Sprawdź dostępną ofertę i zdecyduj, czy ustępstwo jest warte dodatkowej drogi. Nie musisz go użyć, żeby zaliczyć ćwiczenie.",
+      "open_after_preparation": true,
+      "finish": "",
+      "profile": "balanced",
+      "obstacle": "none"
+    },
+    {
+      "id": "practice_favor",
+      "name": "Samodzielnie: Ile kosztuje pewność?",
+      "kind": "npc",
+      "scene_id": "irena_favor",
+      "narration": "Nessa: wybierz jedną z trzech metod i rozegraj rozmowę z tym warunkiem.",
+      "objective": "Sprawdź dostępną ofertę i zdecyduj, czy ustępstwo jest warte dodatkowej drogi. Nie musisz go użyć, żeby zaliczyć ćwiczenie.",
+      "practice": true
+    },
+    {
+      "id": "practice_npc",
+      "name": "Samodzielna rozmowa",
+      "kind": "npc",
+      "narration": "Teraz sam wybierz metodę. Towarzysze są dostępni jako wykonawcy innych podejść. Wartości poznasz dopiero po rozpoczęciu; nie możesz wtedy zmienić zdania i podejrzeć innej metody.",
+      "objective": "Rozstrzygnij dowolne dostępne podejście. Talię normalnie przetasuj.",
+      "practice": true
+    },
+    {
+      "id": "practice_object",
+      "name": "Samodzielna interakcja z obiektem",
+      "kind": "object",
+      "narration": "Wybierz sposób poradzenia sobie ze skrzynią. Sprawdź zapowiedziany koszt metody i to, co zmieniło się po próbie.",
+      "objective": "Rozstrzygnij dowolne dostępne podejście. Talię normalnie przetasuj.",
+      "practice": true
+    }
+  ]
+}

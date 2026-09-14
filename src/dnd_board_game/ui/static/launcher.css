@@ -69,6 +69,8 @@ button:disabled { border-color: #504a3e; color: #8f887b; background: #2b2a27; cu
 }
 .main-menu { display: grid; gap: 10px; }
 .menu-action {
+  color: var(--ink);
+  position: relative;
   display: grid;
   gap: 4px;
   padding: 18px 20px;
@@ -78,6 +80,13 @@ button:disabled { border-color: #504a3e; color: #8f887b; background: #2b2a27; cu
   text-decoration: none;
   transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
 }
+.panel-symbol {width:32px;height:32px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;color:var(--gold-bright);}
+.menu-action[data-board-rune] {padding-left:68px;}
+.menu-action > .panel-symbol {position:absolute;left:18px;top:22px;}
+.launcher-board-controls {font-size:14px;color:var(--ink);line-height:1.5;margin:18px 0;}
+.launcher-board-controls button[hidden] {display:none;}
+.launcher-page > .launcher-board-controls {width:min(900px,calc(100% - 32px));margin:0 auto 28px;}
+.hero-choice > .panel-symbol {align-self:center;}
 .menu-action:hover, .menu-action:focus-visible {
   transform: translateX(5px);
   border-color: var(--gold);

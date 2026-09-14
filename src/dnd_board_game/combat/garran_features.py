@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dnd_board_game.actors.resources import uses_physical_mana
+from dnd_board_game.actors.resources import uses_physical_mana, uses_shared_mana
 
 from dataclasses import dataclass, replace
 from typing import Sequence
@@ -28,6 +28,7 @@ from dnd_board_game.rules import (
 from dnd_board_game.world import BoardState, Coordinate
 
 from .action_economy import ActionEconomyCost
+from .auras import strongest_aura_members
 from .conditions import CombatCondition, remove_condition
 from .damage import DamageComponentInput, AppliedDamageResult, apply_damage_result, resolve_damage
 from .session import (
@@ -154,6 +155,9 @@ def shield_bash_destination(
     attacker: Actor,
     target: Actor,
 ) -> Coordinate | None:
+    from .shared_mana_features import state_blocks_forced_movement
+    if state_blocks_forced_movement(state, target):
+        return None
     dc = target.position.col - attacker.position.col
     dr = target.position.row - attacker.position.row
     if max(abs(dc), abs(dr)) != 1:
@@ -192,8 +196,9 @@ def resolve_shield_bash(
         raise ValueError("Cel Uderzenia tarczą musi znajdować się w odległości 5 stóp.")
     if not 1 <= attacker_roll <= 20 or not 1 <= defender_roll <= 20:
         raise ValueError("Rzuty sporne muszą mieścić się w zakresie 1–20.")
-    if type(damage_roll) is not int or not 1 <= damage_roll <= 6:
-        raise ValueError("Rzut obrażeń Uderzenia tarczą musi być wynikiem k6.")
+    count = 1 + (dict(state.shared_mana.pending_boosts).get("damage", 0) if state.shared_mana else 0)
+    if type(damage_roll) is not int or not count <= damage_roll <= 6 * count:
+        raise ValueError(f"Podaj sumę {count}k6 obrażeń Uderzenia tarczą.")
     action = use_action_economy_cost(state, ActionEconomyCost.BONUS_ACTION)
     if not action.accepted:
         raise ValueError(action.message)
@@ -265,6 +270,18 @@ def resolve_garran_command_halt(
         combat_actors=updated.actors,
         active_effects=active_effects,
     )
+    if uses_shared_mana(actor):
+        if saving_throw.success:
+            return CommandHaltResolution(updated, active_effects, target, saving_throw, "success")
+        slow = ActiveEffect(id=f"garran_command_half_movement:{target.id}", actor_id=str(target.id),
+            kind="garran_command_half_movement", label="Rozkaz: Stać", object_id="class_feature:garran_command_halt", value=0,
+            source_actor_id=str(actor.id), duration=EffectDuration.UNTIL_TURN_START, expiration_actor_id=str(actor.id))
+        from .conditions import apply_condition
+        conditions = apply_condition(updated.condition_states, target, CombatCondition.NO_REACTIONS,
+            source_actor_id=str(actor.id), source_spell_id="garran_command_halt", source_spell_level=0, source_label="Rozkaz: Stać",
+            duration=EffectDuration.UNTIL_TURN_START, expiration_actor_id=str(actor.id)).condition_states
+        return CommandHaltResolution(replace(updated, condition_states=conditions),
+            apply_active_effect(active_effects, slow).active_effects, target, saving_throw, "failure")
     if natural_roll == 20:
         outcome = "critical_success"
         effects = active_effects
@@ -347,7 +364,7 @@ def resolve_garran_rally(
     for ally in updated.actors:
         if ally.faction != actor.faction or ally.is_defeated():
             continue
-        if grid_distance_feet(actor.position, ally.position) > 30:
+        if grid_distance_feet(actor.position, ally.position) > (15 if uses_shared_mana(actor) else 30):
             continue
         if any(
             item.actor_id == str(ally.id) and item.condition == CombatCondition.DEAFENED
@@ -418,6 +435,7 @@ def synchronize_garran_effects(
     actor_by_id = {str(actor.id): actor for actor in actors}
     retained: list[ActiveEffect] = []
     sources: list[ActiveEffect] = []
+    members: list[ActiveEffect] = []
     for effect in active_effects:
         if effect.kind == "warding_bond" and effect.source_actor_id == "garran":
             # Compatibility cleanup for encounters restored from the retired
@@ -448,7 +466,7 @@ def synchronize_garran_effects(
                 continue
             if grid_distance_feet(protector.position, ally.position) > 5:
                 continue
-            retained.append(
+            members.append(
                 ActiveEffect(
                     id=f"garran_shield_wall_member:{protector.id}:{ally.id}",
                     actor_id=str(ally.id),
@@ -462,7 +480,7 @@ def synchronize_garran_effects(
                     expiration_actor_id=source.expiration_actor_id,
                 )
             )
-    return tuple(retained)
+    return (*retained, *strongest_aura_members(members))
 
 
 def redirect_guarded_single_target(

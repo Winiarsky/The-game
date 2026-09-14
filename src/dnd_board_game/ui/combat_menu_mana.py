@@ -59,7 +59,7 @@ def menu_mana_payload(
     ):
         return {"mana_cost": [], "mana_cost_note": "bez many"}
     ability = mana_ability(str(actor.id), option.action_id or option.source_id or "")
-    cost = list(ability.cost) if ability else ["*"]
+    cost = list(ability.cost) if ability else ([] if state.shared_mana else ["*"])
     note = ""
     if ability and ability.timing == "MOD":
         note = (
@@ -74,7 +74,7 @@ def menu_mana_payload(
             cost.extend(meta.cost)
             note = "z Metamagią"
     if not ability and option.action == CombatMenuAction.SELECT_ATTACK_SOURCE:
-        note = "za atak"
+        note = "bez many; skaza może wymagać dopłaty" if state.shared_mana else "za atak"
     # Already-declared techniques include all attacks in their initial price.
     locked = next(
         (

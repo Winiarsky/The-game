@@ -104,6 +104,9 @@ def forced_movement_destination(
     distance_feet: int,
     scene_objects: tuple[SceneObject, ...] = (),
 ) -> Coordinate:
+    from .shared_mana_features import state_blocks_forced_movement
+    if state_blocks_forced_movement(state, target):
+        return target.position
     if kind not in {MagicMovementKind.PUSH, MagicMovementKind.PULL}:
         raise ValueError("Forced movement requires push or pull.")
     dc = _direction(target.position.col - caster.position.col)

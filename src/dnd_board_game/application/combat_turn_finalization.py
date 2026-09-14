@@ -101,7 +101,7 @@ class CombatTurnFinalizationService:
             active_effects=updated_effects,
             result=result,
             board_message=(
-                "Wynik tury przeciwnika gotowy. Potwierdź Enterem albo przyciskiem w UI."
+                "Wynik tury przeciwnika gotowy. Potwierdź przyciskiem ✓."
             ),
             event_type="ui_combat_enemy_turn_board_confirmed",
             event_payload=(
@@ -254,26 +254,32 @@ def _advance_turn(
     tuple[TriggerActivation, ...],
     tuple[ActorResourceRechargeResult, ...],
 ]:
-    end_event = EffectEvent(EffectEventType.TURN_END, actor_id=str(ending_actor.id))
-    end_triggers = resolve_combat_triggers(state, end_event)
-    state = end_triggers.state
-    after_end = expire_turn_end_effects(active_effects, str(ending_actor.id))
-    condition_states, _ = expire_condition_states(
-        state.condition_states,
-        end_event,
-    )
-    state = replace(state, condition_states=condition_states)
     notices: list[ExpiredCombatEffects] = []
-    trigger_activations = list(end_triggers.activations)
+    trigger_activations: list[TriggerActivation] = []
     recharge_results: list[ActorResourceRechargeResult] = []
-    expired_at_end = _removed_effects(active_effects, after_end)
-    if expired_at_end:
-        notices.append(
-            ExpiredCombatEffects(
-                f"Wygasły efekty końca tury: {ending_actor.name}",
-                expired_at_end,
-            )
+    if state.shared_mana and state.shared_mana.end_effects_applied and state.shared_mana.turn_actor == str(ending_actor.id):
+        after_end = active_effects
+    else:
+        end_event = EffectEvent(EffectEventType.TURN_END, actor_id=str(ending_actor.id))
+        end_triggers = resolve_combat_triggers(state, end_event)
+        state = end_triggers.state
+        after_end = expire_turn_end_effects(active_effects, str(ending_actor.id))
+        condition_states, _ = expire_condition_states(
+            state.condition_states,
+            end_event,
         )
+        state = replace(state, condition_states=condition_states)
+        notices: list[ExpiredCombatEffects] = []
+        trigger_activations = list(end_triggers.activations)
+        recharge_results: list[ActorResourceRechargeResult] = []
+        expired_at_end = _removed_effects(active_effects, after_end)
+        if expired_at_end:
+            notices.append(
+                ExpiredCombatEffects(
+                    f"Wygasły efekty końca tury: {ending_actor.name}",
+                    expired_at_end,
+                )
+            )
 
     updated_state = finish_turn(state)
     updated_effects = after_end
@@ -301,6 +307,11 @@ def _advance_turn(
         updated_state = replace(updated_state, condition_states=condition_states)
         after_start = expire_turn_start_effects(updated_effects, str(starting_actor.id))
         expired_at_start = _removed_effects(updated_effects, after_start)
+        if updated_state.shared_mana:
+            from dnd_board_game.combat.scene_interactions import restore_effect_on_state
+            for expired_effect in expired_at_start:
+                updated_state = restore_effect_on_state(updated_state, expired_effect)
+            starting_actor = current_actor(updated_state)
         if expired_at_start:
             notices.append(
                 ExpiredCombatEffects(

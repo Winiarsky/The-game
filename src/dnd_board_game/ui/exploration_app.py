@@ -1,6 +1,12 @@
 from __future__ import annotations
 
-from dnd_board_game.application.recruitment_arena import ARENA_ID, HELPER_ID, NESSA_POSITION, TrainingConfig, configure_training_encounter
+from dnd_board_game.ui.board_panel import action_economy_panel_color, option_panel_payload
+from dnd_board_game.hardware.board_panel import panel_feedback, panel_position, setup_panel_feedback
+
+from dnd_board_game.ui.initiative_panel import InitiativePanel
+from dnd_board_game.hardware.initiative_panel import initiative_panel_feedback
+
+from dnd_board_game.application.recruitment_arena import ARENA_ID, COMBAT_ID, HELPER_ID, NESSA_POSITION, TrainingConfig, configure_training_encounter
 from dnd_board_game.ui.training_arena import training_payload, remember_training_result, can_talk_to_nessa
 
 from dnd_board_game.application.battle_setup import battle_briefing, order_battle_setup
@@ -9,7 +15,7 @@ from dnd_board_game.ui.nessa_briefing import decorate_nessa_briefing
 
 from dnd_board_game.actors.resources import uses_physical_mana
 from dnd_board_game.character_creation.loadout_repair import repair_mira_loadout
-from dnd_board_game.combat.session import use_bonus_action
+from dnd_board_game.combat.session import use_bonus_action, grant_bonus_attacks
 from dnd_board_game.combat.conditions import condition_blocks_actions
 from dnd_board_game.rules.physical_mana import MANA_PASSIVES, mana_ability, hero_abilities, turn_supply, FLAWS
 from dnd_board_game.combat.physical_mana_movement import movement_mana_notice, declare_ordinary_movement
@@ -1134,6 +1140,22 @@ class EncounterSetupFlow:
     player_start_actor_ids: tuple[str, ...] = ()
     player_start_assignments: dict[str, Coordinate] = field(default_factory=dict)
     is_retry: bool = False
+    selected_start_position: Coordinate | None = None
+
+    @property
+    def pending_start_position(self) -> Coordinate | None:
+        if not self.is_player_start_step:
+            return None
+        available = self.remaining_player_start_positions()
+        if self.selected_start_position in available:
+            return self.selected_start_position
+        return available[0] if len(available) == 1 else None
+
+    @property
+    def can_confirm(self) -> bool:
+        return self.current_step is not None and (
+            not self.is_player_start_step or self.pending_start_position is not None
+        )
 
     @property
     def current_step(self) -> SetupStep | None:
@@ -1145,8 +1167,11 @@ class EncounterSetupFlow:
         step = self.current_step
         current_start_actor = self.current_player_start_actor
         step_payload = _setup_step_payload(step) if step is not None else None
+        if step_payload is not None:
+            step_payload["can_confirm"] = self.can_confirm
+            position = self.pending_start_position
+            step_payload["selected_position"] = list(position.as_tuple()) if position else None
         if step_payload is not None and self.is_player_start_step:
-            assigned_positions = set(self.player_start_assignments.values())
             step_payload["requires_board_assignment"] = True
             step_payload["assignment_actor_id"] = str(current_start_actor.id) if current_start_actor is not None else None
             step_payload["assignment_actor_name"] = current_start_actor.name if current_start_actor is not None else None
@@ -1154,7 +1179,7 @@ class EncounterSetupFlow:
                 [position.col, position.row] for position in self.player_start_assignments.values()
             ]
             step_payload["available_positions"] = [
-                [position.col, position.row] for position in step.positions if position not in assigned_positions
+                [position.col, position.row] for position in self.remaining_player_start_positions()
             ]
         return {
             "scenario_id": self.encounter.scenario_id,
@@ -1197,7 +1222,7 @@ class EncounterSetupFlow:
         if step is None:
             return ()
         assigned = set(self.player_start_assignments.values())
-        return tuple(position for position in step.positions if position not in assigned)
+        return tuple(position for position in step.positions if position not in assigned and position != panel_position(28))
 
 
 @dataclass(slots=True)
@@ -1257,6 +1282,20 @@ class EncounterInitiativeFlow:
     order: InitiativeOrder | None = None
     edges_by_actor_id: dict[str, EncounterEdge] = field(default_factory=dict)
 
+    panel: InitiativePanel | None = None
+
+    @property
+    def roll_panel(self) -> InitiativePanel | None:
+        if self.encounter.scenario_id != COMBAT_ID:
+            return None
+        prompt = self.current_prompt
+        if prompt is None:
+            return None
+        if self.panel is None:
+            count = 1 if prompt.request.mode == RollMode.NORMAL else 2
+            self.panel = InitiativePanel(values=(10,) * count)
+        return self.panel
+
     @property
     def current_prompt(self) -> InitiativePrompt | None:
         if self.completed or self.current_prompt_index >= len(self.prompts):
@@ -1270,6 +1309,7 @@ class EncounterInitiativeFlow:
             "scenario_name": self.encounter.scenario_name,
             "status": "completed" if self.completed else "active",
             "current_prompt_index": self.current_prompt_index,
+            "panel": self.roll_panel.as_payload() if self.roll_panel else None,
             "prompt_count": len(self.prompts),
             "current_prompt": (
                 _initiative_prompt_payload(prompt, self.edges_by_actor_id.get(str(prompt.actor.id)))
@@ -1564,9 +1604,23 @@ class ExplorationUiSession:
         )
         self.npc_goal_execution = NpcGoalExecutionPlanner()
         self._board_scan_lock = threading.Lock()
+        self._board_state_lock = threading.RLock()
+        self._board_scan_context_key = ""
         self.reset()
 
     def reset(self) -> None:
+        board_adapter = getattr(self, "board_adapter", None)
+        board_settings = None
+        if board_adapter is not None:
+            board_settings = (
+                self.board_backend, self.board_url, self.board_serial_port,
+                self.wled_url, self.scan_timeout_s,
+            )
+            try:
+                board_adapter.reset_scan()
+            except ValueError:
+                # Lightweight adapters may not implement scan cancellation.
+                pass
         if self._fixed_session_id is None:
             self.observer = SessionObserver(_ui_session_id(), self.observation_dir)
         self.encounter_rng = random.Random(7)
@@ -1631,6 +1685,8 @@ class ExplorationUiSession:
             str,
             dict[tuple[str, str], int],
         ] = {}
+        self.board_panel_context: tuple[str, tuple[int, ...], bool] | None = None
+        self.shared_mana_declaration = None
         self.board_selection_revision = 0
         self.active_paper_map_id = ""
         self.exploration_setup_flow: ExplorationSetupFlow | None = None
@@ -1678,6 +1734,8 @@ class ExplorationUiSession:
         self.wled_url = board_defaults["wled_url"]
         self.scan_timeout_s = 300.0
         self.board_adapter: BoardSessionAdapter | None = None
+        from .launcher_board import LauncherNavigation
+        self.launcher_navigation: LauncherNavigation | None = None
         self.board_message = (
             "Plansza niepodłączona. Domyślne ustawienia wczytane z board/config.json "
             f"({self.configured_board_backend})."
@@ -1705,6 +1763,14 @@ class ExplorationUiSession:
         )
         if self.debug_courtyard_entry:
             self._prepare_debug_courtyard_entry()
+        if board_adapter is not None:
+            self.board_adapter = board_adapter
+            (self.board_backend, self.board_url, self.board_serial_port,
+             self.wled_url, self.scan_timeout_s) = board_settings
+            self.board_message = f"Plansza nadal podłączona: {self.board_backend}."
+            if self.ui_flow_stage == UiFlowStage.WAITING_FOR_BOARD:
+                self.ui_flow_stage = UiFlowStage.READY_TO_START
+            self._sync_board_leds()
 
     @property
     def pending(self) -> PendingInteraction | None:
@@ -2046,6 +2112,14 @@ class ExplorationUiSession:
         self.reset()
 
     def state_payload(self) -> dict[str, object]:
+        from dnd_board_game.combat.shared_mana import synchronize_shared_effects
+        if self.combat_state is not None:
+            self.combat_state, self.active_combat_effects = synchronize_shared_effects(self.combat_state, self.active_combat_effects)
+            self._remove_orphaned_concentration_conditions()
+        from .shared_mana import settle_action
+        settle_action(self)
+        from .training_walkthrough import synchronize as synchronize_training
+        synchronize_training(self)
         if self.ui_flow_stage not in {
             UiFlowStage.SHORT_REST,
             UiFlowStage.GAME_OVER,
@@ -2464,7 +2538,12 @@ class ExplorationUiSession:
         if self.exploration.scenario_id == ARENA_ID and isinstance(combat_payload, dict):
             if combat_payload.get("physical_mana"):
                 combat_payload["physical_mana"]["setup"] = {"deck": 20, "market": 5, "start": 3}
+        from .shared_mana import payload as shared_mana_payload
+        if isinstance(combat_payload, dict):
+            combat_payload["shared_mana"] = shared_mana_payload(self)
         payload["training_arena"] = training_payload(self)
+        from .exploration_mana import payload as exploration_mana_payload
+        payload["exploration_mana"] = exploration_mana_payload(self)
         return payload
 
     @staticmethod
@@ -2712,6 +2791,7 @@ class ExplorationUiSession:
         *,
         expected_encounter_trigger_id: str | None = None,
     ) -> dict[str, object]:
+        self._exploration_mana_confirmed = ""
         base_exploration = build_exploration_from_scenario(load_scenario(self.scenario_path))
         base_state = ExplorationState(
             base_exploration.zones,
@@ -2871,6 +2951,10 @@ class ExplorationUiSession:
                 sum(actor.faction == Faction.ALLY for actor in encounter.actors),
             )
             encounter = configure_training_encounter(encounter, TrainingConfig.from_flags(snapshot.exploration_state.flags))
+            if base_exploration.scenario_id == "recruitment_arena" and any(
+                not encounter.board.in_bounds(actor.position) for actor in snapshot.combat_state.actors
+            ):
+                raise ValueError("Zapis ma figurkę na pasie panelu. Rozpocznij ponownie przygotowanie próby na arenie.")
             combat_by_id = {actor.id: actor for actor in snapshot.combat_state.actors}
             encounter = replace(
                 encounter,
@@ -2920,6 +3004,8 @@ class ExplorationUiSession:
         self.board_actor_selection = None
         self.board_selected_actor_id = ""
         self.board_selected_actor_role = ""
+        self.board_panel_context: tuple[str, tuple[int, ...], bool] | None = None
+        self.shared_mana_declaration = None
         self.board_selection_revision = 0
         self.exploration_board_selection_active = False
         restored_npc_transition = (
@@ -2953,6 +3039,10 @@ class ExplorationUiSession:
         )
         self._add_message("Gra wczytana", "Przywrócono zapisany stan scenariusza.")
         self.board_message = "Przywrócono zapis gry. Stan planszy zsynchronizowano z sesją."
+        from .training_walkthrough import restore_setup
+        restored_setup = restore_setup(self)
+        if restored_setup is not None:
+            return restored_setup
         self._sync_board_leds()
         return self.state_payload()
 
@@ -3062,6 +3152,10 @@ class ExplorationUiSession:
         return self.state_payload()
 
     def _snapshot_blocker(self) -> str | None:
+        if self.combat_state is not None and self.combat_state.shared_mana is not None and self.combat_state.shared_mana.phase.value == "resolving":
+            return "Najpierw dokończ opłaconą zdolność."
+        if self.shared_mana_declaration is not None:
+            return "Najpierw dokończ deklarację lub fizyczną operację kart."
         if self.shield_bash_flow is not None:
             return "Najpierw dokończ Uderzenie tarczą albo anuluj wpisywanie rzutów."
         if self.exploration_card_state.pending is not None:
@@ -3080,6 +3174,9 @@ class ExplorationUiSession:
             return "Najpierw potwierdź albo anuluj podgląd ruchu."
         if self.exploration_setup_flow is not None and not self.exploration_setup_flow.completed:
             return "Najpierw zakończ setup eksploracji."
+        from . import training_walkthrough as guided
+        if guided.enabled(self) and self.combat_state is None and guided.flag(self, "phase") in {"introduction", "setup", "briefing"}:
+            return None  # Loading rebuilds this lesson's figurine setup.
         if self.encounter_setup_flow is not None and self.combat_state is None:
             return "Najpierw zakończ setup i inicjatywę encountera."
         if self.encounter_initiative_flow is not None and self.combat_state is None:
@@ -4969,9 +5066,9 @@ class ExplorationUiSession:
             if self.pending_encounter is not None:
                 trigger = self._trigger_by_id(self.pending_encounter.trigger_id)
                 self.board_message = (
-                    "Encounter gotowy. Rozstrzygnij rozpoczęcie starcia w UI albo Enterem."
+                    "Encounter gotowy. Rozstrzygnij rozpoczęcie starcia w UI albo przyciskiem ✓."
                     if trigger is not None and trigger.opening_policy is not None
-                    else "Encounter gotowy. Potwierdź rozpoczęcie setupu w UI albo Enterem."
+                    else "Encounter gotowy. Potwierdź rozpoczęcie setupu w UI albo przyciskiem ✓."
                 )
             if self.ui_flow_stage == UiFlowStage.LOCATION_ACTIVE:
                 self._detect_passive_traps()
@@ -5157,140 +5254,94 @@ class ExplorationUiSession:
         finally:
             self._board_scan_lock.release()
 
-    def _scan_board_selection_locked(
-        self,
-        *,
-        expected_revision: str,
-        automatic: bool,
-    ) -> dict[str, object]:
-        if self.board_adapter is None:
-            raise ValueError("Najpierw podłącz backend planszy.")
-        selection = self._board_selection_payload()
-        revision = str(selection["revision"])
-        if expected_revision and expected_revision != revision:
-            self._record(
-                "ui_board_scan_stale_before_start",
-                {
-                    "expected_revision": expected_revision,
-                    "current_revision": revision,
-                    "automatic": automatic,
-                },
-            )
-            return self.state_payload()
+    def _board_input_contract(self, target: BoardScanTarget, revision: str) -> tuple[str, str, tuple[Coordinate, ...]]:
+        """A die owns one stream; its displayed value is not an input context."""
+        if self.launcher_navigation is not None:
+            return revision, "single", ()
+        from .training_tutorial import notice_id
+        if notice_id(self):
+            return revision, "single", ()
+        if self.shared_mana_declaration and self.shared_mana_declaration.stage == "payment":
+            return revision, "single", ()
+        if self.shared_mana_declaration and self._board_selection_mode() == "mana_targets":
+            return revision, "single", ()
+        flow = self.encounter_initiative_flow
+        if flow is not None and flow.roll_panel is not None and not flow.roll_panel.review:
+            panel = flow.roll_panel
+            key = f"initiative:{id(flow)}:{flow.current_prompt_index}:{panel.index}"
+            return key, "stream", tuple(p for p in target.positions if p in (panel_position(28), panel_position(29)))
+        context = self.board_panel_context
+        if context and context[2] and context[0].startswith("dice:") and (26 in context[1] or 27 in context[1]):
+            key = f"browser:{id(self.pending_state)}:{context[0]}"
+            return key, "stream", tuple(p for p in target.positions if p in (panel_position(28), panel_position(29)))
+        return revision, "single", ()
+
+    def _cancel_obsolete_board_input(self) -> None:
+        if not self._board_scan_context_key or self.board_adapter is None:
+            return
         target = self._current_board_scan_target()
-        if not target.positions:
-            raise ValueError(target.empty_message)
-        started_at = time.monotonic()
-        self._record(
-            "ui_board_scan_started",
-            {
-                "stage": self.ui_flow_stage.value,
-                "revision": revision,
-                "automatic": automatic,
-                "position_count": len(target.positions),
-                "frames": [
-                    {
-                        "positions": [
-                            [position.col, position.row]
-                            for position in frame.positions
-                        ],
-                        "rgb": list(frame.color),
-                        "color_name": led_color_name_pl(frame.color),
-                        "role": frame.role.value,
-                    }
-                    for frame in target.feedback.frames
-                ],
-            },
-        )
-        self.board_adapter.show_scan_feedback(target.feedback)
-        try:
-            selected_raw = self.board_adapter.scan(
-                target.positions,
-                timeout_s=self.scan_timeout_s,
-            )
-        except TimeoutError as exc:
-            elapsed_ms = round((time.monotonic() - started_at) * 1000)
-            self.board_message = (
-                "Plansza nie odpowiedziała w wyznaczonym czasie. "
-                "Zresetowano nasłuchiwanie; spróbuj ponownie."
-            )
-            reset_action = ""
-            reset_error = ""
-            try:
-                reset_action = self.board_adapter.reset_scan()
-            except Exception as reset_exc:
-                reset_error = str(reset_exc)
-            self._record(
-                "ui_board_scan_timeout",
-                {
-                    "stage": self.ui_flow_stage.value,
-                    "revision": revision,
-                    "automatic": automatic,
-                    "elapsed_ms": elapsed_ms,
-                    "error": str(exc),
-                    "reset_action": reset_action,
-                    "reset_error": reset_error,
-                },
-            )
-            raise
-        finally:
-            self.board_adapter.restore_feedback(
-                self._current_board_scan_target().feedback
-            )
-        if selected_raw is None:
-            current_revision = str(self._board_selection_payload()["revision"])
-            if current_revision != revision:
-                self._record(
-                    "ui_board_scan_stale_after_cancel",
-                    {
-                        "scan_revision": revision,
-                        "current_revision": current_revision,
-                        "automatic": automatic,
-                        "elapsed_ms": round(
-                            (time.monotonic() - started_at) * 1000
-                        ),
-                    },
-                )
+        selection = self._board_selection_payload(target=target)
+        key, _, _ = self._board_input_contract(target, str(selection["revision"]))
+        if key != self._board_scan_context_key or not target.positions:
+            self._board_scan_context_key = ""
+            self.board_adapter.cancel_input()
+
+    def _scan_board_selection_locked(self, *, expected_revision: str, automatic: bool) -> dict[str, object]:
+        started = time.monotonic()
+        with self._board_state_lock:
+            adapter = self.board_adapter
+            if adapter is None:
+                raise ValueError("Najpierw podłącz backend planszy.")
+            target = self._current_board_scan_target()
+            selection = self._board_selection_payload(target=target)
+            revision = str(selection["revision"])
+            if expected_revision and expected_revision != revision:
+                self._record("ui_board_scan_stale_before_start", {"expected_revision": expected_revision, "current_revision": revision, "automatic": automatic})
                 return self.state_payload()
-            self.board_message = "Nie wybrano pola na planszy."
-            self._record(
-                "ui_board_scan_cancelled",
-                {
-                    "stage": self.ui_flow_stage.value,
-                    "revision": revision,
-                    "automatic": automatic,
-                    "elapsed_ms": round(
-                        (time.monotonic() - started_at) * 1000
-                    ),
-                },
-            )
-            return self.state_payload()
-        selected = _coordinate_from_scan(selected_raw)
-        current_revision = str(self._board_selection_payload()["revision"])
-        elapsed_ms = round((time.monotonic() - started_at) * 1000)
-        if current_revision != revision:
-            self._record(
-                "ui_board_scan_stale_after_receive",
-                {
-                    "scan_revision": revision,
-                    "current_revision": current_revision,
-                    "automatic": automatic,
-                    "position": [selected.col, selected.row],
-                    "elapsed_ms": elapsed_ms,
-                },
-            )
-            return self.state_payload()
-        self._record(
-            "ui_board_scan_received",
-            {
-                "stage": self.ui_flow_stage.value,
-                "revision": revision,
-                "automatic": automatic,
-                "position": [selected.col, selected.row],
-                "elapsed_ms": elapsed_ms,
-            },
-        )
-        return self._handle_board_position(selected)
+            if not target.positions:
+                raise ValueError(target.empty_message)
+            key, mode, finish = self._board_input_contract(target, revision)
+            self._board_scan_context_key = key
+            adapter.show_scan_feedback(target.feedback, boost_brightness=not automatic)
+            wait_for_input = adapter.prepare_scan(target.positions, context_key=key, mode=mode, finish_positions=finish)
+            scan_started = time.monotonic()
+            self._record("ui_board_scan_started", {"revision": revision, "automatic": automatic,
+                "position_count": len(target.positions), "input_mode": mode,
+                "led_output": dict(getattr(adapter.connection, "led_status", {})),
+                "preparation_ms": round((scan_started - started) * 1000),
+                "frames": [{"positions": [[p.col, p.row] for p in f.positions], "rgb": list(f.color),
+                            "color_name": led_color_name_pl(f.color), "role": f.role.value} for f in target.feedback.frames]})
+        try:
+            raw = wait_for_input(timeout_s=None if automatic else self.scan_timeout_s)
+            input_received = time.monotonic()
+        except Exception as exc:
+            with self._board_state_lock:
+                self._board_scan_context_key = ""
+                self.board_message = str(exc)
+                self._record("ui_board_scan_timeout" if isinstance(exc, TimeoutError) else "ui_board_scan_error",
+                             {"error": str(exc), "revision": revision,
+                              "led_output": dict(getattr(adapter.connection, "led_status", {}))})
+            raise
+        with self._board_state_lock:
+            current_target = self._current_board_scan_target()
+            current = self._board_selection_payload(target=current_target)
+            current_key, _, _ = self._board_input_contract(current_target, str(current["revision"]))
+            if adapter is not self.board_adapter or current_key != key or self._board_scan_context_key != key:
+                self._record("ui_board_scan_stale_after_receive", {"scan_revision": revision, "current_revision": current["revision"]})
+                return self.state_payload()
+            adapter.restore_feedback(current_target.feedback)
+            if raw is None:
+                self.board_message = "Nie wybrano pola na planszy."
+                return self.state_payload()
+            selected = _coordinate_from_scan(raw)
+            if selected not in current_target.positions:
+                raise ValueError("Odebrano pole spoza aktualnego wyboru.")
+            self._record("ui_board_scan_received", {"revision": revision, "automatic": automatic,
+                "led_output": dict(getattr(adapter.connection, "led_status", {})),
+                "position": [selected.col, selected.row], "elapsed_ms": round((time.monotonic() - started) * 1000),
+                "wait_for_input_ms": round((input_received - scan_started) * 1000),
+                "after_input_ms": round((time.monotonic() - input_received) * 1000)})
+            return self._handle_board_position(selected)
 
     def set_exploration_board_selection(self, enabled: bool) -> dict[str, object]:
         if self.ui_flow_stage != UiFlowStage.LOCATION_ACTIVE or self.combat_state is not None:
@@ -6821,8 +6872,13 @@ class ExplorationUiSession:
         self._sync_board_leds()
         return self.state_payload()
 
-    def _combat_has_pending_resolution(self) -> bool:
-        if self.combat_targeting_class_feature_action_id is not None:
+    def _combat_has_pending_resolution(self, *, ignore_class_target: bool = False) -> bool:
+        if self.shared_mana_declaration is not None:
+            return True
+        if self.combat_state is not None and self.combat_state.shared_mana is not None:
+            if self.combat_state.shared_mana.phase.value in {"end_turn", "discard", "refresh"}:
+                return True
+        if self.combat_targeting_class_feature_action_id is not None and not ignore_class_target:
             return True
         if self.combat_targeting_item_action_id is not None:
             return True
@@ -6831,6 +6887,7 @@ class ExplorationUiSession:
         return any(
             pending is not None
             for pending in (
+                self.pending_physical_feature_action_id,
                 self.pending_enemy_turn_intent,
                 self.pending_enemy_turn_result,
                 self.pending_enemy_turn_ack_result,
@@ -6861,6 +6918,9 @@ class ExplorationUiSession:
         )
 
     def confirm_encounter_setup_step(self) -> dict[str, object]:
+        from .training_walkthrough import enabled as guided_enabled, flag as guided_flag
+        if guided_enabled(self) and guided_flag(self, 'phase') == 'introduction':
+            raise ValueError("Najpierw przeczytaj wprowadzenie i naciśnij ✓, aby rozpocząć ustawianie.")
         if self.encounter_setup_flow is None:
             return self.start_encounter_setup()
         flow = self.encounter_setup_flow
@@ -6868,10 +6928,13 @@ class ExplorationUiSession:
         if step is None:
             return self.state_payload()
         if flow.is_player_start_step:
+            if flow.pending_start_position is not None:
+                return self.assign_encounter_player_start_position(flow.pending_start_position)
             actor = flow.current_player_start_actor
             actor_name = actor.name if actor is not None else "kolejnego bohatera"
             raise ValueError(f"Ten krok wymaga kliknięcia planszy: wybierz pole startowe dla {actor_name}.")
         self._add_message("Setup potwierdzony", f"Potwierdzono: {step.label}.")
+        self.board_selection_revision += 1
         if flow.current_index + 1 >= len(flow.steps):
             flow.completed = True
             self._seed_precombat_stealth_from_exploration()
@@ -6880,6 +6943,8 @@ class ExplorationUiSession:
                 "Figurki i jawne elementy encountera są rozstawione. Następny krok to ewentualne skradanie, inicjatywa i start walki.",
             )
             self._resume_retry_combat_after_setup()
+            from .training_walkthrough import after_setup
+            after_setup(self)
         else:
             flow.current_index += 1
         self._sync_board_leds()
@@ -6902,6 +6967,8 @@ class ExplorationUiSession:
         updated_actors = tuple(updated_actor if candidate.id == actor.id else candidate for candidate in flow.encounter.actors)
         flow.encounter = replace(flow.encounter, actors=updated_actors)
         flow.player_start_assignments[str(actor.id)] = selected
+        flow.selected_start_position = None
+        self.board_selection_revision += 1
         self.board_message = f"Ustawiono {actor.name} na polu {selected.as_tuple()}."
         self._add_message("Pole startowe", f"{actor.name}: {selected.as_tuple()}.")
         self._record(
@@ -6944,6 +7011,19 @@ class ExplorationUiSession:
         )
         self.board_message = (
             "Setup potwierdzony. Encounter jest ponownie aktywny."
+        )
+
+    def _can_start_encounter_initiative(self) -> bool:
+        return bool(
+            self.encounter_setup_flow is not None
+            and self.encounter_setup_flow.completed
+            and self.encounter_initiative_flow is None
+            and self.combat_state is None
+            and (
+                self.pending_encounter is None
+                or not precombat_stealth_is_available(self.pending_encounter.opening_resolution)
+                or self.pending_encounter.precombat_stealth_completed
+            )
         )
 
     def start_encounter_initiative(self) -> dict[str, object]:
@@ -7021,7 +7101,7 @@ class ExplorationUiSession:
             )
         prompts = build_player_initiative_prompts(
             tuple(a for a in encounter.actors if not (
-                self.exploration.scenario_id == ARENA_ID and str(a.id) == HELPER_ID)),
+                self.exploration.scenario_id == ARENA_ID and str(a.id) in {HELPER_ID, f"{HELPER_ID}_2"})),
             roll_modes_by_actor_id,
         )
         self.encounter_initiative_flow = EncounterInitiativeFlow(
@@ -7041,6 +7121,24 @@ class ExplorationUiSession:
         )
         if not prompts:
             self._finish_encounter_initiative()
+        self._sync_board_leds()
+        return self.state_payload()
+
+    def update_initiative_panel(
+        self, command: str, *, value: int | None = None, expected_revision: str = "",
+    ) -> dict[str, object]:
+        flow = self.encounter_initiative_flow
+        if flow is None or flow.roll_panel is None:
+            raise ValueError("Nie trwa wpisywanie inicjatywy.")
+        if expected_revision and expected_revision != self._board_selection_payload()["revision"]:
+            return self.state_payload()
+        panel = flow.roll_panel
+        if command == "accept" and panel.review:
+            return self.submit_encounter_initiative_roll(
+                panel.values[0], panel.values[1] if len(panel.values) > 1 else None,
+            )
+        flow.panel = panel.change(command, value)
+        self.board_selection_revision += 1
         self._sync_board_leds()
         return self.state_payload()
 
@@ -7091,6 +7189,7 @@ class ExplorationUiSession:
             + (f" Zużyto: {edge.label}." if edge is not None else ""),
         )
         flow.current_prompt_index += 1
+        flow.panel = None
         if flow.current_prompt is None:
             self._finish_encounter_initiative()
         self._sync_board_leds()
@@ -7133,7 +7232,7 @@ class ExplorationUiSession:
             hidden_states,
             self.state.condition_states,
         )
-        if self.exploration.scenario_id == ARENA_ID and TrainingConfig.from_flags(self.state.flags).mode == "support":
+        if self.exploration.scenario_id == ARENA_ID and TrainingConfig.from_flags(self.state.flags).mode in {"support", "tutorial"}:
             self.combat_state = replace(self.combat_state, condition_states=(
                 *self.combat_state.condition_states,
                 ConditionState(actor_id=HELPER_ID, condition=CombatCondition.POISONED,
@@ -7233,6 +7332,8 @@ class ExplorationUiSession:
             "Kolejność inicjatywy",
             f"Kolejność została ustalona: {order_text}. Pierwsza tura: {order.current_actor.name}.",
         )
+        from .training_walkthrough import initialize_combat
+        initialize_combat(self)
         checkpoint_saved = self._write_encounter_checkpoint()
         if checkpoint_saved is False:
             self._add_message(
@@ -7649,6 +7750,10 @@ class ExplorationUiSession:
                 if base is not None:
                     sources = (*sources, powerful_strike_source(actor, base))
             sources = tuple(adapt_attack(actor, s) for s in sources)
+        if self.combat_state is not None and self.combat_state.shared_mana is not None:
+            from dnd_board_game.combat.shared_mana_sources import boost_attack, additional_weapon_sources
+            sources = additional_weapon_sources(actor, sources, self.active_combat_effects, self.combat_state.shared_mana if self.combat_state else None)
+            sources = tuple(boost_attack(s, self.combat_state.shared_mana if self.combat_state else None) for s in sources)
         familiar = next(
             (
                 effect
@@ -7837,6 +7942,8 @@ class ExplorationUiSession:
         if encounter is None:
             return ()
         sources = encounter.healing_sources_by_actor.get(actor.id, ())
+        from dnd_board_game.combat.shared_mana_sources import boost_healing
+        sources = tuple(boost_healing(actor, source, self.combat_state.shared_mana if self.combat_state else None) for source in sources)
         goodberry = _goodberry_healing_source(actor)
         if goodberry is None:
             return sources
@@ -8384,6 +8491,8 @@ class ExplorationUiSession:
     def report_physical_mana_wave(self, event: int) -> dict[str, object]:
         if self.combat_state is None:
             raise ValueError("Walka nie została rozpoczęta.")
+        if self.combat_state.shared_mana is not None:
+            raise ValueError("Wspólny rynek nie używa fal many. Użyj odświeżenia talii.")
         self.active_combat_effects = report_wave(self.combat_state, self.active_combat_effects, event)
         self._add_message("Fala many", "Zapisano falę. Efekt wejdzie na końcu rundy, po odpływie rynku. Wyłóżcie nową zapowiedź z k6.")
         return self.state_payload()
@@ -8412,6 +8521,10 @@ class ExplorationUiSession:
         from dnd_board_game.combat.physical_mana_summon import activate_weapon
         if self.combat_state is None or self._combat_has_pending_resolution():
             raise ValueError("Najpierw dokończ bieżące rozstrzygnięcie.")
+        from .shared_mana import gate_payment
+        if gate_payment(self, "spiritual_weapon_activation", "activate_mana_weapon"):
+            self._sync_board_leds()
+            return self.state_payload()
         self.combat_state, self.active_combat_effects = activate_weapon(self.combat_state, self.active_combat_effects)
         self._add_message("Duchowa broń · D · B", "Wydaj B. Przesuń broń do 20 ft i wykonaj jeden atak. Zakończenie aktywacji wraca do tury Dagny.")
         self._sync_board_leds()
@@ -8471,6 +8584,11 @@ class ExplorationUiSession:
         if self.combat_state is None:
             raise ValueError("Walka nie została rozpoczęta.")
         actor = combat_current_actor(self.combat_state)
+        if self.combat_state.shared_mana and source_id in {"unstoppable", "blade_dance"}:
+            from .shared_mana import gate_payment
+            if gate_payment(self, source_id, "select_combat_attack_source", {"source_id": source_id}):
+                self._sync_board_leds()
+                return self.state_payload()
         echo_reason = arcane_echo_block_reason(
             actor,
             self.active_combat_effects,
@@ -8763,6 +8881,8 @@ class ExplorationUiSession:
         return self._apply_multi_target_spell_transition(transition)
 
     def cancel_multi_target_damage_spell(self) -> dict[str, object]:
+        from .shared_mana import require_unpaid_cancellation
+        require_unpaid_cancellation(self)
         pending = self.pending_multi_target_damage_spell
         if pending is None:
             raise ValueError("Nie ma czaru oczekującego na anulowanie.")
@@ -8918,6 +9038,8 @@ class ExplorationUiSession:
         return self.state_payload()
 
     def cancel_physical_feature_prompt(self) -> dict[str, object]:
+        from .shared_mana import require_unpaid_cancellation
+        require_unpaid_cancellation(self)
         if self.pending_physical_feature_action_id is None:
             raise ValueError("Nie ma oczekującej karty cechy klasowej.")
         action_id = self.pending_physical_feature_action_id
@@ -9144,11 +9266,41 @@ class ExplorationUiSession:
             blocked = rage_activation_block_reason(actor, self.active_combat_effects)
             if blocked:
                 raise ValueError(blocked)
+        from .shared_mana import gate_payment
+        target_before_payment = self.combat_state.shared_mana is not None and (
+            action_id in MIRA_ATTACK_ACTION_IDS or action_id in ERYND_ARROW_ACTION_IDS
+            or action_id in LORIAN_SHOT_ACTION_IDS or action_id == "powerful_strike")
+        if not target_before_payment and gate_payment(self, action_id, "use_combat_class_feature", {
+            "action_id": action_id, "natural_roll": natural_roll, "target_id": target_id,
+            "points": points, "mode": mode, "slot_level": slot_level,
+            "source_item_id": source_item_id, "form_id": form_id,
+            "saving_rolls": saving_rolls, "allocations": allocations,
+        }):
+            self._sync_board_leds()
+            return self.state_payload()
+        if action_id == "caring_gesture" and natural_roll is None:
+            from .shared_mana import ManaDeclaration
+            self.shared_mana_declaration = ManaDeclaration(action_id, str(actor.id), "use_combat_class_feature",
+                {"action_id": action_id, "target_id": target_id, "natural_roll": None}, stage="effect_roll")
+            self._sync_board_leds()
+            return self.state_payload()
+        if action_id == "second_wind" and natural_roll is None:
+            return self._queue_physical_feature_prompt(action_id)
         state_before_feature = self.combat_state
         healing_target_ids: tuple[str, ...] = ()
         self._clear_player_pending_choices()
         title = "Cecha klasowa"
-        if uses_physical_mana(actor) and action_id.startswith("mana_"):
+        from dnd_board_game.combat.shared_mana_features import SIMPLE_ACTIONS, resolve_simple_action
+        if self.combat_state.shared_mana and action_id == "counterattack_command":
+            from dnd_board_game.combat.shared_command import start_command
+            self.combat_state, self.active_combat_effects = start_command(self.combat_state, self.active_combat_effects, target_id)
+            title = "Rozkaz: Kontratak!"
+            body = "Garran: przemieść się do 10 ft bez ataków okazyjnych i wykonaj atak. Potem aplikacja odda sterowanie sojusznikowi."
+        elif self.combat_state.shared_mana and action_id in SIMPLE_ACTIONS:
+            self.combat_state, self.active_combat_effects = resolve_simple_action(self.combat_state, self.active_combat_effects, action_id, target_id=target_id, roll=natural_roll)
+            title = mana_ability(str(actor.id), action_id).name
+            body = mana_ability(str(actor.id), action_id).description
+        elif uses_physical_mana(actor) and action_id.startswith("mana_"):
             self.combat_state, self.active_combat_effects, body = resolve_mana_support(
                 self.combat_state, self.active_combat_effects, action_id, target_id)
             title = mana_ability(str(actor.id), action_id).name
@@ -9184,8 +9336,7 @@ class ExplorationUiSession:
             self.combat_state = result.state
             self.active_combat_effects = result.active_effects
             body = (
-                f"{actor.name} przyjmuje Pozycję obronną: +2 KP do początku "
-                "następnej tury albo do zmiany pola."
+                f"{actor.name}: " + (mana_ability(str(actor.id), action_id).description if self.combat_state.shared_mana else "Pozycja obronna: +2 KP do początku następnej tury albo do zmiany pola.")
             )
         elif action_id == "instinctive_dodge":
             raise ValueError(
@@ -9202,6 +9353,8 @@ class ExplorationUiSession:
                 f"{actor.name} tworzy Osłonę tarczą. Sąsiadujący sojusznicy "
                 "mają +2 KP do początku jego następnej tury."
             )
+            from .shared_mana import begin_support_bonus
+            begin_support_bonus(self, "garran_shield_wall")
         elif action_id == "garran_rally":
             result = resolve_garran_rally(
                 self.combat_state,
@@ -9213,6 +9366,8 @@ class ExplorationUiSession:
                 f"{actor.name} wygłasza Mowę dowódcy. Słyszący sojusznicy "
                 "w 30 ft otrzymują wsparcie i tracą Strach."
             )
+            from .shared_mana import begin_support_bonus
+            begin_support_bonus(self, "garran_rally")
         elif action_id == "smoke_screen":
             result = resolve_smoke_screen(
                 self.combat_state,
@@ -9221,13 +9376,13 @@ class ExplorationUiSession:
             self.combat_state = result.state
             self.active_combat_effects = result.active_effects
             self.board_message = (
-                "Zasłona dymna: wybierz na planszy legalne pole w 15 stopach. "
+                f"Zasłona dymna: wybierz legalne pole w {self.combat_state.shared_mana.smoke_movement if self.combat_state.shared_mana else 15} ft. "
                 "Po zatwierdzeniu ruchu system poprosi o nowy test Ukrycia."
             )
             self._add_message("Zasłona dymna", self.board_message)
             self._record(
                 "ui_combat_smoke_screen_started",
-                {"actor_id": str(actor.id), "movement_limit_feet": 15},
+                {"actor_id": str(actor.id), "movement_limit_feet": self.combat_state.shared_mana.smoke_movement if self.combat_state.shared_mana else 15},
             )
             self._sync_board_leds()
             return self.state_payload()
@@ -9441,6 +9596,8 @@ class ExplorationUiSession:
             )
         elif action_id in {"turn_undead", "turn_the_unholy"}:
             encounter = self._active_encounter()
+            if self.combat_state.shared_mana and not saving_rolls:
+                saving_rolls = tuple((str(a.id), self.encounter_rng.randint(1, 20)) for a in channel_turn_targets(self.combat_state, action_id=action_id, board=encounter.board if encounter else None, actor=actor))
             result = resolve_channel_turn(
                 self.combat_state,
                 action_id=action_id,
@@ -9566,7 +9723,7 @@ class ExplorationUiSession:
         response = self.select_combat_attack_source("powerful_strike" if uses_physical_mana(actor) and action_id == "powerful_strike" else source.id)
         self.board_message = (
             f"{player_label(action_id)}: wybierz legalny cel na planszy. "
-            "Enter potwierdza cel i przechodzi do rzutu ataku."
+            "✓ potwierdza cel i przechodzi do rzutu ataku."
         )
         self._add_message(player_label(action_id), self.board_message)
         self._sync_board_leds()
@@ -9600,7 +9757,7 @@ class ExplorationUiSession:
         self.select_combat_attack_source(action_id)
         self.board_message = (
             f"{player_label(action_id)}: wybierz legalny cel na planszy. "
-            + (f"Wydaj: {mana_ability(str(actor.id), action_id).cost_label} przy rzucie ataku." if uses_physical_mana(actor) else "Koszt Instynktu, akcja i amunicja zostaną pobrane przy rzucie ataku.")
+            + ("Po wyborze celu ustal podbicia i potwierdź pełny koszt." if uses_physical_mana(actor) else "Koszt Instynktu, akcja i amunicja zostaną pobrane przy rzucie ataku.")
         )
         self._add_message(player_label(action_id), self.board_message)
         self._sync_board_leds()
@@ -9628,7 +9785,7 @@ class ExplorationUiSession:
         self.select_combat_attack_source(action_id)
         self.board_message = (
             f"{player_label(action_id)}: wybierz legalny cel na planszy. "
-            "Koszt Fortelu i akcja zostaną pobrane dopiero przy rozstrzygnięciu."
+            + ("Po wyborze celu ustal podbicia i potwierdź pełny koszt." if self.combat_state.shared_mana else "Koszt Fortelu i akcja zostaną pobrane dopiero przy rozstrzygnięciu.")
         )
         self._add_message(player_label(action_id), self.board_message)
         self._sync_board_leds()
@@ -9669,6 +9826,8 @@ class ExplorationUiSession:
                 f"{player_label(action_id)}: wybierz legalny cel na planszy. "
                 "Ten strzał zastępuje całą akcję dwóch zwykłych ataków."
             )
+        if self.combat_state.shared_mana:
+            self.board_message = mana_ability(str(actor.id), action_id).description + " Wybierz cel lub obszar, potem ustal podbicia i potwierdź koszt."
         self._add_message(player_label(action_id), self.board_message)
         self._sync_board_leds()
         return self.state_payload()
@@ -9736,6 +9895,8 @@ class ExplorationUiSession:
         return self.state_payload()
 
     def cancel_combat_class_feature_targeting(self) -> dict[str, object]:
+        from .shared_mana import require_unpaid_cancellation
+        require_unpaid_cancellation(self)
         if self.shield_bash_flow is not None and self.shield_bash_flow.stage == "result":
             raise ValueError("Rzuty rozstrzygnięte. Potwierdź wynik Uderzenia tarczą.")
         self.shield_bash_flow = None
@@ -9770,6 +9931,13 @@ class ExplorationUiSession:
                 raise ValueError("Najpierw wskaż legalny cel na planszy.")
             target = self._actor_by_string_id(target_id)
             position = target.position
+        from .shared_mana import gate_payment
+        if gate_payment(self, self.combat_targeting_class_feature_action_id, "confirm_combat_class_feature_targeting", {}):
+            self._sync_board_leds()
+            return self.state_payload()
+        if action_id == "shoulder_check" and self.combat_state.shared_mana and not self.brakka_shoulder_check_rolls:
+            from .shared_shoulder import begin_shoulder
+            return begin_shoulder(self)
         self._combat_class_feature_confirmation_requested = True
         try:
             return self._handle_board_position(position)
@@ -9798,7 +9966,7 @@ class ExplorationUiSession:
                 for target in self.combat_state.actors
                 if target.faction == actor.faction
                 and not target.is_defeated()
-                and target.hp * 2 < target.max_hp
+                and target.hp < (target.max_hp if self.combat_state.shared_mana else target.max_hp / 2)
                 and grid_distance_feet(actor.position, target.position) <= 30
             )
         if action_id == "shoulder_check":
@@ -9905,6 +10073,10 @@ class ExplorationUiSession:
         pending = self.pending_summon
         if pending is None or self.combat_state is None:
             raise ValueError("Nie ma przywołania do potwierdzenia.")
+        from .shared_mana import gate_payment
+        if gate_payment(self, pending.action_id, "confirm_summon", {"col": col, "row": row}):
+            self._sync_board_leds()
+            return self.state_payload()
         actor = combat_current_actor(self.combat_state)
         encounter = self._active_encounter()
         if encounter is None:
@@ -9923,6 +10095,8 @@ class ExplorationUiSession:
         return self._apply_summoning_transition(transition)
 
     def cancel_summon(self) -> dict[str, object]:
+        from .shared_mana import require_unpaid_cancellation
+        require_unpaid_cancellation(self)
         pending = self.pending_summon
         if pending is None or self.combat_state is None:
             raise ValueError("Nie ma przywołania do anulowania.")
@@ -9971,11 +10145,16 @@ class ExplorationUiSession:
         pending = self.pending_magic_movement
         if pending is None or self.combat_state is None:
             raise ValueError("Nie ma magicznego ruchu do potwierdzenia.")
+        from .shared_mana import gate_payment
+        if gate_payment(self, pending.action_id, "confirm_magic_movement", {"col": col, "row": row, "target_id": target_id}):
+            self._sync_board_leds()
+            return self.state_payload()
         actor = combat_current_actor(self.combat_state)
         encounter = self._active_encounter()
         if encounter is None:
             raise ValueError("Brak danych encountera dla aktywnej walki.")
-        if pending.action_id == "field_medic_step":
+        if pending.action_id in {"field_medic_step", "shared_nimble_step"}:
+            step_label = "Zwinne dłonie" if pending.action_id == "shared_nimble_step" else "Krok ratowniczki"
             position = (
                 Coordinate(int(col), int(row))
                 if col is not None and row is not None
@@ -9989,6 +10168,9 @@ class ExplorationUiSession:
                 distance_feet=5,
                 scene_objects=encounter.scene_objects,
             )
+            if pending.action_id == "shared_nimble_step":
+                from .shared_movement import nimble_positions
+                legal = nimble_positions(self)
             if (
                 position is None
                 or position not in pending.legal_positions
@@ -10002,16 +10184,19 @@ class ExplorationUiSession:
                 position,
             )
             self.pending_magic_movement = None
+            if pending.action_id == "shared_nimble_step":
+                from .shared_movement import apply_extra_movement
+                apply_extra_movement(self, str(healer.id), origin, position)
             self.active_combat_effects = synchronize_spell_aura_effects(
                 self.combat_state.actors,
                 self.active_combat_effects,
             )
             message = (
-                f"Krok ratowniczki: {healer.name} przesuwa się z "
+                f"{step_label}: {healer.name} przesuwa się z "
                 f"{origin.as_tuple()} na {position.as_tuple()} bez ataku okazyjnego."
             )
             self.board_message = message
-            self._add_message("Krok ratowniczki", message)
+            self._add_message(step_label, message)
             self._record(
                 "ui_combat_field_medic_step_confirmed",
                 {
@@ -10047,9 +10232,9 @@ class ExplorationUiSession:
         pending = self.pending_magic_movement
         if pending is None or self.combat_state is None:
             raise ValueError("Nie ma magicznego ruchu do anulowania.")
-        if pending.action_id == "field_medic_step":
+        if pending.action_id in {"field_medic_step", "shared_nimble_step"}:
             self.pending_magic_movement = None
-            self.board_message = "Dagna rezygnuje z Kroku ratowniczki."
+            self.board_message = "Rezygnujesz z dodatkowego kroku."
             self._add_message("Krok ratowniczki", self.board_message)
             self._record(
                 "ui_combat_field_medic_step_declined",
@@ -10057,6 +10242,8 @@ class ExplorationUiSession:
             )
             self._sync_board_leds()
             return self.state_payload()
+        from .shared_mana import require_unpaid_cancellation
+        require_unpaid_cancellation(self)
         transition = self.magic_movement_flow.cancel(
             state=self.combat_state,
             pending=pending,
@@ -10193,6 +10380,10 @@ class ExplorationUiSession:
         pending = self.pending_spell_debuff
         if pending is None or self.combat_state is None:
             raise ValueError("Nie ma debuffu do potwierdzenia.")
+        from .shared_mana import gate_payment
+        if gate_payment(self, pending.action_id, "confirm_spell_debuff", {"target_id": target_id, "condition": condition}):
+            self._sync_board_leds()
+            return self.state_payload()
         actor = combat_current_actor(self.combat_state)
         encounter = self._active_encounter()
         if encounter is None:
@@ -10243,6 +10434,8 @@ class ExplorationUiSession:
         return self.state_payload()
 
     def cancel_spell_debuff(self) -> dict[str, object]:
+        from .shared_mana import require_unpaid_cancellation
+        require_unpaid_cancellation(self)
         pending = self.pending_spell_debuff
         if pending is None or self.combat_state is None:
             raise ValueError("Nie ma debuffu do anulowania.")
@@ -10725,7 +10918,7 @@ class ExplorationUiSession:
                 raise ValueError("Wybrany cel rozproszenia nie jest już legalny.")
             self.combat_selected_pending_position = None
             return self.confirm_spell_dispel(target_id=str(target.id))
-        raise ValueError("Bieżąca akcja nie oczekuje potwierdzenia pola Enterem.")
+        raise ValueError("Bieżąca akcja nie oczekuje potwierdzenia pola przyciskiem ✓.")
 
     def start_combat_concentration_action(
         self,
@@ -10769,6 +10962,9 @@ class ExplorationUiSession:
             transition.pending_action is not None
             and str(getattr(action, "effect_kind", "")).endswith("_aura_source")
         ):
+            if self.combat_state.shared_mana is not None:
+                self._apply_combat_resource_transition(transition, sync_board=False)
+                return self.confirm_combat_concentration_action(target_ids=transition.pending_action.selected_target_ids)
             transition = self.player_combat_resource_flow.confirm_concentration(
                 state=self.combat_state,
                 active_effects=self.active_combat_effects,
@@ -10792,6 +10988,10 @@ class ExplorationUiSession:
             raise ValueError("Nie ma czaru koncentracyjnego do potwierdzenia.")
         if self.combat_state is None:
             raise ValueError("Walka nie została rozpoczęta.")
+        from .shared_mana import gate_payment
+        if gate_payment(self, pending.action_id, "confirm_combat_concentration_action", {"target_id": target_id, "target_ids": target_ids, "roll_total": roll_total, "effect_option": effect_option}):
+            self._sync_board_leds()
+            return self.state_payload()
         caster = combat_current_actor(self.combat_state)
         encounter = self._active_encounter()
         if encounter is None:
@@ -10906,6 +11106,8 @@ class ExplorationUiSession:
         selected_for_resolution = target_ids or (
             (target_id,) if target_id else pending.selected_target_ids
         )
+        from dnd_board_game.combat.shared_mana_sources import boost_action
+        action = boost_action(action, self.combat_state.shared_mana)
         transition = self.player_combat_resource_flow.confirm_concentration(
             state=self.combat_state,
             active_effects=self.active_combat_effects,
@@ -11012,6 +11214,8 @@ class ExplorationUiSession:
         return self.state_payload()
 
     def cancel_combat_concentration_action(self) -> dict[str, object]:
+        from .shared_mana import require_unpaid_cancellation
+        require_unpaid_cancellation(self)
         pending = self.pending_concentration_action
         if pending is None:
             raise ValueError("Nie ma czaru koncentracyjnego do anulowania.")
@@ -11327,7 +11531,7 @@ class ExplorationUiSession:
             )
             self.board_message = (
                 "Rzeźbienie pola: kliknij do 4 pól obszaru, aby je wyłączyć. "
-                "Wyłączone pola świecą na zielono; Enter zatwierdza czar."
+                "Wyłączone pola świecą na zielono; ✓ zatwierdza czar."
             )
             self._sync_board_leds()
             return self.state_payload()
@@ -11336,6 +11540,13 @@ class ExplorationUiSession:
             and pending.heightened_target_id is None
         ):
             raise ValueError("Wybierz cel Heightened Spell przed potwierdzeniem czaru.")
+        from .shared_mana import gate_payment
+        if gate_payment(self, source.id, "confirm_player_area_spell"):
+            self._sync_board_leds()
+            return self.state_payload()
+        if source.id == "arrow_rain":
+            from .shared_volley import confirm_volley
+            return confirm_volley(self)
         transition = self.player_area_healing_flow.confirm_area_spell(
             state=self.combat_state,
             source=source,
@@ -11349,11 +11560,12 @@ class ExplorationUiSession:
                 self.active_combat_effects,
                 attacker_id=str(caster.id),
                 saving_throws=transition.pending.saving_throws,
+                shared_root=bool(dict(self.combat_state.shared_mana.pending_boosts).get("root", 0)) if self.combat_state.shared_mana else None,
             )
             saves = transition.pending.saving_throws
             result_text = "; ".join(
                 f"{self._actor_by_string_id(save.actor_id).name}: "
-                f"{'połowa ruchu' if save.success else 'brak ruchu'}"
+                f"{('bez efektu' if save.success else 'brak ruchu' if dict(self.combat_state.shared_mana.pending_boosts).get('root', 0) else 'połowa ruchu') if self.combat_state.shared_mana else ('połowa ruchu' if save.success else 'brak ruchu')}"
                 for save in saves
             ) or "brak istot w obszarze"
             transition = replace(
@@ -11401,7 +11613,7 @@ class ExplorationUiSession:
         )
         self.board_message = (
             f"Rzeźbienie pola: wyłączono {len(ordered)}/4 pól. "
-            "Klikaj dalej albo potwierdź Enterem."
+            "Klikaj dalej albo potwierdź przyciskiem ✓."
         )
         self._record(
             "ui_nimra_sculpt_field_changed",
@@ -11452,7 +11664,7 @@ class ExplorationUiSession:
         )
         self.board_message = (
             f"Rzeźbienie pola: wyłączono {len(ordered)}/4 pól. "
-            "Klikaj pola obszaru albo potwierdź czar Enterem."
+            "Klikaj pola obszaru albo potwierdź czar przyciskiem ✓."
         )
         self._record(
             "ui_nimra_persistent_sculpt_field_changed",
@@ -11628,6 +11840,9 @@ class ExplorationUiSession:
         damage: int | None = None,
         component_totals: Mapping[str, int] | None = None,
     ) -> dict[str, object]:
+        if self.pending_area_spell is not None and self.pending_area_spell.source_id == "arrow_rain":
+            from .shared_volley import apply_volley_damage
+            return apply_volley_damage(self, component_totals)
         pending = self.pending_area_spell
         if pending is None or pending.stage != "damage_roll":
             raise ValueError("Nie ma oczekujących obrażeń czaru obszarowego.")
@@ -11638,7 +11853,7 @@ class ExplorationUiSession:
         if source is None:
             raise ValueError(f"Aktor {caster.name} nie ma tego czaru.")
         roar_saves = pending.saving_throws
-        if source.id == "deafening_roar":
+        if source.id == "deafening_roar" and self.combat_state.shared_mana is None:
             # A natural 20 is Brakka's explicit critical success: no damage,
             # even though an ordinary successful save would take half.
             pending = replace(
@@ -11677,8 +11892,13 @@ class ExplorationUiSession:
         """Apply the roar's turn-scoped movement and natural-1 riders."""
 
         effects = self.active_combat_effects
+        shared = self.combat_state.shared_mana
+        if shared and not dict(shared.pending_boosts).get("root", 0):
+            return
         for save in saving_throws:
-            if (save.success and save.natural_roll != 1) or save.natural_roll == 20:
+            if shared and save.success:
+                continue
+            if not shared and ((save.success and save.natural_roll != 1) or save.natural_roll == 20):
                 continue
             actor_id = str(save.actor_id)
             common = {
@@ -11690,8 +11910,8 @@ class ExplorationUiSession:
                     "deafening_roar",
                     "Ogłuszający ryk",
                 ),
-                "duration": EffectDuration.UNTIL_TURN_END,
-                "expiration_actor_id": actor_id,
+                "duration": EffectDuration.UNTIL_TURN_START if shared else EffectDuration.UNTIL_TURN_END,
+                "expiration_actor_id": str(caster.id) if shared else actor_id,
             }
             movement = ActiveCombatEffect(
                 id=f"roar_no_movement:{actor_id}",
@@ -11701,7 +11921,7 @@ class ExplorationUiSession:
                 **common,
             )
             effects = apply_active_effect(effects, movement).active_effects
-            if save.natural_roll == 1:
+            if not shared and save.natural_roll == 1:
                 disadvantage = ActiveCombatEffect(
                     id=f"roar_attack_disadvantage:{actor_id}",
                     kind="roar_attack_disadvantage",
@@ -11713,6 +11933,8 @@ class ExplorationUiSession:
         self.active_combat_effects = effects
 
     def cancel_player_area_spell(self) -> dict[str, object]:
+        from .shared_mana import require_unpaid_cancellation
+        require_unpaid_cancellation(self)
         pending = self.pending_area_spell
         if pending is None:
             raise ValueError("Nie ma czaru obszarowego do anulowania.")
@@ -11730,6 +11952,10 @@ class ExplorationUiSession:
     ) -> dict[str, object]:
         self.combat_state = transition.state
         self.pending_area_spell = transition.pending
+        if self.combat_state.shared_mana:
+            from .shared_movement import apply_extra_movement
+            for moved in dict(transition.event_payload).get("pushed_targets", ()):
+                apply_extra_movement(self, moved["actor_id"], Coordinate(*moved["from"]), Coordinate(*moved["to"]))
         if (
             transition.event_type == "ui_combat_area_spell_confirmed"
             and self.combat_state is not None
@@ -11830,6 +12056,13 @@ class ExplorationUiSession:
                         ("lightning_jump_is_enemy", jump.is_enemy),
                     ),
                 )
+            if self.combat_state.shared_mana:
+                from dnd_board_game.combat.shared_mana_sources import lightning_chain
+                targets = lightning_chain(attacker, primary, transition.state.actors)
+                names = {str(a.id): a.name for a in transition.state.actors}
+                transition = replace(transition,
+                    pending=replace(transition.pending, twinned_target_id=None, shared_target_ids=targets),
+                    board_message="Piorunowy szlak: " + " → ".join(names[key] for key in (str(primary.id), *targets)) + ". Osobna obrona ZRC każdego celu, wspólne obrażenia.")
         self.combat_targeting_attack_source_id = None
         return self._apply_player_attack_transition(transition)
 
@@ -11851,6 +12084,10 @@ class ExplorationUiSession:
             and pending.twinned_target_id is None
         ):
             raise ValueError("Wybierz drugi cel Twinned Spell przed potwierdzeniem.")
+        from .shared_mana import gate_payment
+        if gate_payment(self, source.id if source.id == "counterattack_command" or mana_ability(str(attacker.id), source.id) else "basic_attack:" + source.id, "confirm_player_attack_target"):
+            self._sync_board_leds()
+            return self.state_payload()
         transition = self.player_combat_action_flow.confirm_attack_target(
             state=self.combat_state,
             board=encounter.board,
@@ -11924,6 +12161,8 @@ class ExplorationUiSession:
         return self.state_payload()
 
     def cancel_player_attack_target(self) -> dict[str, object]:
+        from .shared_mana import require_unpaid_cancellation
+        require_unpaid_cancellation(self)
         pending = self.pending_player_attack
         if pending is None or pending.stage not in {"confirm_attack", "attack_roll"}:
             raise ValueError("Nie ma wyboru celu ataku do anulowania.")
@@ -12399,12 +12638,24 @@ class ExplorationUiSession:
                     source_id=source.id,
                 )
         if transition.event_type == "ui_combat_player_attack_roll":
+            mana = self.combat_state.shared_mana
+            if mana and mana.pending_actor == attacker_id:
+                self.combat_state = replace(self.combat_state, shared_mana=replace(mana, attack_targets=(*mana.attack_targets, target_id), technique_movement=0 if mana.pending_ability == "unstoppable" else mana.technique_movement))
+            if self.combat_state.shared_mana and attacker_id == self.combat_state.shared_mana.turn_actor:
+                self.active_combat_effects = apply_active_effect(self.active_combat_effects,
+                    mana_effect(attacker_id, "shared_offensive_used", "Ofensywa w tej turze", 1)).active_effects
             self._mark_rage_activity(
                 attacker_id,
                 label="Rage podtrzymany atakiem",
             )
         trigger_events = []
         if transition.event_type == "ui_combat_player_attack_roll" and payload.get("hit"):
+            source = self._attack_source_by_id(self._actor_by_string_id(attacker_id), transition.pending.source_id) if transition.pending else None
+            if source is not None:
+                from dnd_board_game.combat.shared_mana_passives import apply_hit_passive
+                self.combat_state, self.active_combat_effects, nimble = apply_hit_passive(self.combat_state, self.active_combat_effects, source)
+                if nimble:
+                    self.active_combat_effects = apply_active_effect(self.active_combat_effects, mana_effect(attacker_id, "shared_nimble_pending", "Zwinne dłonie: ruch po obrażeniach", 1)).active_effects
             trigger_events.append(
                 EffectEvent(
                     EffectEventType.ATTACK_HIT,
@@ -12441,6 +12692,12 @@ class ExplorationUiSession:
                         target_actor_id=attacker_id,
                     )
                 )
+        if transition.event_type == "ui_combat_player_damage_roll" and self.combat_state.shared_mana and self.combat_state.shared_mana.pending_ability == "unstoppable":
+            from dnd_board_game.combat.shared_mana_techniques import resolve_unstoppable_knockdown
+            for applied in applied_damages:
+                if not applied.actor_after.is_defeated():
+                    self.combat_state, save = resolve_unstoppable_knockdown(self.combat_state, str(applied.actor_after.id), self.encounter_rng.randint(1, 20), self.encounter_rng.randint(1, 20), self.active_combat_effects)
+                    self._add_message("Niepowstrzymana", f"{applied.actor_after.name}: obrona Siły {save.total}, " + ("utrzymuje pozycję." if save.success else "powalony."))
         self._apply_combat_trigger_events(tuple(trigger_events))
         for applied in applied_damages:
             self._maybe_prompt_concentration_check(applied)
@@ -12452,6 +12709,16 @@ class ExplorationUiSession:
                 applied_damages=applied_damages,
             )
         self._expire_warding_bonds()
+        if transition.event_type == "ui_combat_player_damage_roll" and self.pending_player_attack is None and any(e.kind == "shared_nimble_pending" for e in self.active_combat_effects):
+            self.active_combat_effects = tuple(e for e in self.active_combat_effects if e.kind != "shared_nimble_pending")
+            actor = combat_current_actor(self.combat_state)
+            encounter = self._active_encounter()
+            if actor.id == "mira" and encounter is not None:
+                from .shared_movement import nimble_positions
+                positions = nimble_positions(self)
+                if positions:
+                    self.pending_magic_movement = PendingMagicMovement(caster_id="mira", action_id="shared_nimble_step", cast_level=0, kind=MagicMovementKind.TELEPORT, legal_positions=positions)
+                    self.board_message = "Zwinne dłonie: wybierz sąsiednie pole i zatwierdź albo pomiń ruch przyciskiem powrotu."
         self._sync_board_leds()
         return self.state_payload()
 
@@ -12637,6 +12904,10 @@ class ExplorationUiSession:
         source = self._selected_healing_source(healer)
         if source is None:
             raise ValueError(f"Aktor {healer.name} nie ma zdefiniowanego leczenia.")
+        from .shared_mana import gate_payment
+        if gate_payment(self, source.id, "select_player_healing_target_at_position", {"position": position}):
+            self._sync_board_leds()
+            return self.state_payload()
         transition = self.player_area_healing_flow.select_healing_target(
             state=self.combat_state,
             board=encounter.board,
@@ -12952,6 +13223,8 @@ class ExplorationUiSession:
         return self.state_payload()
 
     def cancel_player_healing(self) -> dict[str, object]:
+        from .shared_mana import require_unpaid_cancellation
+        require_unpaid_cancellation(self)
         pending = self.pending_player_healing
         if pending is None:
             raise ValueError("Nie ma leczenia do anulowania.")
@@ -13188,6 +13461,10 @@ class ExplorationUiSession:
     def use_combat_dash(self) -> dict[str, object]:
         if self.combat_state is None:
             raise ValueError("Walka nie została rozpoczęta.")
+        from .shared_mana import gate_payment
+        if gate_payment(self, "cunning_action", "use_combat_dash"):
+            self._sync_board_leds()
+            return self.state_payload()
         transition = self.combat_turn_action_flow.use_dash(
             state=self.combat_state,
             active_effects=self.active_combat_effects,
@@ -13220,6 +13497,10 @@ class ExplorationUiSession:
     def use_combat_disengage(self) -> dict[str, object]:
         if self.combat_state is None:
             raise ValueError("Walka nie została rozpoczęta.")
+        from .shared_mana import gate_payment
+        if gate_payment(self, "cunning_action", "use_combat_disengage"):
+            self._sync_board_leds()
+            return self.state_payload()
         transition = self.combat_turn_action_flow.use_disengage(
             state=self.combat_state,
             active_effects=self.active_combat_effects,
@@ -13277,6 +13558,10 @@ class ExplorationUiSession:
             scene_objects=encounter.scene_objects,
             active_effects=self.active_combat_effects,
         )
+        from .shared_mana import gate_payment
+        if gate_payment(self, "hide", "start_combat_hide"):
+            self._sync_board_leds()
+            return self.state_payload()
         self._clear_player_pending_choices()
         self.pending_combat_skill_check = pending
         self.board_message = "Rzuć Dexterity (Stealth) i wpisz naturalny wynik d20."
@@ -14406,7 +14691,7 @@ class ExplorationUiSession:
                                 )
                             except ValueError:
                                 continue
-                        if feature_action_id in {"hard_as_rock", "instinctive_dodge"}:
+                        if feature_action_id in ({"hard_as_rock", "instinctive_dodge", "garran_guard_companion", "cutting_words"} if self.combat_state.shared_mana else {"hard_as_rock", "instinctive_dodge"}):
                             # Reakcja pojawia się wyłącznie w oknie obrażeń.
                             continue
                         if feature_action_id == "rage" and rage_activation_block_reason(
@@ -15012,6 +15297,11 @@ class ExplorationUiSession:
         if encounter is None:
             return ()
         options = []
+        if self.combat_state.shared_mana and str(actor.id) == "dagna":
+            options.append(CombatMenuOption("item:holy_symbol", "Święty symbol — Odpędzenie nieumarłych",
+                "A · niebieska + biała. Nieumarli w 15 ft: obrona MDR; porażka odpędza do początku następnej tury Dagny.",
+                CombatMenuCategory.ITEM, CombatMenuAction.CLASS_FEATURE, action_id="turn_undead", provider="holy_symbol"))
+
         for action in encounter.combat_actions_by_actor.get(actor.id, ()):
             if not action.source_item_id:
                 continue
@@ -15089,6 +15379,9 @@ class ExplorationUiSession:
         }
         visible: list[CombatMenuOption] = []
         for option in candidates:
+            if self.combat_state.shared_mana and str(actor.id) == "dagna" and option.action_id == "turn_undead":
+                continue
+
             if option.category in {
                 CombatMenuCategory.EQUIPMENT,
                 CombatMenuCategory.ITEM,
@@ -15141,19 +15434,15 @@ class ExplorationUiSession:
         actor = combat_current_actor(self.combat_state)
         if actor.faction != Faction.ALLY or actor.is_defeated():
             return ()
-        movement = _remaining_movement_range(
-            self._active_encounter().board,
-            self.combat_state,
-            actor,
-        ) if self._active_encounter() is not None else None
+        encounter = self._active_encounter()
         move = CombatMenuOption(
             id="turn:move",
             label="Ruch",
             description=(
                 f"Pozostało {movement_remaining(self.combat_state, actor)} ft. "
-                "Enter otwiera podgląd; kliknij pole, aby zobaczyć ścieżkę, "
-                "i zatwierdź ją kolejnym Enterem."
-                if movement is not None
+                "Wybranie akcji otwiera podgląd; kliknij pole, aby zobaczyć ścieżkę, "
+                "i potwierdź ją przyciskiem ✓."
+                if encounter is not None
                 else "Wybierz legalne pole ruchu na planszy."
             ),
             category=CombatMenuCategory.FIELD,
@@ -15394,7 +15683,7 @@ class ExplorationUiSession:
         if uses_physical_mana(actor):
             existing = {o.action_id for o in enriched_options}
             for ability in hero_abilities(str(actor.id)):
-                if (ability.id.startswith("mana_") and ability.timing != "R") or ability.id in {"action_surge", "shield_bash", "defensive_stance", "garran_shield_wall"}:
+                if (ability.id.startswith("mana_") and ability.timing != "R") or ability.id in {"action_surge", "shield_bash", "defensive_stance", "garran_shield_wall", "iron_bastion", "victory_hymn", "feint", "caring_gesture", "counterattack_command"}:
                     available = (self.combat_state.turn_action.action_use if ability.timing == "A"
                                  else self.combat_state.turn_action.bonus_action_use) == ActionUse.ACTION_AVAILABLE
                     if available and ability.id not in existing:
@@ -15421,7 +15710,7 @@ class ExplorationUiSession:
                         description=f"{ability.timing} · Wydaj: {ability.cost_label}. {ability.description}" + (f" Dopłata Metamagii: {mana_ability(str(actor.id), option.provider.split(':', 1)[1].split('@')[0]).cost_label}." if option.provider.startswith("nimra_metamagic:") and mana_ability(str(actor.id), option.provider.split(':', 1)[1].split('@')[0]) else "")))
                 else:
                     free = option.id in {"turn:end", "menu:weapons", "menu:items"} or option.action in {CombatMenuAction.OPEN_WEAPON_MENU, CombatMenuAction.OPEN_ITEM_MENU, CombatMenuAction.END_HIDE}
-                    price = "Bez many. " if free else "Wydaj 1 dowolną manę" + (" za każdy atak. " if option.action == CombatMenuAction.SELECT_ATTACK_SOURCE else " raz na turę za zwykły ruch. " if option.action == CombatMenuAction.MOVE else ". ")
+                    price = "Bez many. " if free or self.combat_state.shared_mana else "Wydaj 1 dowolną manę" + (" za każdy atak. " if option.action == CombatMenuAction.SELECT_ATTACK_SOURCE else " raz na turę za zwykły ruch. " if option.action == CombatMenuAction.MOVE else ". ")
                     physical_options.append(replace(option, description=price + option.description))
             enriched_options = physical_options
         source_options = tuple(enriched_options)
@@ -15492,6 +15781,14 @@ class ExplorationUiSession:
     def _available_turn_options(self, options: tuple[CombatMenuOption, ...]) -> tuple[CombatMenuOption, ...]:
         from dnd_board_game.combat.physical_mana import validate_series_source
 
+        if self.combat_state.shared_mana and self.combat_state.shared_mana.command_step:
+            options = tuple(o for o in options if o.action in {CombatMenuAction.MOVE, CombatMenuAction.END_TURN} or o.source_id == "counterattack_command")
+        elif self.combat_state.shared_mana and self.combat_state.shared_mana.pending_ability in {"unstoppable", "blade_dance"}:
+            ability_id = self.combat_state.shared_mana.pending_ability
+            options = tuple(o for o in options if o.action in {CombatMenuAction.MOVE, CombatMenuAction.END_TURN} or o.source_id == ability_id)
+
+        from .training_walkthrough import filter_options
+        options = filter_options(self, options)
         actor = combat_current_actor(self.combat_state)
         groups = self._turn_option_economy(options)
         sources = {source.id: source for source in self._attack_sources_for_actor(actor)}
@@ -15515,6 +15812,8 @@ class ExplorationUiSession:
         return tuple(result)
 
     def _combat_turn_action_menu_payload(self) -> dict[str, object] | None:
+        if self.combat_state and self.combat_state.shared_mana and self.combat_state.shared_mana.command_step:
+            return None
         if self._combat_has_pending_resolution():
             return None
         options = self._combat_turn_action_options()
@@ -15530,6 +15829,7 @@ class ExplorationUiSession:
         selected = options[self.combat_turn_menu_index]
         selected_attack_source = self._selected_attack_source(actor)
         groups = self._turn_option_economy(options)
+        basic_source_id = self._panel_basic_attack_source_id(actor)
         option_payloads: list[dict[str, object]] = []
         for option in options:
             payload = option.as_payload()
@@ -15544,6 +15844,10 @@ class ExplorationUiSession:
                     else None
                 ),
             )
+            payload.update(option_panel_payload(actor_id, option, basic_attack=(
+                option.action == CombatMenuAction.SELECT_ATTACK_SOURCE and option.source_id == basic_source_id
+            )))
+            payload["panel_unavailable_reason"] = self._combat_turn_option_unavailable_reason(option)
             option_payloads.append(payload)
         return {
             "actor_id": actor_id,
@@ -15648,7 +15952,7 @@ class ExplorationUiSession:
             self.board_message = f"{source.name}: wskaż legalnego sojusznika."
         elif option.action == CombatMenuAction.MOVE:
             notice = movement_mana_notice(self.combat_state, self.active_combat_effects)
-            self.board_message = "Ruch: wskaż legalne pole, a potem naciśnij Enter." + (f" {notice.description}" if notice else "")
+            self.board_message = "Ruch: wskaż legalne pole, a potem naciśnij ✓." + (f" {notice.description}" if notice else "")
         elif option.provider == "turn_maneuver":
             self.combat_turn_maneuver_mode = (
                 f"shove:{option.shove_mode}"
@@ -15659,7 +15963,7 @@ class ExplorationUiSession:
         else:
             self.board_message = (
                 f"Podgląd: {option.label}. {option.description} "
-                "Naciśnij Enter ponownie, aby wykonać, albo Esc/Backspace, aby wrócić."
+                "Naciśnij niebieskie ✓, aby zatwierdzić wybór, albo ↩, aby wrócić."
             )
 
     def _combat_turn_option_unavailable_reason(
@@ -15746,13 +16050,19 @@ class ExplorationUiSession:
                     return f"{option.label}: brak legalnego celu."
             finally:
                 self.combat_turn_maneuver_mode = previous_mode
+        elif option.action == CombatMenuAction.CLASS_FEATURE and option.action_id in {
+            "bardic_inspiration", "lay_on_hands", "preserve_life", "shoulder_check",
+            "shield_bash", "garran_command_halt", "garran_guard_companion",
+        }:
+            if not self._class_feature_board_targets(option.action_id, actor):
+                return f"{option.label}: brak legalnego celu."
         return None
 
     def move_combat_turn_action_selection(self, delta: int) -> dict[str, object]:
         started_at = time.monotonic()
         if self.combat_turn_preview_option_id is not None:
             raise ValueError(
-                "Najpierw wróć z podglądu klawiszem Esc/Backspace, a potem zmień akcję."
+                "Najpierw wróć z podglądu przyciskiem ↩, a potem zmień akcję."
             )
         self.selected_combat_aura_preview_id = None
         options = self._combat_turn_action_options()
@@ -15761,7 +16071,7 @@ class ExplorationUiSession:
         self.combat_turn_menu_index = (self.combat_turn_menu_index + int(delta)) % len(options)
         selected = options[self.combat_turn_menu_index]
         self.board_message = (
-            f"Zaznaczono: {selected.label}. Naciśnij Enter, aby otworzyć podgląd."
+            f"Zaznaczono: {selected.label}. Naciśnij ✓, aby otworzyć podgląd."
         )
         self._record(
             "ui_combat_turn_action_selection_changed",
@@ -15809,6 +16119,8 @@ class ExplorationUiSession:
         return self.state_payload()
 
     def confirm_combat_turn_action(self, option_id: str = "") -> dict[str, object]:
+        if self.combat_state and self.combat_state.shared_mana and self.combat_state.shared_mana.command_step:
+            raise ValueError('Kontratak prowadzi ruch i atak automatycznie. Użyj podświetlonych pól i ✓.')
         self.selected_combat_aura_preview_id = None
         options = self._combat_turn_action_options()
         if not options or self._combat_has_pending_resolution():
@@ -15829,9 +16141,18 @@ class ExplorationUiSession:
             self.combat_turn_preview_option_id is not None
             and self.combat_turn_preview_option_id != option.id
         ):
-            raise ValueError(
-                "Najpierw wróć z bieżącego podglądu klawiszem Esc/Backspace."
-            )
+            reason = self._combat_turn_option_unavailable_reason(option)
+            if reason is not None:
+                self.combat_turn_menu_index = next(i for i, candidate in enumerate(options)
+                                                  if candidate.id == self.combat_turn_preview_option_id)
+                self.board_message = reason
+                return self.state_payload()
+            self.combat_turn_preview_option_id = None
+            self.selected_combat_movement_path = None
+            self.combat_targeting_attack_source_id = None
+            self.combat_targeting_healing_source_id = None
+            self.combat_targeting_item_action_id = None
+            self.combat_turn_maneuver_mode = None
 
         navigation_actions = {
             CombatMenuAction.OPEN_WEAPON_MENU,
@@ -15908,7 +16229,7 @@ class ExplorationUiSession:
             if path is None or not path.valid:
                 self.board_message = (
                     "Ruch jest w podglądzie. Wskaż legalne pole na planszy, "
-                    "a potem naciśnij Enter."
+                    "a potem naciśnij ✓."
                 )
                 return self.state_payload()
             return self.submit_combat_movement(
@@ -15921,7 +16242,7 @@ class ExplorationUiSession:
         }:
             self.board_message = (
                 f"{option.label} jest w podglądzie. Wskaż legalny cel na planszy "
-                "albo wróć klawiszem Esc/Backspace."
+                "albo wróć przyciskiem ↩."
             )
             return self.state_payload()
 
@@ -15985,8 +16306,8 @@ class ExplorationUiSession:
             notice=notice,
         )
         self.board_message = (
-            "Wybierz opcję klawiszami Numpad 8/2 i potwierdź Enterem. "
-            "Numpad minus wraca do planszy."
+            "Wybierz opcję na ekranie i potwierdź przyciskiem ✓. "
+            "↩ wraca do planszy."
         )
         self._record(
             "ui_combat_context_menu_opened",
@@ -16808,15 +17129,16 @@ class ExplorationUiSession:
         if damaging_steps <= 0:
             return
         actor = self._actor_by_string_id(actor_id)
-        amount = sum(
-            self.encounter_rng.randint(1, 4)
-            for _ in range(
-                spike_growth_damage_dice_count(
-                    path.path,
-                    self.active_combat_effects,
-                )
-            )
-        )
+        dice_count = spike_growth_damage_dice_count(path.path, self.active_combat_effects)
+        if self.combat_state.shared_mana:
+            used = next((e.value for e in self.active_combat_effects if e.actor_id == actor_id and e.kind == "shared_spike_used"), 0)
+            dice_count = min(damaging_steps, max(0, 4 - used))
+            if not dice_count:
+                return
+            marker = replace(mana_effect(actor_id, "shared_spike_used", "Kolce: pola rozliczone", used + dice_count,
+                EffectDuration.UNTIL_TURN_START), expiration_actor_id=actor_id)
+            self.active_combat_effects = apply_active_effect(self.active_combat_effects, marker).active_effects
+        amount = sum(self.encounter_rng.randint(1, 4) for _ in range(dice_count))
         applied = apply_damage_result(
             actor,
             resolve_damage(
@@ -16928,9 +17250,28 @@ class ExplorationUiSession:
             )
             actor = applied.actor_after
 
+    def _apply_shared_matrix(self, actor_id: str, path: tuple[Coordinate, ...]) -> None:
+        if self.combat_state is None or self.combat_state.shared_mana is None:
+            return
+        from dnd_board_game.combat.shared_mana_zones import matrix_contains, resolve_matrix_save
+        for zone in self.active_combat_effects:
+            if zone.kind != "grease_zone" or not zone.source or zone.source.id != "nimra_sticky_matrix":
+                continue
+            entered = matrix_contains(zone, path[0]) if len(path) == 1 else any(
+                not matrix_contains(zone, first) and matrix_contains(zone, second) for first, second in zip(path, path[1:]))
+            if not entered:
+                continue
+            resolved = resolve_matrix_save(self.combat_state, self.active_combat_effects, zone, actor_id,
+                self.encounter_rng.randint(1, 20), self.encounter_rng.randint(1, 20))
+            self.combat_state, self.active_combat_effects = resolved.state, resolved.effects
+            if resolved.saving_throw is not None:
+                save = resolved.saving_throw
+                self._add_message("Lepka matryca", f"{save.actor_name}: ZRC {save.total} przeciw ST {save.dc} — " + ("utrzymuje równowagę." if save.success else "powalenie."))
+
     def _apply_web_entry_save(self, actor_id: str, path) -> None:
         if self.combat_state is None or len(path.path) < 2:
             return
+        self._apply_shared_matrix(actor_id, path.path)
         from dnd_board_game.combat import (
             resolve_web_save,
             web_zone_contains,
@@ -17010,6 +17351,7 @@ class ExplorationUiSession:
         if self.combat_state is None or self.combat_state.status.value != "active":
             return
         actor = combat_current_actor(self.combat_state)
+        self._apply_shared_matrix(str(actor.id), (actor.position,))
         bleeding_roll = self.encounter_rng.randint(1, 4)
         bleeding_damage = bleeding_damage_at_turn_start(
             self.combat_state.condition_states,
@@ -17208,6 +17550,10 @@ class ExplorationUiSession:
             ),
             None,
         )
+        if rage is not None and self.combat_state is not None and self.combat_state.shared_mana:
+            offensive = any(e.actor_id == str(actor.id) and e.kind == "shared_offensive_used" for e in self.active_combat_effects)
+            if actor.is_unconscious() or not offensive:
+                self._end_rage(str(actor.id), reason="tura bez działania ofensywnego albo utrata przytomności")
         if rage is not None and not uses_physical_mana(actor):
             active_this_cycle = any(
                 effect.actor_id == str(actor.id)
@@ -17539,6 +17885,10 @@ class ExplorationUiSession:
                 },
             )
 
+    def resolve_shared_guard(self) -> dict[str, object]:
+        from .shared_guard import resolve_guard
+        return resolve_guard(self)
+
     def resolve_enemy_turn(self) -> dict[str, object]:
         if self.combat_state is None:
             raise ValueError("Walka nie została rozpoczęta.")
@@ -17564,6 +17914,10 @@ class ExplorationUiSession:
             self._add_message(transition.message_title, transition.message_body)
             self._record(transition.event_type, dict(transition.event_payload))
         intent = self.pending_enemy_turn_intent
+        from .shared_guard import offer_guard
+        if offer_guard(self):
+            self._sync_board_leds()
+            return self.state_payload()
         if (
             self.pending_state.instinctive_dodge_reaction_resolved is None
             and self._maybe_open_instinctive_dodge_reaction(intent, encounter)
@@ -17572,6 +17926,9 @@ class ExplorationUiSession:
             return self.state_payload()
         self.pending_enemy_turn_intent = None
         self.pending_state.instinctive_dodge_reaction_resolved = None
+        self.active_combat_effects = tuple(e for e in self.active_combat_effects
+            if not (e.kind == "shared_guard_offered" and e.actor_id == str(intent.enemy.id)))
+        from .training_walkthrough import enemy_rng as training_enemy_rng
         transition = self.enemy_turn_flow.resolve(
             state=self.combat_state,
             intent=intent,
@@ -17580,7 +17937,7 @@ class ExplorationUiSession:
             attack_source_options_by_actor=encounter.attack_source_options_by_actor,
             multiattack_sources_by_actor=encounter.multiattack_sources_by_actor,
             active_effects=self.active_combat_effects,
-            rng=self.encounter_rng,
+            rng=training_enemy_rng(self),
             scene_objects=encounter.scene_objects,
         )
         if transition.active_effects is not None:
@@ -17614,6 +17971,7 @@ class ExplorationUiSession:
         intent: EnemyTurnPlan,
         encounter: LoadedEncounter,
     ) -> bool:
+        from dnd_board_game.actors.resources import uses_shared_mana
         if self.combat_state is None or intent.target is None:
             return False
         target = next(
@@ -17643,15 +18001,10 @@ class ExplorationUiSession:
             or source is None
             or source.save_ability is not None
             or not actor_has_feature(target, "instinctive_dodge")
-            or not any(
-                hidden.actor_id == str(target.id)
-                for hidden in self.combat_state.hidden_states
-            )
-            or is_hidden_from(
-                self.combat_state.hidden_states,
-                str(target.id),
-                str(enemy.id),
-            )
+            or (not uses_shared_mana(target) and (
+                not any(hidden.actor_id == str(target.id) for hidden in self.combat_state.hidden_states)
+                or is_hidden_from(self.combat_state.hidden_states, str(target.id), str(enemy.id))
+            ))
             or not reaction_available_for(self.combat_state, target)
             or not can_spend_actor_resource(target, "trick_uses", 1)
         ):
@@ -17673,8 +18026,9 @@ class ExplorationUiSession:
             ),
         )
         self.board_message = (
-            f"{enemy.name} namierza Mirę. Wydać 1 Fortel i reakcję, "
-            "aby nadać temu atakowi utrudnienie?"
+            f"{enemy.name} namierza Mirę. "
+            + ("Wybierz Unik instynktowny i odłóż zieloną manę, aby nadać temu atakowi utrudnienie."
+               if uses_shared_mana(target) else "Wydać 1 Fortel i reakcję, aby nadać temu atakowi utrudnienie?")
         )
         self._add_message("Unik instynktowny", self.board_message)
         self._record(
@@ -17692,6 +18046,10 @@ class ExplorationUiSession:
         option = window.current_option
         mira = self._actor_by_string_id(option.reactor_actor_id)
         enemy = self._actor_by_string_id(option.target_actor_id)
+        from .shared_mana import gate_payment
+        if gate_payment(self, "instinctive_dodge", "use_instinctive_dodge_reaction", {}, actor_id=str(mira.id)):
+            self._sync_board_leds()
+            return self.state_payload()
         reaction = use_actor_reaction(self.combat_state, mira)
         if not reaction.accepted:
             raise ValueError(reaction.message)
@@ -17723,6 +18081,8 @@ class ExplorationUiSession:
             "ui_combat_instinctive_dodge_used",
             {"actor_id": str(mira.id), "attacker_id": str(enemy.id)},
         )
+        from .shared_mana import complete_reaction_payment
+        complete_reaction_payment(self, "instinctive_dodge")
         return self.resolve_enemy_turn()
 
     def skip_instinctive_dodge_reaction(self) -> dict[str, object]:
@@ -17797,6 +18157,7 @@ class ExplorationUiSession:
                 result.target,
                 result.source,
             )
+        result = replace(result, state=replace(result.state, shared_mana=self.combat_state.shared_mana))
         transition = self.combat_turn_finalization.commit_enemy_result(
             result=result,
             active_effects=self.active_combat_effects,
@@ -17835,7 +18196,7 @@ class ExplorationUiSession:
         else:
             self.pending_enemy_saving_throw = None
             self.board_message = (
-                "Przypadkowe wykrycie potwierdzone. Naciśnij Enter, aby przeciwnik "
+                "Przypadkowe wykrycie potwierdzone. Naciśnij ✓, aby przeciwnik "
                 "ponownie zaplanował pozostałą część tury."
                 if transition.result.accidentally_detected_actor_id is not None
                 else transition.board_message
@@ -18003,6 +18364,10 @@ class ExplorationUiSession:
         if window is None or window.current_option.kind != ReactionKind.CUTTING_WORDS:
             raise ValueError("Brak oczekującej reakcji Cutting Words.")
         option = window.current_option
+        from .shared_mana import gate_payment
+        if gate_payment(self, "cutting_words", "resolve_cutting_words_reaction", {"die_roll": die_roll}, actor_id=option.reactor_actor_id):
+            self._sync_board_leds()
+            return self.state_payload()
         resolution = self.class_feature_reaction_flow.apply_cutting_words(
             state=self.combat_state,
             enemy_result=self.pending_enemy_turn_result,
@@ -18028,7 +18393,9 @@ class ExplorationUiSession:
                 "damage_total": resolution.damage_total,
             },
         )
-        return self._commit_pending_enemy_turn(resolution.result)
+        from .shared_mana import complete_reaction_payment
+        complete_reaction_payment(self, "cutting_words")
+        return self._commit_pending_enemy_turn(self.pending_enemy_turn_result)
 
     def skip_cutting_words_reaction(self) -> dict[str, object]:
         window = self.pending_reaction_window
@@ -18493,6 +18860,10 @@ class ExplorationUiSession:
         result = self.pending_enemy_turn_result
         if result.target is None or result.damage is None:
             raise ValueError("Brak celu albo obrażeń przeciwnika.")
+        from .shared_mana import gate_payment
+        if gate_payment(self, "hard_as_rock", "_resolve_hard_as_rock_reaction", {"die_roll": die_roll}, actor_id=str(result.target.id)):
+            self._sync_board_leds()
+            return self.state_payload()
         reaction = resolve_hard_as_rock(
             self.combat_state,
             self.active_combat_effects,
@@ -18520,6 +18891,9 @@ class ExplorationUiSession:
             applied_damage=applied,
             updated_target=applied.actor_after,
         )
+        self.combat_state = reaction.state
+        from .shared_mana import complete_reaction_payment
+        complete_reaction_payment(self, "hard_as_rock")
         self.pending_state.hard_as_rock_reaction_resolved = True
         self.pending_physical_feature_action_id = None
         self.board_message = (
@@ -18894,6 +19268,10 @@ class ExplorationUiSession:
         if encounter is None:
             raise ValueError("Brak danych encountera dla aktywnej walki.")
         option = window.current_option
+        from .shared_mana import gate_payment
+        if gate_payment(self, option.effect_id, "cast_defensive_spell_reaction", {}, actor_id=option.reactor_actor_id):
+            self._sync_board_leds()
+            return self.state_payload()
         resolution = self.defensive_spell_reaction_flow.cast(
             state=self.combat_state,
             enemy_result=self.pending_enemy_turn_result,
@@ -18917,7 +19295,9 @@ class ExplorationUiSession:
                 "armor_class": resolution.result.target.ac,
             },
         )
-        return self._commit_pending_enemy_turn(resolution.result)
+        from .shared_mana import complete_reaction_payment
+        complete_reaction_payment(self, "shield")
+        return self._commit_pending_enemy_turn(self.pending_enemy_turn_result)
 
     def skip_defensive_spell_reaction(self) -> dict[str, object]:
         window = self.pending_reaction_window
@@ -19685,7 +20065,7 @@ class ExplorationUiSession:
         )
         updated_state = replace_actor(result.state, merged_actor)
         if self.combat_state is not None:
-            updated_state = replace(updated_state, spent_reaction_actor_ids=self.combat_state.spent_reaction_actor_ids)
+            updated_state = replace(updated_state, spent_reaction_actor_ids=self.combat_state.spent_reaction_actor_ids, shared_mana=self.combat_state.shared_mana)
         moved_enemy = merged_actor if result.moved_enemy is not None and result.moved_enemy.id == merged_actor.id else result.moved_enemy
         return replace(result, state=updated_state, moved_enemy=moved_enemy)
 
@@ -19693,7 +20073,7 @@ class ExplorationUiSession:
         result = self.pending_enemy_turn_result
         if result is None or self.combat_state is None:
             return result
-        return replace(result, state=replace(result.state, spent_reaction_actor_ids=self.combat_state.spent_reaction_actor_ids))
+        return replace(result, state=replace(result.state, spent_reaction_actor_ids=self.combat_state.spent_reaction_actor_ids, shared_mana=self.combat_state.shared_mana))
 
     def _pending_ready_attack_for_enemy_result(self, result) -> PendingReadyAttack | None:
         if self.combat_state is None:
@@ -19913,13 +20293,21 @@ class ExplorationUiSession:
         return replace(state, condition_states=condition_states)
 
     def reset_board_scan(self) -> dict[str, object]:
-        if self.board_adapter is None:
-            raise ValueError("Najpierw podłącz backend planszy.")
-        action = self.board_adapter.reset_scan()
-        self.board_message = "Zresetowano oczekiwanie na kliknięcie planszy."
-        self._record("ui_board_scan_reset", {"action": action})
-        self._sync_board_leds()
-        return self.state_payload()
+        with self._board_state_lock:
+            if self.board_adapter is None:
+                raise ValueError("Najpierw podłącz backend planszy.")
+            self._board_scan_context_key = ""
+            action = self.board_adapter.reset_scan()
+            self.board_message = "Zresetowano oczekiwanie na kliknięcie planszy."
+            self._record("ui_board_scan_reset", {"action": action})
+            self._sync_board_leds()
+        # The cancelled reader needs the game lock to finish. A reset must
+        # acknowledge its completion before a reloaded page starts a new scan.
+        if not self._board_scan_lock.acquire(timeout=5):
+            raise TimeoutError("Nie udało się zakończyć poprzedniego skanu planszy. Ponów połączenie.")
+        self._board_scan_lock.release()
+        with self._board_state_lock:
+            return self.state_payload()
 
     def finish_combat_turn(self) -> dict[str, object]:
         if self.combat_state is None:
@@ -19965,6 +20353,12 @@ class ExplorationUiSession:
             ConditionSaveTiming.TURN_END,
         ):
             raise ValueError("Najpierw wykonaj rzut obronny końca tury przeciw aktywnemu warunkowi.")
+        if self.combat_state.shared_mana and self.combat_state.shared_mana.command_step:
+            raise ValueError('Dokończ Kontratak podświetlonymi polami i przyciskiem ✓.')
+        from .shared_mana import gate_end_turn
+        if self.combat_state.shared_mana is not None and gate_end_turn(self):
+            self._sync_board_leds()
+            return self.state_payload()
         supply = turn_supply(str(actor.id), green_surge=any(e.kind == "mana_wave_3" for e in self.active_combat_effects))
         can_draw_mana = not actor.is_defeated() and not actor.is_unconscious() and not condition_blocks_actions(self.combat_state.condition_states, str(actor.id))
         transition = self.combat_turn_finalization.finish_active_turn(
@@ -19992,9 +20386,9 @@ class ExplorationUiSession:
         self.pending_approach_interaction = None
         self.pending_approach_pickup = None
         self._clear_player_pending_choices()
-        if uses_physical_mana(actor) and not can_draw_mana:
+        if uses_physical_mana(actor) and self.combat_state.shared_mana is None and not can_draw_mana:
             self._add_message("Mana — koniec tury: " + actor.name, "Zachowaj posiadane karty. Stan postaci uniemożliwia dobór w tej turze.")
-        if uses_physical_mana(actor) and can_draw_mana:
+        if uses_physical_mana(actor) and self.combat_state.shared_mana is None and can_draw_mana:
             self._add_message("Mana — koniec tury: " + actor.name,
                 f"Rozlicz skazę, zachowaj do {supply['keep']} niewydanych kart, "
                 f"dobierz do 3 z rynku i uzupełnij rynek. Limit po doborze: {supply['capacity']}. "
@@ -20290,19 +20684,37 @@ class ExplorationUiSession:
             "board_serial_port": self.board_serial_port,
             "wled_url": self.wled_url,
             "scan_timeout_s": self.scan_timeout_s,
-            "connected": self.board_adapter is not None,
+            "connected": self.board_adapter is not None and self.board_adapter.connected,
+            "led_output": dict(getattr(self.board_adapter.connection, "led_status", {})) if self.board_adapter else {},
             "message": self.board_message,
         }
 
-    def _board_selection_payload(self) -> dict[str, object]:
-        target = self._current_board_scan_target()
+    def _board_selection_payload(self, *, target: BoardScanTarget | None = None) -> dict[str, object]:
+        if self.launcher_navigation is not None:
+            from .launcher_board import selection
+            return selection(self)
+        target = target if target is not None else self._current_board_scan_target()
         positions = tuple(sorted(target.positions))
-        connected = self.board_adapter is not None
+        connected = self.board_adapter is not None and self.board_adapter.connected
         signature_payload = {
+            "mana_revision": self.combat_state.shared_mana.revision if self.combat_state and self.combat_state.shared_mana else None,
             "flow_stage": self.ui_flow_stage.value,
             "positions": [[position.col, position.row] for position in positions],
             "prompt": target.empty_message,
             "interaction_revision": self.board_selection_revision,
+            "board_panel_context": self.board_panel_context,
+            "encounter_setup": (
+                (self.encounter_setup_flow.current_index,
+                 self.encounter_setup_flow.completed,
+                 repr(self.encounter_setup_flow.selected_start_position),
+                 repr(self.encounter_setup_flow.player_start_assignments))
+                if self.encounter_setup_flow else None
+            ),
+            "initiative_panel": (
+                (self.encounter_initiative_flow.current_prompt_index,
+                 repr(self.encounter_initiative_flow.roll_panel))
+                if self.encounter_initiative_flow else None
+            ),
             "actor_selection": repr(self.board_actor_selection),
             "selected_board_actor": (
                 self.board_selected_actor_id,
@@ -20374,8 +20786,14 @@ class ExplorationUiSession:
                 )
             )
         )
+        from .training_tutorial import notice_id
+        if self._board_selection_mode() in {"initiative_roll", "initiative_start", "encounter_setup", "training_roster", "mana_targets", "exploration_mana"} or self.board_panel_context or notice_id(self):
+            actor_selection_active = screen_choice_active = False
         return {
             "revision": revision,
+            "input_mode": self._board_input_contract(target, revision)[1],
+            "panel_enabled": self._board_panel_enabled(),
+            "panel_context": self.board_panel_context[0] if self.board_panel_context else None,
             "mode": self._board_selection_mode(),
             "legal_positions": [
                 [position.col, position.row] for position in positions
@@ -20400,6 +20818,19 @@ class ExplorationUiSession:
         }
 
     def _board_selection_mode(self) -> str:
+        from .exploration_mana import active as mana_exploration_active
+        if mana_exploration_active(self):
+            return "exploration_mana"
+        from .shared_mana_board import has_targets as mana_has_targets
+        if mana_has_targets(self.shared_mana_declaration):
+            return "mana_targets"
+        from .training_arena import roster_active
+        if roster_active(self):
+            return "training_roster"
+        if self._can_start_encounter_initiative():
+            return "initiative_start"
+        if self.encounter_initiative_flow and self.encounter_initiative_flow.roll_panel:
+            return "initiative_roll"
         if (
             self.encounter_setup_flow is not None
             and not self.encounter_setup_flow.completed
@@ -20547,8 +20978,16 @@ class ExplorationUiSession:
     def _sync_board_leds(self) -> None:
         if self.board_adapter is None:
             return
+        started = time.monotonic()
         target = self._current_board_scan_target()
+        planned = time.monotonic()
         self._show_board_feedback(target.feedback)
+        finished = time.monotonic()
+        if finished - started >= .25:
+            self._record("ui_board_feedback_slow", {
+                "planning_ms": round((planned - started) * 1000),
+                "transport_ms": round((finished - planned) * 1000),
+            })
 
     def _board_interaction_block_reason(self) -> str:
         if self.pending is not None:
@@ -21151,7 +21590,156 @@ class ExplorationUiSession:
             },
         )
 
+    def _board_panel_enabled(self) -> bool:
+        from .exploration_mana import rolling
+        return self.exploration.scenario_id == "recruitment_arena" and (self.combat_state is not None or rolling(self))
+
+    def configure_board_panel(
+        self, context: str, slots: list[int], exclusive: bool, *, expected_revision: str = "",
+    ) -> dict[str, object]:
+        """Register browser-owned dice/confirmation controls, never resolve rules here."""
+        if not self._board_panel_enabled():
+            raise ValueError("Panel akcji jest dostępny podczas próby na arenie.")
+        if not context or len(context) > 120 or any(type(slot) is not int or slot not in (26, 27, 28, 29) for slot in slots):
+            raise ValueError("Nieprawidłowy kontekst przycisków panelu.")
+        if expected_revision and expected_revision != self._board_selection_payload()["revision"]:
+            return {"board_selection": self._board_selection_payload()}
+        from .exploration_mana import active as mana_active
+        from .simple_traps import enabled as trap_enabled, read as trap_read
+        if (mana_active(self) or (trap_enabled(self) and trap_read(self)['pending'])) and (not context.startswith('dice:') or not exclusive):
+            raise ValueError("Podczas tego rzutu panel należy do bieżącej kości i podsumowania.")
+        self.board_panel_context = (context, tuple(sorted(set(slots))), exclusive)
+        self.board_selection_revision += 1
+        self._sync_board_leds()
+        return {"board_selection": self._board_selection_payload()}
+
+    def _panel_basic_attack_source_id(self, actor: Actor) -> str | None:
+        selected = self._selected_attack_source(actor)
+        if selected is not None and selected.source_type.value == "weapon":
+            return selected.id
+        return next((source.id for source in self._attack_sources_for_actor(actor)
+                     if source.source_type.value == "weapon"), None)
+
+    def _board_panel_feature_preview_active(self) -> bool:
+        return bool(self.combat_targeting_class_feature_action_id
+                    and self.shield_bash_flow is None
+                    and not self.brakka_shoulder_check_rolls
+                    and not self._combat_has_pending_resolution(ignore_class_target=True))
+
+    def _board_panel_selected_option_id(self) -> str | None:
+        if self._board_panel_feature_preview_active():
+            return f"class-feature:{self.combat_targeting_class_feature_action_id}"
+        return self.combat_turn_preview_option_id
+
+    def _board_panel_actions(self, options: tuple[CombatMenuOption, ...] | None = None) -> dict[int, str]:
+        """Use the screen menu's printed mappings and current action budget."""
+        if (
+            not self._board_panel_enabled()
+            or (self.board_panel_context and self.board_panel_context[2])
+            or self.shield_bash_flow is not None
+            or (self._combat_has_pending_resolution() and not self._board_panel_feature_preview_active())
+        ):
+            return {}
+        if options is None:
+            options = self._combat_turn_action_options()
+        actor = combat_current_actor(self.combat_state)
+        basic_source_id = self._panel_basic_attack_source_id(actor)
+        actions: dict[int, str] = {}
+        for option in options:
+            payload = option_panel_payload(str(actor.id), option, basic_attack=(
+                option.action == CombatMenuAction.SELECT_ATTACK_SOURCE
+                and option.source_id == basic_source_id
+            ))
+            slot = payload["panel_slot"]
+            if isinstance(slot, int):
+                actions[slot] = option.id
+        return actions
+
     def _current_board_scan_target(self) -> BoardScanTarget:
+        if self.launcher_navigation is not None:
+            from .launcher_board import target
+            return target(self)
+        from .exploration_mana import active as mana_exploration_active, scan_target as mana_exploration_target
+        if mana_exploration_active(self):
+            return mana_exploration_target(self)
+        from .simple_traps import enabled as trap_lesson_enabled, read as trap_lesson_read
+        if trap_lesson_enabled(self) and trap_lesson_read(self)['pending']:
+            from .board_panel import browser_dice_target
+            return browser_dice_target(self)
+        from .training_arena import roster_active, roster_target
+        if roster_active(self):
+            return roster_target()
+        target = self._game_board_scan_target()
+        from .training_tutorial import notice_id
+        if notice_id(self):
+            from .training_walkthrough import enabled as guided_enabled
+            from .aura_preview import context_feedback
+            return BoardScanTarget(positions=(panel_position(28),),
+                feedback=panel_feedback((), control_slots=(28,),
+                    base=context_feedback(self) if guided_enabled(self) else target.feedback),
+                empty_message="Przeczytaj objaśnienie Nessy i potwierdź ✓.")
+        if (self.encounter_setup_flow is not None and self.encounter_setup_flow.current_step is not None) or not self._board_panel_enabled():
+            return target
+        from .aura_preview import context_feedback
+        aura = context_feedback(self)
+        target = replace(target, feedback=LedFeedback((*aura.frames, *target.feedback.frames)))
+        from .shared_mana_board import scan_target as mana_target
+        if (selection_target := mana_target(self)) is not None:
+            return selection_target
+        from .shared_command import scan_target as command_target
+        if (command_selection := command_target(self)) is not None:
+            return command_selection
+        if self.shared_mana_declaration and self.shared_mana_declaration.stage == "payment":
+            from .shared_mana import payload as mana_payload
+            payment = mana_payload(self)["declaration"]
+            choices = [choice for choice in payment["boost_options"] if choice["enabled"]]
+            controls = (29,) if payment["error"] else (28, 29)
+            colors = {"C": (255, 45, 45), "N": (30, 110, 255), "Z": (30, 220, 70),
+                      "B": (255, 255, 255), "F": (150, 150, 150), "*": (190, 190, 190)}
+            feedback = panel_feedback(tuple(choice["slot"] for choice in choices),
+                control_slots=controls, base=target.feedback,
+                action_colors={choice["slot"]: colors[choice["color"]] for choice in choices})
+            selected = tuple(LedFrame((panel_position(choice["slot"]),), colors[choice["color"]], LedRole.MARKER)
+                             for choice in choices if choice["selected"])
+            return BoardScanTarget(
+                positions=tuple(panel_position(slot) for slot in (*[choice["slot"] for choice in choices], *controls)),
+                feedback=LedFeedback((*feedback.frames, *selected)),
+                empty_message="Wybierz runę podbicia. ✓ potwierdza odłożony koszt, ↩ wraca bez płatności.",
+            )
+        context = self.board_panel_context
+        exclusive = bool(context and context[2])
+        options = (
+            self._combat_turn_action_options()
+            if not exclusive and self.shield_bash_flow is None
+            and (not self._combat_has_pending_resolution() or self._board_panel_feature_preview_active())
+            else ()
+        )
+        actions = self._board_panel_actions(options)
+        selected = next((slot for slot, option_id in actions.items()
+                         if option_id == self._board_panel_selected_option_id()), None)
+        preview = self.combat_turn_preview_option_id is not None or self._board_panel_feature_preview_active()
+        controls = context[1] if context else ((28, 29) if preview else (29,) if self.pending_nimra_metamagic_id else ())
+        positions = tuple(p for p in target.positions if p.col != 19) if not exclusive else ()
+        economies = self._turn_option_economy(options) if actions else {}
+        action_colors = {
+            slot: action_economy_panel_color(economies[option_id]["action_economy"])
+            for slot, option_id in actions.items()
+        }
+        feedback = panel_feedback(tuple(actions), selected_slot=selected,
+                                  control_slots=controls, base=target.feedback,
+                                  action_colors=action_colors)
+        return BoardScanTarget(
+            positions=(*positions, *(panel_position(slot) for slot in (*actions, *controls))),
+            feedback=feedback, empty_message=target.empty_message,
+        )
+
+    def _game_board_scan_target(self) -> BoardScanTarget:
+        if self._can_start_encounter_initiative():
+            return BoardScanTarget(
+                positions=(panel_position(28),),
+                feedback=setup_panel_feedback(LedFeedback(), can_confirm=True),
+                empty_message="Naciśnij niebieski przycisk ✓ na planszy, aby rozpocząć inicjatywę.",
+            )
         if self.shield_bash_flow is not None:
             result = self.shield_bash_flow.result
             destination = result.push_destination if result else None
@@ -21165,21 +21753,19 @@ class ExplorationUiSession:
         ):
             step = self.encounter_setup_flow.current_step
             if step is not None:
-                if self.encounter_setup_flow.is_player_start_step:
-                    positions = self.encounter_setup_flow.remaining_player_start_positions()
-                    return BoardScanTarget(
-                        positions=positions,
-                        feedback=setup_led_feedback(replace(step, positions=positions)),
-                        empty_message="Kliknij wolne pole startowe dla aktualnego bohatera.",
-                    )
+                flow = self.encounter_setup_flow
+                positions = flow.remaining_player_start_positions() if flow.is_player_start_step else ()
+                guidance = setup_led_feedback(replace(step, positions=positions)) if flow.is_player_start_step else setup_led_feedback(step)
                 return BoardScanTarget(
-                    # Instruction-only setup steps illuminate authored fields as
-                    # passive guidance. They are confirmed in the UI and must not
-                    # start a scan that waits for a sensor-state transition.
-                    positions=(),
-                    feedback=setup_led_feedback(step),
+                    positions=(*positions, *((panel_position(28),) if flow.can_confirm else ())),
+                    feedback=setup_panel_feedback(
+                        guidance, can_confirm=flow.can_confirm,
+                        selected=flow.pending_start_position,
+                    ),
                     empty_message=(
-                        "Sprawdź podświetlone elementy setupu i potwierdź krok w UI."
+                        "Ustaw figurkę lub elementy i naciśnij niebieski przycisk ✓ na planszy."
+                        if flow.can_confirm else
+                        "Wybierz wolne, podświetlone pole startowe. Potem zatwierdź przyciskiem ✓ na planszy."
                     ),
                 )
         if (
@@ -21213,11 +21799,19 @@ class ExplorationUiSession:
                     message="Aktualny bohater czeka na rzut Stealth w UI; plansza nie wymaga kliknięcia.",
                 )
         if self.encounter_initiative_flow is not None:
+            panel = self.encounter_initiative_flow.roll_panel
+            if panel is not None:
+                feedback = initiative_panel_feedback(panel.enabled_slots)
+                return BoardScanTarget(
+                    positions=tuple(p for frame in feedback.frames for p in frame.positions),
+                    feedback=feedback,
+                    empty_message=("Inicjatywa: − czerwony, + zielony, ✓ niebieski. "
+                                   "Zatwierdź wynik, potem podsumowanie. Pomarańczowy ↩ poprawia wynik."),
+                )
             prompt = self.encounter_initiative_flow.current_prompt
             if prompt is not None:
                 return self._passive_focus_target(
-                    (prompt.actor.position,),
-                    color=LedColor.ACTIVE_ACTOR,
+                    (prompt.actor.position,), color=LedColor.ACTIVE_ACTOR,
                     role=LedRole.ACTIVE_ACTOR,
                     message="Aktualny aktor czeka na rzut inicjatywy w UI; plansza nie wymaga kliknięcia.",
                 )
@@ -21268,8 +21862,8 @@ class ExplorationUiSession:
                     positions=(),
                     feedback=active_actor_led_feedback(self.combat_state.initiative_order),
                     empty_message=(
-                        "Menu akcji czeka na wybór Numpad 8/2 i potwierdzenie "
-                        "Enterem; Numpad minus wraca."
+                        "Menu akcji czeka na wybór opcji na ekranie i potwierdzenie "
+                        "przyciskiem ✓; ↩ wraca."
                     ),
                 )
             if self.combat_state.status == CombatStatus.FINISHED and (
@@ -21290,7 +21884,7 @@ class ExplorationUiSession:
                 return BoardScanTarget(
                     positions=(),
                     feedback=_enemy_turn_intent_led_feedback(self.pending_enemy_turn_intent),
-                    empty_message="Zamiar przeciwnika czeka na potwierdzenie Enterem albo przyciskiem.",
+                    empty_message="Zamiar przeciwnika czeka na potwierdzenie przyciskiem ✓ albo przyciskiem.",
                 )
             if self.pending_enemy_opportunity_attack is not None:
                 feedback = (
@@ -21400,7 +21994,7 @@ class ExplorationUiSession:
                         )
                     ),
                     empty_message=(
-                        "Kliknij podświetlony cel użycia przedmiotu, a potem potwierdź Enterem."
+                        "Kliknij podświetlony cel użycia przedmiotu, a potem potwierdź przyciskiem ✓."
                         if positions
                         else "Przedmiot nie ma już legalnego celu; wybierz inną akcję."
                     ),
@@ -21445,7 +22039,7 @@ class ExplorationUiSession:
                         legal_anchor_positions=positions,
                     ),
                     empty_message=(
-                        "Wskaż inny legalny środek albo potwierdź aktualny obszar Enterem."
+                        "Wskaż inny legalny środek albo potwierdź aktualny obszar przyciskiem ✓."
                         if positions
                         else "Czar obszarowy czeka na wpisanie obrażeń w UI."
                     ),
@@ -21474,7 +22068,7 @@ class ExplorationUiSession:
                         )
                     ),
                     empty_message=(
-                        "Przywołanie czeka na wybór wolnego pola i potwierdzenie Enterem."
+                        "Przywołanie czeka na wybór wolnego pola i potwierdzenie przyciskiem ✓."
                     ),
                 )
             if self.pending_magic_movement is not None:
@@ -21516,7 +22110,7 @@ class ExplorationUiSession:
                             ),
                         )
                     ),
-                    empty_message=f"{message} Potwierdź wybór Enterem.",
+                    empty_message=f"{message} Potwierdź wybór przyciskiem ✓.",
                 )
             if self.pending_spell_debuff is not None:
                 target_ids = set(self.pending_spell_debuff.legal_target_ids)
@@ -21547,7 +22141,7 @@ class ExplorationUiSession:
                         )
                     ),
                     empty_message=(
-                        "Czar osłabiający czeka na wybór przeciwnika i potwierdzenie Enterem."
+                        "Czar osłabiający czeka na wybór przeciwnika i potwierdzenie przyciskiem ✓."
                     ),
                 )
             if self.pending_spell_dispel is not None:
@@ -21590,7 +22184,7 @@ class ExplorationUiSession:
                     ),
                     empty_message=(
                         "Rozproszenie magii czeka na wybór celu z aktywnym czarem "
-                        "i potwierdzenie Enterem."
+                        "i potwierdzenie przyciskiem ✓."
                     ),
                 )
             if self.pending_combat_help is not None:
@@ -21710,7 +22304,7 @@ class ExplorationUiSession:
                         feedback=LedFeedback(tuple(frames)),
                         empty_message=(
                             "Wybierz podświetlony środek obszaru; kolejne kliknięcia "
-                            "przesuwają podgląd, a Enter zatwierdza czar."
+                            "przesuwają podgląd, a ✓ zatwierdza czar."
                         ),
                     )
                 selected_ids = set(
@@ -21802,7 +22396,7 @@ class ExplorationUiSession:
                             )
                         ),
                         empty_message=(
-                            "Z bara: wybierz pole odepchnięcia, a potem potwierdź Enterem."
+                            "Z bara: wybierz pole odepchnięcia, a potem potwierdź przyciskiem ✓."
                         ),
                     )
                 targets = self._class_feature_board_targets(
@@ -21879,7 +22473,7 @@ class ExplorationUiSession:
                 return BoardScanTarget(
                     positions=(),
                     feedback=LedFeedback((LedFrame(scene_object_positions or (position,), LedColor.INTERACTIVE_OBJECT, LedRole.INTERACTIVE_OBJECT),)),
-                    empty_message="Interakcja czeka na potwierdzenie przyciskiem albo Enterem.",
+                    empty_message="Interakcja czeka na potwierdzenie przyciskiem ✓.",
                 )
             if self.combat_turn_maneuver_mode is not None:
                 targets = self._combat_turn_maneuver_targets()
@@ -21965,7 +22559,6 @@ class ExplorationUiSession:
                         ),
                     )
             if encounter is not None and actor.faction == Faction.ALLY and self.combat_state.status.value == "active":
-                movement = _remaining_movement_range(encounter.board, self.combat_state, actor)
                 turn_options = self._combat_turn_action_options()
                 selected_turn_option = (
                     next(
@@ -21993,6 +22586,7 @@ class ExplorationUiSession:
                             "podgląd planszy bez zużywania akcji ani zasobu."
                         ),
                     )
+                movement = _remaining_movement_range(encounter.board, self.combat_state, actor)
                 if (
                     selected_turn_option.action == CombatMenuAction.MOVE
                     and self.combat_targeting_attack_source_id is None
@@ -22084,7 +22678,7 @@ class ExplorationUiSession:
                     ),
                     empty_message=(
                         f"Podgląd: {selected_turn_option.label}. "
-                        "Naciśnij Enter ponownie, aby wykonać, albo Esc/Backspace, aby wrócić."
+                        "Naciśnij ✓ ponownie, aby wykonać, albo ↩, aby wrócić."
                     ),
                 )
                 bonus_sources = eligible_two_weapon_bonus_sources(
@@ -22163,9 +22757,9 @@ class ExplorationUiSession:
                 positions=(),
                 feedback=LedFeedback(),
                 empty_message=(
-                    "Encounter czeka na rozstrzygnięcie rozpoczęcia starcia w UI albo Enterem."
+                    "Encounter czeka na rozstrzygnięcie rozpoczęcia starcia w UI albo przyciskiem ✓."
                     if opening_required
-                    else "Encounter czeka na rozpoczęcie setupu w UI albo Enterem."
+                    else "Encounter czeka na rozpoczęcie setupu w UI albo przyciskiem ✓."
                 ),
             )
         if self.exploration_setup_flow is not None and self.exploration_setup_flow.current_step is not None:
@@ -22374,6 +22968,77 @@ class ExplorationUiSession:
         return (*ordered, *rest)
 
     def _handle_board_position(self, selected: Coordinate) -> dict[str, object]:
+        if self.launcher_navigation is not None:
+            from .launcher_board import select
+            return select(self, selected)
+        from .exploration_mana import active as mana_exploration_active, select_position as select_mana_exploration
+        if mana_exploration_active(self):
+            return select_mana_exploration(self, selected)
+        from .simple_traps import enabled as trap_lesson_enabled, read as trap_lesson_read
+        if trap_lesson_enabled(self) and trap_lesson_read(self)['pending']:
+            from .board_panel import select_browser_die
+            return select_browser_die(self, selected)
+        from .training_arena import roster_active, select_roster
+        if roster_active(self):
+            return select_roster(self, selected)
+        from .training_tutorial import notice_id, acknowledge
+        tutorial_notice = notice_id(self)
+        if tutorial_notice:
+            if selected != panel_position(28):
+                raise ValueError("Przeczytaj objaśnienie Nessy i naciśnij ✓.")
+            return acknowledge(self, tutorial_notice)
+        if self._can_start_encounter_initiative():
+            if selected != panel_position(28):
+                raise ValueError("Naciśnij niebieski przycisk ✓ na planszy, aby rozpocząć inicjatywę.")
+            return self.start_encounter_initiative()
+        if self.encounter_setup_flow is not None and self.encounter_setup_flow.current_step is not None:
+            flow = self.encounter_setup_flow
+            if selected == panel_position(28):
+                return self.confirm_encounter_setup_step()
+            if not flow.is_player_start_step or selected not in flow.remaining_player_start_positions():
+                raise ValueError("Wybierz podświetlone pole lub przycisk ✓ na planszy.")
+            flow.selected_start_position = selected
+            self.board_selection_revision += 1
+            self.board_message = f"Wybrano pole {selected.as_tuple()}. Ustaw figurkę i zatwierdź przyciskiem ✓ na planszy."
+            self._sync_board_leds()
+            return self.state_payload()
+        if self._board_panel_enabled() and self.shared_mana_declaration is not None:
+            from .shared_mana_board import scan_target as mana_target, select_position
+            if mana_target(self) is not None:
+                return select_position(self, selected)
+        from .shared_command import stage as command_stage, select as select_command
+        if command_stage(self):
+            return select_command(self, selected)
+        if self._board_panel_enabled() and selected.col == 19:
+            slot = 29 - selected.row
+            target = self._current_board_scan_target()
+            if selected not in target.positions:
+                raise ValueError("To pole panelu nie jest teraz dostępne.")
+            if self.shared_mana_declaration and self.shared_mana_declaration.stage == "payment":
+                from .shared_mana import command as mana_command
+                return mana_command(self, {"command": "pay" if slot == 28 else "cancel" if slot == 29 else "boost_option",
+                                           "slot": slot, "revision": self.combat_state.shared_mana.revision})
+            action_id = self._board_panel_actions().get(slot)
+            if action_id and not (self.board_panel_context and self.board_panel_context[2]):
+                if action_id == self._board_panel_selected_option_id():
+                    self.board_selection_revision += 1
+                    return self.state_payload()
+                if self._board_panel_feature_preview_active():
+                    option = next(option for option in self._combat_turn_action_options() if option.id == action_id)
+                    reason = self._combat_turn_option_unavailable_reason(option)
+                    if reason:
+                        self.board_message = reason
+                        self.board_selection_revision += 1
+                        return self.state_payload()
+                    self.cancel_combat_class_feature_targeting()
+                self.board_selection_revision += 1
+                return self.confirm_combat_turn_action(action_id)
+            if slot not in (26, 27, 28, 29):
+                raise ValueError("Nieznana komenda panelu.")
+            context = self.board_panel_context[0] if self.board_panel_context else None
+            self.board_selection_revision += 1
+            return {"panel_event": {"slot": slot, "context": context},
+                    "board_selection": self._board_selection_payload()}
         if self.shield_bash_flow is not None:
             self.board_message = "Uderzenie tarczą: dokończ rzuty i potwierdzenie wyniku na ekranie."
             return self.state_payload()
@@ -22382,15 +23047,15 @@ class ExplorationUiSession:
             and self.exploration_setup_flow.assignment_point_id
         ):
             return self.assign_exploration_point_position(selected)
-        if self.encounter_setup_flow is not None and self.encounter_setup_flow.current_step is not None:
-            if self.encounter_setup_flow.is_player_start_step:
-                return self.assign_encounter_player_start_position(selected)
-            self.board_message = f"Potwierdzono setup kliknięciem pola {selected.as_tuple()}."
-            return self.confirm_encounter_setup_step()
         if self.encounter_initiative_flow is not None and self.encounter_initiative_flow.current_prompt is not None:
-            prompt = self.encounter_initiative_flow.current_prompt
-            self.board_message = f"Wskazano aktora do inicjatywy: {prompt.actor.name}. Wpisz wynik d20 w UI."
-            return self.state_payload()
+            if self.encounter_initiative_flow.roll_panel is None:
+                self.board_message = "Wpisz wynik inicjatywy w UI."
+                return self.state_payload()
+            commands = {Coordinate(19, 3): "minus", Coordinate(19, 2): "plus",
+                        Coordinate(19, 1): "accept", Coordinate(19, 0): "back"}
+            if selected not in commands:
+                raise ValueError("Wybierz podświetlony przycisk panelu inicjatywy.")
+            return self.update_initiative_panel(commands[selected])
         if self.combat_state is not None:
             if selected == NESSA_POSITION and can_talk_to_nessa(self):
                 return self.select_combat_interaction_at_position(selected)
@@ -22432,7 +23097,7 @@ class ExplorationUiSession:
                         if pending_area.stage == "select_sculpt_fields":
                             if selected in pending_area.area_positions:
                                 return self.select_nimra_sculpt_field(selected)
-                            self.board_message = "Kliknij pole wewnątrz obszaru Rzeźbienia albo potwierdź Enterem."
+                            self.board_message = "Kliknij pole wewnątrz obszaru Rzeźbienia albo potwierdź przyciskiem ✓."
                             return self.state_payload()
                         source = self._attack_source_by_id(
                             actor,
@@ -22452,7 +23117,7 @@ class ExplorationUiSession:
                             return self.select_player_area_spell_at_position(selected)
                         self.board_message = (
                             "Wskaż podświetlony środek obszaru albo potwierdź "
-                            "aktualny podgląd Enterem."
+                            "aktualny podgląd przyciskiem ✓."
                         )
                         return self.state_payload()
                     if self.pending_spell_zone_move_effect_id:
@@ -22504,8 +23169,8 @@ class ExplorationUiSession:
                             return self.state_payload()
                         self.combat_selected_item_target_id = str(target.id)
                         self.board_message = (
-                            f"Wybrano cel: {target.name}. Naciśnij Enter, aby użyć "
-                            "przedmiotu, albo Esc/Backspace, aby anulować."
+                            f"Wybrano cel: {target.name}. Naciśnij ✓, aby użyć "
+                            "przedmiotu, albo ↩, aby anulować."
                         )
                         self._sync_board_leds()
                         return self.state_payload()
@@ -22569,7 +23234,7 @@ class ExplorationUiSession:
                         if target is not None:
                             self.combat_selected_pending_position = selected
                             self.board_message = (
-                                f"Wybrano {target.name}. Naciśnij Enter, aby "
+                                f"Wybrano {target.name}. Naciśnij ✓, aby "
                                 "potwierdzić Rozproszenie magii."
                             )
                             self._sync_board_leds()
@@ -22592,7 +23257,7 @@ class ExplorationUiSession:
                         if target is not None:
                             self.combat_selected_pending_position = selected
                             self.board_message = (
-                                f"Wybrano {target.name}. Naciśnij Enter, aby "
+                                f"Wybrano {target.name}. Naciśnij ✓, aby "
                                 "rzucić czar osłabiający."
                             )
                             self._sync_board_leds()
@@ -22609,7 +23274,7 @@ class ExplorationUiSession:
                                 self.combat_selected_pending_position = selected
                                 self.board_message = (
                                     f"Wybrano pole {selected.as_tuple()}. Naciśnij "
-                                    "Enter, aby wykonać teleportację."
+                                    "✓, aby wykonać teleportację."
                                 )
                                 self._sync_board_leds()
                                 return self.state_payload()
@@ -22627,7 +23292,7 @@ class ExplorationUiSession:
                         if target is not None:
                             self.combat_selected_pending_position = selected
                             self.board_message = (
-                                f"Wybrano {target.name}. Naciśnij Enter, aby "
+                                f"Wybrano {target.name}. Naciśnij ✓, aby "
                                 "wykonać wymuszony ruch."
                             )
                             self._sync_board_leds()
@@ -22638,7 +23303,7 @@ class ExplorationUiSession:
                         if selected in self.pending_summon.legal_positions:
                             self.combat_selected_pending_position = selected
                             self.board_message = (
-                                f"Wybrano pole {selected.as_tuple()}. Naciśnij Enter, "
+                                f"Wybrano pole {selected.as_tuple()}. Naciśnij ✓, "
                                 "aby przywołać istotę."
                             )
                             self._sync_board_leds()
@@ -22809,11 +23474,14 @@ class ExplorationUiSession:
                                     return self.state_payload()
                                 self.brakka_shoulder_check_destination = selected
                                 self.board_message = (
-                                    f"Wybrano pole {selected.as_tuple()}. Naciśnij Enter, "
+                                    f"Wybrano pole {selected.as_tuple()}. Naciśnij ✓, "
                                     "aby zakończyć Z bara."
                                 )
                                 self._sync_board_leds()
                                 return self.state_payload()
+                            if self.combat_state.shared_mana:
+                                from .shared_shoulder import finish_shoulder
+                                return finish_shoulder(self, selected)
                             attacker_roll, defender_roll, _distance = (
                                 self.brakka_shoulder_check_rolls
                             )
@@ -22867,8 +23535,8 @@ class ExplorationUiSession:
                         ):
                             self.combat_selected_class_feature_target_id = str(target.id)
                             self.board_message = (
-                                f"Wybrano cel: {target.name}. Naciśnij Enter, aby "
-                                f"wykonać {player_label(action_id)}, albo Esc/Backspace, aby anulować."
+                                f"Wybrano cel: {target.name}. Naciśnij ✓, aby "
+                                f"wykonać {player_label(action_id)}, albo ↩, aby anulować."
                             )
                             self._sync_board_leds()
                             return self.state_payload()
@@ -22887,7 +23555,7 @@ class ExplorationUiSession:
                             self.combat_selected_class_feature_target_id = None
                             self.board_message = (
                                 f"Rozkaz: Stać — {target.name}: {result.outcome}; "
-                                f"rzut obronny {result.saving_throw.roll.total}."
+                                f"rzut obronny {result.saving_throw.total}."
                             )
                             self._add_message("Rozkaz: Stać", self.board_message)
                             self._sync_board_leds()
@@ -23079,7 +23747,7 @@ class ExplorationUiSession:
                             self.selected_combat_movement_path = None
                             self.board_message = (
                                 "Ruch pozostaje w podglądzie. Wskaż inne pole albo "
-                                "wróć klawiszem Esc/Backspace."
+                                "wróć przyciskiem ↩."
                             )
                             self._sync_board_leds()
                             return self.state_payload()
@@ -28018,6 +28686,9 @@ class ExplorationUiSession:
         return tuple(revealed)
 
     def _refresh_pending_encounter(self) -> None:
+        from .exploration_mana import active as mana_exploration_active
+        if mana_exploration_active(self):
+            return
         if self.pending_npc_transition is not None:
             return
         detection = self.exploration_flow.detect_encounter(
@@ -29749,7 +30420,7 @@ def _combat_payload(
                         "name": target.name,
                         "hp": target.hp,
                         "max_hp": target.max_hp,
-                        "maximum_healing": max(0, target.max_hp // 2 - target.hp),
+                        "maximum_healing": max(0, (target.max_hp if uses_physical_mana(actor) else target.max_hp // 2) - target.hp),
                     }
                     for target in state.actors
                     if str(target.id) in selected_class_feature_target_ids
@@ -32126,16 +32797,23 @@ def _pending_area_spell_payload(
     caster = next((actor for actor in state.actors if str(actor.id) == pending.caster_id), None)
     if caster is None:
         return None
+    from dnd_board_game.combat.shared_mana_sources import additional_weapon_sources, boost_attack
+    candidates = additional_weapon_sources(caster, _encounter_attack_sources(encounter, caster), active_combat_effects, state.shared_mana)
+    roar = deafening_roar_attack_source(caster, active_combat_effects)
+    if roar is not None:
+        from dnd_board_game.combat.physical_mana_sources import adapt_attack
+        candidates = (*candidates, adapt_attack(caster, roar))
     source = next(
         (
             candidate
-            for candidate in _encounter_attack_sources(encounter, caster)
+            for candidate in candidates
             if candidate.id == pending.source_id
         ),
         None,
     )
     if source is None:
         return None
+    source = boost_attack(source, state.shared_mana)
     if pending.cast_level is not None:
         source = attack_source_at_cast_level(source, pending.cast_level)
     if pending.metamagic_ids:
@@ -32145,6 +32823,10 @@ def _pending_area_spell_payload(
             pending.metamagic_ids,
             validate_resources=False,
         )
+    from dnd_board_game.combat.shared_volley import volley_bonuses, volley_source
+    if pending.source_id == "arrow_rain":
+        source = volley_source(caster, source, active_combat_effects)
+    bonuses = volley_bonuses(state, source, pending.volley_hits, active_combat_effects) if pending.source_id == "arrow_rain" else ()
     spell = next(
         (spell for spell in caster.spells if spell.id == pending.source_id),
         None,
@@ -32168,6 +32850,10 @@ def _pending_area_spell_payload(
     )
     return {
         "stage": pending.stage,
+        "volley_total": pending.volley_total,
+        "volley_mode": roll_instruction(source.attack_roll_request).mode.value if pending.source_id == "arrow_rain" else "normal",
+        "volley_bonuses": [{"label": c.label, "target_id": target_id} for c, target_id in bonuses],
+        "volley_hits": [{"actor_id": h.actor_id, "armor_class": h.armor_class, "cover": h.cover, "hit": h.hit, "critical": h.critical} for h in pending.volley_hits],
         "caster": _combat_actor_payload(caster, active_combat_effects),
         "source": _attack_source_payload(source, caster),
         "origin": [pending.origin.col, pending.origin.row],
@@ -32259,8 +32945,8 @@ def _pending_area_spell_payload(
         "spell_save_dc": source.save_dc or caster.spell_save_dc,
         "damage_instruction": _damage_roll_instruction(source),
         "damage_components": [
-            component.as_payload()
-            for component in source.damage_components
+            component.as_payload(critical=any(h.critical for h in pending.volley_hits))
+            for component in (*source.damage_components, *(c for c, _ in bonuses))
         ],
     }
 
@@ -32440,16 +33126,17 @@ def _combat_target_payload(target) -> dict[str, object]:
     }
 
 
-def _remaining_movement_range(board, state: CombatState, actor: Actor) -> MovementRangeResult:
+def _remaining_movement_range(board, state: CombatState, actor: Actor, active_effects: tuple[ActiveCombatEffect, ...] = ()) -> MovementRangeResult:
     if has_condition(state.condition_states, str(actor.id), CombatCondition.PRONE):
         standing = stand_up(state, actor)
         if not standing.accepted:
             return MovementRangeResult(actor.position, frozenset(), {}, {})
         state = standing.state
         actor = combat_current_actor(state)
-    remaining = movement_remaining(state, actor)
+    remaining = movement_remaining(state, actor, active_effects)
     movement_actor = replace(actor, speed_feet=remaining)
-    result = movement_range(board, movement_actor, state.actors)
+    from dnd_board_game.combat.shared_mana_techniques import technique_board
+    result = movement_range(technique_board(board, state), movement_actor, state.actors)
     return movement_range_with_condition_cost(
         result,
         state.condition_states,
@@ -32923,7 +33610,7 @@ def _pending_enemy_saving_throw_payload(
         target,
         saving_throw_ability=pending.request.ability,
     )
-    if any(
+    if state.shared_mana is None and any(
         effect.actor_id == str(target.id)
         and effect.kind == "garran_rally_advantage"
         for effect in active_combat_effects
@@ -32938,6 +33625,10 @@ def _pending_enemy_saving_throw_payload(
                 else roll_request.mode
             ),
         )
+    if state.shared_mana is not None and str(target.id) == "mira" and any(
+        effect.actor_id == "mira" and effect.kind == "shared_hidden" for effect in active_combat_effects
+    ):
+        roll_request = replace(roll_request, mode=RollMode.NORMAL if roll_request.mode == RollMode.ADVANTAGE else RollMode.DISADVANTAGE)
     modifiers = roll_request.modifiers
     request_payload = pending.request.as_payload()
     inspiration = next(

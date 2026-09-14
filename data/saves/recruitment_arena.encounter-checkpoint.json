@@ -56,7 +56,7 @@
             "second_wind"
           ],
           "aura_ids": [],
-          "description": "Odzyskaj 1k10+3 PW. Leczenie zajmuje akcję główną.",
+          "description": "Odzyskaj 1k10 + KON PW.",
           "feature_id": "second_wind",
           "label": "Drugi oddech",
           "resource_ids": [],
@@ -65,16 +65,16 @@
           "trigger_ids": []
         },
         {
-          "action_ids": [
-            "action_surge"
-          ],
+          "action_ids": [],
           "aura_ids": [],
-          "description": "Następny zwykły atak w tej turze otrzymuje +2 do trafienia. Atak nadal kosztuje *. Nie odnawia akcji, nie dodaje ataków ani premii do technik specjalnych.",
+          "description": "",
           "feature_id": "action_surge",
           "label": "Zryw akcji",
-          "resource_ids": [],
+          "resource_ids": [
+            "action_surge_uses"
+          ],
           "source_kind": "class",
-          "source_ref": "physical_mana:v02",
+          "source_ref": "fighter",
           "trigger_ids": []
         },
         {
@@ -113,7 +113,7 @@
         {
           "action_ids": [],
           "aura_ids": [],
-          "description": "Jeśli Garran rozpoczyna zwykły Ruch obok przeciwnika (także po skosie), płaci 2 dowolne many zamiast 1. Koszt ustal raz na turę, przy pierwszym rozpoczęciu Ruchu; dalsze odcinki są bez dopłat. Odepchnięcia i przemieszczenia ze zdolności nie uruchamiają skazy.",
+          "description": "Rozpoczęcie własnej tury przy wrogu, także po skosie, zmniejsza limit zwykłego ruchu o połowę do końca tej tury. Późniejsze usunięcie wroga nie znosi kary.",
           "feature_id": "flaw_remorse",
           "label": "Nieustępliwość",
           "resource_ids": [],
@@ -148,7 +148,7 @@
             "shield_bash"
           ],
           "aura_ids": [],
-          "description": "Cel w 5 ft. Wymaga wyposażonej tarczy. Sporny test Siły; remis wygrywa obrońca. Wygrana: 1k4+SIŁ obrażeń obuchowych i odepchnięcie o 5 ft na wolne pole. Ruch pozostaje dostępny.",
+          "description": "Sporny test SIŁ: twój fizyczny k20 + SIŁ, automatyczny rzut wroga. Remis wygrywa obrońca. Wygrana: 1k6 + SIŁ i odepchnięcie o pole. Czerwona: +1k6 obrażeń (maks. 2).",
           "feature_id": "shield_bash",
           "label": "Uderzenie tarczą",
           "resource_ids": [],
@@ -161,7 +161,7 @@
             "defensive_stance"
           ],
           "aura_ids": [],
-          "description": "+2 KP do początku następnej własnej tury. Każda zmiana pola kończy efekt.",
+          "description": "+2 KP; każda zmiana pola kończy postawę. Do odświeżenia talii (O).",
           "feature_id": "defensive_stance",
           "label": "Pozycja obronna",
           "resource_ids": [],
@@ -174,7 +174,7 @@
             "garran_command_halt"
           ],
           "aura_ids": [],
-          "description": "Cel w 60 ft wykonuje obronę Mądrości ST 14. Porażka: brak dobrowolnego ruchu w następnej turze; sukces: połowa ruchu. Naturalne 1 daje również −2 do ataków; naturalne 20 neguje efekt.",
+          "description": "Wróg w 60 ft: obrona MDR. Porażka połowi ruch i odbiera reakcje. Do początku następnej tury źródła (T).",
           "feature_id": "garran_command_halt",
           "label": "Rozkaz: Stać",
           "resource_ids": [],
@@ -187,7 +187,7 @@
             "garran_shield_wall"
           ],
           "aura_ids": [],
-          "description": "Sąsiadujący sojusznicy mają +2 KP do początku następnej tury Garrana; bez premii dla niego.",
+          "description": "Sąsiadujący sojusznicy otrzymują +2 KP; bez premii dla Garrana. Do początku następnej tury źródła (T). Biała: 5 tymczasowych PW jednemu sojusznikowi; różne cele (maks. 2).",
           "feature_id": "garran_shield_wall",
           "label": "Osłona tarczą",
           "resource_ids": [],
@@ -200,7 +200,7 @@
             "garran_rally"
           ],
           "aura_ids": [],
-          "description": "Garran i słyszący sojusznicy w 30 ft usuwają Strach i zyskują przewagę na pierwszy atak, test albo rzut obronny do końca swojej następnej tury.",
+          "description": "Garran i sojusznicy w 15 ft usuwają Strach i mają przewagę pierwszego ataku. Do początku następnej tury źródła (T). Biała: wybrany uczestnik odzyskuje 1k6 PW (maks. 2).",
           "feature_id": "garran_rally",
           "label": "Mowa dowódcy",
           "resource_ids": [],
@@ -213,7 +213,7 @@
             "garran_guard_companion"
           ],
           "aura_ids": [],
-          "description": "Wybierz sąsiadującego sojusznika w 5 ft. Pierwszy pojedynczy wrogi atak, czar lub efekt przeciw niemu zostaje w całości przekierowany na Garrana i zużywa osłonę.",
+          "description": "Przed rozstrzygnięciem pojedynczego ataku na sąsiadującego sojusznika przejmij go na siebie. Nie obejmuje obszarów.",
           "feature_id": "garran_guard_companion",
           "label": "Osłona towarzysza",
           "resource_ids": [],
@@ -224,7 +224,7 @@
         {
           "action_ids": [],
           "aura_ids": [],
-          "description": "Raz we własnej turze, gdy przytomny bohater jest w 5 ft, potraktuj jedną N jako B w Pozycji obronnej, Osłonie tarczą albo Osłonie towarzysza. Nie dotyczy leczenia.",
+          "description": "Raz we własnej turze przy przytomnym sąsiadującym bohaterze użyj niebieskiej zamiast jednej białej w koszcie bazowym Pozycji obronnej, Osłony tarczą lub Osłony towarzysza. Nie zastępuje podbić ani ultów.",
           "feature_id": "mana_behind_shield",
           "label": "Za tarczą",
           "resource_ids": [],
@@ -233,14 +233,51 @@
           "trigger_ids": []
         },
         {
+          "action_ids": [
+            "iron_bastion"
+          ],
+          "aura_ids": [],
+          "description": "Aura 10 ft: Garran i sojusznicy w niej mają +1 KP i ochronę przed przymusowym przesunięciem. Do odświeżenia talii (O).",
+          "feature_id": "iron_bastion",
+          "label": "Żelazny bastion",
+          "resource_ids": [],
+          "source_kind": "class",
+          "source_ref": "physical_mana:v02",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [
+            "counterattack_command"
+          ],
+          "aura_ids": [],
+          "description": "Garran i jeden sojusznik w 15 ft przemieszczają się do 10 ft bez ataków okazyjnych i wykonują po jednym ataku bronią. Sojusznik zużywa reakcję.",
+          "feature_id": "counterattack_command",
+          "label": "Rozkaz: Kontratak!",
+          "resource_ids": [],
+          "source_kind": "class",
+          "source_ref": "physical_mana:v02",
+          "trigger_ids": []
+        },
+        {
           "action_ids": [],
           "aura_ids": [],
-          "description": "Karty rozliczają gracze. Dobór na końcu tury: 3.",
+          "description": "Wspólny rynek pięciu kart. Płatność przed efektem, uzupełnienie na końcu tury.",
           "feature_id": "physical_mana_v02",
           "label": "Fizyczna mana",
           "resource_ids": [],
           "source_kind": "scenario",
           "source_ref": "physical_mana:v02",
+          "trigger_ids": []
+        },
+        {
+          "action_ids": [],
+          "aura_ids": [],
+          "description": "25 kart, po pięć każdego koloru; liczony rynek i odświeżenie talii.",
+          "feature_id": "shared_mana_v03",
+          "label": "Wspólna mana 0.3",
+          "resource_ids": [],
+          "source_kind": "scenario",
+          "source_ref": "shared_mana:v03",
           "trigger_ids": []
         }
       ],
@@ -887,7 +924,7 @@
               "second_wind"
             ],
             "aura_ids": [],
-            "description": "Odzyskaj 1k10+3 PW. Leczenie zajmuje akcję główną.",
+            "description": "Odzyskaj 1k10 + KON PW.",
             "feature_id": "second_wind",
             "label": "Drugi oddech",
             "resource_ids": [],
@@ -896,16 +933,16 @@
             "trigger_ids": []
           },
           {
-            "action_ids": [
-              "action_surge"
-            ],
+            "action_ids": [],
             "aura_ids": [],
-            "description": "Następny zwykły atak w tej turze otrzymuje +2 do trafienia. Atak nadal kosztuje *. Nie odnawia akcji, nie dodaje ataków ani premii do technik specjalnych.",
+            "description": "",
             "feature_id": "action_surge",
             "label": "Zryw akcji",
-            "resource_ids": [],
+            "resource_ids": [
+              "action_surge_uses"
+            ],
             "source_kind": "class",
-            "source_ref": "physical_mana:v02",
+            "source_ref": "fighter",
             "trigger_ids": []
           },
           {
@@ -944,7 +981,7 @@
           {
             "action_ids": [],
             "aura_ids": [],
-            "description": "Jeśli Garran rozpoczyna zwykły Ruch obok przeciwnika (także po skosie), płaci 2 dowolne many zamiast 1. Koszt ustal raz na turę, przy pierwszym rozpoczęciu Ruchu; dalsze odcinki są bez dopłat. Odepchnięcia i przemieszczenia ze zdolności nie uruchamiają skazy.",
+            "description": "Rozpoczęcie własnej tury przy wrogu, także po skosie, zmniejsza limit zwykłego ruchu o połowę do końca tej tury. Późniejsze usunięcie wroga nie znosi kary.",
             "feature_id": "flaw_remorse",
             "label": "Nieustępliwość",
             "resource_ids": [],
@@ -979,7 +1016,7 @@
               "shield_bash"
             ],
             "aura_ids": [],
-            "description": "Cel w 5 ft. Wymaga wyposażonej tarczy. Sporny test Siły; remis wygrywa obrońca. Wygrana: 1k4+SIŁ obrażeń obuchowych i odepchnięcie o 5 ft na wolne pole. Ruch pozostaje dostępny.",
+            "description": "Sporny test SIŁ: twój fizyczny k20 + SIŁ, automatyczny rzut wroga. Remis wygrywa obrońca. Wygrana: 1k6 + SIŁ i odepchnięcie o pole. Czerwona: +1k6 obrażeń (maks. 2).",
             "feature_id": "shield_bash",
             "label": "Uderzenie tarczą",
             "resource_ids": [],
@@ -992,7 +1029,7 @@
               "defensive_stance"
             ],
             "aura_ids": [],
-            "description": "+2 KP do początku następnej własnej tury. Każda zmiana pola kończy efekt.",
+            "description": "+2 KP; każda zmiana pola kończy postawę. Do odświeżenia talii (O).",
             "feature_id": "defensive_stance",
             "label": "Pozycja obronna",
             "resource_ids": [],
@@ -1005,7 +1042,7 @@
               "garran_command_halt"
             ],
             "aura_ids": [],
-            "description": "Cel w 60 ft wykonuje obronę Mądrości ST 14. Porażka: brak dobrowolnego ruchu w następnej turze; sukces: połowa ruchu. Naturalne 1 daje również −2 do ataków; naturalne 20 neguje efekt.",
+            "description": "Wróg w 60 ft: obrona MDR. Porażka połowi ruch i odbiera reakcje. Do początku następnej tury źródła (T).",
             "feature_id": "garran_command_halt",
             "label": "Rozkaz: Stać",
             "resource_ids": [],
@@ -1018,7 +1055,7 @@
               "garran_shield_wall"
             ],
             "aura_ids": [],
-            "description": "Sąsiadujący sojusznicy mają +2 KP do początku następnej tury Garrana; bez premii dla niego.",
+            "description": "Sąsiadujący sojusznicy otrzymują +2 KP; bez premii dla Garrana. Do początku następnej tury źródła (T). Biała: 5 tymczasowych PW jednemu sojusznikowi; różne cele (maks. 2).",
             "feature_id": "garran_shield_wall",
             "label": "Osłona tarczą",
             "resource_ids": [],
@@ -1031,7 +1068,7 @@
               "garran_rally"
             ],
             "aura_ids": [],
-            "description": "Garran i słyszący sojusznicy w 30 ft usuwają Strach i zyskują przewagę na pierwszy atak, test albo rzut obronny do końca swojej następnej tury.",
+            "description": "Garran i sojusznicy w 15 ft usuwają Strach i mają przewagę pierwszego ataku. Do początku następnej tury źródła (T). Biała: wybrany uczestnik odzyskuje 1k6 PW (maks. 2).",
             "feature_id": "garran_rally",
             "label": "Mowa dowódcy",
             "resource_ids": [],
@@ -1044,7 +1081,7 @@
               "garran_guard_companion"
             ],
             "aura_ids": [],
-            "description": "Wybierz sąsiadującego sojusznika w 5 ft. Pierwszy pojedynczy wrogi atak, czar lub efekt przeciw niemu zostaje w całości przekierowany na Garrana i zużywa osłonę.",
+            "description": "Przed rozstrzygnięciem pojedynczego ataku na sąsiadującego sojusznika przejmij go na siebie. Nie obejmuje obszarów.",
             "feature_id": "garran_guard_companion",
             "label": "Osłona towarzysza",
             "resource_ids": [],
@@ -1055,7 +1092,7 @@
           {
             "action_ids": [],
             "aura_ids": [],
-            "description": "Raz we własnej turze, gdy przytomny bohater jest w 5 ft, potraktuj jedną N jako B w Pozycji obronnej, Osłonie tarczą albo Osłonie towarzysza. Nie dotyczy leczenia.",
+            "description": "Raz we własnej turze przy przytomnym sąsiadującym bohaterze użyj niebieskiej zamiast jednej białej w koszcie bazowym Pozycji obronnej, Osłony tarczą lub Osłony towarzysza. Nie zastępuje podbić ani ultów.",
             "feature_id": "mana_behind_shield",
             "label": "Za tarczą",
             "resource_ids": [],
@@ -1064,14 +1101,51 @@
             "trigger_ids": []
           },
           {
+            "action_ids": [
+              "iron_bastion"
+            ],
+            "aura_ids": [],
+            "description": "Aura 10 ft: Garran i sojusznicy w niej mają +1 KP i ochronę przed przymusowym przesunięciem. Do odświeżenia talii (O).",
+            "feature_id": "iron_bastion",
+            "label": "Żelazny bastion",
+            "resource_ids": [],
+            "source_kind": "class",
+            "source_ref": "physical_mana:v02",
+            "trigger_ids": []
+          },
+          {
+            "action_ids": [
+              "counterattack_command"
+            ],
+            "aura_ids": [],
+            "description": "Garran i jeden sojusznik w 15 ft przemieszczają się do 10 ft bez ataków okazyjnych i wykonują po jednym ataku bronią. Sojusznik zużywa reakcję.",
+            "feature_id": "counterattack_command",
+            "label": "Rozkaz: Kontratak!",
+            "resource_ids": [],
+            "source_kind": "class",
+            "source_ref": "physical_mana:v02",
+            "trigger_ids": []
+          },
+          {
             "action_ids": [],
             "aura_ids": [],
-            "description": "Karty rozliczają gracze. Dobór na końcu tury: 3.",
+            "description": "Wspólny rynek pięciu kart. Płatność przed efektem, uzupełnienie na końcu tury.",
             "feature_id": "physical_mana_v02",
             "label": "Fizyczna mana",
             "resource_ids": [],
             "source_kind": "scenario",
             "source_ref": "physical_mana:v02",
+            "trigger_ids": []
+          },
+          {
+            "action_ids": [],
+            "aura_ids": [],
+            "description": "25 kart, po pięć każdego koloru; liczony rynek i odświeżenie talii.",
+            "feature_id": "shared_mana_v03",
+            "label": "Wspólna mana 0.3",
+            "resource_ids": [],
+            "source_kind": "scenario",
+            "source_ref": "shared_mana:v03",
             "trigger_ids": []
           }
         ],
@@ -1697,31 +1771,42 @@
         },
         "exhaustion_level": 0,
         "experience_points": 0,
-        "faction": "enemy",
+        "faction": "ally",
         "features": [
           {
             "action_ids": [],
             "aura_ids": [],
-            "description": "Zagrożenie i fale nie zwiększają obrażeń treningowych.",
-            "feature_id": "training_fixed_damage",
-            "label": "Bezpieczna kukła",
+            "description": "Wspólny rynek pięciu kart. Płatność przed efektem, uzupełnienie na końcu tury.",
+            "feature_id": "physical_mana_v02",
+            "label": "Fizyczna mana",
             "resource_ids": [],
             "source_kind": "scenario",
-            "source_ref": "recruitment_arena_combat",
+            "source_ref": "physical_mana:v02",
+            "trigger_ids": []
+          },
+          {
+            "action_ids": [],
+            "aura_ids": [],
+            "description": "25 kart, po pięć każdego koloru; liczony rynek i odświeżenie talii.",
+            "feature_id": "shared_mana_v03",
+            "label": "Wspólna mana 0.3",
+            "resource_ids": [],
+            "source_kind": "scenario",
+            "source_ref": "shared_mana:v03",
             "trigger_ids": []
           }
         ],
         "hit_dice": [],
-        "hp": 50,
-        "id": "recruitment_dummy",
+        "hp": 5,
+        "id": "recruitment_helper",
         "inventory": [],
         "level": 1,
-        "max_hp": 50,
-        "name": "Kukła rekrutacyjna",
+        "max_hp": 40,
+        "name": "Pomocnik do ćwiczeń",
         "portrait": "",
         "position": [
-          10,
-          12
+          9,
+          17
         ],
         "proficiencies": {
           "armor": [],
@@ -1741,7 +1826,100 @@
           "truesight_feet": 0
         },
         "size": "medium",
-        "speed_feet": 20,
+        "speed_feet": 30,
+        "spell_access": [],
+        "spell_ids": [],
+        "spell_preparation": null,
+        "spell_save_dc": 0,
+        "spell_slots": [],
+        "spells": [],
+        "temp_hp": 0,
+        "triggers": [],
+        "uses_death_saves": false,
+        "wild_shape": null
+      },
+      {
+        "ability_scores": {
+          "charisma": 10,
+          "constitution": 10,
+          "dexterity": 10,
+          "intelligence": 10,
+          "strength": 10,
+          "wisdom": 10
+        },
+        "ac": 10,
+        "active_light": null,
+        "attacks_per_action": 1,
+        "auras": [],
+        "condition_immunities": [],
+        "creature_type": "humanoid",
+        "currency": {
+          "cp": 0,
+          "ep": 0,
+          "gp": 0,
+          "pp": 0,
+          "sp": 0,
+          "total_cp": 0,
+          "weight_lb": 0.0
+        },
+        "damage_affinities": {
+          "immunities": [],
+          "resistances": [],
+          "vulnerabilities": []
+        },
+        "death_saves": {
+          "dead": false,
+          "failures": 0,
+          "stable": false,
+          "successes": 0
+        },
+        "exhaustion_level": 0,
+        "experience_points": 0,
+        "faction": "enemy",
+        "features": [
+          {
+            "action_ids": [],
+            "aura_ids": [],
+            "description": "Zagrożenie i fale nie zwiększają obrażeń treningowych.",
+            "feature_id": "training_fixed_damage",
+            "label": "Bezpieczna kukła",
+            "resource_ids": [],
+            "source_kind": "scenario",
+            "source_ref": "recruitment_arena_combat",
+            "trigger_ids": []
+          }
+        ],
+        "hit_dice": [],
+        "hp": 180,
+        "id": "recruitment_dummy",
+        "inventory": [],
+        "level": 1,
+        "max_hp": 180,
+        "name": "Kukła do ćwiczeń 1",
+        "portrait": "",
+        "position": [
+          10,
+          17
+        ],
+        "proficiencies": {
+          "armor": [],
+          "expertise": [],
+          "saving_throws": [],
+          "skills": [],
+          "tools": [],
+          "weapons": []
+        },
+        "proficiency_bonus": 2,
+        "resource_pools": [],
+        "senses": {
+          "blindsight_feet": 0,
+          "darkvision_feet": 0,
+          "magical_darkness_vision_feet": 0,
+          "tremorsense_feet": 0,
+          "truesight_feet": 0
+        },
+        "size": "medium",
+        "speed_feet": 0,
         "spell_access": [],
         "spell_ids": [],
         "spell_preparation": null,
@@ -1777,12 +1955,12 @@
           "actor_id": "garran",
           "dexterity_modifier": 2,
           "mode": "normal",
-          "natural_roll": 15,
+          "natural_roll": 20,
           "natural_rolls": [
-            15
+            20
           ],
           "stable_order": 0,
-          "total": 17
+          "total": 22
         },
         {
           "actor_id": "recruitment_dummy",
@@ -1792,13 +1970,38 @@
           "natural_rolls": [
             11
           ],
-          "stable_order": 1,
+          "stable_order": 2,
           "total": 11
         }
       ],
       "round_number": 1
     },
     "long_casts": [],
+    "shared_mana": {
+      "attack_targets": [],
+      "bastion_sources": [],
+      "command_ally": "",
+      "command_step": 0,
+      "cycle": 1,
+      "deck": 20,
+      "discard": 0,
+      "echo_count": 0,
+      "echo_spell": "",
+      "end_effects_applied": false,
+      "end_turn_pending": false,
+      "exhausted": false,
+      "hymn_sources": [],
+      "market": 5,
+      "pending_ability": "",
+      "pending_actor": "",
+      "pending_boosts": [],
+      "phase": "ready",
+      "revision": 0,
+      "smoke_movement": 0,
+      "spent_this_turn": 0,
+      "technique_movement": 0,
+      "turn_actor": "garran"
+    },
     "spent_reaction_actor_ids": [],
     "status": "active",
     "summoned_creatures": [],
@@ -1817,6 +2020,8 @@
       "movement_used_feet": 0,
       "object_interaction_available": true,
       "reaction_available": true,
+      "shared_bonus_actions_used": 0,
+      "shared_speed_halved": true,
       "two_weapon_trigger_item_id": null,
       "weapon_change_available": true
     },
@@ -1844,12 +2049,44 @@
         "value": "humanoid"
       },
       {
+        "key": "training_hero",
+        "value": "garran"
+      },
+      {
         "key": "training_mode",
-        "value": "basic"
+        "value": "walkthrough"
       },
       {
         "key": "training_requested",
         "value": true
+      },
+      {
+        "key": "walkthrough_index",
+        "value": 11
+      },
+      {
+        "key": "walkthrough_intro_seen",
+        "value": true
+      },
+      {
+        "key": "walkthrough_paid",
+        "value": false
+      },
+      {
+        "key": "walkthrough_phase",
+        "value": "briefing"
+      },
+      {
+        "key": "walkthrough_progress_garran",
+        "value": 11
+      },
+      {
+        "key": "walkthrough_terrain_ready",
+        "value": true
+      },
+      {
+        "key": "walkthrough_token",
+        "value": "fff2e80e3de24258b22931be1c53a4e7"
       }
     ],
     "hidden_actor_states": [],
@@ -1887,7 +2124,7 @@
     "trap_states": []
   },
   "pending_encounter": {
-    "description": "Jeden kandydat, kukła i Nessa. Rozstaw elementy zgodnie z podświetleniem.",
+    "description": "Ustaw bohatera oraz wskazane kukły i pomocników. Nessa prowadzi narrację; nie wymaga figurki.",
     "encounter_scenario": "content/scenarios/recruitment_arena_combat.json",
     "name": "Próba rekrutacyjna",
     "opening_resolution": null,

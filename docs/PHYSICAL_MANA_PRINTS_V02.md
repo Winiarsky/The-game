@@ -1,17 +1,33 @@
-# Aktualne karty postaci — fizyczna mana 0.2
+# Aktualne karty postaci — wspólna mana 0.3
 
-Wszystkie siedem postaci ma odnowione materiały: statystyki, pełne 77 zdolności,
-aktualne koszty, klawisze, reakcje, pasywy, skazy, dobór i historię postaci.
+## Eksploracja — aktualne wydruki 2026-09-14
+
+Wszystkie siedem zestawów zawiera dwie metody eksploracji z cechami i rzeczywistym
+rozbiciem premii. Zastraszanie Brakki używa KON; Erynd ma Praktykę terenową +2
+do obiektu. Wspólna ściąga opisuje dobieranie do 21, jawne przeszkody i
+**utrudnienie po przekroczeniu: 2k20, niższy wynik, bez premii karcianej**.
+
+Przegenerowano cztery formaty, HTML/PDF, manifesty, aliasy i zbiorczy pakiet
+areny. Arkusze mają 7 stron na postać (49 razem), wersje kart 8 stron (56 razem),
+a pakiet areny i kart 67 stron. [Opis wdrożenia](EXPLORATION_MANA_IMPLEMENTATION.md).
+
+## Obecne materiały
+
+Wspólny czarno-biały PDF A4 z wszystkimi kartami i areną do sklejenia:
+[pakiet 67 stron](ARENA_A4_PRINT_PACK.md). Pusta mapa i osobne znaczniki terenu mają pola 25 mm,
+oznaczenia cięcia i zakładki 10 mm do kleju lub taśmy.
+
+Wszystkie siedem postaci ma odnowione materiały: statystyki, pełne 66 zdolności, Święty symbol Dagny w ekwipunku,
+aktualne koszty, runy panelu, reakcje, pasywy, skazy, dobór i historię postaci.
 Źródło danych jest wspólne z aplikacją: profil nowej gry, katalog fizycznej many,
-kompilator broni oraz funkcja mapowania skrótów. Nie przepisujemy ręcznie PW,
+kompilator broni oraz stały katalog symboli panelu. Nie przepisujemy ręcznie PW,
 KP ani premii broni do arkuszy.
 
 Od 2026-09-07 fioletową manę zastępuje czarna. Symbole: biała — słońce,
 niebieska — kropla, czarna — czaszka, czerwona — płomień, zielona — drzewo;
 cyfra 1 w kółku oznacza dowolny kolor. Do testów używamy podstawowych lądów
 MTG: Plains, Island, Swamp, Mountain i Forest. Każdy ląd jest jedną kartą
-many; wydany trafia na stos odrzuconych. Koszty, dobór i fale pozostają
-według zasad fizycznej many. Wydarzenie 5 nazywa się „Czarne zakłócenie”.
+many; wydany trafia na stos odrzuconych. Nowy rynek ma stale najwyżej pięć kart, talia liczy 25 kart. Nie ma prywatnych rezerw ani fal.
 Mapowanie lądów i kolorów: [Wizards of the Coast](https://magic.wizards.com/en/news/feature/anatomy-magic-card-2006-10-21).
 
 Wszystkie symbole są wektorowe i rozróżnialne również bez koloru. Wewnętrzne
@@ -24,26 +40,26 @@ Katalog: `assets/physical_cards/character_sets/physical_mana_v02/`.
 
 | Podkatalog | Zawartość | Zbiorczy PDF |
 |---|---|---|
-| `minimal` | Oszczędne arkusze ze skrótami, bez ilustracji | `all_heroes.pdf`, 26 stron |
-| `color` | Kolorowe arkusze z portretem | `all_heroes.pdf`, 26 stron |
-| `bw_test` | Czarno-białe awersy do wycięcia, 4 karty na A4 | `all_heroes.pdf`, 35 stron |
-| `cards` | Kolorowe awersy do wycięcia, 4 karty na A4 | `all_heroes.pdf`, 35 stron |
+| `minimal` | Oszczędne arkusze z runami, bez ilustracji | `all_heroes.pdf`, 49 stron |
+| `color` | Kolorowe arkusze z portretem | `all_heroes.pdf`, 49 stron |
+| `bw_test` | Czarno-białe awersy do wycięcia, 4 karty na A4 | `all_heroes.pdf`, 56 stron |
+| `cards` | Kolorowe awersy do wycięcia, 4 karty na A4 | `all_heroes.pdf`, 56 stron |
 
 Każdy podkatalog zawiera także `garran.pdf`, `brakka.pdf`, `mira.pdf`, `dagna.pdf`,
 `lorian.pdf`, `nimra.pdf`, `erynd.pdf`, odpowiedniki HTML i manifesty JSON.
 Każdy zestaw postaci obejmuje kartę statystyk/pasywów/skazy, zdolności oraz
-osobną stronę historii, ekwipunku, biegłości i zasad tury. Nimra potrzebuje
-większej liczby stron, aby wszystkie opisy pozostały czytelne.
+osobną stronę historii, ekwipunku i biegłości oraz osobną stronę zasad tury.
+Każdy zestaw ma dodatkową stronę czterech warunków rozmów. Każdy bohater zajmuje siedem stron arkuszy albo osiem stron wersji do wycięcia.
 
 Druk: A4, skala 100%, jednostronnie. Karty do wycięcia nie zawierają rewersów.
-Skrót otwiera podgląd w aplikacji; ENTER potwierdza, ESC/Backspace wraca.
+Dolne runy na mapie pozostają nadrukowane, ale cały pasek akcji jest wyłączony. Wybieraj ikonę w UI; narożne −, +, ✓ i ↩ zachowują pozycje.
 REAKCJA/AUTO oznacza wybór w kontekstowym oknie gry. MOD modyfikuje czar albo
 atak — nie daje dodatkowej akcji; opłaca się także modyfikowane działanie.
 
 Dotychczasowe ścieżki PDF pod `keyboard_v1/pdf`, `keyboard_v1/minimal_bw/pdf`,
 `bw_test`, `character_sheets_bw` oraz `card_set_<postać>.pdf` zawierają kopie
 aktualnych materiałów. Stary manifest klawiatury został zastąpiony manifestem
-wersji 3 z jawnym `rules_profile: physical_mana_v02`. Starsze ilustracje i PNG
+wersji 5 z mapowaniem run v1 i jawnym `rules_profile: shared_mana_v03`. Starsze ilustracje i PNG
 są archiwum graficznym; aktualnym kompletem do gry są powyższe PDF-y.
 
 Linki do wszystkich czterech kompletów są w aplikacji na `/rules/physical-mana`.
@@ -71,7 +87,7 @@ ręcznego druku, jeśli tych programów nie ma. PDF ma tekst możliwy do zaznacz
 
 ## Zmienione źródła
 
-- `physical_cards/mana_print.py`: dane siedmiu postaci, statystyki i klawisze;
+- `physical_cards/mana_print.py`: dane siedmiu postaci, statystyki i oznaczenia panelu;
 - `physical_cards/mana_print_html.py`: cztery układy A4;
 - `physical_cards/mana_print_files.py`: kolejny eksport, manifesty i kopie
   pod dotychczasowymi ścieżkami;
@@ -158,6 +174,28 @@ Kontrola układu 28 HTML: brak przepełnień. Podgląd formularza przy 390 i 144
 `test_combat_menu_mana.py` (10). Przeglądarka: wszystkie 28 układów bez
 przepełnienia, ikony duże i małe, nowa nazwa fali ze starego zapisu oraz
 zachowanie liczby wymian w wydarzeniu 6. Zweryfikowano 28 PDF-ów postaci,
-cztery kolekcje (26/26/35/35 stron), tekst „Czarna”, brak dawnej nazwy
+cztery kolekcje (26/26/35/49 stron), tekst „Czarna”, brak dawnej nazwy
 oraz zgodność kopii pod dotychczasowymi linkami. Obejrzano także
 wyrenderowaną stronę minimalistycznego PDF-u Miry.
+
+## Karty panelu areny — 2026-09-07
+
+Wszystkie cztery formaty mają runy i ikony zamiast drukowanych liter
+klawiatury. Reakcje są oznaczone słowem REAKCJA i wybierane kontekstowo.
+Manifest przechowuje `panel_slot` oraz dawny `key` wyłącznie dla zgodności
+ze starszym wejściem. Przypisania identyfikatorów do run są jawne i nie
+zależą od sortowania katalogu. Karta statystyk zawiera dziewięć ikon
+sterowania, a opisy wyjaśniają obie ścieżki zmiany podglądu. Reguły many,
+statystyki, pasywy, skazy i koszty zdolności pozostają wspólne z grą.
+
+Weryfikacja kart z runami: 23 testy `test_mana_character_prints.py` przez
+bezpieczny wrapper (limit 60 s), 28 układów HTML bez przepełnienia,
+28 PDF-ów postaci i cztery kolekcje (26/26/35/49 stron) oraz kopie pod
+poprzednimi linkami. Sprawdzono identyczne przypisania znaków w manifestach
+kart i areny, brak drukowanych ENTER/ESC/SPACJA oraz wygląd karty Nimry.
+Przeglądarka: bezpośrednia zmiana podglądu run i ikon, Wróć do menu,
+blokada niedostępnej akcji oraz brak przełączania podczas rzutu.
+
+Aktualizacja panelu: usunięty osobny przycisk Interakcja; nie występuje
+w legendzie sterowania ani opisach przycisków na kartach. Puste miejsce
+w panelu nie zmienia przypisania żadnej runy.

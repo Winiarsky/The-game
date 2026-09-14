@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Nowa gra</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='launcher.css', v='hero-guides-20260905-1') }}">
+  <link rel="stylesheet" href="{{ static_asset_url('launcher.css') }}">
 </head>
 <body class="launcher-page new-game-page">
   <main class="flow-shell">
@@ -29,7 +29,8 @@
               {% set actor_id = character.actor.id|string %}
               {% set guide = hero_guides.get(actor_id) %}
               <article class="roster-card" data-actor-id="{{ actor_id }}" aria-labelledby="hero-name-{{ actor_id }}">
-                <label class="hero-choice">
+                <label class="hero-choice" data-board-rune="{{ 6 + loop.index0 }}">
+                  {{ panel_icon(6 + loop.index0)|safe }}
                   <input type="checkbox" name="character_ids" value="{{ actor_id }}" aria-labelledby="hero-name-{{ actor_id }}" {% if actor_id in selected_character_ids|default(()) %}checked{% endif %}>
                   {% set portrait_url = character_portrait_url(character.actor.portrait) %}
                   <span class="roster-avatar" aria-hidden="true">{% if portrait_url %}<img src="{{ portrait_url }}" alt="">{% else %}{{ character.actor.name[:1]|upper }}{% endif %}</span>
@@ -62,7 +63,8 @@
         <h2>Wybierz scenariusz</h2>
         <p>Na obecnym etapie dostępna jest pierwsza kampania.</p>
         {% for scenario in scenarios %}
-          <label class="scenario-card">
+          <label class="scenario-card" data-board-rune="{{ 6 + loop.index0 }}">
+            {{ panel_icon(6 + loop.index0)|safe }}
             <input type="radio" name="scenario_id" value="{{ scenario.id }}" {% if scenario.id == selected_scenario_id or scenario.id == active_scenario_id %}checked{% endif %}>
             <span class="selection-mark" aria-hidden="true">✓</span>
             <span>
@@ -82,7 +84,7 @@
       <div class="flow-actions">
         <a id="cancel-new-game" class="button secondary" href="{{ url_for('index') }}">Anuluj</a>
         <button id="back-to-party" class="button secondary" type="button" hidden>Wróć</button>
-        <button id="continue-to-scenario" type="button" disabled>Dalej</button>
+        <button id="continue-to-scenario" data-board-rune="25" type="button" disabled>{{ panel_icon(25)|safe }} Dalej</button>
         <button id="start-new-game" type="submit" hidden>Rozpocznij grę</button>
       </div>
     </form>
@@ -128,20 +130,30 @@
         cancel.hidden = choosingScenario;
         next.hidden = choosingScenario;
         back.hidden = !choosingScenario;
-        start.hidden = !choosingScenario;
+        start.hidden = true;
         stepLabel.textContent = choosingScenario ? 'Nowa gra · krok 2 z 2' : 'Nowa gra · krok 1 z 2';
         title.textContent = choosingScenario ? 'Wybierz scenariusz' : 'Wybierz drużynę';
         description.textContent = choosingScenario
-          ? 'Sprawdź scenariusz i rozpocznij grę wybraną drużyną.'
-          : 'Kliknij od 1 do 5 bohaterów, którzy wezmą udział w grze.';
+          ? 'Naciśnij runę scenariusza albo jego kafelek, aby rozpocząć grę wybraną drużyną.'
+          : 'Kliknij od 1 do 5 bohaterów lub wybierz ich runy. Następnie użyj runy przy Dalej.';
       };
 
       actorInputs.forEach(input => input.addEventListener('change', () => updateSelection(input)));
+      cancel.setAttribute('data-board-back', '');
+      back.setAttribute('data-board-back', '');
+      scenarioStep.addEventListener('click', event => {
+        const card = event.target.closest('.scenario-card');
+        if (!card) return;
+        event.preventDefault();
+        card.querySelector('input').checked = true;
+        form.requestSubmit(start);
+      });
       next.addEventListener('click', () => setStage('scenario'));
       back.addEventListener('click', () => setStage('party'));
       updateSelection();
       setStage(form.dataset.initialStage === 'scenario' ? 'scenario' : 'party');
     })();
   </script>
+  {% include 'launcher_board.html' %}
 </body>
 </html>

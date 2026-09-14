@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 1040">
 <title>Arena rekrutacyjna Nessy — rozstawienie 20 na 30 pól</title>
-<desc>Nessa po lewej, bohater na południu, kukła na środku. Szare przeszkody blokują ruch i widoczność, brązowa osłona daje +2 KP, pomarańczowy gruz podwaja koszt ruchu. Znaczniki P, 2 i 3 dotyczą dodatkowych wariantów.</desc>
+<desc>Szare przeszkody blokują ruch i widoczność, brązowa osłona daje +2 KP, pomarańczowy gruz podwaja koszt ruchu. Figurki ustawiaj według bieżącego kroku samouczka.</desc>
 <rect width="680" height="1040" fill="#171e22"/>
 <text x="340" y="28" fill="#efd6a1" text-anchor="middle" font-family="sans-serif" font-size="19">MAPA 0 · ARENA REKRUTACYJNA</text>
 <g transform="translate(40 50)">
@@ -157,20 +157,8 @@
 <path d="M336 469l5 -9 5 7z M348 460l5 -4 2 7z" fill="#f0cb85"/>
 </g>
 </g>
-<rect x="92" y="542" width="26" height="26" rx="5" fill="#a175ac"/>
-<text x="105" y="561" text-anchor="middle" font-family="sans-serif" font-size="18" fill="white">N</text>
-<rect x="272" y="542" width="26" height="26" rx="5" fill="#316faf"/>
-<text x="285" y="561" text-anchor="middle" font-family="sans-serif" font-size="18" fill="white">H</text>
-<rect x="302" y="362" width="26" height="26" rx="5" fill="#963d35"/>
-<text x="315" y="381" text-anchor="middle" font-family="sans-serif" font-size="18" fill="white">K</text>
-<rect x="272" y="482" width="26" height="26" rx="5" fill="#39998a"/>
-<text x="285" y="501" text-anchor="middle" font-family="sans-serif" font-size="18" fill="white">P</text>
-<rect x="332" y="362" width="26" height="26" rx="5" fill="#963d35"/>
-<text x="345" y="381" text-anchor="middle" font-family="sans-serif" font-size="18" fill="white">2</text>
-<rect x="302" y="332" width="26" height="26" rx="5" fill="#963d35"/>
-<text x="315" y="351" text-anchor="middle" font-family="sans-serif" font-size="18" fill="white">3</text>
 </g>
-<text x="40" y="978" fill="#dedbd2" font-size="12" font-family="sans-serif">N: Nessa · H: bohater · K: kukła · P: pomocnik (wsparcie) · 2/3: próba obszarowa</text>
+<text x="40" y="978" fill="#dedbd2" font-size="12" font-family="sans-serif">Teren pozostaje na miejscu. Figurki ustawiaj według podświetlenia bieżącego ćwiczenia.</text>
 <text x="40" y="1002" fill="#dedbd2" font-size="12" font-family="sans-serif">Szare ×: brak przejścia i widoczności · Brązowe +2: niska osłona</text>
 <text x="40" y="1022" fill="#f0cb85" font-size="12" font-family="sans-serif">Pomarańczowe kamienie: trudny teren · podwójny koszt ruchu, bez osłony</text>
 </svg>

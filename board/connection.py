@@ -1,14 +1,16 @@
 from __future__ import annotations
 
-import json
 import logging
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import requests
 
+from .led_output import LedFrame, LedOutput, LedOutputError
+from .serial_v2 import PROTOCOL, BoardProtocolError, FrameReader, SerialV2, coordinates, validate_info
 from .led_mapping import load_led_mapping
 from .settings import (
     board_dimensions,
@@ -33,45 +35,12 @@ logger = logging.getLogger(__name__)
 PORT_HINTS = ("esp32", "silabs", "cp210", "wch", "ch340", "usb", "uart")
 
 
-class _BoardScanIdleTimeout(TimeoutError):
-    pass
-
-
-class _BoardScanResponseTimeout(TimeoutError):
-    pass
-
-
-class _BoardScanCancelled(RuntimeError):
-    pass
-
-
-class _BoardSerialError(RuntimeError):
-    pass
-
-
 @dataclass(slots=True)
 class PortProbeResult:
     port: str
     description: str
     serial_handle: serial.Serial  # type: ignore[name-defined]
-
-
-def _parse_json_line(raw_line: str) -> dict[str, Any] | None:
-    candidates = [raw_line]
-    start = raw_line.find("{")
-    end = raw_line.rfind("}")
-    if start != -1 and end != -1 and end >= start:
-        trimmed = raw_line[start : end + 1]
-        if trimmed != raw_line:
-            candidates.append(trimmed)
-    for candidate in candidates:
-        try:
-            payload = json.loads(candidate)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(payload, dict):
-            return payload
-    return None
+    info: dict[str, Any]
 
 
 def _normalize_wled_url(url: str) -> str:
@@ -109,73 +78,44 @@ def _candidate_ports() -> list[Any]:
     return [port for _, port in scored]
 
 
-def _read_lines_until(
-    ser: serial.Serial,  # type: ignore[name-defined]
-    *,
-    protocol_name: str,
-    timeout_s: float,
-) -> tuple[dict[str, Any] | None, list[str]]:
-    deadline = time.monotonic() + timeout_s
-    seen_lines: list[str] = []
-    while time.monotonic() < deadline:
-        raw = ser.readline().decode("utf-8", errors="replace").strip()
-        if not raw:
-            continue
-        seen_lines.append(raw)
-        payload = _parse_json_line(raw)
-        if payload and payload.get("protocol") == protocol_name:
-            return payload, seen_lines
-    return None, seen_lines
-
-
 def _probe_port(
-    port_name: str,
-    *,
-    protocol_name: str,
-    baud_rate: int,
-    probe_timeout_s: float,
-    line_timeout_s: float,
-    write_timeout_s: float,
+    port_name: str, *, protocol_name: str, baud_rate: int,
+    probe_timeout_s: float, line_timeout_s: float, write_timeout_s: float,
 ) -> PortProbeResult | None:
     if serial is None:
-        raise RuntimeError("Brakuje pakietu pyserial. Zainstaluj zależności z requirements.txt.")
+        raise RuntimeError("Brakuje pakietu pyserial.")
+    if protocol_name != PROTOCOL:
+        raise BoardProtocolError("Aplikacja obsługuje wyłącznie protokół planszy v2.")
     try:
-        ser = serial.Serial(
-            port=port_name,
-            baudrate=baud_rate,
-            timeout=line_timeout_s,
-            write_timeout=write_timeout_s,
-        )
+        ser = serial.Serial(port=None, baudrate=baud_rate, timeout=min(.05, line_timeout_s),
+                            write_timeout=write_timeout_s)
+        ser.dtr = ser.rts = False
+        ser.port = port_name
+        ser.open()
     except serial.SerialException:
         return None
-
     try:
-        ser.setDTR(False)
-        ser.setRTS(False)
-        time.sleep(0.1)
-        ser.reset_input_buffer()
-        ser.reset_output_buffer()
-        payload, _seen = _read_lines_until(ser, protocol_name=protocol_name, timeout_s=probe_timeout_s)
-        if payload is None:
-            ser.reset_input_buffer()
-            ser.write(b"PING\n")
-            ser.flush()
-            payload, _seen = _read_lines_until(ser, protocol_name=protocol_name, timeout_s=3.0)
-        if payload is None:
-            ser.close()
-            return None
-        return PortProbeResult(
-            port=port_name,
-            description=str(payload.get("event") or "ready"),
-            serial_handle=ser,
-        )
-    except Exception:
+        reader = FrameReader()
+        deadline, next_ping = time.monotonic() + probe_timeout_s, 0.0
+        while time.monotonic() < deadline:
+            if time.monotonic() >= next_ping:
+                ser.write(b"PING\n")
+                next_ping = time.monotonic() + 1
+            for payload in reader.feed(ser.read(min(512, max(1, ser.in_waiting)))):
+                if payload.get("protocol") == "board_scan_usb_v1":
+                    raise BoardProtocolError("Na ESP jest stary protokół. Wgraj firmware v2.")
+                if payload.get("protocol") == PROTOCOL and payload.get("type") == "info":
+                    validate_info(payload)
+                    return PortProbeResult(port_name, str(payload.get("firmware")), ser, payload)
         ser.close()
         return None
+    except Exception:
+        ser.close()
+        raise
 
 
 def _open_serial_probe(scan_cfg: dict[str, Any]) -> PortProbeResult:
-    protocol_name = str(scan_cfg.get("protocol") or "board_scan_usb_v1")
+    protocol_name = str(scan_cfg.get("protocol") or PROTOCOL)
     baud_rate = int(scan_cfg.get("baud_rate") or 115200)
     probe_timeout_s = float(scan_cfg.get("probe_timeout_s") or 6.0)
     line_timeout_s = float(scan_cfg.get("line_timeout_s") or 0.25)
@@ -218,26 +158,35 @@ def _open_serial_probe(scan_cfg: dict[str, Any]) -> PortProbeResult:
 class _SimulatorBackend:
     def __init__(self, base_url: str) -> None:
         self.base_url = str(base_url).rstrip("/")
+        self._generation = 0
 
     def scan_board(
-        self,
-        acceptable_responses: list[tuple[int, int]] | None = None,
-        *,
-        timeout_s: float | None = None,
+        self, acceptable_responses: list[tuple[int, int]] | None = None, *,
+        timeout_s: float | None = None, context_key: str = "", mode: str = "single",
+        finish_positions: tuple[tuple[int, int], ...] = (),
     ) -> tuple[int, int] | None:
+        allowed = coordinates(acceptable_responses)
+        if not allowed:
+            return None
+        generation = self._generation
+        deadline = None if timeout_s is None else time.monotonic() + max(0, timeout_s)
         while True:
-            request_timeout = None if timeout_s is None else max(0.1, float(timeout_s))
-            response = requests.get(f"{self.base_url}/scan_board", timeout=request_timeout)
+            remaining = None if deadline is None else deadline - time.monotonic()
+            if remaining is not None and remaining <= 0:
+                raise TimeoutError("Upłynął czas wyboru pola w symulatorze.")
+            response = requests.get(f"{self.base_url}/scan_board", timeout=remaining)
             response.raise_for_status()
-            data = response.json()
-            event = str(data.get("event") or data.get("type") or "").strip().lower()
-            if event in {"cancel", "cancelled", "stop", "abort"} or bool(data.get("cancelled")):
+            if generation != self._generation:
                 return None
-            result = (int(data["col"] - 1), int(data["row"] - 1))
-            if acceptable_responses and result not in acceptable_responses:
-                logger.warning("Nieakceptowalna odpowiedź z symulatora: %s", result)
-                continue
-            return result
+            data = response.json()
+            if str(data.get("event") or data.get("type") or "").lower() in {"cancel", "cancelled", "stop", "abort"} or data.get("cancelled") is True:
+                return None
+            col, row = data.get("col"), data.get("row")
+            if type(col) is not int or type(row) is not int or not (1 <= col <= 20 and 1 <= row <= 30):
+                raise BoardProtocolError("Nieprawidłowe pole z symulatora.")
+            result = (col - 1, row - 1)
+            if result in allowed:
+                return result
 
     def set_leds(
         self,
@@ -261,6 +210,7 @@ class _SimulatorBackend:
         requests.get(f"{self.base_url}/off", timeout=5.0).raise_for_status()
 
     def cancel_scan(self) -> None:
+        self._generation += 1
         requests.post(f"{self.base_url}/simulate/cancel_scan", timeout=5.0).raise_for_status()
 
     def rearm_scan(self) -> None:
@@ -313,6 +263,8 @@ class _WledClient:
         data = response.json()
         if not isinstance(data, dict):
             raise RuntimeError(f"Nieoczekiwana odpowiedź WLED: {data!r}")
+        if data.get("success") is False or data.get("error"):
+            raise RuntimeError(f"WLED odrzucił ramkę: {data!r}")
         return data
 
     def _get_info(self) -> dict[str, Any]:
@@ -401,184 +353,73 @@ class _WledClient:
 class _HardwareBackend:
     def __init__(self, scan_cfg: dict[str, Any], wled_cfg: dict[str, Any]) -> None:
         self.scan_cfg = dict(scan_cfg)
-        self.protocol_name = str(self.scan_cfg.get("protocol") or "board_scan_usb_v1")
-        self.scan_command = str(self.scan_cfg.get("scan_command") or "SCAN").strip() or "SCAN"
-        self.stop_command = str(self.scan_cfg.get("stop_command") or "STOP").strip() or "STOP"
-        self.stop_before_scan = bool(self.scan_cfg.get("stop_before_scan", True))
-        self.pre_scan_stop_s = max(0.0, float(self.scan_cfg.get("pre_scan_stop_s", 0.08)))
-        self.pre_scan_delay_s = max(0.0, float(self.scan_cfg.get("pre_scan_delay_s") or 0.12))
-        self.scan_recovery_timeout_s = max(0.0, float(self.scan_cfg.get("scan_recovery_timeout_s") or 0.0))
-        # STOP is used both as a real cancellation request and as a defensive
-        # preamble before SCAN.  Firmware acknowledges both with the same
-        # protocol event, so remember only cancellations explicitly requested
-        # by the application.  A delayed acknowledgement for the defensive
-        # STOP must not cancel the newly armed scan.
-        self._cancel_generation = 0
         self.port_result = _open_serial_probe(self.scan_cfg)
-        self.ser = self.port_result.serial_handle
-        self.wled = _WledClient(wled_cfg)
-        if self.wled.validate(raise_on_failure=False):
-            self.wled.clear()
-        else:
-            logger.warning("Start hardware bez aktywnego WLED. Skan planszy dziala, ale LED-y beda ponawiane automatycznie.")
         self.serial_port = self.port_result.port
+        self.ser = self.port_result.serial_handle
+        self.input = SerialV2(self.ser, self.port_result.info)
+        self.wled = _WledClient(wled_cfg)
+        self._scan_lock = threading.RLock()
+        self._scan_cancelled = threading.Event()
+        self.output = LedOutput(self._send_led_frame)
+        self.output.submit(LedFrame(()))
 
-    def _reset_input_buffer(self) -> None:
-        try:
-            self.ser.reset_input_buffer()
-        except Exception:
-            pass
+    def _send_led_frame(self, frame: LedFrame) -> bool:
+        if not frame.updates:
+            confirmed = self.wled.clear()
+        else:
+            confirmed = self.wled.set_leds([(index, list(color)) for index, color in frame.updates],
+                                           brightness=frame.brightness, replace=True,
+                                           transition_ms=frame.transition_ms)
+        if not confirmed:
+            # Preserve the HTTP/validation failure during retry cooldown too.
+            # The output worker records it; USB input remains independent.
+            raise LedOutputError(self.wled.last_error or 'WLED nie potwierdził ramki.')
+        return True
 
-    def _send_stop_command(self) -> None:
-        self.ser.write(f"{self.stop_command}\n".encode("ascii", errors="ignore"))
-        self.ser.flush()
+    def prepare_scan(self, positions: list[tuple[int, int]] | None, *, context_key: str,
+                     mode: str, finish_positions: tuple[tuple[int, int], ...]) -> Callable[..., tuple[int, int] | None]:
+        with self._scan_lock:
+            cancelled = self._scan_cancelled
 
-    def _send_scan_command(self) -> None:
-        if self.stop_before_scan:
-            try:
-                self._send_stop_command()
-                if self.pre_scan_stop_s > 0:
-                    time.sleep(self.pre_scan_stop_s)
-            except Exception:
-                logger.debug("Nie udało się asekuracyjnie zatrzymać poprzedniego skanu.", exc_info=True)
-        self._reset_input_buffer()
-        self.ser.write(f"{self.scan_command}\n".encode("ascii", errors="ignore"))
-        self.ser.flush()
-        if self.pre_scan_delay_s > 0:
-            time.sleep(self.pre_scan_delay_s)
+        def wait(timeout_s: float | None = None) -> tuple[int, int] | None:
+            # USB input is governed by the game's current mask and context.
+            # A missing WLED HTTP acknowledgement must not disable buttons:
+            # the LEDs may already be lit while their response was lost.
+            with self._scan_lock:
+                if cancelled.is_set():
+                    return None
+                read = self.input.prepare_input(positions, context_key=context_key,
+                                               mode=mode, finish_positions=finish_positions)
+            return read(timeout_s)
+        return wait
+
+    @property
+    def connected(self) -> bool:
+        return self.input.connected
+
+    def scan_board(self, acceptable_responses: list[tuple[int, int]] | None = None, *, timeout_s: float | None = None,
+                   context_key: str = "", mode: str = "single", finish_positions: tuple[tuple[int, int], ...] = ()) -> tuple[int, int] | None:
+        return self.prepare_scan(acceptable_responses, context_key=context_key,
+                                 mode=mode, finish_positions=finish_positions)(timeout_s)
 
     def cancel_scan(self) -> None:
-        self._cancel_generation = getattr(self, "_cancel_generation", 0) + 1
-        try:
-            self._send_stop_command()
-        except Exception:
-            logger.debug("Nie udało się wysłać komendy zatrzymania skanu.", exc_info=True)
+        with self._scan_lock:
+            self._scan_cancelled.set()
+            self._scan_cancelled = threading.Event()
+            self.output.wake()
+            self.input.cancel()
 
     def rearm_scan(self) -> None:
-        try:
-            self._send_scan_command()
-        except Exception:
-            logger.debug("Nie udało się ponownie uzbroić skanu planszy.", exc_info=True)
+        self.cancel_scan()
 
     def reset_connection(self, *, reopen: bool = False) -> None:
-        try:
-            self.cancel_scan()
-            if not reopen:
-                # Keep the firmware's STOP acknowledgement in the input buffer.
-                # A concurrent scan_board() owns the serial reader and needs that
-                # acknowledgement to return from its blocking read. Clearing the
-                # buffer here can strand the scan and its application-level lock.
-                return
-        except Exception:
-            logger.debug("Miękki reset połączenia planszy nie powiódł się.", exc_info=True)
-        try:
-            self.ser.close()
-        except Exception:
-            pass
-        self.port_result = _open_serial_probe(self.scan_cfg)
-        self.ser = self.port_result.serial_handle
-        self.serial_port = self.port_result.port
-
-    def _read_protocol_payload(
-        self,
-        *,
-        timeout_s: float | None = None,
-        cancel_generation: int | None = None,
-    ) -> dict[str, Any]:
-        started_at = time.monotonic()
-        deadline = None if timeout_s is None else (started_at + timeout_s)
-        idle_deadline = (
-            started_at + self.scan_recovery_timeout_s
-            if self.scan_recovery_timeout_s > 0
-            else None
-        )
-        while deadline is None or time.monotonic() < deadline:
-            if (
-                cancel_generation is not None
-                and getattr(self, "_cancel_generation", 0) != cancel_generation
-            ):
-                raise _BoardScanCancelled
-            now = time.monotonic()
-            if idle_deadline is not None and now >= idle_deadline:
-                raise _BoardScanIdleTimeout("Brak odpowiedzi z planszy podczas aktywnego skanu.")
-            try:
-                raw = self.ser.readline().decode("utf-8", errors="replace").strip()
-            except Exception as exc:
-                raise _BoardSerialError(f"Błąd odczytu z portu planszy: {exc}") from exc
-            if (
-                cancel_generation is not None
-                and getattr(self, "_cancel_generation", 0) != cancel_generation
-            ):
-                raise _BoardScanCancelled
-            if not raw:
-                continue
-            if idle_deadline is not None:
-                idle_deadline = time.monotonic() + self.scan_recovery_timeout_s
-            payload = _parse_json_line(raw)
-            if payload and payload.get("protocol") == self.protocol_name:
-                return payload
-        raise _BoardScanResponseTimeout(f"Timeout oczekiwania na odpowiedź protokołu {self.protocol_name}.")
-
-    def scan_board(
-        self,
-        acceptable_responses: list[tuple[int, int]] | None = None,
-        *,
-        timeout_s: float | None = None,
-    ) -> tuple[int, int] | None:
-        deadline = None if timeout_s is None else (time.monotonic() + max(0.0, float(timeout_s)))
-        while True:
-            cancel_generation = getattr(self, "_cancel_generation", 0)
-            remaining = None if deadline is None else max(0.0, deadline - time.monotonic())
-            if remaining is not None and remaining <= 0:
-                raise TimeoutError("Timeout oczekiwania na wybór pola na planszy.")
-            try:
-                self._send_scan_command()
-            except Exception as exc:
-                logger.warning("Błąd wysłania komendy skanu planszy, ponawiam po reconnect: %s", exc)
-                self.reset_connection(reopen=True)
-                continue
-            while True:
-                remaining = None if deadline is None else max(0.0, deadline - time.monotonic())
-                if remaining is not None and remaining <= 0:
-                    raise TimeoutError("Timeout oczekiwania na wybór pola na planszy.")
-                try:
-                    payload = self._read_protocol_payload(
-                        timeout_s=remaining,
-                        cancel_generation=cancel_generation,
-                    )
-                except _BoardScanCancelled:
-                    return None
-                except _BoardScanIdleTimeout:
-                    logger.warning(
-                        "Skan planszy nie zwrócił żadnych danych przez %.1fs; resetuję skan i ponawiam.",
-                        self.scan_recovery_timeout_s,
-                    )
-                    self.reset_connection()
-                    break
-                except _BoardSerialError as exc:
-                    logger.warning("Połączenie z planszą przerwane podczas skanu, próbuję reconnect: %s", exc)
-                    self.reset_connection(reopen=True)
-                    break
-                except _BoardScanResponseTimeout as exc:
-                    if remaining is not None:
-                        raise TimeoutError("Timeout oczekiwania na wybór pola na planszy.") from exc
-                    raise
-                if getattr(self, "_cancel_generation", 0) != cancel_generation:
-                    return None
-                event = str(payload.get("event") or "").lower()
-                if event in {"cancel", "cancelled", "stop", "abort"} or bool(payload.get("cancelled")):
-                    logger.debug(
-                        "Pomijam potwierdzenie technicznego STOP sprzed aktywnego SCAN."
-                    )
-                    continue
-                if event != "press":
-                    continue
-                result = (int(payload["col"]), int(payload["row"]))
-                if acceptable_responses and result not in acceptable_responses:
-                    logger.warning("Nieakceptowalna odpowiedź z planszy: %s", result)
-                    self.cancel_scan()
-                    break
-                return result
+        self.cancel_scan()
+        if reopen or not self.input.connected:
+            self.input.close()
+            self.port_result = _open_serial_probe(self.scan_cfg)
+            self.ser = self.port_result.serial_handle
+            self.serial_port = self.port_result.port
+            self.input = SerialV2(self.ser, self.port_result.info)
 
     def set_leds(
         self,
@@ -587,22 +428,23 @@ class _HardwareBackend:
         brightness: int | None = None,
         replace: bool = False,
         transition_ms: int | None = None,
-    ) -> None:
-        self.wled.set_leds(
-            led_updates,
-            brightness=brightness,
-            replace=replace,
-            transition_ms=transition_ms,
-        )
+    ) -> bool:
+        self.output.submit(LedFrame(tuple((i, tuple(color)) for i, color in led_updates),
+                                    brightness, transition_ms))
+        return True  # Queue owns delivery/retries; this is not a device ACK.
 
-    def leds_off(self) -> None:
-        self.wled.clear()
+    def leds_off(self) -> bool:
+        self.output.submit(LedFrame(()))
+        return True
 
     def close(self) -> None:
         try:
-            self.ser.close()
-        except Exception:
-            pass
+            self.cancel_scan()
+        finally:
+            try:
+                self.input.close()
+            finally:
+                self.output.close()
 
 
 class Connection:
@@ -679,16 +521,35 @@ class Connection:
             updates.append((led_index, color))
         return updates
 
+    def prepare_scan(self, positions: list[tuple[int, int]], *, context_key: str,
+                     mode: str, finish_positions: tuple[tuple[int, int], ...]) -> Callable[..., tuple[int, int] | None]:
+        if isinstance(self._backend, _HardwareBackend):
+            return self._backend.prepare_scan(positions, context_key=context_key,
+                                              mode=mode, finish_positions=finish_positions)
+        generation = getattr(self._backend, "_generation", 0)
+        def wait(timeout_s: float | None = None) -> tuple[int, int] | None:
+            if generation != getattr(self._backend, "_generation", 0):
+                return None
+            return self.scan_board(positions, timeout_s=timeout_s, context_key=context_key,
+                                   mode=mode, finish_positions=finish_positions)
+        return wait
+
+    @property
+    def connected(self) -> bool:
+        return bool(getattr(self._backend, "connected", True))
+
+    @property
+    def led_status(self) -> dict[str, object]:
+        output = getattr(self._backend, "output", None)
+        return output.status if output is not None else {}
+
     def scan_board(
-        self,
-        acceptable_responses: list[tuple[int, int]] | None = None,
-        *,
-        timeout_s: float | None = None,
+        self, acceptable_responses: list[tuple[int, int]] | None = None, *,
+        timeout_s: float | None = None, context_key: str = "", mode: str = "single",
+        finish_positions: tuple[tuple[int, int], ...] = (),
     ) -> tuple[int, int] | None:
-        try:
-            return self._backend.scan_board(acceptable_responses, timeout_s=timeout_s)
-        except TypeError:
-            return self._backend.scan_board(acceptable_responses)
+        return self._backend.scan_board(acceptable_responses, timeout_s=timeout_s,
+                                       context_key=context_key, mode=mode, finish_positions=finish_positions)
 
     def set_leds(
         self,
@@ -698,12 +559,12 @@ class Connection:
         brightness: int | None = None,
         replace: bool = False,
         transition_ms: int | None = None,
-    ) -> None:
+    ) -> bool | None:
         led_updates = self._resolve_led_updates(positions, rgb_color)
         if not led_updates:
             return
         try:
-            self._backend.set_leds(
+            return self._backend.set_leds(
                 led_updates,
                 brightness=brightness,
                 replace=replace,
@@ -711,15 +572,15 @@ class Connection:
             )
         except TypeError:
             if brightness is None:
-                self._backend.set_leds(led_updates)
+                return self._backend.set_leds(led_updates)
             else:
                 try:
-                    self._backend.set_leds(led_updates, brightness=brightness)
+                    return self._backend.set_leds(led_updates, brightness=brightness)
                 except TypeError:
-                    self._backend.set_leds(led_updates)
+                    return self._backend.set_leds(led_updates)
 
-    def leds_off(self) -> None:
-        self._backend.leds_off()
+    def leds_off(self) -> bool | None:
+        return self._backend.leds_off()
 
     def cancel_scan(self) -> None:
         canceller = getattr(self._backend, "cancel_scan", None)

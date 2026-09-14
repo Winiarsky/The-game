@@ -29,10 +29,11 @@ def submit_shield_bash_rolls(
     defender_roll: int | None = None,
     damage_roll: int | None = None,
 ) -> ShieldBashFlow:
+    count = 1 + (dict(state.shared_mana.pending_boosts).get("damage", 0) if state.shared_mana else 0)
     values = (
         ((attacker_roll, 20), (defender_roll, 20))
         if pending.stage == "contest"
-        else ((damage_roll, 6),)
+        else ((damage_roll, 6 * count),)
     )
     if pending.stage not in {"contest", "damage"}:
         raise ValueError("Wynik Uderzenia tarczą już czeka na potwierdzenie.")
@@ -40,6 +41,8 @@ def submit_shield_bash_rolls(
         type(value) is not int or not 1 <= value <= sides for value, sides in values
     ):
         raise ValueError("Podaj naturalny wynik każdej wymaganej kości w jej zakresie.")
+    if pending.stage == "damage" and damage_roll < count:
+        raise ValueError(f"Suma {count}k6 jest za mała.")
     if pending.stage == "contest":
         pending = replace(
             pending, attacker_roll=attacker_roll, defender_roll=defender_roll
@@ -50,7 +53,7 @@ def submit_shield_bash_rolls(
         target_id=pending.target_id,
         attacker_roll=pending.attacker_roll,
         defender_roll=pending.defender_roll,
-        damage_roll=damage_roll if pending.stage == "damage" else 1,
+        damage_roll=damage_roll if pending.stage == "damage" else count,
     )
     if pending.stage == "contest" and result.succeeded:
         return replace(pending, stage="damage")

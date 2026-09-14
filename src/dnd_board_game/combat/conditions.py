@@ -57,6 +57,7 @@ class CombatCondition(StrEnum):
     GAGGED = "gagged"
     HAMSTRUNG = "hamstrung"
     BLEEDING = "bleeding"
+    STASIS = "stasis"
 
 
 class ConditionSaveTiming(StrEnum):
@@ -134,6 +135,12 @@ CONDITION_DEFINITIONS: dict[CombatCondition, ConditionDefinition] = {
         "Chwytany",
         "Szybkość wynosi 0 do czasu zakończenia chwytu.",
         speed_zero=True,
+    ),
+    CombatCondition.STASIS: ConditionDefinition(
+        CombatCondition.STASIS,
+        "Staza",
+        "Nie może poruszać się ani używać akcji, akcji dodatkowych i reakcji.",
+        speed_zero=True, reactions_blocked=True, actions_blocked=True,
     ),
     CombatCondition.INCAPACITATED: ConditionDefinition(
         CombatCondition.INCAPACITATED,

@@ -1,0 +1,106 @@
+{
+  "heroes": {
+    "garran": {
+      "intro": "Ćwicz ochronę rannego pomocnika, dowodzenie i walkę tarczą. Napastnik zaczyna bliżej pomocnika, aby umożliwić przejęcie ataku.",
+      "lessons": {
+        "second_wind": "Zaczniesz z raną. Użyj Drugiego oddechu, wpisz naturalne k10 i sprawdź odzyskane PW.",
+        "defensive_stance": "Przyjmij postawę i sprawdź premię KP. Po ćwiczeniu zrób krok: każda zmiana pola kończy postawę.",
+        "garran_command_halt": "Wskaż kukłę w 60 ft. Po obronie przeciwnika sprawdź jego ruch i dostępność reakcji.",
+        "garran_guard_companion": "Stań obok pomocnika i zakończ turę. Kukła napastnika zaczyna bliżej pomocnika; gdy zadeklaruje atak na niego, wybierz przejęcie ataku.",
+        "shield_bash": "Podejdź do kukły, zostaw wolne pole za nią i użyj tarczy. Wypróbuj czerwoną runę podbicia. Zatwierdź wynik testu, obrażenia i odepchnięcie.",
+        "garran_shield_wall": "Stań obok pomocnika. Użyj Osłony tarczą i sprawdź jego KP. Białe podbicie daje mu tymczasowe PW; podstawowa osłona nie zwiększa KP Garrana.",
+        "garran_rally": "Obejmij pomocnika w 15 ft. Sprawdź przewagę pierwszego ataku; białe podbicie pozwoli także uleczyć rannego uczestnika.",
+        "iron_bastion": "Uruchom aurę przy pomocniku. Sprawdź premię KP i ochronę przed wymuszonym przesunięciem wewnątrz 10 ft.",
+        "counterattack_command": "Wybierz przytomnego pomocnika w 15 ft z reakcją. Aplikacja podświetli ruch Garrana. ✓ kończy lub pomija ruch i automatycznie otwiera cele ataku wyposażoną bronią. Potem tak samo działa pomocnik; oba ataki kończą ćwiczenie."
+      }
+    },
+    "brakka": {
+      "intro": "Trzy kukły pozwalają ćwiczyć serie i dwa różne cele. Napastnik zadaje 6 obrażeń przed odpornością: umożliwia reakcję w Szale.",
+      "lessons": {
+        "rage": "Włącz Szał, a potem zaatakuj. Sprawdź premię obrażeń i odporności. Tura bez ofensywy lub nieprzytomność zakończy Szał.",
+        "reckless_attack": "Włącz modyfikator przed zwykłym atakiem wręcz opartym na Sile. Sprawdź przewagę oraz przewagę wrogów przeciw Brakce.",
+        "acceleration": "Najpierw włącz Szał. Użyj Przyspieszenia i sprawdź większy limit ruchu; już przebyta droga nadal go zużywa.",
+        "hard_as_rock": "Włącz Szał, wykonaj ofensywę i dopuść do trafienia przez kukłę napastnika. W oknie reakcji użyj redukcji i wpisz k12. Odporność rozlicza się wcześniej.",
+        "powerful_strike": "W Szale wybierz sąsiadującą kukłę. Dokończ atak i dodatkowe k12; czerwona runa podbicia zwiększa liczbę kości.",
+        "shoulder_check": "Stań obok kukły z wolnym polem za nią. Przetestuj sporną Atletykę. Niebieskie runy wydłużają pchnięcie, czerwone dodają obrażenia.",
+        "deafening_roar": "W Szale ustaw stożek na grupę kukieł. Dokończ obrażenia i obrony; sprawdź czerwone podbicie lub niebieską blokadę ruchu.",
+        "reaper": "W Szale wykonaj wszystkie trzy osobne ataki w dostępne kukły. Samo rozpoczęcie serii nie zalicza ćwiczenia.",
+        "unstoppable": "W Szale wybierz trasę i dwóch różnych wrogów. Dokończ oba ataki oraz obrony przed powaleniem."
+      }
+    },
+    "mira": {
+      "intro": "Pomocnik stoi przy kukłach obok zasłony. Obchodź cel na przeciwną stronę pomocnika, aby uzyskać własną flankę. Ukrycie przygotuj z dala od sąsiadujących wrogów.",
+      "lessons": {
+        "hide": "Odsuń się od sąsiadujących wrogów, najlepiej za istniejącą zasłonę. Wykonaj Skradanie i sprawdź, które kukły pozostały nieświadome.",
+        "instinctive_dodge": "Pozwól kukle napastnika zadeklarować atak w Mirę. W oknie reakcji wybierz Unik: nie wymaga dodatkowego rzutu Miry.",
+        "feint": "Podejdź do kukły i użyj Zwodu. Następnie odejdź od tego celu; nie może wykonać przeciw Mirze ataku okazyjnego.",
+        "hamstring_cut": "Ustaw Mirę po przeciwnej stronie kukły niż pomocnik. Sprawdź własną flankę i wykonaj atak; trafienie połowi ruch celu.",
+        "smoke_screen": "Rozpocznij nawet obok kukły. Wybierz legalną trasę dymu i dokończ próbę ukrycia. Zielone podbicie daje dalszy ruch, czarne przewagę Skradania.",
+        "guard_vault": "Wybierz sąsiadującą kukłę z wolnym polem dokładnie za nią. Dokończ atak i zmianę pozycji. Czerwone podbicie dodaje obrażenia.",
+        "blade_mistress": "Przygotuj nóż oraz ukrycie lub własną flankę z pomocnikiem. Dokończ atak. Czerwone podbicie wzmacnia obrażenia, czarne dodaje krwawienie.",
+        "shadow_verdict": "Najpierw ukryj się przed celem, następnie ustaw własną flankę po przeciwnej stronie kukły niż pomocnik. Zachowaj ukrycie do ataku i rozlicz dodatkowe 5k6.",
+        "blade_dance": "Zaplanuj przejście obok dwóch różnych kukieł. Dokończ ruch i oba ataki; Atak z cienia działa najwyżej raz."
+      }
+    },
+    "dagna": {
+      "intro": "Dagna i pomocnik zaczynają ranni; pomocnik jest zatruty. Wszystkie kukły naśladują nieumarłych, aby umożliwić ćwiczenie Świętego symbolu.",
+      "lessons": {
+        "sacred_flame": "Ustaw stożek na nieumarłe kukły. Zwróć uwagę na pomocnika: sojuszników także obejmuje obszar. Dokończ obrony i obrażenia.",
+        "bless": "Stań w 10 ft od pomocnika i uruchom aurę. Sprawdź k4 do ataków i obron oraz znacznik koncentracji.",
+        "lesser_restoration": "Podejdź do zatrutego pomocnika. Usuń treningowe zatrucie i sprawdź, że znacznik stanu zniknął.",
+        "caring_gesture": "Wybierz sąsiadującego pomocnika i wpisz k4. Sprawdź tymczasowe PW: nie uzupełniają zwykłych PW i nie sumują się z inną pulą.",
+        "healing_word": "Wybierz rannego pomocnika w 60 ft i dokończ leczenie. Białe runy podbicia dodają k6.",
+        "divine_care_aura": "Uruchom aurę blisko kukły. Sprawdź karę do jej ataków. Niebieska runa zwiększa promień, biała ogranicza także obrażenia.",
+        "guiding_bolt": "Wskaż kukłę w 75 ft i dokończ atak czarem. Po trafieniu sprawdź przewagę następnego ataku przeciw niej.",
+        "preserve_life": "Rozdziel 40 PW między ranną Dagnę i pomocnika w 30 ft, bez przekraczania maksymalnych PW. Potwierdź cały przydział.",
+        "spiritual_weapon": "Przywołaj broń, ustaw jej figurkę i wykonaj nią atak. Zakończ aktywację, aby wrócić do Dagny. Kolejne aktywacje mają własny koszt.",
+        "turn_undead": "Użyj osobistego Świętego symbolu Dagny z menu przedmiotów. Kukły naśladują nieumarłych; obejmij je promieniem 15 ft i rozstrzygnij obrony."
+      }
+    },
+    "lorian": {
+      "intro": "Pomocnik przyjmuje Inspirację i może być celem ataku napastnika. Rynek, talię i stos odrzuconych obsługuj fizycznie według instrukcji.",
+      "lessons": {
+        "mana_inspiration": "Wybierz pomocnika w 30 ft i przekaż mu Inspirację. Sprawdź znacznik jednorazowego k4 do ataku albo obrony.",
+        "mana_tuning": "Zostaw na rynku kartę poza kosztem. Po płatności wykonaj wymianę kart zgodnie z instrukcją i potwierdź jej zakończenie.",
+        "mocking_shot": "Użyj kuszy przeciw kukle. Dokończ atak; trafienie utrudni jej następny atak.",
+        "cutting_words": "Zakończ turę przy pomocniku. Gdy kukła zada obrażenia bohaterowi w 30 ft, wybierz reakcję i wpisz k6 redukcji.",
+        "mana_recovery": "Zapłać koszt, potem odzyskaj karty z odrzuconych na wierzch talii. Możesz odzyskać właśnie wydane karty. Potwierdź fizyczną operację.",
+        "optical_scope": "Rozpocznij turę bez ruchu. Wybierz strzał z lunetą i sprawdź premię +2 oraz osłonę na linii strzału. Zielone podbicie daje drugi strzał w ten sam cel.",
+        "entangling_shot": "Obejmij grupę kukieł obszarem 3×3. Sprawdź obrony i spowolnienie; niebieska runa blokuje ruch, zielona powiększa obszar.",
+        "mana_great_tuning": "Po odłożeniu kosztu przełóż trzy odrzucone karty do wolnych miejsc rynku. Zakończ instrukcję fizycznej wymiany.",
+        "victory_hymn": "Uruchom aurę i sprawdź koncentrację. W zasięgu aury można wykorzystać dodatkową akcję dodatkową, z normalną płatnością."
+      }
+    },
+    "nimra": {
+      "intro": "Bliska grupa kukieł służy do czarów obszarowych i reakcji Tarcza. Pomocnik pozwala sprawdzić wyłączanie pól i ryzyko trafienia sojusznika.",
+      "lessons": {
+        "nimra_frost_pulse": "Wybierz kukłę w 50 ft. Rozstrzygnij obronę Kondycji i sprawdź obrażenia oraz spowolnienie przy porażce.",
+        "nimra_mind_spike": "Wybierz kukłę w 45 ft. Rozstrzygnij obronę Mądrości; porażka zada obrażenia i odbierze reakcję.",
+        "nimra_sticky_matrix": "Ustaw obszar 2×2 na drodze kukły napastnika. Sprawdź trudny teren; wejście lub początek tury w obszarze uruchamia obronę przed powaleniem.",
+        "misty_step": "Wskaż widoczne, wolne pole do 30 ft. Potwierdź teleport i przestaw figurkę Nimry.",
+        "shield": "Dopuść do ataku kukły napastnika przeciw Nimrze. W oknie reakcji wybierz Tarczę i sprawdź ponowną ocenę trafienia z +3 KP.",
+        "nimra_flame_fan": "Ustaw stożek na grupę kukieł. Uważaj na pomocnika; niebieskie podbicie pozwala wyłączyć dwa pola, czerwone zwiększa obrażenia.",
+        "nimra_force_wave": "Ustaw linię przez kukły, pozostawiając za nimi miejsce. Dokończ obrażenia i obrony przed odepchnięciem.",
+        "nimra_web": "Rozłóż Sieć na grupie kukieł i rozstrzygnij obrony. Sprawdź koncentrację, trudny teren i sposób uwolnienia akcją.",
+        "nimra_mind_break": "Wybierz pierwszą kukłę. Czarna runa dodaje pobliskie cele, czerwona obrażenia dla wszystkich. Dokończ obrony.",
+        "nimra_lightning_path": "Wskaż początek łańcucha. Prześledź najbliższe cele kolejnych przeskoków; błyskawica może trafić także pomocnika.",
+        "shatter": "Wskaż środek obszaru 10 ft. Sprawdź, kto znajduje się w promieniu, i rozlicz 4k8 oraz obrony Kondycji.",
+        "nimra_stasis": "Wybierz kukłę w 50 ft. Po obronie sprawdź odebrane działania przy porażce i wymaganie koncentracji."
+      }
+    },
+    "erynd": {
+      "intro": "Grupa dalszych kukieł pozwala rozdzielać strzały i obejmować cele obszarem. Napastnik podchodzi: wykorzystaj jego trasę do ćwiczenia zarośli.",
+      "lessons": {
+        "hunters_mark": "Oznacz kukłę, a następnie traf ją łukiem. Sprawdź dodatkowe k6 raz we własnej turze i możliwość przeniesienia znaku po pokonaniu celu.",
+        "cunning_action": "Wybierz Sprint albo Odstąpienie. Sprawdź zmieniony limit ruchu lub bezpieczne odejście od kukły.",
+        "aim": "Zacznij turę bez ruchu. Użyj Celowania, następnie strzel z łuku i sprawdź przewagę oraz zużycie limitu ruchu.",
+        "disrupting_arrow": "Dokończ strzał w kukłę. Trafienie odbiera reakcje i utrudnia następny atak celu.",
+        "anchoring_arrow": "Wybierz kukłę obok drugiej. Zielone podbicie pozwala strzelić także w drugą. Rozstrzygnij obrony Siły przed zablokowaniem ruchu.",
+        "exposing_arrow": "Dokończ strzał i po trafieniu sprawdź obniżenie KP celu o 2. Czerwone runy podbicia dodają obrażenia.",
+        "double_shot": "Wykonaj dwa osobne strzały, w tę samą lub różne kukły. Rozlicz obydwa; dodatkowe obrażenia podbicia dotyczą jednego wybranego trafienia.",
+        "arrow_rain": "Obejmij kukły obszarem 3×3. Wpisz wspólny test łuku i obrażenia; trafienie i osłona są sprawdzane osobno dla każdego celu.",
+        "spike_growth": "Rozmieść zarośla na drodze kukły napastnika. Sprawdź koncentrację i trudny teren; obrażenia pojawiają się podczas ruchu, także sojuszników."
+      }
+    }
+  }
+}

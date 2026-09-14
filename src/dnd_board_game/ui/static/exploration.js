@@ -48,6 +48,7 @@ let selectedPanelActorId = localStorage.getItem('explorationPanelActorId') || ''
 let boardFallbackEnabled = localStorage.getItem('explorationBoardFallback') === 'true';
 let pendingClassFeatureActionId = '';
 let boardConnectionNotice = '';
+let boardConnectionInFlight = false;
 let selectedPlaygroundAuditCaseId = '';
 let physicalCardStatusTimer = null;
 let physicalCardScanInFlight = false;
@@ -358,6 +359,9 @@ async function api(path, body, busyMessage) {
   const gmRequest = Boolean(busyMessage && (busyMessage.includes('MG') || busyMessage.includes('NPC')));
   const retryRequest = gmRequest ? {path, body: body || {}, busyMessage} : null;
   setBusy(busyMessage || 'Czekam na odpowiedź...');
+  clearTimeout(boardAutoArmTimer);
+  boardAutoArmTimer = null;
+  if (boardPanelSyncPromise) await boardPanelSyncPromise;
   if (boardScanInFlight && path !== '/api/board/reset-scan') {
     await stopBoardScanLoop();
   }
@@ -380,6 +384,10 @@ async function api(path, body, busyMessage) {
       } else {
         alert(data.error || 'Błąd');
       }
+    }
+    if (res.ok && data.panel_event) {
+      window.setTimeout(() => { handleBoardPanelEvent(data); scheduleAutomaticBoardScan(); }, 0);
+      return {ok: true};
     }
     state = data.state || data;
     const nextStage = state && state.flow ? state.flow.stage : null;
@@ -455,7 +463,15 @@ async function loadState() {
   lastBoardSelectionRevision = -1;
   synchronizeBoardSelection({force: true});
   chatInstanceOpen = true;
-  render();
+  const board = state.board || {};
+  // A reload loses the browser promise, but its server scan can still wait.
+  if (board.connected) await stopBoardScanLoop({force: true});
+  if (!board.connected && !boardFallbackEnabled
+      && ['hardware', 'simulator'].includes(board.configured_backend)) {
+    await retryBoardConnection();
+  } else {
+    render();
+  }
   refreshSessionLog();
   focusCombatDecision();
   scheduleAutomaticBoardScan();
@@ -480,7 +496,8 @@ function render() {
   }
   const modeLabel = currentModeLabel();
   document.getElementById('app-mode-label').textContent = modeLabel;
-  document.getElementById('encounter-title').textContent = inCombat ? 'Walka' : 'Nadchodzi starcie';
+  document.getElementById('encounter-title').textContent = inCombat ? 'Walka'
+    : state.training_arena?.mode === 'walkthrough' ? 'Przygotowanie ćwiczenia' : 'Nadchodzi starcie';
   document.getElementById('scenario').textContent = state.scenario.name;
   document.getElementById('zone').textContent = state.current_zone.name;
   document.getElementById('panel-zone-name').textContent = state.current_zone.name;
@@ -572,11 +589,12 @@ function render() {
   initializeKeyboardRollWizard();
   scheduleAutomaticBoardScan();
   scrollChatToBottom(followChatTail);
+  focusCombatDecision();
 }
 
 function isKeyboardRollInput(input) {
   if (!input || input.type !== 'number' || input.disabled) return false;
-  if (input.closest('#rolls') || input.closest('.precombat-stealth-roll')) return true;
+  if (input.closest('#rolls, .precombat-stealth-roll, #exploration-mana-roll, #simple-trap-roll')) return true;
   if (!input.closest('#encounter')) return false;
   const id = String(input.id || '');
   return (
@@ -597,8 +615,9 @@ function visibleKeyboardRollInputs() {
 function keyboardRollSubmitButton(inputs) {
   const first = inputs[0];
   if (!first) return null;
-  const root = first.closest('#roll-panel, .combat-action-card, .precombat-stealth-roll, #encounter');
+  const root = first.closest('#roll-panel, .combat-action-card, .precombat-stealth-roll, #exploration-mana-roll, #simple-trap-roll, #encounter');
   if (!root) return null;
+  if (root.matches('#exploration-mana-roll, #simple-trap-roll')) return root.querySelector('button[type="submit"]');
   const buttons = Array.from(root.querySelectorAll('button')).filter(button => (
     !button.disabled
     && !button.classList.contains('secondary')
@@ -656,6 +675,12 @@ function keyboardRollStep(input, index) {
 }
 
 function keyboardRollContextLines(root) {
+  if (root.id === 'exploration-mana-roll') {
+    const a = state.exploration_mana.attempt;
+    return [`${a.actor} · ${a.method}`, a.busted
+      ? 'Utrudnienie: dwie k20, liczy się niższa. Premię doliczamy raz do niższego wyniku. Bez premii za karty.'
+      : 'Test k20. Po ustawieniu kości sprawdź podsumowanie i zatwierdź cały rzut.'];
+  }
   const nodes = [];
   const prompt = document.querySelector('.combat-current-step .combat-prompt');
   if (prompt && root.closest('.combat-current-step')) nodes.push(prompt);
@@ -674,6 +699,14 @@ function keyboardRollContextLines(root) {
 }
 
 function activeKeyboardRollPending(input) {
+  if (input.closest('#exploration-mana-roll')) {
+    const a = state.exploration_mana.attempt;
+    return {modifier_total:a.modifier_total, active_modifiers:a.modifiers};
+  }
+  if (input.closest('#simple-trap-roll')) {
+    const items = state.training_arena.trap.modifiers;
+    return {modifier_total:items.reduce((sum,m)=>sum+m.value,0), active_modifiers:items};
+  }
   const combat = (state && state.combat) || {};
   const id = String(input.id || '');
   if (id.startsWith('shield-bash-') && combat.shield_bash) {
@@ -700,6 +733,10 @@ function activeKeyboardRollPending(input) {
 }
 
 function keyboardRollModifierSummary(step) {
+  if (step.input.id.startsWith('encounter-initiative-roll')) {
+    const modifier = Number(state?.encounter_initiative?.current_prompt?.dexterity_modifier || 0);
+    return {total: modifier, items: [`Inicjatywa ${signedNumber(modifier)}`]};
+  }
   if (step.input.dataset.rollModifier !== undefined) {
     return {
       total: step.modifier,
@@ -724,6 +761,7 @@ function closeKeyboardRollWizard() {
 }
 
 function initializeKeyboardRollWizard() {
+  if (state?.training_arena?.tutorial?.notice) return false;
   if (!state || busy || keyboardRollWizard || document.querySelector('dialog[open]')) return false;
   const inputs = visibleKeyboardRollInputs();
   const submitButton = keyboardRollSubmitButton(inputs);
@@ -744,7 +782,7 @@ function initializeKeyboardRollWizard() {
     }));
     return step.parts;
   });
-  steps.forEach(step => { step.input.value = ''; });
+  steps.forEach(step => { step.input.value = ''; step.raw = Math.max(step.min ?? 1, Math.floor((rollStepDieSides(step) || step.max || 20) / 2)); });
   keyboardRollWizard = {
     allSteps,
     steps,
@@ -752,8 +790,20 @@ function initializeKeyboardRollWizard() {
     index: 0,
     review: steps.length === 0,
     submitButton,
-    contextLines: keyboardRollContextLines(submitButton.closest('#roll-panel, .combat-action-card, .precombat-stealth-roll, #encounter')),
+    contextLines: keyboardRollContextLines(submitButton.closest('#roll-panel, .combat-action-card, .precombat-stealth-roll, #exploration-mana-roll, #simple-trap-roll, #encounter')),
   };
+  const panel = state.encounter_initiative?.panel;
+  if (panel && allSteps.every(step => step.input.id.startsWith('encounter-initiative-roll'))) {
+    keyboardRollWizard.initiative = true;
+    keyboardRollWizard.index = panel.index;
+    keyboardRollWizard.review = panel.review;
+    steps.forEach((step, index) => {
+      step.raw = panel.values[index];
+      step.total = step.raw;
+      step.input.value = String(step.raw);
+    });
+    keyboardRollWizard.contextLines = [state.encounter_initiative.current_prompt.message];
+  }
   const overlay = document.createElement('div');
   overlay.id = 'keyboard-roll-wizard';
   overlay.className = 'keyboard-roll-wizard';
@@ -763,12 +813,16 @@ function initializeKeyboardRollWizard() {
   overlay.addEventListener('keydown', handleKeyboardRollWizardKeydown);
   document.body.appendChild(overlay);
   renderKeyboardRollWizard();
+  scheduleAutomaticBoardScan();
   return true;
 }
 
 function keyboardRollStepPrompt(step) {
+  if (step.input.id === 'shield-bash-attacker-roll') {
+    return 'Rzuć fizyczną k20 za bohatera. Ustaw wynik przyciskami − / + i zatwierdź ✓. Początkowe 10 to tylko ustawienie licznika, nie wylosowany wynik. Aplikacja doliczy Siłę i rzuci za przeciwnika po zatwierdzeniu podsumowania.';
+  }
   const sides = rollStepDieSides(step);
-  if (sides) return `Rzuć k${sides} i wpisz wynik tej kości.`;
+  if (sides) return `Rzuć k${sides}. Ustaw naturalny wynik przyciskami − / + i zatwierdź ✓.`;
   const maximum = Number.isFinite(step.max) ? ` (od ${step.min ?? 0} do ${step.max})` : '';
   return `Wpisz wynik rzutu${maximum}.`;
 }
@@ -778,17 +832,18 @@ function renderKeyboardRollWizard(message = '') {
   const overlay = document.getElementById('keyboard-roll-wizard');
   if (!wizard || !overlay) return;
   const totalSteps = wizard.steps.length;
+  const manaAttempt = wizard.submitButton.closest('#exploration-mana-roll') ? state.exploration_mana.attempt : null;
   if (wizard.review) {
     const rows = wizard.allSteps.map(step => {
       const identity = `<span class="keyboard-roll-summary-identity">${rollStepDiceIconHtml(step)}<span>${esc(step.label)}</span></span>`;
       if (step.raw === null) return `<li>${identity}<b>pominięto</b></li>`;
       const modifier = keyboardRollModifierSummary(step);
-      const appliedModifier = step.modifier || (modifier.total !== null ? modifier.total : 0);
+      const appliedModifier = manaAttempt ? 0 : step.modifier || (modifier.total !== null ? modifier.total : 0);
       const rolled = step.parts ? step.parts.map(part => part.raw ?? '—').join(' + ') : step.raw;
       const calculation = appliedModifier
         ? `${rolled} ${signedNumber(appliedModifier)} = ${step.modifier ? step.total : step.raw + appliedModifier}`
         : `${rolled}${step.parts ? ` = ${step.total}` : ''}`;
-      const source = modifier.items.length ? `<small>${esc(modifier.items.join(' · '))}</small>` : '';
+      const source = !manaAttempt && modifier.items.length ? `<small>${esc(modifier.items.join(' · '))}</small>` : '';
       return `<li><span>${identity}${source}</span><b>${esc(calculation)}</b></li>`;
     }).join('');
     overlay.innerHTML = `
@@ -797,8 +852,12 @@ function renderKeyboardRollWizard(message = '') {
         <span class="keyboard-roll-wizard-kicker">Podsumowanie rzutu</span>
         <h2 id="keyboard-roll-wizard-title">Sprawdź wpisane wyniki</h2>
         <ul class="keyboard-roll-wizard-summary">${rows}</ul>
-        <p class="keyboard-roll-wizard-help"><kbd>Enter</kbd> zastosuj wyniki${wizard.steps.length ? ' · <kbd>Backspace</kbd> popraw ostatni' : ''}</p>
-        <div class="keyboard-roll-wizard-actions">${wizard.steps.length ? '<button type="button" class="secondary" onclick="previousKeyboardRollStep()">Wróć</button>' : ''}<button type="button" onclick="submitKeyboardRollWizard()">Zastosuj wyniki</button></div>
+        ${manaAttempt ? `<div class="keyboard-roll-combined-summary"><p>${manaAttempt.busted?'Niższy wynik':'Wynik kości'}:
+          <b>${Math.min(...wizard.allSteps.map(step=>step.raw))} ${signedNumber(manaAttempt.modifier_total)} = ${Math.min(...wizard.allSteps.map(step=>step.raw))+manaAttempt.modifier_total}</b></p>
+          <p>${esc(manaAttempt.modifiers.map(m=>`${m.label} ${signedNumber(m.value)}`).join(' · '))}. Premia doliczona raz.</p></div>` : ''}
+        ${rollPanelControlsHtml(wizard)}
+
+        <div class="keyboard-roll-wizard-actions">${wizard.steps.length ? '<button type="button" class="secondary" onclick="previousKeyboardRollStep()">↩ Wróć</button>' : ''}<button type="button" class="panel-accept" onclick="submitKeyboardRollWizard()">✓ Zastosuj wyniki</button></div>
       </section>`;
     window.requestAnimationFrame(() => {
       const card = overlay.querySelector('.keyboard-roll-wizard-card');
@@ -831,18 +890,20 @@ function renderKeyboardRollWizard(message = '') {
           ${Number.isFinite(step.min) ? `min="${step.min}"` : ''}
           ${Number.isFinite(step.max) ? `max="${step.max}"` : ''}
           value="${step.raw === null ? '' : esc(step.raw)}"
-          placeholder="${step.optional ? 'Enter = pomiń' : 'wpisz wynik'}">
+          placeholder="${step.optional ? '✓ = pomiń' : 'wpisz wynik'}">
       </label>
-      <p class="keyboard-roll-wizard-modifiers"><b>Aplikacja doliczy:</b> ${esc(modifierText)}</p>
+      <p class="keyboard-roll-wizard-modifiers"><b>Aplikacja doliczy${manaAttempt?.busted ? ' raz do niższej kości' : step.parent ? ' raz do sumy kości' : ''}:</b> ${esc(modifierText)}</p>
+      ${rollPanelControlsHtml(wizard)}
       <p id="keyboard-roll-wizard-error" class="keyboard-roll-wizard-error" aria-live="assertive">${esc(message)}</p>
-      <p class="keyboard-roll-wizard-help"><kbd>Enter</kbd> dalej${wizard.index ? ' · <kbd>Backspace</kbd> poprzedni rzut' : ''} · <kbd>Esc</kbd> anuluj akcję</p>
-      <div class="keyboard-roll-wizard-actions">${wizard.index ? '<button type="button" class="secondary" onclick="previousKeyboardRollStep()">Wróć</button>' : ''}<button type="button" onclick="confirmKeyboardRollStep()">${wizard.index + 1 === totalSteps ? 'Podsumowanie' : 'Dalej'}</button></div>
+
+      <div class="keyboard-roll-wizard-actions">${wizard.index ? '<button type="button" class="secondary" onclick="previousKeyboardRollStep()">↩ Wróć</button>' : ''}<button type="button" class="panel-accept" onclick="confirmKeyboardRollStep()">✓ ${wizard.index + 1 === totalSteps ? 'Podsumowanie' : 'Dalej'}</button></div>
     </section>`;
   const entry = document.getElementById('keyboard-roll-wizard-input');
   if (entry) {
     entry.addEventListener('input', () => {
       const error = document.getElementById('keyboard-roll-wizard-error');
       if (error) error.textContent = '';
+      scheduleAutomaticBoardScan();
     });
     window.requestAnimationFrame(() => {
       entry.focus();
@@ -851,7 +912,33 @@ function renderKeyboardRollWizard(message = '') {
   }
 }
 
+function sendInitiativePanelCommand(command) {
+  if (!keyboardRollWizard?.initiative || busy) return false;
+  const entry = document.getElementById('keyboard-roll-wizard-input');
+  const body = {command, revision: state.board_selection?.revision || ''};
+  if (!keyboardRollWizard.review && command !== 'back') {
+    const text = entry?.value.trim() || '';
+    const value = Number(text);
+    if (!text || !Number.isInteger(value) || value < 1 || value > 20) {
+      const error = document.getElementById('keyboard-roll-wizard-error');
+      if (error) error.textContent = 'Wpisz naturalny wynik k20 od 1 do 20.';
+      return false;
+    }
+    body.value = value;
+  }
+  api('/api/encounter/initiative/panel', body, 'Aktualizuję wynik inicjatywy…');
+  return true;
+}
+function initiativePanelControlsHtml() {
+  const panel = state.encounter_initiative?.panel;
+  if (!panel) return '';
+  const buttons = panel.review ? [] : [[26, 'minus', '−', 'czerwony', '#e65d5d'], [27, 'plus', '+', 'zielony', '#62cf83']];
+  return `<div class="keyboard-roll-wizard-actions">${buttons.map(([slot, command, symbol, label, color]) =>
+    `<button type="button" class="secondary" style="border-color:${color};color:${color};min-width:56px" onclick="sendInitiativePanelCommand('${command}')" ${panel.enabled_slots.includes(slot)?'':'disabled'} aria-label="${command==='plus'?'Zwiększ':'Zmniejsz'} wynik">${symbol} ${label}</button>`).join('')}</div>
+    <p class="keyboard-roll-wizard-help">Plansza: <b>− czerwony</b> · <b>+ zielony</b> · <b>✓ niebieski</b>${panel.enabled_slots.includes(29)?' · ↩ pomarańczowy — popraw':''}. ${panel.review?'Niebieski zatwierdza cały rzut.':'Start k20: 10. Niebieski potwierdza tę kość.'}</p>`;
+}
 function confirmKeyboardRollStep() {
+  if (keyboardRollWizard?.initiative) return sendInitiativePanelCommand('accept');
   const wizard = keyboardRollWizard;
   const entry = document.getElementById('keyboard-roll-wizard-input');
   if (!wizard || wizard.review || !entry) return false;
@@ -864,7 +951,7 @@ function confirmKeyboardRollStep() {
   } else {
     const value = Number(valueText);
     if (!valueText || !Number.isInteger(value)) {
-      renderKeyboardRollWizard('Wpisz pełną liczbę i naciśnij Enter.');
+      renderKeyboardRollWizard('Wpisz pełną liczbę i naciśnij ✓.');
       return false;
     }
     if (Number.isFinite(step.min) && value < step.min) {
@@ -895,10 +982,12 @@ function confirmKeyboardRollStep() {
   if (wizard.index + 1 < wizard.steps.length) wizard.index += 1;
   else wizard.review = true;
   renderKeyboardRollWizard();
+  scheduleAutomaticBoardScan();
   return true;
 }
 
 function previousKeyboardRollStep() {
+  if (keyboardRollWizard?.initiative) return sendInitiativePanelCommand('back');
   const wizard = keyboardRollWizard;
   if (!wizard || !wizard.steps.length) return false;
   if (wizard.review) {
@@ -910,10 +999,12 @@ function previousKeyboardRollStep() {
     return false;
   }
   renderKeyboardRollWizard();
+  scheduleAutomaticBoardScan();
   return true;
 }
 
 function submitKeyboardRollWizard() {
+  if (keyboardRollWizard?.initiative) return sendInitiativePanelCommand('accept');
   const wizard = keyboardRollWizard;
   if (!wizard || !wizard.review || busy) return false;
   const submitButton = wizard.submitButton;
@@ -940,6 +1031,11 @@ function cancelKeyboardRollWizard() {
 
 function handleKeyboardRollWizardKeydown(event) {
   if (!keyboardRollWizard) return;
+  if (!keyboardRollWizard.review && ['ArrowUp','ArrowDown','+','-'].includes(event.key)) {
+    event.preventDefault(); event.stopPropagation();
+    changeRollPanelValue(['ArrowUp','+'].includes(event.key) ? 1 : -1);
+    return;
+  }
   if (event.key === 'Escape') {
     event.preventDefault();
     event.stopPropagation();
@@ -974,10 +1070,10 @@ function renderExplorationCardPrompt() {
   const actor = actorById(pendingCard.actor_id);
   panel.innerHTML = `<div class="exploration-card-prompt-head">
       ${actorPortraitHtml(actor, 'roll')}
-      <div><span class="muted">Aktualna decyzja — obsługa numpadem lub kartą</span><h4>${esc(pendingCard.label || identifierLabel(pendingCard.card_action_id))}</h4></div>
+      <div><span class="muted">Aktualna decyzja — wybierz ✓ lub ↩</span><h4>${esc(pendingCard.label || identifierLabel(pendingCard.card_action_id))}</h4></div>
     </div>
     <p>Efekt zostanie rozliczony przed powrotem do poprzedniego promptu.</p>
-    <div class="numpad-combat-hint"><span><kbd>Enter</kbd> akceptuj</span><span><kbd>−</kbd> odrzuć / cofnij</span></div>
+    <div class="numpad-combat-hint"><span><span class="board-control-symbol">✓</span> akceptuj</span><span><span class="board-control-symbol">↩</span> odrzuć / wróć</span></div>
     <div class="row">
       <button onclick="handlePhysicalCardScan('dndbg:v1:action:universal:accept')">Akceptuj</button>
       <button class="secondary" onclick="handlePhysicalCardScan('dndbg:v1:action:universal:decline')">Odrzuć</button>
@@ -1525,7 +1621,8 @@ function renderBoardConnectionIndicator() {
   const connected = Boolean(board.connected);
   indicator.classList.toggle('connected', connected);
   indicator.classList.toggle('simulator', connected && backend === 'simulator');
-  const label = connected ? (backend === 'simulator' ? 'Symulator' : 'Plansza połączona') : 'Plansza rozłączona';
+  const label = connected ? (backend === 'simulator' ? 'Symulator' : 'Plansza połączona')
+    : boardConnectionInFlight ? 'Łączę z planszą…' : 'Plansza rozłączona';
   indicator.querySelector('span:last-child').textContent = label;
   indicator.title = board.message || label;
 }
@@ -1541,7 +1638,7 @@ function renderBoardFallback() {
   const panel = document.getElementById('board-fallback-panel');
   const toggle = document.getElementById('board-fallback-toggle');
   const copy = document.getElementById('board-disconnected-copy');
-  if (banner) banner.hidden = connected;
+  if (banner) banner.hidden = connected || boardConnectionInFlight;
   if (panel) panel.hidden = connected || !boardFallbackEnabled;
   if (toggle) toggle.textContent = boardFallbackEnabled ? 'Sterowanie awaryjne aktywne' : 'Tryb awaryjny';
   if (copy) copy.textContent = boardConnectionNotice || (boardFallbackEnabled ? 'Sterowanie awaryjne jest aktywne. Właściwe połączenie można ponowić w dowolnym momencie.' : 'Możecie ponowić połączenie albo jawnie przejść na sterowanie awaryjne.');
@@ -1549,10 +1646,15 @@ function renderBoardFallback() {
   document.body.classList.toggle('board-disconnected', !connected);
 }
 async function retryBoardConnection() {
+  if (boardConnectionInFlight) return;
+  boardConnectionInFlight = true;
   const board = state.board || {};
   const backend = board.backend && board.backend !== 'none' ? board.backend : (board.configured_backend || 'hardware');
-  setBusy('Ponawiam połączenie z planszą...');
+  setBusy('Łączę z planszą…');
+  renderBoardConnectionIndicator();
+  renderBoardFallback();
   try {
+    await stopBoardScanLoop();
     const response = await fetch('/api/board/configure', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
@@ -1561,12 +1663,13 @@ async function retryBoardConnection() {
     const data = await response.json();
     state = data.state || data;
     boardConnectionNotice = response.ok ? '' : 'Nie udało się połączyć. Możecie spróbować ponownie albo kontynuować w trybie awaryjnym.';
-    render();
   } catch (_error) {
     boardConnectionNotice = 'Nie udało się połączyć. Możecie spróbować ponownie albo kontynuować w trybie awaryjnym.';
-    renderBoardFallback();
   } finally {
+    boardConnectionInFlight = false;
     setBusy('');
+    render();
+    scheduleAutomaticBoardScan();
   }
 }
 function toggleBoardFallback(force) {
@@ -2316,7 +2419,7 @@ function numpadChoiceHint(keysOrCount, label = 'Wybierz opcję') {
     : Array.from({length: Math.min(9, Math.max(1, Number(keysOrCount) || 1))}, (_unused, index) => index + 1);
   return `<div class="numpad-choice-hint">
     <span><b>NUMPAD</b> · ${esc(label)}: ${keys.map(key => `<kbd>${esc(key)}</kbd>`).join(' ')}</span>
-    <span>${state.active_point ? '<kbd>0</kbd> zakończ rozmowę · ' : ''}<kbd>−</kbd> cofnij · <kbd>Enter</kbd> akceptuj / dalej</span>
+    <span>${state.active_point ? '<kbd>0</kbd> zakończ rozmowę · ' : ''}<span class="board-control-symbol">↩</span> wróć · <span class="board-control-symbol">✓</span> akceptuj / dalej</span>
   </div>`;
 }
 function scenarioInteractionImage(imagePath, altText, variant = 'tile') {
@@ -3497,8 +3600,8 @@ function interactionParticipantPickerHtml(goal) {
   const instruction = [
     actorSelectionAllowed
       ? helpAllowed
-        ? 'Wybierz prowadzącego numpadem. Potem wybierz pomocnika albo naciśnij Enter, aby kontynuować bez pomocy.'
-        : 'Wybierz numpadem postać, która wykona test.'
+        ? 'Wybierz prowadzącego i pomocnika na ekranie albo naciśnij ✓, aby kontynuować bez pomocy.'
+        : 'Wybierz na ekranie postać, która wykona test.'
       : '',
     wholePartyAllowed
       ? 'Możecie też wybrać całą drużynę — wtedy każdy rzuca.'
@@ -4144,6 +4247,15 @@ function encounterHtml() {
   if (!encounter) return '';
   if (state.combat) return combatStartHtml();
   const setup = state.encounter_setup;
+  if (state.training_arena?.mode === 'walkthrough' && state.training_arena.tutorial?.phase === 'setup') {
+    return `<div class="encounter-transition-shell training-setup-focus">
+      <div class="encounter-transition-current">${encounterSetupHtml(setup)}
+        <div class="board-choice-toolbar" data-board-input-status>${boardSelectionStatusHtml(true)}</div>
+        <details><summary>Opcje samouczka</summary>
+          <button class="secondary" onclick="api('/api/training/leave', {}, 'Wracam do wyboru postaci…')">↩ Wybór postaci · zachowaj postęp</button>
+        </details>
+      </div></div>`;
+  }
   const stealth = state.encounter_stealth;
   const initiative = state.encounter_initiative;
   const opening = encounter.opening || {};
@@ -4227,10 +4339,12 @@ function encounterSetupHtml(setup) {
     ? '<p><b>Legenda:</b> czerwony ciągły obrys — blokada ruchu i widoczności; złoty przerywany — osłona kierunkowa; niebieski kropkowany — trudny teren. Pozostałe pola są przechodnie.</p><p>Siatka 20 × 30; wydruk 50 × 75 cm (pole 2,5 cm). Obrysy wyznaczają pola terenu, a LED wskazuje obiekty.</p><a href="/game-assets/maps/ostatni_transport_01/glodne_cienie_print_v6.html" target="_blank" rel="noopener">Wersja do druku — skala 100%, bez marginesów</a> · <a href="/game-assets/maps/ostatni_transport_01/glodne_cienie_print_v6.pdf" target="_blank" rel="noopener">Pobierz PDF 50 × 75 cm</a>'
     : '';
   const mapPreview = setup.map_asset_url
-    ? `<details class="battle-map-preview"${Number(setup.current_index || 0) === 0 ? ' open' : ''}><summary>Mapa i obrysy terenu</summary><img class="location-preview-image" src="${esc(setup.map_asset_url)}" alt="Mapa encountera: ${esc(setup.scenario_name || '')}"><a href="${esc(setup.map_asset_url)}" target="_blank" rel="noopener">Otwórz mapę w pełnym rozmiarze</a>${terrainGuide}</details>`
+    ? `<details class="battle-map-preview"><summary>Mapa i obrysy terenu</summary><img class="location-preview-image" src="${esc(setup.map_asset_url)}" alt="Mapa encountera: ${esc(setup.scenario_name || '')}"><a href="${esc(setup.map_asset_url)}" target="_blank" rel="noopener">Otwórz mapę w pełnym rozmiarze</a>${terrainGuide}</details>`
     : '';
   const hasPositions = Boolean(step.has_positions);
   const requiresBoardAssignment = Boolean(step.requires_board_assignment);
+  const canConfirm = Boolean(step.can_confirm);
+  const selectedPosition = step.selected_position;
   const mechanics = Array.isArray(step.mechanics) ? step.mechanics : [];
   const mechanicsHtml = mechanics.length
     ? `<div class="setup-mechanics"><b>Zasady tego kroku</b><ul>${mechanics.map(item => `<li>${esc(item)}</li>`).join('')}</ul></div>`
@@ -4239,18 +4353,20 @@ function encounterSetupHtml(setup) {
     `<button class="secondary" onclick="selectBoardPosition(${Number(pos[0])}, ${Number(pos[1])})">(${Number(pos[0])},${Number(pos[1])})</button>`
   ).join('');
   return `
-    <div class="message">
+    <div class="message setup-current-command" tabindex="-1">
       <b>Krok ${Number(setup.current_index) + 1}/${setup.step_count}: ${esc(step.label || '')}</b><br>
       ${esc(step.message || '')}
-      ${requiresBoardAssignment ? `<p><b>Aktualnie ustaw:</b> ${esc(step.assignment_actor_name || '-')}</p><p>Wybierz jedno z podświetlonych wolnych pól na fizycznej planszy.</p>` : ''}
+      ${requiresBoardAssignment ? `<p><b>Aktualnie ustaw:</b> ${esc(step.assignment_actor_name || '-')}</p><p>${(step.available_positions || []).length > 1 ? 'Kliknij jedno z podświetlonych wolnych pól na planszy. Możesz zmienić wybór przed zatwierdzeniem.' : 'Dostępne jest jedno pole — ustaw na nim figurkę i zatwierdź.'}</p>` : ''}
       ${requiresBoardAssignment && setup.battle_briefing?.length ? '<p><b>Wybór szyku:</b> lewy bok prowadzi do osłon, środek do krótkiego podejścia przez koleiny, prawy bok do suchego obejścia. Możecie swobodnie rozdzielić bohaterów w całej strefie.</p>' : ''}
       ${hasPositions && !requiresBoardAssignment ? `<p>Sprawdź pola podświetlone na planszy kolorem ${esc(step.color || 'wskazanym przez grę')}.</p>` : ''}
       ${mechanicsHtml}
-      ${!hasPositions ? '<p class="muted">Ten krok jest tylko instrukcją i nie podświetla pól na planszy.</p>' : ''}
+      ${selectedPosition ? `<p><b>Wybrane pole:</b> (${selectedPosition.join(', ')}). Ustaw tutaj figurkę.</p>` : ''}
+      <p>${canConfirm ? 'Naciśnij niebieski przycisk <b>✓ Potwierdź</b> na planszy.' : 'Najpierw wybierz pole. Przycisk ✓ zaświeci się po wyborze.'}</p>
     </div>
-    ${requiresBoardAssignment
-      ? `<div class="row"><button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button></div><p class="muted">Postaw figurkę wskazanego bohatera na podświetlonym polu i uruchom skan. Po ostatnim bohaterze gra przejdzie dalej.</p><details class="encounter-position-fallback"><summary>Awaryjny wybór bez skanu</summary><div class="row">${assignmentButtons}</div></details>`
-      : '<button onclick="confirmEncounterSetup()">Potwierdź krok setupu</button>'}
+    <details class="encounter-position-fallback"><summary>Awaryjne sterowanie ekranowe</summary>
+      ${requiresBoardAssignment ? `<div class="row">${assignmentButtons}</div>` : ''}
+      <button onclick="confirmEncounterSetup()" ${canConfirm ? '' : 'disabled'}>✓ Potwierdź ustawienie</button>
+    </details>
     ${mapPreview}
   `;
 }
@@ -4281,8 +4397,8 @@ function encounterInitiativeHtml(setup, initiative, stealth) {
   if (stealth && !stealth.completed) return '';
   if (!initiative) {
     return `
-      <div class="message"><b>Inicjatywa</b><br>Setup zakończony. Teraz ustalcie kolejność tur.</div>
-      <button onclick="startEncounterInitiative()">Rozpocznij inicjatywę</button>
+      <div class="message"><b>Inicjatywa</b><br>Setup zakończony. Teraz ustalcie kolejność tur.<p>Naciśnij niebieski przycisk <b>✓ Potwierdź</b> na planszy, aby rozpocząć inicjatywę.</p></div>
+      <details class="encounter-position-fallback"><summary>Awaryjne sterowanie ekranowe</summary><button onclick="startEncounterInitiative()">✓ Rozpocznij inicjatywę</button></details>
     `;
   }
   if (initiative.status === 'completed') return '';
@@ -4372,8 +4488,24 @@ function miraStealthStatusHtml(combat) {
     <details><summary>Atak z cienia i kolory planszy</summary><p>${passive} Atak kończy ukrycie. Podgląd akcji zastępuje kolory obserwatorów; po anulowaniu wracają.</p></details></aside>`;
 }
 function focusCombatDecision() {
-  if (!state?.combat || keyboardRollWizard || busy) return;
+  if (state?.training_arena?.tutorial?.notice) return;
+  const settingUp = !state?.combat && state?.encounter_setup?.status !== 'completed' && state?.encounter_setup?.current_step;
+  if ((!state?.combat && !settingUp) || keyboardRollWizard || busy) return;
   requestAnimationFrame(() => {
+    if (state?.training_arena?.tutorial?.notice) return;
+    if (settingUp) {
+      const card = document.querySelector('.setup-current-command');
+      if (!card || card.closest('[hidden]')) return;
+      const key = `${state.training_arena?.tutorial?.index}:${state.encounter_setup.scenario_name}:${state.encounter_setup.current_index}:${state.encounter_setup.current_step.label}`;
+      const rect = card.getBoundingClientRect();
+      const header = document.querySelector('.app-shell-header')?.getBoundingClientRect().bottom || 0;
+      if (focusCombatDecision.setupKey !== key || rect.top < header || rect.top > window.innerHeight * .5) {
+        card.focus({preventScroll:true});
+        card.scrollIntoView({block:'start', behavior:'auto'});
+      }
+      focusCombatDecision.setupKey = key;
+      return;
+    }
     const card = document.querySelector('.combat-current-step');
     if (!card) return;
     const idle = Boolean(card.querySelector('.combat-keyboard-waiting'));
@@ -4474,10 +4606,11 @@ function combatCurrentStepHtml(combat, finished, isAllyTurn, isEnemyTurn, interr
   const actionMenuStep = Boolean(isAllyTurn && combat.turn_action_menu && phase === 'choice' && !interrupt);
   return `
     <div class="combat-current-step${interrupt ? ' combat-interrupt-dialog' : ''}${combat.enemy_turn_result ? ' enemy-attack-result' : ''}${actionMenuStep ? ' action-menu-step' : ''}" data-stage="${esc(phase)}"${interrupt ? ' role="dialog" aria-modal="true" aria-label="Przerwanie walki"' : ''}>
+      ${sharedCommandStepHtml(combat)}
       ${actionMenuStep ? '' : combatPhaseStepsHtml(phase)}
-      ${resultAck || actionMenuStep || combat.enemy_turn_result ? '' : combatMainPromptHtml(combat, finished, isAllyTurn, isEnemyTurn)}
+      ${resultAck || actionMenuStep || combat.enemy_turn_result || combat.shared_mana?.command?.stage ? '' : combatMainPromptHtml(combat, finished, isAllyTurn, isEnemyTurn)}
       ${phase === 'result' && !resultAck && !combat.enemy_turn_result && !combat.shield_bash ? `<div class="combat-inline-result">${latestCombatMessageHtml()}</div>` : ''}
-      ${combatCardReminderHtml(combat, phase, isAllyTurn)}
+      ${combat.shared_mana?.command?.stage ? '' : combatCardReminderHtml(combat, phase, isAllyTurn)}
       <div class="combat-action-card">
         ${finished ? '<button onclick="resolveCombatOutcome()">Zastosuj wynik encountera</button>' : combatPrimaryActionHtml(combat, isAllyTurn, isEnemyTurn)}
       </div>
@@ -4513,7 +4646,7 @@ function combatCardReminderHtml(combat, phase, isAllyTurn) {
       <span class="combat-card-reminder-icon" aria-hidden="true"></span>
       <div>
         <small>Dostępne karty ${esc(reminders[0].owner_actor_name)}</small>
-        <b>${names.map(esc).join(' · ')}</b>
+        <b>${names.map(manaTextHtml).join(' · ')}</b>
         <p>Możesz zeskanować kartę albo wybrać zwykłą akcję na planszy.</p>
       </div>
     </aside>
@@ -4633,7 +4766,7 @@ function combatPromptTitle(combat, finished, isAllyTurn, isEnemyTurn) {
   return `Tura ${actor.name || '-'}`;
 }
 function combatInstructionText(combat, finished, isAllyTurn, isEnemyTurn) {
-  if (combat.shield_bash) return combat.shield_bash.stage === 'result' ? 'Sprawdź test, obrażenia i pole odepchnięcia. Enter zastosuje wynik.' : 'Rzucaj wskazaną kością, wpisuj naturalny wynik i potwierdzaj Enterem.';
+  if (combat.shield_bash) return combat.shield_bash.stage === 'result' ? 'Sprawdź test sporny, obrażenia i pole odepchnięcia. ✓ na planszy zastosuje wynik.' : 'Rzuć wskazaną kością. Ustaw naturalny wynik przyciskami − / + i potwierdź ✓ na planszy.';
   if (resultAck) return resultAck.body || 'Przeczytaj wynik i potwierdź.';
   if (finished) {
     const result = combat.encounter_result || {};
@@ -4643,7 +4776,7 @@ function combatInstructionText(combat, finished, isAllyTurn, isEnemyTurn) {
       : '';
     return (result.message || 'Zastosuj wynik encountera, żeby wrócić do eksploracji.') + recoveryText;
   }
-  if (isAllyTurn && combat.class_feature_targeting) return 'Wybierz podświetlony cel na planszy. Enter potwierdza, Esc anuluje.';
+  if (isAllyTurn && combat.class_feature_targeting) return 'Wybierz podświetlony cel na planszy. ✓ potwierdza, ↩ anuluje.';
   const actor = combat.current_actor || {};
   if (combat.physical_mana?.needs_attack_count) return "Zadeklaruj liczbę oddzielnych ataków. Każdy kosztuje 1 dowolną manę.";
   if (combat.death_save_required) {
@@ -4695,11 +4828,11 @@ function combatInstructionText(combat, finished, isAllyTurn, isEnemyTurn) {
     if (preview && preview.kind === 'attack') {
       return `${preview.enemy_name} atakuje ${preview.target_name}. Uruchom skan i kliknij podświetlony cel.`;
     }
-    return 'Naciśnij Enter albo przycisk, żeby gra pokazała zamiar przeciwnika.';
+    return 'Naciśnij ✓ albo przycisk, żeby gra pokazała zamiar przeciwnika.';
   }
   if (!isAllyTurn) return 'Ten aktor nie ma automatycznych kontrolek w MVP. Możesz zakończyć turę.';
   if (combat.context_menu) {
-    return 'Numpad 8/2 zmienia zaznaczenie, Enter wybiera lub potwierdza, a Numpad − cofa do planszy.';
+    return 'Wybierz podświetloną runę akcji na planszy albo przycisk na ekranie. ✓ zatwierdza, ↩ wraca.';
   }
   if (combat.targeting) {
     const targeting = combat.targeting;
@@ -4790,11 +4923,11 @@ function combatInstructionText(combat, finished, isAllyTurn, isEnemyTurn) {
     const source = pendingArea.source || {};
     const targets = (pendingArea.targets || []).map(target => target.name).join(', ') || 'brak celów';
     if (pendingArea.stage === 'damage_roll') return `Rzuć obrażenia ${source.damage_hint || ''} i wpisz sumę dla celów w obszarze.`;
-    return `Wybrano obszar ${source.name || 'czaru'}. Cele: ${targets}. Wskaż inne legalne pole albo potwierdź aktualny podgląd Enterem.`;
+    return `Wybrano obszar ${source.name || 'czaru'}. Cele: ${targets}. Wskaż inne legalne pole albo potwierdź aktualny podgląd przyciskiem ✓.`;
   }
   if (combat.pending_combat_interaction) {
     const pendingInteraction = combat.pending_combat_interaction;
-    return `Wybrano obiekt ${pendingInteraction.object_name || '-'}. Wybierz interakcję i potwierdź przyciskiem albo Enterem.`;
+    return `Wybrano obiekt ${pendingInteraction.object_name || '-'}. Wybierz interakcję i potwierdź przyciskiem ✓.`;
   }
   const movement = combat.movement || {};
   const preview = combat.movement_preview || null;
@@ -4812,8 +4945,8 @@ function combatInstructionText(combat, finished, isAllyTurn, isEnemyTurn) {
     const menu = combat.turn_action_menu;
     const selected = (menu.options || [])[Number(menu.selected_index || 0)] || {};
     return menu.stage === 'preview'
-      ? `${selected.label || 'Akcja'} — podgląd aktywny. Wskaż cel lub pole na planszy, następnie naciśnij Enter. Esc lub Backspace anuluje bez kosztu.`
-      : 'Wybierz akcję skrótem z karty postaci. Naciśnięcie skrótu otwiera podgląd bez zużywania akcji ani zasobu.';
+      ? `${selected.label || 'Akcja'} — podgląd aktywny. Wskaż cel lub pole na planszy, następnie naciśnij ✓. ↩ anuluje bez kosztu.`
+      : 'Wybierz dostępną ikonę na ekranie. Otworzysz podgląd bez zużywania akcji ani zasobu.';
   }
   const selfActionHint = ` Kliknij pole ${actor.name || 'aktywnego bohatera'}, aby otworzyć jego czary, akcje i ekwipunek. Turę możesz zakończyć także przyciskiem obok skanowania.`;
   if (actionUsed && remaining > 0) return `Akcja zużyta. Możesz jeszcze ruszyć się (${remaining} ft).${selfActionHint}`;
@@ -5118,6 +5251,7 @@ function latestCombatMessageHtml() {
   return '<p class="combat-empty">Brak rezultatu w tej walce.</p>';
 }
 function combatPrimaryActionHtml(combat, isAllyTurn, isEnemyTurn) {
+  if (combat.shared_mana?.command?.stage) return sharedCommandControlsHtml(combat);
   if (!resultAck && combat.physical_mana?.needs_attack_count) return physicalAttackSeriesHtml(combat);
   if (resultAck) {
     return `
@@ -5338,7 +5472,7 @@ function pendingCombatItemTargetHtml(pending) {
         ? `Wybrany cel: <b>${esc(target.name)}</b>. Przedmiot nie został jeszcze zużyty.`
         : 'Kliknij podświetlony legalny cel na planszy.'}</p>
       <div class="row">
-        <button data-allow-busy="true" onclick="confirmCombatItemTarget()"${target ? '' : ' disabled'}>Potwierdź Enterem</button>
+        <button data-allow-busy="true" onclick="confirmCombatItemTarget()"${target ? '' : ' disabled'}>✓ Potwierdź</button>
         <button class="secondary" data-allow-busy="true" onclick="cancelCombatItemTargeting()">Wróć bez kosztu</button>
       </div>
     </div>`;
@@ -5807,7 +5941,7 @@ function enemyTurnDetailsHtml(combat) {
   if (preview && preview.kind === 'attack') {
     return `<p><b>Atak przeciwnika:</b> ${esc(preview.enemy_name)} atakuje ${esc(preview.target_name)}. Potwierdź podświetlony cel planszą.${enemyRollSummaryHtml(preview)}</p>${combatActiveEffectsHtml(combat)}`;
   }
-  return '<p>Enter albo przycisk od razu wyliczy ruch i atak przeciwnika. Przestaw figurkę, a potem jednym kliknięciem planszy potwierdź cały zamiar.</p>';
+  return '<p>✓ lub przycisk na ekranie od razu wyliczy ruch i atak przeciwnika. Przestaw figurkę, a potem jednym kliknięciem planszy potwierdź cały zamiar.</p>';
 }
 function attackPositioningText(positioning) {
   if (!positioning) return '';
@@ -5861,7 +5995,7 @@ function enemyTurnResultHtml(result) {
       <p class="enemy-damage-value"><b>Obrażenia: ${esc(damage)}</b></p>
       ${hp}
       <details><summary>Szczegóły trafienia i obrażeń</summary>${damageBreakdownHtml(result.damage_result)}<p>${esc(result.message || '')}</p></details>
-      <button data-allow-busy="true" data-card-action="accept" onclick="confirmEnemyTurnResult()">Przeczytałem · Enter</button>
+      <button data-allow-busy="true" data-card-action="accept" onclick="confirmEnemyTurnResult()">✓ Dalej</button>
     </div>
   `;
 }
@@ -5885,10 +6019,10 @@ function pendingSummonHtml(pending) {
   return `
     <div class="combat-action-box">
       <p><b>Wybierz pole przywołania</b></p>
-      <p class="muted">Plansza pokaże ${esc(positions.length)} wolnych i widocznych pól w zasięgu. Kliknięcie wybiera pole; Enter wykonuje przywołanie.</p>
+      <p class="muted">Plansza pokaże ${esc(positions.length)} wolnych i widocznych pól w zasięgu. Kliknięcie wybiera pole; ✓ wykonuje przywołanie.</p>
       <div class="row">
         <button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button>
-        <button data-allow-busy="true" onclick="confirmCombatPendingBoardSelection()"${selected ? '' : ' disabled'}>Potwierdź Enterem</button>
+        <button data-allow-busy="true" onclick="confirmCombatPendingBoardSelection()"${selected ? '' : ' disabled'}>✓ Potwierdź</button>
         <button class="secondary" data-allow-busy="true" onclick="cancelSummon()">Anuluj</button>
       </div>
     </div>
@@ -5903,7 +6037,7 @@ function pendingMagicMovementHtml(pending) {
         <p>Czy chcesz przesunąć Dagnę o 5 stóp bez prowokowania ataku okazyjnego?</p>
         <div class="row">
           <button data-primary-scan="true" onclick="scanBoard()">Tak — wybierz pole</button>
-          <button data-allow-busy="true" onclick="confirmCombatPendingBoardSelection()"${selected ? '' : ' disabled'}>Potwierdź Enterem</button>
+          <button data-allow-busy="true" onclick="confirmCombatPendingBoardSelection()"${selected ? '' : ' disabled'}>✓ Potwierdź</button>
           <button class="secondary" data-allow-busy="true" onclick="cancelMagicMovement()">Nie</button>
         </div>
       </div>
@@ -5916,7 +6050,7 @@ function pendingMagicMovementHtml(pending) {
         <p><b>Wybierz pole teleportacji</b></p>
         <div class="row">
           <button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button>
-          <span class="muted">Kliknij podświetlone pole, a potem zatwierdź Enterem.</span>
+          <span class="muted">Kliknij podświetlone pole, a potem zatwierdź przyciskiem ✓.</span>
           <button data-allow-busy="true" onclick="confirmCombatPendingBoardSelection()"${selected ? '' : ' disabled'}>Potwierdź</button>
           <button class="secondary" data-allow-busy="true" onclick="cancelMagicMovement()">Anuluj</button>
         </div>
@@ -5929,7 +6063,7 @@ function pendingMagicMovementHtml(pending) {
       <p class="muted">Cel wykona automatyczny rzut obronny po potwierdzeniu.</p>
       <div class="row">
         <button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button>
-        <span class="muted">Kliknij podświetloną figurkę celu, a potem zatwierdź Enterem.</span>
+        <span class="muted">Kliknij podświetloną figurkę celu, a potem zatwierdź przyciskiem ✓.</span>
         <button data-allow-busy="true" onclick="confirmCombatPendingBoardSelection()"${selected ? '' : ' disabled'}>Potwierdź</button>
         <button class="secondary" data-allow-busy="true" onclick="cancelMagicMovement()">Anuluj</button>
       </div>
@@ -5954,7 +6088,7 @@ function pendingSpellDebuffHtml(pending) {
       <div class="row">
         <button data-primary-scan="true" onclick="scanBoard()"${conditionOptions.length && !pending.selected_condition ? ' disabled' : ''}>Skanuj planszę</button>
         ${conditionSelect}
-        <span class="muted">Wybierz figurkę, a potem zatwierdź Enterem.</span>
+        <span class="muted">Wybierz figurkę, a potem zatwierdź przyciskiem ✓.</span>
         <button data-allow-busy="true" onclick="confirmCombatPendingBoardSelection()"${selected ? '' : ' disabled'}>Potwierdź</button>
         <button class="secondary" data-allow-busy="true" onclick="cancelSpellDebuff()">Anuluj</button>
       </div>
@@ -5984,7 +6118,7 @@ function pendingSpellDispelHtml(pending) {
       <p class="muted">Wybierz istotę z co najmniej jednym aktywnym efektem czaru.</p>
       <div class="row">
         <button data-primary-scan="true" onclick="scanBoard()">Skanuj planszę</button>
-        <span class="muted">Wybierz figurkę, a potem zatwierdź Enterem.</span>
+        <span class="muted">Wybierz figurkę, a potem zatwierdź przyciskiem ✓.</span>
         <button data-allow-busy="true" onclick="confirmCombatPendingBoardSelection()"${selected ? '' : ' disabled'}>Potwierdź</button>
         <button class="secondary" data-allow-busy="true" onclick="cancelSpellDispel()">Anuluj</button>
       </div>
@@ -6252,7 +6386,7 @@ function pendingClassFeatureTargetingHtml(pending) {
       <p><b>${esc(pending.label || 'Cecha klasowa')}</b></p>
       <p><b>Efekt w grze:</b> ${esc(pending.instructions || '')}</p>
       <p><b>Koszt:</b> ${pending.mana_cost ? manaCostHtml(pending.mana_cost) : manaTextHtml(pending.cost || '-')}</p>
-      <p class="muted">Legalne figurki zostaną podświetlone. Kliknięcie wybiera cel; dopiero Enter wykonuje albo rozwija akcję.</p>
+      <p class="muted">Legalne figurki zostaną podświetlone. Kliknięcie wybiera cel; dopiero ✓ wykonuje albo rozwija akcję.</p>
       ${preserveLife
         ? `<p><b>Wybrane cele:</b> ${selectedTargets.map(target => esc(target.name)).join(', ') || 'brak'}</p>`
         : selected ? `<p><b>Wybrany cel:</b> ${esc(selected.name)}</p>` : ''}
@@ -6263,7 +6397,7 @@ function pendingClassFeatureTargetingHtml(pending) {
         ${needsPoints && !preserveLife ? `<label>Punkty leczenia<input id="class-feature-board-points" type="number" min="1" required></label>` : ''}
         ${needsPoints
           ? `<button data-allow-busy="true" onclick="confirmClassFeatureBoardTarget()"${(preserveLife ? selectedTargets.length : selected) ? '' : ' disabled'}>Potwierdź użycie</button>`
-          : `<button data-allow-busy="true" onclick="confirmClassFeatureTargetSelection()"${(selectingDestination ? selectedDestination : selected) ? '' : ' disabled'}>Potwierdź Enterem</button>`}
+          : `<button data-allow-busy="true" onclick="confirmClassFeatureTargetSelection()"${(selectingDestination ? selectedDestination : selected) ? '' : ' disabled'}>✓ Potwierdź</button>`}
         <button class="secondary" data-allow-busy="true" onclick="cancelClassFeatureTargeting()">Anuluj</button>
       </div>
     </div>
@@ -6646,6 +6780,12 @@ function pendingAreaSpellHtml(pending) {
         ${['careful_spell', 'heightened_spell'].includes(auxMode) ? '<button class="secondary" data-allow-busy="true" onclick="finishAuxTargeting()">Zakończ wybór</button>' : ''}
       </div>`
     : '';
+  if (pending.stage === 'attack_roll') {
+    const mode = pending.volley_mode || 'normal';
+    return `<p>Deszcz strzał: jeden wspólny test łuku przeciw KP każdego wroga w obszarze 3×3. ${mode === 'advantage' ? 'Przewaga.' : mode === 'disadvantage' ? 'Utrudnienie.' : ''}</p><label>k20<input type="number" id="volley-roll" min="1" max="20" required data-roll-label="Deszcz strzał · wspólny test"></label>${mode !== 'normal' ? '<label>Drugi k20<input type="number" id="volley-roll-2" min="1" max="20" required data-roll-label="Deszcz strzał · drugi k20"></label>' : ''}<button onclick="submitVolleyRoll()">✓ Potwierdź k20</button>`;
+  }
+  const volleySummary = pending.volley_hits?.length ? `<p>Wspólny wynik: <b>${pending.volley_total}</b></p><ul>${pending.volley_hits.map(h => `<li>${esc(pending.targets.find(t => t.id === h.actor_id)?.name || h.actor_id)} · KP ${h.armor_class} (osłona +${h.cover}): ${h.hit ? (h.critical ? 'krytyk' : 'trafienie') : 'pudło'}</li>`).join('')}</ul>` : '';
+  if (pending.stage === 'volley_miss') return `${volleySummary}<button onclick="submitAreaSpellDamage()">✓ Zatwierdź wynik</button>`;
   if (pending.stage === 'damage_roll') {
     const empowered = pending.empowered_spell || {};
     const empoweredControls = empowered.available
@@ -6654,7 +6794,7 @@ function pendingAreaSpellHtml(pending) {
         ? `<p><b>Empowered Spell:</b> wpisz wynik po przerzuceniu do ${esc(empowered.maximum_rerolled_dice)} kości.</p>`
         : '';
     return `
-      <p>${esc(pending.damage_instruction || 'Wpisz obrażenia czaru obszarowego.')}</p>
+      ${volleySummary}${(pending.volley_bonuses || []).map(b => `<p>${esc(b.label)}: ${esc(pending.targets.find(t => t.id === b.target_id)?.name || b.target_id)} — premia tylko do tego celu.</p>`).join('')}<p>${esc(pending.damage_instruction || 'Wpisz obrażenia czaru obszarowego.')}</p>
       <p>Cele w obszarze: ${esc(targetText)}</p>
       ${friendlyFire}
       ${spellSavesHtml(pending.saving_throws || [])}
@@ -6800,7 +6940,7 @@ function combatContextMenuHtml(menu) {
     ${hiddenBefore ? `<div class="combat-context-overflow">▲ jeszcze ${esc(hiddenBefore)} wyżej</div>` : ''}
     <div class="combat-context-menu">${rows}</div>
     ${hiddenAfter ? `<div class="combat-context-overflow">▼ jeszcze ${esc(hiddenAfter)} niżej</div>` : ''}
-    <div class="numpad-combat-hint"><span><kbd>8</kbd> góra</span><span><kbd>2</kbd> dół</span><span><kbd>Enter</kbd> wybierz / potwierdź</span><span><kbd>−</kbd> cofnij</span></div>
+    <div class="numpad-combat-hint"><span>Wybierz opcję na ekranie</span><span>✓ potwierdź</span><span>↩ wróć</span></div>
     <div class="row combat-fallback-actions"><button data-allow-busy="true" onclick="confirmCombatContextMenu('')">Wybierz zaznaczone</button><button class="secondary" data-allow-busy="true" onclick="cancelCombatContextMenu()">Wróć</button></div>
   `;
 }
@@ -6813,12 +6953,12 @@ function combatTurnActionUnavailableHtml(menu, combat) {
     const hasTarget = (combat.legal_targets || []).length > 0;
     const hasArea = (combat.legal_area_positions || []).length > 0;
     if (!hasTarget && !hasArea) {
-      message = 'Brak legalnych celów dla tej akcji. Enter nie uruchomi skanowania; wybierz inną akcję skrótem z karty albo najpierw zmień pozycję.';
+      message = 'Brak legalnych celów dla tej akcji. Zatwierdzenie nie uruchomi skanowania; wybierz inną dostępną ikonę albo najpierw zmień pozycję.';
     }
   } else if (selected.action === 'select_healing_source' && !(combat.legal_healing_targets || []).length) {
-    message = 'Brak rannego, legalnego celu leczenia w zasięgu. Skan planszy został zatrzymany — wybierz inną akcję skrótem z karty.';
+    message = 'Brak rannego, legalnego celu leczenia w zasięgu. Skan planszy został zatrzymany — wybierz inną dostępną ikonę.';
   } else if (selected.action === 'move' && !(combat.movement && (combat.movement.destinations || []).length)) {
-    message = 'Brak legalnego pola ruchu. Wybierz inną akcję skrótem z karty.';
+    message = 'Brak legalnego pola ruchu. Wybierz inną dostępną ikonę.';
   }
   return message ? `<div class="combat-action-unavailable" role="status"><b>Ta akcja jest teraz niedostępna</b><span>${esc(message)}</span></div>` : '';
 }
@@ -6856,27 +6996,14 @@ function combatScreenFallbackHtml(content) {
   </details>`;
 }
 function combatEconomyGroupsHtml(options, renderOption) {
-  const matching = groups => options.filter(o => groups.includes(o.action_economy || 'action'));
-  const section = (groups, label, hint, always = true) => {
-    const entries = matching(groups);
-    if (!always && !entries.length) return '';
-    return `<section class="combat-economy-section" data-economy="${groups[0]}" aria-label="${label}">
-      <div class="combat-economy-heading"><h4>${label}</h4><span>${entries.length}</span></div>
-      <p class="combat-economy-hint">${hint}</p>
-      <div class="combat-economy-options" tabindex="0" role="region" aria-label="${label} — dostępne działania">${entries.length ? entries.map(renderOption).join('') : '<p class="combat-economy-empty">Brak dostępnych działań.</p>'}</div>
-    </section>`;
-  };
-  const controls = matching(['control']);
-  return `<div class="combat-keyboard-action-index" aria-label="Działania według kosztu akcji">
-    <div class="combat-economy-column">${section(['action'], 'Akcja główna', 'Atak, zdolność lub czar.')}</div>
-    <div class="combat-economy-column">${section(['bonus_action'], 'Akcja dodatkowa', 'Najwyżej jedna w turze.')}${section(['reaction'], 'Reakcja', 'W odpowiedzi na zdarzenie.', false)}</div>
-    <div class="combat-economy-column">${section(['free', 'modifier', 'object_interaction'], 'Bez osobnej akcji', 'Wzmocnienia mają własny koszt many i limity.', false)}${section(['movement'], 'Ruch', 'Możesz dzielić go na odcinki.')}</div>
-  </div>${controls.length ? `<div class="combat-economy-controls" aria-label="Ekwipunek i zakończenie tury">${controls.map(renderOption).join('')}</div>` : ''}`;
+  const order = ['action', 'bonus_action', 'reaction', 'modifier', 'free', 'object_interaction', 'movement', 'control'];
+  const sorted = [...options].sort((a, b) => order.indexOf(a.action_economy || 'action') - order.indexOf(b.action_economy || 'action'));
+  return `<div class="combat-keyboard-action-index" aria-label="Dostępne działania">${sorted.map(renderOption).join('')}</div>`;
 }
 function combatKeyboardTileHtml(option) {
-  return `<span class="combat-keyboard-action-index-item category-${esc(option.category || 'basic')}" data-option-id="${esc(option.id)}">
-    <kbd>${esc(option.shortcut === 'SPACE' ? 'SPACJA' : option.shortcut)}</kbd>
-    <span class="combat-action-tile-content"><b>${manaTextHtml(combatActionTileLabel(option))}</b>${actionManaCostHtml(option)}</span>
+  return `<span class="combat-keyboard-action-index-item economy-${esc(option.action_economy || 'action')}${option.panel_unavailable_reason ? ' unavailable' : ''}" title="${esc(option.panel_unavailable_reason || '')}" data-option-id="${esc(option.id)}">
+    <span class="combat-panel-icon">${option.panel_icon || ''}</span>
+    <span class="combat-action-tile-content"><small class="combat-tile-economy" title="${esc(option.action_economy_label || 'Akcja główna')}">${esc(option.action_economy === 'modifier' ? 'Wzmocnienie' : option.action_economy_label || 'Akcja główna')}</small><b>${manaTextHtml(combatActionTileLabel(option))}</b>${actionManaCostHtml(option)}</span>
   </span>`;
 }
 function combatTurnActionMenuHtml(menu, combat = {}) {
@@ -6886,19 +7013,20 @@ function combatTurnActionMenuHtml(menu, combat = {}) {
   const previewActive = menu.stage === 'preview';
   const selected = options[selectedIndex] || {};
   if (!previewActive) {
-    const keyboardOptions = options.filter(option => option.shortcut);
+    const keyboardOptions = options.filter(option => option.panel_slot !== null && option.panel_slot !== undefined);
     const shortcutIndex = keyboardOptions.length ? combatEconomyGroupsHtml(keyboardOptions, combatKeyboardTileHtml) : '';
     const fallbackRows = combatEconomyGroupsHtml(options, option => `
-      <button class="combat-keyboard-fallback-option category-${esc(option.category || 'basic')}" data-option-id="${esc(option.id)}" data-allow-busy="true" onclick="confirmCombatTurnAction('${esc(option.id)}')">
-        ${option.shortcut ? `<kbd>${esc(option.shortcut === 'SPACE' ? 'SPACJA' : option.shortcut)}</kbd>` : ''}
+      <button class="combat-keyboard-fallback-option economy-${esc(option.action_economy || 'action')}" data-option-id="${esc(option.id)}" data-allow-busy="true" onclick="confirmCombatTurnAction('${esc(option.id)}')">
+        <span class="combat-panel-icon">${option.panel_icon || '<small>Ekran</small>'}</span>
         <span><b>${manaTextHtml(combatActionTileLabel(option))}</b>${actionManaCostHtml(option)}<small>${manaTextHtml(option.description || '')}</small></span>
       </button>`);
     return `
       <div class="combat-turn-command-layout combat-keyboard-idle">
         <section class="combat-keyboard-waiting" role="status" aria-live="polite">
-          <h3>Wybierz akcję na karcie postaci</h3>
-          <p>Skrót otwiera podgląd. <kbd>Enter</kbd> zatwierdza.</p>
+          <h3>Wybierz akcję na panelu planszy</h3>
+          <p>Wybierz ikonę na ekranie. ✓ zatwierdza, ↩ wraca. Dolny pasek run jest wyłączony.</p>
           ${shortcutIndex}
+          ${keyboardOptions.length < options.length ? '<p class="muted">Warianty bez przypisanej runy są dostępne w wyborze awaryjnym poniżej.</p>' : ''}
           ${combatScreenFallbackHtml(fallbackRows)}
         </section>
       </div>`;
@@ -6906,13 +7034,13 @@ function combatTurnActionMenuHtml(menu, combat = {}) {
   return `
     <div class="combat-turn-command-layout">
       <div class="combat-turn-command-list">
-        <div class="combat-context-heading"><span>Podgląd działania${selected.shortcut ? ` · klawisz ${esc(selected.shortcut === 'SPACE' ? 'SPACJA' : selected.shortcut)}` : ''}</span></div>
+        <div class="combat-context-heading"><span>Podgląd działania <span class="combat-panel-icon">${selected.panel_icon || ''}</span></span></div>
         <div id="combat-turn-action-availability">${combatTurnActionUnavailableHtml(menu, combat)}</div>
-        <div class="combat-keyboard-preview">${selected.action_economy_label ? `<small class="combat-preview-economy">${esc(selected.action_economy_label)}</small>` : ''}<b>${manaTextHtml(combatActionTileLabel(selected) || '')}</b>${actionManaCostHtml(selected)}<p>${manaTextHtml(selected.description || '')}</p></div>
-        <div class="numpad-combat-hint"><span><kbd>plansza</kbd> wskaż cel / pole</span><span><kbd>Enter</kbd> wykonaj</span><span><kbd>Esc / Backspace</kbd> anuluj bez kosztu</span></div>
+        <div class="combat-keyboard-preview economy-${esc(selected.action_economy || 'action')}">${selected.action_economy_label ? `<small class="combat-preview-economy">${esc(selected.action_economy_label)}</small>` : ''}<b>${manaTextHtml(combatActionTileLabel(selected) || '')}</b>${actionManaCostHtml(selected)}<p>${manaTextHtml(selected.description || '')}</p></div>
+        <div class="numpad-combat-hint"><span><kbd>plansza</kbd> wskaż cel / pole</span><span>✓ wykonaj</span><span>↩ wróć bez kosztu</span></div>
         ${combatScreenFallbackHtml(`<div class="row combat-fallback-actions">
-          <button type="button" data-allow-busy="true" onclick="confirmCombatTurnAction()">Potwierdź · Enter</button>
-          <button type="button" class="secondary" data-allow-busy="true" onclick="cancelCombatTurnActionPreview()">Wróć · Esc</button>
+          <button type="button" data-allow-busy="true" onclick="confirmCombatTurnAction()">✓ Potwierdź</button>
+          <button type="button" class="secondary" data-allow-busy="true" onclick="cancelCombatTurnActionPreview()">↩ Wróć</button>
         </div>`)}
       </div>
     </div>
@@ -7207,7 +7335,7 @@ function updateActivePanel() {
   const flowPanel = document.getElementById('flow-panel');
   flowPanel.hidden = chatMode || hasEncounter || !flowPanel.innerHTML.trim();
   document.getElementById('result-panel').hidden = !hasResult;
-  document.getElementById('encounter-panel').hidden = !hasEncounter || hasResult;
+  document.getElementById('encounter-panel').hidden = !hasEncounter || hasResult || Boolean(state.training_arena?.tutorial?.notice);
   document.getElementById('travel-panel').hidden = true;
   document.getElementById('points-panel').hidden = true;
   document.getElementById('pending-panel').hidden = !hasPendingDecision;
@@ -7632,7 +7760,10 @@ function currentBoardSelection() {
   return (state && state.board_selection) || null;
 }
 function boardSelectionPausedForScreenInput() {
-  if (keyboardRollWizard || resultAck) return true;
+  if (state?.training_arena?.tutorial?.notice) return false;
+  if (state?.board_selection?.mode === 'mana_targets') return false;
+  if (state?.board_selection?.panel_enabled && keyboardRollWizard) return false;
+  if (resultAck || (keyboardRollWizard && !keyboardRollWizard.initiative)) return true;
   const boardInteraction = state && state.flow
     ? state.flow.board_interaction
     : null;
@@ -7737,6 +7868,7 @@ function boardSelectionCanAutoArm(selection = currentBoardSelection()) {
 function scheduleAutomaticBoardScan() {
   clearTimeout(boardAutoArmTimer);
   boardAutoArmTimer = null;
+  if (syncBrowserBoardPanel()) return;
   const selection = currentBoardSelection();
   if (!boardSelectionCanAutoArm(selection)) {
     if (
@@ -7764,11 +7896,14 @@ function scheduleAutomaticBoardScan() {
   updateBoardInputPresentation();
   boardAutoArmTimer = setTimeout(() => {
     boardAutoArmTimer = null;
+    const current = currentBoardSelection();
+    if (boardPanelSyncPromise || boardScanStopPromise || boardScanInFlight
+        || !boardSelectionCanAutoArm(current)
+        || String(current?.revision || '') !== revision) return;
     scanBoardOnce({revision, automatic: true});
-  }, 120);
+  }, selection.input_mode === 'stream' ? 0 : 120);
 }
 async function scanBoard() {
-  if (boardScanInFlight) return;
   if (!Boolean((state.board || {}).connected)) {
     if (!boardFallbackEnabled) toggleBoardFallback(true);
     else {
@@ -7778,6 +7913,7 @@ async function scanBoard() {
     }
     return;
   }
+  if (await stopBoardScanLoop({force: true}) === false) return;
   const selection = currentBoardSelection();
   const revision = String((selection || {}).revision || '');
   lastAttemptedBoardRevision = '';
@@ -7798,6 +7934,7 @@ function scanBoardOnce({revision = '', automatic = false} = {}) {
   return boardScanPromise;
 }
 async function performBoardScan({revision, automatic, token, previousInteractionId}) {
+  let panelEventPending = false;
   try {
     const res = await fetch('/api/board/scan', {
       method:'POST',
@@ -7806,6 +7943,25 @@ async function performBoardScan({revision, automatic, token, previousInteraction
     });
     const data = await res.json();
     if (token !== boardScanToken) return;
+    // The transport has finished. Rendering may change panel controls, but
+    // must not send a serial reset for a scan whose response is already here.
+    boardScanInFlight = false;
+    boardScanPromise = null;
+    if (res.ok && data.navigate === '/') {
+      ++boardScanToken;
+      window.location.assign('/');
+      return;
+    }
+    if (res.ok && data.panel_event) {
+      boardInputPhase = 'resolved';
+      panelEventPending = true;
+      window.setTimeout(() => {
+        if (token !== boardScanToken) return;
+        handleBoardPanelEvent(data);
+        scheduleAutomaticBoardScan();
+      }, 0);
+      return;
+    }
     if (!res.ok) {
       boardInputPhase = 'error';
       boardScanError = data.error || 'Nie udało się odczytać planszy.';
@@ -7813,6 +7969,9 @@ async function performBoardScan({revision, automatic, token, previousInteraction
     }
     state = data.state || data;
     const returnedRevision = String(((state || {}).board_selection || {}).revision || '');
+    // This scan has already returned. Rendering the next input must not cancel
+    // it and leave a stale STOP queued for the next button press.
+    if (res.ok) boardListeningRevision = returnedRevision;
     const nextInteractionId = state && state.conversation ? state.conversation.interaction_id : null;
     if (nextInteractionId !== previousInteractionId) resetInteractionSelection();
     activeInteractionId = nextInteractionId;
@@ -7836,38 +7995,51 @@ async function performBoardScan({revision, automatic, token, previousInteraction
     updateBoardInputPresentation();
     if (!automatic) alert(boardScanError);
   } finally {
-    boardScanInFlight = false;
-    boardScanPromise = null;
     if (token === boardScanToken) {
+      boardScanInFlight = false;
+      boardScanPromise = null;
       if (boardInputPhase !== 'error') boardInputPhase = 'idle';
       boardListeningRevision = '';
       updateBoardInputPresentation();
-      initializeKeyboardRollWizard();
-      focusCombatDecision();
-      scheduleAutomaticBoardScan();
+      if (!panelEventPending) {
+        initializeKeyboardRollWizard();
+        focusCombatDecision();
+        scheduleAutomaticBoardScan();
+      }
     }
   }
 }
-function stopBoardScanLoop() {
+function stopBoardScanLoop({force = false} = {}) {
   if (boardScanStopPromise) return boardScanStopPromise;
-  const stopPromise = stopBoardScanLoopOnce();
+  const stopPromise = stopBoardScanLoopOnce(force);
   boardScanStopPromise = stopPromise;
   stopPromise.finally(() => {
     if (boardScanStopPromise === stopPromise) boardScanStopPromise = null;
   });
   return stopPromise;
 }
-async function stopBoardScanLoopOnce() {
+async function stopBoardScanLoopOnce(force = false) {
   clearTimeout(boardAutoArmTimer);
   boardAutoArmTimer = null;
-  boardScanToken += 1;
+  const stoppedToken = ++boardScanToken;
   boardListeningRevision = '';
   const pendingScan = boardScanPromise;
-  if (pendingScan) {
+  if (force || pendingScan || currentBoardSelection()?.input_mode === 'stream') {
     try {
-      await fetch('/api/board/reset-scan', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({})});
-    } catch (_error) {
-      // The pending request remains authoritative; do not arm over its server lock.
+      const response = await fetch('/api/board/reset-scan', {method:'POST',
+        headers:{'Content-Type':'application/json'}, body: JSON.stringify({}),
+        signal: AbortSignal.timeout(8000)});
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Nie udało się zakończyć poprzedniego skanu.');
+      }
+    } catch (error) {
+      // Do not wait forever on an orphan or arm over its server lock.
+      boardScanError = error.message || 'Nie udało się ponowić oczekiwania planszy.';
+      boardInputPhase = 'error';
+      lastAttemptedBoardRevision = String(currentBoardSelection()?.revision || '');
+      updateBoardInputPresentation();
+      return false;
     }
     try {
       await pendingScan;
@@ -7875,6 +8047,11 @@ async function stopBoardScanLoopOnce() {
       // scanBoardOnce already owns presentation of transport errors.
     }
   }
+  // The old receiver deliberately ignores responses after token changes.
+  // Cancellation therefore owns cleanup, while preserving any newer scan.
+  if (boardScanToken !== stoppedToken) return;
+  boardScanInFlight = false;
+  boardScanPromise = null;
   // A cancelled attempt must never suppress re-arming the same logical
   // contract. This is the single reset point used by action changes, cancel
   // buttons and area-preview repositioning.
@@ -7885,7 +8062,10 @@ async function stopBoardScanLoopOnce() {
   window.setTimeout(scheduleAutomaticBoardScan, 0);
 }
 function selectBoardPosition(col, row) { api('/api/board/select', {col, row}, 'Wybieram pole planszy...'); }
-function resetBoardScan() { api('/api/board/reset-scan', {}, 'Resetuję oczekiwanie planszy...'); }
+async function resetBoardScan() {
+  if (await stopBoardScanLoop({force: true}) === false) return;
+  scheduleAutomaticBoardScan();
+}
 function startEncounterSetup() { api('/api/encounter/setup/start', {}, 'Przygotowuję kroki setupu encountera...'); }
 function resolveEncounterOpening() { api('/api/encounter/opening/resolve', {}, 'Rozstrzygam rozpoczęcie starcia...'); }
 function confirmEncounterSetup() { api('/api/encounter/setup/confirm', {}, 'Potwierdzam krok setupu...'); }
@@ -8218,7 +8398,7 @@ function triggerCombatActionShortcutKey(shortcut) {
     const isKnownShortcut = (menu.bindings || []).some(binding => binding.key === shortcut)
       || shortcut === 'SPACE';
     if (!isKnownShortcut) return false;
-    window.alert('Ta akcja nie jest teraz dostępna. Wybierz inny skrót z karty postaci.');
+    window.alert('Ta akcja nie jest teraz dostępna. Wybierz inną dostępną ikonę.');
     return true;
   }
   confirmCombatTurnAction(option.id);
@@ -8666,6 +8846,9 @@ function visibleSingleAcceptButton() {
   return candidates.length === 1 ? candidates[0] : null;
 }
 function triggerPrimaryAction() {
+  if (explorationManaPrimary()) return true;
+  if (state?.training_arena?.tutorial?.notice) return acknowledgeTrainingNotice();
+  if (sharedManaPrimary()) return true;
   if (busy) return false;
   if (!state) return false;
   if (keyboardRollWizard) {
@@ -8828,7 +9011,8 @@ function triggerPrimaryAction() {
       }
       if (combat.pending_player_healing) { submitPlayerHealingRoll(); return true; }
       if (combat.pending_area_spell) {
-        if (combat.pending_area_spell.stage === 'damage_roll') submitAreaSpellDamage();
+        if (combat.pending_area_spell.stage === 'attack_roll') submitVolleyRoll();
+        else if (['damage_roll', 'volley_miss'].includes(combat.pending_area_spell.stage)) submitAreaSpellDamage();
         else confirmAreaSpell();
         return true;
       }
@@ -8841,7 +9025,7 @@ function triggerPrimaryAction() {
     if (initiative && initiative.status !== 'completed') { submitEncounterInitiativeRoll(); return true; }
     if (setup && setup.status === 'completed' && stealth && !stealth.completed) return false;
     if (setup && setup.status === 'completed' && !initiative) { startEncounterInitiative(); return true; }
-    if (setup && setup.current_step && setup.current_step.requires_board_assignment) return false;
+    if (setup && setup.status === 'active' && !setup.current_step?.can_confirm) return false;
     if (setup && setup.status === 'active') { confirmEncounterSetup(); return true; }
     if (!setup) { startEncounterSetup(); return true; }
   }
@@ -8884,6 +9068,16 @@ function cancelCurrentCombatStep() {
   return false;
 }
 function triggerSecondaryAction() {
+  if (state?.exploration_mana?.active) return explorationManaAction('leave');
+  if (state?.combat?.shared_mana?.command?.stage) {
+    if (state.combat.shared_mana.command.can_back) sharedCommandControl(true);
+    return true;
+  }
+  if (state?.training_arena?.tutorial?.notice) return false;
+  if (state?.combat?.shared_mana?.declaration?.stage === 'payment') {
+    sharedManaCommand('cancel');
+    return true;
+  }
   if (busy || !state) return false;
   if (keyboardRollWizard) return cancelKeyboardRollWizard();
   if (isVisible('pending-panel')) { decision('reject'); return true; }
@@ -9318,3 +9512,7 @@ if (actionInput) {
 setSidePanelOpen(sidePanelOpen);
 setSidePanelTab(sidePanelTab);
 loadState();
+
+function submitVolleyRoll() {
+  return api('/api/combat/area-spell/volley-roll', {natural_roll: Number(document.getElementById('volley-roll').value), natural_roll_2: document.getElementById('volley-roll-2') ? Number(document.getElementById('volley-roll-2').value) : null}, 'Rozstrzygam wspólny atak…');
+}

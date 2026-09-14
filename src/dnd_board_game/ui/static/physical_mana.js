@@ -37,6 +37,7 @@ function manaWaveLabel(wave) {
   return String(wave.label || '').replace('Fioletowe zakłócenie', 'Czarne zakłócenie');
 }
 function physicalManaHtml(combat) {
+  if (combat.shared_mana) return sharedManaHtml(combat);
   const mana = combat.physical_mana;
   if (!mana) return '';
   const supply = mana.supply;
@@ -69,7 +70,7 @@ function physicalManaHtml(combat) {
 }
 function physicalAttackSeriesHtml(combat) {
   if (!combat.physical_mana?.needs_attack_count || combat.physical_mana.actor_id !== 'lorian') return '';
-  return `<form class="mana-attack-declaration" onsubmit="event.preventDefault(); declareManaAttackSeries()"><b>Ile ataków wykonujesz?</b><p>Lorian: cała seria zajmuje jedną akcję główną. Wydaj po jednej dowolnej manie za każdy atak. Każdy ma osobny cel, test trafienia i obrażenia.</p><label>Liczba ataków<input id="mana-attack-count" type="number" min="1" step="1" value="1" required inputmode="numeric"></label><button type="submit">Rozpocznij serię · Enter</button><button type="button" class="secondary" onclick="cancelCombatTurnActionPreview()">Anuluj · Esc</button></form>`;
+  return `<form class="mana-attack-declaration" onsubmit="event.preventDefault(); declareManaAttackSeries()"><b>Ile ataków wykonujesz?</b><p>Lorian: cała seria zajmuje jedną akcję główną. Wydaj po jednej dowolnej manie za każdy atak. Każdy ma osobny cel, test trafienia i obrażenia.</p><label>Liczba ataków<input id="mana-attack-count" type="number" min="1" step="1" value="1" required inputmode="numeric"></label><button type="submit">Rozpocznij serię · ✓</button><button type="button" class="secondary" onclick="cancelCombatTurnActionPreview()">Anuluj · ↩</button></form>`;
 }
 function declareManaAttackSeries() {
   const input = document.getElementById('mana-attack-count');

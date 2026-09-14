@@ -1883,13 +1883,13 @@ def test_exploration_ui_page_includes_gm_decision_correction_controls():
     html, javascript, stylesheet = _page_assets(client)
 
     assert (
-        '<script src="/static/exploration.js?v=combat-hud-20260905-1"></script>'
+        '<script src="/static/exploration.js?v='
         in html
     )
     assert "Popraw decyzję MG" in javascript
     assert "kliknij ponownie pole" in javascript
     assert "Mechanika:" in javascript
-    assert "Mechanika pól" in javascript
+    assert "Zasady tego kroku" in javascript
     assert "decisionCorrectionHtml" in javascript
     assert "correction-roll-mode" in javascript
     assert "event.code === 'Numpad2'" in javascript
@@ -1906,9 +1906,9 @@ def test_exploration_ui_page_includes_gm_decision_correction_controls():
     assert "triggerCombatActionShortcutKey('D')" in javascript
     assert "option.action_id === 'nimra_metamagic_cancel'" in javascript
     assert "event.key === 'Backspace'" in javascript
-    assert "Wybierz akcję na karcie postaci" in javascript
+    assert "Wybierz akcję na panelu planszy" in javascript
     assert "Awaryjny wybór ekranowy" in javascript
-    assert "Wszystkie skróty akcji aktywnego bohatera" in javascript
+    assert "Dostępne działania" in javascript
     assert "combat-keyboard-action-index-item" in javascript
     assert '<kbd>M</kbd> ruch' not in javascript
     assert "Numpad 8/2 zmienia pozycję listy" not in javascript
@@ -1950,7 +1950,7 @@ def test_exploration_ui_page_includes_gm_decision_correction_controls():
     assert ".combat-keyboard-waiting" in stylesheet
     assert ".combat-keyboard-action-index" in stylesheet
     assert "data-numpad-key" in javascript
-    assert "potwierdź aktualny podgląd Enterem" in javascript
+    assert "potwierdź aktualny podgląd przyciskiem ✓" in javascript
     assert "correction-resource" in javascript
     assert "Zasób sceny" in javascript
     assert "zostanie zużyty po rzucie" in javascript
@@ -2235,6 +2235,9 @@ class FakeBoardConnection:
 
     def leds_off(self):
         self.clear_calls += 1
+
+    def cancel_scan(self):
+        pass
 
     def scan_board(self, acceptable_responses=None, *, timeout_s=None):
         if not self.clicks:
@@ -2562,7 +2565,7 @@ def _advance_encounter_setup(client, board):
     if step.get("requires_board_assignment"):
         position = tuple(step["available_positions"][0])
         board.clicks.append(position)
-        return client.post("/api/board/scan", json={}).get_json()
+        client.post("/api/board/scan", json={})
     return client.post("/api/encounter/setup/confirm", json={}).get_json()
 
 
@@ -3037,24 +3040,30 @@ def test_exploration_ui_runs_guided_encounter_setup_after_trigger():
     assert next_step["current_step"]["assignment_actor_id"] == "hero"
 
     board.clicks.append((8, 6))
+    client.post("/api/board/scan")
+    board.clicks.append((19, 1))
     rogue_step = client.post("/api/board/scan").get_json()["encounter_setup"]
     assert rogue_step["current_step"]["label"] == "pola startowe bohaterów"
     assert rogue_step["current_step"]["assignment_actor_id"] == "rogue"
     assert rogue_step["current_step"]["available_positions"] == [[7, 6], [9, 6]]
 
     board.clicks.append((9, 6))
+    client.post("/api/board/scan")
+    board.clicks.append((19, 1))
     cleric_step = client.post("/api/board/scan").get_json()["encounter_setup"]
     assert cleric_step["current_step"]["label"] == "pola startowe bohaterów"
     assert cleric_step["current_step"]["assignment_actor_id"] == "cleric"
     assert cleric_step["current_step"]["available_positions"] == [[7, 6]]
 
     board.clicks.append((7, 6))
+    client.post("/api/board/scan")
+    board.clicks.append((19, 1))
     enemy_state = client.post("/api/board/scan").get_json()
     enemy_step = enemy_state["encounter_setup"]
     assert enemy_step["current_step"]["label"] == "jawnych przeciwników i NPC"
     assert enemy_step["current_step"]["positions"] == [[7, 9], [11, 7]]
-    assert enemy_state["board_selection"]["legal_position_count"] == 0
-    assert enemy_state["board_selection"]["auto_arm"] is False
+    assert enemy_state["board_selection"]["legal_positions"] == [[19, 1]]
+    assert enemy_state["board_selection"]["auto_arm"] is True
 
     while True:
         state = _advance_encounter_setup(client, board)
@@ -3078,17 +3087,20 @@ def test_exploration_ui_can_assign_player_start_from_ui_position_buttons():
     client.post("/api/encounter/setup/start")
     client.post("/api/encounter/setup/confirm")
 
-    rogue_step = client.post("/api/board/select", json={"col": 8, "row": 6}).get_json()["encounter_setup"]
+    client.post("/api/board/select", json={"col": 8, "row": 6})
+    rogue_step = client.post("/api/encounter/setup/confirm").get_json()["encounter_setup"]
     assert rogue_step["current_step"]["label"] == "pola startowe bohaterów"
     assert rogue_step["current_step"]["assignment_actor_id"] == "rogue"
     assert rogue_step["current_step"]["available_positions"] == [[7, 6], [9, 6]]
 
-    cleric_step = client.post("/api/board/select", json={"col": 9, "row": 6}).get_json()["encounter_setup"]
+    client.post("/api/board/select", json={"col": 9, "row": 6})
+    cleric_step = client.post("/api/encounter/setup/confirm").get_json()["encounter_setup"]
     assert cleric_step["current_step"]["label"] == "pola startowe bohaterów"
     assert cleric_step["current_step"]["assignment_actor_id"] == "cleric"
     assert cleric_step["current_step"]["available_positions"] == [[7, 6]]
 
-    enemy_step = client.post("/api/board/select", json={"col": 7, "row": 6}).get_json()["encounter_setup"]
+    client.post("/api/board/select", json={"col": 7, "row": 6})
+    enemy_step = client.post("/api/encounter/setup/confirm").get_json()["encounter_setup"]
     assert enemy_step["current_step"]["label"] == "jawnych przeciwników i NPC"
     assert enemy_step["current_step"]["positions"] == [[7, 9], [11, 7]]
 

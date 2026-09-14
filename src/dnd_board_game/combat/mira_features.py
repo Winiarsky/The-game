@@ -25,6 +25,8 @@ from dnd_board_game.rules import (
     apply_active_effect,
 )
 from dnd_board_game.world import BoardState, Coordinate
+from dnd_board_game.actors.resources import uses_shared_mana
+from .session import use_bonus_action
 
 from .attack_flow import AttackKind, AttackSource, AttackSourceType
 from .conditions import CombatCondition, ConditionApplicationResult, apply_condition
@@ -116,7 +118,7 @@ def resolve_smoke_screen(
     actor = current_actor(state)
     if not actor_has_feature(actor, "smoke_screen"):
         raise ValueError("Aktywna postać nie posiada Zasłony dymnej.")
-    action = use_turn_action(state)
+    action = use_bonus_action(state) if uses_shared_mana(actor) else use_turn_action(state)
     if not action.accepted:
         raise ValueError(action.message)
     spent = spend_actor_resource(actor, "trick_uses", 1)
@@ -135,9 +137,10 @@ def resolve_smoke_screen(
             and effect.kind in {"smoke_screen_hide_pending", "movement_speed_cap"}
         )
     )
+    movement = 10 + 5 * dict(state.shared_mana.pending_boosts).get("move", 0) if state.shared_mana else 15
     for kind, label, value in (
-        ("smoke_screen_hide_pending", "Zasłona dymna: nowe ukrycie", 1),
-        ("movement_speed_cap", "Zasłona dymna: ruch 15 stóp", 15),
+        ("smoke_screen_hide_pending", "Zasłona dymna: nowe ukrycie", 2 if state.shared_mana and dict(state.shared_mana.pending_boosts).get("stealth", 0) else 1),
+        ("movement_speed_cap", f"Zasłona dymna: ruch {movement} stóp", movement),
         ("disengage_until_turn_end", "Zasłona dymna: bez ataków okazyjnych", 0),
     ):
         effects = apply_active_effect(
@@ -156,6 +159,8 @@ def resolve_smoke_screen(
                 stacking_key=f"{kind}:{actor.id}",
             ),
         ).active_effects
+    if updated.shared_mana:
+        updated = replace(updated, shared_mana=replace(updated.shared_mana, smoke_movement=movement))
     return MiraFeatureResolution(updated, effects, "smoke_screen")
 
 
@@ -190,8 +195,8 @@ def prepared_mira_attack_source(
     if base is None:
         return None
     request = base.attack_roll_request
-    damage_bonus = 2 if action_id == "guard_vault" else 0
-    if action_id == "guard_vault":
+    damage_bonus = 2 if action_id == "guard_vault" and not uses_shared_mana(actor) else 0
+    if action_id == "guard_vault" and not uses_shared_mana(actor):
         request = replace(
             request,
             modifiers=(
@@ -280,6 +285,7 @@ def apply_mira_wound_rider(
     source_actor_id: str,
     applied_damage: int,
     physical_mana: bool = False,
+    shared_mana: object | None = None,
 ) -> ConditionApplicationResult:
     condition = (
         CombatCondition.HAMSTRUNG
@@ -288,6 +294,8 @@ def apply_mira_wound_rider(
         if action_id == "blade_mistress"
         else None
     )
+    if shared_mana is not None and action_id == "blade_mistress" and not dict(shared_mana.pending_boosts).get("bleed", 0):
+        condition = None
     if condition is None or applied_damage < 1:
         return ConditionApplicationResult(tuple(states), False, None, "Brak raniącego trafienia.")
     return apply_condition(
@@ -296,10 +304,11 @@ def apply_mira_wound_rider(
         condition,
         source_actor_id=source_actor_id,
         source_label=mira_action_label(action_id),
-        duration=(EffectDuration.UNTIL_TURN_START if action_id == "hamstring_cut" else EffectDuration.UNTIL_TURN_END)
+        source_spell_id=action_id, source_spell_level=0,
+        duration=(EffectDuration.UNTIL_DECK_REFRESH if action_id == "blade_mistress" else EffectDuration.UNTIL_TURN_START) if shared_mana is not None else (EffectDuration.UNTIL_TURN_START if action_id == "hamstring_cut" else EffectDuration.UNTIL_TURN_END)
                  if physical_mana else EffectDuration.PERMANENT,
-        expiration_actor_id=source_actor_id if action_id == "hamstring_cut" else str(target.id),
-        expiration_event_count=2 if physical_mana and action_id == "blade_mistress" else 1,
+        expiration_actor_id=source_actor_id if shared_mana is not None or action_id == "hamstring_cut" else str(target.id),
+        expiration_event_count=2 if physical_mana and shared_mana is None and action_id == "blade_mistress" else 1,
     )
 
 

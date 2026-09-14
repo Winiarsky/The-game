@@ -4,15 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Postacie</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='launcher.css') }}">
+  <link rel="stylesheet" href="{{ static_asset_url('launcher.css') }}">
 </head>
 <body class="launcher-page">
   <main class="flow-shell creator-shell">
     <header class="flow-header">
-      <a class="back-link" href="{{ url_for('index') }}">← Menu główne</a>
+      <a class="back-link" data-board-back href="{{ url_for('index') }}">↩ Menu główne</a>
       <span class="step-label">Roster bohaterów</span>
       <h1>Gotowi bohaterowie</h1>
-      <p>Wybierz profil, aby przeczytać historię, rolę i instrukcję gry. Drużynę wybiera się fizycznymi kartami podczas rozpoczynania przygody.</p>
+      <p>Wybierz profil jego runą lub kafelkiem, aby przeczytać historię, rolę i instrukcję gry. Drużynę wybierzesz w menu Nowa gra.</p>
     </header>
 
     {% if request.args.get('deleted') %}
@@ -29,7 +29,8 @@
     {% if roster.characters %}
       <section class="roster-grid">
         {% for item in roster.characters %}
-          <a class="roster-card" href="{{ url_for('character_detail', character_id=item.actor.id) }}">
+          <a class="roster-card" {% if loop.index0 < 20 %}data-board-rune="{{ 6 + loop.index0 }}"{% endif %} href="{{ url_for('character_detail', character_id=item.actor.id) }}">
+            {% if loop.index0 < 20 %}{{ panel_icon(6 + loop.index0)|safe }}{% endif %}
             {% set portrait_url = character_portrait_url(item.actor.portrait) %}
             <span class="roster-avatar">{% if portrait_url %}<img src="{{ portrait_url }}" alt="Portret: {{ item.actor.name }}">{% else %}{{ item.actor.name[:1]|upper }}{% endif %}</span>
             <span>
@@ -51,5 +52,6 @@
       <a class="button secondary" href="{{ url_for('index') }}">Wróć</a>
     </div>
   </main>
+  {% include 'launcher_board.html' %}
 </body>
 </html>

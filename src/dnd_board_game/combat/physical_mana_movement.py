@@ -21,6 +21,8 @@ class ManaMovementNotice:
 
     @property
     def label(self) -> str:
+        if self.cost == 0:
+            return "Ruch · bez many"
         if self.started:
             return "Ruch: bez kolejnej dopłaty"
         suffix = " · Nieustępliwość" if self.steadfast else ""
@@ -30,6 +32,8 @@ class ManaMovementNotice:
 
     @property
     def description(self) -> str:
+        if self.cost == 0:
+            return "Zwykły ruch nie kosztuje many; obowiązuje pozostały limit ruchu."
         if self.started:
             return (
                 f"Ruch już rozpoczęty. Ustalony koszt many: {self.cost}. "
@@ -58,6 +62,8 @@ def movement_mana_notice(
     actor = current_actor(state)
     if not uses_physical_mana(actor):
         return None
+    if state.shared_mana is not None:
+        return ManaMovementNotice(0, state.turn_action.movement_used_feet > 0, False)
     declared = next(
         (e for e in effects if e.actor_id == str(actor.id) and e.kind == MOVEMENT_DECLARATION),
         None,

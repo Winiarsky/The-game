@@ -11,7 +11,7 @@ def physical_mana_passives(hero_id: str) -> tuple[RuleNote, ...]:
         "Ulepszony krytyk": "Atak bronią trafia krytycznie, gdy na k20 wypadnie naturalne 19 lub 20. Nie dotyczy testu Siły przy Uderzeniu tarczą.",
         "Żelazna linia": "Gdy Garran i sojusznik flankują wspólnego przeciwnika, ten sojusznik ma +1 KP przeciw atakom tego przeciwnika. Premia nie chroni Garrana ani nie działa przeciw innym wrogom.",
         "Obrona bez pancerza": "Bez pancerza twoja KP wynosi 10 + modyfikator Zręczności + modyfikator Kondycji. Możesz korzystać z tarczy.",
-        "Mistrzyni ukrycia": "Ukryj się zużywa akcję główną. Wykonujesz jeden test Skradania; aplikacja rzuca osobno na Percepcję każdego wroga. Remis oznacza wykrycie. Nie potrzebujesz osłony, ale sąsiadujący wróg lub blokujący stan uniemożliwia zwykłe ukrycie.",
+        "Mistrzyni ukrycia": "Ukryj się zużywa akcję dodatkową. Wykonujesz jeden test Skradania; aplikacja rzuca osobno na Percepcję każdego wroga. Remis oznacza wykrycie. Nie potrzebujesz osłony, ale sąsiadujący wróg lub blokujący stan uniemożliwia zwykłe ukrycie.",
         "Skradanie": "Podczas ukrycia możesz przebyć do 20 ft w turze. Dobrowolne ujawnienie się zwiększa ten limit do 25 ft; odejmij od niego ruch już wykonany.",
         "Atak z cienia": "Rapier lub nóż: +1k6 za ukrycie przed celem albo własną flankę; +2k6 za oba. Raz we własnej turze, przy jednym wybranym trafieniu przed obrażeniami. Atak kończy ukrycie. Ukrycie przed celem daje też przewagę ataku.",
         "Pierwsza krew": "Raz we własnej turze trafienie długim łukiem w cel z pełnymi PW dodaje 1k6 obrażeń. Wybierz trafienie przed rzutem obrażeń.",
@@ -25,6 +25,8 @@ def physical_mana_passives(hero_id: str) -> tuple[RuleNote, ...]:
         if note.name not in removed
     )
     _, name, body = MANA_PASSIVES[hero_id]
+    if hero_id == "erynd":
+        notes = (*notes, RuleNote("Praktyka terenowa", "+2 do własnego końcowego testu wyzwania przy obiekcie w eksploracji. Nie dodaje punktów many ani premii do pułapek w walce."))
     return (*notes, RuleNote(name, body))
 
 

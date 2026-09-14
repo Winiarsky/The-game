@@ -30,6 +30,7 @@ class EffectSource:
 
 
 class EffectDuration(StrEnum):
+    UNTIL_DECK_REFRESH = "until_deck_refresh"
     UNTIL_TURN_START = "until_turn_start"
     UNTIL_TURN_END = "until_turn_end"
     UNTIL_ROUND_END = "until_round_end"
@@ -50,6 +51,7 @@ class EffectStackingPolicy(StrEnum):
 
 
 class EffectEventType(StrEnum):
+    DECK_REFRESHED = "deck_refreshed"
     ATTACK_HIT = "attack_hit"
     DAMAGE_TAKEN = "damage_taken"
     TURN_START = "turn_start"
@@ -357,6 +359,7 @@ def effect_expiration_label(effect: ActiveEffect) -> str:
     if effect.kind in legacy_labels:
         return legacy_labels[effect.kind]
     labels = {
+        EffectDuration.UNTIL_DECK_REFRESH: "do odświeżenia wspólnej talii (O)",
         EffectDuration.UNTIL_TURN_START: "znika na początku następnej właściwej tury",
         EffectDuration.UNTIL_TURN_END: "znika na końcu właściwej tury",
         EffectDuration.UNTIL_ROUND_END: "znika na końcu rundy",
@@ -431,12 +434,14 @@ def _duration_expires(
 ) -> bool:
     if duration == EffectDuration.PERMANENT:
         return False
+    if event.event_type == EffectEventType.DECK_REFRESHED:
+        return duration == EffectDuration.UNTIL_DECK_REFRESH
     if event.event_type == EffectEventType.LONG_REST_COMPLETED:
         return duration != EffectDuration.PERMANENT
     if event.event_type == EffectEventType.SHORT_REST_COMPLETED:
         return duration == EffectDuration.UNTIL_SHORT_REST
     if event.event_type == EffectEventType.ENCOUNTER_ENDED:
-        return duration == EffectDuration.UNTIL_ENCOUNTER_END
+        return duration in {EffectDuration.UNTIL_ENCOUNTER_END, EffectDuration.UNTIL_DECK_REFRESH}
     if event.event_type == EffectEventType.CONCENTRATION_ENDED:
         return (
             duration == EffectDuration.CONCENTRATION

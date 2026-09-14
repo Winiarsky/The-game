@@ -14,6 +14,10 @@ class RecoveryPeriod(StrEnum):
     NEVER = "never"
 
 
+def uses_shared_mana(actor: Actor) -> bool:
+    return any(f.feature_id == "shared_mana_v03" for f in actor.features)
+
+
 @dataclass(frozen=True, slots=True)
 class ResourceRechargeRule:
     die_sides: int = 6

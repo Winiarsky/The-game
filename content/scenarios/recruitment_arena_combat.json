@@ -6,7 +6,7 @@
     "project_original"
   ],
   "board": {
-    "cols": 20,
+    "cols": 19,
     "rows": 30
   },
   "id": "recruitment_arena_combat",
@@ -137,7 +137,12 @@
         ]
       ],
       "visibility": "visible",
-      "description": "Pełna zasłona do ćwiczenia ukrycia i linii widzenia. Można obejść ją z obu stron."
+      "description": "Pełna zasłona do ćwiczenia ukrycia i linii widzenia. Można obejść ją z obu stron.",
+      "setup_mechanics": [
+        "Połóż po jednym znaczniku „ZASŁONA” na każdym podświetlonym polu. Znaczników nie przyklejaj do mapy.",
+        "Pole blokuje ruch; figurka nie może wejść ani zakończyć na nim ruchu.",
+        "Pełna przeszkoda blokuje widoczność."
+      ]
     },
     {
       "id": "arena_low_cover",
@@ -159,6 +164,7 @@
       "projectile_cover_bonus": 2,
       "description": "Niska osłona: można wejść na pole i zakończyć na nim ruch. Stojąca tam figurka otrzymuje +2 KP. Osłona na linii ataku dystansowego daje celowi +2 KP.",
       "setup_mechanics": [
+        "Połóż po jednym znaczniku „OSŁONA” na każdym podświetlonym polu. Znaczników nie przyklejaj do mapy.",
         "Na pole niskiej osłony można wejść i zakończyć na nim ruch; nie jest blokadą ani trudnym terenem.",
         "Figurka stojąca na tym polu otrzymuje +2 do KP.",
         "Osłona między atakującym a celem zapewnia +2 do KP przeciw atakom dystansowym."
@@ -179,7 +185,12 @@
         ]
       ],
       "visibility": "visible",
-      "description": "Pełna przeszkoda: blokuje ruch i widoczność. Obejdź stos, aby odsłonić cel lub schować się przed kukłą."
+      "description": "Pełna przeszkoda: blokuje ruch i widoczność. Obejdź stos, aby odsłonić cel lub schować się przed kukłą.",
+      "setup_mechanics": [
+        "Połóż po jednym znaczniku „SKRZYNIE” na każdym podświetlonym polu. Znaczników nie przyklejaj do mapy.",
+        "Pole blokuje ruch; figurka nie może wejść ani zakończyć na nim ruchu.",
+        "Pełna przeszkoda blokuje widoczność."
+      ]
     },
     {
       "id": "arena_pillar",
@@ -204,7 +215,12 @@
         ]
       ],
       "visibility": "visible",
-      "description": "Pełna przeszkoda 2×2: blokuje ruch i widoczność. Obie strony pozostają dostępne do obejścia."
+      "description": "Pełna przeszkoda 2×2: blokuje ruch i widoczność. Obie strony pozostają dostępne do obejścia.",
+      "setup_mechanics": [
+        "Połóż po jednym znaczniku „FILAR” na każdym podświetlonym polu. Znaczników nie przyklejaj do mapy.",
+        "Pole blokuje ruch; figurka nie może wejść ani zakończyć na nim ruchu.",
+        "Pełna przeszkoda blokuje widoczność."
+      ]
     },
     {
       "id": "arena_rubble",
@@ -245,7 +261,12 @@
         ]
       ],
       "visibility": "visible",
-      "description": "Luźny gruz pomiędzy bohaterem a kukłą. Ruch na tych polach kosztuje podwójnie (prosty krok 10 ft zamiast 5 ft). Nie blokuje widoczności i nie daje osłony. Możesz obejść go z obu stron."
+      "description": "Luźny gruz pomiędzy bohaterem a kukłą. Ruch na tych polach kosztuje podwójnie (prosty krok 10 ft zamiast 5 ft). Nie blokuje widoczności i nie daje osłony. Możesz obejść go z obu stron.",
+      "setup_mechanics": [
+        "Połóż po jednym znaczniku „GRUZ” na każdym podświetlonym polu. Znaczników nie przyklejaj do mapy.",
+        "Trudny teren: każde 5 ft ruchu przez to pole kosztuje 10 ft.",
+        "Gruz nie blokuje widoczności i nie daje osłony."
+      ]
     }
   ]
 }

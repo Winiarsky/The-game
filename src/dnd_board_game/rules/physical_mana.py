@@ -12,6 +12,9 @@ class ManaAbility:
     timing: str
     cost: tuple[str, ...]
     description: str
+    category: str = "basic"
+    duration: str = ""
+    boosts: tuple[object, ...] = ()
 
     @property
     def cost_label(self) -> str:
@@ -20,7 +23,9 @@ class ManaAbility:
     def as_payload(self) -> dict[str, object]:
         return {"id": self.id, "name": self.name, "timing": self.timing,
                 "cost": list(self.cost), "cost_label": self.cost_label,
-                "description": self.description}
+                "description": self.description, "category": self.category,
+                "duration": self.duration,
+                "boosts": [{"id": b.id, "color": b.color, "maximum": b.maximum, "label": b.label} for b in self.boosts]}
 
 _ROWS = (('garran',
   'second_wind',
@@ -588,12 +593,11 @@ def hero_abilities(hero_id: str) -> tuple[ManaAbility, ...]:
 
 
 def mana_ability(hero_id: str, ability_id: str) -> ManaAbility | None:
-    return next((a for a in ABILITIES if a.hero_id == hero_id and a.id == ability_id), None)
+    return next((a for a in (*ABILITIES, HOLY_SYMBOL_ABILITY) if a.hero_id == hero_id and a.id == ability_id), None)
 
 
 def turn_supply(hero_id: str, *, green_surge: bool = False) -> dict[str, int]:
-    extra = int(hero_id == "lorian") + int(green_surge)
-    return {"start": 3, "keep": 2 + extra, "draw": 3, "capacity": 5 + extra}
+    return {"start": 5, "keep": 5, "draw": 5, "capacity": 5}
 
 FLAWS = {
     'garran': ('flaw_remorse', 'Nieustępliwość',
@@ -722,3 +726,30 @@ _CARD_TEXT.update({'rage': 'Szał trwa modyfikator KON + modyfikator SIŁ rund (
 
 from dataclasses import replace as _replace
 ABILITIES = tuple(_replace(a, description=_CARD_TEXT.get(a.id, a.description.replace('Obecne ', '').replace('Obecny ', '').replace('Obecna ', '').replace(' jak obecnie', ''))) for a in ABILITIES)
+
+# Version 0.3 is the single current catalogue; legacy rows above document the
+# former profile and are not exposed to new-game menus or printers.
+from .shared_mana_catalog import CATALOG as _SHARED_CATALOG, HOLY_SYMBOL as _HOLY_SYMBOL, SharedAbility
+
+def _shared_presentation(a: SharedAbility) -> ManaAbility:
+    return ManaAbility(a.hero_id, a.id, a.name, a.timing, tuple(a.cost),
+                       a.full_description, a.category, a.duration, a.boosts)
+
+ABILITIES = tuple(_shared_presentation(a) for a in _SHARED_CATALOG)
+HOLY_SYMBOL_ABILITY = _shared_presentation(_HOLY_SYMBOL)
+FLAWS.update({
+    'garran': ('flaw_remorse', 'Nieustępliwość', 'Rozpoczęcie własnej tury przy wrogu, także po skosie, zmniejsza limit zwykłego ruchu o połowę do końca tej tury. Późniejsze usunięcie wroga nie znosi kary.'),
+    'brakka': ('flaw_chains', 'Bitewny amok', 'Tura bez ataku lub szkodliwej techniki przeciw wrogowi kończy Szał. Nieudany atak wystarcza, by utrzymać Szał.'),
+    'mira': ('flaw_exposed_panic', 'Ostrożność w ukryciu', 'Podczas ukrycia masz utrudnienie wszystkich rzutów obronnych oraz testów wykonywanych w ramach reakcji. Efekty bez rzutu, w tym Unik instynktowny, nie otrzymują kary.'),
+    'dagna': ('flaw_leave_no_one', 'Nikogo nie zostawiam', 'Gdy przy deklaracji sąsiadujesz z żywym sojusznikiem mającym mniej niż połowę maksymalnych PW (również 0 PW), każde działanie ofensywne kosztuje dodatkową dowolną manę. Także zwykły atak; raz za działanie, nie za cel. UI przypomina przed płatnością.'),
+    'nimra': ('flaw_arcane_echo', 'Echo magicznego wycieku', 'Kolejne użycia tego samego czaru z rzędu: dopłata 0, 1, 2, 3… dowolnych kart. Inny czar przerywa serię. Ruch, zwykły atak, pusta tura i odświeżenie talii nie zerują serii; reakcje jej nie zmieniają. Podbicie nie zmienia tożsamości czaru. Cały koszt maksymalnie 5.'),
+})
+MANA_PASSIVES.update({
+    'garran': ('mana_behind_shield', 'Za tarczą', 'Raz we własnej turze przy przytomnym sąsiadującym bohaterze użyj niebieskiej zamiast jednej białej w koszcie bazowym Pozycji obronnej, Osłony tarczą lub Osłony towarzysza. Nie zastępuje podbić ani ultów.'),
+    'brakka': ('mana_momentum', 'Bitewny rozpęd', 'Raz we własnej turze trafienie zwykłym atakiem w Szale daje 2 tymczasowe PW do początku następnej własnej tury.'),
+    'mira': ('mana_nimble_hands', 'Zwinne dłonie', 'Raz we własnej turze po trafieniu nożem możesz przemieścić się o pole bez ataków okazyjnych i bez kosztu zwykłego ruchu.'),
+    'lorian': ('mana_reservoir', 'Zgranie', 'Przygotowuj wspólny rynek Strojeniem i Odzyskiem. Karty kosztu trafiają na odrzucone przed efektem i również mogą być odzyskane. Brak prywatnej ręki lub rezerwy.'),
+    'nimra': ('mana_alchemy', 'Alchemia barw', 'Raz we własnej turze użyj jednej niebieskiej jako dowolnego koloru bazowego kosztu czaru. Nie dotyczy wymaganych kolorów podbić ani ultów; kartę normalnie wydajesz.'),
+    'erynd': ('mana_read_currents', 'Czytanie prądów', 'Przed końcowym uzupełnieniem rynku obejrzyj do dwóch wierzchnich kart talii i odłóż je w wybranej kolejności. Nie tasuj w tym celu stosu odrzuconych.'),
+})
+HERO_NOTES = {hero: MANA_PASSIVES[hero][2] + '\n\n' + FLAWS[hero][2] for hero in FLAWS}

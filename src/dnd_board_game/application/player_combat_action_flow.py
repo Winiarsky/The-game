@@ -96,6 +96,7 @@ from dnd_board_game.rules import (
     EffectStackingPolicy,
     RollMode,
     RollModifier,
+    RollModifierType,
     SaveDamageOnSuccess,
     SavingThrowRequest,
     apply_active_effect,
@@ -164,6 +165,7 @@ class PendingPlayerAttack:
     horde_breaker: bool = False
     metamagic_ids: tuple[str, ...] = ()
     twinned_target_id: str | None = None
+    shared_target_ids: tuple[str, ...] = ()
     twinned_second_attack: bool = False
     repelling_blast: bool = False
     miss_half_damage: bool = False
@@ -353,7 +355,7 @@ class PlayerCombatActionFlowService:
             pending=pending,
             board_message=(
                 f"Wybrano cel ataku: {selected.selected_target.name}. "
-                "Potwierdź atak Enterem albo przyciskiem."
+                "Potwierdź atak przyciskiem ✓."
             ),
             message_title="Podgląd ataku",
             message_body=(
@@ -391,6 +393,8 @@ class PlayerCombatActionFlowService:
             state, board, source, pending, scene_objects
         )
         effective_source = _source_for_pending(attacker, source, pending)
+        from dnd_board_game.combat.shared_mana_techniques import validate_technique_target
+        validate_technique_target(state, source.id, str(target.id))
         validate_lorian_optical_target(
             active_effects,
             attacker_id=str(attacker.id),
@@ -402,6 +406,7 @@ class PlayerCombatActionFlowService:
             target,
             effective_source,
             active_effects,
+            allow_physical_turn_bonuses=state.shared_mana is None or state.shared_mana.turn_actor == str(attacker.id),
         )
         effective_source = attack_source_with_hidden_advantage(
             effective_source,
@@ -500,14 +505,15 @@ class PlayerCombatActionFlowService:
                 and effect.kind == "flaw_triage_active"
                 for effect in active_effects
             )
-            if pending.twinned_target_id is not None:
-                twin = _actor_by_id(state, pending.twinned_target_id)
+            if pending.twinned_target_id is not None or pending.shared_target_ids:
+                extra_ids = (pending.twinned_target_id,) if pending.twinned_target_id else pending.shared_target_ids
                 confirmation = self._area_spells.confirm_area_spell(
                     state,
                     caster=attacker,
                     source=effective_source,
-                    target_ids=(pending.target_id, pending.twinned_target_id),
+                    target_ids=(pending.target_id, *extra_ids),
                     rng=rng,
+                    active_effects=active_effects,
                     saving_throw_modifiers_by_target={
                         pending.target_id: _spell_save_cover_modifiers(
                             effective_source,
@@ -515,7 +521,7 @@ class PlayerCombatActionFlowService:
                         ),
                     },
                     advantaged_target_ids=(
-                        (pending.target_id, pending.twinned_target_id)
+                        (pending.target_id, *extra_ids)
                         if triage_hampers_spell
                         else ()
                     ),
@@ -703,6 +709,7 @@ class PlayerCombatActionFlowService:
             target,
             effective_source,
             active_effects,
+            allow_physical_turn_bonuses=state.shared_mana is None or state.shared_mana.turn_actor == str(attacker.id),
         )
         effective_source = attack_source_with_hidden_advantage(
             effective_source,
@@ -770,6 +777,7 @@ class PlayerCombatActionFlowService:
                 effective_source.damage_components[0].damage_type,
             )
             if is_longbow_source(effective_source)
+            and (state.shared_mana is None or state.shared_mana.turn_actor == str(attacker.id))
             and effective_source.damage_components
             and not any(
                 effect.actor_id == str(attacker.id)
@@ -867,7 +875,7 @@ class PlayerCombatActionFlowService:
                     maximum_attacks=attack_maximum(
                         attacker, effective_source, active_effects,
                         1 if effective_source.loading or effective_source.limited_attacks
-                        else lorian_attacks_per_action(attacker, effective_source),
+                        else lorian_attacks_per_action(attacker, effective_source), state=state,
                     ),
                 )
                 if not attack_use.accepted:
@@ -1329,6 +1337,7 @@ class PlayerCombatActionFlowService:
             target,
             effective_source,
             active_effects,
+            allow_physical_turn_bonuses=state.shared_mana is None or state.shared_mana.turn_actor == str(attacker.id),
         )
         if pending.sneak_attack:
             effective_source = (
@@ -1462,6 +1471,7 @@ class PlayerCombatActionFlowService:
             source_actor_id=str(attacker.id),
             applied_damage=applied.damage.total_applied,
             physical_mana=uses_physical_mana(attacker),
+            shared_mana=resolved_state.shared_mana,
         )
         if wound.applied:
             resolved_state = replace(
@@ -1475,18 +1485,19 @@ class PlayerCombatActionFlowService:
                 replace(moved, position=pending.mira_rear_destination),
             )
         additional_applied: list[AppliedDamageResult] = []
-        if pending.twinned_target_id is not None and pending.saving_throws:
+        extra_ids = (pending.twinned_target_id,) if pending.twinned_target_id else pending.shared_target_ids
+        for extra_id in extra_ids:
             twin_save = next(
                 (
                     candidate
                     for candidate in pending.saving_throws
-                    if candidate.actor_id == pending.twinned_target_id
+                    if candidate.actor_id == extra_id
                 ),
                 None,
             )
             twin_resolution = self._spell_saves.apply_target_damage(
                 resolved_state,
-                target_id=pending.twinned_target_id,
+                target_id=extra_id,
                 source=effective_source,
                 base_damage=damage_amount,
                 damage_components=damage_components,
@@ -1663,6 +1674,7 @@ class PlayerCombatActionFlowService:
                 attacker_id=str(attacker.id),
                 target_id=str(target.id),
                 source=effective_source,
+                shared_mana=state.shared_mana is not None,
             )
             if effective_source.on_hit_effect_kind == "erynd_disrupted":
                 application = apply_condition(
@@ -1671,8 +1683,10 @@ class PlayerCombatActionFlowService:
                     CombatCondition.NO_REACTIONS,
                     source_actor_id=str(attacker.id),
                     source_label=effective_source.name,
-                    duration=EffectDuration.UNTIL_TURN_END,
-                    expiration_actor_id=str(target.id),
+                    source_spell_id=effective_source.id,
+                    source_spell_level=effective_source.spell_level,
+                    duration=EffectDuration.UNTIL_TURN_START if state.shared_mana else EffectDuration.UNTIL_TURN_END,
+                    expiration_actor_id=str(attacker.id) if state.shared_mana else str(target.id),
                 )
                 resolved_state = replace(
                     resolved_state,
@@ -1841,7 +1855,7 @@ class PlayerCombatActionFlowService:
                 maximum_attacks=attack_maximum(
                         attacker, effective_source, active_effects,
                         1 if effective_source.loading or effective_source.limited_attacks
-                        else lorian_attacks_per_action(attacker, effective_source),
+                        else lorian_attacks_per_action(attacker, effective_source), state=state,
                     ),
             )
             if not attack_use.accepted:
@@ -2008,6 +2022,7 @@ class PlayerCombatActionFlowService:
                     attacker_id=str(attacker.id),
                     target_id=str(target.id),
                     source=effective_source,
+                    shared_mana=state.shared_mana is not None,
                 )
         return PlayerAttackTransition(
             state=updated_state,
@@ -2207,12 +2222,14 @@ def _validated_attack(
         raise ValueError("Cel ma pełną osłonę i nie może zostać zaatakowany.")
     if source.id in {"hamstring_cut", "piercing_attack"} and not positioning.flanking_ally_ids:
         raise ValueError(f"{source.name} wymaga osobistej flanki Miry.")
-    if source.id == "blade_mistress" and not is_hidden_from(
+    if source.id == "blade_mistress" and not (state.shared_mana and positioning.flanking_ally_ids) and not is_hidden_from(
         state.hidden_states,
         str(attacker.id),
         str(target.id),
     ):
         raise ValueError("Mistrzyni ostrzy wymaga celu, który nie widzi ukrytej Miry.")
+    if source.id == "shadow_verdict" and (not positioning.flanking_ally_ids or not is_hidden_from(state.hidden_states, str(attacker.id), str(target.id))):
+        raise ValueError("Wyrok z cienia wymaga ukrycia przed celem i własnej flanki.")
     if source.id == "guard_vault" and legal_rear_tile(
         board,
         attacker,

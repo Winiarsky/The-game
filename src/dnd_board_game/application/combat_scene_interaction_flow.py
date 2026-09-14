@@ -25,7 +25,7 @@ from dnd_board_game.combat import (
     movement_remaining,
     replace_actor,
 )
-from dnd_board_game.world import BoardState, Coordinate, PathResult, find_path, movement_range
+from dnd_board_game.world import BoardState, Coordinate, PathResult, movement_range
 
 
 @dataclass(frozen=True, slots=True)
@@ -271,11 +271,12 @@ class CombatSceneInteractionFlowService:
         remaining = movement_remaining(state, actor)
         movement_actor = replace(actor, speed_feet=remaining)
         reachable = movement_range(board, movement_actor, state.actors)
-        candidates: list[CombatApproachInteractionPlan] = []
-        for destination in sorted(reachable.reachable_tiles):
-            path = find_path(board, movement_actor, state.actors, destination)
-            if not path.valid:
-                continue
+        # The range already contains shortest paths to every reachable tile.
+        # Re-running find_path for each candidate repeats the whole search.
+        for destination in sorted(
+            reachable.reachable_tiles,
+            key=lambda tile: (reachable.costs_by_tile[tile], tile.col, tile.row),
+        ):
             moved_actor = replace(actor, position=destination)
             moved_state = replace_actor(state, moved_actor)
             options = available_combat_interaction_options(
@@ -286,21 +287,17 @@ class CombatSceneInteractionFlowService:
             )
             if not options:
                 continue
-            candidates.append(
-                CombatApproachInteractionPlan(
-                    actor_id=str(actor.id),
-                    interaction_position=position,
-                    destination=destination,
-                    path=path,
-                    options=options,
-                )
+            return CombatApproachInteractionPlan(
+                actor_id=str(actor.id),
+                interaction_position=position,
+                destination=destination,
+                path=PathResult(
+                    reachable.origin, destination, reachable.paths_by_tile[destination],
+                    reachable.costs_by_tile[destination], True,
+                ),
+                options=options,
             )
-        if not candidates:
-            return None
-        return min(
-            candidates,
-            key=lambda plan: (plan.path.cost_feet, plan.destination.col, plan.destination.row),
-        )
+        return None
 
     def positions(
         self,

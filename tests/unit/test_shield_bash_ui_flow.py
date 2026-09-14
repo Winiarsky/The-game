@@ -12,6 +12,7 @@ from dnd_board_game.ui.exploration_app import ExplorationUiSession
 from dnd_board_game.ui.shield_bash import submit_shield_bash, confirm_shield_bash
 from dnd_board_game.world import Coordinate
 from tests.unit.test_recruitment_arena import arena, begin
+from tests.unit.test_shared_mana_runtime import send
 
 
 @pytest.mark.parametrize("attack_first", [True, False])
@@ -20,7 +21,8 @@ def test_shield_bash_and_basic_attack_share_a_turn_in_either_order(
 ) -> None:
     from dnd_board_game.combat.physical_mana import is_basic_weapon
 
-    s = ready(tmp_path, blocked=True)
+    s = ready(tmp_path, blocked=True, pay=False)
+    send(s, 'cancel')
     s.cancel_combat_class_feature_targeting()
     # Previous movement must not prevent using the shield or be consumed by it.
     s.combat_state = replace(
@@ -43,10 +45,11 @@ def test_shield_bash_and_basic_attack_share_a_turn_in_either_order(
         attack()
     options = s._combat_turn_action_menu_payload()["options"]
     shield = next(o for o in options if o["action_id"] == "shield_bash")
-    assert shield["shortcut"] == "E" and shield["mana_cost"] == ["C", "N"]
+    assert shield["mana_cost"] == ["N", "C"]
     s.start_combat_class_feature_targeting("shield_bash")
     s._handle_board_position(Coordinate(12, 11))
     s.confirm_combat_class_feature_targeting()
+    send(s, 'pay')
     submit_shield_bash(s, {"attacker_roll": 20})
     submit_shield_bash(s, {"damage_roll": 6})
     confirm_shield_bash(s)
@@ -66,7 +69,7 @@ def test_shield_bash_and_basic_attack_share_a_turn_in_either_order(
     assert turn.attacks_used == 1
 
 
-def ready(tmp_path: Path, *, blocked: bool = False) -> ExplorationUiSession:
+def ready(tmp_path: Path, *, blocked: bool = False, pay: bool = True) -> ExplorationUiSession:
     s = arena(tmp_path)
     begin(s, "garran")
     hero = current_actor(s.combat_state)
@@ -80,8 +83,12 @@ def ready(tmp_path: Path, *, blocked: bool = False) -> ExplorationUiSession:
     s._handle_board_position(enemy.position)
     before, rng = s.combat_state, s.encounter_rng.getstate()
     payload = s.confirm_combat_class_feature_targeting()
-    assert payload["combat"]["shield_bash"]["stage"] == "contest"
+    assert payload["combat"]["shared_mana"]["declaration"]["stage"] == "payment"
     assert s.combat_state == before and s.encounter_rng.getstate() == rng
+    if pay:
+        payload = send(s, 'pay')
+        assert payload["combat"]["shield_bash"]["stage"] == "contest"
+        assert s.combat_state.shared_mana.market == 3
     s.encounter_rng.seed(1)  # The automatic defender d20 is 5.
     return s
 
@@ -158,8 +165,9 @@ def test_bad_rolls_and_cancel_do_not_spend_action_or_change_target(
         assert s.encounter_rng.getstate() == rng
     s._handle_board_position(Coordinate(1, 1))
     assert s.shield_bash_flow == pending
-    s.cancel_combat_class_feature_targeting()
-    assert s.shield_bash_flow is None and s.combat_state == before
+    with pytest.raises(ValueError, match='Koszt'):
+        s.cancel_combat_class_feature_targeting()
+    assert s.shield_bash_flow == pending and s.combat_state == before
 
 
 def test_shield_bash_routes_use_same_pending_flow(tmp_path: Path) -> None:
@@ -200,14 +208,16 @@ def test_shield_bash_routes_use_same_pending_flow(tmp_path: Path) -> None:
 def test_pending_shield_bash_cannot_be_saved_or_survive_loading_another_state(
     tmp_path: Path,
 ) -> None:
-    s = ready(tmp_path)
+    s = ready(tmp_path, pay=False)
     with pytest.raises(ValueError):
         s.save_snapshot()
+    send(s, 'cancel')
     s.cancel_combat_class_feature_targeting()
     s.save_snapshot()
     s.start_combat_class_feature_targeting("shield_bash")
     s._handle_board_position(s._actor_by_string_id("recruitment_dummy").position)
     s.confirm_combat_class_feature_targeting()
+    send(s, 'pay')
     submit_shield_bash(s, {"attacker_roll": 20})
     submit_shield_bash(s, {"damage_roll": 6})
     s.load_snapshot()

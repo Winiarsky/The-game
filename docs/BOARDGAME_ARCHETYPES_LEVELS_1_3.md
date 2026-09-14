@@ -1,53 +1,71 @@
-# Siedem archetypów — aktualne karty fizycznej many 0.2
+# Siedem archetypów — aktualne karty wspólnej many 0.3
 
-Źródło: katalog `rules/physical_mana.py`, profile postaci i skróty aplikacji.
+Źródło: katalog `rules/physical_mana.py`, profile postaci i stałe oznaczenia panelu areny.
 Wygenerowano przez `scripts/generate_mana_character_prints.py`.
 
 Każdy symbol oznacza osobną kartę. Biała: słońce (Plains); niebieska: kropla (Island); czarna: czaszka (Swamp); czerwona: płomień (Mountain); zielona: drzewo (Forest). Cyfra 1 w kółku: dowolny kolor.
-A = akcja główna, D = dodatkowa, R = reakcja, MOD = modyfikacja; koszt czaru/ataku płacisz osobno.
+A = akcja główna, D = dodatkowa, R = reakcja, MOD = modyfikacja. Koszt obejmuje opisane ataki. T = początek następnej tury źródła; O = odświeżenie talii. Dolny pasek mapy wyłączony; symbole pozostają wydrukowane.
 
 PDF-y: `assets/physical_cards/character_sets/physical_mana_v02/` — color, minimal, cards i bw_test.
 
 ## Garran — Żelazna Straż — obrona pierwszej linii
 
 PW 28; KP 19; ruch 30 ft.
-Start 3; zachowaj do 2; dobierz do 3; pojemność 5.
+Wspólna talia 25 kart; rynek 5; brak prywatnej ręki. Płatność przed efektem, dobór na końcu tury.
 
-| Klawisz | Zdolność | Czas | Mana | Działanie |
+| Symbol panelu | Zdolność | Czas | Mana | Działanie |
 |---|---|---|---|---|
-| Q | Drugi oddech | A | Biała + Dowolna | Odzyskaj 1k10+3 PW. Leczenie zajmuje akcję główną. |
-| W | Zryw akcji | D | Czerwona | Następny zwykły atak w tej turze otrzymuje +2 do trafienia. Atak nadal kosztuje *. Nie odnawia akcji, nie dodaje ataków ani premii do technik specjalnych. |
-| E | Uderzenie tarczą | D | Czerwona + Niebieska | Akcja dodatkowa; wymaga tarczy. Wybierz wroga na sąsiednim polu (5 ft). Rzuć k20 + modyfikator Siły; aplikacja rzuci za cel. Wygrana: 1k6 + modyfikator Siły obrażeń obuchowych i odepchnięcie o jedno wolne pole od Garrana. Zablokowane pole zatrzymuje tylko odepchnięcie. Remis lub przegrana: brak efektu. |
-| R | Pozycja obronna | D | Biała | +2 KP do początku następnej własnej tury. Każda zmiana pola kończy efekt. |
-| A | Rozkaz: Stać | A | Niebieska + Dowolna | Cel w 60 ft wykonuje obronę Mądrości ST 14. Porażka: brak dobrowolnego ruchu w następnej turze; sukces: połowa ruchu. Naturalne 1 daje również −2 do ataków; naturalne 20 neguje efekt. |
-| S | Osłona tarczą | D | Biała + Niebieska | Sąsiadujący sojusznicy mają +2 KP do początku następnej tury Garrana; bez premii dla niego. |
-| D | Mowa dowódcy | A | Biała + Dowolna | Garran i słyszący sojusznicy w 30 ft usuwają Strach i zyskują przewagę na pierwszy atak, test albo rzut obronny do końca swojej następnej tury. |
-| F | Osłona towarzysza | A | Biała + Niebieska | Wybierz sąsiadującego sojusznika w 5 ft. Pierwszy pojedynczy wrogi atak, czar lub efekt przeciw niemu zostaje w całości przekierowany na Garrana i zużywa osłonę. |
+| Rozwidlenie | Drugi oddech | A | Dowolna | Odzyskaj 1k10 + KON PW. |
+| Trójząb | Pozycja obronna | D | Biała | +2 KP; każda zmiana pola kończy postawę. Do odświeżenia talii (O). |
+| Brama | Rozkaz: Stać! | A | Niebieska | Wróg w 60 ft: obrona MDR. Porażka połowi ruch i odbiera reakcje. Do początku następnej tury źródła (T). |
+| Błysk | Osłona towarzysza | R | Biała | Przed rozstrzygnięciem pojedynczego ataku na sąsiadującego sojusznika przejmij go na siebie. Nie obejmuje obszarów. |
+| Klepsydra | Uderzenie tarczą | D | Niebieska + Czerwona | Sporny test SIŁ: twój fizyczny k20 + SIŁ, automatyczny rzut wroga. Remis wygrywa obrońca. Wygrana: 1k6 + SIŁ i odepchnięcie o pole. Czerwona: +1k6 obrażeń (maks. 2). |
+| Romb | Osłona tarczą | D | Biała + Dowolna | Sąsiadujący sojusznicy otrzymują +2 KP; bez premii dla Garrana. Do początku następnej tury źródła (T). Biała: 5 tymczasowych PW jednemu sojusznikowi; różne cele (maks. 2). |
+| Hak | Mowa dowódcy | A | Biała + Dowolna | Garran i sojusznicy w 15 ft usuwają Strach i mają przewagę pierwszego ataku. Do początku następnej tury źródła (T). Biała: wybrany uczestnik odzyskuje 1k6 PW (maks. 2). |
+| Wieża | Żelazny bastion | A | Biała + Biała + Biała + Niebieska | Aura 10 ft: Garran i sojusznicy w niej mają premię do KP równą modyfikatorowi Siły Garrana oraz ochronę przed przymusowym przesunięciem. Do odświeżenia talii (O). |
+| Oko | Rozkaz: Kontratak! | A | Biała + Biała + Czerwona + Czerwona | Garran i jeden sojusznik w 15 ft przemieszczają się do 10 ft bez ataków okazyjnych i wykonują po jednym ataku bronią. Sojusznik zużywa reakcję. |
+
+### Eksploracja — NPC i obiekty
+
+- **Autorytet (NPC):** Siła, bazowy test +6. Przejmij inicjatywę zdecydowaną obecnością i odpowiedzialnością za sytuację.
+- **Zabezpieczenie (obiekt):** Kondycja, bazowy test +4. Utrzymaj konstrukcję stabilną i bezpiecznie zwolnij naprężenia.
+
+Dobieranie do 21: pas przed następną ofertą. Przekroczenie daje utrudnienie końcowego rzutu (2k20, niższy wynik), bez premii za karty.
+
 
 ### Pasywy i skaza
 
 - **Styl walki: Obrona:** Gdy nosisz pancerz, masz +1 KP. Aplikacja i karta postaci uwzględniają tę premię.
 - **Ulepszony krytyk:** Atak bronią trafia krytycznie, gdy na k20 wypadnie naturalne 19 lub 20. Nie dotyczy testu Siły przy Uderzeniu tarczą.
 - **Żelazna linia:** Gdy Garran i sojusznik flankują wspólnego przeciwnika, ten sojusznik ma +1 KP przeciw atakom tego przeciwnika. Premia nie chroni Garrana ani nie działa przeciw innym wrogom.
-- **Za tarczą:** Raz w swojej turze, gdy na sąsiednim polu (także po skosie) stoi inny przytomny bohater, możesz zapłacić niebieską maną (N) zamiast jednej wymaganej białej (B). Dotyczy tylko Pozycji obronnej, Osłony tarczą i Osłony towarzysza. Kartę normalnie wydajesz; pozostały koszt się nie zmienia. Przykład: Osłonę tarczą opłacisz dwiema niebieskimi kartami zamiast białej i niebieskiej.
+- **Za tarczą:** Raz we własnej turze przy przytomnym sąsiadującym bohaterze użyj niebieskiej zamiast jednej białej w koszcie bazowym Pozycji obronnej, Osłony tarczą lub Osłony towarzysza. Nie zastępuje podbić ani ultów.
 
-**Skaza — Nieustępliwość:** Gdy po raz pierwszy w swojej turze zaczynasz zwykły ruch, sprawdź sąsiednie pola, także po skosie. Jeśli stoi tam przeciwnik, wydaj 2 dowolne many (*) zamiast 1. To cena całego ruchu w tej turze; kolejne odcinki nie wymagają dopłaty. Odepchnięcia i przemieszczenia ze zdolności nie uruchamiają skazy. Przykład: odpychasz jedynego sąsiadującego wroga tarczą, a potem ruszasz — płacisz 1 manę.
+**Skaza — Nieustępliwość:** Rozpoczęcie własnej tury przy wrogu, także po skosie, zmniejsza limit zwykłego ruchu o połowę do końca tej tury. Późniejsze usunięcie wroga nie znosi kary.
 
 ## Brakka — Niszczycielka — obrażenia i wytrzymałość
 
 PW 35; KP 14; ruch 30 ft.
-Start 3; zachowaj do 2; dobierz do 3; pojemność 5.
+Wspólna talia 25 kart; rynek 5; brak prywatnej ręki. Płatność przed efektem, dobór na końcu tury.
 
-| Klawisz | Zdolność | Czas | Mana | Działanie |
+| Symbol panelu | Zdolność | Czas | Mana | Działanie |
 |---|---|---|---|---|
-| Q | Szał | D | Czerwona | Szał trwa modyfikator KON + modyfikator SIŁ rund (minimum 1), licząc rundę uruchomienia. +2 obrażeń ataków wręcz opartych na SIŁ, przewaga testów i obron SIŁ oraz odporność na obrażenia kłute, cięte i obuchowe. Płacisz raz; nie odnawiaj co turę. Utrata przytomności kończy Szał. |
-| W | Lekkomyślny atak | MOD | Czerwona | Następny zwykły atak wręcz oparty na SIŁ w tej turze ma przewagę. Atak jest opłacany dodatkowo przez *. Ataki przeciw Brakce mają przewagę do początku jej następnej tury. Raz we własnej turze; nie jest osobną akcją ani kolejnym atakiem. |
-| E | Potężne uderzenie | A | Czerwona + Czerwona | Wymaga Szału. Jeden atak wręcz oparty na SIŁ: +2 do trafienia i +1k12 obrażeń przy trafieniu. Cały atak jest w cenie. |
-| R | Z bara | A | Czerwona + Niebieska | Przeciwnik w 5 ft, najwyżej o jeden rozmiar większy. Sporny test Atletyki; remis wygrywa obrońca. Odepchnij o 5 ft i dodatkowe 5 ft za każde pełne 5 punktów przewagi, maksymalnie 30 ft. Przeszkody zatrzymują przesunięcie. |
-| A | Przyspieszenie | D | Zielona | W Szale: uruchamia zwykły ruch bez dodatkowej opłaty i podwaja jego bazowy limit w tej turze. Wykonany wcześniej ruch liczy się do nowego limitu. |
-| S | Ogłuszający ryk | A | Czerwona + Niebieska + Dowolna | W Szale: stożek 15 ft, tylko wrogowie. Obrona KON, ST 12+KON Brakki. Porażka: 2k6 grzmotu i brak dobrowolnego ruchu do końca najbliższej tury celu; sukces: połowa obrażeń. Naturalne 1 daje też utrudnienie ataków, naturalne 20 neguje obrażenia. |
-| AUTO | Twarda jak skała | R | Biała | Wymaga Szału. Po ujawnieniu obrażeń ataku i uwzględnieniu odporności zmniejsz je o 1k12+KON, minimum 0. |
-| D | Chwyt | A | Dowolna | Chwyt przeciwnika w 5 ft wymaga wolnej ręki i celu najwyżej o jeden rozmiar większego. Atletyka przeciw Atletyce/Akrobatyce celu; remis wygrywa obrońca. Sukces blokuje ruch celu do uwolnienia. |
+| Rozwidlenie | Szał | D | Czerwona | +2 obrażeń ataków wręcz opartych na SIŁ, przewaga testów i obron SIŁ, odporność na kłute, cięte i obuchowe. Nieprzytomność albo tura bez ofensywy kończy Szał. Do odświeżenia talii (O). |
+| Wieża | Lekkomyślny atak | MOD | Czerwona | Przewaga następnego zwykłego ataku wręcz opartego na SIŁ w tej turze. Wrogowie mają przewagę ataków przeciw Brakce. Do początku następnej tury źródła (T). |
+| Brama | Przyspieszenie | D | Zielona | W Szale podwaja limit ruchu bieżącej tury. Wcześniejszy ruch wlicza się do limitu. |
+| Hak | Twarda jak skała | R | Dowolna | W Szale: po odporności zmniejsz otrzymane obrażenia o 1k12 + KON, minimum zero. |
+| Klepsydra | Potężne uderzenie | A | Czerwona + Dowolna | W Szale wykonaj jeden atak bronią z dodatkowym 1k12 obrażeń. Czerwona: +1k12 obrażeń (maks. 2). |
+| Trójząb | Z bara | A | Czerwona + Dowolna | Sporny test Atletyki przeciw sąsiadującemu wrogowi, maksymalnie o rozmiar większemu. Wygrana odpycha o pole; remis broni cel. Niebieska: dodatkowe pole odepchnięcia (maks. 2). Czerwona: 1k6 obrażeń (maks. 2). |
+| Romb | Ogłuszający ryk | A | Czerwona + Niebieska | W Szale: wrogowie w stożku 15 ft, obrona KON; 1k6 grzmotu, sukces daje połowę. Czerwona: +1k6 obrażeń (maks. 2). Niebieska: przy porażce brak ruchu (T) (maks. 1). |
+| Błysk | Siekator | A | Czerwona + Czerwona + Czerwona + Czerwona | W Szale wykonaj trzy osobne ataki wręcz, rozdzielane między dostępnych wrogów. |
+| Oko | Niepowstrzymana | A | Czerwona + Czerwona + Czerwona + Zielona | W Szale: ruch do 20 ft bez ataków okazyjnych i trudnego terenu, potem ataki w dwóch różnych wrogów. Trafieni bronią się SIŁ przed powaleniem (T lub do wstania). |
+
+### Eksploracja — NPC i obiekty
+
+- **Zastraszanie (NPC):** Kondycja, bazowy test +5. Wytrzymaj nacisk i pokaż, że nie ustąpisz. Test Kondycji, nie rzut obronny.
+- **Forsowanie (obiekt):** Siła, bazowy test +6. Pokonaj opór siłą: podnieś, wyważ lub rozerwij blokadę.
+
+Dobieranie do 21: pas przed następną ofertą. Przekroczenie daje utrudnienie końcowego rzutu (2k20, niższy wynik), bez premii za karty.
+
 
 ### Pasywy i skaza
 
@@ -55,55 +73,71 @@ Start 3; zachowaj do 2; dobierz do 3; pojemność 5.
 - **Obrona bez pancerza:** Bez pancerza twoja KP wynosi 10 + modyfikator Zręczności + modyfikator Kondycji. Możesz korzystać z tarczy.
 - **Nieustępliwość półorka:** automatycznie przy pierwszym zejściu do 0 PW pozostawia Brakkę z 1 PW, o ile obrażenia nie zabijają jej natychmiast; 1 użycie na długi odpoczynek.
 - **Dzikie ataki:** krytyczny atak bronią wręcz dodaje jedną kość broni.
-- **Bitewny rozpęd:** Raz w swojej turze po trafieniu zwykłym atakiem opłaconym czerwoną maną (C) odzyskaj tę kartę z odrzuconych (limit 5 kart). Zwrot nie daje kolejnego ataku. Nie dotyczy dopłaty za Lekkomyślny atak ani kosztów technik.
+- **Bitewny rozpęd:** Raz we własnej turze trafienie zwykłym atakiem w Szale daje 2 tymczasowe PW do początku następnej własnej tury.
 
-**Skaza — Bitewny amok:** Na końcu swojej tury, jeśli nadal jesteś w Szale i nie zaatakowałaś wroga ani nie użyłaś przeciw niemu szkodliwej techniki, odrzuć 1 kartę many. Zrób to przed zachowaniem kart na kolejną turę. Nawet nieudany atak pozwala uniknąć tej kary. Jeśli nie masz kart, nic nie tracisz.
+**Skaza — Bitewny amok:** Tura bez ataku lub szkodliwej techniki przeciw wrogowi kończy Szał. Nieudany atak wystarcza, by utrzymać Szał.
 
 ## Mira — Specjalistka — infiltracja i precyzyjne obrażenia
 
 PW 21; KP 15; ruch 25 ft.
-Start 3; zachowaj do 2; dobierz do 3; pojemność 5.
+Wspólna talia 25 kart; rynek 5; brak prywatnej ręki. Płatność przed efektem, dobór na końcu tury.
 
-| Klawisz | Zdolność | Czas | Mana | Działanie |
+| Symbol panelu | Zdolność | Czas | Mana | Działanie |
 |---|---|---|---|---|
-| D | Ukryj się | A | Dowolna | Wykonaj test Skradania przeciw osobnym obserwatorom. Wymagana legalna pozycja ukrycia; aplikacja pokazuje, kto nadal cię wykrywa. Dobrowolne zakończenie ukrycia nie kosztuje many ani akcji. |
-| Q | Zasłona dymna | A | Zielona + Czarna | Przemieść Mirę do 15 ft bez ataków okazyjnych i wykonaj nowy test Ukrycia nawet obok wroga. Obserwatorzy mają karę do Percepcji równą połowie modyfikatora ZRC Miry, w dół. Ruch zawarty w cenie. |
-| W | Przeskok przez gardę | A | Zielona + Dowolna | Atak wręcz z +2 do trafienia i +2 obrażeń wymaga wolnego pola dokładnie za celem. Po ataku przejdź na to pole; przesunięcie jest w cenie techniki. |
-| E | Wykrycie pułapek | A | Dowolna | Wykonaj bojowy test Percepcji, aby wykryć ukryte pułapki w zasięgu obserwacji. Aplikacja podświetla pola wykrytych pułapek; samo wykrycie ich nie rozbraja. |
-| R | Cięcie ścięgna | A | Zielona + Niebieska | Atak wręcz z własnej flanki. Trafienie zadaje obrażenia broni i połowi szybkość celu do początku następnej tury Miry. |
-| A | Przeszywający atak | A | Zielona + Czerwona | Atak rapierem w przeciwnika stojącego przy sojuszniku. Po raniącym trafieniu osobny atak z +2 do trafienia w drugiego wroga dokładnie jedno pole za pierwszym, na tej samej linii od Miry. Drugie trafienie dosięga tego pola mimo zwykłego zasięgu rapiera; ściana je blokuje. Bez łańcucha dalszych celów. Oba ataki w cenie. |
-| S | Mistrzyni ostrzy | A | Zielona + Czarna | Trafienie nożem z ukrycia powoduje krwawienie 1k4 przez najwyżej dwie tury celu; leczenie kończy wcześniej. Bez kumulowania. |
-| AUTO | Unik instynktowny | R | Zielona | Reakcja proponowana przed atakiem przeciw ukrytej Mirze. Nadaj temu jednemu atakowi utrudnienie. |
+| Rozwidlenie | Ukryj się | D | Dowolna | Test Skradania w legalnej pozycji. Wykrycie, atak lub dobrowolne ujawnienie kończy ukrycie. Do odświeżenia talii (O). |
+| Trójząb | Unik instynktowny | R | Zielona | Nadaj utrudnienie jednemu atakowi przeciw Mirze. Nie wymaga rzutu Miry. |
+| Romb | Zwód | D | Czarna | Sąsiadujący wróg nie może wykonywać ataków okazyjnych przeciw Mirze. Do początku następnej tury źródła (T). |
+| Brama | Cięcie ścięgna | A | Zielona + Dowolna | Atak wręcz z własnej flanki. Trafienie zadaje obrażenia broni i połowi ruch celu. Do początku następnej tury źródła (T). |
+| Wieża | Zasłona dymna | D | Zielona + Dowolna | Ruch do 10 ft bez ataków okazyjnych i próba ukrycia, także po rozpoczęciu obok wroga. Ukrycie kończą atak lub wykrycie. Do odświeżenia talii (O). Zielona: +5 ft ruchu (maks. 2). Czarna: przewaga testu ukrycia (maks. 1). |
+| Klepsydra | Przeskok przez gardę | A | Zielona + Dowolna | Atak wręcz i przejście na wolne pole dokładnie za celem. Czerwona: +1k6 obrażeń (maks. 2). |
+| Hak | Mistrzyni ostrzy | A | Zielona + Czarna | Atak nożem z ukrycia albo własnej flanki, dodatkowe 1k6 obrażeń. Czerwona: +1k6 obrażeń (maks. 2). Czarna: krwawienie 1k4 na początku tury celu (O); leczenie kończy, bez kumulowania (maks. 1). |
+| Błysk | Wyrok z cienia | A | Czarna + Czarna + Czarna + Czarna | Wymaga ukrycia przed celem i własnej flanki. Jeden atak z przewagą i dodatkowym 5k6 obrażeń. |
+| Oko | Taniec ostrzy | A | Zielona + Zielona + Czarna + Czarna | Ruch do 15 ft bez ataków okazyjnych i dwa ataki w różnych wrogów po drodze. Atak z cienia najwyżej raz. |
+
+### Eksploracja — NPC i obiekty
+
+- **Blef (NPC):** Inteligencja, bazowy test +4. Zbuduj sprytne, spójne kłamstwo lub pozór.
+- **Manipulacja (obiekt):** Zręczność, bazowy test +6. Precyzyjnie zwolnij zamek, zatrzask lub drobny mechanizm przy użyciu narzędzi.
+
+Dobieranie do 21: pas przed następną ofertą. Przekroczenie daje utrudnienie końcowego rzutu (2k20, niższy wynik), bez premii za karty.
+
 
 ### Pasywy i skaza
 
-- **Mistrzyni ukrycia:** Ukryj się zużywa akcję główną. Wykonujesz jeden test Skradania; aplikacja rzuca osobno na Percepcję każdego wroga. Remis oznacza wykrycie. Nie potrzebujesz osłony, ale sąsiadujący wróg lub blokujący stan uniemożliwia zwykłe ukrycie.
+- **Mistrzyni ukrycia:** Ukryj się zużywa akcję dodatkową. Wykonujesz jeden test Skradania; aplikacja rzuca osobno na Percepcję każdego wroga. Remis oznacza wykrycie. Nie potrzebujesz osłony, ale sąsiadujący wróg lub blokujący stan uniemożliwia zwykłe ukrycie.
 - **Skradanie:** Podczas ukrycia możesz przebyć do 20 ft w turze. Dobrowolne ujawnienie się zwiększa ten limit do 25 ft; odejmij od niego ruch już wykonany.
 - **Atak z cienia:** Rapier lub nóż: +1k6 za ukrycie przed celem albo własną flankę; +2k6 za oba. Raz we własnej turze, przy jednym wybranym trafieniu przed obrażeniami. Atak kończy ukrycie. Ukrycie przed celem daje też przewagę ataku.
 - **Szczęście niziołka:** ponów naturalną 1 w ataku, teście albo obronie.
 - **Ruchomy cel:** Mira ma +2 KP przeciw dystansowym testom ataku bronią i czarem; nie działa przeciw obszarom ani rzutom obronnym.
 - **Ekspertyza:** Podwójna premia z biegłości w wybranych umiejętnościach; jest już wliczona w ich modyfikatory.
-- **Zwinne dłonie:** Raz w swojej turze, po dobrowolnym przemieszczeniu się o co najmniej jedno pole (5 ft), możesz wymienić 1 kartę z ręki na 1 wybraną kartę rynku. Własną kartę połóż w miejsce zabranej. Nie dobierasz dodatkowych kart. Przymusowe przesunięcie nie uruchamia tej zdolności.
+- **Zwinne dłonie:** Raz we własnej turze po trafieniu nożem możesz przemieścić się o pole bez ataków okazyjnych i bez kosztu zwykłego ruchu.
 
-**Skaza — Panika po zdemaskowaniu:** Gdy przeciwnik wykryje cię testem podczas ukrycia, odrzuć 1 kartę many. Karę ponosisz najwyżej raz do początku swojej następnej tury. Ujawnienie się przez własny atak lub dobrowolne zakończenie ukrycia nie powoduje kary. Jeśli nie masz kart, nic nie tracisz.
+**Skaza — Ostrożność w ukryciu:** Podczas ukrycia masz utrudnienie wszystkich rzutów obronnych oraz testów wykonywanych w ramach reakcji. Efekty bez rzutu, w tym Unik instynktowny, nie otrzymują kary.
 
 ## Dagna — Uzdrowicielka — leczenie i wzmocnienia
 
 PW 30; KP 16; ruch 25 ft.
-Start 3; zachowaj do 2; dobierz do 3; pojemność 5.
+Wspólna talia 25 kart; rynek 5; brak prywatnej ręki. Płatność przed efektem, dobór na końcu tury.
 
-| Klawisz | Zdolność | Czas | Mana | Działanie |
+| Symbol panelu | Zdolność | Czas | Mana | Działanie |
 |---|---|---|---|---|
-| Q | Święty płomień | A | Biała | Stożek 15 ft. Cele w obszarze wykonują obronę Zręczności; porażka: 1k8 obrażeń od blasku, sukces: brak obrażeń. |
-| W | Słowo leczenia | A | Biała + Dowolna | Przywróć 1k4+7 PW celowi w 60 ft. To pełna premia leczenia; nie doliczaj osobno Ucznia Życia. |
-| E | Błogosławieństwo | A | Biała + Niebieska | Aura 10 ft wokół Dagny obejmuje ją i sojuszników: +1k4 do ataków i rzutów obronnych. Koncentracja, do 3 rund. |
-| R | Zachowanie życia | A | Biała + Biała + Dowolna | Rozdziel 15 PW między siebie i sojuszników w 30 ft. Każdy cel może odzyskać PW najwyżej do połowy swojego maksimum; niewykorzystane leczenie przepada. |
-| A | Aura Boskiej Opieki | A | Biała + Niebieska | Aura 5 ft wokół Dagny: wrogowie w zasięgu mają −2 do ataków i obrażeń. Koncentracja, do 3 rund. |
-| S | Naprowadzający pocisk | A | Biała + Czerwona | Cel w 75 ft. Atak czarem; trafienie: 2k6 blasku i przewaga następnego ataku przeciw temu celowi. |
-| D | Aura Uzdrawiającej Łaski | A | Biała + Zielona + Dowolna | Aura 10 ft, koncentracja do 3 rund. Dwa pierwsze leczenia w aurze dodają po 1k8 PW. |
-| F | Pomniejsze przywrócenie | A | Biała + Zielona | Dotknij celu w 5 ft i usuń jeden negatywny stan z listy dostępnej dla tej zdolności. Aplikacja pokazuje legalne stany i cele. |
-| T | Odpędzanie nieumarłych | A | Biała + Niebieska | Nieumarli w obszarze odpędzenia wykonują obronę Mądrości. Porażka: odpędzenie do końca następnej tury Dagny. Obrażenia kończą efekt wcześniej. |
-| Z | Duchowa broń | A | Biała + Czerwona + Dowolna | Przywołanie i jeden atak w cenie. Trwa trzy rundy, najwyżej jedna broń; dalsze aktywacje kosztują akcję dodatkową i jedną białą manę, każda zawiera ruch broni do 20 stóp i jeden atak. Brak osobnej darmowej tury przywołania. |
+| Rozwidlenie | Święty płomień | A | Biała | Stożek 15 ft, także sojusznicy. Obrona ZRC: porażka 1k8 blasku, sukces bez obrażeń. |
+| Klepsydra | Błogosławieństwo | A | Biała + Niebieska | Aura 10 ft: Dagna i sojusznicy mają +1k4 do ataków i obron. Koncentracja. Do odświeżenia talii (O). |
+| Błysk | Pomniejsze przywrócenie | A | Biała + Dowolna | Dotykiem usuń jeden dostępny stan: zatrucie, oślepienie lub głuchotę. |
+| Hak | Opiekuńczy gest | D | Dowolna | Sąsiadujący sojusznik otrzymuje 1k4 + MDR tymczasowych PW. Nie leczy ran; tymczasowe PW nie kumulują się. Do początku następnej tury źródła (T). |
+| Wieża | Słowo leczenia | A | Biała + Dowolna | Cel w 60 ft odzyskuje 1k4 + 7 PW. Biała: +1k6 leczenia (maks. 3). |
+| Brama | Aura Boskiej Opieki | A | Biała + Dowolna | Wrogowie w 5 ft mają −2 do ataków. Koncentracja. Do odświeżenia talii (O). Niebieska: promień 10 ft (maks. 1). Biała: również −2 do zadawanych obrażeń (maks. 1). |
+| Romb | Naprowadzający pocisk | A | Biała + Dowolna | Atak czarem w 75 ft: 2k6 blasku; przewaga następnego ataku przeciw celowi (T lub do wykorzystania). Czerwona: +1k6 obrażeń (maks. 3). |
+| Trójząb | Zachowanie życia | A | Biała + Biała + Biała + Biała | Rozdziel 40 PW leczenia między Dagnę i sojuszników w 30 ft, do ich maksymalnych PW. |
+| Schody | Duchowy oręż | A | Biała + Biała + Czerwona + Czerwona | Przywołaj broń i wykonaj nią atak za 2k8 + MDR. Kolejne aktywacje: D + biała, ruch broni do 20 ft i jeden atak. Najwyżej jedna broń; bez koncentracji. Do odświeżenia talii (O). |
+
+### Eksploracja — NPC i obiekty
+
+- **Empatia (NPC):** Mądrość, bazowy test +6. Rozpoznaj obawy rozmówcy i odwołaj się do jego potrzeb.
+- **Oczyszczenie (obiekt):** Mądrość, bazowy test +6. Przywróć bezpieczne użycie skażonego obiektu dostępnymi środkami.
+
+Dobieranie do 21: pas przed następną ofertą. Przekroczenie daje utrudnienie końcowego rzutu (2k20, niższy wynik), bez premii za karty.
+
 
 ### Pasywy i skaza
 
@@ -114,29 +148,32 @@ Start 3; zachowaj do 2; dobierz do 3; pojemność 5.
 - **Krasnoludzka odporność:** przewaga przeciw truciźnie i odporność na obrażenia od trucizny.
 - **Uczeń Życia:** Raz w swojej turze, gdy zdolność przywraca PW innemu bohaterowi, możesz zapłacić zieloną maną (Z) zamiast jednej wymaganej białej (B). Kartę normalnie wydajesz. Własne leczenie i samo uruchomienie aury nie pozwalają na tę zamianę.
 
-**Skaza — Nikogo nie zostawiam:** Jeśli w odległości do 30 ft leży żywy bohater z 0 PW, pierwsze działanie ofensywne w twojej turze kosztuje o 1 dowolną manę (*) więcej. Sprawdź ten warunek przy deklaracji działania. Leczenie, ratowanie, osłony i ruch nie wymagają dopłaty.
+**Skaza — Nikogo nie zostawiam:** Gdy przy deklaracji sąsiadujesz z żywym sojusznikiem mającym mniej niż połowę maksymalnych PW (również 0 PW), każde działanie ofensywne kosztuje dodatkową dowolną manę. Także zwykły atak; raz za działanie, nie za cel. UI przypomina przed płatnością.
 
 ## Lorian — Bard — zarządzanie maną, kusza i kontrola
 
 PW 24; KP 13; ruch 30 ft.
-Start 3; zachowaj do 3; dobierz do 3; pojemność 6.
+Wspólna talia 25 kart; rynek 5; brak prywatnej ręki. Płatność przed efektem, dobór na końcu tury.
 
-| Klawisz | Zdolność | Czas | Mana | Działanie |
+| Symbol panelu | Zdolność | Czas | Mana | Działanie |
 |---|---|---|---|---|
-| Q | Inspiracja barw | D | Biała | Jeden inny bohater w 30 stopach może przy opłaceniu jednego działania do początku następnej tury Loriana potraktować jedną posiadaną kartę jako dowolny kolor. Jedna niewykorzystana Inspiracja na odbiorcę; bez k6 i bez tworzenia karty. |
-| R | Strojenie rynku | D | Niebieska | Wymień do dwóch własnych kart z taką samą liczbą wybranych kart rynku. Jeden jednoczesny zestaw wymian 1:1, bez dobierania. |
-| F | Transmutacja | D | Czarna | Do końca tej tury dwie wskazane posiadane karty możesz opłacić jako dowolne kolory. Każda nadal jest wydawana i nie może opłacić dwóch symboli. Nie działa na kartę zużytą do uruchomienia Transmutacji. |
-| Z | Przerzut energii | D | Zielona | Przekaż do dwóch własnych kart jednemu innemu bohaterowi w 30 stopach. Nie dobiera on nowych. Obowiązuje pojemność odbiorcy. |
-| X | Rezerwacja | D | Niebieska | Zabierz jedną kartę rynku do swojego depozytu, wliczanego do rezerwy i pojemności. Nie można jej wydać, oddać ani wymienić przed początkiem następnej własnej tury; wolno ją odrzucić. Maksymalnie jeden depozyt, na następnej turze staje się zwykłą kartą. Rynek uzupełnia się na końcu obecnej tury. |
-| C | Odzysk energii | A | Biała + Niebieska | Wybierz do trzech kart obecnych na odrzuconych przed opłaceniem zdolności i rozdaj je sobie lub bohaterom w 30 stopach, najwyżej dwie jednemu odbiorcy. Nie wolno odzyskać właśnie wydanych kart białej i niebieskiej many; nie zwiększa pojemności. Brak odpowiednich kart oznacza mniejszy odzysk. |
-| V | Nowe rozdanie | A | Niebieska + Dowolna | Odrzuć do trzech kart rynku, uzupełnij go z talii. Następnie każdy przytomny bohater w 30 stopach, w tym Lorian, może raz wymienić własną kartę z rynkiem, w kolejności inicjatywy. Nie ma kolejnego doboru pomiędzy wymianami. |
-| AUTO | Awaryjna pożyczka | R | Biała | Gdy inny bohater w 30 stopach deklaruje działanie, przed jego opłaceniem przekaż mu jedną dodatkową własną kartę. Biała mana za reakcję jest osobnym kosztem; łącznie Lorian traci dwie karty. Bez zwrotu/długu mimo nazwy. Nie otwiera dodatkowej akcji ani nie zwiększa już zadeklarowanej serii ataków. |
-| W | Luneta optyczna | A | Zielona + Niebieska + Dowolna | Przed ruchem wykonaj dwa osobne strzały w jeden cel, każdy z +2 do trafienia i ignorowaniem częściowej osłony; całkowita osłona blokuje. Zużywa cały ruch. Dwa strzały są już opłacone. |
-| E | Ostrzał destabilizujący | A | Zielona + Czarna | Jeden strzał w 45 stopach. Trafienie: utrudnienie pierwszego ataku i obron MDR celu do początku następnej tury Loriana. |
-| A | Oplatający ostrzał | A | Zielona + Niebieska | Obszar 3×3 w 45 stopach, także sojusznicy. ZRC ST 14: porażka blokuje ruch, sukces połowi do początku następnej tury Loriana. Bez obrażeń. |
-| S | Podszept paniki | A | Czarna + Niebieska | Cel w 45 stopach, MDR ST 14: 2k6 psychicznych i ruch do 15 stóp od Loriana; sukces połowa bez ruchu. |
-| D | Fala gromu | A | Czerwona + Niebieska | Sześcian 15 stóp, także sojusznicy. KON ST 14: 2k8 grzmotu i odepchnięcie o 10 stóp; sukces połowa bez odepchnięcia. |
-| AUTO | Rozpraszający okrzyk | R | Biała | Gdy bohater w 30 stopach otrzymuje obrażenia od pojedynczego ataku, zmniejsz je o 1k6+2, minimum 0. |
+| Rozwidlenie | Inspiracja | D | Dowolna | Inny bohater w 30 ft otrzymuje 1k4 do jednego ataku albo obrony, do wcześniejszego wykorzystania. Do początku następnej tury źródła (T). |
+| Wieża | Strojenie rynku | D | Niebieska | Po zapłacie odrzuć dodatkową kartę rynku. Dobierz dwie: jedną na rynek, drugą na spód talii. Wymaga dwóch kart talii i dodatkowej karty rynku poza kosztem. |
+| Oko | Ostrzał destabilizujący | A | Zielona + Dowolna | Strzał z kuszy. Trafiony wróg ma utrudnienie następnego ataku, do wcześniejszego wykorzystania. Do początku następnej tury źródła (T). |
+| Klepsydra | Rozpraszający okrzyk | R | Biała | Zmniejsz obrażenia pojedynczego ataku przeciw bohaterowi w 30 ft o 1k6 + CHA, minimum zero. |
+| Romb | Odzysk energii | A | Biała + Dowolna | Po zapłacie połóż dwie wybrane karty odrzucone na wierzchu talii, w dowolnej kolejności. Możesz odzyskać właśnie wydany koszt. Niebieska: kolejna karta na wierzch talii (maks. 3). |
+| Błysk | Luneta optyczna | A | Zielona + Dowolna | Przed ruchem poświęć cały jego limit. Strzał z +2 do trafienia, ignorujący częściową osłonę. Całkowita osłona blokuje. Zielona: drugi taki strzał w ten sam cel (maks. 1). |
+| Schody | Oplatający ostrzał | A | Zielona + Dowolna | Obszar 3×3, także sojusznicy. Obrona ZRC: porażka połowi ruch, bez obrażeń. Do początku następnej tury źródła (T). Niebieska: zamiast połowienia blokuje ruch (maks. 1). Zielona: obszar 4×4 (maks. 1). |
+| Trójząb | Wielkie strojenie | A | Niebieska + Niebieska + Niebieska + Niebieska | Po zapłacie przenieś trzy wybrane karty z odrzuconych do pustych miejsc rynku. Możesz odzyskać właśnie wydane karty. |
+| Brama | Hymn zwycięstwa | A | Biała + Biała + Niebieska + Niebieska | Aura 30 ft, koncentracja. Lorian i sojusznicy mogą wykorzystać jedną dodatkową akcję dodatkową we własnej turze, będąc w aurze. Płać normalnie; wejście i wyjście nie odnawia użycia. Do odświeżenia talii (O). |
+
+### Eksploracja — NPC i obiekty
+
+- **Inspiracja (NPC):** Charyzma, bazowy test +8. Porusz rozmówcę i zachęć go do współpracy.
+- **Pomysłowość (obiekt):** Inteligencja, bazowy test +3. Znajdź obejście problemu i wykorzystaj dostępne części.
+
+Dobieranie do 21: pas przed następną ofertą. Przekroczenie daje utrudnienie końcowego rzutu (2k20, niższy wynik), bez premii za karty.
+
 
 ### Pasywy i skaza
 
@@ -144,63 +181,71 @@ Start 3; zachowaj do 3; dobierz do 3; pojemność 6.
 - **Feyowskie pochodzenie:** przewaga przeciw zauroczeniu i odporność na magiczny sen.
 - **Obycie i targowanie:** +2 do każdego pozabojowego testu Charyzmy. Nie tworzy nowych nagród ani możliwości fabularnych.
 - **Improwizacja:** raz na NPC przerzuć nieudany pozabojowy test Charyzmy przed konsekwencjami; drugi wynik jest ostateczny. Zużycie jest zapisywane.
-- **Rezerwuar i Zgranie:** Pojemność 6 kart. Na koniec tury zachowaj do 3 niewydanych kart i dobierz do 3 nowych; walkę zaczynasz z 3. Raz w swojej turze, przed doborem, możesz wymienić 1 kartę z ręki na 1 kartę innego bohatera w odległości do 30 ft. W grze solo wymieniasz ją z rynkiem. Wymiana nie daje dodatkowej karty.
+- **Zgranie:** Przygotowuj wspólny rynek Strojeniem i Odzyskiem. Karty kosztu trafiają na odrzucone przed efektem i również mogą być odzyskane. Brak prywatnej ręki lub rezerwy.
 
 **Skaza — Potrzeba publiczności:** Jeśli nie ma innego przytomnego bohatera w odległości do 10 ft, pierwsza zdolność specjalna kosztuje o 1 dowolną manę (*) więcej. Dopłata może dotyczyć też reakcji; ponosisz ją najwyżej raz do początku swojej następnej tury. Zwykły atak, ruch, przedmioty i pasywy nie wymagają dopłaty. W grze solo skaza nie działa.
 
 ## Nimra — Kontrolerka magiczna — teren i wiedza
 
 PW 20; KP 12; ruch 25 ft.
-Start 3; zachowaj do 2; dobierz do 3; pojemność 5.
+Wspólna talia 25 kart; rynek 5; brak prywatnej ręki. Płatność przed efektem, dobór na końcu tury.
 
-| Klawisz | Zdolność | Czas | Mana | Działanie |
+| Symbol panelu | Zdolność | Czas | Mana | Działanie |
 |---|---|---|---|---|
-| Q | Lodowy impuls | A | Niebieska | Cel w 50 ft, obrona KON przeciw ST czarów Nimry. Porażka: 1k8 zimna i −10 ft szybkości do początku następnej tury Nimry; sukces: brak efektu. |
-| W | Kwasowy rozprysk | A | Czerwona | Wskaż środek w 40 ft, promień 5 ft, także sojusznicy. Obrona ZRC przeciw ST Nimry: porażka 1k6 kwasu, sukces bez obrażeń. |
-| E | Szpilka umysłu | A | Czarna | Cel w 45 ft, obrona MDR przeciw ST Nimry. Porażka: 1k6 psychicznych i brak reakcji do początku następnej tury Nimry; sukces: brak efektu. |
-| R | Wachlarz płomieni | A | Czerwona + Dowolna | Stożek 15 ft, także sojusznicy. Obrona ZRC przeciw ST Nimry: porażka 2k6 ognia, sukces połowa obrażeń. |
-| A | Fala odrzutu | A | Niebieska + Czerwona | Linia 30×5 ft, także sojusznicy. Obrona SIŁ przeciw ST Nimry: porażka 2k6 mocy i odepchnięcie o 5 ft; sukces połowa obrażeń bez odepchnięcia. |
-| S | Lepka matryca | A | Zielona + Niebieska | Środek w 50 ft, kwadrat 10×10 ft. Trudny teren przez 3 rundy, bez koncentracji. Przy rzuceniu, wejściu lub początku tury istota wykonuje obronę ZRC przeciw ST Nimry; porażka powala. |
-| J | Mglisty krok | D | Niebieska + Zielona | Teleport 30 stóp, bez dodatkowej opłaty ruchu. |
-| D | Sen | A | Czarna + Niebieska + Dowolna | Środek w 50 ft, promień 15 ft. Rzuć 5k8; pula usypia cele od najniższych aktualnych PW. Bez obrony; nie działa na nieumarłych i odpornych na zauroczenie. Sen do końca następnej tury Nimry, obrażeń lub obudzenia akcją. Bez koncentracji. |
-| F | Mgła | A | Niebieska + Dowolna | Środek w 50 ft, promień 15 ft. Mgła silnie przesłania obszar i ogranicza widoczność wszystkim istotom. Koncentracja, do 3 rund. |
-| Z | Sieć | A | Zielona + Niebieska + Dowolna | Środek w 50 ft, kwadrat 20×20 ft. Trudny teren; obrona ZRC przeciw ST Nimry może unieruchomić. Uwolnienie: akcja i test SIŁ przeciw ST czaru. Koncentracja, do 3 rund. |
-| X | Piorunowy szlak | A | Czerwona + Niebieska + Dowolna | Cel w 60 ft: obrona ZRC przeciw ST Nimry, 3k6 błyskawic przy porażce, połowa przy sukcesie. Następnie przeskok na jedną istotę w 15 ft od celu; aplikacja wskazuje najbliższą istotę, także sojusznika; przy remisie wybiera wroga. Przeskok ma osobną obronę i te same obrażenia. |
-| C | Załamanie woli | A | Czarna + Niebieska | Środek w 50 ft, promień 10 ft, także sojusznicy. Obrona MDR przeciw ST Nimry: porażka 2k6 psychicznych i brak reakcji do początku następnej tury Nimry; sukces połowa obrażeń. |
-| V | Staza istoty | A | Niebieska + Czarna + Dowolna | Wróg w 50 ft wykonuje obronę MDR przeciw ST Nimry. Porażka blokuje ruch i akcję ruchu; powtarza obronę na końcu swoich tur. Koncentracja, do 3 rund. |
-| K | Roztrzaskanie | A | Czerwona + Czerwona + Dowolna | Środek w 60 ft, promień 10 ft, także sojusznicy. Obrona KON przeciw ST Nimry: porażka 3k8 grzmotu, sukces połowa obrażeń. Konstrukty mają utrudnienie obrony. |
-| AUTO | Tarcza | R | Biała | Reakcja na atak przeciw Nimrze: +3 KP wyłącznie przeciw temu atakowi i ponowna ocena trafienia. |
-| T | Rzeźbienie pola | MOD | Niebieska | Wyłącz do 4 wskazanych pól z obszaru następnego czaru. Modyfikuje obszar, nie czar pojedynczego celu; koszt czaru płacisz osobno. |
-| Y | Odległy czar | MOD | Zielona | Zwiększ zasięg następnego zgodnego czaru o 15 ft, najwyżej do 75 ft. Nie działa na Tarczę ani Mglisty krok. Koszt czaru płacisz osobno. |
-| U | Przeciążony czar | MOD | Czerwona | Jedna dodatkowa bazowa kość obrażeń. To inna zdolność niż ogólne przeciążenie koloru. |
-| G | Wymuszony splot | MOD | Czarna + Czarna | Jeden cel ma utrudnienie pierwszej obrony; przez limit czar bazowy może kosztować najwyżej dwie karty. |
-| H | Transmutacja energii | MOD | Czarna | Zmień kwas, zimno, ogień, błyskawice lub grzmot następnego czaru na inny typ z tej listy. Nie zmienia obrażeń psychicznych ani mocy. Koszt czaru płacisz osobno. |
+| Rozwidlenie | Lodowy impuls | A | Niebieska | Cel w 50 ft: obrona KON; porażka 1k8 zimna i −10 ft ruchu, sukces bez efektu. Do początku następnej tury źródła (T). |
+| Klepsydra | Szpilka umysłu | A | Czarna | Cel w 45 ft: obrona MDR; porażka 1k6 psychicznych i brak reakcji, sukces bez efektu. Do początku następnej tury źródła (T). |
+| Romb | Lepka matryca | A | Zielona + Dowolna | Obszar 2×2 w 50 ft: trudny teren. Wejście lub początek tury: obrona ZRC przed powaleniem, najwyżej raz na turę istoty. Najwyżej jedna matryca. Powalenie T lub do wstania. Do odświeżenia talii (O). |
+| Hak | Mglisty krok | D | Niebieska + Zielona | Teleport do 30 ft na legalne, widoczne pole. |
+| Wieża | Tarcza | R | Dowolna | +3 KP przeciw jednemu atakowi i ponowna ocena trafienia. |
+| Trójząb | Wachlarz płomieni | A | Czerwona + Dowolna | Stożek 15 ft, także sojusznicy. Obrona ZRC: 2k6 ognia, sukces daje połowę. Czerwona: +1k6 obrażeń (maks. 2). Niebieska: wyłącz dwa wskazane pola (maks. 1). |
+| Brama | Fala odrzutu | A | Niebieska + Dowolna | Linia 30×5 ft, także sojusznicy. Obrona SIŁ: 2k6 mocy i odepchnięcie o pole; sukces połowa bez przesunięcia. Czerwona: +1k6 obrażeń (maks. 2). Niebieska: dodatkowe pole odepchnięcia (maks. 1). |
+| Schody | Sieć | A | Zielona + Niebieska | Obszar 2×2 w 50 ft, także sojusznicy: trudny teren i obrona ZRC przed unieruchomieniem. Koncentracja. Uwolnienie: akcja i test SIŁ. Do odświeżenia talii (O). Zielona: bok większy o jedno pole (maks. 2). Niebieska: wyłącz dwa wskazane pola (maks. 1). |
+| Węzeł | Załamanie woli | A | Czarna + Dowolna | Cel w 50 ft: obrona MDR, 1k6 psychicznych i brak reakcji (T); sukces połowa bez osłabienia. Czarna: dodatkowy cel w 10 ft od pierwszego (maks. 2). Czerwona: +1k6 obrażeń wszystkim celom (maks. 1). |
+| Korona | Piorunowy szlak | A | Czerwona + Czerwona + Czerwona + Niebieska | Cel w 60 ft, potem do dwóch przeskoków po 15 ft do najbliższej nieporażonej istoty, także sojusznika. 4k6 błyskawic, osobne obrony ZRC, sukces połowa. |
+| Kotwica | Roztrzaskanie | A | Czerwona + Czerwona + Niebieska + Niebieska | Środek w 60 ft, promień 10 ft, także sojusznicy. 4k8 grzmotu, obrona KON daje połowę. Konstrukty mają utrudnienie obrony. |
+| Grot | Staza istoty | A | Niebieska + Niebieska + Niebieska + Czarna | Wróg w 50 ft: obrona MDR. Porażka odbiera ruch, akcję główną, dodatkową i reakcję. Koncentracja. Do początku następnej tury źródła (T). |
+
+### Eksploracja — NPC i obiekty
+
+- **Argumentacja (NPC):** Inteligencja, bazowy test +6. Przedstaw rozumowanie i dowody prowadzące do porozumienia.
+- **Analiza (obiekt):** Inteligencja, bazowy test +6. Odczytaj symbole i zastosuj właściwą sekwencję obsługi urządzenia.
+
+Dobieranie do 21: pas przed następną ofertą. Przekroczenie daje utrudnienie końcowego rzutu (2k20, niższy wynik), bez premii za karty.
+
 
 ### Pasywy i skaza
 
 - **Widzenie w ciemności:** W niemagicznej ciemności do 60 stóp widzi jak w półmroku. Nie przenika magicznej ciemności ani mgły.
 - **Gnomia przebiegłość:** przewaga w obronach INT, MĄD i CHA przeciw magii.
 - **Katalog niemożliwego:** wszystkie czary z talii są stale dostępne; Nimra nie przygotowuje ich po odpoczynku.
-- **Alchemia barw:** Raz w swojej turze, płacąc za czar lub Metamagię, możesz użyć jednej niebieskiej many (N) jako dowolnego koloru. Kartę normalnie wydajesz; opłaca tylko jeden symbol kosztu.
+- **Alchemia barw:** Raz we własnej turze użyj jednej niebieskiej jako dowolnego koloru bazowego kosztu czaru. Nie dotyczy wymaganych kolorów podbić ani ultów; kartę normalnie wydajesz.
 
-**Skaza — Echo magicznego wycieku:** Zapamiętaj czary i Metamagię użyte we własnej turze. Jeśli w następnej turze powtórzysz któryś z nich, przy pierwszym powtórzeniu dopłać 1 dowolną manę (*). Łącznie płacisz najwyżej raz w turze, nawet jeśli powtórzysz i czar, i Metamagię. Reakcje poza własną turą nie liczą się do Echa. Pominięta tura usuwa zapamiętane wybory.
+**Skaza — Echo magicznego wycieku:** Kolejne użycia tego samego czaru z rzędu: dopłata 0, 1, 2, 3… dowolnych kart. Inny czar przerywa serię. Ruch, zwykły atak, pusta tura i odświeżenie talii nie zerują serii; reakcje jej nie zmieniają. Podbicie nie zmienia tożsamości czaru. Cały koszt maksymalnie 5.
 
 ## Erynd — Zwiadowca — tropienie i ostrzał
 
 PW 25; KP 16; ruch 30 ft.
-Start 3; zachowaj do 2; dobierz do 3; pojemność 5.
+Wspólna talia 25 kart; rynek 5; brak prywatnej ręki. Płatność przed efektem, dobór na końcu tury.
 
-| Klawisz | Zdolność | Czas | Mana | Działanie |
+| Symbol panelu | Zdolność | Czas | Mana | Działanie |
 |---|---|---|---|---|
-| Q | Znak łowcy | D | Zielona | +1k6 raz na własną turę przy trafieniu oznaczonego celu bronią; koncentracja, trzy rundy. Przeniesienie po pokonaniu celu bez many i akcji. Ograniczenie raz na turę zastępuje dodawanie do każdego trafienia. |
-| W | Zwiadowcza mobilność | D | Zielona | Sprint albo Odstąpienie; obejmuje opłatę za zwykły ruch w tej turze. Sprint zwiększa limit, Odstąpienie znosi ataki okazyjne. Wcześniejszy ruch liczy się do limitu. |
-| E | Celowanie | D | Zielona | Przed ruchem poświęć cały jego limit: następny atak łukiem w tej turze ma przewagę. Atak opłacasz osobno. |
-| R | Strzała kotwicząca | A | Zielona + Niebieska | Atak długim łukiem. Trafiony cel wykonuje obronę Siły ST 14: porażka blokuje ruch, sukces połowi ruch do początku następnej tury Erynda. |
-| A | Strzała odsłaniająca | A | Zielona + Czarna | Atak długim łukiem. Trafienie obniża KP celu o 2 do początku następnej tury Erynda. Efekt nie kumuluje się. |
-| S | Strzała zakłócająca | A | Zielona + Niebieska | Atak długim łukiem. Trafienie zadaje obrażenia broni, odbiera reakcje i daje utrudnienie następnego ataku celu, najpóźniej do końca jego następnej tury. |
-| D | Podwójny strzał | A | Zielona + Czerwona + Dowolna | Dwa osobne strzały długim łukiem, każdy z +2 do trafienia, z możliwością różnych celów. Jedno wybrane trafienie dodaje +1k6 obrażeń tej techniki. Znak i Pierwsza krew również najwyżej raz w całej turze. Oba ataki są w cenie; obrażenia, krytyki i reakcje rozstrzygane osobno. |
-| F | Mglisty krok | D | Niebieska + Zielona | Teleport 30 stóp bez dodatkowej opłaty ruchu. |
-| Z | Kolczaste zarośla | A | Zielona + Zielona + Dowolna | Środek w 50 ft, promień 20 ft. Trudny teren: każde 5 ft ruchu w obszarze zadaje 2k4 obrażeń kłutych. Dotyczy również sojuszników. Koncentracja, do 3 rund. |
+| Rozwidlenie | Znak łowcy | D | Zielona | Koncentracja. Raz we własnej turze trafienie oznaczonego celu bronią dodaje 1k6. Przeniesienie po pokonaniu celu bez many i akcji. Do odświeżenia talii (O). |
+| Wieża | Zwiadowcza mobilność | D | Zielona | Sprint albo Odstąpienie w bieżącej turze. |
+| Klepsydra | Celowanie | D | Dowolna | Przed ruchem poświęć cały jego limit: przewaga następnego ataku łukiem w bieżącej turze. |
+| Romb | Strzała zakłócająca | A | Zielona + Dowolna | Trafienie bronią odbiera reakcje i daje utrudnienie następnego ataku celu. Do początku następnej tury źródła (T). |
+| Trójząb | Strzała kotwicząca | A | Zielona + Dowolna | Trafiony wróg: obrona SIŁ, porażka blokuje ruch, sukces połowi. Do początku następnej tury źródła (T). Zielona: osobny strzał kotwiczący w drugiego wroga sąsiadującego z pierwszym (maks. 1). |
+| Brama | Strzała odsłaniająca | A | Zielona + Dowolna | Trafienie bronią obniża KP celu o 2, bez kumulowania. Do początku następnej tury źródła (T). Czerwona: +1k6 obrażeń (maks. 2). |
+| Hak | Podwójny strzał | A | Zielona + Czerwona + Dowolna | Dwa osobne ataki łukiem, z możliwością różnych celów. Czerwona: +1k6 do jednego wybranego trafienia (maks. 2). |
+| Błysk | Deszcz strzał | A | Zielona + Zielona + Zielona + Zielona | Wskaż środek obszaru 3×3. Jeden wspólny test łuku przeciw KP każdego legalnego wroga, wspólne 1k8 + 1k6 + ZRC obrażeń. Osłona liczona osobno. Znak i Pierwsza krew najwyżej raz. |
+| Oko | Kolczaste zarośla | A | Zielona + Zielona + Niebieska + Niebieska | Środek w 50 ft, promień 20 ft: trudny teren, koncentracja. 1k4 za przebyte pole, maks. 4k4 na turę istoty; także wymuszony ruch i sojusznicy. Do odświeżenia talii (O). |
+
+### Eksploracja — NPC i obiekty
+
+- **Dociekliwość (NPC):** Mądrość, bazowy test +4. Wychwyć szczegół lub niespójność i zadaj właściwe pytanie.
+- **Rozpoznanie (obiekt):** Mądrość, bazowy test +6. Ze śladów używania odczytaj bezpieczny sposób obsługi.
+
+Dobieranie do 21: pas przed następną ofertą. Przekroczenie daje utrudnienie końcowego rzutu (2k20, niższy wynik), bez premii za karty.
+
 
 ### Pasywy i skaza
 
@@ -210,6 +255,7 @@ Start 3; zachowaj do 2; dobierz do 3; pojemność 5.
 - **Pierwsza krew:** Raz we własnej turze trafienie długim łukiem w cel z pełnymi PW dodaje 1k6 obrażeń. Wybierz trafienie przed rzutem obrażeń.
 - **Czujność zwiadowcy:** +2 do inicjatywy i testów wykrywania ukrytych przeciwników; premia nie dotyczy pułapek.
 - **Feyowskie pochodzenie:** przewaga przeciw zauroczeniu i odporność na magiczny sen.
-- **Czytanie prądów:** Na końcu swojej tury, po doborze many i przed uzupełnieniem rynku, możesz obejrzeć 2 wierzchnie karty talii i odłożyć je na wierzch w wybranej kolejności. Jeśli została tylko 1 karta, oglądasz tylko ją. Nie tasuj odrzuconych na potrzeby tego podglądu.
+- **Praktyka terenowa:** +2 do własnego końcowego testu wyzwania przy obiekcie w eksploracji. Nie dodaje punktów many ani premii do pułapek w walce.
+- **Czytanie prądów:** Przed końcowym uzupełnieniem rynku obejrzyj do dwóch wierzchnich kart talii i odłóż je w wybranej kolejności. Nie tasuj w tym celu stosu odrzuconych.
 
 **Skaza — Trauma bratobójczego strzału:** Pierwszy w twojej turze atak łukiem w cel sąsiadujący z innym przytomnym bohaterem kosztuje o 1 dowolną manę (*) więcej. Sąsiedztwo obejmuje też pola po skosie. Ataki nożem nie wymagają dopłaty. NPC i przywołane istoty stojące przy celu nie uruchamiają skazy.

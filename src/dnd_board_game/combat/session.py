@@ -13,6 +13,7 @@ from dnd_board_game.inventory import (
 )
 from dnd_board_game.world import Coordinate, PathResult
 from dnd_board_game.rules import ActiveEffect
+from dnd_board_game.rules.shared_mana import SharedMana
 
 from .action_economy import ActionEconomyCost, ActionUse, consume_action
 from .conditions import (
@@ -58,6 +59,8 @@ class TurnActionState:
     leveled_action_spell_cast: bool = False
     movement_action_used: bool = False
     weapon_change_available: bool = True
+    shared_speed_halved: bool = False
+    shared_bonus_actions_used: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -288,6 +291,7 @@ class CombatState:
     summoned_creatures: tuple[SummonedCreatureState, ...] = ()
     enemy_ai: EnemyAiRuntimeState = EnemyAiRuntimeState()
     damage_received_by_actor: tuple[tuple[str, int], ...] = ()
+    shared_mana: SharedMana | None = None
 
     @property
     def round_number(self) -> int:
@@ -307,7 +311,7 @@ def start_combat(
     state = CombatState(
         actors=actors,
         initiative_order=order,
-        turn_action=_turn_action_for(first_actor, frozenset()),
+        turn_action=_turn_action_for(first_actor, frozenset(), actors),
         hidden_states=hidden_states,
         condition_states=tuple(
             condition
@@ -315,6 +319,9 @@ def start_combat(
             if condition.actor_id in {str(actor.id) for actor in actors}
         ),
     )
+    from dnd_board_game.actors.resources import uses_shared_mana
+    if any(uses_shared_mana(a) for a in actors):
+        state = replace(state, shared_mana=SharedMana(turn_actor=str(first_actor.id)))
     return _with_finished_status(state)
 
 
@@ -624,6 +631,15 @@ def use_bonus_action(state: CombatState) -> TurnActionUseResult:
             False,
             "Stan aktywnego aktora blokuje wykonywanie akcji bonusowych.",
         )
+    if state.shared_mana is not None:
+        maximum = shared_bonus_action_limit(state, actor)
+        used = state.turn_action.shared_bonus_actions_used
+        if used >= maximum:
+            return TurnActionUseResult(state, False, "Akcje dodatkowe w tej turze zostały zużyte.")
+        return TurnActionUseResult(replace(state, turn_action=replace(state.turn_action,
+            shared_bonus_actions_used=used+1,
+            bonus_action_use=ActionUse.ACTION_AVAILABLE if used+1 < maximum else ActionUse.ACTION_USED)),
+            True, "Wykorzystano akcję dodatkową.")
     try:
         bonus_action_use = consume_action(state.turn_action.bonus_action_use)
     except ValueError:
@@ -1209,9 +1225,17 @@ def movement_remaining(
     actor: Actor,
     active_effects: tuple[ActiveEffect, ...] = (),
 ) -> int:
+    if state.shared_mana and any(e.actor_id == str(actor.id) and e.kind == "smoke_screen_hide_pending" for e in active_effects):
+        return state.shared_mana.smoke_movement if effective_movement_speed(actor, state.condition_states, active_effects) > 0 else 0
+    if state.shared_mana and state.shared_mana.pending_actor == str(actor.id) and state.shared_mana.pending_ability in {"unstoppable", "blade_dance"}:
+        if effective_movement_speed(actor, state.condition_states, active_effects) <= 0:
+            return 0
+        return state.shared_mana.technique_movement
     if state.turn_action.movement_action_used:
         return 0
     speed = effective_movement_speed(actor, state.condition_states, active_effects)
+    if state.turn_action.shared_speed_halved:
+        speed = (speed // 10) * 5
     if actor_has_feature(actor, "mira_shadow_stealth") and any(
         hidden.actor_id == str(actor.id) for hidden in state.hidden_states
     ):
@@ -1267,6 +1291,8 @@ def use_dash(
         state.condition_states,
         active_effects,
     )
+    if state.turn_action.shared_speed_halved:
+        dash_speed = (dash_speed // 10) * 5
     updated = replace(
         action_result.state,
         turn_action=replace(
@@ -1372,7 +1398,13 @@ def use_movement(
         )
     updated_actor = replace(actor, position=path.destination)
     updated_state = replace_actor(updated_state, updated_actor)
-    movement_used = state.turn_action.movement_used_feet + path.cost_feet
+    technique = state.shared_mana and state.shared_mana.pending_actor == str(actor.id) and state.shared_mana.pending_ability in {"unstoppable", "blade_dance"}
+    smoke = state.shared_mana and any(e.actor_id == str(actor.id) and e.kind == "smoke_screen_hide_pending" for e in active_effects)
+    if smoke:
+        updated_state = replace(updated_state, shared_mana=replace(state.shared_mana, smoke_movement=state.shared_mana.smoke_movement-path.cost_feet))
+    if technique:
+        updated_state = replace(updated_state, shared_mana=replace(state.shared_mana, technique_movement=state.shared_mana.technique_movement-path.cost_feet))
+    movement_used = state.turn_action.movement_used_feet + (0 if technique or smoke else path.cost_feet)
     updated_state = replace(updated_state, turn_action=replace(updated_state.turn_action, movement_used_feet=movement_used))
     updated_remaining = movement_remaining(
         updated_state,
@@ -1423,18 +1455,24 @@ def finish_turn(state: CombatState) -> CombatState:
         skip_actor_ids=finished_state.enemy_ai.escaped_actor_ids,
     )
     next_actor = actor_by_id(finished_state, order.current_actor.id)
+    mana = finished_state.shared_mana
+    if mana is not None:
+        from dnd_board_game.rules.shared_mana import begin_mana_turn
+        mana = begin_mana_turn(mana, str(next_actor.id))
     spent = frozenset(actor_id for actor_id in finished_state.spent_reaction_actor_ids if actor_id != next_actor.id)
     return replace(
         finished_state,
         initiative_order=order,
         spent_reaction_actor_ids=spent,
-        turn_action=_turn_action_for(next_actor, spent),
+        turn_action=_turn_action_for(next_actor, spent, finished_state.actors),
+        shared_mana=mana,
     )
 
 
 def _turn_action_for(
     actor: Actor,
     spent_reaction_actor_ids: frozenset[ActorId],
+    actors: tuple[Actor, ...] = (),
 ) -> TurnActionState:
     if actor.is_defeated():
         return TurnActionState(
@@ -1444,7 +1482,26 @@ def _turn_action_for(
             movement_used_feet=actor.speed_feet,
             object_interaction_available=False,
         )
-    return TurnActionState(reaction_available=actor.id not in spent_reaction_actor_ids)
+    from dnd_board_game.actors.resources import uses_shared_mana
+    halved = uses_shared_mana(actor) and str(actor.id) == "garran" and any(
+        a.faction not in {actor.faction, Faction.NEUTRAL} and not a.is_defeated()
+        and max(abs(a.position.col-actor.position.col), abs(a.position.row-actor.position.row)) <= 1
+        for a in actors)
+    return TurnActionState(reaction_available=actor.id not in spent_reaction_actor_ids, shared_speed_halved=halved)
+
+
+def hymn_affects(source: Actor, actor: Actor) -> bool:
+    return (source.faction == actor.faction and not source.is_unconscious()
+            and not source.is_defeated()
+            and max(abs(source.position.col-actor.position.col), abs(source.position.row-actor.position.row))*5 <= 30)
+
+
+def shared_bonus_action_limit(state: CombatState, actor: Actor) -> int:
+    if state.shared_mana is None:
+        return 1
+    return 2 if any(str(source.id) in state.shared_mana.hymn_sources
+                    and hymn_affects(source, actor)
+                    for source in state.actors) else 1
 
 
 def stop_combat(state: CombatState) -> CombatState:

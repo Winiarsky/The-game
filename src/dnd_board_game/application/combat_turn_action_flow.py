@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dnd_board_game.actors.resources import uses_physical_mana
+from dnd_board_game.actors.resources import uses_physical_mana, uses_shared_mana
 
 from dataclasses import dataclass, replace
 from typing import Mapping
@@ -49,6 +49,7 @@ from dnd_board_game.rules import (
     apply_active_effect,
     D20RollInput,
     D20RollRequest,
+    RollMode,
     RollModifier,
     RollModifierType,
     resolve_d20_roll,
@@ -256,7 +257,7 @@ class CombatTurnActionFlowService:
             and effect.kind == "smoke_screen_hide_pending"
             for effect in active_effects
         )
-        if not smoke_screen and state.turn_action.action_use != ActionUse.ACTION_AVAILABLE:
+        if not smoke_screen and (state.turn_action.bonus_action_use if uses_shared_mana(actor) else state.turn_action.action_use) != ActionUse.ACTION_AVAILABLE:
             raise ValueError("Akcja w tej turze została już zużyta.")
         blocking_conditions = (
             CombatCondition.GRAPPLED,
@@ -289,6 +290,8 @@ class CombatTurnActionFlowService:
             )
             raise ValueError(f"Nie możesz się ukryć: nadal wyraźnie widzą cię: {names}.")
         request = _skill_request(state, actor, "stealth")
+        if any(e.actor_id == str(actor.id) and e.kind == "smoke_screen_hide_pending" and e.value == 2 for e in active_effects):
+            request = replace(request, mode=RollMode.NORMAL if request.mode == RollMode.DISADVANTAGE else RollMode.ADVANTAGE)
         request = _with_pass_without_trace(
             request,
             actor,
@@ -334,6 +337,8 @@ class CombatTurnActionFlowService:
         if not smoke_screen and not eligibility.allowed:
             raise ValueError("Warunki zmieniły się i nie można już wykonać Hide.")
         request = _skill_request(state, actor, "stealth")
+        if any(e.actor_id == str(actor.id) and e.kind == "smoke_screen_hide_pending" and e.value == 2 for e in active_effects):
+            request = replace(request, mode=RollMode.NORMAL if request.mode == RollMode.DISADVANTAGE else RollMode.ADVANTAGE)
         request = _with_pass_without_trace(
             request,
             actor,
@@ -363,7 +368,7 @@ class CombatTurnActionFlowService:
             observer_perception_totals=perception_totals,
         )
         updated_state = replace(
-            state if smoke_screen else _consume_action(state),
+            state if smoke_screen else _consume_shared_hide_action(state),
             hidden_states=hiding.hidden_states,
         )
         remaining_effects = tuple(
@@ -372,7 +377,8 @@ class CombatTurnActionFlowService:
             if not (
                 smoke_screen
                 and effect.actor_id == str(actor.id)
-                and effect.kind in {"smoke_screen_hide_pending", "movement_speed_cap"}
+                and (effect.kind in {"smoke_screen_hide_pending", "movement_speed_cap"}
+                     or (state.shared_mana and effect.kind == "disengage_until_turn_end" and effect.object_id == "class_feature:smoke_screen"))
             )
         )
         hidden_names = _actor_names(state, hiding.hidden_state.hidden_from_actor_ids) if hiding.hidden_state else ()
@@ -937,3 +943,14 @@ def _actor_names(state: CombatState, actor_ids: tuple[str, ...]) -> tuple[str, .
     for actor_id in actor_ids:
         names.append(_actor_by_string_id(state, actor_id).name)
     return tuple(names)
+
+
+def _consume_shared_hide_action(state: CombatState) -> CombatState:
+    from dnd_board_game.actors.resources import uses_shared_mana
+    from dnd_board_game.combat.session import use_bonus_action
+    if uses_shared_mana(current_actor(state)):
+        result = use_bonus_action(state)
+        if not result.accepted:
+            raise ValueError(result.message)
+        return result.state
+    return _consume_action(state)

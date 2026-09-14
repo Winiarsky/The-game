@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dnd_board_game.actors.resources import uses_physical_mana
+from dnd_board_game.actors.resources import uses_physical_mana, uses_shared_mana
 
 from dataclasses import dataclass, replace
 
@@ -469,7 +469,7 @@ def channel_turn_targets(
         if target.id != source.id
         and not target.is_defeated()
         and target.creature_type in target_types
-        and grid_distance_feet(source.position, target.position) <= 30
+        and grid_distance_feet(source.position, target.position) <= (15 if uses_shared_mana(source) else 30)
         and (
             board is None
             or line_of_sight_clear(board, source.position, target.position)
@@ -554,9 +554,9 @@ def resolve_channel_turn(
                 if action_id == "turn_undead"
                 else "Turn the Unholy"
             ),
-            duration=EffectDuration.UNTIL_TURN_END if uses_physical_mana(actor) else EffectDuration.UNTIL_ENCOUNTER_END,
+            duration=EffectDuration.UNTIL_TURN_START if uses_shared_mana(actor) else EffectDuration.UNTIL_TURN_END if uses_physical_mana(actor) else EffectDuration.UNTIL_ENCOUNTER_END,
             expiration_actor_id=str(actor.id),
-            expiration_event_count=2 if uses_physical_mana(actor) else 1,
+            expiration_event_count=2 if uses_physical_mana(actor) and not uses_shared_mana(actor) else 1,
         )
         conditions = applied.condition_states
         if applied.applied:
@@ -1306,7 +1306,7 @@ def resolve_rage(
     rage_rounds = (
         max(1, ability_modifier(actor.ability_scores.constitution)
             + ability_modifier(actor.ability_scores.strength))
-        if uses_physical_mana(actor) else None
+        if uses_physical_mana(actor) and not uses_shared_mana(actor) else None
     )
     effect = ActiveEffect(
         id=f"rage:{actor.id}",
@@ -1317,7 +1317,7 @@ def resolve_rage(
         value=2,
         source_actor_id=str(actor.id),
         source=EffectSource(EffectSourceType.ACTION, "rage", "Rage"),
-        duration=EffectDuration.UNTIL_ENCOUNTER_END,
+        duration=EffectDuration.UNTIL_DECK_REFRESH if uses_shared_mana(actor) else EffectDuration.UNTIL_ENCOUNTER_END,
         remaining_rounds=rage_rounds,
     )
     effects = apply_active_effect(active_effects, effect).active_effects
@@ -1332,7 +1332,7 @@ def resolve_rage(
             value=state.round_number,
             source_actor_id=str(actor.id),
             source=EffectSource(EffectSourceType.ACTION, "rage", "Rage"),
-            duration=EffectDuration.UNTIL_ENCOUNTER_END,
+            duration=EffectDuration.UNTIL_DECK_REFRESH if uses_shared_mana(actor) else EffectDuration.UNTIL_ENCOUNTER_END,
             remaining_rounds=rage_rounds,
         ),
     ).active_effects
@@ -1424,7 +1424,7 @@ def resolve_powerful_strike(
         kind="powerful_strike",
         label="Potężne uderzenie",
         object_id="class_feature:powerful_strike",
-        value=2 if uses_physical_mana(actor) else 10,
+        value=0 if uses_shared_mana(actor) else 2 if uses_physical_mana(actor) else 10,
         source_actor_id=str(actor.id),
         source=EffectSource(
             EffectSourceType.ACTION,
@@ -1555,7 +1555,8 @@ def legal_shoulder_check_destinations(
 ) -> tuple[Coordinate, ...]:
     """Legal free destinations that do not pull the target toward Brakka."""
 
-    if distance_feet <= 0:
+    from .shared_mana_features import state_blocks_forced_movement
+    if distance_feet <= 0 or state_blocks_forced_movement(state, target):
         return ()
     origin_distance = grid_distance_feet(attacker.position, target.position)
     occupied = {
@@ -1602,7 +1603,7 @@ def resolve_shoulder_check(
         raise ValueError(action.message)
     attacker_total = int(attacker_roll) + skill_modifier(actor, "athletics")
     defender_total = int(defender_roll) + skill_modifier(target, "athletics")
-    distance = shoulder_check_push_distance(attacker_total, defender_total)
+    distance = (5 * (1 + dict(state.shared_mana.pending_boosts).get("push", 0)) if attacker_total > defender_total else 0) if state.shared_mana else shoulder_check_push_distance(attacker_total, defender_total)
     legal = legal_shoulder_check_destinations(
         board,
         action.state,
@@ -1728,7 +1729,7 @@ def apply_life_domain_to_healing_source(
         return source
     if uses_physical_mana(actor):
         return replace(source, healing_modifier=7, action_cost=ActionEconomyCost.ACTION,
-                       healing_hint="1k4+7", healing_modifier_per_cast_level=0) if source.id == "healing_word" else source
+                       healing_hint=source.healing_hint if uses_shared_mana(actor) and "k6" in source.healing_hint else "1k4+7", healing_modifier_per_cast_level=0) if source.id == "healing_word" else source
     modifier = source.healing_modifier + 2 + source.spell_level
     hint = source.healing_hint
     if hint:
@@ -1759,20 +1760,21 @@ def resolve_second_wind(
         raise ValueError(action.message)
     actor_after_action = current_actor(action.state)
     spent = spend_actor_resource(actor_after_action, "second_wind_uses")
+    healing_bonus = ability_modifier(actor.ability_scores.constitution) if uses_shared_mana(actor) else actor.level
     source = HealingSource(
         id="second_wind",
         name="Second Wind",
         source_type=HealingSourceType.CUSTOM,
         range_feet=5,
-        healing_hint=f"1d10 + {actor.level}",
+        healing_hint=f"1d10 + {healing_bonus}",
         healing_die_sides=10,
-        healing_modifier=actor.level,
+        healing_modifier=healing_bonus,
         action_cost=(ActionEconomyCost.ACTION if uses_physical_mana(actor) else ActionEconomyCost.BONUS_ACTION),
     )
     healing = apply_healing_result(
         spent.actor_after,
         source,
-        natural_roll + actor.level,
+        natural_roll + healing_bonus,
         condition_states=action.state.condition_states,
     )
     updated_state = replace_actor(action.state, healing.actor_after)
@@ -1873,7 +1875,7 @@ def plan_sneak_attack(
     source: AttackSource,
     roll_mode: RollMode,
 ) -> SneakAttackPlan:
-    if uses_physical_mana(attacker) and current_actor(state).id != attacker.id:
+    if uses_physical_mana(attacker) and (current_actor(state).id != attacker.id or (state.shared_mana is not None and state.shared_mana.turn_actor != str(attacker.id))):
         return SneakAttackPlan(False, "Atak z cienia działa raz we własnej turze.", source)
     mira_killer = actor_has_feature(attacker, "mira_shadow_killer")
     if not actor_has_feature(attacker, "sneak_attack") and not mira_killer:

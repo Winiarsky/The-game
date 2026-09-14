@@ -10,14 +10,44 @@ Aplikacja nie jest pełnym wirtualnym stołem RPG. W pierwszej wersji ma działa
 
 ---
 
+## Warunki rozmów — 2026-09-14
+
+W Arenie działają cztery opcjonalne warunki: częściowe porozumienie przy
+pierwszym wejściu w 15–17, drażliwy kolor zmieniający cenę sukcesu, dodatkowa
+informacja za dwie niebieskie przy sukcesie i jednorazowa karta za 1 w zamian
+za zobowiązanie. Zobowiązanie pozostaje również przy porażce. Jedna zasada
+na rozmowę, jawna stawka, decyzje przez runy, podstawowa procedura do 21
+bez zmian. Każdy bohater ma dostęp do lekcji, a finał otwiera różne możliwości
+u Nessy. Wynik „Porozumienie” jest odrębny od sukcesu i porażki. Opis i pliki:
+[wdrożenie eksploracji](docs/EXPLORATION_MANA_IMPLEMENTATION.md).
+
+## Aktualny wariant areny: wspólna mana 0.3
+
+Ustalenia rynku i czasu efektów opisuje `PROJECT_CONTEXT.md`, a wspólny katalog akcji dla aplikacji i druku znajduje się w `src/dnd_board_game/rules/shared_mana_catalog.py`. Każdy bohater ma 4 podstawowe zdolności, 3 z podbiciami i 2 ulty; Nimra odpowiednio 5/4/3. Zwykły ruch i atak są darmowe poza dopłatami skaz. Koszt odkłada się przed rozstrzyganiem efektu, dzięki czemu zdolności odzysku mogą odzyskać własny koszt. Historyczne opisy prywatnych rezerw i fal poniżej nie dotyczą tego wariantu.
+
 ## Opcjonalna Mapa 0 — arena rekrutacyjna (2026-09-06)
 
-Nessa prowadzi indywidualne próby wszystkich siedmiu bohaterów. Osobna
-arena używa normalnej walki i fizycznej many; trening kończy pokonanie
-kukły (50 PW, KP 10, +5 do trafienia, 0 obrażeń) albo rozmowa z Nessą
-po podejściu. Dostępne są dodatkowe próby wsparcia i obszarowa. Świeże
-kopie postaci pozwalają powtarzać testy bez zmiany postępu kampanii.
-Opis, rozstawienie i instrukcja: `docs/RECRUITMENT_ARENA.md`.
+Nessa prowadzi klasyczny samouczek krok po kroku dla każdej z siedmiu postaci.
+Sekwencja: osobne okno narracji i mechaniki → ustawienie planszy krok po kroku
+→ krótkie polecenie wykonania → wymagana zdolność
+→ rozstrzygnięcie → objaśnienie i następna sytuacja. Każdy rodzaj podbicia ma
+oddzielne ćwiczenie, razem 99 kroków. W ćwiczeniach zapewniamy potrzebną manę,
+świeże PW, budżet tury i przygotowane warunki (rana, flanka, Szał, atak do reakcji).
+Wyniki rzutów gracza są prawdziwe; nieudane pchnięcie lub ukrycie prowadzi do
+ponowienia. Ataki do ćwiczenia reakcji są jawnie przygotowane, bez losowego
+oczekiwania na okazję. Figurka Nessy i rozmowa na arenie nie są potrzebne.
+Teren pozostaje wspólny. Po pierwszym pełnym przygotowaniu nie powtarzamy
+ustawiania terenu przy kolejnych lekcjach, ponowieniach ani zmianie postaci.
+Podczas setupu na pierwszym planie jest tylko bieżący element i jego potwierdzenie;
+mapa pozostaje zwinięta. W trakcie działania opis lekcji jest rozwijaną pomocą.
+Narracja ma tekst i stabilne identyfikatory pod przyszły głos.
+
+Finał: zwykły pojedynek 1 na 1 z pełnymi PW i normalnym rynkiem many (5/20/0).
+Kukła ma 30 PW, KP 13, ruch 30 ft, atak wręcz +3 i 1k6 obrażeń. Samouczek kończy
+zwycięstwo, a utrata wszystkich PW bohatera kończy próbę bez zaliczenia pojedynku.
+Po wyniku ✓ wraca do wyboru postaci. Ukończone ćwiczenia można kontynuować;
+ukończoną postać można przejść ponownie. Kampania nie jest modyfikowana.
+Opis: `docs/RECRUITMENT_ARENA.md`.
 
 ## Fizyczna mana dla siedmiu bohaterów — 2026-09-05
 
@@ -952,6 +982,33 @@ Pathfinding musi być:
 ---
 
 ## Eksploracja I Wyzwania
+
+### Konfrontacje z maną — wdrożenie 2026-09-14
+
+Wspólny silnik obsługuje siedem metod społecznych i siedem obiektowych,
+ze stałymi wykonawcami i cechami (w tym KON Zastraszania Brakki). Wartości
+wybranej metody odsłaniają się po zobowiązującym rozpoczęciu. Trzy profile
+wartości mają różne właściwości; nie są uniwersalną skalą trudności.
+
+Fizyczna talia 25 kart; wybór jednej z dwóch, opcjonalne dociąganie duplikatów
+do innej barwy, pas przed ofertą. Dokładnie 21 daje sukces. Przekroczenie
+powoduje **utrudnienie końcowego testu, bez premii za karty**: dwa k20 i niższy
+wynik; nie ma −3. Test dodaje właściwą cechę, należną biegłość i pasyw.
+Jedna jawna przeszkoda: powtórzony kolor +2, następny po czerwonej +2 lub
+limit czterech wyborów ze zwykłym pasem. Lorian zachowuje +2 i przerzut własnego
+testu CHA; Erynd ma +2 do własnego końcowego testu obiektu w eksploracji.
+
+Arena udostępnia każdej postaci rozmowę z Ireną, interakcję ze skrzynią,
+lekcje podstaw i samodzielne sceny z trzema obecnymi wykonawcami. Pułapka
+bojowa ma zwykłe wykrywanie MDR/Percepcja i dezaktywację ZRĘ/narzędzia,
+z pozycją, kosztem akcji i zapisem stanu. Zaliczenia eksploracji są oddzielne
+od dotychczasowego combatu; podstawy kart zalicza się raz wspólnie.
+
+Nowe karty i pomoc korzystają z tego samego katalogu. Stan próby oraz
+zaliczenia są zapisywane; stare polecenia są odrzucane, a wczytany dobór
+wymaga potwierdzenia zachowanych fizycznych stosów. Dotychczasowe treści
+kampanii i ExplorationTrap pozostają obsługiwane w ich istniejącym formacie.
+Szczegóły i nawigacja: [opis wdrożenia](docs/EXPLORATION_MANA_IMPLEMENTATION.md).
 
 ### Odprawa Nessy — dopracowanie 2026-09-05
 

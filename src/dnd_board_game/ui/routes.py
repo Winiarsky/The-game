@@ -9,11 +9,14 @@ from dnd_board_game.ui.training_arena import training_hero, start_training_trial
 
 from dataclasses import replace
 from pathlib import Path
+import hashlib
+import time
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from flask import (
     Flask,
+    g,
     jsonify,
     redirect,
     render_template,
@@ -82,6 +85,20 @@ def create_app(
     scenario_dir: str | Path = "content/scenarios",
 ) -> Flask:
     app = Flask(__name__)
+
+    def static_asset_url(filename: str) -> str:
+        """An edited UI asset gets a new URL even when its name stays the same."""
+        digest = hashlib.sha256((Path(app.static_folder) / filename).read_bytes()).hexdigest()[:12]
+        return url_for("static", filename=filename, v=digest)
+
+    app.jinja_env.globals["static_asset_url"] = static_asset_url
+    from .board_panel_symbols import panel_icon
+    from . import launcher_board
+    app.jinja_env.globals['panel_icon'] = panel_icon
+
+    @app.context_processor
+    def launcher_context():
+        return {'launcher_token': getattr(g, 'launcher_token', '')}
     character_catalog = load_character_catalog(
         Path("content/character_creation/catalog.json")
     )
@@ -144,10 +161,12 @@ def create_app(
 
     @app.get("/rules/physical-mana")
     def physical_mana_rules():
+        from dnd_board_game.physical_cards.mana_print import build_print_hero
+        from dnd_board_game.rules.exploration_mana_catalog import REMINDER, CONDITION_HELP
         names = {"garran": "Garran", "brakka": "Brakka", "mira": "Mira", "dagna": "Dagna", "lorian": "Lorian", "nimra": "Nimra", "erynd": "Erynd"}
-        return render_template("physical_mana.html", waves=WAVES, mana_text=mana_text, mana_chips=chips,
+        return render_template("physical_mana.html", waves=WAVES, mana_text=mana_text, mana_chips=chips, exploration_reminder=REMINDER, exploration_conditions=CONDITION_HELP,
             heroes=[{"id": hero_id, "name": name, "abilities": hero_abilities(hero_id),
-                     "flaw": FLAWS[hero_id], "passive": MANA_PASSIVES[hero_id], "notes": "\n".join(f"{note.name}: {note.body}" for note in physical_mana_passives(hero_id)[:-1]), "supply": turn_supply(hero_id)}
+                     "flaw": FLAWS[hero_id], "passive": MANA_PASSIVES[hero_id], "notes": "\n".join(f"{note.name}: {note.body}" for note in physical_mana_passives(hero_id)[:-1]), "supply": turn_supply(hero_id), "exploration": build_print_hero(hero_id).exploration}
                     for hero_id,name in names.items()])
 
     @app.get("/")
@@ -175,12 +194,62 @@ def create_app(
         data = request.get_json(silent=True) or {}
         try:
             return jsonify(start_training_trial(session, str(data.get("hero_id", "")),
-                           str(data.get("mode", "basic")), str(data.get("creature_type", "humanoid"))))
+                           str(data.get("mode", "walkthrough")), str(data.get("creature_type", "humanoid")),
+                           reset_progress=bool(data.get("reset_progress", False))))
+        except ValueError as error:
+            return jsonify(error=str(error), state=session.state_payload()), 400
+
+    @app.post("/api/exploration-mana")
+    def exploration_mana_action():
+        from .exploration_mana import command
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(command(session, data))
+        except (ValueError, TypeError) as error:
+            return jsonify(error=str(error), state=session.state_payload()), 400
+
+    @app.post("/api/simple-trap")
+    def simple_trap_action():
+        from .simple_traps import command
+        try:
+            return jsonify(command(session, request.get_json(silent=True) or {}))
+        except (ValueError, TypeError) as error:
+            return jsonify(error=str(error), state=session.state_payload()), 400
+
+    def guard_exploration_lesson():
+        from .exploration_mana import active
+        from .simple_traps import enabled as trap_enabled, read as trap_read
+        if (request.method == "POST" and request.path.startswith("/api/")
+                and not request.path.startswith("/api/board/") and trap_enabled(session)
+                and trap_read(session)['pending'] and request.path not in
+                {"/api/simple-trap", "/api/snapshot/save", "/api/snapshot/load"}):
+            return jsonify(error="Najpierw rozstrzygnij test pułapki.", state=session.state_payload()), 400
+        if (request.method == "POST" and request.path.startswith("/api/") and not request.path.startswith("/api/board/") and active(session)
+                and request.path not in {"/api/exploration-mana", "/api/snapshot/save", "/api/snapshot/load",
+                                         "/api/board/scan", "/api/board/reset-scan"}):
+            return jsonify(error="Najpierw wróć z lekcji eksploracji do wyboru postaci.", state=session.state_payload()), 400
+
+    @app.post("/api/training/leave")
+    def leave_training():
+        from .training_walkthrough import leave
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(leave(session, retry=data.get("retry") is True))
+        except ValueError as error:
+            return jsonify(error=str(error), state=session.state_payload()), 400
+
+    @app.post("/api/training/acknowledge")
+    def acknowledge_training():
+        from .training_tutorial import acknowledge
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(acknowledge(session, str(data.get("ability_id", ""))))
         except ValueError as error:
             return jsonify(error=str(error), state=session.state_payload()), 400
 
     @app.get("/play")
     def play():
+        launcher_board.leave(session)
         return render_template("exploration.html", slash_commands=slash_commands_payload())
 
     @app.get("/new-game")
@@ -1402,6 +1471,69 @@ def create_app(
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
+    @app.before_request
+    def clear_browser_panel_on_game_command():
+        g.request_started_at = time.monotonic()
+        launcher_pages = {'index', 'new_game', 'load_game', 'characters', 'character_detail', 'start_new_game', 'load_current_game'}
+        if (request.path.startswith("/api/") or request.endpoint in launcher_pages | {'play', 'open_training_arena'}) and request.path not in {"/api/board/scan", "/api/board/reset-scan"}:
+            session._board_state_lock.acquire()
+            g.board_state_locked = True
+        if request.endpoint in launcher_pages:
+            g.launcher_token = launcher_board.begin(session)
+        # A dice overlay belongs to one decision; a game command invalidates it.
+        if request.method == "POST" and request.path.startswith("/api/") and not request.path.startswith("/api/board/"):
+            session.board_panel_context = None
+        return guard_exploration_lesson()
+
+    @app.teardown_request
+    def release_board_state_lock(error):
+        if getattr(g, "board_state_locked", False):
+            g.board_state_locked = False
+            session._board_state_lock.release()
+
+    @app.after_request
+    def record_slow_game_request(response):
+        if getattr(g, "board_state_locked", False) and request.method == "POST":
+            try:
+                session._cancel_obsolete_board_input()
+            except (ConnectionError, TimeoutError) as exc:
+                session.board_message = str(exc)
+
+        elapsed_ms = round((time.monotonic() - g.request_started_at) * 1000)
+        # Board scans wait for the player and report their preparation separately.
+        if elapsed_ms >= 250 and request.path.startswith("/api/") and request.path != "/api/board/scan":
+            session._record("ui_request_slow", {
+                "path": request.path, "method": request.method,
+                "elapsed_ms": elapsed_ms, "status": response.status_code,
+            })
+        return response
+
+    @app.post('/api/board/navigation')
+    def api_board_navigation():
+        try:
+            return jsonify(launcher_board.configure(session, request.get_json(silent=True) or {}))
+        except ValueError as exc:
+            return jsonify(error=str(exc)), 409
+        except Exception as exc:
+            return jsonify(error=str(exc)), 400
+
+    @app.post('/api/board/navigation/release')
+    def api_board_navigation_release():
+        data = request.get_json(silent=True) or {}
+        launcher_board.release(session, str(data.get('token', '')))
+        return jsonify(ok=True)
+
+    @app.post("/api/board/panel")
+    def api_board_panel():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(session.configure_board_panel(
+                str(data.get("context", "")), data.get("slots", []), bool(data.get("exclusive", False)),
+                expected_revision=str(data.get("revision", "")),
+            ))
+        except (ValueError, TypeError) as exc:
+            return jsonify({"error": str(exc)}), 400
+
     @app.post("/api/board/scan")
     def api_board_scan():
         data = request.get_json(silent=True) or {}
@@ -1484,6 +1616,17 @@ def create_app(
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
+    @app.post("/api/encounter/initiative/panel")
+    def api_encounter_initiative_panel():
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(session.update_initiative_panel(
+                str(data.get("command", "")), value=data.get("value"),
+                expected_revision=str(data.get("revision", "")),
+            ))
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
     @app.post("/api/encounter/initiative/roll")
     def api_encounter_initiative_roll():
         data = request.get_json(silent=True) or {}
@@ -1528,6 +1671,14 @@ def create_app(
             )
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/shared-mana")
+    def shared_mana_command():
+        from .shared_mana import command
+        try:
+            return jsonify(command(session, request.get_json() or {}))
+        except (ValueError, TypeError) as exc:
+            return jsonify({"error": str(exc)}), 400
 
     @app.post("/api/combat/mana-wave")
     def api_combat_mana_wave():
@@ -1855,6 +2006,15 @@ def create_app(
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
+    @app.post("/api/combat/area-spell/volley-roll")
+    def api_shared_volley_roll():
+        from .shared_volley import submit_volley_roll
+        data = request.get_json(silent=True) or {}
+        try:
+            return jsonify(submit_volley_roll(session, data.get("natural_roll"), data.get("natural_roll_2")))
+        except (ValueError, TypeError) as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
     @app.post("/api/combat/area-spell/damage")
     def api_combat_area_spell_damage():
         data = request.get_json(silent=True) or {}
@@ -2167,6 +2327,18 @@ def create_app(
                 session.move_combat_turn_action_selection(int(data.get("delta", 0)))
             )
         except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/command")
+    def api_combat_command():
+        from .shared_command import select
+        from dnd_board_game.hardware.board_panel import panel_position
+        data = request.get_json(silent=True) or {}
+        if data.get("revision") != session._board_selection_payload()["revision"]:
+            return jsonify(session.state_payload())
+        try:
+            return jsonify(select(session, panel_position(29 if data.get("back") else 28)))
+        except ValueError as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
     @app.post("/api/combat/turn-actions/confirm")

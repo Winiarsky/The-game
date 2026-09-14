@@ -554,6 +554,8 @@ class PlayerCombatResourceFlowService:
             }
             and pending.anchor is not None
         )
+        matrix = state.shared_mana is not None and action.id == "nimra_sticky_matrix"
+        is_persistent_zone = is_persistent_zone or (matrix and pending.anchor is not None)
         if not selected_target_ids and not is_persistent_zone:
             raise ValueError("Wybierz co najmniej jeden cel czaru koncentracyjnego.")
         if len(selected_target_ids) != len(set(selected_target_ids)):
@@ -582,6 +584,9 @@ class PlayerCombatResourceFlowService:
             _actor_by_id(state, selected_id)
             for selected_id in selected_target_ids
         )
+        if matrix:
+            # The zone checks entry or turn start, never its placement.
+            targets = ()
         base_effect_kind = str(
             getattr(action, "effect_kind", None)
             or "concentration_attack_bonus"
@@ -715,7 +720,7 @@ class PlayerCombatResourceFlowService:
             pending.cast_level - action.spell_level,
         ) * int(getattr(action, "upcast_value_per_level", 0))
         if base_effect_kind == "divine_care_aura_source":
-            effect_value = max(
+            effect_value = 2 if state.shared_mana else max(
                 1,
                 ability_modifier(caster.ability_scores.wisdom) // 2,
             )
@@ -850,7 +855,7 @@ class PlayerCombatResourceFlowService:
                     if is_concentration
                     else _status_effect_duration(action.duration)
                 ),
-                stacking=EffectStackingPolicy.STACK,
+                stacking=EffectStackingPolicy.REPLACE if action.id == "nimra_sticky_matrix" else EffectStackingPolicy.STACK,
                 stacking_key=(
                     f"concentration:{caster.id}"
                     if is_concentration
@@ -867,14 +872,14 @@ class PlayerCombatResourceFlowService:
             applied_effects.append(zone_effect)
         if (
             base_effect_kind == "apply_condition"
-            and action.id in {"entangle", "grease"}
+            and action.id in {"entangle", "grease", "nimra_sticky_matrix"}
             and pending.anchor is not None
             and getattr(action, "area", None) is not None
         ):
             terrain_zone = ActiveCombatEffect(
                 id=f"{action.id}_zone:{caster.id}:{action.id}",
                 actor_id=str(caster.id),
-                kind=f"{action.id}_zone",
+                kind="grease_zone" if action.id == "nimra_sticky_matrix" else f"{action.id}_zone",
                 label=action.label,
                 object_id=f"combat_action:{action.id}",
                 value=int(action.area.length_feet),
@@ -890,7 +895,7 @@ class PlayerCombatResourceFlowService:
                     if is_concentration
                     else _status_effect_duration(action.duration)
                 ),
-                stacking=EffectStackingPolicy.STACK,
+                stacking=EffectStackingPolicy.REPLACE if action.id == "nimra_sticky_matrix" else EffectStackingPolicy.STACK,
                 stacking_key=(
                     f"concentration:{caster.id}"
                     if is_concentration
@@ -941,7 +946,7 @@ class PlayerCombatResourceFlowService:
                 object_id=(
                     f"weapon:{magic_weapon_item_id}"
                     if action.id == "magic_weapon"
-                    else f"combat_action:{action.id}"
+                    else f"shared_combat_action:{action.id}" if state.shared_mana and action.id == "divine_care_aura" else f"combat_action:{action.id}"
                 ),
                 value=effect_value,
                 anchor_position=(
@@ -963,14 +968,10 @@ class PlayerCombatResourceFlowService:
                 radius_feet=int(getattr(action, "aura_radius_feet", 0)),
                 die_sides=int(getattr(action, "bonus_die_sides", 0)),
                 modifier=(
-                    ability_modifier(
-                        getattr(
-                            caster.ability_scores,
-                            str(getattr(action, "bonus_modifier_ability", None)),
-                        )
-                    )
-                    if getattr(action, "bonus_modifier_ability", None)
-                    else 0
+                    (-2 if dict(state.shared_mana.pending_boosts).get("reduction", 0) else 0)
+                    if state.shared_mana and action.id == "divine_care_aura"
+                    else (ability_modifier(getattr(caster.ability_scores, action.bonus_modifier_ability))
+                          if getattr(action, "bonus_modifier_ability", None) else 0)
                 ),
                 uses_maximum=(
                     effect_value

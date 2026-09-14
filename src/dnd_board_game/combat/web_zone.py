@@ -82,11 +82,11 @@ def resolve_web_save(
         CombatCondition.RESTRAINED,
         source_actor_id=zone.source_actor_id,
         source_label=f"Sieć: {zone.label}",
-        duration=EffectDuration.PERMANENT,
+        duration=EffectDuration.CONCENTRATION if state.shared_mana else EffectDuration.PERMANENT,
         save_ability="strength",
         save_dc=dc,
         save_timing=ConditionSaveTiming.ACTION,
-        source_spell_id="web",
+        source_spell_id=zone.source.id if state.shared_mana and zone.source else "web",
         source_spell_level=zone.spell_level,
     )
     return WebSaveResolution(

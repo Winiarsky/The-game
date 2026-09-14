@@ -313,6 +313,7 @@ class AreaSpellResolver(ActionResourceResolver):
         careful_target_ids: tuple[str, ...] = (),
         heightened_target_id: str | None = None,
         advantaged_target_ids: tuple[str, ...] = (),
+        active_effects: tuple[ActiveEffect, ...] = (),
     ) -> AreaSpellConfirmation:
         resource_use = self.consume_action_and_source_resource(
             state,
@@ -333,6 +334,7 @@ class AreaSpellResolver(ActionResourceResolver):
             saving_throw_modifiers_by_target=saving_throw_modifiers_by_target,
             heightened_target_id=heightened_target_id,
             advantaged_target_ids=advantaged_target_ids,
+            active_effects=active_effects,
         )
         careful = set(careful_target_ids)
         saves = tuple(
@@ -443,6 +445,7 @@ def roll_spell_saves_for_targets(
     saving_throw_modifiers_by_target: Mapping[str, tuple[RollModifier, ...]] | None = None,
     heightened_target_id: str | None = None,
     advantaged_target_ids: tuple[str, ...] = (),
+    active_effects: tuple[ActiveEffect, ...] = (),
 ) -> tuple[SpellSaveResult, ...]:
     if not source.save_ability:
         return ()
@@ -469,7 +472,8 @@ def roll_spell_saves_for_targets(
                 CombatCondition.RESTRAINED,
             )
         )
-        disadvantage = heightened or creature_disadvantage
+        hidden_mira = state.shared_mana is not None and str(target.id) == "mira" and any(h.actor_id == "mira" and h.hidden_from_actor_ids for h in state.hidden_states)
+        disadvantage = heightened or creature_disadvantage or hidden_mira
         roll_mode = _opposed_roll_mode(
             advantage=target_id in advantaged_target_ids,
             disadvantage=disadvantage,
@@ -499,6 +503,7 @@ def roll_spell_saves_for_targets(
                 condition_states=state.condition_states,
                 combat_actors=state.actors,
                 roll_mode=roll_mode,
+                active_effects=active_effects,
             )
         )
     return tuple(saves)

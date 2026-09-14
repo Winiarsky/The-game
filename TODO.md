@@ -1,5 +1,316 @@
 # TODO
 
+- [x] [Rozmowy: plan czterech warunków startowych] Zapisano reguły,
+  konsekwencje, zakres siedmiu postaci, runy Klucz/Gwiazda, migracje oraz
+  cztery lekcje z rzeczywistym wyborem w
+  `docs/SOCIAL_MANA_DECISIONS_IMPLEMENTATION_PLAN.md`. Wdrożone; bieżący opis w `docs/EXPLORATION_MANA_IMPLEMENTATION.md`.
+- [x] [Rozmowy 1/6] Jawny typ wyniku, stan warunku i migracje v1→v2
+  bez nakładania warunków na rozpoczęte próby.
+- [x] [Rozmowy 2/6] Jednorazowe porozumienie 15–17 i drażliwy kolor;
+  dodatkowy cel za układ kolorów i jednorazowe ustępstwo (karta = 1 za
+  zobowiązanie). Pierwszeństwo 21/przekroczenia, koszty i przerzut Loriana.
+- [x] [Rozmowy 3/6] Sceny wybierane po id, cztery warianty Ireny, siedem
+  metod i wspólny resolver rzeczywistych konsekwencji.
+- [x] [Rozmowy 4/6] Nowe decyzje przez runy, UI i maski LED/skanu,
+  zapis oferty, aktualne rewizje i niepowtarzalne skutki.
+- [x] [Rozmowy 5/6] Cztery lekcje z własnym wyborem, ćwiczenia samodzielne
+  i reakcja Nessy z opcjami zależnymi od uzyskanego wyniku.
+- [x] [Rozmowy 6/6] Ściąga, wszystkie formaty kart i pakiet areny,
+  testy Chrome/zasad/zapisu oraz porównanie strategii przed próbą przy stole.
+  Walidacja: 160 ukierunkowanych testów przeszło, 5600 symulowanych prób,
+  28 zestawów PDF odświeżonych, pakiet areny 67 stron i sprawdzona strona ściągi.
+
+- [ ] [Rozmowy: próba przy stole] Ograć cztery warunki i obie drogi wyboru,
+  szczególnie opłacalność listu i pogoni za kolorem. Dopiero po tej próbie
+  dobierać nowe warianty do konkretnych przygód.
+
+- [x] [Eksploracja: wspólny widok rzutów, 2026-09-14] NPC, obiekty i pułapki
+  używają fokusowania jednej kości, −/+ na planszy, ✓ do kolejnej kości,
+  podsumowania i poprawki przez ↩. Końcowe ✓ rozstrzyga test. Przy utrudnieniu
+  podsumowanie wybiera niższe k20 i dolicza modyfikatory raz. Panel w fazie
+  rzutu należy do kości; nie uruchamia metod ani powrotu do postaci. Zachowany
+  wspólny strumień wejścia i odrębny kontekst następnej kości/podsumowania.
+  Walidacja: 54 testy — runtime 20, plansza 20, pełny Chrome 2, regresja
+  kości walki 3, pułapki 9. `git diff --check` bez błędów.
+
+- [x] [Eksploracja: wybory przez runy, 2026-09-14] Metody siedmiu postaci,
+  pięć kolorów, pas/dobór, przerzut, pusta talia i nawigacja lekcji obsługiwane
+  przez wydrukowane runy. Wspólny katalog zasila UI, legalne pola skanu i LED;
+  tylko dozwolone wybory świecą. ✓ zatwierdza wpisane wyniki kości. Stałe
+  przypisania metod przy brakujących bohaterach, blokada pasu po odkryciu
+  oferty, wznowienie zapisanych stosów i ochrona przed starym skanem.
+  Walidacja: 40 testów — runtime 20, skany/LED 17 (w tym wszystkie 14 metod),
+  widoki Chrome 2 i pełna strona z wyborem przez planszę 1. Fizyczny sprzęt
+  pozostaje do próby użytkownika. Opis: `docs/EXPLORATION_MANA_IMPLEMENTATION.md`.
+
+- [x] [Garran: Bastion od SIŁ i automatyczny Kontratak, 2026-09-11]
+  Bastion zapisuje przy użyciu premię KP równą modyfikatorowi Siły źródła
+  (+4 dla Garrana z SIŁ 18); katalog, podgląd i objaśnienia używają tej zasady.
+  Kontratak ma zapisany etap ruch/atak/brak celu: automatyczne pola ruchu do
+  10 ft, ✓ kończy ruch lub pozostawia figurkę w miejscu, następnie automatyczne
+  cele wyposażonej broni. Bez menu i run wyboru akcji dla obu uczestników.
+  Po pierwszym ataku natychmiast synchronizuje LED-y ruchu sojusznika.
+  ↩ czyści wybór pola/celu; płatność pozostaje wspólna. Brak celu pozwala
+  przejść dalej bez ataku i kończy lekcję jako próbę do powtórzenia.
+  Walidacja: 95 testów (11 przepływów Garrana, 8 nowych przypadków, 30 many,
+  33 walkthrough, 11 aur LED, 2 Chrome), kompilacja i diff-check.
+- [ ] [Wydruki po zmianie Bastionu] Przy następnym odświeżeniu kompletu kart
+  wygenerować ponownie statyczne HTML/PDF: Bastion daje modyfikator SIŁ do KP.
+
+- [x] [Nakładanie aur, 2026-09-11] Wspólny wybór najsilniejszego efektu
+  danej aury na odbiorcę dla Osłony tarczą, Bastionu, Błogosławieństwa i
+  Boskiej Opieki. Zachowanie wszystkich źródeł pozwala automatycznie wrócić
+  do słabszego po ruchu, pokonaniu źródła lub utracie koncentracji.
+  Boska Opieka wybiera jeden cały wariant: kara ataku, następnie obrażeń;
+  promień służy tylko do sprawdzenia zasięgu. Łaska uzdrowienia wybiera
+  najsilniejszą średnią premię i zużywa tylko jej źródło. Różne aury nadal
+  się łączą; kilka Hymnów daje najwyżej jedną dodatkową akcję dodatkową.
+  Walidacja: 55 testów (18 nakładania, 7 aur, 11 LED, 11 walkthrough Garrana,
+  7 zdolności Garrana, 1 kar Boskiej Opieki), kompilacja i diff-check.
+
+- [x] [Kontratak: instrukcja dla gracza, 2026-09-11] Osobny nagłówek
+  „Teraz działa” dla uczestników 1/2 i 2/2, symbol ruchu z instrukcją
+  opcjonalnego przemieszczenia i wyróżnione polecenie ponownego użycia runy
+  Rozkazu do ataku. Potwierdzenie jednorazowej płatności oraz automatycznego
+  przejścia po ataku, także przy pudle. Po wejściu w podgląd instrukcja
+  ogólna ustępuje wyborowi pola/celu. Uaktualniona narracja lekcji.
+  Walidacja: 11 testów przepływu Garrana i 2 testy Chrome (390/1100 px).
+
+- [x] [Kontratak: zawieszenie po runie ruchu, 2026-09-11] Sesja
+  `exploration_ui_b9ed4739ff` zatrzymała obsługę po odczycie (19,29).
+  Podgląd aur tworzył deklarację many bez zdolności dla zwykłego ruchu
+  podczas opłaconego Kontrataku, wywołując „Brak opłaconej zdolności”.
+  Pomija teraz opcje niebędące aurami przed tworzeniem podglądu.
+  Regresja przez API planszy obejmuje ruch i ✓ obu uczestników, zachowanie
+  płatności oraz zakończenie ćwiczenia po trafieniu i pudle. Walidacja:
+  22 testy przepływów Garrana i aur pozostałych bohaterów.
+
+- [x] [Aury pozostałych bohaterów, 2026-09-11] Błogosławieństwo i Boska
+  Opieka Dagny oraz Hymn Loriana używają wspólnego podglądu LED: zasięg,
+  odbiorcy, podbicie promienia 5 → 10 ft, faza płatności i podsumowanie.
+  Premie oznaczone turkusem, wrogowie w Boskiej Opiece złotem. Aktywne aury
+  widoczne też w turze innej postaci, z pierwszeństwem bieżącej akcji;
+  przesunięcie i utrata koncentracji aktualizują światła. Zasięg Hymnu
+  korzysta z tej samej reguły co dodatkowa akcja. Ćwiczenie Hymnu ma pomocnika.
+  Walidacja: 103 testy (11 nowych LED, 9 Garrana, 7 reguł aur, 30 wspólnej
+  many, 13 wyboru celów, 33 walkthrough), kompilacja i `git diff --check`.
+- [ ] [Próba aur Dagny i Loriana na planszy] Sprawdzić oba kolory odbiorców,
+  przełączenie podbicia promienia, przesunięcie źródła/odbiorcy i zakończenie
+  koncentracji; potwierdzić czytelność dużego zasięgu Hymnu.
+
+- [x] [Garran: przejęcie, aury i kontratak, 2026-09-11] Sesja
+  `exploration_ui_3892f8dd85`: Osłona towarzysza wracała do pierwotnego celu,
+  gdy Garran był poza zasięgiem kukły; po płatności wyłączał się też ćwiczebny
+  rzut. Przejęty atak zachowuje obrońcę, koszt i zużytą reakcję. Lekcja pokazuje
+  6 obrażeń Garrana bez obrażeń pomocnika. Aury Osłony tarczą i Żelaznego
+  bastionu pokazują zasięg oraz odbiorców w podglądzie/płatności/podsumowaniu.
+  Wybór podbicia nadal rozróżnia przygaszone i zaznaczone cele. Kontratak
+  udostępnia atak i tę samą runę również pomocnikowi bez prywatnej many;
+  widoczne 1/2 i 2/2, bez dodatkowej płatności. Samouczek wymaga obu ataków.
+  Walidacja: 129 testów (9 nowych przepływów Garrana, 40 ataków/tur wroga,
+  13 celów planszy, 33 walkthrough, 30 wspólnej many, 4 Chrome), kompilacja
+  zmienionych modułów i `git diff --check`.
+- [ ] [Próba Garrana po poprawkach] Na planszy sprawdzić Osłonę towarzysza
+  (cel: pomocnik, trafiony: Garran), oba zasięgi aur, białe podbicie Osłony
+  tarczą i pełny Kontratak: Garran → pomocnik → zakończenie ćwiczenia.
+
+- [x] [Jeden bieżący krok samouczka, 2026-09-11] Osobne wprowadzenie przed
+  setupem, potem aktualny element pod nagłówkiem i krótkie polecenie ćwiczenia.
+  Opis kursu, mapa i pomoc nie spychają bieżącej akcji poniżej ekranu.
+  Teren po pełnym setupie pozostaje gotowy także przy ponowieniu pierwszej
+  lekcji i zmianie bohatera. Zapis rozróżnia wprowadzenie i ustawianie;
+  stare naciśnięcie ✓ nie zatwierdza następnego kroku. Walidacja: 72 testy
+  (33 walkthrough, 7 nowe przejścia, 19 launcher, 9 setup, 4 Chrome),
+  kompilacja zmienionych modułów Python i `git diff --check`.
+- [ ] [Próba nowego przebiegu setupu] Na fizycznej planszy przejść wybór
+  Garrana → opis → ustawianie → ćwiczenie, ponowić pierwszą lekcję i zmienić
+  bohatera; sprawdzić fokus polecenia i brak ponownego ustawiania terenu.
+
+- [x] [Wybór sojuszników na planszy, 2026-09-11] Cele okien wspólnej many
+  przez pola figurek zamiast dropdownu: legalne przygaszone, zaznaczone jasne,
+  ponowne naciśnięcie odznacza, ✓ wymaga legalnego wyboru. Białe podbicia
+  Osłony tarczą obsługują kilka różnych celów jednym zatwierdzeniem;
+  po zapłacie ↩ czyści zaznaczenie bez cofania kosztu. Walidacja ponownie
+  sprawdza wszystkie cele przed nadaniem efektów. Natywne maski i rewizje
+  odcinają stare panele kości i spóźnione kliknięcia. Testy adaptera i widoku
+  390/1100 px; fizyczny test wyboru pozostaje poniżej.
+- [ ] [Próba wyboru sojuszników na planszy] W samouczku Garrana sprawdzić
+  kontrast LED, odznaczanie, wybór dwóch sojuszników do białych podbić,
+  zatwierdzenie ✓ oraz powrót do kolejnego kroku.
+
+- [x] [Menu sterowane runami, 2026-09-11] Kafelki menu głównego, wczytanie,
+  profile bohaterów i wybór drużyny/scenariusza obsługiwane podświetlonymi
+  runami; wybór bez dodatkowego ✓. ↩ wraca o ekran/etap. Siedem run wyboru
+  bohaterów walkthrough od razu rozpoczyna/ponawia ich ćwiczenia, a powrót
+  przywraca maskę rosteru. Jeden adapter USB/WLED także poza /play; token
+  dokumentu, jednorazowe zdarzenie i anulowanie odcinają stare skany/wyjścia.
+  Symbole pochodzą z istniejącego wydruku panelu, bez zmian firmware'u.
+- [ ] [Próba menu na fizycznej planszy] Po restarcie aplikacji przejść
+  menu → arena → postać → powrót oraz nowa gra → drużyna → scenariusz.
+  Sprawdzić podświetlenie i krótkie naciśnięcia przy zmianie ekranów.
+
+- [x] [Bezpośredni Ethernet WLED, 2026-09-11] Gledopto GL-C-618WL,
+  firmware 16.0.1, 620 LED: stały adres 192.168.50.2/24, brama 192.168.50.1.
+  Komputer: profil NetworkManager „Plansza-WLED”, enp2s0, 192.168.50.1/24,
+  bez trasy domyślnej, autopołączenie. WLED wymaga niezerowej bramy także
+  przy połączeniu bez routera. Tymczasowy DHCP wyłączony po konfiguracji.
+  Aplikacja przełączona na nowy adres; 10 odczytów i 10 poleceń HTTP bez
+  błędów, mediana polecenia 10,8 ms. Szczegóły: docs/WLED_DIRECT_ETHERNET.md.
+- [ ] [Próba gry po Ethernet] Po ponownym uruchomieniu aplikacji sprawdzić
+  podświetlenie podczas samouczka i pełny start zestawu po odłączeniu zasilania.
+- [x] [Timeouty Ethernet przy aktywnym Wi-Fi WLED, 2026-09-11] Wyczyszczono
+  zapisane SSID przez formularz ustawień, zachowując adres/bramę Ethernetu,
+  konfigurację LED, hasło oraz awaryjny hotspot. Po restarcie domyślne
+  `Your_Network`, brak połączenia Wi-Fi. Łącznie 40 odczytów/poleceń HTTP
+  przed i po restarcie bez błędów; po restarcie mediana poleceń 10,15 ms,
+  cały panel 37,5 ms. Szczegóły: docs/WLED_DIRECT_ETHERNET.md.
+
+- [x] [Czytelne polecenia samouczka, 2026-09-11] Osobny blok „Teraz zrób”
+  ze złotą ramką, mocniejszym tłem i większym, pogrubionym poleceniem
+  w oknie narracji oraz przy bieżącym ćwiczeniu.
+
+- [x] [Pozycja obronna w walkthrough, 2026-09-11] Sesja
+  `exploration_ui_610a6683d0`: Drugi oddech i oba Uderzenia tarczą zaliczone;
+  potem ponowne naciśnięcia runy Pozycji obronnej, bez ✓ (potwierdzone przez
+  gracza). Wskazówka lekcji przechodzi z wyboru zdolności do niebieskiego ✓,
+  a następnie do odłożenia many; usunięte mylące „✓ ponownie” w podglądzie.
+  Test obejmuje powtarzanie runy bez kosztu, podgląd, płatność, zaliczenie
+  i następną sytuację. Błąd HTTP/walidacji WLED trafia teraz do diagnostyki
+  ramek także podczas przerwy między ponowieniami; wejście USB niezależne.
+- [ ] [Zanik aktualizacji WLED, sesja 610a6683d0] Po 08:56:31 UTC
+  brak potwierdzenia bieżących ramek aż do końca ćwiczenia. Dotychczasowy
+  log nie zachował przyczyny HTTP. Sprawdzić kolejną fizyczną sesję z nową
+  diagnostyką; bieżący odczyt `/json/info` działa (336 ms, RSSI −57 dBm).
+
+- [x] [Walkthrough areny, 2026-09-11] 99 kolejnych ćwiczeń dla siedmiu
+  postaci: sytuacja, narracja Nessy, wymagana umiejętność i osobne podbicia.
+  Zapewniona mana, świeże zasoby, kontrolowane okazje do reakcji, ponowienie
+  nieudanego pchnięcia/ukrycia. Po ćwiczeniach zwykły pojedynek 1 na 1
+  (30 PW, KP 13, +3, 1k6) oraz powrót przez ✓ do wyboru postaci.
+  Figurka Nessy usunięta z nowego trybu; teren bez zmian. Postęp w zapisie.
+  Usunąć stary warunek publiczności blokujący zdolności Loriana w profilu
+  wspólnej many: skazę wycenia istniejący koszt, bez zakazu użycia solo.
+- [ ] [Próba walkthrough na planszy] Przejść 99 ćwiczeń i 7 pojedynków;
+  sprawdzić przestawianie figurek, narracje i rytm potwierdzeń. Dodać nagrania
+  Nessy do gotowych tekstów i identyfikatorów narracji w osobnym zadaniu.
+
+- [x] [Świecące ✓ bez reakcji, 2026-09-10] Sesja `exploration_ui_be3fc3a4ad`:
+  pierwszy krok przygotowania areny i ręczne ponowienie kończyły się po 5 s
+  błędem ACK WLED, zanim uruchomiono wejście USB. Usunąć zależność skanu
+  od potwierdzenia LED; zachować maskę/kontekst ESP, anulowanie oraz osobne
+  ponowienia i diagnostykę LED. Testy obejmują przejście kroków przygotowania
+  przez ✓ mimo błędów WLED i anulowanie przy zablokowanym wysyłaniu LED.
+
+- [x] [Samouczki areny, 2026-09-10; zastąpione walkthrough] Pierwszy tryb dla siedmiu postaci:
+  67 ćwiczeń aktualnego katalogu (ze Świętym symbolem Dagny), dowolna kolejność,
+  automatyczne zaliczanie rozstrzygniętych działań, objaśnienia z symbolami
+  i niebieskim ✓. Figurki dostosowane do leczenia, reakcji, flanki, serii
+  i obszarów; teren bez zmian. Zapis/wczytanie oraz kontynuacja przechowują
+  postęp. Trzy wcześniejsze warianty pozostają swobodnym treningiem.
+  Unik instynktowny w profilu wspólnej many nie wymaga już starego warunku
+  ukrycia; jego rzeczywiste wywołanie przy ataku obejmuje test regresji.
+
+
+- [x] [Kości i ponawianie skanu, 2026-09-10] Uderzenie tarczą z podbiciem
+  pokazuje osobne k6, postęp, poprawkę i sumę; Siła jest doliczana raz.
+  Anulowanie zwalnia także blokadę skanu w przeglądarce. Ponowienie ręczne
+  i załadowanie strony kończą poprzedni skan; reset serwera czeka na wyjście
+  czytnika poza blokadą gry. Testy Chrome i HTTP obejmują płatność za Pozycję
+  obronną oraz następny wybór. W sesji `exploration_ui_84076df971` po płatności
+  (seq 242–246) ruszył skan trzech dostępnych akcji; ponowienia były odrzucane
+  jako duplikaty (247–254). Brak danych rozstrzygających, dlaczego pierwszy
+  fizyczny wybór nie dotarł. Ponowna próba na planszy pozostaje do wykonania.
+
+- [x] [Runy podbić i komunikaty, 2026-09-10] Zastąpić listę rozwijaną
+  i −/+ podbić wariantami z runą, symbolami kosztu oraz wielkością efektu.
+  W płatności serwer wyznacza aktywne runy, LED i ✓/↩; warianty różnych
+  kolorów można łączyć, ponowny wybór odznacza, limity są walidowane.
+  Uaktualnić instrukcje gry z Enter/Numpad na planszę, ekran i ✓/↩.
+  Opis: `docs/MANA_BOOST_RUNES.md`; fizyczna próba podbić pozostaje do wykonania.
+
+- [x] [WLED po migracji v2, 2026-09-10] Usunąć blokowanie UI podczas
+  wysyłania LED; jeden pracownik, najnowsza pełna ramka i ponowienia błędów.
+  Nie zapamiętywać odrzuconych ramek jako wysłanych. Po późniejszej poprawce
+  świecącego ✓ wejście ESP nie czeka na ACK LED; anulowanie odcina stary skan.
+  Regresja: Garran wybiera kukłę mieczem, sesja `exploration_ui_c4636e91fa`.
+  Analiza: `docs/BOARD_WLED_LATENCY_2026-09-10.md`.
+- [ ] [Fizyczne LED po poprawce] Sprawdzić ponownie potwierdzenie ataku
+  Garrana i płynność UI. Sieć WLED nadal odpowiada z opóźnieniem; zmiana
+  oddziela je od UI i ponawia aktualny obraz, nie przyspiesza samego Wi-Fi.
+
+- [x] [Wgranie v2 bez v1, 2026-09-10] `board_scan_protocol_v2_2` na ESP32:
+  cztery sumy zapisu potwierdzone; produkcyjny transport Python sprawdził
+  HELLO, maskę panelu, 12 s heartbeat/skanowania bez błędów I²C i STOP.
+  Raport: `docs/BOARD_FIRMWARE_DEPLOYMENT.md`. Próby przy stole poniżej.
+
+- [x] [USB v2 bez zgodności v1, 2026-09-10] Przenieść aplikację na maski
+  single/stream/finish, jeden czytnik USB, ACK/deduplikację, heartbeat i ścisły
+  parser. Usunąć SCAN/STOP v1, stare ustawienia skanowania i ponawianie po
+  TypeError. Firmware `board_scan_protocol_v2_2`; tekstowy PING tylko do info v2.
+  Źródła: `board/serial_v2.py`, `board/connection.py`, adapter gry i panel UI,
+  `future/board_20x30_usb_wled_test/`. Kontrakt: `docs/BOARD_SCAN_PROTOCOL_V2.md`.
+- [x] [Ciągłe wejście kości] Stały kontekst i maska +/− tej samej kości,
+  koniec na ✓/powrocie, kolejka transportu niezależna od HTTP i WLED.
+  Sekcja krytyczna gry odcina spóźnione zdarzenia przy sterowaniu ekranem.
+  Testy kontrolera C++, transportu Python, przepływu gry i panelu Chrome.
+- [x] [Audyt i projekt protokołu, 2026-09-10] Wyłącznie aktywne pola, bez
+  skanowania tła i błędnych naciśnięć. Audyt: `docs/BOARD_SCAN_PROTOCOL_REVIEW.md`;
+  aktualny kontrakt i ograniczenia integracji: `docs/BOARD_SCAN_PROTOCOL_V2.md`.
+- [ ] [Próba scenariusza i areny na v2] Sprawdzić start połączenia, LED/menu,
+  szybkie osobne +/−, zatwierdzenie, następną kość, naciśnięcia nieaktywnych
+  pól i równoczesną obsługę ekranu. Zmierzyć pełną reakcję do UI i LED.
+
+- [x] [Licznik inicjatywy / analiza USB, 2026-09-10] Sesja
+  `exploration_ui_37657b3f1c`: trzy fizyczne plusy, wynik 13; obsługa po
+  odbiorze 0–1 ms, kolejne skany po 147–159 ms, bez wolnych ramek LED podczas
+  zmian licznika. Przygotować grupowy odczyt ekspanderów w roboczym szkicu
+  ESP32 (40 zamiast 600 odczytów), oznaczenie wersji w STATUS i test wszystkich
+  pól oraz filtrowania styków. Źródło: `future/board_20x30_usb_wled_test/`.
+- [ ] [Pomiar szybszego skanera ESP32] Po wgraniu `board_scan_protocol_v2_2`
+  zmierzyć wykrywanie krótkich naciśnięć −/+ na fizycznej planszy.
+  Skan aktywnego panelu sprawdzono bez dotykania; pozostała ocena wykrywania
+  naciśnięć i całego przepływu do UI/LED.
+
+- [x] [Połączenie przy wejściu do gry, 2026-09-10] Ekran `/play` sam łączy
+  skonfigurowaną planszę lub symulator. Pokazuje „Łączę z planszą…” podczas
+  próby, a ostrzeżenie i Ponów dopiero po błędzie; nie dubluje prób i respektuje
+  jawny tryb awaryjny. Reset/zmiana scenariusza i nowa próba areny zachowują
+  otwarty adapter i ustawienia, anulując stary skan. Ostatni log
+  `exploration_ui_51cbf025ef` pokazywał pierwsze połączenie dopiero po ręcznym
+  Ponów. Testy obejmują start i błąd w Chrome, oba backendy, reset obu map,
+  wejście do próby areny, zachowanie ustawień i zamknięcie połączenia.
+
+- [x] [Opóźnienia wejścia planszy, 2026-09-10] Naprawić wyścig timera skanu
+  z zatwierdzaniem akcji i rejestracją kontrolek; ignorować stare odpowiedzi
+  bez zwalniania blokady nowego odczytu. Po odebranym naciśnięciu wysyłać
+  kolejny SCAN bez technicznego STOP i pauz 80/120 ms; zachować reset przy
+  starcie, anulowaniu i błędach. Test Chrome z kontrolowanymi timerami oraz
+  testy USB, panelu i inicjatywy. Analiza: `docs/BOARD_INPUT_LATENCY_2026-09-10.md`.
+- [ ] [Pomiar fizycznego wejścia i LED] Po ponownej próbie zmierzyć czas od
+  dotknięcia do sygnału USB oraz pełnego przebiegu czujników; sprawdzić wersję
+  wgranego firmware przed jego optymalizacją. Osobno sprawdzić opóźnienia WLED
+  (w sesji z 2026-09-10 do 954 ms), których testy symulowane nie odtwarzają.
+
+- [x] [Panel akcji po inicjatywie, 2026-09-10] Przywrócić LED-y i wybór akcji
+  nadrukowanymi polami areny, wyłączone podczas wdrożenia wspólnej many.
+  Korzystać z tego samego mapowania i budżetu co menu ekranowe; zachować
+  blokadę podczas płatności/rzutów, kolory i przełączanie podglądów.
+  Regresja z sesji `exploration_ui_0920b468f2`: start tury Garrana po inicjatywie.
+  Walidacja: 63 testy panelu, inicjatywy i wspólnej many przez `safe_pytest.sh`;
+  adapter symulowany, ponowna próba fizycznej planszy pozostaje do wykonania.
+
+## Wspólna mana 0.3 — wdrożenie 2026-09-09
+
+- [x] Liczony rynek 5 kart / talia 25, transakcyjna płatność, podbicia, Odzysk własnego kosztu, odświeżenie i presja końca talii.
+- [x] Podłączyć pełne 66 zdolności, święty symbol Dagny, nowe skazy, T/O i Hymn do runtime walki, reakcji i zapisu.
+- [x] UI wyboru podbić i potwierdzania kart; róg −/+ /✓/↩ bez zmiany pozycji. Dolny pasek akcji aktywny zgodnie z bieżącym menu, nadruk run na mapach pozostaje.
+- [x] Regeneracja kart bohaterów i zbiorczego PDF areny z kalibracją 250/244; testy reguł, UI, setupu i kompletnych rozstrzygnięć akcji.
+
+
+Walidacja: 286 celowanych testów, dwa przebiegi Chrome z symulatorem planszy, widoki 390/1280 px, 28 zestawów HTML/PDF i zbiorczy PDF 53 stron. Szczegóły: [wdrożenie 0.3](docs/SHARED_MANA_V03_IMPLEMENTATION.md).
+
+- [ ] Rozegrać nowy model 0.3 na fizycznej arenie: ocenić balans rynku/podbić i współpracę graczy, płynność LED oraz skalę wydruku na używanej drukarce.
+
 - [x] [Po teście walki 2026-09-06] Doprecyzować ukrycie Miry i priorytet LED, naprawić stary ekwipunek, wydłużyć Szał z licznikiem rund, poprawić „Z bara”, symbole many, pojedyncze kości z akceptacją i wspólny wynik przeciwnika. Uaktualnić wydruki. Walidacja: 122 celowane testy, Chrome 390/1280/1440 px i 28 HTML/PDF; szczegóły w `docs/COMBAT_PLAYTEST_POLISH_2026-09-06.md`.
 
 - [x] [Seria zwykłych ataków] Ograniczyć deklarację liczby ataków do Loriana. Pozostali bohaterowie przechodzą bez formularza do pojedynczego ataku; API i stare zapisy przestrzegają ograniczenia, techniki zachowują własną liczbę uderzeń. Uaktualnić Zryw, Lekkomyślny atak, opisy, karty i zbiorcze PDF-y. Walidacja: 61 celowanych testów i kontrola 28 PDF-ów.
@@ -621,6 +932,94 @@ obowiązują `Current Roadmap Focus` oraz etapy z `ROADMAP.md`.
 
 ## Content Tasks
 
+- [x] [Eksploracja z maną 0.2 — projekt i plan, 2026-09-13] Rozpisać
+  cechy 14 metod (Zastraszanie Brakki na KON), trzy pierwsze przeszkody,
+  rekomendację ujawnienia profilu po rozpoczęciu oraz zwykłe testy pułapek
+  bojowych. Plan `docs/EXPLORATION_CONFRONTATIONS_MANA_V02_PLAN.md` obejmuje
+  silnik, zapis, UI, content, wszystkie karty i praktyczne lekcje Nessy.
+  Sprawdzono kanoniczne cechy bohaterów oraz aktualne generatory/walkthrough.
+  To zakończenie planowania, bez zaliczania poniższego wdrożenia.
+- [x] [Mana eksploracji 1/6 — katalog i porównanie, 2026-09-14] Wspólne
+  14 metod z cechami, profile i trzy przeszkody. Skrypt porównał 134 400 prób
+  fizycznej talii bez zwracania kart, dla rzeczywistych modyfikatorów.
+  Profile pozostają różnymi rozkładami; nie mają mylących etykiet trudności.
+- [x] [Mana eksploracji 2/6 — reguły i zapis] Silnik do 21, utrudnienie
+  zamiast −3 po przekroczeniu, cechy i jednokrotna biegłość, osobiste pasywy,
+  przerzut Loriana. Wersjonowany stan w snapshotach, rewizje poleceń,
+  jednokrotny skutek i potwierdzenie zachowanych fizycznych stosów po wczytaniu.
+- [x] [Mana eksploracji 3/6 — aplikacja i sceny] Działające wejścia NPC/obiekt
+  dla siedmiu postaci, scena Ireny i skrzyni, wybrany kolor/pas/dobór, kości
+  i jawne składniki. Ćwiczenia samodzielne ustawiają trzy postacie i metody;
+  skutki sukcesu i porażki są zapisywane w odizolowanej scenie ćwiczenia.
+- [x] [Mana eksploracji 4/6 — pułapki] Zwykłe wykrycie i dezaktywacja
+  w combacie, zasięg, narzędzia i koszt akcji. Lekcja z atramentem dla każdej
+  postaci, trwały wynik i zapis oczekującego rzutu. Zachowana obsługa dawnych
+  ExplorationTrap; bez destrukcyjnej konwersji contentu i zapisów.
+- [x] [Mana eksploracji 5/6 — karty] Dwie metody/cechy i premie z katalogu,
+  pasyw Erynda, właściwy zakres Loriana, wspólna ściąga z utrudnieniem.
+  Wygenerowano cztery formaty siedmiu zestawów HTML/PDF, manifesty i aliasy;
+  arkusze 42 strony, karty 49, pakiet areny 60. Sprawdzono widok stron Erynda.
+- [x] [Mana eksploracji 6/6 — samouczek] Nessa prowadzi opis → setup →
+  wykonanie → wynik. Praktyczne lekcje doboru/duplikatów/pasu, 21, utrudnienia,
+  trzech przeszkód, 14 metod, pasywów i pułapki. Podstawy zaliczane wspólnie,
+  własne metody osobno; stabilne id i zachowany postęp combatu. Testy
+  przeglądarkowe oraz pełna strona Flask z interakcją Erynda. Łącznie 123
+  ukierunkowane testy przeszły; zapis sprawdzony dla 14 interakcji i pułapek
+  wszystkich siedmiu postaci. Wyniki w `docs/EXPLORATION_MANA_IMPLEMENTATION.md`.
+- [ ] [Próba użytkownika — eksploracja i pułapki] Na planszy sprawdzić
+  nowe wejścia każdej postaci, tempo doboru, koszty metod, balans profili,
+  czytelność druków oraz wznowienie zachowanych stosów. Dokumentacja:
+  `docs/EXPLORATION_MANA_IMPLEMENTATION.md`.
+
+- [x] [Eksploracja z maną — NPC i obiekty, 2026-09-13] Przygotować zbiorczy
+  projekt `docs/EXPLORATION_CONFRONTATIONS_MANA_V01.md`: siedem metod
+  obiektowych, stali wykonawcy, nowy proponowany pasyw Erynda +2, wspólne
+  zasady do 21 i przykłady Ireny oraz skrzyni ewakuacyjnej. Zweryfikować
+  obecne premie Erynda i istnienie pułapek eksploracyjnych. Aktualizacja
+  dokumentów projektowych, bez wdrożenia nowego modelu.
+- [x] [Wyzwania obiektowe — prototyp] Wdrożony jako część modułu 0.2:
+  siedem metod, Erynd +2, trwały skutek i drogi po porażce. Dawne stany
+  ExplorationTrap zachowują kompatybilny format; nie zostały usunięte.
+
+- [x] [Konfrontacje społeczne z maną — projekt, 2026-09-13] Uporządkować
+  dobieranie do 21, wybór jednej z dwóch barw, ukryte profile podatności,
+  stałych wykonawców i przeszkody w `docs/SOCIAL_CONFRONTATIONS_MANA_V01.md`.
+  Sprawdzić obecne Obycie i Improwizację Loriana: 5 istniejących testów
+  zaliczonych przez safe_pytest. To projekt, bez implementacji minigry.
+- [x] [Konfrontacje społeczne — prototyp] Wdrożono ujawnienie profilu po
+  rozpoczęciu, siedem wykonawców i ich cechy, trzy przeszkody, koniec talii
+  i pasywy Loriana. Próbę przy fizycznym stole obejmuje zadanie użytkownika wyżej.
+
+- [x] [Spokojna okolica — likwidacja żerowiska, 2026-09-13] Dodać do grafu
+  etap między odkryciem procederu a finałem: przygotowanie, opcjonalna pomoc
+  Witka, warunkowa walka z tym samym stadem, spokojne zabezpieczenie i rezygnacja.
+  Przekazywać wynik do oceny bezpieczeństwa. Uaktualnić projekt fabularny v0.3;
+  mechaniki i runtime pozostają do osobnego wdrożenia.
+  Walidacja Chrome: 15 kontroli nowego etapu, dróg bez walki, zagnieżdżonej
+  pomocy Witka, wyszukiwania i widoku mobilnego; podgląd układu grafu.
+
+- [x] [Spokojna okolica — interaktywny graf, 2026-09-13] Przygotować samodzielny
+  `content/scenarios/campaign/spokojna_okolica_graf.html`: kolorowane sceny,
+  rozwijane podgrafy, szczegóły węzłów, wyszukiwanie, zoom i przesuwanie;
+  osobny graf przyczyn sprzed przygody oraz oznaczenie roboczego finału.
+  Walidacja w lokalnym Chrome: 22 kontrole interakcji, geometrii, klawiatury,
+  widoków 1440×1000 / 390×844 i braku zależności sieciowych; podgląd zrzutów.
+
+- [x] [Nowa pojedyncza misja — propozycja, 2026-09-13] Przygotować roboczy
+  kierunek „Spokojna okolica”: klasyczne oczyszczenie drogi, odkrycie powodów
+  podtrzymywania zagrożenia, dwie opcjonalne odnogi, wybór i rola planszy.
+  Dokument: `content/scenarios/campaign/SPOKOJNA_OKOLICA_PROPOZYCJA.md`.
+  To propozycja do rozwijania, bez zastąpienia obecnej kampanii w runtime.
+- [x] [Spokojna okolica — przyczyna zagrożenia, 2026-09-13] W propozycji v0.2
+  zastąpić fałszywe ślady celowym podtrzymywaniem żerowiska przez Irenę i Witka.
+  Rozpisać żeraki, logistykę, przyzwyczajanie do wozów, eskalację i tropy.
+  Zmiana wyłącznie projektu; obecne potwory i scenariusze pozostają bez zmian.
+- [ ] [Spokojna okolica — dalszy projekt] Po omówieniu kierunku dopracować
+  dialogi, logistykę i koszty przenosin oraz mapę ratunku; sprawdzić główną
+  ścieżkę bez opcjonalnych rozmów i bez udanych testów wiedzy. Ustalić wagę
+  odpowiedzialności za wabienie i jeden dominujący konflikt finału. Nie traktować
+  nowych mechanik ani treści propozycji jako już wdrożonych.
+
 - [x] Define first demo scenario placeholder.
 - [x] Define minimal monster schema.
 - [x] Define minimal item/equipment schema.
@@ -1103,3 +1502,148 @@ Review evidence and UI/gameplay proposals: `docs/PROJECT_REVIEW_2026-09-05.md`.
   show the updated action menu. Preserve remaining movement and the original
   mana payment; exhausted movement disappears. Cover all seven heroes,
   repeated segments, selecting an attack and invalid movement destinations.
+
+- [x] [30-cell board panel preview, 2026-09-07] Build a landscape recruitment
+  arena preview with one bottom row: six basic icons, twenty distinct runes
+  and minus/plus/accept/back. Include matching card/dialog symbols and an
+  interactive dice prototype starting at half the die size. Document tradeoffs.
+- [ ] [30-cell panel runtime] After the ergonomic trial, audit situational
+  options and freeze symbol mappings; reserve the long edge in scenario setup,
+  movement and targeting. Connect sensor press/release events, dice input,
+  reactions, dialogs, waves and session navigation. Regenerate production cards
+  and validate a complete session without keyboard/mouse; no LLM roll bonuses.
+
+- [x] [Rune cards and arena panel plan, 2026-09-07] Share thirty SVG signs
+  and explicit hero ability mappings between arena preview and all four print
+  formats. Replace printed keyboard labels with runes/basic icons, remove the
+  rounded internal arena border, support direct switching between available
+  previews and Back to the full menu, and document arena-only rollout with
+  sensor, spatial, dice and whole-session acceptance checks.
+
+- [x] [Panel movement icon, 2026-09-07] Use a walking person for movement
+  across the arena preview and all card formats. Clarify the basic weapon
+  control as “Zmiana broni”; document that the interaction control is a
+  proposed shortcut to existing scene interactions, redundant for direct Nessa selection.
+
+- [x] [Remove panel interaction button, 2026-09-07] Remove its command,
+  icon and card instructions. Keep slot 4 blank and every other symbol fixed.
+  Preserve single-figure exploration and direct NPC/object field selection.
+
+- [x] [Combined monochrome A4 playtest pack, 2026-09-07] Generate one PDF
+  with assembly/calibration instructions, nine tiled arena sheets and all
+  seven current hero card sets (45 pages total). Preserve 25 mm cells,
+  750 × 500 mm board, 10 mm labelled glue overlaps, cut lines and blank
+  interaction slot. Use toner-friendly vector art and verify coverage,
+  physical scale, current symbols, PDF pages and card layouts.
+
+- [x] [Reusable arena grid and terrain cutouts, 2026-09-07] Remove all
+  permanent actor/start/terrain marks from the printed map. Add one A4 sheet
+  with 19 labelled 25 mm terrain tokens; preserve the panel, tiled overlaps
+  and all hero cards (46 pages). Give each terrain kind its own setup
+  instruction and LED footprint, matching the printed token label.
+
+- [x] [Panel lighting preview, 2026-09-07] Show available actions at 65%,
+  selected at 100%, other available previews at 35% and legal controls at
+  85%; unavailable fields are unlit. Restore menu brightness on Back,
+  preserve direct switching and lock action runes during dice input.
+  Document matching physical LED behavior and target-layer composition in
+  the existing panel runtime plan; hardware connection remains pending.
+
+- [x] [Arena initiative on physical panel, 2026-09-07] Connect the actual
+  initiative flow to board scans: red minus, green plus, blue accept and
+  amber correction; start every d20 at 10. Keep a shared server draft,
+  separate advantage dice, review before resolution and automatic enemy
+  rolls. Allow scans inside the initiative overlay, discard stale requests,
+  and avoid sending STOP after a completed scan during re-rendering.
+
+- [x] [Live action-menu UI and asset refresh, 2026-09-07] Verify live menu
+  and action previews show printed icons/runes for all seven heroes.
+  Label unmapped fallback variants as screen choices and replace remaining
+  action-preview keyboard instructions. Version all exploration JS/CSS URLs
+  by file contents so ordinary refreshes load the current interface after
+  updates; cover version stability/invalidation and current UI wording.
+
+- [x] [Arena runtime panel and action colors, 2026-09-07] Connect the printed
+  action/rune slots to live combat availability and board scans; retain targets
+  under the panel LED layer, support preview switching and Back, and lock runes
+  during dice entry. Bridge all existing dice-wizard steps to red minus, green
+  plus and blue accept, with half-die defaults, bounds and explicit review.
+  Replace keyboard badges with shared print SVGs; use one responsive tile grid
+  with dark main/bonus/movement/control colors, without scrolling category columns.
+  Reserve the arena panel edge outside playable geometry and reject old saves
+  with actors on that strip. The broader whole-session panel audit above remains
+  open (contextual submenus, reactions, setup/navigation and physical sensor trial).
+
+- [x] [Compact action menu colors, 2026-09-07] Use green backgrounds for
+  main actions and movement, blue for bonus actions, and explicit economy labels.
+  Pack printed runes into one responsive grid; show mana across the full tile
+  width and reduce spacing without clipping labels or prices. Browser checks:
+  all seven heroes at 1284x720; Nimra at 1920x1080, 1284x595, 1024x768 and
+  390x844, with no tile overflow or horizontal scrolling. Small screens retain
+  normal page scrolling for readable text; no independently scrolling columns.
+
+- [x] [Action economy colors on screen and board, 2026-09-08] Separate main
+  action blue, bonus action orange and movement green backgrounds. Color live
+  panel runes by the same authoritative economy groups; equipment/end-turn LEDs
+  are white. Preserve menu/preview brightness and independent dice controls.
+  Verify all seven hero menus and colors sent through the board adapter.
+
+- [x] [Arena print calibration, 2026-09-08] Apply the measured 250/244 scale
+  correction to arena tiles, panel, cut/glue lines, terrain tokens and the guide
+  ruler. Keep A4 paper and hero card scale unchanged; reposition tiles to retain
+  printer margins. Accept the current 19-column play area plus physical panel
+  when rebuilding the full 30×20 print. Regenerate the combined PDF and manifest.
+
+- [x] [Encounter setup on the board, 2026-09-08] Confirm figure and terrain
+  placement with the blue printed ✓ button and automatically arm setup scans.
+  Stage start-zone choices before committing: multiple free fields require a
+  click, the last free field is selected implicitly, and players can change
+  their choice until confirmation. Keep multi-field terrain groups intact,
+  clear each actor's selection and reject stale scans between setup steps.
+  Show the selected field and board instructions, with a gated screen fallback.
+  Cover physical scan/API behavior and verify Garran's setup in the browser.
+
+- [x] [Setup transition fixes, 2026-09-08] Re-arm automatic board input after
+  the reconnect request clears its busy state; the first map step previously
+  lit accept without starting a scan. Add a native blue ✓ scan target for
+  starting initiative after setup and any optional stealth. Keep this press
+  separate from accepting the first die, with stale-revision protection.
+  Verify the reconnect path and all setup steps through initiative in a browser.
+
+- [x] [Steady automatic LEDs and Shield Bash clarity, 2026-09-08] Preserve
+  normal brightness while automatically scanning, avoiding brightness pulses
+  and redundant WLED frames on each press. Include transport time in projectile
+  frame intervals instead of adding it to every full delay. Keep explicit manual
+  scan brightness available. Clarify Shield Bash's physical player k20, starting
+  counter value, automatic enemy Strength roll, and both equations before commit.
+  The observed trial submitted the initial 10; no player die is rolled by the app.
+
+- [x] [Pause after sword damage, 2026-09-08] Reuse the shortest paths already
+  computed by movement_range when planning an approach to scene objects.
+  Check destinations by cost and stable coordinate order, returning the first
+  legal interaction instead of recomputing the whole board for every tile.
+  Reproduce Garran (13,15), dummy (12,14), 11 damage: profiler reduced full
+  movement searches from 861 to 21 and damage processing from 36.3 s to 1.1 s
+  with the same local simulated transport. Cover route selection, exhausted
+  actions and the damage-to-next-action API flow. Existing legacy approach
+  integration tests remain marked skipped by the repository.
+
+- [ ] [Kafelki map bitewnych — po bohaterach na arenie, 2026-09-08]
+  Wrócić do tematu dopiero po dopracowaniu bohaterów na arenie. Przygotować
+  zestaw gotowych, pojedynczo rozkładanych kafelków terenu do druku i ponownego
+  użycia (np. filar, osłona +2), każdy z czytelnymi właściwościami, premiami,
+  karami lub ograniczeniami. Przy przyszłej aktualizacji istniejącej walki
+  z Głodnymi Cieniami zastosować ten sam model składania mapy i setupu.
+  Ustalenie zapisane w `PROJECT_CONTEXT.md`, sekcja „Plansza I Hardware”.
+  Obecnie nie zmieniać tej walki ani jej wydruków w ramach tego zadania.
+
+- [x] [Remaining panel delays, 2026-09-08] Remove movement searches used only
+  to label the action menu; share action options between rune availability and
+  color mapping, and reuse the freshly prepared scan target for its revision.
+  Mark completed browser scans finished before rendering so a panel transition
+  does not send a redundant serial reset. Reuse native accept/back controls
+  instead of registering an equivalent browser panel. Local browser comparison:
+  damage-to-ready 0.89→0.46 s, shield-selection-to-ready 1.73→0.61 s.
+  Read-only WLED probes varied 0.16–0.73 s; physical latency remains distinct
+  from the local simulator measurement. Log slow request durations, LED planning
+  versus transport, and scan preparation/wait/post-input durations separately.

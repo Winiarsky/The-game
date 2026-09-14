@@ -21,3 +21,21 @@
 .mana-chip path {fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
 .mana-plus {display:inline-block;margin:0 2px;vertical-align:middle;}
 .mana-legend {line-height:2.4;}
+.shared-mana-shade { position:fixed; inset:0; z-index:1300; background:#000a; display:grid; place-items:center; padding:1rem; }
+.shared-mana-decision { width:min(42rem,100%); max-height:90vh; overflow:auto; background:#181d22; border:1px solid #9c7d3b; border-radius:.7rem; padding:1.25rem; box-sizing:border-box; }
+.shared-mana-decision select { max-width:100%; }
+.mana-target-instruction { padding:.85rem 1rem; border-left:4px solid #e4c36a; background:#29271d; color:#fff0bc; }
+.mana-target-instruction b { display:block; margin-bottom:.4rem; font-size:1.15rem; }
+.mana-target-options { display:flex; flex-wrap:wrap; gap:.5rem; margin:.7rem 0; }
+.mana-target-option { max-width:100%; overflow-wrap:anywhere; }
+.mana-target-option.selected { border-color:#45dded; background:#14444b; color:#fff; }
+
+.mana-boost-options {display:grid;gap:.65rem;margin:1rem 0;}
+.mana-boost-option {display:flex;align-items:center;gap:1rem;text-align:left;width:100%;padding:.85rem;border:1px solid #65717c;background:#202831;color:inherit;}
+.mana-boost-option.selected {border:2px solid #dfb957;background:#343020;}
+.mana-boost-option:disabled {opacity:.5;}
+.mana-boost-option > span:last-child {display:grid;gap:.4rem;min-width:0;}
+.mana-boost-option small {color:#c6c2b5;}
+.mana-boost-rune {flex:0 0 2.6rem;}
+.mana-boost-rune svg {width:2.6rem;height:2.6rem;}
+.mana-boost-cost {line-height:1.8;}

@@ -47,7 +47,7 @@ def test_printed_hero_matches_build_shortcuts_spell_costs_and_shared_flaw(heroes
     manifest = json.loads(Path(
         "assets/physical_cards/character_sets/keyboard_v1/keyboard_character_cards_v1.json"
     ).read_text())
-    assert manifest["rules_profile"] == "physical_mana_v02"
+    assert manifest["rules_profile"] == "shared_mana_v03"
     sheet = next(hero for hero in manifest["heroes"] if hero["id"] == actor_id)
     assert (sheet["level"], sheet["hp"], sheet["ac"], sheet["speed"]) == (
         actor.level, actor.max_hp, effective_armor_class(actor), actor.speed_feet,

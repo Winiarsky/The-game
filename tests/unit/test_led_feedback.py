@@ -316,3 +316,83 @@ def test_projectile_animation_keeps_context_and_restores_base_frame():
         ((1, 1),),
     ]
     assert connection.calls[-1][2]["transition_ms"] == 80
+
+
+def test_continuous_scan_keeps_brightness_and_sends_only_changed_frames() -> None:
+    class AtomicConnection:
+        def __init__(self):
+            self.calls = []
+
+        def set_leds(self, positions, rgb_color, **kwargs):
+            self.calls.append((tuple(positions), rgb_color, kwargs))
+
+        def leds_off(self):
+            raise AssertionError('Continuous panel input must not blank the LEDs.')
+
+    connection = AtomicConnection()
+    adapter = BoardSessionAdapter(connection)
+    first = LedFeedback((LedFrame((Coordinate(19, 1),), LedColor.PANEL_ACCEPT, LedRole.MARKER),))
+    second = LedFeedback((LedFrame((Coordinate(19, 2),), LedColor.PANEL_PLUS, LedRole.MARKER),))
+    adapter.show_feedback(first)
+    for _ in range(3):
+        adapter.show_scan_feedback(first, boost_brightness=False)
+        adapter.restore_feedback(first)
+    adapter.show_feedback(second)
+    adapter.show_scan_feedback(second, boost_brightness=False)
+    adapter.restore_feedback(second)
+    assert len(connection.calls) == 2
+    assert all(call[2]['brightness'] is None for call in connection.calls)
+    assert all(call[2]['replace'] for call in connection.calls)
+
+
+def test_projectile_timing_includes_transport_time(monkeypatch) -> None:
+    import dnd_board_game.hardware.board_session as module
+
+    elapsed = [0.0]
+    sleeps = []
+
+    class AtomicConnection:
+        def set_leds(self, positions, rgb_color, **kwargs):
+            elapsed[0] += .02
+
+        def leds_off(self):
+            pass
+
+    def sleep(seconds):
+        sleeps.append(seconds)
+        elapsed[0] += seconds
+
+    monkeypatch.setattr(module.time, 'monotonic', lambda: elapsed[0])
+    monkeypatch.setattr(module.time, 'sleep', sleep)
+    adapter = BoardSessionAdapter(AtomicConnection())
+    adapter.animate_projectile((Coordinate(0, 0), Coordinate(1, 0), Coordinate(2, 0)), step_ms=55)
+    assert len(sleeps) == 2
+    assert all(abs(delay - .035) < .00001 for delay in sleeps)
+    assert abs(elapsed[0] - .110) < .00001
+
+
+def test_failed_led_frame_and_clear_are_not_cached_as_delivered():
+    class FailingConnection:
+        def __init__(self):
+            self.sends = 0
+            self.clears = 0
+
+        def set_leds(self, positions, colors, **kwargs):
+            self.sends += 1
+            return self.sends > 1
+
+        def leds_off(self):
+            self.clears += 1
+            return self.clears > 1
+
+    connection = FailingConnection()
+    adapter = BoardLedAdapter(connection)
+    feedback = LedFeedback((LedFrame((Coordinate(19, 1),), LedColor.PANEL_ACCEPT, LedRole.MARKER),))
+    adapter.show_feedback(feedback, replace=True)
+    adapter.show_feedback(feedback, replace=True)
+    adapter.show_feedback(feedback, replace=True)
+    assert connection.sends == 2
+    adapter.clear()
+    adapter.clear()
+    adapter.clear()
+    assert connection.clears == 2
