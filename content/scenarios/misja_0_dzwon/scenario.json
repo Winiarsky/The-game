@@ -1,0 +1,86 @@
+{
+  "schema": "dnd_board_game.scenario",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "project_original"
+  ],
+  "board": {
+    "cols": 20,
+    "rows": 30
+  },
+  "id": "misja_0_dzwon",
+  "name": "Misja 0 — Dzwon do odebrania",
+  "scene_mode": "exploration",
+  "actors": [
+    {
+      "id": "garran",
+      "name": "Garran",
+      "kind": "player_character",
+      "faction": "ally",
+      "ac": 14,
+      "hp": 30,
+      "speed_feet": 30,
+      "position": [
+        9,
+        20
+      ],
+      "item_refs": [
+        "longsword"
+      ],
+      "ability_scores": {
+        "strength": 14,
+        "dexterity": 12,
+        "constitution": 12,
+        "intelligence": 10,
+        "wisdom": 10,
+        "charisma": 10
+      }
+    }
+  ],
+  "environment": [],
+  "exploration": {
+    "party_start_zone": "mission",
+    "zones": [
+      {
+        "id": "mission",
+        "name": "Misja 0",
+        "positions": [
+          [
+            9,
+            18
+          ]
+        ],
+        "anchor_position": [
+          9,
+          18
+        ],
+        "description": "Narrator prowadzi kolejne sceny misji.",
+        "options": []
+      }
+    ],
+    "points": [],
+    "encounter_triggers": [
+      {
+        "id": "bell_battle",
+        "name": "Walka o dzwon",
+        "description": "Przejmijcie kontrolę nad dziedzińcem.",
+        "encounter_scenario": "content/scenarios/misja_0_dzwon/mechanics/battle.json",
+        "condition": "flag_equals",
+        "flag_key": "mission_battle_ready",
+        "flag_value": true,
+        "defeat_policy": "return_to_exploration",
+        "outcome_on_victory": {
+          "title": "Walka zakończona",
+          "body": "Przejdźcie do eksploracji posterunku.",
+          "effects": []
+        },
+        "outcome_on_defeat": {
+          "title": "Drużyna pokonana",
+          "body": "Napastnicy chcą negocjować.",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

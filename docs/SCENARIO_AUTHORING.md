@@ -1,5 +1,9 @@
 # Tworzenie Scenariusza
 
+Przy projektowaniu spotkań przygotuj warianty dla 3–6 graczy według
+[strategii skalowania](PARTY_SCALING.md), zaczynając od czteroosobowej drużyny.
+Podane budżety są wartościami do ogrania, nie zamkniętym balansem.
+
 ## 1. Utwórz paczkę
 
 ```bash
@@ -66,3 +70,14 @@ Scenariusz eksploracyjny pojawia się automatycznie w menu `Nowa gra`. Przed
 publikacją wykonaj test bez hardware oraz
 [checklistę UI-5](PLAYER_UI_DESIGN.md#ui-5--walidacja-przy-stole) na prawdziwej
 planszy.
+
+
+## Lokalna paczka Misji 0
+
+`content/scenarios/misja_0_dzwon/README.md` opisuje działający przykład narracyjnego
+samouczka 3–6 osób. Teksty i media są lokalne oraz odczytywane bez cache;
+mechanika konfrontacji jest utrwalana przy rozpoczęciu. Przejścia wymagające
+skutków gry obsługuje `ui/mission_zero.py`, zasady pozostają we wspólnych silnikach.
+Po edycji map ponów `scripts/build_mission_zero_prints.py`; do porównań liczbowych
+użyj `scripts/evaluate_mission_zero.py`. To nie jest jeszcze uniwersalny edytor
+przepływów dowolnej kampanii.

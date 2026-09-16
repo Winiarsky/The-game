@@ -1,0 +1,68 @@
+{
+  "guild_setup": [
+    {
+      "title": "Mapa Gildii",
+      "body": "Rozłóż mapę Gildii. Wydrukuj dostępny poniżej PDF na dziewięciu arkuszach A4 w skali 100%, bez dopasowania do strony. Plansza 20 × 30; współrzędne od zera. Potwierdź ✓."
+    },
+    {
+      "title": "Biurko Nessy",
+      "body": "Ustaw Nessę albo znacznik jej biurka na podświetlonym polu (5,7).",
+      "position": [
+        5,
+        7
+      ]
+    },
+    {
+      "title": "Arena",
+      "body": "Oznacz wejście na arenę na (14,8). To miejsce ćwiczeń; dziś ruszycie na wyprawę.",
+      "position": [
+        14,
+        8
+      ]
+    },
+    {
+      "title": "Drużyna",
+      "body": "Ustaw jedną figurkę drużyny na (9,18). Wyjście z gildii jest na (9,24).",
+      "position": [
+        9,
+        18
+      ],
+      "party": true
+    }
+  ],
+  "post_setup": [
+    {
+      "title": "Powrót do eksploracji",
+      "body": "Zbierz wszystkie figurki bojowe i karty many ze wszystkich stosów. Mapa posterunku zostaje. Ustaw jedną figurkę drużyny na (9,20).",
+      "position": [
+        9,
+        20
+      ],
+      "party": true
+    },
+    {
+      "title": "Rozmówca",
+      "body": "Ustaw Boruta jako rozmówcę na (9,12), również jeżeli w walce był wyeliminowany. Jest ranny, nie wraca do walki.",
+      "position": [
+        9,
+        12
+      ]
+    },
+    {
+      "title": "Dzwon",
+      "body": "Dzwon pozostaje na (9,16), wóz na (9,24).",
+      "position": [
+        9,
+        16
+      ]
+    },
+    {
+      "title": "Punkty posterunku",
+      "body": "Zbrojownia (5,7), kwatera (14,7), magazynek (4,15). Przechodź między punktami figurką drużyny; wybór punktu pokaże jego opis.",
+      "position": [
+        5,
+        7
+      ]
+    }
+  ]
+}

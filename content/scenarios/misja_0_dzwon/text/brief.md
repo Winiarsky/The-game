@@ -1,0 +1,1 @@
+Nessa odkłada czerwony ołówek. „Kochani, odzyskacie dzwon z opuszczonego posterunku. Zdjęto go z wieży, ale ostatni wóz zabrał rannych. Weźmiecie nasz wóz, muła, liny i rampę. Wrócicie z dzwonem. Za wykonanie zadania: dziesięć sztuk złota na osobę. Dzwon jest ciężki; proszę nie traktować tego jako opinii.”

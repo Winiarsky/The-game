@@ -22,10 +22,10 @@ if TYPE_CHECKING:
     from dnd_board_game.combat.context_menu import CombatMenuOption
 
 
-INTRO = ('Poprowadzę cię krok po kroku. W ćwiczeniach masz zapewnioną manę potrzebną do wskazanej '
-         'zdolności i podbicia: przygotuj wymagane kolory, odkładaj koszt i potwierdzaj ✓. '
-         'Przed kolejną lekcją odnowimy zasoby i ustawimy figurki. Teren pozostaje na miejscu. '
-         'Na końcu stoczysz samodzielny pojedynek, już z normalnym rynkiem i talią many.')
+INTRO = ('Najpierw poznasz dobór, przechowywanie, spalanie i drain. Każda walka zaczyna się '
+         'od przetasowania kompletu. W lekcjach zdolności jawnie przygotujemy pulę wskazaną '
+         'w instrukcji. Ładunek pozostaje; po zdolności spalasz karty z wierzchu. Rzuty wpisujesz '
+         'fokusem i −/+, a na końcu zatwierdzasz podsumowanie. Na końcu samodzielny pojedynek.')
 
 
 def enabled(s: ExplorationUiSession) -> bool:
@@ -57,23 +57,43 @@ def exercising(s: ExplorationUiSession) -> bool:
     return enabled(s) and flag(s, 'phase') == 'exercise' and current_step(s) is not None
 
 
-def start(s: ExplorationUiSession, hero: str, *, reset_progress: bool = False) -> dict[str, object]:
+def single_case(s: ExplorationUiSession) -> bool:
+    return flag(s, 'run_mode', 'sequence') == 'single'
+
+
+def complete_step(s: ExplorationUiSession) -> None:
+    step = current_step(s)
+    if step is None:
+        return
+    flags = set_scene_flag(s.state.flags, f'walkthrough_charge_case_{hero_id(s)}_{step.id}', True)
+    if not single_case(s):
+        flags = set_scene_flag(flags, f'walkthrough_charge_progress_{hero_id(s)}', int(flag(s, 'index', 0)) + 1)
+    s.state = replace(s.state, flags=flags)
+
+
+def start(s: ExplorationUiSession, hero: str, *, reset_progress: bool = False, case_id: str | None = None) -> dict[str, object]:
     if s.exploration.scenario_id != ARENA_ID or hero not in HERO_ORDER:
         raise ValueError('Wybierz bohatera samouczka na arenie.')
     if s.combat_state is not None and s.combat_state.status.value != 'finished':
         raise ValueError('Najpierw zakończ bieżące ćwiczenie albo wróć do wyboru postaci.')
     if s.pending_encounter is not None and s.combat_state is None:
         raise ValueError('Najpierw zakończ przygotowanie bieżącej próby.')
-    index = 0 if reset_progress else int(scene_flag(s.state.flags, f'walkthrough_progress_{hero}', 0))
-    if scene_flag(s.state.flags, f'walkthrough_completed_{hero}', False):
+    if case_id is not None:
+        course = steps(hero)
+        ids = [step.id for step in course] + ['duel']
+        if case_id not in ids:
+            raise ValueError('Nie ma takiego ćwiczenia dla wybranej postaci.')
+        return launch(s, hero, ids.index(case_id), single=True)
+    index = 0 if reset_progress else int(scene_flag(s.state.flags, f'walkthrough_charge_progress_{hero}', 0))
+    if scene_flag(s.state.flags, f'walkthrough_charge_completed_{hero}', False):
         index = 0
     return launch(s, hero, min(index, len(steps(hero))))
 
 
-def launch(s: ExplorationUiSession, hero: str, index: int, *, show_introduction: bool = True) -> dict[str, object]:
+def launch(s: ExplorationUiSession, hero: str, index: int, *, show_introduction: bool = True, single: bool = False) -> dict[str, object]:
     from .training_arena import training_hero
     from dnd_board_game.application.exploration_flow import ExplorationFlowStage
-    saved = [(k, v) for k, v in s.state.flags.values if k.startswith(('training_completed_', 'training_tutorial_done_', 'walkthrough_progress_', 'walkthrough_completed_', 'walkthrough_terrain_ready', 'walkthrough_intro_seen', 'exploration_mana_', 'trap_lesson_done_'))]
+    saved = [(k, v) for k, v in s.state.flags.values if k.startswith(('training_completed_', 'training_tutorial_done_', 'walkthrough_progress_', 'walkthrough_completed_', 'walkthrough_pool_', 'walkthrough_charge_', 'walkthrough_terrain_ready', 'walkthrough_intro_seen', 'exploration_mana_', 'trap_lesson_done_'))]
     # Reset also cancels the old board reader and drops all pending action flows.
     fixed_id = s._fixed_session_id
     s._fixed_session_id = s.observer.session_id
@@ -86,7 +106,7 @@ def launch(s: ExplorationUiSession, hero: str, index: int, *, show_introduction:
                        ('training_creature_type', 'humanoid'), ('training_requested', True)):
         flags = set_scene_flag(flags, key, value)
     s.state = replace(s.state, flags=flags)
-    put(s, index=index, phase='introduction' if show_introduction else 'setup', token=uuid4().hex, paid=False)
+    put(s, run_mode='single' if single else 'sequence', index=index, phase='introduction' if show_introduction else 'setup', token=uuid4().hex, paid=False, charge_pending_ability='')
     s.ui_flow_stage = ExplorationFlowStage.LOCATION_ACTIVE
     s._refresh_pending_encounter()
     s.pending_encounter = replace(s.pending_encounter, precombat_stealth_completed=True)
@@ -135,7 +155,7 @@ def initialize_combat(s: ExplorationUiSession) -> None:
     if state.shared_mana:
         state = replace(state, shared_mana=replace(state.shared_mana, turn_actor=hero_id(s)))
     s.combat_state = state
-    if hero_id(s) == 'brakka' and step.ability.id not in {'rage', 'reckless_attack', 'shoulder_check'}:
+    if hero_id(s) == 'brakka' and not step.ability.id.startswith('pool_') and step.ability.id not in {'rage', 'reckless_attack', 'shoulder_check'}:
         result = resolve_rage(state, s.active_combat_effects)
         s.active_combat_effects = result.active_effects
         # Prerequisite is supplied by the lesson, leaving the real action budget intact.
@@ -146,7 +166,7 @@ def initialize_combat(s: ExplorationUiSession) -> None:
         s.combat_state = replace(s.combat_state, condition_states=(ConditionState(
             actor_id='recruitment_helper', condition=CombatCondition.POISONED,
             source_label='Zatrucie przygotowane do ćwiczenia'),))
-    if step.ability.id == 'mana_recovery':
+    if step.ability.id == 'mana_recovery' and s.combat_state.shared_mana.pooled is None:
         mana = s.combat_state.shared_mana
         s.combat_state = replace(s.combat_state, shared_mana=replace(mana, deck=17, discard=3))
 
@@ -156,7 +176,9 @@ def notice_id(s: ExplorationUiSession) -> str:
         return ''
     if flag(s, 'phase') == 'introduction':
         return f"walkthrough:{flag(s, 'token')}:{flag(s, 'index')}:introduction"
-    if s._combat_has_pending_resolution() or s.shared_mana_declaration is not None:
+    mana = s.combat_state.shared_mana if s.combat_state else None
+    pool_setup = mana is not None and mana.pooled is not None and mana.phase.value == 'pooled'
+    if (s._combat_has_pending_resolution() and not pool_setup) or s.shared_mana_declaration is not None:
         return ''
     if s.combat_targeting_attack_source_id or s.combat_targeting_class_feature_action_id:
         return ''
@@ -176,15 +198,17 @@ def acknowledge(s: ExplorationUiSession, token: str) -> dict[str, object]:
     if phase == 'final_result':
         return leave(s)
     if phase == 'success':
+        if single_case(s):
+            return leave(s)
         return launch(s, hero_id(s), int(flag(s, 'index', 0)) + 1)
     if phase == 'retry':
-        return launch(s, hero_id(s), int(flag(s, 'index', 0)))
+        return launch(s, hero_id(s), int(flag(s, 'index', 0)), single=single_case(s))
     put(s, phase='exercise' if step else 'final')
     s.board_panel_context = None
     s.board_selection_revision += 1
     if step is None:
         return s.start_encounter_initiative()
-    if step.ability.timing == 'R':
+    if step.ability.timing == 'R' and (s.combat_state.shared_mana.pooled is None or s.combat_state.shared_mana.pooled.phase == 'ready'):
         order = s.combat_state.initiative_order
         index = next(i for i, e in enumerate(order.entries) if e.actor.faction == Faction.ENEMY)
         s.combat_state = replace(s.combat_state, initiative_order=replace(order, current_index=index))
@@ -203,7 +227,7 @@ def payment_error(s: ExplorationUiSession, ability_id: str, boosts: dict[str, in
     if ability_id != step.ability.id:
         return f'Teraz ćwiczymy: {step.ability.name}. Wybierz wskazaną umiejętność.'
     if {k: v for k, v in boosts.items() if v} != step.boosts:
-        return ('Wybierz wskazaną runę podbicia (jedną dodatkową kartę).' if step.boost_id
+        return ('Wybierz wskazaną runę podbicia (dwie dodatkowo spalone karty).' if step.boost_id
                 else 'W tym ćwiczeniu użyj zdolności bez podbicia.')
     return ''
 
@@ -216,6 +240,9 @@ def paid(s: ExplorationUiSession, ability_id: str, boosts: dict[str, int]) -> No
 
 def record_ability(s: ExplorationUiSession, ability_id: str, actor: str) -> None:
     if not exercising(s) or actor != hero_id(s) or ability_id != current_step(s).ability.id or not flag(s, 'paid', False):
+        return
+    if s.combat_state.shared_mana.pooled.phase != 'ready':
+        put(s, charge_pending_ability=ability_id)
         return
     step = current_step(s)
     if flag(s, 'paid_boosts', {}) != step.boosts:
@@ -231,7 +258,7 @@ def record_ability(s: ExplorationUiSession, ability_id: str, actor: str) -> None
         success = not s.combat_state.shared_mana.command_skipped
     put(s, phase='success' if success else 'retry', paid=False)
     if success:
-        s.state = replace(s.state, flags=set_scene_flag(s.state.flags, f'walkthrough_progress_{actor}', int(flag(s, 'index', 0)) + 1))
+        complete_step(s)
     s._record('walkthrough_step_resolved', {'hero_id': actor, 'step_id': step.id, 'success': success})
     s.board_selection_revision += 1
 
@@ -243,6 +270,11 @@ def filter_options(s: ExplorationUiSession, options: tuple[CombatMenuOption, ...
         return ()
     from dnd_board_game.combat.context_menu import CombatMenuAction as A
     step = current_step(s)
+    if step.ability.id == 'pool_hold':
+        from dnd_board_game.rules.shared_mana_catalog import CATALOG
+        paid_ids = {a.id for a in CATALOG}
+        return tuple(o for o in options if o.action in {A.SELECT_ATTACK_SOURCE, A.MOVE, A.ATTACK, A.EQUIP_AND_ATTACK}
+                     and (o.source_id or '') not in paid_ids)
     mana = s.combat_state.shared_mana
     if mana and mana.phase.value == 'resolving':
         return tuple(o for o in options if not mana.command_step or o.action != A.END_TURN)
@@ -252,24 +284,33 @@ def filter_options(s: ExplorationUiSession, options: tuple[CombatMenuOption, ...
                  or (step.ability.timing == 'R' and o.action == A.END_TURN))
 
 
-def leave(s: ExplorationUiSession, *, retry: bool = False) -> dict[str, object]:
+def leave(s: ExplorationUiSession, *, retry: bool = False, choose_case: bool = False) -> dict[str, object]:
     if not enabled(s):
         raise ValueError('Nie trwa prowadzony samouczek.')
-    if s._combat_has_pending_resolution() or s.shared_mana_declaration:
-        raise ValueError('Najpierw dokończ bieżący rzut lub płatność.')
+    # These are isolated training encounters: an explicit restart/exit also
+    # cancels unfinished dice, payment and board input via configure_custom_party.
     if retry:
-        return launch(s, hero_id(s), int(flag(s, 'index', 0)))
+        return launch(s, hero_id(s), int(flag(s, 'index', 0)), single=single_case(s))
     won = bool(current_step(s) is None and s.combat_state and s.combat_state.status.value == 'finished'
                and combat_winner(s.combat_state) == Faction.ALLY)
-    if won:
-        s.state = replace(s.state, flags=set_scene_flag(s.state.flags, f'walkthrough_completed_{hero_id(s)}', True))
-    saved = [(k, v) for k, v in s.state.flags.values if k.startswith(('walkthrough_progress_', 'walkthrough_completed_', 'walkthrough_terrain_ready', 'walkthrough_intro_seen', 'exploration_mana_', 'trap_lesson_done_'))]
+    was_single, selected_hero, selected_index = single_case(s), hero_id(s), int(flag(s, 'index', 0))
+    if won and was_single:
+        s.state = replace(s.state, flags=set_scene_flag(s.state.flags, f'walkthrough_charge_case_{selected_hero}_duel', True))
+    if won and not was_single:
+        s.state = replace(s.state, flags=set_scene_flag(s.state.flags, f'walkthrough_charge_completed_{hero_id(s)}', True))
+    saved = [(k, v) for k, v in s.state.flags.values if k.startswith(('walkthrough_progress_', 'walkthrough_completed_', 'walkthrough_pool_', 'walkthrough_charge_', 'walkthrough_terrain_ready', 'walkthrough_intro_seen', 'exploration_mana_', 'trap_lesson_done_'))]
     from .training_arena import training_hero
     s.configure_custom_party((training_hero(hero_id(s)),))
     flags = s.state.flags
     for key, value in saved:
         flags = set_scene_flag(flags, key, value)
     s.state = replace(s.state, flags=flags)
+    if was_single or choose_case:
+        from .training_menu import show_cases
+        show_cases(s, selected_hero, selected_index)
+    else:
+        from .training_menu import show_modes
+        show_modes(s, selected_hero)
     s._sync_board_leds()
     return s.state_payload()
 
@@ -281,6 +322,12 @@ def exercise_instruction(s: ExplorationUiSession, step: TrainingStep, fallback: 
     declaration = s.shared_mana_declaration
     if declaration is not None and declaration.stage == 'payment':
         error = payment_error(s, declaration.ability_id, declaration.boosts)
+        if s.combat_state.shared_mana.pooled is not None:
+            from dnd_board_game.scenarios.pooled_mana_catalog import pool_ability
+            payment = ('Potwierdź niebieskim ✓; ta zdolność nie zużywa many.'
+                       if pool_ability(declaration.ability_id, declaration.actor_id).free else
+                       'Zachowaj ładunek. Zatwierdź użycie przez ✓; po efekcie zgłoś kolory spalonych kart.')
+            return (error + ' ' if error else '') + payment
         if error:
             return error + ' Następnie odłóż pokazany koszt i naciśnij niebieskie ✓.'
         return 'Odłóż pokazany koszt many na stos odrzuconych. Naciśnij niebieskie ✓, aby wykonać zdolność.'
@@ -302,30 +349,38 @@ def payload(s: ExplorationUiSession) -> dict[str, object]:
     lesson = None
     if step:
         boost = next((b for b in step.ability.boosts if b.id == step.boost_id), None)
-        instruction = f'Użyj zdolności „{step.ability.name}”' + (f' i wybierz podbicie: {boost.label} (1 karta).' if boost else ' bez podbicia.')
+        instruction = f'Użyj zdolności „{step.ability.name}”' + (f' i wybierz podbicie: {boost.label} (+2 spalone karty).' if boost else ' bez podbicia.')
         if step.ability.timing == 'R':
-            instruction = 'W tej lekcji wynik ataku kukły jest przygotowany, aby uruchomić reakcję. Po ✓ kukła rozpocznie atak. W oknie reakcji wybierz „' + step.ability.name + '”, odłóż koszt i rozstrzygnij atak.'
+            instruction = 'W tej lekcji wynik ataku kukły jest przygotowany, aby uruchomić reakcję. Po ✓ kukła rozpocznie atak. W oknie reakcji wybierz „' + step.ability.name + '”. Reakcja nie zużywa many; potwierdź ją i rozstrzygnij atak.'
         if step.ability.id == 'garran_guard_companion':
-            instruction = 'Po ✓ kukła zaatakuje pomocnika. W oknie Osłony towarzysza odłóż koszt i naciśnij ✓. Garran przejmie trafienie i 6 obrażeń; pomocnik pozostanie bezpieczny.'
+            instruction = 'Po ✓ kukła zaatakuje pomocnika. W oknie Osłony towarzysza naciśnij ✓; reakcja nie zużywa many. Garran przejmie trafienie i 6 obrażeń; pomocnik pozostanie bezpieczny.'
         preparation = ''
         if hero == 'brakka' and step.ability.id not in {'rage', 'reckless_attack', 'shoulder_check'}:
             preparation = 'Na potrzeby tej sytuacji Brakka już jest w Szale. '
         if step.ability.id == 'shadow_verdict':
             preparation = 'Mira zaczyna ukryta przed kukłą, a pomocnik zapewnia jej własną flankę. '
-        if step.ability.id == 'mana_recovery':
-            preparation += 'Przygotuj rynek 5 kart, talię 17 i 3 karty odrzucone. '
         lesson = dict(id=step.id, narration_id=f'{hero}:{step.id}', name=step.name, cost=list(step.ability.payment(step.boosts)),
-                      icon=panel_icon(3 if step.ability.category == 'item' else ability_panel_slot(hero, step.ability.id)),
+                      icon=panel_icon(24 if step.ability.category == 'tutorial' else 3 if step.ability.category == 'item' else ability_panel_slot(hero, step.ability.id)),
                       explanation=step.ability.full_description,
                       instruction=exercise_instruction(s, step, instruction),
                       narration=preparation + narration_content()[hero][step.ability.id] + (f' Teraz powtórz zdolność z dodatkową maną: {boost.label}. Wybierz odpowiadającą jej runę w oknie kosztu.' if boost else ''),
-                      boost_cost=[boost.color] if boost else [])
+                      boost_cost=["*", "*"] if boost else [])
+    if lesson and step:
+        from .pooled_mana_training import preparation as pool_preparation
+        from dnd_board_game.scenarios.pooled_mana_catalog import requirement_text, hero_profile, ability_description
+        if step.ability.category == 'tutorial':
+            lesson.update(cost=[], instruction=step.ability.description, narration=step.ability.description)
+        else:
+            profile = hero_profile(hero)
+            lesson.update(cost=[], explanation=requirement_text(step.ability.id, hero) + " " + ability_description(hero, step.ability.id),
+                          narration=pool_preparation(s) + " " + profile["passive"] + " Skaza: " + profile["flaw"],
+                          instruction=exercise_instruction(s, step, instruction))
     notice = None
     token = notice_id(s)
     if token:
         notice = dict(lesson or dict(name='Samodzielny pojedynek', cost=[], icon='',
             explanation='Kukła: 30 PW, KP 13, ruch 30 ft, jeden atak wręcz +3, obrażenia 1k6. Pokonaj ją, używając poznanych zdolności.',
-            instruction='Odzyskujesz pełne PW. Przygotuj 25 kart: 5 na rynku, 20 w talii, pusty stos odrzuconych. Od teraz normalnie rozliczamy manę, tury i rzuty.',
+            instruction='Odzyskujesz pełne PW. Zbierz komplet podany w panelu many i przetasuj. Pule są puste; dobór poniżej 21 pkt na początku twojej tury. Kukła co drugą rundę spala dwie karty po trafieniu.',
             narration='Teraz wybory należą do ciebie. Potwierdź przygotowanie kart; następnie rzucimy na inicjatywę.'))
         notice.update(id=token, phase=phase, button='✓ Wykonaj ćwiczenie' if phase == 'briefing' and step else '✓ Rozpocznij pojedynek' if phase == 'briefing' else '✓ Następna sytuacja' if phase == 'success' else '✓ Przygotuj ponowną próbę')
         if phase == 'introduction':
@@ -345,8 +400,8 @@ def payload(s: ExplorationUiSession) -> dict[str, object]:
             won = combat_winner(s.combat_state) == Faction.ALLY
             notice.update(name='Samouczek ukończony' if won else 'Spróbuj ponownie',
                 narration='Kukła pokonana. Znasz już zdolności tej postaci i użyłeś ich w samodzielnej walce.' if won else 'To była próba. Ćwiczenia pozostają zaliczone; po wybraniu tej postaci wrócisz do pojedynku.',
-                instruction='Wróć do wyboru postaci. Możesz poznać następnego bohatera.',
-                explanation='', button='✓ Wybór postaci')
+                instruction='Wróć do wyboru trybu. Możesz powtórzyć kurs lub wybrać pojedyncze ćwiczenie.',
+                explanation='', button='✓ Wybór trybu')
         if phase == 'success':
             notice['narration'] = 'Ćwiczenie zaliczone. Przygotujemy teraz kolejną sytuację.'
             notice['explanation'] = ''
@@ -370,12 +425,26 @@ def payload(s: ExplorationUiSession) -> dict[str, object]:
             notice['instruction'] = '✓ odnowi PW, manę i ustawienie tego ćwiczenia.'
             if step and step.ability.id == 'counterattack_command':
                 notice['narration'] = 'Nie obie figurki wykonały atak. W Kontrataku zakończ ruch w zasięgu kukły albo zostań na polu startowym. Pudło zalicza atak; brak legalnego celu oznacza ponowienie próby.'
-    return dict(guided=True, intro=INTRO, current=lesson, index=index, total=total,
+    if notice and single_case(s):
+        if phase == 'introduction':
+            notice['intro'] = 'Pojedyncze ćwiczenie. Przygotujemy potrzebne zasoby i warunki. Postęp kursu po kolei pozostaje zachowany.'
+        if phase in {'success', 'final_result'}:
+            notice['button'] = '✓ Wybór ćwiczenia'
+            notice['instruction'] = '✓ wraca do listy. Możesz powtórzyć ten przypadek albo wybrać inny.'
+            if phase == 'success':
+                notice['narration'] = notice['narration'].replace('Przygotujemy teraz kolejną sytuację.', 'Możesz teraz wybrać kolejne ćwiczenie.')
+            else:
+                notice['name'] = 'Pojedynek wygrany' if combat_winner(s.combat_state) == Faction.ALLY else 'Koniec próby'
+                notice['narration'] = 'Samodzielna próba zakończona. Postęp kursu po kolei pozostaje zachowany.'
+    return dict(guided=True, run_mode='single' if single_case(s) else 'sequence', intro=INTRO, current=lesson, index=index, total=total,
                 completed_count=index, complete=False, phase=phase, notice=notice,
-                can_retry=phase in {'exercise', 'final'} and not s._combat_has_pending_resolution() and s.shared_mana_declaration is None)
+                can_retry=True)
 
 
 def synchronize(s: ExplorationUiSession) -> None:
+    if enabled(s) and exercising(s) and s.combat_state is not None:
+        from .pooled_mana_training import synchronize as synchronize_pool_lesson
+        synchronize_pool_lesson(s)
     if not enabled(s) or flag(s, 'phase') != 'final' or s.combat_state is None:
         return
     defeated = any(str(a.id) == hero_id(s) and a.hp <= 0 for a in s.combat_state.actors)
@@ -387,7 +456,7 @@ def synchronize(s: ExplorationUiSession) -> None:
     if not s._combat_has_pending_resolution() and defeated:
         from dnd_board_game.combat.session import CombatStatus
         s.combat_state = replace(s.combat_state, status=CombatStatus.FINISHED)
-    if s.combat_state.status.value == 'finished' and not s._combat_has_pending_resolution():
+    if s.combat_state.status.value == 'finished' and not s._combat_has_pending_resolution() and (not mana or not mana.pooled or mana.pooled.phase == 'ready'):
         put(s, phase='final_result')
         s.board_panel_context = None
         s.board_selection_revision += 1
@@ -415,7 +484,7 @@ def enemy_rng(s: ExplorationUiSession) -> random.Random:
 
 def restore_setup(s: ExplorationUiSession) -> dict[str, object] | None:
     if enabled(s) and s.combat_state is None and flag(s, 'phase') in {'introduction', 'setup', 'briefing'}:
-        return launch(s, hero_id(s), int(flag(s, 'index', 0)), show_introduction=flag(s, 'phase') == 'introduction')
+        return launch(s, hero_id(s), int(flag(s, 'index', 0)), show_introduction=flag(s, 'phase') == 'introduction', single=single_case(s))
     return None
 
 
@@ -425,6 +494,8 @@ def require_lesson_action(s: ExplorationUiSession, ability_id: str) -> None:
     if flag(s, 'phase') != 'exercise':
         raise ValueError('Najpierw potwierdź objaśnienie Nessy przyciskiem ✓.')
     if s.combat_state.shared_mana.phase.value == 'resolving':
+        return
+    if current_step(s).ability.id == 'pool_hold' and ability_id.startswith('basic_attack:'):
         return
     if ability_id != current_step(s).ability.id:
         raise ValueError(f'Teraz ćwiczymy: {current_step(s).ability.name}.')

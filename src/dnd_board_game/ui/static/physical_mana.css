@@ -39,3 +39,13 @@
 .mana-boost-rune {flex:0 0 2.6rem;}
 .mana-boost-rune svg {width:2.6rem;height:2.6rem;}
 .mana-boost-cost {line-height:1.8;}
+
+.mana-points {margin:10px 0;padding:10px 14px;border:1px solid #b49a58;border-radius:8px;background:#28271f;}
+.mana-points-total {display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 20px;}
+.mana-points-total strong {font-size:1.7rem;color:#ffe296;white-space:nowrap;}
+.mana-points-cards, .mana-points-values {display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-top:8px;}
+.mana-valued-card {display:inline-flex;align-items:center;gap:4px;white-space:nowrap;}
+.mana-points-values {font-size:.85rem;color:#d5d1c4;}
+
+.mana-charge-statuses {display:flex;flex-wrap:wrap;gap:.4rem;min-width:0}
+.mana-charge-statuses .effect-chip {max-width:100%;white-space:normal;overflow-wrap:anywhere;font-size:.85rem}

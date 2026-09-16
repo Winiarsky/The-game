@@ -71,6 +71,7 @@ function renderTrainingArena() {
   document.body.classList.toggle('training-setup-active', arena?.mode === 'walkthrough' && arena.tutorial?.phase === 'setup');
   panel.hidden = !arena;
   renderTrainingNotice(arena?.tutorial?.notice);
+  renderTrainingTools(arena);
   if (!arena) return;
   if (arena.mode === 'exploration') {renderExplorationMana(panel, state.exploration_mana); return;}
   if (arena.mode === 'traps') {renderSimpleTrapTraining(panel, arena); return;}
@@ -112,20 +113,51 @@ function renderGuidedArena(panel, arena) {
   panel.hidden = !arena.can_start && Boolean(tutorial?.notice || tutorial?.phase === 'setup'
     || state.combat?.shared_mana?.declaration || state.combat?.shield_bash);
   if (panel.hidden) {panel.innerHTML = ''; return;}
-  panel.innerHTML = `<div class="training-heading"><div><small>ARENA · SAMOUCZEK Z NESSĄ</small><h2>${arena.can_start ? 'Wybierz postać' : esc(arena.heroes.find(h => h.id === arena.current_hero_id)?.name || '')}</h2></div><b>Ćwiczenia walki: ${arena.completed.length}/7</b></div>
-    ${arena.can_start ? `<p>Wybierz bohatera jego podświetloną runą — samouczek rozpocznie się od razu. ↩ wraca do menu głównego.</p>
-      <div class="training-roster">${arena.heroes.map(hero => `<button onclick="startGuidedTrial('${esc(hero.id)}', ${Boolean(hero.completed)})">${hero.icon || ''}<b>${esc(hero.name)}</b><small>${hero.completed ? '✓ Ukończono · zagraj ponownie' : hero.tutorial_count ? `Kontynuuj · ${hero.tutorial_count}/${hero.tutorial_total} ćwiczeń` : `${hero.tutorial_total} ćwiczeń + pojedynek`}</small></button>`).join('')}</div>
-      ${explorationManaRosterHtml(arena)}<a class="secondary training-back" href="/">↩ Menu główne</a>`
-    : `<section class="training-course"><div class="training-progress"><b>${tutorial.current ? `Ćwiczenie ${tutorial.index + 1}/${tutorial.total} · ${esc(tutorial.current.name)}` : 'Finał · samodzielny pojedynek'}</b><progress value="${tutorial.index}" max="${tutorial.total}"></progress></div>
+  panel.innerHTML = `<div class="training-heading"><div><small>ARENA · SAMOUCZEK Z NESSĄ</small><h2>${arena.can_start ? esc(arena.menu.title) : esc(arena.heroes.find(h => h.id === arena.current_hero_id)?.name || '')}</h2></div><b>Ćwiczenia walki: ${arena.completed.length}/7</b></div>
+    ${arena.can_start ? trainingMenuHtml(arena)
+    : `<section class="training-course"><div class="training-progress"><b>${tutorial.current ? `${tutorial.run_mode === 'single' ? 'Pojedyncze ćwiczenie' : `Ćwiczenie ${tutorial.index + 1}/${tutorial.total}`} · ${esc(tutorial.current.name)}` : 'Samodzielny pojedynek'}</b>${tutorial.run_mode === 'single' ? '' : `<progress value="${tutorial.index}" max="${tutorial.total}"></progress>`}</div>
       <details class="training-lesson-help"><summary>Cel ćwiczenia i opcje samouczka</summary>
       ${tutorial.current ? `${trainingCommandHtml(tutorial.current.instruction)}<p>${manaTextHtml(tutorial.current.explanation)}</p><p>Koszt: ${manaCostHtml(tutorial.current.cost)} · mana do ćwiczenia jest zapewniona.</p>`
       : '<p>Pokonaj kukłę: 30 PW · KP 13 · atak wręcz +3 · obrażenia 1k6. Korzystaj z pełnego zestawu zdolności i normalnie rozliczaj manę.</p>'}
       ${tutorial.can_retry ? '<button class="secondary" onclick="api(\'/api/training/leave\', {retry:true}, \'Przygotowuję ponowną próbę…\')">↻ Powtórz tę sytuację</button>' : ''}
-      <button class="secondary" onclick="api('/api/training/leave', {}, 'Wracam do wyboru postaci…')">↩ Wybór postaci · zachowaj postęp</button>
+      <button class="secondary" onclick="api('/api/training/leave', {}, 'Wracam do wyboru trybu…')">${tutorial.run_mode === 'single' ? '↩ Wybór ćwiczenia' : '↩ Wybór trybu · zachowaj postęp'}</button>
       <p>We wszystkich ćwiczeniach korzystamy z tego samego terenu.</p><a href="${esc(arena.map_url)}" target="_blank" rel="noopener">Mapa terenu 20×30</a>
       </details></section>`}`;
 }
 
-function startGuidedTrial(heroId, resetProgress) {
-  api('/api/training/start', {hero_id:heroId, mode:'walkthrough', reset_progress:resetProgress}, 'Nessa przygotowuje ćwiczenia…');
+function trainingMenuAction(action) {
+  api('/api/training/menu', {action, revision:state.training_arena.menu.revision}, 'Przygotowuję wybór…');
+}
+
+function trainingMenuHtml(arena) {
+  const menu = arena.menu;
+  const choice = option => `<button class="mana-rune-choice" onclick="trainingMenuAction('${esc(option.action)}')">${option.icon}<span><b>${option.completed ? '✓ ' : ''}${esc(option.label)}</b>${option.detail ? `<small>${esc(option.detail)}</small>` : ''}</span></button>`;
+  return `<p>${menu.view === 'heroes' ? 'Wybierz bohatera runą. Następnie wybierz walkę albo eksplorację.' : menu.view === 'subjects' ? 'Wybierz dział samouczka. W każdym możesz przejść cały kurs lub pojedynczy przypadek.' : menu.view === 'party' ? 'Wybrany bohater prowadzi drużynę. Dodaj lub usuń towarzyszy runami; maksymalnie 5 osób. Przy pełnym składzie usuń kogoś, żeby wybrać zastępstwo.' : menu.view === 'cases' ? 'Każdy przypadek uruchamia świeżą próbę z potrzebną maną i ustawieniem. Zaliczenie nie przesuwa kursu po kolei.' : 'Przejdź kurs po kolei albo uruchom dowolne ćwiczenie.'}</p>
+    <div class="training-roster">${menu.options.filter(o => o.slot < 26).map(choice).join('')}</div>
+    ${menu.view === 'cases' ? `<p>Strona ${menu.page + 1}/${menu.pages} · −/+ zmienia stronę</p>` : ''}
+    <div class="training-menu-controls">${menu.options.filter(o => o.slot >= 26).map(choice).join('')}</div>
+`;
+}
+
+function renderTrainingTools(arena) {
+  let tools = document.getElementById('training-tools');
+  const active = ['walkthrough', 'exploration', 'traps'].includes(arena?.mode) && !arena.can_start;
+  document.body.classList.toggle('training-tools-active', active);
+  if (!active) {tools?.remove(); return;}
+  if (!tools) {
+    tools = document.createElement('nav');
+    tools.id = 'training-tools';
+    tools.setAttribute('aria-label', 'Sterowanie samouczkiem');
+    tools.innerHTML = `<button class="secondary" onclick="trainingToolAction('retry')">↻ Powtórz próbę</button>
+      <button class="secondary" onclick="trainingToolAction('leave')">↩ Wróć do wyboru</button>`;
+    document.body.appendChild(tools);
+  }
+}
+
+function trainingToolAction(action) {
+  const mode = state.training_arena?.mode;
+  if (mode === 'exploration') return explorationManaAction(action);
+  if (mode === 'traps') return simpleTrapAction(action);
+  return api('/api/training/leave', action === 'retry' ? {retry:true} : {},
+    action === 'retry' ? 'Odtwarzam ćwiczenie…' : 'Wracam do wyboru…');
 }

@@ -1,5 +1,137 @@
 # TODO
 
+- [x] [Masterplan misji 0] Zapisano `content/scenarios/misja_0_dzwon/MASTERPLAN.md`:
+  lokalna edytowalna paczka narracji i mediów, profile i narrator, intro składu,
+  odprawa/negocjacje, droga/zmęczenie, walka/poddanie, eksploracja, trzy decyzje
+  i rozliczenie. Podlinkowano w kontekście i projekcie gry; bez zmian runtime.
+- [x] [Implementacja misji 0] Lokalna paczka, teksty/profile i ilustracje, mapy PDF,
+  wybór 3–6, checkpointy, wspólne konfrontacje, zmęczenie −2 przez k4 rund,
+  warianty wrogów i poddanie, eksploracja, realne przedmioty/mikstury i rozliczenie.
+  Zapis końcowy zachowuje drużynę i przyszłe zobowiązania. Poligon zachowany.
+  Weryfikacja: 122 testy w sekwencyjnych partiach (misja, Chrome 390/1100,
+  konfrontacje, menu eksploracji, launcher, premie ładowania); oba PDF po 9 A4.
+- [ ] [Ogranie misji 0] Sprawdzić fizyczny stół, szczególnie 3 i 6 osób, długość
+  walki ze zmęczeniem 4 rund oraz tempo poddania. Raport 1960 konfrontacji daje
+  średnio 3,3–3,6 rund; mniejsze drużyny częściej przegrywają. Audio na końcu.
+
+- [x] [Strategia skalowania 3–6 osób] Zapisano uzgodnione zasady w
+  `docs/PARTY_SCALING.md` i podlinkowano w kontekście, projekcie gry oraz
+  instrukcji tworzenia scenariuszy. Baza czteroosobowa, wspólne karty,
+  talia 10/osobę, warianty walk i proporcjonalny opór/presja eksploracji.
+  Liczby do ogrania; bez zmian w mechanice i UI.
+- [ ] [Próby skalowania przy budowie scenariusza] Warianty 3/4/5/6, wybór sześciu
+  bohaterów i ewaluacja wszystkich 98 składów są gotowe w Misji 0. Pozostaje
+  ograć czas scen, presję many i brak podatnych metod przy fizycznym stole.
+  Pełny balans walk wymaga pomiaru obrażeń, leczenia i powaleń poza obiegiem
+  kart. Punkt odniesienia: `docs/PARTY_SCALING.md`.
+
+- [x] [Ukrycie dawnych umiejętności] Karty i UI bohaterów many nie pokazują
+  osobnej listy umiejętności ani nieaktywnych ekspertyz. Dane zachowane na
+  przyszłość; działania (np. ukrycie, chwyt, pułapki) opisane przez cechy.
+  Test nadal: k20 + cecha + premia z naładowania + inne bonusy, bez zmian
+  w obliczeniach. Ujednolicono opisy w panelach, kartach i lekcji naładowania.
+  Pliki: `character_creation/physical_mana_help.py`, `physical_cards/mana_print*`,
+  `ui/routes.py`, `ui/exploration_app.py`, widoki postaci i eksploracji,
+  opisy katalogu many i `application/pooled_mana_training.py`.
+  55 testów przeszło w sekwencyjnych partiach: prezentacja, wydruki,
+  cztery formaty A4, UI 390/1100 px, chwyt i pchnięcie. Odświeżono 28 PDF,
+  cztery zbiory oraz 67-stronicowy pakiet areny; sprawdzono liczbę stron
+  i brak dawnych sekcji umiejętności/ekspertyzy we wszystkich 32 PDF postaci.
+
+- [x] [Naładowanie zamiast biegłości] Bohaterowie osobistej many: testy ataku,
+  obron, umiejętności i narzędzi bez biegłości/ekspertyzy, z premią +0/+2/+4/+6
+  przy 0/6/12/21 pkt. Konfrontacje używają wybranego progu raz; zachowane
+  zapisane pule i postęp, aktualizacja oczekujących testów starego zapisu.
+  Chwyt/pchnięcie, Uderzenie tarczą, koncentracja, pułapki, Duchowy oręż
+  i podglądy stosują tę samą premię; obrażenia, wpływ i ST zdolności bez zmian.
+  UI postaci/puli, samouczki i 28 PDF + cztery zbiory + pakiet areny odświeżone.
+  248 testów przeszło w sekwencyjnych partiach: reguły, regresje starszych
+  profili, samouczki, zapis, wydruki, Chrome 390/1100 px i cztery formaty A4.
+  Pliki: `rules/charge_rolls.py`, `rules/pooled_mana.py`, `actors/proficiencies.py`,
+  `actors/skills.py`, `combat/mana_charge.py`, ścieżki testów w `application/`,
+  `ui/`, `physical_cards/mana_print*`; opis w `docs/MANA_CHARGE_V02.md`.
+
+- [x] [Nasycenie maną na kartach] Pięć osobnych punktów z symbolami many
+  zamiast liter dla wszystkich siedmiu bohaterów. Opisy z katalogu pasywów,
+  wspólna uwaga pod listą; układ Loriana dopasowany bez zmniejszania czcionki.
+  Zaktualizowano `physical_cards/mana_print*`, stronę kart (`ui/routes.py`,
+  `ui/templates/physical_mana.html`) i generowaną rozpiskę archetypów.
+  31 testów wydruków i układu czterech formatów przeszło.
+
+- [x] [Czytelne opisy kart] Osobne pola: nazwa, wymagany ładunek, akcja,
+  spalanie, efekt i rzeczywiste podbicia. Ten sam układ w PDF-ach, na stronie
+  kart i w oknie zdolności. Rozwinięte opisy Garrana, jednoznaczna nazwa
+  zielonego pasywu (Wytchnienie). 44 testy przeszły: wydruki, układ czterech
+  formatów, runtime oraz okna zdolności 390/1100 px. 28 PDF (po 8 stron),
+  cztery zbiory i HTML/JSON odświeżone. Reguły walki bez zmian.
+  Pliki: `physical_cards/mana_ability_text.py`, `mana_print*`, katalog many,
+  `ui/shared_mana.py`, widoki kart i `docs/BOARDGAME_ARCHETYPES_LEVELS_1_3.md`.
+
+- [x] [Drużynowe konfrontacje eksploracji] Nowy silnik NPC/obiektów: trwałe
+  pule, dobór do 21+, progi testu i spalania, wspólny opór, podatności ST/kość,
+  pomoc, reakcje i drain kończący próbę. 35 pasywów kolorów i właściwe cechy.
+  UI/runy, osobne rzuty testu i wpływu przez fokus/−/+/podsumowanie, zapis
+  i wznowienie, wybór składu 1–5, 84 przypadki, przygotowane 21/reakcja/drain.
+  Cztery warunki, historia rezultatów i zobowiązań; zgodność starych zapisów.
+  146 testów w 10 plikach przeszło (sekwencyjne safe_pytest), w tym Chrome
+  390/1100 px i pełne próby HTTP/runy. 2520 symulacji: drużyny 3–5 osób
+  kończą średnio po ok. 3–3,3 rundy. Odświeżono 28 PDF, cztery zbiory,
+  HTML/JSON/manifest i pakiet areny 67 stron; sprawdzono liczbę stron i treść.
+  Opis: `docs/PARTY_CONFRONTATIONS.md`, raport: `docs/reports/PARTY_CONFRONTATIONS_V01.md`.
+- [ ] [Konfrontacje: próba przy stole] Sprawdzić rzeczywisty czas zgłaszania
+  kart i dwóch rzutów, wartość wsparcia odpornych metod, czytelność pasywów
+  oraz sceny dla 1/3/5 osób. Dostosować profile konkretnych przygód po ograniu.
+
+- [x] [Wspólny wybór walki i eksploracji] Hierarchia: postać → Walka /
+  Eksploracja → Po kolei / Wybierz ćwiczenie, z powrotem na każdym poziomie.
+  127 lekcji eksploracji w tym samym menu run; osobny postęp kursu, pojedyncze
+  próby bez przesuwania kursu i powrót do właściwej strony. Pułapka w przypadkach
+  walki. Stały powrót/restart również przy setupie i kościach eksploracji.
+  110 testów z 10 plików przeszło, w tym mobilny/desktopowy Chrome i trzy
+  pełne próby strony przez HTTP/runy (obiekt, przekroczenie i wyjście z kości).
+  Szczegóły: `docs/RECRUITMENT_ARENA.md`.
+
+- [x] [Samouczek: pojedyncze przypadki i kurs] Po wyborze każdej z siedmiu
+  postaci wybór „Po kolei” / „Wybierz ćwiczenie”. Wszystkie 148 lekcji,
+  podbicia i siedem pojedynków dostępne bez wcześniejszych zaliczeń; runy,
+  strony −/+, powrót do tej samej listy. Osobne zaliczenia prób zachowują
+  postęp kursu. Szybki restart/wyjście czyści także nierozstrzygniętą płatność,
+  spalenie i rzuty; zapis zachowuje tryb. 101 testów w pięciu plikach
+  przeszło, w tym Chrome 390/1100 px. Opis: `docs/RECRUITMENT_ARENA.md`.
+
+- [x] [Ładowanie many 2.0] Zachowanie ładunku, próg kończący dobór 21+,
+  odrębne pasywy 35 kolorów jako statusy, spalanie akcji i podbić, wygasanie
+  rundy, pełny drain, Lorian, skazy, UI, 148 lekcji, karty i nowy ewaluator.
+  272 testy w 16 plikach przeszły; 4704 próby ekonomii. Odświeżono 28 PDF
+  bohaterów, cztery zbiory i pakiet areny 67 stron.
+  Reguły i wyniki: `docs/MANA_CHARGE_V02.md`.
+- [ ] [Próba przy stole many 2.0] Ocenić tempo spalania, powtarzanie ultów,
+  specjalizację kontra obronę oraz odzysk Loriana w pełnych walkach.
+
+
+- [x] [Punkty many w UI] Jawna suma nad akcjami i w oknach kart/płatności,
+  wartości kart, podgląd sumy po doborze i porównanie puli z bazowym progiem zdolności.
+
+- [x] [Pule many 1/7] Wersjonowany katalog siedmiu bohaterów: punkty, kolory,
+  progi, pasywy/skazy, bezpłatne reakcje i czas O do końca walki.
+- [x] [Pule many 2/7] Wspólny czysty silnik i skrypt ewaluacji ekonomii;
+  raport bazowy i sprawdzający: łącznie 8960 prób, HTML/CSV/JSON z katalogiem.
+- [x] [Pule many 3/7] Integracja płatności i rzeczywistych efektów wszystkich
+  bohaterów; strojenie/odzysk Loriana, zachowany zwykły atak bez many.
+- [x] [Pule many 4/7] Spalanie oferty/wierzchu, uwięzienie i uwolnienie przez
+  śmierć wroga, pełny drain i świeża talia przy każdej nowej walce.
+- [x] [Pule many 5/7] Runy, podgląd pul i kosztów, zapis operacji kart.
+  Zapisu podczas nierozstrzygniętej zdolności nadal nie dopuszcza istniejąca blokada.
+- [x] [Pule many 6/7] 134 lekcje: dobór/oszczędzanie/spalanie/więzienie/drain
+  oraz zdolności i podbicia; finałowy wróg atakuje manę. Zachowane NPC i obiekty.
+- [x] [Pule many 7/7] Zaktualizowane cztery formaty kart i pakiet areny,
+  testy reguł, rzeczywistych lekcji, zapisów, wejść planszy i przeglądarki.
+  Opis i ograniczenia: `docs/POOLED_MANA_IMPLEMENTATION.md`.
+- [ ] [Balans po ograniu] Zebrać uwagi użytkownika o tempie, akcjach darmowych,
+  progach ultów i presji na talie 25/30 kart; porównać kandydatów na tych samych seedach.
+- [ ] [Dalsza ewaluacja] Rozszerzyć ekonomiczny runner o pełne walki,
+  sytuacyjne pasywy/skazy i efekty manipulacji Loriana. Obecny raport ich nie modeluje.
+
 - [x] [Rozmowy: plan czterech warunków startowych] Zapisano reguły,
   konsekwencje, zakres siedmiu postaci, runy Klucz/Gwiazda, migracje oraz
   cztery lekcje z rzeczywistym wyborem w

@@ -22,6 +22,9 @@ def test_repository_content_audit_has_no_errors() -> None:
         "ostatni_transport_00_gildia",
         "ostatni_transport_01_glodne_cienie",
         "ostatni_transport_01_zawalona_droga",
+        "ostatni_transport_02_czarny_brod",
+        "recruitment_arena",
+        "recruitment_arena_combat",
         "village_square_mvp",
     )
     assert {entry.stable_id for entry in report.entries} >= {

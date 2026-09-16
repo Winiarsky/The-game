@@ -1,0 +1,607 @@
+{
+  "version": 1,
+  "passives": {
+    "garran": {
+      "C": {
+        "kind": "impact",
+        "label": "Stanowczość: +1 do wpływu za kartę (maks. +2)"
+      },
+      "B": {
+        "kind": "guard",
+        "label": "Opanowanie: osłoń 1 kartę puli przed każdą reakcją (bez kumulacji)"
+      },
+      "Z": {
+        "kind": "recover",
+        "label": "Oddech: przy doborze oddaj najstarszą spaloną kartę na spód talii"
+      },
+      "F": {
+        "kind": "test",
+        "label": "Skupienie: +1 do testu za kartę (maks. +2)"
+      },
+      "N": {
+        "kind": "support",
+        "label": "Współpraca: pomoc daje +3 zamiast +2 (bez kumulacji)"
+      }
+    },
+    "brakka": {
+      "C": {
+        "kind": "impact",
+        "label": "Stanowczość: +1 do wpływu za kartę (maks. +2)"
+      },
+      "B": {
+        "kind": "guard",
+        "label": "Opanowanie: osłoń 1 kartę puli przed każdą reakcją (bez kumulacji)"
+      },
+      "Z": {
+        "kind": "recover",
+        "label": "Oddech: przy doborze oddaj najstarszą spaloną kartę na spód talii"
+      },
+      "F": {
+        "kind": "support",
+        "label": "Współpraca: pomoc daje +3 zamiast +2 (bez kumulacji)"
+      },
+      "N": {
+        "kind": "test",
+        "label": "Skupienie: +1 do testu za kartę (maks. +2)"
+      }
+    },
+    "mira": {
+      "C": {
+        "kind": "test",
+        "label": "Skupienie: +1 do testu za kartę (maks. +2)"
+      },
+      "B": {
+        "kind": "guard",
+        "label": "Opanowanie: osłoń 1 kartę puli przed każdą reakcją (bez kumulacji)"
+      },
+      "Z": {
+        "kind": "impact",
+        "label": "Stanowczość: +1 do wpływu za kartę (maks. +2)"
+      },
+      "F": {
+        "kind": "support",
+        "label": "Współpraca: pomoc daje +3 zamiast +2 (bez kumulacji)"
+      },
+      "N": {
+        "kind": "recover",
+        "label": "Oddech: przy doborze oddaj najstarszą spaloną kartę na spód talii"
+      }
+    },
+    "dagna": {
+      "C": {
+        "kind": "impact",
+        "label": "Stanowczość: +1 do wpływu za kartę (maks. +2)"
+      },
+      "B": {
+        "kind": "support",
+        "label": "Współpraca: pomoc daje +3 zamiast +2 (bez kumulacji)"
+      },
+      "Z": {
+        "kind": "recover",
+        "label": "Oddech: przy doborze oddaj najstarszą spaloną kartę na spód talii"
+      },
+      "F": {
+        "kind": "guard",
+        "label": "Opanowanie: osłoń 1 kartę puli przed każdą reakcją (bez kumulacji)"
+      },
+      "N": {
+        "kind": "test",
+        "label": "Skupienie: +1 do testu za kartę (maks. +2)"
+      }
+    },
+    "lorian": {
+      "C": {
+        "kind": "impact",
+        "label": "Stanowczość: +1 do wpływu za kartę (maks. +2)"
+      },
+      "B": {
+        "kind": "test",
+        "label": "Skupienie: +1 do testu za kartę (maks. +2)"
+      },
+      "Z": {
+        "kind": "guard",
+        "label": "Opanowanie: osłoń 1 kartę puli przed każdą reakcją (bez kumulacji)"
+      },
+      "F": {
+        "kind": "support",
+        "label": "Współpraca: pomoc daje +3 zamiast +2 (bez kumulacji)"
+      },
+      "N": {
+        "kind": "recover",
+        "label": "Oddech: przy doborze oddaj najstarszą spaloną kartę na spód talii"
+      }
+    },
+    "nimra": {
+      "C": {
+        "kind": "impact",
+        "label": "Stanowczość: +1 do wpływu za kartę (maks. +2)"
+      },
+      "B": {
+        "kind": "guard",
+        "label": "Opanowanie: osłoń 1 kartę puli przed każdą reakcją (bez kumulacji)"
+      },
+      "Z": {
+        "kind": "recover",
+        "label": "Oddech: przy doborze oddaj najstarszą spaloną kartę na spód talii"
+      },
+      "F": {
+        "kind": "support",
+        "label": "Współpraca: pomoc daje +3 zamiast +2 (bez kumulacji)"
+      },
+      "N": {
+        "kind": "test",
+        "label": "Skupienie: +1 do testu za kartę (maks. +2)"
+      }
+    },
+    "erynd": {
+      "C": {
+        "kind": "impact",
+        "label": "Stanowczość: +1 do wpływu za kartę (maks. +2)"
+      },
+      "B": {
+        "kind": "guard",
+        "label": "Opanowanie: osłoń 1 kartę puli przed każdą reakcją (bez kumulacji)"
+      },
+      "Z": {
+        "kind": "test",
+        "label": "Skupienie: +1 do testu za kartę (maks. +2)"
+      },
+      "F": {
+        "kind": "support",
+        "label": "Współpraca: pomoc daje +3 zamiast +2 (bez kumulacji)"
+      },
+      "N": {
+        "kind": "recover",
+        "label": "Oddech: przy doborze oddaj najstarszą spaloną kartę na spód talii"
+      }
+    }
+  },
+  "scenes": [
+    {
+      "id": "nessa_raise",
+      "kind": "npc",
+      "name": "Nessa · wyższa zapłata",
+      "goal": "Uzyskaj wyższą zapłatę za zadanie.",
+      "description": "Nessa ma ograniczony budżet. Rozumie obawy o bezpieczeństwo i odpowiedzialność, ale źle reaguje na groźby, blef i wyliczenia.",
+      "resistance_per_hero": 9,
+      "pressure_per_hero": 1,
+      "minimum_pressure": 3,
+      "methods": {
+        "garran": {
+          "dc": 20,
+          "die": 6
+        },
+        "brakka": {
+          "dc": 25,
+          "die": 4
+        },
+        "mira": {
+          "dc": 25,
+          "die": 4
+        },
+        "dagna": {
+          "dc": 15,
+          "die": 8
+        },
+        "lorian": {
+          "dc": 15,
+          "die": 8
+        },
+        "nimra": {
+          "dc": 25,
+          "die": 4
+        },
+        "erynd": {
+          "dc": 20,
+          "die": 6
+        }
+      },
+      "reactions": [
+        {
+          "kind": "burn",
+          "name": "Przeciąganie rozmowy"
+        },
+        {
+          "kind": "strip",
+          "name": "Kontrargument"
+        },
+        {
+          "kind": "heal",
+          "name": "Nowe zastrzeżenie"
+        }
+      ],
+      "success": "Nessa zgadza się na podwyżkę.",
+      "failure": "Nessa kończy negocjacje. Pozostaje pierwotna stawka.",
+      "compromise": "Mniejsza podwyżka w zamian za dodatkowy obowiązek.",
+      "condition": "none"
+    },
+    {
+      "id": "sealed_cache",
+      "kind": "object",
+      "name": "Zablokowany schowek",
+      "goal": "Otwórz schowek bez utraty zawartości.",
+      "description": "Zatrzask jest naprężony, a prowadnice zatarte. Siła, precyzja i rozpoznanie śladów mogą pomóc.",
+      "resistance_per_hero": 10,
+      "pressure_per_hero": 1,
+      "minimum_pressure": 3,
+      "methods": {
+        "garran": {
+          "dc": 20,
+          "die": 6
+        },
+        "brakka": {
+          "dc": 15,
+          "die": 8
+        },
+        "mira": {
+          "dc": 15,
+          "die": 8
+        },
+        "dagna": {
+          "dc": 25,
+          "die": 4
+        },
+        "lorian": {
+          "dc": 20,
+          "die": 6
+        },
+        "nimra": {
+          "dc": 20,
+          "die": 6
+        },
+        "erynd": {
+          "dc": 15,
+          "die": 8
+        }
+      },
+      "reactions": [
+        {
+          "kind": "burn",
+          "name": "Oporny mechanizm"
+        },
+        {
+          "kind": "strip",
+          "name": "Utrata ustawienia"
+        },
+        {
+          "kind": "heal",
+          "name": "Ponowna blokada"
+        }
+      ],
+      "success": "Schowek jest otwarty, zawartość pozostaje nienaruszona.",
+      "failure": "Mechanizm blokuje się. Potrzebujecie innego wejścia.",
+      "compromise": "Schowek otwarty, ale część zawartości ulega uszkodzeniu.",
+      "condition": "none"
+    },
+    {
+      "id": "nessa_compromise",
+      "kind": "npc",
+      "name": "Nessa · porozumienie",
+      "goal": "Uzyskaj wyższą zapłatę za zadanie.",
+      "description": "Po zbiciu połowy oporu możesz przyjąć mniejszą podwyżkę i dodatkowy obowiązek.",
+      "resistance_per_hero": 9,
+      "pressure_per_hero": 1,
+      "minimum_pressure": 3,
+      "methods": {
+        "garran": {
+          "dc": 20,
+          "die": 6
+        },
+        "brakka": {
+          "dc": 25,
+          "die": 4
+        },
+        "mira": {
+          "dc": 25,
+          "die": 4
+        },
+        "dagna": {
+          "dc": 15,
+          "die": 8
+        },
+        "lorian": {
+          "dc": 15,
+          "die": 8
+        },
+        "nimra": {
+          "dc": 25,
+          "die": 4
+        },
+        "erynd": {
+          "dc": 20,
+          "die": 6
+        }
+      },
+      "reactions": [
+        {
+          "kind": "burn",
+          "name": "Przeciąganie rozmowy"
+        },
+        {
+          "kind": "strip",
+          "name": "Kontrargument"
+        },
+        {
+          "kind": "heal",
+          "name": "Nowe zastrzeżenie"
+        }
+      ],
+      "success": "Nessa zgadza się na podwyżkę.",
+      "failure": "Nessa kończy negocjacje. Pozostaje pierwotna stawka.",
+      "compromise": "Mniejsza podwyżka w zamian za dodatkowy obowiązek.",
+      "condition": "compromise"
+    },
+    {
+      "id": "nessa_color_goal",
+      "kind": "npc",
+      "name": "Nessa · pełny obraz",
+      "goal": "Uzyskaj wyższą zapłatę za zadanie.",
+      "description": "Przy sukcesie i co najmniej dwóch niebieskich kartach w pulach drużyny Nessa ujawni dodatkową informację.",
+      "resistance_per_hero": 9,
+      "pressure_per_hero": 1,
+      "minimum_pressure": 3,
+      "methods": {
+        "garran": {
+          "dc": 20,
+          "die": 6
+        },
+        "brakka": {
+          "dc": 25,
+          "die": 4
+        },
+        "mira": {
+          "dc": 25,
+          "die": 4
+        },
+        "dagna": {
+          "dc": 15,
+          "die": 8
+        },
+        "lorian": {
+          "dc": 15,
+          "die": 8
+        },
+        "nimra": {
+          "dc": 25,
+          "die": 4
+        },
+        "erynd": {
+          "dc": 20,
+          "die": 6
+        }
+      },
+      "reactions": [
+        {
+          "kind": "burn",
+          "name": "Przeciąganie rozmowy"
+        },
+        {
+          "kind": "strip",
+          "name": "Kontrargument"
+        },
+        {
+          "kind": "heal",
+          "name": "Nowe zastrzeżenie"
+        }
+      ],
+      "success": "Nessa zgadza się na podwyżkę.",
+      "failure": "Nessa kończy negocjacje. Pozostaje pierwotna stawka.",
+      "compromise": "Mniejsza podwyżka w zamian za dodatkowy obowiązek.",
+      "condition": "color_goal"
+    },
+    {
+      "id": "nessa_sensitive",
+      "kind": "npc",
+      "name": "Nessa · drażliwy temat",
+      "goal": "Uzyskaj wyższą zapłatę za zadanie.",
+      "description": "Dobranie czerwonej karty oznacza nacisk na nazwiska. Przy sukcesie dostaniesz je, ale stracisz dalszą prywatną pomoc Nessy.",
+      "resistance_per_hero": 9,
+      "pressure_per_hero": 1,
+      "minimum_pressure": 3,
+      "methods": {
+        "garran": {
+          "dc": 20,
+          "die": 6
+        },
+        "brakka": {
+          "dc": 25,
+          "die": 4
+        },
+        "mira": {
+          "dc": 25,
+          "die": 4
+        },
+        "dagna": {
+          "dc": 15,
+          "die": 8
+        },
+        "lorian": {
+          "dc": 15,
+          "die": 8
+        },
+        "nimra": {
+          "dc": 25,
+          "die": 4
+        },
+        "erynd": {
+          "dc": 20,
+          "die": 6
+        }
+      },
+      "reactions": [
+        {
+          "kind": "burn",
+          "name": "Przeciąganie rozmowy"
+        },
+        {
+          "kind": "strip",
+          "name": "Kontrargument"
+        },
+        {
+          "kind": "heal",
+          "name": "Nowe zastrzeżenie"
+        }
+      ],
+      "success": "Nessa zgadza się na podwyżkę.",
+      "failure": "Nessa kończy negocjacje. Pozostaje pierwotna stawka.",
+      "compromise": "Mniejsza podwyżka w zamian za dodatkowy obowiązek.",
+      "condition": "sensitive"
+    },
+    {
+      "id": "nessa_favor",
+      "kind": "npc",
+      "name": "Nessa · przysługa",
+      "goal": "Uzyskaj wyższą zapłatę za zadanie.",
+      "description": "Raz w konfrontacji możesz oddać spaloną kartę na spód w zamian za dostarczenie listu. Zobowiązanie pozostaje także przy porażce.",
+      "resistance_per_hero": 9,
+      "pressure_per_hero": 1,
+      "minimum_pressure": 3,
+      "methods": {
+        "garran": {
+          "dc": 20,
+          "die": 6
+        },
+        "brakka": {
+          "dc": 25,
+          "die": 4
+        },
+        "mira": {
+          "dc": 25,
+          "die": 4
+        },
+        "dagna": {
+          "dc": 15,
+          "die": 8
+        },
+        "lorian": {
+          "dc": 15,
+          "die": 8
+        },
+        "nimra": {
+          "dc": 25,
+          "die": 4
+        },
+        "erynd": {
+          "dc": 20,
+          "die": 6
+        }
+      },
+      "reactions": [
+        {
+          "kind": "burn",
+          "name": "Przeciąganie rozmowy"
+        },
+        {
+          "kind": "strip",
+          "name": "Kontrargument"
+        },
+        {
+          "kind": "heal",
+          "name": "Nowe zastrzeżenie"
+        }
+      ],
+      "success": "Nessa zgadza się na podwyżkę.",
+      "failure": "Nessa kończy negocjacje. Pozostaje pierwotna stawka.",
+      "compromise": "Mniejsza podwyżka w zamian za dodatkowy obowiązek.",
+      "condition": "favor"
+    }
+  ],
+  "lessons": [
+    {
+      "id": "npc",
+      "name": "Rozmowa z NPC",
+      "scene": "nessa_raise",
+      "kind": "npc",
+      "focus": "test",
+      "instruction": "Każdy bohater wykonuje swoją turę. Dobierz kartę, wybierz siłę próby, rzuć k20 i po trafieniu kością wpływu. Zbij wspólny opór."
+    },
+    {
+      "id": "object",
+      "name": "Interakcja z obiektem",
+      "scene": "sealed_cache",
+      "kind": "object",
+      "focus": "test",
+      "instruction": "Obsłuż obiekt całą drużyną. Metoda i cecha zależą od aktywnej postaci; potrzebna jest tylko figurka drużyny."
+    },
+    {
+      "id": "support",
+      "name": "Wsparcie sojusznika",
+      "scene": "nessa_raise",
+      "kind": "npc",
+      "focus": "support",
+      "instruction": "Po doborze wybierz Pomoc i sojusznika. Pomoc nie spala kart, zajmuje twoje działanie i działa na jego następny test."
+    },
+    {
+      "id": "charge",
+      "name": "Ładunek i siła próby",
+      "scene": "nessa_raise",
+      "kind": "npc",
+      "focus": "charge",
+      "instruction": "Pula pozostaje po rzucie. Przy 21+ dobór ustaje. Możesz wybrać niższą premię i mniejszy koszt, nawet gdy masz duży ładunek."
+    },
+    {
+      "id": "reaction",
+      "name": "Reakcja i utrata many",
+      "scene": "sealed_cache",
+      "kind": "object",
+      "focus": "reaction",
+      "instruction": "Po pełnej rundzie sytuacja reaguje. Zgłoś spalane karty; utrata karty puli może obniżyć próg i przywrócić dobieranie."
+    },
+    {
+      "id": "drain",
+      "name": "Wyczerpanie talii",
+      "scene": "nessa_raise",
+      "kind": "npc",
+      "focus": "drain",
+      "instruction": "Wykonuj słabe próby lub wspieraj sojuszników, aby przećwiczyć wyczerpanie. Brak kart do wymaganej operacji kończy scenę. Nie ma ostatniej darmowej kolejki."
+    },
+    {
+      "id": "compromise",
+      "name": "Częściowe porozumienie",
+      "scene": "nessa_compromise",
+      "kind": "npc",
+      "focus": "compromise",
+      "instruction": "Zbij co najmniej połowę oporu, potem przyjmij kompromis albo walcz o pełny rezultat."
+    },
+    {
+      "id": "color_goal",
+      "name": "Dodatkowy cel kolorów",
+      "scene": "nessa_color_goal",
+      "kind": "npc",
+      "focus": "color_goal",
+      "instruction": "Zbierz w drużynie dwie niebieskie karty i uzyskaj sukces, aby otrzymać dodatkową informację."
+    },
+    {
+      "id": "sensitive",
+      "name": "Drażliwy temat",
+      "scene": "nessa_sensitive",
+      "kind": "npc",
+      "focus": "test",
+      "instruction": "Zdecyduj, czy dobierać czerwone karty. Nacisk zmienia korzyść i cenę sukcesu."
+    },
+    {
+      "id": "favor",
+      "name": "Przysługa za przysługę",
+      "scene": "nessa_favor",
+      "kind": "npc",
+      "focus": "favor",
+      "instruction": "W tym ćwiczeniu przyjmij zobowiązanie, gdy pojawi się spalona karta, i odzyskaj ją na spód. W przygodzie to opcjonalny wybór; nie zużywa działania."
+    },
+    {
+      "id": "practice_npc",
+      "name": "Samodzielna rozmowa",
+      "scene": "nessa_raise",
+      "kind": "npc",
+      "focus": "test",
+      "instruction": "Przeprowadź drużynową rozmowę, dobierając siłę prób i wsparcie do zasobów."
+    },
+    {
+      "id": "practice_object",
+      "name": "Samodzielny obiekt",
+      "scene": "sealed_cache",
+      "kind": "object",
+      "focus": "test",
+      "instruction": "Otwórz schowek. Planuj wspólny zapas, wsparcie i reakcje mechanizmu."
+    }
+  ]
+}

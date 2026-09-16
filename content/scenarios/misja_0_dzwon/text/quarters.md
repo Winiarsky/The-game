@@ -1,0 +1,1 @@
+Łóżko, opróżniona skrzynia i prosty stół. Pod parapetem widać ślad po często odsuwanej desce. Ewakuacja zabrała potrzebne rzeczy; prywatnego schowka poległego dowódcy nikt najwyraźniej nie znał. Dokładne obejrzenie parapetu może wyjaśnić sprawę.

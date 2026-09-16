@@ -1,5 +1,86 @@
 # Kontekst Projektu
 
+## Misja 0 — narracyjny samouczek drużyny
+
+Docelowe wejście: wybór drużyny 3–6 → intro wybranych bohaterów → odprawa
+Nessy i negocjacja mikstury → wóz → walka o dzwon → krótka eksploracja
+i decyzja o długu wieśniaków → powrót i podsumowanie. Narrator spina sceny;
+dotychczasowe pojedyncze ćwiczenia pozostają jako osobny Poligon.
+Wszystkie teksty, profile i media misji mają być edytowalną lokalną paczką.
+Pierwsza grywalna wersja jest wdrożona. [Instrukcja paczki](content/scenarios/misja_0_dzwon/README.md)
+opisuje edycję, checkpointy, realne nagrody, mapy do druku i zapis pełnej drużyny.
+Przepływ korzysta ze wspólnych silników walki, konfrontacji i fizycznych kości.
+
+## Skalowanie scenariuszy: 3–6 graczy
+
+Przy budowie scenariuszy stosujemy [strategię skalowania](docs/PARTY_SCALING.md).
+Baza: cztery osoby; wspólne karty bohaterów, talia 10 kart na osobę,
+warianty składu i działań wrogów oraz proporcjonalny opór eksploracji.
+Liczby są do ogrania. Misja 0 obsługuje 3–6 osób; starszy scenariusz nadal 1–5.
+`evaluate_mission_zero.py` sprawdza wszystkie składy 3–6 w konfrontacjach;
+pełna taktyka walki wymaga osobnego ogrania.
+
+## Umiejętności ukryte w prezentacji
+
+Karty i aktualne UI nie pokazują dawnej listy umiejętności ani nieczynnych
+opisów ekspertyzy. Test opisuje działanie oraz cechę: `k20 + cecha + premia
+z naładowania + inne bonusy`. Dane umiejętności zachowujemy na przyszłość;
+ukrywanie, szukanie, chwyt i inne działania pozostają dostępne według swoich
+zasad. Ta zmiana nie usuwa cech ani nie zmienia obliczeń testów.
+
+
+## Naładowanie zamiast biegłości — aktualne testy
+
+Bohaterowie z profilem osobistej many nie dodają biegłości ani ekspertyzy do
+ataków, obron, umiejętności i narzędzi. Test: `k20 + cecha + naładowanie + inne
+premie`. Progi punktów 0/6/12/21 dają +0/+2/+4/+6. W walce używasz aktualnej
+premii swojej puli; w konfrontacji wybierasz dostępny próg wraz z jego kosztem,
+licząc premię tylko raz. Bez puli i po drainie premia wynosi zero.
+Naładowanie nie zwiększa obrażeń ani wpływu. ST zdolności pozostają wartościami
+określonymi przez zdolność; ta zmiana dotyczy składników rzutów, nie ST.
+Garran: miecz `k20 +4 Siła + naładowanie + inne premie`, obrażenia `1k8 +4`
+i pasywy kolorów. Biegłości jako uprawnienia do sprzętu nie zmieniają się.
+Samouczki ładowania i zwykłego ataku, panel postaci, kości oraz wydruki używają
+tej reguły. Starsze profile zapisów zachowują dotychczasowe zasady.
+
+
+## Aktualna eksploracja: konfrontacje drużynowe
+
+NPC i obiekty w Arenie używają wspólnego oporu, tur całej drużyny i trwałych
+osobistych pul many. Dobór z oferty dwóch kart do 21+, potem test albo pomoc.
+Progi 0/6/12/21: premia +0/+2/+4/+6 i spalanie 1/1/2/3 po efekcie. Podatność
+zmienia ST i kość wpływu. Reakcje uszczuplają talię/pule lub odnawiają opór;
+drain kończy konfrontację. Brak kary za przekroczenie i automatycznego sukcesu
+przy 21. Nowy kurs: 12 przypadków na bohatera (84), wybór składu 1–5 osób,
+jedna figurka, runy, dwa osobne rzuty przez fokus i podsumowanie.
+Opis: [Konfrontacje drużynowe](docs/PARTY_CONFRONTATIONS.md).
+Poniższe opisy blackjacka i 127 lekcji są historyczne; stare zapisy mają
+oddzielny silnik zgodności. Pułapki w walce pozostają zwykłymi testami.
+
+## Samouczek: kurs lub pojedynczy przypadek
+
+Menu: bohater → Walka / Eksploracja → Po kolei / Wybierz ćwiczenie.
+Wszystkie lekcje walki i eksploracji, podbicia oraz pojedynek można uruchomić
+osobno przez runy; −/+ zmienia stronę. Pułapka jest przypadkiem w dziale walki.
+Kurs eksploracji ma własny zapis kolejności, niezależny od pojedynczych prób.
+Powtarzanie przypadków zachowuje postęp kursu. Pasek ekranowy pozwala odtworzyć
+próbę lub wrócić do wyboru również w trakcie rzutu/płatności. Szczegóły:
+[Struktura samouczka](docs/RECRUITMENT_ARENA.md).
+
+## Trwały ładunek many 2.0 — aktualizacja
+
+Aktualny katalog many ma wersję 2: osobisty ładunek pozostaje po zdolności;
+punkty 6/12/21 odblokowują akcje, pięć kolorów daje własne pasywy każdego
+bohatera. Przy 21+ pkt dobór ustaje do draina. Zdolność bazowo spala 1 kartę
+z wierzchu, każde podbicie +2; darmowe akcje i bazowy odzysk Loriana nie spalają.
+Co rundę 1 karta wygasa bez możliwości odzysku. Drain zbiera wszystkie strefy,
+kończy premie kolorów i efekty O, zachowuje leczenie i zużycie akcji.
+Talia: po max(5, 2 × bohaterowie) każdego koloru. Samouczek: 148 lekcji.
+Ta aktualizacja zastępuje poniższe historyczne zasady wydawania całej puli
+i O do końca walki. Tabele 35 pasywów, wyjątki, UI, migracja i raport:
+[Ładowanie many 2.0](docs/MANA_CHARGE_V02.md).
+
+
 Budujemy nową lokalną aplikację do prowadzenia taktycznej gry RPG w stylu Dungeons & Dragons 5e na fizycznej planszy 20x30 z podświetleniem LED i wykrywaniem pól.
 
 Poprzednia aplikacja używała mechanik zbliżonych do Pathfindera i z czasem zbyt
@@ -84,11 +165,20 @@ Klucz/Gwiazda obsługują warunki; wynik otwiera odpowiednie opcje Nessy.
 Zapis v2 migruje stare próby bez narzucania nowych warunków. Odrębna ściąga
 w kartach i pomocy; balans pozostaje do ogrania przy stole.
 
-## Wspólny rynek many 0.3
+## Osobiste pule many 1.0
 
-Arena domyślnie prowadzi liniowy walkthrough (`walkthrough`): 99 ćwiczeń
-siedmiu bohaterów, obejmujących 67 zdolności i osobne warianty każdego rodzaju
-podbicia. Każdy krok zaczyna osobne okno narracji Nessy i mechaniki; ✓ przechodzi
+Aktualny profil (2026-09-14): osobiste pule `pooled_mana_v01`.
+Nowe walki: po max(5, liczba bohaterów + 1) kart każdego koloru, dwie odkryte
+karty, obowiązkowy wybór jednej na początku własnej tury. Płatna zdolność
+zużywa całą pulę i oddaje ją na spód BEZ tasowania. Drain zbiera także spalone
+oraz uwięzione; każda walka zaczyna z pełną przetasowaną talią i pustymi pulami.
+O = koniec walki, nie drain. Katalog progów/pasywów/skaz: `content/balance/pooled_mana/catalog.json`.
+Wdrożenie i raporty 8960 prób: [pule many 1.0](docs/POOLED_MANA_IMPLEMENTATION.md).
+Ewaluator mierzy ekonomię kart; pełne walki i czas graczy wymagają odrębnej oceny.
+
+Arena domyślnie prowadzi liniowy walkthrough (`walkthrough`): 134 ćwiczenia
+siedmiu bohaterów: po pięć podstaw nowego obiegu oraz wcześniejsze 99 lekcji
+67 zdolności i wariantów podbić. Każdy krok zaczyna osobne okno narracji Nessy i mechaniki; ✓ przechodzi
 do ustawiania, a po setupie krótkie polecenie otwiera wymaganą zdolność.
 Setup pokazuje i ustawia fokus na bieżącym elemencie, bez opisu całego kursu
 nad nim. Teren ustawiamy raz po wejściu; ukończone przygotowanie zachowuje
@@ -103,11 +193,9 @@ postaci, zaliczenie całego kursu wymaga zwycięstwa. Postęp i objaśnienia są
 zapisywane. Dawne tryby pozostają do odczytu wcześniejszych zapisów i testów,
 bez wyboru w nowym panelu. Opis: `docs/RECRUITMENT_ARENA.md`.
 
-Nowe gry siedmioma bohaterami używają 25 kart (po pięć każdego koloru), wspólnego rynku pięciu kart i licznika talii/rynku/odrzuconych. Nie ma prywatnych rezerw. Koszt bazowy, podbicia i skaza mieszczą się łącznie w pięciu kartach. Najpierw deklaracja i fizyczna płatność, następnie rzuty i efekt; Odzysk może przywrócić własny koszt. Rynek uzupełniamy dopiero na końcu tury bohatera, po efektach końca tury.
-
-Odświeżenie zbiera wszystkie 25 kart, również rynek. Potwierdzenie nowego rynku kończy efekty O; efekty T kończą się na początku następnej tury źródła. Po wyczerpaniu talii tura bez wydanej many wymusza odrzucenie jednej karty rynku po uzupełnieniu. Pusta talia i rynek otwierają odświeżenie po zakończeniu bieżącego działania.
-
-Katalog: `rules/shared_mana_catalog.py`, 66 zdolności i osobny Święty symbol Dagny. Dagna płaci dodatkową dowolną manę za ofensywę przy sojuszniku poniżej połowy PW; Mira w ukryciu ma utrudnienie rzutów obronnych i testów reakcji. Dolne runy na arenie podświetlają i wybierają dostępne akcje z bieżącego menu; podczas płatności i rzutów są zablokowane. Narożne −, +, ✓ i ↩ zachowują pozycje. Aktualny zbiorczy PDF areny ma 67 stron. Mechanika kafelków dla Głodnych Cieni pozostaje odłożona. Przebieg wdrożenia, pliki i walidacja: [wspólna mana 0.3](docs/SHARED_MANA_V03_IMPLEMENTATION.md).
+Historyczny rynek `shared_mana_v03` jest zachowany do odczytu poprzednich
+zapisów; jego dawne zasady i weryfikacja: [opis 0.3](docs/SHARED_MANA_V03_IMPLEMENTATION.md).
+Nowe karty, aplikacja i samouczek używają osobistych pul. PDF areny: 67 stron.
 
 Podczas płatności podbicia wybiera się osobnymi wariantami run: każda opcja
 pokazuje dokładną liczbę symboli many i efekt. Ponowne wybranie wariantu go

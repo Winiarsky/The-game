@@ -1,0 +1,1 @@
+Poznaliście już swoje imiona, choć do poznania charakterów pozostała zapewne niejedna niewygodna droga. Wspólne zlecenie miało przyjść z Gildii. Nessa wezwała was do siebie; wiadomość była krótka, uprzejma i nie pozostawiała wątpliwości co do godziny.

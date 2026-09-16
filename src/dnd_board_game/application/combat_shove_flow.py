@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dnd_board_game.combat.mana_charge import charged_check_request
+
 from dataclasses import dataclass, replace
 from enum import StrEnum
 from random import Random
@@ -142,13 +144,13 @@ class CombatShoveFlowService:
             mode=mode,
             defender_skill=defender_skill,
             attacker_request=condition_roll_request(
-                D20RollRequest(modifiers=skill_roll_modifiers(attacker, "athletics")),
+                charged_check_request(state, attacker, D20RollRequest(modifiers=skill_roll_modifiers(attacker, "athletics"))),
                 state.condition_states,
                 attacker,
                 ability_check=True,
             ),
             defender_request=condition_roll_request(
-                D20RollRequest(modifiers=skill_roll_modifiers(target, defender_skill)),
+                charged_check_request(state, target, D20RollRequest(modifiers=skill_roll_modifiers(target, defender_skill))),
                 state.condition_states,
                 target,
                 ability_check=True,
@@ -360,6 +362,8 @@ def _preferred_defense_skill(target: Actor) -> str:
 
 def _request_payload(label: str, request: D20RollRequest) -> dict[str, object]:
     instruction = roll_instruction(request)
+    if any(m.stacking_key == "charge_accuracy" for m in request.modifiers):
+        label = next((m.label for m in request.modifiers if m.modifier_type.value == "ability"), label)
     return {
         "label": label,
         "modifier_total": instruction.breakdown.modifier_total,

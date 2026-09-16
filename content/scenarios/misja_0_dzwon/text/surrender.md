@@ -1,0 +1,1 @@
+Z grupy dobiega krzyk: „Dość! Odłożymy broń!” Możecie przyjąć poddanie i oszczędzić dalszych strat, pozostawiając im osobiste narzędzia. Możecie też kontynuować walkę, ryzykując zdrowie i zasoby, aby całkowicie ich rozbroić i zarekwirować wyposażenie.

@@ -1,0 +1,1 @@
+„Szlak jest przejezdny, ale po deszczu lubi kwestionować to określenie. Nie ciągnijcie koła na siłę, jeżeli zapadnie się w koleinę. Podłóżcie deski. Na miejscu powinna zostać drewniana podstawa pod dzwon.”

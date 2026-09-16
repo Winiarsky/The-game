@@ -1,0 +1,573 @@
+{
+  "version": 1,
+  "profile": "pooled_mana_v01",
+  "heroes": {
+    "garran": {
+      "values": {
+        "C": 4,
+        "B": 7,
+        "Z": 1,
+        "F": 3,
+        "N": 4
+      },
+      "passive_name": "Za tarczą",
+      "passive": "Przy sąsiadującym przytomnym sojuszniku: +2 punkty do ochronnych zdolności.",
+      "flaw_name": "Nieustępliwość",
+      "flaw": "Rozpoczęcie własnej tury przy wrogu zmniejsza limit zwykłego ruchu o połowę do końca tury."
+    },
+    "brakka": {
+      "values": {
+        "C": 7,
+        "B": 1,
+        "Z": 3,
+        "F": 4,
+        "N": 4
+      },
+      "passive_name": "Bitewny rozpęd",
+      "passive": "W Szale: +2 punkty do ofensywnych zdolności. Trafienie zwykłym atakiem w Szale daje 2 tymczasowe PW raz na turę.",
+      "flaw_name": "Głód walki",
+      "flaw": "Tura bez ofensywy kończy Szał."
+    },
+    "mira": {
+      "values": {
+        "C": 3,
+        "B": 1,
+        "Z": 7,
+        "F": 4,
+        "N": 4
+      },
+      "passive_name": "Zwinne dłonie",
+      "passive": "Z ukrycia: +2 punkty do zdolności. Zachowujesz premię ruchu po trafieniu nożem.",
+      "flaw_name": "Cienka granica",
+      "flaw": "W ukryciu masz utrudnienie obron i testów reakcji."
+    },
+    "dagna": {
+      "values": {
+        "C": 1,
+        "B": 7,
+        "Z": 4,
+        "F": 3,
+        "N": 4
+      },
+      "passive_name": "Uczeń Życia",
+      "passive": "Leczenie innego bohatera: +2 punkty do zdolności.",
+      "flaw_name": "Nikogo nie zostawiam",
+      "flaw": "Ofensywna płatna zdolność przy sojuszniku poniżej połowy PW wymaga +2 punktów."
+    },
+    "lorian": {
+      "values": {
+        "C": 1,
+        "B": 4,
+        "Z": 4,
+        "F": 3,
+        "N": 7
+      },
+      "passive_name": "Wspólny rytm",
+      "passive": "Przy przytomnym sojuszniku w 10 ft: +2 punkty do zdolności. Strojenie pozwala ułożyć dwie wierzchnie karty.",
+      "flaw_name": "Potrzeba publiczności",
+      "flaw": "Bez przytomnego sojusznika w 10 ft, w wieloosobowej drużynie: płatna zdolność wymaga +2 punktów."
+    },
+    "nimra": {
+      "values": {
+        "C": 4,
+        "B": 1,
+        "Z": 3,
+        "F": 4,
+        "N": 7
+      },
+      "passive_name": "Alchemia barw",
+      "passive": "Pula co najmniej trzech różnych kolorów daje +2 punkty.",
+      "flaw_name": "Echo",
+      "flaw": "Kolejna ta sama płatna zdolność z rzędu wymaga o 2 punkty więcej; inna płatna zdolność zeruje serię."
+    },
+    "erynd": {
+      "values": {
+        "C": 4,
+        "B": 1,
+        "Z": 7,
+        "F": 3,
+        "N": 4
+      },
+      "passive_name": "Rozpoznanie",
+      "passive": "Bez sąsiadującego przeciwnika: +2 punkty do zdolności.",
+      "flaw_name": "Trauma bratobójczego strzału",
+      "flaw": "Płatny strzał w cel sąsiadujący z innym bohaterem wymaga +2 punktów."
+    }
+  },
+  "abilities": {
+    "second_wind": {
+      "hero": "garran",
+      "minimum": 6,
+      "required": {},
+      "free": false
+    },
+    "defensive_stance": {
+      "hero": "garran",
+      "minimum": 0,
+      "required": {},
+      "free": true
+    },
+    "garran_command_halt": {
+      "hero": "garran",
+      "minimum": 6,
+      "required": {},
+      "free": false
+    },
+    "garran_guard_companion": {
+      "hero": "garran",
+      "minimum": 0,
+      "required": {},
+      "free": true
+    },
+    "shield_bash": {
+      "hero": "garran",
+      "minimum": 12,
+      "required": {},
+      "free": false
+    },
+    "garran_shield_wall": {
+      "hero": "garran",
+      "minimum": 12,
+      "required": {},
+      "free": false
+    },
+    "garran_rally": {
+      "hero": "garran",
+      "minimum": 12,
+      "required": {},
+      "free": false
+    },
+    "iron_bastion": {
+      "hero": "garran",
+      "minimum": 21,
+      "required": {
+        "B": 2,
+        "N": 1
+      },
+      "free": false
+    },
+    "counterattack_command": {
+      "hero": "garran",
+      "minimum": 21,
+      "required": {
+        "B": 2,
+        "C": 2
+      },
+      "free": false
+    },
+    "rage": {
+      "hero": "brakka",
+      "minimum": 0,
+      "required": {},
+      "free": true
+    },
+    "reckless_attack": {
+      "hero": "brakka",
+      "minimum": 0,
+      "required": {},
+      "free": true
+    },
+    "acceleration": {
+      "hero": "brakka",
+      "minimum": 0,
+      "required": {},
+      "free": true
+    },
+    "hard_as_rock": {
+      "hero": "brakka",
+      "minimum": 0,
+      "required": {},
+      "free": true
+    },
+    "powerful_strike": {
+      "hero": "brakka",
+      "minimum": 12,
+      "required": {},
+      "free": false
+    },
+    "shoulder_check": {
+      "hero": "brakka",
+      "minimum": 12,
+      "required": {},
+      "free": false
+    },
+    "deafening_roar": {
+      "hero": "brakka",
+      "minimum": 12,
+      "required": {},
+      "free": false
+    },
+    "reaper": {
+      "hero": "brakka",
+      "minimum": 21,
+      "required": {
+        "C": 2
+      },
+      "free": false
+    },
+    "unstoppable": {
+      "hero": "brakka",
+      "minimum": 21,
+      "required": {
+        "C": 2,
+        "Z": 1
+      },
+      "free": false
+    },
+    "hide": {
+      "hero": "mira",
+      "minimum": 0,
+      "required": {},
+      "free": true
+    },
+    "instinctive_dodge": {
+      "hero": "mira",
+      "minimum": 0,
+      "required": {},
+      "free": true
+    },
+    "feint": {
+      "hero": "mira",
+      "minimum": 0,
+      "required": {},
+      "free": true
+    },
+    "hamstring_cut": {
+      "hero": "mira",
+      "minimum": 6,
+      "required": {},
+      "free": false
+    },
+    "smoke_screen": {
+      "hero": "mira",
+      "minimum": 12,
+      "required": {},
+      "free": false
+    },
+    "guard_vault": {
+      "hero": "mira",
+      "minimum": 12,
+      "required": {},
+      "free": false
+    },
+    "blade_mistress": {
+      "hero": "mira",
+      "minimum": 12,
+      "required": {},
+      "free": false
+    },
+    "shadow_verdict": {
+      "hero": "mira",
+      "minimum": 21,
+      "required": {
+        "F": 2
+      },
+      "free": false
+    },
+    "blade_dance": {
+      "hero": "mira",
+      "minimum": 21,
+      "required": {
+        "Z": 2,
+        "F": 2
+      },
+      "free": false
+    },
+    "sacred_flame": {
+      "hero": "dagna",
+      "minimum": 6,
+      "required": {},
+      "free": false
+    },
+    "bless": {
+      "hero": "dagna",
+      "minimum": 6,
+      "required": {},
+      "free": false
+    },
+    "lesser_restoration": {
+      "hero": "dagna",
+      "minimum": 6,
+      "required": {},
+      "free": false
+    },
+    "caring_gesture": {
+      "hero": "dagna",
+      "minimum": 0,
+      "required": {},
+      "free": true
+    },
+    "healing_word": {
+      "hero": "dagna",
+      "minimum": 12,
+      "required": {},
+      "free": false
+    },
+    "divine_care_aura": {
+      "hero": "dagna",
+      "minimum": 12,
+      "required": {},
+      "free": false
+    },
+    "guiding_bolt": {
+      "hero": "dagna",
+      "minimum": 12,
+      "required": {},
+      "free": false
+    },
+    "preserve_life": {
+      "hero": "dagna",
+      "minimum": 21,
+      "required": {
+        "B": 2
+      },
+      "free": false
+    },
+    "spiritual_weapon": {
+      "hero": "dagna",
+      "minimum": 21,
+      "required": {
+        "B": 2,
+        "C": 2
+      },
+      "free": false
+    },
+    "mana_inspiration": {
+      "hero": "lorian",
+      "minimum": 0,
+      "required": {},
+      "free": true
+    },
+    "mana_tuning": {
+      "hero": "lorian",
+      "minimum": 0,
+      "required": {},
+      "free": true,
+      "description": "Podejrzyj dwie wierzchnie karty i odłóż je na wierzch w wybranej kolejności. Przy jednej karcie obejrzyj tylko ją. Bez tasowania."
+    },
+    "mocking_shot": {
+      "hero": "lorian",
+      "minimum": 6,
+      "required": {},
+      "free": false
+    },
+    "cutting_words": {
+      "hero": "lorian",
+      "minimum": 0,
+      "required": {},
+      "free": true
+    },
+    "mana_recovery": {
+      "hero": "lorian",
+      "minimum": 12,
+      "required": {},
+      "free": false,
+      "description": "Po wydaniu puli przenieś do dwóch wybranych spalonych kart na spód talii, w wybranej kolejności. Niebieskie podbicia zwiększają limit odzysku."
+    },
+    "optical_scope": {
+      "hero": "lorian",
+      "minimum": 12,
+      "required": {},
+      "free": false
+    },
+    "entangling_shot": {
+      "hero": "lorian",
+      "minimum": 12,
+      "required": {},
+      "free": false
+    },
+    "mana_great_tuning": {
+      "hero": "lorian",
+      "minimum": 21,
+      "required": {
+        "N": 2
+      },
+      "free": false,
+      "description": "Po wydaniu puli przenieś do trzech wybranych spalonych kart na wierzch talii, w wybranej kolejności. Uwięzione karty pozostają przy przeciwnikach."
+    },
+    "victory_hymn": {
+      "hero": "lorian",
+      "minimum": 21,
+      "required": {
+        "B": 2,
+        "N": 2
+      },
+      "free": false
+    },
+    "nimra_frost_pulse": {
+      "hero": "nimra",
+      "minimum": 6,
+      "required": {},
+      "free": false
+    },
+    "nimra_mind_spike": {
+      "hero": "nimra",
+      "minimum": 6,
+      "required": {},
+      "free": false
+    },
+    "nimra_sticky_matrix": {
+      "hero": "nimra",
+      "minimum": 6,
+      "required": {},
+      "free": false
+    },
+    "misty_step": {
+      "hero": "nimra",
+      "minimum": 0,
+      "required": {},
+      "free": true
+    },
+    "shield": {
+      "hero": "nimra",
+      "minimum": 0,
+      "required": {},
+      "free": true
+    },
+    "nimra_flame_fan": {
+      "hero": "nimra",
+      "minimum": 12,
+      "required": {},
+      "free": false
+    },
+    "nimra_force_wave": {
+      "hero": "nimra",
+      "minimum": 12,
+      "required": {},
+      "free": false
+    },
+    "nimra_web": {
+      "hero": "nimra",
+      "minimum": 12,
+      "required": {},
+      "free": false
+    },
+    "nimra_mind_break": {
+      "hero": "nimra",
+      "minimum": 12,
+      "required": {},
+      "free": false
+    },
+    "nimra_lightning_path": {
+      "hero": "nimra",
+      "minimum": 21,
+      "required": {
+        "C": 2,
+        "N": 1
+      },
+      "free": false
+    },
+    "shatter": {
+      "hero": "nimra",
+      "minimum": 21,
+      "required": {
+        "C": 2,
+        "N": 2
+      },
+      "free": false
+    },
+    "nimra_stasis": {
+      "hero": "nimra",
+      "minimum": 21,
+      "required": {
+        "N": 2,
+        "F": 1
+      },
+      "free": false
+    },
+    "hunters_mark": {
+      "hero": "erynd",
+      "minimum": 0,
+      "required": {},
+      "free": true
+    },
+    "cunning_action": {
+      "hero": "erynd",
+      "minimum": 0,
+      "required": {},
+      "free": true
+    },
+    "aim": {
+      "hero": "erynd",
+      "minimum": 0,
+      "required": {},
+      "free": true
+    },
+    "disrupting_arrow": {
+      "hero": "erynd",
+      "minimum": 6,
+      "required": {},
+      "free": false
+    },
+    "anchoring_arrow": {
+      "hero": "erynd",
+      "minimum": 12,
+      "required": {},
+      "free": false
+    },
+    "exposing_arrow": {
+      "hero": "erynd",
+      "minimum": 12,
+      "required": {},
+      "free": false
+    },
+    "double_shot": {
+      "hero": "erynd",
+      "minimum": 12,
+      "required": {},
+      "free": false
+    },
+    "arrow_rain": {
+      "hero": "erynd",
+      "minimum": 21,
+      "required": {
+        "Z": 2
+      },
+      "free": false
+    },
+    "spike_growth": {
+      "hero": "erynd",
+      "minimum": 21,
+      "required": {
+        "Z": 2,
+        "N": 2
+      },
+      "free": false
+    },
+    "turn_undead": {
+      "hero": "dagna",
+      "minimum": 12,
+      "required": {},
+      "free": false
+    },
+    "spiritual_weapon_activation": {
+      "hero": "dagna",
+      "minimum": 0,
+      "required": {},
+      "free": true
+    }
+  },
+  "enemy_mana": {
+    "mana_burn_offer": {
+      "source": "offer",
+      "count": 1,
+      "period": 2,
+      "prison": false,
+      "label": "Co drugą rundę: pierwsze trafienie spala odkrytą kartę. Brak karty powoduje mana drain."
+    },
+    "mana_burn_deck": {
+      "source": "deck",
+      "count": 2,
+      "period": 2,
+      "prison": false,
+      "label": "Co drugą rundę: pierwsze trafienie spala dwie karty z wierzchu. Niedobór powoduje mana drain."
+    },
+    "mana_prison": {
+      "source": "offer",
+      "count": 1,
+      "period": 2,
+      "prison": true,
+      "label": "Co drugą rundę: pierwsze trafienie więzi odkrytą kartę. Pokonanie więżącego oddaje kartę na spód. Brak karty powoduje mana drain."
+    }
+  }
+}

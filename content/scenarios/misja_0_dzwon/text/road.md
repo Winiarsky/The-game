@@ -1,0 +1,1 @@
+Przez pierwszą godzinę droga zachowywała pozory współpracy. Potem prawe koło zapadło się po piastę, a mocowanie osi jęknęło. Muł obejrzał się z wyrazem kogoś, kto od początku miał zastrzeżenia. Trzeba wydostać wóz i zabezpieczyć koło.

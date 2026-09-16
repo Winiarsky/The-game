@@ -11,8 +11,8 @@ from dnd_board_game.ui.routes import create_app
 from tests.unit.test_recruitment_arena import arena
 
 
-@pytest.mark.parametrize('lesson', ['object', 'bust'])
-def test_live_page_opens_and_resolves_erynd_object_lesson(tmp_path: Path, lesson: str):
+@pytest.mark.parametrize('lesson', ['object', 'npc', 'abort'])
+def test_live_party_runes_focus_rolls_and_return(tmp_path: Path, lesson: str):
     chrome=shutil.which('google-chrome') or shutil.which('chromium')
     if not chrome:
         pytest.skip('Chrome required')
@@ -37,64 +37,76 @@ def test_live_page_opens_and_resolves_erynd_object_lesson(tmp_path: Path, lesson
   await api('/api/board/select',{col:19,row:29-c.slot},'Runa…');
  };
  try {
-  await waitFor(()=>document.querySelectorAll('.mana-hero-entry').length===7 && !busy);
-  await api('/api/exploration-mana',{action:'open',hero:'erynd',lesson:'LESSON',revision:state.exploration_mana.revision},'Lekcja…');
+  await waitFor(()=>document.querySelectorAll('.training-roster button').length===7 && !busy);
+  for(const action of ['hero:erynd','subject:exploration','cases','case:LESSON']) {
+    const option=state.training_arena.menu.options.find(o=>o.action===action);
+    if(!option)throw Error('Missing menu rune '+action);
+    await api('/api/board/select',{col:19,row:29-option.slot},'Menu samouczka…');
+    await waitFor(()=>!busy);
+  }
   await waitFor(()=>state.exploration_mana?.active && !busy);
   if(state.exploration_mana.hero!=='erynd')throw Error('Wrong hero');
   await press('acknowledge');
   await waitFor(()=>state.exploration_mana.phase==='setup' && !busy);
   while(state.exploration_mana.phase==='setup')await press('acknowledge');
-  await press('start');
-  await waitFor(()=>state.exploration_mana.attempt?.phase==='offer' && !busy);
-  for(const color of ('LESSON'==='bust'?'CCNF':'C')) {
-    if(state.exploration_mana.attempt.phase==='decision')await press('draw');
-    await press('choose',{color});
-  }
-  if(state.exploration_mana.attempt.phase==='decision')await press('stand');
-  await waitFor(()=>document.getElementById('exploration-mana-roll') && !busy);
   const sync=()=>waitFor(()=>keyboardRollWizard && !busy && !boardPanelSyncPromise && desiredBoardPanel()?.context===state.board_selection.panel_context);
   const diePress=async slot=>{
-    await sync();
-    await api('/api/board/select',{col:19,row:29-slot},'Kość…');
+    await sync();await api('/api/board/select',{col:19,row:29-slot},'Kość…');
     await new Promise(r=>setTimeout(r,30));
-    await sync();
   };
-  await sync();
-  await waitFor(()=>document.activeElement?.id==='keyboard-roll-wizard-input');
-  if(keyboardRollWizard.steps.length!==('LESSON'==='bust'?2:1))throw Error('Wrong dice count');
-  if(boardSelectionPausedForScreenInput())throw Error('Dice paused the board');
-  await diePress(27);
-  if(document.getElementById('keyboard-roll-wizard-input').value!=='11')throw Error('Plus missed focus');
-  await diePress(26);
-  if(document.getElementById('keyboard-roll-wizard-input').value!=='10')throw Error('Minus missed focus');
-  await diePress(28);
-  if('LESSON'==='bust') {
-    if(keyboardRollWizard.index!==1 || keyboardRollWizard.review)throw Error('Second die skipped');
-    await diePress(26); // second die 9
-    await diePress(28);
+  let checkedDice=false,checkedImpact=false,aborted=false;
+  for(let i=0;i<160;i++) {
+    const p=state.exploration_mana;
+    if(p.phase==='result')break;
+    if(p.mana.phase==='reveal'||p.mana.phase==='burn')await press('color',p.board_choices.find(c=>c.action==='color').extra);
+    else if(p.mana.phase==='choose')await press('take',{index:0});
+    else if(p.phase==='turn')await press('test',{bonus:0});
+    else if(p.attempt?.phase==='roll') {
+      await sync();
+      if(boardSelectionPausedForScreenInput())throw Error('Dice paused board');
+      if(ABORT_CASE) {
+        document.querySelectorAll('#training-tools button')[1].click();
+        await waitFor(()=>!state.exploration_mana.active&&!busy);
+        if(keyboardRollWizard||document.getElementById('exploration-mana-roll'))throw Error('Stale dice after exit');
+        aborted=true;break;
+      }
+      const die=p.attempt.die;
+      if(keyboardRollWizard.steps.length!==1)throw Error('Wrong dice count');
+      await waitFor(()=>document.activeElement?.id==='keyboard-roll-wizard-input');
+      const input=document.getElementById('keyboard-roll-wizard-input');
+      input.value=String(die-1);input.dispatchEvent(new Event('input',{bubbles:true}));
+      await diePress(27);await sync();
+      if(Number(document.getElementById('keyboard-roll-wizard-input').value)!==die)throw Error('Plus missed focus');
+      await diePress(26);await sync();
+      if(Number(document.getElementById('keyboard-roll-wizard-input').value)!==die-1)throw Error('Minus missed focus');
+      await diePress(28);await sync();
+      if(!keyboardRollWizard.review)throw Error('Missing summary');
+      if(!document.getElementById('keyboard-roll-wizard').innerText.includes('Premia doliczona raz'))throw Error('Modifier summary missing');
+      await diePress(29);await sync();
+      await diePress(27);await sync();
+      await diePress(28);await sync();
+      if(!document.querySelector('.keyboard-roll-combined-summary').innerText.includes(`${die} +${p.attempt.modifier_total} = ${die+p.attempt.modifier_total}`))throw Error('Incorrect single modifier');
+      checkedDice ||= p.phase==='check';checkedImpact ||= p.phase==='impact';
+      await api('/api/board/select',{col:19,row:1},'Potwierdź…');
+      await waitFor(()=>state.exploration_mana.revision!==p.revision&&!busy);
+    }
+    else if(p.phase==='reaction')await press('react');
+    else await press('advance');
   }
-  if(!keyboardRollWizard.review || state.exploration_mana.attempt.phase!=='roll')throw Error('No review before resolution');
-  if(!document.getElementById('keyboard-roll-wizard').innerText.includes('Premia doliczona raz'))throw Error('Modifier summary missing');
-  await diePress(29);
-  const original='LESSON'==='bust'?9:10;
-  if(Number(document.getElementById('keyboard-roll-wizard-input').value)!==original)throw Error('Correction lost die');
-  await diePress('LESSON'==='bust'?26:27);
-  await diePress(28);
-  const raw='LESSON'==='bust'?8:11;
-  if(!document.querySelector('.keyboard-roll-combined-summary').innerText.includes(`${raw} +${state.exploration_mana.attempt.modifier_total} = ${raw+state.exploration_mana.attempt.modifier_total}`))throw Error('Summary adds modifier more than once or wrong die');
-  await sync();
-  await api('/api/board/select',{col:19,row:1},'Zatwierdź rzut…');
-  await waitFor(()=>state.exploration_mana.attempt?.phase==='result' && !busy);
-  if(state.exploration_mana.attempt.rolls.join(',')!==('LESSON'==='bust'?'10,8':'11'))throw Error('Wrong natural dice sent');
-  if(!document.querySelector('#training-arena-panel').innerText.includes('Praktyka terenowa'))throw Error('Passive missing');
-  if(document.documentElement.scrollWidth>innerWidth)throw Error('Horizontal overflow');
+  if(!aborted) {
+    if(state.exploration_mana.phase!=='result'||!state.exploration_mana.completed)throw Error('Confrontation unfinished');
+    if(!checkedDice||!checkedImpact)throw Error('Missing check or influence');
+    if(document.documentElement.scrollWidth>innerWidth)throw Error('Horizontal overflow');
+    await press('next');await waitFor(()=>!state.exploration_mana.active&&!busy);
+  }
+  if(state.training_arena.menu.view!=='cases'||state.training_arena.menu.subject!=='exploration')throw Error('Wrong return menu');
   report.textContent='PASS';
  }catch(error){report.textContent='FAIL: '+error.stack;}
  await fetch('/__test/exploration-result',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({result:report.textContent})});
 })();
 </script>
 '''
-    harness=harness.replace('LESSON',lesson)
+    harness=harness.replace('LESSON','object' if lesson == 'abort' else lesson).replace('ABORT_CASE', 'true' if lesson == 'abort' else 'false')
     @app.after_request
     def inject(response):
         from flask import request
@@ -110,7 +122,7 @@ def test_live_page_opens_and_resolves_erynd_object_lesson(tmp_path: Path, lesson
             '--no-first-run','--disable-background-networking','--no-proxy-server',
             f'--user-data-dir={tmp_path/"chrome"}','--window-size=390,1000',
             f'http://127.0.0.1:{server.server_port}/play'],stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,text=True)
-        assert finished.wait(25), 'Browser did not report the lesson result'
+        assert finished.wait(45), 'Browser did not report the lesson result'
         assert reported.get('result')=='PASS', reported
     finally:
         if process:

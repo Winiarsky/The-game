@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dnd_board_game.combat.mana_charge import charged_check_request
+
 from dataclasses import dataclass, replace
 from enum import StrEnum
 from random import Random
@@ -127,13 +129,13 @@ class CombatGrappleFlowService:
             actor_skill=actor_skill,
             opponent_skill=opponent_skill,
             actor_request=condition_roll_request(
-                D20RollRequest(modifiers=skill_roll_modifiers(actor, actor_skill)),
+                charged_check_request(state, actor, D20RollRequest(modifiers=skill_roll_modifiers(actor, actor_skill))),
                 state.condition_states,
                 actor,
                 ability_check=True,
             ),
             opponent_request=condition_roll_request(
-                D20RollRequest(modifiers=skill_roll_modifiers(target, opponent_skill)),
+                charged_check_request(state, target, D20RollRequest(modifiers=skill_roll_modifiers(target, opponent_skill))),
                 state.condition_states,
                 target,
                 ability_check=True,
@@ -300,6 +302,8 @@ def _actor_by_id(state: CombatState, actor_id: str) -> Actor:
 
 def _request_payload(label: str, request: D20RollRequest) -> dict[str, object]:
     instruction = roll_instruction(request)
+    if any(m.stacking_key == "charge_accuracy" for m in request.modifiers):
+        label = next((m.label for m in request.modifiers if m.modifier_type.value == "ability"), label)
     return {
         "label": label,
         "modifier_total": instruction.breakdown.modifier_total,

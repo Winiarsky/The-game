@@ -17,6 +17,12 @@ def hero_turn(s, hero='mira'):
     index = next(i for i,e in enumerate(s.combat_state.initiative_order.entries) if str(e.actor.id) == hero)
     s.combat_state = replace(s.combat_state, initiative_order=replace(s.combat_state.initiative_order,current_index=index),
         turn_action=replace(s.combat_state.turn_action, action_use=ActionUse.ACTION_AVAILABLE))
+    # Complete the mandatory charge setup before asking for a combat action.
+    if s.combat_state.shared_mana.pooled.phase == 'setup':
+        from tests.unit.test_training_walkthrough import prepare_pool
+        from tests.unit.test_shared_mana_runtime import send
+        prepare_pool(s)
+        send(s, 'pool_take', index=0)
 
 
 def test_trap_detection_and_disarm_consume_real_actions(tmp_path):
@@ -46,7 +52,7 @@ def test_trap_range_and_no_exploration_passive(tmp_path):
         validate_trap_action(s.combat_state,trap,'detect',tools_available=True)
     request=trap_request(actor,trap,'detect')
     assert not any('Czujność' in m.label or 'Praktyka' in m.label for m in request.modifiers)
-    assert sum(m.value for m in request.modifiers)==4
+    assert sum(m.value for m in request.modifiers)==2
 
 
 @pytest.mark.parametrize('hero', ('garran','brakka','mira','dagna','lorian','nimra','erynd'))
@@ -82,3 +88,20 @@ def test_trap_lesson_intro_pending_roll_save_and_completion(tmp_path, hero):
     assert s.state_payload()['training_arena']['can_start']
     from dnd_board_game.combat.scene import scene_flag
     assert scene_flag(s.state.flags,'trap_lesson_done_'+hero)
+
+
+def test_trap_menu_return_and_retry_are_available_before_setup(tmp_path):
+    from dnd_board_game.ui import training_menu as menu
+    from dnd_board_game.application.training_walkthrough import steps
+    s = arena(tmp_path)
+    start_training_trial(s, 'garran', 'traps', 'humanoid')
+    client = create_app(s).test_client()
+    result = client.post('/api/simple-trap', json=dict(action='retry', revision=simple_traps.read(s)['revision']))
+    assert result.status_code == 200, result.json
+    assert notice_id(s).startswith('trap:')
+    result = client.post('/api/simple-trap', json=dict(action='leave', revision=simple_traps.read(s)['revision']))
+    assert result.status_code == 200, result.json
+    assert menu.payload(s)['subject'] == 'combat'
+    assert menu.payload(s)['view'] == 'cases'
+    assert menu.payload(s)['page'] == (len(steps('garran')) + 1) // menu.PAGE_SIZE
+    assert any(o['action'] == 'case:trap' for o in menu.payload(s)['options'])

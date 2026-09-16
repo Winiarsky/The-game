@@ -13,7 +13,7 @@
       <span id="new-game-step-label" class="step-label">Nowa gra · krok 1 z 2</span>
       <h1 id="new-game-title">Wybierz drużynę</h1>
       <p>Nowe rozgrywki używają fizycznej many. <a href="{{ url_for('physical_mana_rules') }}" target="_blank" rel="noopener">Instrukcja i pełne talie do wydruku</a></p>
-      <p id="new-game-description">Kliknij od 1 do 5 bohaterów, którzy wezmą udział w grze.</p>
+      <p id="new-game-description">Kliknij od 1 do 6 bohaterów, którzy wezmą udział w grze.</p>
     </header>
 
     {% if error %}<div class="flow-error" role="alert">{{ error }}</div>{% endif %}
@@ -61,7 +61,7 @@
 
       <section id="scenario-selection-step" class="form-section" hidden>
         <h2>Wybierz scenariusz</h2>
-        <p>Na obecnym etapie dostępna jest pierwsza kampania.</p>
+        <p>Misja 0 uczy zasad podczas wspólnej wyprawy. Możesz też wybrać wcześniejszy scenariusz.</p>
         {% for scenario in scenarios %}
           <label class="scenario-card" data-board-rune="{{ 6 + loop.index0 }}">
             {{ panel_icon(6 + loop.index0)|safe }}
@@ -69,10 +69,10 @@
             <span class="selection-mark" aria-hidden="true">✓</span>
             <span>
               <b>{{ scenario.name }}</b>
-              <small>Scenariusz eksploracyjny · {{ scenario.scene_count }} {% if scenario.scene_count == 1 %}lokacja{% else %}lokacje{% endif %} · maksymalnie 5 bohaterów</small>
+              <small>{% if scenario.id == 'misja_0_dzwon' %}Misja wprowadzająca · 3–6 bohaterów{% else %}Scenariusz eksploracyjny · 1–5 bohaterów{% endif %}</small>
               <em>
                 {% if scenario.continuation_scene_names %}Dalej: {{ scenario.continuation_scene_names|join(" → ") }} · {% endif %}
-                {% if scenario.has_paper_map %}zawiera setup papierowej mapy{% else %}korzysta z planszy bez osobnej mapy papierowej{% endif %}
+                {% if scenario.has_paper_map or scenario.id == 'misja_0_dzwon' %}zawiera setup papierowej mapy{% else %}korzysta z planszy bez osobnej mapy papierowej{% endif %}
               </em>
             </span>
           </label>
@@ -106,7 +106,7 @@
 
       const updateSelection = changedInput => {
         const selected = actorInputs.filter(input => input.checked);
-        if (selected.length > 5 && changedInput) changedInput.checked = false;
+        if (selected.length > 6 && changedInput) changedInput.checked = false;
         const accepted = actorInputs.filter(input => input.checked);
         actorInputs.forEach(input => {
           const card = input.closest('.roster-card');
@@ -116,10 +116,10 @@
             : 'Wybierz do drużyny';
         });
         next.disabled = accepted.length < 1;
-        status.textContent = selected.length > 5
-          ? 'Drużyna może liczyć maksymalnie 5 bohaterów. Odznacz kogoś, aby wybrać inną postać.'
+        status.textContent = selected.length > 6
+          ? 'Drużyna może liczyć maksymalnie 6 bohaterów. Odznacz kogoś, aby wybrać inną postać.'
           : accepted.length
-          ? `Wybrano: ${accepted.length} z 5 bohaterów.`
+          ? `Wybrano: ${accepted.length} z 6 bohaterów.`
           : 'Nie wybrano jeszcze żadnego bohatera.';
       };
 
@@ -135,7 +135,7 @@
         title.textContent = choosingScenario ? 'Wybierz scenariusz' : 'Wybierz drużynę';
         description.textContent = choosingScenario
           ? 'Naciśnij runę scenariusza albo jego kafelek, aby rozpocząć grę wybraną drużyną.'
-          : 'Kliknij od 1 do 5 bohaterów lub wybierz ich runy. Następnie użyj runy przy Dalej.';
+          : 'Kliknij od 1 do 6 bohaterów lub wybierz ich runy. Następnie użyj runy przy Dalej.';
       };
 
       actorInputs.forEach(input => input.addEventListener('change', () => updateSelection(input)));

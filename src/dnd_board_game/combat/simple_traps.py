@@ -8,6 +8,7 @@ from dnd_board_game.actors.skills import ability_check_roll_modifiers
 from dnd_board_game.rules import D20RollInput, D20RollRequest, resolve_d20_roll, resolve_ability_check
 from dnd_board_game.world import Coordinate
 from .session import CombatState, current_actor, use_turn_action
+from .mana_charge import charged_check_request
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,11 +37,11 @@ class SimpleTrapOutcome:
     triggered: bool
 
 
-def trap_request(actor: Actor, trap: SimpleTrap, action: str) -> D20RollRequest:
+def trap_request(actor: Actor, trap: SimpleTrap, action: str, *, state: CombatState | None = None) -> D20RollRequest:
     if action == "detect":
-        return D20RollRequest(ability="wisdom", modifiers=ability_check_roll_modifiers(actor, "wisdom", skill="perception"))
+        return charged_check_request(state, actor, D20RollRequest(ability="wisdom", modifiers=ability_check_roll_modifiers(actor, "wisdom", skill="perception")))
     if action == "disarm":
-        return D20RollRequest(ability="dexterity", modifiers=ability_check_roll_modifiers(actor, "dexterity", tool=trap.tool or None))
+        return charged_check_request(state, actor, D20RollRequest(ability="dexterity", modifiers=ability_check_roll_modifiers(actor, "dexterity", tool=trap.tool or None)))
     raise ValueError("Wybierz wykrywanie albo dezaktywację.")
 
 
@@ -72,7 +73,7 @@ def resolve_trap_check(state: CombatState, trap: SimpleTrap, action: str, natura
     actor = validate_trap_action(state, trap, action, tools_available=tools_available)
     if type(natural) is not int or not 1 <= natural <= 20:
         raise ValueError("Wpisz naturalny wynik k20 od 1 do 20.")
-    roll = resolve_d20_roll(D20RollInput(trap_request(actor, trap, action), natural))
+    roll = resolve_d20_roll(D20RollInput(trap_request(actor, trap, action, state=state), natural))
     success = resolve_ability_check(roll, trap.detection_dc if action == "detect" else trap.disarm_dc).success
     status = ("revealed" if success else "hidden") if action == "detect" else ("disarmed" if success else "triggered")
     return SimpleTrapOutcome(use_turn_action(state).state, replace(trap, status=status), success, roll.total,

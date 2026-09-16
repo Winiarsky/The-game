@@ -54,6 +54,7 @@ def combat_effect_armor_class_bonus(
             if effect.actor_id == str(actor.id)
             and effect.kind in {
                 "spell_ac_bonus",
+                "charge_ac",
                 "iron_bastion_member",
                 "garran_defensive_stance_ac",
                 "garran_shield_wall_member",

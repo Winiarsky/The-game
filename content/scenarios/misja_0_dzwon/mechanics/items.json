@@ -1,0 +1,42 @@
+{
+  "potion": {
+    "name": "Mikstura leczenia",
+    "dice": 2,
+    "sides": 8,
+    "bonus": 4,
+    "description": "Akcja główna; leczy 2k8 + 4 PW, zużycie jednorazowe."
+  },
+  "weak_potion": {
+    "name": "Słabsza mikstura leczenia",
+    "dice": 1,
+    "sides": 8,
+    "bonus": 2,
+    "description": "Akcja główna; leczy 1k8 + 2 PW, zużycie jednorazowe."
+  },
+  "medallion": {
+    "name": "Medalik J. R.",
+    "description": "Wracaj. E. — srebrna pamiątka żołnierza.",
+    "value_cp": 300
+  },
+  "amulet": {
+    "name": "Amulet dowódcy",
+    "description": "Noszony: +1 KP.",
+    "value_cp": 1000,
+    "armor_class_bonus": 1
+  },
+  "rope": {
+    "name": "Lina z posterunku",
+    "description": "Dobry zwój liny.",
+    "value_cp": 100
+  },
+  "tools": {
+    "name": "Zarekwirowane narzędzia",
+    "description": "Zestaw narzędzi do wozu.",
+    "value_cp": 200
+  },
+  "documents": {
+    "name": "Pokwitowania Boruta",
+    "description": "Dowody niezapłaconych dostaw; sprawa dla prawnika.",
+    "value_cp": 0
+  }
+}

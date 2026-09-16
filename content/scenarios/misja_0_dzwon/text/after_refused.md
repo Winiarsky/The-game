@@ -1,0 +1,1 @@
+Ostatni przeciwnik pada, niezdolny do dalszej walki. Zabezpieczacie ich wyposażenie. Gdy przywódca odzyskuje dość sił, by mówić, jego spojrzenie zatrzymuje się najpierw na rannych, dopiero później na was.

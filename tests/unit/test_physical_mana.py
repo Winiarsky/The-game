@@ -16,9 +16,13 @@ from dnd_board_game.ui.exploration_app import ExplorationUiSession
 from dnd_board_game.world import Coordinate
 
 
-def session_for(hero, tmp_path):
+def session_for(hero, tmp_path, *, pooled: bool = False):
     session = ExplorationUiSession('content/scenarios/abandoned_watchtower.json', save_dir=tmp_path/'saves', observation_dir=tmp_path/'observations')
-    session.configure_custom_party((apply_physical_mana_profile(hero),))
+    actor = apply_physical_mana_profile(hero)
+    if not pooled:
+        # These regression cases describe the retained shared-market save profile.
+        actor = replace(actor, features=tuple(f for f in actor.features if f.feature_id != "pooled_mana_v01"))
+    session.configure_custom_party((actor,))
     _start_gate_skirmish(session)
     return session
 
@@ -201,8 +205,8 @@ def test_printable_catalog_and_mana_routes_are_readable(heroes, tmp_path):
     client = create_app(s).test_client()
     page = client.get('/rules/physical-mana')
     assert page.status_code == 200
-    assert page.get_data(as_text=True).count('class="card"') == 66
-    assert 'Strojenie rynku' in page.get_data(as_text=True)
+    assert page.get_data(as_text=True).count('class="card"') == 80  # 66 combat abilities + 14 exploration methods
+    assert 'Strojenie talii' in page.get_data(as_text=True)
     assert client.post('/api/combat/mana-wave', json={'event':True}).status_code == 400
     assert client.post('/api/combat/mana-wave', json={'event':2}).status_code == 400
     assert not any(e.kind == 'mana_wave_2' for e in s.active_combat_effects)

@@ -10,13 +10,14 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from dnd_board_game.character_creation import PLAYABLE_HERO_IDS
-from .mana_print import COLORS, PROFILE, COMMON_KEYS, build_print_hero
+from .mana_print import COLORS, PROFILE, COMMON_KEYS, MANA_PASSIVE_REMINDER, build_print_hero
+from dnd_board_game.scenarios.confrontation import REMINDER
 from dnd_board_game.ui.board_panel_symbols import SYMBOLS, PANEL_CONTROLS
 from .mana_print_html import FORMATS, render_hero_html
 
 ROOT = Path(__file__).resolve().parents[3]
 ASSET_ROOT = ROOT / "assets/physical_cards/character_sets"
-DEFAULT_OUTPUT = ASSET_ROOT / "physical_mana_v02"  # Stable published location; manifest identifies rules 0.3.
+DEFAULT_OUTPUT = ASSET_ROOT / "physical_mana_v02"  # Stable published location; manifest identifies the current profile.
 
 
 def render_pdf(html: Path, pdf: Path) -> None:
@@ -115,8 +116,10 @@ def write_reference(output: Path, actor_ids: tuple[str, ...]) -> None:
     heroes = [build_print_hero(hero_id) for hero_id in actor_ids]
     manifest = {
         "rules_profile": PROFILE,
-        "exploration_rules_version": 2,
-        "version": 5,
+        "exploration_rules_version": 3,
+        "version": 12,
+        "mana_catalog_version": 2,
+        "roll_rules": "charge_replaces_proficiency_v1",
         "panel_symbols_version": 1,
         "panel_controls": PANEL_CONTROLS,
         "common_keys": COMMON_KEYS,
@@ -129,13 +132,13 @@ def write_reference(output: Path, actor_ids: tuple[str, ...]) -> None:
         legacy.parent.mkdir(parents=True, exist_ok=True)
         legacy.write_text(text, encoding="utf-8")
         lines = [
-            "# Siedem archetypów — aktualne karty wspólnej many 0.3",
+            "# Siedem archetypów — ładowanie many 2.0",
             "",
-            "Źródło: katalog `rules/physical_mana.py`, profile postaci i stałe oznaczenia panelu areny.",
+            "Źródło: katalog `content/balance/pooled_mana/catalog.json`, profile postaci i stałe oznaczenia panelu areny.",
             "Wygenerowano przez `scripts/generate_mana_character_prints.py`.",
             "",
             "Każdy symbol oznacza osobną kartę. Biała: słońce (Plains); niebieska: kropla (Island); czarna: czaszka (Swamp); czerwona: płomień (Mountain); zielona: drzewo (Forest). Cyfra 1 w kółku: dowolny kolor.",
-            "A = akcja główna, D = dodatkowa, R = reakcja, MOD = modyfikacja. Koszt obejmuje opisane ataki. T = początek następnej tury źródła; O = odświeżenie talii. Dolny pasek mapy wyłączony; symbole pozostają wydrukowane.",
+            "A = akcja główna, D = dodatkowa, R = reakcja, MOD = modyfikacja. Koszt obejmuje opisane ataki. T = początek następnej tury źródła; O = mana drain. Dolny pasek mapy wyłączony; symbole pozostają wydrukowane.",
             "",
             "PDF-y: `assets/physical_cards/character_sets/physical_mana_v02/` — color, minimal, cards i bw_test.",
             "",
@@ -145,31 +148,24 @@ def write_reference(output: Path, actor_ids: tuple[str, ...]) -> None:
                 f"## {hero.name} — {hero.role}",
                 "",
                 f"PW {hero.hp}; KP {hero.ac}; ruch {hero.speed} ft.",
-                "Wspólna talia 25 kart; rynek 5; brak prywatnej ręki. Płatność przed efektem, dobór na końcu tury.",
+                "Wspólna talia: po max(5, 2 × liczba bohaterów) kart każdego koloru. Oferta dwóch kart, dobór jednej na początku własnej tury poniżej 21 pkt. Ładunek pozostaje do draina; bazowa akcja spala 1 kartę z wierzchu, podbicie dodatkowe 2.",
                 "",
-                "| Symbol panelu | Zdolność | Czas | Mana | Działanie |",
-                "|---|---|---|---|---|",
             ]
             for card in hero.cards:
-                lines.append(
-                    "| "
-                    + " | ".join(
-                        (
-                            SYMBOLS[card.panel_slot][0] if card.panel_slot is not None else "Reakcja — wybór kontekstowy",
-                            card.name,
-                            card.timing,
-                            " + ".join(COLORS[color] for color in card.cost),
-                            card.description.replace("|", "/"),
-                        )
-                    )
-                    + " |"
-                )
+                symbol = SYMBOLS[card.panel_slot][0] if card.panel_slot is not None else "Reakcja"
+                lines += [f"### {card.name} · {symbol}", ""]
+                lines += [f"- **{label}:** {text}" for label, text in card.sections]
+                lines.append("")
             lines += ["", "### Eksploracja — NPC i obiekty", ""]
             for method in hero.exploration:
-                lines.append(f"- **{method.name} ({'NPC' if method.kind == 'npc' else 'obiekt'}):** {method.ability}, bazowy test {method.modifier:+d}. {method.description}")
-            lines += ["", "Dobieranie do 21: pas przed następną ofertą. Przekroczenie daje utrudnienie końcowego rzutu (2k20, niższy wynik), bez premii za karty.", ""]
+                lines.append(f"- **{method.name} ({'NPC' if method.kind == 'npc' else 'obiekt'}):** {method.ability}, bazowy test {method.modifier:+d}; wpływ: kość podatności {method.influence_modifier:+d}. {method.description}")
+            lines += ["", REMINDER, ""]
+            lines += [f"- **{COLORS[color]}:** {label}" for color, label in hero.exploration_passives]
             lines += ["", "### Pasywy i skaza", ""]
-            lines += [f"- **{name}:** {body}" for name, body in hero.passives]
+            lines += [f"- **{name}:** {body}" for name, body in hero.passives[:-1]]
+            lines += ["", "#### Nasycenie maną", ""]
+            lines += [f"- **{COLORS[color]}:** {label}" for color, label in hero.mana_passives]
+            lines += ["", MANA_PASSIVE_REMINDER]
             lines += ["", f"**Skaza — {hero.flaw[0]}:** {hero.flaw[1]}", ""]
         (ROOT / "docs/BOARDGAME_ARCHETYPES_LEVELS_1_3.md").write_text(
             "\n".join(lines), encoding="utf-8"
@@ -178,7 +174,7 @@ def write_reference(output: Path, actor_ids: tuple[str, ...]) -> None:
 
 def main(default_formats: tuple[str, ...] = FORMATS) -> int:
     parser = argparse.ArgumentParser(
-        description="Aktualne karty siedmiu postaci: wspólny rynek many 0.3."
+        description="Aktualne karty siedmiu postaci: osobiste pule many."
     )
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--actor", action="append", choices=PLAYABLE_HERO_IDS)

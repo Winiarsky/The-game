@@ -9,6 +9,7 @@ import pytest
 
 from dnd_board_game.ui import training_walkthrough as guided
 from tests.unit.test_garran_training_regressions import lesson
+from tests.unit.test_training_walkthrough import prepare_pool
 from tests.unit.test_shared_mana_runtime import send
 from dnd_board_game.ui.shared_command import select
 from dnd_board_game.hardware.board_panel import panel_position
@@ -21,9 +22,11 @@ def test_guard_and_two_command_steps_are_explicit(tmp_path: Path, width: int) ->
         pytest.skip('Chrome is needed for presentation checks')
     guard, _ = lesson(tmp_path / 'guard', 'garran_guard_companion')
     guided.acknowledge(guard, guided.notice_id(guard))
+    prepare_pool(guard)
     guard_view = guard.state_payload()['combat']
     session, _ = lesson(tmp_path / 'command', 'counterattack_command')
     guided.acknowledge(session, guided.notice_id(session))
+    prepare_pool(session)
     session.use_combat_class_feature('counterattack_command', target_id='recruitment_helper')
     send(session, 'pay')
     first = session.state_payload()['combat']

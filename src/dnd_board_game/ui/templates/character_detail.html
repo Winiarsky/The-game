@@ -20,7 +20,7 @@
     </header>
 
     <section class="character-sheet">
-      {% if mana_profile %}<p><b>Fizyczna mana:</b> zachowaj do {{ mana_profile.keep }} starych kart, dobierz do 3 na końcu tury; pojemność {{ mana_profile.capacity }}. <a href="{{ url_for('physical_mana_rules') }}#{{ character.actor.id }}">Pełna talia i koszty do wydruku</a></p>{% endif %}
+      {% if mana_profile %}<p><b>Testy:</b> k20 + cecha + naładowanie + inne premie. Przy 0/6/12/21 pkt naładowanie daje +0/+2/+4/+6. <a href="{{ url_for('physical_mana_rules') }}#{{ character.actor.id }}">Karty i pełne zasady</a></p>{% endif %}
       {% if archetype %}
         <section class="form-section">
           <span class="eyebrow">{{ archetype.role }}</span>
@@ -53,7 +53,7 @@
         <span><small>PW</small><b>{{ character.actor.max_hp }}</b></span>
         <span><small>KP</small><b>{{ effective_ac }}</b></span>
         <span><small>Szybkość</small><b>{{ character.actor.speed_feet }} ft</b></span>
-        <span><small>Premia z biegłości</small><b>+{{ character.actor.proficiency_bonus }}</b></span>
+        {% if mana_profile %}<span><small>Naładowanie bez puli</small><b>+0</b></span>{% else %}<span><small>Premia z biegłości</small><b>+{{ character.actor.proficiency_bonus }}</b></span>{% endif %}
       </div>
       <section class="experience-track">
         <div><b>{{ character.actor.experience_points }} XP</b>
@@ -71,7 +71,7 @@
         {% endfor %}
       </div>
       <div class="sheet-columns">
-        <section><h2>Biegłości</h2><p>{% for skill_id in character.actor.proficiencies.skills %}{{ labels.get(skill_id, skill_id) }}{% if not loop.last %}, {% endif %}{% else %}Brak{% endfor %}</p><small>Specjalizacja: {% for skill_id in character.actor.proficiencies.expertise %}{{ labels.get(skill_id, skill_id) }}{% if not loop.last %}, {% endif %}{% else %}brak{% endfor %}</small></section>
+        {% if not mana_profile %}<section><h2>Biegłości</h2><p>{% for skill_id in character.actor.proficiencies.skills %}{{ labels.get(skill_id, skill_id) }}{% if not loop.last %}, {% endif %}{% else %}Brak{% endfor %}</p><small>Specjalizacja: {% for skill_id in character.actor.proficiencies.expertise %}{{ labels.get(skill_id, skill_id) }}{% if not loop.last %}, {% endif %}{% else %}brak{% endfor %}</small></section>{% endif %}
         <section><h2>Ekwipunek</h2><p>{% for item in character.actor.inventory %}{{ item.name }}{% if not loop.last %}, {% endif %}{% endfor %}</p></section>
         <section class="feature-sheet-section">
           <h2>Zdolności i profity</h2>

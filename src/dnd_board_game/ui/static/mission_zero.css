@@ -1,0 +1,13 @@
+#mission-panel {max-width:1080px;margin:0 auto 1rem;padding:1.4rem;}
+.mission-toolbar {display:flex;flex-wrap:wrap;align-items:center;gap:.7rem;margin-bottom:1rem;}
+.mission-art {width:100%;max-height:360px;object-fit:cover;border-radius:8px;margin-bottom:1.2rem;}
+.mission-map {max-height:420px;object-fit:contain;width:100%;background:#ede3d1;}
+.mission-prose {font-size:1.15rem;line-height:1.8;max-width:80ch;margin:1rem 0 1.5rem;white-space:normal;}
+.mission-journal {border-left:3px solid #cda553;padding:1rem;}
+.mission-story #flow-panel,.mission-story #scene-description-card,.mission-story #action-panel,.mission-story #result-panel,.mission-story #training-arena-panel,.mission-story #encounter {display:none!important;}
+.mission-active #mission-panel input {max-width:100px;}
+@media(max-width:600px){#mission-panel{padding:.8rem}.mission-prose{font-size:1rem}.mission-art{max-height:220px}}
+
+#mission-panel a {color:#e8c77f;}
+#mission-panel a.button {display:inline-block;text-decoration:none;border:1px solid #555;border-radius:6px;background:#30312e;padding:.65rem .85rem;color:#eee;}
+.mission-art {object-position:center 25%;}

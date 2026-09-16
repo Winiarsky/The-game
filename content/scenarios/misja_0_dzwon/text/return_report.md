@@ -1,0 +1,1 @@
+Nessa zapisuje miejsce i przebieg zajścia. „Dobrze wiedzieć, na co posyłam następnych.” Wypłaca wynagrodzenie i pięć sztuk złota premii dla drużyny za użyteczny raport. O długu wieśniacy będą musieli przypomnieć komuś innemu.

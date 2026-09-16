@@ -322,6 +322,13 @@ def start_combat(
     from dnd_board_game.actors.resources import uses_shared_mana
     if any(uses_shared_mana(a) for a in actors):
         state = replace(state, shared_mana=SharedMana(turn_actor=str(first_actor.id)))
+        if any(f.feature_id == "pooled_mana_v01" for a in actors for f in a.features):
+            from dnd_board_game.rules.pooled_mana import new_mana
+            from dnd_board_game.rules.shared_mana import sync_pool
+            from dnd_board_game.scenarios.pooled_mana_catalog import hero_profile
+            heroes = tuple(str(a.id) for a in actors if any(f.feature_id == "pooled_mana_v01" for f in a.features))
+            state = replace(state, shared_mana=sync_pool(state.shared_mana, new_mana(heroes, str(first_actor.id), values={h: hero_profile(h)["values"] for h in heroes})))
+
     return _with_finished_status(state)
 
 
@@ -1458,7 +1465,7 @@ def finish_turn(state: CombatState) -> CombatState:
     mana = finished_state.shared_mana
     if mana is not None:
         from dnd_board_game.rules.shared_mana import begin_mana_turn
-        mana = begin_mana_turn(mana, str(next_actor.id))
+        mana = begin_mana_turn(mana, str(next_actor.id), round_end=order.round_number > finished_state.round_number)
     spent = frozenset(actor_id for actor_id in finished_state.spent_reaction_actor_ids if actor_id != next_actor.id)
     return replace(
         finished_state,

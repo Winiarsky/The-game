@@ -834,10 +834,10 @@ def encounter_with_custom_party(
     *,
     content_anchor: str | Path = "content/character_creation/catalog.json",
 ) -> LoadedEncounter:
-    """Replace authored allied fixtures with up to five roster actors."""
+    """Replace authored allied fixtures with up to six roster actors."""
 
-    if not 1 <= len(party) <= 5:
-        raise ValueError("Customowa drużyna musi liczyć od 1 do 5 postaci.")
+    if not 1 <= len(party) <= 6:
+        raise ValueError("Customowa drużyna musi liczyć od 1 do 6 postaci.")
     if len({actor.id for actor in party}) != len(party):
         raise ValueError("Customowa drużyna nie może zawierać duplikatów.")
     authored_allies = tuple(
@@ -6483,8 +6483,8 @@ def _validate_scenario(definition: ScenarioDefinition) -> None:
         raise ValueError("scenario.encounter_party_size_variants repeats a party size.")
     actor_by_id = {actor.id: actor for actor in definition.actors}
     for variant in variants:
-        if not 1 <= variant.party_size <= 5:
-            raise ValueError("Encounter party-size variants support parties from 1 to 5.")
+        if not 1 <= variant.party_size <= 6:
+            raise ValueError("Encounter party-size variants support parties from 1 to 6.")
         if not variant.enemy_actor_ids:
             raise ValueError("Encounter party-size variant must include at least one enemy.")
         if len(variant.enemy_actor_ids) != len(set(variant.enemy_actor_ids)):
@@ -7710,6 +7710,11 @@ def _parse_feature_definition(
     grants = data.get("grants", {})
     if not isinstance(grants, dict):
         raise ValueError(f"feature {feature_id}.grants must be an object.")
+    mana_pressure = grants.get("mana_pressure")
+    if mana_pressure is not None:
+        from dnd_board_game.rules.pooled_mana import MANA_PRESSURE_FEATURES
+        if not isinstance(mana_pressure, str) or mana_pressure != feature_id or mana_pressure not in MANA_PRESSURE_FEATURES:
+            raise ValueError(f"feature {feature_id}.grants.mana_pressure must name its supported mana mechanic.")
     resource_pools = _parse_actor_resources(
         grants.get("resource_pools", []),
         f"{actor_id}.feature.{feature_id}",
@@ -7760,6 +7765,7 @@ def _parse_feature_definition(
         or definition.action_ids
         or definition.trigger_ids
         or definition.aura_ids
+        or mana_pressure
     ):
         raise ValueError(f"feature {feature_id} must grant at least one mechanic.")
     return ScenarioFeatureDefinition(

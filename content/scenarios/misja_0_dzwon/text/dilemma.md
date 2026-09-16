@@ -1,0 +1,1 @@
+Dzwon trzeba dostarczyć. Pokwitowania nie tracą jednak ważności tylko dlatego, że zabrakło komu je zapłacić. Przed wami ludzie, którzy próbowali odzyskać dług cudzą własnością. Cóż pocznie nasza drużyna z kłopotem, którego nie wpisano do umowy?

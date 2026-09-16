@@ -1,0 +1,1 @@
+To niewielki srebrny medalik. Na odwrocie wyryto „Wracaj. E.”, a pod spodem inicjały „J. R.”. Trudno orzec, czy właściciel zauważył już zgubę. Możecie zachować przedmiot albo później sprzedać go za 3 sztuki złota.

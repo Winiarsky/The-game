@@ -70,9 +70,7 @@ def command(s: ExplorationUiSession, data: dict[str, Any]) -> dict[str, object]:
     stored = read(s)
     if data.get('revision') != stored['revision']:
         raise ValueError('Nieaktualne polecenie pułapki.')
-    if data.get('action') == 'leave':
-        if stored['pending'] or s._combat_has_pending_resolution() or s.shared_mana_declaration:
-            raise ValueError('Najpierw zakończ oczekujący rzut lub płatność.')
+    if data.get('action') in {'leave', 'retry'}:
         from .training_arena import training_hero
         hero = str(scene_flag(s.state.flags, 'training_hero', 'garran'))
         saved = [(k, v) for k, v in s.state.flags.values if k.startswith(('walkthrough_', 'training_completed_', 'training_tutorial_done_', 'exploration_mana_', 'trap_lesson_done_'))]
@@ -81,6 +79,13 @@ def command(s: ExplorationUiSession, data: dict[str, Any]) -> dict[str, object]:
         for key, value in saved:
             flags = set_scene_flag(flags, key, value)
         s.state = replace(s.state, flags=flags)
+        if data.get('action') == 'retry':
+            from .training_arena import start_training_trial
+            return start_training_trial(s, hero, 'traps', 'humanoid')
+        from .training_menu import show_cases
+        from dnd_board_game.application.training_walkthrough import steps
+        show_cases(s, hero, len(steps(hero)) + 1)
+        s._sync_board_leds()
         return s.state_payload()
     if s.combat_state is None or stored['phase'] != 'exercise':
         raise ValueError('Najpierw przygotuj planszę i rozpocznij walkę.')
@@ -136,6 +141,6 @@ def payload(s: ExplorationUiSession) -> dict[str, Any] | None:
             reason = str(error)
         data['options'].append(dict(action=action, name=name, enabled=not reason and not data['pending'], reason=reason))
     if data['pending']:
-        request = trap_request(actor, trap, data['pending']['action'])
+        request = trap_request(actor, trap, data['pending']['action'], state=s.combat_state)
         data['modifiers'] = [dict(label=m.label, value=m.value) for m in request.modifiers]
     return data

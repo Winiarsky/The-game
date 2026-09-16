@@ -1,9 +1,74 @@
 # Arena — prowadzony samouczek postaci
 
+## Aktualizacja: konfrontacje drużynowe
+
+Eksploracja ma teraz 12 przypadków na każdego z siedmiu bohaterów (84),
+wybór składu 1–5 osób i własny zapis postępu. Jedna figurka reprezentuje całą
+drużynę. Przypadki 21+, reakcji i draina zaczynają się z opisanymi stosami.
+[Zasady i instrukcja](PARTY_CONFRONTATIONS.md) zastępują starsze opisy
+blackjacka poniżej. Nawigacja, powrót i osobne uruchamianie przypadków pozostają.
+
+Aktualizacja: obowiązuje [trwałe ładowanie many 2.0](MANA_CHARGE_V02.md), 148 lekcji. Poniższy opis wcześniejszego obiegu i jego wyniki są historyczne.
+
+## Wybór pojedynczych ćwiczeń — 2026-09-14
+
+Arena → **bohater → Walka / Eksploracja → Po kolei / Wybierz ćwiczenie**. Kurs po kolei
+zachowuje dotychczasową kolejność i możliwość kontynuacji. Lista pojedynczych
+prób obejmuje wszystkie 148 lekcji siedmiu bohaterów, każde podbicie osobno
+oraz samodzielny pojedynek każdej postaci. Pułapka ma osobny przypadek w dziale
+walki. Eksploracja ma 127 lekcji (18 dla każdej postaci, 19 dla Loriana):
+rozmowy, obiekty, podstawy doboru, cztery warunki i samodzielne sceny.
+Żaden przypadek nie wymaga wcześniejszych zaliczeń.
+
+Menu obsługują runy 6–13, strony listy −/+, powrót ↩; ekran pokazuje te same
+opcje. Pojedyncza próba przygotowuje świeże PW, manę, warunki i figurki, a po
+wyniku wraca na tę samą stronę listy. Raz przygotowany teren pozostaje.
+Zaliczenia pojedynczych przypadków są zapisywane osobno i nie przesuwają
+postępu pełnego kursu; pojedynczy pojedynek nie zalicza całego samouczka.
+
+Stały pasek ekranowy **Powtórz próbę / Wróć do wyboru** pozwala przerwać
+również setup, płatność lub wpisywanie kości. To świadomy reset izolowanej
+próby: porzuca nierozstrzygnięte działanie i czyści oczekiwanie planszy.
+Wczytanie zapisu zachowuje wybrany tryb; odtwarzany setup otrzymuje nowy token
+wejścia. Powrót z listy prowadzi do trybów, potem do działów, postaci i menu głównego.
+Powrót z pojedynczej próby prowadzi na jej stronę listy; z kursu do wyboru
+trybu. Stały pasek powrotu i restartu działa także w eksploracji i pułapkach,
+w tym w oknie kości. Planszowe ↩ podczas wpisywania kości nadal służy poprawce.
+
+Kurs eksploracji ma osobny `sequence_progress` w istniejącym zapisie eksploracji.
+Przechodzi kolejno wszystkie lekcje, niezależnie od wspólnych zaliczeń podstaw.
+Zaliczenie celu przesuwa postęp; „Dalej” uruchamia następną lekcję, po ostatniej
+wraca do trybów. Nieosiągnięty cel wymaga powtórzenia. Pojedynczy przypadek
+nie zmienia indeksu kursu. Starsze próby bez `run_mode` zachowują dawną obsługę.
+
+Kod nawigacji: `ui/training_menu.py`; uruchomienie po stabilnym `case_id`
+przez `/api/training/start`, menu przez `/api/training/menu`. Flagi trybu
+`walkthrough_run_mode` domyślnie oznaczają kurs po kolei dla starszych zapisów.
+
+Weryfikacja wspólnego menu walki/eksploracji: **110 testów** z 10 plików,
+uruchamianych kolejno przez `scripts/safe_pytest.sh`:
+`test_exploration_training_menu.py` (17), `test_exploration_mana_runtime.py` (20),
+`test_training_menu.py` (14), `test_launcher_board.py` (19),
+`test_exploration_mana_board.py` (20), `test_simple_combat_traps.py` (10),
+`test_exploration_mana_browser.py` (2), `test_training_walkthrough_browser.py` (2),
+`test_exploration_mana_live_browser.py` (3) i trzy testy zapisu/wyniku z
+`test_training_walkthrough.py`. Widoki 390/1100 px; pełne wejście runami,
+rzuty i powrót przez rzeczywistą stronę Flask. Fixture pułapki wykonuje teraz
+obowiązkowe tasowanie i dobór many przed akcją wykrywania. Bez próby sprzętowej.
+
+Weryfikacja pierwszego menu walki: 101 testów uruchamianych kolejno przez `safe_pytest.sh`:
+`test_training_menu.py` (14), `test_training_walkthrough.py` (33),
+`test_pooled_mana_training.py` (33), `test_launcher_board.py` (19),
+`test_training_walkthrough_browser.py` (2, Chrome 390/1100 px). Obejmują
+wszystkich bohaterów, paginację i runy, odrębny postęp, zapis/odczyt,
+restart w trakcie płatności/spalania/rzutu oraz zwykły kurs po kolei.
+To testy aplikacji i symulatora; nowego menu nie sprawdzano na fizycznej planszy.
+
 ## Eksploracja i pułapki — wdrożone 2026-09-14
 
-Pod wyborem ćwiczeń walki dodano sekcję **Rozmowy i obiekty**. Każda postać
-ma **Porozmawiaj z NPC**, **Interakcja z obiektem** i **Pułapka w walce**.
+W dziale **Eksploracja** każda postać ma **Porozmawiaj z NPC**,
+**Interakcja z obiektem** i lekcje warunków. **Pułapka w walce** jest dostępna
+w dziale **Walka → Wybierz ćwiczenie**.
 Objaśnienie Nessy → setup → normalny silnik → wynik. Dobór/pas, duplikaty,
 21, utrudnienie po przekroczeniu i trzy przeszkody mają praktyczne lekcje.
 Podstawy zalicza się raz wspólnie; własne metody i samodzielne sceny osobno.

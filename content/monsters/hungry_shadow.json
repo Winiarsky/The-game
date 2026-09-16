@@ -2,7 +2,9 @@
   "schema": "dnd_board_game.monster",
   "schema_version": 1,
   "ruleset_id": "dnd_5e_2014",
-  "source_pack_ids": ["project_original"],
+  "source_pack_ids": [
+    "project_original"
+  ],
   "id": "hungry_shadow",
   "name": "Głodny Cień",
   "kind": "monster",
@@ -28,9 +30,14 @@
   "proficiency_bonus": 2,
   "proficiencies": {
     "saving_throws": [],
-    "skills": ["perception", "stealth"],
+    "skills": [
+      "perception",
+      "stealth"
+    ],
     "expertise": [],
-    "weapons": ["hungry_shadow_rend"],
+    "weapons": [
+      "hungry_shadow_rend"
+    ],
     "armor": [],
     "tools": []
   },
@@ -51,5 +58,8 @@
         "damage_type": "slashing"
       }
     }
+  ],
+  "feature_refs": [
+    "mana_burn_offer"
   ]
 }

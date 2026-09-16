@@ -43,7 +43,10 @@ def steps(hero_id: str) -> tuple[TrainingStep, ...]:
                  'sacred_flame', 'divine_care_aura', 'guiding_bolt', 'preserve_life',
                  'spiritual_weapon', 'turn_undead')
         abilities.sort(key=lambda a: order.index(a.id))
-    return tuple(step for a in abilities for step in (TrainingStep(a), *(TrainingStep(a, b.id) for b in a.boosts)))
+    from .pooled_mana_training import FOUNDATIONS
+    foundation = tuple(TrainingStep(SharedAbility(hero_id, key, name, "A", "tutorial", "", text))
+                       for key, name, text in FOUNDATIONS)
+    return (*foundation, *(step for a in abilities for step in (TrainingStep(a), *(TrainingStep(a, b.id) for b in a.boosts))))
 
 
 def configure_walkthrough(encounter: LoadedEncounter, hero_id: str, index: int) -> LoadedEncounter:
@@ -106,6 +109,12 @@ def configure_walkthrough(encounter: LoadedEncounter, hero_id: str, index: int) 
                          damage_components=tuple(replace(c, dice=DiceExpression(1, 6) if final else None,
                                                          fixed=None if final else 6, modifier=0) for c in source.damage_components))
         sources[enemy.id], options[enemy.id] = source, (source,)
+    if final:
+        from dnd_board_game.actors import FeatureGrant, FeatureSourceKind
+        enemies = tuple(replace(e, features=(*e.features,
+            FeatureGrant("mana_burn_deck", "Żar w talii", FeatureSourceKind.MONSTER, "pooled_mana_v01",
+                         "Co drugą rundę pierwsze trafienie spala dwie karty talii; niedobór powoduje drain."))) for e in enemies)
+        actors = (hero, *helpers, *enemies)
     board = replace(encounter.board, terrain_by_tile={p: t for p, t in encounter.board.terrain_by_tile.items() if p != Coordinate(3, 18)})
     return replace(encounter, board=board, actors=actors, attack_sources_by_actor=sources, attack_source_options_by_actor=options,
                    environment=tuple(e for e in encounter.environment if e.id != 'recruitment_nessa'),

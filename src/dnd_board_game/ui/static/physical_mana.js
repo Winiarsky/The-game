@@ -11,6 +11,21 @@ const manaPaths = {
 function manaCostHtml(cost) {
   return (cost || []).map(color => `<span class="mana-chip mana-${color === '*' ? 'any' : color}" role="img" aria-label="1 mana ${manaSymbols[color] || color}" title="1 mana ${manaSymbols[color] || color}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${manaPaths[color] || manaPaths['*']}"/></svg></span>`).join('<span class="mana-plus" aria-hidden="true">+</span>');
 }
+function manaPointCardsHtml(cards, values) {
+  return (cards || []).map(color => `<span class="mana-valued-card">${manaCostHtml([color])}<b>${esc(values[color])} pkt</b></span>`).join(' ');
+}
+function pooledManaPointsHtml(combat, actorId, compact = false) {
+  const pool = combat.shared_mana?.pool_view;
+  if (!pool) return '';
+  const hand = pool.hands.find(h => h.hero === (actorId || combat.current_actor?.id || pool.actor));
+  if (!hand) return '';
+  return `<section class="mana-points" aria-label="Punkty many">
+    <div class="mana-points-total"><span>${esc(hand.name)} · mana z kart</span><strong>${esc(hand.total)} pkt</strong><small>${hand.total >= 21 ? "Pełne naładowanie · bez doboru" : "Dobór na początku swojej tury"}</small></div>
+    <div class="mana-charge-statuses">${Object.entries(hand.color_passives || {}).filter(([c]) => hand.cards.includes(c)).map(([c,p]) => `<span class="effect-chip">${manaCostHtml([c])} ×${hand.cards.filter(x=>x===c).length} · ${esc(p.label)}${p.kind.startsWith('heal') ? ' · wykonane przy doborze' : ' · do draina'}</span>`).join('')}</div>
+    ${compact ? '' : `<div class="mana-points-cards">${hand.cards.length ? manaPointCardsHtml(hand.cards, hand.values) : 'Pula jest pusta.'}</div>
+    <div class="mana-points-values"><small>Wartości kolorów:</small> ${manaPointCardsHtml(Object.keys(hand.values), hand.values)}</div>`}
+  </section>`;
+}
 function actionManaCostHtml(option) {
   if (!Array.isArray(option.mana_cost)) return '';
   const icons = manaCostHtml(option.mana_cost);
@@ -60,7 +75,7 @@ function physicalManaHtml(combat) {
       <p><b>Na końcu tury:</b> rozlicz skazę, odrzuć nadmiar starej rezerwy, wybierz do 3 kart z rynku, potem uzupełnij rynek. Na początku tury nie dobierasz. Nieprzytomny/obezwładniony nie dobiera. Na końcu rundy odrzuć skrajną lewą kartę rynku i uzupełnij.</p>
       <p><b>Zamienniki:</b> 2 dowolne zastępują 1 kolor. Raz we własnej turze przeciąż jedną własną kartę: wydaj ją jako dowolny kolor i odrzuć 2 karty z góry talii (3 podczas Czarnego zakłócenia). Karty i znaczniki limitów obsługujecie przy stole.</p>
       <p>Koszt techniki zawiera jej ataki i ruch. Nie dodawaj kosztu zwykłego ataku. Pudło nie zwraca many. Niewykorzystane ataki zadeklarowanej serii przepadają. Aplikacja sprawdza czas, cel i skutki; nie sprawdza fizycznej płatności.</p>
-      ${active ? `<details><summary>Pełna talia · ${esc(mana.actor_name)}</summary><p class="mana-hero-notes">${esc(mana.hero_notes)}</p><div class="mana-ability-list">${mana.abilities.map(a => `<article><b>${esc(a.name)}</b> <small>${esc(a.timing)}</small><div>${manaCostHtml(a.cost)}</div><p>${esc(a.description)}</p></article>`).join('')}</div></details>` : ''}
+      ${active ? `<details><summary>Pełna talia · ${esc(mana.actor_name)}</summary><p class="mana-hero-notes">${esc(mana.hero_notes)}</p><div class="mana-ability-list">${mana.abilities.map(a => `<article><b>${esc(a.name)}</b> <small>${esc(a.timing)}</small>${a.sections ? a.sections.map(([label,text])=>`<p><b>${esc(label)}:</b> ${manaTextHtml(text)}</p>`).join('') : `<div>${manaCostHtml(a.cost)}</div><p>${esc(a.description)}</p>`}</article>`).join('')}</div></details>` : ''}
       <div class="mana-wave-report"><p><b>Przewinięto talię?</b> Zgłoś numer zapowiedzianego wydarzenia. Fala zadziała na końcu rundy; rzucicie k6 na następną zapowiedź. Zagrożenie rośnie do 3.</p>
       <form onsubmit="event.preventDefault(); reportManaWave(this)"><label>Zapowiedziane wydarzenie<select name="event">${mana.wave_rules.map(w => `<option value="${w.number}">${w.number}. ${esc(w.name)}</option>`).join('')}</select></label><button type="submit">Zgłoś jedną falę</button></form></div>
       ${active && mana.waves.some(w => w.kind === 'mana_wave_2') && mana.movement?.steadfast ? '<p>Nieustępliwość: ruch za niebieską + 1 dowolną pozwala ominąć Ciężkie powietrze.</p>' : ''}

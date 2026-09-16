@@ -8,6 +8,7 @@ if TYPE_CHECKING:
     from .models import Actor
 
 from .proficiency_profile import validate_ability
+from dnd_board_game.rules.charge_rolls import uses_charge
 
 
 def ability_roll_modifier(
@@ -39,7 +40,7 @@ def saving_throw_roll_modifiers(actor: Actor, ability: str) -> tuple[RollModifie
     from dnd_board_game.inventory import MagicItemEffectKind, magic_item_roll_modifiers
 
     modifiers = [ability_roll_modifier(actor, ability)]
-    if actor.proficiencies.is_save_proficient(ability):
+    if actor.proficiencies.is_save_proficient(ability) and not uses_charge(actor):
         modifiers.append(proficiency_roll_modifier(actor))
     return (
         *modifiers,
@@ -60,7 +61,7 @@ def attack_roll_modifiers(
     from dnd_board_game.inventory import MagicItemEffectKind, magic_item_roll_modifiers
 
     modifiers = [ability_roll_modifier(actor, ability)]
-    if proficient:
+    if proficient and not uses_charge(actor):
         modifiers.append(proficiency_roll_modifier(actor))
     return (
         *modifiers,

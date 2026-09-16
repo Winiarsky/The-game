@@ -13,6 +13,15 @@ from .damage import DamageComponentSpec
 T = TypeVar('T')
 
 
+def _charge_instructions(actor: Actor, ability_id: str) -> str | None:
+    if not any(f.feature_id == "pooled_mana_v01" for f in actor.features):
+        return None
+    from dnd_board_game.scenarios.pooled_mana_catalog import load_catalog, requirement_text, ability_description
+    if ability_id not in load_catalog()["abilities"]:
+        return None
+    return requirement_text(ability_id, str(actor.id)) + " " + ability_description(str(actor.id), ability_id)
+
+
 def adapt_action(actor: Actor, action: T) -> T:
     if not uses_physical_mana(actor):
         return action
@@ -23,6 +32,9 @@ def adapt_action(actor: Actor, action: T) -> T:
                               'R': ActionEconomyCost.REACTION, 'MOD': ActionEconomyCost.FREE}[ability.timing],
                'instructions': f'Wydaj: {ability.cost_label}. {ability.description}',
                'resource_pool_id': None}
+    instructions = _charge_instructions(actor, action.id)
+    if instructions is not None:
+        updates['instructions'] = instructions
     if action.id in {'bless', 'divine_care_aura', 'healing_grace_aura', 'nimra_sticky_matrix',
                      'nimra_fog', 'nimra_web', 'nimra_stasis', 'spike_growth', 'hunters_mark', 'spiritual_weapon'}:
         updates['duration_rounds'] = 3
@@ -51,7 +63,7 @@ def adapt_attack(actor: Actor, source: AttackSource) -> AttackSource:
     ability = mana_ability(str(actor.id), source.id)
     if ability is None:
         return source
-    source = replace(source, resource_pool_id=None, tabletop_riders=(ability.description,),
+    source = replace(source, resource_pool_id=None, tabletop_riders=(_charge_instructions(actor, source.id) or ability.description,),
                      action_cost={'A': ActionEconomyCost.ACTION, 'D': ActionEconomyCost.BONUS_ACTION,
                                   'R': ActionEconomyCost.REACTION, 'MOD': ActionEconomyCost.FREE}[ability.timing])
     if source.id == 'anchoring_arrow':

@@ -8,6 +8,7 @@ from dnd_board_game.application.shield_bash_flow import (
     submit_shield_bash_rolls,
 )
 from dnd_board_game.combat.session import current_actor
+from dnd_board_game.combat.mana_charge import state_charge_bonus
 from dnd_board_game.rules import ability_modifier, EffectEvent, EffectEventType
 from dnd_board_game.world import PathResult
 
@@ -28,8 +29,9 @@ def shield_bash_payload(session: ExplorationUiSession) -> dict[str, object] | No
         "cost_note": "Potwierdzenie zużyje akcję dodatkową. Możesz też wykonać zwykły atak, jeśli masz jeszcze akcję główną. Ruch rozliczasz osobno.",
         "actor_name": actor.name,
         "target_name": target.name,
-        "attacker_modifier": ability_modifier(actor.ability_scores.strength),
-        "defender_modifier": ability_modifier(target.ability_scores.strength),
+        "attacker_modifier": ability_modifier(actor.ability_scores.strength) + state_charge_bonus(session.combat_state, actor),
+        "charge_bonus": state_charge_bonus(session.combat_state, actor),
+        "defender_modifier": ability_modifier(target.ability_scores.strength) + state_charge_bonus(session.combat_state, target),
         "attacker_roll": flow.attacker_roll,
         "defender_roll": flow.defender_roll,
         "damage_roll": flow.damage_roll,

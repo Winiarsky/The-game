@@ -93,6 +93,11 @@ def _quote(session: ExplorationUiSession, declaration: ManaDeclaration, *, subst
     target = declaration.resume_arguments.get("target_id")
     if target:
         target_ids.add(target)
+    for actor_id, amount in declaration.resume_arguments.get("allocations") or ():
+        if amount > 0:
+            target_ids.add(str(actor_id))
+    if session.combat_targeting_class_feature_action_id == declaration.ability_id and session.combat_selected_class_feature_target_id:
+        target_ids.add(session.combat_selected_class_feature_target_id)
     position = declaration.resume_arguments.get("position")
     if position is not None:
         target_ids.update(str(a.id) for a in state.actors if a.position == position)
@@ -100,6 +105,15 @@ def _quote(session: ExplorationUiSession, declaration: ManaDeclaration, *, subst
         if pending:
             target_ids.update(getattr(pending, "target_ids", ()))
             target_ids.add(getattr(pending, "target_id", ""))
+    if state.shared_mana.pooled is not None:
+        if substitution:
+            raise ValueError("Pasyw jest już uwzględniony w punktach; nie zmienia fizycznego koloru.")
+        from dnd_board_game.combat.pooled_mana import quote_pool
+        from dnd_board_game.scenarios.pooled_mana_catalog import pool_ability, hero_profile
+        return quote_pool(state, actor, ability, pool_ability(ability.id, str(actor.id)),
+                          state.shared_mana.pooled.point_values(str(actor.id)) if str(actor.id) in state.shared_mana.pooled.heroes else {}, declaration.boosts,
+                          targets=tuple(a for a in state.actors if str(a.id) in target_ids),
+                          effects=session.active_combat_effects)
     return quote_ability(state, actor, ability, declaration.boosts,
                          targets=tuple(a for a in state.actors if str(a.id) in target_ids),
                          effects=session.active_combat_effects, substitution=declaration.substitution if substitution is None else substitution)
@@ -111,8 +125,11 @@ def payload(session: ExplorationUiSession) -> dict[str, object] | None:
         return None
     mana = state.shared_mana
     result = mana.as_payload()
-    result["refresh_available"] = mana.phase == ManaPhase.READY
-    result["refill_count"] = min(5-mana.market, mana.deck)
+    if mana.pooled is not None:
+        from .pooled_mana import view
+        result["pool_view"] = view(session)
+    result["refresh_available"] = mana.pooled is None and mana.phase == ManaPhase.READY
+    result["refill_count"] = 0 if mana.pooled is not None else min(5-mana.market, mana.deck)
     if mana.command_step:
         participant = current_actor(state)
         from .shared_command import stage, instruction
@@ -133,18 +150,28 @@ def payload(session: ExplorationUiSession) -> dict[str, object] | None:
     if declaration:
         ability = declared_ability(declaration.actor_id, declaration.ability_id)
         result["declaration"] = {
-            "ability_id": ability.id, "name": ability.name, "description": ability.description,
+            "ability_id": ability.id, "actor_id": declaration.actor_id, "name": ability.name, "description": ability.description,
             "duration": ability.duration, "stage": declaration.stage,
             "boosts": [dict(asdict(b), count=declaration.boosts.get(b.id, 0)) for b in ability.boosts],
             "selected_boost": declaration.selected_boost,
             "boost_options": boost_options(session, declaration) if declaration.stage == "payment" else [],
         }
+        if mana.pooled is not None:
+            from dnd_board_game.scenarios.pooled_mana_catalog import ability_description, requirement_text, load_catalog
+            if ability.id in load_catalog()["abilities"]:
+                if ability.id != "spiritual_weapon_activation":
+                    from dnd_board_game.physical_cards.mana_ability_text import ability_sections
+                    result["declaration"]["sections"] = ability_sections(declaration.actor_id, ability.id)
+                    result["declaration"]["description"] = requirement_text(ability.id, declaration.actor_id) + " " + ability_description(declaration.actor_id, ability.id)
+                else:
+                    result["declaration"]["description"] = "Akcja dodatkowa, bez many: przesuń broń i wykonaj atak."
         if ability.id == 'garran_guard_companion' and session.pending_enemy_turn_intent:
             intent = session.pending_enemy_turn_intent
-            result['declaration']['description'] = (
-                f'{intent.enemy.name} atakuje {intent.target.name}. Odłóż koszt i naciśnij ✓: '
+            result['declaration']['context'] = (
+                f'{intent.enemy.name} atakuje {intent.target.name}. Potwierdź osłonę przez ✓: '
                 'Garran przejmie ten pojedynczy atak. Rzut wykonuje aplikacja przeciw KP Garrana; '
                 'przy trafieniu PW traci Garran, a pomocnik nie otrzymuje obrażeń. ↩ rezygnuje z osłony.')
+            result['declaration']['description'] = result['declaration']['context']
         if ability.id == "nimra_mind_break" and session.pending_player_attack:
             from dnd_board_game.combat.spells import grid_distance_feet
             first = next(a for a in state.actors if str(a.id) == session.pending_player_attack.target_id)
@@ -214,7 +241,7 @@ def payload(session: ExplorationUiSession) -> dict[str, object] | None:
             _preflight(session, declaration)
             quote = _quote(session, declaration)
             validate_card_operation(mana, ability.id, len(quote.cards))
-            if len(quote.cards) > mana.market:
+            if mana.pooled is None and len(quote.cards) > mana.market:
                 raise ValueError("Na rynku brakuje kart na pełny koszt.")
             from .training_walkthrough import payment_error
             result["declaration"].update(cost=list(quote.cards), reminders=list(quote.reminders),
@@ -241,13 +268,13 @@ def boost_options(session: ExplorationUiSession, declaration: ManaDeclaration) -
                 try:
                     quote = _quote(session, candidate)
                     validate_card_operation(session.combat_state.shared_mana, ability.id, len(quote.cards))
-                    if len(quote.cards) > session.combat_state.shared_mana.market:
+                    if session.combat_state.shared_mana.pooled is None and len(quote.cards) > session.combat_state.shared_mana.market:
                         raise ValueError("Na rynku brakuje kart na ten wariant.")
                 except ValueError as exc:
                     reason = str(exc)
             choices.append(dict(slot=slot, rune_name=SYMBOLS[slot][0], icon=panel_icon(slot),
                                 boost_id=boost.id, amount=amount, count=count, selected=selected,
-                                color=boost.color, cost=[boost.color] * amount,
+                                color=boost.color, cost=["*"] * (2 * amount) if session.combat_state.shared_mana.pooled is not None else [boost.color] * amount,
                                 effect=boost.label.split(": ", 1)[-1],
                                 enabled=not reason, unavailable_reason=reason))
             slot += 1
@@ -259,9 +286,18 @@ def settle_action(session: ExplorationUiSession) -> None:
     state = session.combat_state
     if state is None or state.shared_mana is None:
         return
-    if state.status.value != "finished" and state.shared_mana.phase == ManaPhase.READY and state.shared_mana.deck == state.shared_mana.market == 0 and not session._combat_has_pending_resolution():
+    if state.shared_mana.pooled is None and state.status.value != "finished" and state.shared_mana.phase == ManaPhase.READY and state.shared_mana.deck == state.shared_mana.market == 0 and not session._combat_has_pending_resolution():
         session.combat_state = replace(state, shared_mana=request_mana_refresh(state.shared_mana, revision=state.shared_mana.revision))
         return
+    if state.shared_mana.pooled is not None and state.shared_mana.phase == ManaPhase.READY:
+        pool = state.shared_mana.pooled
+        defeated = {str(a.id) for a in state.actors if a.is_defeated()}
+        owner = next((owner for owner, cards in pool.prisons if owner in defeated and cards), None)
+        if owner:
+            from dnd_board_game.rules.shared_mana import sync_pool
+            session.combat_state = replace(state, shared_mana=sync_pool(state.shared_mana,
+                replace(pool, phase="release", captor=owner)))
+            return
     if state.shared_mana.phase != ManaPhase.RESOLVING:
         return
     mana = state.shared_mana
@@ -328,6 +364,9 @@ def gate_end_turn(session: ExplorationUiSession) -> bool:
         if expired:
             session._add_message("Koniec efektów tury", ", ".join(e.label for e in expired))
         mana = state.shared_mana
+        if mana.pooled is not None:
+            session.combat_state = replace(state, shared_mana=replace(mana, end_turn_pending=True))
+            return False
         session.combat_state = replace(state, shared_mana=request_mana_end_turn(mana, revision=mana.revision))
     return True
 
@@ -340,6 +379,11 @@ def command(session: ExplorationUiSession, data: dict[str, object]) -> dict[str,
     if type(data.get("revision")) is not int or data["revision"] != mana.revision:
         raise ValueError("Nieaktualny wybór many. Odśwież ekran.")
     action = data.get("command")
+    if mana.pooled is not None and str(action).startswith("pool_"):
+        from .pooled_mana import command as pool_command
+        return pool_command(session, data)
+    if mana.pooled is not None and action in {"refresh", "refresh_done", "discard", "refill", "cards_done"}:
+        raise ValueError("W tym profilu talia wraca na spód; tasowanie tylko na początku walki i przy drain.")
     declaration = session.shared_mana_declaration
     if action == "boost_option":
         if declaration is None or declaration.stage != "payment" or type(data.get("slot")) is not int:
@@ -440,7 +484,11 @@ def command(session: ExplorationUiSession, data: dict[str, object]) -> dict[str,
             if action == "boost":
                 value = data.get("count")
                 candidate = {**declaration.boosts, key: value}
-                ability.payment(candidate)
+                if mana.pooled is None:
+                    ability.payment(candidate)
+                else:
+                    from dnd_board_game.rules.pooled_mana_catalog import validate_boosts
+                    validate_boosts(mana.pooled.hand(declaration.actor_id), candidate, ability.boosts, ability.boost_limit)
                 declaration.boosts = candidate
             declaration.selected_boost = key
             if not declaration.boosts.get("exclude", 0):
@@ -636,7 +684,7 @@ def require_unpaid_cancellation(session: ExplorationUiSession) -> None:
     """Payment is a committed declaration; rolls and effects must be completed."""
     state = session.combat_state
     if state and state.shared_mana and state.shared_mana.phase == ManaPhase.RESOLVING:
-        raise ValueError("Koszt został już odłożony na stos odrzuconych. Dokończ rzut i efekt opłaconej akcji.")
+        raise ValueError("Koszt został już rozliczony. Dokończ rzut i efekt opłaconej akcji.")
 
 
 def complete_reaction_payment(session: ExplorationUiSession, ability_id: str) -> None:

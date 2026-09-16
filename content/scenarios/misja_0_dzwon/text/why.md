@@ -1,0 +1,1 @@
+„Dowódca zginął kilka dni przed ewakuacją. Potem nadeszła decyzja o odwrocie. Zabrali rannych, dokumenty i to, co mieściło się na wozach. Dzwon został. Nie był to wybór szczególnie trudny dla kogokolwiek, kto miał złamaną nogę.”

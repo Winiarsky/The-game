@@ -3,6 +3,7 @@ from __future__ import annotations
 from dnd_board_game.rules import RollModifier, RollModifierType, ability_modifier
 
 from .models import Actor
+from dnd_board_game.rules.charge_rolls import uses_charge
 from .proficiencies import ability_roll_modifier, proficiency_roll_modifier
 
 
@@ -37,9 +38,9 @@ def skill_modifier(actor: Actor, skill: str) -> int:
     if ability is None:
         raise ValueError(f"Unknown skill: {skill}.")
     result = ability_modifier(getattr(actor.ability_scores, ability))
-    if skill in actor.skill_expertise:
+    if skill in actor.skill_expertise and not uses_charge(actor):
         result += 2 * actor.proficiency_bonus
-    elif skill in actor.skill_proficiencies:
+    elif skill in actor.skill_proficiencies and not uses_charge(actor):
         result += actor.proficiency_bonus
     return result + magic_item_effect_total(
         actor,
@@ -71,7 +72,7 @@ def ability_check_roll_modifiers(
     from dnd_board_game.inventory import MagicItemEffectKind, magic_item_roll_modifiers
 
     modifiers = [ability_roll_modifier(actor, ability)]
-    if skill in actor.skill_expertise:
+    if skill in actor.skill_expertise and not uses_charge(actor):
         modifiers.append(
             RollModifier(
                 "Expertise",
@@ -80,9 +81,9 @@ def ability_check_roll_modifiers(
                 stacking_key="proficiency",
             )
         )
-    elif skill in actor.skill_proficiencies:
+    elif skill in actor.skill_proficiencies and not uses_charge(actor):
         modifiers.append(proficiency_roll_modifier(actor))
-    if tool is not None and tool in actor.proficiencies.tools:
+    if tool is not None and tool in actor.proficiencies.tools and not uses_charge(actor):
         tool_label = next(
             (
                 item.name

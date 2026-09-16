@@ -2,7 +2,9 @@
   "schema": "dnd_board_game.monster",
   "schema_version": 1,
   "ruleset_id": "dnd_5e_2014",
-  "source_pack_ids": ["project_original"],
+  "source_pack_ids": [
+    "project_original"
+  ],
   "id": "stone_guardian",
   "name": "Kamienny strażnik",
   "kind": "monster",
@@ -12,10 +14,19 @@
   "hp": 18,
   "temp_hp": 0,
   "speed_feet": 20,
-  "damage_resistances": ["slashing", "piercing"],
-  "damage_immunities": ["poison"],
-  "damage_vulnerabilities": ["thunder"],
-  "condition_immunities": ["poisoned"],
+  "damage_resistances": [
+    "slashing",
+    "piercing"
+  ],
+  "damage_immunities": [
+    "poison"
+  ],
+  "damage_vulnerabilities": [
+    "thunder"
+  ],
+  "condition_immunities": [
+    "poisoned"
+  ],
   "ability_scores": {
     "strength": 16,
     "dexterity": 8,
@@ -25,12 +36,17 @@
     "charisma": 5
   },
   "proficiency_bonus": 2,
-  "multiattack": ["stone_slam", "stone_slam"],
+  "multiattack": [
+    "stone_slam",
+    "stone_slam"
+  ],
   "proficiencies": {
     "saving_throws": [],
     "skills": [],
     "expertise": [],
-    "weapons": ["stone_slam"],
+    "weapons": [
+      "stone_slam"
+    ],
     "armor": [],
     "tools": []
   },
@@ -52,5 +68,8 @@
         "damage_type": "bludgeoning"
       }
     }
+  ],
+  "feature_refs": [
+    "mana_prison"
   ]
 }

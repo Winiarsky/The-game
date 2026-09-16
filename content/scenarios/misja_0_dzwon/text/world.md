@@ -1,0 +1,1 @@
+W spokojniejszych czasach drogi łączyły miasta. Teraz przede wszystkim przypominały, jak daleko jest do następnego bezpiecznego miejsca. Posterunki zamykano, rachunki pozostawały otwarte, a ludzie nadal potrzebowali chleba. W takich okolicznościach powstała wasza drużyna. Świat nie zdążył jeszcze wiele od niej zażądać. Nessa postanowiła naprawić to niedopatrzenie.

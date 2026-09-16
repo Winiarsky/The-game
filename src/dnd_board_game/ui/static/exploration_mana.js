@@ -7,22 +7,6 @@ function explorationManaAction(action, extra = {}) {
   return true;
 }
 
-function explorationManaRosterHtml(arena) {
-  const course = state.exploration_mana;
-  if (!course || !arena.can_start) return '';
-  return `<section class="mana-exploration-entry"><h3>Rozmowy i obiekty</h3>
-    <p>Każdy bohater ma własne podejście do NPC i otoczenia. Wybierz ćwiczenie; Nessa poprowadzi przygotowanie i rozstrzygnięcie.</p>
-    <div class="exploration-roster">${arena.heroes.map(hero => {
-      const lessons = course.heroes.find(h => h.id === hero.id)?.lessons || [];
-      return `<article class="mana-hero-entry"><b>${esc(hero.name)}</b><small>Eksploracja: ${lessons.filter(l=>l.completed).length}/${lessons.length}</small>
-        <button onclick="explorationManaAction('open',{hero:'${hero.id}',lesson:'npc'})">${lessons.find(l=>l.id==='npc')?.completed ? '✓ ' : ''}Porozmawiaj z NPC</button>
-        <button onclick="explorationManaAction('open',{hero:'${hero.id}',lesson:'object'})">${lessons.find(l=>l.id==='object')?.completed ? '✓ ' : ''}Interakcja z obiektem</button>
-        <button onclick="api('/api/training/start',{hero_id:'${hero.id}',mode:'traps'},'Przygotowuję lekcję pułapki…')">${course.heroes.find(h=>h.id===hero.id)?.trap_completed?'✓ ':''}Pułapka w walce</button>
-        <details><summary>Cztery warunki rozmów</summary>${lessons.filter(l=>l.id.startsWith('condition_')).map(l=>`<button onclick="explorationManaAction('open',{hero:'${hero.id}',lesson:'${l.id}'})">${l.completed?'✓ ':''}${esc(l.name)}</button>`).join('')}</details>
-        <details><summary>Wybierz lekcję eksploracji</summary>${lessons.filter(l=>!['npc','object'].includes(l.id)&&!l.id.startsWith('condition_')).map(l=>`<button onclick="explorationManaAction('open',{hero:'${hero.id}',lesson:'${l.id}'})">${l.completed?'✓ ':''}${esc(l.name)}</button>`).join('')}</details></article>`;
-    }).join('')}</div></section>`;
-}
-
 function explorationManaPrimary() {
   if (typeof keyboardRollWizard !== 'undefined' && keyboardRollWizard) return false;
   if (state?.training_arena?.mode === 'traps' && state.training_arena.trap?.pending) {
@@ -50,14 +34,14 @@ function renderSimpleTrapTraining(panel, arena) {
     ${!state.combat?trainingCommandHtml('Dokończ rozstawienie poniżej i rozpocznij inicjatywę.'):
       trap.status==='hidden'?trainingCommandHtml('W swojej turze przeszukaj okolicę pułapki. Zwykły zasięg to 10 stóp; Mira wykrywa do 45 stóp.'):
       trap.status==='revealed'?trainingCommandHtml('Połóż znacznik pułapki na polu (8,18). Z sąsiedniego pola możesz wykonać dezaktywację, gdy odzyskasz akcję.'):
-      trainingCommandHtml('Pułapka została rozstrzygnięta. Ćwiczenie zaliczone; możesz wrócić do wyboru postaci.')}
+      trainingCommandHtml('Pułapka została rozstrzygnięta. Ćwiczenie zaliczone; możesz wrócić do wyboru ćwiczenia.')}
     ${trap.result?`<p aria-live="polite">${esc(trap.result)}</p>`:''}
     ${trap.pending?`<form id="simple-trap-roll" onsubmit="event.preventDefault();simpleTrapAction('roll',{roll:Number(this.querySelector('input').value)})">
       <p>${trap.modifiers.map(m=>`${esc(m.label)} ${m.value>=0?'+':''}${m.value}`).join(' · ')}</p>
       <label>Naturalny wynik k20 <input data-roll-dice="1k20" type="number" min="1" max="20" step="1" required aria-label="Wynik testu pułapki"></label>
       <button type="submit">✓ Rozstrzygnij test</button></form>`:
       trap.options.map(o=>`<button onclick="simpleTrapAction('${o.action}')" ${o.enabled?'':'disabled'} title="${esc(o.reason)}">${esc(o.name)}</button>`).join('')}
-    <button class="secondary training-back" onclick="simpleTrapAction('leave')">↩ Wybór postaci · zachowaj zaliczenie</button>`;
+    <button class="secondary training-back" onclick="simpleTrapAction('leave')">↩ Wybór ćwiczenia · zachowaj zaliczenie</button>`;
 }
 
 function submitExplorationManaRoll(event) {
@@ -78,6 +62,7 @@ function explorationRuneButton(p, action, extra = {}, label = '', primary = fals
 }
 
 function renderExplorationMana(panel, p) {
+  if (p?.model === 'party_confrontation') {renderPartyConfrontation(panel, p); return;}
   panel.hidden = false;
   const a = p.attempt;
   let content = '';
@@ -141,6 +126,7 @@ function renderExplorationMana(panel, p) {
     }
   }
   panel.innerHTML = `<small>NESSA · EKSPLORACJA · ${esc(p.hero)}</small>
+    <p>${p.run_mode === 'sequence' ? `Kurs po kolei · ćwiczenie ${p.course_index + 1}/${p.course_total}` : p.run_mode === 'single' ? 'Pojedyncze ćwiczenie' : ''}</p>
     ${p.condition?.kind && p.condition.kind!=='none'?`<aside class="mana-condition"><b>${esc(p.condition.title)}</b><p>${esc(p.condition.description)}</p>
       ${a&&p.condition.kind==='color_goal'?`<p class="mana-goal-progress">${a.goal_met?'Warunek spełniony — '+(a.phase==='result'?(a.success?'nagroda przyznana':'brak nagrody po porażce'):'uzyskaj sukces'):`Postęp: ${a.goal_progress}/${p.condition.count} · ${esc(explorationColorNames[p.condition.color])}`}</p>`:''}
       ${a?.sensitive_used?'<p>Wybrano drażliwy temat. Przy sukcesie: nazwiska, ale bez dalszej prywatnej pomocy Ireny.</p>':''}</aside>`:''}

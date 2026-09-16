@@ -242,7 +242,7 @@ _ROWS = (('garran',
   'odbiorcę; bez k6 i bez tworzenia karty.'),
  ('lorian',
   'mana_tuning',
-  'Strojenie rynku',
+  'Strojenie talii',
   'D',
   ('N',),
   'Wymień do dwóch własnych kart z taką samą liczbą wybranych kart rynku. Jeden jednoczesny zestaw '

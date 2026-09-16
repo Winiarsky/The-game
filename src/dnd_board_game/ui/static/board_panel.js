@@ -11,6 +11,7 @@ function rollPanelSlots(wizard) {
 function desiredBoardPanel() {
   if (state?.exploration_mana?.active && !keyboardRollWizard) return null;
   if (state?.training_arena?.tutorial?.notice) return null;
+  if (state?.combat?.shared_mana?.pool_view?.choices?.length) return null;
   if (state?.combat?.shared_mana?.command?.stage) return null;
   if (!state?.board_selection?.panel_enabled || keyboardRollWizard?.initiative) return null;
   if (state.combat?.shared_mana?.declaration?.stage === 'payment'

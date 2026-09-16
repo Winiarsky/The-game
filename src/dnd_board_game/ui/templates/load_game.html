@@ -12,11 +12,16 @@
       <a class="back-link" data-board-back href="{{ url_for('index') }}">↩ Menu główne</a>
       <span class="step-label">Wczytaj grę</span>
       <h1>Zapisane przygody</h1>
-      <p>Pokazywane są tylko zapisy zgodne z aktywnym scenariuszem i rulesetem.</p>
+      <p>Wczytaj aktywną przygodę albo zapis misji wprowadzającej.</p>
     </header>
 
     {% if error %}<div class="flow-error" role="alert">{{ error }}</div>{% endif %}
 
+    {% if mission_save %}
+      <section class="save-card"><b>Misja 0 — Dzwon do odebrania</b>
+        <form method="post" action="{{ url_for('load_mission_zero') }}"><button type="submit" data-board-rune="7">{{ panel_icon(7)|safe }} Wczytaj Misję 0</button></form>
+      </section>
+    {% endif %}
     {% if save.exists %}
       <section class="save-card">
         <span>
@@ -27,7 +32,7 @@
           <button type="submit" data-board-rune="6">{{ panel_icon(6)|safe }} Wczytaj</button>
         </form>
       </section>
-    {% else %}
+    {% elif not mission_save %}
       <section class="empty-state">
         <b>Nie ma jeszcze zapisanej przygody</b>
         <p>Zapis utworzysz z panelu gry po rozpoczęciu scenariusza.</p>

@@ -95,6 +95,17 @@ def synchronize_shared_effects(state: CombatState, effects: tuple[ActiveEffect, 
     """Apply catalogue lifetimes to authored effects, retaining early expiry."""
     if state.shared_mana is None:
         return state, effects
+    deck_duration = EffectDuration.UNTIL_DECK_REFRESH
+    if state.shared_mana.pooled is not None:
+        from .mana_charge import charge_effects
+        from dnd_board_game.scenarios.pooled_mana_catalog import hero_profile
+        pool = state.shared_mana.pooled
+        if not pool.values:
+            from dnd_board_game.rules.pooled_mana import COLORS
+            from dnd_board_game.rules.shared_mana import sync_pool
+            pool = replace(pool, catalog_version=2, values=tuple((h, tuple(hero_profile(h)["values"][c] for c in COLORS)) for h in pool.heroes))
+            state = replace(state, shared_mana=sync_pool(state.shared_mana, pool))
+        effects = tuple(e for e in effects if not e.kind.startswith("charge_")) + charge_effects(pool, {h: hero_profile(h) for h in pool.heroes})
     from .shared_mana_features import synchronize_bastion
     effects = synchronize_bastion(state.actors, effects)
     normalized = []
@@ -107,7 +118,7 @@ def synchronize_shared_effects(state: CombatState, effects: tuple[ActiveEffect, 
                        or effect.kind.startswith(("nimra_echo_", "mana_ordinary_")))
         lifetime = (ability.duration or RIDER_LIFETIMES.get(ability.id, "")) if ability else ""
         if ability is not None and lifetime and not bookkeeping:
-            duration = EffectDuration.UNTIL_DECK_REFRESH if lifetime == "O" else EffectDuration.UNTIL_TURN_START
+            duration = deck_duration if lifetime == "O" else EffectDuration.UNTIL_TURN_START
             early = {EffectDuration.UNTIL_NEXT_ATTACK, EffectDuration.WHILE_AT_POSITION}
             extra = tuple(e for e in effect.additional_expirations if e.duration in {*early, EffectDuration.CONCENTRATION})
             if effect.duration in early and not any(e.duration == effect.duration for e in extra):
@@ -126,14 +137,14 @@ def synchronize_shared_effects(state: CombatState, effects: tuple[ActiveEffect, 
     normalized = [e for e in normalized if e.kind != "shared_hidden" or e.actor_id in hidden_ids]
     for actor in state.actors:
         if str(actor.id) == "mira" and str(actor.id) in hidden_ids and not any(e.kind == "shared_hidden" and e.actor_id == str(actor.id) for e in normalized):
-            normalized.append(marker(str(actor.id), "shared_hidden", "Ukrycie · utrudnienie obron i testów reakcji", duration=EffectDuration.UNTIL_DECK_REFRESH))
+            normalized.append(marker(str(actor.id), "shared_hidden", "Ukrycie · utrudnienie obron i testów reakcji", duration=deck_duration))
     conditions = []
     for condition in state.condition_states:
         ability = shared_ability(condition.source_actor_id or "", condition.source_spell_id or "")
         lifetime = (ability.duration or RIDER_LIFETIMES.get(ability.id, "")) if ability else ""
         if ability is not None and lifetime and condition.duration != EffectDuration.CONCENTRATION:
             condition = replace(condition,
-                duration=EffectDuration.UNTIL_DECK_REFRESH if lifetime == "O" and ability.id != "nimra_sticky_matrix" else EffectDuration.UNTIL_TURN_START,
+                duration=deck_duration if lifetime == "O" and ability.id != "nimra_sticky_matrix" else EffectDuration.UNTIL_TURN_START,
                 expiration_actor_id=condition.source_actor_id, expiration_event_count=1)
         conditions.append(condition)
     sources = tuple(sorted({e.source_actor_id or e.actor_id for e in normalized if e.kind == "victory_hymn"}))

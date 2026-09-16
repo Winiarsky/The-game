@@ -420,6 +420,8 @@ def apply_combat_interaction_effects(
                         *saving_throw_aura_modifiers(updated_state.actors, target),
                     )
                 )
+                from .mana_charge import charged_check_request
+                request = charged_check_request(updated_state, target, request)
                 roll = resolve_d20_roll(D20RollInput(request, natural_roll))
                 check = resolve_saving_throw(roll, dc)
                 saving_throw = CombatInteractionSavingThrow(
@@ -552,7 +554,13 @@ def attack_source_with_combat_effects(
     actor: Actor, source, active_effects: tuple[ActiveCombatEffect, ...],
     *, target: Actor | None = None,
 ):
+    from .mana_charge import charged_attack_request
+
+    if not source.save_ability:
+        source = replace(source, attack_roll_request=charged_attack_request(
+            actor, source.attack_roll_request, active_effects))
     modifiers = []
+    charge_applied = any(m.stacking_key == "charge_damage_applied" for m in source.attack_roll_request.modifiers)
     if (actor.faction == Faction.ENEMY and source.damage_components
         and not actor_has_feature(actor, "training_fixed_damage")
         and not any(m.stacking_key == "mana_threat_damage" for m in source.attack_roll_request.modifiers)):
@@ -652,6 +660,8 @@ def attack_source_with_combat_effects(
             continue
         if effect.kind not in {
             "grant_attack_bonus_while_on_object",
+            "scenario_fatigue",
+            "charge_attack",
             "grant_next_attack_penalty",
             "strength_potion",
             "concentration_attack_bonus",
@@ -661,6 +671,10 @@ def attack_source_with_combat_effects(
             "mana_surge",
             "divine_care_aura_penalty",
         }:
+            continue
+        if effect.kind == "scenario_fatigue" and any(m.stacking_key == effect.id for m in source.attack_roll_request.modifiers):
+            continue
+        if effect.kind == "charge_attack" and any(m.stacking_key == effect.id for m in source.attack_roll_request.modifiers):
             continue
         if effect.kind == "mana_surge" and (effect.value <= 0 or not _physical_basic_weapon(actor, source)):
             continue
@@ -712,7 +726,12 @@ def attack_source_with_combat_effects(
                 stacking_key=command_guilt.kind,
             )
         )
-    damage_bonus = sum(
+    from .mana_charge import damage_bonus as charge_damage_bonus
+    charge_bonus = 0 if charge_applied else charge_damage_bonus(actor, source, active_effects)
+    if charge_bonus:
+        modifiers.append(RollModifier("Nasycenie: premia obrażeń", 0, RollModifierType.CUSTOM, "charge_damage_applied"))
+    fatigue_bonus = sum(e.value for e in active_effects if e.actor_id == str(actor.id) and e.kind == "scenario_fatigue" and not any(m.stacking_key == e.id for m in source.attack_roll_request.modifiers))
+    damage_bonus = charge_bonus + fatigue_bonus + sum(
         (effect.modifier if effect.kind == "divine_care_aura_penalty" and effect.object_id.startswith("shared_combat_action:") else effect.value)
         for effect in active_effects
         if effect.actor_id == str(actor.id)
@@ -881,12 +900,12 @@ def attack_source_with_combat_effects(
         mode = _with_disadvantage(mode)
     return replace(
         source,
-        attack_roll_request=D20RollRequest(
+        attack_roll_request=replace(source.attack_roll_request,
             mode=mode,
             modifiers=source.attack_roll_request.modifiers + tuple(modifiers),
         ),
         damage_modifier=source.damage_modifier + damage_bonus,
-        damage_components=(*source.damage_components, *extra_components),
+        damage_components=(*(replace(c, modifier=c.modifier + charge_bonus + fatigue_bonus) if i == 0 and (charge_bonus or fatigue_bonus) else c for i, c in enumerate(source.damage_components)), *extra_components),
         damage_hint=(
             " + ".join(
                 (
@@ -1094,7 +1113,7 @@ def attack_source_with_target_combat_effects(
         return source
     return replace(
         source,
-        attack_roll_request=D20RollRequest(
+        attack_roll_request=replace(source.attack_roll_request,
             mode=mode,
             modifiers=source.attack_roll_request.modifiers + tuple(modifiers),
         ),

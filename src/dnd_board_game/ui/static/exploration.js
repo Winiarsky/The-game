@@ -385,6 +385,7 @@ async function api(path, body, busyMessage) {
         alert(data.error || 'Błąd');
       }
     }
+    if (res.ok && data.redirect) { window.location.assign(data.redirect); return {ok:true}; }
     if (res.ok && data.panel_event) {
       window.setTimeout(() => { handleBoardPanelEvent(data); scheduleAutomaticBoardScan(); }, 0);
       return {ok: true};
@@ -483,6 +484,7 @@ function render() {
     || existingConversationScroll.scrollHeight - existingConversationScroll.scrollTop - existingConversationScroll.clientHeight < 120;
   const inCombat = Boolean(state.combat);
   renderTrainingArena();
+  renderMission();
   const interactionId = state.conversation ? state.conversation.interaction_id : null;
   if (activeInteractionId === null) activeInteractionId = interactionId;
   if (interactionId && interactionId !== activeInteractionId) {
@@ -560,9 +562,9 @@ function render() {
     const sides = Number(r.die_sides || 20);
     const value = sides === 100 ? 50 : 10;
     const plan = state.pending && state.pending.stage === 'roll' ? (state.pending.check_plan || {}) : {};
-    const namedCheck = plan.skill ? skillLabel(plan.skill) : '';
-    const rollLabel = namedCheck ? `${namedCheck} d20` : (r.label || `d${sides}`);
     const actor = actorById(r.actor_id);
+    const namedCheck = actor?.uses_charge && plan.ability ? abilityLabel(plan.ability) : plan.skill ? skillLabel(plan.skill) : '';
+    const rollLabel = namedCheck ? `${namedCheck} d20` : (r.label || `d${sides}`);
     const inspiration = r.bardic_inspiration;
     const inspirationInput = inspiration ? `<label class="roll-entry">${actorPortraitHtml(actor, 'roll')}<span>${esc(r.actor_name)} — ${esc(inspiration.label || 'Bardic Inspiration')} (opcjonalnie):</span> <input data-actor="${esc(r.actor_id)}" data-roll-kind="bardic-inspiration" type="number" min="1" max="${Number(inspiration.die_sides)}" placeholder="nie używaj"></label>` : '';
     const guidance = r.guidance;
@@ -594,7 +596,7 @@ function render() {
 
 function isKeyboardRollInput(input) {
   if (!input || input.type !== 'number' || input.disabled) return false;
-  if (input.closest('#rolls, .precombat-stealth-roll, #exploration-mana-roll, #simple-trap-roll')) return true;
+  if (input.closest('#rolls, .precombat-stealth-roll, #exploration-mana-roll, #mission-roll, #simple-trap-roll')) return true;
   if (!input.closest('#encounter')) return false;
   const id = String(input.id || '');
   return (
@@ -615,9 +617,9 @@ function visibleKeyboardRollInputs() {
 function keyboardRollSubmitButton(inputs) {
   const first = inputs[0];
   if (!first) return null;
-  const root = first.closest('#roll-panel, .combat-action-card, .precombat-stealth-roll, #exploration-mana-roll, #simple-trap-roll, #encounter');
+  const root = first.closest('#roll-panel, .combat-action-card, .precombat-stealth-roll, #exploration-mana-roll, #mission-roll, #simple-trap-roll, #encounter');
   if (!root) return null;
-  if (root.matches('#exploration-mana-roll, #simple-trap-roll')) return root.querySelector('button[type="submit"]');
+  if (root.matches('#exploration-mana-roll, #mission-roll, #simple-trap-roll')) return root.querySelector('button[type="submit"]');
   const buttons = Array.from(root.querySelectorAll('button')).filter(button => (
     !button.disabled
     && !button.classList.contains('secondary')
@@ -675,8 +677,10 @@ function keyboardRollStep(input, index) {
 }
 
 function keyboardRollContextLines(root) {
+  if (root.id === 'mission-roll') return [state.mission.text.body];
   if (root.id === 'exploration-mana-roll') {
     const a = state.exploration_mana.attempt;
+    if (state.exploration_mana.model === 'party_confrontation') return [`${a.actor} · ${a.method}`, state.exploration_mana.die_kind === 'test' ? 'Test przeciw ST. Wpisz naturalny wynik k20; premie doliczamy w podsumowaniu.' : `Wpływ: rzuć k${a.die}. Modyfikator cechy i pasywy doliczamy raz.`];
     return [`${a.actor} · ${a.method}`, a.busted
       ? 'Utrudnienie: dwie k20, liczy się niższa. Premię doliczamy raz do niższego wyniku. Bez premii za karty.'
       : 'Test k20. Po ustawieniu kości sprawdź podsumowanie i zatwierdź cały rzut.'];
@@ -790,7 +794,7 @@ function initializeKeyboardRollWizard() {
     index: 0,
     review: steps.length === 0,
     submitButton,
-    contextLines: keyboardRollContextLines(submitButton.closest('#roll-panel, .combat-action-card, .precombat-stealth-roll, #exploration-mana-roll, #simple-trap-roll, #encounter')),
+    contextLines: keyboardRollContextLines(submitButton.closest('#roll-panel, .combat-action-card, .precombat-stealth-roll, #exploration-mana-roll, #mission-roll, #simple-trap-roll, #encounter')),
   };
   const panel = state.encounter_initiative?.panel;
   if (panel && allSteps.every(step => step.input.id.startsWith('encounter-initiative-roll'))) {
@@ -855,7 +859,7 @@ function renderKeyboardRollWizard(message = '') {
         ${manaAttempt ? `<div class="keyboard-roll-combined-summary"><p>${manaAttempt.busted?'Niższy wynik':'Wynik kości'}:
           <b>${Math.min(...wizard.allSteps.map(step=>step.raw))} ${signedNumber(manaAttempt.modifier_total)} = ${Math.min(...wizard.allSteps.map(step=>step.raw))+manaAttempt.modifier_total}</b></p>
           <p>${esc(manaAttempt.modifiers.map(m=>`${m.label} ${signedNumber(m.value)}`).join(' · '))}. Premia doliczona raz.</p></div>` : ''}
-        ${rollPanelControlsHtml(wizard)}
+        ${missionRollSummary(wizard)}${rollPanelControlsHtml(wizard)}
 
         <div class="keyboard-roll-wizard-actions">${wizard.steps.length ? '<button type="button" class="secondary" onclick="previousKeyboardRollStep()">↩ Wróć</button>' : ''}<button type="button" class="panel-accept" onclick="submitKeyboardRollWizard()">✓ Zastosuj wyniki</button></div>
       </section>`;
@@ -1328,7 +1332,7 @@ function partyDetailActorHtml(actor) {
     <article class="party-detail-card ${actorHealthTone(actor)}">
       <div class="party-detail-heading">${actorPortraitHtml(actor, 'detail')}<strong>${esc(actor.name)}</strong><span>${hp}/${maximum} PW</span></div>
       <div class="party-detail-hp" aria-label="${percentage}% punktów życia"><i style="width:${percentage}%"></i></div>
-      <div class="character-vitals"><span><b>KP</b>${esc(actor.ac ?? '-')}</span><span><b>Szybkość</b>${esc(actor.speed_feet ?? '-')} ft</span><span><b>Temp HP</b>${esc(actor.temp_hp || 0)}</span><span><b>Biegłość</b>${signedNumber(actor.proficiency_bonus || 0)}</span></div>
+      <div class="character-vitals"><span><b>KP</b>${esc(actor.ac ?? '-')}</span><span><b>Szybkość</b>${esc(actor.speed_feet ?? '-')} ft</span><span><b>Temp HP</b>${esc(actor.temp_hp || 0)}</span><span><b>${actor.uses_charge ? 'Naładowanie' : 'Biegłość'}</b>${signedNumber(actor.uses_charge ? actor.charge_roll_bonus || 0 : actor.proficiency_bonus || 0)}</span></div>
       <div class="ability-grid">${['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'].map(ability => {
         const score = abilities[ability] ?? 10;
         return `<span><b>${esc(abilityAbbreviation(ability))}</b>${esc(score)} <small>${esc(signedNumber(Math.floor((Number(score) - 10) / 2)))}</small></span>`;
@@ -4149,14 +4153,15 @@ function rollPromptHtml() {
     lowest: 'liczy się najniższy wynik',
     majority: 'sukces, jeśli zda co najmniej połowa'
   }[plan.aggregation] || plan.aggregation || '';
+  const lead = (state.actors || []).find(actor => String(actor.id) === String(plan.lead_actor_id || ''));
+  const cechaOnly = lead?.uses_charge || (state.actors || []).some(actor => actor.uses_charge);
   const checkName = skillLabel(plan.skill);
   const abilityName = abilityLabel(plan.ability);
-  const checkLabel = plan.skill
+  const checkLabel = cechaOnly ? abilityName : plan.skill
     ? `${checkName} (${abilityName})`
     : plan.tool
       ? `${plan.tool_label || plan.tool} (${abilityName})`
       : abilityName;
-  const lead = (state.actors || []).find(actor => String(actor.id) === String(plan.lead_actor_id || ''));
   const helper = (state.actors || []).find(actor => String(actor.id) === String(plan.helper_actor_id || ''));
   const rollingNames = (state.required_rolls || []).map(r => r.actor_name).join(', ');
   const roleHtml = plan.participants === 'lead_with_help'
@@ -4192,7 +4197,7 @@ function rollPromptHtml() {
         return `${esc(bonus.actor_name || '')}: ${esc(bonus.label || bonus.source_id)} ${signedNumber(Number(bonus.modifier || 0))}${spellCost}`;
       }).join('; ')}</p>`
     : '';
-  const toolProficiencyHtml = plan.tool ? `<p><b>Biegłość narzędzia:</b> ${esc(plan.tool_label || plan.tool)}.</p>` : '';
+  const toolProficiencyHtml = plan.tool ? `<p><b>Narzędzie:</b> ${esc(plan.tool_label || plan.tool)}.</p>` : '';
   return `${mechanicHtml}${roleHtml}${rollModeHtml}<p><b>Rozstrzygnięcie:</b> ${esc(participants)}${aggregation ? `; ${esc(aggregation)}` : ''}.</p>${toolProficiencyHtml}${rollBreakdowns ? `<ul>${rollBreakdowns}</ul>` : ''}${resourceHtml}${situationalHtml}${improvisedHtml}${bonusHtml}`;
 }
 function latestResultMessageSince(state, startIndex) {
@@ -4433,6 +4438,7 @@ function combatStartHtml() {
       ${combatInitiativeRibbonHtml(combat, order)}
       ${combat.battle_briefing?.length ? `<details class="battle-rules"><summary>Cel starcia i zasady terenu</summary><ul>${combat.battle_briefing.map(rule => `<li>${esc(rule)}</li>`).join('')}</ul></details>` : ''}
       ${combatTurnHudHtml(combat)}
+      ${pooledManaPointsHtml(combat, null, true)}
       ${miraStealthStatusHtml(combat)}
       <div class="combat-stage">
         <div data-board-input-status>${boardSelectionStatusHtml()}</div>
@@ -6967,6 +6973,7 @@ function rememberCombatActorDetails(details) {
 }
 function combatTurnActorStatsHtml(combat) {
   const actor = combat.current_actor || {};
+  const manaHand = combat.shared_mana?.pool_view?.hands.find(h => h.hero === actor.id);
   const slots = (actor.spell_slots || []).filter(slot => Number(slot.maximum || 0) > 0);
   const pools = (actor.resource_pools || []).filter(pool => Number(pool.maximum || 0) > 0);
   const slotText = slots.length
@@ -6980,7 +6987,7 @@ function combatTurnActorStatsHtml(combat) {
       <summary data-allow-busy="true">Szczegóły postaci · ${esc(actor.name || '-')}</summary>
       <div class="combat-turn-actor-stats">
         <div class="combat-turn-stat-block"><small>Poziom</small><span>${esc(actor.level || '-')}</span></div>
-        ${combat.physical_mana?.active_hero ? `<div class="combat-turn-stat-block"><small>Mana fizyczna</small><span>Karty na stole · pojemność ${combat.physical_mana.supply.capacity}</span></div>` : `<div class="combat-turn-stat-block"><small>Sloty czarów</small><span>${slotText}</span></div><div class="combat-turn-stat-block"><small>Zasoby</small><span>${poolText}</span></div>`}
+        ${manaHand ? `<div class="combat-turn-stat-block"><small>Mana z kart</small><span>${esc(manaHand.total)} pkt · ${manaHand.cards.length} kart</span></div>` : combat.physical_mana?.active_hero ? `<div class="combat-turn-stat-block"><small>Mana fizyczna</small><span>Karty na stole · pojemność ${combat.physical_mana.supply.capacity}</span></div>` : `<div class="combat-turn-stat-block"><small>Sloty czarów</small><span>${slotText}</span></div><div class="combat-turn-stat-block"><small>Zasoby</small><span>${poolText}</span></div>`}
         <div class="combat-turn-stat-block combat-turn-all-effects"><small>Stany i efekty</small>${statusChipsHtml(combatActorChips(actor).filter(chip => !isTurnResourceChip(chip)), 'Brak aktywnych efektów.')}</div>
       </div>
     </details>
@@ -7952,6 +7959,7 @@ async function performBoardScan({revision, automatic, token, previousInteraction
       window.location.assign('/');
       return;
     }
+    if (res.ok && data.redirect) { window.location.assign(data.redirect); return {ok:true}; }
     if (res.ok && data.panel_event) {
       boardInputPhase = 'resolved';
       panelEventPending = true;

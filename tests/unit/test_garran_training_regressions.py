@@ -15,7 +15,7 @@ from dnd_board_game.ui.exploration_app import ExplorationUiSession
 from dnd_board_game.world import Coordinate
 from tests.unit.test_initiative_panel import Board
 from tests.unit.test_shared_mana_runtime import send
-from tests.unit.test_training_walkthrough import prepared
+from tests.unit.test_training_walkthrough import prepared, prepare_pool, settle_burn
 
 
 def lesson(tmp_path: Path, ability: str) -> tuple[ExplorationUiSession, Board]:
@@ -31,6 +31,7 @@ def test_guard_redirects_out_of_reach_attack_and_preserves_payment(tmp_path: Pat
     session, board = lesson(tmp_path, 'garran_guard_companion')
     before = {str(a.id): a.hp for a in session.combat_state.actors}
     guided.acknowledge(session, guided.notice_id(session))
+    prepare_pool(session)
     assert session.pending_enemy_turn_intent.target.id == 'recruitment_helper'
     assert 'pomocnik' in session.state_payload()['combat']['shared_mana']['declaration']['description'].lower()
     send(session, 'pay')
@@ -38,7 +39,7 @@ def test_guard_redirects_out_of_reach_attack_and_preserves_payment(tmp_path: Pat
     assert result.target.id == 'garran'
     assert result.attack_resolution.hit
     assert 'przejmuje' in result.message
-    assert result.state.shared_mana.market == 4
+    assert result.state.shared_mana.pooled.hand("garran") == ()
     assert 'garran' in result.state.spent_reaction_actor_ids
     assert not guided.notice_id(session)  # Resolve the attack before teaching the outcome.
     session._commit_pending_enemy_turn()
@@ -47,7 +48,7 @@ def test_guard_redirects_out_of_reach_attack_and_preserves_payment(tmp_path: Pat
     after = {str(a.id): a.hp for a in session.combat_state.actors}
     assert after['garran'] == before['garran'] - 6
     assert after['recruitment_helper'] == before['recruitment_helper']
-    assert session.combat_state.shared_mana.market == 4
+    assert session.combat_state.shared_mana.pooled.hand("garran") == ()
     assert guided.flag(session, 'phase') == 'success'
     assert guided.notice_id(session)
 
@@ -55,6 +56,7 @@ def test_guard_redirects_out_of_reach_attack_and_preserves_payment(tmp_path: Pat
 def test_interception_can_miss_outside_lesson_and_is_consumed_once(tmp_path: Path) -> None:
     session, _ = lesson(tmp_path, 'garran_guard_companion')
     guided.acknowledge(session, guided.notice_id(session))
+    prepare_pool(session)
     from dnd_board_game.combat.scene import set_scene_flag
     session.state = replace(session.state, flags=set_scene_flag(session.state.flags, 'training_mode', 'basic'))
     session.encounter_rng = Random(31)  # Natural 1, an ordinary miss despite interception.
@@ -69,6 +71,8 @@ def test_interception_can_miss_outside_lesson_and_is_consumed_once(tmp_path: Pat
 def test_command_automatically_moves_then_attacks_with_both_participants(tmp_path: Path, natural_roll: int, with_movement: bool) -> None:
     session, board = lesson(tmp_path, 'counterattack_command')
     guided.acknowledge(session, guided.notice_id(session))
+    prepare_pool(session)
+    hand_before = session.combat_state.shared_mana.pooled.hand('garran')
     session.use_combat_class_feature('counterattack_command', target_id='recruitment_helper')
     send(session, 'pay')
     from dnd_board_game.ui.routes import create_app
@@ -86,7 +90,7 @@ def test_command_automatically_moves_then_attacks_with_both_participants(tmp_pat
         view = session.state_payload()
         assert current_actor(session.combat_state).id == actor
         assert view['combat']['shared_mana']['command']['step'] == index
-        assert session.combat_state.shared_mana.market == 1
+        assert session.combat_state.shared_mana.pooled.hand("garran") == hand_before
         assert view['combat']['turn_action_menu'] is None
         assert board.leds[panel_position(28).as_tuple()] == LedColor.PANEL_ACCEPT
         assert board.leds[current_actor(session.combat_state).position.as_tuple()] == LedColor.ACTIVE_ACTOR
@@ -120,8 +124,9 @@ def test_command_automatically_moves_then_attacks_with_both_participants(tmp_pat
             session.submit_player_damage_roll(damage=4)
     assert session.combat_state.shared_mana.command_step == 0
     assert current_actor(session.combat_state).id == 'garran'
-    assert session.combat_state.shared_mana.market == 1
+    assert session.combat_state.shared_mana.pooled.hand("garran") == hand_before
     assert len(session.combat_state.initiative_order.entries) == 2
+    settle_burn(session)
     assert guided.flag(session, 'phase') == 'success'
 
 
@@ -134,6 +139,7 @@ def test_aura_range_members_and_payment_share_leds_without_extra_inputs(tmp_path
     assert board.leds[(9, 17)] == LedColor.SELECTED_ABILITY_TARGET
     assert session._current_board_scan_target().positions == (panel_position(28),)
     guided.acknowledge(session, guided.notice_id(session))
+    prepare_pool(session)
     session.use_combat_class_feature(ability.split(':')[0])
     if ':' in ability:
         send(session, 'boost', boost_id='ward', count=1)
@@ -144,6 +150,7 @@ def test_aura_range_members_and_payment_share_leds_without_extra_inputs(tmp_path
     if session.shared_mana_declaration:
         send(session, 'target', target_id='recruitment_helper')
         send(session, 'bonus')
+    settle_burn(session)
     session._sync_board_leds()
     assert guided.flag(session, 'phase') == 'success'
     assert board.leds[edge] == LedColor.AURA_HEALING_DIM

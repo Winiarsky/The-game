@@ -1,0 +1,1 @@
+Przed basztą stoi dzwon. Kilkoro uzbrojonych ludzi mocuje pod nim płozy. Brodaty mężczyzna dostrzega wasz wóz. „Zostawcie zaprzęg. Odejdziecie pieszo.” Dłoń procarza znika w torbie z kamieniami. Nie czekają na odpowiedź: dwoje rusza, żeby odciąć wam drogę do muła.

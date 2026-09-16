@@ -67,7 +67,7 @@ from dnd_board_game.world import Coordinate
 
 from .hero_selection import HERO_SELECTION_GUIDES, physical_mana_guides
 from dnd_board_game.rules.physical_mana import mana_ability, hero_abilities, FLAWS, MANA_PASSIVES, turn_supply
-from dnd_board_game.character_creation.physical_mana_help import physical_mana_passives
+from dnd_board_game.character_creation.physical_mana_help import physical_mana_passives, visible_character_features
 from dnd_board_game.combat.physical_mana import WAVES
 from dnd_board_game.character_creation.boardgame_help import ACTIVE_FEATURE_HELP, FLAW_HELP, HERO_FLAWS, PASSIVE_HELP
 
@@ -75,7 +75,7 @@ if TYPE_CHECKING:
     from .exploration_app import ExplorationUiSession
 
 
-PLAYER_SCENARIO_IDS = ("ostatni_transport_00_gildia",)
+PLAYER_SCENARIO_IDS = ("misja_0_dzwon", "ostatni_transport_00_gildia")
 
 
 def create_app(
@@ -162,11 +162,13 @@ def create_app(
     @app.get("/rules/physical-mana")
     def physical_mana_rules():
         from dnd_board_game.physical_cards.mana_print import build_print_hero
-        from dnd_board_game.rules.exploration_mana_catalog import REMINDER, CONDITION_HELP
+        from dnd_board_game.scenarios.confrontation import REMINDER, CONDITION_HELP
+        from dnd_board_game.scenarios.pooled_mana_catalog import hero_profile
+        from dnd_board_game.physical_cards.mana_print import TURN_REMINDERS, MANA_PASSIVE_REMINDER
         names = {"garran": "Garran", "brakka": "Brakka", "mira": "Mira", "dagna": "Dagna", "lorian": "Lorian", "nimra": "Nimra", "erynd": "Erynd"}
-        return render_template("physical_mana.html", waves=WAVES, mana_text=mana_text, mana_chips=chips, exploration_reminder=REMINDER, exploration_conditions=CONDITION_HELP,
-            heroes=[{"id": hero_id, "name": name, "abilities": hero_abilities(hero_id),
-                     "flaw": FLAWS[hero_id], "passive": MANA_PASSIVES[hero_id], "notes": "\n".join(f"{note.name}: {note.body}" for note in physical_mana_passives(hero_id)[:-1]), "supply": turn_supply(hero_id), "exploration": build_print_hero(hero_id).exploration}
+        return render_template("physical_mana.html", waves=WAVES, mana_text=mana_text, mana_chips=chips, exploration_reminder=REMINDER, exploration_conditions=CONDITION_HELP, pool_rules=TURN_REMINDERS, mana_passive_reminder=MANA_PASSIVE_REMINDER,
+            heroes=[{"id": hero_id, "name": name, "abilities": build_print_hero(hero_id).cards, "values": hero_profile(hero_id)["values"],
+                     "flaw": ("", hero_profile(hero_id)["flaw_name"], hero_profile(hero_id)["flaw"]), "passive": ("", hero_profile(hero_id)["passive_name"], hero_profile(hero_id)["passive"]), "notes": "\n".join(f"{note.name}: {note.body}" for note in physical_mana_passives(hero_id)[:-1]), "supply": turn_supply(hero_id), "exploration": build_print_hero(hero_id).exploration, "exploration_passives": build_print_hero(hero_id).exploration_passives, "mana_passives": build_print_hero(hero_id).mana_passives}
                     for hero_id,name in names.items()])
 
     @app.get("/")
@@ -174,7 +176,8 @@ def create_app(
         return render_template(
             "main_menu.html",
             scenario_name=session.exploration.scenario_name,
-            save_exists=session.snapshot_path.exists(),
+            save_exists=session.snapshot_path.exists() or (session.save_dir/"misja_0_dzwon.snapshot.json").exists(),
+            mission_active=session.exploration.scenario_id == "misja_0_dzwon",
         )
 
     @app.post("/training/open")
@@ -195,8 +198,17 @@ def create_app(
         try:
             return jsonify(start_training_trial(session, str(data.get("hero_id", "")),
                            str(data.get("mode", "walkthrough")), str(data.get("creature_type", "humanoid")),
-                           reset_progress=bool(data.get("reset_progress", False))))
+                           reset_progress=bool(data.get("reset_progress", False)),
+                           case_id=str(data["case_id"]) if "case_id" in data else None))
         except ValueError as error:
+            return jsonify(error=str(error), state=session.state_payload()), 400
+
+    @app.post("/api/training/menu")
+    def training_menu_action():
+        from .training_menu import command
+        try:
+            return jsonify(command(session, request.get_json(silent=True) or {}))
+        except (ValueError, TypeError) as error:
             return jsonify(error=str(error), state=session.state_payload()), 400
 
     @app.post("/api/exploration-mana")
@@ -227,14 +239,14 @@ def create_app(
         if (request.method == "POST" and request.path.startswith("/api/") and not request.path.startswith("/api/board/") and active(session)
                 and request.path not in {"/api/exploration-mana", "/api/snapshot/save", "/api/snapshot/load",
                                          "/api/board/scan", "/api/board/reset-scan"}):
-            return jsonify(error="Najpierw wróć z lekcji eksploracji do wyboru postaci.", state=session.state_payload()), 400
+            return jsonify(error="Najpierw zakończ lub opuść aktywną konfrontację.", state=session.state_payload()), 400
 
     @app.post("/api/training/leave")
     def leave_training():
         from .training_walkthrough import leave
         data = request.get_json(silent=True) or {}
         try:
-            return jsonify(leave(session, retry=data.get("retry") is True))
+            return jsonify(leave(session, retry=data.get("retry") is True, choose_case=data.get("choose_case") is True))
         except ValueError as error:
             return jsonify(error=str(error), state=session.state_payload()), 400
 
@@ -276,13 +288,17 @@ def create_app(
                 error=message,
             ), 400
 
-        if not 1 <= len(selected_actor_ids) <= 5:
-            return selection_error("Wybierz od 1 do 5 bohaterów.")
+        if not 1 <= len(selected_actor_ids) <= 6:
+            return selection_error("Wybierz od 1 do 6 bohaterów.")
         if len(set(selected_actor_ids)) != len(selected_actor_ids):
             return selection_error("Każdego bohatera można wybrać tylko raz.")
         if any(actor_id not in PLAYABLE_HERO_IDS for actor_id in selected_actor_ids):
             return selection_error("Wybrano bohatera spoza dostępnego zestawu.")
 
+        if scenario_id == "misja_0_dzwon" and len(selected_actor_ids) < 3:
+            return selection_error("Misja 0 wymaga 3–6 bohaterów.")
+        if scenario_id != "misja_0_dzwon" and len(selected_actor_ids) > 5:
+            return selection_error("Ten starszy scenariusz obsługuje do 5 bohaterów.")
         scenarios_by_id = {entry.id: entry for entry in scenario_choices()}
         selected_scenario = scenarios_by_id.get(scenario_id)
         if selected_scenario is None:
@@ -303,18 +319,39 @@ def create_app(
 
         session.configure_scenario(selected_scenario.path)
         session.configure_custom_party(tuple(apply_physical_mana_profile(actor) for actor in party))
+        if scenario_id == "misja_0_dzwon":
+            from .mission_zero import initialize
+            initialize(session)
         return redirect(url_for("play"))
+
+    @app.post("/api/mission/action")
+    def mission_action():
+        from .mission_zero import command
+        try:
+            return jsonify(command(session, request.get_json(silent=True) or {}))
+        except (ValueError, KeyError, TypeError) as exc:
+            return jsonify(error=str(exc)), 400
 
     @app.get("/load-game")
     def load_game():
         return render_template(
             "load_game.html",
+            mission_save=(session.save_dir/"misja_0_dzwon.snapshot.json").exists() and session.exploration.scenario_id != "misja_0_dzwon",
             save={
                 "exists": session.snapshot_path.exists(),
                 "scenario_name": session.exploration.scenario_name,
                 "path": str(session.snapshot_path),
             },
         )
+
+    @app.post("/load-game/mission-zero")
+    def load_mission_zero():
+        path=session.save_dir/"misja_0_dzwon.snapshot.json"
+        if not path.exists():
+            return redirect(url_for("load_game"))
+        session.configure_scenario(Path("content/scenarios/misja_0_dzwon/scenario.json"))
+        session.load_snapshot()
+        return redirect(url_for("play"))
 
     @app.post("/load-game/current")
     def load_current_game():
@@ -412,7 +449,7 @@ def create_app(
             background=character_catalog.background_by_id(character.background_id),
             labels=_PLAYER_LABELS,
             feature_entries=_character_sheet_feature_entries(
-                character.actor.features, actor_id=str(character.actor.id)
+                visible_character_features(character.actor), actor_id=str(character.actor.id)
             ),
         )
 
@@ -3685,7 +3722,7 @@ def _character_sheet_feature_entries(
             name, text = (flaw[1], flaw[2]) if flaw and feature.feature_id == flaw[0] else (feature.label, feature.description)
             ability = mana_ability(actor_id or "", feature.feature_id)
             if ability is not None:
-                name, text = ability.name, ability.description
+                name, text = ability.name, feature.description
             entries.append({"name": name, "rule_text": text, "game_text": "", "use_mode": ""})
             continue
         note = FLAW_HELP.get(feature.feature_id) or PASSIVE_HELP.get(feature.feature_id)
@@ -4361,9 +4398,13 @@ def _physical_mana_archetype(hero_id: str):
     archetype = HERO_ARCHETYPES_BY_ID.get(hero_id)
     if archetype is None or not hero_abilities(hero_id):
         return archetype
-    supply = turn_supply(hero_id)
+    from dnd_board_game.scenarios.pooled_mana_catalog import hero_profile
+    profile = hero_profile(hero_id)
     return replace(archetype,
-        turn_plan=("Sprawdź pozycję, rynek i posiadane kombinacje many.", "Wybierz serię zwykłych ataków albo jedną zdolność główną; zaplanuj ruch i akcję dodatkową.",
-                   f"Na końcu zachowaj do {supply['keep']} starych kart, dobierz do 3 i uzupełnij rynek."),
-        resources=(f"Pojemność {supply['capacity']} fizycznych kart many; aplikacja nie prowadzi ręki.", "C, N, Z, B, F — pięć kolorów; 2 dowolne zastępują jeden kolor.", MANA_PASSIVES[hero_id][2]),
-        pitfalls=(FLAWS[hero_id][2], "Reakcje wydają karty przygotowane na następną turę."))
+        turn_plan=("Poniżej 21 pkt wybierz jedną z dwóch odkrytych kart many.",
+                   "Zaplanuj ruch, akcję główną i dodatkową. Test: k20 + cecha + naładowanie + inne premie.",
+                   "Zachowaj pulę. Zwykły atak nie spala kart; spalanie zdolności rozlicz po jej efekcie."),
+        resources=("Naładowanie: 0/6/12/21 pkt daje +0/+2/+4/+6 do testów.",
+                   "Kolory many uruchamiają osobne pasywy. Premie trwają do mana draina.",
+                   profile["passive"]),
+        pitfalls=(profile["flaw"], "Spalanie wspólnej talii przybliża mana drain."))

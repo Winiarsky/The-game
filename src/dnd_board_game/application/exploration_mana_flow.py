@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from dnd_board_game.actors import Actor
+from dnd_board_game.rules.charge_rolls import uses_charge
 from dnd_board_game.core.player_labels_pl import ABILITY_LABELS_PL, SKILL_LABELS_PL
 from dnd_board_game.rules import (
     D20RollInput, D20RollRequest, RollMode, RollModifier, RollModifierType,
@@ -19,7 +20,7 @@ def method_modifiers(actor: Actor, method: ExplorationMethod) -> tuple[RollModif
     modifiers = [RollModifier(ABILITY_LABELS_PL[method.ability],
                   ability_modifier(getattr(actor.ability_scores, method.ability)), RollModifierType.ABILITY)]
     trained = method.proficiency in (*actor.proficiencies.skills, *actor.proficiencies.tools)
-    if trained:
+    if trained and not uses_charge(actor):
         expert = method.proficiency in actor.proficiencies.expertise
         modifiers.append(RollModifier(SKILL_LABELS_PL.get(method.proficiency, "Narzędzia złodziejskie"),
                          actor.proficiency_bonus * (2 if expert else 1),

@@ -23,6 +23,7 @@ def apply_physical_mana_profile(actor: Actor) -> Actor:
         if feature.feature_id in known else feature
         for feature in actor.features
         if feature.feature_id != "physical_mana_v02"
+        and feature.feature_id != "pooled_mana_v01"
         and not (str(actor.id) == "lorian" and feature.feature_id in RETIRED_LORIAN and feature.feature_id not in known)
     )
     from dnd_board_game.rules.shared_mana_catalog import HOLY_SYMBOL
@@ -52,9 +53,19 @@ def apply_physical_mana_profile(actor: Actor) -> Actor:
     )
     features += (FeatureGrant("physical_mana_v02", "Fizyczna mana",
                               FeatureSourceKind.SCENARIO, "physical_mana:v02",
-                              "Wspólny rynek pięciu kart. Płatność przed efektem, uzupełnienie na końcu tury."),
+                              "Fizyczne karty many. W tym profilu obowiązują osobiste pule i oferta dwóch kart."),
                  FeatureGrant("shared_mana_v03", "Wspólna mana 0.3", FeatureSourceKind.SCENARIO,
-                              "shared_mana:v03", "25 kart, po pięć każdego koloru; liczony rynek i odświeżenie talii."))
+                              "shared_mana:v03", "Obsługa płatności, podbić i efektów. Zasady doboru określa profil osobistych pul."))
+    from dnd_board_game.scenarios.pooled_mana_catalog import hero_profile, requirement_text, ability_description
+    profile = hero_profile(str(actor.id))
+    features = tuple(replace(f, label=profile["passive_name"], description=profile["passive"])
+                     if f.feature_id == passive_id else
+                     replace(f, label=profile["flaw_name"], description=profile["flaw"])
+                     if f.feature_id == flaw_id else f for f in features)
+    features += (FeatureGrant("pooled_mana_v01", "Osobista pula many", FeatureSourceKind.SCENARIO,
+                              "pooled_mana:v01", "Dobieraj jedną z dwóch kart do 21+ pkt. Zachowuj ładunek; kolory dają premie, akcje spalają talię. Drain zbiera też spalone, wygasłe i uwięzione."),)
+    features = tuple(replace(f, description=requirement_text(f.feature_id, str(actor.id)) + " " + ability_description(str(actor.id), f.feature_id))
+                     if f.feature_id in known else f for f in features)
     spell_ids = tuple(spell_id for spell_id in actor.spell_ids if spell_id in known)
     return repair_mira_loadout(replace(
         actor, features=features, attacks_per_action=1,

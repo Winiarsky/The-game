@@ -1,0 +1,1032 @@
+{
+  "schema": "dnd_board_game.scenario",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "project_original"
+  ],
+  "board": {
+    "cols": 20,
+    "rows": 30
+  },
+  "id": "misja_0_dzwon_battle",
+  "name": "Walka o dzwon",
+  "actors": [
+    {
+      "id": "garran",
+      "name": "Garran",
+      "kind": "player_character",
+      "faction": "ally",
+      "ac": 14,
+      "hp": 30,
+      "speed_feet": 30,
+      "position": [
+        9,
+        20
+      ],
+      "item_refs": [
+        "longsword"
+      ],
+      "ability_scores": {
+        "strength": 14,
+        "dexterity": 12,
+        "constitution": 12,
+        "intelligence": 10,
+        "wisdom": 10,
+        "charisma": 10
+      }
+    },
+    {
+      "id": "borut",
+      "name": "Borut",
+      "kind": "monster",
+      "faction": "enemy",
+      "ac": 13,
+      "hp": 32,
+      "speed_feet": 30,
+      "position": [
+        9,
+        12
+      ],
+      "attacks": [
+        {
+          "id": "borut_attack",
+          "name": "Cios",
+          "source_type": "weapon",
+          "attack_modifier": 4,
+          "range_feet": 5,
+          "attack_kind": "melee",
+          "damage": {
+            "dice": "1d6",
+            "modifier": 3,
+            "damage_type": "bludgeoning"
+          }
+        }
+      ],
+      "ability_scores": {
+        "strength": 14,
+        "dexterity": 12,
+        "constitution": 12,
+        "intelligence": 10,
+        "wisdom": 10,
+        "charisma": 10
+      }
+    },
+    {
+      "id": "drwal",
+      "name": "Drwal",
+      "kind": "monster",
+      "faction": "enemy",
+      "ac": 12,
+      "hp": 28,
+      "speed_feet": 30,
+      "position": [
+        7,
+        15
+      ],
+      "attacks": [
+        {
+          "id": "drwal_attack",
+          "name": "Cios",
+          "source_type": "weapon",
+          "attack_modifier": 4,
+          "range_feet": 5,
+          "attack_kind": "melee",
+          "damage": {
+            "dice": "1d8",
+            "modifier": 3,
+            "damage_type": "bludgeoning"
+          }
+        }
+      ],
+      "ability_scores": {
+        "strength": 14,
+        "dexterity": 12,
+        "constitution": 12,
+        "intelligence": 10,
+        "wisdom": 10,
+        "charisma": 10
+      }
+    },
+    {
+      "id": "parobek",
+      "name": "Parobek",
+      "kind": "monster",
+      "faction": "enemy",
+      "ac": 14,
+      "hp": 18,
+      "speed_feet": 35,
+      "position": [
+        12,
+        15
+      ],
+      "attacks": [
+        {
+          "id": "parobek_attack",
+          "name": "Cios",
+          "source_type": "weapon",
+          "attack_modifier": 4,
+          "range_feet": 5,
+          "attack_kind": "melee",
+          "damage": {
+            "dice": "1d6",
+            "modifier": 2,
+            "damage_type": "bludgeoning"
+          }
+        }
+      ],
+      "ability_scores": {
+        "strength": 14,
+        "dexterity": 12,
+        "constitution": 12,
+        "intelligence": 10,
+        "wisdom": 10,
+        "charisma": 10
+      }
+    },
+    {
+      "id": "procarz",
+      "name": "Procarz",
+      "kind": "monster",
+      "faction": "enemy",
+      "ac": 12,
+      "hp": 16,
+      "speed_feet": 30,
+      "position": [
+        14,
+        10
+      ],
+      "attacks": [
+        {
+          "id": "procarz_attack",
+          "name": "Proca",
+          "source_type": "weapon",
+          "attack_modifier": 3,
+          "range_feet": 30,
+          "attack_kind": "ranged",
+          "damage": {
+            "dice": "1d4",
+            "modifier": 2,
+            "damage_type": "bludgeoning"
+          }
+        }
+      ],
+      "ability_scores": {
+        "strength": 14,
+        "dexterity": 12,
+        "constitution": 12,
+        "intelligence": 10,
+        "wisdom": 10,
+        "charisma": 10
+      }
+    },
+    {
+      "id": "woznica",
+      "name": "Woźnica",
+      "kind": "monster",
+      "faction": "enemy",
+      "ac": 12,
+      "hp": 22,
+      "speed_feet": 30,
+      "position": [
+        5,
+        14
+      ],
+      "attacks": [
+        {
+          "id": "woznica_attack",
+          "name": "Cios",
+          "source_type": "weapon",
+          "attack_modifier": 3,
+          "range_feet": 5,
+          "attack_kind": "melee",
+          "damage": {
+            "dice": "1d6",
+            "modifier": 2,
+            "damage_type": "bludgeoning"
+          }
+        }
+      ],
+      "ability_scores": {
+        "strength": 14,
+        "dexterity": 12,
+        "constitution": 12,
+        "intelligence": 10,
+        "wisdom": 10,
+        "charisma": 10
+      }
+    },
+    {
+      "id": "pomocnik",
+      "name": "Pomocnik",
+      "kind": "monster",
+      "faction": "enemy",
+      "ac": 12,
+      "hp": 18,
+      "speed_feet": 30,
+      "position": [
+        13,
+        13
+      ],
+      "attacks": [
+        {
+          "id": "pomocnik_attack",
+          "name": "Cios",
+          "source_type": "weapon",
+          "attack_modifier": 3,
+          "range_feet": 5,
+          "attack_kind": "melee",
+          "damage": {
+            "dice": "1d6",
+            "modifier": 2,
+            "damage_type": "bludgeoning"
+          }
+        }
+      ],
+      "ability_scores": {
+        "strength": 14,
+        "dexterity": 12,
+        "constitution": 12,
+        "intelligence": 10,
+        "wisdom": 10,
+        "charisma": 10
+      }
+    },
+    {
+      "id": "procarz_drugi",
+      "name": "Drugi procarz",
+      "kind": "monster",
+      "faction": "enemy",
+      "ac": 12,
+      "hp": 16,
+      "speed_feet": 30,
+      "position": [
+        5,
+        10
+      ],
+      "attacks": [
+        {
+          "id": "procarz_drugi_attack",
+          "name": "Proca",
+          "source_type": "weapon",
+          "attack_modifier": 3,
+          "range_feet": 30,
+          "attack_kind": "ranged",
+          "damage": {
+            "dice": "1d4",
+            "modifier": 2,
+            "damage_type": "bludgeoning"
+          }
+        }
+      ],
+      "ability_scores": {
+        "strength": 14,
+        "dexterity": 12,
+        "constitution": 12,
+        "intelligence": 10,
+        "wisdom": 10,
+        "charisma": 10
+      }
+    },
+    {
+      "id": "drwal_drugi",
+      "name": "Drugi drwal",
+      "kind": "monster",
+      "faction": "enemy",
+      "ac": 12,
+      "hp": 24,
+      "speed_feet": 30,
+      "position": [
+        10,
+        14
+      ],
+      "attacks": [
+        {
+          "id": "drwal_drugi_attack",
+          "name": "Cios",
+          "source_type": "weapon",
+          "attack_modifier": 4,
+          "range_feet": 5,
+          "attack_kind": "melee",
+          "damage": {
+            "dice": "1d8",
+            "modifier": 3,
+            "damage_type": "bludgeoning"
+          }
+        }
+      ],
+      "ability_scores": {
+        "strength": 14,
+        "dexterity": 12,
+        "constitution": 12,
+        "intelligence": 10,
+        "wisdom": 10,
+        "charisma": 10
+      }
+    }
+  ],
+  "environment": [
+    {
+      "id": "bell",
+      "name": "Dzwon na podstawie",
+      "type": "blocking_terrain",
+      "positions": [
+        [
+          9,
+          16
+        ],
+        [
+          10,
+          16
+        ]
+      ],
+      "visibility": "visible"
+    },
+    {
+      "id": "cart",
+      "name": "Wóz",
+      "type": "blocking_terrain",
+      "positions": [
+        [
+          9,
+          24
+        ],
+        [
+          10,
+          24
+        ]
+      ],
+      "visibility": "visible"
+    },
+    {
+      "id": "crates",
+      "name": "Skrzynie — blokada",
+      "type": "blocking_terrain",
+      "positions": [
+        [
+          7,
+          17
+        ],
+        [
+          12,
+          17
+        ]
+      ],
+      "visibility": "visible"
+    },
+    {
+      "id": "buildings",
+      "name": "Zamknięte budynki",
+      "type": "blocking_terrain",
+      "visibility": "visible",
+      "positions": [
+        [
+          2,
+          3
+        ],
+        [
+          2,
+          4
+        ],
+        [
+          2,
+          5
+        ],
+        [
+          2,
+          6
+        ],
+        [
+          2,
+          7
+        ],
+        [
+          2,
+          8
+        ],
+        [
+          2,
+          9
+        ],
+        [
+          2,
+          10
+        ],
+        [
+          3,
+          3
+        ],
+        [
+          3,
+          4
+        ],
+        [
+          3,
+          5
+        ],
+        [
+          3,
+          6
+        ],
+        [
+          3,
+          7
+        ],
+        [
+          3,
+          8
+        ],
+        [
+          3,
+          9
+        ],
+        [
+          3,
+          10
+        ],
+        [
+          4,
+          3
+        ],
+        [
+          4,
+          4
+        ],
+        [
+          4,
+          5
+        ],
+        [
+          4,
+          6
+        ],
+        [
+          4,
+          7
+        ],
+        [
+          4,
+          8
+        ],
+        [
+          4,
+          9
+        ],
+        [
+          4,
+          10
+        ],
+        [
+          5,
+          3
+        ],
+        [
+          5,
+          4
+        ],
+        [
+          5,
+          5
+        ],
+        [
+          5,
+          6
+        ],
+        [
+          5,
+          7
+        ],
+        [
+          5,
+          8
+        ],
+        [
+          5,
+          9
+        ],
+        [
+          5,
+          10
+        ],
+        [
+          6,
+          3
+        ],
+        [
+          6,
+          4
+        ],
+        [
+          6,
+          5
+        ],
+        [
+          6,
+          6
+        ],
+        [
+          6,
+          7
+        ],
+        [
+          6,
+          8
+        ],
+        [
+          6,
+          9
+        ],
+        [
+          6,
+          10
+        ],
+        [
+          7,
+          3
+        ],
+        [
+          7,
+          4
+        ],
+        [
+          7,
+          5
+        ],
+        [
+          7,
+          6
+        ],
+        [
+          7,
+          7
+        ],
+        [
+          7,
+          8
+        ],
+        [
+          7,
+          9
+        ],
+        [
+          7,
+          10
+        ],
+        [
+          12,
+          3
+        ],
+        [
+          12,
+          4
+        ],
+        [
+          12,
+          5
+        ],
+        [
+          12,
+          6
+        ],
+        [
+          12,
+          7
+        ],
+        [
+          12,
+          8
+        ],
+        [
+          12,
+          9
+        ],
+        [
+          12,
+          10
+        ],
+        [
+          13,
+          3
+        ],
+        [
+          13,
+          4
+        ],
+        [
+          13,
+          5
+        ],
+        [
+          13,
+          6
+        ],
+        [
+          13,
+          7
+        ],
+        [
+          13,
+          8
+        ],
+        [
+          13,
+          9
+        ],
+        [
+          13,
+          10
+        ],
+        [
+          14,
+          3
+        ],
+        [
+          14,
+          4
+        ],
+        [
+          14,
+          5
+        ],
+        [
+          14,
+          6
+        ],
+        [
+          14,
+          7
+        ],
+        [
+          14,
+          8
+        ],
+        [
+          14,
+          9
+        ],
+        [
+          14,
+          10
+        ],
+        [
+          15,
+          3
+        ],
+        [
+          15,
+          4
+        ],
+        [
+          15,
+          5
+        ],
+        [
+          15,
+          6
+        ],
+        [
+          15,
+          7
+        ],
+        [
+          15,
+          8
+        ],
+        [
+          15,
+          9
+        ],
+        [
+          15,
+          10
+        ],
+        [
+          16,
+          3
+        ],
+        [
+          16,
+          4
+        ],
+        [
+          16,
+          5
+        ],
+        [
+          16,
+          6
+        ],
+        [
+          16,
+          7
+        ],
+        [
+          16,
+          8
+        ],
+        [
+          16,
+          9
+        ],
+        [
+          16,
+          10
+        ],
+        [
+          17,
+          3
+        ],
+        [
+          17,
+          4
+        ],
+        [
+          17,
+          5
+        ],
+        [
+          17,
+          6
+        ],
+        [
+          17,
+          7
+        ],
+        [
+          17,
+          8
+        ],
+        [
+          17,
+          9
+        ],
+        [
+          17,
+          10
+        ],
+        [
+          2,
+          13
+        ],
+        [
+          2,
+          14
+        ],
+        [
+          2,
+          15
+        ],
+        [
+          2,
+          16
+        ],
+        [
+          2,
+          17
+        ],
+        [
+          3,
+          13
+        ],
+        [
+          3,
+          14
+        ],
+        [
+          3,
+          15
+        ],
+        [
+          3,
+          16
+        ],
+        [
+          3,
+          17
+        ],
+        [
+          4,
+          13
+        ],
+        [
+          4,
+          14
+        ],
+        [
+          4,
+          15
+        ],
+        [
+          4,
+          16
+        ],
+        [
+          4,
+          17
+        ],
+        [
+          5,
+          13
+        ],
+        [
+          5,
+          14
+        ],
+        [
+          5,
+          15
+        ],
+        [
+          5,
+          16
+        ],
+        [
+          5,
+          17
+        ]
+      ]
+    }
+  ],
+  "player_start_zones": [
+    [
+      [
+        6,
+        20
+      ],
+      [
+        7,
+        20
+      ],
+      [
+        8,
+        20
+      ],
+      [
+        9,
+        20
+      ],
+      [
+        10,
+        20
+      ],
+      [
+        11,
+        20
+      ],
+      [
+        12,
+        20
+      ],
+      [
+        13,
+        20
+      ],
+      [
+        6,
+        21
+      ],
+      [
+        7,
+        21
+      ],
+      [
+        8,
+        21
+      ],
+      [
+        9,
+        21
+      ],
+      [
+        10,
+        21
+      ],
+      [
+        11,
+        21
+      ],
+      [
+        12,
+        21
+      ],
+      [
+        13,
+        21
+      ],
+      [
+        6,
+        22
+      ],
+      [
+        7,
+        22
+      ],
+      [
+        8,
+        22
+      ],
+      [
+        9,
+        22
+      ],
+      [
+        10,
+        22
+      ],
+      [
+        11,
+        22
+      ],
+      [
+        12,
+        22
+      ],
+      [
+        13,
+        22
+      ]
+    ]
+  ],
+  "encounter_party_size_variants": [
+    {
+      "party_size": 3,
+      "enemy_actor_ids": [
+        "borut",
+        "drwal",
+        "parobek",
+        "procarz",
+        "woznica"
+      ],
+      "hit_point_overrides": {
+        "borut": 29,
+        "drwal": 25,
+        "parobek": 16,
+        "procarz": 14,
+        "woznica": 20
+      }
+    },
+    {
+      "party_size": 4,
+      "enemy_actor_ids": [
+        "borut",
+        "drwal",
+        "parobek",
+        "procarz",
+        "woznica",
+        "pomocnik"
+      ],
+      "hit_point_overrides": {
+        "borut": 32,
+        "drwal": 28,
+        "parobek": 18,
+        "procarz": 16,
+        "woznica": 22,
+        "pomocnik": 18
+      }
+    },
+    {
+      "party_size": 5,
+      "enemy_actor_ids": [
+        "borut",
+        "drwal",
+        "parobek",
+        "procarz",
+        "woznica",
+        "pomocnik",
+        "procarz_drugi"
+      ],
+      "hit_point_overrides": {
+        "borut": 34,
+        "drwal": 30,
+        "parobek": 19,
+        "procarz": 17,
+        "woznica": 24,
+        "pomocnik": 19,
+        "procarz_drugi": 17
+      }
+    },
+    {
+      "party_size": 6,
+      "enemy_actor_ids": [
+        "borut",
+        "drwal",
+        "parobek",
+        "procarz",
+        "woznica",
+        "pomocnik",
+        "procarz_drugi",
+        "drwal_drugi"
+      ],
+      "hit_point_overrides": {
+        "borut": 36,
+        "drwal": 32,
+        "parobek": 20,
+        "procarz": 18,
+        "woznica": 25,
+        "pomocnik": 20,
+        "procarz_drugi": 18,
+        "drwal_drugi": 27
+      }
+    }
+  ]
+}

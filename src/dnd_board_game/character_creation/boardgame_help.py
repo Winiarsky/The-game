@@ -34,7 +34,7 @@ PASSIVE_HELP: dict[str, RuleNote] = {
     'unarmored_defense_constitution': RuleNote('Obrona bez pancerza', 'KP 10 + Zręczność + Kondycja; tarcza jest dozwolona.'),
     'relentless_endurance': RuleNote('Nieustępliwość półorka', 'automatycznie przy pierwszym zejściu do 0 PW pozostawia Brakkę z 1 PW, o ile obrażenia nie zabijają jej natychmiast; 1 użycie na długi odpoczynek.'),
     'savage_attacks': RuleNote('Dzikie ataki', 'krytyczny atak bronią wręcz dodaje jedną kość broni.'),
-    'mira_shadow_stealth': RuleNote('Mistrzyni ukrycia', 'Ukryj się: akcja, bez osłony; blokuje je wróg w 5 stopach lub stan. Jeden test Skradania przeciw osobnej Percepcji wrogów; remis wykrywa Mirę.'),
+    'mira_shadow_stealth': RuleNote('Mistrzyni ukrycia', 'Ukryj się: akcja, bez osłony; blokuje je wróg w 5 stopach lub stan. Jeden test Zręczności przeciw osobnym testom wykrycia wrogów; remis wykrywa Mirę.'),
     'mira_stealth_movement': RuleNote('Skradanie', 'limit ruchu 20 stóp. Dobrowolne wyjście przywraca limit 25 stóp, ale nie zwraca wykonanego ruchu ani akcji.'),
     'mira_shadow_killer': RuleNote('Atak z cienia', 'Raz na turę rapier lub nóż daje +2k6 i przewagę przeciw celowi, który nie widzi Miry; własna flanka daje +1k6, oba warunki +3k6. Atak kończy ukrycie.'),
     'mira_flanking': RuleNote('Flanka zabójczyni', 'osobista flanka daje +1k6; razem z ukryciem daje +3k6.'),

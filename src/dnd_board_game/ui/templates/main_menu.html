@@ -14,11 +14,12 @@
       <p>Przygoda prowadzona przez cyfrowego Mistrza Gry i fizyczną planszę.</p>
     </section>
 
+    {% if mission_active %}<p><a class="button" href="{{ url_for('play') }}">Wznów Misję 0</a></p>{% endif %}
     <nav class="main-menu" aria-label="Menu główne">
       <a class="menu-action primary" data-board-rune="6" href="{{ url_for('new_game') }}">
         {{ panel_icon(6)|safe }}
         <span>Nowa gra</span>
-        <small>Wybierz scenariusz i rozpocznij przygotowanie stołu</small>
+        <small>Misja 0: wybierz drużynę i naucz się zasad podczas wyprawy</small>
       </a>
       <a class="menu-action{% if not save_exists %} quiet{% endif %}" data-board-rune="7" href="{{ url_for('load_game') }}">
         {{ panel_icon(7)|safe }}
@@ -28,7 +29,7 @@
       <form action="{{ url_for('open_training_arena') }}" method="post">
         <button class="menu-action" data-board-rune="8" type="submit" style="width:100%;text-align:left;font:inherit;cursor:pointer">
           {{ panel_icon(8)|safe }}
-          <span>Arena · Samouczki postaci</span>
+          <span>Poligon · Samouczki postaci</span>
           <small>Poznaj zdolności krok po kroku, potem wygraj samodzielny pojedynek</small>
         </button>
       </form>

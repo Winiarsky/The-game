@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dnd_board_game.combat.mana_charge import charged_check_request
+
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -111,7 +113,7 @@ def resolve_combat_stabilization(
     if natural_roll is None:
         raise ValueError("Stabilizacja testem Medicine wymaga wyniku d20.")
     request = condition_roll_request(
-        D20RollRequest(modifiers=skill_roll_modifiers(stabilizer, "medicine")),
+        charged_check_request(state, stabilizer, D20RollRequest(modifiers=skill_roll_modifiers(stabilizer, "medicine"))),
         state.condition_states,
         stabilizer,
         ability_check=True,

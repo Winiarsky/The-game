@@ -120,6 +120,8 @@ def summon_actor(
 def summon_attack_source(
     definition: SummonDefinition,
     owner: Actor | None = None,
+    *,
+    charge_bonus: int = 0,
 ) -> AttackSource:
     owner_spell_attack = (
         definition.id == "spiritual_weapon"
@@ -138,6 +140,10 @@ def summon_attack_source(
         if owner_spell_attack
         else 0
     )
+    from dnd_board_game.rules.charge_rolls import uses_charge
+    charged_owner = owner_spell_attack and uses_charge(owner)
+    if charged_owner:
+        attack_bonus -= owner.proficiency_bonus
     from dnd_board_game.actors.resources import uses_shared_mana
     from dnd_board_game.rules import DiceExpression
     from .damage import DamageComponentSpec
@@ -157,6 +163,7 @@ def summon_attack_source(
                     attack_bonus,
                     RollModifierType.CUSTOM,
                 ),
+                *((RollModifier("Naładowanie właściciela", charge_bonus, RollModifierType.CUSTOM, "charge_accuracy"),) if charged_owner else ()),
             )
         ),
         damage_components=(DamageComponentSpec("spiritual_weapon", definition.attack_damage_type, dice=DiceExpression(2, 8), modifier=damage_modifier, label="Duchowy oręż"),) if shared_weapon else (),

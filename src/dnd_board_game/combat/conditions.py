@@ -486,6 +486,7 @@ def resolve_condition_save(
 ) -> ConditionSaveResolution:
     from dnd_board_game.actors import saving_throw_roll_modifiers
     from .auras import saving_throw_aura_modifiers
+    from .mana_charge import saving_modifiers
     from .poison_protection import poison_protection_roll_mode
 
     if condition_state.actor_id != str(actor.id):
@@ -506,6 +507,7 @@ def resolve_condition_save(
             ),
             modifiers=(
                 *saving_throw_roll_modifiers(actor, condition_state.save_ability),
+                *saving_modifiers(actor, condition_state.save_ability, active_effects),
                 *saving_throw_aura_modifiers(combat_actors, actor),
                 *additional_modifiers,
             )

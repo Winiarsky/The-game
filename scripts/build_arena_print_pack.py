@@ -212,7 +212,7 @@ def guide(body: str, hero_pages: list[tuple[str, int, int]]) -> str:
     )
     return document(
         f"""<main class="guide">
-<h1>Arena Nessy + karty postaci</h1><p>Czarno-biały komplet do testów · A4 · 7 bohaterów · 77 zdolności</p>
+<h1>Arena Nessy + karty postaci</h1><p>Czarno-biały komplet do testów · A4 · 7 bohaterów · osobiste pule many</p>
 <div class="note"><b>Drukuj jednostronnie, w skali 100% / „rzeczywisty rozmiar”.</b><br>
 Wyłącz „dopasuj do strony”. Papier A4, automatyczny obrót stron, druk czarno-biały.
 Mapa: poziomo. Instrukcja, teren i karty: pionowo.<br><b>Korekta pomiaru 244 → 250: +2,46% jest już w pliku.</b> Nie dodawaj jej ponownie w ustawieniach druku.</div>

@@ -543,6 +543,7 @@ def resolve_actor_saving_throw(
     active_effects: Sequence[object] = (),
 ) -> SavingThrowResult:
     from .auras import saving_throw_aura_modifiers
+    from .mana_charge import saving_modifiers
     from .archetype_flaws import flaw_saving_throw_modifiers
     from .poison_protection import poison_protection_roll_mode
     from .warding_bond import warding_bond_saving_throw_modifiers
@@ -590,6 +591,7 @@ def resolve_actor_saving_throw(
         modifiers=(
             *saving_throw_roll_modifiers(actor, saving_throw.ability),
             *flaw_saving_throw_modifiers(actor, active_effects),
+            *saving_modifiers(actor, saving_throw.ability, active_effects),
             *(
                 (
                     RollModifier(

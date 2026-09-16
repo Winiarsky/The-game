@@ -97,7 +97,7 @@ def additional_weapon_sources(actor: Actor, sources: tuple[AttackSource, ...], e
     extra = []
     for key in available:
         ability = shared_ability("garran" if key == "counterattack_command" else str(actor.id), key)
-        source = replace(base, id=key, name=f'{ability.name} · {base.name}' if key == 'counterattack_command' else ability.name, resource_pool_id=None, tabletop_riders=(ability.full_description,))
+        source = replace(base, id=key, name=f'{ability.name} · {base.name}' if key == 'counterattack_command' else ability.name, resource_pool_id=None, tabletop_riders=(ability.description,))
         if key == 'shadow_verdict' and source.damage_components:
             component = DamageComponentSpec('shadow_verdict', source.damage_components[0].damage_type, dice=DiceExpression(5, 6), label='Wyrok z cienia')
             source = replace(source, damage_components=(*source.damage_components, component), damage_hint=source.damage_hint + ' + 5k6')

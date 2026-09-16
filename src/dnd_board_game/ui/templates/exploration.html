@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="{{ static_asset_url('physical_mana.css') }}">
   <link rel="stylesheet" href="{{ static_asset_url('exploration.css') }}">
   <link rel="stylesheet" href="{{ static_asset_url('training_arena.css') }}">
+<link rel="stylesheet" href="{{ static_asset_url('mission_zero.css') }}">
 </head>
 <body>
 <header class="app-shell-header">
@@ -255,6 +256,7 @@
     <div id="status" class="status" hidden></div>
     <div id="physical-card-status" class="physical-card-status" aria-live="polite" hidden></div>
     <div id="board-input-global" data-board-input-status></div>
+    <section class="card" id="mission-panel" hidden></section>
     <section class="card" id="training-arena-panel" hidden></section>
     <div class="card" id="flow-panel"></div>
     <div class="card scene-description" id="scene-description-card">
@@ -384,6 +386,8 @@
 <script src="{{ static_asset_url('shared_mana.js') }}"></script>
 <script src="{{ static_asset_url('physical_mana.js') }}"></script>
 <script src="{{ static_asset_url('training_arena.js') }}"></script>
+<script src="{{ static_asset_url('confrontation.js') }}"></script>
+<script src="{{ static_asset_url('mission_zero.js') }}"></script>
 <script src="{{ static_asset_url('exploration_mana.js') }}"></script>
 <script src="{{ static_asset_url('dice_icons.js') }}"></script>
 <script src="{{ static_asset_url('shield_bash.js') }}"></script>

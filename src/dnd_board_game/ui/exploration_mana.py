@@ -62,10 +62,16 @@ def _scene(current: dict[str, Any]) -> ManaScene:
 
 
 def active(s: ExplorationUiSession) -> bool:
+    from .confrontation import active as party_active
+    if party_active(s):
+        return True
     return s.exploration.scenario_id == ARENA_ID and read_store(s)["active"]
 
 
 def rolling(s: ExplorationUiSession) -> bool:
+    from .confrontation import active as party_active, payload as party_payload
+    if party_active(s):
+        return party_payload(s).get('attempt', {}).get('phase') == 'roll'
     if not active(s):
         return False
     current = read_store(s).get('current') or {}
@@ -89,7 +95,7 @@ def _actor(s: ExplorationUiSession, method_id: str) -> Actor:
     raise ValueError("Bohater przypisany do tej metody nie uczestniczy w próbie.")
 
 
-def _launch(s: ExplorationUiSession, store: dict[str, Any], hero: str, lesson_id: str) -> None:
+def _launch(s: ExplorationUiSession, store: dict[str, Any], hero: str, lesson_id: str, *, run_mode: str = "legacy") -> None:
     from .training_arena import training_hero
     from dnd_board_game.application.exploration_flow import ExplorationFlowStage
     if s.exploration.scenario_id != ARENA_ID or hero not in HEROES:
@@ -117,8 +123,55 @@ def _launch(s: ExplorationUiSession, store: dict[str, Any], hero: str, lesson_id
     s.pending_encounter = None
     s.ui_flow_stage = ExplorationFlowStage.LOCATION_ACTIVE
     store["active"] = True
-    store["current"] = dict(hero=hero, lesson=lesson_id, scene=scene.id, phase="introduction",
+    store["current"] = dict(hero=hero, lesson=lesson_id, run_mode=run_mode, scene=scene.id, phase="introduction",
                             attempt=None, token=uuid4().hex, setup_index=0, committed=False, scene_data=asdict(scene), check_dc=lesson.dc or scene.dc, debrief_done=[], debrief_message="")
+
+
+def start_legacy_course(s: ExplorationUiSession, hero: str, *, case_id: str | None = None,
+                 reset_progress: bool = False) -> dict[str, object]:
+    from .training_arena import roster_active
+    if not roster_active(s) or active(s) or hero not in HEROES:
+        raise ValueError('Wróć do wyboru ćwiczeń eksploracji.')
+    store = read_store(s)
+    course = lessons_for(hero)
+    run_mode = 'sequence' if case_id is None else 'single'
+    if case_id is None:
+        progress = store.setdefault('sequence_progress', {})
+        index = int(progress.get(hero, 0))
+        if reset_progress or index >= len(course):
+            index = 0
+            progress[hero] = 0
+        case_id = course[index].id
+    _launch(s, store, hero, case_id, run_mode=run_mode)
+    write_store(s, store)
+    return s.state_payload()
+
+
+def start_course(s: ExplorationUiSession, hero: str, *, case_id: str | None = None,
+                 reset_progress: bool = False) -> dict[str, object]:
+    from .confrontation import start_course as start_party
+    return start_party(s, hero, case_id=case_id, reset_progress=reset_progress)
+
+
+def _return_to_menu(s: ExplorationUiSession, store: dict[str, Any]) -> None:
+    from .training_arena import training_hero
+    from .training_menu import show_cases, show_modes
+    current = store['current']
+    hero, mode = current['hero'], current.get('run_mode', 'legacy')
+    saved = [(k, v) for k, v in s.state.flags.values
+             if k.startswith(('walkthrough_', 'training_completed_', 'training_tutorial_done_',
+                              'exploration_mana_', 'trap_lesson_done_'))]
+    s.configure_custom_party((training_hero(hero),))
+    flags = s.state.flags
+    for key, value in saved:
+        flags = set_scene_flag(flags, key, value)
+    s.state = replace(s.state, flags=flags)
+    store['active'] = False
+    if mode == 'single':
+        index = next(i for i, lesson in enumerate(lessons_for(hero)) if lesson.id == current['lesson'])
+        show_cases(s, hero, index, 'exploration')
+    elif mode == 'sequence':
+        show_modes(s, hero, 'exploration')
 
 
 def _commit(s: ExplorationUiSession, store: dict[str, Any], attempt: ManaAttempt) -> None:
@@ -148,12 +201,18 @@ def _commit(s: ExplorationUiSession, store: dict[str, Any], attempt: ManaAttempt
             own_key = f"{current['hero']}:{method.kind}"
             if own_key not in store["completed"]:
                 store["completed"].append(own_key)
+    if fulfilled and current.get('run_mode') == 'sequence':
+        index = next(i for i, item in enumerate(lessons_for(current['hero'])) if item.id == lesson.id)
+        store.setdefault('sequence_progress', {})[current['hero']] = index + 1
     current["lesson_completed"] = fulfilled
     s._record("exploration_mana_resolved", dict(attempt_id=attempt.id, method=attempt.method_id,
               target=scene.id, success=attempt.success, total=attempt.total, busted=attempt.busted))
 
 
 def command(s: ExplorationUiSession, data: dict[str, Any]) -> dict[str, object]:
+    from .confrontation import active as party_active, command as party_command
+    if party_active(s) or data.get('model') == 'party_confrontation':
+        return party_command(s, data)
     store = read_store(s)
     if type(data.get("revision")) is not int or data["revision"] != store["revision"]:
         raise ValueError("To polecenie jest nieaktualne. Użyj bieżącego widoku próby.")
@@ -180,19 +239,24 @@ def command(s: ExplorationUiSession, data: dict[str, Any]) -> dict[str, object]:
     scene = _scene(current)
     attempt = ManaAttempt.from_data(current["attempt"]) if current["attempt"] else None
     if action == "leave":
-        store["active"] = False
-        flags = set_scene_flag(s.state.flags, "training_mode", "")
-        s.state = replace(s.state, flags=set_scene_flag(flags, "training_requested", False))
+        _return_to_menu(s, store)
     elif action in {"retry", "next"}:
-        if attempt is not None and attempt.phase not in {"result", "decision", "offer", "bargain"}:
-            raise ValueError("Najpierw rozstrzygnij oczekujący rzut.")
+        mode = current.get('run_mode', 'legacy')
         target = lesson.id
         if action == "next":
-            if not current["committed"]:
-                raise ValueError("Najpierw rozstrzygnij ćwiczenie.")
-            course = lessons_for(current["hero"])
-            target = next((l.id for l in course if not lesson_completed(store, current['hero'], l.id)), "practice_npc")
-        _launch(s, store, current["hero"], target)
+            if not current['committed']:
+                raise ValueError('Najpierw rozstrzygnij ćwiczenie.')
+            course = lessons_for(current['hero'])
+            index = next(i for i, item in enumerate(course) if item.id == lesson.id)
+            if mode == 'single' or (mode == 'sequence' and current.get('lesson_completed') and index + 1 == len(course)):
+                _return_to_menu(s, store)
+                write_store(s, store)
+                return s.state_payload()
+            if mode == 'sequence':
+                target = course[index + 1].id if current.get('lesson_completed') else lesson.id
+            else:
+                target = next((l.id for l in course if not lesson_completed(store, current['hero'], l.id)), 'practice_npc')
+        _launch(s, store, current['hero'], target, run_mode=mode)
     elif action == "acknowledge":
         if current["phase"] == "introduction":
             current["phase"] = "setup"
@@ -291,6 +355,9 @@ def _followups(store: dict[str, Any], current: dict[str, Any]) -> list[dict[str,
 
 
 def payload(s: ExplorationUiSession) -> dict[str, Any] | None:
+    from .confrontation import active as party_active, payload as party_payload
+    if party_active(s):
+        return party_payload(s)
     if s.exploration.scenario_id != ARENA_ID:
         return None
     store = read_store(s)
@@ -302,6 +369,14 @@ def payload(s: ExplorationUiSession) -> dict[str, Any] | None:
     current = store["current"]
     lesson = lesson_by_id(current["hero"], current["lesson"])
     scene = _scene(current)
+    mode = current.get('run_mode', 'legacy')
+    course = lessons_for(current['hero'])
+    index = next(i for i, item in enumerate(course) if item.id == lesson.id)
+    next_label = ('Wybór ćwiczenia' if mode == 'single' else
+                  'Powtórz ćwiczenie' if mode == 'sequence' and current.get('committed') and not current.get('lesson_completed') else
+                  'Kurs ukończony · wybór trybu' if mode == 'sequence' and index + 1 == len(course) else 'Następne ćwiczenie')
+    result.update(run_mode=mode, course_index=index, course_total=len(course), next_label=next_label,
+                  leave_label='Wybór ćwiczenia' if mode == 'single' else 'Wybór trybu' if mode == 'sequence' else 'Wybór postaci · zachowaj postęp')
     result.update(hero=current["hero"], lesson=dict(id=lesson.id, name=lesson.name, finish=lesson.finish,
                   narration=lesson.narration, objective=lesson.objective), phase=current["phase"],
                   condition=dict(**asdict(scene.condition), title=scene.condition_title, description=scene.condition_text),

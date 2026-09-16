@@ -1,0 +1,836 @@
+{
+  "version": 2,
+  "profile": "pooled_mana_v01",
+  "heroes": {
+    "garran": {
+      "values": {
+        "C": 4,
+        "B": 7,
+        "Z": 1,
+        "F": 3,
+        "N": 4
+      },
+      "passive_name": "Nasycenie maną",
+      "passive": "C: Natarcie: +1 obrażeń wręcz za kartę. B: Mur tarcz: +1 KP za kartę (maks. +2). Z: Wytchnienie: przy doborze odzyskaj 5 PW. F: Wytrwałość: +1 do obron KON (maks. +2). N: Czujność: +2 do obron MĄD (maks. +2). Premie trwają do mana draina; leczenie zachowujesz. Dobór kończy się przy 21 lub więcej pkt.",
+      "flaw_name": "Nieustępliwość",
+      "flaw": "Rozpoczęcie własnej tury przy wrogu zmniejsza limit zwykłego ruchu o połowę do końca tury.",
+      "color_passives": {
+        "C": {
+          "kind": "melee_damage",
+          "value": 1,
+          "label": "Natarcie: +1 obrażeń wręcz za kartę",
+          "cap": 0
+        },
+        "B": {
+          "kind": "ac",
+          "value": 1,
+          "label": "Mur tarcz: +1 KP za kartę (maks. +2)",
+          "cap": 2
+        },
+        "Z": {
+          "kind": "heal",
+          "value": 5,
+          "label": "Wytchnienie: przy doborze odzyskaj 5 PW",
+          "cap": 0
+        },
+        "F": {
+          "kind": "save_constitution",
+          "value": 1,
+          "label": "Wytrwałość: +1 do obron KON (maks. +2)",
+          "cap": 2
+        },
+        "N": {
+          "kind": "save_wisdom",
+          "value": 2,
+          "label": "Czujność: +2 do obron MĄD (maks. +2)",
+          "cap": 2
+        }
+      }
+    },
+    "brakka": {
+      "values": {
+        "C": 7,
+        "B": 1,
+        "Z": 3,
+        "F": 4,
+        "N": 4
+      },
+      "passive_name": "Nasycenie maną",
+      "passive": "C: Rozpęd: +1 obrażeń wręcz za kartę. B: Garda: +1 KP (maks. +1). Z: Witalność: przy doborze odzyskaj 5 PW. F: Nieustraszona: +2 do obron MĄD (maks. +2). N: Hart: +2 do obron KON (maks. +2). Premie trwają do mana draina; leczenie zachowujesz. Dobór kończy się przy 21 lub więcej pkt.",
+      "flaw_name": "Głód walki",
+      "flaw": "Tura bez ofensywy kończy Szał.",
+      "color_passives": {
+        "C": {
+          "kind": "melee_damage",
+          "value": 1,
+          "label": "Rozpęd: +1 obrażeń wręcz za kartę",
+          "cap": 0
+        },
+        "B": {
+          "kind": "ac",
+          "value": 1,
+          "label": "Garda: +1 KP (maks. +1)",
+          "cap": 1
+        },
+        "Z": {
+          "kind": "heal",
+          "value": 5,
+          "label": "Witalność: przy doborze odzyskaj 5 PW",
+          "cap": 0
+        },
+        "F": {
+          "kind": "save_wisdom",
+          "value": 2,
+          "label": "Nieustraszona: +2 do obron MĄD (maks. +2)",
+          "cap": 2
+        },
+        "N": {
+          "kind": "save_constitution",
+          "value": 2,
+          "label": "Hart: +2 do obron KON (maks. +2)",
+          "cap": 2
+        }
+      }
+    },
+    "mira": {
+      "values": {
+        "C": 3,
+        "B": 1,
+        "Z": 7,
+        "F": 4,
+        "N": 4
+      },
+      "passive_name": "Nasycenie maną",
+      "passive": "C: Precyzja: +1 do trafienia (maks. +1). B: Unik: +1 KP (maks. +1). Z: Ostrze: +1 obrażeń wręcz za kartę. F: Refleks: +2 do obron ZRĘ (maks. +2). N: Wytchnienie: przy doborze odzyskaj 4 PW. Premie trwają do mana draina; leczenie zachowujesz. Dobór kończy się przy 21 lub więcej pkt.",
+      "flaw_name": "Cienka granica",
+      "flaw": "W ukryciu masz utrudnienie obron i testów reakcji.",
+      "color_passives": {
+        "C": {
+          "kind": "attack",
+          "value": 1,
+          "label": "Precyzja: +1 do trafienia (maks. +1)",
+          "cap": 1
+        },
+        "B": {
+          "kind": "ac",
+          "value": 1,
+          "label": "Unik: +1 KP (maks. +1)",
+          "cap": 1
+        },
+        "Z": {
+          "kind": "melee_damage",
+          "value": 1,
+          "label": "Ostrze: +1 obrażeń wręcz za kartę",
+          "cap": 0
+        },
+        "F": {
+          "kind": "save_dexterity",
+          "value": 2,
+          "label": "Refleks: +2 do obron ZRĘ (maks. +2)",
+          "cap": 2
+        },
+        "N": {
+          "kind": "heal",
+          "value": 4,
+          "label": "Wytchnienie: przy doborze odzyskaj 4 PW",
+          "cap": 0
+        }
+      }
+    },
+    "dagna": {
+      "values": {
+        "C": 1,
+        "B": 7,
+        "Z": 4,
+        "F": 3,
+        "N": 4
+      },
+      "passive_name": "Nasycenie maną",
+      "passive": "C: Gniew: +2 obrażeń zaklęć za kartę. B: Wiara: +1 do wszystkich obron (maks. +2). Z: Ukojenie: przy doborze przytomni sojusznicy w 10 ft i ty odzyskujecie 2 PW. F: Ochrona: +1 KP (maks. +1). N: Łaska: przy doborze ulecz o 4 PW najbardziej rannego przytomnego sojusznika w 10 ft, wliczając siebie. Premie trwają do mana draina; leczenie zachowujesz. Dobór kończy się przy 21 lub więcej pkt.",
+      "flaw_name": "Nikogo nie zostawiam",
+      "flaw": "Ofensywna płatna zdolność przy sojuszniku poniżej połowy PW spala dodatkową kartę.",
+      "color_passives": {
+        "C": {
+          "kind": "spell_damage",
+          "value": 2,
+          "label": "Gniew: +2 obrażeń zaklęć za kartę",
+          "cap": 0
+        },
+        "B": {
+          "kind": "save_all",
+          "value": 1,
+          "label": "Wiara: +1 do wszystkich obron (maks. +2)",
+          "cap": 2
+        },
+        "Z": {
+          "kind": "heal_party",
+          "value": 2,
+          "label": "Ukojenie: przy doborze przytomni sojusznicy w 10 ft i ty odzyskujecie 2 PW",
+          "cap": 0
+        },
+        "F": {
+          "kind": "ac",
+          "value": 1,
+          "label": "Ochrona: +1 KP (maks. +1)",
+          "cap": 1
+        },
+        "N": {
+          "kind": "heal_weakest",
+          "value": 4,
+          "label": "Łaska: przy doborze ulecz o 4 PW najbardziej rannego przytomnego sojusznika w 10 ft, wliczając siebie",
+          "cap": 0
+        }
+      }
+    },
+    "lorian": {
+      "values": {
+        "C": 1,
+        "B": 4,
+        "Z": 4,
+        "F": 3,
+        "N": 7
+      },
+      "passive_name": "Nasycenie maną",
+      "passive": "C: Akcent: +2 obrażeń dystansowej broni za kartę. B: Rytm kroków: +1 KP (maks. +1). Z: Otucha: przy doborze ulecz o 3 PW najbardziej rannego przytomnego sojusznika w 10 ft, wliczając siebie. F: Oszczędna harmonia: spalanie własnej zdolności −1 (minimum 1, maks. rabatu 1). N: Rezonans: +1 do obron CHA (maks. +2). Premie trwają do mana draina; leczenie zachowujesz. Dobór kończy się przy 21 lub więcej pkt.",
+      "flaw_name": "Potrzeba publiczności",
+      "flaw": "Bez przytomnego sojusznika w 10 ft, w wieloosobowej drużynie: płatna zdolność spala dodatkową kartę.",
+      "color_passives": {
+        "C": {
+          "kind": "ranged_damage",
+          "value": 2,
+          "label": "Akcent: +2 obrażeń dystansowej broni za kartę",
+          "cap": 0
+        },
+        "B": {
+          "kind": "ac",
+          "value": 1,
+          "label": "Rytm kroków: +1 KP (maks. +1)",
+          "cap": 1
+        },
+        "Z": {
+          "kind": "heal_weakest",
+          "value": 3,
+          "label": "Otucha: przy doborze ulecz o 3 PW najbardziej rannego przytomnego sojusznika w 10 ft, wliczając siebie",
+          "cap": 0
+        },
+        "F": {
+          "kind": "burn_discount",
+          "value": 1,
+          "label": "Oszczędna harmonia: spalanie własnej zdolności −1 (minimum 1, maks. rabatu 1)",
+          "cap": 1
+        },
+        "N": {
+          "kind": "save_charisma",
+          "value": 1,
+          "label": "Rezonans: +1 do obron CHA (maks. +2)",
+          "cap": 2
+        }
+      }
+    },
+    "nimra": {
+      "values": {
+        "C": 4,
+        "B": 1,
+        "Z": 3,
+        "F": 4,
+        "N": 7
+      },
+      "passive_name": "Nasycenie maną",
+      "passive": "C: Żar: +2 obrażeń zaklęć za kartę. B: Powłoka: +1 KP (maks. +1). Z: Regeneracja: przy doborze odzyskaj 4 PW. F: Skupienie: +2 do obron KON (maks. +2). N: Nasycenie: +1 obrażeń zaklęć za kartę. Premie trwają do mana draina; leczenie zachowujesz. Dobór kończy się przy 21 lub więcej pkt.",
+      "flaw_name": "Echo",
+      "flaw": "Echo: kolejna ta sama płatna zdolność z rzędu spala o 1 kartę więcej (maks. +2). Inna płatna zdolność zeruje serię.",
+      "color_passives": {
+        "C": {
+          "kind": "spell_damage",
+          "value": 2,
+          "label": "Żar: +2 obrażeń zaklęć za kartę",
+          "cap": 0
+        },
+        "B": {
+          "kind": "ac",
+          "value": 1,
+          "label": "Powłoka: +1 KP (maks. +1)",
+          "cap": 1
+        },
+        "Z": {
+          "kind": "heal",
+          "value": 4,
+          "label": "Regeneracja: przy doborze odzyskaj 4 PW",
+          "cap": 0
+        },
+        "F": {
+          "kind": "save_constitution",
+          "value": 2,
+          "label": "Skupienie: +2 do obron KON (maks. +2)",
+          "cap": 2
+        },
+        "N": {
+          "kind": "spell_damage",
+          "value": 1,
+          "label": "Nasycenie: +1 obrażeń zaklęć za kartę",
+          "cap": 0
+        }
+      }
+    },
+    "erynd": {
+      "values": {
+        "C": 4,
+        "B": 1,
+        "Z": 7,
+        "F": 3,
+        "N": 4
+      },
+      "passive_name": "Nasycenie maną",
+      "passive": "C: Siła cięciwy: +1 obrażeń dystansowej broni za kartę. B: Kamuflaż: +1 KP (maks. +1). Z: Instynkt: +1 do obron ZRĘ (maks. +2). F: Opanowanie: +2 do obron MĄD (maks. +2). N: Skupiony wzrok: +1 do trafienia (maks. +1). Premie trwają do mana draina; leczenie zachowujesz. Dobór kończy się przy 21 lub więcej pkt.",
+      "flaw_name": "Trauma bratobójczego strzału",
+      "flaw": "Płatny strzał w cel sąsiadujący z innym bohaterem spala dodatkową kartę.",
+      "color_passives": {
+        "C": {
+          "kind": "ranged_damage",
+          "value": 1,
+          "label": "Siła cięciwy: +1 obrażeń dystansowej broni za kartę",
+          "cap": 0
+        },
+        "B": {
+          "kind": "ac",
+          "value": 1,
+          "label": "Kamuflaż: +1 KP (maks. +1)",
+          "cap": 1
+        },
+        "Z": {
+          "kind": "save_dexterity",
+          "value": 1,
+          "label": "Instynkt: +1 do obron ZRĘ (maks. +2)",
+          "cap": 2
+        },
+        "F": {
+          "kind": "save_wisdom",
+          "value": 2,
+          "label": "Opanowanie: +2 do obron MĄD (maks. +2)",
+          "cap": 2
+        },
+        "N": {
+          "kind": "attack",
+          "value": 1,
+          "label": "Skupiony wzrok: +1 do trafienia (maks. +1)",
+          "cap": 1
+        }
+      }
+    }
+  },
+  "abilities": {
+    "second_wind": {
+      "hero": "garran",
+      "minimum": 6,
+      "required": {},
+      "free": false,
+      "burn": 1,
+      "description": "Rzuć 1k10 i dodaj modyfikator Kondycji. Odzyskaj tyle PW, najwyżej do swojego maksimum. Leczenie zajmuje akcję główną, więc konkuruje ze zwykłym atakiem."
+    },
+    "defensive_stance": {
+      "hero": "garran",
+      "minimum": 0,
+      "required": {},
+      "free": true,
+      "burn": 0,
+      "description": "Otrzymujesz +2 KP. Każda zmiana pola kończy postawę; ponowne użycie nie zwiększa tej premii."
+    },
+    "garran_command_halt": {
+      "hero": "garran",
+      "minimum": 6,
+      "required": {},
+      "free": false,
+      "burn": 1,
+      "description": "Wybierz wroga w zasięgu 60 ft (12 pól). Aplikacja wykonuje jego obronę Mądrości przeciw ST 14. Przy porażce wróg ma połowę ruchu i nie może używać reakcji. Przy sukcesie nie nakładasz efektu."
+    },
+    "garran_guard_companion": {
+      "hero": "garran",
+      "minimum": 0,
+      "required": {},
+      "free": true,
+      "burn": 0,
+      "description": "Przed rozstrzygnięciem pojedynczego ataku na sąsiadującego sojusznika przejmij ten atak na siebie. Zużywasz reakcję. Nie obejmuje ataków obszarowych."
+    },
+    "shield_bash": {
+      "hero": "garran",
+      "minimum": 12,
+      "required": {},
+      "free": false,
+      "burn": 1,
+      "description": "Wybierz sąsiadującego wroga. Rzuć k20 + modyfikator Siły + naładowanie; aplikacja rzuca za wroga i dodaje jego modyfikator testu. Musisz uzyskać wyższy wynik — remis wygrywa wróg. Wygrana: 1k6 + modyfikator Siły obrażeń i odepchnięcie o pole, jeśli jest wolne. Przegrana: brak efektu."
+    },
+    "garran_shield_wall": {
+      "hero": "garran",
+      "minimum": 12,
+      "required": {},
+      "free": false,
+      "burn": 1,
+      "description": "Sąsiadujący sojusznicy otrzymują +2 KP. Ty nie otrzymujesz tej premii. Sojusznik poza sąsiedztwem traci ochronę."
+    },
+    "garran_rally": {
+      "hero": "garran",
+      "minimum": 12,
+      "required": {},
+      "free": false,
+      "burn": 1,
+      "description": "Ty i słyszący sojusznicy w zasięgu 15 ft (3 pól) usuwacie Strach i macie przewagę pierwszego ataku: rzut dwiema k20, wyższy wynik."
+    },
+    "iron_bastion": {
+      "hero": "garran",
+      "minimum": 21,
+      "required": {},
+      "free": false,
+      "burn": 1,
+      "description": "Uruchom aurę o promieniu 10 ft (2 pól). Ty i sojusznicy w niej macie premię do KP równą twojemu modyfikatorowi Siły oraz ochronę przed przymusowym przesunięciem. Nie opłacasz aury ponownie w kolejnych turach."
+    },
+    "counterattack_command": {
+      "hero": "garran",
+      "minimum": 21,
+      "required": {},
+      "free": false,
+      "burn": 1,
+      "description": "Wybierz sojusznika w zasięgu 15 ft (3 pól), który ma reakcję. Każdy z was może przemieścić się do 10 ft (2 pól) bez ataków okazyjnych i wykonać jeden atak bronią. Sojusznik zużywa reakcję. Opisane ataki są częścią tej akcji."
+    },
+    "rage": {
+      "hero": "brakka",
+      "minimum": 0,
+      "required": {},
+      "free": true,
+      "burn": 0
+    },
+    "reckless_attack": {
+      "hero": "brakka",
+      "minimum": 0,
+      "required": {},
+      "free": true,
+      "burn": 0
+    },
+    "acceleration": {
+      "hero": "brakka",
+      "minimum": 0,
+      "required": {},
+      "free": true,
+      "burn": 0
+    },
+    "hard_as_rock": {
+      "hero": "brakka",
+      "minimum": 0,
+      "required": {},
+      "free": true,
+      "burn": 0
+    },
+    "powerful_strike": {
+      "hero": "brakka",
+      "minimum": 12,
+      "required": {},
+      "free": false,
+      "burn": 1
+    },
+    "shoulder_check": {
+      "hero": "brakka",
+      "minimum": 12,
+      "required": {},
+      "free": false,
+      "burn": 1
+    },
+    "deafening_roar": {
+      "hero": "brakka",
+      "minimum": 12,
+      "required": {},
+      "free": false,
+      "burn": 1
+    },
+    "reaper": {
+      "hero": "brakka",
+      "minimum": 21,
+      "required": {},
+      "free": false,
+      "burn": 1
+    },
+    "unstoppable": {
+      "hero": "brakka",
+      "minimum": 21,
+      "required": {},
+      "free": false,
+      "burn": 1
+    },
+    "hide": {
+      "hero": "mira",
+      "minimum": 0,
+      "required": {},
+      "free": true,
+      "burn": 0,
+      "description": "Wykonaj test Zręczności: k20 + cecha + naładowanie + inne premie. Aplikacja rozstrzyga wykrycie osobno dla każdego wroga; remis oznacza wykrycie. Sąsiadujący wróg lub blokujący stan uniemożliwia zwykłe ukrycie. Atak, wykrycie lub dobrowolne ujawnienie kończy ukrycie."
+    },
+    "instinctive_dodge": {
+      "hero": "mira",
+      "minimum": 0,
+      "required": {},
+      "free": true,
+      "burn": 0
+    },
+    "feint": {
+      "hero": "mira",
+      "minimum": 0,
+      "required": {},
+      "free": true,
+      "burn": 0
+    },
+    "hamstring_cut": {
+      "hero": "mira",
+      "minimum": 6,
+      "required": {},
+      "free": false,
+      "burn": 1
+    },
+    "smoke_screen": {
+      "hero": "mira",
+      "minimum": 12,
+      "required": {},
+      "free": false,
+      "burn": 1
+    },
+    "guard_vault": {
+      "hero": "mira",
+      "minimum": 12,
+      "required": {},
+      "free": false,
+      "burn": 1
+    },
+    "blade_mistress": {
+      "hero": "mira",
+      "minimum": 12,
+      "required": {},
+      "free": false,
+      "burn": 1
+    },
+    "shadow_verdict": {
+      "hero": "mira",
+      "minimum": 21,
+      "required": {},
+      "free": false,
+      "burn": 1
+    },
+    "blade_dance": {
+      "hero": "mira",
+      "minimum": 21,
+      "required": {},
+      "free": false,
+      "burn": 1
+    },
+    "sacred_flame": {
+      "hero": "dagna",
+      "minimum": 6,
+      "required": {},
+      "free": false,
+      "burn": 1
+    },
+    "bless": {
+      "hero": "dagna",
+      "minimum": 6,
+      "required": {},
+      "free": false,
+      "burn": 1
+    },
+    "lesser_restoration": {
+      "hero": "dagna",
+      "minimum": 6,
+      "required": {},
+      "free": false,
+      "burn": 1
+    },
+    "caring_gesture": {
+      "hero": "dagna",
+      "minimum": 0,
+      "required": {},
+      "free": true,
+      "burn": 0
+    },
+    "healing_word": {
+      "hero": "dagna",
+      "minimum": 12,
+      "required": {},
+      "free": false,
+      "burn": 1
+    },
+    "divine_care_aura": {
+      "hero": "dagna",
+      "minimum": 12,
+      "required": {},
+      "free": false,
+      "burn": 1
+    },
+    "guiding_bolt": {
+      "hero": "dagna",
+      "minimum": 12,
+      "required": {},
+      "free": false,
+      "burn": 1
+    },
+    "preserve_life": {
+      "hero": "dagna",
+      "minimum": 21,
+      "required": {},
+      "free": false,
+      "burn": 1
+    },
+    "spiritual_weapon": {
+      "hero": "dagna",
+      "minimum": 21,
+      "required": {},
+      "free": false,
+      "burn": 1
+    },
+    "mana_inspiration": {
+      "hero": "lorian",
+      "minimum": 0,
+      "required": {},
+      "free": true,
+      "burn": 0
+    },
+    "mana_tuning": {
+      "hero": "lorian",
+      "minimum": 0,
+      "required": {},
+      "free": true,
+      "description": "Podejrzyj dwie wierzchnie karty i odłóż je na wierzch w wybranej kolejności. Przy jednej karcie obejrzyj tylko ją. Bez tasowania.",
+      "burn": 0
+    },
+    "mocking_shot": {
+      "hero": "lorian",
+      "minimum": 6,
+      "required": {},
+      "free": false,
+      "burn": 1
+    },
+    "cutting_words": {
+      "hero": "lorian",
+      "minimum": 0,
+      "required": {},
+      "free": true,
+      "burn": 0
+    },
+    "mana_recovery": {
+      "hero": "lorian",
+      "minimum": 12,
+      "required": {},
+      "free": false,
+      "description": "Przenieś do dwóch spalonych kart na spód talii, w wybranej kolejności. Nie odzyskujesz kart wygasłych ani uwięzionych. Zachowujesz ładunek. Bez spalania bazowego; każde podbicie spala 2 karty po odzysku.",
+      "burn": 0
+    },
+    "optical_scope": {
+      "hero": "lorian",
+      "minimum": 12,
+      "required": {},
+      "free": false,
+      "burn": 1
+    },
+    "entangling_shot": {
+      "hero": "lorian",
+      "minimum": 12,
+      "required": {},
+      "free": false,
+      "burn": 1
+    },
+    "mana_great_tuning": {
+      "hero": "lorian",
+      "minimum": 21,
+      "required": {},
+      "free": false,
+      "description": "Przenieś do trzech spalonych kart na wierzch talii, w wybranej kolejności. Nie odzyskujesz kart wygasłych ani uwięzionych. Zachowujesz ładunek. Bez spalania bazowego; każde podbicie spala 2 karty po odzysku.",
+      "burn": 0
+    },
+    "victory_hymn": {
+      "hero": "lorian",
+      "minimum": 21,
+      "required": {},
+      "free": false,
+      "burn": 1
+    },
+    "nimra_frost_pulse": {
+      "hero": "nimra",
+      "minimum": 6,
+      "required": {},
+      "free": false,
+      "burn": 1
+    },
+    "nimra_mind_spike": {
+      "hero": "nimra",
+      "minimum": 6,
+      "required": {},
+      "free": false,
+      "burn": 1
+    },
+    "nimra_sticky_matrix": {
+      "hero": "nimra",
+      "minimum": 6,
+      "required": {},
+      "free": false,
+      "burn": 1
+    },
+    "misty_step": {
+      "hero": "nimra",
+      "minimum": 0,
+      "required": {},
+      "free": true,
+      "burn": 0
+    },
+    "shield": {
+      "hero": "nimra",
+      "minimum": 0,
+      "required": {},
+      "free": true,
+      "burn": 0
+    },
+    "nimra_flame_fan": {
+      "hero": "nimra",
+      "minimum": 12,
+      "required": {},
+      "free": false,
+      "burn": 1
+    },
+    "nimra_force_wave": {
+      "hero": "nimra",
+      "minimum": 12,
+      "required": {},
+      "free": false,
+      "burn": 1
+    },
+    "nimra_web": {
+      "hero": "nimra",
+      "minimum": 12,
+      "required": {},
+      "free": false,
+      "burn": 1
+    },
+    "nimra_mind_break": {
+      "hero": "nimra",
+      "minimum": 12,
+      "required": {},
+      "free": false,
+      "burn": 1
+    },
+    "nimra_lightning_path": {
+      "hero": "nimra",
+      "minimum": 21,
+      "required": {},
+      "free": false,
+      "burn": 1
+    },
+    "shatter": {
+      "hero": "nimra",
+      "minimum": 21,
+      "required": {},
+      "free": false,
+      "burn": 1
+    },
+    "nimra_stasis": {
+      "hero": "nimra",
+      "minimum": 21,
+      "required": {},
+      "free": false,
+      "burn": 1
+    },
+    "hunters_mark": {
+      "hero": "erynd",
+      "minimum": 0,
+      "required": {},
+      "free": true,
+      "burn": 0
+    },
+    "cunning_action": {
+      "hero": "erynd",
+      "minimum": 0,
+      "required": {},
+      "free": true,
+      "burn": 0
+    },
+    "aim": {
+      "hero": "erynd",
+      "minimum": 0,
+      "required": {},
+      "free": true,
+      "burn": 0
+    },
+    "disrupting_arrow": {
+      "hero": "erynd",
+      "minimum": 6,
+      "required": {},
+      "free": false,
+      "burn": 1
+    },
+    "anchoring_arrow": {
+      "hero": "erynd",
+      "minimum": 12,
+      "required": {},
+      "free": false,
+      "burn": 1
+    },
+    "exposing_arrow": {
+      "hero": "erynd",
+      "minimum": 12,
+      "required": {},
+      "free": false,
+      "burn": 1
+    },
+    "double_shot": {
+      "hero": "erynd",
+      "minimum": 12,
+      "required": {},
+      "free": false,
+      "burn": 1
+    },
+    "arrow_rain": {
+      "hero": "erynd",
+      "minimum": 21,
+      "required": {},
+      "free": false,
+      "burn": 1
+    },
+    "spike_growth": {
+      "hero": "erynd",
+      "minimum": 21,
+      "required": {},
+      "free": false,
+      "burn": 1
+    },
+    "turn_undead": {
+      "hero": "dagna",
+      "minimum": 12,
+      "required": {},
+      "free": false,
+      "burn": 1
+    },
+    "spiritual_weapon_activation": {
+      "hero": "dagna",
+      "minimum": 0,
+      "required": {},
+      "free": true,
+      "burn": 0
+    }
+  },
+  "enemy_mana": {
+    "mana_burn_offer": {
+      "source": "offer",
+      "count": 1,
+      "period": 2,
+      "prison": false,
+      "label": "Co drugą rundę: pierwsze trafienie spala odkrytą kartę. Brak karty powoduje mana drain."
+    },
+    "mana_burn_deck": {
+      "source": "deck",
+      "count": 2,
+      "period": 2,
+      "prison": false,
+      "label": "Co drugą rundę: pierwsze trafienie spala dwie karty z wierzchu. Niedobór powoduje mana drain."
+    },
+    "mana_prison": {
+      "source": "offer",
+      "count": 1,
+      "period": 2,
+      "prison": true,
+      "label": "Co drugą rundę: pierwsze trafienie więzi odkrytą kartę. Pokonanie więżącego oddaje kartę na spód. Brak karty powoduje mana drain."
+    }
+  },
+  "deck_rule": "Po max(5, 2 × liczba bohaterów) kart każdego koloru. Kandydat do oceny ekonomii trwałego ładowania."
+}

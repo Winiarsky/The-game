@@ -61,13 +61,13 @@
       "intro": "Pomocnik przyjmuje Inspirację i może być celem ataku napastnika. Rynek, talię i stos odrzuconych obsługuj fizycznie według instrukcji.",
       "lessons": {
         "mana_inspiration": "Wybierz pomocnika w 30 ft i przekaż mu Inspirację. Sprawdź znacznik jednorazowego k4 do ataku albo obrony.",
-        "mana_tuning": "Zostaw na rynku kartę poza kosztem. Po płatności wykonaj wymianę kart zgodnie z instrukcją i potwierdź jej zakończenie.",
+        "mana_tuning": "Podejrzyj dwie wierzchnie karty talii i ułóż ich kolejność. Potwierdź fizyczną operację; strojenie nie zużywa puli.",
         "mocking_shot": "Użyj kuszy przeciw kukle. Dokończ atak; trafienie utrudni jej następny atak.",
         "cutting_words": "Zakończ turę przy pomocniku. Gdy kukła zada obrażenia bohaterowi w 30 ft, wybierz reakcję i wpisz k6 redukcji.",
-        "mana_recovery": "Zapłać koszt, potem odzyskaj karty z odrzuconych na wierzch talii. Możesz odzyskać właśnie wydane karty. Potwierdź fizyczną operację.",
+        "mana_recovery": "Zachowaj ładunek i odzyskaj spalone karty na spód talii. Bazowo nie spalasz; podbicie kosztuje 2 karty po odzysku. Wygasłych i uwięzionych nie odzyskujesz. Potwierdź fizyczną operację.",
         "optical_scope": "Rozpocznij turę bez ruchu. Wybierz strzał z lunetą i sprawdź premię +2 oraz osłonę na linii strzału. Zielone podbicie daje drugi strzał w ten sam cel.",
         "entangling_shot": "Obejmij grupę kukieł obszarem 3×3. Sprawdź obrony i spowolnienie; niebieska runa blokuje ruch, zielona powiększa obszar.",
-        "mana_great_tuning": "Po odłożeniu kosztu przełóż trzy odrzucone karty do wolnych miejsc rynku. Zakończ instrukcję fizycznej wymiany.",
+        "mana_great_tuning": "Zachowaj ładunek i odzyskaj do trzech spalonych kart na wierzch talii w wybranej kolejności. Potwierdź fizyczną operację.",
         "victory_hymn": "Uruchom aurę i sprawdź koncentrację. W zasięgu aury można wykorzystać dodatkową akcję dodatkową, z normalną płatnością."
       }
     },

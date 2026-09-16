@@ -73,7 +73,7 @@ def test_menu_rejects_nonrunes_and_duplicates(tmp_path: Path, slots: list[object
 
 
 @pytest.mark.parametrize('hero', HERO_ORDER)
-def test_tutorial_hero_rune_starts_setup_without_confirm_and_return_restores_roster(tmp_path: Path, hero: str) -> None:
+def test_tutorial_hero_rune_opens_modes_then_sequence_and_return_restores_roster(tmp_path: Path, hero: str) -> None:
     from dnd_board_game.ui.training_walkthrough import leave
     s = arena(tmp_path)
     board = Board()
@@ -87,11 +87,22 @@ def test_tutorial_hero_rune_starts_setup_without_confirm_and_return_restores_ros
     assert [h['panel_slot'] for h in heroes] == list(range(6, 13))
     board.selected = panel_position(6 + HERO_ORDER.index(hero)).as_tuple()
     result = s.scan_board_selection(expected_revision=state['board_selection']['revision'], automatic=True)
+    assert result['training_arena']['menu']['hero_id'] == hero
+    assert result['training_arena']['menu']['view'] == 'subjects'
+    assert result['training_arena']['tutorial'] is None
+    board.selected = panel_position(6).as_tuple()
+    result = s.scan_board_selection(expected_revision=result['board_selection']['revision'], automatic=True)
+    assert result['training_arena']['menu']['view'] == 'modes'
+    result = s.scan_board_selection(expected_revision=result['board_selection']['revision'], automatic=True)
     assert result['training_arena']['current_hero_id'] == hero
     assert result['training_arena']['tutorial']['phase'] == 'introduction'
     assert s.encounter_setup_flow is not None
     leave(s)
     assert s._board_selection_payload()['mode'] == 'training_roster'
+    assert s.state_payload()['training_arena']['menu']['view'] == 'modes'
+    board.selected = (19, 0)
+    s.scan_board_selection(automatic=True)
+    s.scan_board_selection(automatic=True)
     assert {panel_position(slot).as_tuple() for slot in (*range(6, 13), 29)} == set(board.leds)
     board.selected = (19, 0)
     assert s.scan_board_selection(automatic=True) == {'navigate':'/'}

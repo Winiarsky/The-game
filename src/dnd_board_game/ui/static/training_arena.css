@@ -73,3 +73,19 @@
 .mana-condition p {margin:8px 0;line-height:1.5;}
 .mana-goal-progress, .mana-obligation {font-weight:600;color:#f2cc72;}
 .mana-condition-action {border-left:3px solid #d2ae70;padding:12px;}
+
+.training-menu-controls {display:flex;gap:10px;flex-wrap:wrap;}
+.training-roster button {min-width:0;overflow-wrap:anywhere;}
+#training-tools {position:fixed;bottom:0;right:0;z-index:1600;display:flex;gap:8px;padding:8px;background:#171d21;border:1px solid #8b744b;border-radius:8px 0 0 0;max-width:100%;box-sizing:border-box;}
+#training-tools button {min-height:40px;white-space:normal;}
+body.training-tools-active {padding-bottom:72px;}
+.training-tools-active .training-notice-card {max-height:calc(90vh - 72px);}
+.confrontation-party {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(210px,100%),1fr));gap:8px;margin:16px 0;}
+.confrontation-party article {border:1px solid #ffffff30;padding:10px;border-radius:8px;min-width:0;overflow-wrap:anywhere;}
+.confrontation-party article.current {border-color:#f2cc72;background:#f2cc7210;}
+.confrontation-party small {display:block;margin-top:6px;}
+.confrontation-party ul {padding-left:16px;font-size:.85rem;}
+.confrontation-party svg,.confrontation-offer svg {width:22px;height:22px;vertical-align:middle;}
+.confrontation-offer {display:flex;gap:10px;flex-wrap:wrap;}
+.confrontation-offer article {max-width:250px;min-width:0;}
+.confrontation-result {padding:12px;border-left:3px solid #f2cc72;background:#f2cc7210;}

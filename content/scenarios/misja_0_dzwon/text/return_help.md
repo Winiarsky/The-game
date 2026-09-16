@@ -1,0 +1,1 @@
+Nessa sprawdza dzwon i wysłuchuje sprawy pokwitowań. „Spróbuję wskazać wam kogoś w mieście. Nie obiecujcie za sąd.” Wypłaca uzgodnione wynagrodzenie. Dokumenty zostają przy was; znalezienie prawnika to jeszcze niedokończona sprawa.

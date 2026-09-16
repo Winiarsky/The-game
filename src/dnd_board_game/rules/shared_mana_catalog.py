@@ -96,7 +96,7 @@ CATALOG = (
     _a("dagna", "preserve_life", "Zachowanie życia", "A", "ultimate", "BBBB", "Rozdziel 40 PW leczenia między Dagnę i sojuszników w 30 ft, do ich maksymalnych PW."),
     _a("dagna", "spiritual_weapon", "Duchowy oręż", "A", "ultimate", "BBCC", "Przywołaj broń i wykonaj nią atak za 2k8 + MDR. Kolejne aktywacje: D + biała, ruch broni do 20 ft i jeden atak. Najwyżej jedna broń; bez koncentracji.", "O"),
     _a("lorian", "mana_inspiration", "Inspiracja", "D", "basic", "*", "Inny bohater w 30 ft otrzymuje 1k4 do jednego ataku albo obrony, do wcześniejszego wykorzystania.", "T"),
-    _a("lorian", "mana_tuning", "Strojenie rynku", "D", "basic", "N", "Po zapłacie odrzuć dodatkową kartę rynku. Dobierz dwie: jedną na rynek, drugą na spód talii. Wymaga dwóch kart talii i dodatkowej karty rynku poza kosztem."),
+    _a("lorian", "mana_tuning", "Strojenie talii", "D", "basic", "N", "Po zapłacie odrzuć dodatkową kartę rynku. Dobierz dwie: jedną na rynek, drugą na spód talii. Wymaga dwóch kart talii i dodatkowej karty rynku poza kosztem."),
     _a("lorian", "mocking_shot", "Ostrzał destabilizujący", "A", "basic", "Z*", "Strzał z kuszy. Trafiony wróg ma utrudnienie następnego ataku, do wcześniejszego wykorzystania.", "T"),
     _a("lorian", "cutting_words", "Rozpraszający okrzyk", "R", "basic", "B", "Zmniejsz obrażenia pojedynczego ataku przeciw bohaterowi w 30 ft o 1k6 + CHA, minimum zero."),
     _a("lorian", "mana_recovery", "Odzysk energii", "A", "boost", "B*", "Po zapłacie połóż dwie wybrane karty odrzucone na wierzchu talii, w dowolnej kolejności. Możesz odzyskać właśnie wydany koszt.", "", _b("recover", "N", 3, "Niebieska: kolejna karta na wierzch talii")),

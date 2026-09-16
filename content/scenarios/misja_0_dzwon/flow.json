@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "stages": [
+    "world",
+    "heroes",
+    "party",
+    "guild_setup",
+    "brief",
+    "departure",
+    "road",
+    "arrival",
+    "battle",
+    "post_battle",
+    "post_setup",
+    "explore",
+    "dilemma",
+    "load",
+    "return",
+    "summary"
+  ],
+  "checkpoints": [
+    "brief",
+    "road",
+    "arrival",
+    "explore"
+  ],
+  "point_positions": {
+    "leader": [
+      9,
+      12
+    ],
+    "armory": [
+      5,
+      7
+    ],
+    "quarters": [
+      14,
+      7
+    ],
+    "store": [
+      4,
+      15
+    ],
+    "rumor": [
+      9,
+      12
+    ],
+    "load": [
+      9,
+      16
+    ]
+  },
+  "simple_next": {
+    "why": "brief",
+    "road_info": "brief",
+    "road_success": "arrival",
+    "fatigue_result": "arrival",
+    "help": "load",
+    "report": "load",
+    "fraud": "load"
+  }
+}

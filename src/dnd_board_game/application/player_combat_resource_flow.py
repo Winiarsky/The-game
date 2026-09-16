@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dnd_board_game.combat.mana_charge import saving_modifiers as charge_saving_modifiers
+
 from dataclasses import dataclass, replace
 from dnd_board_game.actors.resources import uses_physical_mana
 from random import Random
@@ -1371,6 +1373,7 @@ class PlayerCombatResourceFlowService:
             D20RollRequest(
                 modifiers=(
                     *saving_throw_roll_modifiers(actor, "constitution"),
+                    *charge_saving_modifiers(actor, "constitution", active_effects),
                     *saving_throw_aura_modifiers(state.actors, actor),
                 )
             ),

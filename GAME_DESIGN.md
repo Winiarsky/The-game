@@ -1,5 +1,73 @@
 # Game Design
 
+## Misja 0 — Dzwon do odebrania
+
+Narracyjny samouczek konkretnej drużyny zastępuje obowiązek przechodzenia
+kursu każdego bohatera. Krótkie sceny prowadzi narrator o tonie XIX-wiecznej
+powieści przygodowej; profile postaci i gotowe warianty tekstów utrzymują
+spójność. Przebieg, konsekwencje i struktura paczki:
+[masterplan misji 0](content/scenarios/misja_0_dzwon/MASTERPLAN.md).
+Status: wdrożona pierwsza grywalna wersja; [instrukcja](content/scenarios/misja_0_dzwon/README.md).
+Poligon pojedynczych przypadków pozostaje. Balans do ogrania, audio później.
+
+## Skalowanie scenariuszy: 3–6 graczy
+
+Punkt odniesienia to czteroosobowa drużyna. Zachowujemy wspólne zasady i karty
+bohaterów; skalujemy talię, spotkania bojowe oraz opór i presję eksploracji.
+Przyjęte wartości startowe i sposób ich sprawdzania:
+[strategia skalowania](docs/PARTY_SCALING.md). Wymagają prób przy stole.
+
+## Umiejętności ukryte w prezentacji
+
+Karty i aktualne UI nie pokazują dawnej listy umiejętności ani nieczynnych
+opisów ekspertyzy. Test opisuje działanie oraz cechę: `k20 + cecha + premia
+z naładowania + inne bonusy`. Dane umiejętności zachowujemy na przyszłość;
+ukrywanie, szukanie, chwyt i inne działania pozostają dostępne według swoich
+zasad. Ta zmiana nie usuwa cech ani nie zmienia obliczeń testów.
+
+
+## Naładowanie zamiast biegłości — aktualne testy
+
+Bohaterowie z profilem osobistej many nie dodają biegłości ani ekspertyzy do
+ataków, obron, umiejętności i narzędzi. Test: `k20 + cecha + naładowanie + inne
+premie`. Progi punktów 0/6/12/21 dają +0/+2/+4/+6. W walce używasz aktualnej
+premii swojej puli; w konfrontacji wybierasz dostępny próg wraz z jego kosztem,
+licząc premię tylko raz. Bez puli i po drainie premia wynosi zero.
+Naładowanie nie zwiększa obrażeń ani wpływu. ST zdolności pozostają wartościami
+określonymi przez zdolność; ta zmiana dotyczy składników rzutów, nie ST.
+Garran: miecz `k20 +4 Siła + naładowanie + inne premie`, obrażenia `1k8 +4`
+i pasywy kolorów. Biegłości jako uprawnienia do sprzętu nie zmieniają się.
+Samouczki ładowania i zwykłego ataku, panel postaci, kości oraz wydruki używają
+tej reguły. Starsze profile zapisów zachowują dotychczasowe zasady.
+
+
+## Aktualna eksploracja: konfrontacje drużynowe
+
+NPC i obiekty w Arenie używają wspólnego oporu, tur całej drużyny i trwałych
+osobistych pul many. Dobór z oferty dwóch kart do 21+, potem test albo pomoc.
+Progi 0/6/12/21: premia +0/+2/+4/+6 i spalanie 1/1/2/3 po efekcie. Podatność
+zmienia ST i kość wpływu. Reakcje uszczuplają talię/pule lub odnawiają opór;
+drain kończy konfrontację. Brak kary za przekroczenie i automatycznego sukcesu
+przy 21. Nowy kurs: 12 przypadków na bohatera (84), wybór składu 1–5 osób,
+jedna figurka, runy, dwa osobne rzuty przez fokus i podsumowanie.
+Opis: [Konfrontacje drużynowe](docs/PARTY_CONFRONTATIONS.md).
+Poniższe opisy blackjacka i 127 lekcji są historyczne; stare zapisy mają
+oddzielny silnik zgodności. Pułapki w walce pozostają zwykłymi testami.
+
+## Aktualna walka: trwałe ładowanie many 2.0
+
+Aktualny katalog many ma wersję 2: osobisty ładunek pozostaje po zdolności;
+punkty 6/12/21 odblokowują akcje, pięć kolorów daje własne pasywy każdego
+bohatera. Przy 21+ pkt dobór ustaje do draina. Zdolność bazowo spala 1 kartę
+z wierzchu, każde podbicie +2; darmowe akcje i bazowy odzysk Loriana nie spalają.
+Co rundę 1 karta wygasa bez możliwości odzysku. Drain zbiera wszystkie strefy,
+kończy premie kolorów i efekty O, zachowuje leczenie i zużycie akcji.
+Talia: po max(5, 2 × bohaterowie) każdego koloru. Samouczek: 148 lekcji.
+Ta aktualizacja zastępuje poniższe historyczne zasady wydawania całej puli
+i O do końca walki. Tabele 35 pasywów, wyjątki, UI, migracja i raport:
+[Ładowanie many 2.0](docs/MANA_CHARGE_V02.md).
+
+
 Projekt jest aplikacją do wspomagania taktycznych starć w Dungeons & Dragons 5e z użyciem fizycznej planszy i systemu LED.
 
 Docelowo aplikacja ma wspierać dużą część zasad walki i spotkań z D&D 5e.
@@ -21,9 +89,22 @@ bez zmian. Każdy bohater ma dostęp do lekcji, a finał otwiera różne możliw
 u Nessy. Wynik „Porozumienie” jest odrębny od sukcesu i porażki. Opis i pliki:
 [wdrożenie eksploracji](docs/EXPLORATION_MANA_IMPLEMENTATION.md).
 
-## Aktualny wariant areny: wspólna mana 0.3
+## Aktualny wariant areny: osobiste pule many 1.0
 
-Ustalenia rynku i czasu efektów opisuje `PROJECT_CONTEXT.md`, a wspólny katalog akcji dla aplikacji i druku znajduje się w `src/dnd_board_game/rules/shared_mana_catalog.py`. Każdy bohater ma 4 podstawowe zdolności, 3 z podbiciami i 2 ulty; Nimra odpowiednio 5/4/3. Zwykły ruch i atak są darmowe poza dopłatami skaz. Koszt odkłada się przed rozstrzyganiem efektu, dzięki czemu zdolności odzysku mogą odzyskać własny koszt. Historyczne opisy prywatnych rezerw i fal poniżej nie dotyczą tego wariantu.
+Wdrożenie, wartości i raporty: [osobiste pule](docs/POOLED_MANA_IMPLEMENTATION.md).
+Każda walka zaczyna z pełną przetasowaną talią. Oferta dwóch kart, obowiązkowy
+wybór jednej na początku własnej tury, jawne pule między turami. Płatna zdolność
+wymaga punktów/kolorów i zużywa całą pulę; wydane karty wracają na spód BEZ tasowania.
+Zwykły atak i bazowe reakcje nie zużywają puli. Nie ma limitu 21 w walce.
+Wróg może spalać lub więzić karty. Niewykonalny pełny atak na manę lub brak
+karty do doboru powoduje drain: zbieramy również wszystkie spalone i uwięzione.
+Oznaczenie O oznacza koniec walki, z zachowaniem koncentracji i wcześniejszych warunków.
+
+Talia: po max(5, liczba bohaterów + 1) kart każdego koloru, czyli 25 kart dla
+1–4 i 30 dla 5. Progi i skazy w `content/balance/pooled_mana/catalog.json` są
+wspólne dla aplikacji, kart i ewaluatora. Obecne raporty mierzą ekonomię kart,
+nie pełny balans obrażeń, leczenia ani czas tury człowieka. Liczby wymagają ogrania.
+System do 21 w rozmowach i obiektach zachowuje odrębne zasady.
 
 ## Opcjonalna Mapa 0 — arena rekrutacyjna (2026-09-06)
 

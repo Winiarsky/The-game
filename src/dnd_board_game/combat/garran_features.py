@@ -202,8 +202,9 @@ def resolve_shield_bash(
     action = use_action_economy_cost(state, ActionEconomyCost.BONUS_ACTION)
     if not action.accepted:
         raise ValueError(action.message)
-    attacker_total = attacker_roll + ability_modifier(actor.ability_scores.strength)
-    defender_total = defender_roll + ability_modifier(target.ability_scores.strength)
+    from .mana_charge import state_charge_bonus
+    attacker_total = attacker_roll + ability_modifier(actor.ability_scores.strength) + state_charge_bonus(state, actor)
+    defender_total = defender_roll + ability_modifier(target.ability_scores.strength) + state_charge_bonus(state, target)
     if attacker_total <= defender_total:
         return ShieldBashResolution(
             action.state, actor, target, target, attacker_total, defender_total, None, None

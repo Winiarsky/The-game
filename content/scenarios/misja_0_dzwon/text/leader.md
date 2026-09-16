@@ -1,0 +1,1 @@
+„Nie jesteśmy zbójami. Zwoziliśmy tu mąkę, ser, owies. Za każdym razem: zapłata przy następnym transporcie. Teraz garnizonu nie ma.” Przywódca przedstawia się jako Borut. Wyjmuje zawiniątko z pokwitowaniami dostaw. Podpisy i pieczęcie wyglądają porządnie. „Dzwon coś wart. Nasza praca najwyraźniej nie.”

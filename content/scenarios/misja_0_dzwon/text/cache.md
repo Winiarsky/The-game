@@ -1,0 +1,1 @@
+W zagłębieniu leży mosiężny amulet z kamieniem w kolorze popiołu. Przedmiot zachował słabe zaklęcie ochronne: noszony dodaje +1 do KP. Jest tylko jeden; przed następną walką warto zdecydować, kto go poniesie.

@@ -37,27 +37,14 @@ def roster_active(session: ExplorationUiSession) -> bool:
     return session.exploration.scenario_id == ARENA_ID and not scene_flag(session.state.flags, 'training_requested', False)
 
 
-def roster_target() -> BoardScanTarget:
-    from .exploration_app import BoardScanTarget
-    from dnd_board_game.hardware.board_panel import panel_feedback, panel_position
-    slots = tuple(range(6, 6 + len(HERO_ORDER)))
-    return BoardScanTarget(positions=tuple(panel_position(slot) for slot in (*slots, 29)),
-        feedback=panel_feedback(slots, control_slots=(29,)),
-        empty_message='Naciśnij runę bohatera, aby rozpocząć samouczek. ↩ wraca do menu głównego.')
+def roster_target(session: ExplorationUiSession) -> BoardScanTarget:
+    from .training_menu import board_target
+    return board_target(session)
 
 
 def select_roster(session: ExplorationUiSession, position: Coordinate) -> dict[str, object]:
-    from dnd_board_game.hardware.board_panel import panel_position
-    if position == panel_position(29):
-        from .launcher_board import begin
-        begin(session)
-        return {'navigate': '/'}
-    slot = 29 - position.row
-    if position.col != 19 or not 6 <= slot < 6 + len(HERO_ORDER):
-        raise ValueError('Wybierz runę jednego z siedmiu bohaterów.')
-    hero = HERO_ORDER[slot - 6]
-    return start_training_trial(session, hero, 'walkthrough', 'humanoid',
-        reset_progress=bool(scene_flag(session.state.flags, f'walkthrough_completed_{hero}', False)))
+    from .training_menu import select_position
+    return select_position(session, position)
 
 
 @lru_cache(maxsize=7)
@@ -115,11 +102,11 @@ def remember_training_result(session: ExplorationUiSession) -> None:
 
 
 def start_training_trial(
-    session: ExplorationUiSession, hero_id: str, mode: str, creature_type: str, *, reset_progress: bool = False
+    session: ExplorationUiSession, hero_id: str, mode: str, creature_type: str, *, reset_progress: bool = False, case_id: str | None = None
 ) -> dict[str, object]:
     if mode == "walkthrough":
         from .training_walkthrough import start
-        return start(session, hero_id, reset_progress=reset_progress)
+        return start(session, hero_id, reset_progress=reset_progress, case_id=case_id)
     if session.exploration.scenario_id != ARENA_ID:
         raise ValueError("Próby są dostępne wyłącznie na arenie rekrutacyjnej.")
     if (
@@ -217,9 +204,10 @@ def training_payload(session: ExplorationUiSession) -> dict[str, object] | None:
     if guided.enabled(session) or not scene_flag(session.state.flags, "training_requested", False):
         active = guided.enabled(session)
         finished = bool(session.combat_state and session.combat_state.status.value == "finished")
-        done = [h for h in HERO_ORDER if scene_flag(session.state.flags, f"walkthrough_completed_{h}", False) or (active and h == guided.hero_id(session) and trial_won(session))]
-        return dict(current_hero_id=guided.hero_id(session), completed=done,
-            heroes=[dict(id=h, name=training_hero(h).name, panel_slot=6+i, icon=panel_icon(6+i), tutorial_count=int(scene_flag(session.state.flags, f"walkthrough_progress_{h}", 0)), tutorial_total=len(steps(h)), completed=h in done) for i,h in enumerate(HERO_ORDER)],
+        from .training_menu import payload as menu_payload
+        done = [h for h in HERO_ORDER if scene_flag(session.state.flags, f"walkthrough_charge_completed_{h}", False) or (active and not guided.single_case(session) and h == guided.hero_id(session) and trial_won(session))]
+        return dict(current_hero_id=guided.hero_id(session), completed=done, menu=menu_payload(session) if not active else None,
+            heroes=[dict(id=h, name=training_hero(h).name, panel_slot=6+i, icon=panel_icon(6+i), tutorial_count=int(scene_flag(session.state.flags, f"walkthrough_charge_progress_{h}", 0)), tutorial_total=len(steps(h)), completed=h in done) for i,h in enumerate(HERO_ORDER)],
             can_start=not active, can_talk=False, finished=finished, mode="walkthrough",
             tutorial=guided.payload(session) if active else None, creature_type="humanoid",
             won=trial_won(session) if active else False, map_url="/game-assets/maps/recruitment_arena/arena.svg")

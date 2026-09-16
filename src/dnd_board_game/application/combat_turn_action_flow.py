@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dnd_board_game.combat.mana_charge import charged_check_request, state_charge_bonus
+
 from dnd_board_game.actors.resources import uses_physical_mana, uses_shared_mana
 
 from dataclasses import dataclass, replace
@@ -308,7 +310,7 @@ class CombatTurnActionFlowService:
             actor_id=str(actor.id),
             action="hide",
             skill="stealth",
-            modifier=skill_modifier(actor, "stealth")
+            modifier=(skill_modifier(actor, "stealth") + state_charge_bonus(state, actor))
             + pass_without_trace_bonus(actor, state.actors, active_effects),
             instruction=roll_instruction(request).message,
             opposing_actor_ids=opponents,
@@ -355,7 +357,7 @@ class CombatTurnActionFlowService:
             else 0
         )
         perception_totals = {
-            str(observer.id): natural + skill_modifier(observer, "perception") + smoke_penalty
+            str(observer.id): natural + (skill_modifier(observer, "perception") + state_charge_bonus(state, observer)) + smoke_penalty
             + (2 if actor_has_feature(observer, "scouts_vigilance") else 0)
             for observer in state.actors
             if (natural := opposing_rolls.get(str(observer.id))) is not None
@@ -450,7 +452,7 @@ class CombatTurnActionFlowService:
             actor_id=str(actor.id),
             action="search",
             skill="perception",
-            modifier=skill_modifier(actor, "perception") + (
+            modifier=(skill_modifier(actor, "perception") + state_charge_bonus(state, actor)) + (
                 2 if actor_has_feature(actor, "scouts_vigilance") else 0
             ),
             instruction=roll_instruction(request).message,
@@ -468,7 +470,7 @@ class CombatTurnActionFlowService:
             actor_id=str(actor.id),
             action="detect_traps",
             skill="perception",
-            modifier=skill_modifier(actor, "perception"),
+            modifier=(skill_modifier(actor, "perception") + state_charge_bonus(state, actor)),
             instruction=roll_instruction(request).message,
             opposing_actor_ids=(),
             roll_mode=request.mode.value,
@@ -840,7 +842,7 @@ def _skill_request(state: CombatState, actor: Actor, skill: str) -> D20RollReque
     request = armor_skill_roll_request(
         actor,
         skill,
-        D20RollRequest(modifiers=skill_roll_modifiers(actor, skill)),
+        charged_check_request(state, actor, D20RollRequest(modifiers=skill_roll_modifiers(actor, skill))),
     )
     return apply_exhaustion_to_roll_request(
         actor,

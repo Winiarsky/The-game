@@ -3,7 +3,7 @@ function shieldBashHtml(pending) {
   const defense = pending.defender_roll === null ? 'Za przeciwnika rzuci aplikacja.'
     : `Obrona przeciwnika (automat): k20 ${pending.defender_roll} ${signedNumber(pending.defender_modifier)} = ${pending.defender_roll + pending.defender_modifier}.`;
   const attack = pending.attacker_roll === null ? ''
-    : `Twój rzut: k20 ${pending.attacker_roll} ${signedNumber(pending.attacker_modifier)} (Siła) = ${pending.attacker_roll + pending.attacker_modifier}.`;
+    : `Twój rzut: k20 ${pending.attacker_roll} ${signedNumber(pending.attacker_modifier)} (Siła${pending.charge_bonus ? ` + naładowanie ${signedNumber(pending.charge_bonus)}` : ''}) = ${pending.attacker_roll + pending.attacker_modifier}.`;
   if (pending.stage === 'result') {
     const push = pending.destination ? `Przesuń figurkę celu na (${pending.destination.join(',')}) — zielone pole na planszy.`
       : pending.succeeded ? 'Brak odepchnięcia: pole za celem jest zablokowane.' : 'Cel pozostaje na swoim polu.';

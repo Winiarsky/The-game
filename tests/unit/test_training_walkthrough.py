@@ -30,8 +30,23 @@ def prepared(tmp_path: Path, hero: str = 'garran', index: int = 0) -> Exploratio
     return s
 
 
+def prepare_pool(s: ExplorationUiSession) -> None:
+    send(s, 'pool_shuffle')
+    while s.combat_state.shared_mana.pooled.phase == 'reveal':
+        pool = s.combat_state.shared_mana.pooled
+        send(s, 'pool_color', color=pool.deck[0] or next(c for c in ('C', 'B', 'Z', 'F', 'N') if sum(card == c for card in (*pool.deck, *pool.offer, *pool.burned, *(card for _, hand in pool.pools for card in hand))) < pool.copies))
+
+
+def settle_burn(s: ExplorationUiSession) -> None:
+    while s.combat_state.shared_mana.pooled.phase in {'burn', 'expire'}:
+        p = s.combat_state.shared_mana.pooled
+        known = (*p.deck, *p.offer, *p.burned, *p.expired, *(c for _, h in (*p.pools, *p.prisons) for c in h))
+        color = p.deck[0] or next(c for c in ('C', 'B', 'Z', 'F', 'N') if known.count(c) < p.copies)
+        send(s, 'pool_color', color=color)
+
+
 def test_first_lesson_is_real_second_wind_with_board_confirmation(tmp_path: Path) -> None:
-    s = prepared(tmp_path)
+    s = prepared(tmp_path, index=next(i for i, step in enumerate(steps('garran')) if step.id == 'second_wind'))
     assert current_actor(s.combat_state).id == 'garran'
     hero = current_actor(s.combat_state)
     assert hero.hp < hero.max_hp
@@ -39,12 +54,14 @@ def test_first_lesson_is_real_second_wind_with_board_confirmation(tmp_path: Path
     assert state['board_selection']['legal_positions'] == [[19, 1]]
     assert state['training_arena']['tutorial']['current']['id'] == 'second_wind'
     acknowledge(s, notice_id(s))
+    prepare_pool(s)
     menu = s._combat_turn_action_options()
     assert menu and all(o.action_id == 'second_wind' or o.source_id == 'second_wind' for o in menu)
     s.use_combat_class_feature('second_wind', natural_roll=5)
     assert guided.flag(s, 'phase') == 'exercise'
     send(s, 'pay')
     assert current_actor(s.combat_state).hp > hero.hp
+    settle_burn(s)
     assert guided.flag(s, 'phase') == 'success'
     old_token = notice_id(s)
     acknowledge(s, old_token)
@@ -62,6 +79,7 @@ def test_defensive_stance_rune_preview_then_blue_payment_and_next_lesson(tmp_pat
     index = next(i for i, step in enumerate(steps('garran')) if step.id == 'defensive_stance')
     s = prepared(tmp_path, index=index)
     acknowledge(s, notice_id(s))
+    prepare_pool(s)
     board = Board()
     s.attach_board_connection(board, backend='simulator')
     client = create_app(s).test_client()
@@ -87,7 +105,7 @@ def test_defensive_stance_rune_preview_then_blue_payment_and_next_lesson(tmp_pat
     # The browser dispatches ordinary preview confirmation to this endpoint.
     response = client.post('/api/combat/turn-actions/confirm', json={})
     assert response.status_code == 200, response.json
-    assert 'Odłóż pokazany koszt' in response.json['training_arena']['tutorial']['current']['instruction']
+    assert 'Potwierdź' in response.json['training_arena']['tutorial']['current']['instruction']
     assert s.shared_mana_declaration.stage == 'payment'
     assert guided.flag(s, 'phase') == 'exercise'
     state = scan((19, 1))
@@ -103,7 +121,7 @@ def test_all_abilities_and_each_boost_have_ordered_steps(hero: str) -> None:
     from dnd_board_game.ui.training_tutorial import abilities
     course = steps(hero)
     assert len({s.id for s in course}) == len(course)
-    assert {s.ability.id for s in course} == {a.id for a in abilities(hero)}
+    assert {s.ability.id for s in course if s.ability.category != 'tutorial'} == {a.id for a in abilities(hero)}
     for a in abilities(hero):
         variants = [s for s in course if s.ability.id == a.id]
         assert variants[0].boosts == {}
@@ -138,6 +156,10 @@ def test_each_lesson_has_available_required_action(tmp_path: Path, hero: str) ->
         assert len({a.position for a in s.combat_state.actors}) == len(s.combat_state.actors), step.id
         assert not any(e.id == 'recruitment_nessa' for e in s._active_encounter().environment)
         acknowledge(s, notice_id(s))
+        prepare_pool(s)
+        if step.ability.category == 'tutorial':
+            assert s.combat_state.shared_mana.pooled.phase == 'choose'
+            continue
         if step.ability.timing == 'R':
             assert s.pending_enemy_turn_intent or s.pending_enemy_turn_result or s.pending_reaction_window, step.id
             continue
@@ -165,6 +187,7 @@ def test_reaction_situation_really_offers_required_reaction(tmp_path: Path, hero
     index = next(i for i, step in enumerate(steps(hero)) if step.ability.id == ability)
     s = prepared(tmp_path, hero, index)
     acknowledge(s, notice_id(s))
+    prepare_pool(s)
     if ability not in {'garran_guard_companion', 'instinctive_dodge'}:
         s._commit_pending_enemy_turn()
     option = s.pending_reaction_window.current_option.effect_id if s.pending_reaction_window and s.pending_reaction_window.current_option else ''
@@ -190,15 +213,17 @@ def test_reaction_situation_really_offers_required_reaction(tmp_path: Path, hero
 
 
 def test_progress_and_briefing_survive_save_and_leave(tmp_path: Path) -> None:
-    s = prepared(tmp_path)
+    s = prepared(tmp_path, index=next(i for i, step in enumerate(steps('garran')) if step.id == 'second_wind'))
     original = notice_id(s)
     s.save_snapshot()
     s.load_snapshot()
     assert notice_id(s) == original
     assert s.state_payload()['board_selection']['legal_positions'] == [[19, 1]]
     acknowledge(s, original)
+    prepare_pool(s)
     s.use_combat_class_feature('second_wind', natural_roll=6)
     send(s, 'pay')
+    settle_burn(s)
     guided.leave(s)
     assert s.state_payload()['training_arena']['can_start']
     guided.start(s, 'garran')
@@ -210,8 +235,10 @@ def test_duel_result_returns_to_roster_and_only_victory_completes(tmp_path: Path
     s = prepared(tmp_path, 'garran', len(steps('garran')))
     acknowledge(s, notice_id(s))
     s.submit_encounter_initiative_roll(20)
-    assert s.combat_state.shared_mana.market == 5
-    assert s.combat_state.shared_mana.deck == 20
+    assert s.combat_state.shared_mana.pooled.phase == 'setup'
+    assert len(s.combat_state.shared_mana.pooled.deck) == 25
+    prepare_pool(s)
+    send(s, 'pool_take', index=0)
     victim = next(a for a in s.combat_state.actors if (a.faction == Faction.ENEMY) == won)
     s.combat_state = replace_actor(s.combat_state, replace(victim, hp=0))
     state = s.state_payload()
@@ -228,6 +255,7 @@ def test_shield_lesson_requires_real_push_and_correct_boost(tmp_path: Path, boos
     index = next(i for i, step in enumerate(steps('garran')) if step.id == ('shield_bash:damage' if boosted else 'shield_bash'))
     s = prepared(tmp_path, 'garran', index)
     acknowledge(s, notice_id(s))
+    prepare_pool(s)
     enemy = s._actor_by_string_id('recruitment_dummy')
     s.start_combat_class_feature_targeting('shield_bash')
     s._handle_board_position(enemy.position)
@@ -245,6 +273,7 @@ def test_shield_lesson_requires_real_push_and_correct_boost(tmp_path: Path, boos
     if hit:
         submit_shield_bash(s, {'damage_roll': 12 if boosted else 6})
     confirm_shield_bash(s)
+    settle_burn(s)
     assert guided.flag(s, 'phase') == ('success' if hit else 'retry')
     if hit:
         assert s._actor_by_string_id('recruitment_dummy').position != enemy.position

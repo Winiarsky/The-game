@@ -10,6 +10,7 @@ from dnd_board_game.character_creation.physical_mana_help import physical_mana_f
 from dnd_board_game.physical_cards.mana_print import PROFILE, build_print_hero
 from dnd_board_game.physical_cards.mana_print_html import FORMATS, render_hero_html
 from dnd_board_game.rules.physical_mana import hero_abilities, turn_supply
+from dnd_board_game.scenarios.pooled_mana_catalog import requirement_text, ability_description, hero_profile
 
 
 @pytest.mark.parametrize("hero_id", PLAYABLE_HERO_IDS)
@@ -22,9 +23,9 @@ def test_all_abilities_costs_and_reaction_labels_reach_every_format(hero_id: str
     assert len(slots) == len(set(slots))
     for card, rule in zip(hero.cards, catalog, strict=True):
         assert (card.cost, card.timing, card.description) == (
-            rule.cost,
+            (),
             rule.timing,
-            rule.description,
+            requirement_text(rule.id, hero_id) + " " + ability_description(hero_id, rule.id),
         )
         assert (card.key == "AUTO") == (rule.timing == "R")
     for format_id in FORMATS:
@@ -33,12 +34,10 @@ def test_all_abilities_costs_and_reaction_labels_reach_every_format(hero_id: str
             assert html.count(f'data-card-id="{ability.id}"') == 1
         assert PROFILE in html
         assert hero.flaw[0] in html
-        for color in ("C", "N", "Z", "B", "F", "*"):
+        for color in ("C", "N", "Z", "B", "F"):
             assert f'data-mana="{color}"' in html
-    assert (hero.keep, hero.capacity) == (
-        turn_supply(hero_id)["keep"],
-        turn_supply(hero_id)["capacity"],
-    )
+    assert (hero.keep, hero.capacity) == (1, None)
+    assert dict(hero.mana_values) == hero_profile(hero_id)["values"]
     assert hero.flaw[1] == physical_mana_flaw(hero_id).body
 
 
@@ -48,17 +47,18 @@ def test_lorian_has_nine_shared_market_abilities() -> None:
     assert len(cards) == 9
     assert {"mana_inspiration", "mana_tuning", "mana_recovery", "mana_great_tuning", "victory_hymn"} <= cards.keys()
     assert "mana_transmutation" not in cards and "mana_refresh" not in cards
-    assert "prywatnych" in render_hero_html(hero, "minimal")
+    assert "Osobista pula" in render_hero_html(hero, "minimal")
 
 
 def test_garran_card_explains_contest_and_boost() -> None:
     hero = build_print_hero("garran")
     shield = next(c for c in hero.cards if c.id == "shield_bash")
-    assert (shield.timing, shield.cost) == ("D", ("N", "C"))
-    assert "k20 + SIŁ" in shield.description
-    assert "automatyczny rzut wroga" in shield.description
+    assert (shield.timing, shield.cost) == ("D", ())
+    assert "12 pkt" in shield.description
+    assert "k20 + modyfikator Siły" in shield.description
+    assert "aplikacja rzuca za wroga" in shield.description
     assert "+1k6" in shield.description
-    assert "mniej niż połowę" in build_print_hero("dagna").flaw[1]
+    assert "poniżej połowy" in build_print_hero("dagna").flaw[1]
 
 
 def test_mana_symbols_escape_text_and_match_combat_icon_shapes() -> None:
@@ -74,18 +74,19 @@ def test_mana_symbols_escape_text_and_match_combat_icon_shapes() -> None:
 def test_printed_weapon_damage_includes_runtime_ability_and_archery_bonuses() -> None:
     erynd = build_print_hero("erynd")
     assert erynd.initiative == 6
-    assert any("Długi łuk: +8" in weapon and "1k8 + 4" in weapon for weapon in erynd.weapons)
-    assert any("Nóż myśliwski: +3" in weapon and "1k4 + 1" in weapon for weapon in erynd.weapons)
+    assert any("Długi łuk: +6" in weapon and "1k8 + 4" in weapon for weapon in erynd.weapons)
+    assert any("Nóż myśliwski: +1" in weapon and "1k4 + 1" in weapon for weapon in erynd.weapons)
     assert any(
-        "Miecz: +6" in weapon and "1k8 + 4" in weapon
+        "Miecz: +4" in weapon and "1k8 + 4" in weapon
         for weapon in build_print_hero("garran").weapons
     )
 
 
 def test_retired_passives_are_replaced_and_new_damage_limits_are_explicit() -> None:
     dagna = dict(build_print_hero("dagna").passives)
-    assert "komórk" not in dagna["Uczeń Życia"]
-    assert "Z" in dagna["Uczeń Życia"]
+    assert "Uczeń Życia" not in dagna
+    assert "Wiara" in dagna["Nasycenie maną"]
+    assert "Łaska" in dagna["Nasycenie maną"]
     assert "Odzyskiwanie magiczne" not in dict(build_print_hero("nimra").passives)
     assert "+2k6" in dict(build_print_hero("mira").passives)["Atak z cienia"]
     assert "+3k6" not in dict(build_print_hero("mira").passives)["Atak z cienia"]
@@ -122,7 +123,7 @@ def test_html_export_uses_all_four_layouts_without_raster_dependency(tmp_path: P
     for format_id in FORMATS:
         html = render_hero_html(build_print_hero("nimra"), format_id)
         assert html.count("data-card-id=") == 12
-        assert html.count("data-page=") == (8 if format_id in ("cards", "bw_test") else 7)
+        assert html.count("data-page=") == 8
         assert "<img" not in html
     with pytest.raises(ValueError):
         render_hero_html(build_print_hero("nimra"), "unknown")
@@ -145,10 +146,10 @@ def test_app_print_page_exposes_current_pdfs_and_same_passive_text(tmp_path: Pat
     for format_id in FORMATS:
         assert f"physical_mana_v02/{format_id}/all_heroes.pdf" in html
     assert "1k6 obrażeń" in html
-    assert "Talia 25 kart" in html
-    assert "prywatnych rezerw" in html
-    assert "Swamp — czarna" in html
-    assert "Cyfra 1 w kółku" in html
+    assert "Ładowanie many" in html
+    assert "spalone, wygasłe i uwięzione" in html
+    assert "Pula zostaje po użyciu" in html
+    assert "Czarna" in html
     assert "Fioletow" not in html and "fioletow" not in html
 
 
@@ -216,3 +217,40 @@ def test_removed_interaction_slot_is_blank_without_moving_other_symbols() -> Non
             html = render_hero_html(build_print_hero(hero_id), format_id)
             assert 'data-panel-slot="4"' not in html
             assert '>Interakcja<' not in html
+
+
+def test_party_confrontation_prints_expose_35_passives_and_influence_modifiers():
+    from dnd_board_game.application.confrontation import build
+    from dnd_board_game.scenarios.confrontation import passives,scene_by_id
+    from dnd_board_game.ui.training_arena import training_hero
+    for hero_id in PLAYABLE_HERO_IDS:
+        hero=build_print_hero(hero_id)
+        assert dict(hero.exploration_passives)=={c:p['label'] for c,p in passives(hero_id).items()}
+        for method in hero.exploration:
+            scene=scene_by_id('nessa_raise' if method.kind=='npc' else 'sealed_cache')
+            profile=build((training_hero(hero_id),),scene).actor
+            assert method.influence_modifier==profile.impact_modifier
+            assert method.modifier==profile.test_modifier
+        html=render_hero_html(hero,'minimal')
+        assert 'Pasywy kolorów w eksploracji' in html
+        assert 'Dokładnie 21: sukces' not in html and 'Przekroczenie: utrudnienie' not in html
+        assert '1/1/2/3' in html
+
+
+def test_card_fields_separate_charge_burning_and_only_real_boosts():
+    from dnd_board_game.physical_cards.mana_ability_text import ability_sections
+    for hero in PLAYABLE_HERO_IDS:
+        for card in build_print_hero(hero).cards:
+            fields=dict(card.sections)
+            assert list(fields)[:4]==['Ładunek','Akcja','Spalanie','Efekt']
+            assert card.sections==ability_sections(hero,card.id)
+    cards={c.id:dict(c.sections) for c in build_print_hero('garran').cards}
+    assert 'Podbicia' not in cards['second_wind']
+    assert 'Podbicia' not in cards['iron_bastion']
+    assert cards['defensive_stance']['Spalanie']=='0 kart.'
+    assert '12 pkt' in cards['shield_bash']['Ładunek']
+    assert 'Łącznie maks. 2' in cards['shield_bash']['Podbicia']
+    assert 'nie wymaga' in cards['shield_bash']['Podbicia']
+    assert 'Podbicie' not in requirement_text('second_wind','garran')
+    lorian=dict(ability_sections('lorian','mana_recovery'))
+    assert lorian['Spalanie']=='0 kart.' and '+2 spalone karty' in lorian['Podbicia']

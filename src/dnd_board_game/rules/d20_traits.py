@@ -125,6 +125,15 @@ def apply_actor_d20_traits(
                 stacking_key="proficiency",
             )
         )
+    from .charge_rolls import uses_charge, replace_proficiency
+    if uses_charge(actor):
+        # Charge enters here for saves; combat checks may already carry a pool snapshot.
+        bonus = max((getattr(e, "value", 0) for e in effects
+                     if getattr(e, "actor_id", "") == str(getattr(actor, "id", ""))
+                     and getattr(e, "kind", "") == "charge_accuracy"), default=None)
+        if bonus is None:
+            bonus = next((m.value for m in modifiers if m.stacking_key == "charge_accuracy"), 0)
+        modifiers = list(replace_proficiency(replace(request, modifiers=tuple(modifiers)), bonus).modifiers)
     mode = request.mode
     if advantage_labels:
         mode = (

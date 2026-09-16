@@ -1,0 +1,16 @@
+{
+  "schema": "dnd_board_game.feature",
+  "schema_version": 1,
+  "ruleset_id": "dnd_5e_2014",
+  "source_pack_ids": [
+    "project_original"
+  ],
+  "id": "mana_burn_deck",
+  "label": "Żar w talii",
+  "description": "Co drugą rundę: pierwsze trafienie spala dwie karty z wierzchu. Niedobór powoduje mana drain.",
+  "source_kind": "monster",
+  "source_ref": "pooled_mana_v01",
+  "grants": {
+    "mana_pressure": "mana_burn_deck"
+  }
+}

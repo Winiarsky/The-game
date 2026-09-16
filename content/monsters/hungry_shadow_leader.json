@@ -2,7 +2,9 @@
   "schema": "dnd_board_game.monster",
   "schema_version": 1,
   "ruleset_id": "dnd_5e_2014",
-  "source_pack_ids": ["project_original"],
+  "source_pack_ids": [
+    "project_original"
+  ],
   "id": "hungry_shadow_leader",
   "name": "Przewodnica Głodnych Cieni",
   "kind": "monster",
@@ -27,8 +29,13 @@
   },
   "proficiency_bonus": 2,
   "proficiencies": {
-    "saving_throws": ["dexterity"],
-    "skills": ["perception", "stealth"],
+    "saving_throws": [
+      "dexterity"
+    ],
+    "skills": [
+      "perception",
+      "stealth"
+    ],
     "expertise": [],
     "weapons": [],
     "armor": [],
@@ -62,5 +69,8 @@
         "damage_type": "psychic"
       }
     }
+  ],
+  "feature_refs": [
+    "mana_burn_deck"
   ]
 }

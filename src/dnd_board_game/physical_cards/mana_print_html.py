@@ -9,13 +9,14 @@ from dnd_board_game.ui.board_panel_symbols import PANEL_CONTROLS, panel_icon
 
 from .mana_print import (
     COLORS,
+    MANA_PASSIVE_REMINDER,
     PROFILE,
     TIMING,
     TURN_REMINDERS,
     PrintAbility,
     PrintHero,
 )
-from dnd_board_game.rules.exploration_mana_catalog import REMINDER, OBSTACLES, CONDITION_HELP
+from dnd_board_game.scenarios.confrontation import REMINDER, CONDITION_HELP
 
 FORMATS = ("color", "minimal", "cards", "bw_test")
 CSS = """
@@ -34,6 +35,9 @@ p { margin: 0 0 2mm; } small,.muted { font-size: 8pt; color: #454b50; }
 .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 1mm; }
 .controls p { margin: 0; display: flex; align-items: center; gap: 1.5mm; }
 .note { margin-bottom: 2mm; } .note b { display: block; }
+.mana-passives { list-style: none; padding: 0; }
+.mana-passives li { display: flex; gap: 2mm; align-items: flex-start; margin-bottom: 1.5mm; }
+.mana-passives .mana-symbol { flex-shrink: 0; }
 .box { padding: 3mm; border: .3mm solid #71848a; margin: 3mm 0; background: #edf4f5; }
 .flaw { background: #fcf1e9; border-color: #a7795e; }
 ul,ol { margin: 2mm 0; padding-left: 5mm; } li { margin-bottom: 2mm; }
@@ -45,12 +49,12 @@ ul,ol { margin: 2mm 0; padding-left: 5mm; } li { margin-bottom: 2mm; }
 .mana-legend { display: flex; flex-wrap: wrap; gap: 1mm 3mm; font-size: 8pt; margin: 2mm 0; }
 .C { background: #f4cccc; } .N { background: #d1e5fc; } .Z { background: #dbeed5; } .B { background: #fff; } .F { background: #d5d5d5; } .any { background: #ececec; }
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3mm; }
-.ability { height: 55mm; border: .3mm solid #80969d; border-top: 1mm solid #386779; padding: 3mm; break-inside: avoid; font-size: 9.5pt; }
-.ability h3 { display: flex; align-items: start; gap: 2mm; font-size: 10.5pt; }
+.ability { height: 119mm; border: .3mm solid #80969d; border-top: 1mm solid #386779; padding: 3mm; break-inside: avoid; font-size: 11pt; }
+.ability h3 { display: flex; align-items: start; gap: 2mm; font-size: 12pt; }
 .ability p { line-height: 1.32; }
 .exploration-cards .ability {height:auto;min-height:65mm;}
-.cutouts .ability { height: 119mm; border: .3mm dashed #666; padding: 5mm; font-size: 13pt; }
-.cutouts .ability h3 { font-size: 16pt; } .cutouts .chip { font-size: 11pt; } .cutouts .meta { margin: 4mm 0; }
+.cutouts .ability { height: 119mm; border: .3mm dashed #666; padding: 4mm; font-size: 11pt; }
+.cutouts .ability h3 { font-size: 13pt; } .cutouts .chip { font-size: 11pt; } .cutouts .meta { margin: 1mm 0 2mm; }
 .meta { margin-bottom: 2mm; font-size: 8pt; }
 footer { position: absolute; bottom: 1mm; left: 2mm; right: 2mm; border-top: .2mm solid #bbb; padding-top: 1mm; font-size: 7pt; color: #555; }
 .bw { color: black; } .bw .box,.bw .chip,.bw .key { background: white; border-color: black; color: black; } .bw header,.bw .ability { border-color: black; } .bw small,.bw .muted { color: #333; }
@@ -69,10 +73,12 @@ def chips(cost: tuple[str, ...]) -> str:
 
 def ability_card(card: PrintAbility, hero_name: str) -> str:
     sign = "REAKCJA" if card.panel_slot is None else panel_icon(card.panel_slot)
+    sections = ''.join(f'<p class="ability-field"><b>{escape(label)}:</b> {mana_text(text)}</p>' for label, text in card.sections)
+    if not sections:
+        sections = f'<p>{mana_text(card.description)}</p>'
     return f"""<article class="ability" data-card-id="{escape(card.id)}">
     <h3><span class="key">{sign}</span><span>{escape(card.name)}</span></h3>
-    <div class="meta">{escape(hero_name)} · {TIMING[card.timing]}<br>{chips(card.cost)}</div>
-    <p>{mana_text(card.description)}</p></article>"""
+    <div class="meta">{escape(hero_name)}</div>{sections}</article>"""
 
 
 def page(
@@ -86,8 +92,8 @@ def page(
 ) -> str:
     illustration = f'<img class="portrait" src="{escape(portrait)}" alt="">' if portrait else ""
     return f"""<section class="page{' cutouts' if cutouts else ''}" data-page="{number}">
-    <header><div><h1>{escape(hero.name)}</h1><small>{escape(title)} · mana 0.3</small></div>{illustration}</header>
-    {body}<footer>{escape(hero.name)} · fizyczna mana 0.3 · {number} · A4, skala 100% · Panel areny · runy v1 · 1 = dowolny kolor</footer></section>"""
+    <header><div><h1>{escape(hero.name)}</h1><small>{escape(title)} · ładowanie many 2.0</small></div>{illustration}</header>
+    {body}<footer>{escape(hero.name)} · ładowanie many 2.0 · {number} · A4, skala 100% · Panel areny · runy v1</footer></section>"""
 
 
 def reference_page(hero: PrintHero) -> str:
@@ -107,32 +113,38 @@ def reference_page(hero: PrintHero) -> str:
     )
     metamagic = ""
     # Balance dense dossiers across both columns without shrinking the print.
-    side_passive = hero.id in {"mira", "erynd"}
+    side_passive = True
     main_notes = hero.passives[:-1] if side_passive else hero.passives
     passives = "".join(
         f'<div class="note"><b>{escape(name)}</b>{mana_text(text)}</div>'
         for name, text in main_notes
     )
+    mana_rows = "".join(
+        f"<li>{mana_symbol(color)}<span>{escape(label)}</span></li>"
+        for color, label in hero.mana_passives
+    )
     mana_note = (
-        f'<div class="note"><h2>{escape(hero.passives[-1][0])}</h2>{mana_text(hero.passives[-1][1])}</div>'
+        f'<div class="note"><h2>{escape(hero.passives[-1][0])}</h2>'
+        f'<ul class="mana-passives">{mana_rows}</ul><p>{escape(MANA_PASSIVE_REMINDER)}</p></div>'
         if side_passive else ""
     )
+    flaw = f'<div class="box flaw"><h2>Skaza: {escape(hero.flaw[0])}</h2>{mana_text(hero.flaw[1])}</div>'
+    # Shorter innate-passive columns also hold the flaw to balance the page.
+    left_flaw, right_flaw = (flaw, "") if hero.id in {"lorian", "brakka", "dagna"} else ("", flaw)
     weapons = "<br>".join(escape(w) for w in hero.weapons)
     controls = "".join(
         f'<p>{panel_icon(slot)} {escape(name)}</p>'
         for slot, name, _ in PANEL_CONTROLS
     )
     return f"""<p>{escape(hero.role)} · poziom {hero.level}</p><div class="stats">{stats}</div><div class="scores">{scores}</div>
-    {metamagic}<p><b>Broń — wartości bazowe:</b><br>{weapons}</p>
-    <div class="box"><b>Wspólna mana: 25 kart · rynek 5 · pozostałe 20 w talii</b><br>
-    Zadeklaruj podbicia i zapłać pełny koszt z rynku na odrzucone przed efektem.
-    Na koniec tury uzupełnij wspólny rynek do pięciu kart i potwierdź dobór.
-    T: początek następnej tury źródła. O: potwierdzone odświeżenie całej talii.</div>
-    <div class="mana-legend">{''.join(f'<span>{mana_symbol(c)} {COLORS[c]}</span>' for c in COLORS)}</div>
-    <p class="muted">Jeden symbol kosztu = jedna karta many. Kolory sprawdzacie przy stole. Aplikacja liczy karty i wymaga potwierdzenia płatności.</p>
-    <div class="columns"><div><h2>Zdolności pasywne</h2>{passives}</div><div>{mana_note}
-    <div class="box flaw"><h2>Skaza: {escape(hero.flaw[0])}</h2>{mana_text(hero.flaw[1])}</div>
-    <h2>Sterowanie</h2><div class="controls">{controls}</div><p class="muted">Ikona w aplikacji otwiera podgląd. Reakcje wybierasz w ich oknie. −, +, ✓ i ↩ działają w dotychczasowym rogu planszy.</p><p class="muted">Dolny pasek mapy jest wyłączony; wydrukowane runy zostają na przyszłość.</p>
+    {metamagic}<p><b>Broń — bez naładowania:</b><br>{weapons}</p>
+    <div class="box"><b>Osobista pula — wartości twoich kolorów</b><br>
+    {" · ".join(f"{mana_symbol(c)} {COLORS[c]}: <b>{value}</b>" for c, value in hero.mana_values)}<br>
+    Test: k20 + cecha + naładowanie + inne premie. Naładowanie: 0/6/12/21 pkt → +0/+2/+4/+6.<br>
+    Dobór jednej z dwóch kart na początku tury poniżej 21 pkt. Pula zostaje. Zdolności spalają talię; podbicie +2 karty. Zwykły atak bez spalania.</div>
+    <div class="columns"><div><h2>Zdolności pasywne</h2>{passives}
+    {left_flaw}</div><div>{mana_note}{right_flaw}
+    <h2>Sterowanie</h2><div class="controls">{controls}</div><p class="muted">Ikona w aplikacji otwiera podgląd. Reakcje wybierasz w ich oknie. −, +, ✓ i ↩ działają w dotychczasowym rogu planszy.</p><p class="muted">Runy na planszy wybierają zdolności i kolory; wybór jednej z dwóch kart: Klucz/Gwiazda.</p>
     </div></div>"""
 
 
@@ -140,8 +152,8 @@ def dossier_page(hero: PrintHero) -> str:
     story = "".join(f"<h2>{escape(title)}</h2><p>{escape(text)}</p>" for title, text in hero.story)
     equipment = ", ".join(escape(item) for item in hero.equipment)
     return f"""<div class="columns"><div>{story}</div><div><h2>Ekwipunek początkowy</h2><p>{equipment}</p>
-    <h2>Rzuty obronne</h2><p>{' · '.join(escape(s) for s in hero.saves)}</p>
-    <h2>Biegłości</h2><p>{' · '.join(escape(s) for s in hero.skills)}</p></div></div>"""
+    <h2>Rzuty obronne — baza</h2><p>{' · '.join(escape(s) for s in hero.saves)}</p>
+<p>Do testów dodaj naładowanie i aktualne premie. Bez osobistej puli: naładowanie +0.</p></div></div>"""
 
 
 def turn_rules_page(hero: PrintHero) -> str:
@@ -156,15 +168,16 @@ def turn_rules_page(hero: PrintHero) -> str:
 def exploration_page(hero: PrintHero) -> str:
     cards = ''.join(f'<article class="ability" data-exploration-id="{escape(m.id)}">'
         f'<h3>{escape(m.name)}</h3><p>{"Rozmowa z NPC" if m.kind == "npc" else "Interakcja z obiektem"} · {escape(hero.name)}</p>'
-        f'<p><b>{escape(m.ability)} · test {m.modifier:+d}</b></p>'
+        f'<p><b>{escape(m.ability)} · test {m.modifier:+d}</b><br>Wpływ: kość podatności {m.influence_modifier:+d} + pasywy wpływu.</p>'
         f'<p>{escape(m.description)}</p><p class="muted">' +
         ' · '.join(f'{escape(label)} {value:+d}' for label, value in m.components) +
-        '</p><p>Dodaj premię za karty. Dokładnie 21: sukces. Przekroczenie: utrudnienie, bez premii za karty.</p></article>'
+        '</p><p>ST i kość wpływu określa scena. Naładowanie dodajesz raz do testu, nigdy do wpływu.</p></article>'
         for m in hero.exploration)
-    obstacles = ''.join(f'<li><b>{escape(name)}:</b> {escape(body)}</li>' for key, name, body in OBSTACLES if key != 'none')
-    return (f'<div class="grid exploration-cards">{cards}</div><h2>Eksploracja — wspólna procedura</h2><p>{escape(REMINDER)}</p>'
-            f'<p>Profil metody odsłania się po rozpoczęciu. Wybór wykonawcy jest stały. Jedna jawna przeszkoda na próbę:</p><ul>{obstacles}</ul>'
-            '<p><b>Pułapki w walce:</b> zwykły test MDR (Percepcja) wykrywa, ZRĘ (narzędzia) dezaktywuje. Koszt akcji i pozycja obowiązują. Bez dobierania do 21.</p>')
+    passives = ''.join(f'<p>{mana_symbol(c)} <b>{COLORS[c]}:</b> {escape(label)}</p>' for c, label in hero.exploration_passives)
+    return (f'<div class="grid exploration-cards">{cards}</div><h2>Pasywy kolorów w eksploracji</h2>{passives}'
+            '<p>Wartości punktowe kolorów są takie same jak w walce. Premie działają, dopóki karta jest w puli; Oddech działa tylko przy doborze.</p>'
+            f'<h2>Konfrontacja drużynowa</h2><p>{escape(REMINDER)}</p>'
+            '<p><b>Pułapki w walce:</b> test Mądrości wykrywa; test Zręczności przy użyciu narzędzi dezaktywuje. Koszt akcji i pozycja obowiązują.</p>')
 
 
 def render_hero_html(hero: PrintHero, format_id: str, *, portrait_path: Path | None = None) -> str:
@@ -175,7 +188,7 @@ def render_hero_html(hero: PrintHero, format_id: str, *, portrait_path: Path | N
     portrait = portrait_path.resolve().as_uri() if portrait_path and not bw else ""
     pages = [page(hero, "Karta postaci i sterowanie", reference_page(hero), 1, portrait=portrait)]
     cards = hero.cards
-    per_page = 4 if cutouts else 8
+    per_page = 4
     for offset in range(0, len(cards), per_page):
         body = (
             '<div class="grid">'
@@ -185,7 +198,7 @@ def render_hero_html(hero: PrintHero, format_id: str, *, portrait_path: Path | N
         pages.append(
             page(
                 hero,
-                "Zdolności · podbicia dolicz do kosztu bazowego",
+                "Zdolności · ładunek, akcja, efekt i podbicia",
                 body,
                 len(pages) + 1,
                 cutouts=cutouts,
@@ -194,12 +207,12 @@ def render_hero_html(hero: PrintHero, format_id: str, *, portrait_path: Path | N
     pages.append(
         page(hero, "Historia, ekwipunek i zasady tury", dossier_page(hero), len(pages) + 1)
     )
-    pages.append(page(hero, "Wspólny rynek i kolejność rozstrzygania", turn_rules_page(hero), len(pages) + 1))
+    pages.append(page(hero, "Pule many, spalanie i mana drain", turn_rules_page(hero), len(pages) + 1))
     pages.append(page(hero, "Eksploracja · NPC i obiekty", exploration_page(hero), len(pages) + 1))
-    condition_body = '<p>Jedna jawna zasada na rozmowę. Przeczytaj stawkę przed wyborem metody.</p>' + ''.join(
+    condition_body = '<p>Jedna jawna zasada na konfrontację. Przeczytaj stawkę przed rozpoczęciem.</p>' + ''.join(
         f'<h2>{escape(title)}</h2><p>{escape(body)}</p>' for title, body in CONDITION_HELP)
-    condition_body += '<p><b>Plansza:</b> Klucz i Gwiazda — wybory warunku. Kolory, pas i dobór mają własne runy. Rzuty: fokus jednej kości, −/+, ✓ dalej, podsumowanie i poprawka przez ↩. Końcowe ✓ rozstrzyga test.</p>'
+    condition_body += '<p><b>Plansza:</b> Dobór, siła testu, pomoc i warunki mają własne podświetlone runy. Jedna figurka drużyny, osobne pule każdego bohatera. Rzuty: fokus jednej kości, −/+, ✓ dalej, podsumowanie i poprawka przez ↩. Końcowe ✓ rozstrzyga test.</p>'
     pages.append(page(hero, 'Rozmowy · cztery warunki', condition_body, len(pages) + 1))
-    return f"""<!doctype html><html lang="pl"><meta charset="utf-8"><title>{escape(hero.name)} — mana 0.3 — {format_id}</title>
+    return f"""<!doctype html><html lang="pl"><meta charset="utf-8"><title>{escape(hero.name)} — ładowanie many 2.0 — {format_id}</title>
     <style>{CSS}</style><body class="{'bw' if bw else 'color'}" data-profile="{PROFILE}">
     <nav class="screen"><button onclick="print()">Drukuj / zapisz PDF</button> A4 · 100% · tło włączone w wersji kolorowej.</nav>{''.join(pages)}</body></html>"""

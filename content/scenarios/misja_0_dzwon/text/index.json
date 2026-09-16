@@ -1,0 +1,237 @@
+{
+  "world": {
+    "title": "Dzwon do odebrania",
+    "path": "text/world.md",
+    "speaker": "Narrator"
+  },
+  "party": {
+    "title": "Pierwsze wezwanie",
+    "path": "text/party.md",
+    "speaker": "Narrator"
+  },
+  "brief": {
+    "title": "Odprawa u Nessy",
+    "path": "text/brief.md",
+    "speaker": "Nessa"
+  },
+  "why": {
+    "title": "Dlaczego został?",
+    "path": "text/why.md",
+    "speaker": "Nessa"
+  },
+  "road_info": {
+    "title": "Czego spodziewać się po drodze?",
+    "path": "text/road_info.md",
+    "speaker": "Nessa"
+  },
+  "negotiate": {
+    "title": "Negocjuj stawkę",
+    "path": "text/negotiate.md",
+    "speaker": "Narrator"
+  },
+  "neg_success": {
+    "title": "Dodatkowe zaopatrzenie",
+    "path": "text/neg_success.md",
+    "speaker": "Nessa"
+  },
+  "neg_compromise": {
+    "title": "Rozsądny kompromis",
+    "path": "text/neg_compromise.md",
+    "speaker": "Nessa"
+  },
+  "neg_failure": {
+    "title": "Podstawowe warunki",
+    "path": "text/neg_failure.md",
+    "speaker": "Nessa"
+  },
+  "departure": {
+    "title": "Wóz czeka",
+    "path": "text/departure.md",
+    "speaker": "Narrator"
+  },
+  "road": {
+    "title": "Koleina",
+    "path": "text/road.md",
+    "speaker": "Narrator"
+  },
+  "road_success": {
+    "title": "Znów w drodze",
+    "path": "text/road_success.md",
+    "speaker": "Narrator"
+  },
+  "fatigue_roll": {
+    "title": "Cena przeprawy",
+    "path": "text/fatigue_roll.md",
+    "speaker": "Narrator"
+  },
+  "fatigue_result": {
+    "title": "Ciężar pozostaje",
+    "path": "text/fatigue_result.md",
+    "speaker": "Narrator"
+  },
+  "arrival": {
+    "title": "Ktoś was uprzedził",
+    "path": "text/arrival.md",
+    "speaker": "Narrator"
+  },
+  "surrender": {
+    "title": "Dość!",
+    "path": "text/surrender.md",
+    "speaker": "Narrator"
+  },
+  "after_accepted": {
+    "title": "Broń na ziemi",
+    "path": "text/after_accepted.md",
+    "speaker": "Narrator"
+  },
+  "after_refused": {
+    "title": "Cisza po starciu",
+    "path": "text/after_refused.md",
+    "speaker": "Narrator"
+  },
+  "after_defeated": {
+    "title": "Cena porażki",
+    "path": "text/after_defeated.md",
+    "speaker": "Narrator"
+  },
+  "after_no_offer": {
+    "title": "Koniec oporu",
+    "path": "text/after_no_offer.md",
+    "speaker": "Narrator"
+  },
+  "explore": {
+    "title": "Opuszczony posterunek",
+    "path": "text/explore.md",
+    "speaker": "Narrator"
+  },
+  "leader": {
+    "title": "Pokwitowania",
+    "path": "text/leader.md",
+    "speaker": "Narrator"
+  },
+  "armory": {
+    "title": "Puste stojaki",
+    "path": "text/armory.md",
+    "speaker": "Narrator"
+  },
+  "medallion": {
+    "title": "Czyjaś pamiątka",
+    "path": "text/medallion.md",
+    "speaker": "Narrator"
+  },
+  "quarters": {
+    "title": "Kwatera dowódcy",
+    "path": "text/quarters.md",
+    "speaker": "Narrator"
+  },
+  "cache": {
+    "title": "Za deską",
+    "path": "text/cache.md",
+    "speaker": "Narrator"
+  },
+  "store": {
+    "title": "Magazynek",
+    "path": "text/store.md",
+    "speaker": "Narrator"
+  },
+  "rumor": {
+    "title": "Wskazówka",
+    "path": "text/rumor.md",
+    "speaker": "Narrator"
+  },
+  "dilemma": {
+    "title": "Cudzy rachunek",
+    "path": "text/dilemma.md",
+    "speaker": "Narrator"
+  },
+  "help": {
+    "title": "Sprawa do załatwienia",
+    "path": "text/help.md",
+    "speaker": "Narrator"
+  },
+  "report": {
+    "title": "Sprawa dla Gildii",
+    "path": "text/report.md",
+    "speaker": "Narrator"
+  },
+  "fraud": {
+    "title": "Opłata za obietnicę",
+    "path": "text/fraud.md",
+    "speaker": "Narrator"
+  },
+  "load": {
+    "title": "Załadunek",
+    "path": "text/load.md",
+    "speaker": "Narrator"
+  },
+  "return_help": {
+    "title": "Powrót do Nessy",
+    "path": "text/return_help.md",
+    "speaker": "Narrator"
+  },
+  "return_report": {
+    "title": "Raport z drogi",
+    "path": "text/return_report.md",
+    "speaker": "Narrator"
+  },
+  "return_fraud": {
+    "title": "Przemilczany szczegół",
+    "path": "text/return_fraud.md",
+    "speaker": "Narrator"
+  },
+  "summary": {
+    "title": "Misja zakończona",
+    "path": "text/summary.md",
+    "speaker": "Narrator"
+  },
+  "hero_garran": {
+    "title": "Garran",
+    "path": "text/hero_garran.md",
+    "speaker": "Narrator"
+  },
+  "hero_brakka": {
+    "title": "Brakka",
+    "path": "text/hero_brakka.md",
+    "speaker": "Narrator"
+  },
+  "hero_mira": {
+    "title": "Mira",
+    "path": "text/hero_mira.md",
+    "speaker": "Narrator"
+  },
+  "hero_dagna": {
+    "title": "Dagna",
+    "path": "text/hero_dagna.md",
+    "speaker": "Narrator"
+  },
+  "hero_lorian": {
+    "title": "Lorian",
+    "path": "text/hero_lorian.md",
+    "speaker": "Narrator"
+  },
+  "hero_nimra": {
+    "title": "Nimra",
+    "path": "text/hero_nimra.md",
+    "speaker": "Narrator"
+  },
+  "hero_erynd": {
+    "title": "Erynd",
+    "path": "text/hero_erynd.md",
+    "speaker": "Narrator"
+  },
+  "potion_target": {
+    "title": "Mikstura leczenia",
+    "speaker": "Instrukcja",
+    "path": "text/potion_target.md"
+  },
+  "potion_roll": {
+    "title": "Rzut na leczenie",
+    "speaker": "Instrukcja",
+    "path": "text/potion_roll.md"
+  },
+  "amulet": {
+    "title": "Komu powierzycie amulet?",
+    "speaker": "Instrukcja",
+    "path": "text/amulet.md"
+  }
+}

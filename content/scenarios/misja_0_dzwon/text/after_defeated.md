@@ -1,0 +1,1 @@
+Odzyskujecie przytomność przy wozie. Wasza broń leży obok pod strażą. Napastnicy nie chcą kolejnej walki: pozwolą zabrać dzwon, jeśli obiecacie zanieść ich pokwitowania do kogoś, kto zajmie się długiem. Możecie przyjąć ten warunek albo powtórzyć starcie z punktu kontrolnego.

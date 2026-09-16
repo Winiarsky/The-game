@@ -21,6 +21,8 @@ def choice(slot: int, action: str, label: str, **extra: Any) -> dict[str, Any]:
 
 def choices(p: dict[str, Any]) -> list[dict[str, Any]]:
     """Only legal choices receive a lit rune. Slot assignments never compact."""
+    if p.get('model') == 'party_confrontation':
+        return p['board_choices']
     result = []
     a = p.get('attempt')
     if p['phase'] in {'introduction', 'setup'}:
@@ -56,11 +58,11 @@ def choices(p: dict[str, Any]) -> list[dict[str, Any]]:
         if p['lesson']['finish'] != 'reroll':
             result.append(choice(21, 'accept', 'Przyjmij porażkę'))
     elif a['phase'] == 'result':
-        result.append(choice(28, 'next', 'Następne ćwiczenie'))
+        result.append(choice(28, 'next', p.get('next_label', 'Następne ćwiczenie')))
         result.extend(choice(24+i, 'debrief', f['label'], id=f['id']) for i,f in enumerate(p.get('followups', [])) if not f['completed'])
     if not a or a['phase'] in {'offer', 'decision', 'bargain', 'result'}:
         result.append(choice(23, 'retry', 'Powtórz lekcję · przygotuj talię od nowa'))
-    result.append(choice(29, 'leave', 'Wybór postaci · zachowaj postęp'))
+    result.append(choice(29, 'leave', p.get('leave_label', 'Wybór postaci · zachowaj postęp')))
     return result
 
 
