@@ -145,7 +145,8 @@ class ScenarioContinuationFlowService:
             )
         propagated = tuple(
             (key, value)
-            for key in plan.continuation.propagate_flags
+            for key in dict.fromkeys((*plan.continuation.propagate_flags,
+                                      *(key for key, _ in flags.values if key.startswith('campaign_'))))
             for value in (scene_flag(flags, key, None),)
             if value is not None
         )

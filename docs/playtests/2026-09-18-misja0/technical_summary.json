@@ -1,0 +1,114 @@
+{
+  "http_status_counts": {
+    "200": 11945,
+    "302": 4,
+    "400": 1
+  },
+  "expected_400": "Occupied hero setup field in early P3 driver; correct validation",
+  "completed_parties": [
+    3,
+    4,
+    5,
+    6
+  ],
+  "exploration_totals": {
+    "3": {
+      "attempts": 25,
+      "cards": 78
+    },
+    "4": {
+      "attempts": 44,
+      "cards": 146
+    },
+    "5": {
+      "attempts": 31,
+      "cards": 99
+    },
+    "6": {
+      "attempts": 46,
+      "cards": 154
+    }
+  },
+  "runs": {
+    "3": {
+      "net_gold": 25,
+      "cargo": [
+        {
+          "id": "armory",
+          "name": "Zbrojownia: skrzynie Z-1 i Z-2",
+          "status": "Kompletny"
+        },
+        {
+          "id": "quarters",
+          "name": "Kwatera: dokumenty K-1",
+          "status": "Kompletny"
+        },
+        {
+          "id": "store",
+          "name": "Magazynek: M-1 do M-5",
+          "status": "Kompletny"
+        }
+      ]
+    },
+    "4": {
+      "net_gold": 34,
+      "cargo": [
+        {
+          "id": "armory",
+          "name": "Zbrojownia: skrzynie Z-1 i Z-2",
+          "status": "Kompletny"
+        },
+        {
+          "id": "quarters",
+          "name": "Kwatera: dokumenty K-1",
+          "status": "Kompletny"
+        },
+        {
+          "id": "store",
+          "name": "Magazynek: M-1 do M-5",
+          "status": "Kompletny"
+        }
+      ]
+    },
+    "5": {
+      "net_gold": 55,
+      "cargo": [
+        {
+          "id": "armory",
+          "name": "Zbrojownia: skrzynie Z-1 i Z-2",
+          "status": "Kompletny"
+        },
+        {
+          "id": "quarters",
+          "name": "Kwatera: dokumenty K-1",
+          "status": "Kompletny"
+        },
+        {
+          "id": "store",
+          "name": "Magazynek: M-1 do M-5",
+          "status": "Kompletny"
+        }
+      ]
+    },
+    "6": {
+      "net_gold": 55,
+      "cargo": [
+        {
+          "id": "armory",
+          "name": "Zbrojownia: skrzynie Z-1 i Z-2",
+          "status": "Kompletny"
+        },
+        {
+          "id": "quarters",
+          "name": "Kwatera: dokumenty K-1",
+          "status": "Kompletny"
+        },
+        {
+          "id": "store",
+          "name": "Magazynek: M-1 do M-5",
+          "status": "Kompletny"
+        }
+      ]
+    }
+  }
+}

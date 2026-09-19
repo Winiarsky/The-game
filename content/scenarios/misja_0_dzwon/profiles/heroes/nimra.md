@@ -15,8 +15,12 @@ w kanonie; poniższa charakterystyka jest roboczym rozwinięciem roli, nie nową
 
 Stałe intro, publikowane osobno w `text/hero_nimra.md`:
 
-Nimra lubiła rozumieć, dlaczego rzeczy się dzieją. Gdy nie chciały wyjawić przyczyny, magia pozwalała zadać pytanie z większym naciskiem.
+Nimra lubiła rozumieć, dlaczego rzeczy się dzieją. Gnomia czarodziejka przyglądała się światu z uwagą kogoś, kto podejrzewa, że w instrukcji pominięto kilka istotnych ostrzeżeń.
+
+Gdy zjawiska nie chciały wyjawić przyczyny, magia pozwalała zadać pytanie z większym naciskiem. Nimra wiedziała jednak, że odpowiedź może objąć również najbliższe otoczenie. Dlatego przed rzuceniem czaru dobrze było ustalić, gdzie stoją towarzysze — zwłaszcza ci, którzy właśnie zapewniali, że niczego się nie boją.
 
 Instrukcja generowania: zachowaj ten sam fragment niezależnie od składu drużyny;
 przedstaw wyłącznie bohaterów wybranych do gry. W scenach opisz jedną reakcję,
 nie odbierając graczowi decyzji. Edycja tego profilu nie nadpisuje automatycznie tekstów.
+
+Oprawa ilustracji w tej misji: `profiles/visual_style.md`; aktywny wariant obrazu wybiera `visuals.json`.

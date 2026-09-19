@@ -112,6 +112,7 @@ class PlayerReactionDamageResolution:
     state: CombatState
     applied_damage: AppliedDamageResult
     target_id: str
+    active_effects: tuple[ActiveCombatEffect, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -1380,6 +1381,7 @@ class PlayerReactionFlowService:
         natural_roll: int,
         natural_roll_2: int | None = None,
         consumed_effect_id: str | None = None,
+        board: BoardState | None = None,
     ) -> PlayerReactionAttackResolution:
         attacker = _actor_by_string_id(state, attacker_id)
         target = _actor_by_string_id(state, target_id)
@@ -1437,6 +1439,14 @@ class PlayerReactionFlowService:
             attacker,
             target,
         )
+        from dnd_board_game.rules.charge_rolls import uses_charge
+        from dnd_board_game.combat.saturation_attacks import saturation_damage_source, snapshot_reaction_bonuses
+        if uses_charge(attacker):
+            from dnd_board_game.combat.attack_positioning import evaluate_attack_positioning, attack_source_with_positioning
+            source = attack_source_with_positioning(source, evaluate_attack_positioning(
+                board or BoardState(), attacker, target, source, updated_state.actors,
+                condition_states=updated_state.condition_states))
+            source = saturation_damage_source(updated_state, attacker, target, source)
         attack_roll = resolve_d20_roll(
             _manual_d20_input(source.attack_roll_request, natural_roll, natural_roll_2)
         )
@@ -1464,6 +1474,8 @@ class PlayerReactionFlowService:
             attacker_id,
             target_id,
         )
+        updated_effects = snapshot_reaction_bonuses(updated_effects, attacker, target,
+            source if resolution.hit else replace(source, damage_components=()))
         return PlayerReactionAttackResolution(
             state=updated_state,
             active_effects=updated_effects,
@@ -1504,6 +1516,8 @@ class PlayerReactionFlowService:
             active_effects,
             allow_physical_turn_bonuses=False,
         )
+        from dnd_board_game.combat.saturation_attacks import reaction_damage_source
+        source = reaction_damage_source(source, attacker, target, active_effects)
         if component_totals is not None:
             components = damage_components_from_totals(
                 source.damage_components,
@@ -1530,6 +1544,8 @@ class PlayerReactionFlowService:
             state=replace_actor(state, applied_damage.actor_after),
             applied_damage=applied_damage,
             target_id=target_id,
+            active_effects=tuple(e for e in active_effects if not (
+                e.kind == 'saturation_reaction_damage' and e.actor_id == attacker_id)),
         )
 
     def detect_ready_attack(

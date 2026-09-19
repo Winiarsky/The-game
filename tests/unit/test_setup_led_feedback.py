@@ -56,3 +56,19 @@ def test_setup_led_feedback_ignores_hidden_and_conditional_steps():
 
     assert setup_led_feedback(hidden).frames == ()
     assert setup_led_feedback(conditional).frames == ()
+
+
+def test_tile_footprint_is_dim_and_interaction_is_bright_without_overlap():
+    from dnd_board_game.hardware.led_palette import LedColor
+    area=(Coordinate(2,1),Coordinate(3,1),Coordinate(4,1))
+    step=SetupStep(kind=SetupStepKind.ENVIRONMENT,label='Kafel',positions=area,
+                   color=LedColor.SETUP_FOOTPRINT,message='Ustaw kafel.',
+                   focus_positions=(area[1],))
+    feedback=setup_led_feedback(step)
+    connection=FakeConnection()
+    BoardLedAdapter(connection).show_feedback(feedback)
+    assert len(connection.calls)==1
+    positions,colors=connection.calls[0]
+    assert dict(zip(positions,colors))=={(2,1):list(LedColor.SETUP_FOOTPRINT),
+                                        (4,1):list(LedColor.SETUP_FOOTPRINT),
+                                        (3,1):list(LedColor.INTERACTIVE_OBJECT)}

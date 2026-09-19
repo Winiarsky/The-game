@@ -1,0 +1,1 @@
+{"method": "Page.javascriptDialogOpening", "params": {"url": "http://127.0.0.1:8765/play", "frameId": "505D613A58BEA6A5A5B750C4183D9B45", "message": "Wczytanie zast\u0105pi aktualny stan scenariusza. Kontynuowa\u0107?", "type": "confirm", "hasBrowserHandler": true, "defaultPrompt": ""}}

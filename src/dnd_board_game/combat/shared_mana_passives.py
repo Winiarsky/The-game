@@ -9,6 +9,14 @@ from .attack_flow import AttackSource
 
 def apply_hit_passive(state: CombatState, effects: tuple[ActiveEffect, ...], source: AttackSource) -> tuple[CombatState, tuple[ActiveEffect, ...], bool]:
     actor = current_actor(state)
+    from dnd_board_game.rules.charge_rolls import uses_charge
+    from dnd_board_game.actors import actor_has_feature
+    if uses_charge(actor) and not actor_has_feature(actor, 'mana_nimble_hands'):
+        return state, effects, False
+    if uses_charge(actor):
+        knife = any('knife' in (v or '') or 'dagger' in (v or '')
+                    for v in (source.source_item_id, source.proficiency_id))
+        return state, effects, str(actor.id) == 'mira' and knife
     if state.shared_mana is None or str(actor.id) != state.shared_mana.turn_actor:
         return state, effects, False
     key = 'shared_momentum_used' if str(actor.id) == 'brakka' else 'shared_nimble_used'

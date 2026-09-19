@@ -1,0 +1,1 @@
+Lorian dostrzega, że Nessa sprawdziła nazwiska rannych, zanim wróciła do rachunków. Może raz spróbować zjednać ją sobie. Wybierzcie jedną wypowiedź; po odpowiedzi Nessy nie będzie można próbować innej.

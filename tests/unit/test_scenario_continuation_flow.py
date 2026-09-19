@@ -196,3 +196,20 @@ def test_continuation_outcomes_require_one_final_unconditional_fallback():
             target_scenario_path="watchtower.json",
             outcomes=(conditional,),
         )
+
+
+def test_campaign_threads_propagate_without_repeating_scenario_configuration():
+    service = ScenarioContinuationFlowService()
+    flags = set_scene_flag(SceneFlags(), 'campaign_delayed_rewards_v1', '{"bell":"pending"}')
+    flags = set_scene_flag(flags, 'campaign_mission_zero_case', '{"debt":"garran"}')
+    from dnd_board_game.application.party_ethos import apply_choice, KEY, read
+    flags = apply_choice(flags, 'mission:force', 'ruthlessness')
+    flags = set_scene_flag(flags, 'local_only', True)
+    plan = service.plan(_branched_continuation(), source_scenario_id='misja_0_dzwon', flags=flags, current_zone_id='road')
+    result = service.resolve_outcome(plan, flags=flags, navigation_succeeded=True)
+    carried = dict(result.propagated_flags)
+    assert set(carried) == {'campaign_delayed_rewards_v1', 'campaign_mission_zero_case', KEY}
+    restored = set_scene_flag(SceneFlags(), KEY, carried[KEY])
+    assert read(restored).position == 4
+    assert apply_choice(restored, 'mission:force', 'ruthlessness') == restored
+    assert carried['campaign_mission_zero_case'] == '{"debt":"garran"}'

@@ -1,0 +1,76 @@
+{
+  "actions": {
+    "second_wind": "Odzyskaj 1k10 + modyfikator Kondycji PW (bazowo +2), najwyżej do maksimum. Leczenie zużywa akcję główną.",
+    "defensive_stance": "Zyskujesz +2 KP do mana draina. Każda zmiana pola kończy postawę. Ponowne użycie nie zwiększa premii.",
+    "garran_command_halt": "Wróg do 60 ft (12 pól) broni się Mądrością przeciw ST 14. Porażka: połowa ruchu i brak reakcji do początku twojej następnej tury. Sukces: brak efektu.",
+    "garran_guard_companion": "Przed rozstrzygnięciem pojedynczego ataku na sąsiadującego sojusznika przejmij atak na siebie. Zużywasz reakcję. Nie działa na ataki obszarowe.",
+    "shield_bash": "Sąsiadujący wróg: twój k20 + Siła + naładowanie przeciw jego testowi. Remis wygrywa wróg. Wygrana: 1k6 + Siła obrażeń i odepchnięcie o 1 pole, jeśli wolne. Przegrana: brak efektu.",
+    "garran_shield_wall": "Sąsiadujący sojusznicy mają +2 KP do początku twojej następnej tury. Ty nie zyskujesz tej premii. Wyjście z sąsiedztwa kończy ochronę sojusznika.",
+    "garran_rally": "Ty i słyszący sojusznicy do 15 ft (3 pól) usuwacie Strach. Każdy ma przewagę pierwszego ataku do początku twojej następnej tury: 2k20, wybierz wyższy wynik.",
+    "iron_bastion": "Aura 10 ft (2 pola): ty i sojusznicy w niej macie premię do KP równą twojej Sile (bazowo +4) i ochronę przed przymusowym przesunięciem. Działa do mana draina. Bez opłat w kolejnych turach.",
+    "counterattack_command": "Wybierz sojusznika do 15 ft (3 pól), z dostępną reakcją. Każdy z was może przejść do 10 ft (2 pól) bez ataków okazyjnych i wykonać atak bronią. Sojusznik zużywa reakcję. Ataki są częścią tej akcji."
+  },
+  "boosts": {
+    "shield_bash": "+1k6 obrażeń; maks. 2 razy.",
+    "garran_shield_wall": "5 tymczasowych PW dla sojusznika; maks. 2 różne cele.",
+    "garran_rally": "Wybrany uczestnik odzyskuje 1k6 PW; maks. 2 razy."
+  },
+  "equipment": {
+    "longsword": {
+      "slot": "Jedna ręka / obie ręce",
+      "icon": "sword",
+      "die": 8,
+      "effect": "1k8 + Siła · cięte",
+      "detail": "Oburącz: 1k10 + Siła."
+    },
+    "shield": {
+      "slot": "Jedna ręka",
+      "icon": "shield",
+      "effect": "+2 KP",
+      "detail": "Zajmuje jedną rękę."
+    },
+    "chain_mail": {
+      "slot": "Pancerz",
+      "icon": "shield",
+      "effect": "KP 16 · bez Zręczności",
+      "detail": "Siła <13: −10 ft ruchu; utrudnia skradanie."
+    },
+    "crossbow": {
+      "slot": "Obie ręce / plecak",
+      "icon": "sword",
+      "die": 8,
+      "effect": "1k8 + Zręczność · kłute",
+      "detail": "Zużywa bełt; ładowanie."
+    },
+    "crossbow_bolt": {
+      "slot": "Plecak · amunicja",
+      "icon": "arrow",
+      "effect": "20 bełtów",
+      "detail": "Do kuszy. Pozostało: ______"
+    },
+    "explorers_pack": {
+      "slot": "Plecak · wyposażenie",
+      "icon": "pack",
+      "effect": "Pakiet podróżny",
+      "detail": "Plecak, posłanie, menażka, krzesiwo, 10 pochodni, 10 racji, bukłak, lina."
+    },
+    "common_clothes": {
+      "slot": "Plecak · wyposażenie",
+      "icon": "pack",
+      "effect": "Bez premii do KP",
+      "detail": "Zwykła odzież podróżna."
+    },
+    "pouch": {
+      "slot": "Plecak · pojemnik",
+      "icon": "pack",
+      "effect": "Drobne przedmioty",
+      "detail": "Pojemność: do 6 lb."
+    },
+    "dice_set": {
+      "slot": "Plecak · przedmiot",
+      "icon": "dice",
+      "effect": "Kości do gry",
+      "detail": "Przedmiot fabularny; bez stałej premii."
+    }
+  }
+}

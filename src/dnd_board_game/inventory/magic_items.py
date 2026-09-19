@@ -11,6 +11,7 @@ if TYPE_CHECKING:
 
 
 class MagicItemEffectKind(StrEnum):
+    STRENGTH_SCORE_BONUS = "strength_score_bonus"
     ARMOR_CLASS_BONUS = "armor_class_bonus"
     SAVING_THROW_BONUS = "saving_throw_bonus"
     ABILITY_CHECK_BONUS = "ability_check_bonus"
@@ -66,6 +67,19 @@ def magic_item_effect_total(
         contribution.effect.value
         for contribution in active_magic_item_effects(actor, kind)
     )
+
+
+def effective_ability_score(actor: Actor, ability: str) -> int:
+    """Equipment changes the effective score, never the persisted base score."""
+    from dnd_board_game.actors.proficiency_profile import validate_ability
+    validate_ability(ability)
+    bonus = magic_item_effect_total(actor, MagicItemEffectKind.STRENGTH_SCORE_BONUS) if ability == 'strength' else 0
+    return getattr(actor.ability_scores, ability) + bonus
+
+
+def effective_ability_modifier(actor: Actor, ability: str) -> int:
+    from dnd_board_game.rules import ability_modifier
+    return ability_modifier(effective_ability_score(actor, ability))
 
 
 def magic_item_roll_modifiers(

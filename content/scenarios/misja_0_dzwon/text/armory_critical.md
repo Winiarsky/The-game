@@ -1,0 +1,1 @@
+Przy przeszukiwaniu mocowanie puszcza. Część ładunku zostaje uszkodzona. Zbieracie to, co można dowieźć, lecz dodatkowego znaleziska nie ma. Przy rozliczeniu Gildia potrąci 2 sz. Zaznaczcie uszkodzenie przy tej pozycji rozkazu.

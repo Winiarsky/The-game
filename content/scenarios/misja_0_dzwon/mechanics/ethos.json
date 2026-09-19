@@ -1,0 +1,14 @@
+{
+  "cart_coerce": {
+    "id": "misja_0_dzwon:cart_coerce",
+    "direction": "ruthlessness"
+  },
+  "accept_truce": {
+    "id": "misja_0_dzwon:accept_truce",
+    "direction": "solidarity"
+  },
+  "refuse_truce": {
+    "id": "misja_0_dzwon:refuse_truce",
+    "direction": "ruthlessness"
+  }
+}

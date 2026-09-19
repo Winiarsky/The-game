@@ -1,0 +1,1 @@
+Mira dostaje krótki list. Pośrednik znalazł kupca, którego interesował metal i który nie zadawał pytań o dawny dźwięk. Po potrąceniu kosztów przesyła umówioną część pieniędzy. Sprawa sprzedaży dzwonu zostaje rozliczona.

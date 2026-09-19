@@ -1,6 +1,8 @@
 """Deterministic actions introduced by the shared-market hero catalogue."""
 from __future__ import annotations
 
+from dnd_board_game.inventory.magic_items import effective_ability_modifier
+
 from dataclasses import dataclass, replace
 from typing import Sequence, TYPE_CHECKING
 
@@ -58,7 +60,7 @@ def support_aura_preview(actors: Sequence[Actor], effects: tuple[ActiveEffect, .
             radius = 30 if ability_id == 'victory_hymn' else 5 if shield else 10
         source = ActiveEffect(id='aura_preview', actor_id=source_id, source_actor_id=source_id,
             kind=kind, label='Podgląd aury', object_id=ability_id,
-            value=2 if shield else ability_modifier(owner.ability_scores.strength) if ability_id == 'iron_bastion' else 1,
+            value=2 if shield else effective_ability_modifier(owner, 'strength') if ability_id == 'iron_bastion' else 1,
             radius_feet=radius)
     if source.radius_feet <= 0:
         return None
@@ -97,7 +99,7 @@ def resolve_simple_action(state: CombatState, effects: tuple[ActiveEffect, ...],
     if ability_id == 'victory_hymn':
         effects = expire_active_effects(effects, EffectEvent(EffectEventType.CONCENTRATION_ENDED, actor_id=str(actor.id))).active_effects
         extra = (AdditionalEffectExpiration(EffectDuration.CONCENTRATION, actor_id=str(actor.id)),)
-    value = ability_modifier(actor.ability_scores.strength) if ability_id == 'iron_bastion' else 1
+    value = effective_ability_modifier(actor, 'strength') if ability_id == 'iron_bastion' else 1
     kind = ability_id
     if ability_id == 'caring_gesture':
         value = max(0, roll + ability_modifier(actor.ability_scores.wisdom))

@@ -1,6 +1,8 @@
 """Actor-bound exploration checks, independent of presentation and persistence."""
 from __future__ import annotations
 
+from dnd_board_game.inventory.magic_items import effective_ability_modifier
+
 from dataclasses import replace
 
 from dnd_board_game.actors import Actor
@@ -18,16 +20,16 @@ def method_modifiers(actor: Actor, method: ExplorationMethod) -> tuple[RollModif
     if str(actor.id) != method.hero_id:
         raise ValueError("Tę metodę wykonuje przypisany do niej bohater.")
     modifiers = [RollModifier(ABILITY_LABELS_PL[method.ability],
-                  ability_modifier(getattr(actor.ability_scores, method.ability)), RollModifierType.ABILITY)]
+                  effective_ability_modifier(actor, method.ability), RollModifierType.ABILITY)]
     trained = method.proficiency in (*actor.proficiencies.skills, *actor.proficiencies.tools)
     if trained and not uses_charge(actor):
         expert = method.proficiency in actor.proficiencies.expertise
         modifiers.append(RollModifier(SKILL_LABELS_PL.get(method.proficiency, "Narzędzia złodziejskie"),
                          actor.proficiency_bonus * (2 if expert else 1),
                          RollModifierType.EXPERTISE if expert else RollModifierType.PROFICIENCY))
-    if method.hero_id == "lorian" and method.ability == "charisma":
+    if not uses_charge(actor) and method.hero_id == "lorian" and method.ability == "charisma":
         modifiers.append(RollModifier("Obycie i targowanie", 2, RollModifierType.FEATURE))
-    if method.hero_id == "erynd" and method.kind == "object":
+    if not uses_charge(actor) and method.hero_id == "erynd" and method.kind == "object":
         modifiers.append(RollModifier("Praktyka terenowa", 2, RollModifierType.FEATURE))
     return tuple(modifiers)
 

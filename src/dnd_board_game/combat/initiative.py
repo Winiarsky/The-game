@@ -86,7 +86,7 @@ def build_player_initiative_prompts(
         if actor.faction != Faction.ALLY or actor.is_defeated():
             continue
         modifier = dexterity_modifier(actor) + (
-            2 if actor_has_feature(actor, "scouts_vigilance") else 0
+            2 if actor_has_feature(actor, "scouts_vigilance") and not any(f.feature_id == 'pooled_mana_v01' for f in actor.features) else 0
         )
         request = apply_actor_d20_traits(
             actor,
@@ -114,7 +114,7 @@ def build_enemy_initiative_prompt(
     mode: RollMode = RollMode.NORMAL,
 ) -> InitiativePrompt:
     modifier = dexterity_modifier(actor) + (
-        2 if actor_has_feature(actor, "scouts_vigilance") else 0
+        2 if actor_has_feature(actor, "scouts_vigilance") and not any(f.feature_id == 'pooled_mana_v01' for f in actor.features) else 0
     )
     request = apply_actor_d20_traits(
         actor,

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from dnd_board_game.rules.charge_rolls import uses_charge
 
 from dnd_board_game.actors.resources import uses_physical_mana
 from dnd_board_game.combat.physical_mana import attack_maximum, validate_series_source, bind_series_source
@@ -776,14 +777,14 @@ class PlayerCombatActionFlowService:
                 selected.selected_target,
                 effective_source.damage_components[0].damage_type,
             )
-            if is_longbow_source(effective_source)
-            and (state.shared_mana is None or state.shared_mana.turn_actor == str(attacker.id))
+            if (uses_charge(attacker) or is_longbow_source(effective_source))
+            and (uses_charge(attacker) or state.shared_mana is None or state.shared_mana.turn_actor == str(attacker.id))
             and effective_source.damage_components
-            and not any(
+            and (uses_charge(attacker) or not any(
                 effect.actor_id == str(attacker.id)
                 and effect.kind == "first_blood_used"
                 for effect in active_effects
-            )
+            ))
             else None
         )
         if first_blood_component is not None:
@@ -1536,7 +1537,7 @@ class PlayerCombatActionFlowService:
             None,
         )
         updated_effects = active_effects
-        if pending.sneak_attack:
+        if pending.sneak_attack and not uses_charge(attacker):
             updated_effects = commit_sneak_attack_hit(
                 updated_effects,
                 str(attacker.id),
@@ -1552,7 +1553,7 @@ class PlayerCombatActionFlowService:
                 kind = {"hunters_mark": "mana_hunters_mark_used", "mana_double_shot": "mana_double_shot_used"}.get(component.id)
                 if kind:
                     updated_effects = apply_active_effect(updated_effects, mana_effect(str(attacker.id), kind, "Premia wykorzystana w tej turze", 1)).active_effects
-        if pending.first_blood:
+        if pending.first_blood and not uses_charge(attacker):
             updated_effects = commit_first_blood_hit(
                 updated_effects,
                 str(attacker.id),
@@ -1833,6 +1834,8 @@ class PlayerCombatActionFlowService:
             attacker,
             target,
         )
+        from dnd_board_game.combat.saturation_attacks import saturation_damage_source
+        effective_source = saturation_damage_source(state, attacker, target, effective_source)
         attack_roll = resolve_d20_roll(
             _manual_d20_input(
                 effective_source,

@@ -10,7 +10,7 @@ PDF-y: `assets/physical_cards/character_sets/physical_mana_v02/` — color, mini
 
 ## Garran — Żelazna Straż — obrona pierwszej linii
 
-PW 28; KP 19; ruch 30 ft.
+PW 28; KP 18; ruch 30 ft.
 Wspólna talia: po max(5, 2 × liczba bohaterów) kart każdego koloru. Oferta dwóch kart, dobór jednej na początku własnej tury poniżej 21 pkt. Ładunek pozostaje do draina; bazowa akcja spala 1 kartę z wierzchu, podbicie dodatkowe 2.
 
 ### Drugi oddech · Rozwidlenie
@@ -85,35 +85,32 @@ Wspólna talia: po max(5, 2 × liczba bohaterów) kart każdego koloru. Oferta d
 - **Autorytet (NPC):** Siła, bazowy test +4; wpływ: kość podatności +4. Przejmij inicjatywę zdecydowaną obecnością i odpowiedzialnością za sytuację.
 - **Zabezpieczenie (obiekt):** Kondycja, bazowy test +2; wpływ: kość podatności +2. Utrzymaj konstrukcję stabilną i bezpiecznie zwolnij naprężenia.
 
-Konfrontacja drużynowa: każdy ma własną pulę i turę. Poniżej 21 pkt obowiązkowo wybierz jedną z dwóch odkrytych kart; druga zostaje. Przy 21+ nie dobierasz, bez kary za przekroczenie. Po doborze: własny test albo pomoc +2 do następnego testu sojusznika, bez kumulacji i bez spalania. Premia many +0/+2/+4/+6 wymaga 0/6/12/21 pkt i spala 1/1/2/3 karty. Możesz wybrać słabszą próbę. Test: k20 + cecha + naładowanie + pozostałe premie. Sukces: kość wpływu zależna od podatności + modyfikator cechy + premie wpływu. Pula pozostaje. Spalanie z wierzchu po efekcie, także przy niepowodzeniu. Po rundzie sytuacja reaguje. Opór 0 = sukces. Brak kart do wymaganej operacji kończy konfrontację; najpierw rozstrzygnij rozpoczęte działanie. Bez ostatniej darmowej kolejki. Na nową konfrontację zbierz cały komplet i przetasuj. Runy wybierają działania; rzuty przez fokus, −/+, podsumowanie i ✓.
+Konfrontacja drużynowa: każdy ma własną pulę i turę. Poniżej 21 pkt obowiązkowo wybierz jedną z dwóch odkrytych kart; druga zostaje. Przy 21+ nie dobierasz, bez kary za przekroczenie. Po doborze: własny test albo pomoc +2 do następnego testu sojusznika, bez kumulacji i bez spalania. Premia many +0/+2/+4/+6 wymaga 0/6/12/21 pkt i spala 1/1/2/3 karty. Możesz wybrać słabszą próbę. Test: k20 + cecha + naładowanie + pozostałe premie. Sukces: kość wpływu zależna od podatności + modyfikator cechy + premie wpływu. Pula pozostaje. Pasywy działają, dopóki masz dany kolor, bez limitu tur. Gruba obwódka symbolu: kumuluje się; cienka: nie. Oddech odzyskuje kartę po każdej udanej próbie, przed spalaniem kosztu. Drain wyłącza wszystkie pasywy. Spalanie z wierzchu po efekcie, także przy niepowodzeniu. Po rundzie sytuacja reaguje. Opór 0 = sukces. Brak kart do wymaganej operacji kończy konfrontację; najpierw rozstrzygnij rozpoczęte działanie. Bez ostatniej darmowej kolejki. Na nową konfrontację zbierz cały komplet i przetasuj. Runy wybierają działania; rzuty przez fokus, −/+, podsumowanie i ✓.
 
-- **Czerwona:** Stanowczość: +1 do wpływu za kartę (maks. +2)
+- **Czerwona:** Stanowczość: +1 do wpływu za każdą kartę czerwonej many (maks. +2). Kumuluje się.
 - **Biała:** Opanowanie: osłoń 1 kartę puli przed każdą reakcją (bez kumulacji)
-- **Zielona:** Oddech: przy doborze oddaj najstarszą spaloną kartę na spód talii
-- **Czarna:** Skupienie: +1 do testu za kartę (maks. +2)
+- **Zielona:** Oddech: po każdej udanej próbie oddaj najstarszą spaloną kartę na spód talii, przed spaleniem kosztu próby. Nie kumuluje się.
+- **Czarna:** Skupienie: +1 do testu za każdą kartę czarnej many (maks. +2). Kumuluje się.
 - **Niebieska:** Współpraca: pomoc daje +3 zamiast +2 (bez kumulacji)
 
 ### Pasywy i skaza
 
-- **Styl walki: Obrona:** Gdy nosisz pancerz, masz +1 KP. Aplikacja i karta postaci uwzględniają tę premię.
-- **Ulepszony krytyk:** Atak bronią trafia krytycznie, gdy na k20 wypadnie naturalne 19 lub 20. Nie dotyczy testu Siły przy Uderzeniu tarczą.
-- **Żelazna linia:** Gdy Garran i sojusznik flankują wspólnego przeciwnika, ten sojusznik ma +1 KP przeciw atakom tego przeciwnika. Premia nie chroni Garrana ani nie działa przeciw innym wrogom.
 
 #### Nasycenie maną
 
-- **Czerwona:** Natarcie: +1 obrażeń wręcz za kartę
-- **Biała:** Mur tarcz: +1 KP za kartę (maks. +2)
-- **Zielona:** Wytchnienie: przy doborze odzyskaj 5 PW
-- **Czarna:** Wytrwałość: +1 do obron KON (maks. +2)
-- **Niebieska:** Czujność: +2 do obron MĄD (maks. +2)
+- **Czerwona:** Natarcie: +1 obrażeń wręcz za każdą kartę czerwonej many. Kumuluje się.
+- **Biała:** Żelazna linia: sojusznik flankujący z tobą wroga ma +1 KP przeciw temu wrogowi. Nie kumuluje się.
+- **Zielona:** Ulepszony krytyk: od pierwszej zielonej ataki bronią krytykują przy naturalnym 19–20. Nie dotyczy testu Uderzenia tarczą. Nie kumuluje się.
+- **Czarna:** Wytrwałość: +1 do obron KON (maks. +2). Kumuluje się.
+- **Niebieska:** Osłona: +1 KP dla Garrana. Nie kumuluje się.
 
-Premie trwają do mana draina; leczenie zachowujesz. Dobór kończy się przy 21 lub więcej pkt.
+Pasywy są zablokowane, dopóki nie masz karty odpowiedniego koloru. Gruba obwódka symbolu: kumuluje się za kolejne karty tego koloru (według limitu). Cienka: nie kumuluje się. Utrata ostatniej karty koloru, drain i koniec walki wyłączają pasyw. Drain resetuje użycie Nieustępliwości; nowa czarna mana odblokowuje ją ponownie. Odzyskane PW pozostają. Dobór do 21+ pkt.
 
 **Skaza — Nieustępliwość:** Rozpoczęcie własnej tury przy wrogu zmniejsza limit zwykłego ruchu o połowę do końca tury.
 
 ## Brakka — Niszczycielka — obrażenia i wytrzymałość
 
-PW 35; KP 14; ruch 30 ft.
+PW 35; KP 11; ruch 30 ft.
 Wspólna talia: po max(5, 2 × liczba bohaterów) kart każdego koloru. Oferta dwóch kart, dobór jednej na początku własnej tury poniżej 21 pkt. Ładunek pozostaje do draina; bazowa akcja spala 1 kartę z wierzchu, podbicie dodatkowe 2.
 
 ### Szał · Rozwidlenie
@@ -188,30 +185,26 @@ Wspólna talia: po max(5, 2 × liczba bohaterów) kart każdego koloru. Oferta d
 - **Zastraszanie (NPC):** Kondycja, bazowy test +3; wpływ: kość podatności +3. Wytrzymaj nacisk i pokaż, że nie ustąpisz. Test Kondycji, nie rzut obronny.
 - **Forsowanie (obiekt):** Siła, bazowy test +4; wpływ: kość podatności +4. Pokonaj opór siłą: podnieś, wyważ lub rozerwij blokadę.
 
-Konfrontacja drużynowa: każdy ma własną pulę i turę. Poniżej 21 pkt obowiązkowo wybierz jedną z dwóch odkrytych kart; druga zostaje. Przy 21+ nie dobierasz, bez kary za przekroczenie. Po doborze: własny test albo pomoc +2 do następnego testu sojusznika, bez kumulacji i bez spalania. Premia many +0/+2/+4/+6 wymaga 0/6/12/21 pkt i spala 1/1/2/3 karty. Możesz wybrać słabszą próbę. Test: k20 + cecha + naładowanie + pozostałe premie. Sukces: kość wpływu zależna od podatności + modyfikator cechy + premie wpływu. Pula pozostaje. Spalanie z wierzchu po efekcie, także przy niepowodzeniu. Po rundzie sytuacja reaguje. Opór 0 = sukces. Brak kart do wymaganej operacji kończy konfrontację; najpierw rozstrzygnij rozpoczęte działanie. Bez ostatniej darmowej kolejki. Na nową konfrontację zbierz cały komplet i przetasuj. Runy wybierają działania; rzuty przez fokus, −/+, podsumowanie i ✓.
+Konfrontacja drużynowa: każdy ma własną pulę i turę. Poniżej 21 pkt obowiązkowo wybierz jedną z dwóch odkrytych kart; druga zostaje. Przy 21+ nie dobierasz, bez kary za przekroczenie. Po doborze: własny test albo pomoc +2 do następnego testu sojusznika, bez kumulacji i bez spalania. Premia many +0/+2/+4/+6 wymaga 0/6/12/21 pkt i spala 1/1/2/3 karty. Możesz wybrać słabszą próbę. Test: k20 + cecha + naładowanie + pozostałe premie. Sukces: kość wpływu zależna od podatności + modyfikator cechy + premie wpływu. Pula pozostaje. Pasywy działają, dopóki masz dany kolor, bez limitu tur. Gruba obwódka symbolu: kumuluje się; cienka: nie. Oddech odzyskuje kartę po każdej udanej próbie, przed spalaniem kosztu. Drain wyłącza wszystkie pasywy. Spalanie z wierzchu po efekcie, także przy niepowodzeniu. Po rundzie sytuacja reaguje. Opór 0 = sukces. Brak kart do wymaganej operacji kończy konfrontację; najpierw rozstrzygnij rozpoczęte działanie. Bez ostatniej darmowej kolejki. Na nową konfrontację zbierz cały komplet i przetasuj. Runy wybierają działania; rzuty przez fokus, −/+, podsumowanie i ✓.
 
-- **Czerwona:** Stanowczość: +1 do wpływu za kartę (maks. +2)
+- **Czerwona:** Stanowczość: +1 do wpływu za każdą kartę czerwonej many (maks. +2). Kumuluje się.
 - **Biała:** Opanowanie: osłoń 1 kartę puli przed każdą reakcją (bez kumulacji)
-- **Zielona:** Oddech: przy doborze oddaj najstarszą spaloną kartę na spód talii
+- **Zielona:** Oddech: po każdej udanej próbie oddaj najstarszą spaloną kartę na spód talii, przed spaleniem kosztu próby. Nie kumuluje się.
 - **Czarna:** Współpraca: pomoc daje +3 zamiast +2 (bez kumulacji)
-- **Niebieska:** Skupienie: +1 do testu za kartę (maks. +2)
+- **Niebieska:** Skupienie: +1 do testu za każdą kartę niebieskiej many (maks. +2). Kumuluje się.
 
 ### Pasywy i skaza
 
-- **Widzenie w ciemności:** W niemagicznej ciemności do 60 stóp widzi jak w półmroku. Nie przenika magicznej ciemności ani mgły.
-- **Obrona bez pancerza:** Bez pancerza twoja KP wynosi 10 + modyfikator Zręczności + modyfikator Kondycji. Możesz korzystać z tarczy.
-- **Nieustępliwość półorka:** automatycznie przy pierwszym zejściu do 0 PW pozostawia Brakkę z 1 PW, o ile obrażenia nie zabijają jej natychmiast; 1 użycie na długi odpoczynek.
-- **Dzikie ataki:** krytyczny atak bronią wręcz dodaje jedną kość broni.
 
 #### Nasycenie maną
 
-- **Czerwona:** Rozpęd: +1 obrażeń wręcz za kartę
-- **Biała:** Garda: +1 KP (maks. +1)
-- **Zielona:** Witalność: przy doborze odzyskaj 5 PW
-- **Czarna:** Nieustraszona: +2 do obron MĄD (maks. +2)
-- **Niebieska:** Hart: +2 do obron KON (maks. +2)
+- **Czerwona:** Dzikie ataki: krytyczne trafienie bronią wręcz dodaje jedną kość tej broni. Nie kumuluje się.
+- **Biała:** Obrona bez pancerza: bez pancerza KP = 10 + Zręczność + Kondycja; tarcza dozwolona. Nie kumuluje się.
+- **Zielona:** Witalność: przy doborze odzyskaj 5 PW. Każdy dobór działa osobno; nie wzmacnia kolejnego leczenia.
+- **Czarna:** Nieustępliwość: mając czarną manę, przy zejściu do 0 PW pozostajesz na 1 PW (oprócz natychmiastowej śmierci). Jedno użycie do draina; po drainie i ponownym zdobyciu czarnej działa znów. Nie kumuluje się.
+- **Niebieska:** Hart: +2 do obron KON (maks. +2). Nie kumuluje się.
 
-Premie trwają do mana draina; leczenie zachowujesz. Dobór kończy się przy 21 lub więcej pkt.
+Pasywy są zablokowane, dopóki nie masz karty odpowiedniego koloru. Gruba obwódka symbolu: kumuluje się za kolejne karty tego koloru (według limitu). Cienka: nie kumuluje się. Utrata ostatniej karty koloru, drain i koniec walki wyłączają pasyw. Drain resetuje użycie Nieustępliwości; nowa czarna mana odblokowuje ją ponownie. Odzyskane PW pozostają. Dobór do 21+ pkt.
 
 **Skaza — Głód walki:** Tura bez ofensywy kończy Szał.
 
@@ -284,7 +277,7 @@ Wspólna talia: po max(5, 2 × liczba bohaterów) kart każdego koloru. Oferta d
 - **Ładunek:** Co najmniej 21 pkt. Pula zostaje po użyciu.
 - **Akcja:** Akcja główna
 - **Spalanie:** 1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu.
-- **Efekt:** Ruch do 15 ft bez ataków okazyjnych i dwa ataki w różnych wrogów po drodze. Atak z cienia najwyżej raz.
+- **Efekt:** Ruch do 15 ft bez ataków okazyjnych i dwa ataki w różnych wrogów po drodze. Pasywy many działają przy każdym trafieniu spełniającym warunek ukrycia lub własnej flanki.
 
 
 ### Eksploracja — NPC i obiekty
@@ -292,37 +285,32 @@ Wspólna talia: po max(5, 2 × liczba bohaterów) kart każdego koloru. Oferta d
 - **Blef (NPC):** Inteligencja, bazowy test +2; wpływ: kość podatności +2. Zbuduj sprytne, spójne kłamstwo lub pozór.
 - **Manipulacja (obiekt):** Zręczność, bazowy test +4; wpływ: kość podatności +4. Precyzyjnie zwolnij zamek, zatrzask lub drobny mechanizm przy użyciu narzędzi.
 
-Konfrontacja drużynowa: każdy ma własną pulę i turę. Poniżej 21 pkt obowiązkowo wybierz jedną z dwóch odkrytych kart; druga zostaje. Przy 21+ nie dobierasz, bez kary za przekroczenie. Po doborze: własny test albo pomoc +2 do następnego testu sojusznika, bez kumulacji i bez spalania. Premia many +0/+2/+4/+6 wymaga 0/6/12/21 pkt i spala 1/1/2/3 karty. Możesz wybrać słabszą próbę. Test: k20 + cecha + naładowanie + pozostałe premie. Sukces: kość wpływu zależna od podatności + modyfikator cechy + premie wpływu. Pula pozostaje. Spalanie z wierzchu po efekcie, także przy niepowodzeniu. Po rundzie sytuacja reaguje. Opór 0 = sukces. Brak kart do wymaganej operacji kończy konfrontację; najpierw rozstrzygnij rozpoczęte działanie. Bez ostatniej darmowej kolejki. Na nową konfrontację zbierz cały komplet i przetasuj. Runy wybierają działania; rzuty przez fokus, −/+, podsumowanie i ✓.
+Konfrontacja drużynowa: każdy ma własną pulę i turę. Poniżej 21 pkt obowiązkowo wybierz jedną z dwóch odkrytych kart; druga zostaje. Przy 21+ nie dobierasz, bez kary za przekroczenie. Po doborze: własny test albo pomoc +2 do następnego testu sojusznika, bez kumulacji i bez spalania. Premia many +0/+2/+4/+6 wymaga 0/6/12/21 pkt i spala 1/1/2/3 karty. Możesz wybrać słabszą próbę. Test: k20 + cecha + naładowanie + pozostałe premie. Sukces: kość wpływu zależna od podatności + modyfikator cechy + premie wpływu. Pula pozostaje. Pasywy działają, dopóki masz dany kolor, bez limitu tur. Gruba obwódka symbolu: kumuluje się; cienka: nie. Oddech odzyskuje kartę po każdej udanej próbie, przed spalaniem kosztu. Drain wyłącza wszystkie pasywy. Spalanie z wierzchu po efekcie, także przy niepowodzeniu. Po rundzie sytuacja reaguje. Opór 0 = sukces. Brak kart do wymaganej operacji kończy konfrontację; najpierw rozstrzygnij rozpoczęte działanie. Bez ostatniej darmowej kolejki. Na nową konfrontację zbierz cały komplet i przetasuj. Runy wybierają działania; rzuty przez fokus, −/+, podsumowanie i ✓.
 
-- **Czerwona:** Skupienie: +1 do testu za kartę (maks. +2)
+- **Czerwona:** Skupienie: +1 do testu za każdą kartę czerwonej many (maks. +2). Kumuluje się.
 - **Biała:** Opanowanie: osłoń 1 kartę puli przed każdą reakcją (bez kumulacji)
-- **Zielona:** Stanowczość: +1 do wpływu za kartę (maks. +2)
+- **Zielona:** Stanowczość: +1 do wpływu za każdą kartę zielonej many (maks. +2). Kumuluje się.
 - **Czarna:** Współpraca: pomoc daje +3 zamiast +2 (bez kumulacji)
-- **Niebieska:** Oddech: przy doborze oddaj najstarszą spaloną kartę na spód talii
+- **Niebieska:** Oddech: po każdej udanej próbie oddaj najstarszą spaloną kartę na spód talii, przed spaleniem kosztu próby. Nie kumuluje się.
 
 ### Pasywy i skaza
 
-- **Mistrzyni ukrycia:** Ukryj się zużywa akcję dodatkową. Wykonujesz jeden test Zręczności z naładowaniem i innymi premiami; aplikacja wykonuje osobny test wykrycia dla każdego wroga. Remis oznacza wykrycie. Nie potrzebujesz osłony, ale sąsiadujący wróg lub blokujący stan uniemożliwia zwykłe ukrycie.
-- **Skradanie:** Podczas ukrycia możesz przebyć do 20 ft w turze. Dobrowolne ujawnienie się zwiększa ten limit do 25 ft; odejmij od niego ruch już wykonany.
-- **Atak z cienia:** Rapier lub nóż: +1k6 za ukrycie przed celem albo własną flankę; +2k6 za oba. Raz we własnej turze, przy jednym wybranym trafieniu przed obrażeniami. Atak kończy ukrycie. Ukrycie przed celem daje też przewagę ataku.
-- **Szczęście niziołka:** ponów naturalną 1 w ataku, teście albo obronie.
-- **Ruchomy cel:** Mira ma +2 KP przeciw dystansowym testom ataku bronią i czarem; nie działa przeciw obszarom ani rzutom obronnym.
 
 #### Nasycenie maną
 
-- **Czerwona:** Precyzja: +1 do trafienia (maks. +1)
-- **Biała:** Unik: +1 KP (maks. +1)
-- **Zielona:** Ostrze: +1 obrażeń wręcz za kartę
-- **Czarna:** Refleks: +2 do obron ZRĘ (maks. +2)
-- **Niebieska:** Wytchnienie: przy doborze odzyskaj 4 PW
+- **Czerwona:** Atak z cienia: każde trafienie bronią z ukrycia przed celem zadaje dodatkowe 1k6 obrażeń. Łączy się z Atakiem z flanki. Nie kumuluje się.
+- **Biała:** Ruchomy cel: +2 KP przeciw dystansowym atakom bronią i czarami; nie przeciw obszarom ani obronom. Nie kumuluje się.
+- **Zielona:** Atak z flanki: każde trafienie bronią we wroga, którego flankujesz, zadaje dodatkowe 2k6 obrażeń. Z ukryciem łącznie +3k6. Nie kumuluje się.
+- **Czarna:** Zwinne dłonie: po każdym trafieniu nożem możesz ruszyć się o 5 ft bez kosztu ruchu i ataków okazyjnych. Nie kumuluje się.
+- **Niebieska:** Szczęście: naturalną 1 w ataku, teście lub obronie przerzuć raz; drugi wynik obowiązuje. Nie kumuluje się.
 
-Premie trwają do mana draina; leczenie zachowujesz. Dobór kończy się przy 21 lub więcej pkt.
+Pasywy są zablokowane, dopóki nie masz karty odpowiedniego koloru. Gruba obwódka symbolu: kumuluje się za kolejne karty tego koloru (według limitu). Cienka: nie kumuluje się. Utrata ostatniej karty koloru, drain i koniec walki wyłączają pasyw. Drain resetuje użycie Nieustępliwości; nowa czarna mana odblokowuje ją ponownie. Odzyskane PW pozostają. Dobór do 21+ pkt.
 
 **Skaza — Cienka granica:** W ukryciu masz utrudnienie obron i testów reakcji.
 
 ## Dagna — Uzdrowicielka — leczenie i wzmocnienia
 
-PW 30; KP 16; ruch 25 ft.
+PW 27; KP 16; ruch 25 ft.
 Wspólna talia: po max(5, 2 × liczba bohaterów) kart każdego koloru. Oferta dwóch kart, dobór jednej na początku własnej tury poniżej 21 pkt. Ładunek pozostaje do draina; bazowa akcja spala 1 kartę z wierzchu, podbicie dodatkowe 2.
 
 ### Święty płomień · Rozwidlenie
@@ -397,31 +385,26 @@ Wspólna talia: po max(5, 2 × liczba bohaterów) kart każdego koloru. Oferta d
 - **Empatia (NPC):** Mądrość, bazowy test +4; wpływ: kość podatności +4. Rozpoznaj obawy rozmówcy i odwołaj się do jego potrzeb.
 - **Oczyszczenie (obiekt):** Mądrość, bazowy test +4; wpływ: kość podatności +4. Przywróć bezpieczne użycie skażonego obiektu dostępnymi środkami.
 
-Konfrontacja drużynowa: każdy ma własną pulę i turę. Poniżej 21 pkt obowiązkowo wybierz jedną z dwóch odkrytych kart; druga zostaje. Przy 21+ nie dobierasz, bez kary za przekroczenie. Po doborze: własny test albo pomoc +2 do następnego testu sojusznika, bez kumulacji i bez spalania. Premia many +0/+2/+4/+6 wymaga 0/6/12/21 pkt i spala 1/1/2/3 karty. Możesz wybrać słabszą próbę. Test: k20 + cecha + naładowanie + pozostałe premie. Sukces: kość wpływu zależna od podatności + modyfikator cechy + premie wpływu. Pula pozostaje. Spalanie z wierzchu po efekcie, także przy niepowodzeniu. Po rundzie sytuacja reaguje. Opór 0 = sukces. Brak kart do wymaganej operacji kończy konfrontację; najpierw rozstrzygnij rozpoczęte działanie. Bez ostatniej darmowej kolejki. Na nową konfrontację zbierz cały komplet i przetasuj. Runy wybierają działania; rzuty przez fokus, −/+, podsumowanie i ✓.
+Konfrontacja drużynowa: każdy ma własną pulę i turę. Poniżej 21 pkt obowiązkowo wybierz jedną z dwóch odkrytych kart; druga zostaje. Przy 21+ nie dobierasz, bez kary za przekroczenie. Po doborze: własny test albo pomoc +2 do następnego testu sojusznika, bez kumulacji i bez spalania. Premia many +0/+2/+4/+6 wymaga 0/6/12/21 pkt i spala 1/1/2/3 karty. Możesz wybrać słabszą próbę. Test: k20 + cecha + naładowanie + pozostałe premie. Sukces: kość wpływu zależna od podatności + modyfikator cechy + premie wpływu. Pula pozostaje. Pasywy działają, dopóki masz dany kolor, bez limitu tur. Gruba obwódka symbolu: kumuluje się; cienka: nie. Oddech odzyskuje kartę po każdej udanej próbie, przed spalaniem kosztu. Drain wyłącza wszystkie pasywy. Spalanie z wierzchu po efekcie, także przy niepowodzeniu. Po rundzie sytuacja reaguje. Opór 0 = sukces. Brak kart do wymaganej operacji kończy konfrontację; najpierw rozstrzygnij rozpoczęte działanie. Bez ostatniej darmowej kolejki. Na nową konfrontację zbierz cały komplet i przetasuj. Runy wybierają działania; rzuty przez fokus, −/+, podsumowanie i ✓.
 
-- **Czerwona:** Stanowczość: +1 do wpływu za kartę (maks. +2)
+- **Czerwona:** Stanowczość: +1 do wpływu za każdą kartę czerwonej many (maks. +2). Kumuluje się.
 - **Biała:** Współpraca: pomoc daje +3 zamiast +2 (bez kumulacji)
-- **Zielona:** Oddech: przy doborze oddaj najstarszą spaloną kartę na spód talii
+- **Zielona:** Oddech: po każdej udanej próbie oddaj najstarszą spaloną kartę na spód talii, przed spaleniem kosztu próby. Nie kumuluje się.
 - **Czarna:** Opanowanie: osłoń 1 kartę puli przed każdą reakcją (bez kumulacji)
-- **Niebieska:** Skupienie: +1 do testu za kartę (maks. +2)
+- **Niebieska:** Skupienie: +1 do testu za każdą kartę niebieskiej many (maks. +2). Kumuluje się.
 
 ### Pasywy i skaza
 
-- **Widzenie w ciemności:** W niemagicznej ciemności do 60 stóp widzi jak w półmroku. Nie przenika magicznej ciemności ani mgły.
-- **Krasnoludzki ruch:** Ciężki pancerz nie zmniejsza szybkości Dagny z powodu niewystarczającej Siły.
-- **Krok ratowniczki:** Raz na turę Dagny, po leczeniu lub zdjęciu negatywnego stanu innego sojusznika w 10 stopach: ruch 5 stóp bez kosztu ruchu, reakcji i ataków okazyjnych.
-- **Krasnoludzka wytrzymałość:** +1 maksymalnego PW na każdy poziom.
-- **Krasnoludzka odporność:** przewaga przeciw truciźnie i odporność na obrażenia od trucizny.
 
 #### Nasycenie maną
 
-- **Czerwona:** Gniew: +2 obrażeń zaklęć za kartę
-- **Biała:** Wiara: +1 do wszystkich obron (maks. +2)
-- **Zielona:** Ukojenie: przy doborze przytomni sojusznicy w 10 ft i ty odzyskujecie 2 PW
-- **Czarna:** Ochrona: +1 KP (maks. +1)
-- **Niebieska:** Łaska: przy doborze ulecz o 4 PW najbardziej rannego przytomnego sojusznika w 10 ft, wliczając siebie
+- **Czerwona:** Gniew: +2 obrażeń zaklęć za każdą kartę czerwonej many. Kumuluje się.
+- **Biała:** Wiara: +1 do wszystkich obron (maks. +2). Kumuluje się.
+- **Zielona:** Ukojenie: przy doborze przytomni sojusznicy w 10 ft i ty odzyskujecie 2 PW. Każdy dobór działa osobno; nie wzmacnia kolejnego leczenia.
+- **Czarna:** Odporność na truciznę: przewaga w obronach przeciw truciźnie i połowa obrażeń od trucizny. Nie kumuluje się.
+- **Niebieska:** Krok ratowniczki: po każdym leczeniu lub zdjęciu negatywnego stanu innego sojusznika w 10 ft możesz ruszyć się o 5 ft bez kosztu i ataków okazyjnych. Nie kumuluje się.
 
-Premie trwają do mana draina; leczenie zachowujesz. Dobór kończy się przy 21 lub więcej pkt.
+Pasywy są zablokowane, dopóki nie masz karty odpowiedniego koloru. Gruba obwódka symbolu: kumuluje się za kolejne karty tego koloru (według limitu). Cienka: nie kumuluje się. Utrata ostatniej karty koloru, drain i koniec walki wyłączają pasyw. Drain resetuje użycie Nieustępliwości; nowa czarna mana odblokowuje ją ponownie. Odzyskane PW pozostają. Dobór do 21+ pkt.
 
 **Skaza — Nikogo nie zostawiam:** Ofensywna płatna zdolność przy sojuszniku poniżej połowy PW spala dodatkową kartę.
 
@@ -499,33 +482,29 @@ Wspólna talia: po max(5, 2 × liczba bohaterów) kart każdego koloru. Oferta d
 
 ### Eksploracja — NPC i obiekty
 
-- **Inspiracja (NPC):** Charyzma, bazowy test +6; wpływ: kość podatności +4. Porusz rozmówcę i zachęć go do współpracy.
+- **Inspiracja (NPC):** Charyzma, bazowy test +4; wpływ: kość podatności +4. Porusz rozmówcę i zachęć go do współpracy.
 - **Pomysłowość (obiekt):** Inteligencja, bazowy test +1; wpływ: kość podatności +1. Znajdź obejście problemu i wykorzystaj dostępne części.
 
-Konfrontacja drużynowa: każdy ma własną pulę i turę. Poniżej 21 pkt obowiązkowo wybierz jedną z dwóch odkrytych kart; druga zostaje. Przy 21+ nie dobierasz, bez kary za przekroczenie. Po doborze: własny test albo pomoc +2 do następnego testu sojusznika, bez kumulacji i bez spalania. Premia many +0/+2/+4/+6 wymaga 0/6/12/21 pkt i spala 1/1/2/3 karty. Możesz wybrać słabszą próbę. Test: k20 + cecha + naładowanie + pozostałe premie. Sukces: kość wpływu zależna od podatności + modyfikator cechy + premie wpływu. Pula pozostaje. Spalanie z wierzchu po efekcie, także przy niepowodzeniu. Po rundzie sytuacja reaguje. Opór 0 = sukces. Brak kart do wymaganej operacji kończy konfrontację; najpierw rozstrzygnij rozpoczęte działanie. Bez ostatniej darmowej kolejki. Na nową konfrontację zbierz cały komplet i przetasuj. Runy wybierają działania; rzuty przez fokus, −/+, podsumowanie i ✓.
+Konfrontacja drużynowa: każdy ma własną pulę i turę. Poniżej 21 pkt obowiązkowo wybierz jedną z dwóch odkrytych kart; druga zostaje. Przy 21+ nie dobierasz, bez kary za przekroczenie. Po doborze: własny test albo pomoc +2 do następnego testu sojusznika, bez kumulacji i bez spalania. Premia many +0/+2/+4/+6 wymaga 0/6/12/21 pkt i spala 1/1/2/3 karty. Możesz wybrać słabszą próbę. Test: k20 + cecha + naładowanie + pozostałe premie. Sukces: kość wpływu zależna od podatności + modyfikator cechy + premie wpływu. Pula pozostaje. Pasywy działają, dopóki masz dany kolor, bez limitu tur. Gruba obwódka symbolu: kumuluje się; cienka: nie. Oddech odzyskuje kartę po każdej udanej próbie, przed spalaniem kosztu. Drain wyłącza wszystkie pasywy. Spalanie z wierzchu po efekcie, także przy niepowodzeniu. Po rundzie sytuacja reaguje. Opór 0 = sukces. Brak kart do wymaganej operacji kończy konfrontację; najpierw rozstrzygnij rozpoczęte działanie. Bez ostatniej darmowej kolejki. Na nową konfrontację zbierz cały komplet i przetasuj. Runy wybierają działania; rzuty przez fokus, −/+, podsumowanie i ✓.
 
-- **Czerwona:** Stanowczość: +1 do wpływu za kartę (maks. +2)
-- **Biała:** Skupienie: +1 do testu za kartę (maks. +2)
+- **Czerwona:** Stanowczość: +1 do wpływu za każdą kartę czerwonej many (maks. +2). Kumuluje się.
+- **Biała:** Skupienie: +1 do testu za każdą kartę białej many (maks. +2). Kumuluje się.
 - **Zielona:** Opanowanie: osłoń 1 kartę puli przed każdą reakcją (bez kumulacji)
 - **Czarna:** Współpraca: pomoc daje +3 zamiast +2 (bez kumulacji)
-- **Niebieska:** Oddech: przy doborze oddaj najstarszą spaloną kartę na spód talii
+- **Niebieska:** Oddech: po każdej udanej próbie oddaj najstarszą spaloną kartę na spód talii, przed spaleniem kosztu próby. Nie kumuluje się.
 
 ### Pasywy i skaza
 
-- **Widzenie w ciemności:** W niemagicznej ciemności do 60 stóp widzi jak w półmroku. Nie przenika magicznej ciemności ani mgły.
-- **Feyowskie pochodzenie:** przewaga przeciw zauroczeniu i odporność na magiczny sen.
-- **Obycie i targowanie:** +2 do każdego pozabojowego testu Charyzmy. Nie tworzy nowych nagród ani możliwości fabularnych.
-- **Improwizacja:** raz na NPC przerzuć nieudany pozabojowy test Charyzmy przed konsekwencjami; drugi wynik jest ostateczny. Zużycie jest zapisywane.
 
 #### Nasycenie maną
 
-- **Czerwona:** Akcent: +2 obrażeń dystansowej broni za kartę
-- **Biała:** Rytm kroków: +1 KP (maks. +1)
-- **Zielona:** Otucha: przy doborze ulecz o 3 PW najbardziej rannego przytomnego sojusznika w 10 ft, wliczając siebie
-- **Czarna:** Oszczędna harmonia: spalanie własnej zdolności −1 (minimum 1, maks. rabatu 1)
-- **Niebieska:** Rezonans: +1 do obron CHA (maks. +2)
+- **Czerwona:** Akcent: +2 obrażeń dystansowej broni za każdą kartę czerwonej many. Kumuluje się.
+- **Biała:** Rytm kroków: +1 KP (maks. +1). Nie kumuluje się.
+- **Zielona:** Otucha: przy doborze ulecz o 3 PW najbardziej rannego przytomnego sojusznika w 10 ft, wliczając siebie. Każdy dobór działa osobno; nie wzmacnia kolejnego leczenia.
+- **Czarna:** Oszczędna harmonia: spalanie własnej zdolności −1 (minimum 1, maks. rabatu 1). Nie kumuluje się.
+- **Niebieska:** Nieugięty umysł: przewaga w obronach przeciw zauroczeniu i odporność na magiczny sen. Nie kumuluje się.
 
-Premie trwają do mana draina; leczenie zachowujesz. Dobór kończy się przy 21 lub więcej pkt.
+Pasywy są zablokowane, dopóki nie masz karty odpowiedniego koloru. Gruba obwódka symbolu: kumuluje się za kolejne karty tego koloru (według limitu). Cienka: nie kumuluje się. Utrata ostatniej karty koloru, drain i koniec walki wyłączają pasyw. Drain resetuje użycie Nieustępliwości; nowa czarna mana odblokowuje ją ponownie. Odzyskane PW pozostają. Dobór do 21+ pkt.
 
 **Skaza — Potrzeba publiczności:** Bez przytomnego sojusznika w 10 ft, w wieloosobowej drużynie: płatna zdolność spala dodatkową kartę.
 
@@ -628,29 +607,26 @@ Wspólna talia: po max(5, 2 × liczba bohaterów) kart każdego koloru. Oferta d
 - **Argumentacja (NPC):** Inteligencja, bazowy test +4; wpływ: kość podatności +4. Przedstaw rozumowanie i dowody prowadzące do porozumienia.
 - **Analiza (obiekt):** Inteligencja, bazowy test +4; wpływ: kość podatności +4. Odczytaj symbole i zastosuj właściwą sekwencję obsługi urządzenia.
 
-Konfrontacja drużynowa: każdy ma własną pulę i turę. Poniżej 21 pkt obowiązkowo wybierz jedną z dwóch odkrytych kart; druga zostaje. Przy 21+ nie dobierasz, bez kary za przekroczenie. Po doborze: własny test albo pomoc +2 do następnego testu sojusznika, bez kumulacji i bez spalania. Premia many +0/+2/+4/+6 wymaga 0/6/12/21 pkt i spala 1/1/2/3 karty. Możesz wybrać słabszą próbę. Test: k20 + cecha + naładowanie + pozostałe premie. Sukces: kość wpływu zależna od podatności + modyfikator cechy + premie wpływu. Pula pozostaje. Spalanie z wierzchu po efekcie, także przy niepowodzeniu. Po rundzie sytuacja reaguje. Opór 0 = sukces. Brak kart do wymaganej operacji kończy konfrontację; najpierw rozstrzygnij rozpoczęte działanie. Bez ostatniej darmowej kolejki. Na nową konfrontację zbierz cały komplet i przetasuj. Runy wybierają działania; rzuty przez fokus, −/+, podsumowanie i ✓.
+Konfrontacja drużynowa: każdy ma własną pulę i turę. Poniżej 21 pkt obowiązkowo wybierz jedną z dwóch odkrytych kart; druga zostaje. Przy 21+ nie dobierasz, bez kary za przekroczenie. Po doborze: własny test albo pomoc +2 do następnego testu sojusznika, bez kumulacji i bez spalania. Premia many +0/+2/+4/+6 wymaga 0/6/12/21 pkt i spala 1/1/2/3 karty. Możesz wybrać słabszą próbę. Test: k20 + cecha + naładowanie + pozostałe premie. Sukces: kość wpływu zależna od podatności + modyfikator cechy + premie wpływu. Pula pozostaje. Pasywy działają, dopóki masz dany kolor, bez limitu tur. Gruba obwódka symbolu: kumuluje się; cienka: nie. Oddech odzyskuje kartę po każdej udanej próbie, przed spalaniem kosztu. Drain wyłącza wszystkie pasywy. Spalanie z wierzchu po efekcie, także przy niepowodzeniu. Po rundzie sytuacja reaguje. Opór 0 = sukces. Brak kart do wymaganej operacji kończy konfrontację; najpierw rozstrzygnij rozpoczęte działanie. Bez ostatniej darmowej kolejki. Na nową konfrontację zbierz cały komplet i przetasuj. Runy wybierają działania; rzuty przez fokus, −/+, podsumowanie i ✓.
 
-- **Czerwona:** Stanowczość: +1 do wpływu za kartę (maks. +2)
+- **Czerwona:** Stanowczość: +1 do wpływu za każdą kartę czerwonej many (maks. +2). Kumuluje się.
 - **Biała:** Opanowanie: osłoń 1 kartę puli przed każdą reakcją (bez kumulacji)
-- **Zielona:** Oddech: przy doborze oddaj najstarszą spaloną kartę na spód talii
+- **Zielona:** Oddech: po każdej udanej próbie oddaj najstarszą spaloną kartę na spód talii, przed spaleniem kosztu próby. Nie kumuluje się.
 - **Czarna:** Współpraca: pomoc daje +3 zamiast +2 (bez kumulacji)
-- **Niebieska:** Skupienie: +1 do testu za kartę (maks. +2)
+- **Niebieska:** Skupienie: +1 do testu za każdą kartę niebieskiej many (maks. +2). Kumuluje się.
 
 ### Pasywy i skaza
 
-- **Widzenie w ciemności:** W niemagicznej ciemności do 60 stóp widzi jak w półmroku. Nie przenika magicznej ciemności ani mgły.
-- **Gnomia przebiegłość:** przewaga w obronach INT, MĄD i CHA przeciw magii.
-- **Katalog niemożliwego:** wszystkie czary z talii są stale dostępne; Nimra nie przygotowuje ich po odpoczynku.
 
 #### Nasycenie maną
 
-- **Czerwona:** Żar: +2 obrażeń zaklęć za kartę
-- **Biała:** Powłoka: +1 KP (maks. +1)
-- **Zielona:** Regeneracja: przy doborze odzyskaj 4 PW
-- **Czarna:** Skupienie: +2 do obron KON (maks. +2)
-- **Niebieska:** Nasycenie: +1 obrażeń zaklęć za kartę
+- **Czerwona:** Żar: +2 obrażeń zaklęć za każdą kartę czerwonej many. Kumuluje się.
+- **Biała:** Powłoka: +1 KP (maks. +1). Nie kumuluje się.
+- **Zielona:** Regeneracja: przy doborze odzyskaj 4 PW. Każdy dobór działa osobno; nie wzmacnia kolejnego leczenia.
+- **Czarna:** Magiczna przezorność: przewaga w obronach Inteligencji, Mądrości i Charyzmy przeciw magii. Nie kumuluje się.
+- **Niebieska:** Nasycenie: +1 obrażeń zaklęć za każdą kartę niebieskiej many. Kumuluje się.
 
-Premie trwają do mana draina; leczenie zachowujesz. Dobór kończy się przy 21 lub więcej pkt.
+Pasywy są zablokowane, dopóki nie masz karty odpowiedniego koloru. Gruba obwódka symbolu: kumuluje się za kolejne karty tego koloru (według limitu). Cienka: nie kumuluje się. Utrata ostatniej karty koloru, drain i koniec walki wyłączają pasyw. Drain resetuje użycie Nieustępliwości; nowa czarna mana odblokowuje ją ponownie. Odzyskane PW pozostają. Dobór do 21+ pkt.
 
 **Skaza — Echo:** Echo: kolejna ta sama płatna zdolność z rzędu spala o 1 kartę więcej (maks. +2). Inna płatna zdolność zeruje serię.
 
@@ -729,33 +705,27 @@ Wspólna talia: po max(5, 2 × liczba bohaterów) kart każdego koloru. Oferta d
 ### Eksploracja — NPC i obiekty
 
 - **Dociekliwość (NPC):** Mądrość, bazowy test +2; wpływ: kość podatności +2. Wychwyć szczegół lub niespójność i zadaj właściwe pytanie.
-- **Rozpoznanie (obiekt):** Mądrość, bazowy test +4; wpływ: kość podatności +2. Ze śladów używania odczytaj bezpieczny sposób obsługi.
+- **Rozpoznanie (obiekt):** Mądrość, bazowy test +2; wpływ: kość podatności +2. Ze śladów używania odczytaj bezpieczny sposób obsługi.
 
-Konfrontacja drużynowa: każdy ma własną pulę i turę. Poniżej 21 pkt obowiązkowo wybierz jedną z dwóch odkrytych kart; druga zostaje. Przy 21+ nie dobierasz, bez kary za przekroczenie. Po doborze: własny test albo pomoc +2 do następnego testu sojusznika, bez kumulacji i bez spalania. Premia many +0/+2/+4/+6 wymaga 0/6/12/21 pkt i spala 1/1/2/3 karty. Możesz wybrać słabszą próbę. Test: k20 + cecha + naładowanie + pozostałe premie. Sukces: kość wpływu zależna od podatności + modyfikator cechy + premie wpływu. Pula pozostaje. Spalanie z wierzchu po efekcie, także przy niepowodzeniu. Po rundzie sytuacja reaguje. Opór 0 = sukces. Brak kart do wymaganej operacji kończy konfrontację; najpierw rozstrzygnij rozpoczęte działanie. Bez ostatniej darmowej kolejki. Na nową konfrontację zbierz cały komplet i przetasuj. Runy wybierają działania; rzuty przez fokus, −/+, podsumowanie i ✓.
+Konfrontacja drużynowa: każdy ma własną pulę i turę. Poniżej 21 pkt obowiązkowo wybierz jedną z dwóch odkrytych kart; druga zostaje. Przy 21+ nie dobierasz, bez kary za przekroczenie. Po doborze: własny test albo pomoc +2 do następnego testu sojusznika, bez kumulacji i bez spalania. Premia many +0/+2/+4/+6 wymaga 0/6/12/21 pkt i spala 1/1/2/3 karty. Możesz wybrać słabszą próbę. Test: k20 + cecha + naładowanie + pozostałe premie. Sukces: kość wpływu zależna od podatności + modyfikator cechy + premie wpływu. Pula pozostaje. Pasywy działają, dopóki masz dany kolor, bez limitu tur. Gruba obwódka symbolu: kumuluje się; cienka: nie. Oddech odzyskuje kartę po każdej udanej próbie, przed spalaniem kosztu. Drain wyłącza wszystkie pasywy. Spalanie z wierzchu po efekcie, także przy niepowodzeniu. Po rundzie sytuacja reaguje. Opór 0 = sukces. Brak kart do wymaganej operacji kończy konfrontację; najpierw rozstrzygnij rozpoczęte działanie. Bez ostatniej darmowej kolejki. Na nową konfrontację zbierz cały komplet i przetasuj. Runy wybierają działania; rzuty przez fokus, −/+, podsumowanie i ✓.
 
-- **Czerwona:** Stanowczość: +1 do wpływu za kartę (maks. +2)
+- **Czerwona:** Stanowczość: +1 do wpływu za każdą kartę czerwonej many (maks. +2). Kumuluje się.
 - **Biała:** Opanowanie: osłoń 1 kartę puli przed każdą reakcją (bez kumulacji)
-- **Zielona:** Skupienie: +1 do testu za kartę (maks. +2)
+- **Zielona:** Skupienie: +1 do testu za każdą kartę zielonej many (maks. +2). Kumuluje się.
 - **Czarna:** Współpraca: pomoc daje +3 zamiast +2 (bez kumulacji)
-- **Niebieska:** Oddech: przy doborze oddaj najstarszą spaloną kartę na spód talii
+- **Niebieska:** Oddech: po każdej udanej próbie oddaj najstarszą spaloną kartę na spód talii, przed spaleniem kosztu próby. Nie kumuluje się.
 
 ### Pasywy i skaza
 
-- **Widzenie w ciemności:** W niemagicznej ciemności do 60 stóp widzi jak w półmroku. Nie przenika magicznej ciemności ani mgły.
-- **Styl walki: Łucznictwo:** +2 do dystansowych ataków bronią; premia jest już wliczona w atak na arkuszu.
-- **Pierwsza krew:** Raz we własnej turze trafienie długim łukiem w cel z pełnymi PW dodaje 1k6 obrażeń. Wybierz trafienie przed rzutem obrażeń.
-- **Czujność zwiadowcy:** +2 do inicjatywy i testów wykrywania ukrytych przeciwników; premia nie dotyczy pułapek.
-- **Feyowskie pochodzenie:** przewaga przeciw zauroczeniu i odporność na magiczny sen.
-- **Praktyka terenowa:** +2 do własnych testów przy obiekcie w eksploracji (uwzględnione na karcie). Nie dodaje punktów many ani premii do pułapek w walce.
 
 #### Nasycenie maną
 
-- **Czerwona:** Siła cięciwy: +1 obrażeń dystansowej broni za kartę
-- **Biała:** Kamuflaż: +1 KP (maks. +1)
-- **Zielona:** Instynkt: +1 do obron ZRĘ (maks. +2)
-- **Czarna:** Opanowanie: +2 do obron MĄD (maks. +2)
-- **Niebieska:** Skupiony wzrok: +1 do trafienia (maks. +1)
+- **Czerwona:** Pierwsza krew: każde trafienie w cel mający pełne PW zadaje dodatkowe 1k6 obrażeń. Działa, dopóki masz czerwoną manę. Nie kumuluje się.
+- **Biała:** Kamuflaż: +1 KP (maks. +1). Nie kumuluje się.
+- **Zielona:** Instynkt: +1 do obron ZRĘ (maks. +2). Kumuluje się.
+- **Czarna:** Czujność zwiadowcy: +2 do wykrywania ukrytych przeciwników; nie dotyczy pułapek. Nie kumuluje się.
+- **Niebieska:** Łucznictwo: +2 do ataków dystansową bronią. Nie kumuluje się.
 
-Premie trwają do mana draina; leczenie zachowujesz. Dobór kończy się przy 21 lub więcej pkt.
+Pasywy są zablokowane, dopóki nie masz karty odpowiedniego koloru. Gruba obwódka symbolu: kumuluje się za kolejne karty tego koloru (według limitu). Cienka: nie kumuluje się. Utrata ostatniej karty koloru, drain i koniec walki wyłączają pasyw. Drain resetuje użycie Nieustępliwości; nowa czarna mana odblokowuje ją ponownie. Odzyskane PW pozostają. Dobór do 21+ pkt.
 
 **Skaza — Trauma bratobójczego strzału:** Płatny strzał w cel sąsiadujący z innym bohaterem spala dodatkową kartę.

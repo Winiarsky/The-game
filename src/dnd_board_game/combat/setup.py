@@ -69,6 +69,8 @@ class SetupStep:
     message: str
     visibility: SetupVisibility = SetupVisibility.VISIBLE
     mechanics: tuple[str, ...] = field(default_factory=tuple)
+    cutout_ids: tuple[str, ...] = field(default_factory=tuple)
+    focus_positions: tuple[Coordinate, ...] = field(default_factory=tuple)
 
 
 SETUP_COLORS: dict[str, tuple[int, int, int]] = {
@@ -138,7 +140,12 @@ def build_setup_steps(setup: EncounterSetup) -> tuple[SetupStep, ...]:
 def setup_led_feedback(step: SetupStep) -> LedFeedback:
     if step.visibility != SetupVisibility.VISIBLE or not step.positions:
         return LedFeedback()
-    return LedFeedback((LedFrame(step.positions, step.color, _led_role_for_step(step)),))
+    focus = tuple(p for p in step.focus_positions if p in step.positions)
+    area = tuple(p for p in step.positions if p not in focus)
+    frames = (LedFrame(area, step.color, _led_role_for_step(step)),) if area else ()
+    if focus:
+        frames += (LedFrame(focus, LedColor.INTERACTIVE_OBJECT, LedRole.INTERACTIVE_OBJECT),)
+    return LedFeedback(frames)
 
 
 def build_setup_instructions(setup: EncounterSetup) -> tuple[str, ...]:

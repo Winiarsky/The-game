@@ -30,7 +30,8 @@ def main() -> None:
         'Skrypt używa produkcyjnych zasad. Sprawdza wszystkie składy 3–6 z siedmiu bohaterów.',
         f'{args.trials} ziaren na skład. Polityka: karta z największą liczbą punktów, najwyższa dostępna premia;',
         'pomoc przy szansie trafienia poniżej 35%. Bez przyjmowania kompromisu Nessy.',
-        'To porównanie jednej prostej strategii, nie pomiar optymalnej gry ani czasu przy stole.', '',
+        'To porównanie jednej prostej strategii, nie pomiar optymalnej gry ani czasu przy stole.',
+        'Pomieszczenia: bez wskazówki −2 ST i bez pomocy naprawiającej uszkodzenia. Nessa: bez komplementu.', '',
         '| Osoby | Scena | Próby | Sukces | Średnie rundy | Średnia liczba testów |',
         '|---:|---|---:|---:|---:|---:|']
     for n in (3, 4, 5, 6):
@@ -46,7 +47,7 @@ def main() -> None:
     for n in (3, 4, 5, 6):
         enemies = [a for a in encounter_for_party_size(encounter, n).actors if a.faction.value == 'enemy']
         lines.append(f'| {n} | {len(enemies)} | {sum(a.hp for a in enemies)} |')
-    lines += ['', 'Walka: N+2 wrogów, oferta poddania po zejściu poniżej N.',
+    lines += ['', 'Walka: N+2 wrogów, jednorazowa oferta rozejmu po pierwszym pokonanym przeciwniku.',
         'Ta część raportu jest kontrolą konfiguracji, nie symulacją zwycięstw. Nie modeluje ruchu,',
         'celowania, leczenia ani decyzji przy poddaniu. W testach ręcznych porównać 0 i 4 rundy',
         'zmęczenia, tempo ładowania oraz moment poddania. Zapisać czas scen i odczucia każdego gracza.',

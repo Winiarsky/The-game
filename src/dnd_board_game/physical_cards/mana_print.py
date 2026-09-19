@@ -24,8 +24,10 @@ from dnd_board_game.ui.board_panel_symbols import ability_panel_slot
 
 PROFILE = "pooled_mana_v01"
 MANA_PASSIVE_REMINDER = (
-    "Premie trwają do mana draina; leczenie zachowujesz. "
-    "Dobór kończy się przy 21 lub więcej pkt."
+    "Pasywy są zablokowane, dopóki nie masz karty odpowiedniego koloru. "
+    "Gruba obwódka symbolu: kumuluje się za kolejne karty tego koloru (według limitu). Cienka: nie kumuluje się. "
+    "Utrata ostatniej karty koloru, drain i koniec walki wyłączają pasyw. "
+    "Drain resetuje użycie Nieustępliwości; nowa czarna mana odblokowuje ją ponownie. Odzyskane PW pozostają. Dobór do 21+ pkt."
 )
 TIMING = {"A": "Akcja główna", "D": "Akcja dodatkowa", "R": "Reakcja", "MOD": "Modyfikacja"}
 COLORS = {
@@ -110,6 +112,8 @@ class PrintHero:
     mana_values: tuple[tuple[str, int], ...] = ()
     exploration_passives: tuple[tuple[str, str], ...] = ()
     mana_passives: tuple[tuple[str, str], ...] = ()
+    stacking_mana_colors: tuple[str, ...] = ()
+    stacking_exploration_colors: tuple[str, ...] = ()
 
     def as_payload(self) -> dict[str, object]:
         return {"rules_profile": PROFILE, **asdict(self)}
@@ -137,9 +141,8 @@ def build_print_hero(hero_id: str) -> PrintHero:
     from .character_card_sets import _starter_builds, _SKILL_ABILITIES
     from dnd_board_game.scenarios.loader import compile_actor_combat_content
     from dnd_board_game.combat import attack_source_for_actor
-    from dnd_board_game.application.exploration_mana_flow import method_modifiers
-    from dnd_board_game.rules.exploration_mana_catalog import hero_methods
     from dnd_board_game.scenarios.confrontation import passives as exploration_passives
+    from dnd_board_game.scenarios.confrontation_terms import effect_text
 
     if hero_id not in PLAYABLE_HERO_IDS:
         raise ValueError(f"Nieznany bohater: {hero_id}")
@@ -211,12 +214,12 @@ def build_print_hero(hero_id: str) -> PrintHero:
             ("Dlaczego podróżuje", profile.motivation),
             ("Cel osobisty", profile.personal_goal),
         ),
-        tuple(PrintExploration(m.id, m.name, m.kind, ABILITY_LABELS_PL[m.ability],
-              sum(part.value for part in method_modifiers(actor, m)),
-              tuple((part.label, part.value) for part in method_modifiers(actor, m)), m.description,
-              ability_modifier(getattr(actor.ability_scores, m.ability)))
-              for m in hero_methods(hero_id)),
+        tuple(PrintExploration(kind, 'Podejście ze sceny', kind, 'Cecha podejścia', 0, (),
+              'Wybierz runą podejście dostępne w tej scenie. Określa cechę, ST, kość efektu i dozwolone wsparcie. Wybór zostaje do końca konfrontacji.')
+              for kind in ('npc', 'object')),
         tuple(hero_profile(hero_id)["values"].items()),
-        tuple((c, p["label"]) for c, p in exploration_passives(hero_id).items()),
+        tuple((c, effect_text(p["label"], None)) for c, p in exploration_passives(hero_id).items()),
         tuple((c, p["label"]) for c, p in hero_profile(hero_id)["color_passives"].items()),
+        tuple(c for c, p in hero_profile(hero_id)["color_passives"].items() if p['stackable']),
+        tuple(c for c, p in exploration_passives(hero_id).items() if p['stackable']),
     )

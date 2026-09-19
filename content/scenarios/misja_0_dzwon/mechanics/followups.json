@@ -1,0 +1,9 @@
+{
+  "mission_zero_bell_payment": {
+    "title": "Wiadomość z dziupli",
+    "text": "text/bell_payment.md",
+    "trigger": "after_mission",
+    "mission_id": "misja_2",
+    "reward_key": "bell_fence_gp"
+  }
+}

@@ -1,5 +1,97 @@
 # Game Design
 
+## Postawa drużyny — 19.09.2026
+
+Wskaźnik ma siedem pól: Solidarność (3), Równowaga, Bezwzględność (3),
+bez punktów plus/minus w UI. Każdy krok od środka wyłącza po jednej karcie
+z dwóch kolorów: Solidarność — czerwona i czarna; Bezwzględność — biała
+i niebieska. Zielona bez zmian. Nowy skład obowiązuje od kolejnej walki
+lub konfrontacji. Wyłączone karty są poza obiegiem i nie wracają przy drainie.
+Misja 0: wymuszenie zamiany wozu pomija test i zmęczenie, krok ku Bezwzględności;
+przyjęcie rozejmu daje krok ku Solidarności, odmowa ku Bezwzględności. Szczegóły: [Postawa drużyny](docs/PARTY_ETHOS.md).
+
+## Podejścia scen i powiązania pomocy (19.09.2026)
+
+W nowych konfrontacjach NPC/obiekt każdy bohater wybiera przed talią własne
+podejście z opcji sceny. Opcja określa cechę, ST, kość wpływu/postępu i skierowane
+powiązania pomocy. Scena określa, które podejścia są dla jednej postaci, a które mogą się powtarzać; cechy nie muszą być pokryte
+symetrycznie. Runy prowadzą przez skład w kolejności tur, bez dodatkowej inicjatywy.
+Test i dozwolona pomoc spalają 1 kartę. Pomoc: +1 (+2 ze Współpracą), sumowana
+do najbliższej próby. Alternatywa: podgląd dolnej karty i zostawienie lub przeniesienie
+na wierzch, bez zgłaszania koloru i bez spalania, za całe działanie. Reakcje po rundzie nadal obowiązują.
+Misja 0: osobne podejścia Nessy, wozu, zbrojowni i kwatery. Katalogi, UI, samouczek
+i wydruki opisują ten model; dawne stałe metody bohaterów są zgodnością starych zapisów.
+Szczegóły: [Konfrontacje drużynowe](docs/PARTY_CONFRONTATIONS.md).
+
+
+## Orientacja planszy i kafli
+
+Gracze siedzą od strony run (kolumna 19). Ta krawędź stanowi umowny
+dół planszy. Podpisy nowych kafli mają być czytelne z tej strony; obrót
+kafla musi obejmować jego pełny obrys LED i położenie oznaczenia I.
+Współrzędne sprzętowe pozostają bez zmian. Układ do druku jest niezależny
+od obrotu na planszy (`board_rotation`, stopnie zgodnie z ruchem wskazówek
+zegara względem siatki kolumna/wiersz). Misja 0: kafle Gildii i posterunku obrócono
+o −90°, z zachowaniem pól interakcji i zgodności z istniejącymi wycinankami.
+Pozostałe istniejące mapy dostosowujemy przy ich kolejnym przeglądzie.
+
+Nazwy efektu udanej próby eksploracyjnej: **wpływ** w rozmowie z NPC,
+**postęp** przy interakcji z obiektem (naprawie, zabezpieczaniu, przeszukiwaniu).
+Oba wyniki liczymy tak samo: kość podatności + modyfikator cechy + premie efektu;
+wynik zmniejsza opór konfrontacji. Naładowanie zwiększa test, nie ten efekt.
+Wspólne pasywy używają zapisu „wpływ / postęp”. To rozróżnienie nazewnictwa,
+bez zmian kosztów, progów, danych zapisów ani obliczeń.
+
+## Pasywy odblokowywane nasyceniem (2026-09-17)
+
+W obecnym profilu bohater nie ma darmowych pasywów. Pierwsza karta danego
+koloru w osobistej puli odblokowuje przypisaną cechę bojową. Kolejne karty
+nie dublują tej cechy; premie liczbowe nadal rosną według opisu i limitu.
+Utrata ostatniej karty koloru, mana drain i koniec walki usuwają odblokowanie.
+Leczenie wykonane przy doborze pozostaje. Drain resetuje wykorzystanie pasywów;
+Nieustępliwość ponownie działa po zdobyciu czarnej many. Nie ma limitów tur ani odpoczynku. Skazy, akcje i zdolności manipulowania maną zostają.
+
+| Postać | Kluczowe odblokowania |
+| --- | --- |
+| Garran | Biała: +1 KP tylko flankującemu sojusznikowi; niebieska: +1 KP Garrana; zielona: krytyk bronią 19–20. |
+| Brakka | Czerwona: dodatkowa kość krytyka; biała: obrona bez pancerza; czarna: jedno przetrwanie na 1 PW do draina, odnawiane przez drain. |
+| Mira | Czerwona: +1k6 przy trafieniu z ukrycia; zielona: +2k6 z flanki (łącznie +3k6); biała: ochrona przed ostrzałem; czarna: krok po trafieniu nożem; niebieska: przerzut naturalnej 1. |
+| Dagna | Czarna: odporność na truciznę; niebieska: krok po pomocy sojusznikowi. |
+| Lorian | Niebieska: odporność na zauroczenie i magiczny sen; czarna zachowuje obniżenie spalania. |
+| Nimra | Czarna: ułatwienie mentalnych obron przed magią. |
+| Erynd | Czerwona: Pierwsza krew; czarna: wykrywanie ukrytych wrogów; niebieska: Łucznictwo. |
+
+Pozostałe kolory zachowują opisane premie liczbowe lub leczenie przy doborze.
+Źródło wartości i opisów: `content/balance/pooled_mana/catalog.json`.
+Dawne darmowe premie Loriana i Erynda do konfrontacji również nie są doliczane;
+Oddech w eksploracji działa po każdej udanej próbie przy posiadaniu właściwego koloru.
+Gruba obwódka ikony oznacza kumulację, cienka brak kumulacji.
+Opis każdego koloru określa warunek, wartość oraz ewentualny limit kumulacji.
+Statystyki bazowe uwzględniają usunięcie dawnych bonusów: m.in. Brakka KP 11,
+Dagna 27 PW, Erynd inicjatywa +4 i atak łukiem +4 bez nasycenia.
+
+
+## Przygotowanie wyposażenia — Misja 0
+
+Znaleziska trafiają do wspólnego zapasu. W bazie: identyfikacja, sprzedaż,
+przydział przedmiotów kolejnym bohaterom. Sloty pancerza, głowy, obu rąk,
+szyi, ogniska/instrumentu i pierścienia; pozostałe rzeczy w plecaku. Wybranie
+zajętego slotu zwraca poprzedni przedmiot do zapasu. Sprzęt pozostaje ustalony
+od wyjścia do powrotu; przedmioty zużywalne nadal można używać. Lista zapasu
+obsługiwana przez −/+ i runy, ✓ przechodzi do kolejnej postaci. Drukowana karta
+przechodzi razem z przedmiotem. Nimra ma jedną próbę rozpoznania pierścienia
+przy odkryciu; pewna identyfikacja w Gildii kosztuje startowo 5 sz.
+Zakupy, rozwój i wybór zestawu akcji specjalnych pozostają do rozszerzenia.
+
+
+Aktualizacja Misji 0 (2026-09-17): „Sprawy pozostawione”. Kontrakt obejmuje
+sprzęt, zapasy i dokumenty; dzwon jest dodatkową decyzją. Rozejm po pierwszym
+pokonanym, dwa opcjonalne przeszukania, wydruki rozkazu i pokwitowań, komplement
+Loriana, poręczenie Garrana i kontakt Miry. Pierścień ze skrytki po identyfikacji
+daje +1 do **wartości Siły**; Nimra próbuje na miejscu, Gildia rozpoznaje pewnie.
+Bieżące szczegóły: [README misji](content/scenarios/misja_0_dzwon/README.md).
+
+
 ## Misja 0 — Dzwon do odebrania
 
 Narracyjny samouczek konkretnej drużyny zastępuje obowiązek przechodzenia
@@ -45,7 +137,10 @@ tej reguły. Starsze profile zapisów zachowują dotychczasowe zasady.
 
 NPC i obiekty w Arenie używają wspólnego oporu, tur całej drużyny i trwałych
 osobistych pul many. Dobór z oferty dwóch kart do 21+, potem test albo pomoc.
-Progi 0/6/12/21: premia +0/+2/+4/+6 i spalanie 1/1/2/3 po efekcie. Podatność
+Progi 0/6/12/21: premia +0/+2/+4/+6; UI wybiera najwyższy dostępny próg.
+Test i pomoc spalają po 1 karcie. Pomoc daje +1 (+2 ze Współpracą), sumuje
+się do pierwszej próby testu sojusznika i wtedy znika w całości, także po
+porażce. Czekanie i pomaganie innym nie zużywają otrzymanej premii. Podatność
 zmienia ST i kość wpływu. Reakcje uszczuplają talię/pule lub odnawiają opór;
 drain kończy konfrontację. Brak kary za przekroczenie i automatycznego sukcesu
 przy 21. Nowy kurs: 12 przypadków na bohatera (84), wybór składu 1–5 osób,

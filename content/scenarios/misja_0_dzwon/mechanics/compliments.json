@@ -1,0 +1,26 @@
+{
+  "bonus": 2,
+  "success": "wounded",
+  "options": [
+    {
+      "id": "invitation",
+      "label": "Przy pani nawet wezwanie do zapłaty brzmi jak zaproszenie."
+    },
+    {
+      "id": "soul",
+      "label": "Niełatwo utrzymać porządek, nie odbierając temu miejscu duszy. Pani się udaje."
+    },
+    {
+      "id": "wounded",
+      "label": "Najpierw powiedziała pani o rannych, dopiero potem o sprzęcie. Dobrze wiedzieć, u kogo bierzemy pierwsze zadanie."
+    },
+    {
+      "id": "kingdom",
+      "label": "Gdyby pani prowadziła królestwo, wojny kończyłyby się przed terminem płatności."
+    },
+    {
+      "id": "bawdy",
+      "label": "Za takim biurkiem i z taką figurą można człowieka puścić z torbami, a jeszcze podziękuje."
+    }
+  ]
+}

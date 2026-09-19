@@ -1,6 +1,8 @@
 """Presentation and commit boundary for the Shield Bash physical-roll flow."""
 
 from __future__ import annotations
+
+from dnd_board_game.inventory.magic_items import effective_ability_modifier
 from typing import TYPE_CHECKING
 
 from dnd_board_game.application.shield_bash_flow import (
@@ -29,9 +31,9 @@ def shield_bash_payload(session: ExplorationUiSession) -> dict[str, object] | No
         "cost_note": "Potwierdzenie zużyje akcję dodatkową. Możesz też wykonać zwykły atak, jeśli masz jeszcze akcję główną. Ruch rozliczasz osobno.",
         "actor_name": actor.name,
         "target_name": target.name,
-        "attacker_modifier": ability_modifier(actor.ability_scores.strength) + state_charge_bonus(session.combat_state, actor),
+        "attacker_modifier": effective_ability_modifier(actor, 'strength') + state_charge_bonus(session.combat_state, actor),
         "charge_bonus": state_charge_bonus(session.combat_state, actor),
-        "defender_modifier": ability_modifier(target.ability_scores.strength) + state_charge_bonus(session.combat_state, target),
+        "defender_modifier": effective_ability_modifier(target, 'strength') + state_charge_bonus(session.combat_state, target),
         "attacker_roll": flow.attacker_roll,
         "defender_roll": flow.defender_roll,
         "damage_roll": flow.damage_roll,

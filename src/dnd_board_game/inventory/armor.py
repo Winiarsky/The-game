@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from .magic_items import effective_ability_score
+
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Sequence
 
@@ -107,7 +109,7 @@ def armor_speed_penalty_feet(actor: Actor) -> int:
     if (
         armor is None
         or armor.armor_strength_requirement is None
-        or actor.ability_scores.strength >= armor.armor_strength_requirement
+        or effective_ability_score(actor, 'strength') >= armor.armor_strength_requirement
         or actor_has_feature(actor, "dwarven_speed")
     ):
         return 0

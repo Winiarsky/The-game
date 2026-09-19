@@ -37,6 +37,9 @@ try {
  for(const frame of frames.slice(1)){
   state=frame;renderTrainingArena();const p=state.exploration_mana;
   check(document.querySelectorAll('.confrontation-party article').length===3,'party missing');
+  check(p.effect_name==='Postęp','object effect name');
+  if(p.party.some(h=>h.assigned))check(document.querySelector('.confrontation-party').innerText.includes('postęp'),'object method label');
+  if(p.phase==='impact')check(p.attempt.modifiers.some(m=>m.label==='Pasywy postępu'),'object modifier label');
   check(document.documentElement.scrollWidth<=innerWidth,'overflow '+p.phase);
   check(document.querySelectorAll('#training-tools button').length===2,'retry/back missing');
   document.querySelectorAll('#training-tools button')[1].click();check(call.body.action==='leave','wrong back');
@@ -53,7 +56,7 @@ try {
    check(call.body.action==='roll'&&call.body.rolls[0]===p.attempt.die,'wrong natural result');
    check(call.body.revision===p.revision,'stale protection missing');
   }
-  if(p.phase==='after_action')check(document.querySelector('#training-arena-panel').innerText.includes('Wpływ:'),'result missing');
+  if(p.phase==='after_action')check(document.querySelector('#training-arena-panel').innerText.includes('Postęp:'),'result missing');
  }
  document.getElementById('result').textContent='PASS';
 }catch(e){document.getElementById('result').textContent='FAIL: '+e.stack;}

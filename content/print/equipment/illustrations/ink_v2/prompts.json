@@ -1,0 +1,200 @@
+{
+  "mode": "built-in image_gen",
+  "style_reference": "content/scenarios/misja_0_dzwon/maps/illustrations/ink_v3/cart.png",
+  "assets": [
+    {
+      "name": "sword",
+      "prompt": "Use case: illustration-story. Asset type: one printable fantasy RPG equipment-card illustration. Subject: a complete practical medieval longsword, viewed in three-quarter perspective lying diagonally from lower left to upper right, broad straight double-edged steel blade, central fuller, sturdy straight crossguard, leather-wrapped grip, round pommel. Realistic believable craftsmanship and proportions. Style: black ink drawing on PURE WHITE background, confident thick outer contours, thinner hand-drawn interior lines and sparse controlled hatching showing steel, worn leather and small nicks. Match the detailed monochrome ink drawings used for tabletop terrain cutouts, not a vector symbol or minimalist icon, not a photograph. Lots of open white areas, no gray washes, no gradients, no paper texture, no scene or cast shadow. Complete object, generously filling a landscape 3:2 composition with small safe margins and no cropping. No hands or people. No words, labels, numbers, lettering, frame, grid or UI. Keep detail legible when printed about 5 cm wide.",
+      "source": "/home/winiar/.codex/generated_images/01a097bf-2951-7e62-a62a-8e6ddb94adb6/exec-7b60fa70-1099-4fb0-88c4-d7f047cd1d46.png",
+      "destination": "content/print/equipment/illustrations/ink_v2/sword.png"
+    },
+    {
+      "name": "mace",
+      "prompt": "Use case: illustration-story. Asset type: one printable fantasy RPG equipment-card illustration. Style: detailed black ink drawing on PURE WHITE background, confident thick outer contour, thinner hand-drawn interior lines and restrained hatching for believable material and volume; match medieval tabletop terrain cutout illustrations. Recognizable realistic craftsmanship, not a vector icon, not a diagram, not a photo. Lots of open white surfaces, no gray wash, gradients, background scene, cast shadow or paper texture. Landscape 3:2 composition, complete object fills frame with safe margins, no cropping. No people, hands, lettering, numbers, labels, frame, grid or UI. Detail legible printed 5 cm wide. Subject: One practical medieval flanged iron mace with six thick steel flanges and a leather-wrapped shaft, whole weapon diagonal.",
+      "source": "/home/winiar/.codex/generated_images/01a097bf-2951-7e62-a62a-8e6ddb94adb6/exec-c093d71d-82aa-4aa2-a16c-5eba83ada3d4.png",
+      "destination": "content/print/equipment/illustrations/ink_v2/mace.png"
+    },
+    {
+      "name": "rapier",
+      "prompt": "Use case: illustration-story. Asset type: one printable fantasy RPG equipment-card illustration. Style: detailed black ink drawing on PURE WHITE background, confident thick outer contour, thinner hand-drawn interior lines and restrained hatching for believable material and volume; match medieval tabletop terrain cutout illustrations. Recognizable realistic craftsmanship, not a vector icon, not a diagram, not a photo. Lots of open white surfaces, no gray wash, gradients, background scene, cast shadow or paper texture. Landscape 3:2 composition, complete object fills frame with safe margins, no cropping. No people, hands, lettering, numbers, labels, frame, grid or UI. Detail legible printed 5 cm wide. Subject: One elegant slender rapier with a long narrow blade, a swept steel basket guard, leather grip and a small pommel. Whole weapon diagonal.",
+      "source": "/home/winiar/.codex/generated_images/01a097bf-2951-7e62-a62a-8e6ddb94adb6/exec-3ed17b09-5a4b-405b-91c3-1daa9588df8b.png",
+      "destination": "content/print/equipment/illustrations/ink_v2/rapier.png"
+    },
+    {
+      "name": "axe",
+      "prompt": "Use case: illustration-story. Asset type: one printable fantasy RPG equipment-card illustration. Style: detailed black ink drawing on PURE WHITE background, confident thick outer contour, thinner hand-drawn interior lines and restrained hatching for believable material and volume; match medieval tabletop terrain cutout illustrations. Recognizable realistic craftsmanship, not a vector icon, not a diagram, not a photo. Lots of open white surfaces, no gray wash, gradients, background scene, cast shadow or paper texture. Landscape 3:2 composition, complete object fills frame with safe margins, no cropping. No people, hands, lettering, numbers, labels, frame, grid or UI. Detail legible printed 5 cm wide. Subject: One large two-handed battleaxe, broad heavy steel crescent blade and long thick wooden haft wrapped in leather near the grip. Entire weapon diagonal.",
+      "source": "/home/winiar/.codex/generated_images/01a097bf-2951-7e62-a62a-8e6ddb94adb6/exec-b25320cd-20a5-4ca4-83cb-12760581dc92.png",
+      "destination": "content/print/equipment/illustrations/ink_v2/axe.png"
+    },
+    {
+      "name": "shield",
+      "prompt": "Edit this equipment-card illustration. Keep the medieval heater shield, perspective, central iron boss, riveted rim, strong hand-drawn black ink contours and restrained hatching on pure white. Change the entire wooden face to solid hammered STEEL: no planks or wood grain, instead sparse scratches and light hammer marks with generous white areas. This is a metal shield. Make the entire object fit inside the frame with clear white margins on ALL sides, especially the top edge; no clipping. No symbols, lettering, background scene, gradients or gray wash. Same detailed tabletop cutout art style.",
+      "source": "/home/winiar/.codex/generated_images/01a097bf-2951-7e62-a62a-8e6ddb94adb6/exec-fd040e2d-0b87-4588-b5dd-e078b7ae5aba.png",
+      "destination": "content/print/equipment/illustrations/ink_v2/shield.png",
+      "original_prompt": "Use case: illustration-story. Asset type: one printable fantasy RPG equipment-card illustration. Style: detailed black ink drawing on PURE WHITE background, confident thick outer contour, thinner hand-drawn interior lines and restrained hatching for believable material and volume; match medieval tabletop terrain cutout illustrations. Recognizable realistic craftsmanship, not a vector icon, not a diagram, not a photo. Lots of open white surfaces, no gray wash, gradients, background scene, cast shadow or paper texture. Landscape 3:2 composition, complete object fills frame with safe margins, no cropping. No people, hands, lettering, numbers, labels, frame, grid or UI. Detail legible printed 5 cm wide. Subject: One sturdy medieval heater shield in three-quarter view, iron rim, plain wooden face with iron boss and rivets, a little wear. No heraldic symbol or lettering.",
+      "original_source": "/home/winiar/.codex/generated_images/01a097bf-2951-7e62-a62a-8e6ddb94adb6/exec-5b66bfaa-af46-4d6f-85df-083beb292cc4.png"
+    },
+    {
+      "name": "knife",
+      "prompt": "Use case: illustration-story. Asset type: one printable fantasy RPG equipment-card illustration. Style: detailed black ink drawing on PURE WHITE background, confident thick outer contour, thinner hand-drawn interior lines and restrained hatching for believable material and volume; match medieval tabletop terrain cutout illustrations. Recognizable realistic craftsmanship, not a vector icon, not a diagram, not a photo. Lots of open white surfaces, no gray wash, gradients, background scene, cast shadow or paper texture. Landscape 3:2 composition, complete object fills frame with safe margins, no cropping. No people, hands, lettering, numbers, labels, frame, grid or UI. Detail legible printed 5 cm wide. Subject: One practical steel hunting dagger, straight tapered blade, small guard, riveted worn leather handle. Entire object diagonal.",
+      "source": "/home/winiar/.codex/generated_images/01a097bf-2951-7e62-a62a-8e6ddb94adb6/exec-49850402-97ea-426e-aaf7-c48a54f0a55f.png",
+      "destination": "content/print/equipment/illustrations/ink_v2/knife.png"
+    },
+    {
+      "name": "bow",
+      "prompt": "Use case: illustration-story. Asset type: one printable fantasy RPG equipment-card illustration. Style: detailed black ink drawing on PURE WHITE background, confident thick outer contour, thinner hand-drawn interior lines and restrained hatching for believable material and volume; match medieval tabletop terrain cutout illustrations. Recognizable realistic craftsmanship, not a vector icon, not a diagram, not a photo. Lots of open white surfaces, no gray wash, gradients, background scene, cast shadow or paper texture. Landscape 3:2 composition, complete object fills frame with safe margins, no cropping. No people, hands, lettering, numbers, labels, frame, grid or UI. Detail legible printed 5 cm wide. Subject: One tall traditional wooden longbow with taut bowstring and leather grip; three-quarter view, entire curved bow diagonal. No arrow and no person.",
+      "source": "/home/winiar/.codex/generated_images/01a097bf-2951-7e62-a62a-8e6ddb94adb6/exec-9a8bda1c-5d3b-45fb-bc7d-b9fe59c5f939.png",
+      "destination": "content/print/equipment/illustrations/ink_v2/bow.png"
+    },
+    {
+      "name": "hatchet",
+      "prompt": "Use case: illustration-story. Asset type: one printable fantasy RPG equipment-card illustration. Style: detailed black ink drawing on PURE WHITE background, confident thick outer contour, thinner hand-drawn interior lines and restrained hatching for believable material and volume; match medieval tabletop terrain cutout illustrations. Recognizable realistic craftsmanship, not a vector icon, not a diagram, not a photo. Lots of open white surfaces, no gray wash, gradients, background scene, cast shadow or paper texture. Landscape 3:2 composition, complete object fills frame with safe margins, no cropping. No people, hands, lettering, numbers, labels, frame, grid or UI. Detail legible printed 5 cm wide. Subject: One compact single-handed woodsman's handaxe, wedge-shaped iron head, short curved wooden handle with visible grain. Entire object diagonal.",
+      "source": "/home/winiar/.codex/generated_images/01a097bf-2951-7e62-a62a-8e6ddb94adb6/exec-97025b79-2c38-43c8-acf5-85c446285777.png",
+      "destination": "content/print/equipment/illustrations/ink_v2/hatchet.png"
+    },
+    {
+      "name": "spear",
+      "prompt": "Use case: illustration-story. Asset type: one printable fantasy RPG equipment-card illustration. Style: detailed black ink drawing on PURE WHITE background, confident thick outer contour, thinner hand-drawn interior lines and restrained hatching for believable material and volume; match medieval tabletop terrain cutout illustrations. Recognizable realistic craftsmanship, not a vector icon, not a diagram, not a photo. Lots of open white surfaces, no gray wash, gradients, background scene, cast shadow or paper texture. Landscape 3:2 composition, complete object fills frame with safe margins, no cropping. No people, hands, lettering, numbers, labels, frame, grid or UI. Detail legible printed 5 cm wide. Subject: One throwing javelin, long slender straight wooden shaft, leaf-shaped steel spearhead bound securely to shaft. Entire object diagonal.",
+      "source": "/home/winiar/.codex/generated_images/01a097bf-2951-7e62-a62a-8e6ddb94adb6/exec-34a2f8f1-7a7d-4d43-a9ec-ca1dcf50b0e6.png",
+      "destination": "content/print/equipment/illustrations/ink_v2/spear.png"
+    },
+    {
+      "name": "crossbow",
+      "prompt": "Use case: illustration-story. Asset type: one printable fantasy RPG equipment-card illustration. Style: detailed black ink drawing on PURE WHITE background, confident thick outer contour, thinner hand-drawn interior lines and restrained hatching for believable material and volume; match medieval tabletop terrain cutout illustrations. Recognizable realistic craftsmanship, not a vector icon, not a diagram, not a photo. Lots of open white surfaces, no gray wash, gradients, background scene, cast shadow or paper texture. Landscape 3:2 composition, complete object fills frame with safe margins, no cropping. No people, hands, lettering, numbers, labels, frame, grid or UI. Detail legible printed 5 cm wide. Subject: One believable medieval light crossbow in elevated three-quarter view, wooden stock, steel bow prod, taut single string seated at the trigger, simple stirrup. Complete object.",
+      "source": "/home/winiar/.codex/generated_images/01a097bf-2951-7e62-a62a-8e6ddb94adb6/exec-870e356a-a7cd-40bf-9f7f-35f407d2613f.png",
+      "destination": "content/print/equipment/illustrations/ink_v2/crossbow.png"
+    },
+    {
+      "name": "arrow",
+      "prompt": "Use case: illustration-story. Asset type: one printable fantasy RPG equipment-card illustration. Style: detailed black ink drawing on PURE WHITE background, confident thick outer contour, thinner hand-drawn interior lines and restrained hatching for believable material and volume; match medieval tabletop terrain cutout illustrations. Recognizable realistic craftsmanship, not a vector icon, not a diagram, not a photo. Lots of open white surfaces, no gray wash, gradients, background scene, cast shadow or paper texture. Landscape 3:2 composition, complete object fills frame with safe margins, no cropping. No people, hands, lettering, numbers, labels, frame, grid or UI. Detail legible printed 5 cm wide. Subject: Three long wooden arrows with distinct feather fletching and narrow iron arrowheads, tied together loosely with cord. No quiver. Entire arrows diagonal.",
+      "source": "/home/winiar/.codex/generated_images/01a097bf-2951-7e62-a62a-8e6ddb94adb6/exec-e421ab40-ecf6-491d-a614-65ad1e024b27.png",
+      "destination": "content/print/equipment/illustrations/ink_v2/arrow.png"
+    },
+    {
+      "name": "armor",
+      "prompt": "Use case: illustration-story. Asset type: one printable fantasy RPG equipment-card illustration. Style: detailed black ink drawing on PURE WHITE background, confident thick outer contour, thinner hand-drawn interior lines and restrained hatching for believable material and volume; match medieval tabletop terrain cutout illustrations. Recognizable realistic craftsmanship, not a vector icon, not a diagram, not a photo. Lots of open white surfaces, no gray wash, gradients, background scene, cast shadow or paper texture. Landscape 3:2 composition, complete object fills frame with safe margins, no cropping. No people, hands, lettering, numbers, labels, frame, grid or UI. Detail legible printed 5 cm wide. Subject: One empty medieval chainmail hauberk, short sleeves, interlocking iron rings clearly drawn, leather belt, no mannequin and no body. Three-quarter view, entire garment.",
+      "source": "/home/winiar/.codex/generated_images/01a097bf-2951-7e62-a62a-8e6ddb94adb6/exec-399cbc76-7bfe-4e33-b5a0-c719fed453cb.png",
+      "destination": "content/print/equipment/illustrations/ink_v2/armor.png"
+    },
+    {
+      "name": "leather",
+      "prompt": "Use case: illustration-story. Asset type: one printable fantasy RPG equipment-card illustration. Style: detailed black ink drawing on PURE WHITE background, confident thick outer contour, thinner hand-drawn interior lines and restrained hatching for believable material and volume; match medieval tabletop terrain cutout illustrations. Recognizable realistic craftsmanship, not a vector icon, not a diagram, not a photo. Lots of open white surfaces, no gray wash, gradients, background scene, cast shadow or paper texture. Landscape 3:2 composition, complete object fills frame with safe margins, no cropping. No people, hands, lettering, numbers, labels, frame, grid or UI. Detail legible printed 5 cm wide. Subject: One empty medieval leather cuirass with shoulder pieces, stitched seams, side buckles and straps; naturally three-dimensional, no wearer or mannequin.",
+      "source": "/home/winiar/.codex/generated_images/01a097bf-2951-7e62-a62a-8e6ddb94adb6/exec-a44892d2-afd3-457c-be7c-6b3cb0829069.png",
+      "destination": "content/print/equipment/illustrations/ink_v2/leather.png"
+    },
+    {
+      "name": "staff",
+      "prompt": "Use case: illustration-story. Asset type: one printable fantasy RPG equipment-card illustration. Style: detailed black ink drawing on PURE WHITE background, confident thick outer contour, thinner hand-drawn interior lines and restrained hatching for believable material and volume; match medieval tabletop terrain cutout illustrations. Recognizable realistic craftsmanship, not a vector icon, not a diagram, not a photo. Lots of open white surfaces, no gray wash, gradients, background scene, cast shadow or paper texture. Landscape 3:2 composition, complete object fills frame with safe margins, no cropping. No people, hands, lettering, numbers, labels, frame, grid or UI. Detail legible printed 5 cm wide. Subject: One traveller's quarterstaff of knotted hardwood, straight usable shaft, leather grip wrapping, small simple iron cap at the bottom. No ornamented wizard orb. Entire staff diagonal.",
+      "source": "/home/winiar/.codex/generated_images/01a097bf-2951-7e62-a62a-8e6ddb94adb6/exec-31bfcd6f-f442-484b-a17c-deda7c38fd2b.png",
+      "destination": "content/print/equipment/illustrations/ink_v2/staff.png"
+    },
+    {
+      "name": "book",
+      "prompt": "Use case: illustration-story. Asset type: one printable fantasy RPG equipment-card illustration. Style: detailed black ink drawing on PURE WHITE background, confident thick outer contour, thinner hand-drawn interior lines and restrained hatching for believable material and volume; match medieval tabletop terrain cutout illustrations. Recognizable realistic craftsmanship, not a vector icon, not a diagram, not a photo. Lots of open white surfaces, no gray wash, gradients, background scene, cast shadow or paper texture. Landscape 3:2 composition, complete object fills frame with safe margins, no cropping. No people, hands, lettering, numbers, labels, frame, grid or UI. Detail legible printed 5 cm wide. Subject: One closed thick wizard's spellbook in three-quarter view, worn leather cover, iron corner protectors, plain metal clasp, visible uneven page edges, small embossed geometric seal without letters. No magical glow.",
+      "source": "/home/winiar/.codex/generated_images/01a097bf-2951-7e62-a62a-8e6ddb94adb6/exec-47888260-88a2-4c20-9ff0-32f41f53b3e0.png",
+      "destination": "content/print/equipment/illustrations/ink_v2/book.png"
+    },
+    {
+      "name": "pouch",
+      "prompt": "Use case: illustration-story. Asset type: one printable fantasy RPG equipment-card illustration. Style: detailed black ink drawing on PURE WHITE background, confident thick outer contour, thinner hand-drawn interior lines and restrained hatching for believable material and volume; match medieval tabletop terrain cutout illustrations. Recognizable realistic craftsmanship, not a vector icon, not a diagram, not a photo. Lots of open white surfaces, no gray wash, gradients, background scene, cast shadow or paper texture. Landscape 3:2 composition, complete object fills frame with safe margins, no cropping. No people, hands, lettering, numbers, labels, frame, grid or UI. Detail legible printed 5 cm wide. Subject: One small soft leather coin pouch with gathered drawstring mouth, stitched seams and knotted cord, slightly bulging, seen in three-quarter view. No loose coins.",
+      "source": "/home/winiar/.codex/generated_images/01a097bf-2951-7e62-a62a-8e6ddb94adb6/exec-15372d71-04d3-4ead-b87b-ef7642566d1e.png",
+      "destination": "content/print/equipment/illustrations/ink_v2/pouch.png"
+    },
+    {
+      "name": "tools",
+      "prompt": "Use case: illustration-story. Asset type: one printable fantasy RPG equipment-card illustration. Style: detailed black ink drawing on PURE WHITE background, confident thick outer contour, thinner hand-drawn interior lines and restrained hatching for believable material and volume; match medieval tabletop terrain cutout illustrations. Recognizable realistic craftsmanship, not a vector icon, not a diagram, not a photo. Lots of open white surfaces, no gray wash, gradients, background scene, cast shadow or paper texture. Landscape 3:2 composition, complete object fills frame with safe margins, no cropping. No people, hands, lettering, numbers, labels, frame, grid or UI. Detail legible printed 5 cm wide. Subject: A woodcarver's small set of tools on an open leather roll: three wood-handled chisels, a carving knife and a small wooden mallet. Natural realistic tools, neatly arranged, no background.",
+      "source": "/home/winiar/.codex/generated_images/01a097bf-2951-7e62-a62a-8e6ddb94adb6/exec-0d7a9bd3-46d2-457f-8c1f-489690b387aa.png",
+      "destination": "content/print/equipment/illustrations/ink_v2/tools.png"
+    },
+    {
+      "name": "pack",
+      "prompt": "Use case: illustration-story. Asset type: one printable fantasy RPG equipment-card illustration. Style: detailed black ink drawing on PURE WHITE background, confident thick outer contour, thinner hand-drawn interior lines and restrained hatching for believable material and volume; match medieval tabletop terrain cutout illustrations. Recognizable realistic craftsmanship, not a vector icon, not a diagram, not a photo. Lots of open white surfaces, no gray wash, gradients, background scene, cast shadow or paper texture. Landscape 3:2 composition, complete object fills frame with safe margins, no cropping. No people, hands, lettering, numbers, labels, frame, grid or UI. Detail legible printed 5 cm wide. Subject: One well-used medieval adventurer's canvas and leather backpack with buckled flap, outside pockets, shoulder straps, a neatly rolled bedroll tied across its top, no modern zips or plastic. Entire pack, three-quarter view.",
+      "source": "/home/winiar/.codex/generated_images/01a097bf-2951-7e62-a62a-8e6ddb94adb6/exec-08a3ef3c-f7c1-4415-b13b-237e939f6b74.png",
+      "destination": "content/print/equipment/illustrations/ink_v2/pack.png"
+    },
+    {
+      "name": "lute",
+      "prompt": "Use case: illustration-story. Asset type: one printable fantasy RPG equipment-card illustration. Style: detailed black ink drawing on PURE WHITE background, confident thick outer contour, thinner hand-drawn interior lines and restrained hatching for believable material and volume; match medieval tabletop terrain cutout illustrations. Recognizable realistic craftsmanship, not a vector icon, not a diagram, not a photo. Lots of open white surfaces, no gray wash, gradients, background scene, cast shadow or paper texture. Landscape 3:2 composition, complete object fills frame with safe margins, no cropping. No people, hands, lettering, numbers, labels, frame, grid or UI. Detail legible printed 5 cm wide. Subject: One complete medieval wooden lute viewed three-quarter, rounded pear-shaped body, decorative soundhole rosette, six visible strings, neck, bent pegbox and tuning pegs. No hands.",
+      "source": "/home/winiar/.codex/generated_images/01a097bf-2951-7e62-a62a-8e6ddb94adb6/exec-a2bf092e-f888-4dac-a80d-725827a9c88d.png",
+      "destination": "content/print/equipment/illustrations/ink_v2/lute.png"
+    },
+    {
+      "name": "clothes",
+      "prompt": "Use case: illustration-story. Asset type: one printable fantasy RPG equipment-card illustration. Style: detailed black ink drawing on PURE WHITE background, confident thick outer contour, thinner hand-drawn interior lines and restrained hatching for believable material and volume; match medieval tabletop terrain cutout illustrations. Recognizable realistic craftsmanship, not a vector icon, not a diagram, not a photo. Lots of open white surfaces, no gray wash, gradients, background scene, cast shadow or paper texture. Landscape 3:2 composition, complete object fills frame with safe margins, no cropping. No people, hands, lettering, numbers, labels, frame, grid or UI. Detail legible printed 5 cm wide. Subject: A tidy folded set of simple medieval civilian clothing: linen tunic, trousers and cloth belt arranged as one compact clothing bundle. Show cloth folds, hems and seams; no body, mannequin or boots.",
+      "source": "/home/winiar/.codex/generated_images/01a097bf-2951-7e62-a62a-8e6ddb94adb6/exec-c13e701b-fb09-4537-9ae4-413edb8d9268.png",
+      "destination": "content/print/equipment/illustrations/ink_v2/clothes.png"
+    },
+    {
+      "name": "drum",
+      "prompt": "Use case: illustration-story. Asset type: one printable fantasy RPG equipment-card illustration. Style: detailed black ink drawing on PURE WHITE background, confident thick outer contour, thinner hand-drawn interior lines and restrained hatching for believable material and volume; match medieval tabletop terrain cutout illustrations. Recognizable realistic craftsmanship, not a vector icon, not a diagram, not a photo. Lots of open white surfaces, no gray wash, gradients, background scene, cast shadow or paper texture. Landscape 3:2 composition, complete object fills frame with safe margins, no cropping. No people, hands, lettering, numbers, labels, frame, grid or UI. Detail legible printed 5 cm wide. Subject: One small rope-tensioned wooden frame drum with a stretched hide head, two wooden drumsticks resting beside it. Visible grain, cords and stitching. Three-quarter view.",
+      "source": "/home/winiar/.codex/generated_images/01a097bf-2951-7e62-a62a-8e6ddb94adb6/exec-b252196f-d804-41de-b352-269d2f19b664.png",
+      "destination": "content/print/equipment/illustrations/ink_v2/drum.png"
+    },
+    {
+      "name": "dice",
+      "prompt": "Use case: illustration-story. Asset type: one printable fantasy RPG equipment-card illustration. Style: detailed black ink drawing on PURE WHITE background, confident thick outer contour, thinner hand-drawn interior lines and restrained hatching for believable material and volume; match medieval tabletop terrain cutout illustrations. Recognizable realistic craftsmanship, not a vector icon, not a diagram, not a photo. Lots of open white surfaces, no gray wash, gradients, background scene, cast shadow or paper texture. Landscape 3:2 composition, complete object fills frame with safe margins, no cropping. No people, hands, lettering, numbers, labels, frame, grid or UI. Detail legible printed 5 cm wide. Subject: Three small worn bone six-sided dice in a natural clustered three-quarter view. Correct square cube faces, dark drilled pips, no numerals. No cup.",
+      "source": "/home/winiar/.codex/generated_images/01a097bf-2951-7e62-a62a-8e6ddb94adb6/exec-62632d28-4935-4fcf-9156-d1832365c846.png",
+      "destination": "content/print/equipment/illustrations/ink_v2/dice.png"
+    },
+    {
+      "name": "cards",
+      "prompt": "Use case: illustration-story. Asset type: one printable fantasy RPG equipment-card illustration. Style: detailed black ink drawing on PURE WHITE background, confident thick outer contour, thinner hand-drawn interior lines and restrained hatching for believable material and volume; match medieval tabletop terrain cutout illustrations. Recognizable realistic craftsmanship, not a vector icon, not a diagram, not a photo. Lots of open white surfaces, no gray wash, gradients, background scene, cast shadow or paper texture. Landscape 3:2 composition, complete object fills frame with safe margins, no cropping. No people, hands, lettering, numbers, labels, frame, grid or UI. Detail legible printed 5 cm wide. Subject: A small deck of hand-painted medieval playing cards, a short stack and three fanned cards with simple cups, swords and botanical suit designs. No modern poker indices, words or numbers.",
+      "source": "/home/winiar/.codex/generated_images/01a097bf-2951-7e62-a62a-8e6ddb94adb6/exec-27f1e204-f1d5-428a-bcd4-9d6557d215f8.png",
+      "destination": "content/print/equipment/illustrations/ink_v2/cards.png"
+    },
+    {
+      "name": "crowbar",
+      "prompt": "Use case: illustration-story. Asset type: one printable fantasy RPG equipment-card illustration. Style: detailed black ink drawing on PURE WHITE background, confident thick outer contour, thinner hand-drawn interior lines and restrained hatching for believable material and volume; match medieval tabletop terrain cutout illustrations. Recognizable realistic craftsmanship, not a vector icon, not a diagram, not a photo. Lots of open white surfaces, no gray wash, gradients, background scene, cast shadow or paper texture. Landscape 3:2 composition, complete object fills frame with safe margins, no cropping. No people, hands, lettering, numbers, labels, frame, grid or UI. Detail legible printed 5 cm wide. Subject: One worn iron crowbar with a curved hooked flattened end and a split nail-pulling tip, realistic forged texture, complete tool diagonally.",
+      "source": "/home/winiar/.codex/generated_images/01a097bf-2951-7e62-a62a-8e6ddb94adb6/exec-041b3216-a694-4da2-8830-573828efc810.png",
+      "destination": "content/print/equipment/illustrations/ink_v2/crowbar.png"
+    },
+    {
+      "name": "trap",
+      "prompt": "Use case: illustration-story. Asset type: one printable fantasy RPG equipment-card illustration. Style: detailed black ink drawing on PURE WHITE background, confident thick outer contour, thinner hand-drawn interior lines and restrained hatching for believable material and volume; match medieval tabletop terrain cutout illustrations. Recognizable realistic craftsmanship, not a vector icon, not a diagram, not a photo. Lots of open white surfaces, no gray wash, gradients, background scene, cast shadow or paper texture. Landscape 3:2 composition, complete object fills frame with safe margins, no cropping. No people, hands, lettering, numbers, labels, frame, grid or UI. Detail legible printed 5 cm wide. Subject: One open medieval iron jaw hunting trap lying flat in elevated three-quarter view, toothed curved jaws, central pressure plate, spring and short linked chain. Mechanically coherent, no animal or gore.",
+      "source": "/home/winiar/.codex/generated_images/01a097bf-2951-7e62-a62a-8e6ddb94adb6/exec-1aabe2a6-e9c5-4084-99e7-0293aac0351d.png",
+      "destination": "content/print/equipment/illustrations/ink_v2/trap.png"
+    },
+    {
+      "name": "pot",
+      "prompt": "Use case: illustration-story. Asset type: one printable fantasy RPG equipment-card illustration. Style: detailed black ink drawing on PURE WHITE background, confident thick outer contour, thinner hand-drawn interior lines and restrained hatching for believable material and volume; match medieval tabletop terrain cutout illustrations. Recognizable realistic craftsmanship, not a vector icon, not a diagram, not a photo. Lots of open white surfaces, no gray wash, gradients, background scene, cast shadow or paper texture. Landscape 3:2 composition, complete object fills frame with safe margins, no cropping. No people, hands, lettering, numbers, labels, frame, grid or UI. Detail legible printed 5 cm wide. Subject: One small medieval iron cooking pot with a curved swing handle, thick lip, rivets and three little feet. Three-quarter view shows open empty interior.",
+      "source": "/home/winiar/.codex/generated_images/01a097bf-2951-7e62-a62a-8e6ddb94adb6/exec-e2a3b628-adc4-4a2e-8a12-7f2a6e274e96.png",
+      "destination": "content/print/equipment/illustrations/ink_v2/pot.png"
+    },
+    {
+      "name": "shovel",
+      "prompt": "Use case: illustration-story. Asset type: one printable fantasy RPG equipment-card illustration. Style: detailed black ink drawing on PURE WHITE background, confident thick outer contour, thinner hand-drawn interior lines and restrained hatching for believable material and volume; match medieval tabletop terrain cutout illustrations. Recognizable realistic craftsmanship, not a vector icon, not a diagram, not a photo. Lots of open white surfaces, no gray wash, gradients, background scene, cast shadow or paper texture. Landscape 3:2 composition, complete object fills frame with safe margins, no cropping. No people, hands, lettering, numbers, labels, frame, grid or UI. Detail legible printed 5 cm wide. Subject: One sturdy medieval digging shovel, iron spade blade, long wooden shaft and a simple wooden D-grip. Entire tool diagonal.",
+      "source": "/home/winiar/.codex/generated_images/01a097bf-2951-7e62-a62a-8e6ddb94adb6/exec-359d9b7a-ecdf-4105-b636-6b21a53537ef.png",
+      "destination": "content/print/equipment/illustrations/ink_v2/shovel.png"
+    },
+    {
+      "name": "ink",
+      "prompt": "Use case: illustration-story. Asset type: one printable fantasy RPG equipment-card illustration. Style: detailed black ink drawing on PURE WHITE background, confident thick outer contour, thinner hand-drawn interior lines and restrained hatching for believable material and volume; match medieval tabletop terrain cutout illustrations. Recognizable realistic craftsmanship, not a vector icon, not a diagram, not a photo. Lots of open white surfaces, no gray wash, gradients, background scene, cast shadow or paper texture. Landscape 3:2 composition, complete object fills frame with safe margins, no cropping. No people, hands, lettering, numbers, labels, frame, grid or UI. Detail legible printed 5 cm wide. Subject: One small squat clear glass ink bottle, dark ink in its lower half, cork stopper seated in the neck. Short wide base, some highlights as white areas. No paper label or words.",
+      "source": "/home/winiar/.codex/generated_images/01a097bf-2951-7e62-a62a-8e6ddb94adb6/exec-0c728f4c-9d70-43ce-bb64-2363cd607807.png",
+      "destination": "content/print/equipment/illustrations/ink_v2/ink.png"
+    },
+    {
+      "name": "quill",
+      "prompt": "Use case: illustration-story. Asset type: one printable fantasy RPG equipment-card illustration. Style: detailed black ink drawing on PURE WHITE background, confident thick outer contour, thinner hand-drawn interior lines and restrained hatching for believable material and volume; match medieval tabletop terrain cutout illustrations. Recognizable realistic craftsmanship, not a vector icon, not a diagram, not a photo. Lots of open white surfaces, no gray wash, gradients, background scene, cast shadow or paper texture. Landscape 3:2 composition, complete object fills frame with safe margins, no cropping. No people, hands, lettering, numbers, labels, frame, grid or UI. Detail legible printed 5 cm wide. Subject: One goose-feather writing quill, finely split and shaped nib, recognizable feather barbs and natural shaft, entire quill diagonally. No ink bottle.",
+      "source": "/home/winiar/.codex/generated_images/01a097bf-2951-7e62-a62a-8e6ddb94adb6/exec-dca63d1a-dd51-40bc-934a-b7d3419e36d6.png",
+      "destination": "content/print/equipment/illustrations/ink_v2/quill.png"
+    },
+    {
+      "name": "scale_armor",
+      "prompt": "Use case: illustration-story. Asset type: one printable fantasy RPG equipment-card illustration. Style: detailed black ink drawing on PURE WHITE background, confident thick outer contour, thinner hand-drawn interior lines and restrained hatching for believable material and volume; match medieval tabletop terrain cutout illustrations. Recognizable realistic craftsmanship, not a vector icon, not a diagram, not a photo. Lots of open white surfaces, no gray wash, gradients, background scene, cast shadow or paper texture. Landscape 3:2 composition, complete object fills frame with safe margins, no cropping. No people, hands, lettering, numbers, labels, frame, grid or UI. Detail legible printed 5 cm wide. Subject: One empty medieval scale-mail shirt: overlapping small metal scales attached in horizontal rows to a leather tunic, short sleeves, simple leather belt and shoulder straps. No chain mesh, no wearer or mannequin.",
+      "source": "/home/winiar/.codex/generated_images/01a097bf-2951-7e62-a62a-8e6ddb94adb6/exec-cc1b0953-a4a1-485a-82c0-bf4ffe7edc69.png",
+      "destination": "content/print/equipment/illustrations/ink_v2/scale_armor.png"
+    },
+    {
+      "name": "holy_symbol",
+      "prompt": "Use case: illustration-story. Asset type: one printable fantasy RPG equipment-card illustration. Style: detailed black ink drawing on PURE WHITE background, confident thick outer contour, thinner hand-drawn interior lines and restrained hatching for believable material and volume; match medieval tabletop terrain cutout illustrations. Recognizable realistic craftsmanship, not a vector icon, not a diagram, not a photo. Lots of open white surfaces, no gray wash, gradients, background scene, cast shadow or paper texture. Landscape 3:2 composition, complete object fills frame with safe margins, no cropping. No people, hands, lettering, numbers, labels, frame, grid or UI. Detail legible printed 5 cm wide. Subject: One small simple sun-shaped sacred silver amulet on a leather cord, a circular central medallion and eight short radial rays, three-quarter view, hand-crafted metal with fine engraved edges. No text or real-world religious symbols.",
+      "source": "/home/winiar/.codex/generated_images/01a097bf-2951-7e62-a62a-8e6ddb94adb6/exec-2eb08ae6-f955-4333-9570-584b06fb7c62.png",
+      "destination": "content/print/equipment/illustrations/ink_v2/holy_symbol.png"
+    },
+    {
+      "name": "lockpicks",
+      "prompt": "Use case: illustration-story. Asset type: one printable fantasy RPG equipment-card illustration. Style: detailed black ink drawing on PURE WHITE background, confident thick outer contour, thinner hand-drawn interior lines and restrained hatching for believable material and volume; match medieval tabletop terrain cutout illustrations. Recognizable realistic craftsmanship, not a vector icon, not a diagram, not a photo. Lots of open white surfaces, no gray wash, gradients, background scene, cast shadow or paper texture. Landscape 3:2 composition, complete object fills frame with safe margins, no cropping. No people, hands, lettering, numbers, labels, frame, grid or UI. Detail legible printed 5 cm wide. Subject: A fictional fantasy tabletop game prop: a small open leather tool wallet containing an assortment of tiny old metal tools with slim handles and rounded or hooked tips. Decorative equipment illustration for an adventurer inventory card. Objects only, lying flat; no lock, no demonstration or instructions for use, no mechanism schematic.",
+      "source": "/home/winiar/.codex/generated_images/01a097bf-2951-7e62-a62a-8e6ddb94adb6/exec-55359655-546d-4ff5-9f63-3c59368f5503.png",
+      "destination": "content/print/equipment/illustrations/ink_v2/lockpicks.png"
+    }
+  ]
+}

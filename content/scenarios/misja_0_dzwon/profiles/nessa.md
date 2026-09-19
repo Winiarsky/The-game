@@ -1,5 +1,11 @@
 # Nessa — profil
 
+Narrator może przed pierwszą odprawą żartobliwie zauważyć, że gdyby nie Gildia,
+Nessa z pewnością zostałaby burdelmamą: troska o własnych ludzi, kontrola
+interesów i wyczucie klientów płacących z góry. To ironiczna hipoteza narratora,
+nie fakt z jej przeszłości ani zmiana obecnej profesji. Nie powtarzać puenty
+w każdej rozmowie.
+
 ### 4.2. Wygląd
 
 Nessa jest dojrzałą, postawną kobietą o wyprostowanej sylwetce i ruchach, które
@@ -55,8 +61,8 @@ od człowieka.
 
 Cele w Misji 0:
 
-- wysłać nową drużynę po dzwon pozostawiony przy posterunku;
-- odzyskać dzwon, wóz i ludzi bez nadmiernego ryzyka;
+- wysłać nową drużynę po sprzęt, zapasy i dokumenty pozostawione przy posterunku;
+- odzyskać ładunek ze spisu, wóz i ludzi bez nadmiernego ryzyka;
 - sprawdzić samodzielność drużyny, zachować rozsądny koszt kontraktu;
 - zdecydować, czy dodatkowa mikstura jest uzasadnionym zabezpieczeniem wyprawy.
 
@@ -137,4 +143,4 @@ sygnalizować przejście między etapami rozmowy.
 | Groźba przemocy albo odmowa przydziału | Nie rzuca się ani nie targuje; przypomina granice zatrudnienia i kończy niedozwolony kierunek rozmowy. |
 
 
-W tej misji zna zlecenie odzyskania dzwonu. Nie zna prawdy o wieśniakach ani kłamstw drużyny, dopóki nie zostanie poinformowana. Wątki pyłu i Alvena nie obowiązują.
+W tej misji zna zlecenie odzyskania ładunku ze spisu. Nie zna prawdy o wieśniakach ani kłamstw drużyny, dopóki nie zostanie poinformowana. Wątki pyłu i Alvena nie obowiązują.

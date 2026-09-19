@@ -1,1 +1,1 @@
-Dzwon dotarł na miejsce. Wasza pierwsza wspólna wyprawa ma już zakończenie, choć nie wszystkie jej sprawy można uznać za zamknięte.
+Dostawa jest rozliczona. Sprawdźcie pieniądze, przedmioty i otwarte sprawy poniżej. Wydruk z pokwitowaniami zachowajcie, jeśli podjęliście się pomóc wieśniakom.

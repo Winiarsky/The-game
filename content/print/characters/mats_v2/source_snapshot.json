@@ -1,0 +1,3255 @@
+{
+  "garran": {
+    "id": "garran",
+    "name": "Garran",
+    "role": "Żelazna Straż — obrona pierwszej linii",
+    "level": 3,
+    "hp": 28,
+    "ac": 18,
+    "speed": 30,
+    "initiative": 2,
+    "spell_dc": 14,
+    "abilities": [
+      [
+        "Siła",
+        18,
+        4
+      ],
+      [
+        "Zręczność",
+        14,
+        2
+      ],
+      [
+        "Kondycja",
+        15,
+        2
+      ],
+      [
+        "Inteligencja",
+        9,
+        -1
+      ],
+      [
+        "Mądrość",
+        13,
+        1
+      ],
+      [
+        "Charyzma",
+        11,
+        0
+      ]
+    ],
+    "weapons": [
+      "Miecz: +4 do trafienia; 1k8 + 4 cięte",
+      "Kusza: +2 do trafienia; 1k8 + 2 kłute"
+    ],
+    "saves": [
+      "Siła +4",
+      "Zręczność +2",
+      "Kondycja +2",
+      "Inteligencja -1",
+      "Mądrość +1",
+      "Charyzma +0"
+    ],
+    "skills": [
+      "Atletyka +4",
+      "Zastraszanie +0",
+      "Percepcja +1",
+      "Sztuka przetrwania +1"
+    ],
+    "equipment": [
+      "Miecz ×1",
+      "Tarcza ×1",
+      "Kolczuga ×1",
+      "Kusza ×1",
+      "Bełt do kuszy ×20",
+      "Pakiet odkrywcy ×1",
+      "Zwykłe ubranie ×1",
+      "Sakiewka ×1",
+      "Zestaw kości ×1"
+    ],
+    "keep": 1,
+    "capacity": null,
+    "cards": [
+      {
+        "id": "second_wind",
+        "name": "Drugi oddech",
+        "key": "Q",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 6 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Rzuć 1k10 i dodaj modyfikator Kondycji. Odzyskaj tyle PW, najwyżej do swojego maksimum. Leczenie zajmuje akcję główną, więc konkuruje ze zwykłym atakiem.",
+        "panel_slot": 6,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 6 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "Rzuć 1k10 i dodaj modyfikator Kondycji. Odzyskaj tyle PW, najwyżej do swojego maksimum. Leczenie zajmuje akcję główną, więc konkuruje ze zwykłym atakiem."
+          ]
+        ]
+      },
+      {
+        "id": "defensive_stance",
+        "name": "Pozycja obronna",
+        "key": "R",
+        "timing": "D",
+        "cost": [],
+        "description": "Bez many; normalny koszt akcji i ograniczenia użycia. Otrzymujesz +2 KP. Każda zmiana pola kończy postawę; ponowne użycie nie zwiększa tej premii. Do mana draina, chyba że opisany warunek lub koncentracja zakończy wcześniej.",
+        "panel_slot": 9,
+        "sections": [
+          [
+            "Ładunek",
+            "0 pkt — dostępna bez naładowania."
+          ],
+          [
+            "Akcja",
+            "Akcja dodatkowa"
+          ],
+          [
+            "Spalanie",
+            "0 kart."
+          ],
+          [
+            "Efekt",
+            "Otrzymujesz +2 KP. Każda zmiana pola kończy postawę; ponowne użycie nie zwiększa tej premii. Działa do mana draina; wskazane warunki mogą zakończyć wcześniej."
+          ]
+        ]
+      },
+      {
+        "id": "garran_command_halt",
+        "name": "Rozkaz: Stać!",
+        "key": "A",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 6 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Wybierz wroga w zasięgu 60 ft (12 pól). Aplikacja wykonuje jego obronę Mądrości przeciw ST 14. Przy porażce wróg ma połowę ruchu i nie może używać reakcji. Przy sukcesie nie nakładasz efektu. Do początku następnej tury źródła, chyba że efekt wykorzystano wcześniej.",
+        "panel_slot": 10,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 6 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "Wybierz wroga w zasięgu 60 ft (12 pól). Aplikacja wykonuje jego obronę Mądrości przeciw ST 14. Przy porażce wróg ma połowę ruchu i nie może używać reakcji. Przy sukcesie nie nakładasz efektu. Działa do początku następnej tury postaci, która użyła zdolności, lub do wcześniejszego wykorzystania."
+          ]
+        ]
+      },
+      {
+        "id": "garran_guard_companion",
+        "name": "Osłona towarzysza",
+        "key": "AUTO",
+        "timing": "R",
+        "cost": [],
+        "description": "Bez many; normalny koszt akcji i ograniczenia użycia. Przed rozstrzygnięciem pojedynczego ataku na sąsiadującego sojusznika przejmij ten atak na siebie. Zużywasz reakcję. Nie obejmuje ataków obszarowych.",
+        "panel_slot": 13,
+        "sections": [
+          [
+            "Ładunek",
+            "0 pkt — dostępna bez naładowania."
+          ],
+          [
+            "Akcja",
+            "Reakcja"
+          ],
+          [
+            "Spalanie",
+            "0 kart."
+          ],
+          [
+            "Efekt",
+            "Przed rozstrzygnięciem pojedynczego ataku na sąsiadującego sojusznika przejmij ten atak na siebie. Zużywasz reakcję. Nie obejmuje ataków obszarowych."
+          ]
+        ]
+      },
+      {
+        "id": "shield_bash",
+        "name": "Uderzenie tarczą",
+        "key": "E",
+        "timing": "D",
+        "cost": [],
+        "description": "Co najmniej 12 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Wybierz sąsiadującego wroga. Rzuć k20 + modyfikator Siły + naładowanie; aplikacja rzuca za wroga i dodaje jego modyfikator testu. Musisz uzyskać wyższy wynik — remis wygrywa wróg. Wygrana: 1k6 + modyfikator Siły obrażeń i odepchnięcie o pole, jeśli jest wolne. Przegrana: brak efektu. Czerwona: +1k6 obrażeń (maks. 2) Łącznie najwyżej 3 podbicia, każde kosztuje dodatkowe 2 spalone karty; kolor jest symbolem wariantu, nie wymaganiem puli.",
+        "panel_slot": 8,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 12 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja dodatkowa"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "Wybierz sąsiadującego wroga. Rzuć k20 + modyfikator Siły + naładowanie; aplikacja rzuca za wroga i dodaje jego modyfikator testu. Musisz uzyskać wyższy wynik — remis wygrywa wróg. Wygrana: 1k6 + modyfikator Siły obrażeń i odepchnięcie o pole, jeśli jest wolne. Przegrana: brak efektu."
+          ],
+          [
+            "Podbicia",
+            "+1k6 obrażeń. Maks. 2 razy. Każde: +2 spalone karty. Łącznie maks. 2. Kolor runy nie wymaga tego koloru w puli ani w spaleniu."
+          ]
+        ]
+      },
+      {
+        "id": "garran_shield_wall",
+        "name": "Osłona tarczą",
+        "key": "S",
+        "timing": "D",
+        "cost": [],
+        "description": "Co najmniej 12 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Sąsiadujący sojusznicy otrzymują +2 KP. Ty nie otrzymujesz tej premii. Sojusznik poza sąsiedztwem traci ochronę. Do początku następnej tury źródła, chyba że efekt wykorzystano wcześniej. Biała: 5 tymczasowych PW jednemu sojusznikowi; różne cele (maks. 2) Łącznie najwyżej 3 podbicia, każde kosztuje dodatkowe 2 spalone karty; kolor jest symbolem wariantu, nie wymaganiem puli.",
+        "panel_slot": 11,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 12 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja dodatkowa"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "Sąsiadujący sojusznicy otrzymują +2 KP. Ty nie otrzymujesz tej premii. Sojusznik poza sąsiedztwem traci ochronę. Działa do początku następnej tury postaci, która użyła zdolności, lub do wcześniejszego wykorzystania."
+          ],
+          [
+            "Podbicia",
+            "5 tymczasowych PW jednemu sojusznikowi; różne cele. Maks. 2 razy. Każde: +2 spalone karty. Łącznie maks. 2. Kolor runy nie wymaga tego koloru w puli ani w spaleniu."
+          ]
+        ]
+      },
+      {
+        "id": "garran_rally",
+        "name": "Mowa dowódcy",
+        "key": "D",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 12 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Ty i słyszący sojusznicy w zasięgu 15 ft (3 pól) usuwacie Strach i macie przewagę pierwszego ataku: rzut dwiema k20, wyższy wynik. Do początku następnej tury źródła, chyba że efekt wykorzystano wcześniej. Biała: wybrany uczestnik odzyskuje 1k6 PW (maks. 2) Łącznie najwyżej 3 podbicia, każde kosztuje dodatkowe 2 spalone karty; kolor jest symbolem wariantu, nie wymaganiem puli.",
+        "panel_slot": 12,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 12 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "Ty i słyszący sojusznicy w zasięgu 15 ft (3 pól) usuwacie Strach i macie przewagę pierwszego ataku: rzut dwiema k20, wyższy wynik. Działa do początku następnej tury postaci, która użyła zdolności, lub do wcześniejszego wykorzystania."
+          ],
+          [
+            "Podbicia",
+            "wybrany uczestnik odzyskuje 1k6 PW. Maks. 2 razy. Każde: +2 spalone karty. Łącznie maks. 2. Kolor runy nie wymaga tego koloru w puli ani w spaleniu."
+          ]
+        ]
+      },
+      {
+        "id": "iron_bastion",
+        "name": "Żelazny bastion",
+        "key": "MENU",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 21 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Uruchom aurę o promieniu 10 ft (2 pól). Ty i sojusznicy w niej macie premię do KP równą twojemu modyfikatorowi Siły oraz ochronę przed przymusowym przesunięciem. Nie opłacasz aury ponownie w kolejnych turach. Do mana draina, chyba że opisany warunek lub koncentracja zakończy wcześniej.",
+        "panel_slot": 7,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 21 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "Uruchom aurę o promieniu 10 ft (2 pól). Ty i sojusznicy w niej macie premię do KP równą twojemu modyfikatorowi Siły oraz ochronę przed przymusowym przesunięciem. Nie opłacasz aury ponownie w kolejnych turach. Działa do mana draina; wskazane warunki mogą zakończyć wcześniej."
+          ]
+        ]
+      },
+      {
+        "id": "counterattack_command",
+        "name": "Rozkaz: Kontratak!",
+        "key": "MENU",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 21 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Wybierz sojusznika w zasięgu 15 ft (3 pól), który ma reakcję. Każdy z was może przemieścić się do 10 ft (2 pól) bez ataków okazyjnych i wykonać jeden atak bronią. Sojusznik zużywa reakcję. Opisane ataki są częścią tej akcji.",
+        "panel_slot": 14,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 21 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "Wybierz sojusznika w zasięgu 15 ft (3 pól), który ma reakcję. Każdy z was może przemieścić się do 10 ft (2 pól) bez ataków okazyjnych i wykonać jeden atak bronią. Sojusznik zużywa reakcję. Opisane ataki są częścią tej akcji."
+          ]
+        ]
+      }
+    ],
+    "passives": [
+      [
+        "Nasycenie maną",
+        "C: Natarcie: Gdy zadajesz obrażenia bronią wręcz: +1 do obrażeń za każdą kartę tego koloru w twojej puli. Kumuluje się. B: Żelazna linia: Gdy razem flankujecie wroga: Sojusznik ma +1 KP przeciw temu wrogowi. Ty nie otrzymujesz tej premii. Nie kumuluje się. Z: Ulepszony krytyk: Atak bronią: Naturalne 19 lub 20 oznacza trafienie krytyczne. Nie dotyczy Uderzenia tarczą. Nie kumuluje się. F: Wytrwałość: Gdy wykonujesz rzut obronny: +1 do rzutów obronnych Kondycji za kartę tego koloru. Łącznie maks. +2. Kumuluje się. N: Osłona: Gdy masz ten kolor w puli: +1 KP. Nie kumuluje się. Pasywy wymagają odpowiedniego koloru w puli; efekty leczenia uruchamia sam dobór. Mana Drain usuwa nasycenie."
+      ]
+    ],
+    "flaw": [
+      "Nieustępliwość",
+      "Rozpoczęcie własnej tury przy wrogu zmniejsza limit zwykłego ruchu o połowę do końca tury."
+    ],
+    "story": [
+      [
+        "Historia",
+        "Garran był dobrym dowódcą, dopóki wojna nie zmusiła go do wyboru między krzywdą niewinnych a ryzykiem dla własnych ludzi. Odmówił bezpodstawnych aresztowań; później dwóch wypuszczonych uczestniczyło w ataku na jego dawnych podwładnych."
+      ],
+      [
+        "Dlaczego podróżuje",
+        "W Gildii przyjmuje małe, konkretne zlecenia: chroni człowieka, karawanę albo drogę odwrotu zamiast abstrakcyjnego interesu państwa. Szuka sposobu, by nadal osłaniać innych, nie oddając własnego sumienia żadnej instytucji."
+      ],
+      [
+        "Cel osobisty",
+        "Znaleźć własne zasady przyzwoitego działania bez obietnicy pewnego, dobrego rezultatu."
+      ]
+    ],
+    "exploration": [
+      {
+        "id": "npc",
+        "name": "Podejście ze sceny",
+        "kind": "npc",
+        "ability": "Cecha podejścia",
+        "modifier": 0,
+        "components": [],
+        "description": "Wybierz runą podejście dostępne w tej scenie. Określa cechę, ST, kość efektu i dozwolone wsparcie. Wybór zostaje do końca konfrontacji.",
+        "influence_modifier": 0
+      },
+      {
+        "id": "object",
+        "name": "Podejście ze sceny",
+        "kind": "object",
+        "ability": "Cecha podejścia",
+        "modifier": 0,
+        "components": [],
+        "description": "Wybierz runą podejście dostępne w tej scenie. Określa cechę, ST, kość efektu i dozwolone wsparcie. Wybór zostaje do końca konfrontacji.",
+        "influence_modifier": 0
+      }
+    ],
+    "mana_values": [
+      [
+        "C",
+        4
+      ],
+      [
+        "B",
+        7
+      ],
+      [
+        "Z",
+        1
+      ],
+      [
+        "F",
+        3
+      ],
+      [
+        "N",
+        4
+      ]
+    ],
+    "exploration_passives": [
+      [
+        "C",
+        "Stanowczość: Po sukcesie: +1 do wpływu / postępu za kartę tego koloru. Maks. +2. Kumuluje się."
+      ],
+      [
+        "B",
+        "Opanowanie: Reakcja zabiera kartę z twojej puli? Zachowaj ją. Ochrona 1 karty; nie dotyczy wspólnej talii. Nie kumuluje się."
+      ],
+      [
+        "Z",
+        "Oddech: Po udanym teście: przenieś 1 najwcześniej spaloną kartę na spód talii. Potwierdź ✓, potem spal koszt testu. Nie kumuluje się."
+      ],
+      [
+        "F",
+        "Skupienie: Test k20: +1 za kartę tego koloru w puli. Maks. +2. Bez premii do wpływu / postępu. Kumuluje się."
+      ],
+      [
+        "N",
+        "Współpraca: Pomoc: +2 do następnego testu sojusznika zamiast +1. Spal 1 kartę. Dostępne cele wsparcia bez zmian. Nie kumuluje się."
+      ]
+    ],
+    "mana_passives": [
+      [
+        "C",
+        "Natarcie: Gdy zadajesz obrażenia bronią wręcz: +1 do obrażeń za każdą kartę tego koloru w twojej puli. Kumuluje się."
+      ],
+      [
+        "B",
+        "Żelazna linia: Gdy razem flankujecie wroga: Sojusznik ma +1 KP przeciw temu wrogowi. Ty nie otrzymujesz tej premii. Nie kumuluje się."
+      ],
+      [
+        "Z",
+        "Ulepszony krytyk: Atak bronią: Naturalne 19 lub 20 oznacza trafienie krytyczne. Nie dotyczy Uderzenia tarczą. Nie kumuluje się."
+      ],
+      [
+        "F",
+        "Wytrwałość: Gdy wykonujesz rzut obronny: +1 do rzutów obronnych Kondycji za kartę tego koloru. Łącznie maks. +2. Kumuluje się."
+      ],
+      [
+        "N",
+        "Osłona: Gdy masz ten kolor w puli: +1 KP. Nie kumuluje się."
+      ]
+    ],
+    "stacking_mana_colors": [
+      "C",
+      "F"
+    ],
+    "stacking_exploration_colors": [
+      "C",
+      "F"
+    ]
+  },
+  "brakka": {
+    "id": "brakka",
+    "name": "Brakka",
+    "role": "Niszczycielka — obrażenia i wytrzymałość",
+    "level": 3,
+    "hp": 35,
+    "ac": 11,
+    "speed": 30,
+    "initiative": 1,
+    "spell_dc": 13,
+    "abilities": [
+      [
+        "Siła",
+        18,
+        4
+      ],
+      [
+        "Zręczność",
+        13,
+        1
+      ],
+      [
+        "Kondycja",
+        16,
+        3
+      ],
+      [
+        "Inteligencja",
+        8,
+        -1
+      ],
+      [
+        "Mądrość",
+        12,
+        1
+      ],
+      [
+        "Charyzma",
+        10,
+        0
+      ]
+    ],
+    "weapons": [
+      "Wielki topór: +4 do trafienia; 1k12 + 4 cięte",
+      "Toporek: +4 do trafienia; 1k6 + 4 cięte",
+      "Toporek — rzut: +4 do trafienia; 1k6 + 4 cięte",
+      "Oszczep: +4 do trafienia; 1k6 + 4 kłute",
+      "Oszczep — rzut: +4 do trafienia; 1k6 + 4 kłute",
+      "Kostur: +4 do trafienia; 1k6 + 4 obuchowe"
+    ],
+    "saves": [
+      "Siła +4",
+      "Zręczność +1",
+      "Kondycja +3",
+      "Inteligencja -1",
+      "Mądrość +1",
+      "Charyzma +0"
+    ],
+    "skills": [
+      "Opieka nad zwierzętami +1",
+      "Atletyka +4",
+      "Zastraszanie +0",
+      "Percepcja +1",
+      "Sztuka przetrwania +1"
+    ],
+    "equipment": [
+      "Wielki topór ×1",
+      "Toporek ×2",
+      "Oszczep ×4",
+      "Pakiet odkrywcy ×1",
+      "Kostur ×1",
+      "Pułapka myśliwska ×1",
+      "Ubranie podróżne ×1",
+      "Sakiewka ×1",
+      "Bęben ×1"
+    ],
+    "keep": 1,
+    "capacity": null,
+    "cards": [
+      {
+        "id": "rage",
+        "name": "Szał",
+        "key": "Q",
+        "timing": "D",
+        "cost": [],
+        "description": "Bez many; normalny koszt akcji i ograniczenia użycia. +2 obrażeń ataków wręcz opartych na SIŁ, przewaga testów i obron SIŁ, odporność na kłute, cięte i obuchowe. Nieprzytomność albo tura bez ofensywy kończy Szał. Do mana draina, chyba że opisany warunek lub koncentracja zakończy wcześniej.",
+        "panel_slot": 6,
+        "sections": [
+          [
+            "Ładunek",
+            "0 pkt — dostępna bez naładowania."
+          ],
+          [
+            "Akcja",
+            "Akcja dodatkowa"
+          ],
+          [
+            "Spalanie",
+            "0 kart."
+          ],
+          [
+            "Efekt",
+            "+2 obrażeń ataków wręcz opartych na SIŁ, przewaga testów i obron SIŁ, odporność na kłute, cięte i obuchowe. Nieprzytomność albo tura bez ofensywy kończy Szał. Działa do mana draina; wskazane warunki mogą zakończyć wcześniej."
+          ]
+        ]
+      },
+      {
+        "id": "reckless_attack",
+        "name": "Lekkomyślny atak",
+        "key": "W",
+        "timing": "MOD",
+        "cost": [],
+        "description": "Bez many; normalny koszt akcji i ograniczenia użycia. Przewaga następnego zwykłego ataku wręcz opartego na SIŁ w tej turze. Wrogowie mają przewagę ataków przeciw Brakce. Do początku następnej tury źródła, chyba że efekt wykorzystano wcześniej.",
+        "panel_slot": 7,
+        "sections": [
+          [
+            "Ładunek",
+            "0 pkt — dostępna bez naładowania."
+          ],
+          [
+            "Akcja",
+            "Modyfikacja opisanego działania"
+          ],
+          [
+            "Spalanie",
+            "0 kart."
+          ],
+          [
+            "Efekt",
+            "Przewaga następnego zwykłego ataku wręcz opartego na SIŁ w tej turze. Wrogowie mają przewagę ataków przeciw Brakce. Działa do początku następnej tury postaci, która użyła zdolności, lub do wcześniejszego wykorzystania."
+          ]
+        ]
+      },
+      {
+        "id": "acceleration",
+        "name": "Przyspieszenie",
+        "key": "A",
+        "timing": "D",
+        "cost": [],
+        "description": "Bez many; normalny koszt akcji i ograniczenia użycia. W Szale podwaja limit ruchu bieżącej tury. Wcześniejszy ruch wlicza się do limitu.",
+        "panel_slot": 10,
+        "sections": [
+          [
+            "Ładunek",
+            "0 pkt — dostępna bez naładowania."
+          ],
+          [
+            "Akcja",
+            "Akcja dodatkowa"
+          ],
+          [
+            "Spalanie",
+            "0 kart."
+          ],
+          [
+            "Efekt",
+            "W Szale podwaja limit ruchu bieżącej tury. Wcześniejszy ruch wlicza się do limitu."
+          ]
+        ]
+      },
+      {
+        "id": "hard_as_rock",
+        "name": "Twarda jak skała",
+        "key": "AUTO",
+        "timing": "R",
+        "cost": [],
+        "description": "Bez many; normalny koszt akcji i ograniczenia użycia. W Szale: po odporności zmniejsz otrzymane obrażenia o 1k12 + KON, minimum zero.",
+        "panel_slot": 12,
+        "sections": [
+          [
+            "Ładunek",
+            "0 pkt — dostępna bez naładowania."
+          ],
+          [
+            "Akcja",
+            "Reakcja"
+          ],
+          [
+            "Spalanie",
+            "0 kart."
+          ],
+          [
+            "Efekt",
+            "W Szale: po odporności zmniejsz otrzymane obrażenia o 1k12 + KON, minimum zero."
+          ]
+        ]
+      },
+      {
+        "id": "powerful_strike",
+        "name": "Potężne uderzenie",
+        "key": "E",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 12 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. W Szale wykonaj jeden atak bronią z dodatkowym 1k12 obrażeń. Czerwona: +1k12 obrażeń (maks. 2) Łącznie najwyżej 3 podbicia, każde kosztuje dodatkowe 2 spalone karty; kolor jest symbolem wariantu, nie wymaganiem puli.",
+        "panel_slot": 8,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 12 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "W Szale wykonaj jeden atak bronią z dodatkowym 1k12 obrażeń."
+          ],
+          [
+            "Podbicia",
+            "+1k12 obrażeń. Maks. 2 razy. Każde: +2 spalone karty. Łącznie maks. 2. Kolor runy nie wymaga tego koloru w puli ani w spaleniu."
+          ]
+        ]
+      },
+      {
+        "id": "shoulder_check",
+        "name": "Z bara",
+        "key": "R",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 12 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Sporny test Atletyki przeciw sąsiadującemu wrogowi, maksymalnie o rozmiar większemu. Wygrana odpycha o pole; remis broni cel. Niebieska: dodatkowe pole odepchnięcia (maks. 2) Czerwona: 1k6 obrażeń (maks. 2) Łącznie najwyżej 2 podbicia, każde kosztuje dodatkowe 2 spalone karty; kolor jest symbolem wariantu, nie wymaganiem puli.",
+        "panel_slot": 9,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 12 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "Sporny test Atletyki przeciw sąsiadującemu wrogowi, maksymalnie o rozmiar większemu. Wygrana odpycha o pole; remis broni cel."
+          ],
+          [
+            "Podbicia",
+            "dodatkowe pole odepchnięcia. Maks. 2 razy. 1k6 obrażeń. Maks. 2 razy. Każde: +2 spalone karty. Łącznie maks. 2. Kolor runy nie wymaga tego koloru w puli ani w spaleniu."
+          ]
+        ]
+      },
+      {
+        "id": "deafening_roar",
+        "name": "Ogłuszający ryk",
+        "key": "S",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 12 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. W Szale: wrogowie w stożku 15 ft, obrona KON; 1k6 grzmotu, sukces daje połowę. Czerwona: +1k6 obrażeń (maks. 2) Niebieska: przy porażce brak ruchu (T) (maks. 1) Łącznie najwyżej 3 podbicia, każde kosztuje dodatkowe 2 spalone karty; kolor jest symbolem wariantu, nie wymaganiem puli.",
+        "panel_slot": 11,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 12 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "W Szale: wrogowie w stożku 15 ft, obrona KON; 1k6 grzmotu, sukces daje połowę."
+          ],
+          [
+            "Podbicia",
+            "+1k6 obrażeń. Maks. 2 razy. przy porażce brak ruchu (T). Maks. 1 razy. Każde: +2 spalone karty. Łącznie maks. 3. Kolor runy nie wymaga tego koloru w puli ani w spaleniu."
+          ]
+        ]
+      },
+      {
+        "id": "reaper",
+        "name": "Siekator",
+        "key": "MENU",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 21 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. W Szale wykonaj trzy osobne ataki wręcz, rozdzielane między dostępnych wrogów.",
+        "panel_slot": 13,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 21 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "W Szale wykonaj trzy osobne ataki wręcz, rozdzielane między dostępnych wrogów."
+          ]
+        ]
+      },
+      {
+        "id": "unstoppable",
+        "name": "Niepowstrzymana",
+        "key": "MENU",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 21 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. W Szale: ruch do 20 ft bez ataków okazyjnych i trudnego terenu, potem ataki w dwóch różnych wrogów. Trafieni bronią się SIŁ przed powaleniem (T lub do wstania).",
+        "panel_slot": 14,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 21 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "W Szale: ruch do 20 ft bez ataków okazyjnych i trudnego terenu, potem ataki w dwóch różnych wrogów. Trafieni bronią się SIŁ przed powaleniem (T lub do wstania)."
+          ]
+        ]
+      }
+    ],
+    "passives": [
+      [
+        "Nasycenie maną",
+        "C: Dzikie ataki: Krytyczne trafienie bronią wręcz: Dodaj do obrażeń jeszcze 1 kość użytej broni. Nie kumuluje się. B: Obrona bez pancerza: Gdy nie nosisz pancerza: KP = 10 + mod. Zręczności + mod. Kondycji. Możesz używać tarczy. Nie kumuluje się. Z: Witalność: Za każdym razem, gdy dobierzesz ten kolor: Odzyskaj 5 PW. Każdy dobór działa osobno. F: Nieustępliwość: Gdy obrażenia obniżą PW do 0: Zostajesz na 1 PW. Jedno użycie do Mana Drain. Nie zapobiega natychmiastowej śmierci. Po drainie odzyskaj czarną manę, aby użyć ponownie. Nie kumuluje się. N: Hart: Gdy wykonujesz rzut obronny: +2 do rzutów obronnych Kondycji. Nie kumuluje się. Pasywy wymagają odpowiedniego koloru w puli; efekty leczenia uruchamia sam dobór. Mana Drain usuwa nasycenie."
+      ]
+    ],
+    "flaw": [
+      "Głód walki",
+      "Tura bez ofensywy kończy Szał."
+    ],
+    "story": [
+      [
+        "Historia",
+        "Brakka przeżyła więcej wojen, oblężeń i źle opłaconych kontraktów, niż chce pamiętać. Dziś jest najemniczką Gildii Poszukiwaczy Przygód: walczy toporem, mówi wprost i każdą umowę traktuje śmiertelnie poważnie."
+      ],
+      [
+        "Dlaczego podróżuje",
+        "Bierze zlecenia, aby uczciwie zarobić, przeżyć i odłożyć kolejną monetę na własny zajazd. Pomaga praktycznie, lecz każdą otrzymaną przysługę traktuje jak dług o nieznanej cenie."
+      ],
+      [
+        "Cel osobisty",
+        "Uzbierać na własny zajazd i zakończyć życie najemniczki."
+      ]
+    ],
+    "exploration": [
+      {
+        "id": "npc",
+        "name": "Podejście ze sceny",
+        "kind": "npc",
+        "ability": "Cecha podejścia",
+        "modifier": 0,
+        "components": [],
+        "description": "Wybierz runą podejście dostępne w tej scenie. Określa cechę, ST, kość efektu i dozwolone wsparcie. Wybór zostaje do końca konfrontacji.",
+        "influence_modifier": 0
+      },
+      {
+        "id": "object",
+        "name": "Podejście ze sceny",
+        "kind": "object",
+        "ability": "Cecha podejścia",
+        "modifier": 0,
+        "components": [],
+        "description": "Wybierz runą podejście dostępne w tej scenie. Określa cechę, ST, kość efektu i dozwolone wsparcie. Wybór zostaje do końca konfrontacji.",
+        "influence_modifier": 0
+      }
+    ],
+    "mana_values": [
+      [
+        "C",
+        7
+      ],
+      [
+        "B",
+        1
+      ],
+      [
+        "Z",
+        3
+      ],
+      [
+        "F",
+        4
+      ],
+      [
+        "N",
+        4
+      ]
+    ],
+    "exploration_passives": [
+      [
+        "C",
+        "Stanowczość: Po sukcesie: +1 do wpływu / postępu za kartę tego koloru. Maks. +2. Kumuluje się."
+      ],
+      [
+        "B",
+        "Opanowanie: Reakcja zabiera kartę z twojej puli? Zachowaj ją. Ochrona 1 karty; nie dotyczy wspólnej talii. Nie kumuluje się."
+      ],
+      [
+        "Z",
+        "Oddech: Po udanym teście: przenieś 1 najwcześniej spaloną kartę na spód talii. Potwierdź ✓, potem spal koszt testu. Nie kumuluje się."
+      ],
+      [
+        "F",
+        "Współpraca: Pomoc: +2 do następnego testu sojusznika zamiast +1. Spal 1 kartę. Dostępne cele wsparcia bez zmian. Nie kumuluje się."
+      ],
+      [
+        "N",
+        "Skupienie: Test k20: +1 za kartę tego koloru w puli. Maks. +2. Bez premii do wpływu / postępu. Kumuluje się."
+      ]
+    ],
+    "mana_passives": [
+      [
+        "C",
+        "Dzikie ataki: Krytyczne trafienie bronią wręcz: Dodaj do obrażeń jeszcze 1 kość użytej broni. Nie kumuluje się."
+      ],
+      [
+        "B",
+        "Obrona bez pancerza: Gdy nie nosisz pancerza: KP = 10 + mod. Zręczności + mod. Kondycji. Możesz używać tarczy. Nie kumuluje się."
+      ],
+      [
+        "Z",
+        "Witalność: Za każdym razem, gdy dobierzesz ten kolor: Odzyskaj 5 PW. Każdy dobór działa osobno."
+      ],
+      [
+        "F",
+        "Nieustępliwość: Gdy obrażenia obniżą PW do 0: Zostajesz na 1 PW. Jedno użycie do Mana Drain. Nie zapobiega natychmiastowej śmierci. Po drainie odzyskaj czarną manę, aby użyć ponownie. Nie kumuluje się."
+      ],
+      [
+        "N",
+        "Hart: Gdy wykonujesz rzut obronny: +2 do rzutów obronnych Kondycji. Nie kumuluje się."
+      ]
+    ],
+    "stacking_mana_colors": [],
+    "stacking_exploration_colors": [
+      "C",
+      "N"
+    ]
+  },
+  "mira": {
+    "id": "mira",
+    "name": "Mira",
+    "role": "Specjalistka — infiltracja i precyzyjne obrażenia",
+    "level": 3,
+    "hp": 21,
+    "ac": 15,
+    "speed": 25,
+    "initiative": 4,
+    "spell_dc": 14,
+    "abilities": [
+      [
+        "Siła",
+        8,
+        -1
+      ],
+      [
+        "Zręczność",
+        19,
+        4
+      ],
+      [
+        "Kondycja",
+        13,
+        1
+      ],
+      [
+        "Inteligencja",
+        14,
+        2
+      ],
+      [
+        "Mądrość",
+        12,
+        1
+      ],
+      [
+        "Charyzma",
+        11,
+        0
+      ]
+    ],
+    "weapons": [
+      "Rapier: +4 do trafienia; 1k8 + 4 kłute",
+      "Nóż do rzucania: +4 do trafienia; 1k4 + 4 kłute",
+      "Nóż do rzucania — rzut: +4 do trafienia; 1k4 + 4 kłute"
+    ],
+    "saves": [
+      "Siła -1",
+      "Zręczność +4",
+      "Kondycja +1",
+      "Inteligencja +2",
+      "Mądrość +1",
+      "Charyzma +0"
+    ],
+    "skills": [
+      "Akrobatyka +4",
+      "Oszustwo +0",
+      "Śledztwo +2",
+      "Percepcja +1",
+      "Zwinne dłonie +4",
+      "Skradanie +4"
+    ],
+    "equipment": [
+      "Rapier ×1",
+      "Nóż do rzucania ×1",
+      "Nóż do rzucania ×1",
+      "Nóż do rzucania ×1",
+      "Nóż do rzucania ×1",
+      "Skórzana zbroja ×1",
+      "Narzędzia złodziejskie ×1",
+      "Pakiet włamywacza ×1",
+      "Łom ×1",
+      "Zwykłe ubranie ×1",
+      "Sakiewka ×1",
+      "Talia kart ×1"
+    ],
+    "keep": 1,
+    "capacity": null,
+    "cards": [
+      {
+        "id": "hide",
+        "name": "Ukryj się",
+        "key": "D",
+        "timing": "D",
+        "cost": [],
+        "description": "Bez many; normalny koszt akcji i ograniczenia użycia. Wykonaj test Zręczności: k20 + cecha + naładowanie + inne premie. Aplikacja rozstrzyga wykrycie osobno dla każdego wroga; remis oznacza wykrycie. Sąsiadujący wróg lub blokujący stan uniemożliwia zwykłe ukrycie. Atak, wykrycie lub dobrowolne ujawnienie kończy ukrycie. Do mana draina, chyba że opisany warunek lub koncentracja zakończy wcześniej.",
+        "panel_slot": 6,
+        "sections": [
+          [
+            "Ładunek",
+            "0 pkt — dostępna bez naładowania."
+          ],
+          [
+            "Akcja",
+            "Akcja dodatkowa"
+          ],
+          [
+            "Spalanie",
+            "0 kart."
+          ],
+          [
+            "Efekt",
+            "Wykonaj test Zręczności: k20 + cecha + naładowanie + inne premie. Aplikacja rozstrzyga wykrycie osobno dla każdego wroga; remis oznacza wykrycie. Sąsiadujący wróg lub blokujący stan uniemożliwia zwykłe ukrycie. Atak, wykrycie lub dobrowolne ujawnienie kończy ukrycie. Działa do mana draina; wskazane warunki mogą zakończyć wcześniej."
+          ]
+        ]
+      },
+      {
+        "id": "instinctive_dodge",
+        "name": "Unik instynktowny",
+        "key": "AUTO",
+        "timing": "R",
+        "cost": [],
+        "description": "Bez many; normalny koszt akcji i ograniczenia użycia. Nadaj utrudnienie jednemu atakowi przeciw Mirze. Nie wymaga rzutu Miry.",
+        "panel_slot": 9,
+        "sections": [
+          [
+            "Ładunek",
+            "0 pkt — dostępna bez naładowania."
+          ],
+          [
+            "Akcja",
+            "Reakcja"
+          ],
+          [
+            "Spalanie",
+            "0 kart."
+          ],
+          [
+            "Efekt",
+            "Nadaj utrudnienie jednemu atakowi przeciw Mirze. Nie wymaga rzutu Miry."
+          ]
+        ]
+      },
+      {
+        "id": "feint",
+        "name": "Zwód",
+        "key": "MENU",
+        "timing": "D",
+        "cost": [],
+        "description": "Bez many; normalny koszt akcji i ograniczenia użycia. Sąsiadujący wróg nie może wykonywać ataków okazyjnych przeciw Mirze. Do początku następnej tury źródła, chyba że efekt wykorzystano wcześniej.",
+        "panel_slot": 11,
+        "sections": [
+          [
+            "Ładunek",
+            "0 pkt — dostępna bez naładowania."
+          ],
+          [
+            "Akcja",
+            "Akcja dodatkowa"
+          ],
+          [
+            "Spalanie",
+            "0 kart."
+          ],
+          [
+            "Efekt",
+            "Sąsiadujący wróg nie może wykonywać ataków okazyjnych przeciw Mirze. Działa do początku następnej tury postaci, która użyła zdolności, lub do wcześniejszego wykorzystania."
+          ]
+        ]
+      },
+      {
+        "id": "hamstring_cut",
+        "name": "Cięcie ścięgna",
+        "key": "R",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 6 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Atak wręcz z własnej flanki. Trafienie zadaje obrażenia broni i połowi ruch celu. Do początku następnej tury źródła, chyba że efekt wykorzystano wcześniej.",
+        "panel_slot": 10,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 6 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "Atak wręcz z własnej flanki. Trafienie zadaje obrażenia broni i połowi ruch celu. Działa do początku następnej tury postaci, która użyła zdolności, lub do wcześniejszego wykorzystania."
+          ]
+        ]
+      },
+      {
+        "id": "smoke_screen",
+        "name": "Zasłona dymna",
+        "key": "Q",
+        "timing": "D",
+        "cost": [],
+        "description": "Co najmniej 12 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Ruch do 10 ft bez ataków okazyjnych i próba ukrycia, także po rozpoczęciu obok wroga. Ukrycie kończą atak lub wykrycie. Do mana draina, chyba że opisany warunek lub koncentracja zakończy wcześniej. Zielona: +5 ft ruchu (maks. 2) Czarna: przewaga testu ukrycia (maks. 1) Łącznie najwyżej 3 podbicia, każde kosztuje dodatkowe 2 spalone karty; kolor jest symbolem wariantu, nie wymaganiem puli.",
+        "panel_slot": 7,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 12 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja dodatkowa"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "Ruch do 10 ft bez ataków okazyjnych i próba ukrycia, także po rozpoczęciu obok wroga. Ukrycie kończą atak lub wykrycie. Działa do mana draina; wskazane warunki mogą zakończyć wcześniej."
+          ],
+          [
+            "Podbicia",
+            "+5 ft ruchu. Maks. 2 razy. przewaga testu ukrycia. Maks. 1 razy. Każde: +2 spalone karty. Łącznie maks. 3. Kolor runy nie wymaga tego koloru w puli ani w spaleniu."
+          ]
+        ]
+      },
+      {
+        "id": "guard_vault",
+        "name": "Przeskok przez gardę",
+        "key": "W",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 12 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Atak wręcz i przejście na wolne pole dokładnie za celem. Czerwona: +1k6 obrażeń (maks. 2) Łącznie najwyżej 3 podbicia, każde kosztuje dodatkowe 2 spalone karty; kolor jest symbolem wariantu, nie wymaganiem puli.",
+        "panel_slot": 8,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 12 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "Atak wręcz i przejście na wolne pole dokładnie za celem."
+          ],
+          [
+            "Podbicia",
+            "+1k6 obrażeń. Maks. 2 razy. Każde: +2 spalone karty. Łącznie maks. 2. Kolor runy nie wymaga tego koloru w puli ani w spaleniu."
+          ]
+        ]
+      },
+      {
+        "id": "blade_mistress",
+        "name": "Mistrzyni ostrzy",
+        "key": "S",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 12 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Atak nożem z ukrycia albo własnej flanki, dodatkowe 1k6 obrażeń. Czerwona: +1k6 obrażeń (maks. 2) Czarna: krwawienie 1k4 na początku tury celu (O); leczenie kończy, bez kumulowania (maks. 1) Łącznie najwyżej 3 podbicia, każde kosztuje dodatkowe 2 spalone karty; kolor jest symbolem wariantu, nie wymaganiem puli.",
+        "panel_slot": 12,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 12 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "Atak nożem z ukrycia albo własnej flanki, dodatkowe 1k6 obrażeń."
+          ],
+          [
+            "Podbicia",
+            "+1k6 obrażeń. Maks. 2 razy. krwawienie 1k4 na początku tury celu (O); leczenie kończy, bez kumulowania. Maks. 1 razy. Każde: +2 spalone karty. Łącznie maks. 3. Kolor runy nie wymaga tego koloru w puli ani w spaleniu."
+          ]
+        ]
+      },
+      {
+        "id": "shadow_verdict",
+        "name": "Wyrok z cienia",
+        "key": "MENU",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 21 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Wymaga ukrycia przed celem i własnej flanki. Jeden atak z przewagą i dodatkowym 5k6 obrażeń.",
+        "panel_slot": 13,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 21 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "Wymaga ukrycia przed celem i własnej flanki. Jeden atak z przewagą i dodatkowym 5k6 obrażeń."
+          ]
+        ]
+      },
+      {
+        "id": "blade_dance",
+        "name": "Taniec ostrzy",
+        "key": "MENU",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 21 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Ruch do 15 ft bez ataków okazyjnych i dwa ataki w różnych wrogów po drodze. Pasywy many działają przy każdym trafieniu spełniającym warunek ukrycia lub własnej flanki.",
+        "panel_slot": 14,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 21 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "Ruch do 15 ft bez ataków okazyjnych i dwa ataki w różnych wrogów po drodze. Pasywy many działają przy każdym trafieniu spełniającym warunek ukrycia lub własnej flanki."
+          ]
+        ]
+      }
+    ],
+    "passives": [
+      [
+        "Nasycenie maną",
+        "C: Atak z cienia: Trafienie bronią z ukrycia: +1k6 obrażeń, jeśli cel cię nie widzi. Z Atakiem z flanki łącznie +3k6. Nie kumuluje się. B: Ruchomy cel: Gdy ktoś atakuje cię z dystansu: +2 KP przeciw atakom bronią i czarami. Nie chroni przed obszarami ani efektami z rzutem obronnym. Nie kumuluje się. Z: Atak z flanki: Trafienie bronią z flanki: +2k6 obrażeń, jeśli flankujesz cel. Z Atakiem z cienia łącznie +3k6. Nie kumuluje się. F: Zwinne dłonie: Po każdym trafieniu nożem: Możesz przejść 5 ft za darmo. Ten krok nie wywołuje ataków okazyjnych. Nie kumuluje się. N: Szczęście: Gdy na k20 wypadnie 1: Przerzuć tę kość raz. Drugi wynik obowiązuje. Dotyczy ataków, testów i rzutów obronnych. Nie kumuluje się. Pasywy wymagają odpowiedniego koloru w puli; efekty leczenia uruchamia sam dobór. Mana Drain usuwa nasycenie."
+      ]
+    ],
+    "flaw": [
+      "Cienka granica",
+      "W ukryciu masz utrudnienie obron i testów reakcji."
+    ],
+    "story": [
+      [
+        "Historia",
+        "Mira spłacała rodzinny dług w przestępczej Rodzinie Jedwabnego Sznura. Gdy zrozumiała, że dług jest tylko smyczą, uciekła z łupem i fałszywymi dokumentami — ale bez starszego brata."
+      ],
+      [
+        "Dlaczego podróżuje",
+        "Zlecenia dają jej pieniądze, sojuszników i doświadczenie potrzebne do bezpiecznego powrotu. Chce żyć pod własnym nazwiskiem, lecz znaki Rodziny wciąż potrafią uciszyć najbardziej bezczelną osobę w drużynie."
+      ],
+      [
+        "Cel osobisty",
+        "Dowiedzieć się, co stało się z bratem, i uwolnić go od Rodziny Jedwabnego Sznura."
+      ]
+    ],
+    "exploration": [
+      {
+        "id": "npc",
+        "name": "Podejście ze sceny",
+        "kind": "npc",
+        "ability": "Cecha podejścia",
+        "modifier": 0,
+        "components": [],
+        "description": "Wybierz runą podejście dostępne w tej scenie. Określa cechę, ST, kość efektu i dozwolone wsparcie. Wybór zostaje do końca konfrontacji.",
+        "influence_modifier": 0
+      },
+      {
+        "id": "object",
+        "name": "Podejście ze sceny",
+        "kind": "object",
+        "ability": "Cecha podejścia",
+        "modifier": 0,
+        "components": [],
+        "description": "Wybierz runą podejście dostępne w tej scenie. Określa cechę, ST, kość efektu i dozwolone wsparcie. Wybór zostaje do końca konfrontacji.",
+        "influence_modifier": 0
+      }
+    ],
+    "mana_values": [
+      [
+        "C",
+        3
+      ],
+      [
+        "B",
+        1
+      ],
+      [
+        "Z",
+        7
+      ],
+      [
+        "F",
+        4
+      ],
+      [
+        "N",
+        4
+      ]
+    ],
+    "exploration_passives": [
+      [
+        "C",
+        "Skupienie: Test k20: +1 za kartę tego koloru w puli. Maks. +2. Bez premii do wpływu / postępu. Kumuluje się."
+      ],
+      [
+        "B",
+        "Opanowanie: Reakcja zabiera kartę z twojej puli? Zachowaj ją. Ochrona 1 karty; nie dotyczy wspólnej talii. Nie kumuluje się."
+      ],
+      [
+        "Z",
+        "Stanowczość: Po sukcesie: +1 do wpływu / postępu za kartę tego koloru. Maks. +2. Kumuluje się."
+      ],
+      [
+        "F",
+        "Współpraca: Pomoc: +2 do następnego testu sojusznika zamiast +1. Spal 1 kartę. Dostępne cele wsparcia bez zmian. Nie kumuluje się."
+      ],
+      [
+        "N",
+        "Oddech: Po udanym teście: przenieś 1 najwcześniej spaloną kartę na spód talii. Potwierdź ✓, potem spal koszt testu. Nie kumuluje się."
+      ]
+    ],
+    "mana_passives": [
+      [
+        "C",
+        "Atak z cienia: Trafienie bronią z ukrycia: +1k6 obrażeń, jeśli cel cię nie widzi. Z Atakiem z flanki łącznie +3k6. Nie kumuluje się."
+      ],
+      [
+        "B",
+        "Ruchomy cel: Gdy ktoś atakuje cię z dystansu: +2 KP przeciw atakom bronią i czarami. Nie chroni przed obszarami ani efektami z rzutem obronnym. Nie kumuluje się."
+      ],
+      [
+        "Z",
+        "Atak z flanki: Trafienie bronią z flanki: +2k6 obrażeń, jeśli flankujesz cel. Z Atakiem z cienia łącznie +3k6. Nie kumuluje się."
+      ],
+      [
+        "F",
+        "Zwinne dłonie: Po każdym trafieniu nożem: Możesz przejść 5 ft za darmo. Ten krok nie wywołuje ataków okazyjnych. Nie kumuluje się."
+      ],
+      [
+        "N",
+        "Szczęście: Gdy na k20 wypadnie 1: Przerzuć tę kość raz. Drugi wynik obowiązuje. Dotyczy ataków, testów i rzutów obronnych. Nie kumuluje się."
+      ]
+    ],
+    "stacking_mana_colors": [],
+    "stacking_exploration_colors": [
+      "C",
+      "Z"
+    ]
+  },
+  "dagna": {
+    "id": "dagna",
+    "name": "Dagna",
+    "role": "Uzdrowicielka — leczenie i wzmocnienia",
+    "level": 3,
+    "hp": 27,
+    "ac": 16,
+    "speed": 25,
+    "initiative": 0,
+    "spell_dc": 14,
+    "abilities": [
+      [
+        "Siła",
+        13,
+        1
+      ],
+      [
+        "Zręczność",
+        10,
+        0
+      ],
+      [
+        "Kondycja",
+        16,
+        3
+      ],
+      [
+        "Inteligencja",
+        8,
+        -1
+      ],
+      [
+        "Mądrość",
+        18,
+        4
+      ],
+      [
+        "Charyzma",
+        12,
+        1
+      ]
+    ],
+    "weapons": [
+      "Buława: +1 do trafienia; 1k6 + 1 obuchowe",
+      "Kusza: +0 do trafienia; 1k8 kłute"
+    ],
+    "saves": [
+      "Siła +1",
+      "Zręczność +0",
+      "Kondycja +3",
+      "Inteligencja -1",
+      "Mądrość +4",
+      "Charyzma +1"
+    ],
+    "skills": [
+      "Intuicja +4",
+      "Medycyna +4",
+      "Perswazja +1",
+      "Religia -1"
+    ],
+    "equipment": [
+      "Buława ×1",
+      "Tarcza ×1",
+      "Zbroja łuskowa ×1",
+      "Kusza ×1",
+      "Bełt do kuszy ×20",
+      "Amulet ze świętym symbolem ×2",
+      "Pakiet kapłana ×1",
+      "Szaty liturgiczne ×1",
+      "Zwykłe ubranie ×1",
+      "Sakiewka ×1",
+      "Święty symbol: A · Co najmniej 12 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Nieumarli w 15 ft: obrona MDR; porażka odpędza do początku następnej tury Dagny. Obrażenia kończą wcześniej."
+    ],
+    "keep": 1,
+    "capacity": null,
+    "cards": [
+      {
+        "id": "sacred_flame",
+        "name": "Święty płomień",
+        "key": "Q",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 6 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Stożek 15 ft, także sojusznicy. Obrona ZRC: porażka 1k8 blasku, sukces bez obrażeń.",
+        "panel_slot": 6,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 6 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "Stożek 15 ft, także sojusznicy. Obrona ZRC: porażka 1k8 blasku, sukces bez obrażeń."
+          ]
+        ]
+      },
+      {
+        "id": "bless",
+        "name": "Błogosławieństwo",
+        "key": "E",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 6 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Aura 10 ft: Dagna i sojusznicy mają +1k4 do ataków i obron. Koncentracja. Do mana draina, chyba że opisany warunek lub koncentracja zakończy wcześniej.",
+        "panel_slot": 8,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 6 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "Aura 10 ft: Dagna i sojusznicy mają +1k4 do ataków i obron. Koncentracja. Działa do mana draina; wskazane warunki mogą zakończyć wcześniej."
+          ]
+        ]
+      },
+      {
+        "id": "lesser_restoration",
+        "name": "Pomniejsze przywrócenie",
+        "key": "F",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 6 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Dotykiem usuń jeden dostępny stan: zatrucie, oślepienie lub głuchotę.",
+        "panel_slot": 13,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 6 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "Dotykiem usuń jeden dostępny stan: zatrucie, oślepienie lub głuchotę."
+          ]
+        ]
+      },
+      {
+        "id": "caring_gesture",
+        "name": "Opiekuńczy gest",
+        "key": "MENU",
+        "timing": "D",
+        "cost": [],
+        "description": "Bez many; normalny koszt akcji i ograniczenia użycia. Sąsiadujący sojusznik otrzymuje 1k4 + MDR tymczasowych PW. Nie leczy ran; tymczasowe PW nie kumulują się. Do początku następnej tury źródła, chyba że efekt wykorzystano wcześniej.",
+        "panel_slot": 12,
+        "sections": [
+          [
+            "Ładunek",
+            "0 pkt — dostępna bez naładowania."
+          ],
+          [
+            "Akcja",
+            "Akcja dodatkowa"
+          ],
+          [
+            "Spalanie",
+            "0 kart."
+          ],
+          [
+            "Efekt",
+            "Sąsiadujący sojusznik otrzymuje 1k4 + MDR tymczasowych PW. Nie leczy ran; tymczasowe PW nie kumulują się. Działa do początku następnej tury postaci, która użyła zdolności, lub do wcześniejszego wykorzystania."
+          ]
+        ]
+      },
+      {
+        "id": "healing_word",
+        "name": "Słowo leczenia",
+        "key": "W",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 12 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Cel w 60 ft odzyskuje 1k4 + 7 PW. Biała: +1k6 leczenia (maks. 3) Łącznie najwyżej 3 podbicia, każde kosztuje dodatkowe 2 spalone karty; kolor jest symbolem wariantu, nie wymaganiem puli.",
+        "panel_slot": 7,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 12 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "Cel w 60 ft odzyskuje 1k4 + 7 PW."
+          ],
+          [
+            "Podbicia",
+            "+1k6 leczenia. Maks. 3 razy. Każde: +2 spalone karty. Łącznie maks. 3. Kolor runy nie wymaga tego koloru w puli ani w spaleniu."
+          ]
+        ]
+      },
+      {
+        "id": "divine_care_aura",
+        "name": "Aura Boskiej Opieki",
+        "key": "A",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 12 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Wrogowie w 5 ft mają −2 do ataków. Koncentracja. Do mana draina, chyba że opisany warunek lub koncentracja zakończy wcześniej. Niebieska: promień 10 ft (maks. 1) Biała: również −2 do zadawanych obrażeń (maks. 1) Łącznie najwyżej 3 podbicia, każde kosztuje dodatkowe 2 spalone karty; kolor jest symbolem wariantu, nie wymaganiem puli.",
+        "panel_slot": 10,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 12 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "Wrogowie w 5 ft mają −2 do ataków. Koncentracja. Działa do mana draina; wskazane warunki mogą zakończyć wcześniej."
+          ],
+          [
+            "Podbicia",
+            "promień 10 ft. Maks. 1 razy. również −2 do zadawanych obrażeń. Maks. 1 razy. Każde: +2 spalone karty. Łącznie maks. 2. Kolor runy nie wymaga tego koloru w puli ani w spaleniu."
+          ]
+        ]
+      },
+      {
+        "id": "guiding_bolt",
+        "name": "Naprowadzający pocisk",
+        "key": "S",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 12 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Atak czarem w 75 ft: 2k6 blasku; przewaga następnego ataku przeciw celowi (T lub do wykorzystania). Czerwona: +1k6 obrażeń (maks. 3) Łącznie najwyżej 3 podbicia, każde kosztuje dodatkowe 2 spalone karty; kolor jest symbolem wariantu, nie wymaganiem puli.",
+        "panel_slot": 11,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 12 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "Atak czarem w 75 ft: 2k6 blasku; przewaga następnego ataku przeciw celowi (T lub do wykorzystania)."
+          ],
+          [
+            "Podbicia",
+            "+1k6 obrażeń. Maks. 3 razy. Każde: +2 spalone karty. Łącznie maks. 3. Kolor runy nie wymaga tego koloru w puli ani w spaleniu."
+          ]
+        ]
+      },
+      {
+        "id": "preserve_life",
+        "name": "Zachowanie życia",
+        "key": "R",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 21 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Rozdziel 40 PW leczenia między Dagnę i sojuszników w 30 ft, do ich maksymalnych PW.",
+        "panel_slot": 9,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 21 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "Rozdziel 40 PW leczenia między Dagnę i sojuszników w 30 ft, do ich maksymalnych PW."
+          ]
+        ]
+      },
+      {
+        "id": "spiritual_weapon",
+        "name": "Duchowy oręż",
+        "key": "Z",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 21 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Przywołaj broń i wykonaj nią atak za 2k8 + MDR. Kolejne aktywacje: D, bez many, ruch broni do 20 ft i jeden atak. Najwyżej jedna broń; bez koncentracji. Do mana draina, chyba że opisany warunek lub koncentracja zakończy wcześniej.",
+        "panel_slot": 15,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 21 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "Przywołaj broń i wykonaj nią atak za 2k8 + MDR. Kolejne aktywacje: akcja dodatkowa, bez spalania, ruch broni do 20 ft i jeden atak. Najwyżej jedna broń; bez koncentracji. Działa do mana draina; wskazane warunki mogą zakończyć wcześniej."
+          ]
+        ]
+      }
+    ],
+    "passives": [
+      [
+        "Nasycenie maną",
+        "C: Gniew: Gdy zaklęcie zadaje obrażenia: +2 do obrażeń za każdą kartę tego koloru w twojej puli. Kumuluje się. B: Wiara: Gdy wykonujesz rzut obronny: +1 do wszystkich rzutów obronnych za kartę tego koloru. Łącznie maks. +2. Kumuluje się. Z: Ukojenie: Za każdym razem, gdy dobierzesz ten kolor: Ty i przytomni sojusznicy w 10 ft odzyskujecie po 2 PW. Każdy dobór działa osobno. F: Odporność na truciznę: Przeciw truciźnie: Rzuty obronne z przewagą. Otrzymujesz połowę obrażeń od trucizny. Nie kumuluje się. N: Krok ratowniczki: Po pomocy innemu sojusznikowi w 10 ft: Jeśli go leczysz lub usuwasz jego stan, możesz przejść 5 ft za darmo. Ten krok nie wywołuje ataków okazyjnych. Nie kumuluje się. Pasywy wymagają odpowiedniego koloru w puli; efekty leczenia uruchamia sam dobór. Mana Drain usuwa nasycenie."
+      ]
+    ],
+    "flaw": [
+      "Nikogo nie zostawiam",
+      "Ofensywna płatna zdolność przy sojuszniku poniżej połowy PW spala dodatkową kartę."
+    ],
+    "story": [
+      [
+        "Historia",
+        "Rodzina Dagny spłaciła dług wobec świątyni, oddając ją pod opiekę zakonu. Jej talent do magii leczniczej nazwano boskim przeznaczeniem, zanim nauczyła się pytać, czy sama chce takiego życia."
+      ],
+      [
+        "Dlaczego podróżuje",
+        "Podejmuje kolejne wyprawy, bo zawsze istnieje ktoś, kto bez niej może umrzeć. Jednocześnie szuka doświadczeń, dzięki którym odkryje własne pragnienia i nauczy się odróżniać wiarę od oczekiwań innych ludzi."
+      ],
+      [
+        "Cel osobisty",
+        "Odkryć, kim jest poza rolą kapłanki i uzdrowicielki, oraz wybrać własne życie."
+      ]
+    ],
+    "exploration": [
+      {
+        "id": "npc",
+        "name": "Podejście ze sceny",
+        "kind": "npc",
+        "ability": "Cecha podejścia",
+        "modifier": 0,
+        "components": [],
+        "description": "Wybierz runą podejście dostępne w tej scenie. Określa cechę, ST, kość efektu i dozwolone wsparcie. Wybór zostaje do końca konfrontacji.",
+        "influence_modifier": 0
+      },
+      {
+        "id": "object",
+        "name": "Podejście ze sceny",
+        "kind": "object",
+        "ability": "Cecha podejścia",
+        "modifier": 0,
+        "components": [],
+        "description": "Wybierz runą podejście dostępne w tej scenie. Określa cechę, ST, kość efektu i dozwolone wsparcie. Wybór zostaje do końca konfrontacji.",
+        "influence_modifier": 0
+      }
+    ],
+    "mana_values": [
+      [
+        "C",
+        1
+      ],
+      [
+        "B",
+        7
+      ],
+      [
+        "Z",
+        4
+      ],
+      [
+        "F",
+        3
+      ],
+      [
+        "N",
+        4
+      ]
+    ],
+    "exploration_passives": [
+      [
+        "C",
+        "Stanowczość: Po sukcesie: +1 do wpływu / postępu za kartę tego koloru. Maks. +2. Kumuluje się."
+      ],
+      [
+        "B",
+        "Współpraca: Pomoc: +2 do następnego testu sojusznika zamiast +1. Spal 1 kartę. Dostępne cele wsparcia bez zmian. Nie kumuluje się."
+      ],
+      [
+        "Z",
+        "Oddech: Po udanym teście: przenieś 1 najwcześniej spaloną kartę na spód talii. Potwierdź ✓, potem spal koszt testu. Nie kumuluje się."
+      ],
+      [
+        "F",
+        "Opanowanie: Reakcja zabiera kartę z twojej puli? Zachowaj ją. Ochrona 1 karty; nie dotyczy wspólnej talii. Nie kumuluje się."
+      ],
+      [
+        "N",
+        "Skupienie: Test k20: +1 za kartę tego koloru w puli. Maks. +2. Bez premii do wpływu / postępu. Kumuluje się."
+      ]
+    ],
+    "mana_passives": [
+      [
+        "C",
+        "Gniew: Gdy zaklęcie zadaje obrażenia: +2 do obrażeń za każdą kartę tego koloru w twojej puli. Kumuluje się."
+      ],
+      [
+        "B",
+        "Wiara: Gdy wykonujesz rzut obronny: +1 do wszystkich rzutów obronnych za kartę tego koloru. Łącznie maks. +2. Kumuluje się."
+      ],
+      [
+        "Z",
+        "Ukojenie: Za każdym razem, gdy dobierzesz ten kolor: Ty i przytomni sojusznicy w 10 ft odzyskujecie po 2 PW. Każdy dobór działa osobno."
+      ],
+      [
+        "F",
+        "Odporność na truciznę: Przeciw truciźnie: Rzuty obronne z przewagą. Otrzymujesz połowę obrażeń od trucizny. Nie kumuluje się."
+      ],
+      [
+        "N",
+        "Krok ratowniczki: Po pomocy innemu sojusznikowi w 10 ft: Jeśli go leczysz lub usuwasz jego stan, możesz przejść 5 ft za darmo. Ten krok nie wywołuje ataków okazyjnych. Nie kumuluje się."
+      ]
+    ],
+    "stacking_mana_colors": [
+      "C",
+      "B"
+    ],
+    "stacking_exploration_colors": [
+      "C",
+      "N"
+    ]
+  },
+  "lorian": {
+    "id": "lorian",
+    "name": "Lorian",
+    "role": "Bard — zarządzanie maną, kusza i kontrola",
+    "level": 3,
+    "hp": 24,
+    "ac": 13,
+    "speed": 30,
+    "initiative": 2,
+    "spell_dc": 14,
+    "abilities": [
+      [
+        "Siła",
+        8,
+        -1
+      ],
+      [
+        "Zręczność",
+        15,
+        2
+      ],
+      [
+        "Kondycja",
+        14,
+        2
+      ],
+      [
+        "Inteligencja",
+        12,
+        1
+      ],
+      [
+        "Mądrość",
+        10,
+        0
+      ],
+      [
+        "Charyzma",
+        19,
+        4
+      ]
+    ],
+    "weapons": [
+      "Rapier: +2 do trafienia; 1k8 + 2 kłute",
+      "Kusza ręczna: +2 do trafienia; 1k6 + 2 kłute"
+    ],
+    "saves": [
+      "Siła -1",
+      "Zręczność +2",
+      "Kondycja +2",
+      "Inteligencja +1",
+      "Mądrość +0",
+      "Charyzma +4"
+    ],
+    "skills": [
+      "Akrobatyka +2",
+      "Wiedza tajemna +1",
+      "Oszustwo +4",
+      "Historia +1",
+      "Intuicja +0",
+      "Śledztwo +1",
+      "Percepcja +0",
+      "Występy +4",
+      "Perswazja +4",
+      "Skradanie +2"
+    ],
+    "equipment": [
+      "Rapier ×1",
+      "Kusza ręczna ×1",
+      "Skórzana zbroja ×1",
+      "Lutnia ×1"
+    ],
+    "keep": 1,
+    "capacity": null,
+    "cards": [
+      {
+        "id": "mana_inspiration",
+        "name": "Inspiracja",
+        "key": "Q",
+        "timing": "D",
+        "cost": [],
+        "description": "Bez many; normalny koszt akcji i ograniczenia użycia. Inny bohater w 30 ft otrzymuje 1k4 do jednego ataku albo obrony, do wcześniejszego wykorzystania. Do początku następnej tury źródła, chyba że efekt wykorzystano wcześniej.",
+        "panel_slot": 6,
+        "sections": [
+          [
+            "Ładunek",
+            "0 pkt — dostępna bez naładowania."
+          ],
+          [
+            "Akcja",
+            "Akcja dodatkowa"
+          ],
+          [
+            "Spalanie",
+            "0 kart."
+          ],
+          [
+            "Efekt",
+            "Inny bohater w 30 ft otrzymuje 1k4 do jednego ataku albo obrony, do wcześniejszego wykorzystania. Działa do początku następnej tury postaci, która użyła zdolności, lub do wcześniejszego wykorzystania."
+          ]
+        ]
+      },
+      {
+        "id": "mana_tuning",
+        "name": "Strojenie talii",
+        "key": "R",
+        "timing": "D",
+        "cost": [],
+        "description": "Bez many; normalny koszt akcji i ograniczenia użycia. Podejrzyj dwie wierzchnie karty i odłóż je na wierzch w wybranej kolejności. Przy jednej karcie obejrzyj tylko ją. Bez tasowania.",
+        "panel_slot": 7,
+        "sections": [
+          [
+            "Ładunek",
+            "0 pkt — dostępna bez naładowania."
+          ],
+          [
+            "Akcja",
+            "Akcja dodatkowa"
+          ],
+          [
+            "Spalanie",
+            "0 kart."
+          ],
+          [
+            "Efekt",
+            "Podejrzyj dwie wierzchnie karty i odłóż je na wierzch w wybranej kolejności. Przy jednej karcie obejrzyj tylko ją. Bez tasowania."
+          ]
+        ]
+      },
+      {
+        "id": "mocking_shot",
+        "name": "Ostrzał destabilizujący",
+        "key": "E",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 6 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Strzał z kuszy. Trafiony wróg ma utrudnienie następnego ataku, do wcześniejszego wykorzystania. Do początku następnej tury źródła, chyba że efekt wykorzystano wcześniej.",
+        "panel_slot": 14,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 6 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "Strzał z kuszy. Trafiony wróg ma utrudnienie następnego ataku, do wcześniejszego wykorzystania. Działa do początku następnej tury postaci, która użyła zdolności, lub do wcześniejszego wykorzystania."
+          ]
+        ]
+      },
+      {
+        "id": "cutting_words",
+        "name": "Rozpraszający okrzyk",
+        "key": "AUTO",
+        "timing": "R",
+        "cost": [],
+        "description": "Bez many; normalny koszt akcji i ograniczenia użycia. Zmniejsz obrażenia pojedynczego ataku przeciw bohaterowi w 30 ft o 1k6 + CHA, minimum zero.",
+        "panel_slot": 8,
+        "sections": [
+          [
+            "Ładunek",
+            "0 pkt — dostępna bez naładowania."
+          ],
+          [
+            "Akcja",
+            "Reakcja"
+          ],
+          [
+            "Spalanie",
+            "0 kart."
+          ],
+          [
+            "Efekt",
+            "Zmniejsz obrażenia pojedynczego ataku przeciw bohaterowi w 30 ft o 1k6 + CHA, minimum zero."
+          ]
+        ]
+      },
+      {
+        "id": "mana_recovery",
+        "name": "Odzysk energii",
+        "key": "C",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 12 pkt. Zachowaj pulę; spal 0 kart z wierzchu po efekcie. Przenieś do dwóch spalonych kart na spód talii, w wybranej kolejności. Nie odzyskujesz kart wygasłych ani uwięzionych. Zachowujesz ładunek. Bez spalania bazowego; każde podbicie spala 2 karty po odzysku. Niebieska: kolejna karta na wierzch talii (maks. 3) Łącznie najwyżej 3 podbicia, każde kosztuje dodatkowe 2 spalone karty; kolor jest symbolem wariantu, nie wymaganiem puli.",
+        "panel_slot": 11,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 12 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "0 kart."
+          ],
+          [
+            "Efekt",
+            "Przenieś do dwóch spalonych kart na spód talii, w wybranej kolejności. Nie odzyskujesz kart wygasłych ani uwięzionych. Zachowujesz ładunek. Bez spalania bazowego; każde podbicie spala 2 karty po odzysku."
+          ],
+          [
+            "Podbicia",
+            "kolejna karta na wierzch talii. Maks. 3 razy. Każde: +2 spalone karty. Łącznie maks. 3. Kolor runy nie wymaga tego koloru w puli ani w spaleniu."
+          ]
+        ]
+      },
+      {
+        "id": "optical_scope",
+        "name": "Luneta optyczna",
+        "key": "W",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 12 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Przed ruchem poświęć cały jego limit. Strzał z +2 do trafienia, ignorujący częściową osłonę. Całkowita osłona blokuje. Zielona: drugi taki strzał w ten sam cel (maks. 1) Łącznie najwyżej 3 podbicia, każde kosztuje dodatkowe 2 spalone karty; kolor jest symbolem wariantu, nie wymaganiem puli.",
+        "panel_slot": 13,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 12 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "Przed ruchem poświęć cały jego limit. Strzał z +2 do trafienia, ignorujący częściową osłonę. Całkowita osłona blokuje."
+          ],
+          [
+            "Podbicia",
+            "drugi taki strzał w ten sam cel. Maks. 1 razy. Każde: +2 spalone karty. Łącznie maks. 1. Kolor runy nie wymaga tego koloru w puli ani w spaleniu."
+          ]
+        ]
+      },
+      {
+        "id": "entangling_shot",
+        "name": "Oplatający ostrzał",
+        "key": "A",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 12 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Obszar 3×3, także sojusznicy. Obrona ZRC: porażka połowi ruch, bez obrażeń. Do początku następnej tury źródła, chyba że efekt wykorzystano wcześniej. Niebieska: zamiast połowienia blokuje ruch (maks. 1) Zielona: obszar 4×4 (maks. 1) Łącznie najwyżej 3 podbicia, każde kosztuje dodatkowe 2 spalone karty; kolor jest symbolem wariantu, nie wymaganiem puli.",
+        "panel_slot": 15,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 12 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "Obszar 3×3, także sojusznicy. Obrona ZRC: porażka połowi ruch, bez obrażeń. Działa do początku następnej tury postaci, która użyła zdolności, lub do wcześniejszego wykorzystania."
+          ],
+          [
+            "Podbicia",
+            "zamiast połowienia blokuje ruch. Maks. 1 razy. obszar 4×4. Maks. 1 razy. Każde: +2 spalone karty. Łącznie maks. 2. Kolor runy nie wymaga tego koloru w puli ani w spaleniu."
+          ]
+        ]
+      },
+      {
+        "id": "mana_great_tuning",
+        "name": "Wielkie strojenie",
+        "key": "MENU",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 21 pkt. Zachowaj pulę; spal 0 kart z wierzchu po efekcie. Przenieś do trzech spalonych kart na wierzch talii, w wybranej kolejności. Nie odzyskujesz kart wygasłych ani uwięzionych. Zachowujesz ładunek. Bez spalania bazowego; każde podbicie spala 2 karty po odzysku.",
+        "panel_slot": 9,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 21 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "0 kart."
+          ],
+          [
+            "Efekt",
+            "Przenieś do trzech spalonych kart na wierzch talii, w wybranej kolejności. Nie odzyskujesz kart wygasłych ani uwięzionych. Zachowujesz ładunek. Bez spalania bazowego; każde podbicie spala 2 karty po odzysku."
+          ]
+        ]
+      },
+      {
+        "id": "victory_hymn",
+        "name": "Hymn zwycięstwa",
+        "key": "MENU",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 21 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Aura 30 ft, koncentracja. Lorian i sojusznicy mogą wykorzystać jedną dodatkową akcję dodatkową we własnej turze, będąc w aurze. Płać normalnie; wejście i wyjście nie odnawia użycia. Do mana draina, chyba że opisany warunek lub koncentracja zakończy wcześniej.",
+        "panel_slot": 10,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 21 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "Aura 30 ft, koncentracja. Lorian i sojusznicy mogą wykorzystać jedną dodatkową akcję dodatkową we własnej turze, będąc w aurze. Płać normalnie; wejście i wyjście nie odnawia użycia. Działa do mana draina; wskazane warunki mogą zakończyć wcześniej."
+          ]
+        ]
+      }
+    ],
+    "passives": [
+      [
+        "Nasycenie maną",
+        "C: Akcent: Gdy zadajesz obrażenia dystansową bronią: +2 do obrażeń za każdą kartę tego koloru w twojej puli. Kumuluje się. B: Rytm kroków: Gdy masz ten kolor w puli: +1 KP. Nie kumuluje się. Z: Otucha: Za każdym razem, gdy dobierzesz ten kolor: 3 PW odzyskuje przytomny sojusznik w 10 ft, któremu brakuje najwięcej PW. Także ty. Każdy dobór działa osobno. F: Oszczędna harmonia: Gdy używasz płatnej zdolności: Spal o 1 kartę mniej, ale co najmniej 1. Darmowe zdolności pozostają darmowe. Nie kumuluje się. N: Nieugięty umysł: Przeciw zauroczeniu i magicznemu snowi: Obrona przed zauroczeniem z przewagą. Magiczny sen na ciebie nie działa. Nie kumuluje się. Pasywy wymagają odpowiedniego koloru w puli; efekty leczenia uruchamia sam dobór. Mana Drain usuwa nasycenie."
+      ]
+    ],
+    "flaw": [
+      "Potrzeba publiczności",
+      "Bez przytomnego sojusznika w 10 ft, w wieloosobowej drużynie: płatna zdolność spala dodatkową kartę."
+    ],
+    "story": [
+      [
+        "Historia",
+        "Podczas oblężenia przeciętny muzyk Lorian zapragnął dotrzeć do ludzi, którzy nie czuli już nic poza strachem. Gość Ostatniego Rzędu odpowiedział, dając mu głos, charyzmę i magię w zamian za emocje wzbudzane w publiczności."
+      ],
+      [
+        "Dlaczego podróżuje",
+        "Podróżuje, aby nieść ludziom prawdziwą nadzieję, badać naturę paktu i znaleźć własny głos. Drużyna daje mu też przynależność, lecz Lorian nie wie, czy jej przywiązanie dotyczy jego samego, czy magicznego daru."
+      ],
+      [
+        "Cel osobisty",
+        "Zrozumieć Gościa Ostatniego Rzędu i stworzyć pieśń poruszającą ludzi bez pomocy paktu."
+      ]
+    ],
+    "exploration": [
+      {
+        "id": "npc",
+        "name": "Podejście ze sceny",
+        "kind": "npc",
+        "ability": "Cecha podejścia",
+        "modifier": 0,
+        "components": [],
+        "description": "Wybierz runą podejście dostępne w tej scenie. Określa cechę, ST, kość efektu i dozwolone wsparcie. Wybór zostaje do końca konfrontacji.",
+        "influence_modifier": 0
+      },
+      {
+        "id": "object",
+        "name": "Podejście ze sceny",
+        "kind": "object",
+        "ability": "Cecha podejścia",
+        "modifier": 0,
+        "components": [],
+        "description": "Wybierz runą podejście dostępne w tej scenie. Określa cechę, ST, kość efektu i dozwolone wsparcie. Wybór zostaje do końca konfrontacji.",
+        "influence_modifier": 0
+      }
+    ],
+    "mana_values": [
+      [
+        "C",
+        1
+      ],
+      [
+        "B",
+        4
+      ],
+      [
+        "Z",
+        4
+      ],
+      [
+        "F",
+        3
+      ],
+      [
+        "N",
+        7
+      ]
+    ],
+    "exploration_passives": [
+      [
+        "C",
+        "Stanowczość: Po sukcesie: +1 do wpływu / postępu za kartę tego koloru. Maks. +2. Kumuluje się."
+      ],
+      [
+        "B",
+        "Skupienie: Test k20: +1 za kartę tego koloru w puli. Maks. +2. Bez premii do wpływu / postępu. Kumuluje się."
+      ],
+      [
+        "Z",
+        "Opanowanie: Reakcja zabiera kartę z twojej puli? Zachowaj ją. Ochrona 1 karty; nie dotyczy wspólnej talii. Nie kumuluje się."
+      ],
+      [
+        "F",
+        "Współpraca: Pomoc: +2 do następnego testu sojusznika zamiast +1. Spal 1 kartę. Dostępne cele wsparcia bez zmian. Nie kumuluje się."
+      ],
+      [
+        "N",
+        "Oddech: Po udanym teście: przenieś 1 najwcześniej spaloną kartę na spód talii. Potwierdź ✓, potem spal koszt testu. Nie kumuluje się."
+      ]
+    ],
+    "mana_passives": [
+      [
+        "C",
+        "Akcent: Gdy zadajesz obrażenia dystansową bronią: +2 do obrażeń za każdą kartę tego koloru w twojej puli. Kumuluje się."
+      ],
+      [
+        "B",
+        "Rytm kroków: Gdy masz ten kolor w puli: +1 KP. Nie kumuluje się."
+      ],
+      [
+        "Z",
+        "Otucha: Za każdym razem, gdy dobierzesz ten kolor: 3 PW odzyskuje przytomny sojusznik w 10 ft, któremu brakuje najwięcej PW. Także ty. Każdy dobór działa osobno."
+      ],
+      [
+        "F",
+        "Oszczędna harmonia: Gdy używasz płatnej zdolności: Spal o 1 kartę mniej, ale co najmniej 1. Darmowe zdolności pozostają darmowe. Nie kumuluje się."
+      ],
+      [
+        "N",
+        "Nieugięty umysł: Przeciw zauroczeniu i magicznemu snowi: Obrona przed zauroczeniem z przewagą. Magiczny sen na ciebie nie działa. Nie kumuluje się."
+      ]
+    ],
+    "stacking_mana_colors": [
+      "C"
+    ],
+    "stacking_exploration_colors": [
+      "C",
+      "B"
+    ]
+  },
+  "nimra": {
+    "id": "nimra",
+    "name": "Nimra",
+    "role": "Kontrolerka magiczna — teren i wiedza",
+    "level": 3,
+    "hp": 20,
+    "ac": 12,
+    "speed": 25,
+    "initiative": 2,
+    "spell_dc": 14,
+    "abilities": [
+      [
+        "Siła",
+        8,
+        -1
+      ],
+      [
+        "Zręczność",
+        14,
+        2
+      ],
+      [
+        "Kondycja",
+        14,
+        2
+      ],
+      [
+        "Inteligencja",
+        19,
+        4
+      ],
+      [
+        "Mądrość",
+        12,
+        1
+      ],
+      [
+        "Charyzma",
+        10,
+        0
+      ]
+    ],
+    "weapons": [
+      "Kostur: -1 do trafienia; 1k6 - 1 obuchowe",
+      "Sztylet: +2 do trafienia; 1k4 + 2 kłute",
+      "Sztylet — rzut: +2 do trafienia; 1k4 + 2 kłute"
+    ],
+    "saves": [
+      "Siła -1",
+      "Zręczność +2",
+      "Kondycja +2",
+      "Inteligencja +4",
+      "Mądrość +1",
+      "Charyzma +0"
+    ],
+    "skills": [
+      "Wiedza tajemna +4",
+      "Historia +4",
+      "Intuicja +1",
+      "Śledztwo +4"
+    ],
+    "equipment": [
+      "Kostur ×1",
+      "Sztylet ×1",
+      "Sakiewka na komponenty ×1",
+      "Księga czarów ×1",
+      "Pakiet uczonego ×1",
+      "Atrament (butelka 1 uncja) ×1",
+      "Pióro do pisania ×1",
+      "Mały nożyk ×1",
+      "Zwykłe ubranie ×1",
+      "Sakiewka ×1"
+    ],
+    "keep": 1,
+    "capacity": null,
+    "cards": [
+      {
+        "id": "nimra_frost_pulse",
+        "name": "Lodowy impuls",
+        "key": "Q",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 6 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Cel w 50 ft: obrona KON; porażka 1k8 zimna i −10 ft ruchu, sukces bez efektu. Do początku następnej tury źródła, chyba że efekt wykorzystano wcześniej.",
+        "panel_slot": 6,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 6 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "Cel w 50 ft: obrona KON; porażka 1k8 zimna i −10 ft ruchu, sukces bez efektu. Działa do początku następnej tury postaci, która użyła zdolności, lub do wcześniejszego wykorzystania."
+          ]
+        ]
+      },
+      {
+        "id": "nimra_mind_spike",
+        "name": "Szpilka umysłu",
+        "key": "E",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 6 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Cel w 45 ft: obrona MDR; porażka 1k6 psychicznych i brak reakcji, sukces bez efektu. Do początku następnej tury źródła, chyba że efekt wykorzystano wcześniej.",
+        "panel_slot": 8,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 6 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "Cel w 45 ft: obrona MDR; porażka 1k6 psychicznych i brak reakcji, sukces bez efektu. Działa do początku następnej tury postaci, która użyła zdolności, lub do wcześniejszego wykorzystania."
+          ]
+        ]
+      },
+      {
+        "id": "nimra_sticky_matrix",
+        "name": "Lepka matryca",
+        "key": "S",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 6 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Obszar 2×2 w 50 ft: trudny teren. Wejście lub początek tury: obrona ZRC przed powaleniem, najwyżej raz na turę istoty. Najwyżej jedna matryca. Powalenie T lub do wstania. Do mana draina, chyba że opisany warunek lub koncentracja zakończy wcześniej.",
+        "panel_slot": 11,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 6 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "Obszar 2×2 w 50 ft: trudny teren. Wejście lub początek tury: obrona ZRC przed powaleniem, najwyżej raz na turę istoty. Najwyżej jedna matryca. Powalenie T lub do wstania. Działa do mana draina; wskazane warunki mogą zakończyć wcześniej."
+          ]
+        ]
+      },
+      {
+        "id": "misty_step",
+        "name": "Mglisty krok",
+        "key": "J",
+        "timing": "D",
+        "cost": [],
+        "description": "Bez many; normalny koszt akcji i ograniczenia użycia. Teleport do 30 ft na legalne, widoczne pole.",
+        "panel_slot": 12,
+        "sections": [
+          [
+            "Ładunek",
+            "0 pkt — dostępna bez naładowania."
+          ],
+          [
+            "Akcja",
+            "Akcja dodatkowa"
+          ],
+          [
+            "Spalanie",
+            "0 kart."
+          ],
+          [
+            "Efekt",
+            "Teleport do 30 ft na legalne, widoczne pole."
+          ]
+        ]
+      },
+      {
+        "id": "shield",
+        "name": "Tarcza",
+        "key": "AUTO",
+        "timing": "R",
+        "cost": [],
+        "description": "Bez many; normalny koszt akcji i ograniczenia użycia. +3 KP przeciw jednemu atakowi i ponowna ocena trafienia.",
+        "panel_slot": 7,
+        "sections": [
+          [
+            "Ładunek",
+            "0 pkt — dostępna bez naładowania."
+          ],
+          [
+            "Akcja",
+            "Reakcja"
+          ],
+          [
+            "Spalanie",
+            "0 kart."
+          ],
+          [
+            "Efekt",
+            "+3 KP przeciw jednemu atakowi i ponowna ocena trafienia."
+          ]
+        ]
+      },
+      {
+        "id": "nimra_flame_fan",
+        "name": "Wachlarz płomieni",
+        "key": "R",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 12 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Stożek 15 ft, także sojusznicy. Obrona ZRC: 2k6 ognia, sukces daje połowę. Czerwona: +1k6 obrażeń (maks. 2) Niebieska: wyłącz dwa wskazane pola (maks. 1) Łącznie najwyżej 3 podbicia, każde kosztuje dodatkowe 2 spalone karty; kolor jest symbolem wariantu, nie wymaganiem puli.",
+        "panel_slot": 9,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 12 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "Stożek 15 ft, także sojusznicy. Obrona ZRC: 2k6 ognia, sukces daje połowę."
+          ],
+          [
+            "Podbicia",
+            "+1k6 obrażeń. Maks. 2 razy. wyłącz dwa wskazane pola. Maks. 1 razy. Każde: +2 spalone karty. Łącznie maks. 3. Kolor runy nie wymaga tego koloru w puli ani w spaleniu."
+          ]
+        ]
+      },
+      {
+        "id": "nimra_force_wave",
+        "name": "Fala odrzutu",
+        "key": "A",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 12 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Linia 30×5 ft, także sojusznicy. Obrona SIŁ: 2k6 mocy i odepchnięcie o pole; sukces połowa bez przesunięcia. Czerwona: +1k6 obrażeń (maks. 2) Niebieska: dodatkowe pole odepchnięcia (maks. 1) Łącznie najwyżej 3 podbicia, każde kosztuje dodatkowe 2 spalone karty; kolor jest symbolem wariantu, nie wymaganiem puli.",
+        "panel_slot": 10,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 12 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "Linia 30×5 ft, także sojusznicy. Obrona SIŁ: 2k6 mocy i odepchnięcie o pole; sukces połowa bez przesunięcia."
+          ],
+          [
+            "Podbicia",
+            "+1k6 obrażeń. Maks. 2 razy. dodatkowe pole odepchnięcia. Maks. 1 razy. Każde: +2 spalone karty. Łącznie maks. 3. Kolor runy nie wymaga tego koloru w puli ani w spaleniu."
+          ]
+        ]
+      },
+      {
+        "id": "nimra_web",
+        "name": "Sieć",
+        "key": "Z",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 12 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Obszar 2×2 w 50 ft, także sojusznicy: trudny teren i obrona ZRC przed unieruchomieniem. Koncentracja. Uwolnienie: akcja i test SIŁ. Do mana draina, chyba że opisany warunek lub koncentracja zakończy wcześniej. Zielona: bok większy o jedno pole (maks. 2) Niebieska: wyłącz dwa wskazane pola (maks. 1) Łącznie najwyżej 3 podbicia, każde kosztuje dodatkowe 2 spalone karty; kolor jest symbolem wariantu, nie wymaganiem puli.",
+        "panel_slot": 15,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 12 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "Obszar 2×2 w 50 ft, także sojusznicy: trudny teren i obrona ZRC przed unieruchomieniem. Koncentracja. Uwolnienie: akcja i test SIŁ. Działa do mana draina; wskazane warunki mogą zakończyć wcześniej."
+          ],
+          [
+            "Podbicia",
+            "bok większy o jedno pole. Maks. 2 razy. wyłącz dwa wskazane pola. Maks. 1 razy. Każde: +2 spalone karty. Łącznie maks. 3. Kolor runy nie wymaga tego koloru w puli ani w spaleniu."
+          ]
+        ]
+      },
+      {
+        "id": "nimra_mind_break",
+        "name": "Załamanie woli",
+        "key": "C",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 12 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Cel w 50 ft: obrona MDR, 1k6 psychicznych i brak reakcji (T); sukces połowa bez osłabienia. Czarna: dodatkowy cel w 10 ft od pierwszego (maks. 2) Czerwona: +1k6 obrażeń wszystkim celom (maks. 1) Łącznie najwyżej 3 podbicia, każde kosztuje dodatkowe 2 spalone karty; kolor jest symbolem wariantu, nie wymaganiem puli.",
+        "panel_slot": 17,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 12 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "Cel w 50 ft: obrona MDR, 1k6 psychicznych i brak reakcji (T); sukces połowa bez osłabienia."
+          ],
+          [
+            "Podbicia",
+            "dodatkowy cel w 10 ft od pierwszego. Maks. 2 razy. +1k6 obrażeń wszystkim celom. Maks. 1 razy. Każde: +2 spalone karty. Łącznie maks. 3. Kolor runy nie wymaga tego koloru w puli ani w spaleniu."
+          ]
+        ]
+      },
+      {
+        "id": "nimra_lightning_path",
+        "name": "Piorunowy szlak",
+        "key": "X",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 21 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Cel w 60 ft, potem do dwóch przeskoków po 15 ft do najbliższej nieporażonej istoty, także sojusznika. 4k6 błyskawic, osobne obrony ZRC, sukces połowa.",
+        "panel_slot": 16,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 21 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "Cel w 60 ft, potem do dwóch przeskoków po 15 ft do najbliższej nieporażonej istoty, także sojusznika. 4k6 błyskawic, osobne obrony ZRC, sukces połowa."
+          ]
+        ]
+      },
+      {
+        "id": "shatter",
+        "name": "Roztrzaskanie",
+        "key": "K",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 21 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Środek w 60 ft, promień 10 ft, także sojusznicy. 4k8 grzmotu, obrona KON daje połowę. Konstrukty mają utrudnienie obrony.",
+        "panel_slot": 19,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 21 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "Środek w 60 ft, promień 10 ft, także sojusznicy. 4k8 grzmotu, obrona KON daje połowę. Konstrukty mają utrudnienie obrony."
+          ]
+        ]
+      },
+      {
+        "id": "nimra_stasis",
+        "name": "Staza istoty",
+        "key": "V",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 21 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Wróg w 50 ft: obrona MDR. Porażka odbiera ruch, akcję główną, dodatkową i reakcję. Koncentracja. Do początku następnej tury źródła, chyba że efekt wykorzystano wcześniej.",
+        "panel_slot": 18,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 21 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "Wróg w 50 ft: obrona MDR. Porażka odbiera ruch, akcję główną, dodatkową i reakcję. Koncentracja. Działa do początku następnej tury postaci, która użyła zdolności, lub do wcześniejszego wykorzystania."
+          ]
+        ]
+      }
+    ],
+    "passives": [
+      [
+        "Nasycenie maną",
+        "C: Żar: Gdy zaklęcie zadaje obrażenia: +2 do obrażeń za każdą kartę tego koloru w twojej puli. Kumuluje się. B: Powłoka: Gdy masz ten kolor w puli: +1 KP. Nie kumuluje się. Z: Regeneracja: Za każdym razem, gdy dobierzesz ten kolor: Odzyskaj 4 PW. Każdy dobór działa osobno. F: Magiczna przezorność: Gdy bronisz się przed magią: Rzuty obronne Inteligencji, Mądrości i Charyzmy z przewagą. Nie kumuluje się. N: Nasycenie: Gdy zaklęcie zadaje obrażenia: +1 do obrażeń za każdą kartę tego koloru w twojej puli. Kumuluje się. Pasywy wymagają odpowiedniego koloru w puli; efekty leczenia uruchamia sam dobór. Mana Drain usuwa nasycenie."
+      ]
+    ],
+    "flaw": [
+      "Echo",
+      "Echo: kolejna ta sama płatna zdolność z rzędu spala o 1 kartę więcej (maks. +2). Inna płatna zdolność zeruje serię."
+    ],
+    "story": [
+      [
+        "Historia",
+        "Nimra była błyskotliwą badaczką teorii magii. Podczas eksperymentu z niestabilnym źródłem mocy zignorowała ostrzeżenia: laboratorium zostało zniszczone, a jej najbliższy współpracownik zaginął w anomalii."
+      ],
+      [
+        "Dlaczego podróżuje",
+        "Wyprawy zapewniają ochronę, dostęp do anomalii oraz materiał do badań. Nimra wierzy, że większa wiedza pozwoli jej przewidzieć wszystkie konsekwencje i naprawić błąd, którego nadal nie potrafi nazwać własną winą."
+      ],
+      [
+        "Cel osobisty",
+        "Zrozumieć magiczne przesilenie i odkryć los współpracownika zaginionego w laboratorium."
+      ]
+    ],
+    "exploration": [
+      {
+        "id": "npc",
+        "name": "Podejście ze sceny",
+        "kind": "npc",
+        "ability": "Cecha podejścia",
+        "modifier": 0,
+        "components": [],
+        "description": "Wybierz runą podejście dostępne w tej scenie. Określa cechę, ST, kość efektu i dozwolone wsparcie. Wybór zostaje do końca konfrontacji.",
+        "influence_modifier": 0
+      },
+      {
+        "id": "object",
+        "name": "Podejście ze sceny",
+        "kind": "object",
+        "ability": "Cecha podejścia",
+        "modifier": 0,
+        "components": [],
+        "description": "Wybierz runą podejście dostępne w tej scenie. Określa cechę, ST, kość efektu i dozwolone wsparcie. Wybór zostaje do końca konfrontacji.",
+        "influence_modifier": 0
+      }
+    ],
+    "mana_values": [
+      [
+        "C",
+        4
+      ],
+      [
+        "B",
+        1
+      ],
+      [
+        "Z",
+        3
+      ],
+      [
+        "F",
+        4
+      ],
+      [
+        "N",
+        7
+      ]
+    ],
+    "exploration_passives": [
+      [
+        "C",
+        "Stanowczość: Po sukcesie: +1 do wpływu / postępu za kartę tego koloru. Maks. +2. Kumuluje się."
+      ],
+      [
+        "B",
+        "Opanowanie: Reakcja zabiera kartę z twojej puli? Zachowaj ją. Ochrona 1 karty; nie dotyczy wspólnej talii. Nie kumuluje się."
+      ],
+      [
+        "Z",
+        "Oddech: Po udanym teście: przenieś 1 najwcześniej spaloną kartę na spód talii. Potwierdź ✓, potem spal koszt testu. Nie kumuluje się."
+      ],
+      [
+        "F",
+        "Współpraca: Pomoc: +2 do następnego testu sojusznika zamiast +1. Spal 1 kartę. Dostępne cele wsparcia bez zmian. Nie kumuluje się."
+      ],
+      [
+        "N",
+        "Skupienie: Test k20: +1 za kartę tego koloru w puli. Maks. +2. Bez premii do wpływu / postępu. Kumuluje się."
+      ]
+    ],
+    "mana_passives": [
+      [
+        "C",
+        "Żar: Gdy zaklęcie zadaje obrażenia: +2 do obrażeń za każdą kartę tego koloru w twojej puli. Kumuluje się."
+      ],
+      [
+        "B",
+        "Powłoka: Gdy masz ten kolor w puli: +1 KP. Nie kumuluje się."
+      ],
+      [
+        "Z",
+        "Regeneracja: Za każdym razem, gdy dobierzesz ten kolor: Odzyskaj 4 PW. Każdy dobór działa osobno."
+      ],
+      [
+        "F",
+        "Magiczna przezorność: Gdy bronisz się przed magią: Rzuty obronne Inteligencji, Mądrości i Charyzmy z przewagą. Nie kumuluje się."
+      ],
+      [
+        "N",
+        "Nasycenie: Gdy zaklęcie zadaje obrażenia: +1 do obrażeń za każdą kartę tego koloru w twojej puli. Kumuluje się."
+      ]
+    ],
+    "stacking_mana_colors": [
+      "C",
+      "N"
+    ],
+    "stacking_exploration_colors": [
+      "C",
+      "N"
+    ]
+  },
+  "erynd": {
+    "id": "erynd",
+    "name": "Erynd",
+    "role": "Zwiadowca — tropienie i ostrzał",
+    "level": 3,
+    "hp": 25,
+    "ac": 16,
+    "speed": 30,
+    "initiative": 4,
+    "spell_dc": 12,
+    "abilities": [
+      [
+        "Siła",
+        12,
+        1
+      ],
+      [
+        "Zręczność",
+        19,
+        4
+      ],
+      [
+        "Kondycja",
+        13,
+        1
+      ],
+      [
+        "Inteligencja",
+        11,
+        0
+      ],
+      [
+        "Mądrość",
+        14,
+        2
+      ],
+      [
+        "Charyzma",
+        8,
+        -1
+      ]
+    ],
+    "weapons": [
+      "Długi łuk: +4 do trafienia; 1k8 + 4 kłute",
+      "Nóż myśliwski: +1 do trafienia; 1k4 + 1 cięte"
+    ],
+    "saves": [
+      "Siła +1",
+      "Zręczność +4",
+      "Kondycja +1",
+      "Inteligencja +0",
+      "Mądrość +2",
+      "Charyzma -1"
+    ],
+    "skills": [
+      "Opieka nad zwierzętami +2",
+      "Śledztwo +0",
+      "Przyroda +0",
+      "Percepcja +2",
+      "Skradanie +4",
+      "Sztuka przetrwania +2"
+    ],
+    "equipment": [
+      "Długi łuk ×1",
+      "Nóż myśliwski ×1",
+      "Ćwiekowana zbroja skórzana ×1",
+      "Strzała ×20",
+      "Pakiet odkrywcy ×1",
+      "Łopata ×1",
+      "Żelazny garnek ×1",
+      "Zwykłe ubranie ×1",
+      "Sakiewka ×1",
+      "Narzędzia snycerza ×1"
+    ],
+    "keep": 1,
+    "capacity": null,
+    "cards": [
+      {
+        "id": "hunters_mark",
+        "name": "Znak łowcy",
+        "key": "Q",
+        "timing": "D",
+        "cost": [],
+        "description": "Bez many; normalny koszt akcji i ograniczenia użycia. Koncentracja. Raz we własnej turze trafienie oznaczonego celu bronią dodaje 1k6. Przeniesienie po pokonaniu celu bez many i akcji. Do mana draina, chyba że opisany warunek lub koncentracja zakończy wcześniej.",
+        "panel_slot": 6,
+        "sections": [
+          [
+            "Ładunek",
+            "0 pkt — dostępna bez naładowania."
+          ],
+          [
+            "Akcja",
+            "Akcja dodatkowa"
+          ],
+          [
+            "Spalanie",
+            "0 kart."
+          ],
+          [
+            "Efekt",
+            "Koncentracja. Raz we własnej turze trafienie oznaczonego celu bronią dodaje 1k6. Przeniesienie po pokonaniu celu bez many i akcji. Działa do mana draina; wskazane warunki mogą zakończyć wcześniej."
+          ]
+        ]
+      },
+      {
+        "id": "cunning_action",
+        "name": "Zwiadowcza mobilność",
+        "key": "W",
+        "timing": "D",
+        "cost": [],
+        "description": "Bez many; normalny koszt akcji i ograniczenia użycia. Sprint albo Odstąpienie w bieżącej turze.",
+        "panel_slot": 7,
+        "sections": [
+          [
+            "Ładunek",
+            "0 pkt — dostępna bez naładowania."
+          ],
+          [
+            "Akcja",
+            "Akcja dodatkowa"
+          ],
+          [
+            "Spalanie",
+            "0 kart."
+          ],
+          [
+            "Efekt",
+            "Sprint albo Odstąpienie w bieżącej turze."
+          ]
+        ]
+      },
+      {
+        "id": "aim",
+        "name": "Celowanie",
+        "key": "E",
+        "timing": "D",
+        "cost": [],
+        "description": "Bez many; normalny koszt akcji i ograniczenia użycia. Przed ruchem poświęć cały jego limit: przewaga następnego ataku łukiem w bieżącej turze.",
+        "panel_slot": 8,
+        "sections": [
+          [
+            "Ładunek",
+            "0 pkt — dostępna bez naładowania."
+          ],
+          [
+            "Akcja",
+            "Akcja dodatkowa"
+          ],
+          [
+            "Spalanie",
+            "0 kart."
+          ],
+          [
+            "Efekt",
+            "Przed ruchem poświęć cały jego limit: przewaga następnego ataku łukiem w bieżącej turze."
+          ]
+        ]
+      },
+      {
+        "id": "disrupting_arrow",
+        "name": "Strzała zakłócająca",
+        "key": "S",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 6 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Trafienie bronią odbiera reakcje i daje utrudnienie następnego ataku celu. Do początku następnej tury źródła, chyba że efekt wykorzystano wcześniej.",
+        "panel_slot": 11,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 6 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "Trafienie bronią odbiera reakcje i daje utrudnienie następnego ataku celu. Działa do początku następnej tury postaci, która użyła zdolności, lub do wcześniejszego wykorzystania."
+          ]
+        ]
+      },
+      {
+        "id": "anchoring_arrow",
+        "name": "Strzała kotwicząca",
+        "key": "R",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 12 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Trafiony wróg: obrona SIŁ, porażka blokuje ruch, sukces połowi. Do początku następnej tury źródła, chyba że efekt wykorzystano wcześniej. Zielona: osobny strzał kotwiczący w drugiego wroga sąsiadującego z pierwszym (maks. 1) Łącznie najwyżej 3 podbicia, każde kosztuje dodatkowe 2 spalone karty; kolor jest symbolem wariantu, nie wymaganiem puli.",
+        "panel_slot": 9,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 12 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "Trafiony wróg: obrona SIŁ, porażka blokuje ruch, sukces połowi. Działa do początku następnej tury postaci, która użyła zdolności, lub do wcześniejszego wykorzystania."
+          ],
+          [
+            "Podbicia",
+            "osobny strzał kotwiczący w drugiego wroga sąsiadującego z pierwszym. Maks. 1 razy. Każde: +2 spalone karty. Łącznie maks. 1. Kolor runy nie wymaga tego koloru w puli ani w spaleniu."
+          ]
+        ]
+      },
+      {
+        "id": "exposing_arrow",
+        "name": "Strzała odsłaniająca",
+        "key": "A",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 12 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Trafienie bronią obniża KP celu o 2, bez kumulowania. Do początku następnej tury źródła, chyba że efekt wykorzystano wcześniej. Czerwona: +1k6 obrażeń (maks. 2) Łącznie najwyżej 3 podbicia, każde kosztuje dodatkowe 2 spalone karty; kolor jest symbolem wariantu, nie wymaganiem puli.",
+        "panel_slot": 10,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 12 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "Trafienie bronią obniża KP celu o 2, bez kumulowania. Działa do początku następnej tury postaci, która użyła zdolności, lub do wcześniejszego wykorzystania."
+          ],
+          [
+            "Podbicia",
+            "+1k6 obrażeń. Maks. 2 razy. Każde: +2 spalone karty. Łącznie maks. 2. Kolor runy nie wymaga tego koloru w puli ani w spaleniu."
+          ]
+        ]
+      },
+      {
+        "id": "double_shot",
+        "name": "Podwójny strzał",
+        "key": "D",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 12 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Dwa osobne ataki łukiem, z możliwością różnych celów. Czerwona: +1k6 do jednego wybranego trafienia (maks. 2) Łącznie najwyżej 3 podbicia, każde kosztuje dodatkowe 2 spalone karty; kolor jest symbolem wariantu, nie wymaganiem puli.",
+        "panel_slot": 12,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 12 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "Dwa osobne ataki łukiem, z możliwością różnych celów."
+          ],
+          [
+            "Podbicia",
+            "+1k6 do jednego wybranego trafienia. Maks. 2 razy. Każde: +2 spalone karty. Łącznie maks. 2. Kolor runy nie wymaga tego koloru w puli ani w spaleniu."
+          ]
+        ]
+      },
+      {
+        "id": "arrow_rain",
+        "name": "Deszcz strzał",
+        "key": "MENU",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 21 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Wskaż środek obszaru 3×3. Jeden wspólny test łuku przeciw KP każdego legalnego wroga, wspólne 1k8 + 1k6 + ZRC obrażeń. Osłona liczona osobno. Znak i Pierwsza krew najwyżej raz.",
+        "panel_slot": 13,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 21 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "Wskaż środek obszaru 3×3. Jeden wspólny test łuku przeciw KP każdego legalnego wroga, wspólne 1k8 + 1k6 + ZRC obrażeń. Osłona liczona osobno. Znak i Pierwsza krew najwyżej raz."
+          ]
+        ]
+      },
+      {
+        "id": "spike_growth",
+        "name": "Kolczaste zarośla",
+        "key": "Z",
+        "timing": "A",
+        "cost": [],
+        "description": "Co najmniej 21 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Środek w 50 ft, promień 20 ft: trudny teren, koncentracja. 1k4 za przebyte pole, maks. 4k4 na turę istoty; także wymuszony ruch i sojusznicy. Do mana draina, chyba że opisany warunek lub koncentracja zakończy wcześniej.",
+        "panel_slot": 14,
+        "sections": [
+          [
+            "Ładunek",
+            "Co najmniej 21 pkt. Pula zostaje po użyciu."
+          ],
+          [
+            "Akcja",
+            "Akcja główna"
+          ],
+          [
+            "Spalanie",
+            "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+          ],
+          [
+            "Efekt",
+            "Środek w 50 ft, promień 20 ft: trudny teren, koncentracja. 1k4 za przebyte pole, maks. 4k4 na turę istoty; także wymuszony ruch i sojusznicy. Działa do mana draina; wskazane warunki mogą zakończyć wcześniej."
+          ]
+        ]
+      }
+    ],
+    "passives": [
+      [
+        "Nasycenie maną",
+        "C: Pierwsza krew: Trafienie w cel z pełnymi PW: +1k6 obrażeń. Nie kumuluje się. B: Kamuflaż: Gdy masz ten kolor w puli: +1 KP. Nie kumuluje się. Z: Instynkt: Gdy wykonujesz rzut obronny: +1 do rzutów obronnych Zręczności za kartę tego koloru. Łącznie maks. +2. Kumuluje się. F: Czujność zwiadowcy: Gdy wykrywasz ukrytego wroga: +2 do testu wykrywania. Nie dotyczy pułapek. Nie kumuluje się. N: Łucznictwo: Atak dystansową bronią: +2 do testu ataku. Bez dodatkowej premii do obrażeń. Nie kumuluje się. Pasywy wymagają odpowiedniego koloru w puli; efekty leczenia uruchamia sam dobór. Mana Drain usuwa nasycenie."
+      ]
+    ],
+    "flaw": [
+      "Trauma bratobójczego strzału",
+      "Płatny strzał w cel sąsiadujący z innym bohaterem spala dodatkową kartę."
+    ],
+    "story": [
+      [
+        "Historia",
+        "Erynd ostrzegał rodzinną osadę przed znakami magicznego przesilenia, lecz nikt go nie słuchał. Przeżył falę wypaczenia dzięki przygotowanemu schronieniu; wielu mieszkańców zaginęło, wśród nich jego ojciec."
+      ],
+      [
+        "Dlaczego podróżuje",
+        "Podróżuje, aby badać narastający chaos oraz tworzyć bezpieczne szlaki, schronienia i ukryte magazyny. Drużynę traktuje jak ludzi, których musi przygotować na wszystko, nawet jeśli jego troska zaczyna przypominać kontrolę."
+      ],
+      [
+        "Cel osobisty",
+        "Odnaleźć ojca i zbudować sieć miejsc, w których ludzie przetrwają kolejną katastrofę."
+      ]
+    ],
+    "exploration": [
+      {
+        "id": "npc",
+        "name": "Podejście ze sceny",
+        "kind": "npc",
+        "ability": "Cecha podejścia",
+        "modifier": 0,
+        "components": [],
+        "description": "Wybierz runą podejście dostępne w tej scenie. Określa cechę, ST, kość efektu i dozwolone wsparcie. Wybór zostaje do końca konfrontacji.",
+        "influence_modifier": 0
+      },
+      {
+        "id": "object",
+        "name": "Podejście ze sceny",
+        "kind": "object",
+        "ability": "Cecha podejścia",
+        "modifier": 0,
+        "components": [],
+        "description": "Wybierz runą podejście dostępne w tej scenie. Określa cechę, ST, kość efektu i dozwolone wsparcie. Wybór zostaje do końca konfrontacji.",
+        "influence_modifier": 0
+      }
+    ],
+    "mana_values": [
+      [
+        "C",
+        4
+      ],
+      [
+        "B",
+        1
+      ],
+      [
+        "Z",
+        7
+      ],
+      [
+        "F",
+        3
+      ],
+      [
+        "N",
+        4
+      ]
+    ],
+    "exploration_passives": [
+      [
+        "C",
+        "Stanowczość: Po sukcesie: +1 do wpływu / postępu za kartę tego koloru. Maks. +2. Kumuluje się."
+      ],
+      [
+        "B",
+        "Opanowanie: Reakcja zabiera kartę z twojej puli? Zachowaj ją. Ochrona 1 karty; nie dotyczy wspólnej talii. Nie kumuluje się."
+      ],
+      [
+        "Z",
+        "Skupienie: Test k20: +1 za kartę tego koloru w puli. Maks. +2. Bez premii do wpływu / postępu. Kumuluje się."
+      ],
+      [
+        "F",
+        "Współpraca: Pomoc: +2 do następnego testu sojusznika zamiast +1. Spal 1 kartę. Dostępne cele wsparcia bez zmian. Nie kumuluje się."
+      ],
+      [
+        "N",
+        "Oddech: Po udanym teście: przenieś 1 najwcześniej spaloną kartę na spód talii. Potwierdź ✓, potem spal koszt testu. Nie kumuluje się."
+      ]
+    ],
+    "mana_passives": [
+      [
+        "C",
+        "Pierwsza krew: Trafienie w cel z pełnymi PW: +1k6 obrażeń. Nie kumuluje się."
+      ],
+      [
+        "B",
+        "Kamuflaż: Gdy masz ten kolor w puli: +1 KP. Nie kumuluje się."
+      ],
+      [
+        "Z",
+        "Instynkt: Gdy wykonujesz rzut obronny: +1 do rzutów obronnych Zręczności za kartę tego koloru. Łącznie maks. +2. Kumuluje się."
+      ],
+      [
+        "F",
+        "Czujność zwiadowcy: Gdy wykrywasz ukrytego wroga: +2 do testu wykrywania. Nie dotyczy pułapek. Nie kumuluje się."
+      ],
+      [
+        "N",
+        "Łucznictwo: Atak dystansową bronią: +2 do testu ataku. Bez dodatkowej premii do obrażeń. Nie kumuluje się."
+      ]
+    ],
+    "stacking_mana_colors": [
+      "Z"
+    ],
+    "stacking_exploration_colors": [
+      "C",
+      "Z"
+    ]
+  }
+}

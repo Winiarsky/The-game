@@ -15,5 +15,6 @@ def road_fatigue(actor_ids: tuple[str, ...], rounds: int, label: str) -> tuple[A
     ) for actor in actor_ids)
 
 
-def surrender_available(party_size: int, remaining_enemies: int, offered: bool) -> bool:
-    return not offered and 0 < remaining_enemies < party_size
+def surrender_available(initial_enemies: int, remaining_enemies: int, offered: bool) -> bool:
+    """Offer once after the first defeated opponent, while someone can negotiate."""
+    return not offered and 0 < remaining_enemies < initial_enemies

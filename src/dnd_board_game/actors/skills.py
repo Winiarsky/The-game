@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dnd_board_game.inventory.magic_items import effective_ability_modifier
+
 from dnd_board_game.rules import RollModifier, RollModifierType, ability_modifier
 
 from .models import Actor
@@ -37,7 +39,7 @@ def skill_modifier(actor: Actor, skill: str) -> int:
     ability = SKILL_ABILITIES.get(skill)
     if ability is None:
         raise ValueError(f"Unknown skill: {skill}.")
-    result = ability_modifier(getattr(actor.ability_scores, ability))
+    result = effective_ability_modifier(actor, ability)
     if skill in actor.skill_expertise and not uses_charge(actor):
         result += 2 * actor.proficiency_bonus
     elif skill in actor.skill_proficiencies and not uses_charge(actor):

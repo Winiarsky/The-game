@@ -29,5 +29,8 @@ def text_entry(root: Path, key: str, **values: object) -> dict[str, str]:
 
 
 def asset_url(root: Path, relative: str) -> str:
+    variants = root / 'visuals.json'
+    if variants.is_file():
+        relative = read_json(root, 'visuals.json').get('image_overrides', {}).get(relative, relative)
     path = local_path(root, relative)
     return '/scenario-assets/' + relative + '?v=' + sha256(path.read_bytes()).hexdigest()[:12]

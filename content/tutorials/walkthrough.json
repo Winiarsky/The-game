@@ -16,8 +16,8 @@
       "pool_hold": "Dobierz kartę, a potem wykonaj zwykły atak bronią w kukłę. Twoja pula pozostaje przy tobie; nie wydajesz jej na zwykły atak.",
       "pool_burn": "Dobierz kartę. Potem uruchom zapowiedziane spalenie przez ✓. Odłóż pozostawioną kartę do spalonych, nie na spód talii.",
       "pool_prison": "Dobierz kartę. ✓ symuluje uwięzienie odkrytej karty przez kukłę. Następne ✓ symuluje jej pokonanie: oddaj uwięzioną kartę na spód.",
-      "pool_drain": "Przygotujemy końcówkę talii: po tasowaniu pozostaw trzy karty wskazane w instrukcji, resztę połóż jako spalone. Dobierz kartę. ✓ uruchomi spalenie dwóch kart przy zbyt małej talii. Zbierz i przetasuj WSZYSTKIE karty.",
-      "pool_charge": "Pełna sakwa bywa argumentem. Pełna mana — kilkoma. Sprawdź, co zostaje z tobą po dobraniu ostatniej karty. Przygotuj 20 pkt zgodnie z instrukcją. Dobierz kartę, obejrzyj premie kolorów. Przy 21+ następna własna tura pomija dobór; ładunek zostaje do draina.",
+      "pool_drain": "Przygotujemy końcówkę talii: po tasowaniu pozostaw trzy karty wskazane w instrukcji, resztę połóż jako spalone. Dobierz kartę. ✓ uruchomi spalenie dwóch kart przy zbyt małej talii. Zbierz i przetasuj WSZYSTKIE karty. Po drainie wszystkie pasywy kolorów są znów zablokowane. Powrócą dopiero z kolejnymi kartami; drain odnawia jednorazową Nieustępliwość Brakki, a ponowny dobór czarnej many odblokowuje ją znów.",
+      "pool_charge": "Pełna sakwa bywa argumentem. Pełna mana — kilkoma. Sprawdź, co zostaje z tobą po dobraniu ostatniej karty. Przygotuj 20 pkt zgodnie z instrukcją. Dobierz kartę, obejrzyj premie kolorów. Przy 21+ następna własna tura pomija dobór; ładunek zostaje do draina. Pasywy nie działają od początku walki: właściwy kolor odblokowuje pasyw bez limitu tur. Gruba obwódka symbolu oznacza kumulowanie; cienka brak kumulacji. Sprawdź odblokowania swojego bohatera na karcie i w panelu statusów.",
       "pool_expire": "Nawet kiedy wszyscy czekają, świat zużywa się po trochu. Na koniec rundy jedna karta z wierzchu wygasa. Leży osobno od spalonych; odzyskasz ją dopiero przy mana drainie."
     },
     "brakka": {
@@ -34,8 +34,8 @@
       "pool_hold": "Dobierz kartę, a potem wykonaj zwykły atak bronią w kukłę. Twoja pula pozostaje przy tobie; nie wydajesz jej na zwykły atak.",
       "pool_burn": "Dobierz kartę. Potem uruchom zapowiedziane spalenie przez ✓. Odłóż pozostawioną kartę do spalonych, nie na spód talii.",
       "pool_prison": "Dobierz kartę. ✓ symuluje uwięzienie odkrytej karty przez kukłę. Następne ✓ symuluje jej pokonanie: oddaj uwięzioną kartę na spód.",
-      "pool_drain": "Przygotujemy końcówkę talii: po tasowaniu pozostaw trzy karty wskazane w instrukcji, resztę połóż jako spalone. Dobierz kartę. ✓ uruchomi spalenie dwóch kart przy zbyt małej talii. Zbierz i przetasuj WSZYSTKIE karty.",
-      "pool_charge": "Pełna sakwa bywa argumentem. Pełna mana — kilkoma. Sprawdź, co zostaje z tobą po dobraniu ostatniej karty. Przygotuj 20 pkt zgodnie z instrukcją. Dobierz kartę, obejrzyj premie kolorów. Przy 21+ następna własna tura pomija dobór; ładunek zostaje do draina.",
+      "pool_drain": "Przygotujemy końcówkę talii: po tasowaniu pozostaw trzy karty wskazane w instrukcji, resztę połóż jako spalone. Dobierz kartę. ✓ uruchomi spalenie dwóch kart przy zbyt małej talii. Zbierz i przetasuj WSZYSTKIE karty. Po drainie wszystkie pasywy kolorów są znów zablokowane. Powrócą dopiero z kolejnymi kartami; drain odnawia jednorazową Nieustępliwość Brakki, a ponowny dobór czarnej many odblokowuje ją znów.",
+      "pool_charge": "Pełna sakwa bywa argumentem. Pełna mana — kilkoma. Sprawdź, co zostaje z tobą po dobraniu ostatniej karty. Przygotuj 20 pkt zgodnie z instrukcją. Dobierz kartę, obejrzyj premie kolorów. Przy 21+ następna własna tura pomija dobór; ładunek zostaje do draina. Pasywy nie działają od początku walki: właściwy kolor odblokowuje pasyw bez limitu tur. Gruba obwódka symbolu oznacza kumulowanie; cienka brak kumulacji. Sprawdź odblokowania swojego bohatera na karcie i w panelu statusów.",
       "pool_expire": "Nawet kiedy wszyscy czekają, świat zużywa się po trochu. Na koniec rundy jedna karta z wierzchu wygasa. Leży osobno od spalonych; odzyskasz ją dopiero przy mana drainie."
     },
     "mira": {
@@ -47,13 +47,13 @@
       "guard_vault": "Za sąsiadującą kukłą zostawiliśmy wolne pole. Wykonaj atak i przeskocz na drugą stronę. Przestaw Mirę zgodnie z końcowym wskazaniem.",
       "blade_mistress": "Pomocnik zapewnia własną flankę, a Mira ma przygotowany nóż. Wykonaj Mistrzynię ostrzy i rozlicz dodatkową kość obrażeń.",
       "shadow_verdict": "Połącz dwa warunki: ukrycie i własną flankę. W tej sytuacji oba są już przygotowane. Wykonaj Wyrok z cienia i rozlicz potężne dodatkowe obrażenia.",
-      "blade_dance": "Zamień ruch w serię cięć. Przejdź obok dwóch różnych kukieł i wykonaj oba ataki. Atak z cienia może zadziałać najwyżej raz w tej technice.",
+      "blade_dance": "Zamień ruch w serię cięć. Przejdź obok dwóch różnych kukieł i wykonaj oba ataki. Pasywy many działają przy każdym trafieniu spełniającym warunek: czerwona daje +1k6 z ukrycia, zielona +2k6 z własnej flanki.",
       "pool_draw": "Przetasuj komplet, odkryj dwie karty i zgłoś ich kolory. Wybierz jedną runą. Drugą zostaw dla następnego bohatera.",
       "pool_hold": "Dobierz kartę, a potem wykonaj zwykły atak bronią w kukłę. Twoja pula pozostaje przy tobie; nie wydajesz jej na zwykły atak.",
       "pool_burn": "Dobierz kartę. Potem uruchom zapowiedziane spalenie przez ✓. Odłóż pozostawioną kartę do spalonych, nie na spód talii.",
       "pool_prison": "Dobierz kartę. ✓ symuluje uwięzienie odkrytej karty przez kukłę. Następne ✓ symuluje jej pokonanie: oddaj uwięzioną kartę na spód.",
-      "pool_drain": "Przygotujemy końcówkę talii: po tasowaniu pozostaw trzy karty wskazane w instrukcji, resztę połóż jako spalone. Dobierz kartę. ✓ uruchomi spalenie dwóch kart przy zbyt małej talii. Zbierz i przetasuj WSZYSTKIE karty.",
-      "pool_charge": "Pełna sakwa bywa argumentem. Pełna mana — kilkoma. Sprawdź, co zostaje z tobą po dobraniu ostatniej karty. Przygotuj 20 pkt zgodnie z instrukcją. Dobierz kartę, obejrzyj premie kolorów. Przy 21+ następna własna tura pomija dobór; ładunek zostaje do draina.",
+      "pool_drain": "Przygotujemy końcówkę talii: po tasowaniu pozostaw trzy karty wskazane w instrukcji, resztę połóż jako spalone. Dobierz kartę. ✓ uruchomi spalenie dwóch kart przy zbyt małej talii. Zbierz i przetasuj WSZYSTKIE karty. Po drainie wszystkie pasywy kolorów są znów zablokowane. Powrócą dopiero z kolejnymi kartami; drain odnawia jednorazową Nieustępliwość Brakki, a ponowny dobór czarnej many odblokowuje ją znów.",
+      "pool_charge": "Pełna sakwa bywa argumentem. Pełna mana — kilkoma. Sprawdź, co zostaje z tobą po dobraniu ostatniej karty. Przygotuj 20 pkt zgodnie z instrukcją. Dobierz kartę, obejrzyj premie kolorów. Przy 21+ następna własna tura pomija dobór; ładunek zostaje do draina. Pasywy nie działają od początku walki: właściwy kolor odblokowuje pasyw bez limitu tur. Gruba obwódka symbolu oznacza kumulowanie; cienka brak kumulacji. Sprawdź odblokowania swojego bohatera na karcie i w panelu statusów.",
       "pool_expire": "Nawet kiedy wszyscy czekają, świat zużywa się po trochu. Na koniec rundy jedna karta z wierzchu wygasa. Leży osobno od spalonych; odzyskasz ją dopiero przy mana drainie."
     },
     "dagna": {
@@ -71,8 +71,8 @@
       "pool_hold": "Dobierz kartę, a potem wykonaj zwykły atak bronią w kukłę. Twoja pula pozostaje przy tobie; nie wydajesz jej na zwykły atak.",
       "pool_burn": "Dobierz kartę. Potem uruchom zapowiedziane spalenie przez ✓. Odłóż pozostawioną kartę do spalonych, nie na spód talii.",
       "pool_prison": "Dobierz kartę. ✓ symuluje uwięzienie odkrytej karty przez kukłę. Następne ✓ symuluje jej pokonanie: oddaj uwięzioną kartę na spód.",
-      "pool_drain": "Przygotujemy końcówkę talii: po tasowaniu pozostaw trzy karty wskazane w instrukcji, resztę połóż jako spalone. Dobierz kartę. ✓ uruchomi spalenie dwóch kart przy zbyt małej talii. Zbierz i przetasuj WSZYSTKIE karty.",
-      "pool_charge": "Pełna sakwa bywa argumentem. Pełna mana — kilkoma. Sprawdź, co zostaje z tobą po dobraniu ostatniej karty. Przygotuj 20 pkt zgodnie z instrukcją. Dobierz kartę, obejrzyj premie kolorów. Przy 21+ następna własna tura pomija dobór; ładunek zostaje do draina.",
+      "pool_drain": "Przygotujemy końcówkę talii: po tasowaniu pozostaw trzy karty wskazane w instrukcji, resztę połóż jako spalone. Dobierz kartę. ✓ uruchomi spalenie dwóch kart przy zbyt małej talii. Zbierz i przetasuj WSZYSTKIE karty. Po drainie wszystkie pasywy kolorów są znów zablokowane. Powrócą dopiero z kolejnymi kartami; drain odnawia jednorazową Nieustępliwość Brakki, a ponowny dobór czarnej many odblokowuje ją znów.",
+      "pool_charge": "Pełna sakwa bywa argumentem. Pełna mana — kilkoma. Sprawdź, co zostaje z tobą po dobraniu ostatniej karty. Przygotuj 20 pkt zgodnie z instrukcją. Dobierz kartę, obejrzyj premie kolorów. Przy 21+ następna własna tura pomija dobór; ładunek zostaje do draina. Pasywy nie działają od początku walki: właściwy kolor odblokowuje pasyw bez limitu tur. Gruba obwódka symbolu oznacza kumulowanie; cienka brak kumulacji. Sprawdź odblokowania swojego bohatera na karcie i w panelu statusów.",
       "pool_expire": "Nawet kiedy wszyscy czekają, świat zużywa się po trochu. Na koniec rundy jedna karta z wierzchu wygasa. Leży osobno od spalonych; odzyskasz ją dopiero przy mana drainie."
     },
     "lorian": {
@@ -89,8 +89,8 @@
       "pool_hold": "Dobierz kartę, a potem wykonaj zwykły atak bronią w kukłę. Twoja pula pozostaje przy tobie; nie wydajesz jej na zwykły atak.",
       "pool_burn": "Dobierz kartę. Potem uruchom zapowiedziane spalenie przez ✓. Odłóż pozostawioną kartę do spalonych, nie na spód talii.",
       "pool_prison": "Dobierz kartę. ✓ symuluje uwięzienie odkrytej karty przez kukłę. Następne ✓ symuluje jej pokonanie: oddaj uwięzioną kartę na spód.",
-      "pool_drain": "Przygotujemy końcówkę talii: po tasowaniu pozostaw trzy karty wskazane w instrukcji, resztę połóż jako spalone. Dobierz kartę. ✓ uruchomi spalenie dwóch kart przy zbyt małej talii. Zbierz i przetasuj WSZYSTKIE karty.",
-      "pool_charge": "Pełna sakwa bywa argumentem. Pełna mana — kilkoma. Sprawdź, co zostaje z tobą po dobraniu ostatniej karty. Przygotuj 20 pkt zgodnie z instrukcją. Dobierz kartę, obejrzyj premie kolorów. Przy 21+ następna własna tura pomija dobór; ładunek zostaje do draina.",
+      "pool_drain": "Przygotujemy końcówkę talii: po tasowaniu pozostaw trzy karty wskazane w instrukcji, resztę połóż jako spalone. Dobierz kartę. ✓ uruchomi spalenie dwóch kart przy zbyt małej talii. Zbierz i przetasuj WSZYSTKIE karty. Po drainie wszystkie pasywy kolorów są znów zablokowane. Powrócą dopiero z kolejnymi kartami; drain odnawia jednorazową Nieustępliwość Brakki, a ponowny dobór czarnej many odblokowuje ją znów.",
+      "pool_charge": "Pełna sakwa bywa argumentem. Pełna mana — kilkoma. Sprawdź, co zostaje z tobą po dobraniu ostatniej karty. Przygotuj 20 pkt zgodnie z instrukcją. Dobierz kartę, obejrzyj premie kolorów. Przy 21+ następna własna tura pomija dobór; ładunek zostaje do draina. Pasywy nie działają od początku walki: właściwy kolor odblokowuje pasyw bez limitu tur. Gruba obwódka symbolu oznacza kumulowanie; cienka brak kumulacji. Sprawdź odblokowania swojego bohatera na karcie i w panelu statusów.",
       "pool_expire": "Nawet kiedy wszyscy czekają, świat zużywa się po trochu. Na koniec rundy jedna karta z wierzchu wygasa. Leży osobno od spalonych; odzyskasz ją dopiero przy mana drainie."
     },
     "nimra": {
@@ -110,8 +110,8 @@
       "pool_hold": "Dobierz kartę, a potem wykonaj zwykły atak bronią w kukłę. Twoja pula pozostaje przy tobie; nie wydajesz jej na zwykły atak.",
       "pool_burn": "Dobierz kartę. Potem uruchom zapowiedziane spalenie przez ✓. Odłóż pozostawioną kartę do spalonych, nie na spód talii.",
       "pool_prison": "Dobierz kartę. ✓ symuluje uwięzienie odkrytej karty przez kukłę. Następne ✓ symuluje jej pokonanie: oddaj uwięzioną kartę na spód.",
-      "pool_drain": "Przygotujemy końcówkę talii: po tasowaniu pozostaw trzy karty wskazane w instrukcji, resztę połóż jako spalone. Dobierz kartę. ✓ uruchomi spalenie dwóch kart przy zbyt małej talii. Zbierz i przetasuj WSZYSTKIE karty.",
-      "pool_charge": "Pełna sakwa bywa argumentem. Pełna mana — kilkoma. Sprawdź, co zostaje z tobą po dobraniu ostatniej karty. Przygotuj 20 pkt zgodnie z instrukcją. Dobierz kartę, obejrzyj premie kolorów. Przy 21+ następna własna tura pomija dobór; ładunek zostaje do draina.",
+      "pool_drain": "Przygotujemy końcówkę talii: po tasowaniu pozostaw trzy karty wskazane w instrukcji, resztę połóż jako spalone. Dobierz kartę. ✓ uruchomi spalenie dwóch kart przy zbyt małej talii. Zbierz i przetasuj WSZYSTKIE karty. Po drainie wszystkie pasywy kolorów są znów zablokowane. Powrócą dopiero z kolejnymi kartami; drain odnawia jednorazową Nieustępliwość Brakki, a ponowny dobór czarnej many odblokowuje ją znów.",
+      "pool_charge": "Pełna sakwa bywa argumentem. Pełna mana — kilkoma. Sprawdź, co zostaje z tobą po dobraniu ostatniej karty. Przygotuj 20 pkt zgodnie z instrukcją. Dobierz kartę, obejrzyj premie kolorów. Przy 21+ następna własna tura pomija dobór; ładunek zostaje do draina. Pasywy nie działają od początku walki: właściwy kolor odblokowuje pasyw bez limitu tur. Gruba obwódka symbolu oznacza kumulowanie; cienka brak kumulacji. Sprawdź odblokowania swojego bohatera na karcie i w panelu statusów.",
       "pool_expire": "Nawet kiedy wszyscy czekają, świat zużywa się po trochu. Na koniec rundy jedna karta z wierzchu wygasa. Leży osobno od spalonych; odzyskasz ją dopiero przy mana drainie."
     },
     "erynd": {
@@ -128,8 +128,8 @@
       "pool_hold": "Dobierz kartę, a potem wykonaj zwykły atak bronią w kukłę. Twoja pula pozostaje przy tobie; nie wydajesz jej na zwykły atak.",
       "pool_burn": "Dobierz kartę. Potem uruchom zapowiedziane spalenie przez ✓. Odłóż pozostawioną kartę do spalonych, nie na spód talii.",
       "pool_prison": "Dobierz kartę. ✓ symuluje uwięzienie odkrytej karty przez kukłę. Następne ✓ symuluje jej pokonanie: oddaj uwięzioną kartę na spód.",
-      "pool_drain": "Przygotujemy końcówkę talii: po tasowaniu pozostaw trzy karty wskazane w instrukcji, resztę połóż jako spalone. Dobierz kartę. ✓ uruchomi spalenie dwóch kart przy zbyt małej talii. Zbierz i przetasuj WSZYSTKIE karty.",
-      "pool_charge": "Pełna sakwa bywa argumentem. Pełna mana — kilkoma. Sprawdź, co zostaje z tobą po dobraniu ostatniej karty. Przygotuj 20 pkt zgodnie z instrukcją. Dobierz kartę, obejrzyj premie kolorów. Przy 21+ następna własna tura pomija dobór; ładunek zostaje do draina.",
+      "pool_drain": "Przygotujemy końcówkę talii: po tasowaniu pozostaw trzy karty wskazane w instrukcji, resztę połóż jako spalone. Dobierz kartę. ✓ uruchomi spalenie dwóch kart przy zbyt małej talii. Zbierz i przetasuj WSZYSTKIE karty. Po drainie wszystkie pasywy kolorów są znów zablokowane. Powrócą dopiero z kolejnymi kartami; drain odnawia jednorazową Nieustępliwość Brakki, a ponowny dobór czarnej many odblokowuje ją znów.",
+      "pool_charge": "Pełna sakwa bywa argumentem. Pełna mana — kilkoma. Sprawdź, co zostaje z tobą po dobraniu ostatniej karty. Przygotuj 20 pkt zgodnie z instrukcją. Dobierz kartę, obejrzyj premie kolorów. Przy 21+ następna własna tura pomija dobór; ładunek zostaje do draina. Pasywy nie działają od początku walki: właściwy kolor odblokowuje pasyw bez limitu tur. Gruba obwódka symbolu oznacza kumulowanie; cienka brak kumulacji. Sprawdź odblokowania swojego bohatera na karcie i w panelu statusów.",
       "pool_expire": "Nawet kiedy wszyscy czekają, świat zużywa się po trochu. Na koniec rundy jedna karta z wierzchu wygasa. Leży osobno od spalonych; odzyskasz ją dopiero przy mana drainie."
     }
   }

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dnd_board_game.inventory.magic_items import effective_ability_modifier
+
 from dnd_board_game.actors.resources import uses_physical_mana, uses_shared_mana
 
 from dataclasses import dataclass, replace
@@ -1305,7 +1307,7 @@ def resolve_rage(
     updated_state = replace_actor(action.state, actor_after)
     rage_rounds = (
         max(1, ability_modifier(actor.ability_scores.constitution)
-            + ability_modifier(actor.ability_scores.strength))
+            + effective_ability_modifier(actor, 'strength'))
         if uses_physical_mana(actor) and not uses_shared_mana(actor) else None
     )
     effect = ActiveEffect(
@@ -1875,6 +1877,14 @@ def plan_sneak_attack(
     source: AttackSource,
     roll_mode: RollMode,
 ) -> SneakAttackPlan:
+    from dnd_board_game.rules.charge_rolls import uses_charge
+    if uses_charge(attacker):
+        keys = {m.stacking_key for m in source.attack_roll_request.modifiers}
+        dice = int(actor_has_feature(attacker, 'mana_shadow_strike') and 'hidden_attacker_advantage' in keys)
+        dice += 2 * int(actor_has_feature(attacker, 'mana_flanking_strike') and 'flanking_advantage' in keys)
+        if dice and target.faction != attacker.faction and source.source_type == AttackSourceType.WEAPON:
+            return SneakAttackPlan(True, f'Pasywy nasycenia: +{dice}k6.', sneak_attack_source_with_dice(source, dice))
+        return SneakAttackPlan(False, 'Wymagana mana oraz ukrycie lub własna flanka.', source)
     if uses_physical_mana(attacker) and (current_actor(state).id != attacker.id or (state.shared_mana is not None and state.shared_mana.turn_actor != str(attacker.id))):
         return SneakAttackPlan(False, "Atak z cienia działa raz we własnej turze.", source)
     mira_killer = actor_has_feature(attacker, "mira_shadow_killer")

@@ -1,6 +1,6 @@
 #mission-panel {max-width:1080px;margin:0 auto 1rem;padding:1.4rem;}
 .mission-toolbar {display:flex;flex-wrap:wrap;align-items:center;gap:.7rem;margin-bottom:1rem;}
-.mission-art {width:100%;max-height:360px;object-fit:cover;border-radius:8px;margin-bottom:1.2rem;}
+.mission-art {width:100%;max-height:360px;object-fit:contain;border-radius:8px;margin-bottom:1.2rem;}
 .mission-map {max-height:420px;object-fit:contain;width:100%;background:#ede3d1;}
 .mission-prose {font-size:1.15rem;line-height:1.8;max-width:80ch;margin:1rem 0 1.5rem;white-space:normal;}
 .mission-journal {border-left:3px solid #cda553;padding:1rem;}
@@ -11,3 +11,110 @@
 #mission-panel a {color:#e8c77f;}
 #mission-panel a.button {display:inline-block;text-decoration:none;border:1px solid #555;border-radius:6px;background:#30312e;padding:.65rem .85rem;color:#eee;}
 .mission-art {object-position:center 25%;}
+
+.mission-tile-setup {display:grid;grid-template-columns:minmax(220px,.9fr) minmax(0,1.1fr);gap:1.5rem;align-items:center;}
+.mission-tile-gallery {display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:1rem;align-items:start;}
+.mission-tile-gallery.single {grid-template-columns:minmax(0,1fr);}
+.mission-tile-gallery figure {margin:0;min-width:0;text-align:center;}
+.mission-tile-preview svg {display:block;width:100%;height:min(30dvh,220px);}
+.mission-tile-gallery.single .mission-tile-preview svg {height:min(48dvh,380px);}
+.mission-tile-gallery figcaption {margin-top:.5rem;font-size:.9rem;}
+.mission-tile-gallery figcaption small {display:block;color:#bcb5a6;margin-top:.2rem;}
+.mission-tile-instruction {min-width:0;}
+.mission-tile-instruction .mission-prose {font-size:1.05rem;line-height:1.65;}
+.mission-figurine-preview {text-align:center;}
+.mission-figurine-preview svg {height:180px;fill:#d3b365;stroke:#7b653b;stroke-width:2;}
+@media(max-width:760px){
+  .mission-tile-setup {grid-template-columns:minmax(0,1fr);gap:1rem;}
+  .mission-tile-gallery.single .mission-tile-preview svg {height:210px;}
+  .mission-tile-preview svg {height:130px;}
+  .mission-figurine-preview svg {height:100px;}
+}
+
+.mission-narrative--portrait,
+.mission-narrative--landscape {display:grid;gap:1.5rem;align-items:start;}
+.mission-narrative--portrait {grid-template-columns:minmax(180px,280px) minmax(0,1fr);}
+.mission-narrative--landscape {grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);}
+.mission-narrative--portrait .mission-art,
+.mission-narrative--landscape .mission-art {height:auto;max-height:none;object-fit:contain;}
+.mission-narrative--portrait .mission-art {max-height:430px;}
+.mission-narrative-text {min-width:0;}
+.mission-narrative--landscape .mission-prose {font-size:1.05rem;line-height:1.65;}
+@media(max-width:760px){
+  .mission-narrative--portrait,.mission-narrative--landscape {grid-template-columns:minmax(0,1fr);gap:.5rem;}
+  .mission-narrative--portrait .mission-art {width:min(260px,75%);max-height:320px;margin:0 auto 1rem;}
+}
+
+#mission-panel.mission-reading {height:var(--mission-room,calc(100dvh - 125px));min-height:0;display:flex;flex-direction:column;overflow:hidden;box-sizing:border-box;}
+.mission-reading .mission-toolbar {flex-shrink:0;}
+.mission-reading .mission-toolbar details[open] {max-height:90px;overflow-y:auto;}
+.mission-reading .mission-narrative {flex:1;min-height:0;grid-template-rows:minmax(0,1fr);}
+.mission-reading .mission-art {height:100%;max-height:100%;object-fit:contain;object-position:top;margin:0;}
+.mission-reading .mission-narrative-text {height:100%;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding-right:.5rem;}
+.mission-reading .mission-narrative,.mission-reading .mission-narrative-text {scrollbar-width:thin;scrollbar-color:#8b7956 #252b29;}
+.mission-reading .mission-story-controls {display:flex;align-items:center;justify-content:space-between;gap:.75rem;flex-shrink:0;padding-top:.75rem;}
+.mission-scroll-controls {display:flex;align-items:center;gap:.5rem;}
+.mission-scroll-controls button {min-width:44px;min-height:44px;font-size:1.4rem;}
+.mission-scroll-controls small {color:#d4cab7;}
+.mission-reading .mana-decisions {margin:0;}
+@media(max-width:760px){
+  .mission-reading .mission-narrative {display:block;overflow-y:auto;overscroll-behavior:contain;}
+  .mission-reading .mission-narrative-text {height:auto;overflow:visible;padding:0;}
+  .mission-reading .mission-art {display:block;width:100%;height:auto;max-height:180px;margin:0 auto 1rem;}
+  .mission-reading .mission-narrative--portrait .mission-art {width:auto;max-width:100%;}
+  .mission-scroll-controls {flex-wrap:wrap;max-width:150px;}
+  .mission-scroll-controls small {flex-basis:100%;font-size:.7rem;}
+  .mission-reading .mission-toolbar {gap:.4rem;margin-bottom:.65rem;}
+}
+
+/* The picture stays visible; only prose scrolls, choices stay within reach. */
+.mission-reading .mission-tile-setup {flex:1;min-height:0;grid-template-rows:minmax(0,1fr);align-items:start;}
+.mission-reading .mission-tile-setup > div:first-child {height:100%;min-height:0;overflow:auto;}
+.mission-reading .mission-tile-gallery.single .mission-tile-preview svg {height:min(38dvh,300px);}
+.mission-reading .mission-tile-instruction {height:100%;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;padding-right:.5rem;}
+.mission-reading .mission-tile-instruction > .mana-decisions:empty {display:none;}
+.mission-reading.has-multiple-choices .mission-scroll-controls {flex-wrap:wrap;flex:0 0 112px;}
+.mission-reading.has-multiple-choices .mission-scroll-controls small {flex-basis:100%;font-size:.7rem;}
+.mission-reading.has-multiple-choices .mission-story-controls > .mana-decisions {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));flex:1;gap:.5rem;}
+.mission-reading.has-multiple-choices .mana-rune-choice {min-width:0;padding:.55rem .7rem;font-size:.9rem;}
+.mission-reading.has-multiple-choices .mana-rune-choice small {display:none;}
+@media(max-width:760px){
+  .mission-reading .mission-tile-setup {display:block;overflow-y:auto;}
+  .mission-reading .mission-tile-setup > div:first-child {height:auto;overflow:visible;}
+  .mission-reading .mission-tile-instruction {height:auto;overflow:visible;padding:0;}
+  .mission-reading .mission-tile-gallery.single .mission-tile-preview svg {height:170px;}
+  .mission-reading.has-multiple-choices .mission-story-controls {flex-direction:column;align-items:stretch;gap:.5rem;}
+  .mission-reading.has-multiple-choices .mission-scroll-controls {flex:0 0 auto;max-width:none;flex-wrap:nowrap;}
+  .mission-reading.has-multiple-choices .mission-scroll-controls small {flex-basis:auto;}
+  .mission-reading.has-multiple-choices .mana-rune-choice {padding:.45rem;font-size:.8rem;gap:.4rem;}
+  .mission-reading.has-multiple-choices .mana-rune-choice .panel-symbol {width:24px;height:24px;}
+}
+
+/* One browsed item and a stable loadout; the inventory can grow without more buttons. */
+.equipment-heading {display:flex; align-items:center; justify-content:space-between; gap:1rem}
+.equipment-heading h2 {margin:.4rem 0}
+.equipment-layout {display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; max-height:47vh}
+.equipment-preview, .equipment-loadout {overflow:auto; min-width:0}
+.equipment-preview h3 {margin:.4rem 0}
+.equipment-preview p {margin:.4rem 0; line-height:1.35}
+.equipment-art {height:18vh; background:#fff; border-radius:8px; text-align:center; padding:.35rem}
+.equipment-art img {height:100%; width:100%; object-fit:contain}
+.equipment-loadout>div {padding:.45rem .7rem; border-bottom:1px solid #5a5138; display:grid; grid-template-columns:95px 1fr; gap:.5rem}
+.equipment-loadout span {overflow-wrap:anywhere}
+.equipment-notice {font-size:.9rem; margin:.6rem 0; min-height:1.3em}
+.equipment-controls {display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.4rem}
+.equipment-controls button {font-size:.85rem; min-height:42px; padding:.35rem .6rem}
+@media(max-width:650px) {
+ .equipment-layout {grid-template-columns:1fr; max-height:none}
+ .equipment-art {height:160px}
+ .equipment-controls {grid-template-columns:repeat(2,minmax(0,1fr))}
+ .equipment-loadout {max-height:none}
+}
+@media(min-width:651px) {
+ #mission-panel.mission-equipment {height:var(--mission-room,calc(100dvh - 125px));display:flex;flex-direction:column;box-sizing:border-box;overflow:hidden}
+ .mission-equipment .mission-toolbar {margin-bottom:.5rem;flex-shrink:0}
+ .mission-equipment .equipment-layout {flex:1;min-height:0;max-height:none}
+ .mission-equipment .equipment-art {height:clamp(70px,16vh,150px)}
+ .mission-equipment .equipment-heading,.mission-equipment .equipment-controls,.mission-equipment .equipment-notice {flex-shrink:0}
+ .mission-equipment .equipment-loadout>div {grid-template-columns:130px 1fr;padding:.35rem .5rem;font-size:.9rem}
+}

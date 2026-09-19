@@ -1,0 +1,142 @@
+[
+  {
+    "party": 3,
+    "scene": "Nessa — dodatkowa mikstura",
+    "result": "compromise",
+    "rounds": 2,
+    "deck_remaining": 16,
+    "attempts": 4,
+    "supports": 1,
+    "cards_reported": 14
+  },
+  {
+    "party": 3,
+    "scene": "Wóz w koleinie",
+    "result": "success",
+    "rounds": 4,
+    "deck_remaining": 1,
+    "attempts": 9,
+    "supports": 1,
+    "cards_reported": 32
+  },
+  {
+    "party": 3,
+    "scene": "Zbrojownia — zabezpieczenie i przeszukanie",
+    "result": "success",
+    "rounds": 2,
+    "deck_remaining": 14,
+    "attempts": 6,
+    "supports": 0,
+    "cards_reported": 16
+  },
+  {
+    "party": 3,
+    "scene": "Kwatera — dokumenty i skrytka",
+    "result": "success",
+    "rounds": 2,
+    "deck_remaining": 14,
+    "attempts": 6,
+    "supports": 0,
+    "cards_reported": 16
+  },
+  {
+    "party": 4,
+    "scene": "Nessa — dodatkowa mikstura",
+    "result": "success",
+    "rounds": 3,
+    "deck_remaining": 9,
+    "attempts": 8,
+    "supports": 2,
+    "cards_reported": 33
+  },
+  {
+    "party": 4,
+    "scene": "Wóz w koleinie",
+    "result": "failure",
+    "rounds": 3,
+    "deck_remaining": 3,
+    "attempts": 12,
+    "supports": 0,
+    "cards_reported": 37
+  },
+  {
+    "party": 4,
+    "scene": "Zbrojownia — zabezpieczenie i przeszukanie",
+    "result": "success",
+    "rounds": 4,
+    "deck_remaining": 0,
+    "attempts": 12,
+    "supports": 1,
+    "cards_reported": 40
+  },
+  {
+    "party": 4,
+    "scene": "Kwatera — dokumenty i skrytka",
+    "result": "success",
+    "rounds": 3,
+    "deck_remaining": 4,
+    "attempts": 12,
+    "supports": 0,
+    "cards_reported": 36
+  },
+  {
+    "party": 5,
+    "scene": "Nessa — dodatkowa mikstura",
+    "result": "compromise",
+    "rounds": 3,
+    "deck_remaining": 12,
+    "attempts": 11,
+    "supports": 3,
+    "cards_reported": 40
+  },
+  {
+    "party": 5,
+    "scene": "Wóz w koleinie",
+    "result": "success",
+    "rounds": 3,
+    "deck_remaining": 19,
+    "attempts": 10,
+    "supports": 1,
+    "cards_reported": 33
+  },
+  {
+    "party": 5,
+    "scene": "Kwatera — dokumenty i skrytka",
+    "result": "success",
+    "rounds": 2,
+    "deck_remaining": 24,
+    "attempts": 10,
+    "supports": 0,
+    "cards_reported": 26
+  },
+  {
+    "party": 6,
+    "scene": "Nessa — dodatkowa mikstura",
+    "result": "success",
+    "rounds": 4,
+    "deck_remaining": 1,
+    "attempts": 18,
+    "supports": 4,
+    "cards_reported": 64
+  },
+  {
+    "party": 6,
+    "scene": "Wóz w koleinie",
+    "result": "failure",
+    "rounds": 4,
+    "deck_remaining": 0,
+    "attempts": 17,
+    "supports": 2,
+    "cards_reported": 60
+  },
+  {
+    "party": 6,
+    "scene": "Kwatera — dokumenty i skrytka",
+    "result": "success",
+    "rounds": 2,
+    "deck_remaining": 33,
+    "attempts": 11,
+    "supports": 0,
+    "cards_reported": 30
+  }
+]

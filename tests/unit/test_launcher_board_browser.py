@@ -67,6 +67,8 @@ window.addEventListener('load',async()=>{
    check(contract.slots.length===7 && !contract.slots.includes(25),'empty party can continue');
    const first=document.querySelector('[data-board-rune="6"] input');
    const second=document.querySelector('[data-board-rune="7"] input');
+   const scenarioRunes=[...document.querySelectorAll('#scenario-selection-step [data-board-rune]')]
+     .map(card=>Number(card.dataset.boardRune));
    await press(6);
    await until(()=>first.checked && contract.slots.includes(25));
    await press(6);
@@ -77,14 +79,14 @@ window.addEventListener('load',async()=>{
    await until(()=>contract.slots.includes(25));
    check(!second.checked,'late board event overrode screen choice');
    await press(25);
-   await until(()=>JSON.stringify(contract.slots)==='[6]');
+   await until(()=>JSON.stringify(contract.slots)===JSON.stringify(scenarioRunes));
    check(contract.back,'scenario has no back control');
    await press(29);
    await until(()=>contract.slots.includes(25));
    check(first.checked,'back lost selected party');
    await press(25);
-   await until(()=>JSON.stringify(contract.slots)==='[6]');
-   await press(6);
+   await until(()=>JSON.stringify(contract.slots)===JSON.stringify(scenarioRunes));
+   await press(scenarioRunes[0]);
    await until(()=>submission);
    check(submission.path==='/new-game/start','scenario selection did not start game');
    check(submission.values.some(([key,value])=>key==='character_ids' && value===first.value),'missing selected hero');

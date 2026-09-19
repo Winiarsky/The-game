@@ -15,8 +15,12 @@ w kanonie; poniższa charakterystyka jest roboczym rozwinięciem roli, nie nową
 
 Stałe intro, publikowane osobno w `text/hero_erynd.md`:
 
-Erynd przyglądał się śladom, zanim zaufał opowieści. Być może dlatego rzadko zaskakiwała go droga, choć ludzie nadal potrafili.
+Erynd przyglądał się śladom, zanim zaufał opowieści. Elf z łukiem potrafił zatrzymać się przy pozornie pustym skrawku drogi i znaleźć tam więcej do przemyślenia niż inni przy pełnym stole.
+
+Nie spieszył się z wnioskami. Ziemia rzadko kłamała, choć łatwo było źle ją zrozumieć; ludzie mieli pod tym względem znacznie bogatszy repertuar. Być może dlatego droga zaskakiwała go rzadziej niż rozmówcy.
 
 Instrukcja generowania: zachowaj ten sam fragment niezależnie od składu drużyny;
 przedstaw wyłącznie bohaterów wybranych do gry. W scenach opisz jedną reakcję,
 nie odbierając graczowi decyzji. Edycja tego profilu nie nadpisuje automatycznie tekstów.
+
+Oprawa ilustracji w tej misji: `profiles/visual_style.md`; aktywny wariant obrazu wybiera `visuals.json`.

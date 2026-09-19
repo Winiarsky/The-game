@@ -97,7 +97,8 @@ def carried_weight_lb(actor: Actor) -> float:
 def carrying_capacity_lb(actor: Actor) -> float:
     """Return the standard 5e carrying capacity: Strength score × 15 lb."""
 
-    return max(0, actor.ability_scores.strength) * 15.0
+    from .magic_items import effective_ability_score
+    return max(0, effective_ability_score(actor, 'strength')) * 15.0
 
 
 def remaining_capacity_lb(actor: Actor) -> float:

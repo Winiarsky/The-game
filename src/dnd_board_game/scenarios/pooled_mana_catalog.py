@@ -21,10 +21,19 @@ def load_catalog(path: str = str(DEFAULT_PATH)) -> dict[str, object]:
             raise ValueError("Nieprawidłowe wartości kolorów bohatera.")
         if set(hero["color_passives"]) != set(COLORS):
             raise ValueError("Bohater wymaga pięciu pasywów kolorów.")
-        allowed = {"melee_damage", "ranged_damage", "spell_damage", "attack", "ac", "heal", "heal_party", "heal_weakest", "burn_discount", "save_all", *("save_" + a for a in ("strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"))}
+        allowed = {"feature", "melee_damage", "ranged_damage", "spell_damage", "attack", "ac", "heal", "heal_party", "heal_weakest", "burn_discount", "save_all", *("save_" + a for a in ("strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma"))}
         for passive in hero["color_passives"].values():
             if passive["kind"] not in allowed or type(passive["value"]) is not int or passive["value"] < 1 or type(passive["cap"]) is not int or passive["cap"] < 0:
                 raise ValueError("Nieprawidłowy pasyw koloru.")
+            expected_stacking = (passive['kind'] != 'feature' and not passive['kind'].startswith('heal')
+                                 and (passive['cap'] == 0 or passive['cap'] > passive['value']))
+            if passive.get('stackable') is not expected_stacking:
+                raise ValueError('Obwódka kumulacji musi odpowiadać regule i limitowi pasywu.')
+            if passive['kind'] == 'feature':
+                from dnd_board_game.actors.mana_passives import FEATURE_LABELS
+                features = passive.get('features', ())
+                if not features or len(features) != len(set(features)) or any(f not in FEATURE_LABELS for f in features) or passive['value'] != 1 or passive['cap'] != 1:
+                    raise ValueError('Odblokowanie wymaga znanych, niepowtarzalnych cech i limitu 1.')
     for key, value in data["abilities"].items():
         if value["hero"] not in data["heroes"]:
             raise ValueError("Zdolność ma nieznanego właściciela.")

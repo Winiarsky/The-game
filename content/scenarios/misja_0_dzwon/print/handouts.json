@@ -1,0 +1,86 @@
+{
+  "order": {
+    "title": "Rozkaz odbioru mienia",
+    "subtitle": "Gildia · Dyspozycja N/17 · Posterunek przy trakcie",
+    "paragraphs": [
+      "Po śmierci dowódcy i ewakuacji załogi poleca się odebrać mienie pozostawione w zamkniętym posterunku. Ładunek należy dostarczyć w całości do siedziby Gildii i przekazać służbom zaopatrzenia.",
+      "Drużynie powierza się: wóz, muła, liny, rampę załadunkową oraz klucz do bramy. Sprzęt transportowy i klucz podlegają zwrotowi."
+    ],
+    "headers": [
+      "Odebrano",
+      "Miejsce / oznaczenie",
+      "Przedmiot odbioru",
+      "Uwagi o stanie"
+    ],
+    "rows": [
+      [
+        "□",
+        "Zbrojownia · Z-1, Z-2",
+        "Dwie skrzynie wyposażenia i narzędzi",
+        ""
+      ],
+      [
+        "□",
+        "Magazynek · M-1–M-5",
+        "Cztery worki zapasów i skrzynka racji",
+        ""
+      ],
+      [
+        "□",
+        "Kwatera dowódcy · K-1",
+        "Pakiet pozostawionych dokumentów",
+        ""
+      ]
+    ],
+    "after": [
+      "Wynagrodzenie: 10 sztuk złota na osobę po dostarczeniu wszystkich pozycji. Za każdą uszkodzoną partię ładunku potrąca się 2 sztuki złota ze wspólnej zapłaty.",
+      "Uwagi przy odbiorze: ........................................................................................",
+      "........................................................................................................................",
+      "Skład drużyny: .................................................................................................."
+    ],
+    "signature": "Z upoważnienia Gildii: Nessa",
+    "seal": "GILDIA · ZLECENIA I ZAOPATRZENIE"
+  },
+  "receipts": {
+    "title": "Pokwitowania dostaw",
+    "subtitle": "Egzemplarz dostawców · Posterunek przy trakcie",
+    "paragraphs": [
+      "Niżej wymienione dostawy przyjęto na potrzeby załogi. Należność pozostaje do wypłaty przy najbliższym rozliczeniu transportu.",
+      "Dostawcy: Borut oraz gospodarze z osady przy trakcie. Oryginały trzech pokwitowań spięto w jeden odpis zbiorczy."
+    ],
+    "headers": [
+      "Dzień dostawy",
+      "Przyjęto",
+      "Należność",
+      "Potwierdzenie"
+    ],
+    "rows": [
+      [
+        "3. dzień żniw",
+        "Mąka, 8 worków",
+        "32 sz",
+        "Przyjęto · A. Radan"
+      ],
+      [
+        "8. dzień żniw",
+        "Ser i racje na drogę",
+        "24 sz",
+        "Przyjęto · A. Radan"
+      ],
+      [
+        "12. dzień żniw",
+        "Owies, 10 worków",
+        "40 sz",
+        "Przyjęto · kwatermistrz"
+      ]
+    ],
+    "after": [
+      "Razem do wypłaty: 96 sztuk złota.",
+      "Adnotacja na odwrocie: „Zapłata przy następnym transporcie. Potwierdzić w kancelarii zaopatrzenia.”",
+      "Otrzymano dotychczas: ....................................................................................",
+      "Osoba przyjmująca dokumenty: ......................................................................."
+    ],
+    "signature": "Za dostawców: Borut",
+    "seal": "POSTERUNEK · PRZYJĘTO NA STAN"
+  }
+}

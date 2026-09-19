@@ -88,7 +88,10 @@ def expire_deck_effects(state: CombatState, effects: tuple[ActiveEffect, ...]) -
         hidden = tuple(h for h in hidden if h.actor_id not in ids)
     from .summoning import remove_summons
     state, _ = remove_summons(state, spell_id="spiritual_weapon")
-    return replace(state, condition_states=conditions, hidden_states=hidden), result.active_effects
+    from dnd_board_game.actors.mana_passives import reset_mana_passives
+    return replace(state, condition_states=conditions, hidden_states=hidden,
+                   actors=tuple(reset_mana_passives(a) for a in state.actors)), tuple(
+                       e for e in result.active_effects if e.kind != 'saturation_reaction_damage')
 
 
 def synchronize_shared_effects(state: CombatState, effects: tuple[ActiveEffect, ...]) -> tuple[CombatState, tuple[ActiveEffect, ...]]:
@@ -105,7 +108,16 @@ def synchronize_shared_effects(state: CombatState, effects: tuple[ActiveEffect, 
             from dnd_board_game.rules.shared_mana import sync_pool
             pool = replace(pool, catalog_version=2, values=tuple((h, tuple(hero_profile(h)["values"][c] for c in COLORS)) for h in pool.heroes))
             state = replace(state, shared_mana=sync_pool(state.shared_mana, pool))
-        effects = tuple(e for e in effects if not e.kind.startswith("charge_")) + charge_effects(pool, {h: hero_profile(h) for h in pool.heroes})
+        profiles = {h: hero_profile(h) for h in pool.heroes}
+        retired_markers = {'sneak_attack_used', 'first_blood_used', 'field_medic_step_used',
+                           'shared_nimble_used', 'shared_momentum_used'}
+        effects = tuple(e for e in effects if not (e.actor_id in profiles and e.kind in retired_markers))
+        from dnd_board_game.actors.mana_passives import apply_color_features
+        state = replace(state, actors=tuple(
+            apply_color_features(a, pool.hand(str(a.id)) if pool.phase not in {'setup', 'drain'} else (),
+                                 profiles[str(a.id)]['color_passives'])
+            if str(a.id) in profiles else a for a in state.actors))
+        effects = tuple(e for e in effects if not e.kind.startswith("charge_")) + charge_effects(pool, profiles, state.actors)
     from .shared_mana_features import synchronize_bastion
     effects = synchronize_bastion(state.actors, effects)
     normalized = []

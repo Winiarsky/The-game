@@ -11,7 +11,14 @@ from dnd_board_game.ui.training_arena import training_hero
 
 def game(heroes=('garran','brakka','dagna'), scene='nessa_raise'):
     s=build(tuple(training_hero(h) for h in heroes),scene_by_id(scene))
-    return r.shuffle(replace(s,stage='setup'))
+    s=r.begin_preparation(s)
+    while s.stage=='approach':
+        options=r.available_approaches(s)
+        chosen=next((p for p in options if '*' in p.supports), options[0])
+        s=r.select_approach(s,chosen.approach_id)
+    # These economy tests isolate support cost/consumption from authored edges.
+    s=replace(s,participants=tuple(replace(p,supports=('*',)) for p in s.participants))
+    return r.shuffle(s)
 
 
 def charged(s, hands, *, deck_size=None):
@@ -26,6 +33,7 @@ def charged(s, hands, *, deck_size=None):
 
 
 def settle(s):
+    if s.stage=='recovery': s=r.confirm_recovery(s)
     while s.mana.phase in {'reveal','burn'} and s.stage!='result':
         color=s.mana.deck[0]
         if color is None:
@@ -40,17 +48,17 @@ def test_draw_is_mandatory_offer_stays_and_21_stops_draw():
     with pytest.raises(ValueError): r.declare(s,0)
     s=r.take(s,0)
     assert s.mana.hand('garran')==('C',) and s.mana.offer==('B',)
-    s=r.advance(r.support(s,'brakka'))
+    s=r.advance(settle(r.support(s,'brakka')))
     assert s.actor.id=='brakka' and s.mana.offer==('B',) and s.mana.phase=='reveal'
     s=charged(s,{'garran':('B','B','B','C')})
     s=replace(s,stage='after_reaction')
     s=r.advance(s)
     assert s.mana.points('garran')==25 and s.mana.phase=='ready'
-    assert r.available_tiers(s)[-1]==(21,6,3)
+    assert r.available_tiers(s)[-1]==(21,6,1)
 
 
-@pytest.mark.parametrize('bonus,cost',[(0,1),(2,1),(4,2),(6,3)])
-def test_charged_hero_can_choose_cheaper_test_and_keeps_hand_on_failure(bonus,cost):
+@pytest.mark.parametrize('bonus,cost',[(0,1),(2,1),(4,1),(6,1)])
+def test_every_charge_tier_costs_one_and_keeps_hand_on_failure(bonus,cost):
     s=charged(game(),{'garran':('B','B','B')})
     s=r.declare(s,bonus);s=r.roll_check(s,1)
     assert s.stage=='after_action' and s.mana.pending_count==cost
@@ -61,7 +69,7 @@ def test_charged_hero_can_choose_cheaper_test_and_keeps_hand_on_failure(bonus,co
 
 def test_hit_uses_attribute_without_proficiency_and_applies_effect_before_cost():
     s=charged(game(),{'garran':('C','C','C')},deck_size=0)
-    s=replace(s,resistance=6)
+    s=replace(s,resistance=1+s.actor.impact_modifier+2)
     s=r.declare(s,0)
     assert s.check_modifier==s.actor.test_modifier
     s=r.roll_check(s,20)
@@ -88,27 +96,75 @@ def test_exact_last_card_paid_allows_next_turn_and_support_but_next_burn_drains(
     assert s.outcome=='failure'
 
 
-def test_support_nonstacking_consumed_only_by_own_test_and_no_burn():
-    s=charged(game(),{'garran':('N',),'brakka':('F',)})
-    before=s.mana
-    s=r.support(s,'dagna')
-    assert dict(s.aids)['dagna']==3 and s.mana==before
-    s=replace(s,stage='turn',turn=1,mana=replace(s.mana,actor='brakka'))
-    s=r.support(s,'dagna');assert dict(s.aids)['dagna']==3
-    s=replace(s,stage='turn',turn=2,mana=replace(s.mana,actor='dagna'))
-    s=r.declare(s,0)
-    assert s.check_modifier==s.actor.test_modifier+3 and not s.aids
+@pytest.mark.parametrize('natural', [1, 20])
+@pytest.mark.parametrize('scene', ['nessa_raise', 'sealed_cache'])
+def test_support_stacks_across_turns_and_all_expires_on_own_attempt(natural, scene):
+    s=charged(game(('erynd','garran','nimra'),scene),{})
+    def act(state, index):
+        return replace(state, stage='turn', turn=index,
+                       mana=replace(state.mana,actor=state.participants[index].id))
+    s=settle(r.support(s,'garran'))
+    assert dict(s.aids)['garran']==1 and len(s.mana.burned)==1
+    # Garran supports Nimra instead of using the bonus; it remains for later.
+    s=settle(r.support(act(s,1),'nimra'))
+    assert dict(s.aids)=={'garran':1,'nimra':1}
+    s=settle(r.support(act(s,2),'garran'))
+    s=settle(r.support(act(s,0),'garran'))
+    assert dict(s.aids)['garran']==3 and len(s.mana.burned)==4
+    s=r.declare(act(s,1),0)
+    assert s.check_modifier==s.actor.test_modifier+3
+    assert dict(s.aids)['garran']==3  # No attempt yet, including save/load.
+    s=r.Confrontation.from_data(json.loads(json.dumps(s.to_data())))
+    with pytest.raises(ValueError):r.roll_check(s,0)
+    after=r.roll_check(s,natural)
+    assert dict(after.aids)=={'nimra':1}
+    assert after.last_total==natural+s.actor.test_modifier+3
+    assert after.stage==('impact' if natural==20 else 'after_action')
+    if natural==20:after=r.roll_impact(after,1)
+    after=settle(after)
+    assert len(after.mana.burned)==5
+    again=r.declare(act(after,1),0)
+    assert again.check_modifier==again.actor.test_modifier
 
 
-def test_recovery_only_on_pick_and_physical_bottom_is_known():
+def test_cooperation_adds_one_without_stacking_from_duplicate_color_cards():
+    s=charged(game(),{'garran':('N','N')})
+    assert r.support_bonus(s)==2
+    supported=r.support(s,'dagna')
+    assert dict(supported.aids)['dagna']==2
+    assert supported.mana.phase=='burn' and supported.mana.pending_count==1
+    assert supported.mana.hand('garran')==('N','N')
+    with pytest.raises(ValueError):r.advance(supported)
+    with pytest.raises(ValueError):r.support(supported,'dagna')
+    supported=replace(settle(supported),stage='turn')
+    supported=settle(r.support(supported,'dagna'))
+    assert dict(supported.aids)['dagna']==4
+
+
+def test_support_without_card_to_burn_ends_confrontation():
+    s=charged(game(),{},deck_size=0)
+    result=r.support(s,'brakka')
+    assert result.outcome=='failure' and result.mana.phase=='drain'
+    with pytest.raises(ValueError):r.advance(result)
+
+
+def test_recovery_is_active_on_each_success_not_on_pick():
     s=charged(game(),{},deck_size=20)
     color=s.mana.burned[0]
     remaining=list(s.mana.deck);remaining.remove('Z');remaining.remove('C')
     s=replace(s,mana=replace(s.mana,deck=tuple(remaining),offer=('Z','C'),phase='choose',draw_due=True))
     s=r.take(s,0)
-    assert s.mana.deck[-1]==color and len(s.mana.burned)==9
-    s=r.support(s,'brakka')
-    assert len(s.mana.burned)==9
+    assert len(s.mana.burned)==10
+    supported=r.support(s,'brakka')
+    assert len(supported.mana.burned)==10
+    for _ in range(2):
+        s=r.roll_impact(r.roll_check(r.declare(s,0),20),1)
+        assert s.stage=='recovery' and len(s.mana.burned)==10
+        s=r.confirm_recovery(s)
+        assert s.mana.deck[-1]==color and len(s.mana.burned)==9
+        s=settle(s)
+        color=s.mana.burned[0]
+        s=replace(s,stage='turn')
 
 
 @pytest.mark.parametrize('guard',[True,False])

@@ -1,0 +1,19 @@
+{
+  "date": "2026-09-18",
+  "scope": "post-audit technical and UI fixes",
+  "passed": 93,
+  "skipped": 0,
+  "files": {
+    "test_mission_audit_fixes.py": 18,
+    "test_mission_recovery.py": 14,
+    "test_mission_zero.py": 38,
+    "test_effects.py": 9,
+    "test_initiative_panel.py": 10,
+    "test_mission_audit_browser.py": 2,
+    "test_confrontation_presentation_browser.py": 2
+  },
+  "real_wled_retested": false,
+  "physical_button_press_retested": false,
+  "browser_board_endpoint_tested": true,
+  "historical_playthroughs_preserved": true
+}

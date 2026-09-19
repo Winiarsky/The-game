@@ -1,1 +1,1 @@
-„Szlak jest przejezdny, ale po deszczu lubi kwestionować to określenie. Nie ciągnijcie koła na siłę, jeżeli zapadnie się w koleinę. Podłóżcie deski. Na miejscu powinna zostać drewniana podstawa pod dzwon.”
+„Szlak jest przejezdny, ale po deszczu lubi kwestionować to określenie. Nie ciągnijcie koła na siłę, jeżeli zapadnie się w koleinę. Podłóżcie deski. Na miejscu sprawdźcie oznaczenia skrzyń i stan worków, zanim zaczniecie ładować. Do Gildii mają wrócić rzeczy ze spisu, nie samo ich wspomnienie.”

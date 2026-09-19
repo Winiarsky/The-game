@@ -1,1 +1,3 @@
-Borut kiwa w stronę kwatery. „Pod oknem. Kapitan zawsze poprawiał tam deskę, gdy ktoś wchodził.” Ta wiadomość oszczędza szukania. Bez niej też można dokładnie obejrzeć pokój.
+„Dowódca odsuwał łóżko, kiedy zostawał sam. Widziałem, jak wnosiłem mu worek owsa. Podłoga przy ścianie jest wytarta, choć tam nikt nie chodził.”
+
+Wskazówka: ST wszystkich podejść podczas przeszukiwania kwatery jest niższe o 2. Nie gwarantuje znalezienia skrytki.

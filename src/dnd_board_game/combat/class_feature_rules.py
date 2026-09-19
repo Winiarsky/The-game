@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dnd_board_game.inventory.magic_items import effective_ability_score
+
 from dataclasses import dataclass, replace
 from math import ceil
 
@@ -440,7 +442,7 @@ def jump_distances(
     actor: Actor,
     active_effects: tuple[object, ...] = (),
 ) -> JumpDistances:
-    strength = max(0, actor.ability_scores.strength)
+    strength = max(0, effective_ability_score(actor, 'strength'))
     running_long = strength
     running_high = max(0, 3 + ability_modifier(strength))
     if actor_has_feature(actor, "second_story_work"):

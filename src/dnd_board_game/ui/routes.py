@@ -16,6 +16,7 @@ from uuid import uuid4
 
 from flask import (
     Flask,
+    abort,
     g,
     jsonify,
     redirect,
@@ -564,6 +565,15 @@ def create_app(
                 message=str(exc),
             ), 404
         return redirect(url_for("characters", deleted=character_id))
+
+    @app.get("/equipment-art/<name>.png")
+    def equipment_art_asset(name: str):
+        from dnd_board_game.physical_cards.equipment_art import artwork_path
+        try:
+            path = artwork_path(name)
+        except ValueError:
+            abort(404)
+        return send_from_directory(path.parent, path.name, conditional=True)
 
     @app.get("/scenario-assets/<path:filename>")
     def scenario_assets(filename: str):

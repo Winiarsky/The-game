@@ -17,7 +17,12 @@ from dnd_board_game.ui.training_arena import training_hero
 
 def simulate(template: rules.Confrontation, seed: int, *, cooperation: bool) -> tuple[bool,int,int]:
     rng=random.Random(seed)
-    state=rules.shuffle(replace(template,stage='setup'))
+    state=rules.begin_preparation(template)
+    while state.stage=='approach':
+        options=rules.available_approaches(state)
+        selected=max(options,key=lambda p:max(0,min(1,(21-p.dc+p.test_modifier)/20))*((p.die+1)/2+p.impact_modifier))
+        state=rules.select_approach(state,selected.approach_id)
+    state=rules.shuffle(state)
     deck=[c for c in COLORS for _ in range(state.mana.copies)]
     rng.shuffle(deck)
     state=replace(state,mana=replace(state.mana,deck=tuple(deck)))
@@ -32,7 +37,7 @@ def simulate(template: rules.Confrontation, seed: int, *, cooperation: bool) -> 
         elif state.stage=='turn':
             bonus=rules.available_tiers(state)[-1][1]
             chance=max(0,min(1,(21-state.actor.dc+state.actor.test_modifier+bonus+state.passive(state.actor.id,'test')+dict(state.aids).get(state.actor.id,0))/20))
-            targets=[p for p in state.participants if p.id!=state.actor.id and not dict(state.aids).get(p.id)]
+            targets=list(rules.support_targets(state))
             if cooperation and targets and chance<0.35:
                 target=min(targets,key=lambda p:p.dc-p.test_modifier)
                 state=rules.support(state,target.id)
@@ -40,6 +45,7 @@ def simulate(template: rules.Confrontation, seed: int, *, cooperation: bool) -> 
                 state=rules.declare(state,bonus);tests+=1
         elif state.stage=='check':state=rules.roll_check(state,rng.randint(1,20))
         elif state.stage=='impact':state=rules.roll_impact(state,rng.randint(1,state.actor.die))
+        elif state.stage=='recovery':state=rules.confirm_recovery(state)
         elif state.stage=='reaction':state=rules.react(state,rng.randint(1,4))
         else:state=rules.advance(state)
     raise RuntimeError('Konfrontacja nie zakończyła się w limicie operacji.')

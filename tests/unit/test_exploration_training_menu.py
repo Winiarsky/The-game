@@ -10,6 +10,9 @@ from dnd_board_game.ui.exploration_app import ExplorationUiSession
 from dnd_board_game.hardware.board_panel import panel_position
 from tests.unit.test_recruitment_arena import arena
 def send(s, action, **extra):
+    if action == "acknowledge":
+        from tests.unit.test_confrontation_presentation import choose_approaches
+        choose_approaches(s)
     return exploration.command(s, dict(action=action, revision=exploration.read_store(s)['revision'], **extra))
 
 

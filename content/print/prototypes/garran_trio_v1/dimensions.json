@@ -1,0 +1,46 @@
+{
+  "paper_mm": [
+    210,
+    297
+  ],
+  "sheet_mm": [
+    190,
+    277
+  ],
+  "card_mm": [
+    63,
+    88
+  ],
+  "card_orientation": "landscape",
+  "exposed_mm": 18,
+  "slot_height_mm": 66,
+  "row_pitch_mm": 33.5,
+  "same_side_pitch_mm": 67.0,
+  "slots": [
+    {
+      "color": "C",
+      "side": "left",
+      "center_y_mm": 103.75
+    },
+    {
+      "color": "B",
+      "side": "right",
+      "center_y_mm": 137.25
+    },
+    {
+      "color": "Z",
+      "side": "left",
+      "center_y_mm": 170.75
+    },
+    {
+      "color": "F",
+      "side": "right",
+      "center_y_mm": 204.25
+    },
+    {
+      "color": "N",
+      "side": "left",
+      "center_y_mm": 237.75
+    }
+  ]
+}

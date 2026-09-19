@@ -1,0 +1,461 @@
+{
+  "id": "garran",
+  "name": "Garran",
+  "role": "Żelazna Straż — obrona pierwszej linii",
+  "level": 3,
+  "hp": 28,
+  "ac": 18,
+  "speed": 30,
+  "initiative": 2,
+  "spell_dc": 14,
+  "abilities": [
+    [
+      "Siła",
+      18,
+      4
+    ],
+    [
+      "Zręczność",
+      14,
+      2
+    ],
+    [
+      "Kondycja",
+      15,
+      2
+    ],
+    [
+      "Inteligencja",
+      9,
+      -1
+    ],
+    [
+      "Mądrość",
+      13,
+      1
+    ],
+    [
+      "Charyzma",
+      11,
+      0
+    ]
+  ],
+  "weapons": [
+    "Miecz: +4 do trafienia; 1k8 + 4 cięte",
+    "Kusza: +2 do trafienia; 1k8 + 2 kłute"
+  ],
+  "saves": [
+    "Siła +4",
+    "Zręczność +2",
+    "Kondycja +2",
+    "Inteligencja -1",
+    "Mądrość +1",
+    "Charyzma +0"
+  ],
+  "skills": [
+    "Atletyka +4",
+    "Zastraszanie +0",
+    "Percepcja +1",
+    "Sztuka przetrwania +1"
+  ],
+  "equipment": [
+    "Miecz ×1",
+    "Tarcza ×1",
+    "Kolczuga ×1",
+    "Kusza ×1",
+    "Bełt do kuszy ×20",
+    "Pakiet odkrywcy ×1",
+    "Zwykłe ubranie ×1",
+    "Sakiewka ×1",
+    "Zestaw kości ×1"
+  ],
+  "keep": 1,
+  "capacity": null,
+  "cards": [
+    {
+      "id": "second_wind",
+      "name": "Drugi oddech",
+      "key": "Q",
+      "timing": "A",
+      "cost": [],
+      "description": "Co najmniej 6 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Rzuć 1k10 i dodaj modyfikator Kondycji. Odzyskaj tyle PW, najwyżej do swojego maksimum. Leczenie zajmuje akcję główną, więc konkuruje ze zwykłym atakiem.",
+      "panel_slot": 6,
+      "sections": [
+        [
+          "Ładunek",
+          "Co najmniej 6 pkt. Pula zostaje po użyciu."
+        ],
+        [
+          "Akcja",
+          "Akcja główna"
+        ],
+        [
+          "Spalanie",
+          "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+        ],
+        [
+          "Efekt",
+          "Rzuć 1k10 i dodaj modyfikator Kondycji. Odzyskaj tyle PW, najwyżej do swojego maksimum. Leczenie zajmuje akcję główną, więc konkuruje ze zwykłym atakiem."
+        ]
+      ]
+    },
+    {
+      "id": "defensive_stance",
+      "name": "Pozycja obronna",
+      "key": "R",
+      "timing": "D",
+      "cost": [],
+      "description": "Bez many; normalny koszt akcji i ograniczenia użycia. Otrzymujesz +2 KP. Każda zmiana pola kończy postawę; ponowne użycie nie zwiększa tej premii. Do mana draina, chyba że opisany warunek lub koncentracja zakończy wcześniej.",
+      "panel_slot": 9,
+      "sections": [
+        [
+          "Ładunek",
+          "0 pkt — dostępna bez naładowania."
+        ],
+        [
+          "Akcja",
+          "Akcja dodatkowa"
+        ],
+        [
+          "Spalanie",
+          "0 kart."
+        ],
+        [
+          "Efekt",
+          "Otrzymujesz +2 KP. Każda zmiana pola kończy postawę; ponowne użycie nie zwiększa tej premii. Działa do mana draina; wskazane warunki mogą zakończyć wcześniej."
+        ]
+      ]
+    },
+    {
+      "id": "garran_command_halt",
+      "name": "Rozkaz: Stać!",
+      "key": "A",
+      "timing": "A",
+      "cost": [],
+      "description": "Co najmniej 6 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Wybierz wroga w zasięgu 60 ft (12 pól). Aplikacja wykonuje jego obronę Mądrości przeciw ST 14. Przy porażce wróg ma połowę ruchu i nie może używać reakcji. Przy sukcesie nie nakładasz efektu. Do początku następnej tury źródła, chyba że efekt wykorzystano wcześniej.",
+      "panel_slot": 10,
+      "sections": [
+        [
+          "Ładunek",
+          "Co najmniej 6 pkt. Pula zostaje po użyciu."
+        ],
+        [
+          "Akcja",
+          "Akcja główna"
+        ],
+        [
+          "Spalanie",
+          "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+        ],
+        [
+          "Efekt",
+          "Wybierz wroga w zasięgu 60 ft (12 pól). Aplikacja wykonuje jego obronę Mądrości przeciw ST 14. Przy porażce wróg ma połowę ruchu i nie może używać reakcji. Przy sukcesie nie nakładasz efektu. Działa do początku następnej tury postaci, która użyła zdolności, lub do wcześniejszego wykorzystania."
+        ]
+      ]
+    },
+    {
+      "id": "garran_guard_companion",
+      "name": "Osłona towarzysza",
+      "key": "AUTO",
+      "timing": "R",
+      "cost": [],
+      "description": "Bez many; normalny koszt akcji i ograniczenia użycia. Przed rozstrzygnięciem pojedynczego ataku na sąsiadującego sojusznika przejmij ten atak na siebie. Zużywasz reakcję. Nie obejmuje ataków obszarowych.",
+      "panel_slot": 13,
+      "sections": [
+        [
+          "Ładunek",
+          "0 pkt — dostępna bez naładowania."
+        ],
+        [
+          "Akcja",
+          "Reakcja"
+        ],
+        [
+          "Spalanie",
+          "0 kart."
+        ],
+        [
+          "Efekt",
+          "Przed rozstrzygnięciem pojedynczego ataku na sąsiadującego sojusznika przejmij ten atak na siebie. Zużywasz reakcję. Nie obejmuje ataków obszarowych."
+        ]
+      ]
+    },
+    {
+      "id": "shield_bash",
+      "name": "Uderzenie tarczą",
+      "key": "E",
+      "timing": "D",
+      "cost": [],
+      "description": "Co najmniej 12 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Wybierz sąsiadującego wroga. Rzuć k20 + modyfikator Siły + naładowanie; aplikacja rzuca za wroga i dodaje jego modyfikator testu. Musisz uzyskać wyższy wynik — remis wygrywa wróg. Wygrana: 1k6 + modyfikator Siły obrażeń i odepchnięcie o pole, jeśli jest wolne. Przegrana: brak efektu. Czerwona: +1k6 obrażeń (maks. 2) Łącznie najwyżej 3 podbicia, każde kosztuje dodatkowe 2 spalone karty; kolor jest symbolem wariantu, nie wymaganiem puli.",
+      "panel_slot": 8,
+      "sections": [
+        [
+          "Ładunek",
+          "Co najmniej 12 pkt. Pula zostaje po użyciu."
+        ],
+        [
+          "Akcja",
+          "Akcja dodatkowa"
+        ],
+        [
+          "Spalanie",
+          "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+        ],
+        [
+          "Efekt",
+          "Wybierz sąsiadującego wroga. Rzuć k20 + modyfikator Siły + naładowanie; aplikacja rzuca za wroga i dodaje jego modyfikator testu. Musisz uzyskać wyższy wynik — remis wygrywa wróg. Wygrana: 1k6 + modyfikator Siły obrażeń i odepchnięcie o pole, jeśli jest wolne. Przegrana: brak efektu."
+        ],
+        [
+          "Podbicia",
+          "+1k6 obrażeń. Maks. 2 razy. Każde: +2 spalone karty. Łącznie maks. 2. Kolor runy nie wymaga tego koloru w puli ani w spaleniu."
+        ]
+      ]
+    },
+    {
+      "id": "garran_shield_wall",
+      "name": "Osłona tarczą",
+      "key": "S",
+      "timing": "D",
+      "cost": [],
+      "description": "Co najmniej 12 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Sąsiadujący sojusznicy otrzymują +2 KP. Ty nie otrzymujesz tej premii. Sojusznik poza sąsiedztwem traci ochronę. Do początku następnej tury źródła, chyba że efekt wykorzystano wcześniej. Biała: 5 tymczasowych PW jednemu sojusznikowi; różne cele (maks. 2) Łącznie najwyżej 3 podbicia, każde kosztuje dodatkowe 2 spalone karty; kolor jest symbolem wariantu, nie wymaganiem puli.",
+      "panel_slot": 11,
+      "sections": [
+        [
+          "Ładunek",
+          "Co najmniej 12 pkt. Pula zostaje po użyciu."
+        ],
+        [
+          "Akcja",
+          "Akcja dodatkowa"
+        ],
+        [
+          "Spalanie",
+          "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+        ],
+        [
+          "Efekt",
+          "Sąsiadujący sojusznicy otrzymują +2 KP. Ty nie otrzymujesz tej premii. Sojusznik poza sąsiedztwem traci ochronę. Działa do początku następnej tury postaci, która użyła zdolności, lub do wcześniejszego wykorzystania."
+        ],
+        [
+          "Podbicia",
+          "5 tymczasowych PW jednemu sojusznikowi; różne cele. Maks. 2 razy. Każde: +2 spalone karty. Łącznie maks. 2. Kolor runy nie wymaga tego koloru w puli ani w spaleniu."
+        ]
+      ]
+    },
+    {
+      "id": "garran_rally",
+      "name": "Mowa dowódcy",
+      "key": "D",
+      "timing": "A",
+      "cost": [],
+      "description": "Co najmniej 12 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Ty i słyszący sojusznicy w zasięgu 15 ft (3 pól) usuwacie Strach i macie przewagę pierwszego ataku: rzut dwiema k20, wyższy wynik. Do początku następnej tury źródła, chyba że efekt wykorzystano wcześniej. Biała: wybrany uczestnik odzyskuje 1k6 PW (maks. 2) Łącznie najwyżej 3 podbicia, każde kosztuje dodatkowe 2 spalone karty; kolor jest symbolem wariantu, nie wymaganiem puli.",
+      "panel_slot": 12,
+      "sections": [
+        [
+          "Ładunek",
+          "Co najmniej 12 pkt. Pula zostaje po użyciu."
+        ],
+        [
+          "Akcja",
+          "Akcja główna"
+        ],
+        [
+          "Spalanie",
+          "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+        ],
+        [
+          "Efekt",
+          "Ty i słyszący sojusznicy w zasięgu 15 ft (3 pól) usuwacie Strach i macie przewagę pierwszego ataku: rzut dwiema k20, wyższy wynik. Działa do początku następnej tury postaci, która użyła zdolności, lub do wcześniejszego wykorzystania."
+        ],
+        [
+          "Podbicia",
+          "wybrany uczestnik odzyskuje 1k6 PW. Maks. 2 razy. Każde: +2 spalone karty. Łącznie maks. 2. Kolor runy nie wymaga tego koloru w puli ani w spaleniu."
+        ]
+      ]
+    },
+    {
+      "id": "iron_bastion",
+      "name": "Żelazny bastion",
+      "key": "MENU",
+      "timing": "A",
+      "cost": [],
+      "description": "Co najmniej 21 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Uruchom aurę o promieniu 10 ft (2 pól). Ty i sojusznicy w niej macie premię do KP równą twojemu modyfikatorowi Siły oraz ochronę przed przymusowym przesunięciem. Nie opłacasz aury ponownie w kolejnych turach. Do mana draina, chyba że opisany warunek lub koncentracja zakończy wcześniej.",
+      "panel_slot": 7,
+      "sections": [
+        [
+          "Ładunek",
+          "Co najmniej 21 pkt. Pula zostaje po użyciu."
+        ],
+        [
+          "Akcja",
+          "Akcja główna"
+        ],
+        [
+          "Spalanie",
+          "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+        ],
+        [
+          "Efekt",
+          "Uruchom aurę o promieniu 10 ft (2 pól). Ty i sojusznicy w niej macie premię do KP równą twojemu modyfikatorowi Siły oraz ochronę przed przymusowym przesunięciem. Nie opłacasz aury ponownie w kolejnych turach. Działa do mana draina; wskazane warunki mogą zakończyć wcześniej."
+        ]
+      ]
+    },
+    {
+      "id": "counterattack_command",
+      "name": "Rozkaz: Kontratak!",
+      "key": "MENU",
+      "timing": "A",
+      "cost": [],
+      "description": "Co najmniej 21 pkt. Zachowaj pulę; spal 1 kartę z wierzchu po efekcie. Wybierz sojusznika w zasięgu 15 ft (3 pól), który ma reakcję. Każdy z was może przemieścić się do 10 ft (2 pól) bez ataków okazyjnych i wykonać jeden atak bronią. Sojusznik zużywa reakcję. Opisane ataki są częścią tej akcji.",
+      "panel_slot": 14,
+      "sections": [
+        [
+          "Ładunek",
+          "Co najmniej 21 pkt. Pula zostaje po użyciu."
+        ],
+        [
+          "Akcja",
+          "Akcja główna"
+        ],
+        [
+          "Spalanie",
+          "1 karta z wierzchu wspólnej talii po efekcie, także przy niepowodzeniu."
+        ],
+        [
+          "Efekt",
+          "Wybierz sojusznika w zasięgu 15 ft (3 pól), który ma reakcję. Każdy z was może przemieścić się do 10 ft (2 pól) bez ataków okazyjnych i wykonać jeden atak bronią. Sojusznik zużywa reakcję. Opisane ataki są częścią tej akcji."
+        ]
+      ]
+    }
+  ],
+  "passives": [
+    [
+      "Nasycenie maną",
+      "C: Natarcie: +1 obrażeń wręcz za każdą kartę czerwonej many. Kumuluje się. B: Żelazna linia: sojusznik flankujący z tobą wroga ma +1 KP przeciw temu wrogowi. Nie kumuluje się. Z: Ulepszony krytyk: od pierwszej zielonej ataki bronią krytykują przy naturalnym 19–20. Nie dotyczy testu Uderzenia tarczą. Nie kumuluje się. F: Wytrwałość: +1 do obron KON (maks. +2). Kumuluje się. N: Osłona: +1 KP dla Garrana. Nie kumuluje się. Pasywy działają przy posiadaniu koloru, bez limitu tur. Drain usuwa nasycenie i resetuje użycie Nieustępliwości. Gruba obwódka symbolu: kumuluje się; cienka: nie kumuluje się."
+    ]
+  ],
+  "flaw": [
+    "Nieustępliwość",
+    "Rozpoczęcie własnej tury przy wrogu zmniejsza limit zwykłego ruchu o połowę do końca tury."
+  ],
+  "story": [
+    [
+      "Historia",
+      "Garran był dobrym dowódcą, dopóki wojna nie zmusiła go do wyboru między krzywdą niewinnych a ryzykiem dla własnych ludzi. Odmówił bezpodstawnych aresztowań; później dwóch wypuszczonych uczestniczyło w ataku na jego dawnych podwładnych."
+    ],
+    [
+      "Dlaczego podróżuje",
+      "W Gildii przyjmuje małe, konkretne zlecenia: chroni człowieka, karawanę albo drogę odwrotu zamiast abstrakcyjnego interesu państwa. Szuka sposobu, by nadal osłaniać innych, nie oddając własnego sumienia żadnej instytucji."
+    ],
+    [
+      "Cel osobisty",
+      "Znaleźć własne zasady przyzwoitego działania bez obietnicy pewnego, dobrego rezultatu."
+    ]
+  ],
+  "exploration": [
+    {
+      "id": "authority",
+      "name": "Autorytet",
+      "kind": "npc",
+      "ability": "Siła",
+      "modifier": 4,
+      "components": [
+        [
+          "Siła",
+          4
+        ]
+      ],
+      "description": "Przejmij inicjatywę zdecydowaną obecnością i odpowiedzialnością za sytuację.",
+      "influence_modifier": 4
+    },
+    {
+      "id": "secure",
+      "name": "Zabezpieczenie",
+      "kind": "object",
+      "ability": "Kondycja",
+      "modifier": 2,
+      "components": [
+        [
+          "Kondycja",
+          2
+        ]
+      ],
+      "description": "Utrzymaj konstrukcję stabilną i bezpiecznie zwolnij naprężenia.",
+      "influence_modifier": 2
+    }
+  ],
+  "mana_values": [
+    [
+      "C",
+      4
+    ],
+    [
+      "B",
+      7
+    ],
+    [
+      "Z",
+      1
+    ],
+    [
+      "F",
+      3
+    ],
+    [
+      "N",
+      4
+    ]
+  ],
+  "exploration_passives": [
+    [
+      "C",
+      "Stanowczość: +1 do wpływu / postępu za każdą kartę czerwonej many (maks. +2). Kumuluje się."
+    ],
+    [
+      "B",
+      "Opanowanie: osłoń 1 kartę puli przed każdą reakcją (bez kumulacji)"
+    ],
+    [
+      "Z",
+      "Oddech: po każdej udanej próbie oddaj najstarszą spaloną kartę na spód talii, przed spaleniem kosztu próby. Nie kumuluje się."
+    ],
+    [
+      "F",
+      "Skupienie: +1 do testu za każdą kartę czarnej many (maks. +2). Kumuluje się."
+    ],
+    [
+      "N",
+      "Współpraca: pomoc daje +3 zamiast +2 (bez kumulacji)"
+    ]
+  ],
+  "mana_passives": [
+    [
+      "C",
+      "Natarcie: +1 obrażeń wręcz za każdą kartę czerwonej many. Kumuluje się."
+    ],
+    [
+      "B",
+      "Żelazna linia: sojusznik flankujący z tobą wroga ma +1 KP przeciw temu wrogowi. Nie kumuluje się."
+    ],
+    [
+      "Z",
+      "Ulepszony krytyk: od pierwszej zielonej ataki bronią krytykują przy naturalnym 19–20. Nie dotyczy testu Uderzenia tarczą. Nie kumuluje się."
+    ],
+    [
+      "F",
+      "Wytrwałość: +1 do obron KON (maks. +2). Kumuluje się."
+    ],
+    [
+      "N",
+      "Osłona: +1 KP dla Garrana. Nie kumuluje się."
+    ]
+  ],
+  "stacking_mana_colors": [
+    "C",
+    "F"
+  ],
+  "stacking_exploration_colors": [
+    "C",
+    "F"
+  ]
+}

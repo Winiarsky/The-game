@@ -10,8 +10,11 @@ from dnd_board_game.rules import ActiveEffect, D20RollRequest, EffectDuration, R
 from dnd_board_game.rules.pooled_mana import PooledMana, charge_roll_bonus
 
 
-def charge_effects(pool: PooledMana, profiles: Mapping[str, Mapping[str, object]]) -> tuple[ActiveEffect, ...]:
+def charge_effects(pool: PooledMana, profiles: Mapping[str, Mapping[str, object]],
+                   actors: Sequence[Actor] = ()) -> tuple[ActiveEffect, ...]:
     effects = []
+    if pool.phase in {'setup', 'drain'}:
+        return ()
     for hero in pool.heroes:
         bonus = charge_roll_bonus(pool.points(hero))
         if bonus and pool.phase != "drain":
@@ -23,14 +26,17 @@ def charge_effects(pool: PooledMana, profiles: Mapping[str, Mapping[str, object]
         for color, count in Counter(pool.hand(hero)).items():
             passive = profiles[hero]['color_passives'][color]
             kind = passive['kind']
-            if kind.startswith('heal'):
-                continue
             value = count * passive['value']
             if passive['cap']:
                 value = min(value, passive['cap'])
+            prefix = 'Odblokowane' if kind == 'feature' else f'{color} ×{count}'
+            actor = next((a for a in actors if str(a.id) == hero), None)
+            if actor is not None:
+                from dnd_board_game.actors.mana_passives import color_passive_status
+                prefix = color_passive_status(actor, passive)
             effects.append(ActiveEffect(
                 id=f'charge:{hero}:{color}', actor_id=hero, kind=f'charge_{kind}',
-                label=f"{color} ×{count} · {passive['label']}", object_id=f'charge:{color}',
+                label=f"{prefix} · {passive['label']}", object_id=f'charge:{color}',
                 value=value, duration=EffectDuration.UNTIL_DECK_REFRESH))
     return tuple(effects)
 

@@ -74,6 +74,8 @@ try {
  check(document.documentElement.scrollWidth <= innerWidth, 'Payment point display overflows');
  check(document.querySelector('[role="dialog"]').textContent.includes('Zachowaj'), 'Missing retained charge reminder');
  check(document.querySelector('.mana-charge-statuses').textContent.includes('KP'), 'Missing passive status');
+ check(document.querySelector('.mana-charge-statuses [data-stackable="false"]'), 'Missing nonstacking icon frame');
+ check(!document.querySelector('.mana-charge-statuses').textContent.includes('×'), 'Unlock incorrectly shown as stacking');
  check(document.getElementById('app').textContent.includes('Naładowanie: +2 do testów'), 'Missing charge bonus');
  state.combat = {shared_mana: paid, current_actor: {id: 'garran'}};
  document.getElementById('app').innerHTML = pooledManaPointsHtml(state.combat);
@@ -93,7 +95,7 @@ try {
     assert '<pre id="result">PASS</pre>' in result.stdout, (re.findall(r'<pre id="result">(.*?)</pre>', result.stdout, re.S), result.stderr[-1800:])
 
 
-@pytest.mark.parametrize('format_id', ['minimal', 'bw_test'])
+@pytest.mark.parametrize('format_id', ['minimal', 'bw_test', 'color', 'cards'])
 def test_all_hero_prints_fit_cards_and_pages(tmp_path, format_id):
     from dnd_board_game.application.recruitment_arena import HERO_ORDER
     from dnd_board_game.physical_cards.mana_print import build_print_hero

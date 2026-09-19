@@ -1,6 +1,9 @@
 {
   "base_gp_per_hero": 10,
-  "report_gp": 5,
-  "fraud_gp": 5,
-  "rumor_gp": 1
+  "bell_guild_gp": 10,
+  "bell_fence_gp": 20,
+  "rumor_gp": 1,
+  "cargo_damage_gp": 2,
+  "fence_after_mission": "misja_2",
+  "identification_gp": 5
 }

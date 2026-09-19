@@ -1,35 +1,57 @@
 """Build a rules-only party confrontation from actor data and an authored scene."""
 from __future__ import annotations
+from dataclasses import replace
+
+from dnd_board_game.inventory.magic_items import effective_ability_modifier
 from dnd_board_game.actors import Actor
-from dnd_board_game.rules import ability_modifier
 from dnd_board_game.core.player_labels_pl import ABILITY_LABELS_PL
 from dnd_board_game.rules.confrontation import Confrontation, Participant
 from dnd_board_game.rules.pooled_mana import new_mana
 from dnd_board_game.rules.exploration_mana_catalog import hero_methods
 from dnd_board_game.scenarios.pooled_mana_catalog import hero_profile
-from dnd_board_game.scenarios.confrontation import passives
+from dnd_board_game.scenarios.confrontation import passives, validate_approaches
 from .exploration_mana_flow import method_modifiers
 
 
-def build(actors: tuple[Actor, ...], scene: dict) -> Confrontation:
+def build(actors: tuple[Actor, ...], scene: dict, *, excluded: tuple[str, ...] = ()) -> Confrontation:
     participants = []
+    options = []
     values = {}
+    if 'approaches' in scene:
+        validate_approaches(scene['approaches'])
+        if len(scene['approaches']) < len(actors) and not any(a.get('repeatable', False) for a in scene['approaches']):
+            raise ValueError('Scena wymaga odrębnego podejścia dla każdego bohatera lub opcji powtarzalnej.')
     for actor in actors:
         key = str(actor.id)
-        method = next(m for m in hero_methods(key) if m.kind == scene['kind'])
-        profile = scene['methods'][key]
-        participants.append(Participant(key, actor.name, method.name,
-            sum(m.value for m in method_modifiers(actor, method)),
-            ability_modifier(getattr(actor.ability_scores, method.ability)), profile['dc'], profile['die'],
-            tuple((c, p['kind']) for c, p in passives(key).items()), ABILITY_LABELS_PL[method.ability],
-            tuple((m.label, m.value) for m in method_modifiers(actor, method))))
+        passive_kinds = tuple((c, p['kind']) for c, p in passives(key).items())
+        if 'approaches' in scene:
+            own = []
+            for approach in scene['approaches']:
+                modifier = effective_ability_modifier(actor, approach['ability'])
+                label = ABILITY_LABELS_PL[approach['ability']]
+                own.append(Participant(key, actor.name, approach['name'], modifier, modifier,
+                    approach['dc'], approach['die'], passive_kinds, label, ((label, modifier),),
+                    approach['id'], approach['description'], tuple(approach['supports']), approach.get('repeatable', False)))
+            options.append(tuple(own))
+            participants.append(replace(own[0], method='Wybierz podejście', approach_id=''))
+        else:
+            # Completed/in-progress snapshots authored before scene approaches.
+            method = next(m for m in hero_methods(key) if m.kind == scene['kind'])
+            profile = scene['methods'][key]
+            participants.append(Participant(key, actor.name, method.name,
+                sum(m.value for m in method_modifiers(actor, method)),
+                effective_ability_modifier(actor, method.ability), profile['dc'], profile['die'],
+                passive_kinds, ABILITY_LABELS_PL[method.ability],
+                tuple((m.label, m.value) for m in method_modifiers(actor, method))))
         values[key] = hero_profile(key)['values']
     party = tuple(participants)
-    pool = new_mana(tuple(p.id for p in party), party[0].id, values=values)
+    pool = new_mana(tuple(p.id for p in party), party[0].id, values=values, excluded=excluded)
     resistance = scene['resistance_per_hero'] * len(party)
     return Confrontation(party, pool, resistance, resistance,
         max(scene['minimum_pressure'], scene['pressure_per_hero'] * len(party)),
-        reactions=tuple(r['kind'] for r in scene['reactions']), condition=scene['condition'])
+        reactions=tuple(r['kind'] for r in scene['reactions']), condition=scene['condition'],
+        first_test_bonus=scene.get('first_test_bonus', 0), first_test_label=scene.get('first_test_label', ''),
+        approach_options=tuple(options), approach_selection_version=3)
 
 
 def prepare_lesson(state: Confrontation, lesson_id: str) -> Confrontation:

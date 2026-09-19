@@ -1,5 +1,74 @@
 # Kontekst Projektu
 
+## Postawa drużyny — 19.09.2026
+
+Wskaźnik ma siedem pól: Solidarność (3), Równowaga, Bezwzględność (3),
+bez punktów plus/minus w UI. Każdy krok od środka wyłącza po jednej karcie
+z dwóch kolorów: Solidarność — czerwona i czarna; Bezwzględność — biała
+i niebieska. Zielona bez zmian. Nowy skład obowiązuje od kolejnej walki
+lub konfrontacji. Wyłączone karty są poza obiegiem i nie wracają przy drainie.
+Misja 0: wymuszenie zamiany wozu pomija test i zmęczenie, krok ku Bezwzględności;
+przyjęcie rozejmu daje krok ku Solidarności, odmowa ku Bezwzględności. Szczegóły: [Postawa drużyny](docs/PARTY_ETHOS.md).
+
+## Podejścia scen i powiązania pomocy (19.09.2026)
+
+W nowych konfrontacjach NPC/obiekt każdy bohater wybiera przed talią własne
+podejście z opcji sceny. Opcja określa cechę, ST, kość wpływu/postępu i skierowane
+powiązania pomocy. Scena określa, które podejścia są dla jednej postaci, a które mogą się powtarzać; cechy nie muszą być pokryte
+symetrycznie. Runy prowadzą przez skład w kolejności tur, bez dodatkowej inicjatywy.
+Test i dozwolona pomoc spalają 1 kartę. Pomoc: +1 (+2 ze Współpracą), sumowana
+do najbliższej próby. Alternatywa: podgląd dolnej karty i zostawienie lub przeniesienie
+na wierzch, bez zgłaszania koloru i bez spalania, za całe działanie. Reakcje po rundzie nadal obowiązują.
+Misja 0: osobne podejścia Nessy, wozu, zbrojowni i kwatery. Katalogi, UI, samouczek
+i wydruki opisują ten model; dawne stałe metody bohaterów są zgodnością starych zapisów.
+Szczegóły: [Konfrontacje drużynowe](docs/PARTY_CONFRONTATIONS.md).
+
+
+Aktualizacja kart (2026-09-19): na pierwszej stronie każdej postaci po portrecie
+oraz historii są skaza i „Aktualne zobowiązania” z kropkowanymi liniami.
+Zasady eksploracji są we wspólnym pomocniku. Podgląd wymaga tylko wyboru
+położenia karty, bez zgłaszania koloru. Wymiary fizycznych kart są zachowane.
+
+Wydruki postaci (2026-09-18): zatwierdzony układ Garrana obejmuje wszystkie
+siedem postaci. `scripts/build_hero_mats.py` buduje jeden 41-stronicowy PDF
+`content/print/characters/bohaterowie_zestawy_startowe_A4.pdf`: spis, po pięć
+stron bohatera (postać, mana, akcje, mata wyposażenia, wycinanki sprzętu),
+na końcu cztery strony pomocnika (podstawy, walka, rozmowy, obiekty) i znaczniki. Nimra ma 12 akcji na A4 poziomo,
+pozostali po 9. Wspólna komenda `build_session_print_packs.py --only heroes`
+korzysta z nowego generatora. Opisy i podglądy: `content/print/characters/mats_v2/`.
+
+Pasywy (2026-09-17): w profilu pooled_mana_v01 nie ma darmowych cech
+pasywnych. Kluczowe cechy uruchamia pierwszy właściwy kolor w puli bojowej;
+tracą aktywność po utracie koloru/drainie/końcu walki. Skazy bez zmian.
+Katalog `content/balance/pooled_mana/catalog.json`, reguły migracji i odblokowań
+`actors/mana_passives.py`; UI, samouczek i wydruki korzystają z tych opisów.
+Szczegóły i przypisania w GAME_DESIGN.md. Zapis sprzed zmiany jest normalizowany,
+a odblokowania odtwarzane z rzeczywistej puli. Sam odczyt/odzysk koloru nie odnawia
+Nieustępliwości; drain i nowa walka resetują jej użycie. Pasywy nie mają limitu
+tur ani odpoczynku. Mira: czerwona +1k6 z ukrycia, zielona +2k6 z flanki; Erynd:
++1k6 przy każdym trafieniu w pełne PW. Grubość obwódki ikony oznacza kumulowanie.
+
+Wydruki sesji: `python scripts/build_session_print_packs.py` buduje dwa komplety:
+`content/scenarios/misja_0_dzwon/maps/print/misja_0_komplet_A4.pdf` (kafle, potem
+handouty i przedmioty) oraz `content/print/characters/bohaterowie_zestawy_startowe_A4.pdf`
+(po kolei pełne karty każdego bohatera i jego sprzęt). Obok PDF-ów są spisy stron.
+
+Przygotowanie wyposażenia (2026-09-17): Misja 0 gromadzi znaleziska w `party_loot`.
+Przed wyprawą wybór przedmiotów −/+ i slotów runami, po kolei dla każdej postaci.
+W terenie brak zmiany wyposażenia, mikstury dostępne także z zapasu. Gildia:
+płatna identyfikacja (5 sz), sprzedaż za połowę wartości, ponowny przydział.
+Nimra próbuje od razu przy znalezieniu pierścienia; nawet poznany pozostaje
+w zapasie do powrotu. Wydruki: `scripts/build_equipment_cards.py`.
+
+
+Aktualizacja Misji 0 (2026-09-17): „Sprawy pozostawione”. Kontrakt obejmuje
+sprzęt, zapasy i dokumenty; dzwon jest dodatkową decyzją. Rozejm po pierwszym
+pokonanym, dwa opcjonalne przeszukania, wydruki rozkazu i pokwitowań, komplement
+Loriana, poręczenie Garrana i kontakt Miry. Pierścień ze skrytki po identyfikacji
+daje +1 do **wartości Siły**; Nimra próbuje na miejscu, Gildia rozpoznaje pewnie.
+Bieżące szczegóły: [README misji](content/scenarios/misja_0_dzwon/README.md).
+
+
 ## Misja 0 — narracyjny samouczek drużyny
 
 Docelowe wejście: wybór drużyny 3–6 → intro wybranych bohaterów → odprawa
@@ -48,7 +117,10 @@ tej reguły. Starsze profile zapisów zachowują dotychczasowe zasady.
 
 NPC i obiekty w Arenie używają wspólnego oporu, tur całej drużyny i trwałych
 osobistych pul many. Dobór z oferty dwóch kart do 21+, potem test albo pomoc.
-Progi 0/6/12/21: premia +0/+2/+4/+6 i spalanie 1/1/2/3 po efekcie. Podatność
+Progi 0/6/12/21: premia +0/+2/+4/+6; UI wybiera najwyższy dostępny próg.
+Test i pomoc spalają po 1 karcie. Pomoc daje +1 (+2 ze Współpracą), sumuje
+się do pierwszej próby testu sojusznika i wtedy znika w całości, także po
+porażce. Czekanie i pomaganie innym nie zużywają otrzymanej premii. Podatność
 zmienia ST i kość wpływu. Reakcje uszczuplają talię/pule lub odnawiają opór;
 drain kończy konfrontację. Brak kary za przekroczenie i automatycznego sukcesu
 przy 21. Nowy kurs: 12 przypadków na bohatera (84), wybór składu 1–5 osób,

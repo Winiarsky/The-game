@@ -131,8 +131,10 @@ function sharedManaHtml(combat) {
     const pool = mana.pool_view;
     const hand = pool.hands.find(h => h.hero === pool.actor);
     decision = `<h3>${pool.phase === 'drain' ? 'Mana drain' : pool.phase === 'bard' ? 'Manipulacja many' : 'Pula many'}</h3>
-      <p>${esc(pool.instruction)}</p><div class="mana-boost-options">${pool.choices.map(c =>
-        `<button onclick="sharedManaCommand('${c.command}', {${c.index !== undefined ? `index: ${c.index}` : c.color ? `color: '${c.color}'` : ''}})">${c.icon} ${esc(c.rune)} · ${esc(c.label)}${pool.phase === 'choose' && hand ? ` · +${hand.values[c.color]} pkt → ${hand.total + hand.values[c.color]} pkt · ${esc(hand.color_passives?.[c.color]?.label || '')}` : ''}</button>`).join('')}</div>`;
+      <p>${esc(pool.instruction)}</p><div class="mana-boost-options">${pool.choices.map(c => {
+        const button = `<button onclick="sharedManaCommand('${c.command}', {${c.index !== undefined ? `index: ${c.index}` : c.color ? `color: '${c.color}'` : ''}})">${c.icon} ${esc(c.rune)} · ${esc(c.label)}${pool.phase === 'choose' && hand ? ` · +${hand.values[c.color]} pkt → ${hand.total + hand.values[c.color]} pkt` : ''}</button>`;
+        return pool.phase === 'choose' && hand ? `<article class="mana-choice-option">${button}${manaPassiveDescriptionHtml(hand.color_passives?.[c.color],true)}</article>` : button;
+      }).join('')}</div>`;
   } else if (declaration) {
     const cards = declaration.stage === 'cards';
     decision = `<h3>${esc(declaration.name)}</h3>${declaration.sections ? declaration.sections.map(([label,text])=>`<p><b>${esc(label)}:</b> ${manaTextHtml(text)}</p>`).join('') : `<p>${manaTextHtml(declaration.description)}</p>`}${declaration.context&&declaration.sections?`<p>${esc(declaration.context)}</p>`:''}

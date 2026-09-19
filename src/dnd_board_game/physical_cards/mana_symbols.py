@@ -24,6 +24,13 @@ def mana_symbol(color: str) -> str:
     )
 
 
+def passive_mana_symbol(color: str, stackable: bool) -> str:
+    label = 'Kumuluje się' if stackable else 'Nie kumuluje się'
+    border = '3px' if stackable else '1px'
+    return (f'<span class="mana-passive-symbol" data-stackable="{str(stackable).lower()}" '
+            f'title="{label}" style="border:{border} solid currentColor">{mana_symbol(color)}</span>')
+
+
 def mana_text(text: str) -> str:
     """Replace only explicit color markers, preserving escaped readable prose."""
     return re.sub(r"\(([CNZBF*])\)", lambda m: mana_symbol(m[1]), escape(text))

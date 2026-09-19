@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dnd_board_game.inventory.magic_items import effective_ability_modifier
+
 from typing import TYPE_CHECKING
 
 from dnd_board_game.rules import RollModifier, RollModifierType, ability_modifier
@@ -18,7 +20,7 @@ def ability_roll_modifier(
     label: str | None = None,
 ) -> RollModifier:
     validate_ability(ability)
-    value = ability_modifier(getattr(actor.ability_scores, ability))
+    value = effective_ability_modifier(actor, ability)
     return RollModifier(
         label or _ability_label(ability),
         value,

@@ -1,9 +1,10 @@
 """Physical attack roll for the ranger's shared-roll area volley."""
 from __future__ import annotations
+from dnd_board_game.rules.charge_rolls import uses_charge
 from dataclasses import replace
 from typing import TYPE_CHECKING, Mapping
 from dnd_board_game.combat.session import current_actor, use_turn_action, replace_actor
-from dnd_board_game.combat.shared_volley import resolve_volley, volley_bonuses, volley_source
+from dnd_board_game.combat.shared_volley import resolve_volley, volley_bonuses, volley_source, volley_damage_specs
 from dnd_board_game.combat.damage import damage_components_from_totals, resolve_damage, apply_damage_result
 from dnd_board_game.application.player_area_healing_flow import PlayerAreaSpellTransition
 
@@ -57,7 +58,7 @@ def apply_volley_damage(session: ExplorationUiSession, component_totals: Mapping
     source = session._attack_source_by_id(actor, pending.source_id, pending.cast_level)
     hits = tuple(h for h in pending.volley_hits if h.hit)
     bonuses = volley_bonuses(state, source, hits, session.active_combat_effects)
-    specs = (*source.damage_components, *(c for c, _ in bonuses))
+    specs = volley_damage_specs(source, bonuses)
     components = damage_components_from_totals(specs, component_totals or {}) if hits else ()
     damages = []
     for hit in hits:
@@ -70,9 +71,9 @@ def apply_volley_damage(session: ExplorationUiSession, component_totals: Mapping
     from dnd_board_game.rules import apply_active_effect
     from dnd_board_game.combat.erynd_features import commit_first_blood_hit
     for component, _ in bonuses:
-        if component.id == "first_blood":
+        if component.id == "first_blood" and not uses_charge(actor):
             session.active_combat_effects = commit_first_blood_hit(session.active_combat_effects, str(actor.id))
-        else:
+        elif component.id != 'first_blood':
             session.active_combat_effects = apply_active_effect(session.active_combat_effects, effect(str(actor.id), "mana_hunters_mark_used", "Znak wykorzystany", 1)).active_effects
     state = replace(state, hidden_states=tuple(h for h in state.hidden_states if h.actor_id != str(actor.id)))
     names = {str(a.id): a.name for a in state.actors}

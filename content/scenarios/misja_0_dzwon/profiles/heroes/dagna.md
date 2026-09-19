@@ -15,8 +15,12 @@ w kanonie; poniższa charakterystyka jest roboczym rozwinięciem roli, nie nową
 
 Stałe intro, publikowane osobno w `text/hero_dagna.md`:
 
-Dagna dostrzegała rannych wcześniej niż łupy. Była to cecha szlachetna, a podczas odwrotu czasem niepokojąca dla jej towarzyszy.
+Dagna dostrzegała rannych wcześniej niż łupy. Była to cecha szlachetna, a podczas odwrotu czasem niepokojąca dla jej towarzyszy. Krasnoludzka kapłanka potrafiła zapytać o ból tak zwyczajnie, że nawet najbardziej dumny wojownik przestawał na chwilę twierdzić, iż to tylko zadrapanie.
+
+Jej troski nie należało jednak mylić z pobłażliwością. Pomagała wstać, lecz nie obiecywała nikomu, że przy okazji usprawiedliwi wszystko, co zrobił, zanim upadł.
 
 Instrukcja generowania: zachowaj ten sam fragment niezależnie od składu drużyny;
 przedstaw wyłącznie bohaterów wybranych do gry. W scenach opisz jedną reakcję,
 nie odbierając graczowi decyzji. Edycja tego profilu nie nadpisuje automatycznie tekstów.
+
+Oprawa ilustracji w tej misji: `profiles/visual_style.md`; aktywny wariant obrazu wybiera `visuals.json`.

@@ -66,6 +66,24 @@ def choices(p: dict[str, Any]) -> list[dict[str, Any]]:
     return result
 
 
+MANA_LED_COLORS: dict[str, tuple[int, int, int]] = {
+    'C': (255, 0, 0), 'B': (255, 255, 255), 'Z': (0, 255, 0),
+    'F': (180, 0, 255), 'N': (0, 70, 255),
+}
+
+
+def mana_choice_colors(p: dict[str, Any]) -> dict[int, tuple[int, int, int]]:
+    """Color reporting and taking a revealed card share the same LED identity."""
+    colors: dict[int, tuple[int, int, int]] = {}
+    for control in p['board_choices']:
+        color = control['extra'].get('color')
+        if control['action'] == 'take':
+            color = p['mana']['offer'][control['extra']['index']]
+        if color in MANA_LED_COLORS:
+            colors[control['slot']] = MANA_LED_COLORS[color]
+    return colors
+
+
 def scan_target(s: ExplorationUiSession) -> BoardScanTarget:
     from .exploration_app import BoardScanTarget
     from .exploration_mana import payload
@@ -84,7 +102,8 @@ def scan_target(s: ExplorationUiSession) -> BoardScanTarget:
     return BoardScanTarget(
         positions=tuple(panel_position(c['slot']) for c in controls),
         feedback=panel_feedback(tuple(c['slot'] for c in controls if c['slot'] < 26),
-                                control_slots=tuple(c['slot'] for c in controls if c['slot'] >= 26), base=base),
+                                control_slots=tuple(c['slot'] for c in controls if c['slot'] >= 26), base=base,
+                                action_colors=mana_choice_colors(p)),
         empty_message='Wybierz podświetloną runę na planszy. Jej znaczenie widzisz przy opcji na ekranie.')
 
 
@@ -97,4 +116,8 @@ def select_position(s: ExplorationUiSession, position: Coordinate) -> dict[str, 
     selected = next((c for c in p['board_choices'] if panel_position(c['slot']) == position), None)
     if selected is None:
         raise ValueError('Ta runa nie jest aktywna w bieżącym kroku eksploracji.')
+    if selected['action'] == 'scroll':
+        s.board_selection_revision += 1
+        return dict(panel_event=dict(slot=selected['slot'], context=f"confrontation-scroll:{p['revision']}"),
+                    board_selection=s._board_selection_payload())
     return command(s, dict(action=selected['action'], revision=p['revision'], **selected['extra']))

@@ -39,7 +39,8 @@ def resolve_volley(source: AttackSource, targets: Sequence[Actor], covers: dict[
 
 
 def volley_bonuses(state: CombatState, source: AttackSource, hits: Sequence[VolleyHit], effects: tuple[ActiveEffect, ...]) -> tuple[tuple[DamageComponentSpec, str], ...]:
-    """Assign each once-per-turn damage rider to at most one qualifying hit."""
+    """Saturation First Blood applies to every full-health target hit."""
+    from dnd_board_game.rules.charge_rolls import uses_charge
     from .session import current_actor
     from .scene_interactions import attack_source_with_target_combat_effects
     from .erynd_features import first_blood_damage
@@ -52,9 +53,14 @@ def volley_bonuses(state: CombatState, source: AttackSource, hits: Sequence[Voll
         target = next(a for a in state.actors if str(a.id) == hit.actor_id)
         contextual = attack_source_with_target_combat_effects(actor, target, source, effects)
         mark = next((c for c in contextual.damage_components if c.id == 'hunters_mark'), None)
-        blood = first_blood_damage(actor, target, source.damage_components[0].damage_type) if not any(e.actor_id == str(actor.id) and e.kind == 'first_blood_used' for e in effects) else None
+        blood = first_blood_damage(actor, target, source.damage_components[0].damage_type) if uses_charge(actor) or not any(e.actor_id == str(actor.id) and e.kind == 'first_blood_used' for e in effects) else None
         for component in (mark, blood):
-            if component is not None and component.id not in assigned:
+            if component is not None and (component.id not in assigned or (uses_charge(actor) and component.id == 'first_blood')):
                 assigned.add(component.id)
                 bonuses.append((component, hit.actor_id))
     return tuple(bonuses)
+
+
+def volley_damage_specs(source: AttackSource, bonuses: Sequence[tuple[DamageComponentSpec, str]]) -> tuple[DamageComponentSpec, ...]:
+    """Roll a shared rider once, then apply it once to each assigned target."""
+    return tuple({c.id: c for c in (*source.damage_components, *(c for c, _ in bonuses))}.values())

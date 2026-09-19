@@ -15,8 +15,12 @@ w kanonie; poniższa charakterystyka jest roboczym rozwinięciem roli, nie nową
 
 Stałe intro, publikowane osobno w `text/hero_lorian.md`:
 
-Lorian wiedział, że odpowiednie słowo potrafi zmienić rytm rozmowy. Z maną postępował podobnie: słuchał, porządkował i szukał następnej nuty.
+Lorian wiedział, że odpowiednie słowo potrafi zmienić rytm rozmowy. Półelfi bard słuchał więc uważnie — co niektórym pochlebiało tak bardzo, że zapominali zapytać, po co właściwie słucha.
+
+Z maną postępował podobnie: wyczuwał rytm, porządkował go i pomagał innym znaleźć właściwy moment. Nie każda trudność dawała się zagadać. Lorian miał jednak rozsądny zwyczaj sprawdzać to, zanim trudność zacznie wymachiwać bronią.
 
 Instrukcja generowania: zachowaj ten sam fragment niezależnie od składu drużyny;
 przedstaw wyłącznie bohaterów wybranych do gry. W scenach opisz jedną reakcję,
 nie odbierając graczowi decyzji. Edycja tego profilu nie nadpisuje automatycznie tekstów.
+
+Oprawa ilustracji w tej misji: `profiles/visual_style.md`; aktywny wariant obrazu wybiera `visuals.json`.

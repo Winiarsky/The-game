@@ -12,6 +12,7 @@ from tempfile import TemporaryDirectory
 from dnd_board_game.character_creation import PLAYABLE_HERO_IDS
 from .mana_print import COLORS, PROFILE, COMMON_KEYS, MANA_PASSIVE_REMINDER, build_print_hero
 from dnd_board_game.scenarios.confrontation import REMINDER
+from dnd_board_game.scenarios.confrontation_terms import effect_name
 from dnd_board_game.ui.board_panel_symbols import SYMBOLS, PANEL_CONTROLS
 from .mana_print_html import FORMATS, render_hero_html
 
@@ -117,7 +118,8 @@ def write_reference(output: Path, actor_ids: tuple[str, ...]) -> None:
     manifest = {
         "rules_profile": PROFILE,
         "exploration_rules_version": 3,
-        "version": 12,
+        "version": 13,
+        "mana_passive_revision": 2,
         "mana_catalog_version": 2,
         "roll_rules": "charge_replaces_proficiency_v1",
         "panel_symbols_version": 1,
@@ -158,7 +160,7 @@ def write_reference(output: Path, actor_ids: tuple[str, ...]) -> None:
                 lines.append("")
             lines += ["", "### Eksploracja — NPC i obiekty", ""]
             for method in hero.exploration:
-                lines.append(f"- **{method.name} ({'NPC' if method.kind == 'npc' else 'obiekt'}):** {method.ability}, bazowy test {method.modifier:+d}; wpływ: kość podatności {method.influence_modifier:+d}. {method.description}")
+                lines.append(f"- **{method.name} ({'NPC' if method.kind == 'npc' else 'obiekt'}):** {method.ability}, bazowy test {method.modifier:+d}; {effect_name(method.kind).lower()}: kość podatności {method.influence_modifier:+d}. {method.description}")
             lines += ["", REMINDER, ""]
             lines += [f"- **{COLORS[color]}:** {label}" for color, label in hero.exploration_passives]
             lines += ["", "### Pasywy i skaza", ""]

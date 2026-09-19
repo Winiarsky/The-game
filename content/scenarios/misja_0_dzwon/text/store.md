@@ -1,1 +1,3 @@
-Puste worki i rozsypane ziarno mówią o pośpiechu więcej niż meldunek. Za beczką pozostał zwój dobrej liny. Jeszcze się przyda.
+Worki M-1 do M-4 i skrzynka M-5 mają oznaczenia zgodne z rozkazem. Zabezpieczacie je na wozie. Odhaczcie pozycję „Magazynek” na wydruku.
+
+To ładunek kontraktowy, nie prowiant do swobodnego rozdysponowania.

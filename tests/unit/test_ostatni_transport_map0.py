@@ -1051,7 +1051,11 @@ def test_map0_legacy_travel_inputs_do_not_change_fixed_transition(tmp_path) -> N
     assert travel["total_minutes"] == 60
     assert travel["navigation"] == {"required": False, "success": True}
 
+    from dnd_board_game.inventory import InventoryItem, LootBundle
+    shared = LootBundle('party_loot', 'Wspólny zapas', (InventoryItem('found_ring', 'Nieznany pierścień', 'gear', equipped=False),))
+    session.state = replace(session.state, party_loot=shared)
     session.start_scenario_handoff()
+    assert session.state.party_loot == shared
     assert scene_flag(session.state.flags, "travel.pace.fast") is None
     assert scene_flag(session.state.flags, "travel.arrival.late") is None
 

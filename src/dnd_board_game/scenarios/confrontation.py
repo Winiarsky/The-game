@@ -7,16 +7,20 @@ import json
 from dnd_board_game.rules.exploration_mana_catalog import HEROES
 from dnd_board_game.rules.confrontation import PASSIVE_KINDS
 from dnd_board_game.rules.pooled_mana import COLORS
+from dnd_board_game.core.player_labels_pl import ABILITY_LABELS_PL
 
-REMINDER = ('Konfrontacja drużynowa: każdy ma własną pulę i turę. Poniżej 21 pkt obowiązkowo wybierz jedną z dwóch odkrytych kart; druga zostaje. '
-            'Przy 21+ nie dobierasz, bez kary za przekroczenie. Po doborze: własny test albo pomoc +2 do następnego testu sojusznika, bez kumulacji i bez spalania. '
-            'Premia many +0/+2/+4/+6 wymaga 0/6/12/21 pkt i spala 1/1/2/3 karty. Możesz wybrać słabszą próbę. '
-            'Test: k20 + cecha + naładowanie + pozostałe premie. Sukces: kość wpływu zależna od podatności + modyfikator cechy + premie wpływu. '
-            'Pula pozostaje. Spalanie z wierzchu po efekcie, także przy niepowodzeniu. Po rundzie sytuacja reaguje. '
+REMINDER = ('Konfrontacja drużynowa: przed przygotowaniem talii każdy bohater wybiera runą podejście dostępne w tej scenie. Wybór obowiązuje do końca konfrontacji; podejście „Dla jednej postaci” znika po wyborze, a „Może się powtarzać” pozostaje dostępne. Podejście określa cechę, ST, kość wpływu / postępu i dozwolone cele pomocy. Powiązania wsparcia są jednostronne. '
+            'Każdy ma własną pulę i turę. Poniżej 21 pkt obowiązkowo wybierz jedną z dwóch odkrytych kart; druga zostaje. '
+            'Przy 21+ nie dobierasz, bez kary za przekroczenie. Po doborze: własny test albo pomoc +1 do najbliższej próby testu sojusznika (+2 ze Współpracą). Pomoc sumuje się i cała znika po jego próbie, także nieudanej. Test i pomoc spalają po 1 karcie. Zamiast nich możesz podejrzeć dolną kartę i zostawić ją na spodzie lub przenieść na wierzch: bez spalania, za całe działanie. Reakcja po rundzie nadal obowiązuje. '
+            'Premia many +0/+2/+4/+6 wymaga 0/6/12/21 pkt; test korzysta z najwyższego osiągniętego progu, zawsze za 1 kartę. '
+            'Test: k20 + cecha + naładowanie + pozostałe premie. Sukces: kość podatności + cecha + premie = wpływ (NPC) / postęp (obiekt). '
+            'Pula pozostaje. Pasywy działają, dopóki masz dany kolor, bez limitu tur. Gruba obwódka symbolu: kumuluje się; cienka: nie. '
+            'Oddech: po udanej próbie przełóż najstarszą spaloną kartę na spód talii i potwierdź ✓, potem opłać test. Drain wyłącza wszystkie pasywy. '
+            'Spalanie z wierzchu po efekcie, także przy niepowodzeniu. Po rundzie sytuacja reaguje. '
             'Opór 0 = sukces. Brak kart do wymaganej operacji kończy konfrontację; najpierw rozstrzygnij rozpoczęte działanie. Bez ostatniej darmowej kolejki. '
             'Na nową konfrontację zbierz cały komplet i przetasuj. Runy wybierają działania; rzuty przez fokus, −/+, podsumowanie i ✓.')
 CONDITION_HELP = (
-    ('Częściowe porozumienie', 'Po zbiciu połowy oporu możesz przyjąć jawny kompromis zamiast walczyć o pełny sukces.'),
+    ('Częściowe porozumienie', 'Po zbiciu połowy oporu i opłaceniu testu rozstrzygnij ofertę: przyjmij kompromis albo jawnie odrzuć go i kontynuuj.'),
     ('Drażliwy temat', 'Dobranie wskazanego koloru zmienia cenę i korzyść sukcesu całej drużyny.'),
     ('Dodatkowy cel', 'Dwie niebieskie karty w pulach drużyny przy sukcesie dają dodatkową informację.'),
     ('Przysługa za przysługę', 'Raz: odzyskaj najstarszą spaloną kartę na spód za zobowiązanie, które pozostaje także po porażce.'),
@@ -31,6 +35,30 @@ class Lesson:
     focus: str
     instruction: str
 
+
+def validate_approaches(approaches: list[dict]) -> None:
+    """Authored options need not cover all abilities or use unique abilities."""
+    if not isinstance(approaches, list) or not 1 <= len(approaches) <= 12:
+        raise ValueError('Scena wymaga od 1 do 12 podejść.')
+    ids = set()
+    for option in approaches:
+        if (not isinstance(option, dict) or not isinstance(option.get('id'), str)
+                or not option['id'] or option['id'] in ids
+                or not isinstance(option.get('name'), str) or not option['name'].strip()
+                or not isinstance(option.get('description'), str) or not option['description'].strip()
+                or option.get('ability') not in ABILITY_LABELS_PL
+                or type(option.get('repeatable', False)) is not bool
+                or type(option.get('dc')) is not int or option['dc'] < 1
+                or type(option.get('die')) is not int or option['die'] not in (4, 6, 8, 10, 12)):
+            raise ValueError('Nieprawidłowe podejście sceny: id, nazwa, opis, cecha, ST i kość.')
+        ids.add(option['id'])
+    for option in approaches:
+        links = option.get('supports')
+        if (not isinstance(links, list) or any(not isinstance(x, str) for x in links)
+                or len(set(links)) != len(links) or any(x not in ids and x != '*' for x in links)
+                or ('*' in links and len(links) != 1)):
+            raise ValueError('Powiązania pomocy muszą wskazywać podejścia tej sceny lub samo *.')
+
 @lru_cache(maxsize=1)
 def catalog() -> dict:
     data = json.loads((Path(__file__).resolve().parents[3] / 'content/balance/confrontation.json').read_text())
@@ -39,15 +67,15 @@ def catalog() -> dict:
     for profile in data['passives'].values():
         if set(profile) != set(COLORS) or any(p['kind'] not in PASSIVE_KINDS or not p['label'] for p in profile.values()):
             raise ValueError('Nieprawidłowe pasywy konfrontacji.')
+        if any(p.get('stackable') is not (p['kind'] in {'test','impact'}) for p in profile.values()):
+            raise ValueError('Obwódka kumulacji musi odpowiadać działaniu pasywu konfrontacji.')
     ids = {s['id'] for s in data['scenes']}
     if len(ids) != len(data['scenes']):
         raise ValueError('Powtórzona scena konfrontacji.')
     for scene in data['scenes']:
-        if scene['kind'] not in {'npc', 'object'} or set(scene['methods']) != set(HEROES) or scene['resistance_per_hero'] < 1:
-            raise ValueError('Scena wymaga profilu wszystkich siedmiu metod.')
-        for method in scene['methods'].values():
-            if method['dc'] < 1 or method['die'] not in (4, 6, 8, 10, 12):
-                raise ValueError('Nieprawidłowa podatność metody.')
+        if scene['kind'] not in {'npc', 'object'} or scene['resistance_per_hero'] < 1:
+            raise ValueError('Nieprawidłowy rodzaj lub opór sceny.')
+        validate_approaches(scene.get('approaches'))
         if scene['minimum_pressure'] < 1 or scene['pressure_per_hero'] < 1:
             raise ValueError('Scena wymaga presji na talię.')
         if not scene['reactions'] or any(r['kind'] not in {'burn', 'strip', 'heal'} for r in scene['reactions']):

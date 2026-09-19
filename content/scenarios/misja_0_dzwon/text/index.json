@@ -1,23 +1,31 @@
 {
   "world": {
-    "title": "Dzwon do odebrania",
+    "title": "Na skraju wielkich wydarzeń",
     "path": "text/world.md",
-    "speaker": "Narrator"
+    "speaker": "Narrator",
+    "image": "assets/images/comic_v2/world_intro.png",
+    "image_layout": "landscape"
   },
   "party": {
     "title": "Pierwsze wezwanie",
     "path": "text/party.md",
-    "speaker": "Narrator"
+    "speaker": "Narrator",
+    "image": "assets/images/nessa_desk_interaction.png",
+    "image_layout": "landscape"
   },
   "brief": {
     "title": "Odprawa u Nessy",
     "path": "text/brief.md",
-    "speaker": "Nessa"
+    "speaker": "Nessa",
+    "image_layout": "landscape",
+    "image": "assets/images/nessa_desk_interaction.png"
   },
   "why": {
-    "title": "Dlaczego został?",
+    "title": "Dlaczego mienie zostało?",
     "path": "text/why.md",
-    "speaker": "Nessa"
+    "speaker": "Nessa",
+    "image_layout": "landscape",
+    "image": "assets/images/nessa_desk_interaction.png"
   },
   "road_info": {
     "title": "Czego spodziewać się po drodze?",
@@ -47,7 +55,9 @@
   "departure": {
     "title": "Wóz czeka",
     "path": "text/departure.md",
-    "speaker": "Narrator"
+    "speaker": "Narrator",
+    "image_layout": "landscape",
+    "image": "assets/images/nessa_desk_interaction.png"
   },
   "road": {
     "title": "Koleina",
@@ -70,49 +80,59 @@
     "speaker": "Narrator"
   },
   "arrival": {
-    "title": "Ktoś was uprzedził",
+    "title": "Brama bez formalności",
     "path": "text/arrival.md",
-    "speaker": "Narrator"
+    "speaker": "Narrator",
+    "image_layout": "landscape"
   },
   "surrender": {
-    "title": "Dość!",
+    "title": "„Dość! Porozmawiajmy!”",
     "path": "text/surrender.md",
-    "speaker": "Narrator"
+    "speaker": "Narrator",
+    "image_layout": "landscape"
   },
   "after_accepted": {
-    "title": "Broń na ziemi",
+    "title": "Ręce do pracy",
     "path": "text/after_accepted.md",
-    "speaker": "Narrator"
+    "speaker": "Narrator",
+    "image_layout": "landscape"
   },
   "after_refused": {
-    "title": "Cisza po starciu",
+    "title": "Posterunek pod kontrolą",
     "path": "text/after_refused.md",
-    "speaker": "Narrator"
+    "speaker": "Narrator",
+    "image_layout": "landscape"
   },
   "after_defeated": {
-    "title": "Cena porażki",
+    "title": "Cena przewagi",
     "path": "text/after_defeated.md",
-    "speaker": "Narrator"
+    "speaker": "Narrator",
+    "image_layout": "landscape"
   },
   "after_no_offer": {
-    "title": "Koniec oporu",
+    "title": "Po starciu",
     "path": "text/after_no_offer.md",
-    "speaker": "Narrator"
+    "speaker": "Narrator",
+    "image_layout": "landscape"
   },
   "explore": {
-    "title": "Opuszczony posterunek",
+    "title": "Spis i rzeczy spoza spisu",
     "path": "text/explore.md",
-    "speaker": "Narrator"
+    "speaker": "Narrator",
+    "image_layout": "landscape"
   },
   "leader": {
-    "title": "Pokwitowania",
+    "title": "Rachunek, który został",
     "path": "text/leader.md",
-    "speaker": "Narrator"
+    "speaker": "Narrator",
+    "image_layout": "landscape"
   },
   "armory": {
-    "title": "Puste stojaki",
+    "title": "Zbrojownia",
     "path": "text/armory.md",
-    "speaker": "Narrator"
+    "speaker": "Narrator",
+    "image_layout": "landscape",
+    "image": "maps/illustrations/ink_v3/armory.png"
   },
   "medallion": {
     "title": "Czyjaś pamiątka",
@@ -122,7 +142,9 @@
   "quarters": {
     "title": "Kwatera dowódcy",
     "path": "text/quarters.md",
-    "speaker": "Narrator"
+    "speaker": "Narrator",
+    "image_layout": "landscape",
+    "image": "maps/illustrations/ink_v3/quarters.png"
   },
   "cache": {
     "title": "Za deską",
@@ -130,19 +152,23 @@
     "speaker": "Narrator"
   },
   "store": {
-    "title": "Magazynek",
+    "title": "Zapasy do drogi",
     "path": "text/store.md",
-    "speaker": "Narrator"
+    "speaker": "Narrator",
+    "image_layout": "landscape",
+    "image": "maps/illustrations/ink_v3/store.png"
   },
   "rumor": {
-    "title": "Wskazówka",
+    "title": "Ślad pod łóżkiem",
     "path": "text/rumor.md",
-    "speaker": "Narrator"
+    "speaker": "Narrator",
+    "image_layout": "landscape"
   },
   "dilemma": {
-    "title": "Cudzy rachunek",
+    "title": "Dzwon poza rubrykami",
     "path": "text/dilemma.md",
-    "speaker": "Narrator"
+    "speaker": "Narrator",
+    "image_layout": "landscape"
   },
   "help": {
     "title": "Sprawa do załatwienia",
@@ -160,9 +186,10 @@
     "speaker": "Narrator"
   },
   "load": {
-    "title": "Załadunek",
+    "title": "Zabezpieczyć na drogę",
     "path": "text/load.md",
-    "speaker": "Narrator"
+    "speaker": "Narrator",
+    "image_layout": "landscape"
   },
   "return_help": {
     "title": "Powrót do Nessy",
@@ -182,42 +209,58 @@
   "summary": {
     "title": "Misja zakończona",
     "path": "text/summary.md",
-    "speaker": "Narrator"
+    "speaker": "Narrator",
+    "image_layout": "landscape",
+    "image": "assets/images/nessa_desk_interaction.png"
   },
   "hero_garran": {
     "title": "Garran",
     "path": "text/hero_garran.md",
-    "speaker": "Narrator"
+    "speaker": "Narrator",
+    "image": "assets/images/garran.png",
+    "image_layout": "portrait"
   },
   "hero_brakka": {
     "title": "Brakka",
     "path": "text/hero_brakka.md",
-    "speaker": "Narrator"
+    "speaker": "Narrator",
+    "image": "assets/images/brakka.png",
+    "image_layout": "portrait"
   },
   "hero_mira": {
     "title": "Mira",
     "path": "text/hero_mira.md",
-    "speaker": "Narrator"
+    "speaker": "Narrator",
+    "image": "assets/images/mira.png",
+    "image_layout": "portrait"
   },
   "hero_dagna": {
     "title": "Dagna",
     "path": "text/hero_dagna.md",
-    "speaker": "Narrator"
+    "speaker": "Narrator",
+    "image": "assets/images/dagna.png",
+    "image_layout": "portrait"
   },
   "hero_lorian": {
     "title": "Lorian",
     "path": "text/hero_lorian.md",
-    "speaker": "Narrator"
+    "speaker": "Narrator",
+    "image": "assets/images/lorian.png",
+    "image_layout": "portrait"
   },
   "hero_nimra": {
     "title": "Nimra",
     "path": "text/hero_nimra.md",
-    "speaker": "Narrator"
+    "speaker": "Narrator",
+    "image": "assets/images/nimra.png",
+    "image_layout": "portrait"
   },
   "hero_erynd": {
     "title": "Erynd",
     "path": "text/hero_erynd.md",
-    "speaker": "Narrator"
+    "speaker": "Narrator",
+    "image": "assets/images/erynd.png",
+    "image_layout": "portrait"
   },
   "potion_target": {
     "title": "Mikstura leczenia",
@@ -233,5 +276,289 @@
     "title": "Komu powierzycie amulet?",
     "speaker": "Instrukcja",
     "path": "text/amulet.md"
+  },
+  "guild_hub": {
+    "title": "Siedziba Gildii",
+    "path": "text/guild_hub.md",
+    "speaker": "Narrator",
+    "image": "assets/images/nessa_desk_interaction.png"
+  },
+  "arena_unavailable": {
+    "title": "Arena — jeszcze niedostępna",
+    "path": "text/arena_unavailable.md",
+    "speaker": "Instrukcja",
+    "image": "maps/illustrations/ink_v3/arena.png"
+  },
+  "debt_help": {
+    "title": "Papier cięższy od żelaza",
+    "path": "text/debt_help.md",
+    "speaker": "Narrator",
+    "image_layout": "landscape"
+  },
+  "debt_garran": {
+    "title": "Słowo Garrana",
+    "path": "text/debt_garran.md",
+    "speaker": "Narrator",
+    "image_layout": "landscape"
+  },
+  "debt_decline": {
+    "title": "Dokumenty zostają",
+    "path": "text/debt_decline.md",
+    "speaker": "Narrator",
+    "image_layout": "landscape"
+  },
+  "search_armory": {
+    "title": "Przeszukiwanie: Zbrojownia",
+    "path": "text/search_armory.md",
+    "speaker": "Narrator",
+    "image_layout": "landscape",
+    "image": "maps/illustrations/ink_v3/armory.png"
+  },
+  "armory_safe": {
+    "title": "Ładunek zabezpieczony",
+    "path": "text/armory_safe.md",
+    "speaker": "Narrator",
+    "image_layout": "landscape",
+    "image": "maps/illustrations/ink_v3/armory.png"
+  },
+  "armory_failure": {
+    "title": "Tylko rzeczy ze spisu",
+    "path": "text/armory_failure.md",
+    "speaker": "Narrator",
+    "image_layout": "landscape",
+    "image": "maps/illustrations/ink_v3/armory.png"
+  },
+  "armory_critical": {
+    "title": "Uszkodzony ładunek",
+    "path": "text/armory_critical.md",
+    "speaker": "Narrator",
+    "image_layout": "landscape",
+    "image": "maps/illustrations/ink_v3/armory.png"
+  },
+  "armory_repaired": {
+    "title": "Pomoc przychodzi w porę",
+    "path": "text/armory_repaired.md",
+    "speaker": "Narrator",
+    "image_layout": "landscape",
+    "image": "maps/illustrations/ink_v3/armory.png"
+  },
+  "armory_done": {
+    "title": "To miejsce już sprawdzone",
+    "path": "text/armory_done.md",
+    "speaker": "Narrator",
+    "image_layout": "landscape",
+    "image": "maps/illustrations/ink_v3/armory.png"
+  },
+  "search_quarters": {
+    "title": "Przeszukiwanie: Kwatera dowódcy",
+    "path": "text/search_quarters.md",
+    "speaker": "Narrator",
+    "image_layout": "landscape",
+    "image": "maps/illustrations/ink_v3/quarters.png"
+  },
+  "quarters_safe": {
+    "title": "Ładunek zabezpieczony",
+    "path": "text/quarters_safe.md",
+    "speaker": "Narrator",
+    "image_layout": "landscape",
+    "image": "maps/illustrations/ink_v3/quarters.png"
+  },
+  "quarters_failure": {
+    "title": "Tylko rzeczy ze spisu",
+    "path": "text/quarters_failure.md",
+    "speaker": "Narrator",
+    "image_layout": "landscape",
+    "image": "maps/illustrations/ink_v3/quarters.png"
+  },
+  "quarters_critical": {
+    "title": "Uszkodzony ładunek",
+    "path": "text/quarters_critical.md",
+    "speaker": "Narrator",
+    "image_layout": "landscape",
+    "image": "maps/illustrations/ink_v3/quarters.png"
+  },
+  "quarters_repaired": {
+    "title": "Pomoc przychodzi w porę",
+    "path": "text/quarters_repaired.md",
+    "speaker": "Narrator",
+    "image_layout": "landscape",
+    "image": "maps/illustrations/ink_v3/quarters.png"
+  },
+  "quarters_done": {
+    "title": "To miejsce już sprawdzone",
+    "path": "text/quarters_done.md",
+    "speaker": "Narrator",
+    "image_layout": "landscape",
+    "image": "maps/illustrations/ink_v3/quarters.png"
+  },
+  "armory_success": {
+    "title": "Czyjaś pamiątka",
+    "path": "text/armory_success.md",
+    "speaker": "Narrator",
+    "image_layout": "landscape",
+    "image": "maps/illustrations/ink_v3/armory.png"
+  },
+  "quarters_success": {
+    "title": "Pierścień za deską",
+    "path": "text/quarters_success.md",
+    "speaker": "Narrator",
+    "image_layout": "landscape",
+    "image": "maps/illustrations/ink_v3/quarters.png"
+  },
+  "bell_guild": {
+    "title": "Jeszcze jeden ciężar",
+    "path": "text/bell_guild.md",
+    "speaker": "Narrator",
+    "image_layout": "landscape"
+  },
+  "bell_village": {
+    "title": "Nie wasza rubryka",
+    "path": "text/bell_village.md",
+    "speaker": "Narrator",
+    "image_layout": "landscape"
+  },
+  "bell_fence": {
+    "title": "Kontakt Miry",
+    "path": "text/bell_fence.md",
+    "speaker": "Narrator",
+    "image_layout": "landscape"
+  },
+  "return_guild": {
+    "title": "Dostawa z nadwyżką",
+    "path": "text/return_guild.md",
+    "speaker": "Narrator",
+    "image_layout": "landscape",
+    "image": "assets/images/nessa_desk_interaction.png"
+  },
+  "return_village": {
+    "title": "Zgodnie ze spisem",
+    "path": "text/return_village.md",
+    "speaker": "Narrator",
+    "image_layout": "landscape",
+    "image": "assets/images/nessa_desk_interaction.png"
+  },
+  "return_fence": {
+    "title": "Dwa miejsca dostawy",
+    "path": "text/return_fence.md",
+    "speaker": "Narrator",
+    "image_layout": "landscape",
+    "image": "assets/images/nessa_desk_interaction.png"
+  },
+  "guild_return": {
+    "title": "Zanim odłożycie rozkaz",
+    "path": "text/guild_return.md",
+    "speaker": "Narrator",
+    "image_layout": "landscape",
+    "image": "assets/images/nessa_desk_interaction.png"
+  },
+  "ring": {
+    "title": "Pierścień dowódcy",
+    "path": "text/ring.md",
+    "speaker": "Narrator",
+    "image_layout": "landscape",
+    "image": "maps/illustrations/ink_v3/quarters.png"
+  },
+  "identify_roll": {
+    "title": "Nimra bada pierścień",
+    "path": "text/identify_roll.md",
+    "speaker": "Narrator",
+    "image_layout": "landscape",
+    "image": "maps/illustrations/ink_v3/quarters.png"
+  },
+  "identify_failure": {
+    "title": "Znak pozostaje zagadką",
+    "path": "text/identify_failure.md",
+    "speaker": "Narrator",
+    "image_layout": "landscape",
+    "image": "maps/illustrations/ink_v3/quarters.png"
+  },
+  "ring_identified": {
+    "title": "Pierścień Siły",
+    "path": "text/ring_identified.md",
+    "speaker": "Narrator",
+    "image_layout": "landscape",
+    "image": "maps/illustrations/ink_v3/quarters.png"
+  },
+  "ring_equip": {
+    "title": "Kto założy pierścień?",
+    "path": "text/ring_equip.md",
+    "speaker": "Narrator",
+    "image_layout": "landscape",
+    "image": "maps/illustrations/ink_v3/quarters.png"
+  },
+  "compliments": {
+    "title": "Kilka słów Loriana",
+    "path": "text/compliments.md",
+    "speaker": "Narrator",
+    "image_layout": "landscape",
+    "image": "assets/images/nessa_desk_interaction.png"
+  },
+  "compliment_invitation": {
+    "title": "Odpowiedź Nessy",
+    "path": "text/compliment_invitation.md",
+    "speaker": "Nessa",
+    "image_layout": "landscape",
+    "image": "assets/images/nessa_desk_interaction.png"
+  },
+  "compliment_soul": {
+    "title": "Odpowiedź Nessy",
+    "path": "text/compliment_soul.md",
+    "speaker": "Nessa",
+    "image_layout": "landscape",
+    "image": "assets/images/nessa_desk_interaction.png"
+  },
+  "compliment_wounded": {
+    "title": "Odpowiedź Nessy",
+    "path": "text/compliment_wounded.md",
+    "speaker": "Nessa",
+    "image_layout": "landscape",
+    "image": "assets/images/nessa_desk_interaction.png"
+  },
+  "compliment_kingdom": {
+    "title": "Odpowiedź Nessy",
+    "path": "text/compliment_kingdom.md",
+    "speaker": "Nessa",
+    "image_layout": "landscape",
+    "image": "assets/images/nessa_desk_interaction.png"
+  },
+  "compliment_bawdy": {
+    "title": "Odpowiedź Nessy",
+    "path": "text/compliment_bawdy.md",
+    "speaker": "Nessa",
+    "image_layout": "landscape",
+    "image": "assets/images/nessa_desk_interaction.png"
+  },
+  "dilemma_mira": {
+    "title": "Dzwon poza rubrykami",
+    "path": "text/dilemma_mira.md",
+    "speaker": "Narrator",
+    "image_layout": "landscape"
+  },
+  "quarters_success_nimra": {
+    "title": "Pierścień za deską",
+    "path": "text/quarters_success_nimra.md",
+    "speaker": "Narrator",
+    "image_layout": "landscape",
+    "image": "maps/illustrations/ink_v3/quarters.png"
+  },
+  "ring_nimra": {
+    "title": "Pierścień dowódcy",
+    "path": "text/ring_nimra.md",
+    "speaker": "Narrator",
+    "image_layout": "landscape",
+    "image": "maps/illustrations/ink_v3/quarters.png"
+  },
+  "cart_confrontation": {
+    "title": "Wóz w koleinie",
+    "path": "text/cart_confrontation.md",
+    "speaker": "Narrator",
+    "image": "assets/images/road.png",
+    "image_layout": "landscape"
+  },
+  "cart_coerced": {
+    "title": "Propozycja nie do odrzucenia",
+    "speaker": "Narrator",
+    "path": "text/cart_coerced.md",
+    "image": "assets/images/road.png"
   }
 }

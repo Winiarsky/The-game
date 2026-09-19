@@ -1,0 +1,17 @@
+{
+  "style": "comic_v2",
+  "style_guide": "profiles/visual_style.md",
+  "image_overrides": {
+    "assets/images/posterunek.png": "assets/images/comic_v2/posterunek.png",
+    "assets/images/road.png": "assets/images/comic_v2/road.png",
+    "assets/images/nessa_desk_interaction.png": "assets/images/comic_v2/nessa_desk_interaction.png",
+    "assets/images/nessa_portrait.png": "assets/images/comic_v2/nessa_portrait.png",
+    "assets/images/garran.png": "assets/images/comic_v2/garran.png",
+    "assets/images/brakka.png": "assets/images/comic_v2/brakka.png",
+    "assets/images/dagna.png": "assets/images/comic_v2/dagna.png",
+    "assets/images/mira.png": "assets/images/comic_v2/mira.png",
+    "assets/images/lorian.png": "assets/images/comic_v2/lorian.png",
+    "assets/images/nimra.png": "assets/images/comic_v2/nimra.png",
+    "assets/images/erynd.png": "assets/images/comic_v2/erynd.png"
+  }
+}

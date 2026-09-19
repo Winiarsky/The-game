@@ -14,6 +14,18 @@ from dnd_board_game.scenarios.pooled_mana_catalog import requirement_text, abili
 
 
 @pytest.mark.parametrize("hero_id", PLAYABLE_HERO_IDS)
+def test_confrontation_effect_names_follow_method_context(hero_id: str) -> None:
+    from dnd_board_game.physical_cards.mana_print_html import exploration_page
+    from dnd_board_game.scenarios.confrontation_terms import effect_text
+    html = exploration_page(build_print_hero(hero_id))
+    assert 'Wpływ: kość podejścia' in html
+    assert 'Postęp: kość podejścia' in html
+    assert effect_text('Wpływ: +4. Pasywy wpływu.', 'object') == 'Postęp: +4. Pasywy postępu.'
+    assert effect_text('+1 do wpływu', None) == '+1 do wpływu / postępu'
+    assert effect_text('Wpływ: +4. Pasywy wpływu.', 'npc') == 'Wpływ: +4. Pasywy wpływu.'
+
+
+@pytest.mark.parametrize("hero_id", PLAYABLE_HERO_IDS)
 def test_all_abilities_costs_and_reaction_labels_reach_every_format(hero_id: str) -> None:
     hero = build_print_hero(hero_id)
     catalog = hero_abilities(hero_id)
@@ -73,8 +85,8 @@ def test_mana_symbols_escape_text_and_match_combat_icon_shapes() -> None:
 
 def test_printed_weapon_damage_includes_runtime_ability_and_archery_bonuses() -> None:
     erynd = build_print_hero("erynd")
-    assert erynd.initiative == 6
-    assert any("Długi łuk: +6" in weapon and "1k8 + 4" in weapon for weapon in erynd.weapons)
+    assert erynd.initiative == 4
+    assert any("Długi łuk: +4" in weapon and "1k8 + 4" in weapon for weapon in erynd.weapons)
     assert any("Nóż myśliwski: +1" in weapon and "1k4 + 1" in weapon for weapon in erynd.weapons)
     assert any(
         "Miecz: +4" in weapon and "1k8 + 4" in weapon
@@ -86,25 +98,24 @@ def test_retired_passives_are_replaced_and_new_damage_limits_are_explicit() -> N
     dagna = dict(build_print_hero("dagna").passives)
     assert "Uczeń Życia" not in dagna
     assert "Wiara" in dagna["Nasycenie maną"]
-    assert "Łaska" in dagna["Nasycenie maną"]
+    assert "Krok ratowniczki" in dagna["Nasycenie maną"]
     assert "Odzyskiwanie magiczne" not in dict(build_print_hero("nimra").passives)
-    assert "+2k6" in dict(build_print_hero("mira").passives)["Atak z cienia"]
-    assert "+3k6" not in dict(build_print_hero("mira").passives)["Atak z cienia"]
-    assert "1k6" in dict(build_print_hero("erynd").passives)["Pierwsza krew"]
+    assert "2k6" in dict(build_print_hero("mira").passives)["Nasycenie maną"]
+    assert "+3k6" in dict(build_print_hero("mira").passives)["Nasycenie maną"]
+    assert "1k6" in dict(build_print_hero("erynd").passives)["Nasycenie maną"]
 
 
-def test_exploration_cards_share_runtime_methods_and_passives() -> None:
-    from dnd_board_game.rules.exploration_mana_catalog import HEROES, hero_methods
-    from dnd_board_game.application.exploration_mana_flow import method_modifiers
-    from dnd_board_game.ui.training_arena import training_hero
-    for hero in HEROES:
+def test_exploration_cards_explain_scene_choice_without_fixed_hero_methods() -> None:
+    for hero in PLAYABLE_HERO_IDS:
         cards = build_print_hero(hero).exploration
         assert len(cards) == 2 and {c.kind for c in cards} == {'npc', 'object'}
-        for card, method in zip(cards, hero_methods(hero)):
-            assert card.id == method.id
-            assert card.modifier == sum(m.value for m in method_modifiers(training_hero(hero), method))
-    assert build_print_hero('brakka').exploration[0].ability == 'Kondycja'
-    assert 'Praktyka terenowa' in dict(build_print_hero('erynd').passives)
+        for card in cards:
+            assert card.id == card.kind
+            assert card.name == 'Podejście ze sceny'
+            assert card.ability == 'Cecha podejścia'
+            assert not card.components
+            assert 'runą' in card.description and 'wsparcie' in card.description
+    assert set(dict(build_print_hero('erynd').passives)) == {'Nasycenie maną'}
 
 
 def test_descriptions_are_standalone_and_finite_effects_are_named() -> None:
@@ -225,16 +236,14 @@ def test_party_confrontation_prints_expose_35_passives_and_influence_modifiers()
     from dnd_board_game.ui.training_arena import training_hero
     for hero_id in PLAYABLE_HERO_IDS:
         hero=build_print_hero(hero_id)
-        assert dict(hero.exploration_passives)=={c:p['label'] for c,p in passives(hero_id).items()}
-        for method in hero.exploration:
-            scene=scene_by_id('nessa_raise' if method.kind=='npc' else 'sealed_cache')
-            profile=build((training_hero(hero_id),),scene).actor
-            assert method.influence_modifier==profile.impact_modifier
-            assert method.modifier==profile.test_modifier
+        from dnd_board_game.scenarios.confrontation_terms import effect_text
+        assert dict(hero.exploration_passives)=={c:effect_text(p['label'], None) for c,p in passives(hero_id).items()}
+        assert {method.kind for method in hero.exploration} == {'npc','object'}
+        assert all(method.name == 'Podejście ze sceny' for method in hero.exploration)
         html=render_hero_html(hero,'minimal')
         assert 'Pasywy kolorów w eksploracji' in html
         assert 'Dokładnie 21: sukces' not in html and 'Przekroczenie: utrudnienie' not in html
-        assert '1/1/2/3' in html
+        assert 'zawsze za 1 kartę' in html
 
 
 def test_card_fields_separate_charge_burning_and_only_real_boosts():

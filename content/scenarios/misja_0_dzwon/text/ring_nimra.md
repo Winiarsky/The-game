@@ -1,0 +1,1 @@
+Nimra może spróbować identyfikacji na miejscu: jeden test Inteligencji, k20 + jej premia z cechy i aktywne premie przedmiotów, ST 15. Po przeszukiwaniu zbieracie talię — nie przenosicie na ten test naładowania z zakończonej konfrontacji. Niepowodzenie nie niszczy pierścienia; specjalista w Gildii rozpozna go po powrocie.

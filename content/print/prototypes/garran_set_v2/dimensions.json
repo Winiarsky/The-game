@@ -1,0 +1,24 @@
+{
+  "paper_mm": [
+    210,
+    297
+  ],
+  "mana_paper_mm": [
+    297,
+    210
+  ],
+  "mana_card_mm": [
+    63,
+    88
+  ],
+  "action_mm": [
+    62,
+    76
+  ],
+  "equipment_mm": [
+    60,
+    42
+  ],
+  "garran_pages": 5,
+  "shared_reference_pages": 1
+}

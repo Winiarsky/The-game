@@ -20,7 +20,7 @@ Katalog: `content/balance/pooled_mana/catalog.json`, wersja 2.
 
 ## Obieg i kolejność
 
-- Każda walka: zbierz komplet, przetasuj; pule są puste. Po `max(5, 2 × bohaterowie)` kart każdego koloru: 25 kart dla 1–2, 30 dla 3, 40 dla 4, 50 dla 5, 60 dla 6, 70 dla 7. UI wyboru drużyny nadal obsługuje maksymalnie pięciu bohaterów.
+- Każda walka: zbierz aktywny komplet zgodny z [postawą drużyny](PARTY_ETHOS.md), przetasuj; pule są puste. Po `max(5, 2 × bohaterowie)` kart każdego koloru: 25 kart dla 1–2, 30 dla 3, 40 dla 4, 50 dla 5, 60 dla 6, 70 dla 7. UI wyboru drużyny nadal obsługuje maksymalnie pięciu bohaterów.
 - Poniżej 21 pkt: na początku własnej tury uzupełnij ofertę do dwóch, wybierz jedną runą; pozostała karta czeka na następnego gracza. Przy jednej dostępnej karcie bierzesz ją. Zero dostępnych kart powoduje drain.
 - Dobór ostatniej karty może przekroczyć 21 bez kary. Od 21 pkt nie dobierasz ani nie uzupełniasz oferty w swojej turze. Po drainie wracasz do zwykłego ładowania przy następnym należnym doborze.
 - Punkty 6/12/21 odblokowują zdolności. Bez dodatkowych warunków kolorów: limit doboru nie może zamknąć dostępu do części karty postaci.
@@ -29,7 +29,7 @@ Katalog: `content/balance/pooled_mana/catalog.json`, wersja 2.
 - Wybierz wariant i potwierdź koszt PRZED efektem. Rozstrzygnij akcję, następnie zgłoś kolory spalanych kart z wierzchu. Jeśli nie ma całej wymaganej liczby, efekt akcji pozostaje i następuje drain. Przy dokładnym wyczerpaniu reset dopiero przy kolejnej niemożliwej operacji.
 - Na granicy rund jedna karta z wierzchu **wygasa**. Osobny stos, nieodzyskiwalny przez zdolności. Jeśli brakuje karty — drain. Ta zasada zapewnia reset nawet przy samych darmowych akcjach i odzysku Loriana.
 - Wrogowie nadal spalają ofertę/wierzch i więżą manę. Pokonanie więżącego oddaje jego karty na spód bez tasowania. Po wygaśnięciu karty na koniec rundy aplikacja wraca do należnego doboru nowego aktora.
-- Drain: WSZYSTKIE karty, także ładowane, spalone, wygasłe i uwięzione, wracają do przetasowanego kompletu. Znikają premie kolorów i efekty O, z uwzględnieniem koncentracji. Leczenie, zadane obrażenia i pozycje pozostają. Nie odnawia akcji/reakcji/znaczników użycia w turze i nie daje dodatkowego doboru.
+- Drain: WSZYSTKIE karty aktywnej talii (bez wyłączonych przez postawę drużyny), także ładowane, spalone, wygasłe i uwięzione, wracają do przetasowanego kompletu. Znikają premie kolorów i efekty O, z uwzględnieniem koncentracji. Leczenie, zadane obrażenia i pozycje pozostają. Nie odnawia akcji/reakcji/znaczników użycia w turze i nie daje dodatkowego doboru.
 
 ## Punkty i kolory
 

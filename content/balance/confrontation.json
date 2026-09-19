@@ -4,155 +4,484 @@
     "garran": {
       "C": {
         "kind": "impact",
-        "label": "Stanowczość: +1 do wpływu za kartę (maks. +2)"
+        "label": "Stanowczość: Po sukcesie: +1 do wpływu za kartę tego koloru. Maks. +2. Kumuluje się.",
+        "stackable": true,
+        "display": {
+          "name": "Stanowczość",
+          "when": "Po udanym teście",
+          "effect": "+1 do wpływu za każdą kartę tego koloru w twojej puli; maksymalnie +2.",
+          "note": "To premia do zmniejszenia oporu rozmówcy lub obiektu, nie do rzutu k20.",
+          "short": "Po sukcesie: +1 do wpływu za kartę tego koloru. Maks. +2.",
+          "stacking": "Kolejne karty: +1, łącznie maks. +2."
+        }
       },
       "B": {
         "kind": "guard",
-        "label": "Opanowanie: osłoń 1 kartę puli przed każdą reakcją (bez kumulacji)"
+        "label": "Opanowanie: Reakcja zabiera kartę z twojej puli? Zachowaj ją. Ochrona 1 karty; nie dotyczy wspólnej talii. Nie kumuluje się.",
+        "stackable": false,
+        "display": {
+          "name": "Opanowanie",
+          "when": "Gdy reakcja zabiera kartę z twojej puli",
+          "effect": "Zachowujesz tę kartę.",
+          "note": "Chroni 1 kartę przy każdej takiej reakcji. Nie chroni wspólnej talii przed spalaniem.",
+          "short": "Reakcja zabiera kartę z twojej puli? Zachowaj ją. Ochrona 1 karty; nie dotyczy wspólnej talii.",
+          "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
+        }
       },
       "Z": {
         "kind": "recover",
-        "label": "Oddech: przy doborze oddaj najstarszą spaloną kartę na spód talii"
+        "label": "Oddech: Po udanym teście: przenieś 1 najwcześniej spaloną kartę na spód talii. Potwierdź ✓, potem spal koszt testu. Nie kumuluje się.",
+        "stackable": false,
+        "display": {
+          "name": "Oddech",
+          "when": "Po każdym udanym teście",
+          "effect": "Weź 1 kartę, która została spalona najwcześniej. Połóż ją na spodzie wspólnej talii.",
+          "note": "Weź kartę, która została spalona najwcześniej — nie musi być zielona. Potwierdź ✓. Dopiero potem spal 1 kartę z wierzchu talii za swój test. Sam dobór many nie odzyskuje kart. Jeśli stos spalonych jest pusty, nic nie odzyskujesz.",
+          "short": "Po udanym teście: przenieś 1 najwcześniej spaloną kartę na spód talii. Potwierdź ✓, potem spal koszt testu.",
+          "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu.",
+          "diagram": "recovery",
+          "instruction": "Potwierdź ✓, potem opłać test."
+        }
       },
       "F": {
         "kind": "test",
-        "label": "Skupienie: +1 do testu za kartę (maks. +2)"
+        "label": "Skupienie: Test k20: +1 za kartę tego koloru w puli. Maks. +2. Bez premii do wpływu. Kumuluje się.",
+        "stackable": true,
+        "display": {
+          "name": "Skupienie",
+          "when": "Gdy wykonujesz test",
+          "effect": "+1 do wyniku k20 za każdą kartę tego koloru w twojej puli; maksymalnie +2.",
+          "note": "Nie zwiększa efektu po sukcesie.",
+          "short": "Test k20: +1 za kartę tego koloru w puli. Maks. +2. Bez premii do wpływu.",
+          "stacking": "Kolejne karty: +1, łącznie maks. +2."
+        }
       },
       "N": {
         "kind": "support",
-        "label": "Współpraca: pomoc daje +3 zamiast +2 (bez kumulacji)"
+        "label": "Współpraca: Pomoc: +2 do następnego testu sojusznika zamiast +1. Spal 1 kartę. Dostępne cele wsparcia bez zmian. Nie kumuluje się.",
+        "stackable": false,
+        "display": {
+          "name": "Współpraca",
+          "when": "Gdy pomagasz sojusznikowi",
+          "effect": "Dajesz +2 do jego następnego testu zamiast +1. Spal 1 kartę.",
+          "note": "Możesz pomóc tylko podejściom wskazanym w scenie. Pomoc od kilku osób sumuje się. Cała premia znika po teście odbiorcy, także nieudanym.",
+          "short": "Pomoc: +2 do następnego testu sojusznika zamiast +1. Spal 1 kartę. Dostępne cele wsparcia bez zmian.",
+          "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
+        }
       }
     },
     "brakka": {
       "C": {
         "kind": "impact",
-        "label": "Stanowczość: +1 do wpływu za kartę (maks. +2)"
+        "label": "Stanowczość: Po sukcesie: +1 do wpływu za kartę tego koloru. Maks. +2. Kumuluje się.",
+        "stackable": true,
+        "display": {
+          "name": "Stanowczość",
+          "when": "Po udanym teście",
+          "effect": "+1 do wpływu za każdą kartę tego koloru w twojej puli; maksymalnie +2.",
+          "note": "To premia do zmniejszenia oporu rozmówcy lub obiektu, nie do rzutu k20.",
+          "short": "Po sukcesie: +1 do wpływu za kartę tego koloru. Maks. +2.",
+          "stacking": "Kolejne karty: +1, łącznie maks. +2."
+        }
       },
       "B": {
         "kind": "guard",
-        "label": "Opanowanie: osłoń 1 kartę puli przed każdą reakcją (bez kumulacji)"
+        "label": "Opanowanie: Reakcja zabiera kartę z twojej puli? Zachowaj ją. Ochrona 1 karty; nie dotyczy wspólnej talii. Nie kumuluje się.",
+        "stackable": false,
+        "display": {
+          "name": "Opanowanie",
+          "when": "Gdy reakcja zabiera kartę z twojej puli",
+          "effect": "Zachowujesz tę kartę.",
+          "note": "Chroni 1 kartę przy każdej takiej reakcji. Nie chroni wspólnej talii przed spalaniem.",
+          "short": "Reakcja zabiera kartę z twojej puli? Zachowaj ją. Ochrona 1 karty; nie dotyczy wspólnej talii.",
+          "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
+        }
       },
       "Z": {
         "kind": "recover",
-        "label": "Oddech: przy doborze oddaj najstarszą spaloną kartę na spód talii"
+        "label": "Oddech: Po udanym teście: przenieś 1 najwcześniej spaloną kartę na spód talii. Potwierdź ✓, potem spal koszt testu. Nie kumuluje się.",
+        "stackable": false,
+        "display": {
+          "name": "Oddech",
+          "when": "Po każdym udanym teście",
+          "effect": "Weź 1 kartę, która została spalona najwcześniej. Połóż ją na spodzie wspólnej talii.",
+          "note": "Weź kartę, która została spalona najwcześniej — nie musi być zielona. Potwierdź ✓. Dopiero potem spal 1 kartę z wierzchu talii za swój test. Sam dobór many nie odzyskuje kart. Jeśli stos spalonych jest pusty, nic nie odzyskujesz.",
+          "short": "Po udanym teście: przenieś 1 najwcześniej spaloną kartę na spód talii. Potwierdź ✓, potem spal koszt testu.",
+          "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu.",
+          "diagram": "recovery",
+          "instruction": "Potwierdź ✓, potem opłać test."
+        }
       },
       "F": {
         "kind": "support",
-        "label": "Współpraca: pomoc daje +3 zamiast +2 (bez kumulacji)"
+        "label": "Współpraca: Pomoc: +2 do następnego testu sojusznika zamiast +1. Spal 1 kartę. Dostępne cele wsparcia bez zmian. Nie kumuluje się.",
+        "stackable": false,
+        "display": {
+          "name": "Współpraca",
+          "when": "Gdy pomagasz sojusznikowi",
+          "effect": "Dajesz +2 do jego następnego testu zamiast +1. Spal 1 kartę.",
+          "note": "Możesz pomóc tylko podejściom wskazanym w scenie. Pomoc od kilku osób sumuje się. Cała premia znika po teście odbiorcy, także nieudanym.",
+          "short": "Pomoc: +2 do następnego testu sojusznika zamiast +1. Spal 1 kartę. Dostępne cele wsparcia bez zmian.",
+          "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
+        }
       },
       "N": {
         "kind": "test",
-        "label": "Skupienie: +1 do testu za kartę (maks. +2)"
+        "label": "Skupienie: Test k20: +1 za kartę tego koloru w puli. Maks. +2. Bez premii do wpływu. Kumuluje się.",
+        "stackable": true,
+        "display": {
+          "name": "Skupienie",
+          "when": "Gdy wykonujesz test",
+          "effect": "+1 do wyniku k20 za każdą kartę tego koloru w twojej puli; maksymalnie +2.",
+          "note": "Nie zwiększa efektu po sukcesie.",
+          "short": "Test k20: +1 za kartę tego koloru w puli. Maks. +2. Bez premii do wpływu.",
+          "stacking": "Kolejne karty: +1, łącznie maks. +2."
+        }
       }
     },
     "mira": {
       "C": {
         "kind": "test",
-        "label": "Skupienie: +1 do testu za kartę (maks. +2)"
+        "label": "Skupienie: Test k20: +1 za kartę tego koloru w puli. Maks. +2. Bez premii do wpływu. Kumuluje się.",
+        "stackable": true,
+        "display": {
+          "name": "Skupienie",
+          "when": "Gdy wykonujesz test",
+          "effect": "+1 do wyniku k20 za każdą kartę tego koloru w twojej puli; maksymalnie +2.",
+          "note": "Nie zwiększa efektu po sukcesie.",
+          "short": "Test k20: +1 za kartę tego koloru w puli. Maks. +2. Bez premii do wpływu.",
+          "stacking": "Kolejne karty: +1, łącznie maks. +2."
+        }
       },
       "B": {
         "kind": "guard",
-        "label": "Opanowanie: osłoń 1 kartę puli przed każdą reakcją (bez kumulacji)"
+        "label": "Opanowanie: Reakcja zabiera kartę z twojej puli? Zachowaj ją. Ochrona 1 karty; nie dotyczy wspólnej talii. Nie kumuluje się.",
+        "stackable": false,
+        "display": {
+          "name": "Opanowanie",
+          "when": "Gdy reakcja zabiera kartę z twojej puli",
+          "effect": "Zachowujesz tę kartę.",
+          "note": "Chroni 1 kartę przy każdej takiej reakcji. Nie chroni wspólnej talii przed spalaniem.",
+          "short": "Reakcja zabiera kartę z twojej puli? Zachowaj ją. Ochrona 1 karty; nie dotyczy wspólnej talii.",
+          "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
+        }
       },
       "Z": {
         "kind": "impact",
-        "label": "Stanowczość: +1 do wpływu za kartę (maks. +2)"
+        "label": "Stanowczość: Po sukcesie: +1 do wpływu za kartę tego koloru. Maks. +2. Kumuluje się.",
+        "stackable": true,
+        "display": {
+          "name": "Stanowczość",
+          "when": "Po udanym teście",
+          "effect": "+1 do wpływu za każdą kartę tego koloru w twojej puli; maksymalnie +2.",
+          "note": "To premia do zmniejszenia oporu rozmówcy lub obiektu, nie do rzutu k20.",
+          "short": "Po sukcesie: +1 do wpływu za kartę tego koloru. Maks. +2.",
+          "stacking": "Kolejne karty: +1, łącznie maks. +2."
+        }
       },
       "F": {
         "kind": "support",
-        "label": "Współpraca: pomoc daje +3 zamiast +2 (bez kumulacji)"
+        "label": "Współpraca: Pomoc: +2 do następnego testu sojusznika zamiast +1. Spal 1 kartę. Dostępne cele wsparcia bez zmian. Nie kumuluje się.",
+        "stackable": false,
+        "display": {
+          "name": "Współpraca",
+          "when": "Gdy pomagasz sojusznikowi",
+          "effect": "Dajesz +2 do jego następnego testu zamiast +1. Spal 1 kartę.",
+          "note": "Możesz pomóc tylko podejściom wskazanym w scenie. Pomoc od kilku osób sumuje się. Cała premia znika po teście odbiorcy, także nieudanym.",
+          "short": "Pomoc: +2 do następnego testu sojusznika zamiast +1. Spal 1 kartę. Dostępne cele wsparcia bez zmian.",
+          "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
+        }
       },
       "N": {
         "kind": "recover",
-        "label": "Oddech: przy doborze oddaj najstarszą spaloną kartę na spód talii"
+        "label": "Oddech: Po udanym teście: przenieś 1 najwcześniej spaloną kartę na spód talii. Potwierdź ✓, potem spal koszt testu. Nie kumuluje się.",
+        "stackable": false,
+        "display": {
+          "name": "Oddech",
+          "when": "Po każdym udanym teście",
+          "effect": "Weź 1 kartę, która została spalona najwcześniej. Połóż ją na spodzie wspólnej talii.",
+          "note": "Weź kartę, która została spalona najwcześniej — nie musi być zielona. Potwierdź ✓. Dopiero potem spal 1 kartę z wierzchu talii za swój test. Sam dobór many nie odzyskuje kart. Jeśli stos spalonych jest pusty, nic nie odzyskujesz.",
+          "short": "Po udanym teście: przenieś 1 najwcześniej spaloną kartę na spód talii. Potwierdź ✓, potem spal koszt testu.",
+          "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu.",
+          "diagram": "recovery",
+          "instruction": "Potwierdź ✓, potem opłać test."
+        }
       }
     },
     "dagna": {
       "C": {
         "kind": "impact",
-        "label": "Stanowczość: +1 do wpływu za kartę (maks. +2)"
+        "label": "Stanowczość: Po sukcesie: +1 do wpływu za kartę tego koloru. Maks. +2. Kumuluje się.",
+        "stackable": true,
+        "display": {
+          "name": "Stanowczość",
+          "when": "Po udanym teście",
+          "effect": "+1 do wpływu za każdą kartę tego koloru w twojej puli; maksymalnie +2.",
+          "note": "To premia do zmniejszenia oporu rozmówcy lub obiektu, nie do rzutu k20.",
+          "short": "Po sukcesie: +1 do wpływu za kartę tego koloru. Maks. +2.",
+          "stacking": "Kolejne karty: +1, łącznie maks. +2."
+        }
       },
       "B": {
         "kind": "support",
-        "label": "Współpraca: pomoc daje +3 zamiast +2 (bez kumulacji)"
+        "label": "Współpraca: Pomoc: +2 do następnego testu sojusznika zamiast +1. Spal 1 kartę. Dostępne cele wsparcia bez zmian. Nie kumuluje się.",
+        "stackable": false,
+        "display": {
+          "name": "Współpraca",
+          "when": "Gdy pomagasz sojusznikowi",
+          "effect": "Dajesz +2 do jego następnego testu zamiast +1. Spal 1 kartę.",
+          "note": "Możesz pomóc tylko podejściom wskazanym w scenie. Pomoc od kilku osób sumuje się. Cała premia znika po teście odbiorcy, także nieudanym.",
+          "short": "Pomoc: +2 do następnego testu sojusznika zamiast +1. Spal 1 kartę. Dostępne cele wsparcia bez zmian.",
+          "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
+        }
       },
       "Z": {
         "kind": "recover",
-        "label": "Oddech: przy doborze oddaj najstarszą spaloną kartę na spód talii"
+        "label": "Oddech: Po udanym teście: przenieś 1 najwcześniej spaloną kartę na spód talii. Potwierdź ✓, potem spal koszt testu. Nie kumuluje się.",
+        "stackable": false,
+        "display": {
+          "name": "Oddech",
+          "when": "Po każdym udanym teście",
+          "effect": "Weź 1 kartę, która została spalona najwcześniej. Połóż ją na spodzie wspólnej talii.",
+          "note": "Weź kartę, która została spalona najwcześniej — nie musi być zielona. Potwierdź ✓. Dopiero potem spal 1 kartę z wierzchu talii za swój test. Sam dobór many nie odzyskuje kart. Jeśli stos spalonych jest pusty, nic nie odzyskujesz.",
+          "short": "Po udanym teście: przenieś 1 najwcześniej spaloną kartę na spód talii. Potwierdź ✓, potem spal koszt testu.",
+          "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu.",
+          "diagram": "recovery",
+          "instruction": "Potwierdź ✓, potem opłać test."
+        }
       },
       "F": {
         "kind": "guard",
-        "label": "Opanowanie: osłoń 1 kartę puli przed każdą reakcją (bez kumulacji)"
+        "label": "Opanowanie: Reakcja zabiera kartę z twojej puli? Zachowaj ją. Ochrona 1 karty; nie dotyczy wspólnej talii. Nie kumuluje się.",
+        "stackable": false,
+        "display": {
+          "name": "Opanowanie",
+          "when": "Gdy reakcja zabiera kartę z twojej puli",
+          "effect": "Zachowujesz tę kartę.",
+          "note": "Chroni 1 kartę przy każdej takiej reakcji. Nie chroni wspólnej talii przed spalaniem.",
+          "short": "Reakcja zabiera kartę z twojej puli? Zachowaj ją. Ochrona 1 karty; nie dotyczy wspólnej talii.",
+          "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
+        }
       },
       "N": {
         "kind": "test",
-        "label": "Skupienie: +1 do testu za kartę (maks. +2)"
+        "label": "Skupienie: Test k20: +1 za kartę tego koloru w puli. Maks. +2. Bez premii do wpływu. Kumuluje się.",
+        "stackable": true,
+        "display": {
+          "name": "Skupienie",
+          "when": "Gdy wykonujesz test",
+          "effect": "+1 do wyniku k20 za każdą kartę tego koloru w twojej puli; maksymalnie +2.",
+          "note": "Nie zwiększa efektu po sukcesie.",
+          "short": "Test k20: +1 za kartę tego koloru w puli. Maks. +2. Bez premii do wpływu.",
+          "stacking": "Kolejne karty: +1, łącznie maks. +2."
+        }
       }
     },
     "lorian": {
       "C": {
         "kind": "impact",
-        "label": "Stanowczość: +1 do wpływu za kartę (maks. +2)"
+        "label": "Stanowczość: Po sukcesie: +1 do wpływu za kartę tego koloru. Maks. +2. Kumuluje się.",
+        "stackable": true,
+        "display": {
+          "name": "Stanowczość",
+          "when": "Po udanym teście",
+          "effect": "+1 do wpływu za każdą kartę tego koloru w twojej puli; maksymalnie +2.",
+          "note": "To premia do zmniejszenia oporu rozmówcy lub obiektu, nie do rzutu k20.",
+          "short": "Po sukcesie: +1 do wpływu za kartę tego koloru. Maks. +2.",
+          "stacking": "Kolejne karty: +1, łącznie maks. +2."
+        }
       },
       "B": {
         "kind": "test",
-        "label": "Skupienie: +1 do testu za kartę (maks. +2)"
+        "label": "Skupienie: Test k20: +1 za kartę tego koloru w puli. Maks. +2. Bez premii do wpływu. Kumuluje się.",
+        "stackable": true,
+        "display": {
+          "name": "Skupienie",
+          "when": "Gdy wykonujesz test",
+          "effect": "+1 do wyniku k20 za każdą kartę tego koloru w twojej puli; maksymalnie +2.",
+          "note": "Nie zwiększa efektu po sukcesie.",
+          "short": "Test k20: +1 za kartę tego koloru w puli. Maks. +2. Bez premii do wpływu.",
+          "stacking": "Kolejne karty: +1, łącznie maks. +2."
+        }
       },
       "Z": {
         "kind": "guard",
-        "label": "Opanowanie: osłoń 1 kartę puli przed każdą reakcją (bez kumulacji)"
+        "label": "Opanowanie: Reakcja zabiera kartę z twojej puli? Zachowaj ją. Ochrona 1 karty; nie dotyczy wspólnej talii. Nie kumuluje się.",
+        "stackable": false,
+        "display": {
+          "name": "Opanowanie",
+          "when": "Gdy reakcja zabiera kartę z twojej puli",
+          "effect": "Zachowujesz tę kartę.",
+          "note": "Chroni 1 kartę przy każdej takiej reakcji. Nie chroni wspólnej talii przed spalaniem.",
+          "short": "Reakcja zabiera kartę z twojej puli? Zachowaj ją. Ochrona 1 karty; nie dotyczy wspólnej talii.",
+          "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
+        }
       },
       "F": {
         "kind": "support",
-        "label": "Współpraca: pomoc daje +3 zamiast +2 (bez kumulacji)"
+        "label": "Współpraca: Pomoc: +2 do następnego testu sojusznika zamiast +1. Spal 1 kartę. Dostępne cele wsparcia bez zmian. Nie kumuluje się.",
+        "stackable": false,
+        "display": {
+          "name": "Współpraca",
+          "when": "Gdy pomagasz sojusznikowi",
+          "effect": "Dajesz +2 do jego następnego testu zamiast +1. Spal 1 kartę.",
+          "note": "Możesz pomóc tylko podejściom wskazanym w scenie. Pomoc od kilku osób sumuje się. Cała premia znika po teście odbiorcy, także nieudanym.",
+          "short": "Pomoc: +2 do następnego testu sojusznika zamiast +1. Spal 1 kartę. Dostępne cele wsparcia bez zmian.",
+          "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
+        }
       },
       "N": {
         "kind": "recover",
-        "label": "Oddech: przy doborze oddaj najstarszą spaloną kartę na spód talii"
+        "label": "Oddech: Po udanym teście: przenieś 1 najwcześniej spaloną kartę na spód talii. Potwierdź ✓, potem spal koszt testu. Nie kumuluje się.",
+        "stackable": false,
+        "display": {
+          "name": "Oddech",
+          "when": "Po każdym udanym teście",
+          "effect": "Weź 1 kartę, która została spalona najwcześniej. Połóż ją na spodzie wspólnej talii.",
+          "note": "Weź kartę, która została spalona najwcześniej — nie musi być zielona. Potwierdź ✓. Dopiero potem spal 1 kartę z wierzchu talii za swój test. Sam dobór many nie odzyskuje kart. Jeśli stos spalonych jest pusty, nic nie odzyskujesz.",
+          "short": "Po udanym teście: przenieś 1 najwcześniej spaloną kartę na spód talii. Potwierdź ✓, potem spal koszt testu.",
+          "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu.",
+          "diagram": "recovery",
+          "instruction": "Potwierdź ✓, potem opłać test."
+        }
       }
     },
     "nimra": {
       "C": {
         "kind": "impact",
-        "label": "Stanowczość: +1 do wpływu za kartę (maks. +2)"
+        "label": "Stanowczość: Po sukcesie: +1 do wpływu za kartę tego koloru. Maks. +2. Kumuluje się.",
+        "stackable": true,
+        "display": {
+          "name": "Stanowczość",
+          "when": "Po udanym teście",
+          "effect": "+1 do wpływu za każdą kartę tego koloru w twojej puli; maksymalnie +2.",
+          "note": "To premia do zmniejszenia oporu rozmówcy lub obiektu, nie do rzutu k20.",
+          "short": "Po sukcesie: +1 do wpływu za kartę tego koloru. Maks. +2.",
+          "stacking": "Kolejne karty: +1, łącznie maks. +2."
+        }
       },
       "B": {
         "kind": "guard",
-        "label": "Opanowanie: osłoń 1 kartę puli przed każdą reakcją (bez kumulacji)"
+        "label": "Opanowanie: Reakcja zabiera kartę z twojej puli? Zachowaj ją. Ochrona 1 karty; nie dotyczy wspólnej talii. Nie kumuluje się.",
+        "stackable": false,
+        "display": {
+          "name": "Opanowanie",
+          "when": "Gdy reakcja zabiera kartę z twojej puli",
+          "effect": "Zachowujesz tę kartę.",
+          "note": "Chroni 1 kartę przy każdej takiej reakcji. Nie chroni wspólnej talii przed spalaniem.",
+          "short": "Reakcja zabiera kartę z twojej puli? Zachowaj ją. Ochrona 1 karty; nie dotyczy wspólnej talii.",
+          "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
+        }
       },
       "Z": {
         "kind": "recover",
-        "label": "Oddech: przy doborze oddaj najstarszą spaloną kartę na spód talii"
+        "label": "Oddech: Po udanym teście: przenieś 1 najwcześniej spaloną kartę na spód talii. Potwierdź ✓, potem spal koszt testu. Nie kumuluje się.",
+        "stackable": false,
+        "display": {
+          "name": "Oddech",
+          "when": "Po każdym udanym teście",
+          "effect": "Weź 1 kartę, która została spalona najwcześniej. Połóż ją na spodzie wspólnej talii.",
+          "note": "Weź kartę, która została spalona najwcześniej — nie musi być zielona. Potwierdź ✓. Dopiero potem spal 1 kartę z wierzchu talii za swój test. Sam dobór many nie odzyskuje kart. Jeśli stos spalonych jest pusty, nic nie odzyskujesz.",
+          "short": "Po udanym teście: przenieś 1 najwcześniej spaloną kartę na spód talii. Potwierdź ✓, potem spal koszt testu.",
+          "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu.",
+          "diagram": "recovery",
+          "instruction": "Potwierdź ✓, potem opłać test."
+        }
       },
       "F": {
         "kind": "support",
-        "label": "Współpraca: pomoc daje +3 zamiast +2 (bez kumulacji)"
+        "label": "Współpraca: Pomoc: +2 do następnego testu sojusznika zamiast +1. Spal 1 kartę. Dostępne cele wsparcia bez zmian. Nie kumuluje się.",
+        "stackable": false,
+        "display": {
+          "name": "Współpraca",
+          "when": "Gdy pomagasz sojusznikowi",
+          "effect": "Dajesz +2 do jego następnego testu zamiast +1. Spal 1 kartę.",
+          "note": "Możesz pomóc tylko podejściom wskazanym w scenie. Pomoc od kilku osób sumuje się. Cała premia znika po teście odbiorcy, także nieudanym.",
+          "short": "Pomoc: +2 do następnego testu sojusznika zamiast +1. Spal 1 kartę. Dostępne cele wsparcia bez zmian.",
+          "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
+        }
       },
       "N": {
         "kind": "test",
-        "label": "Skupienie: +1 do testu za kartę (maks. +2)"
+        "label": "Skupienie: Test k20: +1 za kartę tego koloru w puli. Maks. +2. Bez premii do wpływu. Kumuluje się.",
+        "stackable": true,
+        "display": {
+          "name": "Skupienie",
+          "when": "Gdy wykonujesz test",
+          "effect": "+1 do wyniku k20 za każdą kartę tego koloru w twojej puli; maksymalnie +2.",
+          "note": "Nie zwiększa efektu po sukcesie.",
+          "short": "Test k20: +1 za kartę tego koloru w puli. Maks. +2. Bez premii do wpływu.",
+          "stacking": "Kolejne karty: +1, łącznie maks. +2."
+        }
       }
     },
     "erynd": {
       "C": {
         "kind": "impact",
-        "label": "Stanowczość: +1 do wpływu za kartę (maks. +2)"
+        "label": "Stanowczość: Po sukcesie: +1 do wpływu za kartę tego koloru. Maks. +2. Kumuluje się.",
+        "stackable": true,
+        "display": {
+          "name": "Stanowczość",
+          "when": "Po udanym teście",
+          "effect": "+1 do wpływu za każdą kartę tego koloru w twojej puli; maksymalnie +2.",
+          "note": "To premia do zmniejszenia oporu rozmówcy lub obiektu, nie do rzutu k20.",
+          "short": "Po sukcesie: +1 do wpływu za kartę tego koloru. Maks. +2.",
+          "stacking": "Kolejne karty: +1, łącznie maks. +2."
+        }
       },
       "B": {
         "kind": "guard",
-        "label": "Opanowanie: osłoń 1 kartę puli przed każdą reakcją (bez kumulacji)"
+        "label": "Opanowanie: Reakcja zabiera kartę z twojej puli? Zachowaj ją. Ochrona 1 karty; nie dotyczy wspólnej talii. Nie kumuluje się.",
+        "stackable": false,
+        "display": {
+          "name": "Opanowanie",
+          "when": "Gdy reakcja zabiera kartę z twojej puli",
+          "effect": "Zachowujesz tę kartę.",
+          "note": "Chroni 1 kartę przy każdej takiej reakcji. Nie chroni wspólnej talii przed spalaniem.",
+          "short": "Reakcja zabiera kartę z twojej puli? Zachowaj ją. Ochrona 1 karty; nie dotyczy wspólnej talii.",
+          "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
+        }
       },
       "Z": {
         "kind": "test",
-        "label": "Skupienie: +1 do testu za kartę (maks. +2)"
+        "label": "Skupienie: Test k20: +1 za kartę tego koloru w puli. Maks. +2. Bez premii do wpływu. Kumuluje się.",
+        "stackable": true,
+        "display": {
+          "name": "Skupienie",
+          "when": "Gdy wykonujesz test",
+          "effect": "+1 do wyniku k20 za każdą kartę tego koloru w twojej puli; maksymalnie +2.",
+          "note": "Nie zwiększa efektu po sukcesie.",
+          "short": "Test k20: +1 za kartę tego koloru w puli. Maks. +2. Bez premii do wpływu.",
+          "stacking": "Kolejne karty: +1, łącznie maks. +2."
+        }
       },
       "F": {
         "kind": "support",
-        "label": "Współpraca: pomoc daje +3 zamiast +2 (bez kumulacji)"
+        "label": "Współpraca: Pomoc: +2 do następnego testu sojusznika zamiast +1. Spal 1 kartę. Dostępne cele wsparcia bez zmian. Nie kumuluje się.",
+        "stackable": false,
+        "display": {
+          "name": "Współpraca",
+          "when": "Gdy pomagasz sojusznikowi",
+          "effect": "Dajesz +2 do jego następnego testu zamiast +1. Spal 1 kartę.",
+          "note": "Możesz pomóc tylko podejściom wskazanym w scenie. Pomoc od kilku osób sumuje się. Cała premia znika po teście odbiorcy, także nieudanym.",
+          "short": "Pomoc: +2 do następnego testu sojusznika zamiast +1. Spal 1 kartę. Dostępne cele wsparcia bez zmian.",
+          "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
+        }
       },
       "N": {
         "kind": "recover",
-        "label": "Oddech: przy doborze oddaj najstarszą spaloną kartę na spód talii"
+        "label": "Oddech: Po udanym teście: przenieś 1 najwcześniej spaloną kartę na spód talii. Potwierdź ✓, potem spal koszt testu. Nie kumuluje się.",
+        "stackable": false,
+        "display": {
+          "name": "Oddech",
+          "when": "Po każdym udanym teście",
+          "effect": "Weź 1 kartę, która została spalona najwcześniej. Połóż ją na spodzie wspólnej talii.",
+          "note": "Weź kartę, która została spalona najwcześniej — nie musi być zielona. Potwierdź ✓. Dopiero potem spal 1 kartę z wierzchu talii za swój test. Sam dobór many nie odzyskuje kart. Jeśli stos spalonych jest pusty, nic nie odzyskujesz.",
+          "short": "Po udanym teście: przenieś 1 najwcześniej spaloną kartę na spód talii. Potwierdź ✓, potem spal koszt testu.",
+          "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu.",
+          "diagram": "recovery",
+          "instruction": "Potwierdź ✓, potem opłać test."
+        }
       }
     }
   },
@@ -166,36 +495,6 @@
       "resistance_per_hero": 9,
       "pressure_per_hero": 1,
       "minimum_pressure": 3,
-      "methods": {
-        "garran": {
-          "dc": 20,
-          "die": 6
-        },
-        "brakka": {
-          "dc": 25,
-          "die": 4
-        },
-        "mira": {
-          "dc": 25,
-          "die": 4
-        },
-        "dagna": {
-          "dc": 15,
-          "die": 8
-        },
-        "lorian": {
-          "dc": 15,
-          "die": 8
-        },
-        "nimra": {
-          "dc": 25,
-          "die": 4
-        },
-        "erynd": {
-          "dc": 20,
-          "die": 6
-        }
-      },
       "reactions": [
         {
           "kind": "burn",
@@ -213,7 +512,84 @@
       "success": "Nessa zgadza się na podwyżkę.",
       "failure": "Nessa kończy negocjacje. Pozostaje pierwotna stawka.",
       "compromise": "Mniejsza podwyżka w zamian za dodatkowy obowiązek.",
-      "condition": "none"
+      "condition": "none",
+      "approaches": [
+        {
+          "id": "compliments",
+          "name": "Komplementy",
+          "ability": "charisma",
+          "dc": 18,
+          "die": 4,
+          "description": "Okaż uznanie dla zaradności Nessy; życzliwy ton otwiera drogę rzeczowym prośbom.",
+          "supports": [
+            "logic",
+            "empathy"
+          ],
+          "repeatable": false
+        },
+        {
+          "id": "demands",
+          "name": "Stanowcze żądania",
+          "ability": "constitution",
+          "dc": 25,
+          "die": 10,
+          "description": "Wytrzymaj nacisk i nie ustępuj w sprawie wyposażenia. To mocna, lecz trudna droga.",
+          "supports": [
+            "bluff"
+          ],
+          "repeatable": false
+        },
+        {
+          "id": "logic",
+          "name": "Logiczne argumenty",
+          "ability": "intelligence",
+          "dc": 20,
+          "die": 4,
+          "description": "Wykaż, że mikstura zmniejsza ryzyko utraty ludzi i ładunku.",
+          "supports": [
+            "demands",
+            "empathy"
+          ],
+          "repeatable": true
+        },
+        {
+          "id": "bluff",
+          "name": "Blef",
+          "ability": "charisma",
+          "dc": 22,
+          "die": 8,
+          "description": "Zasugeruj, że bez lepszego wyposażenia drużyna rozważa inne zlecenie.",
+          "supports": [
+            "demands"
+          ],
+          "repeatable": false
+        },
+        {
+          "id": "empathy",
+          "name": "Zrozumienie obaw",
+          "ability": "wisdom",
+          "dc": 19,
+          "die": 6,
+          "description": "Rozpoznaj, za co Nessa odpowiada, i dopasuj prośbę do jej trosk.",
+          "supports": [
+            "*"
+          ],
+          "repeatable": true
+        },
+        {
+          "id": "promise",
+          "name": "Osobista gwarancja",
+          "ability": "charisma",
+          "dc": 20,
+          "die": 6,
+          "description": "Daj słowo, że wyposażenie trafi do potrzebujących, a z wyprawy zdacie rzetelny raport.",
+          "supports": [
+            "logic",
+            "empathy"
+          ],
+          "repeatable": false
+        }
+      ]
     },
     {
       "id": "sealed_cache",
@@ -224,36 +600,6 @@
       "resistance_per_hero": 10,
       "pressure_per_hero": 1,
       "minimum_pressure": 3,
-      "methods": {
-        "garran": {
-          "dc": 20,
-          "die": 6
-        },
-        "brakka": {
-          "dc": 15,
-          "die": 8
-        },
-        "mira": {
-          "dc": 15,
-          "die": 8
-        },
-        "dagna": {
-          "dc": 25,
-          "die": 4
-        },
-        "lorian": {
-          "dc": 20,
-          "die": 6
-        },
-        "nimra": {
-          "dc": 20,
-          "die": 6
-        },
-        "erynd": {
-          "dc": 15,
-          "die": 8
-        }
-      },
       "reactions": [
         {
           "kind": "burn",
@@ -271,7 +617,84 @@
       "success": "Schowek jest otwarty, zawartość pozostaje nienaruszona.",
       "failure": "Mechanizm blokuje się. Potrzebujecie innego wejścia.",
       "compromise": "Schowek otwarty, ale część zawartości ulega uszkodzeniu.",
-      "condition": "none"
+      "condition": "none",
+      "approaches": [
+        {
+          "id": "lock",
+          "name": "Precyzyjne otwarcie",
+          "ability": "dexterity",
+          "dc": 18,
+          "die": 6,
+          "description": "Zwolnij zatrzask bez uszkadzania zawartości.",
+          "supports": [
+            "lever"
+          ],
+          "repeatable": false
+        },
+        {
+          "id": "lever",
+          "name": "Użycie dźwigni",
+          "ability": "strength",
+          "dc": 22,
+          "die": 10,
+          "description": "Pokonaj opór pokrywy, uważając na zawiasy.",
+          "supports": [
+            "lock"
+          ],
+          "repeatable": true
+        },
+        {
+          "id": "mechanism",
+          "name": "Rozpoznanie mechanizmu",
+          "ability": "intelligence",
+          "dc": 20,
+          "die": 8,
+          "description": "Ustal, który element blokuje pokrywę i jak zwolnić naprężenie.",
+          "supports": [
+            "*"
+          ],
+          "repeatable": false
+        },
+        {
+          "id": "hinges",
+          "name": "Oględziny zawiasów",
+          "ability": "wisdom",
+          "dc": 18,
+          "die": 6,
+          "description": "Odszukaj słabe mocowania i ślady poprzednich prób otwarcia.",
+          "supports": [
+            "lever",
+            "mechanism"
+          ],
+          "repeatable": false
+        },
+        {
+          "id": "brace",
+          "name": "Przytrzymanie wieka",
+          "ability": "constitution",
+          "dc": 19,
+          "die": 6,
+          "description": "Utrzymaj ciężkie wieko pod naprężeniem, aby pozostali mogli pracować.",
+          "supports": [
+            "lock",
+            "lever"
+          ],
+          "repeatable": true
+        },
+        {
+          "id": "rust",
+          "name": "Oczyszczenie zamka",
+          "ability": "dexterity",
+          "dc": 17,
+          "die": 4,
+          "description": "Usuń rdzę i brud blokujące drobne elementy zamka.",
+          "supports": [
+            "lock",
+            "mechanism"
+          ],
+          "repeatable": true
+        }
+      ]
     },
     {
       "id": "nessa_compromise",
@@ -282,36 +705,6 @@
       "resistance_per_hero": 9,
       "pressure_per_hero": 1,
       "minimum_pressure": 3,
-      "methods": {
-        "garran": {
-          "dc": 20,
-          "die": 6
-        },
-        "brakka": {
-          "dc": 25,
-          "die": 4
-        },
-        "mira": {
-          "dc": 25,
-          "die": 4
-        },
-        "dagna": {
-          "dc": 15,
-          "die": 8
-        },
-        "lorian": {
-          "dc": 15,
-          "die": 8
-        },
-        "nimra": {
-          "dc": 25,
-          "die": 4
-        },
-        "erynd": {
-          "dc": 20,
-          "die": 6
-        }
-      },
       "reactions": [
         {
           "kind": "burn",
@@ -329,7 +722,84 @@
       "success": "Nessa zgadza się na podwyżkę.",
       "failure": "Nessa kończy negocjacje. Pozostaje pierwotna stawka.",
       "compromise": "Mniejsza podwyżka w zamian za dodatkowy obowiązek.",
-      "condition": "compromise"
+      "condition": "compromise",
+      "approaches": [
+        {
+          "id": "compliments",
+          "name": "Komplementy",
+          "ability": "charisma",
+          "dc": 18,
+          "die": 4,
+          "description": "Okaż uznanie dla zaradności Nessy; życzliwy ton otwiera drogę rzeczowym prośbom.",
+          "supports": [
+            "logic",
+            "empathy"
+          ],
+          "repeatable": false
+        },
+        {
+          "id": "demands",
+          "name": "Stanowcze żądania",
+          "ability": "constitution",
+          "dc": 25,
+          "die": 10,
+          "description": "Wytrzymaj nacisk i nie ustępuj w sprawie wyposażenia. To mocna, lecz trudna droga.",
+          "supports": [
+            "bluff"
+          ],
+          "repeatable": false
+        },
+        {
+          "id": "logic",
+          "name": "Logiczne argumenty",
+          "ability": "intelligence",
+          "dc": 20,
+          "die": 4,
+          "description": "Wykaż, że mikstura zmniejsza ryzyko utraty ludzi i ładunku.",
+          "supports": [
+            "demands",
+            "empathy"
+          ],
+          "repeatable": true
+        },
+        {
+          "id": "bluff",
+          "name": "Blef",
+          "ability": "charisma",
+          "dc": 22,
+          "die": 8,
+          "description": "Zasugeruj, że bez lepszego wyposażenia drużyna rozważa inne zlecenie.",
+          "supports": [
+            "demands"
+          ],
+          "repeatable": false
+        },
+        {
+          "id": "empathy",
+          "name": "Zrozumienie obaw",
+          "ability": "wisdom",
+          "dc": 19,
+          "die": 6,
+          "description": "Rozpoznaj, za co Nessa odpowiada, i dopasuj prośbę do jej trosk.",
+          "supports": [
+            "*"
+          ],
+          "repeatable": true
+        },
+        {
+          "id": "promise",
+          "name": "Osobista gwarancja",
+          "ability": "charisma",
+          "dc": 20,
+          "die": 6,
+          "description": "Daj słowo, że wyposażenie trafi do potrzebujących, a z wyprawy zdacie rzetelny raport.",
+          "supports": [
+            "logic",
+            "empathy"
+          ],
+          "repeatable": false
+        }
+      ]
     },
     {
       "id": "nessa_color_goal",
@@ -340,36 +810,6 @@
       "resistance_per_hero": 9,
       "pressure_per_hero": 1,
       "minimum_pressure": 3,
-      "methods": {
-        "garran": {
-          "dc": 20,
-          "die": 6
-        },
-        "brakka": {
-          "dc": 25,
-          "die": 4
-        },
-        "mira": {
-          "dc": 25,
-          "die": 4
-        },
-        "dagna": {
-          "dc": 15,
-          "die": 8
-        },
-        "lorian": {
-          "dc": 15,
-          "die": 8
-        },
-        "nimra": {
-          "dc": 25,
-          "die": 4
-        },
-        "erynd": {
-          "dc": 20,
-          "die": 6
-        }
-      },
       "reactions": [
         {
           "kind": "burn",
@@ -387,7 +827,84 @@
       "success": "Nessa zgadza się na podwyżkę.",
       "failure": "Nessa kończy negocjacje. Pozostaje pierwotna stawka.",
       "compromise": "Mniejsza podwyżka w zamian za dodatkowy obowiązek.",
-      "condition": "color_goal"
+      "condition": "color_goal",
+      "approaches": [
+        {
+          "id": "compliments",
+          "name": "Komplementy",
+          "ability": "charisma",
+          "dc": 18,
+          "die": 4,
+          "description": "Okaż uznanie dla zaradności Nessy; życzliwy ton otwiera drogę rzeczowym prośbom.",
+          "supports": [
+            "logic",
+            "empathy"
+          ],
+          "repeatable": false
+        },
+        {
+          "id": "demands",
+          "name": "Stanowcze żądania",
+          "ability": "constitution",
+          "dc": 25,
+          "die": 10,
+          "description": "Wytrzymaj nacisk i nie ustępuj w sprawie wyposażenia. To mocna, lecz trudna droga.",
+          "supports": [
+            "bluff"
+          ],
+          "repeatable": false
+        },
+        {
+          "id": "logic",
+          "name": "Logiczne argumenty",
+          "ability": "intelligence",
+          "dc": 20,
+          "die": 4,
+          "description": "Wykaż, że mikstura zmniejsza ryzyko utraty ludzi i ładunku.",
+          "supports": [
+            "demands",
+            "empathy"
+          ],
+          "repeatable": true
+        },
+        {
+          "id": "bluff",
+          "name": "Blef",
+          "ability": "charisma",
+          "dc": 22,
+          "die": 8,
+          "description": "Zasugeruj, że bez lepszego wyposażenia drużyna rozważa inne zlecenie.",
+          "supports": [
+            "demands"
+          ],
+          "repeatable": false
+        },
+        {
+          "id": "empathy",
+          "name": "Zrozumienie obaw",
+          "ability": "wisdom",
+          "dc": 19,
+          "die": 6,
+          "description": "Rozpoznaj, za co Nessa odpowiada, i dopasuj prośbę do jej trosk.",
+          "supports": [
+            "*"
+          ],
+          "repeatable": true
+        },
+        {
+          "id": "promise",
+          "name": "Osobista gwarancja",
+          "ability": "charisma",
+          "dc": 20,
+          "die": 6,
+          "description": "Daj słowo, że wyposażenie trafi do potrzebujących, a z wyprawy zdacie rzetelny raport.",
+          "supports": [
+            "logic",
+            "empathy"
+          ],
+          "repeatable": false
+        }
+      ]
     },
     {
       "id": "nessa_sensitive",
@@ -398,36 +915,6 @@
       "resistance_per_hero": 9,
       "pressure_per_hero": 1,
       "minimum_pressure": 3,
-      "methods": {
-        "garran": {
-          "dc": 20,
-          "die": 6
-        },
-        "brakka": {
-          "dc": 25,
-          "die": 4
-        },
-        "mira": {
-          "dc": 25,
-          "die": 4
-        },
-        "dagna": {
-          "dc": 15,
-          "die": 8
-        },
-        "lorian": {
-          "dc": 15,
-          "die": 8
-        },
-        "nimra": {
-          "dc": 25,
-          "die": 4
-        },
-        "erynd": {
-          "dc": 20,
-          "die": 6
-        }
-      },
       "reactions": [
         {
           "kind": "burn",
@@ -445,7 +932,84 @@
       "success": "Nessa zgadza się na podwyżkę.",
       "failure": "Nessa kończy negocjacje. Pozostaje pierwotna stawka.",
       "compromise": "Mniejsza podwyżka w zamian za dodatkowy obowiązek.",
-      "condition": "sensitive"
+      "condition": "sensitive",
+      "approaches": [
+        {
+          "id": "compliments",
+          "name": "Komplementy",
+          "ability": "charisma",
+          "dc": 18,
+          "die": 4,
+          "description": "Okaż uznanie dla zaradności Nessy; życzliwy ton otwiera drogę rzeczowym prośbom.",
+          "supports": [
+            "logic",
+            "empathy"
+          ],
+          "repeatable": false
+        },
+        {
+          "id": "demands",
+          "name": "Stanowcze żądania",
+          "ability": "constitution",
+          "dc": 25,
+          "die": 10,
+          "description": "Wytrzymaj nacisk i nie ustępuj w sprawie wyposażenia. To mocna, lecz trudna droga.",
+          "supports": [
+            "bluff"
+          ],
+          "repeatable": false
+        },
+        {
+          "id": "logic",
+          "name": "Logiczne argumenty",
+          "ability": "intelligence",
+          "dc": 20,
+          "die": 4,
+          "description": "Wykaż, że mikstura zmniejsza ryzyko utraty ludzi i ładunku.",
+          "supports": [
+            "demands",
+            "empathy"
+          ],
+          "repeatable": true
+        },
+        {
+          "id": "bluff",
+          "name": "Blef",
+          "ability": "charisma",
+          "dc": 22,
+          "die": 8,
+          "description": "Zasugeruj, że bez lepszego wyposażenia drużyna rozważa inne zlecenie.",
+          "supports": [
+            "demands"
+          ],
+          "repeatable": false
+        },
+        {
+          "id": "empathy",
+          "name": "Zrozumienie obaw",
+          "ability": "wisdom",
+          "dc": 19,
+          "die": 6,
+          "description": "Rozpoznaj, za co Nessa odpowiada, i dopasuj prośbę do jej trosk.",
+          "supports": [
+            "*"
+          ],
+          "repeatable": true
+        },
+        {
+          "id": "promise",
+          "name": "Osobista gwarancja",
+          "ability": "charisma",
+          "dc": 20,
+          "die": 6,
+          "description": "Daj słowo, że wyposażenie trafi do potrzebujących, a z wyprawy zdacie rzetelny raport.",
+          "supports": [
+            "logic",
+            "empathy"
+          ],
+          "repeatable": false
+        }
+      ]
     },
     {
       "id": "nessa_favor",
@@ -456,36 +1020,6 @@
       "resistance_per_hero": 9,
       "pressure_per_hero": 1,
       "minimum_pressure": 3,
-      "methods": {
-        "garran": {
-          "dc": 20,
-          "die": 6
-        },
-        "brakka": {
-          "dc": 25,
-          "die": 4
-        },
-        "mira": {
-          "dc": 25,
-          "die": 4
-        },
-        "dagna": {
-          "dc": 15,
-          "die": 8
-        },
-        "lorian": {
-          "dc": 15,
-          "die": 8
-        },
-        "nimra": {
-          "dc": 25,
-          "die": 4
-        },
-        "erynd": {
-          "dc": 20,
-          "die": 6
-        }
-      },
       "reactions": [
         {
           "kind": "burn",
@@ -503,7 +1037,84 @@
       "success": "Nessa zgadza się na podwyżkę.",
       "failure": "Nessa kończy negocjacje. Pozostaje pierwotna stawka.",
       "compromise": "Mniejsza podwyżka w zamian za dodatkowy obowiązek.",
-      "condition": "favor"
+      "condition": "favor",
+      "approaches": [
+        {
+          "id": "compliments",
+          "name": "Komplementy",
+          "ability": "charisma",
+          "dc": 18,
+          "die": 4,
+          "description": "Okaż uznanie dla zaradności Nessy; życzliwy ton otwiera drogę rzeczowym prośbom.",
+          "supports": [
+            "logic",
+            "empathy"
+          ],
+          "repeatable": false
+        },
+        {
+          "id": "demands",
+          "name": "Stanowcze żądania",
+          "ability": "constitution",
+          "dc": 25,
+          "die": 10,
+          "description": "Wytrzymaj nacisk i nie ustępuj w sprawie wyposażenia. To mocna, lecz trudna droga.",
+          "supports": [
+            "bluff"
+          ],
+          "repeatable": false
+        },
+        {
+          "id": "logic",
+          "name": "Logiczne argumenty",
+          "ability": "intelligence",
+          "dc": 20,
+          "die": 4,
+          "description": "Wykaż, że mikstura zmniejsza ryzyko utraty ludzi i ładunku.",
+          "supports": [
+            "demands",
+            "empathy"
+          ],
+          "repeatable": true
+        },
+        {
+          "id": "bluff",
+          "name": "Blef",
+          "ability": "charisma",
+          "dc": 22,
+          "die": 8,
+          "description": "Zasugeruj, że bez lepszego wyposażenia drużyna rozważa inne zlecenie.",
+          "supports": [
+            "demands"
+          ],
+          "repeatable": false
+        },
+        {
+          "id": "empathy",
+          "name": "Zrozumienie obaw",
+          "ability": "wisdom",
+          "dc": 19,
+          "die": 6,
+          "description": "Rozpoznaj, za co Nessa odpowiada, i dopasuj prośbę do jej trosk.",
+          "supports": [
+            "*"
+          ],
+          "repeatable": true
+        },
+        {
+          "id": "promise",
+          "name": "Osobista gwarancja",
+          "ability": "charisma",
+          "dc": 20,
+          "die": 6,
+          "description": "Daj słowo, że wyposażenie trafi do potrzebujących, a z wyprawy zdacie rzetelny raport.",
+          "supports": [
+            "logic",
+            "empathy"
+          ],
+          "repeatable": false
+        }
+      ]
     }
   ],
   "lessons": [
@@ -513,7 +1124,7 @@
       "scene": "nessa_raise",
       "kind": "npc",
       "focus": "test",
-      "instruction": "Każdy bohater wykonuje swoją turę. Dobierz kartę, wybierz siłę próby, rzuć k20 i po trafieniu kością wpływu. Zbij wspólny opór."
+      "instruction": "Najpierw każdy bohater wybiera podejście runą. Sprawdź cechę, ST, kość wpływu i dozwolone wsparcie. Opcje dla jednej postaci znikają po wyborze, a powtarzalne pozostają dostępne. Potem dobieraj manę, testuj, pomagaj lub podglądaj spód talii."
     },
     {
       "id": "object",
@@ -521,7 +1132,7 @@
       "scene": "sealed_cache",
       "kind": "object",
       "focus": "test",
-      "instruction": "Obsłuż obiekt całą drużyną. Metoda i cecha zależą od aktywnej postaci; potrzebna jest tylko figurka drużyny."
+      "instruction": "Każdy wybiera sposób pracy przy obiekcie. Podejście określa cechę, ST, kość postępu i powiązania pomocy. To scena określa dostępne rozwiązania, nie klasa bohatera."
     },
     {
       "id": "support",
@@ -529,7 +1140,7 @@
       "scene": "nessa_raise",
       "kind": "npc",
       "focus": "support",
-      "instruction": "Po doborze wybierz Pomoc i sojusznika. Pomoc nie spala kart, zajmuje twoje działanie i działa na jego następny test."
+      "instruction": "Wybierzcie powiązane podejścia. Po doborze pomóż dozwolonemu sojusznikowi: +1 do najbliższego testu (+2 ze Współpracą), za 1 spaloną kartę. Pomoce sumują się i znikają po próbie. Zamiast testu lub pomocy możesz podejrzeć dolną kartę i zostawić ją lub przenieść na wierzch — bez zgłaszania koloru i bez spalania, za całe działanie."
     },
     {
       "id": "charge",
@@ -537,7 +1148,7 @@
       "scene": "nessa_raise",
       "kind": "npc",
       "focus": "charge",
-      "instruction": "Pula pozostaje po rzucie. Przy 21+ dobór ustaje. Możesz wybrać niższą premię i mniejszy koszt, nawet gdy masz duży ładunek."
+      "instruction": "Pula pozostaje po rzucie. Przy 21+ dobór ustaje. Test korzysta z najwyższej dostępnej premii naładowania i zawsze spala 1 kartę. Zamiast testu możesz pomóc sojusznikowi za 1 kartę."
     },
     {
       "id": "reaction",
@@ -553,7 +1164,7 @@
       "scene": "nessa_raise",
       "kind": "npc",
       "focus": "drain",
-      "instruction": "Wykonuj słabe próby lub wspieraj sojuszników, aby przećwiczyć wyczerpanie. Brak kart do wymaganej operacji kończy scenę. Nie ma ostatniej darmowej kolejki."
+      "instruction": "Wykonuj testy lub wspieraj dozwolonych sojuszników, aby przećwiczyć wyczerpanie. Brak kart do wymaganej operacji kończy scenę. Podgląd nie spala karty, ale reakcje po rundzie nadal uszczuplają talię."
     },
     {
       "id": "compromise",

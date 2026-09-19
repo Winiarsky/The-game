@@ -67,7 +67,12 @@ def apply_physical_mana_profile(actor: Actor) -> Actor:
     features = tuple(replace(f, description=requirement_text(f.feature_id, str(actor.id)) + " " + ability_description(str(actor.id), f.feature_id))
                      if f.feature_id in known else f for f in features)
     spell_ids = tuple(spell_id for spell_id in actor.spell_ids if spell_id in known)
-    return repair_mira_loadout(replace(
+    from dnd_board_game.actors.mana_passives import normalize_mana_passives
+    # The old per-hero passive ids must not accidentally enable native 5e hooks.
+    features = tuple(f for f in features if f.feature_id != passive_id and f.feature_id != 'mana_saturation')
+    features += (FeatureGrant('mana_saturation', 'Nasycenie maną', FeatureSourceKind.SCENARIO,
+                              'mana_saturation:v1', profile['passive']),)
+    return normalize_mana_passives(repair_mira_loadout(replace(
         actor, features=features, attacks_per_action=1,
         resource_pools=tuple(p for p in actor.resource_pools if p.id not in PHYSICAL_MANA_RESOURCES),
         spell_slots=(), spell_ids=spell_ids,
@@ -75,4 +80,4 @@ def apply_physical_mana_profile(actor: Actor) -> Actor:
         spell_access=tuple(replace(access, resource_ids_by_spell=(), spell_ids=tuple(
             spell_id for spell_id in access.spell_ids if spell_id in spell_ids
         )) for access in actor.spell_access if any(i in spell_ids for i in access.spell_ids)),
-    ))
+    )))

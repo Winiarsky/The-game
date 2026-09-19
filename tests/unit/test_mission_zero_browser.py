@@ -58,10 +58,48 @@ const die=async values=>{const phase=state.exploration_mana?.phase,missionStage=
 };
 try{
  await wait(()=>state?.mission&&!busy);
- check(document.getElementById('mission-panel').textContent.includes('Dzwon'),'mission visible');
- for(let i=0;i<12&&state.mission.stage!=='brief';i++)await press('next');
+ check(document.getElementById('mission-panel').textContent.includes(state.mission.text.title),'mission visible');
+ check(state.mission.image.includes('world_intro.png'),'opening world illustration');
+ check(document.querySelector('.mission-narrative--landscape'),'world layout');
+ check(!document.querySelector('#mission-panel a[href*="elements_A4.pdf"]'),'print preparation is not in play');
+ await wait(()=>document.querySelector('[data-mission-slot="28"]').getBoundingClientRect().bottom<=innerHeight);
+ const revision=state.mission.revision;
+ const reader=missionScrollArea();
+ check(reader&&reader.scrollHeight>reader.clientHeight,'narration can scroll');
+ const control=document.querySelector('[data-mission-slot="28"]').getBoundingClientRect();
+ check(control.top>=0&&control.bottom<=innerHeight,'continue is visible');
+ const scroll=async slot=>{
+  await wait(()=>!busy&&!boardPanelSyncPromise);
+  await api('/api/board/select',{col:19,row:29-slot},'');
+ };
+ await scroll(27);await wait(()=>missionScrollArea().scrollTop>0);
+ const position=missionScrollArea().scrollTop;
+ renderMission();check(missionScrollArea().scrollTop===position,'refresh preserves reading position');
+ await scroll(26);await wait(()=>missionScrollArea().scrollTop===0);
+ check(state.mission.revision===revision&&state.mission.stage==='world','scroll does not advance story');
+ await scroll(27);await wait(()=>missionScrollArea().scrollTop>0);
+ const introduced=[];
+ for(let i=0;i<12&&state.mission.stage!=='brief';i++){
+  if(state.mission.stage==='heroes'){
+   introduced.push(state.mission.text.id);
+   check(missionScrollArea().scrollTop===0,'new hero starts at the top');
+   handleBoardPanelEvent({panel_event:{slot:27,context:`mission-scroll:${revision}`}});
+   check(missionScrollArea().scrollTop===0,'old scroll event ignored');
+   const portrait=document.querySelector('.mission-narrative--portrait .mission-art');
+   check(portrait&&getComputedStyle(portrait).objectFit==='contain','full portrait, not a cropped scene');
+   check(state.mission.text.speaker==='Narrator','narrator introduces hero');
+   check(document.documentElement.scrollWidth<=innerWidth,'intro horizontal overflow');
+  }
+  if(state.mission.stage==='party')check(!state.mission.image.includes('posterunek'),'party closure does not reveal outpost');
+  if(state.mission.stage==='guild_hub'){
+   await wait(()=>!busy&&!boardPanelSyncPromise);
+   await api('/api/board/select',{col:5,row:7},'');
+   await wait(()=>!busy);
+  }else await press('next');
+ }
+ check(JSON.stringify(introduced)===JSON.stringify(['hero_garran','hero_brakka','hero_dagna']),'selected heroes in order');
  check(state.mission.stage==='brief','intro progression');
- await press('negotiate');await press('acknowledge',true);await press('acknowledge',true);
+ await press('negotiate');await press('acknowledge',true);while(state.exploration_mana.phase==='approach') await press('approach',true);await press('acknowledge',true);
  for(let i=0;i<3&&state.exploration_mana.mana.phase==='reveal';i++)await press('color',true);
  await press('take',true);await press('test',true);
  await die(20);check(state.exploration_mana.phase==='impact','natural attack die');
@@ -83,7 +121,7 @@ try{
         return response
     server=make_server('127.0.0.1',0,app,threaded=True);thread=Thread(target=server.serve_forever,daemon=True);thread.start();process=None
     try:
-        process=subprocess.Popen([chrome,'--headless','--no-sandbox','--disable-gpu','--disable-dev-shm-usage','--no-first-run','--disable-background-networking','--no-proxy-server',f'--user-data-dir={tmp_path/"chrome"}',f'--window-size={width},1000',f'http://127.0.0.1:{server.server_port}/play'],stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,text=True)
+        process=subprocess.Popen([chrome,'--headless','--no-sandbox','--disable-gpu','--disable-dev-shm-usage','--no-first-run','--disable-background-networking','--no-proxy-server',f'--user-data-dir={tmp_path/"chrome"}',f'--window-size={width},720',f'http://127.0.0.1:{server.server_port}/play'],stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,text=True)
         assert finished.wait(42),'Browser did not report'
         assert reported.get('result')=='PASS',reported
     finally:

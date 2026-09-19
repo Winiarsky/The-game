@@ -1,5 +1,7 @@
 """Movement and target constraints that belong to a paid weapon technique."""
 from __future__ import annotations
+
+from dnd_board_game.inventory.magic_items import effective_ability_modifier
 from dataclasses import replace
 from dnd_board_game.world import BoardState
 from .session import CombatState
@@ -33,7 +35,7 @@ def resolve_unstoppable_knockdown(state: CombatState, target_id: str, roll: int,
     from dnd_board_game.rules import SavingThrowRequest, EffectDuration, ability_modifier
     owner = current_actor(state)
     target = next(a for a in state.actors if str(a.id) == target_id)
-    save = resolve_actor_saving_throw(target, SavingThrowRequest('strength', 8 + owner.proficiency_bonus + ability_modifier(owner.ability_scores.strength), 'Niepowstrzymana'), natural_roll=roll, natural_roll_2=roll_2, active_effects=effects, condition_states=state.condition_states, combat_actors=state.actors)
+    save = resolve_actor_saving_throw(target, SavingThrowRequest('strength', 8 + owner.proficiency_bonus + effective_ability_modifier(owner, 'strength'), 'Niepowstrzymana'), natural_roll=roll, natural_roll_2=roll_2, active_effects=effects, condition_states=state.condition_states, combat_actors=state.actors)
     if not save.success:
         conditions = apply_condition(state.condition_states, target, CombatCondition.PRONE, source_actor_id=str(owner.id), source_label='Niepowstrzymana', duration=EffectDuration.UNTIL_TURN_START, expiration_actor_id=str(owner.id), source_spell_id='unstoppable', source_spell_level=0).condition_states
         state = replace(state, condition_states=conditions)

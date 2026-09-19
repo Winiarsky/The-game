@@ -12,16 +12,14 @@
       <a class="back-link" href="{{ url_for('index') }}">← Menu główne</a>
       <span id="new-game-step-label" class="step-label">Nowa gra · krok 1 z 2</span>
       <h1 id="new-game-title">Wybierz drużynę</h1>
-      <p>Nowe rozgrywki używają fizycznej many. <a href="{{ url_for('physical_mana_rules') }}" target="_blank" rel="noopener">Instrukcja i pełne talie do wydruku</a></p>
-      <p id="new-game-description">Kliknij od 1 do 6 bohaterów, którzy wezmą udział w grze.</p>
+      <p class="party-card-link"><a href="{{ url_for('physical_mana_rules') }}" target="_blank" rel="noopener">Karty postaci i pełne zasady do wydruku</a></p>
+      <p id="new-game-description">Wybierz 1–6 bohaterów kafelkami lub runami, następnie Dalej.</p>
     </header>
 
     {% if error %}<div class="flow-error" role="alert">{{ error }}</div>{% endif %}
 
     <form id="new-game-card-flow" method="post" action="{{ url_for('start_new_game') }}" data-initial-stage="{{ initial_stage|default('party') }}">
       <section id="party-selection-step" class="form-section">
-        <h2>Poznaj bohaterów</h2>
-        <p>Porównaj role i styl gry. Złożoność opisuje liczbę decyzji, które trzeba połączyć podczas gry.</p>
         <div id="party-selection-status" class="flow-note" aria-live="polite">Nie wybrano jeszcze żadnego bohatera.</div>
         {% if roster.characters %}
           <div class="roster-grid">
@@ -39,17 +37,8 @@
                 {% if guide %}
                   <div class="hero-overview">
                     <strong class="hero-role">{{ guide.role }}</strong>
-                    <p>{{ guide.play_style }}</p>
-                    <span class="hero-complexity">Złożoność: <strong>{{ guide.complexity }}</strong></span>
+                    <p class="hero-play-style">{{ guide.play_style.split('. ')[0].rstrip('.') }}.</p>
                   </div>
-                  <details class="hero-details">
-                    <summary>Zdolności i skaza<span class="sr-only"> — {{ character.actor.name }}</span></summary>
-                    <div class="hero-details-body">
-                      <p>{{ guide.complexity_reason }}</p>
-                      <ul>{% for ability in guide.abilities %}<li>{{ ability }}</li>{% endfor %}</ul>
-                      <div class="hero-flaw"><strong>{{ hero_flaws[actor_id][1] }}</strong><p>{{ guide.flaw }}</p></div>
-                    </div>
-                  </details>
                 {% endif %}
               </article>
             {% endfor %}
@@ -135,7 +124,7 @@
         title.textContent = choosingScenario ? 'Wybierz scenariusz' : 'Wybierz drużynę';
         description.textContent = choosingScenario
           ? 'Naciśnij runę scenariusza albo jego kafelek, aby rozpocząć grę wybraną drużyną.'
-          : 'Kliknij od 1 do 6 bohaterów lub wybierz ich runy. Następnie użyj runy przy Dalej.';
+          : 'Wybierz 1–6 bohaterów kafelkami lub runami, następnie Dalej.';
       };
 
       actorInputs.forEach(input => input.addEventListener('change', () => updateSelection(input)));

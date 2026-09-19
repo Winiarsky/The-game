@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dnd_board_game.inventory.magic_items import effective_ability_modifier, effective_ability_score
+
 from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import Sequence
@@ -257,7 +259,7 @@ def unarmed_strike_source(actor: Actor) -> AttackSource:
     ability = (
         "dexterity"
         if martial_arts
-        and actor.ability_scores.dexterity >= actor.ability_scores.strength
+        and effective_ability_score(actor, 'dexterity') >= effective_ability_score(actor, 'strength')
         else "strength"
     )
     return attack_source_for_actor(
@@ -495,7 +497,7 @@ def attack_source_for_actor(source: AttackSource, actor: Actor) -> AttackSource:
     if source.adds_ability_modifier_to_damage:
         from dnd_board_game.rules import ability_modifier
 
-        desired = ability_modifier(getattr(actor.ability_scores, source.ability))
+        desired = effective_ability_modifier(actor, source.ability)
         delta = desired - applied
         damage_modifier += delta
         damage_components = tuple(

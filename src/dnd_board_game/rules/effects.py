@@ -441,7 +441,11 @@ def _duration_expires(
     if event.event_type == EffectEventType.SHORT_REST_COMPLETED:
         return duration == EffectDuration.UNTIL_SHORT_REST
     if event.event_type == EffectEventType.ENCOUNTER_ENDED:
-        return duration in {EffectDuration.UNTIL_ENCOUNTER_END, EffectDuration.UNTIL_DECK_REFRESH}
+        return duration in {
+            EffectDuration.UNTIL_ENCOUNTER_END, EffectDuration.UNTIL_DECK_REFRESH,
+            EffectDuration.UNTIL_TURN_START, EffectDuration.UNTIL_TURN_END,
+            EffectDuration.UNTIL_ROUND_END, EffectDuration.UNTIL_NEXT_ATTACK,
+        }
     if event.event_type == EffectEventType.CONCENTRATION_ENDED:
         return (
             duration == EffectDuration.CONCENTRATION

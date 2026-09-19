@@ -1,3 +1,4 @@
-# amulet
+# Amulet — wariant historyczny
 
-Mosiężny amulet dowódcy z popielatym kamieniem; +1 KP u noszącego.
+Nie występuje w aktualnej Misji 0. Skrytka zawiera pierścień opisany w
+`ring.md`; stare zapisy mogą zachowywać wcześniej zdobyty amulet +1 KP.

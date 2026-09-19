@@ -15,8 +15,12 @@ w kanonie; poniższa charakterystyka jest roboczym rozwinięciem roli, nie nową
 
 Stałe intro, publikowane osobno w `text/hero_brakka.md`:
 
-Brakka ceniła rozwiązania, które dało się poprzeć własnym ramieniem. Świat dostarczał jej wielu okazji do praktyki i stanowczo zbyt wielu powodów do gniewu.
+Brakka ceniła rozwiązania, które dało się poprzeć własnym ramieniem. Jako półorczyca z toporem rzadko musiała objaśniać, co przez to rozumie. Nie oznaczało to, że brakowało jej cierpliwości do słuchania; po prostu nie uważała, by każda długa przemowa zasługiwała na dokończenie.
+
+Świat dostarczał jej wielu okazji do praktyki i stanowczo zbyt wielu powodów do gniewu. Towarzyszom pozostawało liczyć, że w odpowiedniej chwili znajdą się po właściwej stronie obu tych okoliczności.
 
 Instrukcja generowania: zachowaj ten sam fragment niezależnie od składu drużyny;
 przedstaw wyłącznie bohaterów wybranych do gry. W scenach opisz jedną reakcję,
 nie odbierając graczowi decyzji. Edycja tego profilu nie nadpisuje automatycznie tekstów.
+
+Oprawa ilustracji w tej misji: `profiles/visual_style.md`; aktywny wariant obrazu wybiera `visuals.json`.

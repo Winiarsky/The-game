@@ -18,12 +18,6 @@
     "description": "Wracaj. E. — srebrna pamiątka żołnierza.",
     "value_cp": 300
   },
-  "amulet": {
-    "name": "Amulet dowódcy",
-    "description": "Noszony: +1 KP.",
-    "value_cp": 1000,
-    "armor_class_bonus": 1
-  },
   "rope": {
     "name": "Lina z posterunku",
     "description": "Dobry zwój liny.",
@@ -36,7 +30,24 @@
   },
   "documents": {
     "name": "Pokwitowania Boruta",
-    "description": "Dowody niezapłaconych dostaw; sprawa dla prawnika.",
+    "description": "Pokwitowania niezapłaconych dostaw. Zachowaj druk; w przyszłej misji sprawę może podjąć adwokat.",
+    "value_cp": 0
+  },
+  "ring": {
+    "name": "Niezidentyfikowany pierścień",
+    "description": "Pierścień ze skrytki dowódcy. Wymaga identyfikacji; na razie nie daje premii.",
+    "value_cp": 0,
+    "identification_dc": 15
+  },
+  "ring_identified": {
+    "name": "Pierścień Siły",
+    "description": "Noszony: +1 do wartości Siły (np. 18 → 19). Modyfikator rośnie dopiero na progu, np. 19 → 20: +4 → +5.",
+    "value_cp": 1500,
+    "strength_score_bonus": 1
+  },
+  "key": {
+    "name": "Klucz do posterunku",
+    "description": "Klucz powierzony przez Nessę. Należy oddać go z dostawą.",
     "value_cp": 0
   }
 }

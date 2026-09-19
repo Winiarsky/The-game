@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from html import escape
 from pathlib import Path
-from .mana_symbols import mana_symbol, mana_text
+from .mana_symbols import mana_symbol, mana_text, passive_mana_symbol
 from dnd_board_game.ui.board_panel_symbols import PANEL_CONTROLS, panel_icon
 
 from .mana_print import (
@@ -38,6 +38,8 @@ p { margin: 0 0 2mm; } small,.muted { font-size: 8pt; color: #454b50; }
 .mana-passives { list-style: none; padding: 0; }
 .mana-passives li { display: flex; gap: 2mm; align-items: flex-start; margin-bottom: 1.5mm; }
 .mana-passives .mana-symbol { flex-shrink: 0; }
+.mana-passive-symbol { display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; width: 7mm; height: 7mm; flex-shrink: 0; vertical-align: middle; }
+.mana-passive-symbol .mana-symbol { width: 4.8mm; height: 4.8mm; }
 .box { padding: 3mm; border: .3mm solid #71848a; margin: 3mm 0; background: #edf4f5; }
 .flaw { background: #fcf1e9; border-color: #a7795e; }
 ul,ol { margin: 2mm 0; padding-left: 5mm; } li { margin-bottom: 2mm; }
@@ -112,15 +114,9 @@ def reference_page(hero: PrintHero) -> str:
         for name, value, mod in hero.abilities
     )
     metamagic = ""
-    # Balance dense dossiers across both columns without shrinking the print.
     side_passive = True
-    main_notes = hero.passives[:-1] if side_passive else hero.passives
-    passives = "".join(
-        f'<div class="note"><b>{escape(name)}</b>{mana_text(text)}</div>'
-        for name, text in main_notes
-    )
     mana_rows = "".join(
-        f"<li>{mana_symbol(color)}<span>{escape(label)}</span></li>"
+        f"<li>{passive_mana_symbol(color, color in hero.stacking_mana_colors)}<span>{escape(label)}</span></li>"
         for color, label in hero.mana_passives
     )
     mana_note = (
@@ -129,8 +125,6 @@ def reference_page(hero: PrintHero) -> str:
         if side_passive else ""
     )
     flaw = f'<div class="box flaw"><h2>Skaza: {escape(hero.flaw[0])}</h2>{mana_text(hero.flaw[1])}</div>'
-    # Shorter innate-passive columns also hold the flaw to balance the page.
-    left_flaw, right_flaw = (flaw, "") if hero.id in {"lorian", "brakka", "dagna"} else ("", flaw)
     weapons = "<br>".join(escape(w) for w in hero.weapons)
     controls = "".join(
         f'<p>{panel_icon(slot)} {escape(name)}</p>'
@@ -142,8 +136,7 @@ def reference_page(hero: PrintHero) -> str:
     {" · ".join(f"{mana_symbol(c)} {COLORS[c]}: <b>{value}</b>" for c, value in hero.mana_values)}<br>
     Test: k20 + cecha + naładowanie + inne premie. Naładowanie: 0/6/12/21 pkt → +0/+2/+4/+6.<br>
     Dobór jednej z dwóch kart na początku tury poniżej 21 pkt. Pula zostaje. Zdolności spalają talię; podbicie +2 karty. Zwykły atak bez spalania.</div>
-    <div class="columns"><div><h2>Zdolności pasywne</h2>{passives}
-    {left_flaw}</div><div>{mana_note}{right_flaw}
+    <div class="columns"><div>{mana_note}</div><div>{flaw}
     <h2>Sterowanie</h2><div class="controls">{controls}</div><p class="muted">Ikona w aplikacji otwiera podgląd. Reakcje wybierasz w ich oknie. −, +, ✓ i ↩ działają w dotychczasowym rogu planszy.</p><p class="muted">Runy na planszy wybierają zdolności i kolory; wybór jednej z dwóch kart: Klucz/Gwiazda.</p>
     </div></div>"""
 
@@ -166,16 +159,15 @@ def turn_rules_page(hero: PrintHero) -> str:
 
 
 def exploration_page(hero: PrintHero) -> str:
+    from dnd_board_game.scenarios.confrontation_terms import effect_name
     cards = ''.join(f'<article class="ability" data-exploration-id="{escape(m.id)}">'
-        f'<h3>{escape(m.name)}</h3><p>{"Rozmowa z NPC" if m.kind == "npc" else "Interakcja z obiektem"} · {escape(hero.name)}</p>'
-        f'<p><b>{escape(m.ability)} · test {m.modifier:+d}</b><br>Wpływ: kość podatności {m.influence_modifier:+d} + pasywy wpływu.</p>'
-        f'<p>{escape(m.description)}</p><p class="muted">' +
-        ' · '.join(f'{escape(label)} {value:+d}' for label, value in m.components) +
-        '</p><p>ST i kość wpływu określa scena. Naładowanie dodajesz raz do testu, nigdy do wpływu.</p></article>'
+        f'<h3>{"Rozmowa z NPC" if m.kind == "npc" else "Interakcja z obiektem"}</h3>'
+        f'<p>{escape(m.description)}</p><p>Test: k20 + cecha podejścia + naładowanie + premie.</p>'
+        f'<p>{effect_name(m.kind)}: kość podejścia + ta sama cecha + premie efektu. Bez naładowania.</p></article>'
         for m in hero.exploration)
-    passives = ''.join(f'<p>{mana_symbol(c)} <b>{COLORS[c]}:</b> {escape(label)}</p>' for c, label in hero.exploration_passives)
+    passives = ''.join(f'<p>{passive_mana_symbol(c, c in hero.stacking_exploration_colors)} <b>{COLORS[c]}:</b> {escape(label)}</p>' for c, label in hero.exploration_passives)
     return (f'<div class="grid exploration-cards">{cards}</div><h2>Pasywy kolorów w eksploracji</h2>{passives}'
-            '<p>Wartości punktowe kolorów są takie same jak w walce. Premie działają, dopóki karta jest w puli; Oddech działa tylko przy doborze.</p>'
+            '<p>Wartości punktowe kolorów są takie same jak w walce. Premie działają, dopóki karta jest w puli; Oddech działa po udanej próbie.</p>'
             f'<h2>Konfrontacja drużynowa</h2><p>{escape(REMINDER)}</p>'
             '<p><b>Pułapki w walce:</b> test Mądrości wykrywa; test Zręczności przy użyciu narzędzi dezaktywuje. Koszt akcji i pozycja obowiązują.</p>')
 

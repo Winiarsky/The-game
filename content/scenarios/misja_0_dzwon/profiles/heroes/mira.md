@@ -15,8 +15,14 @@ w kanonie; poniższa charakterystyka jest roboczym rozwinięciem roli, nie nową
 
 Stałe intro, publikowane osobno w `text/hero_mira.md`:
 
-Mira zwracała uwagę na drzwi, okna i to, czego rozmówca nie powiedział. Jej obecność bywała oczywista dopiero wtedy, gdy sama sobie tego życzyła.
+Mira zwracała uwagę na drzwi, okna i to, czego rozmówca nie powiedział. Niziołka zajmowała niewiele miejsca i nie widziała powodu, żeby przypominać o tym światu. Świat na ogół odwdzięczał się, patrząc ponad jej głową.
+
+Było w tym sporo wygody. Kiedy inni spierali się o główne wejście, ona zdążała zauważyć boczne. Jej obecność bywała oczywista dopiero wtedy, gdy sama sobie tego życzyła — albo gdy ktoś wyjątkowo uważny popsuł jej tę przyjemność.
 
 Instrukcja generowania: zachowaj ten sam fragment niezależnie od składu drużyny;
 przedstaw wyłącznie bohaterów wybranych do gry. W scenach opisz jedną reakcję,
 nie odbierając graczowi decyzji. Edycja tego profilu nie nadpisuje automatycznie tekstów.
+
+Oprawa ilustracji w tej misji: `profiles/visual_style.md`; aktywny wariant obrazu wybiera `visuals.json`.
+
+Kontakt w Misji 0: Mira zna w mieście dyskretnego pośrednika od używanego mienia. Może oddać mu dzwon do sprzedaży; nie zna terminu wypłaty. To jawnie przyjęty element jej historii, nie wiedza o skrytce dowódcy.

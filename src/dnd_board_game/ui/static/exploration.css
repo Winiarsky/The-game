@@ -1389,3 +1389,15 @@ button.panel-accept {background:#172e49;color:#b4dcff;border-color:#437fb7;}
 }
 
 .combat-keyboard-action-index-item.unavailable {opacity:.48;}
+
+/* Seven fields, a neutral centre; the same gold marker on both sides. */
+.party-ethos {position:relative;flex:0 0 auto;font-size:11px;max-width:170px;}
+.party-ethos summary {list-style:none;cursor:pointer;padding:4px;color:var(--color-text);}
+.party-ethos summary::-webkit-details-marker {display:none;}
+.ethos-label {display:block;text-align:center;margin-bottom:4px;}
+.ethos-track {display:flex;gap:4px;justify-content:center;}
+.ethos-track i {display:block;width:13px;height:10px;border:1px solid #a89b7e;border-radius:2px;}
+.ethos-track i.centre {border-radius:50%;}
+.ethos-track i.current {background:#f0cd79;outline:1px solid #f0cd79;outline-offset:1px;}
+.ethos-details {position:absolute;z-index:90;right:0;top:100%;width:320px;max-width:calc(100vw - 24px);padding:14px;border:1px solid #a89b7e;border-radius:6px;background:#202321;color:#eee;box-shadow:0 4px 16px #0008;font-size:13px;line-height:1.45;}
+@media(max-width:600px) {.party-ethos{max-width:110px;font-size:10px}.ethos-track{gap:3px}.ethos-track i{width:10px;height:9px}.ethos-details{position:fixed;top:80px;right:12px;}}

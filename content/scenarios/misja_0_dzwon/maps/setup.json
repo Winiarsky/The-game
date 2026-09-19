@@ -1,12 +1,11 @@
 {
   "guild_setup": [
     {
-      "title": "Mapa Gildii",
-      "body": "Rozłóż mapę Gildii. Wydrukuj dostępny poniżej PDF na dziewięciu arkuszach A4 w skali 100%, bez dopasowania do strony. Plansza 20 × 30; współrzędne od zera. Potwierdź ✓."
-    },
-    {
-      "title": "Biurko Nessy",
-      "body": "Ustaw Nessę albo znacznik jej biurka na podświetlonym polu (5,7).",
+      "title": "Biuro Nessy",
+      "body": "Gracze siedzą od strony run — to dół planszy. Połóż kafel biura Nessy na podświetlonym obszarze. Ustaw oznaczenie I nad mocniej świecącym polem. Pozostaw je wolne dla figurki drużyny. Po ułożeniu kafla naciśnij ✓ (Accept). Podpis kafla skieruj ku runom, aby dało się go czytać z miejsca graczy.",
+      "cutout_ids": [
+        "G01"
+      ],
       "position": [
         5,
         7
@@ -14,15 +13,25 @@
     },
     {
       "title": "Arena",
-      "body": "Oznacz wejście na arenę na (14,8). To miejsce ćwiczeń; dziś ruszycie na wyprawę.",
+      "body": "Gracze siedzą od strony run — to dół planszy. Połóż kafel G02 — Arena obok biura. Dopasuj cały kafel do słabiej podświetlonego obszaru, a pole oznaczone I do jasnozielonego pola. Po rozłożeniu potwierdź niebieskim przyciskiem ✓ na planszy. Podpis kafla skieruj ku runom, aby dało się go czytać z miejsca graczy.",
+      "cutout_ids": [
+        "G02"
+      ],
       "position": [
         14,
         8
       ]
     },
     {
-      "title": "Drużyna",
-      "body": "Ustaw jedną figurkę drużyny na (9,18). Wyjście z gildii jest na (9,24).",
+      "title": "Wyjście z Gildii",
+      "body": "Gracze siedzą od strony run — to dół planszy. Połóż mały kafel G03 — Wyjście na jasnozielonym polu. Tędy drużyna opuści Gildię. Po rozłożeniu potwierdź niebieskim przyciskiem ✓ na planszy. Podpis kafla skieruj ku runom, aby dało się go czytać z miejsca graczy.",
+      "cutout_ids": [
+        "G03"
+      ]
+    },
+    {
+      "title": "Figurka drużyny",
+      "body": "Ustaw jedną figurkę reprezentującą całą drużynę na podświetlonym polu przed biurem. Pozostałe figurki bohaterów zostaw na razie obok planszy. Po rozłożeniu potwierdź niebieskim przyciskiem ✓ na planszy.",
       "position": [
         9,
         18
@@ -33,7 +42,7 @@
   "post_setup": [
     {
       "title": "Powrót do eksploracji",
-      "body": "Zbierz wszystkie figurki bojowe i karty many ze wszystkich stosów. Mapa posterunku zostaje. Ustaw jedną figurkę drużyny na (9,20).",
+      "body": "Zdejmij figurki bojowe i zbierz manę ze wszystkich stosów. Dzwon, wóz i kafle terenu zostają. Ustaw jedną figurkę drużyny na jasno podświetlonym polu. W eksploracji blokady i premie terenu nie ograniczają jej ruchu. Po rozłożeniu potwierdź niebieskim przyciskiem ✓ na planszy.",
       "position": [
         9,
         20
@@ -41,28 +50,90 @@
       "party": true
     },
     {
-      "title": "Rozmówca",
-      "body": "Ustaw Boruta jako rozmówcę na (9,12), również jeżeli w walce był wyeliminowany. Jest ranny, nie wraca do walki.",
+      "title": "Rozmowa z Borutem",
+      "body": "Połóż kafel P15 — Rozmowa na jasnozielonym polu. Reprezentuje Boruta i wieśniaków, także jeśli ich figurki zdjęto podczas walki. Nie dostawiaj osobnej figurki NPC na pole interakcji — to miejsce dla figurki drużyny. Pozostałe miejsca mają oznaczenia I na kaflach. Potwierdź ✓. Podpis kafla skieruj ku runom.",
+      "cutout_ids": [
+        "P15"
+      ],
       "position": [
         9,
         12
       ]
-    },
+    }
+  ],
+  "battle_setup": [
     {
-      "title": "Dzwon",
-      "body": "Dzwon pozostaje na (9,16), wóz na (9,24).",
-      "position": [
-        9,
-        16
+      "title": "Zbrojownia",
+      "body": "Połóż duży kafel P05 — Zbrojownia. Dopasuj cały kafel do słabiej podświetlonego obszaru, a pole oznaczone I do jasnozielonego pola. Podpisy kafli skieruj ku runom — to dół planszy od strony graczy. Po rozłożeniu potwierdź niebieskim przyciskiem ✓ na planszy.",
+      "cutout_ids": [
+        "P05"
       ]
     },
     {
-      "title": "Punkty posterunku",
-      "body": "Zbrojownia (5,7), kwatera (14,7), magazynek (4,15). Przechodź między punktami figurką drużyny; wybór punktu pokaże jego opis.",
-      "position": [
-        5,
-        7
+      "title": "Kwatera dowódcy",
+      "body": "Połóż duży kafel P06 — Kwatera dowódcy. Dopasuj cały kafel do słabiej podświetlonego obszaru, a pole oznaczone I do jasnozielonego pola. Podpisy kafli skieruj ku runom — to dół planszy od strony graczy. Po rozłożeniu potwierdź niebieskim przyciskiem ✓ na planszy.",
+      "cutout_ids": [
+        "P06"
+      ]
+    },
+    {
+      "title": "Magazynek",
+      "body": "Połóż duży kafel P07 — Magazynek. Dopasuj cały kafel do słabiej podświetlonego obszaru, a pole oznaczone I do jasnozielonego pola. Podpisy kafli skieruj ku runom — to dół planszy od strony graczy. Po rozłożeniu potwierdź niebieskim przyciskiem ✓ na planszy.",
+      "cutout_ids": [
+        "P07"
+      ]
+    },
+    {
+      "title": "Dzwon i wóz",
+      "body": "Połóż P01 — Dzwon oraz P02 — Wóz na dwóch podświetlonych obszarach. Pole I na dzwonie dopasuj do jasnozielonego pola. Kafle blokują ruch. Podpisy kafli skieruj ku runom — to dół planszy od strony graczy. Po rozłożeniu potwierdź niebieskim przyciskiem ✓ na planszy.",
+      "cutout_ids": [
+        "P01",
+        "P02"
+      ]
+    },
+    {
+      "title": "Skrzynie",
+      "body": "Rozłóż obie skrzynie P03 i P04 na podświetlonych obszarach. Blokują ruch. Całą parę potwierdzasz razem. Podpisy kafli skieruj ku runom — to dół planszy od strony graczy. Po rozłożeniu potwierdź niebieskim przyciskiem ✓ na planszy.",
+      "cutout_ids": [
+        "P03",
+        "P04"
+      ]
+    },
+    {
+      "title": "Osłony",
+      "body": "Rozłóż worki P08 i P09 oraz murek P10. Dopasuj rozmiary kafli do podświetlonych obszarów. Można na nie wejść; dają +2 KP. Całą serię potwierdzasz razem. Podpisy kafli skieruj ku runom — to dół planszy od strony graczy. Po rozłożeniu potwierdź niebieskim przyciskiem ✓ na planszy.",
+      "cutout_ids": [
+        "P08",
+        "P09",
+        "P10"
+      ]
+    },
+    {
+      "title": "Gruz",
+      "body": "Połóż obie części gruzu P11 i P12 na podświetlonych obszarach. Wejście na takie pole kosztuje 10 ft zamiast 5 ft. Oba kafle potwierdzasz razem. Podpisy kafli skieruj ku runom — to dół planszy od strony graczy. Po rozłożeniu potwierdź niebieskim przyciskiem ✓ na planszy.",
+      "cutout_ids": [
+        "P11",
+        "P12"
+      ]
+    },
+    {
+      "title": "Głazy",
+      "body": "Połóż głazy P13 i P14 na podświetlonych obszarach. Blokują ruch. Oba kafle potwierdzasz razem. Podpisy kafli skieruj ku runom — to dół planszy od strony graczy. Po rozłożeniu potwierdź niebieskim przyciskiem ✓ na planszy.",
+      "cutout_ids": [
+        "P13",
+        "P14"
       ]
     }
-  ]
+  ],
+  "road_placement": {
+    "cutout_id": "P02",
+    "origin": [
+      9,
+      16
+    ],
+    "party_position": [
+      9,
+      18
+    ]
+  }
 }

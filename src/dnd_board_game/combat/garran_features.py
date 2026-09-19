@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dnd_board_game.inventory.magic_items import effective_ability_modifier
+
 from dnd_board_game.actors.resources import uses_physical_mana, uses_shared_mana
 
 from dataclasses import dataclass, replace
@@ -203,8 +205,8 @@ def resolve_shield_bash(
     if not action.accepted:
         raise ValueError(action.message)
     from .mana_charge import state_charge_bonus
-    attacker_total = attacker_roll + ability_modifier(actor.ability_scores.strength) + state_charge_bonus(state, actor)
-    defender_total = defender_roll + ability_modifier(target.ability_scores.strength) + state_charge_bonus(state, target)
+    attacker_total = attacker_roll + effective_ability_modifier(actor, 'strength') + state_charge_bonus(state, actor)
+    defender_total = defender_roll + effective_ability_modifier(target, 'strength') + state_charge_bonus(state, target)
     if attacker_total <= defender_total:
         return ShieldBashResolution(
             action.state, actor, target, target, attacker_total, defender_total, None, None
@@ -214,7 +216,7 @@ def resolve_shield_bash(
         resolve_damage(
             (
                 DamageComponentInput(
-                    max(0, damage_roll + ability_modifier(actor.ability_scores.strength)),
+                    max(0, damage_roll + effective_ability_modifier(actor, 'strength')),
                     DamageType.BLUDGEONING,
                     "Uderzenie tarczą",
                 ),

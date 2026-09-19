@@ -1,4 +1,113 @@
+- [x] [Komplet kafli w stylu próbki wozu] 18 kafli z 14 ilustracjami tuszem
+  (13 nowych z image_gen i zaakceptowany wóz). Ramka przez cały kafel,
+  jedna linia podpisu: pogrubiona nazwa — zwykły tekst efektu. Zachowane
+  obrysy, pola I i skale obu PDF-ów; grafiki i prompty w maps/illustrations/ink_v3.
+  Weryfikacja: 8 testów kafli, oględziny 14 ilustracji i 5 arkuszy, pomiar
+  18 podpisów w Chrome (mieszczą się także w nominalnych polach 25 mm).
+
+- [x] [Próbny kafel wozu z ramką v3] Jedna ilustracja image_gen: rozpoznawalny
+  drewniany wóz w czerni i bieli. Ramka przez oba pola 2×1, poniżej efekt
+  „BLOKUJE RUCH” i nazwa, wszystko w obrysie 50×25 mm. Osobny podgląd i PDF-y
+  w maps/prototypes/cart_v3; ocena próbki poprzedza zmianę reszty zestawu.
+
+- [x] [Wektorowe ilustracje kafli Misji 0] 14 lokalnych czarno-białych SVG
+  dla 18 kafli: wyposażone wnętrza, przedmioty, osłony i gruz. Edytowalne
+  przypisania artwork w maps/cutouts.json; oba PDF-y zachowują skalę i siatkę.
+  Podpis trudnego terenu: „KOSZT RUCHU ×2” i „10 ft / pole”.
+
+- [x] [Kafle Misji 0 do wycięcia, 2026-09-16] 18 kafli w 7-stronicowym PDF A4:
+  całe budynki, punkty eksploracji i teren bojowy. Katalog obrysów korzysta z
+  danych walki; trzy osłony +2 KP, dwa kafle gruzu i dwa głazy działają w silniku.
+  Skala areny 250/244 oraz wariant nominalny 25 mm; pełne podświetlenie miejsc
+  w setupie, link PDF w UI. Generator: scripts/build_mission_zero_cutouts.py.
+  Weryfikacja: 38 testów (kafle, misja i Chrome 390 px); geometria A4,
+  zgodność terenu i startów dla 3–6 osób, LED i pobranie PDF. Oba PDF-y
+  mają po 7 stron; obejrzano wszystkie arkusze wariantu kalibrowanego.
+
 # TODO
+
+- [x] Orientacja Gildii od strony run: kafle G01–G03 obrócone o 90°
+  w lewo, obrysy LED dopasowane, pola interakcji bez zmian. Rozdzielony
+  rozmiar wydruku i obrót na planszy; obecne wycinanki nadal pasują.
+  Zaktualizowane instrukcje oraz mapka w komplecie PDF Misji 0.
+- [x] Posterunek: wszystkie P01–P15 obrócone podpisem ku runom.
+  Obrysy terenu i LED zgodne; gruz omija strefę startową, woźnica
+  przesunięty na (6,13) poza magazynek. Pola I i wycinanki zachowane.
+  Zaktualizowane instrukcje, podglądy i komplet PDF Misji 0.
+
+- [x] Konfrontacje Misji 0: portret rozmówcy i portrety uczestników, kompromis
+  ujawniany dopiero przy ofercie, przygotowanie opisujące tylko skład talii.
+  Widok dopasowany do wysokości ekranu, przewijanie +/−, wybór pod każdą
+  odkrytą kartą; runy raportowania i wyboru świecą kolorami many
+  (czarna: intensywny fiolet). Rzuty zachowują własną obsługę +/−.
+
+- [x] Koncept Garrana 1/3: jedna strona A4 ze statystykami, pięcioma kolorami
+  i pasywami walki/eksploracji; miejsca na karty 63 × 88 mm wsuwane z boków,
+  trzy stosy z lewej i dwa z prawej. Osobny PDF i podgląd ułożenia w
+  content/print/prototypes/garran_trio_v1. Do oceny przed dalszym redesignem.
+
+- [x] Pasywy bez limitów tur/odpoczynku: Garran rozdzielona ochrona, Mira ukrycie
+  i flanka, Erynd każde pełne PW, Brakka jedno uratowanie na cykl draina.
+  Status gotowe/zużyte, ikony z obwódką kumulacji, trwały Oddech eksploracji,
+  aktualizacja kart, samouczka i kompletu wydruków.
+
+- [x] Usunąć darmowe pasywy wszystkich siedmiu bohaterów; kluczowe cechy
+  odblokowywać kolorami nasycenia. Obsłużyć utratę koloru, drain, nową walkę
+  i migrację zapisów; pozostawić skazy. Zaktualizować UI, lekcje i karty.
+
+- [x] Dwa kompletne wydruki: Misja 0 (kafle → rozkaz → pokwitowania → przedmioty)
+  oraz bohaterowie (pełne karty postaci → jej startowy ekwipunek, osobno dla
+  każdego z siedmiu bohaterów). Wspólny generator z aktualnych źródeł,
+  zachowana kalibracja kafli, spisy stron i manifesty ułatwiające druk drużyny.
+
+- [x] [Setup Misji 0 kaflami, 2026-09-16] Zastąpić mapy poglądowe
+  podglądem całego kafla z jego grafiką, ramką i polem I; instrukcja po prawej.
+  Duże kafle osobno, małe przeszkody walki w seriach; teren przed figurkami.
+  Podświetlać słabiej obszar kafla, mocniej pole interakcji, potwierdzać ✓.
+  Wspólna geometria z wydrukiem, edytowalne grupy w maps/setup.json,
+  weryfikacja pełnego zestawu kafli i ta sama kolejność przy ponawianiu walki.
+  Po walce zachować teren, zmienić figurki i dodać kafel rozmowy.
+  Weryfikacja: 21 testów setupu, adaptera LED, Misji 0 i przeglądarki;
+  oględziny podglądu biura i zbrojowni, pełne przejście do walki dla 6 osób.
+
+- [x] [Czytanie intro z planszy, 2026-09-16] Usunąć link do wycinanek
+  z panelu rozgrywki (przygotowanie przed sesją). Intro świata, bohaterów
+  i wezwania do Nessy ma przewijany opis: + w dół, − w górę, ✓ dalej.
+  Nawigacja pozostaje widoczna także po zmianie wysokości komunikatu planszy.
+  Przewijanie nie zmienia stanu misji; aktualizacje panelu zachowują pozycję,
+  nowy fragment ją zeruje. Spóźnione zdarzenia z poprzedniej sceny są pomijane,
+  a podczas rzutów +/− nadal służą do wprowadzania wyniku.
+
+- [x] [Narracyjne otwarcie Misji 0, 2026-09-16] Osobna komiksowa ilustracja
+  Pogranicza zamiast napastników przy dzwonie; narracja świata, osobne pełne
+  portrety i stałe opisy wybranych bohaterów, zamknięcie o powstaniu drużyny
+  i pierwszym wezwaniu do Nessy. Rozwinięte opisy siedmiorga bohaterów
+  zsynchronizowane z profilami autorskimi. `image` i `image_layout` w
+  `text/index.json` sterują grafiką i układem bez zmiany kodu. Nowy obraz
+  i prompt w paczce scenariusza; posterunek dopiero przy dotarciu do celu.
+
+- [ ] [Pomysł: arena jako konfigurowalna walka, 2026-09-16] Docelowo
+  przebudować arenę/poligon w modularny tryb walki konfigurowany przez UI:
+  wybór składu drużyny, typów i liczby przeciwników, rozstawienia bohaterów
+  i przeciwników oraz przeszkód i kafli terenu z ich efektami mechanicznymi.
+  Po konfiguracji przejść przez setup fizycznej planszy i uruchomić walkę
+  według aktualnych zasad. Tryb ma służyć do swobodnego testowania starć
+  i zestawień; Misja 0 pozostaje samouczkiem drużynowym podczas przygody.
+  Na razie wyłącznie zapis pomysłu — bez przebudowy obecnej areny.
+
+- [x] [Wybór drużyny bez przewijania, 2026-09-16] Dopasować siedem kafelków
+  bohaterów i nawigację do wysokości okna. Na mniejszych ekranach pozostawić
+  krótki nagłówek roli; szczegółowe zasady są na kartach postaci. Sprawdzić
+  dziewięć rozmiarów widoku, limit sześciu bohaterów, powrót ze scenariuszy
+  i wybór runami (13 testów przeglądarkowych).
+  Doprecyzowanie oprawy: portrety 64–88 px i jedno zdanie o stylu gry,
+  pokazywane zależnie od dostępnego miejsca w kafelku. Sprawdzone ponownie
+  na dziewięciu rozmiarach okna, bez przewijania i ucinania opisów.
+
+- [x] [Komiksowa oprawa Misji 0] Wariant `comic_v2`: trzy sceny, Nessa i siedmioro
+  bohaterów; wspólny styl, żywe kolory i przełączanie przez `visuals.json`.
+  Weryfikacja: test przełączania wariantu/cache oraz 11 poprawnych odpowiedzi
+  HTTP obrazów i nowe portrety w payloadzie misji. Oryginały zachowane lokalnie.
 
 - [x] [Masterplan misji 0] Zapisano `content/scenarios/misja_0_dzwon/MASTERPLAN.md`:
   lokalna edytowalna paczka narracji i mediów, profile i narrator, intro składu,
@@ -1779,3 +1888,195 @@ Review evidence and UI/gameplay proposals: `docs/PROJECT_REVIEW_2026-09-05.md`.
   Read-only WLED probes varied 0.16–0.73 s; physical latency remains distinct
   from the local simulator measurement. Log slow request durations, LED planning
   versus transport, and scan preparation/wait/post-input durations separately.
+
+- [x] Misja 0: wspólny układ obraz po lewej / przewijany opis po prawej,
+  stałe opcje dialogowe i +/− na planszy; po setupie wybór Nessy lub
+  niedostępnej jeszcze areny przez pola kafli w siedzibie Gildii.
+- [ ] Rozbudować siedzibę Gildii w centrum rozwoju i zadań: trening na arenie
+  za zdobyte punkty, zbrojownia ze sprzedażą broni, handlarz przedmiotami
+  oraz kolejne zlecenia. Na razie arena pokazuje wyłącznie informację.
+
+- [x] Siedziba Gildii: wybór Nessy i areny wyłącznie przez pola planszy
+  z figurką drużyny; usunięto powielające je przyciski i runy.
+
+- [x] Misja 0 — kontrakt odbioru sprzętu, zapasów i dokumentów; drukowany rozkaz
+  i pokwitowania, rozejm po pierwszym pokonanym, dwa przeszukania z ryzykiem
+  uszkodzeń, pomoc wieśniaków, plotka, komplement Loriana i osobne losy dzwonu/długu.
+- [x] Pierścień zamiast amuletu: identyfikacja Nimry lub Gildii, +1 do wartości
+  Siły z wyposażenia, przekazanie/zdejmowanie, UI i zapis; odroczona nagroda
+  pasera z jednorazowym punktem wejścia rozliczenia kampanii.
+- [ ] Przy budowie Misji 2 podłączyć `campaign_rewards.complete_mission` na jej
+  zakończeniu oraz narrację `misja_0_dzwon/mechanics/followups.json`; zachować
+  flagi kampanii przy kontynuacji. W przyszłym mieście dodać adwokata i obsługę
+  pokwitowań / poręczenia Garrana. Nie zdradzać terminu wypłaty w tekście gry.
+
+- [x] Wspólny zapas Misji 0, przygotowanie bohaterów przed wyjściem i po powrocie,
+  sloty i atomowa zamiana, lista −/+, zapis, blokada wyposażenia w terenie,
+  mikstury z zapasu, płatna identyfikacja / próba Nimry przy odkryciu, sprzedaż
+  z potwierdzeniem oraz ilustrowane karty startowego sprzętu i znalezisk.
+- [x] Zachowanie wspólnego zapasu przy przekazaniu drużyny do kolejnego scenariusza.
+- [ ] Rozszerzyć przygotowanie o zakupy, rozwój postaci i dobór zestawu akcji
+  specjalnych. Ustalić liczbę slotów akcji i ograniczenia przed implementacją.
+
+- [x] Karty ekwipunku: zastąpić schematyczne SVG pełnymi czarno-białymi
+  ilustracjami tuszem w stylu kafli mapy; wspólne grafiki w UI i nowych PDF-ach.
+
+- [x] Prototyp Garrana v2: cztery osobne arkusze A4 (historia/statystyki,
+  pełne miejsca 63 × 88 mm na manę, dziewięć akcji z runami, pusta mata
+  wyposażenia), żetony sprzętu 60 × 42 mm i wspólna jednostronicowa ściągawka.
+  Generator `scripts/build_garran_set_concept.py`; PDF-y i podglądy
+  `content/print/prototypes/garran_set_v2/`. Sprawdzić fizyczny wydruk przed
+  przeniesieniem układu na wszystkie postaci i zastąpieniem oficjalnych paczek.
+- [x] Prototyp maty many Garrana: wyraźnie oddzielić walkę i eksplorację,
+  wyrównać bloki między kolorami oraz odróżnić ich nagłówki w druku czarno-białym.
+- [x] Prototyp karty Garrana: najpierw kontekst rozmowy / interakcji z obiektem,
+  następnie nazwa podejścia i mechanika; jawnie oznaczyć pole na notatki gracza.
+- [x] Nazwy efektów konfrontacji: „wpływ” dla NPC, „postęp” dla obiektów;
+  kontekstowe instrukcje, rzuty, podsumowania i pasywy w UI oraz wydrukach.
+- [x] Przenieść zatwierdzony układ Garrana na siedem postaci: cztery maty
+  i startowy sprzęt każdej postaci, wspólne dodatki na końcu jednego PDF-u.
+  Osobne obwódki kumulacji dla walki/eksploracji; 12 akcji Nimry na jednym A4.
+  Generator `scripts/build_hero_mats.py`, materiały w `content/print/characters/mats_v2/`.
+
+- [x] [Redakcja kompletu postaci, 2026-09-18] Naturalne opisy akcji, pasywów i
+  wyposażenia; słownik pogrubianych terminów mechanicznych. „Przybory magiczne /
+  instrument” zastępują „ognisko”. Pomocnik z przykładami walki, rozmów i obiektów
+  na końcu zbiorczego PDF-u; edytowalne copy.json, keywords.json i player_aid.json.
+  Weryfikacja: 50 testów (język wydruków, karty many, ekwipunek, grafiki),
+  41 arkuszy bez przepełnień; sprawdzono kolejność pomocnika i wynikowy PDF.
+
+- [ ] [Po ukończeniu pierwszej kampanii — wersja online] Udostępnić jedną
+  stronę gry z logowaniem, indywidualnymi zapisami kampanii i automatycznym
+  zapisem postępu. Przepływ: zaloguj się → nowa kampania / kontynuuj → połącz
+  planszę → graj przez dotychczasowy interfejs. Zachowywać drużynę, ekwipunek,
+  decyzje fabularne i aktualny etap; oddzielić stan, zapisy i plansze różnych
+  użytkowników, umożliwiając równoczesne niezależne rozgrywki.
+  Docelowo podłączanie planszy ze strony bez instalowania programu: najpierw
+  sprawdzić Web Serial dla przycisków USB oraz dostęp przeglądarki do LED-ów
+  WLED. Zweryfikować zgodność przeglądarek, parowanie planszy z sesją oraz
+  wznowienie po utracie połączenia bez powtarzania akcji. Jeśli potrzebny
+  będzie lokalny program pośredniczący, omówić ten kompromis przed wdrożeniem.
+  Po próbie jednej zdalnej rozgrywki wykonać test wielu stołów i dobrać hosting,
+  trwałe zapisy oraz kopie zapasowe. Wstępny budżet infrastruktury: 600–1000 zł
+  rocznie dla małej wersji publicznej; ponownie sprawdzić ceny i obciążenie
+  przed zakupem. Zadanie odłożone do zakończenia pierwszej kampanii.
+
+## Misja 0 — audyt rozgrywki przez UI (2026-09-18)
+
+Raport i dowody: `docs/playtests/2026-09-18-misja0/REPORT.md`.
+
+- [x] Przejść Misję 0 przez UI drużynami 3, 4, 5 i 6 osób z symulowaną
+  fizyczną talią/kośćmi, realnym WLED, zapisem wyników i raportem.
+
+- [x] Ujednolicić instrukcje wyboru działań w walce: runy faktycznie działają,
+  choć tekst mówi o wyłączonym pasku; główne ikony ekranowe nie są przyciskami.
+- [x] Usunąć fałszywe „Brak dostępnych pól ruchu” przy niepustej liście pól.
+- [x] Zastąpić stare przypomnienia „Wydaj: czerwona” aktualnymi progami
+  naładowania/spalaniem we wszystkich wariantach UI walki.
+- [x] Ujednolicić statystyki Brakki z wydrukiem: zapisany bohater ma 32 PW,
+  SIŁ 19/KON 15; generator mat 35 PW, SIŁ 18/KON 16. Pozostałe sześć
+  wartości PW było zgodnych.
+- [x] Generować współrzędne wozu w narracji drogi z geometrii kafla;
+  obecny tekst nadal podaje położenie sprzed obrotu.
+- [x] Naprawić problem ✓ podczas inicjatywy Misji 0: panel był ograniczony
+  do scenariusza areny. Profil fizycznej many korzysta teraz z tego samego
+  panelu. Chrome: +/−, podsumowanie i ✓ trzech bohaterów przez endpoint planszy.
+- [ ] W teście przy stole potwierdzić inicjatywę fizycznymi przyciskami;
+  regresja automatyczna wysyła wskazania pól i nie naciska sprzętu.
+- [x] Ukryć znaczniki techniczne stanów („Rodzaj rozpoczętej serii: 0”,
+  „Ofensywa w tej turze”, „Czas Rage”) i skrócić powtarzane akapity pasywów.
+- [ ] Rozważyć opcjonalną lekcję pełnego naładowania i draina dla drużyn,
+  które przyjmują rozejm i kończą walkę przed poznaniem tych mechanik.
+- [ ] Podczas testów przy stole zmierzyć obciążenie zgłaszaniem spalanych
+  kart oraz czterema pełnymi konfrontacjami w jednej misji wprowadzającej.
+- [x] Naprawić nominały przy nagrodach/opłatach Misji 0: zapis wartości jako
+  `CurrencyWallet(cp=total_cp)` zamienia np. 44 sz na 4400 miedziaków i 88 lb.
+  Zachować poprawną wartość bez sztucznego zwiększania masy waluty/udźwigu.
+- [ ] Zweryfikować sens odmowy rozejmu: w próbie brak dodatkowego XP lub
+  nagrody, za to dłuższa walka, rany, płatna plotka i brak pomocy. Świadomie
+  zaakceptować przewagę rozejmu albo nadać drugiej ścieżce odrębną korzyść.
+
+- [x] Naprawić identyfikację Nimry w terenie: udany test wywołuje
+  `identify_paid()` i zabiera 5 sz. Płatność dotyczy tylko Gildii; sukces
+  Nimry powinien wywoływać bezpłatne `identify()`. Potwierdzone w P5.
+- [x] W konfrontacji sześciu postaci odsłaniać kartę aktualnego aktora:
+  Nimra zostaje w drugim rzędzie poza widokiem także w swojej turze
+  (1131×720). Przypiąć podsumowanie lub przewijać do aktywnej karty.
+- [x] Przy zakończeniu walki usuwać znaczniki `mana_series_source` oraz
+  `shared_offensive_used`: w P3–P6 dotrwały do końcowego zapisu misji
+  mimo czasu „do końca tury”.
+- [x] Dopracować drobne komunikaty Misji 0: odmiana „1 pełną rundę”,
+  „Zastosuj wynik encountera”, sprzeczny brak aktywnego aktora podczas
+  tury wroga oraz wzmianki o Mirze/Nimrze przy nieobecności w drużynie.
+
+Poprawki po audycie: patrz tabela statusów i weryfikacja w raporcie. Lokalny
+rekord startowy Brakki dostosowano do kanonicznego zestawu (35 PW, SIŁ 18,
+KON 16); wcześniejsze snapshoty i historyczne wyniki audytu pozostają bez zmian.
+
+## Eksploracja — kumulowana pomoc (19.09.2026)
+
+- [x] Test i pomoc spalają po 1 karcie z wierzchu wspólnej talii; UI pokazuje
+  jeden test z najwyższą dostępną premią naładowania.
+- [x] Pomoc daje +1, ze Współpracą +2. Kolejne pomoce sumują się bez limitu;
+  cała suma znika po pierwszej próbie k20 odbiorcy, także nieudanej.
+  Dobór, kolejna runda i pomaganie innym nie zużywają premii.
+- [x] Zachować zgłaszanie spalonej karty przez runy, blokadę następnej tury
+  do zakończenia płatności i zakończenie konfrontacji przy braku karty.
+- [x] Zaktualizować opisy UI, lekcje pomocy/naładowania, pasywy wszystkich
+  siedmiu bohaterów i zbiorczy PDF (41 stron, walidacja bez przepełnień).
+- [x] Regresje: kumulacja do +3, zużycie przy sukcesie i porażce, NPC/obiekt,
+  zapis podczas próby, Współpraca oraz fizyczny koszt. Chrome: runy pomocy
+  na ekranach 1300×657 i 390×800 oraz przebieg sześciu bohaterów.
+- [ ] Ocenić przy stole balans płatnej, kumulowanej pomocy; poprzedni raport
+  symulacyjny dotyczy wcześniejszego modelu kosztów.
+
+## Podejścia zależne od sceny i graf pomocy (19.09.2026)
+
+- [x] Zastąpić stałe metody bohaterów opcjami NPC/obiektu: nazwa, opis,
+  cecha, ST, kość wpływu/postępu i skierowane powiązania `supports`.
+- [x] Wybór każdego uczestnika runą przed talią, w kolejności tur; wspólne
+  podejścia dozwolone, przydział trwa do końca konfrontacji. Bez symetrii cech.
+- [x] Nessa: komplementy, żądania, argumenty, blef, zrozumienie obaw.
+  Osobno dopasować wóz, zbrojownię, kwaterę i schowek treningowy.
+- [x] Pokazać skierowane powiązania podczas wyboru; pomoc tylko wskazanym
+  podejściom. `*` pozwala wybrać dowolnego sojusznika, jedna osoba na akcję.
+- [x] Dodać alternatywę za całe działanie: podgląd dolnej karty, zgłoszenie
+  koloru i pozostawienie na spodzie/przeniesienie na wierzch, bez spalania.
+  Pusta talia: czekanie. Reakcje po rundzie nadal obowiązują.
+- [x] Zachować kolejność/kolory w zapisie, odrzucać nielegalne powiązania
+  i przekroczenie liczby kart. Nie resetować konfrontacji rozpoczętej wcześniej.
+- [x] Zaktualizować lekcje, opisy, karty siedmiu bohaterów i wspólny pomocnik
+  (41 stron); skrypty ewaluacji wybierają podejścia przed talią.
+- [x] Testy wyboru, grafu, zużycia akcji, kart, zapisu i run w Chrome;
+  testowa symulacja pełnych konfrontacji (`--trials 1`, 84 przebiegi, wynik w /tmp).
+- [ ] Przy stole ocenić balans podejść i decyzji podgląd/test/wsparcie.
+  Szybki przebieg skryptu nie ocenia optymalnej współpracy ani balansu scen.
+
+- [x] Wybór podejść: przypisać opcje do run od pola 6 zamiast akcji
+  podstawowych 0–5; umieścić wybór bezpośrednio w kafelkach z pełnymi opisami.
+  Usunąć powtórzony pasek wyborów, zastąpić duże panele uczestników zwięzłym
+  podsumowaniem przydziału. Chrome: wszystkie pięć opcji bez przewijania
+  na 1300×657 i 1131×720; mały ekran zachowuje dostęp przez przewijanie.
+  Test adaptera potwierdza, że podstawowe pola nie są celami wyboru podejść.
+
+
+- [x] Konfrontacje: wyłączne podejścia na bohatera, niezmienne runy po zajęciu opcji, sześć logicznych podejść w scenach Misji 0 i treningu. Portret wybierającego, oddzielenie nagłówka i wsparcie z runami w kółkach; aktualizacja pomocnika. Starsze przydziały przed doborem zachowują poprawny początek; rozpoczęta rozgrywka zachowuje stan.
+
+- [x] Podejścia mieszane: `repeatable` w katalogach NPC i obiektów, blokowanie tylko wyłącznych opcji, oznaczenia na kafelkach i zgodność zapisów. Sceny z opcją powtarzalną nie wymagają sześciu różnych podejść. Pomocnik i oznaczenia UI opisują oba warianty; testy obejmują sześć postaci i zachowanie run po ponownym wyborze.
+
+- [x] Wóz: osobny zwięzły opis konfrontacji bez powtórzenia setupu drogi; sprawdzenie mieszanego przydziału, run, starszego zapisu i widoku jak u Nessy.
+
+- [x] Odświeżyć wszystkie zestawy postaci po zmianie podejść: wspólny blok eksploracji, trzy działania, modyfikator cechy zamiast nieprecyzyjnej „cechy”, wsparcie i powtarzalność w pomocniku. Komplet PDF: 41 stron bez przepełnień, rozmiary fizycznych kart zachowane; 38 testów opisów i danych wydruku przeszło.
+
+- [x] Podgląd w konfrontacjach bez zgłaszania koloru: tylko zostawienie/przełożenie, zachowanie znanej kolejności i migracja trwającego podglądu; odświeżone samouczek, karty i PDF. Testy reguł, zapisu, run i przeglądarki przeszły.
+
+- [x] Usunąć blok eksploracji z kart wszystkich postaci; pod portretem i historią umieścić skazę oraz aktualne zobowiązania z kropkowanymi liniami. Wspólny pomocnik zachowany; PDF 41 stron, kontrola układu bez przepełnień.
+
+- [x] Postawa drużyny: siedmiopolowy wskaźnik, skład talii z wyłączonymi kartami, zapis kampanii; wymuszona zamiana wozu oraz przyjęcie/odmowa rozejmu w Misji 0. UI i instrukcje podają aktualny skład; pomocnik w PDF (41 stron bez przepełnień). Testy reguł, zapisów, scenariusza, run i Chrome (3/6 postaci oraz widoki Nessy i wozu).
+- [ ] Ograć wpływ postawy na balans: po 1 karcie z dwóch kolorów na krok (maks. 6 wyłączonych), szczególnie dla drużyn 3 i 6 osób; sprawdzić długość konfrontacji i dostęp do pasywów.
+
+- [x] Konfrontacje: większy portret wybierającego obok podejść, usunięcie ogólnego zdania o wsparciu, cofanie pomyłek podejścia/koloru/doboru przez runę Fala z zachowaniem talii i zapisu. Granice korekt przed rzutem/działaniem; 4 testy cofania i 6 prób Chrome (Nessa/wóz, trzy rozmiary ekranu) przeszły.
+
+- [x] Konfrontacje — poprawki po sesji 19.09: Oddech wymaga przełożenia najstarszej spalonej karty i potwierdzenia ✓ przed kosztem testu; kompromis zatrzymuje postęp na osobnym wyborze przyjęcia/odrzucenia po rozliczeniu akcji. Zapis zachowuje oczekujące potwierdzenie; logi pokazują zmiany kart i decyzję. Regresje reguł/run/zapisu oraz Chrome na 1300×657 i 390×800; skrypty symulacji obsługują nowy krok.
+
+- [x] Czytelne pasywy many wszystkich siedmiu postaci: wspólne dane opisu dla UI i mat (warunek, efekt, szczegóły, kumulacja, krótki tekst do druku). Schemat jednej karty ze spalonych na spód talii przy Oddechu, pogrubione wartości w UI, wyraźne rozróżnienie leczenia przy doborze i stałych premii. Nowe opisy także w wyborze many podczas walki i w pomocniku. Testy opisów, UI rozmowy/walki i potwierdzenia Dagny w Chrome; walidacja A4 i rozmiarów kart.

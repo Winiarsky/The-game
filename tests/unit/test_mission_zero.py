@@ -31,18 +31,61 @@ def stage(s,stage,**kwargs):
 
 @pytest.mark.parametrize('count',[3,4,5,6])
 def test_selected_intro_setup_and_scaled_battle(tmp_path,count):
-    s=session(tmp_path,count);send(s,'next')
+    s=session(tmp_path,count)
+    intro=m.payload(s)
+    assert intro['text']['id']=='world' and intro['text']['speaker']=='Narrator'
+    assert 'world_intro.png' in intro['image'] and 'posterunek' not in intro['image']
+    assert intro['image_layout']=='landscape'
+    send(s,'next')
     seen=[]
     for _ in range(count):
-        seen.append(m.payload(s)['text']['id']);send(s,'next')
+        current=m.payload(s)
+        seen.append(current['text']['id'])
+        assert current['image_layout']=='portrait' and current['text']['speaker']=='Narrator'
+        assert '/'+HEROES[len(seen)-1]+'.png?' in current['image']
+        send(s,'next')
     assert seen==['hero_'+h for h in HEROES[:count]]
     assert m.read(s)['stage']=='party'
+    assert 'nessa_desk_interaction' in m.payload(s)['image']
     send(s,'next')
     for _ in range(4):send(s,'next')
+    assert m.read(s)['stage']=='guild_hub'
+    send(s,'talk_nessa')
     assert m.read(s)['stage']=='brief'
     assert (s.save_dir/'misja_0_dzwon.brief.checkpoint.json').exists()
     encounter=encounter_for_party_size(build_encounter_from_scenario(load_scenario(PACK/'mechanics/battle.json')),count)
     assert sum(a.faction.value=='enemy' for a in encounter.actors)==count+2
+
+
+def test_intro_uses_selected_order_including_nimra(tmp_path):
+    s=session(tmp_path)
+    members=('nimra','erynd','lorian')
+    s.configure_custom_party(tuple(training_hero(h) for h in members))
+    m.initialize(s)
+    send(s,'next')
+    for hero in members:
+        assert m.payload(s)['text']==text_entry(PACK,'hero_'+hero)
+        assert '/'+hero+'.png?' in m.payload(s)['image']
+        send(s,'next')
+    assert m.read(s)['stage']=='party'
+    stage(s,'arrival')
+    assert 'posterunek.png' in m.payload(s)['image']
+
+
+@pytest.mark.parametrize('scene',['world','brief','guild_setup','guild_hub','summary','departure'])
+def test_intro_scroll_controls_do_not_change_mission_state(tmp_path,scene):
+    from dnd_board_game.hardware.board_panel import panel_position
+    s=session(tmp_path)
+    stage(s,scene,index=0)
+    before=m.read(s)
+    for slot in (26,27):
+        assert panel_position(slot) in m.scan_target(s).positions
+        event=m.select_position(s,panel_position(slot))
+        assert event['panel_event']==dict(slot=slot,context=f"mission-scroll:{before['revision']}")
+        assert m.read(s)==before
+    stage(s,'fatigue_roll')
+    assert not m.payload(s)['reading']
+    assert panel_position(27) not in m.scan_target(s).positions
 
 @pytest.mark.parametrize('outcome,item',[('success','mission_potion'),('compromise','mission_weak_potion'),('failure',None)])
 def test_confrontation_returns_real_reward_once(tmp_path,outcome,item):
@@ -50,7 +93,7 @@ def test_confrontation_returns_real_reward_once(tmp_path,outcome,item):
     store=c.read_store(s);store['current']['state'].update(stage='result',outcome=outcome);c.write(s,store)
     c.command(s,dict(action='next',revision=c.read_store(s)['revision']))
     assert m.read(s)['stage']=='brief'
-    actual=[i.id for a in s.exploration.actors for i in a.inventory if i.id.startswith('mission_')]
+    actual=[i.id for i in s.state.party_loot.items if i.id.startswith('mission_')]
     assert actual==([item] if item else [])
     with pytest.raises(ValueError):send(s,'negotiate')
 
@@ -81,31 +124,30 @@ def test_fatigue_changes_attack_and_damage_once():
     assert again.damage_modifier==2
     assert sum(x.value for x in again.attack_roll_request.modifiers)==-2
 
-@pytest.mark.parametrize('debt',['help','report','fraud'])
+@pytest.mark.parametrize('debt',['help','garran','decline'])
 def test_decisions_summary_rewards_and_checkpoint(tmp_path,debt):
+    from tests.unit.test_mission_recovery import collect_all
     s=session(tmp_path);stage(s,'explore',outcome='accepted')
     m.checkpoint(s,m.read(s))
-    send(s,'leader');send(s,'back');send(s,'dilemma');send(s,debt);send(s,'next');send(s,'loaded');send(s,'next')
+    collect_all(s)
+    send(s,'leader');send(s,'debt_'+debt);send(s,'back');send(s,'dilemma')
+    send(s,'bell_village');send(s,'next');send(s,'loaded');send(s,'next');send(s,'summary')
     assert m.read(s)['stage']=='summary'
     assert m.read(s)['debt']==debt
-    assert sum(x['amount'] for x in m.read(s)['ledger'] if x['kind']=='money')==30+(5 if debt!='help' else 0)
-    assert any(i.id=='mission_documents' for a in s.exploration.actors for i in a.inventory)==(debt!='report')
+    assert sum(x['amount'] for x in m.read(s)['ledger'] if x['kind']=='money')==30
+    assert any(i.id=='mission_documents' for i in s.state.party_loot.items)==(debt!='decline')
     with pytest.raises(ValueError):send(s,'next')
     send(s,'checkpoint',id='explore')
     assert m.read(s)['stage']=='explore' and not m.read(s)['ledger']
 
 
-def test_discoveries_and_amulet_transfer_are_not_repeatable_rewards(tmp_path):
+def test_safe_collection_does_not_grant_optional_items_or_allow_search(tmp_path):
     s=session(tmp_path);stage(s,'explore')
-    send(s,'armory');send(s,'medallion');send(s,'back')
-    send(s,'quarters');send(s,'cache');send(s,'back')
-    from dnd_board_game.inventory.armor import effective_armor_class
-    before={str(a.id):effective_armor_class(a) for a in s.exploration.actors}
-    send(s,'amulet');send(s,'equip_amulet',target='brakka')
-    send(s,'amulet');send(s,'equip_amulet',target='dagna')
-    assert {str(a.id):effective_armor_class(a) for a in s.exploration.actors}=={k:v+(k=='dagna') for k,v in before.items()}
-    send(s,'armory')
-    with pytest.raises(ValueError):send(s,'medallion')
+    for room in ('armory','quarters'):
+        send(s,room);send(s,'collect',room=room);send(s,'back');send(s,room)
+        with pytest.raises(ValueError):send(s,'search',room=room)
+        send(s,'back')
+    assert not any(i.id in ('mission_ring','mission_medallion') for i in s.state.party_loot.items)
 
 
 def test_editable_text_and_safe_paths(tmp_path):
@@ -143,7 +185,7 @@ def test_real_setup_six_players_fatigue_save_and_surrender(tmp_path):
     s.load_snapshot()
     assert len([e for e in s.active_combat_effects if e.kind=='scenario_fatigue'])==6
     enemies=[a for a in s.combat_state.actors if a.faction.value=='enemy']
-    defeated={a.id for a in enemies[:3]}
+    defeated={a.id for a in enemies[:1]}
     s.combat_state=replace(s.combat_state,actors=tuple(replace(a,hp=0) if a.id in defeated else a for a in s.combat_state.actors))
     s.state_payload()
     assert m.read(s)['stage']=='surrender'
@@ -169,9 +211,9 @@ def test_potion_uses_actual_item_action_and_physical_dice(tmp_path):
 
 def test_finished_mission_keeps_party_and_ledger_after_reload(tmp_path):
     s=session(tmp_path,6)
-    stage(s,'return',debt='help')
+    stage(s,'return',debt='help',bell='village',cargo=dict(armory='safe',quarters='safe',store='safe'))
     data=m.read(s);m.grant(s,data,'documents');m.grant(s,data,'medallion');m.write(s,data)
-    send(s,'next')
+    send(s,'next');send(s,'summary')
     assert (s.save_dir/'misja_0_dzwon.completed.json').exists()
     assert send(s,'finish')=={'redirect':'/'}
     restored=session(tmp_path)
@@ -180,16 +222,22 @@ def test_finished_mission_keeps_party_and_ledger_after_reload(tmp_path):
     assert m.read(restored)['stage']=='summary'
     assert m.read(restored)['debt']=='help'
     assert restored.exploration.actors[0].currency.gp==s.exploration.actors[0].currency.gp
-    assert {'mission_documents','mission_medallion'} <= {i.id for a in restored.exploration.actors for i in a.inventory}
+    assert {'mission_documents','mission_medallion'} <= {i.id for i in restored.state.party_loot.items}
 
 
 def test_declining_compromise_is_persistent_and_cannot_be_replayed(tmp_path):
     s=session(tmp_path);stage(s,'brief');send(s,'negotiate')
-    for _ in range(2):c.command(s,dict(action='acknowledge',revision=c.read_store(s)['revision']))
+    from tests.unit.test_confrontation_presentation import choose_approaches
+    c.command(s,dict(action='acknowledge',revision=c.read_store(s)['revision']))
+    choose_approaches(s)
+    c.command(s,dict(action='acknowledge',revision=c.read_store(s)['revision']))
     for color in ('C','B'):c.command(s,dict(action='color',color=color,revision=c.read_store(s)['revision']))
     c.command(s,dict(action='take',index=0,revision=c.read_store(s)['revision']))
     store=c.read_store(s);store['current']['state']['resistance']=10;c.write(s,store)
     assert any(o['action']=='compromise' for o in c.payload(s)['board_choices'])
+    with pytest.raises(ValueError, match='Najpierw'):
+        c.command(s,dict(action='test',bonus=0,revision=c.read_store(s)['revision']))
+    c.command(s,dict(action='decline_compromise',revision=c.read_store(s)['revision']))
     c.command(s,dict(action='test',bonus=0,revision=c.read_store(s)['revision']))
     assert c.read_store(s)['current']['compromise_declined']
     c.command(s,dict(action='leave',revision=c.read_store(s)['revision']))
@@ -256,7 +304,77 @@ def test_defeat_overrides_previous_refusal_and_does_not_grant_spoils(tmp_path,pr
     assert m.read(s)['outcome']=='defeated'
     assert all(a.hp==1 for a in s.exploration.actors)
     assert not any(i.id=='mission_tools' for a in s.exploration.actors for i in a.inventory)
-    for _ in range(5):send(s,'next')
+    while m.read(s)['stage']!='explore':send(s,'next')
     assert m.read(s)['stage']=='explore'
+    from tests.unit.test_mission_recovery import collect_all
+    collect_all(s)
     send(s,'leader');send(s,'back');send(s,'dilemma')
-    assert {c['action'] for c in m.payload(s)['choices']}=={'help','back'}
+    assert {c['action'] for c in m.payload(s)['choices']}=={'bell_village','back'}
+
+
+def test_visual_variant_switch_is_live_and_invalidates_image_cache(tmp_path):
+    from dnd_board_game.scenarios.mission_pack import asset_url
+    (tmp_path/'assets').mkdir()
+    (tmp_path/'old.png').write_bytes(b'original')
+    (tmp_path/'comic.png').write_bytes(b'comic version')
+    original=asset_url(tmp_path,'old.png')
+    manifest=tmp_path/'visuals.json'
+    manifest.write_text(json.dumps({'image_overrides':{'old.png':'comic.png'}}))
+    variant=asset_url(tmp_path,'old.png')
+    assert variant.startswith('/scenario-assets/comic.png?v=') and variant!=original
+    (tmp_path/'comic.png').write_bytes(b'edited comic version')
+    assert asset_url(tmp_path,'old.png')!=variant
+    manifest.write_text(json.dumps({'image_overrides':{}}))
+    assert asset_url(tmp_path,'old.png')==original
+    manifest.write_text(json.dumps({'image_overrides':{'old.png':'../outside.png'}}))
+    with pytest.raises(ValueError,match='paczki'):
+        asset_url(tmp_path,'old.png')
+
+
+@pytest.mark.parametrize('setup_stage,index,count',[('guild_setup',0,35),('guild_setup',1,45),('guild_setup',2,1),('post_setup',1,1)])
+def test_cutout_setup_lights_full_footprint_and_links_print(tmp_path,setup_stage,index,count):
+    from dnd_board_game.ui.exploration_app import create_app
+    from dnd_board_game.world import Coordinate
+    s=session(tmp_path);stage(s,setup_stage,index=index)
+    p=m.payload(s)
+    footprint={Coordinate(*pos) for pos in p['setup']['positions']}
+    assert len(footprint)==count
+    target=m.scan_target(s)
+    assert {pos for frame in target.feedback.frames for pos in frame.positions if pos.col<19}==footprint
+    assert p['image']=='' and p['setup']['tiles']
+    assert all('<svg' in tile['svg'] and '<image' in tile['svg'] for tile in p['setup']['tiles'])
+    # Lit scenery remains guidance; confirmation uses the existing panel controls.
+    assert not footprint.intersection(target.positions)
+    if p['print_cutouts']:
+        response=create_app(s).test_client().get(p['print_cutouts'])
+        assert response.status_code==200 and response.mimetype=='application/pdf'
+
+
+def test_guild_destinations_use_tile_fields_and_arena_is_informational(tmp_path):
+    from dnd_board_game.world import Coordinate
+    from dnd_board_game.ui.mission_setup import tiles
+    s=session(tmp_path)
+    stage(s,'guild_hub')
+    catalog=tiles(PACK)
+    nessa=Coordinate(*catalog['G01'].interaction)
+    arena=Coordinate(*catalog['G02'].interaction)
+    from dnd_board_game.hardware.board_panel import panel_position
+    scan=m.scan_target(s)
+    assert m.payload(s)['choices']==[]
+    assert set(scan.positions)=={nessa,arena,panel_position(26),panel_position(27)}
+    for slot in (6,7):
+        with pytest.raises(ValueError):m.select_position(s,panel_position(slot))
+    assert {nessa,arena} <= set(scan.positions)
+    assert {nessa,arena} <= {p for f in scan.feedback.frames for p in f.positions}
+    actors=s.exploration.actors
+    m.select_position(s,arena)
+    assert m.read(s)['stage']=='arena_unavailable'
+    assert s.state.party_position.marker_position==arena
+    assert s.exploration.actors==actors and s.combat_state is None
+    assert [c['action'] for c in m.payload(s)['choices']]==['guild_back']
+    send(s,'guild_back')
+    m.select_position(s,nessa)
+    assert m.read(s)['stage']=='brief'
+    assert s.state.party_position.marker_position==nessa
+    assert m.payload(s)['reading'] and m.payload(s)['image_layout']=='landscape'
+    with pytest.raises(ValueError):send(s,'visit_arena')

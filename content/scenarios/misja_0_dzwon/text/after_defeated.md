@@ -1,1 +1,3 @@
-Odzyskujecie przytomność przy wozie. Wasza broń leży obok pod strażą. Napastnicy nie chcą kolejnej walki: pozwolą zabrać dzwon, jeśli obiecacie zanieść ich pokwitowania do kogoś, kto zajmie się długiem. Możecie przyjąć ten warunek albo powtórzyć starcie z punktu kontrolnego.
+Wieśniacy odbierają wam broń tylko na tyle długo, by przerwać walkę. Borut pokazuje pokwitowania: nie przyszedł tu po jeńców. Pozwala odebrać rzeczy ze spisu, ale dzwon zostanie z nimi. Ranni bohaterowie odzyskują przytomność.
+
+Ładunek zabezpieczacie sami. Rozłóżcie eksplorację; rozmowa z Borutem pozostaje dostępna.

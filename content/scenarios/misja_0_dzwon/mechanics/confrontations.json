@@ -3,41 +3,11 @@
     "id": "mission_nessa",
     "kind": "npc",
     "name": "Nessa — dodatkowa mikstura",
-    "goal": "Przekonaj Nessę do wydania mikstury 2k8 + 4. Kompromis: 1k8 + 2.",
+    "goal": "Przekonaj Nessę, żeby dorzuciła miksturę leczenia: 2k8 + 4 PW.",
     "description": "Zanim Nessa zamknie księgę, prosicie o dodatkową miksturę. „Zapłata jest ustalona. O tym, co zabierzecie na drogę, możemy jeszcze porozmawiać.”",
     "resistance_per_hero": 9,
     "pressure_per_hero": 1,
     "minimum_pressure": 3,
-    "methods": {
-      "garran": {
-        "dc": 20,
-        "die": 6
-      },
-      "brakka": {
-        "dc": 25,
-        "die": 4
-      },
-      "mira": {
-        "dc": 25,
-        "die": 4
-      },
-      "dagna": {
-        "dc": 15,
-        "die": 8
-      },
-      "lorian": {
-        "dc": 15,
-        "die": 8
-      },
-      "nimra": {
-        "dc": 25,
-        "die": 4
-      },
-      "erynd": {
-        "dc": 20,
-        "die": 6
-      }
-    },
     "reactions": [
       {
         "kind": "burn",
@@ -62,7 +32,85 @@
     ],
     "party_position": [
       5,
-      8
+      7
+    ],
+    "image": "assets/images/nessa_portrait.png",
+    "approaches": [
+      {
+        "id": "compliments",
+        "name": "Komplementy",
+        "ability": "charisma",
+        "dc": 18,
+        "die": 4,
+        "description": "Okaż uznanie dla zaradności Nessy; życzliwy ton otwiera drogę rzeczowym prośbom.",
+        "supports": [
+          "logic",
+          "empathy"
+        ],
+        "repeatable": false
+      },
+      {
+        "id": "demands",
+        "name": "Stanowcze żądania",
+        "ability": "constitution",
+        "dc": 25,
+        "die": 10,
+        "description": "Wytrzymaj nacisk i nie ustępuj w sprawie wyposażenia. To mocna, lecz trudna droga.",
+        "supports": [
+          "bluff"
+        ],
+        "repeatable": false
+      },
+      {
+        "id": "logic",
+        "name": "Logiczne argumenty",
+        "ability": "intelligence",
+        "dc": 20,
+        "die": 4,
+        "description": "Wykaż, że mikstura zmniejsza ryzyko utraty ludzi i ładunku.",
+        "supports": [
+          "demands",
+          "empathy"
+        ],
+        "repeatable": true
+      },
+      {
+        "id": "bluff",
+        "name": "Blef",
+        "ability": "charisma",
+        "dc": 22,
+        "die": 8,
+        "description": "Zasugeruj, że bez lepszego wyposażenia drużyna rozważa inne zlecenie.",
+        "supports": [
+          "demands"
+        ],
+        "repeatable": false
+      },
+      {
+        "id": "empathy",
+        "name": "Zrozumienie obaw",
+        "ability": "wisdom",
+        "dc": 19,
+        "die": 6,
+        "description": "Rozpoznaj, za co Nessa odpowiada, i dopasuj prośbę do jej trosk.",
+        "supports": [
+          "*"
+        ],
+        "repeatable": true
+      },
+      {
+        "id": "promise",
+        "name": "Osobista gwarancja",
+        "ability": "charisma",
+        "dc": 20,
+        "die": 6,
+        "description": "Daj słowo, że wyposażenie trafi do potrzebujących, a z wyprawy zdacie rzetelny raport.",
+        "supports": [
+          "logic",
+          "empathy"
+        ],
+        "repeatable": false
+      }
     ]
   },
   "cart": {
@@ -74,36 +122,6 @@
     "resistance_per_hero": 10,
     "pressure_per_hero": 1,
     "minimum_pressure": 3,
-    "methods": {
-      "garran": {
-        "dc": 20,
-        "die": 6
-      },
-      "brakka": {
-        "dc": 15,
-        "die": 8
-      },
-      "mira": {
-        "dc": 15,
-        "die": 8
-      },
-      "dagna": {
-        "dc": 25,
-        "die": 4
-      },
-      "lorian": {
-        "dc": 20,
-        "die": 6
-      },
-      "nimra": {
-        "dc": 20,
-        "die": 6
-      },
-      "erynd": {
-        "dc": 15,
-        "die": 8
-      }
-    },
     "reactions": [
       {
         "kind": "burn",
@@ -128,6 +146,311 @@
     "party_position": [
       9,
       18
+    ],
+    "image": "assets/images/road.png",
+    "approaches": [
+      {
+        "id": "lift",
+        "name": "Uniesienie wozu",
+        "ability": "strength",
+        "dc": 18,
+        "die": 8,
+        "description": "Odciąż zapadnięte koło, podnosząc bok wozu.",
+        "supports": [
+          "lash",
+          "ground"
+        ],
+        "repeatable": true
+      },
+      {
+        "id": "lash",
+        "name": "Mocowanie osi",
+        "ability": "dexterity",
+        "dc": 17,
+        "die": 6,
+        "description": "Dociągnij mocowania i załóż wiązanie, zanim koło osunie się ponownie.",
+        "supports": [
+          "lift"
+        ],
+        "repeatable": false
+      },
+      {
+        "id": "lever",
+        "name": "Prowizoryczna dźwignia",
+        "ability": "intelligence",
+        "dc": 20,
+        "die": 8,
+        "description": "Dobierz belkę i punkt podparcia, aby wydostać koło z koleiny.",
+        "supports": [
+          "lift",
+          "lash"
+        ],
+        "repeatable": false
+      },
+      {
+        "id": "ground",
+        "name": "Ocena gruntu",
+        "ability": "wisdom",
+        "dc": 16,
+        "die": 4,
+        "description": "Wskaż stabilne podłoże i bezpieczny kierunek wyprowadzenia wozu.",
+        "supports": [
+          "*"
+        ],
+        "repeatable": false
+      },
+      {
+        "id": "unload",
+        "name": "Odciążenie wozu",
+        "ability": "strength",
+        "dc": 18,
+        "die": 6,
+        "description": "Zdejmij ciężkie pakunki, aby można było bezpiecznie osadzić oś.",
+        "supports": [
+          "lift",
+          "lever"
+        ],
+        "repeatable": true
+      },
+      {
+        "id": "mule",
+        "name": "Uspokojenie muła",
+        "ability": "wisdom",
+        "dc": 17,
+        "die": 6,
+        "description": "Utrzymaj zwierzę w miejscu, zanim szarpnięciem zniweczy naprawę.",
+        "supports": [
+          "lash",
+          "unload"
+        ],
+        "repeatable": false
+      }
+    ]
+  },
+  "armory": {
+    "id": "mission_armory",
+    "kind": "object",
+    "name": "Zbrojownia — zabezpieczenie i przeszukanie",
+    "goal": "Zabezpieczcie ładunek i znajdźcie dodatkowy przedmiot. Przegrana z naturalną 1 w teście: uszkodzenie warte 2 sz.",
+    "description": "",
+    "resistance_per_hero": 9,
+    "pressure_per_hero": 1,
+    "minimum_pressure": 3,
+    "reactions": [
+      {
+        "kind": "burn",
+        "name": "Upływ czasu"
+      },
+      {
+        "kind": "strip",
+        "name": "Utrata skupienia"
+      },
+      {
+        "kind": "heal",
+        "name": "Kolejne zakamarki"
+      }
+    ],
+    "success": "",
+    "failure": "",
+    "condition": "none",
+    "position": [
+      5,
+      7
+    ],
+    "party_position": [
+      5,
+      7
+    ],
+    "approaches": [
+      {
+        "id": "crates",
+        "name": "Przesunięcie skrzyń",
+        "ability": "strength",
+        "dc": 18,
+        "die": 6,
+        "description": "Odsuń ciężki sprzęt, odsłaniając przestrzeń pod regałami.",
+        "supports": [
+          "search",
+          "packing"
+        ],
+        "repeatable": true
+      },
+      {
+        "id": "packing",
+        "name": "Ostrożne pakowanie",
+        "ability": "dexterity",
+        "dc": 19,
+        "die": 6,
+        "description": "Zabezpiecz ostre elementy i przejrzyj zawartość przegród.",
+        "supports": [
+          "crates"
+        ],
+        "repeatable": true
+      },
+      {
+        "id": "search",
+        "name": "Wypatrywanie drobiazgów",
+        "ability": "wisdom",
+        "dc": 20,
+        "die": 8,
+        "description": "Szukaj rzeczy upuszczonych pomiędzy sprzętem podczas pośpiesznego odwrotu.",
+        "supports": [
+          "packing"
+        ],
+        "repeatable": false
+      },
+      {
+        "id": "inventory",
+        "name": "Spis wyposażenia",
+        "ability": "intelligence",
+        "dc": 18,
+        "die": 6,
+        "description": "Porównaj zawartość skrzyń ze spisem i ustal, czego brakuje.",
+        "supports": [
+          "search",
+          "packing"
+        ],
+        "repeatable": false
+      },
+      {
+        "id": "rack",
+        "name": "Podparcie regału",
+        "ability": "strength",
+        "dc": 20,
+        "die": 8,
+        "description": "Zabezpiecz przechylony regał i odblokuj dostęp do pozostałych skrzyń.",
+        "supports": [
+          "crates",
+          "search"
+        ],
+        "repeatable": false
+      },
+      {
+        "id": "sorting",
+        "name": "Ocena stanu sprzętu",
+        "ability": "intelligence",
+        "dc": 19,
+        "die": 6,
+        "description": "Oddziel sprawny sprzęt od uszkodzonego, zanim trafi do transportu.",
+        "supports": [
+          "inventory",
+          "packing"
+        ],
+        "repeatable": true
+      }
+    ]
+  },
+  "quarters": {
+    "id": "mission_quarters",
+    "kind": "object",
+    "name": "Kwatera — dokumenty i skrytka",
+    "goal": "Zabezpieczcie ładunek i znajdźcie dodatkowy przedmiot. Przegrana z naturalną 1 w teście: uszkodzenie warte 2 sz.",
+    "description": "",
+    "resistance_per_hero": 9,
+    "pressure_per_hero": 1,
+    "minimum_pressure": 3,
+    "reactions": [
+      {
+        "kind": "burn",
+        "name": "Upływ czasu"
+      },
+      {
+        "kind": "strip",
+        "name": "Utrata skupienia"
+      },
+      {
+        "kind": "heal",
+        "name": "Kolejne zakamarki"
+      }
+    ],
+    "success": "",
+    "failure": "",
+    "condition": "none",
+    "position": [
+      14,
+      7
+    ],
+    "party_position": [
+      14,
+      7
+    ],
+    "approaches": [
+      {
+        "id": "deduction",
+        "name": "Szukanie skrytki",
+        "ability": "intelligence",
+        "dc": 18,
+        "die": 6,
+        "description": "Odtwórz zwyczaje dowódcy i sprawdź prawdopodobne kryjówki.",
+        "supports": [
+          "lock",
+          "traces"
+        ],
+        "repeatable": false
+      },
+      {
+        "id": "traces",
+        "name": "Ślady użytkowania",
+        "ability": "wisdom",
+        "dc": 20,
+        "die": 8,
+        "description": "Wypatrz przetarcia, nierówności i miejsca często dotykane.",
+        "supports": [
+          "deduction",
+          "lock"
+        ],
+        "repeatable": true
+      },
+      {
+        "id": "lock",
+        "name": "Ukryty zatrzask",
+        "ability": "dexterity",
+        "dc": 22,
+        "die": 10,
+        "description": "Ostrożnie poruszaj okuciami i zwalniaj podejrzane zamknięcia.",
+        "supports": [
+          "papers"
+        ],
+        "repeatable": false
+      },
+      {
+        "id": "papers",
+        "name": "Porządkowanie dokumentów",
+        "ability": "intelligence",
+        "dc": 16,
+        "die": 4,
+        "description": "Oddziel wymagane pakiety, nie gubiąc znalezionych między nimi wskazówek.",
+        "supports": [
+          "*"
+        ],
+        "repeatable": true
+      },
+      {
+        "id": "furniture",
+        "name": "Przesunięcie mebli",
+        "ability": "strength",
+        "dc": 20,
+        "die": 8,
+        "description": "Odsuń ciężkie meble bez niszczenia ich zawartości i odsłoń zakamarki.",
+        "supports": [
+          "traces",
+          "lock"
+        ],
+        "repeatable": false
+      },
+      {
+        "id": "sorting",
+        "name": "Porządkowanie drobiazgów",
+        "ability": "dexterity",
+        "dc": 18,
+        "die": 6,
+        "description": "Ostrożnie rozdziel zawartość szuflad, nie gubiąc drobnych części i zapisków.",
+        "supports": [
+          "deduction",
+          "papers"
+        ],
+        "repeatable": true
+      }
     ]
   }
 }

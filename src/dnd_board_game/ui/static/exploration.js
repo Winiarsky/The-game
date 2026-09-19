@@ -680,7 +680,7 @@ function keyboardRollContextLines(root) {
   if (root.id === 'mission-roll') return [state.mission.text.body];
   if (root.id === 'exploration-mana-roll') {
     const a = state.exploration_mana.attempt;
-    if (state.exploration_mana.model === 'party_confrontation') return [`${a.actor} · ${a.method}`, state.exploration_mana.die_kind === 'test' ? 'Test przeciw ST. Wpisz naturalny wynik k20; premie doliczamy w podsumowaniu.' : `Wpływ: rzuć k${a.die}. Modyfikator cechy i pasywy doliczamy raz.`];
+    if (state.exploration_mana.model === 'party_confrontation') return [`${a.actor} · ${a.method}`, state.exploration_mana.die_kind === 'test' ? 'Test przeciw ST. Wpisz naturalny wynik k20; premie doliczamy w podsumowaniu.' : `${state.exploration_mana.effect_name || (state.exploration_mana.scene?.kind === 'object' ? 'Postęp' : 'Wpływ')}: rzuć k${a.die}. Modyfikator cechy i pasywy doliczamy raz.`];
     return [`${a.actor} · ${a.method}`, a.busted
       ? 'Utrudnienie: dwie k20, liczy się niższa. Premię doliczamy raz do niższego wyniku. Bez premii za karty.'
       : 'Test k20. Po ustawieniu kości sprawdź podsumowanie i zatwierdź cały rzut.'];
@@ -1194,7 +1194,15 @@ function sceneStatusSummaryHtml() {
     </div>
   `).join('') + (entries.length > 6 ? `<span class="muted">+${entries.length - 6} kolejnych wpisów</span>` : '');
 }
+function renderPartyEthos() {
+  const element=document.getElementById('party-ethos'), p=state.party_ethos;
+  if (!element) return;
+  element.hidden=!p;
+  if (!p) return;
+  element.innerHTML=`<summary aria-label="Postawa drużyny: ${esc(p.label)}${p.steps ? `, ${p.steps} z 3 pól` : ''}"><span class="ethos-label">${esc(p.label)}${p.steps ? ` · ${p.steps}/3` : ''}</span><span class="ethos-track" aria-hidden="true">${Array.from({length:7},(_,i)=>`<i class="${i===p.position?'current':''} ${i===3?'centre':''}"></i>`).join('')}</span></summary><div class="ethos-details"><b>Solidarność · Równowaga · Bezwzględność</b><p>${esc(p.explanation)}</p><p><b>Następna talia</b><br>${esc(p.instruction)}</p></div>`;
+}
 function renderPartyShell() {
+  renderPartyEthos();
   const actors = state.actors || [];
   const summary = document.getElementById('party-summary');
   const details = document.getElementById('party-details');
@@ -1357,7 +1365,7 @@ function openActorPanel(actorId, tab = 'party') {
 function openPartyPanel() { openActorPanel(selectedPanelActorId, 'party'); }
 function actorStatesHtml(actor) {
   const conditions = actor.conditions || [];
-  const effects = actor.effects || [];
+  const effects = visibleActorEffects(actor);
   const concentration = actor.concentration || null;
   const lifeChips = combatActorChips(actor).filter(chip => !isTurnResourceChip(chip));
   const cards = [];
@@ -1369,8 +1377,8 @@ function actorStatesHtml(actor) {
   }));
   effects.forEach(effect => cards.push({
     tone: effectChipTone(effect.kind),
-    label: effect.label || effect.kind || 'Efekt',
-    body: effect.value_label || (effect.value === undefined ? 'Aktywny efekt.' : signedNumber(effect.value)),
+    label: effectDisplayName(effect),
+    body: effect.kind === 'charge_feature' ? effect.label : effect.value_label || (effect.value === undefined ? 'Aktywny efekt.' : signedNumber(effect.value)),
     meta: effect.expires || '',
   }));
   if (concentration) cards.push({tone: 'magic', label: `Koncentracja: ${concentration.label || '-'}`, body: concentration.value_label || 'Efekt wymaga koncentracji.', meta: concentration.expires || ''});
@@ -4252,6 +4260,9 @@ function encounterHtml() {
   if (!encounter) return '';
   if (state.combat) return combatStartHtml();
   const setup = state.encounter_setup;
+  if (state.mission && setup?.status==='active') {
+    return `<div class="encounter-transition-shell"><div class="encounter-transition-current">${encounterSetupHtml(setup)}</div></div>`;
+  }
   if (state.training_arena?.mode === 'walkthrough' && state.training_arena.tutorial?.phase === 'setup') {
     return `<div class="encounter-transition-shell training-setup-focus">
       <div class="encounter-transition-current">${encounterSetupHtml(setup)}
@@ -4340,10 +4351,14 @@ function encounterSetupHtml(setup) {
     return '<div class="result"><b>Setup zakończony</b><br>Plansza jest przygotowana do inicjatywy i walki.</div>';
   }
   const step = setup.current_step || {};
+  if (step.tiles?.length) {
+    const confirm=`<button data-setup-accept="true" onclick="confirmEncounterSetup()" ${step.can_confirm?'':'disabled'}>${esc(state.mission.ui.setup_accept)}</button>`;
+    return missionSetupHtml(step,step.label,step.message,confirm);
+  }
   const terrainGuide = setup.battle_briefing?.length
     ? '<p><b>Legenda:</b> czerwony ciągły obrys — blokada ruchu i widoczności; złoty przerywany — osłona kierunkowa; niebieski kropkowany — trudny teren. Pozostałe pola są przechodnie.</p><p>Siatka 20 × 30; wydruk 50 × 75 cm (pole 2,5 cm). Obrysy wyznaczają pola terenu, a LED wskazuje obiekty.</p><a href="/game-assets/maps/ostatni_transport_01/glodne_cienie_print_v6.html" target="_blank" rel="noopener">Wersja do druku — skala 100%, bez marginesów</a> · <a href="/game-assets/maps/ostatni_transport_01/glodne_cienie_print_v6.pdf" target="_blank" rel="noopener">Pobierz PDF 50 × 75 cm</a>'
     : '';
-  const mapPreview = setup.map_asset_url
+  const mapPreview = !state.mission && setup.map_asset_url
     ? `<details class="battle-map-preview"><summary>Mapa i obrysy terenu</summary><img class="location-preview-image" src="${esc(setup.map_asset_url)}" alt="Mapa encountera: ${esc(setup.scenario_name || '')}"><a href="${esc(setup.map_asset_url)}" target="_blank" rel="noopener">Otwórz mapę w pełnym rozmiarze</a>${terrainGuide}</details>`
     : '';
   const hasPositions = Boolean(step.has_positions);
@@ -4618,7 +4633,7 @@ function combatCurrentStepHtml(combat, finished, isAllyTurn, isEnemyTurn, interr
       ${phase === 'result' && !resultAck && !combat.enemy_turn_result && !combat.shield_bash ? `<div class="combat-inline-result">${latestCombatMessageHtml()}</div>` : ''}
       ${combat.shared_mana?.command?.stage ? '' : combatCardReminderHtml(combat, phase, isAllyTurn)}
       <div class="combat-action-card">
-        ${finished ? '<button onclick="resolveCombatOutcome()">Zastosuj wynik encountera</button>' : combatPrimaryActionHtml(combat, isAllyTurn, isEnemyTurn)}
+        ${finished ? '<button onclick="resolveCombatOutcome()">Zakończ walkę i przejdź dalej</button>' : combatPrimaryActionHtml(combat, isAllyTurn, isEnemyTurn)}
       </div>
     </div>
   `;
@@ -4780,7 +4795,7 @@ function combatInstructionText(combat, finished, isAllyTurn, isEnemyTurn) {
     const recoveryText = Number(recovery.recoverable || 0) > 0
       ? ` Po minucie przeszukiwania pola walki można odzyskać ${recovery.recoverable} z ${recovery.fired} wystrzelonych pocisków. Kliknij podświetlony stos, aby go zebrać.`
       : '';
-    return (result.message || 'Zastosuj wynik encountera, żeby wrócić do eksploracji.') + recoveryText;
+    return (result.message || 'Zakończ walkę i przejdź dalej, żeby wrócić do eksploracji.') + recoveryText;
   }
   if (isAllyTurn && combat.class_feature_targeting) return 'Wybierz podświetlony cel na planszy. ✓ potwierdza, ↩ anuluje.';
   const actor = combat.current_actor || {};
@@ -5157,12 +5172,22 @@ function statusChipsHtml(chips, emptyText) {
     return `<span class="status-chip ${esc(tone)}"${title}>${esc(chip.label || '')}</span>`;
   }).join('')}</div>`;
 }
+function visibleActorEffects(actor) {
+  const internal = new Set(['mana_series_source', 'shared_offensive_used', 'rage_duration', 'rage_activity', 'mana_ordinary_movement']);
+  return (actor.effects || []).filter(effect => !internal.has(effect.kind));
+}
+function effectDisplayName(effect) {
+  return effect.kind?.startsWith('charge_') ? (effect.label || '').split(':')[0] : (effect.label || effect.kind || 'Efekt');
+}
+function effectDisplayValue(effect) {
+  return effect.kind === 'charge_feature' ? '' : (effect.value_label || '');
+}
 function actorEffectChips(actor) {
   const chips = [];
   if (actor.defeated) chips.push({label: 'Pokonany', tone: 'danger'});
-  (actor.effects || []).forEach(effect => {
-    const label = `${effect.label || effect.kind || 'Efekt'}${effect.value_label ? `: ${effect.value_label}` : ''}`;
-    chips.push({label, tone: effectChipTone(effect.kind), title: effect.expires || ''});
+  visibleActorEffects(actor).forEach(effect => {
+    const label = `${effectDisplayName(effect)}${effectDisplayValue(effect) ? `: ${effectDisplayValue(effect)}` : ''}`;
+    chips.push({label, tone: effectChipTone(effect.kind), title: `${effect.label || ''} · ${effect.expires || ''}`});
   });
   if (actor.concentration) chips.push({label: `Koncentracja: ${actor.concentration.label || '-'}`, tone: 'magic', title: actor.concentration.expires || ''});
   return chips;
@@ -5187,7 +5212,7 @@ function combatAllEffectsHtml(combat) {
   const actors = combat.actors || [];
   const items = [];
   actors.forEach(actor => {
-    (actor.effects || []).forEach(effect => items.push({actor, effect, role: actor.name || 'Aktor'}));
+    visibleActorEffects(actor).forEach(effect => items.push({actor, effect, role: actor.name || 'Aktor'}));
   });
   if (!items.length) return '<p class="combat-empty">Brak aktywnych efektów.</p>';
   return `<div class="combat-effect-list">${items.map(item => combatEffectHtml(item)).join('')}</div>`;
@@ -5201,7 +5226,7 @@ function relevantCombatEffects(combat) {
     if (!actorId) return;
     const actor = actors.find(candidate => candidate.id === actorId);
     if (!actor) return;
-    (actor.effects || []).forEach(effect => {
+    visibleActorEffects(actor).forEach(effect => {
       const key = `${actor.id}:${effect.id}`;
       if (seen.has(key)) return;
       seen.add(key);
@@ -5220,12 +5245,13 @@ function relevantCombatEffects(combat) {
 function combatEffectHtml(item) {
   const effect = item.effect || {};
   const actor = item.actor || {};
-  const value = effect.value_label || signedNumber(effect.value || 0);
+  const value = effectDisplayValue(effect);
   const expires = effect.expires || 'czas trwania zależy od efektu';
   return `
     <div class="combat-effect">
       <b>${esc(item.role || 'Efekt')}: ${esc(actor.name || '-')}</b>
-      <span>${esc(effect.label || effect.kind || '-')} | ${esc(value)} | ${esc(expires)}</span>
+      <span>${esc(effectDisplayName(effect))}${value ? ` | ${esc(value)}` : ''} | ${esc(expires)}</span>
+      ${effect.kind?.startsWith('charge_') ? `<details><summary>Szczegóły</summary>${esc(effect.label)}</details>` : ''}
     </div>
   `;
 }
@@ -5606,7 +5632,7 @@ function physicalFeaturePromptHtml(prompt) {
   return `
     <div class="status-item">
       <h3>${esc(prompt.label || identifierLabel(actionId))}</h3>
-      ${ability ? `<p class="mana-prompt-cost">${manaCostHtml(ability.cost)} · ${esc(ability.timing)}</p>` : ''}
+      ${ability ? `<p class="mana-prompt-cost">${state.combat?.shared_mana?.pool_view ? esc(ability.cost_label) : manaCostHtml(ability.cost)} · ${esc(ability.timing)}</p>` : ''}
       ${prompt.incoming_damage ? `<p>Ujawnione obrażenia pocisku: <b>${Number(prompt.incoming_damage)}</b>.</p>` : ''}
       ${controls}
       <div class="panel-actions">
@@ -6250,7 +6276,7 @@ function defensiveSpellReactionHtml(option, preview) {
   const nextAc = currentAc === '?' ? '?' : Number(currentAc) + Number(option.value || 0);
   return `
     <p><b>Atak ${esc(attackTotal)} przeciw AC ${esc(currentAc)} trafił.</b></p>
-    <p>${state.combat?.physical_mana ? `Tarcza: +3 KP przeciw temu jednemu atakowi. Wydaj ${manaCostHtml(['B'])} i reakcję. KP: ${currentAc === '?' ? '?' : Number(currentAc)+3}.` : `${esc(option.label || 'Czar obronny')} podniesie AC do ${esc(nextAc)} aż do początku następnej tury bohatera. Zużyje reakcję i slot poziomu ${esc(option.spell_level || 1)}.`}</p>
+    <p>${state.combat?.physical_mana ? `Tarcza: +3 KP przeciw temu jednemu atakowi. ${state.combat?.reaction_costs?.shield ? `${esc(state.combat.reaction_costs.shield)} Zużywa reakcję.` : `Wydaj ${manaCostHtml(['B'])} i reakcję.`} KP: ${currentAc === '?' ? '?' : Number(currentAc)+3}.` : `${esc(option.label || 'Czar obronny')} podniesie AC do ${esc(nextAc)} aż do początku następnej tury bohatera. Zużyje reakcję i slot poziomu ${esc(option.spell_level || 1)}.`}</p>
     <div class="row">
       <button data-allow-busy="true" onclick="castDefensiveSpellReaction()">Rzuć ${esc(option.label || 'czar obronny')}</button>
       <button class="secondary" data-allow-busy="true" onclick="skipDefensiveSpellReaction()">Przyjmij trafienie</button>
@@ -7031,7 +7057,7 @@ function combatTurnActionMenuHtml(menu, combat = {}) {
       <div class="combat-turn-command-layout combat-keyboard-idle">
         <section class="combat-keyboard-waiting" role="status" aria-live="polite">
           <h3>Wybierz akcję na panelu planszy</h3>
-          <p>Wybierz ikonę na ekranie. ✓ zatwierdza, ↩ wraca. Dolny pasek run jest wyłączony.</p>
+          <p>Wybierz akcję jej runą na planszy. Następnie wskaż cel lub wykonaj instrukcję podglądu. ✓ zatwierdza, ↩ wraca. Przyciski ekranowe znajdziesz w wyborze awaryjnym poniżej.</p>
           ${shortcutIndex}
           ${keyboardOptions.length < options.length ? '<p class="muted">Warianty bez przypisanej runy są dostępne w wyborze awaryjnym poniżej.</p>' : ''}
           ${combatScreenFallbackHtml(fallbackRows)}

@@ -5,6 +5,8 @@
     "heroes",
     "party",
     "guild_setup",
+    "guild_hub",
+    "arena_unavailable",
     "brief",
     "departure",
     "road",
@@ -16,7 +18,19 @@
     "dilemma",
     "load",
     "return",
-    "summary"
+    "summary",
+    "compliments",
+    "search_armory",
+    "search_quarters",
+    "search_result",
+    "ring",
+    "identify_roll",
+    "ring_identified",
+    "guild_return",
+    "equipment",
+    "equipment_item",
+    "equipment_sell",
+    "cart_coerced"
   ],
   "checkpoints": [
     "brief",
@@ -48,6 +62,10 @@
     "load": [
       9,
       16
+    ],
+    "dilemma": [
+      9,
+      16
     ]
   },
   "simple_next": {
@@ -55,8 +73,13 @@
     "road_info": "brief",
     "road_success": "arrival",
     "fatigue_result": "arrival",
-    "help": "load",
-    "report": "load",
-    "fraud": "load"
+    "bell_guild": "load",
+    "bell_village": "load",
+    "bell_fence": "load",
+    "cart_coerced": "arrival"
+  },
+  "guild_points": {
+    "talk_nessa": "G01",
+    "visit_arena": "G02"
   }
 }

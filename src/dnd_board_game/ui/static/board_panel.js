@@ -9,6 +9,8 @@ function rollPanelSlots(wizard) {
 }
 
 function desiredBoardPanel() {
+  if (state?.mission && (state.mission.setup || (!state.combat && state.encounter_setup?.status==='active')) && !keyboardRollWizard) return null;
+  if (state?.mission?.reading && !keyboardRollWizard) return null;
   if (state?.exploration_mana?.active && !keyboardRollWizard) return null;
   if (state?.training_arena?.tutorial?.notice) return null;
   if (state?.combat?.shared_mana?.pool_view?.choices?.length) return null;
@@ -61,6 +63,20 @@ function syncBrowserBoardPanel() {
 
 function handleBoardPanelEvent(data) {
   const event = data.panel_event;
+  if (event.context?.startsWith('confrontation-scroll:')) {
+    if (!state?.exploration_mana?.active || keyboardRollWizard
+        || event.context !== `confrontation-scroll:${state.exploration_mana.revision}`) return;
+    state.board_selection = data.board_selection;
+    if (event.slot === 26 || event.slot === 27) scrollConfrontation(event.slot === 27 ? 1 : -1);
+    return;
+  }
+  if (event.context?.startsWith('mission-scroll:')) {
+    if (!state?.mission?.reading || keyboardRollWizard
+        || event.context !== `mission-scroll:${state.mission.revision}`) return;
+    state.board_selection = data.board_selection;
+    if (event.slot === 26 || event.slot === 27) scrollMissionText(event.slot === 27 ? 1 : -1);
+    return;
+  }
   const expected = state?.board_selection?.panel_context || null;
   if (event.context !== expected) return;
   state.board_selection = data.board_selection;

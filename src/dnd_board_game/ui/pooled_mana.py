@@ -8,6 +8,7 @@ from dnd_board_game.rules.pooled_mana import COLORS, charge_roll_bonus, confirm_
 from dnd_board_game.rules.shared_mana import sync_pool, finish_mana_action
 from dnd_board_game.scenarios.pooled_mana_catalog import hero_profile
 from .board_panel_symbols import panel_icon, SYMBOLS
+from .party_ethos import deck_instruction
 
 if TYPE_CHECKING:
     from .exploration_app import ExplorationUiSession, BoardScanTarget
@@ -27,7 +28,7 @@ def view(session: ExplorationUiSession) -> dict[str, object] | None:
     choices = []
     instruction = "Zwykły atak zachowuje manę. Punkty dają premię do testów ataku, cech i obrony zamiast biegłości (0/6/12/21 pkt → +0/+2/+4/+6) i odblokowują zdolności; kolory dają osobne premie. Zdolności spalają wspólną talię; ładunek zostaje. Przy 21+ pkt nie dobierasz."
     if phase in {"setup", "drain"}:
-        instruction = ("Mana drain! " if phase == "drain" else "Nowa walka. ") + f"Zbierz {pool.copies * 5} kart — po {pool.copies} każdego koloru, także wszystkie pule, spalone, wygasłe i uwięzione. Premie ładunku i efekty O wygasają; odzyskane PW zostają. Przetasuj i potwierdź ✓."
+        instruction = ("Mana drain! " if phase == "drain" else "Nowa walka. ") + deck_instruction(pool) + " Zbierz także osobiste pule, ofertę, spalone, wygasłe i uwięzione karty tej talii. Premie ładunku i efekty O wygasają; odzyskane PW zostają. Potwierdź ✓."
         choices = [dict(slot=28, command="pool_shuffle", label="Komplet przetasowany")]
         if phase == "setup":
             from .training_walkthrough import enabled
@@ -56,7 +57,10 @@ def view(session: ExplorationUiSession) -> dict[str, object] | None:
             if buffer:
                 choices.append(dict(slot=29, command="pool_bard_back", label="Popraw ostatni kolor"))
         else:
-            allowed = list(COLORS)
+            known = (*pool.deck, *pool.offer, *pool.burned, *pool.expired,
+                     *(c for _, cards in (*pool.pools, *pool.prisons) for c in cards))
+            allowed = [c for c in COLORS if pool.deck and (pool.deck[0] == c or
+                       (pool.deck[0] is None and known.count(c) < pool.composition[c]))]
         choices += [dict(slot=6 + COLORS.index(c), command="pool_color", color=c, label=NAMES[c]) for c in allowed]
     elif phase == "choose":
         instruction = "Wybierz jedną kartę do swojej puli. Druga pozostanie dla następnego bohatera."
@@ -66,13 +70,17 @@ def view(session: ExplorationUiSession) -> dict[str, object] | None:
         choices = controls(session)
     actors = {str(a.id): a.name for a in state.actors}
     hands = []
+    from dnd_board_game.actors.mana_passives import color_passive_status
     for hero in pool.heroes:
         profile = hero_profile(hero)
         cards = pool.hand(hero)
+        actor = next(a for a in state.actors if str(a.id) == hero)
+        color_passives = {c: {**p, 'status': color_passive_status(actor, p)}
+                          for c, p in profile['color_passives'].items()}
         hands.append(dict(hero=hero, name=actors.get(hero, hero), cards=list(cards),
                           total=pool.points(hero), roll_bonus=charge_roll_bonus(pool.points(hero)), values=pool.point_values(hero),
-                          passive=profile["passive"], flaw=profile["flaw"], color_passives=profile["color_passives"], charged=pool.points(hero) >= 21))
-    return dict(phase=phase, copies=pool.copies, total=pool.copies * 5, deck=len(pool.deck),
+                          passive=profile["passive"], flaw=profile["flaw"], color_passives=color_passives, charged=pool.points(hero) >= 21))
+    return dict(phase=phase, copies=pool.copies, total=pool.total, composition=pool.composition, excluded=list(pool.excluded), deck=len(pool.deck),
                 offer=list(pool.offer), burned=list(pool.burned), expired=list(pool.expired), prisons=dict(pool.prisons),
                 hands=hands, actor=pool.actor, instruction=instruction,
                 choices=[dict(c, icon=panel_icon(c["slot"]), rune=SYMBOLS[c["slot"]][0] if c["slot"] < 26 else "✓" if c["slot"] == 28 else "↩") for c in choices])

@@ -52,6 +52,7 @@ class PooledMana:
     expired: tuple[str, ...] = ()
     burn_due: int = 0
     resume_draw: bool = False
+    excluded: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if self.catalog_version not in {1, 2}:
@@ -68,14 +69,22 @@ class PooledMana:
             raise ValueError("Nieprawidłowa tabela punktów ładunku.")
         if len(dict(self.prisons)) != len(self.prisons):
             raise ValueError("Powtórzony właściciel więzienia many.")
-        if any(c not in COLORS for c in (*self.offer, *self.burned, *self.expired, *(c for _, hand in (*self.pools, *self.prisons) for c in hand))):
+        if any(c not in COLORS for c in (*self.offer, *self.burned, *self.expired, *self.excluded, *(c for _, hand in (*self.pools, *self.prisons) for c in hand))):
             raise ValueError("Ujawniona karta wymaga znanego koloru.")
-        cards = (*self.deck, *self.offer, *self.burned, *self.expired,
+        cards = (*self.deck, *self.offer, *self.burned, *self.expired, *self.excluded,
                  *(c for _, hand in self.pools for c in hand),
                  *(c for _, hand in self.prisons for c in hand))
         counts = Counter(c for c in cards if c is not None)
         if len(cards) != 5 * self.copies or any(c not in COLORS or n > self.copies for c, n in counts.items()):
             raise ValueError("Karty nie zgadzają się z kompletem talii.")
+
+    @property
+    def composition(self) -> dict[str, int]:
+        return {c: self.copies - self.excluded.count(c) for c in COLORS}
+
+    @property
+    def total(self) -> int:
+        return 5 * self.copies - len(self.excluded)
 
     def point_values(self, actor: str) -> dict[str, int]:
         return dict(zip(COLORS, dict(self.values).get(actor, (4, 4, 4, 4, 4))))
@@ -93,16 +102,16 @@ class PooledMana:
     @classmethod
     def from_payload(cls, data: Mapping[str, object]) -> PooledMana:
         values = dict(data)
-        for key in ("heroes", "deck", "offer", "burned", "last_paid", "used", "expired"):
+        for key in ("heroes", "deck", "offer", "burned", "last_paid", "used", "expired", "excluded"):
             values[key] = tuple(values.get(key, ()))
         for key in ("pools", "prisons", "values"):
             values[key] = tuple((str(owner), tuple(cards)) for owner, cards in values.get(key, ()))
         return cls(**values)
 
 
-def new_mana(heroes: tuple[str, ...], actor: str = "", *, copies: int | None = None, values: Mapping[str, Mapping[str, int]] | None = None) -> PooledMana:
+def new_mana(heroes: tuple[str, ...], actor: str = "", *, copies: int | None = None, values: Mapping[str, Mapping[str, int]] | None = None, excluded: tuple[str, ...] = ()) -> PooledMana:
     count = deck_copies(len(heroes)) if copies is None else copies
-    return PooledMana(heroes, count, (None,) * (5 * count), actor=actor, draw_due=actor in heroes,
+    return PooledMana(heroes, count, (None,) * (5 * count - len(excluded)), actor=actor, draw_due=actor in heroes, excluded=excluded,
                       values=tuple((h, tuple(v[c] for c in COLORS)) for h, v in (values or {}).items()))
 
 
@@ -119,7 +128,7 @@ def _fill_phase(state: PooledMana) -> str:
 def confirm_shuffle(state: PooledMana, deck: tuple[str | None, ...] | None = None) -> PooledMana:
     if state.phase not in {"setup", "drain"}:
         raise ValueError("Nie ma tasowania do potwierdzenia.")
-    fresh = new_mana(state.heroes, state.actor, copies=state.copies)
+    fresh = new_mana(state.heroes, state.actor, copies=state.copies, excluded=state.excluded)
     fresh = replace(fresh, deck=deck if deck is not None else fresh.deck,
                     draw_due=state.draw_due, cycle=state.cycle + int(state.phase == "drain"),
                     revision=state.revision, turns=state.turns, used=state.used, values=state.values, phase="reveal",
@@ -243,3 +252,10 @@ def tune(state: PooledMana, colors: tuple[str, ...]) -> PooledMana:
     if any(Counter(colors)[c] < n for c, n in known.items()):
         raise ValueError("Podgląd musi zachować znane kolory.")
     return _change(state, deck=(*colors, *state.deck[len(colors):]))
+
+
+def bottom_to_top(state: PooledMana) -> PooledMana:
+    # An unknown physical card stays unknown until its normal reveal/burn.
+    if state.phase != 'ready' or not state.deck:
+        raise ValueError('Przeniesienie wymaga niepustej talii i zakończenia poprzedniej operacji.')
+    return _change(state, deck=(state.deck[-1], *state.deck[:-1]))

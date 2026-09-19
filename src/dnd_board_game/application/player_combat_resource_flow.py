@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dnd_board_game.inventory.magic_items import effective_ability_modifier
+
 from dnd_board_game.combat.mana_charge import saving_modifiers as charge_saving_modifiers
 
 from dataclasses import dataclass, replace
@@ -732,7 +734,7 @@ class PlayerCombatResourceFlowService:
             )
             effect_value = max(
                 1,
-                ability_modifier(getattr(caster.ability_scores, ability_name)),
+                effective_ability_modifier(caster, ability_name),
             )
         if uses_physical_mana(caster) and base_effect_kind == "healing_grace_aura_source":
             effect_value = 2
@@ -972,7 +974,7 @@ class PlayerCombatResourceFlowService:
                 modifier=(
                     (-2 if dict(state.shared_mana.pending_boosts).get("reduction", 0) else 0)
                     if state.shared_mana and action.id == "divine_care_aura"
-                    else (ability_modifier(getattr(caster.ability_scores, action.bonus_modifier_ability))
+                    else (effective_ability_modifier(caster, action.bonus_modifier_ability)
                           if getattr(action, "bonus_modifier_ability", None) else 0)
                 ),
                 uses_maximum=(

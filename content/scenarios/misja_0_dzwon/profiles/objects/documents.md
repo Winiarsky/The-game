@@ -1,5 +1,9 @@
-# documents
+# Pokwitowania Boruta
 
-Pokwitowania dostaw Boruta, zachowane przez dostawców. Papier z podpisami i pieczęciami; nie są dokumentami zapomnianymi w kancelarii.
+Oryginały podpisanych dostaw zachowane przez wieśniaków; łącznie 96 sz.
+To odrębne dokumenty od pakietu K-1, który drużyna zabiera z kwatery na
+polecenie Nessy. Wydruk przygotowany przed grą jest wręczany dopiero przy
+przyjęciu zobowiązania. Z poręczeniem Garrana trafia do jego gracza.
 
-Opisuj stan, materiał i jeden szczegół użytkowy. Ilustracja w malarskim stylu paczki, bez napisów UI.
+Nie zdradzaj konkretnej przyszłej misji ani wyniku sprawy. Późniejszy
+adwokat może rozpoznać w dokumentach podstawę do dochodzenia należności.

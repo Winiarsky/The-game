@@ -303,9 +303,13 @@ def start_combat(
     initiative_order: InitiativeOrder,
     hidden_states: tuple[HiddenState, ...] = (),
     condition_states: tuple[ConditionState, ...] = (),
+    *,
+    mana_excluded: tuple[str, ...] = (),
 ) -> CombatState:
     if not actors:
         raise ValueError("Cannot start combat without actors.")
+    from dnd_board_game.actors.mana_passives import reset_mana_passives
+    actors = tuple(reset_mana_passives(a) for a in actors)
     order = _sync_order_actor_states(initiative_order, actors)
     first_actor = next(actor for actor in actors if actor.id == order.current_actor.id)
     state = CombatState(
@@ -327,7 +331,7 @@ def start_combat(
             from dnd_board_game.rules.shared_mana import sync_pool
             from dnd_board_game.scenarios.pooled_mana_catalog import hero_profile
             heroes = tuple(str(a.id) for a in actors if any(f.feature_id == "pooled_mana_v01" for f in a.features))
-            state = replace(state, shared_mana=sync_pool(state.shared_mana, new_mana(heroes, str(first_actor.id), values={h: hero_profile(h)["values"] for h in heroes})))
+            state = replace(state, shared_mana=sync_pool(state.shared_mana, new_mana(heroes, str(first_actor.id), values={h: hero_profile(h)["values"] for h in heroes}, excluded=mana_excluded)))
 
     return _with_finished_status(state)
 
