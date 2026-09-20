@@ -28,6 +28,7 @@ from dnd_board_game.physical_cards.equipment_art import item_art
 from dnd_board_game.scenarios.confrontation_terms import effect_name, effect_text
 from dnd_board_game.scenarios.confrontation import passives as exploration_profile
 from dnd_board_game.scenarios.pooled_mana_catalog import hero_profile
+from dnd_board_game.scenarios.character_text import load_text, print_copy
 from dnd_board_game.physical_cards.print_language import keyword_text
 from dnd_board_game.ui.training_arena import training_hero
 from dnd_board_game.ui.board_panel_symbols import panel_icon
@@ -35,11 +36,10 @@ from dnd_board_game.ui.board_panel_symbols import panel_icon
 ROOT = base.ROOT
 OUTPUT = ROOT / 'content/print/characters/mats_v2'
 DESTINATION = ROOT / 'content/print/characters/bohaterowie_zestawy_startowe_A4.pdf'
-KEYWORDS = tuple(t for forms in json.loads((OUTPUT / 'keywords.json').read_text()).values() for t in forms)
 
 
 def rules_text(text: str) -> str:
-    return keyword_text(text, KEYWORDS)
+    return keyword_text(text, tuple(t for forms in load_text()['keywords'].values() for t in forms))
 
 
 def passive_text(text: str) -> str:
@@ -115,11 +115,10 @@ def mana_page(hero: PrintHero, copy: dict) -> str:
         exploration_data=exploration_profile(hero.id)[color]['display']
         combat=passive_text(f"{combat_data['name']}: {combat_data['short']}")
         exploration=passive_text(effect_text(f"{exploration_data['name']}: {exploration_data['short']}", None))
-        cells.append(f'''<section class="mana-cell" data-color="{color}"><div class="mana-slot">{mana_symbol(color)}<b>{COLORS[color]}</b><span>{value} pkt / karta</span><small>Miejsce na karty 63 × 88 mm.<br>Ten sam kolor układaj w stos.</small></div><div class="mana-notes"><div class="mana-head">{mana_symbol(color)}<div><strong>{value}</strong><small>pkt / karta</small></div></div>
+        cells.append(f'''<section class="mana-cell" data-color="{color}"><div class="mana-slot">{mana_symbol(color)}<b>{COLORS[color]}</b><span>{"Atut · " if value == 2 else ""}{value} ładunku</span><small>Miejsce na karty 63 × 88 mm.<br>Ten sam kolor układaj w stos.</small></div><div class="mana-notes"><div class="mana-head">{mana_symbol(color)}<div><strong>{value}</strong><small>ładunku</small></div></div>
 <section class="passive-block combat-passive"><div class="mode">Walka {passive_mana_symbol(color,color in hero.stacking_mana_colors)}</div>{combat}</section>
 <section class="passive-block exploration-passive"><div class="mode">Eksploracja {passive_mana_symbol(color,color in hero.stacking_exploration_colors)}</div>{exploration}</section></div></section>''')
-    diagram=(ROOT/'src/dnd_board_game/ui/static/icons/mana_recovery.svg').as_uri()
-    cells.append(f'''<section class="mana-guide"><h2>Nasycenie maną</h2><p><b>Punkty:</b> premia do testu i akcje w walce.<br><b>Kolory:</b> pasywy opisane obok.</p><table class="tiers"><tr><th>Punkty</th><td>0–5</td><td>6–11</td><td>12–20</td><td>21+</td></tr><tr><th>Premia</th><td>+0</td><td>+2</td><td>+4</td><td>+6</td></tr></table><p>Przy <b>21+ pkt</b> nie dobieraj kolejnych kart.</p><p><span class="ring thick"></span> <b>Gruba:</b> premie kart sumują się do limitu.<br><span class="ring"></span> <b>Cienka:</b> wystarczy 1 karta.<br>Leczenie: przy każdym doborze, nie stale.</p><div class="recovery-guide"><h3>Oddech · po udanym teście</h3><img class="recovery-diagram" src="{diagram}" alt="1 karta ze spalonych na spód talii"><p>Najwcześniej spalona karta. Potwierdź <b>✓</b>, potem opłać test.</p></div><p><b>Mana Drain:</b> walka — reset talii i pasywów; eksploracja — koniec konfrontacji. Leczenie pozostaje.</p></section>''')
+    cells.append(f'''<section class="mana-guide"><h2>Nasycenie maną</h2><p><b>Testy:</b> +1 za fizyczną kartę, maks. +6.<br><b>Ładunek:</b> atut = 2, reszta = 1, maks. 6.<br><b>Akcje:</b> progi 2 / 4 / 6 (ulta).</p><p><b>Dobór do 6 kart.</b> Trzy atuty dają ładunek 6 i test +3; nadal dobierasz. Kolory włączają pasywy.</p><p><span class="ring thick"></span> <b>Gruba:</b> premie kart sumują się do limitu.<br><span class="ring"></span> <b>Cienka:</b> wystarczy 1 karta.<br>Leczenie: przy każdym doborze, nie stale.</p><div class="recovery-guide"><h3>Pasywy bohatera</h3><p>Każdy bohater ma własne efekty. Pomoc, koszt i reakcja mogą się zmieniać — sprawdź warunek na tej macie.</p><p>Odzyskanie karty: przesuń ją zgodnie z instrukcją i potwierdź <b>✓</b>.</p></div><p><b>Mana Drain:</b> walka — reset talii i pasywów; eksploracja — koniec konfrontacji. Leczenie pozostaje.</p></section>''')
     return document(hero,header(hero,f'{hero.name} · mana','Pięć kolorów · osobista pula','02 / 04')+'<div class="mana-grid">'+''.join(cells)+'</div>',landscape=True)
 
 
@@ -127,7 +126,7 @@ def actions_page(hero: PrintHero, copy: dict) -> str:
     dense=len(hero.cards)>9
     if len(hero.cards)>12:
         raise ValueError('Zbyt wiele akcji dla jednostronicowego układu.')
-    if set(copy['actions'])!={a.id for a in hero.cards}:
+    if not {a.id for a in hero.cards} <= set(copy['actions']):
         raise ValueError(f'{hero.id}: opisy nie odpowiadają zestawowi akcji.')
     cards=[]
     for action in sorted(hero.cards,key=lambda a:a.panel_slot):
@@ -138,7 +137,7 @@ def actions_page(hero: PrintHero, copy: dict) -> str:
         if bool(boost)!=('Podbicia' in sections):
             raise ValueError(f'{hero.id}/{action.id}: niezgodne podbicia')
         extra=f'<div class="boost"><b>Podbicie: spal +2 karty za każde</b>{rules_text(boost)}</div>' if boost else ''
-        cards.append(f'<section class="action" data-id="{action.id}"><div class="action-head"><div class="rune">{panel_icon(action.panel_slot)}</div><h2>{escape(action.name)}</h2></div><div class="action-meta"><span>Mana ≥ {threshold} pkt</span><span>{action.timing}</span><span>Spalanie: {burn}</span></div><p>{rules_text(copy["actions"][action.id])}</p>{extra}</section>')
+        cards.append(f'<section class="action" data-id="{action.id}"><div class="action-head"><div class="rune">{panel_icon(action.panel_slot)}</div><h2>{escape(action.name)}</h2></div><div class="action-meta"><span>Ładunek ≥ {threshold}/6</span><span>{action.timing}</span><span>Spalanie: {burn}</span></div><p>{rules_text(copy["actions"][action.id])}</p>{extra}</section>')
     size='68 × 53' if dense else '62 × 76'
     legend=f'''<div class="action-legend {'dense-legend' if dense else ''}"><p><b>A</b> — główna · <b>D</b> — dodatkowa · <b>R</b> — reakcja · <b>MOD</b> — modyfikacja. <b>mod.</b> — modyfikator cechy. <b>5 ft</b> = 1 pole.</p><p><b>Pula zostaje.</b> Spal koszt po efekcie, także po porażce; nasycenie i skaza mogą go zmienić. Podbicie nie wymaga koloru.</p></div>'''
 
@@ -244,10 +243,10 @@ def compact_pdf(path: Path) -> None:
 
 
 def build_pack(*, check_only: bool=False, actors: tuple[str,...]=PLAYABLE_HERO_IDS) -> Path:
-    copy=json.loads((OUTPUT/'copy.json').read_text())
+    copy=print_copy()
     sections=[];parts=[];checks={};snapshots={};page=2
     for hid in actors:
-        hero=build_print_hero(hid);folder=OUTPUT/hid;own={**copy['heroes'][hid], 'exploration_copy':copy['exploration_passives'], 'flaw':copy['flaws'].get(hid,hero.flaw[1])}
+        hero=build_print_hero(hid);folder=OUTPUT/hid;own=copy['heroes'][hid]
         snapshots[hid]=asdict(hero)
         sheets=[('01_postac',character_page(hero,own,folder)),('02_mana',mana_page(hero,own)),('03_akcje',actions_page(hero,own)),('04_ekwipunek',equipment_page(hero)),('05_sprzet',equipment_cutouts(hero,copy['equipment'],folder))]
         for name,html in sheets:
@@ -256,7 +255,7 @@ def build_pack(*, check_only: bool=False, actors: tuple[str,...]=PLAYABLE_HERO_I
         sections.append(dict(id=hid,name=hero.name,first_page=page,last_page=page+4,description='Postać · mana · akcje · wyposażenie · wycinanki'))
         page+=5
     shared=OUTPUT/'wspolne'
-    aid=json.loads((OUTPUT/'player_aid.json').read_text())
+    aid=load_text()['player_aid']
     shared_sheets=[(p['id'],player_aid_page(p)) for p in aid]+[('05_znaczniki',markers_page())]
     shared_first=page
     for name,html in shared_sheets:

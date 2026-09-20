@@ -7,7 +7,7 @@ from typing import Mapping, Sequence
 
 from dnd_board_game.actors import Actor
 from dnd_board_game.rules import ActiveEffect, D20RollRequest, EffectDuration, RollModifier, RollModifierType
-from dnd_board_game.rules.pooled_mana import PooledMana, charge_roll_bonus
+from dnd_board_game.rules.pooled_mana import PooledMana
 
 
 def charge_effects(pool: PooledMana, profiles: Mapping[str, Mapping[str, object]],
@@ -16,16 +16,26 @@ def charge_effects(pool: PooledMana, profiles: Mapping[str, Mapping[str, object]
     if pool.phase in {'setup', 'drain'}:
         return ()
     for hero in pool.heroes:
-        bonus = charge_roll_bonus(pool.points(hero))
+        bonus = pool.roll_bonus(hero)
         if bonus and pool.phase != "drain":
             effects.append(ActiveEffect(
                 id=f"charge:{hero}:accuracy", actor_id=hero, kind="charge_accuracy",
-                label=f"Naładowanie: +{bonus} do testów ({pool.points(hero)} pkt)",
+                label=f"Naładowanie: +{bonus} do testów ({len(pool.hand(hero))} kart)",
                 object_id="charge:accuracy", value=bonus,
                 duration=EffectDuration.UNTIL_DECK_REFRESH))
         for color, count in Counter(pool.hand(hero)).items():
             passive = profiles[hero]['color_passives'][color]
             kind = passive['kind']
+            if kind == 'audience_guard' and actors:
+                from .spells import grid_distance_feet
+                owner = next((a for a in actors if str(a.id) == hero), None)
+                allies = [a for a in actors if owner and a.id != owner.id and a.faction == owner.faction
+                          and not a.is_unconscious() and not a.is_defeated() and grid_distance_feet(owner.position, a.position) <= 10]
+                if owner and not owner.is_unconscious() and not owner.is_defeated() and allies:
+                    target = min(allies, key=lambda a: grid_distance_feet(owner.position, a.position))
+                    effects.append(ActiveEffect(id=f'charge:{hero}:audience', actor_id=str(target.id), kind='charge_ac',
+                        label='Krąg zaufania: +1 KP od Loriana', object_id=f'charge:{hero}:audience', value=1,
+                        duration=EffectDuration.UNTIL_DECK_REFRESH))
             value = count * passive['value']
             if passive['cap']:
                 value = min(value, passive['cap'])
@@ -49,6 +59,8 @@ def picked_color(actors: tuple[Actor, ...], hero: str, passive: Mapping[str, obj
     from .spells import grid_distance_feet
     owner = next(a for a in actors if str(a.id) == hero)
     kind = passive['kind']
+    if kind == 'temp_hp' and not owner.is_unconscious() and not owner.is_defeated():
+        return tuple(replace(a, temp_hp=max(a.temp_hp, int(passive['value']))) if a.id == owner.id else a for a in actors)
     if not kind.startswith('heal') or owner.is_unconscious() or owner.is_defeated():
         return actors
     eligible = [a for a in actors if a.faction == owner.faction and not a.is_unconscious()
@@ -73,6 +85,15 @@ def damage_bonus(actor: Actor, source: object, effects: Sequence[ActiveEffect]) 
     kind = getattr(getattr(source, 'attack_kind', None), 'value', '')
     weapon = getattr(getattr(source, 'source_type', None), 'value', '') == 'weapon'
     allowed = {'charge_melee_damage'} if weapon and kind == 'melee' else {'charge_ranged_damage'} if weapon else {'charge_spell_damage'} if getattr(getattr(source, 'source_type', None), 'value', '') == 'spell' else set()
+    if weapon and kind == 'melee' and actor.hp * 2 <= actor.max_hp:
+        allowed.add('charge_wounded_melee_damage')
+    if getattr(getattr(source, 'source_type', None), 'value', '') == 'spell':
+        from dnd_board_game.core.damage_types import DamageType
+        components = getattr(source, 'damage_components', ())
+        if components and components[0].damage_type == DamageType.RADIANT:
+            allowed.add('charge_radiant_spell_damage')
+        if any(e.actor_id == str(actor.id) and e.kind == 'charge_accuracy' and e.value >= 6 for e in effects):
+            allowed.add('charge_full_pool_spell_damage')
     return sum(e.value for e in effects if e.actor_id == str(actor.id) and e.kind in allowed)
 
 
@@ -93,7 +114,7 @@ def state_charge_bonus(state: object, actor: Actor) -> int:
     pool = getattr(mana, "pooled", None)
     if not uses_charge(actor) or pool is None or pool.phase == "drain":
         return 0
-    return charge_roll_bonus(pool.points(str(actor.id)))
+    return pool.roll_bonus(str(actor.id))
 
 
 def charged_check_request(state: object, actor: Actor, request: D20RollRequest) -> D20RollRequest:

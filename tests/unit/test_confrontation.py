@@ -43,35 +43,35 @@ def settle(s):
     return s
 
 
-def test_draw_is_mandatory_offer_stays_and_21_stops_draw():
+def test_draw_is_mandatory_offer_stays_and_six_cards_stop_draw():
     s=game();s=r.report_color(s,'C');s=r.report_color(s,'B')
     with pytest.raises(ValueError): r.declare(s,0)
     s=r.take(s,0)
     assert s.mana.hand('garran')==('C',) and s.mana.offer==('B',)
     s=r.advance(settle(r.support(s,'brakka')))
     assert s.actor.id=='brakka' and s.mana.offer==('B',) and s.mana.phase=='reveal'
-    s=charged(s,{'garran':('B','B','B','C')})
+    s=charged(s,{'garran':('B','B','B','C','N','F')})
     s=replace(s,stage='after_reaction')
     s=r.advance(s)
-    assert s.mana.points('garran')==25 and s.mana.phase=='ready'
-    assert r.available_tiers(s)[-1]==(21,6,1)
+    assert s.mana.points('garran')==6 and s.mana.phase=='ready'
+    assert r.available_tiers(s)[-1]==(6,6,1)
 
 
 @pytest.mark.parametrize('bonus,cost',[(0,1),(2,1),(4,1),(6,1)])
 def test_every_charge_tier_costs_one_and_keeps_hand_on_failure(bonus,cost):
-    s=charged(game(),{'garran':('B','B','B')})
+    s=charged(game(),{'garran':('B','B','B','C','N','F')})
     s=r.declare(s,bonus);s=r.roll_check(s,1)
     assert s.stage=='after_action' and s.mana.pending_count==cost
     s=settle(s)
-    assert len(s.mana.burned)==cost and s.mana.points('garran')==21
+    assert len(s.mana.burned)==cost and s.mana.points('garran')==6
     assert s.resistance==s.maximum
 
 
 def test_hit_uses_attribute_without_proficiency_and_applies_effect_before_cost():
     s=charged(game(),{'garran':('C','C','C')},deck_size=0)
-    s=replace(s,resistance=1+s.actor.impact_modifier+2)
+    s=replace(s,resistance=1+s.actor.impact_modifier+2,aids=(('garran',1),))
     s=r.declare(s,0)
-    assert s.check_modifier==s.actor.test_modifier
+    assert s.check_modifier==s.actor.test_modifier+1
     s=r.roll_check(s,20)
     assert s.stage=='impact' and s.mana.phase=='ready'
     s=r.roll_impact(s,1)
@@ -87,7 +87,7 @@ def test_failed_unpayable_test_ends_without_free_last_round():
 
 
 def test_exact_last_card_paid_allows_next_turn_and_support_but_next_burn_drains():
-    s=charged(game(),{'brakka':('C','C','C')},deck_size=1)
+    s=charged(game(),{'brakka':('C','C','C','B','Z','N')},deck_size=1)
     s=settle(r.roll_check(r.declare(s,0),1))
     assert s.stage=='after_action' and not s.mana.deck
     s=r.advance(s)
@@ -128,17 +128,17 @@ def test_support_stacks_across_turns_and_all_expires_on_own_attempt(natural, sce
 
 
 def test_cooperation_adds_one_without_stacking_from_duplicate_color_cards():
-    s=charged(game(),{'garran':('N','N')})
+    s=charged(game(('dagna','garran','brakka')),{'dagna':('B','B')})
     assert r.support_bonus(s)==2
-    supported=r.support(s,'dagna')
-    assert dict(supported.aids)['dagna']==2
+    supported=r.support(s,'garran')
+    assert dict(supported.aids)['garran']==2
     assert supported.mana.phase=='burn' and supported.mana.pending_count==1
-    assert supported.mana.hand('garran')==('N','N')
+    assert supported.mana.hand('dagna')==('B','B')
     with pytest.raises(ValueError):r.advance(supported)
-    with pytest.raises(ValueError):r.support(supported,'dagna')
+    with pytest.raises(ValueError):r.support(supported,'garran')
     supported=replace(settle(supported),stage='turn')
-    supported=settle(r.support(supported,'dagna'))
-    assert dict(supported.aids)['dagna']==4
+    supported=settle(r.support(supported,'garran'))
+    assert dict(supported.aids)['garran']==4
 
 
 def test_support_without_card_to_burn_ends_confrontation():
@@ -149,7 +149,7 @@ def test_support_without_card_to_burn_ends_confrontation():
 
 
 def test_recovery_is_active_on_each_success_not_on_pick():
-    s=charged(game(),{},deck_size=20)
+    s=charged(game(('dagna','garran','brakka')),{},deck_size=20)
     color=s.mana.burned[0]
     remaining=list(s.mana.deck);remaining.remove('Z');remaining.remove('C')
     s=replace(s,mana=replace(s.mana,deck=tuple(remaining),offer=('Z','C'),phase='choose',draw_due=True))
@@ -214,9 +214,9 @@ def test_prepared_charge_reaction_and_drain_cases_use_conserved_cards(hero):
     from dnd_board_game.application.confrontation import prepare_lesson
     s=game((hero,))
     charge=prepare_lesson(s,'charge')
-    assert charge.mana.phase=='choose' and charge.mana.points(hero)==14
+    assert charge.mana.phase=='choose' and len(charge.mana.hand(hero))==5
     charge=r.take(charge,0)
-    assert charge.mana.points(hero)==21 and charge.reached_charge
+    assert len(charge.mana.hand(hero))==6 and charge.reached_charge
     reaction=prepare_lesson(s,'reaction')
     assert reaction.stage=='reaction' and reaction.round==2
     reaction=r.react(reaction)

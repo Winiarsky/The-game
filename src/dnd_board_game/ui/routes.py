@@ -163,11 +163,11 @@ def create_app(
     @app.get("/rules/physical-mana")
     def physical_mana_rules():
         from dnd_board_game.physical_cards.mana_print import build_print_hero
-        from dnd_board_game.scenarios.confrontation import REMINDER, CONDITION_HELP
+        from dnd_board_game.scenarios.confrontation import reminder, condition_help
         from dnd_board_game.scenarios.pooled_mana_catalog import hero_profile
-        from dnd_board_game.physical_cards.mana_print import TURN_REMINDERS, MANA_PASSIVE_REMINDER
+        from dnd_board_game.physical_cards.mana_print import turn_reminders, mana_passive_reminder
         names = {"garran": "Garran", "brakka": "Brakka", "mira": "Mira", "dagna": "Dagna", "lorian": "Lorian", "nimra": "Nimra", "erynd": "Erynd"}
-        return render_template("physical_mana.html", waves=WAVES, mana_text=mana_text, mana_chips=chips, exploration_reminder=REMINDER, exploration_conditions=CONDITION_HELP, pool_rules=TURN_REMINDERS, mana_passive_reminder=MANA_PASSIVE_REMINDER,
+        return render_template("physical_mana.html", waves=WAVES, mana_text=mana_text, mana_chips=chips, exploration_reminder=reminder(), exploration_conditions=condition_help(), pool_rules=turn_reminders(), mana_passive_reminder=mana_passive_reminder(),
             heroes=[{"id": hero_id, "name": name, "abilities": build_print_hero(hero_id).cards, "values": hero_profile(hero_id)["values"],
                      "flaw": ("", hero_profile(hero_id)["flaw_name"], hero_profile(hero_id)["flaw"]), "passive": ("", hero_profile(hero_id)["passive_name"], hero_profile(hero_id)["passive"]), "notes": "\n".join(f"{note.name}: {note.body}" for note in physical_mana_passives(hero_id)[:-1]), "supply": turn_supply(hero_id), "exploration": build_print_hero(hero_id).exploration, "exploration_passives": build_print_hero(hero_id).exploration_passives, "mana_passives": build_print_hero(hero_id).mana_passives}
                     for hero_id,name in names.items()])
@@ -3733,6 +3733,10 @@ def _character_sheet_feature_entries(
             ability = mana_ability(actor_id or "", feature.feature_id)
             if ability is not None:
                 name, text = ability.name, feature.description
+            from dnd_board_game.scenarios.character_text import feature_copy
+            current_copy = feature_copy(actor_id or '', feature.feature_id)
+            if current_copy is not None:
+                name, text = current_copy
             entries.append({"name": name, "rule_text": text, "game_text": "", "use_mode": ""})
             continue
         note = FLAW_HELP.get(feature.feature_id) or PASSIVE_HELP.get(feature.feature_id)
@@ -4409,12 +4413,15 @@ def _physical_mana_archetype(hero_id: str):
     if archetype is None or not hero_abilities(hero_id):
         return archetype
     from dnd_board_game.scenarios.pooled_mana_catalog import hero_profile
+    from dnd_board_game.scenarios.character_text import hero_text
     profile = hero_profile(hero_id)
+    copy = hero_text(hero_id)
     return replace(archetype,
-        turn_plan=("Poniżej 21 pkt wybierz jedną z dwóch odkrytych kart many.",
+        history=copy["history"], motivation=copy["motivation"], personal_goal=copy["personal_goal"], role=copy["role"],
+        turn_plan=("Mając mniej niż 6 kart, wybierz jedną z dwóch odkrytych kart many.",
                    "Zaplanuj ruch, akcję główną i dodatkową. Test: k20 + cecha + naładowanie + inne premie.",
                    "Zachowaj pulę. Zwykły atak nie spala kart; spalanie zdolności rozlicz po jej efekcie."),
-        resources=("Naładowanie: 0/6/12/21 pkt daje +0/+2/+4/+6 do testów.",
+        resources=("Naładowanie: +1 do testów za fizyczną kartę, maks. +6. Atut daje 2 ładunku zdolności; progi 2/4/6.",
                    "Kolory many uruchamiają osobne pasywy. Premie trwają do mana draina.",
                    profile["passive"]),
         pitfalls=(profile["flaw"], "Spalanie wspólnej talii przybliża mana drain."))

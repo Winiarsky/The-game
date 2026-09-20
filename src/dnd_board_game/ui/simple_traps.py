@@ -50,7 +50,7 @@ def notice(s: ExplorationUiSession) -> dict[str, object] | None:
         return None
     return dict(id='trap:'+data['token'], phase='introduction', name='Pułapka podczas walki',
                 narration='Nessa: wykryj pułapkę zwykłym testem Mądrości, a potem dezaktywuj testem Zręczności. Każda próba zużywa akcję, więc pomiędzy nimi normalnie przejdzie tura przeciwnika.',
-                explanation='Na polu (8,18) znajduje się ćwiczebny mechanizm z atramentem. Znacznik połóż dopiero po wykryciu. Narzędzia są przygotowane obok; biegłość otrzymuje tylko posiadający ją bohater. Tu nie dobieramy many do 21.',
+                explanation='Na polu (8,18) znajduje się ćwiczebny mechanizm z atramentem. Znacznik połóż dopiero po wykryciu. Narzędzia są przygotowane obok; biegłość otrzymuje tylko posiadający ją bohater. Ten test nie korzysta z doboru many.',
                 instruction='Przeczytaj zasady, przygotuj planszę i rozpocznij walkę. W swojej turze wybierz wykrywanie pułapki.', button='✓ Przygotuj ćwiczenie')
 
 
@@ -83,7 +83,7 @@ def command(s: ExplorationUiSession, data: dict[str, Any]) -> dict[str, object]:
             from .training_arena import start_training_trial
             return start_training_trial(s, hero, 'traps', 'humanoid')
         from .training_menu import show_cases
-        from dnd_board_game.application.training_walkthrough import steps
+        from dnd_board_game.scenarios.character_text import tutorial_steps as steps
         show_cases(s, hero, len(steps(hero)) + 1)
         s._sync_board_leds()
         return s.state_payload()

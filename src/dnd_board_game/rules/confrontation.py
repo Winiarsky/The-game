@@ -3,9 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass, replace, asdict
 from typing import Mapping
 from . import pooled_mana as cards
+from . import confrontation_passives as perks
 
 TIERS = tuple((minimum, bonus, 1) for minimum, bonus in cards.CHARGE_BONUS_TIERS)
-PASSIVE_KINDS = frozenset({'test', 'impact', 'support', 'guard', 'recover'})
+PASSIVE_KINDS = frozenset({'test', 'impact', 'support', 'guard', 'recover'}) | perks.KINDS
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,6 +68,12 @@ class Confrontation:
     natural_one_seen: bool = False
     approach_options: tuple[tuple[Participant, ...], ...] = ()
     approach_selection_version: int = 1
+    passive_rules_version: int = 1
+    last_action_actor: str = ''
+    last_action_kind: str = ''
+    last_action_success: bool = False
+    hero_actions: tuple[tuple[str, str], ...] = ()
+    recovery_label: str = 'Oddech'
 
     def __post_init__(self) -> None:
         if tuple(p.id for p in self.participants) != self.mana.heroes or not 0 <= self.turn < len(self.participants):
@@ -91,10 +98,14 @@ class Confrontation:
     def passive(self, hero: str, kind: str) -> int:
         if self.mana.phase in {'setup', 'drain'} or self.stage == 'result':
             return 0
-        participant = next(p for p in self.participants if p.id == hero)
-        kinds = dict(participant.passives)
-        count = sum(kinds[c] == kind for c in self.mana.hand(hero))
-        return min(2 if kind in {'test', 'impact'} else 1, count)
+        count = perks.count(self, hero, kind)
+        value = min(2 if kind in {'test', 'impact'} else 1, count)
+        if kind == 'test': value += perks.test_bonus(self, hero)
+        if kind == 'impact': value += perks.impact_bonus(self, hero)
+        if kind == 'guard': value = max(value, int(perks.guard(self, hero)))
+        if kind == 'support': value = max(value, int(perks.enabled(self, hero, 'dagna_cooperate')))
+        if kind == 'recover': value = max(value, int(perks.enabled(self, hero, 'dagna_recover')))
+        return value
 
     def to_data(self) -> dict[str, object]:
         return asdict(self)
@@ -111,12 +122,13 @@ class Confrontation:
         values['approach_options'] = tuple(tuple(participant(p) for p in options) for options in values.get('approach_options', ()))
         values['mana'] = cards.PooledMana.from_payload(values['mana'])
         values['aids'] = tuple(tuple(a) for a in values.get('aids', ()))
+        values['hero_actions'] = tuple(tuple(a) for a in values.get('hero_actions', ()))
         values['reactions'] = tuple(values.get('reactions', ('burn', 'strip', 'heal')))
         return cls(**values)
 
 
 def available_tiers(state: Confrontation) -> tuple[tuple[int, int, int], ...]:
-    return tuple(t for t in TIERS if state.mana.points(state.actor.id) >= t[0])
+    return tuple(t for t in TIERS if len(state.mana.hand(state.actor.id)) >= t[0])
 
 
 def _acting(state: Confrontation) -> None:
@@ -185,7 +197,7 @@ def take(state: Confrontation, index: int) -> Confrontation:
     message = f'{state.actor.name}: dobrana karta {color}.'
     return replace(state, mana=pool, last=message,
                    sensitive=state.sensitive or (state.condition == 'sensitive' and color == 'C'),
-                   reached_charge=state.reached_charge or pool.points(state.actor.id) >= 21)
+                   reached_charge=state.reached_charge or pool.full(state.actor.id))
 
 
 def declare(state: Confrontation, bonus: int) -> Confrontation:
@@ -202,7 +214,29 @@ def declare(state: Confrontation, bonus: int) -> Confrontation:
 
 
 def _cost(state: Confrontation) -> Confrontation:
-    return finish(replace(state, stage='after_action', mana=cards.attack_mana(state.mana, 'deck', state.cost)))
+    mana = cards.attack_mana(state.mana, 'deck', state.cost) if state.cost else state.mana
+    return finish(replace(state, stage='after_action', mana=mana))
+
+
+def _record_action(state: Confrontation, kind: str, success: bool = False) -> Confrontation:
+    actions = dict(state.hero_actions)
+    actions[state.actor.id] = kind
+    return replace(state, hero_actions=tuple(actions.items()), last_action_actor=state.actor.id,
+                   last_action_kind=kind, last_action_success=success)
+
+
+def _aid(state: Confrontation, hero: str, amount: int) -> Confrontation:
+    aids = dict(state.aids)
+    gain = perks.received_aid(state, hero, amount)
+    aids[hero] = aids.get(hero, 0) + gain
+    name = next(p.name for p in state.participants if p.id == hero)
+    return replace(state, aids=tuple(aids.items()), last=state.last + f' Pomoc dla {name}: +{gain}.')
+
+
+def _recovery(state: Confrontation, label: str) -> Confrontation:
+    if state.mana.burned:
+        return replace(state, stage='recovery', recovery_color=state.mana.burned[0], recovery_label=label)
+    return _cost(state)
 
 
 def roll_check(state: Confrontation, natural: int) -> Confrontation:
@@ -214,18 +248,39 @@ def roll_check(state: Confrontation, natural: int) -> Confrontation:
                       natural_one_seen=state.natural_one_seen or natural == 1,
                       last=f'{state.actor.name}: {natural} + ({state.check_modifier}) = {total}, ST {state.actor.dc}.')
     if total >= state.actor.dc:
-        return replace(updated, stage='impact', last=updated.last + ' Udana próba — rzuć na wpływ.')
-    return _cost(replace(updated, last=updated.last + ' Niepowodzenie. Koszt próby nadal obowiązuje.'))
+        exact = 3 if perks.enabled(state, state.actor.id, 'nimra_exact') and total == state.actor.dc else 0
+        return replace(_record_action(updated, 'test', True), stage='impact',
+                       impact_modifier=updated.impact_modifier + exact,
+                       last=updated.last + ' Udana próba — rzuć na wpływ.' + (' Dokładny rachunek: +3.' if exact else ''))
+    updated = _record_action(updated, 'test')
+    hero = state.actor.id
+    updated = replace(updated, last=updated.last + ' Nieudany test.')
+    if perks.enabled(state, hero, 'garran_rally'):
+        for ally in state.participants:
+            if ally.id != hero: updated = _aid(updated, ally.id, 1)
+    if perks.enabled(state, hero, 'brakka_stubborn'): updated = _aid(updated, hero, 2)
+    if perks.enabled(state, hero, 'brakka_force'):
+        updated = replace(updated, resistance=max(0, updated.resistance - 1), last_impact=1,
+                          last=updated.last + ' Choćby siłą: opór −1.')
+    if natural <= 5 and perks.enabled(state, hero, 'dagna_patience'):
+        updated = replace(updated, cost=0, last=updated.last + ' Łagodność: bez spalania.')
+    else:
+        updated = replace(updated, last=updated.last + f' Spal {updated.cost} kartę.')
+    return _cost(updated)
 
 
 def roll_impact(state: Confrontation, natural: int) -> Confrontation:
     if state.stage != 'impact' or type(natural) is not int or not 1 <= natural <= state.actor.die:
         raise ValueError('Wpisz naturalny wynik kości wpływu.')
-    impact = max(0, natural + state.impact_modifier)
+    effective = 2 if natural == 1 and perks.enabled(state, state.actor.id, 'nimra_stability') else natural
+    extra = min(3, perks.count(state, state.actor.id, 'mira_precision')) if natural == state.actor.die else 0
+    impact = max(0, effective + state.impact_modifier + extra)
     updated = replace(state, resistance=max(0, state.resistance - impact), last_impact=impact,
-                      last=state.last + f' Wpływ: {natural} + ({state.impact_modifier}) = {impact}.')
-    if state.passive(state.actor.id, 'recover') and state.mana.burned:
-        return replace(updated, stage='recovery', recovery_color=state.mana.burned[0])
+                      last=state.last + f' Wpływ: {natural}' + (f' → {effective}' if effective != natural else '') + f' + ({state.impact_modifier}) + {extra} = {impact}.')
+    if perks.enabled(state, state.actor.id, 'erynd_track') and len(state.participants) > 1:
+        updated = _aid(updated, state.participants[(state.turn + 1) % len(state.participants)].id, 1)
+    if state.passive(state.actor.id, 'recover'):
+        return _recovery(updated, 'Oddech')
     return _cost(updated)
 
 
@@ -236,16 +291,22 @@ def confirm_recovery(state: Confrontation) -> Confrontation:
     color = state.recovery_color
     pool = cards.recover(state.mana, (color,))
     return _cost(replace(state, mana=pool, recovery_color='',
-                        last=state.last + f' Oddech: odzyskano kartę ({color}) na spód talii.'))
+                        last=state.last + f' {state.recovery_label}: odzyskano kartę ({color}) na spód talii.'))
 
 
-def support_bonus(state: Confrontation) -> int:
-    return 1 + state.passive(state.actor.id, 'support')
+def support_bonus(state: Confrontation, target: str = '') -> int:
+    value = 1 + state.passive(state.actor.id, 'support')
+    if target:
+        if perks.enabled(state, state.actor.id, 'erynd_signal') and len(state.mana.hand(target)) > len(state.mana.hand(state.actor.id)):
+            value += 1
+        value = perks.received_aid(state, target, value)
+    return value
 
 
 def support_targets(state: Confrontation) -> tuple[Participant, ...]:
     return tuple(p for p in state.participants if p.id != state.actor.id
-                 and ('*' in state.actor.supports or p.approach_id in state.actor.supports))
+                 and ('*' in state.actor.supports or p.approach_id in state.actor.supports
+                      or (perks.enabled(state, state.actor.id, 'mira_shortcut') and p.approach_id == state.actor.approach_id)))
 
 
 def support(state: Confrontation, target: str) -> Confrontation:
@@ -253,17 +314,24 @@ def support(state: Confrontation, target: str) -> Confrontation:
     if target not in {p.id for p in support_targets(state)}:
         raise ValueError('Wybrane podejście nie pozwala wesprzeć tego sojusznika.')
     aids = dict(state.aids)
-    value = support_bonus(state)
+    value = support_bonus(state, target)
     aids[target] = aids.get(target, 0) + value
     name = next(p.name for p in state.participants if p.id == target)
-    return _cost(replace(state, aids=tuple(aids.items()), cost=1, used_support=True,
-                   last=f'{state.actor.name}: pomoc +{value} dla {name}; razem +{aids[target]} do najbliższej próby testu. Spal 1 kartę. Cała pomoc znika po tej próbie, także po porażce.',
-                   last_roll=None, last_total=None, last_impact=0))
+    cost = perks.support_cost(state)
+    updated = _record_action(replace(state, aids=tuple(aids.items()), cost=cost, used_support=True,
+                   last=f'{state.actor.name}: pomoc +{value} dla {name}; razem +{aids[target]} do najbliższej próby testu. Spalanie: {cost}. Cała pomoc znika po tej próbie, także po porażce.',
+                   last_roll=None, last_total=None, last_impact=0), 'support')
+    if perks.enabled(state, state.actor.id, 'garran_example'): updated = _aid(updated, state.actor.id, 1)
+    if perks.enabled(state, state.actor.id, 'lorian_echo'):
+        others = [p for p in support_targets(state) if p.id != target]
+        if others: updated = _aid(updated, min(others, key=lambda p: len(state.mana.hand(p.id))).id, 1)
+    if perks.enabled(state, state.actor.id, 'lorian_recycle'): return _recovery(updated, 'Drugi obieg')
+    return _cost(updated)
 
 
 def start_peek(state: Confrontation) -> Confrontation:
     _acting(state)
-    return replace(state, stage='peek_choice' if state.mana.deck else 'after_action', cost=0,
+    return replace(state if state.mana.deck else _record_action(state, 'wait'), stage='peek_choice' if state.mana.deck else 'after_action', cost=0,
                    last='Podejrzyj dolną kartę. Wybierz: zostaw na spodzie albo przenieś na wierzch.' if state.mana.deck else 'Talia jest pusta. Czekasz; kończysz działanie bez spalania.',
                    last_roll=None, last_total=None, last_impact=0)
 
@@ -271,8 +339,11 @@ def start_peek(state: Confrontation) -> Confrontation:
 def finish_peek(state: Confrontation, move_top: bool) -> Confrontation:
     if state.stage != 'peek_choice' or type(move_top) is not bool:
         raise ValueError('Najpierw podejrzyj kartę, potem wybierz jej położenie.')
-    return replace(state, mana=cards.bottom_to_top(state.mana) if move_top else state.mana,
-                   stage='after_action', last='Przenieś podejrzaną kartę na wierzch talii. Koniec działania, bez spalania.' if move_top else 'Zostaw podejrzaną kartę na spodzie talii. Koniec działania, bez spalania.')
+    updated = _record_action(replace(state, mana=cards.bottom_to_top(state.mana) if move_top else state.mana,
+                   stage='after_action', last='Przenieś podejrzaną kartę na wierzch talii. Koniec działania, bez spalania.' if move_top else 'Zostaw podejrzaną kartę na spodzie talii. Koniec działania, bez spalania.'), 'peek')
+    if move_top and perks.enabled(state, state.actor.id, 'mira_switch'): updated = _aid(updated, state.actor.id, 1)
+    if not move_top and perks.enabled(state, state.actor.id, 'nimra_deduction'): updated = _aid(updated, state.actor.id, 2)
+    return updated
 
 
 def favor(state: Confrontation) -> Confrontation:
@@ -313,10 +384,11 @@ def react(state: Confrontation, heal_roll: int = 1) -> Confrontation:
     kind = state.reactions[(state.round - 1) % len(state.reactions)]
     if type(heal_roll) is not int or not 1 <= heal_roll <= 4:
         raise ValueError('Reakcja wymaga wyniku k4.')
-    message = f'Presja sytuacji: spal {state.pressure} kart z wierzchu.'
+    pressure = max(0, state.pressure - int(any(perks.enabled(state, p.id, 'garran_line') and state.mana.full(p.id) for p in state.participants)))
+    message = f'Presja sytuacji: spal {pressure} kart z wierzchu.'
     pool, resistance = state.mana, state.resistance
     if kind == 'strip':
-        target = max(state.participants, key=lambda p: pool.points(p.id))
+        target = max(state.participants, key=lambda p: len(pool.hand(p.id)))
         count = max(0, 1 - state.passive(target.id, 'guard'))
         if count and pool.hand(target.id):
             hand = pool.hand(target.id)
@@ -325,9 +397,10 @@ def react(state: Confrontation, heal_roll: int = 1) -> Confrontation:
             pool = replace(pool, pools=tuple(hands.items()), burned=(*pool.burned, hand[-1]), revision=pool.revision + 1)
             message += f' {target.name}: odłóż ostatnią kartę puli ({hand[-1]}) do spalonych.'
         else:
-            message += f' {target.name}: Opanowanie chroni pulę lub pula jest pusta.'
+            message += f' {target.name}: Pasyw chroni pulę lub pula jest pusta.'
     elif kind == 'heal':
-        resistance = min(state.maximum, resistance + heal_roll)
+        recovery = max(0, heal_roll - int(any(perks.enabled(state, p.id, 'brakka_persistence') for p in state.participants)))
+        resistance = min(state.maximum, resistance + recovery)
         message += f' Odzysk oporu: k4 = {heal_roll}; przywrócono {resistance - state.resistance}.'
-    pool = cards.attack_mana(pool, 'deck', state.pressure)
+    pool = cards.attack_mana(pool, 'deck', pressure) if pressure else pool
     return finish(replace(state, mana=pool, resistance=resistance, stage='after_reaction', last=message, reacted=True))

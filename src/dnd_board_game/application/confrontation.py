@@ -51,7 +51,7 @@ def build(actors: tuple[Actor, ...], scene: dict, *, excluded: tuple[str, ...] =
         max(scene['minimum_pressure'], scene['pressure_per_hero'] * len(party)),
         reactions=tuple(r['kind'] for r in scene['reactions']), condition=scene['condition'],
         first_test_bonus=scene.get('first_test_bonus', 0), first_test_label=scene.get('first_test_label', ''),
-        approach_options=tuple(options), approach_selection_version=3)
+        approach_options=tuple(options), approach_selection_version=3, passive_rules_version=2)
 
 
 def prepare_lesson(state: Confrontation, lesson_id: str) -> Confrontation:
@@ -64,7 +64,7 @@ def prepare_lesson(state: Confrontation, lesson_id: str) -> Confrontation:
     if lesson_id in {'charge', 'reaction'}:
         values = pool.point_values(state.actor.id)
         high, low = max(values, key=values.get), min(values, key=values.get)
-        hand = (high,) * (2 if lesson_id == 'charge' else 3)
+        hand = tuple((high, low, high, low, high) if lesson_id == 'charge' else (high, low, high, low, high, low))
         offer = (high, low) if lesson_id == 'charge' else ()
         pool = replace(pool, pools=((state.actor.id, hand),), offer=offer,
                        deck=(None,) * (len(pool.deck) - len(hand) - len(offer)),

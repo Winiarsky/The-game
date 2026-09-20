@@ -73,8 +73,8 @@ def quote_pool(state: CombatState, actor: Actor, ability: SharedAbility,
     hand = pool.hand(str(actor.id))
     definition.validate(hand, values)
     validate_boosts(hand, boosts, ability.boosts, ability.boost_limit)
-    total = sum(values[c] for c in hand)
+    total = pool.points(str(actor.id))
     discount = sum(e.value for e in effects if e.actor_id == str(actor.id) and e.kind == "charge_burn_discount")
     cost = definition.burn + 2 * sum(boosts.values()) + surcharge
     cost = max(1, cost - discount) if cost else 0
-    return ManaQuote(("*",) * cost, (f"Ładunek {total} pkt; próg {definition.minimum}. Zachowaj pulę. Po akcji spal {cost} kart z wierzchu; niedobór powoduje mana drain po wykonaniu efektu.", *notes), str(actor.id) == "nimra")
+    return ManaQuote(("*",) * cost, (f"Ładunek {total}/6; próg {definition.minimum}. Zachowaj pulę. Po akcji spal {cost} kart z wierzchu; niedobór powoduje mana drain po wykonaniu efektu.", *notes), str(actor.id) == "nimra")

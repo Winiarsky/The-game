@@ -14,9 +14,6 @@ function manaCostHtml(cost) {
 function manaPassiveSymbolHtml(color, stackable) {
   return `<span class="mana-passive-symbol" data-stackable="${!!stackable}" title="${stackable ? 'Kumuluje się' : 'Nie kumuluje się'}">${manaCostHtml([color])}</span>`;
 }
-function manaRecoveryDiagramHtml() {
-  return '<img class="mana-recovery-diagram" src="/static/icons/mana_recovery.svg" alt="1 karta: ze stosu spalonych na spód wspólnej talii">';
-}
 function manaPassiveRuleHtml(text) {
   const source = String(text || '');
   let html = '', offset = 0;
@@ -32,25 +29,26 @@ function manaPassiveDescriptionHtml(passive, compact = false) {
   const details = [d.note, d.stacking].filter(Boolean).map(t=>`<p>${esc(t)}</p>`).join('');
   return `<div class="mana-passive-description"><strong class="passive-name">${esc(d.name)}</strong>
     <p class="passive-trigger">${esc(d.when)}</p><p class="passive-effect">${manaPassiveRuleHtml(d.effect)}</p>
-    ${d.diagram === 'recovery' ? manaRecoveryDiagramHtml() : ''}
     ${d.instruction ? `<p class="passive-instruction">${esc(d.instruction)}</p>` : ''}
     ${details ? compact ? `<details><summary>Szczegóły i kumulacja</summary>${details}</details>` : `<div class="passive-details">${details}</div>` : ''}</div>`;
 }
 function manaPointCardsHtml(cards, values) {
-  return (cards || []).map(color => `<span class="mana-valued-card">${manaCostHtml([color])}<b>${esc(values[color])} pkt</b></span>`).join(' ');
+  return (cards || []).map(color => `<span class="mana-valued-card">${manaCostHtml([color])}<b>${values[color]===2?'Atut · 2 ładunku':'1 ładunku'}</b></span>`).join(' ');
 }
 function pooledManaPointsHtml(combat, actorId, compact = false) {
   const pool = combat.shared_mana?.pool_view;
   if (!pool) return '';
   const hand = pool.hands.find(h => h.hero === (actorId || combat.current_actor?.id || pool.actor));
   if (!hand) return '';
-  return `<section class="mana-points" aria-label="Punkty many">
-    <div class="mana-points-total"><span>${esc(hand.name)} · mana z kart</span><strong>${esc(hand.total)} pkt</strong><small>${hand.total >= 21 ? "Pełne naładowanie · bez doboru" : "Dobór na początku swojej tury"}</small></div>
+  return `<section class="mana-points" aria-label="Karty many i ładunek">
+    <div class="mana-points-total"><span>${esc(hand.name)} · mana z kart</span><strong>${hand.cards.length}/6 kart</strong><small>${hand.cards.length >= 6 ? "Pełna pula · bez doboru" : "Dobór na początku swojej tury"}</small></div>
     <div class="mana-charge-statuses">${Object.entries(hand.color_passives || {}).filter(([c]) => !['setup','drain'].includes(pool.phase) && hand.cards.includes(c)).map(([c,p]) => `<details class="effect-chip"><summary>${manaPassiveSymbolHtml(c, p.stackable)} ${p.stackable ? `×${hand.cards.filter(x=>x===c).length}` : ''} · ${esc(p.label.split(':')[0])} · ${esc(p.status || 'Aktywne')}</summary>${manaPassiveDescriptionHtml(p)}</details>`).join('')}</div>
     ${pool.phase === 'drain' ? '<p>Mana drain — pasywy nieaktywne. Tasowanie odnowi ich użycia.</p>' : ''}
     <small>Obwódka symbolu: gruba — kumuluje się; cienka — nie kumuluje się.</small>
+    ${hand.legacy_overflow?'<p>Starszy zapis zawiera ponad 6 kart. Zachowaj stosy do draina; nie dobieraj. Premia do testów: maks. +6.</p>':''}
+    <p class="mana-points-summary"><b>Testy +${hand.roll_bonus || 0} · Ładunek ${hand.total}/6</b></p>
     ${compact ? '' : `<div class="mana-points-cards">${hand.cards.length ? manaPointCardsHtml(hand.cards, hand.values) : 'Pula jest pusta.'}</div>
-    <div class="mana-points-values"><small>Wartości kolorów:</small> ${manaPointCardsHtml(Object.keys(hand.values), hand.values)}</div>`}
+    <div class="mana-points-values"><p>Atut: ${manaCostHtml([hand.trump_color])} liczy się jako 2 do progów 2/4/6. Pozostałe karty jako 1. Do testów każda karta daje +1.</p></div>`}
   </section>`;
 }
 function actionManaCostHtml(option) {

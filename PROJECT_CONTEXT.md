@@ -1,5 +1,14 @@
 # Kontekst Projektu
 
+## Mana: sześć kart i atut — 20.09.2026
+
+Aktualne zasady zastępują starsze zapisy o 21 punktach: pula do 6 fizycznych kart,
++1 do testów za kartę. Atut daje 2 ładunku zdolności, inne kolory 1; ładunek
+maks. 6, progi 2/4/6. Trzy atuty odblokowują ultę, ale dobór trwa do 6 kart.
+Pasywy liczą fizyczne karty, spalanie pozostaje.
+Szczegóły i bilans talii: [Mana i atuty](docs/TRUMP_MANA.md).
+
+
 ## Postawa drużyny — 19.09.2026
 
 Wskaźnik ma siedem pól: Solidarność (3), Równowaga, Bezwzględność (3),
@@ -482,3 +491,12 @@ The current economy is documented in `docs/PHYSICAL_MANA_DESIGN_V0_2.md`.
 Player help and printable ability sets are served at `/rules/physical-mana`.
 A temporary spiritual-weapon activation returns to the owner's saved turn state;
 it does not grant the weapon an unpaid recurring initiative turn.
+
+
+## Unikalne pasywy many — 2026-09-20
+
+Wdrożono indywidualne zestawy pasywów walki i eksploracji dla siedmiu bohaterów. Katalogi są wspólnym źródłem dla zasad, UI i drukowanych mat; pełna rozpiska: [docs/DISTINCT_MANA_PASSIVES.md](docs/DISTINCT_MANA_PASSIVES.md).
+
+### Wspólne opisy postaci
+
+`content/characters/karty_postaci.json` jest źródłem opisów kart, akcji, obu zestawów pasywów i samouczka. Adapter `scenarios/character_text.py` odświeża odczyt po zmianie pliku. Reguły i liczby pozostają niezależne; instrukcja edycji w `content/characters/README.md`.

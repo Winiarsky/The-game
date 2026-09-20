@@ -1,4 +1,13 @@
+- [x] UI pasywów i potwierdzenia odzysku: opisy tekstowe bez schematu stosów kart.
+
+- [x] Kolumny bohaterów w konfrontacji: zebrana mana i nazwy aktywnych pasywów, bez opisów ani diagramów.
+
+- [x] Dobór many w konfrontacji: portret aktywnego bohatera tylko przy wyborze karty z oferty. Zgłaszanie kolorów i pozostałe etapy pokazują ilustrację sceny (w rozmowie z Nessą — Nessę).
+
 - [x] [Komplet kafli w stylu próbki wozu] 18 kafli z 14 ilustracjami tuszem
+
+- [x] Mana: 6 fizycznych kart, premia +1/karta, atut = 2 ładunku; progi 2/4/6. Silnik, migracja zapisów, UI, samouczki, zestawy PDF i ewaluacja zaktualizowane. [Zasady](docs/TRUMP_MANA.md).
+- [ ] Ograć nowy model many w Misji 0: tempo odblokowania ultów i drainów przy 3–6 osobach; wartości ST i obrażeń na razie pozostają.
   (13 nowych z image_gen i zaakceptowany wóz). Ramka przez cały kafel,
   jedna linia podpisu: pogrubiona nazwa — zwykły tekst efektu. Zachowane
   obrysy, pola I i skale obu PDF-ów; grafiki i prompty w maps/illustrations/ink_v3.
@@ -2080,3 +2089,16 @@ KON 16); wcześniejsze snapshoty i historyczne wyniki audytu pozostają bez zmia
 - [x] Konfrontacje — poprawki po sesji 19.09: Oddech wymaga przełożenia najstarszej spalonej karty i potwierdzenia ✓ przed kosztem testu; kompromis zatrzymuje postęp na osobnym wyborze przyjęcia/odrzucenia po rozliczeniu akcji. Zapis zachowuje oczekujące potwierdzenie; logi pokazują zmiany kart i decyzję. Regresje reguł/run/zapisu oraz Chrome na 1300×657 i 390×800; skrypty symulacji obsługują nowy krok.
 
 - [x] Czytelne pasywy many wszystkich siedmiu postaci: wspólne dane opisu dla UI i mat (warunek, efekt, szczegóły, kumulacja, krótki tekst do druku). Schemat jednej karty ze spalonych na spód talii przy Oddechu, pogrubione wartości w UI, wyraźne rozróżnienie leczenia przy doborze i stałych premii. Nowe opisy także w wyborze many podczas walki i w pomocniku. Testy opisów, UI rozmowy/walki i potwierdzenia Dagny w Chrome; walidacja A4 i rozmiarów kart.
+
+
+## Unikalne pasywy many — 2026-09-20
+
+- [x] Wdrożono indywidualne zestawy pasywów walki i eksploracji dla siedmiu bohaterów. Katalogi są wspólnym źródłem dla zasad, UI i drukowanych mat; pełna rozpiska: [docs/DISTINCT_MANA_PASSIVES.md](docs/DISTINCT_MANA_PASSIVES.md).
+- [ ] Po ręcznym ograniu ocenić siłę nowych kombinacji pasywów, szczególnie odzysk i darmową pomoc Loriana oraz wsparcie po porażkach Garrana. Punkt odniesienia: `docs/reports/DISTINCT_PASSIVES_SMOKE.md`.
+
+- [x] Autozapis Misji 0 po etapach, rozstrzygnięciach konfrontacji, nagrodach, wozie, walce i przygotowaniu; oddzielny od startowych checkpointów. Usunąć ręczne zapisy z widoku misji, zachować wczytywanie; regresje pełnego odtworzenia skutków i UI.
+
+- [x] Usunąć nieużywane kopie pasywów walki i eksploracji z `mats_v2/copy.json`; wskazać w instrukcji edycji aktywne katalogi i pola `display`.
+
+- [x] Wspólne źródło treści `content/characters/karty_postaci.json`: historie, skazy, akcje i podbicia, 70 pasywów, samouczek i pomocnik. Gra i druk czytają ten sam plik; usunięto poprzednie kopie. Testy edycji i odświeżania bez restartu.
+- [ ] Dostosować stare `test_garran_mana_movement.py` (13 wariantów oczekujących płatnego ruchu) i `test_hero_rules_consistency.py` (7 oczekiwań profilu `shared_mana_v03`) do obecnego systemu. Szczegóły: `docs/reports/CHARACTER_TEXT_SOURCE.md`.

@@ -66,11 +66,11 @@ def test_garran_card_explains_contest_and_boost() -> None:
     hero = build_print_hero("garran")
     shield = next(c for c in hero.cards if c.id == "shield_bash")
     assert (shield.timing, shield.cost) == ("D", ())
-    assert "12 pkt" in shield.description
-    assert "k20 + modyfikator Siły" in shield.description
-    assert "aplikacja rzuca za wroga" in shield.description
+    assert "4/6" in shield.description
+    assert "k20 + mod. Siły" in shield.description
+    assert "testowi wroga" in shield.description
     assert "+1k6" in shield.description
-    assert "poniżej połowy" in build_print_hero("dagna").flaw[1]
+    assert "mniej niż połowę PW" in build_print_hero("dagna").flaw[1]
 
 
 def test_mana_symbols_escape_text_and_match_combat_icon_shapes() -> None:
@@ -101,7 +101,7 @@ def test_retired_passives_are_replaced_and_new_damage_limits_are_explicit() -> N
     assert "Krok ratowniczki" in dagna["Nasycenie maną"]
     assert "Odzyskiwanie magiczne" not in dict(build_print_hero("nimra").passives)
     assert "2k6" in dict(build_print_hero("mira").passives)["Nasycenie maną"]
-    assert "+3k6" in dict(build_print_hero("mira").passives)["Nasycenie maną"]
+    assert "Przerzuć tę kość raz" in dict(build_print_hero("mira").passives)["Nasycenie maną"]
     assert "1k6" in dict(build_print_hero("erynd").passives)["Nasycenie maną"]
 
 
@@ -243,7 +243,7 @@ def test_party_confrontation_prints_expose_35_passives_and_influence_modifiers()
         html=render_hero_html(hero,'minimal')
         assert 'Pasywy kolorów w eksploracji' in html
         assert 'Dokładnie 21: sukces' not in html and 'Przekroczenie: utrudnienie' not in html
-        assert 'zawsze za 1 kartę' in html
+        assert 'Podstawowy koszt testu: 1 karta; pasyw może go zmienić.' in html
 
 
 def test_card_fields_separate_charge_burning_and_only_real_boosts():
@@ -257,7 +257,7 @@ def test_card_fields_separate_charge_burning_and_only_real_boosts():
     assert 'Podbicia' not in cards['second_wind']
     assert 'Podbicia' not in cards['iron_bastion']
     assert cards['defensive_stance']['Spalanie']=='0 kart.'
-    assert '12 pkt' in cards['shield_bash']['Ładunek']
+    assert '4/6' in cards['shield_bash']['Ładunek']
     assert 'Łącznie maks. 2' in cards['shield_bash']['Podbicia']
     assert 'nie wymaga' in cards['shield_bash']['Podbicia']
     assert 'Podbicie' not in requirement_text('second_wind','garran')

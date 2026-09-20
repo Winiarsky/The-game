@@ -200,7 +200,7 @@ def training_payload(session: ExplorationUiSession) -> dict[str, object] | None:
                     trap=trap_payload(session), heroes=[], completed=[], current_hero_id=str(scene_flag(session.state.flags, "training_hero", "garran")))
     from . import training_walkthrough as guided
     from .board_panel_symbols import panel_icon
-    from dnd_board_game.application.training_walkthrough import steps
+    from dnd_board_game.scenarios.character_text import tutorial_steps as steps
     if guided.enabled(session) or not scene_flag(session.state.flags, "training_requested", False):
         active = guided.enabled(session)
         finished = bool(session.combat_state and session.combat_state.status.value == "finished")

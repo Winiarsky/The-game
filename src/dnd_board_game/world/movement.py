@@ -62,7 +62,8 @@ def movement_cost(
         if not _can_move_through_occupant(actor, occupant):
             return None
         return DIFFICULT_MOVE_COST_FEET
-    if terrain.is_difficult and not (
+    from dnd_board_game.actors import actor_has_feature
+    if terrain.is_difficult and not actor_has_feature(actor, 'mana_pathfinder') and not (
         actor.wild_shape is not None
         and actor.wild_shape.form_id == "giant_eagle"
     ):

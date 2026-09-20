@@ -1,11 +1,11 @@
-"""Typed point requirements, independent from loading and presentation."""
+"""Typed ability-charge requirements, independent from loading and presentation."""
 from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
 from typing import Mapping
 
-from .pooled_mana import COLORS
+from .pooled_mana import COLORS, ability_charge
 from .shared_mana_catalog import Boost
 
 
@@ -29,9 +29,9 @@ class PoolAbility:
     def validate(self, hand: tuple[str, ...], values: Mapping[str, int], bonus: int = 0, surcharge: int = 0) -> None:
         if self.free:
             return
-        total = sum(values[c] for c in hand) + bonus
+        total = ability_charge(hand, values) + bonus
         if not hand or total < self.minimum + surcharge:
-            raise ValueError(f"Potrzeba {self.minimum + surcharge} punktów; masz {total}.")
+            raise ValueError(f"Potrzeba {self.minimum + surcharge} ładunku; masz {total}.")
         counts = Counter(hand)
         missing = [f"{c} × {n - counts[c]}" for c, n in self.required if counts[c] < n]
         if missing:

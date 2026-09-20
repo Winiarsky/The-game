@@ -1,5 +1,7 @@
 # Osobiste pule many 1.0 — wdrożenie i punkt odniesienia
 
+> Dokument historyczny. Aktualne zasady: [Sześć kart i atut](TRUMP_MANA.md). Poniższa punktacja nie obowiązuje w bieżącym profilu.
+
 Aktualizacja: obowiązuje [trwałe ładowanie many 2.0](MANA_CHARGE_V02.md), 148 lekcji. Poniższy opis wcześniejszego obiegu i jego wyniki są historyczne.
 
 2026-09-14. Profil `pooled_mana_v01`, katalog w wersji 1.

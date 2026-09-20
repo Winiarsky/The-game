@@ -10,10 +10,10 @@ from dnd_board_game.rules.pooled_mana import COLORS, PooledMana
 from dnd_board_game.rules.pooled_mana_catalog import PoolAbility
 
 FOUNDATIONS = (
-    ("pool_draw", "Dobór i wspólna karta", "Przetasuj komplet, odkryj dwie karty i zgłoś ich kolory. Wybierz jedną runą. Drugą zostaw dla następnego bohatera."),
-    ("pool_charge", "Pełne naładowanie i pasywy", "Przygotuj wskazane 20 punktów. Dobierz jedną kartę: przekroczysz 21 bez kary. Sprawdź statusy kolorów i premię naładowania +6 do ataków, testów cech i obron zamiast biegłości; ✓ rozpocznie próbną kolejną turę już bez doboru."),
+    ("pool_draw", "Dobór i wspólna karta", "Przetasuj komplet, odkryj dwie karty i zgłoś ich kolory. Wybierz jedną runą. Drugą zostaw dla następnego bohatera. Każda karta daje +1 do testów. Atut daje 2 ładunku zdolności; reszta 1. Trzy atuty odblokowują ultę, ale dobór trwa do 6 kart."),
+    ("pool_charge", "Pełne naładowanie i pasywy", "Przygotuj wskazane 5 kart. Dobierz szóstą: osiągniesz limit osobistej puli. Sprawdź statusy kolorów i premię naładowania +6 do ataków, testów cech i obron zamiast biegłości; ✓ rozpocznie próbną kolejną turę już bez doboru."),
     ("pool_expire", "Upływ rundy", "Dobierz kartę. ✓ przechodzi do końca próbnej rundy. Zgłoś kolor jednej karty z wierzchu odłożonej do wygasłych; Lorian nie może jej odzyskać przed drainem."),
-    ("pool_hold", "Zwykły atak i oszczędzanie", "Dobierz kartę, a potem wykonaj zwykły atak bronią w kukłę. Rzut: k20 + cecha broni + naładowanie + inne premie. Naładowanie zastępuje biegłość: 0/6/12/21 pkt daje +0/+2/+4/+6. Nie dodajesz tej premii do obrażeń. Twoja pula pozostaje; zwykły atak nie spala kart."),
+    ("pool_hold", "Zwykły atak i oszczędzanie", "Dobierz kartę, a potem wykonaj zwykły atak bronią w kukłę. Rzut: k20 + cecha broni + naładowanie + inne premie. Każda fizyczna karta daje +1 do testu, maks. +6. Atut nie podwaja tej premii. Nie dodajesz tej premii do obrażeń. Twoja pula pozostaje; zwykły atak nie spala kart."),
     ("pool_burn", "Spalenie odkrytej karty", "Dobierz kartę. Potem uruchom zapowiedziane spalenie przez ✓. Odłóż pozostawioną kartę do spalonych, nie na spód talii."),
     ("pool_prison", "Uwięzienie i uwolnienie", "Dobierz kartę. ✓ symuluje uwięzienie odkrytej karty przez kukłę. Następne ✓ symuluje jej pokonanie: oddaj uwięzioną kartę na spód."),
     ("pool_drain", "Mana drain zbiera cały komplet", "Przygotujemy końcówkę talii: po tasowaniu pozostaw trzy karty wskazane w instrukcji, resztę połóż jako spalone. Dobierz kartę. ✓ uruchomi spalenie dwóch kart przy zbyt małej talii. Zbierz i przetasuj WSZYSTKIE karty."),
@@ -26,7 +26,7 @@ def lesson_hand(definition: PoolAbility, values: Mapping[str, int], copies: int,
         return ()
     candidates = []
     for counts in product(range(copies + 1), repeat=5):
-        if sum(counts) > 7:
+        if sum(counts) > 6:
             continue
         hand = tuple(c for c, n in zip(COLORS, counts) for _ in range(n))
         try:

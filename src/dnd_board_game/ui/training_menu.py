@@ -5,7 +5,7 @@ from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from dnd_board_game.application.recruitment_arena import HERO_ORDER
-from dnd_board_game.application.training_walkthrough import steps
+from dnd_board_game.scenarios.character_text import tutorial_steps as steps
 from dnd_board_game.combat.scene import scene_flag, set_scene_flag
 from dnd_board_game.hardware.board_panel import panel_feedback, panel_position
 from .board_panel_symbols import panel_icon

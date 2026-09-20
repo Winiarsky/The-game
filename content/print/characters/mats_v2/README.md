@@ -47,14 +47,12 @@ przekaż też fizyczny żeton; stan musi odpowiadać aplikacji.
 - `python scripts/build_session_print_packs.py --only heroes` robi to samo.
 - `python scripts/build_hero_mats.py --check-only` sprawdza wszystkie układy bez PDF.
   Można dodać `--actor nimra`, by obejrzeć wybraną postać. Publikacja wymaga wszystkich.
-- `copy.json` zawiera redakcyjne skróty opisów akcji, pasywów i przedmiotów.
-  Progi, koszt, przypisanie run, statystyki i wyposażenie pochodzą z gry.
-  Skróty należy uzgodnić z mechaniką po zmianach reguł.
-- `player_aid.json` — cztery strony pomocnika, edytowalne sekcje i przykłady.
-  Rozmowy opisują przydział, powtarzalność, runy wsparcia, kumulowanie pomocy
-  i podgląd talii. Obiekty pokazują te same reguły na przykładzie wozu.
-- `keywords.json` — pogrubiane terminy i ich odmiany; znaczenie w `TERMINOLOGIA.md`.
-- `copy.json` obejmuje też wspólne opisy pasywów eksploracji i korektę skaz.
+- **Wszystkie opisy edytuj w `content/characters/karty_postaci.json`.**
+  Instrukcja sekcji: `content/characters/README.md`.
+- Ten sam plik zasila grę, karty, pasywy obu trybów, lekcje samouczka,
+  opisy wycinanek, cztery strony pomocnika i słownik pogrubień.
+- Statystyki, progi, koszt, runy i wyposażenie pochodzą z reguł gry.
+  Zmiana tekstu nie zmienia naliczanej mechaniki.
 - `source_snapshot.json` zapisuje dane siedmiu postaci użyte do eksportu.
 - `validation.json` zawiera kontrolę przepełnienia tekstu, grafik i wymiarów.
 - W katalogu każdej postaci są pojedyncze HTML, PDF i PNG. `podglad.html`

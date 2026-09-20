@@ -1,34 +1,21 @@
 {
-  "version": 2,
+  "version": 3,
   "profile": "pooled_mana_v01",
   "heroes": {
     "garran": {
       "values": {
-        "C": 4,
-        "B": 7,
+        "C": 1,
+        "B": 2,
         "Z": 1,
-        "F": 3,
-        "N": 4
+        "F": 1,
+        "N": 1
       },
-      "passive_name": "Nasycenie maną",
-      "passive": "C: Natarcie: Gdy zadajesz obrażenia bronią wręcz: +1 do obrażeń za każdą kartę tego koloru w twojej puli. Kumuluje się. B: Żelazna linia: Gdy razem flankujecie wroga: Sojusznik ma +1 KP przeciw temu wrogowi. Ty nie otrzymujesz tej premii. Nie kumuluje się. Z: Ulepszony krytyk: Atak bronią: Naturalne 19 lub 20 oznacza trafienie krytyczne. Nie dotyczy Uderzenia tarczą. Nie kumuluje się. F: Wytrwałość: Gdy wykonujesz rzut obronny: +1 do rzutów obronnych Kondycji za kartę tego koloru. Łącznie maks. +2. Kumuluje się. N: Osłona: Gdy masz ten kolor w puli: +1 KP. Nie kumuluje się. Pasywy wymagają odpowiedniego koloru w puli; efekty leczenia uruchamia sam dobór. Mana Drain usuwa nasycenie.",
-      "flaw_name": "Nieustępliwość",
-      "flaw": "Rozpoczęcie własnej tury przy wrogu zmniejsza limit zwykłego ruchu o połowę do końca tury.",
       "color_passives": {
         "C": {
           "kind": "melee_damage",
           "value": 1,
-          "label": "Natarcie: Gdy zadajesz obrażenia bronią wręcz: +1 do obrażeń za każdą kartę tego koloru w twojej puli. Kumuluje się.",
           "cap": 0,
-          "stackable": true,
-          "display": {
-            "name": "Natarcie",
-            "when": "Gdy zadajesz obrażenia bronią wręcz",
-            "effect": "+1 do obrażeń za każdą kartę tego koloru w twojej puli.",
-            "note": "",
-            "short": "Obrażenia broni wręcz: +1 za każdą kartę tego koloru w puli.",
-            "stacking": "Każda kolejna karta: +1. Bez limitu premii."
-          }
+          "stackable": true
         },
         "B": {
           "kind": "feature",
@@ -37,16 +24,7 @@
           "features": [
             "iron_line"
           ],
-          "label": "Żelazna linia: Gdy razem flankujecie wroga: Sojusznik ma +1 KP przeciw temu wrogowi. Ty nie otrzymujesz tej premii. Nie kumuluje się.",
-          "stackable": false,
-          "display": {
-            "name": "Żelazna linia",
-            "when": "Gdy razem flankujecie wroga",
-            "effect": "Sojusznik ma +1 KP przeciw temu wrogowi. Ty nie otrzymujesz tej premii.",
-            "note": "",
-            "short": "Gdy wspólnie flankujecie wroga: sojusznik ma +1 KP przeciw temu wrogowi. Ty nie dostajesz tej premii.",
-            "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
-          }
+          "stackable": false
         },
         "Z": {
           "kind": "feature",
@@ -55,61 +33,31 @@
           "features": [
             "improved_critical"
           ],
-          "label": "Ulepszony krytyk: Atak bronią: Naturalne 19 lub 20 oznacza trafienie krytyczne. Nie dotyczy Uderzenia tarczą. Nie kumuluje się.",
-          "stackable": false,
-          "display": {
-            "name": "Ulepszony krytyk",
-            "when": "Atak bronią",
-            "effect": "Naturalne 19 lub 20 oznacza trafienie krytyczne.",
-            "note": "Nie dotyczy Uderzenia tarczą.",
-            "short": "Atak bronią: krytyk przy naturalnym 19–20. Nie dotyczy Uderzenia tarczą.",
-            "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
-          }
+          "stackable": false
         },
         "F": {
           "kind": "save_constitution",
           "value": 1,
-          "label": "Wytrwałość: Gdy wykonujesz rzut obronny: +1 do rzutów obronnych Kondycji za kartę tego koloru. Łącznie maks. +2. Kumuluje się.",
           "cap": 2,
-          "stackable": true,
-          "display": {
-            "name": "Wytrwałość",
-            "when": "Gdy wykonujesz rzut obronny",
-            "effect": "+1 do rzutów obronnych Kondycji za kartę tego koloru.",
-            "note": "Łącznie maks. +2.",
-            "short": "Gdy wykonujesz rzut obronny: +1 do rzutów obronnych Kondycji za kartę tego koloru. Łącznie maks. +2.",
-            "stacking": "Każda kolejna karta: +1. Łącznie maks. +2."
-          }
+          "stackable": true
         },
         "N": {
           "kind": "ac",
           "value": 1,
           "cap": 1,
-          "label": "Osłona: Gdy masz ten kolor w puli: +1 KP. Nie kumuluje się.",
-          "stackable": false,
-          "display": {
-            "name": "Osłona",
-            "when": "Gdy masz ten kolor w puli",
-            "effect": "+1 KP.",
-            "note": "",
-            "short": "Gdy masz ten kolor w puli: +1 KP.",
-            "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
-          }
+          "stackable": false
         }
-      }
+      },
+      "trump_color": "B"
     },
     "brakka": {
       "values": {
-        "C": 7,
+        "C": 2,
         "B": 1,
-        "Z": 3,
-        "F": 4,
-        "N": 4
+        "Z": 1,
+        "F": 1,
+        "N": 1
       },
-      "passive_name": "Nasycenie maną",
-      "passive": "C: Dzikie ataki: Krytyczne trafienie bronią wręcz: Dodaj do obrażeń jeszcze 1 kość użytej broni. Nie kumuluje się. B: Obrona bez pancerza: Gdy nie nosisz pancerza: KP = 10 + mod. Zręczności + mod. Kondycji. Możesz używać tarczy. Nie kumuluje się. Z: Witalność: Za każdym razem, gdy dobierzesz ten kolor: Odzyskaj 5 PW. Każdy dobór działa osobno. F: Nieustępliwość: Gdy obrażenia obniżą PW do 0: Zostajesz na 1 PW. Jedno użycie do Mana Drain. Nie zapobiega natychmiastowej śmierci. Po drainie odzyskaj czarną manę, aby użyć ponownie. Nie kumuluje się. N: Hart: Gdy wykonujesz rzut obronny: +2 do rzutów obronnych Kondycji. Nie kumuluje się. Pasywy wymagają odpowiedniego koloru w puli; efekty leczenia uruchamia sam dobór. Mana Drain usuwa nasycenie.",
-      "flaw_name": "Głód walki",
-      "flaw": "Tura bez ofensywy kończy Szał.",
       "color_passives": {
         "C": {
           "kind": "feature",
@@ -118,16 +66,7 @@
           "features": [
             "savage_attacks"
           ],
-          "label": "Dzikie ataki: Krytyczne trafienie bronią wręcz: Dodaj do obrażeń jeszcze 1 kość użytej broni. Nie kumuluje się.",
-          "stackable": false,
-          "display": {
-            "name": "Dzikie ataki",
-            "when": "Krytyczne trafienie bronią wręcz",
-            "effect": "Dodaj do obrażeń jeszcze 1 kość użytej broni.",
-            "note": "Np. dla topora z kością k12 dodaj 1k12.",
-            "short": "Krytyk bronią wręcz: dodaj jeszcze 1 kość tej broni do obrażeń.",
-            "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
-          }
+          "stackable": false
         },
         "B": {
           "kind": "feature",
@@ -136,31 +75,13 @@
           "features": [
             "unarmored_defense_constitution"
           ],
-          "label": "Obrona bez pancerza: Gdy nie nosisz pancerza: KP = 10 + mod. Zręczności + mod. Kondycji. Możesz używać tarczy. Nie kumuluje się.",
-          "stackable": false,
-          "display": {
-            "name": "Obrona bez pancerza",
-            "when": "Gdy nie nosisz pancerza",
-            "effect": "KP = 10 + mod. Zręczności + mod. Kondycji.",
-            "note": "Możesz używać tarczy.",
-            "short": "Bez pancerza: KP = 10 + mod. Zręczności + mod. Kondycji. Tarcza dozwolona.",
-            "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
-          }
+          "stackable": false
         },
         "Z": {
           "kind": "heal",
           "value": 5,
-          "label": "Witalność: Za każdym razem, gdy dobierzesz ten kolor: Odzyskaj 5 PW. Każdy dobór działa osobno.",
           "cap": 0,
-          "stackable": false,
-          "display": {
-            "name": "Witalność",
-            "when": "Za każdym razem, gdy dobierzesz ten kolor",
-            "effect": "Odzyskaj 5 PW.",
-            "note": "Nie przekraczaj maksymalnych PW.",
-            "short": "Każdy dobór tego koloru: odzyskaj 5 PW.",
-            "stacking": "Każdy dobór leczy osobno. Karty leżące w puli nie leczą ponownie."
-          }
+          "stackable": false
         },
         "F": {
           "kind": "feature",
@@ -169,46 +90,25 @@
           "features": [
             "relentless_endurance"
           ],
-          "label": "Nieustępliwość: Gdy obrażenia obniżą PW do 0: Zostajesz na 1 PW. Jedno użycie do Mana Drain. Nie zapobiega natychmiastowej śmierci. Po drainie odzyskaj czarną manę, aby użyć ponownie. Nie kumuluje się.",
-          "stackable": false,
-          "display": {
-            "name": "Nieustępliwość",
-            "when": "Gdy obrażenia obniżą PW do 0",
-            "effect": "Zostajesz na 1 PW. Jedno użycie do Mana Drain.",
-            "note": "Nie zapobiega natychmiastowej śmierci. Po drainie odzyskaj czarną manę, aby użyć ponownie.",
-            "short": "0 PW → 1 PW, chyba że cios zabija od razu. Jedno użycie; wraca po drainie i dobraniu czarnej.",
-            "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
-          }
+          "stackable": false
         },
         "N": {
-          "kind": "save_constitution",
+          "kind": "wounded_melee_damage",
           "value": 2,
-          "label": "Hart: Gdy wykonujesz rzut obronny: +2 do rzutów obronnych Kondycji. Nie kumuluje się.",
           "cap": 2,
-          "stackable": false,
-          "display": {
-            "name": "Hart",
-            "when": "Gdy wykonujesz rzut obronny",
-            "effect": "+2 do rzutów obronnych Kondycji.",
-            "note": "",
-            "short": "Gdy wykonujesz rzut obronny: +2 do rzutów obronnych Kondycji.",
-            "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
-          }
+          "stackable": false
         }
-      }
+      },
+      "trump_color": "C"
     },
     "mira": {
       "values": {
-        "C": 3,
+        "C": 1,
         "B": 1,
-        "Z": 7,
-        "F": 4,
-        "N": 4
+        "Z": 2,
+        "F": 1,
+        "N": 1
       },
-      "passive_name": "Nasycenie maną",
-      "passive": "C: Atak z cienia: Trafienie bronią z ukrycia: +1k6 obrażeń, jeśli cel cię nie widzi. Z Atakiem z flanki łącznie +3k6. Nie kumuluje się. B: Ruchomy cel: Gdy ktoś atakuje cię z dystansu: +2 KP przeciw atakom bronią i czarami. Nie chroni przed obszarami ani efektami z rzutem obronnym. Nie kumuluje się. Z: Atak z flanki: Trafienie bronią z flanki: +2k6 obrażeń, jeśli flankujesz cel. Z Atakiem z cienia łącznie +3k6. Nie kumuluje się. F: Zwinne dłonie: Po każdym trafieniu nożem: Możesz przejść 5 ft za darmo. Ten krok nie wywołuje ataków okazyjnych. Nie kumuluje się. N: Szczęście: Gdy na k20 wypadnie 1: Przerzuć tę kość raz. Drugi wynik obowiązuje. Dotyczy ataków, testów i rzutów obronnych. Nie kumuluje się. Pasywy wymagają odpowiedniego koloru w puli; efekty leczenia uruchamia sam dobór. Mana Drain usuwa nasycenie.",
-      "flaw_name": "Cienka granica",
-      "flaw": "W ukryciu masz utrudnienie obron i testów reakcji.",
       "color_passives": {
         "C": {
           "kind": "feature",
@@ -217,16 +117,7 @@
           "features": [
             "mana_shadow_strike"
           ],
-          "label": "Atak z cienia: Trafienie bronią z ukrycia: +1k6 obrażeń, jeśli cel cię nie widzi. Z Atakiem z flanki łącznie +3k6. Nie kumuluje się.",
-          "stackable": false,
-          "display": {
-            "name": "Atak z cienia",
-            "when": "Trafienie bronią z ukrycia",
-            "effect": "+1k6 obrażeń, jeśli cel cię nie widzi.",
-            "note": "Z Atakiem z flanki łącznie +3k6.",
-            "short": "Trafienie bronią z ukrycia przed celem: +1k6 obrażeń. Z Atakiem z flanki łącznie +3k6.",
-            "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
-          }
+          "stackable": false
         },
         "B": {
           "kind": "feature",
@@ -235,16 +126,7 @@
           "features": [
             "mira_ranged_evasion"
           ],
-          "label": "Ruchomy cel: Gdy ktoś atakuje cię z dystansu: +2 KP przeciw atakom bronią i czarami. Nie chroni przed obszarami ani efektami z rzutem obronnym. Nie kumuluje się.",
-          "stackable": false,
-          "display": {
-            "name": "Ruchomy cel",
-            "when": "Gdy ktoś atakuje cię z dystansu",
-            "effect": "+2 KP przeciw atakom bronią i czarami.",
-            "note": "Nie chroni przed obszarami ani efektami z rzutem obronnym.",
-            "short": "Atak dystansowy: +2 KP przeciw broni i czarom. Bez ochrony przed obszarami i efektami z rzutem obronnym.",
-            "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
-          }
+          "stackable": false
         },
         "Z": {
           "kind": "feature",
@@ -253,16 +135,7 @@
           "features": [
             "mana_flanking_strike"
           ],
-          "label": "Atak z flanki: Trafienie bronią z flanki: +2k6 obrażeń, jeśli flankujesz cel. Z Atakiem z cienia łącznie +3k6. Nie kumuluje się.",
-          "stackable": false,
-          "display": {
-            "name": "Atak z flanki",
-            "when": "Trafienie bronią z flanki",
-            "effect": "+2k6 obrażeń, jeśli flankujesz cel.",
-            "note": "Z Atakiem z cienia łącznie +3k6.",
-            "short": "Trafienie bronią z flanki: +2k6 obrażeń. Z Atakiem z cienia łącznie +3k6.",
-            "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
-          }
+          "stackable": false
         },
         "F": {
           "kind": "feature",
@@ -271,16 +144,7 @@
           "features": [
             "mana_nimble_hands"
           ],
-          "label": "Zwinne dłonie: Po każdym trafieniu nożem: Możesz przejść 5 ft za darmo. Ten krok nie wywołuje ataków okazyjnych. Nie kumuluje się.",
-          "stackable": false,
-          "display": {
-            "name": "Zwinne dłonie",
-            "when": "Po każdym trafieniu nożem",
-            "effect": "Możesz przejść 5 ft za darmo.",
-            "note": "Ten krok nie wywołuje ataków okazyjnych.",
-            "short": "Po każdym trafieniu nożem: Możesz przejść 5 ft za darmo. Ten krok nie wywołuje ataków okazyjnych.",
-            "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
-          }
+          "stackable": false
         },
         "N": {
           "kind": "feature",
@@ -289,76 +153,37 @@
           "features": [
             "lucky"
           ],
-          "label": "Szczęście: Gdy na k20 wypadnie 1: Przerzuć tę kość raz. Drugi wynik obowiązuje. Dotyczy ataków, testów i rzutów obronnych. Nie kumuluje się.",
-          "stackable": false,
-          "display": {
-            "name": "Szczęście",
-            "when": "Gdy na k20 wypadnie 1",
-            "effect": "Przerzuć tę kość raz. Drugi wynik obowiązuje.",
-            "note": "Dotyczy ataków, testów i rzutów obronnych.",
-            "short": "Gdy na k20 wypadnie 1: Przerzuć tę kość raz. Drugi wynik obowiązuje. Dotyczy ataków, testów i rzutów obronnych.",
-            "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
-          }
+          "stackable": false
         }
-      }
+      },
+      "trump_color": "Z"
     },
     "dagna": {
       "values": {
         "C": 1,
-        "B": 7,
-        "Z": 4,
-        "F": 3,
-        "N": 4
+        "B": 2,
+        "Z": 1,
+        "F": 1,
+        "N": 1
       },
-      "passive_name": "Nasycenie maną",
-      "passive": "C: Gniew: Gdy zaklęcie zadaje obrażenia: +2 do obrażeń za każdą kartę tego koloru w twojej puli. Kumuluje się. B: Wiara: Gdy wykonujesz rzut obronny: +1 do wszystkich rzutów obronnych za kartę tego koloru. Łącznie maks. +2. Kumuluje się. Z: Ukojenie: Za każdym razem, gdy dobierzesz ten kolor: Ty i przytomni sojusznicy w 10 ft odzyskujecie po 2 PW. Każdy dobór działa osobno. F: Odporność na truciznę: Przeciw truciźnie: Rzuty obronne z przewagą. Otrzymujesz połowę obrażeń od trucizny. Nie kumuluje się. N: Krok ratowniczki: Po pomocy innemu sojusznikowi w 10 ft: Jeśli go leczysz lub usuwasz jego stan, możesz przejść 5 ft za darmo. Ten krok nie wywołuje ataków okazyjnych. Nie kumuluje się. Pasywy wymagają odpowiedniego koloru w puli; efekty leczenia uruchamia sam dobór. Mana Drain usuwa nasycenie.",
-      "flaw_name": "Nikogo nie zostawiam",
-      "flaw": "Ofensywna płatna zdolność przy sojuszniku poniżej połowy PW spala dodatkową kartę.",
       "color_passives": {
         "C": {
-          "kind": "spell_damage",
-          "value": 2,
-          "label": "Gniew: Gdy zaklęcie zadaje obrażenia: +2 do obrażeń za każdą kartę tego koloru w twojej puli. Kumuluje się.",
-          "cap": 0,
-          "stackable": true,
-          "display": {
-            "name": "Gniew",
-            "when": "Gdy zaklęcie zadaje obrażenia",
-            "effect": "+2 do obrażeń za każdą kartę tego koloru w twojej puli.",
-            "note": "",
-            "short": "Obrażenia zaklęć: +2 za każdą kartę tego koloru w puli.",
-            "stacking": "Każda kolejna karta: +2. Bez limitu premii."
-          }
+          "kind": "radiant_spell_damage",
+          "value": 1,
+          "cap": 3,
+          "stackable": true
         },
         "B": {
           "kind": "save_all",
           "value": 1,
-          "label": "Wiara: Gdy wykonujesz rzut obronny: +1 do wszystkich rzutów obronnych za kartę tego koloru. Łącznie maks. +2. Kumuluje się.",
           "cap": 2,
-          "stackable": true,
-          "display": {
-            "name": "Wiara",
-            "when": "Gdy wykonujesz rzut obronny",
-            "effect": "+1 do wszystkich rzutów obronnych za kartę tego koloru.",
-            "note": "Łącznie maks. +2.",
-            "short": "Gdy wykonujesz rzut obronny: +1 do wszystkich rzutów obronnych za kartę tego koloru. Łącznie maks. +2.",
-            "stacking": "Każda kolejna karta: +1. Łącznie maks. +2."
-          }
+          "stackable": true
         },
         "Z": {
           "kind": "heal_party",
           "value": 2,
-          "label": "Ukojenie: Za każdym razem, gdy dobierzesz ten kolor: Ty i przytomni sojusznicy w 10 ft odzyskujecie po 2 PW. Każdy dobór działa osobno.",
           "cap": 0,
-          "stackable": false,
-          "display": {
-            "name": "Ukojenie",
-            "when": "Za każdym razem, gdy dobierzesz ten kolor",
-            "effect": "Ty i przytomni sojusznicy w 10 ft odzyskujecie po 2 PW.",
-            "note": "Nie przekraczajcie maksymalnych PW.",
-            "short": "Każdy dobór tego koloru: ty i przytomni sojusznicy w 10 ft odzyskujecie po 2 PW.",
-            "stacking": "Każdy dobór leczy osobno. Karty leżące w puli nie leczą ponownie."
-          }
+          "stackable": false
         },
         "F": {
           "kind": "feature",
@@ -367,16 +192,7 @@
           "features": [
             "dwarven_resilience"
           ],
-          "label": "Odporność na truciznę: Przeciw truciźnie: Rzuty obronne z przewagą. Otrzymujesz połowę obrażeń od trucizny. Nie kumuluje się.",
-          "stackable": false,
-          "display": {
-            "name": "Odporność na truciznę",
-            "when": "Przeciw truciźnie",
-            "effect": "Rzuty obronne z przewagą. Otrzymujesz połowę obrażeń od trucizny.",
-            "note": "",
-            "short": "Przeciw truciźnie: Rzuty obronne z przewagą. Otrzymujesz połowę obrażeń od trucizny.",
-            "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
-          }
+          "stackable": false
         },
         "N": {
           "kind": "feature",
@@ -385,91 +201,43 @@
           "features": [
             "field_medic_step"
           ],
-          "label": "Krok ratowniczki: Po pomocy innemu sojusznikowi w 10 ft: Jeśli go leczysz lub usuwasz jego stan, możesz przejść 5 ft za darmo. Ten krok nie wywołuje ataków okazyjnych. Nie kumuluje się.",
-          "stackable": false,
-          "display": {
-            "name": "Krok ratowniczki",
-            "when": "Po pomocy innemu sojusznikowi w 10 ft",
-            "effect": "Jeśli go leczysz lub usuwasz jego stan, możesz przejść 5 ft za darmo.",
-            "note": "Ten krok nie wywołuje ataków okazyjnych.",
-            "short": "Po leczeniu lub zdjęciu stanu z innego sojusznika w 10 ft: przejdź 5 ft bez kosztu ruchu i ataków okazyjnych.",
-            "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
-          }
+          "stackable": false
         }
-      }
+      },
+      "trump_color": "B"
     },
     "lorian": {
       "values": {
         "C": 1,
-        "B": 4,
-        "Z": 4,
-        "F": 3,
-        "N": 7
+        "B": 1,
+        "Z": 1,
+        "F": 1,
+        "N": 2
       },
-      "passive_name": "Nasycenie maną",
-      "passive": "C: Akcent: Gdy zadajesz obrażenia dystansową bronią: +2 do obrażeń za każdą kartę tego koloru w twojej puli. Kumuluje się. B: Rytm kroków: Gdy masz ten kolor w puli: +1 KP. Nie kumuluje się. Z: Otucha: Za każdym razem, gdy dobierzesz ten kolor: 3 PW odzyskuje przytomny sojusznik w 10 ft, któremu brakuje najwięcej PW. Także ty. Każdy dobór działa osobno. F: Oszczędna harmonia: Gdy używasz płatnej zdolności: Spal o 1 kartę mniej, ale co najmniej 1. Darmowe zdolności pozostają darmowe. Nie kumuluje się. N: Nieugięty umysł: Przeciw zauroczeniu i magicznemu snowi: Obrona przed zauroczeniem z przewagą. Magiczny sen na ciebie nie działa. Nie kumuluje się. Pasywy wymagają odpowiedniego koloru w puli; efekty leczenia uruchamia sam dobór. Mana Drain usuwa nasycenie.",
-      "flaw_name": "Potrzeba publiczności",
-      "flaw": "Bez przytomnego sojusznika w 10 ft, w wieloosobowej drużynie: płatna zdolność spala dodatkową kartę.",
       "color_passives": {
         "C": {
           "kind": "ranged_damage",
           "value": 2,
-          "label": "Akcent: Gdy zadajesz obrażenia dystansową bronią: +2 do obrażeń za każdą kartę tego koloru w twojej puli. Kumuluje się.",
           "cap": 0,
-          "stackable": true,
-          "display": {
-            "name": "Akcent",
-            "when": "Gdy zadajesz obrażenia dystansową bronią",
-            "effect": "+2 do obrażeń za każdą kartę tego koloru w twojej puli.",
-            "note": "",
-            "short": "Obrażenia dystansowej broni: +2 za każdą kartę tego koloru w puli.",
-            "stacking": "Każda kolejna karta: +2. Bez limitu premii."
-          }
+          "stackable": true
         },
         "B": {
-          "kind": "ac",
+          "kind": "audience_guard",
           "value": 1,
-          "label": "Rytm kroków: Gdy masz ten kolor w puli: +1 KP. Nie kumuluje się.",
           "cap": 1,
-          "stackable": false,
-          "display": {
-            "name": "Rytm kroków",
-            "when": "Gdy masz ten kolor w puli",
-            "effect": "+1 KP.",
-            "note": "",
-            "short": "Gdy masz ten kolor w puli: +1 KP.",
-            "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
-          }
+          "stackable": false
         },
         "Z": {
           "kind": "heal_weakest",
           "value": 3,
-          "label": "Otucha: Za każdym razem, gdy dobierzesz ten kolor: 3 PW odzyskuje przytomny sojusznik w 10 ft, któremu brakuje najwięcej PW. Także ty. Każdy dobór działa osobno.",
           "cap": 0,
-          "stackable": false,
-          "display": {
-            "name": "Otucha",
-            "when": "Za każdym razem, gdy dobierzesz ten kolor",
-            "effect": "3 PW odzyskuje przytomny sojusznik w 10 ft, któremu brakuje najwięcej PW.",
-            "note": "Możesz być nim ty. Nie przekraczaj maksymalnych PW.",
-            "short": "Każdy dobór tego koloru: 3 PW dla przytomnego sojusznika w 10 ft z największym brakiem PW (także ciebie).",
-            "stacking": "Każdy dobór leczy osobno. Karty leżące w puli nie leczą ponownie."
-          }
+          "stackable": false
         },
         "F": {
           "kind": "burn_discount",
           "value": 1,
-          "label": "Oszczędna harmonia: Gdy używasz płatnej zdolności: Spal o 1 kartę mniej, ale co najmniej 1. Darmowe zdolności pozostają darmowe. Nie kumuluje się.",
           "cap": 1,
-          "stackable": false,
-          "display": {
-            "name": "Oszczędna harmonia",
-            "when": "Gdy używasz płatnej zdolności",
-            "effect": "Spal o 1 kartę mniej, ale co najmniej 1.",
-            "note": "Darmowe zdolności pozostają darmowe.",
-            "short": "Gdy używasz płatnej zdolności: Spal o 1 kartę mniej, ale co najmniej 1. Darmowe zdolności pozostają darmowe.",
-            "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
-          }
+          "stackable": false
         },
         "N": {
           "kind": "feature",
@@ -478,76 +246,37 @@
           "features": [
             "fey_ancestry"
           ],
-          "label": "Nieugięty umysł: Przeciw zauroczeniu i magicznemu snowi: Obrona przed zauroczeniem z przewagą. Magiczny sen na ciebie nie działa. Nie kumuluje się.",
-          "stackable": false,
-          "display": {
-            "name": "Nieugięty umysł",
-            "when": "Przeciw zauroczeniu i magicznemu snowi",
-            "effect": "Obrona przed zauroczeniem z przewagą. Magiczny sen na ciebie nie działa.",
-            "note": "",
-            "short": "Obrona przed zauroczeniem: przewaga. Magiczny sen na ciebie nie działa.",
-            "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
-          }
+          "stackable": false
         }
-      }
+      },
+      "trump_color": "N"
     },
     "nimra": {
       "values": {
-        "C": 4,
+        "C": 1,
         "B": 1,
-        "Z": 3,
-        "F": 4,
-        "N": 7
+        "Z": 1,
+        "F": 1,
+        "N": 2
       },
-      "passive_name": "Nasycenie maną",
-      "passive": "C: Żar: Gdy zaklęcie zadaje obrażenia: +2 do obrażeń za każdą kartę tego koloru w twojej puli. Kumuluje się. B: Powłoka: Gdy masz ten kolor w puli: +1 KP. Nie kumuluje się. Z: Regeneracja: Za każdym razem, gdy dobierzesz ten kolor: Odzyskaj 4 PW. Każdy dobór działa osobno. F: Magiczna przezorność: Gdy bronisz się przed magią: Rzuty obronne Inteligencji, Mądrości i Charyzmy z przewagą. Nie kumuluje się. N: Nasycenie: Gdy zaklęcie zadaje obrażenia: +1 do obrażeń za każdą kartę tego koloru w twojej puli. Kumuluje się. Pasywy wymagają odpowiedniego koloru w puli; efekty leczenia uruchamia sam dobór. Mana Drain usuwa nasycenie.",
-      "flaw_name": "Echo",
-      "flaw": "Echo: kolejna ta sama płatna zdolność z rzędu spala o 1 kartę więcej (maks. +2). Inna płatna zdolność zeruje serię.",
       "color_passives": {
         "C": {
-          "kind": "spell_damage",
-          "value": 2,
-          "label": "Żar: Gdy zaklęcie zadaje obrażenia: +2 do obrażeń za każdą kartę tego koloru w twojej puli. Kumuluje się.",
-          "cap": 0,
-          "stackable": true,
-          "display": {
-            "name": "Żar",
-            "when": "Gdy zaklęcie zadaje obrażenia",
-            "effect": "+2 do obrażeń za każdą kartę tego koloru w twojej puli.",
-            "note": "",
-            "short": "Obrażenia zaklęć: +2 za każdą kartę tego koloru w puli.",
-            "stacking": "Każda kolejna karta: +2. Bez limitu premii."
-          }
+          "kind": "full_pool_spell_damage",
+          "value": 3,
+          "cap": 3,
+          "stackable": false
         },
         "B": {
-          "kind": "ac",
+          "kind": "elemental_ward",
           "value": 1,
-          "label": "Powłoka: Gdy masz ten kolor w puli: +1 KP. Nie kumuluje się.",
           "cap": 1,
-          "stackable": false,
-          "display": {
-            "name": "Powłoka",
-            "when": "Gdy masz ten kolor w puli",
-            "effect": "+1 KP.",
-            "note": "",
-            "short": "Gdy masz ten kolor w puli: +1 KP.",
-            "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
-          }
+          "stackable": false
         },
         "Z": {
-          "kind": "heal",
+          "kind": "temp_hp",
           "value": 4,
-          "label": "Regeneracja: Za każdym razem, gdy dobierzesz ten kolor: Odzyskaj 4 PW. Każdy dobór działa osobno.",
           "cap": 0,
-          "stackable": false,
-          "display": {
-            "name": "Regeneracja",
-            "when": "Za każdym razem, gdy dobierzesz ten kolor",
-            "effect": "Odzyskaj 4 PW.",
-            "note": "Nie przekraczaj maksymalnych PW.",
-            "short": "Każdy dobór tego koloru: odzyskaj 4 PW.",
-            "stacking": "Każdy dobór leczy osobno. Karty leżące w puli nie leczą ponownie."
-          }
+          "stackable": false
         },
         "F": {
           "kind": "feature",
@@ -556,46 +285,25 @@
           "features": [
             "gnome_cunning"
           ],
-          "label": "Magiczna przezorność: Gdy bronisz się przed magią: Rzuty obronne Inteligencji, Mądrości i Charyzmy z przewagą. Nie kumuluje się.",
-          "stackable": false,
-          "display": {
-            "name": "Magiczna przezorność",
-            "when": "Gdy bronisz się przed magią",
-            "effect": "Rzuty obronne Inteligencji, Mądrości i Charyzmy z przewagą.",
-            "note": "",
-            "short": "Obrona przed magią: przewaga w rzutach Inteligencji, Mądrości i Charyzmy.",
-            "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
-          }
+          "stackable": false
         },
         "N": {
           "kind": "spell_damage",
           "value": 1,
-          "label": "Nasycenie: Gdy zaklęcie zadaje obrażenia: +1 do obrażeń za każdą kartę tego koloru w twojej puli. Kumuluje się.",
           "cap": 0,
-          "stackable": true,
-          "display": {
-            "name": "Nasycenie",
-            "when": "Gdy zaklęcie zadaje obrażenia",
-            "effect": "+1 do obrażeń za każdą kartę tego koloru w twojej puli.",
-            "note": "",
-            "short": "Obrażenia zaklęć: +1 za każdą kartę tego koloru w puli.",
-            "stacking": "Każda kolejna karta: +1. Bez limitu premii."
-          }
+          "stackable": true
         }
-      }
+      },
+      "trump_color": "N"
     },
     "erynd": {
       "values": {
-        "C": 4,
+        "C": 1,
         "B": 1,
-        "Z": 7,
-        "F": 3,
-        "N": 4
+        "Z": 2,
+        "F": 1,
+        "N": 1
       },
-      "passive_name": "Nasycenie maną",
-      "passive": "C: Pierwsza krew: Trafienie w cel z pełnymi PW: +1k6 obrażeń. Nie kumuluje się. B: Kamuflaż: Gdy masz ten kolor w puli: +1 KP. Nie kumuluje się. Z: Instynkt: Gdy wykonujesz rzut obronny: +1 do rzutów obronnych Zręczności za kartę tego koloru. Łącznie maks. +2. Kumuluje się. F: Czujność zwiadowcy: Gdy wykrywasz ukrytego wroga: +2 do testu wykrywania. Nie dotyczy pułapek. Nie kumuluje się. N: Łucznictwo: Atak dystansową bronią: +2 do testu ataku. Bez dodatkowej premii do obrażeń. Nie kumuluje się. Pasywy wymagają odpowiedniego koloru w puli; efekty leczenia uruchamia sam dobór. Mana Drain usuwa nasycenie.",
-      "flaw_name": "Trauma bratobójczego strzału",
-      "flaw": "Płatny strzał w cel sąsiadujący z innym bohaterem spala dodatkową kartę.",
       "color_passives": {
         "C": {
           "kind": "feature",
@@ -604,46 +312,22 @@
           "features": [
             "first_blood"
           ],
-          "label": "Pierwsza krew: Trafienie w cel z pełnymi PW: +1k6 obrażeń. Nie kumuluje się.",
-          "stackable": false,
-          "display": {
-            "name": "Pierwsza krew",
-            "when": "Trafienie w cel z pełnymi PW",
-            "effect": "+1k6 obrażeń.",
-            "note": "Działa przy każdym takim trafieniu, dopóki masz ten kolor.",
-            "short": "Trafienie w cel z pełnymi PW: +1k6 obrażeń.",
-            "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
-          }
+          "stackable": false
         },
         "B": {
-          "kind": "ac",
+          "kind": "feature",
           "value": 1,
-          "label": "Kamuflaż: Gdy masz ten kolor w puli: +1 KP. Nie kumuluje się.",
           "cap": 1,
           "stackable": false,
-          "display": {
-            "name": "Kamuflaż",
-            "when": "Gdy masz ten kolor w puli",
-            "effect": "+1 KP.",
-            "note": "",
-            "short": "Gdy masz ten kolor w puli: +1 KP.",
-            "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
-          }
+          "features": [
+            "mana_pathfinder"
+          ]
         },
         "Z": {
           "kind": "save_dexterity",
           "value": 1,
-          "label": "Instynkt: Gdy wykonujesz rzut obronny: +1 do rzutów obronnych Zręczności za kartę tego koloru. Łącznie maks. +2. Kumuluje się.",
           "cap": 2,
-          "stackable": true,
-          "display": {
-            "name": "Instynkt",
-            "when": "Gdy wykonujesz rzut obronny",
-            "effect": "+1 do rzutów obronnych Zręczności za kartę tego koloru.",
-            "note": "Łącznie maks. +2.",
-            "short": "Gdy wykonujesz rzut obronny: +1 do rzutów obronnych Zręczności za kartę tego koloru. Łącznie maks. +2.",
-            "stacking": "Każda kolejna karta: +1. Łącznie maks. +2."
-          }
+          "stackable": true
         },
         "F": {
           "kind": "feature",
@@ -652,16 +336,7 @@
           "features": [
             "scouts_vigilance"
           ],
-          "label": "Czujność zwiadowcy: Gdy wykrywasz ukrytego wroga: +2 do testu wykrywania. Nie dotyczy pułapek. Nie kumuluje się.",
-          "stackable": false,
-          "display": {
-            "name": "Czujność zwiadowcy",
-            "when": "Gdy wykrywasz ukrytego wroga",
-            "effect": "+2 do testu wykrywania.",
-            "note": "Nie dotyczy pułapek.",
-            "short": "Gdy wykrywasz ukrytego wroga: +2 do testu wykrywania. Nie dotyczy pułapek.",
-            "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
-          }
+          "stackable": false
         },
         "N": {
           "kind": "feature",
@@ -670,92 +345,75 @@
           "features": [
             "fighting_style_archery"
           ],
-          "label": "Łucznictwo: Atak dystansową bronią: +2 do testu ataku. Bez dodatkowej premii do obrażeń. Nie kumuluje się.",
-          "stackable": false,
-          "display": {
-            "name": "Łucznictwo",
-            "when": "Atak dystansową bronią",
-            "effect": "+2 do testu ataku.",
-            "note": "Bez dodatkowej premii do obrażeń.",
-            "short": "Atak dystansową bronią: +2 do testu ataku. Bez dodatkowej premii do obrażeń.",
-            "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
-          }
+          "stackable": false
         }
-      }
+      },
+      "trump_color": "Z"
     }
   },
   "abilities": {
     "second_wind": {
       "hero": "garran",
-      "minimum": 6,
+      "minimum": 2,
       "required": {},
       "free": false,
-      "burn": 1,
-      "description": "Rzuć 1k10 i dodaj modyfikator Kondycji. Odzyskaj tyle PW, najwyżej do swojego maksimum. Leczenie zajmuje akcję główną, więc konkuruje ze zwykłym atakiem."
+      "burn": 1
     },
     "defensive_stance": {
       "hero": "garran",
       "minimum": 0,
       "required": {},
       "free": true,
-      "burn": 0,
-      "description": "Otrzymujesz +2 KP. Każda zmiana pola kończy postawę; ponowne użycie nie zwiększa tej premii."
+      "burn": 0
     },
     "garran_command_halt": {
       "hero": "garran",
-      "minimum": 6,
+      "minimum": 2,
       "required": {},
       "free": false,
-      "burn": 1,
-      "description": "Wybierz wroga w zasięgu 60 ft (12 pól). Aplikacja wykonuje jego obronę Mądrości przeciw ST 14. Przy porażce wróg ma połowę ruchu i nie może używać reakcji. Przy sukcesie nie nakładasz efektu."
+      "burn": 1
     },
     "garran_guard_companion": {
       "hero": "garran",
       "minimum": 0,
       "required": {},
       "free": true,
-      "burn": 0,
-      "description": "Przed rozstrzygnięciem pojedynczego ataku na sąsiadującego sojusznika przejmij ten atak na siebie. Zużywasz reakcję. Nie obejmuje ataków obszarowych."
+      "burn": 0
     },
     "shield_bash": {
       "hero": "garran",
-      "minimum": 12,
+      "minimum": 4,
       "required": {},
       "free": false,
-      "burn": 1,
-      "description": "Wybierz sąsiadującego wroga. Rzuć k20 + modyfikator Siły + naładowanie; aplikacja rzuca za wroga i dodaje jego modyfikator testu. Musisz uzyskać wyższy wynik — remis wygrywa wróg. Wygrana: 1k6 + modyfikator Siły obrażeń i odepchnięcie o pole, jeśli jest wolne. Przegrana: brak efektu."
+      "burn": 1
     },
     "garran_shield_wall": {
       "hero": "garran",
-      "minimum": 12,
+      "minimum": 4,
       "required": {},
       "free": false,
-      "burn": 1,
-      "description": "Sąsiadujący sojusznicy otrzymują +2 KP. Ty nie otrzymujesz tej premii. Sojusznik poza sąsiedztwem traci ochronę."
+      "burn": 1
     },
     "garran_rally": {
       "hero": "garran",
-      "minimum": 12,
+      "minimum": 4,
       "required": {},
       "free": false,
-      "burn": 1,
-      "description": "Ty i słyszący sojusznicy w zasięgu 15 ft (3 pól) usuwacie Strach i macie przewagę pierwszego ataku: rzut dwiema k20, wyższy wynik."
+      "burn": 1
     },
     "iron_bastion": {
       "hero": "garran",
-      "minimum": 21,
+      "minimum": 6,
       "required": {},
       "free": false,
-      "burn": 1,
-      "description": "Uruchom aurę o promieniu 10 ft (2 pól). Ty i sojusznicy w niej macie premię do KP równą twojemu modyfikatorowi Siły oraz ochronę przed przymusowym przesunięciem. Nie opłacasz aury ponownie w kolejnych turach."
+      "burn": 1
     },
     "counterattack_command": {
       "hero": "garran",
-      "minimum": 21,
+      "minimum": 6,
       "required": {},
       "free": false,
-      "burn": 1,
-      "description": "Wybierz sojusznika w zasięgu 15 ft (3 pól), który ma reakcję. Każdy z was może przemieścić się do 10 ft (2 pól) bez ataków okazyjnych i wykonać jeden atak bronią. Sojusznik zużywa reakcję. Opisane ataki są częścią tej akcji."
+      "burn": 1
     },
     "rage": {
       "hero": "brakka",
@@ -787,35 +445,35 @@
     },
     "powerful_strike": {
       "hero": "brakka",
-      "minimum": 12,
+      "minimum": 4,
       "required": {},
       "free": false,
       "burn": 1
     },
     "shoulder_check": {
       "hero": "brakka",
-      "minimum": 12,
+      "minimum": 4,
       "required": {},
       "free": false,
       "burn": 1
     },
     "deafening_roar": {
       "hero": "brakka",
-      "minimum": 12,
+      "minimum": 4,
       "required": {},
       "free": false,
       "burn": 1
     },
     "reaper": {
       "hero": "brakka",
-      "minimum": 21,
+      "minimum": 6,
       "required": {},
       "free": false,
       "burn": 1
     },
     "unstoppable": {
       "hero": "brakka",
-      "minimum": 21,
+      "minimum": 6,
       "required": {},
       "free": false,
       "burn": 1
@@ -825,8 +483,7 @@
       "minimum": 0,
       "required": {},
       "free": true,
-      "burn": 0,
-      "description": "Wykonaj test Zręczności: k20 + cecha + naładowanie + inne premie. Aplikacja rozstrzyga wykrycie osobno dla każdego wroga; remis oznacza wykrycie. Sąsiadujący wróg lub blokujący stan uniemożliwia zwykłe ukrycie. Atak, wykrycie lub dobrowolne ujawnienie kończy ukrycie."
+      "burn": 0
     },
     "instinctive_dodge": {
       "hero": "mira",
@@ -844,64 +501,63 @@
     },
     "hamstring_cut": {
       "hero": "mira",
-      "minimum": 6,
+      "minimum": 2,
       "required": {},
       "free": false,
       "burn": 1
     },
     "smoke_screen": {
       "hero": "mira",
-      "minimum": 12,
+      "minimum": 4,
       "required": {},
       "free": false,
       "burn": 1
     },
     "guard_vault": {
       "hero": "mira",
-      "minimum": 12,
+      "minimum": 4,
       "required": {},
       "free": false,
       "burn": 1
     },
     "blade_mistress": {
       "hero": "mira",
-      "minimum": 12,
+      "minimum": 4,
       "required": {},
       "free": false,
       "burn": 1
     },
     "shadow_verdict": {
       "hero": "mira",
-      "minimum": 21,
+      "minimum": 6,
       "required": {},
       "free": false,
       "burn": 1
     },
     "blade_dance": {
       "hero": "mira",
-      "minimum": 21,
+      "minimum": 6,
       "required": {},
       "free": false,
-      "burn": 1,
-      "description": "Ruch do 15 ft bez ataków okazyjnych i dwa ataki w różnych wrogów po drodze. Pasywy many działają przy każdym trafieniu spełniającym warunek ukrycia lub własnej flanki."
+      "burn": 1
     },
     "sacred_flame": {
       "hero": "dagna",
-      "minimum": 6,
+      "minimum": 2,
       "required": {},
       "free": false,
       "burn": 1
     },
     "bless": {
       "hero": "dagna",
-      "minimum": 6,
+      "minimum": 2,
       "required": {},
       "free": false,
       "burn": 1
     },
     "lesser_restoration": {
       "hero": "dagna",
-      "minimum": 6,
+      "minimum": 2,
       "required": {},
       "free": false,
       "burn": 1
@@ -915,35 +571,35 @@
     },
     "healing_word": {
       "hero": "dagna",
-      "minimum": 12,
+      "minimum": 4,
       "required": {},
       "free": false,
       "burn": 1
     },
     "divine_care_aura": {
       "hero": "dagna",
-      "minimum": 12,
+      "minimum": 4,
       "required": {},
       "free": false,
       "burn": 1
     },
     "guiding_bolt": {
       "hero": "dagna",
-      "minimum": 12,
+      "minimum": 4,
       "required": {},
       "free": false,
       "burn": 1
     },
     "preserve_life": {
       "hero": "dagna",
-      "minimum": 21,
+      "minimum": 6,
       "required": {},
       "free": false,
       "burn": 1
     },
     "spiritual_weapon": {
       "hero": "dagna",
-      "minimum": 21,
+      "minimum": 6,
       "required": {},
       "free": false,
       "burn": 1
@@ -960,12 +616,11 @@
       "minimum": 0,
       "required": {},
       "free": true,
-      "description": "Podejrzyj dwie wierzchnie karty i odłóż je na wierzch w wybranej kolejności. Przy jednej karcie obejrzyj tylko ją. Bez tasowania.",
       "burn": 0
     },
     "mocking_shot": {
       "hero": "lorian",
-      "minimum": 6,
+      "minimum": 2,
       "required": {},
       "free": false,
       "burn": 1
@@ -979,58 +634,56 @@
     },
     "mana_recovery": {
       "hero": "lorian",
-      "minimum": 12,
+      "minimum": 4,
       "required": {},
       "free": false,
-      "description": "Przenieś do dwóch spalonych kart na spód talii, w wybranej kolejności. Nie odzyskujesz kart wygasłych ani uwięzionych. Zachowujesz ładunek. Bez spalania bazowego; każde podbicie spala 2 karty po odzysku.",
       "burn": 0
     },
     "optical_scope": {
       "hero": "lorian",
-      "minimum": 12,
+      "minimum": 4,
       "required": {},
       "free": false,
       "burn": 1
     },
     "entangling_shot": {
       "hero": "lorian",
-      "minimum": 12,
+      "minimum": 4,
       "required": {},
       "free": false,
       "burn": 1
     },
     "mana_great_tuning": {
       "hero": "lorian",
-      "minimum": 21,
+      "minimum": 6,
       "required": {},
       "free": false,
-      "description": "Przenieś do trzech spalonych kart na wierzch talii, w wybranej kolejności. Nie odzyskujesz kart wygasłych ani uwięzionych. Zachowujesz ładunek. Bez spalania bazowego; każde podbicie spala 2 karty po odzysku.",
       "burn": 0
     },
     "victory_hymn": {
       "hero": "lorian",
-      "minimum": 21,
+      "minimum": 6,
       "required": {},
       "free": false,
       "burn": 1
     },
     "nimra_frost_pulse": {
       "hero": "nimra",
-      "minimum": 6,
+      "minimum": 2,
       "required": {},
       "free": false,
       "burn": 1
     },
     "nimra_mind_spike": {
       "hero": "nimra",
-      "minimum": 6,
+      "minimum": 2,
       "required": {},
       "free": false,
       "burn": 1
     },
     "nimra_sticky_matrix": {
       "hero": "nimra",
-      "minimum": 6,
+      "minimum": 2,
       "required": {},
       "free": false,
       "burn": 1
@@ -1051,49 +704,49 @@
     },
     "nimra_flame_fan": {
       "hero": "nimra",
-      "minimum": 12,
+      "minimum": 4,
       "required": {},
       "free": false,
       "burn": 1
     },
     "nimra_force_wave": {
       "hero": "nimra",
-      "minimum": 12,
+      "minimum": 4,
       "required": {},
       "free": false,
       "burn": 1
     },
     "nimra_web": {
       "hero": "nimra",
-      "minimum": 12,
+      "minimum": 4,
       "required": {},
       "free": false,
       "burn": 1
     },
     "nimra_mind_break": {
       "hero": "nimra",
-      "minimum": 12,
+      "minimum": 4,
       "required": {},
       "free": false,
       "burn": 1
     },
     "nimra_lightning_path": {
       "hero": "nimra",
-      "minimum": 21,
+      "minimum": 6,
       "required": {},
       "free": false,
       "burn": 1
     },
     "shatter": {
       "hero": "nimra",
-      "minimum": 21,
+      "minimum": 6,
       "required": {},
       "free": false,
       "burn": 1
     },
     "nimra_stasis": {
       "hero": "nimra",
-      "minimum": 21,
+      "minimum": 6,
       "required": {},
       "free": false,
       "burn": 1
@@ -1121,49 +774,49 @@
     },
     "disrupting_arrow": {
       "hero": "erynd",
-      "minimum": 6,
+      "minimum": 2,
       "required": {},
       "free": false,
       "burn": 1
     },
     "anchoring_arrow": {
       "hero": "erynd",
-      "minimum": 12,
+      "minimum": 4,
       "required": {},
       "free": false,
       "burn": 1
     },
     "exposing_arrow": {
       "hero": "erynd",
-      "minimum": 12,
+      "minimum": 4,
       "required": {},
       "free": false,
       "burn": 1
     },
     "double_shot": {
       "hero": "erynd",
-      "minimum": 12,
+      "minimum": 4,
       "required": {},
       "free": false,
       "burn": 1
     },
     "arrow_rain": {
       "hero": "erynd",
-      "minimum": 21,
+      "minimum": 6,
       "required": {},
       "free": false,
       "burn": 1
     },
     "spike_growth": {
       "hero": "erynd",
-      "minimum": 21,
+      "minimum": 6,
       "required": {},
       "free": false,
       "burn": 1
     },
     "turn_undead": {
       "hero": "dagna",
-      "minimum": 12,
+      "minimum": 4,
       "required": {},
       "free": false,
       "burn": 1
@@ -1199,6 +852,7 @@
       "label": "Co drugą rundę: pierwsze trafienie więzi odkrytą kartę. Pokonanie więżącego oddaje kartę na spód. Brak karty powoduje mana drain."
     }
   },
-  "deck_rule": "Po max(5, 2 × liczba bohaterów) kart każdego koloru. Kandydat do oceny ekonomii trwałego ładowania.",
-  "passive_revision": 2
+  "deck_rule": "Po max(5, 2 × liczba bohaterów) kart każdego koloru. Pula: maks. 6 kart. Testy: +1 za fizyczną kartę. Ładunek zdolności: 1 za kartę, 2 za atut, maks. 6; progi 2/4/6.",
+  "passive_revision": 2,
+  "passives_version": 2
 }

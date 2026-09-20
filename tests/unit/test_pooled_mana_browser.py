@@ -57,29 +57,29 @@ try {
  const buttons = [...document.querySelectorAll('[role="dialog"] button')];
  check(buttons.length === 2, 'Not two choices');
  check(buttons[0].textContent.includes('Klucz'), 'Missing printed rune');
- check(buttons[0].textContent.includes('+7 pkt → 7 pkt'), 'Missing card point preview');
- check(document.querySelector('[role="dialog"] .mana-points-total').textContent.includes('0 pkt'), 'Missing current points inside choice');
+ check(buttons[0].textContent.includes('Atut → 2/6 ładunku · +1 do testów'), 'Missing card point preview');
+ check(document.querySelector('[role="dialog"] .mana-points-total').textContent.includes('0/6 kart'), 'Missing current points inside choice');
  buttons[0].click();
  check(call.body.command === 'pool_take' && call.body.index === 0, 'Wrong choice command');
  check(document.documentElement.scrollWidth <= innerWidth, 'Horizontal overflow');
  state.combat = {shared_mana: ready, current_actor: {id: 'brakka', name: 'Brakka'}};
  document.getElementById('app').innerHTML = pooledManaPointsHtml(state.combat, null, true) + combatTurnActorStatsHtml(state.combat);
- check(document.querySelector('.mana-points-total').textContent.includes('7 pkt'), 'Missing visible turn total');
- check(!document.getElementById('app').textContent.includes('pojemność'), 'Old capacity replaces points');
+ check(document.querySelector('.mana-points-total').textContent.includes('1/6 kart'), 'Missing visible turn total');
+ check(document.querySelector('.mana-points-summary').textContent.includes('Testy +1 · Ładunek 2/6'), 'Compact panel must distinguish bonus and ability charge');
  state.combat = {shared_mana: payment, current_actor: {id: 'enemy'}};
  document.getElementById('app').innerHTML = sharedManaHtml(state.combat);
  check(document.querySelector('[role="dialog"] .mana-points-total').textContent.includes('Garran'), 'Wrong paying actor');
- check(document.querySelector('[role="dialog"] .mana-points-total').textContent.includes('7 pkt'), 'Missing points during payment');
- check(document.querySelector('[role="dialog"] .mana-valued-card').textContent.includes('7 pkt'), 'Missing individual card value');
+ check(document.querySelector('[role="dialog"] .mana-points-total').textContent.includes('1/6 kart'), 'Missing points during payment');
+ check(document.querySelector('[role="dialog"] .mana-valued-card').textContent.includes('Atut · 2 ładunku'), 'Missing individual card value');
  check(document.documentElement.scrollWidth <= innerWidth, 'Payment point display overflows');
  check(document.querySelector('[role="dialog"]').textContent.includes('Zachowaj'), 'Missing retained charge reminder');
  check(document.querySelector('.mana-charge-statuses').textContent.includes('KP'), 'Missing passive status');
  check(document.querySelector('.mana-charge-statuses [data-stackable="false"]'), 'Missing nonstacking icon frame');
  check(!document.querySelector('.mana-charge-statuses').textContent.includes('×'), 'Unlock incorrectly shown as stacking');
- check(document.getElementById('app').textContent.includes('Naładowanie: +2 do testów'), 'Missing charge bonus');
+ check(document.getElementById('app').textContent.includes('Naładowanie: +1 do testów'), 'Missing charge bonus');
  state.combat = {shared_mana: paid, current_actor: {id: 'garran'}};
  document.getElementById('app').innerHTML = pooledManaPointsHtml(state.combat);
- check(document.querySelector('.mana-points-total').textContent.includes('7 pkt'), 'Charge disappeared after ability');
+ check(document.querySelector('.mana-points-total').textContent.includes('1/6 kart'), 'Charge disappeared after ability');
  document.getElementById('result').textContent = 'PASS';
 } catch(e) { document.getElementById('result').textContent = 'FAIL: ' + e.stack; }
 """

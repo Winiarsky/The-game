@@ -97,7 +97,7 @@ def test_full_charge_has_one_test_and_support_shows_accumulated_bonus(tmp_path: 
     store = c.read_store(s)
     state = rules.Confrontation.from_data(store['current']['state'])
     color = max(state.mana.point_values(state.actor.id), key=state.mana.point_values(state.actor.id).get)
-    state = charged(state, {state.actor.id: (color,) * 4})
+    state = charged(state, {state.actor.id: (color,) * 6})
     target = state.participants[1]
     state = replace(state, aids=((target.id, 3),))
     store['current']['state'] = state.to_data()

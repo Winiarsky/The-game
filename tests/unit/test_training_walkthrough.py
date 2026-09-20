@@ -268,7 +268,8 @@ def test_shield_lesson_requires_real_push_and_correct_boost(tmp_path: Path, boos
         send(s, 'boost', boost_id='damage', count=1)
     send(s, 'pay')
     assert guided.flag(s, 'phase') == 'exercise'
-    s.encounter_rng.seed(1)
+    # A natural 1 is not an automatic loss in a contest; account for charge.
+    s.encounter_rng.seed(1 if hit else 5)  # defender 5 or 20
     submit_shield_bash(s, {'attacker_roll': 20 if hit else 1})
     if hit:
         submit_shield_bash(s, {'damage_roll': 12 if boosted else 6})

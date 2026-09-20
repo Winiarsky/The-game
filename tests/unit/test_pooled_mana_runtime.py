@@ -125,8 +125,8 @@ def test_action_menu_shows_card_points_and_base_threshold_after_spending(heroes,
     prepare(s, 'B', 'C')
     option = next(o for o in s._combat_turn_action_options() if (o.action_id or o.source_id) == 'second_wind')
     note = menu_mana_payload(option, s.combat_state, s.active_combat_effects)['mana_cost_note']
-    assert 'Pula: 7 pkt' in note and 'Próg bazowy: 6 pkt' in note
+    assert 'Ładunek: 2/6' in note and 'Ładunek co najmniej 2/6' in note
     s.use_combat_class_feature('second_wind')
     send(s, 'pay')
     note = menu_mana_payload(option, s.combat_state, s.active_combat_effects)['mana_cost_note']
-    assert 'Pula: 7 pkt' in note
+    assert 'Ładunek: 2/6' in note

@@ -2,7 +2,7 @@
 
 Nazwy mechaniczne wyróżniamy pogrubieniem w opisach zasad. Odmiany fleksyjne
 pozostają naturalne: „wpływ”, „wpływu”; „rzut obronny”, „rzutu obronnego”.
-Lista form jest w `keywords.json`; treść jest escapowana przed generowaniem HTML.
+Lista form jest w `content/characters/karty_postaci.json` → `keywords`; treść jest escapowana przed generowaniem HTML.
 Nie pogrubiamy historii postaci, aby zwykłe użycie słowa nie wyglądało jak reguła.
 
 | Nazwa | Znaczenie w tej grze |

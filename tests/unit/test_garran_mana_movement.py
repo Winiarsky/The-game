@@ -184,9 +184,11 @@ def test_stale_remorse_penalties_and_saved_text_are_replaced(heroes: dict[str, A
     feature = next(f for f in actor.features if f.feature_id == FLAWS["garran"][0])
     stale = replace(feature, label="Wyrzuty sumienia", description="Stara dopłata za atak")
     payload = _feature_grant_payload(stale, "garran")
-    assert payload["label"] == "Nieustępliwość" and payload["mechanics"] == FLAWS["garran"][2]
+    from dnd_board_game.scenarios.character_text import hero_text
+    description = hero_text("garran")["flaw"]["description"]
+    assert payload["label"] == "Nieustępliwość" and payload["mechanics"] == description
     entry = _character_sheet_feature_entries((stale,), actor_id="garran")[0]
-    assert entry["name"] == "Nieustępliwość" and entry["rule_text"] == FLAWS["garran"][2]
+    assert entry["name"] == "Nieustępliwość" and entry["rule_text"] == description
 
 
 @pytest.mark.parametrize("prone", [False, True])

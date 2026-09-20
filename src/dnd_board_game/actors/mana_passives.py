@@ -13,6 +13,7 @@ from dnd_board_game.core.damage_types import DamageType
 SOURCE = 'mana_saturation:color'
 MIGRATION = 'mana_passives_v1'
 FEATURE_LABELS = {
+    'mana_pathfinder': 'Lekki krok',
     'iron_line': 'Żelazna linia',
     'fighting_style_defense': 'Styl walki: Obrona',
     'improved_critical': 'Ulepszony krytyk',
@@ -118,6 +119,8 @@ def color_passive_status(actor: Actor, passive: Mapping[str, object]) -> str:
         from .resources import can_spend_actor_resource
         return ('Gotowe — uratuje przed 0 PW' if can_spend_actor_resource(actor, 'relentless_endurance_uses')
                 else 'Zużyte — odnowi mana drain')
+    if passive['kind'] == 'temp_hp':
+        return 'Tymczasowe PW przy doborze'
     if str(passive['kind']).startswith('heal'):
         return 'Leczenie przy każdym doborze tego koloru'
     return 'Aktywne'

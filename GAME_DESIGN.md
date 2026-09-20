@@ -1,5 +1,14 @@
 # Game Design
 
+## Mana: sześć kart i atut — 20.09.2026
+
+Aktualne zasady zastępują starsze zapisy o 21 punktach: pula do 6 fizycznych kart,
++1 do testów za kartę. Atut daje 2 ładunku zdolności, inne kolory 1; ładunek
+maks. 6, progi 2/4/6. Trzy atuty odblokowują ultę, ale dobór trwa do 6 kart.
+Pasywy liczą fizyczne karty, spalanie pozostaje.
+Szczegóły i bilans talii: [Mana i atuty](docs/TRUMP_MANA.md).
+
+
 ## Postawa drużyny — 19.09.2026
 
 Wskaźnik ma siedem pól: Solidarność (3), Równowaga, Bezwzględność (3),
@@ -2505,3 +2514,8 @@ Najważniejsze przyszłe obszary rozwoju:
 * kampanie,
 * opcjonalny cyfrowy roller kości,
 * opcjonalne automatyczne rozpoznawanie rzutów fizycznych kości.
+
+
+## Unikalne pasywy many — 2026-09-20
+
+Wdrożono indywidualne zestawy pasywów walki i eksploracji dla siedmiu bohaterów. Katalogi są wspólnym źródłem dla zasad, UI i drukowanych mat; pełna rozpiska: [docs/DISTINCT_MANA_PASSIVES.md](docs/DISTINCT_MANA_PASSIVES.md).

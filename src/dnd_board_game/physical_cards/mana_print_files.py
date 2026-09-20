@@ -10,8 +10,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from dnd_board_game.character_creation import PLAYABLE_HERO_IDS
-from .mana_print import COLORS, PROFILE, COMMON_KEYS, MANA_PASSIVE_REMINDER, build_print_hero
-from dnd_board_game.scenarios.confrontation import REMINDER
+from .mana_print import COLORS, PROFILE, common_keys, mana_passive_reminder, build_print_hero
+from dnd_board_game.scenarios.confrontation import reminder
 from dnd_board_game.scenarios.confrontation_terms import effect_name
 from dnd_board_game.ui.board_panel_symbols import SYMBOLS, PANEL_CONTROLS
 from .mana_print_html import FORMATS, render_hero_html
@@ -124,7 +124,7 @@ def write_reference(output: Path, actor_ids: tuple[str, ...]) -> None:
         "roll_rules": "charge_replaces_proficiency_v1",
         "panel_symbols_version": 1,
         "panel_controls": PANEL_CONTROLS,
-        "common_keys": COMMON_KEYS,
+        "common_keys": common_keys(),
         "heroes": [hero.as_payload() for hero in heroes],
     }
     text = json.dumps(manifest, ensure_ascii=False, indent=2) + "\n"
@@ -136,7 +136,7 @@ def write_reference(output: Path, actor_ids: tuple[str, ...]) -> None:
         lines = [
             "# Siedem archetypów — ładowanie many 2.0",
             "",
-            "Źródło: katalog `content/balance/pooled_mana/catalog.json`, profile postaci i stałe oznaczenia panelu areny.",
+            "Teksty: `content/characters/karty_postaci.json`. Mechanika: katalog balansu, profile postaci i oznaczenia panelu areny.",
             "Wygenerowano przez `scripts/generate_mana_character_prints.py`.",
             "",
             "Każdy symbol oznacza osobną kartę. Biała: słońce (Plains); niebieska: kropla (Island); czarna: czaszka (Swamp); czerwona: płomień (Mountain); zielona: drzewo (Forest). Cyfra 1 w kółku: dowolny kolor.",
@@ -150,7 +150,7 @@ def write_reference(output: Path, actor_ids: tuple[str, ...]) -> None:
                 f"## {hero.name} — {hero.role}",
                 "",
                 f"PW {hero.hp}; KP {hero.ac}; ruch {hero.speed} ft.",
-                "Wspólna talia: po max(5, 2 × liczba bohaterów) kart każdego koloru. Oferta dwóch kart, dobór jednej na początku własnej tury poniżej 21 pkt. Ładunek pozostaje do draina; bazowa akcja spala 1 kartę z wierzchu, podbicie dodatkowe 2.",
+                "Wspólna talia: po max(5, 2 × liczba bohaterów) kart każdego koloru. Oferta dwóch kart, dobór jednej na początku własnej tury przy mniej niż 6 kartach. Atut daje 2 ładunku, reszta 1 (maks. 6); progi zdolności: 2/4/6. Pula pozostaje do draina; bazowa akcja spala 1 kartę z wierzchu, podbicie dodatkowe 2.",
                 "",
             ]
             for card in hero.cards:
@@ -161,13 +161,13 @@ def write_reference(output: Path, actor_ids: tuple[str, ...]) -> None:
             lines += ["", "### Eksploracja — NPC i obiekty", ""]
             for method in hero.exploration:
                 lines.append(f"- **{method.name} ({'NPC' if method.kind == 'npc' else 'obiekt'}):** {method.ability}, bazowy test {method.modifier:+d}; {effect_name(method.kind).lower()}: kość podatności {method.influence_modifier:+d}. {method.description}")
-            lines += ["", REMINDER, ""]
+            lines += ["", reminder(), ""]
             lines += [f"- **{COLORS[color]}:** {label}" for color, label in hero.exploration_passives]
             lines += ["", "### Pasywy i skaza", ""]
             lines += [f"- **{name}:** {body}" for name, body in hero.passives[:-1]]
             lines += ["", "#### Nasycenie maną", ""]
             lines += [f"- **{COLORS[color]}:** {label}" for color, label in hero.mana_passives]
-            lines += ["", MANA_PASSIVE_REMINDER]
+            lines += ["", mana_passive_reminder()]
             lines += ["", f"**Skaza — {hero.flaw[0]}:** {hero.flaw[1]}", ""]
         (ROOT / "docs/BOARDGAME_ARCHETYPES_LEVELS_1_3.md").write_text(
             "\n".join(lines), encoding="utf-8"

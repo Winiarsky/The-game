@@ -23,7 +23,7 @@ def test_all_passives_have_trigger_effect_and_explicit_stacking():
                     assert 'dobierzesz' in text['when']
 
 
-def test_print_uses_live_descriptions_and_preserves_recovery_diagram(monkeypatch):
+def test_print_uses_live_descriptions_and_shared_passive_reminder(monkeypatch):
     root=Path(__file__).resolve().parents[2]
     monkeypatch.syspath_prepend(str(root/'scripts'))
     mats=importlib.import_module('build_hero_mats')
@@ -33,7 +33,7 @@ def test_print_uses_live_descriptions_and_preserves_recovery_diagram(monkeypatch
         html=mats.mana_page(hero,{})
         assert html.count('class="mana-slot"')==5
         assert html.count('class="passive-block ')==10
-        assert 'mana_recovery.svg' in html
+        assert 'Pasywy bohatera' in html
         assert '63 × 88 mm' in html
-        assert 'Potwierdź' in html
+        assert 'potwierdź' in html
         assert 'postępu / postępu' not in html

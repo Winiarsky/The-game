@@ -9,14 +9,14 @@ from dnd_board_game.ui.board_panel_symbols import PANEL_CONTROLS, panel_icon
 
 from .mana_print import (
     COLORS,
-    MANA_PASSIVE_REMINDER,
+    mana_passive_reminder,
     PROFILE,
     TIMING,
-    TURN_REMINDERS,
+    turn_reminders,
     PrintAbility,
     PrintHero,
 )
-from dnd_board_game.scenarios.confrontation import REMINDER, CONDITION_HELP
+from dnd_board_game.scenarios.confrontation import reminder, condition_help
 
 FORMATS = ("color", "minimal", "cards", "bw_test")
 CSS = """
@@ -121,7 +121,7 @@ def reference_page(hero: PrintHero) -> str:
     )
     mana_note = (
         f'<div class="note"><h2>{escape(hero.passives[-1][0])}</h2>'
-        f'<ul class="mana-passives">{mana_rows}</ul><p>{escape(MANA_PASSIVE_REMINDER)}</p></div>'
+        f'<ul class="mana-passives">{mana_rows}</ul><p>{escape(mana_passive_reminder())}</p></div>'
         if side_passive else ""
     )
     flaw = f'<div class="box flaw"><h2>Skaza: {escape(hero.flaw[0])}</h2>{mana_text(hero.flaw[1])}</div>'
@@ -134,8 +134,8 @@ def reference_page(hero: PrintHero) -> str:
     {metamagic}<p><b>Broń — bez naładowania:</b><br>{weapons}</p>
     <div class="box"><b>Osobista pula — wartości twoich kolorów</b><br>
     {" · ".join(f"{mana_symbol(c)} {COLORS[c]}: <b>{value}</b>" for c, value in hero.mana_values)}<br>
-    Test: k20 + cecha + naładowanie + inne premie. Naładowanie: 0/6/12/21 pkt → +0/+2/+4/+6.<br>
-    Dobór jednej z dwóch kart na początku tury poniżej 21 pkt. Pula zostaje. Zdolności spalają talię; podbicie +2 karty. Zwykły atak bez spalania.</div>
+    Test: k20 + cecha + naładowanie + inne premie. Naładowanie: +1 za fizyczną kartę, maks. +6.<br>
+    Dobór jednej z dwóch kart na początku tury przy mniej niż 6 kartach. Pula zostaje. Zdolności spalają talię; podbicie +2 karty. Zwykły atak bez spalania.</div>
     <div class="columns"><div>{mana_note}</div><div>{flaw}
     <h2>Sterowanie</h2><div class="controls">{controls}</div><p class="muted">Ikona w aplikacji otwiera podgląd. Reakcje wybierasz w ich oknie. −, +, ✓ i ↩ działają w dotychczasowym rogu planszy.</p><p class="muted">Runy na planszy wybierają zdolności i kolory; wybór jednej z dwóch kart: Klucz/Gwiazda.</p>
     </div></div>"""
@@ -150,7 +150,7 @@ def dossier_page(hero: PrintHero) -> str:
 
 
 def turn_rules_page(hero: PrintHero) -> str:
-    reminders = "".join(f"<li>{escape(text)}</li>" for text in TURN_REMINDERS)
+    reminders = "".join(f"<li>{escape(text)}</li>" for text in turn_reminders())
     controls = "".join(
         f'<div class="note"><b>{panel_icon(slot)} {escape(title)}</b>{mana_text(text)}</div>'
         for slot, title, text in PANEL_CONTROLS
@@ -168,7 +168,7 @@ def exploration_page(hero: PrintHero) -> str:
     passives = ''.join(f'<p>{passive_mana_symbol(c, c in hero.stacking_exploration_colors)} <b>{COLORS[c]}:</b> {escape(label)}</p>' for c, label in hero.exploration_passives)
     return (f'<div class="grid exploration-cards">{cards}</div><h2>Pasywy kolorów w eksploracji</h2>{passives}'
             '<p>Wartości punktowe kolorów są takie same jak w walce. Premie działają, dopóki karta jest w puli; Oddech działa po udanej próbie.</p>'
-            f'<h2>Konfrontacja drużynowa</h2><p>{escape(REMINDER)}</p>'
+            f'<h2>Konfrontacja drużynowa</h2><p>{escape(reminder())}</p>'
             '<p><b>Pułapki w walce:</b> test Mądrości wykrywa; test Zręczności przy użyciu narzędzi dezaktywuje. Koszt akcji i pozycja obowiązują.</p>')
 
 
@@ -202,7 +202,7 @@ def render_hero_html(hero: PrintHero, format_id: str, *, portrait_path: Path | N
     pages.append(page(hero, "Pule many, spalanie i mana drain", turn_rules_page(hero), len(pages) + 1))
     pages.append(page(hero, "Eksploracja · NPC i obiekty", exploration_page(hero), len(pages) + 1))
     condition_body = '<p>Jedna jawna zasada na konfrontację. Przeczytaj stawkę przed rozpoczęciem.</p>' + ''.join(
-        f'<h2>{escape(title)}</h2><p>{escape(body)}</p>' for title, body in CONDITION_HELP)
+        f'<h2>{escape(title)}</h2><p>{escape(body)}</p>' for title, body in condition_help())
     condition_body += '<p><b>Plansza:</b> Dobór, siła testu, pomoc i warunki mają własne podświetlone runy. Jedna figurka drużyny, osobne pule każdego bohatera. Rzuty: fokus jednej kości, −/+, ✓ dalej, podsumowanie i poprawka przez ↩. Końcowe ✓ rozstrzyga test.</p>'
     pages.append(page(hero, 'Rozmowy · cztery warunki', condition_body, len(pages) + 1))
     return f"""<!doctype html><html lang="pl"><meta charset="utf-8"><title>{escape(hero.name)} — ładowanie many 2.0 — {format_id}</title>

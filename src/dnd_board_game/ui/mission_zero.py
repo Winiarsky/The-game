@@ -66,15 +66,33 @@ def active_panel(s: ExplorationUiSession) -> bool:
     return not active(s) and read(s)['stage'] != 'battle'
 
 
+def autosave(s: ExplorationUiSession) -> bool:
+    """Persist a completed mission step, never an unfinished combat operation.
+
+    Checkpoints remain separate starting positions for replaying a scene.
+    The latest snapshot includes rewards and decisions from repeated visits.
+    """
+    from .confrontation import read_store
+    from dnd_board_game.save import write_snapshot
+    if not enabled(s) or s.combat_state is not None or s._snapshot_blocker() is not None:
+        return False
+    confrontation = read_store(s)
+    if confrontation['active'] and confrontation['current']['state']['stage'] != 'result':
+        return False
+    write_snapshot(s.snapshot_path, s.create_snapshot())
+    s._record('mission_autosaved', dict(stage=read(s)['stage'], path=str(s.snapshot_path)))
+    return True
+
+
 def checkpoint(s: ExplorationUiSession, m: dict[str, Any]) -> None:
     from dnd_board_game.save import write_snapshot
-    if m['stage'] not in ('brief', 'road', 'arrival', 'explore'): return
-    path = s.save_dir / (MISSION_ID + '.' + m['stage'] + '.checkpoint.json')
-    if not path.exists() or m['stage'] not in m['visited']:
-        if m['stage'] not in m['visited']: m['visited'].append(m['stage'])
-        write(s, m)
-        write_snapshot(path, s.create_snapshot())
-        write_snapshot(s.snapshot_path, s.create_snapshot())
+    if m['stage'] in ('brief', 'road', 'arrival', 'explore'):
+        path = s.save_dir / (MISSION_ID + '.' + m['stage'] + '.checkpoint.json')
+        if not path.exists() or m['stage'] not in m['visited']:
+            if m['stage'] not in m['visited']: m['visited'].append(m['stage'])
+            write(s, m)
+            write_snapshot(path, s.create_snapshot())
+    autosave(s)
 
 
 def _set_actor(s: ExplorationUiSession, actor: Any) -> None:
@@ -191,7 +209,7 @@ def synchronize(s: ExplorationUiSession) -> None:
         if surrender_available(size,remaining,m['offered']) and not s._combat_has_pending_resolution() and not (s.combat_state.shared_mana and s.combat_state.shared_mana.pooled and s.combat_state.shared_mana.pooled.phase not in ('ready',)):
             m.update(stage='surrender',offered=True);write(s,m)
     if m['stage']=='battle' and s.combat_state is None and 'bell_battle' in s.resolved_encounter_trigger_ids:
-        m['stage']='post_battle';write(s,m)
+        m['stage']='post_battle';write(s,m);autosave(s)
 
 
 def combat_finished(s: ExplorationUiSession, conclusion: str) -> None:
@@ -211,6 +229,7 @@ def combat_finished(s: ExplorationUiSession, conclusion: str) -> None:
         for a in s.exploration.actors:
             if a.hp<=0:_set_actor(s,replace(a,hp=1,death_saves=DeathSaveState()))
     write(s,m)
+    autosave(s)
 
 
 def available_potions(s: ExplorationUiSession) -> list[tuple[Any, Any]]:
@@ -305,7 +324,7 @@ def payload(s: ExplorationUiSession) -> dict[str, Any] | None:
         pool=s.combat_state.shared_mana.pooled
         from dnd_board_game.combat.session import current_actor
         actor=current_actor(s.combat_state)
-        combat_tip=label(s,'combat_drain' if pool.phase=='drain' else 'combat_loaded' if str(actor.id) in pool.heroes and pool.points(str(actor.id))>=6 else 'combat_charge')
+        combat_tip=label(s,'combat_drain' if pool.phase=='drain' else 'combat_loaded' if str(actor.id) in pool.heroes and pool.full(str(actor.id)) else 'combat_charge')
     return dict(print_cutouts=asset_url(root(s),'maps/print/elements_A4.pdf') if (root(s)/'maps/print/elements_A4.pdf').exists() else '',roll_bonus=potion_data.get('bonus',0),print_map=asset_url(root(s),'maps/print/'+('guild' if stage=='guild_setup' else 'outpost')+'_A4.pdf'),combat_tip=combat_tip,point_positions=point_positions,roll_count=potion_data.get('dice',1),roll_sides=potion_data.get('sides',4),active=active_panel(s),stage=stage,revision=m['revision'],text=text,image=asset_url(root(s),image) if image and (root(s)/image).is_file() else '',
         equipment=preparation.payload(s,m),identification_dc=recovery.identification_dc(s),recovery=recovery.status_payload(s,m),reading=active_panel(s) and stage not in ('fatigue_roll','potion_roll','identify_roll',*preparation.STAGES),guild_points=guild_points(s) if stage=='guild_hub' else {},image_layout=image_layout,choices=controls,marker=marker,setup=setup,ledger=m['ledger'],debt=m['debt'],fatigue=m['fatigue'],checkpoints=checkpoints,
         ui=read_json(root(s),'text/ui.json'),rolling=stage in ('fatigue_roll','potion_roll','identify_roll'), can_save=s._snapshot_blocker() is None)

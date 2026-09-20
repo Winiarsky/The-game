@@ -17,13 +17,9 @@ from dnd_board_game.scenarios.pooled_mana_catalog import pool_ability, hero_prof
 @lru_cache(maxsize=256)
 def prepared_hand(hero: str, ability_id: str, boost: str, copies: int) -> tuple[str, ...]:
     if ability_id == "pool_charge":
-        from itertools import product
-        from dnd_board_game.rules.pooled_mana import COLORS
-        values = hero_profile(hero)["values"]
-        hands = [tuple(c for c, n in zip(COLORS, counts) for _ in range(n))
-                 for counts in product(range(copies + 1), repeat=5)
-                 if sum(values[c] * n for c, n in zip(COLORS, counts)) == 20]
-        return min(hands, key=lambda h: (len(h), h))
+        trump = hero_profile(hero)['trump_color']
+        other = next(c for c in hero_profile(hero)['values'] if c != trump)
+        return (trump, other, trump, other, trump)
     from dnd_board_game.rules.shared_mana_catalog import shared_ability
     ability = shared_ability(hero, ability_id)
     color = next((b.color for b in ability.boosts if b.id == boost), "")
@@ -42,7 +38,7 @@ def preparation(s: ExplorationUiSession) -> str:
     from .pooled_mana import NAMES
     text = "Po przetasowaniu kompletu przygotuj osobistą pulę: " + (", ".join(NAMES[c] for c in cards) if cards else "pusta — ta zdolność jest bez many") + ". Następnie odkryj dwie karty oferty; w tej przygotowanej lekcji nie dobierasz dodatkowej karty. "
     if step.ability.id == "pool_charge":
-        text = text.replace("w tej przygotowanej lekcji nie dobierasz dodatkowej karty", "dobierz jedną kartę do przygotowanych 20 pkt")
+        text = text.replace("w tej przygotowanej lekcji nie dobierasz dodatkowej karty", "dobierz szóstą kartę do osobistej puli")
     if step.ability.id in {"mana_recovery", "mana_great_tuning"}:
         from dnd_board_game.rules.pooled_mana import new_mana, confirm_shuffle
         pool = prepare_lesson(confirm_shuffle(new_mana((hero_id(s),), hero_id(s))), step.ability.id, cards)
@@ -96,7 +92,7 @@ def lesson_command(s: ExplorationUiSession, pool: PooledMana, action: str) -> Po
     if key == "pool_charge":
         pool = start_turn(pool, pool.actor)
         if pool.phase != "ready" or pool.draw_due:
-            raise ValueError("Przygotowana pula nie osiągnęła 21 pkt.")
+            raise ValueError("Przygotowana pula nie osiągnęła 6 kart.")
         success(s)
     elif key == "pool_expire":
         pool = start_turn(pool, "nessa", round_end=True)

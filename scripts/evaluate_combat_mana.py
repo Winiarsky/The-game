@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reproducible point-economy baseline, using the actual pooled-card rules."""
+"""Reproducible trump-card economy baseline, using the actual pooled-card rules."""
 from __future__ import annotations
 
 import argparse
@@ -22,7 +22,7 @@ def main() -> None:
     parser.add_argument("--samples", type=int, default=21)
     parser.add_argument("--rounds", type=int, default=8)
     parser.add_argument("--seed", type=int, default=20260914)
-    parser.add_argument("--sizes", default="1,3,5,7")
+    parser.add_argument("--sizes", default="3,4,5,6")
     parser.add_argument("--catalog", type=Path, default=DEFAULT_PATH)
     parser.add_argument("--output", type=Path, default=Path("/tmp/combat-mana-evaluation"))
     args = parser.parse_args()
@@ -30,8 +30,8 @@ def main() -> None:
     if not 1 <= args.samples <= 10000 or not 1 <= args.rounds <= 100 or any(n not in range(1, 8) for n in sizes):
         parser.error("samples: 1–10000, rounds: 1–100, sizes: 1–7")
     rows = compare(load_catalog(str(args.catalog.resolve())), args.samples, args.rounds, args.seed, sizes)
-    limitations = ["Nadwyżka ponad próg jest zachowaną mocą, nie stratą punktów. Ekonomia kart, bez modelu obrażeń, leczenia, pozycji i zwycięstwa w walce.",
-                  "Uwzględnia zatrzymanie na 21+, spalanie akcji, wygaśnięcie co rundę i odzysk Loriana. Nie mierzy siły bojowej premii kolorów ani sytuacyjnych skaz.",
+    limitations = ["Ładunek ponad próg jest zachowany, a nie wydawany. Ekonomia kart, bez modelu obrażeń, leczenia, pozycji i zwycięstwa w walce.",
+                  "Uwzględnia limit 6 fizycznych kart i próg ulty 6 ładunku (atut = 2, reszta = 1), spalanie akcji, wygaśnięcie co rundę i odzysk Loriana. Nie mierzy siły bojowej premii kolorów ani sytuacyjnych skaz.",
                   "Strategie są heurystyczne; medianę dojścia do ulta czytaj razem z odsetkiem nieosiągnięcia.",
                   "Składy i inicjatywa rotują cyklicznie; to nie wszystkie kombinacje drużyn.",
                   "Symulowane rundy nie określają czasu obsługi przez człowieka."]
@@ -47,7 +47,7 @@ def main() -> None:
     (args.output / "catalog.json").write_bytes(args.catalog.read_bytes())
     (args.output / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
     columns = ("players", "cards", "pressure", "policy", "trials", "ultimate_median_when_reached",
-               "ultimate_unreached_fraction", "drains_per_trial", "basic_attack_fraction", "fully_charged_fraction", "ability_uses_per_hero", "held_cards_mean", "overspend_mean_when_paid", "points_lost_per_drain")
+               "ultimate_unreached_fraction", "drains_per_trial", "basic_attack_fraction", "fully_charged_fraction", "ability_uses_per_hero", "held_cards_mean", "charge_above_threshold_mean", "charge_lost_per_drain")
     with (args.output / "report.csv").open("w", newline="") as stream:
         writer = csv.DictWriter(stream, columns, extrasaction="ignore")
         writer.writeheader()

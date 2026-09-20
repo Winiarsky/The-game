@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
-from dnd_board_game.rules.pooled_mana import COLORS, charge_roll_bonus, confirm_shuffle, reveal, take, report_removed, recover, tune, release
+from dnd_board_game.rules.pooled_mana import COLORS, confirm_shuffle, reveal, take, report_removed, recover, tune, release
 from dnd_board_game.rules.shared_mana import sync_pool, finish_mana_action
 from dnd_board_game.scenarios.pooled_mana_catalog import hero_profile
 from .board_panel_symbols import panel_icon, SYMBOLS
@@ -26,7 +26,7 @@ def view(session: ExplorationUiSession) -> dict[str, object] | None:
     bard = definition is not None and definition.stage == "cards"
     phase = "bard" if bard else pool.phase
     choices = []
-    instruction = "Zwykły atak zachowuje manę. Punkty dają premię do testów ataku, cech i obrony zamiast biegłości (0/6/12/21 pkt → +0/+2/+4/+6) i odblokowują zdolności; kolory dają osobne premie. Zdolności spalają wspólną talię; ładunek zostaje. Przy 21+ pkt nie dobierasz."
+    instruction = "Pula: maks. 6 kart. Każda karta daje +1 do testów, także ataków i obron. Do odblokowania zdolności atut liczy się jako 2, inne kolory jako 1: progi 2/4/6, ładunek maks. 6. Pasywy liczą fizyczne karty. Zdolności spalają wspólną talię; pula zostaje. Przy 6 kartach nie dobierasz."
     if phase in {"setup", "drain"}:
         instruction = ("Mana drain! " if phase == "drain" else "Nowa walka. ") + deck_instruction(pool) + " Zbierz także osobiste pule, ofertę, spalone, wygasłe i uwięzione karty tej talii. Premie ładunku i efekty O wygasają; odzyskane PW zostają. Potwierdź ✓."
         choices = [dict(slot=28, command="pool_shuffle", label="Komplet przetasowany")]
@@ -78,8 +78,8 @@ def view(session: ExplorationUiSession) -> dict[str, object] | None:
         color_passives = {c: {**p, 'status': color_passive_status(actor, p)}
                           for c, p in profile['color_passives'].items()}
         hands.append(dict(hero=hero, name=actors.get(hero, hero), cards=list(cards),
-                          total=pool.points(hero), roll_bonus=charge_roll_bonus(pool.points(hero)), values=pool.point_values(hero),
-                          passive=profile["passive"], flaw=profile["flaw"], color_passives=color_passives, charged=pool.points(hero) >= 21))
+                          total=pool.points(hero), card_count=len(cards), limit=6, trump_color=profile["trump_color"], roll_bonus=0 if pool.phase in {"setup", "drain"} else pool.roll_bonus(hero), values=pool.point_values(hero),
+                          passive=profile["passive"], flaw=profile["flaw"], color_passives=color_passives, charged=pool.full(hero), legacy_overflow=len(cards)>6))
     return dict(phase=phase, copies=pool.copies, total=pool.total, composition=pool.composition, excluded=list(pool.excluded), deck=len(pool.deck),
                 offer=list(pool.offer), burned=list(pool.burned), expired=list(pool.expired), prisons=dict(pool.prisons),
                 hands=hands, actor=pool.actor, instruction=instruction,

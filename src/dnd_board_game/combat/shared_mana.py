@@ -106,7 +106,7 @@ def synchronize_shared_effects(state: CombatState, effects: tuple[ActiveEffect, 
         if not pool.values:
             from dnd_board_game.rules.pooled_mana import COLORS
             from dnd_board_game.rules.shared_mana import sync_pool
-            pool = replace(pool, catalog_version=2, values=tuple((h, tuple(hero_profile(h)["values"][c] for c in COLORS)) for h in pool.heroes))
+            pool = replace(pool, catalog_version=3, values=tuple((h, tuple(hero_profile(h)["values"][c] for c in COLORS)) for h in pool.heroes))
             state = replace(state, shared_mana=sync_pool(state.shared_mana, pool))
         profiles = {h: hero_profile(h) for h in pool.heroes}
         retired_markers = {'sneak_attack_used', 'first_blood_used', 'field_medic_step_used',

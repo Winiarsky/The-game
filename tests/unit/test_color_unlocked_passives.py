@@ -175,7 +175,7 @@ def test_garran_blue_protects_self_white_only_ally_and_borders_match_stacking() 
         assert combat_armor_class(base,effects)==effective_armor_class(base)+expected
     hero=build_print_hero('garran')
     assert hero.stacking_mana_colors==('C','F')
-    assert hero.stacking_exploration_colors==('C','F')
+    assert hero.stacking_exploration_colors==('C',)
     html=render_hero_html(hero,'bw_test')
     assert 'data-stackable="true"' in html and 'data-stackable="false"' in html
 

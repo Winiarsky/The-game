@@ -246,6 +246,9 @@ def apply_damage_result(
         from .poison_protection import poison_protection_affinities
 
         affinities = poison_protection_affinities(actor, active_effects)
+        if any(getattr(e, 'actor_id', '') == str(actor.id) and getattr(e, 'kind', '') == 'charge_elemental_ward' for e in active_effects):
+            affinities = replace(affinities, resistances=tuple(dict.fromkeys((*affinities.resistances,
+                DamageType.FIRE, DamageType.COLD, DamageType.LIGHTNING))))
         raging_without_heavy_armor = (
             any(
                 getattr(effect, "actor_id", "") == str(actor.id)

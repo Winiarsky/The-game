@@ -28,10 +28,10 @@ def test_keyword_emphasis_escapes_content_and_literal_terms() -> None:
 def test_all_character_mats_have_mechanical_emphasis(monkeypatch) -> None:
     monkeypatch.syspath_prepend(str(ROOT / 'scripts'))
     mats = importlib.import_module('build_hero_mats')
-    copy = json.loads((COPY / 'copy.json').read_text())
+    copy = mats.print_copy()
     for hid in mats.PLAYABLE_HERO_IDS:
         hero = mats.build_print_hero(hid)
-        own = {**copy['heroes'][hid], 'exploration_copy': copy['exploration_passives']}
+        own = copy['heroes'][hid]
         actions = mats.actions_page(hero, own)
         mana = mats.mana_page(hero, own)
         assert actions.count('class="action"') == len(hero.cards)
@@ -46,7 +46,7 @@ def test_all_character_mats_have_mechanical_emphasis(monkeypatch) -> None:
 def test_player_aid_explains_each_mode_and_is_generated(monkeypatch) -> None:
     monkeypatch.syspath_prepend(str(ROOT / 'scripts'))
     mats = importlib.import_module('build_hero_mats')
-    pages = json.loads((COPY / 'player_aid.json').read_text())
+    pages = mats.load_text()['player_aid']
     assert [p['id'] for p in pages] == ['01_podstawy','02_walka','03_rozmowy','04_obiekty']
     for page in pages:
         html = mats.player_aid_page(page)
@@ -55,5 +55,5 @@ def test_player_aid_explains_each_mode_and_is_generated(monkeypatch) -> None:
         for section in page['sections']:
             assert section['title'] in html
     assert 'zwiększy premię do +3' in json.dumps(pages, ensure_ascii=False)
-    assert 'nie dodaje nowych powiązań' in json.dumps(pages, ensure_ascii=False)
-    assert 'postęp 3 + 4 + 1 = 8' in json.dumps(pages, ensure_ascii=False)
+    assert 'Inne pasywy mogą zmieniać' in json.dumps(pages, ensure_ascii=False)
+    assert 'postęp 3 + 4 = 7' in json.dumps(pages, ensure_ascii=False)

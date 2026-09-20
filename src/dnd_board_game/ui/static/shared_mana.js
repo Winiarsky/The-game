@@ -132,7 +132,7 @@ function sharedManaHtml(combat) {
     const hand = pool.hands.find(h => h.hero === pool.actor);
     decision = `<h3>${pool.phase === 'drain' ? 'Mana drain' : pool.phase === 'bard' ? 'Manipulacja many' : 'Pula many'}</h3>
       <p>${esc(pool.instruction)}</p><div class="mana-boost-options">${pool.choices.map(c => {
-        const button = `<button onclick="sharedManaCommand('${c.command}', {${c.index !== undefined ? `index: ${c.index}` : c.color ? `color: '${c.color}'` : ''}})">${c.icon} ${esc(c.rune)} · ${esc(c.label)}${pool.phase === 'choose' && hand ? ` · +${hand.values[c.color]} pkt → ${hand.total + hand.values[c.color]} pkt` : ''}</button>`;
+        const button = `<button onclick="sharedManaCommand('${c.command}', {${c.index !== undefined ? `index: ${c.index}` : c.color ? `color: '${c.color}'` : ''}})">${c.icon} ${esc(c.rune)} · ${esc(c.label)}${pool.phase === 'choose' && hand ? ` · ${hand.values[c.color]===2?'Atut':'Mana'} → ${Math.min(6,hand.total + hand.values[c.color])}/6 ładunku · +1 do testów` : ''}</button>`;
         return pool.phase === 'choose' && hand ? `<article class="mana-choice-option">${button}${manaPassiveDescriptionHtml(hand.color_passives?.[c.color],true)}</article>` : button;
       }).join('')}</div>`;
   } else if (declaration) {
@@ -161,7 +161,7 @@ function sharedManaHtml(combat) {
   if (mana.pool_view) {
     const pool = mana.pool_view;
     const owner = pool.hands.find(h => h.hero === pool.actor);
-    const handHtml = h => `<p><b>${esc(h.name)}: ${h.total} pkt</b> · Naładowanie: +${h.roll_bonus ?? 0} do testów · ${manaPointCardsHtml(h.cards, h.values)}</p>`;
+    const handHtml = h => `<p><b>${esc(h.name)}: ${h.cards.length}/6 kart · ładunek ${h.total}/6</b> · Naładowanie: +${h.roll_bonus ?? 0} do testów · ${manaPointCardsHtml(h.cards, h.values)}</p>`;
     return `<section class="physical-mana" aria-label="Osobiste pule many">
       <div class="mana-summary"><b>Osobiste pule many</b><span>Talia: ${pool.deck} · Spalone: ${pool.burned.length} · Wygasłe: ${(pool.expired || []).length} · Uwięzione: ${Object.values(pool.prisons).reduce((n,c)=>n+c.length,0)} · Komplet: ${pool.total}</span></div>
       <p>Odkryte: ${manaCostHtml(pool.offer)}</p>

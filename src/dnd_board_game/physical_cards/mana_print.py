@@ -8,7 +8,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from functools import lru_cache
 
-from dnd_board_game.character_creation import PLAYABLE_HERO_IDS, HERO_ARCHETYPES_BY_ID
+from dnd_board_game.character_creation import PLAYABLE_HERO_IDS
 from dnd_board_game.character_creation.physical_mana import apply_physical_mana_profile
 from dnd_board_game.character_creation.physical_mana_help import (
     physical_mana_flaw,
@@ -22,13 +22,15 @@ from dnd_board_game.rules.physical_mana import hero_abilities
 from dnd_board_game.ui.combat_keyboard import shortcut_for_option
 from dnd_board_game.ui.board_panel_symbols import ability_panel_slot
 
+from dnd_board_game.scenarios.character_text import load_text, revision
+
 PROFILE = "pooled_mana_v01"
-MANA_PASSIVE_REMINDER = (
-    "Pasywy są zablokowane, dopóki nie masz karty odpowiedniego koloru. "
-    "Gruba obwódka symbolu: kumuluje się za kolejne karty tego koloru (według limitu). Cienka: nie kumuluje się. "
-    "Utrata ostatniej karty koloru, drain i koniec walki wyłączają pasyw. "
-    "Drain resetuje użycie Nieustępliwości; nowa czarna mana odblokowuje ją ponownie. Odzyskane PW pozostają. Dobór do 21+ pkt."
-)
+
+
+def mana_passive_reminder() -> str:
+    return load_text()['tutorial']['mana_passive_reminder']
+
+
 TIMING = {"A": "Akcja główna", "D": "Akcja dodatkowa", "R": "Reakcja", "MOD": "Modyfikacja"}
 COLORS = {
     "C": "Czerwona",
@@ -38,28 +40,14 @@ COLORS = {
     "F": "Czarna",
     "*": "Dowolna",
 }
-COMMON_KEYS = (
-    ("", "Atak", "Jedna akcja główna: k20 + cecha + naładowanie + inne premie. Zwykły atak nie spala kart; pula zostaje."),
-    ("", "Ruch", "Bez many. Możesz dzielić ruch na odcinki; pole to 5 ft. Trudny teren zwiększa koszt w stopach."),
-    ("", "Broń", "Wybierz broń lub chwyt; aplikacja pokazuje koszt zmiany."),
-    ("", "Przedmiot", "Otwórz ekwipunek; czas działania i koszt wskazuje opis przedmiotu."),
-    ("", "Koniec tury", "Rozlicz efekty. Zachowaj pulę; dobór następuje na początku kolejnej własnej tury."),
-    ("✓", "Potwierdź", "Potwierdź wybór, płatność, wynik rzutu lub fizyczną operację kart przyciskiem w rogu planszy."),
-    ("↩", "Wróć", "Anuluj podgląd przed płatnością. Opłacone działanie trzeba rozstrzygnąć."),
-)
-TURN_REMINDERS = (
-    "Każdą walkę zacznij od zebrania i przetasowania kompletu. Liczba kart: po max(5, 2 × liczba bohaterów) każdego z pięciu kolorów.",
-    "Odkryj dwie karty. Poniżej 21 pkt na początku własnej tury weź jedną do puli; druga zostaje dla następnego bohatera. Przed jego wyborem uzupełnij ofertę do dwóch.",
-    "Karty przechodzą między turami. Punkty 6/12/21 odblokowują zdolności. Przy 21+ pkt przestajesz dobierać do mana draina. Kolory uruchamiają osobne pasywy.",
-    "Zdolność zachowuje CAŁĄ pulę. Bazowe użycie spala 1 kartę z wierzchu po efekcie, każde podbicie +2 karty. Wyjątki podano na kartach. Nie potrzebujesz koloru podbicia w puli.",
-    "Test ataku, działania lub obrony: k20 + cecha + naładowanie + inne premie. Trafienie porównaj z KP. Zamiast biegłości: 0/6/12/21 pkt daje +0/+2/+4/+6. Naładowanie nie zwiększa obrażeń.",
-    "Zwykły atak jest bez many. Darmowe zdolności zachowują pulę, nadal zużywają swoją akcję lub reakcję. Ruch działa normalnie.",
-    "Spalone karty leżą osobno. Co rundę 1 karta z wierzchu wygasa; nie można jej odzyskać przed drainem. Uwięzione pozostają przy przeciwniku; po jego pokonaniu wracają na spód talii.",
-    "Jeśli nie można wykonać pełnego spalenia/uwięzienia, następuje mana drain. Także gdy przy obowiązkowym doborze brak karty zarówno w ofercie, jak i w talii.",
-    "Drain: zbierz i przetasuj WSZYSTKIE karty, również osobiste pule, spalone, wygasłe i uwięzione. Wyłóż nową ofertę. Drain nie odnawia akcji, reakcji ani pasywek i nie daje dodatkowego doboru.",
-    "T: do początku następnej tury źródła. O: do mana draina; koncentracja i opisane warunki mogą zakończyć wcześniej. Premie kolorów również znikają przy drainie.",
-    "Runy wybierają kolory, karty i zdolności. Rzuty: fokus jednej kości, −/+, ✓ do następnej, podsumowanie i końcowe ✓. ↩ pozwala poprawić wynik.",
-)
+
+
+def common_keys() -> tuple:
+    return tuple(load_text()['tutorial']['common_keys'])
+
+
+def turn_reminders() -> tuple:
+    return tuple(load_text()['tutorial']['turn_reminders'])
 
 
 @dataclass(frozen=True, slots=True)
@@ -135,8 +123,12 @@ def ability_key(hero_id: str, ability_id: str, timing: str) -> str:
     return shortcut_for_option(hero_id, _KeyOption(option_id, ability_id, ability_id)) or "MENU"
 
 
-@lru_cache(maxsize=7)
 def build_print_hero(hero_id: str) -> PrintHero:
+    return _build_print_hero(hero_id, revision())
+
+
+@lru_cache(maxsize=14)
+def _build_print_hero(hero_id: str, text_revision: tuple[str, int, int]) -> PrintHero:
     # Reuse the canonical curated starter build; no fixed copies of HP/AC/scores.
     from .character_card_sets import _starter_builds, _SKILL_ABILITIES
     from dnd_board_game.scenarios.loader import compile_actor_combat_content
@@ -147,7 +139,8 @@ def build_print_hero(hero_id: str) -> PrintHero:
     if hero_id not in PLAYABLE_HERO_IDS:
         raise ValueError(f"Nieznany bohater: {hero_id}")
     actor = apply_physical_mana_profile(_starter_builds()[1][hero_id][1].actor)
-    profile = HERO_ARCHETYPES_BY_ID[hero_id]
+    from dnd_board_game.scenarios.character_text import hero_text, present_ability
+    profile = hero_text(hero_id)
     ability_ids = ("strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma")
     scores = tuple(
         (
@@ -184,10 +177,10 @@ def build_print_hero(hero_id: str) -> PrintHero:
             a.id, a.name, ability_key(hero_id, a.id, a.timing), a.timing, (), requirement_text(a.id, hero_id) + " " + ability_description(hero_id, a.id),
             ability_panel_slot(hero_id, a.id), ability_sections(hero_id, a.id),
         )
-        for a in hero_abilities(hero_id)
+        for a in map(present_ability, hero_abilities(hero_id))
     )
     flaw = physical_mana_flaw(hero_id)
-    role = "Bard — zarządzanie maną, kusza i kontrola" if hero_id == "lorian" else profile.role
+    role = profile['role']
     return PrintHero(
         hero_id,
         actor.name,
@@ -210,9 +203,9 @@ def build_print_hero(hero_id: str) -> PrintHero:
         tuple((n.name, n.body) for n in physical_mana_passives(hero_id)),
         (flaw.name, flaw.body),
         (
-            ("Historia", profile.history),
-            ("Dlaczego podróżuje", profile.motivation),
-            ("Cel osobisty", profile.personal_goal),
+            ("Historia", profile['history']),
+            ("Dlaczego podróżuje", profile['motivation']),
+            ("Cel osobisty", profile['personal_goal']),
         ),
         tuple(PrintExploration(kind, 'Podejście ze sceny', kind, 'Cecha podejścia', 0, (),
               'Wybierz runą podejście dostępne w tej scenie. Określa cechę, ST, kość efektu i dozwolone wsparcie. Wybór zostaje do końca konfrontacji.')

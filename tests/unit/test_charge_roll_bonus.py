@@ -19,7 +19,7 @@ from tests.unit.test_mana_charge import pool
 from tests.unit.test_physical_mana import session_for
 
 
-@pytest.mark.parametrize('points,bonus', [(0,0),(5,0),(6,2),(11,2),(12,4),(20,4),(21,6),(27,6)])
+@pytest.mark.parametrize('points,bonus', [(0,0),(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,6)])
 def test_shared_threshold_boundaries(points: int, bonus: int) -> None:
     assert charge_roll_bonus(points) == bonus
 
@@ -39,12 +39,12 @@ def test_each_hero_live_weapon_preserves_attribute_and_damage(heroes, tmp_path, 
     bare = attack_source_with_combat_effects(actor,source,())
     charge = tuple(e for e in s.active_combat_effects if e.kind == 'charge_accuracy')
     full = attack_source_with_combat_effects(actor,source,charge)
-    assert sum(m.value for m in full.attack_roll_request.modifiers) == sum(m.value for m in bare.attack_roll_request.modifiers) + 6
+    assert sum(m.value for m in full.attack_roll_request.modifiers) == sum(m.value for m in bare.attack_roll_request.modifiers) + 3
     assert full.damage_components == bare.damage_components
     assert attack_source_with_combat_effects(actor,full,charge).attack_roll_request == full.attack_roll_request
     assert attack_source_with_combat_effects(actor,full,()).attack_roll_request == bare.attack_roll_request
     payload = s.state_payload()['combat']['shared_mana']['pool_view']
-    assert next(h for h in payload['hands'] if h['hero']==hero)['roll_bonus'] == 6
+    assert next(h for h in payload['hands'] if h['hero']==hero)['roll_bonus'] == 3
 
 
 def test_spell_attack_charge_stacks_with_other_bonuses_and_reset_removes_it(heroes,tmp_path) -> None:
@@ -57,7 +57,7 @@ def test_spell_attack_charge_stacks_with_other_bonuses_and_reset_removes_it(hero
     source = replace(source,attack_roll_request=replace(source.attack_roll_request,modifiers=(
         *source.attack_roll_request.modifiers,RollModifier('Wsparcie',2,RollModifierType.SITUATIONAL,'aid'))))
     result = attack_source_with_combat_effects(actor,source,effects)
-    assert sum(m.value for m in result.attack_roll_request.modifiers) == ability_modifier(actor.ability_scores.wisdom)+6+2
+    assert sum(m.value for m in result.attack_roll_request.modifiers) == ability_modifier(actor.ability_scores.wisdom)+3+2
     empty = charge_effects(confirm_shuffle(drain(p,'test')),{'dagna':hero_profile('dagna')})
     result = attack_source_with_combat_effects(actor,result,empty)
     assert sum(m.value for m in result.attack_roll_request.modifiers) == ability_modifier(actor.ability_scores.wisdom)+2
@@ -74,7 +74,7 @@ def test_expertise_and_tool_proficiency_removed_without_changing_legacy(heroes,t
     p = pool('mira',('Z','Z','Z'))
     state = replace(s.combat_state,shared_mana=sync_pool(s.combat_state.shared_mana,p))
     request = charged_check_request(state,actor,D20RollRequest(modifiers=new))
-    assert sum(m.value for m in request.modifiers) == ability_modifier(actor.ability_scores.dexterity)+6
+    assert sum(m.value for m in request.modifiers) == ability_modifier(actor.ability_scores.dexterity)+3
     assert charged_check_request(state,actor,request)==request
     traits = apply_actor_d20_traits(actor,request,D20RollKind.ABILITY_CHECK)
     assert sum(m.value for m in traits.modifiers)==sum(m.value for m in request.modifiers)
@@ -86,7 +86,7 @@ def test_save_combines_charge_and_color_once_and_obeys_drain(heroes) -> None:
     effects = charge_effects(pool('garran',('B','B','F')),{'garran':hero_profile('garran')})
     request = SavingThrowRequest('constitution',15,'test')
     result = resolve_actor_saving_throw(actor,request,natural_roll=10,active_effects=effects)
-    assert result.total == 10+2+4+1  # KON, 17 charge points, black passive.
+    assert result.total == 10+2+3+1  # KON, three physical cards, black passive.
     assert sum(m.value for m in saving_throw_roll_modifiers(actor,'constitution'))==2
     assert resolve_actor_saving_throw(actor,request,natural_roll=10).total==12
 
@@ -95,9 +95,9 @@ def test_npc_confrontation_has_no_proficiency_or_double_charge() -> None:
     from tests.unit.test_confrontation import game,charged
     from dnd_board_game.rules.confrontation import declare
     s=charged(game(),{'garran':('B','B','B')})
-    assert s.actor.test_modifier==s.actor.impact_modifier==4
-    assert declare(s,6).check_modifier==10
-    assert declare(s,0).check_modifier==4
+    assert s.actor.test_modifier==s.actor.impact_modifier
+    assert declare(s,3).check_modifier==s.actor.test_modifier+3
+    assert declare(s,0).check_modifier==s.actor.test_modifier
 
 
 def test_trap_request_uses_current_pool_on_both_sides_of_drain(heroes,tmp_path) -> None:
@@ -110,8 +110,8 @@ def test_trap_request_uses_current_pool_on_both_sides_of_drain(heroes,tmp_path) 
     trap=SimpleTrap('test','Pułapka',actor.position)
     request=trap_request(actor,trap,'detect',state=state)
     base=ability_modifier(actor.ability_scores.wisdom)
-    assert sum(m.value for m in request.modifiers)==base+6
-    assert resolve_trap_check(state,trap,'detect',10,tools_available=True).total==10+base+6
+    assert sum(m.value for m in request.modifiers)==base+3
+    assert resolve_trap_check(state,trap,'detect',10,tools_available=True).total==10+base+3
     state=replace(state,shared_mana=sync_pool(state.shared_mana,drain(p,'test')))
     assert sum(m.value for m in trap_request(actor,trap,'detect',state=state).modifiers)==base
 
@@ -125,7 +125,8 @@ def test_saved_confrontation_drops_old_proficiency_without_resetting_cards() -> 
     from dnd_board_game.scenarios.confrontation import scene_by_id
     from tests.unit.test_confrontation import game,charged
     from dnd_board_game.rules.confrontation import declare
-    state=declare(charged(game(),{'garran':('B','B','B')}),6).to_data()
+    state=declare(charged(game(),{'garran':('B','B','B')}),3).to_data()
+    base_modifier=state['participants'][0]['test_modifier']
     state['participants'][0]['test_modifier']+=2
     state['check_modifier']+=2
     current={'state':state,'scene':scene_by_id('nessa_raise')}
@@ -134,8 +135,8 @@ def test_saved_confrontation_drops_old_proficiency_without_resetting_cards() -> 
         exploration=SimpleNamespace(actors=tuple(training_hero(h) for h in ('garran','brakka','dagna'))))
     result=read_store(session)['current']
     assert result['roll_rules_version']==2
-    assert result['state']['check_modifier']==10
-    assert result['state']['participants'][0]['test_modifier']==4
+    assert result['state']['check_modifier']==base_modifier+3
+    assert result['state']['participants'][0]['test_modifier']==base_modifier
     assert result['state']['mana']['pools']==json.loads(raw)['current']['state']['mana']['pools']
 
 
@@ -149,9 +150,9 @@ def test_concentration_and_its_preview_share_charge_and_color(heroes,tmp_path) -
     result=PlayerCombatResourceFlowService().resolve_concentration_check(
         state=s.combat_state,active_effects=effects,actor_id=str(actor.id),effect_ids=(),
         damage=10,dc=15,natural_roll=10)
-    assert dict(result.event_payload)['total']==17
+    assert dict(result.event_payload)['total']==16
     pending=PendingConcentrationCheck(actor_id=str(actor.id),effect_ids=(),damage=10,dc=15)
-    assert _pending_concentration_check_payload(pending,s.combat_state,effects)['modifier']==7
+    assert _pending_concentration_check_payload(pending,s.combat_state,effects)['modifier']==6
 
 
 def test_shield_bash_charge_changes_contest_but_not_damage(heroes,tmp_path) -> None:
@@ -167,7 +168,7 @@ def test_shield_bash_charge_changes_contest_but_not_damage(heroes,tmp_path) -> N
         shared_mana=sync_pool(s.combat_state.shared_mana,p))
     result=resolve_shield_bash(state,board=s._active_encounter().board,target_id=str(enemy.id),
         attacker_roll=10,defender_roll=1,damage_roll=3)
-    assert result.attacker_total==18
+    assert result.attacker_total==17
     assert result.defender_total==1+ability_modifier(enemy.ability_scores.strength)
     assert result.damage.damage.total_applied==7
 

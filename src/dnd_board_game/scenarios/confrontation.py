@@ -6,25 +6,19 @@ from pathlib import Path
 import json
 from dnd_board_game.rules.exploration_mana_catalog import HEROES
 from dnd_board_game.rules.confrontation import PASSIVE_KINDS
+from dnd_board_game.rules.confrontation_passives import STACKING
 from dnd_board_game.rules.pooled_mana import COLORS
 from dnd_board_game.core.player_labels_pl import ABILITY_LABELS_PL
+from .character_text import load_text, hero_text, passive_label, revision
 
-REMINDER = ('Konfrontacja drużynowa: przed przygotowaniem talii każdy bohater wybiera runą podejście dostępne w tej scenie. Wybór obowiązuje do końca konfrontacji; podejście „Dla jednej postaci” znika po wyborze, a „Może się powtarzać” pozostaje dostępne. Podejście określa cechę, ST, kość wpływu / postępu i dozwolone cele pomocy. Powiązania wsparcia są jednostronne. '
-            'Każdy ma własną pulę i turę. Poniżej 21 pkt obowiązkowo wybierz jedną z dwóch odkrytych kart; druga zostaje. '
-            'Przy 21+ nie dobierasz, bez kary za przekroczenie. Po doborze: własny test albo pomoc +1 do najbliższej próby testu sojusznika (+2 ze Współpracą). Pomoc sumuje się i cała znika po jego próbie, także nieudanej. Test i pomoc spalają po 1 karcie. Zamiast nich możesz podejrzeć dolną kartę i zostawić ją na spodzie lub przenieść na wierzch: bez spalania, za całe działanie. Reakcja po rundzie nadal obowiązuje. '
-            'Premia many +0/+2/+4/+6 wymaga 0/6/12/21 pkt; test korzysta z najwyższego osiągniętego progu, zawsze za 1 kartę. '
-            'Test: k20 + cecha + naładowanie + pozostałe premie. Sukces: kość podatności + cecha + premie = wpływ (NPC) / postęp (obiekt). '
-            'Pula pozostaje. Pasywy działają, dopóki masz dany kolor, bez limitu tur. Gruba obwódka symbolu: kumuluje się; cienka: nie. '
-            'Oddech: po udanej próbie przełóż najstarszą spaloną kartę na spód talii i potwierdź ✓, potem opłać test. Drain wyłącza wszystkie pasywy. '
-            'Spalanie z wierzchu po efekcie, także przy niepowodzeniu. Po rundzie sytuacja reaguje. '
-            'Opór 0 = sukces. Brak kart do wymaganej operacji kończy konfrontację; najpierw rozstrzygnij rozpoczęte działanie. Bez ostatniej darmowej kolejki. '
-            'Na nową konfrontację zbierz cały komplet i przetasuj. Runy wybierają działania; rzuty przez fokus, −/+, podsumowanie i ✓.')
-CONDITION_HELP = (
-    ('Częściowe porozumienie', 'Po zbiciu połowy oporu i opłaceniu testu rozstrzygnij ofertę: przyjmij kompromis albo jawnie odrzuć go i kontynuuj.'),
-    ('Drażliwy temat', 'Dobranie wskazanego koloru zmienia cenę i korzyść sukcesu całej drużyny.'),
-    ('Dodatkowy cel', 'Dwie niebieskie karty w pulach drużyny przy sukcesie dają dodatkową informację.'),
-    ('Przysługa za przysługę', 'Raz: odzyskaj najstarszą spaloną kartę na spód za zobowiązanie, które pozostaje także po porażce.'),
-)
+
+def reminder() -> str:
+    return load_text()['tutorial']['exploration_reminder']
+
+
+def condition_help() -> tuple[tuple[str, str], ...]:
+    return tuple(tuple(item) for item in load_text()['tutorial']['conditions'])
+
 
 @dataclass(frozen=True, slots=True)
 class Lesson:
@@ -59,15 +53,26 @@ def validate_approaches(approaches: list[dict]) -> None:
                 or ('*' in links and len(links) != 1)):
             raise ValueError('Powiązania pomocy muszą wskazywać podejścia tej sceny lub samo *.')
 
-@lru_cache(maxsize=1)
 def catalog() -> dict:
-    data = json.loads((Path(__file__).resolve().parents[3] / 'content/balance/confrontation.json').read_text())
-    if data['version'] != 1 or set(data['passives']) != set(HEROES):
+    path = Path(__file__).resolve().parents[3] / 'content/balance/confrontation.json'
+    return _catalog(revision(path), revision())
+
+
+@lru_cache(maxsize=8)
+def _catalog(balance_revision: tuple, text_revision: tuple) -> dict:
+    data = json.loads(Path(balance_revision[0]).read_text())
+    for hid, profile in data['passives'].items():
+        for color, passive in profile.items():
+            passive['display'] = dict(hero_text(hid)['passives']['exploration'][color])
+            passive['label'] = passive_label(passive['display'])
+    for lesson in data['lessons']:
+        lesson.update(load_text()['tutorial']['exploration_lessons'][lesson['id']])
+    if data['version'] != 2 or set(data['passives']) != set(HEROES):
         raise ValueError('Nieprawidłowy katalog konfrontacji.')
     for profile in data['passives'].values():
         if set(profile) != set(COLORS) or any(p['kind'] not in PASSIVE_KINDS or not p['label'] for p in profile.values()):
             raise ValueError('Nieprawidłowe pasywy konfrontacji.')
-        if any(p.get('stackable') is not (p['kind'] in {'test','impact'}) for p in profile.values()):
+        if any(p.get('stackable') is not (p['kind'] in ({'test','impact'} | STACKING)) for p in profile.values()):
             raise ValueError('Obwódka kumulacji musi odpowiadać działaniu pasywu konfrontacji.')
     ids = {s['id'] for s in data['scenes']}
     if len(ids) != len(data['scenes']):

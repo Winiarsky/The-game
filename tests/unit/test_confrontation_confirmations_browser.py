@@ -38,11 +38,7 @@ def test_confirmation_visible_and_operable(tmp_path: Path, recovery: bool, width
   const recovery=p.phase==='recovery';
   check(controls.textContent.includes(recovery?'kartę spaloną najwcześniej':'Nessa stawia'),'instruction outside fixed controls');
   check(!controls.textContent.includes('Test: mana'),'test must not bypass confirmation');
-  if(recovery){
-   const diagram=controls.querySelector('.mana-recovery-diagram');
-   check(diagram,'recovery diagram missing');
-   await wait(()=>diagram.complete&&diagram.naturalWidth>0);
-  }
+  check(!controls.querySelector('.mana-recovery-diagram'),'recovery uses text only');
   const action=recovery?'confirm_recovery':'decline_compromise';
   const choice=p.board_choices.find(c=>c.action===action);
   const button=controls.querySelector(`[data-mana-slot="${choice.slot}"]`);

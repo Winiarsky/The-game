@@ -16,11 +16,13 @@ from dnd_board_game.rules.shared_mana_catalog import shared_ability, SharedAbili
 
 
 def declared_ability(hero_id: str, ability_id: str) -> SharedAbility | None:
+    from dnd_board_game.scenarios.character_text import present_ability
     if hero_id == "dagna" and ability_id == "spiritual_weapon_activation":
-        return SharedAbility(hero_id, ability_id, "Duchowy oręż — aktywacja", "D", "basic", "B", "Przesuń broń do 20 ft i wykonaj jeden atak.")
+        return present_ability(SharedAbility(hero_id, ability_id, "", "D", "basic", "B", ""))
     if ability_id.startswith("basic_attack:"):
         return SharedAbility(hero_id, ability_id, "Zwykły atak", "A", "basic", "", "Zwykły atak bronią; uwzględnij skazę bohatera.")
-    return shared_ability(hero_id, ability_id)
+    ability = shared_ability(hero_id, ability_id)
+    return present_ability(ability) if ability else None
 
 if TYPE_CHECKING:
     from .exploration_app import ExplorationUiSession
@@ -107,7 +109,7 @@ def _quote(session: ExplorationUiSession, declaration: ManaDeclaration, *, subst
             target_ids.add(getattr(pending, "target_id", ""))
     if state.shared_mana.pooled is not None:
         if substitution:
-            raise ValueError("Pasyw jest już uwzględniony w punktach; nie zmienia fizycznego koloru.")
+            raise ValueError("Kolor atutowy jest już uwzględniony w ładunku; nie zmienia fizycznego koloru karty.")
         from dnd_board_game.combat.pooled_mana import quote_pool
         from dnd_board_game.scenarios.pooled_mana_catalog import pool_ability, hero_profile
         return quote_pool(state, actor, ability, pool_ability(ability.id, str(actor.id)),
@@ -164,7 +166,7 @@ def payload(session: ExplorationUiSession) -> dict[str, object] | None:
                     result["declaration"]["sections"] = ability_sections(declaration.actor_id, ability.id)
                     result["declaration"]["description"] = requirement_text(ability.id, declaration.actor_id) + " " + ability_description(declaration.actor_id, ability.id)
                 else:
-                    result["declaration"]["description"] = "Akcja dodatkowa, bez many: przesuń broń i wykonaj atak."
+                    result["declaration"]["description"] = ability.description
         if ability.id == 'garran_guard_companion' and session.pending_enemy_turn_intent:
             intent = session.pending_enemy_turn_intent
             result['declaration']['context'] = (

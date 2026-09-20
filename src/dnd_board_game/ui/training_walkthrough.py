@@ -2,15 +2,13 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from functools import lru_cache
-import json
 import random
-from pathlib import Path
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from dnd_board_game.application.recruitment_arena import ARENA_ID, HERO_ORDER
-from dnd_board_game.application.training_walkthrough import TrainingStep, steps
+from dnd_board_game.application.training_walkthrough import TrainingStep
+from dnd_board_game.scenarios.character_text import load_text, tutorial_steps as steps
 from dnd_board_game.actors import Faction
 from dnd_board_game.combat.context_menu import CombatMenuAction
 from dnd_board_game.combat.scene import scene_flag, set_scene_flag
@@ -22,10 +20,6 @@ if TYPE_CHECKING:
     from dnd_board_game.combat.context_menu import CombatMenuOption
 
 
-INTRO = ('Najpierw poznasz dobór, przechowywanie, spalanie i drain. Każda walka zaczyna się '
-         'od przetasowania kompletu. W lekcjach zdolności jawnie przygotujemy pulę wskazaną '
-         'w instrukcji. Ładunek pozostaje; po zdolności spalasz karty z wierzchu. Rzuty wpisujesz '
-         'fokusem i −/+, a na końcu zatwierdzasz podsumowanie. Na końcu samodzielny pojedynek.')
 
 
 def enabled(s: ExplorationUiSession) -> bool:
@@ -110,7 +104,7 @@ def launch(s: ExplorationUiSession, hero: str, index: int, *, show_introduction:
     s.ui_flow_stage = ExplorationFlowStage.LOCATION_ACTIVE
     s._refresh_pending_encounter()
     s.pending_encounter = replace(s.pending_encounter, precombat_stealth_completed=True)
-    s._add_message('Nessa · samouczek', INTRO if index == 0 else 'Kolejne ćwiczenie: usuń poprzednie kukły i pomocników. Ustaw figurki zgodnie z podświetleniem; teren pozostaje bez zmian.')
+    s._add_message('Nessa · samouczek', load_text()['tutorial']['intro'] if index == 0 else 'Kolejne ćwiczenie: usuń poprzednie kukły i pomocników. Ustaw figurki zgodnie z podświetleniem; teren pozostaje bez zmian.')
     s.start_encounter_setup()
     from dnd_board_game.combat import SetupStep, SetupStepKind
     from dnd_board_game.hardware.led_palette import LedColor
@@ -367,24 +361,23 @@ def payload(s: ExplorationUiSession) -> dict[str, object]:
                       boost_cost=["*", "*"] if boost else [])
     if lesson and step:
         from .pooled_mana_training import preparation as pool_preparation
-        from dnd_board_game.scenarios.pooled_mana_catalog import requirement_text, hero_profile, ability_description
+        from dnd_board_game.scenarios.pooled_mana_catalog import requirement_text, ability_description
         if step.ability.category == 'tutorial':
-            lesson.update(cost=[], instruction=step.ability.description, narration=step.ability.description)
+            lesson.update(cost=[], instruction=step.ability.description)
         else:
-            profile = hero_profile(hero)
             lesson.update(cost=[], explanation=requirement_text(step.ability.id, hero) + " " + ability_description(hero, step.ability.id),
-                          narration=pool_preparation(s) + " " + profile["passive"] + " Skaza: " + profile["flaw"],
+                          narration=pool_preparation(s) + " " + lesson["narration"],
                           instruction=exercise_instruction(s, step, instruction))
     notice = None
     token = notice_id(s)
     if token:
         notice = dict(lesson or dict(name='Samodzielny pojedynek', cost=[], icon='',
             explanation='Kukła: 30 PW, KP 13, ruch 30 ft, jeden atak wręcz +3, obrażenia 1k6. Pokonaj ją, używając poznanych zdolności.',
-            instruction='Odzyskujesz pełne PW. Zbierz komplet podany w panelu many i przetasuj. Pule są puste; dobór poniżej 21 pkt na początku twojej tury. Kukła co drugą rundę spala dwie karty po trafieniu.',
+            instruction='Odzyskujesz pełne PW. Zbierz komplet podany w panelu many i przetasuj. Pule są puste; dobór poniżej 6 kart na początku twojej tury. Kukła co drugą rundę spala dwie karty po trafieniu.',
             narration='Teraz wybory należą do ciebie. Potwierdź przygotowanie kart; następnie rzucimy na inicjatywę.'))
         notice.update(id=token, phase=phase, button='✓ Wykonaj ćwiczenie' if phase == 'briefing' and step else '✓ Rozpocznij pojedynek' if phase == 'briefing' else '✓ Następna sytuacja' if phase == 'success' else '✓ Przygotuj ponowną próbę')
         if phase == 'introduction':
-            notice.update(intro=INTRO if not flag(s, 'intro_seen', False) else '',
+            notice.update(intro=load_text()['tutorial']['intro'] if not flag(s, 'intro_seen', False) else '',
                 instruction='Naciśnij ✓, aby przejść do ustawiania figurek. Teren pozostaje na miejscu.'
                     if flag(s, 'terrain_ready', False) else 'Naciśnij ✓, aby rozpocząć przygotowanie planszy. Każdy element ustawimy osobno.',
                 button='✓ Przejdź do ustawiania')
@@ -436,7 +429,7 @@ def payload(s: ExplorationUiSession) -> dict[str, object]:
             else:
                 notice['name'] = 'Pojedynek wygrany' if combat_winner(s.combat_state) == Faction.ALLY else 'Koniec próby'
                 notice['narration'] = 'Samodzielna próba zakończona. Postęp kursu po kolei pozostaje zachowany.'
-    return dict(guided=True, run_mode='single' if single_case(s) else 'sequence', intro=INTRO, current=lesson, index=index, total=total,
+    return dict(guided=True, run_mode='single' if single_case(s) else 'sequence', intro=load_text()['tutorial']['intro'], current=lesson, index=index, total=total,
                 completed_count=index, complete=False, phase=phase, notice=notice,
                 can_retry=True)
 
@@ -462,10 +455,8 @@ def synchronize(s: ExplorationUiSession) -> None:
         s.board_selection_revision += 1
 
 
-@lru_cache(maxsize=1)
 def narration_content() -> dict[str, dict[str, str]]:
-    path = Path(__file__).resolve().parents[3] / 'content/tutorials/walkthrough.json'
-    data = json.loads(path.read_text())['heroes']
+    data = {hid: h['tutorial'] for hid, h in load_text()['heroes'].items()}
     if set(data) != set(HERO_ORDER):
         raise ValueError('Narracja wymaga siedmiu bohaterów.')
     for hero in HERO_ORDER:

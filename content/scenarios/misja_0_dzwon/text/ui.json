@@ -56,9 +56,9 @@
   "potion_used": "Mikstura zużyta",
   "cancel": "Anuluj",
   "equip": "Przekaż amulet",
-  "combat_help": "Ruch i zwykły atak są dostępne bez ładowania. Na początku tury poniżej 21 pkt wybierz jedną z dwóch kart. Progi 6/12/21 odblokowują zdolności; użycie zachowuje pulę i spala karty. Podbicie spala dodatkowo 2. Po mana drainie zbierz wszystkie strefy i przetasuj. Przeciwnika przy 0 HP usuń z planszy; tutaj oznacza to wyeliminowanie z walki. Zamalowane budynki są zamknięte podczas walki; ich wnętrza odwiedzicie później.",
-  "combat_charge": "Poniżej 21 pkt dobierz jedną z dwóch kart. Zwykły atak nie spala many; próg 6 odblokowuje pierwsze zdolności.",
-  "combat_loaded": "Zachowujesz ładunek po użyciu zdolności. Wybierz zwykłe użycie albo podbicie za dodatkowe spalanie. Od 21 pkt nie dobierasz.",
+  "combat_help": "Ruch i zwykły atak są dostępne bez ładowania. Na początku tury przy mniej niż 6 kartach wybierz jedną z dwóch kart. Progi 2/4/6 ładunku (atut = 2, reszta = 1) odblokowują zdolności; użycie zachowuje pulę i spala karty. Podbicie spala dodatkowo 2. Po mana drainie zbierz wszystkie strefy i przetasuj. Przeciwnika przy 0 HP usuń z planszy; tutaj oznacza to wyeliminowanie z walki. Zamalowane budynki są zamknięte podczas walki; ich wnętrza odwiedzicie później.",
+  "combat_charge": "Mając mniej niż 6 kart dobierz jedną z dwóch kart. Zwykły atak nie spala many; ładunek 2 odblokowuje pierwsze zdolności, 6 ultę.",
+  "combat_loaded": "Zachowujesz ładunek po użyciu zdolności. Wybierz zwykłe użycie albo podbicie za dodatkowe spalanie. Przy 6 fizycznych kartach nie dobierasz. Każda daje +1 do testów.",
   "combat_drain": "Mana drain: zbierz także osobiste pule, spalone, wygasłe i uwięzione karty. Przetasuj pełny komplet. Zmęczenie z drogi pozostaje.",
   "pack_edit": "Teksty tej misji możesz edytować w content/scenarios/misja_0_dzwon/text/.",
   "treasury": "Pieniądze drużyny zapisano u pierwszego bohatera jako wspólny depozyt.",
@@ -118,5 +118,6 @@
   "summary_bell": "Los dzwonu",
   "key_return": "Klucz oddany Gildii",
   "equipment_open": "Ekwipunek drużyny",
-  "cart_coerce": "Wymuście zamianę wozu · Bezwzględność"
+  "cart_coerce": "Wymuście zamianę wozu · Bezwzględność",
+  "autosave": "Autozapis po każdym etapie"
 }

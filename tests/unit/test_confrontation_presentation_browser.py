@@ -27,6 +27,12 @@ const check=(v,m)=>{if(!v)throw Error(m)};
 const wait=async f=>{for(let i=0;i<180;i++){if(f())return;await new Promise(r=>setTimeout(r,25))}throw Error('timeout')};
 const field=async(slot)=>{await wait(()=>!busy&&!boardPanelSyncPromise);await api('/api/board/select',{col:19,row:29-slot},'');await wait(()=>!busy)};
 const press=async(action,extra=null)=>{const c=state.exploration_mana.board_choices.find(c=>c.action===action&&(!extra||Object.entries(extra).every(([k,v])=>c.extra[k]===v)));check(c,'missing '+action);await field(c.slot)};
+const checkManaPortrait=(showHero=true)=>{
+ const p=state.exploration_mana, hero=p.party.find(h=>h.id===p.actor);
+ const portrait=document.querySelector('.confrontation-scene-image');
+ check(portrait?.getAttribute('src')===(showHero?hero.portrait_url:p.image_url),'portrait must match the current step');
+ check(portrait.alt===(showHero?p.actor_name:p.scene.name),'portrait must name its subject');
+};
 const bounds=()=>{
  const panel=document.getElementById('mission-panel');
  check(panel.classList.contains('confrontation-view')&&!panel.classList.contains('mission-reading'),'dedicated layout');
@@ -84,16 +90,31 @@ try{
  check(instruction.includes('30 kart')&&instruction.includes('czerwone: 6'),'deck composition');
  check(!instruction.includes('Figurka')&&!instruction.includes('(5,7)'),'setup contains coordinates');
  await press('acknowledge');bounds();
+ checkManaPortrait(false);
  await press('color',{color:'F'});await press('color',{color:'B'});bounds();
+ checkManaPortrait();
  await press('undo');bounds();
  check(state.exploration_mana.mana.offer.length===1,'undo wrong color');
+ checkManaPortrait(false);
  check(document.querySelector('.confrontation-controls').innerText.includes('Nie dobieraj kolejnej'),'physical correction instruction');
  await press('color',{color:'N'});bounds();
  const options=[...document.querySelectorAll('.confrontation-offer [data-mana-slot]')];
  check(options.length===2,'two physical card choices');
+ check(document.querySelector('.confrontation-offer .mana-passive-description'),'card choice retains passive explanations');
+ check(!document.querySelector('.confrontation-offer img'),'passive choices use text without diagrams');
  check(options.every(el=>el.getBoundingClientRect().bottom<=innerHeight),'choice below viewport');
  await press('take',{index:0});bounds();
+ checkManaPortrait(false);
  check(state.exploration_mana.party.some(h=>h.cards.includes('F')),'selected card not recorded');
+ const heroColumns=[...document.querySelectorAll('.confrontation-party>article')];
+ check(heroColumns.length===state.exploration_mana.party.length,'keep one column per hero');
+ for(const [index,column] of heroColumns.entries()){
+  const hero=state.exploration_mana.party[index];
+  check(JSON.stringify([...column.querySelectorAll('li')].map(li=>li.textContent.trim()))===JSON.stringify(hero.passives.map(p=>p.display.name)),'party lists only passive names');
+  check(!column.querySelector('.mana-passive-description,details,.mana-recovery-diagram,img.recovery-diagram'),'no passive explanations or diagrams in party columns');
+  if(hero.cards.length) check(column.querySelector('p svg'),'collected mana symbols remain visible');
+ }
+
  check(state.exploration_mana.mana.offer[0]==='N','other card not retained');
  const choices=state.exploration_mana.board_choices;
  check(choices.filter(c=>c.action==='test').length===1,'one test at current charge');
@@ -107,9 +128,12 @@ try{
  await press('color',{color:'C'});bounds();
  check(state.exploration_mana.mana.burned===1,'reported burn recorded');
  await press('advance');
+ checkManaPortrait(false);
  while(state.exploration_mana.mana.phase==='reveal') await press('color');
+ checkManaPortrait();
  await press('take',{index:0});await press('peek');bounds();
  check(state.exploration_mana.phase==='peek_choice','peek must go directly to position choice');
+ checkManaPortrait(false);
  check(!state.exploration_mana.board_choices.some(c=>c.action==='peek_color'||c.action==='color'),'no color reporting during peek');
  check(!document.querySelector('.peeked-mana'),'no color display for physical peek');
  await press('peek_finish',{move_top:true});bounds();

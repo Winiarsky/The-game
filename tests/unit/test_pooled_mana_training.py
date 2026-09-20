@@ -72,7 +72,7 @@ def test_free_weapon_attack_completes_saving_lesson_and_keeps_pool(tmp_path, her
     enemy = s._actor_by_string_id("recruitment_dummy")
     s.select_player_attack_target_at_position(enemy.position)
     s.confirm_player_attack_target()
-    s.submit_player_attack_roll(natural_roll=1, natural_roll_2=1, natural_rerolls=(1,) if hero == "mira" else ())
+    s.submit_player_attack_roll(natural_roll=1, natural_roll_2=1, natural_rerolls=())
     assert s.shared_mana_declaration is None
     assert s.combat_state.shared_mana.pooled.hand(hero) == hand
     assert guided.flag(s, "phase") == "success"
@@ -88,6 +88,6 @@ def test_charge_and_expiry_lessons_use_runes_and_finish(tmp_path, hero, lesson):
         assert s.combat_state.shared_mana.pooled.phase == "expire"
         send(s, "pool_color", color="Z")
     else:
-        assert s.combat_state.shared_mana.pooled.points(hero) >= 21
+        assert len(s.combat_state.shared_mana.pooled.hand(hero)) == 6
         assert not s.combat_state.shared_mana.pooled.draw_due
     assert guided.flag(s, "phase") == "success"

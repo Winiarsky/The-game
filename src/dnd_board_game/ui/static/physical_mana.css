@@ -63,6 +63,5 @@
 .mana-passive-description .passive-effect{font-weight:500}
 .mana-passive-description .passive-instruction{font-weight:600}
 .mana-passive-description details{font-size:.85em;margin-top:.45em}
-.mana-recovery-diagram{display:block;width:100%;max-width:320px;height:auto;max-height:78px;object-fit:contain;border-radius:6px;margin:6px 0}
 
 .mana-choice-option{padding:12px;border:1px solid #7776;border-radius:8px}.mana-choice-option>button{width:100%;margin-bottom:8px}

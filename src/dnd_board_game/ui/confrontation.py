@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from dnd_board_game.rules import confrontation as rules
 from dnd_board_game.rules.pooled_mana import COLORS
 from dnd_board_game.rules.exploration_mana_catalog import HEROES, COLOR_NAMES
-from dnd_board_game.scenarios.confrontation import lessons_for, lesson_by_id, scene_by_id, passives, REMINDER
+from dnd_board_game.scenarios.confrontation import lessons_for, lesson_by_id, scene_by_id, passives, reminder
 from dnd_board_game.combat.scene import scene_flag, set_scene_flag
 from dnd_board_game.world import Coordinate
 from dnd_board_game.scenarios.confrontation_terms import effect_name, effect_text
@@ -28,6 +28,13 @@ def read_store(s: ExplorationUiSession) -> dict[str, Any]:
     if data.get('version') != 1:
         raise ValueError('Nieobsługiwana wersja konfrontacji drużynowej.')
     current = data.get('current')
+    if current and current['state'].get('passive_rules_version', 1) < 2:
+        previous = rules.Confrontation.from_data(current['state'])
+        def refreshed(participant: rules.Participant) -> rules.Participant:
+            return replace(participant, passives=tuple((c, info['kind']) for c, info in passives(participant.id).items()))
+        current['state'] = replace(previous, participants=tuple(refreshed(p) for p in previous.participants),
+            approach_options=tuple(tuple(refreshed(p) for p in options) for options in previous.approach_options),
+            passive_rules_version=2).to_data()
     if current and current['state']['stage'] == 'peek_color':
         current['state'] = rules.Confrontation.from_data(current['state']).to_data()
     if current and current.get('roll_rules_version', 1) < 2:
@@ -37,6 +44,9 @@ def read_store(s: ExplorationUiSession) -> dict[str, Any]:
         fresh = build(tuple(actors[p['id']] for p in state['participants']), current['scene'])
         for index, participant in enumerate(fresh.participants):
             previous = state['participants'][index]
+            if fresh.approach_options and previous.get('approach_id'):
+                participant = next((option for option in fresh.approach_options[index]
+                                    if option.approach_id == previous['approach_id']), participant)
             delta = participant.test_modifier - previous['test_modifier']
             if index == state['turn'] and state['stage'] == 'check':
                 state['check_modifier'] += delta
@@ -302,6 +312,10 @@ def command(s: ExplorationUiSession, data: dict[str, Any]) -> dict[str, object]:
                   compromise_pending=_compromise_pending(current, state),
                   compromise_declined=bool(current.get('compromise_declined')), last=state.last))
     write(s, store)
+    current = store.get('current') or {}
+    if current.get('mode') == 'mission' and current['state']['stage'] == 'result':
+        from .mission_zero import autosave
+        autosave(s)
     return s.state_payload()
 
 
@@ -349,11 +363,11 @@ def payload(s: ExplorationUiSession) -> dict[str, Any]:
             if pool.deck[0] == color or (pool.deck[0] is None and known.count(color) < pool.composition[color]):
                 options.append(choice(13 + i, 'color', COLOR_NAMES[i], color=color))
     elif pool.phase == 'choose':
-        options.extend(choice(6+i, 'take', f'Weź {COLOR_NAMES[COLORS.index(c)]} · {pool.point_values(state.actor.id)[c]} pkt', index=i) for i,c in enumerate(pool.offer))
+        options.extend(choice(6+i, 'take', f'Weź {COLOR_NAMES[COLORS.index(c)]} · +1 do testów', index=i) for i,c in enumerate(pool.offer))
     elif state.stage == 'turn':
         _, bonus, cost = rules.available_tiers(state)[-1]
         options.append(choice(18, 'test', f'Test: mana +{bonus} · spal {cost} kartę', bonus=bonus))
-        options.extend(choice(6+HEROES.index(p.id), 'support', f'Pomóż: {p.name} (+{rules.support_bonus(state)}, razem +{dict(state.aids).get(p.id,0)+rules.support_bonus(state)}) · spal 1', target=p.id) for p in rules.support_targets(state))
+        options.extend(choice(6+HEROES.index(p.id), 'support', f'Pomóż: {p.name} (+{rules.support_bonus(state, p.id)}, razem +{dict(state.aids).get(p.id,0)+rules.support_bonus(state, p.id)}) · spal {rules.perks.support_cost(state)}', target=p.id) for p in rules.support_targets(state))
         options.append(choice(19, 'peek', 'Podejrzyj spód talii · bez spalania' if pool.deck else 'Czekaj · talia pusta'))
         if state.condition == 'favor' and not state.obligation and pool.burned:
             options.append(choice(25, 'favor', 'Przyjmij zobowiązanie · odzyskaj kartę'))
@@ -383,8 +397,8 @@ def payload(s: ExplorationUiSession) -> dict[str, Any]:
     if lesson.id in {'charge', 'reaction'}:
         values = pool.point_values(state.actor.id)
         high, low = max(values, key=values.get), min(values, key=values.get)
-        count = 2 if lesson.id == 'charge' else 3
-        preparation = [f'Ćwiczenie zaczyna się z przygotowanym ładunkiem: połóż {count} karty koloru {COLOR_NAMES[COLORS.index(high)]} w puli {state.actor.name}.']
+        count = 5 if lesson.id == 'charge' else 6
+        preparation = [f'Ćwiczenie: przygotuj pulę {state.actor.name} zgodnie z kolorami widocznymi na ekranie ({count} kart).']
         if lesson.id == 'charge':
             preparation.append(f'Wyłóż ofertę: {COLOR_NAMES[COLORS.index(high)]}, {COLOR_NAMES[COLORS.index(low)]}. Pozostałe karty przetasuj jako talię.')
         else:
@@ -409,7 +423,7 @@ def payload(s: ExplorationUiSession) -> dict[str, Any]:
     return dict(model='party_confrontation', active=True, revision=store['revision'], phase=state.stage,
         correction_notice=current.get('correction_notice', ''),
         compromise_pending=_compromise_pending(current, state),
-        recovery_color=state.recovery_color,
+        recovery_color=state.recovery_color, recovery_label=state.recovery_label, recovery_cost=state.cost,
         recovery_color_name=COLOR_NAMES[COLORS.index(state.recovery_color)] if state.recovery_color else '',
         image_url=scene_image,
         choosing_approach=state.stage == 'approach',
@@ -427,14 +441,15 @@ def payload(s: ExplorationUiSession) -> dict[str, Any]:
         last=effect_text(state.last, scene['kind']), last_total=state.last_total, last_impact=state.last_impact,
         mana=dict(phase=pool.phase, reason=pool.reason, deck=len(pool.deck), burned=len(pool.burned), copies=pool.copies,
                   total=pool.total, composition=pool.composition, preparation=deck_instruction(pool), excluded=list(pool.excluded),
-                  offer=list(pool.offer), pending=pool.pending_count, points=pool.points(state.actor.id)),
-        party=[dict(id=p.id,name=p.name,assigned=bool(p.approach_id) or not state.approach_options,portrait_url=portraits.get(p.id),method=p.method,dc=p.dc,die=p.die,points=pool.points(p.id),
+                  offer=list(pool.offer), pending=pool.pending_count, points=pool.points(state.actor.id), card_count=len(pool.hand(state.actor.id)), limit=6, roll_bonus=pool.roll_bonus(state.actor.id)),
+        party=[dict(id=p.id,name=p.name,assigned=bool(p.approach_id) or not state.approach_options,portrait_url=portraits.get(p.id),method=p.method,dc=p.dc,die=p.die,points=pool.points(p.id),card_count=len(pool.hand(p.id)),roll_bonus=pool.roll_bonus(p.id),
                     ability=p.ability,test_modifier=p.test_modifier,influence_modifier=p.impact_modifier,
                     cards=list(pool.hand(p.id)),values=pool.point_values(p.id),aid=dict(state.aids).get(p.id,0),
                     passives=[dict(display={key: effect_text(value, scene['kind']) for key, value in info.get('display', {}).items()},color=c,label=effect_text(info['label'], scene['kind']),count=pool.hand(p.id).count(c),stackable=info['stackable'],status='Aktywne') for c,info in passives(p.id).items() if c in pool.hand(p.id) and pool.phase not in {'setup','drain'} and state.stage != 'result']) for p in state.participants],
+        forecast=scene['reactions'][(state.round-1)%len(scene['reactions'])]['name'] if any(rules.perks.enabled(state, p.id, 'erynd_scout') for p in state.participants) else '',
         reaction=scene['reactions'][(state.round-1)%len(scene['reactions'])]['name'], pressure=state.pressure,
         needs_resume=needs_resume, obligation=state.obligation, completed=current.get('completed',False),
-        board_choices=options, reminder=REMINDER, die_kind='test' if state.stage == 'check' else 'influence',
+        board_choices=options, reminder=reminder(), die_kind='test' if state.stage == 'check' else 'influence',
         attempt=dict(phase='roll',actor=state.actor.name,method=state.actor.method,busted=False,dice_count=1,die=die,
                      modifier_total=modifier,modifiers=([dict(label=label,value=value) for label,value in state.actor.test_components] +
                         [dict(label='Mana, pasywy i pomoc',value=modifier-state.actor.test_modifier-state.applied_first_test_bonus)] +

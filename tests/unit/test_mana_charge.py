@@ -33,9 +33,10 @@ def test_cap_and_all_abilities_ignore_color_requirements(hero):
     profile = hero_profile(hero)
     color = max(profile['values'], key=profile['values'].get)
     p = pool(hero, (color, color, color))
-    assert p.points(hero) == 21
-    assert start_turn(p, hero).phase == 'ready'
-    assert not start_turn(p, hero).draw_due
+    assert p.points(hero) == 6
+    assert p.roll_bonus(hero) == 3
+    assert start_turn(p, hero).phase == 'reveal'
+    assert start_turn(p, hero).draw_due
     for key, a in load_catalog()['abilities'].items():
         if a['hero'] == hero:
             pool_ability(key, hero).validate(p.hand(hero), profile['values'])
@@ -43,11 +44,13 @@ def test_cap_and_all_abilities_ignore_color_requirements(hero):
         assert c in profile['color_passives']
 
 
-def test_last_card_can_overshoot_and_next_turn_never_draws():
-    p = pool(hand=('C','C','N'))
+def test_sixth_card_caps_charge_and_next_turn_never_draws():
+    p = pool(hand=('C','C','N','Z','F'))
     p = replace(p, deck=p.deck[:-2], offer=('N','B'), phase='choose', draw_due=True)
     p = take(p, 0)
-    assert p.points('brakka') == 22
+    assert p.points('brakka') == 6
+    assert p.roll_bonus('brakka') == 6
+    assert len(p.hand('brakka')) == 6
     assert start_turn(p, 'brakka').offer == ('B',)
     assert start_turn(p, 'brakka').phase == 'ready'
 
@@ -64,7 +67,7 @@ def test_expiry_cannot_be_recovered_and_drain_collects_every_zone():
 
 
 def test_round_expiry_resumes_mandatory_pick_but_not_full_charge():
-    for hand, phase in [((), 'reveal'), (('C','C','C'), 'ready')]:
+    for hand, phase in [((), 'reveal'), (('C','C','C','N','Z','F'), 'ready')]:
         p = start_turn(pool(hand=hand), 'brakka', round_end=True)
         assert p.phase == 'expire'
         p = report_removed(p, 'B')
@@ -87,7 +90,7 @@ def test_statuses_stack_damage_cap_ac_and_modify_real_source(heroes, tmp_path):
     p = pool('lorian', ('C','C','C','B','B'))
     effects = charge_effects(p, {'lorian': hero_profile('lorian')})
     actor = heroes['lorian']
-    assert combat_armor_class(actor, effects) == effective_armor_class(actor) + 1
+    assert combat_armor_class(actor, effects) == effective_armor_class(actor)
     session = session_for(actor, tmp_path, pooled=True)
     source = next(s for s in session._attack_sources_for_actor(actor) if s.source_type.value == 'weapon' and s.attack_kind.value == 'ranged')
     changed = attack_source_with_combat_effects(actor, source, effects)
@@ -150,8 +153,8 @@ def test_spell_damage_and_real_saving_throw_include_color_status(heroes, tmp_pat
     s.combat_state,s.active_combat_effects=synchronize_shared_effects(s.combat_state,())
     source=s._attack_source_by_id(actor, 'nimra_frost_pulse')
     effective=s._effective_attack_source(actor,source)
-    assert effective.damage_modifier==source.damage_modifier+3
-    assert effective.damage_components[0].modifier==source.damage_components[0].modifier+3
+    assert effective.damage_modifier==source.damage_modifier+1
+    assert effective.damage_components[0].modifier==source.damage_components[0].modifier+1
     request=SavingThrowRequest(ability='constitution', dc=15, source_label='Test koloru')
     before=resolve_actor_saving_throw(actor,request,natural_roll=10)
     after=resolve_actor_saving_throw(actor,request,natural_roll=10,active_effects=s.active_combat_effects)

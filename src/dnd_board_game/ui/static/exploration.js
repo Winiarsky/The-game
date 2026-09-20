@@ -1606,6 +1606,7 @@ function renderSnapshotPanel() {
     ? `Dostępny zapis v${esc(snapshot.schema_version)}.<br><span class="muted">${esc(snapshot.path || '')}</span>`
     : `Brak zapisu dla tego scenariusza.<br><span class="muted">${esc(snapshot.path || '')}</span>`;
   if (snapshot.blocker) status.innerHTML += `<br><span class="status">${esc(snapshot.blocker)}</span>`;
+  saveButton.hidden = Boolean(state.mission);
   saveButton.disabled = !snapshot.can_save;
   loadButton.disabled = !snapshot.exists;
 }

@@ -32,8 +32,11 @@ def simulate(template: rules.Confrontation, seed: int, *, cooperation: bool) -> 
         if state.mana.phase in {'reveal','burn'}:
             state=rules.report_color(state,state.mana.deck[0])
         elif state.mana.phase=='choose':
-            values=state.mana.point_values(state.actor.id)
-            state=rules.take(state,max(range(len(state.mana.offer)),key=lambda i:values[state.mana.offer[i]]))
+            def card_priority(index: int) -> tuple[int, ...]:
+                candidate = rules.take(state, index)
+                return tuple(candidate.passive(state.actor.id, kind) - state.passive(state.actor.id, kind)
+                             for kind in ('test', 'impact', 'recover', 'support', 'guard'))
+            state=rules.take(state,max(range(len(state.mana.offer)),key=card_priority))
         elif state.stage=='turn':
             bonus=rules.available_tiers(state)[-1][1]
             chance=max(0,min(1,(21-state.actor.dc+state.actor.test_modifier+bonus+state.passive(state.actor.id,'test')+dict(state.aids).get(state.actor.id,0))/20))
@@ -59,7 +62,7 @@ def main() -> None:
     if not 1<=args.trials<=10000:parser.error('trials: 1–10000')
     actors={h:training_hero(h) for h in HEROES}
     rows=[]
-    for count in (1,3,5):
+    for count in (3,4,5,6):
         for scene in ('nessa_raise','sealed_cache'):
             for cooperation in (False,True):
                 results=[]
@@ -71,7 +74,7 @@ def main() -> None:
     args.output.parent.mkdir(parents=True,exist_ok=True)
     args.output.write_text('# Konfrontacje drużynowe — raport startowy\n\n'
         f'Po {args.trials} prób na każdy z 7 rotowanych składów w każdym wierszu; stałe ziarna. Silnik produkcyjny, pełna talia i fizyczna oferta.\n\n'
-        'Obie strategie wybierają najwięcej punktów i najwyższy dostępny próg; jedna dodatkowo wspiera przy niskiej szansie. To proste punkty odniesienia, bez optymalizacji kolorów i kosztów. Nie jest to model zachowania ludzi ani pomiar czasu przy stole.\n\n'
+        'Obie strategie dobierają do sześciu kart i wykorzystują premię +1 za fizyczną kartę. Preferują przyrost pasywów: test, efekt, odzysk, wsparcie, ochrona; jedna dodatkowo wspiera przy niskiej szansie. To proste punkty odniesienia, bez pełnej optymalizacji kolorów i kosztów. Atut nie podwaja testów eksploracji. Nie jest to model zachowania ludzi ani pomiar czasu przy stole.\n\n'
         '| Osób | Scena | Strategia | Sukces | Mediana rund | Średnia rund | Testów |\n|---|---|---|---|---|---|---|\n'+'\n'.join(rows)+'\n\n'
         'Podatność celowo wpływa na ST i kość wpływu. Solo nie ma wsparcia. Wyniki wymagają ręcznego ogrania: szczególnie udział odpornych metod, czytelność rozliczania kart i czas dwóch rzutów.\n')
     print(args.output)

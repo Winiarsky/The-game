@@ -63,11 +63,10 @@ def menu_mana_payload(
         from dnd_board_game.scenarios.pooled_mana_catalog import requirement_text, hero_profile, pool_ability
         if ability:
             definition = pool_ability(ability.id, str(actor.id))
-            values = state.shared_mana.pooled.point_values(str(actor.id))
-            total = sum(values[color] for color in state.shared_mana.pooled.hand(str(actor.id)))
+            total = state.shared_mana.pooled.points(str(actor.id))
             note = requirement_text(ability.id, str(actor.id))
             if not definition.free:
-                note = f"Pula: {total} pkt · " + note.replace("Co najmniej", "Próg bazowy:", 1)
+                note = f"Ładunek: {total}/6 · " + note
             return {"mana_cost": [], "mana_cost_note": note}
         return {"mana_cost": [], "mana_cost_note": "bez many"}
     cost = list(ability.cost) if ability else ([] if state.shared_mana else ["*"])

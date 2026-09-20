@@ -190,7 +190,15 @@ bez dublowania łupów. Po powrocie odtwórz fizyczne ustawienie opisane w sceni
 Rozpoczęta konfrontacja po wczytaniu wymaga potwierdzenia zachowanych stosów.
 Jeśli karty zostały pomieszane, użyj wcześniejszego punktu kontrolnego.
 
-Zwykły zapis: `misja_0_dzwon.snapshot.json` w skonfigurowanym katalogu zapisów.
+Autozapis: `misja_0_dzwon.snapshot.json` w skonfigurowanym katalogu zapisów.
+Aktualizuje się po etapach narracji, wyniku konfrontacji i odebraniu jej nagród,
+zdarzeniu z wozem (także rzucie na zmęczenie), walce oraz decyzjach i przygotowaniu
+wyposażenia. Wynik konfrontacji zapisuje się już przed zamknięciem podsumowania.
+Wczytanie zachowuje skutki i nie wymaga ponawiania ukończonego testu.
+Punkty kontrolne są osobnymi kopiami początku sceny do testów; nie blokują
+aktualizacji autozapisu przy kolejnej wizycie. W trakcie nierozstrzygniętej walki
+lub konfrontacji autozapis pozostaje przy ostatnim zakończonym etapie.
+Przyciski ręcznego zapisu są ukryte w Misji 0; wznawianie: **Wczytaj grę**.
 Podsumowanie zapisuje także `misja_0_dzwon.completed.json`: pełną drużynę,
 ekwipunek, pieniądze, decyzje i dziennik do dalszej kampanii. Nowa gra jest nową
 rozgrywką, nie kontynuacją tego zapisu. Po restarcie aplikacji **Wczytaj grę**

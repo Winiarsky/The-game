@@ -15779,7 +15779,7 @@ class ExplorationUiSession:
             if self.combat_state.shared_mana and self.combat_state.shared_mana.pooled:
                 from dnd_board_game.scenarios.pooled_mana_catalog import requirement_text, ability_description, load_catalog
                 catalog = load_catalog()['abilities']
-                physical_options = [replace(option, description=(
+                physical_options = [replace(option, label=catalog[option.action_id or option.source_id]['name'], description=(
                     requirement_text(option.action_id or option.source_id, str(actor.id)) + " " +
                     ability_description(str(actor.id), option.action_id or option.source_id)
                 )) if ((option.action_id or option.source_id) in catalog
@@ -35609,9 +35609,16 @@ def _feature_help_text(feature: FeatureGrant, actor_id: str | None = None) -> tu
 def _feature_grant_payload(feature: FeatureGrant, actor_id: str | None = None) -> dict[str, object]:
     description, mechanics = _feature_help_text(feature, actor_id)
     flaw = FLAWS.get(actor_id or "") if feature.source_ref == "physical_mana:v02" else None
+    label = flaw[1] if flaw and feature.feature_id == flaw[0] else feature.label
+    if feature.source_ref == "physical_mana:v02":
+        from dnd_board_game.scenarios.character_text import feature_copy
+        current_copy = feature_copy(actor_id or '', feature.feature_id)
+        if current_copy is not None:
+            label, mechanics = current_copy
+            description = ""
     return {
         "id": feature.feature_id,
-        "label": flaw[1] if flaw and feature.feature_id == flaw[0] else feature.label,
+        "label": label,
         "description": description,
         "mechanics": mechanics,
         "source_kind": feature.source_kind.value,

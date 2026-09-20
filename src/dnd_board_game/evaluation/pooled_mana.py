@@ -37,7 +37,7 @@ def prepare(state: PooledMana, rng: Random, metrics: Counter[str]) -> PooledMana
         if state.phase == "drain":
             metrics["drains"] += 1
             metrics["cards_lost"] += sum(len(hand) for _, hand in state.pools)
-            metrics["points_lost"] += sum(state.points(h) for h in state.heroes)
+            metrics["charge_lost"] += sum(state.points(h) for h in state.heroes)
         cards = list(COLORS) * state.copies
         rng.shuffle(cards)
         state = confirm_shuffle(state, tuple(cards))
@@ -79,12 +79,12 @@ def run_trial(catalog: dict[str, object], heroes: tuple[str, ...], policy: str,
                 state = take(state, choose_index(state, catalog, policy, heroes[(index + 1) % len(heroes)]))
             elif state.phase != "ready":
                 raise ValueError("Nieukończony dobór w symulacji.")
-            if state.points(hero) >= 21:
+            if state.full(hero):
                 metrics["fully_charged_turns"] += 1
             metrics["hero_turns"] += 1
             metrics["held_card_turns"] += sum(len(hand) for _, hand in state.pools)
             options = available_abilities(catalog, hero, state.hand(hero))
-            ultimates = [a for a in options if a.minimum >= 21]
+            ultimates = [a for a in options if a.minimum >= 6]
             if ultimates:
                 reached.setdefault(hero, round_index + 1)
                 metrics["ultimate_available_turns"] += 1
@@ -94,14 +94,14 @@ def run_trial(catalog: dict[str, object], heroes: tuple[str, ...], policy: str,
             elif policy != "basic_only" and ultimates:
                 candidate = max(ultimates, key=lambda a: (a.minimum, a.id))
             elif policy in {"adaptive", "cooperative", "overburn", "sustain"} and options:
-                if len(state.deck) <= len(heroes) + 2 or max(a.minimum for a in options) >= 12:
+                if len(state.deck) <= len(heroes) + 2 or max(a.minimum for a in options) >= 4:
                     candidate = max(options, key=lambda a: (a.minimum, a.id))
             if policy == "sustain" and len(state.deck) < len(heroes) * 2 + 3:
                 candidate = next((a for a in options if a.id in {"mana_recovery", "mana_great_tuning"} and state.burned), None)
             if candidate:
                 hand = state.hand(hero)
                 metrics["ability_uses"] += 1
-                metrics["overspend_points"] += sum(catalog["heroes"][hero]["values"][c] for c in hand) - candidate.minimum
+                metrics["charge_above_threshold"] += state.points(hero) - candidate.minimum
                 uses[candidate.id] += 1
                 cost = catalog["abilities"][candidate.id]["burn"]
                 if candidate.id in {"mana_recovery", "mana_great_tuning"}:
@@ -129,12 +129,12 @@ def run_trial(catalog: dict[str, object], heroes: tuple[str, ...], policy: str,
                 state = report_removed(state, state.deck[0])
                 metrics["removed_cards"] += 1
             state = prepare(state, rng, metrics)
-    return dict(metrics=metrics, reached=reached, uses=uses, points_lost=metrics["points_lost"],
+    return dict(metrics=metrics, reached=reached, uses=uses, charge_lost=metrics["charge_lost"],
                 not_reached=len(heroes) - len(reached))
 
 
 def compare(catalog: dict[str, object], samples: int, rounds: int, seed: int,
-            sizes: tuple[int, ...] = (1, 3, 5, 7)) -> list[dict[str, object]]:
+            sizes: tuple[int, ...] = (3, 4, 5, 6)) -> list[dict[str, object]]:
     heroes = tuple(catalog["heroes"])
     rows = []
     for size in sizes:
@@ -165,6 +165,6 @@ def compare(catalog: dict[str, object], samples: int, rounds: int, seed: int,
                         fully_charged_fraction=sums["fully_charged_turns"] / sums["hero_turns"],
                         ability_uses_per_hero=sums["ability_uses"] / (samples * size),
                         held_cards_mean=sums["held_card_turns"] / sums["hero_turns"],
-                        overspend_mean_when_paid=sums["overspend_points"] / sum(uses.values()) if uses else None,
-                        points_lost_per_drain=sums["points_lost"] / sums["drains"] if sums["drains"] else None))
+                        charge_above_threshold_mean=sums["charge_above_threshold"] / sum(uses.values()) if uses else None,
+                        charge_lost_per_drain=sums["charge_lost"] / sums["drains"] if sums["drains"] else None))
     return rows

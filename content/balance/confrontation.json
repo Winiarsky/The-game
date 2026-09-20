@@ -1,487 +1,158 @@
 {
-  "version": 1,
+  "version": 2,
   "passives": {
     "garran": {
       "C": {
-        "kind": "impact",
-        "label": "Stanowczość: Po sukcesie: +1 do wpływu za kartę tego koloru. Maks. +2. Kumuluje się.",
-        "stackable": true,
-        "display": {
-          "name": "Stanowczość",
-          "when": "Po udanym teście",
-          "effect": "+1 do wpływu za każdą kartę tego koloru w twojej puli; maksymalnie +2.",
-          "note": "To premia do zmniejszenia oporu rozmówcy lub obiektu, nie do rzutu k20.",
-          "short": "Po sukcesie: +1 do wpływu za kartę tego koloru. Maks. +2.",
-          "stacking": "Kolejne karty: +1, łącznie maks. +2."
-        }
+        "kind": "garran_follow",
+        "stackable": true
       },
       "B": {
-        "kind": "guard",
-        "label": "Opanowanie: Reakcja zabiera kartę z twojej puli? Zachowaj ją. Ochrona 1 karty; nie dotyczy wspólnej talii. Nie kumuluje się.",
-        "stackable": false,
-        "display": {
-          "name": "Opanowanie",
-          "when": "Gdy reakcja zabiera kartę z twojej puli",
-          "effect": "Zachowujesz tę kartę.",
-          "note": "Chroni 1 kartę przy każdej takiej reakcji. Nie chroni wspólnej talii przed spalaniem.",
-          "short": "Reakcja zabiera kartę z twojej puli? Zachowaj ją. Ochrona 1 karty; nie dotyczy wspólnej talii.",
-          "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
-        }
+        "kind": "garran_guard",
+        "stackable": false
       },
       "Z": {
-        "kind": "recover",
-        "label": "Oddech: Po udanym teście: przenieś 1 najwcześniej spaloną kartę na spód talii. Potwierdź ✓, potem spal koszt testu. Nie kumuluje się.",
-        "stackable": false,
-        "display": {
-          "name": "Oddech",
-          "when": "Po każdym udanym teście",
-          "effect": "Weź 1 kartę, która została spalona najwcześniej. Połóż ją na spodzie wspólnej talii.",
-          "note": "Weź kartę, która została spalona najwcześniej — nie musi być zielona. Potwierdź ✓. Dopiero potem spal 1 kartę z wierzchu talii za swój test. Sam dobór many nie odzyskuje kart. Jeśli stos spalonych jest pusty, nic nie odzyskujesz.",
-          "short": "Po udanym teście: przenieś 1 najwcześniej spaloną kartę na spód talii. Potwierdź ✓, potem spal koszt testu.",
-          "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu.",
-          "diagram": "recovery",
-          "instruction": "Potwierdź ✓, potem opłać test."
-        }
+        "kind": "garran_line",
+        "stackable": false
       },
       "F": {
-        "kind": "test",
-        "label": "Skupienie: Test k20: +1 za kartę tego koloru w puli. Maks. +2. Bez premii do wpływu. Kumuluje się.",
-        "stackable": true,
-        "display": {
-          "name": "Skupienie",
-          "when": "Gdy wykonujesz test",
-          "effect": "+1 do wyniku k20 za każdą kartę tego koloru w twojej puli; maksymalnie +2.",
-          "note": "Nie zwiększa efektu po sukcesie.",
-          "short": "Test k20: +1 za kartę tego koloru w puli. Maks. +2. Bez premii do wpływu.",
-          "stacking": "Kolejne karty: +1, łącznie maks. +2."
-        }
+        "kind": "garran_rally",
+        "stackable": false
       },
       "N": {
-        "kind": "support",
-        "label": "Współpraca: Pomoc: +2 do następnego testu sojusznika zamiast +1. Spal 1 kartę. Dostępne cele wsparcia bez zmian. Nie kumuluje się.",
-        "stackable": false,
-        "display": {
-          "name": "Współpraca",
-          "when": "Gdy pomagasz sojusznikowi",
-          "effect": "Dajesz +2 do jego następnego testu zamiast +1. Spal 1 kartę.",
-          "note": "Możesz pomóc tylko podejściom wskazanym w scenie. Pomoc od kilku osób sumuje się. Cała premia znika po teście odbiorcy, także nieudanym.",
-          "short": "Pomoc: +2 do następnego testu sojusznika zamiast +1. Spal 1 kartę. Dostępne cele wsparcia bez zmian.",
-          "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
-        }
+        "kind": "garran_example",
+        "stackable": false
       }
     },
     "brakka": {
       "C": {
-        "kind": "impact",
-        "label": "Stanowczość: Po sukcesie: +1 do wpływu za kartę tego koloru. Maks. +2. Kumuluje się.",
-        "stackable": true,
-        "display": {
-          "name": "Stanowczość",
-          "when": "Po udanym teście",
-          "effect": "+1 do wpływu za każdą kartę tego koloru w twojej puli; maksymalnie +2.",
-          "note": "To premia do zmniejszenia oporu rozmówcy lub obiektu, nie do rzutu k20.",
-          "short": "Po sukcesie: +1 do wpływu za kartę tego koloru. Maks. +2.",
-          "stacking": "Kolejne karty: +1, łącznie maks. +2."
-        }
+        "kind": "brakka_pressure",
+        "stackable": true
       },
       "B": {
-        "kind": "guard",
-        "label": "Opanowanie: Reakcja zabiera kartę z twojej puli? Zachowaj ją. Ochrona 1 karty; nie dotyczy wspólnej talii. Nie kumuluje się.",
-        "stackable": false,
-        "display": {
-          "name": "Opanowanie",
-          "when": "Gdy reakcja zabiera kartę z twojej puli",
-          "effect": "Zachowujesz tę kartę.",
-          "note": "Chroni 1 kartę przy każdej takiej reakcji. Nie chroni wspólnej talii przed spalaniem.",
-          "short": "Reakcja zabiera kartę z twojej puli? Zachowaj ją. Ochrona 1 karty; nie dotyczy wspólnej talii.",
-          "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
-        }
+        "kind": "brakka_stubborn",
+        "stackable": false
       },
       "Z": {
-        "kind": "recover",
-        "label": "Oddech: Po udanym teście: przenieś 1 najwcześniej spaloną kartę na spód talii. Potwierdź ✓, potem spal koszt testu. Nie kumuluje się.",
-        "stackable": false,
-        "display": {
-          "name": "Oddech",
-          "when": "Po każdym udanym teście",
-          "effect": "Weź 1 kartę, która została spalona najwcześniej. Połóż ją na spodzie wspólnej talii.",
-          "note": "Weź kartę, która została spalona najwcześniej — nie musi być zielona. Potwierdź ✓. Dopiero potem spal 1 kartę z wierzchu talii za swój test. Sam dobór many nie odzyskuje kart. Jeśli stos spalonych jest pusty, nic nie odzyskujesz.",
-          "short": "Po udanym teście: przenieś 1 najwcześniej spaloną kartę na spód talii. Potwierdź ✓, potem spal koszt testu.",
-          "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu.",
-          "diagram": "recovery",
-          "instruction": "Potwierdź ✓, potem opłać test."
-        }
+        "kind": "brakka_force",
+        "stackable": false
       },
       "F": {
-        "kind": "support",
-        "label": "Współpraca: Pomoc: +2 do następnego testu sojusznika zamiast +1. Spal 1 kartę. Dostępne cele wsparcia bez zmian. Nie kumuluje się.",
-        "stackable": false,
-        "display": {
-          "name": "Współpraca",
-          "when": "Gdy pomagasz sojusznikowi",
-          "effect": "Dajesz +2 do jego następnego testu zamiast +1. Spal 1 kartę.",
-          "note": "Możesz pomóc tylko podejściom wskazanym w scenie. Pomoc od kilku osób sumuje się. Cała premia znika po teście odbiorcy, także nieudanym.",
-          "short": "Pomoc: +2 do następnego testu sojusznika zamiast +1. Spal 1 kartę. Dostępne cele wsparcia bez zmian.",
-          "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
-        }
+        "kind": "brakka_defiance",
+        "stackable": false
       },
       "N": {
-        "kind": "test",
-        "label": "Skupienie: Test k20: +1 za kartę tego koloru w puli. Maks. +2. Bez premii do wpływu. Kumuluje się.",
-        "stackable": true,
-        "display": {
-          "name": "Skupienie",
-          "when": "Gdy wykonujesz test",
-          "effect": "+1 do wyniku k20 za każdą kartę tego koloru w twojej puli; maksymalnie +2.",
-          "note": "Nie zwiększa efektu po sukcesie.",
-          "short": "Test k20: +1 za kartę tego koloru w puli. Maks. +2. Bez premii do wpływu.",
-          "stacking": "Kolejne karty: +1, łącznie maks. +2."
-        }
+        "kind": "brakka_persistence",
+        "stackable": false
       }
     },
     "mira": {
       "C": {
-        "kind": "test",
-        "label": "Skupienie: Test k20: +1 za kartę tego koloru w puli. Maks. +2. Bez premii do wpływu. Kumuluje się.",
-        "stackable": true,
-        "display": {
-          "name": "Skupienie",
-          "when": "Gdy wykonujesz test",
-          "effect": "+1 do wyniku k20 za każdą kartę tego koloru w twojej puli; maksymalnie +2.",
-          "note": "Nie zwiększa efektu po sukcesie.",
-          "short": "Test k20: +1 za kartę tego koloru w puli. Maks. +2. Bez premii do wpływu.",
-          "stacking": "Kolejne karty: +1, łącznie maks. +2."
-        }
+        "kind": "mira_opening",
+        "stackable": false
       },
       "B": {
-        "kind": "guard",
-        "label": "Opanowanie: Reakcja zabiera kartę z twojej puli? Zachowaj ją. Ochrona 1 karty; nie dotyczy wspólnej talii. Nie kumuluje się.",
-        "stackable": false,
-        "display": {
-          "name": "Opanowanie",
-          "when": "Gdy reakcja zabiera kartę z twojej puli",
-          "effect": "Zachowujesz tę kartę.",
-          "note": "Chroni 1 kartę przy każdej takiej reakcji. Nie chroni wspólnej talii przed spalaniem.",
-          "short": "Reakcja zabiera kartę z twojej puli? Zachowaj ją. Ochrona 1 karty; nie dotyczy wspólnej talii.",
-          "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
-        }
+        "kind": "mira_slip",
+        "stackable": false
       },
       "Z": {
-        "kind": "impact",
-        "label": "Stanowczość: Po sukcesie: +1 do wpływu za kartę tego koloru. Maks. +2. Kumuluje się.",
-        "stackable": true,
-        "display": {
-          "name": "Stanowczość",
-          "when": "Po udanym teście",
-          "effect": "+1 do wpływu za każdą kartę tego koloru w twojej puli; maksymalnie +2.",
-          "note": "To premia do zmniejszenia oporu rozmówcy lub obiektu, nie do rzutu k20.",
-          "short": "Po sukcesie: +1 do wpływu za kartę tego koloru. Maks. +2.",
-          "stacking": "Kolejne karty: +1, łącznie maks. +2."
-        }
+        "kind": "mira_precision",
+        "stackable": true
       },
       "F": {
-        "kind": "support",
-        "label": "Współpraca: Pomoc: +2 do następnego testu sojusznika zamiast +1. Spal 1 kartę. Dostępne cele wsparcia bez zmian. Nie kumuluje się.",
-        "stackable": false,
-        "display": {
-          "name": "Współpraca",
-          "when": "Gdy pomagasz sojusznikowi",
-          "effect": "Dajesz +2 do jego następnego testu zamiast +1. Spal 1 kartę.",
-          "note": "Możesz pomóc tylko podejściom wskazanym w scenie. Pomoc od kilku osób sumuje się. Cała premia znika po teście odbiorcy, także nieudanym.",
-          "short": "Pomoc: +2 do następnego testu sojusznika zamiast +1. Spal 1 kartę. Dostępne cele wsparcia bez zmian.",
-          "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
-        }
+        "kind": "mira_shortcut",
+        "stackable": false
       },
       "N": {
-        "kind": "recover",
-        "label": "Oddech: Po udanym teście: przenieś 1 najwcześniej spaloną kartę na spód talii. Potwierdź ✓, potem spal koszt testu. Nie kumuluje się.",
-        "stackable": false,
-        "display": {
-          "name": "Oddech",
-          "when": "Po każdym udanym teście",
-          "effect": "Weź 1 kartę, która została spalona najwcześniej. Połóż ją na spodzie wspólnej talii.",
-          "note": "Weź kartę, która została spalona najwcześniej — nie musi być zielona. Potwierdź ✓. Dopiero potem spal 1 kartę z wierzchu talii za swój test. Sam dobór many nie odzyskuje kart. Jeśli stos spalonych jest pusty, nic nie odzyskujesz.",
-          "short": "Po udanym teście: przenieś 1 najwcześniej spaloną kartę na spód talii. Potwierdź ✓, potem spal koszt testu.",
-          "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu.",
-          "diagram": "recovery",
-          "instruction": "Potwierdź ✓, potem opłać test."
-        }
+        "kind": "mira_switch",
+        "stackable": false
       }
     },
     "dagna": {
       "C": {
-        "kind": "impact",
-        "label": "Stanowczość: Po sukcesie: +1 do wpływu za kartę tego koloru. Maks. +2. Kumuluje się.",
-        "stackable": true,
-        "display": {
-          "name": "Stanowczość",
-          "when": "Po udanym teście",
-          "effect": "+1 do wpływu za każdą kartę tego koloru w twojej puli; maksymalnie +2.",
-          "note": "To premia do zmniejszenia oporu rozmówcy lub obiektu, nie do rzutu k20.",
-          "short": "Po sukcesie: +1 do wpływu za kartę tego koloru. Maks. +2.",
-          "stacking": "Kolejne karty: +1, łącznie maks. +2."
-        }
+        "kind": "dagna_care",
+        "stackable": true
       },
       "B": {
-        "kind": "support",
-        "label": "Współpraca: Pomoc: +2 do następnego testu sojusznika zamiast +1. Spal 1 kartę. Dostępne cele wsparcia bez zmian. Nie kumuluje się.",
-        "stackable": false,
-        "display": {
-          "name": "Współpraca",
-          "when": "Gdy pomagasz sojusznikowi",
-          "effect": "Dajesz +2 do jego następnego testu zamiast +1. Spal 1 kartę.",
-          "note": "Możesz pomóc tylko podejściom wskazanym w scenie. Pomoc od kilku osób sumuje się. Cała premia znika po teście odbiorcy, także nieudanym.",
-          "short": "Pomoc: +2 do następnego testu sojusznika zamiast +1. Spal 1 kartę. Dostępne cele wsparcia bez zmian.",
-          "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
-        }
+        "kind": "dagna_cooperate",
+        "stackable": false
       },
       "Z": {
-        "kind": "recover",
-        "label": "Oddech: Po udanym teście: przenieś 1 najwcześniej spaloną kartę na spód talii. Potwierdź ✓, potem spal koszt testu. Nie kumuluje się.",
-        "stackable": false,
-        "display": {
-          "name": "Oddech",
-          "when": "Po każdym udanym teście",
-          "effect": "Weź 1 kartę, która została spalona najwcześniej. Połóż ją na spodzie wspólnej talii.",
-          "note": "Weź kartę, która została spalona najwcześniej — nie musi być zielona. Potwierdź ✓. Dopiero potem spal 1 kartę z wierzchu talii za swój test. Sam dobór many nie odzyskuje kart. Jeśli stos spalonych jest pusty, nic nie odzyskujesz.",
-          "short": "Po udanym teście: przenieś 1 najwcześniej spaloną kartę na spód talii. Potwierdź ✓, potem spal koszt testu.",
-          "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu.",
-          "diagram": "recovery",
-          "instruction": "Potwierdź ✓, potem opłać test."
-        }
+        "kind": "dagna_recover",
+        "stackable": false
       },
       "F": {
-        "kind": "guard",
-        "label": "Opanowanie: Reakcja zabiera kartę z twojej puli? Zachowaj ją. Ochrona 1 karty; nie dotyczy wspólnej talii. Nie kumuluje się.",
-        "stackable": false,
-        "display": {
-          "name": "Opanowanie",
-          "when": "Gdy reakcja zabiera kartę z twojej puli",
-          "effect": "Zachowujesz tę kartę.",
-          "note": "Chroni 1 kartę przy każdej takiej reakcji. Nie chroni wspólnej talii przed spalaniem.",
-          "short": "Reakcja zabiera kartę z twojej puli? Zachowaj ją. Ochrona 1 karty; nie dotyczy wspólnej talii.",
-          "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
-        }
+        "kind": "dagna_shelter",
+        "stackable": false
       },
       "N": {
-        "kind": "test",
-        "label": "Skupienie: Test k20: +1 za kartę tego koloru w puli. Maks. +2. Bez premii do wpływu. Kumuluje się.",
-        "stackable": true,
-        "display": {
-          "name": "Skupienie",
-          "when": "Gdy wykonujesz test",
-          "effect": "+1 do wyniku k20 za każdą kartę tego koloru w twojej puli; maksymalnie +2.",
-          "note": "Nie zwiększa efektu po sukcesie.",
-          "short": "Test k20: +1 za kartę tego koloru w puli. Maks. +2. Bez premii do wpływu.",
-          "stacking": "Kolejne karty: +1, łącznie maks. +2."
-        }
+        "kind": "dagna_patience",
+        "stackable": false
       }
     },
     "lorian": {
       "C": {
-        "kind": "impact",
-        "label": "Stanowczość: Po sukcesie: +1 do wpływu za kartę tego koloru. Maks. +2. Kumuluje się.",
-        "stackable": true,
-        "display": {
-          "name": "Stanowczość",
-          "when": "Po udanym teście",
-          "effect": "+1 do wpływu za każdą kartę tego koloru w twojej puli; maksymalnie +2.",
-          "note": "To premia do zmniejszenia oporu rozmówcy lub obiektu, nie do rzutu k20.",
-          "short": "Po sukcesie: +1 do wpływu za kartę tego koloru. Maks. +2.",
-          "stacking": "Kolejne karty: +1, łącznie maks. +2."
-        }
+        "kind": "lorian_ensemble",
+        "stackable": true
       },
       "B": {
-        "kind": "test",
-        "label": "Skupienie: Test k20: +1 za kartę tego koloru w puli. Maks. +2. Bez premii do wpływu. Kumuluje się.",
-        "stackable": true,
-        "display": {
-          "name": "Skupienie",
-          "when": "Gdy wykonujesz test",
-          "effect": "+1 do wyniku k20 za każdą kartę tego koloru w twojej puli; maksymalnie +2.",
-          "note": "Nie zwiększa efektu po sukcesie.",
-          "short": "Test k20: +1 za kartę tego koloru w puli. Maks. +2. Bez premii do wpływu.",
-          "stacking": "Kolejne karty: +1, łącznie maks. +2."
-        }
+        "kind": "lorian_echo",
+        "stackable": false
       },
       "Z": {
-        "kind": "guard",
-        "label": "Opanowanie: Reakcja zabiera kartę z twojej puli? Zachowaj ją. Ochrona 1 karty; nie dotyczy wspólnej talii. Nie kumuluje się.",
-        "stackable": false,
-        "display": {
-          "name": "Opanowanie",
-          "when": "Gdy reakcja zabiera kartę z twojej puli",
-          "effect": "Zachowujesz tę kartę.",
-          "note": "Chroni 1 kartę przy każdej takiej reakcji. Nie chroni wspólnej talii przed spalaniem.",
-          "short": "Reakcja zabiera kartę z twojej puli? Zachowaj ją. Ochrona 1 karty; nie dotyczy wspólnej talii.",
-          "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
-        }
+        "kind": "lorian_refrain",
+        "stackable": false
       },
       "F": {
-        "kind": "support",
-        "label": "Współpraca: Pomoc: +2 do następnego testu sojusznika zamiast +1. Spal 1 kartę. Dostępne cele wsparcia bez zmian. Nie kumuluje się.",
-        "stackable": false,
-        "display": {
-          "name": "Współpraca",
-          "when": "Gdy pomagasz sojusznikowi",
-          "effect": "Dajesz +2 do jego następnego testu zamiast +1. Spal 1 kartę.",
-          "note": "Możesz pomóc tylko podejściom wskazanym w scenie. Pomoc od kilku osób sumuje się. Cała premia znika po teście odbiorcy, także nieudanym.",
-          "short": "Pomoc: +2 do następnego testu sojusznika zamiast +1. Spal 1 kartę. Dostępne cele wsparcia bez zmian.",
-          "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
-        }
+        "kind": "lorian_tempo",
+        "stackable": false
       },
       "N": {
-        "kind": "recover",
-        "label": "Oddech: Po udanym teście: przenieś 1 najwcześniej spaloną kartę na spód talii. Potwierdź ✓, potem spal koszt testu. Nie kumuluje się.",
-        "stackable": false,
-        "display": {
-          "name": "Oddech",
-          "when": "Po każdym udanym teście",
-          "effect": "Weź 1 kartę, która została spalona najwcześniej. Połóż ją na spodzie wspólnej talii.",
-          "note": "Weź kartę, która została spalona najwcześniej — nie musi być zielona. Potwierdź ✓. Dopiero potem spal 1 kartę z wierzchu talii za swój test. Sam dobór many nie odzyskuje kart. Jeśli stos spalonych jest pusty, nic nie odzyskujesz.",
-          "short": "Po udanym teście: przenieś 1 najwcześniej spaloną kartę na spód talii. Potwierdź ✓, potem spal koszt testu.",
-          "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu.",
-          "diagram": "recovery",
-          "instruction": "Potwierdź ✓, potem opłać test."
-        }
+        "kind": "lorian_recycle",
+        "stackable": false
       }
     },
     "nimra": {
       "C": {
-        "kind": "impact",
-        "label": "Stanowczość: Po sukcesie: +1 do wpływu za kartę tego koloru. Maks. +2. Kumuluje się.",
-        "stackable": true,
-        "display": {
-          "name": "Stanowczość",
-          "when": "Po udanym teście",
-          "effect": "+1 do wpływu za każdą kartę tego koloru w twojej puli; maksymalnie +2.",
-          "note": "To premia do zmniejszenia oporu rozmówcy lub obiektu, nie do rzutu k20.",
-          "short": "Po sukcesie: +1 do wpływu za kartę tego koloru. Maks. +2.",
-          "stacking": "Kolejne karty: +1, łącznie maks. +2."
-        }
+        "kind": "nimra_exact",
+        "stackable": false
       },
       "B": {
-        "kind": "guard",
-        "label": "Opanowanie: Reakcja zabiera kartę z twojej puli? Zachowaj ją. Ochrona 1 karty; nie dotyczy wspólnej talii. Nie kumuluje się.",
-        "stackable": false,
-        "display": {
-          "name": "Opanowanie",
-          "when": "Gdy reakcja zabiera kartę z twojej puli",
-          "effect": "Zachowujesz tę kartę.",
-          "note": "Chroni 1 kartę przy każdej takiej reakcji. Nie chroni wspólnej talii przed spalaniem.",
-          "short": "Reakcja zabiera kartę z twojej puli? Zachowaj ją. Ochrona 1 karty; nie dotyczy wspólnej talii.",
-          "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
-        }
+        "kind": "nimra_pattern",
+        "stackable": false
       },
       "Z": {
-        "kind": "recover",
-        "label": "Oddech: Po udanym teście: przenieś 1 najwcześniej spaloną kartę na spód talii. Potwierdź ✓, potem spal koszt testu. Nie kumuluje się.",
-        "stackable": false,
-        "display": {
-          "name": "Oddech",
-          "when": "Po każdym udanym teście",
-          "effect": "Weź 1 kartę, która została spalona najwcześniej. Połóż ją na spodzie wspólnej talii.",
-          "note": "Weź kartę, która została spalona najwcześniej — nie musi być zielona. Potwierdź ✓. Dopiero potem spal 1 kartę z wierzchu talii za swój test. Sam dobór many nie odzyskuje kart. Jeśli stos spalonych jest pusty, nic nie odzyskujesz.",
-          "short": "Po udanym teście: przenieś 1 najwcześniej spaloną kartę na spód talii. Potwierdź ✓, potem spal koszt testu.",
-          "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu.",
-          "diagram": "recovery",
-          "instruction": "Potwierdź ✓, potem opłać test."
-        }
+        "kind": "nimra_stability",
+        "stackable": false
       },
       "F": {
-        "kind": "support",
-        "label": "Współpraca: Pomoc: +2 do następnego testu sojusznika zamiast +1. Spal 1 kartę. Dostępne cele wsparcia bez zmian. Nie kumuluje się.",
-        "stackable": false,
-        "display": {
-          "name": "Współpraca",
-          "when": "Gdy pomagasz sojusznikowi",
-          "effect": "Dajesz +2 do jego następnego testu zamiast +1. Spal 1 kartę.",
-          "note": "Możesz pomóc tylko podejściom wskazanym w scenie. Pomoc od kilku osób sumuje się. Cała premia znika po teście odbiorcy, także nieudanym.",
-          "short": "Pomoc: +2 do następnego testu sojusznika zamiast +1. Spal 1 kartę. Dostępne cele wsparcia bez zmian.",
-          "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
-        }
+        "kind": "nimra_focus",
+        "stackable": true
       },
       "N": {
-        "kind": "test",
-        "label": "Skupienie: Test k20: +1 za kartę tego koloru w puli. Maks. +2. Bez premii do wpływu. Kumuluje się.",
-        "stackable": true,
-        "display": {
-          "name": "Skupienie",
-          "when": "Gdy wykonujesz test",
-          "effect": "+1 do wyniku k20 za każdą kartę tego koloru w twojej puli; maksymalnie +2.",
-          "note": "Nie zwiększa efektu po sukcesie.",
-          "short": "Test k20: +1 za kartę tego koloru w puli. Maks. +2. Bez premii do wpływu.",
-          "stacking": "Kolejne karty: +1, łącznie maks. +2."
-        }
+        "kind": "nimra_deduction",
+        "stackable": false
       }
     },
     "erynd": {
       "C": {
-        "kind": "impact",
-        "label": "Stanowczość: Po sukcesie: +1 do wpływu za kartę tego koloru. Maks. +2. Kumuluje się.",
-        "stackable": true,
-        "display": {
-          "name": "Stanowczość",
-          "when": "Po udanym teście",
-          "effect": "+1 do wpływu za każdą kartę tego koloru w twojej puli; maksymalnie +2.",
-          "note": "To premia do zmniejszenia oporu rozmówcy lub obiektu, nie do rzutu k20.",
-          "short": "Po sukcesie: +1 do wpływu za kartę tego koloru. Maks. +2.",
-          "stacking": "Kolejne karty: +1, łącznie maks. +2."
-        }
+        "kind": "erynd_finish",
+        "stackable": true
       },
       "B": {
-        "kind": "guard",
-        "label": "Opanowanie: Reakcja zabiera kartę z twojej puli? Zachowaj ją. Ochrona 1 karty; nie dotyczy wspólnej talii. Nie kumuluje się.",
-        "stackable": false,
-        "display": {
-          "name": "Opanowanie",
-          "when": "Gdy reakcja zabiera kartę z twojej puli",
-          "effect": "Zachowujesz tę kartę.",
-          "note": "Chroni 1 kartę przy każdej takiej reakcji. Nie chroni wspólnej talii przed spalaniem.",
-          "short": "Reakcja zabiera kartę z twojej puli? Zachowaj ją. Ochrona 1 karty; nie dotyczy wspólnej talii.",
-          "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
-        }
+        "kind": "erynd_scout",
+        "stackable": false
       },
       "Z": {
-        "kind": "test",
-        "label": "Skupienie: Test k20: +1 za kartę tego koloru w puli. Maks. +2. Bez premii do wpływu. Kumuluje się.",
-        "stackable": true,
-        "display": {
-          "name": "Skupienie",
-          "when": "Gdy wykonujesz test",
-          "effect": "+1 do wyniku k20 za każdą kartę tego koloru w twojej puli; maksymalnie +2.",
-          "note": "Nie zwiększa efektu po sukcesie.",
-          "short": "Test k20: +1 za kartę tego koloru w puli. Maks. +2. Bez premii do wpływu.",
-          "stacking": "Kolejne karty: +1, łącznie maks. +2."
-        }
+        "kind": "erynd_prepare",
+        "stackable": false
       },
       "F": {
-        "kind": "support",
-        "label": "Współpraca: Pomoc: +2 do następnego testu sojusznika zamiast +1. Spal 1 kartę. Dostępne cele wsparcia bez zmian. Nie kumuluje się.",
-        "stackable": false,
-        "display": {
-          "name": "Współpraca",
-          "when": "Gdy pomagasz sojusznikowi",
-          "effect": "Dajesz +2 do jego następnego testu zamiast +1. Spal 1 kartę.",
-          "note": "Możesz pomóc tylko podejściom wskazanym w scenie. Pomoc od kilku osób sumuje się. Cała premia znika po teście odbiorcy, także nieudanym.",
-          "short": "Pomoc: +2 do następnego testu sojusznika zamiast +1. Spal 1 kartę. Dostępne cele wsparcia bez zmian.",
-          "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu."
-        }
+        "kind": "erynd_signal",
+        "stackable": false
       },
       "N": {
-        "kind": "recover",
-        "label": "Oddech: Po udanym teście: przenieś 1 najwcześniej spaloną kartę na spód talii. Potwierdź ✓, potem spal koszt testu. Nie kumuluje się.",
-        "stackable": false,
-        "display": {
-          "name": "Oddech",
-          "when": "Po każdym udanym teście",
-          "effect": "Weź 1 kartę, która została spalona najwcześniej. Połóż ją na spodzie wspólnej talii.",
-          "note": "Weź kartę, która została spalona najwcześniej — nie musi być zielona. Potwierdź ✓. Dopiero potem spal 1 kartę z wierzchu talii za swój test. Sam dobór many nie odzyskuje kart. Jeśli stos spalonych jest pusty, nic nie odzyskujesz.",
-          "short": "Po udanym teście: przenieś 1 najwcześniej spaloną kartę na spód talii. Potwierdź ✓, potem spal koszt testu.",
-          "stacking": "Wystarczy 1 karta tego koloru. Więcej kart nie wzmacnia efektu.",
-          "diagram": "recovery",
-          "instruction": "Potwierdź ✓, potem opłać test."
-        }
+        "kind": "erynd_track",
+        "stackable": false
       }
     }
   },
@@ -1120,99 +791,75 @@
   "lessons": [
     {
       "id": "npc",
-      "name": "Rozmowa z NPC",
       "scene": "nessa_raise",
       "kind": "npc",
-      "focus": "test",
-      "instruction": "Najpierw każdy bohater wybiera podejście runą. Sprawdź cechę, ST, kość wpływu i dozwolone wsparcie. Opcje dla jednej postaci znikają po wyborze, a powtarzalne pozostają dostępne. Potem dobieraj manę, testuj, pomagaj lub podglądaj spód talii."
+      "focus": "test"
     },
     {
       "id": "object",
-      "name": "Interakcja z obiektem",
       "scene": "sealed_cache",
       "kind": "object",
-      "focus": "test",
-      "instruction": "Każdy wybiera sposób pracy przy obiekcie. Podejście określa cechę, ST, kość postępu i powiązania pomocy. To scena określa dostępne rozwiązania, nie klasa bohatera."
+      "focus": "test"
     },
     {
       "id": "support",
-      "name": "Wsparcie sojusznika",
       "scene": "nessa_raise",
       "kind": "npc",
-      "focus": "support",
-      "instruction": "Wybierzcie powiązane podejścia. Po doborze pomóż dozwolonemu sojusznikowi: +1 do najbliższego testu (+2 ze Współpracą), za 1 spaloną kartę. Pomoce sumują się i znikają po próbie. Zamiast testu lub pomocy możesz podejrzeć dolną kartę i zostawić ją lub przenieść na wierzch — bez zgłaszania koloru i bez spalania, za całe działanie."
+      "focus": "support"
     },
     {
       "id": "charge",
-      "name": "Ładunek i siła próby",
       "scene": "nessa_raise",
       "kind": "npc",
-      "focus": "charge",
-      "instruction": "Pula pozostaje po rzucie. Przy 21+ dobór ustaje. Test korzysta z najwyższej dostępnej premii naładowania i zawsze spala 1 kartę. Zamiast testu możesz pomóc sojusznikowi za 1 kartę."
+      "focus": "charge"
     },
     {
       "id": "reaction",
-      "name": "Reakcja i utrata many",
       "scene": "sealed_cache",
       "kind": "object",
-      "focus": "reaction",
-      "instruction": "Po pełnej rundzie sytuacja reaguje. Zgłoś spalane karty; utrata karty puli może obniżyć próg i przywrócić dobieranie."
+      "focus": "reaction"
     },
     {
       "id": "drain",
-      "name": "Wyczerpanie talii",
       "scene": "nessa_raise",
       "kind": "npc",
-      "focus": "drain",
-      "instruction": "Wykonuj testy lub wspieraj dozwolonych sojuszników, aby przećwiczyć wyczerpanie. Brak kart do wymaganej operacji kończy scenę. Podgląd nie spala karty, ale reakcje po rundzie nadal uszczuplają talię."
+      "focus": "drain"
     },
     {
       "id": "compromise",
-      "name": "Częściowe porozumienie",
       "scene": "nessa_compromise",
       "kind": "npc",
-      "focus": "compromise",
-      "instruction": "Zbij co najmniej połowę oporu, potem przyjmij kompromis albo walcz o pełny rezultat."
+      "focus": "compromise"
     },
     {
       "id": "color_goal",
-      "name": "Dodatkowy cel kolorów",
       "scene": "nessa_color_goal",
       "kind": "npc",
-      "focus": "color_goal",
-      "instruction": "Zbierz w drużynie dwie niebieskie karty i uzyskaj sukces, aby otrzymać dodatkową informację."
+      "focus": "color_goal"
     },
     {
       "id": "sensitive",
-      "name": "Drażliwy temat",
       "scene": "nessa_sensitive",
       "kind": "npc",
-      "focus": "test",
-      "instruction": "Zdecyduj, czy dobierać czerwone karty. Nacisk zmienia korzyść i cenę sukcesu."
+      "focus": "test"
     },
     {
       "id": "favor",
-      "name": "Przysługa za przysługę",
       "scene": "nessa_favor",
       "kind": "npc",
-      "focus": "favor",
-      "instruction": "W tym ćwiczeniu przyjmij zobowiązanie, gdy pojawi się spalona karta, i odzyskaj ją na spód. W przygodzie to opcjonalny wybór; nie zużywa działania."
+      "focus": "favor"
     },
     {
       "id": "practice_npc",
-      "name": "Samodzielna rozmowa",
       "scene": "nessa_raise",
       "kind": "npc",
-      "focus": "test",
-      "instruction": "Przeprowadź drużynową rozmowę, dobierając siłę prób i wsparcie do zasobów."
+      "focus": "test"
     },
     {
       "id": "practice_object",
-      "name": "Samodzielny obiekt",
       "scene": "sealed_cache",
       "kind": "object",
-      "focus": "test",
-      "instruction": "Otwórz schowek. Planuj wspólny zapas, wsparcie i reakcje mechanizmu."
+      "focus": "test"
     }
   ]
 }

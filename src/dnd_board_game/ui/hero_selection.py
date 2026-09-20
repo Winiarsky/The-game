@@ -110,13 +110,15 @@ HERO_SELECTION_GUIDES: dict[str, HeroSelectionGuide] = {
 def physical_mana_guides() -> dict[str, HeroSelectionGuide]:
     """The new-game picker describes the physical profile; old saves keep old help."""
     from dataclasses import replace
-    from dnd_board_game.rules.physical_mana import FLAWS, hero_abilities
+    from dnd_board_game.rules.physical_mana import hero_abilities
+    from dnd_board_game.scenarios.character_text import hero_text, present_ability
+    from dnd_board_game.scenarios.pooled_mana_catalog import requirement_text
     result = {}
     for hero_id, guide in HERO_SELECTION_GUIDES.items():
-        abilities = hero_abilities(hero_id)
-        result[hero_id] = replace(guide, flaw=FLAWS[hero_id][2],
+        abilities = tuple(map(present_ability, hero_abilities(hero_id)))
+        result[hero_id] = replace(guide, flaw=hero_text(hero_id)['flaw']['description'],
             complexity_reason='Wybieraj kombinacje kolorów, pozycję i karty pozostawione na reakcje.',
             play_style=('Zarządzaj wspólnym rynkiem: wymieniaj, przekazuj i odzyskuj manę. Zachowujesz 3 stare karty i mieścisz 6; dobierasz tyle samo co inni.'
                         if hero_id == 'lorian' else guide.play_style.replace('Dzikość', 'czerwona mana')),
-            abilities=tuple(f'{a.name} — {a.timing}, {a.cost_label}. {a.description}' for a in abilities[:3]))
+            abilities=tuple(f'{a.name} — {a.timing}. {requirement_text(a.id, hero_id)} {a.description}' for a in abilities[:3]))
     return result

@@ -35,6 +35,11 @@ def test_mission_runes_confrontation_pause_and_fatigue_dice(tmp_path,width):
         s.combat_state=replace(s.combat_state,actors=tuple(replace(a,hp=a.hp-15) if a.id==actor.id else a for a in s.combat_state.actors))
         send(s,'potion');send(s,'potion_target',target=str(actor.id))
         return s.state_payload()
+    @app.post('/__test/autosave')
+    def autosave_result():
+        from tests.unit.test_mission_autosave import restored
+        loaded=restored(s)
+        return dict(ok=m.read(loaded)['stage']=='fatigue_result' and m.read(loaded)['fatigue']==4)
     @app.post('/__test/potion-result')
     def potion_result():
         return dict(ok=m.read(s)['stage']=='battle' and not m.available_potions(s))
@@ -60,6 +65,9 @@ try{
  await wait(()=>state?.mission&&!busy);
  check(document.getElementById('mission-panel').textContent.includes(state.mission.text.title),'mission visible');
  check(state.mission.image.includes('world_intro.png'),'opening world illustration');
+ check(document.querySelector('.mission-toolbar').textContent.includes('Autozapis po każdym etapie'),'autosave explanation');
+ check(!document.querySelector('.mission-toolbar [onclick*="snapshot/save"]'),'no manual mission save');
+ check(document.getElementById('snapshot-save-button').hidden,'manual save hidden in mission menu');
  check(document.querySelector('.mission-narrative--landscape'),'world layout');
  check(!document.querySelector('#mission-panel a[href*="elements_A4.pdf"]'),'print preparation is not in play');
  await wait(()=>document.querySelector('[data-mission-slot="28"]').getBoundingClientRect().bottom<=innerHeight);
@@ -108,7 +116,8 @@ try{
  await press('negotiate');check(state.exploration_mana.phase!=='introduction','resume retained encounter');
  await api('/__test/fatigue',{},'');await die(4);
  check(state.mission.stage==='fatigue_result'&&state.mission.fatigue===4,'fatigue result');
- check(document.getElementById('mission-panel').textContent.includes('4 pełnych rund'),'fatigue narration');
+ check(document.getElementById('mission-panel').textContent.includes('4 pełne rundy'),'fatigue narration');
+ check((await (await fetch('/__test/autosave',{method:'POST'})).json()).ok,'fatigue persisted automatically');
  check(document.documentElement.scrollWidth<=innerWidth,'horizontal overflow');
  await api('/__test/potion',{},'');await die([3,4]);
  check((await (await fetch('/__test/potion-result',{method:'POST'})).json()).ok,'potion consumed');

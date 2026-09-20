@@ -10,12 +10,17 @@ from dataclasses import asdict, dataclass, replace
 from typing import Mapping
 
 COLORS = ("C", "B", "Z", "F", "N")
-CHARGE_BONUS_TIERS = ((0, 0), (6, 2), (12, 4), (21, 6))
+MANA_LIMIT = 6
+CHARGE_BONUS_TIERS = tuple((count, count) for count in range(MANA_LIMIT + 1))
 
 
-def charge_roll_bonus(points: int) -> int:
-    """Shared combat/exploration bonus; reaching 21 caps the bonus, not the pool."""
-    return max(bonus for minimum, bonus in CHARGE_BONUS_TIERS if points >= minimum)
+def charge_roll_bonus(card_count: int) -> int:
+    """Every physical card grants +1; trump never doubles a test bonus."""
+    return max(0, min(MANA_LIMIT, card_count))
+
+
+def ability_charge(hand: tuple[str, ...], values: Mapping[str, int]) -> int:
+    return min(MANA_LIMIT, sum(values[c] for c in hand))
 
 MANA_PRESSURE_FEATURES = frozenset({"mana_burn_offer", "mana_burn_deck", "mana_prison"})
 
@@ -47,7 +52,7 @@ class PooledMana:
     last_paid: tuple[str, ...] = ()
     used: tuple[str, ...] = ()
     turns: int = 0
-    catalog_version: int = 2
+    catalog_version: int = 3
     values: tuple[tuple[str, tuple[int, ...]], ...] = ()
     expired: tuple[str, ...] = ()
     burn_due: int = 0
@@ -55,7 +60,7 @@ class PooledMana:
     excluded: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        if self.catalog_version not in {1, 2}:
+        if self.catalog_version not in {1, 2, 3}:
             raise ValueError("Nieobsługiwana wersja katalogu zapisu many.")
         if not self.heroes or len(set(self.heroes)) != len(self.heroes) or type(self.copies) is not int or self.copies < 1:
             raise ValueError("Nieprawidłowy skład talii.")
@@ -87,11 +92,17 @@ class PooledMana:
         return 5 * self.copies - len(self.excluded)
 
     def point_values(self, actor: str) -> dict[str, int]:
-        return dict(zip(COLORS, dict(self.values).get(actor, (4, 4, 4, 4, 4))))
+        return dict(zip(COLORS, dict(self.values).get(actor, (1, 1, 1, 1, 1))))
 
     def points(self, actor: str) -> int:
         values = self.point_values(actor)
-        return sum(values[c] for c in self.hand(actor))
+        return ability_charge(self.hand(actor), values)
+
+    def roll_bonus(self, actor: str) -> int:
+        return charge_roll_bonus(len(self.hand(actor)))
+
+    def full(self, actor: str) -> bool:
+        return len(self.hand(actor)) >= MANA_LIMIT
 
     def hand(self, actor: str) -> tuple[str, ...]:
         return dict(self.pools).get(actor, ())
@@ -106,6 +117,17 @@ class PooledMana:
             values[key] = tuple(values.get(key, ()))
         for key in ("pools", "prisons", "values"):
             values[key] = tuple((str(owner), tuple(cards)) for owner, cards in values.get(key, ()))
+        if values.get('catalog_version', 1) < 3:
+            # Preserve physical zones, including historical overfull hands. New
+            # draws cannot exceed six; the next drain clears legacy overflow.
+            values['values'] = tuple((hero, tuple(2 if i == max(range(5), key=lambda j: old[j]) else 1
+                                                  for i in range(5))) for hero, old in values['values'])
+            values['catalog_version'] = 3
+            if values.get('actor') in values.get('heroes', ()):
+                hand = dict(values['pools']).get(values['actor'], ())
+                if len(hand) >= MANA_LIMIT:
+                    values['draw_due'] = False
+                    if values.get('phase') == 'choose': values['phase'] = 'ready'
         return cls(**values)
 
 
@@ -139,7 +161,7 @@ def confirm_shuffle(state: PooledMana, deck: tuple[str | None, ...] | None = Non
 def start_turn(state: PooledMana, actor: str, *, round_end: bool = False) -> PooledMana:
     if state.phase != "ready" or state.burn_due:
         raise ValueError("Dokończ operację many przed zmianą tury.")
-    updated = _change(state, actor=actor, draw_due=actor in state.heroes and state.points(actor) < 21,
+    updated = _change(state, actor=actor, draw_due=actor in state.heroes and not state.full(actor),
                       used=tuple(k for k in state.used if not k.startswith(actor + ":")),
                       turns=state.turns + 1, last_paid=())
     if round_end:
@@ -165,6 +187,8 @@ def reveal(state: PooledMana, color: str) -> PooledMana:
 def take(state: PooledMana, index: int) -> PooledMana:
     if state.phase != "choose" or not state.draw_due or type(index) is not int or not 0 <= index < len(state.offer):
         raise ValueError("Wybierz jedną z odkrytych kart.")
+    if state.full(state.actor):
+        raise ValueError("Masz już 6 kart many. Nie dobierasz kolejnej.")
     hands = dict(state.pools)
     hands[state.actor] = (*state.hand(state.actor), state.offer[index])
     return _change(state, pools=tuple(hands.items()), offer=state.offer[:index] + state.offer[index + 1:],

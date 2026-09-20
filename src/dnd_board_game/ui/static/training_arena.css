@@ -220,8 +220,6 @@ body.training-tools-active {padding-bottom:72px;}
 }
 @media(max-width:899px){.approach-layout .approach-chooser{margin-bottom:8px}}
 
-.confrontation-controls>.mana-recovery-diagram{align-self:center;margin:0 auto 4px;max-height:64px}
 .confrontation-party ul{list-style:none;padding:0}
-.confrontation-party li{margin-top:10px;padding-top:8px;border-top:1px solid #ffffff25}
-.confrontation-party li>.mana-passive-symbol{float:right;margin-left:8px}
+.confrontation-party li{margin-top:4px}
 .confrontation-offer .mana-passive-description{font-size:.88rem}

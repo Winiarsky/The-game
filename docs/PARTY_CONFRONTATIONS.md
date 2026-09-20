@@ -1,4 +1,4 @@
-# Drużynowe konfrontacje eksploracji — aktualizacja 19.09.2026
+# Drużynowe konfrontacje eksploracji — aktualizacja 20.09.2026
 
 Aktualny model rozmów i obiektów w Misji 0 i samouczku. Zastępuje aktywny samouczek blackjacka; starsze rozpoczęte próby nadal odczytuje silnik zgodności. Zwykłe rozmowy fabularne i pułapki walki zachowują swoje dotychczasowe przepływy.
 
@@ -9,20 +9,23 @@ Jedna figurka drużyny, osobna pula i tura każdego uczestnika. Misja obsługuje
 Najpierw przypisz podejścia zgodnie z poniższą sekcją.
 
 1. Przygotuj pełny komplet: po `max(5, 2 × liczba bohaterów)` każdego koloru, przetasuj. Osobiste pule puste.
-2. Poniżej 21 punktów obowiązkowo dobierz jedną z dwóch odkrytych kart. Druga pozostaje; następny dobierający uzupełnia ofertę. Jeśli została tylko jedna karta, można ją wziąć. Przy 21+ nie dobierasz; przekroczenie nie szkodzi.
-3. Kolor uruchamia pasyw. Punkty korzystają z tej samej tabeli bohatera co w walce.
+2. Przy mniej niż 6 fizycznych kartach obowiązkowo dobierz jedną z dwóch odkrytych kart. Druga pozostaje; następny dobierający uzupełnia ofertę. Jeśli została tylko jedna karta, można ją wziąć. Przy 6 kartach nie dobierasz.
+3. Kolor uruchamia pasyw. Każda fizyczna karta daje +1 do testu, maksymalnie +6. Atut nie podwaja tej premii.
 4. Po doborze wybierz test, pomoc dozwoloną przez powiązania albo podgląd dolnej karty.
 5. Test: `k20 + cecha + premia naładowania + pasywy + pomoc`. Naturalne 20 nie omija ST, naturalne 1 nie przesądza porażki.
 6. Sukces: `kość podejścia + modyfikator cechy + pasywy wpływu`, minimum 0. Odejmij od wspólnego oporu. Biegłość i premia many nie zwiększają wpływu.
 7. Po efekcie spal 1 kartę z wierzchu, również po nieudanym teście. Zgłaszaj kolory; aplikacja zachowuje bilans wszystkich fizycznych kart. Osobisty ładunek zostaje.
 8. Po działaniach wszystkich postaci następuje jedna reakcja sytuacji, potem kolejna runda.
 
-| Ładunek wymagany | Premia many do testu | Spalanie |
+| Liczba kart | Premia many do testu | Spalanie |
 |---|---|---|
 | 0 | +0 | 1 |
-| 6 | +2 | 1 |
-| 12 | +4 | 1 |
-| 21 | +6 | 1 |
+| 1 | +1 | 1 |
+| 2 | +2 | 1 |
+| 3 | +3 | 1 |
+| 4 | +4 | 1 |
+| 5 | +5 | 1 |
+| 6 | +6 | 1 |
 
 UI wybiera najwyższy osiągnięty próg. Pomoc zastępuje test, spala 1 kartę i daje +1 do najbliższej próby testu wybranego sojusznika (+2 ze Współpracą). Kolejne pomoce, także od tej samej postaci w kolejnej turze, sumują się bez limitu. Cała suma jest zużywana po jego pierwszej próbie k20 — także po porażce. Nie znika przy doborze, końcu rundy ani gdy wsparty bohater pomaga komuś innemu. Nie zwiększa wpływu/postępu. Nie można wspierać siebie; bonus nie przechodzi do nowej konfrontacji. Płatność po efekcie; wymagane spalenie musi zostać zgłoszone przed następną turą.
 
@@ -62,7 +65,7 @@ do oceny przy stole, a nie wyniki ukończonego balansu.
 
 ## Bezpieczna alternatywa: podgląd spodu talii
 
-Po obowiązkowym doborze (albo przy 21+) zamiast testu/pomocy można podejrzeć
+Po obowiązkowym doborze (albo przy 6 kartach) zamiast testu/pomocy można podejrzeć
 jedną dolną kartę. Bez zgłaszania koloru wybierz runą pozostawienie na spodzie
 lub przeniesienie na wierzch. To całe działanie, bez spalania; nie zmienia
 odkrytej oferty, osobistych pul ani zgromadzonej pomocy. Aplikacja zapisuje przesunięcie karty, zachowując już znaną kolejność.
@@ -94,9 +97,9 @@ Cztery opcjonalne warunki zachowane w nowej procedurze: kompromis po zbiciu poł
 
 ## Obsługa i samouczek
 
-Postać → Eksploracja → Skład drużyny / Po kolei / Wybierz ćwiczenie. Domyślnie prowadzący i dwoje towarzyszy. Skład można zmienić przed próbą. Dwanaście przypadków dla każdej postaci (84): NPC, obiekt, pomoc, 21+, reakcja, drain, cztery warunki, dwie samodzielne konfrontacje. Postęp nowego kursu nie dziedziczy zaliczeń starego blackjacka.
+Postać → Eksploracja → Skład drużyny / Po kolei / Wybierz ćwiczenie. Domyślnie prowadzący i dwoje towarzyszy. Skład można zmienić przed próbą. Dwanaście przypadków dla każdej postaci (84): NPC, obiekt, pomoc, sześć kart, reakcja, drain, cztery warunki, dwie samodzielne konfrontacje. Postęp nowego kursu nie dziedziczy zaliczeń starego blackjacka.
 
-Próg 21, reakcja i drain mają jawne przygotowane stany fizycznych stosów, opisane przed rozpoczęciem. Pozostałe próby startują od pełnego kompletu. Ćwiczenie pomocy wymaga co najmniej dwóch osób. Powrót i restart działają także podczas doboru, spalania i rzutu. Pojedyncza próba nie przesuwa postępu kursu.
+Limit sześciu kart, reakcja i drain mają jawne przygotowane stany fizycznych stosów, opisane przed rozpoczęciem. Pozostałe próby startują od pełnego kompletu. Ćwiczenie pomocy wymaga co najmniej dwóch osób. Powrót i restart działają także podczas doboru, spalania i rzutu. Pojedyncza próba nie przesuwa postępu kursu.
 
 Wybory idą przez podświetlone runy. Naturalne wyniki testu i wpływu wprowadza się osobno przez fokus, −/+, podsumowanie, korektę i końcowe ✓. Premie doliczane są raz. Po wczytaniu trzeba potwierdzić zachowanie fizycznych stosów albo powtórzyć próbę. Zapisy przechowują profil sceny, podejścia i powiązania uczestników, etap wyboru, podglądu i rzutu, premie, karty oraz wynik reakcji. Nierozpoczęty starszy zapis otrzymuje nowy wybór podejść; rozpoczęta konfrontacja zachowuje dotychczasowy profil do zakończenia.
 
@@ -151,7 +154,7 @@ talii przed/po, oczekujące odzyskanie oraz stan oferty kompromisu.
 
 Każdy pasyw ma osobno warunek uruchomienia, efekt i zasady kumulacji.
 UI pokazuje warunek oraz efekt od razu; wyjątki i dokładniejsze wyjaśnienia
-są w szczegółach. Dane `display` w katalogach konfrontacji i walki są wspólne
+są w szczegółach. Opisy pochodzą z `content/characters/karty_postaci.json` (sekcje `heroes.*.passives`). Adaptery dołączają je jako `display` do katalogów konfrontacji i walki; pozostają wspólne
 dla aplikacji i mat do druku, z krótszym wariantem `short` na macie.
 
 Oddech ma schemat „spalone → 1 karta → spód talii”. Dotyczy karty spalonej
