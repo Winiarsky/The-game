@@ -9,7 +9,7 @@
     },
     "hardware": {
         "protocol": "board_scan_usb_v2",
-        "serial_port": "/dev/ttyUSB0",
+        "serial_port": "",
         "baud_rate": 115200,
         "probe_timeout_s": 6.0,
         "line_timeout_s": 0.05,

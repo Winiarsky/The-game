@@ -27,10 +27,13 @@
     "identify_roll",
     "ring_identified",
     "guild_return",
+    "equipment_intro",
     "equipment",
     "equipment_item",
     "equipment_sell",
-    "cart_coerced"
+    "cart_coerced",
+    "nessa_theft",
+    "nessa_theft_taken"
   ],
   "checkpoints": [
     "brief",
@@ -76,7 +79,8 @@
     "bell_guild": "load",
     "bell_village": "load",
     "bell_fence": "load",
-    "cart_coerced": "arrival"
+    "cart_coerced": "arrival",
+    "nessa_theft_taken": "brief"
   },
   "guild_points": {
     "talk_nessa": "G01",

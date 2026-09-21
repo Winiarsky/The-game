@@ -12,7 +12,7 @@ from tests.unit.test_confrontation_confirmations import prepared
 
 
 @pytest.mark.parametrize('recovery', [True, False])
-@pytest.mark.parametrize('width,height', [(1300, 657), (390, 800)])
+@pytest.mark.parametrize('width,height', [(1300, 720), (1131, 720)])
 def test_confirmation_visible_and_operable(tmp_path: Path, recovery: bool, width: int, height: int):
     chrome = shutil.which('google-chrome') or shutil.which('chromium')
     if not chrome: pytest.skip('Chrome unavailable')

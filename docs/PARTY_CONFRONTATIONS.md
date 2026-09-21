@@ -12,9 +12,9 @@ Najpierw przypisz podejścia zgodnie z poniższą sekcją.
 2. Przy mniej niż 6 fizycznych kartach obowiązkowo dobierz jedną z dwóch odkrytych kart. Druga pozostaje; następny dobierający uzupełnia ofertę. Jeśli została tylko jedna karta, można ją wziąć. Przy 6 kartach nie dobierasz.
 3. Kolor uruchamia pasyw. Każda fizyczna karta daje +1 do testu, maksymalnie +6. Atut nie podwaja tej premii.
 4. Po doborze wybierz test, pomoc dozwoloną przez powiązania albo podgląd dolnej karty.
-5. Test: `k20 + cecha + premia naładowania + pasywy + pomoc`. Naturalne 20 nie omija ST, naturalne 1 nie przesądza porażki.
-6. Sukces: `kość podejścia + modyfikator cechy + pasywy wpływu`, minimum 0. Odejmij od wspólnego oporu. Biegłość i premia many nie zwiększają wpływu.
-7. Po efekcie spal 1 kartę z wierzchu, również po nieudanym teście. Zgłaszaj kolory; aplikacja zachowuje bilans wszystkich fizycznych kart. Osobisty ładunek zostaje.
+5. Test: `k20 + cecha + premia naładowania + pasywy + pomoc`. Naturalne 20 oznacza automatyczny sukces; naturalne 1 — automatyczną porażkę, niezależnie od premii i ST.
+6. Sukces: `kość podejścia + modyfikator cechy + pasywy wpływu`, minimum 0. Odejmij od wspólnego oporu. Biegłość i premia many nie zwiększają wpływu. Przy naturalnym 20 zamiast rzutu weź maksimum kości i dodaj premie; aplikacja od razu rozlicza efekt.
+7. Po efekcie zwykle spal 1 kartę z wierzchu, również po nieudanym teście. Przy naturalnym 1 dodaj 1 spaloną kartę po modyfikacji zwykłego kosztu (zwykle łącznie 2). Pasywy nadal działają: np. Łagodność Dagny obniża zwykły koszt do 0, ale zostaje 1 karta kary. Zgłaszaj kolory; aplikacja zachowuje bilans wszystkich fizycznych kart. Osobisty ładunek zostaje.
 8. Po działaniach wszystkich postaci następuje jedna reakcja sytuacji, potem kolejna runda.
 
 | Liczba kart | Premia many do testu | Spalanie |
@@ -154,7 +154,7 @@ talii przed/po, oczekujące odzyskanie oraz stan oferty kompromisu.
 
 Każdy pasyw ma osobno warunek uruchomienia, efekt i zasady kumulacji.
 UI pokazuje warunek oraz efekt od razu; wyjątki i dokładniejsze wyjaśnienia
-są w szczegółach. Opisy pochodzą z `content/characters/karty_postaci.json` (sekcje `heroes.*.passives`). Adaptery dołączają je jako `display` do katalogów konfrontacji i walki; pozostają wspólne
+są w szczegółach. Opisy pochodzą z `content/scenarios/misja_0_dzwon/text/karty_postaci.json` (sekcje `heroes.*.passives`). Adaptery dołączają je jako `display` do katalogów konfrontacji i walki; pozostają wspólne
 dla aplikacji i mat do druku, z krótszym wariantem `short` na macie.
 
 Oddech ma schemat „spalone → 1 karta → spód talii”. Dotyczy karty spalonej

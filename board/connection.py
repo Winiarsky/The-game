@@ -81,6 +81,7 @@ def _candidate_ports() -> list[Any]:
 def _probe_port(
     port_name: str, *, protocol_name: str, baud_rate: int,
     probe_timeout_s: float, line_timeout_s: float, write_timeout_s: float,
+    raise_on_open_error: bool = False,
 ) -> PortProbeResult | None:
     if serial is None:
         raise RuntimeError("Brakuje pakietu pyserial.")
@@ -92,7 +93,13 @@ def _probe_port(
         ser.dtr = ser.rts = False
         ser.port = port_name
         ser.open()
-    except serial.SerialException:
+    except serial.SerialException as exc:
+        if raise_on_open_error:
+            raise RuntimeError(
+                f"Nie można otworzyć portu planszy {port_name}: {exc}. "
+                "Sprawdź aktualny port i uprawnienia dostępu. "
+                "Zamknij monitor portu oraz inne programy korzystające z planszy."
+            ) from exc
         return None
     try:
         reader = FrameReader()
@@ -129,6 +136,7 @@ def _open_serial_probe(scan_cfg: dict[str, Any]) -> PortProbeResult:
             probe_timeout_s=probe_timeout_s,
             line_timeout_s=line_timeout_s,
             write_timeout_s=write_timeout_s,
+            raise_on_open_error=True,
         )
         if result is None:
             raise RuntimeError(
@@ -140,19 +148,26 @@ def _open_serial_probe(scan_cfg: dict[str, Any]) -> PortProbeResult:
     ports = _candidate_ports()
     if not ports:
         raise RuntimeError("Nie znaleziono żadnych portów szeregowych.")
+    failures: list[str] = []
     for port in ports:
-        result = _probe_port(
-            port.device,
-            protocol_name=protocol_name,
-            baud_rate=baud_rate,
-            probe_timeout_s=probe_timeout_s,
-            line_timeout_s=line_timeout_s,
-            write_timeout_s=write_timeout_s,
-        )
+        try:
+            result = _probe_port(
+                port.device,
+                protocol_name=protocol_name,
+                baud_rate=baud_rate,
+                probe_timeout_s=probe_timeout_s,
+                line_timeout_s=line_timeout_s,
+                write_timeout_s=write_timeout_s,
+            )
+        except OSError as exc:
+            # A disconnected port or incompatible board must not hide a later match.
+            failures.append(f"{port.device}: {exc}")
+            continue
         if result is not None:
             return result
     checked = ", ".join(port.device for port in ports)
-    raise RuntimeError(f"Nie udało się wykryć płytki z protokołem {protocol_name}. Sprawdzone porty: {checked}")
+    details = " Szczegóły: " + "; ".join(failures) if failures else ""
+    raise RuntimeError(f"Nie udało się wykryć płytki z protokołem {protocol_name}. Sprawdzone porty: {checked}.{details}")
 
 
 class _SimulatorBackend:

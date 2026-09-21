@@ -560,5 +560,25 @@
     "speaker": "Narrator",
     "path": "text/cart_coerced.md",
     "image": "assets/images/road.png"
+  },
+  "nessa_theft": {
+    "title": "Chwila nieuwagi",
+    "path": "text/nessa_theft.md",
+    "speaker": "Narrator",
+    "image": "assets/images/nessa_desk_interaction.png",
+    "image_layout": "landscape"
+  },
+  "nessa_theft_taken": {
+    "title": "Jedna fiolka mniej",
+    "path": "text/nessa_theft_taken.md",
+    "speaker": "Narrator",
+    "image": "assets/images/nessa_desk_interaction.png",
+    "image_layout": "landscape"
+  },
+  "equipment_intro": {
+    "title": "Przygotowanie drużyny do misji",
+    "path": "text/equipment_intro.md",
+    "speaker": "Przy stole",
+    "image": ""
   }
 }

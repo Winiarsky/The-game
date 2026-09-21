@@ -295,6 +295,8 @@ def command(s: ExplorationUiSession, data: dict[str, Any]) -> dict[str, object]:
         else:
             raise ValueError('Nieznane działanie konfrontacji.')
         old=rules.Confrontation.from_data(current['state'])
+        if old.stage in {'reaction', 'after_reaction'}:
+            current['reaction_resolution'] = state.stage in {'reaction', 'after_reaction', 'result'}
         corrections.remember(current, old, state, str(action))
         current['state'] = state.to_data()
         if state.obligation:
@@ -306,6 +308,7 @@ def command(s: ExplorationUiSession, data: dict[str, Any]) -> dict[str, object]:
         s._record('party_confrontation_action', dict(action=action, hero=state.actor.id, round=state.round,
                   resistance=state.resistance, stage=state.stage, outcome=state.outcome,
                   input=dict(data), previous_stage=old.stage, acting_hero=old.actor.id,
+                  action_source='reaction' if old.stage in {'reaction', 'after_reaction'} else 'hero',
                   deck_before=len(old.mana.deck), deck_after=len(state.mana.deck),
                   burned_before=list(old.mana.burned), burned_after=list(state.mana.burned),
                   recovery_color=state.recovery_color or old.recovery_color,
@@ -339,23 +342,43 @@ def payload(s: ExplorationUiSession) -> dict[str, Any]:
     state = rules.Confrontation.from_data(current['state'])
     pool = state.mana
     needs_resume = getattr(s, '_exploration_mana_confirmed', '') != current['token'] and state.stage not in {'introduction', 'approach', 'setup', 'result'}
+    from .session_copy import load_ui_copy
+    copy = load_ui_copy(s._scenario_asset_root() if current['mode'] == 'mission' else None)['confrontation']
+
+    def text(key: str, **params: object) -> str:
+        return copy[key].format(**params)
+
+    reaction_step = state.stage in {'reaction', 'after_reaction'} or (
+        state.stage == 'result' and current.get('reaction_resolution', False))
+    reaction = scene['reactions'][(state.round - 1) % len(scene['reactions'])]
+    reaction_actor = scene.get('reaction_actor') or scene['name'].split('—')[0].split('·')[0].strip()
+    reaction_view = dict(
+        active=reaction_step,
+        source=reaction_actor if scene['kind'] == 'npc' else text('reaction_title'),
+        title=text('reaction_npc_title', name=reaction_actor, reaction=reaction['name'])
+            if scene['kind'] == 'npc' else reaction['name'],
+        label=text('reaction_npc_stage' if scene['kind'] == 'npc' else 'reaction_title'),
+        description=text('reaction_effect_' + reaction['kind']),
+        preview_burn=rules.reaction_pressure(state) if state.stage == 'reaction' else None,
+    )
+
     options = []
     if needs_resume:
-        options.append(choice(28, 'resume', 'Potwierdzam zachowane stosy', stacks_preserved=True))
+        options.append(choice(28, 'resume', text('resume_choice'), stacks_preserved=True))
     elif _compromise_pending(current, state):
-        options.extend((choice(24, 'compromise', 'Przyjmij kompromis'),
-                        choice(25, 'decline_compromise', 'Odrzuć ofertę · negocjuj dalej')))
+        options.extend((choice(24, 'compromise', text('compromise_accept')),
+                        choice(25, 'decline_compromise', text('compromise_decline'))))
     elif state.stage == 'recovery':
-        options.append(choice(28, 'confirm_recovery', 'Karta przełożona — zatwierdź'))
+        options.append(choice(28, 'confirm_recovery', text('recovery_confirm')))
     elif state.stage in {'introduction', 'setup'}:
-        options.append(choice(28, 'acknowledge', 'Wybierzcie podejścia' if state.stage == 'introduction' and state.approach_options else 'Przygotuj talię many' if state.stage == 'introduction' else 'Talia gotowa — rozpocznij'))
+        options.append(choice(28, 'acknowledge', text('choose_approaches') if state.stage == 'introduction' and state.approach_options else text('prepare_deck') if state.stage == 'introduction' else text('deck_ready')))
     elif state.stage == 'approach':
         options.extend(choice(6+i, 'approach', p.method, approach=p.approach_id) for i, p in enumerate(state.approach_options[state.turn]) if p in rules.available_approaches(state))
     elif state.stage == 'peek_choice':
-        options.extend((choice(18, 'peek_finish', 'Zostaw na spodzie', move_top=False),
-                        choice(19, 'peek_finish', 'Przenieś na wierzch', move_top=True)))
+        options.extend((choice(18, 'peek_finish', text('peek_bottom'), move_top=False),
+                        choice(19, 'peek_finish', text('peek_top'), move_top=True)))
     elif state.stage == 'result':
-        options.append(choice(28, 'next', 'Wróć do misji' if current['mode'] == 'mission' else 'Wybór ćwiczenia' if current['mode'] == 'single' else 'Następne ćwiczenie' if current.get('completed') else 'Powtórz ćwiczenie'))
+        options.append(choice(28, 'next', text('return_mission') if current['mode'] == 'mission' else text('choose_lesson') if current['mode'] == 'single' else text('next_lesson') if current.get('completed') else text('repeat_lesson')))
     elif pool.phase in {'reveal', 'burn'}:
         for i, color in enumerate(COLORS):
             # Full physical conservation validation also happens in the pure engine.
@@ -363,25 +386,58 @@ def payload(s: ExplorationUiSession) -> dict[str, Any]:
             if pool.deck[0] == color or (pool.deck[0] is None and known.count(color) < pool.composition[color]):
                 options.append(choice(13 + i, 'color', COLOR_NAMES[i], color=color))
     elif pool.phase == 'choose':
-        options.extend(choice(6+i, 'take', f'Weź {COLOR_NAMES[COLORS.index(c)]} · +1 do testów', index=i) for i,c in enumerate(pool.offer))
+        options.extend(choice(6+i, 'take', text('take_choice', color=COLOR_NAMES[COLORS.index(c)]), index=i) for i,c in enumerate(pool.offer))
     elif state.stage == 'turn':
         _, bonus, cost = rules.available_tiers(state)[-1]
-        options.append(choice(18, 'test', f'Test: mana +{bonus} · spal {cost} kartę', bonus=bonus))
-        options.extend(choice(6+HEROES.index(p.id), 'support', f'Pomóż: {p.name} (+{rules.support_bonus(state, p.id)}, razem +{dict(state.aids).get(p.id,0)+rules.support_bonus(state, p.id)}) · spal {rules.perks.support_cost(state)}', target=p.id) for p in rules.support_targets(state))
-        options.append(choice(19, 'peek', 'Podejrzyj spód talii · bez spalania' if pool.deck else 'Czekaj · talia pusta'))
+        options.append(choice(18, 'test', text('test_choice', bonus=bonus, cost=cost), bonus=bonus))
+        options.extend(choice(6+HEROES.index(p.id), 'support', text('support_choice', name=p.name, bonus=rules.support_bonus(state, p.id), total=dict(state.aids).get(p.id,0)+rules.support_bonus(state, p.id), cost=rules.perks.support_cost(state)), target=p.id) for p in rules.support_targets(state))
+        options.append(choice(19, 'peek', text('peek_choice') if pool.deck else text('empty_choice')))
         if state.condition == 'favor' and not state.obligation and pool.burned:
-            options.append(choice(25, 'favor', 'Przyjmij zobowiązanie · odzyskaj kartę'))
+            options.append(choice(25, 'favor', text('favor_choice')))
     elif state.stage in {'after_action', 'after_reaction'}:
-        options.append(choice(28, 'advance', 'Przejdź dalej'))
+        options.append(choice(28, 'advance', text('advance_choice')))
     elif state.stage == 'reaction':
-        options.append(choice(28, 'react', 'Rozstrzygnij reakcję sytuacji'))
+        options.append(choice(28, 'react', text('react_choice')))
     from dnd_board_game.scenarios.mission_pack import read_json
     mission_ui=read_json(s._scenario_asset_root(),'text/ui.json') if current['mode']=='mission' else None
     if state.stage not in {'check', 'impact'} or needs_resume:
-        options.extend((choice(26, 'scroll', 'Przewiń w górę', direction=-1), choice(27, 'scroll', 'Przewiń w dół', direction=1)))
-    options.append(choice(29,'leave',mission_ui['leave_confrontation'] if mission_ui else 'Wróć do wyboru'))
+        options.extend((choice(26, 'scroll', text('scroll_up'), direction=-1), choice(27, 'scroll', text('scroll_down'), direction=1)))
+    options.append(choice(29,'leave',mission_ui['leave_confrontation'] if mission_ui else text('return_choices')))
     if not needs_resume and not _compromise_pending(current, state) and corrections.available(current):
-        options.append(choice(23, 'undo', 'Cofnij ostatni wybór'))
+        options.append(choice(23, 'undo', text('undo_choice')))
+    # Details are read-only board events, never rules commands. Conditions and
+    # required physical operations retain their existing rune priority.
+    if (not needs_resume and not _compromise_pending(current, state)
+            and pool.phase == 'ready'
+            and state.stage in {'turn', 'after_action', 'after_reaction'}):
+        occupied = {option['slot'] for option in options}
+        for slot, detail in ((24, 'bonus'), (25, 'effects')):
+            if slot not in occupied:
+                options.append(choice(slot, 'inspect', text('inspect_' + detail), detail=detail))
+    test_modifiers = [dict(label=label, value=value) for label, value in state.actor.test_components]
+    test_modifiers.extend((
+        dict(label=text('mana_component'), value=pool.roll_bonus(state.actor.id)),
+        dict(label=text('passive_component'), value=state.passive(state.actor.id, 'test')),
+        dict(label=text('aid_component'), value=dict(state.aids).get(state.actor.id, 0)),
+    ))
+    if state.first_test_bonus:
+        test_modifiers.append(dict(label=state.first_test_label, value=state.first_test_bonus))
+    test_preview = dict(
+        modifier_total=sum(component['value'] for component in test_modifiers),
+        modifiers=test_modifiers,
+        impact_modifier=state.actor.impact_modifier + state.passive(state.actor.id, 'impact'),
+        cost=rules.available_tiers(state)[-1][2],
+    )
+    for option in options:
+        if option['action'] == 'support':
+            target = option['extra']['target']
+            option.update(support_bonus=rules.support_bonus(state, target),
+                          support_total=dict(state.aids).get(target, 0) + rules.support_bonus(state, target),
+                          cost=rules.perks.support_cost(state))
+        elif option['action'] == 'take':
+            after = rules.take(state, option['extra']['index'])
+            option['preview'] = dict(roll_bonus=after.mana.roll_bonus(state.actor.id),
+                                     card_count=len(after.mana.hand(state.actor.id)))
     rolling = state.stage in {'check', 'impact'} and not needs_resume
     modifier = state.check_modifier if state.stage == 'check' else state.impact_modifier
     die = 20 if state.stage == 'check' else state.actor.die
@@ -425,7 +481,8 @@ def payload(s: ExplorationUiSession) -> dict[str, Any]:
         compromise_pending=_compromise_pending(current, state),
         recovery_color=state.recovery_color, recovery_label=state.recovery_label, recovery_cost=state.cost,
         recovery_color_name=COLOR_NAMES[COLORS.index(state.recovery_color)] if state.recovery_color else '',
-        image_url=scene_image,
+        image_url=scene_image, test_preview=test_preview,
+        reaction_view=reaction_view,
         choosing_approach=state.stage == 'approach',
         approach_index=state.turn + 1,
         approaches=[dict(slot=6+i, icon=panel_icon(6+i), available=p in rules.available_approaches(state), repeatable=p.repeatable, id=p.approach_id, name=p.method, description=p.description, ability=p.ability, modifier=p.test_modifier, dc=p.dc, die=p.die, supports=list(p.supports)) for i, p in enumerate(state.approach_options[state.turn])] if state.approach_options else [],
@@ -439,13 +496,14 @@ def payload(s: ExplorationUiSession) -> dict[str, Any]:
                          for c, info in passives(state.actor.id).items()},
         resistance=state.resistance, maximum=state.maximum, outcome=state.outcome, result=result,
         last=effect_text(state.last, scene['kind']), last_total=state.last_total, last_impact=state.last_impact,
+        critical=state.last_critical, action_cost=state.cost,
         mana=dict(phase=pool.phase, reason=pool.reason, deck=len(pool.deck), burned=len(pool.burned), copies=pool.copies,
                   total=pool.total, composition=pool.composition, preparation=deck_instruction(pool), excluded=list(pool.excluded),
                   offer=list(pool.offer), pending=pool.pending_count, points=pool.points(state.actor.id), card_count=len(pool.hand(state.actor.id)), limit=6, roll_bonus=pool.roll_bonus(state.actor.id)),
         party=[dict(id=p.id,name=p.name,assigned=bool(p.approach_id) or not state.approach_options,portrait_url=portraits.get(p.id),method=p.method,dc=p.dc,die=p.die,points=pool.points(p.id),card_count=len(pool.hand(p.id)),roll_bonus=pool.roll_bonus(p.id),
                     ability=p.ability,test_modifier=p.test_modifier,influence_modifier=p.impact_modifier,
                     cards=list(pool.hand(p.id)),values=pool.point_values(p.id),aid=dict(state.aids).get(p.id,0),
-                    passives=[dict(display={key: effect_text(value, scene['kind']) for key, value in info.get('display', {}).items()},color=c,label=effect_text(info['label'], scene['kind']),count=pool.hand(p.id).count(c),stackable=info['stackable'],status='Aktywne') for c,info in passives(p.id).items() if c in pool.hand(p.id) and pool.phase not in {'setup','drain'} and state.stage != 'result']) for p in state.participants],
+                    passives=[dict(display={key: effect_text(value, scene['kind']) for key, value in info.get('display', {}).items()},color=c,label=effect_text(info['label'], scene['kind']),count=pool.hand(p.id).count(c),stackable=info['stackable'],status=text('active_status')) for c,info in passives(p.id).items() if c in pool.hand(p.id) and pool.phase not in {'setup','drain'} and state.stage != 'result']) for p in state.participants],
         forecast=scene['reactions'][(state.round-1)%len(scene['reactions'])]['name'] if any(rules.perks.enabled(state, p.id, 'erynd_scout') for p in state.participants) else '',
         reaction=scene['reactions'][(state.round-1)%len(scene['reactions'])]['name'], pressure=state.pressure,
         needs_resume=needs_resume, obligation=state.obligation, completed=current.get('completed',False),

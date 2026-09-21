@@ -1,0 +1,121 @@
+/* Shared laptop display. The physical board supplies every game input. */
+#mission-panel.tabletop-confrontation,#training-arena-panel.tabletop-confrontation {
+  display:grid;grid-template-columns:286px minmax(0,1fr);gap:26px;padding:18px 22px;
+  max-width:1380px;margin-inline:auto;background:#161e1c;color:#eee8dc;
+}
+.tabletop-confrontation .confrontation-scroll {padding-right:18px;border-right:1px solid #39433e;scrollbar-gutter:auto;min-height:0;}
+.tabletop-confrontation .confrontation-scene {gap:12px;align-items:center;}
+.tabletop-confrontation .confrontation-scene-image {width:64px;height:84px;border-radius:5px;object-fit:contain;}
+.tabletop-confrontation .confrontation-scene h2 {font:1.4rem Georgia,serif;color:#f0e8d7;margin:5px 0;}
+.tabletop-confrontation .confrontation-scene small,.tabletop-confrontation .confrontation-controls>header>small {color:#c9b77f;text-transform:uppercase;letter-spacing:.075em;font-size:.69rem;}
+.tabletop-confrontation .confrontation-scene p {font-size:.81rem;line-height:1.4;margin:0;color:#bcbdae;}
+.confrontation-pressure {margin:20px 0 18px;}
+.confrontation-pressure>div {display:flex;justify-content:space-between;gap:12px;font-size:.82rem;}
+.confrontation-pressure progress {display:block;width:100%;height:7px;margin:8px 0 12px;accent-color:#c6a454;}
+.confrontation-active-hero {border:1px solid #bfa361;border-radius:5px;background:#c6a45409;padding:13px;}
+.tabletop-confrontation .confrontation-hero-heading {align-items:center;gap:12px;}
+.tabletop-confrontation .confrontation-hero-portrait {width:66px;height:85px;object-fit:contain;}
+.confrontation-active-hero h3 {font:1.5rem Georgia,serif;margin:5px 0;}
+.confrontation-active-hero .confrontation-hero-heading small {font-size:.68rem;color:#dbc480;}
+.confrontation-active-hero .confrontation-hero-heading p {font-size:.79rem;line-height:1.4;margin:0;}
+.confrontation-pool {display:flex;flex-wrap:wrap;gap:3px;align-items:center;margin:12px 0 7px;min-height:0;}
+.confrontation-pool:empty {display:none;}
+.confrontation-pool .mana-chip {width:25px;height:25px;}
+.confrontation-pool .mana-plus {display:none;}
+.confrontation-pool-summary {font-size:.83rem;margin:8px 0;}
+.confrontation-detail-links {display:grid;gap:6px;margin-top:10px;}
+.tabletop-confrontation .confrontation-detail-links .mana-rune-choice {display:flex;gap:9px;width:100%;padding:5px 3px;min-height:30px;border:0;background:transparent;color:#dfcf9a;font-size:.8rem;text-align:left;}
+.confrontation-detail-links .panel-symbol {width:22px;height:22px;}
+.confrontation-party-summary {display:flex;flex-wrap:wrap;gap:6px 10px;margin-top:15px;color:#afb4ab;font-size:.76rem;}
+.confrontation-party-summary .current {color:#dbc480;}
+.confrontation-received-aid {color:#eddbad;line-height:1.35;}
+.confrontation-received-aid small {display:block;margin-top:3px;font-size:.74rem;color:#c2c5b0;}
+.tabletop-confrontation .confrontation-forecast {font-size:.78rem;line-height:1.4;margin-top:14px;}
+.tabletop-confrontation .confrontation-forecast small {display:block;margin-top:3px;}
+.tabletop-confrontation .confrontation-controls {max-height:none;min-width:0;overflow-y:auto;scrollbar-gutter:stable;display:flex;flex-direction:column;gap:11px;padding-right:5px;}
+.tabletop-confrontation .confrontation-controls>header h2 {font:1.8rem Georgia,serif;font-weight:normal;line-height:1.2;margin:5px 0 0;color:#f3ecdd;}
+.tabletop-confrontation .confrontation-description,.tabletop-confrontation .confrontation-instruction {line-height:1.5;font-size:.91rem;margin:0;}
+.tabletop-confrontation .confrontation-instruction {padding:9px 0;border-bottom:1px solid #354039;color:#d4d4c6;}
+.confrontation-action-grid {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:12px;}
+.confrontation-action-grid>article {border:1px solid #39463d;border-radius:5px;padding:14px;min-width:0;}
+.confrontation-action-grid h3 {font:1.25rem Georgia,serif;margin:8px 0 14px;}
+.confrontation-action-grid p {font-size:.86rem;line-height:1.4;margin:10px 0;}
+.confrontation-action-grid small {font-size:.76rem;line-height:1.4;color:#b7beae;}
+.confrontation-action-grid>article>small:first-child {text-transform:uppercase;letter-spacing:.075em;color:#d1bb7a;}
+.confrontation-formula {font-weight:bold;color:#ebdda6;}
+.tabletop-confrontation .confrontation-action-grid .mana-rune-choice {width:100%;margin-top:12px;}
+.confrontation-action-cost {display:block;margin-top:8px;}
+.confrontation-help-heading {display:flex;align-items:center;justify-content:space-between;min-height:27px;}
+.confrontation-help-heading>div {display:flex;gap:8px;align-items:center;font-size:.72rem;}
+.confrontation-help-heading .confrontation-scroll-button {min-width:28px;min-height:28px;width:28px;height:28px;padding:0;font-size:1.05rem;}
+.confrontation-help-person {display:flex;align-items:center;gap:12px;margin:7px 0;}
+.confrontation-help-person img {width:42px;height:53px;object-fit:contain;border-radius:3px;}
+.confrontation-help-person strong {font:1.3rem Georgia,serif;}
+.confrontation-help-person small {display:block;margin-top:3px;}
+.confrontation-action-grid .confrontation-peek {grid-column:1/-1;display:flex;gap:14px;align-items:center;justify-content:space-between;padding-block:11px;}
+.confrontation-peek h3 {margin:0 0 5px;font-size:1.1rem;}
+.confrontation-peek p {margin:0 0 3px;}
+.tabletop-confrontation .confrontation-peek .mana-rune-choice {width:auto;min-width:116px;margin-top:0;}
+.tabletop-confrontation .confrontation-navigation {margin-top:auto;padding-top:10px;border-top:1px solid #39463d;gap:9px;align-items:flex-end;}
+.tabletop-confrontation .confrontation-navigation>div {flex-wrap:wrap;gap:5px;}
+.tabletop-confrontation .confrontation-navigation small {max-width:180px;font-size:.7rem;line-height:1.4;}
+.tabletop-confrontation .confrontation-navigation .mana-rune-choice {max-width:180px;font-size:.75rem;line-height:1.2;padding:6px;min-height:36px;}
+.tabletop-confrontation .confrontation-navigation .confrontation-scroll-button {min-height:30px;min-width:30px;}
+.tabletop-confrontation .confrontation-controls .mana-rune-choice {background:#202d27;border:1px solid #758064;color:#eee7d6;display:flex;align-items:center;gap:10px;}
+.tabletop-confrontation .mana-rune-choice:hover {border-color:#ddbd68;background:#2d392d;}
+.tabletop-confrontation .mana-rune-choice .panel-symbol {flex-shrink:0;width:27px;height:27px;}
+.tabletop-confrontation .confrontation-controls .confrontation-offer {gap:16px;margin:3px 0;}
+.tabletop-confrontation .confrontation-offer article {padding:17px;border:1px solid #52604b;border-radius:5px;background:#202923;color:#eee8dc;gap:8px;}
+.confrontation-offer-symbol {display:flex;gap:12px;align-items:center;}
+.confrontation-offer-symbol .mana-chip {width:40px;height:40px;}
+.confrontation-offer-symbol b {font-size:.85rem;}
+.tabletop-confrontation .confrontation-offer .mana-passive-description {font-size:.81rem;line-height:1.35;}
+.tabletop-confrontation .confrontation-offer .mana-passive-description p {font-size:inherit;margin:5px 0;line-height:1.35;}
+.tabletop-confrontation .confrontation-offer article>small {font-size:.73rem;color:#c2c5b0;}
+.tabletop-confrontation .confrontation-color-choice {min-width:74px;justify-content:center;padding:15px!important;}
+.tabletop-confrontation .confrontation-color-choice>.panel-symbol {display:none;}
+.tabletop-confrontation .confrontation-color-choice .mana-chip {width:40px;height:40px;}
+.tabletop-confrontation .confrontation-color-choice .mana-chip svg {width:30px;height:30px;}
+.confrontation-recovery-symbol .mana-chip {width:44px;height:44px;}
+.tabletop-confrontation .confrontation-result {padding:10px 12px;font-size:.9rem;margin:0;line-height:1.5;}
+.tabletop-confrontation .confrontation-critical {padding:10px 12px;border:1px solid #b99a56;background:#202923;color:#eee8dc;}
+.tabletop-confrontation .confrontation-critical p {margin:4px 0 0;}
+.tabletop-confrontation .confrontation-rules {margin-top:12px;font-size:.83rem;line-height:1.5;color:#babfae;}
+.tabletop-confrontation .confrontation-rules h3 {font-size:.85rem;color:#d6c693;}
+#confrontation-detail {width:min(660px,80vw);max-height:80vh;border:1px solid #a48c55;border-radius:7px;background:#1b2520;color:#eee8dc;padding:22px;box-sizing:border-box;}
+#confrontation-detail[open] {display:flex;flex-direction:column;gap:16px;}
+#confrontation-detail::backdrop {background:#030906bb;}
+#confrontation-detail header>small,#confrontation-detail footer>small {color:#b8c0ae;font-size:.79rem;}
+#confrontation-detail h2 {font:1.65rem Georgia,serif;margin:7px 0 0;}
+.confrontation-detail-body {overflow-y:auto;min-height:0;line-height:1.55;padding-right:9px;}
+.confrontation-detail-body dl>div {display:flex;justify-content:space-between;border-top:1px solid #425143;padding:10px 0;gap:20px;}
+.confrontation-detail-body dd {color:#e7cf89;}
+.confrontation-detail-body article {padding:10px 0;border-bottom:1px solid #425143;}
+.confrontation-detail-body h3 {display:flex;align-items:center;gap:12px;}
+.confrontation-detail-body .mana-chip {width:30px;height:30px;}
+#confrontation-detail footer {display:flex;align-items:center;justify-content:space-between;gap:10px;border-top:1px solid #425143;padding-top:13px;}
+#confrontation-detail footer>div {display:flex;gap:7px;}
+@media (max-height:750px) {
+  #mission-panel.tabletop-confrontation,#training-arena-panel.tabletop-confrontation {padding:13px 18px;gap:20px;grid-template-columns:265px minmax(0,1fr);}
+  .tabletop-confrontation .confrontation-pressure {margin:14px 0;}
+  .tabletop-confrontation .confrontation-active-hero {padding:10px;}
+  .tabletop-confrontation .confrontation-controls {gap:8px;}
+  .tabletop-confrontation .confrontation-controls>header h2 {font-size:1.65rem;}
+  .confrontation-action-grid {gap:10px;}
+  .confrontation-action-grid>article {padding:10px 12px;}
+  .confrontation-action-grid h3 {font-size:1.15rem;margin:6px 0 9px;}
+  .confrontation-action-grid p {margin:7px 0;font-size:.83rem;}
+  .tabletop-confrontation .confrontation-offer article {padding:11px;gap:5px;}
+}
+@media (max-height:750px) {
+  .tabletop-confrontation .confrontation-scene-image {width:50px;height:70px;}
+  .tabletop-confrontation .confrontation-scene {gap:9px;}
+  .tabletop-confrontation .confrontation-scene h2 {font-size:1.23rem;}
+  .tabletop-confrontation .confrontation-scene p {font-size:.76rem;line-height:1.35;}
+  .tabletop-confrontation .confrontation-hero-portrait {width:56px;height:72px;}
+  .tabletop-confrontation .confrontation-active-hero h3 {font-size:1.3rem;}
+  .tabletop-confrontation .confrontation-pool {margin:9px 0 5px;}
+  .tabletop-confrontation .confrontation-detail-links {gap:4px;margin-top:8px;}
+  .tabletop-confrontation .confrontation-detail-links .mana-rune-choice {padding:3px 0;min-height:28px;}
+  .tabletop-confrontation .confrontation-party-summary {margin-top:10px;font-size:.72rem;}
+}

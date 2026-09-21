@@ -50,9 +50,7 @@ def impact_bonus(state: Confrontation, hero: str) -> int:
     colors = set(state.mana.hand(hero))
     if any(p.id != hero and colors.intersection(state.mana.hand(p.id)) for p in state.participants):
         value += min(2, count(state, hero, 'lorian_ensemble'))
-    trump = max(state.mana.point_values(hero), key=state.mana.point_values(hero).get)
-    if state.mana.hand(hero).count(trump) >= 2:
-        value += min(2, count(state, hero, 'nimra_focus'))
+    value += min(2, count(state, hero, 'nimra_focus'))
     if state.resistance * 3 <= state.maximum:
         value += min(2, count(state, hero, 'erynd_finish'))
     return value

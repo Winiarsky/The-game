@@ -122,6 +122,18 @@ function sharedCommandControlsHtml(combat) {
   </div>`;
 }
 
+function manaDeckPreparationHtml(pool) {
+  const preparation = pool.deck_preparation;
+  if (!preparation) return '';
+  const t = (key, params={}) => esc(sessionUiText(`combat.${key}`, params));
+  const counts = values => Object.entries(values).map(([color, count]) => `<span>${manaCostHtml([color])}<b>× ${Number(count)}</b></span>`).join('');
+  return `<section class="mana-deck-preparation" role="alert">
+    <h3>${t('deck_ethos_title',{stance:preparation.label,steps:preparation.steps})}</h3>
+    <p>${t('deck_ethos_remove')}</p><div class="mana-deck-counts">${counts(preparation.removed)}</div>
+    <p>${t('deck_ethos_keep',{total:preparation.total})}</p><div class="mana-deck-counts">${counts(preparation.composition)}</div>
+    <p>${t('deck_ethos_confirm')}</p></section>`;
+}
+
 function sharedManaHtml(combat) {
   const mana = combat.shared_mana;
   if (!mana) return '';
@@ -131,7 +143,7 @@ function sharedManaHtml(combat) {
     const pool = mana.pool_view;
     const hand = pool.hands.find(h => h.hero === pool.actor);
     decision = `<h3>${pool.phase === 'drain' ? 'Mana drain' : pool.phase === 'bard' ? 'Manipulacja many' : 'Pula many'}</h3>
-      <p>${esc(pool.instruction)}</p><div class="mana-boost-options">${pool.choices.map(c => {
+      ${manaDeckPreparationHtml(pool) || `<p>${esc(pool.instruction)}</p>`}<div class="mana-boost-options">${pool.choices.map(c => {
         const button = `<button onclick="sharedManaCommand('${c.command}', {${c.index !== undefined ? `index: ${c.index}` : c.color ? `color: '${c.color}'` : ''}})">${c.icon} ${esc(c.rune)} · ${esc(c.label)}${pool.phase === 'choose' && hand ? ` · ${hand.values[c.color]===2?'Atut':'Mana'} → ${Math.min(6,hand.total + hand.values[c.color])}/6 ładunku · +1 do testów` : ''}</button>`;
         return pool.phase === 'choose' && hand ? `<article class="mana-choice-option">${button}${manaPassiveDescriptionHtml(hand.color_passives?.[c.color],true)}</article>` : button;
       }).join('')}</div>`;

@@ -39,6 +39,7 @@
 .mission-narrative--landscape .mission-art {height:auto;max-height:none;object-fit:contain;}
 .mission-narrative--portrait .mission-art {max-height:430px;}
 .mission-narrative-text {min-width:0;}
+.mission-narrative-text:only-child {grid-column:1 / -1;}
 .mission-narrative--landscape .mission-prose {font-size:1.05rem;line-height:1.65;}
 @media(max-width:760px){
   .mission-narrative--portrait,.mission-narrative--landscape {grid-template-columns:minmax(0,1fr);gap:.5rem;}
@@ -93,6 +94,9 @@
 /* One browsed item and a stable loadout; the inventory can grow without more buttons. */
 .equipment-heading {display:flex; align-items:center; justify-content:space-between; gap:1rem}
 .equipment-heading h2 {margin:.4rem 0}
+.equipment-hero {display:flex;align-items:center;gap:.8rem;min-width:0}
+.equipment-hero-portrait {width:64px;height:80px;object-fit:contain;border-radius:6px;flex-shrink:0}
+.equipment-hero small {color:#bfa25d}
 .equipment-layout {display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; max-height:47vh}
 .equipment-preview, .equipment-loadout {overflow:auto; min-width:0}
 .equipment-preview h3 {margin:.4rem 0}

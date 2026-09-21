@@ -11,7 +11,7 @@ from dnd_board_game.ui.routes import create_app
 from tests.unit.test_launcher_ui import _session
 
 
-@pytest.mark.parametrize('width', [390, 1100])
+@pytest.mark.parametrize('width', [1131, 1300])
 @pytest.mark.parametrize('page_path', ['/', '/new-game'])
 def test_runes_click_real_controls_and_follow_menu_changes(tmp_path: Path, width: int, page_path: str) -> None:
     chrome = shutil.which('google-chrome') or shutil.which('chromium')
@@ -22,6 +22,8 @@ def test_runes_click_real_controls_and_follow_menu_changes(tmp_path: Path, width
     html = re.sub(r'<link rel="stylesheet"[^>]+>', '<style>' + (static/'launcher.css').read_text() + '</style>', html)
     html = re.sub(r'<script src="[^"]*launcher_board.js[^"]*" defer></script>',
                   lambda _: '<script>' + (static/'launcher_board.js').read_text() + '</script>', html)
+    html = re.sub(r'<script src="[^"]*session_copy.js[^"]*"[^>]*></script>',
+                  lambda _: '<script>' + (static/'session_copy.js').read_text() + '</script>', html)
     harness = r'''
 let contract=null, selection=null, pending=null, generation=0, submission=null, released=false, staleNext=false;
 const response=data=>Promise.resolve({ok:true,json:()=>Promise.resolve(data)});
@@ -43,7 +45,7 @@ const check=(ok, message)=>{if(!ok)throw new Error(message);};
 const pause=()=>new Promise(resolve=>setTimeout(resolve,10));
 async function until(predicate) {for(let i=0;i<100;i++){if(predicate())return;await pause();}throw new Error('Timed out');}
 async function press(slot) {
- await until(()=>pending && (contract.slots.includes(slot)||(slot===29 && contract.back)));
+ await until(()=>pending && (contract.slots.includes(slot)||contract.controls.includes(slot)||(slot===29 && contract.back)));
  const resolve=pending;pending=null;
  resolve({navigation_event:{token:contract.token,slot},board_selection:{...selection,auto_arm:false}});
  await pause();
@@ -53,6 +55,7 @@ window.addEventListener('load',async()=>{
  try {
   await until(()=>pending);
   check(!contract.slots.includes(28),'menu requires confirmation');
+  check(JSON.stringify(contract.controls)==='[26,27,28]','missing board cursor controls');
   check(document.documentElement.scrollWidth<=innerWidth,'horizontal overflow');
   if(PAGE==='/') {
    check(JSON.stringify(contract.slots)==='[6,7,8,9]','wrong main runes');
@@ -60,7 +63,11 @@ window.addEventListener('load',async()=>{
    check(document.querySelectorAll('.main-menu svg[data-panel-slot]').length===4,'missing glyphs');
    const button=document.querySelector('button.menu-action');
    check(getComputedStyle(button).color===getComputedStyle(document.querySelector('a.menu-action')).color,'arena title is dark');
-   await press(8);
+   await press(27);await until(()=>contract.focused===7);
+   await press(27);await until(()=>contract.focused===8);
+   await press(26);await until(()=>contract.focused===7);
+   await press(27);await until(()=>contract.focused===8);
+   await press(28);
    await until(()=>submission);
    check(submission.path==='/training/open','rune did not open arena immediately');
   } else {
@@ -69,7 +76,7 @@ window.addEventListener('load',async()=>{
    const second=document.querySelector('[data-board-rune="7"] input');
    const scenarioRunes=[...document.querySelectorAll('#scenario-selection-step [data-board-rune]')]
      .map(card=>Number(card.dataset.boardRune));
-   await press(6);
+   await press(28);
    await until(()=>first.checked && contract.slots.includes(25));
    await press(6);
    await until(()=>!first.checked && !contract.slots.includes(25));
@@ -78,6 +85,9 @@ window.addEventListener('load',async()=>{
    first.click();
    await until(()=>contract.slots.includes(25));
    check(!second.checked,'late board event overrode screen choice');
+   for(const slot of [7,8,9,10,11]) await press(slot);
+   await until(()=>document.querySelectorAll('input[name="character_ids"]:checked').length===6&&!contract.slots.includes(12));
+   check(document.querySelectorAll('input[name="character_ids"]:checked').length===6,'six-player party is blocked');
    await press(25);
    await until(()=>JSON.stringify(contract.slots)===JSON.stringify(scenarioRunes));
    check(contract.back,'scenario has no back control');

@@ -1,0 +1,25 @@
+/* Shared laptop presentation. The physical board remains the map and controller. */
+body.mission-active{--shell-header-height:64px;--color-bg:#17201c;--color-surface:#1b2520;--color-surface-raised:#202b24;--color-border:#d4dcca24;--color-text:#eeeadd;--color-text-muted:#a5b4aa;--color-gold:#d6bd86;background:#17201c}
+.mission-active .app-shell-header{background:#17201c;box-shadow:none;border-bottom:1px solid var(--color-border);grid-template-columns:1fr auto;min-height:64px;padding:9px 28px}
+.mission-active .party-summary{display:none}.mission-active .mode-badge{border:0;background:none;padding:0;font-size:10px}.mission-active .app-shell-title h1{font-size:22px;font-weight:400}
+.mission-active .card{border-radius:4px;box-shadow:none}.mission-active button{border-radius:4px}
+.mission-active #mission-panel{max-width:1300px;padding:16px 22px;margin:0 auto;background:transparent;border:0}
+.mission-active .mission-toolbar{font-size:11px;margin-bottom:14px;justify-content:space-between;color:var(--color-text-muted)}
+.mission-active .mission-toolbar details{display:none}.mission-active .mission-toolbar a.button{display:none}
+.mission-active .mission-narrative{gap:38px}.mission-active .mission-narrative-text h2{font:36px/1.2 Georgia,serif;font-weight:400;margin:12px 0 24px}
+.mission-active .mission-narrative--landscape{grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr)}
+.mission-active .mission-narrative--portrait{grid-template-columns:minmax(220px,.65fr) minmax(0,1.35fr)}
+.mission-active .mission-prose{font:18px/1.7 Georgia,serif;color:#d2d8cd;max-width:65ch}
+.mission-active .mission-art{border-radius:4px}.mission-active .mission-story-controls{padding-top:16px}
+.mission-active .mana-rune-choice{border-radius:4px}.mission-active .mission-story-controls .mana-rune-choice small{display:none}
+.tabletop-combat-active #mission-panel,.tabletop-combat-active #encounter-title{display:none!important}
+.tabletop-combat-active main>section{width:min(1400px,100%);padding:14px 24px;overflow:visible}
+.tabletop-combat-active #encounter-panel{padding:0;border:0;background:transparent;box-shadow:none;width:100%}
+.tabletop-combat-active .tt-combat{height:calc(100dvh - 104px);max-height:none;min-height:390px;padding:4px 0}
+.tabletop-combat-active .tt-decision{min-height:0}
+#session-navigation{width:min(720px,80vw);height:min(640px,85vh);padding:22px;border:1px solid #d4dcca35;border-radius:5px;background:#1b2520;color:#eeeadd;box-shadow:0 15px 70px #0008}
+#session-navigation[open]{display:flex;flex-direction:column;gap:15px}#session-navigation::backdrop{background:#07110bbd}
+#session-navigation header{display:flex;align-items:center;justify-content:space-between;gap:20px}#session-navigation h2{font:30px Georgia,serif;margin:0}#session-navigation h3{font:24px Georgia,serif;margin:10px 0}
+#session-navigation .session-navigation-content{overflow:auto;min-height:0;flex:1;scrollbar-width:thin;line-height:1.7}
+#session-navigation [data-session-choice]{display:block;width:100%;text-align:left;margin:8px 0;padding:13px;color:#eeeadd;background:#202b24;border:1px solid #d4dcca24}
+#session-navigation .session-focused{outline:2px solid #d6bd86;outline-offset:-2px}#session-navigation footer{font-size:11px;color:#a5b4aa}#session-navigation p{font-size:14px}#session-navigation td{padding:5px 10px;border:1px solid #d4dcca24}

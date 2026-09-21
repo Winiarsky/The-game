@@ -59,6 +59,7 @@ class Confrontation:
     last_roll: int | None = None
     last_total: int | None = None
     last_impact: int = 0
+    last_critical: str = ''
     recovery_color: str = ''
     check_modifier: int = 0
     impact_modifier: int = 0
@@ -90,6 +91,8 @@ class Confrontation:
                     raise ValueError('Nieprawidłowe podejścia uczestnika.')
         if not self.reactions or any(r not in {'burn', 'strip', 'heal'} for r in self.reactions):
             raise ValueError('Nieznana reakcja.')
+        if self.last_critical not in {'', 'success', 'failure'}:
+            raise ValueError('Nieznany wynik krytyczny konfrontacji.')
 
     @property
     def actor(self) -> Participant:
@@ -210,7 +213,7 @@ def declare(state: Confrontation, bonus: int) -> Confrontation:
     return replace(state, stage='check', bonus=bonus, cost=tier[2], aids=tuple(aids.items()),
                    check_modifier=modifier + state.first_test_bonus,
                    applied_first_test_bonus=state.first_test_bonus, first_test_bonus=0, impact_modifier=state.actor.impact_modifier + state.passive(state.actor.id, 'impact'),
-                   last_roll=None, last_total=None, last_impact=0)
+                   last_roll=None, last_total=None, last_impact=0, last_critical='')
 
 
 def _cost(state: Confrontation) -> Confrontation:
@@ -245,16 +248,18 @@ def roll_check(state: Confrontation, natural: int) -> Confrontation:
     total = natural + state.check_modifier
     aids = tuple((hero, value) for hero, value in state.aids if hero != state.actor.id)
     updated = replace(state, aids=aids, last_roll=natural, last_total=total,
+                      last_critical='success' if natural == 20 else 'failure' if natural == 1 else '',
                       natural_one_seen=state.natural_one_seen or natural == 1,
                       last=f'{state.actor.name}: {natural} + ({state.check_modifier}) = {total}, ST {state.actor.dc}.')
-    if total >= state.actor.dc:
+    if natural == 20 or (natural != 1 and total >= state.actor.dc):
         exact = 3 if perks.enabled(state, state.actor.id, 'nimra_exact') and total == state.actor.dc else 0
-        return replace(_record_action(updated, 'test', True), stage='impact',
+        updated = replace(_record_action(updated, 'test', True), stage='impact',
                        impact_modifier=updated.impact_modifier + exact,
-                       last=updated.last + ' Udana próba — rzuć na wpływ.' + (' Dokładny rachunek: +3.' if exact else ''))
+                       last=updated.last + (' Krytyczny sukces — maksymalna wartość kości wpływu.' if natural == 20 else ' Udana próba — rzuć na wpływ.') + (' Dokładny rachunek: +3.' if exact else ''))
+        return roll_impact(updated, state.actor.die) if natural == 20 else updated
     updated = _record_action(updated, 'test')
     hero = state.actor.id
-    updated = replace(updated, last=updated.last + ' Nieudany test.')
+    updated = replace(updated, last=updated.last + (' Krytyczna porażka.' if natural == 1 else ' Nieudany test.'))
     if perks.enabled(state, hero, 'garran_rally'):
         for ally in state.participants:
             if ally.id != hero: updated = _aid(updated, ally.id, 1)
@@ -263,9 +268,11 @@ def roll_check(state: Confrontation, natural: int) -> Confrontation:
         updated = replace(updated, resistance=max(0, updated.resistance - 1), last_impact=1,
                           last=updated.last + ' Choćby siłą: opór −1.')
     if natural <= 5 and perks.enabled(state, hero, 'dagna_patience'):
-        updated = replace(updated, cost=0, last=updated.last + ' Łagodność: bez spalania.')
-    else:
-        updated = replace(updated, last=updated.last + f' Spal {updated.cost} kartę.')
+        updated = replace(updated, cost=0, last=updated.last + ' Łagodność: zwykły koszt 0.')
+    if natural == 1:
+        updated = replace(updated, cost=updated.cost + 1,
+                          last=updated.last + ' Krytyczna porażka: dodatkowo spal 1 kartę.')
+    updated = replace(updated, last=updated.last + f' Spalanie: {updated.cost}.')
     return _cost(updated)
 
 
@@ -320,7 +327,7 @@ def support(state: Confrontation, target: str) -> Confrontation:
     cost = perks.support_cost(state)
     updated = _record_action(replace(state, aids=tuple(aids.items()), cost=cost, used_support=True,
                    last=f'{state.actor.name}: pomoc +{value} dla {name}; razem +{aids[target]} do najbliższej próby testu. Spalanie: {cost}. Cała pomoc znika po tej próbie, także po porażce.',
-                   last_roll=None, last_total=None, last_impact=0), 'support')
+                   last_roll=None, last_total=None, last_impact=0, last_critical=''), 'support')
     if perks.enabled(state, state.actor.id, 'garran_example'): updated = _aid(updated, state.actor.id, 1)
     if perks.enabled(state, state.actor.id, 'lorian_echo'):
         others = [p for p in support_targets(state) if p.id != target]
@@ -333,7 +340,7 @@ def start_peek(state: Confrontation) -> Confrontation:
     _acting(state)
     return replace(state if state.mana.deck else _record_action(state, 'wait'), stage='peek_choice' if state.mana.deck else 'after_action', cost=0,
                    last='Podejrzyj dolną kartę. Wybierz: zostaw na spodzie albo przenieś na wierzch.' if state.mana.deck else 'Talia jest pusta. Czekasz; kończysz działanie bez spalania.',
-                   last_roll=None, last_total=None, last_impact=0)
+                   last_roll=None, last_total=None, last_impact=0, last_critical='')
 
 
 def finish_peek(state: Confrontation, move_top: bool) -> Confrontation:
@@ -364,12 +371,13 @@ def compromise_available(state: Confrontation) -> bool:
 def compromise(state: Confrontation) -> Confrontation:
     if not compromise_available(state):
         raise ValueError('Kompromis nie jest teraz dostępny.')
-    return replace(state, stage='result', outcome='compromise', last='Drużyna przyjmuje częściowe porozumienie.')
+    return replace(state, stage='result', outcome='compromise', last_critical='', last='Drużyna przyjmuje częściowe porozumienie.')
 
 
 def advance(state: Confrontation) -> Confrontation:
     if state.stage not in {'after_action', 'after_reaction'} or state.mana.phase != 'ready':
         raise ValueError('Dokończ działanie i rozliczenie kart.')
+    state = replace(state, last_critical='')
     if state.stage == 'after_action' and state.turn + 1 == len(state.participants):
         return replace(state, stage='reaction')
     new_round = state.round + int(state.stage == 'after_reaction')
@@ -378,13 +386,21 @@ def advance(state: Confrontation) -> Confrontation:
     return finish(replace(state, turn=index, round=new_round, mana=pool, stage='turn'))
 
 
+def reaction_pressure(state: Confrontation) -> int:
+    """Cards burned by the next reaction, including the party's protection."""
+    return max(0, state.pressure - int(any(
+        perks.enabled(state, p.id, 'garran_line') and state.mana.full(p.id)
+        for p in state.participants
+    )))
+
+
 def react(state: Confrontation, heal_roll: int = 1) -> Confrontation:
     if state.stage != 'reaction' or state.mana.phase != 'ready':
         raise ValueError('Nie trwa reakcja sytuacji.')
     kind = state.reactions[(state.round - 1) % len(state.reactions)]
     if type(heal_roll) is not int or not 1 <= heal_roll <= 4:
         raise ValueError('Reakcja wymaga wyniku k4.')
-    pressure = max(0, state.pressure - int(any(perks.enabled(state, p.id, 'garran_line') and state.mana.full(p.id) for p in state.participants)))
+    pressure = reaction_pressure(state)
     message = f'Presja sytuacji: spal {pressure} kart z wierzchu.'
     pool, resistance = state.mana, state.resistance
     if kind == 'strip':

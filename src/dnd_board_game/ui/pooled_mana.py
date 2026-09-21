@@ -8,7 +8,7 @@ from dnd_board_game.rules.pooled_mana import COLORS, confirm_shuffle, reveal, ta
 from dnd_board_game.rules.shared_mana import sync_pool, finish_mana_action
 from dnd_board_game.scenarios.pooled_mana_catalog import hero_profile
 from .board_panel_symbols import panel_icon, SYMBOLS
-from .party_ethos import deck_instruction
+from .party_ethos import deck_instruction, deck_preparation
 
 if TYPE_CHECKING:
     from .exploration_app import ExplorationUiSession, BoardScanTarget
@@ -83,6 +83,7 @@ def view(session: ExplorationUiSession) -> dict[str, object] | None:
     return dict(phase=phase, copies=pool.copies, total=pool.total, composition=pool.composition, excluded=list(pool.excluded), deck=len(pool.deck),
                 offer=list(pool.offer), burned=list(pool.burned), expired=list(pool.expired), prisons=dict(pool.prisons),
                 hands=hands, actor=pool.actor, instruction=instruction,
+                deck_preparation=deck_preparation(pool) if phase in {'setup', 'drain'} else None,
                 choices=[dict(c, icon=panel_icon(c["slot"]), rune=SYMBOLS[c["slot"]][0] if c["slot"] < 26 else "✓" if c["slot"] == 28 else "↩") for c in choices])
 
 
@@ -163,12 +164,14 @@ def command(session: ExplorationUiSession, data: dict[str, object]) -> dict[str,
 def scan_target(session: ExplorationUiSession) -> BoardScanTarget | None:
     from .exploration_app import BoardScanTarget
     from dnd_board_game.hardware.board_panel import panel_feedback, panel_position
+    from .exploration_mana_board import MANA_LED_COLORS
     payload = view(session)
     if payload is None or not payload["choices"]:
         return None
     slots = tuple(c["slot"] for c in payload["choices"])
+    colors = {c['slot']: MANA_LED_COLORS[c['color']] for c in payload['choices'] if c.get('color') in MANA_LED_COLORS}
     return BoardScanTarget(positions=tuple(panel_position(s) for s in slots),
-                           feedback=panel_feedback(tuple(s for s in slots if s < 26), control_slots=tuple(s for s in slots if s >= 26)),
+                           feedback=panel_feedback(tuple(s for s in slots if s < 26), control_slots=tuple(s for s in slots if s >= 26), action_colors=colors),
                            empty_message=payload["instruction"])
 
 

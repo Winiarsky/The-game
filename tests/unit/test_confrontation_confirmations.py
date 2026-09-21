@@ -22,7 +22,7 @@ def prepared(tmp_path: Path, recovery: bool = True):
     if recovery:
         state = replace(state, turn=2, mana=replace(state.mana, actor='dagna'))
         state = charged(state, {'dagna': ('Z',)}, deck_size=15)
-        state = r.roll_impact(r.roll_check(r.declare(state, 0), 20), 1)
+        state = r.roll_impact(r.roll_check(r.declare(state, 0), 19), 1)
     else:
         state = charged(state, {}, deck_size=15)
         state = replace(state, stage='after_action', resistance=state.maximum // 2)
@@ -33,7 +33,7 @@ def prepared(tmp_path: Path, recovery: bool = True):
 
 def test_recovery_waits_for_physical_confirmation_and_survives_save():
     state = charged(game(('dagna', 'garran', 'brakka')), {'dagna': ('Z',)}, deck_size=0)
-    state = r.roll_impact(r.roll_check(r.declare(state, 0), 20), 1)
+    state = r.roll_impact(r.roll_check(r.declare(state, 0), 19), 1)
     assert state.stage == 'recovery' and not state.outcome
     before = state.mana
     loaded = r.Confrontation.from_data(json.loads(json.dumps(state.to_data())))
@@ -52,7 +52,7 @@ def test_recovery_waits_for_physical_confirmation_and_survives_save():
 def test_recovery_on_winning_hit_still_requires_confirmation():
     state = charged(game(('dagna', 'garran', 'brakka')), {'dagna': ('Z',)}, deck_size=0)
     state = replace(state, resistance=1)
-    pending = r.roll_impact(r.roll_check(r.declare(state, 0), 20), 1)
+    pending = r.roll_impact(r.roll_check(r.declare(state, 0), 19), 1)
     assert pending.stage == 'recovery' and pending.resistance == 0 and not pending.outcome
     assert settle(pending).outcome == 'success'
 

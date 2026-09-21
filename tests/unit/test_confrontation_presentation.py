@@ -264,3 +264,92 @@ def test_saved_peek_skips_color_reporting_and_uses_only_position_runes(tmp_path:
     assert after['stage']=='after_action'
     assert after['mana']['deck']==[before['deck'][-1],*before['deck'][:-1]]
     assert after['mana']['burned']==before['burned']
+
+
+def test_tabletop_preview_matches_rules_and_inspection_is_read_only(tmp_path: Path):
+    from dataclasses import replace
+    from dnd_board_game.rules import confrontation as rules
+    from tests.unit.test_confrontation import charged
+
+    s = start(tmp_path, 6)
+    command(s, 'acknowledge'); choose_approaches(s); command(s, 'acknowledge')
+    store = c.read_store(s)
+    state = rules.Confrontation.from_data(store['current']['state'])
+    state = charged(state, {state.actor.id: ('C', 'B', 'N', 'Z')})
+    state = replace(state, aids=((state.actor.id, 3),), first_test_bonus=2,
+                    first_test_label='Przychylność Nessy')
+    store['current']['state'] = state.to_data()
+    c.write(s, store)
+    before = c.read_store(s)
+    p = c.payload(s)
+    declared = rules.declare(state, rules.available_tiers(state)[-1][1])
+    assert p['test_preview']['modifier_total'] == declared.check_modifier
+    assert p['test_preview']['impact_modifier'] == declared.impact_modifier
+    assert sum(item['value'] for item in p['test_preview']['modifiers']) == declared.check_modifier
+    assert c.read_store(s) == before
+    for slot, detail in ((24, 'bonus'), (25, 'effects')):
+        choice = next(item for item in p['board_choices'] if item['slot'] == slot)
+        assert choice['action'] == 'inspect' and choice['extra']['detail'] == detail
+        event = board.select_position(s, panel_position(slot))
+        assert event['panel_event'] == dict(slot=slot, context=f"confrontation-inspect:{p['revision']}")
+        assert c.read_store(s) == before
+
+
+def test_help_runes_stay_with_hero_and_show_real_support_modifier(tmp_path: Path):
+    from dataclasses import replace
+    from dnd_board_game.rules import confrontation as rules
+    from dnd_board_game.rules.exploration_mana_catalog import HEROES
+    from tests.unit.test_confrontation import charged
+
+    s = start(tmp_path, 6)
+    command(s, 'acknowledge'); choose_approaches(s); command(s, 'acknowledge')
+    store = c.read_store(s)
+    state = rules.Confrontation.from_data(store['current']['state'])
+    state = charged(state, {state.actor.id: ('C',)})
+    state = replace(state, participants=tuple(replace(person, supports=('*',)) for person in state.participants))
+    store['current']['state'] = state.to_data(); c.write(s, store)
+    choices = [item for item in c.payload(s)['board_choices'] if item['action'] == 'support']
+    assert len(choices) == 5
+    for item in choices:
+        hero = item['extra']['target']
+        assert item['slot'] == 6 + HEROES.index(hero)
+        assert item['support_bonus'] == rules.support_bonus(state, hero)
+        assert item['support_total'] == rules.support_bonus(state, hero)
+        assert item['cost'] == rules.perks.support_cost(state)
+    assert next(item for item in choices if item['extra']['target'] == 'erynd')['slot'] == 12
+
+
+def test_mana_preview_does_not_draw_and_inspection_cannot_bypass_cards(tmp_path: Path):
+    s = start(tmp_path)
+    command(s, 'acknowledge'); choose_approaches(s); command(s, 'acknowledge')
+    for color in ('C', 'B'):
+        assert not any(item['action'] == 'inspect' for item in c.payload(s)['board_choices'])
+        command(s, 'color', color=color)
+    before = c.read_store(s)
+    p = c.payload(s)
+    choices = [item for item in p['board_choices'] if item['action'] == 'take']
+    assert all(item['preview'] == {'roll_bonus': 1, 'card_count': 1} for item in choices)
+    assert not any(item['action'] == 'inspect' for item in p['board_choices'])
+    assert c.read_store(s) == before
+    command(s, 'take', index=0)
+    assert {item['slot'] for item in c.payload(s)['board_choices'] if item['action'] == 'inspect'} == {24, 25}
+    command(s, 'support', target=c.payload(s)['allowed_support'][0])
+    assert c.payload(s)['mana']['phase'] == 'burn'
+    assert not any(item['action'] == 'inspect' for item in c.payload(s)['board_choices'])
+
+
+def test_optional_favor_keeps_star_rune_ahead_of_effect_details(tmp_path: Path):
+    from dataclasses import replace
+    from dnd_board_game.rules import confrontation as rules
+    from tests.unit.test_confrontation import charged
+
+    s = start(tmp_path)
+    command(s, 'acknowledge'); choose_approaches(s); command(s, 'acknowledge')
+    store = c.read_store(s)
+    state = rules.Confrontation.from_data(store['current']['state'])
+    state = replace(charged(state, {}, deck_size=10), condition='favor')
+    store['current']['state'] = state.to_data(); c.write(s, store)
+    choices = c.payload(s)['board_choices']
+    assert next(item for item in choices if item['slot'] == 25)['action'] == 'favor'
+    assert next(item for item in choices if item['slot'] == 24)['action'] == 'inspect'
+    assert len({item['slot'] for item in choices}) == len(choices)

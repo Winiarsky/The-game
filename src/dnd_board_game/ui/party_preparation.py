@@ -16,7 +16,8 @@ STAGES = ('equipment', 'equipment_item', 'equipment_sell')
 
 
 def begin(m: dict[str, Any], home: str) -> None:
-    m.update(stage='equipment', equipment_home=home, equipment_hero=0, equipment_index=0,
+    m.pop('equipment_help_return', None)
+    m.update(stage='equipment_intro' if home == 'departure' else 'equipment', equipment_home=home, equipment_hero=0, equipment_index=0,
              equipment_source='stash', equipment_notice='')
 
 
@@ -34,9 +35,15 @@ def selected(s: ExplorationUiSession, m: dict[str, Any]) -> InventoryItem | None
 
 
 def choices(s: ExplorationUiSession, m: dict[str, Any]) -> list[dict[str, Any]]:
+    from . import mission_zero as mission
     result: list[dict[str, Any]] = []
     def add(slot: int, action: str, label: str, **extra: Any) -> None:
         result.append(choice(slot,action,label,**extra))
+    if m['stage'] == 'equipment_intro':
+        reviewing = bool(m.get('equipment_help_return'))
+        add(28, 'equipment_continue', mission.label(s, 'equipment_help_close' if reviewing else 'equipment_begin'))
+        add(29, 'equipment_intro_back', mission.label(s, 'equipment_help_close' if reviewing else 'equipment_intro_back'))
+        return result
     item=selected(s,m)
     if m['stage'] == 'equipment_sell':
         add(28,'equipment_sell_confirm','Potwierdź sprzedaż')
@@ -61,6 +68,7 @@ def choices(s: ExplorationUiSession, m: dict[str, Any]) -> list[dict[str, Any]]:
                     add(9,'equipment_identify',f'Identyfikacja — {price} sz')
             else: add(6,'equipment_stow','Odłóż do wspólnego zapasu')
         add(7,'equipment_source','Pokaż wyposażenie postaci' if m['equipment_source']=='stash' else 'Pokaż wspólny zapas')
+        add(25,'equipment_help',mission.label(s,'equipment_help'))
         if len(items(s,m))>1:
             add(26,'equipment_previous','Poprzedni przedmiot');add(27,'equipment_next','Następny przedmiot')
         add(28,'equipment_accept','Gotowe — następna postać' if m['equipment_hero']+1<len(s.exploration.actors) else 'Gotowe — cała drużyna')
@@ -74,7 +82,12 @@ def payload(s: ExplorationUiSession,m: dict[str, Any]) -> dict[str, Any] | None:
     a=actor(s,m); item=selected(s,m)
     from dnd_board_game.inventory import effective_armor_class
     from dnd_board_game.inventory.magic_items import effective_ability_score
-    return dict(hero=a.name,hero_index=m['equipment_hero']+1,hero_count=len(s.exploration.actors),
+    from .exploration_app import _actor_portrait_url
+    from . import mission_zero as mission
+    from dnd_board_game.scenarios.mission_pack import asset_url
+    portrait_path = f'assets/images/{a.id}.png'
+    portrait = asset_url(mission.root(s), portrait_path) if (mission.root(s) / portrait_path).is_file() else _actor_portrait_url(a)
+    return dict(hero=a.name,hero_id=str(a.id),portrait_url=portrait,hero_index=m['equipment_hero']+1,hero_count=len(s.exploration.actors),
         source='Wspólny zapas' if m['equipment_source']=='stash' else 'Wyposażenie postaci',
         index=min(m['equipment_index']+1,len(items(s,m))),count=len(items(s,m)),
         item=dict(id=item.id,name=item.name,description=item.description,quantity=item.quantity,art=item_art(item),
@@ -90,6 +103,13 @@ def handle(s: ExplorationUiSession,m: dict[str, Any], action: str,data: dict[str
     from . import mission_zero as mission
     from . import mission_zero_recovery as recovery
     if action=='equipment_open': begin(m,'guild_return');return True
+    if action == 'equipment_help':
+        m.update(equipment_help_return=m['stage'], stage='equipment_intro')
+        return True
+    if action in ('equipment_continue', 'equipment_intro_back'):
+        previous = m.pop('equipment_help_return', None)
+        m['stage'] = previous or ('equipment' if action == 'equipment_continue' else 'brief')
+        return True
     a=actor(s,m); item=selected(s,m)
     if action=='equipment_source':
         m.update(equipment_source='hero' if m['equipment_source']=='stash' else 'stash',equipment_index=0)

@@ -11,12 +11,11 @@ from dnd_board_game.ui.exploration_app import create_app
 from tests.unit.test_confrontation_presentation import start
 
 
-@pytest.mark.parametrize('scene_name', ['nessa','cart'])
-@pytest.mark.parametrize('width,height', [(1300,657), (1131,720), (390,800)])
-def test_nessa_portraits_choices_and_board_scrolling(tmp_path: Path, width: int, height: int, scene_name: str):
+@pytest.mark.parametrize('scene_name,count,width,height', [('nessa',3,1300,720), ('nessa',6,1131,720), ('cart',6,1131,720)])
+def test_nessa_portraits_choices_and_board_scrolling(tmp_path: Path, width: int, height: int, scene_name: str, count: int):
     chrome=shutil.which('google-chrome') or shutil.which('chromium')
     if not chrome: pytest.skip('Chrome required')
-    s=start(tmp_path,scene_name=scene_name);s.configured_board_backend='none'
+    s=start(tmp_path,count=count,scene_name=scene_name);s.configured_board_backend='none'
     app=create_app(s);done=Event();report={}
     @app.post('/__test/result')
     def report_result():
@@ -25,13 +24,13 @@ def test_nessa_portraits_choices_and_board_scrolling(tmp_path: Path, width: int,
 (async()=>{
 const check=(v,m)=>{if(!v)throw Error(m)};
 const wait=async f=>{for(let i=0;i<180;i++){if(f())return;await new Promise(r=>setTimeout(r,25))}throw Error('timeout')};
-const field=async(slot)=>{await wait(()=>!busy&&!boardPanelSyncPromise);await api('/api/board/select',{col:19,row:29-slot},'');await wait(()=>!busy)};
+const field=async(slot)=>{await wait(()=>!busy&&!boardPanelSyncPromise);const revision=state.board_selection.revision;await api('/api/board/select',{col:19,row:29-slot},'');await wait(()=>!busy&&!boardPanelSyncPromise&&state.board_selection.revision!==revision)};
 const press=async(action,extra=null)=>{const c=state.exploration_mana.board_choices.find(c=>c.action===action&&(!extra||Object.entries(extra).every(([k,v])=>c.extra[k]===v)));check(c,'missing '+action);await field(c.slot)};
 const checkManaPortrait=(showHero=true)=>{
  const p=state.exploration_mana, hero=p.party.find(h=>h.id===p.actor);
  const portrait=document.querySelector('.confrontation-scene-image');
- check(portrait?.getAttribute('src')===(showHero?hero.portrait_url:p.image_url),'portrait must match the current step');
- check(portrait.alt===(showHero?p.actor_name:p.scene.name),'portrait must name its subject');
+ check(portrait?.getAttribute('src')===p.image_url,'portrait must match the current step');
+ check(portrait.alt===p.scene.name,'portrait must name its subject');
 };
 const bounds=()=>{
  const panel=document.getElementById('mission-panel');
@@ -39,18 +38,18 @@ const bounds=()=>{
  check(panel.getBoundingClientRect().bottom<=innerHeight+1,'panel clipped at bottom');
  check(document.documentElement.scrollWidth<=innerWidth,'horizontal overflow');
  const controls=panel.querySelector('.confrontation-controls');
- check(controls.scrollHeight<=controls.clientHeight+1,'controls clipped '+state.exploration_mana.phase+' '+state.exploration_mana.mana.phase+' '+JSON.stringify({innerHeight,top:panel.getBoundingClientRect().top,panel:panel.clientHeight,controls:controls.clientHeight,content:controls.scrollHeight}));
+ if(state.exploration_mana.phase==='turn'&&['ready','choose','burn'].includes(state.exploration_mana.mana.phase))check(controls.scrollHeight<=controls.clientHeight+1,'decision requires scrolling '+JSON.stringify({phase:state.exploration_mana.phase,mana:state.exploration_mana.mana.phase,innerHeight,top:panel.getBoundingClientRect().top,panel:panel.clientHeight,controls:controls.clientHeight,content:controls.scrollHeight}));
 };
 try{
  await wait(()=>state?.exploration_mana?.active&&!busy);
- await wait(()=>[...document.querySelectorAll('.confrontation-view img')].length===4&&[...document.querySelectorAll('.confrontation-view img')].every(i=>i.complete&&i.naturalWidth));
+ await wait(()=>[...document.querySelectorAll('.confrontation-view img')].length===2&&[...document.querySelectorAll('.confrontation-view img')].every(i=>i.complete&&i.naturalWidth));
  check(getComputedStyle(document.querySelector('.confrontation-scene-image')).objectFit==='contain','portrait cropped');
  check(!document.getElementById('mission-panel').innerText.includes('Kompromis'),'early spoiler');
  bounds();
- document.querySelector('.confrontation-scroll details').open=true;
+ document.querySelector('.confrontation-controls').insertAdjacentHTML('beforeend','<p style="height:1200px;flex-shrink:0">Reading probe</p>');
  const revision=state.exploration_mana.revision;
- await field(27);await wait(()=>document.querySelector('.confrontation-scroll').scrollTop>0);
- check(document.querySelector('.confrontation-scroll').scrollTop>0,'board + must scroll description');
+ await field(27);await wait(()=>document.querySelector('.confrontation-controls').scrollTop>0);
+ check(document.querySelector('.confrontation-controls').scrollTop>0,'board + must scroll description');
  check(state.exploration_mana.revision===revision,'scroll mutated confrontation');
  await press('acknowledge');bounds();
  check(document.querySelectorAll('.confrontation-approaches article').length===6,'six scene approaches');
@@ -84,15 +83,26 @@ try{
  await field(firstSlot);
 
  check(Boolean(document.querySelector(`.approach-card[data-mana-slot="${firstSlot}"]`))===anySupport.repeatable,'availability after choice');
- check(state.exploration_mana.mana.deck===30&&state.exploration_mana.mana.phase==='setup','assignment does not draw cards');
+ check(state.exploration_mana.mana.deck===state.exploration_mana.party.length*10&&state.exploration_mana.mana.phase==='setup','assignment does not draw cards');
  while(state.exploration_mana.phase==='approach') await press('approach',{approach:state.exploration_mana.approaches.find(a=>a.available).id});bounds();
  const instruction=document.querySelector('.confrontation-controls').innerText;
- check(instruction.includes('30 kart')&&instruction.includes('czerwone: 6'),'deck composition');
+ check(instruction.includes((state.exploration_mana.party.length*10)+' kart')&&instruction.includes('czerwone: '+(state.exploration_mana.party.length*2)),'deck composition');
  check(!instruction.includes('Figurka')&&!instruction.includes('(5,7)'),'setup contains coordinates');
  await press('acknowledge');bounds();
  checkManaPortrait(false);
  await press('color',{color:'F'});await press('color',{color:'B'});bounds();
  checkManaPortrait();
+ const luminance=rgb=>rgb.match(/[\d.]+/g).slice(0,3).map(Number).map(v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4).reduce((sum,v,i)=>sum+v*[.2126,.7152,.0722][i],0);
+ for(const color of ['F','B']){
+  const card=document.querySelector(`.confrontation-offer article.mana-${color}`);
+  const display=state.exploration_mana.passive_details[color];
+  check(card.querySelector('.passive-name').textContent===display.name,'missing passive name');
+  check(card.querySelector('.passive-effect').textContent.trim().length>0,'missing passive description');
+  for(const text of card.querySelectorAll('.confrontation-offer-symbol b,.mana-passive-description strong,.mana-passive-description p')){
+   const bg=luminance(getComputedStyle(card).backgroundColor),fg=luminance(getComputedStyle(text).color);
+   check((Math.max(bg,fg)+.05)/(Math.min(bg,fg)+.05)>=4.5,'unreadable '+color+' mana description');
+  }
+ }
  await press('undo');bounds();
  check(state.exploration_mana.mana.offer.length===1,'undo wrong color');
  checkManaPortrait(false);
@@ -106,15 +116,26 @@ try{
  await press('take',{index:0});bounds();
  checkManaPortrait(false);
  check(state.exploration_mana.party.some(h=>h.cards.includes('F')),'selected card not recorded');
- const heroColumns=[...document.querySelectorAll('.confrontation-party>article')];
- check(heroColumns.length===state.exploration_mana.party.length,'keep one column per hero');
- for(const [index,column] of heroColumns.entries()){
-  const hero=state.exploration_mana.party[index];
-  check(JSON.stringify([...column.querySelectorAll('li')].map(li=>li.textContent.trim()))===JSON.stringify(hero.passives.map(p=>p.display.name)),'party lists only passive names');
-  check(!column.querySelector('.mana-passive-description,details,.mana-recovery-diagram,img.recovery-diagram'),'no passive explanations or diagrams in party columns');
-  if(hero.cards.length) check(column.querySelector('p svg'),'collected mana symbols remain visible');
+ const p=state.exploration_mana;
+ check(document.querySelectorAll('.confrontation-active-hero').length===1,'one active hero');
+ check(document.querySelectorAll('.confrontation-party-summary>span').length===p.party.length,'compact party');
+ check(!document.querySelector('.confrontation-party'),'old full party cards removed');
+ check(document.querySelector('.confrontation-active-hero .confrontation-pool svg'),'pool symbols visible');
+ check(document.querySelector('.confrontation-help-person img'),'recipient portrait');
+ const beforeHelp=JSON.stringify(state.exploration_mana), helps=confrontationHelpChoices(p);
+ const helpBefore=confrontationCurrentHelp(p).extra.target;
+ await field(27);
+ if(helps.length>1)check(confrontationCurrentHelp(p).extra.target!==helpBefore,'plus cycles helper recipient');
+ check(JSON.stringify(state.exploration_mana)===beforeHelp,'browsing spends nothing');
+ await field(26);check(confrontationCurrentHelp(p).extra.target===helpBefore,'minus restores recipient');
+ for(const [slot,kind] of [[24,'bonus'],[25,'effects']]){
+  await field(slot);await wait(()=>document.getElementById('confrontation-detail')?.open&&!boardPanelSyncPromise);
+  check(confrontationDetail.kind===kind,'rune opens correct detail');
+  await field(27);await field(26);
+  check(JSON.stringify(state.exploration_mana)===beforeHelp,'detail spends nothing');
+  await field(29);await wait(()=>!document.getElementById('confrontation-detail').open&&!boardPanelSyncPromise);
+  check(!state.board_selection.panel_context?.startsWith('confrontation-detail:'),'closing releases exclusive board context');
  }
-
  check(state.exploration_mana.mana.offer[0]==='N','other card not retained');
  const choices=state.exploration_mana.board_choices;
  check(choices.filter(c=>c.action==='test').length===1,'one test at current charge');
@@ -129,9 +150,15 @@ try{
  check(state.exploration_mana.mana.burned===1,'reported burn recorded');
  await press('advance');
  checkManaPortrait(false);
+ const recipient=state.exploration_mana.party.find(h=>h.id===state.exploration_mana.actor);
+ check(recipient.aid>=1&&recipient.roll_bonus===0,'recipient has help before drawing');
+ check(document.querySelector('.confrontation-pool-summary').textContent.includes('Mana +0'),'card bonus is labelled as mana');
+ check(document.querySelector('.confrontation-received-aid b')?.textContent===`Pomoc +${recipient.aid}`,'help is visible during reveal');
  while(state.exploration_mana.mana.phase==='reveal') await press('color');
  checkManaPortrait();
+ check(document.querySelector('.confrontation-received-aid b')?.textContent===`Pomoc +${recipient.aid}`,'help is visible during card selection');
  await press('take',{index:0});await press('peek');bounds();
+ check(document.querySelector('.confrontation-received-aid b')?.textContent===`Pomoc +${recipient.aid}`,'drawing and peeking do not consume help');
  check(state.exploration_mana.phase==='peek_choice','peek must go directly to position choice');
  checkManaPortrait(false);
  check(!state.exploration_mana.board_choices.some(c=>c.action==='peek_color'||c.action==='color'),'no color reporting during peek');

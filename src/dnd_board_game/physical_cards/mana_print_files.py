@@ -136,7 +136,7 @@ def write_reference(output: Path, actor_ids: tuple[str, ...]) -> None:
         lines = [
             "# Siedem archetypów — ładowanie many 2.0",
             "",
-            "Teksty: `content/characters/karty_postaci.json`. Mechanika: katalog balansu, profile postaci i oznaczenia panelu areny.",
+            "Teksty: `content/scenarios/misja_0_dzwon/text/karty_postaci.json`. Mechanika: katalog balansu, profile postaci i oznaczenia panelu areny.",
             "Wygenerowano przez `scripts/generate_mana_character_prints.py`.",
             "",
             "Każdy symbol oznacza osobną kartę. Biała: słońce (Plains); niebieska: kropla (Island); czarna: czaszka (Swamp); czerwona: płomień (Mountain); zielona: drzewo (Forest). Cyfra 1 w kółku: dowolny kolor.",

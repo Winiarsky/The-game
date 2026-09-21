@@ -29,6 +29,41 @@ eksplorację, NPC, podróż i handoff między scenariuszami, walkę, czary, loot
 zapis sesji. Dla szybkiej diagnostyki można użyć `--debug-point`,
 `--debug-challenge` albo `--debug-courtyard-entry`.
 
+## Szybki start Misji 0 po scenie z wozem
+
+Z katalogu repozytorium, z fizyczną planszą:
+
+```bash
+PYTHONPATH=src .venv/bin/python -m dnd_board_game.runtime.mission_combat_ui \
+  --heroes brakka garran nimra --morality 1 --board-backend hardware
+```
+
+Otwórz `http://127.0.0.1:5201/play`. Start następuje od fabularnego opisu
+przybycia do posterunku, **po scenie z wozem**. ✓ prowadzi do rozstawiania
+planszy, inicjatywy i przygotowania talii, z wybraną drużyną i postawą.
+Bez podłączonej planszy pomiń `--board-backend hardware`; można używać UI.
+Przed podłączeniem tej samej planszy USB zatrzymaj wcześniejszy proces gry.
+USB jest wyszukiwane automatycznie; WLED korzysta z `board/config.json`.
+
+- `--heroes`: 3–6 różnych identyfikatorów w wybranej kolejności:
+  `brakka`, `garran`, `nimra`, `mira`, `dagna`, `lorian`, `erynd`.
+- `--morality -3` … `-1`: Solidarność, `0`: Równowaga, `1` … `3`:
+  Bezwzględność. Liczba oznacza kroki od środka. Alias: `--ethos`.
+- `--start-at intro` jest domyślne. Opcjonalnie `setup` pomija opis,
+  `initiative` automatycznie ustawia figurki i czeka na rzuty graczy,
+  a `combat` także losuje inicjatywę i otwiera pierwszą rundę przy
+  przygotowaniu talii. W dwóch ostatnich trybach terminal wypisuje pola figurek.
+- `--seed 7` pozwala odtworzyć automatyczne rzuty, `--port 5201` zmienia port.
+- `--runtime-dir /tmp/moj-test` wskazuje katalog zapisów i logów.
+  Domyślnie każde uruchomienie dostaje nowy `/tmp/mission0-combat-…`;
+  zwykłe zapisy kampanii i biblioteka postaci pozostają osobno. Każde wywołanie
+  tworzy nową próbę; nie wczytuje poprzedniej z podanego katalogu.
+
+Bohaterowie zaczynają ze swoim wyposażeniem startowym, bez zmęczenia z drogi
+i bez nagród za pominięte negocjacje. Skład przeciwników skaluje się według
+istniejących wariantów Misji 0, a postawa zmienia skład talii zgodnie z zasadami.
+Pełne opcje: `PYTHONPATH=src .venv/bin/python -m dnd_board_game.runtime.mission_combat_ui --help`.
+
 ## Tryby Uruchamiania
 
 Docelowo projekt powinien mieć trzy tryby pracy.

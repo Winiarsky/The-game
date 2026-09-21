@@ -1,0 +1,236 @@
+{
+  "version": 1,
+  "pages": [
+    {
+      "id": "01_podstawy",
+      "title": "Podstawy i słownik",
+      "subtitle": "Pomocnik drużyny · wspólne zasady · 1 / 4",
+      "lead": "Każda karta many daje +1 do testów. Ładunek odblokowuje akcje: kolor atutowy liczy się jako 2, pozostałe jako 1; maksymalnie 6. Kolory uruchamiają zdolności pasywne. Użycie zdolności nie opróżnia osobistej puli many.",
+      "sections": [
+        {
+          "title": "Wspólna talia, osobiste pule",
+          "paragraphs": [
+            "Bazowa talia dla 3 / 4 / 5 / 6 osób ma 30 / 40 / 50 / 60 kart, po równo pięciu kolorów (1–2 bohaterów: 25). Przed walką lub konfrontacją przygotuj aktualny skład wskazany przez aplikację i przetasuj.",
+            "Postawa drużyny: Równowaga i po 3 pola w obie strony. Każdy krok ku Solidarności wyłącza po 1 czerwonej i czarnej karcie; ku Bezwzględności — po 1 białej i niebieskiej. Zielona bez zmian. Cofnięcie przywraca karty. Zmiana działa od następnego starcia; wyłączone karty trzymaj osobno — drain i odzysk ich nie przywracają.",
+            "Na początku swojej tury, mając mniej niż 6 kart many, musisz wybrać jedną z odkrytych kart. Zwykle wybierasz z dwóch; jeśli dostępna jest tylko jedna, bierzesz ją. Druga karta zostaje. Ofertę uzupełniaj zgodnie z aplikacją.",
+            "Przy 6 fizycznych kartach nie dobierasz. Progi zdolności: 2 / 4 / 6 ładunku. Trzy atuty odblokowują ultę, ale dają tylko +3 do testów; nadal dobierasz do 6 kart. Atut nie podwaja pasywów."
+          ]
+        },
+        {
+          "title": "Co oznaczają liczby?",
+          "table": [
+            [
+              "Karty w puli",
+              "0",
+              "1",
+              "2",
+              "3",
+              "4",
+              "5",
+              "6"
+            ],
+            [
+              "Naładowanie",
+              "+0",
+              "+1",
+              "+2",
+              "+3",
+              "+4",
+              "+5",
+              "+6"
+            ]
+          ],
+          "paragraphs": [
+            "Modyfikator cechy to mała liczba obok jej wartości. Przykład: Siła 18 daje modyfikator +4. Do rzutu dodajesz +4, nie 18. Zapis „mod.” oznacza modyfikator; SIŁ — Siłę, ZRĘ — Zręczność.",
+            "Test: k20 + modyfikator cechy + naładowanie + pozostałe premie. ST to stopień trudności. KP to klasa pancerza — próg trafienia. PW to punkty wytrzymałości.",
+            "Przewaga: rzuć 2k20 i wybierz wyższy wynik. Utrudnienie: wybierz niższy. Przewaga i utrudnienie znoszą się. Wynik naturalny to liczba na kości, bez premii."
+          ]
+        },
+        {
+          "title": "Nasycenie i kolory",
+          "paragraphs": [
+            "Masz kolor w puli? Jego pasyw działa we wskazanych sytuacjach. Najpierw przeczytaj warunek, potem efekt. Używaj części „Walka” albo „Eksploracja”. Skaza działa niezależnie.",
+            "Gruba obwódka symbolu: kolejne karty zwiększają premię, do limitu z opisu. Cienka: wystarczy jedna karta; następne nie wzmacniają efektu. Leczenie „po dobraniu” wykonujesz po każdej takiej karcie, najwyżej do maksymalnych PW.",
+            "Utrata karty usuwa wynikającą z niej premię. Mana Drain usuwa nasycenie i odnawia wykorzystanie zdolności pasywnych; nie cofa otrzymanego leczenia.",
+            "Pasywy mają różne warunki dla każdego bohatera. Efekt opisany jako „po dobraniu” wykonaj raz po tej karcie. Tymczasowe PW Nimry nie sumują się; zachowaj większą wartość, także po drainie, dopóki nie zostaną zużyte."
+          ]
+        },
+        {
+          "title": "Obsługa i wyposażenie",
+          "paragraphs": [
+            "Runy wybierają działania z kart i ekranu. ✓ zatwierdza lub przechodzi dalej; ↩ cofa. −/+ przegląda wskazaną listę albo zmienia wynik kości. Wpisuj wynik naturalny; premie dolicza aplikacja.",
+            "Przed wyprawą przydziel sprzęt do miejsc na macie. „Przybory magiczne / instrument” to miejsce na przybory do czarów lub instrument. Broń oburęczna zajmuje obie ręce.",
+            "W misji wyposażenie pozostaje ustalone; przedmiotów zużywalnych nadal można używać. Znaleziska trafiają do wspólnego zapasu. Zmieniaj fizyczne żetony zgodnie z aplikacją."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "02_walka",
+      "title": "Walka — krok po kroku",
+      "subtitle": "Pomocnik drużyny · walka · 2 / 4",
+      "lead": "Tura to działania jednej postaci. Runda obejmuje tury wszystkich walczących. Kolejność i aktualnie dostępne działania pokazuje aplikacja.",
+      "sections": [
+        {
+          "title": "1. Rozegraj swoją turę",
+          "steps": [
+            "Dobierz kartę, jeżeli masz mniej niż 6 kart many. Zastosuj nasycenie; sprawdź skazę i aktualne stany.",
+            "Wykorzystaj ruch, jedną akcję główną (A) i dostępną akcję dodatkową (D). Reakcję (R) wykonujesz przy wskazanym zdarzeniu; odnawia się na początku twojej tury.",
+            "Wybierz runę akcji z karty, potem pole celu. Sprawdź portret, PW, stany, zasięg i osłonę w podglądzie; ✓ zatwierdza. Podbicie zwiększa spalanie o 2 karty, do limitu na karcie.",
+            "Rozstrzygnij test i efekt. Potem spal koszt z wierzchu wspólnej talii, również po niepowodzeniu. Pula many zostaje. Zakończ turę odpowiednią runą."
+          ]
+        },
+        {
+          "title": "2. Rozstrzygnij atak lub rzut obronny",
+          "paragraphs": [
+            "Zwykły atak zużywa akcję główną i nie spala many. Test ataku: k20 + modyfikator cechy + naładowanie + premie. Wynik równy KP celu lub wyższy trafia.",
+            "Obrażenia: kości broni lub zdolności + wskazany modyfikator + premie obrażeń. Naładowanie nie zwiększa obrażeń. Naturalne 1 chybia; naturalne 20 daje trafienie krytyczne — podwajasz kości obrażeń, nie stałe premie. Zdolność pasywna może poszerzyć zakres krytyka.",
+            "Gdy karta wymaga rzutu obronnego, wykonuje go cel. Porównaj jego wynik ze ST zdolności. Opis „Sukces” i „Porażka” odnosi się wtedy do rzutu celu. Nie wykonuj dodatkowego testu ataku, chyba że karta go wymaga. Aktualne ST podaje aplikacja."
+          ]
+        },
+        {
+          "title": "Przykład · zwykły atak Garrana",
+          "example": true,
+          "paragraphs": [
+            "Garran ma Siłę 18 (mod. +4), 4 karty many (naładowanie +4) i jedną czerwoną kartę (+1 obrażeń wręcz). Wróg ma KP 15.",
+            "Na k20 wypada 9: test = 9 + 4 + 4 = 17. Trafienie. Miecz trzymany jednorącz: na k8 wypada 5, więc obrażenia = 5 + 4 + 1 = 10. Garran nie spala kart; zachowuje nasycenie."
+          ]
+        },
+        {
+          "title": "3. Teren i presja na talię",
+          "paragraphs": [
+            "1 pole = 5 ft. Trudny teren podwaja koszt wejścia na pole, np. 10 ft zamiast 5 ft. Osłony, przeszkody i flankowanie rozlicz według planszy oraz aplikacji.",
+            "Po rundzie wygasa jedna karta. Wygasłe karty odkładaj osobno od spalonych: Lorian odzyskuje spalone, nie wygasłe ani uwięzione.",
+            "Mana Drain następuje, gdy nie można wykonać wymaganej operacji kart. Rozstrzygnij rozpoczęty efekt. Zbierz wszystkie karty: talię, ofertę, pule, spalone, wygasłe i uwięzione. Przetasuj zgodnie z aplikacją. Walka trwa, ale nasycenie buduj od nowa."
+          ]
+        },
+        {
+          "title": "Koncentracja i aura",
+          "paragraphs": [
+            "Koncentracja podtrzymuje jeden efekt. Rozpoczęcie nowego efektu wymagającego koncentracji kończy poprzedni. Po otrzymaniu obrażeń wykonaj rzut obronny Kondycji: ST 10 albo połowa obrażeń (w dół), wybierz wyższą wartość. Porażka przerywa efekt.",
+            "Aura obejmuje wskazane istoty w promieniu z karty. Zasięg i czas śledzi aplikacja. Stany sprawdzisz na torze inicjatywy: −/+ przegląda uczestników bez zmiany aktywnej tury."
+          ]
+        },
+        {
+          "title": "Pozycja i ochrona",
+          "paragraphs": [
+            "Flankowanie: ty i zdolny do walki sojusznik sąsiadujecie z tym samym wrogiem po dokładnie przeciwnych stronach. Daje przewagę w ataku wręcz; może też uruchamiać zdolności pasywne.",
+            "Odporność na rodzaj obrażeń zmniejsza je o połowę. Tymczasowe PW pochłaniają obrażenia przed zwykłymi PW; nie leczą ran i nie sumują się z innymi tymczasowymi PW.",
+            "Przy 0 PW sprawdź instrukcję aplikacji. Zdolność pasywna, stan postaci lub scenariusz może zmienić dalsze rozstrzygnięcie."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "03_rozmowy",
+      "title": "Rozmowy — wpływ na NPC",
+      "subtitle": "Pomocnik drużyny · konfrontacje społeczne · 3 / 4",
+      "lead": "Zwykły dialog nie wymaga tych kroków. Gdy rozpocznie się konfrontacja, cała drużyna pomaga osiągnąć wspólny cel. Na mapie nadal używacie jednej figurki.",
+      "sections": [
+        {
+          "title": "1. Wybierz podejście w scenie",
+          "paragraphs": [
+            "W kolejności tur każdy bohater wybiera podejście runą. Nie jest ono przypisane do klasy. Scena podaje cechę, ST, kość wpływu i dozwolone wsparcie; kilka opcji może korzystać z tej samej cechy.",
+            "„Dla jednej postaci” znika po wyborze. „Może się powtarzać” może wybrać kilku bohaterów. Przydział trwa do końca konfrontacji. Runy pozostałych opcji nie zmieniają się.",
+            "Sekcja „Wsparcie” wymienia podejścia, którym możesz pomóc. Runa w kółku identyfikuje podejście, nie postać. Jeśli wybrało je kilka osób, wskazujesz jednego sojusznika. Nie wspierasz siebie."
+          ]
+        },
+        {
+          "title": "2. Dobierz manę i wybierz jedno działanie",
+          "paragraphs": [
+            "Mając mniej niż 6 kart, wybierz kartę z oferty; druga pozostaje. Przy 6 kartach nie dobieraj. Włącz pasywy „Eksploracja”. Pula many pozostaje po działaniu.",
+            "Tabela podaje koszty podstawowe. Przykłady wyjątków: Łagodność Dagny może anulować koszt porażki, a Lekki rytm Loriana pozwala pomagać bez spalania. Oddech Dagny odzyskuje kartę po sukcesie; Drugi obieg Loriana — po pomocy. Najpierw potwierdź odzyskanie, potem opłać działanie."
+          ],
+          "table": [
+            [
+              "Działanie",
+              "Co robisz",
+              "Spalanie"
+            ],
+            [
+              "Test",
+              "Rzut k20; po sukcesie rzut na wpływ.",
+              "1 karta"
+            ],
+            [
+              "Pomoc",
+              "+1 do najbliższego testu dozwolonego sojusznika; +2 ze Współpracą.",
+              "1 karta"
+            ],
+            [
+              "Podgląd",
+              "Podejrzyj spód; zostaw kartę lub przenieś na wierzch.",
+              "0 kart"
+            ]
+          ]
+        },
+        {
+          "title": "3. Rozstrzygnij test i wpływ",
+          "paragraphs": [
+            "Test: k20 + modyfikator cechy + liczba kart many (maks. +6) + inne premie. Wynik co najmniej równy ST daje sukces. Naturalne 20: zawsze sukces i maksimum kości wpływu + premie, bez drugiego rzutu. Naturalne 1: zawsze porażka i +1 karta spalania po zmianach kosztu (zwykle razem 2).",
+            "Wpływ: kość podejścia + modyfikator cechy + premie wpływu, minimum 0. Odejmij go od oporu. Bez premii many. Test i pomoc zwykle spalają po 1 karcie; pasywy mogą zmienić koszt i efekt."
+          ]
+        },
+        {
+          "title": "Wsparcie · przykład kumulowania",
+          "example": true,
+          "paragraphs": [
+            "Garran wybiera żądania. Erynd, z logicznymi argumentami, może go wspierać: daje +1. Nimra ze zrozumieniem obaw również daje +1. Każda pomoc kosztuje 1 spaloną kartę.",
+            "Garran ma +2 do najbliższego testu. Jeśli jeszcze nie rzuca, kolejna pomoc +1 zwiększy premię do +3. Cała premia znika po pierwszej próbie, także nieudanej. Nie zwiększa wpływu. Współpraca Dagny wzmacnia pomoc. Inne pasywy mogą zmieniać jej wartość, koszt lub dozwolonych odbiorców."
+          ]
+        },
+        {
+          "title": "4. Reakcja i zakończenie",
+          "paragraphs": [
+            "Po turach całej drużyny sytuacja reaguje: może spalać karty, odbierać manę z puli lub odnawiać opór. Podgląd nie zatrzymuje reakcji.",
+            "Opór 0 oznacza sukces. Gdy brakuje kart do wymaganej operacji, najpierw dokończ rozpoczęty efekt. Jeżeli opór pozostał, Mana Drain oznacza porażkę; nie ma dodatkowej rundy ani tasowania na kontynuację. Nową konfrontację zacznij z aktualnym składem many wskazanym przez aplikację."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "04_obiekty",
+      "title": "Obiekty — postęp zadania",
+      "subtitle": "Pomocnik drużyny · naprawa, przeszukanie, zabezpieczenie · 4 / 4",
+      "lead": "Przy obiektach używacie tej samej procedury drużynowej co w rozmowach. Zmieniamy kontekst i nazwę efektu: tutaj osiągacie postęp, zamiast wywierać wpływ.",
+      "sections": [
+        {
+          "title": "1. Ustal zadanie i sposób działania",
+          "paragraphs": [
+            "Obiektem może być zamek, wóz, pomieszczenie albo inny element sceny. Opór oznacza pracę pozostałą do wykonania zadania. Nie oznacza wytrzymałości przedmiotu.",
+            "Każdy wybiera podejście runą. „Dla jednej postaci” znika po wyborze, a „Może się powtarzać” pozostaje dla kolejnych osób. Opcja określa cechę, ST, kość postępu i dozwolone wsparcie.",
+            "Uniesienie i odciążenie wozu mogą wybrać różne osoby. Mocowanie osi, dźwignia, ocena gruntu i uspokojenie muła są dla jednej postaci."
+          ]
+        },
+        {
+          "title": "2. Wykonaj turę",
+          "steps": [
+            "Mając mniej niż 6 kart, dobierz jedną kartę z oferty. Przy 6 kartach nie dobieraj. Zastosuj zdolności pasywne z części „Eksploracja”.",
+            "Test lub pomoc zgodna z powiązaniami zwykle spalają 1 kartę; pasyw może zmienić koszt. Zamiast tego podejrzyj dolną kartę: zostaw na spodzie lub przenieś na wierzch. Kończy działanie, bez spalania.",
+            "Test: k20 + modyfikator cechy podejścia + premia z naładowania + pozostałe premie. Wynik co najmniej równy ST daje sukces. Naturalne 20: automatyczny sukces i maksimum kości postępu + premie, bez drugiego rzutu. Naturalne 1: automatyczna porażka i 1 dodatkowa spalona karta ponad zmodyfikowany koszt. Pasywy nadal działają.",
+            "Po sukcesie: postęp = kość podatności + modyfikator cechy + premie postępu, nie mniej niż 0. Zmniejsz opór o postęp. Naładowania nie dodawaj drugi raz.",
+            "Podstawowa pomoc spala 1 kartę i daje +1 do najbliższego testu sojusznika (+2 ze Współpracą). Pomoce sumują się; cała suma znika po jego próbie, także nieudanej. Pomaganie innym jej nie zużywa."
+          ]
+        },
+        {
+          "title": "Przykład · Garran unosi wóz",
+          "example": true,
+          "paragraphs": [
+            "Uniesienie wozu: Siła, ST 18, k8 postępu. Garran ma mod. Siły +4, 2 karty many (+2 do testu) i jedną czerwoną kartę. Bez pomocy sojusznika Wspólny front nie dodaje postępu. Pozostały opór: 10.",
+            "k20 = 12: test 12 + 4 + 2 = 18 — sukces. k8 = 3: postęp 3 + 4 = 7. Opór spada z 10 do 3. Spal 1 kartę.",
+            "Zamiast testu może pomóc bohaterowi mocującemu oś lub oceniającemu grunt. Sprawdź sekcję „Wsparcie”; pasyw Miry „Boczne przejście” dodatkowo pozwala jej pomagać osobie z tym samym podejściem."
+          ]
+        },
+        {
+          "title": "3. Reakcja i wynik sceny",
+          "paragraphs": [
+            "Po turach wszystkich uczestników następuje reakcja sytuacji: np. pogorszenie usterki lub utrudnienie pracy. Jej faktyczny efekt pokazuje aplikacja; nie dopisuj dodatkowych kar.",
+            "Brak kart do wymaganej operacji kończy konfrontację. Dokończ rozpoczęty efekt: opór 0 daje sukces, pozostały opór — porażkę. Nie tasuj, by kontynuować zadanie.",
+            "Dopiero wynik całej konfrontacji uruchamia opisany w scenie skutek, np. odzyskanie przedmiotu, zmęczenie albo stratę części ładunku. Przed następną konfrontacją przygotuj skład wskazany przez aplikację; uwzględnij postawę drużyny.",
+            "Pułapki podczas walki korzystają z osobnego, prostego wykrywania i testu rozbrojenia. Nie uruchamiaj dla nich całej konfrontacji z obiektem, jeśli aplikacja tego nie poleca."
+          ]
+        }
+      ]
+    }
+  ]
+}

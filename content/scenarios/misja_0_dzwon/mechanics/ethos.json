@@ -10,5 +10,9 @@
   "refuse_truce": {
     "id": "misja_0_dzwon:refuse_truce",
     "direction": "ruthlessness"
+  },
+  "nessa_steal_potion": {
+    "id": "misja_0_dzwon:nessa_steal_potion",
+    "direction": "ruthlessness"
   }
 }

@@ -1,4 +1,4 @@
-"""Build two complete A4 packs: Mission 0 scenery/handouts and hero starter sets."""
+"""Build Mission 0 A4 packs: scenery/handouts, hero sheets, rules, and markers."""
 from __future__ import annotations
 
 import argparse
@@ -47,6 +47,10 @@ def assemble(destination: Path, parts: list[tuple[str, Path]], **metadata: Any) 
     merge_pdfs([path for _, path in parts], destination)
     if pdf_pages(destination) != next_page - 1:
         raise RuntimeError('Nieprawidłowa liczba stron kompletnego pakietu.')
+    # Use the same 300 dpi print optimization as hero sheets; preserve page
+    # geometry and calibration while making the publishable map packs smaller.
+    from build_hero_mats import compact_pdf
+    compact_pdf(destination)
     manifest = dict(pdf=destination.name, pages=next_page - 1, sections=sections, **metadata)
     destination.with_suffix('.json').write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
@@ -58,7 +62,7 @@ def assemble(destination: Path, parts: list[tuple[str, Path]], **metadata: Any) 
 
 
 def build_mission(*, nominal: bool = False) -> Path:
-    output = MISSION / 'maps/print'
+    output = MISSION / 'print'
     output.mkdir(parents=True, exist_ok=True)
     destination = output / ('misja_0_komplet_A4_25mm.pdf' if nominal else 'misja_0_komplet_A4.pdf')
     spec = json.loads((MISSION / 'maps/cutouts.json').read_text())
@@ -94,13 +98,16 @@ def build_heroes() -> Path:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--only', choices=('mission', 'heroes'))
+    parser.add_argument('--only', choices=('mission', 'heroes', 'aid'))
     parser.add_argument('--nominal', action='store_true', help='Kafle 25 mm bez korekty drukarki.')
     args = parser.parse_args()
-    if args.only != 'heroes':
+    if args.only in (None, 'mission'):
         build_mission(nominal=args.nominal)
-    if args.only != 'mission':
+    if args.only in (None, 'heroes'):
         build_heroes()
+    if args.only == 'aid':
+        from build_hero_mats import build_player_aid
+        build_player_aid()
 
 
 if __name__ == '__main__':

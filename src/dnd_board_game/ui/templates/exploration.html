@@ -3,39 +3,42 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Eksploracja</title>
+  <title>{{ ui_text('common.exploration') }}</title>
   <link rel="stylesheet" href="{{ static_asset_url('nessa_briefing.css') }}">
   <link rel="stylesheet" href="{{ static_asset_url('physical_mana.css') }}">
   <link rel="stylesheet" href="{{ static_asset_url('exploration.css') }}">
   <link rel="stylesheet" href="{{ static_asset_url('training_arena.css') }}">
 <link rel="stylesheet" href="{{ static_asset_url('mission_zero.css') }}">
+<link rel="stylesheet" href="{{ static_asset_url('tabletop_conversation.css') }}">
+<link rel="stylesheet" href="{{ static_asset_url('tabletop_combat.css') }}">
+<link rel="stylesheet" href="{{ static_asset_url('tabletop_shell.css') }}">
 </head>
 <body>
 <header class="app-shell-header">
   <div class="app-shell-context">
-    <span id="app-mode-label" class="mode-badge">Eksploracja</span>
+    <span id="app-mode-label" class="mode-badge">{{ ui_text('common.exploration') }}</span>
     <div class="app-shell-title">
-      <h1 id="page-title"><span id="scenario">Scenariusz</span></h1>
-      <p><span id="zone">Lokacja</span></p>
+      <h1 id="page-title"><span id="scenario">{{ ui_text('common.scenario') }}</span></h1>
+      <p><span id="zone">{{ ui_text('common.location') }}</span></p>
     </div>
   </div>
-  <div id="party-summary" class="party-summary" aria-label="Stan drużyny"></div>
+  <div id="party-summary" class="party-summary" aria-label="{{ ui_text('common.party_status') }}"></div>
   <div class="app-shell-tools">
     <details id="party-ethos" class="party-ethos" hidden></details>
     <div id="board-connection-indicator" class="board-connection-indicator" role="status">
       <span class="connection-dot" aria-hidden="true"></span>
-      <span>Plansza</span>
+      <span>{{ ui_text('common.board') }}</span>
     </div>
-    <button id="side-panel-toggle" class="side-panel-toggle secondary" data-allow-busy="true" onclick="toggleSidePanel()" aria-controls="side-panel" aria-expanded="false" title="Otwórz informacje i ustawienia">
-      <span aria-hidden="true">☰</span><span class="side-panel-toggle-label">Menu</span>
+    <button id="side-panel-toggle" class="side-panel-toggle secondary" data-allow-busy="true" onclick="toggleSidePanel()" aria-controls="side-panel" aria-expanded="false" title="{{ ui_text('common.menu_hint') }}">
+      <span aria-hidden="true">☰</span><span class="side-panel-toggle-label">{{ ui_text('common.menu') }}</span>
     </button>
   </div>
 </header>
 <div id="board-disconnected-banner" class="board-disconnected-banner" role="status" hidden>
-  <div><b>Plansza rozłączona</b><span id="board-disconnected-copy">Możecie ponowić połączenie albo jawnie przejść na sterowanie awaryjne.</span></div>
+  <div><b>{{ ui_text('common.disconnected') }}</b><span id="board-disconnected-copy">{{ ui_text('common.disconnected_hint') }}</span></div>
   <div class="row">
-    <button class="secondary" data-allow-busy="true" onclick="retryBoardConnection()">Ponów</button>
-    <button id="board-fallback-toggle" data-allow-busy="true" onclick="toggleBoardFallback()">Tryb awaryjny</button>
+    <button class="secondary" data-allow-busy="true" onclick="retryBoardConnection()">{{ ui_text('common.retry') }}</button>
+    <button id="board-fallback-toggle" data-allow-busy="true" onclick="toggleBoardFallback()">{{ ui_text('common.fallback') }}</button>
   </div>
 </div>
 <div id="side-panel-scrim" class="side-panel-scrim" data-allow-busy="true" onclick="setSidePanelOpen(false)"></div>
@@ -58,7 +61,7 @@
     <div class="side-panel-content" data-side-panel-content="game">
       <section class="panel-section">
         <span class="panel-section-label">Aktualna lokacja</span>
-        <strong id="panel-zone-name">Lokacja</strong>
+        <strong id="panel-zone-name">{{ ui_text('common.location') }}</strong>
         <div id="scene-status-summary" class="panel-stack"></div>
       </section>
       <section class="panel-section">
@@ -383,7 +386,8 @@
     </div>
   </form>
 </dialog>
-<script>window.EXPLORATION_SLASH_COMMANDS = {{ slash_commands | tojson }};</script>
+<script>window.EXPLORATION_SLASH_COMMANDS = {{ slash_commands | tojson }}; window.SESSION_UI_COPY = {{ ui_copy | tojson }};</script>
+<script src="{{ static_asset_url('session_copy.js') }}"></script>
 <script src="{{ static_asset_url('shared_mana.js') }}"></script>
 <script src="{{ static_asset_url('physical_mana.js') }}"></script>
 <script src="{{ static_asset_url('training_arena.js') }}"></script>
@@ -393,6 +397,8 @@
 <script src="{{ static_asset_url('dice_icons.js') }}"></script>
 <script src="{{ static_asset_url('shield_bash.js') }}"></script>
 <script src="{{ static_asset_url('board_panel.js') }}"></script>
+<script src="{{ static_asset_url('session_navigation.js') }}"></script>
+<script src="{{ static_asset_url('tabletop_combat.js') }}"></script>
 <script src="{{ static_asset_url('exploration.js') }}"></script>
 </body>
 </html>

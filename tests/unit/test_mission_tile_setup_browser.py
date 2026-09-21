@@ -48,7 +48,7 @@ def test_tile_setup_preview_and_accept(tmp_path: Path,width: int) -> None:
   check(illustration&&(await fetch(illustration.getAttribute('href'))).ok,'cutout illustration available');
   if(innerWidth>=760)check(pictures()[0].getBoundingClientRect().right<document.querySelector('.mission-tile-instruction').getBoundingClientRect().left,'art left, instructions right');
   check(document.documentElement.scrollWidth<=innerWidth,'guild overflow');
-  check(state.board_selection.legal_positions.length===3,'accept and scrolling are selectable');
+  check(state.board_selection.legal_positions.length===4,'accept, scrolling and menu are selectable');
   await accept();check(pictures()[0].dataset.setupCutout==='G02','second large tile');
   const rev=state.mission.revision;
   document.querySelector('[data-mission-slot="28"]').click();await wait(()=>!busy&&state.mission.revision!==rev);
@@ -56,7 +56,7 @@ def test_tile_setup_preview_and_accept(tmp_path: Path,width: int) -> None:
   await accept();check(!pictures().length&&document.querySelector('.mission-figurine-preview'),'single party figure');
   await accept();check(state.mission.stage==='guild_hub','setup ends in guild');
   check(!document.querySelector('[data-mission-slot]'),'guild has no destination buttons');
-  check(state.board_selection.legal_positions.length===4,'only two map fields and scroll controls');
+  check(state.board_selection.legal_positions.length===5,'two map fields, scroll controls and menu');
   const select=async(col,row)=>{await wait(()=>!busy&&!boardPanelSyncPromise);await api('/api/board/select',{col,row},'');await wait(()=>!busy)};
   await select(14,8);check(state.mission.stage==='arena_unavailable','arena information');
   await select(19,0);check(state.mission.stage==='guild_hub','back to guild');
@@ -85,6 +85,20 @@ def test_tile_setup_preview_and_accept(tmp_path: Path,width: int) -> None:
   }
   check(state.encounter_setup.current_step.requires_board_assignment,'figures after terrain');
   check(!document.querySelector('.battle-map-preview'),'no full map during figure setup');
+  while(state.encounter_setup.current_step?.requires_board_assignment){
+   const step=state.encounter_setup.current_step;
+   const actor=state.actors.find(a=>a.id===step.assignment_actor_id);
+   await wait(()=>document.querySelector('.setup-assignment-hero img')?.complete&&document.querySelector('.setup-assignment-hero img').naturalWidth);
+   const portrait=document.querySelector('.setup-assignment-hero img');
+   check(portrait.getAttribute('src')===actor.portrait_url,'portrait follows called hero');
+   check(portrait.alt===step.assignment_actor_name,'portrait names called hero');
+   check(portrait.getBoundingClientRect().height===100,'portrait size');
+   if(innerWidth>=760)check(document.querySelector('.setup-current-command').getBoundingClientRect().bottom<=innerHeight,'placement clipped');
+   const position=step.available_positions[0];
+   await select(position[0],position[1]);
+   check(state.encounter_setup.current_step.assignment_actor_id===actor.id,'selection changed called hero before confirmation');
+   await accept();
+  }
   await fetch('/__test/result',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({result:'PASS'})});
  }catch(e){await fetch('/__test/result',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({result:e.stack,body:document.body.innerText.slice(-1800)})})}
 })();</script>'''

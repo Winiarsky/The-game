@@ -1401,3 +1401,6 @@ button.panel-accept {background:#172e49;color:#b4dcff;border-color:#437fb7;}
 .ethos-track i.current {background:#f0cd79;outline:1px solid #f0cd79;outline-offset:1px;}
 .ethos-details {position:absolute;z-index:90;right:0;top:100%;width:320px;max-width:calc(100vw - 24px);padding:14px;border:1px solid #a89b7e;border-radius:6px;background:#202321;color:#eee;box-shadow:0 4px 16px #0008;font-size:13px;line-height:1.45;}
 @media(max-width:600px) {.party-ethos{max-width:110px;font-size:10px}.ethos-track{gap:3px}.ethos-track i{width:10px;height:9px}.ethos-details{position:fixed;top:80px;right:12px;}}
+.setup-assignment-hero {display:flex;align-items:center;gap:1rem;margin:1rem 0;}
+.setup-assignment-hero img {width:80px;height:100px;object-fit:contain;border-radius:6px;flex-shrink:0;}
+.setup-assignment-hero p {margin:0;line-height:1.6;}

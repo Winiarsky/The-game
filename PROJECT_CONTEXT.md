@@ -1,5 +1,45 @@
 # Kontekst Projektu
 
+Konfrontacje (21.09.2026): naturalne 20 automatycznie rozlicza sukces jako
+maksimum kości wpływu/postępu + premie, bez drugiego rzutu. Naturalne 1:
+automatyczna porażka i dodatkowa spalona karta po modyfikacji zwykłego kosztu.
+Pasywy nadal działają; UI wyróżnia krytyk, a zapis zachowuje wynik i pozostałe
+spalanie. Rozpoczęte wcześniej rzuty wpływu nie są przeliczane ponownie.
+
+## UI na laptopie i paczka Misji 0 — 21.09.2026
+
+Wdrażany widok rozgrywki jest przeznaczony na **laptop przy fizycznej planszy**.
+Nie przygotowujemy obecnie wariantu mobilnego. Mapa zostaje na stole;
+aplikacja pokazuje bieżącą decyzję, skutki i informacje potrzebne do działania.
+W walce jeden pionowy tor po lewej zawiera portrety, PW i stany. Wyróżnienie
+aktywnej tury jest niezależne od podglądu uczestnika przez −/+. Prawa karta
+prowadzi od runy akcji przez pole figurki do podglądu celu i zatwierdzenia.
+W rozmowie pomoc ma stałe runy odbiorców, a −/+ przegląda jedną widoczną osobę;
+Klucz i Gwiazda otwierają podgląd premii oraz efektów. Mana zachowuje symbole.
+
+Launcher, wybór do sześciu bohaterów i scenariusza, menu, dziennik oraz
+ściąga korzystają z run i funkcyjnych −/+/✓/↩. Podglądy mają osobny kontekst
+wejścia, bez zmiany zasad, kart czy aktywnej tury. Stare zdarzenia i zamknięcia
+panelu nie powinny przejmować kolejnego ekranu. Ogranie na fizycznej planszy,
+w tym rozłączenie i odtworzenie stosów, pozostaje wymaganym sprawdzeniem.
+
+Cała bieżąca paczka jest w `content/scenarios/misja_0_dzwon/`:
+
+- `text/ui/*.json` — podpisy nowego UI; `text/ui.json` — instrukcje etapów misji.
+- `text/*.md` i `text/index.json` — narracja, dialogi, przypisania ilustracji.
+- `text/karty_postaci.json` — jedno źródło opisów dla gry i kart bohaterów.
+- `text/sciaga_graczy.json` — osobne źródło zasad i instrukcji dla graczy.
+- `print/` — komplet sceny (10 stron), alternatywne nominalne pola 25 mm
+  (10 stron), karty postaci (36 stron), ściąga (4 strony) i znaczniki (1 strona).
+
+Łącznie pięć gotowych PDF-ów. Kalibracja mapy 250/244 oraz wymiary kart są
+zachowane. Starsze wydruki postaci są w `print/archive/`; nowe arkusze i ich
+podglądy w `print/characters/`. Źródła kart i ściągi przeładowują się po zapisie,
+a teksty UI przy kolejnym żądaniu. Opisy nie zastępują mechaniki w regułach.
+[Start i przygotowanie](content/scenarios/misja_0_dzwon/README.md),
+[edycja tekstów](content/scenarios/misja_0_dzwon/EDITING.md),
+[wydruki](content/scenarios/misja_0_dzwon/print/README.md).
+
 ## Mana: sześć kart i atut — 20.09.2026
 
 Aktualne zasady zastępują starsze zapisy o 21 punktach: pula do 6 fizycznych kart,
@@ -38,13 +78,13 @@ oraz historii są skaza i „Aktualne zobowiązania” z kropkowanymi liniami.
 Zasady eksploracji są we wspólnym pomocniku. Podgląd wymaga tylko wyboru
 położenia karty, bez zgłaszania koloru. Wymiary fizycznych kart są zachowane.
 
-Wydruki postaci (2026-09-18): zatwierdzony układ Garrana obejmuje wszystkie
-siedem postaci. `scripts/build_hero_mats.py` buduje jeden 41-stronicowy PDF
-`content/print/characters/bohaterowie_zestawy_startowe_A4.pdf`: spis, po pięć
-stron bohatera (postać, mana, akcje, mata wyposażenia, wycinanki sprzętu),
-na końcu cztery strony pomocnika (podstawy, walka, rozmowy, obiekty) i znaczniki. Nimra ma 12 akcji na A4 poziomo,
-pozostali po 9. Wspólna komenda `build_session_print_packs.py --only heroes`
-korzysta z nowego generatora. Opisy i podglądy: `content/print/characters/mats_v2/`.
+Wydruki postaci: zatwierdzony układ Garrana obejmuje wszystkie siedem
+postaci. `scripts/build_hero_mats.py` publikuje oddzielnie karty postaci,
+ściągę i znaczniki w `content/scenarios/misja_0_dzwon/print/`. Bohater ma
+pięć stron: postać, mana, akcje, mata wyposażenia i wycinanki sprzętu.
+Nimra ma 12 akcji na A4 poziomo, pozostali po 9. Dawny zbiorczy plik
+41-stronicowy zachowano w `print/archive/`. Wspólna komenda
+`build_session_print_packs.py --only heroes` używa tego samego generatora.
 
 Pasywy (2026-09-17): w profilu pooled_mana_v01 nie ma darmowych cech
 pasywnych. Kluczowe cechy uruchamia pierwszy właściwy kolor w puli bojowej;
@@ -57,10 +97,11 @@ Nieustępliwości; drain i nowa walka resetują jej użycie. Pasywy nie mają li
 tur ani odpoczynku. Mira: czerwona +1k6 z ukrycia, zielona +2k6 z flanki; Erynd:
 +1k6 przy każdym trafieniu w pełne PW. Grubość obwódki ikony oznacza kumulowanie.
 
-Wydruki sesji: `python scripts/build_session_print_packs.py` buduje dwa komplety:
-`content/scenarios/misja_0_dzwon/maps/print/misja_0_komplet_A4.pdf` (kafle, potem
-handouty i przedmioty) oraz `content/print/characters/bohaterowie_zestawy_startowe_A4.pdf`
-(po kolei pełne karty każdego bohatera i jego sprzęt). Obok PDF-ów są spisy stron.
+Wydruki sesji: `PYTHONPATH=src .venv/bin/python scripts/build_session_print_packs.py`
+buduje cztery osobne PDF-y w `content/scenarios/misja_0_dzwon/print/`:
+`misja_0_komplet_A4.pdf`, `karty_postaci_A4.pdf`, `sciaga_graczy_A4.pdf`
+i `znaczniki_A4.pdf`. Opcja `--only mission --nominal` buduje piąty,
+alternatywny plik kafli bez korekty drukarki. Obok PDF-ów są spisy stron.
 
 Przygotowanie wyposażenia (2026-09-17): Misja 0 gromadzi znaleziska w `party_loot`.
 Przed wyprawą wybór przedmiotów −/+ i slotów runami, po kolei dla każdej postaci.
@@ -499,4 +540,4 @@ Wdrożono indywidualne zestawy pasywów walki i eksploracji dla siedmiu bohater�
 
 ### Wspólne opisy postaci
 
-`content/characters/karty_postaci.json` jest źródłem opisów kart, akcji, obu zestawów pasywów i samouczka. Adapter `scenarios/character_text.py` odświeża odczyt po zmianie pliku. Reguły i liczby pozostają niezależne; instrukcja edycji w `content/characters/README.md`.
+`content/scenarios/misja_0_dzwon/text/karty_postaci.json` jest źródłem opisów kart, akcji, obu zestawów pasywów i samouczka. Osobna ściąga jest w `text/sciaga_graczy.json`. Adapter `scenarios/character_text.py` odświeża oba pliki niezależnie. Reguły i liczby pozostają niezależne; instrukcja edycji w `content/scenarios/misja_0_dzwon/EDITING.md`.

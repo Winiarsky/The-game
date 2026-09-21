@@ -65,3 +65,8 @@
 .mana-passive-description details{font-size:.85em;margin-top:.45em}
 
 .mana-choice-option{padding:12px;border:1px solid #7776;border-radius:8px}.mana-choice-option>button{width:100%;margin-bottom:8px}
+.mana-deck-preparation {border:2px solid #d6b45f;border-radius:8px;background:#292c22;padding:.8rem 1rem;margin:.75rem 0;}
+.mana-deck-preparation h3 {color:#f3d38b;margin:0 0 .6rem;}
+.mana-deck-preparation p {margin:.55rem 0;line-height:1.4;}
+.mana-deck-counts {display:flex;gap:.6rem 1.1rem;flex-wrap:wrap;}
+.mana-deck-counts>span {display:flex;align-items:center;gap:.35rem;}

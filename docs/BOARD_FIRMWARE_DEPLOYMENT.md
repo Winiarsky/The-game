@@ -1,5 +1,27 @@
 # Wgranie firmware skanera — 2026-09-10
 
+## Aktualizacja portu — 2026-09-21
+
+Po ponownym podłączeniu system przypisał CP2102 `/dev/ttyUSB1`; stary wpis
+`/dev/ttyUSB0` powodował błąd otwarcia. Zgodnie z wyborem użytkownika
+`board/config.json` ma teraz `hardware.serial_port: ""`: aplikacja wyszukuje
+planszę we wszystkich dostępnych portach i zatrzymuje się po poprawnej odpowiedzi
+protokołu v2 z właściwym mapowaniem i gotowymi czujnikami. Porty USB są sprawdzane
+w pierwszej kolejności. Budżet oczekiwania na odpowiedź jednego portu określa
+`probe_timeout_s` (domyślnie 6 s). Błąd lub niezgodna odpowiedź jednego portu
+nie przerywają dalszego wyszukiwania. Przy ponownym połączeniu lista urządzeń
+jest odczytywana od nowa; UI ponawia nieudane próby. Numer `ttyUSB` nie jest
+zapisywany jako wymuszone ustawienie.
+
+Po zmianie konfiguracji uruchom aplikację ponownie. Opcjonalny niepusty
+`hardware.serial_port` lub `BOARD_SERIAL_PORT` nadal wymusza konkretny port;
+dla automatycznego wyszukiwania pozostaw pole puste i usuń tę zmienną środowiskową.
+
+Sprawdzono prawdziwe urządzenie przez `_open_serial_probe` i `SerialV2`:
+firmware `board_scan_protocol_v2_2`, HELLO poprawne, PING/status `idle`,
+`ready: true`, `i2c_errors: 0`. Próba zwolniła port i nie zmieniała firmware,
+WLED ani stanu rozgrywki. Poniższe nazwy `/dev/ttyUSB0` opisują wcześniejsze wdrożenie.
+
 ## Aktualny stan: v2 bez zgodności v1
 
 Na życzenie użytkownika aplikację i firmware przeniesiono wyłącznie na v2.

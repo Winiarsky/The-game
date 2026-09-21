@@ -116,8 +116,8 @@ def select_position(s: ExplorationUiSession, position: Coordinate) -> dict[str, 
     selected = next((c for c in p['board_choices'] if panel_position(c['slot']) == position), None)
     if selected is None:
         raise ValueError('Ta runa nie jest aktywna w bieżącym kroku eksploracji.')
-    if selected['action'] == 'scroll':
+    if selected['action'] in ('scroll', 'inspect'):
         s.board_selection_revision += 1
-        return dict(panel_event=dict(slot=selected['slot'], context=f"confrontation-scroll:{p['revision']}"),
+        return dict(panel_event=dict(slot=selected['slot'], context=f"confrontation-{selected['action']}:{p['revision']}"),
                     board_selection=s._board_selection_payload())
     return command(s, dict(action=selected['action'], revision=p['revision'], **selected['extra']))

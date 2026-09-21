@@ -99,7 +99,10 @@ def create_app(
 
     @app.context_processor
     def launcher_context():
-        return {'launcher_token': getattr(g, 'launcher_token', '')}
+        from .session_copy import load_ui_copy, render_ui_text
+        copy = load_ui_copy()
+        return {'launcher_token': getattr(g, 'launcher_token', ''), 'ui_copy': copy,
+                'ui_text': lambda key, **values: render_ui_text(copy, key, **values)}
     character_catalog = load_character_catalog(
         Path("content/character_creation/catalog.json")
     )
@@ -264,6 +267,25 @@ def create_app(
     def play():
         launcher_board.leave(session)
         return render_template("exploration.html", slash_commands=slash_commands_payload())
+
+    @app.get("/session-materials")
+    def session_materials():
+        from .session_copy import DEFAULT_PACK
+        files = (("misja_0_komplet_A4.pdf", "materials_mission"),
+                 ("karty_postaci_A4.pdf", "materials_heroes"),
+                 ("sciaga_graczy_A4.pdf", "materials_rules"),
+                 ("znaczniki_A4.pdf", "materials_tokens"))
+        return render_template("session_materials.html", materials=[
+            dict(filename=name, label=label, exists=(DEFAULT_PACK / "print" / name).is_file())
+            for name, label in files])
+
+    @app.get("/session-materials/<path:filename>")
+    def session_material_file(filename: str):
+        from .session_copy import DEFAULT_PACK
+        if filename not in {"misja_0_komplet_A4.pdf", "misja_0_komplet_A4_25mm.pdf",
+                            "karty_postaci_A4.pdf", "sciaga_graczy_A4.pdf", "znaczniki_A4.pdf"}:
+            abort(404)
+        return send_from_directory(DEFAULT_PACK / "print", filename)
 
     @app.get("/new-game")
     def new_game():
@@ -1521,7 +1543,7 @@ def create_app(
     @app.before_request
     def clear_browser_panel_on_game_command():
         g.request_started_at = time.monotonic()
-        launcher_pages = {'index', 'new_game', 'load_game', 'characters', 'character_detail', 'start_new_game', 'load_current_game'}
+        launcher_pages = {'index', 'new_game', 'load_game', 'characters', 'character_detail', 'start_new_game', 'load_current_game', 'session_materials'}
         if (request.path.startswith("/api/") or request.endpoint in launcher_pages | {'play', 'open_training_arena'}) and request.path not in {"/api/board/scan", "/api/board/reset-scan"}:
             session._board_state_lock.acquire()
             g.board_state_locked = True
@@ -1574,6 +1596,8 @@ def create_app(
     def api_board_panel():
         data = request.get_json(silent=True) or {}
         try:
+            if 'release_context' in data:
+                return jsonify(session.release_board_panel(str(data['release_context'])))
             return jsonify(session.configure_board_panel(
                 str(data.get("context", "")), data.get("slots", []), bool(data.get("exclusive", False)),
                 expected_revision=str(data.get("revision", "")),

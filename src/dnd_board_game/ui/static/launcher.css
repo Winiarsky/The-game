@@ -854,3 +854,9 @@ legend { padding: 0 7px; color: #dfca97; font-weight: 800; }
   .split-actions { align-items: stretch; }
   .split-actions > div { display: grid; }
 }
+
+/* Laptop navigation cursor is separate from heroes chosen for the party. */
+[data-board-rune].board-focused{outline:2px solid #d6bd86;outline-offset:3px}
+.launcher-page{background:#17201c;color:#ede9df}
+.launcher-page .menu-action,.launcher-page .roster-card,.launcher-page .scenario-card{border-radius:4px;background:#202924}
+.launcher-page .launcher-shell,.launcher-page .flow-shell{max-width:1300px}

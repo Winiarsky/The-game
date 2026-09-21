@@ -172,13 +172,20 @@ def launch_confrontation(s: ExplorationUiSession, name: str) -> None:
     c.write(s,data)
 
 
+def nessa_theft_available(s: ExplorationUiSession, m: dict[str, Any]) -> bool:
+    return (m.get('nessa_outcome') == 'failure' and 'negotiated' in m['flags']
+            and 'nessa_theft_resolved' not in m['flags'] and 'item:weak_potion' not in m['flags']
+            and any(str(a.id) == 'mira' and a.faction == Faction.ALLY for a in s.exploration.actors))
+
+
 def finish_confrontation(s: ExplorationUiSession, current: dict[str, Any]) -> None:
     m=read(s); name=current['mission_scene']; outcome=current['state']['outcome']
     if name == 'nessa':
-        m['flags'].append('negotiated')
+        if 'negotiated' not in m['flags']: m['flags'].append('negotiated')
+        m['nessa_outcome'] = outcome
         if outcome == 'success': grant(s,m,'potion')
         elif outcome == 'compromise': grant(s,m,'weak_potion')
-        m['stage']='brief'
+        m['stage']='nessa_theft' if nessa_theft_available(s,m) else 'brief'
     elif name == 'cart':
         m['stage']='road_success' if outcome=='success' else 'fatigue_roll'
     else:
@@ -283,6 +290,9 @@ def payload(s: ExplorationUiSession) -> dict[str, Any] | None:
         opt(6,'why','why');opt(7,'road_info','road_info')
         if 'negotiated' not in m['flags']:opt(8,'negotiate','negotiate')
         opt(28,'depart','depart')
+    elif stage=='nessa_theft':
+        if nessa_theft_available(s,m): opt(6,'nessa_steal_potion','nessa_steal_potion')
+        opt(7,'nessa_leave_potion','nessa_leave_potion')
     elif stage=='departure':marker=[9,24];opt(28,'exit','exit')
     elif stage=='road':
         opt(6,'cart','cart')
@@ -305,7 +315,7 @@ def payload(s: ExplorationUiSession) -> dict[str, Any] | None:
     else:opt(28,'next','next')
     from . import mission_zero_recovery as recovery
     from . import party_preparation as preparation
-    revised_choices=preparation.choices(s,m) if stage in preparation.STAGES else recovery.choices(s,m)
+    revised_choices=preparation.choices(s,m) if stage in (*preparation.STAGES,'equipment_intro') else recovery.choices(s,m)
     if revised_choices is not None:controls=revised_choices
     textkey=recovery.presentation(s,m,textkey)
     entries=read_json(root(s),'text/index.json')
@@ -377,6 +387,15 @@ def command(s: ExplorationUiSession, data: dict[str, Any]) -> dict[str, object]:
         s.state=replace(s.state,flags=party_ethos.apply_choice(s.state.flags,event['id'],event['direction']))
         m.update(stage='cart_coerced',fatigue=0,cart_started=True)
         m['flags'].append('cart_exchanged')
+    elif action=='nessa_steal_potion':
+        event=read_json(root(s),'mechanics/ethos.json')['nessa_steal_potion']
+        s.state=replace(s.state,flags=party_ethos.apply_choice(s.state.flags,event['id'],event['direction']))
+        grant(s,m,'weak_potion')
+        m['flags'].append('nessa_theft_resolved')
+        m['stage']='nessa_theft_taken'
+    elif action=='nessa_leave_potion':
+        m['flags'].append('nessa_theft_resolved')
+        m['stage']='brief'
     elif action=='depart':
         preparation.begin(m,'departure')
     elif action=='exit':
@@ -467,6 +486,8 @@ def scan_target(s: ExplorationUiSession) -> BoardScanTarget:
     slots=tuple(c['slot'] for c in p['choices']);marker=Coordinate(*p['marker']) if p['marker'] else None
     if p['reading']:
         slots=(*slots,26,27)
+    if 29 not in slots:
+        slots=(*slots,29)
     feedback=LedFeedback((LedFrame((marker,),LedColor.PLAYER_START_ZONE,LedRole.MARKER),)) if marker else LedFeedback()
     if p.get('setup'):
         from .mission_setup import step_from_data
@@ -492,6 +513,10 @@ def select_position(s: ExplorationUiSession, position: Coordinate) -> dict[str, 
     if p['rolling']:
         from .board_panel import select_browser_die
         return select_browser_die(s,position)
+    if position == panel_position(29) and not any(c['slot'] == 29 for c in p['choices']):
+        s.board_selection_revision += 1
+        return dict(panel_event=dict(slot=29,context=f"session-open-menu:{p['revision']}"),
+                    board_selection=s._board_selection_payload())
     if p['reading'] and position in (panel_position(26),panel_position(27)):
         s.board_selection_revision += 1
         return dict(panel_event=dict(slot=29-position.row,context=f"mission-scroll:{p['revision']}"),

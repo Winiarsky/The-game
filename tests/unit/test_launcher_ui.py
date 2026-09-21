@@ -80,7 +80,7 @@ def test_new_game_lists_real_exploration_scenario_catalog(tmp_path) -> None:
     assert 'class="launcher-page new-game-page"' in html
     assert 'launcher.css?v=' in html
     assert 'id="scenario-selection-step" class="form-section" hidden' in html
-    assert "Kliknij od 1 do 5 bohaterów" in html
+    assert "Wybierz do 6 bohaterów" in html
     assert "ACCEPT" not in html
     assert "Zeskanuj" not in html
 
@@ -101,9 +101,9 @@ def test_new_game_rejects_empty_or_too_large_party(tmp_path) -> None:
     )
 
     assert missing.status_code == 400
-    assert "Wybierz od 1 do 5 bohaterów" in missing.get_data(as_text=True)
+    assert "Wybierz od 1 do 6 bohaterów" in missing.get_data(as_text=True)
     assert too_many.status_code == 400
-    assert "Wybierz od 1 do 5 bohaterów" in too_many.get_data(as_text=True)
+    assert "Ten starszy scenariusz obsługuje do 5 bohaterów" in too_many.get_data(as_text=True)
 
 
 def test_removed_new_game_card_scan_endpoint_is_not_available(tmp_path) -> None:

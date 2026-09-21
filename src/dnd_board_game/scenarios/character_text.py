@@ -19,7 +19,8 @@ if TYPE_CHECKING:
 
 AbilityText = TypeVar("AbilityText", SharedAbility, ManaAbility)
 
-SOURCE_PATH = Path(__file__).resolve().parents[3] / 'content/characters/karty_postaci.json'
+SOURCE_PATH = (Path(__file__).resolve().parents[3]
+               / 'content/scenarios/misja_0_dzwon/text/karty_postaci.json')
 HERO_IDS = frozenset(('garran', 'brakka', 'mira', 'dagna', 'lorian', 'nimra', 'erynd'))
 COLORS = frozenset('CBZFN')
 
@@ -49,14 +50,43 @@ def _read(stamp: tuple[str, int, int]) -> dict[str, Any]:
         for aid, action in hero['actions'].items():
             if not all(isinstance(action.get(k), str) and action[k].strip() for k in ('name', 'description')):
                 raise ValueError(f'karty_postaci.json: niepełny opis akcji {hid}.{aid}.')
-    for key in ('equipment', 'keywords', 'player_aid', 'tutorial'):
+    for key in ('equipment', 'keywords', 'tutorial'):
         if key not in data:
             raise ValueError(f'karty_postaci.json: brak sekcji {key}.')
+    if 'player_aid' not in data and not isinstance(data.get('player_aid_file'), str):
+        raise ValueError('karty_postaci.json: brak player_aid_file lub sekcji player_aid.')
     return data
 
 
+@lru_cache(maxsize=8)
+def _read_player_aid(stamp: tuple[str, int, int]) -> list[dict[str, Any]]:
+    data = json.loads(Path(stamp[0]).read_text(encoding='utf-8'))
+    pages = data.get('pages')
+    if data.get('version') != 1 or not isinstance(pages, list) or not pages:
+        raise ValueError('Ściąga graczy wymaga wersji 1 i niepustej listy pages.')
+    ids: set[str] = set()
+    for page in pages:
+        if not isinstance(page, dict) or not all(
+            isinstance(page.get(key), str) and page[key].strip()
+            for key in ('id', 'title', 'subtitle', 'lead')
+        ) or not isinstance(page.get('sections'), list) or not page['sections']:
+            raise ValueError('Ściąga graczy: niepełna strona.')
+        if page['id'] in ids:
+            raise ValueError('Ściąga graczy: powtórzony identyfikator strony.')
+        ids.add(page['id'])
+    return pages
+
+
 def load_text() -> dict[str, Any]:
-    return _read(revision())
+    data = _read(revision())
+    # Complete in-memory/legacy sources retain the previous public contract.
+    if 'player_aid' in data:
+        return data
+    reference = Path(data['player_aid_file'])
+    if reference.name != str(reference) or reference.is_absolute():
+        raise ValueError('player_aid_file musi wskazywać plik obok karty_postaci.json.')
+    pages = _read_player_aid(revision(SOURCE_PATH.parent / reference))
+    return {**data, 'player_aid': pages}
 
 
 def hero_text(hero_id: str) -> dict[str, Any]:

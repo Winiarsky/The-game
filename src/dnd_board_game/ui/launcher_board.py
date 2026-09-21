@@ -18,13 +18,15 @@ class LauncherNavigation:
     token: str
     slots: tuple[int, ...] = ()
     selected: tuple[int, ...] = ()
+    controls: tuple[int, ...] = ()
+    focused: int | None = None
     back: bool = False
     generation: int = 0
     consumed: bool = False
 
     @property
     def active_slots(self) -> tuple[int, ...]:
-        return () if self.consumed else (*self.slots, *((29,) if self.back else ()))
+        return () if self.consumed else (*self.slots, *self.controls, *((29,) if self.back else ()))
 
 
 def begin(s: ExplorationUiSession) -> str:
@@ -53,7 +55,15 @@ def configure(s: ExplorationUiSession, data: dict[str, object]) -> dict[str, obj
             raise ValueError('Każdy kafelek menu musi mieć osobną runę.')
     if not set(selected) <= set(slots) or type(data.get('back', False)) is not bool:
         raise ValueError('Nieprawidłowy wybór menu.')
+    controls = data.get('controls', [])
+    focused = data.get('focused')
+    if (not isinstance(controls, list) or len(controls) > 3
+            or any(type(slot) is not int or slot not in (26, 27, 28) for slot in controls)
+            or len(controls) != len(set(controls))
+            or (focused is not None and (type(focused) is not int or focused not in slots))):
+        raise ValueError('Nieprawidłowe przyciski nawigacji menu.')
     s.launcher_navigation = replace(nav, slots=tuple(slots), selected=tuple(selected),
+                                    controls=tuple(controls) if slots else (), focused=focused,
                                     back=data.get('back') is True, generation=nav.generation + 1, consumed=False)
     if s.board_adapter is not None and not s.board_adapter.connected:
         s.shutdown_board()
@@ -80,10 +90,11 @@ def target(s: ExplorationUiSession) -> BoardScanTarget:
     nav = s.launcher_navigation
     slots = nav.active_slots
     colors = {slot: LedColor.MOVEMENT_DESTINATION if slot in nav.selected else LedColor.PANEL_ACTION
-              for slot in slots if slot != 29}
+              for slot in slots if slot < 26}
     return BoardScanTarget(positions=tuple(panel_position(slot) for slot in slots),
-        feedback=panel_feedback(tuple(colors), action_colors=colors, control_slots=(29,) if 29 in slots else ()),
-        empty_message='Naciśnij runę wybranego kafelka. ↩ wraca do poprzedniego menu.')
+        feedback=panel_feedback(tuple(colors), selected_slot=nav.focused, action_colors=colors,
+                                control_slots=tuple(slot for slot in slots if slot >= 26)),
+        empty_message='Runa wybiera od razu. −/+ przegląda, ✓ wybiera, ↩ wraca.')
 
 
 def selection(s: ExplorationUiSession) -> dict[str, object]:

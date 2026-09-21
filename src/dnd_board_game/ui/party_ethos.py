@@ -20,6 +20,17 @@ def deck_instruction(pool: PooledMana) -> str:
     return text + ' Przetasuj.'
 
 
+def deck_preparation(pool: PooledMana) -> dict[str, object] | None:
+    """Describe this encounter's deck, including after loading an older save."""
+    if not pool.excluded:
+        return None
+    from dnd_board_game.rules.party_ethos import PartyEthos
+    ethos = PartyEthos(3 + pool.excluded.count('B') - pool.excluded.count('C'))
+    return dict(label=ethos.label, steps=abs(ethos.position - 3), total=pool.total,
+                composition=pool.composition,
+                removed={c: pool.excluded.count(c) for c in NAMES if c in pool.excluded})
+
+
 def payload(flags: SceneFlags, heroes: tuple[str, ...]) -> dict[str, object] | None:
     if not heroes:
         return None

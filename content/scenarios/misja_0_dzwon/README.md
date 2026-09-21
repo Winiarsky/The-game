@@ -1,16 +1,33 @@
 # Misja 0 — Sprawy pozostawione
 
 Działająca misja wprowadzająca dla wybranej drużyny **3–6 bohaterów**.
-Uruchom aplikację jak dotychczas: **Nowa gra → wybierz drużynę → Misja 0**.
-Osobne ćwiczenia pozostają w **Poligon · Samouczki postaci**.
+Gramy z **laptopa przy fizycznej planszy**. Uruchom aplikację i wybierz
+**Nowa gra → drużyna → Misja 0**. Runy wybierają opcje; **−/+** przegląda,
+**✓** zatwierdza, **↩** wraca. Osobne ćwiczenia pozostają w
+**Poligon · Samouczki postaci**. Wersja mobilna nie jest obecnym celem.
+
+Przed grą otwórz [gotowe wydruki](print/README.md). Teksty aplikacji i materiałów
+zmienisz według [instrukcji edycji](EDITING.md), bez szukania ich w kodzie UI.
 
 ## Przebieg
 
-Elementy do wycięcia przygotuj przed rozpoczęciem scenariusza, z PDF-ów
-w `maps/print/`. W panelu rozgrywki nie ma linku do wycinanek.
+Do ogrania samego przybycia i walki, bez przechodzenia odprawy i sceny z wozem:
+
+```bash
+PYTHONPATH=src .venv/bin/python -m dnd_board_game.runtime.mission_combat_ui \
+  --heroes brakka garran nimra --morality 1 --board-backend hardware
+```
+
+Uruchom z katalogu repozytorium i otwórz `http://127.0.0.1:5201/play`.
+Zaczynasz od fabularnego przybycia do posterunku. `--morality`: −3…−1
+Solidarność, 0 Równowaga, 1…3 Bezwzględność. Bez planszy pomiń ostatni
+parametr. [Opcje szybkiego startu i katalogi testowe](../../../docs/RUNNING_AND_TESTING.md#szybki-start-misji-0-po-scenie-z-wozem).
+
+Elementy do wycięcia przygotuj przed rozpoczęciem scenariusza, z aktualnych
+PDF-ów w `print/`. Materiały są też dostępne z ekranu przygotowania gry.
 Podczas intro świata, bohaterów i pierwszego wezwania **+** przewija opis
 w dół, **−** w górę, a **✓** przechodzi do kolejnego fragmentu. Przyciski
-pozostają widoczne; można też przewijać myszą lub dotykiem. Aktualizacje
+pozostają widoczne; podczas przygotowania można też używać myszy. Aktualizacje
 panelu zachowują miejsce w tekście, nowy fragment zaczyna się od góry.
 
 Intro → rozłożenie Gildii i wybór miejsca figurką → odprawa oraz drukowany
@@ -23,34 +40,57 @@ Miejsca wybieracie figurką na polach planszy. Dialogi i decyzje korzystają
 z run. Kości wpisuje się przez fokus, − / +, potwierdzenie wyniku i przegląd
 przed zatwierdzeniem. Współrzędne są liczone od zera.
 
-## Dwa kompletne pakiety do druku
+## Gotowe materiały do druku
 
-Przed sesją używaj tych dwóch plików:
+Wszystkie bieżące PDF-y są w `print/`. Wybierz jeden z dwóch wariantów kafli;
+karty postaci i ściąga są osobnymi plikami.
 
-1. **[Misja 0 — kompletny pakiet A4](maps/print/misja_0_komplet_A4.pdf)**:
-   najpierw instrukcja, rozmieszczenie i wszystkie kafle planszy, następnie
-   rozkaz Nessy, pokwitowania Boruta i karty przedmiotów (medalik, mikstury,
-   klucz, dokumenty oraz pierścień przed identyfikacją i po niej).
-   Karta rozpoznanego pierścienia zastępuje nieznaną — to jeden przedmiot.
-2. **[Bohaterowie — kompletne zestawy startowe A4](../../print/characters/bohaterowie_zestawy_startowe_A4.pdf)**:
-   kolejno Garran, Brakka, Mira, Dagna, Lorian, Nimra i Erynd. Po pełnym zestawie
-   kart każdej postaci (statystyki, zdolności, pasywy, skaza i zasady) są jej
-   ilustrowane karty wyposażenia. Kolejna postać zaczyna się na nowej stronie.
-   [Spis stron](../../print/characters/bohaterowie_zestawy_startowe_A4.md)
-   pozwala wydrukować tylko wybraną drużynę.
+| PDF | Zawartość | Strony |
+| --- | --- | --- |
+| [Misja 0 — komplet](print/misja_0_komplet_A4.pdf) | Instrukcja, rozmieszczenie, kafle, rozkaz Nessy, pokwitowania i przedmioty; korekta drukarki 250/244 | 10 |
+| [Misja 0 — pola 25 mm](print/misja_0_komplet_A4_25mm.pdf) | Ten sam komplet bez korekty drukarki | 10 |
+| [Karty postaci](print/karty_postaci_A4.pdf) | Spis i po pięć stron siedmiu bohaterów: postać, mana, akcje, mata wyposażenia, sprzęt | 36 |
+| [Ściąga graczy](print/sciaga_graczy_A4.pdf) | Podstawy, walka, rozmowy i obiekty | 4 |
+| [Znaczniki](print/znaczniki_A4.pdf) | Zajęta druga ręka, wykorzystana zdolność i legenda sprzętu | 1 |
 
-Druk jednostronny, A4, **100%, bez dopasowania**. Pakiet misji zachowuje korektę
-kafli 250/244; karty i handouty mają własny niezmieniony rozmiar. Podkład mapy,
-figurki, kości i wspólna talia many są wielokrotnego użytku i nie są dublowane
-w tych pakietach. Handouty rozdaj dopiero przy odpowiednim wydarzeniu w grze.
+Druk jednostronny, A4, **100%, bez dopasowania**. Nie drukuj obu wariantów
+kafli. [Instrukcja wydruków](print/README.md) podaje wymiary oraz strony dla
+wybranych bohaterów. Podkład mapy, figurki, kości i wspólna talia many są
+wielokrotnego użytku i nie są dublowane w tych pakietach.
 
-Odbudowa obu pakietów z aktualnych danych (bez zmiany zasad postaci):
-`python scripts/build_session_print_packs.py`.
-Opcje: `--only mission`, `--only heroes`; `--only mission --nominal` tworzy
-alternatywny komplet `misja_0_komplet_A4_25mm.pdf` bez korekty drukarki.
-Obok każdego PDF-u powstają spis stron `.md` i manifest `.json`.
-Poniższe mniejsze pliki pozostają materiałami pomocniczymi; nie trzeba ich
-drukować dodatkowo, jeśli korzystacie z kompletnych pakietów.
+Handouty rozdaj przy odpowiednich wydarzeniach. Kartę rozpoznanego pierścienia
+przekaż dopiero po identyfikacji; zastępuje nieznaną — to jeden przedmiot.
+
+Odbudowa z aktualnych źródeł, z głównego katalogu projektu:
+
+```sh
+PYTHONPATH=src .venv/bin/python scripts/build_session_print_packs.py
+PYTHONPATH=src .venv/bin/python scripts/build_session_print_packs.py --only mission --nominal
+```
+
+Opcje `--only mission`, `--only heroes` i `--only aid` odświeżają wybraną część.
+Obok PDF-ów powstają spisy stron `.md` i manifesty `.json`. Starszy zbiorczy
+pakiet postaci jest w `print/archive/`; wcześniejsze mapy i osobne kafle
+pozostają w `maps/print/`. Nie trzeba drukować ich dodatkowo.
+
+## Nowy widok na laptopie
+
+Rozmowa pokazuje bieżące działanie oraz jednego odbiorcę pomocy. **−/+**
+zmienia odbiorcę, a jego stała runa wykonuje pomoc. **Klucz (24)** otwiera
+składniki premii, **Gwiazda (25)** — efekty. W szczegółach **−/+** przewija,
+**✓ / ↩** zamyka podgląd. Dobór many posługuje się symbolami kart.
+
+Walka ma jeden pionowy tor uczestników po lewej: portrety, PW i stany.
+Aktywna tura jest wyróżniona niezależnie od uczestnika oglądanego przez **−/+**.
+Po prawej: wybór runy akcji, wskazanie pola figurki, podgląd celu i **✓**.
+Przy wskazanym celu główne miejsce zajmują jego portret, PW, stany i warunki
+akcji. **↩** cofa bieżący krok; samo oglądanie nie wydaje zasobów.
+Mapa i pozycje figurek pozostają na fizycznej planszy.
+
+Menu, dziennik i ściąga mają własną obsługę przyciskami planszy. Ich zamknięcie
+przywraca właściwe przyciski bieżącego etapu. Wpisywanie kości i obowiązkowe
+operacje kart zachowują swoje konteksty sterowania. Pełne ogranie bez myszy
+na rzeczywistym sprzęcie pozostaje osobnym sprawdzeniem przy stole.
 
 ## Dokumenty źródłowe do druku
 
@@ -131,7 +171,8 @@ wezwanie do Nessy) → setup Gildii. Ilustracja napastników przy dzwonie pojawi
 się dopiero przy dotarciu do posterunku. Pola `image` i `image_layout` we
 wpisach `text/index.json` pozwalają zmienić grafikę i układ: `landscape`
 (pełna scena obok tekstu) lub `portrait` (pełny portret obok tekstu).
-Pozostałe wpisy domyślnie używają `landscape`. Na telefonie obraz jest nad tekstem.
+Pozostałe wpisy domyślnie używają `landscape`. Aktualny układ jest przeznaczony
+do ekranu laptopa; nie przygotowujemy osobnego wariantu mobilnego.
 Nowa ilustracja: `assets/images/comic_v2/world_intro.png`; pełny prompt
 w `assets/prompts/world_intro.json`, wygenerowany wbudowanym image_gen.
 
@@ -139,7 +180,11 @@ w `assets/prompts/world_intro.json`, wygenerowany wbudowanym image_gen.
 |---|---|
 | `text/*.md` | Narrator, dialogi i wyniki. Edycja jest widoczna przy odświeżeniu widoku, bez powtarzania nagród. |
 | `text/index.json` | Stabilne ID, tytuł, mówca, ścieżka tekstu oraz opcjonalne `image` i `image_layout`. |
-| `text/ui.json` | Etykiety wyborów, instrukcje misji i wpisy dziennika. |
+| `text/ui.json` | Etykiety wyborów, instrukcje konkretnej misji i wpisy dziennika. |
+| `text/ui/*.json` | Podpisy nowego UI: nawigacja, wspólne menu, rozmowy i walka. |
+| `text/karty_postaci.json` | Wspólne opisy postaci, akcji, pasywów, sprzętu i samouczka; czytane przez grę i druk. |
+| `text/sciaga_graczy.json` | Osobne źródło czterech stron zasad dla graczy. |
+| `print/` | Pięć gotowych PDF-ów; źródło handoutów `handouts.json`, manifesty i podglądy arkuszy. |
 | `profiles/` | Instrukcje tworzenia tekstów i obrazów: narrator, Nessa, siedmioro bohaterów, wieśniacy i obiekty. |
 | `assets/images/` | Pierwotne portrety i ilustracje; nowa oprawa komiksowa w `comic_v2/`. Zmiana pliku zmienia identyfikator cache obrazu. |
 | `visuals.json` | Wybór obrazów do gry. `image_overrides` kieruje dotychczasowe nazwy na wariant komiksowy; pusta mapa przywraca oryginały. |
@@ -159,8 +204,9 @@ w `assets/prompts/world_intro.json`, wygenerowany wbudowanym image_gen.
 | `scenario.json` | Standardowy manifest eksploracji i wyzwalacz walki. |
 
 Opis/sukces/porażka konfrontacji są pobierane z `text/` przez ID; kopie w JSON
-nie zastępują tych tekstów. Rdzeń reguł, wspólne objaśnienia mechaniki i kontrolki
-UI pozostają wspólne dla gry. Wszystkie materiały fabularne tej misji są lokalne.
+nie zastępują tych tekstów. Rdzeń reguł i transport przycisków pozostają wspólne dla gry. Opisy postaci,
+ściąga oraz teksty nowego UI są w tej paczce i pozostają edytowalne osobno
+od reguł. Szczegóły pól i odbudowy materiałów: [EDITING.md](EDITING.md).
 Zmiana profilu jest instrukcją do kolejnej redakcji, **nie automatycznym nadpisaniem**
 ręcznie poprawionych tekstów. W grze nie ma generowania dialogów na żywo.
 
@@ -169,6 +215,12 @@ ręcznie poprawionych tekstów. W grze nie ma generowania dialogów na żywo.
 - Nessa: pełny sukces daje jedną miksturę **2k8 + 4**. Po zbiciu połowy oporu
   proponuje **1k8 + 2**. Kontynuowanie testem lub pomocą odrzuca jednorazową
   ofertę. Przegrana nie blokuje zadania. Wyjście z rozmowy ją pauzuje.
+- Po przegranej negocjacji, tylko z Mirą w drużynie, pojawia się jednorazowa
+  okazja kradzieży słabszej mikstury **1k8 + 2 PW**. Runa 6: kradzież do
+  wspólnego zapasu i jeden krok ku Bezwzględności; runa 7: zostawienie fiolki
+  bez nagrody i zmiany postawy. Sukces i przyjęty kompromis nie dają tej opcji.
+  Teksty: `text/nessa_theft.md`, `text/nessa_theft_taken.md`, podpisy w `text/ui.json`.
+  Zapis zachowuje oczekującą decyzję, zdobyty przedmiot i zmianę postawy.
 - Mikstura: akcja główna, cel to działający bohater lub sąsiedni sojusznik;
   fizyczne kości, ograniczenie leczenia do maksymalnych PW i rzeczywiste zużycie fiolki.
   Wspólne zapasy drużyny są dostępne przez runę mikstury w walce.

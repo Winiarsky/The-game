@@ -1,19 +1,25 @@
 # Wspólne źródło opisów postaci
 
-Źródło: `content/characters/karty_postaci.json`.
-Adapter: `scenarios/character_text.py`. Instrukcja autora: `content/characters/README.md`.
+Aktualne źródła: `content/scenarios/misja_0_dzwon/text/karty_postaci.json`
+oraz osobne `text/sciaga_graczy.json` w tej samej paczce.
+Adapter: `scenarios/character_text.py`. [Instrukcja autora](../../content/scenarios/misja_0_dzwon/EDITING.md).
+
+Aktualizacja 21.09.2026: źródła są w folderze Misji 0, a loader zachowuje
+dotychczasowe API i odświeża oba pliki niezależnie. Wydruki rozdzielono
+na karty (36 stron), ściągę (4) i znaczniki (1); starszy zbiorczy PDF
+jest w `print/archive/`. Nowe teksty UI są w `text/ui/*.json` tej paczki.
 
 Przeniesiono historie, skazy, opisy akcji i podbić, 70 pasywów, narracje lekcji,
 instrukcje samouczka, opisy sprzętu startowego, pomocnik i słownik wyróżnień.
 Usunięto cztery stare pliki redakcyjne; katalogi balansu nie przechowują już
-kopii opisów pasywów i akcji. Układy i bieżące komunikaty sterowania pozostają
-w kodzie, a statystyki i efekty liczbowe w regułach.
+kopii opisów pasywów i akcji. Układy pozostają w kodzie, statystyki i efekty liczbowe w regułach.
+Bieżące komunikaty nowego UI odczytują osobne pliki `text/ui/*.json`.
 
 Test edycji zapisuje tymczasowy JSON i sprawdza odświeżenie w już działającej
 sesji: opis akcji, pasywy walki i eksploracji, historia/skaza, lekcja, pomocnik.
 Sprawdza także niezmienność kosztu akcji i statystyk bohatera.
 
-## Walidacja
+## Walidacja pierwotnego scalenia źródeł
 
 Testy przez `scripts/safe_pytest.sh`, sekwencyjnie, z limitami czasu:
 

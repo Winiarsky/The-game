@@ -1,12 +1,14 @@
 """Starting a game keeps its device transport; the play page connects once."""
 
 from pathlib import Path
+import json
 import shutil
 import subprocess
 
 import pytest
 
 from dnd_board_game.ui.exploration_app import ExplorationUiSession
+from dnd_board_game.ui.session_copy import load_ui_copy
 from dnd_board_game.ui.training_arena import start_training_trial
 from tests.unit.test_initiative_panel import Board
 
@@ -104,6 +106,7 @@ async function run() {
   const failed = loadState(); await flush(); pendingConnect(false); await failed;
   check(!document.getElementById('board-disconnected-banner').hidden, 'real failure hidden');
   check(boardConnectionNotice.includes('Nie udało'), 'failure lacks explanation');
+  check(boardConnectionNotice.includes('offline'), 'server connection cause was hidden');
   const retry = retryBoardConnection(); await flush(); pendingConnect(true); await retry;
   check(state.board.connected && !boardConnectionNotice, 'manual recovery failed');
   connected = false; boardFallbackEnabled = true; requests = []; await loadState();
@@ -117,7 +120,9 @@ run().catch(error => { document.getElementById('result').textContent = 'FAIL: ' 
     page = tmp_path / 'startup.html'
     page.write_text('<pre id="result">PENDING</pre><div id="board-connection-indicator"><span></span><span></span></div>'
         '<div id="board-disconnected-banner" hidden></div><div id="board-disconnected-copy"></div>'
-        '<script>' + startup + connection + harness + '</script>')
+        '<script>window.SESSION_UI_COPY=' + json.dumps(load_ui_copy()) + ';'
+        + Path('src/dnd_board_game/ui/static/session_copy.js').read_text()
+        + startup + connection + harness + '</script>')
     result = subprocess.run([chrome, '--headless', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage',
         '--no-first-run', '--disable-background-networking', '--no-proxy-server',
         f'--user-data-dir={tmp_path / "chrome"}', '--dump-dom', page.as_uri()],

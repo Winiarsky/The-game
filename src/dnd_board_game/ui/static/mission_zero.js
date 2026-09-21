@@ -16,7 +16,7 @@ function missionRoll(event) {
   return missionAction('roll', state.mission.stage==='potion_roll'?{rolls:inputs.map(i=>Number(i.value))}:{roll:Number(inputs[0].value)});
 }
 function missionCheckpoint(id) {
-  if (window.confirm(state.mission.ui.restart_warning)) missionAction('checkpoint',{id});
+  SessionNavigation.open('checkpoints');
 }
 function missionScrollArea() {
   const panel=document.querySelector('#mission-panel.mission-reading');
@@ -42,7 +42,7 @@ window.addEventListener('load',()=>{
 function renderMission() {
   const panel=document.getElementById('mission-panel');
   const p=state.mission;
-  panel.classList.remove('confrontation-view');
+  panel.classList.remove('confrontation-view','tabletop-confrontation');
   const readingKey=p?.reading ? `${p.stage}:${p.text.id||p.text.title}` : '';
   const scrollTop=readingKey && panel.dataset.readingKey===readingKey ? missionScrollArea()?.scrollTop||0 : 0;
   panel.dataset.readingKey=readingKey;
@@ -88,11 +88,11 @@ function missionRollSummary(wizard) {
 function renderPartyEquipment(p, panel) {
   const e=p.equipment;
   const controls=p.choices.map(c=>`<button class="mana-rune-choice" data-mission-slot="${c.slot}" onclick="missionAction('${esc(c.action)}',${esc(JSON.stringify(c.extra))})">${c.icon}<span>${esc(c.label)}</span></button>`).join('');
-  panel.innerHTML=`<div class="mission-toolbar"><a class="button secondary" href="/">Menu główne</a><small>${esc(p.ui.autosave)}</small><span>Przygotowanie ${e.hero_index}/${e.hero_count} · Skarbiec: ${e.gold} sz</span></div>
-    <div class="equipment-heading"><h2>${esc(e.hero)}</h2><span>Siła ${e.strength} · KP ${e.ac}</span></div>
-    <div class="equipment-layout"><section class="equipment-preview">${e.item?`<div class="equipment-art">${e.item.art}</div><h3>${esc(e.item.name)} ${e.item.quantity>1?`× ${e.item.quantity}`:''}</h3><p>${esc(e.item.description||'Przedmiot ze wspólnego wyposażenia drużyny.')}</p>${e.item.usage?`<p><b>${esc(e.item.usage)}</b></p>`:''}`:'<h3>Zapas jest pusty</h3><p>Możecie odłożyć tu przedmioty z wyposażenia postaci.</p>'}<strong>${esc(e.source)} · ${e.index}/${e.count}</strong></section>
-    <section class="equipment-loadout" aria-label="Sloty postaci">${e.loadout.map(row=>`<div><b>${esc(row.slot)}</b><span>${esc(row.items)}</span></div>`).join('')}</section></div>
-    <p class="equipment-notice" role="status">${p.stage==='equipment_sell'?'Sprzedaż zabierze cały wybrany stos. Potwierdźcie albo wróćcie.':esc(e.notice||'−/+ wybiera przedmiot. Runa wybiera działanie. Zmiana slotu oddaje poprzedni przedmiot do zapasu.')}</p>
+  panel.innerHTML=`<div class="mission-toolbar"><a class="button secondary" href="/">${esc(sessionUiText('common.main_menu'))}</a><small>${esc(p.ui.autosave)}</small><span>${esc(sessionUiText('common.equipment_heading',{hero:e.hero_index,total:e.hero_count,gold:e.gold}))}</span></div>
+    <div class="equipment-heading"><div class="equipment-hero">${e.portrait_url?`<img class="equipment-hero-portrait" src="${esc(e.portrait_url)}" alt="${esc(e.hero)}">`:''}<div><small>${esc(p.ui.equipment_active_hero)}</small><h2>${esc(e.hero)}</h2></div></div><span>${esc(sessionUiText('common.equipment_stats',{strength:e.strength,ac:e.ac}))}</span></div>
+    <div class="equipment-layout"><section class="equipment-preview">${e.item?`<div class="equipment-art">${e.item.art}</div><h3>${esc(e.item.name)} ${e.item.quantity>1?`× ${e.item.quantity}`:''}</h3><p>${esc(e.item.description||sessionUiText('common.equipment_default'))}</p>${e.item.usage?`<p><b>${esc(e.item.usage)}</b></p>`:''}`:`<h3>${esc(sessionUiText('common.empty_supply'))}</h3><p>${esc(sessionUiText('common.supply_hint'))}</p>`}<strong>${esc(e.source)} · ${e.index}/${e.count}</strong></section>
+    <section class="equipment-loadout" aria-label="${esc(sessionUiText('common.loadout'))}">${e.loadout.map(row=>`<div><b>${esc(row.slot)}</b><span>${esc(row.items)}</span></div>`).join('')}</section></div>
+    <p class="equipment-notice" role="status">${p.stage==='equipment_sell'?esc(sessionUiText('common.sell_hint')):esc(e.notice||sessionUiText('common.equipment_hint'))}</p>
     <div class="mana-decisions equipment-controls">${controls}</div>`;
   sizeMissionReader();
 }

@@ -9,6 +9,11 @@ function rollPanelSlots(wizard) {
 }
 
 function desiredBoardPanel() {
+  const sessionPanel = typeof SessionNavigation !== 'undefined' ? SessionNavigation.panel() : null;
+  if (sessionPanel) return sessionPanel;
+  const detailPanel = typeof confrontationDetailPanel === 'function' ? confrontationDetailPanel() : null;
+  if (detailPanel) return detailPanel;
+  if (['initiative_start', 'initiative_roll'].includes(state?.board_selection?.mode)) return null;
   if (state?.mission && (state.mission.setup || (!state.combat && state.encounter_setup?.status==='active')) && !keyboardRollWizard) return null;
   if (state?.mission?.reading && !keyboardRollWizard) return null;
   if (state?.exploration_mana?.active && !keyboardRollWizard) return null;
@@ -26,6 +31,8 @@ function desiredBoardPanel() {
     return {context: `dice:${wizard.panelId}:${wizard.index}:${Boolean(wizard.review)}`,
       slots: rollPanelSlots(wizard), exclusive: true};
   }
+  const combatPanel = typeof TabletopCombat !== 'undefined' ? TabletopCombat.panel() : null;
+  if (combatPanel) return combatPanel;
   const menu = state.combat?.turn_action_menu;
   if (menu) return null;
   const slots = state.combat?.shield_bash?.stage === 'result' ? [28] : [28, 29];
@@ -63,6 +70,14 @@ function syncBrowserBoardPanel() {
 
 function handleBoardPanelEvent(data) {
   const event = data.panel_event;
+  if (event.context?.startsWith('confrontation-') && typeof handleConfrontationPanelEvent === 'function') {
+    state.board_selection = data.board_selection;
+    if (handleConfrontationPanelEvent(event)) return;
+  }
+  if (event.context?.startsWith('session-') && typeof SessionNavigation !== 'undefined') {
+    state.board_selection = data.board_selection;
+    if (SessionNavigation.handleEvent(event)) return;
+  }
   if (event.context?.startsWith('confrontation-scroll:')) {
     if (!state?.exploration_mana?.active || keyboardRollWizard
         || event.context !== `confrontation-scroll:${state.exploration_mana.revision}`) return;
@@ -80,6 +95,10 @@ function handleBoardPanelEvent(data) {
   const expected = state?.board_selection?.panel_context || null;
   if (event.context !== expected) return;
   state.board_selection = data.board_selection;
+  if (event.context?.startsWith('combat-inspect:')) {
+    if (TabletopCombat.handleSlot(event.slot)) return;
+    if (event.slot===29 && state.combat?.turn_action_menu?.stage!=='preview' && !state.combat?.pending_player_attack && !state.combat?.class_feature_targeting && SessionNavigation.open()) return;
+  }
   if (event.context?.startsWith('mana:')) {
     if (event.slot === 28) sharedManaPrimary();
     else if (event.slot === 29) sharedManaCommand('cancel');
@@ -117,4 +136,27 @@ function rollPanelControlsHtml(wizard) {
     <button type="button" class="panel-plus" onclick="changeRollPanelValue(1)" ${Number.isFinite(step.max) && step.raw >= step.max ? 'disabled' : ''} aria-label="Zwiększ wynik">+</button>
     <button type="button" class="panel-accept" onclick="confirmKeyboardRollStep()">✓ Zatwierdź kość</button>
   </div><p class="keyboard-roll-wizard-help">− czerwony · + zielony · ✓ niebieski${wizard.index ? ' · ↩ popraw poprzednią kość' : ''}</p>`;
+}
+
+
+function handleReadOnlyPanelSlot(slot) {
+  if (typeof busy !== 'undefined' && busy) return false;
+  if (typeof SessionNavigation !== 'undefined' && SessionNavigation.handleSlot(slot)) return true;
+  const detail = typeof confrontationDetailPanel === 'function' ? confrontationDetailPanel() : null;
+  if (detail && handleConfrontationPanelEvent({context:detail.context, slot})) return true;
+  return typeof TabletopCombat !== 'undefined' && TabletopCombat.handleSlot(slot);
+}
+
+async function releaseBrowserBoardPanel(context) {
+  if (!context) return;
+  if (boardPanelSyncPromise) await boardPanelSyncPromise;
+  boardPanelSyncPromise = (async () => {
+    await stopBoardScanLoop();
+    const response = await fetch('/api/board/panel', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({release_context:context})});
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error);
+    state.board_selection = data.board_selection;
+  })().catch(error => {boardScanError=error.message;boardInputPhase='error';})
+    .finally(() => {boardPanelSyncPromise=null;scheduleAutomaticBoardScan();});
+  return boardPanelSyncPromise;
 }

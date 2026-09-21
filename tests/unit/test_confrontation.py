@@ -60,7 +60,7 @@ def test_draw_is_mandatory_offer_stays_and_six_cards_stop_draw():
 @pytest.mark.parametrize('bonus,cost',[(0,1),(2,1),(4,1),(6,1)])
 def test_every_charge_tier_costs_one_and_keeps_hand_on_failure(bonus,cost):
     s=charged(game(),{'garran':('B','B','B','C','N','F')})
-    s=r.declare(s,bonus);s=r.roll_check(s,1)
+    s=r.declare(s,bonus);s=r.roll_check(s,2)
     assert s.stage=='after_action' and s.mana.pending_count==cost
     s=settle(s)
     assert len(s.mana.burned)==cost and s.mana.points('garran')==6
@@ -72,7 +72,7 @@ def test_hit_uses_attribute_without_proficiency_and_applies_effect_before_cost()
     s=replace(s,resistance=1+s.actor.impact_modifier+2,aids=(('garran',1),))
     s=r.declare(s,0)
     assert s.check_modifier==s.actor.test_modifier+1
-    s=r.roll_check(s,20)
+    s=r.roll_check(s,19)
     assert s.stage=='impact' and s.mana.phase=='ready'
     s=r.roll_impact(s,1)
     assert s.last_impact==1+s.actor.impact_modifier+2
@@ -81,18 +81,18 @@ def test_hit_uses_attribute_without_proficiency_and_applies_effect_before_cost()
 
 def test_failed_unpayable_test_ends_without_free_last_round():
     s=charged(game(),{},deck_size=0)
-    s=r.roll_check(r.declare(s,0),1)
+    s=r.roll_check(r.declare(s,0),2)
     assert s.outcome=='failure'
     with pytest.raises(ValueError):r.advance(s)
 
 
 def test_exact_last_card_paid_allows_next_turn_and_support_but_next_burn_drains():
     s=charged(game(),{'brakka':('C','C','C','B','Z','N')},deck_size=1)
-    s=settle(r.roll_check(r.declare(s,0),1))
+    s=settle(r.roll_check(r.declare(s,0),2))
     assert s.stage=='after_action' and not s.mana.deck
     s=r.advance(s)
     assert s.actor.id=='brakka' and s.stage=='turn' and s.mana.phase=='ready'
-    s=r.roll_check(r.declare(s,0),1)
+    s=r.roll_check(r.declare(s,0),2)
     assert s.outcome=='failure'
 
 
@@ -119,10 +119,10 @@ def test_support_stacks_across_turns_and_all_expires_on_own_attempt(natural, sce
     after=r.roll_check(s,natural)
     assert dict(after.aids)=={'nimra':1}
     assert after.last_total==natural+s.actor.test_modifier+3
-    assert after.stage==('impact' if natural==20 else 'after_action')
-    if natural==20:after=r.roll_impact(after,1)
+    assert after.stage == 'after_action'
+    assert after.last_critical == ('success' if natural == 20 else 'failure')
     after=settle(after)
-    assert len(after.mana.burned)==5
+    assert len(after.mana.burned) == (5 if natural == 20 else 6)
     again=r.declare(act(after,1),0)
     assert again.check_modifier==again.actor.test_modifier
 
@@ -158,7 +158,7 @@ def test_recovery_is_active_on_each_success_not_on_pick():
     supported=r.support(s,'brakka')
     assert len(supported.mana.burned)==10
     for _ in range(2):
-        s=r.roll_impact(r.roll_check(r.declare(s,0),20),1)
+        s=r.roll_impact(r.roll_check(r.declare(s,0),19),1)
         assert s.stage=='recovery' and len(s.mana.burned)==10
         s=r.confirm_recovery(s)
         assert s.mana.deck[-1]==color and len(s.mana.burned)==9
@@ -185,7 +185,7 @@ def test_reaction_heals_once_and_pressure_ends_support_loop():
 
 def test_save_roundtrip_in_middle_of_two_stage_roll():
     s=charged(game(),{'garran':('F',)})
-    s=r.roll_check(r.declare(s,0),20)
+    s=r.roll_check(r.declare(s,0),19)
     loaded=r.Confrontation.from_data(json.loads(json.dumps(s.to_data())))
     assert loaded==s
     assert r.roll_impact(loaded,3)==r.roll_impact(s,3)
@@ -224,7 +224,7 @@ def test_prepared_charge_reaction_and_drain_cases_use_conserved_cards(hero):
     drain=prepare_lesson(s,'drain')
     assert drain.mana.deck==('C','B','N') and len(drain.mana.burned)==22
     drain=r.report_color(drain,'C');drain=r.report_color(drain,'B');drain=r.take(drain,0)
-    drain=r.roll_check(r.declare(drain,0),1)
+    drain=r.roll_check(r.declare(drain,0),2)
     assert drain.mana.phase=='burn'
     with pytest.raises(ValueError):r.report_color(drain,'C')
     drain=r.report_color(drain,'N')
@@ -234,9 +234,9 @@ def test_prepared_charge_reaction_and_drain_cases_use_conserved_cards(hero):
 def test_color_goal_and_sensitive_consequence_are_party_wide_and_need_success():
     s=charged(game(scene='nessa_color_goal'),{'brakka':('N',),'dagna':('N',)})
     s=replace(s,resistance=1)
-    s=settle(r.roll_impact(r.roll_check(r.declare(s,0),20),1))
+    s=settle(r.roll_impact(r.roll_check(r.declare(s,0),19),1))
     assert s.goal and s.outcome=='success'
     s=charged(game(scene='nessa_color_goal'),{'brakka':('N',),'dagna':('N',)},deck_size=0)
-    assert not r.roll_check(r.declare(s,0),1).goal
+    assert not r.roll_check(r.declare(s,0),2).goal
     s=game(scene='nessa_sensitive');s=r.report_color(s,'C');s=r.report_color(s,'B')
     assert r.take(s,0).sensitive and not r.take(s,1).sensitive

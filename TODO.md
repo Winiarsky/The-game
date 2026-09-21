@@ -1,3 +1,227 @@
+## Terminal — szybki start po scenie z wozem — 21.09.2026
+
+- [x] `runtime.mission_combat_ui`: wybór 3–6 unikalnych bohaterów oraz
+  postawy −3…3. Domyślnie fabularne przybycie do posterunku, potem normalne
+  rozstawianie, inicjatywa i walka. Opcjonalne skróty setup/initiative/combat,
+  ziarno rzutów, port i backend planszy; automatyczne wykrywanie USB.
+- [x] Nowe próby mają osobne katalogi zapisów, obserwacji i biblioteki postaci.
+  Tryb bez planszy nie przejmuje ustawienia automatycznego łączenia z USB.
+  Postawa przechodzi do checkpointu i fizycznego składu talii. Opis i przykłady
+  w `docs/RUNNING_AND_TESTING.md` oraz README Misji 0.
+- [x] 15 testów: cztery punkty startu, drużyny 3/4/6 osób, postawa i talia,
+  przejście z fabularnego intro przez ✓, zapis/odczyt, powtarzalność rzutów,
+  błędne parametry, przekazanie opcji połączenia i zamknięcie backendu.
+  Sprawdzono również polecenie `--help`.
+
+## Inicjatywa, kolory many i postawa — 21.09.2026
+
+- [x] Log `exploration_ui_b0f14c085f`, zdarzenia 543–548: ogólny panel
+  zastępował przyciski inicjatywy przez ✓/↩. Panel inicjatywy ma teraz
+  pierwszeństwo przy wyborze pól, LED i rozstrzyganiu naciśnięć. Start czyści
+  poprzedni kontekst; przeglądarka i serwer blokują jego nadpisanie.
+- [x] Zdarzenie 562 potwierdzało jeden niebieski kolor dla pięciu run many.
+  Zgłaszanie koloru i wybór z oferty używają palety rozmów: czerwony, biały,
+  zielony, fiolet dla czarnego symbolu i niebieski. Także dwie karty tego
+  samego koloru podświetlają właściwe runy tym samym kolorem.
+- [x] Wyróżniony komunikat przygotowania talii przy odchyleniu od Równowagi:
+  postawa, wyłączone karty i pełny skład talii z symbolami. Operacja pozostaje
+  zablokowana do ✓; zapis zachowuje ten etap. Dane pochodzą z talii danej
+  walki. Teksty w `text/ui/combat.json`; Równowaga zachowuje zwykłą instrukcję.
+- [x] 26 testów zaliczonych: inicjatywa i LED, kolory zgłaszania/oferty,
+  wszystkie siedem pozycji postawy, zapis/odczyt przygotowania; trzy próby
+  Chrome z automatycznym odczytem symulowanej planszy od inicjatywy do many
+  (Równowaga, Solidarność, Bezwzględność).
+
+## Ustawianie bohaterów przed walką — 21.09.2026
+
+- [x] Portret obok „Aktualnie ustaw” wskazuje bohatera, którego figurkę
+  należy postawić. Zmienia się po zatwierdzeniu pola, razem z imieniem;
+  korzysta z istniejących portretów postaci i paczki misji.
+- [x] Test Chrome na laptopie: przygotowanie terenu, kolejne portrety trzech
+  bohaterów, wybór pola i zatwierdzenie przez wejście planszy; instrukcja
+  mieści się w widoku. Zaktualizowano oczekiwania testu o przycisk menu.
+
+## Przygotowanie drużyny — instrukcja i portrety — 21.09.2026
+
+- [x] Przed wyposażaniem na wyprawę osobny ekran instrukcji: wspólny zapas,
+  rzeczy postaci, miejsca noszenia i plecak, przekazywanie fizycznych kart,
+  obsługa runami oraz przykład zamiany miecza i tarczy na broń dwuręczną.
+  Tekst w `text/equipment_intro.md`, tytuł i przyciski w plikach tekstowych misji.
+- [x] Portret i imię aktualnie wyposażanej postaci; runa instrukcji w menu
+  pozwala wrócić do opisu również ze starszego zapisu. Powrót z instrukcji
+  zachowuje bohatera, źródło i wybrany przedmiot. Instrukcja obsługuje −/+/✓/↩.
+- [x] 14 testów: wyposażenie, przebieg przygotowania, zapis/odczyt instrukcji,
+  powrót i portrety; dwie próby Chrome na laptopie z automatycznym odczytem
+  symulowanej planszy (1131 × 720 i 1300 × 720), bez obciętych przycisków.
+
+## Plansza — sterowanie w oknach podglądu — 21.09.2026
+
+- [x] Okna „Twoje efekty”, premii i menu sesji nie zatrzymują automatycznego
+  odczytu planszy, gdy ich kontekst został zarejestrowany na serwerze.
+  −/+ przewijają podgląd, ✓/↩ zamykają go i przywracają sterowanie rozmową.
+  Pozostałe okna nadal blokują wejście do gry w tle.
+- [x] Test Chrome odtworzył brak ponownego skanowania po otwarciu efektów.
+  Po poprawce dwa warianty (otwarcie runą i myszą podczas oczekiwania planszy)
+  przechodzą przez prawdziwe HTTP skanowania z symulowanym odbiornikiem;
+  sprawdzają przewijanie, obie drogi zamknięcia, menu i zachowanie stanu gry.
+  Łącznie 19 testów zaliczonych. W starszym teście blokady podczas spalania
+  użyto zwykłej porażki (2), bo naturalna 1 ma teraz dodatkowy koszt krytyczny.
+
+## Misja 0 — kradzież mikstury przez Mirę — 21.09.2026
+
+- [x] Po porażce konfrontacji z Nessą i tylko z Mirą w drużynie: opcjonalna
+  kradzież jednej słabszej mikstury (1k8 + 2 PW) za krok ku Bezwzględności.
+  Osobna scena z Nessą zajętą papierami i fiolką pozostawioną na biurku;
+  runy kradzieży/odmowy, potem powrót do odprawy. Wynik konfrontacji pozostaje
+  porażką. Sukces, kompromis i porażki innych scen nie odblokowują kradzieży.
+- [x] Edytowalne teksty w `text/nessa_theft*.md` oraz `text/ui.json`, zdarzenie
+  postawy w `mechanics/ethos.json`. Nagroda trafia do wspólnego zapasu.
+  Jednorazowość decyzji i kosztu; autozapis przed wyborem i po obu odpowiedziach.
+- [x] Weryfikacja: 18 testów dostępności, nagród, postawy, zapisów i wcześniejszych
+  wyników negocjacji; w tym dwie próby Chrome na laptopie (kradzież/odmowa runami).
+
+## Konfrontacje — czytelna reakcja po rundzie — 21.09.2026
+
+- [x] Doprecyzowano „Poza podejrzeniem” Miry: podgląd dolnej karty talii,
+  ochrona przed reakcją przeciwnika po rundzie (przykład: Kontrargument Nessy),
+  osobna pula a spalanie wspólnej talii; przy obiektach reakcja sytuacji.
+  Wspólne źródło UI/druku oraz opis w rozpisce pasywów.
+
+- [x] Log `exploration_ui_7d3ae5182e`, zdarzenia 150/153/156: Nimra
+  opłaciła test jedną kartą, potem Nessa uruchomiła „Przeciąganie rozmowy”
+  ze spalaniem 3 kart. UI błędnie utrzymywał wyróżnienie „Teraz Nimra”.
+  Reakcja ma teraz własny nagłówek i źródło, nazwę działania, zapowiedź kosztu,
+  licznik pozostałych kart i zakończenie przed kolejną rundą. Podczas reakcji
+  żaden bohater nie jest wyróżniony jako aktywny. Obiekty używają tego samego
+  etapu bez przypisywania im działania NPC. Teksty w `text/ui/confrontation.json`.
+- [x] Podgląd kosztu uwzględnia ochronę Garrana. Tożsamość reakcji pozostaje
+  podczas zgłaszania kart, po odtworzeniu stanu i gdy zabraknie talii.
+  Log rozróżnia źródło działania (`hero` / `reaction`). Zasady reakcji bez zmian.
+
+## Konfrontacje — krytyczne wyniki — 21.09.2026
+
+- [x] Naturalne 20: automatyczny sukces i maksimum kości efektu + premie,
+  bez drugiego rzutu. Naturalne 1: automatyczna porażka i 1 dodatkowa karta
+  spalania po obniżkach zwykłego kosztu. Zachowano pasywy, zużycie pomocy,
+  odzysk przed kosztem oraz rozliczenie efektu przed końcem talii.
+- [x] Wyróżnienie wyniku w UI, edytowalne komunikaty w `text/ui/confrontation.json`,
+  opisy Łagodności i samouczka w `text/karty_postaci.json` oraz zasady
+  rozmów/obiektów w `text/sciaga_graczy.json`. Starsze zapisy z oczekującym
+  rzutem wpływu zachowują rozpoczęte rozstrzygnięcie.
+- [x] Weryfikacja: 149 testów zasad, pasywów, zapisów, prezentacji NPC/obiektu
+  i potwierdzeń, w tym 2 próby w Chrome z runami spalania. Odbudowano karty
+  postaci (36 stron) i ściągę (4 strony); walidacja bez przepełnień.
+- [ ] Podczas ogrania ocenić wpływ krytyków na tempo konfrontacji i presję talii.
+
+## Eksploracja — bez warunków kart atutowych — 21.09.2026
+
+- [x] Przejrzano 35 pasywów siedmiu postaci. Usunięto jedyny warunek
+  wymagający kart atutowych: Skupiona myśl Nimry daje po sukcesie +1 wpływu
+  / postępu za czarną kartę, maks. +2, również bez niebieskich kart.
+  Zaktualizowano wspólne opisy UI/druku i dokumentację. Regresje obejmują
+  sukces, porażkę, limit, odtworzenie zapisu i niezależność premii wszystkich
+  postaci od przypisania koloru atutowego.
+  Odbudowano `print/karty_postaci_A4.pdf` (36 stron); zmieniona mata Nimry
+  przeszła walidację układu i kontrolę tekstu w wynikowym PDF.
+
+## Połączenie USB — 21.09.2026
+
+- [x] Po zmianie numeru portu `/dev/ttyUSB0` → `/dev/ttyUSB1` włączono
+  domyślne automatyczne wyszukiwanie (`hardware.serial_port: ""` w `board/config.json`).
+  Aplikacja sprawdza dostępne porty po kolei, rozpoznaje gotową planszę po
+  protokole v2 i ponownie odczytuje listę przy każdym połączeniu.
+  Niedostępny port, rozłączenie podczas próby oraz obcy/niezgodny firmware
+  nie blokują dalszego szukania; końcowy błąd zachowuje szczegóły diagnostyczne.
+  Testy obejmują również zmianę numeru portu przy ponownym połączeniu.
+  Weryfikacja: 29 testów (`hardware/test_serial_probe.py`, `test_connection_backends.py`)
+  oraz rzeczywiste automatyczne znalezienie `/dev/ttyUSB1` bez podania portu.
+  Produkcyjny transport na rzeczywistej planszy potwierdził firmware v2_2,
+  HELLO i PING/status: `ready: true`, `state: idle`, `i2c_errors: 0`.
+  Port zamknięto po próbie; nie zmieniano firmware ani WLED.
+- [x] Błąd otwarcia wskazanego portu zachowuje przyczynę systemową zamiast
+  sugerować brak odpowiedzi protokołu. UI pokazuje szczegół błędu serwera.
+  Testy wykrywania używają atrap portów, bez podłączania sprzętu.
+
+## UI laptopa i materiały Misji 0 — 21.09.2026
+
+- [x] Log `exploration_ui_835773ee9e`, zdarzenie 98: nieudany test Garrana
+  (11 + 2 = 13, ST 19) przyznał Brakce i Nimrze pomoc +1. Podpis „Test +0”
+  pokazywał sam bonus many. Karta bohatera pokazuje teraz osobno „Mana”
+  i otrzymaną „Pomoc” z czasem obowiązywania, również podczas doboru kart.
+  Odtworzenie przebiegu potwierdza doliczenie pomocy i jej zużycie dopiero
+  po próbie (udanej lub nieudanej); stan rzeczywistej sesji nie jest zmieniany.
+
+- [x] Naprawiono ciemny tekst białej karty w doborze many: wspólne ciemne
+  tło oferty ma jawny jasny kolor opisów, niezależnie od koloru symbolu.
+  Podpis „Ta karta aktywuje:” poprzedza konkretną nazwę i opis zdolności.
+  Test przeglądarkowy sprawdza obecność opisów i kontrast białej oraz czarnej karty.
+
+- [x] Nowy widok w aplikacji: konfrontacja z jedną kartą pomocy i symbolami
+  many; szczegóły premii i efektów pod runami 24/25. W walce jeden lewy
+  tor z portretami, PW i stanami oraz prawa karta akcji/celu; podgląd
+  uczestnika jest niezależny od aktywnej tury. Zakres: laptop, bez wersji mobilnej.
+- [x] Sterowanie od launchera przez runy i −/+/✓/↩, wybór do sześciu
+  bohaterów, osobne konteksty menu, dziennika, ściągi i szczegółów.
+  Zamknięcie przywraca wejście bieżącej gry; stare zdarzenia i release
+  nie przejmują następnego panelu. Obowiązkowe operacje kart zachowują priorytet.
+- [x] Edytowalne treści w `content/scenarios/misja_0_dzwon/`: `text/ui/`,
+  narracja `text/`, wspólne `text/karty_postaci.json` i osobne
+  `text/sciaga_graczy.json`. Gra i druk korzystają z tych samych źródeł;
+  edycja ściągi odświeża się niezależnie od kart. Instrukcja: [EDITING.md](content/scenarios/misja_0_dzwon/EDITING.md).
+- [x] Pięć gotowych PDF-ów w `print/`: misja 10 stron (kalibracja 250/244),
+  wariant nominalny 25 mm — 10 stron, karty postaci — 36, ściąga — 4,
+  znaczniki — 1. Zachowane wymiary kart; starsze pliki w `print/archive/`.
+  Generator zakończony bez przepełnień; zgodne manifesty i liczby stron,
+  obejrzane strony postaci, akcji, zasad, kafli, handoutów i przedmiotów.
+  Gotowe PDF-y mogą być wersjonowane; oba komplety map zoptymalizowano
+  do około 1,65 MB przy zachowaniu geometrii i czytelności.
+- [x] Aktualna instrukcja startu, edycji i drukowania jest w folderze Misji 0.
+- [x] Weryfikacja wdrożenia: testy `session_copy`, `session_board_navigation`,
+  `tabletop_combat`, `session_zero_materials`, źródeł kart, języka druku,
+  pasywów, launchera oraz prezentacji i potwierdzeń konfrontacji.
+  Chrome: menu startowe i sześciu bohaterów, rozmowy Nessy/wozu dla 3 i 6 osób,
+  szczegóły 24/25, pomoc, obowiązkowe operacje kart, menu i przewijanie ściągi;
+  rozdzielczości laptopowe 1131×720 i 1300×720.
+  Rzeczywisty runtime walki: 31 kontroli podglądu uczestnika, akcji i celu,
+  anulowania oraz przejścia do kości. Test Misji 0 potwierdza setup sześciu
+  postaci, zapis/wznowienie, zmęczenie i rozejm. Sprawdzone liczby stron pięciu PDF.
+
+### Projekt poprzedzający wdrożenie i pozostałe sprawdzenia
+
+- [x] [UI, 20.09.2026] Audyt obecnej prezentacji i projekt hierarchii informacji dla fizycznej
+  planszy bez mapy na ekranie: [propozycja i makieta](docs/ui/PROPOSAL.md).
+  Doprecyzowany kierunek: Test / Pomoc / Podgląd, jedna karta odbiorcy
+  pomocy przełączana −/+ z licznikiem, wykonanie pomocy stałą runą osoby;
+  dotychczasowe symbole many zamiast nazw i liter; w walce „Wybierz akcję”
+  i podgląd po naciśnięciu runy, z fizycznymi kartami postaci jako źródłem opcji.
+  Makieta rozmowy ma także górny pasek symulacji fizycznych −/+ oraz run
+  odbiorców, testu i podglądu; przyciski −/+ w karcie pomocy pozostają.
+  Szczegóły rozmowy dostępne runami: Klucz (24) — premia, Gwiazda (25) —
+  efekty; także po zużyciu działania. W oknie −/+ przewija, Accept/Decline wraca.
+  Uzupełniony kierunek walki: jeden pionowy tor wszystkich uczestników
+  po lewej, portrety przeciwników, aktywna tura wyróżniona niezależnie od
+  kursora podglądu −/+; bez poziomego toru i dolnego paska drużyny.
+  Po prawej karta: runa akcji → wskazanie figurki → portret i warunki celu
+  → Accept; Decline cofa krok, podglądy nie wydają zasobów. PW, tymczasowe
+  PW, stany i premie z aur wraz ze źródłem i momentem wygaśnięcia.
+  Makieta dokumentuje zatwierdzony kierunek; wdrożenie runtime opisano wyżej. Atlas portretów i prompt: docs/ui/assets/PROMPTS.md.
+  Przycisk przejścia w narracji używa symbolu ✓ z fizycznego Accept.
+  Przy wyborze celu duży nagłówek zastępuje krótki podpis akcji; portret
+  i warunki celu są główną treścią, koszt pozostaje przy zatwierdzeniu.
+- [ ] [Ogranie nowego UI] Porównać czytelność przy stole dla 3 i 6 osób:
+  odbiorcy pomocy (0, 1 i wielu), wyróżnienie aktywnej tury i oglądanego
+  uczestnika, długie stany, 0 PW, wejście/wyjście z aury oraz drain.
+  Sprawdzić sąsiadujące figurki, nieaktualny cel i cofanie przed płatnością.
+- [ ] [Plansza, pełna próba sprzętowa] Przejść Misję 0 od uruchomienia
+  aplikacji bez myszy: drużyna, scenariusz, setup, narracja, kości, karty,
+  walka, szczegóły, dziennik, menu i wynik. Sprawdzić wznowienie, zgodność
+  fizycznych stosów, rozłączenie i automatyczny powrót po odzyskaniu planszy.
+- [ ] [Plansza, propozycja UI] Osobno sprawdzić podgląd pola uczestnika
+  i jednej aury przez istniejące LED; pierwszeństwo dla ruchu, celu i wejścia
+  gracza. Zasięg i skutki dostarcza silnik, adapter tylko je prezentuje.
+  Porównać czytelność z opcjonalnymi drukowanymi znacznikami stanów;
+  nie wymagać nowego sprzętu ani mapy na ekranie.
+
 - [x] UI pasywów i potwierdzenia odzysku: opisy tekstowe bez schematu stosów kart.
 
 - [x] Kolumny bohaterów w konfrontacji: zebrana mana i nazwy aktywnych pasywów, bez opisów ani diagramów.
@@ -2100,5 +2324,5 @@ KON 16); wcześniejsze snapshoty i historyczne wyniki audytu pozostają bez zmia
 
 - [x] Usunąć nieużywane kopie pasywów walki i eksploracji z `mats_v2/copy.json`; wskazać w instrukcji edycji aktywne katalogi i pola `display`.
 
-- [x] Wspólne źródło treści `content/characters/karty_postaci.json`: historie, skazy, akcje i podbicia, 70 pasywów, samouczek i pomocnik. Gra i druk czytają ten sam plik; usunięto poprzednie kopie. Testy edycji i odświeżania bez restartu.
+- [x] Wspólne źródło treści `content/scenarios/misja_0_dzwon/text/karty_postaci.json`: historie, skazy, akcje i podbicia, 70 pasywów, samouczek i pomocnik. Gra i druk czytają ten sam plik; usunięto poprzednie kopie. Testy edycji i odświeżania bez restartu.
 - [ ] Dostosować stare `test_garran_mana_movement.py` (13 wariantów oczekujących płatnego ruchu) i `test_hero_rules_consistency.py` (7 oczekiwań profilu `shared_mana_v03`) do obecnego systemu. Szczegóły: `docs/reports/CHARACTER_TEXT_SOURCE.md`.

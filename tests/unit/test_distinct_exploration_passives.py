@@ -20,11 +20,11 @@ def reaction(state: r.Confrontation, kind: str = 'strip', heal: int = 4) -> r.Co
     return r.react(replace(state, stage='reaction', reactions=(kind,)), heal)
 
 
-def success(state: r.Confrontation, roll: int = 20, impact: int = 3) -> r.Confrontation:
+def success(state: r.Confrontation, roll: int = 19, impact: int = 3) -> r.Confrontation:
     return r.roll_impact(r.roll_check(r.declare(state, 0), roll), impact)
 
 
-def failure(state: r.Confrontation, roll: int = 1) -> r.Confrontation:
+def failure(state: r.Confrontation, roll: int = 2) -> r.Confrontation:
     return r.roll_check(r.declare(state, 0), roll)
 
 
@@ -139,9 +139,33 @@ def test_nimra_exact_pattern_stability_focus_and_deduction():
     assert success(scene('nimra', ('Z',)),impact=1).last_impact == 2
     assert success(scene('nimra', ('Z',)),impact=3).last_impact == 3
     assert scene('nimra', ('F','F','N','N')).passive('nimra','impact') == 2
-    assert scene('nimra', ('F','F','N')).passive('nimra','impact') == 0
+    assert scene('nimra', ('F','F','N')).passive('nimra','impact') == 2
     state = r.finish_peek(r.start_peek(scene('nimra', ('N',))),False)
     assert dict(state.aids)['nimra'] == 2 and state.cost == 0
+
+
+@pytest.mark.parametrize('hand,bonus', [
+    ((), 0), (('N', 'N'), 0), (('F',), 1), (('F', 'N'), 1),
+    (('F', 'F'), 2), (('F', 'F', 'F'), 2), (('F', 'F', 'N', 'N'), 2),
+])
+def test_nimra_focus_needs_only_black_cards_and_only_rewards_success(
+    hand: tuple[str, ...], bonus: int,
+) -> None:
+    state = scene('nimra', hand)
+    assert success(state).last_impact == 3 + bonus
+    assert failure(state).resistance == state.resistance
+    assert success(r.Confrontation.from_data(state.to_data())).last_impact == 3 + bonus
+
+
+@pytest.mark.parametrize('hero,color', [(h, c) for h in catalog()['passives'] for c in catalog()['passives'][h]])
+def test_exploration_bonuses_do_not_depend_on_trump_color(hero: str, color: str) -> None:
+    state = scene(hero, (color, color), aids=((hero, 1),), resistance=20,
+                  last_action_actor='other', last_action_kind='test', last_action_success=False)
+    expected = (p.test_bonus(state, hero), p.impact_bonus(state, hero))
+    for trump in 'CBZFN':
+        values = ((hero, tuple(2 if c == trump else 1 for c in 'CBZFN')),)
+        changed = replace(state, mana=replace(state.mana, values=values))
+        assert (p.test_bonus(changed, hero), p.impact_bonus(changed, hero)) == expected
 
 
 def test_erynd_finish_scout_prepare_signal_and_track():

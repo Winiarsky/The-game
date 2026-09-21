@@ -3,44 +3,44 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Kroniki Pogranicza</title>
+  <title>{{ ui_text('navigation.title') }}</title>
   <link rel="stylesheet" href="{{ static_asset_url('launcher.css') }}">
 </head>
 <body class="launcher-page main-menu-page">
   <main class="launcher-shell">
     <section class="title-block">
-      <span class="eyebrow">Planszowa gra fabularna</span>
-      <h1>Kroniki Pogranicza</h1>
-      <p>Przygoda prowadzona przez cyfrowego Mistrza Gry i fizyczną planszę.</p>
+      <span class="eyebrow">{{ ui_text('navigation.tagline') }}</span>
+      <h1>{{ ui_text('navigation.title') }}</h1>
+      <p>{{ ui_text('navigation.description') }}</p>
     </section>
 
-    {% if mission_active %}<p><a class="button" href="{{ url_for('play') }}">Wznów Misję 0</a></p>{% endif %}
-    <nav class="main-menu" aria-label="Menu główne">
+    {% if mission_active %}<p><a class="button" data-board-rune="10" href="{{ url_for('play') }}">{{ panel_icon(10)|safe }} {{ ui_text('navigation.resume') }}</a></p>{% endif %}
+    <nav class="main-menu" aria-label="{{ ui_text('navigation.main_menu') }}">
       <a class="menu-action primary" data-board-rune="6" href="{{ url_for('new_game') }}">
         {{ panel_icon(6)|safe }}
-        <span>Nowa gra</span>
-        <small>Misja 0: wybierz drużynę i naucz się zasad podczas wyprawy</small>
+        <span>{{ ui_text('navigation.new_game') }}</span>
+        <small>{{ ui_text('navigation.new_hint') }}</small>
       </a>
       <a class="menu-action{% if not save_exists %} quiet{% endif %}" data-board-rune="7" href="{{ url_for('load_game') }}">
         {{ panel_icon(7)|safe }}
-        <span>Wczytaj grę</span>
-        <small>{% if save_exists %}Dostępny jest zapis: {{ scenario_name }}{% else %}Brak zapisu dla aktywnego scenariusza{% endif %}</small>
+        <span>{{ ui_text('navigation.load_game') }}</span>
+        <small>{% if save_exists %}{{ ui_text('navigation.save_available', scenario=scenario_name) }}{% else %}{{ ui_text('navigation.no_save') }}{% endif %}</small>
       </a>
       <form action="{{ url_for('open_training_arena') }}" method="post">
         <button class="menu-action" data-board-rune="8" type="submit" style="width:100%;text-align:left;font:inherit;cursor:pointer">
           {{ panel_icon(8)|safe }}
-          <span>Poligon · Samouczki postaci</span>
-          <small>Poznaj zdolności krok po kroku, potem wygraj samodzielny pojedynek</small>
+          <span>{{ ui_text('navigation.training') }}</span>
+          <small>{{ ui_text('navigation.training_hint') }}</small>
         </button>
       </form>
       <a class="menu-action" data-board-rune="9" href="{{ url_for('characters') }}">
         {{ panel_icon(9)|safe }}
-        <span>Bohaterowie</span>
-        <small>Poznaj gotowe archetypy i ich instrukcje gry</small>
+        <span>{{ ui_text('navigation.heroes') }}</span>
+        <small>{{ ui_text('navigation.heroes_hint') }}</small>
       </a>
     </nav>
 
-    <footer>{% include 'launcher_board.html' %}Aktywny scenariusz runtime: {{ scenario_name }}</footer>
+    <footer>{% include 'launcher_board.html' %}{{ ui_text('navigation.active_scenario', scenario=scenario_name) }}</footer>
   </main>
 </body>
 </html>

@@ -117,7 +117,7 @@ def test_lorian_one_shot_bonus_and_hero_gates(tmp_path):
     ordinary=rules.declare(replace(state,first_test_bonus=0),0)
     assert declared.check_modifier==ordinary.check_modifier+2
     # Real roll tracking includes only check dice, not a 1 on the impact die.
-    hit=rules.roll_check(declared,20)
+    hit=rules.roll_check(declared,19)
     assert not rules.roll_impact(hit,1).natural_one_seen
     assert rules.roll_check(declared,1).natural_one_seen
     other=session(tmp_path/'other');stage(other,'brief')

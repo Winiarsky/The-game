@@ -1,5 +1,7 @@
 <aside class="launcher-board-controls" data-launcher-token="{{ launcher_token }}">
-  <p data-board-status role="status">Łączę planszę… Kafelek wybierzesz jego runą.</p>
-  <button type="button" class="secondary" hidden>Ponów połączenie</button>
+  <p data-board-status role="status">{{ ui_text('navigation.connecting') }}</p>
+  <button type="button" class="secondary" hidden>{{ ui_text('navigation.retry') }}</button>
 </aside>
+<script>window.SESSION_UI_COPY = {{ ui_copy | tojson }};</script>
+<script src="{{ static_asset_url('session_copy.js') }}"></script>
 <script src="{{ static_asset_url('launcher_board.js') }}" defer></script>

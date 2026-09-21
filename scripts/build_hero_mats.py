@@ -1,4 +1,4 @@
-"""Build all seven approved A4 hero sets, then shared reference and markers.
+"""Build separate Mission 0 PDFs for hero sets, player reference, and markers.
 
 Reuses the Garran prototype's print styles, symbols and layout validation.
 Numbers/runes/starting equipment come from the live game; copy is editable.
@@ -34,8 +34,11 @@ from dnd_board_game.ui.training_arena import training_hero
 from dnd_board_game.ui.board_panel_symbols import panel_icon
 
 ROOT = base.ROOT
-OUTPUT = ROOT / 'content/print/characters/mats_v2'
-DESTINATION = ROOT / 'content/print/characters/bohaterowie_zestawy_startowe_A4.pdf'
+PRINT_ROOT = ROOT / 'content/scenarios/misja_0_dzwon/print'
+OUTPUT = PRINT_ROOT / 'characters'
+DESTINATION = PRINT_ROOT / 'karty_postaci_A4.pdf'
+AID_DESTINATION = PRINT_ROOT / 'sciaga_graczy_A4.pdf'
+MARKERS_DESTINATION = PRINT_ROOT / 'znaczniki_A4.pdf'
 
 
 def rules_text(text: str) -> str:
@@ -149,7 +152,7 @@ def equipment_page(hero: PrintHero) -> str:
     markup=''.join(f'<div class="equipment-slot">{base.icon(symbol)}<b>{name}</b><small>1 przedmiot · 60 × 42 mm</small></div>' for name,symbol in slots)
     markup+='''<div class="equip-instruction"><h3>Przygotuj przed wyprawą</h3><p>Połóż sprzęt zgodnie ze slotami w aplikacji. Przedmiot oburęczny zajmuje obie ręce: żeton na jednej, znacznik „zajęta” na drugiej.</p><p>Zmiana w slocie oddaje poprzedni przedmiot do wspólnego zapasu. Wyposażenie jest ustalone do powrotu; zużywalnych nadal można używać.</p></div><div class="bag-label">PLECAK / PRZEDMIOTY · wspólne pole, bez limitu sześciu przedmiotów</div>'''
     markup+=''.join('<div class="equipment-slot"><small>Miejsce na żetony<br>Można układać w stos.</small></div>' for _ in range(6))
-    return document(hero,header(hero,f'{hero.name} · wyposażenie','Pusta mata · połóż na niej wycięte elementy','04 / 04')+'<div class="equipment-grid">'+markup+'</div><p class="equip-note">Startowe rozmieszczenie znajdziesz pod wycinankami sprzętu tej postaci. Nowe znaleziska w misji trafiają do wspólnego zapasu. Znaczniki zajętej drugiej ręki są na końcu kompletu.</p>'+base.footer('Przerywane ramki są miejscami na żetony — nie wycinaj tej maty'))
+    return document(hero,header(hero,f'{hero.name} · wyposażenie','Pusta mata · połóż na niej wycięte elementy','04 / 04')+'<div class="equipment-grid">'+markup+'</div><p class="equip-note">Startowe rozmieszczenie znajdziesz pod wycinankami sprzętu tej postaci. Nowe znaleziska w misji trafiają do wspólnego zapasu. Znaczniki zajętej drugiej ręki są w osobnym pliku znaczniki_A4.pdf.</p>'+base.footer('Przerywane ramki są miejscami na żetony — nie wycinaj tej maty'))
 
 
 def equipment_cutouts(hero: PrintHero, copy: dict, folder: Path) -> str:
@@ -167,7 +170,7 @@ def equipment_cutouts(hero: PrintHero, copy: dict, folder: Path) -> str:
             positions.append(escape(name)+' — '+('obie ręce' if len(slots)==2 else SLOTS[slots[0]].lower()))
     if len(tiles)>12:
         raise ValueError(f'{hero.id}: sprzęt wymaga dodatkowego arkusza.')
-    guide=f'''<div class="items-guide"><h2>Połóż na macie wyposażenia</h2><p><b>Start:</b> {'; '.join(positions)}. Pozostałe przedmioty — plecak.</p><p><b>mod.</b> — modyfikator cechy, nie jej wartość. <b>SIŁ</b> — Siła; <b>ZRĘ</b> — Zręczność. Np. Siła 18 daje mod. +4. <b>KP 16</b> ustala pancerz na 16; <b>+2 KP</b> zwiększa go o 2.</p><p>Wycinanki mają <b>60 × 42 mm</b>. Liczba × przy nazwie oznacza zawartość stosu. Osobne noże mają osobne żetony. Każdy element przechodzi wraz z przedmiotem po zatwierdzeniu zmiany w aplikacji.</p><p>Znaczniki, legenda ikon i wspólne zasady znajdują się na końcu pliku. Sprzęt znaleziony w przygodzie drukujesz z zestawu scenariusza.</p></div>'''
+    guide=f'''<div class="items-guide"><h2>Połóż na macie wyposażenia</h2><p><b>Start:</b> {'; '.join(positions)}. Pozostałe przedmioty — plecak.</p><p><b>mod.</b> — modyfikator cechy, nie jej wartość. <b>SIŁ</b> — Siła; <b>ZRĘ</b> — Zręczność. Np. Siła 18 daje mod. +4. <b>KP 16</b> ustala pancerz na 16; <b>+2 KP</b> zwiększa go o 2.</p><p>Wycinanki mają <b>60 × 42 mm</b>. Liczba × przy nazwie oznacza zawartość stosu. Osobne noże mają osobne żetony. Każdy element przechodzi wraz z przedmiotem po zatwierdzeniu zmiany w aplikacji.</p><p>Wspólne zasady znajdziesz w sciaga_graczy_A4.pdf, a znaczniki i legendę w znaczniki_A4.pdf. Sprzęt znaleziony w przygodzie drukujesz z zestawu scenariusza.</p></div>'''
     return document(hero,header(hero,f'{hero.name} · sprzęt startowy',f'Wytnij {len(tiles)} elementów po zewnętrznych liniach','WYCINANKI')+'<div class="cutouts">'+''.join(tiles)+'</div>'+guide+base.footer('Ilustracja · nazwa · miejsce · efekt · każdy żeton 60 × 42 mm'))
 
 
@@ -192,7 +195,7 @@ def markers_page() -> str:
 
 def cover_page(sections: list[dict]) -> str:
     rows=''.join(f'<tr><td><b>{s["name"]}</b></td><td>{s["first_page"]}–{s["last_page"]}</td><td>{s["description"]}</td></tr>' for s in sections)
-    return base.document(base.header('Bohaterowie','Kompletny zestaw do gry · siedem postaci','SPIS',imprint='WERSJA 02')+'''<div class="cover-title">Jedna postać — własny zestaw</div><p class="section-intro">Wybierzcie bohaterów, wydrukujcie ich strony i połóżcie przed sobą. Wspólne dodatki znajdują się na końcu pliku.</p>'''+f'<table class="toc"><tr><th>Postać / sekcja</th><th>Strony</th><th>Zawartość</th></tr>{rows}</table>'+'''<div class="cover-box"><h2>Jak przygotować wydruk</h2><ul><li><b>A4, jednostronnie, 100% / rzeczywisty rozmiar.</b> Nie dopasowuj do strony.</li><li>Maty many i akcje Nimry są poziomo. Drukarka może obrócić stronę, ale nie powinna jej skalować.</li><li>Arkusze postaci, many, akcji i wyposażenia pozostają w całości. Wytnij tylko sprzęt i znaczniki.</li><li>Mana: karty 63 × 88 mm bez koszulek. Ekwipunek: żetony 60 × 42 mm.</li><li>Akcje: ramki 62 × 76 mm; Nimra: 68 × 53 mm. Karty rozwoju powinny pasować do ramek i run swojej postaci.</li></ul></div><p>Na macie many czarny nagłówek oznacza walkę, jasny eksplorację. Obwódka symbolu przy każdym nagłówku określa kumulację tylko w tym trybie.</p>'''+base.footer('Postacie w kolejności · wspólne dodatki na końcu · kontrola skali linijką'),title='Spis zestawów bohaterów',extra_css=EXTRA_CSS)
+    return base.document(base.header('Bohaterowie','Kompletny zestaw do gry · siedem postaci','SPIS',imprint='WERSJA 02')+'''<div class="cover-title">Jedna postać — własny zestaw</div><p class="section-intro">Wybierzcie bohaterów, wydrukujcie ich strony i połóżcie przed sobą. Wspólne zasady: sciaga_graczy_A4.pdf. Znaczniki do wycięcia: znaczniki_A4.pdf.</p>'''+f'<table class="toc"><tr><th>Postać / sekcja</th><th>Strony</th><th>Zawartość</th></tr>{rows}</table>'+'''<div class="cover-box"><h2>Jak przygotować wydruk</h2><ul><li><b>A4, jednostronnie, 100% / rzeczywisty rozmiar.</b> Nie dopasowuj do strony.</li><li>Maty many i akcje Nimry są poziomo. Drukarka może obrócić stronę, ale nie powinna jej skalować.</li><li>Arkusze postaci, many, akcji i wyposażenia pozostają w całości. Wytnij tylko sprzęt i znaczniki.</li><li>Mana: karty 63 × 88 mm bez koszulek. Ekwipunek: żetony 60 × 42 mm.</li><li>Akcje: ramki 62 × 76 mm; Nimra: 68 × 53 mm. Karty rozwoju powinny pasować do ramek i run swojej postaci.</li></ul></div><p>Na macie many czarny nagłówek oznacza walkę, jasny eksplorację. Obwódka symbolu przy każdym nagłówku określa kumulację tylko w tym trybie.</p>'''+base.footer('Postacie w kolejności · zasady i znaczniki osobno · kontrola skali linijką'),title='Spis zestawów bohaterów',extra_css=EXTRA_CSS)
 
 
 def write_page(folder: Path, name: str, html: str, *, action_mm: tuple[float,float]=(62,76), render: bool=True) -> tuple[Path,list[dict]]:
@@ -242,6 +245,46 @@ def compact_pdf(path: Path) -> None:
         target.unlink(missing_ok=True)
 
 
+def publish_pdf(destination: Path, parts: list[Path], sections: list[dict], **metadata: object) -> None:
+    """Publish a self-contained PDF and a page index only after layout checks."""
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    expected = sum(pdf_pages(path) for path in parts)
+    merge_pdfs(parts, destination)
+    if pdf_pages(destination) != expected:
+        raise RuntimeError('Nieprawidłowa liczba stron po połączeniu zestawów.')
+    compact_pdf(destination)
+    manifest = dict(pdf=destination.name, pages=expected, sections=sections, **metadata)
+    destination.with_suffix('.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2)+'\n')
+    lines = [f'# {destination.stem}', '', 'A4 · jednostronnie · 100%, bez dopasowania.', '',
+             '| Sekcja | Strony |', '| --- | --- |']
+    lines += [f'| {s["name"]} | {s["first_page"]}–{s["last_page"]} |' for s in sections]
+    destination.with_suffix('.md').write_text('\n'.join(lines)+'\n')
+    print(f'{destination}: {expected} stron', flush=True)
+
+
+def build_player_aid(*, check_only: bool = False) -> Path:
+    """Rebuild the separately editable common rules without rendering hero sheets."""
+    shared = OUTPUT / 'wspolne'
+    checks: dict[str, list[dict]] = {}
+    parts: list[Path] = []
+    sections: list[dict] = []
+    for number, page in enumerate(load_text()['player_aid'], 1):
+        pdf, issues = write_page(shared, page['id'], player_aid_page(page), render=not check_only)
+        parts.append(pdf)
+        checks[page['id']] = issues
+        sections.append(dict(id=page['id'], name=page['title'], first_page=number, last_page=number))
+    marker_pdf, issues = write_page(shared, '05_znaczniki', markers_page(), render=not check_only)
+    checks['05_znaczniki'] = issues
+    (shared/'validation.json').write_text(json.dumps(checks, ensure_ascii=False, indent=2)+'\n')
+    if any(checks.values()):
+        raise RuntimeError('Ściąga lub znaczniki: popraw wskazane przepełnienia.')
+    if not check_only:
+        publish_pdf(AID_DESTINATION, parts, sections, format='player_aid_v1')
+        publish_pdf(MARKERS_DESTINATION, [marker_pdf], [dict(id='markers', name='Znaczniki pomocnicze',
+            first_page=1, last_page=1)], marker_mm=[60, 42])
+    return AID_DESTINATION
+
+
 def build_pack(*, check_only: bool=False, actors: tuple[str,...]=PLAYABLE_HERO_IDS) -> Path:
     copy=print_copy()
     sections=[];parts=[];checks={};snapshots={};page=2
@@ -254,36 +297,21 @@ def build_pack(*, check_only: bool=False, actors: tuple[str,...]=PLAYABLE_HERO_I
             parts.append(pdf);checks[f'{hid}/{name}']=issues
         sections.append(dict(id=hid,name=hero.name,first_page=page,last_page=page+4,description='Postać · mana · akcje · wyposażenie · wycinanki'))
         page+=5
-    shared=OUTPUT/'wspolne'
-    aid=load_text()['player_aid']
-    shared_sheets=[(p['id'],player_aid_page(p)) for p in aid]+[('05_znaczniki',markers_page())]
-    shared_first=page
-    for name,html in shared_sheets:
-        pdf,issues=write_page(shared,name,html,render=not check_only);parts.append(pdf);checks['wspolne/'+name]=issues
-        page+=1
-    sections.append(dict(id='wspolne',name='Pomocnik i znaczniki',first_page=shared_first,last_page=page-1,description='Podstawy · walka · rozmowy · obiekty · znaczniki'))
     cover,issues=write_page(OUTPUT,'00_spis',cover_page(sections),render=not check_only);checks['spis']=issues
     (OUTPUT/'validation.json').write_text(json.dumps(checks,ensure_ascii=False,indent=2)+'\n')
     if any(checks.values()):
         raise RuntimeError('Wydruk nie został opublikowany: popraw wskazane przepełnienia.')
+    build_player_aid(check_only=check_only)
     if check_only:
         return DESTINATION
     if actors!=PLAYABLE_HERO_IDS:
         raise ValueError('Publikacja kompletu wymaga wszystkich siedmiu bohaterów.')
-    merge_pdfs([cover,*parts],DESTINATION)
-    if pdf_pages(DESTINATION)!=page-1:
-        raise RuntimeError('Nieprawidłowa liczba stron po połączeniu zestawów.')
-    compact_pdf(DESTINATION)
-    metadata=dict(pdf=DESTINATION.name,pages=page-1,format='hero_mats_v2',sections=sections,mana_mm=[63,88],equipment_mm=[60,42],action_mm=[62,76],nimra_action_mm=[68,53])
-    DESTINATION.with_suffix('.json').write_text(json.dumps(metadata,ensure_ascii=False,indent=2)+'\n')
+    publish_pdf(DESTINATION,[cover,*parts],sections,format='hero_mats_v3',mana_mm=[63,88],equipment_mm=[60,42],action_mm=[62,76],nimra_action_mm=[68,53])
     (OUTPUT/'source_snapshot.json').write_text(json.dumps(snapshots,ensure_ascii=False,indent=2)+'\n')
-    lines=['# Zestawy bohaterów — A4 v2','','A4 · jednostronnie · 100%, bez dopasowania.','','| Sekcja | Strony |','| --- | --- |']
-    lines += [f'| {s["name"]} | {s["first_page"]}–{s["last_page"]} |' for s in sections]
-    DESTINATION.with_suffix('.md').write_text('\n'.join(lines)+'\n')
-    previews=''.join(f'<section><h2>{s["name"]} · strony {s["first_page"]}–{s["last_page"]}</h2><div>'+''.join(f'<a href="{s["id"]}/{key}.pdf"><img src="{s["id"]}/{key}.png" alt="{key}"></a>' for key in ['01_postac','02_mana','03_akcje','04_ekwipunek','05_sprzet'])+'</div></section>' for s in sections if s['id']!='wspolne')
-    previews+='<section><h2>Wspólne dodatki</h2><div>'+''.join(f'<a href="wspolne/{key}.pdf"><img src="wspolne/{key}.png" alt="{key}"></a>' for key,_ in shared_sheets)+'</div></section>'
-    (OUTPUT/'podglad.html').write_text('<!doctype html><meta charset="utf-8"><title>Bohaterowie — podgląd</title><style>body{font:16px Arial;background:#e7e4de;margin:24px;color:#222}h1,h2{font-family:Georgia}section{margin-bottom:24px}section>div{display:grid;grid-template-columns:repeat(5,1fr);gap:14px}img{width:100%;height:280px;object-fit:contain;object-position:top;background:white;box-shadow:0 2px 5px #0003}</style><h1>Bohaterowie · zestawy A4</h1><p><a href="../bohaterowie_zestawy_startowe_A4.pdf">Pobierz cały PDF</a> · kliknij arkusz, żeby otworzyć jego PDF.</p>'+previews)
-    print(f'{DESTINATION}: {page-1} stron',flush=True)
+    previews=''.join(f'<section><h2>{s["name"]} · strony {s["first_page"]}–{s["last_page"]}</h2><div>'+''.join(f'<a href="{s["id"]}/{key}.pdf"><img src="{s["id"]}/{key}.png" alt="{key}"></a>' for key in ['01_postac','02_mana','03_akcje','04_ekwipunek','05_sprzet'])+'</div></section>' for s in sections)
+    shared_sheets=[p['id'] for p in load_text()['player_aid']]+['05_znaczniki']
+    previews+='<section><h2>Ściąga i znaczniki — osobne pliki</h2><div>'+''.join(f'<a href="wspolne/{key}.pdf"><img src="wspolne/{key}.png" alt="{key}"></a>' for key in shared_sheets)+'</div></section>'
+    (OUTPUT/'podglad.html').write_text('<!doctype html><meta charset="utf-8"><title>Bohaterowie — podgląd</title><style>body{font:16px Arial;background:#e7e4de;margin:24px;color:#222}h1,h2{font-family:Georgia}section{margin-bottom:24px}section>div{display:grid;grid-template-columns:repeat(5,1fr);gap:14px}img{width:100%;height:280px;object-fit:contain;object-position:top;background:white;box-shadow:0 2px 5px #0003}</style><h1>Bohaterowie · zestawy A4</h1><p><a href="../karty_postaci_A4.pdf">Karty postaci</a> · <a href="../sciaga_graczy_A4.pdf">Ściąga graczy</a> · <a href="../znaczniki_A4.pdf">Znaczniki</a> · kliknij arkusz, żeby otworzyć jego PDF.</p>'+previews)
     return DESTINATION
 
 

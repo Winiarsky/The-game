@@ -1,0 +1,31 @@
+{
+  "pdf": "sciaga_graczy_A4.pdf",
+  "pages": 4,
+  "sections": [
+    {
+      "id": "01_podstawy",
+      "name": "Podstawy i słownik",
+      "first_page": 1,
+      "last_page": 1
+    },
+    {
+      "id": "02_walka",
+      "name": "Walka — krok po kroku",
+      "first_page": 2,
+      "last_page": 2
+    },
+    {
+      "id": "03_rozmowy",
+      "name": "Rozmowy — wpływ na NPC",
+      "first_page": 3,
+      "last_page": 3
+    },
+    {
+      "id": "04_obiekty",
+      "name": "Obiekty — postęp zadania",
+      "first_page": 4,
+      "last_page": 4
+    }
+  ],
+  "format": "player_aid_v1"
+}

@@ -94,6 +94,15 @@ data/characters/
 *.pdf
 *.pdf.json
 
+# Required runtime sprite; other local scenario artwork remains private.
+!/content/scenarios/misja_0_dzwon/assets/
+/content/scenarios/misja_0_dzwon/assets/*
+!/content/scenarios/misja_0_dzwon/assets/images/
+/content/scenarios/misja_0_dzwon/assets/images/*
+!/content/scenarios/misja_0_dzwon/assets/images/ui/
+/content/scenarios/misja_0_dzwon/assets/images/ui/*
+!/content/scenarios/misja_0_dzwon/assets/images/ui/enemies-atlas.png
+
 # Scrapy stuff:
 .scrapy
 

@@ -3,24 +3,24 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Nowa gra</title>
+  <title>{{ ui_text('navigation.new_game') }}</title>
   <link rel="stylesheet" href="{{ static_asset_url('launcher.css') }}">
 </head>
 <body class="launcher-page new-game-page">
   <main class="flow-shell">
     <header class="flow-header">
-      <a class="back-link" href="{{ url_for('index') }}">← Menu główne</a>
-      <span id="new-game-step-label" class="step-label">Nowa gra · krok 1 z 2</span>
-      <h1 id="new-game-title">Wybierz drużynę</h1>
-      <p class="party-card-link"><a href="{{ url_for('physical_mana_rules') }}" target="_blank" rel="noopener">Karty postaci i pełne zasady do wydruku</a></p>
-      <p id="new-game-description">Wybierz 1–6 bohaterów kafelkami lub runami, następnie Dalej.</p>
+      <a class="back-link" href="{{ url_for('index') }}">{{ ui_text('navigation.main_menu') }}</a>
+      <span id="new-game-step-label" class="step-label">{{ ui_text('navigation.party_step') }}</span>
+      <h1 id="new-game-title">{{ ui_text('navigation.choose_party') }}</h1>
+      <p class="party-card-link"><a href="{{ url_for('session_materials') }}" target="_blank" rel="noopener">{{ ui_text('navigation.print_materials') }}</a></p>
+      <p id="new-game-description">{{ ui_text('navigation.party_hint') }}</p>
     </header>
 
     {% if error %}<div class="flow-error" role="alert">{{ error }}</div>{% endif %}
 
     <form id="new-game-card-flow" method="post" action="{{ url_for('start_new_game') }}" data-initial-stage="{{ initial_stage|default('party') }}">
       <section id="party-selection-step" class="form-section">
-        <div id="party-selection-status" class="flow-note" aria-live="polite">Nie wybrano jeszcze żadnego bohatera.</div>
+        <div id="party-selection-status" class="flow-note" aria-live="polite">{{ ui_text('navigation.empty_party') }}</div>
         {% if roster.characters %}
           <div class="roster-grid">
             {% for character in roster.characters %}
@@ -32,7 +32,7 @@
                   <input type="checkbox" name="character_ids" value="{{ actor_id }}" aria-labelledby="hero-name-{{ actor_id }}" {% if actor_id in selected_character_ids|default(()) %}checked{% endif %}>
                   {% set portrait_url = character_portrait_url(character.actor.portrait) %}
                   <span class="roster-avatar" aria-hidden="true">{% if portrait_url %}<img src="{{ portrait_url }}" alt="">{% else %}{{ character.actor.name[:1]|upper }}{% endif %}</span>
-                  <span class="hero-identity"><b id="hero-name-{{ actor_id }}">{{ character.actor.name }}</b><small>Poziom {{ character.actor.level }} · {{ class_names.get(character.class_id, character.class_id) }}</small><em data-selection-state>Wybierz do drużyny</em></span>
+                  <span class="hero-identity"><b id="hero-name-{{ actor_id }}">{{ character.actor.name }}</b><small>Poziom {{ character.actor.level }} · {{ class_names.get(character.class_id, character.class_id) }}</small><em data-selection-state>{{ ui_text('navigation.choose_hero') }}</em></span>
                 </label>
                 {% if guide %}
                   <div class="hero-overview">
@@ -44,13 +44,13 @@
             {% endfor %}
           </div>
         {% else %}
-          <aside class="flow-note">Brakuje zainstalowanego zestawu archetypów.</aside>
+          <aside class="flow-note">{{ ui_text('navigation.no_heroes') }}</aside>
         {% endif %}
       </section>
 
       <section id="scenario-selection-step" class="form-section" hidden>
-        <h2>Wybierz scenariusz</h2>
-        <p>Misja 0 uczy zasad podczas wspólnej wyprawy. Możesz też wybrać wcześniejszy scenariusz.</p>
+        <h2>{{ ui_text('navigation.choose_scenario') }}</h2>
+        <p>{{ ui_text('navigation.scenario_description') }}</p>
         {% for scenario in scenarios %}
           <label class="scenario-card" data-board-rune="{{ 6 + loop.index0 }}">
             {{ panel_icon(6 + loop.index0)|safe }}
@@ -58,7 +58,7 @@
             <span class="selection-mark" aria-hidden="true">✓</span>
             <span>
               <b>{{ scenario.name }}</b>
-              <small>{% if scenario.id == 'misja_0_dzwon' %}Misja wprowadzająca · 3–6 bohaterów{% else %}Scenariusz eksploracyjny · 1–5 bohaterów{% endif %}</small>
+              <small>{% if scenario.id == 'misja_0_dzwon' %}{{ ui_text('navigation.mission_party') }}{% else %}{{ ui_text('navigation.legacy_party') }}{% endif %}</small>
               <em>
                 {% if scenario.continuation_scene_names %}Dalej: {{ scenario.continuation_scene_names|join(" → ") }} · {% endif %}
                 {% if scenario.has_paper_map or scenario.id == 'misja_0_dzwon' %}zawiera setup papierowej mapy{% else %}korzysta z planszy bez osobnej mapy papierowej{% endif %}
@@ -66,15 +66,15 @@
             </span>
           </label>
         {% else %}
-          <aside class="flow-note">Brak dostępnej kampanii.</aside>
+          <aside class="flow-note">{{ ui_text('navigation.no_scenarios') }}</aside>
         {% endfor %}
       </section>
 
       <div class="flow-actions">
-        <a id="cancel-new-game" class="button secondary" href="{{ url_for('index') }}">Anuluj</a>
-        <button id="back-to-party" class="button secondary" type="button" hidden>Wróć</button>
-        <button id="continue-to-scenario" data-board-rune="25" type="button" disabled>{{ panel_icon(25)|safe }} Dalej</button>
-        <button id="start-new-game" type="submit" hidden>Rozpocznij grę</button>
+        <a id="cancel-new-game" class="button secondary" href="{{ url_for('index') }}">{{ ui_text('navigation.cancel') }}</a>
+        <button id="back-to-party" class="button secondary" type="button" hidden>{{ ui_text('navigation.back') }}</button>
+        <button id="continue-to-scenario" data-board-rune="25" type="button" disabled>{{ panel_icon(25)|safe }} {{ ui_text('navigation.next') }}</button>
+        <button id="start-new-game" type="submit" hidden>{{ ui_text('navigation.start') }}</button>
       </div>
     </form>
   </main>
@@ -101,15 +101,15 @@
           const card = input.closest('.roster-card');
           card.classList.toggle('selected', input.checked);
           card.querySelector('[data-selection-state]').textContent = input.checked
-            ? '✓ W drużynie · kliknij, aby usunąć'
-            : 'Wybierz do drużyny';
+            ? {{ ui_text('navigation.chosen_hero') | tojson }}
+            : {{ ui_text('navigation.choose_hero') | tojson }};
         });
         next.disabled = accepted.length < 1;
         status.textContent = selected.length > 6
-          ? 'Drużyna może liczyć maksymalnie 6 bohaterów. Odznacz kogoś, aby wybrać inną postać.'
+          ? {{ ui_text('navigation.party_limit') | tojson }}
           : accepted.length
-          ? `Wybrano: ${accepted.length} z 6 bohaterów.`
-          : 'Nie wybrano jeszcze żadnego bohatera.';
+          ? {{ ui_text('navigation.party_count') | tojson }}.replace('{count}', accepted.length)
+          : {{ ui_text('navigation.empty_party') | tojson }};
       };
 
       const setStage = stage => {
@@ -120,11 +120,11 @@
         next.hidden = choosingScenario;
         back.hidden = !choosingScenario;
         start.hidden = true;
-        stepLabel.textContent = choosingScenario ? 'Nowa gra · krok 2 z 2' : 'Nowa gra · krok 1 z 2';
-        title.textContent = choosingScenario ? 'Wybierz scenariusz' : 'Wybierz drużynę';
+        stepLabel.textContent = choosingScenario ? {{ ui_text('navigation.scenario_step') | tojson }} : {{ ui_text('navigation.party_step') | tojson }};
+        title.textContent = choosingScenario ? {{ ui_text('navigation.choose_scenario') | tojson }} : {{ ui_text('navigation.choose_party') | tojson }};
         description.textContent = choosingScenario
-          ? 'Naciśnij runę scenariusza albo jego kafelek, aby rozpocząć grę wybraną drużyną.'
-          : 'Wybierz 1–6 bohaterów kafelkami lub runami, następnie Dalej.';
+          ? {{ ui_text('navigation.scenario_hint') | tojson }}
+          : {{ ui_text('navigation.party_hint') | tojson }};
       };
 
       actorInputs.forEach(input => input.addEventListener('change', () => updateSelection(input)));

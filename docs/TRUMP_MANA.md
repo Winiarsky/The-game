@@ -9,6 +9,7 @@ Aktualny model zastępuje punktację 1–7 oraz progi 6/12/21 w walce i drużyno
 - Kolory uruchamiają dotychczasowe pasywy. Atut nie podwaja ich efektów ani liczby kart do kumulacji.
 - Użycie zdolności zachowuje osobistą pulę. Spalanie akcji, podbicia, skazy, odzysk Loriana i presja przeciwników działają jak dotąd.
 - Test i pomoc w konfrontacji nadal spalają po jednej karcie. Podgląd jest bez spalania. Atut nie daje dodatkowej premii do testów rozmowy/obiektu.
+- Pasywy eksploracji wszystkich bohaterów nie wymagają kart atutowych.
 - Mana drain w walce zbiera wszystkie aktywne strefy i resetuje nasycenie; w konfrontacji kończy próbę według jej zasad. Karty wyłączone przez postawę drużyny nadal pozostają poza talią.
 
 ## Kolory atutowe
@@ -40,7 +41,7 @@ To górne granice bez spalania, wygasania, uwięzienia i postawy. Każda karta w
 
 Katalog ma wersję 3. Odczyt wersji 1/2 przelicza najwyższą dawną wartość na atut, pozostałe na 1; nie zmienia fizycznych stref. Historyczne pule większe niż 6 zachowujemy do draina, blokując dobór i ograniczając premię do +6. Rozpoczęte rozstrzygnięcie zachowuje już zadeklarowany bonus; nowa deklaracja używa nowych zasad.
 
-Panel pokazuje osobno liczbę kart, naładowanie testu i ładunek zdolności. Mata many oznacza atut, progi akcji oraz premię +1 za kartę. Wspólny pomocnik ma zaktualizowane przykłady walki i eksploracji. Pełny PDF: `content/print/characters/bohaterowie_zestawy_startowe_A4.pdf`.
+Panel pokazuje osobno liczbę kart, naładowanie testu i ładunek zdolności. Mata many oznacza atut, progi akcji oraz premię +1 za kartę. Wspólny pomocnik ma zaktualizowane przykłady walki i eksploracji. Aktualne, osobne PDF-y: `content/scenarios/misja_0_dzwon/print/karty_postaci_A4.pdf` oraz `sciaga_graczy_A4.pdf` w tym samym folderze. [Instrukcja wydruku i spis materiałów](../content/scenarios/misja_0_dzwon/print/README.md).
 
 ## Ewaluacja
 

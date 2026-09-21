@@ -2580,11 +2580,20 @@ class ExplorationUiSession:
         payload["exploration_mana"] = exploration_mana_payload(self)
         from .mission_zero import payload as mission_payload
         payload["mission"] = mission_payload(self)
+        from .session_copy import load_ui_copy
+        payload["ui_copy"] = load_ui_copy(self._scenario_asset_root() if payload["mission"] else None)
         if payload["mission"]:
+            from dnd_board_game.scenarios.character_text import load_text
+            payload["player_aid"] = load_text()["player_aid"]
             from .mission_zero import apply_pack_portraits
             apply_pack_portraits(self,payload)
             from .mission_setup import enrich_combat_payload
             enrich_combat_payload(self._scenario_asset_root(),payload)
+            if payload.get("combat"):
+                from .tabletop_combat import tabletop_combat_payload
+                payload["combat"]["tabletop"] = tabletop_combat_payload(
+                    payload["combat"], (payload.get("encounter_initiative") or {}).get("order", ()),
+                    conditions=self.combat_state.condition_states)
         return payload
 
     def _physical_card_resource_note(self, actor: Actor, source_id: str) -> str | None:
@@ -7167,6 +7176,7 @@ class ExplorationUiSession:
             entries=[],
             edges_by_actor_id=applicable_edges,
         )
+        self.board_panel_context = None
         self._add_message(
             "Inicjatywa",
             "Rozpoczyna się walka. Bohaterowie wykonują test inicjatywy po kolei; przeciwnicy rzucają automatycznie."
@@ -21711,7 +21721,18 @@ class ExplorationUiSession:
     def _board_panel_enabled(self) -> bool:
         from .exploration_mana import rolling
         from .mission_zero import enabled, read
-        return (self.exploration.scenario_id == "recruitment_arena" or enabled(self)) and (self.combat_state is not None or rolling(self) or (enabled(self) and read(self)["stage"] in {"fatigue_roll", "potion_roll", "identify_roll"}))
+        from .confrontation import active as confrontation_active
+        return enabled(self) or (self.exploration.scenario_id == "recruitment_arena" and (
+            self.combat_state is not None or rolling(self) or confrontation_active(self)))
+
+    def release_board_panel(self, context: str) -> dict[str, object]:
+        """A delayed close from an old panel must not release its successor."""
+        if self.board_panel_context and self.board_panel_context[0] == context:
+            self.board_panel_context = None
+            self.board_selection_revision += 1
+            self._cancel_obsolete_board_input()
+            self._sync_board_leds()
+        return {"board_selection": self._board_selection_payload()}
 
     def configure_board_panel(
         self, context: str, slots: list[int], exclusive: bool, *, expected_revision: str = "",
@@ -21725,7 +21746,15 @@ class ExplorationUiSession:
             return {"board_selection": self._board_selection_payload()}
         from .exploration_mana import active as mana_active
         from .simple_traps import enabled as trap_enabled, read as trap_read
-        if (mana_active(self) or (trap_enabled(self) and trap_read(self)['pending'])) and (not context.startswith('dice:') or not exclusive):
+        from .presentation_board import owns_context, validate as validate_presentation
+        if owns_context(context):
+            validate_presentation(self, context, exclusive)
+        elif self._can_start_encounter_initiative() or (
+            self.encounter_initiative_flow is not None
+            and self.encounter_initiative_flow.roll_panel is not None
+        ):
+            raise ValueError("Przyciski należą teraz do panelu inicjatywy.")
+        elif (mana_active(self) or (trap_enabled(self) and trap_read(self)['pending'])) and (not context.startswith('dice:') or not exclusive):
             raise ValueError("Podczas tego rzutu panel należy do bieżącej kości i podsumowania.")
         self.board_panel_context = (context, tuple(sorted(set(slots))), exclusive)
         self.board_selection_revision += 1
@@ -21753,7 +21782,8 @@ class ExplorationUiSession:
     def _board_panel_actions(self, options: tuple[CombatMenuOption, ...] | None = None) -> dict[int, str]:
         """Use the screen menu's printed mappings and current action budget."""
         if (
-            not self._board_panel_enabled()
+            self.combat_state is None
+            or not self._board_panel_enabled()
             or (self.board_panel_context and self.board_panel_context[2])
             or self.shield_bash_flow is not None
             or (self._combat_has_pending_resolution() and not self._board_panel_feature_preview_active())
@@ -21778,6 +21808,9 @@ class ExplorationUiSession:
         if self.launcher_navigation is not None:
             from .launcher_board import target
             return target(self)
+        from .presentation_board import active as presentation_active, target as presentation_target
+        if presentation_active(self):
+            return presentation_target(self)
         from .mission_zero import active_panel as mission_panel, scan_target as mission_target
         if mission_panel(self):
             return mission_target(self)
@@ -21800,7 +21833,10 @@ class ExplorationUiSession:
                 feedback=panel_feedback((), control_slots=(28,),
                     base=context_feedback(self) if guided_enabled(self) else target.feedback),
                 empty_message="Przeczytaj objaśnienie Nessy i potwierdź ✓.")
-        if (self.encounter_setup_flow is not None and self.encounter_setup_flow.current_step is not None) or not self._board_panel_enabled():
+        if (self._can_start_encounter_initiative()
+                or (self.encounter_initiative_flow is not None and self.encounter_initiative_flow.roll_panel is not None)
+                or (self.encounter_setup_flow is not None and self.encounter_setup_flow.current_step is not None)
+                or not self._board_panel_enabled()):
             return target
         from .aura_preview import context_feedback
         aura = context_feedback(self)
@@ -23100,6 +23136,9 @@ class ExplorationUiSession:
         if self.launcher_navigation is not None:
             from .launcher_board import select
             return select(self, selected)
+        from .presentation_board import active as presentation_active, select as presentation_select
+        if presentation_active(self):
+            return presentation_select(self, selected)
         from .mission_zero import active_panel as mission_panel, select_position as mission_select
         if mission_panel(self):
             return mission_select(self, selected)
@@ -23137,6 +23176,12 @@ class ExplorationUiSession:
             self.board_message = f"Wybrano pole {selected.as_tuple()}. Ustaw figurkę i zatwierdź przyciskiem ✓ na planszy."
             self._sync_board_leds()
             return self.state_payload()
+        if self.encounter_initiative_flow is not None and self.encounter_initiative_flow.roll_panel is not None:
+            commands = {panel_position(26): "minus", panel_position(27): "plus",
+                        panel_position(28): "accept", panel_position(29): "back"}
+            if selected not in commands:
+                raise ValueError("Wybierz podświetlony przycisk panelu inicjatywy.")
+            return self.update_initiative_panel(commands[selected])
         from .pooled_mana import scan_target as pool_target, select_position as select_pool_position
         if pool_target(self) is not None:
             return select_pool_position(self, selected)
@@ -23186,14 +23231,8 @@ class ExplorationUiSession:
         ):
             return self.assign_exploration_point_position(selected)
         if self.encounter_initiative_flow is not None and self.encounter_initiative_flow.current_prompt is not None:
-            if self.encounter_initiative_flow.roll_panel is None:
-                self.board_message = "Wpisz wynik inicjatywy w UI."
-                return self.state_payload()
-            commands = {Coordinate(19, 3): "minus", Coordinate(19, 2): "plus",
-                        Coordinate(19, 1): "accept", Coordinate(19, 0): "back"}
-            if selected not in commands:
-                raise ValueError("Wybierz podświetlony przycisk panelu inicjatywy.")
-            return self.update_initiative_panel(commands[selected])
+            self.board_message = "Wpisz wynik inicjatywy w UI."
+            return self.state_payload()
         if self.combat_state is not None:
             if selected == NESSA_POSITION and can_talk_to_nessa(self):
                 return self.select_combat_interaction_at_position(selected)

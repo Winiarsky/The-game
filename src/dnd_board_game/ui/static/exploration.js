@@ -498,14 +498,15 @@ function render() {
   }
   const modeLabel = currentModeLabel();
   document.getElementById('app-mode-label').textContent = modeLabel;
-  document.getElementById('encounter-title').textContent = inCombat ? 'Walka'
-    : state.training_arena?.mode === 'walkthrough' ? 'Przygotowanie ćwiczenia' : 'Nadchodzi starcie';
+  document.getElementById('encounter-title').textContent = inCombat ? sessionUiText('common.combat')
+    : state.training_arena?.mode === 'walkthrough' ? sessionUiText('common.training_setup') : sessionUiText('common.battle_setup');
   document.getElementById('scenario').textContent = state.scenario.name;
   document.getElementById('zone').textContent = state.current_zone.name;
   document.getElementById('panel-zone-name').textContent = state.current_zone.name;
   document.getElementById('scene-status-summary').innerHTML = sceneStatusSummaryHtml();
   document.getElementById('briefing-contract').innerHTML = briefingContractHtml();
   renderPartyShell();
+  document.body.classList.toggle('tabletop-combat-active', Boolean(state.mission && state.combat));
   document.getElementById('challenge').textContent = state.active_challenge
     ? state.active_challenge.uses_progress
       ? `${state.active_challenge.name}: ${state.active_challenge.current_progress}/${state.active_challenge.progress_required}, hałas ${state.active_challenge.noise}`
@@ -592,6 +593,8 @@ function render() {
   scheduleAutomaticBoardScan();
   scrollChatToBottom(followChatTail);
   focusCombatDecision();
+  if (typeof TabletopCombat !== 'undefined') TabletopCombat.afterRender();
+  if (typeof SessionNavigation !== 'undefined') SessionNavigation.afterRender();
 }
 
 function isKeyboardRollInput(input) {
@@ -1171,18 +1174,14 @@ function scrollChatToBottom(shouldFollow = true) {
   });
 }
 function currentModeLabel() {
-  if (state.combat) return 'Walka';
-  if (state.pending_encounter) return 'Początek encountera';
-  const stage = state.flow ? state.flow.stage : '';
-  if (stage === 'spell_preparation') return 'Przygotowanie czarów';
-  if (stage === 'short_rest') return 'Krótki odpoczynek';
-  if (stage === 'party_setup') return 'Przygotowanie planszy';
-  if (stage === 'location_preview') return 'Wybór lokacji';
-  if (stage === 'game_over') return 'Game Over';
-  if (stage === 'scenario_complete') return 'Koniec scenariusza';
-  if (state.trade) return 'Handel';
-  if (state.active_point && state.active_point.npc) return 'Rozmowa';
-  return 'Eksploracja';
+  if (state.combat) return sessionUiText('common.combat');
+  if (state.pending_encounter) return sessionUiText('common.battle_setup');
+  if (state.exploration_mana?.active) return sessionUiText('common.conversation');
+  const stage = state.flow?.stage;
+  if (['spell_preparation','short_rest','party_setup','location_preview','game_over','scenario_complete'].includes(stage)) return sessionUiText(`common.${stage}`);
+  if (state.trade) return sessionUiText('common.trade');
+  if (state.active_point?.npc) return sessionUiText('common.conversation');
+  return sessionUiText('common.exploration');
 }
 function sceneStatusSummaryHtml() {
   const entries = state.scene_status || [];
@@ -1634,8 +1633,8 @@ function renderBoardConnectionIndicator() {
   const connected = Boolean(board.connected);
   indicator.classList.toggle('connected', connected);
   indicator.classList.toggle('simulator', connected && backend === 'simulator');
-  const label = connected ? (backend === 'simulator' ? 'Symulator' : 'Plansza połączona')
-    : boardConnectionInFlight ? 'Łączę z planszą…' : 'Plansza rozłączona';
+  const label = connected ? (backend === 'simulator' ? sessionUiText('common.simulator') : sessionUiText('common.connected'))
+    : boardConnectionInFlight ? sessionUiText('common.connecting') : sessionUiText('common.disconnected');
   indicator.querySelector('span:last-child').textContent = label;
   indicator.title = board.message || label;
 }
@@ -1653,8 +1652,8 @@ function renderBoardFallback() {
   const copy = document.getElementById('board-disconnected-copy');
   if (banner) banner.hidden = connected || boardConnectionInFlight;
   if (panel) panel.hidden = connected || !boardFallbackEnabled;
-  if (toggle) toggle.textContent = boardFallbackEnabled ? 'Sterowanie awaryjne aktywne' : 'Tryb awaryjny';
-  if (copy) copy.textContent = boardConnectionNotice || (boardFallbackEnabled ? 'Sterowanie awaryjne jest aktywne. Właściwe połączenie można ponowić w dowolnym momencie.' : 'Możecie ponowić połączenie albo jawnie przejść na sterowanie awaryjne.');
+  if (toggle) toggle.textContent = boardFallbackEnabled ? sessionUiText('common.fallback_active') : sessionUiText('common.fallback');
+  if (copy) copy.textContent = boardConnectionNotice || (boardFallbackEnabled ? sessionUiText('common.fallback_hint') : sessionUiText('common.disconnected_hint'));
   document.body.classList.toggle('board-fallback-active', !connected && boardFallbackEnabled);
   document.body.classList.toggle('board-disconnected', !connected);
 }
@@ -1663,7 +1662,7 @@ async function retryBoardConnection() {
   boardConnectionInFlight = true;
   const board = state.board || {};
   const backend = board.backend && board.backend !== 'none' ? board.backend : (board.configured_backend || 'hardware');
-  setBusy('Łączę z planszą…');
+  setBusy(sessionUiText('common.connecting'));
   renderBoardConnectionIndicator();
   renderBoardFallback();
   try {
@@ -1675,9 +1674,9 @@ async function retryBoardConnection() {
     });
     const data = await response.json();
     state = data.state || data;
-    boardConnectionNotice = response.ok ? '' : 'Nie udało się połączyć. Możecie spróbować ponownie albo kontynuować w trybie awaryjnym.';
+    boardConnectionNotice = response.ok ? '' : `${sessionUiText('common.connection_failed')}${data.error ? ' ' + data.error : ''}`;
   } catch (_error) {
-    boardConnectionNotice = 'Nie udało się połączyć. Możecie spróbować ponownie albo kontynuować w trybie awaryjnym.';
+    boardConnectionNotice = sessionUiText('common.connection_failed');
   } finally {
     boardConnectionInFlight = false;
     setBusy('');
@@ -4364,6 +4363,7 @@ function encounterSetupHtml(setup) {
     : '';
   const hasPositions = Boolean(step.has_positions);
   const requiresBoardAssignment = Boolean(step.requires_board_assignment);
+  const assignmentActor = (state.actors || []).find(actor => actor.id === step.assignment_actor_id);
   const canConfirm = Boolean(step.can_confirm);
   const selectedPosition = step.selected_position;
   const mechanics = Array.isArray(step.mechanics) ? step.mechanics : [];
@@ -4377,7 +4377,7 @@ function encounterSetupHtml(setup) {
     <div class="message setup-current-command" tabindex="-1">
       <b>Krok ${Number(setup.current_index) + 1}/${setup.step_count}: ${esc(step.label || '')}</b><br>
       ${esc(step.message || '')}
-      ${requiresBoardAssignment ? `<p><b>Aktualnie ustaw:</b> ${esc(step.assignment_actor_name || '-')}</p><p>${(step.available_positions || []).length > 1 ? 'Kliknij jedno z podświetlonych wolnych pól na planszy. Możesz zmienić wybór przed zatwierdzeniem.' : 'Dostępne jest jedno pole — ustaw na nim figurkę i zatwierdź.'}</p>` : ''}
+      ${requiresBoardAssignment ? `<div class="setup-assignment-hero">${assignmentActor?.portrait_url ? `<img src="${esc(assignmentActor.portrait_url)}" alt="${esc(step.assignment_actor_name || assignmentActor.name)}">` : ''}<p><b>Aktualnie ustaw:</b><br>${esc(step.assignment_actor_name || '-')}</p></div><p>${(step.available_positions || []).length > 1 ? 'Kliknij jedno z podświetlonych wolnych pól na planszy. Możesz zmienić wybór przed zatwierdzeniem.' : 'Dostępne jest jedno pole — ustaw na nim figurkę i zatwierdź.'}</p>` : ''}
       ${requiresBoardAssignment && setup.battle_briefing?.length ? '<p><b>Wybór szyku:</b> lewy bok prowadzi do osłon, środek do krótkiego podejścia przez koleiny, prawy bok do suchego obejścia. Możecie swobodnie rozdzielić bohaterów w całej strefie.</p>' : ''}
       ${hasPositions && !requiresBoardAssignment ? `<p>Sprawdź pola podświetlone na planszy kolorem ${esc(step.color || 'wskazanym przez grę')}.</p>` : ''}
       ${mechanicsHtml}
@@ -4440,6 +4440,7 @@ function encounterInitiativeHtml(setup, initiative, stealth) {
   `;
 }
 function combatStartHtml() {
+  if (typeof TabletopCombat !== 'undefined' && TabletopCombat.enabled()) return TabletopCombat.html(state);
   const combat = state.combat;
   if (!combat) return '';
   const order = state.encounter_initiative && state.encounter_initiative.order ? state.encounter_initiative.order : [];
@@ -7897,7 +7898,12 @@ function boardSelectionCanAutoArm(selection = currentBoardSelection()) {
   if (boardSelectionPausedForScreenInput()) return false;
   if (document.hidden || busy || waitingForGm) return false;
   const openDialog = document.querySelector('dialog[open]');
-  return !openDialog;
+  if (!openDialog) return true;
+  // Read-only dialogs own the function keys after their server panel is synced.
+  // Other dialogs still pause game input while the screen owns the decision.
+  const modalPanel = openDialog.id === 'confrontation-detail' ? confrontationDetailPanel()
+    : openDialog.id === 'session-navigation' ? SessionNavigation.panel() : null;
+  return Boolean(modalPanel?.exclusive && modalPanel.context === selection.panel_context);
 }
 function scheduleAutomaticBoardScan() {
   clearTimeout(boardAutoArmTimer);
@@ -8881,6 +8887,7 @@ function visibleSingleAcceptButton() {
   return candidates.length === 1 ? candidates[0] : null;
 }
 function triggerPrimaryAction() {
+  if (handleReadOnlyPanelSlot(28)) return true;
   if (explorationManaPrimary()) return true;
   if (state?.training_arena?.tutorial?.notice) return acknowledgeTrainingNotice();
   if (sharedManaPrimary()) return true;
@@ -9103,6 +9110,7 @@ function cancelCurrentCombatStep() {
   return false;
 }
 function triggerSecondaryAction() {
+  if (handleReadOnlyPanelSlot(29)) return true;
   if (state?.exploration_mana?.active) return explorationManaAction('leave');
   if (state?.combat?.shared_mana?.command?.stage) {
     if (state.combat.shared_mana.command.can_back) sharedCommandControl(true);
@@ -9456,6 +9464,8 @@ document.addEventListener('keydown', event => {
   const combatMenu = state && state.combat ? state.combat.context_menu : null;
   const combatTurnMenu = state && state.combat ? state.combat.turn_action_menu : null;
   const typing = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT');
+  const functionSlot = event.key === '+' || event.key === '=' ? 27 : event.key === '-' ? 26 : event.key === 'Escape' ? 29 : event.key === 'Enter' ? 28 : null;
+  if (!typing && functionSlot !== null && handleReadOnlyPanelSlot(functionSlot)) {event.preventDefault();return;}
   if (!typing && !combatMenu && triggerCombatActionShortcut(event)) {
     event.preventDefault();
     return;

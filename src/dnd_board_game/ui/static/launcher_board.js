@@ -6,7 +6,7 @@
   const status = controls.querySelector('[data-board-status]');
   const retry = controls.querySelector('button');
   let stopped = false, syncing = false, scanning = false, scheduled = null;
-  let selection = null, signature = '', epoch = 0;
+  let selection = null, signature = '', epoch = 0, focused = null;
 
   const visible = element => element && !element.closest('[hidden]') && element.getClientRects().length > 0;
   function choices() {
@@ -14,13 +14,15 @@
     return [...document.querySelectorAll('[data-board-rune]')].filter(element => {
       const checkbox = element.querySelector('input[type="checkbox"]');
       return visible(element) && !element.disabled && element.getAttribute('aria-disabled') !== 'true'
-        && !(checkbox && !checkbox.checked && selectedCount >= 5);
+        && !(checkbox && !checkbox.checked && selectedCount >= 6);
     });
   }
   const back = () => [...document.querySelectorAll('[data-board-back]')].find(visible);
   function desired() {
     const entries = choices();
-    return {token, slots: entries.map(e => Number(e.dataset.boardRune)),
+    if (!entries.some(e => Number(e.dataset.boardRune) === focused)) focused = entries.length ? Number(entries[0].dataset.boardRune) : null;
+    entries.forEach(e => e.classList.toggle('board-focused', Number(e.dataset.boardRune) === focused));
+    return {token, controls: entries.length ? [26,27,28] : [], focused, slots: entries.map(e => Number(e.dataset.boardRune)),
       selected: entries.filter(e => e.querySelector('input:checked')).map(e => Number(e.dataset.boardRune)),
       back: Boolean(back())};
   }
@@ -32,7 +34,7 @@
     const response = await fetch(path, {method:'POST', headers:{'Content-Type':'application/json'},
       body:JSON.stringify(body), keepalive});
     const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Nie udało się połączyć z planszą.');
+    if (!response.ok) throw new Error(data.error || sessionUiText('navigation.connect_error'));
     return data;
   }
   function stop() {
@@ -57,10 +59,11 @@
       if (stopped || version !== epoch) return;
       signature = key;
       selection = data.board_selection;
-      if (!selection.connected) throw new Error('Plansza nie jest podłączona. Możesz też wybrać kafelek na ekranie.');
-      report('Naciśnij runę wybranego kafelka. Wybór działa od razu.' + (contract.back ? ' ↩ — wróć.' : ''));
+      if (!selection.connected) throw new Error(sessionUiText('navigation.disconnected'));
+      report(sessionUiText('navigation.board_hint') + (contract.back ? ' · ' + sessionUiText('navigation.back_hint') : ''));
     } catch (error) {
-      if (!stopped) {signature = key; selection = null; report(error.message, true);}
+      if (!stopped) {signature = key; selection = null; report(error.message, true);
+        setTimeout(() => {if (!stopped && !selection) {signature='';queueSync();}}, 2000);}
     } finally {
       syncing = false;
       if (!stopped) {
@@ -79,15 +82,24 @@
       const event = data.navigation_event;
       if (event?.token === token) {
         selection = null;
-        const element = event.slot === 29 ? back() : choices().find(e => Number(e.dataset.boardRune) === event.slot);
-        if (element) element.click();
+        const entries = choices();
+        if (event.slot === 26 || event.slot === 27) {
+          const index = Math.max(0, entries.findIndex(e => Number(e.dataset.boardRune) === focused));
+          const next = entries[(index + (event.slot === 26 ? -1 : 1) + entries.length) % entries.length];
+          if (next) {focused = Number(next.dataset.boardRune);next.scrollIntoView({block:'nearest'});}
+        } else {
+          const slot = event.slot === 28 ? focused : event.slot;
+          const element = slot === 29 ? back() : entries.find(e => Number(e.dataset.boardRune) === slot);
+          if (element) element.click();
+        }
         signature = '';
         queueSync();
       } else if (data.board_selection?.navigation_token === token) {
         selection = data.board_selection;
       }
     } catch (error) {
-      if (!stopped && version === epoch) {selection = null; report(error.message, true);}
+      if (!stopped && version === epoch) {selection = null; report(error.message, true);
+        setTimeout(() => {if (!stopped && !selection) {signature='';queueSync();}}, 2000);}
     } finally {
       scanning = false;
       if (!stopped) setTimeout(read, 100);

@@ -82,6 +82,9 @@ def test_paid_identification_is_atomic_and_one_shot(tmp_path):
 def test_preparation_sequence_board_paging_and_lock(tmp_path):
     from dnd_board_game.hardware.board_panel import panel_position
     s=party(tmp_path);stage(s,'brief');send(s,'depart')
+    assert mission.read(s)['stage']=='equipment_intro'
+    assert mission.payload(s)['reading'] and mission.payload(s)['equipment'] is None
+    mission.select_position(s,panel_position(28))
     assert mission.read(s)['stage']=='equipment'
     send(s,'equipment_source')
     original=mission.payload(s)['equipment']['item']['id']
@@ -140,3 +143,41 @@ def test_large_stash_paging_and_stale_command_are_safe(tmp_path):
     with pytest.raises(ValueError):mission.command(s,dict(action='equipment_attach',gear_slot='pack',revision=revision))
     assert len(s.state.party_loot.items)==79
     assert len([i for a in s.exploration.actors for i in a.inventory if i.id=='loot_79'])==1
+
+
+def test_preparation_intro_save_back_and_help_preserve_selection(tmp_path):
+    from dnd_board_game.hardware.board_panel import panel_position
+    s=party(tmp_path);stage(s,'brief');send(s,'depart')
+    inventory=tuple(a.inventory for a in s.exploration.actors)
+    stash=s.state.party_loot
+    s.save_snapshot();s.load_snapshot()
+    assert mission.payload(s)['stage']=='equipment_intro'
+    assert {panel_position(i) for i in (26,27,28,29)} <= set(mission.scan_target(s).positions)
+    assert mission.select_position(s,panel_position(27))['panel_event']['slot']==27
+    with pytest.raises(ValueError):send(s,'equipment_accept')
+    mission.select_position(s,panel_position(29))
+    assert mission.read(s)['stage']=='brief'
+    send(s,'depart');send(s,'equipment_continue')
+    send(s,'equipment_accept');send(s,'equipment_source');send(s,'equipment_next')
+    before=mission.payload(s)['equipment']
+    mission.select_position(s,panel_position(25))
+    s.save_snapshot();s.load_snapshot()
+    mission.select_position(s,panel_position(29))
+    assert mission.payload(s)['equipment']==before
+    mission.select_position(s,panel_position(25))
+    mission.select_position(s,panel_position(28))
+    assert mission.payload(s)['equipment']==before
+    assert tuple(a.inventory for a in s.exploration.actors)==inventory
+    assert s.state.party_loot==stash
+
+
+def test_preparation_portrait_tracks_hero_and_previous(tmp_path):
+    s=party(tmp_path);stage(s,'brief');send(s,'depart');send(s,'equipment_continue')
+    for hero in s.exploration.actors:
+        view=mission.payload(s)['equipment']
+        assert view['hero_id']==str(hero.id) and view['hero']==hero.name
+        assert f'/{hero.id}.png?' in view['portrait_url']
+        send(s,'equipment_accept')
+    stage(s,'guild_return');send(s,'equipment_open')
+    send(s,'equipment_accept');send(s,'equipment_back')
+    assert mission.payload(s)['equipment']['hero_id']=='garran'

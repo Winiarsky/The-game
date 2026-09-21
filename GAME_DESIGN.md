@@ -1,11 +1,26 @@
 # Game Design
 
+## Krytyczne wyniki konfrontacji — 21.09.2026
+
+W rozmowach i konfrontacjach z obiektami naturalne 20 na k20 daje automatyczny
+sukces. Wpływ/postęp jest równy maksimum kości podejścia plus zwykłe premie;
+nie ma drugiego rzutu. Naturalne 1 daje automatyczną porażkę i 1 dodatkową
+spaloną kartę ponad koszt po modyfikacjach (zwykle łącznie 2).
+Pasywy sukcesu/porażki działają normalnie; Łagodność Dagny zeruje zwykły
+koszt, ale pozostaje 1 karta za krytyczną porażkę. Pomoc zużywa się przy próbie.
+Rozstrzygnięcie efektu, odzysk i fizyczne spalanie zachowują swoją kolejność.
+Wyniki 2–19 nadal porównujemy ze ST. Zmiana nie dotyczy zwykłych testów poza
+konfrontacjami ani zasad krytyków w walce.
+
 ## Mana: sześć kart i atut — 20.09.2026
 
 Aktualne zasady zastępują starsze zapisy o 21 punktach: pula do 6 fizycznych kart,
 +1 do testów za kartę. Atut daje 2 ładunku zdolności, inne kolory 1; ładunek
 maks. 6, progi 2/4/6. Trzy atuty odblokowują ultę, ale dobór trwa do 6 kart.
 Pasywy liczą fizyczne karty, spalanie pozostaje.
+W eksploracji żaden pasyw nie wymaga posiadania kart atutowych. Skupiona
+myśl Nimry daje po sukcesie +1 wpływu / postępu za czarną kartę w jej puli,
+maksymalnie +2, bez dodatkowego wymogu niebieskich kart.
 Szczegóły i bilans talii: [Mana i atuty](docs/TRUMP_MANA.md).
 
 

@@ -64,7 +64,7 @@ function acknowledgeTrainingNotice() {
 function renderTrainingArena() {
   const panel = document.getElementById('training-arena-panel');
   const arena = state.training_arena;
-  if (!state.exploration_mana?.active) panel.classList.remove('confrontation-view');
+  if (!state.exploration_mana?.active) panel.classList.remove('confrontation-view','tabletop-confrontation');
   document.body.classList.toggle('training-arena-mode', Boolean(arena));
   document.body.classList.toggle('training-exploration-mode', Boolean(state.exploration_mana?.active));
   document.body.classList.toggle('training-guided-mode', arena?.mode === 'walkthrough');

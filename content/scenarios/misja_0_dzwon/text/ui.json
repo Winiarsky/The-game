@@ -119,5 +119,12 @@
   "key_return": "Klucz oddany Gildii",
   "equipment_open": "Ekwipunek drużyny",
   "cart_coerce": "Wymuście zamianę wozu · Bezwzględność",
-  "autosave": "Autozapis po każdym etapie"
+  "autosave": "Autozapis po każdym etapie",
+  "nessa_steal_potion": "Mira: ukradnij słabszą miksturę · krok ku Bezwzględności",
+  "nessa_leave_potion": "Zostaw fiolkę · bez zmiany postawy",
+  "equipment_help": "Jak przygotować wyposażenie?",
+  "equipment_begin": "Przejdź do wyposażenia",
+  "equipment_help_close": "Wróć do wyposażenia",
+  "equipment_intro_back": "Wróć do odprawy",
+  "equipment_active_hero": "Przygotowujecie teraz"
 }
