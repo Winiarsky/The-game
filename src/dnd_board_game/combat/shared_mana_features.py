@@ -13,6 +13,7 @@ from .action_economy import ActionEconomyCost
 from .auras import strongest_aura_members
 from .session import CombatState, current_actor, replace_actor, use_action_economy_cost
 from .spells import grid_distance_feet
+from dnd_board_game.world import Coordinate
 
 if TYPE_CHECKING:
     from dnd_board_game.rules.shared_mana import SharedMana
@@ -32,6 +33,7 @@ class SupportAuraPreview:
     affected_actor_ids: tuple[str, ...]
     source_kind: str = ''
     square_range: bool = False
+    center: Coordinate | None = None
 
 
 def support_aura_preview(actors: Sequence[Actor], effects: tuple[ActiveEffect, ...],
@@ -58,10 +60,12 @@ def support_aura_preview(actors: Sequence[Actor], effects: tuple[ActiveEffect, .
             radius = boost_action(action, mana).aura_radius_feet
         else:
             radius = 30 if ability_id == 'victory_hymn' else 5 if shield else 10
+            if mana and mana.runes and ability_id == 'iron_bastion':
+                radius += 5 * dict(mana.pending_boosts).get('radius', 0)
         source = ActiveEffect(id='aura_preview', actor_id=source_id, source_actor_id=source_id,
             kind=kind, label='Podgląd aury', object_id=ability_id,
-            value=2 if shield else effective_ability_modifier(owner, 'strength') if ability_id == 'iron_bastion' else 1,
-            radius_feet=radius)
+            value=2 if shield else (1 + dict(mana.pending_boosts).get('armor', 0) if mana and mana.runes else effective_ability_modifier(owner, 'strength')) if ability_id == 'iron_bastion' else 1,
+            radius_feet=radius, anchor_position=owner.position if mana and mana.runes and ability_id == 'iron_bastion' else None)
     if source.radius_feet <= 0:
         return None
     if ability_id == 'victory_hymn':
@@ -74,7 +78,7 @@ def support_aura_preview(actors: Sequence[Actor], effects: tuple[ActiveEffect, .
         synchronize = synchronize_garran_effects if shield else synchronize_bastion
         member_kind = 'garran_shield_wall_member' if shield else 'iron_bastion_member'
         members = tuple(e.actor_id for e in synchronize(actors, (source,)) if e.kind == member_kind)
-    return SupportAuraPreview(owner, source.radius_feet, members, kind, ability_id == 'victory_hymn')
+    return SupportAuraPreview(owner, source.radius_feet, members, kind, ability_id == 'victory_hymn', source.anchor_position)
 
 
 def resolve_simple_action(state: CombatState, effects: tuple[ActiveEffect, ...], ability_id: str,
@@ -100,6 +104,9 @@ def resolve_simple_action(state: CombatState, effects: tuple[ActiveEffect, ...],
         effects = expire_active_effects(effects, EffectEvent(EffectEventType.CONCENTRATION_ENDED, actor_id=str(actor.id))).active_effects
         extra = (AdditionalEffectExpiration(EffectDuration.CONCENTRATION, actor_id=str(actor.id)),)
     value = effective_ability_modifier(actor, 'strength') if ability_id == 'iron_bastion' else 1
+    rune_bastion = state.shared_mana.runes is not None and ability_id == 'iron_bastion'
+    if rune_bastion:
+        value = 1 + dict(state.shared_mana.pending_boosts).get('armor', 0)
     kind = ability_id
     if ability_id == 'caring_gesture':
         value = max(0, roll + ability_modifier(actor.ability_scores.wisdom))
@@ -112,9 +119,11 @@ def resolve_simple_action(state: CombatState, effects: tuple[ActiveEffect, ...],
         kind=kind, label=ability.name, object_id=f'class_feature:{ability_id}', value=value,
         source_actor_id=str(actor.id), target_actor_id=str(target.id),
         source=EffectSource(EffectSourceType.ACTION, ability_id, ability.name),
-        duration=EffectDuration.UNTIL_DECK_REFRESH if ability.duration == 'O' else EffectDuration.UNTIL_TURN_START,
+        duration=(EffectDuration.UNTIL_ENCOUNTER_END if state.shared_mana.runes is not None else EffectDuration.UNTIL_DECK_REFRESH) if ability.duration == 'O' else EffectDuration.UNTIL_TURN_START,
         expiration_actor_id=str(actor.id), additional_expirations=extra,
-        radius_feet=30 if ability_id == 'victory_hymn' else 10 if ability_id == 'iron_bastion' else 0)
+        anchor_position=actor.position if rune_bastion else None,
+        expiration_event_count=2 if rune_bastion else 1,
+        radius_feet=30 if ability_id == 'victory_hymn' else (10 + 5 * dict(state.shared_mana.pending_boosts).get('radius', 0) if rune_bastion else 10) if ability_id == 'iron_bastion' else 0)
     return updated, apply_active_effect(effects, effect).active_effects
 
 
@@ -128,18 +137,24 @@ def synchronize_bastion(actors: Sequence[Actor], effects: tuple[ActiveEffect, ..
         if owner is None or owner.is_unconscious() or owner.is_defeated():
             continue
         for target in actors:
-            if target.faction == owner.faction and not target.is_dead() and grid_distance_feet(owner.position, target.position) <= 10:
+            if target.faction == owner.faction and not target.is_dead() and grid_distance_feet(source.anchor_position or owner.position, target.position) <= source.radius_feet:
                 members.append(replace(source, id=f'iron_bastion_member:{target.id}', actor_id=str(target.id), kind='iron_bastion_member'))
     return (*retained, *strongest_aura_members(members))
 
 
 def blocks_forced_movement(actor: Actor, effects: Sequence[ActiveEffect]) -> bool:
-    return any(e.actor_id == str(actor.id) and e.kind == 'iron_bastion_member' for e in effects)
+    return any(e.actor_id == str(actor.id) and e.kind in {'iron_bastion_member', 'rune_anchor', 'rune_anchor_member'} for e in effects)
 
 
 def state_blocks_forced_movement(state: CombatState, target: Actor) -> bool:
     if state.shared_mana is None:
         return False
+    if state.shared_mana.runes is not None:
+        owners = {str(a.id): a for a in state.actors}
+        return any(owner in owners and owners[owner].faction == target.faction
+                   and not owners[owner].is_unconscious() and not owners[owner].is_defeated()
+                   and grid_distance_feet(Coordinate(col,row), target.position) <= radius
+                   for owner,col,row,radius in state.shared_mana.bastion_anchors)
     return any(str(a.id) in state.shared_mana.bastion_sources and a.faction == target.faction
                and not a.is_unconscious() and not a.is_defeated()
                and grid_distance_feet(a.position, target.position) <= 10 for a in state.actors)

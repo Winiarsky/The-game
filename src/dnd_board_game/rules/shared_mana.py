@@ -9,6 +9,7 @@ from dataclasses import asdict, dataclass, replace
 from enum import StrEnum
 from typing import Mapping
 from .pooled_mana import PooledMana
+from .runes import RunePool
 
 
 class ManaPhase(StrEnum):
@@ -40,6 +41,7 @@ class SharedMana:
     end_effects_applied: bool = False
     hymn_sources: tuple[str, ...] = ()
     bastion_sources: tuple[str, ...] = ()
+    bastion_anchors: tuple[tuple[str, int, int, int], ...] = ()
     command_step: int = 0
     command_ally: str = ""
     command_stage: str = ""
@@ -49,13 +51,23 @@ class SharedMana:
     attack_targets: tuple[str, ...] = ()
 
     pooled: PooledMana | None = None
+    runes: RunePool | None = None
+    rune_upkeep_actor: str = ""
+    rune_upkeep_selected: str = ""
+    rune_flaw_paid: bool = False
+    rune_payment: tuple[str, ...] = ()
+    rune_exchange: str = ""
+    rune_recovery: tuple[str, ...] = ()
+    rune_recovery_available: tuple[str, ...] = ()
+    rune_ally_actor: str = ""
+    rune_ally_payment: str = ""
 
     def __post_init__(self) -> None:
         for name in ("deck", "market", "discard", "cycle", "revision", "spent_this_turn", "echo_count", "command_step", "technique_movement", "smoke_movement"):
             value = getattr(self, name)
             if type(value) is not int or value < 0:
                 raise ValueError(f"Nieprawidłowy licznik many: {name}.")
-        if self.pooled is None and (self.deck + self.market + self.discard != 25 or self.market > 5 or self.cycle < 1):
+        if self.pooled is None and self.runes is None and (self.deck + self.market + self.discard != 25 or self.market > 5 or self.cycle < 1):
             raise ValueError("Wspólna mana wymaga 25 kart i najwyżej pięciu na rynku.")
         if not isinstance(self.phase, ManaPhase):
             raise ValueError("Nieznany etap wspólnej many.")
@@ -72,11 +84,16 @@ class SharedMana:
         data = dict(payload)
         if data.get("pooled") is not None:
             data["pooled"] = PooledMana.from_payload(data["pooled"])
+        if data.get("runes") is not None:
+            data["runes"] = RunePool.from_payload(data["runes"])
         data["phase"] = ManaPhase(str(data.get("phase", "ready")))
         data["pending_boosts"] = tuple((str(k), int(v)) for k, v in data.get("pending_boosts", ()))
         data["attack_targets"] = tuple(data.get("attack_targets", ()))
         data["hymn_sources"] = tuple(data.get("hymn_sources", ()))
         data["bastion_sources"] = tuple(data.get("bastion_sources", ()))
+        data["bastion_anchors"] = tuple(tuple(item) for item in data.get("bastion_anchors", ()))
+        for name in ("rune_payment", "rune_recovery", "rune_recovery_available"):
+            data[name] = tuple(data.get(name, ()))
         return cls(**data)
 
 
@@ -95,6 +112,12 @@ def sync_pool(state: SharedMana, pooled: PooledMana) -> SharedMana:
                    revision=state.revision + 1)
 
 
+def sync_runes(state: SharedMana, runes: RunePool) -> SharedMana:
+    return replace(state, runes=runes, deck=len(runes.deck), market=len(runes.offer),
+                   discard=len(runes.discard), phase=ManaPhase.READY if runes.phase == "ready" else ManaPhase.POOLED,
+                   revision=state.revision + 1)
+
+
 def begin_mana_turn(state: SharedMana, actor_id: str, *, round_end: bool = False) -> SharedMana:
     if state.phase != ManaPhase.READY:
         raise ValueError("Przed następną turą potwierdź operację kart.")
@@ -108,8 +131,50 @@ def begin_mana_turn(state: SharedMana, actor_id: str, *, round_end: bool = False
 
 def pay_mana(state: SharedMana, *, revision: int, actor_id: str,
              ability_id: str, count: int, boosts: tuple[tuple[str, int], ...] = (),
-             echo_spell: bool = False) -> SharedMana:
+             echo_spell: bool = False, rune_payment: tuple[str, ...] | None = None,
+             rune_exchange: str = "", rune_recovery: tuple[str, ...] = (),
+             rune_ally_actor: str = "", rune_ally_payment: str = "", rune_surcharge: int = 0) -> SharedMana:
     _expect(state, revision, ManaPhase.READY)
+    if state.runes is not None:
+        from collections import Counter
+        from .runes import spend_runes, validate_card_payment
+        from dnd_board_game.scenarios.rune_catalog import rune_card
+        card = rune_card(actor_id, ability_id)
+        if card is None:
+            raise ValueError("Nieznana moc runiczna.")
+        free_first = card.free_first and (actor_id, ability_id + ":free") not in state.runes.used_once
+        if type(rune_surcharge) is not int or not 0 <= rune_surcharge <= 2:
+            raise ValueError("Nieprawidłowa dopłata runiczna skazy.")
+        if actor_id == "nimra" and rune_surcharge != (min(2, state.echo_count) if state.echo_spell == ability_id else 0):
+            raise ValueError("Dopłata Echa nie zgadza się z ostatnią opłaconą mocą.")
+        costs = validate_card_payment(state.runes.hand(actor_id),
+            card.payment(dict(boosts), free_base=free_first) + ("*",) * rune_surcharge, rune_payment)
+        if count != len(costs):
+            raise ValueError("Koszt runiczny nie zgadza się z kartą.")
+        remaining = list(state.runes.hand(actor_id))
+        for rune in costs:
+            remaining.remove(rune)
+        if ability_id == "mana_tuning" and (rune_exchange not in remaining or not state.runes.deck):
+            raise ValueError("Wybierz dodatkową runę pozostałą po zapłacie do wymiany.")
+        recovery_available = state.runes.discard if ability_id == "mana_recovery" else ()
+        if ability_id == "mana_recovery":
+            maximum = min(3 if dict(boosts).get("recover_more") else 2, 7-len(remaining))
+            if (not rune_recovery or len(rune_recovery) > maximum
+                    or Counter(rune_recovery) - Counter(recovery_available)):
+                raise ValueError("Wybierz runy ze stosu sprzed zapłaty, mieszczące się na ręce.")
+        if ability_id == "counterattack_command" and (rune_ally_actor == actor_id
+                or rune_ally_payment not in state.runes.hand(rune_ally_actor)):
+            raise ValueError("Sojusznik musi wybrać własną runę na Kontratak.")
+        once = ability_id if card.once else ability_id + ":free" if free_first else ""
+        runes = spend_runes(state.runes, actor_id, costs, once=once)
+        return replace(sync_runes(state, runes), phase=ManaPhase.RESOLVING, pending_actor=actor_id,
+                       pending_ability=ability_id, pending_boosts=boosts,
+                       echo_spell=ability_id if actor_id == "nimra" else state.echo_spell,
+                       echo_count=min(2, state.echo_count + 1) if actor_id == "nimra" and state.echo_spell == ability_id else 1 if actor_id == "nimra" else state.echo_count,
+                       rune_flaw_paid=bool(rune_surcharge), rune_payment=costs, rune_exchange=rune_exchange, rune_recovery=rune_recovery,
+                       rune_recovery_available=recovery_available, rune_ally_actor=rune_ally_actor,
+                       rune_ally_payment=rune_ally_payment,
+                       technique_movement={"unstoppable": 20, "blade_dance": 15}.get(ability_id, 0), attack_targets=())
     if state.pooled is not None:
         from .pooled_mana import pay_pool
         hand = state.pooled.hand(actor_id)
@@ -139,7 +204,7 @@ def pay_mana(state: SharedMana, *, revision: int, actor_id: str,
 
 def validate_card_operation(state: SharedMana, ability_id: str, cost: int) -> None:
     """Preflight BEFORE payment, including a separate sacrifice for tuning."""
-    if state.pooled is not None:
+    if state.pooled is not None or state.runes is not None:
         return
     if ability_id == "mana_tuning" and (state.deck < 2 or state.market-cost < 1):
         raise ValueError("Strojenie wymaga dwóch kart talii i jednej karty rynku poza kosztem.")
@@ -148,6 +213,11 @@ def validate_card_operation(state: SharedMana, ability_id: str, cost: int) -> No
 def finish_mana_action(state: SharedMana, *, revision: int) -> SharedMana:
     """Acknowledge the whole ability; recoveries can use its paid cost."""
     _expect(state, revision, ManaPhase.RESOLVING)
+    if state.runes is not None:
+        return replace(state, phase=ManaPhase.READY, pending_ability="", pending_actor="",
+                       pending_boosts=(), technique_movement=0, attack_targets=(), rune_payment=(), rune_flaw_paid=False,
+                       rune_exchange="", rune_recovery=(), rune_recovery_available=(),
+                       rune_ally_actor="", rune_ally_payment="", revision=state.revision + 1)
     if state.pooled is not None:
         from .pooled_mana import finish_burn
         state = sync_pool(state, finish_burn(state.pooled))
@@ -188,6 +258,8 @@ def request_mana_end_turn(state: SharedMana, *, revision: int) -> SharedMana:
 
 def confirm_mana_refill(state: SharedMana, *, revision: int) -> SharedMana:
     _expect(state, revision, ManaPhase.END_TURN)
+    if state.runes is not None:
+        raise ValueError("Runy dobiera się wyłącznie na początku walki.")
     drawn = min(5-state.market, state.deck)
     deck, market = state.deck-drawn, state.market+drawn
     exhausted = state.exhausted or deck == 0
@@ -208,10 +280,12 @@ def confirm_mana_discard(state: SharedMana, *, revision: int) -> SharedMana:
 
 def request_mana_refresh(state: SharedMana, *, revision: int) -> SharedMana:
     _expect(state, revision, ManaPhase.READY, ManaPhase.DISCARD, ManaPhase.END_TURN)
+    if state.runes is not None:
+        raise ValueError("Puli run nie odświeża się w trakcie walki.")
     return replace(state, phase=ManaPhase.REFRESH, revision=state.revision+1)
 
 
 def confirm_mana_refresh(state: SharedMana, *, revision: int) -> SharedMana:
     _expect(state, revision, ManaPhase.REFRESH)
     return replace(state, deck=20, market=5, discard=0, cycle=state.cycle+1,
-                   exhausted=False, phase=ManaPhase.READY, revision=state.revision+1, hymn_sources=(), bastion_sources=())
+                   exhausted=False, phase=ManaPhase.READY, revision=state.revision+1, hymn_sources=(), bastion_sources=(), bastion_anchors=())

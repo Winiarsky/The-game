@@ -98,6 +98,9 @@ def synchronize_shared_effects(state: CombatState, effects: tuple[ActiveEffect, 
     """Apply catalogue lifetimes to authored effects, retaining early expiry."""
     if state.shared_mana is None:
         return state, effects
+    if state.shared_mana.runes is not None:
+        effects = tuple(e for e in effects if e.kind not in {"nimra_echo_spell", "nimra_echo_metamagic",
+            "shared_audience_paid", "shared_friendly_fire_paid"})
     deck_duration = EffectDuration.UNTIL_DECK_REFRESH
     if state.shared_mana.pooled is not None:
         from .mana_charge import charge_effects
@@ -126,11 +129,15 @@ def synchronize_shared_effects(state: CombatState, effects: tuple[ActiveEffect, 
         candidates = (effect.source.id if effect.source else "", effect.object_id.partition(":")[2])
         ability = next((a for key in candidates if (a := shared_ability(owner, key))), None)
         bookkeeping = (effect.kind.endswith(("_used", "_paid", "_pending"))
-                       or effect.kind in {"mira_attack_prepared", "movement_speed_cap", "disengage_until_turn_end", "rage_activity", "mana_series_source", "mana_attack_series", "rage_duration"}
+                       or effect.kind in {"mira_attack_prepared", "smoke_screen_area", "movement_speed_cap", "disengage_until_turn_end", "rage_activity", "mana_series_source", "mana_attack_series", "rage_duration"}
                        or effect.kind.startswith(("nimra_echo_", "mana_ordinary_")))
         lifetime = (ability.duration or RIDER_LIFETIMES.get(ability.id, "")) if ability else ""
         if ability is not None and lifetime and not bookkeeping:
             duration = deck_duration if lifetime == "O" else EffectDuration.UNTIL_TURN_START
+            if state.shared_mana.runes is not None:
+                duration = (EffectDuration.UNTIL_ENCOUNTER_END if lifetime == "O" else EffectDuration.UNTIL_TURN_START)
+                if owner == "garran":
+                    duration = EffectDuration.UNTIL_ENCOUNTER_END if ability.id == "iron_bastion" else EffectDuration.UNTIL_TURN_START
             early = {EffectDuration.UNTIL_NEXT_ATTACK, EffectDuration.WHILE_AT_POSITION}
             extra = tuple(e for e in effect.additional_expirations if e.duration in {*early, EffectDuration.CONCENTRATION})
             if effect.duration in early and not any(e.duration == effect.duration for e in extra):
@@ -156,11 +163,15 @@ def synchronize_shared_effects(state: CombatState, effects: tuple[ActiveEffect, 
         lifetime = (ability.duration or RIDER_LIFETIMES.get(ability.id, "")) if ability else ""
         if ability is not None and lifetime and condition.duration != EffectDuration.CONCENTRATION:
             condition = replace(condition,
-                duration=deck_duration if lifetime == "O" and ability.id != "nimra_sticky_matrix" else EffectDuration.UNTIL_TURN_START,
+                duration=(EffectDuration.UNTIL_ENCOUNTER_END if state.shared_mana.runes is not None else deck_duration) if lifetime == "O" and ability.id != "nimra_sticky_matrix" else EffectDuration.UNTIL_TURN_START,
                 expiration_actor_id=condition.source_actor_id, expiration_event_count=1)
         conditions.append(condition)
     sources = tuple(sorted({e.source_actor_id or e.actor_id for e in normalized if e.kind == "victory_hymn"}))
-    state = replace(state, condition_states=tuple(conditions), shared_mana=replace(state.shared_mana, hymn_sources=sources, bastion_sources=tuple(sorted({e.source_actor_id for e in normalized if e.kind == "iron_bastion"}))))
+    anchors = tuple((e.source_actor_id or e.actor_id, e.anchor_position.col, e.anchor_position.row, e.radius_feet)
+                    for e in normalized if e.kind == "iron_bastion" and e.anchor_position is not None)
+    state = replace(state, condition_states=tuple(conditions), shared_mana=replace(state.shared_mana,
+        hymn_sources=sources, bastion_sources=tuple(sorted({e.source_actor_id for e in normalized if e.kind == "iron_bastion"})),
+        bastion_anchors=anchors))
     from .session import current_actor, shared_bonus_action_limit
     from .action_economy import ActionUse
     limit = shared_bonus_action_limit(state, current_actor(state))

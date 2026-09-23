@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dnd_board_game.combat.saving_effects import consume_saving_effects, has_wisdom_save_penalty
+
 from dataclasses import dataclass, replace
 from random import Random
 from typing import Mapping
@@ -101,6 +103,7 @@ class PlayerAreaSpellTransition:
     event_payload: tuple[tuple[str, object], ...]
     clear_movement_preview: bool = False
     applied_damages: tuple[AppliedDamageResult, ...] = ()
+    active_effects: tuple[ActiveCombatEffect, ...] | None = None
 
 
 class PlayerAreaHealingFlowService:
@@ -411,6 +414,8 @@ class PlayerAreaHealingFlowService:
             ),
         )
         saves = confirmation.saving_throws
+        for save in saves:
+            active_effects = consume_saving_effects(active_effects, save)
         updated_pending = replace(pending, stage="damage_roll", saving_throws=saves)
         save_text = " ".join(_spell_save_message(save) for save in saves)
         return PlayerAreaSpellTransition(
@@ -426,6 +431,7 @@ class PlayerAreaHealingFlowService:
                 f"{caster.name} rzuca {source.name}. {save_text} "
                 f"Rzuć obrażenia {source.damage_hint}."
             ),
+            active_effects=active_effects,
             event_type="ui_combat_area_spell_confirmed",
             event_payload=(
                 ("caster_id", str(caster.id)),

@@ -300,6 +300,15 @@ def _advance_turn(
         updated_effects = resolve_waves(updated_state, after_round)
     if updated_state.status == CombatStatus.ACTIVE:
         starting_actor = current_actor(updated_state)
+        rune_bastions = tuple(e for e in updated_effects if e.kind == "iron_bastion" and e.source_actor_id == str(starting_actor.id))
+        if updated_state.shared_mana and updated_state.shared_mana.runes and any(e.expiration_event_count <= 1 for e in rune_bastions):
+            from dnd_board_game.rules.shared_mana import ManaPhase
+            updated_state = replace(updated_state, shared_mana=replace(updated_state.shared_mana,
+                phase=ManaPhase.POOLED, rune_upkeep_actor=str(starting_actor.id), revision=updated_state.shared_mana.revision + 1))
+        elif updated_state.shared_mana and updated_state.shared_mana.runes and rune_bastions:
+            updated_effects = tuple(replace(e, expiration_event_count=e.expiration_event_count - 1)
+                if e.kind in {"iron_bastion", "iron_bastion_member"} and e.source_actor_id == str(starting_actor.id)
+                and e.expiration_event_count > 1 else e for e in updated_effects)
         condition_states, _ = expire_condition_states(
             updated_state.condition_states,
             EffectEvent(EffectEventType.TURN_START, actor_id=str(starting_actor.id)),

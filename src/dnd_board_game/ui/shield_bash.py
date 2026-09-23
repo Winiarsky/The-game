@@ -25,9 +25,13 @@ def shield_bash_payload(session: ExplorationUiSession) -> dict[str, object] | No
     actor = current_actor(session.combat_state)
     target = session._actor_by_string_id(flow.target_id)
     result = flow.result
+    from dnd_board_game.combat.rune_dice import shield_bash_dice, dice_label
+    dice = shield_bash_dice(session.combat_state)
     return {
         "stage": flow.stage,
-        "damage_dice": 1 + (dict(session.combat_state.shared_mana.pending_boosts).get("damage", 0) if session.combat_state.shared_mana else 0),
+        "damage_dice": len(dice),
+        "damage_die_sides": list(dice),
+        "damage_label": dice_label(dice),
         "cost_note": "Potwierdzenie zużyje akcję dodatkową. Możesz też wykonać zwykły atak, jeśli masz jeszcze akcję główną. Ruch rozliczasz osobno.",
         "actor_name": actor.name,
         "target_name": target.name,
@@ -94,8 +98,9 @@ def submit_shield_bash(
             "stage": session.shield_bash_flow.stage,
         },
     )
+    from dnd_board_game.combat.rune_dice import shield_bash_dice, dice_label
     session.board_message = (
-        f"Wygrany test Siły. Rzuć {1 + (dict(session.combat_state.shared_mana.pending_boosts).get('damage', 0) if session.combat_state.shared_mana else 0)}k6 obrażeń."
+        f"Wygrany test Siły. Rzuć {dice_label(shield_bash_dice(session.combat_state))} obrażeń."
         if session.shield_bash_flow.stage == "damage"
         else "Sprawdź wynik Uderzenia tarczą i potwierdź jego zastosowanie."
     )
@@ -113,6 +118,14 @@ def confirm_shield_bash(session: ExplorationUiSession) -> dict[str, object]:
     session.combat_targeting_class_feature_action_id = None
     session.combat_selected_class_feature_target_id = None
     session.combat_turn_preview_option_id = None
+    mana = session.combat_state.shared_mana
+    if result.succeeded and mana and mana.runes and dict(mana.pending_boosts).get("slow"):
+        from dnd_board_game.rules import ActiveEffect, EffectDuration, apply_active_effect
+        slow = ActiveEffect(id=f"rune_bash_slow:{result.target_after.id}", actor_id=str(result.target_after.id),
+            kind="garran_command_half_movement", label="Uderzenie tarczą: połowa ruchu", object_id="class_feature:shield_bash", value=0,
+            source_actor_id=str(result.attacker.id), duration=EffectDuration.UNTIL_TURN_START,
+            expiration_actor_id=str(result.attacker.id))
+        session.active_combat_effects = apply_active_effect(session.active_combat_effects, slow).active_effects
     damage = result.damage.damage.total_applied if result.damage else 0
     push = (
         f"Odepchnięcie na {result.push_destination.as_tuple()}."

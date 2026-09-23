@@ -68,6 +68,7 @@ class ReactionWindow:
     dc: int | None = None
     modifier: int | None = None
     cast_level: int | None = None
+    choice_confirmed: bool = False
 
     def __post_init__(self) -> None:
         if not self.interrupted_actor_id.strip():
@@ -163,6 +164,7 @@ def advance_reaction_window(
                 dc=None,
                 modifier=None,
                 cast_level=None,
+                choice_confirmed=False,
             )
         next_index += 1
     return None

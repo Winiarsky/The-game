@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dnd_board_game.combat.saving_effects import consume_saving_effects, has_wisdom_save_penalty
+
 from dataclasses import dataclass, replace
 from random import Random
 from typing import Protocol
@@ -77,6 +79,7 @@ class SpellDebuffTransition:
     message_body: str
     event_type: str
     event_payload: tuple[tuple[str, object], ...]
+    active_effects: tuple[ActiveCombatEffect, ...] | None = None
     concentration_effect: ActiveCombatEffect | None = None
     scene_flag_changes: tuple[tuple[str, object], ...] = ()
 
@@ -192,6 +195,7 @@ class SpellDebuffFlowService:
             natural_roll_2=(
                 rng.randint(1, 20)
                 if "nimra_forced_weave" in getattr(action, "metamagic_ids", ())
+                or has_wisdom_save_penalty(str(target.id), action.save_ability or "constitution", active_effects)
                 else None
             ),
             roll_mode=(
@@ -201,6 +205,7 @@ class SpellDebuffFlowService:
             ),
             condition_states=resource.state.condition_states,
             combat_actors=resource.state.actors,
+            active_effects=active_effects,
         )
         selected_condition = _selected_condition(action, condition)
         conditions = (selected_condition, *action.additional_conditions)
@@ -294,6 +299,7 @@ class SpellDebuffFlowService:
                 ("save", save.as_payload()),
                 ("applied", bool(applied_conditions)),
             ),
+            active_effects=consume_saving_effects(active_effects, save),
             concentration_effect=concentration_effect,
             scene_flag_changes=(
                 ((action.cast_flag, True),)

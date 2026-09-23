@@ -53,24 +53,24 @@ def choices(s: ExplorationUiSession, m: dict[str, Any]) -> list[dict[str, Any]]:
             for n, slot in enumerate(slots_for(item)):
                 if hands_required(item)==2 and slot=='off_hand': continue
                 label='Obie ręce' if hands_required(item)==2 and slot=='main_hand' else SLOTS[slot]
-                add(6+n,'equipment_attach',label,gear_slot=slot)
+                add(5+n,'equipment_attach',label,gear_slot=slot)
         add(29,'equipment_list','Wróć do listy')
     else:
         if item:
             if m['equipment_source']=='stash':
-                if slots_for(item): add(6,'equipment_slots','Wybierz slot')
+                if slots_for(item): add(5,'equipment_slots','Wybierz slot')
                 if item.value_cp > 0 and item.id not in ('mission_key','mission_documents'):
-                    add(8,'equipment_sell','Sprzedaj za '+format((item.value_cp*item.quantity//2)/100,'.2f')+' sz')
+                    add(7,'equipment_sell','Sprzedaj za '+format((item.value_cp*item.quantity//2)/100,'.2f')+' sz')
                 if item.id=='mission_ring' and not item.magic_effects:
                     from . import mission_zero as mission
                     from dnd_board_game.scenarios.mission_pack import read_json
                     price=read_json(mission.root(s),'mechanics/rewards.json')['identification_gp']
-                    add(9,'equipment_identify',f'Identyfikacja — {price} sz')
-            else: add(6,'equipment_stow','Odłóż do wspólnego zapasu')
-        add(7,'equipment_source','Pokaż wyposażenie postaci' if m['equipment_source']=='stash' else 'Pokaż wspólny zapas')
-        add(25,'equipment_help',mission.label(s,'equipment_help'))
+                    add(8,'equipment_identify',f'Identyfikacja — {price} sz')
+            else: add(5,'equipment_stow','Odłóż do wspólnego zapasu')
+        add(6,'equipment_source','Pokaż wyposażenie postaci' if m['equipment_source']=='stash' else 'Pokaż wspólny zapas')
+        add(24,'equipment_help',mission.label(s,'equipment_help'))
         if len(items(s,m))>1:
-            add(26,'equipment_previous','Poprzedni przedmiot');add(27,'equipment_next','Następny przedmiot')
+            add(27,'equipment_previous','Poprzedni przedmiot');add(26,'equipment_next','Następny przedmiot')
         add(28,'equipment_accept','Gotowe — następna postać' if m['equipment_hero']+1<len(s.exploration.actors) else 'Gotowe — cała drużyna')
         add(29,'equipment_back','Poprzednia postać' if m['equipment_hero'] else 'Wróć do odprawy' if m['equipment_home']=='departure' else 'Wróć do Gildii')
     return result
@@ -148,6 +148,9 @@ def handle(s: ExplorationUiSession,m: dict[str, Any], action: str,data: dict[str
 
 def locked(s: ExplorationUiSession) -> bool:
     from . import mission_zero as mission
+    from dnd_board_game.combat.runes import uses_runes
+    if s.combat_state is not None and any(uses_runes(actor) for actor in s.combat_state.actors):
+        return True
     return mission.enabled(s) and bool(mission.read(s).get('equipment_locked'))
 
 

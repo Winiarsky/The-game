@@ -39,7 +39,17 @@ CONTROLS = [
     ("Zatwierdź", "M3 12l6 7L21 5"),
     ("Wróć", "M10 4 3 11l7 7M3 11h12a6 6 0 0 1 0 12"),
 ]
-SYMBOLS = BASIC + RUNES + CONTROLS
+# BASIC/CONTROLS retain the source glyph library used by existing print builders.
+# Only SYMBOLS defines physical positions, shared by the live game and new prints.
+SYMBOLS = [
+    BASIC[0], BASIC[1], BASIC[3], BASIC[5], ("Przerwa", ""),
+    *RUNES, ("Przerwa", ""), CONTROLS[1], CONTROLS[0], CONTROLS[2], CONTROLS[3],
+]
+
+
+def rune_slot(name: str) -> int:
+    """Find a rune in the printed panel without depending on catalog ordering."""
+    return next(index for index, (label, _) in enumerate(SYMBOLS) if label == name)
 
 
 def panel_icon(slot: int) -> str:
@@ -143,8 +153,8 @@ HERO_PANEL_ABILITIES: dict[str, tuple[str, ...]] = {
 }
 
 
-# Preserve every surviving character glyph. Reuse retired character bindings for
-# new abilities; SYMBOLS (the already printed map strip) stays byte-for-byte stable.
+# Preserve legacy ability ids for older scenarios. Current rune cards provide
+# their own explicit slots below, independently of this compatibility ordering.
 from dnd_board_game.rules.shared_mana_catalog import CATALOG
 for _hero_id, _previous in tuple(HERO_PANEL_ABILITIES.items()):
     _ids = [a.id for a in CATALOG if a.hero_id == _hero_id]
@@ -159,37 +169,37 @@ for _hero_id, _previous in tuple(HERO_PANEL_ABILITIES.items()):
 
 
 def ability_panel_slot(hero_id: str, ability_id: str) -> int:
-    return 6 + HERO_PANEL_ABILITIES[hero_id].index(ability_id)
+    from dnd_board_game.scenarios.rune_catalog import rune_card
+    card = rune_card(hero_id, ability_id)
+    if card is not None:
+        return card.slot
+    return 5 + HERO_PANEL_ABILITIES[hero_id].index(ability_id)
 
 
 PANEL_CONTROLS: tuple[tuple[int, str, str], ...] = (
     (
         0,
         "Ruch",
-        "Wybierz pole i zatwierdź odcinek. Potem wrócisz do menu. Pozostały ruch jest dostępny bez ponownej opłaty many.",
+        "Wybierz podświetlone pole figurki i zatwierdź ruch. Pozostały ruch możesz wykorzystać później w tej turze.",
     ),
     (
         1,
         "Atak",
-        "Wybierz cel dla aktualnej broni. Jeden zwykły atak bez many; aplikacja przypomni ewentualną dopłatę skazy.",
+        "Wskaż pole legalnego celu dla wyposażonej broni i zatwierdź. Zwykły atak nie kosztuje run.",
     ),
     (
         2,
-        "Zmiana broni",
-        "Wybierz broń lub jej chwyt z ekwipunku. Aplikacja pokazuje koszt zmiany.",
+        "Przedmiot",
+        "Podejrzyj użycie przedmiotu i zatwierdź. Zastępuje zwykły atak w tej turze.",
     ),
     (
         3,
-        "Przedmiot",
-        "Otwórz ekwipunek i wybierz przedmiot. Rodzaj akcji i koszt wskazuje jego opis.",
-    ),
-    (
-        5,
         "Koniec tury",
-        "Rozlicz koniec tury, uzupełnij wspólny rynek do pięciu kart i potwierdź. Aplikacja wskaże ewentualny odrzut lub odświeżenie.",
+        "Zatwierdź zakończenie tury. Niewydane runy zostają; przydział odbywa się tylko na początku walki.",
     ),
-    (26, "Zmniejsz", "Zmniejsz wynik kości o 1, najwyżej do dolnej granicy 1."),
-    (27, "Zwiększ", "Zwiększ wynik kości o 1, najwyżej do liczby ścianek."),
+    (24, "Informacja o bohaterze", "Niebieska Gwiazda pokazuje aktualne PW, stany, zasoby, cechy i wyposażenie. Powrót zachowuje wybraną akcję i cel."),
+    (26, "Zwiększ", "Zwiększ wynik kości lub przewiń dalej."),
+    (27, "Zmniejsz", "Zmniejsz wynik kości lub przewiń wstecz."),
     (28, "Zatwierdź", "Zatwierdź cel, wynik kości lub końcowe podsumowanie."),
     (
         29,

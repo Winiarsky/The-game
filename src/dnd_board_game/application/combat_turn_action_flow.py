@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dnd_board_game.combat.mana_charge import charged_check_request, state_charge_bonus
+from dnd_board_game.combat.runes import rune_resolution, uses_runes
+from dnd_board_game.combat.smoke import smoke_hide_request
 
 from dnd_board_game.actors.resources import uses_physical_mana, uses_shared_mana
 
@@ -254,12 +256,12 @@ class CombatTurnActionFlowService:
         actor = _active_hero(state)
         if not actor_has_feature(actor, "mira_shadow_stealth"):
             raise ValueError("Tylko Mira może używać bojowej akcji Ukryj się.")
-        smoke_screen = any(
+        smoke_screen = not uses_runes(actor) and any(
             effect.actor_id == str(actor.id)
             and effect.kind == "smoke_screen_hide_pending"
             for effect in active_effects
         )
-        if not smoke_screen and (state.turn_action.bonus_action_use if uses_shared_mana(actor) else state.turn_action.action_use) != ActionUse.ACTION_AVAILABLE:
+        if not smoke_screen and not rune_resolution(state) and (state.turn_action.bonus_action_use if uses_shared_mana(actor) else state.turn_action.action_use) != ActionUse.ACTION_AVAILABLE:
             raise ValueError("Akcja w tej turze została już zużyta.")
         blocking_conditions = (
             CombatCondition.GRAPPLED,
@@ -284,14 +286,14 @@ class CombatTurnActionFlowService:
             for effect in active_effects
         ):
             raise ValueError("Mira jest oznaczona ujawniającym światłem i nie może się ukryć.")
-        eligibility = hide_eligibility(board, actor, state.actors, scene_objects)
+        eligibility = hide_eligibility(board, actor, state.actors, scene_objects, active_effects)
         if not smoke_screen and not eligibility.allowed:
             names = ", ".join(
                 _actor_by_string_id(state, actor_id).name
                 for actor_id in eligibility.blocking_observer_ids
             )
             raise ValueError(f"Nie możesz się ukryć: nadal wyraźnie widzą cię: {names}.")
-        request = _skill_request(state, actor, "stealth")
+        request = smoke_hide_request(_skill_request(state, actor, "stealth"), actor.position, active_effects)
         if any(e.actor_id == str(actor.id) and e.kind == "smoke_screen_hide_pending" and e.value == 2 for e in active_effects):
             request = replace(request, mode=RollMode.NORMAL if request.mode == RollMode.DISADVANTAGE else RollMode.ADVANTAGE)
         request = _with_pass_without_trace(
@@ -330,15 +332,15 @@ class CombatTurnActionFlowService:
         scene_objects: tuple[SceneObject, ...] = (),
     ) -> CombatTurnActionTransition:
         actor = _validate_pending_skill_actor(state, pending, "hide")
-        smoke_screen = any(
+        smoke_screen = not uses_runes(actor) and any(
             effect.actor_id == str(actor.id)
             and effect.kind == "smoke_screen_hide_pending"
             for effect in active_effects
         )
-        eligibility = hide_eligibility(board, actor, state.actors, scene_objects)
+        eligibility = hide_eligibility(board, actor, state.actors, scene_objects, active_effects)
         if not smoke_screen and not eligibility.allowed:
             raise ValueError("Warunki zmieniły się i nie można już wykonać Hide.")
-        request = _skill_request(state, actor, "stealth")
+        request = smoke_hide_request(_skill_request(state, actor, "stealth"), actor.position, active_effects)
         if any(e.actor_id == str(actor.id) and e.kind == "smoke_screen_hide_pending" and e.value == 2 for e in active_effects):
             request = replace(request, mode=RollMode.NORMAL if request.mode == RollMode.DISADVANTAGE else RollMode.ADVANTAGE)
         request = _with_pass_without_trace(

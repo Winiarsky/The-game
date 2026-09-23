@@ -1,0 +1,407 @@
+{
+  "print_scale": 1.055327868852459,
+  "relative_scale": 1.03,
+  "pdf_cell_mm": 26.383196721311474,
+  "tiles": [
+    {
+      "label": "A1",
+      "x": 0,
+      "y": 0,
+      "width": 250,
+      "height": 150,
+      "right": 10,
+      "bottom": 10
+    },
+    {
+      "label": "A2",
+      "x": 250,
+      "y": 0,
+      "width": 250,
+      "height": 150,
+      "right": 10,
+      "bottom": 10
+    },
+    {
+      "label": "A3",
+      "x": 500,
+      "y": 0,
+      "width": 250,
+      "height": 150,
+      "right": 0,
+      "bottom": 10
+    },
+    {
+      "label": "B1",
+      "x": 0,
+      "y": 150,
+      "width": 250,
+      "height": 150,
+      "right": 10,
+      "bottom": 10
+    },
+    {
+      "label": "B2",
+      "x": 250,
+      "y": 150,
+      "width": 250,
+      "height": 150,
+      "right": 10,
+      "bottom": 10
+    },
+    {
+      "label": "B3",
+      "x": 500,
+      "y": 150,
+      "width": 250,
+      "height": 150,
+      "right": 0,
+      "bottom": 10
+    },
+    {
+      "label": "C1",
+      "x": 0,
+      "y": 300,
+      "width": 250,
+      "height": 150,
+      "right": 10,
+      "bottom": 10
+    },
+    {
+      "label": "C2",
+      "x": 250,
+      "y": 300,
+      "width": 250,
+      "height": 150,
+      "right": 10,
+      "bottom": 10
+    },
+    {
+      "label": "C3",
+      "x": 500,
+      "y": 300,
+      "width": 250,
+      "height": 150,
+      "right": 0,
+      "bottom": 10
+    },
+    {
+      "label": "D1",
+      "x": 0,
+      "y": 450,
+      "width": 250,
+      "height": 50,
+      "right": 10,
+      "bottom": 0
+    },
+    {
+      "label": "D2",
+      "x": 250,
+      "y": 450,
+      "width": 250,
+      "height": 50,
+      "right": 10,
+      "bottom": 0
+    },
+    {
+      "label": "D3",
+      "x": 500,
+      "y": 450,
+      "width": 250,
+      "height": 50,
+      "right": 0,
+      "bottom": 0
+    }
+  ],
+  "cutout_ids": [
+    "P01",
+    "P02",
+    "P03",
+    "P04",
+    "P05",
+    "P06",
+    "P07",
+    "P08",
+    "P09",
+    "P10",
+    "P11",
+    "P12",
+    "P13",
+    "P14",
+    "G01",
+    "G02",
+    "G03",
+    "P15"
+  ],
+  "panel": [
+    {
+      "slot": 0,
+      "name": "Ruch",
+      "path": "M15 4a2 2 0 1 0-4 0 2 2 0 1 0 4 0M12 8l-2 6 5 3 2 5M10 14l-3 8M12 8l4 4h4M12 8H8l-4 5",
+      "board": [
+        19,
+        29
+      ]
+    },
+    {
+      "slot": 1,
+      "name": "Atak",
+      "path": "M5 19 18 6l3-3v6L8 22M3 14l7 7M5 21l-2 2",
+      "board": [
+        19,
+        28
+      ]
+    },
+    {
+      "slot": 2,
+      "name": "Przedmiot",
+      "path": "M8 2h8M9 2v7L4 18v4h16v-4l-5-9V2M6 16h12",
+      "board": [
+        19,
+        27
+      ]
+    },
+    {
+      "slot": 3,
+      "name": "Koniec tury",
+      "path": "M5 22V3h14l-4 5 4 5H5",
+      "board": [
+        19,
+        26
+      ]
+    },
+    {
+      "slot": 4,
+      "name": "Przerwa",
+      "path": "",
+      "board": [
+        19,
+        25
+      ]
+    },
+    {
+      "slot": 5,
+      "name": "Rozwidlenie",
+      "path": "M12 21V4M4 5l8 7 8-7",
+      "board": [
+        19,
+        24
+      ]
+    },
+    {
+      "slot": 6,
+      "name": "Wieża",
+      "path": "M5 21V4h14v17M5 10h14M12 4v17",
+      "board": [
+        19,
+        23
+      ]
+    },
+    {
+      "slot": 7,
+      "name": "Klepsydra",
+      "path": "M4 3h16L4 21h16Z",
+      "board": [
+        19,
+        22
+      ]
+    },
+    {
+      "slot": 8,
+      "name": "Trójząb",
+      "path": "M12 22V2M4 3v8h16V3",
+      "board": [
+        19,
+        21
+      ]
+    },
+    {
+      "slot": 9,
+      "name": "Brama",
+      "path": "M3 21V8l9-6 9 6v13M8 21V11h8v10",
+      "board": [
+        19,
+        20
+      ]
+    },
+    {
+      "slot": 10,
+      "name": "Romb",
+      "path": "M12 2 21 12 12 22 3 12ZM12 7v10",
+      "board": [
+        19,
+        19
+      ]
+    },
+    {
+      "slot": 11,
+      "name": "Hak",
+      "path": "M5 3h14v9H9v9M5 17l4 4 4-4",
+      "board": [
+        19,
+        18
+      ]
+    },
+    {
+      "slot": 12,
+      "name": "Błysk",
+      "path": "M15 2 5 13h8l-4 9 11-13h-8Z",
+      "board": [
+        19,
+        17
+      ]
+    },
+    {
+      "slot": 13,
+      "name": "Oko",
+      "path": "M2 12 12 5l10 7-10 7ZM12 9v6",
+      "board": [
+        19,
+        16
+      ]
+    },
+    {
+      "slot": 14,
+      "name": "Schody",
+      "path": "M3 21v-6h6V9h6V3h6M3 3h6",
+      "board": [
+        19,
+        15
+      ]
+    },
+    {
+      "slot": 15,
+      "name": "Korona",
+      "path": "M3 7l5 5 4-9 4 9 5-5v13H3Z",
+      "board": [
+        19,
+        14
+      ]
+    },
+    {
+      "slot": 16,
+      "name": "Węzeł",
+      "path": "M3 8h18v8H3ZM8 3v18h8V3Z",
+      "board": [
+        19,
+        13
+      ]
+    },
+    {
+      "slot": 17,
+      "name": "Grot",
+      "path": "M4 21 12 3l8 18M8 14h8M12 14v7",
+      "board": [
+        19,
+        12
+      ]
+    },
+    {
+      "slot": 18,
+      "name": "Kotwica",
+      "path": "M12 3v18M6 7h12M3 14l9 7 9-7M3 10v4M21 10v4",
+      "board": [
+        19,
+        11
+      ]
+    },
+    {
+      "slot": 19,
+      "name": "Spirala",
+      "path": "M20 21H4V3h16v12H10V9h4",
+      "board": [
+        19,
+        10
+      ]
+    },
+    {
+      "slot": 20,
+      "name": "Kielich",
+      "path": "M4 3h16v7l-8 6-8-6ZM12 16v5M7 21h10",
+      "board": [
+        19,
+        9
+      ]
+    },
+    {
+      "slot": 21,
+      "name": "Most",
+      "path": "M3 21V3h5v10h8V3h5v18M3 18h18",
+      "board": [
+        19,
+        8
+      ]
+    },
+    {
+      "slot": 22,
+      "name": "Fala",
+      "path": "M3 5l6 5 6-5 6 5M3 14l6 5 6-5 6 5",
+      "board": [
+        19,
+        7
+      ]
+    },
+    {
+      "slot": 23,
+      "name": "Klucz",
+      "path": "M5 3h8v8H5ZM9 11v10h11v-5M15 21v-5",
+      "board": [
+        19,
+        6
+      ]
+    },
+    {
+      "slot": 24,
+      "name": "Gwiazda",
+      "path": "M12 2v20M2 12h20M5 5l14 14M5 19 19 5M8 8h8v8H8Z",
+      "board": [
+        19,
+        5
+      ]
+    },
+    {
+      "slot": 25,
+      "name": "Przerwa",
+      "path": "",
+      "board": [
+        19,
+        4
+      ]
+    },
+    {
+      "slot": 26,
+      "name": "Zwiększ",
+      "path": "M4 12h16M12 4v16",
+      "board": [
+        19,
+        3
+      ]
+    },
+    {
+      "slot": 27,
+      "name": "Zmniejsz",
+      "path": "M4 12h16",
+      "board": [
+        19,
+        2
+      ]
+    },
+    {
+      "slot": 28,
+      "name": "Zatwierdź",
+      "path": "M3 12l6 7L21 5",
+      "board": [
+        19,
+        1
+      ]
+    },
+    {
+      "slot": 29,
+      "name": "Wróć",
+      "path": "M10 4 3 11l7 7M3 11h12a6 6 0 0 1 0 12",
+      "board": [
+        19,
+        0
+      ]
+    }
+  ]
+}

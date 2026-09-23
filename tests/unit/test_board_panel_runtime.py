@@ -9,11 +9,19 @@ from dnd_board_game.hardware.board_panel import panel_feedback, panel_position
 from dnd_board_game.hardware.led_feedback import LedFeedback, LedFrame, LedRole
 from dnd_board_game.hardware.led_palette import LedColor
 from dnd_board_game.ui.board_panel import action_economy_panel_color
-from dnd_board_game.ui.board_panel_symbols import HERO_PANEL_ABILITIES
+from dnd_board_game.ui.board_panel_symbols import ability_panel_slot
 from dnd_board_game.ui.routes import create_app
 from dnd_board_game.world import Coordinate
-from tests.unit.test_recruitment_arena import arena, begin
+from tests.unit.test_recruitment_arena import arena, begin as begin_trial
 from tests.unit.test_initiative_panel import Board, session_at_initiative
+from dnd_board_game.rules.shared_mana import SharedMana
+
+
+def begin(session, hero: str, mode: str = 'basic') -> None:
+    """Keep legacy arena rule regressions independent of opening deck reporting."""
+    begin_trial(session, hero, mode)
+    session.combat_state = replace(session.combat_state, shared_mana=SharedMana(turn_actor=hero))
+    session.state_payload()
 
 
 def lights(feedback: LedFeedback) -> dict[Coordinate, tuple[int, int, int]]:
@@ -26,25 +34,27 @@ def test_live_runes_match_printed_cards_and_budget(hero: str, tmp_path: Path) ->
     menu = s._combat_turn_action_menu_payload()
     slots = [o['panel_slot'] for o in menu['options'] if o['panel_slot'] is not None]
     assert len(slots) == len(set(slots))
-    assert {0, 2, 5} <= set(slots)
+    assert {0, 3} <= set(slots)
+    assert not {4, 25} & set(slots)
     for option in menu['options']:
         slot = option['panel_slot']
-        if slot is not None and slot >= 6:
+        if slot is not None and slot >= 5:
             ability = 'hide' if option['id'] in {'basic:hide', 'basic:end-hide'} else option['action_id'] or option['source_id']
-            assert HERO_PANEL_ABILITIES[hero][slot - 6] == ability
+            assert ability_panel_slot(hero, ability) == slot
     actions = s._board_panel_actions()
-    assert actions == {o['panel_slot']: o['id'] for o in menu['options'] if o['panel_slot'] is not None}
+    assert actions == {o['panel_slot']: o['id'] for o in menu['options'] if o['panel_slot'] is not None and not o['panel_unavailable_reason']}
     target = s._current_board_scan_target()
-    assert {p for p in target.positions if p.col == 19} == {panel_position(slot) for slot in actions}
+    assert {p for p in target.positions if p.col == 19} == {panel_position(slot) for slot in (*actions, 24, 26, 27, 29)}
     for option in menu['options']:
-        if option['panel_slot'] is not None:
+        if option['panel_slot'] in actions:
             color = action_economy_panel_color(option['action_economy'])
             assert lights(target.feedback)[panel_position(option['panel_slot'])] == tuple(round(c * .65) for c in color)
     s.confirm_combat_turn_action('turn:move')
     target = s._current_board_scan_target()
-    assert {panel_position(28), panel_position(29)} <= set(target.positions)
+    assert panel_position(29) in target.positions
+    assert panel_position(28) not in target.positions
     assert lights(target.feedback)[panel_position(0)] == LedColor.PANEL_MOVEMENT
-    assert lights(target.feedback)[panel_position(5)] == tuple(round(c * .35) for c in LedColor.PANEL_TURN_CONTROL)
+    assert lights(target.feedback)[panel_position(3)] == tuple(round(c * .35) for c in LedColor.PANEL_TURN_CONTROL)
 
 
 def test_panel_layer_preserves_targets_and_clears_old_edge() -> None:
@@ -53,7 +63,7 @@ def test_panel_layer_preserves_targets_and_clears_old_edge() -> None:
     result = lights(panel_feedback((0, 6), base=base, control_slots=(28,)))
     assert result[target] == LedColor.LEGAL_ATTACK_TARGET
     assert panel_position(7) not in result
-    assert result[panel_position(6)] == tuple(round(c * .65) for c in LedColor.PANEL_ACTION)
+    assert result[panel_position(6)] == tuple(round(c * .65) for c in LedColor.PANEL_RUNE)
     assert result[panel_position(28)] == LedColor.PANEL_ACCEPT
 
 
@@ -83,6 +93,12 @@ def test_finishing_initiative_lights_and_arms_first_action_menu(tmp_path: Path) 
     s.update_initiative_panel('accept', value=20)
     board.selected = panel_position(28).as_tuple()
     result = s.scan_board_selection(automatic=True)
+    # Legacy arena starts with deck preparation; the opening-rune flow is tested
+    # separately with a real Mission 0 party.
+    assert s.combat_state.shared_mana.pooled.phase == 'setup'
+    s.combat_state = replace(s.combat_state, shared_mana=SharedMana(turn_actor='garran'))
+    result = s.state_payload()
+    s._sync_board_leds()
     assert result['combat']['turn_action_menu']['actor_id'] == 'garran'
     assert result['board_selection']['auto_arm']
     assert [19, 29] in result['board_selection']['legal_positions']
@@ -125,8 +141,8 @@ def test_dice_controls_lock_runes_use_colors_and_forward_one_event(tmp_path: Pat
     selection = response.json['board_selection']
     assert selection['auto_arm']
     assert set(map(tuple, selection['legal_positions'])) == {(19,3),(19,2),(19,1)}
-    assert board.leds[(19,3)] == LedColor.PANEL_MINUS
-    assert board.leds[(19,2)] == LedColor.PANEL_PLUS
+    assert board.leds[(19,3)] == LedColor.PANEL_PLUS
+    assert board.leds[(19,2)] == LedColor.PANEL_MINUS
     assert board.leds[(19,1)] == LedColor.PANEL_ACCEPT
     assert not any(p[0] == 19 and p[1] > 3 for p in board.leds)
     board.selected = (19,2)
@@ -175,7 +191,7 @@ def test_stale_browser_registration_does_not_override_new_decision(tmp_path: Pat
     s.confirm_combat_turn_action('turn:move')
     s.configure_board_panel('old-dice', [26, 27, 28], True, expected_revision=revision)
     assert s.board_panel_context is None
-    assert panel_position(28) in s._current_board_scan_target().positions
+    assert panel_position(28) not in s._current_board_scan_target().positions
 
 
 def test_spent_bonus_runes_remain_disabled(tmp_path: Path) -> None:
@@ -186,9 +202,9 @@ def test_spent_bonus_runes_remain_disabled(tmp_path: Path) -> None:
     s.combat_state = spent.state
     assert s._board_panel_actions()[0] == 'turn:move'
     assert 'class-feature:shield_bash' not in s._board_panel_actions().values()
-    assert panel_position(8) not in lights(s._current_board_scan_target().feedback)
+    assert panel_position(18) not in lights(s._current_board_scan_target().feedback)
     client = create_app(s).test_client()
-    assert client.post('/api/board/select', json={'col': 19, 'row': 21}).status_code == 400
+    assert client.post('/api/board/select', json={'col': 19, 'row': 11}).status_code == 400
 
 
 @pytest.mark.parametrize('on_panel', [False, True])
@@ -219,7 +235,7 @@ def test_board_transmits_actions_and_corner_controls_after_screen_preview(tmp_pa
     s._sync_board_leds()
     assert board.leds[panel_position(0).as_tuple()] == tuple(round(c * .65) for c in LedColor.PANEL_MOVEMENT)
     s.confirm_combat_turn_action('turn:move')
-    assert board.leds[panel_position(28).as_tuple()] == LedColor.PANEL_ACCEPT
+    assert panel_position(28).as_tuple() not in board.leds
     assert board.leds[panel_position(0).as_tuple()] == LedColor.PANEL_MOVEMENT
 
 
@@ -243,8 +259,8 @@ def test_sword_damage_returns_menu_and_allows_shield_selection(tmp_path: Path) -
     assert s._actor_by_string_id('recruitment_dummy').hp == 39
     assert s.pending_player_attack is None
     assert payload['combat']['turn_action_menu'] is not None
-    assert [19, 21] in payload['board_selection']['legal_positions']
-    response = client.post('/api/board/select', json={'col': 19, 'row': 21})
+    assert [19, 11] in payload['board_selection']['legal_positions']
+    response = client.post('/api/board/select', json={'col': 19, 'row': 11})
     assert response.status_code == 200
     assert s.combat_targeting_class_feature_action_id == 'shield_bash'
 

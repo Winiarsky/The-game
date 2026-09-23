@@ -85,7 +85,7 @@
         const entries = choices();
         if (event.slot === 26 || event.slot === 27) {
           const index = Math.max(0, entries.findIndex(e => Number(e.dataset.boardRune) === focused));
-          const next = entries[(index + (event.slot === 26 ? -1 : 1) + entries.length) % entries.length];
+          const next = entries[(index + (event.slot === 26 ? 1 : -1) + entries.length) % entries.length];
           if (next) {focused = Number(next.dataset.boardRune);next.scrollIntoView({block:'nearest'});}
         } else {
           const slot = event.slot === 28 ? focused : event.slot;

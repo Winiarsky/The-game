@@ -9,6 +9,8 @@ from .attack_flow import AttackSource
 
 def apply_hit_passive(state: CombatState, effects: tuple[ActiveEffect, ...], source: AttackSource) -> tuple[CombatState, tuple[ActiveEffect, ...], bool]:
     actor = current_actor(state)
+    if state.shared_mana is not None and state.shared_mana.runes is not None:
+        return state, effects, False
     from dnd_board_game.rules.charge_rolls import uses_charge
     from dnd_board_game.actors import actor_has_feature
     if uses_charge(actor) and not actor_has_feature(actor, 'mana_nimble_hands'):

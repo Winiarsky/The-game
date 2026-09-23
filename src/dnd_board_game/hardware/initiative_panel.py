@@ -5,7 +5,7 @@ from dnd_board_game.world import Coordinate
 
 
 def initiative_panel_feedback(enabled_slots: tuple[int, ...]) -> LedFeedback:
-    colors = {26: (255, 0, 0), 27: (0, 255, 0), 28: (0, 80, 255), 29: (255, 160, 0)}
+    colors = {26: (0, 255, 0), 27: (255, 0, 0), 28: (0, 80, 255), 29: (255, 160, 0)}
     return LedFeedback(
         tuple(
             LedFrame((Coordinate(19, 29 - slot),), colors[slot], LedRole.MARKER)

@@ -47,6 +47,12 @@ def combat_effect_armor_class_bonus(
     actor: Actor,
     active_effects: tuple[ActiveEffect, ...] = (),
 ) -> int:
+    from .runes import uses_runes
+    if uses_runes(actor):
+        kinds = {"spell_ac_bonus", "charge_ac", "iron_bastion_member", "garran_defensive_stance_ac", "garran_shield_wall_member"}
+        bonus = max((e.value for e in active_effects if e.actor_id == str(actor.id) and e.kind in kinds), default=0)
+        penalty = sum(e.value for e in active_effects if e.actor_id == str(actor.id) and e.kind == "erynd_exposed_ac")
+        return bonus - penalty
     return (
         sum(
             effect.value

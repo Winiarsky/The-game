@@ -8,6 +8,10 @@ function sharedManaCommand(command, extra = {}) {
 function sharedManaPrimary() {
   const mana = state?.combat?.shared_mana;
   if (!mana) return false;
+  if (mana.rune_view?.choices?.some(choice => choice.slot === 28)) {
+    sharedManaCommand(mana.rune_view.choices.find(choice => choice.slot === 28).command);
+    return true;
+  }
   if (mana.command?.stage) {
     if (mana.command.can_confirm) sharedCommandControl();
     return true;
@@ -70,8 +74,8 @@ function sharedManaPanel() {
   if (declaration?.stage === 'payment' || declaration?.target_selection) return null; // Server owns targets, payment runes and controls.
   const slots = [28];
   if (["effect_roll", "bonus"].includes(declaration?.stage) && declaration.roll_sides) {
-    if ((declaration.roll || 1) > 1) slots.push(26);
-    if ((declaration.roll || 1) < declaration.roll_sides) slots.push(27);
+    if ((declaration.roll || 1) > 1) slots.push(27);
+    if ((declaration.roll || 1) < declaration.roll_sides) slots.push(26);
   }
   return {context: `mana:${mana.revision}:${mana.phase}`, slots, exclusive: true};
 }
@@ -85,11 +89,7 @@ function sharedManaTargetsHtml(declaration) {
     <p role="status"><b>Wybrano${selection.multiple ? ` ${selected.length}/${selection.maximum}` : ''}:</b> ${selected.length ? selected.map(esc).join(', ') : 'jeszcze nikogo'}</p>
     ${selection.applied_targets.length ? `<p>Efekt otrzymali: ${selection.applied_targets.map(target => esc(target.name)).join(', ')}.</p>` : ''}
     ${selection.targets.length ? '' : '<p role="alert">Brak legalnych celów w zasięgu.</p>'}
-    <details><summary>Awaryjny wybór ekranowy</summary><div class="mana-target-options">
-      ${selection.targets.map(target => `<button type="button" aria-pressed="${target.selected}"
-        class="mana-target-option ${target.selected ? 'selected' : ''}"
-        onclick="sharedManaCommand('target', {target_id: '${esc(target.id)}'})">${target.selected ? '✓ ' : ''}${esc(target.name)}</button>`).join('')}
-    </div></details>
+    <ul class="tt-legal-targets">${selection.targets.map(target => `<li>${target.selected ? '✓ ' : ''}${esc(target.name)}${target.position ? ` · pole (${target.position.join(', ')})` : ''}</li>`).join('')}</ul>
     ${declaration.stage !== 'payment' && selected.length ? '<button class="secondary" onclick="sharedManaCommand(\'clear_targets\')">↩ Wyczyść wybór</button>' : ''}
   </section>`;
 }
@@ -137,6 +137,7 @@ function manaDeckPreparationHtml(pool) {
 function sharedManaHtml(combat) {
   const mana = combat.shared_mana;
   if (!mana) return '';
+  if (mana.rune_view) return RuneCombat.stepHtml() || '';
   const declaration = mana.declaration;
   let decision = '';
   if (mana.pool_view?.choices?.length) {

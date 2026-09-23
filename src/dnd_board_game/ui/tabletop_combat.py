@@ -25,15 +25,39 @@ def _actor_effects(
     """Keep source/duration metadata and real, already-resolved aura membership."""
     effects: list[dict[str, Any]] = []
     labels: set[str] = set()
+    mana = combat.get("shared_mana") or {}
+    if str(actor["id"]) == "nimra" and mana.get("rune_view") is not None and mana.get("echo_spell"):
+        from dnd_board_game.scenarios.rune_catalog import rune_card
+        card = rune_card("nimra", mana["echo_spell"])
+        if card:
+            count = min(2, int(mana.get("echo_count", 0)))
+            effects.append({"id": "rune_echo", "label": "Echo", "body":
+                f"Ostatnia płatna moc: {card.name}. Powtórzenie: +{count} dowolne runy. Inna płatna moc rozpocznie nową serię."})
     for effect in actor.get("effects", ()):
         if effect.get("kind") in _INTERNAL_EFFECTS:
             continue
         source_id = str(effect.get("source_actor_id") or "")
         label = str(effect.get("label") or effect.get("kind") or "")
+        body = effect.get("value_label") or ""
+        expires = effect.get("expires") or ""
+        if ((combat.get("shared_mana") or {}).get("rune_view") is not None
+                and effect.get("kind") in {"iron_bastion", "iron_bastion_member"}):
+            radius = (effect.get("radius_feet") or 10) / 5
+            body = (f"Aura: promień {radius:g} pól, +{effect.get('value', 1)} KP "
+                    "i ochrona przed przymusowym przesunięciem. Premie KP nie sumują się.")
+            anchor = effect.get("anchor_position")
+            if anchor is not None:
+                body += f" Stacjonarny krąg, środek na polu ({anchor[0]}, {anchor[1]})."
+            owner = actors.get(source_id, {}).get("name", "właściciela")
+            grace = effect.get("expiration_event_count", 1) > 1
+            expires = (("Pierwsza kolejna tura bez opłaty. Potem na początku tury " if grace
+                        else "Na początku następnej tury ") + f"postaci {owner}: podtrzymanie za "
+                       "1 dowolną runę albo wygaśnięcie. Podtrzymanie przywraca podstawę: "
+                       "+1 KP, promień 2 pól.")
         effects.append({
             "id": effect.get("id"), "label": label,
-            "body": effect.get("value_label") or "",
-            "expires": effect.get("expires") or "",
+            "body": body,
+            "expires": expires,
             "source_name": actors.get(source_id, {}).get("name", ""),
         })
         labels.add(label)
@@ -107,6 +131,14 @@ def tabletop_combat_payload(
             continue
         seen.add(actor_id)
         actor = actors[actor_id]
+        from dnd_board_game.scenarios.character_text import HERO_IDS, hero_text
+        if actor_id in HERO_IDS:
+            biography = hero_text(actor_id)
+            if (combat.get("shared_mana") or {}).get("rune_view") is not None:
+                from dnd_board_game.scenarios.rune_traits import rune_flaw
+                biography = {**biography, "flaw": rune_flaw(actor_id).body}
+            actor["biography"] = {key: biography[key] for key in
+                ("history", "motivation", "personal_goal", "flaw") if key in biography}
         entries.append({**actor, "initiative": entry.get("total"),
                         "active": actor_id == current_id,
                         "details": _actor_effects(actor, actors, combat, conditions)})

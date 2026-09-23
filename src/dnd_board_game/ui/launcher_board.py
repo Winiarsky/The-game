@@ -5,7 +5,7 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
-from dnd_board_game.hardware.board_panel import panel_feedback, panel_position
+from dnd_board_game.hardware.board_panel import PANEL_RUNE_START, PANEL_RUNE_STOP, panel_feedback, panel_position
 from dnd_board_game.hardware.led_palette import LedColor
 
 if TYPE_CHECKING:
@@ -49,7 +49,7 @@ def configure(s: ExplorationUiSession, data: dict[str, object]) -> dict[str, obj
         raise ValueError('To menu nie jest już aktywne. Odśwież stronę.')
     slots, selected = data.get('slots', []), data.get('selected', [])
     for values in (slots, selected):
-        if not isinstance(values, list) or len(values) > 20 or any(type(v) is not int or not 6 <= v <= 25 for v in values):
+        if not isinstance(values, list) or len(values) > 20 or any(type(v) is not int or not PANEL_RUNE_START <= v < PANEL_RUNE_STOP for v in values):
             raise ValueError('Nieprawidłowe runy menu.')
         if len(set(values)) != len(values):
             raise ValueError('Każdy kafelek menu musi mieć osobną runę.')
@@ -89,7 +89,7 @@ def target(s: ExplorationUiSession) -> BoardScanTarget:
     from .exploration_app import BoardScanTarget
     nav = s.launcher_navigation
     slots = nav.active_slots
-    colors = {slot: LedColor.MOVEMENT_DESTINATION if slot in nav.selected else LedColor.PANEL_ACTION
+    colors = {slot: LedColor.MOVEMENT_DESTINATION if slot in nav.selected else LedColor.PANEL_RUNE
               for slot in slots if slot < 26}
     return BoardScanTarget(positions=tuple(panel_position(slot) for slot in slots),
         feedback=panel_feedback(tuple(colors), selected_slot=nav.focused, action_colors=colors,

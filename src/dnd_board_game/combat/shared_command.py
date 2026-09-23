@@ -16,11 +16,13 @@ def validate_command_target(state: CombatState, target_id: str) -> Actor:
     target = next((a for a in state.actors if str(a.id) == target_id), None)
     if target is None or target.id == owner.id or target.faction != owner.faction or target.is_unconscious() or target.is_defeated() or grid_distance_feet(owner.position, target.position) > 15 or not reaction_available_for(state, target):
         raise ValueError('Wybierz przytomnego sojusznika w 15 ft z dostępną reakcją.')
+    if state.shared_mana and state.shared_mana.runes and not state.shared_mana.runes.hand(str(target.id)):
+        raise ValueError("Sojusznik musi mieć dowolną własną runę na Kontratak.")
     return target
 
 
-def _movement(effects: tuple[ActiveEffect, ...], actor_id: str) -> tuple[ActiveEffect, ...]:
-    for kind, value in (('movement_speed_cap', 10), ('disengage_until_turn_end', 0)):
+def _movement(effects: tuple[ActiveEffect, ...], actor_id: str, extra: int = 0) -> tuple[ActiveEffect, ...]:
+    for kind, value in (('movement_speed_cap', 10 + extra), ('disengage_until_turn_end', 0)):
         effects = apply_active_effect(effects, replace(effect(actor_id, kind, 'Rozkaz: ruch do 10 ft bez ataków okazyjnych', value),
             id=f'shared_command:{actor_id}:{kind}', object_id='shared_command')).active_effects
     return effects
@@ -32,13 +34,21 @@ def start_command(state: CombatState, effects: tuple[ActiveEffect, ...], target_
     if not spent.accepted:
         raise ValueError(spent.message)
     owner = current_actor(state)
+    if state.shared_mana.runes is not None:
+        from dnd_board_game.rules.runes import spend_runes
+        rune = state.shared_mana.rune_ally_payment
+        if state.shared_mana.rune_ally_actor != str(target.id) or not rune:
+            raise ValueError("Sojusznik musi najpierw wybrać runę na Kontratak.")
+        pool = spend_runes(state.shared_mana.runes, str(target.id), (rune,))
+        spent = replace(spent, state=replace(spent.state, shared_mana=replace(spent.state.shared_mana, runes=pool, discard=len(pool.discard))))
+        state = spent.state
     marker = replace(effect(str(owner.id), 'shared_command_owner', 'Rozkaz: Kontratak!', duration=EffectDuration.UNTIL_ENCOUNTER_END),
         object_id=json.dumps(asdict(spent.state.turn_action)), target_actor_id=str(target.id))
     effects = apply_active_effect(effects, marker).active_effects
     state = replace(spent.state, shared_mana=replace(state.shared_mana, command_step=1, command_ally=str(target.id), command_stage='movement', command_skipped=False),
         turn_action=TurnActionState(bonus_action_use=ActionUse.ACTION_USED, shared_bonus_actions_used=2, reaction_available=False,
             object_interaction_available=False, weapon_change_available=False))
-    return state, _movement(effects, str(owner.id))
+    return state, _movement(effects, str(owner.id), 5 * dict(state.shared_mana.pending_boosts).get('move', 0))
 
 
 def advance_command(state: CombatState, effects: tuple[ActiveEffect, ...]) -> tuple[CombatState, tuple[ActiveEffect, ...]]:
@@ -59,7 +69,7 @@ def advance_command(state: CombatState, effects: tuple[ActiveEffect, ...]) -> tu
                 shared_mana=replace(state.shared_mana, command_step=2, command_stage='movement'),
                 turn_action=TurnActionState(bonus_action_use=ActionUse.ACTION_USED, shared_bonus_actions_used=2, reaction_available=False,
                     object_interaction_available=False, weapon_change_available=False))
-            return state, _movement(effects, str(ally.id))
+            return state, _movement(effects, str(ally.id), 5 * dict(state.shared_mana.pending_boosts).get('move', 0))
     entries = list(state.initiative_order.entries)
     if state.shared_mana.command_step == 2:
         entries.pop(state.initiative_order.current_index)

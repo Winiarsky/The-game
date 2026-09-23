@@ -1,0 +1,56 @@
+{
+  "pages": 35,
+  "sections": [
+    {
+      "hero": "garran",
+      "name": "Garran",
+      "first_page": 1,
+      "pages": 5
+    },
+    {
+      "hero": "brakka",
+      "name": "Brakka",
+      "first_page": 6,
+      "pages": 5
+    },
+    {
+      "hero": "mira",
+      "name": "Mira",
+      "first_page": 11,
+      "pages": 5
+    },
+    {
+      "hero": "dagna",
+      "name": "Dagna",
+      "first_page": 16,
+      "pages": 5
+    },
+    {
+      "hero": "lorian",
+      "name": "Lorian",
+      "first_page": 21,
+      "pages": 5
+    },
+    {
+      "hero": "nimra",
+      "name": "Nimra",
+      "first_page": 26,
+      "pages": 5
+    },
+    {
+      "hero": "erynd",
+      "name": "Erynd",
+      "first_page": 31,
+      "pages": 5
+    }
+  ],
+  "action_mm": [
+    60,
+    54
+  ],
+  "equipment_mm": [
+    60,
+    42
+  ],
+  "ability_slots": 12
+}

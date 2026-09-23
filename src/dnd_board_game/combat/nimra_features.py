@@ -253,7 +253,8 @@ def arcane_echo_effects(
 ) -> tuple[ActiveEffect, ...]:
     """Record a committed cast for the next Nimra turn; previews record nothing."""
 
-    if not actor_has_feature(actor, "flaw_arcane_echo"):
+    from .runes import uses_runes
+    if uses_runes(actor) or not actor_has_feature(actor, "flaw_arcane_echo"):
         return ()
     source = EffectSource(EffectSourceType.SYSTEM, "flaw_arcane_echo", "Skaza: Echo magicznego wycieku")
     actor_id = str(actor.id)

@@ -8,24 +8,20 @@ from typing import Any
 import pytest
 
 from dnd_board_game.hardware.board_panel import panel_position
-from dnd_board_game.rules import confrontation as rules
+from dnd_board_game.application.reputation import read as read_reputation
 from dnd_board_game.ui import confrontation
 from dnd_board_game.ui.routes import create_app
-from tests.unit.test_confrontation import charged
-from tests.unit.test_confrontation_presentation import start, choose_approaches, command
+from tests.unit.test_mission_zero import session as mission_session
+from tests.unit.test_progress_confrontation_runtime import start, attempt, command
 from tests.unit.test_initiative_panel import Board
 from tests.unit.test_launcher_board import menu
 
 
 def ready_conversation(tmp_path: Path) -> tuple[Any, Board, Any]:
-    session = start(tmp_path)
-    command(session, 'acknowledge')
-    choose_approaches(session)
-    command(session, 'acknowledge')
-    store = confrontation.read_store(session)
-    state = rules.Confrontation.from_data(store['current']['state'])
-    store['current']['state'] = charged(state, {state.actor.id: ('C', 'B')}).to_data()
-    confrontation.write(session, store)
+    session = mission_session(tmp_path)
+    start(session)
+    attempt(session, 10)
+    assert confrontation.payload(session)['phase'] == 'summary'
     board = Board()
     session.attach_board_connection(board, backend='simulator')
     client = create_app(session, character_dir=tmp_path/'characters').test_client()
@@ -117,29 +113,29 @@ def test_readonly_panels_own_only_function_keys_and_release_restores_game(
     assert game_snapshot(session) == before
 
 
-@pytest.mark.parametrize(('slot', 'detail'), [(24, 'bonus'), (25, 'effects')])
-def test_conversation_inspection_rune_then_detail_keeps_cards_and_turn(
-    tmp_path: Path, slot: int, detail: str,
+@pytest.mark.parametrize(('slot', 'option'), [(5, 'plus_one'), (6, 'plus_five'), (7, 'extra_die')])
+def test_reputation_preview_survives_readonly_menu_without_spending(
+    tmp_path: Path, slot: int, option: str,
 ) -> None:
     session, board, client = ready_conversation(tmp_path)
-    before = game_snapshot(session)
     payload = confrontation.payload(session)
-    assert any(choice['slot'] == slot and choice['action'] == 'inspect'
+    assert any(choice['slot'] == slot and choice['action'] == 'reputation'
                for choice in payload['board_choices'])
-    original = session._board_selection_payload()
-    response = press(client, board, original, slot)
+    response = press(client, board, session._board_selection_payload(), slot)
     assert response.status_code == 200, response.json
-    assert response.json['panel_event'] == {'slot': slot, 'context': f"confrontation-inspect:{payload['revision']}"}
-    assert game_snapshot(session) == before
-    context = f"confrontation-detail:{payload['revision']}:{detail}"
+    assert confrontation.payload(session)['reputation']['selected'] == option
+    assert read_reputation(session.state.flags).points == 20
+    before = game_snapshot(session)
+    original = session._board_selection_payload()
+    context = 'session-menu:reputation-preview'
     response = panel(client, session, context)
     assert response.status_code == 200, response.json
     selection = response.json['board_selection']
     assert set(map(tuple, selection['legal_positions'])) == {
         panel_position(index).as_tuple() for index in (26, 27, 28, 29)
     }
-    # A gameplay rune cannot leak through the detail panel to spend a card.
-    blocked = client.post('/api/board/select', json={'col': 19, 'row': 29-18})
+    # Gameplay input cannot leak through the information panel to change payment.
+    blocked = client.post('/api/board/select', json={'col': 19, 'row': 29-slot})
     assert blocked.status_code == 400
     response = press(client, board, selection, 28)
     assert response.status_code == 200 and response.json['panel_event']['context'] == context
@@ -169,17 +165,16 @@ def test_stale_registration_scan_and_release_do_not_replace_new_panel(tmp_path: 
 
 
 @pytest.mark.parametrize('detail', ['bonus', 'effects'])
-def test_required_physical_payment_rejects_old_and_current_detail_contexts(
+def test_paid_additional_die_rejects_obsolete_mana_detail_contexts(
     tmp_path: Path, detail: str,
 ) -> None:
     session, _, client = ready_conversation(tmp_path)
     ready_revision = confrontation.payload(session)['revision']
-    # A normal failure requires burning its cost before any other action.
-    # Natural 1 has an additional critical-failure cost.
-    command(session, 'test', bonus=2)
-    command(session, 'roll', rolls=[2])
+    command(session, 'reputation', option='extra_die')
+    command(session, 'confirm')
     payload = confrontation.payload(session)
-    assert payload['mana']['phase'] == 'burn' and payload['mana']['pending'] == 1
+    assert payload['phase'] == 'extra_check'
+    assert read_reputation(session.state.flags).points == 15
     assert not any(choice['action'] == 'inspect' for choice in payload['board_choices'])
     before = game_snapshot(session)
     selection = session._board_selection_payload()

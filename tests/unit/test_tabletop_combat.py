@@ -103,3 +103,43 @@ def test_status_chip_does_not_repeat_the_same_effect_with_numeric_suffix() -> No
                  status_chips=[{"label": "Zmęczenie: -2", "title": "Kara"}])
     view = tabletop_combat_payload({"actors": [hero], "current_actor": hero})
     assert len(view["actors"][0]["details"]) == 1
+
+
+def test_active_hero_information_uses_live_defenses_health_inventory_and_statuses() -> None:
+    stored = actor("garran", hp=20, ac=16, portrait_url="/garran.png")
+    live = actor("garran", hp=7, ac=21, temp_hp=4, effective_max_hp=18,
+                 inventory=[{"id": "shield", "name": "Tarcza", "equipped": True}],
+                 ability_scores={"strength": 18, "dexterity": 12},
+                 effects=[{"id": "guard", "kind": "shield_guard", "label": "Osłona tarczą",
+                           "value_label": "+2 KP", "source_actor_id": "garran"}],
+                 status_chips=[{"label": "Zmęczenie: 1", "title": "Pierwszy poziom zmęczenia"}])
+    combat = {"actors": [stored], "current_actor": live}
+    before = deepcopy(combat)
+    info = tabletop_combat_payload(combat)["actors"][0]
+    assert (info["hp"], info["temp_hp"], info["effective_max_hp"], info["ac"]) == (7, 4, 18, 21)
+    assert info["inventory"] == live["inventory"]
+    assert info["ability_scores"] == live["ability_scores"]
+    assert info["portrait_url"] == "/garran.png"
+    assert {detail["label"] for detail in info["details"]} == {"Osłona tarczą", "Zmęczenie: 1"}
+    assert info["biography"]["history"]
+    assert combat == before
+
+
+def test_rune_bastion_information_shows_current_radius_and_upkeep_instead_of_encounter_expiry() -> None:
+    effect = {"id": "bastion", "kind": "iron_bastion", "label": "Żelazny bastion",
+              "value": 2, "radius_feet": 15, "source_actor_id": "garran",
+              "value_label": "+2 KP", "expires": "do końca walki"}
+    owner = actor("garran", effects=[effect])
+    combat = {"actors": [owner], "current_actor": owner,
+              "shared_mana": {"rune_view": {"phase": "ready"}}}
+    detail = tabletop_combat_payload(combat)["actors"][0]["details"][0]
+    assert "promień 3 pól, +2 KP" in detail["body"]
+    assert "podtrzymanie" in detail["expires"] and "1 dowolną runę" in detail["expires"]
+    assert "do końca walki" not in detail["expires"]
+    effect.update(anchor_position=[3, 4], expiration_event_count=2)
+    grace = tabletop_combat_payload(combat)["actors"][0]["details"][0]
+    assert "środek na polu (3, 4)" in grace["body"]
+    assert "Pierwsza kolejna tura bez opłaty" in grace["expires"]
+    combat["shared_mana"] = None
+    legacy = tabletop_combat_payload(combat)["actors"][0]["details"][0]
+    assert legacy["expires"] == "do końca walki"

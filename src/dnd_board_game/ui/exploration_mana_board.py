@@ -28,40 +28,40 @@ def choices(p: dict[str, Any]) -> list[dict[str, Any]]:
     if p['phase'] in {'introduction', 'setup'}:
         result.append(choice(28, 'acknowledge', 'Gotowe'))
     elif not a:
-        result.extend(choice(6 + HEROES.index(o['hero']), 'start', o['name'], method=o['id'])
+        result.extend(choice(5 + HEROES.index(o['hero']), 'start', o['name'], method=o['id'])
                       for o in p['options'] if o['enabled'])
     elif a['needs_resume']:
         result.append(choice(28, 'resume', 'Potwierdzam zachowane stosy', stacks_preserved=True))
         if a['phase'] == 'bargain':
-            result.append(choice(24, 'accept_bargain', 'Przyjmij podpisane świadectwo'))
+            result.append(choice(23, 'accept_bargain', 'Przyjmij podpisane świadectwo'))
     elif a['phase'] == 'bargain':
-        result.extend((choice(24, 'accept_bargain', 'Przyjmij podpisane świadectwo'),
-                       choice(25, 'decline_bargain', 'Odrzuć propozycję · wróć do pas/dobór')))
+        result.extend((choice(23, 'accept_bargain', 'Przyjmij podpisane świadectwo'),
+                       choice(24, 'decline_bargain', 'Odrzuć propozycję · wróć do pas/dobór')))
     elif a['phase'] == 'offer':
         if p['condition']['kind'] == 'favor' and a['favor_status'] != 'used':
-            result.append(choice(25, 'cancel_favor', 'Wybierz normalną wartość') if a['favor_status'] == 'armed'
-                          else choice(24, 'arm_favor', 'Ustępstwo: karta za 1 w zamian za list'))
-        result.extend(choice(13 + COLORS.index(v['color']), 'choose', v['name'], color=v['color'])
+            result.append(choice(24, 'cancel_favor', 'Wybierz normalną wartość') if a['favor_status'] == 'armed'
+                          else choice(23, 'arm_favor', 'Ustępstwo: karta za 1 w zamian za list'))
+        result.extend(choice(12 + COLORS.index(v['color']), 'choose', v['name'], color=v['color'])
                       for v in a['values'] if (not a['expected_color'] or a['expected_color'] == v['color'])
                       and sum(c['color'] == v['color'] for c in a['cards']) < 5)
         if a['cards'] and not a['expected_color']:
-            result.append(choice(22, 'empty', 'Talia wyczerpana'))
+            result.append(choice(21, 'empty', 'Talia wyczerpana'))
     elif a['phase'] == 'decision':
         if not a['must_stand']:
-            result.append(choice(18, 'draw', 'Dobierz kolejną ofertę'))
+            result.append(choice(17, 'draw', 'Dobierz kolejną ofertę'))
         if not a['must_draw']:
-            result.append(choice(19, 'stand', 'Pas · przejdź do testu'))
+            result.append(choice(18, 'stand', 'Pas · przejdź do testu'))
     elif a['phase'] == 'roll':
         result.append(choice(28, 'roll', 'Zatwierdź wpisane wyniki kości'))
     elif a['phase'] == 'reroll_choice':
-        result.append(choice(20, 'reroll', 'Improwizacja · przerzuć test'))
+        result.append(choice(19, 'reroll', 'Improwizacja · przerzuć test'))
         if p['lesson']['finish'] != 'reroll':
-            result.append(choice(21, 'accept', 'Przyjmij porażkę'))
+            result.append(choice(20, 'accept', 'Przyjmij porażkę'))
     elif a['phase'] == 'result':
         result.append(choice(28, 'next', p.get('next_label', 'Następne ćwiczenie')))
-        result.extend(choice(24+i, 'debrief', f['label'], id=f['id']) for i,f in enumerate(p.get('followups', [])) if not f['completed'])
+        result.extend(choice(23+i, 'debrief', f['label'], id=f['id']) for i,f in enumerate(p.get('followups', [])) if not f['completed'])
     if not a or a['phase'] in {'offer', 'decision', 'bargain', 'result'}:
-        result.append(choice(23, 'retry', 'Powtórz lekcję · przygotuj talię od nowa'))
+        result.append(choice(22, 'retry', 'Powtórz lekcję · przygotuj talię od nowa'))
     result.append(choice(29, 'leave', p.get('leave_label', 'Wybór postaci · zachowaj postęp')))
     return result
 

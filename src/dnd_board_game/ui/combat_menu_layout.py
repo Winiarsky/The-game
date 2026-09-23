@@ -11,6 +11,12 @@ from dnd_board_game.combat.session import CombatState, can_pay_action_economy_co
 def menu_action_economy_payload(
     option: CombatMenuOption, actor: Actor, *, default_cost: str = "action"
 ) -> dict[str, str]:
+    if any(feature.feature_id == "rune_resource_v01" for feature in actor.features):
+        from dnd_board_game.scenarios.rune_catalog import rune_card
+        card = rune_card(str(actor.id), option.action_id or option.source_id or "")
+        if card:
+            return {"action_economy": "reaction" if card.budget == "R" else "special",
+                    "action_economy_label": card.budget}
     if option.action in {
         CombatMenuAction.OPEN_WEAPON_MENU,
         CombatMenuAction.OPEN_ITEM_MENU,

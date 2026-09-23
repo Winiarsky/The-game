@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from dnd_board_game.combat.saving_effects import consume_saving_effects, has_wisdom_save_penalty
+from dnd_board_game.combat.spells import saving_throw_roll_request
+from dnd_board_game.combat.conditions import condition_save_roll_request
+
 from dnd_board_game.inventory.magic_items import effective_ability_score
 
 from dnd_board_game.combat.mana_charge import saving_modifiers as charge_saving_modifiers, state_charge_bonus
@@ -2553,6 +2557,10 @@ class ExplorationUiSession:
         from .shared_mana import payload as shared_mana_payload
         if isinstance(combat_payload, dict):
             combat_payload["shared_mana"] = shared_mana_payload(self)
+            from .reaction_choices import view as reaction_choice_view
+            combat_payload["reaction_choices"] = reaction_choice_view(self)
+            if self.combat_state.shared_mana and self.combat_state.shared_mana.runes:
+                combat_payload["physical_mana"] = None
             if self.combat_state and self.combat_state.shared_mana and self.combat_state.shared_mana.pooled and combat_payload.get("physical_mana"):
                 from dnd_board_game.scenarios.pooled_mana_catalog import hero_profile, requirement_text, ability_description
                 from dnd_board_game.physical_cards.mana_ability_text import ability_sections
@@ -2585,12 +2593,19 @@ class ExplorationUiSession:
         if payload["mission"]:
             from dnd_board_game.scenarios.character_text import load_text
             payload["player_aid"] = load_text()["player_aid"]
+            if any(any(f.feature_id == "rune_resource_v01" for f in actor.features) for actor in self.exploration.actors):
+                from dnd_board_game.scenarios.mission_pack import read_json
+                payload["player_aid"] = read_json(self._scenario_asset_root(), "text/sciaga_runy.json")["pages"]
             from .mission_zero import apply_pack_portraits
             apply_pack_portraits(self,payload)
             from .mission_setup import enrich_combat_payload
             enrich_combat_payload(self._scenario_asset_root(),payload)
             if payload.get("combat"):
                 from .tabletop_combat import tabletop_combat_payload
+                from .combat_board_controls import preview_confirmation
+                payload["combat"]["board_can_confirm"] = preview_confirmation(self)
+                from .board_panel_symbols import panel_icon
+                payload["combat"]["information_icon"] = panel_icon(24)
                 payload["combat"]["tabletop"] = tabletop_combat_payload(
                     payload["combat"], (payload.get("encounter_initiative") or {}).get("order", ()),
                     conditions=self.combat_state.condition_states)
@@ -2599,6 +2614,15 @@ class ExplorationUiSession:
     def _physical_card_resource_note(self, actor: Actor, source_id: str) -> str | None:
         """Describe the finite resource behind a currently legal physical card."""
 
+        if self.combat_state and self.combat_state.shared_mana and self.combat_state.shared_mana.runes:
+            from dnd_board_game.scenarios.rune_catalog import rune_card
+            card = rune_card(str(actor.id), source_id)
+            if card is None:
+                return "Bez kosztu run."
+            pool = self.combat_state.shared_mana.runes
+            free = card.free_first and (str(actor.id), card.id + ":free") not in pool.used_once
+            cost = "bez kosztu run" if free else "1 dowolna runa" if card.rune == "*" else card.rune
+            return f"{card.budget} · {cost}."
         if self.combat_state and self.combat_state.shared_mana and self.combat_state.shared_mana.pooled:
             from dnd_board_game.scenarios.pooled_mana_catalog import requirement_text, load_catalog
             if source_id in load_catalog()['abilities'] or source_id.startswith('basic_attack:'):
@@ -2860,8 +2884,9 @@ class ExplorationUiSession:
         )
         snapshot = read_snapshot(snapshot_path, base_state=base_state)
         from dnd_board_game.actors.mana_passives import normalize_mana_passives
+        from dnd_board_game.character_creation.runes import normalize_rune_features
         snapshot_actors = tuple(
-            normalize_mana_passives(repair_mira_loadout(reconcile_boardgame_feature_removals(actor)))
+            normalize_rune_features(normalize_mana_passives(repair_mira_loadout(reconcile_boardgame_feature_removals(actor))))
             for actor in snapshot.actors
         )
         snapshot_combat_state = snapshot.combat_state
@@ -2870,6 +2895,7 @@ class ExplorationUiSession:
                 reconciled_actor = normalize_mana_passives(repair_mira_loadout(reconcile_boardgame_feature_removals(
                     combat_actor
                 )))
+                reconciled_actor = normalize_rune_features(reconciled_actor)
                 if reconciled_actor != combat_actor:
                     snapshot_combat_state = replace_actor(
                         snapshot_combat_state,
@@ -6938,7 +6964,9 @@ class ExplorationUiSession:
         self._sync_board_leds()
         return self.state_payload()
 
-    def _combat_has_pending_resolution(self, *, ignore_class_target: bool = False) -> bool:
+    def _combat_has_pending_resolution(
+        self, *, ignore_class_target: bool = False, ignore_enemy_confirmation: bool = False,
+    ) -> bool:
         if self.shared_mana_declaration is not None:
             return True
         if self.combat_state is not None and self.combat_state.shared_mana is not None:
@@ -6954,9 +6982,9 @@ class ExplorationUiSession:
             pending is not None
             for pending in (
                 self.pending_physical_feature_action_id,
-                self.pending_enemy_turn_intent,
+                None if ignore_enemy_confirmation else self.pending_enemy_turn_intent,
                 self.pending_enemy_turn_result,
-                self.pending_enemy_turn_ack_result,
+                None if ignore_enemy_confirmation else self.pending_enemy_turn_ack_result,
                 self.pending_enemy_saving_throw,
                 self.pending_player_attack,
                 self.pending_player_healing,
@@ -7294,12 +7322,24 @@ class ExplorationUiSession:
             flow.encounter.actors,
         )
         from dnd_board_game.application.party_ethos import read as read_party_ethos
+        from .mission_zero import enabled as mission_enabled
+        from dnd_board_game.character_creation.runes import apply_rune_profile
+        from dnd_board_game.rules.runes import RESOURCE_RUNES
+        if mission_enabled(self):
+            flow.encounter = replace(flow.encounter, actors=tuple(
+                apply_rune_profile(actor) if actor.faction == Faction.ALLY else actor
+                for actor in flow.encounter.actors))
+        rune_heroes = tuple(actor for actor in flow.encounter.actors
+            if actor.faction == Faction.ALLY and any(f.feature_id == "rune_resource_v01" for f in actor.features))
+        rune_deck = [rune for _ in rune_heroes for rune in RESOURCE_RUNES]
+        self.encounter_rng.shuffle(rune_deck)
         self.combat_state = start_combat(
             flow.encounter.actors,
             order,
             hidden_states,
             self.state.condition_states,
             mana_excluded=read_party_ethos(self.state.flags).excluded,
+            rune_deck=tuple(rune_deck) if rune_heroes else None,
         )
         if self.exploration.scenario_id == ARENA_ID and TrainingConfig.from_flags(self.state.flags).mode in {"support", "tutorial"}:
             self.combat_state = replace(self.combat_state, condition_states=(
@@ -7823,6 +7863,7 @@ class ExplorationUiSession:
             from dnd_board_game.combat.shared_mana_sources import boost_attack, additional_weapon_sources
             sources = additional_weapon_sources(actor, sources, self.active_combat_effects, self.combat_state.shared_mana if self.combat_state else None)
             sources = tuple(boost_attack(s, self.combat_state.shared_mana if self.combat_state else None) for s in sources)
+        sources = lorian_attack_sources(actor, sources, self.active_combat_effects)
         familiar = next(
             (
                 effect
@@ -9098,6 +9139,9 @@ class ExplorationUiSession:
                 "Rzuć k8 i wpisz wartość obniżenia KP po trafieniu."
             ),
         }
+        if action_id == "second_wind":
+            from dnd_board_game.combat.rune_dice import second_wind_dice, dice_label
+            instructions[action_id] = f"Rzuć {dice_label(second_wind_dice(self.combat_state))} i potwierdź wyniki leczenia."
         self.board_message = f"{player_label(action_id)}: {instructions[action_id]}"
         self._record(
             "ui_physical_feature_prompt_opened",
@@ -9321,22 +9365,23 @@ class ExplorationUiSession:
             for feature in actor.features
             for feature_action_id in feature.action_ids
         }
-        if action_id == "cunning_action":
-            if not actor_has_feature(actor, "cunning_action"):
-                raise ValueError("Aktywna postać nie posiada Zwiadowczej mobilności.")
-            if mode == "dash":
-                return self.use_combat_dash()
-            if mode == "disengage":
-                return self.use_combat_disengage()
-            raise ValueError("Zwiadowcza mobilność wymaga wyboru: Sprint albo Odwrót.")
         if action_id not in available:
             raise ValueError("Aktywna postać nie posiada tej akcji klasowej.")
+        if action_id == "hide":
+            if self.combat_state.shared_mana and self.combat_state.shared_mana.runes and any(
+                h.actor_id == str(actor.id) and h.hidden_from_actor_ids for h in self.combat_state.hidden_states
+            ):
+                return self.end_combat_hide()
+            return self.start_combat_hide()
         if action_id == "rage":
             blocked = rage_activation_block_reason(actor, self.active_combat_effects)
             if blocked:
                 raise ValueError(blocked)
         from .shared_mana import gate_payment
-        target_before_payment = self.combat_state.shared_mana is not None and (
+        rune_scope = bool(action_id == "optical_scope" and self.combat_state.shared_mana and self.combat_state.shared_mana.runes)
+        if rune_scope and not any(is_lorian_hand_crossbow_source(source) for source in self._attack_sources_for_actor(actor)):
+            raise ValueError("Luneta wymaga wyposażonej kuszy ręcznej.")
+        target_before_payment = not rune_scope and self.combat_state.shared_mana is not None and (
             action_id in MIRA_ATTACK_ACTION_IDS or action_id in ERYND_ARROW_ACTION_IDS
             or action_id in LORIAN_SHOT_ACTION_IDS or action_id == "powerful_strike")
         if not target_before_payment and gate_payment(self, action_id, "use_combat_class_feature", {
@@ -9347,6 +9392,14 @@ class ExplorationUiSession:
         }):
             self._sync_board_leds()
             return self.state_payload()
+        if action_id == "cunning_action":
+            if not actor_has_feature(actor, "cunning_action"):
+                raise ValueError("Aktywna postać nie posiada Zwiadowczej mobilności.")
+            if mode == "dash":
+                return self.use_combat_dash()
+            if mode == "disengage":
+                return self.use_combat_disengage()
+            raise ValueError("Zwiadowcza mobilność wymaga wyboru: Sprint albo Odwrót.")
         if action_id == "caring_gesture" and natural_roll is None:
             from .shared_mana import ManaDeclaration
             self.shared_mana_declaration = ManaDeclaration(action_id, str(actor.id), "use_combat_class_feature",
@@ -9369,6 +9422,11 @@ class ExplorationUiSession:
             self.combat_state, self.active_combat_effects = resolve_simple_action(self.combat_state, self.active_combat_effects, action_id, target_id=target_id, roll=natural_roll)
             title = mana_ability(str(actor.id), action_id).name
             body = mana_ability(str(actor.id), action_id).description
+            if self.combat_state.shared_mana.runes is not None:
+                from dnd_board_game.scenarios.rune_catalog import rune_card
+                card = rune_card(str(actor.id), action_id)
+                if card is not None:
+                    title, body = card.name, card.description
         elif uses_physical_mana(actor) and action_id.startswith("mana_"):
             self.combat_state, self.active_combat_effects, body = resolve_mana_support(
                 self.combat_state, self.active_combat_effects, action_id, target_id)
@@ -9444,14 +9502,19 @@ class ExplorationUiSession:
             )
             self.combat_state = result.state
             self.active_combat_effects = result.active_effects
+            from dnd_board_game.combat.runes import uses_runes
+            rune_smoke = uses_runes(actor)
             self.board_message = (
+                "Dym zajmuje 3×3 pola wokół miejsca rzucenia do końca następnej tury Miry. "
+                "Każda postać w dymie może wykonać osobną akcję Ukrycia z przewagą."
+                if rune_smoke else
                 f"Zasłona dymna: wybierz legalne pole w {self.combat_state.shared_mana.smoke_movement if self.combat_state.shared_mana else 15} ft. "
                 "Po zatwierdzeniu ruchu system poprosi o nowy test Ukrycia."
             )
             self._add_message("Zasłona dymna", self.board_message)
             self._record(
                 "ui_combat_smoke_screen_started",
-                {"actor_id": str(actor.id), "movement_limit_feet": self.combat_state.shared_mana.smoke_movement if self.combat_state.shared_mana else 15},
+                {"actor_id": str(actor.id), **({"area_size": [3, 3], "center": [actor.position.col, actor.position.row]} if rune_smoke else {"movement_limit_feet": self.combat_state.shared_mana.smoke_movement if self.combat_state.shared_mana else 15})},
             )
             self._sync_board_leds()
             return self.state_payload()
@@ -9472,6 +9535,12 @@ class ExplorationUiSession:
             )
         elif action_id in ERYND_ARROW_ACTION_IDS:
             return self._prepare_erynd_arrow_attack(action_id, natural_roll)
+        elif rune_scope and not dict(self.combat_state.shared_mana.pending_boosts).get("shot", 0):
+            from dnd_board_game.combat.lorian_features import prepare_rune_optical_scope
+            result = prepare_rune_optical_scope(self.combat_state, self.active_combat_effects)
+            self.combat_state, self.active_combat_effects = result.state, result.active_effects
+            title = "Luneta optyczna"
+            body = "Przygotowano następny zwykły strzał z kuszy: +2 do trafienia, pomija częściową osłonę. Wybierz Atak bronią; przygotowanie wygasa na końcu tej tury."
         elif action_id in LORIAN_SHOT_ACTION_IDS:
             return self._prepare_lorian_crossbow_attack(action_id)
         elif action_id == "rage":
@@ -9671,9 +9740,14 @@ class ExplorationUiSession:
                 self.combat_state,
                 action_id=action_id,
                 saving_rolls=dict(saving_rolls),
+                saving_rolls_2={target_id: self.encounter_rng.randint(1, 20)
+                    for target_id, _ in saving_rolls
+                    if has_wisdom_save_penalty(target_id, "wisdom", self.active_combat_effects)},
+                active_effects=self.active_combat_effects,
                 board=encounter.board if encounter is not None else None,
             )
             self.combat_state = result.state
+            self.active_combat_effects = result.active_effects
             body = (
                 f"{actor.name} używa "
                 f"{'Turn Undead' if action_id == 'turn_undead' else 'Turn the Unholy'}. "
@@ -9849,7 +9923,8 @@ class ExplorationUiSession:
             self.active_combat_effects,
         )
         if source is None:
-            required = "nóż do rzucania" if action_id == "blade_mistress" else "rapier"
+            rune_mode = bool(self.combat_state.shared_mana and self.combat_state.shared_mana.runes)
+            required = "broń" if action_id == "blade_mistress" and rune_mode else "nóż do rzucania" if action_id == "blade_mistress" else "rapier"
             raise ValueError(f"Mira musi mieć wyposażony {required}.")
         self.select_combat_attack_source(action_id)
         self.board_message = (
@@ -10523,6 +10598,8 @@ class ExplorationUiSession:
         nimra_action = self.pending_nimra_modified_combat_action
         self.combat_selected_pending_position = None
         self.combat_state = transition.state
+        if transition.active_effects is not None:
+            self.active_combat_effects = transition.active_effects
         if transition.concentration_effect is not None:
             source_actor_id = transition.concentration_effect.source_actor_id
             expiration = expire_active_effects(
@@ -10707,6 +10784,8 @@ class ExplorationUiSession:
     ) -> dict[str, object]:
         self.combat_selected_pending_position = None
         self.combat_state = transition.state
+        if transition.active_effects is not None:
+            self.active_combat_effects = transition.active_effects
         self.pending_magic_movement = transition.pending
         self.selected_combat_movement_path = None
         self.board_message = transition.message_body
@@ -10884,7 +10963,7 @@ class ExplorationUiSession:
             raise ValueError("Ten przedmiot nie ma obecnie legalnego celu.")
         self._clear_player_pending_choices()
         self.combat_targeting_item_action_id = action_id
-        self.combat_selected_item_target_id = None
+        self.combat_selected_item_target_id = str(targets[0].id) if len(targets) == 1 else None
         action = _combat_action_by_id(
             self._active_encounter(),
             combat_current_actor(self.combat_state),
@@ -12021,6 +12100,8 @@ class ExplorationUiSession:
         transition: PlayerAreaSpellTransition,
     ) -> dict[str, object]:
         self.combat_state = transition.state
+        if transition.active_effects is not None:
+            self.active_combat_effects = transition.active_effects
         self.pending_area_spell = transition.pending
         if self.combat_state.shared_mana:
             from .shared_movement import apply_extra_movement
@@ -12619,6 +12700,8 @@ class ExplorationUiSession:
         self.combat_state = transition.state
         self.active_combat_effects = transition.active_effects
         self.pending_player_attack = transition.pending
+        from .runes import apply_attack_push
+        apply_attack_push(self, transition)
         if transition.event_type in {
             "ui_combat_player_save_spell_confirmed",
             "ui_combat_player_save_spell_resolved",
@@ -13415,7 +13498,7 @@ class ExplorationUiSession:
                 )
             )
         self._apply_combat_trigger_events(tuple(movement_events))
-        if any(
+        if not (self.combat_state.shared_mana and self.combat_state.shared_mana.runes) and any(
             effect.actor_id == submission.actor_id
             and effect.kind == "smoke_screen_hide_pending"
             for effect in self.active_combat_effects
@@ -14861,7 +14944,7 @@ class ExplorationUiSession:
                             CombatMenuAction.ESCAPE_NET,
                         )
                     )
-                hiding = hide_eligibility(encounter.board, actor, self.combat_state.actors, encounter.scene_objects)
+                hiding = hide_eligibility(encounter.board, actor, self.combat_state.actors, encounter.scene_objects, self.active_combat_effects)
                 if actor_has_feature(actor, "mira_shadow_stealth") and hiding.allowed and not any(h.actor_id == str(actor.id) for h in self.combat_state.hidden_states):
                     options.append(
                         CombatMenuOption("basic:hide", "Ukryj się", "Akcja Miry: test Skradania przeciw osobnej Percepcji każdego przeciwnika.", CombatMenuCategory.BASIC, CombatMenuAction.HIDE)
@@ -15754,7 +15837,35 @@ class ExplorationUiSession:
                         ),
                     )
             enriched_options.append(option)
-        if uses_physical_mana(actor):
+        from dnd_board_game.scenarios.rune_catalog import rune_cards, rune_card
+        rune_mode = bool(self.combat_state.shared_mana and self.combat_state.shared_mana.runes)
+        if rune_mode:
+            hidden = any(h.actor_id == str(actor.id) and h.hidden_from_actor_ids
+                         for h in self.combat_state.hidden_states)
+            if rune_card(str(actor.id), "hide") is not None:
+                enriched_options = [option for option in enriched_options
+                                    if option.action != CombatMenuAction.HIDE
+                                    and not (hidden and option.action_id == "hide")]
+            existing = {o.action_id or o.source_id for o in enriched_options}
+            for card in rune_cards(str(actor.id)):
+                if card.id == "hide" and hidden:
+                    continue
+                if card.budget != "R" and card.id not in existing:
+                    enriched_options.append(CombatMenuOption(
+                        id=f"class-feature:{card.id}", label=card.name, description=card.description,
+                        category=CombatMenuCategory.SUPPORT, action=CombatMenuAction.CLASS_FEATURE,
+                        action_id=card.id, provider="class_feature", group_label="Zdolności specjalne"))
+            enriched_options = [option for option in enriched_options
+                if ((card := rune_card(str(actor.id), option.action_id or option.source_id or ""))
+                    and card.budget != "R")
+                or (card is None and not mana_ability(str(actor.id), option.action_id or option.source_id or ""))]
+            enriched_options = [replace(option, label=card.name,
+                description=f"{self._physical_card_resource_note(actor, card.id)} {card.description}")
+                if (card := rune_card(str(actor.id), option.action_id or option.source_id or "")) else option
+                for option in enriched_options if option.action not in {
+                    CombatMenuAction.OPEN_WEAPON_MENU, CombatMenuAction.CHANGE_WEAPON,
+                    CombatMenuAction.EQUIP_AND_ATTACK}]
+        elif uses_physical_mana(actor):
             existing = {o.action_id for o in enriched_options}
             for ability in hero_abilities(str(actor.id)):
                 if (ability.id.startswith("mana_") and ability.timing != "R") or ability.id in {"action_surge", "shield_bash", "defensive_stance", "garran_shield_wall", "iron_bastion", "victory_hymn", "feint", "caring_gesture", "counterattack_command"}:
@@ -15878,6 +15989,17 @@ class ExplorationUiSession:
         remaining = movement_remaining(self.combat_state, actor, self.active_combat_effects)
         result = []
         for option in options:
+            if self.combat_state.shared_mana and self.combat_state.shared_mana.runes:
+                from dnd_board_game.scenarios.rune_catalog import rune_card
+                from dnd_board_game.combat.runes import require_budget
+                card = rune_card(str(actor.id), option.action_id or option.source_id or "")
+                if card:
+                    try:
+                        require_budget(self.combat_state, actor, card)
+                    except ValueError:
+                        continue
+                    result.append(option)
+                    continue
             continuation = False
             source = sources.get(option.source_id)
             if (source is not None and option.action == CombatMenuAction.SELECT_ATTACK_SOURCE
@@ -15918,6 +16040,9 @@ class ExplorationUiSession:
             payload = option.as_payload()
             payload.update(groups[option.id])
             payload.update(menu_mana_payload(option, self.combat_state, self.active_combat_effects))
+            if self.combat_state.shared_mana and self.combat_state.shared_mana.runes:
+                from .runes import option_metadata
+                payload.update(option_metadata(self, payload))
             payload["shortcut"] = shortcut_for_option(
                 actor_id,
                 option,
@@ -16060,6 +16185,11 @@ class ExplorationUiSession:
         encounter = self._active_encounter()
         actor = combat_current_actor(self.combat_state)
         mana = self.combat_state.shared_mana
+        if mana is not None and mana.runes is not None:
+            from .runes import option_unavailable
+            reason = option_unavailable(self, option.as_payload())
+            if reason:
+                return reason
         if mana is not None and mana.pooled is not None:
             from dnd_board_game.scenarios.pooled_mana_catalog import load_catalog, pool_ability, hero_profile
             key = option.action_id or option.source_id or ""
@@ -16215,6 +16345,12 @@ class ExplorationUiSession:
         if self.combat_state and self.combat_state.shared_mana and self.combat_state.shared_mana.command_step:
             raise ValueError('Kontratak prowadzi ruch i atak automatycznie. Użyj podświetlonych pól i ✓.')
         self.selected_combat_aura_preview_id = None
+        if self.combat_state is not None:
+            actor_id = str(combat_current_actor(self.combat_state).id)
+            if self.combat_turn_menu_actor_id != actor_id:
+                self.combat_turn_menu_actor_id = actor_id
+                self.combat_turn_menu_index = 0
+                self.combat_turn_preview_option_id = None
         options = self._combat_turn_action_options()
         if not options or self._combat_has_pending_resolution():
             raise ValueError("Lista działań nie jest teraz dostępna.")
@@ -16284,6 +16420,9 @@ class ExplorationUiSession:
                 self._sync_board_leds()
                 return self.state_payload()
             if option.action in navigation_actions:
+                return self._execute_combat_context_option(option)
+            if (self.combat_state.shared_mana and self.combat_state.shared_mana.runes
+                    and option.action == CombatMenuAction.CLASS_FEATURE):
                 return self._execute_combat_context_option(option)
             if (
                 option.action == CombatMenuAction.CLASS_FEATURE
@@ -16486,6 +16625,8 @@ class ExplorationUiSession:
             options = self._combat_item_menu_options(actor)
             if not options:
                 raise ValueError("Bohater nie ma obecnie przedmiotu możliwego do użycia.")
+            if len(options) == 1 and options[0].action == CombatMenuAction.SELECT_ITEM_ACTION:
+                return self._start_combat_item_targeting(options[0].action_id)
             return self._open_combat_context_menu(actor, actor.position, options)
         if option.action == CombatMenuAction.CHANGE_WEAPON and option.item_id:
             return self._change_combat_weapon(option.item_id)
@@ -17309,9 +17450,12 @@ class ExplorationUiSession:
                 ability=save_ability,
                 dc=(caster.spell_save_dc if caster is not None else 10),
                 natural_roll=self.encounter_rng.randint(1, 20),
+                natural_roll_2=self.encounter_rng.randint(1, 20) if has_wisdom_save_penalty(str(actor.id), save_ability, self.active_combat_effects) else None,
+                active_effects=self.active_combat_effects,
                 condition_states=self.combat_state.condition_states,
                 combat_actors=self.combat_state.actors,
             )
+            self.active_combat_effects = consume_saving_effects(self.active_combat_effects, save)
             if save.success:
                 amount = amount // 2 if save_mode == "half" else 0
             applied = apply_damage_result(
@@ -17574,9 +17718,12 @@ class ExplorationUiSession:
                     ability=save_ability,
                     dc=(caster.spell_save_dc if caster is not None else 10),
                     natural_roll=self.encounter_rng.randint(1, 20),
+                natural_roll_2=self.encounter_rng.randint(1, 20) if has_wisdom_save_penalty(str(actor.id), save_ability, self.active_combat_effects) else None,
+                active_effects=self.active_combat_effects,
                     condition_states=self.combat_state.condition_states,
                     combat_actors=self.combat_state.actors,
                 )
+                self.active_combat_effects = consume_saving_effects(self.active_combat_effects, save)
                 save_payload = save.as_payload()
                 if save.success:
                     rolled_damage = (
@@ -19165,9 +19312,12 @@ class ExplorationUiSession:
             ability=action.save_ability or "dexterity",
             dc=reactor.spell_save_dc,
             natural_roll=self.encounter_rng.randint(1, 20),
+                natural_roll_2=self.encounter_rng.randint(1, 20) if has_wisdom_save_penalty(str(enemy.id), action.save_ability or "dexterity", self.active_combat_effects) else None,
+                active_effects=self.active_combat_effects,
             condition_states=updated_state.condition_states,
             combat_actors=updated_state.actors,
         )
+        self.active_combat_effects = consume_saving_effects(self.active_combat_effects, save)
         dice_count = int(action.ongoing_damage_dice_count) + max(
             0,
             cast_level - action.spell_level,
@@ -19652,6 +19802,7 @@ class ExplorationUiSession:
             additional_modifiers=additional_modifiers,
             active_effects=self.active_combat_effects,
         )
+        self.active_combat_effects = consume_saving_effects(self.active_combat_effects, transition.saving_throw)
         self.combat_state = transition.result.state
         self.pending_enemy_turn_ack_result = transition.result
         self.pending_enemy_saving_throw = None
@@ -20336,34 +20487,9 @@ class ExplorationUiSession:
         saves = pending_condition_saves(condition_states, str(actor.id), timing)
         for condition_state in saves:
             assert condition_state.save_ability is not None
-            request = condition_roll_request(
-                D20RollRequest(
-                    modifiers=saving_throw_roll_modifiers(
-                        actor,
-                        condition_state.save_ability,
-                    )
-                ),
-                condition_states,
-                actor,
-                saving_throw_ability=condition_state.save_ability,
-            )
-            request = replace(
-                request,
-                mode=poison_protection_roll_mode(
-                    actor,
-                    self.active_combat_effects,
-                    (
-                        "poison"
-                        if condition_state.condition == CombatCondition.POISONED
-                        else condition_state.condition.value,
-                    ),
-                    request.mode,
-                ),
-            )
-            request = apply_exhaustion_to_roll_request(
-                actor,
-                request,
-                ExhaustionRollKind.SAVING_THROW,
+            request = condition_save_roll_request(
+                condition_states, actor, condition_state, combat_actors=state.actors,
+                active_effects=self.active_combat_effects,
             )
             natural_roll = self.encounter_rng.randint(1, 20)
             natural_roll_2 = (
@@ -20380,6 +20506,7 @@ class ExplorationUiSession:
                 combat_actors=state.actors,
                 active_effects=self.active_combat_effects,
             )
+            self.active_combat_effects = consume_saving_effects(self.active_combat_effects, resolution.saving_throw)
             condition_states = resolution.condition_states
             if (
                 resolution.removed
@@ -20609,6 +20736,7 @@ class ExplorationUiSession:
             additional_modifiers=additional_modifiers,
             active_effects=self.active_combat_effects,
         )
+        self.active_combat_effects = consume_saving_effects(self.active_combat_effects, resolution.saving_throw)
         self.combat_state = replace(
             self.combat_state,
             condition_states=resolution.condition_states,
@@ -21740,7 +21868,7 @@ class ExplorationUiSession:
         """Register browser-owned dice/confirmation controls, never resolve rules here."""
         if not self._board_panel_enabled():
             raise ValueError("Panel akcji jest dostępny podczas próby na arenie.")
-        if not context or len(context) > 120 or any(type(slot) is not int or slot not in (26, 27, 28, 29) for slot in slots):
+        if not context or len(context) > 120 or any(type(slot) is not int or slot not in (24, 26, 27, 28, 29) for slot in slots):
             raise ValueError("Nieprawidłowy kontekst przycisków panelu.")
         if expected_revision and expected_revision != self._board_selection_payload()["revision"]:
             return {"board_selection": self._board_selection_payload()}
@@ -21795,6 +21923,8 @@ class ExplorationUiSession:
         basic_source_id = self._panel_basic_attack_source_id(actor)
         actions: dict[int, str] = {}
         for option in options:
+            if self._combat_turn_option_unavailable_reason(option):
+                continue
             payload = option_panel_payload(str(actor.id), option, basic_attack=(
                 option.action == CombatMenuAction.SELECT_ATTACK_SOURCE
                 and option.source_id == basic_source_id
@@ -21841,6 +21971,12 @@ class ExplorationUiSession:
         from .aura_preview import context_feedback
         aura = context_feedback(self)
         target = replace(target, feedback=LedFeedback((*aura.frames, *target.feedback.frames)))
+        from .reaction_choices import scan_target as reaction_choice_target
+        if (reaction_selection := reaction_choice_target(self)) is not None:
+            return reaction_selection
+        from .runes import scan_target as rune_target
+        if (rune_selection := rune_target(self)) is not None:
+            return rune_selection
         from .pooled_mana import scan_target as pool_target
         if (pool_selection := pool_target(self)) is not None:
             return pool_selection
@@ -21859,8 +21995,8 @@ class ExplorationUiSession:
                       "B": (255, 255, 255), "F": (150, 150, 150), "*": (190, 190, 190)}
             feedback = panel_feedback(tuple(choice["slot"] for choice in choices),
                 control_slots=controls, base=target.feedback,
-                action_colors={choice["slot"]: colors[choice["color"]] for choice in choices})
-            selected = tuple(LedFrame((panel_position(choice["slot"]),), colors[choice["color"]], LedRole.MARKER)
+                action_colors={choice["slot"]: colors.get(choice["color"], (220, 175, 70)) for choice in choices})
+            selected = tuple(LedFrame((panel_position(choice["slot"]),), colors.get(choice["color"], (220, 175, 70)), LedRole.MARKER)
                              for choice in choices if choice["selected"])
             return BoardScanTarget(
                 positions=tuple(panel_position(slot) for slot in (*[choice["slot"] for choice in choices], *controls)),
@@ -21879,7 +22015,14 @@ class ExplorationUiSession:
         selected = next((slot for slot, option_id in actions.items()
                          if option_id == self._board_panel_selected_option_id()), None)
         preview = self.combat_turn_preview_option_id is not None or self._board_panel_feature_preview_active()
-        controls = context[1] if context else ((28, 29) if preview else (29,) if self.pending_nimra_metamagic_id else ())
+        from .combat_board_controls import preview_confirmation, information_available
+        can_confirm = preview_confirmation(self)
+        controls = context[1] if context else ((26, 27, 28, 29) if preview else (26, 27, 29) if self.combat_state else ())
+        if not exclusive and can_confirm is not None:
+            controls = tuple(slot for slot in controls if slot != 28)
+            controls = (*controls, *((28,) if can_confirm else ()), 29)
+        controls = tuple(sorted(set(slot for slot in controls if slot >= 26)))
+        info_slots = (24,) if information_available(self) and (not exclusive or context[0].startswith("combat-inspect:")) else ()
         positions = tuple(p for p in target.positions if p.col != 19) if not exclusive else ()
         economies = self._turn_option_economy(options) if actions else {}
         action_colors = {
@@ -21887,12 +22030,18 @@ class ExplorationUiSession:
             for slot, option_id in actions.items()
         }
         from .mission_zero import enabled as mission_enabled, read as mission_read, available_potions, potion_targets
-        mission_slots = (24,) if mission_enabled(self) and mission_read(self)["stage"] == "battle" and not exclusive and available_potions(self) and potion_targets(self) else ()
-        feedback = panel_feedback((*actions, *mission_slots), selected_slot=selected,
+        if (not exclusive and mission_enabled(self) and mission_read(self)["stage"] == "battle"
+                and available_potions(self) and potion_targets(self)):
+            actions[2] = "mission:potion"
+            action_colors[2] = LedColor.PANEL_ACTION
+        if self.combat_state and self.combat_state.shared_mana and self.combat_state.shared_mana.runes:
+            action_colors.update({slot: LedColor.PANEL_RUNE for slot in actions if 5 <= slot < 24})
+        action_colors.update({slot: LedColor.PANEL_INFO for slot in info_slots})
+        feedback = panel_feedback((*actions, *info_slots), selected_slot=selected,
                                   control_slots=controls, base=target.feedback,
                                   action_colors=action_colors)
         return BoardScanTarget(
-            positions=(*positions, *(panel_position(slot) for slot in (*actions, *mission_slots, *controls))),
+            positions=(*positions, *(panel_position(slot) for slot in (*actions, *info_slots, *controls))),
             feedback=feedback, empty_message=target.empty_message,
         )
 
@@ -23142,9 +23291,6 @@ class ExplorationUiSession:
         from .mission_zero import active_panel as mission_panel, select_position as mission_select
         if mission_panel(self):
             return mission_select(self, selected)
-        from .mission_zero import enabled as mission_enabled, read as mission_read, command as mission_command, available_potions, potion_targets
-        if mission_enabled(self) and mission_read(self)["stage"] == "battle" and selected == panel_position(24) and available_potions(self) and potion_targets(self):
-            return mission_command(self, {"action": "potion", "revision": mission_read(self)["revision"]})
         from .exploration_mana import active as mana_exploration_active, select_position as select_mana_exploration
         if mana_exploration_active(self):
             return select_mana_exploration(self, selected)
@@ -23177,11 +23323,17 @@ class ExplorationUiSession:
             self._sync_board_leds()
             return self.state_payload()
         if self.encounter_initiative_flow is not None and self.encounter_initiative_flow.roll_panel is not None:
-            commands = {panel_position(26): "minus", panel_position(27): "plus",
+            commands = {panel_position(26): "plus", panel_position(27): "minus",
                         panel_position(28): "accept", panel_position(29): "back"}
             if selected not in commands:
                 raise ValueError("Wybierz podświetlony przycisk panelu inicjatywy.")
             return self.update_initiative_panel(commands[selected])
+        from .reaction_choices import select_position as select_reaction_choice
+        if (reaction_selection := select_reaction_choice(self, selected)) is not None:
+            return reaction_selection
+        from .runes import scan_target as rune_target, select_position as select_rune_position
+        if rune_target(self) is not None:
+            return select_rune_position(self, selected)
         from .pooled_mana import scan_target as pool_target, select_position as select_pool_position
         if pool_target(self) is not None:
             return select_pool_position(self, selected)
@@ -23201,6 +23353,14 @@ class ExplorationUiSession:
                 from .shared_mana import command as mana_command
                 return mana_command(self, {"command": "pay" if slot == 28 else "cancel" if slot == 29 else "boost_option",
                                            "slot": slot, "revision": self.combat_state.shared_mana.revision})
+            if slot == 2 and not (self.board_panel_context and self.board_panel_context[2]):
+                from .mission_zero import enabled as mission_enabled, read as mission_read, command as mission_command, available_potions, potion_targets
+                if (mission_enabled(self) and mission_read(self)["stage"] == "battle"
+                        and available_potions(self) and potion_targets(self)):
+                    self.combat_turn_preview_option_id = None
+                    self.selected_combat_movement_path = None
+                    self.combat_targeting_attack_source_id = None
+                    return mission_command(self, {"action": "potion", "revision": mission_read(self)["revision"]})
             action_id = self._board_panel_actions().get(slot)
             if action_id and not (self.board_panel_context and self.board_panel_context[2]):
                 if action_id == self._board_panel_selected_option_id():
@@ -23216,7 +23376,7 @@ class ExplorationUiSession:
                     self.cancel_combat_class_feature_targeting()
                 self.board_selection_revision += 1
                 return self.confirm_combat_turn_action(action_id)
-            if slot not in (26, 27, 28, 29):
+            if slot not in (24, 26, 27, 28, 29):
                 raise ValueError("Nieznana komenda panelu.")
             context = self.board_panel_context[0] if self.board_panel_context else None
             self.board_selection_revision += 1
@@ -23720,19 +23880,24 @@ class ExplorationUiSession:
                         if action_id == "shield_bash":
                             return start_shield_bash(self, str(target.id))
                         if action_id == "garran_command_halt":
-                            result = resolve_garran_command_halt(
-                                self.combat_state,
-                                self.active_combat_effects,
-                                target_id=str(target.id),
-                                natural_roll=self.encounter_rng.randint(1, 20),
-                            )
-                            self.combat_state = result.state
-                            self.active_combat_effects = result.active_effects
+                            mana = self.combat_state.shared_mana
+                            targets = mana.attack_targets if mana and mana.runes and mana.attack_targets else (str(target.id),)
+                            halt_results = []
+                            for halt_id in targets:
+                                result = resolve_garran_command_halt(
+                                    self.combat_state,
+                                    self.active_combat_effects,
+                                    target_id=halt_id,
+                                    natural_roll=self.encounter_rng.randint(1, 20),
+                                    natural_roll_2=self.encounter_rng.randint(1, 20) if has_wisdom_save_penalty(halt_id, "wisdom", self.active_combat_effects) else None,
+                                )
+                                self.combat_state = result.state
+                                self.active_combat_effects = result.active_effects
+                                halt_results.append(f"{result.target.name}: {result.outcome}, obrona {result.saving_throw.total}")
                             self.combat_targeting_class_feature_action_id = None
                             self.combat_selected_class_feature_target_id = None
                             self.board_message = (
-                                f"Rozkaz: Stać — {target.name}: {result.outcome}; "
-                                f"rzut obronny {result.saving_throw.total}."
+                                "Rozkaz: Stać — " + "; ".join(halt_results) + "."
                             )
                             self._add_message("Rozkaz: Stać", self.board_message)
                             self._sync_board_leds()
@@ -29787,7 +29952,10 @@ def _physical_feature_prompt_payload(
                                     and not a.is_unconscious() and grid_distance_feet(actor.position, a.position) <= 30]})
         return payload
     if action_id == "second_wind":
-        payload.update({"input_kind": "die", "die_sides": 10})
+        from dnd_board_game.combat.rune_dice import second_wind_dice, dice_label
+        dice = second_wind_dice(state)
+        payload.update({"input_kind": "die", "die_sides": 10,
+                        "dice": list(dice), "dice_label": dice_label(dice)})
     elif action_id == "anchoring_arrow":
         payload.update({"input_kind": "die", "die_sides": 4})
     elif action_id == "exposing_arrow":
@@ -30141,7 +30309,7 @@ def _combat_payload(
             stabilization_targets = legal_stabilization_targets(state, actor)
     healers_kit = next((item for item in actor.inventory if item.id == "healers_kit" and item.available), None)
     hiding = (
-        hide_eligibility(encounter.board, actor, state.actors, encounter.scene_objects)
+        hide_eligibility(encounter.board, actor, state.actors, encounter.scene_objects, active_combat_effects)
         if encounter is not None and actor.faction == Faction.ALLY and not actor.is_defeated()
         else None
     )
@@ -31018,6 +31186,8 @@ def _combat_actor_payload(
         "uses_charge": uses_charge(actor),
         "charge_roll_bonus": max((e.value for e in active_combat_effects if e.actor_id == str(actor.id) and e.kind == "charge_accuracy"), default=0),
         "level": actor.level,
+        "ability_scores": {key: getattr(actor.ability_scores, key) for key in (
+            "strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma")},
         "experience_points": actor.experience_points,
         "proficiencies": {
             "saving_throws": list(actor.proficiencies.saving_throws),
@@ -31141,35 +31311,9 @@ def _condition_save_payload(
     active_combat_effects: tuple[ActiveCombatEffect, ...] = (),
 ) -> dict[str, object]:
     ability = condition_state.save_ability or ""
-    request = condition_roll_request(
-        D20RollRequest(
-            modifiers=(
-                *saving_throw_roll_modifiers(actor, ability),
-                *charge_saving_modifiers(actor, ability, active_combat_effects),
-                *saving_throw_aura_modifiers(state.actors, actor),
-            )
-        ),
-        state.condition_states,
-        actor,
-        saving_throw_ability=ability,
-    )
-    request = replace(
-        request,
-        mode=poison_protection_roll_mode(
-            actor,
-            active_combat_effects,
-            (
-                "poison"
-                if condition_state.condition == CombatCondition.POISONED
-                else condition_state.condition.value,
-            ),
-            request.mode,
-        ),
-    )
-    request = apply_exhaustion_to_roll_request(
-        actor,
-        request,
-        ExhaustionRollKind.SAVING_THROW,
+    request = condition_save_roll_request(
+        state.condition_states, actor, condition_state, combat_actors=state.actors,
+        active_effects=active_combat_effects,
     )
     inspiration = next(
         (
@@ -32649,6 +32793,7 @@ def _pending_player_attack_payload(
             if base is not None:
                 sources = (*sources, powerful_strike_source(attacker, base))
         sources = tuple(adapt_attack(attacker, s) for s in sources)
+    sources = lorian_attack_sources(attacker, sources, active_combat_effects)
     source = next((candidate for candidate in sources if candidate.id == pending.source_id), None) or (
         sources[0] if sources else None
     )
@@ -33791,37 +33936,10 @@ def _pending_enemy_saving_throw_payload(
     )
     if target is None:
         return None
-    roll_request = condition_roll_request(
-        D20RollRequest(
-            modifiers=(
-                *saving_throw_roll_modifiers(target, pending.request.ability),
-                *charge_saving_modifiers(target, pending.request.ability, active_combat_effects),
-                *saving_throw_aura_modifiers(state.actors, target),
-            )
-        ),
-        state.condition_states,
-        target,
-        saving_throw_ability=pending.request.ability,
+    roll_request = saving_throw_roll_request(
+        target, pending.request, condition_states=state.condition_states,
+        combat_actors=state.actors, active_effects=active_combat_effects,
     )
-    if state.shared_mana is None and any(
-        effect.actor_id == str(target.id)
-        and effect.kind == "garran_rally_advantage"
-        for effect in active_combat_effects
-    ):
-        roll_request = replace(
-            roll_request,
-            mode=(
-                RollMode.NORMAL
-                if roll_request.mode == RollMode.DISADVANTAGE
-                else RollMode.ADVANTAGE
-                if roll_request.mode == RollMode.NORMAL
-                else roll_request.mode
-            ),
-        )
-    if state.shared_mana is not None and str(target.id) == "mira" and any(
-        effect.actor_id == "mira" and effect.kind == "shared_hidden" for effect in active_combat_effects
-    ):
-        roll_request = replace(roll_request, mode=RollMode.NORMAL if roll_request.mode == RollMode.ADVANTAGE else RollMode.DISADVANTAGE)
     modifiers = roll_request.modifiers
     request_payload = pending.request.as_payload()
     inspiration = next(
@@ -35488,6 +35606,8 @@ def _exploration_actor_payload(
         "proficiency_bonus": 0 if uses_charge(actor) else actor.proficiency_bonus,
         "uses_charge": uses_charge(actor),
         "level": actor.level,
+        "ability_scores": {key: getattr(actor.ability_scores, key) for key in (
+            "strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma")},
         "experience_points": actor.experience_points,
         "proficiencies": {
             "saving_throws": list(actor.proficiencies.saving_throws),
@@ -35599,7 +35719,7 @@ _FEATURE_MECHANICAL_HELP: dict[str, tuple[str, str]] = {'field_medic_step': ('Po
 
 
 def _feature_help_text(feature: FeatureGrant, actor_id: str | None = None) -> tuple[str, str]:
-    if feature.source_ref == 'mana_saturation:color':
+    if feature.source_ref in {'runes:v01', 'mana_saturation:color'}:
         return feature.label, feature.description
     if feature.source_ref == "physical_mana:v02":
         flaw = FLAWS.get(actor_id or "")

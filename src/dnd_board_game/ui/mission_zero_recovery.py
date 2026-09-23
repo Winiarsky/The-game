@@ -32,54 +32,54 @@ def choices(s: ExplorationUiSession, m: dict[str, Any]) -> list[dict[str, Any]] 
     def add(slot: int, action: str, key: str | None = None, **extra: Any) -> None:
         result.append(choice(slot, action, mission.label(s, key or action), **extra))
     if stage == 'brief':
-        add(6, 'why'); add(7, 'road_info')
-        if 'negotiated' not in m['flags']: add(8, 'negotiate')
-        if has_hero(s, 'lorian') and not m['compliment'] and not negotiation_started(s): add(9, 'compliments')
+        add(5, 'why'); add(6, 'road_info')
+        if 'negotiated' not in m['flags']: add(7, 'negotiate')
+        if has_hero(s, 'lorian') and not m['compliment'] and not negotiation_started(s): add(8, 'compliments')
         if not negotiation_started(s) or 'negotiated' in m['flags']: add(28, 'depart')
     elif stage == 'compliments':
         for i, option in enumerate(read_json(mission.root(s), 'mechanics/compliments.json')['options']):
-            result.append(choice(6+i, 'compliment', option['label'], option=option['id']))
+            result.append(choice(5+i, 'compliment', option['label'], option=option['id']))
     elif stage.startswith('compliment_'):
         add(28, 'brief_back', 'next')
     elif stage == 'explore':
         # Locations are selected by moving the party marker, not duplicate rune buttons.
         if 'leader' in m['flags'] and complete_cargo(m): add(28, 'dilemma')
-        if owns_ring(s): add(23, 'ring')
+        if owns_ring(s): add(22, 'ring')
     elif stage in ('armory', 'quarters'):
         if stage not in m['cargo']:
-            add(6, 'search', room=stage); add(7, 'collect', room=stage)
+            add(5, 'search', room=stage); add(6, 'collect', room=stage)
         add(29, 'back')
     elif stage.startswith('search_') and stage != 'search_result':
         add(28, 'resume_search', 'resume_confrontation')
     elif stage == 'search_result' or stage == 'store':
         if m.get('search_result')=='quarters_success' and stage=='search_result' and has_hero(s,'nimra') and not m['identify_attempted'] and not m['ring_identified']:
-            add(6,'identify_nimra')
+            add(5,'identify_nimra')
         add(28, 'back')
     elif stage == 'leader':
         if not m['debt']:
-            add(6, 'debt_help')
-            if has_hero(s, 'garran'): add(7, 'debt_garran')
-            add(8, 'debt_decline')
-        if 'rumor_known' not in m['flags']: add(9, 'rumor')
+            add(5, 'debt_help')
+            if has_hero(s, 'garran'): add(6, 'debt_garran')
+            add(7, 'debt_decline')
+        if 'rumor_known' not in m['flags']: add(8, 'rumor')
         add(29, 'back')
     elif stage in ('debt_help', 'debt_garran', 'debt_decline'):
         add(28, 'back')
     elif stage == 'dilemma':
-        if m['outcome'] != 'defeated': add(6, 'bell_guild')
-        add(7, 'bell_village')
-        if m['outcome'] != 'defeated' and has_hero(s, 'mira'): add(8, 'bell_fence')
+        if m['outcome'] != 'defeated': add(5, 'bell_guild')
+        add(6, 'bell_village')
+        if m['outcome'] != 'defeated' and has_hero(s, 'mira'): add(7, 'bell_fence')
         add(29, 'back')
     elif stage == 'guild_return':
-        if owns_ring(s): add(6, 'ring')
-        add(7,'equipment_open')
+        if owns_ring(s): add(5, 'ring')
+        add(6,'equipment_open')
         add(28, 'summary', 'next')
     elif stage in ('ring', 'ring_identified'):
         if m['ring_identified']:
-            if m['ring_home']=='guild_return': add(6,'equipment_open')
+            if m['ring_home']=='guild_return': add(5,'equipment_open')
         elif m['ring_home'] == 'guild_return':
             price=read_json(mission.root(s),'mechanics/rewards.json')['identification_gp']
-            result.append(choice(6,'identify_guild',f'Identyfikacja w Gildii — {price} sz'))
-        elif has_hero(s, 'nimra') and not m['identify_attempted']: add(6, 'identify_nimra')
+            result.append(choice(5,'identify_guild',f'Identyfikacja w Gildii — {price} sz'))
+        elif has_hero(s, 'nimra') and not m['identify_attempted']: add(5, 'identify_nimra')
         add(29, 'ring_back')
     elif stage == 'identify_roll':
         pass

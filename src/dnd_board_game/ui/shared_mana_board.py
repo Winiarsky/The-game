@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from dnd_board_game.hardware.board_panel import panel_feedback, panel_position
+from dnd_board_game.hardware.board_panel import PANEL_MINUS, PANEL_PLUS, panel_delta, panel_feedback, panel_position
 from dnd_board_game.hardware.led_feedback import LedFeedback, LedFrame, LedRole
 from dnd_board_game.hardware.led_palette import LedColor
 from dnd_board_game.world import Coordinate
@@ -14,14 +14,15 @@ if TYPE_CHECKING:
 
 
 def has_targets(declaration: ManaDeclaration | None) -> bool:
-    return declaration is not None and (declaration.stage == "bonus" or
-        declaration.ability_id in {"counterattack_command", "feint", "caring_gesture", "mana_inspiration"})
+    return declaration is not None and (declaration.stage in {"bonus", "rune_choices"} or
+        declaration.ability_id in {"counterattack_command", "feint", "caring_gesture", "mana_inspiration", "garran_rally", "garran_command_halt", "cunning_action"})
 
 
 def target_selection(session: ExplorationUiSession, declaration: ManaDeclaration,
                      targets: list[dict[str, str]]) -> dict[str, object]:
-    multiple = declaration.stage == "bonus" and declaration.ability_id == "garran_shield_wall"
-    maximum = int(declaration.resume_arguments["remaining"]) if multiple else 1
+    rally = session.combat_state.shared_mana.runes is not None and declaration.ability_id == "garran_rally" and declaration.stage == "payment"
+    multiple = (declaration.stage == "bonus" and declaration.ability_id == "garran_shield_wall") or rally or (declaration.ability_id == "garran_command_halt" and declaration.stage == "payment")
+    maximum = 1 + declaration.boosts.get("second", 0) if rally else int(declaration.resume_arguments["remaining"]) if multiple and declaration.stage == "bonus" else 1
     selected = declaration.selected_target_ids if multiple else tuple(
         key for key in (declaration.resume_arguments.get("target_id"),) if key)
     actors = {str(actor.id): actor for actor in session.combat_state.actors}
@@ -53,6 +54,12 @@ def scan_target(session: ExplorationUiSession) -> BoardScanTarget | None:
     view = payload(session)["declaration"]
     selection = view.get("target_selection")
     if selection is None:
+        if view.get("mode_options"):
+            modes = view["mode_options"]
+            controls = (29,) if view.get("error") else (28,29)
+            slots = tuple(o["slot"] for o in modes)
+            return BoardScanTarget(positions=tuple(panel_position(s) for s in (*slots,*controls)),
+                feedback=panel_feedback(slots, control_slots=controls), empty_message="Wybierz Sprint lub Odwrót i zatwierdź.")
         return None
     positions = tuple(Coordinate(*target["position"]) for target in selection["targets"])
     frames = tuple(LedFrame((Coordinate(*target["position"]),),
@@ -66,9 +73,9 @@ def scan_target(session: ExplorationUiSession) -> BoardScanTarget | None:
     if view["stage"] != "payment" and view.get("roll_sides"):
         roll = view.get("roll") or 1
         if roll > 1:
-            controls.append(26)
+            controls.append(PANEL_MINUS)
         if roll < view["roll_sides"]:
-            controls.append(27)
+            controls.append(PANEL_PLUS)
     choices = [choice for choice in view.get("boost_options", ()) if choice["enabled"]]
     colors = {"C": (255, 45, 45), "N": (30, 110, 255), "Z": (30, 220, 70),
               "B": (255, 255, 255), "F": (150, 150, 150), "*": (190, 190, 190)}
@@ -77,9 +84,9 @@ def scan_target(session: ExplorationUiSession) -> BoardScanTarget | None:
                         for frame in context_feedback(session).frames)
     feedback = panel_feedback(tuple(choice["slot"] for choice in choices),
         control_slots=tuple(controls), base=LedFeedback((*aura_frames, *frames)),
-        action_colors={choice["slot"]: colors[choice["color"]] for choice in choices})
+        action_colors={choice["slot"]: colors.get(choice["color"], (190,145,65)) for choice in choices})
     selected_boosts = tuple(LedFrame((panel_position(choice["slot"]),),
-        colors[choice["color"]], LedRole.MARKER) for choice in choices if choice["selected"])
+        colors.get(choice["color"], (190,145,65)), LedRole.MARKER) for choice in choices if choice["selected"])
     return BoardScanTarget(
         positions=(*positions, *(panel_position(slot) for slot in controls),
                    *(panel_position(choice["slot"]) for choice in choices)),
@@ -97,7 +104,10 @@ def select_position(session: ExplorationUiSession, position: Coordinate) -> dict
     session.board_panel_context = None
     view = payload(session)["declaration"]
     data = {"revision": session.combat_state.shared_mana.revision}
-    actor = next((item for item in view["target_selection"]["targets"]
+    mode = next((item for item in view.get("mode_options", ()) if panel_position(item["slot"]) == position), None)
+    if mode:
+        return command(session, {**data, "command": "mode", "mode": mode["mode"]})
+    actor = next((item for item in view.get("target_selection", {}).get("targets", ())
                   if list(position.as_tuple()) == item["position"]), None)
     if actor:
         data.update(command="target", target_id=actor["id"])
@@ -108,7 +118,7 @@ def select_position(session: ExplorationUiSession, position: Coordinate) -> dict
         elif slot == 29:
             data["command"] = "cancel" if view["stage"] == "payment" else "clear_targets"
         elif slot in (26, 27):
-            data.update(command="parameters", natural_roll=(view.get("roll") or 1) + (1 if slot == 27 else -1))
+            data.update(command="parameters", natural_roll=(view.get("roll") or 1) + panel_delta(slot))
         else:
             data.update(command="boost_option", slot=slot)
     return command(session, data)

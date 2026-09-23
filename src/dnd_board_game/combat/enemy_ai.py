@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dnd_board_game.combat.saving_effects import consume_saving_effects, has_wisdom_save_penalty
+
 import random
 from dataclasses import dataclass, replace
 
@@ -288,9 +290,12 @@ def resolve_enemy_auto_attack(
                 dc_source_label=f"ST czarów: {caster.name}",
             ),
             natural_roll=rng.randint(1, 20),
+            natural_roll_2=rng.randint(1, 20) if has_wisdom_save_penalty(str(enemy.id), "wisdom", active_effects) else None,
+            active_effects=active_effects,
             condition_states=action_result.state.condition_states,
             combat_actors=action_result.state.actors,
         )
+        active_effects = consume_saving_effects(active_effects, save)
         sanctuary_saves.append(save)
         if save.success:
             break

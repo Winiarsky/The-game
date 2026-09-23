@@ -95,6 +95,19 @@
 .confrontation-detail-body .mana-chip {width:30px;height:30px;}
 #confrontation-detail footer {display:flex;align-items:center;justify-content:space-between;gap:10px;border-top:1px solid #425143;padding-top:13px;}
 #confrontation-detail footer>div {display:flex;gap:7px;}
+/* Six approaches stay readable together on a laptop, without paragraph margins. */
+.tabletop-confrontation .progress-approach-instruction {margin:2px 0 4px;font-size:.88rem;line-height:1.35;}
+.progress-confrontation-options {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 20px;}
+.progress-confrontation-options>article {display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:0;border-top:1px solid #39433e;padding-top:5px;}
+.tabletop-confrontation .progress-confrontation-options .mana-rune-choice {min-height:36px;padding:5px 9px;gap:8px;font-size:.88rem;line-height:1.2;}
+.tabletop-confrontation .progress-confrontation-options .panel-symbol {width:24px;height:24px;}
+.progress-confrontation-options p {margin:0;font-size:.88rem;line-height:1.35;}
+.progress-confrontation-options small {font-size:.76rem;line-height:1.3;color:#c3c8b8;}
+.tabletop-confrontation .confrontation-scroll>.reputation-pool {margin-top:12px;padding-top:9px;border-top:1px solid #39433e;font-size:.84rem;line-height:1.35;}
+.tabletop-confrontation .confrontation-scroll>.reputation-pool small {display:block;margin-top:3px;font-size:.74rem;color:#bcbdae;}
+@media (max-width:760px) {
+  .progress-confrontation-options {grid-template-columns:1fr;}
+}
 @media (max-height:750px) {
   #mission-panel.tabletop-confrontation,#training-arena-panel.tabletop-confrontation {padding:13px 18px;gap:20px;grid-template-columns:265px minmax(0,1fr);}
   .tabletop-confrontation .confrontation-pressure {margin:14px 0;}

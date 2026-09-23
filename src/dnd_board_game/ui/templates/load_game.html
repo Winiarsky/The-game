@@ -19,7 +19,7 @@
 
     {% if mission_save %}
       <section class="save-card"><b>{{ ui_text('navigation.mission_name') }}</b>
-        <form method="post" action="{{ url_for('load_mission_zero') }}"><button type="submit" data-board-rune="7">{{ panel_icon(7)|safe }} {{ ui_text('navigation.load_mission') }}</button></form>
+        <form method="post" action="{{ url_for('load_mission_zero') }}"><button type="submit" data-board-rune="6">{{ panel_icon(6)|safe }} {{ ui_text('navigation.load_mission') }}</button></form>
       </section>
     {% endif %}
     {% if save.exists %}
@@ -29,14 +29,14 @@
           <small>{{ ui_text('navigation.save_validation') }}</small>
         </span>
         <form method="post" action="{{ url_for('load_current_game') }}">
-          <button type="submit" data-board-rune="6">{{ panel_icon(6)|safe }} {{ ui_text('navigation.load') }}</button>
+          <button type="submit" data-board-rune="5">{{ panel_icon(5)|safe }} {{ ui_text('navigation.load') }}</button>
         </form>
       </section>
     {% elif not mission_save %}
       <section class="empty-state">
         <b>{{ ui_text('navigation.no_save_heading') }}</b>
         <p>{{ ui_text('navigation.no_save_hint') }}</p>
-        <a class="button" data-board-rune="6" href="{{ url_for('new_game') }}">{{ panel_icon(6)|safe }} {{ ui_text('navigation.start') }}</a>
+        <a class="button" data-board-rune="5" href="{{ url_for('new_game') }}">{{ panel_icon(5)|safe }} {{ ui_text('navigation.start') }}</a>
       </section>
     {% endif %}
   </main>

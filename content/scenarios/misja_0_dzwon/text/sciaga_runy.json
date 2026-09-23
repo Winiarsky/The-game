@@ -1,0 +1,80 @@
+{
+  "version": 1,
+  "pages": [
+    {
+      "id": "runy",
+      "title": "Runy, akcje i plansza",
+      "lead": "Ruch, atak lub przedmiot i jedna moc specjalna w swojej turze.",
+      "sections": [
+        {
+          "title": "Początek walki",
+          "paragraphs": [
+            "Aplikacja dobiera N+2 run, gdzie N to liczba bohaterów. Gracze po kolei wybierają runy z tej samej puli. Kliknięcie przypisuje jedną sztukę. ↩ cofa ostatni wybór aktualnego gracza; ✓ zatwierdza jego przydział. Limit ręki: 7.",
+            "Runy są dobierane tylko na początku walki. Niewydane zachowujesz w kolejnych rundach."
+          ]
+        },
+        {
+          "title": "Użycie mocy",
+          "paragraphs": [
+            "Karta podaje runę podstawową i koszt akcji: S — specjalna; A — atak/przedmiot; M — cały ruch; R — reakcja. Brakującą runę podstawową możesz zastąpić dwiema dowolnymi.",
+            "Wybierz najwyżej jedno wzmocnienie spośród opcji karty. Koszt pobierany jest po zatwierdzeniu. Podgląd i jego anulowanie są bezpłatne. Zwykły atak okazyjny bronią nie kosztuje run i zużywa reakcję.",
+            "Aura wymagająca podtrzymania pokazuje koszt na początku własnej tury. Możesz zapłacić albo ją zakończyć."
+          ]
+        },
+        {
+          "title": "Sterowanie",
+          "paragraphs": [
+            "Naciśnij ikonę podstawowej akcji lub runę swojej mocy. Ruch i cel wybierz kliknięciem podświetlonego pola fizycznej planszy, a następnie ✓.",
+            "Gwiazda otwiera bieżące informacje o bohaterze. +/− przewija widok lub ustawia wynik kości. ↩ wraca bez utraty wybranego celu. Wyposażenie ustalasz przed wyprawą."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "reputacja",
+      "title": "Konfrontacje i reputacja",
+      "lead": "Reputacja jest wspólna dla drużyny. Zaczynacie z 20 punktami.",
+      "sections": [
+        {
+          "title": "Jedna kolejka",
+          "paragraphs": [
+            "Każdy bohater wybiera podejście i wykonuje test k20. Nie ma osobnego rzutu na wpływ. Sukces: +1 postępu; porażka: bez zmiany; naturalne 20: +2; naturalne 1: −1.",
+            "Po ostatnim graczu kończycie na osiągniętym etapie. Próba zejścia poniżej −1 lub dojście do końca toru rozstrzyga scenę wcześniej. Aplikacja dopasowuje długość toru do liczby osób."
+          ]
+        },
+        {
+          "title": "Premia po rzucie społecznym",
+          "table": [
+            [
+              "Koszt reputacji",
+              "Efekt"
+            ],
+            [
+              "1",
+              "+1 do wyniku"
+            ],
+            [
+              "3",
+              "+5 do wyniku"
+            ],
+            [
+              "5",
+              "Dodatkowa k20; zachowaj wyższy naturalny wynik"
+            ]
+          ],
+          "paragraphs": [
+            "Wybierz jedną z trzech podświetlonych run. Opcje nie łączą się. Dodatkową kość opłacasz przed rzutem; po jego poznaniu nie odzyskasz kosztu.",
+            "Premia liczbowa nie usuwa krytycznej porażki. Fizyczne wydobywanie wozu nie używa reputacji. Reputacja pozostaje między scenami i wraca przez decyzje lub nagrody misji."
+          ]
+        },
+        {
+          "title": "Wóz i konsekwencje",
+          "paragraphs": [
+            "Wymuszona zamiana wozu wymaga co najmniej 20 aktualnej reputacji i kosztuje 3 punkty. Ma również konsekwencję dla postawy drużyny.",
+            "Na obecnym etapie ukończenie Misji 0 daje jednokrotnie +5 reputacji."
+          ]
+        }
+      ]
+    }
+  ]
+}

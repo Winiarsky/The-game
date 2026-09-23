@@ -529,26 +529,26 @@ def resolve_spell_save(
     )
 
 
-def resolve_actor_saving_throw(
+def saving_throw_roll_request(
     actor: Actor,
     saving_throw: SavingThrowRequest,
     *,
-    natural_roll: int,
-    natural_roll_2: int | None = None,
-    natural_rerolls: tuple[int, ...] = (),
     situational_modifiers: Sequence[RollModifier] = (),
     condition_states: Sequence = (),
     combat_actors: Sequence[Actor] = (),
     roll_mode: RollMode = RollMode.NORMAL,
     active_effects: Sequence[object] = (),
-) -> SavingThrowResult:
+) -> D20RollRequest:
+    """Build the same saving-throw mode for presentation and resolution."""
     from .auras import saving_throw_aura_modifiers
     from .mana_charge import saving_modifiers
     from .archetype_flaws import flaw_saving_throw_modifiers
     from .poison_protection import poison_protection_roll_mode
     from .warding_bond import warding_bond_saving_throw_modifiers
+    from .saving_effects import has_wisdom_save_penalty
 
     from dnd_board_game.actors.resources import uses_shared_mana
+    initial_mode = roll_mode
     if uses_shared_mana(actor) and str(actor.id) == "mira" and any(getattr(e, "kind", "") == "shared_hidden" and getattr(e, "actor_id", "") == str(actor.id) for e in active_effects):
         roll_mode = RollMode.NORMAL if roll_mode == RollMode.ADVANTAGE else RollMode.DISADVANTAGE
     roll_mode = poison_protection_roll_mode(
@@ -571,11 +571,11 @@ def resolve_actor_saving_throw(
         )
     if (
         saving_throw.ability == "wisdom"
-        and any(
+        and (has_wisdom_save_penalty(str(actor.id), saving_throw.ability, active_effects) or any(
             getattr(effect, "actor_id", "") == str(actor.id)
             and getattr(effect, "kind", "") == "lorian_mocked_wisdom"
             for effect in active_effects
-        )
+        ))
     ):
         roll_mode = (
             RollMode.NORMAL
@@ -639,6 +639,40 @@ def resolve_actor_saving_throw(
         effect_tags=saving_throw.effect_tags,
         active_effects=active_effects,
         condition_states=condition_states,
+    )
+    if has_wisdom_save_penalty(str(actor.id), saving_throw.ability, active_effects):
+        # Multiple disadvantages never overcome even one source of advantage.
+        has_advantage = (
+            initial_mode == RollMode.ADVANTAGE
+            or poison_protection_roll_mode(actor, active_effects, saving_throw.effect_tags) == RollMode.ADVANTAGE
+            or (not uses_shared_mana(actor) and any(
+                getattr(e, "actor_id", "") == str(actor.id)
+                and getattr(e, "kind", "") == "garran_rally_advantage" for e in active_effects
+            ))
+            or any((m.stacking_key or "").startswith("feature:") and (m.stacking_key or "").endswith(":advantage")
+                   for m in roll_request.modifiers)
+        )
+        roll_request = replace(roll_request, mode=RollMode.NORMAL if has_advantage else RollMode.DISADVANTAGE)
+    return roll_request
+
+
+def resolve_actor_saving_throw(
+    actor: Actor,
+    saving_throw: SavingThrowRequest,
+    *,
+    natural_roll: int,
+    natural_roll_2: int | None = None,
+    natural_rerolls: tuple[int, ...] = (),
+    situational_modifiers: Sequence[RollModifier] = (),
+    condition_states: Sequence = (),
+    combat_actors: Sequence[Actor] = (),
+    roll_mode: RollMode = RollMode.NORMAL,
+    active_effects: Sequence[object] = (),
+) -> SavingThrowResult:
+    roll_request = saving_throw_roll_request(
+        actor, saving_throw, situational_modifiers=situational_modifiers,
+        condition_states=condition_states, combat_actors=combat_actors,
+        roll_mode=roll_mode, active_effects=active_effects,
     )
     if roll_request.mode != RollMode.NORMAL and natural_roll_2 is None:
         raise ValueError("Advantage or disadvantage saving throw requires two d20 rolls.")

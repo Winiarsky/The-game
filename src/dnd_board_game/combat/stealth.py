@@ -11,6 +11,8 @@ from dnd_board_game.actors import (
     passive_skill_score,
 )
 from dnd_board_game.world import BoardState, bresenham_line, line_of_sight_clear
+from dnd_board_game.rules import ActiveEffect
+from .smoke import smoke_contains
 
 if TYPE_CHECKING:
     from .scene import SceneObject
@@ -54,7 +56,10 @@ def hide_eligibility(
     actor: Actor,
     actors: Sequence[Actor],
     scene_objects: Sequence[SceneObject] = (),
+    active_effects: Sequence[ActiveEffect] = (),
 ) -> HideEligibility:
+    if smoke_contains(actor.position, active_effects):
+        return HideEligibility(True)
     if actor_has_feature(actor, "mira_shadow_stealth"):
         blockers = tuple(
             str(observer.id)
@@ -245,11 +250,12 @@ def refresh_hidden_after_movement(
     actors: Sequence[Actor],
     hidden_states: Sequence[HiddenState],
     scene_objects: Sequence[SceneObject] = (),
+    active_effects: Sequence[ActiveEffect] = (),
 ) -> HiddenMovementResolution:
     current = hidden_state_for(hidden_states, str(moved_actor.id))
     if current is None:
         return HiddenMovementResolution(tuple(hidden_states), ())
-    if actor_has_feature(moved_actor, "mira_shadow_stealth"):
+    if actor_has_feature(moved_actor, "mira_shadow_stealth") or smoke_contains(moved_actor.position, active_effects):
         # Mira's roll establishes per-observer knowledge. Ordinary movement does
         # not leak her location; attacks, Search and path collisions reveal her.
         return HiddenMovementResolution(tuple(hidden_states), ())

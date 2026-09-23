@@ -20,6 +20,7 @@ from urllib.parse import quote
 
 import build_garran_set_concept as base
 from dnd_board_game.character_creation import PLAYABLE_HERO_IDS
+from dnd_board_game.actors import Actor
 from dnd_board_game.inventory.party_equipment import occupied, SLOTS
 from dnd_board_game.physical_cards.mana_print import PrintHero, build_print_hero, COLORS
 from dnd_board_game.physical_cards.mana_print_files import render_pdf, merge_pdfs
@@ -155,8 +156,8 @@ def equipment_page(hero: PrintHero) -> str:
     return document(hero,header(hero,f'{hero.name} · wyposażenie','Pusta mata · połóż na niej wycięte elementy','04 / 04')+'<div class="equipment-grid">'+markup+'</div><p class="equip-note">Startowe rozmieszczenie znajdziesz pod wycinankami sprzętu tej postaci. Nowe znaleziska w misji trafiają do wspólnego zapasu. Znaczniki zajętej drugiej ręki są w osobnym pliku znaczniki_A4.pdf.</p>'+base.footer('Przerywane ramki są miejscami na żetony — nie wycinaj tej maty'))
 
 
-def equipment_cutouts(hero: PrintHero, copy: dict, folder: Path) -> str:
-    actor=training_hero(hero.id)
+def equipment_cutouts(hero: PrintHero, copy: dict, folder: Path, *, actor: Actor | None = None) -> str:
+    actor = actor if actor is not None else training_hero(hero.id)
     tiles=[]
     positions=[]
     for item in actor.inventory:

@@ -7,6 +7,7 @@ from dataclasses import replace
 from dnd_board_game.combat.shared_mana_features import AURA_ABILITIES, support_aura_preview
 from dnd_board_game.combat.session import current_actor
 from dnd_board_game.combat.spells import grid_distance_feet
+from dnd_board_game.combat.smoke import SMOKE_AREA_KIND, smoke_positions
 from dnd_board_game.hardware.led_feedback import LedFeedback, LedFrame, LedRole
 from dnd_board_game.hardware.led_palette import LedColor
 from dnd_board_game.world import Coordinate
@@ -17,6 +18,8 @@ if TYPE_CHECKING:
 
 def aura_feedback(session: ExplorationUiSession, ability_id: str | None, source_id: str = 'garran', *,
                   active_only: bool = False, boosts: dict[str, int] | None = None) -> LedFeedback:
+    if ability_id == 'smoke_screen':
+        return smoke_feedback(session, source_id, active_only=active_only)
     # Movement/control options have no ability id. Do not build a hypothetical
     # mana declaration for them, especially while a paid technique is resolving.
     if not ability_id or ability_id not in dict(AURA_ABILITIES):
@@ -34,13 +37,14 @@ def aura_feedback(session: ExplorationUiSession, ability_id: str | None, source_
     if preview is None:
         return LedFeedback()
     owner = preview.source
+    center = preview.center or owner.position
     members = set(preview.affected_actor_ids)
     member_positions = tuple(a.position for a in state.actors if str(a.id) in members and a.id != owner.id)
     area = tuple(Coordinate(col, row)
         for col in range(min(19, encounter.board.dimensions.cols))
         for row in range(encounter.board.dimensions.rows)
-        if (max(abs(owner.position.col-col), abs(owner.position.row-row))*5 if preview.square_range
-            else grid_distance_feet(owner.position, Coordinate(col, row))) <= preview.radius_feet
+        if (max(abs(center.col-col), abs(center.row-row))*5 if preview.square_range
+            else grid_distance_feet(center, Coordinate(col, row))) <= preview.radius_feet
         and Coordinate(col, row) not in (*member_positions, owner.position))
     hostile = preview.source_kind == 'divine_care_aura_source'
     return LedFeedback((
@@ -48,6 +52,24 @@ def aura_feedback(session: ExplorationUiSession, ability_id: str | None, source_
         LedFrame(member_positions, LedColor.AURA_DIVINE_CARE_ACTIVE if hostile else LedColor.SELECTED_ABILITY_TARGET, LedRole.ENEMY if hostile else LedRole.ALLY),
         LedFrame((owner.position,), LedColor.ACTIVE_ACTOR, LedRole.ACTIVE_ACTOR),
     ))
+
+
+def smoke_feedback(session: ExplorationUiSession, source_id: str, *, active_only: bool = False) -> LedFeedback:
+    state = session.combat_state
+    encounter = session._active_encounter()
+    if state is None or encounter is None or not (state.shared_mana and state.shared_mana.runes):
+        return LedFeedback()
+    actor = next((a for a in state.actors if str(a.id) == source_id), None)
+    if actor is None:
+        return LedFeedback()
+    if active_only:
+        centers = tuple(e.anchor_position for e in session.active_combat_effects
+                        if e.kind == SMOKE_AREA_KIND and e.source_actor_id == source_id and e.anchor_position is not None)
+    else:
+        centers = (actor.position,)
+    positions = tuple(dict.fromkeys(p for center in centers for p in smoke_positions(encounter.board, center)
+                                   if p.col < min(19, encounter.board.dimensions.cols)))
+    return LedFeedback((LedFrame(positions, LedColor.AREA_EFFECT, LedRole.AREA_EFFECT),)) if positions else LedFeedback()
 
 
 def context_feedback(session: ExplorationUiSession) -> LedFeedback:
@@ -75,6 +97,8 @@ def context_feedback(session: ExplorationUiSession) -> LedFeedback:
         owners = {e.source_actor_id or e.actor_id for e in session.active_combat_effects if e.kind == kind}
         for owner in sorted(owners):
             frames.extend(aura_feedback(session, ability, owner, active_only=True).frames)
+    for owner in sorted({e.source_actor_id or e.actor_id for e in session.active_combat_effects if e.kind == SMOKE_AREA_KIND}):
+        frames.extend(smoke_feedback(session, owner, active_only=True).frames)
     # The active figure belongs to the current board decision, even inside an aura.
     active_position = current_actor(state).position
     return LedFeedback(tuple(replace(frame, positions=tuple(p for p in frame.positions if p != active_position))

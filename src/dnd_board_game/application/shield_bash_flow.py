@@ -29,11 +29,13 @@ def submit_shield_bash_rolls(
     defender_roll: int | None = None,
     damage_roll: int | None = None,
 ) -> ShieldBashFlow:
-    count = 1 + (dict(state.shared_mana.pending_boosts).get("damage", 0) if state.shared_mana else 0)
+    from dnd_board_game.combat.rune_dice import shield_bash_dice
+    dice = shield_bash_dice(state)
+    count = len(dice)
     values = (
         ((attacker_roll, 20), (defender_roll, 20))
         if pending.stage == "contest"
-        else ((damage_roll, 6 * count),)
+        else ((damage_roll, sum(dice)),)
     )
     if pending.stage not in {"contest", "damage"}:
         raise ValueError("Wynik Uderzenia tarczą już czeka na potwierdzenie.")

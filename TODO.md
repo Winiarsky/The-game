@@ -1,3 +1,36 @@
+## Wnioski po ręcznym teście — 22.09.2026
+
+- [x] Spisać punkt wyjścia przed wdrożeniem: wymagania użytkownika, proponowany
+  obieg run, przykładowa adaptacja dziewięciu mocy Garrana, jedna runda
+  konfrontacji, skalowanie toru, przykłady i luki. Dokument do omówienia:
+  [Runy v0.1](docs/RUNE_SYSTEM_PROPOSAL_V01.md). Liczby i doprecyzowania
+  pozostają propozycją; bez zmian runtime, kart i PDF-ów.
+- [ ] Po uzgodnieniu projektu dostosować pasek: ruch/atak/przedmiot/koniec,
+  przerwa, runy, przerwa, +/−/✓/↩. Usunąć zmianę broni w terenie, zachować
+  przygotowanie wyposażenia przed misją. Ustalić liczbę rodzajów run i znaków.
+- [ ] Po uzgodnieniu projektu powiększyć mapę bazową i wszystkie kafle Misji 0
+  o 3% względem obecnego profilu wydruku; wspólna geometria, kontrola A4
+  i pasowania do czujników. Pozostałe fizyczne karty zachowują swoje wymiary.
+- [ ] Po uzgodnieniu projektu sprawdzić pełną obsługę planszą od launchera,
+  przypisania wszystkich kontrolek oraz rozdzielenie przewijania i wpisywania
+  wartości przez +/−, zachowując obecny wygląd UI.
+- [ ] Wybrać i przetestować na stole mechanikę zastępującą manę: wspólna,
+  ograniczona pula do uzgadnianego podziału, wydawanie teraz lub oszczędzanie
+  między rundami, różne układy zasobów zmieniające dostępne rozwiązania.
+  Punkt wyjścia użytkownika: N+2 run co rundę walki, ręka do 7, płatne moce,
+  reakcje i aury; ruch + atak/przedmiot + specjalna. Stałe przypisania run,
+  liczba 10/20 do ustalenia. Konfrontacje: jedna runda i tor zamiast wpływu.
+  Zachować sterowanie polami, fabułę i postawę drużyny; doprecyzowania
+  z dokumentu nie są jeszcze zatwierdzoną specyfikacją.
+- [ ] Skrócić konfrontację z Nessą. Log `exploration_ui_4cd122c1af.jsonl`
+  z 21.09: wejście 22:37:06, porażka 22:55:29, wyjście 22:56:09 czasu lokalnego;
+  ok. 19 minut obejmuje przygotowanie i obsługę. Próba doszła do 4. rundy,
+  9 testów i 90 operacji konfrontacji; przy wyczerpaniu talii zostały 2 oporu.
+- [ ] W kolejnym kroku zdiagnozować zgłoszoną blokadę sterowania walką.
+  Ten sam log, linie 726, 752 i 756: kliknięcia ataku Miry odebrane, lecz
+  odrzucone jako „Rapier: brak legalnych celów”. Końcowe skany i potwierdzenia
+  LED są obecne; przyczyna problemu nie została jeszcze ustalona.
+
 ## Terminal — szybki start po scenie z wozem — 21.09.2026
 
 - [x] `runtime.mission_combat_ui`: wybór 3–6 unikalnych bohaterów oraz
@@ -2326,3 +2359,161 @@ KON 16); wcześniejsze snapshoty i historyczne wyniki audytu pozostają bez zmia
 
 - [x] Wspólne źródło treści `content/scenarios/misja_0_dzwon/text/karty_postaci.json`: historie, skazy, akcje i podbicia, 70 pasywów, samouczek i pomocnik. Gra i druk czytają ten sam plik; usunięto poprzednie kopie. Testy edycji i odświeżania bez restartu.
 - [ ] Dostosować stare `test_garran_mana_movement.py` (13 wariantów oczekujących płatnego ruchu) i `test_hero_rules_consistency.py` (7 oczekiwań profilu `shared_mana_v03`) do obecnego systemu. Szczegóły: `docs/reports/CHARACTER_TEXT_SOURCE.md`.
+
+## Runy — techniczny prototyp 22.09.2026
+
+- [x] Osobna paczka `print/runy_v01`: plansza z czterema akcjami podstawowymi,
+  dwiema przerwami, 20 runami i przyciskami +/−/✓/↩. Plansza oraz wszystkie
+  18 kafli Misji 0 powiększone o 3% względem poprzedniej korekty drukarki.
+- [x] Siedem modułowych zestawów: postać i zobowiązania, mata 12 zdolności,
+  mata wyposażenia, dwa arkusze wycinanek. Wspólny PDF ma 35 stron.
+  Garran: robocze moce; pozostali: nazwane szablony bez kosztów starej many.
+- [x] Makieta UI: nowy panel i podświetlenia, dobór N+2, podział run,
+  ręka do 7, koszt po zatwierdzeniu, dopłata do mocy, utrzymanie aury,
+  jedna runda konfrontacji. Darmowy atak okazyjny i wybór reakcji.
+- [x] Kontrola układu i wymiarów wszystkich mat/wycinanek w Chrome;
+  testy geometrii planszy, spójności danych oraz klikania przepływów.
+- [x] Dostosować karty pozostałych sześciu bohaterów do run i wspólnego źródła
+  kosztów używanego przez silnik oraz generator wydruków.
+- [ ] Ograć skazy, balans talii i dalsze koszty moralnych decyzji.
+- [x] Wdrożyć mapowanie panelu i zasady zaakceptowanej makiety do aplikacji;
+  szczegóły i pozostała kontrola fizyczna poniżej.
+- [x] Naprawić sterowanie walką zgłoszone po teście manualnym: legalność świateł
+  i zatwierdzania, wybór pól i anulowanie, sprawdzone przez symulowany skaner.
+
+## Reputacja w makiecie — 22.09.2026
+
+- [x] Gwiazda: niebieski skrót informacji o aktywnym bohaterze i drobna legenda.
+  Bieżące PW, KP, statusy/efekty/aura, budżet tury, runy, cechy, sprzęt i historia.
+  Powrót zachowuje podgląd akcji i cel. Bastion oraz jego koszt przeniesione na
+  Klucz; odświeżone źródło i PDF kart. Regresje UI oraz spójności druku.
+- [x] Cele ataków/mocy: informacyjna lista bez przycisków i przypisań run.
+  Wybór sygnałem pola figurki, wyróżnienie wybranego celu i aktywacja ✓.
+  Regresje Chrome: klik listy nic nie wybiera, pola nielegalne odrzucane,
+  wybór legalny bez kosztu, zmiana celu oraz ignorowanie zdarzeń poza podglądem.
+- [x] Sekwencyjny przydział run: jedno kliknięcie przenosi jedną sztukę
+  do bieżącej postaci; ostatnia kopia wygasza pole. ↩ cofa wybory w odwrotnej
+  kolejności, ✓ zatwierdza i przechodzi do następnego bohatera. Bez przełączania
+  odbiorcy przez +/−. Limit 7, pusta pula i kolejny obieg reszty sprawdzone w Chrome.
+- [x] Przedmiot: automatycznie wybrać jedyną dostępną miksturę w podglądzie,
+  od razu aktywować ekranowe zatwierdzenie i podświetlić ✓ na panelu planszy.
+  Efekt dopiero po potwierdzeniu; regresja anulowania i ponownego ✓.
+- [x] Ruch: usunąć ekranowe kafelki odległości. Pozostawić limit pól,
+  instrukcję wyboru podświetlonego pola fizycznej planszy i potwierdzenie.
+  Regresja: brak przypisań odległości do run, wybór pola bez kosztu,
+  odrzucanie błędnego dystansu, rozliczenie dopiero po ✓.
+- [x] Walka: usunąć katalog akcji z ekranu oczekiwania. „Wybierz akcję” →
+  pole planszy → opis i dystans/cele/obszar aury → wybór → ✓ wykonuje.
+  Ruch i przedmiot również wymagają potwierdzenia; anulowanie bez kosztu.
+  Testy Chrome: brak katalogu, zachowane przypisania, legalne cele, promień
+  aury i jego wzmocnienie, brak skutków przed potwierdzeniem.
+- [x] Korekta doboru: tylko początek pierwszej rundy walki; ilustracja i opis
+  posterunku zamiast Nessy. Przejście od wozu otwiera dobór. Kolejne rundy
+  zachowują ręce bez losowania; utrzymanie aury nadal działa. Regresja Chrome.
+- [x] Zastąpić dobór i wsparcie runami w rozmowach wspólną reputacją od 20.
+  Podejście otwiera rzut; podsumowanie oferuje trzy wyłączne opcje pod runami:
+  +1 za 1, +5 za 3, dodatkowa k20 i wyższy wynik za 5. Bez kupowania premii +/−.
+- [x] Koszt po potwierdzeniu; dodatkowa kość opłacana przed rzutem, bez zwrotu
+  po poznaniu wyniku. Saldo wspólne, bez odnowienia przy zmianie sceny.
+- [x] Zamiana wozu: bieżąca reputacja ≥20, koszt 3, wybór i potwierdzenie.
+  Przykład jednorazowej nagrody misji +5; wartość nagrody robocza.
+- [x] Testy Chrome: trzy opcje, brak kumulacji, koszty, krytyki, dodatkowa kość,
+  próg wozu, zachowanie salda i brak ponownego przyznania nagrody.
+- [ ] Uzgodnić nagrody i koszty decyzji, wpływ reputacji na ceny i progi dialogów;
+  reputacja jest już zapisywana w kampanii. Zasady:
+  [docs/REPUTATION_PROTOTYPE.md](docs/REPUTATION_PROTOTYPE.md).
+
+## Wdrożenie run i reputacji — 22.09.2026
+
+- [x] Reputacja kampanii od 20: trzy rozłączne premie po rzucie, zapis opłaconej
+  dodatkowej kości, próg 20 i koszt 3 za zamianę wozu, jednorazowa nagroda misji.
+- [x] Nowe konfrontacje Nessy i wozu: jedna kolejka, test bez wpływu, postęp
+  skalowany liczbą bohaterów i natychmiastowe zakończenie na skrajnych wynikach.
+- [x] Produkcyjny panel zgodny z wydrukiem: cztery akcje podstawowe, runy od 5,
+  Gwiazda informacyjna 24, +26/−27; aktualizacja launchera i adapterów.
+- [x] Naprawa sterowania zgłoszonego po teście manualnym: brak legalnego celu
+  wygasza atak; ruch i cel muszą być wybrane przed ✓. Podgląd Gwiazdy zachowuje
+  akcję i cel. Dwa testy Chrome używają automatycznego skanera przez całą turę.
+- [x] Przydział run kliknięciami po jednej sztuce, cofanie bieżących wyborów,
+  limit 7 i zapis skończonej talii. Dobór N+2 tylko na początku walki.
+- [x] Zasłona dymna Miry: stacjonarny obszar 3×3 i przewaga do osobnego
+  Ukrycia, bez darmowego ruchu i automatycznego ukrywania. Roboczy czas:
+  do końca następnej tury Miry, żeby mogła wykorzystać swoją kolejną specjalną.
+- [x] Strojenie Loriana wymaga runy pozostałej po pełnej zapłacie, także
+  zastępczej. Podgląd wskazuje runę wymienianą z ręki.
+- [x] Audyt wszystkich 66 kart siedmiu bohaterów: pokrywanie się efektów,
+  koszty S/A/M/R i wzmocnień, ekonomia N+2 tylko raz na walkę oraz czytelność
+  symbolu przycisku i kosztu. Ustalenia i propozycje bez samowolnej zmiany
+  balansu: [docs/HERO_ACTION_REVIEW.md](docs/HERO_ACTION_REVIEW.md).
+- [x] Jawny wybór dowolnych run przy dopłacie, zastępczym koszcie,
+  podtrzymaniu Bastionu i Kontrataku. Rezerwacja wymaganych symboli, wybór
+  po jednej kopii, cofanie i zatwierdzenie przed pobraniem kosztu. Strojenie
+  i Odzysk Loriana pozwalają wybrać konkretne wymieniane/odzyskiwane runy.
+- [x] Wdrożyć zaakceptowane korekty audytu: stacjonarny Bastion z pierwszą
+  kolejną turą bez podtrzymania, pierwszy Szał bez runy, Zwód osłaniający
+  sojuszników, bezpieczny Święty płomień i Zachowanie życia raz na walkę.
+  Połączyć odzyski Loriana w jedną kartę raz na walkę bez odzysku kosztu;
+  poprawić budżety Lunety i Podwójnego strzału; odróżnić Załamanie woli
+  utrudnieniem kolejnej obrony MDR. Zachować N+2 tylko na początku walki.
+  Szczegóły: [docs/RUNE_BALANCE_V02.md](docs/RUNE_BALANCE_V02.md).
+- [x] Doprecyzować na kartach czas Inspiracji i obniżenia KP Strzały
+  odsłaniającej; zastąpić dawne skróty T/O jawnymi granicami efektów.
+  Opisać podstawowy koszt i dopłaty wzmocnień. Zregenerować komplet 65 kart
+  siedmiu postaci (35 stron A4) oraz dane klikalnej makiety.
+- [ ] Po wdrożeniu fizycznie sprawdzić wydruk powiększony o 3% względem czujników
+  i rozegrać Misję 0 na urządzeniu. Testy symulatora nie potwierdzają tej geometrii.
+- [ ] Ograć balans kart siedmiu bohaterów oraz nagrodę reputacji +5; określić
+  konkretne rabaty sklepowe i dalsze progi dialogów.
+
+Aktualne zasady aplikacji: [docs/RUNES_RUNTIME.md](docs/RUNES_RUNTIME.md).
+Historyczne wpisy o osobistych pulach many dotyczą poprzedniego wariantu.
+
+- [x] Ścisnąć wybór podejścia w konfrontacji: mniejsze odstępy, reputacja
+  przy bohaterze, „Pas” w dolnym pasku. Sześć pełnych opisów bez przewijania
+  na ekranach 1285×632, 1131×632 i 1285×600. Kontrola geometrii i pełnego
+  przebiegu konfrontacji w Chrome na tymczasowej sesji z symulatorem planszy.
+- [x] Przydział run: portret obok nagłówka pokazuje bieżącego odbiorcę run
+  i zmienia się po zatwierdzeniu przydziału. Sprawdzone w Chrome dla każdego
+  odbiorcy podczas pełnego testu przydziału i tury sterowanej planszą.
+- [x] Tura przeciwnika: podświetlać i skanować ✓ na początku, przy zamiarze
+  i potwierdzeniu wyniku. Zachować pierwszeństwo reakcji, rzutów i fizycznych
+  pól docelowych. Regresja odtworzyła brak ✓; testy maski i LED oraz Chrome
+  potwierdziły przejście bohater → przeciwnik i uruchomienie akcji planszą.
+
+- [x] Ujednolicić podstawowe koszty wszystkich 65 mocy z symbolami ich
+  przycisków: poprawione 26 kart, m.in. Z bara = 1 × Trójząb. Pierwszy
+  Szał pozostaje bez run, kolejne użycia za Rozwidlenie; Duchowa broń
+  i jej ponowne aktywacje za Schody. Talia nowych walk zawiera 16 używanych
+  symboli. Wersjonowanie zachowuje pulę i kolejność kart rozpoczętych walk.
+  Wspólna lista zasobów dla aplikacji, wydruków i makiety; przydział i LED
+  wyliczają pola po nazwach run. Generator odrzuca rozbieżność koszt/przycisk.
+  Zregenerowane siedem kompletów i zbiorczy PDF (35 stron A4).
+  Weryfikacja: 72 testy zasobów, płatności, efektów, kart i planszy, w tym
+  Chrome dla działającej walki oraz makiety. Odczyt dotychczasowego checkpointu
+  walki przeszedł bez modyfikowania zapisu.
+
+- [x] Podstawowy ekwipunek nowych postaci runicznych i wydruków: jedna
+  wyposażona broń, dotychczasowy pancerz/tarcza oraz osobiste przedmioty;
+  usunąć zapasowe bronie i zbędną amunicję, zachować KP i brak zbroi
+  Brakki/Nimry. Wspólny profil dla gry, mat, wycinanek i danych makiety.
+- [x] Mistrzyni ostrzy: wyposażona broń, wymagane Ukrycie przed konkretnym
+  celem, +1k6 oraz dodatkowe +1k6 z własnej flanki. Nie sumować ponownie
+  tych premii z Atakiem z cienia; zachować kość flanki do rozliczenia
+  obrażeń po ujawnieniu. Legalne pola wykluczają widzących Mirę wrogów.
+- [x] Rozwidlenie w trybie Ukrycia otwiera darmowe wyjście z niego:
+  ✓ ujawnia, ↩ anuluje, bez zwrotu ani pobrania akcji/run. Zachować
+  potwierdzony przez użytkownika wyjątek Ukrycia na otwartym polu.
+  Weryfikacja: testy wyposażenia siedmiu bohaterów, pełny atak Miry
+  z flanką i bez niej, rozliczenie kości po ujawnieniu, brak podwójnej
+  premii, płatności i darmowe wyjście z Ukrycia. Regresje starszych
+  technik Miry, flankowania i dymu przeszły. Chrome sprawdził legalne
+  cele i podświetlenia, anulowanie oraz zatwierdzenie Rozwidlenia.
+  Zregenerowano 35 stron kart; generator sprawdził przepełnienia.
+
+- [x] Ponowny audyt siedmiu bohaterów po przejściu na runy: wspólny katalog
+  skaz dla UI i PDF, dopłaty wybieranymi runami dla Dagny/Loriana/Nimry/Erynda,
+  Echo z limitem +2 i zapisem serii, dopłata także przy drugim strzale Erynda.
+  Usunięte wycofane cechy i Metamagia, poprawiony alias Zachowania życia oraz
+  pierwszeństwo aktualnych opisów. Wczytanie odświeża wyłącznie cechy;
+  nie resetuje PW, ekwipunku ani puli. Zregenerowane 35 stron kart.
+  Szczegóły: [docs/RUNE_HERO_AUDIT.md](docs/RUNE_HERO_AUDIT.md).

@@ -18,8 +18,8 @@ function desiredBoardPanel() {
   if (state?.mission?.reading && !keyboardRollWizard) return null;
   if (state?.exploration_mana?.active && !keyboardRollWizard) return null;
   if (state?.training_arena?.tutorial?.notice) return null;
-  if (state?.combat?.shared_mana?.pool_view?.choices?.length) return null;
-  if (state?.combat?.shared_mana?.command?.stage) return null;
+  if (state?.combat?.shared_mana?.pool_view?.choices?.length || state?.combat?.shared_mana?.rune_view?.choices?.length) return null;
+  if (state?.combat?.shared_mana?.command?.stage || state?.combat?.reaction_choices) return null;
   if (!state?.board_selection?.panel_enabled || keyboardRollWizard?.initiative) return null;
   if (state.combat?.shared_mana?.declaration?.stage === 'payment'
       || state.combat?.shared_mana?.declaration?.target_selection) return null;
@@ -33,6 +33,7 @@ function desiredBoardPanel() {
   }
   const combatPanel = typeof TabletopCombat !== 'undefined' ? TabletopCombat.panel() : null;
   if (combatPanel) return combatPanel;
+  if (state.combat?.tabletop && !resultAck && !combatInterruptPresentation(state.combat)) return null;
   const menu = state.combat?.turn_action_menu;
   if (menu) return null;
   const slots = state.combat?.shield_bash?.stage === 'result' ? [28] : [28, 29];
@@ -82,19 +83,30 @@ function handleBoardPanelEvent(data) {
     if (!state?.exploration_mana?.active || keyboardRollWizard
         || event.context !== `confrontation-scroll:${state.exploration_mana.revision}`) return;
     state.board_selection = data.board_selection;
-    if (event.slot === 26 || event.slot === 27) scrollConfrontation(event.slot === 27 ? 1 : -1);
+    if (event.slot === 26 || event.slot === 27) scrollConfrontation(event.slot === 26 ? 1 : -1);
     return;
   }
   if (event.context?.startsWith('mission-scroll:')) {
     if (!state?.mission?.reading || keyboardRollWizard
         || event.context !== `mission-scroll:${state.mission.revision}`) return;
     state.board_selection = data.board_selection;
-    if (event.slot === 26 || event.slot === 27) scrollMissionText(event.slot === 27 ? 1 : -1);
+    if (event.slot === 26 || event.slot === 27) scrollMissionText(event.slot === 26 ? 1 : -1);
+    return;
+  }
+  if (event.context?.startsWith('rune-scroll:')) {
+    if (!state?.combat?.shared_mana?.rune_view?.choices?.length || keyboardRollWizard
+        || event.context !== `rune-scroll:${state.combat.shared_mana.revision}`) return;
+    state.board_selection = data.board_selection;
+    const panel = document.querySelector('[data-tt-decision]');
+    if (panel && (event.slot === 26 || event.slot === 27)) {
+      panel.scrollBy({top:(event.slot === 26 ? 1 : -1) * Math.max(160,panel.clientHeight * .65),behavior:'auto'});
+    }
     return;
   }
   const expected = state?.board_selection?.panel_context || null;
   if (event.context !== expected) return;
   state.board_selection = data.board_selection;
+  if (event.slot === 24 && typeof TabletopCombat !== 'undefined' && TabletopCombat.handleSlot(24)) return;
   if (event.context?.startsWith('combat-inspect:')) {
     if (TabletopCombat.handleSlot(event.slot)) return;
     if (event.slot===29 && state.combat?.turn_action_menu?.stage!=='preview' && !state.combat?.pending_player_attack && !state.combat?.class_feature_targeting && SessionNavigation.open()) return;
@@ -102,10 +114,12 @@ function handleBoardPanelEvent(data) {
   if (event.context?.startsWith('mana:')) {
     if (event.slot === 28) sharedManaPrimary();
     else if (event.slot === 29) sharedManaCommand('cancel');
-    else sharedManaDelta(event.slot === 27 ? 1 : -1);
+    else sharedManaDelta(event.slot === 26 ? 1 : -1);
     return;
   }
-  if (event.slot === 26 || event.slot === 27) changeRollPanelValue(event.slot === 27 ? 1 : -1);
+  if (!keyboardRollWizard && typeof TabletopCombat !== 'undefined' && TabletopCombat.handleSlot(event.slot)) return;
+  if (!keyboardRollWizard && event.slot === 29 && state.combat?.turn_action_menu?.stage === 'list' && SessionNavigation.open()) return;
+  if (event.slot === 26 || event.slot === 27) changeRollPanelValue(event.slot === 26 ? 1 : -1);
   else if (event.slot === 28) triggerPrimaryAction();
   else if (event.slot === 29) {
     if (keyboardRollWizard) previousKeyboardRollStep();

@@ -86,20 +86,14 @@ def arena_svg(data: dict[str, object]) -> str:
         if not path:
             parts.append(f'<rect data-panel-blank="{slot}" x="{slot*40}" y="760" width="40" height="40" fill="#121a1e"><title>Puste pole</title></rect>')
             continue
-        color = (
-            "#9dcadc"
-            if slot < 6
-            else (
-                ["#e4c380", "#adc9c2", "#c3b8da", "#daa994"][(slot - 6) // 5]
-                if slot < 26
-                else ["#cfba9c", "#cfba9c", "#97d4ab", "#efad9a"][slot - 26]
-            )
-        )
+        color = ("#9dcadc" if slot < 4 else "#53aeef" if slot == 24
+                 else "#d6b46b" if slot < 26
+                 else ["#97d4ab", "#efad9a", "#53aeef", "#efad9a"][slot - 26])
         parts.append(
             f'<g class="pad" tabindex="0" role="button" aria-label="{escape(name)}" data-slot="{slot}" data-board-col="19" data-board-row="{29-slot}" transform="translate({slot*40} 760)" style="color:{color}"><title>{escape(name)}</title><rect x="2" y="3" width="36" height="34" rx="3" fill="#1c272c" stroke="{color}" stroke-width="1"/><svg x="9" y="8" width="22" height="24" viewBox="0 0 24 24" class="glyph"><path d="{path}"/></svg></g>'
         )
     parts.append(
-        '</g><text x="20" y="871" fill="#a6b9b6" font-size="12">5 ikon podstawowych · puste pole · 20 run zdolności · − / + / zatwierdź / wróć. Rząd panelu nie jest terenem gry.</text></svg>'
+        '</g><text x="20" y="871" fill="#a6b9b6" font-size="12">4 akcje · przerwa · 19 run i gwiazda informacji · przerwa · + / − / zatwierdź / wróć. Panel nie jest terenem gry.</text></svg>'
     )
     return "".join(parts)
 
@@ -110,7 +104,8 @@ def main() -> None:
         (ROOT / "content/scenarios/recruitment_arena_combat.json").read_text()
     )
     assert data["board"] == {"cols": 20, "rows": 30}
-    assert len(SYMBOLS) == 30 and len({path for _, path in SYMBOLS}) == 30
+    assert len(SYMBOLS) == 30 and len({path for _, path in SYMBOLS if path}) == 28
+    assert [slot for slot, (_, path) in enumerate(SYMBOLS) if not path] == [4, 25]
     heroes = []
     for hero_id in PLAYABLE_HERO_IDS:
         hero = build_print_hero(hero_id)

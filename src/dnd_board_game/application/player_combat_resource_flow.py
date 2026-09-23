@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dnd_board_game.combat.saving_effects import consume_saving_effects, has_wisdom_save_penalty
+
 from dnd_board_game.inventory.magic_items import effective_ability_modifier
 
 from dnd_board_game.combat.mana_charge import saving_modifiers as charge_saving_modifiers
@@ -788,7 +790,7 @@ class PlayerCombatResourceFlowService:
                                 save_ability == "wisdom"
                                 and any(
                                     effect.actor_id == str(target.id)
-                                    and effect.kind == "lorian_mocked_wisdom"
+                                    and effect.kind in {"lorian_mocked_wisdom", "nimra_mind_break_wisdom"}
                                     for effect in updated_effects
                                 )
                             )
@@ -805,6 +807,7 @@ class PlayerCombatResourceFlowService:
                     combat_actors=resource_use.state.actors,
                     active_effects=updated_effects,
                 )
+                updated_effects = consume_saving_effects(updated_effects, save)
                 save_results.append((str(target.id), save.as_payload()))
                 if save.success:
                     continue

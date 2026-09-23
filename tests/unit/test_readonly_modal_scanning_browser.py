@@ -96,34 +96,29 @@ def test_modal_automatic_scans_scroll_close_and_resume(tmp_path: Path, opening: 
       try {
         await wait(()=>state?.exploration_mana?.active&&!busy,'initial conversation');
         const original=JSON.stringify(state.exploration_mana);
-        const help=confrontationCurrentHelp(state.exploration_mana).extra.target;
-        for(const [slot,kind,close] of [[25,'effects',28],[24,'bonus',29]]){
-          await wait(()=>boardScanInFlight,'initial scanner');
-          if(OPENING==='board')await press(slot);
-          else check(openConfrontationDetail(kind),'mouse open');
-          await wait(()=>document.getElementById('confrontation-detail')?.open&&!boardPanelSyncPromise,'detail opening');
-          const area=document.querySelector('.confrontation-detail-body');
+        check(SessionNavigation.open(),'open menu');
+        await wait(()=>document.getElementById('session-navigation')?.open&&!boardPanelSyncPromise,'menu context');
+        for(const [action,steps,close] of [['journal',1,28],['rules',2,29]]){
+          if(OPENING==='board'){
+            for(let i=0;i<steps;i++)await press(26);
+            check(document.querySelector('.session-focused').dataset.sessionChoice===action,'menu plus');
+            await press(28);
+          }else document.querySelector('[data-session-choice="'+action+'"]').click();
+          await wait(()=>state.board_selection.panel_context?.startsWith(action==='journal'?'session-journal:':'session-help:')&&!boardPanelSyncPromise,'reading context');
+          const area=document.querySelector('.session-navigation-content');
           area.insertAdjacentHTML('beforeend','<p style="height:1000px">Long description</p>');
-          await press(27);
+          await press(26);
           check(area.scrollTop>0,'plus scrolls modal');
           const down=area.scrollTop;
-          await press(26);
+          await press(27);
           check(area.scrollTop<down,'minus scrolls modal');
-          check(confrontationCurrentHelp(state.exploration_mana).extra.target===help,'modal keys changed help target');
           await press(close);
-          await wait(()=>!document.getElementById('confrontation-detail').open&&!boardPanelSyncPromise,'detail close');
-          check(!state.board_selection.panel_context,'detail released');
+          await wait(()=>state.board_selection.panel_context?.startsWith('session-menu:')&&!boardPanelSyncPromise,'return to menu');
         }
-        await press(27);
-        check(confrontationCurrentHelp(state.exploration_mana).extra.target!==help,'conversation controls resume');
-        await press(26);
-        // The session menu uses the same modal scan gate.
-        check(SessionNavigation.open(),'open menu');
-        await wait(()=>!boardPanelSyncPromise,'menu context');
-        await press(27);
-        check(document.querySelector('.session-focused').dataset.sessionChoice==='journal','menu plus');
-        await press(26);await press(28);
+        await press(28);
         await wait(()=>!document.getElementById('session-navigation').open&&!boardPanelSyncPromise,'menu close');
+        check(!state.board_selection.panel_context,'menu released');
+        await press(26);await press(27);
         check(JSON.stringify(state.exploration_mana)===original,'reading changed game state');
         // Unrelated screen-only dialogs must still suppress board input.
         const screen=document.createElement('dialog');document.body.append(screen);screen.showModal();

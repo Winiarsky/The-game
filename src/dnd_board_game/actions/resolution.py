@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dnd_board_game.combat.saving_effects import has_wisdom_save_penalty
+
 from dnd_board_game.actors.resources import uses_physical_mana
 
 import random
@@ -249,6 +251,7 @@ class SpellSaveAttackResolver(AttackActionResolver):
         saving_throw_modifiers: tuple[RollModifier, ...] = (),
         heightened: bool = False,
         target_advantaged: bool = False,
+        active_effects: tuple[ActiveEffect, ...] = (),
     ) -> SingleTargetSaveSpellConfirmation:
         if not source.save_ability:
             raise ValueError(f"Czar {source.name} nie ma zdefiniowanego rzutu obronnego.")
@@ -276,6 +279,8 @@ class SpellSaveAttackResolver(AttackActionResolver):
             advantage=target_advantaged,
             disadvantage=heightened,
         )
+        if target_advantaged and has_wisdom_save_penalty(str(target_after.id), source.save_ability, active_effects):
+            roll_mode = RollMode.ADVANTAGE  # The marker cancels this alongside any other disadvantage.
         saving_throw = resolve_spell_save(
             target_after,
             ability=source.save_ability,
@@ -283,7 +288,7 @@ class SpellSaveAttackResolver(AttackActionResolver):
             natural_roll=rng.randint(1, 20),
             natural_roll_2=(
                 rng.randint(1, 20)
-                if roll_mode != RollMode.NORMAL or target_restrained
+                if roll_mode != RollMode.NORMAL or target_restrained or has_wisdom_save_penalty(str(target_after.id), source.save_ability, active_effects)
                 else None
             ),
             damage_on_success=source.save_damage_on_success,
@@ -296,6 +301,7 @@ class SpellSaveAttackResolver(AttackActionResolver):
             condition_states=resource_use.state.condition_states,
             combat_actors=resource_use.state.actors,
             roll_mode=roll_mode,
+            active_effects=active_effects,
         )
         return SingleTargetSaveSpellConfirmation(resource_use.state, resource_use, saving_throw)
 
@@ -478,6 +484,8 @@ def roll_spell_saves_for_targets(
             advantage=target_id in advantaged_target_ids,
             disadvantage=disadvantage,
         )
+        if target_id in advantaged_target_ids and has_wisdom_save_penalty(target_id, source.save_ability, active_effects):
+            roll_mode = RollMode.ADVANTAGE
         saves.append(
             resolve_spell_save(
                 target,
@@ -486,7 +494,7 @@ def roll_spell_saves_for_targets(
                 natural_roll=rng.randint(1, 20),
                 natural_roll_2=(
                     rng.randint(1, 20)
-                    if roll_mode != RollMode.NORMAL or target_restrained
+                    if roll_mode != RollMode.NORMAL or target_restrained or has_wisdom_save_penalty(str(target.id), source.save_ability, active_effects)
                     else None
                 ),
                 natural_rerolls=(),

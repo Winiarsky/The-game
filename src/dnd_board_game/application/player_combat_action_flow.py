@@ -1,4 +1,8 @@
 from __future__ import annotations
+
+from dnd_board_game.combat.saving_effects import (
+    MIND_BREAK_WISDOM, consume_saving_effects, has_wisdom_save_penalty,
+)
 from dnd_board_game.rules.charge_rolls import uses_charge
 
 from dnd_board_game.actors.resources import uses_physical_mana
@@ -125,6 +129,7 @@ from dnd_board_game.combat.mira_features import (
     legal_rear_tile,
 )
 from dnd_board_game.combat.lorian_features import (
+    consume_rune_optical_preparation,
     apply_lorian_optical_target_lock,
     apply_lorian_shot_companion_effects,
     is_lorian_hand_crossbow_source,
@@ -445,9 +450,12 @@ class PlayerCombatActionFlowService:
                     dc_source_label=f"ST czarów: {caster.name}",
                 ),
                 natural_roll=rng.randint(1, 20),
+                natural_roll_2=rng.randint(1, 20) if has_wisdom_save_penalty(str(attacker.id), "wisdom", active_effects) else None,
+                active_effects=active_effects,
                 condition_states=state.condition_states,
                 combat_actors=state.actors,
             )
+            active_effects = consume_saving_effects(active_effects, save)
             if not save.success:
                 blocked_effect = ActiveCombatEffect(
                     id=f"sanctuary-block:{attacker.id}:{target.id}",
@@ -554,9 +562,12 @@ class PlayerCombatActionFlowService:
                         & set(effective_source.metamagic_ids)
                     ),
                     target_advantaged=triage_hampers_spell,
+                    active_effects=active_effects,
                 )
                 confirmation = single
                 saves = (single.saving_throw,)
+            for completed_save in saves:
+                offensive_effects = consume_saving_effects(offensive_effects, completed_save)
             save_text = " ".join(_spell_save_message(save) for save in saves)
             save = saves[0]
             if all(save.damage_multiplier <= 0 for save in saves):
@@ -688,6 +699,7 @@ class PlayerCombatActionFlowService:
         natural_rerolls: tuple[int, ...] = (),
         mirror_image_roll: int | None = None,
         rider_saving_roll: int | None = None,
+        rider_saving_roll_2: int | None = None,
         scene_objects: tuple[SceneObject, ...] = (),
     ) -> PlayerAttackTransition:
         if pending.stage != "attack_roll":
@@ -968,6 +980,7 @@ class PlayerCombatActionFlowService:
             str(attacker.id),
             selected.selected_target.id,
         )
+        updated_effects = consume_rune_optical_preparation(updated_effects, str(attacker.id), effective_source)
         updated_effects = apply_lorian_optical_target_lock(
             updated_effects,
             attacker_id=str(attacker.id),
@@ -1185,9 +1198,12 @@ class PlayerCombatActionFlowService:
                     effective_source.name,
                 ),
                 natural_roll=rider_saving_roll,
+                natural_roll_2=rider_saving_roll_2,
+                active_effects=updated_effects,
                 condition_states=state.condition_states,
                 combat_actors=state.actors,
             )
+            updated_effects = consume_saving_effects(updated_effects, rider_save)
             on_hit_save_success = rider_save.success
             outcome = (
                 "sukces — ruch spada o połowę"
@@ -1599,9 +1615,27 @@ class PlayerCombatActionFlowService:
                     updated_effects,
                     glow,
                 ).active_effects
+        if effective_source.on_hit_effect_kind == MIND_BREAK_WISDOM:
+            for completed_save in pending.saving_throws:
+                if completed_save.success:
+                    continue
+                weakened_id = str(completed_save.actor_id)
+                weakened = ActiveCombatEffect(
+                    id=f"{MIND_BREAK_WISDOM}:{weakened_id}", actor_id=weakened_id,
+                    kind=MIND_BREAK_WISDOM,
+                    label="Załamanie woli: utrudnienie następnej obrony MDR",
+                    object_id=f"class_feature:{effective_source.id}", value=0,
+                    source_actor_id=str(attacker.id), target_actor_id=weakened_id,
+                    duration=EffectDuration.UNTIL_TURN_START,
+                    expiration_actor_id=str(attacker.id),
+                    stacking=EffectStackingPolicy.REFRESH,
+                    stacking_key=f"{MIND_BREAK_WISDOM}:{weakened_id}",
+                )
+                updated_effects = apply_active_effect(updated_effects, weakened).active_effects
         if (
             pending.hit is not False
             and effective_source.on_hit_effect_kind is not None
+            and effective_source.on_hit_effect_kind != MIND_BREAK_WISDOM
         ):
             on_hit_effect = ActiveCombatEffect(
                 id=(
@@ -1905,6 +1939,7 @@ class PlayerCombatActionFlowService:
             str(attacker.id),
             selected.selected_target.id,
         )
+        updated_effects = consume_rune_optical_preparation(updated_effects, str(attacker.id), effective_source)
         updated_effects = apply_lorian_optical_target_lock(
             updated_effects,
             attacker_id=str(attacker.id),
@@ -2225,7 +2260,9 @@ def _validated_attack(
         raise ValueError("Cel ma pełną osłonę i nie może zostać zaatakowany.")
     if source.id in {"hamstring_cut", "piercing_attack"} and not positioning.flanking_ally_ids:
         raise ValueError(f"{source.name} wymaga osobistej flanki Miry.")
-    if source.id == "blade_mistress" and not (state.shared_mana and positioning.flanking_ally_ids) and not is_hidden_from(
+    if source.id == "blade_mistress" and not (
+        state.shared_mana and state.shared_mana.runes is None and positioning.flanking_ally_ids
+    ) and not is_hidden_from(
         state.hidden_states,
         str(attacker.id),
         str(target.id),
@@ -2293,6 +2330,8 @@ def _source_for_pending(
     source: AttackSource,
     pending: PendingPlayerAttack,
 ) -> AttackSource:
+    from dnd_board_game.combat.mira_features import blade_mistress_flank_damage
+    source = blade_mistress_flank_damage(source, bool(pending.flanking_ally_ids))
     if not pending.two_weapon_bonus:
         return source
     return two_weapon_bonus_attack_source(actor, source)
@@ -2313,6 +2352,15 @@ def _require_attack_economy(
         reserved_hands=reserved_hands,
     ):
         raise ValueError("Atak oburącz wymaga wolnej drugiej ręki.")
+    from dnd_board_game.combat.runes import rune_resolution
+    if rune_resolution(state):
+        return
+    if state.shared_mana and state.shared_mana.runes:
+        from dnd_board_game.scenarios.rune_catalog import rune_card
+        from dnd_board_game.combat.runes import quote_runes
+        if rune_card(str(actor.id), source.id):
+            quote_runes(state, actor, source.id, {})
+            return
     if two_weapon_bonus:
         if state.turn_action.bonus_action_use != ActionUse.ACTION_AVAILABLE:
             raise ValueError("Akcja bonusowa w tej turze została już zużyta.")

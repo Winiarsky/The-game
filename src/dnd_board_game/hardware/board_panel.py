@@ -6,6 +6,27 @@ from dnd_board_game.hardware.led_feedback import LedFeedback, LedFrame, LedRole
 from dnd_board_game.hardware.led_palette import LedColor
 from dnd_board_game.world import Coordinate
 
+PANEL_MOVE = 0
+PANEL_ATTACK = 1
+PANEL_ITEM = 2
+PANEL_END_TURN = 3
+PANEL_GAPS = (4, 25)
+PANEL_RUNE_START = 5
+PANEL_RUNE_STOP = 25
+PANEL_KEY = 23
+PANEL_INFO = 24
+PANEL_PLUS = 26
+PANEL_MINUS = 27
+PANEL_ACCEPT = 28
+PANEL_BACK = 29
+
+
+def panel_delta(slot: int) -> int:
+    """Translate the printed plus/minus controls into their signed change."""
+    if slot not in (PANEL_PLUS, PANEL_MINUS):
+        raise ValueError("Wybierz przycisk + albo −.")
+    return 1 if slot == PANEL_PLUS else -1
+
 
 def panel_position(slot: int) -> Coordinate:
     if not 0 <= slot < 30:
@@ -41,10 +62,12 @@ def panel_feedback(
     ]
     for slot in action_slots:
         intensity = 1.0 if slot == selected_slot else .35 if selected_slot is not None else .65
-        base_color = (action_colors or {}).get(slot, LedColor.PANEL_ACTION)
+        base_color = (action_colors or {}).get(
+            slot, LedColor.PANEL_INFO if slot == PANEL_INFO else LedColor.PANEL_RUNE,
+        )
         color = tuple(round(component * intensity) for component in base_color)
         frames.append(LedFrame((panel_position(slot),), color, LedRole.MARKER))
-    colors = {26: LedColor.PANEL_MINUS, 27: LedColor.PANEL_PLUS,
+    colors = {PANEL_PLUS: LedColor.PANEL_PLUS, PANEL_MINUS: LedColor.PANEL_MINUS,
               28: LedColor.PANEL_ACCEPT, 29: LedColor.PANEL_BACK}
     for slot in control_slots:
         frames.append(LedFrame((panel_position(slot),), colors[slot], LedRole.MARKER))

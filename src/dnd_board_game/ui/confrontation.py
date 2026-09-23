@@ -28,6 +28,8 @@ def read_store(s: ExplorationUiSession) -> dict[str, Any]:
     if data.get('version') != 1:
         raise ValueError('Nieobsługiwana wersja konfrontacji drużynowej.')
     current = data.get('current')
+    if current and current.get('engine') == 'progress_v1':
+        return data
     if current and current['state'].get('passive_rules_version', 1) < 2:
         previous = rules.Confrontation.from_data(current['state'])
         def refreshed(participant: rules.Participant) -> rules.Participant:
@@ -201,6 +203,9 @@ def command(s: ExplorationUiSession, data: dict[str, Any]) -> dict[str, object]:
     store = read_store(s)
     if type(data.get('revision')) is not int or data['revision'] != store['revision']:
         raise ValueError('To polecenie jest nieaktualne.')
+    if (store.get('current') or {}).get('engine') == 'progress_v1':
+        from .progress_confrontation import command as progress_command
+        return progress_command(s, store, data)
     action = data.get('action')
     if (store.get('current') or {}).get('mode') == 'mission' and action in {'next','leave'}:
         from .mission_zero import finish_confrontation
@@ -331,6 +336,9 @@ def payload(s: ExplorationUiSession) -> dict[str, Any]:
     store = read_store(s)
     if not store['active']:
         return dict(model='party_confrontation', active=False, revision=store['revision'])
+    if store['current'].get('engine') == 'progress_v1':
+        from .progress_confrontation import payload as progress_payload
+        return progress_payload(s, store)
     current = store['current']
     scene = current['scene']
     if current['mode'] == 'mission':

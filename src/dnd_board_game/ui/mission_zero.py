@@ -15,7 +15,7 @@ from dnd_board_game.hardware.led_feedback import LedFeedback, LedFrame, LedRole
 from dnd_board_game.hardware.led_palette import LedColor
 from dnd_board_game.world import Coordinate
 from .exploration_mana_board import choice
-from dnd_board_game.application import party_ethos
+from dnd_board_game.application import party_ethos, reputation
 
 if TYPE_CHECKING:
     from .exploration_app import ExplorationUiSession, BoardScanTarget
@@ -51,8 +51,14 @@ def write(s: ExplorationUiSession, m: dict[str, Any]) -> None:
 
 def initialize(s: ExplorationUiSession) -> None:
     from .exploration_app import UiFlowStage
+    from dnd_board_game.character_creation.runes import apply_rune_profile
     s.exploration_setup_flow = None
     s.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
+    s.state = replace(s.state, flags=reputation.initialize(s.state.flags))
+    if s.combat_state is None:
+        for actor in s.exploration.actors:
+            if actor.faction == Faction.ALLY:
+                _set_actor(s, apply_rune_profile(actor))
     write(s, read(s))
 
 
@@ -77,7 +83,8 @@ def autosave(s: ExplorationUiSession) -> bool:
     if not enabled(s) or s.combat_state is not None or s._snapshot_blocker() is not None:
         return False
     confrontation = read_store(s)
-    if confrontation['active'] and confrontation['current']['state']['stage'] != 'result':
+    if (confrontation['active'] and confrontation['current']['state']['stage'] != 'result'
+            and confrontation['current'].get('engine') != 'progress_v1'):
         return False
     write_snapshot(s.snapshot_path, s.create_snapshot())
     s._record('mission_autosaved', dict(stage=read(s)['stage'], path=str(s.snapshot_path)))
@@ -156,18 +163,19 @@ def scene(s: ExplorationUiSession, name: str) -> dict[str, Any]:
 
 def launch_confrontation(s: ExplorationUiSession, name: str) -> None:
     from . import confrontation as c
-    from dnd_board_game.application.confrontation import build
+    from .progress_confrontation import build, ENGINE
     actors = tuple(a for a in s.exploration.actors if a.faction == Faction.ALLY)
     data = c.read_store(s); spec = scene(s,name)
     s.state=replace(s.state,party_position=replace(s.state.party_position,marker_position=Coordinate(*spec['party_position'])))
     previous = data.get('current') or {}
-    if previous.get('mode') == 'mission' and previous.get('mission_scene') == name:
+    if (previous.get('mode') == 'mission' and previous.get('mission_scene') == name
+            and (previous.get('engine') == ENGINE or previous.get('state', {}).get('stage') != 'introduction')):
         data['active'] = True
         c.write(s,data)
         return
     data.update(active=True, current=dict(hero=str(actors[0].id), lesson='mission_'+name, mode='mission',
         mission_scene=name, members=[str(a.id) for a in actors], token=uuid4().hex, scene=spec,
-        state=build(actors,spec,excluded=party_ethos.read(s.state.flags).excluded).to_data(), committed=False, roll_rules_version=2))
+        engine=ENGINE, state=build(actors,spec).to_data(), committed=False, roll_rules_version=2))
     s._exploration_mana_confirmed = data['current']['token']
     c.write(s,data)
 
@@ -187,11 +195,29 @@ def finish_confrontation(s: ExplorationUiSession, current: dict[str, Any]) -> No
         elif outcome == 'compromise': grant(s,m,'weak_potion')
         m['stage']='nessa_theft' if nessa_theft_available(s,m) else 'brief'
     elif name == 'cart':
-        m['stage']='road_success' if outcome=='success' else 'fatigue_roll'
+        tier = current['state'].get('tier', '')
+        if outcome == 'compromise':
+            m.update(stage='fatigue_result', fatigue=1)
+        else:
+            m['stage']='road_success' if outcome=='success' else 'fatigue_roll'
+            m['fatigue_extra'] = 1 if tier == 'worsened' else 0
     else:
         from .mission_zero_recovery import finish_search
         finish_search(s,m,current)
     write(s,m);checkpoint(s,m)
+
+
+def exchange_cart(s: ExplorationUiSession, m: dict[str, Any]) -> None:
+    """Validate the live threshold before spending; keep the moral consequence."""
+    if 'cart_exchanged' in m['flags']:
+        raise ValueError('Wóz został już zamieniony.')
+    flags = reputation.apply(s.state.flags, MISSION_ID + ':cart_exchange', -3, minimum=20)
+    event = read_json(root(s), 'mechanics/ethos.json')['cart_coerce']
+    flags = party_ethos.apply_choice(flags, event['id'], event['direction'])
+    s.state = replace(s.state, flags=flags)
+    m.update(stage='cart_coerced', fatigue=0, cart_started=True)
+    m['flags'].append('cart_exchanged')
+    m['ledger'].append(dict(kind='reputation', id='cart_exchange', name='Zamiana wozu', amount=-3, owner='party'))
 
 
 def synchronize(s: ExplorationUiSession) -> None:
@@ -298,17 +324,23 @@ def payload(s: ExplorationUiSession) -> dict[str, Any] | None:
         opt(6,'cart','cart')
         from .confrontation import read_store
         current = read_store(s).get('current') or {}
-        if not m.get('cart_started') and not (current.get('mode')=='mission' and current.get('mission_scene')=='cart'):
+        if (not m.get('cart_started') and not (current.get('mode')=='mission' and current.get('mission_scene')=='cart')
+                and reputation.read(s.state.flags).points >= 20):
             opt(7,'cart_coerce','cart_coerce')
+    elif stage=='cart_exchange_preview':
+        if reputation.read(s.state.flags).points >= 20:
+            controls.append(choice(28,'cart_exchange_confirm','Zamień wóz · koszt 3 reputacji'))
+        controls.append(choice(29,'cart_exchange_cancel','Anuluj bez kosztu'))
     elif stage=='arrival':opt(28,'battle','battle')
     elif stage=='surrender':opt(6,'accept','accept');opt(7,'refuse','refuse')
     elif stage=='rumor':opt(28,'back','back')
     elif stage=='load':opt(28,'loaded','loaded')
     elif stage=='summary':opt(28,'finish','finish')
     elif stage=='battle':
-        if available_potions(s) and potion_targets(s):opt(24,'potion','potion')
+        if available_potions(s) and potion_targets(s):opt(2,'potion','potion')
     elif stage=='potion_target':
-        for i,a in enumerate(potion_targets(s)):controls.append(choice(6+i,'potion_target',a.name,target=str(a.id)))
+        if m.get('potion_target') in {str(a.id) for a in potion_targets(s)}:
+            controls.append(choice(28,'potion_confirm','Zatwierdź użycie przedmiotu'))
         opt(29,'potion_cancel','cancel')
     elif stage=='potion_roll':opt(29,'potion_cancel','cancel')
     elif stage=='fatigue_roll':pass
@@ -325,6 +357,18 @@ def payload(s: ExplorationUiSession) -> dict[str, Any] | None:
     if image_layout not in ('landscape','portrait'):
         image_layout='landscape'
     text=narrative(s,textkey,fatigue=m['fatigue'],fatigue_duration=f"{m['fatigue']} " + ('pełną rundę' if m['fatigue']==1 else 'pełne rundy')) if textkey in entries else dict(title=setup['title'] if setup else label(s,'mission'),body=setup['body'] if setup else '',speaker='Narrator')
+    if stage == 'cart_exchange_preview':
+        points = reputation.read(s.state.flags).points
+        text = dict(title='Zażądaj zamiany wozu', speaker='Narrator', body=f'Powołajcie się na reputację Gildii. Wymagane: co najmniej 20. Koszt: 3 reputacji ({points} → {points - 3}). Wóz zostanie zamieniony bez testu i zmęczenia. Decyzja przesuwa postawę ku Bezwzględności. Zatwierdź albo anuluj bez kosztu.')
+        image = 'assets/images/road.png'
+    elif stage == 'fatigue_roll' and m.get('fatigue_extra'):
+        text['body'] += ' Pogorszenie sytuacji dodaje 1 rundę do wyniku k4.'
+    elif stage == 'potion_target':
+        targets = potion_targets(s)
+        selected = next((a for a in targets if str(a.id) == m.get('potion_target')), None)
+        potion = read_json(root(s), 'mechanics/items.json')[m['potion_id']]
+        legal = '; '.join(f'{a.name}: pole ({a.position.col}, {a.position.row})' for a in targets)
+        text = dict(title=potion['name'], speaker='Przedmiot', body=f"{potion['description']} Legalne cele: {legal}. Wskaż pole figurki na planszy i zatwierdź. Wybrany cel: {selected.name if selected else 'brak'}. Zużywa zwykłą akcję; runy bez kosztu.")
     checkpoints=[dict(id=k,label=label(s,'checkpoint_'+k)) for k in m['visited'] if (s.save_dir/(MISSION_ID+'.'+k+'.checkpoint.json')).exists()]
     potion_data=read_json(root(s),'mechanics/items.json').get(m.get('potion_id',''),{})
     if stage=='identify_roll':potion_data=dict(sides=20,dice=1,bonus=recovery.identification_modifier(s))
@@ -335,8 +379,8 @@ def payload(s: ExplorationUiSession) -> dict[str, Any] | None:
         from dnd_board_game.combat.session import current_actor
         actor=current_actor(s.combat_state)
         combat_tip=label(s,'combat_drain' if pool.phase=='drain' else 'combat_loaded' if str(actor.id) in pool.heroes and pool.full(str(actor.id)) else 'combat_charge')
-    return dict(print_cutouts=asset_url(root(s),'maps/print/elements_A4.pdf') if (root(s)/'maps/print/elements_A4.pdf').exists() else '',roll_bonus=potion_data.get('bonus',0),print_map=asset_url(root(s),'maps/print/'+('guild' if stage=='guild_setup' else 'outpost')+'_A4.pdf'),combat_tip=combat_tip,point_positions=point_positions,roll_count=potion_data.get('dice',1),roll_sides=potion_data.get('sides',4),active=active_panel(s),stage=stage,revision=m['revision'],text=text,image=asset_url(root(s),image) if image and (root(s)/image).is_file() else '',
-        equipment=preparation.payload(s,m),identification_dc=recovery.identification_dc(s),recovery=recovery.status_payload(s,m),reading=active_panel(s) and stage not in ('fatigue_roll','potion_roll','identify_roll',*preparation.STAGES),guild_points=guild_points(s) if stage=='guild_hub' else {},image_layout=image_layout,choices=controls,marker=marker,setup=setup,ledger=m['ledger'],debt=m['debt'],fatigue=m['fatigue'],checkpoints=checkpoints,
+    return dict(print_cutouts=asset_url(root(s),'print/runy_v01/misja_0_kafle_A4.pdf') if (root(s)/'print/runy_v01/misja_0_kafle_A4.pdf').exists() else '',print_characters=asset_url(root(s),'print/runy_v01/karty_postaci_A4.pdf'),roll_bonus=potion_data.get('bonus',0),print_map=asset_url(root(s),'print/runy_v01/plansza_A4.pdf'),combat_tip=combat_tip,point_positions=point_positions,roll_count=potion_data.get('dice',1),roll_sides=potion_data.get('sides',4),active=active_panel(s),stage=stage,revision=m['revision'],text=text,image=asset_url(root(s),image) if image and (root(s)/image).is_file() else '',
+        reputation=reputation.read(s.state.flags).points,usable_potions=[dict(id=i.id,name=i.name,quantity=i.quantity) for _,i in available_potions(s)],can_use_potion=bool(available_potions(s) and potion_targets(s)),equipment=preparation.payload(s,m),identification_dc=recovery.identification_dc(s),recovery=recovery.status_payload(s,m),reading=active_panel(s) and stage not in ('fatigue_roll','potion_roll','identify_roll',*preparation.STAGES),guild_points=guild_points(s) if stage=='guild_hub' else {},image_layout=image_layout,choices=controls,marker=marker,setup=setup,ledger=m['ledger'],debt=m['debt'],fatigue=m['fatigue'],checkpoints=checkpoints,
         ui=read_json(root(s),'text/ui.json'),rolling=stage in ('fatigue_roll','potion_roll','identify_roll'), can_save=s._snapshot_blocker() is None)
 
 
@@ -351,6 +395,7 @@ def command(s: ExplorationUiSession, data: dict[str, Any]) -> dict[str, object]:
     allowed={c['action'] for c in payload(s)['choices']}
     if stage=='guild_hub':allowed.update(guild_points(s))
     if stage=='explore':allowed.update(('leader','armory','quarters','store'))
+    if stage=='potion_target':allowed.add('potion_target')
     if action not in allowed and not (action=='roll' and stage in ('fatigue_roll','potion_roll','identify_roll')):raise ValueError('Działanie niedostępne w tym etapie.')
     from . import mission_zero_recovery as recovery
     from . import party_preparation as preparation
@@ -383,10 +428,11 @@ def command(s: ExplorationUiSession, data: dict[str, Any]) -> dict[str, object]:
         if action=='cart':m['cart_started']=True
         write(s,m);launch_confrontation(s,'nessa' if action=='negotiate' else 'cart');return s.state_payload()
     elif action=='cart_coerce':
-        event=read_json(root(s),'mechanics/ethos.json')['cart_coerce']
-        s.state=replace(s.state,flags=party_ethos.apply_choice(s.state.flags,event['id'],event['direction']))
-        m.update(stage='cart_coerced',fatigue=0,cart_started=True)
-        m['flags'].append('cart_exchanged')
+        m['stage'] = 'cart_exchange_preview'
+    elif action=='cart_exchange_cancel':
+        m['stage'] = 'road'
+    elif action=='cart_exchange_confirm':
+        exchange_cart(s, m)
     elif action=='nessa_steal_potion':
         event=read_json(root(s),'mechanics/ethos.json')['nessa_steal_potion']
         s.state=replace(s.state,flags=party_ethos.apply_choice(s.state.flags,event['id'],event['direction']))
@@ -404,14 +450,19 @@ def command(s: ExplorationUiSession, data: dict[str, Any]) -> dict[str, object]:
     elif action=='roll' and stage=='fatigue_roll':
         value=data.get('roll')
         if type(value) is not int or not 1<=value<=4:raise ValueError('Podaj naturalny wynik k4 od 1 do 4.')
-        m.update(fatigue=value,stage='fatigue_result')
+        m.update(fatigue=value + m.get('fatigue_extra', 0),stage='fatigue_result')
     elif action=='potion':
         if not potion_targets(s) or not available_potions(s):raise ValueError('Mikstura nie jest teraz dostępna.')
-        m.update(stage='potion_target',potion_id=available_potions(s)[0][1].id.removeprefix('mission_'))
+        from dnd_board_game.combat.session import current_actor
+        m.update(stage='potion_target',potion_id=available_potions(s)[0][1].id.removeprefix('mission_'),potion_target=str(current_actor(s.combat_state).id))
     elif action=='potion_target':
         target=str(data.get('target',''))
         if target not in {str(a.id) for a in potion_targets(s)}:raise ValueError('Cel poza zasięgiem.')
-        m.update(stage='potion_roll',potion_target=target)
+        m['potion_target']=target
+    elif action=='potion_confirm':
+        if m.get('potion_target') not in {str(a.id) for a in potion_targets(s)}:
+            raise ValueError('Cel poza zasięgiem.')
+        m['stage']='potion_roll'
     elif action=='potion_cancel':m['stage']='battle'
     elif action=='roll' and stage=='potion_roll':
         from dnd_board_game.combat.session import use_turn_action
@@ -440,6 +491,12 @@ def command(s: ExplorationUiSession, data: dict[str, Any]) -> dict[str, object]:
         from dnd_board_game.save import write_snapshot
         from dnd_board_game.application.campaign_rewards import complete_mission
         flags, actors, _ = complete_mission(s.state.flags, s.exploration.actors, MISSION_ID)
+        reward = read_json(root(s), 'mechanics/rewards.json').get('reputation_on_completion', 5)
+        reward_id = MISSION_ID + ':completed'
+        already_awarded = reward_id in dict(reputation.read(flags).events)
+        flags = reputation.apply(flags, reward_id, reward)
+        if not already_awarded:
+            m['ledger'].append(dict(kind='reputation', id='mission_completion', name='Ukończenie misji', amount=reward, owner='party'))
         s.state=replace(s.state, flags=flags)
         s.exploration=replace(s.exploration, actors=actors)
         write(s,m)
@@ -505,6 +562,14 @@ def scan_target(s: ExplorationUiSession) -> BoardScanTarget:
         points=tuple(Coordinate(*v) for k,v in p['point_positions'].items() if k in ('leader','armory','quarters','store'))
         positions=(*positions,*points)
         feedback=LedFeedback((*feedback.frames,LedFrame(points,LedColor.INTERACTIVE_OBJECT,LedRole.MARKER)))
+    elif p['stage']=='potion_target':
+        targets = potion_targets(s)
+        points = tuple(a.position for a in targets)
+        positions = (*positions, *points)
+        feedback = LedFeedback((*feedback.frames, LedFrame(points, LedColor.INTERACTIVE_OBJECT, LedRole.MARKER)))
+        selected = next((a for a in targets if str(a.id) == read(s).get('potion_target')), None)
+        if selected:
+            feedback = LedFeedback((*feedback.frames, LedFrame((selected.position,), LedColor.PLAYER_START_ZONE, LedRole.MARKER)))
     return BoardScanTarget(positions=positions,feedback=panel_feedback(tuple(i for i in slots if i<26),control_slots=tuple(i for i in slots if i>=26),base=feedback),empty_message=label(s,'board_hint'))
 
 
@@ -528,6 +593,10 @@ def select_position(s: ExplorationUiSession, position: Coordinate) -> dict[str, 
     if p['stage']=='explore':
         action=next((k for k,v in p['point_positions'].items() if k in ('leader','armory','quarters','store') and Coordinate(*v)==position),None)
         if action:return command(s,dict(action=action,revision=p['revision']))
+    if p['stage']=='potion_target':
+        actor = next((a for a in potion_targets(s) if a.position == position), None)
+        if actor:
+            return command(s,dict(action='potion_target',target=str(actor.id),revision=p['revision']))
     c=next((c for c in p['choices'] if panel_position(c['slot'])==position),None)
     if c is None:raise ValueError(label(s,'board_hint'))
     return command(s,dict(action=c['action'],revision=p['revision'],**c['extra']))

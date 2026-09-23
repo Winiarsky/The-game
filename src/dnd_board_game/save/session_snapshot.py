@@ -1318,7 +1318,7 @@ def _actor_from_payload(raw: object) -> Actor:
             hood_lowered=_boolean(light.get("hood_lowered", False), "actor.active_light.hood_lowered"),
         )
     validate_attunement_limit(inventory)
-    return Actor(
+    actor = Actor(
         id=ActorId(_string(data.get("id"), "actor.id")), name=_string(data.get("name"), "actor.name"),
         portrait=_string(data.get("portrait", ""), "actor.portrait", allow_empty=True),
         creature_type=_string(
@@ -1522,6 +1522,8 @@ def _actor_from_payload(raw: object) -> Actor:
             for feature in (_mapping(raw_feature, "actor.feature"),)
         ),
     )
+    from dnd_board_game.character_creation.runes import normalize_rune_features
+    return normalize_rune_features(actor)
 
 
 def _exploration_payload(state: ExplorationState) -> dict[str, object]:
@@ -2226,6 +2228,7 @@ def _effect_payload(effect: ActiveEffect) -> dict[str, object]:
         "modifier": effect.modifier,
         "uses_maximum": effect.uses_maximum,
         "remaining_rounds": effect.remaining_rounds,
+        "expiration_event_count": effect.expiration_event_count,
         "excluded_positions": [
             _coordinate_payload(position) for position in effect.excluded_positions
         ],
@@ -2251,6 +2254,7 @@ def _effect_from_payload(raw: object) -> ActiveEffect:
         modifier=_integer(data.get("modifier", 0), "effect.modifier"),
         uses_maximum=_integer(data.get("uses_maximum", 0), "effect.uses_maximum"),
         remaining_rounds=_optional_integer(data.get("remaining_rounds"), "effect.remaining_rounds"),
+        expiration_event_count=_integer(data.get("expiration_event_count", 1), "effect.expiration_event_count"),
         excluded_positions=tuple(
             _coordinate(value, "effect.excluded_positions[]")
             for value in _sequence(
@@ -2573,7 +2577,7 @@ def _combat_payload(state: CombatState | None) -> dict[str, object] | None:
             "current_index": state.initiative_order.current_index, "round_number": state.initiative_order.round_number,
             "entries": [{"actor_id": str(entry.actor.id), "natural_roll": entry.roll.natural_roll, "natural_rolls": list(entry.roll.natural_rolls), "total": entry.roll.total, "mode": entry.roll.mode.value, "dexterity_modifier": entry.dexterity_modifier, "stable_order": entry.stable_order} for entry in state.initiative_order.entries],
         },
-        "turn_action": {"shared_speed_halved": state.turn_action.shared_speed_halved, "shared_bonus_actions_used": state.turn_action.shared_bonus_actions_used, "action_use": state.turn_action.action_use.value, "bonus_action_use": state.turn_action.bonus_action_use.value, "reaction_available": state.turn_action.reaction_available, "movement_used_feet": state.turn_action.movement_used_feet, "extra_movement_feet": state.turn_action.extra_movement_feet, "object_interaction_available": state.turn_action.object_interaction_available, "two_weapon_trigger_item_id": state.turn_action.two_weapon_trigger_item_id, "attack_action_active": state.turn_action.attack_action_active, "attacks_used": state.turn_action.attacks_used, "attacks_maximum": state.turn_action.attacks_maximum, "bonus_attacks_remaining": state.turn_action.bonus_attacks_remaining, "bonus_attack_source_id": state.turn_action.bonus_attack_source_id, "bonus_action_spell_cast": state.turn_action.bonus_action_spell_cast, "leveled_action_spell_cast": state.turn_action.leveled_action_spell_cast, "movement_action_used": state.turn_action.movement_action_used, "weapon_change_available": state.turn_action.weapon_change_available},
+        "turn_action": {"rune_special_used": state.turn_action.rune_special_used, "shared_speed_halved": state.turn_action.shared_speed_halved, "shared_bonus_actions_used": state.turn_action.shared_bonus_actions_used, "action_use": state.turn_action.action_use.value, "bonus_action_use": state.turn_action.bonus_action_use.value, "reaction_available": state.turn_action.reaction_available, "movement_used_feet": state.turn_action.movement_used_feet, "extra_movement_feet": state.turn_action.extra_movement_feet, "object_interaction_available": state.turn_action.object_interaction_available, "two_weapon_trigger_item_id": state.turn_action.two_weapon_trigger_item_id, "attack_action_active": state.turn_action.attack_action_active, "attacks_used": state.turn_action.attacks_used, "attacks_maximum": state.turn_action.attacks_maximum, "bonus_attacks_remaining": state.turn_action.bonus_attacks_remaining, "bonus_attack_source_id": state.turn_action.bonus_attack_source_id, "bonus_action_spell_cast": state.turn_action.bonus_action_spell_cast, "leveled_action_spell_cast": state.turn_action.leveled_action_spell_cast, "movement_action_used": state.turn_action.movement_action_used, "weapon_change_available": state.turn_action.weapon_change_available},
         "status": state.status.value, "winner": state.winner.value if state.winner else None,
         "enemy_ai": {
             "profile_id": state.enemy_ai.profile_id,
@@ -2871,6 +2875,7 @@ def _combat_from_payload(raw: object) -> CombatState | None:
             ),
             _boolean(turn.get("shared_speed_halved", False), "turn_action.shared_speed_halved"),
             _integer(turn.get("shared_bonus_actions_used", 0), "turn_action.shared_bonus_actions_used"),
+            bool(turn.get("rune_special_used", False)),
         ),
         status=_enum(CombatStatus, data.get("status"), "combat.status"),
         winner=_optional_enum(Faction, data.get("winner"), "combat.winner"),

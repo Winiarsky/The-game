@@ -939,7 +939,7 @@ function sendInitiativePanelCommand(command) {
 function initiativePanelControlsHtml() {
   const panel = state.encounter_initiative?.panel;
   if (!panel) return '';
-  const buttons = panel.review ? [] : [[26, 'minus', '−', 'czerwony', '#e65d5d'], [27, 'plus', '+', 'zielony', '#62cf83']];
+  const buttons = panel.review ? [] : [[26, 'plus', '+', 'zielony', '#62cf83'], [27, 'minus', '−', 'czerwony', '#e65d5d']];
   return `<div class="keyboard-roll-wizard-actions">${buttons.map(([slot, command, symbol, label, color]) =>
     `<button type="button" class="secondary" style="border-color:${color};color:${color};min-width:56px" onclick="sendInitiativePanelCommand('${command}')" ${panel.enabled_slots.includes(slot)?'':'disabled'} aria-label="${command==='plus'?'Zwiększ':'Zmniejsz'} wynik">${symbol} ${label}</button>`).join('')}</div>
     <p class="keyboard-roll-wizard-help">Plansza: <b>− czerwony</b> · <b>+ zielony</b> · <b>✓ niebieski</b>${panel.enabled_slots.includes(29)?' · ↩ pomarańczowy — popraw':''}. ${panel.review?'Niebieski zatwierdza cały rzut.':'Start k20: 10. Niebieski potwierdza tę kość.'}</p>`;
@@ -5617,7 +5617,7 @@ function physicalFeaturePromptHtml(prompt) {
   if (prompt.input_kind === 'mana_target') {
     controls = `<label>Bohater w 30 ft<select id="physical-feature-mana-target" required>${(prompt.targets || []).map(t => `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join('')}</select></label>`;
   } else if (prompt.input_kind === 'die') {
-    controls = `<label>Wynik k${Number(prompt.die_sides || 10)}<input id="physical-feature-roll" type="number" min="1" max="${Number(prompt.die_sides || 10)}" required></label>`;
+    controls = (prompt.dice || [prompt.die_sides || 10]).map((sides,index) => `<label>Wynik k${Number(sides)}<input id="physical-feature-roll${index ? `-${index}` : ''}" class="physical-feature-die" type="number" min="1" max="${Number(sides)}" data-roll-dice="1d${Number(sides)}" data-roll-modifier="0" required></label>`).join('');
   } else if (prompt.input_kind === 'weapon') {
     controls = `<label>Broń<select id="physical-feature-weapon" required>${(prompt.weapons || []).map(item => `<option value="${esc(item.id)}">${esc(item.name)}</option>`).join('')}</select></label>`;
   } else if (prompt.input_kind === 'slot') {
@@ -5644,7 +5644,7 @@ function physicalFeaturePromptHtml(prompt) {
     </div>`;
 }
 function submitPhysicalFeaturePrompt(actionId) {
-  const roll = Number((document.getElementById('physical-feature-roll') || {}).value || 0);
+  const roll = [...document.querySelectorAll('.physical-feature-die')].reduce((sum,input)=>sum+Number(input.value || 0),0);
   if (actionId === 'divine_smite') {
     const slot = Number((document.getElementById('physical-feature-slot') || {}).value || 0);
     api('/api/combat/divine-smite', {slot_level: slot}, 'Dodaję Divine Smite...');
@@ -8890,6 +8890,7 @@ function triggerPrimaryAction() {
   if (handleReadOnlyPanelSlot(28)) return true;
   if (explorationManaPrimary()) return true;
   if (state?.training_arena?.tutorial?.notice) return acknowledgeTrainingNotice();
+  if (state?.combat?.reaction_choices) return RuneCombat.chooseReaction();
   if (sharedManaPrimary()) return true;
   if (busy) return false;
   if (!state) return false;
@@ -9464,7 +9465,7 @@ document.addEventListener('keydown', event => {
   const combatMenu = state && state.combat ? state.combat.context_menu : null;
   const combatTurnMenu = state && state.combat ? state.combat.turn_action_menu : null;
   const typing = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT');
-  const functionSlot = event.key === '+' || event.key === '=' ? 27 : event.key === '-' ? 26 : event.key === 'Escape' ? 29 : event.key === 'Enter' ? 28 : null;
+  const functionSlot = event.key === '+' || event.key === '=' ? 26 : event.key === '-' ? 27 : event.key === 'Escape' ? 29 : event.key === 'Enter' ? 28 : null;
   if (!typing && functionSlot !== null && handleReadOnlyPanelSlot(functionSlot)) {event.preventDefault();return;}
   if (!typing && !combatMenu && triggerCombatActionShortcut(event)) {
     event.preventDefault();

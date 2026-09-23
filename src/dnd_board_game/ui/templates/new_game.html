@@ -27,8 +27,8 @@
               {% set actor_id = character.actor.id|string %}
               {% set guide = hero_guides.get(actor_id) %}
               <article class="roster-card" data-actor-id="{{ actor_id }}" aria-labelledby="hero-name-{{ actor_id }}">
-                <label class="hero-choice" data-board-rune="{{ 6 + loop.index0 }}">
-                  {{ panel_icon(6 + loop.index0)|safe }}
+                <label class="hero-choice" data-board-rune="{{ 5 + loop.index0 }}">
+                  {{ panel_icon(5 + loop.index0)|safe }}
                   <input type="checkbox" name="character_ids" value="{{ actor_id }}" aria-labelledby="hero-name-{{ actor_id }}" {% if actor_id in selected_character_ids|default(()) %}checked{% endif %}>
                   {% set portrait_url = character_portrait_url(character.actor.portrait) %}
                   <span class="roster-avatar" aria-hidden="true">{% if portrait_url %}<img src="{{ portrait_url }}" alt="">{% else %}{{ character.actor.name[:1]|upper }}{% endif %}</span>
@@ -52,8 +52,8 @@
         <h2>{{ ui_text('navigation.choose_scenario') }}</h2>
         <p>{{ ui_text('navigation.scenario_description') }}</p>
         {% for scenario in scenarios %}
-          <label class="scenario-card" data-board-rune="{{ 6 + loop.index0 }}">
-            {{ panel_icon(6 + loop.index0)|safe }}
+          <label class="scenario-card" data-board-rune="{{ 5 + loop.index0 }}">
+            {{ panel_icon(5 + loop.index0)|safe }}
             <input type="radio" name="scenario_id" value="{{ scenario.id }}" {% if scenario.id == selected_scenario_id or scenario.id == active_scenario_id %}checked{% endif %}>
             <span class="selection-mark" aria-hidden="true">✓</span>
             <span>
@@ -73,7 +73,7 @@
       <div class="flow-actions">
         <a id="cancel-new-game" class="button secondary" href="{{ url_for('index') }}">{{ ui_text('navigation.cancel') }}</a>
         <button id="back-to-party" class="button secondary" type="button" hidden>{{ ui_text('navigation.back') }}</button>
-        <button id="continue-to-scenario" data-board-rune="25" type="button" disabled>{{ panel_icon(25)|safe }} {{ ui_text('navigation.next') }}</button>
+        <button id="continue-to-scenario" data-board-rune="24" type="button" disabled>{{ panel_icon(24)|safe }} {{ ui_text('navigation.next') }}</button>
         <button id="start-new-game" type="submit" hidden>{{ ui_text('navigation.start') }}</button>
       </div>
     </form>

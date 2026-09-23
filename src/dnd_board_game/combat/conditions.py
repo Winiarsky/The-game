@@ -472,18 +472,12 @@ def pending_condition_saves(
     )
 
 
-def resolve_condition_save(
-    states: Sequence[ConditionState],
-    actor: Actor,
-    condition_state: ConditionState,
-    *,
-    natural_roll: int,
-    natural_roll_2: int | None = None,
-    natural_rerolls: tuple[int, ...] = (),
-    combat_actors: Sequence[Actor] = (),
+def condition_save_roll_request(
+    states: Sequence[ConditionState], actor: Actor, condition_state: ConditionState,
+    *, combat_actors: Sequence[Actor] = (),
     additional_modifiers: tuple[RollModifier, ...] = (),
     active_effects: Sequence[object] = (),
-) -> ConditionSaveResolution:
+) -> D20RollRequest:
     from dnd_board_game.actors import saving_throw_roll_modifiers
     from .auras import saving_throw_aura_modifiers
     from .mana_charge import saving_modifiers
@@ -516,6 +510,10 @@ def resolve_condition_save(
         actor,
         saving_throw_ability=condition_state.save_ability,
     )
+    from .saving_effects import has_wisdom_save_penalty, saving_effect_roll_mode
+    request = replace(request, mode=saving_effect_roll_mode(
+        str(actor.id), condition_state.save_ability, active_effects, request.mode,
+    ))
     request = apply_exhaustion_to_roll_request(
         actor,
         request,
@@ -534,6 +532,34 @@ def resolve_condition_save(
         ),
         active_effects=active_effects,
         condition_states=states,
+    )
+    if has_wisdom_save_penalty(str(actor.id), condition_state.save_ability, active_effects):
+        advantage = poison_protection_roll_mode(
+            actor, active_effects,
+            ("poison" if condition_state.condition == CombatCondition.POISONED else condition_state.condition.value,),
+        ) == RollMode.ADVANTAGE or any(
+            (m.stacking_key or "").startswith("feature:") and (m.stacking_key or "").endswith(":advantage")
+            for m in request.modifiers
+        )
+        request = replace(request, mode=RollMode.NORMAL if advantage else RollMode.DISADVANTAGE)
+    return request
+
+
+def resolve_condition_save(
+    states: Sequence[ConditionState],
+    actor: Actor,
+    condition_state: ConditionState,
+    *,
+    natural_roll: int,
+    natural_roll_2: int | None = None,
+    natural_rerolls: tuple[int, ...] = (),
+    combat_actors: Sequence[Actor] = (),
+    additional_modifiers: tuple[RollModifier, ...] = (),
+    active_effects: Sequence[object] = (),
+) -> ConditionSaveResolution:
+    request = condition_save_roll_request(
+        states, actor, condition_state, combat_actors=combat_actors,
+        additional_modifiers=additional_modifiers, active_effects=active_effects,
     )
     if request.mode != RollMode.NORMAL and natural_roll_2 is None:
         raise ValueError("Condition save with advantage or disadvantage requires two d20 rolls.")

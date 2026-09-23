@@ -1,5 +1,64 @@
 # UI przy stole — audyt i propozycja
 
+Gwiazda (ostatnia runa, slot 24) jest stałym skrótem „Informacja o bohaterze”,
+z niebieskim podświetleniem i drobnym podpisem przy panelu. Pokazuje bieżące
+PW/maksimum, tymczasowe PW, KP, statusy, efekty, aurę, zużycie akcji i reakcji,
+runy, reputację, cechy, sprzęt, skazę i historię. Dotyczy aktywnej postaci.
+Otwarcie i powrót nie zmieniają akcji, celu ani zasobów; +/− przewijają treść.
+Klucz (slot 23) przejmuje Żelazny bastion i zastępuje Gwiazdę w talii zasobów
+oraz na karcie Garrana. Gwiazda nie służy już do płatnej mocy ani doboru.
+Zaakceptowane przepływy wdrożono w aplikacji Misji 0. Reguły i źródła danych:
+[Runy i reputacja w aplikacji](../RUNES_RUNTIME.md). Poniżej także opis makiety.
+
+Cele ataku i mocy są wypisane informacyjnie, bez przycisków, ikon run
+i przypisań do dolnego panelu. Wybór następuje przez pole figurki na planszy;
+lista wskazuje wybraną postać, a ✓ uaktywnia się dopiero dla legalnego celu.
+W lokalnej makiecie sygnał pola symuluje `RunePrototype.previewTargetField(row,column)`.
+
+Przydział run odbywa się kolejno dla bohaterów. Kliknięcie runy od razu
+przenosi jedną sztukę z puli do ręki aktywnej postaci. Pole świeci, dopóki
+pozostaje kolejna sztuka i miejsce w ręce. ↩ cofa ostatni niezatwierdzony
+wybór, przywracając runę i podświetlenie; ✓ zatwierdza przydział i przechodzi
+do następnej osoby. Limit ręki 7 pozostaje. Po ostatniej osobie reszta puli
+przechodzi do kolejnego obiegu bez nowego losowania. Pusta pula nie blokuje
+cofania wyborów bieżącej postaci. +/− przewijają, nie zmieniają odbiorcy.
+
+Ruch: podgląd zawiera wyłącznie limit pól i instrukcję przesunięcia figurki,
+kliknięcia podświetlonego pola planszy oraz potwierdzenia. Usunięto ekranowe
+kafelki odległości i ich przypisania do run. W samodzielnej makiecie sygnał
+wyboru pola symuluje `RunePrototype.previewMovement(distance)`; rzeczywisty
+adapter planszy nadal pozostaje poza zakresem makiety.
+
+Korekta wyboru akcji: ekran walki pokazuje „Wybierz akcję”, bez katalogu
+działań podstawowych i mocy. Runy nadal obsługują wszystkie dostępne akcje.
+Wybranie pola otwiera opis tej jednej akcji: ruch pokazuje dostępny dystans,
+atak i moc legalne cele, aura promień (także po zmianie wzmocnienia).
+Wskazanie celu lub wariantu nie pobiera kosztu. Dopiero ✓ wykonuje działanie;
+↩ anuluje podgląd. Wybór pól ruchu i figurki jest osobnym sygnałem planszy;
+nie jest to podłączenie fizycznych LED ani pełna geometria walki.
+Pełny katalog mocy pozostaje na kartach postaci.
+
+Korekta doboru: runy losowane są tylko na początku pierwszej rundy walki.
+Dobór pokazuje posterunek i kontekst starcia. Kolejne rundy zachowują ręce
+bez nowej puli; konfrontacje społeczne korzystają z reputacji.
+
+Nowsza korekta z 22.09.2026: rozmowy korzystają ze wspólnej reputacji (start 20),
+bez doboru run. Po rzucie trzy runy wybierają jedną opcję: +1 za 1, +5 za 3
+lub dodatkową k20 za 5. Wóz: próg 20, koszt zamiany 3.
+[Zasady i granice makiety](../REPUTATION_PROTOTYPE.md).
+
+Aktualizacja 22.09.2026: [makieta](prototype.html) przedstawia teraz runy v0.1:
+wspólny dobór, ręce bohaterów, płatne moce i wybór reakcji. Zwykły atak
+okazyjny bronią kosztuje 0 run. Dolny panel odpowiada nowym
+[wydrukom](../../content/scenarios/misja_0_dzwon/print/runy_v01/index.html).
+`+` i `−` zmieniają wynik kości albo przewijają ekran;
+podświetlenie odróżnia opcje dostępne, wybrane i zablokowane.
+Garran ma robocze moce, pozostałe postacie szablony. To lokalna makieta,
+bez połączenia z czujnikami i bez pełnego rozstrzygania efektów walki.
+Weryfikacja: [raport run v0.1](rune-verification.json).
+
+Poniższy audyt i starsze zrzuty opisują wersję z 20.09, sprzed zmiany zasobów.
+
 Stan: 20.09.2026. Propozycja do obejrzenia, bez wdrożenia zmian w aplikacji.
 Podgląd: [klikalna makieta](prototype.html). Otwórz plik w przeglądarce;
 grafiki bohaterów korzystają z istniejącej lokalnej paczki Misji 0, a przeciwnicy

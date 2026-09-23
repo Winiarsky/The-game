@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dnd_board_game.combat.saving_effects import consume_saving_effects, has_wisdom_save_penalty
+
 from dnd_board_game.inventory.magic_items import effective_ability_modifier
 
 from dnd_board_game.actors.resources import uses_physical_mana, uses_shared_mana
@@ -146,8 +148,15 @@ def resolve_garran_defensive_stance(
         ),
     )
     effects = apply_active_effect(active_effects, effect).active_effects
+    updated = movement.state
+    if state.shared_mana and state.shared_mana.runes:
+        boosts = dict(state.shared_mana.pending_boosts)
+        if boosts.get("anchor"):
+            effects = apply_active_effect(effects, replace(effect, id=f"rune_anchor:{actor.id}", kind="rune_anchor", label="Postawa: ochrona przed przesunięciem", value=1)).active_effects
+        if boosts.get("temp_hp"):
+            updated = replace_actor(updated, replace(current_actor(updated), temp_hp=max(actor.temp_hp, 5)))
     return GarranFeatureResolution(
-        movement.state, effects, actor, current_actor(movement.state), "defensive_stance"
+        updated, effects, actor, current_actor(updated), "defensive_stance"
     )
 
 
@@ -191,6 +200,8 @@ def resolve_shield_bash(
     actor = current_actor(state)
     if not actor_has_feature(actor, "shield_bash"):
         raise ValueError("Aktywna postać nie posiada Uderzenia tarczą.")
+    if state.shared_mana and state.shared_mana.runes and not any(i.kind == "shield" and i.equipped and i.available for i in actor.inventory):
+        raise ValueError("Uderzenie tarczą wymaga wyposażonej tarczy.")
     target = next((item for item in state.actors if str(item.id) == target_id), None)
     if target is None or target.faction == actor.faction or target.is_defeated():
         raise ValueError("Uderzenie tarczą wymaga żywego przeciwnika.")
@@ -198,9 +209,10 @@ def resolve_shield_bash(
         raise ValueError("Cel Uderzenia tarczą musi znajdować się w odległości 5 stóp.")
     if not 1 <= attacker_roll <= 20 or not 1 <= defender_roll <= 20:
         raise ValueError("Rzuty sporne muszą mieścić się w zakresie 1–20.")
-    count = 1 + (dict(state.shared_mana.pending_boosts).get("damage", 0) if state.shared_mana else 0)
-    if type(damage_roll) is not int or not count <= damage_roll <= 6 * count:
-        raise ValueError(f"Podaj sumę {count}k6 obrażeń Uderzenia tarczą.")
+    from .rune_dice import shield_bash_dice, dice_label
+    dice = shield_bash_dice(state)
+    if type(damage_roll) is not int or not len(dice) <= damage_roll <= sum(dice):
+        raise ValueError(f"Podaj sumę {dice_label(dice)} obrażeń Uderzenia tarczą.")
     action = use_action_economy_cost(state, ActionEconomyCost.BONUS_ACTION)
     if not action.accepted:
         raise ValueError(action.message)
@@ -273,6 +285,7 @@ def resolve_garran_command_halt(
         combat_actors=updated.actors,
         active_effects=active_effects,
     )
+    active_effects = consume_saving_effects(active_effects, saving_throw)
     if uses_shared_mana(actor):
         if saving_throw.success:
             return CommandHaltResolution(updated, active_effects, target, saving_throw, "success")
@@ -283,6 +296,8 @@ def resolve_garran_command_halt(
         conditions = apply_condition(updated.condition_states, target, CombatCondition.NO_REACTIONS,
             source_actor_id=str(actor.id), source_spell_id="garran_command_halt", source_spell_level=0, source_label="Rozkaz: Stać",
             duration=EffectDuration.UNTIL_TURN_START, expiration_actor_id=str(actor.id)).condition_states
+        if state.shared_mana.runes is not None and dict(state.shared_mana.pending_boosts).get("root"):
+            slow = replace(slow, kind="movement_speed_cap", value=0)
         return CommandHaltResolution(replace(updated, condition_states=conditions),
             apply_active_effect(active_effects, slow).active_effects, target, saving_throw, "failure")
     if natural_roll == 20:
@@ -335,6 +350,8 @@ def resolve_garran_shield_wall(
     actor = current_actor(state)
     if not actor_has_feature(actor, "garran_shield_wall"):
         raise ValueError("Aktywna postać nie posiada Osłony tarczą.")
+    if state.shared_mana and state.shared_mana.runes and not any(i.kind == "shield" and i.equipped and i.available for i in actor.inventory):
+        raise ValueError("Osłona tarczą wymaga wyposażonej tarczy.")
     updated, before, after = _spend_tactic_and_action(state, ActionEconomyCost.BONUS_ACTION)
     source_effect = ActiveEffect(
         id=f"garran_shield_wall_source:{actor.id}",
@@ -350,6 +367,8 @@ def resolve_garran_shield_wall(
         radius_feet=5,
     )
     effects = apply_active_effect(active_effects, source_effect).active_effects
+    if state.shared_mana and state.shared_mana.runes and dict(state.shared_mana.pending_boosts).get("anchor"):
+        effects = apply_active_effect(effects, replace(source_effect, id=f"rune_anchor_aura:{actor.id}", kind="rune_anchor_aura")).active_effects
     effects = synchronize_garran_effects(updated.actors, effects)
     return GarranFeatureResolution(updated, effects, before, after, "garran_shield_wall")
 
@@ -375,6 +394,10 @@ def resolve_garran_rally(
         ):
             continue
         conditions = remove_condition(conditions, str(ally.id), CombatCondition.FRIGHTENED)
+        if state.shared_mana and state.shared_mana.runes:
+            chosen = state.shared_mana.attack_targets or (str(actor.id),)
+            if not dict(state.shared_mana.pending_boosts).get("all") and str(ally.id) not in chosen:
+                continue
         advantage = ActiveEffect(
             id=f"garran_rally_advantage:{ally.id}",
             actor_id=str(ally.id),
@@ -444,7 +467,7 @@ def synchronize_garran_effects(
             # Compatibility cleanup for encounters restored from the retired
             # spell-shaped Garran deck.
             continue
-        if effect.kind == "garran_shield_wall_member":
+        if effect.kind in {"garran_shield_wall_member", "rune_anchor_member"}:
             continue
         if effect.kind == "garran_guard_companion":
             protector = actor_by_id.get(effect.source_actor_id or "")
@@ -458,7 +481,7 @@ def synchronize_garran_effects(
             ):
                 continue
         retained.append(effect)
-        if effect.kind == "garran_shield_wall_source":
+        if effect.kind in {"garran_shield_wall_source", "rune_anchor_aura"}:
             sources.append(effect)
     for source in sources:
         protector = actor_by_id.get(source.actor_id)
@@ -471,9 +494,9 @@ def synchronize_garran_effects(
                 continue
             members.append(
                 ActiveEffect(
-                    id=f"garran_shield_wall_member:{protector.id}:{ally.id}",
+                    id=f"rune_anchor_member:{protector.id}:{ally.id}" if source.kind == "rune_anchor_aura" else f"garran_shield_wall_member:{protector.id}:{ally.id}",
                     actor_id=str(ally.id),
-                    kind="garran_shield_wall_member",
+                    kind="rune_anchor_member" if source.kind == "rune_anchor_aura" else "garran_shield_wall_member",
                     label="Osłona tarczą Garrana",
                     object_id="class_feature:garran_shield_wall",
                     value=source.value,
@@ -511,6 +534,10 @@ def redirect_guarded_single_target(
     if protector is None or protector.is_defeated():
         return GuardRedirect(intended, tuple(effect for effect in effects if effect.id != guard.id), False)
     remaining = tuple(effect for effect in effects if effect.id != guard.id)
+    if guard.value > 0:
+        remaining += (replace(guard, id=f"rune_guard_reduction:{protector.id}", actor_id=str(protector.id),
+            kind="rune_guard_reduction", duration=EffectDuration.UNTIL_NEXT_ATTACK,
+            expiration_actor_id=str(current_actor(state).id)),)
     return GuardRedirect(protector, remaining, True, intended_target_id)
 
 

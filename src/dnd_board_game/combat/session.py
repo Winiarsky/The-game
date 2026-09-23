@@ -61,6 +61,7 @@ class TurnActionState:
     weapon_change_available: bool = True
     shared_speed_halved: bool = False
     shared_bonus_actions_used: int = 0
+    rune_special_used: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -305,6 +306,7 @@ def start_combat(
     condition_states: tuple[ConditionState, ...] = (),
     *,
     mana_excluded: tuple[str, ...] = (),
+    rune_deck: tuple[str, ...] | None = None,
 ) -> CombatState:
     if not actors:
         raise ValueError("Cannot start combat without actors.")
@@ -333,6 +335,14 @@ def start_combat(
             heroes = tuple(str(a.id) for a in actors if any(f.feature_id == "pooled_mana_v01" for f in a.features))
             state = replace(state, shared_mana=sync_pool(state.shared_mana, new_mana(heroes, str(first_actor.id), values={h: hero_profile(h)["values"] for h in heroes}, excluded=mana_excluded)))
 
+    if any(any(f.feature_id == "rune_resource_v01" for f in a.features) for a in actors):
+        from dnd_board_game.rules.runes import RESOURCE_RUNES, new_runes
+        from dnd_board_game.rules.shared_mana import sync_runes
+        heroes = tuple(str(a.id) for a in actors if a.faction == Faction.ALLY)
+        # Randomness belongs to the caller; absent injection gives a stable deck.
+        # Runtime sessions supply an already shuffled deck at combat activation.
+        deck = rune_deck if rune_deck is not None else tuple(r for _ in heroes for r in RESOURCE_RUNES)
+        state = replace(state, shared_mana=sync_runes(SharedMana(turn_actor=str(first_actor.id)), new_runes(heroes, deck)))
     return _with_finished_status(state)
 
 
@@ -547,6 +557,9 @@ def _drop_equipped_weapons(
 
 
 def use_turn_action(state: CombatState) -> TurnActionUseResult:
+    from .runes import rune_resolution
+    if rune_resolution(state):
+        return TurnActionUseResult(state, True, "Koszt mocy runicznej został opłacony.")
     if state.status != CombatStatus.ACTIVE:
         return TurnActionUseResult(state, False, "Walka nie jest aktywna.")
     actor = current_actor(state)
@@ -581,8 +594,11 @@ def attack_action_remaining(state: CombatState, actor: Actor | None = None) -> i
     turn = state.turn_action
     if turn.attack_action_active:
         return max(0, turn.attacks_maximum - turn.attacks_used)
-    if turn.action_use == ActionUse.ACTION_AVAILABLE:
+    from .runes import rune_resolution
+    if rune_resolution(state):
         return acting.attacks_per_action
+    if turn.action_use == ActionUse.ACTION_AVAILABLE:
+        return 1 if state.shared_mana and state.shared_mana.runes else acting.attacks_per_action
     return 0
 
 
@@ -612,14 +628,17 @@ def use_attack_action(
             )
         updated = replace(turn, attacks_used=turn.attacks_used + 1)
     else:
-        if turn.action_use != ActionUse.ACTION_AVAILABLE:
+        from .runes import rune_resolution
+        if turn.action_use != ActionUse.ACTION_AVAILABLE and not rune_resolution(state):
             return TurnActionUseResult(state, False, "Akcja w tej turze została już zużyta.")
         maximum = acting.attacks_per_action if maximum_attacks is None else int(maximum_attacks)
+        if state.shared_mana and state.shared_mana.runes and not rune_resolution(state):
+            maximum = 1
         if maximum < 1:
             return TurnActionUseResult(state, False, "Liczba ataków musi być dodatnia.")
         updated = replace(
             turn,
-            action_use=ActionUse.ACTION_USED,
+            action_use=turn.action_use if rune_resolution(state) else ActionUse.ACTION_USED,
             attack_action_active=True,
             attacks_used=1,
             attacks_maximum=maximum,
@@ -633,6 +652,9 @@ def use_attack_action(
 
 
 def use_bonus_action(state: CombatState) -> TurnActionUseResult:
+    from .runes import rune_resolution
+    if rune_resolution(state):
+        return TurnActionUseResult(state, True, "Koszt mocy runicznej został opłacony.")
     if state.status != CombatStatus.ACTIVE:
         return TurnActionUseResult(state, False, "Walka nie jest aktywna.")
     actor = current_actor(state)
@@ -1177,6 +1199,9 @@ def use_actor_reaction(state: CombatState, actor: Actor) -> TurnActionUseResult:
 
 
 def can_pay_action_economy_cost(state: CombatState, cost: ActionEconomyCost) -> bool:
+    from .runes import rune_resolution
+    if rune_resolution(state) and cost in {ActionEconomyCost.ACTION, ActionEconomyCost.BONUS_ACTION}:
+        return True
     if state.status != CombatStatus.ACTIVE:
         return False
     if cost == ActionEconomyCost.FREE:
@@ -1257,6 +1282,9 @@ def movement_remaining(
 def use_movement_action(state: CombatState, actor: Actor) -> TurnMovementUseResult:
     """Spend the whole voluntary movement budget on a Garran movement technique."""
 
+    from .runes import rune_resolution
+    if rune_resolution(state) and state.turn_action.movement_action_used:
+        return TurnMovementUseResult(state, True, "Cały ruch opłacono przy zatwierdzeniu mocy.", 0)
     if state.status != CombatStatus.ACTIVE or actor.id != current_actor(state).id:
         return TurnMovementUseResult(state, False, "To nie jest aktywna tura tego aktora.", 0)
     if actor.is_defeated():
@@ -1494,7 +1522,8 @@ def _turn_action_for(
             object_interaction_available=False,
         )
     from dnd_board_game.actors.resources import uses_shared_mana
-    halved = uses_shared_mana(actor) and str(actor.id) == "garran" and any(
+    from .runes import uses_runes
+    halved = uses_shared_mana(actor) and not uses_runes(actor) and str(actor.id) == "garran" and any(
         a.faction not in {actor.faction, Faction.NEUTRAL} and not a.is_defeated()
         and max(abs(a.position.col-actor.position.col), abs(a.position.row-actor.position.row)) <= 1
         for a in actors)

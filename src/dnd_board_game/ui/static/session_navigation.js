@@ -64,8 +64,8 @@ const SessionNavigation = (() => {
     if (slot===29) back();
     else if (slot===28) {const selected=choices()[index];if(selected)activate(selected.dataset.sessionChoice);else back();}
     else if (slot===26 || slot===27) {
-      if (choices().length) {index+=slot===26?-1:1;highlight();}
-      else dialog().querySelector('.session-navigation-content').scrollBy({top:slot===26?-180:180});
+      if (choices().length) {index+=slot===26?1:-1;highlight();}
+      else dialog().querySelector('.session-navigation-content').scrollBy({top:slot===26?180:-180});
     } else return false;
     return true;
   }

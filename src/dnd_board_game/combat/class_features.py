@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dnd_board_game.combat.saving_effects import consume_saving_effects, has_wisdom_save_penalty
+
 from dnd_board_game.inventory.magic_items import effective_ability_modifier
 
 from dnd_board_game.actors.resources import uses_physical_mana, uses_shared_mana
@@ -241,6 +243,7 @@ class ChannelTurnResolution:
     turned_target_ids: tuple[str, ...]
     successful_save_target_ids: tuple[str, ...]
     action_id: str
+    active_effects: tuple[ActiveEffect, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -484,6 +487,8 @@ def resolve_channel_turn(
     *,
     action_id: str,
     saving_rolls: dict[str, int],
+    saving_rolls_2: dict[str, int] | None = None,
+    active_effects: tuple[ActiveEffect, ...] = (),
     board: BoardState | None = None,
 ) -> ChannelTurnResolution:
     actor = current_actor(state)
@@ -540,9 +545,12 @@ def resolve_channel_turn(
             target,
             request,
             natural_roll=int(saving_rolls[target_id]),
+            natural_roll_2=(saving_rolls_2 or {}).get(target_id),
+            active_effects=active_effects,
             condition_states=conditions,
             combat_actors=updated.actors,
         )
+        active_effects = consume_saving_effects(active_effects, save)
         if save.success:
             successful.append(target_id)
             continue
@@ -571,6 +579,7 @@ def resolve_channel_turn(
         tuple(turned),
         tuple(successful),
         action_id,
+        active_effects,
     )
 
 
@@ -1753,8 +1762,10 @@ def resolve_second_wind(
     actor = current_actor(state)
     if not actor_has_feature(actor, "second_wind"):
         raise ValueError("Aktywna postać nie posiada cechy Second Wind.")
-    if not 1 <= natural_roll <= 10:
-        raise ValueError("Wynik Second Wind musi mieścić się w zakresie 1–10.")
+    from .rune_dice import second_wind_dice, dice_label
+    dice = second_wind_dice(state)
+    if not len(dice) <= natural_roll <= sum(dice):
+        raise ValueError(f"Podaj sumę {dice_label(dice)} Drugiego oddechu.")
     if not can_spend_actor_resource(actor, "second_wind_uses"):
         raise ValueError("Second Wind zostało już wykorzystane.")
     action = use_action_economy_cost(state, (ActionEconomyCost.ACTION if uses_physical_mana(actor) else ActionEconomyCost.BONUS_ACTION))
@@ -1779,11 +1790,14 @@ def resolve_second_wind(
         natural_roll + healing_bonus,
         condition_states=action.state.condition_states,
     )
-    updated_state = replace_actor(action.state, healing.actor_after)
+    healed = healing.actor_after
+    if state.shared_mana and state.shared_mana.runes and dict(state.shared_mana.pending_boosts).get("temp_hp"):
+        healed = replace(healed, temp_hp=max(5, healed.temp_hp))
+    updated_state = replace_actor(action.state, healed)
     return SecondWindResolution(
         state=updated_state,
         actor_before=actor,
-        actor_after=healing.actor_after,
+        actor_after=healed,
         healing=healing,
         natural_roll=natural_roll,
     )
@@ -1877,6 +1891,8 @@ def plan_sneak_attack(
     source: AttackSource,
     roll_mode: RollMode,
 ) -> SneakAttackPlan:
+    if any(c.id == 'rune_blade_mistress' for c in source.damage_components):
+        return SneakAttackPlan(False, "Mistrzyni ostrzy już uwzględnia premie za ukrycie i flankę.", source)
     from dnd_board_game.rules.charge_rolls import uses_charge
     if uses_charge(attacker):
         keys = {m.stacking_key for m in source.attack_roll_request.modifiers}

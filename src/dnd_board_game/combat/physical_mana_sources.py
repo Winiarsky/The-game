@@ -87,11 +87,19 @@ def adapt_attack(actor: Actor, source: AttackSource) -> AttackSource:
             source = replace(source, damage_components=components, damage_hint=" + ".join(c.hint() for c in components), damage_die_sides=sides, damage_modifier=0)
         if source.id == 'sacred_flame' and source.area is not None:
             from .spells import SpellAreaTargetMode
-            source = replace(source, area=replace(source.area, target_mode=SpellAreaTargetMode.ALL_CREATURES))
+            from .runes import uses_runes
+            source = replace(source, area=replace(source.area, target_mode=SpellAreaTargetMode.ENEMIES if uses_runes(actor) else SpellAreaTargetMode.ALL_CREATURES))
         if source.id == 'guiding_bolt':
             source = replace(source, range_feet=75)
         if source.id == 'nimra_mind_break':
             source = replace(source, area=None)
+            from .runes import uses_runes
+            if uses_runes(actor):
+                from .saving_effects import MIND_BREAK_WISDOM
+                source = replace(source, on_hit_condition=None,
+                    on_hit_effect_kind=MIND_BREAK_WISDOM,
+                    on_hit_effect_duration=EffectDuration.UNTIL_TURN_START,
+                    on_hit_effect_remaining_rounds=None)
     return source
 
 

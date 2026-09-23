@@ -14,27 +14,27 @@
       <p>{{ ui_text('navigation.description') }}</p>
     </section>
 
-    {% if mission_active %}<p><a class="button" data-board-rune="10" href="{{ url_for('play') }}">{{ panel_icon(10)|safe }} {{ ui_text('navigation.resume') }}</a></p>{% endif %}
+    {% if mission_active %}<p><a class="button" data-board-rune="9" href="{{ url_for('play') }}">{{ panel_icon(9)|safe }} {{ ui_text('navigation.resume') }}</a></p>{% endif %}
     <nav class="main-menu" aria-label="{{ ui_text('navigation.main_menu') }}">
-      <a class="menu-action primary" data-board-rune="6" href="{{ url_for('new_game') }}">
-        {{ panel_icon(6)|safe }}
+      <a class="menu-action primary" data-board-rune="5" href="{{ url_for('new_game') }}">
+        {{ panel_icon(5)|safe }}
         <span>{{ ui_text('navigation.new_game') }}</span>
         <small>{{ ui_text('navigation.new_hint') }}</small>
       </a>
-      <a class="menu-action{% if not save_exists %} quiet{% endif %}" data-board-rune="7" href="{{ url_for('load_game') }}">
-        {{ panel_icon(7)|safe }}
+      <a class="menu-action{% if not save_exists %} quiet{% endif %}" data-board-rune="6" href="{{ url_for('load_game') }}">
+        {{ panel_icon(6)|safe }}
         <span>{{ ui_text('navigation.load_game') }}</span>
         <small>{% if save_exists %}{{ ui_text('navigation.save_available', scenario=scenario_name) }}{% else %}{{ ui_text('navigation.no_save') }}{% endif %}</small>
       </a>
       <form action="{{ url_for('open_training_arena') }}" method="post">
-        <button class="menu-action" data-board-rune="8" type="submit" style="width:100%;text-align:left;font:inherit;cursor:pointer">
-          {{ panel_icon(8)|safe }}
+        <button class="menu-action" data-board-rune="7" type="submit" style="width:100%;text-align:left;font:inherit;cursor:pointer">
+          {{ panel_icon(7)|safe }}
           <span>{{ ui_text('navigation.training') }}</span>
           <small>{{ ui_text('navigation.training_hint') }}</small>
         </button>
       </form>
-      <a class="menu-action" data-board-rune="9" href="{{ url_for('characters') }}">
-        {{ panel_icon(9)|safe }}
+      <a class="menu-action" data-board-rune="8" href="{{ url_for('characters') }}">
+        {{ panel_icon(8)|safe }}
         <span>{{ ui_text('navigation.heroes') }}</span>
         <small>{{ ui_text('navigation.heroes_hint') }}</small>
       </a>

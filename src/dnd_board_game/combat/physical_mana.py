@@ -206,6 +206,10 @@ def resolve_mana_support(state: CombatState, effects: tuple[ActiveEffect, ...], 
                          target_id: str = "") -> tuple[CombatState, tuple[ActiveEffect, ...], str]:
     actor = current_actor(state)
     ability = mana_ability(str(actor.id), action_id)
+    if state.shared_mana and state.shared_mana.runes:
+        from dnd_board_game.scenarios.rune_catalog import rune_card
+        if rune_card(str(actor.id), action_id) is None:
+            raise ValueError("Ta zdolność nie ma dostępnej karty runicznej.")
     if not uses_physical_mana(actor) or ability is None or not action_id.startswith("mana_") or ability.timing == "R":
         raise ValueError("Ta zdolność nie jest dostępną akcją zarządzania maną.")
     if condition_blocks_actions(state.condition_states, str(actor.id)) or actor.is_defeated():
@@ -227,6 +231,26 @@ def resolve_mana_support(state: CombatState, effects: tuple[ActiveEffect, ...], 
                    EffectDuration.UNTIL_TURN_START), source_actor_id=str(actor.id), expiration_actor_id=str(actor.id), die_sides=4 if state.shared_mana else None,
                    object_id="class_feature:mana_inspiration"
         )).active_effects
+    if state.shared_mana and state.shared_mana.runes:
+        from dnd_board_game.rules.runes import exchange_rune, recover_rune
+        from dnd_board_game.scenarios.rune_catalog import rune_card
+        pool = state.shared_mana.runes
+        if action_id == "mana_tuning":
+            if not state.shared_mana.rune_exchange:
+                raise ValueError("Najpierw wybierz runę do wymiany.")
+            pool = exchange_rune(pool, str(actor.id), state.shared_mana.rune_exchange)
+        elif action_id in {"mana_recovery", "mana_great_tuning"}:
+            from collections import Counter
+            selected = state.shared_mana.rune_recovery
+            amount = 3 if dict(state.shared_mana.pending_boosts).get("recover_more") else 2
+            if (not selected or len(selected) > amount
+                    or Counter(selected) - Counter(state.shared_mana.rune_recovery_available)):
+                raise ValueError("Wybierz runy odrzucone przed opłaceniem Odzysku.")
+            for rune in selected:
+                pool = recover_rune(pool, str(actor.id), rune)
+        updated = replace(spent.state, shared_mana=replace(spent.state.shared_mana, runes=pool, deck=len(pool.deck), discard=len(pool.discard)))
+        card = rune_card(str(actor.id), action_id)
+        return updated, effects, card.description if card else ability.description
     return spent.state, effects, f"{ability.name} · wydaj: {ability.cost_label}. {ability.description}"
 
 

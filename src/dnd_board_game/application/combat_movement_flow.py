@@ -182,6 +182,7 @@ class CombatMovementFlowService:
             movement.state.actors,
             movement.state.hidden_states,
             scene_objects,
+            active_effects,
         )
         updated_state = replace(movement.state, hidden_states=hidden.hidden_states)
         return CombatMovementSubmission(

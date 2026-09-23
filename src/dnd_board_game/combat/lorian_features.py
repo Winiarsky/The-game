@@ -117,7 +117,8 @@ def prepare_lorian_shot(
         action_id,
         condition_states=state.condition_states,
     )
-    if action_id == "optical_scope" and (
+    from .runes import rune_resolution
+    if action_id == "optical_scope" and not rune_resolution(state) and (
         state.turn_action.movement_action_used
         or state.turn_action.movement_used_feet > 0
     ):
@@ -145,6 +146,25 @@ def prepare_lorian_shot(
         apply_active_effect(active_effects, effect).active_effects,
         action_id,
     )
+
+
+def prepare_rune_optical_scope(state: CombatState, active_effects: tuple[ActiveEffect, ...]) -> LorianFeatureResolution:
+    """Prepare the next ordinary crossbow attack; do not resolve an attack here."""
+    from .session import use_bonus_action, use_movement_action
+    actor = current_actor(state)
+    if not actor_has_feature(actor, "optical_scope"):
+        raise ValueError("Postać nie posiada Lunety optycznej.")
+    action = use_bonus_action(state)
+    if not action.accepted:
+        raise ValueError(action.message)
+    movement = use_movement_action(action.state, actor)
+    if not movement.accepted:
+        raise ValueError(movement.message)
+    marker = ActiveEffect(id=f"rune_optical_prepared:{actor.id}", actor_id=str(actor.id),
+        kind="rune_optical_prepared", label="Luneta: następny zwykły strzał +2, pomija częściową osłonę",
+        object_id="class_feature:optical_scope", value=2, source_actor_id=str(actor.id),
+        duration=EffectDuration.UNTIL_TURN_END, expiration_actor_id=str(actor.id))
+    return LorianFeatureResolution(movement.state, apply_active_effect(active_effects, marker).active_effects, "optical_scope")
 
 
 def prepared_lorian_shot_source(
@@ -196,7 +216,7 @@ def prepared_lorian_shot_source(
         base,
         id=action_id,
         name=lorian_shot_label(action_id),
-        range_feet=60 if action_id == "optical_scope" else base.range_feet,
+        range_feet=60 if action_id == "optical_scope" and not any(f.feature_id == "rune_resource_v01" for f in actor.features) else base.range_feet,
         attack_roll_request=request,
         limited_attacks=action_id in LORIAN_SINGLE_SHOT_ACTION_IDS,
         on_hit_effect_kind=(
@@ -268,15 +288,33 @@ def lorian_entangling_shot_source(
 def lorian_attack_sources(
     actor: Actor,
     sources: Sequence[AttackSource],
+    active_effects: Sequence[ActiveEffect] = (),
 ) -> tuple[AttackSource, ...]:
     """Normalize ordinary hand-crossbow sources shown to Lorian."""
 
-    return tuple(
+    normalized = tuple(
         lorian_hand_crossbow_source(source)
         if str(actor.id) == "lorian"
         else source
         for source in sources
     )
+    prepared = any(e.actor_id == str(actor.id) and e.kind == "rune_optical_prepared" for e in active_effects)
+    if not prepared:
+        return normalized
+    return tuple(replace(source, attack_roll_request=replace(source.attack_roll_request,
+        modifiers=(*source.attack_roll_request.modifiers,
+                   RollModifier("Luneta optyczna", 2, RollModifierType.FEATURE, stacking_key="lorian_optical_scope"))))
+        if is_lorian_hand_crossbow_source(source) and source.id not in {*LORIAN_SHOT_ACTION_IDS, "counterattack_command"}
+        and not any(m.stacking_key == "lorian_optical_scope" for m in source.attack_roll_request.modifiers)
+        else source for source in normalized)
+
+
+def consume_rune_optical_preparation(active_effects: tuple[ActiveEffect, ...],
+                                     attacker_id: str, source: AttackSource) -> tuple[ActiveEffect, ...]:
+    if (not is_lorian_hand_crossbow_source(source) or source.id in {*LORIAN_SHOT_ACTION_IDS, "counterattack_command"}
+            or not any(m.stacking_key == "lorian_optical_scope" for m in source.attack_roll_request.modifiers)):
+        return active_effects
+    return tuple(e for e in active_effects if not (e.actor_id == attacker_id and e.kind == "rune_optical_prepared"))
 
 
 def lorian_shot_action_id(source_id: str) -> str | None:

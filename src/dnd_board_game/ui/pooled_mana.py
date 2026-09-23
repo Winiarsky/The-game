@@ -61,10 +61,10 @@ def view(session: ExplorationUiSession) -> dict[str, object] | None:
                      *(c for _, cards in (*pool.pools, *pool.prisons) for c in cards))
             allowed = [c for c in COLORS if pool.deck and (pool.deck[0] == c or
                        (pool.deck[0] is None and known.count(c) < pool.composition[c]))]
-        choices += [dict(slot=6 + COLORS.index(c), command="pool_color", color=c, label=NAMES[c]) for c in allowed]
+        choices += [dict(slot=5 + COLORS.index(c), command="pool_color", color=c, label=NAMES[c]) for c in allowed]
     elif phase == "choose":
         instruction = "Wybierz jedną kartę do swojej puli. Druga pozostanie dla następnego bohatera."
-        choices = [dict(slot=24 + i, command="pool_take", index=i, label=NAMES[c], color=c) for i, c in enumerate(pool.offer)]
+        choices = [dict(slot=23 + i, command="pool_take", index=i, label=NAMES[c], color=c) for i, c in enumerate(pool.offer)]
     if phase == "ready" and not choices:
         from .pooled_mana_training import controls
         choices = controls(session)

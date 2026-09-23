@@ -53,12 +53,12 @@ def payload(s: ExplorationUiSession) -> dict[str, object]:
 
     if view == 'heroes':
         for index, h in enumerate(HERO_ORDER):
-            option(6 + index, 'hero:' + h, training_hero(h).name)
+            option(5 + index, 'hero:' + h, training_hero(h).name)
         title = 'Wybierz postać'
     elif view == 'subjects':
         title = training_hero(hero).name + ' · wybierz dział'
-        option(6, 'subject:combat', 'Walka', detail='Mana, zdolności, podbicia, pojedynek i pułapka.')
-        option(7, 'subject:exploration', 'Eksploracja', detail='Rozmowy z NPC, obiekty i warunki interakcji.')
+        option(5, 'subject:combat', 'Walka', detail='Mana, zdolności, podbicia, pojedynek i pułapka.')
+        option(6, 'subject:exploration', 'Eksploracja', detail='Rozmowy z NPC, obiekty i warunki interakcji.')
     elif view == 'modes':
         title = training_hero(hero).name + ' · ' + subject_name
         if exploring:
@@ -71,23 +71,23 @@ def payload(s: ExplorationUiSession) -> dict[str, object]:
             total = len(steps(hero))
             progress = int(scene_flag(s.state.flags, f'walkthrough_charge_progress_{hero}', 0))
             completed = bool(scene_flag(s.state.flags, f'walkthrough_charge_completed_{hero}', False))
-        option(6, 'sequence', 'Po kolei · od początku' if completed or not progress else 'Po kolei · kontynuuj',
+        option(5, 'sequence', 'Po kolei · od początku' if completed or not progress else 'Po kolei · kontynuuj',
                detail=f'{total} ćwiczeń' + (' rozmów i obiektów.' if exploring else ' i końcowy pojedynek.')
                if completed or not progress else f'Zachowany postęp: {progress}/{total} ćwiczeń.')
-        option(7, 'cases', 'Wybierz ćwiczenie', detail='Dowolny przypadek. Bez zmiany postępu kursu po kolei.')
+        option(6, 'cases', 'Wybierz ćwiczenie', detail='Dowolny przypadek. Bez zmiany postępu kursu po kolei.')
         if exploring:
             from .confrontation import selected_party
             members = selected_party(s, hero)
-            option(9, 'party', 'Skład drużyny', detail=', '.join(training_hero(h).name for h in members))
+            option(8, 'party', 'Skład drużyny', detail=', '.join(training_hero(h).name for h in members))
         if progress and not completed:
-            option(8, 'restart', 'Po kolei · od początku', detail='Rozpocznij nowy przebieg kursu.')
+            option(7, 'restart', 'Po kolei · od początku', detail='Rozpocznij nowy przebieg kursu.')
     elif view == 'party':
         from .confrontation import selected_party
         members = selected_party(s, hero)
         title = training_hero(hero).name + f' · skład drużyny {len(members)}/5'
         for index, h in enumerate(HERO_ORDER):
             if h != hero and (h in members or len(members) < 5):
-                option(6 + index, 'member:' + h, training_hero(h).name, completed=h in members,
+                option(5 + index, 'member:' + h, training_hero(h).name, completed=h in members,
                        detail='Usuń z drużyny' if h in members else 'Dodaj do drużyny')
     else:
         view = 'cases'
@@ -106,11 +106,11 @@ def payload(s: ExplorationUiSession) -> dict[str, object]:
         for index, (case_id, name, category) in enumerate(course[page * PAGE_SIZE:(page + 1) * PAGE_SIZE]):
             completed = (lesson_completed(store, hero, case_id) if exploring else
                          bool(scene_flag(s.state.flags, 'trap_lesson_done_' + hero if case_id == 'trap' else f'walkthrough_charge_case_{hero}_{case_id}', False)))
-            option(6 + index, 'case:' + case_id, name, detail=category, completed=completed)
+            option(5 + index, 'case:' + case_id, name, detail=category, completed=completed)
         if page:
-            option(26, 'previous', 'Poprzednia strona')
+            option(27, 'previous', 'Poprzednia strona')
         if page + 1 < pages:
-            option(27, 'next', 'Następna strona')
+            option(26, 'next', 'Następna strona')
     option(29, 'back', 'Menu główne' if view == 'heroes' else 'Wybór postaci' if view == 'subjects' else 'Wybór działu' if view == 'modes' else 'Wybór trybu')
     return dict(view=view, subject=subject, hero_id=hero, title=title, page=page, pages=pages, options=options,
                 revision=s.board_selection_revision)

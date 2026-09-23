@@ -33,7 +33,7 @@ window.fetch=(path, options)=>{
   contract=body;
   selection={revision:String(++generation),navigation_token:body.token,connected:true,auto_arm:true};
   if(pending) {const old=pending;pending=null;old(staleNext
-    ? {navigation_event:{token:body.token,slot:7},board_selection:selection}
+    ? {navigation_event:{token:body.token,slot:6},board_selection:selection}
     : {board_selection:selection});staleNext=false;}
   return response({board_selection:selection});
  }
@@ -58,43 +58,43 @@ window.addEventListener('load',async()=>{
   check(JSON.stringify(contract.controls)==='[26,27,28]','missing board cursor controls');
   check(document.documentElement.scrollWidth<=innerWidth,'horizontal overflow');
   if(PAGE==='/') {
-   check(JSON.stringify(contract.slots)==='[6,7,8,9]','wrong main runes');
+   check(JSON.stringify(contract.slots)==='[5,6,7,8]','wrong main runes');
    check(!contract.back,'root has a nonexistent parent');
    check(document.querySelectorAll('.main-menu svg[data-panel-slot]').length===4,'missing glyphs');
    const button=document.querySelector('button.menu-action');
    check(getComputedStyle(button).color===getComputedStyle(document.querySelector('a.menu-action')).color,'arena title is dark');
-   await press(27);await until(()=>contract.focused===7);
-   await press(27);await until(()=>contract.focused===8);
+   await press(26);await until(()=>contract.focused===6);
    await press(26);await until(()=>contract.focused===7);
-   await press(27);await until(()=>contract.focused===8);
+   await press(27);await until(()=>contract.focused===6);
+   await press(26);await until(()=>contract.focused===7);
    await press(28);
    await until(()=>submission);
    check(submission.path==='/training/open','rune did not open arena immediately');
   } else {
-   check(contract.slots.length===7 && !contract.slots.includes(25),'empty party can continue');
-   const first=document.querySelector('[data-board-rune="6"] input');
-   const second=document.querySelector('[data-board-rune="7"] input');
+   check(contract.slots.length===7 && !contract.slots.includes(24),'empty party can continue');
+   const first=document.querySelector('[data-board-rune="5"] input');
+   const second=document.querySelector('[data-board-rune="6"] input');
    const scenarioRunes=[...document.querySelectorAll('#scenario-selection-step [data-board-rune]')]
      .map(card=>Number(card.dataset.boardRune));
    await press(28);
-   await until(()=>first.checked && contract.slots.includes(25));
-   await press(6);
-   await until(()=>!first.checked && !contract.slots.includes(25));
+   await until(()=>first.checked && contract.slots.includes(24));
+   await press(5);
+   await until(()=>!first.checked && !contract.slots.includes(24));
    await until(()=>pending);
    staleNext=true;
    first.click();
-   await until(()=>contract.slots.includes(25));
+   await until(()=>contract.slots.includes(24));
    check(!second.checked,'late board event overrode screen choice');
-   for(const slot of [7,8,9,10,11]) await press(slot);
-   await until(()=>document.querySelectorAll('input[name="character_ids"]:checked').length===6&&!contract.slots.includes(12));
+   for(const slot of [6,7,8,9,10]) await press(slot);
+   await until(()=>document.querySelectorAll('input[name="character_ids"]:checked').length===6&&!contract.slots.includes(11));
    check(document.querySelectorAll('input[name="character_ids"]:checked').length===6,'six-player party is blocked');
-   await press(25);
+   await press(24);
    await until(()=>JSON.stringify(contract.slots)===JSON.stringify(scenarioRunes));
    check(contract.back,'scenario has no back control');
    await press(29);
-   await until(()=>contract.slots.includes(25));
+   await until(()=>contract.slots.includes(24));
    check(first.checked,'back lost selected party');
-   await press(25);
+   await press(24);
    await until(()=>JSON.stringify(contract.slots)===JSON.stringify(scenarioRunes));
    await press(scenarioRunes[0]);
    await until(()=>submission);

@@ -84,7 +84,8 @@ def evaluate_attack_positioning(
         cover_level = _cover_level_for_bonus(cover_bonus)
 
     from dnd_board_game.actors.resources import uses_physical_mana
-    if uses_physical_mana(attacker) and source.id == "optical_scope":
+    if uses_physical_mana(attacker) and (source.id == "optical_scope" or any(
+        modifier.stacking_key == "lorian_optical_scope" for modifier in source.attack_roll_request.modifiers)):
         cover_bonus = 0
         cover_level = CoverLevel.NONE
         cover_sources = ()
@@ -221,6 +222,8 @@ def dexterity_save_cover_modifiers(
 
 
 def attack_source_with_positioning(source: AttackSource, positioning: AttackPositioning) -> AttackSource:
+    from .mira_features import blade_mistress_flank_damage
+    source = blade_mistress_flank_damage(source, bool(positioning.flanking_ally_ids))
     if (
         not positioning.ranged_threat_actor_ids
         and not positioning.flanking_ally_ids

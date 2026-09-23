@@ -354,7 +354,7 @@ def payload(s: ExplorationUiSession) -> dict[str, object]:
         if step.ability.id == 'shadow_verdict':
             preparation = 'Mira zaczyna ukryta przed kukłą, a pomocnik zapewnia jej własną flankę. '
         lesson = dict(id=step.id, narration_id=f'{hero}:{step.id}', name=step.name, cost=list(step.ability.payment(step.boosts)),
-                      icon=panel_icon(24 if step.ability.category == 'tutorial' else 3 if step.ability.category == 'item' else ability_panel_slot(hero, step.ability.id)),
+                      icon=panel_icon(23 if step.ability.category == 'tutorial' else 2 if step.ability.category == 'item' else ability_panel_slot(hero, step.ability.id)),
                       explanation=step.ability.full_description,
                       instruction=exercise_instruction(s, step, instruction),
                       narration=preparation + narration_content()[hero][step.ability.id] + (f' Teraz powtórz zdolność z dodatkową maną: {boost.label}. Wybierz odpowiadającą jej runę w oknie kosztu.' if boost else ''),

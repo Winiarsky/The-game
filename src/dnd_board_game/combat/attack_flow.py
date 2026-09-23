@@ -565,6 +565,10 @@ def legal_attack_targets(
             continue
         if is_hidden_from(hidden_states, str(actor.id), str(attacker.id)):
             continue
+        if source.id in {'blade_mistress', 'shadow_verdict'} and any(
+                f.feature_id == 'rune_resource_v01' for f in attacker.features):
+            if not is_hidden_from(hidden_states, str(attacker.id), str(actor.id)):
+                continue
         target_space = next(
             (
                 effect.object_id

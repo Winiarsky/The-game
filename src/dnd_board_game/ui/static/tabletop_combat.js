@@ -33,6 +33,8 @@ const TabletopCombat = (() => {
     return labels.length ? `<div class="tt-statuses">${labels.slice(0, 3).map(label => `<span>${esc(label)}</span>`).join('')}${labels.length > 3 ? `<span>+${labels.length - 3}</span>` : ''}</div>` : '';
   }
   function manaLine(actor) {
+    const rune = state.combat.shared_mana?.rune_view?.hands?.find(item => item.hero === actor.id);
+    if (rune) return `<small class="tt-mana-line">Runy: ${rune.count}/7</small>`;
     const pool = state.combat.shared_mana?.pool_view;
     const hand = pool?.hands?.find(item => item.hero === actor.id);
     return hand ? `<small class="tt-mana-line">${text('mana', {cards: hand.cards.length, bonus: hand.roll_bonus ?? 0, charge: hand.total})}</small>` : '';
@@ -45,7 +47,7 @@ const TabletopCombat = (() => {
         return `<button type="button" role="listitem" data-tt-actor="${esc(actor.id)}" class="tt-actor${active ? ' is-active' : ''}${viewing ? ' is-inspected' : ''}${actor.defeated ? ' is-defeated' : ''}"${active ? ' aria-current="step"' : ''}>
           ${portrait(actor)}<span class="tt-actor-content"><span class="tt-name"><strong>${esc(actor.name)}</strong><small>${active ? text('now') : viewing ? text('inspected') : esc(actor.initiative ?? '')}</small></span>
           <span class="tt-hp">${health(actor)}</span>${active || viewing ? `<i class="tt-health-track"><i style="width:${hp}%"></i></i>${manaLine(actor)}<small>${text('ac', {ac: actor.ac})}</small>${badges(actor)}` : badges(actor)}</span></button>`;
-      }).join('')}</div><footer>${text('browse_hint')}</footer></aside>`;
+      }).join('')}</div><footer class="tt-info-legend">${combat.information_icon || '✶'} — Informacja o bohaterze</footer></aside>`;
   }
   function button(slot, label, disabled = false) {
     return `<button type="button" data-tt-slot="${slot}"${disabled ? ' disabled' : ''} class="${slot === 28 ? 'tt-accept' : 'secondary'}">${slot === 28 ? '✓' : '↩'} ${text(label)}</button>`;
@@ -58,23 +60,48 @@ const TabletopCombat = (() => {
     const key = {bless_aura_source: 'aura_bless', saving_throw_bonus: 'aura_saves', divine_care_aura_source: 'aura_divine_care', healing_grace_aura_source: 'aura_healing'}[aura.effect_kind];
     return key ? text(key, params) : '';
   }
+  function effectHtml(effect) {
+    return `<article class="tt-effect"><h3>${effect.concentration ? `${text('concentration')} · ` : ''}${esc(effect.label)}</h3>
+      ${effect.body ? `<p>${esc(effect.body)}</p>` : ''}
+      ${effect.source_name ? `<p>${text('effect_source', {name:effect.source_name})}</p>` : ''}
+      ${effect.expires ? `<p>${text('effect_expiry', {expiry:effect.expires})}</p>` : ''}
+      ${effect.duration && !effect.save_timing ? `<p>${text(`duration_${effect.duration}`, {name:effect.expiration_actor, count:effect.expiration_count})}</p>` : ''}
+      ${effect.save_timing ? `<p>${text('condition_save', {ability:abilityLabel(effect.save_ability), dc:effect.save_dc, timing:copy(`save_${effect.save_timing}`)})}</p>` : ''}
+      ${effect.aura ? `<p>${text(effect.aura_source ? 'aura_source' : 'aura_receives')} · ${text('aura_radius', {radius:effect.aura.radius_feet})}</p><p>${auraDescription(effect.aura)}</p>` : ''}</article>`;
+  }
   function inspectionHtml() {
     const actor = find(inspected);
     if (!actor) { inspected = ''; return ''; }
-    const details = actor.details || [];
-    effectPage = Math.min(effectPage, Math.max(0, details.length - 1));
-    const effect = details[effectPage];
+    const details = actor.details || [], bio = actor.biography || {};
+    const inventory = actor.inventory || [];
     return `<section class="tt-inspection" data-tt-inspection="${esc(actor.id)}">${actorHeader(actor, 'inspected')}
-      <div class="tt-inspection-facts"><span>${text('ac', {ac: actor.ac})}</span>${manaLine(actor)}</div>
-      <div class="tt-effect"><small>${details.length ? text('effect_page', {page: effectPage + 1, total: details.length}) : text('effects_count', {count: 0})}</small>
-      ${effect ? `<h3>${effect.concentration ? `${text('concentration')} · ` : ''}${esc(effect.label)}</h3>
-        ${effect.body ? `<p>${esc(effect.body)}</p>` : ''}
-        ${effect.source_name ? `<p class="tt-effect-source">${text('effect_source', {name: effect.source_name})}</p>` : ''}
-        ${effect.expires ? `<p>${text('effect_expiry', {expiry: effect.expires})}</p>` : ''}
-        ${effect.duration && !effect.save_timing ? `<p>${text(`duration_${effect.duration}`, {name: effect.expiration_actor, count: effect.expiration_count})}</p>` : ''}
-        ${effect.save_timing ? `<p>${text('condition_save', {ability: abilityLabel(effect.save_ability), dc: effect.save_dc, timing: copy(`save_${effect.save_timing}`)})}</p>` : ''}
-        ${effect.aura ? `<p>${text(effect.aura_source ? 'aura_source' : 'aura_receives')} · ${text('aura_radius', {radius: effect.aura.radius_feet})}</p><p>${auraDescription(effect.aura)}</p>${effect.aura_receives ? `<p>${text('aura_exit')}</p>` : ''}` : ''}` : `<p>${text('no_effects')}</p>`}</div>
-      <div class="tt-buttons">${button(28, effectPage + 1 < details.length ? 'next_effect' : 'close_inspection')}${button(29, 'back')}</div><p class="tt-hint">${text('inspect_hint')}</p></section>`;
+      <div class="tt-inspection-facts"><span>${text('ac', {ac:actor.ac})}</span><span>Poziom ${Number(actor.level || 1)}</span>${manaLine(actor)}
+      ${state.mission?.reputation !== undefined ? `<span>Reputacja drużyny: ${Number(state.mission.reputation?.balance ?? state.mission.reputation)}</span>` : ''}</div>
+      ${actor.id === current() ? budgetHtml(state.combat) : ''}${handHtml(actor.id)}
+      <div class="tt-inspection-facts">${Object.entries(actor.ability_scores || {}).map(([key,value]) => `<span>${esc(abilityLabel(key))}: ${Number(value)}</span>`).join('')}</div>
+      <h3>Aktualne stany i efekty</h3>${details.length ? details.map(effectHtml).join('') : `<p>${text('no_effects')}</p>`}
+      <h3>Ekwipunek</h3><ul>${inventory.map(item => `<li>${esc(item.name || item.label || item.id)}${item.quantity > 1 ? ` ×${item.quantity}` : ''}${item.equipped ? ' · wyposażony' : ''}</li>`).join('') || '<li>Brak przedmiotów</li>'}</ul>
+      ${[['history','Historia'],['motivation','Motywacja'],['personal_goal','Cel osobisty'],['flaw','Skaza']].map(([key,label]) => bio[key] ? `<h3>${label}</h3><p>${esc(typeof bio[key] === 'string' ? bio[key] : bio[key].description || '')}</p>` : '').join('')}
+      ${actor.commitments?.length ? `<h3>Zobowiązania</h3><ul>${actor.commitments.map(item => `<li>${esc(item)}</li>`).join('')}</ul>` : ''}
+      <div class="tt-buttons">${button(29, 'back')}</div><p class="tt-hint">+/− przewija informacje. Gwiazda lub ↩ wraca do wybranej akcji.</p></section>`;
+  }
+  function budgetHtml(combat) {
+    const action = combat.action_economy || combat.turn_action || {};
+    const remaining = Math.floor(Number(combat.movement?.remaining_feet ?? combat.current_actor?.movement_remaining_feet ?? 0) / 5);
+    const rune = combat.shared_mana?.rune_view;
+    return `<div class="tt-budget"><span>Ruch: do ${remaining} pól</span><span>Atak / przedmiot${action.action_use === 'action_used' ? ' · wykorzystano' : ''}</span><span>Specjalna${rune?.special_used ? ' · wykorzystano' : ''}</span><span>Reakcja${action.reaction_available === false ? ' · wykorzystano' : ''}</span></div>`;
+  }
+  function handHtml(actorId = current()) {
+    const rune = state.combat?.shared_mana?.rune_view;
+    if (!rune) return '';
+    const hand = rune.hands?.find(item => (item.hero || item.actor_id) === actorId);
+    if (!hand) return '';
+    const cards = hand.runes || hand.cards || [];
+    return `<div class="tt-rune-hand"><small>Twoja ręka · ${cards.length}/7 run</small><div>${(hand.counts || []).map(item => `<span>${item.icon || ''}${esc(item.name || item.rune)} ×${item.count}</span>`).join('')}</div></div>`;
+  }
+  function legalTargetsHtml(combat) {
+    const targets = combat.class_feature_targeting?.legal_targets || combat.class_feature_targeting?.targets || combat.legal_targets || [];
+    return targets.length ? `<div class="tt-legal-targets"><small>Legalne cele · wskaż pole figurki</small><ul>${targets.map(target => `<li>${esc(target.name)}${target.position ? ` · pole (${target.position.join(', ')})` : ''}</li>`).join('')}</ul></div>` : '';
   }
   function fact(label, value) { return `<div><dt>${text(label)}</dt><dd>${value}</dd></div>`; }
   function targetFactsHtml(pending, target) {
@@ -109,7 +136,7 @@ const TabletopCombat = (() => {
     const cost = feature?.mana_cost ? manaCostHtml(feature.mana_cost) : feature?.cost ? text('cost', {cost: feature.cost}) : '';
     return `<section class="tt-target" data-tt-target="${esc(actor?.id || '')}"><h1 class="tt-target-title">${esc(name)} <span>· ${text('choose_target')}</span></h1>
       ${actor ? `${actorHeader(actor, 'target_selected')}${badges(actor)}${targetFactsHtml(pending || {}, actor)}` : `<div class="tt-target-empty"><h2>${text(invalid ? 'target_unavailable' : 'choose_target_title')}</h2><p>${text('target_hint')}</p></div>`}
-      ${feature?.instructions ? `<p class="tt-action-description">${manaTextHtml(feature.instructions)}</p>` : ''}
+      ${!actor ? legalTargetsHtml(combat) : ''}${feature?.instructions ? `<p class="tt-action-description">${manaTextHtml(feature.instructions)}</p>` : ''}
       ${feature?.selected_destination ? `<p>(${Number(feature.selected_destination.col)}, ${Number(feature.selected_destination.row)})</p>` : ''}
       ${pending?.source?.source_type === 'spell' ? spellMechanicalEffectHtml(pending.source) : ''}
       ${pending?.twinned_spell?.available ? pendingPlayerAttackHtml(pending) : `<div class="tt-buttons">${button(28, 'confirm_target', !allowed)}${button(29, hasSelection ? 'change_target' : 'back')}${cost ? `<span class="tt-cost">${cost}</span>` : ''}</div>`}
@@ -117,13 +144,17 @@ const TabletopCombat = (() => {
   }
   function actionHtml(menu, combat) {
     const selected = menu.options?.[Number(menu.selected_index || 0)] || {};
-    if (menu.stage !== 'preview') return `<section class="tt-idle combat-keyboard-waiting"><h1>${text('choose_action')}</h1><p>${text('choose_action_hint')}</p><p class="tt-hint">${text('action_hint')}</p></section>`;
+    if (menu.stage !== 'preview') return `<section class="tt-idle combat-keyboard-waiting"><h1>${text('choose_action')}</h1>${budgetHtml(combat)}${handHtml()}<p>${text('choose_action_hint')}</p><p class="tt-hint">${text('action_hint')}</p></section>`;
+    const movement = selected.id === 'turn:move';
+    const description = movement ? `Ruch: do ${Math.floor(Number(combat.movement?.remaining_feet || 0) / 5)} pól. Przesuń figurkę na podświetlone pole planszy, kliknij je i potwierdź decyzję.` : selected.description || '';
     return `<section class="tt-action"><small>${text('action_preview')}</small><h1><span class="combat-panel-icon">${selected.panel_icon || ''}</span>${manaTextHtml(combatActionTileLabel(selected) || '')}</h1>
-      ${actionManaCostHtml(selected)}<p class="tt-action-description">${manaTextHtml(selected.description || '')}</p>${combatTurnActionUnavailableHtml(menu, combat)}
-      <div class="tt-buttons">${button(28, 'confirm', Boolean(selected.panel_unavailable_reason))}${button(29, 'back')}</div><p class="tt-hint">${text('action_hint')}</p></section>`;
+      ${budgetHtml(combat)}${handHtml()}${actionManaCostHtml(selected)}<p class="tt-action-description">${manaTextHtml(description)}</p>${movement && combat.movement_preview ? `<p>Wybrane pole: (${combat.movement_preview.destination.join(', ')}) · koszt ${combat.movement_preview.cost_feet / 5} pkt ruchu</p>` : ''}${!movement && combat.targeting ? legalTargetsHtml(combat) : ''}${combatTurnActionUnavailableHtml(menu, combat)}
+      <div class="tt-buttons">${button(28, 'confirm', combat.board_can_confirm === false || Boolean(selected.panel_unavailable_reason))}${button(29, 'back')}</div><p class="tt-hint">${text('action_hint')}</p></section>`;
   }
   function decisionHtml(combat) {
     if (inspected) return inspectionHtml();
+    const runeStep = RuneCombat.stepHtml();
+    if (runeStep) return runeStep;
     const actor = combat.current_actor || {};
     const finished = combat.status === 'finished';
     // Interrupts and physical dice retain their established handlers and dialogs.
@@ -136,6 +167,7 @@ const TabletopCombat = (() => {
     return combatCurrentStepHtml(combat, finished, actor.faction === 'ally', actor.faction === 'enemy', combatInterruptPresentation(combat));
   }
   function manaLayerHtml(combat) {
+    if (combat.shared_mana?.rune_view) return '';
     const original = physicalManaHtml(combat);
     const pool = combat.shared_mana?.pool_view;
     if (!pool?.choices?.length) return original;
@@ -172,19 +204,14 @@ const TabletopCombat = (() => {
     if (!enabled() || keyboardRollWizard || resultAck || document.querySelector('dialog[open]')) return false;
     const combat = state.combat, mana = combat.shared_mana;
     if (combat.status !== 'active' || combat.shield_bash || combatInterruptPresentation(combat)) return false;
-    if (mana?.declaration || mana?.pool_view?.choices?.length || mana?.command?.stage || sharedManaPanel()) return false;
+    if (mana?.declaration || mana?.pool_view?.choices?.length || mana?.rune_view?.choices?.length || mana?.command?.stage || sharedManaPanel()) return false;
     if (combatPresentationPhase(combat, false, combat.current_actor?.faction === 'ally', combat.current_actor?.faction === 'enemy') === 'roll') return false;
     return roster().length > 0;
   }
   function panel() {
-    if (!canBrowse()) return null;
-    const combat = state.combat, menu = combat.turn_action_menu;
-    const option = menu?.options?.[Number(menu.selected_index || 0)]?.id || '';
-    const target = combat.pending_player_attack?.target?.id || combat.class_feature_targeting?.selected_target?.id || '';
-    const stage = combat.pending_player_attack?.stage || combat.class_feature_targeting?.action_id || menu?.stage || combatPresentationPhase(combat, false, combat.current_actor?.faction === 'ally', combat.current_actor?.faction === 'enemy');
-    const idle = menu && menu.stage !== 'preview';
-    return {context: `combat-inspect:${combat.round_number}:${current()}:${stage}:${option}:${target}:${inspected || 'closed'}`,
-      slots: !inspected && idle ? [26, 27, 29] : [26, 27, 28, 29], exclusive: Boolean(inspected)};
+    if (!inspected || !canBrowse()) return null;
+    return {context:`combat-inspect:${state.combat.round_number}:${current()}:${inspected}`,
+      slots:[24,26,27,29], exclusive:true};
   }
   function repaint() {
     const element = document.querySelector('.tt-roster');
@@ -198,14 +225,20 @@ const TabletopCombat = (() => {
   }
   function handleSlot(slot) {
     if (!canBrowse()) return false;
-    if (slot === 26 || slot === 27) {
-      const all = roster(), from = Math.max(0, all.findIndex(actor => actor.id === (inspected || current())));
-      return inspect(all[(from + (slot === 26 ? -1 : 1) + all.length) % all.length].id);
+    if (slot === 24 && !inspected) return inspect(current());
+    if (!inspected) {
+      if (slot === 26 || slot === 27) { document.querySelector('[data-tt-decision]')?.scrollBy({top:slot === 26 ? 180 : -180}); return true; }
+      return false;
     }
-    if (!inspected || ![28, 29].includes(slot)) return false;
-    if (slot === 28 && effectPage + 1 < (find(inspected)?.details || []).length) effectPage += 1;
-    else { inspected = ''; effectPage = 0; scrollActor = current(); }
-    repaint(); return true;
+    if (slot === 26 || slot === 27) {
+      document.querySelector('[data-tt-decision]')?.scrollBy({top:slot === 26 ? 180 : -180}); return true;
+    }
+    if (![24,28,29].includes(slot)) return false;
+    const context = state.board_selection?.panel_context;
+    inspected = ''; effectPage = 0; scrollActor = current();
+    if (context?.startsWith('combat-inspect:')) releaseBrowserBoardPanel(context).then(repaint);
+    else repaint();
+    return true;
   }
   function afterRender() {
     const list = document.querySelector('.tt-roster');

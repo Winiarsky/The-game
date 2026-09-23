@@ -25,6 +25,12 @@ def offer_guard(session: ExplorationUiSession) -> bool:
     source = next((s for s in encounter.attack_source_options_by_actor.get(intent.enemy.id, ()) if s.id == intent.source_id), encounter.attack_sources_by_actor.get(intent.enemy.id))
     if protector is None or target is None or source is None or source.area is not None or source.save_ability is not None or protector.is_unconscious() or not reaction_available_for(state, protector) or target.faction != protector.faction or not adjacent(protector, target):
         return False
+    if state.shared_mana.runes is not None:
+        from dnd_board_game.combat.runes import quote_runes
+        try:
+            quote_runes(state, protector, "garran_guard_companion", {})
+        except ValueError:
+            return False
     from .shared_mana import gate_payment
     if not gate_payment(session, 'garran_guard_companion', 'resolve_shared_guard', {}, actor_id='garran'):
         return False
@@ -33,16 +39,26 @@ def offer_guard(session: ExplorationUiSession) -> bool:
     return True
 
 
-def resolve_guard(session: ExplorationUiSession) -> dict[str, object]:
+def resolve_guard(session: ExplorationUiSession, *, reduction_roll: int | None = None) -> dict[str, object]:
     state = session.combat_state
     intent = session.pending_enemy_turn_intent
     if intent is None or intent.target is None or state.shared_mana.pending_ability != 'garran_guard_companion':
         raise ValueError('Nie ma opłaconej Osłony towarzysza.')
+    boosts = dict(state.shared_mana.pending_boosts)
+    sides = 6 if boosts.get("reduce_d6") else 4 if boosts.get("reduce_d4") else 0
+    if state.shared_mana.runes is not None and sides:
+        if reduction_roll is None:
+            from .shared_mana import ManaDeclaration
+            session.shared_mana_declaration = ManaDeclaration("garran_guard_companion", "garran", "resolve_shared_guard", boosts=boosts, stage="effect_roll")
+            session._sync_board_leds()
+            return session.state_payload()
+        if type(reduction_roll) is not int or not 1 <= reduction_roll <= sides:
+            raise ValueError(f"Podaj naturalny k{sides} redukcji obrażeń.")
     protector = next(a for a in state.actors if str(a.id) == 'garran')
     use = use_actor_reaction(state, protector)
     if not use.accepted:
         raise ValueError(use.message)
-    guard = replace(effect(intent.target.id, 'garran_guard_companion', 'Osłona towarzysza'), source_actor_id='garran', target_actor_id=intent.target.id)
+    guard = replace(effect(intent.target.id, 'garran_guard_companion', 'Osłona towarzysza'), source_actor_id='garran', target_actor_id=intent.target.id, value=reduction_roll or 0)
     session.active_combat_effects = apply_active_effect(session.active_combat_effects, guard).active_effects
     mana = finish_mana_action(state.shared_mana, revision=state.shared_mana.revision)
     # A last card may request refresh only after the interrupted attack is complete.

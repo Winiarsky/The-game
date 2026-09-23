@@ -1,5 +1,22 @@
 # Kontekst Projektu
 
+## Obowiązujące zasady Misji 0 — 22.09.2026
+
+Nowe gry używają run w walce i wspólnej reputacji w konfrontacjach.
+Dobór N+2 odbywa się raz na początku walki; przydział jest sekwencyjny,
+ręka ma limit 7, a zwykły ruch i atak nie kosztują run. Specjalna jest
+osobnym budżetem; karta określa dodatkowe wymagania. Gwiazda otwiera
+informacje o bohaterze. Ruch i cele wybiera się przez pola figurek.
+
+Nessa i wóz trwają jedną kolejkę. Sukces daje +1 postępu, krytyk +2,
+krytyczna porażka −1. Reputacja od 20 pozwala wybrać jedną z trzech
+premii po rzucie społecznym. Aktualne dane kart i pełna specyfikacja:
+[Runy i reputacja w aplikacji](docs/RUNES_RUNTIME.md).
+Korekta po audycie: gracz wybiera konkretne wydawane runy; pierwszy Szał bez run,
+Zachowanie życia i połączony Odzysk raz na walkę, Podwójny strzał za A+S.
+Pełny zakres: [Korekty kart](docs/RUNE_BALANCE_V02.md).
+Starsze wpisy o manie poniżej opisują poprzedni wariant i zgodność jego zapisów.
+
 Konfrontacje (21.09.2026): naturalne 20 automatycznie rozlicza sukces jako
 maksimum kości wpływu/postępu + premie, bez drugiego rzutu. Naturalne 1:
 automatyczna porażka i dodatkowa spalona karta po modyfikacji zwykłego kosztu.

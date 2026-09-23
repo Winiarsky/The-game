@@ -40,7 +40,7 @@ def boost_attack(source: AttackSource, mana: SharedMana | None) -> AttackSource:
         return source
     boosts = boost_counts(mana, source.id)
     count = boosts.get('damage', 0)
-    if source.id == 'blade_mistress':
+    if source.id == 'blade_mistress' and not any(c.id == 'rune_blade_mistress' for c in source.damage_components):
         count += 1
     if count and source.damage_components:
         component_id = 'mana_double_shot' if source.id == 'double_shot' else 'shared_boost'

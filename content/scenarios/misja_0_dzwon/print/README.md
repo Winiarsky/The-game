@@ -1,5 +1,11 @@
 # Misja 0 — materiały do przygotowania gry
 
+**Aktualny zestaw run (22.09.2026):** materiały dla nowej gry są w
+[osobnym spisie](runy_v01/index.html): plansza i kafle powiększone o 3%,
+trzy modułowe maty oraz dwa arkusze wycinanek dla każdego bohatera.
+Panel jest zgodny z działającą aplikacją. Wszystkie siedem zestawów zawiera
+koszty run i opisy mocy. Poniższy spis zachowano dla starszego wariantu many.
+
 Aktualne, gotowe pliki są bezpośrednio w tym folderze. Otwórz PDF,
 wybierz **A4, jednostronnie, 100% / rzeczywisty rozmiar**. Wyłącz
 „dopasuj do strony”. Strony poziome mogą się obrócić, ale nie skalować.

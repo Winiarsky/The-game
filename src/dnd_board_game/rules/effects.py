@@ -115,6 +115,7 @@ class ActiveEffect:
     uses_maximum: int = 0
     remaining_rounds: int | None = None
     excluded_positions: tuple[Coordinate, ...] = ()
+    expiration_event_count: int = 1
 
     def __post_init__(self) -> None:
         duration_was_explicit = self.duration is not None
@@ -132,6 +133,8 @@ class ActiveEffect:
             raise ValueError("Active effect dice and use limits cannot be negative.")
         if self.remaining_rounds is not None and self.remaining_rounds < 1:
             raise ValueError("Active effect remaining rounds must be positive.")
+        if self.expiration_event_count < 1:
+            raise ValueError("Active effect expiration event count must be positive.")
         if self.source is None:
             object.__setattr__(self, "source", _legacy_effect_source(self))
         if self.duration is None:
@@ -204,6 +207,7 @@ class ActiveEffect:
             "modifier": self.modifier,
             "uses_maximum": self.uses_maximum,
             "remaining_rounds": self.remaining_rounds,
+            "expiration_event_count": self.expiration_event_count,
             "excluded_positions": [
                 [position.col, position.row]
                 for position in self.excluded_positions
@@ -274,6 +278,8 @@ def expire_active_effects(
             and effect.id not in expired_ids
             and effect.remaining_rounds is not None
         )
+        else replace(effect, expiration_event_count=effect.expiration_event_count - 1)
+        if effect.expiration_event_count > 1 and _counted_turn_expiration(effect, event)
         else effect
         for effect in active_effects
         if effect.id not in expired_ids
@@ -282,6 +288,8 @@ def expire_active_effects(
 
 
 def effect_value_label(effect: ActiveEffect) -> str:
+    if effect.kind == "smoke_screen_area":
+        return "obszar 3×3: można się ukryć; przewaga w teście Ukrycia"
     if effect.kind == "grant_ac_bonus_until_move":
         return f"+{effect.value} AC"
     if effect.kind == "grant_attack_bonus_while_on_object":
@@ -334,6 +342,12 @@ def effect_value_label(effect: ActiveEffect) -> str:
 
 def effect_expiration_label(effect: ActiveEffect) -> str:
     assert effect.duration is not None
+    if effect.kind in {"iron_bastion", "iron_bastion_member"} and effect.anchor_position is not None:
+        return ("pierwsza kolejna tura Garrana bez podtrzymania; później 1 runa na początku tury"
+                if effect.expiration_event_count > 1 else "1 runa na podtrzymanie na początku następnej tury Garrana")
+    if effect.kind == "smoke_screen_area":
+        return ("do końca następnej tury Miry" if effect.expiration_event_count > 1
+                else "do końca najbliższej tury Miry")
     legacy_labels = {
         "grant_ac_bonus_until_move": "znika po ruchu z pola",
         "grant_attack_bonus_while_on_object": "znika po zejściu z obiektu",
@@ -412,7 +426,7 @@ def _expires_on(effect: ActiveEffect, event: EffectEvent) -> bool:
         effect.target_actor_id,
         event,
     ):
-        return True
+        return effect.expiration_event_count <= 1 or not _counted_turn_expiration(effect, event)
     return any(
         _duration_expires(
             effect,
@@ -422,6 +436,12 @@ def _expires_on(effect: ActiveEffect, event: EffectEvent) -> bool:
             event,
         )
         for expiration in effect.additional_expirations
+    )
+
+
+def _counted_turn_expiration(effect: ActiveEffect, event: EffectEvent) -> bool:
+    return event.event_type in {EffectEventType.TURN_START, EffectEventType.TURN_END} and _duration_expires(
+        effect, effect.duration, effect.expiration_actor_id, effect.target_actor_id, event,
     )
 
 

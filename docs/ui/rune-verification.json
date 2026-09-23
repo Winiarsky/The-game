@@ -1,0 +1,185 @@
+{
+  "date": "2026-09-22",
+  "scope": "Verification of the standalone rune UI and print artifacts. Live implementation and its separate checks are documented in docs/RUNES_RUNTIME.md.",
+  "print_checks": {
+    "heroes": 7,
+    "pages_per_hero": 5,
+    "combined_pages": 35,
+    "board_pages": 12,
+    "mission_tile_pages": 7,
+    "mission_tiles": 18,
+    "layout": "Headless Chrome checks page/footer overlap, card text overflow, image loading and physical slot/cutout dimensions for every hero.",
+    "action_mm": [
+      60,
+      54
+    ],
+    "equipment_mm": [
+      60,
+      42
+    ],
+    "scale_relative_to_previous_board_and_tiles": 1.03
+  },
+  "browser_checks": [
+    "Board navigation from start through party and equipment",
+    "Allocation N+2, recipient selection, rune conservation",
+    "Ability cancellation without spending",
+    "Confirmed upgrade spends exactly once",
+    "Special and ordinary action budgets",
+    "Free weapon opportunity attack with empty rune hand",
+    "Choice and confirmation of paid reaction",
+    "Single-round NPC confrontation",
+    "Early end after critical failure below -1",
+    "Fixed panel and no horizontal overflow at 1131x720",
+    "Every visible button has a board route"
+  ],
+  "visual_review": [
+    "Combat at 1300x850",
+    "Reaction choice at 1131x720",
+    "Rune allocation at 1131x720",
+    "Garran ability mat and cutouts; character page"
+  ],
+  "limitations": [
+    "Prototype does not resolve all combat effects or control physical sensors.",
+    "The current seven-hero set has 65 complete ability cards; balance requires a table playtest.",
+    "Twenty physical rune controls remain; the sample resource deck uses ten types.",
+    "Physical printer/sensor alignment still requires an actual print."
+  ],
+  "test_results": [
+    {
+      "command": "scripts/safe_pytest.sh --timeout 60 tests/unit/test_rune_prototype_prints.py",
+      "result": "5 passed"
+    },
+    {
+      "command": "scripts/safe_pytest.sh --timeout 60 tests/unit/test_rune_prototype_browser.py",
+      "result": "1 passed; local Chrome outside sandbox"
+    }
+  ],
+  "pdf_page_counts_verified_with_pdfinfo": {
+    "karty_postaci_A4.pdf": 35,
+    "plansza_A4.pdf": 12,
+    "misja_0_kafle_A4.pdf": 7
+  },
+  "reputation_update": {
+    "starting_shared_reputation": 20,
+    "exclusive_options": [
+      {
+        "cost": 1,
+        "bonus": 1
+      },
+      {
+        "cost": 3,
+        "bonus": 5
+      },
+      {
+        "cost": 5,
+        "effect": "one additional d20, keep higher natural result"
+      }
+    ],
+    "cart_exchange": {
+      "threshold": 20,
+      "cost": 3
+    },
+    "checks": [
+      "approach opens roll directly without rune draw",
+      "three mutually exclusive rune choices",
+      "plus/minus scroll instead of purchasing bonuses",
+      "reserve then confirm numeric bonus cost",
+      "reroll paid before extra die; no refund afterwards",
+      "higher die including criticals; no stacking after reroll",
+      "unaffordable choices disabled; zero-cost normal result available",
+      "cart threshold uses current balance; cancel free; charge once",
+      "balance persists between scenes",
+      "illustrative mission reward once per mock expedition",
+      "choices and confirmation reachable using board scroll"
+    ],
+    "browser_test": "scripts/safe_pytest.sh --timeout 60 tests/unit/test_rune_prototype_browser.py: 1 passed",
+    "scope": "Standalone mockup only; shop pricing and saved campaign state remain future integration."
+  },
+  "combat_preview_update": {
+    "idle": "Wybierz akcję; no action catalogue, board bindings preserved",
+    "previews": [
+      "movement distance and destination",
+      "legal melee and ranged targets",
+      "aura radius with upgrade",
+      "item effect and cost"
+    ],
+    "confirmation": "Selecting or cancelling movement, item, target or aura spends nothing; accept applies action.",
+    "opening_draw": "Only first combat round; battlefield illustration; cart transition opens draw; later rounds preserve hands; aura upkeep retained.",
+    "validation": "scripts/safe_pytest.sh --timeout 60 tests/unit/test_rune_prototype_browser.py: 1 passed",
+    "scope": "Standalone mockup with illustrative legal destinations and targets; no physical LED integration or full combat geometry."
+  },
+  "sequential_allocation_update": {
+    "interaction": "Click transfers one rune immediately; undo reverses current unconfirmed picks; accept confirms hero and advances in party order.",
+    "checks": [
+      "duplicate remains lit",
+      "last copy goes dark",
+      "undo restores pool order and lighting",
+      "confirmed previous hero cannot be undone",
+      "empty pool permits undo",
+      "plus/minus do not change recipient",
+      "hand cap seven",
+      "remaining pool gets another pass without drawing",
+      "rune inventory conserved"
+    ],
+    "validation": "scripts/safe_pytest.sh --timeout 60 tests/unit/test_rune_prototype_browser.py: 1 passed"
+  },
+  "hero_information_update": {
+    "control": {
+      "rune": "Gwiazda",
+      "slot": 24,
+      "color": "blue",
+      "label": "Informacja o bohaterze"
+    },
+    "bastion": {
+      "rune": "Klucz",
+      "slot": 23,
+      "print_and_resource_deck_updated": true
+    },
+    "state": [
+      "current/max HP",
+      "temporary HP",
+      "armor with active personal bonuses",
+      "conditions and current effects",
+      "aura radius",
+      "remaining movement/actions/reaction",
+      "runes",
+      "party reputation",
+      "ability scores",
+      "equipment",
+      "flaw and history"
+    ],
+    "checks": [
+      "star color differs from action",
+      "legend visible",
+      "current HP/conditions shown",
+      "active hero follows turn",
+      "read-only open/return preserves selected action and target",
+      "active aura and stance reflected",
+      "movement ends stance",
+      "source card and generated data agree"
+    ],
+    "tests": [
+      "test_rune_prototype_browser.py: 1 passed",
+      "test_rune_prototype_prints.py: 5 passed"
+    ],
+    "print_layout": "All seven five-page hero sets validated by generator; combined PDF 35 pages.",
+    "scope": "Current standalone mock state; full runtime combat effects and physical hardware integration remain separate."
+  },
+  "explicit_payment_update": {
+    "checks": [
+      "named rune reserved before wildcard choice",
+      "undo changes only pending selection",
+      "player can spend Cup and preserve Key",
+      "missing base rune requires two explicitly selected substitutes",
+      "no payment before final confirmation"
+    ],
+    "tests": [
+      "test_rune_prototype_browser.py: 1 passed in local Chrome",
+      "test_rune_prototype_prints.py and test_tabletop_combat.py: 15 passed"
+    ],
+    "cards": 65,
+    "combined_pdf_pages": 35,
+    "visual_review": "Lorian cutouts after recovery merge and scope budget changes",
+    "live_validation": "See docs/RUNE_BALANCE_V02.md for separate runtime and board scanner checks."
+  }
+}

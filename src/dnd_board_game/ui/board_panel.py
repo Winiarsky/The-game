@@ -5,7 +5,9 @@ from __future__ import annotations
 from typing import Protocol, TYPE_CHECKING
 
 from dnd_board_game.hardware.led_palette import LedColor, RGBColor
-from dnd_board_game.ui.board_panel_symbols import HERO_PANEL_ABILITIES, panel_icon
+from dnd_board_game.hardware.board_panel import PANEL_MOVE, PANEL_ATTACK, PANEL_ITEM, PANEL_END_TURN
+from dnd_board_game.scenarios.rune_catalog import rune_card
+from dnd_board_game.ui.board_panel_symbols import HERO_PANEL_ABILITIES, ability_panel_slot, panel_icon
 
 if TYPE_CHECKING:
     from .exploration_app import BoardScanTarget, ExplorationUiSession
@@ -51,16 +53,19 @@ class PanelOption(Protocol):
 def option_panel_payload(
     hero_id: str, option: PanelOption, *, basic_attack: bool = False
 ) -> dict[str, object]:
-    fixed = {"turn:move": 0, "menu:weapons": 2, "menu:items": 3, "turn:end": 5}
+    fixed = {"turn:move": PANEL_MOVE, "menu:items": PANEL_ITEM, "turn:end": PANEL_END_TURN}
     ability = {
         "basic:hide": "hide", "basic:end-hide": "hide", "turn:grapple": "grapple",
     }.get(option.id, option.action_id or option.source_id)
     abilities = HERO_PANEL_ABILITIES.get(hero_id, ())
     slot = fixed.get(option.id)
-    if ability == 'counterattack_command':
-        slot = 6 + HERO_PANEL_ABILITIES['garran'].index(ability)
+    card = rune_card(hero_id, ability or "")
+    if card is not None:
+        slot = card.slot
+    elif ability == 'counterattack_command':
+        slot = ability_panel_slot('garran', ability)
     elif ability in abilities:
-        slot = 6 + abilities.index(ability)
+        slot = ability_panel_slot(hero_id, ability)
     elif basic_attack:
-        slot = 1
-    return {"panel_slot": slot, "panel_icon": panel_icon(slot) if slot is not None else panel_icon(2) if option.source_id else ""}
+        slot = PANEL_ATTACK
+    return {"panel_slot": slot, "panel_icon": panel_icon(slot) if slot is not None else panel_icon(PANEL_ATTACK) if option.source_id else ""}

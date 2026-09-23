@@ -26,7 +26,7 @@ from flask import (
     url_for,
 )
 
-from dnd_board_game.character_creation.physical_mana import apply_physical_mana_profile
+from dnd_board_game.character_creation.runes import apply_rune_profile
 from dnd_board_game.actions import slash_commands_payload
 from dnd_board_game.actors import AbilityScores, FeatureGrant
 from dnd_board_game.character_creation import (
@@ -341,7 +341,7 @@ def create_app(
             return selection_error("Nie udało się wczytać wybranego bohatera.")
 
         session.configure_scenario(selected_scenario.path)
-        session.configure_custom_party(tuple(apply_physical_mana_profile(actor) for actor in party))
+        session.configure_custom_party(tuple(apply_rune_profile(actor) for actor in party))
         if scenario_id == "misja_0_dzwon":
             from .mission_zero import initialize
             initialize(session)
@@ -458,7 +458,7 @@ def create_app(
                 "character_not_found.html",
                 message=str(exc),
             ), 404
-        character = replace(character, actor=apply_physical_mana_profile(character.actor))
+        character = replace(character, actor=apply_rune_profile(character.actor))
         return render_template(
             "character_detail.html",
             character=character,
@@ -2701,6 +2701,17 @@ def create_app(
     def api_combat_instinctive_dodge_skip():
         try:
             return jsonify(session.skip_instinctive_dodge_reaction())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/reaction/choose")
+    def api_combat_reaction_choose():
+        from .reaction_choices import choose, confirm
+        data = request.get_json(silent=True) or {}
+        try:
+            if data.get("confirm"):
+                return jsonify(confirm(session, revision=data.get("revision")))
+            return jsonify(choose(session, str(data.get("option_id", "")), revision=data.get("revision")))
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 

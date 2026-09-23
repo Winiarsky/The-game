@@ -35,6 +35,12 @@ def menu_mana_payload(
     option: CombatMenuOption, state: CombatState, effects: Sequence[ActiveEffect]
 ) -> dict[str, object]:
     actor = current_actor(state)
+    if state.shared_mana is not None and state.shared_mana.runes is not None:
+        from dnd_board_game.scenarios.rune_catalog import rune_card
+        card = rune_card(str(actor.id), option.action_id or option.source_id or "")
+        return {"mana_cost": [], "mana_cost_note": (
+            f"{card.budget} · {card.rune}" if card else "Bez kosztu run"),
+            "rune_cost": [card.rune] if card else []}
     if not uses_physical_mana(actor):
         return {}
     if option.action == CombatMenuAction.MOVE:

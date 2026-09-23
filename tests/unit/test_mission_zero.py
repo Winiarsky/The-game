@@ -175,12 +175,18 @@ def start_battle(s):
     return s
 
 
+def prepare_runes(s):
+    from dnd_board_game.ui.runes import command
+    while s.combat_state.shared_mana.runes.phase == 'allocation':
+        pool=s.combat_state.shared_mana.runes
+        data=dict(command='rune_take',rune=pool.offer[0]) if pool.offer and len(pool.hand(pool.actor))<7 else dict(command='rune_confirm')
+        command(s,{**data,'revision':s.combat_state.shared_mana.revision})
+
+
 def test_real_setup_six_players_fatigue_save_and_surrender(tmp_path):
     s=start_battle(session(tmp_path,6))
     assert len([e for e in s.active_combat_effects if e.kind=='scenario_fatigue'])==6
-    # Resolve physical deck preparation through production transport.
-    from tests.unit.test_pooled_mana_runtime import prepare
-    prepare(s,'B','C')
+    prepare_runes(s)
     s.save_snapshot()
     s.load_snapshot()
     assert len([e for e in s.active_combat_effects if e.kind=='scenario_fatigue'])==6
@@ -197,13 +203,12 @@ def test_real_setup_six_players_fatigue_save_and_surrender(tmp_path):
 def test_potion_uses_actual_item_action_and_physical_dice(tmp_path):
     s=session(tmp_path);data=m.read(s);m.grant(s,data,'potion');m.write(s,data)
     start_battle(s)
-    from tests.unit.test_pooled_mana_runtime import prepare
     from dnd_board_game.combat.session import current_actor
-    prepare(s,'B','C')
+    prepare_runes(s)
     actor=current_actor(s.combat_state)
     s.combat_state=replace(s.combat_state,actors=tuple(replace(a,hp=max(1,a.hp-12)) if a.id==actor.id else a for a in s.combat_state.actors))
     hp=next(a.hp for a in s.combat_state.actors if a.id==actor.id)
-    send(s,'potion');send(s,'potion_target',target=str(actor.id));send(s,'roll',rolls=[2,3])
+    send(s,'potion');send(s,'potion_target',target=str(actor.id));send(s,'potion_confirm');send(s,'roll',rolls=[2,3])
     assert next(a.hp for a in s.combat_state.actors if a.id==actor.id)==hp+9
     assert not m.available_potions(s)
     assert s.combat_state.turn_action.action_use.value=='action_used'
@@ -225,33 +230,21 @@ def test_finished_mission_keeps_party_and_ledger_after_reload(tmp_path):
     assert {'mission_documents','mission_medallion'} <= {i.id for i in restored.state.party_loot.items}
 
 
-def test_declining_compromise_is_persistent_and_cannot_be_replayed(tmp_path):
+def test_cancelled_reputation_choice_preserves_roll_when_resuming(tmp_path):
     s=session(tmp_path);stage(s,'brief');send(s,'negotiate')
-    from tests.unit.test_confrontation_presentation import choose_approaches
-    c.command(s,dict(action='acknowledge',revision=c.read_store(s)['revision']))
-    choose_approaches(s)
-    c.command(s,dict(action='acknowledge',revision=c.read_store(s)['revision']))
-    for color in ('C','B'):c.command(s,dict(action='color',color=color,revision=c.read_store(s)['revision']))
-    c.command(s,dict(action='take',index=0,revision=c.read_store(s)['revision']))
-    store=c.read_store(s);store['current']['state']['resistance']=10;c.write(s,store)
-    assert any(o['action']=='compromise' for o in c.payload(s)['board_choices'])
-    with pytest.raises(ValueError, match='Najpierw'):
-        c.command(s,dict(action='test',bonus=0,revision=c.read_store(s)['revision']))
-    c.command(s,dict(action='decline_compromise',revision=c.read_store(s)['revision']))
-    c.command(s,dict(action='test',bonus=0,revision=c.read_store(s)['revision']))
-    assert c.read_store(s)['current']['compromise_declined']
-    c.command(s,dict(action='leave',revision=c.read_store(s)['revision']))
-    send(s,'negotiate')
-    assert c.payload(s)['phase']=='check'
-    with pytest.raises(ValueError,match='odrzucona'):
-        c.command(s,dict(action='compromise',revision=c.read_store(s)['revision']))
+    def act(action,**kwargs):return c.command(s,dict(action=action,revision=c.read_store(s)['revision'],**kwargs))
+    act('acknowledge');act('approach',approach='compliments');act('roll',rolls=[10])
+    act('reputation',option='plus_five');act('cancel')
+    s.load_snapshot()
+    assert c.payload(s)['phase']=='summary' and c.payload(s)['original_roll']==10
+    assert c.payload(s)['reputation']['selected']=='' and c.payload(s)['reputation']['points']==20
+    with pytest.raises(ValueError):act('roll',rolls=[20])
 
 
 def test_result_pause_keeps_result_instead_of_restarting(tmp_path):
     s=session(tmp_path);stage(s,'brief');send(s,'negotiate')
     store=c.read_store(s);store['current']['state'].update(stage='result',outcome='failure');c.write(s,store)
-    c.command(s,dict(action='leave',revision=c.read_store(s)['revision']))
-    send(s,'negotiate')
+    m.autosave(s);s.load_snapshot()
     assert c.payload(s)['outcome']=='failure'
     c.command(s,dict(action='next',revision=c.read_store(s)['revision']))
     with pytest.raises(ValueError,match='zamknięta'):

@@ -34,7 +34,10 @@ def opportunity_attackers_for_movement(
     for attacker in state.actors:
         if attacker.id == mover.id or attacker.faction in {mover.faction, Faction.NEUTRAL}:
             continue
-        if any(e.kind == "feint" and e.actor_id == str(attacker.id) and e.source_actor_id == str(mover.id) for e in active_effects):
+        from .runes import uses_runes
+        if any(e.kind == "feint" and e.actor_id == str(attacker.id) and any(
+            str(owner.id) == e.source_actor_id and (owner.id == mover.id or uses_runes(owner) and owner.faction == mover.faction)
+            for owner in state.actors) for e in active_effects):
             continue
         if attacker.is_defeated() or not reaction_available_for(state, attacker):
             continue

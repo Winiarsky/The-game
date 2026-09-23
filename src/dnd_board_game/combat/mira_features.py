@@ -118,6 +118,21 @@ def resolve_smoke_screen(
     actor = current_actor(state)
     if not actor_has_feature(actor, "smoke_screen"):
         raise ValueError("Aktywna postać nie posiada Zasłony dymnej.")
+    from .runes import uses_runes
+    if uses_runes(actor):
+        from .smoke import SMOKE_AREA_KIND
+        action = use_bonus_action(state)
+        if not action.accepted:
+            raise ValueError(action.message)
+        smoke = ActiveEffect(
+            id=f"smoke_screen_area:{actor.id}", actor_id=str(actor.id),
+            kind=SMOKE_AREA_KIND, label="Zasłona dymna", object_id="class_feature:smoke_screen",
+            value=0, anchor_position=actor.position, source_actor_id=str(actor.id),
+            duration=EffectDuration.UNTIL_TURN_END, expiration_actor_id=str(actor.id),
+            expiration_event_count=2,
+        )
+        return MiraFeatureResolution(action.state, apply_active_effect(active_effects, smoke).active_effects,
+                                     "smoke_screen")
     action = use_bonus_action(state) if uses_shared_mana(actor) else use_turn_action(state)
     if not action.accepted:
         raise ValueError(action.message)
@@ -180,8 +195,17 @@ def prepared_mira_attack_source(
     if prepared is None:
         return None
     action_id = prepared.object_id.removeprefix("class_feature:")
-    throwing = action_id == "blade_mistress"
+    from .runes import uses_runes
+    rune_blade = action_id == "blade_mistress" and uses_runes(actor)
+    throwing = action_id == "blade_mistress" and not rune_blade
     base = (
+        next((source for source in sources
+              if source.source_type == AttackSourceType.WEAPON
+              and source.id not in MIRA_ATTACK_ACTION_IDS
+              and any(item.equipped and item.kind == "weapon"
+                      and source.source_item_id in {item.id, item.source_ref}
+                      for item in actor.inventory)), None)
+        if rune_blade else
         next(
             (source for source in sources if is_mira_throwing_knife_source(source)),
             None,
@@ -194,6 +218,13 @@ def prepared_mira_attack_source(
     )
     if base is None:
         return None
+    if rune_blade:
+        from .damage import DamageComponentSpec
+        from dnd_board_game.rules import DiceExpression
+        extra = DamageComponentSpec('rune_blade_mistress', base.damage_components[0].damage_type,
+                                    dice=DiceExpression(1, 6), label='Mistrzyni ostrzy: ukrycie')
+        base = replace(base, damage_components=(*base.damage_components, extra),
+                       damage_hint=base.damage_hint + ' + 1k6')
     request = base.attack_roll_request
     damage_bonus = 2 if action_id == "guard_vault" and not uses_shared_mana(actor) else 0
     if action_id == "guard_vault" and not uses_shared_mana(actor):
@@ -224,13 +255,27 @@ def prepared_mira_attack_source(
         damage_hint=(f"{base.damage_hint} + 2" if damage_bonus else base.damage_hint),
         resource_pool_id=(None if action_id == "guard_vault" else "trick_uses"),
         resource_cost=1,
-        tabletop_riders=(*base.tabletop_riders, _rider_text(action_id)),
+        tabletop_riders=(*base.tabletop_riders,
+            "Wymaga ukrycia przed tym celem. +1k6 obrażeń; własna flanka dodaje kolejne +1k6."
+            if rune_blade else _rider_text(action_id)),
     )
 
 
 def mira_attack_action_id(source_id: str) -> str | None:
     action_id = source_id.partition(":")[0]
     return action_id if action_id in MIRA_ATTACK_ACTION_IDS else None
+
+
+def blade_mistress_flank_damage(source: AttackSource, flanked: bool) -> AttackSource:
+    """Apply the rune card's positional die once, including after revealing Mira."""
+    base = next((c for c in source.damage_components if c.id == 'rune_blade_mistress'), None)
+    if base is None:
+        return source
+    components = tuple(c for c in source.damage_components if c.id != 'rune_blade_flank')
+    if flanked:
+        components += (replace(base, id='rune_blade_flank', label='Mistrzyni ostrzy: flanka'),)
+    return replace(source, damage_components=components,
+                   damage_hint=' + '.join(c.hint() for c in components))
 
 
 def rear_tile(attacker: Coordinate, target: Coordinate) -> Coordinate:

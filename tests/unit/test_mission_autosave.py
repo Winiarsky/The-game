@@ -6,7 +6,7 @@ import pytest
 
 from dnd_board_game.ui import mission_zero as mission, confrontation
 from dnd_board_game.ui.exploration_app import ExplorationUiSession
-from tests.unit.test_mission_zero import PACK, session, stage, send, start_battle
+from tests.unit.test_mission_zero import PACK, session, stage, send, start_battle, prepare_runes
 
 
 def restored(original: ExplorationUiSession) -> ExplorationUiSession:
@@ -53,9 +53,11 @@ def test_cart_result_and_fatigue_roll_are_saved(tmp_path: Path, outcome: str) ->
 
 
 def test_completed_confrontation_is_saved_before_leaving_result(tmp_path: Path) -> None:
-    from tests.unit.test_confrontation_confirmations import prepared
-    s=prepared(tmp_path,recovery=False)
-    confrontation.command(s,dict(action='compromise',revision=confrontation.read_store(s)['revision']))
+    from tests.unit.test_progress_confrontation_runtime import start, attempt, command
+    s=session(tmp_path);start(s)
+    for index in range(3):
+        attempt(s,14 if index==0 else 2);command(s,'confirm')
+        if index<2:command(s,'advance')
     loaded=restored(s)
     store=confrontation.read_store(loaded)
     assert store['active'] and store['current']['state']['outcome']=='compromise'
@@ -67,7 +69,7 @@ def test_completed_confrontation_is_saved_before_leaving_result(tmp_path: Path) 
 
 def test_coerced_cart_preserves_choice_and_party_ethos(tmp_path: Path) -> None:
     from dnd_board_game.application import party_ethos
-    s=session(tmp_path);stage(s,'road');send(s,'cart_coerce')
+    s=session(tmp_path);stage(s,'road');send(s,'cart_coerce');send(s,'cart_exchange_confirm')
     loaded=restored(s)
     assert mission.read(loaded)['stage']=='cart_coerced'
     assert 'cart_exchanged' in mission.read(loaded)['flags']
@@ -75,8 +77,7 @@ def test_coerced_cart_preserves_choice_and_party_ethos(tmp_path: Path) -> None:
 
 
 def test_truce_saves_completed_combat_before_exploration_setup(tmp_path: Path) -> None:
-    from tests.unit.test_pooled_mana_runtime import prepare
-    s=start_battle(session(tmp_path));prepare(s,'B','C')
+    s=start_battle(session(tmp_path));prepare_runes(s)
     enemy=next(a for a in s.combat_state.actors if a.faction.value=='enemy')
     s.combat_state=replace(s.combat_state,actors=tuple(replace(a,hp=0) if a.id==enemy.id else a for a in s.combat_state.actors))
     s.state_payload();send(s,'accept')
@@ -87,9 +88,12 @@ def test_truce_saves_completed_combat_before_exploration_setup(tmp_path: Path) -
     assert 'bell_battle' in loaded.resolved_encounter_trigger_ids
 
 
-def test_active_confrontation_does_not_overwrite_last_finished_stage(tmp_path: Path) -> None:
+def test_active_progress_confrontation_is_saved_without_overwriting_start_checkpoint(tmp_path: Path) -> None:
     s=session(tmp_path);stage(s,'brief');mission.checkpoint(s,mission.read(s))
-    initial=s.snapshot_path.read_bytes()
+    checkpoint=s.save_dir/'misja_0_dzwon.brief.checkpoint.json'
+    initial=checkpoint.read_bytes()
     send(s,'negotiate')
-    assert not mission.autosave(s)
-    assert s.snapshot_path.read_bytes()==initial
+    assert mission.autosave(s)
+    loaded=restored(s)
+    assert confrontation.read_store(loaded)['current']['engine']=='progress_v1'
+    assert checkpoint.read_bytes()==initial

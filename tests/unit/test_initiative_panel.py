@@ -74,14 +74,15 @@ def test_board_scan_changes_one_value_and_requires_second_accept(
 ) -> None:
     session = session_at_initiative(tmp_path)
     board = Board()
+    board.selected = (19, 3)  # Printed + is slot 26.
     session.attach_board_connection(board, backend="simulator")
     session._sync_board_leds()
     payload = session.state_payload()
     selection = payload["board_selection"]
     assert selection["auto_arm"] and selection["mode"] == "initiative_roll"
     assert board.leds == {
-        (19, 3): (255, 0, 0),
-        (19, 2): (0, 255, 0),
+        (19, 3): (0, 255, 0),
+        (19, 2): (255, 0, 0),
         (19, 1): (0, 80, 255),
     }
     session.scan_board_selection(

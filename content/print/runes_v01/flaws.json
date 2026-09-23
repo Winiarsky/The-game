@@ -1,0 +1,30 @@
+{
+  "garran": {
+    "name": "Nieustępliwość",
+    "description": "Rozpoczęcie własnej tury przy wrogu zmniejsza limit zwykłego ruchu o połowę do końca tury."
+  },
+  "brakka": {
+    "name": "Głód walki",
+    "description": "Tura bez ofensywy kończy Szał."
+  },
+  "mira": {
+    "name": "Cienka granica",
+    "description": "Gdy jesteś ukryta, masz utrudnienie rzutów obronnych oraz testów wykonywanych w ramach reakcji."
+  },
+  "dagna": {
+    "name": "Nikogo nie zostawiam",
+    "description": "Gdy sąsiadujesz z żywym sojusznikiem mającym mniej niż połowę PW, każda ofensywna moc kosztuje dodatkowo 1 dowolną runę wybraną przez ciebie. Zwykły atak pozostaje darmowy."
+  },
+  "lorian": {
+    "name": "Potrzeba publiczności",
+    "description": "W drużynie wieloosobowej, gdy nie masz przytomnego sojusznika w zasięgu 2 pól, każda płatna moc (także reakcja) kosztuje dodatkowo 1 dowolną runę wybraną przez ciebie."
+  },
+  "nimra": {
+    "name": "Echo",
+    "description": "Powtórzenie ostatniej płatnej mocy kosztuje dodatkowo 1 dowolną runę, trzecie i dalsze użycia z rzędu: 2. Wybierasz odrzucane runy. Inna płatna moc, także reakcja, rozpoczyna nową serię. Zwykłe akcje nie zmieniają serii."
+  },
+  "erynd": {
+    "name": "Trauma bratobójczego strzału",
+    "description": "Płatny strzał w cel sąsiadujący z innym przytomnym bohaterem kosztuje dodatkowo 1 wybraną dowolną runę. Dopłata raz na moc, także gdy warunek pojawi się dopiero przy drugim strzale; przed jego rzutem. Zwykły atak pozostaje darmowy."
+  }
+}

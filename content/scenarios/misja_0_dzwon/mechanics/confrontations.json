@@ -111,7 +111,8 @@
         ],
         "repeatable": false
       }
-    ]
+    ],
+    "progress_dc": 14
   },
   "cart": {
     "id": "mission_cart",
@@ -225,7 +226,8 @@
         ],
         "repeatable": false
       }
-    ]
+    ],
+    "progress_dc": 14
   },
   "armory": {
     "id": "mission_armory",
@@ -338,7 +340,8 @@
         ],
         "repeatable": true
       }
-    ]
+    ],
+    "progress_dc": 14
   },
   "quarters": {
     "id": "mission_quarters",
@@ -451,6 +454,7 @@
         ],
         "repeatable": true
       }
-    ]
+    ],
+    "progress_dc": 14
   }
 }

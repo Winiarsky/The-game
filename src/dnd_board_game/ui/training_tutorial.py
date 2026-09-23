@@ -104,7 +104,7 @@ def payload(session: ExplorationUiSession, hero_id: str) -> dict[str, object]:
     content = tutorial_content()[hero_id]
     done = completed(session, hero_id)
     lessons = [dict(id=a.id, name=a.name, cost=list(a.cost), timing=a.timing,
-                    icon=panel_icon(3 if a.category == 'item' else ability_panel_slot(hero_id, a.id)),
+                    icon=panel_icon(2 if a.category == 'item' else ability_panel_slot(hero_id, a.id)),
                     instruction=content['lessons'][a.id], explanation=a.full_description,
                     completed=a.id in done) for a in abilities(hero_id)]
     notice = next((lesson for lesson in lessons if lesson['id'] == notice_id(session)), None)

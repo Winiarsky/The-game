@@ -10,6 +10,8 @@ class LedColor:
     """
 
     PANEL_ACTION: RGBColor = (30, 110, 255)
+    PANEL_RUNE: RGBColor = (214, 180, 107)
+    PANEL_INFO: RGBColor = (83, 174, 239)
     PANEL_BONUS_ACTION: RGBColor = (255, 120, 20)
     PANEL_MOVEMENT: RGBColor = (40, 220, 95)
     PANEL_TURN_CONTROL: RGBColor = (255, 255, 255)

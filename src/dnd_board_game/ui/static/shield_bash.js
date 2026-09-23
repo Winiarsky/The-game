@@ -13,10 +13,12 @@ function shieldBashHtml(pending) {
       <p>${esc(push)}</p><p>${esc(pending.cost_note)}</p>
       <button data-card-action="accept" onclick="confirmShieldBashResult()">✓ Zastosuj wynik</button></div>`;
   }
+  const damageDice = pending.damage_die_sides || Array(pending.damage_dice || 1).fill(6);
+  const damageLabel = pending.damage_label || `${pending.damage_dice || 1}k6`;
   const controls = pending.stage === 'contest'
     ? `<label>${esc(pending.actor_name)} · k20 Siły<input id="shield-bash-attacker-roll" type="number" min="1" max="20" data-roll-label="Uderzenie tarczą · Twój rzut k20 Siły" required></label>`
-    : `<label>Obrażenia ${pending.damage_dice || 1}k6<input id="shield-bash-damage-roll" type="number" min="${pending.damage_dice || 1}" max="${6 * (pending.damage_dice || 1)}" data-roll-label="Uderzenie tarczą · obrażenia" data-roll-dice="${pending.damage_dice || 1}d6" required></label>`;
-  return `<div class="combat-action-box"><p>${contest}</p>${attack ? `<p>${esc(attack)}</p>` : ''}<p>${esc(defense)}</p><p>${pending.stage === 'damage' ? `Wygrany test. Rzuć ${pending.damage_dice || 1}k6 i zatwierdź ✓ wynik każdej kości. Aplikacja zsumuje kości i raz doliczy modyfikator Siły Garrana.` : 'Rzuć fizyczną k20. Ustaw jej wynik przyciskami − / + i zatwierdź ✓. Dopiero po potwierdzeniu podsumowania aplikacja rzuci za przeciwnika.'}</p>
+    : damageDice.map((sides,index) => `<label>Obrażenia · k${sides}<input id="shield-bash-damage-roll-${index}" class="shield-bash-damage-die" type="number" min="1" max="${sides}" data-roll-label="Uderzenie tarczą · obrażenia k${sides}" data-roll-dice="1d${sides}" data-roll-modifier="0" required></label>`).join('');
+  return `<div class="combat-action-box"><p>${contest}</p>${attack ? `<p>${esc(attack)}</p>` : ''}<p>${esc(defense)}</p><p>${pending.stage === 'damage' ? `Wygrany test. Rzuć ${damageLabel} i zatwierdź ✓ wynik każdej kości. Aplikacja zsumuje kości i raz doliczy modyfikator Siły Garrana.` : 'Rzuć fizyczną k20. Ustaw jej wynik przyciskami − / + i zatwierdź ✓. Dopiero po potwierdzeniu podsumowania aplikacja rzuci za przeciwnika.'}</p>
     <div class="row">${controls}<button onclick="submitShieldBashRolls()">Potwierdź rzuty</button>
     <button class="secondary" onclick="cancelClassFeatureTargeting()">Anuluj</button></div></div>`;
 }
@@ -25,7 +27,7 @@ function submitShieldBashRolls() {
   const value = id => Number(document.getElementById(id).value);
   const data = pending.stage === 'contest'
     ? {attacker_roll:value('shield-bash-attacker-roll')}
-    : {damage_roll:value('shield-bash-damage-roll')};
+    : {damage_roll:[...document.querySelectorAll('.shield-bash-damage-die')].reduce((sum,input)=>sum+Number(input.value),0)};
   api('/api/combat/shield-bash/rolls', data, 'Sprawdzam Uderzenie tarczą...');
 }
 function confirmShieldBashResult() {

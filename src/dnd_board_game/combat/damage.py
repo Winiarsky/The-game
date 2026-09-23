@@ -284,6 +284,14 @@ def apply_damage_result(
     else:
         affinities = actor.damage_affinities
     damage = resolve_damage(damage.components, affinities)
+    reduction = max((e.value for e in active_effects if e.actor_id == str(actor.id) and e.kind == "rune_guard_reduction"), default=0)
+    if reduction:
+        components = []
+        for component in damage.resolved_components:
+            absorbed = min(reduction, component.amount_applied)
+            components.append(replace(component, amount_applied=component.amount_applied-absorbed))
+            reduction -= absorbed
+        damage = replace(damage, resolved_components=tuple(components), total_applied=sum(c.amount_applied for c in components))
     remaining = damage.total_applied
     temp_hp_before = actor.temp_hp
     hp_before = actor.hp

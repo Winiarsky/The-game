@@ -12,6 +12,7 @@ function confrontationChoice(p, c, label = null, css = '') {
   return `<button type="button" class="mana-rune-choice ${css}" ${attrs} onclick="${handler}">${c.icon}<span>${label ?? esc(c.label)}</span></button>`;
 }
 function confrontationIdle(p) {
+  if (p.engine === 'progress_v1') return false;
   return p.phase === 'turn' && p.mana.phase === 'ready' && !p.needs_resume && !p.compromise_pending;
 }
 function confrontationHelpChoices(p) {
@@ -81,6 +82,7 @@ function confrontationActions(p) {
     <article class="confrontation-peek"><div><h3>${esc(t('peek'))}</h3><p>${esc(t(p.mana.deck ? 'peek_short' : 'wait_empty'))}</p><small>${esc(t('peek_ends'))}</small></div>${confrontationChoice(p,peek,esc(t('peek')))}</article></div>`;
 }
 function renderPartyConfrontation(panel, p) {
+  if (p.engine === 'progress_v1') {renderProgressConfrontation(panel,p);return;}
   panel.hidden = false;
   panel.classList.add('confrontation-view');
   panel.classList.toggle('confrontation-approach-view', p.choosing_approach);
@@ -168,7 +170,7 @@ function handleConfrontationPanelEvent(event) {
     return true;
   }
   if (event.context===confrontationDetailPanel()?.context) {
-    if(event.slot===26||event.slot===27) scrollConfrontation(event.slot===27?1:-1);
+    if(event.slot===26||event.slot===27) scrollConfrontation(event.slot===26?1:-1);
     else if(event.slot===28||event.slot===29) closeConfrontationDetail();
     return true;
   }
@@ -197,5 +199,51 @@ function renderConfrontationApproachSelection(panel,p) {
   const t=confrontationText, image=p.image_url?`<img class="confrontation-scene-image" src="${esc(p.image_url)}" alt="${esc(p.scene.name)}">`:'',actor=p.party.find(h=>h.id===p.actor);
   panel.dataset.confrontationKey=`${p.scene.id}:${p.actor}:approach`;
   panel.innerHTML=`<div class="confrontation-scroll"><div class="confrontation-scene">${image}<div><div class="training-heading"><h2>${esc(p.scene.name)}</h2></div><p>${esc(p.scene.goal)}</p><p class="confrontation-description">${esc(p.scene.description)}</p></div></div><div class="approach-layout"><div class="approach-chooser">${actor?.portrait_url?`<img src="${esc(actor.portrait_url)}" alt="${esc(p.actor_name)}">`:''}<div><b>${esc(t('chooser',{name:p.actor_name,index:p.approach_index,count:p.party.length}))}</b>${p.correction_notice?`<p>${esc(p.correction_notice)}</p>`:''}</div></div>${confrontationApproaches(p,p.effect_name)}</div><div class="approach-party-summary" aria-label="${esc(t('party_choices'))}">${p.party.map(h=>`<span class="${h.id===p.actor?'current':''}"><b>${esc(h.name)}</b>: ${h.assigned?esc(h.method):t(h.id===p.actor?'choosing':'waiting')}</span>`).join('')}</div>${p.first_test_bonus?`<p class="approach-favor">${esc(t('first_bonus',{label:p.first_test_label,bonus:p.first_test_bonus}))}</p>`:''}</div><div class="confrontation-controls"><p class="approach-instruction">${esc(t('approach_instruction'))}</p><nav class="confrontation-navigation"><div>${p.board_choices.filter(c=>['scroll','undo'].includes(c.action)).map(c=>confrontationChoice(p,c)).join('')}</div>${confrontationChoice(p,p.board_choices.find(c=>c.action==='leave'))}</nav></div>`;
+  sizeConfrontation();
+}
+
+/* One-round mission checks: costs and natural-roll results remain server-owned. */
+function renderProgressConfrontation(panel,p) {
+  panel.hidden=false;
+  panel.classList.add('confrontation-view','tabletop-confrontation');
+  panel.classList.remove('confrontation-approach-view');
+  if(confrontationDetail)closeConfrontationDetail(false);
+  const key=`${p.scene.id}:${p.actor}:${p.phase}`;
+  const oldScroll=panel.dataset.confrontationKey===key?panel.querySelector('.confrontation-controls')?.scrollTop||0:0;
+  panel.dataset.confrontationKey=key;
+  const own=p.party.find(h=>h.id===p.actor),rep=p.reputation;
+  const titles={introduction:'Jedna runda, wspólny wynik',approach:'Wybierz podejście',check:'Wykonaj test',summary:'Podsumowanie rzutu',extra_check:'Dodatkowa k20',after_action:'Wynik próby',result:'Wynik konfrontacji',cart_preview:'Zażądaj zamiany wozu'};
+  const controls=actions=>p.board_choices.filter(c=>actions.includes(c.action)).map(c=>confrontationChoice(p,c,null,c.selected?'selected':'')).join('');
+  const reputationHtml=`<div class="reputation-pool"><b>Reputacja drużyny: ${rep.points}</b><small> Wspólny zasób · bez odnowienia między scenami</small></div>`;
+  let content='';
+  if(p.phase==='introduction'){
+    content=`<p>${esc(p.scene.description)}</p><p>Każdy bohater wybiera jedno podejście i wykonuje jeden test. Sukces: +1 na torze; naturalne 20: +2; porażka: bez zmiany; naturalne 1: −1. Koniec po kolejce drużyny, pełnym sukcesie albo zejściu poniżej −1.</p><p>${rep.social?'Po rzucie można wybrać jedną premię ze wspólnej reputacji.':'Podejścia fizyczne nie korzystają z premii reputacji.'}</p>${controls(['acknowledge'])}`;
+  }else if(p.phase==='approach'){
+    content='<p class="progress-approach-instruction">Wybierz podświetloną runę podejścia na planszy. Od razu przejdziesz do rzutu.</p><div class="progress-confrontation-options">'+p.approaches.filter(a=>a.available).map(a=>{
+      const c=p.board_choices.find(c=>c.action==='approach'&&c.extra.approach===a.id);
+      return `<article>${confrontationChoice(p,c)}<p>${esc(a.description)}</p><small>${esc(a.ability)} ${confrontationSigned(a.modifier)} · ST ${a.dc} · ${a.repeatable?'Może się powtarzać':'Dla jednej postaci'}</small></article>`;
+    }).join('')+'</div>';
+  }else if(['check','extra_check'].includes(p.phase)){
+    const extra=p.phase==='extra_check';
+    content=`<p>${extra?`Pierwsza kość: ${p.original_roll}. Zapłacono 5 reputacji. Rzuć dodatkową k20; zachowasz wyższy naturalny wynik.`:`${esc(p.method)} · k20 ${confrontationSigned(p.check_modifier)} · ST ${p.dc}`}</p><form id="exploration-mana-roll" onsubmit="submitExplorationManaRoll(event)"><label>Naturalny wynik k20<input id="progress-${extra?'extra':'test'}-roll" aria-label="Naturalny wynik k20" data-roll-dice="1k20" data-roll-source="${esc(p.actor_name)}" type="number" min="1" max="20" required></label><button type="submit">✓ Zatwierdź kość</button></form>${controls(['cancel'])}`;
+  }else if(p.phase==='summary'){
+    const preview=p.preview,label=preview.critical==='success'?'Krytyczny sukces':preview.critical==='failure'?'Krytyczna porażka':preview.delta?'Sukces':'Porażka';
+    content=`<p class="confrontation-formula">${preview.natural} ${confrontationSigned(p.check_modifier)} ${preview.bonus?' + '+preview.bonus:''} = <b>${preview.total}</b> · ST ${p.dc}</p><p><strong>${label}</strong>. Tor ${p.progress} → ${preview.progress} po zatwierdzeniu.</p>`;
+    if(rep.paid){
+      content+=`<p>Kości: ${p.original_roll} i ${p.extra_roll}. Zachowujesz ${preview.natural}. Zapłacono ${rep.paid} reputacji. Nie można dokupić innej premii ani odzyskać kosztu.</p>`;
+    }else if(rep.social){
+      content+='<div class="reputation-options">'+rep.options.map(option=>{
+        const c=p.board_choices.find(c=>c.action==='reputation'&&c.extra.option===option.id);
+        return c?confrontationChoice(p,c,null,option.selected?'selected':''):`<button class="mana-rune-choice" disabled>${option.icon}<span>${esc(option.label)}</span></button>`;
+      }).join('')+'</div>';
+      content+=`<p>Jedna opcja na test. Reputacja: ${rep.points} → ${rep.points-rep.cost}. ${p.original_roll===1?'Premie liczbowe nie zmieniają naturalnej 1.':p.original_roll===20?'Naturalna 20 nie potrzebuje wsparcia.':rep.selected==='extra_die'?'Koszt dodatkowej kości pobieramy przed rzutem.':'Koszt pobieramy po zatwierdzeniu rezultatu.'}</p>`;
+    }else content+='<p>Próba fizyczna bez premii reputacji.</p>';
+    content+=controls(['confirm','cancel']);
+  }else if(p.phase==='cart_preview'){
+    content=`<p>Powołajcie się na reputację Gildii. Wymagane: co najmniej 20; koszt: 3. Reputacja: ${rep.points} → ${rep.points-3}.</p><p>Zamiana kończy konfrontację bez testu i zmęczenia. Decyzja przesuwa postawę ku Bezwzględności.</p>${controls(['cart_exchange','cart_cancel'])}`;
+  }else if(p.phase==='after_action')content=`<p class="confrontation-result">${esc(p.last)}</p>${controls(['advance'])}`;
+  else if(p.phase==='result')content=`<p class="confrontation-result">${esc(p.last)}</p><p>${esc(p.result)}</p><p>Konfrontacja zakończona. Reputacja przechodzi do kolejnej sceny.</p>${controls(['next'])}`;
+  panel.innerHTML=`<aside class="confrontation-scroll" tabindex="0"><div class="confrontation-scene">${p.image_url?`<img class="confrontation-scene-image" src="${esc(p.image_url)}" alt="${esc(p.scene.name)}">`:''}<div><small>Jedna runda · ${p.approach_index}/${p.party.length}</small><h2>${esc(p.scene.name)}</h2><p>${esc(p.scene.goal)}</p></div></div><div class="confrontation-pressure"><b>Tor postępu: ${p.progress}</b><ol style="display:flex;flex-wrap:wrap;list-style:none;gap:8px;padding:0">${p.track.map(step=>`<li ${step.value===p.progress?'aria-current="step" style="outline:1px solid #c7ae72"':''}><b>${step.value}</b> ${esc(step.label)}</li>`).join('')}</ol></div><section class="confrontation-active-hero"><div class="confrontation-hero-heading">${own?.portrait_url?`<img class="confrontation-hero-portrait" src="${esc(own.portrait_url)}" alt="${esc(own.name)}">`:''}<div><h3>${esc(p.actor_name)}</h3><p>${esc(p.method)}</p></div></div></section><div class="confrontation-party-summary">${p.party.map(h=>`<span class="${h.id===p.actor?'current':''}">${esc(h.name)}${h.acted?' ✓':''}</span>`).join('')}</div>${p.phase==='approach'?reputationHtml:''}</aside><section class="confrontation-controls"><header>${p.phase==='approach'?'':`<small>${esc(p.actor_name)}</small>`}<h2>${titles[p.phase]||'Konfrontacja'}</h2></header>${p.phase==='approach'?'':reputationHtml}${content}<nav class="confrontation-navigation"><div>${p.phase==='approach'?controls(['cart_preview','pass']):''}${controls(['scroll'])}</div>${controls(['leave'])}</nav></section>`;
+  panel.querySelector('.confrontation-controls').scrollTop=oldScroll;
   sizeConfrontation();
 }

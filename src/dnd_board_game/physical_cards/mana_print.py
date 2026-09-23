@@ -123,12 +123,12 @@ def ability_key(hero_id: str, ability_id: str, timing: str) -> str:
     return shortcut_for_option(hero_id, _KeyOption(option_id, ability_id, ability_id)) or "MENU"
 
 
-def build_print_hero(hero_id: str) -> PrintHero:
-    return _build_print_hero(hero_id, revision())
+def build_print_hero(hero_id: str, *, rune_profile: bool = False) -> PrintHero:
+    return _build_print_hero(hero_id, revision(), rune_profile)
 
 
 @lru_cache(maxsize=14)
-def _build_print_hero(hero_id: str, text_revision: tuple[str, int, int]) -> PrintHero:
+def _build_print_hero(hero_id: str, text_revision: tuple[str, int, int], rune_profile: bool = False) -> PrintHero:
     # Reuse the canonical curated starter build; no fixed copies of HP/AC/scores.
     from .character_card_sets import _starter_builds, _SKILL_ABILITIES
     from dnd_board_game.scenarios.loader import compile_actor_combat_content
@@ -139,6 +139,9 @@ def _build_print_hero(hero_id: str, text_revision: tuple[str, int, int]) -> Prin
     if hero_id not in PLAYABLE_HERO_IDS:
         raise ValueError(f"Nieznany bohater: {hero_id}")
     actor = apply_physical_mana_profile(_starter_builds()[1][hero_id][1].actor)
+    if rune_profile:
+        from dnd_board_game.character_creation.runes import apply_rune_profile
+        actor = apply_rune_profile(actor)
     from dnd_board_game.scenarios.character_text import hero_text, present_ability
     profile = hero_text(hero_id)
     ability_ids = ("strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma")
@@ -179,7 +182,8 @@ def _build_print_hero(hero_id: str, text_revision: tuple[str, int, int]) -> Prin
         )
         for a in map(present_ability, hero_abilities(hero_id))
     )
-    flaw = physical_mana_flaw(hero_id)
+    from dnd_board_game.scenarios.rune_traits import rune_flaw
+    flaw = rune_flaw(hero_id) if rune_profile else physical_mana_flaw(hero_id)
     role = profile['role']
     return PrintHero(
         hero_id,
@@ -196,7 +200,7 @@ def _build_print_hero(hero_id: str, text_revision: tuple[str, int, int]) -> Prin
         weapons,
         saves,
         skills,
-        tuple(f"{item.name} ×{item.quantity}" for item in actor.inventory) + (("Święty symbol: A · " + requirement_text("turn_undead", hero_id) + " Nieumarli w 15 ft: obrona MDR; porażka odpędza do początku następnej tury Dagny. Obrażenia kończą wcześniej.",) if hero_id == "dagna" else ()),
+        tuple(f"{item.name} ×{item.quantity}" for item in actor.inventory) + (("Święty symbol: A · " + requirement_text("turn_undead", hero_id) + " Nieumarli w 15 ft: obrona MDR; porażka odpędza do początku następnej tury Dagny. Obrażenia kończą wcześniej.",) if hero_id == "dagna" and not rune_profile else ()),
         1,
         None,
         cards,

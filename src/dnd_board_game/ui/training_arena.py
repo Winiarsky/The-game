@@ -207,7 +207,7 @@ def training_payload(session: ExplorationUiSession) -> dict[str, object] | None:
         from .training_menu import payload as menu_payload
         done = [h for h in HERO_ORDER if scene_flag(session.state.flags, f"walkthrough_charge_completed_{h}", False) or (active and not guided.single_case(session) and h == guided.hero_id(session) and trial_won(session))]
         return dict(current_hero_id=guided.hero_id(session), completed=done, menu=menu_payload(session) if not active else None,
-            heroes=[dict(id=h, name=training_hero(h).name, panel_slot=6+i, icon=panel_icon(6+i), tutorial_count=int(scene_flag(session.state.flags, f"walkthrough_charge_progress_{h}", 0)), tutorial_total=len(steps(h)), completed=h in done) for i,h in enumerate(HERO_ORDER)],
+            heroes=[dict(id=h, name=training_hero(h).name, panel_slot=5+i, icon=panel_icon(5+i), tutorial_count=int(scene_flag(session.state.flags, f"walkthrough_charge_progress_{h}", 0)), tutorial_total=len(steps(h)), completed=h in done) for i,h in enumerate(HERO_ORDER)],
             can_start=not active, can_talk=False, finished=finished, mode="walkthrough",
             tutorial=guided.payload(session) if active else None, creature_type="humanoid",
             won=trial_won(session) if active else False, map_url="/game-assets/maps/recruitment_arena/arena.svg")

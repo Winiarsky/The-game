@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .saving_effects import consume_saving_effects, has_wisdom_save_penalty, saving_effect_roll_mode
+
 from dnd_board_game.actors.resources import uses_physical_mana
 
 from dataclasses import dataclass, replace
@@ -422,7 +424,15 @@ def apply_combat_interaction_effects(
                 )
                 from .mana_charge import charged_check_request
                 request = charged_check_request(updated_state, target, request)
-                roll = resolve_d20_roll(D20RollInput(request, natural_roll))
+                request = replace(request, mode=saving_effect_roll_mode(
+                    str(target.id), ability, updated_effects, request.mode,
+                ))
+                second_roll = None
+                if has_wisdom_save_penalty(str(target.id), ability, updated_effects):
+                    if rng is None:
+                        raise ValueError("Obrona MDR z utrudnieniem wymaga drugiej kości.")
+                    second_roll = rng.randint(1, 20)
+                roll = resolve_d20_roll(D20RollInput(request, natural_roll, second_roll))
                 check = resolve_saving_throw(roll, dc)
                 saving_throw = CombatInteractionSavingThrow(
                     actor_id=str(target.id),
@@ -435,6 +445,7 @@ def apply_combat_interaction_effects(
                     success=check.success,
                     modifiers=roll.breakdown.active_modifiers,
                 )
+                updated_effects = consume_saving_effects(updated_effects, saving_throw)
                 roll_message = (
                     f"{target.name} wykonuje rzut obronny na {_ability_label_pl(ability)}: "
                     f"d20 {roll.natural_roll}, modyfikator {format_signed(roll.breakdown.modifier_total)}, "

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dnd_board_game.combat.saving_effects import consume_saving_effects, has_wisdom_save_penalty
+
 from dataclasses import dataclass, replace
 from random import Random
 from typing import Protocol
@@ -68,6 +70,7 @@ class MagicMovementTransition:
     message_body: str
     event_type: str
     event_payload: tuple[tuple[str, object], ...]
+    active_effects: tuple[ActiveCombatEffect, ...] | None = None
     moved_actor_id: str | None = None
     origin: Coordinate | None = None
     destination: Coordinate | None = None
@@ -206,6 +209,7 @@ class MagicMovementFlowService:
             target_id=target_id,
             rng=rng,
             scene_objects=scene_objects,
+            active_effects=active_effects,
         )
 
     def cancel(
@@ -287,6 +291,7 @@ class MagicMovementFlowService:
         target_id: str | None,
         rng: Random,
         scene_objects: tuple[SceneObject, ...],
+        active_effects: tuple[ActiveCombatEffect, ...] = (),
     ) -> MagicMovementTransition:
         assert action.movement is not None
         legal_targets = legal_forced_movement_targets(
@@ -314,6 +319,8 @@ class MagicMovementFlowService:
             ability=action.save_ability or "strength",
             dc=save_dc,
             natural_roll=rng.randint(1, 20),
+            natural_roll_2=rng.randint(1, 20) if has_wisdom_save_penalty(str(target_after.id), action.save_ability or "strength", active_effects) else None,
+            active_effects=active_effects,
             condition_states=resource.state.condition_states,
             combat_actors=resource.state.actors,
         )
@@ -349,6 +356,7 @@ class MagicMovementFlowService:
             pending=None,
             message_title="Wymuszony ruch",
             message_body=message,
+            active_effects=consume_saving_effects(active_effects, save),
             event_type="ui_combat_forced_movement_confirmed",
             event_payload=(
                 ("caster_id", str(caster.id)),

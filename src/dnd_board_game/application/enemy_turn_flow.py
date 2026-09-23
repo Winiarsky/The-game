@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dnd_board_game.combat.saving_effects import consume_saving_effects
+
 from dataclasses import dataclass, replace
 from enum import StrEnum
 from random import Random
@@ -383,6 +385,8 @@ class EnemyTurnFlowService:
                 original_state=state,
                 intercepted_target=intercepted_target,
             )
+        for completed_save in result.sanctuary_saves:
+            active_effects = consume_saving_effects(active_effects, completed_save)
         if interception_message:
             result = replace(result, message=interception_message + result.message)
         ready_attacks = (

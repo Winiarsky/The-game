@@ -118,7 +118,7 @@
   "summary_bell": "Los dzwonu",
   "key_return": "Klucz oddany Gildii",
   "equipment_open": "Ekwipunek drużyny",
-  "cart_coerce": "Wymuście zamianę wozu · Bezwzględność",
+  "cart_coerce": "Wymuście zamianę wozu · reputacja ≥20 · koszt 3 · Bezwzględność",
   "autosave": "Autozapis po każdym etapie",
   "nessa_steal_potion": "Mira: ukradnij słabszą miksturę · krok ku Bezwzględności",
   "nessa_leave_potion": "Zostaw fiolkę · bez zmiany postawy",
