@@ -1,6 +1,10 @@
 # Runy v0.1 — wydruki i makieta
 
-Otwórz [spis materiałów](index.html). Druk A4, 100%, bez dopasowania.
+Otwórz [aktualny spis materiałów](index.html). Prowadzi do kart osobistych
+koszyków run v0.2 w `../runy_koszyki_v01/` (42 strony, 6 na bohatera).
+PDF-y postaci w tym katalogu są poprzednią wersją do starszych zapisów.
+Poniższy opis kart i generator dotyczy tych starszych plików.
+Plansza i kafle pozostają aktualne. Druk A4, 100%, bez dopasowania.
 Plansza: 12 arkuszy A1–D3. Tnij zewnętrzny obrys; pasy 10 mm służą jako zakładki.
 Składaj od górnego lewego A1 w wierszach A–D. Panel znajduje się przy dolnej krawędzi.
 Plansza oraz wszystkie 18 kafli Misji 0 mają skalę `(250/244) × 1,03`.

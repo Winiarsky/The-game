@@ -75,25 +75,17 @@
       S.origin=origin;S.scene='talk';S.track=0;S.talkActor=0;S.talkDone=false;
       S.approach=null;S.reputationOption=null;S.reputationPaid=0;S.extraRoll=null;S.lockedRoll=null;S.result='';S.phase='idle';render();return;
     }
-    S.origin=origin;S.hands=Object.fromEntries(S.party.map(id=>[id,[]]));S.deck=shuffledDeck();S.discard=[];
-    S.actor=0;S.round=1;S.aura=false;S.auraRadius=2;S.auraAc=1;S.auraGrace=0;S.paymentPrompt=null;S.usedCards={};S.secondWind=false;
-    S.currentHp={};S.temporaryHp={};S.conditions={};S.effects={};S.previewHp=hero('garran').hp;resetTurn();
-    S.track=0;S.talkActor=0;S.talkDone=false;S.result='';S.phase='idle';drawOpeningRunes();render();
+    chargeCombat.start(S.party);S.origin='combat';S.scene='combat';S.phase='idle';render();
   }
   function combatExample() {
-    freshEncounter('combat');S.previewHp=23;S.market.forEach(r=>S.deck.push(r));S.market=[];
-    const example=['Kotwica','Węzeł','Błysk','Klucz','Wieża','Kielich'];
-    S.hands.garran=[];
-    for(const r of example){const i=S.deck.indexOf(r);if(i>=0){S.deck.splice(i,1);S.hands.garran.push(r);}}
-    S.actor=S.party.indexOf('garran');if(S.actor<0){S.party[0]='garran';S.actor=0;}
-    S.scene='combat';S.phase='idle';render();
+    freshEncounter('combat');
   }
   function startScene(scene) {
     $('#toast').hidden=true;
     if(scene==='draw'){freshEncounter('combat');return;}
     if(scene==='talk'||scene==='cart'){freshEncounter(scene);return;}
     if(scene==='combat'){combatExample();return;}
-    if(scene==='reaction'){combatExample();S.scene='reaction';S.selection=null;render();return;}
+    if(scene==='reaction'){combatExample();notify('Ataki okazyjne pojawiają się podczas ruchu. Sprawdź je w symulatorze pól.');return;}
     S.scene=scene;S.phase='idle';render();
   }
   function openMenu() { if(S.scene!=='menu')S.returnScene=S.scene;S.scene='menu';render(); }
@@ -115,9 +107,9 @@
   function startView() {
     return `<div class="eyebrow">Przy wspólnej planszy</div><h1>Wasza kolejna wyprawa.</h1><p class="intro">Wybierzcie drużynę, przygotujcie wyposażenie i sprawdźcie reputację drużyny oraz runy w walce.</p>`+
       button(5,'Nowa wyprawa','Wybór bohaterów i wyposażenia',()=>{S.reputation=REPUTATION.start;S.missionRewardClaimed=false;S.reputationOption=null;S.reputationPaid=0;S.extraRoll=null;S.log=[];S.scene='setup';render();},{main:true})+
-      button(6,'Próba walki','Garran z przygotowaną ręką run',()=>startScene('combat'))+
+      button(6,'Próba walki','20 ładunków · aktualne moce i ciągły Rezonans',()=>startScene('combat'))+
       button(7,'Próba rozmowy','Nessa · jeden test na bohatera',()=>startScene('talk'))+
-      button(8,'Próba reakcji','Wybierz broń albo płatną moc',()=>startScene('reaction'))+
+      button(8,'Próba reakcji','Ataki okazyjne podczas ruchu na próbnej arenie',()=>startScene('reaction'))+
       `<p class="compact-note">Dolny panel jest klikalny. Te same symbole są przy wyborach na ekranie. To samodzielna makieta nowych zasad.</p>`;
   }
   function setupView() {
@@ -562,39 +554,48 @@
       button(5,'Wróć do rozgrywki','Zachowaj bieżący stan makiety',goBack,{main:true})+
       button(6,'Dziennik','Zapisane działania tej próby',()=>{S.scene='journal';render();})+
       button(7,'Start','Nowa drużyna i wyposażenie',()=>startScene('start'))+
-      button(8,'Dobór run','Nowa próbna walka z pustymi rękami',()=>startScene('draw'))+
+      button(8,'Nowa próba walki','20 ładunków na bohatera, bez doboru run',()=>startScene('draw'))+
       button(9,'Rozmowa z Nessą','Jedna runda i tor postępu',()=>startScene('talk'))+
       button(10,'Wóz','Konfrontacja z obiektem',()=>startScene('cart'))+
-      button(11,'Walka','Garran z przygotowaną ręką',()=>startScene('combat'))+
-      button(12,'Reakcje','Bezpłatny atak okazyjny lub płatna moc',()=>startScene('reaction'))+
+      button(11,'Walka','Aktualne karty · Rezonans i moce',()=>startScene('combat'))+
+      button(12,'Reakcje','Ataki okazyjne na próbnej arenie',()=>startScene('reaction'))+
       button(13,'Ukończona misja','Przykład jednorazowej nagrody reputacji',()=>{S.scene='mission';render();});
   }
   function render() {
     bindings=new Map();
+    const resonanceCombat=S.scene==='combat';
+    const previousFlow=$('.decision')?.dataset.combatFlow,previousRight=$('.decision')?.scrollTop??0,previousLeft=$('.charge-initiative')?.scrollTop??0;
+    const journalEntries=[...S.log,...(chargeCombat.model?.s.history??[])];
+    document.body.classList.toggle('resonance-combat',resonanceCombat);
     const views={start:startView,setup:setupView,equipment:equipmentView,story:storyView,
       allocation:allocationView,combat:combatView,talk:talkView,reaction:reactionView,
       menu:menuView,hero:heroView,aura:auraView,payment:paymentView,mission:missionView,
-      journal:()=>'<div class="eyebrow">Dziennik makiety</div><h1>Wasze działania.</h1><div class="journal-list">'+(S.log.length?S.log.map(s=>`<p>${esc(s)}</p>`).join(''):'<p class="intro">Jeszcze nie wykonano żadnego działania.</p>')+'</div>'+controls('Wróć',()=>{S.scene='menu';render();})};
-    const right=views[S.scene]();
-    const infoId=informationHero();
+      journal:()=>'<div class="eyebrow">Dziennik makiety</div><h1>Wasze działania.</h1><div class="journal-list">'+(journalEntries.length?journalEntries.map(s=>`<p>${esc(s)}</p>`).join(''):'<p class="intro">Jeszcze nie wykonano żadnego działania.</p>')+'</div>'+controls('Wróć',()=>{S.scene='menu';render();})};
+    const right=resonanceCombat?chargeCombat.right():views[S.scene]();
+    const infoId=resonanceCombat?null:informationHero();
     if(infoId){bind(slot('Gwiazda'),'Informacja o bohaterze',S.scene==='hero'?goBack:()=>showHero(infoId),true,S.scene==='hero');bindings.get(slot('Gwiazda')).kind='info';}
     const context=S.scene==='hero'?S.heroReturn?.scene:S.scene==='payment'?S.paymentPrompt?.returnScene:S.scene;
-    const left=['combat','aura','reaction'].includes(context)?combatList():S.scene==='hero'?art(S.origin):art(['talk','allocation'].includes(S.scene)?S.origin:S.scene);
+    const left=resonanceCombat?chargeCombat.left():['combat','aura','reaction'].includes(context)?combatList():S.scene==='hero'?art(S.origin):art(['talk','allocation'].includes(S.scene)?S.origin:S.scene);
     $('#main').innerHTML=left+`<section class="decision" aria-label="Bieżąca decyzja">${right}</section>`;
+    if(resonanceCombat){
+      const flow=chargeCombat.flowKey();$('.decision').dataset.combatFlow=flow;
+      if(flow===previousFlow)$('.decision').scrollTop=previousRight;
+      $('.charge-initiative').scrollTop=previousLeft;
+    }
     if(!bindings.has(26))bind(26,'Przewiń w dół',()=>scrollContent(1));
     if(!bindings.has(27))bind(27,'Przewiń w górę',()=>scrollContent(-1));
     if(!bindings.has(29))bind(29,'Menu / wróć',goBack);
     renderBoard();renderParty();
-    $('#demo-nav').innerHTML=[['start','Start','Klepsydra'],['draw','Dobór','Trójząb'],['talk','Nessa','Brama'],['cart','Wóz','Romb'],['combat','Walka','Hak'],['reaction','Reakcje','Błysk']].map(([scene,name,key])=>`<button data-scene="${scene}" data-route="menu:${scene}" aria-current="${S.scene===scene?'page':'false'}" title="Menu ↩ → ${key}">${name}<span class="route-hint">↩ → ${key}</span></button>`).join('');
+    $('#demo-nav').innerHTML=[['start','Start','Klepsydra'],['talk','Nessa','Brama'],['cart','Wóz','Romb'],['combat','Walka · Rezonans','Hak']].map(([scene,name,key])=>`<button data-scene="${scene}" data-route="menu:${scene}" aria-current="${S.scene===scene?'page':'false'}" title="Menu ↩ → ${key}">${name}<span class="route-hint">↩ → ${key}</span></button>`).join('');
   }
   function scrollContent(direction) {
-    const local=$('.journal-list');
+    const local=S.scene==='combat'?$('.decision'):$('.journal-list');
     if(local&&local.scrollHeight>local.clientHeight)local.scrollBy({top:direction*160,behavior:'instant'});
     else window.scrollBy({top:direction*180,behavior:'instant'});
   }
   function renderBoard() {
     const selected=[...bindings.values()].some(b=>b.selected);
-    const boardContext=S.scene==='hero'?'Informacja o bohaterze · + / − przewija · Gwiazda / ↩ wraca':S.scene==='allocation'?`${hero(S.party[S.recipient]).name}: runa przydziela 1 · ↩ cofa wybór · ✓ następna postać`:S.phase==='reputation'?'Reputacja: wybierz jedną z trzech run · ✓ zatwierdza · ↩ usuwa wybór':['roll','reputation-reroll'].includes(S.phase)?'Wynik kości: + / − → ✓':'Kliknij podświetlone pole planszy';
+    const boardContext=S.scene==='combat'?'Walka · runa wybiera moc · pole wybiera cel · ✓ zatwierdza · ★ informacje':S.scene==='hero'?'Informacja o bohaterze · + / − przewija · Gwiazda / ↩ wraca':S.scene==='allocation'?`${hero(S.party[S.recipient]).name}: runa przydziela 1 · ↩ cofa wybór · ✓ następna postać`:S.phase==='reputation'?'Reputacja: wybierz jedną z trzech run · ✓ zatwierdza · ↩ usuwa wybór':['roll','reputation-reroll'].includes(S.phase)?'Wynik kości: + / − → ✓':'Kliknij podświetlone pole planszy';
     $('#board-context').innerHTML=esc(boardContext)+(bindings.get(slot('Gwiazda'))?.kind==='info'?`<span class="hero-info-hint">${icon(slot('Gwiazda'))} — Informacja o bohaterze</span>`:'');
     $('#board-pads').innerHTML=D.panel.map(p=>{
       if(!p.path)return '<div class="board-gap" aria-hidden="true"></div>';
@@ -622,7 +623,8 @@
     const key={'+':26,'=':26,'-':27,Enter:28,Escape:29}[e.key];
     if(key!==undefined){e.preventDefault();press(key);}
   });
-  window.RunePrototype={state:S,previewMovement,previewTargetField,press,startScene,render,slot,planPayment,bindings:()=>bindings,reputationRules:REPUTATION};
+  const chargeCombat=window.ResonancePrototype.create({bind,button,controls,icon,slot,render,notify,getBindings:()=>bindings,isActive:()=>S.scene==='combat'});
+  window.RunePrototype={state:S,combat:chargeCombat,previewMovement,previewTargetField:(row,column)=>S.scene==='combat'?chargeCombat.selectField(column,row):previewTargetField(row,column),press,startScene,render,slot,planPayment,bindings:()=>bindings,reputationRules:REPUTATION};
   const initial=new URLSearchParams(location.search).get('scene');
   if(initial&&['combat','reaction','draw','talk','cart'].includes(initial))startScene(initial);else render();
 })();

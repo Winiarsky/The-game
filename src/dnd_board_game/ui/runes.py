@@ -23,6 +23,10 @@ def view(session: ExplorationUiSession) -> dict[str, object] | None:
     state = session.combat_state
     if state is None or state.shared_mana is None or state.shared_mana.runes is None:
         return None
+    from .rune_baskets import active
+    if active(session):
+        from .rune_baskets import view as basket_view
+        return basket_view(session)
     from .board_panel_symbols import panel_icon
     pool = state.shared_mana.runes
     actors = {str(a.id): a for a in state.actors}
@@ -114,6 +118,10 @@ def command(session: ExplorationUiSession, data: dict[str, object]) -> dict[str,
 
 
 def scan_target(session: ExplorationUiSession) -> BoardScanTarget | None:
+    from .rune_baskets import active
+    if active(session):
+        from .rune_baskets import scan_target as basket_target
+        return basket_target(session)
     from .exploration_app import BoardScanTarget
     from dnd_board_game.hardware.board_panel import panel_feedback, panel_position
     payload = view(session)
@@ -131,6 +139,10 @@ def scan_target(session: ExplorationUiSession) -> BoardScanTarget | None:
 
 
 def select_position(session: ExplorationUiSession, position: Coordinate) -> dict[str, object]:
+    from .rune_baskets import active
+    if active(session):
+        from .rune_baskets import select_position as basket_select
+        return basket_select(session, position)
     from dnd_board_game.hardware.board_panel import panel_position
     payload = view(session)
     if payload and payload["choices"] and position in (panel_position(26), panel_position(27)):
@@ -147,7 +159,8 @@ def boost_options(session: ExplorationUiSession, declaration: ManaDeclaration) -
     from dnd_board_game.combat.runes import quote_runes
     from .board_panel_symbols import panel_icon, SYMBOLS
     from .rune_payment import declaration_targets
-    if declaration.rune_flaw_only:
+    from .rune_baskets import active
+    if declaration.rune_flaw_only or active(session):
         return []
     card = rune_card(declaration.actor_id, declaration.ability_id)
     actor = next(a for a in session.combat_state.actors if str(a.id) == declaration.actor_id)
@@ -172,9 +185,15 @@ def option_metadata(session: ExplorationUiSession, option: dict[str, object]) ->
     from dnd_board_game.combat.session import current_actor
     actor = current_actor(session.combat_state)
     key = str(option.get("action_id") or option.get("source_id") or option.get("id") or "")
-    card = rune_card(str(actor.id), key)
+    card = rune_card(str(actor.id), key, pool=session.combat_state.shared_mana.runes)
     if card is None:
         return {}
+    if card.category:
+        from dnd_board_game.rules.rune_baskets import NAMES
+        return dict(label=card.name, description=card.description, rune_cost=[NAMES[card.category]],
+                    rune_cost_label="1 własny żeton: " + NAMES[card.category], rune_budget=card.budget,
+                    action_cost="reaction" if card.budget=="R" else "special", timing=card.budget,
+                    rune_slot=card.slot, mana_cost=None, mana_boosts=[])
     first_free = card.free_first and (str(actor.id), card.id + ":free") not in session.combat_state.shared_mana.runes.used_once
     return dict(label=card.name, description=card.description, rune_cost=[] if first_free else [card.rune], rune_budget=card.budget,
                 rune_cost_label=f"Pierwsze użycie bez run; następne: 1 × {card.rune}" if card.free_first else "",

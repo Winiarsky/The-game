@@ -60,6 +60,7 @@ def _available(s: ExplorationUiSession) -> tuple[ReactionOption, ...]:
 def view(s: ExplorationUiSession) -> dict[str, Any] | None:
     """Actor fields select whose reaction runes are shown; symbols never collide."""
     from .board_panel_symbols import panel_icon, SYMBOLS
+    from dnd_board_game.rules.rune_baskets import NAMES
     options = _available(s)
     window = s.pending_reaction_window
     if not options or (len(options) == 1 and options[0] == window.current_option):
@@ -75,7 +76,7 @@ def view(s: ExplorationUiSession) -> dict[str, Any] | None:
     choices = []
     used = set()
     for option in own:
-        card = rune_card(option.reactor_actor_id, ability_id(option)) if option.kind not in WEAPON_REACTIONS else None
+        card = rune_card(option.reactor_actor_id, ability_id(option), pool=s.combat_state.shared_mana.runes) if option.kind not in WEAPON_REACTIONS else None
         preferred = card.slot if card else 1
         if preferred in used or (preferred in reserved and option.kind != ReactionKind.OPPORTUNITY_ATTACK):
             preferred = next(slot for slot in range(5, 24) if slot not in used and slot not in reserved
@@ -85,7 +86,7 @@ def view(s: ExplorationUiSession) -> dict[str, Any] | None:
                             kind=option.kind.value, target=option.target_actor_id, selected=option.id == current.id,
                             slot=preferred, position=[panel_position(preferred).col, panel_position(preferred).row],
                             icon=panel_icon(preferred), rune_name=SYMBOLS[preferred][0],
-                            cost=[] if card is None else [card.rune]))
+                            cost=[] if card is None else [NAMES[card.category] if card.category else card.rune]))
     return dict(active=True, selected=current.id, selected_actor=selected_actor,
                 actor_name=actors[selected_actor].name, confirm_available=current in options,
                 revision=s.board_selection_revision,

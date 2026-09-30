@@ -27,9 +27,9 @@ const RuneCombat = (() => {
         <div class="tt-rune-boosts">${(declaration.boost_options || []).map(option => `<button type="button" onclick="sharedManaBoostOption(${option.slot})" aria-pressed="${Boolean(option.selected)}" ${option.enabled ? '' : 'disabled'}>${option.icon}<span>${esc(option.effect)}<small>${option.cost.length ? cost(option.cost) : `Bez dopłaty run · ${esc(option.budget || '')}`}</small></span>${option.selected ? '✓' : ''}</button>`).join('')}</div>` : ''}
       ${declaration.roll_sides && ['effect_roll','bonus'].includes(declaration.stage) ? `<label>Naturalny k${declaration.roll_sides}<input type="number" min="1" max="${declaration.roll_sides}" value="${declaration.roll || 1}" onchange="sharedManaCommand('parameters',{natural_roll:Number(this.value)})"></label><p>Ustaw wynik przez +/− i zatwierdź.</p>` : ''}
       ${declaration.error ? `<p role="alert">${esc(declaration.error)}</p>` : ''}
-      <div class="tt-buttons"><button class="tt-accept" onclick="sharedManaPrimary()" ${declaration.error || (target && !target.can_confirm) ? 'disabled' : ''}>✓ ${paid ? 'Zastosuj efekt' : 'Zatwierdź użycie'}</button>
+      <div class="tt-buttons"><button class="tt-accept" onclick="sharedManaPrimary()" ${declaration.error || (target && !target.can_confirm) ? 'disabled' : ''}>✓ ${paid ? 'Zastosuj efekt' : view()?.model === 'baskets_v02' ? (declaration.basket_step === 'parameters' ? 'Przejdź do podsumowania' : 'Wybierz koszt') : 'Zatwierdź użycie'}</button>
       ${!paid ? `<button class="secondary" onclick="sharedManaCommand('cancel')">↩ Wróć bez płatności</button>` : ''}</div>
-      <p class="tt-hint">${paid ? 'Runy zostały wydane.' : 'Koszt zostanie pobrany po zatwierdzeniu. Brakującą runę podstawową mogą zastąpić dwie dowolne.'}</p></section>`;
+      <p class="tt-hint">${paid ? 'Runy zostały wydane.' : (view()?.model === 'baskets_v02' ? 'Podstawa: własny żeton kategorii przycisku. Dalej wybierzesz Rezonans; koszt pobiera dopiero końcowe potwierdzenie.' : 'Koszt zostanie pobrany po zatwierdzeniu. Brakującą runę podstawową mogą zastąpić dwie dowolne.')}</p></section>`;
   }
   function chooseReaction(optionId = null) {
     const choices = state.combat?.reaction_choices;
@@ -51,10 +51,23 @@ const RuneCombat = (() => {
       <div class="tt-buttons"><button class="tt-accept" onclick="sharedManaCommand('rune_choice_confirm')" ${pool.can_confirm ? '' : 'disabled'}>✓ Zatwierdź wybór</button><button class="secondary" onclick="sharedManaCommand('rune_choice_back')">↩ Cofnij</button></div>
       <p class="tt-hint">Runy pozostają na rękach do ostatniego zatwierdzenia. ↩ cofa wybory i kroki aż do podglądu; tam kolejne ↩ anuluje moc.</p></section>`;
   }
+  function utilitiesHtml() {
+    return `<div class="tt-rune-boosts">${(view()?.utilities || []).map(c=>`<button onclick="sharedManaCommand('${c.command}')">${c.icon}<span>${esc(c.label)}</span></button>`).join('')}</div>`;
+  }
+  function basketsHtml(pool) {
+    const hero = pool.hands.find(h => h.hero === pool.actor);
+    return `<section class="tt-rune-payment tt-baskets"><small>Koszyki run · ${esc(pool.actor_name)}</small><h1>${esc(pool.title)}</h1>
+      <p>${esc(pool.instruction)}</p>
+      ${hero ? `<div class="tt-basket-counts">${hero.baskets.map(b => `<div><b>${esc(b.name)} ${b.count}/${b.capacity}</b><span>${b.tokens.map(t => `${t.icon} ${esc(t.rune)} ×${t.count}`).join(' · ') || 'Puste miejsca'}</span></div>`).join('')}</div>` : ''}
+      ${pool.selected.length ? `<p>Wybrano: ${pool.selected.map(esc).join(', ')}</p>` : ''}
+      <div class="tt-rune-boosts">${pool.choices.map((c,i) => `<button data-basket-choice="${i}" class="${c.slot===28?'tt-accept':''}">${c.icon || ''}<span>${esc(c.label)}</span></button>`).join('')}</div>
+      <ul class="tt-legal-targets">${pool.targets.map(t => `<li><button data-basket-helper="${esc(t.id)}">${esc(t.name)} · pole (${t.position.join(', ')})</button></li>`).join('')}</ul></section>`;
+  }
   function stepHtml() {
     if (state.combat?.reaction_choices) return reactionsHtml(state.combat.reaction_choices);
     const pool = view();
     if (!pool) return null;
+    if (pool.model === 'baskets_v02' && pool.phase === 'basket') return basketsHtml(pool);
     if (pool.phase === 'allocation') return allocationHtml(pool);
     if (pool.phase === 'rune_choices') return selectionHtml(pool);
     if (pool.upkeep) return `<section class="tt-rune-payment"><h1>Podtrzymanie aury · ${esc(pool.actor_name)}</h1><p>${esc(pool.instruction)}</p><div class="tt-rune-boosts">${pool.choices.map(choice => `<button onclick="sharedManaCommand('${choice.command}',{rune:'${esc(choice.rune || '')}'})">${choice.icon || ''}${esc(choice.label)}</button>`).join('')}</div></section>`;
@@ -62,8 +75,12 @@ const RuneCombat = (() => {
     return declaration ? paymentHtml(declaration) : null;
   }
   document.addEventListener('click', event => {
+    const basket = event.target.closest('[data-basket-choice]');
+    const helper = event.target.closest('[data-basket-helper]');
+    if (basket && !busy) { const c=view().choices[Number(basket.dataset.basketChoice)]; sharedManaCommand(c.command,c); }
+    if (helper && !busy) sharedManaCommand('basket_helper',{target_id:helper.dataset.basketHelper});
     const button = event.target.closest('[data-rune-take]');
     if (button && !button.disabled && !busy) sharedManaCommand('rune_take',{rune:button.dataset.runeTake});
   });
-  return {stepHtml, cost, chooseReaction};
+  return {stepHtml, cost, chooseReaction, utilitiesHtml};
 })();

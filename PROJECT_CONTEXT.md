@@ -1,6 +1,95 @@
 # Kontekst Projektu
 
-## Obowiązujące zasady Misji 0 — 22.09.2026
+## Mock walki ładunków i Rezonansu — 29.09.2026
+
+`docs/ui/prototype.html` ma aktualną, klikalną symulację walki na podstawie
+29 mocy z kart: 20 ładunków, tryby 4/8, skazy, stany, odzysk i ciągły
+Rezonans. Osobne moduły `docs/ui/resonance-*` nie zmieniają silnika Python,
+sprzętu ani rozmów i reputacji. Opis obsługi, jawne robocze interpretacje
+i ograniczenia areny testowej: `docs/ui/RESONANCE_MOCK.md`.
+Następny krok: ograć ten mock i zatwierdzić przepływy przed przenoszeniem
+mechaniki do aplikacji. Dawne wpisy „bez zmian makiety” opisują poprzedni etap.
+
+## Przegląd pozostałych kart — 29.09.2026
+
+Zaktualizowano karty Brakki, Miry, Dagny, Loriana i Nimry; Erynd pozostaje
+bez zmian. ST drukowane jako formuła 10 + cecha. Brakka: dwie dodatkowe
+kości broni przy krytyku, Szał +1k6, Echo gromu. Mira: Cios z zaskoczenia,
+Całun bez wymogu osłony, Parkour do wroga do 4 pól, Więzy blokujące ruch
+po trafieniu z ukrycia. Lorian: Hymn 1k6 do wybranego k20, bezterminowo,
+jedna kość na bohatera, decyzja także po porażce. Nimra: jawny wybór
+Precyzyjnego splotu albo „Nie pomijaj”, Fala uderzeniowa i Strefa ognia 3×3.
+Notatki mechaniczne i przypadki akceptacyjne są w
+`docs/RESONANCE_RUNTIME_SPEC.md`. Bieżący etap to karty i PDF-y;
+obsługa planszy i mechaniki pozostaje do następnego kroku.
+
+## Przegląd Garrana i kart — 27.09.2026
+
+Katalog ładunków i PDF-y uwzględniają Żywą osłonę jako stan +1 KP u
+sąsiadujących sojuszników, odzysk po pudle w Garrana, odrzucenie Impulsu,
+magiczne 1k6 Ostrza i Szarżę bastionu M+S zamiast Ścieżki przysięgi.
+Pełny przepływ podglądu, warunki ruchu i Powalony są zapisane w
+`docs/RESONANCE_RUNTIME_SPEC.md`; etap nadal dotyczy kart i specyfikacji.
+Każda postać ma scenkę zamiast dawnego celu na pierwszej stronie,
+czytelniejsze pola pasywu i odzysku bez długiego wspólnego dopisku.
+Strona 2 jest pionowa: moce oraz jedna ramka celu 60×54 mm po lewej
+i tor pięciu okręgów po prawej. Cały zestaw nadal ma 35 stron A4.
+
+## Ciągły Rezonans — karty i specyfikacja, 25.09.2026
+
+Etap pozostaje ograniczony do kart i dokumentacji; działająca walka nadal
+używa wcześniejszych koszyków. Bieżąca specyfikacja nadrzędna:
+[RESONANCE_RUNTIME_SPEC.md](docs/RESONANCE_RUNTIME_SPEC.md).
+
+Bohater dołącza na początku swojej tury. Zatwierdzona moc wzmocniona dodaje
+runę i włącza premię przed efektami mocy. Premie uczestników działają także
+poza turą; oczekujący na pierwszą turę jeszcze ich nie mają. Zakończenie
+Rezonansu usuwa czasowe premie wszystkich uczestników i spowolnienie wrogów.
+Obrażenia, leczenie i wykonane przemieszczenia pozostają. Podstawowa moc
+zamyka łańcuch po całym rozpatrzeniu; Skupienie natychmiast; brak mocy na końcu tury.
+
+Wieża: KP przez Rezonans. Grot: wszystkie zdarzenia obrażeń źródłowego
+bohatera, także zwykłe ataki, reakcje i okresowe. Schody: tymczasowy budżet
+zwykłego ruchu. Błysk: początek własnej tury i dodatkowa kość po nowym Błysku.
+Hak: po obrażeniach kolejka wskazywania legalnych pól do N od celu, włącznie
+z pozostaniem na miejscu; podgląd i zatwierdzenie przez planszę.
+Oko: wszystkie własne k20, bez ST. Kielich: 2 tymczasowe PW/kopię, ich utrata
+liczy się jako obrażenia. Klepsydra: osobna zużywalna prewencja 2/kopię,
+omijana przez obrażenia umysłowe. Węzeł: wszyscy wrogowie −1 ruchu/kopię.
+Fala: +1 efektywna kopia poprzedniej runy na uporządkowanym torze.
+Specyfikacja jawnie rozdziela ustalenia i robocze przypadki brzegowe.
+
+ST mocy = 10 + modyfikator wskazanej cechy; rzuty bohaterów bez premii
+biegłości. Stała 10 zachowuje aktualne ST zamiast starego 8 + biegłość + cecha.
+Oko zwiększa rzuty k20, nie ST. Nie wraca premia od poziomu naładowania.
+
+20 ładunków na bohatera, koszty 4/8, Skupienie 1k20, odzysk klasowy 1k4 raz
+na rundę. Przesunięte zestawy: Wieża, Grot, Schody, Błysk, Hak, Oko, Kielich,
+Węzeł, Fala, Klepsydra; kolejno Garran, Brakka, Mira, Dagna, Lorian, Nimra,
+Erynd, po cztery runy, u Nimry pięć. Spirala to osobne Skupienie.
+Katalog `content/print/rune_charges_v02/catalog.json` ma model `ongoing_chain_effects`.
+
+Wydruk `content/scenarios/misja_0_dzwon/print/runy_ladunki_v02/`: 35 stron,
+3 planszetki + 2 arkusze wycinanek na bohatera. Pasyw i odzysk na
+stronie 1; brak toru ładunków. Pokrętło gracza i docelowy licznik aplikacji.
+Premie w otoczce Rezonansu, rozmiary 60×54 / 60×42 mm bez zmian. Gwiazda 25,
+Iskra 24; pozycje panelu bez zmian. Najpierw przegląd poszczególnych postaci,
+potem UI i mechanika **wyłącznie walki**. Makieta: `docs/ui/prototype.html`.
+
+## Osobiste koszyki run w aplikacji — 23.09.2026
+
+Nowe walki Misji 0 i swobodnego treningu areny używają osobistych koszyków.
+Kategorie przycisków określają koszt podstawowy. Rezonans wymaga konkretnej
+runy innej kategorii; brakujący symbol może opłacić sojusznik do 3 pól z reakcją.
+Aplikacja śledzi symbole, pojemności i właścicieli oraz rozlicza dopiero końcowe
+potwierdzenie. Początkowe żetony deklaruje się kategoriami przez planszę.
+Brakka: 4/1/3/1, Garran: 2/4/1/2, Mira: 3/1/4/1 (Ofensywa/Obrona/Mobilność/Aura).
+Karty i runtime korzystają z `content/print/rune_baskets_v01/catalog.json`.
+PDF ma 42 strony; pierwsza strona postaci zawiera miejsca na żetony.
+[Pełny przebieg, limity, ładowanie i zgodność zapisów](docs/RUNE_BASKETS_RUNTIME.md).
+Poniższe wpisy o N+2 i ręce do 7 run opisują poprzedni model.
+
+## Poprzednie zasady Misji 0 — 22.09.2026
 
 Nowe gry używają run w walce i wspólnej reputacji w konfrontacjach.
 Dobór N+2 odbywa się raz na początku walki; przydział jest sekwencyjny,

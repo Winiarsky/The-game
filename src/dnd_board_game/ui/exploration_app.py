@@ -2605,7 +2605,7 @@ class ExplorationUiSession:
                 from .combat_board_controls import preview_confirmation
                 payload["combat"]["board_can_confirm"] = preview_confirmation(self)
                 from .board_panel_symbols import panel_icon
-                payload["combat"]["information_icon"] = panel_icon(24)
+                payload["combat"]["information_icon"] = panel_icon(25)
                 payload["combat"]["tabletop"] = tabletop_combat_payload(
                     payload["combat"], (payload.get("encounter_initiative") or {}).get("order", ()),
                     conditions=self.combat_state.condition_states)
@@ -2616,10 +2616,13 @@ class ExplorationUiSession:
 
         if self.combat_state and self.combat_state.shared_mana and self.combat_state.shared_mana.runes:
             from dnd_board_game.scenarios.rune_catalog import rune_card
-            card = rune_card(str(actor.id), source_id)
+            card = rune_card(str(actor.id), source_id, pool=self.combat_state.shared_mana.runes)
             if card is None:
                 return "Bez kosztu run."
             pool = self.combat_state.shared_mana.runes
+            if card.category:
+                from dnd_board_game.rules.rune_baskets import NAMES
+                return f"{card.budget} · 1 własny żeton: {NAMES[card.category]}."
             free = card.free_first and (str(actor.id), card.id + ":free") not in pool.used_once
             cost = "bez kosztu run" if free else "1 dowolna runa" if card.rune == "*" else card.rune
             return f"{card.budget} · {cost}."
@@ -7323,9 +7326,10 @@ class ExplorationUiSession:
         )
         from dnd_board_game.application.party_ethos import read as read_party_ethos
         from .mission_zero import enabled as mission_enabled
-        from dnd_board_game.character_creation.runes import apply_rune_profile
+        from dnd_board_game.character_creation.runes import apply_basket_profile as apply_rune_profile
         from dnd_board_game.rules.runes import RESOURCE_RUNES
-        if mission_enabled(self):
+        from .training_walkthrough import enabled as guided_training
+        if mission_enabled(self) or (self.exploration.scenario_id == "recruitment_arena" and not guided_training(self)):
             flow.encounter = replace(flow.encounter, actors=tuple(
                 apply_rune_profile(actor) if actor.faction == Faction.ALLY else actor
                 for actor in flow.encounter.actors))
@@ -9424,7 +9428,7 @@ class ExplorationUiSession:
             body = mana_ability(str(actor.id), action_id).description
             if self.combat_state.shared_mana.runes is not None:
                 from dnd_board_game.scenarios.rune_catalog import rune_card
-                card = rune_card(str(actor.id), action_id)
+                card = rune_card(str(actor.id), action_id, pool=self.combat_state.shared_mana.runes)
                 if card is not None:
                     title, body = card.name, card.description
         elif uses_physical_mana(actor) and action_id.startswith("mana_"):
@@ -21868,7 +21872,7 @@ class ExplorationUiSession:
         """Register browser-owned dice/confirmation controls, never resolve rules here."""
         if not self._board_panel_enabled():
             raise ValueError("Panel akcji jest dostępny podczas próby na arenie.")
-        if not context or len(context) > 120 or any(type(slot) is not int or slot not in (24, 26, 27, 28, 29) for slot in slots):
+        if not context or len(context) > 120 or any(type(slot) is not int or slot not in (25, 26, 27, 28, 29) for slot in slots):
             raise ValueError("Nieprawidłowy kontekst przycisków panelu.")
         if expected_revision and expected_revision != self._board_selection_payload()["revision"]:
             return {"board_selection": self._board_selection_payload()}
@@ -22022,7 +22026,7 @@ class ExplorationUiSession:
             controls = tuple(slot for slot in controls if slot != 28)
             controls = (*controls, *((28,) if can_confirm else ()), 29)
         controls = tuple(sorted(set(slot for slot in controls if slot >= 26)))
-        info_slots = (24,) if information_available(self) and (not exclusive or context[0].startswith("combat-inspect:")) else ()
+        info_slots = (25,) if information_available(self) and (not exclusive or context[0].startswith("combat-inspect:")) else ()
         positions = tuple(p for p in target.positions if p.col != 19) if not exclusive else ()
         economies = self._turn_option_economy(options) if actions else {}
         action_colors = {
@@ -22035,7 +22039,11 @@ class ExplorationUiSession:
             actions[2] = "mission:potion"
             action_colors[2] = LedColor.PANEL_ACTION
         if self.combat_state and self.combat_state.shared_mana and self.combat_state.shared_mana.runes:
-            action_colors.update({slot: LedColor.PANEL_RUNE for slot in actions if 5 <= slot < 24})
+            action_colors.update({slot: LedColor.PANEL_RUNE for slot in actions if 5 <= slot < 25})
+        from .rune_baskets import utility_slots
+        for slot in utility_slots(self):
+            actions[slot] = "basket:utility"
+            action_colors[slot] = LedColor.PANEL_RUNE
         action_colors.update({slot: LedColor.PANEL_INFO for slot in info_slots})
         feedback = panel_feedback((*actions, *info_slots), selected_slot=selected,
                                   control_slots=controls, base=target.feedback,
@@ -23353,6 +23361,9 @@ class ExplorationUiSession:
                 from .shared_mana import command as mana_command
                 return mana_command(self, {"command": "pay" if slot == 28 else "cancel" if slot == 29 else "boost_option",
                                            "slot": slot, "revision": self.combat_state.shared_mana.revision})
+            from .rune_baskets import utility_slots, utility_command
+            if slot in utility_slots(self):
+                return utility_command(self, "basket_focus" if slot==19 else "basket_regeneration")
             if slot == 2 and not (self.board_panel_context and self.board_panel_context[2]):
                 from .mission_zero import enabled as mission_enabled, read as mission_read, command as mission_command, available_potions, potion_targets
                 if (mission_enabled(self) and mission_read(self)["stage"] == "battle"
@@ -23376,7 +23387,7 @@ class ExplorationUiSession:
                     self.cancel_combat_class_feature_targeting()
                 self.board_selection_revision += 1
                 return self.confirm_combat_turn_action(action_id)
-            if slot not in (24, 26, 27, 28, 29):
+            if slot not in (25, 26, 27, 28, 29):
                 raise ValueError("Nieznana komenda panelu.")
             context = self.board_panel_context[0] if self.board_panel_context else None
             self.board_selection_revision += 1

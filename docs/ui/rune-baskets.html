@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Koszyki run · grywalny prototyp</title>
+  <link rel="stylesheet" href="rune-baskets.css">
+  <script defer src="rune-baskets-data.js"></script>
+  <script defer src="rune-baskets.js"></script>
+</head>
+<body>
+  <header class="masthead"><a href="prototype.html" class="brand">Przy stole <small>Koszyki run · v0.1</small></a><div class="tools"><span id="save-status">Zapis w tej przeglądarce</span><button id="help-button">Zasady i sterowanie</button><button id="new-button">Nowa próba</button></div></header>
+  <main id="app" aria-live="polite" aria-label="Prototyp osobistych koszyków run"></main>
+  <footer class="controller" aria-label="Stały panel planszy"><div class="controller-heading"><strong id="controller-hint"></strong><span>★ Informacja · + / − wybór lub wynik · ✓ potwierdź · ↩ cofnij</span></div><div id="board-pads" class="board-pads"></div><div class="controller-groups"><span>Ruch · atak · przedmiot · koniec tury</span><span>Stałe symbole run · Spirala: Skupienie · Most: Wsparcie · Gwiazda obok +/−: informacja</span><span>+ / − / ✓ / ↩</span></div></footer>
+  <dialog id="help-dialog"><button class="close" data-close-dialog aria-label="Zamknij">×</button><h1>Koszyki run</h1><p>Każdy bohater ma cztery osobiste koszyki. Podstawę mocy opłaca jedną własną runą jej kategorii. Symbol przycisku mocy jest jej skrótem na panelu, a nie wymaganym kosztem.</p><p>Możesz dodać jeden Rezonans: dokładny symbol z innej kategorii. Płacisz własną runą albo używasz Mostu, wskazujesz figurkę sojusznika do 3 pól i zużywasz jego runę oraz reakcję. Podstawowego kosztu nie można pożyczyć.</p><p>Wskaż cel na symulowanej planszy, wybierz własną runę, ewentualnie Rezonans i płatnika. Dopiero ostatnie ✓ rozlicza zasoby. ↩ wcześniej cofa wybór bez kosztu. Lista celów jest wyłącznie informacyjna.</p><p>Spirala: Skupienie kosztuje S. Wybierz do dwóch rozładowanych miejsc, także z tej samej kategorii. Dla każdego fizycznie rzuć k4; +/− wpisuje wynik, ✓ go zatwierdza. Runy nigdy nie zmieniają kategorii.</p><p>Regeneracja jest najwyżej raz na rundę dla każdego warunku. Zdarzenie przy pełnym koszyku zużywa jego limit. Reakcje odnawiają się na granicy rundy. Zasięg liczymy jak ruch króla: przekątna to jedno pole. W tej próbie nie ma przeszkód ani zasłaniania widoczności.</p><p><strong>Zakres prototypu:</strong> przygotowanie, budżety, cele, płatności, Rezonans, Wsparcie i ładowanie działają. Pełny silnik walki D&amp;D i przeciwników nie jest zaimplementowany. Trafienie, testy, obrażenia i pozostałe efekty rozstrzygacie przy stole według karty; potem wpisujecie wynik. Jawne przyciski zdarzeń służą potwierdzaniu skutecznej obrony, ukrycia i innych warunków zaobserwowanych przy stole.</p><p>Zapis obejmuje aktualny krok, wybrane runy i wpisany wynik k4. Odświeżenie strony nie losuje ani nie odnawia zasobów. Przycisk „Nowa próba” rozpoczyna nowy przykład dopiero po potwierdzeniu.</p><p><a href="../../system_run_v0.1.md">Pełna propozycja zasad</a> · <a href="prototype.html">Pozostałe widoki prototypu</a></p></dialog>
+  <dialog id="info-dialog"><button class="close" data-close-dialog aria-label="Zamknij">×</button><div id="info-content"></div></dialog>
+  <div id="toast" role="status" hidden></div>
+</body>
+</html>

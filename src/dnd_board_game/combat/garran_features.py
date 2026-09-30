@@ -237,6 +237,10 @@ def resolve_shield_bash(
         ),
     )
     destination = shield_bash_destination(board, action.state, actor, target)
+    if state.shared_mana and dict(state.shared_mana.pending_boosts).get("push"):
+        from dnd_board_game.application.combat_shove_flow import forced_push_destination
+        pushed = forced_push_destination(board=board, state=action.state, attacker=actor, target=target, distance_feet=10)
+        destination = pushed if pushed != target.position else None
     target_after = replace(
         damage.actor_after,
         position=destination or damage.actor_after.position,

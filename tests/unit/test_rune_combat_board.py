@@ -147,7 +147,8 @@ def test_physical_allocation_counts_duplicates_undo_and_stale_click(tmp_path: Pa
         press(rune_slot(pool.offer[0]) if pool.offer else 28)
     assert game.combat_state.shared_mana.runes.phase == 'ready'
     assert not any(p.col != 19 for p in game._current_board_scan_target().positions)
-    assert not {panel_position(4), panel_position(25)} & set(game._current_board_scan_target().positions)
+    assert panel_position(4) not in game._current_board_scan_target().positions
+    assert panel_position(25) in game._current_board_scan_target().positions
 
 
 def test_no_legal_target_extinguishes_attack_and_movement_requires_field(tmp_path: Path) -> None:
@@ -162,7 +163,7 @@ def test_no_legal_target_extinguishes_attack_and_movement_requires_field(tmp_pat
     target = game._current_board_scan_target()
     assert panel_position(28) not in target.positions
     assert panel_position(28).as_tuple() not in board.leds
-    assert panel_position(24) in target.positions
+    assert panel_position(25) in target.positions
     actor = current_actor(game.combat_state)
     field = next(p for p in target.positions if p.col != 19 and p != actor.position)
     game.select_board_position(field)
@@ -189,10 +190,10 @@ def test_hero_information_roundtrip_preserves_target_and_rejects_old_mask(tmp_pa
     assert panel_position(28) in game._current_board_scan_target().positions
     before = (game.combat_state, game.pending_player_attack, game.combat_turn_preview_option_id)
     revision = game._board_selection_payload()['revision']
-    event = game._handle_board_position(panel_position(24))
-    assert event['panel_event']['slot'] == 24
-    game.configure_board_panel('combat-inspect:1:garran:garran', [24, 26, 27, 29], True)
-    assert set(game._current_board_scan_target().positions) == {panel_position(s) for s in (24, 26, 27, 29)}
+    event = game._handle_board_position(panel_position(25))
+    assert event['panel_event']['slot'] == 25
+    game.configure_board_panel('combat-inspect:1:garran:garran', [25, 26, 27, 29], True)
+    assert set(game._current_board_scan_target().positions) == {panel_position(s) for s in (25, 26, 27, 29)}
     game.configure_board_panel('dice:obsolete', [26, 27, 28], True, expected_revision=revision)
     assert game.board_panel_context[0] == 'combat-inspect:1:garran:garran'
     game.release_board_panel('combat-inspect:1:garran:garran')

@@ -123,13 +123,13 @@ window.RUNE_DATA = {
     },
     {
       "slot": 24,
-      "name": "Gwiazda",
-      "path": "M12 2v20M2 12h20M5 5l14 14M5 19 19 5M8 8h8v8H8Z"
+      "name": "Iskra",
+      "path": "M12 2l3 7 7 3-7 3-3 7-3-7-7-3 7-3ZM12 8v8M8 12h8"
     },
     {
       "slot": 25,
-      "name": "Przerwa",
-      "path": ""
+      "name": "Gwiazda",
+      "path": "M12 2v20M2 12h20M5 5l14 14M5 19 19 5M8 8h8v8H8Z"
     },
     {
       "slot": 26,

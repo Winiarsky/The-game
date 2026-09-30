@@ -20,7 +20,7 @@ class RuneFlawCost:
 def rune_flaw_cost(state: CombatState, actor: Actor, ability_id: str,
                    targets: Sequence[Actor] = ()) -> RuneFlawCost:
     mana = state.shared_mana
-    card = rune_card(str(actor.id), ability_id)
+    card = rune_card(str(actor.id), ability_id, pool=mana.runes if mana else None)
     if mana is None or mana.runes is None or card is None:
         return RuneFlawCost()
     if card.free_first and (str(actor.id), ability_id + ":free") not in mana.runes.used_once:
@@ -29,7 +29,7 @@ def rune_flaw_cost(state: CombatState, actor: Actor, ability_id: str,
     allies = tuple(a for a in state.actors if a.id != actor.id and a.faction == actor.faction and not a.is_dead())
     unconscious = {c.actor_id for c in state.condition_states if c.condition == CombatCondition.UNCONSCIOUS}
     conscious_allies = tuple(a for a in allies if not a.is_unconscious() and not a.is_defeated() and str(a.id) not in unconscious)
-    if hero == "dagna" and ability_id not in NON_OFFENSIVE and any(adjacent(actor, a) and 2*a.hp < a.max_hp for a in allies):
+    if hero == "dagna" and (card.category == "offense" if card.category else ability_id not in NON_OFFENSIVE) and any(adjacent(actor, a) and 2*a.hp < a.max_hp for a in allies):
         return RuneFlawCost(1, ("Nikogo nie zostawiam: ranny sąsiad — dopłać 1 wybraną dowolną runę.",))
     if hero == "lorian" and len(mana.runes.heroes) > 1 and not any(
             grid_distance_feet(actor.position, a.position) <= 10 for a in conscious_allies):

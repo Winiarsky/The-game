@@ -1,0 +1,1935 @@
+{
+  "version": 1,
+  "source": "system_run_v0.1.md",
+  "categories": [
+    {
+      "id": "offense",
+      "name": "Ofensywa",
+      "runes": [
+        "Grot",
+        "Hak",
+        "Trójząb",
+        "Błysk"
+      ]
+    },
+    {
+      "id": "defense",
+      "name": "Obrona",
+      "runes": [
+        "Wieża",
+        "Kotwica",
+        "Brama",
+        "Węzeł"
+      ]
+    },
+    {
+      "id": "mobility",
+      "name": "Mobilność",
+      "runes": [
+        "Oko",
+        "Schody",
+        "Rozwidlenie",
+        "Klepsydra"
+      ]
+    },
+    {
+      "id": "aura",
+      "name": "Aura",
+      "runes": [
+        "Korona",
+        "Kielich",
+        "Klucz",
+        "Romb"
+      ]
+    }
+  ],
+  "rules": {
+    "base_cost": 1,
+    "base_owner": "self",
+    "max_resonances": 1,
+    "max_resonance_options": 3,
+    "resonance_other_category": true,
+    "support_distance": 3,
+    "support_reaction": true,
+    "support_base_cost": false,
+    "distance_metric": "chebyshev",
+    "reaction_reset": "round",
+    "focus_count": 2,
+    "focus_budget": "S",
+    "focus_variant": "A",
+    "recharge_die": 4,
+    "full_basket_consumes_regeneration": true,
+    "duplicate_prepared_symbols": true,
+    "focus_description": "Wydaj S. Wybierz do 2 własnych rozładowanych miejsc, również z jednej kategorii. Osobny fizyczny k4 za każde; wynik nadaje symbol według tabeli kategorii.",
+    "support_description": "Przytomny sojusznik do 3 pól może opłacić jeden Rezonans własną runą i Reakcją. Podstawę opłaca wykonujący moc. Reakcje wracają na początku rundy; odległość licz najkrótszym ciągiem pól, także po przekątnej.",
+    "regeneration_description": "Zgłoś rzeczywiste zdarzenie po rozstrzygnięciu. Każdy warunek działa najwyżej raz w rundzie. Pierwsze zdarzenie zużywa limit także przy pełnym koszyku; bez zachowywania odnowienia na później.",
+    "control_description": "Przycisk mocy → cel → potwierdzenie celu → własny żeton kategorii → opcjonalny Rezonans i pomocnik → podsumowanie → ✓. ↩ cofa bez kosztu.",
+    "prototype_notes": [
+      "Każda moc kosztuje jedną własną runę kategorii swojego przycisku. Rezonans wymaga konkretnego symbolu z innej kategorii.",
+      "Pojemności i warunki odnowienia są przeznaczone do testów balansu."
+    ],
+    "control_slots": {
+      "focus": 19,
+      "support": 21,
+      "information": 25
+    }
+  },
+  "heroes": {
+    "garran": {
+      "capacities": {
+        "offense": 2,
+        "defense": 4,
+        "mobility": 1,
+        "aura": 2
+      },
+      "preparation": {
+        "offense": [
+          "Grot",
+          "Hak"
+        ],
+        "defense": [
+          "Wieża",
+          "Kotwica",
+          "Brama",
+          "Węzeł"
+        ],
+        "mobility": [
+          "Oko"
+        ],
+        "aura": [
+          "Korona",
+          "Kielich"
+        ]
+      },
+      "regeneration": [
+        {
+          "id": "successful_guard",
+          "event": "successful_guard",
+          "category": "defense",
+          "label": "Pierwszy raz w rundzie, gdy twoja moc Obrony zamieni trafienie w pudło albo zmniejszy obrażenia tobie lub sojusznikowi o co najmniej 1: naładuj 1 Obronę.",
+          "limit": "round",
+          "count": 1
+        }
+      ],
+      "provisional": {
+        "capacities": false,
+        "regeneration": true,
+        "note": "Pojemności i odnowienie do testów. Koszt podstawowy wynika z kategorii przycisku mocy."
+      },
+      "flaw": {
+        "name": "Nieustępliwość",
+        "description": "Rozpoczęcie własnej tury przy wrogu zmniejsza limit zwykłego ruchu o połowę do końca tury."
+      },
+      "cards": [
+        {
+          "id": "shield_bash",
+          "name": "Uderzenie tarczą",
+          "slot": 18,
+          "budget": "S",
+          "description": "Test Siły przeciw Sile celu w zasięgu 1 pola (remis wygrywa obrońca). Po wygranej: 1k6 + Siła obrażeń i odepchnięcie o 1 pole, jeśli jest wolne. Możesz w tej samej turze wykonać zwykły atak.",
+          "button": "Kotwica",
+          "category": "defense",
+          "target": "enemy",
+          "range": 1,
+          "resonances": [
+            {
+              "id": "push",
+              "rune": "Oko",
+              "description": "Odepchnięcie o 2 pola zamiast 1."
+            },
+            {
+              "id": "damage",
+              "rune": "Grot",
+              "description": "Dodatkowe 1k6 obrażeń przy wygranym teście."
+            }
+          ],
+          "effect": {
+            "type": "push_attack",
+            "push": 1
+          }
+        },
+        {
+          "id": "second_wind",
+          "name": "Drugi oddech",
+          "slot": 20,
+          "budget": "S",
+          "description": "Odzyskaj 1k10 + KON PW, do maksimum. Raz na walkę.",
+          "button": "Kielich",
+          "category": "aura",
+          "target": "self",
+          "range": 0,
+          "resonances": [
+            {
+              "id": "heal_d4",
+              "rune": "Grot",
+              "description": "+1k4 leczenia"
+            },
+            {
+              "id": "temp_hp",
+              "rune": "Wieża",
+              "description": "5 tymczasowych PW"
+            }
+          ],
+          "once": true,
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "defensive_stance",
+          "name": "Pozycja obronna",
+          "slot": 6,
+          "budget": "S",
+          "description": "+2 KP do początku następnej tury. Każda zmiana pola kończy postawę.",
+          "button": "Wieża",
+          "category": "defense",
+          "target": "self",
+          "range": 0,
+          "resonances": [
+            {
+              "id": "anchor",
+              "rune": "Grot",
+              "description": "Ochrona przed przymusowym przesunięciem"
+            },
+            {
+              "id": "temp_hp",
+              "rune": "Hak",
+              "description": "5 tymczasowych PW"
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "garran_command_halt",
+          "name": "Rozkaz: Stać!",
+          "slot": 7,
+          "budget": "S",
+          "description": "Wróg do 12 pól, obrona MDR ST 14. Porażka: połowa ruchu i brak reakcji do początku twojej następnej tury.",
+          "button": "Klepsydra",
+          "category": "mobility",
+          "target": "enemy",
+          "range": 12,
+          "resonances": [
+            {
+              "id": "root",
+              "rune": "Kotwica",
+              "description": "Ruch 0 zamiast połowy"
+            },
+            {
+              "id": "target",
+              "rune": "Korona",
+              "description": "Drugi wróg do 2 pól od pierwszego; osobna obrona"
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "garran_guard_companion",
+          "name": "Osłona towarzysza",
+          "slot": 16,
+          "budget": "R",
+          "description": "Przed rzutem ataku na sąsiada przejmij pojedynczy atak. Użyj swojej KP; obrażenia otrzymujesz ty. Bez obszarów.",
+          "button": "Węzeł",
+          "category": "defense",
+          "target": "ally",
+          "range": 1,
+          "resonances": [
+            {
+              "id": "reduce_d6",
+              "rune": "Grot",
+              "description": "Zmniejsz obrażenia o 1k6"
+            },
+            {
+              "id": "reduce_d4",
+              "rune": "Hak",
+              "description": "Zmniejsz obrażenia o 1k4"
+            }
+          ],
+          "allow_self": false,
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "garran_shield_wall",
+          "name": "Osłona tarczą",
+          "slot": 9,
+          "budget": "S",
+          "description": "Z tarczą. Sąsiedni sojusznicy +2 KP do twojej następnej tury. Ty bez premii. Odejście kończy ochronę.",
+          "button": "Brama",
+          "category": "defense",
+          "target": "area",
+          "range": 1,
+          "resonances": [
+            {
+              "id": "ward",
+              "rune": "Kielich",
+              "description": "5 tymczasowych PW dla jednego chronionego"
+            },
+            {
+              "id": "anchor",
+              "rune": "Grot",
+              "description": "Ochrona przed przymusowym przesunięciem"
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "garran_rally",
+          "name": "Mowa dowódcy",
+          "slot": 15,
+          "budget": "S",
+          "description": "Ty i słyszący sojusznicy do 3 pól usuwacie Strach. Jeden uczestnik: przewaga pierwszego ataku do twojej następnej tury.",
+          "button": "Korona",
+          "category": "aura",
+          "target": "ally",
+          "range": 3,
+          "resonances": [
+            {
+              "id": "all",
+              "rune": "Węzeł",
+              "description": "Przewaga dla wszystkich uczestników"
+            },
+            {
+              "id": "heal",
+              "rune": "Grot",
+              "description": "Jeden odzyskuje 1k6 PW"
+            },
+            {
+              "id": "second",
+              "rune": "Hak",
+              "description": "Przewaga dla drugiego uczestnika"
+            }
+          ],
+          "allow_self": true,
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "iron_bastion",
+          "name": "Żelazny bastion",
+          "slot": 23,
+          "budget": "A+S",
+          "description": "Stacjonarny krąg ze środkiem na twoim polu, promień 2 pól: sojusznicy wewnątrz +1 KP i ochrona przed przesunięciem. Pierwsza kolejna tura bez podtrzymania, później 1 dowolna runa na turę; wraca do podstawy. Premie KP nie sumują się.",
+          "button": "Klucz",
+          "category": "aura",
+          "target": "area",
+          "range": 2,
+          "resonances": [
+            {
+              "id": "armor",
+              "rune": "Wieża",
+              "description": "+2 KP zamiast +1"
+            },
+            {
+              "id": "radius",
+              "rune": "Brama",
+              "description": "Promień 3 pól"
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "counterattack_command",
+          "name": "Rozkaz: Kontratak!",
+          "slot": 12,
+          "budget": "M+A+S",
+          "description": "Ty i sojusznik do 3 pól: ruch do 2 pól bez ataków okazyjnych i po ataku. Sojusznik płaci reakcją; nie płaci dodatkowego żetonu.",
+          "button": "Błysk",
+          "category": "offense",
+          "target": "ally",
+          "range": 3,
+          "resonances": [
+            {
+              "id": "move",
+              "rune": "Wieża",
+              "description": "Obaj o 1 pole dalej"
+            },
+            {
+              "id": "push",
+              "rune": "Kotwica",
+              "description": "Twoje trafienie odpycha o 1 pole"
+            }
+          ],
+          "allow_self": false,
+          "effect": {
+            "type": "table"
+          }
+        }
+      ]
+    },
+    "brakka": {
+      "capacities": {
+        "offense": 4,
+        "defense": 1,
+        "mobility": 3,
+        "aura": 1
+      },
+      "preparation": {
+        "offense": [
+          "Grot",
+          "Hak",
+          "Trójząb",
+          "Błysk"
+        ],
+        "defense": [
+          "Wieża"
+        ],
+        "mobility": [
+          "Oko",
+          "Schody",
+          "Rozwidlenie"
+        ],
+        "aura": [
+          "Korona"
+        ]
+      },
+      "regeneration": [
+        {
+          "id": "melee_hit",
+          "event": "melee_hit",
+          "category": "offense",
+          "label": "Pierwszy raz w rundzie, gdy trafisz wroga atakiem wręcz i zadasz co najmniej 1 obrażenie: naładuj 1 Ofensywę.",
+          "limit": "round",
+          "count": 1
+        }
+      ],
+      "provisional": {
+        "capacities": false,
+        "regeneration": true,
+        "note": "Pojemności i odnowienie do testów. Koszt podstawowy wynika z kategorii przycisku mocy."
+      },
+      "flaw": {
+        "name": "Głód walki",
+        "description": "Tura bez ofensywy kończy Szał."
+      },
+      "cards": [
+        {
+          "id": "rage",
+          "name": "Szał",
+          "slot": 5,
+          "budget": "S",
+          "description": "+2 obrażeń wręcz z SIŁ, przewaga testów i obron SIŁ, odporność na kłute, cięte i obuchowe. Nieprzytomność albo tura bez ofensywy kończy Szał.",
+          "button": "Rozwidlenie",
+          "category": "mobility",
+          "target": "self",
+          "range": 0,
+          "resonances": [
+            {
+              "id": "rune_guard",
+              "rune": "Wieża",
+              "description": "Po użyciu mocy otrzymujesz 3 tymczasowe PW. Nie sumują się z innymi tymczasowymi PW."
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "reckless_attack",
+          "name": "Lekkomyślny atak",
+          "slot": 6,
+          "budget": "S",
+          "description": "Przewaga następnego zwykłego ataku wręcz opartego na SIŁ w tej turze. Wrogowie mają przewagę ataków przeciw Brakce.",
+          "button": "Wieża",
+          "category": "defense",
+          "target": "self",
+          "range": 0,
+          "resonances": [
+            {
+              "id": "rune_guard",
+              "rune": "Kielich",
+              "description": "Po użyciu mocy otrzymujesz 3 tymczasowe PW. Nie sumują się z innymi tymczasowymi PW."
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "powerful_strike",
+          "name": "Potężne uderzenie",
+          "slot": 7,
+          "budget": "S",
+          "description": "W Szale wykonaj jeden atak bronią z dodatkowym 1k12 obrażeń.",
+          "button": "Klepsydra",
+          "category": "mobility",
+          "target": "enemy",
+          "range": 1,
+          "resonances": [
+            {
+              "id": "damage",
+              "rune": "Błysk",
+              "description": "+1k12 obrażeń"
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "shoulder_check",
+          "name": "Z bara",
+          "slot": 8,
+          "budget": "S",
+          "description": "Sporny test Atletyki przeciw sąsiadującemu wrogowi, maksymalnie o rozmiar większemu. Wygrana odpycha o pole; remis broni cel.",
+          "button": "Trójząb",
+          "category": "offense",
+          "target": "enemy",
+          "range": 1,
+          "resonances": [
+            {
+              "id": "push",
+              "rune": "Klepsydra",
+              "description": "dodatkowe pole odepchnięcia"
+            },
+            {
+              "id": "damage",
+              "rune": "Wieża",
+              "description": "1k6 obrażeń"
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "acceleration",
+          "name": "Przyspieszenie",
+          "slot": 9,
+          "budget": "S",
+          "description": "W Szale podwaja limit ruchu bieżącej tury. Wcześniejszy ruch wlicza się do limitu.",
+          "button": "Brama",
+          "category": "defense",
+          "target": "self",
+          "range": 0,
+          "resonances": [
+            {
+              "id": "rune_guard",
+              "rune": "Kielich",
+              "description": "Po użyciu mocy otrzymujesz 3 tymczasowe PW. Nie sumują się z innymi tymczasowymi PW."
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "deafening_roar",
+          "name": "Ogłuszający ryk",
+          "slot": 10,
+          "budget": "S",
+          "description": "W Szale: wrogowie w stożku 15 ft, obrona KON; 1k6 grzmotu, sukces daje połowę.",
+          "button": "Romb",
+          "category": "aura",
+          "target": "area",
+          "range": 3,
+          "resonances": [
+            {
+              "id": "damage",
+              "rune": "Błysk",
+              "description": "+1k6 obrażeń"
+            },
+            {
+              "id": "root",
+              "rune": "Klepsydra",
+              "description": "przy porażce brak ruchu do początku następnej tury Brakki"
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "hard_as_rock",
+          "name": "Twarda jak skała",
+          "slot": 11,
+          "budget": "R",
+          "description": "W Szale: po odporności zmniejsz otrzymane obrażenia o 1k12 + KON, minimum zero.",
+          "button": "Hak",
+          "category": "offense",
+          "target": "self",
+          "range": 0,
+          "resonances": [
+            {
+              "id": "rune_guard",
+              "rune": "Wieża",
+              "description": "Po użyciu mocy otrzymujesz 3 tymczasowe PW. Nie sumują się z innymi tymczasowymi PW."
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "reaper",
+          "name": "Siekator",
+          "slot": 12,
+          "budget": "A+S",
+          "description": "W Szale wykonaj trzy osobne ataki wręcz, rozdzielane między dostępnych wrogów.",
+          "button": "Błysk",
+          "category": "offense",
+          "target": "enemy",
+          "range": 1,
+          "resonances": [
+            {
+              "id": "rune_guard",
+              "rune": "Wieża",
+              "description": "Po użyciu mocy otrzymujesz 3 tymczasowe PW. Nie sumują się z innymi tymczasowymi PW."
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "unstoppable",
+          "name": "Niepowstrzymana",
+          "slot": 13,
+          "budget": "M+A+S",
+          "description": "W Szale: ruch do 20 ft bez ataków okazyjnych i trudnego terenu, potem ataki w dwóch różnych wrogów. Trafieni bronią się SIŁ przed powaleniem (do początku następnej tury Brakki lub do wstania).",
+          "button": "Oko",
+          "category": "mobility",
+          "target": "position",
+          "range": 4,
+          "resonances": [
+            {
+              "id": "rune_guard",
+              "rune": "Wieża",
+              "description": "Po użyciu mocy otrzymujesz 3 tymczasowe PW. Nie sumują się z innymi tymczasowymi PW."
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        }
+      ]
+    },
+    "mira": {
+      "capacities": {
+        "offense": 3,
+        "defense": 1,
+        "mobility": 4,
+        "aura": 1
+      },
+      "preparation": {
+        "offense": [
+          "Grot",
+          "Hak",
+          "Trójząb"
+        ],
+        "defense": [
+          "Wieża"
+        ],
+        "mobility": [
+          "Oko",
+          "Schody",
+          "Rozwidlenie",
+          "Klepsydra"
+        ],
+        "aura": [
+          "Korona"
+        ]
+      },
+      "regeneration": [
+        {
+          "id": "flank_entry",
+          "event": "flank_entry",
+          "category": "mobility",
+          "label": "Pierwszy raz w rundzie, gdy własnym ruchem przejdziesz z braku flanki do flankowania wroga: naładuj 1 Mobilność. Ruch wymuszony i przesuwanie się po istniejącej flance nie wystarczają.",
+          "limit": "round",
+          "count": 1
+        },
+        {
+          "id": "hidden_hit",
+          "event": "hidden_hit",
+          "category": "offense",
+          "label": "Pierwszy raz w rundzie, gdy trafisz wroga, przed którym byłaś Ukryta w chwili ataku: naładuj 1 Ofensywę.",
+          "limit": "round",
+          "count": 1
+        }
+      ],
+      "provisional": {
+        "capacities": false,
+        "regeneration": false,
+        "note": "Pojemności i odnowienie do testów. Koszt podstawowy wynika z kategorii przycisku mocy."
+      },
+      "flaw": {
+        "name": "Cienka granica",
+        "description": "Gdy jesteś ukryta, masz utrudnienie rzutów obronnych oraz testów wykonywanych w ramach reakcji."
+      },
+      "cards": [
+        {
+          "id": "hide",
+          "name": "Ukryj się",
+          "slot": 5,
+          "budget": "S",
+          "description": "Test Skradania przeciw każdemu wrogowi osobno. Możesz próbować na otwartym polu, jeśli nie sąsiadujesz z wrogiem; dym znosi ten zakaz i daje przewagę. Ponowne Rozwidlenie i zatwierdzenie: wyjdź z Ukrycia bez kosztu.",
+          "button": "Rozwidlenie",
+          "category": "mobility",
+          "target": "self",
+          "range": 0,
+          "resonances": [
+            {
+              "id": "rune_guard",
+              "rune": "Wieża",
+              "description": "Po użyciu mocy otrzymujesz 3 tymczasowe PW. Nie sumują się z innymi tymczasowymi PW."
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "smoke_screen",
+          "name": "Zasłona dymna",
+          "slot": 6,
+          "budget": "S",
+          "description": "Tworzysz stacjonarny obszar dymu 3×3 pola, ze środkiem na polu Miry. Do końca następnej tury Miry każda postać w dymie (także wróg) może się ukryć i ma przewagę w teście Ukrycia. Ukrycie jest osobną akcją; dym sam nie ukrywa postaci.",
+          "button": "Wieża",
+          "category": "defense",
+          "target": "area",
+          "range": 1,
+          "resonances": [
+            {
+              "id": "rune_guard",
+              "rune": "Kielich",
+              "description": "Po użyciu mocy otrzymujesz 3 tymczasowe PW. Nie sumują się z innymi tymczasowymi PW."
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "guard_vault",
+          "name": "Przeskok przez gardę",
+          "slot": 7,
+          "budget": "S",
+          "description": "Atak wręcz i przejście na wolne pole dokładnie za celem.",
+          "button": "Klepsydra",
+          "category": "mobility",
+          "target": "enemy",
+          "range": 1,
+          "resonances": [
+            {
+              "id": "damage",
+              "rune": "Błysk",
+              "description": "+1k6 obrażeń"
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "instinctive_dodge",
+          "name": "Unik instynktowny",
+          "slot": 8,
+          "budget": "R",
+          "description": "Nadaj utrudnienie jednemu atakowi przeciw Mirze. Nie wymaga rzutu Miry.",
+          "button": "Trójząb",
+          "category": "offense",
+          "target": "self",
+          "range": 0,
+          "resonances": [
+            {
+              "id": "rune_guard",
+              "rune": "Wieża",
+              "description": "Po użyciu mocy otrzymujesz 3 tymczasowe PW. Nie sumują się z innymi tymczasowymi PW."
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "hamstring_cut",
+          "name": "Cięcie ścięgna",
+          "slot": 9,
+          "budget": "S",
+          "description": "Atak wręcz z własnej flanki. Trafienie zadaje obrażenia broni i połowi ruch celu.",
+          "button": "Brama",
+          "category": "defense",
+          "target": "enemy",
+          "range": 1,
+          "resonances": [
+            {
+              "id": "rune_guard",
+              "rune": "Kielich",
+              "description": "Po użyciu mocy otrzymujesz 3 tymczasowe PW. Nie sumują się z innymi tymczasowymi PW."
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "feint",
+          "name": "Zwód",
+          "slot": 10,
+          "budget": "S",
+          "description": "Sąsiadujący wróg nie wykonuje ataków okazyjnych przeciw Mirze ani jej sojusznikom do początku następnej tury Miry.",
+          "button": "Romb",
+          "category": "aura",
+          "target": "enemy",
+          "range": 1,
+          "resonances": [
+            {
+              "id": "rune_guard",
+              "rune": "Wieża",
+              "description": "Po użyciu mocy otrzymujesz 3 tymczasowe PW. Nie sumują się z innymi tymczasowymi PW."
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "blade_mistress",
+          "name": "Atak z cienia",
+          "slot": 11,
+          "budget": "S",
+          "description": "Atak wyposażoną bronią w cel, przed którym Mira jest ukryta: obrażenia broni +1k6. Własna flanka dodaje kolejne +1k6. Premie Ataku z cienia są już wliczone. Cel, który widzi Mirę, jest nielegalny.",
+          "button": "Hak",
+          "category": "offense",
+          "target": "enemy",
+          "range": 1,
+          "resonances": [
+            {
+              "id": "damage",
+              "rune": "Wieża",
+              "description": "+1k6 obrażeń"
+            },
+            {
+              "id": "bleed",
+              "rune": "Oko",
+              "description": "krwawienie 1k4 na początku tury celu do końca walki; leczenie kończy, bez kumulowania"
+            }
+          ],
+          "effect": {
+            "type": "hidden_attack",
+            "damage": "weapon+1d6",
+            "flank_bonus": "1d6"
+          }
+        },
+        {
+          "id": "shadow_verdict",
+          "name": "Wyrok z cienia",
+          "slot": 12,
+          "budget": "A+S",
+          "description": "Wymaga ukrycia przed celem i własnej flanki. Jeden atak z przewagą i dodatkowym 5k6 obrażeń.",
+          "button": "Błysk",
+          "category": "offense",
+          "target": "enemy",
+          "range": 1,
+          "resonances": [
+            {
+              "id": "rune_guard",
+              "rune": "Wieża",
+              "description": "Po użyciu mocy otrzymujesz 3 tymczasowe PW. Nie sumują się z innymi tymczasowymi PW."
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "blade_dance",
+          "name": "Taniec ostrzy",
+          "slot": 13,
+          "budget": "M+A+S",
+          "description": "Ruch do 15 ft bez ataków okazyjnych i dwa ataki w różnych wrogów po drodze. Atak z cienia najwyżej raz.",
+          "button": "Oko",
+          "category": "mobility",
+          "target": "position",
+          "range": 3,
+          "resonances": [
+            {
+              "id": "rune_guard",
+              "rune": "Wieża",
+              "description": "Po użyciu mocy otrzymujesz 3 tymczasowe PW. Nie sumują się z innymi tymczasowymi PW."
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        }
+      ]
+    },
+    "dagna": {
+      "capacities": {
+        "offense": 1,
+        "defense": 2,
+        "mobility": 1,
+        "aura": 4
+      },
+      "preparation": {
+        "offense": [
+          "Grot"
+        ],
+        "defense": [
+          "Wieża",
+          "Kotwica"
+        ],
+        "mobility": [
+          "Oko"
+        ],
+        "aura": [
+          "Korona",
+          "Kielich",
+          "Klucz",
+          "Romb"
+        ]
+      },
+      "regeneration": [
+        {
+          "id": "effective_heal",
+          "event": "effective_heal",
+          "category": "aura",
+          "label": "Pierwszy raz w rundzie, gdy twoja moc przywróci co najmniej 1 utracony PW innemu bohaterowi: naładuj 1 Aurę. Tymczasowe PW i leczenie siebie nie wystarczają.",
+          "limit": "round",
+          "count": 1
+        }
+      ],
+      "provisional": {
+        "capacities": true,
+        "regeneration": true,
+        "note": "Pojemności i odnowienie do testów. Koszt podstawowy wynika z kategorii przycisku mocy."
+      },
+      "flaw": {
+        "name": "Nikogo nie zostawiam",
+        "description": "Gdy sąsiadujesz z żywym sojusznikiem mającym mniej niż połowę PW, każda moc kategorii Ofensywa kosztuje dodatkowo 1 własną naładowaną runę dowolnej kategorii, wybraną przez ciebie. Zwykły atak pozostaje darmowy.",
+        "surcharge": {
+          "condition": "adjacent_injured_ally",
+          "owner": "self",
+          "category": "any",
+          "max": 1,
+          "power_category": "offense"
+        }
+      },
+      "cards": [
+        {
+          "id": "sacred_flame",
+          "name": "Święty płomień",
+          "slot": 5,
+          "budget": "S",
+          "description": "Stożek 15 ft obejmuje tylko wrogów. Obrona ZRC: porażka 1k8 blasku, sukces bez obrażeń.",
+          "button": "Rozwidlenie",
+          "category": "mobility",
+          "target": "area",
+          "range": 3,
+          "resonances": [
+            {
+              "id": "rune_guard",
+              "rune": "Wieża",
+              "description": "Po użyciu mocy otrzymujesz 3 tymczasowe PW. Nie sumują się z innymi tymczasowymi PW."
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "healing_word",
+          "name": "Słowo leczenia",
+          "slot": 6,
+          "budget": "S",
+          "description": "Cel w 60 ft odzyskuje 1k4 + 7 PW.",
+          "button": "Wieża",
+          "category": "defense",
+          "target": "ally",
+          "range": 12,
+          "resonances": [
+            {
+              "id": "heal",
+              "rune": "Kielich",
+              "description": "+1k6 leczenia"
+            }
+          ],
+          "allow_self": true,
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "bless",
+          "name": "Błogosławieństwo",
+          "slot": 7,
+          "budget": "S",
+          "description": "Aura 10 ft: Dagna i sojusznicy mają +1k4 do ataków i obron. Koncentracja.",
+          "button": "Klepsydra",
+          "category": "mobility",
+          "target": "area",
+          "range": 2,
+          "resonances": [
+            {
+              "id": "rune_guard",
+              "rune": "Wieża",
+              "description": "Po użyciu mocy otrzymujesz 3 tymczasowe PW. Nie sumują się z innymi tymczasowymi PW."
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "preserve_life",
+          "name": "Zachowanie życia",
+          "slot": 8,
+          "budget": "A+S",
+          "description": "Raz na walkę. Rozdziel 40 PW leczenia między Dagnę i sojuszników w 30 ft, do ich maksymalnych PW.",
+          "button": "Trójząb",
+          "category": "offense",
+          "target": "area",
+          "range": 6,
+          "resonances": [
+            {
+              "id": "rune_guard",
+              "rune": "Wieża",
+              "description": "Po użyciu mocy otrzymujesz 3 tymczasowe PW. Nie sumują się z innymi tymczasowymi PW."
+            }
+          ],
+          "once": true,
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "divine_care_aura",
+          "name": "Aura Boskiej Opieki",
+          "slot": 9,
+          "budget": "S",
+          "description": "Wrogowie w 5 ft mają −2 do ataków. Koncentracja.",
+          "button": "Brama",
+          "category": "defense",
+          "target": "area",
+          "range": 1,
+          "resonances": [
+            {
+              "id": "radius",
+              "rune": "Klepsydra",
+              "description": "promień 10 ft"
+            },
+            {
+              "id": "reduction",
+              "rune": "Kielich",
+              "description": "również −2 do zadawanych obrażeń"
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "guiding_bolt",
+          "name": "Naprowadzający pocisk",
+          "slot": 10,
+          "budget": "S",
+          "description": "Atak czarem w 75 ft: 2k6 blasku; przewaga następnego ataku przeciw celowi (do początku następnej tury Dagny lub wykorzystania).",
+          "button": "Romb",
+          "category": "aura",
+          "target": "enemy",
+          "range": 15,
+          "resonances": [
+            {
+              "id": "damage",
+              "rune": "Błysk",
+              "description": "+1k6 obrażeń"
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "caring_gesture",
+          "name": "Opiekuńczy gest",
+          "slot": 11,
+          "budget": "S",
+          "description": "Sąsiadujący sojusznik otrzymuje 1k4 + MDR tymczasowych PW. Nie leczy ran; tymczasowe PW nie kumulują się.",
+          "button": "Hak",
+          "category": "offense",
+          "target": "ally",
+          "range": 1,
+          "resonances": [
+            {
+              "id": "rune_guard",
+              "rune": "Wieża",
+              "description": "Po użyciu mocy otrzymujesz 3 tymczasowe PW. Nie sumują się z innymi tymczasowymi PW."
+            }
+          ],
+          "allow_self": false,
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "lesser_restoration",
+          "name": "Pomniejsze przywrócenie",
+          "slot": 12,
+          "budget": "S",
+          "description": "Dotykiem usuń jeden dostępny stan: zatrucie, oślepienie lub głuchotę.",
+          "button": "Błysk",
+          "category": "offense",
+          "target": "ally",
+          "range": 1,
+          "resonances": [
+            {
+              "id": "rune_guard",
+              "rune": "Wieża",
+              "description": "Po użyciu mocy otrzymujesz 3 tymczasowe PW. Nie sumują się z innymi tymczasowymi PW."
+            }
+          ],
+          "allow_self": true,
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "spiritual_weapon",
+          "name": "Duchowy oręż",
+          "slot": 14,
+          "budget": "A+S",
+          "description": "Przywołaj broń i wykonaj nią atak za 2k8 + MDR. Kolejne aktywacje: S + Schody, ruch broni do 20 ft i jeden atak. Najwyżej jedna broń; bez koncentracji.",
+          "button": "Schody",
+          "category": "mobility",
+          "target": "enemy",
+          "range": 12,
+          "resonances": [
+            {
+              "id": "rune_guard",
+              "rune": "Wieża",
+              "description": "Po użyciu mocy otrzymujesz 3 tymczasowe PW. Nie sumują się z innymi tymczasowymi PW."
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        }
+      ]
+    },
+    "lorian": {
+      "capacities": {
+        "offense": 1,
+        "defense": 2,
+        "mobility": 2,
+        "aura": 4
+      },
+      "preparation": {
+        "offense": [
+          "Grot"
+        ],
+        "defense": [
+          "Wieża",
+          "Kotwica"
+        ],
+        "mobility": [
+          "Oko",
+          "Schody"
+        ],
+        "aura": [
+          "Korona",
+          "Kielich",
+          "Klucz",
+          "Romb"
+        ]
+      },
+      "regeneration": [
+        {
+          "id": "ally_support",
+          "event": "ally_support",
+          "category": "aura",
+          "label": "Pierwszy raz w rundzie, gdy wzmocnisz innego bohatera Inspiracją lub Hymnem, nastroisz albo naładujesz jego runy, bądź opłacisz jego Rezonans przez Wsparcie: naładuj 1 Aurę. Samo odnowienie nie wyzwala kolejnego odnowienia.",
+          "limit": "round",
+          "count": 1
+        }
+      ],
+      "provisional": {
+        "capacities": false,
+        "regeneration": true,
+        "note": "Pojemności i odnowienie do testów. Koszt podstawowy wynika z kategorii przycisku mocy."
+      },
+      "flaw": {
+        "name": "Potrzeba publiczności",
+        "description": "W drużynie wieloosobowej, gdy nie masz przytomnego sojusznika w zasięgu 2 pól, każda płatna moc (także reakcja) kosztuje dodatkowo 1 własną naładowaną runę dowolnej kategorii wybraną przez ciebie.",
+        "surcharge": {
+          "condition": "isolated",
+          "owner": "self",
+          "category": "any",
+          "max": 1
+        }
+      },
+      "cards": [
+        {
+          "id": "mana_inspiration",
+          "name": "Inspiracja",
+          "slot": 5,
+          "budget": "S",
+          "description": "Inny bohater w 30 ft otrzymuje 1k4 do jednego ataku albo obrony. Do początku następnej tury Loriana lub wcześniejszego wykorzystania.",
+          "button": "Rozwidlenie",
+          "category": "mobility",
+          "target": "ally",
+          "range": 6,
+          "resonances": [
+            {
+              "id": "rune_guard",
+              "rune": "Wieża",
+              "description": "Po użyciu mocy otrzymujesz 3 tymczasowe PW. Nie sumują się z innymi tymczasowymi PW."
+            }
+          ],
+          "allow_self": false,
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "mana_tuning",
+          "name": "Strojenie runy",
+          "slot": 6,
+          "budget": "S",
+          "description": "Naładuj 1 własne rozładowane miejsce. Wybierz kategorię i rzuć k4, aby ustalić nowy symbol.",
+          "button": "Wieża",
+          "category": "defense",
+          "target": "ally",
+          "range": 3,
+          "resonances": [
+            {
+              "id": "rune_guard",
+              "rune": "Kielich",
+              "description": "Po użyciu mocy otrzymujesz 3 tymczasowe PW. Nie sumują się z innymi tymczasowymi PW."
+            }
+          ],
+          "allow_self": true,
+          "effect": {
+            "type": "tune",
+            "sameCategory": true,
+            "excludePayment": true
+          }
+        },
+        {
+          "id": "cutting_words",
+          "name": "Rozpraszający okrzyk",
+          "slot": 7,
+          "budget": "R",
+          "description": "Zmniejsz obrażenia pojedynczego ataku przeciw bohaterowi w 30 ft o 1k6 + CHA, minimum zero.",
+          "button": "Klepsydra",
+          "category": "mobility",
+          "target": "ally",
+          "range": 6,
+          "resonances": [
+            {
+              "id": "rune_guard",
+              "rune": "Wieża",
+              "description": "Po użyciu mocy otrzymujesz 3 tymczasowe PW. Nie sumują się z innymi tymczasowymi PW."
+            }
+          ],
+          "allow_self": true,
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "victory_hymn",
+          "name": "Hymn zwycięstwa",
+          "slot": 9,
+          "budget": "A+S",
+          "description": "Aura 30 ft, koncentracja. Lorian i sojusznicy mogą wykorzystać jedną dodatkową akcję specjalną we własnej turze, będąc w aurze. Płać normalnie; wejście i wyjście nie odnawia użycia.",
+          "button": "Brama",
+          "category": "defense",
+          "target": "area",
+          "range": 6,
+          "resonances": [
+            {
+              "id": "rune_guard",
+              "rune": "Kielich",
+              "description": "Po użyciu mocy otrzymujesz 3 tymczasowe PW. Nie sumują się z innymi tymczasowymi PW."
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "mana_recovery",
+          "name": "Odzysk energii",
+          "slot": 10,
+          "budget": "S",
+          "description": "Naładuj do 2 własnych rozładowanych miejsc. Dla każdego wybierz kategorię i rzuć osobny k4. Raz na walkę.",
+          "button": "Romb",
+          "category": "aura",
+          "target": "ally",
+          "range": 3,
+          "resonances": [
+            {
+              "id": "recover_more",
+              "rune": "Wieża",
+              "description": "Naładuj do 3 miejsc zamiast 2."
+            }
+          ],
+          "once": true,
+          "allow_self": true,
+          "effect": {
+            "type": "recharge",
+            "count": 2,
+            "excludePayment": true
+          }
+        },
+        {
+          "id": "optical_scope",
+          "name": "Luneta optyczna",
+          "slot": 12,
+          "budget": "M+S",
+          "description": "Przed ruchem przygotuj następny zwykły strzał z kuszy w tej turze: +2 do trafienia, pomija częściową osłonę. Oddajesz ruch i specjalną; atak zostaje. Całkowita osłona blokuje.",
+          "button": "Błysk",
+          "category": "offense",
+          "target": "self",
+          "range": 0,
+          "resonances": [
+            {
+              "id": "shot",
+              "rune": "Brama",
+              "description": "Oddaj też atak (M+A+S): wykonaj dwa takie strzały w ten sam cel",
+              "budget": "M+A+S"
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "mocking_shot",
+          "name": "Ostrzał destabilizujący",
+          "slot": 13,
+          "budget": "S",
+          "description": "Strzał z kuszy. Trafiony wróg ma utrudnienie następnego ataku do początku kolejnej tury Loriana lub wcześniejszego wykorzystania.",
+          "button": "Oko",
+          "category": "mobility",
+          "target": "enemy",
+          "range": 16,
+          "resonances": [
+            {
+              "id": "rune_guard",
+              "rune": "Wieża",
+              "description": "Po użyciu mocy otrzymujesz 3 tymczasowe PW. Nie sumują się z innymi tymczasowymi PW."
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "entangling_shot",
+          "name": "Oplatający ostrzał",
+          "slot": 14,
+          "budget": "S",
+          "description": "Obszar 3×3, także sojusznicy. Obrona ZRC: porażka połowi ruch, bez obrażeń.",
+          "button": "Schody",
+          "category": "mobility",
+          "target": "position",
+          "range": 16,
+          "resonances": [
+            {
+              "id": "root",
+              "rune": "Grot",
+              "description": "zamiast połowienia blokuje ruch"
+            },
+            {
+              "id": "area",
+              "rune": "Brama",
+              "description": "obszar 4×4"
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        }
+      ]
+    },
+    "nimra": {
+      "capacities": {
+        "offense": 3,
+        "defense": 1,
+        "mobility": 2,
+        "aura": 3
+      },
+      "preparation": {
+        "offense": [
+          "Grot",
+          "Hak",
+          "Trójząb"
+        ],
+        "defense": [
+          "Wieża"
+        ],
+        "mobility": [
+          "Oko",
+          "Schody"
+        ],
+        "aura": [
+          "Korona",
+          "Kielich",
+          "Klucz"
+        ]
+      },
+      "regeneration": [
+        {
+          "id": "control_success",
+          "event": "control_success",
+          "category": "aura",
+          "label": "Pierwszy raz w rundzie, gdy wróg nie obroni się przed twoją mocą i otrzyma ograniczenie ruchu, reakcji lub działań albo zostanie powalony: naładuj 1 Aurę. Samo zadanie obrażeń nie wystarcza.",
+          "limit": "round",
+          "count": 1
+        }
+      ],
+      "provisional": {
+        "capacities": true,
+        "regeneration": true,
+        "note": "Pojemności i odnowienie do testów. Koszt podstawowy wynika z kategorii przycisku mocy."
+      },
+      "flaw": {
+        "name": "Echo",
+        "description": "Powtórzenie ostatniej płatnej mocy kosztuje dodatkowo 1 własną naładowaną runę dowolnej kategorii, trzecie i dalsze użycia z rzędu: 2 własne naładowane runy dowolnych kategorii. Wybierasz rozładowywane runy. Inna płatna moc, także reakcja, rozpoczyna nową serię. Zwykłe akcje nie zmieniają serii.",
+        "surcharge": {
+          "condition": "repeat_power",
+          "owner": "self",
+          "category": "any",
+          "max": 2
+        }
+      },
+      "cards": [
+        {
+          "id": "nimra_frost_pulse",
+          "name": "Lodowy impuls",
+          "slot": 5,
+          "budget": "S",
+          "description": "Cel w 50 ft: obrona KON; porażka 1k8 zimna i −10 ft ruchu, sukces bez efektu.",
+          "button": "Rozwidlenie",
+          "category": "mobility",
+          "target": "enemy",
+          "range": 10,
+          "resonances": [
+            {
+              "id": "rune_guard",
+              "rune": "Wieża",
+              "description": "Po użyciu mocy otrzymujesz 3 tymczasowe PW. Nie sumują się z innymi tymczasowymi PW."
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "shield",
+          "name": "Tarcza",
+          "slot": 6,
+          "budget": "R",
+          "description": "+3 KP przeciw jednemu atakowi i ponowna ocena trafienia.",
+          "button": "Wieża",
+          "category": "defense",
+          "target": "self",
+          "range": 0,
+          "resonances": [
+            {
+              "id": "rune_guard",
+              "rune": "Kielich",
+              "description": "Po użyciu mocy otrzymujesz 3 tymczasowe PW. Nie sumują się z innymi tymczasowymi PW."
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "nimra_mind_spike",
+          "name": "Szpilka umysłu",
+          "slot": 7,
+          "budget": "S",
+          "description": "Cel w 45 ft: obrona MDR; porażka 1k6 psychicznych i brak reakcji, sukces bez efektu.",
+          "button": "Klepsydra",
+          "category": "mobility",
+          "target": "enemy",
+          "range": 9,
+          "resonances": [
+            {
+              "id": "rune_guard",
+              "rune": "Wieża",
+              "description": "Po użyciu mocy otrzymujesz 3 tymczasowe PW. Nie sumują się z innymi tymczasowymi PW."
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "nimra_flame_fan",
+          "name": "Wachlarz płomieni",
+          "slot": 8,
+          "budget": "S",
+          "description": "Stożek 15 ft, także sojusznicy. Obrona ZRC: 2k6 ognia, sukces daje połowę.",
+          "button": "Trójząb",
+          "category": "offense",
+          "target": "area",
+          "range": 3,
+          "resonances": [
+            {
+              "id": "damage",
+              "rune": "Wieża",
+              "description": "+1k6 obrażeń"
+            },
+            {
+              "id": "exclude",
+              "rune": "Klepsydra",
+              "description": "wyłącz dwa wskazane pola"
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "nimra_force_wave",
+          "name": "Fala odrzutu",
+          "slot": 9,
+          "budget": "S",
+          "description": "Linia 30×5 ft, także sojusznicy. Obrona SIŁ: 2k6 mocy i odepchnięcie o pole; sukces połowa bez przesunięcia.",
+          "button": "Brama",
+          "category": "defense",
+          "target": "area",
+          "range": 6,
+          "resonances": [
+            {
+              "id": "damage",
+              "rune": "Błysk",
+              "description": "+1k6 obrażeń"
+            },
+            {
+              "id": "push",
+              "rune": "Klepsydra",
+              "description": "dodatkowe pole odepchnięcia"
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "nimra_sticky_matrix",
+          "name": "Lepka matryca",
+          "slot": 10,
+          "budget": "S",
+          "description": "Obszar 2×2 w 50 ft: trudny teren. Wejście lub początek tury: obrona ZRC przed powaleniem, najwyżej raz na turę istoty. Najwyżej jedna matryca. Powalenie do początku następnej tury Nimry lub do wstania.",
+          "button": "Romb",
+          "category": "aura",
+          "target": "position",
+          "range": 10,
+          "resonances": [
+            {
+              "id": "rune_guard",
+              "rune": "Wieża",
+              "description": "Po użyciu mocy otrzymujesz 3 tymczasowe PW. Nie sumują się z innymi tymczasowymi PW."
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "misty_step",
+          "name": "Mglisty krok",
+          "slot": 11,
+          "budget": "S",
+          "description": "Teleport do 30 ft na legalne, widoczne pole.",
+          "button": "Hak",
+          "category": "offense",
+          "target": "position",
+          "range": 6,
+          "resonances": [
+            {
+              "id": "rune_guard",
+              "rune": "Wieża",
+              "description": "Po użyciu mocy otrzymujesz 3 tymczasowe PW. Nie sumują się z innymi tymczasowymi PW."
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "nimra_web",
+          "name": "Sieć",
+          "slot": 14,
+          "budget": "S",
+          "description": "Obszar 2×2 w 50 ft, także sojusznicy: trudny teren i obrona ZRC przed unieruchomieniem. Koncentracja. Uwolnienie: akcja i test SIŁ.",
+          "button": "Schody",
+          "category": "mobility",
+          "target": "position",
+          "range": 10,
+          "resonances": [
+            {
+              "id": "area",
+              "rune": "Brama",
+              "description": "bok większy o jedno pole"
+            },
+            {
+              "id": "exclude",
+              "rune": "Grot",
+              "description": "wyłącz dwa wskazane pola"
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "nimra_lightning_path",
+          "name": "Piorunowy szlak",
+          "slot": 15,
+          "budget": "A+S",
+          "description": "Cel w 60 ft, potem do dwóch przeskoków po 15 ft do najbliższej nieporażonej istoty, także sojusznika. 4k6 błyskawic, osobne obrony ZRC, sukces połowa.",
+          "button": "Korona",
+          "category": "aura",
+          "target": "enemy",
+          "range": 12,
+          "resonances": [
+            {
+              "id": "rune_guard",
+              "rune": "Wieża",
+              "description": "Po użyciu mocy otrzymujesz 3 tymczasowe PW. Nie sumują się z innymi tymczasowymi PW."
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "nimra_mind_break",
+          "name": "Załamanie woli",
+          "slot": 16,
+          "budget": "S",
+          "description": "Cel w 50 ft: obrona MDR. Porażka: 1k6 psychicznych i utrudnienie najbliższej obrony MDR do początku następnej tury Nimry. Sukces: połowa obrażeń, bez osłabienia.",
+          "button": "Węzeł",
+          "category": "defense",
+          "target": "enemy",
+          "range": 10,
+          "resonances": [
+            {
+              "id": "target",
+              "rune": "Oko",
+              "description": "dodatkowy cel w 10 ft od pierwszego"
+            },
+            {
+              "id": "damage",
+              "rune": "Błysk",
+              "description": "+1k6 obrażeń wszystkim celom"
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "nimra_stasis",
+          "name": "Staza istoty",
+          "slot": 17,
+          "budget": "A+S",
+          "description": "Wróg w 50 ft: obrona MDR. Porażka odbiera ruch, akcję główną, dodatkową i reakcję. Koncentracja.",
+          "button": "Grot",
+          "category": "offense",
+          "target": "enemy",
+          "range": 10,
+          "resonances": [
+            {
+              "id": "rune_guard",
+              "rune": "Wieża",
+              "description": "Po użyciu mocy otrzymujesz 3 tymczasowe PW. Nie sumują się z innymi tymczasowymi PW."
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "shatter",
+          "name": "Roztrzaskanie",
+          "slot": 18,
+          "budget": "A+S",
+          "description": "Środek w 60 ft, promień 10 ft, także sojusznicy. 4k8 grzmotu, obrona KON daje połowę. Konstrukty mają utrudnienie obrony.",
+          "button": "Kotwica",
+          "category": "defense",
+          "target": "position",
+          "range": 12,
+          "resonances": [
+            {
+              "id": "rune_guard",
+              "rune": "Kielich",
+              "description": "Po użyciu mocy otrzymujesz 3 tymczasowe PW. Nie sumują się z innymi tymczasowymi PW."
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        }
+      ]
+    },
+    "erynd": {
+      "capacities": {
+        "offense": 4,
+        "defense": 1,
+        "mobility": 3,
+        "aura": 1
+      },
+      "preparation": {
+        "offense": [
+          "Grot",
+          "Hak",
+          "Trójząb",
+          "Błysk"
+        ],
+        "defense": [
+          "Wieża"
+        ],
+        "mobility": [
+          "Oko",
+          "Schody",
+          "Rozwidlenie"
+        ],
+        "aura": [
+          "Korona"
+        ]
+      },
+      "regeneration": [
+        {
+          "id": "ranged_hit_after_move",
+          "event": "ranged_hit_after_move",
+          "category": "mobility",
+          "label": "Pierwszy raz w rundzie, gdy trafisz wroga strzałem po własnym ruchu o co najmniej 1 pole w bieżącej turze: naładuj 1 Mobilność. Drugi strzał nie odnawia limitu.",
+          "limit": "round",
+          "count": 1
+        }
+      ],
+      "provisional": {
+        "capacities": true,
+        "regeneration": true,
+        "note": "Pojemności i odnowienie do testów. Koszt podstawowy wynika z kategorii przycisku mocy."
+      },
+      "flaw": {
+        "name": "Trauma bratobójczego strzału",
+        "description": "Płatny strzał w cel sąsiadujący z innym przytomnym bohaterem kosztuje dodatkowo 1 wybraną własną naładowaną runę dowolnej kategorii. Dopłata raz na moc, także gdy warunek pojawi się dopiero przy drugim strzale; przed jego rzutem. Zwykły atak pozostaje darmowy.",
+        "surcharge": {
+          "condition": "ally_adjacent_to_target",
+          "owner": "self",
+          "category": "any",
+          "max": 1,
+          "cards": [
+            "anchoring_arrow",
+            "exposing_arrow",
+            "disrupting_arrow",
+            "double_shot",
+            "arrow_rain"
+          ]
+        }
+      },
+      "cards": [
+        {
+          "id": "hunters_mark",
+          "name": "Znak łowcy",
+          "slot": 5,
+          "budget": "S",
+          "description": "Koncentracja. Raz we własnej turze trafienie oznaczonego celu bronią dodaje 1k6. Przeniesienie po pokonaniu celu bez kosztu run i akcji.",
+          "button": "Rozwidlenie",
+          "category": "mobility",
+          "target": "enemy",
+          "range": 18,
+          "resonances": [
+            {
+              "id": "rune_guard",
+              "rune": "Wieża",
+              "description": "Po użyciu mocy otrzymujesz 3 tymczasowe PW. Nie sumują się z innymi tymczasowymi PW."
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "cunning_action",
+          "name": "Zwiadowcza mobilność",
+          "slot": 6,
+          "budget": "S",
+          "description": "Sprint albo Odstąpienie w bieżącej turze.",
+          "button": "Wieża",
+          "category": "defense",
+          "target": "self",
+          "range": 0,
+          "resonances": [
+            {
+              "id": "rune_guard",
+              "rune": "Kielich",
+              "description": "Po użyciu mocy otrzymujesz 3 tymczasowe PW. Nie sumują się z innymi tymczasowymi PW."
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "aim",
+          "name": "Celowanie",
+          "slot": 7,
+          "budget": "M+S",
+          "description": "Przed ruchem poświęć cały jego limit: przewaga następnego ataku łukiem w bieżącej turze.",
+          "button": "Klepsydra",
+          "category": "mobility",
+          "target": "self",
+          "range": 0,
+          "resonances": [
+            {
+              "id": "rune_guard",
+              "rune": "Wieża",
+              "description": "Po użyciu mocy otrzymujesz 3 tymczasowe PW. Nie sumują się z innymi tymczasowymi PW."
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "anchoring_arrow",
+          "name": "Strzała kotwicząca",
+          "slot": 8,
+          "budget": "S",
+          "description": "Trafiony wróg: obrona SIŁ, porażka blokuje ruch, sukces połowi.",
+          "button": "Trójząb",
+          "category": "offense",
+          "target": "enemy",
+          "range": 30,
+          "resonances": [
+            {
+              "id": "shot",
+              "rune": "Brama",
+              "description": "osobny strzał kotwiczący w drugiego wroga sąsiadującego z pierwszym"
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "exposing_arrow",
+          "name": "Strzała odsłaniająca",
+          "slot": 9,
+          "budget": "S",
+          "description": "Trafienie bronią obniża KP celu o 2 do początku następnej tury Erynda; bez kumulowania.",
+          "button": "Brama",
+          "category": "defense",
+          "target": "enemy",
+          "range": 30,
+          "resonances": [
+            {
+              "id": "damage",
+              "rune": "Błysk",
+              "description": "+1k6 obrażeń"
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "disrupting_arrow",
+          "name": "Strzała zakłócająca",
+          "slot": 10,
+          "budget": "S",
+          "description": "Trafienie bronią odbiera reakcje i daje utrudnienie następnego ataku celu.",
+          "button": "Romb",
+          "category": "aura",
+          "target": "enemy",
+          "range": 30,
+          "resonances": [
+            {
+              "id": "rune_guard",
+              "rune": "Wieża",
+              "description": "Po użyciu mocy otrzymujesz 3 tymczasowe PW. Nie sumują się z innymi tymczasowymi PW."
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "double_shot",
+          "name": "Podwójny strzał",
+          "slot": 11,
+          "budget": "A+S",
+          "description": "Dwa osobne ataki łukiem, z możliwością różnych celów.",
+          "button": "Hak",
+          "category": "offense",
+          "target": "enemy",
+          "range": 30,
+          "resonances": [
+            {
+              "id": "damage",
+              "rune": "Wieża",
+              "description": "+1k6 do jednego wybranego trafienia"
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "arrow_rain",
+          "name": "Deszcz strzał",
+          "slot": 12,
+          "budget": "A+S",
+          "description": "Wskaż środek obszaru 3×3. Jeden wspólny test łuku przeciw KP każdego legalnego wroga, wspólne 1k8 + 1k6 + ZRC obrażeń. Osłona liczona osobno. Znak i Pierwsza krew najwyżej raz.",
+          "button": "Błysk",
+          "category": "offense",
+          "target": "position",
+          "range": 30,
+          "resonances": [
+            {
+              "id": "rune_guard",
+              "rune": "Wieża",
+              "description": "Po użyciu mocy otrzymujesz 3 tymczasowe PW. Nie sumują się z innymi tymczasowymi PW."
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        },
+        {
+          "id": "spike_growth",
+          "name": "Kolczaste zarośla",
+          "slot": 13,
+          "budget": "A+S",
+          "description": "Środek w 50 ft, promień 20 ft: trudny teren, koncentracja. 1k4 za przebyte pole, maks. 4k4 na turę istoty; także wymuszony ruch i sojusznicy.",
+          "button": "Oko",
+          "category": "mobility",
+          "target": "position",
+          "range": 10,
+          "resonances": [
+            {
+              "id": "rune_guard",
+              "rune": "Wieża",
+              "description": "Po użyciu mocy otrzymujesz 3 tymczasowe PW. Nie sumują się z innymi tymczasowymi PW."
+            }
+          ],
+          "effect": {
+            "type": "table"
+          }
+        }
+      ]
+    }
+  }
+}

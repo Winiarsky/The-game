@@ -68,7 +68,7 @@ function sharedManaBoostsHtml(declaration) {
 
 function sharedManaPanel() {
   const mana = state?.combat?.shared_mana;
-  if (mana?.pool_view?.choices?.length) return null;
+  if (mana?.pool_view?.choices?.length || mana?.rune_view?.phase === 'basket') return null;
   if (!mana || (!mana.declaration && !['end_turn', 'discard', 'refresh'].includes(mana.phase))) return null;
   const declaration = mana.declaration;
   if (declaration?.stage === 'payment' || declaration?.target_selection) return null; // Server owns targets, payment runes and controls.

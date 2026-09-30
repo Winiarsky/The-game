@@ -1,10 +1,23 @@
 # Misja 0 — materiały do przygotowania gry
 
-**Aktualny zestaw run (22.09.2026):** materiały dla nowej gry są w
-[osobnym spisie](runy_v01/index.html): plansza i kafle powiększone o 3%,
-trzy modułowe maty oraz dwa arkusze wycinanek dla każdego bohatera.
-Panel jest zgodny z działającą aplikacją. Wszystkie siedem zestawów zawiera
-koszty run i opisy mocy. Poniższy spis zachowano dla starszego wariantu many.
+**Aktualny etap kart (25.09.2026):** [ładunki i przekazywany Rezonans v0.2](runy_ladunki_v02/index.html),
+[komplet 35 stron](runy_ladunki_v02/karty_postaci_A4.pdf). Po 3 planszetki + 2 arkusze wycinanek na bohatera. Pasyw, Skupienie i odzysk na stronie 1, bez toru ładunków.
+Po 4 moce, u Nimry 5;
+pokrętło ładunków oraz przesunięte zestawy z 10 wspólnymi bonusami run. To karty do testów; wdrożenie tej
+mechaniki w UI walki będzie następnym krokiem po przeglądzie postaci.
+Aktualne zasady ciągłego efektu i wspólnego wygaszenia: [specyfikacja Rezonansu](../../../../docs/RESONANCE_RUNTIME_SPEC.md). Wcześniejsza makieta pozostaje.
+Mapowanie informacji jest już zmienione: Gwiazda przed +/−, Iskra w jej dawnym
+miejscu. Dla wydrukowanej mapy wystarczy [nowy arkusz D3](runy_v01/plansza_panel_D3_A4.pdf).
+
+**Poprzednie karty koszyków (23.09.2026):** [PDF siedmiu postaci, 42 strony](runy_koszyki_v01/karty_postaci_A4.pdf)
+obejmuje pierwszą stronę z miejscami na żetony;
+każda moc zawiera koszt kategorii przycisku i opcjonalne Rezonanse. Ten zestaw
+odpowiada nowym walkom w aplikacji. Druk A4, monochromatyczny, 100%.
+
+**Plansza i kafle:** [dotychczasowy adres spisu](runy_v01/index.html) również
+prowadzi do aktualnych kart ładunków oraz planszy i kafli powiększonych o 3%.
+Starsze PDF-y postaci w `runy_v01/` zachowano dla poprzedniego modelu.
+Poniższy spis dotyczy starszego wariantu many.
 
 Aktualne, gotowe pliki są bezpośrednio w tym folderze. Otwórz PDF,
 wybierz **A4, jednostronnie, 100% / rzeczywisty rozmiar**. Wyłącz

@@ -34,7 +34,7 @@ const TabletopCombat = (() => {
   }
   function manaLine(actor) {
     const rune = state.combat.shared_mana?.rune_view?.hands?.find(item => item.hero === actor.id);
-    if (rune) return `<small class="tt-mana-line">Runy: ${rune.count}/7</small>`;
+    if (rune) return `<small class="tt-mana-line">Runy: ${rune.count}/${rune.limit}</small>`;
     const pool = state.combat.shared_mana?.pool_view;
     const hand = pool?.hands?.find(item => item.hero === actor.id);
     return hand ? `<small class="tt-mana-line">${text('mana', {cards: hand.cards.length, bonus: hand.roll_bonus ?? 0, charge: hand.total})}</small>` : '';
@@ -96,6 +96,7 @@ const TabletopCombat = (() => {
     if (!rune) return '';
     const hand = rune.hands?.find(item => (item.hero || item.actor_id) === actorId);
     if (!hand) return '';
+    if (hand.baskets) return `<div class="tt-basket-counts">${hand.baskets.map(b=>`<div><b>${esc(b.name)} ${b.count}/${b.capacity}</b><span>${b.tokens.map(t=>`${t.icon} ${esc(t.rune)} ×${t.count}`).join(' · ') || 'Brak naładowanych'}</span></div>`).join('')}</div>`;
     const cards = hand.runes || hand.cards || [];
     return `<div class="tt-rune-hand"><small>Twoja ręka · ${cards.length}/7 run</small><div>${(hand.counts || []).map(item => `<span>${item.icon || ''}${esc(item.name || item.rune)} ×${item.count}</span>`).join('')}</div></div>`;
   }
@@ -144,7 +145,7 @@ const TabletopCombat = (() => {
   }
   function actionHtml(menu, combat) {
     const selected = menu.options?.[Number(menu.selected_index || 0)] || {};
-    if (menu.stage !== 'preview') return `<section class="tt-idle combat-keyboard-waiting"><h1>${text('choose_action')}</h1>${budgetHtml(combat)}${handHtml()}<p>${text('choose_action_hint')}</p><p class="tt-hint">${text('action_hint')}</p></section>`;
+    if (menu.stage !== 'preview') return `<section class="tt-idle combat-keyboard-waiting"><h1>${text('choose_action')}</h1>${budgetHtml(combat)}${handHtml()}${RuneCombat.utilitiesHtml()}<p>${text('choose_action_hint')}</p><p class="tt-hint">${text('action_hint')}</p></section>`;
     const movement = selected.id === 'turn:move';
     const description = movement ? `Ruch: do ${Math.floor(Number(combat.movement?.remaining_feet || 0) / 5)} pól. Przesuń figurkę na podświetlone pole planszy, kliknij je i potwierdź decyzję.` : selected.description || '';
     return `<section class="tt-action"><small>${text('action_preview')}</small><h1><span class="combat-panel-icon">${selected.panel_icon || ''}</span>${manaTextHtml(combatActionTileLabel(selected) || '')}</h1>
@@ -211,7 +212,7 @@ const TabletopCombat = (() => {
   function panel() {
     if (!inspected || !canBrowse()) return null;
     return {context:`combat-inspect:${state.combat.round_number}:${current()}:${inspected}`,
-      slots:[24,26,27,29], exclusive:true};
+      slots:[25,26,27,29], exclusive:true};
   }
   function repaint() {
     const element = document.querySelector('.tt-roster');
@@ -225,7 +226,7 @@ const TabletopCombat = (() => {
   }
   function handleSlot(slot) {
     if (!canBrowse()) return false;
-    if (slot === 24 && !inspected) return inspect(current());
+    if (slot === 25 && !inspected) return inspect(current());
     if (!inspected) {
       if (slot === 26 || slot === 27) { document.querySelector('[data-tt-decision]')?.scrollBy({top:slot === 26 ? 180 : -180}); return true; }
       return false;
@@ -233,7 +234,7 @@ const TabletopCombat = (() => {
     if (slot === 26 || slot === 27) {
       document.querySelector('[data-tt-decision]')?.scrollBy({top:slot === 26 ? 180 : -180}); return true;
     }
-    if (![24,28,29].includes(slot)) return false;
+    if (![25,28,29].includes(slot)) return false;
     const context = state.board_selection?.panel_context;
     inspected = ''; effectPage = 0; scrollActor = current();
     if (context?.startsWith('combat-inspect:')) releaseBrowserBoardPanel(context).then(repaint);

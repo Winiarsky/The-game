@@ -157,10 +157,12 @@ def export(html: str, name: str, *, check_layout: bool = False) -> Path:
 
 def build_maps() -> list[Path]:
     sheets = ''.join('<section>'+map_tile_svg(tile)+'</section>' for tile in map_tiles())
-    html = ('<!doctype html><html lang="pl"><meta charset="utf-8"><title>Plansza · runy v0.1</title>'
+    html = ('<!doctype html><html lang="pl"><meta charset="utf-8"><title>Plansza · runy v0.2</title>'
             '<style>@page{size:A4 landscape;margin:0}body{margin:0}section{width:297mm;height:210mm;'
             'break-after:page}section:last-child{break-after:auto}svg{display:block}</style>'+sheets+'</html>')
     board = export(html, 'plansza_A4')
+    subprocess.run(['pdfseparate', '-f', '12', '-l', '12', str(board),
+                    str(OUTPUT / 'plansza_panel_D3_A4.pdf')], check=True, timeout=30)
     spec = json.loads((MISSION/'maps/cutouts.json').read_text())
     battle = json.loads((MISSION/'mechanics/battle.json').read_text())
     tokens = build_cutouts(spec, battle)
@@ -173,7 +175,7 @@ def build_maps() -> list[Path]:
                         'Odcinek kontrolny: 4 pola; porównaj z nową planszą i czujnikami.')
     scenery = export(html, 'misja_0_kafle_A4')
     old.compact_pdf(scenery)
-    (OUTPUT/'map_manifest.json').write_text(json.dumps(dict(print_scale=PRINT_SCALE,
+    (OUTPUT/'map_manifest.json').write_text(json.dumps(dict(panel_version=2, print_scale=PRINT_SCALE,
         relative_scale=1.03, pdf_cell_mm=25*PRINT_SCALE, tiles=[asdict(t) for t in map_tiles()],
         cutout_ids=[t.id for t in tokens], panel=[dict(slot=i,name=n,path=p,board=[19,29-i])
         for i,(n,p) in enumerate(PANEL_SYMBOLS)]), ensure_ascii=False, indent=2)+'\n')
@@ -224,22 +226,27 @@ def build_heroes(data: dict[str, Any]) -> list[Path]:
 
 
 def write_index() -> None:
-    names = [(h, build_print_hero(h).name) for h in PLAYABLE_HERO_IDS]
-    links = ''.join(f'<li><a href="{h}.pdf">{name} — 5 stron</a> · <a href="{h}.html">podgląd</a></li>' for h,name in names)
-    html = f'''<!doctype html><html lang="pl"><meta charset="utf-8"><title>Runy · materiały</title>
-<style>body{{max-width:950px;margin:50px auto;padding:0 24px;background:#f3f0e8;color:#262a26;font:17px/1.65 system-ui}}h1,h2{{font-family:Georgia}}a{{color:#435d4c}}li{{margin:10px 0}}.note{{border-left:3px solid #958058;padding:12px 20px;background:#fff}}</style>
-<h1>Przy stole · runy v0.1</h1><p>Nowa plansza, wymienne karty i klikalna makieta.</p>
-<p class="note">Druk A4, 100%, bez dopasowania. Plansza i kafle mają tę samą dodatkową korektę +3%. Maty i wycinanki zachowują swoje wymiary.</p>
-<h2>Plansza i Misja 0</h2><ul><li><a href="plansza_A4.pdf">Plansza — 12 stron A4</a></li><li><a href="misja_0_kafle_A4.pdf">Wszystkie 18 kafli Misji 0</a></li></ul>
-<h2>Modułowe zestawy bohaterów</h2><p>1. Postać i zobowiązania · 2. Pusta mata zdolności · 3. Pusta mata wyposażenia · 4. Zdolności do wycięcia · 5. Sprzęt do wycięcia.</p>
-<p><a href="karty_postaci_A4.pdf">Wszyscy bohaterowie — 35 stron</a></p><ul>{links}</ul>
-<p>Zdolności: 60 × 54 mm. Sprzęt: 60 × 42 mm. Karty wszystkich bohaterów odpowiadają regułom run w aplikacji. Puste karty służą rozwojowi.</p>
-<p><a href="../../../../../docs/ui/prototype.html">Otwórz klikalną makietę z panelem run</a></p>
-<p class="note">Panel, karty i aplikacja używają wspólnego układu run. Gwiazda otwiera informacje o bohaterze.</p></html>'''
-    (OUTPUT/'index.html').write_text(html)
+    latest = ROOT / 'content/scenarios/misja_0_dzwon/print/runy_ladunki_v02/characters_manifest.json'
+    if latest.is_file():
+        from build_rune_charges import OUTPUT as charge_output, write_indexes
+        from dnd_board_game.scenarios.rune_charge_catalog import load_rune_charge_catalog
+        write_indexes(charge_output, load_rune_charge_catalog(), json.loads(latest.read_text(encoding='utf-8')))
+        return
+    from build_rune_baskets import OUTPUT as cards_output, render_index
+    from dnd_board_game.physical_cards.rune_baskets import build_payload
+    from dnd_board_game.scenarios.rune_basket_catalog import load_rune_basket_catalog
+
+    payload = build_payload(load_rune_basket_catalog())
+    manifest = json.loads((cards_output / 'characters_manifest.json').read_text(encoding='utf-8'))
+    (OUTPUT / 'index.html').write_text(
+        render_index(OUTPUT, payload, manifest, cards_output=cards_output), encoding='utf-8')
     (OUTPUT/'README.md').write_text('''# Runy v0.1 — wydruki i makieta
 
-Otwórz [spis materiałów](index.html). Druk A4, 100%, bez dopasowania.
+Otwórz [aktualny spis materiałów](index.html). Prowadzi do kart osobistych
+koszyków run v0.2 w `../runy_koszyki_v01/` (42 strony, 6 na bohatera).
+PDF-y postaci w tym katalogu są poprzednią wersją do starszych zapisów.
+Poniższy opis kart i generator dotyczy tych starszych plików.
+Plansza i kafle pozostają aktualne. Druk A4, 100%, bez dopasowania.
 Plansza: 12 arkuszy A1–D3. Tnij zewnętrzny obrys; pasy 10 mm służą jako zakładki.
 Składaj od górnego lewego A1 w wierszach A–D. Panel znajduje się przy dolnej krawędzi.
 Plansza oraz wszystkie 18 kafli Misji 0 mają skalę `(250/244) × 1,03`.

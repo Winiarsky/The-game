@@ -1,3 +1,104 @@
+## Karty ładunków v0.2 — 24.09.2026
+
+- [x] Rzuty w mocku walki: jedna kość → ✓ → następna kość, również
+  wewnątrz puli 2k6 i przy przewadze/utrudnieniu. Skutki dopiero po ostatniej
+  kości; zapis próby zachowuje dotychczas zatwierdzone wyniki.
+
+- [x] 29.09: zaktualizować wyłącznie walkę w dotychczasowym mocku UI:
+  dane z aktualnych kart, ładunki, 29 mocy, Rezonans i jego prezentację,
+  stany, koszty/skazy, odzysk, reakcje oraz kolejki wskazywania pól.
+  Dodać symulator pól i niezależny zapis próby; zachować rozmowy/reputację.
+  Zakres, założenia i instrukcja: `docs/ui/RESONANCE_MOCK.md`.
+- [ ] Ograć i zatwierdzić mock walki z użytkownikiem. Dopiero potem
+  przenieść zaakceptowane mechaniki do Python/UI aplikacji i planszy;
+  testować rzeczywiste zdarzenia, zapis, powtórzenia i geometrię areny.
+
+- [x] 29.09: zaktualizować karty Brakki, Miry, Dagny, Loriana i Nimry;
+  Erynd bez zmian. ST jako formuły, Szał i krytyk Brakki, Parkour/ukrycie
+  Miry, bezterminowy Hymn, Precyzyjny splot i Strefa ognia 3×3. Odświeżyć PDF.
+- [ ] W kolejnym kroku wdrożyć mechaniki z przeglądu 29.09:
+  krytyk i Szał Brakki, ukrycie per obserwator i Parkour z kolejką okazyjnych,
+  terminy Więzów, decyzję Hymnu po k20, wybór pominięcia i obszar 3×3 Nimry.
+  Notatki i przypadki akceptacyjne: `docs/RESONANCE_RUNTIME_SPEC.md`.
+
+- [x] 27.09: przegląd kart Garrana — stan Żywa osłona, odzysk po pudle
+  w Garrana, odrzucenie Impulsu, magiczne obrażenia Ostrza, Szarża bastionu
+  M+S i opis Powalonego; Żar bez zmian. Przepływ planszy w specyfikacji.
+- [x] 27.09: wspólna korekta siedmiu zestawów — scenki zamiast celu na
+  stronie 1, formatowanie pasywu i odzysku, usunięcie wspólnego dopisku.
+  Pionowa strona 2: jeden cel 60×54 mm i pięć okręgów postępu po prawej.
+  Usunięta sekcja obsługi; wszystkie bonusy run na stronie 4.
+- [ ] Przy wdrożeniu walki ładunków zrealizować stany Żywej osłony i
+  Powalonego oraz wybór/podgląd/zatwierdzenie Impulsu i Szarży zgodnie z
+  `docs/RESONANCE_RUNTIME_SPEC.md`; sprawdzić zapis i powtórzoną akceptację.
+
+- [x] 26.09: zmienić odzysk klasowy na 1k4 raz na rundę w katalogu,
+  walidacji, kartach i dokumentacji zasad.
+
+- [x] 26.09: usunąć powtórzony opis Skupienia spod pasywu na pierwszej
+  stronie wszystkich postaci; zachować kartę i miejsce na macie zdolności.
+
+- [x] 25.09: usunąć pozostałość biegłości z mat i formuły ST; ST = 10 +
+  modyfikator cechy, bez zmiany obecnych wartości liczbowych. Odświeżyć PDF-y.
+
+- [x] Przygotować 29 mocy: po 4 dla sześciu bohaterów, 5 dla Nimry.
+  Wspólne bonusy run, koszty obu trybów, pula 20, Skupienie 1k20,
+  pasywy, skazy i dwa warunki odzysku ze wspólnym limitem 1k6 na rundę.
+- [x] Zachować wygląd kart i wygenerować komplet A4, zaktualizować spis
+  materiałów; pozostawić wcześniejszą makietę UI.
+- [x] Korekta ogólna kart: usunąć tor 0–20 i dawną stronę 02; przenieść
+  pasyw, Skupienie i odzysk na stronę 1. Po 3 planszetki + 2 wycinanki,
+  35 stron razem. Magiczne nazwy mocy i symbol Rezonansu w podwójnej otoczce.
+  Zachować koszty, efekty i rozmiary. Odnowić PDF-y, spisy i legendy.
+- [x] Przenieść Gwiazdę przed +/− (slot 25); zachować 20 run, dodając Iskrę
+  w dawnym slocie 24. Uaktualnić PDF mapy, osobny arkusz D3, wejście i LED.
+- [x] 25.09: przesunięte zestawy po 4 runy (Nimra 5), 10 używanych run mocy;
+  nowe bonusy Oka, Kielicha, Węzła, Fali i Klepsydry z zasadami kumulowania.
+  Katalog, przypisania na kartach, legendy, HTML i 35 stron PDF zaktualizowane.
+- [x] 25.09: zapisać ciągły Rezonans, wejście bohaterów od własnej tury,
+  premie przed mocą i wspólne wygaszenie; nowe działanie 10 run na kartach.
+  Osobne liczniki Kielicha/Klepsydry, Fala kopiuje poprzednią runę, Węzeł globalny.
+  Specyfikacja `docs/RESONANCE_RUNTIME_SPEC.md` zawiera kolejkę Haka i przypadki testowe.
+- [x] Przegląd postać po postaci: korekty Garrana 27.09 i pozostałych
+  bohaterów 29.09 zapisane na kartach; Erynd zaakceptowany bez zmian.
+- [ ] Przed wdrożeniem do silnika zamknąć jawne doprecyzowania w specyfikacji (wzrost premii
+  wcześniejszych uczestników, brzegowe Fale, pule osłon i legalność przeniesień).
+- [ ] Omówić karty z użytkownikiem, następnie wdrożyć ładunki i przekazywany
+  Rezonans **tylko w walce**, zachowując wcześniejszą makietę i eksplorację.
+  Wyświetlać liczbę ładunków bohatera; fizyczny licznik gracza to pokrętło.
+  Osobno rozstrzygnąć pomijane tury nieprzytomnych bohaterów i balans kosztów.
+- [ ] Uporządkować stary fixture `tests/unit/test_board_panel_runtime.py`:
+  helper `begin()` usuwa pulę run, pozostawiając postaci z profilem runicznym.
+  22 przypadki zatrzymują się przed kontrolą panelu na `ActionEconomyCost('special')`.
+  Aktualne testy mapowania i `test_rune_combat_board.py` używają spójnej puli.
+
+## Dalszy kierunek prac — 23.09.2026
+
+- [ ] Przygotować indywidualne cele dla każdej postaci, które będzie mogła
+  realizować podczas gry, z jasno określonymi warunkami ukończenia.
+- [x] Przywrócić wcześniejszą makietę `docs/ui/prototype.html` jako widok
+  wskazywany przez stronę materiałów; zachować aktualne karty i ich PDF-y.
+- [ ] Dopracowywać zmiany po kolei z użytkownikiem, zaczynając od kart.
+  Makieta koszyków nie jest przyjętym docelowym układem UI.
+
+## Osobiste koszyki run — prototyp 23.09.2026
+
+- [ ] Przygotować wspólny katalog siedmiu bohaterów według
+  `system_run_v0.1.md`: cztery kategorie, pojemności, regeneracja, skazy,
+  osobny przycisk mocy, koszt kategorią i konkretne rezonanse.
+- [ ] Wygenerować komplet nowych kart, planszetek koszyków i wyposażenia;
+  zachować wymiary wycinanek i sprawdzić przepełnienia wydruków.
+- [ ] Przygotować klikalną makietę: wybór symboli przed walką,
+  moc → pole → własna runa → rezonans/wsparcie → zatwierdzenie,
+  rozładowanie, Skupienie, klasowe ładowanie k4 i zapis prototypu.
+- [ ] Sprawdzić koszty, anulowanie, reakcję pomocnika, limity regeneracji,
+  zapis w trakcie decyzji oraz pełny przykład Uderzenia tarczą z Okiem.
+- [ ] Ograć przy stole profile i nowe koszty wszystkich siedmiu postaci;
+  dopracować robocze pojemności Dagny/Nimry/Erynda oraz tempo regeneracji.
+- [ ] Po ograniu przenieść zaakceptowany wariant z prototypu do aplikacji.
+
+[Zakres i doprecyzowania](docs/RUNE_BASKETS_PROTOTYPE.md).
+
 ## Wnioski po ręcznym teście — 22.09.2026
 
 - [x] Spisać punkt wyjścia przed wdrożeniem: wymagania użytkownika, proponowany
@@ -2517,3 +2618,34 @@ Historyczne wpisy o osobistych pulach many dotyczą poprzedniego wariantu.
   pierwszeństwo aktualnych opisów. Wczytanie odświeża wyłącznie cechy;
   nie resetuje PW, ekwipunku ani puli. Zregenerowane 35 stron kart.
   Szczegóły: [docs/RUNE_HERO_AUDIT.md](docs/RUNE_HERO_AUDIT.md).
+
+
+- [x] [Panel: rezygnacja z opcjonalnej reakcji, 2026-09-23] Na pierwszej
+  kości Cutting Words lub Rozpraszającego okrzyku podświetlić ↩ i pokazać
+  „Pomiń reakcję”. Przycisk pomija nieopłaconą ofertę bez wydania run;
+  obowiązkowe i opłacone rzuty pozostają do rozliczenia. W podsumowaniu
+  ↩ oraz awaryjny Escape wracają do poprawy wyniku, zamiast pomijać reakcję.
+  Rozszerzyć test Chrome o Ruch → Atak → Wróć bez kosztu oraz pełną turę
+  przeciwnika: pominięcie reakcji, automatyczny rzut, jedno okno wyniku,
+  potwierdzenie bez ponownego losowania i powrót do następnego bohatera.
+  Weryfikacja używa symulatora wejścia; test fizycznych sensorów pozostaje osobny.
+
+- [x] [Koszyki run w grze, 23.09.2026] Wspólny katalog 65 mocy i pojemności
+  siedmiu bohaterów; koszt zgodny z kategorią przycisku, opcjonalny konkretny
+  Rezonans, wybór pomocnika do 3 pól i atomowe rozliczenie żetonu oraz reakcji.
+  Przygotowanie kategoriami przez planszę, powtórzenia symboli, cofanie,
+  podsumowanie i kontrola nieaktualnych komend. Skupienie, ładowanie k4,
+  zgłaszanie warunków odnowienia oraz limit raz na rundę. Reakcje po rundzie.
+  Pierwsza strona kart: żetony zamiast notatek; pełny komplet A4 i nowe odsyłacze
+  z aplikacji. Starsze zapisy zachowują dawny model.
+  Weryfikacja: 60 ukierunkowanych testów (reguły, zapis, plansza, Chrome,
+  druk i regresje Garrana), walidacja 42 stron A4 oraz `git diff --check`.
+- [ ] Osobno przepisać prowadzony samouczek dawnej many na scenariusze ćwiczeń
+  koszyków; swobodna arena już używa nowego modelu. Zdarzenia odnowienia są
+  obecnie zgłaszane Mostem, z walidacją limitu i pojemności; ewentualną pełną
+  automatyzację wyzwalaczy rozpatrzyć po testach balansu.
+- [x] [Spis wydruków, 23.09.2026] Zaktualizować `runy_v01/index.html`
+  i spis koszyków: odsyłacze do bieżących 42 stron, siedem zestawów,
+  pojemności z katalogu i instrukcja obsługi przez planszę. Zachować dostęp
+  do mapy i kafli. Oba generatory korzystają ze wspólnego spisu, żeby
+  ponowny eksport nie przywracał starych kart ani opisów.

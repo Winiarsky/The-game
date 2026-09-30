@@ -44,7 +44,7 @@ def test_live_runes_match_printed_cards_and_budget(hero: str, tmp_path: Path) ->
     actions = s._board_panel_actions()
     assert actions == {o['panel_slot']: o['id'] for o in menu['options'] if o['panel_slot'] is not None and not o['panel_unavailable_reason']}
     target = s._current_board_scan_target()
-    assert {p for p in target.positions if p.col == 19} == {panel_position(slot) for slot in (*actions, 24, 26, 27, 29)}
+    assert {p for p in target.positions if p.col == 19} == {panel_position(slot) for slot in (*actions, 25, 26, 27, 29)}
     for option in menu['options']:
         if option['panel_slot'] in actions:
             color = action_economy_panel_color(option['action_economy'])

@@ -21,17 +21,17 @@ def test_printed_controls_and_gaps_have_unambiguous_positions() -> None:
     assert tuple(i for i, (_, path) in enumerate(SYMBOLS) if not path) == PANEL_GAPS
     assert [name for name, _ in SYMBOLS[26:]] == ['Zwiększ', 'Zmniejsz', 'Zatwierdź', 'Wróć']
     assert rune_slot('Klucz') == PANEL_KEY == 23
-    assert rune_slot('Gwiazda') == PANEL_INFO == 24
+    assert rune_slot('Gwiazda') == PANEL_INFO == 25
     assert len({panel_position(slot) for slot in range(30)}) == 30
 
 
 def test_plus_minus_and_information_lights_preserve_map_targets() -> None:
     target = Coordinate(8, 11)
-    base = LedFeedback((LedFrame((target, panel_position(25)), LedColor.LEGAL_ATTACK_TARGET, LedRole.ENEMY),))
+    base = LedFeedback((LedFrame((target, panel_position(4)), LedColor.LEGAL_ATTACK_TARGET, LedRole.ENEMY),))
     feedback = panel_feedback((18, PANEL_INFO), control_slots=(PANEL_PLUS, PANEL_MINUS), base=base)
     lights = {p: frame.color for frame in feedback.frames for p in frame.positions}
     assert lights[target] == LedColor.LEGAL_ATTACK_TARGET
-    assert panel_position(25) not in lights
+    assert panel_position(4) not in lights
     assert lights[panel_position(18)] == tuple(round(c * .65) for c in LedColor.PANEL_RUNE)
     assert lights[panel_position(PANEL_INFO)] == tuple(round(c * .65) for c in LedColor.PANEL_INFO)
     assert lights[panel_position(PANEL_PLUS)] == LedColor.PANEL_PLUS

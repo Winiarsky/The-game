@@ -23,3 +23,10 @@
 .tt-rune-allocation .tt-rune-recipient h1{margin:5px 0 0}.tt-rune-recipient>div{min-width:0}
 
 .tt-rune-allocation h1,.tt-rune-payment h1{font-size:30px;margin:12px 0}.tt-rune-allocation>small,.tt-rune-payment>small{color:#dbc18b;text-transform:uppercase;letter-spacing:1px;font-size:10px}.tt-rune-allocation>p,.tt-rune-payment>p{color:#b6c5b9;font-size:13px;line-height:1.6}.tt-rune-offer{display:flex;flex-wrap:wrap;gap:9px;margin:16px 0}.tt-rune-offer button{flex:1 0 100px;max-width:160px;display:flex;flex-direction:column;align-items:center;gap:6px;border:1px solid #dbc18b55;background:#dbc18b08;color:#dbc18b;border-radius:4px;padding:14px}.tt-rune-offer svg{width:30px;height:30px}.tt-party-runes{list-style:none;display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0;font-size:12px}.tt-party-runes li{padding:10px;border:1px solid #d4dcca24;border-radius:4px}.tt-party-runes li[aria-current]{border-color:#dbc18b}.tt-party-runes span{display:block;margin-top:6px;color:#b6c5b9}.tt-rune-boosts{display:flex;flex-direction:column;gap:8px}.tt-rune-boosts button{display:flex;align-items:center;gap:12px;padding:12px;text-align:left;background:transparent;border:1px solid #dbc18b44;color:#dbc18b;border-radius:4px}.tt-rune-boosts button[aria-pressed=true]{border-color:#dbc18b;background:#dbc18b15}.tt-rune-boosts svg{width:28px;height:28px;flex-shrink:0}.tt-rune-boosts small{display:block;margin-top:4px}.tt-rune-cost{font-size:12px;color:#dbc18b}
+
+.tt-basket-counts { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.65rem; margin:.8rem 0; }
+.tt-basket-counts > div { border:1px solid #53606c; border-radius:.35rem; padding:.55rem; }
+.tt-basket-counts b, .tt-basket-counts span { display:block; }
+.tt-basket-counts span {font-size:.8rem;color:#c6ccd1;margin-top:.3rem;}
+.tt-basket-counts svg {width:1.2rem;height:1.2rem;vertical-align:middle;}
+@media(max-width:700px){.tt-basket-counts{grid-template-columns:repeat(2,minmax(0,1fr));}}

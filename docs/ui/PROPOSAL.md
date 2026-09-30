@@ -1,6 +1,26 @@
 # UI przy stole — audyt i propozycja
 
-Gwiazda (ostatnia runa, slot 24) jest stałym skrótem „Informacja o bohaterze”,
+## Walka: ładunki i ciągły Rezonans — 29.09.2026
+
+Zaktualizowano część bojową [tej samej makiety](prototype.html?scene=combat)
+według aktualnych kart siedmiu postaci. Zamiast doboru/ręki: 20 ładunków,
+tryby 4/8 ze skazami i uporządkowany tor Rezonansu. Nowy model symuluje
+wszystkie 29 mocy, stany, rzuty, odzysk, reakcje i kolejki wyborów pól.
+Wygląd powłoki, rozmowy, reputacja i przygotowanie wyprawy pozostają.
+Brak wdrożenia do właściwego silnika i sprzętu.
+
+[Instrukcja ogrania, zakres, założenia i testy](RESONANCE_MOCK.md).
+Rozwijany symulator pól jest narzędziem testowym, nie nową mapą w docelowym UI.
+Starsze opisy ręki, doboru i kosztów run poniżej są historyczne.
+
+Ustalenie z 23.09.2026: wracamy do [wcześniejszej makiety UI](prototype.html)
+jako punktu wyjścia. Aktualne karty zostają; następne zmiany uzgadniamy
+po kolei, zaczynając od kart. Nie przenosimy kolejnych rozwiązań z makiety
+koszyków do docelowego interfejsu bez omówienia ich z użytkownikiem.
+Eksperyment `rune-baskets.html` pozostaje zachowany jako materiał roboczy.
+Poniższy opis dotyczy wcześniejszej makiety i działającej aplikacji.
+
+Gwiazda (osobny przycisk przed +/−, slot 25) jest stałym skrótem „Informacja o bohaterze”,
 z niebieskim podświetleniem i drobnym podpisem przy panelu. Pokazuje bieżące
 PW/maksimum, tymczasowe PW, KP, statusy, efekty, aurę, zużycie akcji i reakcji,
 runy, reputację, cechy, sprzęt, skazę i historię. Dotyczy aktywnej postaci.

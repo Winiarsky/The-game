@@ -10,7 +10,7 @@
 .board-pad[data-light="selected"]{color:#fff6d6;border-color:#fff1bc;background:#8a7248;box-shadow:0 0 14px #ffe7a680}
 .board-pad[data-light="dimmed"]{color:#a69168;opacity:.7}.board-pad[data-light="control"]{color:#cedacb;border-color:#6b806e}
 .board-pad[data-slot="28"][data-light="control"]{color:#b0e5b6;border-color:#739b79}.board-pad[data-slot="29"]{color:#deb099}
-.board-gap{border:0;background:transparent}.board-groups{display:grid;grid-template-columns:4fr 22fr 4fr;text-align:center;margin-top:6px;font-size:9px;letter-spacing:.5px;color:#7f9187}
+.board-gap{border:0;background:transparent}.board-groups{display:grid;grid-template-columns:4fr 21fr 5fr;text-align:center;margin-top:6px;font-size:9px;letter-spacing:.5px;color:#7f9187}
 .rune-strip{display:flex;flex-wrap:wrap;gap:7px;margin:13px 0}.rune-token{display:inline-flex;align-items:center;gap:5px;border:1px solid #d6bd8644;border-radius:5px;padding:6px 8px;background:#d6bd8607;color:var(--gold);font-size:12px}
 .rune-token .rune{width:22px;height:22px}.rune-token.empty{color:var(--muted);border-style:dashed}.rune-token b{font-weight:600}
 .rune-label{font-size:11px;color:var(--muted);display:flex;justify-content:space-between;gap:10px}.rune-demo .action{padding:10px 0;gap:10px}.rune-demo .action-main{padding:12px}.rune-demo .action-title{font-size:20px}

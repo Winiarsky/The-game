@@ -41,6 +41,11 @@ def normalize_rune_features(actor: Actor) -> Actor:
     if not cards:
         return actor
     flaw = rune_flaw(str(actor.id))
+    if any(f.feature_id == "rune_baskets_v02" for f in actor.features):
+        from dnd_board_game.scenarios.rune_basket_catalog import basket_cards, load_rune_basket_catalog
+        cards = {c.id: c for c in basket_cards(str(actor.id))}
+        row = load_rune_basket_catalog()['heroes'][str(actor.id)]['flaw']
+        flaw = replace(flaw, name=row['name'], body=row['description'])
     retired = {"mana_great_tuning", "turn_undead", "action_surge", "piercing_attack",
                "distracting_shout", "pooled_mana_v01", "mana_passives_v1", "mana_saturation",
                "nimra_sculpt_field", "nimra_distant_spell", "nimra_overcharged_spell",
@@ -58,3 +63,10 @@ def normalize_rune_features(actor: Actor) -> Actor:
             feature = replace(feature, label="Runy bohatera", description="Koszty run i efekty kart postaci.")
         features.append(feature)
     return replace(actor, features=tuple(features))
+
+
+def apply_basket_profile(actor: Actor) -> Actor:
+    actor = apply_rune_profile(actor)
+    if not any(f.feature_id == "rune_baskets_v02" for f in actor.features):
+        actor = replace(actor, features=(*actor.features, FeatureGrant("rune_baskets_v02", "Koszyki run", FeatureSourceKind.SCENARIO, "runes:baskets_v02")))
+    return normalize_rune_features(actor)

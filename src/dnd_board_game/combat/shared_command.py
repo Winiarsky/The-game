@@ -16,7 +16,8 @@ def validate_command_target(state: CombatState, target_id: str) -> Actor:
     target = next((a for a in state.actors if str(a.id) == target_id), None)
     if target is None or target.id == owner.id or target.faction != owner.faction or target.is_unconscious() or target.is_defeated() or grid_distance_feet(owner.position, target.position) > 15 or not reaction_available_for(state, target):
         raise ValueError('Wybierz przytomnego sojusznika w 15 ft z dostępną reakcją.')
-    if state.shared_mana and state.shared_mana.runes and not state.shared_mana.runes.hand(str(target.id)):
+    from dnd_board_game.rules.rune_baskets import RuneBaskets
+    if state.shared_mana and state.shared_mana.runes and not isinstance(state.shared_mana.runes, RuneBaskets) and not state.shared_mana.runes.hand(str(target.id)):
         raise ValueError("Sojusznik musi mieć dowolną własną runę na Kontratak.")
     return target
 
@@ -34,7 +35,8 @@ def start_command(state: CombatState, effects: tuple[ActiveEffect, ...], target_
     if not spent.accepted:
         raise ValueError(spent.message)
     owner = current_actor(state)
-    if state.shared_mana.runes is not None:
+    from dnd_board_game.rules.rune_baskets import RuneBaskets
+    if state.shared_mana.runes is not None and not isinstance(state.shared_mana.runes, RuneBaskets):
         from dnd_board_game.rules.runes import spend_runes
         rune = state.shared_mana.rune_ally_payment
         if state.shared_mana.rune_ally_actor != str(target.id) or not rune:

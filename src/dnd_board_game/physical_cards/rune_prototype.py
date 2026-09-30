@@ -64,7 +64,7 @@ def map_tile_svg(tile: MapTile) -> str:
     tabs = (f'<path d="M{tile.width} 0V{h}" stroke-dasharray="1 1"/>' if tile.right else '')
     tabs += (f'<path d="M0 {tile.height}H{w}" stroke-dasharray="1 1"/>' if tile.bottom else '')
     return f'''<svg xmlns="http://www.w3.org/2000/svg" width="297mm" height="210mm" viewBox="0 0 297 210">
-<text x="10" y="6" font-family="Arial" font-size="3">RUNY v0.1 · {tile.label} · A4 100% · wspólna skala +3%</text>
+<text x="10" y="6" font-family="Arial" font-size="3">RUNY v0.2 · {tile.label} · A4 100% · wspólna skala +3%</text>
 <g transform="translate(10 15) scale({s:.10f})" data-print-scale="{s:.10f}">
 <svg width="{w}" height="{h}" viewBox="{tile.x} {tile.y} {w} {h}" overflow="hidden">{board_svg()}</svg>
 <g fill="none" stroke="black" stroke-width=".2">{tabs}<rect width="{w}" height="{h}" stroke-dasharray="3 1.5"/>{marks}</g>

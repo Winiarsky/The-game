@@ -10,6 +10,7 @@ from enum import StrEnum
 from typing import Mapping
 from .pooled_mana import PooledMana
 from .runes import RunePool
+from .rune_baskets import RuneBaskets
 
 
 class ManaPhase(StrEnum):
@@ -51,7 +52,7 @@ class SharedMana:
     attack_targets: tuple[str, ...] = ()
 
     pooled: PooledMana | None = None
-    runes: RunePool | None = None
+    runes: RunePool | RuneBaskets | None = None
     rune_upkeep_actor: str = ""
     rune_upkeep_selected: str = ""
     rune_flaw_paid: bool = False
@@ -85,7 +86,7 @@ class SharedMana:
         if data.get("pooled") is not None:
             data["pooled"] = PooledMana.from_payload(data["pooled"])
         if data.get("runes") is not None:
-            data["runes"] = RunePool.from_payload(data["runes"])
+            data["runes"] = (RuneBaskets if data["runes"].get("model") == "baskets_v02" else RunePool).from_payload(data["runes"])
         data["phase"] = ManaPhase(str(data.get("phase", "ready")))
         data["pending_boosts"] = tuple((str(k), int(v)) for k, v in data.get("pending_boosts", ()))
         data["attack_targets"] = tuple(data.get("attack_targets", ()))
@@ -112,7 +113,7 @@ def sync_pool(state: SharedMana, pooled: PooledMana) -> SharedMana:
                    revision=state.revision + 1)
 
 
-def sync_runes(state: SharedMana, runes: RunePool) -> SharedMana:
+def sync_runes(state: SharedMana, runes: RunePool | RuneBaskets) -> SharedMana:
     return replace(state, runes=runes, deck=len(runes.deck), market=len(runes.offer),
                    discard=len(runes.discard), phase=ManaPhase.READY if runes.phase == "ready" else ManaPhase.POOLED,
                    revision=state.revision + 1)

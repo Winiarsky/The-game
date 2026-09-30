@@ -276,7 +276,7 @@ def create_app(
                  ("sciaga_graczy_A4.pdf", "materials_rules"),
                  ("znaczniki_A4.pdf", "materials_tokens"))
         return render_template("session_materials.html", materials=[
-            dict(filename=name, label=label, exists=(DEFAULT_PACK / "print" / name).is_file())
+            dict(filename=name, label=label, exists=(DEFAULT_PACK / "print" / ("runy_koszyki_v01/" + name if name == "karty_postaci_A4.pdf" else name)).is_file())
             for name, label in files])
 
     @app.get("/session-materials/<path:filename>")
@@ -285,6 +285,8 @@ def create_app(
         if filename not in {"misja_0_komplet_A4.pdf", "misja_0_komplet_A4_25mm.pdf",
                             "karty_postaci_A4.pdf", "sciaga_graczy_A4.pdf", "znaczniki_A4.pdf"}:
             abort(404)
+        if filename == "karty_postaci_A4.pdf":
+            return send_from_directory(DEFAULT_PACK / "print/runy_koszyki_v01", filename)
         return send_from_directory(DEFAULT_PACK / "print", filename)
 
     @app.get("/new-game")

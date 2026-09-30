@@ -79,16 +79,20 @@ dialog{background:var(--panel);color:var(--text);border:1px solid #ffffff22;bord
 </style>
 <link rel="stylesheet" href="combat-flow.css">
 <link rel="stylesheet" href="rune-prototype.css">
+<link rel="stylesheet" href="resonance-prototype.css">
 </head>
 <body class="rune-demo">
-<div class="prototype-bar"><strong>Makieta · reputacja i runy</strong><nav id="demo-nav" class="prototype-nav" aria-label="Przykładowe sceny"></nav></div>
+<div class="prototype-bar"><strong>Makieta · reputacja i Rezonans</strong><nav id="demo-nav" class="prototype-nav" aria-label="Przykładowe sceny"></nav></div>
 <div class="app">
 <header class="masthead"><div class="brand"><div class="brand-mark" aria-hidden="true"><span>D</span></div><div><strong>Dług za dzwon</strong><small>Misja 0 · Gildia Poszukiwaczy</small></div></div><div class="tools"><span class="connection">Symulacja planszy</span><button id="journal-button" class="text-btn" data-route="journal">Dziennik <span class="route-hint">↩ → Wieża</span></button><button id="menu-button" class="text-btn" data-route="menu">Menu <span class="route-hint">↩</span></button></div></header>
 <main id="main" class="play-area" tabindex="-1"></main>
 <footer class="party" id="party" aria-label="Drużyna"></footer>
 </div>
-<section id="rune-board" class="rune-board" aria-label="Symulowany dolny pasek fizycznej planszy"><div class="board-heading"><span id="board-context"></span><span>Dostępne: złote · wybrane: jasne · niedostępne: zgaszone</span></div><div id="board-pads" class="board-pads"></div><div class="board-groups"><span>Akcje podstawowe</span><span>Runy</span><span>+ / − / ✓ / ↩</span></div></section>
+<section id="rune-board" class="rune-board" aria-label="Symulowany dolny pasek fizycznej planszy"><div class="board-heading"><span id="board-context"></span><span>Dostępne: złote · wybrane: jasne · niedostępne: zgaszone</span></div><div id="board-pads" class="board-pads"></div><div class="board-groups"><span>Akcje podstawowe</span><span>Runy</span><span>★ / + / − / ✓ / ↩</span></div></section>
 <div id="toast" class="toast" role="status" hidden></div>
 <script src="rune-prototype-data.js"></script>
+<script src="resonance-data.js"></script>
+<script src="resonance-model.js"></script>
+<script src="resonance-prototype.js"></script>
 <script src="rune-prototype.js"></script>
 </body></html>

@@ -343,6 +343,13 @@ def start_combat(
         # Runtime sessions supply an already shuffled deck at combat activation.
         deck = rune_deck if rune_deck is not None else tuple(r for _ in heroes for r in RESOURCE_RUNES)
         state = replace(state, shared_mana=sync_runes(SharedMana(turn_actor=str(first_actor.id)), new_runes(heroes, deck)))
+    if any(f.feature_id == "rune_baskets_v02" for a in actors for f in a.features):
+        from dnd_board_game.rules.rune_baskets import new_baskets
+        from dnd_board_game.scenarios.rune_basket_catalog import load_rune_basket_catalog
+        catalog = load_rune_basket_catalog()['heroes']
+        capacities = {str(a.id): catalog[str(a.id)]['capacities'] for a in actors
+                      if a.faction == Faction.ALLY and str(a.id) in catalog}
+        state = replace(state, shared_mana=sync_runes(SharedMana(turn_actor=str(first_actor.id)), new_baskets(capacities)))
     return _with_finished_status(state)
 
 
@@ -1499,6 +1506,9 @@ def finish_turn(state: CombatState) -> CombatState:
         from dnd_board_game.rules.shared_mana import begin_mana_turn
         mana = begin_mana_turn(mana, str(next_actor.id), round_end=order.round_number > finished_state.round_number)
     spent = frozenset(actor_id for actor_id in finished_state.spent_reaction_actor_ids if actor_id != next_actor.id)
+    from dnd_board_game.rules.rune_baskets import RuneBaskets
+    if mana and isinstance(mana.runes, RuneBaskets):
+        spent = frozenset() if order.round_number > finished_state.round_number else finished_state.spent_reaction_actor_ids
     return replace(
         finished_state,
         initiative_order=order,

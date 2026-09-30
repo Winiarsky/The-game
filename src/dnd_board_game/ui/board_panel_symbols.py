@@ -23,8 +23,9 @@ RUNES = [
     ("Most", "M3 21V3h5v10h8V3h5v18M3 18h18"),
     ("Fala", "M3 5l6 5 6-5 6 5M3 14l6 5 6-5 6 5"),
     ("Klucz", "M5 3h8v8H5ZM9 11v10h11v-5M15 21v-5"),
-    ("Gwiazda", "M12 2v20M2 12h20M5 5l14 14M5 19 19 5M8 8h8v8H8Z"),
+    ("Iskra", "M12 2l3 7 7 3-7 3-3 7-3-7-7-3 7-3ZM12 8v8M8 12h8"),
 ]
+INFORMATION = ("Gwiazda", "M12 2v20M2 12h20M5 5l14 14M5 19 19 5M8 8h8v8H8Z")
 BASIC = [
     ("Ruch", "M15 4a2 2 0 1 0-4 0 2 2 0 1 0 4 0M12 8l-2 6 5 3 2 5M10 14l-3 8M12 8l4 4h4M12 8H8l-4 5"),
     ("Atak", "M5 19 18 6l3-3v6L8 22M3 14l7 7M5 21l-2 2"),
@@ -43,7 +44,7 @@ CONTROLS = [
 # Only SYMBOLS defines physical positions, shared by the live game and new prints.
 SYMBOLS = [
     BASIC[0], BASIC[1], BASIC[3], BASIC[5], ("Przerwa", ""),
-    *RUNES, ("Przerwa", ""), CONTROLS[1], CONTROLS[0], CONTROLS[2], CONTROLS[3],
+    *RUNES, INFORMATION, CONTROLS[1], CONTROLS[0], CONTROLS[2], CONTROLS[3],
 ]
 
 
@@ -197,7 +198,7 @@ PANEL_CONTROLS: tuple[tuple[int, str, str], ...] = (
         "Koniec tury",
         "Zatwierdź zakończenie tury. Niewydane runy zostają; przydział odbywa się tylko na początku walki.",
     ),
-    (24, "Informacja o bohaterze", "Niebieska Gwiazda pokazuje aktualne PW, stany, zasoby, cechy i wyposażenie. Powrót zachowuje wybraną akcję i cel."),
+    (25, "Informacja o bohaterze", "Niebieska Gwiazda pokazuje aktualne PW, stany, zasoby, cechy i wyposażenie. Powrót zachowuje wybraną akcję i cel."),
     (26, "Zwiększ", "Zwiększ wynik kości lub przewiń dalej."),
     (27, "Zmniejsz", "Zmniejsz wynik kości lub przewiń wstecz."),
     (28, "Zatwierdź", "Zatwierdź cel, wynik kości lub końcowe podsumowanie."),

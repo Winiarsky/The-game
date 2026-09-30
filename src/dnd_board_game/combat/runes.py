@@ -45,13 +45,17 @@ def quote_runes(state: CombatState, actor: Actor, ability_id: str, boosts: Mappi
                 selected_wildcards: Sequence[str] | None = None, *, targets: Sequence[Actor] = ()) -> tuple[str, ...]:
     if ability_id.startswith("basic_attack:"):
         return ()
-    card = rune_card(str(actor.id), ability_id)
+    card = rune_card(str(actor.id), ability_id, pool=state.shared_mana.runes if state.shared_mana else None)
     if card is None or state.shared_mana is None or state.shared_mana.runes is None:
         raise ValueError("Nieznana karta mocy runicznej.")
     require_budget(state, actor, card, boosts)
     pool = state.shared_mana.runes
     if card.once and (str(actor.id), ability_id) in pool.used_once:
         raise ValueError("Ta moc została już użyta w tej walce.")
+    from dnd_board_game.rules.rune_baskets import RuneBaskets
+    if isinstance(pool, RuneBaskets):
+        from .rune_baskets import quote
+        return quote(state, actor, ability_id, boosts, selected_wildcards, targets=targets)
     payment = plan_card_payment(pool.hand(str(actor.id)), rune_requirements(state, actor, ability_id, boosts, targets=targets), selected_wildcards)
     if ability_id == "mana_tuning" and (len(pool.hand(str(actor.id))) <= len(payment) or not pool.deck):
         raise ValueError("Strojenie wymaga dodatkowej runy do wymiany oraz niepustej talii.")
@@ -63,7 +67,7 @@ def quote_runes(state: CombatState, actor: Actor, ability_id: str, boosts: Mappi
 def rune_requirements(state: CombatState, actor: Actor, ability_id: str,
                        boosts: Mapping[str, int], *, targets: Sequence[Actor] = ()) -> tuple[str, ...]:
     from .rune_flaws import rune_flaw_cost
-    card = rune_card(str(actor.id), ability_id)
+    card = rune_card(str(actor.id), ability_id, pool=state.shared_mana.runes if state.shared_mana else None)
     pool = state.shared_mana.runes
     free = card.free_first and (str(actor.id), ability_id + ":free") not in pool.used_once
     return card.payment(boosts, free_base=free) + ("*",) * rune_flaw_cost(state, actor, ability_id, targets).count

@@ -39,7 +39,9 @@ def test_real_combat_board_flow_and_rune_layout(tmp_path: Path, width: int) -> N
     # Exercise the transition from a hero action menu to the enemy confirmation.
     order = game.combat_state.initiative_order
     enemy_entry = next(entry for entry in order.entries if str(entry.actor.id) == 'borut')
-    entries = (order.entries[0], enemy_entry, *(entry for entry in order.entries[1:] if entry != enemy_entry))
+    next_hero = next(entry for entry in order.entries[1:] if entry.actor.faction.value == 'ally')
+    entries = (order.entries[0], enemy_entry, next_hero,
+               *(entry for entry in order.entries[1:] if entry not in (enemy_entry, next_hero)))
     game.combat_state = replace(game.combat_state, initiative_order=replace(order, entries=entries))
     pool = game.combat_state.shared_mana.runes
     opening = ['Kotwica', 'Kotwica', 'Kielich', 'Kielich', 'Klucz', 'Błysk', 'Oko', 'Korona']
@@ -73,6 +75,10 @@ def test_real_combat_board_flow_and_rune_layout(tmp_path: Path, width: int) -> N
     def snapshot() -> dict[str, str]:
         return {'value': repr((game.combat_state, game.active_combat_effects,
                               game.pending_player_attack, game.combat_turn_preview_option_id))}
+
+    @app.get('/__test/random-state')
+    def random_state() -> dict[str, str]:
+        return {'value': repr(game.encounter_rng.getstate())}
 
     @app.post('/__test/result')
     def result() -> dict[str, bool]:
@@ -127,7 +133,7 @@ try{
  check(document.querySelector('.tt-idle').textContent.includes('Wybierz akcję'),'clean idle');
  const handBefore=JSON.stringify(state.combat.shared_mana.rune_view.hands);
  const deckBefore=state.combat.shared_mana.rune_view.deck_count;
- const before=await snapshot();await slot(24);await wait(()=>TabletopCombat.getView().inspected==='garran','star opens active hero');
+ const before=await snapshot();await slot(25);await wait(()=>TabletopCombat.getView().inspected==='garran','star opens active hero');
  check(TabletopCombat.panel().exclusive,'information owns its controls');
  check(document.querySelector('[data-tt-inspection="garran"]').innerText.includes('Aktualne stany'),'full status information');
  check(document.querySelector('.tt-actor.is-active').dataset.ttActor==='garran','info changes turn');
@@ -137,21 +143,30 @@ try{
  check(!legal(28),'movement confirm lit before field');
  check(!document.querySelector('[data-movement-distance]'),'screen distance selector');
  await press(MOVE_POSITION);check(legal(28),'movement confirm dark after field');
+ await slot(1);await wait(()=>state.combat.turn_action_menu?.stage==='preview'&&state.combat.turn_action_menu.preview_option_id!=='turn:move','switch movement to attack');
+ check(!state.combat.movement_preview,'switching action retained movement path');
+ check(!legal(28),'attack inherited movement confirmation');
+ await slot(29);await wait(()=>document.querySelector('.tt-idle'),'back from switched preview');
+ check(before===await snapshot(),'switching previews or back spent resources');
+ await slot(0);await wait(()=>state.combat.turn_action_menu?.preview_option_id==='turn:move','movement reopened');
+ check(!legal(28),'reopened movement retained the old destination');
+ await press(MOVE_POSITION);
  await slot(28);await wait(()=>state.combat.current_actor.position.join(',')===MOVE_POSITION.join(','),'movement committed');
  await slot(1);await wait(()=>state.combat.turn_action_menu?.stage==='preview','attack preview');
  check(!legal(28),'attack confirm lit before target');
  check(!document.querySelector('.tt-legal-targets button'),'targets are rune buttons');
- await slot(24);await wait(()=>TabletopCombat.getView().inspected,'info from action');await slot(29);
+ await slot(25);await wait(()=>TabletopCombat.getView().inspected,'info from action');await slot(29);
  await wait(()=>!TabletopCombat.getView().inspected,'return to preview');
  check(state.combat.turn_action_menu.stage==='preview','info lost action');
  const target=state.combat.actors.find(a=>a.id==='borut');
  await press(target.position);await wait(()=>state.combat.pending_player_attack?.stage==='confirm_attack','target chosen');
  check(document.querySelector('.tt-target').dataset.ttTarget==='borut','wrong target identity');
  check(legal(28),'target cannot confirm');bounds();
- const targetBefore=await snapshot();await slot(24);await wait(()=>TabletopCombat.getView().inspected,'target info');await slot(29);
+ const targetBefore=await snapshot();await slot(25);await wait(()=>TabletopCombat.getView().inspected,'target info');await slot(29);
  await wait(()=>!TabletopCombat.getView().inspected,'target info closed');
  check(targetBefore===await snapshot(),'information changed pending target/resources');
- await slot(28);await wait(()=>state.combat.pending_player_attack?.stage==='attack_roll'&&keyboardRollWizard,'attack die');
+  await slot(28);await wait(()=>state.combat.pending_player_attack?.stage==='attack_roll'&&keyboardRollWizard,'attack die');
+ check(!legal(29),'uncommitted-reaction cancellation leaked into the weapon attack die');
  check(!TabletopCombat.canBrowse(),'information stole dice');
  check(desiredBoardPanel().context.startsWith('dice:'),'dice owns panel');
  const natural=keyboardRollWizard.steps[keyboardRollWizard.index].raw;
@@ -168,7 +183,7 @@ try{
  const stanceCount=state.combat.shared_mana.rune_view.hands.find(h=>h.hero==='garran').count;
  const stanceAC=state.combat.current_actor.ac;
  await slot(6);await wait(()=>state.combat.shared_mana.declaration?.stage==='payment','special payment after weapon attack');
- check(!legal(24)&&!TabletopCombat.canBrowse(),'information stole rune payment');
+ check(!legal(25)&&!TabletopCombat.canBrowse(),'information stole rune payment');
  check(document.querySelector('.tt-rune-payment'),'missing rune payment preview');
  check([...document.querySelectorAll('.tt-rune-payment .tt-rune-cost')].every(el=>el.textContent.startsWith('1 × ')),'rune cost omits quantity');
  const boost=state.combat.shared_mana.declaration.boost_options.find(o=>o.boost_id==='temp_hp');
@@ -216,6 +231,59 @@ try{
  check(!legal(23),'Key must not replace enemy confirmation');
  await slot(28);
  await wait(()=>state.combat.enemy_turn_intent||state.combat.enemy_turn_preview||state.combat.enemy_turn_result,'physical accept starts enemy action');
+ let enemyResults=0, skippedReactions=0;
+ for(let step=0;step<20&&state.combat.current_actor.faction==='enemy';step++){
+  const combat=state.combat;
+  if(keyboardRollWizard){
+   check(combat.reaction_window?.stage==='choice','enemy attack requested a player die');
+   check(keyboardRollWizard.steps.every(s=>['cutting-words-roll','distracting-shout-roll'].includes(s.input.id)),'unexpected player roll in enemy turn');
+   check(legal(29),'optional reaction die cannot be declined on the board');
+   const hands=JSON.stringify(combat.shared_mana.rune_view.hands);
+   if(!skippedReactions){
+    const reactionBefore=await snapshot();
+    await slot(28);check(keyboardRollWizard.review,'reaction die did not open review');
+    await slot(29);check(keyboardRollWizard&&!keyboardRollWizard.review,'back should correct the reaction die before declining');
+    check(reactionBefore===await snapshot(),'correcting reaction die changed engine state');
+    await slot(28);check(keyboardRollWizard.review,'reaction review did not reopen');
+    document.getElementById('keyboard-roll-wizard').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+    await wait(()=>keyboardRollWizard&&!keyboardRollWizard.review&&!busy&&!boardPanelSyncPromise,'Escape corrects the reaction die');
+    check(reactionBefore===await snapshot(),'Escape in review skipped the reaction or spent resources');
+   }
+   await slot(29);
+   check(JSON.stringify(state.combat.shared_mana.rune_view.hands)===hands,'declining reaction spent runes');
+   skippedReactions++;
+  }else if(combat.reaction_choices||combat.reaction_window||combat.pending_enemy_opportunity_attack){
+   check(legal(29),'reaction cannot be declined on the board');
+   await slot(29);
+  }else if(combat.enemy_turn_result){
+   const result=combat.enemy_turn_result;
+   check(typeof result.hit==='boolean','enemy turn did not resolve an attack');
+   check(result.natural_roll>=1&&result.natural_roll<=20,'enemy die was not rolled automatically');
+   const summary=document.querySelector('.enemy-attack-summary');
+   check(summary?.querySelector('.enemy-outcome')?.textContent.includes(result.hit?'TRAFIENIE':'PUDŁO'),'attack outcome missing from result window');
+   check(summary.querySelector('.enemy-damage-value'),'damage missing from result window');
+   check(document.querySelectorAll('.enemy-attack-summary').length===1,'duplicated enemy result window');
+   check(legal(28),'enemy result cannot be confirmed on the board');
+   const rng=JSON.stringify(await(await fetch('/__test/random-state')).json());
+   await slot(28);
+   check(JSON.stringify(await(await fetch('/__test/random-state')).json())===rng,'acknowledgement rerolled the enemy attack');
+   enemyResults++;
+  }else if(combat.enemy_turn_preview){
+   const fields=(state.board_selection.legal_positions||[]).filter(p=>p[0]!==19);
+   check(fields.length===1,'enemy movement/target needs one physical confirmation field');
+   await press(fields[0]);
+  }else{
+   check(legal(28),'enemy intent or next attack cannot be confirmed');
+   await slot(28);
+  }
+ }
+ check(enemyResults>0,'enemy result was never acknowledged');
+ check(skippedReactions>0,'optional reaction cancellation was not exercised');
+ check(state.combat.current_actor.faction==='ally','enemy turn did not finish');
+ await wait(()=>document.querySelector('.tt-idle'),'next hero action screen');
+ check(!state.combat.enemy_turn_result&&!state.combat.enemy_turn_preview&&!state.combat.enemy_turn_intent,'old enemy decision survived the turn');
+ check(!keyboardRollWizard,'stale dice window survived the enemy turn');
+ bounds();
  await stopBoardScanLoop();
  await fetch('/__test/result',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({result:'PASS'})});
 }catch(e){await fetch('/__test/result',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({result:e.stack,phase:boardInputPhase,error:boardScanError,body:document.body.innerText.slice(-2200)})})}

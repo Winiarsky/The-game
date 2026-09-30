@@ -232,6 +232,16 @@ def resolve_mana_support(state: CombatState, effects: tuple[ActiveEffect, ...], 
                    object_id="class_feature:mana_inspiration"
         )).active_effects
     if state.shared_mana and state.shared_mana.runes:
+        from dnd_board_game.rules.rune_baskets import RuneBaskets, start_recharge
+        if isinstance(state.shared_mana.runes, RuneBaskets):
+            from dnd_board_game.rules.shared_mana import finish_mana_action, sync_runes
+            mana = spent.state.shared_mana
+            if action_id in {"mana_tuning", "mana_recovery"}:
+                count = 1 if action_id == "mana_tuning" else 3 if dict(mana.pending_boosts).get("recover_more") else 2
+                finished = finish_mana_action(mana, revision=mana.revision)
+                pool = start_recharge(finished.runes, str(actor.id), count)
+                return replace(spent.state, shared_mana=sync_runes(finished, pool)), effects, "Wybierz kategorię i rzuć k4 za każde ładowane miejsce."
+            return spent.state, effects, ability.description
         from dnd_board_game.rules.runes import exchange_rune, recover_rune
         from dnd_board_game.scenarios.rune_catalog import rune_card
         pool = state.shared_mana.runes

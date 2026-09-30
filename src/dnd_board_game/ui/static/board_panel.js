@@ -5,7 +5,7 @@ let boardPanelWizardSequence = 0;
 
 function rollPanelSlots(wizard) {
   if (wizard.review) return wizard.steps.length ? [28, 29] : [28];
-  return [26, 27, 28, ...(wizard.index > 0 ? [29] : [])];
+  return [26, 27, 28, ...(wizard.index > 0 || optionalReactionRollSkip(wizard) ? [29] : [])];
 }
 
 function desiredBoardPanel() {
@@ -106,7 +106,7 @@ function handleBoardPanelEvent(data) {
   const expected = state?.board_selection?.panel_context || null;
   if (event.context !== expected) return;
   state.board_selection = data.board_selection;
-  if (event.slot === 24 && typeof TabletopCombat !== 'undefined' && TabletopCombat.handleSlot(24)) return;
+  if (event.slot === 25 && typeof TabletopCombat !== 'undefined' && TabletopCombat.handleSlot(25)) return;
   if (event.context?.startsWith('combat-inspect:')) {
     if (TabletopCombat.handleSlot(event.slot)) return;
     if (event.slot===29 && state.combat?.turn_action_menu?.stage!=='preview' && !state.combat?.pending_player_attack && !state.combat?.class_feature_targeting && SessionNavigation.open()) return;
@@ -122,7 +122,8 @@ function handleBoardPanelEvent(data) {
   if (event.slot === 26 || event.slot === 27) changeRollPanelValue(event.slot === 26 ? 1 : -1);
   else if (event.slot === 28) triggerPrimaryAction();
   else if (event.slot === 29) {
-    if (keyboardRollWizard) previousKeyboardRollStep();
+    if (keyboardRollWizard?.review || keyboardRollWizard?.index > 0) previousKeyboardRollStep();
+    else if (keyboardRollWizard) cancelKeyboardRollWizard();
     else triggerSecondaryAction();
   }
 }
@@ -145,11 +146,13 @@ function rollPanelControlsHtml(wizard) {
   if (wizard.initiative) return initiativePanelControlsHtml();
   if (wizard.review) return '<p class="keyboard-roll-wizard-help">✓ Zatwierdź cały rzut · ↩ Popraw wynik</p>';
   const step = wizard.steps[wizard.index];
+  const skipReaction = Boolean(optionalReactionRollSkip(wizard));
   return `<div class="roll-panel-controls">
     <button type="button" class="panel-minus" onclick="changeRollPanelValue(-1)" ${step.raw <= (step.min ?? 1) ? 'disabled' : ''} aria-label="Zmniejsz wynik">−</button>
     <button type="button" class="panel-plus" onclick="changeRollPanelValue(1)" ${Number.isFinite(step.max) && step.raw >= step.max ? 'disabled' : ''} aria-label="Zwiększ wynik">+</button>
     <button type="button" class="panel-accept" onclick="confirmKeyboardRollStep()">✓ Zatwierdź kość</button>
-  </div><p class="keyboard-roll-wizard-help">− czerwony · + zielony · ✓ niebieski${wizard.index ? ' · ↩ popraw poprzednią kość' : ''}</p>`;
+    ${skipReaction && !wizard.index ? '<button type="button" class="secondary" onclick="cancelKeyboardRollWizard()">↩ Pomiń reakcję</button>' : ''}
+  </div><p class="keyboard-roll-wizard-help">− czerwony · + zielony · ✓ niebieski${wizard.index ? ' · ↩ popraw poprzednią kość' : skipReaction ? ' · ↩ pomiń reakcję bez kosztu' : ''}</p>`;
 }
 
 

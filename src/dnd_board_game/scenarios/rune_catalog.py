@@ -24,6 +24,7 @@ class RuneCard:
     once: bool = False
     free_first: bool = False
     boost_budgets: tuple[tuple[str, str], ...] = ()
+    category: str = ""
 
     def payment(self, boosts: Mapping[str, int], *, free_base: bool = False) -> tuple[str, ...]:
         known = {b.id: b for b in self.boosts}
@@ -87,9 +88,15 @@ def _rune_cards(hero_id: str, modified: int) -> tuple[RuneCard, ...]:
     return tuple(cards)
 
 
-def rune_card(hero_id: str, ability_id: str) -> RuneCard | None:
+def rune_card(hero_id: str, ability_id: str, *, pool: object = None) -> RuneCard | None:
+    from dnd_board_game.rules.rune_baskets import RuneBaskets
+    if isinstance(pool, RuneBaskets):
+        from .rune_basket_catalog import basket_cards
+        cards = basket_cards(hero_id)
+    else:
+        cards = rune_cards(hero_id)
     key = "spiritual_weapon" if ability_id == "spiritual_weapon_activation" else ability_id
-    card = next((c for c in rune_cards(hero_id) if c.id == key), None)
+    card = next((c for c in cards if c.id == key), None)
     if card is not None and ability_id == "spiritual_weapon_activation":
         from dataclasses import replace
         return replace(card, id=ability_id, budget="S")

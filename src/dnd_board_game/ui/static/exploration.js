@@ -1020,8 +1020,30 @@ function submitKeyboardRollWizard() {
   return true;
 }
 
+function optionalReactionRollSkip(wizard = keyboardRollWizard) {
+  const combat = state?.combat;
+  if (!wizard || combat?.reaction_window?.stage !== 'choice'
+      || combat.shared_mana?.declaration || combat.shared_mana?.phase === 'resolving') return null;
+  // Only an uncommitted offer can be declined. Attack/damage rolls of an
+  // already spent reaction and mandatory saves keep their existing rules.
+  for (const [kind, inputId, skip] of [
+    ['cutting_words', 'cutting-words-roll', skipCuttingWordsReaction],
+    ['distracting_shout', 'distracting-shout-roll', skipDistractingShoutReaction],
+  ]) {
+    if (classFeatureReaction(combat, kind)
+        && wizard.steps.some(step => step.input?.id === inputId)) return skip;
+  }
+  return null;
+}
+
 function cancelKeyboardRollWizard() {
   if (!keyboardRollWizard) return false;
+  const skipReaction = optionalReactionRollSkip();
+  if (skipReaction) {
+    closeKeyboardRollWizard();
+    skipReaction();
+    return true;
+  }
   const precombat = keyboardRollWizard.submitButton.closest('.precombat-stealth-roll');
   if (precombat) {
     precombat.hidden = true;
@@ -1046,7 +1068,8 @@ function handleKeyboardRollWizardKeydown(event) {
   if (event.key === 'Escape') {
     event.preventDefault();
     event.stopPropagation();
-    cancelKeyboardRollWizard();
+    if (keyboardRollWizard.review || keyboardRollWizard.index > 0) previousKeyboardRollStep();
+    else cancelKeyboardRollWizard();
     return;
   }
   if (event.key === 'Backspace') {
