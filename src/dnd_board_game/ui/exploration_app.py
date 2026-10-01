@@ -2124,10 +2124,11 @@ class ExplorationUiSession:
         self.reset()
 
     def state_payload(self) -> dict[str, object]:
+        charge_combat = bool(self.combat_state and self.combat_state.resonance)
         from .mission_zero import synchronize as synchronize_mission
         synchronize_mission(self)
         from dnd_board_game.combat.shared_mana import synchronize_shared_effects
-        if self.combat_state is not None:
+        if self.combat_state is not None and not charge_combat:
             self.combat_state, self.active_combat_effects = synchronize_shared_effects(self.combat_state, self.active_combat_effects)
             self._remove_orphaned_concentration_conditions()
         from .shared_mana import settle_action
@@ -2142,7 +2143,7 @@ class ExplorationUiSession:
             if self.pending_npc_transition is None:
                 self._refresh_pending_encounter()
         self._expire_invalid_combat_effects()
-        if self.combat_state is not None:
+        if self.combat_state is not None and not charge_combat:
             self.combat_state, self.active_combat_effects = reconcile_attack_series(
                 self.combat_state, self.active_combat_effects
             )
@@ -2609,6 +2610,14 @@ class ExplorationUiSession:
                 payload["combat"]["tabletop"] = tabletop_combat_payload(
                     payload["combat"], (payload.get("encounter_initiative") or {}).get("order", ()),
                     conditions=self.combat_state.condition_states)
+        if self.combat_state and self.combat_state.resonance and payload.get("combat"):
+            from .resonance import payload as resonance_payload
+            view = resonance_payload(self)
+            portraits = {a['id']: a.get('portrait_url', '') for a in payload['combat'].get('actors', [])}
+            for actor in view['actors']:
+                actor['portrait_url'] = portraits.get(actor['id'], '')
+            payload['combat']['resonance'] = view
+            payload['combat']['tabletop'] = dict(actors=view['actors'], active_actor_id=view['active'])
         return payload
 
     def _physical_card_resource_note(self, actor: Actor, source_id: str) -> str | None:
@@ -6970,6 +6979,8 @@ class ExplorationUiSession:
     def _combat_has_pending_resolution(
         self, *, ignore_class_target: bool = False, ignore_enemy_confirmation: bool = False,
     ) -> bool:
+        if self.combat_state and self.combat_state.resonance:
+            return self.combat_state.resonance.phase not in {"idle", "finished"}
         if self.shared_mana_declaration is not None:
             return True
         if self.combat_state is not None and self.combat_state.shared_mana is not None:
@@ -7329,6 +7340,11 @@ class ExplorationUiSession:
         from dnd_board_game.character_creation.runes import apply_basket_profile as apply_rune_profile
         from dnd_board_game.rules.runes import RESOURCE_RUNES
         from .training_walkthrough import enabled as guided_training
+        charge_profile = ((mission_enabled(self) or (self.exploration.scenario_id == "recruitment_arena" and not guided_training(self)
+                                                    and TrainingConfig.from_flags(self.state.flags).mode != "tutorial"))
+                          and dict(self.state.flags.values).get("combat_rules_profile") != "rune_baskets_v02")
+        if charge_profile:
+            from dnd_board_game.application.resonance_combat import apply_charge_profile as apply_rune_profile
         if mission_enabled(self) or (self.exploration.scenario_id == "recruitment_arena" and not guided_training(self)):
             flow.encounter = replace(flow.encounter, actors=tuple(
                 apply_rune_profile(actor) if actor.faction == Faction.ALLY else actor
@@ -7447,6 +7463,9 @@ class ExplorationUiSession:
         )
         from .training_walkthrough import initialize_combat
         initialize_combat(self)
+        if charge_profile:
+            from dnd_board_game.application.resonance_combat import start_charge_combat
+            self.combat_state = start_charge_combat(self.combat_state, flow.encounter)
         checkpoint_saved = self._write_encounter_checkpoint()
         if checkpoint_saved is False:
             self._add_message(
@@ -15590,6 +15609,8 @@ class ExplorationUiSession:
     def _combat_turn_action_options(self) -> tuple[CombatMenuOption, ...]:
         """Return the persistent, board-first action list for the active hero."""
 
+        if self.combat_state and self.combat_state.resonance:
+            return ()
         if self.combat_state is None or self.combat_state.status != CombatStatus.ACTIVE:
             return ()
         actor = combat_current_actor(self.combat_state)
@@ -20954,6 +20975,7 @@ class ExplorationUiSession:
         positions = tuple(sorted(target.positions))
         connected = self.board_adapter is not None and self.board_adapter.connected
         signature_payload = {
+            "resonance_revision": self.combat_state.resonance.revision if self.combat_state and self.combat_state.resonance else None,
             "mana_revision": self.combat_state.shared_mana.revision if self.combat_state and self.combat_state.shared_mana else None,
             "flow_stage": self.ui_flow_stage.value,
             "positions": [[position.col, position.row] for position in positions],
@@ -21958,6 +21980,9 @@ class ExplorationUiSession:
         from .training_arena import roster_active, roster_target
         if roster_active(self):
             return roster_target(self)
+        from .resonance import active as charge_active, scan_target as charge_target
+        if charge_active(self):
+            return charge_target(self)
         target = self._game_board_scan_target()
         from .training_tutorial import notice_id
         if notice_id(self):
@@ -23336,6 +23361,9 @@ class ExplorationUiSession:
             if selected not in commands:
                 raise ValueError("Wybierz podświetlony przycisk panelu inicjatywy.")
             return self.update_initiative_panel(commands[selected])
+        from .resonance import active as charge_active, select_position as charge_select
+        if charge_active(self):
+            return charge_select(self, selected)
         from .reaction_choices import select_position as select_reaction_choice
         if (reaction_selection := select_reaction_choice(self, selected)) is not None:
             return reaction_selection
@@ -29831,6 +29859,8 @@ def _encounter_with_session_actor_state(
             exhaustion_level=session_by_id[str(actor.id)].exhaustion_level,
             currency=session_by_id[str(actor.id)].currency,
             inventory=persisted_inventory(actor),
+            features=tuple(f for f in actor.features if f.feature_id != "resonance_hymn")
+                     + tuple(f for f in session_by_id[str(actor.id)].features if f.feature_id == "resonance_hymn"),
         )
         if str(actor.id) in session_by_id
         else actor
@@ -29881,6 +29911,8 @@ def _exploration_with_combat_actor_state(
             currency=combat_by_id[str(actor.id)].currency,
             death_saves=combat_by_id[str(actor.id)].death_saves,
             exhaustion_level=combat_by_id[str(actor.id)].exhaustion_level,
+            features=tuple(f for f in actor.features if f.feature_id != "resonance_hymn")
+                     + tuple(f for f in combat_by_id[str(actor.id)].features if f.feature_id == "resonance_hymn"),
         )
         if str(actor.id) in combat_by_id
         else actor

@@ -1,9 +1,11 @@
-# Rezonans ciągły — specyfikacja do wdrożenia
+# Rezonans ciągły — specyfikacja mechaniki
 
-Aktualizacja: 29.09.2026, według ostatnich ustaleń użytkownika.
-**Status: karty, projekt mechaniki i osobny mock walki. Nie jest to opis
-działającego już silnika aplikacji.** Od 29.09 zasady można ograć w
-`docs/ui/prototype.html`; [zakres i założenia mocka](ui/RESONANCE_MOCK.md).
+Aktualizacja: 30.09.2026, po akceptacji mocka przez użytkownika.
+Status: implementacja Python/UI/LED dla nowych walk Misji 0 i swobodnej areny;
+próba na fizycznej planszy pozostaje do wykonania.
+[Uruchomienie i test ręczny](playtests/RESONANCE_RUNTIME_MANUAL.md).
+Osobny mock `docs/ui/prototype.html` pozostaje materiałem referencyjnym;
+[zakres i założenia mocka](ui/RESONANCE_MOCK.md).
 Ten dokument zastępuje wcześniejsze zasady paczki wzmacniającej wyłącznie moc,
 indywidualnych terminów ochrony i jednorazowej Klepsydry. Źródło opisów na
 kartach: `content/print/rune_charges_v02/catalog.json`, model `ongoing_chain_effects`.
@@ -222,8 +224,8 @@ nie poszerza tego wyzwalacza; rzut obronny z Hymnem nie włącza odzysku.
 
 ## Przegląd Garrana — 27.09.2026
 
-Poniższe reguły są specyfikacją dla wersji ładunków, jeszcze bez aktywacji
-w działającym silniku koszyków. Opisy kart korzystają z tego samego katalogu.
+Poniższe reguły dotyczą profilu ładunków. Opisy kart i nowy silnik korzystają
+z tego samego katalogu; stare zapisy koszyków zachowują swój wcześniejszy profil.
 
 ### Żywa osłona i odzysk
 

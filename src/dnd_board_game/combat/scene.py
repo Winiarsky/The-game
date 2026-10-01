@@ -131,6 +131,7 @@ class SceneObject:
     allow_interaction_when_occupied_by_enemy: bool = False
     cover_bonus: int = 0
     projectile_cover_bonus: int = 0
+    stealth_bonus: int = 0
 
     @property
     def primary_position(self) -> Coordinate:

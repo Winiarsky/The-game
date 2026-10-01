@@ -1,5 +1,17 @@
 # Kontekst Projektu
 
+## Wdrożenie walki ładunków — 30.09.2026
+
+Zaakceptowany mock przeniesiono do silnika Python i `/play`: 29 mocy,
+ciągły Rezonans, odzysk, pasywy/skazy, przerwania ruchu, osobne kości gracza,
+automatyczne rzuty przeciwników, panel i LED-y. Nowe starcia Misji 0 oraz
+swobodnej areny używają profilu `rune_charges_v02`. Eksploracja pozostaje
+bez zmiany; stare walki i prowadzone lekcje areny zachowują wcześniejszy profil.
+Stan zapisuje `CombatState.resonance`, schema 34, bez konwersji trwającej walki.
+Instrukcja i niezależny launcher: `docs/playtests/RESONANCE_RUNTIME_MANUAL.md`,
+`scripts/resonance_playtest.py`. Rzeczywisty sprzęt wymaga jeszcze ogrania.
+Poniższe datowane wpisy dokumentują wcześniejsze etapy, nie stan wdrożenia.
+
 ## Mock walki ładunków i Rezonansu — 29.09.2026
 
 `docs/ui/prototype.html` ma aktualną, klikalną symulację walki na podstawie

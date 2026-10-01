@@ -55,9 +55,13 @@ HELPERS = r"""
      assert(++count<100,'flow terminates');
      const t=m.s.task;
      if(t.type==='roll'){
-       const die=m.rollDice()[t.diceResults?.length??0];
-       assert(die?m.submitDie(Math.max(1,Math.min(value,die.sides))):m.submit([]),'roll accepted');
+       if(m.isEnemyRoll())assert(m.confirmEnemyRoll(sides=>Math.max(1,Math.min(value,sides))),'automatic enemy roll accepted');
+       else {
+         const die=m.rollDice()[t.diceResults?.length??0];
+         assert(die?m.submitDie(Math.max(1,Math.min(value,die.sides))):m.submit([]),'roll accepted');
+       }
      }
+     else if(t.type==='enemy-result')m.acknowledgeEnemyResult();
      else if(t.type==='recover')m.recover(false);
      else if(t.type==='hymn')m.decideHymn(false);
      else if(t.type==='opportunity')m.opportunity(false);
@@ -131,7 +135,7 @@ def test_updated_hero_powers_and_pending_decisions(tmp_path: Path) -> None:
  const before=g.snapshot();assert(g.active.charges===20&&!g.active.moved,'preview spends nothing');g.cancel();assert(g.active.charges===20,'cancel free');
  assert(g.choose('bastion_charge')&&g.selectTarget('enemy1')&&g.commit(),'charge commit');
  assert(g.movement()===0&&g.active.ordinary&&!g.active.special,'charge spends all movement and special only');
- assert(g.s.task.dc===15,'charge DC is base + strength + steps');g.submit([1]);drain(g);
+ assert(g.s.task.dc===15,'charge DC is base + strength + steps');drain(g);
  assert(g.status(g.actor('enemy1'),'prone'),'failed save applies prone');
  const b=create('brakka');b.actor('enemy1').pos={x:3,y:4};
  play(b,'rage');drain(b,3);assert(b.status(b.active,'rage').remaining===7,'rage strength + constitution turns');b.acknowledge();
@@ -176,12 +180,10 @@ def test_combat_ui_and_social_isolation(tmp_path: Path) -> None:
  app.press(app.slot('Schody'));document.querySelector('[data-field="4,4"]').click();app.press(8);
  assert(m.s.preview.mode==='enhanced'&&m.active.charges===20,'mode is still a preview');app.press(28);
  assert(m.active.charges===12&&m.s.chain.entries[0].rune==='Schody','commit pays once and appends rune');
- assert(document.querySelector('.physical-dice'),'physical save roll UI');
- const input=document.querySelector('[data-die]');input.value='0';input.dispatchEvent(new Event('input',{bubbles:true}));
- assert(!app.bindings().get(28).enabled,'invalid physical die disables confirmation');
- input.value='20';input.dispatchEvent(new Event('input',{bubbles:true}));
+ assert(document.querySelector('.enemy-roll-notice')&&!document.querySelector('.physical-dice'),'enemy save uses automatic roll UI');
  document.querySelector('.decision [data-slot="28"]').click();
- assert(m.s.phase==='result'&&m.active.charges===12,'typing and one click confirm without duplicate charge');
+ assert(m.s.task.type==='enemy-result'&&m.active.charges===12,'one click resolves enemy save without duplicate charge');
+ app.press(28);assert(m.s.phase==='result','acknowledging enemy save finishes charge');
  assert(document.documentElement.scrollWidth<=innerWidth+1,'no horizontal overflow');
  const pane=document.querySelector('.decision'),board=document.getElementById('rune-board');
  assert(pane.getBoundingClientRect().bottom<=board.getBoundingClientRect().top,'decision is not hidden behind fixed controller');
@@ -191,6 +193,41 @@ def test_combat_ui_and_social_isolation(tmp_path: Path) -> None:
  assert(app.state.phase==='reputation'&&document.querySelectorAll('.reputation-options button').length===3,'existing reputation decisions unchanged');
  app.press(6);app.press(28);assert(app.state.reputation===17,'existing reputation cost unchanged');
  assert(m.snapshot()===state,'conversation does not mutate combat mock');
+ """)
+
+
+def test_chain_summary_shows_combined_bonuses_and_wave_copies(tmp_path: Path) -> None:
+    browser_check(tmp_path, r"""
+ const app=window.RunePrototype;app.startScene('combat');const m=app.combat.model;
+ const summary=()=>document.querySelector('.chain-bonus-summary');
+ const bonus=name=>document.querySelector(`[data-chain-bonus="${name}"] dd`)?.textContent;
+ assert(!summary(),'inactive resonance has no bonus summary');
+ m.addRune(m.active,'Schody');m.addRune(m.active,'Błysk');app.render();
+ assert(summary()&&summary().textContent.includes('Podsumowanie bonusów'),'visible summary inside resonance section');
+ assert(bonus('Schody').includes('+2 pkt ruchu')&&bonus('Błysk').includes('1k4 PW na początku tury'),'screenshot example explains movement and healing');
+ assert(document.querySelectorAll('[data-chain-bonus]').length===2,'only present bonuses shown');
+ m.addRune(m.active,'Schody');m.addRune(m.active,'Fala');m.addRune(m.active,'Fala');app.render();
+ assert(bonus('Schody').includes('+8 pkt ruchu'),'duplicate stairs and chained waves summed');
+ assert(!bonus('Fala')&&summary().textContent.includes('Kopie z Fali są już wliczone'),'wave counted in copied bonus, not as another effect');
+ for(const rune of ['Wieża','Grot','Hak','Oko','Kielich','Węzeł','Klepsydra']){
+   m.addRune(m.active,rune);m.addRune(m.active,rune);
+ }
+ m.damage(m.active,[{value:5,damage_type:'piercing'}],m.actor('enemy1'));
+ const before=m.snapshot();app.render();
+ assert(m.snapshot()===before,'rendering summary changes no resources, dice, queue or membership');
+ for(const [rune,text] of Object.entries({'Wieża':'+2 KP','Grot':'+2k4 obrażeń','Hak':'do 2 pól','Oko':'+2 do własnych rzutów k20','Kielich':'4 tymczasowych PW','Węzeł':'−2 pkt ruchu','Klepsydra':'4 pkt'})){
+   assert(bonus(rune)?.includes(text),'numeric combined bonus '+rune);
+ }
+ assert(document.querySelectorAll('[data-chain-bonus]').length===9,'one summary row per effective rune');
+ assert(bonus('Kielich').includes('Limit puli')&&bonus('Klepsydra').includes('Limit osłony'),'summary distinguishes pool limits from remaining amounts');
+ assert(m.active.cup===3&&m.active.shield===0,'showing full pool limit does not refill consumed shields');
+ assert(bonus('Klepsydra').includes('psychicznymi')&&bonus('Oko').includes('nie do ST'),'important exceptions remain visible');
+ assert(document.querySelector('.resonance-chain').textContent.includes('Pozostali dołączą na początku swojej tury'),'membership scope still explained');
+ assert(document.documentElement.scrollWidth<=innerWidth+1,'summary does not create horizontal overflow');
+ m.restore(before);app.render();assert(bonus('Schody').includes('+8 pkt ruchu'),'summary survives save restoration');
+ m.endChain('test');app.render();assert(!summary()&&!document.querySelector('[data-chain-bonus]'),'expired bonuses disappear');
+ m.addRune(m.active,'Fala');app.render();
+ assert(summary().textContent.includes('Brak bonusów')&&!document.querySelector('[data-chain-bonus]'),'leading wave explicitly grants no bonus');
  """)
 
 
@@ -269,6 +306,8 @@ def test_dice_are_confirmed_individually_and_partial_rolls_survive_reload(tmp_pa
  const roll=value=>{input().value=String(value);input().dispatchEvent(new Event('input',{bubbles:true}));app.press(28);};
  assert(document.querySelectorAll('.physical-dice input').length===1,'one visible die for advantage');
  assert(document.querySelector('[data-dice-progress]').textContent.includes('1 z 2'),'first d20 counter');
+ input().value='0';input().dispatchEvent(new Event('input',{bubbles:true}));
+ assert(!app.bindings().get(28).enabled,'invalid physical die disables confirmation');
  const attack=m.s.task;roll(14);
  assert(m.s.task===attack&&attack.diceResults[0]===14&&m.actor('enemy1').hp===45,'first accept stores die without resolving attack');
  assert(document.querySelector('[data-dice-progress]').textContent.includes('2 z 2'),'accept shows second d20');
@@ -308,13 +347,104 @@ def test_dice_are_confirmed_individually_and_partial_rolls_survive_reload(tmp_pa
  """)
 
 
+def test_enemy_rolls_pause_movement_and_store_results_once(tmp_path: Path) -> None:
+    browser_check(tmp_path, HELPERS + r"""
+ const moving=()=>{
+   const m=create();m.actor('enemy1').pos={x:3,y:4};m.actor('enemy3').pos={x:3,y:3};
+   assert(m.choose('move')&&m.select({x:1,y:4})&&m.commit(),'movement triggers two enemy reactions');
+   return m;
+ };
+ const m=moving(),hp=m.active.hp,position={...m.active.pos};
+ assert(m.isEnemyRoll()&&m.s.task.power==='opportunity'&&m.s.task.actor==='enemy1','first enemy is announced');
+ assert(m.actor('enemy1').reaction&&m.active.hp===hp&&m.active.pos.x===position.x,'notice has no reaction cost, damage or movement');
+ const pending=m.snapshot();m.restore(pending);
+ assert(!m.submitDie(20)&&!m.submit([20]),'enemy cannot use manual player input');
+ let bad=[16,0];assert(!m.confirmEnemyRoll(()=>bad.shift())&&m.snapshot()===pending,'invalid generated damage rolls back attack and reaction');
+ let dice=[16,4],calls=0;
+ assert(m.confirmEnemyRoll(()=>{calls++;return dice.shift();}),'one accept resolves attack and damage');
+ assert(calls===2&&m.s.task.type==='enemy-result'&&m.s.task.rolls.length===2,'complete automatic attack result');
+ assert(m.s.task.rolls[0].total===18&&m.s.task.rolls[1].loss.hp===6,'modifier and damage applied correctly');
+ assert(m.active.hp===hp-6&&!m.actor('enemy1').reaction&&m.actor('enemy3').reaction,'only first reaction consumed');
+ assert(m.active.pos.x===position.x,'movement waits while result is shown');
+ const result=m.snapshot();m.restore(result);
+ assert(!m.confirmEnemyRoll(()=>{throw Error('reroll');})&&m.snapshot()===result,'result reload and repeated roll cannot change outcome');
+ m.acknowledgeEnemyResult();assert(m.isEnemyRoll()&&m.s.task.actor==='enemy3','next opponent waits for its own accept');
+ calls=0;m.confirmEnemyRoll(()=>{calls++;return 1;});
+ assert(calls===1&&!m.s.task.rolls[0].success&&m.s.task.rolls.length===1,'natural-one miss never rolls damage');
+ assert(m.active.hp===hp-6&&m.active.pos.x===position.x,'miss result also pauses movement');
+ m.acknowledgeEnemyResult();drain(m);
+ assert(m.active.pos.x===1&&m.active.charges===20&&m.active.ordinary&&m.active.special,'both reactions finish before movement; no action/charge cost');
+ assert(!m.actor('enemy1').reaction&&!m.actor('enemy3').reaction,'both reactions spent exactly once');
+ // A lethal reaction stops the path and skips later reactions against the downed hero.
+ const lethal=moving();lethal.active.hp=1;dice=[20,6,6];lethal.confirmEnemyRoll(()=>dice.shift());
+ assert(lethal.active.hp===0&&lethal.s.task.rolls[1].parts[0].count===2,'enemy natural 20 rolls critical damage automatically');
+ lethal.acknowledgeEnemyResult();drain(lethal);
+ assert(lethal.active.pos.x===2&&lethal.actor('enemy3').reaction,'downed hero stays at interruption tile; later enemy does not react');
+ // Ordinary enemy attacks also use application rolls, with advantage/disadvantage.
+ const enemyTurn=()=>{
+   const e=create();e.actor('enemy1').pos={x:3,y:4};e.s.index=e.s.order.indexOf('enemy1');e.beginTurn();return e;
+ };
+ const adv=enemyTurn();adv.active.hidden=['garran'];play(adv,'attack','base','garran');
+ // An older partial manual enemy roll is retained, but remaining dice are automatic.
+ adv.s.task.diceResults=[2];adv.restore(adv.snapshot());dice=[20,4,3];adv.confirmEnemyRoll(()=>dice.shift());
+ assert(adv.s.task.rolls[0].natural===20&&adv.s.task.rolls[0].dice.flat().join(',')==='2,20','advantage and saved first die respected');
+ assert(adv.s.task.rolls[1].loss.hp===9&&!adv.active.ordinary&&adv.active.reaction,'ordinary attack costs no reaction');
+ const dis=enemyTurn();dis.addStatus(dis.active,'fear');play(dis,'attack','base','garran');dice=[20,1];dis.confirmEnemyRoll(()=>dice.shift());
+ assert(dis.s.task.rolls[0].natural===1&&!dis.s.task.rolls[0].success&&!dis.status(dis.active,'fear'),'disadvantage and single-use fear respected');
+ // Automatic physical damage still passes through rage and both resonance pools.
+ const protectedHero=create('brakka');protectedHero.actor('enemy1').pos={x:3,y:4};
+ protectedHero.addStatus(protectedHero.active,'rage',{remaining:7});protectedHero.addRune(protectedHero.active,'Kielich');protectedHero.addRune(protectedHero.active,'Klepsydra');
+ assert(protectedHero.choose('move')&&protectedHero.select({x:1,y:4})&&protectedHero.commit(),'protected hero provokes attack');
+ dice=[20,6,5];protectedHero.confirmEnemyRoll(()=>dice.shift());const damage=protectedHero.s.task.rolls[1];
+ assert(damage.components[0].value===13&&damage.loss.hp===2&&damage.loss.cup===2&&damage.loss.shield===2,'13 damage halves then consumes shield and temporary HP');
+ """)
+
+
+def test_enemy_opportunity_notice_highlight_and_result_ui(tmp_path: Path) -> None:
+    browser_check(tmp_path, r"""
+ const app=window.RunePrototype;app.startScene('combat');const m=app.combat.model;
+ m.actor('enemy1').pos={x:3,y:4};const hp=m.active.hp;app.render();
+ let calls=0;const random=Math.random;Math.random=()=>{calls++;return calls===1?0.775:0.584;};
+ try{
+   app.press(0);app.combat.selectField(1,4);
+   document.querySelector('.charge-initiative').scrollTop=400;app.press(28);
+   assert(document.querySelector('.decision h1').textContent==='Atak okazyjny przeciwnika','enemy opportunity notice title');
+   assert(document.querySelector('.enemy-roll-notice')&&!document.querySelector('[data-die]'),'no physical die input for enemy');
+   assert(document.querySelector('.combat-lab').open&&document.querySelector('.charge-initiative').scrollTop===0,'board opens and scrolls into view');
+   assert(document.querySelector('.mock-cell.enemy-focus').dataset.field==='3,4','attacking enemy highlighted on board');
+   assert(document.querySelector('.initiative-entry.enemy-focus').textContent.includes('Strażnik'),'enemy also identified in initiative');
+   assert(m.active.id==='garran'&&calls===0&&m.active.hp===hp,'notice does not change turn or roll dice');
+   const pending=m.snapshot();app.press(29);app.press(app.slot('Gwiazda'));app.press(29);app.render();
+   assert(m.snapshot()===pending&&calls===0,'back, information and rendering do not roll');
+   const accept=app.bindings().get(28);document.querySelector('.decision').scrollTop=100;app.press(28);
+   assert(calls===2&&document.querySelector('.enemy-roll-result'),'accept automatically rolls attack and damage');
+   assert(document.querySelector('.decision').scrollTop===0,'result starts at top after scrolled notice');
+   accept.fn();assert(calls===2&&m.s.task.type==='enemy-result','stale accept callback cannot reroll or advance result');
+   assert(document.querySelector('.enemy-roll-result').textContent.includes('Trafienie')&&document.querySelector('.enemy-roll-result').textContent.includes('Utrata PW: 6'),'hit and actual damage shown');
+   assert(!document.querySelector('[data-die]')&&document.querySelector('.mock-cell.enemy-focus'),'result has no editable dice and keeps highlight');
+   assert(m.active.hp===hp-6&&m.active.pos.x===2,'damage applied but movement still paused');
+   const result=m.snapshot();m.restore(result);app.render();app.press(app.slot('Gwiazda'));app.press(29);
+   assert(calls===2&&m.snapshot()===result,'reloaded result and information never reroll');
+   app.press(28);
+   assert(m.active.pos.x===1&&m.active.hp===hp-6&&calls===2,'second accept continues movement without rerolling');
+   assert(!document.querySelector('.mock-cell.enemy-focus')&&!document.querySelector('.initiative-entry.enemy-focus'),'highlight cleared after reaction');
+   assert(document.documentElement.scrollWidth<=innerWidth+1,'enemy result does not cause horizontal overflow');
+ }finally{Math.random=random;}
+ """)
+
+
 def test_hooks_reactions_rounds_and_failure_boundaries(tmp_path: Path) -> None:
     browser_check(tmp_path, HELPERS + r"""
  // Basic area resolves all damage, then one Hook per distinct victim, then closes.
  const n=create('nimra');n.active.pos={x:3,y:4};n.actor('enemy2').pos={x:4,y:3};
  n.addRune(n.active,'Hak');n.addRune(n.active,'Hak');
  assert(n.choose('force_wave')&&n.exclude(null)&&n.commit(),'basic area with inherited Hooks');
- let count=0;while(n.s.task?.type==='roll'){assert(++count<30,'area roll loop bounded');n.submit(n.s.task.parts.map(p=>p.count));}
+ let count=0;while(['roll','enemy-result'].includes(n.s.task?.type)){
+   assert(++count<40,'area roll loop bounded');
+   if(n.s.task.type==='enemy-result')n.acknowledgeEnemyResult();
+   else if(n.isEnemyRoll())n.confirmEnemyRoll(()=>1);
+   else n.submit(n.s.task.parts.map(p=>p.count));
+ }
  assert(n.s.task.type==='relocate'&&n.s.task.radius===2&&n.s.chain,'Hooks wait until all damage; two copies extend range');
  const victim=n.actor(n.s.task.target),original={...victim.pos},hp=victim.hp,charges=n.active.charges;
  const fields=n.relocationFields(n.s.task);n.select(fields[0]);n.cancel();
@@ -323,7 +453,7 @@ def test_hooks_reactions_rounds_and_failure_boundaries(tmp_path: Path) -> None:
  drain(n);assert(!n.s.chain,'chain closes after entire Hook queue');
  // Miss has no Hook. Successful bash displaces before Hook from the new position.
  const g=create();g.actor('enemy1').pos={x:3,y:4};g.addRune(g.active,'Hak');
- play(g,'shield_bash','base','enemy1');g.submit([1]);g.submit([20]);g.submit(g.s.task.parts.map(p=>p.count));
+ play(g,'shield_bash','base','enemy1');g.confirmEnemyRoll(()=>1);g.acknowledgeEnemyResult();g.submit([20]);g.submit(g.s.task.parts.map(p=>p.count));
  assert(g.s.task.label==='Impuls egidy','power relocation before Hook');
  g.select({x:4,y:4});g.confirmRelocation();assert(g.s.task.label==='Rezonans runy Hak'&&g.actor('enemy1').pos.x===4,'Hook starts at displaced position');
  drain(g);
@@ -339,6 +469,8 @@ def test_hooks_reactions_rounds_and_failure_boundaries(tmp_path: Path) -> None:
  const o=create('mira');o.active.hidden=['enemy1'];o.actor('enemy1').pos={x:3,y:4};o.actor('enemy3').pos={x:3,y:3};
  assert(o.choose('guard_vault')&&o.selectTarget('enemy2')&&o.select({x:7,y:3})&&o.commit(),'mixed-observer Parkour');
  assert(o.s.task?.outcome==='attack'&&o.s.task.actor==='enemy3','visible observer can react while hidden observer cannot');
+ assert(o.actor('enemy1').reaction&&o.actor('enemy3').reaction,'reaction waits for enemy attack confirmation');
+ o.confirmEnemyRoll(()=>1);
  assert(o.actor('enemy1').reaction&&!o.actor('enemy3').reaction,'per-observer reaction budgets');
  drain(o);
  const e=create();e.actor('enemy1').pos={x:3,y:4};e.s.index=e.s.order.indexOf('enemy1');e.beginTurn();

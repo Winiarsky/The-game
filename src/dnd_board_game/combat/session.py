@@ -14,6 +14,7 @@ from dnd_board_game.inventory import (
 from dnd_board_game.world import Coordinate, PathResult
 from dnd_board_game.rules import ActiveEffect
 from dnd_board_game.rules.shared_mana import SharedMana
+from dnd_board_game.rules.resonance import ChargeState
 
 from .action_economy import ActionEconomyCost, ActionUse, consume_action
 from .conditions import (
@@ -293,6 +294,7 @@ class CombatState:
     enemy_ai: EnemyAiRuntimeState = EnemyAiRuntimeState()
     damage_received_by_actor: tuple[tuple[str, int], ...] = ()
     shared_mana: SharedMana | None = None
+    resonance: "ChargeState | None" = None
 
     @property
     def round_number(self) -> int:

@@ -276,7 +276,7 @@ def create_app(
                  ("sciaga_graczy_A4.pdf", "materials_rules"),
                  ("znaczniki_A4.pdf", "materials_tokens"))
         return render_template("session_materials.html", materials=[
-            dict(filename=name, label=label, exists=(DEFAULT_PACK / "print" / ("runy_koszyki_v01/" + name if name == "karty_postaci_A4.pdf" else name)).is_file())
+            dict(filename=name, label=label, exists=(DEFAULT_PACK / "print" / ("runy_ladunki_v02/" + name if name == "karty_postaci_A4.pdf" else name)).is_file())
             for name, label in files])
 
     @app.get("/session-materials/<path:filename>")
@@ -286,7 +286,7 @@ def create_app(
                             "karty_postaci_A4.pdf", "sciaga_graczy_A4.pdf", "znaczniki_A4.pdf"}:
             abort(404)
         if filename == "karty_postaci_A4.pdf":
-            return send_from_directory(DEFAULT_PACK / "print/runy_koszyki_v01", filename)
+            return send_from_directory(DEFAULT_PACK / "print/runy_ladunki_v02", filename)
         return send_from_directory(DEFAULT_PACK / "print", filename)
 
     @app.get("/new-game")
@@ -1554,6 +1554,9 @@ def create_app(
         # A dice overlay belongs to one decision; a game command invalidates it.
         if request.method == "POST" and request.path.startswith("/api/") and not request.path.startswith("/api/board/"):
             session.board_panel_context = None
+        if (session.combat_state and session.combat_state.resonance and request.method == "POST"
+                and request.path.startswith("/api/combat/") and request.path != "/api/combat/resonance"):
+            return jsonify({"error": "Ta walka korzysta z panelu Ładunki i Rezonans."}), 409
         return guard_exploration_lesson()
 
     @app.teardown_request
@@ -1743,6 +1746,14 @@ def create_app(
                 )
             )
         except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/combat/resonance")
+    def resonance_command():
+        from .resonance import command
+        try:
+            return jsonify(command(session, request.get_json() or {}))
+        except (ValueError, TypeError, KeyError) as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
     @app.post("/api/combat/shared-mana")

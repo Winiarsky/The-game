@@ -143,7 +143,7 @@ from dnd_board_game.scenarios.content_contract import (
 
 
 SNAPSHOT_SCHEMA = "dnd_board_game.session"
-SNAPSHOT_SCHEMA_VERSION = 33
+SNAPSHOT_SCHEMA_VERSION = 34
 
 
 def _migrate_snapshot_v1_to_v2(data: dict[str, Any]) -> dict[str, Any]:
@@ -582,6 +582,14 @@ def _migrate_snapshot_v32_to_v33(data: dict[str, Any]) -> dict[str, Any]:
     return migrated
 
 
+def _migrate_snapshot_v33_to_v34(data: dict[str, Any]) -> dict[str, Any]:
+    migrated = dict(data, schema_version=34)
+    if isinstance(migrated.get("combat"), dict):
+        migrated["combat"] = dict(migrated["combat"])
+        migrated["combat"].setdefault("resonance", None)
+    return migrated
+
+
 _SNAPSHOT_MIGRATIONS = MigrationRegistry(
     schema=SNAPSHOT_SCHEMA,
     current_version=SNAPSHOT_SCHEMA_VERSION,
@@ -618,6 +626,7 @@ _SNAPSHOT_MIGRATIONS.register(29, _migrate_snapshot_v29_to_v30)
 _SNAPSHOT_MIGRATIONS.register(30, _migrate_snapshot_v30_to_v31)
 _SNAPSHOT_MIGRATIONS.register(31, _migrate_snapshot_v31_to_v32)
 _SNAPSHOT_MIGRATIONS.register(32, _migrate_snapshot_v32_to_v33)
+_SNAPSHOT_MIGRATIONS.register(33, _migrate_snapshot_v33_to_v34)
 
 
 class SnapshotValidationError(ValueError):
@@ -2572,6 +2581,7 @@ def _combat_payload(state: CombatState | None) -> dict[str, object] | None:
         return None
     return {
         "shared_mana": state.shared_mana.as_payload() if state.shared_mana else None,
+        "resonance": state.resonance.as_payload() if state.resonance else None,
         "actors": [_actor_payload(actor) for actor in state.actors],
         "initiative": {
             "current_index": state.initiative_order.current_index, "round_number": state.initiative_order.round_number,
@@ -2830,9 +2840,16 @@ def _combat_from_payload(raw: object) -> CombatState | None:
     turn = _mapping(data.get("turn_action"), "combat.turn_action")
     enemy_ai_raw = _mapping(data.get("enemy_ai", {}), "combat.enemy_ai")
     from dnd_board_game.rules.shared_mana import SharedMana
+    from dnd_board_game.rules.resonance import ChargeState
     mana_raw = data.get("shared_mana")
+    charge_raw = data.get("resonance")
+    charge = ChargeState.from_payload(_mapping(charge_raw, "combat.resonance"), set(by_id)) if charge_raw is not None else None
+    if charge and (charge.order != [str(entry.actor.id) for entry in entries]
+                   or charge.index != current_index or charge.round != initiative.get("round_number")):
+        raise SnapshotValidationError("Stan Rezonansu nie odpowiada inicjatywie walki.")
     return CombatState(
         shared_mana=SharedMana.from_payload(_mapping(mana_raw, "combat.shared_mana")) if mana_raw is not None else None,
+        resonance=charge,
         actors=actors,
         initiative_order=InitiativeOrder(
             tuple(entries), current_index, _integer(initiative.get("round_number"), "initiative.round_number")

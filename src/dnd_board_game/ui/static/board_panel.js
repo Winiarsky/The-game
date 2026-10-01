@@ -11,6 +11,7 @@ function rollPanelSlots(wizard) {
 function desiredBoardPanel() {
   const sessionPanel = typeof SessionNavigation !== 'undefined' ? SessionNavigation.panel() : null;
   if (sessionPanel) return sessionPanel;
+  if (state?.combat?.resonance) return null;
   const detailPanel = typeof confrontationDetailPanel === 'function' ? confrontationDetailPanel() : null;
   if (detailPanel) return detailPanel;
   if (['initiative_start', 'initiative_roll'].includes(state?.board_selection?.mode)) return null;

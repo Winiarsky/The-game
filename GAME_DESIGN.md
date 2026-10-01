@@ -1,5 +1,12 @@
 # Game Design
 
+## Wdrożenie walki — 30.09.2026
+
+Zaakceptowane karty i mock mają implementację Python/UI/LED dla nowych
+walk Misji 0 i swobodnej areny. Mechanika: `docs/RESONANCE_RUNTIME_SPEC.md`.
+Test ręczny: `docs/playtests/RESONANCE_RUNTIME_MANUAL.md`.
+Poniższe wpisy o etapie „tylko mock” są historyczne. Eksploracja bez zmian.
+
 ## Mock walki — 29.09.2026
 
 Nowy profil jest dostępny do ogrania w `docs/ui/prototype.html`, wyłącznie

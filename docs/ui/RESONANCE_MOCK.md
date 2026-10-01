@@ -1,6 +1,6 @@
 # Walka: makieta ładunków i ciągłego Rezonansu
 
-Aktualizacja: 29.09.2026. [Otwórz makietę](prototype.html?scene=combat).
+Aktualizacja: 30.09.2026. [Otwórz makietę](prototype.html?scene=combat).
 
 Zmiana obejmuje wyłącznie walkę w `prototype.html`. Rozmowy, reputacja,
 przygotowanie wyprawy i eksploracja zachowują wcześniejszy przebieg.
@@ -21,22 +21,35 @@ aplikacja nadal korzysta ze swojego dotychczasowego modelu walki.
 4. W podglądzie wybierz **Podstawowa** (Rozwidlenie) albo **Wzmocniona**
    (Trójząb). Widać pełny koszt ze skazą i przyszłą liczbę ładunków.
    ✓ opłaca i uruchamia moc; ↩ wcześniej anuluje bez kosztu.
-5. Wprowadzaj wynik **jednej kości naraz**, bez modyfikatora. +/− ustawia
+5. Dla bohaterów wprowadzaj wynik **jednej kości naraz**, bez modyfikatora. +/− ustawia
    wynik, a ✓ zatwierdza go i pokazuje następną kość. Dotyczy to różnych
    składników obrażeń, puli 2k6/3k12 oraz dwóch k20 przy przewadze lub
    utrudnieniu. Dopiero ostatnie ✓ rozlicza cały rzut i dolicza premie;
    wcześniej zatwierdzone wyniki pozostają widoczne i są zachowane w zapisie.
-6. Dokończ kolejkę obron, obrażeń, przesunięć i odzysku, następnie wróć
+6. Za przeciwników rzuca aplikacja. Przy ataku okazyjnym najpierw zobaczysz
+   komunikat, a symulator automatycznie otworzy się i wyróżni pole atakującego
+   jasną czerwoną ramką. ✓ losuje atak oraz, po trafieniu, obrażenia.
+   Wynik pokazuje kości, modyfikatory, trafienie/pudło i rzeczywistą utratę PW
+   po odporności i osłonach. Następne ✓ wznawia ruch albo pokazuje kolejnego
+   reagującego wroga. Przy 0 PW ruch ustaje na polu przerwania.
+   Tak samo automatyczne są zwykłe ataki wrogów i ich rzuty obronne / przeciwstawne.
+7. Dokończ kolejkę obron, obrażeń, przesunięć i odzysku, następnie wróć
    do swojej tury. Po opłacie nie ma zwrotu zasobów przez cofnięcie.
 
 Gwiazda pokazuje aktualne PW, KP, ładunki, osłony, stany, pasyw, odzysk,
 skazę i wyposażenie. Otwieranie informacji nie zmienia podglądu ani opłat.
 W spoczynku −/+ przegląda uczestników bez zmiany aktywnej tury.
 
+Sekcja aktywnego Rezonansu pokazuje pod torem run **podsumowanie bonusów**
+z konkretnymi sumami: KP, kości obrażeń / leczenia, ruch, zasięg Haka i pule
+osłon. Kopie z Fali są już wliczone. Kielich i Klepsydra pokazują tu limity
+pul; pozostałe punkty są przy bohaterze. Po wygaśnięciu Rezonansu podsumowanie znika.
+
 W panelu testowym można rozpocząć nową próbę od dowolnego z siedmiu
 bohaterów. To **reset przykładu**, nie darmowa zmiana postaci w środku tury.
 „Zapisz próbę” / „Wczytaj próbę” używają osobnego wpisu `localStorage`.
-Zapis obejmuje również opłaconą akcję, oczekujący rzut, Hymn i kolejkę Haka;
+Zapis obejmuje również opłaconą akcję, oczekujący rzut, Hymn, kolejkę Haka
+i wylosowane wyniki przeciwników. Powrót z informacji nie losuje ponownie;
 wczytanie nie ponawia efektów ani nie wykonuje oczekującego zatwierdzenia.
 
 ## Co można sprawdzić
@@ -60,10 +73,12 @@ wczytanie nie ponawia efektów ani nie wykonuje oczekującego zatwierdzenia.
   dostępne także przy udanym rzucie, aby odbiorca mógł sam wybrać użycie.
 - Jawne pominięcie stworzenia / „Nie pomijaj” w obszarówkach Nimry,
   Strefa ognia 3×3, wspólna kość obrażeń i oddzielne obrony.
-- Przeciwnicy mają własne tury, ruch i ręcznie rozstrzygane ataki.
+- Przeciwnicy mają własne tury; ruch i cele ataków nadal wybierasz ręcznie,
+  natomiast wszystkie ich kości losuje aplikacja dopiero po ✓.
   Okazyjne bohaterów można przyjąć lub odrzucić, bez kosztu ładunków;
-  przeciwnicy korzystają z dostępnej reakcji automatycznie. Rzuty nadal
-  wymagają potwierdzenia. Rezonans działa w reakcjach, również Hak.
+  przeciwnicy korzystają z dostępnej reakcji po potwierdzeniu zapowiedzi.
+  Nie można pominąć ich reakcji; potwierdzenie wyniku nie powtarza rzutu
+  ani obrażeń. Rezonans działa w reakcjach, również Hak.
 
 ## Jawne założenia i granice próby
 
@@ -97,7 +112,8 @@ w ramach próby i jej zapisu Hymn nie wygasa przy rundzie ani końcu łańcucha.
 - `resonance-data.js`: generowane dane kart i startowych statystyk, bez
   modyfikowania danych rozmów w `rune-prototype-data.js`.
 - `resonance-model.js`: deterministyczny stan i serializowalna kolejka
-  wyłącznie symulacji; nie importować tego modułu do silnika Python.
+  wyłącznie symulacji. Generator kości przeciwników dostarcza adapter UI;
+  odczyt / odtworzenie stanu nie losuje. Nie importować do silnika Python.
 - `resonance-prototype.js` / `.css`: prezentacja i wejście mocka.
 - `rune-prototype.js`: istniejąca powłoka, routowanie walki do nowego modułu.
 

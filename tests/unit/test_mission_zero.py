@@ -17,10 +17,15 @@ from dnd_board_game.rules import D20RollRequest
 PACK=Path('content/scenarios/misja_0_dzwon')
 HEROES=('garran','brakka','dagna','mira','lorian','erynd')
 
-def session(tmp_path, count=3):
+def session(tmp_path, count=3, *, legacy_combat=True):
     s=ExplorationUiSession(PACK/'scenario.json',save_dir=tmp_path/'saves',observation_dir=tmp_path/'logs')
     s.configure_custom_party(tuple(training_hero(h) for h in HEROES[:count]))
     m.initialize(s)
+    # Historical mission/rune tests retain their original rules profile. New
+    # integration tests pass legacy_combat=False to exercise the production default.
+    if legacy_combat:
+        from dnd_board_game.combat.scene import SceneFlags
+        s.state=replace(s.state,flags=SceneFlags((*s.state.flags.values,('combat_rules_profile','rune_baskets_v02'))))
     return s
 
 def send(s,action,**kwargs):

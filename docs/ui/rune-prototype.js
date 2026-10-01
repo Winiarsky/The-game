@@ -564,7 +564,7 @@
   function render() {
     bindings=new Map();
     const resonanceCombat=S.scene==='combat';
-    const previousFlow=$('.decision')?.dataset.combatFlow,previousRight=$('.decision')?.scrollTop??0,previousLeft=$('.charge-initiative')?.scrollTop??0;
+    const previousFlow=$('.decision')?.dataset.combatFlow,previousRight=$('.decision')?.scrollTop??0,previousLeft=$('.charge-initiative')?.scrollTop??0,previousEnemyFocus=$('.charge-initiative')?.dataset.enemyFocus;
     const journalEntries=[...S.log,...(chargeCombat.model?.s.history??[])];
     document.body.classList.toggle('resonance-combat',resonanceCombat);
     const views={start:startView,setup:setupView,equipment:equipmentView,story:storyView,
@@ -580,7 +580,8 @@
     if(resonanceCombat){
       const flow=chargeCombat.flowKey();$('.decision').dataset.combatFlow=flow;
       if(flow===previousFlow)$('.decision').scrollTop=previousRight;
-      $('.charge-initiative').scrollTop=previousLeft;
+      const enemyFocus=$('.charge-initiative').dataset.enemyFocus;
+      $('.charge-initiative').scrollTop=enemyFocus&&enemyFocus!==previousEnemyFocus?0:previousLeft;
     }
     if(!bindings.has(26))bind(26,'Przewiń w dół',()=>scrollContent(1));
     if(!bindings.has(27))bind(27,'Przewiń w górę',()=>scrollContent(-1));

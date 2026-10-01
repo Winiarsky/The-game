@@ -2,7 +2,7 @@
   "version": 2,
   "profile": "rune_charges_v02",
   "source": "system_run_v0.2_ladunki_i_rezonans.md",
-  "stage": "cards_only",
+  "stage": "runtime",
   "rules": {
     "start_charges": 20,
     "max_charges": 20,

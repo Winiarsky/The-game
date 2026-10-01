@@ -1,5 +1,27 @@
 ## Karty ładunków v0.2 — 24.09.2026
 
+- [x] 30.09: przenieść zaakceptowaną walkę do Python/UI: wszystkie 29 mocy,
+  pasywy/skazy, Rezonans i premie, kolejki reakcji/przesunięć, indywidualne
+  kości gracza i automatyczne rzuty przeciwników; panel, LED-y oraz zapis 34.
+- [x] Przygotować izolowany launcher `scripts/resonance_playtest.py`,
+  tryb symulatora/sprzętu i instrukcję `docs/playtests/RESONANCE_RUNTIME_MANUAL.md`.
+- [ ] Wykonać próby stołowe z fizyczną planszą według instrukcji: opóźnienia
+  wejść, czytelność kolorów, przerwane ruchy i powrót po wczytaniu.
+- [ ] Po teście ręcznym ocenić balans kosztów 4/8, skaz i odzysku 1k4.
+- [ ] Zaktualizować historyczny test
+  `test_mission_zero.py::test_guild_destinations_use_tile_fields_and_arena_is_informational`:
+  pomija istniejący już w HEAD przycisk powrotu (slot 29) w skanie gildii.
+  Nie zmieniać przy tej okazji eksploracji w ramach wdrożenia walki.
+
+- [x] 30.09: pod torem Rezonansu w mocku pokazać liczbowe podsumowanie
+  aktywnych bonusów, z sumowaniem kopii i Fali oraz rozróżnieniem limitów
+  osłon od ich pozostałych pul. Bez zmiany mechaniki.
+
+- [x] 30.09: w mocku aplikacja rzuca za przeciwników (atak, obrażenia,
+  obrona i test przeciwstawny). Okazyjny: zapowiedź i podświetlenie wroga
+  → ✓ → pełny wynik → ✓ → dalszy ruch / następna reakcja. Wyniki zachowane
+  w zapisie, bez ponownego losowania; ręczne kości tylko dla bohaterów.
+
 - [x] Rzuty w mocku walki: jedna kość → ✓ → następna kość, również
   wewnątrz puli 2k6 i przy przewadze/utrudnieniu. Skutki dopiero po ostatniej
   kości; zapis próby zachowuje dotychczas zatwierdzone wyniki.
@@ -9,14 +31,14 @@
   stany, koszty/skazy, odzysk, reakcje oraz kolejki wskazywania pól.
   Dodać symulator pól i niezależny zapis próby; zachować rozmowy/reputację.
   Zakres, założenia i instrukcja: `docs/ui/RESONANCE_MOCK.md`.
-- [ ] Ograć i zatwierdzić mock walki z użytkownikiem. Dopiero potem
+- [x] Ograć i zatwierdzić mock walki z użytkownikiem. Dopiero potem
   przenieść zaakceptowane mechaniki do Python/UI aplikacji i planszy;
   testować rzeczywiste zdarzenia, zapis, powtórzenia i geometrię areny.
 
 - [x] 29.09: zaktualizować karty Brakki, Miry, Dagny, Loriana i Nimry;
   Erynd bez zmian. ST jako formuły, Szał i krytyk Brakki, Parkour/ukrycie
   Miry, bezterminowy Hymn, Precyzyjny splot i Strefa ognia 3×3. Odświeżyć PDF.
-- [ ] W kolejnym kroku wdrożyć mechaniki z przeglądu 29.09:
+- [x] W kolejnym kroku wdrożyć mechaniki z przeglądu 29.09:
   krytyk i Szał Brakki, ukrycie per obserwator i Parkour z kolejką okazyjnych,
   terminy Więzów, decyzję Hymnu po k20, wybór pominięcia i obszar 3×3 Nimry.
   Notatki i przypadki akceptacyjne: `docs/RESONANCE_RUNTIME_SPEC.md`.
@@ -28,7 +50,7 @@
   stronie 1, formatowanie pasywu i odzysku, usunięcie wspólnego dopisku.
   Pionowa strona 2: jeden cel 60×54 mm i pięć okręgów postępu po prawej.
   Usunięta sekcja obsługi; wszystkie bonusy run na stronie 4.
-- [ ] Przy wdrożeniu walki ładunków zrealizować stany Żywej osłony i
+- [x] Przy wdrożeniu walki ładunków zrealizować stany Żywej osłony i
   Powalonego oraz wybór/podgląd/zatwierdzenie Impulsu i Szarży zgodnie z
   `docs/RESONANCE_RUNTIME_SPEC.md`; sprawdzić zapis i powtórzoną akceptację.
 
@@ -61,12 +83,12 @@
   Specyfikacja `docs/RESONANCE_RUNTIME_SPEC.md` zawiera kolejkę Haka i przypadki testowe.
 - [x] Przegląd postać po postaci: korekty Garrana 27.09 i pozostałych
   bohaterów 29.09 zapisane na kartach; Erynd zaakceptowany bez zmian.
-- [ ] Przed wdrożeniem do silnika zamknąć jawne doprecyzowania w specyfikacji (wzrost premii
+- [x] Przed wdrożeniem do silnika zamknąć jawne doprecyzowania w specyfikacji (wzrost premii
   wcześniejszych uczestników, brzegowe Fale, pule osłon i legalność przeniesień).
-- [ ] Omówić karty z użytkownikiem, następnie wdrożyć ładunki i przekazywany
+- [x] Omówić karty z użytkownikiem, następnie wdrożyć ładunki i przekazywany
   Rezonans **tylko w walce**, zachowując wcześniejszą makietę i eksplorację.
   Wyświetlać liczbę ładunków bohatera; fizyczny licznik gracza to pokrętło.
-  Osobno rozstrzygnąć pomijane tury nieprzytomnych bohaterów i balans kosztów.
+  Pominięta tura nieprzytomnego nie przerywa łańcucha; balans pozostaje do ogrania.
 - [ ] Uporządkować stary fixture `tests/unit/test_board_panel_runtime.py`:
   helper `begin()` usuwa pulę run, pozostawiając postaci z profilem runicznym.
   22 przypadki zatrzymują się przed kontrolą panelu na `ActionEconomyCost('special')`.

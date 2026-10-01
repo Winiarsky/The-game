@@ -194,6 +194,7 @@ const TabletopCombat = (() => {
     return template.innerHTML;
   }
   function html(view) {
+    if (typeof ChargeCombat !== 'undefined' && ChargeCombat.enabled()) return ChargeCombat.html();
     const combat = view.combat;
     const key = `${combat.round_number}:${combat.current_actor?.id}`;
     if (key !== turnKey) { inspected = ''; effectPage = 0; scrollActor = combat.current_actor?.id || ''; turnKey = key; }
@@ -202,6 +203,7 @@ const TabletopCombat = (() => {
       <div class="tt-mana-layer">${manaLayerHtml(combat)}</div>`;
   }
   function canBrowse() {
+    if (state?.combat?.resonance) return false;
     if (!enabled() || keyboardRollWizard || resultAck || document.querySelector('dialog[open]')) return false;
     const combat = state.combat, mana = combat.shared_mana;
     if (combat.status !== 'active' || combat.shield_bash || combatInterruptPresentation(combat)) return false;
@@ -225,6 +227,7 @@ const TabletopCombat = (() => {
     inspected = actorId; effectPage = 0; scrollActor = actorId; repaint(); return true;
   }
   function handleSlot(slot) {
+    if (typeof ChargeCombat !== 'undefined' && ChargeCombat.enabled()) return ChargeCombat.handleSlot(slot);
     if (!canBrowse()) return false;
     if (slot === 25 && !inspected) return inspect(current());
     if (!inspected) {
@@ -242,6 +245,7 @@ const TabletopCombat = (() => {
     return true;
   }
   function afterRender() {
+    if (typeof ChargeCombat !== 'undefined') ChargeCombat.afterRender();
     const list = document.querySelector('.tt-roster');
     if (!list) return;
     list.scrollTop = scrollTop;

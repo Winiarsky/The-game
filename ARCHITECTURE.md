@@ -2,6 +2,20 @@
 
 The rebuild should separate deterministic game logic from adapters.
 
+## Charge combat profile (2026-09-30)
+
+`rules/resonance.py` owns serializable profile state; `combat/charge_encounter.py`
+resolves the deterministic decision queue, and `world/charge_movement.py`
+owns its paths. `application/resonance_combat.py` compiles existing content
+into this profile. `ui/resonance.py` projects decisions and accepts revision-
+checked commands from both the browser and the physical panel; it supplies
+enemy RNG explicitly. `hardware/resonance_feedback.py` only maps presentation
+cues to existing LED frames. The browser does not resolve rules.
+
+`CombatState.resonance` is optional, persisted by snapshot schema 34. New
+Mission 0/free-arena encounters activate it; legacy snapshots keep their
+original profile. Reads never roll dice or advance a pending decision.
+
 ## Directory Layout
 
 ```text

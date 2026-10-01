@@ -472,6 +472,7 @@ class ScenarioEnvironmentDefinition:
     cover_bonus: int = 0
     projectile_cover_bonus: int = 0
     tags: tuple[str, ...] = ()
+    stealth_bonus: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -689,12 +690,14 @@ def build_encounter_from_scenario(loaded: LoadedScenario) -> LoadedEncounter:
             allow_interaction_when_occupied_by_enemy=entry.allow_interaction_when_occupied_by_enemy,
             cover_bonus=entry.cover_bonus,
             projectile_cover_bonus=entry.projectile_cover_bonus,
+            stealth_bonus=entry.stealth_bonus,
         )
         for entry in definition.environment
         if (
             entry.interaction_label is not None
             or entry.cover_bonus > 0
             or entry.projectile_cover_bonus > 0
+            or entry.stealth_bonus > 0
         )
     )
     objectives = tuple(
@@ -3223,6 +3226,9 @@ def _parse_environment(data: dict[str, Any]) -> ScenarioEnvironmentDefinition:
     entry_id = str(_required(data, "id", "environment"))
     positions_data = _required_list(data, "positions", f"environment {entry_id}")
     projectile_cover_bonus = int(data.get("projectile_cover_bonus", 0))
+    stealth_bonus = data.get("stealth_bonus", 0)
+    if type(stealth_bonus) is not int or stealth_bonus < 0:
+        raise ValueError(f"environment {entry_id}.stealth_bonus must be a non-negative integer.")
     tags_data = data.get("tags", [])
     if not isinstance(tags_data, list) or any(
         not isinstance(tag, str) or not tag.strip() for tag in tags_data
@@ -3259,6 +3265,7 @@ def _parse_environment(data: dict[str, Any]) -> ScenarioEnvironmentDefinition:
         cover_bonus=int(data.get("cover_bonus", data.get("cover", 0))),
         projectile_cover_bonus=projectile_cover_bonus,
         tags=tuple(str(tag) for tag in tags_data),
+        stealth_bonus=stealth_bonus,
     )
 
 

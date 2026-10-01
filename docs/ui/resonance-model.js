@@ -6,6 +6,18 @@
   const same = (a,b) => a && b && a.x===b.x && a.y===b.y;
   const key = p => `${p.x},${p.y}`;
   const neighbors = p => [-1,0,1].flatMap(y=>[-1,0,1].map(x=>({x:p.x+x,y:p.y+y}))).filter(q=>!same(p,q));
+  const rollResult = (t,values) => {
+    const isCheck=['attack','hide','bash','contest','save'].includes(t.outcome);
+    const natural=isCheck&&t.parts[0]?.sides===20?(t.mode==='advantage'?Math.max(...values):t.mode==='disadvantage'?Math.min(...values):values[0]):null;
+    const total=(natural??values.reduce((sum,n)=>sum+n,0))+(t.modifier??0);
+    const success=t.outcome==='attack'?(natural===20||(natural!==1&&total>=t.dc)):total>=(t.dc??0);
+    return {natural,total,success};
+  };
+  const damageComponents = (t,values) => {
+    let index=0;const groups={};
+    for(const c of t.components)groups[c.damage_type]=(groups[c.damage_type]??0)+(c.count?values[index++]+(c.modifier??0):c.value);
+    return Object.entries(groups).map(([damage_type,value])=>({damage_type,value:Math.max(0,Math.floor(value/t.divisor))}));
+  };
   class Encounter {
     constructor(data,party=['garran','mira','lorian','nimra']) {
       this.data=data;
@@ -343,7 +355,7 @@
       const mode=advantage===disadvantage?'normal':advantage?'advantage':'disadvantage';
       const precision=a.id==='erynd'&&!a.shot&&!a.moved?1:0;a.shot=true;
       const modifier=a.abilities[a.weapon.ability]+this.bonus(a,'Oko')+(this.status(a,'bless')?1:0)+precision-(!melee&&this.status(b,'prone')?2:0);
-      const task=this.diceTask(`${a.name} → ${b.name} · ${a.weapon.name}`,a.id,1,20,'attack',{target:b.id,modifier,dc:this.ac(b),mode,power:t.power,hidden,melee});
+      const task=this.diceTask(`${a.name} → ${b.name} · ${a.weapon.name}`,a.id,1,20,'attack',{target:b.id,modifier,dc:this.ac(b),mode,power:t.power,hidden,melee,reactionPending:Boolean(t.reactionPending)});
       if(mode!=='normal')task.parts.push({count:1,sides:20,label:'Druga k20'});
       this.s.queue.unshift(task);
     }
@@ -399,7 +411,7 @@
         if(t.type==='opportunity'){
           const source=this.actor(t.actor),target=this.actor(t.target);
           if(!source.reaction||source.hp<=0||target.hp<=0)continue;
-          if(!source.hero){source.reaction=false;this.s.queue.unshift({type:'attack',actor:source.id,target:target.id,power:'opportunity'});continue;}
+          if(!source.hero){this.s.queue.unshift({type:'attack',actor:source.id,target:target.id,power:'opportunity',reactionPending:true});continue;}
         }
         if(t.type==='relocate'&&!this.relocationFields(t).length)continue;
         if(t.type==='recover'&&(this.actor(t.actor).regenRound===this.s.round||!this.actor(t.actor).regenReason))continue;
@@ -431,9 +443,46 @@
       const t=this.s.task;if(t?.type!=='roll')return [];
       return t.parts.flatMap((part,partIndex)=>Array.from({length:part.count},(_,dieIndex)=>({...part,partIndex,dieIndex})));
     }
+    isEnemyRoll(t=this.s.task){return t?.type==='roll'&&this.actor(t.actor)?.hero===false;}
+    confirmEnemyRoll(rollDie){
+      const t=this.s.task;if(!this.isEnemyRoll(t)||typeof rollDie!=='function')return false;
+      // Randomness is supplied by the UI. Store every die and pause before resuming
+      // movement/the next reaction; rendering and restoring never generate a roll.
+      const checkpoint=copy(this.s),rolls=[];
+      const resolveRoll=roll=>{
+        let index=0;
+        const dice=roll.parts.map(p=>Array.from({length:p.count},()=>{
+          const value=roll.diceResults?.[index]??rollDie(p.sides);index++;
+          if(!Number.isInteger(value)||value<1||value>p.sides)throw Error('Nieprawidłowy wynik kości przeciwnika');
+          return value;
+        }));
+        const values=dice.map(part=>part.reduce((sum,value)=>sum+value,0)),result=rollResult(roll,values);
+        const target=this.actor(roll.target),before=target?{hp:target.hp,cup:target.cup,shield:target.shield}:null;
+        this.resolve(roll,values,result.natural,result.total,result.success);
+        rolls.push({label:roll.label,outcome:roll.outcome,mode:roll.mode,parts:copy(roll.parts),dice,values,...result,
+          modifier:roll.modifier??0,dc:roll.dc,
+          ...(roll.outcome==='damage'?{components:damageComponents(roll,values),loss:{hp:before.hp-target.hp,cup:before.cup-target.cup,shield:before.shield-target.shield}}:{})});
+      };
+      try{
+        this.s.task=null;
+        if(t.reactionPending)this.actor(t.actor).reaction=false;
+        resolveRoll(t);
+        const next=this.s.queue[0];
+        if(t.outcome==='attack'&&next?.type==='damage'&&next.actor===t.actor&&next.target===t.target){
+          this.damageTask(this.s.queue.shift());
+          resolveRoll(this.s.queue.shift());
+        }
+        this.s.task={type:'enemy-result',actor:t.actor,target:t.target,power:t.power,label:t.label,rolls};
+        this.s.phase='task';return true;
+      }catch{this.s=checkpoint;return false;}
+    }
+    acknowledgeEnemyResult(){
+      if(this.s.task?.type!=='enemy-result')return false;
+      this.s.task=null;this.pump();return true;
+    }
     submitDie(value,index=this.s.task?.diceResults?.length??0){
       const t=this.s.task,dice=this.rollDice(),confirmed=t?.diceResults??[];
-      if(t?.type!=='roll'||index!==confirmed.length||!dice[index])return false;
+      if(t?.type!=='roll'||this.isEnemyRoll(t)||index!==confirmed.length||!dice[index])return false;
       if(!Number.isInteger(value)||value<1||value>dice[index].sides)return false;
       t.diceResults=[...confirmed,value];
       if(t.diceResults.length<dice.length)return true;
@@ -442,13 +491,10 @@
       return this.submit(totals);
     }
     submit(values){
-      const t=this.s.task;if(t?.type!=='roll'||!Array.isArray(values)||values.length!==t.parts.length)return false;
+      const t=this.s.task;if(t?.type!=='roll'||this.isEnemyRoll(t)||!Array.isArray(values)||values.length!==t.parts.length)return false;
       if(values.some((value,i)=>!Number.isInteger(value)||value<t.parts[i].count||value>t.parts[i].count*t.parts[i].sides))return false;
       this.s.task=null;
-      const isCheck=['attack','hide','bash','contest','save'].includes(t.outcome);
-      const natural=isCheck&&t.parts[0]?.sides===20?(t.mode==='advantage'?Math.max(...values):t.mode==='disadvantage'?Math.min(...values):values[0]):null;
-      const total=(natural??values.reduce((sum,n)=>sum+n,0))+(t.modifier??0);
-      const success=t.outcome==='attack'?(natural===20||(natural!==1&&total>=t.dc)):total>=(t.dc??0);
+      const {natural,total,success}=rollResult(t,values);
       if(natural!==null&&this.actor(t.actor)?.hymn){
         this.s.task={type:'hymn',actor:t.actor,roll:t,values,natural,total,success};this.s.phase='task';return true;
       }
@@ -505,10 +551,7 @@
         }
         a.hidden=[];
       }else if(t.outcome==='damage'){
-        let index=0;const groups={};
-        for(const c of t.components)groups[c.damage_type]=(groups[c.damage_type]??0)+(c.count?values[index++]+(c.modifier??0):c.value);
-        const components=Object.entries(groups).map(([damage_type,value])=>({damage_type,value:Math.max(0,Math.floor(value/t.divisor))}));
-        const loss=this.damage(target,components,a);
+        const loss=this.damage(target,damageComponents(t,values),a);
         if(t.hit&&target.hp>0){
           if(t.power==='powerful_strike')this.addStatus(target,'broken',{untilStart:a.id,turn:a.turn+1});
           if(t.power==='hamstring_cut'){this.addStatus(target,'slow',{untilEnd:target.id,turn:target.turn+1});if(t.hidden)this.addStatus(target,'roundRoot',{round:this.s.round+1});}

@@ -6,9 +6,20 @@
   const field=p=>p?`${String.fromCharCode(65+p.x)}${p.y+1}`:'—';
   const names={strength:'Siły',dexterity:'Zręczności',constitution:'Kondycji',intelligence:'Inteligencji',wisdom:'Mądrości',charisma:'Charyzmy'};
   const damageNames={slashing:'cięte',piercing:'kłute',bludgeoning:'obuchowe',magic:'magiczne',force:'siłowe',psychic:'psychiczne',radiant:'promieniste',fire:'ogień'};
+  const chainBonusText={
+    'Wieża':n=>`+${n} KP, także poza własną turą.`,
+    'Grot':n=>`+${n}k4 obrażeń na każdy cel, także przy zwykłych atakach i reakcjach.`,
+    'Schody':n=>`+${2*n} pkt ruchu na początku tury; nowa kopia: +2 pkt.`,
+    'Błysk':n=>`Leczenie ${n}k4 PW na początku tury; nowa kopia: +1k4 PW.`,
+    'Hak':n=>`Po obrażeniach: przeniesienie każdego legalnego celu do ${n} pól; można pozostać w miejscu.`,
+    'Oko':n=>`+${n} do własnych rzutów k20, nie do ST.`,
+    'Kielich':n=>`Limit puli: ${2*n} tymczasowych PW; zużyta pula nie odnawia się co turę.`,
+    'Węzeł':n=>`Wszyscy wrogowie: −${n} pkt ruchu, minimum 0.`,
+    'Klepsydra':n=>`Limit osłony: ${2*n} pkt, nie chroni przed obrażeniami psychicznymi; bez odnowy co turę.`
+  };
   const statusNames={rage:'Runiczny szał',prone:'Powalony',slow:'Więzy · połowa ruchu',root:'Korzenie · bez ruchu',roundRoot:'Więzy · blokada następnej rundy',fear:'Echo / Dysonans · najbliższy atak z utrudnieniem',arcane:'Tarcza splotu · +2 KP',bless:'Pieczęć łaski · +1 atak / obrona',broken:'Przełamanie · −2 KP'};
   function create(host){
-    let model=null,info=null,labOpen=false,rollValue=1,rollRef=null,rollIndex=-1,previewActor=null;
+    let model=null,info=null,labOpen=false,rollValue=1,rollRef=null,rollIndex=-1,previewActor=null,enemyFocusRef=null;
     const {bind,button,controls,icon,slot,render,notify}=host;
     const change=fn=>()=>{fn();render();};
     function start(party,focused=null){
@@ -33,11 +44,15 @@
     function chain(){
       const c=model.s.chain,counts=model.counts();
       return `<section class="resonance-chain ${c?'active':''}" aria-label="Ciągły Rezonans"><div class="chain-heading"><span class="eyebrow">Rezonans ${c?'aktywny':'nieaktywny'}</span><span>${c?`${c.members.length} uczestników · ${c.entries.length} run`:'Wzmocniona moc rozpoczyna łańcuch'}</span></div>`+
-        (c?`<ol class="chain-entries">${c.entries.map((e,i)=>`<li title="${esc(model.actor(e.contributor).name)}"><span class="resonance-halo">${icon(slot(e.rune))}</span><span>${i+1}. ${esc(e.rune)}${e.rune==='Fala'?`<small>→ ${e.effective??'brak'}</small>`:''}</span></li>`).join('')}</ol><div class="chain-totals">${Object.entries(counts).map(([r,n])=>`<span title="${esc(D.runes.find(x=>x.name===r).description)}">${esc(r)} ×${n}</span>`).join('')}</div><p>Objęci: ${c.members.map(id=>esc(model.actor(id).name)).join(', ')}. Pozostali dołączą na początku swojej tury.</p>`:'<p>Podstawowa moc kończy łańcuch po rozpatrzeniu. Skupienie kończy go od razu; tura bez kontynuacji — na końcu.</p>')+'</section>';
+        (c?`<ol class="chain-entries">${c.entries.map((e,i)=>`<li title="${esc(model.actor(e.contributor).name)}"><span class="resonance-halo">${icon(slot(e.rune))}</span><span>${i+1}. ${esc(e.rune)}${e.rune==='Fala'?`<small>→ ${e.effective??'brak'}</small>`:''}</span></li>`).join('')}</ol><div class="chain-totals">${Object.entries(counts).map(([r,n])=>`<span title="${esc(D.runes.find(x=>x.name===r).description)}">${esc(r)} ×${n}</span>`).join('')}</div>`+
+          `<div class="chain-bonus-summary"><span class="eyebrow">Podsumowanie bonusów</span>${Object.keys(counts).length?
+            `<dl class="chain-bonuses">${Object.entries(counts).map(([r,n])=>`<div data-chain-bonus="${esc(r)}"><dt>${esc(r)}</dt><dd>${esc(chainBonusText[r]?.(n)??D.runes.find(x=>x.name===r)?.short)}</dd></div>`).join('')}</dl>`:
+            '<p>Brak bonusów — Fala nie ma poprzedniej runy do skopiowania.</p>'}${c.entries.some(e=>e.rune==='Fala'&&e.effective)?'<p class="chain-bonus-note">Kopie z Fali są już wliczone w powyższe wartości.</p>':''}</div>`+
+          `<p>Objęci: ${c.members.map(id=>esc(model.actor(id).name)).join(', ')}. Pozostali dołączą na początku swojej tury.</p>`:'<p>Podstawowa moc kończy łańcuch po rozpatrzeniu. Skupienie kończy go od razu; tura bez kontynuacji — na końcu.</p>')+'</section>';
     }
     function title(text,sub=''){
       const a=model.active,h=D.heroes[a.id];
-      return `<div class="turn-line"><div class="turn-actor">${h?`<img class="avatar" src="${h.portrait}" alt="">`:''}<div><strong>${esc(a.name)}</strong><small>${a.hero?'Tura bohatera':'Tura przeciwnika · ręczne rzuty w mocku'}</small></div></div><span class="turn-number">Runda ${model.s.round}</span></div><h1>${esc(text)}</h1>${sub?`<p class="intro">${esc(sub)}</p>`:''}`;
+      return `<div class="turn-line"><div class="turn-actor">${h?`<img class="avatar" src="${h.portrait}" alt="">`:''}<div><strong>${esc(a.name)}</strong><small>${a.hero?'Tura bohatera':'Tura przeciwnika · rzuca aplikacja'}</small></div></div><span class="turn-number">Runda ${model.s.round}</span></div><h1>${esc(text)}</h1>${sub?`<p class="intro">${esc(sub)}</p>`:''}`;
     }
     function budgets(){const a=model.active;return `<div class="phase-pills"><span class="phase-pill ${model.movement()?'':'used'}">Ruch ${model.movement()}${a.tempMove?` (w tym +${a.tempMove} Schody)`:''}</span><span class="phase-pill ${a.ordinary?'':'used'}">Atak / przedmiot</span><span class="phase-pill ${a.special?'':'used'}">Specjalna</span><span class="phase-pill ${a.reaction?'':'used'}">Reakcja</span></div>`;}
     function idle(){
@@ -96,8 +111,32 @@
       return html+`<p class="compact-note">Podgląd niczego nie wydaje.${c?` Ładunki: ${a.charges} → ${a.charges-cost}.`:''}</p>`+
         controls(c?`Zatwierdź · ${cost} ładunków`:'Zatwierdź',change(()=>{if(!model.commit())notify('Podgląd nie jest już legalny. Wybierz ponownie.');}),model.ready(),change(()=>model.cancel()));
     }
+    function enemyFocus(){const t=model.s.task;return model.isEnemyRoll(t)||t?.type==='enemy-result'?t.actor:null;}
+    function enemyTaskView(t){
+      const a=model.actor(t.actor),target=model.actor(t.target),result=t.type==='enemy-result';
+      const attack=(result?t.rolls[0].outcome:t.outcome)==='attack',opportunity=t.power==='opportunity';
+      const heading=opportunity?'Atak okazyjny przeciwnika':attack?'Atak przeciwnika':'Rzut przeciwnika';
+      let html=title(result?`Wynik · ${heading.toLowerCase()}`:heading,
+        `${a.name} · ${field(a.pos)}${target?` → ${target.name}`:''}. Przeciwnik jest wyróżniony na planszy.`);
+      if(!result){
+        html+=`<div class="enemy-roll-notice" role="status"><strong>${esc(t.label.replace(/strength|dexterity|constitution|intelligence|wisdom|charisma/g,m=>names[m]))}</strong><p>${opportunity?'Ruch zatrzymany przed opuszczeniem zasięgu przeciwnika. ':''}Naciśnij ✓. Aplikacja wykona ${attack?'rzut ataku i, po trafieniu, obrażeń':t.outcome==='damage'?'rzut obrażeń':'rzut obronny'} i pokaże wynik. Nie wpisujesz kości przeciwnika.</p>${t.dc!==undefined?`<p>${attack?'KP celu':'ST'} ${t.dc} · modyfikator ${t.modifier>=0?'+':''}${t.modifier}${t.mode==='advantage'?' · przewaga':t.mode==='disadvantage'?' · utrudnienie':''}</p>`:''}</div>`;
+        return html+controls(attack?'Rozpatrz atak':'Rozpatrz rzut',change(()=>{
+          if(model.s.task===t&&!model.confirmEnemyRoll(sides=>1+Math.floor(Math.random()*sides)))notify('Nie udało się rozpatrzyć rzutu. Spróbuj ponownie.');
+        }),true,()=>{}, {enabled:false});
+      }
+      html+='<div class="enemy-roll-result" role="status">'+t.rolls.map(r=>{
+        const damage=r.outcome==='damage';
+        const outcome=damage?'Obrażenia':r.outcome==='attack'?(r.success?(r.natural===20?'Trafienie krytyczne':'Trafienie'):'Pudło'):r.outcome==='contest'?'Wynik przeciwstawny':r.success?'Obrona udana':'Obrona nieudana';
+        const dice=r.parts.map((p,i)=>`${p.count}k${p.sides}: ${r.dice[i].join(' + ')}${damage&&p.modifier?` ${p.modifier>=0?'+':''}${p.modifier}`:''}`).join(' · ');
+        return `<section><h2>${outcome}</h2><p>${esc(dice)}${damage?'':` ${r.modifier>=0?'+':''}${r.modifier} = <b>${r.total}</b>${r.dc!==undefined?` / ${r.outcome==='attack'?'KP':'ST'} ${r.dc}`:''}`}${r.mode==='advantage'?' · wyższa k20':r.mode==='disadvantage'?' · niższa k20':''}</p>${damage?`<p>Obrażenia przed osłonami / odpornością: ${r.components.map(c=>`${c.value} ${damageNames[c.damage_type]??c.damage_type}`).join(' + ')}.</p><strong>Utrata PW: ${r.loss.hp}${r.loss.cup?` · Kielich: −${r.loss.cup}`:''}${r.loss.shield?` · Klepsydra pochłonęła: ${r.loss.shield}`:''}</strong>`:''}</section>`;
+      }).join('')+'</div>';
+      if(target)html+=pools(target);
+      if(opportunity)html+='<p class="compact-note">✓ zamyka wynik i kontynuuje ruch albo pokazuje kolejną reakcję. Przy 0 PW ruch zostanie przerwany.</p>';
+      return html+controls('Dalej',change(()=>{if(model.s.task===t)model.acknowledgeEnemyResult();}),true,()=>{}, {enabled:false});
+    }
     function taskView(){
       const t=model.s.task;if(!t)return title('Rozpatrywanie…');
+      if(model.isEnemyRoll(t)||t.type==='enemy-result')return enemyTaskView(t);
       if(t.type==='roll'){
         const dice=model.rollDice(),confirmed=t.diceResults??[],index=confirmed.length,p=dice[index];
         if(rollRef!==t||rollIndex!==index){rollRef=t;rollIndex=index;rollValue=p?Math.floor((p.sides+1)/2):1;}
@@ -145,6 +184,7 @@
         controls('Wróć do decyzji',change(()=>info=null),true,change(()=>info=null));
     }
     function right(){
+      if(enemyFocus()&&enemyFocusRef!==model.s.task){enemyFocusRef=model.s.task;labOpen=true;}
       if(info){bind(slot('Gwiazda'),'Zamknij informacje',change(()=>info=null),true,true);host.getBindings().get(slot('Gwiazda')).kind='info';return infoView();}
       bind(slot('Gwiazda'),'Informacja o bohaterze',change(()=>info=previewActor??model.active.id));
       let html=chain();
@@ -175,14 +215,15 @@
       for(let y=0;y<model.s.board.height;y++)for(let x=0;x<model.s.board.width;x++){
         const p={x,y},a=Object.values(model.s.actors).find(a=>a.hp>0&&M.same(a.pos,p)),blocked=model.s.board.blocked.some(q=>M.same(q,p)),rough=model.s.board.difficult.some(q=>M.same(q,p));
         const legal=selectable(p),area=v?.center&&M.distance(v.center,p)<=(v.id==='flame_fan'?1:2),path=v?.path?.cells.some(q=>M.same(q,p));
-        html+=`<button class="mock-cell ${a?a.hero?'ally':'enemy':''} ${blocked?'blocked':''} ${rough?'rough':''} ${legal?'legal':''} ${area?'area':''} ${path?'path':''} ${M.same(destination,p)?'destination':''}" data-field="${x},${y}" ${legal?'':'disabled'} aria-label="${field(p)}${a?' · '+esc(a.name):blocked?' · przeszkoda':''}${legal?' · legalne pole':''}" title="${field(p)}${a?' · '+esc(a.name):''}"><small>${field(p)}</small><b>${a?a.name.slice(0,2):blocked?'▧':rough?'≈':''}</b></button>`;
+        const focused=Boolean(a&&a.id===enemyFocus());
+        html+=`<button class="mock-cell ${a?a.hero?'ally':'enemy':''} ${focused?'enemy-focus':''} ${blocked?'blocked':''} ${rough?'rough':''} ${legal?'legal':''} ${area?'area':''} ${path?'path':''} ${M.same(destination,p)?'destination':''}" data-field="${x},${y}" ${legal?'':'disabled'} aria-label="${field(p)}${a?' · '+esc(a.name):blocked?' · przeszkoda':''}${focused?' · rozpatrywany przeciwnik':''}${legal?' · legalne pole':''}" title="${field(p)}${a?' · '+esc(a.name):''}"><small>${field(p)}</small><b>${a?a.name.slice(0,2):blocked?'▧':rough?'≈':''}</b></button>`;
       }
-      return html+'</div><p class="compact-note">Złote: legalne · niebieskie: cel / droga · czerwone: wróg · ▧ przeszkoda · ≈ trudny teren. To testowa arena, nie mapa Misji 0.</p>';
+      return html+'</div><p class="compact-note">Złote: legalne · niebieskie: cel / droga · czerwone: wróg · jasna czerwona ramka: rozpatrywany przeciwnik · ▧ przeszkoda · ≈ trudny teren. To testowa arena, nie mapa Misji 0.</p>';
     }
     function left(){
-      return `<aside class="prototype-combat-list charge-initiative"><div class="eyebrow">Kolejność tur</div><h2>Próba przy posterunku</h2>`+
+      return `<aside class="prototype-combat-list charge-initiative" data-enemy-focus="${enemyFocus()??''}"><div class="eyebrow">Kolejność tur</div><h2>Próba przy posterunku</h2>`+
         `<details class="combat-lab" ${labOpen?'open':''}><summary>Symulator pól · panel testowy</summary>${labOpen?grid():''}<label>Nowa próba od bohatera<select data-demo-hero><option value="">Wybierz…</option>${Object.values(D.heroes).map(h=>`<option value="${h.id}">${h.name}</option>`).join('')}</select></label><div class="lab-tools"><button data-combat="save">Zapisz próbę</button><button data-combat="load">Wczytaj próbę</button><button data-combat="finish">Zakończ próbę</button></div><p class="compact-note">Zapis dotyczy wyłącznie tej makiety w przeglądarce. Nie zmienia zapisów gry.</p></details>`+
-        model.s.order.map(id=>{const a=model.actor(id),h=D.heroes[id];return `<article class="initiative-entry ${a===model.active?'active':''} ${id===previewActor?'inspected':''}">${h?`<img class="avatar" src="${h.portrait}" alt="">`:'<span class="enemy-avatar">◆</span>'}<div><strong>${esc(a.name)}</strong><small>${a.hp}/${a.maxHp} PW · KP ${model.ac(a)}${a.hero?` · ${a.charges}/20 ład.`:` · ruch ${model.movement(a)}`}</small><small class="membership ${model.member(a)?'joined':''}">${a.hero?(model.member(a)?'◉ W Rezonansie':model.s.chain?'○ Oczekuje na swoją turę':'○ Poza Rezonansem'):''}</small>${statuses(a).map(s=>`<small class="state-chip">${esc(s)}</small>`).join('')}</div><span class="field-label">${field(a.pos)}</span></article>`;}).join('')+
+        model.s.order.map(id=>{const a=model.actor(id),h=D.heroes[id];return `<article class="initiative-entry ${a===model.active?'active':''} ${id===previewActor?'inspected':''} ${id===enemyFocus()?'enemy-focus':''}">${h?`<img class="avatar" src="${h.portrait}" alt="">`:'<span class="enemy-avatar">◆</span>'}<div><strong>${esc(a.name)}</strong>${id===enemyFocus()?'<small class="enemy-focus-label">Rozpatrywany przeciwnik</small>':''}<small>${a.hp}/${a.maxHp} PW · KP ${model.ac(a)}${a.hero?` · ${a.charges}/20 ład.`:` · ruch ${model.movement(a)}`}</small><small class="membership ${model.member(a)?'joined':''}">${a.hero?(model.member(a)?'◉ W Rezonansie':model.s.chain?'○ Oczekuje na swoją turę':'○ Poza Rezonansem'):''}</small>${statuses(a).map(s=>`<small class="state-chip">${esc(s)}</small>`).join('')}</div><span class="field-label">${field(a.pos)}</span></article>`;}).join('')+
         '</aside>';
     }
     function selectField(x,y){
@@ -218,7 +259,7 @@
       // Keep the input and clicked confirmation in the DOM; rerendering on blur loses clicks.
       document.querySelectorAll('button[data-slot="28"]').forEach(b=>{b.disabled=!valid;if(b.classList.contains('board-pad'))b.dataset.light=valid?'control':'off';});
     });
-    return {start,right,left,selectField,flowKey:()=>`${info??''}:${model?.s.phase}:${model?.s.preview?.id??''}:${model?.s.task?.label??model?.s.task?.type??''}:${model?.s.task?.diceResults?.length??0}`,get model(){return model;},get state(){return model?.s;},setRoll:values=>{rollValue=values[0];},openLab:()=>{labOpen=true;render();},showHero:id=>{info=id;render();},back:()=>{if(info){info=null;render();return true;}if(model.cancel()){render();return true;}return false;}};
+    return {start,right,left,selectField,flowKey:()=>`${info??''}:${model?.s.phase}:${model?.s.preview?.id??''}:${model?.s.task?.type??''}:${model?.s.task?.actor??''}:${model?.s.task?.label??''}:${model?.s.task?.diceResults?.length??0}`,get model(){return model;},get state(){return model?.s;},setRoll:values=>{rollValue=values[0];},openLab:()=>{labOpen=true;render();},showHero:id=>{info=id;render();},back:()=>{if(info){info=null;render();return true;}if(model.cancel()){render();return true;}return false;}};
   }
   window.ResonancePrototype={create};
 })();

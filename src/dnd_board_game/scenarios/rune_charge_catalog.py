@@ -1,4 +1,4 @@
-"""Read the v0.2 card specification without activating it in combat."""
+"""Shared v0.2 source for printed cards and charge-profile combat."""
 from __future__ import annotations
 
 import json
@@ -14,8 +14,8 @@ CATALOG_PATH = Path(__file__).resolve().parents[3] / 'content/print/rune_charges
 def validate_catalog(data: dict[str, Any]) -> None:
     """Reject ambiguous card counts, prices, symbols and recovery budgets."""
     rules = data['rules']
-    if data['profile'] != 'rune_charges_v02' or data['stage'] != 'cards_only':
-        raise ValueError('Katalog v0.2 jest etapem kart, nie aktywacją zasad w aplikacji.')
+    if data['profile'] != 'rune_charges_v02' or data['stage'] not in {'cards_only', 'runtime'}:
+        raise ValueError('Nieprawidłowy profil lub etap katalogu ładunków v0.2.')
     if rules.get('resonance_model') != 'ongoing_chain_effects':
         raise ValueError('Karty wymagają ciągłego Rezonansu z globalnym wygaszeniem premii.')
     if (rules['start_charges'], rules['max_charges'], rules['focus_die']) != (20, 20, 20):

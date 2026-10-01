@@ -506,7 +506,7 @@ function render() {
   document.getElementById('scene-status-summary').innerHTML = sceneStatusSummaryHtml();
   document.getElementById('briefing-contract').innerHTML = briefingContractHtml();
   renderPartyShell();
-  document.body.classList.toggle('tabletop-combat-active', Boolean(state.mission && state.combat));
+  document.body.classList.toggle('tabletop-combat-active', Boolean(state.combat && (state.mission || state.combat.resonance) && !(state.combat.resonance && (state.mission?.active || state.exploration_mana?.active))));
   document.getElementById('challenge').textContent = state.active_challenge
     ? state.active_challenge.uses_progress
       ? `${state.active_challenge.name}: ${state.active_challenge.current_progress}/${state.active_challenge.progress_required}, hałas ${state.active_challenge.noise}`
