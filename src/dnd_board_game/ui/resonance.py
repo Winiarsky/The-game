@@ -20,8 +20,57 @@ if TYPE_CHECKING:
 
 LABELS = {"move": "Ruch", "attack": "Atak bronią", "item": "Mikstura", "focus": "Skupienie", "end": "Koniec tury"}
 STATUS_NAMES = {"rage": "Runiczny szał", "prone": "Powalony", "fear": "Najbliższy atak z utrudnieniem", "slow": "Połowa ruchu",
-                "root": "Unieruchomiony", "round_root": "Więzy mroku · brak ruchu w następnej rundzie", "bless": "Pieczęć łaski · +1 atak / obrona",
+                "root": "Brak zwykłego ruchu", "round_root": "Więzy mroku · brak zwykłego ruchu w następnej rundzie", "bless": "Pieczęć łaski · +1 atak / obrona",
                 "arcane": "Tarcza arkanów · +2 KP", "broken": "Przełamana obrona · −2 KP"}
+
+
+def _relations(e: ChargeEncounter) -> bool:
+    """An active legacy encounter keeps its original controls and summaries."""
+    return e.is_relations
+
+
+def _card_details(e: ChargeEncounter, card: Any) -> list[str]:
+    if not _relations(e):
+        return [card.target, card.requirements]
+    details = [f"Koszt karty: {card.cost} ładunków · {card.budget}", card.target, card.requirements]
+    if card.requires_resonance:
+        details.append("Wyładowanie: " + " + ".join(card.requires_resonance) + "; wymaga zgodnego przejścia i kończy Rezonans.")
+    details.extend(" + ".join(bonus["requires"]) + ": " + bonus["text"] for bonus in card.resonance_bonuses)
+    return [line for line in details if line]
+
+
+def _status_deadline(e: ChargeEncounter, status: dict[str, Any]) -> str:
+    if status.get("until_start"):
+        return f" · do początku tury: {e.actor(status['until_start']).name}"
+    if status.get("until_end"):
+        return f" · do końca tury: {e.actor(status['until_end']).name}"
+    if "remaining" in status:
+        return f" · {status['remaining']} tur"
+    return ""
+
+
+def _status_text(e: ChargeEncounter, status: dict[str, Any]) -> str:
+    kind, value = status["type"], status.get("value", 0)
+    if kind == "round_root":
+        movement = "zwykłego ruchu" if _relations(e) else "ruchu"
+        return f"Więzy mroku · brak {movement} w rundzie {status['round']}"
+    if kind.startswith("ward:"):
+        name = f"Ochrona · +{value} KP"
+    elif kind == "arcane" and _relations(e):
+        name = f"Tarcza arkanów · +{status.get('value', 2)} KP"
+    elif kind == "bless" and _relations(e):
+        name = f"Pieczęć łaski · +{status.get('value', 1)} atak / obrona"
+    elif kind == "root" and not _relations(e):
+        name = "Unieruchomiony"
+    elif kind == "move_penalty":
+        name = f"Spowolnienie · −{value} ruchu"
+    elif kind == "next_attack":
+        name = "Najbliższy atak z przewagą"
+    elif kind in {"temporary", "prevention", "hymn"}:
+        return ""  # The current pool or Hymn die is shown once below.
+    else:
+        name = status.get("name") or STATUS_NAMES.get(kind, kind)
+    return name + _status_deadline(e, status)
 
 
 def active(session: ExplorationUiSession) -> bool:
@@ -69,7 +118,7 @@ def controls(e: ChargeEncounter) -> dict[int, dict[str, Any]]:
             add(3, "Koniec tury", "end")
     elif s.phase == "preview":
         card = e.card(s.preview["id"])
-        if card:
+        if card and not _relations(e):
             add(26, f"Wzmocniona · {e.price(card, 'enhanced', s.preview['targets'])}", "mode", mode="enhanced")
             add(27, f"Podstawowa · {e.price(card, 'base', s.preview['targets'])}", "mode", mode="base")
         if s.preview["id"] == "item" and len(e.items) > 1:
@@ -77,7 +126,7 @@ def controls(e: ChargeEncounter) -> dict[int, dict[str, Any]]:
             add(27, "Poprzednia mikstura", "item", delta=-1)
         if s.preview["id"] in {"force_wave", "flame_fan"} and s.preview["center"] is not None and not s.preview["exclude_chosen"]:
             add(28, "Nie wyłączaj żadnego pola", "exclude", actor=None)
-        elif e.ready():
+        elif e.ready() and not p_rejected(e):
             add(28, "Zatwierdź", "accept")
         add(29, "Wróć", "back")
     elif task:
@@ -92,8 +141,13 @@ def controls(e: ChargeEncounter) -> dict[int, dict[str, Any]]:
         elif kind in {"enemy-result", "enemy-move", "correction"}:
             add(28, "Dalej" if kind == "enemy-result" else "Figurka ustawiona", "accept")
         elif kind in {"recover", "hymn", "opportunity"}:
-            add(28, {"recover": "Odzyskaj 1k4", "hymn": "Dodaj 1k6", "opportunity": "Wykonaj atak"}[kind], "accept")
+            hymn_label = f"Dodaj 1k{e.hymn_sides(task['actor'])}" if _relations(e) and kind == "hymn" else "Dodaj 1k6"
+            add(28, {"recover": "Odzyskaj 1k4", "hymn": hymn_label, "opportunity": "Wykonaj atak"}[kind], "accept")
             add(29, "Pomiń", "back")
+        elif kind == "bonus_target":
+            if task.get("target"):
+                add(28, "Potwierdź sojusznika", "accept")
+            add(29, "Pomiń dodatkowe leczenie", "back")
         elif kind == "relocate":
             if task.get("destination") is not None:
                 add(28, "Potwierdź przestawienie", "accept")
@@ -107,29 +161,53 @@ def controls(e: ChargeEncounter) -> dict[int, dict[str, Any]]:
 
 
 def actor_view(e: ChargeEncounter, actor_id: str) -> dict[str, Any]:
+    from dnd_board_game.combat.conditions import condition_definition
+    from dnd_board_game.inventory.magic_items import effective_ability_score
     a, f = e.actor(actor_id), e.fighter(actor_id)
-    statuses = [f"Więzy mroku · brak ruchu w rundzie {s['round']}" if s["type"] == "round_root" else
-                STATUS_NAMES.get(s["type"], s["type"])+(f" · {s['remaining']} tur" if "remaining" in s else "") for s in f.statuses]
+    statuses = [text for status in f.statuses if (text := _status_text(e, status))]
+    for source, fighter in e.s.fighters.items():
+        if fighter.mark == actor_id:
+            statuses.append(f"Piętno łowcy · {e.actor(source).name}")
+    for condition in e.original.condition_states:
+        if condition.actor_id == actor_id:
+            label = condition_definition(condition.condition).label
+            source = e.actors.get(str(condition.source_actor_id))
+            statuses.append(label + (f" · {source.name}" if source else ""))
     if e.shielded(actor_id):
         statuses.append("Żywa osłona · +1 KP")
+    cover = e.cover(actor_id)
+    if cover.cover_bonus:
+        statuses.append(f"Osłona terenu · +{cover.cover_bonus} KP · {', '.join(cover.cover_sources)}")
     if actor_id in e.original.enemy_ai.escaped_actor_ids:
         statuses.append("Uciekł z walki")
     if f.move_locked:
-        statuses.append("Ruch wykorzystany")
+        statuses.append("Zwykły ruch niedostępny" if _relations(e) else "Ruch wykorzystany")
     if f.hidden:
         statuses.append("Ukrycie przed: "+", ".join(e.actor(key).name for key in f.hidden))
     if hymn_source(a):
-        statuses.append("Hymn odwagi · 1k6 do wykorzystania")
-    if f.cup:
-        statuses.append(f"Kielich {f.cup}/{2*e.bonus(actor_id, 'Kielich')}")
+        statuses.append(f"Hymn odwagi · 1k{e.hymn_sides(actor_id) if _relations(e) else 6} do wykorzystania")
+    temporary_hp = max(f.cup, a.temp_hp) if _relations(e) else f.cup
+    if temporary_hp:
+        deadline = _status_deadline(e, e.status(actor_id, "temporary") or {}) if f.cup >= a.temp_hp else ""
+        statuses.append(f"Tymczasowe PW: {temporary_hp}{deadline}" if _relations(e) else f"Kielich {f.cup}/{2*e.bonus(actor_id, 'Kielich')}")
     if f.shield:
-        statuses.append(f"Osłona {f.shield}/{2*e.bonus(actor_id, 'Klepsydra')}")
+        deadline = _status_deadline(e, e.status(actor_id, "prevention") or {})
+        statuses.append(f"Osłona obrażeń: {f.shield} · bez psychicznych{deadline}" if _relations(e) else f"Osłona {f.shield}/{2*e.bonus(actor_id, 'Klepsydra')}")
     if a.hp <= 0:
         statuses.append("Martwy" if a.death_saves.dead else "Nieprzytomny")
+    weapon = e.weapons.get(actor_id)
+    traits = [weapon.name, f"Zasięg broni: {weapon.range} pól"] if weapon else []
     return dict(id=actor_id, name=a.name, hp=a.hp, max_hp=a.max_hp, ac=e.ac(actor_id), charges=f.charges,
+                cover_bonus=cover.cover_bonus, cover_sources=list(cover.cover_sources),
+                ability_scores={key: effective_ability_score(a, key) for key in ("strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma")},
+                traits=traits,
                 hero=a.faction == Faction.ALLY, position=list(a.position), statuses=statuses, active=actor_id == str(e.active.id),
-                member=e.member(actor_id), portrait_url="", movement=e.movement(actor_id),
+                member=False if _relations(e) else e.member(actor_id), portrait_url="", movement=e.movement(actor_id),
                 ordinary=f.ordinary, special=f.special, reaction=f.reaction)
+
+
+def p_rejected(e: ChargeEncounter) -> dict[str, str] | None:
+    return (e.s.preview or {}).get("rejected_target")
 
 
 def decision(e: ChargeEncounter) -> dict[str, Any]:
@@ -146,33 +224,47 @@ def decision(e: ChargeEncounter) -> dict[str, Any]:
                 pages.append(dict(title=hero[key]["name"], body=hero[key]["description"], details=[]))
         if hero:
             pages.append(dict(title="Odzysk klasowy · 1k4", body="Raz na rundę, gdy:", details=hero["regeneration"]))
-            pages.extend(dict(title=c.name, body=c.effect, details=[c.target, c.requirements]) for c in cards_for(e.catalog, actor_id))
+            for card in cards_for(e.catalog, actor_id):
+                details = _card_details(e, card)
+                pages.extend(dict(title=card.name, body=card.effect if i == 0 else "Warunki i premie tej mocy.", details=details[i:i+3])
+                             for i in range(0, max(1, len(details)), 3))
         inventory = e.actor(actor_id).inventory
         for i in range(0, len(inventory), 6):
             pages.append(dict(title="Ekwipunek", body="", details=[f"{item.name} ×{item.quantity}" for item in inventory[i:i+6]]))
         page = s.info_page % len(pages)
-        return dict(pages[page], page=page+1, pages=len(pages), inspected=actor_id)
+        return dict(pages[page], page=page+1, pages=len(pages), inspected=actor_id, actor=actor_id)
     if s.phase == "preview":
         card = e.card(p["id"])
         result.update(title=card.name if card else LABELS.get(p["id"], p["id"]), body=card.effect if card else "Wybierz podświetlone pole i potwierdź.")
         if card:
-            result.update(mode=p["mode"], base_cost=e.price(card, "base", p["targets"]), enhanced_cost=e.price(card, "enhanced", p["targets"]), budget=card.budget,
-                          warning=e.unavailable(card.id, p["mode"]), rune=card.rune)
+            if _relations(e):
+                result.update(cost=e.price(card, targets=p["targets"]), budget=card.budget, rune=card.rune,
+                              warning=e.unavailable(card.id), resonance=e.resonance_preview(card, p["targets"]))
+            else:
+                result.update(mode=p["mode"], base_cost=e.price(card, "base", p["targets"]), enhanced_cost=e.price(card, "enhanced", p["targets"]), budget=card.budget,
+                              warning=e.unavailable(card.id, p["mode"]), rune=card.rune)
         if p["id"] == "focus":
             result["body"] = "Wykorzystaj akcję specjalną i odzyskaj 1k20 ładunków, do 20. Skupienie kończy Rezonans."
         if p["id"] == "item":
             item = p["item"]
             result.update(title=item["name"], body=f"Leczenie {item['count']}k{item['sides']} + {item['modifier']}. Zużywa miksturę i akcję ataku / przedmiotu. Możesz wskazać siebie albo sąsiadującego sojusznika.", item_choices=len(e.items))
-        if p["id"] in {"flame_fan", "force_wave"} and p["center"] is not None and not p["exclude_chosen"]:
+        if p["id"] in {"rage", "second_wind", "hide", "focus"}:
+            result["prompt"] = (f"Działa na postać: {e.active.name}. Potwierdź ✓." if e.ready()
+                                else "Wskaż własne podświetlone pole, aby poprawić wybór, albo wróć ↩.")
+        elif p["id"] in {"flame_fan", "force_wave"} and p["center"] is not None and not p["exclude_chosen"]:
             result["prompt"] = "Precyzyjny splot: wskaż podświetloną postać do wyłączenia albo wybierz „Nie wyłączaj żadnego pola”."
         elif p["id"] == "guard_vault":
             result["prompt"] = "Wybierz wolne pole przy wybranym wrogu." if p["targets"] else "Wybierz podświetlonego wroga."
         elif p["destination"]:
-            result["prompt"] = "Przesuń figurkę na niebieskie pole i zatwierdź."
+            result["prompt"] = "Niebieskie pola: zasięg, żółte: trasa, zielone: cel. Możesz wybrać inne pole; ✓ potwierdza ruch."
         else:
             result["prompt"] = "Wybierz cel na planszy." if not e.ready() else "Wybór gotowy do zatwierdzenia."
         if p["targets"]:
             result["targets"] = [e.actor(t).name for t in p["targets"]]
+        result["target_ids"] = list(p["targets"])
+        if rejected := p_rejected(e):
+            result.update(warning=rejected["reason"], target_ids=[rejected["target"]], rejected_target=True,
+                          targets=[], prompt="Wybierz legalny, podświetlony cel. Akcja nie została zużyta.")
     elif task:
         kind = task["type"]
         result.update(title=task.get("label", "Rozpatrywanie akcji"), body="", actor=task.get("actor"))
@@ -186,7 +278,11 @@ def decision(e: ChargeEncounter) -> dict[str, Any]:
                 index = len(task.get("dice_results", []))
                 result.update(die=dict(index=index, total=len(dice), sides=dice[index]["sides"], value=s.die_value, label=dice[index]["label"], accepted=task.get("dice_results", [])))
                 result["body"] = "Rzuć jedną kością i ustaw jej wynik."
-            result.update(modifier=task.get("modifier", 0), dc=task.get("dc") if task["parts"][0]["sides"] == 20 else None, mode=task.get("mode", "normal"))
+            result.update(modifier=task.get("modifier", 0), modifier_components=task.get("modifier_components", []),
+                          dc=task.get("dc") if task["parts"][0]["sides"] == 20 else None, mode=task.get("mode", "normal"))
+            if task.get("cover_bonus", 0):
+                benefit = "KP celu" if task.get("outcome") == "attack" else "do obrony"
+                result["cover_text"] = f"Osłona: +{task['cover_bonus']} {benefit} · " + ", ".join(task.get("cover_sources", []))
         elif kind == "enemy-result":
             result.update(title="Wynik przeciwnika", rolls=task["rolls"])
         elif kind in {"enemy-move", "correction"}:
@@ -194,19 +290,29 @@ def decision(e: ChargeEncounter) -> dict[str, Any]:
         elif kind == "recover":
             result.update(title=f"{e.actor(task['actor']).name} · odzysk klasowy", body=e.fighter(task["actor"]).regeneration_reason)
         elif kind == "hymn":
-            result.update(title="Dodać kość Hymnu odwagi?", body=f"Wynik {task['total']} · {'sukces' if task['success'] else 'porażka'}. Możesz dodać 1k6 albo zachować kość.")
+            sides = e.hymn_sides(task["actor"]) if _relations(e) else 6
+            result.update(title="Dodać kość Hymnu odwagi?", body=f"Wynik {task['total']} · {'sukces' if task['success'] else 'porażka'}. Możesz dodać 1k{sides} albo zachować kość.")
         elif kind == "opportunity":
             result.update(title="Twój atak okazyjny", body=f"{e.actor(task['actor']).name} może zaatakować {e.actor(task['target']).name}.")
         elif kind == "relocate":
             result["body"] = f"{e.actor(task['target']).name}: wybierz podświetlone pole, przestaw figurkę i potwierdź."
+        elif kind == "bonus_target":
+            result.update(title="Żar odnowy · dodatkowe leczenie", actor=task["source"],
+                          body="Wybierz podświetlonego sojusznika przy Garranie i potwierdź, aby wykonać dodatkowy rzut leczenia.")
+            if task.get("target"):
+                result["targets"] = [e.actor(task["target"]).name]
     elif s.phase == "result":
         result.update(title="Podsumowanie akcji", body="", details=(s.action or {}).get("results", []))
     elif s.phase == "end-preview":
-        result.update(title="Zakończyć turę?", body="Niewykorzystane akcje przepadną." + (" Rezonans zakończy się: w tej turze nie użyto mocy wzmocnionej." if e.active.hp > 0 and not e.fighter().continued and s.chain else ""))
+        end_reason = "mocy runicznej" if _relations(e) else "mocy wzmocnionej"
+        result.update(title="Zakończyć turę?", body="Niewykorzystane akcje przepadną." + (f" Rezonans zakończy się: w tej turze nie użyto {end_reason}." if e.active.hp > 0 and not e.fighter().continued and s.chain else ""))
     elif s.phase == "finished":
         result.update(title="Koniec walki", body="Zatwierdź, aby przejść do wyniku starcia.")
     elif e.active.faction == Faction.ENEMY:
         result.update(title=f"Tura: {e.active.name}", body="Zatwierdź zamiar przeciwnika. Aplikacja wykona jego rzuty.")
+    if task or s.phase == "result":
+        result["target_ids"] = list(dict.fromkeys([task["target"]] if task and task.get("target")
+                                                  else (s.action or {}).get("targets", [])))
     return result
 
 
@@ -214,7 +320,7 @@ def presentation(e: ChargeEncounter) -> tuple[dict[str, Any], ResonanceBoardView
     control = controls(e)
     p, task = e.s.preview, e.s.task
     fields = [a.position for a in e.board_actors()] if e.s.inspected else e.available_fields()
-    selected = tuple(e.actor(t).position for t in p["targets"]) if p else ()
+    selected = tuple(e.actor(t).position for t in p["targets"]) if p else ((e.actor(task["target"]).position,) if task and task["type"] == "bonus_target" and task.get("target") else ())
     path = tuple(point(pos) for pos in (p or task or {}).get("path", {}).get("cells", ())) if (p or task or {}).get("path") else ()
     destination = point((p or task)["destination"]) if (p or task or {}).get("destination") is not None else None
     area: tuple[Coordinate, ...] = ()
@@ -228,16 +334,44 @@ def presentation(e: ChargeEncounter) -> tuple[dict[str, Any], ResonanceBoardView
     enemy = bool(focus_id in e.actors and e.actor(focus_id).faction == Faction.ENEMY)
     outcome = task["rolls"][0]["success"] if task and task["type"] == "enemy-result" else None
     actor_id = str(e.active.id)
+    relations = _relations(e)
+    chain = dict(entries=[asdict(entry) for entry in e.s.chain.entries], members=e.s.chain.members,
+                 bonuses=[] if relations else bonus_summary(e.counts())) if e.s.chain else None
+    if chain and relations:
+        chain["next_runes"] = e.next_runes()
+    powers = []
+    for card in e.cards():
+        power = dict(asdict(card), slot=rune_slot(card.rune), disabled=e.unavailable(card.id))
+        if relations:
+            power.pop("base_cost")
+            power.pop("enhanced_cost")
+            power.update(cost=e.price(card), resonance=e.resonance_preview(card))
+        powers.append(power)
+    illegal_ids = [key for key in e.target_candidates() if key not in e.legal_targets()] if not e.s.inspected else []
+    basic_actions = [dict(slot=slot, id=action, command="choose", label=LABELS[action], disabled=e.unavailable(action))
+                     for slot, action in ((0, "move"), (1, "attack"), (2, "item"), (rune_slot("Spirala"), "focus"))]
     view = dict(revision=e.s.revision, phase=e.s.phase, round=e.s.round, active=actor_id,
+                profile=e.catalog["profile"], relations=relations,
                 actors=[actor_view(e, key) for key in e.s.order], decision=decision(e), controls=list(control.values()), icons={str(slot): panel_icon(slot) for slot in range(30)},
                 legal_positions=[list(p) for p in fields], history=e.s.history[:30],
-                chain=dict(entries=[asdict(entry) for entry in e.s.chain.entries], members=e.s.chain.members,
-                           bonuses=bonus_summary(e.counts())) if e.s.chain else None,
-                powers=[dict(asdict(c), slot=rune_slot(c.rune), disabled=e.unavailable(c.id)) for c in e.cards()])
+                chain=chain, powers=powers, basic_actions=basic_actions,
+                illegal_positions=[list(e.actor(key).position) for key in illegal_ids],
+                rune_icons={name: panel_icon(rune_slot(name)) for name in (*e.catalog["rules"]["starter_runes"], *e.catalog["rules"].get("reserved_runes", []))},
+                reserved_runes=e.catalog["rules"].get("reserved_runes", []))
+    selected_slot = None
+    if p:
+        selected_card = e.card(p["id"])
+        selected_slot = rune_slot(selected_card.rune) if selected_card else {"move": 0, "attack": 1, "item": 2, "focus": rune_slot("Spirala")}.get(p["id"])
     board_view = ResonanceBoardView(active=e.active.position, legal=tuple(fields), selected=selected, path=path, destination=destination,
+        illegal=tuple(e.actor(key).position for key in illegal_ids),
         area=area, excluded=e.actor(p["exclude"]).position if p and p["exclude"] else None, focus=focus, focus_result=outcome, enemy=enemy,
         action_slots=tuple(slot for slot in control if slot < 26), control_slots=tuple(slot for slot in control if slot >= 26),
-        selected_slot=rune_slot(e.card(p["id"]).rune) if p and e.card(p["id"]) else None)
+        selected_slot=selected_slot,
+        action_cues=tuple((power["slot"], "locked" if power["disabled"] else power["resonance"]["transition"])
+                          for power in powers) if relations and e.s.phase == "idle" and not e.s.inspected else (),
+        legal_kind="movement" if not e.s.inspected and ((task and task["type"] == "relocate") or
+            (p and (p["id"] in {"move", "misty_step"} or p["id"] == "skirmish_shot" and not p["destination"] or
+                    p["id"] == "guard_vault" and p["targets"]))) else "target")
     return view, board_view
 
 
@@ -248,7 +382,7 @@ def payload(session: ExplorationUiSession) -> dict[str, Any]:
 def scan_target(session: ExplorationUiSession) -> BoardScanTarget:
     from .exploration_app import BoardScanTarget
     view, board = presentation(engine(session))
-    positions = (*board.legal, *(panel_position(c["slot"]) for c in view["controls"]))
+    positions = (*board.legal, *board.illegal, *(panel_position(c["slot"]) for c in view["controls"]))
     return BoardScanTarget(positions=tuple(dict.fromkeys(positions)), feedback=resonance_feedback(board), empty_message=view["decision"]["title"])
 
 
@@ -262,6 +396,21 @@ def select_position(session: ExplorationUiSession, position: Coordinate) -> dict
     else:
         data = dict(command="select", position=list(position))
     return command(session, dict(data, revision=e.s.revision))
+
+
+def _rejection_text(session: ExplorationUiSession, e: ChargeEncounter, target_id: str, reason: str) -> str:
+    """Name a mapped obstacle only when it actually blocks the shot's line."""
+    from dnd_board_game.world.line_of_sight import bresenham_line, line_of_sight_clear
+    p = e.s.preview or {}
+    origin = point(p["destination"]) if p.get("id") == "skirmish_shot" and p.get("destination") else e.active.position
+    target = e.actor(target_id)
+    encounter = session._active_encounter()
+    if encounter and not line_of_sight_clear(e.board, origin, target.position) and ("widocz" in reason.lower() or "zasł" in reason.lower()):
+        blocked = {cell for cell in bresenham_line(origin, target.position)[1:-1] if e.board.terrain_at(cell).blocks_movement}
+        obstacles = list(dict.fromkeys(obj.name for obj in encounter.scene_objects if blocked.intersection(obj.positions)))
+        if obstacles:
+            reason += " Przeszkoda: " + ", ".join(obstacles) + "."
+    return f"Cel nielegalny — {target.name}: {reason}"
 
 
 def plan_enemy(session: ExplorationUiSession, e: ChargeEncounter) -> bool:
@@ -307,8 +456,15 @@ def command(session: ExplorationUiSession, data: dict[str, Any]) -> dict[str, An
                 e.s.inspected, e.s.info_page, accepted = selected, 0, True
         else:
             accepted = e.select(pos)
+            if accepted and e.s.preview:
+                e.s.preview.pop("rejected_target", None)
+            elif e.s.preview:
+                target_id = next((key for key in e.target_candidates() if e.actor(key).position == pos), None)
+                if target_id and (reason := e.target_rejection(target_id)):
+                    e.s.preview["rejected_target"] = dict(target=target_id, reason=_rejection_text(session, e, target_id, reason))
+                    accepted = True
     elif action == "mode":
-        accepted = e.mode(data.get("mode"))
+        accepted = not _relations(e) and e.mode(data.get("mode"))
     elif action == "item" and e.s.phase == "preview" and e.s.preview["id"] == "item" and e.items:
         current = next((i for i, item in enumerate(e.items) if item == e.s.preview["item"]), 0)
         e.s.preview["item"] = e.items[(current+(1 if data.get("delta", 1) > 0 else -1)) % len(e.items)]
@@ -334,6 +490,8 @@ def command(session: ExplorationUiSession, data: dict[str, Any]) -> dict[str, An
     elif action == "back":
         if e.s.inspected:
             accepted = e.cancel()
+        elif e.s.task and e.s.task["type"] == "bonus_target":
+            accepted = e.skip_bonus_target()
         elif e.s.task and e.s.task["type"] in {"recover", "hymn", "opportunity"}:
             accepted = {"recover": e.recover, "hymn": e.decide_hymn, "opportunity": e.opportunity}[e.s.task["type"]](False)
         else:
@@ -341,6 +499,8 @@ def command(session: ExplorationUiSession, data: dict[str, Any]) -> dict[str, An
     elif action == "accept" and not e.s.inspected:
         task = e.s.task
         if e.s.phase == "preview":
+            if p_rejected(e):
+                raise ValueError(p_rejected(e)["reason"])
             accepted = e.commit()
         elif e.s.phase == "end-preview":
             accepted = e.end_turn()
@@ -353,6 +513,8 @@ def command(session: ExplorationUiSession, data: dict[str, Any]) -> dict[str, An
                 accepted = {"recover": e.recover, "hymn": e.decide_hymn, "opportunity": e.opportunity}[task["type"]](True)
             elif task["type"] == "relocate":
                 accepted = e.confirm_relocation()
+            elif task["type"] == "bonus_target":
+                accepted = e.confirm_bonus_target()
             else:
                 accepted = e.acknowledge()
         elif e.s.phase == "result":

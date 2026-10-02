@@ -1,0 +1,22 @@
+Use case: infographic-diagram
+Asset type: brainstorming concept illustration for a Polish tabletop RPG rulebook, a rune relationship reference card.
+Primary request: create a beautiful, extremely legible Polish fantasy infographic explaining directed rune continuation. This is a proposed rules diagram, not a screenshot of an existing application. Landscape canvas, high resolution. Refined charcoal stone background, warm ivory typography, subtle engraved gold runic ornament, restrained turquoise magical light. Flat front-facing graphic, no perspective. Prioritize correct relationships and large readable text over decoration.
+Composition: title above, nine equal engraved panels in a clean 3 by 3 grid. Each panel has one large simple pictogram representing the named rune, its name, then a clear rightward arrow followed by the three allowed next rune names, exactly as specified. Use labels for destinations, not unlabeled symbols. This structured atlas IS the relationship diagram: do not connect panels with extra lines. A wide turquoise bridge panel below the grid explains Fala; a narrow final footer shows a three-slot memory.
+Title verbatim: "REZONANS — RELACJE RUN"
+Subtitle verbatim: "Ostatnia runa wskazuje następny krok"
+Nine panels, reading order, exact source and destinations:
+"Wieża" → "Grot · Schody · Błysk"
+"Grot" → "Klepsydra · Hak · Kielich"
+"Schody" → "Grot · Oko · Błysk"
+"Błysk" → "Wieża · Schody · Kielich"
+"Hak" → "Schody · Oko · Klepsydra"
+"Oko" → "Wieża · Grot · Węzeł"
+"Kielich" → "Wieża · Błysk · Węzeł"
+"Węzeł" → "Schody · Oko · Kielich"
+"Klepsydra" → "Oko · Grot · Hak"
+Pictograms: crenellated tower; spearhead; three ascending steps; lightning spark; hook; eye; chalice; knotted cord; hourglass. Distinct, clean, luminous engraved marks.
+Bridge panel exact text: "DOWOLNA RUNA → FALA → DOWOLNA RUNA"
+Below in smaller text: "Tylko Nimra. Fala podtrzymuje łańcuch, ale nie zastępuje wymaganych run."
+Footer exact text: "PAMIĘĆ: 3 OSTATNIE RUNY" and three small slots numbered "1", "2", "3", the third subtly highlighted with label "ostatnia".
+Small status label: "PROPOZYCJA DO TESTÓW"
+Constraints: all Polish diacritics accurate; exactly nine ordinary panels plus one Fala panel; exactly three destinations per ordinary panel in specified order. No invented connections, no repeated panels, no heroes, no dice, no extra rules, no global rune bonuses, no watermark. Beautiful restrained editorial typography, ample space, borders understated.

@@ -16,6 +16,7 @@ from uuid import uuid4
 
 from flask import (
     Flask,
+    Response,
     abort,
     g,
     jsonify,
@@ -181,7 +182,6 @@ def create_app(
             "main_menu.html",
             scenario_name=session.exploration.scenario_name,
             save_exists=session.snapshot_path.exists() or (session.save_dir/"misja_0_dzwon.snapshot.json").exists(),
-            mission_active=session.exploration.scenario_id == "misja_0_dzwon",
         )
 
     @app.post("/training/open")
@@ -270,24 +270,29 @@ def create_app(
 
     @app.get("/session-materials")
     def session_materials():
-        from .session_copy import DEFAULT_PACK
-        files = (("misja_0_komplet_A4.pdf", "materials_mission"),
-                 ("karty_postaci_A4.pdf", "materials_heroes"),
-                 ("sciaga_graczy_A4.pdf", "materials_rules"),
-                 ("znaczniki_A4.pdf", "materials_tokens"))
-        return render_template("session_materials.html", materials=[
-            dict(filename=name, label=label, exists=(DEFAULT_PACK / "print" / ("runy_ladunki_v02/" + name if name == "karty_postaci_A4.pdf" else name)).is_file())
-            for name, label in files])
+        from dnd_board_game.physical_cards import handout_files
+        materials = []
+        for spec in handout_files.HANDOUT_FILES:
+            try:
+                exists = handout_files.handout_path(
+                    spec.filename, root=handout_files.HANDOUTS_ROOT,
+                ).is_file()
+            except ValueError:
+                exists = False
+            materials.append(dict(filename=spec.filename, label=spec.label_key,
+                                  title=spec.title, exists=exists))
+        return render_template("session_materials.html", materials=materials)
 
     @app.get("/session-materials/<path:filename>")
     def session_material_file(filename: str):
-        from .session_copy import DEFAULT_PACK
-        if filename not in {"misja_0_komplet_A4.pdf", "misja_0_komplet_A4_25mm.pdf",
-                            "karty_postaci_A4.pdf", "sciaga_graczy_A4.pdf", "znaczniki_A4.pdf"}:
+        from dnd_board_game.physical_cards import handout_files
+        try:
+            path = handout_files.handout_path(filename, root=handout_files.HANDOUTS_ROOT)
+        except ValueError:
             abort(404)
-        if filename == "karty_postaci_A4.pdf":
-            return send_from_directory(DEFAULT_PACK / "print/runy_ladunki_v02", filename)
-        return send_from_directory(DEFAULT_PACK / "print", filename)
+        if not path.is_file():
+            abort(404)
+        return send_from_directory(handout_files.HANDOUTS_ROOT, filename)
 
     @app.get("/new-game")
     def new_game():
@@ -1612,6 +1617,7 @@ def create_app(
 
     @app.post("/api/board/scan")
     def api_board_scan():
+        from .exploration_app import BoardCommandRejected
         data = request.get_json(silent=True) or {}
         try:
             return jsonify(
@@ -1620,6 +1626,8 @@ def create_app(
                     automatic=bool(data.get("automatic", False)),
                 )
             )
+        except BoardCommandRejected as exc:
+            return jsonify({"error": str(exc), "error_kind": "command_rejected", "state": session.state_payload()}), 400
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 
@@ -1656,6 +1664,13 @@ def create_app(
     def api_encounter_setup_confirm():
         try:
             return jsonify(session.confirm_encounter_setup_step())
+        except Exception as exc:
+            return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/encounter/setup/back")
+    def api_encounter_setup_back() -> Response | tuple[Response, int]:
+        try:
+            return jsonify(session.back_encounter_setup_step())
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
 

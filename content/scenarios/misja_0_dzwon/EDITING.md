@@ -12,9 +12,10 @@ nie ma osobnego zakresu wdrożenia mobilnego.
 | Podpisy i komunikaty nowego UI | `text/ui/navigation.json`, `common.json`, `confrontation.json`, `combat.json` |
 | Etykiety scen, instrukcje i dziennik Misji 0 | `text/ui.json` |
 | Przygotowanie wyposażenia: instrukcja planszy i przykład | `text/equipment_intro.md`; tytuł w `text/index.json`, przyciski w `text/ui.json` |
-| Historie, skazy, opisy akcji, pasywów i sprzętu bohaterów | `text/karty_postaci.json` |
-| Ściąga: jak grać, walka, rozmowy i obiekty | `text/sciaga_graczy.json` |
-| Rozkaz Nessy i pokwitowania Boruta | `print/handouts.json` |
+| Obecne moce v0.3, koszty, premie, skazy, pasywy i relacje run | `content/print/rune_relations_v03/catalog.json` w katalogu projektu |
+| Historie i sprzęt bohaterów; wcześniejsze lekcje i opisy | `text/karty_postaci.json` |
+| Obecna ściąga gry i PDF | `text/sciaga_relacje_v03.json`; tabela relacji pochodzi z katalogu |
+| Rozkaz Nessy i pokwitowania Boruta | `text/handouts.json` |
 | Nazwy, obrysy, podpisy i grafiki elementów mapy | `maps/cutouts.json` |
 | Rozmieszczenie sceny i przygotowanie planszy | `maps/setup.json` |
 | Przedmioty scenariusza i opis działania | `mechanics/items.json` |
@@ -38,7 +39,16 @@ Odśwież ekran, aby od razu zobaczyć poprawiony podpis strony startowej.
 
 ## Karty bohaterów — wspólne źródło gry i wydruków
 
-`text/karty_postaci.json` jest jedynym edytowalnym źródłem tych opisów.
+Moce, pasywy, skazy i relacje run nowych walk znajdują się w
+`content/print/rune_relations_v03/catalog.json` w katalogu projektu.
+`scenarios/rune_relation_catalog.py` sprawdza koszty, warunki, graf
+i słownik modyfikatorów przed rozpoczęciem gry. Nie wpisuj drugiej
+definicji efektu do UI lub adaptera LED. Odbuduj karty przez
+`scripts/build_rune_relations.py`, a dane mocka przez
+`scripts/build_resonance_mock.py`.
+
+`text/karty_postaci.json` pozostaje źródłem historii, sprzętu oraz starszych
+lekcji i opisów używanych poza nową mechaniką walki.
 Aplikacja i generatory odczytują ten sam plik przez `scenarios/character_text.py`.
 Nie ma drugiej kopii w dawnym `content/characters/`.
 
@@ -80,31 +90,33 @@ wcześniej zapisane wpisy historii nie zmieniają się wstecz.
 Uruchom z głównego katalogu projektu:
 
 ```sh
-PYTHONPATH=src .venv/bin/python scripts/build_session_print_packs.py
+PYTHONPATH=src .venv/bin/python scripts/build_handouts.py
 ```
 
-Komenda tworzy cztery osobne pliki w `print/`: materiały sceny,
-karty bohaterów, ściągę i znaczniki. Piąty gotowy PDF jest alternatywnym
-kompletem sceny z nominalnymi polami 25 mm; odbudowujesz go przez
-`--only mission --nominal`. Nie drukuj obu wariantów kafli. Dokładną listę oraz skalę druku opisuje
-[przewodnik wydruków](print/README.md).
+Komenda publikuje aktualne czarno-białe PDF-y w głównym folderze `handouts/`:
+`characters.pdf`, `map_a4.pdf`, `map_full.pdf`, materiały `mission_0/` oraz
+ściągę i znaczniki w `reference/`. Mapa i kafle mają wspólną skalę
+`(250/244) × 1,03`. Dokładną listę oraz instrukcję druku opisuje
+[przewodnik wydruków](../../../handouts/README.md).
 
 Można odnowić tylko zmienioną część:
 
 ```sh
-PYTHONPATH=src .venv/bin/python scripts/build_session_print_packs.py --only mission
-PYTHONPATH=src .venv/bin/python scripts/build_session_print_packs.py --only heroes
-PYTHONPATH=src .venv/bin/python scripts/build_session_print_packs.py --only aid
+PYTHONPATH=src .venv/bin/python scripts/build_handouts.py --only mission_0
+PYTHONPATH=src .venv/bin/python scripts/build_handouts.py --only characters
+PYTHONPATH=src .venv/bin/python scripts/build_handouts.py --only maps
+PYTHONPATH=src .venv/bin/python scripts/build_handouts.py --only reference
 ```
 
-`heroes` odświeża też ściągę i znaczniki, bo zmiana słownika może wpływać
-na ich skład. `aid` pomija 35 arkuszy bohaterów. Generator sprawdza w Chrome
+`characters` odświeża też ściągę i znaczniki, bo zmiana słownika może wpływać
+na ich skład. `reference` pomija 35 arkuszy bohaterów. Generator sprawdza w Chrome
 przepełnienia, grafiki i fizyczne wymiary kart przed publikacją.
 Potrzebuje istniejących Chrome/Chromium, `pdfinfo`, `pdfunite` i `pdftoppm`;
 nie instaluje dodatkowych zależności. Ghostscript, jeśli jest dostępny,
 zmniejsza rozmiar PDF przy zachowaniu wymiarów i liczby stron; ilustracje
-są przygotowane do druku w 300 dpi. Pięć końcowych PDF-ów może być
-wersjonowanych w Git; robocze PDF-y i podglądy pozostają ignorowane.
+są przygotowane do druku w 300 dpi. Dziewięć końcowych PDF-ów w `handouts/`
+może być wersjonowanych w Git; robocze HTML, PDF-y, manifesty i podglądy
+trafiają do ignorowanego `.cache/handouts/`.
 
 ## Opis a mechanika
 

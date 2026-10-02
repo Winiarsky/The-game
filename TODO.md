@@ -1,3 +1,132 @@
+## Trasy, osłona i Żar odnowy — 02.10.2026
+
+- [x] Odtworzyć zgłoszenia z `exploration_ui_66707532c6.jsonl`:
+  zbędne zygzaki Erynda (seq219) i Nimry (seq522), Borut na murku
+  `(8,13)` (seq326), wybór wroga przy Żarze odnowy (seq664–667).
+- [x] Przy tym samym koszcie ruchu preferować geometrycznie krótszą
+  trasę. Zachować koszty przekątnych, terenu, przejścia przez sojusznika,
+  narożniki i Parkour. Nimra nadal omija trudne pole `(11,19)`.
+- [x] Doliczać aktualną osłonę pola do KP obu stron: Borut na murku
+  ma KP 15, po zejściu 13. Pokazać nazwę i premię; używać wspólnych
+  zasad osłony linii ataku i obron Zręczności, bez sumowania osłon.
+- [x] Ograniczyć Żar odnowy, Szał, Całun i Skupienie do ich wykonawcy.
+  Nie pozwalać mocom obszarowym z automatycznym doborem celów wybierać
+  pojedynczego wroga. Błędny dawny podgląd można poprawić lub cofnąć
+  bez wydawania zasobów.
+- [x] Potwierdzić testem przeglądarki wznowienie skanera po odrzuconej
+  komendzie, widoczność błędu oraz zachowanie ręcznej ponownej próby
+  przy błędzie połączenia ze sprzętem.
+- [x] Walidacja: 245 testów w seryjnych, ograniczonych partiach, w tym
+  6 prób Chrome (harmonogram skanera, wznowienie po błędzie, widok
+  osłony i stabilny rzut na dwóch rozdzielczościach). Porównano też
+  pełne zasięgi i koszty ruchu przed/po w 168 układach — bez zmian.
+- [ ] Ograć poprawione trasy, osłonę i Żar odnowy na fizycznej planszy.
+
+## Setup i informacja zwrotna w walce — 02.10.2026
+
+- [x] Dodać cofnięcie do poprzedniego elementu ustawiania planszy na ekranie
+  i polu ↩, także korektę ustawienia bohatera przed inicjatywą.
+- [x] Pokazać portret rzucającej postaci przy inicjatywie i podsumowaniu.
+- [x] Zachować zasięg ruchu po wskazaniu celu; rozróżnić niebieski zasięg,
+  żółtą trasę i zielony cel. Kolejne naciśnięcia zmieniają podgląd,
+  dopiero ✓ przemieszcza bohatera i zużywa ruch.
+- [x] Oznaczać niedozwolone cele na czerwono i pozwolić odczytać powód
+  odmowy przez naciśnięcie pola; po błędnym wyborze wymagać legalnego
+  wskazania przed ✓. Zachować dotychczasowe reguły zasięgu i widoczności.
+- [x] Pokazać wszystkie podstawowe akcje w zwartej formie z przyczynami
+  niedostępności. Dodać kartę celu z portretem, cechami, PW/KP i stanami,
+  w tym Piętnem łowcy oraz źródłem efektu.
+- [x] Rozpoczynać nowe kości na środku zakresu, zachować zapisany wynik
+  w trakcie rzutu i aktualizować +/− bez przebudowy widoku.
+- [x] Sprawdzić premie wszystkich siedmiu bohaterów; pokazać składniki.
+  Sesja `exploration_ui_639fe6b8f1.jsonl` oraz checkpoint potwierdzają
+  zmęczenie po wozie przez jedną rundę: +4 cechy −2 = +2. Bez zmiany
+  arytmetyki. Erynd zachowuje +1 za pierwszy strzał przed ruchem.
+- [x] Walidacja seryjna: 141 testów silnika/premii, 32 setupu/inicjatywy,
+  4 adaptera LED, 27 prezentacji/integracji/zapisu i 7 prób Chrome
+  (galeria mocy, karta celu, stabilność +/−, cofanie i portrety inicjatywy).
+  Obejrzano także zrzuty rzeczywistego UI w rozdzielczości 1268×691.
+- [ ] Ograć zmiany na rzeczywistym sprzęcie: zmiana celu ruchu bez
+  zatwierdzania, czerwony cel za skrzynią, ↩ w setupie i płynność +/−.
+- [ ] Uzupełnić dane wyposażenia startowego Loriana o amunicję do kuszy.
+  Audyt premii wykazał poprawny modyfikator Zręczności +2, ale zestaw
+  z `training_hero` nie ma bełtów, więc bramka amunicji blokuje zwykły strzał.
+
+## Przygotowanie wyposażenia — 02.10.2026
+
+- [x] Zastąpić przeglądanie całego zapasu kartą kolejnych bohaterów:
+  gotowy sprzęt startowy, siedem miejsc na postaci, osiem miejsc plecaka
+  na stronie, stałe runy miejsc i +/− dopiero w wyborze przedmiotu.
+- [x] Obsłużyć zamianę, odkładanie, przenoszenie z własnego plecaka,
+  broń dwuręczną, dalsze strony plecaka, cofnięcie oraz zapis wyboru.
+- [x] Oddzielić zapas, znaleziska do identyfikacji i fabularny ekwipunek
+  drużyny. Zdobyty sprzęt odblokowywać w bazie na kolejną wyprawę;
+  zachować identyfikację pierścienia przez Nimrę i mikstury z odprawy.
+- [x] Sprawdzić siedem startowych zestawów, maski LED/skanera, blokadę
+  podczas misji, identyfikację, sprzedaż, zachowanie zapisu oraz Chrome
+  w dwóch rozdzielczościach laptopa z wejściem przez adapter planszy.
+  Walidacja: 21 testów transakcji/przygotowania, 9 zestawów/blokady,
+  2 próby Chrome, 12 przejść powrotu oraz 3 próby mikstur/zapisu — OK.
+  Mikstura zachowuje typ i tożsamość także po przeniesieniu do bohatera
+  i zmianie identyfikatora wynikającej z powtarzającej się nazwy przedmiotu.
+- [ ] Przeprowadzić próbę całego przygotowania na rzeczywistej planszy:
+  zgodność run przy miejscach, światła, naciśnięcia i czytelność ze stołu.
+- [ ] Uaktualnić starsze testy powrotu z misji do obecnego silnika
+  konfrontacji i biegłości: `test_lorian_one_shot_bonus_and_hero_gates`
+  czyta obecny stan starym modelem (`passives`), a
+  `test_ring_changes_score_not_modifier_and_preserves_base` pomija premię
+  biegłości. Odtworzono oba błędy na poprzednich modułach ekwipunku.
+  Dwie próby `test_mission_recovery_browser.py` zatrzymują się wcześniej
+  na dawnym polu premii Nessy. Nowy test przygotowania obejmuje niezależnie
+  powrót, identyfikację znaleziska i założenie go przez fizyczne runy adaptera.
+
+## Menu startowe — 02.10.2026
+
+- [x] Przenieść cztery kafelki na prawą stronę tytułu i usunąć osobne
+  „Wznów Misję 0”; zapis pozostaje dostępny przez „Wczytaj grę”.
+- [x] Sprawdzić podświetlenie run 5–8 i natychmiastowe uruchomienie
+  odpowiadających kafelków po pojedynczym naciśnięciu; zachować wspólny
+  adapter planszy i ochronę przed zdarzeniami poprzedniego ekranu.
+  Walidacja pierwszej zmiany: 24 testy adaptera/menu, 12 prób Chrome
+  i 3 testy menu/wczytywania.
+- [x] Korekta po próbie użytkownika: w menu głównym wyłączyć +/−/✓
+  i kursor przyciemniający pozostałe runy. Podświetlać i skanować wyłącznie
+  cztery runy kafelków 5–8, wszystkie z jednakową jasnością; dopasować
+  komunikat obsługi do dostępnych pól. Walidacja: 24 testy adaptera/menu
+  (także odrzucanie +/−/✓) i 10 prób Chrome (każdy kafelek oraz nowa gra).
+  Próba na rzeczywistym sprzęcie pozostaje w istniejącej liście poniżej.
+
+## Relacje run v0.3 — 01.10.2026
+
+- [x] Przerobić siedem postaci w osobnym katalogu v0.3: 29 mocy z jednym
+  kosztem, 51 warunkowych premii, cztery wyładowania i Fala tylko u Nimry.
+- [x] Przygotować osobne karty HTML/PDF oraz pełny komplet A4 (35 stron);
+  sprawdzić układ wszystkich siedmiu zestawów.
+- [x] Zaktualizować wyłącznie klikalny mock walki: pamięć trzech run,
+  podgląd kontynuacji/resetu, warunki wyładowań, galeria wszystkich postaci
+  i klikalne kierunkowe połączenia. Zachować właściwy runtime v0.2.
+- [x] Przygotować grafikę okręgu bez napisów: tekstura imagegen, dokładne
+  symbole panelu i połączenia zgodne z katalogiem; PNG oraz wektorowy SVG.
+- [x] Sprawdzić wszystkie 29 mocy i wykonanie 51 premii w mocku, pamięć,
+  wyładowania, zapis i terminy stanów; zachować regresję reputacji i wyprawy.
+- [x] Przejrzeć z użytkownikiem 29 kart wszystkich siedmiu bohaterów,
+  pojedyncze koszty, 51 premii i cztery finiszery w osobnym katalogu v0.3.
+- [x] Zaakceptować klikalny mock: pamięć trzech run, kierunkowe kontynuacje,
+  reset przed niepasującą mocą, Fala Nimry, terminy stanów i wyładowania.
+- [x] Wdrożyć uzgodnione relacje do wspólnego silnika gry, zapisu 35,
+  UI i adapterów LED. Nowe walki używają v03; trwające zapisy v02
+  zachowują swoje reguły. Obsłużyć wszystkie 29 mocy i 51 premii,
+  koszty raz, przerwane ruchy, kości, czasowe efekty i wznowienie decyzji.
+- [x] Uaktualnić launcher, materiały kart i wspólną ściągę UI/PDF;
+  graf i podgląd nie mają drugiej definicji w adapterze LED.
+- [x] Przeprowadzić 282 skupione testy serialnie, sprawdzić wszystkie
+  podglądy kart w trzech rozdzielczościach, komplet PDF oraz rzeczywisty
+  launcher Flask + symulator z klatką LED i zamknięciem serwerów.
+- [ ] Ograć v03 przy stole na prawdziwym sprzęcie według instrukcji;
+  ocenić balans pojedynczych kosztów 3–8, finiszerów i odzysku.
+- [ ] Zaprojektować późniejsze zdobycze pod dziewięcioma zarezerwowanymi
+  silniejszymi runami; nie nadawać im startowych mocy przed osobnym przeglądem.
+
 ## Karty ładunków v0.2 — 24.09.2026
 
 - [x] 30.09: przenieść zaakceptowaną walkę do Python/UI: wszystkie 29 mocy,
@@ -7,7 +136,8 @@
   tryb symulatora/sprzętu i instrukcję `docs/playtests/RESONANCE_RUNTIME_MANUAL.md`.
 - [ ] Wykonać próby stołowe z fizyczną planszą według instrukcji: opóźnienia
   wejść, czytelność kolorów, przerwane ruchy i powrót po wczytaniu.
-- [ ] Po teście ręcznym ocenić balans kosztów 4/8, skaz i odzysku 1k4.
+- [x] Zastąpić plan testu kosztów 4/8 zaakceptowanymi kosztami v03;
+  bieżący test balansu znajduje się w zadaniach relacji run powyżej.
 - [ ] Zaktualizować historyczny test
   `test_mission_zero.py::test_guild_destinations_use_tile_fields_and_arena_is_informational`:
   pomija istniejący już w HEAD przycisk powrotu (slot 29) w skanie gildii.
@@ -2481,7 +2611,8 @@ KON 16); wcześniejsze snapshoty i historyczne wyniki audytu pozostają bez zmia
 - [x] Usunąć nieużywane kopie pasywów walki i eksploracji z `mats_v2/copy.json`; wskazać w instrukcji edycji aktywne katalogi i pola `display`.
 
 - [x] Wspólne źródło treści `content/scenarios/misja_0_dzwon/text/karty_postaci.json`: historie, skazy, akcje i podbicia, 70 pasywów, samouczek i pomocnik. Gra i druk czytają ten sam plik; usunięto poprzednie kopie. Testy edycji i odświeżania bez restartu.
-- [ ] Dostosować stare `test_garran_mana_movement.py` (13 wariantów oczekujących płatnego ruchu) i `test_hero_rules_consistency.py` (7 oczekiwań profilu `shared_mana_v03`) do obecnego systemu. Szczegóły: `docs/reports/CHARACTER_TEXT_SOURCE.md`.
+- [x] Zastąpić siedem starych oczekiwań `shared_mana_v03` w `test_hero_rules_consistency.py` zgodnością bieżących kart v03 ze statystykami, ekwipunkiem i cechami postaci; testy korzystają z edytowalnych źródeł, bez dawnych manifestów wydruku.
+- [ ] Dostosować stare `test_garran_mana_movement.py` (13 wariantów oczekujących płatnego ruchu) do obecnego systemu. Szczegóły: `docs/reports/CHARACTER_TEXT_SOURCE.md`.
 
 ## Runy — techniczny prototyp 22.09.2026
 
@@ -2671,3 +2802,10 @@ Historyczne wpisy o osobistych pulach many dotyczą poprzedniego wariantu.
   pojemności z katalogu i instrukcja obsługi przez planszę. Zachować dostęp
   do mapy i kafli. Oba generatory korzystają ze wspólnego spisu, żeby
   ponowny eksport nie przywracał starych kart ani opisów.
+
+- [x] [Materiały do druku, 02.10.2026] Uporządkować aktualną czarno-białą
+  edycję w `handouts/`: `characters.pdf`, `map_a4.pdf`, `map_full.pdf`,
+  podfolder `mission_0/` i wspólne pomoce `reference/`. Mapy i kafle korzystają
+  z tej samej skali. Usunąć stare eksporty postaci, map i prototypów;
+  zachować źródła ilustracji. Zaktualizować linki UI, dokumentację oraz
+  generatory, z plikami roboczymi w `.cache/handouts/`.

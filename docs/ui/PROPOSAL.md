@@ -70,7 +70,7 @@ lub dodatkową k20 za 5. Wóz: próg 20, koszt zamiany 3.
 Aktualizacja 22.09.2026: [makieta](prototype.html) przedstawia teraz runy v0.1:
 wspólny dobór, ręce bohaterów, płatne moce i wybór reakcji. Zwykły atak
 okazyjny bronią kosztuje 0 run. Dolny panel odpowiada nowym
-[wydrukom](../../content/scenarios/misja_0_dzwon/print/runy_v01/index.html).
+[wydrukom](../../handouts/README.md).
 `+` i `−` zmieniają wynik kości albo przewijają ekran;
 podświetlenie odróżnia opcje dostępne, wybrane i zablokowane.
 Garran ma robocze moce, pozostałe postacie szablony. To lokalna makieta,

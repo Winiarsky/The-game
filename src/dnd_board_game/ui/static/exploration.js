@@ -14,6 +14,8 @@ let boardInputPhase = 'idle';
 let boardListeningRevision = '';
 let lastAttemptedBoardRevision = '';
 let boardScanError = '';
+let boardCommandError = '';
+let boardCommandRetryAt = 0;
 let boardAutoArmTimer = null;
 let lastBoardSelectionRevision = 0;
 let sessionLog = null;
@@ -189,12 +191,15 @@ function handleSidePanelTabKeydown(event) {
   next.focus();
   event.preventDefault();
 }
-function setBusy(message) {
+function setBusy(message, {quiet = false} = {}) {
   busy = Boolean(message);
   waitingForGm = Boolean(message && (message.includes('MG') || message.includes('NPC')));
   const status = document.getElementById('status');
-  status.hidden = !busy;
+  status.hidden = !busy || quiet;
   status.textContent = message || '';
+  // Repeated die adjustments keep focus and the visible controls steady.
+  // The busy flag still prevents concurrent commands and stale revisions.
+  if (quiet && busy) return;
   const typing = document.getElementById('chat-typing');
   if (typing) typing.hidden = !waitingForGm;
   const typingLabel = document.getElementById('chat-typing-label');
@@ -352,13 +357,13 @@ function synchronizeBoardSelection({force = false} = {}) {
     || boardInteraction.selected_action_id
   );
 }
-async function api(path, body, busyMessage) {
+async function api(path, body, busyMessage, {quiet = false} = {}) {
   const previousStage = state && state.flow ? state.flow.stage : null;
   const previousInteractionId = state && state.conversation ? state.conversation.interaction_id : null;
   const previousMessageCount = state && state.messages ? state.messages.length : 0;
   const gmRequest = Boolean(busyMessage && (busyMessage.includes('MG') || busyMessage.includes('NPC')));
   const retryRequest = gmRequest ? {path, body: body || {}, busyMessage} : null;
-  setBusy(busyMessage || 'Czekam na odpowiedź...');
+  setBusy(busyMessage || 'Czekam na odpowiedź...', {quiet});
   clearTimeout(boardAutoArmTimer);
   boardAutoArmTimer = null;
   if (boardPanelSyncPromise) await boardPanelSyncPromise;
@@ -391,6 +396,7 @@ async function api(path, body, busyMessage) {
       return {ok: true};
     }
     state = data.state || data;
+    if (res.ok) boardCommandError = '';
     const nextStage = state && state.flow ? state.flow.stage : null;
     const nextInteractionId = state && state.conversation ? state.conversation.interaction_id : null;
     if (nextStage === 'location_active' && (previousStage !== 'location_active' || nextInteractionId !== previousInteractionId)) {
@@ -478,6 +484,11 @@ async function loadState() {
   scheduleAutomaticBoardScan();
 }
 function render() {
+  if (typeof ChargeCombat !== 'undefined' && ChargeCombat.updateDie()) {
+    updateBoardInputPresentation();
+    scheduleAutomaticBoardScan();
+    return;
+  }
   closeKeyboardRollWizard();
   const existingConversationScroll = document.getElementById('chat-conversation-scroll');
   const followChatTail = !existingConversationScroll
@@ -799,6 +810,13 @@ function initializeKeyboardRollWizard() {
     submitButton,
     contextLines: keyboardRollContextLines(submitButton.closest('#roll-panel, .combat-action-card, .precombat-stealth-roll, #exploration-mana-roll, #mission-roll, #simple-trap-roll, #encounter')),
   };
+  if (allSteps.every(step => step.input.id.startsWith('encounter-initiative-roll'))) {
+    const prompt = state.encounter_initiative?.current_prompt;
+    const actor = (state.actors || []).find(actor => actor.id === prompt?.actor_id);
+    if (prompt) keyboardRollWizard.initiativeActor = {
+      name: prompt.actor_name, portrait_url: actor?.portrait_url || prompt.portrait_url,
+    };
+  }
   const panel = state.encounter_initiative?.panel;
   if (panel && allSteps.every(step => step.input.id.startsWith('encounter-initiative-roll'))) {
     keyboardRollWizard.initiative = true;
@@ -839,6 +857,9 @@ function renderKeyboardRollWizard(message = '') {
   const overlay = document.getElementById('keyboard-roll-wizard');
   if (!wizard || !overlay) return;
   const totalSteps = wizard.steps.length;
+  const initiativeHero = wizard.initiativeActor;
+  const initiativePortrait = initiativeHero?.portrait_url
+    ? `<img class="initiative-roll-portrait" src="${esc(initiativeHero.portrait_url)}" alt="${esc(initiativeHero.name)}">` : '';
   const manaAttempt = wizard.submitButton.closest('#exploration-mana-roll') ? state.exploration_mana.attempt : null;
   if (wizard.review) {
     const rows = wizard.allSteps.map(step => {
@@ -856,8 +877,10 @@ function renderKeyboardRollWizard(message = '') {
     overlay.innerHTML = `
       <div class="keyboard-roll-wizard-backdrop"></div>
       <section class="keyboard-roll-wizard-card" tabindex="-1">
-        <span class="keyboard-roll-wizard-kicker">Podsumowanie rzutu</span>
-        <h2 id="keyboard-roll-wizard-title">Sprawdź wpisane wyniki</h2>
+        <div class="keyboard-roll-wizard-heading">${initiativePortrait}<div>
+          <span class="keyboard-roll-wizard-kicker">${initiativeHero ? `Inicjatywa · ${esc(initiativeHero.name)}` : 'Podsumowanie rzutu'}</span>
+          <h2 id="keyboard-roll-wizard-title">Sprawdź wpisane wyniki</h2>
+        </div></div>
         <ul class="keyboard-roll-wizard-summary">${rows}</ul>
         ${manaAttempt ? `<div class="keyboard-roll-combined-summary"><p>${manaAttempt.busted?'Niższy wynik':'Wynik kości'}:
           <b>${Math.min(...wizard.allSteps.map(step=>step.raw))} ${signedNumber(manaAttempt.modifier_total)} = ${Math.min(...wizard.allSteps.map(step=>step.raw))+manaAttempt.modifier_total}</b></p>
@@ -884,8 +907,8 @@ function renderKeyboardRollWizard(message = '') {
     <div class="keyboard-roll-wizard-backdrop"></div>
     <section class="keyboard-roll-wizard-card">
       <div class="keyboard-roll-wizard-heading">
-        ${rollStepDiceIconHtml(step)}
-        <div><span class="keyboard-roll-wizard-kicker">Rzut ${wizard.index + 1} z ${totalSteps}</span>
+        ${initiativePortrait || rollStepDiceIconHtml(step)}
+        <div><span class="keyboard-roll-wizard-kicker">${initiativeHero ? `Inicjatywa · ${esc(initiativeHero.name)} · ` : ''}Rzut ${wizard.index + 1} z ${totalSteps}</span>
         <h2 id="keyboard-roll-wizard-title">${esc(step.label)}</h2></div>
       </div>
       <div class="keyboard-roll-wizard-context">${context}</div>
@@ -4374,8 +4397,9 @@ function encounterSetupHtml(setup) {
     return '<div class="result"><b>Setup zakończony</b><br>Plansza jest przygotowana do inicjatywy i walki.</div>';
   }
   const step = setup.current_step || {};
+  const back = setup.can_back ? '<button class="secondary" data-setup-back="true" onclick="backEncounterSetup()">↩ Poprzedni element</button>' : '';
   if (step.tiles?.length) {
-    const confirm=`<button data-setup-accept="true" onclick="confirmEncounterSetup()" ${step.can_confirm?'':'disabled'}>${esc(state.mission.ui.setup_accept)}</button>`;
+    const confirm=`<button data-setup-accept="true" onclick="confirmEncounterSetup()" ${step.can_confirm?'':'disabled'}>${esc(state.mission.ui.setup_accept)}</button>${back}`;
     return missionSetupHtml(step,step.label,step.message,confirm);
   }
   const terrainGuide = setup.battle_briefing?.length
@@ -4406,6 +4430,7 @@ function encounterSetupHtml(setup) {
       ${mechanicsHtml}
       ${selectedPosition ? `<p><b>Wybrane pole:</b> (${selectedPosition.join(', ')}). Ustaw tutaj figurkę.</p>` : ''}
       <p>${canConfirm ? 'Naciśnij niebieski przycisk <b>✓ Potwierdź</b> na planszy.' : 'Najpierw wybierz pole. Przycisk ✓ zaświeci się po wyborze.'}</p>
+      ${back}
     </div>
     <details class="encounter-position-fallback"><summary>Awaryjne sterowanie ekranowe</summary>
       ${requiresBoardAssignment ? `<div class="row">${assignmentButtons}</div>` : ''}
@@ -4442,6 +4467,7 @@ function encounterInitiativeHtml(setup, initiative, stealth) {
   if (!initiative) {
     return `
       <div class="message"><b>Inicjatywa</b><br>Setup zakończony. Teraz ustalcie kolejność tur.<p>Naciśnij niebieski przycisk <b>✓ Potwierdź</b> na planszy, aby rozpocząć inicjatywę.</p></div>
+      <button class="secondary" data-setup-back="true" onclick="backEncounterSetup()">↩ Poprzedni element</button>
       <details class="encounter-position-fallback"><summary>Awaryjne sterowanie ekranowe</summary><button onclick="startEncounterInitiative()">✓ Rozpocznij inicjatywę</button></details>
     `;
   }
@@ -7913,6 +7939,7 @@ function updateBoardInputPresentation() {
   document.querySelectorAll('button[data-primary-scan="true"]').forEach(button => {
     button.hidden = hasBoardContract;
   });
+  if (typeof ChargeCombat !== 'undefined') ChargeCombat.updateBoardError();
 }
 function boardSelectionCanAutoArm(selection = currentBoardSelection()) {
   if (!selection || !selection.auto_arm || !selection.connected) return false;
@@ -7964,7 +7991,7 @@ function scheduleAutomaticBoardScan() {
         || !boardSelectionCanAutoArm(current)
         || String(current?.revision || '') !== revision) return;
     scanBoardOnce({revision, automatic: true});
-  }, selection.input_mode === 'stream' ? 0 : 120);
+  }, Math.max(selection.input_mode === 'stream' ? 0 : 120, boardCommandRetryAt-Date.now()));
 }
 async function scanBoard() {
   if (!Boolean((state.board || {}).connected)) {
@@ -7991,6 +8018,7 @@ function scanBoardOnce({revision = '', automatic = false} = {}) {
   boardInputPhase = 'listening';
   boardListeningRevision = revision;
   boardScanError = '';
+  boardCommandRetryAt = 0;
   lastAttemptedBoardRevision = revision;
   updateBoardInputPresentation();
   boardScanPromise = performBoardScan({revision, automatic, token, previousInteractionId});
@@ -8029,7 +8057,15 @@ async function performBoardScan({revision, automatic, token, previousInteraction
     if (!res.ok) {
       boardInputPhase = 'error';
       boardScanError = data.error || 'Nie udało się odczytać planszy.';
-      if (!automatic) alert(boardScanError);
+      if (res.status===400 && data.error_kind==='command_rejected' && data.state?.board_selection?.revision) {
+        // Re-arm for a new physical press. Never repeat the rejected command.
+        boardCommandError = boardScanError;
+        lastAttemptedBoardRevision = '';
+        boardCommandRetryAt = Date.now()+700;
+      } else {
+        boardCommandError = '';
+        if (!automatic) alert(boardScanError);
+      }
     }
     state = data.state || data;
     const returnedRevision = String(((state || {}).board_selection || {}).revision || '');
@@ -8048,6 +8084,7 @@ async function performBoardScan({revision, automatic, token, previousInteraction
       boardScanError = 'Nie wykryto zmiany na żadnym z podświetlonych pól.';
     } else if (res.ok) {
       boardInputPhase = 'resolved';
+      boardCommandError = '';
     }
     render();
     if (boardSelectionActivated) scrollChatToBottom(true);
@@ -8056,6 +8093,7 @@ async function performBoardScan({revision, automatic, token, previousInteraction
     if (token !== boardScanToken) return;
     boardInputPhase = 'error';
     boardScanError = 'Połączenie z planszą zostało przerwane.';
+    boardCommandError = '';
     updateBoardInputPresentation();
     if (!automatic) alert(boardScanError);
   } finally {
@@ -8133,6 +8171,7 @@ async function resetBoardScan() {
 function startEncounterSetup() { api('/api/encounter/setup/start', {}, 'Przygotowuję kroki setupu encountera...'); }
 function resolveEncounterOpening() { api('/api/encounter/opening/resolve', {}, 'Rozstrzygam rozpoczęcie starcia...'); }
 function confirmEncounterSetup() { api('/api/encounter/setup/confirm', {}, 'Potwierdzam krok setupu...'); }
+function backEncounterSetup() { api('/api/encounter/setup/back', {}, 'Wracam do poprzedniego elementu...'); }
 function startEncounterInitiative() { api('/api/encounter/initiative/start', {}, 'Rozpoczynam inicjatywę...'); }
 function startPrecombatStealthRoll(actorId) {
   if (busy || keyboardRollWizard) return;

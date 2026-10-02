@@ -253,85 +253,9 @@ def pdf_pages(path: Path) -> int:
 
 
 def main() -> None:
-    OUTPUT.mkdir(parents=True, exist_ok=True)
-    parts = OUTPUT / "parts"
-    parts.mkdir(exist_ok=True)
-    data = json.loads(
-        (ROOT / "content/scenarios/recruitment_arena_combat.json").read_text()
-    )
-    body = map_body(data)
-    (OUTPUT / "arena_bw_750x500mm.svg").write_text(
-        svg(body, "0 0 750 500", "750mm", "500mm")
-    )
-    map_html = parts / "arena_A4.html"
-    map_html.write_text(
-        document(
-            "".join(
-                f'<section class="sheet">{tile_svg(t, body)}</section>' for t in tiles()
-            ),
-            "landscape",
-        )
-    )
-    map_pdf = parts / "arena_A4.pdf"
-    render_pdf(map_html, map_pdf)
-    if pdf_pages(map_pdf) != 9:
-        raise RuntimeError("Mapa musi mieć dokładnie 9 stron.")
-    print("Arena: 9 arkuszy A4, zakładki 10 mm", flush=True)
-    hero_pdfs = []
-    hero_pages = []
-    terrain_html, terrain_pdf = parts / "teren.html", parts / "teren.pdf"
-    terrain_html.write_text(terrain_document(data))
-    render_pdf(terrain_html, terrain_pdf)
-    if pdf_pages(terrain_pdf) != 1:
-        raise RuntimeError("Znaczniki terenu muszą zmieścić się na jednej stronie.")
-    next_page = 12
-    for hero_id in PLAYABLE_HERO_IDS:
-        hero = build_print_hero(hero_id)
-        html, pdf = parts / f"{hero_id}.html", parts / f"{hero_id}.pdf"
-        html.write_text(render_hero_html(hero, "bw_test"))
-        render_pdf(html, pdf)
-        count = pdf_pages(pdf)
-        hero_pages.append((hero.name, next_page, count))
-        next_page += count
-        hero_pdfs.append(pdf)
-        print(f"{hero.name}: {count} stron", flush=True)
-    guide_html, guide_pdf = parts / "instrukcja.html", parts / "instrukcja.pdf"
-    guide_html.write_text(guide(body, hero_pages))
-    render_pdf(guide_html, guide_pdf)
-    if pdf_pages(guide_pdf) != 1:
-        raise RuntimeError("Instrukcja musi zmieścić się na jednej stronie.")
-    destination = OUTPUT / "arena_i_karty_A4_czarno_biale.pdf"
-    merge_pdfs([guide_pdf, map_pdf, terrain_pdf, *hero_pdfs], destination)
-    if pdf_pages(destination) != next_page - 1:
-        raise RuntimeError("Nieprawidłowa liczba stron pakietu.")
-    (OUTPUT / "manifest.json").write_text(
-        json.dumps(
-            {
-                "pdf": destination.name,
-                "pages": next_page - 1,
-                "cell_mm": CELL_MM,
-                "print_scale": PRINT_SCALE,
-                "pdf_cell_mm": CELL_MM * PRINT_SCALE,
-                "calibration": {"measured": 244, "target": 250},
-                "tile_origin_mm": [PAGE_ORIGIN_MM, PAGE_ORIGIN_Y_MM],
-                "board_mm": [BOARD_WIDTH_MM, BOARD_HEIGHT_MM],
-                "overlap_mm": OVERLAP_MM,
-                "orientation": "clockwise",
-                "panel_blank_slot": 4,
-                "blank_map": True,
-                "terrain_page": 11,
-                "terrain_tokens": terrain_inventory(data),
-                "tiles": [asdict(t) for t in tiles()],
-                "heroes": [
-                    {"name": n, "first_page": p, "pages": c} for n, p, c in hero_pages
-                ],
-            },
-            ensure_ascii=False,
-            indent=2,
-        )
-        + "\n"
-    )
-    print(f"Gotowe: {destination} ({next_page-1} stron)", flush=True)
+    """Legacy invocation rebuilds the current shared handouts instead of an arena pack."""
+    from build_handouts import main as current_main
+    current_main()
 
 
 if __name__ == "__main__":

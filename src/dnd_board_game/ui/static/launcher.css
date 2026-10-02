@@ -99,6 +99,23 @@ button:disabled { border-color: #504a3e; color: #8f887b; background: #2b2a27; cu
 .menu-action small { color: var(--muted); line-height: 1.35; }
 .launcher-shell footer { grid-column: 1 / -1; color: #777064; font-size: 11px; }
 
+.main-menu-page .launcher-shell {
+  padding: clamp(24px, 4vh, 48px) clamp(28px, 4vw, 64px);
+  gap: clamp(20px, 4vh, 40px);
+}
+.main-menu-page .menu-board-hint {
+  max-width: 34ch;
+  margin-top: 28px;
+  color: var(--gold-bright);
+  font-size: 14px;
+}
+.main-menu-page .launcher-board-controls { margin: 0 0 6px; }
+.main-menu-page .launcher-board-controls p { margin: 0; }
+@media (min-width: 761px) {
+  .main-menu-page .title-block { grid-column: 1; grid-row: 1; }
+  .main-menu-page .main-menu { grid-column: 2; grid-row: 1; }
+}
+
 .flow-shell {
   width: min(900px, calc(100% - 32px));
   margin: 0 auto;

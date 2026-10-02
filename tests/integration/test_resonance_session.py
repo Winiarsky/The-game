@@ -1,6 +1,7 @@
 """Real mission session, command locking, saves and board adapter."""
 from pathlib import Path
 from dataclasses import replace
+import pytest
 
 from dnd_board_game.ui import resonance
 from dnd_board_game.ui.routes import create_app
@@ -9,11 +10,14 @@ from tests.unit.test_initiative_panel import Board
 from dnd_board_game.hardware.board_panel import panel_position
 from dnd_board_game.hardware.led_palette import LedColor
 from dnd_board_game.ui.board_panel_symbols import rune_slot
+from dnd_board_game.rules.resonance import PROFILE, LEGACY_PROFILE
 
 
 def test_mission_starts_new_profile_and_rejects_stale_commands(tmp_path: Path) -> None:
     s = start_battle(session(tmp_path, legacy_combat=False))
     assert s.combat_state.resonance is not None
+    assert s.combat_state.resonance.profile == PROFILE
+    assert s.combat_state.resonance.version == 2
     assert s.combat_state.shared_mana is None
     data = s.state_payload()["combat"]["resonance"]
     assert data["active"] == "garran"
@@ -58,18 +62,18 @@ def test_physical_dice_save_restore_and_stale_scan(tmp_path: Path) -> None:
     count = board.scans
     client.post("/api/board/scan", json=dict(revision=old, automatic=True))
     assert board.scans == count
-    press(26)
     press(28)
-    assert s.combat_state.resonance.fighters["garran"].charges == 12
+    assert s.combat_state.resonance.fighters["garran"].charges == 16
+    assert s.combat_state.resonance.task["parts"][0]["sides"] == 10
     press(26)
-    assert s.combat_state.resonance.die_value == 2
+    assert s.combat_state.resonance.die_value == 6  # k10 starts at 5, then physical +.
     before = s.combat_state.resonance.as_payload()
     s.save_snapshot()
     s.load_snapshot()
     assert s.combat_state.resonance.as_payload() == before
     press(28)
-    assert s.combat_state.resonance.task["parts"][0]["sides"] == 10
-    assert s.combat_state.resonance.die_value == 1
+    assert s.combat_state.resonance.phase == "result"
+    assert s.combat_state.resonance.task is None
 
 
 def test_enemy_full_turn_uses_authored_ai_and_returns_to_queue(tmp_path: Path) -> None:
@@ -153,7 +157,7 @@ def test_finished_combat_returns_to_mission_without_clearing_hymn(tmp_path: Path
         if a.faction.value == "enemy":
             e.update_actor(replace(a, hp=0))
     garran = e.actor("garran")
-    e.update_actor(replace(garran, features=(*garran.features, FeatureGrant("resonance_hymn", "Hymn", FeatureSourceKind.SCENARIO, "lorian"))))
+    e.update_actor(replace(garran, features=(*garran.features, FeatureGrant("resonance_hymn", "Hymn odwagi · 1k8", FeatureSourceKind.SCENARIO, "lorian"))))
     e.s.phase = "result"
     assert e.acknowledge()
     assert e.s.phase == "finished"
@@ -163,6 +167,132 @@ def test_finished_combat_returns_to_mission_without_clearing_hymn(tmp_path: Path
     assert data["mission"]["stage"] == "post_battle"
     assert any(f.feature_id == "resonance_hymn" for a in s.exploration.actors if a.id == "garran" for f in a.features)
     from dnd_board_game.ui.exploration_app import _encounter_with_session_actor_state
-    from dnd_board_game.combat.charge_encounter import hymn_source
+    from dnd_board_game.combat.charge_encounter import hymn_source, hymn_sides
     refreshed = _encounter_with_session_actor_state(encounter, s.exploration.actors)
     assert hymn_source(next(a for a in refreshed.actors if a.id == "garran")) == "lorian"
+    assert hymn_sides(next(a for a in refreshed.actors if a.id == "garran")) == 8
+
+
+def test_new_profile_removes_legacy_grants_and_preserves_hymn() -> None:
+    from dnd_board_game.actors import FeatureGrant, FeatureSourceKind
+    from dnd_board_game.application.resonance_combat import apply_charge_profile
+    from dnd_board_game.combat.charge_encounter import hymn_sides
+    from dnd_board_game.ui.training_arena import training_hero
+    for hero_id in ("garran", "brakka", "mira", "dagna", "lorian", "nimra", "erynd"):
+        legacy = apply_charge_profile(training_hero(hero_id), profile=LEGACY_PROFILE)
+        hymn = FeatureGrant("resonance_hymn", "Hymn odwagi · 1k8", FeatureSourceKind.SCENARIO, "lorian")
+        actor = apply_charge_profile(replace(legacy, features=(*legacy.features, hymn)))
+        assert actor.hp == legacy.hp and actor.inventory == legacy.inventory
+        assert not any(f.source_ref == LEGACY_PROFILE for f in actor.features)
+        assert not any(f.feature_id in {"rune_resource_v01", "physical_mana_v02", "mana_passives_v1"} for f in actor.features)
+        assert len([f for f in actor.features if f.feature_id == PROFILE]) == 1
+        assert len([f for f in actor.features if f.feature_id == f"{PROFILE}_passive"]) == 1
+        assert hymn in actor.features and hymn_sides(actor) == 8
+        assert apply_charge_profile(actor) == actor
+
+
+def test_schema_34_restore_keeps_started_legacy_profile(tmp_path: Path) -> None:
+    from copy import deepcopy
+    from dnd_board_game.application.resonance_combat import apply_charge_profile
+    from dnd_board_game.rules.resonance import ResonanceChain, ResonanceEntry
+    from dnd_board_game.save.session_snapshot import SessionSnapshot, SNAPSHOT_SCHEMA_VERSION
+    s = start_battle(session(tmp_path, legacy_combat=False))
+    legacy = deepcopy(s.combat_state.resonance)
+    legacy.version, legacy.profile = 1, LEGACY_PROFILE
+    legacy.chain = ResonanceChain(1, [ResonanceEntry("Wieża", "garran", "Wieża"),
+                                   ResonanceEntry("Fala", "brakka", "Wieża")], ["garran", "brakka"])
+    actors = tuple(apply_charge_profile(a, profile=LEGACY_PROFILE) if a.faction.value == "ally" else a
+                   for a in s.combat_state.actors)
+    s.combat_state = replace(s.combat_state, actors=actors, resonance=legacy)
+    raw = s.create_snapshot().as_dict()
+    raw["schema_version"] = 34
+    raw["combat"]["resonance"].pop("profile")
+    restored = SessionSnapshot.from_dict(raw, base_state=s.state)
+    assert restored.as_dict()["schema_version"] == SNAPSHOT_SCHEMA_VERSION == 35
+    assert restored.combat_state.resonance.version == 1
+    assert restored.combat_state.resonance.profile == LEGACY_PROFILE
+    assert restored.combat_state.resonance.chain == legacy.chain
+    assert restored.combat_state.resonance.queue == legacy.queue
+    s.combat_state = restored.combat_state
+    assert resonance.engine(s).catalog["profile"] == LEGACY_PROFILE
+
+
+@pytest.mark.parametrize("card_flag", [True, False])
+def test_snapshot_rejects_modified_paid_bonus_before_session_commit(tmp_path: Path, card_flag: bool) -> None:
+    import json
+    import pytest
+    from dnd_board_game.rules.resonance import ResonanceChain, ResonanceEntry
+    from dnd_board_game.save.session_snapshot import SnapshotValidationError
+    s = start_battle(session(tmp_path, legacy_combat=False))
+    e = resonance.engine(s)
+    e.s.chain = ResonanceChain(1, [ResonanceEntry("Wieża", "garran", "Wieża")], ["garran"])
+    assert e.choose("second_wind") and e.commit()
+    assert e.s.action["modifiers"]["self_temp_hp"] == 4
+    s.combat_state = e.combat_state()
+    before = s.combat_state.resonance.as_payload()
+    s.save_snapshot()
+    saved = json.loads(s.snapshot_path.read_text(encoding="utf-8"))
+    saved["combat"]["resonance"]["action"]["modifiers"]["self_temp_hp"] = 999
+    saved["combat"]["resonance"]["action"]["card"] = card_flag
+    s.snapshot_path.write_text(json.dumps(saved), encoding="utf-8")
+    with pytest.raises(SnapshotValidationError, match="Rezonansu"):
+        s.load_snapshot()
+    assert s.combat_state.resonance.as_payload() == before
+def test_reserved_runes_are_silent_and_loading_rearms_board_context(tmp_path: Path) -> None:
+    import pytest
+    s = start_battle(session(tmp_path, legacy_combat=False))
+    class CountingBoard(Board):
+        def __init__(self) -> None:
+            super().__init__()
+            self.cancellations = 0
+        def cancel_scan(self) -> None:
+            self.cancellations += 1
+    board = CountingBoard()
+    s.attach_board_connection(board, backend="simulator")
+    s._sync_board_leds()
+    old_mask = s._board_selection_payload()
+    before = s.combat_state.resonance.as_payload()
+    for rune in resonance.engine(s).catalog["rules"]["reserved_runes"]:
+        position = panel_position(rune_slot(rune))
+        assert position.as_tuple() not in board.leds
+        assert position not in resonance.scan_target(s).positions
+        with pytest.raises(ValueError, match="dostępny"):
+            resonance.select_position(s, position)
+    assert s.combat_state.resonance.as_payload() == before
+    s.save_snapshot()
+    s._board_scan_context_key = old_mask["revision"]
+    cancellations = board.cancellations
+    s.load_snapshot()
+    assert board.cancellations == cancellations + 1
+    assert s._board_scan_context_key == ""
+    assert s._board_selection_payload()["revision"] != old_mask["revision"]
+    assert s.combat_state.resonance.as_payload() == before
+    scans = board.scans
+    s.scan_board_selection(expected_revision=old_mask["revision"], automatic=True)
+    assert board.scans == scans
+
+
+def test_live_v03_help_and_api_exclude_retired_mana_panels(tmp_path: Path) -> None:
+    import json
+    from dnd_board_game.scenarios.rune_relation_catalog import load_rune_relation_player_aid
+    s = start_battle(session(tmp_path, legacy_combat=False))
+    before = s.combat_state.resonance.as_payload()
+    response = create_app(s).test_client().get("/api/state")
+    assert response.status_code == 200
+    data = response.json
+    assert data["player_aid"] == load_rune_relation_player_aid()
+    aid = json.dumps(data["player_aid"], ensure_ascii=False)
+    assert "pamięć trzech run" in aid and "Klepsydra" in aid and "Wieża" in aid
+    help_text = data["mission"]["ui"]["combat_help"].lower()
+    assert "jeden koszt" in help_text and "ostatnia runa" in help_text
+    assert not any(retired in help_text for retired in ("mana", "drain", "6 kart"))
+    assert data["combat"]["resonance"]["profile"] == PROFILE
+    assert data["combat"]["physical_mana"] is None
+    assert data["combat"]["shared_mana"] is None
+    for actor in data["combat"]["actors"]:
+        if actor["faction"] != "ally":
+            continue
+        assert not any(feature["source_ref"].startswith(("physical_mana:", "shared_mana:", "runes:", "mana_saturation:"))
+                       or feature["source_ref"] == LEGACY_PROFILE for feature in actor["features"])
+        assert len([feature for feature in actor["features"] if feature["id"] == f"{PROFILE}_passive"]) == 1
+    assert s.combat_state.resonance.as_payload() == before

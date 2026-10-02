@@ -94,7 +94,9 @@ def target(s: ExplorationUiSession) -> BoardScanTarget:
     return BoardScanTarget(positions=tuple(panel_position(slot) for slot in slots),
         feedback=panel_feedback(tuple(colors), selected_slot=nav.focused, action_colors=colors,
                                 control_slots=tuple(slot for slot in slots if slot >= 26)),
-        empty_message='Runa wybiera od razu. −/+ przegląda, ✓ wybiera, ↩ wraca.')
+        empty_message=('Naciśnij podświetloną runę kafelka.'
+                       + (' −/+ przegląda, ✓ wybiera.' if nav.controls else '')
+                       + (' ↩ wraca.' if nav.back else '')))
 
 
 def selection(s: ExplorationUiSession) -> dict[str, object]:

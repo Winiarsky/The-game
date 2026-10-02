@@ -6,7 +6,7 @@ Gramy z **laptopa przy fizycznej planszy**. Uruchom aplikację i wybierz
 **✓** zatwierdza, **↩** wraca. Osobne ćwiczenia pozostają w
 **Poligon · Samouczki postaci**. Wersja mobilna nie jest obecnym celem.
 
-Przed grą otwórz [gotowe wydruki](print/README.md). Teksty aplikacji i materiałów
+Przed grą otwórz [gotowe wydruki](../../../handouts/README.md). Teksty aplikacji i materiałów
 zmienisz według [instrukcji edycji](EDITING.md), bez szukania ich w kodzie UI.
 
 ## Przebieg
@@ -24,7 +24,7 @@ Solidarność, 0 Równowaga, 1…3 Bezwzględność. Bez planszy pomiń ostatni
 parametr. [Opcje szybkiego startu i katalogi testowe](../../../docs/RUNNING_AND_TESTING.md#szybki-start-misji-0-po-scenie-z-wozem).
 
 Elementy do wycięcia przygotuj przed rozpoczęciem scenariusza, z aktualnych
-PDF-ów w `print/`. Materiały są też dostępne z ekranu przygotowania gry.
+PDF-ów w głównym katalogu `handouts/`. Materiały są też dostępne z ekranu przygotowania gry.
 Podczas intro świata, bohaterów i pierwszego wezwania **+** przewija opis
 w dół, **−** w górę, a **✓** przechodzi do kolejnego fragmentu. Przyciski
 pozostają widoczne; podczas przygotowania można też używać myszy. Aktualizacje
@@ -42,21 +42,28 @@ przed zatwierdzeniem. Współrzędne są liczone od zera.
 
 ## Gotowe materiały do druku
 
-Wszystkie bieżące PDF-y są w `print/`. Wybierz jeden z dwóch wariantów kafli;
-karty postaci i ściąga są osobnymi plikami.
+Wszystkie bieżące PDF-y są w głównym katalogu repozytorium `handouts/`.
+To aktualny, czarno-biały komplet do testów.
 
 | PDF | Zawartość | Strony |
 | --- | --- | --- |
-| [Misja 0 — komplet](print/misja_0_komplet_A4.pdf) | Instrukcja, rozmieszczenie, kafle, rozkaz Nessy, pokwitowania i przedmioty; korekta drukarki 250/244 | 10 |
-| [Misja 0 — pola 25 mm](print/misja_0_komplet_A4_25mm.pdf) | Ten sam komplet bez korekty drukarki | 10 |
-| [Karty postaci](print/karty_postaci_A4.pdf) | Spis i po pięć stron siedmiu bohaterów: postać, mana, akcje, mata wyposażenia, sprzęt | 36 |
-| [Ściąga graczy](print/sciaga_graczy_A4.pdf) | Podstawy, walka, rozmowy i obiekty | 4 |
-| [Znaczniki](print/znaczniki_A4.pdf) | Zajęta druga ręka, wykorzystana zdolność i legenda sprzętu | 1 |
+| [Karty postaci](../../../handouts/characters.pdf) | Siedmiu bohaterów, po pięć stron: postać, zdolności, mata wyposażenia i wycinanki | 35 |
+| [Plansza A4](../../../handouts/map_a4.pdf) | Plansza 20 × 30 z panelem; dwanaście arkuszy do złożenia | 12 |
+| [Pełna plansza](../../../handouts/map_full.pdf) | Ta sama geometria na jednej stronie dla drukarni, bez zakładek i oznaczeń składania | 1 |
+| [Kafle Misji 0](../../../handouts/mission_0/tiles.pdf) | Instrukcja, rozmieszczenie i 18 elementów do wycięcia | 7 |
+| [Przedmioty Misji 0](../../../handouts/mission_0/items.pdf) | Znaleziska, mikstury i dokumenty; również karta rozpoznanego pierścienia | 1 |
+| [Rozkaz Nessy](../../../handouts/mission_0/order.pdf) | Zlecenie wręczane podczas odprawy | 1 |
+| [Pokwitowania Boruta](../../../handouts/mission_0/receipts.pdf) | Dokument wręczany przy podjęciu sprawy długu | 1 |
+| [Ściąga graczy](../../../handouts/reference/rules.pdf) | Wspólne zasady i relacje run | 3 |
+| [Znaczniki](../../../handouts/reference/markers.pdf) | Pomocnicze znaczniki wyposażenia i efektów | 1 |
 
-Druk jednostronny, A4, **100%, bez dopasowania**. Nie drukuj obu wariantów
-kafli. [Instrukcja wydruków](print/README.md) podaje wymiary oraz strony dla
-wybranych bohaterów. Podkład mapy, figurki, kości i wspólna talia many są
-wielokrotnego użytku i nie są dublowane w tych pakietach.
+Drukuj jednostronnie, **100%, bez dopasowania**. Wybierz planszę A4 albo
+jedną pełną planszę; oba pliki przedstawiają ten sam podkład. Mapa i kafle
+mają wspólną kalibrację **`(250/244) × 1,03`**, już uwzględnioną w PDF-ach.
+Nie dodawaj jej ponownie w sterowniku. Pełna plansza ma
+około **791,5 × 527,7 mm**, a pole w pliku około **26,383 mm**.
+Porównaj próbny wydruk z fizyczną planszą przed drukowaniem całego kompletu.
+Figurki, kości i talia do konfrontacji są wielokrotnego użytku.
 
 Handouty rozdaj przy odpowiednich wydarzeniach. Kartę rozpoznanego pierścienia
 przekaż dopiero po identyfikacji; zastępuje nieznaną — to jeden przedmiot.
@@ -64,14 +71,12 @@ przekaż dopiero po identyfikacji; zastępuje nieznaną — to jeden przedmiot.
 Odbudowa z aktualnych źródeł, z głównego katalogu projektu:
 
 ```sh
-PYTHONPATH=src .venv/bin/python scripts/build_session_print_packs.py
-PYTHONPATH=src .venv/bin/python scripts/build_session_print_packs.py --only mission --nominal
+PYTHONPATH=src .venv/bin/python scripts/build_handouts.py
 ```
 
-Opcje `--only mission`, `--only heroes` i `--only aid` odświeżają wybraną część.
-Obok PDF-ów powstają spisy stron `.md` i manifesty `.json`. Starszy zbiorczy
-pakiet postaci jest w `print/archive/`; wcześniejsze mapy i osobne kafle
-pozostają w `maps/print/`. Nie trzeba drukować ich dodatkowo.
+Opcje `--only characters`, `--only maps`, `--only mission_0` i `--only reference`
+odświeżają wybraną część. Pośrednie HTML, manifesty i robocze PDF-y powstają
+w `.cache/handouts/`; gotowe materiały pozostają w `handouts/`.
 
 ## Nowy widok na laptopie
 
@@ -94,13 +99,12 @@ na rzeczywistym sprzęcie pozostaje osobnym sprawdzeniem przy stole.
 
 ## Dokumenty źródłowe do druku
 
-Przed grą przygotujcie [rozkaz odbioru](print/rozkaz_A4.pdf) oraz
-[pokwitowania dostaw](print/pokwitowania_A4.pdf), albo oba dokumenty z
-[jednego PDF-u A4](print/dokumenty_A4.pdf). Rozkaz wręcza Nessa; pokwitowania
-otrzymujecie dopiero przy podjęciu sprawy długu. Oba wydruki są pozbawione
-informacji o ukrytych przedmiotach, premiach dialogowych i przyszłych scenach.
-Edytowalne źródło: `print/handouts.json`. Odtworzenie:
-`python scripts/build_mission_zero_handouts.py` (Chrome i Poppler, bez nowych zależności).
+Przed grą przygotujcie [rozkaz odbioru](../../../handouts/mission_0/order.pdf)
+oraz [pokwitowania dostaw](../../../handouts/mission_0/receipts.pdf).
+Rozkaz wręcza Nessa; pokwitowania otrzymujecie dopiero przy podjęciu sprawy długu.
+Oba wydruki są pozbawione informacji o ukrytych przedmiotach, premiach dialogowych
+i przyszłych scenach. Edytowalne źródło: `text/handouts.json`. Odtworzenie:
+`PYTHONPATH=src .venv/bin/python scripts/build_handouts.py --only mission_0`.
 
 ## Wersja kontraktu i przedmiotów
 
@@ -183,8 +187,10 @@ w `assets/prompts/world_intro.json`, wygenerowany wbudowanym image_gen.
 | `text/ui.json` | Etykiety wyborów, instrukcje konkretnej misji i wpisy dziennika. |
 | `text/ui/*.json` | Podpisy nowego UI: nawigacja, wspólne menu, rozmowy i walka. |
 | `text/karty_postaci.json` | Wspólne opisy postaci, akcji, pasywów, sprzętu i samouczka; czytane przez grę i druk. |
-| `text/sciaga_graczy.json` | Osobne źródło czterech stron zasad dla graczy. |
-| `print/` | Pięć gotowych PDF-ów; źródło handoutów `handouts.json`, manifesty i podglądy arkuszy. |
+| `text/sciaga_relacje_v03.json` | Źródło trzech stron aktualnej ściągi; tabela relacji pochodzi z katalogu v0.3. |
+| `text/handouts.json` | Edytowalny rozkaz Nessy i pokwitowania Boruta. |
+| `../../../handouts/` | Gotowe bieżące PDF-y; źródła i pliki robocze pozostają poza tym katalogiem. |
+| `../../../.cache/handouts/` | Pośrednie HTML, PDF i manifesty generowane przy odbudowie materiałów. |
 | `profiles/` | Instrukcje tworzenia tekstów i obrazów: narrator, Nessa, siedmioro bohaterów, wieśniacy i obiekty. |
 | `assets/images/` | Pierwotne portrety i ilustracje; nowa oprawa komiksowa w `comic_v2/`. Zmiana pliku zmienia identyfikator cache obrazu. |
 | `visuals.json` | Wybór obrazów do gry. `image_overrides` kieruje dotychczasowe nazwy na wariant komiksowy; pusta mapa przywraca oryginały. |
@@ -192,7 +198,7 @@ w `assets/prompts/world_intro.json`, wygenerowany wbudowanym image_gen.
 | `assets/prompts/` | Pierwotne prompty w `generated_images.md`; pełen zestaw promptów zmian stylu w `comic_v2.json`. Obrazy utworzono wbudowanym image_gen. |
 | `maps/setup.json` | Instrukcje rozstawiania i wskazywane pola. `party: true` oznacza położenie figurki drużyny. |
 | `maps/*.svg` | Źródłowe mapy z siatką, edytowalne jako tekst lub grafika wektorowa. |
-| `maps/print/` | PDF i HTML: osobne kafle `elements_A4` oraz wcześniejsze mapy. Po zmianie źródeł ponów eksport. |
+| `content/print/rune_relations_v03/catalog.json` (od głównego katalogu repozytorium) | Aktualne moce wszystkich siedmiu bohaterów, koszty i kierunkowe relacje run używane przez grę oraz karty. |
 | `maps/illustrations/ink_v3/` | Aktualne czarno-białe ilustracje PNG z image_gen i pełne prompty. `artwork` wskazuje plik, `print_name` krótką nazwę na kaflu. |
 | `maps/symbols/*.svg` | Zachowany wcześniejszy wariant wektorowych rysunków. |
 | `maps/cutouts.json` | Spis 18 kafli, skala i pola interakcji. Obrysy i zasady terenu walki są pobierane z `mechanics/battle.json`. |
@@ -259,7 +265,7 @@ pozwala wybrać zapis Misji 0 także przy innym aktywnym scenariuszu.
 ## Kafle do wycięcia — własne tło
 
 Docelowe warstwy: plansza z przyciskami i LED → własne tło → kafle → figurki.
-**[Elementy A4, kalibracja areny](maps/print/elements_A4.pdf)**: 7 stron,
+**[Kafle Misji 0](../../../handouts/mission_0/tiles.pdf)**: 7 stron,
 18 elementów. Strona 1: instrukcja i spis; 2: plan rozmieszczenia;
 **3–7: arkusze do wycinania**. Budynki wycinaj jako jeden prostokąt,
 nie jako osobne kratki. Wycinaj **zewnętrzny obrys razem z podpisem**.
@@ -277,11 +283,10 @@ jako ciężki ładunek na drewnianych płozach, zajmujący kafel 2×1.
 Nominalne rozmiary: biuro 5×7, arena 5×9, zbrojownia i kwatera po 6×8,
 magazynek 4×5, pozostałe kafle 1×1, 2×1 lub 3×1 pól.
 
-Główny PDF używa wcześniejszej korekty drukarki **250/244**: geometria w pliku
-jest powiększona do około 25,615 mm/pole, tak jak wydruk areny. Drukuj **100%,
-bez dopasowania**, i sprawdź odcinek kontrolny: na tej drukarce ma dać 100 mm.
-Dla drukarki bez tego pomniejszenia użyj **[wersji dokładnie 25 mm/pole](maps/print/elements_A4_25mm.pdf)**.
-Nie drukuj obu kompletów i nie nakładaj drugiej korekty w sterowniku.
+Kafle używają tej samej skali **`(250/244) × 1,03`** co obie wersje planszy.
+Drukuj **100%, bez dopasowania**. Odcinek kontrolny odpowiada czterem polom;
+porównaj go z mapą i fizycznymi czujnikami. Nie nakładaj drugiej korekty
+w ustawieniach drukarki.
 
 - **Blokada / blokuje ruch**: w walce blokuje wejście i widoczność. Budynki, skrzynie, głazy,
   dzwon i wóz. Podczas eksploracji jedna figurka może wskazać pole w budynku.
@@ -306,26 +311,28 @@ P02 Wóz jest używany ponownie: na drodze (9,17)–(10,17), w posterunku
 I wskazuje punkt eksploracji, bojowe premie i blokady wtedy nie obowiązują.
 W setupie i widoku misji jest link „Elementy do wycięcia”.
 
-Ponowny eksport obu wariantów z katalogu projektu:
+Ponowny eksport bieżących materiałów Misji 0 z katalogu projektu:
 
 ```sh
-PYTHONPATH=src:. .venv/bin/python scripts/build_mission_zero_cutouts.py
+PYTHONPATH=src .venv/bin/python scripts/build_handouts.py --only mission_0
 ```
 
 Edytuj nazwę, rodzaj i `positions` terenu w `mechanics/battle.json`, a rozmiary
 miejsc Gildii i pola interakcji w `maps/cutouts.json`. Zmienione punkty muszą
 zgadzać się z `flow.json` i `maps/setup.json`. Generator odrzuca nieprostokątne
 obrysy, nakładanie kafli, wejście na panel i brakujące elementy walki.
-HTML i PDF są eksportem, więc po zmianie danych trzeba uruchomić generator.
+HTML w cache i gotowe PDF-y są eksportem, więc po zmianie danych trzeba uruchomić generator.
 
 ## Mapy i sprawdzanie
 
-PDF dla każdej mapy ma dziewięć arkuszy A4. Drukuj **100%, bez dopasowania**;
-zachowaj znaczniki składania i sprawdź odcinek kalibracyjny przed całą serią.
+[Plansza A4](../../../handouts/map_a4.pdf) ma dwanaście arkuszy;
+[pełna plansza](../../../handouts/map_full.pdf) jedną stronę w tej samej skali.
+Drukuj **100%, bez dopasowania**. W wariancie A4 zachowaj znaczniki składania;
+pełny plik dla drukarni nie zawiera zakładek ani numerów kafli.
 Ponowny eksport, z głównego katalogu repozytorium:
 
 ```sh
-python scripts/build_mission_zero_prints.py
+PYTHONPATH=src .venv/bin/python scripts/build_handouts.py --only maps
 python scripts/evaluate_mission_zero.py --trials 10
 scripts/safe_pytest.sh --timeout 60 tests/unit/test_mission_zero.py
 scripts/safe_pytest.sh --timeout 60 tests/unit/test_mission_zero_browser.py
@@ -386,15 +393,17 @@ Stan listy, kolejność postaci, wyposażenie i zapas są zapisywane. Stare zapi
 przenoszą przedmioty `mission_*` z ekwipunków do zapasu przy pierwszym wczytaniu.
 Wczytanie checkpointu nadal odtwarza cały wcześniejszy stan, wraz z pieniędzmi.
 
-Karty do druku, 63 × 88 mm, A4, **100% bez dopasowania**:
+Wyposażenie startowe jest częścią [kart postaci](../../../handouts/characters.pdf):
+maty i wycinanki wszystkich siedmiu bohaterów. Drukuj strony wybranego składu.
+Jedna karta stosu reprezentuje podaną liczbę sztuk.
 
-- `../../print/equipment/wyposazenie_startowe_A4.pdf` — sprzęt wszystkich
-  siedmiu bohaterów; drukuj karty wybranego składu. „Początkowo” oznacza źródło,
-  nie ograniczenie właściciela. Jedna karta stosu reprezentuje podaną liczbę sztuk.
-- `print/przedmioty_A4.pdf` — nieznany pierścień, medalik, mikstury, klucz, dokumenty.
-- `print/pierscien_zidentyfikowany_A4.pdf` — podmień po identyfikacji; to nie drugi pierścień.
+[Przedmioty Misji 0](../../../handouts/mission_0/items.pdf) zawierają karty
+63 × 88 mm: pierścień, medalik, mikstury, klucz i dokumenty. Karta rozpoznanego
+pierścienia jest na tym samym arkuszu — podmień ją dopiero po identyfikacji.
+A4, **100%, bez dopasowania**.
 
-Eksport: `python scripts/build_equipment_cards.py`. Ilustracje są czarno-białymi rysunkami tuszem w PNG; ramki i tekst pozostają
+Odbudowa: `python scripts/build_handouts.py --only characters` oraz
+`python scripts/build_handouts.py --only mission_0`. Ilustracje są czarno-białymi rysunkami tuszem w PNG; ramki i tekst pozostają
 wektorowe. Sprzęt wspólny: `content/print/equipment/illustrations/ink_v2/`,
 znaleziska Misji 0: `assets/items/ink_v2/`. Mapowanie w
 `physical_cards/equipment_art.py` jest wspólne dla UI i wydruków. Nazwy i zasady biorą

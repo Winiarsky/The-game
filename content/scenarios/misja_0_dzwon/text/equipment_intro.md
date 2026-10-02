@@ -1,17 +1,17 @@
-Przed wyruszeniem na misję ustalcie, co nosi każdy bohater. Aplikacja przeprowadzi was kolejno przez całą drużynę. Portret i imię nad menu wskazują postać, której wyposażenie właśnie zmieniacie.
+Przygotowujecie bohaterów po kolei. Ich wyposażenie startowe jest już ułożone — jeśli nic nie chcecie zmieniać, naciśnijcie ✓, aby przejść do następnej postaci.
 
-Przygotujcie karty postaci i przedmiotów. Przedmioty używane przez bohatera układajcie przy jego karcie, zgodnie z miejscami pokazanymi w aplikacji: pancerz, ręce, szyja i pozostałe. Rzeczy schowane trzymajcie osobno jako plecak. Wspólny zapas połóżcie na środku stołu. Nie trzeba kłaść kart przedmiotów na polach planszy — planszą wybieracie polecenia.
+Ekran przypomina matę wyposażenia: szyja, głowa i pierścień u góry; ręce po bokach pancerza; niżej przybory magiczne lub instrument. Obok są ponumerowane miejsca w plecaku. Każde widoczne miejsce ma własną runę.
 
-1. Przeglądajcie przedmioty przyciskami −/+. Po lewej zobaczycie wybrany przedmiot, a po prawej aktualne wyposażenie bohatera. Runa „Pokaż wyposażenie postaci” przełącza listę ze wspólnego zapasu na rzeczy tej osoby. Ta sama runa pozwala wrócić do zapasu.
+1. Naciśnijcie na planszy runę miejsca, które chcecie obejrzeć lub zmienić. Na przykład Grot otwiera pierwszą rękę, a Wieża — pancerz.
 
-2. Aby dać przedmiot bohaterowi, wybierzcie go we wspólnym zapasie. Naciśnijcie runę „Wybierz slot”, a potem runę miejsca, np. „Druga ręka” lub „Plecak”. Slot to miejsce noszenia przedmiotu. Dopiero wybór miejsca przenosi przedmiot. Przekażcie jego kartę graczowi i ułóżcie ją zgodnie z wyborem. Aplikacja sprawdza, czy postać może go używać.
+2. Przyciskami −/+ przejrzyjcie pasujące przedmioty z zapasu w bazie i wyposażenia tej postaci. Aplikacja pokazuje tylko legalne możliwości. ✓ zatwierdza wybrany przedmiot, a ↩ wraca bez zmiany.
 
-3. Zajęte miejsce zostanie zwolnione: poprzedni przedmiot wróci do wspólnego zapasu. Oddajcie tam także jego kartę. Broń dwuręczna zajmuje obie ręce. Plecak mieści więcej rzeczy, ale schowany przedmiot nie jest używany jako wyposażenie.
+3. Zmieniony przedmiot trafia do wybranego miejsca. Poprzedni wraca do wspólnego zapasu. „Puste miejsce” pozwala odłożyć przedmiot i przekazać go później innej postaci. Przenieście także jego fizyczną kartę.
 
-Przykład: Garran ma miecz w pierwszej ręce i tarczę w drugiej. Jeśli w zapasie jest topór dwuręczny, wybierzcie go przez −/+, następnie runę „Wybierz slot” i runę „Obie ręce”. Topór trafi do Garrana, a miecz i tarcza wrócą do wspólnego zapasu. Zróbcie to samo z kartami na stole.
+Broń dwuręczna zajmuje obie ręce: jej kartę połóżcie w pierwszej, a w drugiej znacznik „zajęta”. Zatwierdzenie takiej broni odłoży do zapasu rzeczy z obu rąk. Przedmioty w plecaku nie zastępują noszonego pancerza czy broni. Większy plecak ma kolejne strony; nie tracicie przedmiotów ani pojemności.
 
-Aby przekazać własny przedmiot innej postaci, otwórzcie „Pokaż wyposażenie postaci”, wybierzcie przedmiot i runę „Odłóż do wspólnego zapasu”. Następnie przypiszcie go odbiorcy. Klucz do posterunku i dokumenty zostają we wspólnym zapasie — nie trzeba przydzielać ich konkretnej osobie.
+Klucz otwiera osobny podgląd wspólnego zapasu, znalezisk i przedmiotów drużyny. Klucze do misji oraz dokumenty są wspólne — nie trzeba przypisywać ich bohaterowi.
 
-✓ „Gotowe” przechodzi do następnej postaci. ↩ wraca do poprzedniej, a przy pierwszej — do odprawy lub Gildii. Po ostatnim bohaterze ✓ kończy przygotowanie drużyny. Możecie zachować wyposażenie startowe; nie trzeba nic zmieniać. Po wyjściu na misję zmiany wyposażenia będą dostępne dopiero po powrocie do Gildii.
+Sprzęt znaleziony podczas misji trafia do „Znalezisk”. Nie można go wtedy założyć ani użyć. Po powrocie do Gildii sprawdźcie i zidentyfikujcie przedmioty; rozpoznany sprzęt będzie dostępny podczas przygotowania do kolejnej wyprawy. Rozpoznanie pierścienia przez Nimrę w terenie nie pozwala założyć go przed powrotem. Mikstury wydane przez Gildię przed wyjściem są dostępne na bieżącą misję.
 
-W menu ekwipunku runa „Jak przygotować wyposażenie?” ponownie otwiera tę instrukcję. Teraz −/+ przewijają opis, a ✓ przechodzi do wyposażenia.
+✓ na widoku postaci kończy jej przygotowanie. ↩ wraca do poprzedniego bohatera. Po wyjściu na misję wyposażenie pozostaje ustalone do powrotu do Gildii.

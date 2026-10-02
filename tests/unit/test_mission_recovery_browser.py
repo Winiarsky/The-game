@@ -70,9 +70,8 @@ try{
  await press('ring');
  if(NATURAL===1)await press('identify_guild');
  await press('equipment_open');
- while(state.mission.equipment.item?.id!=='mission_ring')await press('equipment_next');
  if(innerWidth>650)check([...document.querySelectorAll('[data-mission-slot]')].every(el=>el.getBoundingClientRect().bottom<=innerHeight),'equipment controls fit viewport');
- await press('equipment_slots');await press('equipment_attach',{gear_slot:'ring'});
+ await press('equipment_slot',{gear_slot:'ring'});await press('equipment_confirm');
  const g=state.actors.find(a=>a.id==='garran');check(g.ability_scores.strength===19,'score +1 displayed');
  for(let i=0;i<4;i++)await press('equipment_accept');await press('summary');
  check(state.mission.text.title==='Misja zakończona','summary');

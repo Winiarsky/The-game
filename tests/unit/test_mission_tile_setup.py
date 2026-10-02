@@ -98,8 +98,33 @@ def test_real_battle_accepts_each_terrain_batch_then_places_heroes(tmp_path: Pat
         assert flow.can_confirm
         # Physical selection is confirmation, never any of the footprint cells.
         target=s._current_board_scan_target()
-        assert target.positions==(panel_position(28),)
+        assert target.positions == ((panel_position(28), panel_position(29))
+                                    if flow.can_back else (panel_position(28),))
         s.confirm_encounter_setup_step()
     assert s.encounter_setup_flow.is_player_start_step
     assert not s.encounter_setup_flow.current_step.cutout_ids
     assert mission_zero.read(s)['stage']=='battle'
+
+
+@pytest.mark.parametrize('setup_stage', ['guild_setup', 'post_setup'])
+def test_mission_setup_back_keeps_rewards_and_reopens_previous_tile(tmp_path: Path, setup_stage: str) -> None:
+    s = session(tmp_path)
+    stage(s, setup_stage, index=0)
+    before = (s.exploration.actors, s.state.party_loot)
+    assert not any(c['action'] == 'setup_back' for c in mission_zero.payload(s)['choices'])
+    with pytest.raises(ValueError):
+        send(s, 'setup_back')
+    send(s, 'next')
+    # The first post-battle instruction places the fixed party marker. Going
+    # back reopens that instruction; it does not move the marker elsewhere.
+    position_before_back = s.state.party_position
+    previous = mission_zero.read(s)['revision']
+    p = mission_zero.select_position(s, panel_position(29))['mission']
+    assert mission_zero.read(s)['index'] == 0
+    expected = read_json(PACK, 'maps/setup.json')[setup_stage][0]
+    assert p['setup']['title'] == expected['title']
+    assert p['setup'].get('cutout_ids', []) == expected.get('cutout_ids', [])
+    assert (s.exploration.actors, s.state.party_loot) == before
+    assert s.state.party_position == position_before_back
+    with pytest.raises(ValueError, match='Nieaktualny'):
+        mission_zero.command(s, dict(action='next', revision=previous))

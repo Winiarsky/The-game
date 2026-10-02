@@ -32,7 +32,7 @@ Poprawka po sesji 2026-09-10: dolny pasek ponownie podświetla dostępne akcje i
 
 ## Materiały do druku
 
-[Zbiorczy PDF areny i siedmiu bohaterów](../assets/maps/recruitment_arena/print/arena_i_karty_A4_czarno_biale.pdf): **53 strony**. Instrukcja, 9 arkuszy mapy, arkusz terenu i 42 strony postaci. Zachowana korekta skali mapy 250/244; druk 100%, bez ponownego skalowania. Szczegóły w [instrukcji wydruku](ARENA_A4_PRINT_PACK.md).
+Dawny zbiorczy PDF areny i siedmiu bohaterów został usunięty. Obecne wydruki są w [handouts/README.md](../handouts/README.md): karty postaci, plansza A4 i pełna plansza dla drukarni. Aktualną skalę i sposób generowania opisuje [instrukcja wydruku](ARENA_A4_PRINT_PACK.md).
 
 Wszystkie 28 indywidualnych PDF-ów zostało wygenerowanych ponownie i sprawdzonych pod względem liczby stron. Arkusze kolorowe/minimalistyczne mają po 5 stron na postać, warianty do wycinania po 6. Kontrola 28 HTML w trybie druku nie wykazała przepełnionych stron. Historia i wyposażenie oraz zasady mają osobne strony.
 

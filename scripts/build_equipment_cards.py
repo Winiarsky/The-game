@@ -53,23 +53,10 @@ def mission_item_cards(pack: Path, print_root: Path) -> tuple[list[str], str]:
 
 def main() -> None:
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('--html-only',action='store_true');args=parser.parse_args()
-    folder=ROOT/'content/print/equipment';folder.mkdir(parents=True,exist_ok=True)
-    cards=[];manifest=[]
-    for hero in HEROES:
-        a=training_hero(hero)
-        for item in a.inventory:
-            cards.append(card(item,'Początkowo: '+a.name,print_root=folder))
-            manifest.append(dict(hero=hero,id=item.id,name=item.name,quantity=item.quantity))
-    pack=ROOT/'content/scenarios/misja_0_dzwon'
-    found, known_card=mission_item_cards(pack, pack/'print')
-    outputs=[(folder/'wyposazenie_startowe_A4.html',document(cards,'Wyposażenie startowe · 63 × 88 mm')),
-             (pack/'print/przedmioty_A4.html',document(found,'Misja 0 · przedmioty')),
-             (pack/'print/pierscien_zidentyfikowany_A4.html',document([known_card],'Misja 0 · karta po identyfikacji'))]
-    for path,html in outputs:
-        path.write_text(html,encoding='utf-8')
-        if not args.html_only:render_pdf(path,path.with_suffix('.pdf'))
-        print(path if args.html_only else path.with_suffix('.pdf'),flush=True)
-    (folder/'manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+'\n')
+    # Starting equipment is already on page five of each current character set.
+    from build_handouts import build_mission
+    for path in build_mission(html_only=args.html_only).values():
+        print(path, flush=True)
 
 
 if __name__=='__main__':main()

@@ -5,6 +5,7 @@
   const token = controls.dataset.launcherToken;
   const status = controls.querySelector('[data-board-status]');
   const retry = controls.querySelector('button');
+  const directRunes = document.body.classList.contains('main-menu-page');
   let stopped = false, syncing = false, scanning = false, scheduled = null;
   let selection = null, signature = '', epoch = 0, focused = null;
 
@@ -20,9 +21,10 @@
   const back = () => [...document.querySelectorAll('[data-board-back]')].find(visible);
   function desired() {
     const entries = choices();
-    if (!entries.some(e => Number(e.dataset.boardRune) === focused)) focused = entries.length ? Number(entries[0].dataset.boardRune) : null;
+    if (directRunes) focused = null;
+    else if (!entries.some(e => Number(e.dataset.boardRune) === focused)) focused = entries.length ? Number(entries[0].dataset.boardRune) : null;
     entries.forEach(e => e.classList.toggle('board-focused', Number(e.dataset.boardRune) === focused));
-    return {token, controls: entries.length ? [26,27,28] : [], focused, slots: entries.map(e => Number(e.dataset.boardRune)),
+    return {token, controls: !directRunes && entries.length ? [26,27,28] : [], focused, slots: entries.map(e => Number(e.dataset.boardRune)),
       selected: entries.filter(e => e.querySelector('input:checked')).map(e => Number(e.dataset.boardRune)),
       back: Boolean(back())};
   }
@@ -60,7 +62,7 @@
       signature = key;
       selection = data.board_selection;
       if (!selection.connected) throw new Error(sessionUiText('navigation.disconnected'));
-      report(sessionUiText('navigation.board_hint') + (contract.back ? ' · ' + sessionUiText('navigation.back_hint') : ''));
+      report(sessionUiText(directRunes ? 'navigation.menu_board_hint' : 'navigation.board_hint') + (contract.back ? ' · ' + sessionUiText('navigation.back_hint') : ''));
     } catch (error) {
       if (!stopped) {signature = key; selection = null; report(error.message, true);
         setTimeout(() => {if (!stopped && !selection) {signature='';queueSync();}}, 2000);}

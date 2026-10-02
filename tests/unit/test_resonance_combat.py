@@ -22,7 +22,7 @@ def game(hero: str = "garran", companions: tuple[str, ...] = ()) -> ChargeEncoun
     actors = (*heroes, *enemies)
     roll = resolve_d20_roll(D20RollInput(D20RollRequest(), 10))
     order = InitiativeOrder(tuple(InitiativeEntry(a, roll, 0, i) for i, a in enumerate(actors)))
-    state = CombatState(actors, order, resonance=ChargeState(order=[str(a.id) for a in actors], fighters={str(a.id): ChargeActorState() for a in actors}))
+    state = CombatState(actors, order, resonance=ChargeState(version=1, profile="rune_charges_v02", order=[str(a.id) for a in actors], fighters={str(a.id): ChargeActorState() for a in actors}))
     weapons = {str(a.id): charge_weapon(a, next(s for s in compile_actor_combat_content(a).attack_sources if any(i.id == s.source_item_id and i.equipped for i in a.inventory))) for a in heroes}
     weapons.update({str(a.id): ChargeWeapon("spear", "Włócznia", "strength", "melee", 1,
         (dict(count=1, sides=6, modifier=2, damage_type="piercing", label="Włócznia"),), 2) for a in enemies})
@@ -357,7 +357,7 @@ def test_led_opportunity_focus_result_and_clear_on_resume() -> None:
     assert enemy not in board.leds
 
 
-def test_movement_destination_led_is_blue_over_path() -> None:
+def test_movement_destination_led_is_green_over_path() -> None:
     from dnd_board_game.hardware.resonance_feedback import resonance_feedback
     from dnd_board_game.hardware.led_feedback import BoardLedAdapter
     from dnd_board_game.hardware.led_palette import LedColor
@@ -369,7 +369,7 @@ def test_movement_destination_led_is_blue_over_path() -> None:
     assert e.select(destination)
     _, view = presentation(e)
     BoardLedAdapter(board).show_feedback(resonance_feedback(view), replace=True)
-    assert board.leds[destination.as_tuple()] == LedColor.SELECTED_ATTACK_TARGET
+    assert board.leds[destination.as_tuple()] == LedColor.MOVEMENT_DESTINATION
 
 
 def test_unconscious_turn_does_not_break_another_heros_chain() -> None:

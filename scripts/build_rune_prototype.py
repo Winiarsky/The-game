@@ -272,15 +272,11 @@ Przy kilku dostępnych reakcjach wybiera się jedną, a koszt płaci po potwierd
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--only', choices=('heroes','maps'))
-    args = parser.parse_args()
-    OUTPUT.mkdir(parents=True, exist_ok=True)
-    if args.only != 'heroes':
-        build_maps()
-    if args.only != 'maps':
-        build_heroes(json.loads(SOURCE.read_text()))
-    write_index()
+    """Build the current monochrome handouts from the canonical catalog."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from build_handouts import main as build_current
+    build_current()
 
 
 if __name__ == '__main__':

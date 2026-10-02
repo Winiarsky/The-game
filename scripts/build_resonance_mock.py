@@ -1,4 +1,4 @@
-"""Export current printed cards and starter stats to the combat-only UI mock."""
+"""Export the review-only rune-relation cards to the combat UI mock."""
 from __future__ import annotations
 
 from copy import deepcopy
@@ -14,14 +14,20 @@ from dnd_board_game.character_creation.runes import apply_rune_profile
 from dnd_board_game.physical_cards.character_card_sets import _starter_builds
 from dnd_board_game.physical_cards.mana_print import build_print_hero
 from dnd_board_game.scenarios.loader import compile_actor_combat_content
-from dnd_board_game.scenarios.rune_charge_catalog import load_rune_charge_catalog
+from dnd_board_game.scenarios.rune_relation_catalog import load_rune_relation_catalog
 from dnd_board_game.ui.board_panel_symbols import rune_slot
 
 OUTPUT = ROOT / "docs/ui/resonance-data.js"
+CATALOG = ROOT / "content/print/rune_relations_v03/catalog.json"
+
+
+def load_mock_catalog() -> dict[str, Any]:
+    """Use the same validated v0.3 catalog as the live game and cards."""
+    return load_rune_relation_catalog(CATALOG)
 
 
 def build_payload() -> dict[str, Any]:
-    catalog = deepcopy(load_rune_charge_catalog())
+    catalog = deepcopy(load_mock_catalog())
     heroes = {}
     abilities = ("strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma")
     for hero_id, card_hero in catalog["heroes"].items():
@@ -46,7 +52,8 @@ def build_payload() -> dict[str, Any]:
                               speed=printed.speed // 5, level=printed.level,
                               abilities=stats, weapon=weapon,
                               portrait=f"../../content/scenarios/misja_0_dzwon/assets/images/comic_v2/{hero_id}.png")
-    return dict(version=1, rules=catalog["rules"], runes=catalog["runes"], heroes=heroes)
+    return dict(version=3, profile=catalog["profile"], stage=catalog["stage"],
+                rules=catalog["rules"], runes=catalog["runes"], heroes=heroes)
 
 
 def render_data() -> str:

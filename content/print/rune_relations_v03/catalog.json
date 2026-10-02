@@ -1,0 +1,1257 @@
+{
+  "version": 3,
+  "profile": "rune_relations_v03",
+  "source": "docs/RUNE_RELATIONS_V03.md",
+  "stage": "runtime",
+  "rules": {
+    "start_charges": 20,
+    "max_charges": 20,
+    "focus_die": 20,
+    "focus_budget": "S",
+    "focus_rune": "Spirala",
+    "regeneration_die": 4,
+    "regeneration_limit": "once_per_hero_per_round",
+    "regeneration_triggers_per_hero": 2,
+    "information_slot": 25,
+    "starter_runes": [
+      "Wieża",
+      "Grot",
+      "Schody",
+      "Błysk",
+      "Hak",
+      "Oko",
+      "Kielich",
+      "Węzeł",
+      "Fala",
+      "Klepsydra"
+    ],
+    "hero_rune_order": [
+      "garran",
+      "brakka",
+      "mira",
+      "dagna",
+      "lorian",
+      "nimra",
+      "erynd"
+    ],
+    "resonance_model": "directed_rune_memory",
+    "save_dc_base": 10,
+    "memory_limit": 3,
+    "rune_relations": {
+      "Wieża": [
+        "Grot",
+        "Schody",
+        "Błysk",
+        "Fala"
+      ],
+      "Grot": [
+        "Klepsydra",
+        "Hak",
+        "Kielich",
+        "Fala"
+      ],
+      "Schody": [
+        "Grot",
+        "Oko",
+        "Błysk",
+        "Fala"
+      ],
+      "Błysk": [
+        "Wieża",
+        "Schody",
+        "Kielich",
+        "Fala"
+      ],
+      "Hak": [
+        "Schody",
+        "Oko",
+        "Klepsydra",
+        "Fala"
+      ],
+      "Oko": [
+        "Wieża",
+        "Grot",
+        "Węzeł",
+        "Fala"
+      ],
+      "Kielich": [
+        "Wieża",
+        "Błysk",
+        "Węzeł",
+        "Fala"
+      ],
+      "Węzeł": [
+        "Schody",
+        "Oko",
+        "Kielich",
+        "Fala"
+      ],
+      "Klepsydra": [
+        "Oko",
+        "Grot",
+        "Hak",
+        "Fala"
+      ],
+      "Fala": [
+        "Wieża",
+        "Grot",
+        "Schody",
+        "Błysk",
+        "Hak",
+        "Oko",
+        "Kielich",
+        "Węzeł",
+        "Fala",
+        "Klepsydra"
+      ]
+    },
+    "bonus_timing": "before_new_rune_after_continuity_check",
+    "mismatch": "clear_before_base_action_then_start_new_chain",
+    "rune_presence": "boolean",
+    "wave_owner": "nimra",
+    "wave_behavior": "universal_bridge_without_copy_or_substitution",
+    "end_without_power": "end_of_conscious_hero_turn",
+    "finisher_miss": "pay_and_clear_after_resolution",
+    "temporary_effects": "own_duration_survives_chain_end",
+    "reserved_runes": [
+      "Rozwidlenie",
+      "Trójząb",
+      "Brama",
+      "Romb",
+      "Korona",
+      "Kotwica",
+      "Most",
+      "Klucz",
+      "Iskra"
+    ],
+    "reserved_rune_role": "stronger_progression_rewards",
+    "control_runes": [
+      "Spirala",
+      "Gwiazda"
+    ]
+  },
+  "runes": [
+    {
+      "name": "Wieża",
+      "short": "Grot → Schody → Błysk → Fala",
+      "description": "Następna moc: Grot, Schody, Błysk, Fala. Premie wynikają wyłącznie z opisu karty.",
+      "stack": "boolean_presence_in_last_three_tokens"
+    },
+    {
+      "name": "Grot",
+      "short": "Klepsydra → Hak → Kielich → Fala",
+      "description": "Następna moc: Klepsydra, Hak, Kielich, Fala. Premie wynikają wyłącznie z opisu karty.",
+      "stack": "boolean_presence_in_last_three_tokens"
+    },
+    {
+      "name": "Schody",
+      "short": "Grot → Oko → Błysk → Fala",
+      "description": "Następna moc: Grot, Oko, Błysk, Fala. Premie wynikają wyłącznie z opisu karty.",
+      "stack": "boolean_presence_in_last_three_tokens"
+    },
+    {
+      "name": "Błysk",
+      "short": "Wieża → Schody → Kielich → Fala",
+      "description": "Następna moc: Wieża, Schody, Kielich, Fala. Premie wynikają wyłącznie z opisu karty.",
+      "stack": "boolean_presence_in_last_three_tokens"
+    },
+    {
+      "name": "Hak",
+      "short": "Schody → Oko → Klepsydra → Fala",
+      "description": "Następna moc: Schody, Oko, Klepsydra, Fala. Premie wynikają wyłącznie z opisu karty.",
+      "stack": "boolean_presence_in_last_three_tokens"
+    },
+    {
+      "name": "Oko",
+      "short": "Wieża → Grot → Węzeł → Fala",
+      "description": "Następna moc: Wieża, Grot, Węzeł, Fala. Premie wynikają wyłącznie z opisu karty.",
+      "stack": "boolean_presence_in_last_three_tokens"
+    },
+    {
+      "name": "Kielich",
+      "short": "Wieża → Błysk → Węzeł → Fala",
+      "description": "Następna moc: Wieża, Błysk, Węzeł, Fala. Premie wynikają wyłącznie z opisu karty.",
+      "stack": "boolean_presence_in_last_three_tokens"
+    },
+    {
+      "name": "Węzeł",
+      "short": "Schody → Oko → Kielich → Fala",
+      "description": "Następna moc: Schody, Oko, Kielich, Fala. Premie wynikają wyłącznie z opisu karty.",
+      "stack": "boolean_presence_in_last_three_tokens"
+    },
+    {
+      "name": "Fala",
+      "short": "Dowolna runa.",
+      "description": "Wyłącznie Nimra: przyjmuje każdą poprzednią runę i pozwala kontynuować dowolną runą. Zajmuje jedno miejsce pamięci; nie kopiuje ani nie zastępuje wymaganych symboli.",
+      "stack": "boolean_presence_in_last_three_tokens"
+    },
+    {
+      "name": "Klepsydra",
+      "short": "Oko → Grot → Hak → Fala",
+      "description": "Następna moc: Oko, Grot, Hak, Fala. Premie wynikają wyłącznie z opisu karty.",
+      "stack": "boolean_presence_in_last_three_tokens"
+    }
+  ],
+  "heroes": {
+    "garran": {
+      "vignette": {
+        "title": "Ostatni na moście",
+        "text": "Deski ugięły się pod uciekającymi. Garran wsunął tarczę między kuszę a chłopca, który zgubił but. Bełt zadźwięczał o obręcz. — Po but wrócimy — powiedział, cofając się o krok. Dopiero gdy usłyszał za plecami tupot małych stóp, pozwolił sobie spojrzeć na drugi brzeg."
+      },
+      "passive": {
+        "name": "Żywa osłona",
+        "description": "Gdy trzymasz tarczę, sąsiadujący z tobą przytomni sojusznicy otrzymują stan Żywa osłona: +1 KP. Stan znika, gdy przestają spełniać te warunki."
+      },
+      "flaw": {
+        "name": "Nieustępliwość",
+        "description": "Jeśli zaczynasz własną turę na polu sąsiadującym z wrogiem, twój limit zwykłego ruchu w tej turze jest o połowę mniejszy. Dodatkowy ruch z mocy pozostaje bez zmian."
+      },
+      "regeneration": [
+        "Wróg chybił atakiem w sojusznika korzystającego w tej chwili z twojej Żywej osłony.",
+        "Przeciwnik chybił atakiem w ciebie."
+      ],
+      "cards": [
+        {
+          "id": "shield_bash",
+          "name": "Impuls egidy",
+          "rune": "Wieża",
+          "budget": "S",
+          "target": "1 wróg na sąsiednim polu.",
+          "requirements": "Tarcza w ręce.",
+          "effect": "Test Siły przeciw Sile lub Zręczności celu (wyższa premia). Wygrana: 1k6 + Siła obuchowych i odrzucenie na wybrane legalne pole w odległości 1 od celu. Remis: brak efektu.",
+          "cost": 4,
+          "resonance_bonuses": [
+            {
+              "requires": [
+                "Oko"
+              ],
+              "text": "Przewaga w teście Siły.",
+              "modifiers": {
+                "check_advantage": true
+              }
+            },
+            {
+              "requires": [
+                "Schody"
+              ],
+              "text": "Po wygranej przejdź do 1 pola bez okazyjnych; nie zużywa zwykłego ruchu.",
+              "modifiers": {
+                "bonus_move": 1,
+                "no_opportunity": true
+              }
+            }
+          ]
+        },
+        {
+          "id": "breaking_strike",
+          "name": "Ostrze przełamania",
+          "rune": "Grot",
+          "budget": "A+S",
+          "target": "1 wróg w zasięgu broni.",
+          "requirements": "Broń wręcz.",
+          "effect": "Wykonaj jeden atak bronią wręcz. Przy trafieniu zadaj obrażenia broni + 1k6 obrażeń magicznych.",
+          "cost": 5,
+          "resonance_bonuses": [
+            {
+              "requires": [
+                "Schody"
+              ],
+              "text": "Trafienie: dodatkowe 1k6 magicznych.",
+              "modifiers": {
+                "attack_bonus_dice": [
+                  {
+                    "count": 1,
+                    "sides": 6,
+                    "damage_type": "magic"
+                  }
+                ]
+              }
+            },
+            {
+              "requires": [
+                "Wieża"
+              ],
+              "text": "Po ataku, także po pudle: +1 KP do początku swojej następnej tury.",
+              "modifiers": {
+                "self_ac_next_turn": 1
+              }
+            }
+          ]
+        },
+        {
+          "id": "bastion_charge",
+          "name": "Szarża bastionu",
+          "rune": "Schody",
+          "budget": "M+S",
+          "target": "1 wróg osiągalny w twoim zasięgu ruchu.",
+          "requirements": "Przed jakimkolwiek ruchem; pełna pula ruchu.",
+          "effect": "Przejdź na najbliższe legalne pole przy celu; zwykły ruch spada do 0. Obrona Kondycji: ST 10 + Siła + przebyte pola. Porażka: Powalony (wręcz z przewagą, dystansowo −2; następna tura bez ruchu).",
+          "cost": 4,
+          "resonance_bonuses": [
+            {
+              "requires": [
+                "Wieża"
+              ],
+              "text": "Szarża nie prowokuje ataków okazyjnych.",
+              "modifiers": {
+                "no_opportunity": true
+              }
+            },
+            {
+              "requires": [
+                "Błysk"
+              ],
+              "text": "Cel ma −2 do tej obrony Kondycji.",
+              "modifiers": {
+                "enemy_save_penalty": 2
+              }
+            }
+          ]
+        },
+        {
+          "id": "second_wind",
+          "name": "Żar odnowy",
+          "rune": "Błysk",
+          "budget": "S",
+          "target": "Ty.",
+          "requirements": "Brak dodatkowych wymagań.",
+          "effect": "Odzyskaj 1k10 + poziom własnych PW, do maksimum. Nie przywraca utraconej akcji ani reakcji.",
+          "cost": 4,
+          "resonance_bonuses": [
+            {
+              "requires": [
+                "Wieża"
+              ],
+              "text": "Otrzymujesz 4 tymczasowe PW do początku swojej następnej tury.",
+              "modifiers": {
+                "self_temp_hp": 4
+              }
+            },
+            {
+              "requires": [
+                "Kielich"
+              ],
+              "text": "Jeden sąsiedni żywy sojusznik odzyskuje dodatkowo 1k6 PW.",
+              "modifiers": {
+                "adjacent_ally_heal_dice": [
+                  {
+                    "count": 1,
+                    "sides": 6
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "brakka": {
+      "vignette": {
+        "title": "Solidny stół",
+        "text": "Brakka podłożyła klin pod chwiejącą się ławę i sprawdziła ją ciężarem całego ciała. Karczmarz wyciągnął miedziaka, lecz wskazała miskę gulaszu. — Za robotę. Piwo osobno. — Kiedy odszedł, przesunęła dłonią po blacie, oceniając grubość desek. W jej zajeździe stoły miały być solidniejsze."
+      },
+      "passive": {
+        "name": "Zaciekłość",
+        "description": "Przy trafieniu krytycznym atakiem bronią dodaj 2 kości obrażeń broni zamiast 1 dodatkowej kości."
+      },
+      "flaw": {
+        "name": "Głód walki",
+        "description": "Jeśli kończysz swoją turę bez próby ataku lub ofensywnej mocy przeciw wrogowi, Runiczny szał natychmiast się kończy. Sam ruch w stronę wroga nie wystarcza."
+      },
+      "regeneration": [
+        "Trafiłaś bronią wręcz przeciwnika, który na początku twojej tury nie sąsiadował z tobą.",
+        "Atak wroga odebrał ci przynajmniej 1 PW podczas Runicznego szału."
+      ],
+      "cards": [
+        {
+          "id": "powerful_strike",
+          "name": "Gniew runy",
+          "rune": "Grot",
+          "budget": "A+S",
+          "target": "1 wróg w zasięgu broni.",
+          "requirements": "Broń wręcz.",
+          "effect": "Wykonaj atak wręcz. Trafienie: obrażenia broni + 3k6 gromowych i −2 KP celu do początku twojej następnej tury. Kara nie sumuje się. Szał nadal dodaje swoje 1k6.",
+          "cost": 8,
+          "resonance_bonuses": [],
+          "requires_resonance": [
+            "Wieża",
+            "Błysk"
+          ],
+          "ends_resonance": true,
+          "base_modifiers": {
+            "attack_bonus_dice": [
+              {
+                "count": 3,
+                "sides": 6,
+                "damage_type": "thunder"
+              }
+            ]
+          }
+        },
+        {
+          "id": "rage",
+          "name": "Runiczny szał",
+          "rune": "Błysk",
+          "budget": "S",
+          "target": "Ty.",
+          "requirements": "Tylko gdy szał nie jest aktywny.",
+          "effect": "Aktywuj Runiczny szał: +1k6 obrażeń bronią wręcz i redukcja o połowę otrzymywanych obrażeń obuchowych, kłutych i ciętych. Czas trwania: Siła + Kondycja twoich tur (min. 1).",
+          "cost": 5,
+          "resonance_bonuses": [
+            {
+              "requires": [
+                "Wieża"
+              ],
+              "text": "+1 KP do początku swojej następnej tury.",
+              "modifiers": {
+                "self_ac_next_turn": 1
+              }
+            },
+            {
+              "requires": [
+                "Oko"
+              ],
+              "text": "Przewaga w najbliższym ataku bronią przed początkiem swojej następnej tury.",
+              "modifiers": {
+                "next_attack_advantage": true
+              }
+            }
+          ]
+        },
+        {
+          "id": "charge",
+          "name": "Pęd gromu",
+          "rune": "Schody",
+          "budget": "A+S",
+          "target": "1 wróg osiągalny po ruchu do 3 pól.",
+          "requirements": "Broń wręcz; legalna droga, trudny teren kosztuje podwójnie.",
+          "effect": "Przejdź do 3 pól, potem wykonaj atak wręcz. Ten ruch nie zużywa zwykłego ruchu, ale prowokuje ataki okazyjne.",
+          "cost": 4,
+          "resonance_bonuses": [
+            {
+              "requires": [
+                "Wieża"
+              ],
+              "text": "Ten ruch nie prowokuje ataków okazyjnych.",
+              "modifiers": {
+                "no_opportunity": true
+              }
+            },
+            {
+              "requires": [
+                "Grot"
+              ],
+              "text": "Trafienie: dodatkowe 1k6 obrażeń broni.",
+              "modifiers": {
+                "attack_bonus_dice": [
+                  {
+                    "count": 1,
+                    "sides": 6,
+                    "damage_type": "weapon"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "roar",
+          "name": "Echo gromu",
+          "rune": "Hak",
+          "budget": "S",
+          "target": "Wrogowie do 2 pól, którzy cię słyszą.",
+          "requirements": "Brak dodatkowych wymagań.",
+          "effect": "Rzut obronny Mądrości ST 10 + Siła. Porażka: utrudnienie najbliższego ataku celu przed końcem jego następnej tury.",
+          "cost": 3,
+          "resonance_bonuses": [
+            {
+              "requires": [
+                "Błysk"
+              ],
+              "text": "Zasięg obejmuje wrogów do 3 pól.",
+              "modifiers": {
+                "range_bonus": 1
+              }
+            },
+            {
+              "requires": [
+                "Węzeł"
+              ],
+              "text": "Porażka obrony: cel ma dodatkowo −2 pola ruchu w swojej następnej turze.",
+              "modifiers": {
+                "enemy_move_penalty": 2
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "mira": {
+      "vignette": {
+        "title": "Miejsce przy drzwiach",
+        "text": "Mira usiadła tak, by w lustrze za szynkwasem widzieć drzwi. Obracała monetę między palcami, kiedy na rękawie gościa mignął jedwabny sznur. Moneta zniknęła w dłoni. Dopiero gdy mężczyzna minął jej stolik, uśmiechnęła się do gospodarza. — Ten pokój na górze ma drugie wyjście?"
+      },
+      "passive": {
+        "name": "Cios z zaskoczenia",
+        "description": "Raz w swojej turze dodaj 1k6 obrażeń do trafienia bronią, jeśli flankujesz cel z sojusznikiem albo jesteś przed nim ukryta."
+      },
+      "flaw": {
+        "name": "Cienka granica",
+        "description": "Dopóki pozostajesz ukryta, masz utrudnienie rzutów obronnych. Po ujawnieniu ta kara znika. Ukrycie ustalaj osobno wobec każdego wroga."
+      },
+      "regeneration": [
+        "Własnym ruchem, także z mocy, weszłaś na flankę wroga; przed tym ruchem go nie flankowałaś.",
+        "Test Ukrycia ukrył cię przed co najmniej jednym wrogiem, który wcześniej cię widział."
+      ],
+      "cards": [
+        {
+          "id": "shadow_attack",
+          "name": "Ostrze zmierzchu",
+          "rune": "Oko",
+          "budget": "A+S",
+          "target": "1 wróg w zasięgu broni, który cię nie widzi.",
+          "requirements": "Brak dodatkowych wymagań.",
+          "effect": "Atak bronią z przewagą przeciw celowi, który cię nie widzi. Trafienie: obrażenia broni + 3k6 obrażeń broni. Po rozpatrzeniu ataku ujawniasz się; Cios z zaskoczenia nadal działa.",
+          "cost": 7,
+          "resonance_bonuses": [],
+          "requires_resonance": [
+            "Hak",
+            "Schody"
+          ],
+          "ends_resonance": true,
+          "base_modifiers": {
+            "attack_bonus_dice": [
+              {
+                "count": 3,
+                "sides": 6,
+                "damage_type": "weapon"
+              }
+            ]
+          }
+        },
+        {
+          "id": "hide",
+          "name": "Całun cienia",
+          "rune": "Błysk",
+          "budget": "S",
+          "target": "Ty.",
+          "requirements": "Brak dodatkowych wymagań.",
+          "effect": "Wykonaj test Zręczności przeciw pasywnej Percepcji każdego wroga. Ukrywasz się przed tymi, których wynik przewyższysz.",
+          "cost": 4,
+          "resonance_bonuses": [
+            {
+              "requires": [
+                "Schody"
+              ],
+              "text": "Po ukryciu przed co najmniej jednym wrogiem przejdź do 2 pól. Okazyjne tylko od wrogów, którzy cię widzą.",
+              "modifiers": {
+                "bonus_move": 2
+              }
+            },
+            {
+              "requires": [
+                "Grot"
+              ],
+              "text": "Wrogowie mają −2 do pasywnej Percepcji wyłącznie podczas tej próby.",
+              "modifiers": {
+                "perception_penalty": 2
+              }
+            },
+            {
+              "requires": [
+                "Grot",
+                "Schody"
+              ],
+              "text": "Dodatkowo przewaga w teście ukrycia; zachowaj oba powyższe efekty.",
+              "modifiers": {
+                "hide_advantage": true
+              }
+            }
+          ]
+        },
+        {
+          "id": "guard_vault",
+          "name": "Parkour",
+          "rune": "Schody",
+          "budget": "S",
+          "target": "1 wróg do 4 pól, z wolnym sąsiednim polem.",
+          "requirements": "Brak dodatkowych wymagań.",
+          "effect": "Przemieść się na wybrane wolne pole przy tym wrogu, najkrótszą drogą, ignorując przeszkody i figurki wrogów. Ten ruch nie zużywa zwykłego ruchu. Prowokujesz ataki okazyjne tylko od wrogów, przed którymi nie jesteś ukryta.",
+          "cost": 4,
+          "resonance_bonuses": [
+            {
+              "requires": [
+                "Hak"
+              ],
+              "text": "Możesz wybrać wroga do 6 pól.",
+              "modifiers": {
+                "range_bonus": 2
+              }
+            },
+            {
+              "requires": [
+                "Oko"
+              ],
+              "text": "Ruch Parkour nie prowokuje żadnych ataków okazyjnych.",
+              "modifiers": {
+                "no_opportunity": true
+              }
+            }
+          ]
+        },
+        {
+          "id": "hamstring_cut",
+          "name": "Więzy mroku",
+          "rune": "Hak",
+          "budget": "A+S",
+          "target": "1 wróg na sąsiednim polu.",
+          "requirements": "Broń wręcz.",
+          "effect": "Wykonaj atak bronią wręcz. Trafienie: obrażenia broni i połowa punktów ruchu celu do końca jego następnej tury. Atak z ukrycia przed celem dodatkowo odbiera mu ruch w następnej rundzie.",
+          "cost": 4,
+          "resonance_bonuses": [
+            {
+              "requires": [
+                "Grot"
+              ],
+              "text": "Trafienie: dodatkowe 1k6 obrażeń broni.",
+              "modifiers": {
+                "attack_bonus_dice": [
+                  {
+                    "count": 1,
+                    "sides": 6,
+                    "damage_type": "weapon"
+                  }
+                ]
+              }
+            },
+            {
+              "requires": [
+                "Klepsydra"
+              ],
+              "text": "Trafienie dodatkowo odejmuje 2 pola ruchu celu w jego następnej turze (minimum 0).",
+              "modifiers": {
+                "enemy_move_penalty": 2
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "dagna": {
+      "vignette": {
+        "title": "Po opatrunku",
+        "text": "— To tylko zadrapanie — upierał się woźnica. Dagna podała mu koniec bandaża. — W takim razie łatwo będzie go potrzymać. — Zaczekała, aż przestanie drżeć, i zawiązała opatrunek. Przy wyjściu zatrzymał ją zapach pieczonych jabłek. Tym razem kupiła dwa: jedno dla rannego, drugie dla siebie."
+      },
+      "passive": {
+        "name": "Łagodna dłoń",
+        "description": "Gdy twoja moc przywraca PW innemu bohaterowi, ten bohater odzyskuje dodatkowo 2 PW, najwyżej raz na rozpatrywaną moc. Bez przekraczania maksimum."
+      },
+      "flaw": {
+        "name": "Nikogo nie zostawiam",
+        "description": "Gdy sąsiadujesz z żywym sojusznikiem mającym mniej niż połowę maksymalnych PW, Płomień świtu kosztuje o 2 ładunki więcej. Zwykły atak nie kosztuje ładunków."
+      },
+      "regeneration": [
+        "Twoja moc rzeczywiście przywróciła PW innemu bohaterowi, który przed leczeniem miał mniej niż połowę maksimum.",
+        "Wróg chybił sojusznika objętego twoją Pieczęcią łaski."
+      ],
+      "cards": [
+        {
+          "id": "sacred_flame",
+          "name": "Płomień świtu",
+          "rune": "Hak",
+          "budget": "S",
+          "target": "1 widoczny wróg do 6 pól.",
+          "requirements": "Brak dodatkowych wymagań.",
+          "effect": "Rzut obronny Zręczności ST 10 + Mądrość. Porażka: 2k6 obrażeń promienistych. Sukces: brak obrażeń.",
+          "cost": 3,
+          "resonance_bonuses": [
+            {
+              "requires": [
+                "Grot"
+              ],
+              "text": "Porażka obrony: dodatkowe 1k6 promienistych.",
+              "modifiers": {
+                "damage_dice_extra": [
+                  {
+                    "count": 1,
+                    "sides": 6,
+                    "damage_type": "radiant"
+                  }
+                ]
+              }
+            },
+            {
+              "requires": [
+                "Klepsydra"
+              ],
+              "text": "Cel ma −2 do tej obrony Zręczności.",
+              "modifiers": {
+                "enemy_save_penalty": 2
+              }
+            }
+          ]
+        },
+        {
+          "id": "bless",
+          "name": "Pieczęć łaski",
+          "rune": "Oko",
+          "budget": "S",
+          "target": "Do 2 przytomnych sojuszników do 6 pól; także ty.",
+          "requirements": "Brak dodatkowych wymagań.",
+          "effect": "Cele zyskują +1 do ataków i rzutów obronnych do początku twojej następnej tury. Ta sama premia nie sumuje się.",
+          "cost": 4,
+          "resonance_bonuses": [
+            {
+              "requires": [
+                "Wieża"
+              ],
+              "text": "Cele otrzymują również +1 KP do początku twojej następnej tury.",
+              "modifiers": {
+                "target_ac_next_turn": 1
+              }
+            },
+            {
+              "requires": [
+                "Klepsydra"
+              ],
+              "text": "Pieczęć daje +2 do ataków i obron zamiast +1, na ten sam czas.",
+              "modifiers": {
+                "bless_bonus": 1
+              }
+            }
+          ]
+        },
+        {
+          "id": "healing_word",
+          "name": "Tchnienie życia",
+          "rune": "Błysk",
+          "budget": "S",
+          "target": "1 żywy sojusznik do 6 pól; także ty.",
+          "requirements": "Brak dodatkowych wymagań.",
+          "effect": "Cel odzyskuje 1k6 + Mądrość PW, minimum 1, do maksimum. Może odzyskać przytomność z 0 PW.",
+          "cost": 3,
+          "resonance_bonuses": [
+            {
+              "requires": [
+                "Kielich"
+              ],
+              "text": "Leczenie zwiększa się o 1k6 PW.",
+              "modifiers": {
+                "heal_dice": [
+                  {
+                    "count": 1,
+                    "sides": 6
+                  }
+                ]
+              }
+            },
+            {
+              "requires": [
+                "Wieża"
+              ],
+              "text": "Cel otrzymuje 4 tymczasowe PW do początku twojej następnej tury.",
+              "modifiers": {
+                "target_temp_hp": 4
+              }
+            }
+          ]
+        },
+        {
+          "id": "preserve_life",
+          "name": "Krąg odnowy",
+          "rune": "Kielich",
+          "budget": "S",
+          "target": "Żywi sojusznicy do 2 pól; także ty.",
+          "requirements": "Brak dodatkowych wymagań.",
+          "effect": "Każdy cel odzyskuje 1k6 PW, do maksimum. Rzuć jedną kością dla wszystkich. Nie leczy przeciwników.",
+          "cost": 6,
+          "resonance_bonuses": [
+            {
+              "requires": [
+                "Błysk"
+              ],
+              "text": "Każdy cel odzyskuje dodatkowo 2 PW.",
+              "modifiers": {
+                "heal_flat": 2
+              }
+            },
+            {
+              "requires": [
+                "Węzeł"
+              ],
+              "text": "Każdy cel otrzymuje 3 tymczasowe PW do początku twojej następnej tury.",
+              "modifiers": {
+                "target_temp_hp": 3
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "lorian": {
+      "vignette": {
+        "title": "Cicha zwrotka",
+        "text": "Lorian przerwał pieśń, gdy siedząca przy piecu kobieta zaczęła nucić własną melodię. Odłożył lutnię i pozwolił jej skończyć. Ktoś poprosił o kolejną zwrotkę; tym razem pytanie nie było skierowane do niego. Uśmiechnął się, choć przez chwilę nie wiedział, co zrobić z pustymi rękami."
+      },
+      "passive": {
+        "name": "Zgrana drużyna",
+        "description": "Po podtrzymaniu Rezonansu pozostawionego przez innego bohatera odzyskaj 1 ładunek, raz w swojej turze, po opłaceniu i rozpatrzeniu mocy. Nie możesz nim opłacić tej mocy; nie działa przy rozpoczęciu nowego łańcucha."
+      },
+      "flaw": {
+        "name": "Potrzeba publiczności",
+        "description": "Jeśli nie masz przytomnego sojusznika do 2 pól, twoje moce kosztują o 2 ładunki więcej."
+      },
+      "regeneration": [
+        "Sojusznik wykorzystał premię z twojego Hymnu odwagi w udanym teście ataku.",
+        "Twoja Pieśń przejścia przemieściła sojusznika z sąsiedztwa przynajmniej jednego wroga na pole niesąsiadujące z żadnym wrogiem."
+      ],
+      "cards": [
+        {
+          "id": "mockery",
+          "name": "Dysonans",
+          "rune": "Hak",
+          "budget": "S",
+          "target": "1 wróg do 6 pól, który cię słyszy.",
+          "requirements": "Brak dodatkowych wymagań.",
+          "effect": "Rzut obronny Mądrości ST 10 + Charyzma. Porażka: 2k4 psychicznych i utrudnienie najbliższego ataku przed końcem następnej tury celu.",
+          "cost": 3,
+          "resonance_bonuses": [
+            {
+              "requires": [
+                "Oko"
+              ],
+              "text": "Cel ma −2 do tej obrony Mądrości.",
+              "modifiers": {
+                "enemy_save_penalty": 2
+              }
+            },
+            {
+              "requires": [
+                "Grot"
+              ],
+              "text": "Porażka obrony: dodatkowe 1k4 psychicznych.",
+              "modifiers": {
+                "damage_dice_extra": [
+                  {
+                    "count": 1,
+                    "sides": 4,
+                    "damage_type": "psychic"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "inspiration",
+          "name": "Hymn odwagi",
+          "rune": "Oko",
+          "budget": "S",
+          "target": "1 przytomny sojusznik do 6 pól, poza tobą.",
+          "requirements": "Brak dodatkowych wymagań.",
+          "effect": "Sojusznik otrzymuje 1k6 do jednego wybranego rzutu k20. Może zdecydować po nieudanym rzucie. Premia pozostaje do wykorzystania, bez limitu czasu; każdy bohater może mieć tylko jeden niewykorzystany Hymn.",
+          "cost": 3,
+          "resonance_bonuses": [
+            {
+              "requires": [
+                "Klepsydra"
+              ],
+              "text": "Hymn daje 1k8 zamiast 1k6; pozostaje do wykorzystania.",
+              "modifiers": {
+                "hymn_sides": 8
+              }
+            },
+            {
+              "requires": [
+                "Kielich"
+              ],
+              "text": "Cel otrzymuje także 3 tymczasowe PW do początku twojej następnej tury.",
+              "modifiers": {
+                "target_temp_hp": 3
+              }
+            }
+          ]
+        },
+        {
+          "id": "passage_song",
+          "name": "Pieśń przejścia",
+          "rune": "Węzeł",
+          "budget": "S",
+          "target": "Do 2 przytomnych sojuszników do 6 pól.",
+          "requirements": "Brak dodatkowych wymagań.",
+          "effect": "Każdy cel może przejść do 2 pól bez ataków okazyjnych. Trudny teren kosztuje podwójnie; blokady obowiązują.",
+          "cost": 4,
+          "resonance_bonuses": [
+            {
+              "requires": [
+                "Schody"
+              ],
+              "text": "Każdy cel może przejść do 3 pól zamiast 2.",
+              "modifiers": {
+                "move_bonus": 1
+              }
+            },
+            {
+              "requires": [
+                "Oko"
+              ],
+              "text": "Możesz wybrać sojuszników do 8 pól.",
+              "modifiers": {
+                "range_bonus": 2
+              }
+            }
+          ]
+        },
+        {
+          "id": "energy_recovery",
+          "name": "Akord odnowy",
+          "rune": "Kielich",
+          "budget": "S",
+          "target": "1 przytomny sojusznik do 6 pól, poza tobą.",
+          "requirements": "Brak dodatkowych wymagań.",
+          "effect": "Cel odzyskuje 1k6 ładunków, do maksimum 20. Płacisz przed rzutem. Odzysk nie przywraca zużytej akcji specjalnej.",
+          "cost": 4,
+          "resonance_bonuses": [
+            {
+              "requires": [
+                "Błysk"
+              ],
+              "text": "Cel odzyskuje dodatkowo 2 ładunki, do maksimum 20.",
+              "modifiers": {
+                "charge_bonus_flat": 2
+              }
+            },
+            {
+              "requires": [
+                "Węzeł"
+              ],
+              "text": "Cel otrzymuje także 3 tymczasowe PW do początku twojej następnej tury.",
+              "modifiers": {
+                "target_temp_hp": 3
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "nimra": {
+      "vignette": {
+        "title": "Jeszcze jeden pomiar",
+        "text": "Nimra przybliżyła szklaną igłę do drżącego światła. W notatniku miała już gotowy wynik, brakowało tylko potwierdzenia. Igła zapiszczała. Czarodziejka zastygła, po czym powoli opuściła narzędzie. — Odsuńcie się — powiedziała. Na marginesie przekreśliła słowo „bezpieczne” i zaczęła pomiar od nowa."
+      },
+      "passive": {
+        "name": "Precyzyjny splot",
+        "description": "Po wybraniu obszaru mocy wskaż pole jednego stworzenia do pominięcia albo wybierz „Nie pomijaj”. Pominięte stworzenie nie otrzymuje żadnego efektu tej mocy. Wybierz przed rzutami obronnymi."
+      },
+      "flaw": {
+        "name": "Echo",
+        "description": "Powtórzenie ostatniej użytej mocy kosztuje +2 ładunki; trzecie i dalsze użycia z rzędu: +4. Inna moc zeruje serię. Zwykły atak, ruch i Skupienie jej nie zmieniają."
+      },
+      "regeneration": [
+        "Jedna twoja moc zadała bezpośrednie obrażenia co najmniej dwóm różnym wrogom.",
+        "Użyłaś mocy o innej runie niż twoja poprzednia moc w tej walce. Pierwsza moc nie spełnia tego warunku."
+      ],
+      "cards": [
+        {
+          "id": "force_darts",
+          "name": "Groty eteru",
+          "rune": "Węzeł",
+          "budget": "S",
+          "target": "3 pociski; widoczni wrogowie do 6 pól.",
+          "requirements": "Brak dodatkowych wymagań.",
+          "effect": "Każdy pocisk trafia automatycznie i zadaje 1k4 + 1 obrażeń siłowych. Przed rozstrzygnięciem rozdziel pociski między cele; każdy jest osobnym trafieniem.",
+          "cost": 5,
+          "resonance_bonuses": [
+            {
+              "requires": [
+                "Grot"
+              ],
+              "text": "Tylko pierwszy pocisk zadaje dodatkowo 1k4 siłowych.",
+              "modifiers": {
+                "first_damage_dice": [
+                  {
+                    "count": 1,
+                    "sides": 4,
+                    "damage_type": "force"
+                  }
+                ]
+              }
+            },
+            {
+              "requires": [
+                "Oko"
+              ],
+              "text": "Zasięg wszystkich pocisków wzrasta do 8 pól.",
+              "modifiers": {
+                "range_bonus": 2
+              }
+            }
+          ]
+        },
+        {
+          "id": "arcane_shield",
+          "name": "Tarcza splotu",
+          "rune": "Klepsydra",
+          "budget": "S",
+          "target": "Ty lub 1 przytomny sojusznik do 6 pól.",
+          "requirements": "Brak dodatkowych wymagań.",
+          "effect": "Cel otrzymuje +2 KP do początku twojej następnej tury. Kolejna Tarcza splotu nie zwiększa tej premii.",
+          "cost": 4,
+          "resonance_bonuses": [
+            {
+              "requires": [
+                "Wieża"
+              ],
+              "text": "Cel otrzymuje także 3 pkt osłony do początku twojej następnej tury. Pochłania obrażenia poza psychicznymi.",
+              "modifiers": {
+                "shield_pool": 3
+              }
+            },
+            {
+              "requires": [
+                "Oko"
+              ],
+              "text": "Tarcza daje łącznie +3 KP zamiast +2, na ten sam czas.",
+              "modifiers": {
+                "target_ac_next_turn": 1
+              }
+            }
+          ]
+        },
+        {
+          "id": "misty_step",
+          "name": "Mglisty krok",
+          "rune": "Fala",
+          "budget": "S",
+          "target": "Ty; widoczne wolne pole do 6 pól.",
+          "requirements": "Brak dodatkowych wymagań.",
+          "effect": "Teleportuj się na wskazane pole. Pomijasz teren między polami i nie prowokujesz ataków okazyjnych.",
+          "cost": 5,
+          "resonance_bonuses": [
+            {
+              "requires": [
+                "Schody"
+              ],
+              "text": "Możesz teleportować się do 8 pól.",
+              "modifiers": {
+                "range_bonus": 2
+              }
+            },
+            {
+              "requires": [
+                "Kielich"
+              ],
+              "text": "Otrzymujesz 4 tymczasowe PW do początku swojej następnej tury.",
+              "modifiers": {
+                "self_temp_hp": 4
+              }
+            }
+          ]
+        },
+        {
+          "id": "force_wave",
+          "name": "Fala uderzeniowa",
+          "rune": "Oko",
+          "budget": "S",
+          "target": "Wszyscy wrogowie do 2 pól.",
+          "requirements": "Brak dodatkowych wymagań.",
+          "effect": "Rzut obronny Siły ST 10 + Inteligencja. Porażka: 2k6 siłowych; sukces: połowa. Jeden rzut obrażeń dla wszystkich celów.",
+          "cost": 5,
+          "resonance_bonuses": [
+            {
+              "requires": [
+                "Grot"
+              ],
+              "text": "Obrażenia zwiększają się o 1k6 siłowych (sukces obrony nadal połowi całość).",
+              "modifiers": {
+                "damage_dice_extra": [
+                  {
+                    "count": 1,
+                    "sides": 6,
+                    "damage_type": "force"
+                  }
+                ]
+              }
+            },
+            {
+              "requires": [
+                "Węzeł"
+              ],
+              "text": "Porażka obrony: cel ma −2 pola ruchu w swojej następnej turze.",
+              "modifiers": {
+                "enemy_move_penalty": 2
+              }
+            }
+          ]
+        },
+        {
+          "id": "flame_fan",
+          "name": "Strefa ognia",
+          "rune": "Kielich",
+          "budget": "S",
+          "target": "Wszyscy w obszarze 3×3; wskaż środek do 6 pól.",
+          "requirements": "Brak dodatkowych wymagań.",
+          "effect": "Obrona Zręczności: ST 10 + Inteligencja. Porażka: 4k6 ognia; sukces: połowa. Jeden rzut obrażeń dla całego obszaru. Precyzyjny splot pozwala pominąć jedno stworzenie.",
+          "cost": 8,
+          "resonance_bonuses": [],
+          "requires_resonance": [
+            "Oko",
+            "Węzeł"
+          ],
+          "ends_resonance": true,
+          "base_modifiers": {
+            "damage_dice_extra": [
+              {
+                "count": 2,
+                "sides": 6,
+                "damage_type": "fire"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "erynd": {
+      "vignette": {
+        "title": "Miejsce na ogień",
+        "text": "Erynd rozgarnął popiół starego ogniska i znalazł pod nim wilgotną ziemię. Przeniósł plecak wyżej, pod skałę. Gdy towarzysz spytał, skąd wie, że będzie padać, wskazał ciemny pas na pniach. — Nie wiem. Wiem, dokąd dochodzi tu woda. — Zostawił pod osłoną miejsce na pozostałe posłania."
+      },
+      "passive": {
+        "name": "Czysty strzał",
+        "description": "Jeśli przed pierwszym strzałem w swojej turze nie wykonałeś żadnego ruchu, ten strzał otrzymuje +1 do trafienia. Dotyczy zwykłego ataku lub pierwszego trafienia mocy."
+      },
+      "flaw": {
+        "name": "Trauma bratobójczego strzału",
+        "description": "Moc strzelecka skierowana w choć jednego wroga sąsiadującego z innym przytomnym bohaterem kosztuje +2 ładunki. Dopłata raz na całą moc; cele deklarujesz przed zapłatą."
+      },
+      "regeneration": [
+        "Trafiłeś strzałem przeciwnika oznaczonego twoim Piętnem łowcy.",
+        "Trafiłeś strzałem wroga odległego o co najmniej 4 pola; przed tym strzałem nie poruszyłeś się w tej turze."
+      ],
+      "cards": [
+        {
+          "id": "double_shot",
+          "name": "Bliźniacze groty",
+          "rune": "Kielich",
+          "budget": "A+S",
+          "target": "2 strzały; cele w zasięgu broni.",
+          "requirements": "Łuk i amunicja.",
+          "effect": "Wykonaj dwa ataki łukiem w jednego lub dwóch wrogów. Każdy trafiony strzał zadaje obrażenia broni + 1k6 obrażeń broni. Osobne testy i obrażenia; cele wybierz przed zapłatą.",
+          "cost": 8,
+          "resonance_bonuses": [],
+          "requires_resonance": [
+            "Oko",
+            "Węzeł"
+          ],
+          "ends_resonance": true,
+          "base_modifiers": {
+            "attack_bonus_dice": [
+              {
+                "count": 1,
+                "sides": 6,
+                "damage_type": "weapon"
+              }
+            ]
+          }
+        },
+        {
+          "id": "hunters_mark",
+          "name": "Piętno łowcy",
+          "rune": "Klepsydra",
+          "budget": "S",
+          "target": "1 widoczny wróg do 12 pól.",
+          "requirements": "Brak dodatkowych wymagań.",
+          "effect": "Do końca walki twoje trafienia bronią w ten cel zadają +1k4 obrażeń. Możesz mieć jeden znak; nowy zastępuje poprzedni.",
+          "cost": 3,
+          "resonance_bonuses": [
+            {
+              "requires": [
+                "Oko"
+              ],
+              "text": "Przewaga w najbliższym ataku bronią przed początkiem swojej następnej tury.",
+              "modifiers": {
+                "next_attack_advantage": true
+              }
+            },
+            {
+              "requires": [
+                "Hak"
+              ],
+              "text": "Oznaczony wróg ma −2 pola ruchu w swojej następnej turze (minimum 0).",
+              "modifiers": {
+                "enemy_move_penalty": 2
+              }
+            }
+          ]
+        },
+        {
+          "id": "skirmish_shot",
+          "name": "Strzała wichru",
+          "rune": "Schody",
+          "budget": "A+S",
+          "target": "Ty i 1 wróg w zasięgu broni po ruchu.",
+          "requirements": "Łuk i amunicja; legalna droga.",
+          "effect": "Przejdź do 2 pól bez ataków okazyjnych, potem wykonaj jeden strzał. Ten ruch nie zużywa zwykłego ruchu; trudny teren kosztuje podwójnie.",
+          "cost": 4,
+          "resonance_bonuses": [
+            {
+              "requires": [
+                "Błysk"
+              ],
+              "text": "Przed strzałem możesz przejść do 3 pól zamiast 2.",
+              "modifiers": {
+                "move_bonus": 1
+              }
+            },
+            {
+              "requires": [
+                "Grot"
+              ],
+              "text": "Trafienie: dodatkowe 1k6 obrażeń broni.",
+              "modifiers": {
+                "attack_bonus_dice": [
+                  {
+                    "count": 1,
+                    "sides": 6,
+                    "damage_type": "weapon"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "anchoring_arrow",
+          "name": "Więzy korzeni",
+          "rune": "Węzeł",
+          "budget": "A+S",
+          "target": "1 wróg w zasięgu broni.",
+          "requirements": "Łuk i amunicja.",
+          "effect": "Wykonaj strzał. Trafienie: obrażenia broni; cel ma 0 zwykłego ruchu do końca swojej następnej tury. Może zostać odepchnięty.",
+          "cost": 5,
+          "resonance_bonuses": [
+            {
+              "requires": [
+                "Oko"
+              ],
+              "text": "Przewaga w tym strzale.",
+              "modifiers": {
+                "check_advantage": true
+              }
+            },
+            {
+              "requires": [
+                "Kielich"
+              ],
+              "text": "Po strzale, także po pudle: otrzymujesz 4 tymczasowe PW do początku swojej następnej tury.",
+              "modifiers": {
+                "self_temp_hp": 4
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "rules_spec": "docs/RUNE_RELATIONS_V03.md"
+}

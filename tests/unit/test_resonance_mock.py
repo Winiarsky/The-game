@@ -65,12 +65,23 @@ HELPERS = r"""
      else if(t.type==='recover')m.recover(false);
      else if(t.type==='hymn')m.decideHymn(false);
      else if(t.type==='opportunity')m.opportunity(false);
+     else if(t.type==='bonusTarget'){m.selectTarget(t.targets[0]);m.confirmBonusTarget();}
      else if(t.type==='relocate'){const p=m.relocationFields(t).find(p=>window.ResonanceModel.same(p,m.actor(t.target).pos))??m.relocationFields(t)[0];m.select(p);m.confirmRelocation();}
      else throw Error('Unhandled task '+t.type);
    }
  };
- const play=(m,id,mode='base',target=null)=>{
-   assert(m.choose(id),'choose '+id);m.mode(mode);if(target)assert(m.selectTarget(target),'target '+id);
+  const seedMemory=(m,required,rune)=>{
+   const pool=D.rules.starter_runes;let found=null;
+   const search=path=>{
+     if(path.length&&required.every(r=>path.includes(r))&&m.nextRunes(path.at(-1)).includes(rune)){found=path;return;}
+     if(path.length===3||found)return;
+     for(const symbol of pool){if(!path.length||m.nextRunes(path.at(-1)).includes(symbol))search([...path,symbol]);if(found)return;}
+   };
+   search([]);assert(found,'required symbols have a legal path into '+rune);
+   for(const symbol of found)m.addRune(m.active,symbol);
+ };
+ const play=(m,id,target=null)=>{
+   assert(m.choose(id),'choose '+id);if(target)assert(m.selectTarget(target),'target '+id);
    assert(m.commit(),'commit '+id);
  };
 """
@@ -89,41 +100,31 @@ def test_generated_mock_data_matches_current_cards() -> None:
     assert payload["heroes"]["erynd"]["abilities"]["dexterity"] == 4
 
 
-def test_resonance_lifecycle_and_resource_pools(tmp_path: Path) -> None:
+def test_directed_memory_and_independent_card_effects(tmp_path: Path) -> None:
     browser_check(tmp_path, HELPERS + r"""
- const m=create(),a=m.active,b=m.actor('mira');
- const hp=a.hp;a.hp-=8;
- m.addRune(a,'Wieża');assert(m.ac(a)===a.ac+1&&!m.member(b),'only first participant joins');
- a.continued=true;m.endTurn();assert(m.member(b)&&m.ac(b)===b.ac+1,'next turn joins');
- m.addRune(b,'Wieża');assert(m.ac(a)===a.ac+2,'growth reaches existing participant');
- m.addRune(b,'Fala');m.addRune(b,'Fala');assert(m.counts()['Wieża']===4,'waves copy a single previous effective rune');
- m.addRune(b,'Kielich');m.addRune(b,'Klepsydra');
- m.damage(b,[{value:3,damage_type:'piercing'}],a);
- assert(b.shield===0&&b.cup===1&&b.hp===b.maxHp,'prevention before temporary HP before HP');
- m.addRune(b,'Kielich');assert(b.cup===3,'growth does not refill old missing points');
- m.addRune(b,'Klepsydra');m.damage(b,[{value:1,damage_type:'psychic'}],a);
- assert(b.shield===2&&b.cup===2,'psychic bypasses prevention only');
- m.addRune(b,'Węzeł');assert(m.movement(m.actor('enemy1'))===5,'global enemy slow without a hit');
- m.endChain('test');assert(a.hp===hp-8&&b.cup===0&&b.shield===0&&m.ac(a)===a.ac,'global cleanup preserves actual HP');
- m.addRune(b,'Fala');assert(!Object.keys(m.counts()).length,'first wave does not invent a predecessor');m.endChain('test');
- const f=create();f.active.hp-=10;f.addRune(f.active,'Błysk');f.advance();
- assert(f.s.task.parts[0].count===1,'new flash only one die');f.submit([3]);assert(f.active.hp===f.active.maxHp-7,'flash heals');
- f.addRune(f.active,'Błysk');f.advance();f.submit([2]);assert(f.active.hp===f.active.maxHp-5,'second flash does not reroll previous');
- const snapshot=f.snapshot();f.restore(snapshot);assert(f.snapshot()===snapshot,'snapshot restoration is effect-free');
- f.active.charges=4;f.active.hymn={source:'lorian'};play(f,'focus');assert(!f.s.chain&&!f.active.special,'focus ends chain before roll');
- f.submit([20]);drain(f);assert(f.active.charges===20,'focus clamps at twenty');
- assert(f.active.hymn,'resource d20 is not a check and cannot consume Hymn');
- const p=create('lorian');p.addRune(p.active,'Wieża');p.active.charges=20;
- play(p,'inspiration','base','garran');drain(p);
- assert(!p.s.chain&&p.active.charges===17&&p.actor('garran').hymn,'basic power then Lorian refund then chain closure');
- assert(!p.commit()&&p.active.charges===17,'duplicate commit has no effect');
- const stairs=create();stairs.addRune(stairs.active,'Schody');const old=stairs.movement();
- play(stairs,'move');
- """.replace("play(stairs,'move');", r"""
- assert(stairs.choose('move')&&stairs.select({x:3,y:4})&&stairs.commit(),'ordinary movement preview and commit');drain(stairs);
- assert(stairs.active.tempMove===1&&stairs.active.baseSpent===0,'temporary movement spent first');
- stairs.endChain('test');assert(stairs.movement()===old-2,'unused stairs removed without reverting position');
- """))
+ const m=create(),a=m.active;
+ m.addRune(a,'Wieża');m.addRune(a,'Schody');
+ const before=m.snapshot(),preview=m.resonancePreview('breaking_strike');
+ assert(preview.transition==='continue'&&preview.activeBonuses.length===2,'matching old symbols activate both card bonuses');
+ assert(m.snapshot()===before,'preview does not mutate chain or buffs');
+ assert(m.ac(a)===a.ac&&m.movement()===a.speed,'stored runes have no global AC or movement effects');
+ m.actor('enemy1').pos={x:3,y:4};play(m,'breaking_strike','enemy1');
+ assert(m.s.chain.entries.length===2,'new rune waits for the complete action');m.submit([1]);drain(m);
+ assert(m.ac(a)===a.ac+1&&m.s.chain.entries.at(-1).rune==='Grot','miss still grants printed protection then adds rune');
+ m.endChain('test');assert(m.ac(a)===a.ac+1,'ending memory preserves timed card protection');
+ m.acknowledge();a.special=true;play(m,'focus');assert(!m.s.chain&&!a.special,'focus immediately clears memory before its die');
+ m.submit([20]);drain(m);assert(a.charges===20,'focus caps at twenty');
+ const mismatch=create();mismatch.addRune(mismatch.active,'Oko');mismatch.actor('enemy1').pos={x:3,y:4};
+ assert(mismatch.resonancePreview('hide').activeBonuses.length===0,'missing actor power has no effects');
+ assert(mismatch.resonancePreview('second_wind').transition==='reset','Oko cannot continue into Błysk');
+ play(mismatch,'second_wind');assert(!mismatch.s.chain,'mismatch clears old memory before effect');drain(mismatch);
+ assert(mismatch.s.chain.entries.length===1&&mismatch.s.chain.entries[0].rune==='Błysk','normal mismatching power starts its own chain');
+ const wave=create('nimra');wave.addRune(wave.actor('garran'),'Wieża');wave.addRune(wave.active,'Fala');wave.addRune(wave.active,'Fala');
+ assert(wave.counts()['Wieża']===1&&wave.counts()['Fala']===1,'presence is boolean; waves occupy slots without copies');
+ wave.addRune(wave.active,'Oko');assert(!wave.counts()['Wieża']&&wave.s.chain.entries.length===3,'fourth rune expires oldest token');
+ assert(wave.resonancePreview('flame_fan').missingRequiredRunes.includes('Węzeł'),'wave does not substitute a required rune');
+ const save=wave.snapshot();wave.restore(save);assert(wave.snapshot()===save,'snapshot restoration is effect free');
+ """)
 
 
 def test_updated_hero_powers_and_pending_decisions(tmp_path: Path) -> None:
@@ -139,7 +140,7 @@ def test_updated_hero_powers_and_pending_decisions(tmp_path: Path) -> None:
  assert(g.status(g.actor('enemy1'),'prone'),'failed save applies prone');
  const b=create('brakka');b.actor('enemy1').pos={x:3,y:4};
  play(b,'rage');drain(b,3);assert(b.status(b.active,'rage').remaining===7,'rage strength + constitution turns');b.acknowledge();
- play(b,'attack','base','enemy1');b.submit([20]);
+ play(b,'attack','enemy1');b.submit([20]);
  assert(b.s.task.parts.some(p=>p.sides===12&&p.count===3),'Brakka crit has two extra weapon dice');
  assert(b.s.task.parts.some(p=>p.sides===6),'rage adds melee die');drain(b,3);
  const hp=b.active.hp;b.damage(b.active,[{value:8,damage_type:'slashing'},{value:3,damage_type:'fire'}],b.actor('enemy1'));
@@ -151,11 +152,11 @@ def test_updated_hero_powers_and_pending_decisions(tmp_path: Path) -> None:
  assert(mira.s.preview.path.cells.some(p=>p.x===5),'Parkour crosses obstacle column');
  const snap=mira.snapshot();mira.restore(snap);assert(!mira.active.moved&&mira.active.charges===16,'preview save does not commit movement');
  assert(mira.commit(),'Parkour commits');drain(mira);assert(mira.active.pos.x===7&&mira.active.hidden.length>0,'Parkour moves and preserves hiding');
- const n=create('nimra');assert(n.choose('flame_fan')&&n.select({x:4,y:4}),'fire center selected');
+ const n=create('nimra');seedMemory(n,['Oko','Węzeł'],'Kielich');assert(n.choose('flame_fan')&&n.select({x:4,y:4}),'fire center selected');
  assert(!n.ready(),'explicit weave decision required');n.exclude('enemy1');assert(n.ready(),'chosen tile completes weave');
  assert(n.commit(),'fire commits');drain(n);assert(n.actor('enemy1').hp===45,'excluded target unaffected');
  const hymn=create();hymn.actor('enemy1').pos={x:3,y:4};hymn.active.hymn={source:'lorian'};
- play(hymn,'attack','base','enemy1');hymn.submit([8]);assert(hymn.s.task.type==='hymn'&&hymn.actor('enemy1').hp===45,'failed roll pauses before consequences');
+ play(hymn,'attack','enemy1');hymn.submit([8]);assert(hymn.s.task.type==='hymn'&&hymn.actor('enemy1').hp===45,'failed roll pauses before consequences');
  const save=hymn.snapshot();hymn.restore(save);hymn.decideHymn(true);hymn.submit([3]);
  assert(!hymn.active.hymn&&hymn.s.task.outcome==='damage','hymn can turn miss into hit without another k20');drain(hymn);
  assert(hymn.actor('lorian').regenReason===null,'recovery handled after action');
@@ -177,12 +178,12 @@ def test_combat_ui_and_social_isolation(tmp_path: Path) -> None:
  app.press(29);assert(m.snapshot()===snapshot,'information roundtrip read only');
  app.press(29);assert(m.active.charges===20,'cancel preserves charges');
  app.combat.openLab();assert(document.querySelectorAll('[data-field]').length===120,'clickable simulated board available');
- app.press(app.slot('Schody'));document.querySelector('[data-field="4,4"]').click();app.press(8);
- assert(m.s.preview.mode==='enhanced'&&m.active.charges===20,'mode is still a preview');app.press(28);
- assert(m.active.charges===12&&m.s.chain.entries[0].rune==='Schody','commit pays once and appends rune');
+ app.press(app.slot('Schody'));document.querySelector('[data-field="4,4"]').click();
+ assert(!('mode' in m.s.preview)&&m.active.charges===20,'single power is still only a preview');app.press(28);
+ assert(m.active.charges===16&&!m.s.chain,'commit pays once and waits to append rune');
  assert(document.querySelector('.enemy-roll-notice')&&!document.querySelector('.physical-dice'),'enemy save uses automatic roll UI');
  document.querySelector('.decision [data-slot="28"]').click();
- assert(m.s.task.type==='enemy-result'&&m.active.charges===12,'one click resolves enemy save without duplicate charge');
+ assert(m.s.task.type==='enemy-result'&&m.active.charges===16,'one click resolves enemy save without duplicate charge');
  app.press(28);assert(m.s.phase==='result','acknowledging enemy save finishes charge');
  assert(document.documentElement.scrollWidth<=innerWidth+1,'no horizontal overflow');
  const pane=document.querySelector('.decision'),board=document.getElementById('rune-board');
@@ -196,38 +197,19 @@ def test_combat_ui_and_social_isolation(tmp_path: Path) -> None:
  """)
 
 
-def test_chain_summary_shows_combined_bonuses_and_wave_copies(tmp_path: Path) -> None:
+def test_chain_ui_shows_memory_and_card_bonuses_without_global_auras(tmp_path: Path) -> None:
     browser_check(tmp_path, r"""
  const app=window.RunePrototype;app.startScene('combat');const m=app.combat.model;
- const summary=()=>document.querySelector('.chain-bonus-summary');
- const bonus=name=>document.querySelector(`[data-chain-bonus="${name}"] dd`)?.textContent;
- assert(!summary(),'inactive resonance has no bonus summary');
- m.addRune(m.active,'Schody');m.addRune(m.active,'Błysk');app.render();
- assert(summary()&&summary().textContent.includes('Podsumowanie bonusów'),'visible summary inside resonance section');
- assert(bonus('Schody').includes('+2 pkt ruchu')&&bonus('Błysk').includes('1k4 PW na początku tury'),'screenshot example explains movement and healing');
- assert(document.querySelectorAll('[data-chain-bonus]').length===2,'only present bonuses shown');
- m.addRune(m.active,'Schody');m.addRune(m.active,'Fala');m.addRune(m.active,'Fala');app.render();
- assert(bonus('Schody').includes('+8 pkt ruchu'),'duplicate stairs and chained waves summed');
- assert(!bonus('Fala')&&summary().textContent.includes('Kopie z Fali są już wliczone'),'wave counted in copied bonus, not as another effect');
- for(const rune of ['Wieża','Grot','Hak','Oko','Kielich','Węzeł','Klepsydra']){
-   m.addRune(m.active,rune);m.addRune(m.active,rune);
- }
- m.damage(m.active,[{value:5,damage_type:'piercing'}],m.actor('enemy1'));
- const before=m.snapshot();app.render();
- assert(m.snapshot()===before,'rendering summary changes no resources, dice, queue or membership');
- for(const [rune,text] of Object.entries({'Wieża':'+2 KP','Grot':'+2k4 obrażeń','Hak':'do 2 pól','Oko':'+2 do własnych rzutów k20','Kielich':'4 tymczasowych PW','Węzeł':'−2 pkt ruchu','Klepsydra':'4 pkt'})){
-   assert(bonus(rune)?.includes(text),'numeric combined bonus '+rune);
- }
- assert(document.querySelectorAll('[data-chain-bonus]').length===9,'one summary row per effective rune');
- assert(bonus('Kielich').includes('Limit puli')&&bonus('Klepsydra').includes('Limit osłony'),'summary distinguishes pool limits from remaining amounts');
- assert(m.active.cup===3&&m.active.shield===0,'showing full pool limit does not refill consumed shields');
- assert(bonus('Klepsydra').includes('psychicznymi')&&bonus('Oko').includes('nie do ST'),'important exceptions remain visible');
- assert(document.querySelector('.resonance-chain').textContent.includes('Pozostali dołączą na początku swojej tury'),'membership scope still explained');
- assert(document.documentElement.scrollWidth<=innerWidth+1,'summary does not create horizontal overflow');
- m.restore(before);app.render();assert(bonus('Schody').includes('+8 pkt ruchu'),'summary survives save restoration');
- m.endChain('test');app.render();assert(!summary()&&!document.querySelector('[data-chain-bonus]'),'expired bonuses disappear');
- m.addRune(m.active,'Fala');app.render();
- assert(summary().textContent.includes('Brak bonusów')&&!document.querySelector('[data-chain-bonus]'),'leading wave explicitly grants no bonus');
+ m.addRune(m.active,'Wieża');m.addRune(m.active,'Schody');app.render();
+ const chain=document.querySelector('.resonance-chain');
+ assert(chain&&chain.textContent.includes('Schody'),'UI shows ordered rune memory');
+ assert(!document.querySelector('[data-chain-bonus]'),'old global rune aura list absent');
+ const before=m.snapshot();app.render();assert(m.snapshot()===before,'render never adds resources or activates effects');
+ app.press(app.slot('Grot'));assert(m.s.phase==='preview','rune opens matching single power');
+ assert(document.querySelector('.decision').textContent.includes('1k6')&&document.querySelector('.decision').textContent.includes('KP'),'preview includes both printed active bonuses');
+ assert(!document.querySelector('[data-combat="mode"]'),'no basic or enhanced mode selector');
+ assert(m.active.charges===20,'bonus preview spends nothing');
+ assert(document.documentElement.scrollWidth<=innerWidth+1,'memory UI fits laptop');
  """)
 
 
@@ -235,14 +217,14 @@ def test_weave_parkour_and_hymn_ui_decisions(tmp_path: Path) -> None:
     browser_check(tmp_path, r"""
  const app=window.RunePrototype;app.startScene('combat');
  app.combat.start(['nimra','garran','mira','lorian']);app.render();app.combat.openLab();
- let m=app.combat.model;app.press(app.slot('Kielich'));
+ let m=app.combat.model;m.addRune(m.active,'Oko');m.addRune(m.active,'Węzeł');app.render();app.press(app.slot('Kielich'));
  assert(app.combat.selectField(3,4)&&document.querySelector('.weave-prompt'),'area leads to explicit weave prompt');
  assert(!app.bindings().get(28).enabled&&m.active.charges===20,'cannot pay before exclusion decision');
  app.combat.selectField(2,4);assert(m.s.preview.exclude==='nimra','figure tile selects excluded creature');
  document.querySelector('[data-combat="area-reset"]').click();
  assert(!m.s.preview.center&&m.s.preview.exclude===undefined,'changing area clears previous exception');
  app.combat.selectField(3,4);app.press(5);assert(m.s.preview.exclude===null,'none is an explicit choice');
- app.press(8);app.press(28);assert(m.active.charges===12&&document.querySelector('.physical-dice'),'enhanced area starts resolution');
+ app.press(28);assert(m.active.charges===12&&document.querySelector('.physical-dice'),'finisher area starts resolution');
  app.combat.start(['mira','garran','lorian','nimra']);app.render();m=app.combat.model;
  app.press(app.slot('Schody'));app.combat.selectField(4,4);
  assert(m.s.preview.targets[0]==='enemy1'&&!app.bindings().get(28).enabled,'Parkour first chooses enemy, not destination');
@@ -269,7 +251,8 @@ def test_all_current_powers_resolve_and_pay_once(tmp_path: Path) -> None:
    m.actor('enemy1').pos={x:3,y:4};
    m.actor('enemy2').pos={x:4,y:3};m.actor('enemy3').pos={x:4,y:6};
    if(card.id==='shadow_attack')a.hidden=['enemy1'];
-   assert(m.choose(card.id),'select '+heroId+':'+card.id);m.mode('enhanced');
+   if(card.requires_resonance)seedMemory(m,card.requires_resonance,card.rune);
+   assert(m.choose(card.id),'select '+heroId+':'+card.id);
    if(card.id==='flame_fan')m.select({x:3,y:4});
    if(['flame_fan','force_wave'].includes(card.id))m.exclude(null);
    else if(['move','misty_step','skirmish_shot'].includes(card.id)){
@@ -282,16 +265,16 @@ def test_all_current_powers_resolve_and_pay_once(tmp_path: Path) -> None:
    }else if(!m.ready()){
      const target=m.legalTargets()[0];assert(target,'legal target '+card.id);m.selectTarget(target.id);
    }
-   const price=m.price(card,'enhanced',m.s.preview.targets);
+   const price=m.price(card,m.s.preview.targets);
    assert(m.commit(),'commit '+heroId+':'+card.id);
    assert(a.charges===20-price&&!a.special,'exact cost and special '+card.id);
-   assert(m.s.chain?.entries.length===1&&m.s.chain.entries[0].rune===card.rune,'rune precedes resolution '+card.id);
+   assert(m.s.phase==='result'||!m.s.chain||card.requires_resonance,'rune waits until resolution completes '+card.id);
    assert(!m.commit()&&a.charges===20-price,'duplicate commit rejected '+card.id);
    const pending=m.snapshot();m.restore(pending);assert(m.snapshot()===pending,'pending snapshot stable '+card.id);
    drain(m,12);assert(m.s.phase==='result','power reaches result '+heroId+':'+card.id);
    assert(m.active.ordinary===!card.budget.includes('A'),'attack budget '+card.id);
    if(card.id==='bastion_charge')assert(m.movement()===0,'all movement consumed by charge');
-   assert(m.s.chain?.entries.length===1,'enhanced power continues chain '+card.id);
+   assert(card.ends_resonance?!m.s.chain:m.s.chain?.entries.at(-1)?.rune===card.rune,'power updates memory after all effects '+card.id);
  }
  """)
 
@@ -384,16 +367,16 @@ def test_enemy_rolls_pause_movement_and_store_results_once(tmp_path: Path) -> No
  const enemyTurn=()=>{
    const e=create();e.actor('enemy1').pos={x:3,y:4};e.s.index=e.s.order.indexOf('enemy1');e.beginTurn();return e;
  };
- const adv=enemyTurn();adv.active.hidden=['garran'];play(adv,'attack','base','garran');
+ const adv=enemyTurn();adv.active.hidden=['garran'];play(adv,'attack','garran');
  // An older partial manual enemy roll is retained, but remaining dice are automatic.
  adv.s.task.diceResults=[2];adv.restore(adv.snapshot());dice=[20,4,3];adv.confirmEnemyRoll(()=>dice.shift());
  assert(adv.s.task.rolls[0].natural===20&&adv.s.task.rolls[0].dice.flat().join(',')==='2,20','advantage and saved first die respected');
  assert(adv.s.task.rolls[1].loss.hp===9&&!adv.active.ordinary&&adv.active.reaction,'ordinary attack costs no reaction');
- const dis=enemyTurn();dis.addStatus(dis.active,'fear');play(dis,'attack','base','garran');dice=[20,1];dis.confirmEnemyRoll(()=>dice.shift());
+ const dis=enemyTurn();dis.addStatus(dis.active,'fear');play(dis,'attack','garran');dice=[20,1];dis.confirmEnemyRoll(()=>dice.shift());
  assert(dis.s.task.rolls[0].natural===1&&!dis.s.task.rolls[0].success&&!dis.status(dis.active,'fear'),'disadvantage and single-use fear respected');
- // Automatic physical damage still passes through rage and both resonance pools.
+ // Automatic physical damage still passes through rage and both card pools.
  const protectedHero=create('brakka');protectedHero.actor('enemy1').pos={x:3,y:4};
- protectedHero.addStatus(protectedHero.active,'rage',{remaining:7});protectedHero.addRune(protectedHero.active,'Kielich');protectedHero.addRune(protectedHero.active,'Klepsydra');
+ protectedHero.addStatus(protectedHero.active,'rage',{remaining:7});protectedHero.grantPool(protectedHero.active,'temporary',2,protectedHero.active);protectedHero.grantPool(protectedHero.active,'prevention',2,protectedHero.active);
  assert(protectedHero.choose('move')&&protectedHero.select({x:1,y:4})&&protectedHero.commit(),'protected hero provokes attack');
  dice=[20,6,5];protectedHero.confirmEnemyRoll(()=>dice.shift());const damage=protectedHero.s.task.rolls[1];
  assert(damage.components[0].value===13&&damage.loss.hp===2&&damage.loss.cup===2&&damage.loss.shield===2,'13 damage halves then consumes shield and temporary HP');
@@ -433,30 +416,13 @@ def test_enemy_opportunity_notice_highlight_and_result_ui(tmp_path: Path) -> Non
  """)
 
 
-def test_hooks_reactions_rounds_and_failure_boundaries(tmp_path: Path) -> None:
+def test_reactions_rounds_and_failure_boundaries(tmp_path: Path) -> None:
     browser_check(tmp_path, HELPERS + r"""
- // Basic area resolves all damage, then one Hook per distinct victim, then closes.
+ // Unrelated old symbols do not grant area relocations or damage bonuses.
  const n=create('nimra');n.active.pos={x:3,y:4};n.actor('enemy2').pos={x:4,y:3};
  n.addRune(n.active,'Hak');n.addRune(n.active,'Hak');
- assert(n.choose('force_wave')&&n.exclude(null)&&n.commit(),'basic area with inherited Hooks');
- let count=0;while(['roll','enemy-result'].includes(n.s.task?.type)){
-   assert(++count<40,'area roll loop bounded');
-   if(n.s.task.type==='enemy-result')n.acknowledgeEnemyResult();
-   else if(n.isEnemyRoll())n.confirmEnemyRoll(()=>1);
-   else n.submit(n.s.task.parts.map(p=>p.count));
- }
- assert(n.s.task.type==='relocate'&&n.s.task.radius===2&&n.s.chain,'Hooks wait until all damage; two copies extend range');
- const victim=n.actor(n.s.task.target),original={...victim.pos},hp=victim.hp,charges=n.active.charges;
- const fields=n.relocationFields(n.s.task);n.select(fields[0]);n.cancel();
- assert(!n.s.task.destination&&victim.hp===hp&&n.active.charges===charges,'Hook back clears preview only');
- n.select(original);n.confirmRelocation();assert(n.s.task.type==='relocate'&&n.s.task.target!==victim.id,'next unique victim');
- drain(n);assert(!n.s.chain,'chain closes after entire Hook queue');
- // Miss has no Hook. Successful bash displaces before Hook from the new position.
- const g=create();g.actor('enemy1').pos={x:3,y:4};g.addRune(g.active,'Hak');
- play(g,'shield_bash','base','enemy1');g.confirmEnemyRoll(()=>1);g.acknowledgeEnemyResult();g.submit([20]);g.submit(g.s.task.parts.map(p=>p.count));
- assert(g.s.task.label==='Impuls egidy','power relocation before Hook');
- g.select({x:4,y:4});g.confirmRelocation();assert(g.s.task.label==='Rezonans runy Hak'&&g.actor('enemy1').pos.x===4,'Hook starts at displaced position');
- drain(g);
+ assert(n.choose('force_wave')&&n.exclude(null)&&n.commit(),'area with old unrelated runes');
+ drain(n);assert(n.s.phase==='result'&&n.s.chain.entries.at(-1).rune==='Oko','all saves resolve without global Hook queue');
  // One regeneration pool per hero and round; skipping a full pool preserves eligibility.
  const r=create();r.active.charges=19;r.offerRegen(r.active,'test');
  play(r,'second_wind');r.submit([1]);assert(r.s.task.type==='recover','recovery offered after effect');
@@ -479,6 +445,131 @@ def test_hooks_reactions_rounds_and_failure_boundaries(tmp_path: Path) -> None:
  e.opportunity(false);drain(e);assert(responder.reaction,'decline retains reaction');
  // Pending result with a hymn is not applied twice after reload/decline.
  const h=create();h.active.hymn={source:'lorian'};h.actor('enemy1').pos={x:3,y:4};
- play(h,'attack','base','enemy1');h.submit([1]);h.decideHymn(false);drain(h);
+ play(h,'attack','enemy1');h.submit([1]);h.decideHymn(false);drain(h);
  assert(h.active.hymn&&h.actor('enemy1').hp===45,'declined natural-one result preserves Hymn and misses');
+ """)
+
+
+def test_every_card_bonus_executes_with_its_own_scope(tmp_path: Path) -> None:
+    browser_check(tmp_path, HELPERS + r"""
+ const supported=new Set(['attack_bonus_dice','damage_dice_extra','first_damage_dice','heal_dice','heal_flat',
+   'adjacent_ally_heal_dice','self_temp_hp','target_temp_hp','self_ac_next_turn','target_ac_next_turn',
+   'next_attack_advantage','check_advantage','hide_advantage','no_opportunity','enemy_save_penalty',
+   'range_bonus','move_bonus','bonus_move','perception_penalty','hymn_sides','bless_bonus','enemy_move_penalty',
+   'charge_bonus_flat','shield_pool']);
+ let tested=0;
+ for(const [heroId,hero] of Object.entries(D.heroes))for(const card of hero.cards)for(const bonus of card.resonance_bonuses){
+   const m=create(heroId),a=m.active,mods=bonus.modifiers,seen=[];
+   m.s.board.blocked=[];m.s.board.difficult=[];
+   for(const b of Object.values(m.s.actors)){b.maxHp=500;b.hp=350;}
+   const other=m.heroes().filter(b=>b.id!==a.id);other.forEach((b,i)=>b.pos=[{x:2,y:3},{x:1,y:5},{x:1,y:3}][i]);
+   m.actor('enemy1').pos={x:heroId==='erynd'?6:3,y:4};m.actor('enemy2').pos={x:5,y:1};m.actor('enemy3').pos={x:5,y:8};
+   if(mods.range_bonus){
+     if(card.id==='guard_vault')m.actor('enemy1').pos={x:7,y:4};
+     if(card.id==='force_darts')m.actor('enemy1').pos={x:9,y:4};
+     if(card.id==='passage_song')other[0].pos={x:9,y:4};
+     if(card.id==='roar')m.actor('enemy1').pos={x:5,y:4};
+   }
+   if(card.id==='energy_recovery')other[0].charges=5;
+   seedMemory(m,bonus.requires,card.rune);
+   assert(m.resonancePreview(card).activeBonuses.some(b=>b.text===bonus.text),'bonus active '+card.id+': '+bonus.text);
+   assert(Object.keys(mods).every(k=>supported.has(k)),'all modifier keys implemented '+card.id);
+   assert(m.choose(card.id),'select bonus power '+card.id);
+   if(card.id==='misty_step')assert(m.select(mods.range_bonus?{x:9,y:4}:{x:2,y:5}),'teleport uses bonus range');
+   else if(card.id==='guard_vault'){m.selectTarget('enemy1');assert(m.select({x:m.actor('enemy1').pos.x,y:3}),'Parkour bonus target and destination');}
+   else if(card.id==='skirmish_shot'){assert(m.select(mods.move_bonus?{x:2,y:7}:{x:2,y:5}),'skirmish uses bonus movement');m.selectTarget('enemy1');}
+   else if(card.id==='charge')m.selectTarget('enemy1');
+   else if(card.id==='force_darts')for(let i=0;i<3;i++)m.selectTarget('enemy1');
+   else if(card.id==='force_wave')m.exclude(null);
+   else if(!m.ready()){
+     const target=['bless','healing_word','inspiration','passage_song','energy_recovery','arcane_shield'].includes(card.id)?other[0]:m.actor('enemy1');
+     assert(m.selectTarget(target.id),'select bonus target '+card.id);
+   }
+   assert(m.commit(),'commit bonus power '+card.id);
+   let count=0;
+   while(m.s.task){
+     assert(++count<120,'bonus action terminates '+card.id);
+     const t=m.s.task;seen.push(JSON.parse(JSON.stringify(t)));
+     if(t.type==='roll'){
+       if(m.isEnemyRoll())m.confirmEnemyRoll(()=>1);
+       else{const die=m.rollDice()[t.diceResults?.length??0];assert(die||!t.parts.length,'next physical die exists '+heroId+':'+card.id+' '+JSON.stringify(t));if(die)m.submitDie(Math.min(die.sides,['attack','hide','bash'].includes(t.outcome)?16:3));else m.submit([]);}
+     }else if(t.type==='enemy-result')m.acknowledgeEnemyResult();
+     else if(t.type==='recover')m.recover(false);
+     else if(t.type==='hymn')m.decideHymn(false);
+     else if(t.type==='opportunity')m.opportunity(false);
+     else if(t.type==='bonusTarget'){assert(m.selectTarget(t.targets[0])&&m.confirmBonusTarget(),'extra healing target selected');}
+     else if(t.type==='relocate'){
+       assert(t.radius>0,'card relocation has positive distance');
+       const cell=m.relocationFields(t).find(p=>window.ResonanceModel.same(p,m.actor(t.target).pos))??m.relocationFields(t)[0];
+       assert(m.select(cell)&&m.confirmRelocation(),'card relocation resolved');
+     }else throw Error('Unexpected task '+t.type);
+   }
+   assert(m.s.phase==='result','bonus action resolves completely '+card.id);
+   if(mods.attack_bonus_dice)assert(seen.some(t=>t.outcome==='damage'&&t.components.some(c=>c.label==='Rezonans · moc')),'extra damage belongs to power attack');
+   if(mods.damage_dice_extra)assert(seen.some(t=>t.outcome==='areaDamage'&&t.parts.length===2),'area damage adds own extra dice');
+   if(mods.first_damage_dice){const rolls=seen.filter(t=>t.outcome==='damage'&&!(t.diceResults?.length));assert(rolls.length===3&&rolls[0].parts.length===2&&rolls[1].parts.length===1&&rolls[2].parts.length===1,'only first projectile has bonus die');}
+   if(mods.heal_dice)assert(seen.some(t=>t.outcome==='healGroup'&&t.parts.length===2),'extra healing die rolled once');
+   if(mods.heal_flat)assert(seen.some(t=>t.outcome==='healGroup'&&t.modifier===mods.heal_flat),'flat healing bonus is part of power');
+   if(mods.adjacent_ally_heal_dice)assert(seen.some(t=>t.type==='bonusTarget')&&other[0].hp>350,'selected adjacent ally healed');
+   if(mods.self_temp_hp)assert(a.cup===mods.self_temp_hp,'caster receives printed temporary HP');
+   if(mods.target_temp_hp)assert(other[0].cup===mods.target_temp_hp,'target receives printed temporary HP');
+   if(mods.self_ac_next_turn)assert(m.ac(a)>a.ac,'caster protection changes actual AC');
+   if(mods.target_ac_next_turn)assert(m.ac(other[0])>other[0].ac,'target protection changes actual AC');
+   if(mods.next_attack_advantage)assert(m.status(a,'nextAttack'),'next weapon attack retains its advantage state');
+   if(mods.check_advantage)assert(seen.some(t=>['attack','bash'].includes(t.outcome)&&t.mode==='advantage'),'check actually uses two dice '+heroId+':'+card.id);
+   if(mods.hide_advantage)assert(seen.some(t=>t.outcome==='hide'&&t.mode==='advantage'),'hiding uses two dice');
+   if(mods.enemy_save_penalty)assert(seen.some(t=>t.outcome==='save'&&t.modifier===m.actor(t.actor).abilities[t.effect.kind==='prone'?'constitution':card.id==='sacred_flame'?'dexterity':'wisdom']-mods.enemy_save_penalty),'target save subtracts printed penalty');
+   if(mods.no_opportunity)assert(!seen.some(t=>t.power==='opportunity'),'power movement suppresses opportunities');
+   if(mods.move_bonus)assert(card.id==='passage_song'?seen.some(t=>t.type==='relocate'&&t.radius===3):a.pos.y===7,'power uses increased movement');
+   if(mods.bonus_move)assert(seen.some(t=>t.type==='relocate'&&t.target===a.id&&t.radius===mods.bonus_move),'successful power grants own follow-up move');
+   if(mods.perception_penalty)assert(seen.some(t=>t.outcome==='hide'&&t.perceptionPenalty===2),'perception penalty belongs to hiding check');
+   if(mods.hymn_sides)assert(other[0].hymn.sides===8,'stored Hymn uses larger die');
+   if(mods.bless_bonus)assert(m.status(other[0],'bless').value===2,'bless doubles its own check bonus');
+   if(mods.enemy_move_penalty)assert(m.movement(m.actor('enemy1'))<m.actor('enemy1').speed,'affected enemy movement actually reduced');
+   if(mods.charge_bonus_flat)assert(other[0].charges===10,'charge recovery adds flat bonus after die');
+   if(mods.shield_pool)assert(other[0].shield===3,'shield pool belongs to protected target');
+   const timedAc=m.ac(a),temp=a.cup,otherAc=m.ac(other[0]),pool=other[0].shield;
+   m.endChain('test');assert(m.ac(a)===timedAc&&a.cup===temp&&m.ac(other[0])===otherAc&&other[0].shield===pool,'card states survive resonance end');
+   tested++;
+ }
+ assert(tested===51,'all fifty-one card bonuses execute');
+ """)
+
+
+def test_finishers_require_old_symbols_and_pay_even_on_miss(tmp_path: Path) -> None:
+    browser_check(tmp_path, HELPERS + r"""
+ const b=create('brakka');b.actor('enemy1').pos={x:3,y:4};
+ assert(!b.choose('powerful_strike')&&b.active.charges===20,'missing setup blocks finisher without payment');
+ b.addRune(b.active,'Wieża');b.addRune(b.active,'Błysk');
+ assert(!b.choose('powerful_strike')&&b.resonancePreview('powerful_strike').missingRequiredRunes.length===0,'required symbols alone do not bypass continuation');
+ b.addRune(b.active,'Schody');const original=b.snapshot();
+ assert(b.choose('powerful_strike')&&b.selectTarget('enemy1'),'prepared finisher selected');b.cancel();assert(b.snapshot()===original,'cancel preserves preparation');
+ play(b,'powerful_strike','enemy1');assert(b.active.charges===12&&b.s.chain.entries.length===3,'paid finisher retains memory until result');
+ b.submit([1]);drain(b);assert(!b.s.chain&&b.actor('enemy1').hp===45&&b.active.charges===12,'miss consumes charge and closes all memory');
+ const g=create();g.actor('enemy1').pos={x:3,y:4};g.addRune(g.active,'Schody');
+ play(g,'breaking_strike','enemy1');g.submit([16]);
+ assert(g.s.task.parts.filter(p=>p.sides===6).length===2,'power uses old stairs before adding its own Grot');drain(g);g.acknowledge();
+ g.active.ordinary=true;play(g,'attack','enemy1');g.submit([16]);
+ assert(g.s.task.parts.length===1,'ordinary attack receives no stored Grot bonus');
+ const teleport=create('nimra');teleport.s.board.blocked=[];teleport.addRune(teleport.active,'Schody');
+ assert(teleport.choose('misty_step')&&teleport.select({x:9,y:4}),'bonus memory allows extended teleport preview');
+ teleport.endChain('zmiana przed zatwierdzeniem');
+ assert(!teleport.commit()&&teleport.active.charges===20,'stale bonus range cannot be committed or charged');
+ """)
+
+
+def test_enemy_turns_rounds_skip_and_powerless_hero_end(tmp_path: Path) -> None:
+    browser_check(tmp_path, HELPERS + r"""
+ const m=create();m.addRune(m.active,'Wieża');m.active.continued=true;
+ m.actor('mira').hp=0;m.actor('lorian').hp=0;m.actor('nimra').hp=0;
+ assert(m.endTurn()&&m.active.id==='enemy1'&&m.s.chain,'skipping unconscious heroes does not clear memory');
+ m.endTurn();m.endTurn();m.endTurn();
+ assert(m.active.id==='garran'&&m.s.round===2&&m.s.chain,'enemy turns and round boundary preserve memory');
+ assert(m.endTurn()&&!m.s.chain,'conscious hero ending without a runic power clears memory');
+ const duration=create('nimra'),caster=duration.active,protectedHero=duration.actor('garran');
+ duration.grantPool(protectedHero,'temporary',4,caster);duration.grantAc(protectedHero,1,caster,'test');
+ duration.addRune(caster,'Klepsydra');caster.continued=true;duration.endTurn();caster.hp=0;
+ for(let i=0;i<6;i++){duration.active.continued=true;duration.endTurn();}
+ assert(caster.turn===2&&protectedHero.cup===0&&duration.ac(protectedHero)===protectedHero.ac,'card timers expire at skipped unconscious source slot');
+ assert(duration.s.chain,'skipped source slot expires buffs without ending memory');
  """)

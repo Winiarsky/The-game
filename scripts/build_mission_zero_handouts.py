@@ -9,7 +9,6 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'src'))
-from dnd_board_game.physical_cards.mana_print_files import render_pdf, merge_pdfs
 
 
 def render(data: dict[str, object]) -> str:
@@ -26,15 +25,9 @@ def main() -> None:
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--html-only',action='store_true')
     args=parser.parse_args()
-    folder=ROOT/'content/scenarios/misja_0_dzwon/print'
-    data=json.loads((folder/'handouts.json').read_text())
-    outputs=[]
-    for key, name in [('order','rozkaz_A4'),('receipts','pokwitowania_A4')]:
-        html=folder/(name+'.html');html.write_text(render(data[key]),encoding='utf-8')
-        if not args.html_only:
-            pdf=html.with_suffix('.pdf');render_pdf(html,pdf);outputs.append(pdf)
-        print(html if args.html_only else html.with_suffix('.pdf'),flush=True)
-    if outputs:merge_pdfs(outputs,folder/'dokumenty_A4.pdf')
+    from build_handouts import build_mission
+    for path in build_mission(html_only=args.html_only).values():
+        print(path, flush=True)
 
 
 if __name__=='__main__':main()

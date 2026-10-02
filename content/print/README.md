@@ -1,20 +1,10 @@
-# Kompletne wydruki
+# Źródła materiałów
 
-- [Misja 0 — kafle i handouty](../scenarios/misja_0_dzwon/maps/print/misja_0_komplet_A4.pdf)
-- [Bohaterowie — karty i zestawy startowe](characters/bohaterowie_zestawy_startowe_A4.pdf)
-- [Spis stron bohaterów](characters/bohaterowie_zestawy_startowe_A4.md)
+Aktualne czarno-białe PDF-y znajdują się wyłącznie w [handouts](../../handouts/README.md).
+Odbudowa: `PYTHONPATH=src .venv/bin/python scripts/build_handouts.py`.
+Pliki robocze trafiają do `.cache/handouts/`.
 
-Odbudowa: `python scripts/build_session_print_packs.py`.
-Każdy bohater ma pięć arkuszy: postać i historia, mata many, akcje z runami,
-pusta mata wyposażenia oraz startowy sprzęt do wycięcia. Na końcu kompletu
-są wspólna ściągawka zasad i znaczniki pomocnicze. Ilość na żetonie stosu
-określa liczbę sztuk. Nie trzeba dobierać osobnych PDF-ów ekwipunku.
-Maty many i arkusz akcji Nimry są poziomo. Pozostałe strony są pionowo.
-[Podgląd wszystkich postaci](characters/mats_v2/podglad.html) ·
-[Instrukcja zestawu](characters/mats_v2/README.md).
-
-Druk jednostronny A4, 100%, bez dopasowania. Kafle domyślnie mają dotychczasową
-korektę 250/244. Dla nieskalowanej drukarki:
-`python scripts/build_session_print_packs.py --only mission --nominal`.
-Figurki, kości, wspólna talia many i posiadany podkład planszy są osobnymi,
-wielokrotnie używanymi elementami. Starsze częściowe PDF-y można pominąć.
+`rune_relations_v03/catalog.json` jest wspólnym katalogiem bieżących mocy,
+warunków i relacji run. `equipment/illustrations/ink_v2/` zawiera źródłowe
+ilustracje używane przez aktualne karty i UI. Starsze katalogi reguł pozostają
+na potrzeby wczytywania rozpoczętych walk; nie publikują starszych kart.

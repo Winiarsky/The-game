@@ -58,30 +58,8 @@ def evaluate_attack_positioning(
     if source.save_ability is not None or source.area is not None:
         return cover if source.save_ability == "dexterity" else AttackPositioning()
 
-    cover_level = cover.cover_level
-    cover_bonus = cover.cover_bonus
-    cover_sources = cover.cover_sources
-    defensive_spots = tuple(
-        scene_object
-        for scene_object in scene_objects
-        if scene_object.cover_bonus > 0 and target.position in scene_object.positions
-    )
-    if defensive_spots:
-        defensive_bonus = max(scene.cover_bonus for scene in defensive_spots)
-        if defensive_bonus > cover_bonus:
-            cover_bonus = defensive_bonus
-            cover_sources = tuple(
-                scene.name
-                for scene in defensive_spots
-                if scene.cover_bonus == defensive_bonus
-            )
-        elif defensive_bonus == cover_bonus:
-            cover_sources = tuple(
-                dict.fromkeys(
-                    (*cover_sources, *(scene.name for scene in defensive_spots))
-                )
-            )
-        cover_level = _cover_level_for_bonus(cover_bonus)
+    cover = with_defensive_spot_cover(cover, target, scene_objects)
+    cover_level, cover_bonus, cover_sources = cover.cover_level, cover.cover_bonus, cover.cover_sources
 
     from dnd_board_game.actors.resources import uses_physical_mana
     if uses_physical_mana(attacker) and (source.id == "optical_scope" or any(
@@ -147,6 +125,26 @@ def evaluate_attack_positioning(
             and _distance_feet(attacker.position, target.position) <= 5
         ),
     )
+
+
+def with_defensive_spot_cover(
+    positioning: AttackPositioning,
+    target: Actor,
+    scene_objects: Sequence[SceneObject] = (),
+) -> AttackPositioning:
+    """Use the strongest positional protection, never sum overlapping cover."""
+    if positioning.total_cover:
+        return positioning
+    spots = tuple(obj for obj in scene_objects
+                  if obj.cover_bonus > 0 and target.position in obj.positions)
+    bonus = max((obj.cover_bonus for obj in spots), default=0)
+    if bonus < positioning.cover_bonus or bonus == 0:
+        return positioning
+    sources = tuple(obj.name for obj in spots if obj.cover_bonus == bonus)
+    if bonus == positioning.cover_bonus:
+        sources = tuple(dict.fromkeys((*positioning.cover_sources, *sources)))
+    return replace(positioning, cover_level=_cover_level_for_bonus(bonus),
+                   cover_bonus=bonus, cover_sources=sources)
 
 
 def evaluate_cover_from_origin(

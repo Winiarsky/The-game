@@ -36,18 +36,21 @@ def panel_position(slot: int) -> Coordinate:
 
 def setup_panel_feedback(
     base: LedFeedback, *, can_confirm: bool, selected: Coordinate | None = None,
+    can_back: bool = False,
 ) -> LedFeedback:
     """Keep placement guidance and illuminate accept only after a valid choice."""
-    accept = panel_position(28)
+    accept, back = panel_position(28), panel_position(29)
     frames = [
         LedFrame(positions, frame.color, frame.role)
         for frame in base.frames
-        if (positions := tuple(p for p in frame.positions if p not in (accept, selected)))
+        if (positions := tuple(p for p in frame.positions if p not in (accept, back, selected)))
     ]
     if selected is not None:
         frames.append(LedFrame((selected,), LedColor.MOVEMENT_DESTINATION, LedRole.DESTINATION))
     if can_confirm:
         frames.append(LedFrame((accept,), LedColor.PANEL_ACCEPT, LedRole.MARKER))
+    if can_back:
+        frames.append(LedFrame((back,), LedColor.PANEL_BACK, LedRole.MARKER))
     return LedFeedback(tuple(frames))
 
 

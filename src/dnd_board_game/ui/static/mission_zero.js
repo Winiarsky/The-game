@@ -85,14 +85,53 @@ function missionRollSummary(wizard) {
   return `<p>${esc(state.mission.ui.healing_total)}: ${rolled} + ${state.mission.roll_bonus} = <b>${rolled+state.mission.roll_bonus} PW</b></p>`;
 }
 
+function equipmentButton(c, className='') {
+  return `<button type="button" class="mana-rune-choice ${className}" data-mission-slot="${c.slot}" onclick="missionAction('${esc(c.action)}',${esc(JSON.stringify(c.extra))})">${c.icon}<span>${esc(c.label)}</span></button>`;
+}
+
+function equipmentSlot(row, p) {
+  const c=p.choices.find(c=>c.action==='equipment_slot'&&c.extra.gear_slot===row.id);
+  const selected=p.equipment.picker?.slot===row.id;
+  const item=row.item;
+  return `<button type="button" class="equipment-slot ${row.linked?'equipment-slot-linked':''} ${selected?'equipment-slot-selected':''}" data-equipment-slot="${esc(row.id)}" ${c?`data-mission-slot="${c.slot}" onclick="missionAction('equipment_slot',{gear_slot:'${esc(row.id)}'})"`:'disabled'} aria-label="${esc(row.label)}: ${esc(item?.name||'Puste miejsce')}">
+    <span class="equipment-slot-label">${esc(row.label)}</span>
+    <span class="equipment-slot-content">${item&&!row.linked?`<span class="equipment-slot-art">${item.art}</span>`:''}<span>${esc(row.linked?'Zajęta przez broń dwuręczną':item?.name||'Puste miejsce')}${item?.quantity>1?` <small>×${item.quantity}</small>`:''}</span></span>
+    <span class="equipment-slot-rune">${row.icon}</span></button>`;
+}
+
+function equipmentItemPreview(item, emptyText, handChange=false) {
+  return item?`<div class="equipment-art">${item.art}</div><h3>${esc(item.name)}${item.quantity>1?` × ${item.quantity}`:''}</h3><p>${esc(item.description||'Przedmiot wyposażenia.')}</p>${item.two_handed&&handChange?'<p class="equipment-warning">Zajmie obie ręce. Obecny sprzęt z obu rąk wróci do zapasu.</p>':''}`:`<div class="equipment-empty-art" aria-hidden="true">—</div><h3>${esc(emptyText)}</h3>`;
+}
+
 function renderPartyEquipment(p, panel) {
   const e=p.equipment;
-  const controls=p.choices.map(c=>`<button class="mana-rune-choice" data-mission-slot="${c.slot}" onclick="missionAction('${esc(c.action)}',${esc(JSON.stringify(c.extra))})">${c.icon}<span>${esc(c.label)}</span></button>`).join('');
-  panel.innerHTML=`<div class="mission-toolbar"><a class="button secondary" href="/">${esc(sessionUiText('common.main_menu'))}</a><small>${esc(p.ui.autosave)}</small><span>${esc(sessionUiText('common.equipment_heading',{hero:e.hero_index,total:e.hero_count,gold:e.gold}))}</span></div>
-    <div class="equipment-heading"><div class="equipment-hero">${e.portrait_url?`<img class="equipment-hero-portrait" src="${esc(e.portrait_url)}" alt="${esc(e.hero)}">`:''}<div><small>${esc(p.ui.equipment_active_hero)}</small><h2>${esc(e.hero)}</h2></div></div><span>${esc(sessionUiText('common.equipment_stats',{strength:e.strength,ac:e.ac}))}</span></div>
-    <div class="equipment-layout"><section class="equipment-preview">${e.item?`<div class="equipment-art">${e.item.art}</div><h3>${esc(e.item.name)} ${e.item.quantity>1?`× ${e.item.quantity}`:''}</h3><p>${esc(e.item.description||sessionUiText('common.equipment_default'))}</p>${e.item.usage?`<p><b>${esc(e.item.usage)}</b></p>`:''}`:`<h3>${esc(sessionUiText('common.empty_supply'))}</h3><p>${esc(sessionUiText('common.supply_hint'))}</p>`}<strong>${esc(e.source)} · ${e.index}/${e.count}</strong></section>
-    <section class="equipment-loadout" aria-label="${esc(sessionUiText('common.loadout'))}">${e.loadout.map(row=>`<div><b>${esc(row.slot)}</b><span>${esc(row.items)}</span></div>`).join('')}</section></div>
-    <p class="equipment-notice" role="status">${p.stage==='equipment_sell'?esc(sessionUiText('common.sell_hint')):esc(e.notice||sessionUiText('common.equipment_hint'))}</p>
-    <div class="mana-decisions equipment-controls">${controls}</div>`;
+  const t=(key,params={})=>sessionUiText(`equipment.${key}`,params);
+  const inStash=['equipment_stash','equipment_sell'].includes(e.view);
+  const body=e.loadout.filter(row=>!row.id.startsWith('pack_'));
+  const pack=e.loadout.filter(row=>row.id.startsWith('pack_'));
+  const footerChoices=p.choices.filter(c=>!['equipment_slot','equipment_group','equipment_pack_previous','equipment_pack_next'].includes(c.action));
+  let aside;
+  if(e.picker) {
+    const pick=e.picker;
+    aside=`<section class="equipment-picker" aria-label="${esc(t('choose_for',{slot:pick.label}))}"><small>${esc(t('choose_for',{slot:pick.label}))}</small><div class="equipment-picker-position">${esc(t('item_count',{index:pick.index,count:pick.count}))} · ${esc(t(pick.current?'current':pick.source==='hero'?'own_item':pick.source==='stash'?'base_item':'empty_item'))}</div>
+      ${equipmentItemPreview(e.item,t('empty_item'),!pick.current&&['main_hand','off_hand'].includes(pick.slot))}<p>${esc(t(pick.source==='empty'?'empty_hint':pick.current?'keep_hint':'picker_hint'))}</p>
+      <div class="equipment-candidate-list" aria-label="${esc(t('available_items'))}">${pick.names.map((name,index)=>`<span ${index===pick.index-1?'aria-current="true"':''}>${esc(name)}</span>`).join('')}</div></section>`;
+  } else {
+    aside=`<section class="equipment-pack"><div class="equipment-section-title"><h3>${esc(t('pack'))}</h3><small>${e.pack_pages>1?esc(t('page',{page:e.pack_page,pages:e.pack_pages})):esc(t('pack_hint'))}</small></div><div class="equipment-pack-grid">${pack.map(row=>equipmentSlot(row,p)).join('')}</div>
+      ${e.pack_pages>1?`<div class="equipment-pack-pages">${p.choices.filter(c=>c.action.startsWith('equipment_pack_')).map(c=>equipmentButton(c)).join('')}</div>`:''}</section>`;
+  }
+  let workspace=`<div class="equipment-workspace"><section class="equipment-body" aria-label="${esc(t('worn'))}">${body.map(row=>equipmentSlot(row,p)).join('')}</section>${aside}</div>`;
+  if(inStash) {
+    workspace=`<div class="equipment-stash"><nav class="equipment-stash-tabs" aria-label="${esc(t('shared'))}">${p.choices.filter(c=>c.action==='equipment_group').map(c=>equipmentButton({...c,label:`${c.label} · ${e.groups[c.extra.group]}`},c.extra.group===e.group?'selected':'')).join('')}</nav>
+      <section class="equipment-stash-preview">${equipmentItemPreview(e.item,t(`${e.group}_empty`))}<p>${esc(t(`${e.group}_hint`))}</p>${e.group==='found'&&!e.can_identify?`<p>${esc(t('identify_at_base'))}</p>`:''}<small>${esc(t('item_count',{index:e.stash_index,count:e.groups[e.group]}))}</small></section></div>`;
+  }
+  panel.innerHTML=`<div class="mission-toolbar"><span class="equipment-stage-label">${esc(t('title'))}</span><small>${esc(p.ui.autosave)}</small><span>${esc(t('treasury',{gold:e.gold}))}</span></div>
+    <div class="equipment-heading"><div class="equipment-hero">${e.portrait_url?`<img class="equipment-hero-portrait" src="${esc(e.portrait_url)}" alt="${esc(e.hero)}">`:''}<div><small>${esc(t('hero_step',{index:e.hero_index,count:e.hero_count}))}</small><h2>${esc(e.hero)}</h2><span>${esc(sessionUiText('common.equipment_stats',{strength:e.strength,ac:e.ac}))}</span></div></div>
+      <ol class="equipment-party" aria-label="${esc(t('order'))}">${e.party.map((hero,index)=>`<li ${index===e.hero_index-1?'aria-current="step"':''}>${index<e.hero_index-1?'✓ ':''}${esc(hero.name)}</li>`).join('')}</ol></div>
+    ${workspace}<p class="equipment-notice" role="status">${esc(e.notice||(e.view==='equipment'?t(e.groups.available===0?'starter_hint':'sheet_hint'):e.view==='equipment_sell'?t('sale_hint'):e.picker?t('picker_controls'):''))}</p>
+    <div class="mana-decisions equipment-controls">${footerChoices.map(c=>equipmentButton(c)).join('')}</div>`;
   sizeMissionReader();
+  const candidates=panel.querySelector('.equipment-candidate-list');
+  const selected=candidates?.querySelector('[aria-current]');
+  if(selected) candidates.scrollLeft+=selected.getBoundingClientRect().left-candidates.getBoundingClientRect().left-candidates.clientWidth/2+selected.clientWidth/2;
 }

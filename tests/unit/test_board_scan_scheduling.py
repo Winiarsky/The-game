@@ -24,6 +24,7 @@ let selection = {revision: 'menu'}, busy = false, syncing = false;
 let boardAutoArmTimer = null, boardPanelSyncPromise = null, boardScanStopPromise = null;
 let boardScanInFlight = false, boardScanPromise = null, boardScanToken = 1;
 let boardListeningRevision = '', lastAttemptedBoardRevision = '', boardInputPhase = '';
+let boardCommandRetryAt = 0, boardCommandError = '';
 let state = {}, boardScanError = '', scans = 0, scheduled = 0, initialized = 0;
 const currentBoardSelection = () => selection;
 const boardSelectionCanAutoArm = () => !busy;
@@ -91,6 +92,7 @@ let state = {board_selection: {panel_enabled: true}}, busy = false;
 let keyboardRollWizard = {steps: [{raw: 10, min: 1, max: 20}], index: 0, review: false};
 let schedules = 0;
 const sharedManaPanel = () => null;
+const optionalReactionRollSkip = () => false;
 const scheduleAutomaticBoardScan = () => { schedules++; };
 const renderKeyboardRollWizard = () => {
   document.getElementById('keyboard-roll-wizard-input').value = keyboardRollWizard.steps[0].raw;
@@ -135,6 +137,7 @@ def test_cancel_reload_and_retry_release_the_previous_scan(tmp_path: Path) -> No
 let state = {board:{connected:true}, board_selection:{revision:'actions'}};
 let boardAutoArmTimer=null, boardScanStopPromise=null, boardScanInFlight=false, boardScanPromise=null;
 let boardScanToken=0, boardListeningRevision='', lastAttemptedBoardRevision='', boardScanError='', boardInputPhase='';
+let boardCommandRetryAt=0, boardCommandError='';
 let activeInteractionId=null, lastBoardSelectionRevision=0, chatInstanceOpen=false;
 let resets=0, scans=0, rendered=false, delayedResponse=null;
 const currentBoardSelection = () => state.board_selection;

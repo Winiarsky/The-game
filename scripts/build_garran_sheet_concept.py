@@ -102,28 +102,11 @@ def document(*, demo: bool = False) -> str:
 
 
 def main() -> None:
-    OUTPUT.mkdir(parents=True,exist_ok=True)
-    target=OUTPUT/'garran_01_postac_i_mana_A4.html'
-    target.write_text(document(),encoding='utf-8')
-    (OUTPUT/'garran_ulozenie.html').write_text(document(demo=True),encoding='utf-8')
-    render_pdf(target,target.with_suffix('.pdf'))
-    info = subprocess.run(['pdfinfo',str(target.with_suffix('.pdf'))], capture_output=True,text=True,check=True,timeout=15).stdout
-    pages = next(line.split(':')[1].strip() for line in info.splitlines() if line.startswith('Pages:'))
-    if pages != '1':
-        raise RuntimeError('Koncept musi mieścić się na jednej stronie A4.')
-    subprocess.run(['pdftoppm','-singlefile','-scale-to','1600','-png',str(target.with_suffix('.pdf')),str(OUTPUT/'garran_01_podglad')],check=True,timeout=30,capture_output=True)
-    chrome = shutil.which('google-chrome') or shutil.which('chromium')
-    with TemporaryDirectory(prefix='garran-sheet-preview-') as temporary:
-        subprocess.run([chrome,'--headless','--no-sandbox','--disable-gpu','--disable-dev-shm-usage',
-            '--no-first-run','--disable-background-networking',f'--user-data-dir={temporary}',
-            '--window-size=1100,1330',f'--screenshot={OUTPUT / "garran_ulozenie.png"}',
-            (OUTPUT/'garran_ulozenie.html').as_uri()],check=True,timeout=30,capture_output=True)
-    (OUTPUT/'dimensions.json').write_text(json.dumps(dict(
-        paper_mm=[210,297],sheet_mm=[SHEET_WIDTH,SHEET_HEIGHT],card_mm=[63,88],
-        card_orientation='landscape',exposed_mm=EXPOSED,slot_height_mm=SLOT_HEIGHT,
-        row_pitch_mm=ROW_HEIGHT,same_side_pitch_mm=2*ROW_HEIGHT,
-        slots=[dict(color=c,side='left' if i%2==0 else 'right',center_y_mm=ROW_TOP+(i+.5)*ROW_HEIGHT) for i,c in enumerate(COLORS_ORDER)]),indent=2)+'\n')
-    print(target.with_suffix('.pdf'))
+    """Build the current monochrome handouts from the canonical catalog."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from build_rune_relations import main as build_current
+    build_current()
 
 if __name__=='__main__':
     main()

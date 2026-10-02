@@ -3,7 +3,7 @@
   "tagline": "Planszowa gra fabularna",
   "description": "Przygoda przy wspólnej planszy.",
   "main_menu": "Menu główne",
-  "resume": "Wznów Misję 0",
+  "menu_board_hint": "Naciśnij podświetloną runę na planszy, aby uruchomić kafelek z tym samym symbolem.",
   "new_game": "Nowa gra",
   "new_hint": "Misja 0 · wyprawa dla 3–6 bohaterów",
   "load_game": "Wczytaj grę",

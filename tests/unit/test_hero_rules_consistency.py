@@ -1,6 +1,5 @@
 """Cross-check the player-facing material against the actual starter builds."""
 
-import json
 from dataclasses import replace
 from pathlib import Path
 
@@ -37,30 +36,42 @@ def heroes() -> dict[str, Actor]:
 
 
 @pytest.mark.parametrize("actor_id", PLAYABLE_HERO_IDS)
-def test_printed_hero_matches_build_shortcuts_spell_costs_and_shared_flaw(heroes: dict[str, Actor], actor_id: str) -> None:
-    from dnd_board_game.character_creation.physical_mana import apply_physical_mana_profile
-    from dnd_board_game.character_creation.physical_mana_help import physical_mana_flaw
-    from dnd_board_game.rules.physical_mana import hero_abilities
-    from dnd_board_game.physical_cards.mana_print import ability_key
+def test_current_print_model_matches_v03_starter_stats_equipment_and_features(
+    heroes: dict[str, Actor], actor_id: str,
+) -> None:
+    from dnd_board_game.application.resonance_combat import apply_charge_profile
+    from dnd_board_game.character_creation.runes import apply_rune_profile
+    from dnd_board_game.core.player_labels_pl import ABILITY_LABELS_PL
+    from dnd_board_game.inventory.armor import effective_speed_feet
+    from dnd_board_game.physical_cards.mana_print import build_print_hero
+    from dnd_board_game.rules import ability_modifier
+    from dnd_board_game.rules.resonance import PROFILE, cards_for
+    from dnd_board_game.scenarios.rune_relation_catalog import load_rune_relation_catalog
 
-    actor = apply_physical_mana_profile(heroes[actor_id])
-    manifest = json.loads(Path(
-        "assets/physical_cards/character_sets/keyboard_v1/keyboard_character_cards_v1.json"
-    ).read_text())
-    assert manifest["rules_profile"] == "shared_mana_v03"
-    sheet = next(hero for hero in manifest["heroes"] if hero["id"] == actor_id)
-    assert (sheet["level"], sheet["hp"], sheet["ac"], sheet["speed"]) == (
-        actor.level, actor.max_hp, effective_armor_class(actor), actor.speed_feet,
+    actor = apply_charge_profile(apply_rune_profile(heroes[actor_id]))
+    printed = build_print_hero(actor_id, rune_profile=True)
+    assert (printed.id, printed.name, printed.level, printed.hp, printed.ac, printed.speed) == (
+        str(actor.id), actor.name, actor.level, actor.max_hp,
+        effective_armor_class(actor), effective_speed_feet(actor),
     )
-    expected = {a.id: a for a in hero_abilities(actor_id)}
-    assert {card["id"] for card in sheet["cards"]} == set(expected)
-    for card in sheet["cards"]:
-        rule = expected[card["id"]]
-        assert card["cost"] == list(rule.cost)
-        assert card["description"] == rule.description
-        assert card["key"] == ability_key(actor_id, rule.id, rule.timing)
-    flaw = physical_mana_flaw(actor_id)
-    assert sheet["flaw"] == [flaw.name, flaw.body]
+    assert printed.abilities == tuple(
+        (label, score, ability_modifier(score))
+        for ability, label in ABILITY_LABELS_PL.items()
+        for score in (getattr(actor.ability_scores, ability),)
+    )
+    assert printed.equipment == tuple(f"{item.name} ×{item.quantity}" for item in actor.inventory)
+
+    catalog = load_rune_relation_catalog()
+    row = catalog["heroes"][actor_id]
+    powers = cards_for(catalog, actor_id)
+    grants = {feature.feature_id: feature for feature in actor.features if feature.source_ref == PROFILE}
+    assert set(grants) == {PROFILE, f"{PROFILE}_passive", f"{PROFILE}_flaw", *(card.id for card in powers)}
+    for card in powers:
+        assert (grants[card.id].label, grants[card.id].description) == (card.name, card.effect)
+    for kind in ("passive", "flaw"):
+        assert (grants[f"{PROFILE}_{kind}"].label, grants[f"{PROFILE}_{kind}"].description) == (
+            row[kind]["name"], row[kind]["description"],
+        )
 
 
 def test_custom_knives_and_archery_survive_live_source_rebinding(heroes: dict[str, Actor], tmp_path: Path) -> None:

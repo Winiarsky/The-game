@@ -4,4 +4,4 @@ Po założeniu: +1 do wartości Siły, np. 18 → 19. Modyfikator zmienia się d
 
 Premia działa tylko u bohatera noszącego pierścień. Zdjęcie lub przekazanie usuwa ją u poprzedniego właściciela.
 
-Znalezisko pozostaje we wspólnym zapasie. Zakładanie i przekazywanie wyposażenia odbywa się w Gildii, przed wyprawą. Po identyfikacji zamieńcie kartę nieznanego pierścienia na kartę Pierścienia Siły — to nadal jeden przedmiot.
+Do powrotu pierścień pozostaje w znaleziskach drużyny. W Gildii rozpoznany pierścień trafia do zapasu na kolejną wyprawę. Aby go założyć, otwórzcie wyposażenie bohatera i naciśnijcie Romb przy miejscu na pierścień. Po identyfikacji zamieńcie kartę nieznanego pierścienia na kartę Pierścienia Siły — to nadal jeden przedmiot.

@@ -32,7 +32,7 @@ def test_fixed_placement_accepts_on_board_and_rejects_old_scan(tmp_path: Path) -
     payload = session.state_payload()
     selection = payload['board_selection']
     assert selection['auto_arm']
-    assert selection['legal_positions'] == [[19, 1]]
+    assert {tuple(p) for p in selection['legal_positions']} == {(19, 1), (19, 0)}
     assert board.leds[(19, 1)] == LedColor.PANEL_ACCEPT
     assert board.leds[step.positions[0].as_tuple()] == step.color
     with pytest.raises(ValueError):
@@ -129,8 +129,8 @@ def test_board_accept_starts_initiative_after_last_setup_step(tmp_path: Path) ->
     selection = payload['board_selection']
     assert selection['mode'] == 'initiative_start'
     assert selection['auto_arm']
-    assert selection['legal_positions'] == [[19, 1]]
-    assert board.leds == {(19, 1): LedColor.PANEL_ACCEPT}
+    assert {tuple(p) for p in selection['legal_positions']} == {(19, 1), (19, 0)}
+    assert board.leds == {(19, 1): LedColor.PANEL_ACCEPT, (19, 0): LedColor.PANEL_BACK}
     # A delayed setup press cannot also start initiative.
     session.scan_board_selection(expected_revision=setup_revision, automatic=True)
     assert session.encounter_initiative_flow is None
@@ -181,7 +181,76 @@ def test_initiative_start_does_not_skip_optional_stealth(tmp_path: Path) -> None
     payload = session.finish_precombat_stealth()
     assert payload['board_selection']['mode'] == 'initiative_start'
     assert payload['board_selection']['auto_arm']
-    assert board.leds == {(19, 1): LedColor.PANEL_ACCEPT}
+    assert board.leds == {(19, 1): LedColor.PANEL_ACCEPT, (19, 0): LedColor.PANEL_BACK}
+
+
+def test_back_reopens_previous_batch_and_invalidates_buffered_input(tmp_path: Path) -> None:
+    session, board = setup_session(tmp_path)
+    flow = session.encounter_setup_flow
+    original_actors = flow.encounter.actors
+    client = create_app(session).test_client()
+    assert not flow.can_back
+    assert client.post('/api/encounter/setup/back').status_code == 400
+    session.confirm_encounter_setup_step()
+    revision = session.state_payload()['board_selection']['revision']
+    board.selected = panel_position(29).as_tuple()
+    session.scan_board_selection(expected_revision=revision, automatic=True)
+    assert flow.current_index == 0 and not flow.can_back
+    assert flow.encounter.actors == original_actors
+    assert panel_position(29).as_tuple() not in board.leds
+    scans = board.scans
+    session.scan_board_selection(expected_revision=revision, automatic=True)
+    assert board.scans == scans and flow.current_index == 0
+    session.confirm_encounter_setup_step()
+    assert client.post('/api/encounter/setup/back').status_code == 200
+    assert flow.current_index == 0
+
+
+def test_back_reopens_one_hero_and_frees_only_their_assigned_field(tmp_path: Path) -> None:
+    session, board = setup_session(tmp_path)
+    flow = session.encounter_setup_flow
+    first = flow.encounter.actors[0]
+    second = replace(first, id=type(first.id)('second'), name='Drugi')
+    flow.encounter = replace(flow.encounter, actors=(first, second))
+    flow.player_start_actor_ids = (str(first.id), str(second.id))
+    a, b, c = Coordinate(7, 8), Coordinate(8, 8), Coordinate(9, 8)
+    placement = replace(flow.steps[1], label='pola startowe bohaterów', positions=(a, b, c))
+    flow.steps = (flow.steps[0], placement, flow.steps[0])
+    session.confirm_encounter_setup_step()
+    session.assign_encounter_player_start_position(a)
+    session.assign_encounter_player_start_position(b)
+    assert flow.current_index == 2
+    session.select_board_position(panel_position(29))
+    assert flow.current_index == 1 and flow.current_player_start_actor.id == second.id
+    assert flow.player_start_assignments == {str(first.id): a}
+    assert flow.pending_start_position == b
+    assert flow.encounter.actors[0].position == a
+    assert flow.encounter.actors[1] == second
+    assert b in flow.remaining_player_start_positions() and a not in flow.remaining_player_start_positions()
+    session.select_board_position(c)
+    session.select_board_position(panel_position(28))
+    assert flow.encounter.actors[1].position == c and flow.current_index == 2
+    session.select_board_position(panel_position(29))
+    session.select_board_position(panel_position(29))
+    assert not flow.player_start_assignments
+    assert flow.current_player_start_actor.id == first.id
+    assert flow.encounter.actors == (first, second)
+    assert flow.pending_start_position == a
+    session.select_board_position(panel_position(29))
+    assert flow.current_index == 0 and flow.selected_start_position is None
+
+
+def test_final_setup_can_be_corrected_until_initiative_starts(tmp_path: Path) -> None:
+    session, _ = setup_session(tmp_path)
+    flow = session.encounter_setup_flow
+    flow.current_index = len(flow.steps) - 1
+    session.confirm_encounter_setup_step()
+    session.select_board_position(panel_position(29))
+    assert not flow.completed and flow.current_index == len(flow.steps) - 1
+    session.confirm_encounter_setup_step()
+    session.select_board_position(panel_position(28))
+    with pytest.raises(ValueError, match='poprzedniego elementu'):
+        session.back_encounter_setup_step()
 
 
 def test_automatic_accept_does_not_flash_or_resend_unchanged_lights(tmp_path: Path) -> None:

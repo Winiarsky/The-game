@@ -1,0 +1,129 @@
+{
+  "version": 3,
+  "pages": [
+    {
+      "id": "01_relacje_akcje",
+      "title": "Walka — ładunki i działania",
+      "subtitle": "Relacje run v0.3 · 1 / 3",
+      "lead": "W swojej turze masz ruch, atak albo przedmiot oraz jedną moc specjalną. Aplikacja pokazuje dostępne działania i dolicza premie do fizycznych kości.",
+      "sections": [
+        {
+          "title": "Zasoby i koszt",
+          "paragraphs": [
+            "Każdy bohater zaczyna walkę z 20 ładunkami; maksimum to 20. Moc ma jeden koszt od 3 do 8, przed dopłatą skazy. Nie wybierasz trybu podstawowego ani wzmocnionego.",
+            "S zużywa specjalną. A+S zużywa też atak, M+S cały ruch. Zwykły atak, ruch i reakcja nie kosztują ładunków ani nie dopisują run."
+          ]
+        },
+        {
+          "title": "Wybierz i potwierdź",
+          "steps": [
+            "Naciśnij runę mocy, następnie wybierz podświetlone pole celu lub ruchu. Sprawdź koszt, premie i pamięć po akcji.",
+            "✓ opłaca moc i jej budżety raz. ↩ przed potwierdzeniem anuluje bez kosztu. Pudło lub udana obrona celu nie zwracają opłaty.",
+            "Wprowadź jedną kość naraz przez +/− i ✓, bez modyfikatora. Przy przewadze lub utrudnieniu podaj obie k20; aplikacja wybiera właściwą.",
+            "Za przeciwnika rzuca aplikacja po ✓. Wynik czeka na kolejne ✓ przed dalszym ruchem lub reakcją."
+          ]
+        },
+        {
+          "title": "Odzysk",
+          "paragraphs": [
+            "Spirala: Skupienie zużywa specjalną, natychmiast wygasza pamięć i odzyskuje 1k20 ładunków do maksimum.",
+            "Odzysk klasowy: 1k4 raz na bohatera na rundę, po jednym z dwóch warunków swojej karty. Pominięcie nie zużywa limitu; pełna pula nie wymaga rzutu."
+          ]
+        },
+        {
+          "title": "Plansza i informacje",
+          "paragraphs": [
+            "Runy rozpoczynające lub podtrzymujące pamięć świecą złoto; niepasujące zwykłe moce — pomarańczowo. Zablokowane moce i runy rozwoju nie świecą. Wybrana runa oraz cel są białe.",
+            "Cele mocy są złote. Ruch i docelowe pole bohatera są niebieskie; droga przeciwnika i jego reakcja czerwone. Obszar jest pomarańczowy, pominięta postać turkusowa.",
+            "Gwiazda otwiera szczegóły postaci, pasyw, skazę i opisy mocy. Powrót wznawia przerwaną decyzję bez ponownej opłaty lub rzutu."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "02_relacje_pamiec",
+      "title": "Rezonans — pamięć trzech run",
+      "subtitle": "Relacje run v0.3 · 2 / 3",
+      "lead": "Ostatnia runa określa legalną kontynuację. Obecność symboli w całej pamięci uruchamia premie konkretnej karty. Powtórzenia nie mnożą efektu.",
+      "sections": [
+        {
+          "title": "Rozpoczęcie i podtrzymanie",
+          "paragraphs": [
+            "Przy pustej pamięci zwykła moc wykonuje efekt podstawowy. Po całej akcji dopisujesz jej runę; moc nie korzysta z symbolu, który właśnie dodaje.",
+            "Przy legalnym przejściu sprawdź wszystkie warunki karty na starej pamięci. Wszystkie pasujące premie działają razem. Dopiero po całej mocy dopisz nową runę; czwarty wpis wypiera najstarszy.",
+            "Niepasująca zwykła moc czyści pamięć przed działaniem, wykonuje efekt podstawowy i rozpoczyna nowy łańcuch. Podgląd uprzedza o utracie przygotowania."
+          ]
+        },
+        {
+          "title": "Kierunkowe połączenia",
+          "relation_table": true,
+          "paragraphs": [
+            "Po Fali wybierasz dowolną runę, także Falę. Fala występuje tylko przy Mglistym kroku Nimry: zajmuje miejsce pamięci, bez kopiowania lub zastępowania wymaganego symbolu."
+          ]
+        },
+        {
+          "title": "Wyładowania i efekty kart",
+          "paragraphs": [
+            "Wyładowanie wymaga obu wskazanych symboli oraz legalnej kontynuacji z ostatniej runy. Bez warunków jest zablokowane. Po całej akcji wygasza pamięć, także po pudle, bez dodania własnej runy.",
+            "Same symbole nie przyznają globalnych premii do KP, obrażeń, ruchu ani reakcji. Czasowe efekty kart trwają do własnego terminu także po zerwaniu łańcucha; pominięta tura źródła nadal kończy ich czas.",
+            "Tymczasowe PW nie sumują się: zachowaj większą pulę. Osłona Tarczy splotu jest osobna i nie chroni przed obrażeniami psychicznymi. Hymn k6 lub k8 trwa do wykorzystania; tylko jeden na bohaterze."
+          ]
+        },
+        {
+          "title": "Granice łańcucha",
+          "paragraphs": [
+            "Koniec przytomnej tury bohatera bez mocy runicznej wygasza pamięć. Zwykłe działania w trakcie tury nie przerywają jej.",
+            "Tura wroga, koniec rundy i pominięcie nieprzytomnego nie kończą pamięci. Nowa walka i jej zakończenie czyszczą ją. Dziewięć pozostałych run czeka jako silniejsze zdobycze."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "reputacja",
+      "title": "Konfrontacje i reputacja",
+      "lead": "Reputacja jest wspólna dla drużyny. Zaczynacie z 20 punktami.",
+      "sections": [
+        {
+          "title": "Jedna kolejka",
+          "paragraphs": [
+            "Każdy bohater wybiera podejście i wykonuje test k20. Nie ma osobnego rzutu na wpływ. Sukces: +1 postępu; porażka: bez zmiany; naturalne 20: +2; naturalne 1: −1.",
+            "Po ostatnim graczu kończycie na osiągniętym etapie. Próba zejścia poniżej −1 lub dojście do końca toru rozstrzyga scenę wcześniej. Aplikacja dopasowuje długość toru do liczby osób."
+          ]
+        },
+        {
+          "title": "Premia po rzucie społecznym",
+          "table": [
+            [
+              "Koszt reputacji",
+              "Efekt"
+            ],
+            [
+              "1",
+              "+1 do wyniku"
+            ],
+            [
+              "3",
+              "+5 do wyniku"
+            ],
+            [
+              "5",
+              "Dodatkowa k20; zachowaj wyższy naturalny wynik"
+            ]
+          ],
+          "paragraphs": [
+            "Wybierz jedną z trzech podświetlonych run. Opcje nie łączą się. Dodatkową kość opłacasz przed rzutem; po jego poznaniu nie odzyskasz kosztu.",
+            "Premia liczbowa nie usuwa krytycznej porażki. Fizyczne wydobywanie wozu nie używa reputacji. Reputacja pozostaje między scenami i wraca przez decyzje lub nagrody misji."
+          ]
+        },
+        {
+          "title": "Wóz i konsekwencje",
+          "paragraphs": [
+            "Wymuszona zamiana wozu wymaga co najmniej 20 aktualnej reputacji i kosztuje 3 punkty. Ma również konsekwencję dla postawy drużyny.",
+            "Na obecnym etapie ukończenie Misji 0 daje jednokrotnie +5 reputacji."
+          ]
+        }
+      ],
+      "subtitle": "Konfrontacje i reputacja · 3 / 3"
+    }
+  ]
+}

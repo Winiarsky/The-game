@@ -29,21 +29,8 @@ def overview_svg(cutouts: tuple[Cutout, ...], scene: str) -> str:
 
 
 def main() -> None:
-    pack=ROOT/'content/scenarios/misja_0_dzwon'
-    output=pack/'maps/print';output.mkdir(exist_ok=True)
-    panel=map_body({'board':{'cols':20,'rows':30}})
-    panel=panel[panel.index('<rect y="475"'):]
-    cutouts=build_cutouts(json.loads((pack/'maps/cutouts.json').read_text()),
-                          json.loads((pack/'mechanics/battle.json').read_text()))
-    for name,title in [('guild','GILDIA'),('outpost','POSTERUNEK')]:
-        source=overview_svg(cutouts,name)
-        (pack/'maps'/f'{name}.svg').write_text(source)
-        inner=source[source.index('>')+1:source.rindex('</svg>')]
-        body='<g transform="matrix(0 .8333333333 -.8333333333 0 750 0)">'+inner+'</g>'+panel
-        html=document(''.join('<section class="sheet">'+tile_svg(t,body).replace('ARENA NESSY',title)+'</section>' for t in tiles()),'landscape')
-        html=html.replace('Arena i karty — druk A4',title+' — Misja 0, mapa A4')
-        path=output/f'{name}_A4.html';path.write_text(html)
-        render_pdf(path,output/f'{name}_A4.pdf')
-        print(title,output/f'{name}_A4.pdf',flush=True)
+    """The historical map command now publishes the canonical board PDFs."""
+    from build_handout_maps import main as current_main
+    current_main()
 
 if __name__=='__main__':main()

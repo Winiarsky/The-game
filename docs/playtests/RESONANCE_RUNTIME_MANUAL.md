@@ -1,12 +1,18 @@
-# Test ręczny: Ładunki i Rezonans
+# Test ręczny: relacje run v0.3
 
-Wersja 30.09.2026. To rzeczywisty silnik Python i ekran `/play`, nie mock HTML.
-Nowy profil jest domyślny w nowych walkach Misji 0 i swobodnej areny.
-Rozmowy, reputacja i eksploracja zachowują dotychczasowe zasady. Walki
-wczytane ze starych zapisów oraz prowadzone lekcje areny zachowują stary profil.
-Do sprawdzania nowych zasad rozpocznij nowe starcie.
+Wersja 01.10.2026. To silnik Python i ekran `/play`. Nowe walki Misji 0
+oraz swobodnej areny korzystają z `rune_relations_v03`. Rozpoczęte walki
+wczytane ze starszych zapisów zachowują swoje zasady; zapis wersji 34
+z Rezonansem v0.2 pozostaje w profilu `rune_charges_v02`. Prowadzone lekcje
+areny i historyczne profile zachowują dotychczasowe działanie.
+Do sprawdzenia relacji run rozpocznij nowe starcie.
 
-## Najprostsze uruchomienie
+Źródło kart i warunków: `content/print/rune_relations_v03/catalog.json`.
+Pełne zasady: [RUNE_RELATIONS_V03.md](../RUNE_RELATIONS_V03.md).
+Ściąga na ekranie jest wspólna z materiałami do druku:
+`content/scenarios/misja_0_dzwon/text/sciaga_relacje_v03.json`.
+
+## Uruchomienie
 
 Z katalogu projektu:
 
@@ -14,15 +20,15 @@ Z katalogu projektu:
 .venv/bin/python scripts/resonance_playtest.py
 ```
 
-Otwórz grę: <http://127.0.0.1:5201/play>, a w drugim oknie planszę:
-<http://127.0.0.1:5001>. Skrypt uruchamia oba serwery, pomija fabułę, ale
-zostawia rozstawienie figurek i inicjatywę. Zaczynasz bez zmęczenia z drogi.
-Domyślna drużyna: Garran, Brakka, Mira, Dagna, Lorian, Nimra.
-Każde uruchomienie dostaje osobny katalog `/tmp/resonance-playtest-*`,
-wypisany w terminalu. Nie nadpisuje normalnej kampanii. Ctrl+C kończy serwery;
-katalog testu pozostaje do inspekcji i wczytania zapisów.
+Gra: <http://127.0.0.1:5201/play>; plansza w drugim oknie:
+<http://127.0.0.1:5001>. Skrypt uruchamia oba serwery i pomija fabułę,
+ale pozostawia rozstawienie figurek i inicjatywę. Zaczynasz bez zmęczenia
+z drogi. Domyślna drużyna: Garran, Brakka, Mira, Dagna, Lorian, Nimra.
+Każde uruchomienie dostaje oddzielny katalog `/tmp/rune-relations-v03-*`,
+wypisany w terminalu. Ctrl+C kończy serwery; katalog testu pozostaje
+z zapisami i obserwacjami.
 
-Do szybkiego sprawdzenia samej walki w symulatorze:
+Szybki początek samej walki w symulatorze:
 
 ```bash
 .venv/bin/python scripts/resonance_playtest.py --skip-setup
@@ -35,116 +41,161 @@ Osobna próba z Eryndem:
 ```
 
 Zajęte porty zmień przez `--port 5202 --board-port 5002`.
-Opcja `--check` sprawdza przygotowanie sesji bez serwerów i bez sprzętu.
+`--check` sprawdza przygotowanie sesji bez uruchamiania serwerów i sprzętu.
 
-## Prawdziwa plansza
+## Fizyczna plansza
 
-Najpierw zakończ inne połączenie z tą samą planszą. Podaj jej rzeczywisty port
-szeregowy i adres WLED, np. zastępując poniższe wartości:
+Podaj rzeczywisty port szeregowy oraz adres WLED:
 
 ```bash
 .venv/bin/python scripts/resonance_playtest.py --hardware \
   --serial-port /dev/ttyACM0 --wled-url http://ADRES_TWOJEGO_WLED
 ```
 
-Ten tryb nie uruchamia symulatora i wymaga ręcznego rozstawienia figurek.
-Nie był zweryfikowany na fizycznym sprzęcie podczas wdrożenia.
+Ten tryb wymaga ręcznego rozstawienia figurek. Weryfikacja automatyczna
+korzysta z symulatora i połączenia testowego; fizyczne serial/WLED pozostają
+do sprawdzenia przy stole.
 
-## Obsługa
+## Obsługa i światła
 
-- Wybór mocy/runy → cel/pole → tryb podstawowy lub wzmocniony → ✓.
-  Do ✓ możesz wrócić; koszt pobierany jest raz po zatwierdzeniu.
-- Gracz: ustaw wynik jednej fizycznie rzuconej kości przez +/−, zatwierdź ✓.
-  Dopiero potem pojawi się następna, także przy 2k6 i przewadze.
-- Przeciwnik: zapowiedź → ✓ → aplikacja losuje i pokazuje wynik → ✓.
-  Przy okazyjnym odpowiedni przeciwnik jest podświetlony; ruch czeka na wynik.
-- Gwiazda otwiera informacje; wybierz postać na planszy lub w kolejce.
-  +/− zmieniają strony opisów, powrót wznawia przerwaną decyzję bez kosztu.
-- Niebieskie pole to cel ruchu. Żółta ścieżka dotyczy bohatera, czerwona
-  przeciwnika. Obszar jest pomarańczowy, pominięta postać turkusowa.
-  Atakujący przeciwnik jest wyróżniony; wynik zmienia kolor na trafienie/pudło.
-- Długie kolejki, łańcuch Rezonansu i raporty mają strony zamiast pionowego
-  przewijania. Pełne stany są w informacjach postaci; ekran walki nie dubluje
-  listy współrzędnych i technicznych informacji o skanowaniu planszy.
+- Wybierz runę mocy, potem cel lub pole i zatwierdź ✓. Moc ma jeden koszt.
+  Podgląd pokazuje rozpoczęcie, podtrzymanie, przerwanie albo wyładowanie,
+  a także premie aktywne przed dodaniem jej runy. ↩ anuluje podgląd bez kosztu.
+- Złota runa oznacza dostępną moc. Pomarańczowa uprzedza, że moc rozpocznie
+  nowy łańcuch. Niedostępna moc, w tym wyładowanie bez wymaganych run,
+  pozostaje wygaszona. Wybrana runa świeci na biało.
+- Złote pola pokazują legalne cele; wybrana figurka jest biała. Zakres ruchu,
+  ścieżka i pole docelowe bohatera są niebieskie. Ścieżka przeciwnika jest
+  czerwona; przy jego ataku okazyjnym wyróżniony jest reagujący przeciwnik.
+  Obszar pozostaje pomarańczowy, a pomijana postać turkusowa.
+- Wynik gracza wpisuj osobno dla każdej fizycznie rzuconej kości przez +/−,
+  zatwierdzając ✓. Dotyczy to także przewagi, 2k6 i dodatkowych kości karty.
+  +/− podczas podglądu mocy nie wybierają wariantu kosztu.
+- Przeciwnik: zapowiedź → ✓ → automatyczny rzut z widocznym wynikiem → ✓.
+  Ruch czeka na rozpatrzenie reakcji i nie losuje ponownie przy odświeżeniu.
+- Niebieska Gwiazda otwiera informacje. Wskaż postać na planszy lub
+  w kolejce; +/− zmieniają strony, ↩ wraca do zachowanej decyzji.
+- Dodatkowy ruch po Całunie/Impulsie oraz leczenie sojusznika z Żaru odnowy
+  rozpatrz przed zamknięciem mocy. Dopiero potem jej runa trafia do pamięci.
+- Nieużywane runy rozwoju pozostają ciemne i nie uruchamiają dawnych wyborów.
 
-## Lista prób przy stole
+## Próby wspólnej mechaniki
 
-- [ ] 20/20 ładunków na starcie; koszt 4/8 plus skaza; A, S i ruch zużywane
-  zgodnie z kartą. Anulowanie podglądu nie pobiera kosztu.
-- [ ] Moc wzmocniona dodaje runę przed skutkami. Nowy bohater dołącza od
-  początku swojej tury. Ekran pokazuje kolejność, uczestników i sumy premii.
-- [ ] Wieża działa również podczas własnej tury; Grot dodaje kości obrażeń;
-  Schody dają ruch, Błysk osobne kości leczenia. Oko nie zmienia ST.
-- [ ] Kielich i Klepsydra mają osobne pozostałe pule. Fala powiela poprzedni
-  skuteczny efekt; kolejne wejście w informacje nie odnawia osłon.
-- [ ] Węzeł ogranicza ruch wrogów. Hak po obrażeniach pozwala przenieść każdy
-  zraniony, żywy cel raz, bez okazyjnych, albo pozostawić go na miejscu.
-- [ ] Moc podstawowa wygasza Rezonans dopiero po skutkach i Haku;
-  Skupienie od razu. Koniec tury bez wzmocnienia też kończy łańcuch.
-- [ ] Odzysk klasowy 1k4 jest dobrowolny, raz na rundę; pominięcie nie
-  zużywa limitu, a pełna pula nie wywołuje zbędnego pytania.
-- [ ] Garran: osłona +1 KP sąsiadów, odzysk po pudle, odrzucenie Impulsu,
-  magiczny składnik Ostrza, pełny ruch wymagany do Szarży, ST zależne od drogi.
-- [ ] Powalony: przewaga wręcz, −2 dystansowo, brak ruchu w następnej turze,
-  lecz atak i akcja specjalna nadal dostępne.
-- [ ] Brakka: dwie dodatkowe kości broni na krytyku; Szał +1k6, połowa
-  trzech fizycznych typów obrażeń i poprawny czas; Echo używa ST 10 + Siła.
-- [ ] Mira: ukrycie osobno wobec każdego wroga; Cios z flanki/ukrycia;
-  Parkour wybiera wroga i wolne sąsiednie pole, przecina przeszkody, nie
-  zużywa zwykłego ruchu. Widzący ją przeciwnicy nadal wykonują okazyjne.
-- [ ] Przerwanie ruchu przez utratę przytomności zatrzymuje dalszą drogę
-  i wskazuje pole, na które należy odłożyć figurkę.
-- [ ] Więzy mroku: połowa ruchu, a z ukrycia dodatkowo brak ruchu w kolejnej rundzie.
-- [ ] Dagna: ST 10 + Mądrość, Pieczęć, leczenie i +2 innemu bohaterowi;
-  Krąg podnosi także żywego sojusznika z 0 PW.
-- [ ] Lorian: Hymn czeka bezterminowo, najwyżej jeden na postaci. Po k20
-  można odmówić albo rzucić dodatkowe 1k6; naturalna 1/20 się nie zmienia.
-  Hymn pozostaje po zakończeniu walki. Pieśń przejścia nie wywołuje reakcji.
-- [ ] Nimra: obszar → jawny wybór pomijanego celu albo „Nie pomijaj”;
-  Strefa ognia 3×3 może zranić sojuszników. Pociski mają osobne trafienia;
-  kolejne użycia tej samej mocy uwzględniają skazę.
-- [ ] Erynd: nieruchomy pierwszy strzał, Piętno, dwa ataki, ruch i strzał,
-  unieruchomienie, skaza i zużycie amunicji.
-- [ ] Mikstura zużywa jedną akcję i jedną sztukę z ekwipunku lub wspólnego
-  łupu. Rzuć każdą kością oddzielnie.
-- [ ] Zapisz/wczytaj po pierwszej kości, przed Hakiem, podczas okazyjnego
-  i na ekranie wyniku przeciwnika. Kości, koszty, stany i LED-y nie powtarzają się.
-- [ ] Po starciu wraca poprawny etap misji, a komunikat kapitulacji nie
-  znika pod ekranem walki. Sprawdź ponownie prawdziwe LED-y i przyciski.
+- [ ] Nowa walka zaczyna się z pustą pamięcią i 20/20 ładunków na bohatera.
+  Każda moc ma jeden koszt 3–8, powiększony tylko przez swoją skazę.
+- [ ] Pusta pamięć daje podstawowe działanie. Własna runa nie wzmacnia
+  właśnie wykonywanej mocy; trafia do pamięci po wszystkich jej skutkach.
+- [ ] Ostatnia runa określa legalne połączenie, a trzy poprzednie wpisy
+  warunki premii. Czwarta runa usuwa najstarszą dopiero po rozpatrzeniu mocy.
+- [ ] Kilka takich samych symboli zajmuje miejsca, ale nie mnoży bonusu.
+  Zwykły atak i reakcja nie dostają ogólnych premii z samych symboli.
+- [ ] Moc niezgodna z ostatnią runą uprzedza w podglądzie, wygasza starą
+  pamięć przed efektami i kończy się jednym nowym wpisem. Nie dziedziczy
+  bonusów starego łańcucha.
+- [ ] Podgląd, zmiana celu i ↩ niczego nie opłacają. ✓ pobiera koszt i budżety
+  raz; pudło lub udana obrona przeciwnika nie cofają płatności ani wpisu runy.
+- [ ] Skupienie wygasza pamięć od razu i daje 1k20 ładunków, maksymalnie 20.
+  Koniec przytomnej tury bez mocy runicznej również wygasza łańcuch.
+- [ ] Tury wrogów, zmiana rundy i nieprzytomny bohater zachowują pamięć.
+  Czasowe efekty nadal wygasają w swoim wskazanym momencie inicjatywy.
+- [ ] Fala jest wyłącznie pod Mglistym krokiem Nimry. Łączy się z każdą runą
+  w obu kierunkach, zajmuje jedno miejsce i nie zastępuje wymaganych symboli.
+- [ ] Odzysk klasowy 1k4 jest dobrowolny, raz na bohatera na rundę.
+  Pominięcie i pełna pula nie zużywają możliwości odzysku.
+- [ ] Premie KP, tymczasowe PW, osłona i inne stany z kart przeżywają koniec
+  Rezonansu oraz wygasają według czasu podanego na karcie.
 
-## Uwagi implementacyjne
+## Próby postaci i wyładowań
 
-Stan profilu znajduje się w `CombatState.resonance`; zapis ma wersję 34.
-Stare zapisy nie są przeliczane na nowe zasady w połowie walki. Serwer
-odrzuca powtórzoną decyzję ze starą rewizją i nie losuje nic przy odczycie.
-Geometria używa faktycznej mapy; panel w kolumnie 19 nigdy nie jest celem.
-Opcjonalne `environment.stealth_bonus` pochodzi z danych mapy i daje
-najsilniejszą premię przy obiekcie (na jego polu lub sąsiednim). Domyślnie 0;
-nie dodano wymogu osłony ani nie przypisano samowolnie premii obecnym mapom.
+- [ ] Garran: Żywa osłona sąsiadów +1 KP; Impuls z Okiem daje przewagę,
+  a ze Schodami dodatkowy krok dopiero po wygranej i odrzuceniu celu.
+  Ostrze z Wieżą daje +1 KP także po pudle. Żar z Kielichem pozwala wybrać
+  jednego sąsiedniego sojusznika i rozpatrzyć osobne leczenie 1k6.
+- [ ] Brakka: Szał, odporność na trzy fizyczne typy obrażeń i dwie dodatkowe
+  kości broni na krytyku. Gniew runy wymaga Wieży + Błysku oraz legalnej
+  kontynuacji Grotem. Obecność pary sama nie omija wymogu ostatniej runy.
+  Cios zadaje dodatkowe 3k6 gromowych i wygasza pamięć także przy pudle.
+- [ ] Mira: Całun ze Schodami daje dodatkowy ruch po udanym ukryciu,
+  z Grotem odejmuje 2 Percepcji podczas próby, z oboma daje również przewagę.
+  Ostrze zmierzchu wymaga ukrycia przed celem, Haka + Schodów i legalnego Oka;
+  dodatkowe 3k6 oraz ujawnienie rozpatrz przed wygaszeniem pamięci.
+- [ ] Dagna: Pieczęć z Klepsydrą daje +2 do ataków/obron zamiast +1.
+  Tchnienie życia z Kielichem dodaje 1k6 leczenia; Krąg odnowy z Węzłem daje własne
+  czasowe PW. Pasyw +2 leczenia innemu bohaterowi rozlicz raz na moc.
+- [ ] Lorian: +1 ładunek dopiero po opłaconej legalnej kontynuacji runy
+  innego bohatera. Hymn z Klepsydrą jest 1k8; zwykły 1k6. Kość pozostaje
+  do wykorzystania, najwyżej jedna na postaci, także między walkami.
+  Pieśń przejścia korzysta z legalnej drogi i nie wywołuje okazyjnych.
+- [ ] Nimra: każdy pocisk jest osobnym trafieniem; Grot dodaje 1k4 tylko
+  pierwszemu. Tarcza z Wieżą daje 3 pkt osłony, która omija psychiczne;
+  z Okiem daje łącznie +3 KP. Strefa ognia wymaga Oka + Węzła i legalnego
+  Kielicha, daje 4k6 ognia i po całym obszarze wygasza pamięć.
+- [ ] Erynd: Piętno z Okiem daje przewagę w najbliższym ataku; Więzy
+  korzeni z Okiem w tym strzale. Strzała wichru używa Schodów.
+  Bliźniacze groty wymaga Oka + Węzła oraz legalnego Kielicha; oba ataki
+  i ich kości rozpatrz przed wygaszeniem. Amunicja i skaza są rozliczane raz.
+- [ ] Wszystkie cztery wyładowania: brak pary lub nielegalna ostatnia runa
+  blokują wybór; anulowanie nie kosztuje; zatwierdzone pudło zużywa koszt
+  i kończy łańcuch dopiero po pełnym rozstrzygnięciu.
 
-Automatyczne testy nie zastępują powyższych prób stołowych, zwłaszcza
-rzeczywistego przesuwania figurek, czytelności kolorów i opóźnień sprzętu.
+Dla próby współpracy trzyosobowej ustaw kolejność Garran → Brakka → Mira.
+Garran: Impuls (Wieża), Brakka: Pęd gromu (Schody), Mira: Całun (Błysk),
+w następnej rundzie Garran: Impuls (Wieża). Przed turą Brakki pamięć to
+Schody → Błysk → Wieża: Gniew runy ma wymagane symbole i legalną
+kontynuację Grotem. Cele i skutki ruchu nadal muszą być legalne na planszy.
 
-## Weryfikacja wdrożenia — 30.09.2026
+## Zapis i przerwane decyzje
 
-Testy uruchamiane kolejno przez `scripts/safe_pytest.sh`, z timeoutem:
+- [ ] Zapis/wczytanie po pierwszej kości przewagi lub pierwszej kości obrażeń
+  zachowuje zaakceptowane wyniki i otwiera dokładnie następną kość.
+- [ ] Zapis/wczytanie przed wyborem oraz po wyborze dodatkowego ruchu,
+  odrzucenia albo leczenia z Żaru nie przyznaje efektów ponownie.
+- [ ] Wczytanie podczas okazyjnego i na ekranie wyniku przeciwnika nie
+  losuje nowych wyników, nie pobiera kosztu ani nie przesuwa kolejki.
+- [ ] Wczytanie zamyka poprzednie oczekiwanie planszy. Stare kliknięcie
+  ani stara rewizja skanu nie wykonują przywróconej decyzji.
+- [ ] Po zakończeniu starcia wraca właściwy etap misji. Hymn zachowuje swój
+  rozmiar 1k6/1k8; chwilowe premie nie przechodzą do nowego starcia.
+- [ ] Wczytany zapis wersji 34 z rozpoczętą walką v0.2 pozostaje w v0.2,
+  razem z dawną pamięcią i oczekującą kolejką. Kolejne nowe starcie używa v0.3.
 
-- `tests/unit/test_resonance_combat.py`: 60 przypadków — wszystkie karty,
-  kości, pule, reakcje, warunki, ekwipunek, geometria i klatki LED.
-- `tests/integration/test_resonance_session.py`: 9 przypadków — prawdziwa
-  sesja misji, API/panel, blokada powtórzeń, zapis, AI, mikstury, osłony mapy,
-  zmęczenie, przeniesienie Hymnu między walkami i swobodna arena bez panelu misji.
-- `tests/integration/test_resonance_browser.py`: 2 przypadki — Chrome,
-  1366×768 i 1131×720, automatyczne skany panelu, kości i brak przepełnienia,
-  także dla 6 bohaterów, 14 uczestników i 9 rodzajów premii Rezonansu.
-- Regresja: zapisy 64, karty 32, starszy panel run 9, prezentacja walki 10,
-  loader scenariuszy 36, zaakceptowany mock 11 — przeszły.
-- Misja 0: 37 przeszło, 1 stary test menu gildii nie przeszedł:
-  `test_guild_destinations_use_tile_fields_and_arena_is_informational` nie
-  uwzględnia przycisku powrotu (slot 29), obecnego już w kodzie HEAD przed
-  tym wdrożeniem. Wpis do naprawy w TODO; nie zmieniano zachowania gildii.
+Zapis sesji ma schemat 35; `CombatState.resonance` dla nowych walk ma
+wersję 2 i jawny profil `rune_relations_v03`. Walidacja sprawdza uczestników,
+pamięć, wymagania opłaconej mocy i zapamiętane modyfikatory przed przywróceniem.
+Odczyt UI i zapis nie wykonują kroków kolejki ani rzutów. Panel w kolumnie 19
+nie jest celem ruchu, ataku ani obszaru.
 
-Launcher sprawdzono dla 6 bohaterów i oddzielnie drużyny z Eryndem. Uruchomiono
-też rzeczywisty Flask i lokalny symulator, sprawdzono HTTP, wysłanie klatki
-LED oraz zamknięcie po Ctrl+C. Nie uruchamiano pełnej, ogólnoprojektowej
-suity ani prób na rzeczywistym serial/WLED.
+Automatyczne testy obejmują 29 mocy oraz wykonanie wszystkich 51 premii kart,
+zapis przerwanych decyzji i tłumaczenie sygnałów LED na połączeniu testowym.
+Balans, czytelność świateł, ustawianie figurek i opóźnienia fizycznego sprzętu
+należy sprawdzić przy stole według powyższej listy.
+
+## Weryfikacja wdrożenia — 01.10.2026
+
+282 przypadki przeszły w oddzielnych, serialnych wywołaniach
+`scripts/safe_pytest.sh`, każde z timeoutem:
+
+| Plik testów | Przypadki |
+| --- | --- |
+| `tests/unit/test_rune_relation_catalog.py` | 13 |
+| `tests/unit/test_rune_relations_combat.py` | 62 |
+| `tests/unit/test_rune_relation_effects.py` | 52 |
+| `tests/unit/test_resonance_presentation.py` | 8 |
+| `tests/integration/test_resonance_session.py` | 16 |
+| `tests/hardware/test_resonance_feedback.py` | 3 |
+| `tests/integration/test_resonance_browser.py` | 3 |
+| `tests/unit/test_session_snapshot.py` | 64 |
+| `tests/unit/test_resonance_combat.py` — regresja v02 | 60 |
+| `tests/unit/test_resonance_mock.py::test_generated_mock_data_matches_current_cards` | 1 |
+
+Chrome sprawdził 1366×768, 1131×720 i 390×844, wszystkie 29 podglądów,
+stronicowanie premii i fizyczne sterowanie. Wydruki: wszystkie siedem
+zestawów po 5 stron, komplet 35 stron, ściąga 3 strony i znaczniki 1 strona;
+walidacja nie wykazała przepełnień. Sprawdzono też wizualnie strony ściągi.
+
+Launcher przeszedł przygotowanie sześciu bohaterów oraz osobnej drużyny
+z Eryndem. Rzeczywisty Flask i lokalny symulator odpowiedziały przez HTTP;
+aktualny PDF został pobrany, wybrana Spirala dostała białą diodę,
+anulowanie nie pobrało zasobów, a Ctrl+C zamknęło oba serwery.
+Compile i `git diff --check` przeszły. Nie uruchamiano ogólnej pełnej suity
+projektu ani prób na fizycznym serial/WLED.

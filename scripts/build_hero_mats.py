@@ -24,6 +24,7 @@ from dnd_board_game.actors import Actor
 from dnd_board_game.inventory.party_equipment import occupied, SLOTS
 from dnd_board_game.physical_cards.mana_print import PrintHero, build_print_hero, COLORS
 from dnd_board_game.physical_cards.mana_print_files import render_pdf, merge_pdfs
+from dnd_board_game.physical_cards.handout_files import pdf_pages, compact_pdf
 from dnd_board_game.physical_cards.mana_symbols import mana_symbol, passive_mana_symbol
 from dnd_board_game.physical_cards.equipment_art import item_art
 from dnd_board_game.scenarios.confrontation_terms import effect_name, effect_text
@@ -220,31 +221,6 @@ def write_page(folder: Path, name: str, html: str, *, action_mm: tuple[float,flo
     return path.with_suffix('.pdf'),issues
 
 
-def pdf_pages(path: Path) -> int:
-    result=subprocess.run(['pdfinfo',str(path)],capture_output=True,text=True,check=True,timeout=15)
-    return int(re.search(r'Pages:\s+(\d+)',result.stdout).group(1))
-
-
-def compact_pdf(path: Path) -> None:
-    """Keep vector type/icons; sample large embedded ink pictures at 300 dpi."""
-    gs=shutil.which('gs')
-    if not gs:
-        return
-    target=path.with_suffix('.compact.pdf')
-    try:
-        subprocess.run([gs,'-q','-dSAFER','-dBATCH','-dNOPAUSE','-sDEVICE=pdfwrite',
-            '-dCompatibilityLevel=1.4','-dAutoRotatePages=/None','-dDetectDuplicateImages=true',
-            '-dDownsampleColorImages=true','-dColorImageResolution=300','-dColorImageDownsampleType=/Bicubic',
-            '-dDownsampleGrayImages=true','-dGrayImageResolution=300','-dGrayImageDownsampleType=/Bicubic',
-            '-dDownsampleMonoImages=false',f'-sOutputFile={target}',str(path)],
-            capture_output=True,check=True,timeout=60)
-        if pdf_pages(target)!=pdf_pages(path):
-            raise RuntimeError('Optymalizacja zmieniła liczbę stron.')
-        if target.stat().st_size<path.stat().st_size:
-            target.replace(path)
-    finally:
-        target.unlink(missing_ok=True)
-
 
 def publish_pdf(destination: Path, parts: list[Path], sections: list[dict], **metadata: object) -> None:
     """Publish a self-contained PDF and a page index only after layout checks."""
@@ -316,9 +292,13 @@ def build_pack(*, check_only: bool=False, actors: tuple[str,...]=PLAYABLE_HERO_I
     return DESTINATION
 
 
-if __name__=='__main__':
-    parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--check-only',action='store_true')
-    parser.add_argument('--actor',action='append',choices=PLAYABLE_HERO_IDS)
-    args=parser.parse_args()
-    build_pack(check_only=args.check_only,actors=tuple(args.actor or PLAYABLE_HERO_IDS))
+def main() -> None:
+    """Build the current monochrome handouts from the canonical catalog."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from build_rune_relations import main as build_current
+    build_current()
+
+
+if __name__ == "__main__":
+    main()

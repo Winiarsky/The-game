@@ -50,6 +50,10 @@ def test_tile_setup_preview_and_accept(tmp_path: Path,width: int) -> None:
   check(document.documentElement.scrollWidth<=innerWidth,'guild overflow');
   check(state.board_selection.legal_positions.length===4,'accept, scrolling and menu are selectable');
   await accept();check(pictures()[0].dataset.setupCutout==='G02','second large tile');
+  const backChoice=document.querySelector('[data-mission-slot="29"]');
+  check(backChoice?.textContent.includes('Poprzedni element'),'guild back visible');
+  backChoice.click();await wait(()=>!busy&&pictures()[0]?.dataset.setupCutout==='G01');
+  await accept();check(pictures()[0].dataset.setupCutout==='G02','guild tile can be confirmed again');
   const rev=state.mission.revision;
   document.querySelector('[data-mission-slot="28"]').click();await wait(()=>!busy&&state.mission.revision!==rev);
   check(pictures()[0].dataset.setupCutout==='G03','small exit after large tiles');
@@ -69,7 +73,7 @@ def test_tile_setup_preview_and_accept(tmp_path: Path,width: int) -> None:
   check(choices.every(el=>el.getBoundingClientRect().bottom<=innerHeight),'all dialog choices within viewport');
   prose.insertAdjacentHTML('beforeend','<p>Próba długiego opisu.</p>'.repeat(40));
   const revision=state.mission.revision;
-  await select(19,2);await wait(()=>missionScrollArea().scrollTop>0);
+  await select(19,3);await wait(()=>missionScrollArea().scrollTop>0);
   check(state.mission.revision===revision,'scroll preserves dialogue');
   check(choices.every(el=>el.getBoundingClientRect().bottom<=innerHeight),'choices stay visible while scrolling');
   await api('/__test/battle',{},'');await wait(()=>!busy);
@@ -79,6 +83,13 @@ def test_tile_setup_preview_and_accept(tmp_path: Path,width: int) -> None:
    check(document.getElementById('mission-panel').hidden,'no duplicate mission map');
    check(document.documentElement.scrollWidth<=innerWidth,'battle overflow');
    const before=state.encounter_setup.current_index;
+   if(i===2){
+    check(document.querySelector('[data-setup-back]'),'battle back visible');
+    await select(19,0);
+    check(state.encounter_setup.current_index===before-1,'back reopens previous batch');
+    check(JSON.stringify(pictures().map(el=>el.dataset.setupCutout))===JSON.stringify(groups[i-1]),'previous artwork');
+    await accept();check(state.encounter_setup.current_index===before,'accept corrected batch');
+   }
    if(i===1){document.querySelector('[data-setup-accept]').click();await wait(()=>!busy&&state.encounter_setup.current_index!==before)}
    else await accept();
    check(state.encounter_setup.current_index===before+1,'one accept advances one batch');
@@ -92,12 +103,31 @@ def test_tile_setup_preview_and_accept(tmp_path: Path,width: int) -> None:
    const portrait=document.querySelector('.setup-assignment-hero img');
    check(portrait.getAttribute('src')===actor.portrait_url,'portrait follows called hero');
    check(portrait.alt===step.assignment_actor_name,'portrait names called hero');
-   check(portrait.getBoundingClientRect().height===100,'portrait size');
+   check(Math.abs(portrait.getBoundingClientRect().height-100)<1,`portrait size: ${portrait.getBoundingClientRect().height}, CSS ${getComputedStyle(portrait).height}`);
    if(innerWidth>=760)check(document.querySelector('.setup-current-command').getBoundingClientRect().bottom<=innerHeight,'placement clipped');
    const position=step.available_positions[0];
    await select(position[0],position[1]);
    check(state.encounter_setup.current_step.assignment_actor_id===actor.id,'selection changed called hero before confirmation');
    await accept();
+  }
+  while(state.encounter_setup.status==='active')await accept();
+  await accept();
+  for(let hero=0;hero<3;hero++){
+   await wait(()=>keyboardRollWizard?.initiative&&!busy);
+   const prompt=state.encounter_initiative.current_prompt;
+   const actor=state.actors.find(a=>a.id===prompt.actor_id);
+   const portrait=()=>document.querySelector('#keyboard-roll-wizard .initiative-roll-portrait');
+   await wait(()=>portrait()?.complete&&portrait().naturalWidth);
+   check(portrait().getAttribute('src')===actor.portrait_url,'initiative portrait follows hero');
+   check(portrait().alt===prompt.actor_name,'initiative portrait identity');
+   check(portrait().getBoundingClientRect().width>=80,'initiative portrait large enough');
+   check(document.querySelector('#keyboard-roll-wizard .keyboard-roll-wizard-kicker').textContent.includes(prompt.actor_name),'name beside portrait');
+   check(document.documentElement.scrollWidth<=innerWidth,'initiative horizontal overflow');
+   await select(19,3);check(state.encounter_initiative.panel.values[0]===11,'initiative plus');
+   check(portrait().alt===prompt.actor_name,'portrait survives result adjustment');
+   await accept();check(state.encounter_initiative.panel.review,'initiative summary');
+   check(portrait().alt===prompt.actor_name,'portrait stays on summary');
+   if(hero<2)await accept();
   }
   await fetch('/__test/result',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({result:'PASS'})});
  }catch(e){await fetch('/__test/result',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({result:e.stack,body:document.body.innerText.slice(-1800)})})}

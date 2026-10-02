@@ -14,6 +14,7 @@ the D&D 5e rebuild became self-contained. It remains recoverable from Git histor
 - `ROADMAP.md` - mechanics-first master plan through content, classes, and authoring tools.
 - `docs/DND_IMPLEMENTATION_MATRIX.md` - living audit of implemented, partial, and missing D&D systems.
 - `PROMPT_TEMPLATE.md` - recommended prompt shape for Codex work.
+- [handouts](handouts/README.md) - current monochrome character cards, board maps, and Mission 0 print materials.
 
 ## Active Code Areas
 

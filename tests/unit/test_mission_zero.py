@@ -205,8 +205,16 @@ def test_real_setup_six_players_fatigue_save_and_surrender(tmp_path):
     assert m.read(s)['outcome']=='accepted' and m.read(s)['stage']=='post_battle'
 
 
-def test_potion_uses_actual_item_action_and_physical_dice(tmp_path):
+@pytest.mark.parametrize('source', ('stash', 'hero'))
+def test_potion_uses_actual_item_action_and_physical_dice(tmp_path, source):
     s=session(tmp_path);data=m.read(s);m.grant(s,data,'potion');m.write(s,data)
+    if source == 'hero':
+        # Preparation migrates older saves before assigning shared equipment.
+        m.synchronize(s)
+        potion = replace(s.state.party_loot.items[0], id='mission_potion:2', source_ref='mission_potion')
+        owner = s.exploration.actors[0]
+        m._set_actor(s, replace(owner, inventory=(*owner.inventory, potion)))
+        s.state = replace(s.state, party_loot=replace(s.state.party_loot, items=()))
     start_battle(s)
     from dnd_board_game.combat.session import current_actor
     prepare_runes(s)

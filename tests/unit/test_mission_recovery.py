@@ -149,7 +149,7 @@ def test_nimra_identification_and_guild_fallback(tmp_path,natural,known):
         with pytest.raises(ValueError):send(s,'identify_nimra')
         stage(s,'guild_return');send(s,'ring');send(s,'identify_guild')
         assert m.read(s)['ring_identified']
-    stage(s,'guild_return');send(s,'equipment_open');send(s,'equipment_slots');send(s,'equipment_attach',gear_slot='ring')
+    stage(s,'guild_return');send(s,'equipment_open');send(s,'equipment_slot',gear_slot='ring');send(s,'equipment_confirm')
     g=s.exploration.actors[0]
     assert effective_ability_score(g,'strength')==g.ability_scores.strength+1
     s.save_snapshot();s.load_snapshot()

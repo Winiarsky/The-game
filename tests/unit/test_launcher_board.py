@@ -1,5 +1,6 @@
 """Launcher and tutorial rune masks must never leak across screen changes."""
 from pathlib import Path
+import re
 import threading
 
 import pytest
@@ -22,7 +23,7 @@ def menu(tmp_path: Path):
     return s, board, client
 
 
-def arm(s, client, slots=(6, 7, 8, 9), back=False):
+def arm(s, client, slots=(5, 6, 7, 8), back=False):
     response = client.post('/api/board/navigation', json={
         'token': s.launcher_navigation.token, 'slots': list(slots), 'back': back,
     })
@@ -35,7 +36,7 @@ def test_menu_choice_is_immediate_one_shot_and_does_not_change_game(tmp_path: Pa
     before = s.state
     selection = arm(s, client)
     assert selection['auto_arm'] and selection['confirmation_policy'] == 'immediate'
-    assert set(board.leds) == {(19, 23), (19, 22), (19, 21), (19, 20)}
+    assert set(board.leds) == {(19, 24), (19, 23), (19, 22), (19, 21)}
     assert (19, 1) not in board.leds
     board.selected = (19, 21)
     result = client.post('/api/board/scan', json={'revision': selection['revision'], 'automatic': True})
@@ -44,6 +45,38 @@ def test_menu_choice_is_immediate_one_shot_and_does_not_change_game(tmp_path: Pa
     assert not result.json['board_selection']['auto_arm']
     assert not board.leds
     assert client.post('/api/board/select', json={'col':19, 'row':21}).status_code == 400
+
+
+@pytest.mark.parametrize('slot', [5, 6, 7, 8])
+def test_main_menu_lights_each_tile_rune_and_accepts_a_single_press(tmp_path: Path, slot: int) -> None:
+    s, board, client = menu(tmp_path)
+    s.configure_scenario(Path('content/scenarios/misja_0_dzwon/scenario.json'))
+    html = client.get('/').get_data(as_text=True)
+    slots = [int(value) for value in re.findall(r'data-board-rune="(\d+)"', html)]
+    assert slots == [5, 6, 7, 8]
+    assert 'Wznów' not in html and 'href="/play"' not in html
+    response = client.post('/api/board/navigation', json={
+        'token': s.launcher_navigation.token, 'slots': slots,
+        'controls': [], 'focused': None,
+    })
+    assert response.status_code == 200, response.json
+    selection = response.json['board_selection']
+    expected = {panel_position(value).as_tuple() for value in slots}
+    assert set(board.leds) == expected
+    assert all(any(color) for color in board.leds.values())
+    assert len(set(board.leds.values())) == 1
+    assert {tuple(position) for position in selection['legal_positions']} == expected
+    assert '−/+' not in selection['prompt'] and '✓' not in selection['prompt']
+    for control in (26, 27, 28):
+        position = panel_position(control)
+        assert client.post('/api/board/select', json={'col': position.col, 'row': position.row}).status_code == 400
+    assert set(board.leds) == expected
+    board.selected = panel_position(slot).as_tuple()
+    result = client.post('/api/board/scan', json={'revision': selection['revision'], 'automatic': True})
+    assert result.status_code == 200, result.json
+    assert result.json['navigation_event'] == {'token': s.launcher_navigation.token, 'slot': slot}
+    assert board.scans == 1 and not board.leds
+    assert not result.json['board_selection']['auto_arm']
 
 
 def test_new_page_rejects_old_registration_release_and_scan(tmp_path: Path) -> None:

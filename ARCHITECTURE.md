@@ -2,7 +2,37 @@
 
 The rebuild should separate deterministic game logic from adapters.
 
-## Charge combat profile (2026-09-30)
+## Combat decision feedback (2026-10-02)
+
+`ChargeEncounter.target_candidates/target_rejection` explain the existing
+target rules without modifying `legal_targets`. The UI includes rejected
+creature positions in its scan mask and marks them red. A rejected press
+stores a preview notice and requires a legal reselection before confirmation;
+it never spends movement, ammunition or actions. Semantic range/path/goal
+cues remain separate in `hardware/resonance_feedback.py`.
+
+Attack tasks include named modifier components; their sum is the existing
+total. New player dice initialize to half their range; saved pending values
+are preserved. The browser patches only the displayed value when an adjust
+response differs solely in that value and transport revisions.
+
+## Equipment preparation (2026-10-02)
+
+`inventory/party_equipment.py` owns pure, atomic slot changes, hand
+displacement, stable numbered pack places and discovery availability.
+`ui/party_preparation.py` projects one hero's sheet and compatible choices;
+the same revision-checked choices drive browser buttons, physical scan
+masks and LEDs. Slot runes stay fixed; +/− are enabled inside pickers.
+The browser renders the sheet and never resolves equipment rules.
+
+Existing serialized item properties carry `pack_slot:N`,
+`party_loot:unidentified` and `party_loot:expedition`; no save schema change
+is needed. Mission state version flags migrate the old preparation cursor
+and shared discoveries without replacing a saved hero's loadout.
+Quest items stay in party loot. Identified field discoveries remain sealed
+until return to base; unresolved discoveries require inspection there.
+
+## Rune relations combat profile (2026-10-01)
 
 `rules/resonance.py` owns serializable profile state; `combat/charge_encounter.py`
 resolves the deterministic decision queue, and `world/charge_movement.py`
@@ -12,9 +42,16 @@ checked commands from both the browser and the physical panel; it supplies
 enemy RNG explicitly. `hardware/resonance_feedback.py` only maps presentation
 cues to existing LED frames. The browser does not resolve rules.
 
-`CombatState.resonance` is optional, persisted by snapshot schema 34. New
-Mission 0/free-arena encounters activate it; legacy snapshots keep their
-original profile. Reads never roll dice or advance a pending decision.
+`scenarios/rune_relation_catalog.py` validates the one v0.3 content source
+used by runtime, cards, help and mock. The directed graph stays in content;
+`rules/rune_modifiers.py` defines its executable modifier vocabulary.
+UI previews and semantic LED cues come from the same deterministic engine.
+
+`CombatState.resonance` is optional, persisted by snapshot schema 35. New
+Mission 0/free-arena encounters activate `rune_relations_v03` (state version 2).
+Legacy version 1 snapshots retain `rune_charges_v02` in the same engine.
+Reads never roll dice or advance a pending decision. Restoring a snapshot
+invalidates buffered board input before arming the restored decision.
 
 ## Directory Layout
 

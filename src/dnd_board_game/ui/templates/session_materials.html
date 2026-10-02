@@ -6,7 +6,7 @@
   <header class="flow-header"><a class="back-link" data-board-back href="{{ url_for('index') }}">↩ {{ ui_text('navigation.main_menu') }}</a>
   <h1>{{ ui_text('common.session_materials') }}</h1><p>{{ ui_text('common.materials_hint') }}</p></header>
   {% for material in materials %}
-  <section class="save-card"><b>{{ ui_text('common.' + material.label) }}</b>
+  <section class="save-card"><b>{{ ui_text('common.' + material.label) if material.label else material.title }}</b>
     {% if material.exists %}<a class="button" href="{{ url_for('session_material_file', filename=material.filename) }}" target="_blank" rel="noopener">{{ material.filename }}</a>
     {% else %}<p>{{ ui_text('common.materials_missing') }}</p>{% endif %}
   </section>

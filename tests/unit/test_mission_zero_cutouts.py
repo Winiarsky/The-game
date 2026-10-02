@@ -15,7 +15,7 @@ PACK=Path('content/scenarios/misja_0_dzwon')
 def inputs():
     return (json.loads((PACK/'maps/cutouts.json').read_text()),json.loads((PACK/'mechanics/battle.json').read_text()))
 
-@pytest.mark.parametrize('scale',[1,250/244])
+@pytest.mark.parametrize('scale',[1,250/244,(250/244)*1.03])
 def test_print_preserves_every_footprint_and_fits_a4_without_overlaps(scale):
     spec,battle=inputs();tokens=build_cutouts(spec,battle)
     placements=arrange(tokens,25*scale)

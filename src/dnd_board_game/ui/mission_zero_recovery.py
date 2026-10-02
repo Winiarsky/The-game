@@ -137,11 +137,14 @@ def finish_search(s: ExplorationUiSession, m: dict[str, Any], current: dict[str,
 
 def identify(s: ExplorationUiSession, m: dict[str, Any]) -> None:
     from . import mission_zero as mission
+    from dnd_board_game.inventory.party_equipment import identify_item
     if m['ring_identified']: return
     spec = read_json(mission.root(s), 'mechanics/items.json')['ring_identified']
     def known(ring):
-        return replace(ring, name=spec['name'], description=spec['description'], value_cp=spec['value_cp'],
+        identified = replace(ring, name=spec['name'], description=spec['description'], value_cp=spec['value_cp'],
             equipped=False, magic_effects=(MagicItemEffect('strength', MagicItemEffectKind.STRENGTH_SCORE_BONUS, spec['strength_score_bonus']),))
+        at_base = m.get('ring_home') == 'guild_return' or (m.get('equipment_home') == 'guild_return' and m['stage'] in ('equipment_stash', 'equipment'))
+        return identify_item(identified, at_base=at_base)
     found=False
     if any(i.id=='mission_ring' for i in s.state.party_loot.items):
         s.state=replace(s.state,party_loot=replace(s.state.party_loot,items=tuple(known(i) if i.id=='mission_ring' else i for i in s.state.party_loot.items)))
@@ -262,7 +265,9 @@ def handle(s: ExplorationUiSession, m: dict[str, Any], action: str, data: dict[s
         m.update(bell=action.removeprefix('bell_'), stage=action)
         record_campaign(s, m)
     elif action == 'next' and stage == 'return':
+        from dnd_board_game.inventory.party_equipment import release_identified
         settle(s, m); m['stage'] = 'guild_return'; m['equipment_locked']=False
+        s.state = replace(s.state, party_loot=release_identified(s.state.party_loot))
     elif action == 'summary': m['stage'] = 'summary'
     elif action == 'ring':
         m.update(ring_home=stage, stage='ring_identified' if m['ring_identified'] else 'ring')

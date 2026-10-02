@@ -11,13 +11,15 @@ from dnd_board_game.ui.routes import create_app
 from tests.unit.test_launcher_ui import _session
 
 
-@pytest.mark.parametrize('width', [1131, 1300])
-@pytest.mark.parametrize('page_path', ['/', '/new-game'])
-def test_runes_click_real_controls_and_follow_menu_changes(tmp_path: Path, width: int, page_path: str) -> None:
+@pytest.mark.parametrize('width,height', [(1268, 649), (1131, 720)])
+@pytest.mark.parametrize('page_path,menu_slot', [('/', 5), ('/', 6), ('/', 7), ('/', 8), ('/new-game', None)])
+def test_runes_click_real_controls_and_follow_menu_changes(tmp_path: Path, width: int, height: int, page_path: str, menu_slot: int | None) -> None:
     chrome = shutil.which('google-chrome') or shutil.which('chromium')
     if not chrome:
         pytest.skip('Chrome is needed for browser checks')
-    html = create_app(_session(tmp_path)).test_client().get(page_path).get_data(as_text=True)
+    session = _session(tmp_path)
+    session.configure_scenario(Path('content/scenarios/misja_0_dzwon/scenario.json'))
+    html = create_app(session).test_client().get(page_path).get_data(as_text=True)
     static = Path('src/dnd_board_game/ui/static')
     html = re.sub(r'<link rel="stylesheet"[^>]+>', '<style>' + (static/'launcher.css').read_text() + '</style>', html)
     html = re.sub(r'<script src="[^"]*launcher_board.js[^"]*" defer></script>',
@@ -25,7 +27,7 @@ def test_runes_click_real_controls_and_follow_menu_changes(tmp_path: Path, width
     html = re.sub(r'<script src="[^"]*session_copy.js[^"]*"[^>]*></script>',
                   lambda _: '<script>' + (static/'session_copy.js').read_text() + '</script>', html)
     harness = r'''
-let contract=null, selection=null, pending=null, generation=0, submission=null, released=false, staleNext=false;
+let contract=null, selection=null, pending=null, generation=0, submission=null, navigation=null, released=false, staleNext=false;
 const response=data=>Promise.resolve({ok:true,json:()=>Promise.resolve(data)});
 window.fetch=(path, options)=>{
  const body=JSON.parse(options.body);
@@ -51,26 +53,41 @@ async function press(slot) {
  await pause();
 }
 document.addEventListener('submit',event=>{event.preventDefault();submission={path:new URL(event.target.action).pathname,values:[...new FormData(event.target)]};},true);
+document.addEventListener('click',event=>{
+ const link=event.target.closest('a.menu-action');
+ if(link) {event.preventDefault();navigation=new URL(link.href).pathname;}
+},true);
 window.addEventListener('load',async()=>{
  try {
   await until(()=>pending);
   check(!contract.slots.includes(28),'menu requires confirmation');
-  check(JSON.stringify(contract.controls)==='[26,27,28]','missing board cursor controls');
   check(document.documentElement.scrollWidth<=innerWidth,'horizontal overflow');
   if(PAGE==='/') {
    check(JSON.stringify(contract.slots)==='[5,6,7,8]','wrong main runes');
+   check(contract.controls.length===0,'main menu still lights cursor controls');
+   check(contract.focused===null,'main menu still dims the other runes');
+   check(!document.querySelector('.board-focused'),'main menu still uses a board cursor');
+   check(!document.querySelector('[data-board-status]').textContent.includes('−/+'),'main menu still asks for cursor controls');
    check(!contract.back,'root has a nonexistent parent');
    check(document.querySelectorAll('.main-menu svg[data-panel-slot]').length===4,'missing glyphs');
+   check(!document.querySelector('[data-board-rune="9"]'),'duplicate resume tile');
+   const title=document.querySelector('.title-block').getBoundingClientRect();
+   const menu=document.querySelector('.main-menu').getBoundingClientRect();
+   check(menu.left>=title.right,'tiles are not to the right of the title');
+   check(menu.top<title.bottom && title.top<menu.bottom,'tiles are in another row');
+   check(document.documentElement.scrollHeight<=innerHeight,`main menu needs vertical scrolling: ${document.documentElement.scrollHeight} > ${innerHeight}`);
    const button=document.querySelector('button.menu-action');
    check(getComputedStyle(button).color===getComputedStyle(document.querySelector('a.menu-action')).color,'arena title is dark');
-   await press(26);await until(()=>contract.focused===6);
-   await press(26);await until(()=>contract.focused===7);
-   await press(27);await until(()=>contract.focused===6);
-   await press(26);await until(()=>contract.focused===7);
-   await press(28);
-   await until(()=>submission);
-   check(submission.path==='/training/open','rune did not open arena immediately');
+   await press(MENU_SLOT);
+   if(MENU_SLOT===7) {
+    await until(()=>submission);
+    check(submission.path==='/training/open','rune did not open arena immediately');
+   } else {
+    await until(()=>navigation);
+    check(navigation===({5:'/new-game',6:'/load-game',8:'/characters'})[MENU_SLOT],'rune opened the wrong tile');
+   }
   } else {
+   check(JSON.stringify(contract.controls)==='[26,27,28]','missing party cursor controls');
    check(contract.slots.length===7 && !contract.slots.includes(24),'empty party can continue');
    const first=document.querySelector('[data-board-rune="5"] input');
    const second=document.querySelector('[data-board-rune="6"] input');
@@ -106,13 +123,13 @@ window.addEventListener('load',async()=>{
  } catch(error) {document.getElementById('test-result').textContent='FAIL: '+error.stack;}
 });
 '''
-    html = html.replace('</head>', '<script>const PAGE=' + json.dumps(page_path) + ';' + harness + '</script></head>')
-    html = html.replace('</body>', '<pre id="test-result">PENDING</pre></body>')
+    html = html.replace('</head>', '<script>const PAGE=' + json.dumps(page_path) + ', MENU_SLOT=' + json.dumps(menu_slot) + ';' + harness + '</script></head>')
+    html = html.replace('</body>', '<pre id="test-result" style="position:fixed;bottom:0">PENDING</pre></body>')
     page = tmp_path/'launcher.html'
     page.write_text(html)
     result = subprocess.run([chrome, '--headless', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage',
         '--no-first-run', '--disable-background-networking', '--no-proxy-server', '--virtual-time-budget=6000',
-        f'--user-data-dir={tmp_path/"chrome"}', f'--window-size={width},1000', '--dump-dom', page.as_uri()],
+        f'--user-data-dir={tmp_path/"chrome"}', f'--window-size={width},{height}', '--dump-dom', page.as_uri()],
         capture_output=True, text=True, timeout=20)
     assert result.returncode == 0, result.stderr[-1000:]
-    assert '<pre id="test-result">PASS</pre>' in result.stdout, result.stdout[-2500:]
+    assert re.search(r'<pre id="test-result"[^>]*>PASS</pre>', result.stdout), result.stdout[-2500:]

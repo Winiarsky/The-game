@@ -13,6 +13,7 @@ from dnd_board_game.scenarios.mission_pack import MISSION_ID, read_json, text_en
 from dnd_board_game.hardware.board_panel import panel_position, panel_feedback
 from dnd_board_game.hardware.led_feedback import LedFeedback, LedFrame, LedRole
 from dnd_board_game.hardware.led_palette import LedColor
+from dnd_board_game.physical_cards.handout_files import handout_url
 from dnd_board_game.world import Coordinate
 from .exploration_mana_board import choice
 from dnd_board_game.application import party_ethos, reputation
@@ -39,6 +40,8 @@ def read(s: ExplorationUiSession) -> dict[str, Any]:
                     ring_identified=False, identify_attempted=False, ring_home='explore')
     for key, value in defaults.items(): data.setdefault(key, value)
     if data['stage']=='ring_equip':data['stage']='ring_identified' if data['ring_identified'] else 'ring'
+    from .party_preparation import normalize
+    normalize(data)
     return data
 
 
@@ -111,12 +114,18 @@ def _set_actor(s: ExplorationUiSession, actor: Any) -> None:
 
 def grant(s: ExplorationUiSession, m: dict[str, Any], item_id: str) -> None:
     from dnd_board_game.inventory import InventoryItem
+    from dnd_board_game.inventory.party_equipment import found_item
     key = 'item:' + item_id
     if key in m['flags']: return
     data = read_json(root(s), 'mechanics/items.json')[item_id]
     item = InventoryItem(id='mission_' + item_id, name=data['name'], kind='consumable' if 'potion' in item_id else 'gear',
         equipped=False, description=data['description'], value_cp=data.get('value_cp', 0),
         armor_class_bonus=data.get('armor_class_bonus',0))
+    # Supplies issued before departure are usable now; field discoveries wait
+    # for inspection at base. Quest objects never become personal equipment.
+    if item_id not in ('potion', 'weak_potion') or m.get('equipment_locked') or m['stage'] in (
+            'battle', 'explore', 'armory', 'quarters', 'search_armory', 'search_quarters', 'search_result'):
+        item = found_item(item)
     s.state = replace(s.state, party_loot=replace(s.state.party_loot, items=(*s.state.party_loot.items, item)))
     m['flags'].append(key)
     m['ledger'].append(dict(kind='item', id=item_id, name=data['name'], amount=1, owner='party'))
@@ -230,6 +239,19 @@ def synchronize(s: ExplorationUiSession) -> None:
             for item in discoveries:s.state=replace(s.state,party_loot=deposit(s.state.party_loot,item))
             if discoveries:_set_actor(s,replace(actor,inventory=tuple(i for i in actor.inventory if i not in discoveries)))
         m['shared_inventory_v1']=True;write(s,m)
+    if not m.get('shared_inventory_v2'):
+        from dnd_board_game.inventory import InventoryItem
+        from dnd_board_game.inventory.party_equipment import found_item, identify_item
+        def migrate_discovery(item: InventoryItem) -> InventoryItem:
+            if item.id not in ('mission_ring', 'mission_medallion', 'mission_rope', 'mission_tools'):
+                return item
+            marked = found_item(item)
+            if item.id == 'mission_ring' and item.magic_effects:
+                return identify_item(marked, at_base=not m.get('equipment_locked') and m['stage'] in ('guild_return', 'summary', 'equipment', 'equipment_item', 'equipment_stash'))
+            return marked
+        s.state = replace(s.state, party_loot=replace(s.state.party_loot, items=tuple(migrate_discovery(i) for i in s.state.party_loot.items)))
+        m['shared_inventory_v2'] = True
+        write(s, m)
     if s.combat_state is not None and m['stage'] in ('battle','surrender'):
         if not m['fatigue_applied']:
             if m['fatigue']:
@@ -266,9 +288,10 @@ def combat_finished(s: ExplorationUiSession, conclusion: str) -> None:
 
 
 def available_potions(s: ExplorationUiSession) -> list[tuple[Any, Any]]:
+    from dnd_board_game.inventory.party_equipment import ready_for_use
     actors=s.combat_state.actors if s.combat_state else s.exploration.actors
-    return [(None,i) for i in s.state.party_loot.items if i.id in ('mission_potion','mission_weak_potion') and i.quantity>0] + [(a,i) for a in actors if a.faction==Faction.ALLY for i in a.inventory
-            if i.id in ('mission_potion','mission_weak_potion') and i.quantity>0]
+    return [(None,i) for i in s.state.party_loot.items if (i.source_ref or i.id) in ('mission_potion','mission_weak_potion') and ready_for_use(i)] + [(a,i) for a in actors if a.faction==Faction.ALLY for i in a.inventory
+            if (i.source_ref or i.id) in ('mission_potion','mission_weak_potion') and ready_for_use(i)]
 
 
 def potion_targets(s: ExplorationUiSession) -> tuple[Any, ...]:
@@ -345,6 +368,8 @@ def payload(s: ExplorationUiSession) -> dict[str, Any] | None:
     elif stage=='potion_roll':opt(29,'potion_cancel','cancel')
     elif stage=='fatigue_roll':pass
     else:opt(28,'next','next')
+    if stage in ('guild_setup', 'post_setup') and m['index'] > 0:
+        controls.append(choice(29, 'setup_back', 'Poprzedni element'))
     from . import mission_zero_recovery as recovery
     from . import party_preparation as preparation
     revised_choices=preparation.choices(s,m) if stage in (*preparation.STAGES,'equipment_intro') else recovery.choices(s,m)
@@ -379,9 +404,16 @@ def payload(s: ExplorationUiSession) -> dict[str, Any] | None:
         from dnd_board_game.combat.session import current_actor
         actor=current_actor(s.combat_state)
         combat_tip=label(s,'combat_drain' if pool.phase=='drain' else 'combat_loaded' if str(actor.id) in pool.heroes and pool.full(str(actor.id)) else 'combat_charge')
-    return dict(print_cutouts=asset_url(root(s),'print/runy_v01/misja_0_kafle_A4.pdf') if (root(s)/'print/runy_v01/misja_0_kafle_A4.pdf').exists() else '',print_characters=asset_url(root(s),'print/runy_ladunki_v02/karty_postaci_A4.pdf'),roll_bonus=potion_data.get('bonus',0),print_map=asset_url(root(s),'print/runy_v01/plansza_A4.pdf'),combat_tip=combat_tip,point_positions=point_positions,roll_count=potion_data.get('dice',1),roll_sides=potion_data.get('sides',4),active=active_panel(s),stage=stage,revision=m['revision'],text=text,image=asset_url(root(s),image) if image and (root(s)/image).is_file() else '',
+    ui = read_json(root(s), 'text/ui.json')
+    if s.combat_state and s.combat_state.resonance and s.combat_state.resonance.version == 2:
+        from dnd_board_game.scenarios.rune_relation_catalog import load_rune_relation_player_aid
+        aid = load_rune_relation_player_aid()
+        ui = {**ui, 'combat_help': aid[0]['sections'][0]['paragraphs'][0] + ' ' + aid[1]['lead']}
+    return dict(print_cutouts=handout_url('mission_0/tiles.pdf'),
+        print_characters=handout_url('characters.pdf'),print_map=handout_url('map_a4.pdf'),
+        roll_bonus=potion_data.get('bonus',0),combat_tip=combat_tip,point_positions=point_positions,roll_count=potion_data.get('dice',1),roll_sides=potion_data.get('sides',4),active=active_panel(s),stage=stage,revision=m['revision'],text=text,image=asset_url(root(s),image) if image and (root(s)/image).is_file() else '',
         reputation=reputation.read(s.state.flags).points,usable_potions=[dict(id=i.id,name=i.name,quantity=i.quantity) for _,i in available_potions(s)],can_use_potion=bool(available_potions(s) and potion_targets(s)),equipment=preparation.payload(s,m),identification_dc=recovery.identification_dc(s),recovery=recovery.status_payload(s,m),reading=active_panel(s) and stage not in ('fatigue_roll','potion_roll','identify_roll',*preparation.STAGES),guild_points=guild_points(s) if stage=='guild_hub' else {},image_layout=image_layout,choices=controls,marker=marker,setup=setup,ledger=m['ledger'],debt=m['debt'],fatigue=m['fatigue'],checkpoints=checkpoints,
-        ui=read_json(root(s),'text/ui.json'),rolling=stage in ('fatigue_roll','potion_roll','identify_roll'), can_save=s._snapshot_blocker() is None)
+        ui=ui,rolling=stage in ('fatigue_roll','potion_roll','identify_roll'), can_save=s._snapshot_blocker() is None)
 
 
 def command(s: ExplorationUiSession, data: dict[str, Any]) -> dict[str, object]:
@@ -401,6 +433,8 @@ def command(s: ExplorationUiSession, data: dict[str, Any]) -> dict[str, object]:
     from . import party_preparation as preparation
     if preparation.handle(s,m,action,data):pass
     elif recovery.handle(s,m,action,data):pass
+    elif action == 'setup_back':
+        m['index'] -= 1
     elif action=='next':
         if stage=='world':m.update(stage='heroes',index=0)
         elif stage=='heroes':
@@ -454,7 +488,10 @@ def command(s: ExplorationUiSession, data: dict[str, Any]) -> dict[str, object]:
     elif action=='potion':
         if not potion_targets(s) or not available_potions(s):raise ValueError('Mikstura nie jest teraz dostępna.')
         from dnd_board_game.combat.session import current_actor
-        m.update(stage='potion_target',potion_id=available_potions(s)[0][1].id.removeprefix('mission_'),potion_target=str(current_actor(s.combat_state).id))
+        owner, potion = available_potions(s)[0]
+        m.update(stage='potion_target', potion_id=(potion.source_ref or potion.id).removeprefix('mission_'),
+                 potion_instance_id=potion.id, potion_owner_id=str(owner.id) if owner else None,
+                 potion_target=str(current_actor(s.combat_state).id))
     elif action=='potion_target':
         target=str(data.get('target',''))
         if target not in {str(a.id) for a in potion_targets(s)}:raise ValueError('Cel poza zasięgiem.')
@@ -471,7 +508,9 @@ def command(s: ExplorationUiSession, data: dict[str, Any]) -> dict[str, object]:
         rolls=data.get('rolls')
         if not isinstance(rolls,list) or len(rolls)!=item['dice'] or any(type(r) is not int or not 1<=r<=item['sides'] for r in rolls):raise ValueError('Podaj wszystkie naturalne wyniki kości leczenia.')
         target=next((a for a in potion_targets(s) if str(a.id)==m['potion_target']),None)
-        owned=next(((a,i) for a,i in available_potions(s) if i.id=='mission_'+m['potion_id']),None)
+        owned=next(((a,i) for a,i in available_potions(s)
+                    if i.id == m.get('potion_instance_id', 'mission_' + m['potion_id'])
+                    and ('potion_owner_id' not in m or (str(a.id) if a else None) == m['potion_owner_id'])), None)
         if target is None or owned is None:raise ValueError('Cel lub mikstura nie są już dostępne.')
         consumed=use_turn_action(s.combat_state)
         if not consumed.accepted:raise ValueError(consumed.message)

@@ -143,7 +143,7 @@ from dnd_board_game.scenarios.content_contract import (
 
 
 SNAPSHOT_SCHEMA = "dnd_board_game.session"
-SNAPSHOT_SCHEMA_VERSION = 34
+SNAPSHOT_SCHEMA_VERSION = 35
 
 
 def _migrate_snapshot_v1_to_v2(data: dict[str, Any]) -> dict[str, Any]:
@@ -590,6 +590,20 @@ def _migrate_snapshot_v33_to_v34(data: dict[str, Any]) -> dict[str, Any]:
     return migrated
 
 
+def _migrate_snapshot_v34_to_v35(data: dict[str, Any]) -> dict[str, Any]:
+    """Name the old charge profile without changing a started encounter."""
+    from dnd_board_game.rules.resonance import LEGACY_PROFILE
+    migrated = dict(data, schema_version=35)
+    combat = data.get("combat")
+    if isinstance(combat, dict):
+        migrated["combat"] = dict(combat)
+        resonance = combat.get("resonance")
+        if isinstance(resonance, dict) and resonance.get("version") == 1:
+            migrated["combat"]["resonance"] = dict(resonance)
+            migrated["combat"]["resonance"].setdefault("profile", LEGACY_PROFILE)
+    return migrated
+
+
 _SNAPSHOT_MIGRATIONS = MigrationRegistry(
     schema=SNAPSHOT_SCHEMA,
     current_version=SNAPSHOT_SCHEMA_VERSION,
@@ -627,6 +641,7 @@ _SNAPSHOT_MIGRATIONS.register(30, _migrate_snapshot_v30_to_v31)
 _SNAPSHOT_MIGRATIONS.register(31, _migrate_snapshot_v31_to_v32)
 _SNAPSHOT_MIGRATIONS.register(32, _migrate_snapshot_v32_to_v33)
 _SNAPSHOT_MIGRATIONS.register(33, _migrate_snapshot_v33_to_v34)
+_SNAPSHOT_MIGRATIONS.register(34, _migrate_snapshot_v34_to_v35)
 
 
 class SnapshotValidationError(ValueError):
@@ -2843,7 +2858,13 @@ def _combat_from_payload(raw: object) -> CombatState | None:
     from dnd_board_game.rules.resonance import ChargeState
     mana_raw = data.get("shared_mana")
     charge_raw = data.get("resonance")
-    charge = ChargeState.from_payload(_mapping(charge_raw, "combat.resonance"), set(by_id)) if charge_raw is not None else None
+    try:
+        charge = ChargeState.from_payload(_mapping(charge_raw, "combat.resonance"), set(by_id)) if charge_raw is not None else None
+        if charge is not None and charge.version == 2:
+            from dnd_board_game.scenarios.rune_relation_catalog import load_rune_relation_catalog
+            charge.validate_catalog(load_rune_relation_catalog())
+    except (TypeError, ValueError, KeyError) as exc:
+        raise SnapshotValidationError(f"Nieprawidłowy stan Rezonansu: {exc}") from exc
     if charge and (charge.order != [str(entry.actor.id) for entry in entries]
                    or charge.index != current_index or charge.round != initiative.get("round_number")):
         raise SnapshotValidationError("Stan Rezonansu nie odpowiada inicjatywie walki.")

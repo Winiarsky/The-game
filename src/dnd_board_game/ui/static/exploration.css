@@ -1376,6 +1376,7 @@ button.panel-accept {background:#172e49;color:#b4dcff;border-color:#437fb7;}
 .dice-icon-count {font-size:14px;white-space:nowrap;}
 .keyboard-roll-wizard-heading {display:flex;align-items:center;gap:18px;margin-bottom:14px;}
 .keyboard-roll-wizard-heading > div {min-width:0;}
+.initiative-roll-portrait {width:88px;height:88px;flex:0 0 88px;object-fit:cover;border:1px solid var(--color-gold);border-radius:8px;}
 .keyboard-roll-wizard-heading h2 {margin:5px 0 0;overflow-wrap:anywhere;}
 .keyboard-roll-wizard-summary .keyboard-roll-summary-identity {display:flex;align-items:center;gap:9px;}
 .keyboard-roll-wizard-summary .dice-icon-group {display:inline-flex;gap:4px;}

@@ -95,9 +95,12 @@ def legacy_main() -> int:
 
 
 def main() -> int:
-    """Default exports always use the current physical-mana profile."""
-    from dnd_board_game.physical_cards.mana_print_files import main as print_current
-    return print_current(default_formats=('cards', 'bw_test'))
+    """Build the current monochrome handouts from the canonical catalog."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from build_rune_relations import main as build_current
+    build_current()
+    return 0
 
 
 if __name__ == "__main__":

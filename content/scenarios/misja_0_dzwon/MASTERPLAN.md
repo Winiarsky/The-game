@@ -32,6 +32,6 @@ Szczegóły zasad, plików i przygotowania opisuje [README](README.md).
     Panel końcowy: pieniądze, przedmioty, dzwon, zobowiązania i pełny zapis.
 
 Wszystkie aktywne teksty są w `text/`, parametry w `mechanics/`, dokumenty
-w `print/handouts.json` i generowanych PDF-ach. Audio pozostaje na później.
+w `text/handouts.json` i generowanych PDF-ach. Audio pozostaje na później.
 
 12. Przygotowanie drużyny przed wyjściem: wspólny zapas, sloty, zamiana, runy i lista −/+. Wyposażenie zamknięte na czas misji; mikstury nadal dostępne. Po powrocie identyfikacja, sprzedaż i przydzielenie przedmiotów przed następną wyprawą. Drukowane karty odpowiadają przedmiotom w aplikacji. Zakupy, rozwój i zestawy akcji są następnym etapem.

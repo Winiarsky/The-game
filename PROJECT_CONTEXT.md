@@ -1,5 +1,61 @@
 # Kontekst Projektu
 
+## Informacja zwrotna podczas walki — 02.10.2026
+
+Ustawianie planszy pozwala wrócić do poprzedniego elementu przyciskiem
+cofnięcia na ekranie i planszy. Inicjatywa pokazuje portret rzucającej
+postaci. Wybór ruchu zachowuje niebieski zasięg, żółtą trasę i zielony
+cel; kolejne naciśnięcia zmieniają podgląd, a ✓ wykonuje ruch.
+
+Niedostępne cele działań są czerwone i można nacisnąć ich pola, aby
+przeczytać powód odmowy. Nie zmienia to legalności ani kosztu akcji.
+Cel ma w UI portret, cechy i aktywne stany, w tym Piętno łowcy ze źródłem.
+Podstawowe akcje pozostają widoczne również wtedy, gdy są niedostępne.
+Nowy rzut zaczyna od połowy zakresu kości; +/− aktualizuje tylko wynik.
+Przy ataku pokazujemy składniki modyfikatora, także zmęczenie po wozie.
+
+## Przygotowanie drużyny — 02.10.2026
+
+Przed wyprawą gracze kolejno zatwierdzają gotowe wyposażenie bohaterów.
+Ekran ma układ karty: siedem miejsc na postaci i osiem ponumerowanych
+miejsc plecaka na stronie. Każde miejsce otwiera własna runa; dopiero
+w wyborze pasujących przedmiotów działają +/−, ✓ i cofnięcie. Dalsze
+strony plecaka nie wprowadzają limitu pojemności. Sprzęt startowy jest
+już założony, a wczytanie zachowuje dokonane wcześniej zmiany.
+
+Wspólny panel oddziela zapas w bazie, znaleziska i przedmioty fabularne
+drużyny. Klucz i dokumenty nie zajmują miejsca u bohatera. Zdobyty sprzęt
+wymaga identyfikacji po powrocie i jest dostępny na kolejną wyprawę.
+Rozpoznanie pierścienia przez Nimrę w terenie nie odblokowuje go przed
+powrotem. Wydane przed wyprawą mikstury pozostają od razu używalne.
+
+## Materiały do druku — porządkowanie, 02.10.2026
+
+Aktualna czarno-biała edycja testowa znajduje się wyłącznie w `handouts/`:
+karty `characters.pdf`, plansza `map_a4.pdf` (12 arkuszy) i `map_full.pdf`
+(jedna strona), kafle/przedmioty/dokumenty w `mission_0/`, ściąga i znaczniki
+w `reference/`. Gra odsyła do tych plików przez `/session-materials`.
+Odbudowa: `scripts/build_handouts.py`; wyniki robocze są w `.cache/handouts/`.
+Starsze wydruki i podglądy usunięto, źródłowe ilustracje i katalogi reguł
+zachowano. Rozkaz i pokwitowania mają źródło `text/handouts.json` w Misji 0.
+Instrukcja: [handouts/README.md](handouts/README.md).
+
+## Relacje run — wdrożenie, 01.10.2026
+
+Nowy projekt v0.3 obejmuje osobny katalog `content/print/rune_relations_v03/catalog.json`,
+29 mocy siedmiu bohaterów, pojedyncze koszty, 51 premii na kartach, pamięć
+trzech run i kierunkowe kontynuacje. Cztery finiszery wymagają dwóch symboli
+i wygaszają pamięć. Fala jest mostem wyłącznie Nimry; Erynd używa Schodów.
+Pozostałe dziewięć run to silniejsze przyszłe zdobycze. Zaakceptowane zasady
+działają w nowych walkach Misji 0 i swobodnej areny, w silniku Python,
+UI, panelu i LED-ach. Gra, karty i mock korzystają z tego samego katalogu;
+ściąga w UI i PDF ma wspólny tekst oraz tabelę wyprowadzoną z katalogu.
+Specyfikacja: `docs/RUNE_RELATIONS_V03.md`. Nowy profil ma stan wersji 2,
+zapis schemat 35. Aktywne stare walki zachowują `rune_charges_v02`,
+obsługiwane w tym samym silniku bez konwersji w trakcie starcia.
+Gotowy launcher: `.venv/bin/python scripts/resonance_playtest.py --skip-setup`.
+Poniższe datowane wpisy opisują wcześniejsze etapy.
+
 ## Wdrożenie walki ładunków — 30.09.2026
 
 Zaakceptowany mock przeniesiono do silnika Python i `/play`: 29 mocy,

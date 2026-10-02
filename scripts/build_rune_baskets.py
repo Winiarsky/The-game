@@ -291,13 +291,11 @@ def build(*, output: Path = OUTPUT, data_path: Path = DATA, data_only: bool = Fa
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    mode = parser.add_mutually_exclusive_group()
-    mode.add_argument('--data-only', action='store_true')
-    mode.add_argument('--html-only', action='store_true')
-    parser.add_argument('--output', type=Path, default=OUTPUT)
-    args = parser.parse_args()
-    build(output=args.output, data_only=args.data_only, html_only=args.html_only)
+    """Build the current monochrome handouts from the canonical catalog."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from build_rune_relations import main as build_current
+    build_current()
 
 
 if __name__ == '__main__':

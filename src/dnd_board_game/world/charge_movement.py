@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import heapq
+from math import sqrt
 from typing import Sequence
 
 from dnd_board_game.actors import Actor
@@ -43,15 +44,18 @@ def charge_paths(board: BoardState, actor: Actor, actors: Sequence[Actor], budge
 
     Parkour may cross enemies and obstacles, but not an occupied/blocked end.
     Ordinary movement reuses the world's corner/door and occupant legality.
+    Equal movement costs prefer the geometrically shorter route, avoiding
+    gratuitous diagonal zigzags without changing any movement allowance.
     """
     if not playable(board, actor.position):
         return {}
-    costs = {actor.position: 0}
+    ranks = {actor.position: (0, 0.0)}
+    diagonal_counts = {actor.position: 0}
     paths = {actor.position: ChargePath((), ())}
-    queue = [(0, actor.position)]
+    queue = [(0, 0.0, actor.position)]
     while queue:
-        cost, p = heapq.heappop(queue)
-        if cost != costs[p]:
+        cost, length, p = heapq.heappop(queue)
+        if (cost, length) != ranks[p]:
             continue
         for q in neighbors(board, p):
             if not playable(board, q):
@@ -66,9 +70,15 @@ def charge_paths(board: BoardState, actor: Actor, actors: Sequence[Actor], budge
                     continue
                 step = 2 if board.terrain_at(q).is_difficult or occupant else 1
             total = cost + step
-            if total > budget or total >= costs.get(q, budget+1):
+            diagonals = diagonal_counts[p] + int(p.col != q.col and p.row != q.row)
+            # Recompute from integer counts so a reordered sequence of equal
+            # steps has exactly the same floating-point tie-break value.
+            straight = len(paths[p].cells) + 1 - diagonals
+            rank = (total, straight + diagonals * sqrt(2))
+            if total > budget or (q in ranks and rank >= ranks[q]):
                 continue
-            costs[q] = total
+            ranks[q] = rank
+            diagonal_counts[q] = diagonals
             paths[q] = ChargePath((*paths[p].cells, q), (*paths[p].costs, step))
-            heapq.heappush(queue, (total, q))
+            heapq.heappush(queue, (*rank, q))
     return {p: path for p, path in paths.items() if free(board, actors, p, str(actor.id))}

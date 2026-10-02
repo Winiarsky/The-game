@@ -70,32 +70,104 @@ def test_invalid_aid_fails_before_rendering(tmp_path: Path, monkeypatch: pytest.
         character_text.load_text()
 
 
-def test_generator_publishes_cards_aid_and_markers_as_separate_pdfs(
+def test_current_generator_publishes_35_character_pages_and_separate_reference_files(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.syspath_prepend(str(ROOT / 'scripts'))
-    mats = importlib.import_module('build_hero_mats')
-    monkeypatch.setattr(mats, 'OUTPUT', tmp_path / 'characters')
-    published: dict[str, tuple[list[Path], list[dict], dict]] = {}
+    generator = importlib.import_module('build_rune_relations')
+    work = tmp_path / 'work'
+    public = tmp_path / 'handouts'
+    page_counts: dict[Path, int] = {}
+    merged: dict[Path, tuple[Path, ...]] = {}
+    published: dict[Path, tuple[Path, int | None]] = {}
+    written: list[Path] = []
+    original_mkdir = Path.mkdir
+    original_text = Path.write_text
+    original_bytes = Path.write_bytes
 
-    def write_page(folder: Path, name: str, html: str, **kwargs: object) -> tuple[Path, list]:
+    def writable(path: Path) -> None:
+        assert path.resolve().is_relative_to(tmp_path.resolve()), f'Generator wrote outside tmp: {path}'
+        written.append(path)
+
+    def mkdir(path: Path, *args: object, **kwargs: object) -> None:
+        writable(path)
+        original_mkdir(path, *args, **kwargs)
+
+    def write_text(path: Path, text: str, *args: object, **kwargs: object) -> int:
+        writable(path)
+        return original_text(path, text, *args, **kwargs)
+
+    def write_bytes(path: Path, data: bytes) -> int:
+        writable(path)
+        return original_bytes(path, data)
+
+    monkeypatch.setattr(Path, 'mkdir', mkdir)
+    monkeypatch.setattr(Path, 'write_text', write_text)
+    monkeypatch.setattr(Path, 'write_bytes', write_bytes)
+
+    def render(html: Path, pdf: Path) -> None:
+        pages = html.read_text(encoding='utf-8').count('<article class="page')
+        assert pages > 0
+        page_counts[pdf] = pages
+        pdf.write_bytes(b'%PDF-1.4\nrendered placeholder\n%%EOF\n')
+
+    def merge(parts: list[Path], destination: Path) -> None:
+        assert parts and all(path.is_file() for path in parts)
+        merged[destination] = tuple(parts)
+        page_counts[destination] = sum(page_counts[path] for path in parts)
+        destination.write_bytes(b'%PDF-1.4\nmerged placeholder\n%%EOF\n')
+
+    def validate(path: Path, *, script: str) -> list[object]:
+        assert path.read_text(encoding='utf-8').count('<article class="page') == 5
+        return []
+
+    def reference_sheet(folder: Path, name: str, html: str, *, html_only: bool) -> tuple[Path, list[object]]:
+        assert not html_only
         folder.mkdir(parents=True, exist_ok=True)
-        return folder / f'{name}.pdf', []
+        path = folder / f'{name}.html'
+        path.write_text(html, encoding='utf-8')
+        pdf = path.with_suffix('.pdf')
+        render(path, pdf)
+        assert page_counts[pdf] == 1
+        return pdf, []
 
-    def publish(destination: Path, parts: list[Path], sections: list[dict], **metadata: object) -> None:
-        published[destination.name] = (parts, sections, metadata)
+    def compact(path: Path) -> None:
+        assert path.is_file() and page_counts[path] > 0
 
-    monkeypatch.setattr(mats, 'write_page', write_page)
-    monkeypatch.setattr(mats, 'publish_pdf', publish)
-    assert mats.build_pack() == MISSION / 'print/karty_postaci_A4.pdf'
-    assert set(published) == {'karty_postaci_A4.pdf', 'sciaga_graczy_A4.pdf', 'znaczniki_A4.pdf'}
-    cards, sections, dimensions = published['karty_postaci_A4.pdf']
-    assert len(cards) == 36 and len(sections) == 7
-    assert all(path.parent.name != 'wspolne' for path in cards)
-    assert sections[0]['first_page'] == 2 and sections[-1]['last_page'] == 36
-    assert dimensions['mana_mm'] == [63, 88]
-    assert dimensions['equipment_mm'] == [60, 42]
-    assert dimensions['action_mm'] == [62, 76]
-    assert dimensions['nimra_action_mm'] == [68, 53]
-    assert len(published['sciaga_graczy_A4.pdf'][0]) == 4
-    assert published['znaczniki_A4.pdf'][0][0].name == '05_znaczniki.pdf'
+    def publish(source: Path, destination: Path, *, expected_pages: int | None = None) -> Path:
+        assert source.is_file() and page_counts[source] == expected_pages
+        published[destination.relative_to(public)] = (source, expected_pages)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(source.read_bytes())
+        return destination
+
+    def external_process(*args: object, **kwargs: object) -> None:
+        raise AssertionError('The pipeline test must not launch Chrome or PDF tools')
+
+    monkeypatch.setattr(generator, 'render_pdf', render)
+    monkeypatch.setattr(generator, 'merge_pdfs', merge)
+    monkeypatch.setattr(generator, 'pdf_pages', lambda path: page_counts[path])
+    monkeypatch.setattr(generator, 'compact_pdf', compact)
+    monkeypatch.setattr(generator.baskets, 'validate', validate)
+    monkeypatch.setattr(generator, '_reference_sheet', reference_sheet)
+    monkeypatch.setattr(generator, 'publish_pdf', publish)
+    monkeypatch.setattr(generator.subprocess, 'run', external_process)
+
+    manifest = generator.build(output=work, publish_root=public)
+    assert manifest['profile'] == 'rune_relations_v03' and manifest['pages'] == 35
+    assert manifest['action_mm'] == [60, 54] and manifest['equipment_mm'] == [60, 42]
+    assert len(manifest['sections']) == 7
+    assert [section['first_page'] for section in manifest['sections']] == [1, 6, 11, 16, 21, 26, 31]
+    assert all(section['pages'] == 5 for section in manifest['sections'])
+    assert len(merged[work / 'characters.pdf']) == 7
+    assert len(merged[work / 'reference/rules.pdf']) == 3
+    assert published == {
+        Path('characters.pdf'): (work / 'characters.pdf', 35),
+        Path('reference/rules.pdf'): (work / 'reference/rules.pdf', 3),
+        Path('reference/markers.pdf'): (work / 'reference/markers.pdf', 1),
+    }
+    assert {path.relative_to(public) for path in public.rglob('*.pdf')} == set(published)
+    reference = json.loads((work / 'reference/reference_manifest.json').read_text(encoding='utf-8'))
+    assert reference['rules']['file'] == 'rules.pdf' and reference['rules']['pages'] == 3
+    assert reference['markers']['file'] == 'markers.pdf' and reference['markers']['pages'] == 1
+    assert written and all(path.resolve().is_relative_to(tmp_path.resolve()) for path in written)

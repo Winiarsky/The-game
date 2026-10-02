@@ -1,5 +1,61 @@
 # Game Design
 
+## Czytelność decyzji przy planszy — 02.10.2026
+
+Przed inicjatywą można poprawić poprzednio rozłożony element lub ustawienie
+bohatera przez ↩. Portret wskazuje, kto teraz rzuca. W turze widać wszystkie
+podstawowe akcje; zużyte/niedostępne mają opis powodu blokady.
+
+Ruch: niebieskie pola oznaczają zasięg, żółte wybraną trasę, zielone jej
+koniec. Zmiana pola docelowego przelicza sam podgląd. Dopiero ✓ zużywa ruch.
+Wybór celu: dozwolone cele zachowują podświetlenie, niedozwolone są czerwone.
+Naciśnięcie czerwonego celu wyjaśnia np. brak widoczności albo przekroczony
+zasięg, bez wykonywania akcji. Karta wybranego celu pokazuje jego portret,
+PW, KP, cechy i stany, w tym Piętno łowcy i autora efektu.
+
+Rzut fizyczną kością nadal wprowadza gracz. Nowe k20 zaczyna na 10,
+k8 na 4 itd.; +/− zmienia liczbę bez przebudowy całego widoku. Pod wynikiem
+widać składniki premii. Zmęczenie po wozie pozostaje karą −2 do ataku
+i obrażeń przez ustaloną liczbę rund; nie zmieniono zasad atakowania.
+
+## Przygotowanie wyposażenia — 02.10.2026
+
+Przygotowanie odbywa się po kolei dla każdego bohatera. Gotowy sprzęt
+startowy widać od razu; ✓ zatwierdza postać. Zmiana jest opcjonalna:
+naciśnij runę przy miejscu, przeglądaj pasujące przedmioty +/−,
+zatwierdź ✓ albo anuluj cofnięciem. Zastąpiony sprzęt wraca do zapasu.
+Źródłem nowego przedmiotu może być zapas albo własny plecak bohatera.
+Broń dwuręczna zajmuje obie ręce, zgodnie z dotychczasowymi zasadami.
+
+Stałe runy: Kielich — szyja, Korona — głowa, Romb — pierścień,
+Grot — pierwsza ręka, Wieża — pancerz, Kotwica — druga ręka,
+Trójząb — przybory magiczne/instrument. Plecak ma osiem miejsc na stronie
+z osobnymi runami; przy większym ekwipunku pojawiają się dalsze strony.
+
+Klucz otwiera wspólny panel: **zapas w bazie**, **znaleziska** oraz
+**przedmioty drużyny**. Fabularnych kluczy i dokumentów nie zakłada się
+ani nie sprzedaje. Znaleziony sprzęt czeka na identyfikację w bazie i
+kolejną wyprawę. Zwykłe znaleziska można sprawdzić bez opłaty; nieznany
+pierścień zachowuje dotychczasową płatną identyfikację w Gildii.
+Udane rozpoznanie przez Nimrę w terenie ujawnia właściwości, ale sprzęt
+staje się dostępny dopiero po powrocie. Mikstury wydane na odprawie
+nie podlegają tej blokadzie.
+
+## Relacje run w grze — 01.10.2026
+
+Karty i makieta walki v0.3 korzystają z kierunkowych relacji, pamięci trzech
+ostatnich run i premii opisanych na każdej mocy. Jeden koszt zastępuje dwa
+tryby. Fala Nimry podtrzymuje dowolny łańcuch; finiszery wymagają dwóch run
+oraz legalnej kontynuacji i kończą pamięć. Nieużywane runy stanowią przyszłe
+silniejsze zdobycze. Źródło: `content/print/rune_relations_v03/catalog.json`.
+Pełne zasady i odnośniki: `docs/RUNE_RELATIONS_V03.md`.
+Zaakceptowana wersja działa w silniku Python, UI i panelu LED nowych walk.
+Premie ustalane są przed dopisaniem runy, na pamięci po sprawdzeniu
+kontynuacji; pamięć dopisuje się po całej mocy. Efekty czasowe zachowują
+własne terminy po wygaśnięciu łańcucha. Dawne zapisy rozpoczętych walk
+zachowują profil v0.2. Instrukcja uruchomienia i prób:
+`docs/playtests/RESONANCE_RUNTIME_MANUAL.md`.
+
 ## Wdrożenie walki — 30.09.2026
 
 Zaakceptowane karty i mock mają implementację Python/UI/LED dla nowych

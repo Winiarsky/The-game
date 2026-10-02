@@ -1,125 +1,97 @@
-# Walka: makieta ładunków i ciągłego Rezonansu
+# Walka: makieta relacji run v0.3
 
-Aktualizacja: 30.09.2026. [Otwórz makietę](prototype.html?scene=combat).
+Aktualizacja: 01.10.2026. [Otwórz makietę](prototype.html?scene=combat).
+[Karty wszystkich postaci](../../handouts/characters.pdf)
+· [Pełne zasady](../RUNE_RELATIONS_V03.md).
 
-Zmiana obejmuje wyłącznie walkę w `prototype.html`. Rozmowy, reputacja,
-przygotowanie wyprawy i eksploracja zachowują wcześniejszy przebieg.
-Nie podłączono Flask, czujników, LED ani zapisów właściwej gry. Starsza
-aplikacja nadal korzysta ze swojego dotychczasowego modelu walki.
+To klikalny materiał do przeglądu kart i UI. Zaakceptowana wersja v0.3
+działa też we właściwej grze; [uruchomienie](../playtests/RESONANCE_RUNTIME_MANUAL.md).
+Makieta nie wywołuje Flask, czujników ani LED. Rozmowy,
+reputacja, wyprawa i eksploracja zachowują dotychczasowy przebieg.
 
 ## Jak ograć
 
-1. Otwórz `prototype.html` i wybierz **Walka · Rezonans**. Każdy bohater
-   zaczyna z 20 ładunkami; nie ma doboru run ani ręki.
-2. Wybierz runę mocy na dolnym panelu. Przycisk pokazuje dostępność, a jego
-   podpowiedź nazwę aktualnej mocy lub powód blokady. Zwykły atak, ruch,
-   przedmiot i koniec tury zachowują dotychczasowe pola.
-3. Rozwiń **Symulator pól · panel testowy** nad listą inicjatywy. Kliknięcie
-   pola zastępuje sygnał fizycznej planszy. Złote pola są legalne;
-   niebieskie pokazują docelową pozycję i drogę. Lista celów po prawej
-   jest informacyjna — nie zastępuje wyboru pola.
-4. W podglądzie wybierz **Podstawowa** (Rozwidlenie) albo **Wzmocniona**
-   (Trójząb). Widać pełny koszt ze skazą i przyszłą liczbę ładunków.
-   ✓ opłaca i uruchamia moc; ↩ wcześniej anuluje bez kosztu.
-5. Dla bohaterów wprowadzaj wynik **jednej kości naraz**, bez modyfikatora. +/− ustawia
-   wynik, a ✓ zatwierdza go i pokazuje następną kość. Dotyczy to różnych
-   składników obrażeń, puli 2k6/3k12 oraz dwóch k20 przy przewadze lub
-   utrudnieniu. Dopiero ostatnie ✓ rozlicza cały rzut i dolicza premie;
-   wcześniej zatwierdzone wyniki pozostają widoczne i są zachowane w zapisie.
-6. Za przeciwników rzuca aplikacja. Przy ataku okazyjnym najpierw zobaczysz
-   komunikat, a symulator automatycznie otworzy się i wyróżni pole atakującego
-   jasną czerwoną ramką. ✓ losuje atak oraz, po trafieniu, obrażenia.
-   Wynik pokazuje kości, modyfikatory, trafienie/pudło i rzeczywistą utratę PW
-   po odporności i osłonach. Następne ✓ wznawia ruch albo pokazuje kolejnego
-   reagującego wroga. Przy 0 PW ruch ustaje na polu przerwania.
-   Tak samo automatyczne są zwykłe ataki wrogów i ich rzuty obronne / przeciwstawne.
-7. Dokończ kolejkę obron, obrażeń, przesunięć i odzysku, następnie wróć
-   do swojej tury. Po opłacie nie ma zwrotu zasobów przez cofnięcie.
+1. Otwórz `prototype.html?scene=combat`. Bohaterowie zaczynają z 20 ładunkami.
+   Rozwiń panel testowy, aby wybrać skład i rozpocząć świeżą próbę.
+2. Wybierz symbol mocy na dolnym panelu. Każda moc ma jeden koszt i działanie
+   podstawowe. Podgląd pokazuje dopłatę skazy, premie z obecnej pamięci,
+   brakujące warunki oraz pamięć po całej akcji.
+3. Wybierz cel w **Symulatorze pól**. Złote pola są legalne, niebieskie
+   pokazują drogę i przyszłą pozycję. Kliknięcie zastępuje sygnał planszy.
+4. Sprawdź, czy moc rozpoczyna, podtrzymuje lub resetuje łańcuch.
+   Wyładowanie pozostaje zablokowane bez obu wymaganych run i legalnego wejścia.
+   ✓ opłaca i uruchamia moc; ↩ przed potwierdzeniem anuluje bez kosztu.
+5. Dla bohaterów podawaj wynik jednej fizycznej kości naraz, bez modyfikatora.
+   +/− zmienia wynik, ✓ zatwierdza i pokazuje następną kość. Dotyczy to także
+   przewagi, utrudnienia i pul obrażeń. Skutki następują po ostatniej kości.
+6. Za przeciwników rzuca aplikacja dopiero po ✓. Przy okazyjnym najpierw
+   pojawia się zapowiedź i podświetlenie atakującego; po rzucie pełny wynik.
+   Kolejne ✓ wznawia ruch lub pokazuje następną reakcję. Przy 0 PW ruch ustaje.
+7. Dokończ obrony, obrażenia, wybory przesunięcia, dodatkowego celu i odzysku.
+   Po zapłacie cofnięcie nie zwraca zasobów.
 
-Gwiazda pokazuje aktualne PW, KP, ładunki, osłony, stany, pasyw, odzysk,
-skazę i wyposażenie. Otwieranie informacji nie zmienia podglądu ani opłat.
-W spoczynku −/+ przegląda uczestników bez zmiany aktywnej tury.
+Gwiazda pokazuje statystyki, zasoby, stany, pasyw, skazę i wyposażenie,
+bez zmiany podglądu. W spoczynku +/− przegląda uczestników. Panel testowy
+zawiera galerię wszystkich siedmiu postaci, także spoza wybranego składu,
+oraz klikalny okrąg połączeń. Wybierz symbol, aby zobaczyć jego następców.
 
-Sekcja aktywnego Rezonansu pokazuje pod torem run **podsumowanie bonusów**
-z konkretnymi sumami: KP, kości obrażeń / leczenia, ruch, zasięg Haka i pule
-osłon. Kopie z Fali są już wliczone. Kielich i Klepsydra pokazują tu limity
-pul; pozostałe punkty są przy bohaterze. Po wygaśnięciu Rezonansu podsumowanie znika.
+**Zapisz próbę / Wczytaj próbę** używa osobnego klucza `resonance-mock-v3`.
+Zapis obejmuje opłaconą akcję, kolejkę decyzji, zatwierdzone kości, Hymny,
+pamięć i czasowe efekty kart. Wczytanie nie losuje ponownie ani nie powtarza
+skutków. Próby v0.2 nie są przeliczane na nowe zasady.
 
-W panelu testowym można rozpocząć nową próbę od dowolnego z siedmiu
-bohaterów. To **reset przykładu**, nie darmowa zmiana postaci w środku tury.
-„Zapisz próbę” / „Wczytaj próbę” używają osobnego wpisu `localStorage`.
-Zapis obejmuje również opłaconą akcję, oczekujący rzut, Hymn, kolejkę Haka
-i wylosowane wyniki przeciwników. Powrót z informacji nie losuje ponownie;
-wczytanie nie ponawia efektów ani nie wykonuje oczekującego zatwierdzenia.
+## Co się zmieniło
 
-## Co można sprawdzić
+- Pamięć obejmuje trzy ostatnie wpisy. Ostatni określa kierunkową kontynuację;
+  obecność symboli w całej pamięci spełnia warunki kart. Duplikaty nie mnożą premii.
+- Premie sprawdza się przed dodaniem własnej runy. Dopisywanie i przesunięcie
+  pamięci następuje po całej mocy, również po pudle.
+- Niezgodna zwykła moc czyści pamięć przed podstawowym działaniem i zaczyna
+  własny łańcuch. Podgląd uprzedza o utracie przygotowania.
+- Cztery wyładowania mają koszt i twarde warunki. Po całej akcji wygaszają
+  pamięć, również po pudle, bez dodawania własnego symbolu.
+- Fala występuje tylko u Nimry: przyjmuje każdego poprzednika i następcę,
+  zajmuje miejsce pamięci, bez kopiowania i zastępowania warunków.
+  Strzała wichru Erynda korzysta ze Schodów.
+- Wszystkie dodatkowe efekty opisano na kartach. Same runy nie dają globalnych
+  premii do KP, obrażeń, ruchu, leczenia ani reakcji. Czasowe efekty kart
+  trwają do własnego terminu także po zerwaniu pamięci.
+- Koszty wynoszą 3–8 przed skazami. Skupienie zużywa S, natychmiast kończy
+  pamięć i odzyskuje 1k20 do maksimum. Odzysk klasowy: 1k4 raz na rundę.
+- Koniec przytomnej tury bohatera bez mocy runicznej kończy pamięć.
+  Tury wrogów, granica rundy i pominięcie nieprzytomnego nie kończą jej.
 
-- Wszystkie 29 mocy z aktualnych kart, Skupienie 1k20, odzysk 1k4 raz
-  na rundę, koszty 4/8 i dopłaty skaz. Budżety S, A+S oraz M+S.
-- Uporządkowany tor, efektywne liczniki, Fala z oznaczeniem kopiowanej
-  runy, dołączanie bohaterów od własnej tury i premie poza nią.
-- Wieża/KP, Grot przy obrażeniach, Schody jako osobna pula ruchu, Błysk
-  na początku tury i po nowej kopii, Oko bez zwiększania ST, globalny Węzeł.
-- Kielich i Klepsydra jako oddzielne, zużywalne liczniki. Obrażenia
-  psychiczne omijają Klepsydrę; leczenie nie odnawia żadnej osłony.
-- Hak po wszystkich obrażeniach: po jednym wyborze na zranionego wroga,
-  z pozostaniem na miejscu, podglądem i potwierdzeniem. Impuls najpierw
-  rozpatruje swoje odrzucenie, potem Hak od nowej pozycji.
-- Szarża z legalną drogą i niebieskim polem; Powalony i utrata następnego
-  ruchu. Szał i krytyk Brakki. Ukrycie per obserwator, Parkour z reakcjami
-  po drodze, Więzy z osobnym terminem następnej rundy.
-- Hymn bez terminu, maksymalnie jeden na bohatera; decyzja po k20, przed
-  konsekwencjami, fizyczna 1k6, zachowanie naturalnej kości. Pytanie jest
-  dostępne także przy udanym rzucie, aby odbiorca mógł sam wybrać użycie.
-- Jawne pominięcie stworzenia / „Nie pomijaj” w obszarówkach Nimry,
-  Strefa ognia 3×3, wspólna kość obrażeń i oddzielne obrony.
-- Przeciwnicy mają własne tury; ruch i cele ataków nadal wybierasz ręcznie,
-  natomiast wszystkie ich kości losuje aplikacja dopiero po ✓.
-  Okazyjne bohaterów można przyjąć lub odrzucić, bez kosztu ładunków;
-  przeciwnicy korzystają z dostępnej reakcji po potwierdzeniu zapowiedzi.
-  Nie można pominąć ich reakcji; potwierdzenie wyniku nie powtarza rzutu
-  ani obrażeń. Rezonans działa w reakcjach, również Hak.
+Dziewięć nieużywanych run mocy pokazano jako przyszłe silniejsze zdobycze.
+Spirala/Skupienie i Gwiazda/informacje pozostają przyciskami sterowania.
 
-## Jawne założenia i granice próby
+## Zachowane zachowania i granice
 
-Przyjęto robocze doprecyzowania ze
-[specyfikacji](../RESONANCE_RUNTIME_SPEC.md), do oceny przed produkcyjnym
-wdrożeniem: nowa runa podnosi premie dotychczasowych uczestników, przyrost
-osłony dodaje tylko nowe 2 punkty, Schody zużywane są przed bazowym ruchem,
-Fala kopiuje jedną poprzednią efektywną runę (pierwsza nie daje bonusu).
-Błysk leczy na początku własnej tury; wcześniejsi uczestnicy nie dostają
-natychmiastowego leczenia po cudzym Błysku. Powalony wstaje na początku
-swojej następnej tury, tracąc cały ruch. Nieprzytomne figury pomijają turę;
-samo pominięcie nie zamyka łańcucha. Ostatnie założenie nadal wymaga
-decyzji dla właściwego silnika.
+Makieta obejmuje 29 mocy, pasywy i skazy, budżety S / A+S / M+S, reakcje,
+osłony, ukrycie per obserwator, Szał i krytyk Brakki, obszary Nimry 3×3,
+wybór pominięcia celu, Hymn po k20 i kolejki przesunięć. Hymn przechowuje
+przyznaną kość k6 lub k8, trwa do wykorzystania i ma limit jeden na bohatera.
+Obrażenia psychiczne omijają osłonę Tarczy splotu. Leczenie jej nie odnawia.
 
-Przykład krytyka Brakki: bazowe 1k12 → 3k12, hipotetyczne bazowe 2k6 →
-4k6, a nie 6k6. Pasyw dodaje dwie pojedyncze kości broni, modyfikator raz.
-Kości dodatkowych efektów i Grota zachowują robocze podwojenie na krytyku.
-Grot w trafieniu mieszanym przyjmuje typ pierwszego składnika źródła.
+Arena 12×10 i trzech wrogów są przykładem. Kolejność jest stała: wybrani
+bohaterowie, potem wrogowie. Drogi uwzględniają zajęte pola, blokady, narożniki
+i przykładowy trudny teren; widoczność jest uproszczona. Nie ma AI wrogów,
+testów śmierci, kampanijnego ekwipunku ani zewnętrznych obrażeń okresowych.
+Powalony wstaje na początku swojej następnej tury, tracąc cały ruch.
+To materiał do oceny wyborów, kosztów i przepływu obok właściwego silnika.
 
-Arena 12×10 i trzech przeciwników są **danymi demonstracyjnymi**. Kolejność
-tur jest stała: wybrani bohaterowie, potem wrogowie. Figury zajmują jedno
-pole. Drogi uwzględniają blokady, zajętość, narożniki i przykładowy trudny
-teren; widoczność jest uproszczonym testem od środka pola do środka pola.
-To nie zastępuje docelowej topologii/LoS planszy. Nie ma tu AI przeciwników,
-zużycia amunicji i ekwipunku kampanii, testów śmierci ani obrażeń okresowych
-z zewnętrznych źródeł. Świeża próba resetuje cały fixture, także Hymny;
-w ramach próby i jej zapisu Hymn nie wygasa przy rundzie ani końcu łańcucha.
+## Pliki i odtwarzanie
 
-## Pliki i kontrola
+- `resonance-data.js`: wygenerowane dane osobnego katalogu v0.3 i statystyki.
+- `resonance-model.js`: deterministyczna symulacja JS z serializowalną kolejką;
+  kości wrogów dostarcza adapter. Nie importować do właściwego silnika Python.
+- `resonance-prototype.js` / `.css`: prezentacja i obsługa panelu.
+- `assets/rune-relations-circle-v03.png`: grafika bez napisów; tekstura imagegen,
+  symbole i kierunki z dokładnej mapy katalogu. Wersja SVG zachowuje wektory.
 
-- `resonance-data.js`: generowane dane kart i startowych statystyk, bez
-  modyfikowania danych rozmów w `rune-prototype-data.js`.
-- `resonance-model.js`: deterministyczny stan i serializowalna kolejka
-  wyłącznie symulacji. Generator kości przeciwników dostarcza adapter UI;
-  odczyt / odtworzenie stanu nie losuje. Nie importować do silnika Python.
-- `resonance-prototype.js` / `.css`: prezentacja i wejście mocka.
-- `rune-prototype.js`: istniejąca powłoka, routowanie walki do nowego modułu.
-
-Odświeżenie danych po korekcie kart:
+Odświeżenie danych:
 `PYTHONPATH=src .venv/bin/python scripts/build_resonance_mock.py`.
 
-Testy: `scripts/safe_pytest.sh --timeout 60 tests/unit/test_resonance_mock.py`
-oraz osobno `tests/unit/test_rune_prototype_browser.py` (regresja reputacji
-i wyprawy). Testy wymagają lokalnego Chrome. Nie łączyć równoległych pytest.
+Testy uruchamiaj osobno, przez bezpieczny wrapper:
+`scripts/safe_pytest.sh --timeout 60 tests/unit/test_resonance_mock.py`
+oraz `scripts/safe_pytest.sh --timeout 60 tests/unit/test_rune_prototype_browser.py`.
+Testy przeglądarki wymagają lokalnego Chrome; nie uruchamiaj równoległych pytest.

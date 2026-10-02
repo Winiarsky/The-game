@@ -38,7 +38,7 @@
           perception:10+per,weapon:{name:i===1?'Kusza':'Włócznia',ability:i===1?'dexterity':'strength',kind:i===1?'ranged':'melee',count:1,sides:6,damage_type:'piercing',range:i===1?8:1},
           reaction:true,cup:0,shield:0};
       });
-      this.s={version:1,party:[...party],order:Object.keys(actors),actors,index:0,round:1,chain:null,
+      this.s={version:3,party:[...party],order:Object.keys(actors),actors,index:0,round:1,chain:null,
         serial:0,phase:'idle',preview:null,action:null,queue:[],task:null,history:[],
         board:{width:12,height:10,blocked:[{x:5,y:4},{x:5,y:5}],difficult:[{x:3,y:6},{x:4,y:6}]}};
       this.beginTurn();
@@ -49,17 +49,65 @@
     enemies(a=this.active){return Object.values(this.s.actors).filter(b=>b.hero!==a.hero&&b.hp>0);}
     allies(a=this.active){return Object.values(this.s.actors).filter(b=>b.hero===a.hero);}
     note(text){this.s.history.unshift(text);}
-    counts(){const out={};for(const e of this.s.chain?.entries??[])if(e.effective)out[e.effective]=(out[e.effective]??0)+1;return out;}
-    member(a){return this.s.chain?.members.includes(a.id)??false;}
-    bonus(a,rune){return this.member(a)?this.counts()[rune]??0:0;}
+    counts(){return Object.fromEntries((this.s.chain?.entries??[]).map(e=>[e.rune,1]));}
+    nextRunes(rune=this.s.chain?.entries.at(-1)?.rune){
+      if(!rune||rune==='Fala')return [...this.data.rules.starter_runes];
+      return [...new Set([...(this.data.rules.rune_relations?.[rune]??[]),'Fala'])];
+    }
+    resonancePreview(cardOrId,targets=[]){
+      const card=typeof cardOrId==='string'?this.card(cardOrId):cardOrId;
+      const memoryBefore=copy(this.s.chain?.entries??[]),last=memoryBefore.at(-1)?.rune;
+      if(!card)return {transition:'start',memoryBefore,eligibleMemory:[],memoryAfter:memoryBefore,
+        allowedNext:this.nextRunes(),activeBonuses:[],missingBonuses:[],missingRequiredRunes:[],continuityAllowed:true,blockedReasons:[]};
+      const continuityAllowed=!last||this.nextRunes(last).includes(card.rune);
+      const eligibleMemory=continuityAllowed?memoryBefore:[];
+      const symbols=new Set(eligibleMemory.map(e=>e.rune));
+      const activeBonuses=[],missingBonuses=[];
+      for(const bonus of card.resonance_bonuses??[]){
+        const missing=(bonus.requires??[]).filter(rune=>!symbols.has(rune));
+        if(!missing.length)activeBonuses.push(copy(bonus));else missingBonuses.push({...copy(bonus),missing});
+      }
+      const oldSymbols=new Set(memoryBefore.map(e=>e.rune));
+      const missingRequiredRunes=(card.requires_resonance??[]).filter(rune=>!oldSymbols.has(rune));
+      const blockedReasons=[];
+      if(missingRequiredRunes.length)blockedReasons.push(`Wymaga Rezonansu: ${missingRequiredRunes.join(' + ')}`);
+      if((card.requires_resonance?.length||card.ends_resonance)&&(!last||!continuityAllowed))blockedReasons.push('Wymaga legalnej kontynuacji Rezonansu');
+      const transition=card.ends_resonance?'finisher':!last?'start':continuityAllowed?'continue':'reset';
+      const memoryAfter=card.ends_resonance?[]:[...eligibleMemory,{rune:card.rune,effective:card.rune,contributor:this.active.id}].slice(-(this.data.rules.memory_limit??3));
+      return {transition,memoryBefore,eligibleMemory,memoryAfter,allowedNext:this.nextRunes(),activeBonuses,missingBonuses,
+        missingRequiredRunes,continuityAllowed,blockedReasons};
+    }
+    effectModifiers(cardOrId=this.s.preview?.id){
+      const card=typeof cardOrId==='string'?this.card(cardOrId):cardOrId;
+      const modifiers=copy(card?.base_modifiers??{});
+      for(const bonus of this.resonancePreview(card).activeBonuses){
+        for(const [name,value] of Object.entries(bonus.modifiers??{})){
+          if(Array.isArray(value))modifiers[name]=[...(modifiers[name]??[]),...copy(value)];
+          else if(typeof value==='boolean')modifiers[name]=Boolean(modifiers[name]||value);
+          else if(['hymn_sides'].includes(name))modifiers[name]=Math.max(modifiers[name]??0,value);
+          else modifiers[name]=(modifiers[name]??0)+value;
+        }
+      }
+      return modifiers;
+    }
+    actionModifiers(actor,power){return this.s.action?.actor===actor&&this.s.action.id===power?this.s.action.modifiers??{}:{};}
+    turnDuration(source){return {source:source.id,untilStart:source.id,turn:source.turn+1};}
+    grantPool(target,kind,value,source){
+      const field=kind==='temporary'?'cup':'shield';
+      if(value<target[field])return;
+      target[field]=value;
+      this.addStatus(target,kind,{name:kind==='temporary'?'Tymczasowe PW':'Osłona obrażeń',value,...this.turnDuration(source)});
+    }
+    grantAc(target,value,source,power){this.addStatus(target,`ward:${power}`,{name:`Ochrona · +${value} KP`,value,...this.turnDuration(source)});}
+
     status(a,type){return a.statuses.find(s=>s.type===type);}
     shielded(a){const g=this.actor('garran');return a.hero&&a.id!=='garran'&&a.hp>0&&g?.hp>0&&g.hasShield&&distance(a.pos,g.pos)===1;}
-    ac(a){return a.ac+this.bonus(a,'Wieża')+(this.shielded(a)?1:0)+(this.status(a,'arcane')?2:0)-(this.status(a,'broken')?2:0);}
+    ac(a){return a.ac+(this.shielded(a)?1:0)+(this.status(a,'arcane')?.value??(this.status(a,'arcane')?2:0))+a.statuses.filter(s=>s.type.startsWith('ward:')).reduce((n,s)=>n+s.value,0)-(this.status(a,'broken')?.value??(this.status(a,'broken')?2:0));}
     movement(a=this.active){
       if(a.moveLocked||this.status(a,'root')||a.statuses.some(s=>s.type==='roundRoot'&&s.round===this.s.round))return 0;
       let limit=a.turnBase??a.speed;
       if(this.status(a,'slow'))limit=Math.floor(limit/2);
-      if(!a.hero)limit=Math.max(0,limit-(this.counts()['Węzeł']??0));
+      limit=Math.max(0,limit-(this.status(a,'movePenalty')?.value??0));
       return Math.max(0,limit-(a.baseSpent??0))+Math.max(0,a.tempMove??0);
     }
     addStatus(a,type,extra={}){a.statuses=a.statuses.filter(s=>s.type!==type);a.statuses.push({type,...extra});}
@@ -95,46 +143,50 @@
       return neighbors(target.pos).filter(p=>this.free(p,a.id)).map(p=>({destination:p,path:this.path(a,p,limit)})).filter(o=>o.path)
         .sort((a,b)=>a.path.cost-b.path.cost||a.path.cells.length-b.path.cells.length||a.destination.y-b.destination.y||a.destination.x-b.destination.x)[0]??null;
     }
-    join(a){
-      if(!a.hero||!this.s.chain||this.member(a))return;
-      this.s.chain.members.push(a.id);a.cup=2*this.bonus(a,'Kielich');a.shield=2*this.bonus(a,'Klepsydra');
-    }
     addRune(a,rune){
-      if(!this.s.chain)this.s.chain={id:++this.s.serial,entries:[],members:[]};
-      this.join(a);
-      const entries=this.s.chain.entries,effective=rune==='Fala'?entries.at(-1)?.effective??null:rune;
-      entries.push({rune,effective,contributor:a.id});
-      for(const id of this.s.chain.members){const b=this.actor(id);if(effective==='Kielich')b.cup+=2;if(effective==='Klepsydra')b.shield+=2;}
-      if(effective==='Schody'&&!a.moveLocked)a.tempMove+=2;
-      if(effective==='Błysk')this.s.queue.push(this.diceTask('Błysk · nowa kopia',a.id,1,4,'heal',{target:a.id}));
-      this.note(`${a.name}: ${rune}${rune==='Fala'?` → ${effective??'brak poprzednika'}`:''} do Rezonansu.`);
+      if(!this.s.chain)this.s.chain={id:++this.s.serial,entries:[]};
+      this.s.chain.entries.push({rune,effective:rune,contributor:a.id});
+      this.s.chain.entries=this.s.chain.entries.slice(-(this.data.rules.memory_limit??3));
+      this.note(`${a.name}: ${rune} do Rezonansu.`);
     }
     endChain(reason){
       if(!this.s.chain)return;
-      for(const a of Object.values(this.s.actors)){a.cup=0;a.shield=0;a.tempMove=0;}
       this.s.chain=null;this.note(`Rezonans wygaszony: ${reason}.`);
+    }
+    expireTurnStart(a){
+      for(const b of Object.values(this.s.actors)){
+        const expired=b.statuses.filter(s=>s.untilStart===a.id&&s.turn<=a.turn);
+        if(expired.some(s=>s.type==='temporary'))b.cup=0;
+        if(expired.some(s=>s.type==='prevention'))b.shield=0;
+        b.statuses=b.statuses.filter(s=>!expired.includes(s));
+      }
+    }
+    skipTurn(a){
+      a.turn++;this.expireTurnStart(a);
+      for(const b of Object.values(this.s.actors))b.statuses=b.statuses.filter(s=>!(s.untilEnd===a.id&&s.turn<=a.turn));
     }
     beginTurn(){
       const a=this.active;a.turn++;a.ordinary=true;a.special=true;a.reaction=true;a.baseSpent=0;a.tempMove=0;a.moved=false;a.offensive=false;a.continued=false;a.sneakUsed=false;a.shot=false;
       a.moveLocked=Boolean(this.status(a,'prone'));
       a.statuses=a.statuses.filter(s=>s.type!=='prone'&&!(s.type==='roundRoot'&&s.round<this.s.round));
-      for(const b of Object.values(this.s.actors))b.statuses=b.statuses.filter(s=>!(s.untilStart===a.id&&s.turn<=a.turn));
+      this.expireTurnStart(a);
       a.turnBase=a.id==='garran'&&this.enemies(a).some(b=>distance(a.pos,b.pos)===1)?Math.floor(a.speed/2):a.speed;
       a.startAdjacent=this.enemies(a).filter(b=>distance(a.pos,b.pos)===1).map(b=>b.id);
-      this.join(a);if(!a.moveLocked)a.tempMove=2*this.bonus(a,'Schody');
-      const flashes=this.bonus(a,'Błysk');
-      if(flashes)this.s.queue.push(this.diceTask('Błysk · początek tury',a.id,flashes,4,'heal',{target:a.id}));
+
       this.s.phase='idle';this.advance();
     }
     endTurn(){
       if(this.s.phase!=='idle')return false;
       const a=this.active;
-      if(a.hero&&!a.continued)this.endChain('koniec tury bez mocy wzmocnionej');
+      if(a.hero&&!a.continued)this.endChain('koniec tury bez mocy runicznej');
       const rage=this.status(a,'rage');if(rage&&(!a.offensive||--rage.remaining<=0))a.statuses=a.statuses.filter(s=>s!==rage);
       for(const b of Object.values(this.s.actors))b.statuses=b.statuses.filter(s=>!(s.untilEnd===a.id&&s.turn<=a.turn));
       a.tempMove=0;
       let searched=0;
-      do{this.s.index=(this.s.index+1)%this.s.order.length;if(!this.s.index)this.s.round++;searched++;}while(this.active.hp<=0&&searched<this.s.order.length);
+      do{
+        this.s.index=(this.s.index+1)%this.s.order.length;if(!this.s.index)this.s.round++;searched++;
+        if(this.active.hp<=0)this.skipTurn(this.active);
+      }while(this.active.hp<=0&&searched<this.s.order.length);
       if(searched>=this.s.order.length||!this.heroes().some(h=>h.hp>0)||!this.enemies(this.heroes()[0]).length){this.endChain('koniec walki');this.s.phase='finished';return true;}
       this.beginTurn();return true;
     }
@@ -148,8 +200,8 @@
       if(a.id==='erynd'&&['double_shot','skirmish_shot','anchoring_arrow'].includes(card.id)&&targets.some(id=>this.allies().some(b=>b.id!==a.id&&b.hp>0&&distance(this.actor(id).pos,b.pos)===1)))return 2;
       return 0;
     }
-    price(card,mode,targets=[]){return (mode==='enhanced'?card.enhanced_cost:card.base_cost)+this.surcharge(card,targets);}
-    unavailable(id,mode='base'){
+    price(card,targets=[]){return card.cost+this.surcharge(card,targets);}
+    unavailable(id){
       const a=this.active,c=this.card(id);
       if(a.hp<=0)return 'Postać nieprzytomna';
       if(id==='move')return this.movement()>0?'':'Brak ruchu';
@@ -161,54 +213,58 @@
       if(id==='bastion_charge'&&(a.moved||a.moveLocked||this.movement()<=0))return 'Wymaga pełnego, niewykorzystanego ruchu';
       if(id==='rage'&&this.status(a,'rage'))return 'Szał już aktywny';
       if(id==='shield_bash'&&!a.hasShield)return 'Wymaga tarczy';
-      return a.charges<this.price(c,mode,this.s.preview?.targets??[])?'Za mało ładunków':'';
+      const blocked=this.resonancePreview(c).blockedReasons;if(blocked.length)return blocked.join(' · ');
+      return a.charges<this.price(c,this.s.preview?.targets??[])?'Za mało ładunków':'';
     }
     choose(id){
       if(this.s.phase!=='idle'||this.unavailable(id))return false;
-      this.s.preview={id,mode:'base',targets:[],destination:null,path:null,center:null,exclude:undefined};
+      this.s.preview={id,targets:[],destination:null,path:null,center:null,exclude:undefined};
       this.s.phase='preview';
       if(['rage','second_wind','hide','focus','item'].includes(id))this.s.preview.targets=[this.active.id];
       if(['roar','force_wave','preserve_life'].includes(id))this.s.preview.center=copy(this.active.pos);
       return true;
     }
-    mode(mode){if(this.s.phase!=='preview'||!['base','enhanced'].includes(mode))return false;this.s.preview.mode=mode;return true;}
     area(p=this.s.preview){
       if(!p?.center)return [];
-      const radius=p.id==='flame_fan'?1:2;
+      const radius=(p.id==='flame_fan'?1:2)+(this.effectModifiers(p.id).range_bonus??0);
       return Object.values(this.s.actors).filter(a=>a.hp>0&&distance(a.pos,p.center)<=radius&&
         (p.id==='flame_fan'||(p.id==='preserve_life'?a.hero===this.active.hero:a.hero!==this.active.hero))).map(a=>a.id);
     }
     legalTargets(p=this.s.preview){
       if(!p)return [];
-      const a=this.active,id=p.id;
-      if(['bless','healing_word','inspiration','passage_song','energy_recovery','arcane_shield'].includes(id))return this.allies().filter(b=>distance(a.pos,b.pos)<=6&&(b.hp>0||id==='healing_word')&&(!['inspiration','energy_recovery'].includes(id)||b.id!==a.id)&&!(id==='inspiration'&&b.hymn));
+      const a=this.active,id=p.id,mods=this.effectModifiers(id),range=mods.range_bonus??0;
+      if(['bless','healing_word','inspiration','passage_song','energy_recovery','arcane_shield'].includes(id))return this.allies().filter(b=>distance(a.pos,b.pos)<=6+range&&(b.hp>0||id==='healing_word')&&(!['inspiration','energy_recovery'].includes(id)||b.id!==a.id)&&!(id==='inspiration'&&b.hymn));
       return this.enemies().filter(b=>{
         const d=distance(a.pos,b.pos);
-        if(id==='guard_vault')return d<=4&&neighbors(b.pos).some(q=>this.free(q,a.id));
-        if(id==='bastion_charge'||id==='charge')return Boolean(this.adjacentPath(a,b,id==='charge'?3:this.movement()+(p.mode==='enhanced'?2:0)));
+        if(id==='guard_vault')return d<=4+range&&neighbors(b.pos).some(q=>this.free(q,a.id));
+        if(id==='bastion_charge'||id==='charge')return Boolean(this.adjacentPath(a,b,id==='charge'?3+(mods.move_bonus??0):this.movement()+(mods.move_bonus??0)));
         if(['shield_bash','hamstring_cut','breaking_strike','powerful_strike'].includes(id))return d===1;
         if(id==='shadow_attack'&&!a.hidden.includes(b.id))return false;
-        if(id==='hunters_mark')return d<=12&&this.visible(a,b.pos);
-        if(['sacred_flame','mockery','force_darts'].includes(id))return d<=6&&(id==='mockery'||this.visible(a,b.pos));
+        if(id==='hunters_mark')return d<=12+range&&this.visible(a,b.pos);
+        if(['sacred_flame','mockery','force_darts'].includes(id))return d<=6+range&&(id==='mockery'||this.visible(a,b.pos));
         const from=id==='skirmish_shot'&&p.destination?{...a,pos:p.destination}:a;
-        return distance(from.pos,b.pos)<=a.weapon.range&&this.visible(from,b.pos);
+        return distance(from.pos,b.pos)<=a.weapon.range+range&&this.visible(from,b.pos);
       });
     }
     select(p){
+      if(this.s.phase==='task'&&this.s.task?.type==='bonusTarget'){
+        const task=this.s.task,target=task.targets.map(id=>this.actor(id)).find(a=>a.hp>0&&same(a.pos,p));
+        if(!target)return false;task.target=target.id;return true;
+      }
       if(this.s.phase==='task'&&this.s.task?.type==='relocate'){
         if(!this.relocationFields(this.s.task).some(q=>same(q,p)))return false;
         this.s.task.destination=copy(p);return true;
       }
       if(this.s.phase!=='preview'||!this.inBounds(p))return false;
-      const v=this.s.preview,a=this.active;
+      const v=this.s.preview,a=this.active,mods=this.effectModifiers(v.id);
       if(v.id==='flame_fan'){
-        if(distance(a.pos,p)>6)return false;
+        if(distance(a.pos,p)>6+(mods.range_bonus??0))return false;
         v.center=copy(p);delete v.exclude;return true;
       }
       if(['move','misty_step','skirmish_shot'].includes(v.id)){
         if(!this.free(p,a.id))return false;
-        const limit=v.id==='move'?this.movement():v.id==='skirmish_shot'?2:6;
-        const path=v.id==='misty_step'?distance(a.pos,p)<=6&&this.visible(a,p)?{cells:[p],cost:0}:null:this.path(a,p,limit);
+        const limit=v.id==='move'?this.movement():v.id==='skirmish_shot'?2+(mods.move_bonus??0):6+(mods.range_bonus??0);
+        const path=v.id==='misty_step'?distance(a.pos,p)<=limit&&this.visible(a,p)?{cells:[p],cost:0}:null:this.path(a,p,limit);
         if(!path)return false;v.destination=copy(p);v.path=path;v.targets=[];return true;
       }
       const target=this.legalTargets(v).find(b=>same(b.pos,p));
@@ -222,7 +278,7 @@
       }else if(['double_shot','force_darts'].includes(v.id)){
         const max=v.id==='force_darts'?3:2;if(v.targets.length===max)v.targets=[];v.targets.push(target.id);
       }else v.targets=[target.id];
-      if(['bastion_charge','charge'].includes(v.id))Object.assign(v,this.adjacentPath(a,target,v.id==='charge'?3:this.movement()+(v.mode==='enhanced'?2:0)));
+      if(['bastion_charge','charge'].includes(v.id))Object.assign(v,this.adjacentPath(a,target,v.id==='charge'?3+(mods.move_bonus??0):this.movement()+(mods.move_bonus??0)));
       if(v.id==='guard_vault'){v.destination=null;v.path=null;}
       return true;
     }
@@ -238,7 +294,7 @@
       if(id!==null&&!this.area().includes(id))return false;p.exclude=id;return true;
     }
     ready(){
-      const p=this.s.preview;if(!p||this.s.phase!=='preview'||this.unavailable(p.id,p.mode))return false;
+      const p=this.s.preview;if(!p||this.s.phase!=='preview'||this.unavailable(p.id))return false;
       if(['force_wave','flame_fan'].includes(p.id))return Boolean(p.center)&&p.exclude!==undefined;
       if(['roar','preserve_life'].includes(p.id))return true;
       if(['move','misty_step'].includes(p.id))return Boolean(p.destination);
@@ -251,30 +307,33 @@
       return false;
     }
     revalidate(p){
-      if(p.center&&(!this.inBounds(p.center)||(p.id==='flame_fan'&&distance(this.active.pos,p.center)>6)))return false;
+      const mods=this.effectModifiers(p.id);
+      if(p.center&&(!this.inBounds(p.center)||(p.id==='flame_fan'&&distance(this.active.pos,p.center)>6+(mods.range_bonus??0))))return false;
       if(p.exclude!==undefined&&p.exclude!==null&&!this.area(p).includes(p.exclude))return false;
       if(p.destination&&!this.free(p.destination,this.active.id))return false;
+      if(p.id==='misty_step'&&(distance(this.active.pos,p.destination)>6+(mods.range_bonus??0)||!this.visible(this.active,p.destination)))return false;
       if(p.targets.some(id=>id!==this.active.id&&!this.legalTargets(p).some(a=>a.id===id)))return false;
       if(['bastion_charge','charge'].includes(p.id)){
-        const found=this.adjacentPath(this.active,this.actor(p.targets[0]),p.id==='charge'?3:this.movement()+(p.mode==='enhanced'?2:0));
+        const found=this.adjacentPath(this.active,this.actor(p.targets[0]),p.id==='charge'?3+(mods.move_bonus??0):this.movement()+(mods.move_bonus??0));
         if(!found||!same(found.destination,p.destination)||JSON.stringify(found.path)!==JSON.stringify(p.path))return false;
       }
       if(p.path&&['move','guard_vault','skirmish_shot'].includes(p.id)){
-        const path=this.path(this.active,p.destination,p.id==='move'?this.movement():p.id==='skirmish_shot'?2:100,p.id==='guard_vault');
+        const path=this.path(this.active,p.destination,p.id==='move'?this.movement():p.id==='skirmish_shot'?2+(mods.move_bonus??0):100,p.id==='guard_vault');
         if(JSON.stringify(path)!==JSON.stringify(p.path))return false;
       }
       return true;
     }
     commit(){
       if(!this.ready()||!this.revalidate(this.s.preview))return false;
-      const p=copy(this.s.preview),a=this.active,c=this.card(p.id);
-      this.s.preview=null;this.s.phase='task';this.s.action={...p,serial:++this.s.serial,actor:a.id,harmed:[],damageGroups:{},handledHooks:[],results:[],hadChain:Boolean(this.s.chain),card:Boolean(c),closed:false};
+      const p=copy(this.s.preview),a=this.active,c=this.card(p.id),resonance=this.resonancePreview(c),modifiers=this.effectModifiers(c);
+      this.s.preview=null;this.s.phase='task';this.s.action={...p,serial:++this.s.serial,actor:a.id,harmed:[],damageGroups:{},handledHooks:[],results:[],hadChain:Boolean(this.s.chain),card:Boolean(c),closed:false,resonance,modifiers};
       if(c){
-        const cost=this.price(c,p.mode,p.targets);a.charges-=cost;a.special=false;if(c.budget.includes('A'))a.ordinary=false;
-        if(p.mode==='enhanced'){this.addRune(a,c.rune);a.continued=true;}
+        const cost=this.price(c,p.targets);a.charges-=cost;a.special=false;if(c.budget.includes('A'))a.ordinary=false;
+        if(resonance.transition==='reset')this.endChain('runa nie podtrzymuje poprzedniej');
+        a.continued=true;
         if(a.id==='nimra'&&a.lastRune&&a.lastRune!==c.rune)this.offerRegen(a,'Inna runa niż poprzednia moc');
         a.powerStreak=a.lastPower===p.id?a.powerStreak+1:1;a.lastPower=p.id;a.lastRune=c.rune;
-        this.note(`${a.name}: ${c.name}, ${p.mode==='enhanced'?'wzmocniona':'podstawowa'}, −${cost} ładunków.`);
+        this.note(`${a.name}: ${c.name}, −${cost} ładunków.`);
       }else if(p.id==='focus'){a.special=false;this.endChain('Skupienie');}
       else if(['attack','item'].includes(p.id))a.ordinary=false;
       this.plan(p,a);this.s.queue.push({type:'finish'});this.advance();return true;
@@ -282,38 +341,54 @@
     diceTask(label,actor,count,sides,outcome,extra={}){return {type:'roll',label,actor,parts:[{count,sides,label}],outcome,...extra};}
     saveTask(target,ability,dc,effect){return {type:'save',target,ability,dc,effect};}
     plan(p,a){
-      const q=this.s.queue,id=p.id,t=p.targets[0],dc=this.data.rules.save_dc_base;
+      const q=this.s.queue,id=p.id,t=p.targets[0],dc=this.data.rules.save_dc_base,mods=this.s.action.modifiers;
       const attack=()=>p.targets.forEach(target=>q.push({type:'attack',actor:a.id,target,power:id}));
-      const heal=(sides,modifier=0)=>q.push(this.diceTask('Leczenie',a.id,1,sides,'healGroup',{targets:p.targets,modifier,power:true}));
+      const heal=(sides,modifier=0,targets=p.targets)=>{
+        const task=this.diceTask('Leczenie',a.id,1,sides,'healGroup',{targets,modifier:modifier+(mods.heal_flat??0),power:true});
+        for(const die of mods.heal_dice??[])task.parts.push({...die,label:'Rezonans · leczenie'});
+        q.push(task);
+      };
       if(id==='focus')q.push(this.diceTask('Skupienie · odzysk ładunków',a.id,1,20,'charges',{target:a.id}));
       else if(id==='item')q.push(this.diceTask('Mikstura · 2k4 + 2 PW',a.id,2,4,'heal',{target:a.id,modifier:2}));
       else if(id==='second_wind')heal(10,this.data.heroes[a.id].level);
-      else if(id==='rage')q.push({type:'status',target:a.id,status:'rage',extra:{remaining:Math.max(1,a.abilities.strength+a.abilities.constitution)}});
-      else if(id==='hide')q.push(this.diceTask('Całun cienia · Zręczność',a.id,1,20,'hide',{modifier:a.abilities.dexterity+this.bonus(a,'Oko'),dc:Math.min(...this.enemies().map(b=>b.perception))+1}));
-      else if(id==='shield_bash'){
+      else if(id==='rage')q.push({type:'status',target:a.id,status:'rage',extra:{remaining:Math.max(1,a.abilities.strength+a.abilities.constitution+(mods.duration_bonus??0))}});
+      else if(id==='hide'){
+        const advantage=Boolean(mods.hide_advantage||mods.check_advantage);
+        const task=this.diceTask('Całun cienia · Zręczność',a.id,1,20,'hide',{modifier:a.abilities.dexterity,dc:Math.min(...this.enemies().map(b=>b.perception))-(mods.perception_penalty??0)+1,perceptionPenalty:mods.perception_penalty??0,mode:advantage?'advantage':'normal'});
+        if(advantage)task.parts.push({count:1,sides:20,label:'Druga k20'});q.push(task);
+      }else if(id==='shield_bash'){
         a.offensive=true;q.push(this.diceTask('Impuls egidy · obrona przeciwnika',t,1,20,'contest',{source:a.id,modifier:Math.max(this.actor(t).abilities.strength,this.actor(t).abilities.dexterity)}));
       }else if(['move','bastion_charge','charge','guard_vault','skirmish_shot'].includes(id)){
         const normal=id==='move',steps=p.path.cells;let prev=a.pos;
         if(id==='bastion_charge'){a.moveLocked=true;a.tempMove=0;a.offensive=true;}
-        for(const pos of steps){q.push({type:'moveStep',actor:a.id,from:copy(prev),pos,cost:normal?(this.s.board.difficult.some(d=>same(d,pos))?2:1):0,opportunities:!['skirmish_shot'].includes(id)});prev=pos;}
-        if(id==='bastion_charge')q.push(this.saveTask(t,'constitution',dc+a.abilities.strength+steps.length,{kind:'prone',source:a.id}));
+        for(const pos of steps){q.push({type:'moveStep',actor:a.id,from:copy(prev),pos,cost:normal?(this.s.board.difficult.some(d=>same(d,pos))?2:1):0,opportunities:id!=='skirmish_shot'&&!mods.no_opportunity});prev=pos;}
+        if(id==='bastion_charge')q.push(this.saveTask(t,'constitution',dc+a.abilities.strength+steps.length,{kind:'prone',source:a.id,savePenalty:mods.enemy_save_penalty??0}));
         if(['charge','skirmish_shot'].includes(id))attack();
       }else if(id==='misty_step')q.push({type:'moveStep',actor:a.id,pos:p.destination,cost:0,opportunities:false});
       else if(['attack','breaking_strike','powerful_strike','shadow_attack','hamstring_cut','double_shot','anchoring_arrow'].includes(id))attack();
-      else if(id==='hunters_mark'){a.mark=t;this.note(`${a.name}: Piętno łowcy → ${this.actor(t).name}.`);}
-      else if(id==='inspiration'){this.actor(t).hymn={source:a.id};this.note(`${this.actor(t).name}: Hymn odwagi 1k6, do wykorzystania.`);}
-      else if(id==='energy_recovery')q.push(this.diceTask('Akord odnowy · odzysk ładunków',a.id,1,6,'charges',{target:t}));
+      else if(id==='hunters_mark'){
+        a.mark=t;
+        if(mods.enemy_move_penalty)this.addStatus(this.actor(t),'movePenalty',{name:`−${mods.enemy_move_penalty} pola ruchu`,value:mods.enemy_move_penalty,untilEnd:t,turn:this.actor(t).turn+1});
+        this.note(`${a.name}: Piętno łowcy → ${this.actor(t).name}.`);
+      }else if(id==='inspiration'){
+        const sides=mods.hymn_sides??6;
+        this.actor(t).hymn={source:a.id,sides};this.note(`${this.actor(t).name}: Hymn odwagi 1k${sides}, do wykorzystania.`);
+      }else if(id==='energy_recovery')q.push(this.diceTask('Akord odnowy · odzysk ładunków',a.id,1,6,'charges',{target:t,modifier:mods.charge_bonus_flat??0}));
       else if(id==='healing_word')heal(6,a.abilities.wisdom);
-      else if(id==='preserve_life')q.push(this.diceTask('Krąg odnowy · wspólna kość',a.id,1,6,'healGroup',{targets:this.area(p),modifier:0,power:true}));
-      else if(['bless','arcane_shield'].includes(id))p.targets.forEach(target=>q.push({type:'status',target,status:id==='bless'?'bless':'arcane',extra:{source:a.id,untilStart:a.id,turn:a.turn+1}}));
-      else if(id==='passage_song')p.targets.forEach(target=>q.push({type:'relocate',target,source:a.id,radius:2,walk:true,label:'Pieśń przejścia',destination:null}));
-      else if(id==='force_darts')p.targets.forEach(target=>q.push({type:'damage',actor:a.id,target,components:[{count:1,sides:4,modifier:1,damage_type:'force',label:'Pocisk eteru'}]}));
-      else if(id==='roar'){const targets=this.area(p);if(targets.length)a.offensive=true;targets.forEach(target=>q.push(this.saveTask(target,'wisdom',dc+a.abilities.strength,{kind:'fear',source:a.id})));}
-      else if(['sacred_flame','mockery','force_wave','flame_fan'].includes(id)){
+      else if(id==='preserve_life')heal(6,0,this.area(p));
+      else if(['bless','arcane_shield'].includes(id))p.targets.forEach(target=>q.push({type:'status',target,status:id==='bless'?'bless':'arcane',extra:{value:(id==='bless'?1:2)+(id==='bless'?mods.bless_bonus??0:mods.target_ac_next_turn??0),...this.turnDuration(a)}}));
+      else if(id==='passage_song')p.targets.forEach(target=>q.push({type:'relocate',target,source:a.id,radius:2+(mods.move_bonus??0),walk:true,opportunities:false,label:'Pieśń przejścia',destination:null}));
+      else if(id==='force_darts')p.targets.forEach((target,index)=>q.push({type:'damage',actor:a.id,target,power:id,components:[{count:1,sides:4,modifier:1,damage_type:'force',label:'Pocisk eteru'},...(index===0?copy(mods.first_damage_dice??[]).map(d=>({...d,modifier:d.modifier??0,label:d.label??'Rezonans · pierwszy pocisk'})):[])]}));
+      else if(id==='roar'){
+        const targets=this.area(p);if(targets.length)a.offensive=true;
+        targets.forEach(target=>q.push(this.saveTask(target,'wisdom',dc+a.abilities.strength,{kind:'fear',source:a.id,savePenalty:mods.enemy_save_penalty??0,movePenalty:mods.enemy_move_penalty??0})));
+      }else if(['sacred_flame','mockery','force_wave','flame_fan'].includes(id)){
         a.offensive=true;
         const config={sacred_flame:['dexterity','wisdom',6,'radiant',false],mockery:['wisdom','charisma',4,'psychic',false],force_wave:['strength','intelligence',6,'force',true],flame_fan:['dexterity','intelligence',6,'fire',true]}[id];
         const targets=['force_wave','flame_fan'].includes(id)?this.area(p).filter(id=>id!==p.exclude):p.targets;
-        q.push(this.diceTask('Obrażenia mocy · jeden rzut dla obszaru',a.id,2,config[2],'areaDamage',{targets,saveAbility:config[0],dc:dc+a.abilities[config[1]],damage_type:config[3],half:config[4],fear:id==='mockery'}));
+        const task=this.diceTask('Obrażenia mocy · jeden rzut dla obszaru',a.id,2,config[2],'areaDamage',{targets,saveAbility:config[0],dc:dc+a.abilities[config[1]],damage_type:config[3],half:config[4],fear:id==='mockery',savePenalty:mods.enemy_save_penalty??0,movePenalty:mods.enemy_move_penalty??0});
+        for(const die of mods.damage_dice_extra??[])task.parts.push({...die,label:die.label??'Rezonans · obrażenia'});
+        q.push(task);
       }
     }
     offerRegen(a,reason){if(a?.hero&&a.regenRound!==this.s.round)a.regenReason=reason;}
@@ -342,27 +417,28 @@
         }
         if(a.id==='brakka'&&this.status(a,'rage')&&source&&!source.hero)this.offerRegen(a,'Obrażenia podczas Szału');
       }
-      this.note(`${a.name}: −${hp} PW${temporary?`, −${temporary} Kielicha`:''}${prevented?`, Klepsydra zapobiega ${prevented}`:''}.`);
+      this.note(`${a.name}: −${hp} PW${temporary?`, −${temporary} tymczasowych PW`:''}${prevented?`, osłona zapobiega ${prevented}`:''}.`);
       return {prevented,temporary,hp};
     }
     attackTask(t){
       const a=this.actor(t.actor),b=this.actor(t.target);if(a.hp<=0||b.hp<=0)return;
       a.offensive=true;
       const melee=a.weapon.kind==='melee',hidden=a.hidden.includes(b.id);
-      const advantage=Boolean(hidden||(melee&&this.status(b,'prone')));
+      const mods=this.actionModifiers(a.id,t.power);
+      const advantage=Boolean(hidden||(melee&&this.status(b,'prone'))||mods.attack_advantage||mods.check_advantage||this.status(a,'nextAttack'));
+      a.statuses=a.statuses.filter(s=>s.type!=='nextAttack');
       const disadvantage=Boolean(this.status(a,'fear'))||(!melee&&this.enemies(a).some(e=>distance(a.pos,e.pos)===1));
       a.statuses=a.statuses.filter(s=>s.type!=='fear');
       const mode=advantage===disadvantage?'normal':advantage?'advantage':'disadvantage';
       const precision=a.id==='erynd'&&!a.shot&&!a.moved?1:0;a.shot=true;
-      const modifier=a.abilities[a.weapon.ability]+this.bonus(a,'Oko')+(this.status(a,'bless')?1:0)+precision-(!melee&&this.status(b,'prone')?2:0);
+      const modifier=a.abilities[a.weapon.ability]+(this.status(a,'bless')?.value??0)+precision-(!melee&&this.status(b,'prone')?2:0);
       const task=this.diceTask(`${a.name} → ${b.name} · ${a.weapon.name}`,a.id,1,20,'attack',{target:b.id,modifier,dc:this.ac(b),mode,power:t.power,hidden,melee,reactionPending:Boolean(t.reactionPending)});
       if(mode!=='normal')task.parts.push({count:1,sides:20,label:'Druga k20'});
       this.s.queue.unshift(task);
     }
     damageTask(t){
       const a=this.actor(t.actor),b=this.actor(t.target);if(a.hp<=0||b.hp<=0)return;
-      const components=copy(t.components),grot=this.bonus(a,'Grot');
-      if(grot)components.push({count:grot*(t.critical?2:1),sides:4,modifier:0,damage_type:components[0].damage_type,label:'Rezonans · Grot'});
+      const components=copy(t.components);
       const parts=components.filter(c=>c.count).map(c=>({count:c.count,sides:c.sides,label:c.label,modifier:c.modifier??0,damage_type:c.damage_type}));
       this.s.queue.unshift({type:'roll',label:`Obrażenia → ${b.name}`,actor:a.id,parts,outcome:'damage',target:b.id,components,divisor:t.divisor??1,power:t.power,hit:t.hit,hidden:t.hidden});
     }
@@ -402,7 +478,7 @@
         if(t.type==='save'){
           const a=this.actor(t.target);if(a.hp<=0||this.actor(t.effect.source).hp<=0)continue;
           const disadvantage=a.id==='mira'&&a.hidden.length;
-          const roll=this.diceTask(`${a.name} · obrona ${t.ability}`,a.id,1,20,'save',{dc:t.dc,modifier:a.abilities[t.ability]+this.bonus(a,'Oko')+(this.status(a,'bless')?1:0),effect:t.effect,mode:disadvantage?'disadvantage':'normal'});
+          const roll=this.diceTask(`${a.name} · obrona ${t.ability}`,a.id,1,20,'save',{dc:t.dc,modifier:a.abilities[t.ability]+(this.status(a,'bless')?.value??0)-(t.effect.savePenalty??0),effect:t.effect,mode:disadvantage?'disadvantage':'normal'});
           if(disadvantage)roll.parts.push({count:1,sides:20,label:'Druga k20'});
           this.s.queue.unshift(roll);continue;
         }
@@ -421,21 +497,37 @@
     }
     finish(){
       const action=this.s.action;if(!action||action.closed)return;
-      const a=this.actor(action.actor);
+      const a=this.actor(action.actor),mods=action.modifiers??{};
       if(a.id==='nimra'&&action.card&&action.harmed.filter(id=>!this.actor(id).hero).length>=2)this.offerRegen(a,'Moc zraniła co najmniej dwóch wrogów');
       action.closed=true;
-      for(const [source,targets] of Object.entries(action.damageGroups)){
-        const owner=this.actor(source),radius=this.bonus(owner,'Hak');
-        const wounded=targets.filter(id=>this.actor(id).hero!==owner.hero&&this.actor(id).hp>0&&!action.handledHooks.includes(`${source}:${id}`));
-        if(radius)this.s.queue.push(...wounded.map(target=>({type:'relocate',target,radius,label:'Rezonans runy Hak',destination:null})));
+      if(action.card&&a.hp>0){
+        if(mods.self_ac_next_turn)this.grantAc(a,mods.self_ac_next_turn,a,action.id);
+        if(mods.self_temp_hp)this.grantPool(a,'temporary',mods.self_temp_hp,a);
+        if(mods.next_attack_advantage)this.addStatus(a,'nextAttack',{name:'Przewaga w najbliższym ataku',...this.turnDuration(a)});
+        const targets=action.id==='preserve_life'?this.area(action):action.targets;
+        for(const id of targets){
+          const target=this.actor(id);if(!target?.hero||target.hp<=0)continue;
+          if(mods.target_temp_hp)this.grantPool(target,'temporary',mods.target_temp_hp,a);
+          if(mods.shield_pool)this.grantPool(target,'prevention',mods.shield_pool,a);
+          if(mods.target_ac_next_turn&&action.id!=='arcane_shield')this.grantAc(target,mods.target_ac_next_turn,a,action.id);
+        }
+        if(mods.bonus_move&&action.successful&&!a.moveLocked&&!this.status(a,'root'))this.s.queue.push({type:'relocate',target:a.id,source:a.id,radius:mods.bonus_move,walk:true,opportunities:!mods.no_opportunity,label:'Ruch po mocy',destination:null});
+        if(mods.adjacent_ally_heal_dice){
+          const targets=this.allies(a).filter(b=>b.id!==a.id&&b.hp>0&&distance(a.pos,b.pos)===1).map(b=>b.id);
+          if(targets.length)this.s.queue.push({type:'bonusTarget',source:a.id,targets,dice:copy(mods.adjacent_ally_heal_dice),label:'Żar odnowy · wybierz sojusznika',target:null});
+        }
       }
       this.s.queue.push({type:'closeAction'});
     }
     closeAction(){
       const action=this.s.action,a=this.actor(action.actor);
-      if(action.card&&action.mode==='base'){
-        if(a.id==='lorian'&&action.hadChain){a.charges=Math.min(20,a.charges+1);this.note('Zgrana drużyna: Lorian +1 ładunek.');}
-        this.endChain('moc podstawowa rozpatrzona w całości');
+      if(action.card){
+        const card=this.data.heroes[a.id].cards.find(c=>c.id===action.id);
+        if(a.id==='lorian'&&action.hadChain&&action.resonance.transition!=='reset'&&action.resonance.memoryBefore.at(-1)?.contributor!==a.id){
+          a.charges=Math.min(this.data.rules.max_charges,a.charges+1);this.note('Zgrana drużyna: Lorian +1 ładunek.');
+        }
+        if(card.ends_resonance)this.endChain('wyładowanie rozpatrzone w całości');
+        else this.addRune(a,card.rune);
       }
       for(const h of this.heroes())if(h.regenReason&&h.regenRound!==this.s.round)this.s.queue.push({type:'recover',actor:h.id});
     }
@@ -502,7 +594,7 @@
     }
     decideHymn(use){
       const t=this.s.task;if(t?.type!=='hymn')return false;this.s.task=null;
-      if(use){const owner=this.actor(t.actor);t.source=owner.hymn.source;owner.hymn=null;this.s.queue.unshift(this.diceTask('Hymn odwagi · dodatkowa kość',t.actor,1,6,'hymn',{pending:t}));}
+      if(use){const owner=this.actor(t.actor);t.source=owner.hymn.source;const sides=owner.hymn.sides??6;owner.hymn=null;this.s.queue.unshift(this.diceTask('Hymn odwagi · dodatkowa kość',t.actor,1,sides,'hymn',{pending:t}));}
       else this.resolve(t.roll,t.values,t.natural,t.total,t.success);
       this.pump();return true;
     }
@@ -519,26 +611,31 @@
       else if(t.outcome==='charges')target.charges=Math.min(20,target.charges+total);
       else if(t.outcome==='regenerate'){a.charges=Math.min(20,a.charges+total);a.regenReason=null;}
       else if(t.outcome==='hide'){
-        const previous=a.hidden;a.hidden=this.enemies(a).filter(b=>total>b.perception).map(b=>b.id);
+        const previous=a.hidden;a.hidden=this.enemies(a).filter(b=>total>b.perception-(t.perceptionPenalty??0)).map(b=>b.id);
+        if(a.hidden.length&&this.s.action)this.s.action.successful=true;
         if(a.hidden.some(id=>!previous.includes(id)))this.offerRegen(a,'Ukrycie przed nowym wrogiem');
       }else if(t.outcome==='contest'){
-        const source=this.actor(t.source);q.unshift(this.diceTask('Impuls egidy · test Siły',source.id,1,20,'bash',{target:a.id,modifier:source.abilities.strength+this.bonus(source,'Oko'),dc:total+1}));
+        const source=this.actor(t.source),mods=this.actionModifiers(source.id,'shield_bash'),roll=this.diceTask('Impuls egidy · test Siły',source.id,1,20,'bash',{target:a.id,modifier:source.abilities.strength,dc:total+1,mode:mods.check_advantage?'advantage':'normal'});
+        if(mods.check_advantage)roll.parts.push({count:1,sides:20,label:'Druga k20'});q.unshift(roll);
       }else if(t.outcome==='bash'){
-        if(success)q.unshift({type:'damage',actor:a.id,target:target.id,power:'shield_bash',components:[{count:1,sides:6,modifier:a.abilities.strength,damage_type:'bludgeoning',label:'Impuls egidy'}]});
+        if(success){if(this.s.action)this.s.action.successful=true;q.unshift({type:'damage',actor:a.id,target:target.id,power:'shield_bash',components:[{count:1,sides:6,modifier:a.abilities.strength,damage_type:'bludgeoning',label:'Impuls egidy'}]});}
       }else if(t.outcome==='areaDamage'){
-        q.unshift(...t.targets.map(target=>this.saveTask(target,t.saveAbility,t.dc,{kind:'damage',value:total,damage_type:t.damage_type,half:t.half,fear:t.fear,source:a.id})));
+        q.unshift(...t.targets.map(target=>this.saveTask(target,t.saveAbility,t.dc,{kind:'damage',value:total,damage_type:t.damage_type,half:t.half,fear:t.fear,source:a.id,savePenalty:t.savePenalty,movePenalty:t.movePenalty})));
       }else if(t.outcome==='save'){
         const e=t.effect;
         if(e.kind==='damage'){
           if(!success||e.half)q.unshift({type:'damage',actor:e.source,target:a.id,divisor:success?2:1,components:[{value:e.value,count:0,damage_type:e.damage_type,label:'Moc'}]});
           if(!success&&e.fear)this.addStatus(a,'fear',{untilEnd:a.id,turn:a.turn+1});
         }else if(!success)this.addStatus(a,e.kind,{untilEnd:a.id,turn:a.turn+1});
+        if(!success&&e.movePenalty)this.addStatus(a,'movePenalty',{name:`−${e.movePenalty} pola ruchu`,value:e.movePenalty,untilEnd:a.id,turn:a.turn+1});
       }else if(t.outcome==='attack'){
         if(success){
           const crit=natural===20,w=a.weapon;
           const parts=[{count:crit?(a.id==='brakka'?w.count+2:w.count*2):w.count,sides:w.sides,modifier:a.abilities[w.ability],damage_type:w.damage_type,label:w.name}];
           const extra=(sides,label,type=w.damage_type)=>parts.push({count:crit?2:1,sides,modifier:0,damage_type:type,label});
+          const mods=this.actionModifiers(a.id,t.power);
           if(t.power==='breaking_strike')extra(6,'Ostrze przełamania','magic');
+          for(const die of mods.attack_bonus_dice??[])parts.push({count:die.count*(crit?2:1),sides:die.sides,modifier:die.modifier??0,damage_type:die.damage_type==='weapon'?w.damage_type:die.damage_type,label:die.label??'Rezonans · moc'});
           if(this.status(a,'rage')&&t.melee)extra(6,'Runiczny szał');
           if(a.mark===target.id)extra(4,'Piętno łowcy');
           if(a.id==='mira'&&a===this.active&&!a.sneakUsed&&(t.hidden||this.flanking(a,target))){extra(6,'Cios z zaskoczenia');a.sneakUsed=true;}
@@ -558,10 +655,10 @@
           if(t.power==='anchoring_arrow')this.addStatus(target,'root',{untilEnd:target.id,turn:target.turn+1});
         }
         if(t.power==='shield_bash'&&target.hp>0)q.unshift({type:'relocate',target:target.id,radius:1,label:'Impuls egidy',destination:null});
-        if(t.power==='opportunity'&&loss.hp+loss.temporary>0&&target.hp>0&&this.bonus(a,'Hak')){
-          this.s.action.handledHooks.push(`${a.id}:${target.id}`);
-          q.unshift({type:'relocate',target:target.id,radius:this.bonus(a,'Hak'),label:'Rezonans runy Hak',destination:null});
-        }
+        const mods=this.actionModifiers(a.id,t.power);
+        if(mods.push&&target.hp>0&&t.hit)q.unshift({type:'relocate',target:target.id,radius:mods.push,label:'Odepchnięcie mocy',destination:null});
+        if(mods.enemy_move_penalty&&target.hp>0&&t.hit)this.addStatus(target,'movePenalty',{name:`−${mods.enemy_move_penalty} pola ruchu`,value:mods.enemy_move_penalty,untilEnd:target.id,turn:target.turn+1});
+
       }
     }
     pump(){
@@ -584,9 +681,23 @@
     confirmRelocation(){
       const t=this.s.task;if(t?.type!=='relocate'||!t.destination||!this.relocationFields(t).some(p=>same(p,t.destination)))return false;
       const a=this.actor(t.target),wasAdjacent=this.enemies(a).some(b=>distance(a.pos,b.pos)===1);
-      a.pos=copy(t.destination);
-      if(t.walk){a.moved=true;if(wasAdjacent&&!this.enemies(a).some(b=>distance(a.pos,b.pos)===1))this.offerRegen(this.actor(t.source),'Pieśń przejścia wyprowadziła sojusznika z zagrożenia');}
-      this.note(`${t.label}: ${a.name} → ${a.pos.x},${a.pos.y}.`);this.s.task=null;this.pump();return true;
+      if(t.walk&&t.opportunities){
+        const path=this.path(a,t.destination,t.radius);let previous=a.pos;
+        const moves=path.cells.map(pos=>{
+          const step={type:'moveStep',actor:a.id,from:copy(previous),pos,cost:0,opportunities:true};previous=pos;return step;
+        });
+        this.s.queue.unshift(...moves);
+      }else{a.pos=copy(t.destination);if(t.walk)a.moved=true;}
+      if(t.walk&&t.label==='Pieśń przejścia'&&wasAdjacent&&!this.enemies(a).some(b=>distance(a.pos,b.pos)===1))this.offerRegen(this.actor(t.source),'Pieśń przejścia wyprowadziła sojusznika z zagrożenia');
+      this.note(`${t.label}: ${a.name} → ${t.destination.x},${t.destination.y}.`);this.s.task=null;this.pump();return true;
+    }
+    confirmBonusTarget(){
+      const t=this.s.task;if(t?.type!=='bonusTarget'||!t.target||!t.targets.includes(t.target))return false;
+      const source=this.actor(t.source),target=this.actor(t.target);
+      if(!target?.hero||target.hp<=0||distance(source.pos,target.pos)!==1)return false;
+      this.s.task=null;
+      this.s.queue.unshift({type:'roll',label:'Żar odnowy · leczenie sojusznika',actor:source.id,parts:t.dice.map(d=>({...d,label:'Leczenie sojusznika'})),outcome:'healGroup',targets:[target.id],power:true});
+      this.pump();return true;
     }
     acknowledge(){
       if(this.s.phase!=='result')return false;this.s.action=null;this.s.phase='idle';
@@ -594,7 +705,7 @@
       return true;
     }
     snapshot(){return JSON.stringify(this.s);}
-    restore(raw){const state=JSON.parse(raw);if(state.version!==1||!Array.isArray(state.order)||!state.actors)throw Error('Nieprawidłowy zapis makiety');this.s=state;}
+    restore(raw){const state=JSON.parse(raw);if(state.version!==3||!Array.isArray(state.order)||!state.actors)throw Error('Nieprawidłowy zapis makiety');this.s=state;}
   }
   window.ResonanceModel={Encounter,distance,same,neighbors};
 })();

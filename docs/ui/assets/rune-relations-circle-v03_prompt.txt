@@ -1,0 +1,27 @@
+Final review graphic: imagegen slate texture plus exact vector rune symbols and directed relations from the v0.3 catalog. No text elements in the graphic.
+
+Initial imagegen diagram study (not the final graph, because generative arrows may diverge):
+Use case: infographic-diagram
+Asset type: Polish fantasy tabletop RPG rune-relation wheel, production-ready raster reference illustration.
+Input images: Image 1 is a precise diagram reference. It specifies the complete geometry, rune glyphs and arrow connections to preserve.
+Primary request: Turn the provided flat diagram into an elegant finished fantasy rulebook illustration. Keep the nine outer rune medallions arranged on the same circle, and the cyan wave rune medallion in the center as the universal connector. Render only symbols and arrows, absolutely NO TEXT or letters, numbers, labels, captions, logos or watermark.
+Style: restrained engraved gold on charcoal slate; crisp ivory-gold native rune lines; subdued turquoise for the central universal wave and its links. Light fine stone texture and very subtle magical luminosity. Flat front-facing chart, not a photographed object, no perspective. Spacious square image, clearly distinguish medallions, lines and arrowheads.
+Invariants: Preserve exactly ten rune glyphs with the same line geometry, at exactly the same positions as the reference. Do not replace them with pictorial towers, real eyes, cups, hourglasses or fantasy alphabets. Preserve every connector path and direction from the reference, with clear arrowheads. There are exactly 27 directed gold ordinary connections and nine bidirectional turquoise links between the wave in the center and each outer medallion. Do not add or remove relations. Keep all medallion interiors free of connector clutter.
+For accuracy, outer clockwise order starting at the top is: tower glyph, spearhead glyph, steps glyph, lightning glyph, hook glyph, eye glyph, chalice glyph, knot glyph, hourglass glyph. These names are instructions only and must NOT appear in the image.
+Gold directed relations, encoded by glyphs only:
+tower -> spearhead, steps, lightning;
+spearhead -> hourglass, hook, chalice;
+steps -> spearhead, eye, lightning;
+lightning -> tower, steps, chalice;
+hook -> steps, eye, hourglass;
+eye -> tower, spearhead, knot;
+chalice -> tower, lightning, knot;
+knot -> steps, eye, chalice;
+hourglass -> eye, spearhead, hook.
+The central wave connects both ways to all nine outer glyphs, in turquoise. Preserve the supplied diagram rather than inventing an alternative graph.
+Avoid: text of any kind, written rune names, decorative pseudo-letters, missing arrows, false extra edges, duplicated or changed glyphs, replacing diagrams with paintings, busy ornament, huge glowing blobs, illegible line crossings.
+
+Selected imagegen background prompt:
+Create a square seamless-looking dark charcoal slate stone texture for a fantasy tabletop rune diagram background. Polished high quality ancient slate, subtle fine grain, restrained thin gold mineral veins around the outermost edges, a soft vignette. Center and entire central 90 percent must be plain evenly dark and spacious, suitable for overlaying a precise gold geometric diagram. Absolutely no runes, symbols, arrows, circles, frames, lines across center, ornaments, text, numbers, characters or letters. This is a background texture only.
+
+Final SVG: rune-relations-circle-v03.svg. Gold: 27 ordinary directed edges. Cyan: 9 bidirectional Fala connections. The graph was checked against catalog.json; raster export uses local Chrome.

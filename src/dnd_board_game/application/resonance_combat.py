@@ -9,27 +9,40 @@ from dnd_board_game.actors import Actor, Faction, FeatureGrant, FeatureSourceKin
 from dnd_board_game.combat.charge_encounter import ChargeEncounter
 from dnd_board_game.combat.session import CombatState
 from dnd_board_game.inventory.magic_items import effective_ability_modifier
-from dnd_board_game.rules.resonance import PROFILE, ChargeActorState, ChargeState, ChargeWeapon
+from dnd_board_game.rules.resonance import PROFILE, LEGACY_PROFILE, ChargeActorState, ChargeState, ChargeWeapon
 from dnd_board_game.scenarios.loader import LoadedEncounter, compile_actor_combat_content
 from dnd_board_game.scenarios.rune_charge_catalog import load_rune_charge_catalog
+from dnd_board_game.scenarios.rune_relation_catalog import load_rune_relation_catalog
 from dnd_board_game.world.charge_movement import distance
 
 
-def apply_charge_profile(actor: Actor) -> Actor:
-    catalog = load_rune_charge_catalog()
+def catalog_for_profile(profile: str) -> Mapping[str, Any]:
+    """Started encounters keep their saved rules; fresh encounters use v0.3."""
+    if profile == PROFILE:
+        return load_rune_relation_catalog()
+    if profile == LEGACY_PROFILE:
+        return load_rune_charge_catalog()
+    raise ValueError("Nieznany profil zasad Rezonansu.")
+
+
+def apply_charge_profile(actor: Actor, *, profile: str = PROFILE) -> Actor:
+    catalog = catalog_for_profile(profile)
     hero = catalog["heroes"].get(str(actor.id))
-    if not hero or any(f.feature_id == PROFILE for f in actor.features):
+    if not hero:
         return actor
     old_prefixes = ("physical_mana:", "shared_mana:", "pooled_mana:", "mana_saturation:", "runes:")
+    charge_profiles = {PROFILE, LEGACY_PROFILE}
     card_ids = {c["id"] for c in hero["cards"]}
-    retired = {"action_surge", "savage_attacks", "sneak_attack", "first_blood", "fighting_style_archery", "scouts_vigilance", "mana_passives_v1"}
+    retired = {"action_surge", "savage_attacks", "sneak_attack", "first_blood", "fighting_style_archery", "scouts_vigilance", "mana_passives_v1",
+               "physical_mana_v02", "shared_mana_v03", "pooled_mana_v01", "mana_saturation", "rune_resource_v01", "rune_baskets_v02"}
     features = tuple(f for f in actor.features if f.feature_id not in retired|card_ids
+                     and f.feature_id not in charge_profiles and f.source_ref not in charge_profiles
                      and not f.source_ref.startswith(old_prefixes) and not f.feature_id.startswith("flaw_"))
     for key in ("passive", "flaw"):
         entry = hero[key]
-        features += (FeatureGrant(f"{PROFILE}_{key}", entry["name"], FeatureSourceKind.SCENARIO, PROFILE, entry["description"]),)
-    features += tuple(FeatureGrant(c["id"], c["name"], FeatureSourceKind.SCENARIO, PROFILE, c["effect"]) for c in hero["cards"])
-    features += (FeatureGrant(PROFILE, "Ładunki i Rezonans", FeatureSourceKind.SCENARIO, PROFILE),)
+        features += (FeatureGrant(f"{profile}_{key}", entry["name"], FeatureSourceKind.SCENARIO, profile, entry["description"]),)
+    features += tuple(FeatureGrant(c["id"], c["name"], FeatureSourceKind.SCENARIO, profile, c["effect"]) for c in hero["cards"])
+    features += (FeatureGrant(profile, "Ładunki i Rezonans", FeatureSourceKind.SCENARIO, profile),)
     return replace(actor, features=features, attacks_per_action=1, spell_slots=(), spells=(), spell_ids=(), spell_access=())
 
 
@@ -37,8 +50,9 @@ def charge_weapon(actor: Actor, source: Any) -> ChargeWeapon:
     """Use authored damage and equipment bonuses, not retired proficiency/passives."""
     ability = source.ability or "strength"
     hero = actor.faction == Faction.ALLY
-    modifiers = source.attack_roll_request.modifiers
-    attack_bonus = sum(m.value for m in modifiers if not hero or str(m.modifier_type) not in {"ability", "proficiency"})
+    modifiers = tuple(m for m in source.attack_roll_request.modifiers
+                      if not hero or str(m.modifier_type) not in {"ability", "proficiency"})
+    attack_bonus = sum(m.value for m in modifiers)
     ability_damage = effective_ability_modifier(actor, ability)-source.ability_damage_modifier_applied if hero and source.adds_ability_modifier_to_damage else 0
     parts = tuple(dict(count=p.dice.count if p.dice else 0, sides=p.dice.sides if p.dice else 0,
                        value=(p.fixed or 0)+p.modifier, modifier=p.modifier+(ability_damage if p.id == "base" else 0),
@@ -55,7 +69,8 @@ def charge_weapon(actor: Actor, source: Any) -> ChargeWeapon:
                         minimum_movement=source.conditional_on_hit_minimum_movement_feet//5,
                         requires_adjacent_ally=source.conditional_on_hit_requires_adjacent_ally,
                         spell_save_ability=source.save_ability or "", spell_save_dc=source.save_dc,
-                        spell_save_half=source.save_damage_on_success == "half", proficiency_id=source.proficiency_id or "")
+                        spell_save_half=source.save_damage_on_success == "half", proficiency_id=source.proficiency_id or "",
+                        attack_modifiers=tuple(dict(label=m.label, value=m.value) for m in modifiers if m.value))
 
 
 @lru_cache(maxsize=64)
@@ -88,7 +103,9 @@ def weapons_for(combat: CombatState, encounter: LoadedEncounter, effects: tuple[
 def encounter_engine(combat: CombatState, encounter: LoadedEncounter, *, catalog: Mapping[str, Any] | None = None, effects: tuple[Any, ...] = ()) -> ChargeEncounter:
     cover = {a.position: max((obj.stealth_bonus for obj in encounter.scene_objects
                             if any(distance(a.position, p) <= 1 for p in obj.positions)), default=0) for a in combat.actors}
-    return ChargeEncounter(combat, encounter.board, catalog or load_rune_charge_catalog(), weapons_for(combat, encounter, effects), cover_bonuses=cover)
+    profile = getattr(combat.resonance, "profile", LEGACY_PROFILE)
+    return ChargeEncounter(combat, encounter.board, catalog if catalog is not None else catalog_for_profile(profile), weapons_for(combat, encounter, effects),
+                           cover_bonuses=cover, scene_objects=encounter.scene_objects)
 
 
 def start_charge_combat(combat: CombatState, encounter: LoadedEncounter) -> CombatState:

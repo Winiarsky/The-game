@@ -93,6 +93,7 @@ data/characters/
 *.tiff
 *.pdf
 *.pdf.json
+!/handouts/**/*.pdf
 
 # Required runtime sprite; other local scenario artwork remains private.
 !/content/scenarios/misja_0_dzwon/assets/

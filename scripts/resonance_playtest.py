@@ -1,4 +1,4 @@
-"""Isolated manual charge-combat test; skips story, keeps physical board setup."""
+"""Isolated v0.3 rune-relations playtest with the actual game and board adapter."""
 from __future__ import annotations
 
 import argparse
@@ -15,11 +15,15 @@ from dnd_board_game.ui.exploration_app import ExplorationUiSession
 from dnd_board_game.ui.routes import create_app
 from dnd_board_game.ui.training_arena import training_hero
 from dnd_board_game.ui import mission_zero
+from dnd_board_game.character_creation import PLAYABLE_HERO_IDS
+from dnd_board_game.rules.resonance import PROFILE
 
 
 def prepare_session(folder: Path, heroes: tuple[str, ...], *, skip_setup: bool = False) -> ExplorationUiSession:
     if not 3 <= len(heroes) <= 6 or len(set(heroes)) != len(heroes):
         raise ValueError("Wybierz od 3 do 6 różnych bohaterów.")
+    if set(heroes) - set(PLAYABLE_HERO_IDS):
+        raise ValueError("Wybierz bohaterów z katalogu siedmiu postaci.")
     game = ExplorationUiSession(ROOT / "content/scenarios/misja_0_dzwon/scenario.json",
                                save_dir=folder / "saves", observation_dir=folder / "observations")
     game.configure_custom_party(tuple(training_hero(hero) for hero in heroes))
@@ -43,7 +47,8 @@ def prepare_session(folder: Path, heroes: tuple[str, ...], *, skip_setup: bool =
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--heroes", nargs="+", default=["garran", "brakka", "mira", "dagna", "lorian", "nimra"])
+    parser.add_argument("--heroes", nargs="+", choices=PLAYABLE_HERO_IDS,
+                        default=["garran", "brakka", "mira", "dagna", "lorian", "nimra"])
     parser.add_argument("--port", type=int, default=5201)
     parser.add_argument("--board-port", type=int, default=5001)
     parser.add_argument("--runtime", type=Path, help="Opcjonalny osobny katalog zapisów testu; domyślnie nowy katalog /tmp.")
@@ -55,11 +60,13 @@ def main() -> None:
     args = parser.parse_args()
     if args.hardware and (not args.serial_port or not args.wled_url or args.skip_setup):
         parser.error("Sprzęt wymaga --serial-port i --wled-url oraz ręcznego setupu.")
-    folder = args.runtime or Path(mkdtemp(prefix="resonance-playtest-"))
+    folder = args.runtime or Path(mkdtemp(prefix="rune-relations-v03-"))
     game = prepare_session(folder, tuple(args.heroes), skip_setup=args.skip_setup or args.check)
     if args.check:
         assert game.combat_state and game.combat_state.resonance
-        print(f"OK: {len(args.heroes)} bohaterów, profil Ładunki i Rezonans. Dane testu: {folder}")
+        assert game.combat_state.resonance.profile == PROFILE
+        assert game.combat_state.resonance.version == 2
+        print(f"OK: {len(args.heroes)} bohaterów, profil {PROFILE}, pamięć 3 run. Dane testu: {folder}")
         return
     simulator = worker = server = None
     try:
@@ -73,7 +80,7 @@ def main() -> None:
             game.configure_board(backend="simulator", board_url=f"http://127.0.0.1:{args.board_port}")
             print(f"Plansza: http://127.0.0.1:{args.board_port}", flush=True)
         server = make_server("127.0.0.1", args.port, create_app(game, character_dir=folder / "characters"), threaded=True)
-        print(f"Gra: http://127.0.0.1:{args.port}/play\nZapisy testu: {folder}\nCtrl+C kończy test. Zwykłe zapisy gry pozostają nietknięte.", flush=True)
+        print(f"Gra v0.3: http://127.0.0.1:{args.port}/play\nZapisy testu: {folder}\nCtrl+C kończy test. Zwykłe zapisy gry pozostają nietknięte.", flush=True)
         server.serve_forever()
     except KeyboardInterrupt:
         pass

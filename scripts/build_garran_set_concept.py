@@ -193,34 +193,11 @@ def validate_html(path: Path, *, action_mm: tuple[float, float] = (62, 76)) -> l
 
 
 def main() -> None:
-    OUTPUT.mkdir(parents=True,exist_ok=True)
-    copy=json.loads((OUTPUT/'copy.json').read_text())
-    pages=[('01_postac',character_page()),('02_mana',mana_page()),('03_akcje',actions_page(copy)),('04_ekwipunek',equipment_page()),('05_sprzet_do_wyciecia',equipment_cutouts(copy)),('sciagawka_druzyny',rules_page())]
-    checks={}
-    for name, html in pages:
-        path=OUTPUT/(name+'.html')
-        path.write_text(html,encoding='utf-8')
-        checks[name]=validate_html(path)
-        print(name,checks[name],flush=True)
-        if checks[name]:
-            continue
-        render_pdf(path,path.with_suffix('.pdf'))
-        info=subprocess.run(['pdfinfo',str(path.with_suffix('.pdf'))],capture_output=True,text=True,check=True,timeout=15).stdout
-        if not re.search(r'Pages:\s+1\b',info):
-            raise RuntimeError(f'{name}: więcej niż jedna strona')
-        subprocess.run(['pdftoppm','-singlefile','-scale-to','1600','-png',str(path.with_suffix('.pdf')),str(OUTPUT/name)],capture_output=True,check=True,timeout=30)
-    (OUTPUT/'validation.json').write_text(json.dumps(checks,ensure_ascii=False,indent=2)+'\n')
-    if any(checks.values()):
-        raise RuntimeError('Popraw układ przed publikacją kompletu.')
-    merge_pdfs([OUTPUT/(name+'.pdf') for name,_ in pages[:5]],OUTPUT/'garran_zestaw_A4.pdf')
-    (OUTPUT/'source_snapshot.json').write_text(json.dumps(asdict(build_print_hero('garran')),ensure_ascii=False,indent=2)+'\n')
-    (OUTPUT/'dimensions.json').write_text(json.dumps({'paper_mm':[210,297],'mana_paper_mm':[297,210],'mana_card_mm':[63,88],'action_mm':[62,76],'equipment_mm':[60,42],'garran_pages':5,'shared_reference_pages':1},indent=2)+'\n')
-    preview=''.join(f'<figure><img src="{name}.png"><figcaption>{label}</figcaption></figure>' for (name,_),label in zip(pages,['01 · Postać','02 · Mana — A4 poziomo','03 · Akcje','04 · Pusta mata wyposażenia','Wycinanki · sprzęt startowy','Jedna wspólna ściągawka']))
-    (OUTPUT/'podglad.html').write_text('<!doctype html><meta charset="utf-8"><title>Zestaw Garrana</title><style>body{margin:24px;background:#e4e1dc;font:18px Arial;color:#222}h1{font:32px Georgia}main{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}figure{margin:0}img{width:100%;height:540px;object-fit:contain;object-position:top;background:white;box-shadow:0 2px 8px #0002}figcaption{padding:12px 0}</style><h1>Garran · prototyp zestawu do gry</h1><main>'+preview+'</main>')
-    chrome=shutil.which('google-chrome') or shutil.which('chromium')
-    with TemporaryDirectory(prefix='garran-overview-') as temporary:
-        subprocess.run([chrome,'--headless','--no-sandbox','--disable-gpu','--disable-dev-shm-usage',f'--user-data-dir={temporary}','--window-size=1400,1310',f'--screenshot={OUTPUT / "podglad.png"}',(OUTPUT/'podglad.html').as_uri()],check=True,capture_output=True,timeout=30)
-    print(OUTPUT/'garran_zestaw_A4.pdf')
+    """Build the current monochrome handouts from the canonical catalog."""
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from build_rune_relations import main as build_current
+    build_current()
 
 
 if __name__=='__main__':

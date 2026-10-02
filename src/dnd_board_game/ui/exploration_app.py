@@ -1149,6 +1149,7 @@ class EncounterSetupFlow:
     completed: bool = False
     player_start_actor_ids: tuple[str, ...] = ()
     player_start_assignments: dict[str, Coordinate] = field(default_factory=dict)
+    player_start_original_positions: dict[str, Coordinate] = field(default_factory=dict)
     is_retry: bool = False
     selected_start_position: Coordinate | None = None
 
@@ -1166,6 +1167,10 @@ class EncounterSetupFlow:
         return self.current_step is not None and (
             not self.is_player_start_step or self.pending_start_position is not None
         )
+
+    @property
+    def can_back(self) -> bool:
+        return bool(self.completed or self.current_index > 0 or self.player_start_assignments)
 
     @property
     def current_step(self) -> SetupStep | None:
@@ -1207,6 +1212,7 @@ class EncounterSetupFlow:
             "status": "completed" if self.completed else "active",
             "current_index": self.current_index,
             "step_count": len(self.steps),
+            "can_back": self.can_back,
             "current_step": step_payload,
             "is_retry": self.is_retry,
         }
@@ -1232,7 +1238,8 @@ class EncounterSetupFlow:
         if step is None:
             return ()
         assigned = set(self.player_start_assignments.values())
-        return tuple(position for position in step.positions if position not in assigned and position != panel_position(28))
+        return tuple(position for position in step.positions if position not in assigned
+                     and position not in (panel_position(28), panel_position(29)))
 
 
 @dataclass(slots=True)
@@ -1331,6 +1338,10 @@ class EncounterInitiativeFlow:
             "entries": [_initiative_entry_payload(entry) for entry in self.entries],
             "order": [_initiative_entry_payload(entry) for entry in self.order.entries] if self.order is not None else [],
         }
+
+
+class BoardCommandRejected(ValueError):
+    """A received board press failed game validation; the reader can re-arm."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -2592,11 +2603,15 @@ class ExplorationUiSession:
         from .session_copy import load_ui_copy
         payload["ui_copy"] = load_ui_copy(self._scenario_asset_root() if payload["mission"] else None)
         if payload["mission"]:
-            from dnd_board_game.scenarios.character_text import load_text
-            payload["player_aid"] = load_text()["player_aid"]
-            if any(any(f.feature_id == "rune_resource_v01" for f in actor.features) for actor in self.exploration.actors):
-                from dnd_board_game.scenarios.mission_pack import read_json
-                payload["player_aid"] = read_json(self._scenario_asset_root(), "text/sciaga_runy.json")["pages"]
+            if not self.combat_state or (self.combat_state.resonance and self.combat_state.resonance.version == 2):
+                from dnd_board_game.scenarios.rune_relation_catalog import load_rune_relation_player_aid
+                payload["player_aid"] = load_rune_relation_player_aid()
+            else:
+                from dnd_board_game.scenarios.character_text import load_text
+                payload["player_aid"] = load_text()["player_aid"]
+                if any(any(f.feature_id == "rune_resource_v01" for f in actor.features) for actor in self.exploration.actors):
+                    from dnd_board_game.scenarios.mission_pack import read_json
+                    payload["player_aid"] = read_json(self._scenario_asset_root(), "text/sciaga_runy.json")["pages"]
             from .mission_zero import apply_pack_portraits
             apply_pack_portraits(self,payload)
             from .mission_setup import enrich_combat_payload
@@ -3067,6 +3082,11 @@ class ExplorationUiSession:
                 completed=True,
                 order=snapshot.combat_state.initiative_order,
             )
+        # A restored decision may have the same rules revision and scan mask.
+        # Invalidate the old transport context before exposing that decision.
+        self._board_scan_context_key = ""
+        if self.board_adapter is not None:
+            self.board_adapter.cancel_input()
         self.custom_party = restored_custom_party
         self.exploration = replace(base_exploration, actors=snapshot.actors)
         self.state = snapshot.exploration_state
@@ -3098,7 +3118,7 @@ class ExplorationUiSession:
         self.board_selected_actor_role = ""
         self.board_panel_context: tuple[str, tuple[int, ...], bool] | None = None
         self.shared_mana_declaration = None
-        self.board_selection_revision = 0
+        self.board_selection_revision += 1
         self.exploration_board_selection_active = False
         restored_npc_transition = (
             restore_npc_transition_plan(base_exploration.npc_transitions, snapshot.pending_npc_transition)
@@ -5439,7 +5459,14 @@ class ExplorationUiSession:
                 "position": [selected.col, selected.row], "elapsed_ms": round((time.monotonic() - started) * 1000),
                 "wait_for_input_ms": round((input_received - scan_started) * 1000),
                 "after_input_ms": round((time.monotonic() - input_received) * 1000)})
-            return self._handle_board_position(selected)
+            try:
+                return self._handle_board_position(selected)
+            except ValueError as exc:
+                self._record("ui_board_command_rejected", {
+                    "revision": revision, "automatic": automatic,
+                    "position": [selected.col, selected.row], "error": str(exc),
+                })
+                raise BoardCommandRejected(str(exc)) from exc
 
     def set_exploration_board_selection(self, enabled: bool) -> dict[str, object]:
         if self.ui_flow_stage != UiFlowStage.LOCATION_ACTIVE or self.combat_state is not None:
@@ -7058,6 +7085,33 @@ class ExplorationUiSession:
         self._sync_board_leds()
         return self.state_payload()
 
+    def back_encounter_setup_step(self) -> dict[str, object]:
+        """Reopen the preceding placement without undoing any game resources."""
+        flow = self.encounter_setup_flow
+        if (flow is None or not flow.can_back or self.encounter_initiative_flow is not None
+                or self.combat_state is not None):
+            raise ValueError("Nie można teraz wrócić do poprzedniego elementu przygotowania.")
+        if flow.completed:
+            flow.completed = False
+        elif not (flow.is_player_start_step and flow.player_start_assignments):
+            flow.current_index -= 1
+        flow.selected_start_position = None
+        if flow.is_player_start_step and flow.player_start_assignments:
+            actor_id = next(actor_id for actor_id in reversed(flow.player_start_actor_ids)
+                            if actor_id in flow.player_start_assignments)
+            flow.selected_start_position = flow.player_start_assignments.pop(actor_id)
+            original = flow.player_start_original_positions.pop(actor_id)
+            flow.encounter = replace(flow.encounter, actors=tuple(
+                replace(actor, position=original) if str(actor.id) == actor_id else actor
+                for actor in flow.encounter.actors
+            ))
+        self.board_selection_revision += 1
+        self.board_message = "Popraw poprzednio ustawiony element i ponownie zatwierdź przyciskiem ✓."
+        self._record("ui_encounter_setup_back", {"step_index": flow.current_index,
+                     "actor_id": str(flow.current_player_start_actor.id) if flow.current_player_start_actor else None})
+        self._sync_board_leds()
+        return self.state_payload()
+
     def assign_encounter_player_start_position(self, selected: Coordinate) -> dict[str, object]:
         if self.encounter_setup_flow is None:
             raise ValueError("Setup encountera nie jest aktywny.")
@@ -7071,6 +7125,7 @@ class ExplorationUiSession:
         if selected not in remaining:
             self.board_message = "Kliknij wolne, podświetlone pole startowe dla aktualnego bohatera."
             return self.state_payload()
+        flow.player_start_original_positions[str(actor.id)] = actor.position
         updated_actor = replace(actor, position=selected)
         updated_actors = tuple(updated_actor if candidate.id == actor.id else candidate for candidate in flow.encounter.actors)
         flow.encounter = replace(flow.encounter, actors=updated_actors)
@@ -22081,8 +22136,8 @@ class ExplorationUiSession:
     def _game_board_scan_target(self) -> BoardScanTarget:
         if self._can_start_encounter_initiative():
             return BoardScanTarget(
-                positions=(panel_position(28),),
-                feedback=setup_panel_feedback(LedFeedback(), can_confirm=True),
+                positions=(panel_position(28), panel_position(29)),
+                feedback=setup_panel_feedback(LedFeedback(), can_confirm=True, can_back=True),
                 empty_message="Naciśnij niebieski przycisk ✓ na planszy, aby rozpocząć inicjatywę.",
             )
         if self.shield_bash_flow is not None:
@@ -22102,9 +22157,10 @@ class ExplorationUiSession:
                 positions = flow.remaining_player_start_positions() if flow.is_player_start_step else ()
                 guidance = setup_led_feedback(replace(step, positions=positions)) if flow.is_player_start_step else setup_led_feedback(step)
                 return BoardScanTarget(
-                    positions=(*positions, *((panel_position(28),) if flow.can_confirm else ())),
+                    positions=(*positions, *((panel_position(28),) if flow.can_confirm else ()),
+                               *((panel_position(29),) if flow.can_back else ())),
                     feedback=setup_panel_feedback(
-                        guidance, can_confirm=flow.can_confirm,
+                        guidance, can_confirm=flow.can_confirm, can_back=flow.can_back,
                         selected=flow.pending_start_position,
                     ),
                     empty_message=(
@@ -23341,11 +23397,15 @@ class ExplorationUiSession:
                 raise ValueError("Przeczytaj objaśnienie Nessy i naciśnij ✓.")
             return acknowledge(self, tutorial_notice)
         if self._can_start_encounter_initiative():
+            if selected == panel_position(29):
+                return self.back_encounter_setup_step()
             if selected != panel_position(28):
                 raise ValueError("Naciśnij niebieski przycisk ✓ na planszy, aby rozpocząć inicjatywę.")
             return self.start_encounter_initiative()
         if self.encounter_setup_flow is not None and self.encounter_setup_flow.current_step is not None:
             flow = self.encounter_setup_flow
+            if selected == panel_position(29):
+                return self.back_encounter_setup_step()
             if selected == panel_position(28):
                 return self.confirm_encounter_setup_step()
             if not flow.is_player_start_step or selected not in flow.remaining_player_start_positions():
@@ -29794,6 +29854,7 @@ def _initiative_prompt_payload(
     return {
         "actor_id": str(prompt.actor.id),
         "actor_name": prompt.actor.name,
+        "portrait_url": _actor_portrait_url(prompt.actor),
         "message": prompt.message,
         "dexterity_modifier": prompt.dexterity_modifier,
         "roll_mode": prompt.request.mode.value,
