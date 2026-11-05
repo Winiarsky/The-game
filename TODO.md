@@ -1,16 +1,24 @@
-## Plansza LED + klawiatura — plan 05.11.2026
+## Plansza LED + pad — aktualizacja planu 05.11.2026
 
 - [x] Przejrzeć obecne wejście klawiatury, aktualną walkę runiczną,
   rozdzielenie USB/WLED i zależności launchera/setupu.
 - [x] Przygotować na branchu `feat/led-keyboard-control` osobny
   [plan implementacji](docs/LED_KEYBOARD_CONTROL_PLAN.md), podzielony na
   core, hardware, UI, gameplay, konfigurację i testy. Tylko dokumentacja.
-- [ ] Po akceptacji planu wdrożyć kontrakt wejścia i WLED bez seriala.
-- [ ] Dodać kursor strzałkami i podgląd/zatwierdzenie w arenie v0.3,
+- [x] Uaktualnić plan: pad głównym wejściem od początku, klawiatura awaryjnie
+  i do tekstu; sprawdzić oferty bezprzewodowe, odbiór w okolicy Wołomina
+  i podstawy zgodności z obecnym Linuxem. Polecany DualSense przez Bluetooth.
+- [ ] Po akceptacji planu sprawdzić konkretny pad na Linuxie/przeglądarce,
+  jego mapowanie i ponowne połączenie przez Bluetooth.
+- [ ] Wdrożyć wspólny kontrakt wejścia, adapter Gamepad API, klawiaturę
+  awaryjną i WLED bez seriala skanera.
+- [ ] Dodać kursor krzyżakiem/analogiem i podgląd/zatwierdzenie w arenie v0.3,
   następnie pełną walkę, ekwipunek i menu run.
-- [ ] Objąć klawiaturą launcher, setup, Misję 0, eksplorację i wczytywanie.
+- [ ] Objąć padem i klawiaturą launcher, setup, Misję 0, eksplorację i wczytywanie.
 - [ ] Sprawdzić zgodność zasad oraz pełną sesję z LED-ami bez USB skanera.
-  Pada zostawić na kolejny etap; implementacji jeszcze nie rozpoczęto.
+  Decyzje i kości obsłużyć padem, swobodny tekst klawiaturą; sprawdzić
+  utratę fokusu, przytrzymanie przycisku i rozłączenie. Implementacji
+  jeszcze nie rozpoczęto; plan czeka na akceptację.
 
 ## Trasy, osłona i Żar odnowy — 02.10.2026
 
@@ -1331,8 +1339,9 @@ najbliższy horyzont, a nie kopię całej roadmapy.
 - [x] Move prepared-spell selection to the final initial-setup step before first-location selection.
 - [ ] UI-5: Validate the complete board-first UI vertical slice with `abandoned_watchtower` and the manual hardware checklist.
 - [ ] [LED-only control experiment] Scope updated on 2026-11-05: prepare an
-  optional keyboard + LED profile on `feat/led-keyboard-control`, preserving
-  gameplay and existing setup correction. See the approval-pending
+  optional gamepad + LED profile with keyboard fallback on
+  `feat/led-keyboard-control`, preserving gameplay and existing setup correction.
+  See the approval-pending
   [layered implementation plan](docs/LED_KEYBOARD_CONTROL_PLAN.md) and tasks
   at the top of this file. Runtime work starts only after plan acceptance.
 - [ ] P1: After the first target scenario, add the physical player-interface vertical
