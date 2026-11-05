@@ -79,7 +79,7 @@ const SessionNavigation = (() => {
     if (menu) {menu.onclick=()=>open();menu.title=t('menu');}
     if (retryTimer) clearTimeout(retryTimer);
     const backend=state.board?.backend && state.board.backend!=='none' ? state.board.backend : state.board?.configured_backend;
-    if (backend && backend!=='none' && !state.board.connected && !busy && !boardFallbackEnabled)
+    if (state.input?.mode !== 'keyboard' && backend && backend!=='none' && !state.board.connected && !busy && !boardFallbackEnabled)
       retryTimer=setTimeout(()=>{if(!busy)retryBoardConnection();},2000);
   }
   return {open,close,panel,handleSlot,handleEvent,afterRender};

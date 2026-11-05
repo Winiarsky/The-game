@@ -44,9 +44,9 @@ class BoardSessionAdapter:
 
         if backend == "simulator":
             connection = Connection(backend="simulator", simulator_url=board_url)
-        elif backend == "hardware":
+        elif backend in {"hardware", "wled"}:
             connection = Connection(
-                backend="hardware",
+                backend=backend,
                 serial_port=serial_port or None,
                 wled_url=wled_url or None,
             )
@@ -58,9 +58,18 @@ class BoardSessionAdapter:
     def connected(self) -> bool:
         return bool(getattr(self.connection, "connected", True))
 
+    @property
+    def can_scan(self) -> bool:
+        return bool(getattr(self.connection, "can_scan", True))
+
+    @property
+    def can_display_leds(self) -> bool:
+        return bool(getattr(self.connection, "can_display_leds", True))
+
     def scan(self, positions: tuple[Coordinate, ...], *, timeout_s: float | None,
              context_key: str = "", mode: str = "single",
              finish_positions: tuple[Coordinate, ...] = ()) -> Any:
+        self._require_scan()
         kwargs = {"timeout_s": timeout_s}
         if context_key:
             kwargs.update(context_key=context_key, mode=mode,
@@ -69,6 +78,7 @@ class BoardSessionAdapter:
 
     def prepare_scan(self, positions: tuple[Coordinate, ...], *, context_key: str,
                      mode: str, finish_positions: tuple[Coordinate, ...]) -> Callable[..., Any]:
+        self._require_scan()
         prepare = getattr(self.connection, "prepare_scan", None)
         if callable(prepare):
             return prepare([p.as_tuple() for p in positions], context_key=context_key,
@@ -77,9 +87,12 @@ class BoardSessionAdapter:
         return lambda timeout_s=None: self.scan(positions, timeout_s=timeout_s)
 
     def cancel_input(self) -> None:
-        self.connection.cancel_scan()
+        if self.can_scan:
+            self.connection.cancel_scan()
 
     def reset_scan(self) -> str:
+        if not self.can_scan:
+            return "not_required"
         resetter = getattr(self.connection, "reset_connection", None)
         rearmer = getattr(self.connection, "rearm_scan", None)
         canceller = getattr(self.connection, "cancel_scan", None)
@@ -93,6 +106,10 @@ class BoardSessionAdapter:
             canceller()
             return "cancel_scan"
         raise ValueError("Aktualny backend planszy nie obsługuje resetu skanu.")
+
+    def _require_scan(self) -> None:
+        if not self.can_scan:
+            raise ValueError("Tryb samych LED-ów nie obsługuje skanowania pól. Użyj klawiatury.")
 
     def close(self) -> None:
         """Turn every LED off before releasing the underlying connection."""
@@ -111,7 +128,7 @@ class BoardSessionAdapter:
     def show_scan_feedback(self, feedback: LedFeedback, *, boost_brightness: bool = True) -> None:
         self._replace_feedback(
             feedback,
-            brightness=self.scan_brightness if boost_brightness else None,
+            brightness=self.scan_brightness if boost_brightness and self.can_scan else None,
             transition_ms=self.scan_transition_ms,
         )
 

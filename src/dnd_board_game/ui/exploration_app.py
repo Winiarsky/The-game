@@ -1632,6 +1632,9 @@ class ExplorationUiSession:
         self.reset()
 
     def reset(self) -> None:
+        from .input_commands import CursorState
+        self.input_mode = getattr(self, "input_mode", "board")
+        self.keyboard_cursor = CursorState(revision=getattr(getattr(self, "keyboard_cursor", None), "revision", 0) + 1)
         board_adapter = getattr(self, "board_adapter", None)
         board_settings = None
         if board_adapter is not None:
@@ -1640,7 +1643,8 @@ class ExplorationUiSession:
                 self.wled_url, self.scan_timeout_s,
             )
             try:
-                board_adapter.reset_scan()
+                if self.input_mode == "board":
+                    board_adapter.reset_scan()
             except ValueError:
                 # Lightweight adapters may not implement scan cancellation.
                 pass
@@ -1767,6 +1771,8 @@ class ExplorationUiSession:
             self.ui_flow_stage = UiFlowStage.LOCATION_ACTIVE
         else:
             self.ui_flow_stage = UiFlowStage.WAITING_FOR_BOARD
+        if self.input_mode == "keyboard" and self.ui_flow_stage == UiFlowStage.WAITING_FOR_BOARD:
+            self.ui_flow_stage = UiFlowStage.READY_TO_START
         self.preview_zone_id = ""
         self.interaction_result: dict[str, object] | None = None
         self.scenario_handoff: dict[str, object] | None = None
@@ -2633,6 +2639,8 @@ class ExplorationUiSession:
                 actor['portrait_url'] = portraits.get(actor['id'], '')
             payload['combat']['resonance'] = view
             payload['combat']['tabletop'] = dict(actors=view['actors'], active_actor_id=view['active'])
+        from .input_context import decorate as decorate_input
+        decorate_input(self, payload)
         return payload
 
     def _physical_card_resource_note(self, actor: Actor, source_id: str) -> str | None:
@@ -3085,6 +3093,8 @@ class ExplorationUiSession:
         # A restored decision may have the same rules revision and scan mask.
         # Invalidate the old transport context before exposing that decision.
         self._board_scan_context_key = ""
+        from .input_commands import CursorState
+        self.keyboard_cursor = CursorState(revision=self.keyboard_cursor.revision + 1)
         if self.board_adapter is not None:
             self.board_adapter.cancel_input()
         self.custom_party = restored_custom_party
@@ -3332,6 +3342,23 @@ class ExplorationUiSession:
         )
         return True
 
+    def configure_input_mode(self, mode: str) -> None:
+        """Choose an input adapter independently of the LED output transport."""
+        from .input_commands import CursorState
+        if mode not in {"board", "keyboard"}:
+            raise ValueError("Sterowanie musi mieć wartość board albo keyboard.")
+        if self.input_mode != mode and self.board_adapter is not None:
+            self.board_adapter.cancel_input()
+        self.input_mode = mode
+        self.keyboard_cursor = CursorState(revision=self.keyboard_cursor.revision + 1)
+        self._board_scan_context_key = ""
+        self.board_selection_revision += 1
+        if mode == "keyboard" and self.ui_flow_stage == UiFlowStage.WAITING_FOR_BOARD:
+            self.ui_flow_stage = UiFlowStage.READY_TO_START
+        elif mode == "board" and self.board_adapter is None and self.ui_flow_stage == UiFlowStage.READY_TO_START:
+            self.ui_flow_stage = UiFlowStage.WAITING_FOR_BOARD
+        self._sync_board_leds()
+
     def configure_board(
         self,
         *,
@@ -3342,8 +3369,8 @@ class ExplorationUiSession:
         scan_timeout_s: float | None = None,
     ) -> dict[str, object]:
         backend = str(backend or "none").strip().lower()
-        if backend not in {"none", "simulator", "hardware"}:
-            raise ValueError("Backend planszy musi mieć wartość none, simulator albo hardware.")
+        if backend not in {"none", "simulator", "hardware", "wled"}:
+            raise ValueError("Backend planszy musi mieć wartość none, simulator, hardware albo wled.")
         self.board_backend = backend
         self.board_url = board_url.strip() or self.board_url
         self.board_serial_port = board_serial_port.strip()
@@ -3351,22 +3378,30 @@ class ExplorationUiSession:
         if scan_timeout_s is not None:
             self.scan_timeout_s = max(0.1, float(scan_timeout_s))
         if backend == "none":
+            if self.board_adapter is not None:
+                self.board_adapter.close()
             self.board_adapter = None
             self.board_message = "Plansza niepodłączona."
             if (
                 not self.debug_point_id
                 and not self.debug_challenge_id
                 and self.ui_flow_stage != UiFlowStage.SPELL_PREPARATION
+                and self.input_mode != "keyboard"
             ):
                 self.ui_flow_stage = UiFlowStage.WAITING_FOR_BOARD
             self._record("ui_board_configured", {"backend": backend, "connected": False})
             return self.state_payload()
+        previous_adapter = self.board_adapter
         self.board_adapter = BoardSessionAdapter.connect(
             backend=backend,
             board_url=self.board_url,
             serial_port=self.board_serial_port,
             wled_url=self.wled_url,
         )
+        if previous_adapter is not None:
+            previous_adapter.close()
+        if backend == "wled":
+            self.input_mode = "keyboard"
         self.board_message = f"Plansza podłączona: {backend}."
         if self.ui_flow_stage == UiFlowStage.WAITING_FOR_BOARD:
             self.ui_flow_stage = UiFlowStage.READY_TO_START
@@ -3387,7 +3422,7 @@ class ExplorationUiSession:
         self.board_backend = backend
         self.board_adapter = BoardSessionAdapter(connection)
         self.board_message = f"Plansza podłączona: {backend}."
-        if backend in {"simulator", "hardware"} and self.ui_flow_stage == UiFlowStage.WAITING_FOR_BOARD:
+        if backend in {"simulator", "hardware", "wled"} and self.ui_flow_stage == UiFlowStage.WAITING_FOR_BOARD:
             self.ui_flow_stage = UiFlowStage.READY_TO_START
 
     def shutdown_board(self) -> bool:
@@ -4767,7 +4802,7 @@ class ExplorationUiSession:
             self.wled_url,
             self.scan_timeout_s,
         ) = board_settings
-        if board_adapter is not None and board_backend in {"simulator", "hardware"}:
+        if (board_adapter is not None and board_backend in {"simulator", "hardware", "wled"}) or self.input_mode == "keyboard":
             self.ui_flow_stage = UiFlowStage.READY_TO_START
             self.board_message = (
                 f"Plansza nadal podłączona: {board_backend}. "
@@ -5035,8 +5070,8 @@ class ExplorationUiSession:
             + _build_exploration_setup_steps(self.exploration.environment)
         )
         transition = self.exploration_flow.start_session(
-            board_connected=self.board_adapter is not None,
-            board_backend=self.board_backend,
+            board_connected=self.board_adapter is not None or self.input_mode == "keyboard",
+            board_backend="keyboard" if self.input_mode == "keyboard" else self.board_backend,
             current_stage=self.ui_flow_stage,
             setup_steps=setup_steps,
             spell_preparation_pending=bool(
@@ -5355,6 +5390,8 @@ class ExplorationUiSession:
         expected_revision: str = "",
         automatic: bool = False,
     ) -> dict[str, object]:
+        if self.input_mode == "keyboard":
+            raise ValueError("Sterowanie klawiaturą jest aktywne; skaner planszy jest wyłączony.")
         if not self._board_scan_lock.acquire(blocking=False):
             self._record(
                 "ui_board_scan_duplicate_ignored",
@@ -21018,6 +21055,9 @@ class ExplorationUiSession:
             "wled_url": self.wled_url,
             "scan_timeout_s": self.scan_timeout_s,
             "connected": self.board_adapter is not None and self.board_adapter.connected,
+            "can_scan": bool(self.board_adapter and self.board_adapter.can_scan and self.input_mode == "board"),
+            "can_display_leds": bool(self.board_adapter and self.board_adapter.can_display_leds),
+            "input_mode": self.input_mode,
             "led_output": dict(getattr(self.board_adapter.connection, "led_status", {})) if self.board_adapter else {},
             "message": self.board_message,
         }
@@ -21030,6 +21070,8 @@ class ExplorationUiSession:
         positions = tuple(sorted(target.positions))
         connected = self.board_adapter is not None and self.board_adapter.connected
         signature_payload = {
+            "input_mode": self.input_mode,
+            "keyboard_revision": self.keyboard_cursor.revision if self.input_mode == "keyboard" else None,
             "resonance_revision": self.combat_state.resonance.revision if self.combat_state and self.combat_state.resonance else None,
             "mana_revision": self.combat_state.shared_mana.revision if self.combat_state and self.combat_state.shared_mana else None,
             "flow_stage": self.ui_flow_stage.value,
@@ -21136,12 +21178,14 @@ class ExplorationUiSession:
             "prompt": target.empty_message,
             "auto_arm": bool(
                 connected
+                and self.input_mode == "board"
+                and self.board_adapter.can_scan
                 and positions
                 and not screen_choice_active
                 and not actor_selection_active
             ),
             "connected": connected,
-            "allow_retry": connected,
+            "allow_retry": bool(connected and self.input_mode == "board" and self.board_adapter.can_scan),
             "confirmation_policy": (
                 "actor_card"
                 if actor_selection_active
@@ -21901,6 +21945,9 @@ class ExplorationUiSession:
     def _show_board_feedback(self, feedback: LedFeedback) -> None:
         if self.board_adapter is None:
             return
+        if self.input_mode == "keyboard":
+            from .input_context import feedback as keyboard_feedback
+            feedback = keyboard_feedback(self, feedback)
         self.board_adapter.show_feedback(feedback)
 
     def _animate_ranged_projectile(

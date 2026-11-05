@@ -17,7 +17,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--gm-classifier", choices=("none", "groq", "gemini"), default="gemini")
     parser.add_argument("--groq-model", default=None)
     parser.add_argument("--gemini-model", default=None)
-    parser.add_argument("--board-backend", choices=("none", "simulator", "hardware"), default="none")
+    parser.add_argument("--board-backend", choices=("none", "simulator", "hardware", "wled"), default="none")
+    parser.add_argument("--input-mode", choices=("board", "keyboard"), default="board",
+                        help="Klawiatura zastępuje czujniki i przyciski planszy; wled automatycznie wybiera klawiaturę.")
     parser.add_argument("--board-url", default="http://127.0.0.1:5000")
     parser.add_argument("--board-serial-port", default="")
     parser.add_argument("--wled-url", default="")
@@ -44,6 +46,9 @@ def main(argv: list[str] | None = None) -> int:
         debug_courtyard_entry=args.debug_courtyard_entry,
         automatic_checkpoints=True,
     )
+    session.configured_board_backend = args.board_backend
+    if args.input_mode == "keyboard" or args.board_backend == "wled":
+        session.configure_input_mode("keyboard")
     if args.board_backend != "none":
         session.configure_board(
             backend=args.board_backend,

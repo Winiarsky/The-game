@@ -13,6 +13,7 @@
 <link rel="stylesheet" href="{{ static_asset_url('tabletop_combat.css') }}">
 <link rel="stylesheet" href="{{ static_asset_url('tabletop_shell.css') }}">
 <link rel="stylesheet" href="{{ static_asset_url('resonance_combat.css') }}">
+<link rel="stylesheet" href="{{ static_asset_url('keyboard_input.css') }}">
 </head>
 <body>
 <header class="app-shell-header">
@@ -35,6 +36,11 @@
     </button>
   </div>
 </header>
+<section id="keyboard-control-bar" class="keyboard-control-bar" aria-label="Sterowanie klawiaturą" hidden>
+  <span class="keyboard-control-keys"><kbd>↑↓←→</kbd> wybór · <kbd>Enter</kbd> zatwierdź · <kbd>Esc</kbd> wróć <span data-keyboard-multiple hidden>· <kbd>Spacja</kbd> zaznacz/dodaj cel</span> · <kbd>M</kbd> ruch · <kbd>A</kbd> atak · <kbd>I</kbd> ekwipunek · <kbd>R</kbd> runy · <kbd>H</kbd> pomoc</span>
+  <span data-keyboard-status role="status" aria-live="polite"></span>
+  <small data-keyboard-sync hidden>Aktualizuję podgląd…</small>
+</section>
 <div id="board-disconnected-banner" class="board-disconnected-banner" role="status" hidden>
   <div><b>{{ ui_text('common.disconnected') }}</b><span id="board-disconnected-copy">{{ ui_text('common.disconnected_hint') }}</span></div>
   <div class="row">
@@ -147,6 +153,13 @@
             <option value="none">brak</option>
             <option value="simulator">symulator</option>
             <option value="hardware">hardware</option>
+            <option value="wled">same LED-y (WLED)</option>
+          </select>
+        </label>
+        <label>Sterowanie
+          <select id="input-mode" onchange="api('/api/input/configure',{mode:this.value},'Zmieniam sterowanie…')">
+            <option value="board">Przyciski planszy</option>
+            <option value="keyboard">Klawiatura komputera</option>
           </select>
         </label>
         <label>URL symulatora <input id="board-url" class="wide-input" value="http://127.0.0.1:5000"></label>
@@ -402,6 +415,7 @@
 <script src="{{ static_asset_url('rune_combat.js') }}"></script>
 <script src="{{ static_asset_url('tabletop_combat.js') }}"></script>
 <script src="{{ static_asset_url('resonance_combat.js') }}"></script>
+<script src="{{ static_asset_url('keyboard_input.js') }}"></script>
 <script src="{{ static_asset_url('exploration.js') }}"></script>
 </body>
 </html>

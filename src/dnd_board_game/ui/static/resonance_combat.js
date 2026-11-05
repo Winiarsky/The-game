@@ -45,7 +45,7 @@ const ChargeCombat = (() => {
     return `<aside class="rc-roster" aria-label="Kolejność tury"><header><span>RUNDA ${v.round}</span>${pages('roster',page,count)}</header>
       ${v.actors.slice(page*8,page*8+8).map(a => `<button class="rc-actor ${a.active ? 'rc-current' : ''} ${a.hp <= 0 ? 'rc-defeated' : ''}" data-rc-inspect="${esc(a.id)}" ${a.active ? 'aria-current="true"' : ''}>
       ${TabletopCombat.portrait(a)}<span><b>${esc(a.name)}</b><small>${a.hp}/${a.max_hp} PW · KP ${a.ac}${a.hero ? ` · ⚡ ${a.charges}/20` : ''}</small><span class="rc-actor-state">${esc(a.statuses.slice(0,2).join(' · '))}${a.statuses.length > 2 ? ` +${a.statuses.length-2}` : ''}</span></span>${a.member ? '<i title="Objęty Rezonansem">✦</i>' : ''}</button>`).join('')}
-      <footer>Gwiazda: szczegóły postaci i mocy</footer></aside>`;
+      <footer>${state.input?.mode === 'keyboard' ? 'C: karta postaci · R: runy i akcje' : 'Gwiazda: szczegóły postaci i mocy'}</footer></aside>`;
   }
   function targetHtml(v) {
     const targets = (v.decision.target_ids || []).map(id=>v.actors.find(a=>a.id===id)).filter(Boolean);

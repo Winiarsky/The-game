@@ -15,6 +15,7 @@ the D&D 5e rebuild became self-contained. It remains recoverable from Git histor
 - `docs/DND_IMPLEMENTATION_MATRIX.md` - living audit of implemented, partial, and missing D&D systems.
 - `PROMPT_TEMPLATE.md` - recommended prompt shape for Codex work.
 - [handouts](handouts/README.md) - current monochrome character cards, board maps, and Mission 0 print materials.
+- [Keyboard + LED playtest](docs/playtests/KEYBOARD_LED_MANUAL.md) - run Mission 0 or its battle with computer keyboard controls and optional WLED, without board sensors.
 
 ## Active Code Areas
 

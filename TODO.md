@@ -1,4 +1,4 @@
-## Plansza LED + pad — aktualizacja planu 05.11.2026
+## Klawiatura + LED — wdrożenie 05.11.2026
 
 - [x] Przejrzeć obecne wejście klawiatury, aktualną walkę runiczną,
   rozdzielenie USB/WLED i zależności launchera/setupu.
@@ -8,17 +8,26 @@
 - [x] Uaktualnić plan: pad głównym wejściem od początku, klawiatura awaryjnie
   i do tekstu; sprawdzić oferty bezprzewodowe, odbiór w okolicy Wołomina
   i podstawy zgodności z obecnym Linuxem. Polecany DualSense przez Bluetooth.
-- [ ] Po akceptacji planu sprawdzić konkretny pad na Linuxie/przeglądarce,
-  jego mapowanie i ponowne połączenie przez Bluetooth.
-- [ ] Wdrożyć wspólny kontrakt wejścia, adapter Gamepad API, klawiaturę
-  awaryjną i WLED bez seriala skanera.
-- [ ] Dodać kursor krzyżakiem/analogiem i podgląd/zatwierdzenie w arenie v0.3,
-  następnie pełną walkę, ekwipunek i menu run.
-- [ ] Objąć padem i klawiaturą launcher, setup, Misję 0, eksplorację i wczytywanie.
-- [ ] Sprawdzić zgodność zasad oraz pełną sesję z LED-ami bez USB skanera.
-  Decyzje i kości obsłużyć padem, swobodny tekst klawiaturą; sprawdzić
-  utratę fokusu, przytrzymanie przycisku i rozłączenie. Implementacji
-  jeszcze nie rozpoczęto; plan czeka na akceptację.
+- [x] Wdrożyć zaakceptowany zakres klawiaturowy: wspólny kontrakt wejścia,
+  bezkosztowy kursor, rewizje, modalne przejęcie wejścia i WLED bez seriala.
+- [x] Dodać M/A/I/R/C/J/H/0, strzałki, Enter/Esc, podgląd trasy/kosztu,
+  wybór wielu celów Spacją oraz zachować istniejące etapy mocy i kości.
+- [x] Objąć klawiaturą launcher, wybór drużyny/scenariusza, setup, Misję 0,
+  rozmowy, ekwipunek, walkę v0.3 oraz zapis/wczytywanie; nie zmieniać zasad.
+- [x] Dodać izolowany start pełnej misji i szybkiej walki:
+  `.venv/bin/python scripts/keyboard_playtest.py`, opcjonalnie
+  `--arena --skip-setup` albo `--wled-url ADRES`; instrukcja w
+  [KEYBOARD_LED_MANUAL.md](docs/playtests/KEYBOARD_LED_MANUAL.md).
+- [x] Sprawdzić brak seriala/skanów, zgodność zatwierdzonego ruchu z obecną
+  ścieżką, nieaktualne komendy, wszystkie siedem menu bohaterów oraz
+  rzeczywiste klawisze w Chrome podczas walki i przejścia Misji 0 do drogi.
+  Walidacja: 104 celowane testy w pojedynczych partiach z timeoutem,
+  także ręczny setup/inicjatywa bez skanera, pomoc, wyposażenie i launcher;
+  kompilacja Pythona, oba warianty `--check` oraz działający start lokalny.
+- [ ] Ograć fizyczne LED-y bez USB skanera: kierunki, trasa/cel, kości,
+  błąd i powrót WLED oraz wygaszenie. Symulator nie zastępuje tej próby.
+- [ ] Kolejny etap: próba konkretnego pada na Linuxie i adapter Gamepad API.
+  Zgodnie z aktualną decyzją wdrażamy najpierw klawiaturę.
 
 ## Trasy, osłona i Żar odnowy — 02.10.2026
 
@@ -1338,12 +1347,10 @@ najbliższy horyzont, a nie kopię całej roadmapy.
 - [x] Add passive board focus for physically placed initiative/Stealth actors and exploration objects, without treating exploration party members or NPCs as separate board pieces.
 - [x] Move prepared-spell selection to the final initial-setup step before first-location selection.
 - [ ] UI-5: Validate the complete board-first UI vertical slice with `abandoned_watchtower` and the manual hardware checklist.
-- [ ] [LED-only control experiment] Scope updated on 2026-11-05: prepare an
-  optional gamepad + LED profile with keyboard fallback on
+- [x] [LED-only keyboard controls] Implemented on 2026-11-05 on
   `feat/led-keyboard-control`, preserving gameplay and existing setup correction.
-  See the approval-pending
-  [layered implementation plan](docs/LED_KEYBOARD_CONTROL_PLAN.md) and tasks
-  at the top of this file. Runtime work starts only after plan acceptance.
+  See the [usage guide](docs/playtests/KEYBOARD_LED_MANUAL.md) and tasks at the
+  top of this file. Physical WLED playtest and gamepad input remain separate tasks.
 - [ ] P1: After the first target scenario, add the physical player-interface vertical
   slice: a player-maintained A4/A5 character sheet updated through level-up, printable
   illustrated decision cards with stable QR ids, a scanner input adapter, shared

@@ -1,6 +1,7 @@
 """A player can read session help and return to narration using only board slots."""
 from pathlib import Path
 from threading import Event, Thread
+import json
 import shutil
 import subprocess
 
@@ -9,6 +10,7 @@ import pytest
 from werkzeug.serving import make_server
 
 from dnd_board_game.ui.routes import create_app
+from dnd_board_game.scenarios.rune_relation_catalog import load_rune_relation_player_aid
 from tests.unit.test_mission_zero import session
 
 
@@ -31,25 +33,29 @@ def test_board_menu_help_and_return_preserve_narration(tmp_path: Path) -> None:
     harness = r'''<script>
     (async () => {
       const check=(value,message)=>{if(!value)throw Error(message)};
+      const expectedPlayerAid=EXPECTED_PLAYER_AID;
+      const canonical=value=>Array.isArray(value) ? value.map(canonical)
+        : value&&typeof value==='object' ? Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])) : value;
       const wait=async predicate=>{for(let i=0;i<200;i++){if(predicate())return;await new Promise(r=>setTimeout(r,20));}throw Error('Timed out');};
       const press=async slot=>{await wait(()=>!busy&&!boardPanelSyncPromise);const revision=state.board_selection.revision;await api('/api/board/select',{col:19,row:29-slot},'');await wait(()=>!busy&&!boardPanelSyncPromise&&state.board_selection.revision!==revision);};
       try {
         await wait(()=>state?.mission&&!busy);
         const original=JSON.stringify(state.mission);
-        check(state.player_aid.length===4,'canonical player aid missing');
+        check(JSON.stringify(canonical(state.player_aid))===JSON.stringify(canonical(expectedPlayerAid)),'canonical player aid missing');
         check(document.querySelector('[data-mission-slot="28"] svg'),'narration uses physical accept symbol');
         await press(29);
         await wait(()=>document.getElementById('session-navigation')?.open&&state.board_selection.panel_context?.startsWith('session-menu:'));
         check(document.querySelectorAll('#session-navigation .session-focused').length===1,'one menu cursor');
-        await press(27);await press(27);await press(28);
+        await press(26);await press(26);await press(28);
         await wait(()=>state.board_selection.panel_context?.startsWith('session-help:'));
-        check(document.querySelectorAll('#session-navigation .session-navigation-content>section').length===4,'rules are rendered from all four pages');
+        check(document.querySelectorAll('#session-navigation .session-navigation-content>section').length===expectedPlayerAid.length,'rules are rendered from all canonical pages');
         check(document.querySelectorAll('#session-navigation ol li').length===state.player_aid.flatMap(page=>page.sections||[]).flatMap(section=>section.steps||[]).length,'step-by-step rules are complete');
-        await press(27);
+        await press(26);
+        await wait(()=>document.querySelector('#session-navigation .session-navigation-content')?.scrollTop>0);
         {const area=document.querySelector('#session-navigation .session-navigation-content');check(area.scrollTop>0,'board plus scrolls the rules '+JSON.stringify({scroll:area.scrollTop,height:area.clientHeight,total:area.scrollHeight,context:state.board_selection.panel_context,open:document.getElementById('session-navigation').open}));}
         await press(29);
         await wait(()=>state.board_selection.panel_context?.startsWith('session-menu:'));
-        await press(27);await press(27);await press(27);await press(28);
+        await press(26);await press(26);await press(26);await press(28);
         await wait(()=>document.querySelector('#session-navigation h2')?.textContent===sessionUiText('common.party'));
         check(document.querySelectorAll('#session-navigation .session-navigation-content>section').length===6,'six party members');
         await press(28);
@@ -64,7 +70,7 @@ def test_board_menu_help_and_return_preserve_narration(tmp_path: Path) -> None:
       } catch(error) {
         await fetch('/__test/result',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({result:error.stack,body:document.body.innerText.slice(-1800)})});
       }
-    })();</script>'''
+    })();</script>'''.replace('EXPECTED_PLAYER_AID', json.dumps(load_rune_relation_player_aid(), ensure_ascii=True).replace('</', '<\\/'))
 
     @app.after_request
     def inject(response):

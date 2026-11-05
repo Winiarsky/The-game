@@ -1,9 +1,28 @@
-# Plan: plansza LED i sterowanie padem
+# Plansza LED — klawiatura i plan rozbudowy o pada
 
-Status: **do akceptacji; implementacja nierozpoczęta**. Aktualizacja: 05.11.2026.
+Status: **zakres klawiaturowy zaakceptowany i wdrożony; pad odłożony**.
+Aktualizacja: 05.11.2026.
 Branch: `feat/led-keyboard-control`.
 
-## Cel i zakres
+## Aktualne wdrożenie: klawiatura + LED
+
+Zgodnie z najnowszą decyzją implementacja obejmuje najpierw klawiaturę.
+Gotowy start: `.venv/bin/python scripts/keyboard_playtest.py`;
+szybka walka: `--arena --skip-setup`; prawdziwe światła: `--wled-url ADRES`.
+[Instrukcja i przypisania](playtests/KEYBOARD_LED_MANUAL.md).
+
+Zrealizowano WLED bez seriala, osobny profil wejścia, przejściowy kursor,
+podgląd na prywatnej kopii silnika, zabezpieczenie rewizji i modalów,
+klawiaturę w launcherze, setupie, Misji 0, rozmowach, ekwipunku i walce v0.3.
+Strzałki nie mutują wyboru celów. Enter korzysta z istniejącego zatwierdzenia;
+Spacja wybiera cele do zestawu. Zasady i format zapisu domenowego są zachowane.
+Sprawdzono atrapy hardware i rzeczywiste zdarzenia klawiatury w Chrome.
+Próba fizycznej planszy pozostaje osobnym punktem odbioru.
+
+Poniższy projekt pada i jego Gamepad API opisują dalszą rozbudowę, której
+obecne wdrożenie nie zawiera. Klawiatura jest teraz głównym wejściem.
+
+## Docelowa rozbudowa: pad
 
 Przygotować osobny, opcjonalny profil **pad + LED** na obecnym komputerze
 z Linuxem. Pad jest głównym wejściem od pierwszego etapu; klawiatura pozostaje
@@ -21,8 +40,8 @@ pozostałych scenariuszy korzystają z tej samej obsługi; starsze profile walki
 zachowują dotychczasowe działanie i wymagają regresji tam, gdzie dotykamy
 wspólnego kodu. Nie przebudowujemy wszystkich historycznych interfejsów.
 
-Na tym branchu na razie zapisujemy plan i TODO. Zmiany runtime oraz testy
-implementacji powstaną dopiero po akceptacji planu.
+Wdrożona warstwa klawiatury dostarcza wspólny dispatcher i kontrakt wejścia
+dla przyszłego adaptera pada. Zakup i próba pada nie blokują testu klawiatury.
 
 ## Pad do testów i odbiór — sprawdzone 05.11.2026
 

@@ -102,7 +102,7 @@ def create_app(
     def launcher_context():
         from .session_copy import load_ui_copy, render_ui_text
         copy = load_ui_copy()
-        return {'launcher_token': getattr(g, 'launcher_token', ''), 'ui_copy': copy,
+        return {'launcher_token': getattr(g, 'launcher_token', ''), 'input_mode': session.input_mode, 'ui_copy': copy,
                 'ui_text': lambda key, **values: render_ui_text(copy, key, **values)}
     character_catalog = load_character_catalog(
         Path("content/character_creation/catalog.json")
@@ -236,11 +236,11 @@ def create_app(
         from .exploration_mana import active
         from .simple_traps import enabled as trap_enabled, read as trap_read
         if (request.method == "POST" and request.path.startswith("/api/")
-                and not request.path.startswith("/api/board/") and trap_enabled(session)
+                and not request.path.startswith(("/api/board/", "/api/input/")) and trap_enabled(session)
                 and trap_read(session)['pending'] and request.path not in
                 {"/api/simple-trap", "/api/snapshot/save", "/api/snapshot/load"}):
             return jsonify(error="Najpierw rozstrzygnij test pułapki.", state=session.state_payload()), 400
-        if (request.method == "POST" and request.path.startswith("/api/") and not request.path.startswith("/api/board/") and active(session)
+        if (request.method == "POST" and request.path.startswith("/api/") and not request.path.startswith(("/api/board/", "/api/input/")) and active(session)
                 and request.path not in {"/api/exploration-mana", "/api/snapshot/save", "/api/snapshot/load",
                                          "/api/board/scan", "/api/board/reset-scan"}):
             return jsonify(error="Najpierw zakończ lub opuść aktywną konfrontację.", state=session.state_payload()), 400
@@ -1557,7 +1557,7 @@ def create_app(
         if request.endpoint in launcher_pages:
             g.launcher_token = launcher_board.begin(session)
         # A dice overlay belongs to one decision; a game command invalidates it.
-        if request.method == "POST" and request.path.startswith("/api/") and not request.path.startswith("/api/board/"):
+        if request.method == "POST" and request.path.startswith("/api/") and not request.path.startswith(("/api/board/", "/api/input/")):
             session.board_panel_context = None
         if (session.combat_state and session.combat_state.resonance and request.method == "POST"
                 and request.path.startswith("/api/combat/") and request.path != "/api/combat/resonance"):
@@ -1638,6 +1638,26 @@ def create_app(
             return jsonify(session.select_board_position(Coordinate(int(data.get("col", 0)), int(data.get("row", 0)))))
         except Exception as exc:
             return jsonify({"error": str(exc), "state": session.state_payload()}), 400
+
+    @app.post("/api/input/configure")
+    def api_input_configure():
+        data = request.get_json(silent=True) or {}
+        try:
+            session.configure_input_mode(str(data.get("mode", "")))
+            return jsonify(session.state_payload())
+        except (ValueError, TypeError) as exc:
+            return jsonify(error=str(exc), state=session.state_payload()), 400
+
+    @app.post("/api/input/command")
+    def api_input_command():
+        from .input_context import command
+        try:
+            data = request.get_json(silent=True)
+            if not isinstance(data, dict):
+                raise ValueError("Nieprawidłowe polecenie sterowania.")
+            return jsonify(command(session, data))
+        except (ValueError, TypeError, KeyError) as exc:
+            return jsonify(error=str(exc), state=session.state_payload()), 400
 
     @app.post("/api/board/reset-scan")
     def api_board_reset_scan():

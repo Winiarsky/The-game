@@ -28,7 +28,8 @@ def build_parser() -> argparse.ArgumentParser:
                         help='intro: przybycie po scenie z wozem (domyślnie); setup: rozstawianie; initiative: rzuty graczy; combat: pierwsza runda.')
     parser.add_argument('--seed', type=int, default=7, help='Ziarno automatycznych rzutów inicjatywy i przeciwników.')
     parser.add_argument('--runtime-dir', type=Path, help='Katalog zapisów i logów; domyślnie nowy /tmp/mission0-combat-…')
-    parser.add_argument('--board-backend', choices=('none', 'simulator', 'hardware'), default='none')
+    parser.add_argument('--board-backend', choices=('none', 'simulator', 'hardware', 'wled'), default='none')
+    parser.add_argument('--input-mode', choices=('board', 'keyboard'), default='board')
     parser.add_argument('--board-url', default='http://127.0.0.1:5000')
     parser.add_argument('--board-serial-port', default='', help='Pusty: automatyczne wyszukiwanie planszy USB.')
     parser.add_argument('--wled-url', default='')
@@ -110,6 +111,8 @@ def main(argv: list[str] | None = None) -> int:
                              start_at=args.start_at, runtime_dir=runtime_dir, seed=args.seed)
     try:
         session.configured_board_backend = args.board_backend
+        if args.input_mode == 'keyboard' or args.board_backend == 'wled':
+            session.configure_input_mode('keyboard')
         if args.board_backend != 'none':
             session.configure_board(backend=args.board_backend, board_url=args.board_url,
                                     board_serial_port=args.board_serial_port, wled_url=args.wled_url,

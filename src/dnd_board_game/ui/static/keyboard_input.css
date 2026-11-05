@@ -1,0 +1,42 @@
+.keyboard-control-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .4rem 1rem;
+  padding: .45rem 1rem;
+  color: #e9e3d4;
+  background: #242b32;
+  border-bottom: 1px solid #617186;
+  font-size: .8rem;
+}
+.keyboard-control-bar[hidden] { display: none; }
+.keyboard-control-mode .board-connection-indicator.led-error .connection-dot { background: #e59474; box-shadow: 0 0 8px #e5947466; }
+.keyboard-control-mode .board-connection-indicator.led-pending .connection-dot { background: #d6bd86; }
+.keyboard-control-mode .rc-combat { height: calc(100dvh - 100px - var(--keyboard-control-height, 0px)); min-height: 390px; }
+.keyboard-control-mode .tt-combat { height: calc(100dvh - 104px - var(--keyboard-control-height, 0px)); }
+.keyboard-control-keys { color: #c7d5e4; }
+.keyboard-control-bar [data-keyboard-status] { flex: 1 1 18rem; }
+.keyboard-control-bar kbd {
+  display: inline-block;
+  min-width: 1.2em;
+  padding: .05rem .22rem;
+  border: 1px solid #64748b;
+  border-radius: .2rem;
+  font: inherit;
+  text-align: center;
+}
+.keyboard-control-mode .keyboard-choice-focused {
+  outline: 3px solid #f4ca72;
+  outline-offset: 2px;
+}
+#keyboard-shortcuts, #keyboard-journal {
+  max-width: min(44rem, 90vw);
+  max-height: 82vh;
+  color: #eee7da;
+  background: #222a31;
+  border: 1px solid #8292a4;
+  border-radius: .6rem;
+  padding: 1.25rem;
+}
+#keyboard-shortcuts::backdrop, #keyboard-journal::backdrop { background: #0009; }
+.keyboard-journal-entries { max-height: 60vh; overflow-y: auto; }

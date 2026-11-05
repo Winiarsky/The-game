@@ -6,6 +6,7 @@
   const status = controls.querySelector('[data-board-status]');
   const retry = controls.querySelector('button');
   const directRunes = document.body.classList.contains('main-menu-page');
+  let keyboardMode = controls.dataset.inputMode === 'keyboard';
   let stopped = false, syncing = false, scanning = false, scheduled = null;
   let selection = null, signature = '', epoch = 0, focused = null;
 
@@ -21,10 +22,10 @@
   const back = () => [...document.querySelectorAll('[data-board-back]')].find(visible);
   function desired() {
     const entries = choices();
-    if (directRunes) focused = null;
+    if (directRunes && !keyboardMode) focused = null;
     else if (!entries.some(e => Number(e.dataset.boardRune) === focused)) focused = entries.length ? Number(entries[0].dataset.boardRune) : null;
     entries.forEach(e => e.classList.toggle('board-focused', Number(e.dataset.boardRune) === focused));
-    return {token, controls: !directRunes && entries.length ? [26,27,28] : [], focused, slots: entries.map(e => Number(e.dataset.boardRune)),
+    return {token, controls: (!directRunes || keyboardMode) && entries.length ? [26,27,28] : [], focused, slots: entries.map(e => Number(e.dataset.boardRune)),
       selected: entries.filter(e => e.querySelector('input:checked')).map(e => Number(e.dataset.boardRune)),
       back: Boolean(back())};
   }
@@ -61,8 +62,15 @@
       if (stopped || version !== epoch) return;
       signature = key;
       selection = data.board_selection;
-      if (!selection.connected) throw new Error(sessionUiText('navigation.disconnected'));
-      report(sessionUiText(directRunes ? 'navigation.menu_board_hint' : 'navigation.board_hint') + (contract.back ? ' · ' + sessionUiText('navigation.back_hint') : ''));
+      keyboardMode = selection.control_mode === 'keyboard' || data.input?.mode === 'keyboard';
+      if (!selection.connected && !keyboardMode) throw new Error(sessionUiText('navigation.disconnected'));
+      report(keyboardMode ? 'Klawiatura: strzałki wybierają · Enter otwiera · Esc wraca.'
+        : sessionUiText(directRunes ? 'navigation.menu_board_hint' : 'navigation.board_hint') + (contract.back ? ' · ' + sessionUiText('navigation.back_hint') : ''));
+      if (keyboardMode) {
+        document.querySelectorAll('.menu-board-hint').forEach(element => {
+          element.textContent = 'Strzałki wybierają · Enter otwiera · Esc wraca';
+        });
+      }
     } catch (error) {
       if (!stopped) {signature = key; selection = null; report(error.message, true);
         setTimeout(() => {if (!stopped && !selection) {signature='';queueSync();}}, 2000);}
@@ -117,6 +125,41 @@
     else queueSync();
   }, true);
   document.addEventListener('submit', stop, true);
+  document.addEventListener('focusin', event => {
+    if (!keyboardMode || stopped || !(event.target instanceof Element)) return;
+    const element = event.target.closest('[data-board-rune]');
+    if (!element || !choices().includes(element)) return;
+    const slot = Number(element.dataset.boardRune);
+    if (focused !== slot) {focused = slot; signature = ''; queueSync();}
+  });
+  document.addEventListener('keydown', event => {
+    if (!keyboardMode || stopped || event.defaultPrevented || event.isComposing
+        || event.ctrlKey || event.altKey || event.metaKey) return;
+    const editable = event.target instanceof Element && event.target.closest('textarea,select,[contenteditable="true"],input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"])');
+    if (editable) return;
+    if (!['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Enter','Escape'].includes(event.key)) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (event.repeat && ['Enter','Escape'].includes(event.key)) return;
+    if (event.key === 'Escape') {back()?.click(); return;}
+    const entries = choices();
+    if (!entries.length) return;
+    let index = entries.findIndex(element => Number(element.dataset.boardRune) === focused);
+    if (event.key === 'Enter') {
+      if (syncing) return;
+      (entries[index < 0 ? 0 : index]).click();
+      return;
+    }
+    const delta = ['ArrowDown','ArrowRight'].includes(event.key) ? 1 : -1;
+    index = Math.max(0, Math.min(entries.length - 1, (index < 0 ? 0 : index) + delta));
+    const element = entries[index];
+    focused = Number(element.dataset.boardRune);
+    element.tabIndex = 0;
+    element.focus({preventScroll:true});
+    element.scrollIntoView({block:'nearest'});
+    signature = '';
+    queueSync();
+  }, true);
   document.addEventListener('change', () => {++epoch; signature = ''; queueSync();});
   new MutationObserver(queueSync).observe(document.querySelector('main'), {
     subtree:true, childList:true, attributes:true, attributeFilter:['hidden', 'disabled', 'class'],

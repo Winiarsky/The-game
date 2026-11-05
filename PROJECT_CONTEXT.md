@@ -1,5 +1,19 @@
 # Kontekst Projektu
 
+## Klawiatura + LED — 05.11.2026
+
+Opcjonalny profil klawiatury zastępuje czujniki i przyciski planszy. Strzałki
+wskazują kursor/podgląd, Enter przekazuje wybór i obecne zatwierdzenie,
+Esc cofa, M otwiera ruch, A atak, I ekwipunek, a R menu run i akcji.
+Podgląd nie wydaje zasobów. Moce wieloetapowe zachowują kolejność; Spacja
+wybiera cele do zestawu. Zasady, fizyczne kości i ręczne przestawianie
+figurek pozostają. Pada odłożono do kolejnego etapu.
+
+Backend `wled` działa bez seriala skanera; wejście i wyjście LED mają osobne
+możliwości. Gotowy test z osobnymi danymi: `.venv/bin/python scripts/keyboard_playtest.py`;
+szybka walka: `--arena --skip-setup`; prawdziwe światła: `--wled-url ADRES`.
+Instrukcja: [Klawiatura i LED](docs/playtests/KEYBOARD_LED_MANUAL.md).
+
 ## Informacja zwrotna podczas walki — 02.10.2026
 
 Ustawianie planszy pozwala wrócić do poprzedniego elementu przyciskiem

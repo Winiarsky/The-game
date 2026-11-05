@@ -365,6 +365,69 @@ class _WledClient:
         return True
 
 
+def _send_wled_frame(client: _WledClient, frame: LedFrame) -> bool:
+    """Deliver a complete frame through the shared asynchronous output worker."""
+
+    if not frame.updates:
+        confirmed = client.clear()
+    else:
+        confirmed = client.set_leds(
+            [(index, list(color)) for index, color in frame.updates],
+            brightness=frame.brightness,
+            replace=True,
+            transition_ms=frame.transition_ms,
+        )
+    if not confirmed:
+        raise LedOutputError(client.last_error or "WLED nie potwierdził ramki.")
+    return True
+
+
+class _WledBackend:
+    """LED output without creating, probing or depending on a serial device."""
+
+    can_scan = False
+
+    def __init__(self, wled_cfg: dict[str, Any]) -> None:
+        self.wled = _WledClient(wled_cfg)
+        self._closed = False
+        self.output = LedOutput(lambda frame: _send_wled_frame(self.wled, frame))
+        self.output.submit(LedFrame(()))
+
+    @property
+    def connected(self) -> bool:
+        # HTTP availability is reported by led_status, separately from input.
+        return not self._closed
+
+    @property
+    def can_display_leds(self) -> bool:
+        return not self._closed
+
+    def set_leds(
+        self,
+        led_updates: list[tuple[int, list[int]]],
+        *,
+        brightness: int | None = None,
+        replace: bool = False,
+        transition_ms: int | None = None,
+    ) -> bool:
+        self.output.submit(LedFrame(tuple((i, tuple(color)) for i, color in led_updates),
+                                    brightness, transition_ms))
+        return True
+
+    def leds_off(self) -> bool:
+        self.output.submit(LedFrame(()))
+        return True
+
+    def close(self) -> None:
+        if self._closed:
+            return
+        try:
+            self.leds_off()
+            self.output.close()
+        finally:
+            self._closed = True
+
+
 class _HardwareBackend:
     def __init__(self, scan_cfg: dict[str, Any], wled_cfg: dict[str, Any]) -> None:
         self.scan_cfg = dict(scan_cfg)
@@ -379,17 +442,8 @@ class _HardwareBackend:
         self.output.submit(LedFrame(()))
 
     def _send_led_frame(self, frame: LedFrame) -> bool:
-        if not frame.updates:
-            confirmed = self.wled.clear()
-        else:
-            confirmed = self.wled.set_leds([(index, list(color)) for index, color in frame.updates],
-                                           brightness=frame.brightness, replace=True,
-                                           transition_ms=frame.transition_ms)
-        if not confirmed:
-            # Preserve the HTTP/validation failure during retry cooldown too.
-            # The output worker records it; USB input remains independent.
-            raise LedOutputError(self.wled.last_error or 'WLED nie potwierdził ramki.')
-        return True
+        # Preserve HTTP failures during retry cooldown; input stays independent.
+        return _send_wled_frame(self.wled, frame)
 
     def prepare_scan(self, positions: list[tuple[int, int]] | None, *, context_key: str,
                      mode: str, finish_positions: tuple[tuple[int, int], ...]) -> Callable[..., tuple[int, int] | None]:
@@ -496,7 +550,7 @@ class Connection:
         resolved_backend = backend
         resolved_simulator_url = simulator_url
         if resolved_backend is None:
-            if target in {"hardware", "simulator"}:
+            if target in {"hardware", "simulator", "wled"}:
                 resolved_backend = target
             elif isinstance(target, str) and target.startswith("http"):
                 resolved_backend = "simulator"
@@ -504,6 +558,8 @@ class Connection:
             else:
                 resolved_backend = connection_backend(self.config)
         resolved_backend = str(resolved_backend or "hardware").strip().lower()
+        if resolved_backend not in {"hardware", "simulator", "wled"}:
+            raise ValueError(f"Unsupported board backend: {resolved_backend}.")
         self.backend = resolved_backend
 
         if resolved_backend == "simulator":
@@ -511,15 +567,20 @@ class Connection:
             self._backend: Any = _SimulatorBackend(self.simulator_url)
             return
 
-        scan_cfg = hardware_scan_config(self.config)
-        if serial_port is not None:
-            scan_cfg["serial_port"] = serial_port
         wled_cfg = wled_config(self.config)
         if wled_url is not None:
             wled_cfg["base_url"] = wled_url
+        self.wled_url = _normalize_wled_url(str(wled_cfg.get("base_url") or ""))
+        if resolved_backend == "wled":
+            self._backend = _WledBackend(wled_cfg)
+            self.serial_port = None
+            return
+
+        scan_cfg = hardware_scan_config(self.config)
+        if serial_port is not None:
+            scan_cfg["serial_port"] = serial_port
         self._backend = _HardwareBackend(scan_cfg, wled_cfg)
         self.serial_port = getattr(self._backend, "serial_port", None)
-        self.wled_url = _normalize_wled_url(str(wled_cfg.get("base_url") or ""))
 
     def _resolve_led_updates(self, positions: list[tuple[int, int]], rgb_color) -> list[tuple[int, list[int]]]:
         if not positions:
@@ -538,6 +599,7 @@ class Connection:
 
     def prepare_scan(self, positions: list[tuple[int, int]], *, context_key: str,
                      mode: str, finish_positions: tuple[tuple[int, int], ...]) -> Callable[..., tuple[int, int] | None]:
+        self._require_scan()
         if isinstance(self._backend, _HardwareBackend):
             return self._backend.prepare_scan(positions, context_key=context_key,
                                               mode=mode, finish_positions=finish_positions)
@@ -554,6 +616,18 @@ class Connection:
         return bool(getattr(self._backend, "connected", True))
 
     @property
+    def can_scan(self) -> bool:
+        return bool(getattr(self._backend, "can_scan", True))
+
+    @property
+    def can_display_leds(self) -> bool:
+        return bool(getattr(self._backend, "can_display_leds", True))
+
+    def _require_scan(self) -> None:
+        if not self.can_scan:
+            raise ValueError("Tryb samych LED-ów nie obsługuje skanowania pól. Użyj klawiatury.")
+
+    @property
     def led_status(self) -> dict[str, object]:
         output = getattr(self._backend, "output", None)
         return output.status if output is not None else {}
@@ -563,6 +637,7 @@ class Connection:
         timeout_s: float | None = None, context_key: str = "", mode: str = "single",
         finish_positions: tuple[tuple[int, int], ...] = (),
     ) -> tuple[int, int] | None:
+        self._require_scan()
         return self._backend.scan_board(acceptable_responses, timeout_s=timeout_s,
                                        context_key=context_key, mode=mode, finish_positions=finish_positions)
 

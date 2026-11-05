@@ -53,15 +53,21 @@ def main() -> None:
     parser.add_argument("--board-port", type=int, default=5001)
     parser.add_argument("--runtime", type=Path, help="Opcjonalny osobny katalog zapisów testu; domyślnie nowy katalog /tmp.")
     parser.add_argument("--hardware", action="store_true", help="Zamiast lokalnego symulatora połącz wskazaną planszę.")
+    parser.add_argument("--keyboard", action="store_true", help="Sterowanie klawiaturą, bez skanowania pól i przycisków.")
+    parser.add_argument("--wled-only", action="store_true", help="Wyłącznie prawdziwe LED-y WLED i klawiatura, bez seriala planszy.")
     parser.add_argument("--serial-port", default="")
     parser.add_argument("--wled-url", default="")
     parser.add_argument("--skip-setup", action="store_true", help="Tylko symulator: automatyczne ustawienie i inicjatywa.")
     parser.add_argument("--check", action="store_true", help="Sprawdź przygotowanie bez uruchamiania serwerów i sprzętu.")
     args = parser.parse_args()
+    if args.wled_only and (args.hardware or not args.wled_url or args.skip_setup):
+        parser.error("--wled-only wymaga --wled-url i ręcznego setupu; nie łącz z --hardware.")
     if args.hardware and (not args.serial_port or not args.wled_url or args.skip_setup):
         parser.error("Sprzęt wymaga --serial-port i --wled-url oraz ręcznego setupu.")
     folder = args.runtime or Path(mkdtemp(prefix="rune-relations-v03-"))
     game = prepare_session(folder, tuple(args.heroes), skip_setup=args.skip_setup or args.check)
+    if args.keyboard or args.wled_only:
+        game.configure_input_mode("keyboard")
     if args.check:
         assert game.combat_state and game.combat_state.resonance
         assert game.combat_state.resonance.profile == PROFILE
@@ -70,7 +76,10 @@ def main() -> None:
         return
     simulator = worker = server = None
     try:
-        if args.hardware:
+        if args.wled_only:
+            game.configured_board_backend = "wled"
+            game.configure_board(backend="wled", wled_url=args.wled_url)
+        elif args.hardware:
             game.configure_board(backend="hardware", board_serial_port=args.serial_port, wled_url=args.wled_url)
         else:
             from board.simulator.app import app as board_app

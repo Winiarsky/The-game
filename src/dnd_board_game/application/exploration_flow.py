@@ -103,7 +103,7 @@ class ExplorationFlowService:
         setup_steps: tuple[SetupStep, ...],
         spell_preparation_pending: bool = False,
     ) -> StartSessionTransition | None:
-        if not board_connected or board_backend not in {"simulator", "hardware"}:
+        if not board_connected or board_backend not in {"simulator", "hardware", "wled", "keyboard"}:
             raise ValueError("Najpierw wybierz i zastosuj backend planszy: symulator albo hardware.")
         if current_stage not in {
             ExplorationFlowStage.READY_TO_START,

@@ -392,8 +392,15 @@ async function api(path, body, busyMessage, {quiet = false} = {}) {
     }
     if (res.ok && data.redirect) { window.location.assign(data.redirect); return {ok:true}; }
     if (res.ok && data.panel_event) {
-      window.setTimeout(() => { handleBoardPanelEvent(data); scheduleAutomaticBoardScan(); }, 0);
-      return {ok: true};
+      if (data.input) state.input = data.input;
+      if (data.board_selection) state.board_selection = data.board_selection;
+      if (typeof KeyboardInput !== 'undefined') KeyboardInput.refresh();
+      window.setTimeout(() => {
+        handleBoardPanelEvent(data);
+        if (typeof KeyboardInput !== 'undefined') KeyboardInput.refresh();
+        scheduleAutomaticBoardScan();
+      }, 0);
+      return {ok: true, data};
     }
     state = data.state || data;
     if (res.ok) boardCommandError = '';
@@ -472,8 +479,9 @@ async function loadState() {
   chatInstanceOpen = true;
   const board = state.board || {};
   // A reload loses the browser promise, but its server scan can still wait.
-  if (board.connected) await stopBoardScanLoop({force: true});
+  if (board.connected && state.input?.mode !== 'keyboard' && board.can_scan !== false) await stopBoardScanLoop({force: true});
   if (!board.connected && !boardFallbackEnabled
+      && state.input?.mode !== 'keyboard'
       && ['hardware', 'simulator'].includes(board.configured_backend)) {
     await retryBoardConnection();
   } else {
@@ -484,6 +492,7 @@ async function loadState() {
   scheduleAutomaticBoardScan();
 }
 function render() {
+  if (typeof KeyboardInput !== 'undefined') KeyboardInput.refresh();
   if (typeof ChargeCombat !== 'undefined' && ChargeCombat.updateDie()) {
     updateBoardInputPresentation();
     scheduleAutomaticBoardScan();
@@ -606,6 +615,7 @@ function render() {
   focusCombatDecision();
   if (typeof TabletopCombat !== 'undefined') TabletopCombat.afterRender();
   if (typeof SessionNavigation !== 'undefined') SessionNavigation.afterRender();
+  if (typeof KeyboardInput !== 'undefined') KeyboardInput.refresh();
 }
 
 function isKeyboardRollInput(input) {
@@ -1677,12 +1687,21 @@ function renderBoardConnectionIndicator() {
   const board = state.board || {};
   const backend = board.backend || 'none';
   const connected = Boolean(board.connected);
-  indicator.classList.toggle('connected', connected);
-  indicator.classList.toggle('simulator', connected && backend === 'simulator');
-  const label = connected ? (backend === 'simulator' ? sessionUiText('common.simulator') : sessionUiText('common.connected'))
+  const ledError = String(board.led_output?.error || '');
+  const ledPending = Boolean(board.led_output?.pending);
+  indicator.classList.toggle('connected', connected && !ledError);
+  indicator.classList.toggle('simulator', connected && backend === 'simulator' && !ledError);
+  indicator.classList.toggle('led-error', Boolean(ledError));
+  indicator.classList.toggle('led-pending', ledPending && !ledError);
+  const keyboard = state.input?.mode === 'keyboard';
+  const ledLabel = ledError ? 'LED-y niedostępne' : !connected ? 'bez LED-ów'
+    : ledPending ? 'aktualizuję LED-y' : backend === 'simulator' ? 'symulator LED' : 'LED-y';
+  const label = keyboard ? `Klawiatura · ${ledLabel}`
+    : connected ? (backend === 'simulator' ? sessionUiText('common.simulator') : sessionUiText('common.connected'))
     : boardConnectionInFlight ? sessionUiText('common.connecting') : sessionUiText('common.disconnected');
   indicator.querySelector('span:last-child').textContent = label;
-  indicator.title = board.message || label;
+  indicator.title = ledError ? `LED-y: ${ledError}${keyboard ? ' Klawiatura pozostaje aktywna.' : ''}`
+    : ledPending ? 'Oczekuję na potwierdzenie aktualnej ramki LED.' : board.message || label;
 }
 function renderBoardFallback() {
   const board = state.board || {};
@@ -1696,12 +1715,12 @@ function renderBoardFallback() {
   const panel = document.getElementById('board-fallback-panel');
   const toggle = document.getElementById('board-fallback-toggle');
   const copy = document.getElementById('board-disconnected-copy');
-  if (banner) banner.hidden = connected || boardConnectionInFlight;
+  if (banner) banner.hidden = state.input?.mode === 'keyboard' || connected || boardConnectionInFlight;
   if (panel) panel.hidden = connected || !boardFallbackEnabled;
   if (toggle) toggle.textContent = boardFallbackEnabled ? sessionUiText('common.fallback_active') : sessionUiText('common.fallback');
   if (copy) copy.textContent = boardConnectionNotice || (boardFallbackEnabled ? sessionUiText('common.fallback_hint') : sessionUiText('common.disconnected_hint'));
   document.body.classList.toggle('board-fallback-active', !connected && boardFallbackEnabled);
-  document.body.classList.toggle('board-disconnected', !connected);
+  document.body.classList.toggle('board-disconnected', !connected && state.input?.mode !== 'keyboard');
 }
 async function retryBoardConnection() {
   if (boardConnectionInFlight) return;
@@ -7891,6 +7910,7 @@ function pauseBoardForScreenInput() {
   updateBoardInputPresentation();
 }
 function boardSelectionStatusHtml(compact = false) {
+  if (state?.input?.mode === 'keyboard') return '';
   const selection = currentBoardSelection();
   if (boardSelectionPausedForScreenInput()) return '';
   if (!selection || !Number(selection.legal_position_count || 0)) return '';
@@ -7942,6 +7962,7 @@ function updateBoardInputPresentation() {
   if (typeof ChargeCombat !== 'undefined') ChargeCombat.updateBoardError();
 }
 function boardSelectionCanAutoArm(selection = currentBoardSelection()) {
+  if (state?.input?.mode === 'keyboard' || state?.board?.can_scan === false) return false;
   if (!selection || !selection.auto_arm || !selection.connected) return false;
   if (!Number(selection.legal_position_count || 0)) return false;
   if (combatTurnActionMoveInFlight || combatTurnActionMoveTimer || combatTurnActionMoveDelta) return false;
@@ -7958,7 +7979,7 @@ function boardSelectionCanAutoArm(selection = currentBoardSelection()) {
 function scheduleAutomaticBoardScan() {
   clearTimeout(boardAutoArmTimer);
   boardAutoArmTimer = null;
-  if (syncBrowserBoardPanel()) return;
+  if (state?.input?.mode !== 'keyboard' && syncBrowserBoardPanel()) return;
   const selection = currentBoardSelection();
   if (!boardSelectionCanAutoArm(selection)) {
     if (
@@ -9436,6 +9457,7 @@ function physicalCardPayloadFromRecentKeys() {
   return match ? match[0] : '';
 }
 function consumePhysicalCardKey(event) {
+  if (state?.input?.mode === 'keyboard') return false;
   if (event.defaultPrevented || event.isComposing || event.repeat) return false;
   if (event.ctrlKey || event.metaKey || event.altKey) return false;
   const now = performance.now();
@@ -9522,6 +9544,7 @@ function consumePhysicalCardKey(event) {
 }
 document.addEventListener('keydown', consumePhysicalCardKey, {capture: true});
 document.addEventListener('keydown', event => {
+  if (state?.input?.mode === 'keyboard') return;
   if (event.defaultPrevented) return;
   const target = event.target;
   const combatMenu = state && state.combat ? state.combat.context_menu : null;

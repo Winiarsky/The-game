@@ -68,12 +68,16 @@ def configure(s: ExplorationUiSession, data: dict[str, object]) -> dict[str, obj
     if s.board_adapter is not None and not s.board_adapter.connected:
         s.shutdown_board()
     if s.board_adapter is None:
-        backend = s.board_backend if s.board_backend in {'hardware', 'simulator'} else s.configured_board_backend
-        s.configure_board(backend=backend, board_url=s.board_url,
-                          board_serial_port=s.board_serial_port, wled_url=s.wled_url)
+        backend = s.board_backend if s.board_backend in {'hardware', 'simulator', 'wled'} else s.configured_board_backend
+        # A remembered scanner default must not make keyboard navigation probe USB.
+        # Explicit LED-only and simulator choices remain available for output.
+        if getattr(s, 'input_mode', 'board') != 'keyboard' or backend in {'simulator', 'wled'}:
+            s.configure_board(backend=backend, board_url=s.board_url,
+                              board_serial_port=s.board_serial_port, wled_url=s.wled_url)
     s._cancel_obsolete_board_input()
     s._sync_board_leds()
-    return {'board_selection': selection(s), 'board': s._board_payload()}
+    return {'board_selection': selection(s), 'board': s._board_payload(),
+            'input': {'mode': getattr(s, 'input_mode', 'board')}}
 
 
 def release(s: ExplorationUiSession, token: str) -> None:
@@ -102,12 +106,17 @@ def target(s: ExplorationUiSession) -> BoardScanTarget:
 def selection(s: ExplorationUiSession) -> dict[str, object]:
     nav = s.launcher_navigation
     connected = s.board_adapter is not None and s.board_adapter.connected
+    keyboard = getattr(s, 'input_mode', 'board') == 'keyboard'
+    can_scan = connected and bool(getattr(s.board_adapter, 'can_scan', True)) and not keyboard
     positions = [list(panel_position(slot).as_tuple()) for slot in nav.active_slots]
     return dict(revision=f'launcher:{nav.token}:{nav.generation}', navigation_token=nav.token,
                 mode='launcher', input_mode='single', panel_enabled=False, panel_context=None,
+                control_mode='keyboard' if keyboard else 'board',
                 legal_positions=positions, legal_position_count=len(positions), connected=connected,
-                auto_arm=connected and bool(positions), allow_retry=connected,
-                confirmation_policy='immediate', prompt=target(s).empty_message)
+                auto_arm=can_scan and bool(positions), allow_retry=can_scan,
+                confirmation_policy='immediate', prompt=(
+                    'Klawiatura: strzałki wybierają, Enter otwiera, Esc wraca.'
+                    if keyboard else target(s).empty_message))
 
 
 def select(s: ExplorationUiSession, position: Coordinate) -> dict[str, object]:

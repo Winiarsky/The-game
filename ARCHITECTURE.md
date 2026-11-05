@@ -2,6 +2,22 @@
 
 The rebuild should separate deterministic game logic from adapters.
 
+## Keyboard and output-only WLED (2026-11-05)
+
+`ui/input_commands.py` holds transient cursor state and pure coordinate helpers;
+`ui/input_context.py` projects device-neutral input contexts and dispatches to
+existing session commands. Cursor previews use the combat engine's private copy
+and never commit it. Selected targets, multi-step powers and resource spending
+remain authoritative in the existing application/combat flows. Input revisions
+and modal ownership prevent stale or duplicate confirmations.
+
+`ui/static/keyboard_input.js` adapts browser keys, focus and controlled repeats.
+The session's input profile survives reset/load independently of LED output.
+`board.Connection(backend="wled")` reuses the asynchronous LED worker without
+creating serial input. `can_scan` and `can_display_leds` describe independent
+capabilities; keyboard mode disables scan scheduling even with a simulator.
+Gamepad input is deferred. Start and usage: `docs/playtests/KEYBOARD_LED_MANUAL.md`.
+
 ## Combat decision feedback (2026-10-02)
 
 `ChargeEncounter.target_candidates/target_rejection` explain the existing
