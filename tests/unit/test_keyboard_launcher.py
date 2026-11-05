@@ -26,7 +26,8 @@ def test_keyboard_launcher_has_led_choices_without_automatic_scan(tmp_path: Path
     assert not result['auto_arm']
     assert not result['allow_retry']
     assert 'Enter' in result['prompt']
-    assert len(board.leds) == 4
+    assert len(result['legal_positions']) == 4
+    assert not any(any(color) for color in board.leds.values())
     assert board.scans == 0
 
 

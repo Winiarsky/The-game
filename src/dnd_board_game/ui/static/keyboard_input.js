@@ -3,6 +3,8 @@ const KeyboardInput = (() => {
   let context = '', generation = 0, inFlight = false, pendingCursor = null;
   let desiredCursor = null, pendingBack = '', lastNavigationAt = 0, message = '', actionList = false;
   let tabNavigation = false, explicitChoice = null;
+  let menuFocusScheduled = false;
+  const menuMemory = new Map();
   const held = new Set(), blocked = new Set();
   const enabled = () => typeof state !== 'undefined' && state?.input?.mode === 'keyboard';
   const contract = () => state?.input || {};
@@ -47,6 +49,7 @@ const KeyboardInput = (() => {
     document.body.style.setProperty('--keyboard-control-height', `${bar.getBoundingClientRect().height}px`);
     const selector = document.getElementById('input-mode');
     if (selector && document.activeElement !== selector) selector.value = input.mode;
+    scheduleMenuFocus();
   }
   function status(text) { message = text; refresh(); }
 
@@ -117,10 +120,56 @@ const KeyboardInput = (() => {
       && !element.matches('[data-primary-scan="true"],[data-rc-scan-retry]')
       && !element.closest('.mission-toolbar,.mission-scroll-controls'));
   }
+  function menuKey() { return `${currentContext()}:${actionList ? 'actions' : 'menu'}`; }
+  function choiceKey(element) {
+    return element.dataset.keyboardChoice || element.dataset.equipmentSlot
+      || (element.dataset.rcSlot ? `combat:${element.dataset.rcSlot}` : '')
+      || element.getAttribute('onclick') || element.id || element.getAttribute('href')
+      || element.textContent.trim();
+  }
+  function rememberChoice(element) {
+    if (!menuButtons().includes(element)) return;
+    menuMemory.set(menuKey(), choiceKey(element));
+    if (menuMemory.size > 32) menuMemory.delete(menuMemory.keys().next().value);
+  }
+  function rememberedChoice(choices) {
+    const remembered = menuMemory.get(menuKey());
+    return choices.find(element => choiceKey(element) === remembered)
+      || (state.encounter_initiative?.panel?.review
+        ? choices.find(element => element.matches('.panel-accept,[data-mana-primary]')) : null) || choices[0];
+  }
+  function clearChoiceHighlight() {
+    document.querySelectorAll('.keyboard-choice-focused').forEach(item => {
+      item.classList.remove('keyboard-choice-focused');
+      item.removeAttribute('aria-current');
+    });
+  }
+  function restoreMenuFocus() {
+    if (!enabled() || busy || inFlight || pendingCursor || contract().kind !== 'menu'
+        || keyboardRollWizard || modal() || sideOpen() || typing(document.activeElement)
+        || tabNavigation || (explicitChoice?.element === document.activeElement && nativeChoice())) return;
+    // Combat result/dice/turn confirmations keep their existing primary action.
+    if (state.combat && !state.mission?.active && !state.exploration_mana?.active && !actionList) return;
+    const choices = menuButtons();
+    if (!choices.length) return;
+    const current = choices.includes(document.activeElement) ? document.activeElement : rememberedChoice(choices);
+    if (current) focusChoice(current);
+  }
+  function scheduleMenuFocus() {
+    if (menuFocusScheduled) return;
+    menuFocusScheduled = true;
+    // Run after the existing render focus tasks, with the current DOM/context.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      menuFocusScheduled = false;
+      restoreMenuFocus();
+    }));
+  }
   function focusChoice(element) {
-    document.querySelectorAll('.keyboard-choice-focused').forEach(item => item.classList.remove('keyboard-choice-focused'));
+    clearChoiceHighlight();
     if (!element) return false;
     element.classList.add('keyboard-choice-focused');
+    element.setAttribute('aria-current', 'true');
+    rememberChoice(element);
     element.focus({preventScroll:true});
     element.scrollIntoView({block:'nearest'});
     return true;
@@ -134,8 +183,8 @@ const KeyboardInput = (() => {
       container?.scrollBy({top:delta * 150});
       return true;
     }
-    const index = choices.indexOf(document.activeElement);
-    return focusChoice(choices[index < 0 ? 0 : Math.max(0, Math.min(choices.length - 1, index + delta))]);
+    const index = choices.indexOf(choices.includes(document.activeElement) ? document.activeElement : rememberedChoice(choices));
+    return focusChoice(choices[Math.max(0, Math.min(choices.length - 1, index + delta))]);
   }
   function nativeChoice(allowHeader = false) {
     const focused = document.activeElement;
@@ -149,10 +198,10 @@ const KeyboardInput = (() => {
     if (modal()?.id === 'session-navigation') return handleReadOnlyPanelSlot(28);
     if (nativeChoice()) { document.activeElement.click(); return true; }
     const choices = menuButtons();
-    if (choices.length === 1) { choices[0].click(); return true; }
     if (choices.length) {
-      focusChoice(choices[0]);
-      status('Strzałkami wybierz opcję, Enter ją otworzy.');
+      const selected = rememberedChoice(choices);
+      focusChoice(selected);
+      selected.click();
       return true;
     }
     return false;
@@ -249,7 +298,7 @@ const KeyboardInput = (() => {
     if (command === 'back' && actionList) {
       actionList = false;
       document.activeElement?.blur();
-      document.querySelectorAll('.keyboard-choice-focused').forEach(item => item.classList.remove('keyboard-choice-focused'));
+      clearChoiceHighlight();
       status('Menu run zamknięte.');
       return true;
     }
@@ -329,7 +378,9 @@ const KeyboardInput = (() => {
   }
   document.addEventListener('keydown', handleKeydown, {capture:true});
   document.addEventListener('focusin', event => {
-    if (!enabled() || !tabNavigation) return;
+    if (!enabled()) return;
+    rememberChoice(event.target);
+    if (!tabNavigation) return;
     tabNavigation = false;
     explicitChoice = nativeChoice(true) ? {element:event.target, context:contract().context} : null;
   }, {capture:true});

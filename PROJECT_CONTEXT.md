@@ -14,6 +14,10 @@ możliwości. Gotowy test z osobnymi danymi: `.venv/bin/python scripts/keyboard_
 szybka walka: `--arena --skip-setup`; prawdziwe światła: `--wled-url ADRES`.
 Instrukcja: [Klawiatura i LED](docs/playtests/KEYBOARD_LED_MANUAL.md).
 
+W profilu klawiatury stary fizyczny pasek run i przycisków pozostaje
+wygaszony także w menu startowym oraz dialogach. Opcje menu wybieramy
+na ekranie strzałkami i Enterem; światła dotyczą przestrzeni mapy.
+
 ## Informacja zwrotna podczas walki — 02.10.2026
 
 Ustawianie planszy pozwala wrócić do poprzedniego elementu przyciskiem

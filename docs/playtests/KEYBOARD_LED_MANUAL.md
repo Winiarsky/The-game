@@ -4,6 +4,11 @@ Wariant działa na branchu `feat/led-keyboard-control`. Pad pozostaje kolejnym
 etapem. Obecny profil zachowuje zasady walki, sceny, fizyczne kości oraz ręczne
 przesuwanie figurek. Czujniki i przyciski planszy nie są wymagane.
 
+Stary fizyczny pasek run i przycisków pozostaje wygaszony. Menu ma tekstowe
+opcje z widocznym zaznaczeniem: strzałki zmieniają wybór, Enter wybiera.
+Dłuższy opis przewijasz PageUp/PageDown. LED-y pokazują pola, trasy, cele
+i pozostałe informacje przestrzenne na mapie.
+
 ## Szybki start
 
 Z katalogu repozytorium uruchom:

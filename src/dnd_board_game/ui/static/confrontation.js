@@ -6,10 +6,12 @@ const confrontationSigned = value => `${value >= 0 ? '+' : '−'}${Math.abs(valu
 
 function confrontationChoice(p, c, label = null, css = '') {
   if (!c) return '';
+  const keyboard=state.input?.mode==='keyboard';
+  if (keyboard && c.action === 'scroll') return '';
   const attrs = `data-mana-slot="${c.slot}" ${c.slot === 28 ? 'data-mana-primary' : ''}`;
   if (c.action === 'scroll') return `<button type="button" class="confrontation-scroll-button" ${attrs} aria-label="${esc(c.label)}" onclick="scrollConfrontation(${c.extra.direction})">${c.extra.direction > 0 ? '+' : '−'}</button>`;
   const handler = c.action === 'inspect' ? `openConfrontationDetail('${c.extra.detail}')` : `explorationManaAction('${esc(c.action)}',${esc(JSON.stringify(c.extra))})`;
-  return `<button type="button" class="mana-rune-choice ${css}" ${attrs} onclick="${handler}">${c.icon}<span>${label ?? esc(c.label)}</span></button>`;
+  return `<button type="button" class="${keyboard?'keyboard-mission-option':'mana-rune-choice'} ${css}" ${attrs} onclick="${handler}">${keyboard?'':c.icon}<span>${label ?? esc(c.label)}</span></button>`;
 }
 function confrontationIdle(p) {
   if (p.engine === 'progress_v1') return false;

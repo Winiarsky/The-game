@@ -160,9 +160,19 @@ def decorate(session: ExplorationUiSession, state: dict[str, Any]) -> None:
         })
 
 
+def _map_feedback(base: LedFeedback) -> LedFeedback:
+    """Keyboard decisions use the screen; the physical control strip stays dark."""
+    return LedFeedback(tuple(
+        LedFrame(positions, frame.color, frame.role)
+        for frame in base.frames
+        if (positions := tuple(position for position in frame.positions if position.col != 19))
+    ))
+
+
 def feedback(session: ExplorationUiSession, base: LedFeedback) -> LedFeedback:
     if session.input_mode != "keyboard":
         return base
+    base = _map_feedback(base)
     view = payload(session)
     cursor = session.keyboard_cursor
     if view["kind"] != "map" or not cursor.touched or cursor.position is None:
@@ -176,7 +186,7 @@ def feedback(session: ExplorationUiSession, base: LedFeedback) -> LedFeedback:
         board = presentation(candidate)[1]
         if not valid:
             board = replace(board, path=(), destination=None, selected=())
-        base = resonance_feedback(board)
+        base = _map_feedback(resonance_feedback(board))
     retained = tuple(LedFrame(positions, frame.color, frame.role) for frame in base.frames
                      if (positions := tuple(p for p in frame.positions if p != cursor.position)))
     color = LedColor.MOVEMENT_DESTINATION if valid else LedColor.ATTACK_MISS

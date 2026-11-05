@@ -40,3 +40,47 @@
 }
 #keyboard-shortcuts::backdrop, #keyboard-journal::backdrop { background: #0009; }
 .keyboard-journal-entries { max-height: 60vh; overflow-y: auto; }
+.keyboard-control-mode #mission-panel .keyboard-mission-menu {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: .3rem;
+  width: 100%;
+  max-height: min(43dvh, 350px);
+  overflow-y: auto;
+  padding: 4px;
+  box-sizing: border-box;
+}
+.keyboard-control-mode #mission-panel .mission-story-controls {
+  flex-direction: column;
+  align-items: stretch;
+  gap: .35rem;
+}
+.keyboard-control-mode .keyboard-mission-option {
+  display: block;
+  width: 100%;
+  min-height: 34px;
+  padding: .45rem .75rem;
+  border: 1px solid #a6b09b45;
+  border-radius: 4px;
+  background: #d6bd8605;
+  color: #eeeadd;
+  font-size: .9rem;
+  line-height: 1.35;
+  text-align: left;
+}
+.keyboard-control-mode .keyboard-mission-option.keyboard-choice-focused {
+  background: #d6bd8626;
+  border-color: #d6bd86;
+}
+.keyboard-control-mode .keyboard-mission-option.keyboard-choice-focused::before {
+  content: '› ';
+  color: #f4ca72;
+  font-weight: bold;
+}
+.keyboard-control-mode .keyboard-reading-hint {
+  margin: 0;
+  color: #a5b4aa;
+  font-size: .75rem;
+  line-height: 1.4;
+}

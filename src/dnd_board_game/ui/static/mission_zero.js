@@ -1,4 +1,10 @@
 /* Mission prose stays in the scenario pack; controls reuse the native board. */
+function missionChoiceButton(choice, className='', showRuneName=true) {
+  const keyboard=state.input?.mode==='keyboard';
+  const key=`${choice.action}:${JSON.stringify(choice.extra||{})}`;
+  return `<button type="button" class="${keyboard?'keyboard-mission-option':'mana-rune-choice'} ${className}" data-mission-slot="${choice.slot}" ${keyboard?`data-keyboard-choice="${esc(key)}"`:''} onclick="missionAction('${esc(choice.action)}',${esc(JSON.stringify(choice.extra))})">${keyboard?'':choice.icon}<span>${esc(choice.label)}${!keyboard&&showRuneName?`<small>${esc(choice.name)}</small>`:''}</span></button>`;
+}
+
 function missionSetupHtml(setup,title,body,controls) {
   const tiles=setup.tiles||[];
   const preview=tiles.length ? `<div class="mission-tile-gallery ${tiles.length===1?'single':''}">${tiles.map(tile=>
@@ -60,13 +66,16 @@ function renderMission() {
     return;
   }
   if (p.equipment) {renderPartyEquipment(p,panel);return;}
-  const options=p.choices.map(c=>`<button class="mana-rune-choice" data-mission-slot="${c.slot}" onclick="missionAction('${esc(c.action)}',${esc(JSON.stringify(c.extra))})">${c.icon}<span>${esc(c.label)}<small>${esc(c.name)}</small></span></button>`).join('');
+  const keyboard=state.input?.mode==='keyboard';
+  const options=p.choices.map(c=>missionChoiceButton(c)).join('');
   const rolling=p.rolling?`<form id="mission-roll" onsubmit="missionRoll(event)">${Array.from({length:p.roll_count||1},(_,i)=>`<label>${esc(p.stage==='potion_roll'?p.ui.potion_roll:p.stage==='identify_roll'?p.ui.identify_die:p.ui.fatigue_die)}<input id="mission-roll-${i}" type="number" min="1" max="${p.roll_sides||4}" required data-roll-dice="1k${p.roll_sides||4}" data-roll-source="${esc(p.text.title)}"></label>`).join('')}<button type="submit">${esc(p.ui.submit)}</button></form>`:'';
-  const scrollControls=p.reading?`<div class="mission-scroll-controls"><button type="button" onclick="scrollMissionText(-1)" aria-label="${esc(p.ui.scroll_up)}">−</button><button type="button" onclick="scrollMissionText(1)" aria-label="${esc(p.ui.scroll_down)}">+</button><small>${esc(p.ui.scroll_hint)}</small></div>`:'';
+  const scrollControls=p.reading ? keyboard
+    ? '<p class="keyboard-reading-hint">PageUp / PageDown — przewijaj opis. Strzałki — wybierz opcję, Enter — zatwierdź.</p>'
+    : `<div class="mission-scroll-controls"><button type="button" onclick="scrollMissionText(-1)" aria-label="${esc(p.ui.scroll_up)}">−</button><button type="button" onclick="scrollMissionText(1)" aria-label="${esc(p.ui.scroll_down)}">+</button><small>${esc(p.ui.scroll_hint)}</small></div>` : '';
   const cargo=['explore','search_result','guild_return','summary'].includes(p.stage)?`<div class="mission-cargo"><b>${esc(p.ui.contract_status)}</b><ul>${p.recovery.cargo.map(c=>`<li>${esc(c.name)} — ${esc(c.status)}</li>`).join('')}</ul></div>`:'';
   const pending=p.recovery.open_threads.map(t=>`<p class="mission-journal">${esc(t)}</p>`).join('');
   const summary=p.stage==='summary'?`<h3>${esc(p.ui.ledger)}</h3><ul>${p.ledger.map(x=>`<li>${esc(x.name)}: ${x.amount}${x.kind==='money'?' sz':''}</li>`).join('')}</ul><p>${esc(p.ui.summary_bell)}: ${esc(p.recovery.bell)}</p>${pending}<p>${esc(p.ui.treasury)}</p><p>${esc(p.ui.completed)}</p>`:'';
-  const controls=`<div class="mission-story-controls">${scrollControls}<div class="mana-decisions">${options}</div></div>`;
+  const controls=`<div class="mission-story-controls">${scrollControls}<div class="mana-decisions${keyboard?' keyboard-mission-menu':''}"${keyboard?' role="group" aria-label="Dostępne działania"':''}>${options}</div></div>`;
   panel.innerHTML=`<div class="mission-toolbar"><a class="button secondary" href="/">${esc(p.ui.menu)}</a><small>${esc(p.ui.autosave)}</small><details><summary>${esc(p.ui.restart)}</summary>${p.checkpoints.map(c=>`<button class="secondary" onclick="missionCheckpoint('${esc(c.id)}')">${esc(c.label)}</button>`).join('')}</details></div>
     ${p.setup ? missionSetupHtml(p.setup,p.text.title,p.text.body,'')+controls : p.active ? `<article class="mission-narrative mission-narrative--${esc(p.image_layout||'landscape')}">${p.image?`<img class="mission-art ${p.setup?'mission-map':''}" src="${esc(p.image)}" alt="${esc(p.text.title)}">`:''}<div class="mission-narrative-text" tabindex="0" role="region" aria-label="${esc(p.ui.reading_label)}"><small>${esc(p.text.speaker)}</small><h2>${esc(p.text.title)}</h2><div class="mission-prose">${esc(p.text.body).replace(/\n/g,'<br>')}</div>${cargo}${summary}</div></article>${rolling}${controls}` : `<details><summary>${esc(p.ui.rules)}</summary><p>${esc(p.combat_tip)}</p><p>${esc(p.ui.combat_help)}</p></details>${options}`}`;
   sizeMissionReader();
@@ -86,7 +95,7 @@ function missionRollSummary(wizard) {
 }
 
 function equipmentButton(c, className='') {
-  return `<button type="button" class="mana-rune-choice ${className}" data-mission-slot="${c.slot}" onclick="missionAction('${esc(c.action)}',${esc(JSON.stringify(c.extra))})">${c.icon}<span>${esc(c.label)}</span></button>`;
+  return missionChoiceButton(c, className, false);
 }
 
 function equipmentSlot(row, p) {
@@ -96,7 +105,7 @@ function equipmentSlot(row, p) {
   return `<button type="button" class="equipment-slot ${row.linked?'equipment-slot-linked':''} ${selected?'equipment-slot-selected':''}" data-equipment-slot="${esc(row.id)}" ${c?`data-mission-slot="${c.slot}" onclick="missionAction('equipment_slot',{gear_slot:'${esc(row.id)}'})"`:'disabled'} aria-label="${esc(row.label)}: ${esc(item?.name||'Puste miejsce')}">
     <span class="equipment-slot-label">${esc(row.label)}</span>
     <span class="equipment-slot-content">${item&&!row.linked?`<span class="equipment-slot-art">${item.art}</span>`:''}<span>${esc(row.linked?'Zajęta przez broń dwuręczną':item?.name||'Puste miejsce')}${item?.quantity>1?` <small>×${item.quantity}</small>`:''}</span></span>
-    <span class="equipment-slot-rune">${row.icon}</span></button>`;
+    ${state.input?.mode==='keyboard'?'':`<span class="equipment-slot-rune">${row.icon}</span>`}</button>`;
 }
 
 function equipmentItemPreview(item, emptyText, handChange=false) {
@@ -105,6 +114,7 @@ function equipmentItemPreview(item, emptyText, handChange=false) {
 
 function renderPartyEquipment(p, panel) {
   const e=p.equipment;
+  const keyboard=state.input?.mode==='keyboard';
   const t=(key,params={})=>sessionUiText(`equipment.${key}`,params);
   const inStash=['equipment_stash','equipment_sell'].includes(e.view);
   const body=e.loadout.filter(row=>!row.id.startsWith('pack_'));
@@ -128,8 +138,8 @@ function renderPartyEquipment(p, panel) {
   panel.innerHTML=`<div class="mission-toolbar"><span class="equipment-stage-label">${esc(t('title'))}</span><small>${esc(p.ui.autosave)}</small><span>${esc(t('treasury',{gold:e.gold}))}</span></div>
     <div class="equipment-heading"><div class="equipment-hero">${e.portrait_url?`<img class="equipment-hero-portrait" src="${esc(e.portrait_url)}" alt="${esc(e.hero)}">`:''}<div><small>${esc(t('hero_step',{index:e.hero_index,count:e.hero_count}))}</small><h2>${esc(e.hero)}</h2><span>${esc(sessionUiText('common.equipment_stats',{strength:e.strength,ac:e.ac}))}</span></div></div>
       <ol class="equipment-party" aria-label="${esc(t('order'))}">${e.party.map((hero,index)=>`<li ${index===e.hero_index-1?'aria-current="step"':''}>${index<e.hero_index-1?'✓ ':''}${esc(hero.name)}</li>`).join('')}</ol></div>
-    ${workspace}<p class="equipment-notice" role="status">${esc(e.notice||(e.view==='equipment'?t(e.groups.available===0?'starter_hint':'sheet_hint'):e.view==='equipment_sell'?t('sale_hint'):e.picker?t('picker_controls'):''))}</p>
-    <div class="mana-decisions equipment-controls">${footerChoices.map(c=>equipmentButton(c)).join('')}</div>`;
+    ${workspace}<p class="equipment-notice" role="status">${esc(e.notice||(keyboard?'Strzałki wybierają miejsce lub opcję. Enter otwiera i zatwierdza, Esc wraca. +/− przegląda pasujące przedmioty.':e.view==='equipment'?t(e.groups.available===0?'starter_hint':'sheet_hint'):e.view==='equipment_sell'?t('sale_hint'):e.picker?t('picker_controls'):''))}</p>
+    <div class="mana-decisions equipment-controls${keyboard?' keyboard-mission-menu':''}">${footerChoices.map(c=>equipmentButton(c)).join('')}</div>`;
   sizeMissionReader();
   const candidates=panel.querySelector('.equipment-candidate-list');
   const selected=candidates?.querySelector('[aria-current]');

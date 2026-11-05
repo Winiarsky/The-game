@@ -58,7 +58,8 @@ function manaValuesHtml(attempt) {
 function explorationRuneButton(p, action, extra = {}, label = '', primary = false, css = '') {
   const choice = p.board_choices.find(c => c.action === action && Object.entries(extra).every(([k,v]) => c.extra[k] === v));
   const attrs = choice ? `data-mana-slot="${choice.slot}" ${primary?'data-mana-primary':''} onclick="explorationManaAction('${action}',${esc(JSON.stringify(choice.extra))})"` : 'disabled';
-  return `<button class="mana-rune-choice ${css}" ${attrs}>${choice?.icon || ''}<span>${label || esc(choice?.label || '')}${choice?`<small>Na planszy: ${esc(choice.name)}</small>`:''}</span></button>`;
+  const keyboard=state.input?.mode==='keyboard';
+  return `<button class="${keyboard?'keyboard-mission-option':'mana-rune-choice'} ${css}" ${attrs}>${keyboard?'':choice?.icon || ''}<span>${label || esc(choice?.label || '')}${choice&&!keyboard?`<small>Na planszy: ${esc(choice.name)}</small>`:''}</span></button>`;
 }
 
 function renderExplorationMana(panel, p) {

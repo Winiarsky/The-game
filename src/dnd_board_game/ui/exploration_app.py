@@ -5444,6 +5444,8 @@ class ExplorationUiSession:
     def _scan_board_selection_locked(self, *, expected_revision: str, automatic: bool) -> dict[str, object]:
         started = time.monotonic()
         with self._board_state_lock:
+            if self.input_mode == "keyboard":
+                raise ValueError("Sterowanie klawiaturą jest aktywne; skaner planszy jest wyłączony.")
             adapter = self.board_adapter
             if adapter is None:
                 raise ValueError("Najpierw podłącz backend planszy.")

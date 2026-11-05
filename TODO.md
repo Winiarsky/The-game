@@ -1,3 +1,17 @@
+## Klawiatura — wygaszony panel i klasyczne menu, 05.11.2026
+
+- [x] Usunąć z ramek LED cały stary pasek przycisków/run w profilu
+  klawiatury, także w launcherze, dialogach, setupie i podglądzie walki.
+  Zachować światła przestrzenne mapy oraz dotychczasowy profil planszy.
+- [x] Pokazać klasyczne tekstowe opcje w menu: zaznaczona pozycja,
+  strzałki zmieniają wybór, pojedynczy Enter wybiera; bez symboli
+  fizycznych przycisków i panelu przewijania +/−.
+- [x] Sprawdzić zapalenie/wygaszenie panelu przy zmianie profilu,
+  zachowanie kolorów trasy/celu oraz menu odprawy Nessy w Chrome.
+  Walidacja: 39 celowanych testów w osobnych partiach, w tym pionowe
+  menu Nessy, pojedynczy Enter, odtworzenie fokusu, pełna Misja 0
+  i zachowanie dotychczasowego launchera planszy.
+
 ## Klawiatura + LED — wdrożenie 05.11.2026
 
 - [x] Przejrzeć obecne wejście klawiatury, aktualną walkę runiczną,
