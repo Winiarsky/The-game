@@ -4406,20 +4406,24 @@ function encounterOpeningHtml(opening) {
   `;
 }
 function encounterSetupHtml(setup) {
+  const keyboard = state.input?.mode === 'keyboard';
   if (!setup) {
     return `
       <div class="message"><b>Setup przed walką</b><br>Rozpocznijcie setup encountera. Jawne elementy sceny są już na planszy.</div>
-      <button onclick="startEncounterSetup()">Rozpocznij setup</button>
+      <button ${keyboard ? 'data-keyboard-primary="true" data-keyboard-choice="setup:start"' : ''} onclick="startEncounterSetup()">Rozpocznij setup${keyboard ? ' · Enter' : ''}</button>
     `;
   }
   if (setup.status === 'completed') {
     return '<div class="result"><b>Setup zakończony</b><br>Plansza jest przygotowana do inicjatywy i walki.</div>';
   }
   const step = setup.current_step || {};
-  const back = setup.can_back ? '<button class="secondary" data-setup-back="true" onclick="backEncounterSetup()">↩ Poprzedni element</button>' : '';
+  const stepMessage = keyboard ? String(step.message || '')
+    .replace(/niebieskim przyciskiem\s*✓(?:\s+na planszy)?/gi, 'klawiszem Enter')
+    .replace(/naciśnij\s*✓\s*\(Accept\)/gi, 'naciśnij Enter') : step.message;
+  const back = setup.can_back ? `<button class="secondary" data-setup-back="true" ${keyboard ? 'data-keyboard-choice="setup:back"' : ''} onclick="backEncounterSetup()">↩ Poprzedni element${keyboard ? ' · Esc' : ''}</button>` : '';
   if (step.tiles?.length) {
-    const confirm=`<button data-setup-accept="true" onclick="confirmEncounterSetup()" ${step.can_confirm?'':'disabled'}>${esc(state.mission.ui.setup_accept)}</button>${back}`;
-    return missionSetupHtml(step,step.label,step.message,confirm);
+    const confirm=`<button data-setup-accept="true" ${keyboard ? 'data-keyboard-primary="true" data-keyboard-choice="setup:accept"' : ''} onclick="confirmEncounterSetup()" ${step.can_confirm?'':'disabled'}>${keyboard ? 'Dalej · Enter' : esc(state.mission.ui.setup_accept)}</button>${back}`;
+    return missionSetupHtml(step,step.label,stepMessage,confirm);
   }
   const terrainGuide = setup.battle_briefing?.length
     ? '<p><b>Legenda:</b> czerwony ciągły obrys — blokada ruchu i widoczności; złoty przerywany — osłona kierunkowa; niebieski kropkowany — trudny teren. Pozostałe pola są przechodnie.</p><p>Siatka 20 × 30; wydruk 50 × 75 cm (pole 2,5 cm). Obrysy wyznaczają pola terenu, a LED wskazuje obiekty.</p><a href="/game-assets/maps/ostatni_transport_01/glodne_cienie_print_v6.html" target="_blank" rel="noopener">Wersja do druku — skala 100%, bez marginesów</a> · <a href="/game-assets/maps/ostatni_transport_01/glodne_cienie_print_v6.pdf" target="_blank" rel="noopener">Pobierz PDF 50 × 75 cm</a>'
@@ -4440,21 +4444,19 @@ function encounterSetupHtml(setup) {
     `<button class="secondary" onclick="selectBoardPosition(${Number(pos[0])}, ${Number(pos[1])})">(${Number(pos[0])},${Number(pos[1])})</button>`
   ).join('');
   return `
-    <div class="message setup-current-command" tabindex="-1">
+    <div class="message setup-current-command${keyboard ? ' keyboard-setup-card' : ''}" tabindex="-1">
+      ${keyboard ? '<div class="keyboard-setup-description">' : ''}
       <b>Krok ${Number(setup.current_index) + 1}/${setup.step_count}: ${esc(step.label || '')}</b><br>
-      ${esc(step.message || '')}
-      ${requiresBoardAssignment ? `<div class="setup-assignment-hero">${assignmentActor?.portrait_url ? `<img src="${esc(assignmentActor.portrait_url)}" alt="${esc(step.assignment_actor_name || assignmentActor.name)}">` : ''}<p><b>Aktualnie ustaw:</b><br>${esc(step.assignment_actor_name || '-')}</p></div><p>${(step.available_positions || []).length > 1 ? 'Kliknij jedno z podświetlonych wolnych pól na planszy. Możesz zmienić wybór przed zatwierdzeniem.' : 'Dostępne jest jedno pole — ustaw na nim figurkę i zatwierdź.'}</p>` : ''}
+      ${esc(stepMessage || '')}
+      ${requiresBoardAssignment ? `<div class="setup-assignment-hero">${assignmentActor?.portrait_url ? `<img src="${esc(assignmentActor.portrait_url)}" alt="${esc(step.assignment_actor_name || assignmentActor.name)}">` : ''}<p><b>Aktualnie ustaw:</b><br>${esc(step.assignment_actor_name || '-')}</p></div><p>${keyboard ? 'Strzałkami wskaż pole → Enter wybiera → ustaw figurkę → Enter potwierdza.' : (step.available_positions || []).length > 1 ? 'Kliknij jedno z podświetlonych wolnych pól na planszy. Możesz zmienić wybór przed zatwierdzeniem.' : 'Dostępne jest jedno pole — ustaw na nim figurkę i zatwierdź.'}</p>` : ''}
       ${requiresBoardAssignment && setup.battle_briefing?.length ? '<p><b>Wybór szyku:</b> lewy bok prowadzi do osłon, środek do krótkiego podejścia przez koleiny, prawy bok do suchego obejścia. Możecie swobodnie rozdzielić bohaterów w całej strefie.</p>' : ''}
       ${hasPositions && !requiresBoardAssignment ? `<p>Sprawdź pola podświetlone na planszy kolorem ${esc(step.color || 'wskazanym przez grę')}.</p>` : ''}
       ${mechanicsHtml}
       ${selectedPosition ? `<p><b>Wybrane pole:</b> (${selectedPosition.join(', ')}). Ustaw tutaj figurkę.</p>` : ''}
-      <p>${canConfirm ? 'Naciśnij niebieski przycisk <b>✓ Potwierdź</b> na planszy.' : 'Najpierw wybierz pole. Przycisk ✓ zaświeci się po wyborze.'}</p>
-      ${back}
+      <p>${keyboard ? canConfirm ? 'Enter: dalej. Esc: poprzedni element.' : 'Wybierz pole strzałkami i Enterem, aby odblokować potwierdzenie.' : canConfirm ? 'Naciśnij niebieski przycisk <b>✓ Potwierdź</b> na planszy.' : 'Najpierw wybierz pole. Przycisk ✓ zaświeci się po wyborze.'}</p>
+      ${keyboard ? `</div><div class="row encounter-setup-actions"><button type="button" data-setup-accept="true" data-keyboard-primary="true" data-keyboard-choice="setup:accept" onclick="${requiresBoardAssignment ? "KeyboardInput.dispatch('accept')" : 'confirmEncounterSetup()'}" ${canConfirm ? '' : 'disabled'}>${requiresBoardAssignment ? 'Potwierdź ustawienie · Enter' : 'Dalej · Enter'}</button>${back}</div>` : back}
     </div>
-    <details class="encounter-position-fallback"><summary>Awaryjne sterowanie ekranowe</summary>
-      ${requiresBoardAssignment ? `<div class="row">${assignmentButtons}</div>` : ''}
-      <button onclick="confirmEncounterSetup()" ${canConfirm ? '' : 'disabled'}>✓ Potwierdź ustawienie</button>
-    </details>
+    ${keyboard ? requiresBoardAssignment ? `<details class="encounter-position-fallback"><summary>Wybierz pole współrzędnymi</summary><div class="row">${assignmentButtons}</div></details>` : '' : `<details class="encounter-position-fallback"><summary>Awaryjne sterowanie ekranowe</summary>${requiresBoardAssignment ? `<div class="row">${assignmentButtons}</div>` : ''}<button onclick="confirmEncounterSetup()" ${canConfirm ? '' : 'disabled'}>✓ Potwierdź ustawienie</button></details>`}
     ${mapPreview}
   `;
 }
@@ -4483,11 +4485,11 @@ function encounterStealthHtml(setup, stealth) {
 function encounterInitiativeHtml(setup, initiative, stealth) {
   if (!setup || setup.status !== 'completed' || state.combat) return '';
   if (stealth && !stealth.completed) return '';
+  const keyboard = state.input?.mode === 'keyboard';
   if (!initiative) {
     return `
-      <div class="message"><b>Inicjatywa</b><br>Setup zakończony. Teraz ustalcie kolejność tur.<p>Naciśnij niebieski przycisk <b>✓ Potwierdź</b> na planszy, aby rozpocząć inicjatywę.</p></div>
-      <button class="secondary" data-setup-back="true" onclick="backEncounterSetup()">↩ Poprzedni element</button>
-      <details class="encounter-position-fallback"><summary>Awaryjne sterowanie ekranowe</summary><button onclick="startEncounterInitiative()">✓ Rozpocznij inicjatywę</button></details>
+      <div class="message"><b>Inicjatywa</b><br>Setup zakończony. Teraz ustalcie kolejność tur.<p>${keyboard ? 'Naciśnij Enter lub wybierz „Rozpocznij inicjatywę”. Esc pozwala poprawić poprzedni element.' : 'Naciśnij niebieski przycisk <b>✓ Potwierdź</b> na planszy, aby rozpocząć inicjatywę.'}</p></div>
+      ${keyboard ? '<div class="row encounter-setup-actions"><button type="button" data-setup-start-initiative="true" data-keyboard-primary="true" data-keyboard-choice="setup:initiative" onclick="startEncounterInitiative()">Rozpocznij inicjatywę · Enter</button><button class="secondary" data-setup-back="true" data-keyboard-choice="setup:back" onclick="backEncounterSetup()">↩ Poprzedni element · Esc</button></div>' : '<button class="secondary" data-setup-back="true" onclick="backEncounterSetup()">↩ Poprzedni element</button><details class="encounter-position-fallback"><summary>Awaryjne sterowanie ekranowe</summary><button onclick="startEncounterInitiative()">✓ Rozpocznij inicjatywę</button></details>'}
     `;
   }
   if (initiative.status === 'completed') return '';
@@ -4581,6 +4583,9 @@ function miraStealthStatusHtml(combat) {
 function focusCombatDecision() {
   if (state?.training_arena?.tutorial?.notice) return;
   const settingUp = !state?.combat && state?.encounter_setup?.status !== 'completed' && state?.encounter_setup?.current_step;
+  // Keyboard setup owns a bounded reading area and a permanent action footer.
+  // Scrolling the whole card under the sticky header can hide that footer.
+  if (settingUp && state.input?.mode === 'keyboard') return;
   if ((!state?.combat && !settingUp) || keyboardRollWizard || busy) return;
   requestAnimationFrame(() => {
     if (state?.training_arena?.tutorial?.notice) return;

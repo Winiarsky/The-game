@@ -171,3 +171,184 @@
  .equipment-stash-tabs {flex-direction:row;flex-wrap:wrap;}
  .equipment-controls {flex-wrap:wrap;}.equipment-controls button {flex:1 1 40%;}
 }
+
+/* The keyboard inventory uses readable rows; its lists scroll instead of shrinking. */
+.keyboard-control-mode #mission-panel.keyboard-inventory {
+  display:flex;
+  flex-direction:column;
+  height:var(--mission-room,calc(100dvh - 145px));
+  min-height:0;
+  padding:10px 16px;
+  overflow:hidden;
+  box-sizing:border-box;
+}
+.keyboard-control-mode #mission-panel.keyboard-inventory .mission-toolbar {
+  flex:0 0 auto;
+  margin:0 0 5px;
+}
+.keyboard-control-mode #mission-panel.keyboard-inventory .equipment-heading {
+  flex:0 0 auto;
+  gap:12px;
+  margin:0 0 8px;
+}
+.keyboard-control-mode #mission-panel.keyboard-inventory .equipment-hero-portrait {width:38px;height:46px;}
+.keyboard-control-mode #mission-panel.keyboard-inventory .equipment-heading h2 {font-size:24px;line-height:1.1;}
+.keyboard-control-mode #mission-panel.keyboard-inventory .equipment-party {
+  flex-wrap:nowrap;
+  overflow-x:auto;
+  padding:2px;
+  white-space:nowrap;
+  font-size:11px;
+}
+.keyboard-control-mode #mission-panel.keyboard-inventory .equipment-party li {padding:4px 7px;}
+.keyboard-control-mode #mission-panel.keyboard-inventory .equipment-workspace {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  flex:1 1 0;
+  min-height:0;
+  gap:12px;
+  overflow:hidden;
+}
+.keyboard-control-mode #mission-panel.keyboard-inventory .equipment-equipped-pane,
+.keyboard-control-mode #mission-panel.keyboard-inventory .equipment-pack {
+  display:flex;
+  flex-direction:column;
+  min-width:0;
+  min-height:0;
+  gap:7px;
+  padding:9px;
+  border:1px solid #53614f;
+  border-radius:6px;
+  background:#1d2922;
+  overflow:hidden;
+}
+.keyboard-control-mode #mission-panel.keyboard-inventory .equipment-section-title {flex:0 0 auto;min-height:23px;}
+.keyboard-control-mode #mission-panel.keyboard-inventory .equipment-section-title h3 {font-size:18px;line-height:1.25;}
+.keyboard-control-mode #mission-panel.keyboard-inventory .equipment-section-title small {font-size:11px;text-align:right;}
+.keyboard-control-mode #mission-panel.keyboard-inventory .equipment-body-list,
+.keyboard-control-mode #mission-panel.keyboard-inventory .equipment-pack-grid {
+  display:flex;
+  flex-direction:column;
+  flex:1 1 0;
+  min-height:0;
+  gap:6px;
+  margin:0;
+  padding:3px;
+  overflow:auto;
+  overscroll-behavior:contain;
+  scrollbar-width:thin;
+  scrollbar-color:#64705f #1d2922;
+}
+.keyboard-control-mode #mission-panel.keyboard-inventory .equipment-slot,
+.keyboard-control-mode #mission-panel.keyboard-inventory .equipment-slot[data-equipment-slot=focus] {
+  display:grid;
+  grid-template-columns:minmax(78px,.7fr) minmax(0,1.5fr);
+  grid-template-rows:auto;
+  grid-column:auto;
+  flex:0 0 auto;
+  align-items:center;
+  justify-content:initial;
+  min-height:62px;
+  height:auto;
+  gap:8px;
+  padding:8px 10px;
+  text-align:left;
+  box-sizing:border-box;
+}
+.keyboard-control-mode #mission-panel.keyboard-inventory .equipment-slot-label {
+  grid-column:1;
+  grid-row:1;
+  font-size:12px;
+  line-height:1.35;
+  overflow-wrap:anywhere;
+}
+.keyboard-control-mode #mission-panel.keyboard-inventory .equipment-slot-content {
+  grid-column:2;
+  grid-row:1;
+  justify-content:flex-start;
+  min-width:0;
+  min-height:36px;
+  gap:8px;
+  font-size:13px;
+  line-height:1.35;
+}
+.keyboard-control-mode #mission-panel.keyboard-inventory .equipment-slot-art {
+  display:block;
+  width:36px;
+  height:36px;
+  flex:0 0 36px;
+  box-sizing:border-box;
+}
+.keyboard-control-mode #mission-panel.keyboard-inventory .equipment-pack-pages {flex:0 0 auto;gap:6px;}
+.keyboard-control-mode #mission-panel.keyboard-inventory .equipment-pack-pages button {
+  flex:1 1 0;
+  min-height:32px;
+  padding:5px 7px;
+  font-size:12px;
+}
+.keyboard-control-mode #mission-panel.keyboard-inventory .equipment-picker,
+.keyboard-control-mode #mission-panel.keyboard-inventory .equipment-stash-preview {
+  min-width:0;
+  min-height:0;
+  overflow:auto;
+  overscroll-behavior:contain;
+  scrollbar-width:thin;
+  padding:10px 12px;
+}
+.keyboard-control-mode #mission-panel.keyboard-inventory .equipment-picker>small {font-size:15px;}
+.keyboard-control-mode #mission-panel.keyboard-inventory .equipment-art {height:64px;}
+.keyboard-control-mode #mission-panel.keyboard-inventory .equipment-picker h3,
+.keyboard-control-mode #mission-panel.keyboard-inventory .equipment-stash-preview h3 {font-size:18px;}
+.keyboard-control-mode #mission-panel.keyboard-inventory .equipment-candidate-list {
+  flex-direction:column;
+  gap:4px;
+  max-height:150px;
+  overflow:auto;
+}
+.keyboard-control-mode #mission-panel.keyboard-inventory .equipment-candidate-list span {max-width:none;min-height:28px;box-sizing:border-box;}
+.keyboard-control-mode #mission-panel.keyboard-inventory .equipment-stash {
+  flex:1 1 0;
+  min-height:0;
+  grid-template-columns:minmax(160px,.55fr) minmax(0,1.45fr);
+  overflow:hidden;
+  gap:12px;
+}
+.keyboard-control-mode #mission-panel.keyboard-inventory .equipment-stash-tabs {min-height:0;overflow:auto;gap:6px;}
+.keyboard-control-mode #mission-panel.keyboard-inventory .equipment-notice {
+  flex:0 0 auto;
+  margin:6px 0;
+  font-size:12px;
+  line-height:1.35;
+}
+.keyboard-control-mode #mission-panel.keyboard-inventory .equipment-controls {
+  display:flex;
+  flex-direction:row;
+  flex-wrap:wrap;
+  flex:0 0 auto;
+  align-items:center;
+  justify-content:flex-end;
+  gap:6px;
+  width:auto;
+  max-height:106px;
+  margin:0;
+  padding:5px 3px 3px;
+  overflow:auto;
+  border-top:1px solid #526052;
+  box-sizing:border-box;
+}
+.keyboard-control-mode #mission-panel.keyboard-inventory .equipment-controls button {
+  flex:0 1 auto;
+  width:auto;
+  min-height:34px;
+  padding:6px 10px;
+  font-size:12px;
+  line-height:1.25;
+}
+.keyboard-control-mode #mission-panel.keyboard-inventory .equipment-primary-action {border-color:#b9ca9b;background:#354330;}
+@media(max-width:760px) {
+  .keyboard-control-mode #mission-panel.keyboard-inventory .equipment-workspace {display:flex;flex-direction:column;overflow:auto;}
+  .keyboard-control-mode #mission-panel.keyboard-inventory .equipment-equipped-pane,
+  .keyboard-control-mode #mission-panel.keyboard-inventory .equipment-pack,
+  .keyboard-control-mode #mission-panel.keyboard-inventory .equipment-picker {flex:0 0 280px;min-height:240px;}
+  .keyboard-control-mode #mission-panel.keyboard-inventory .equipment-party {max-width:48%;}
+}

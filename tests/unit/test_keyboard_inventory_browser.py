@@ -1,0 +1,170 @@
+"""Keyboard inventory remains readable and usable on short laptop screens."""
+from __future__ import annotations
+
+from pathlib import Path
+import shutil
+import subprocess
+from threading import Event, Thread
+from typing import Any
+
+from flask import request
+import pytest
+from werkzeug.serving import make_server
+
+from dnd_board_game.ui import mission_zero, party_preparation
+from dnd_board_game.ui.routes import create_app
+from scripts.keyboard_playtest import prepare_session
+from tests.unit.test_initiative_panel import Board
+
+
+@pytest.mark.parametrize('width,height', [(1221, 656), (883, 687)])
+def test_keyboard_inventory_readable_rows_and_accessible_actions(
+    tmp_path: Path, width: int, height: int,
+) -> None:
+    chrome = shutil.which('google-chrome') or shutil.which('chromium')
+    if not chrome:
+        pytest.skip('Chrome required for inventory layout check')
+    game = prepare_session(tmp_path, ('garran', 'brakka', 'nimra'))
+    preparation = mission_zero.read(game)
+    party_preparation.begin(preparation, 'guild')
+    mission_zero.write(game, preparation)
+    board = Board()
+    game.attach_board_connection(board, backend='simulator')
+    app = create_app(game, character_dir=tmp_path / 'characters')
+    done = Event()
+    report: dict[str, Any] = {}
+
+    @app.post('/__test/result')
+    def result() -> dict[str, bool]:
+        report.update(request.get_json())
+        done.set()
+        return {'ok': True}
+
+    harness = r'''<script>
+    (async()=>{
+      const pause=()=>new Promise(resolve=>setTimeout(resolve,20));
+      const check=(value,message)=>{if(!value)throw Error(message)};
+      const wait=async(predicate,message)=>{
+        for(let i=0;i<350;i++){if(predicate())return;await pause();}
+        throw Error('timeout '+message);
+      };
+      const key=value=>{
+        (document.activeElement||document.body).dispatchEvent(new KeyboardEvent('keydown',{
+          key:value,code:value,bubbles:true,cancelable:true,
+        }));
+        document.dispatchEvent(new KeyboardEvent('keyup',{key:value,code:value,bubbles:true}));
+      };
+      const idle=()=>wait(()=>!busy&&!boardPanelSyncPromise
+        &&document.querySelector('[data-keyboard-sync]')?.hidden,'input idle');
+      const choose=async(selector)=>{
+        await idle();
+        const target=document.querySelector(selector);
+        check(target&&!target.disabled,'missing enabled choice '+selector);
+        for(let i=0;i<40;i++)key('ArrowUp');
+        for(let i=0;i<40&&document.activeElement!==target;i++)key('ArrowDown');
+        check(document.activeElement===target,'cannot focus '+selector);
+        const rect=target.getBoundingClientRect();
+        check(rect.top>=0&&rect.bottom<=innerHeight+1,'focused choice clipped '+selector);
+        key('Enter');await idle();
+      };
+      const choice=action=>{
+        const entry=state.mission.choices.find(entry=>entry.action===action);
+        check(entry,'missing action '+action);
+        return `[data-mission-slot="${entry.slot}"]`;
+      };
+      const bounds=()=>{
+        const panel=document.querySelector('#mission-panel.keyboard-inventory');
+        check(panel,'classic inventory missing');
+        check(panel.getBoundingClientRect().bottom<=innerHeight+1,'inventory extends below screen');
+        check(document.documentElement.scrollWidth<=innerWidth,'horizontal overflow');
+        const footer=panel.querySelector('.equipment-controls').getBoundingClientRect();
+        check(footer.height<=110,'actions consume inventory space');
+        check(footer.top>=0&&footer.bottom<=innerHeight+1,'actions below screen');
+        for(const button of panel.querySelectorAll('[data-equipment-slot]')){
+          const row=button.getBoundingClientRect();
+          check(row.height>=44,'compressed slot '+button.dataset.equipmentSlot+' '+row.height);
+          for(const content of button.querySelectorAll('.equipment-slot-label,.equipment-slot-content')){
+            const text=content.getBoundingClientRect();
+            check(text.top>=row.top-1&&text.bottom<=row.bottom+1,
+              'text outside slot '+button.dataset.equipmentSlot);
+          }
+        }
+      };
+      try{
+        window.alert=message=>{throw Error('Unexpected alert '+message)};
+        await wait(()=>state?.mission?.equipment&&!busy
+          &&document.querySelector('.keyboard-choice-focused'),'inventory ready');
+        check(document.querySelectorAll('[data-equipment-slot]').length===15,'missing slots');
+        check(!document.querySelector('.equipment-slot-rune'),'physical rune badges remain');
+        check(!document.querySelector('.equipment-pack').textContent.includes('własną runę'),
+          'keyboard pack retains physical guidance');
+        bounds();
+        const weapon=document.querySelector('[data-equipment-slot="main_hand"]').textContent;
+        await choose('[data-equipment-slot="main_hand"]');
+        check(state.mission.stage==='equipment_item','slot did not open picker');bounds();
+        await wait(()=>document.activeElement?.dataset.keyboardPrimary==='true','picker confirmation focus');
+        key('Enter');await idle();
+        check(state.mission.stage==='equipment','Enter did not confirm current equipment');
+        check(document.querySelector('[data-equipment-slot="main_hand"]').textContent===weapon,
+          'keeping current equipment changed weapon');
+        await choose('[data-equipment-slot="main_hand"]');
+        const item=state.mission.equipment.item?.id;
+        if(state.mission.choices.some(entry=>entry.action==='equipment_next')){
+          key('+');await idle();
+          check(state.mission.equipment.item?.id!==item,'browse failed');
+          key('-');await idle();
+          check(state.mission.equipment.item?.id===item,'reverse browse failed');
+        }
+        key('Escape');await idle();
+        await wait(()=>state.mission.stage==='equipment','cancel picker');bounds();
+        check(document.querySelector('[data-equipment-slot="main_hand"]').textContent===weapon,
+          'cancel modified equipment');
+        await choose('[data-equipment-slot="pack_8"]');
+        check(state.mission.equipment.picker.slot==='pack_8','last pack row inaccessible');
+        key('Escape');await idle();
+        await choose(choice('equipment_stash'));
+        check(state.mission.stage==='equipment_stash','stash inaccessible');bounds();
+        key('Escape');await idle();
+        await choose(choice('equipment_accept'));
+        check(state.mission.equipment.hero_id==='brakka','ready did not advance hero');bounds();
+        check(!state.board_selection.auto_arm&&!boardScanInFlight,'inventory armed scanner');
+        await fetch('/__test/result',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({result:'PASS',viewport:[innerWidth,innerHeight]})});
+      }catch(error){
+        await fetch('/__test/result',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({result:String(error.stack),stage:state?.mission?.stage,
+            viewport:[innerWidth,innerHeight],body:document.body.innerText.slice(-1200)})});
+      }
+    })();</script>'''
+
+    @app.after_request
+    def inject(response: Any) -> Any:
+        if request.path == '/play' and response.status_code == 200:
+            response.set_data(response.get_data(as_text=True).replace('</body>', harness + '</body>'))
+        return response
+
+    server = make_server('127.0.0.1', 0, app, threaded=True)
+    worker = Thread(target=server.serve_forever, daemon=True)
+    worker.start()
+    process = None
+    try:
+        process = subprocess.Popen([
+            chrome, '--headless', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage',
+            '--no-first-run', '--disable-background-networking', '--no-proxy-server',
+            f'--user-data-dir={tmp_path / "chrome"}', f'--window-size={width},{height}',
+            f'http://127.0.0.1:{server.server_port}/play',
+        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        assert done.wait(40), 'Inventory browser did not report'
+        assert report.get('result') == 'PASS', report
+        assert board.scans == 0
+    finally:
+        if process:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=5)
+        server.shutdown()
+        server.server_close()
+        worker.join(timeout=2)

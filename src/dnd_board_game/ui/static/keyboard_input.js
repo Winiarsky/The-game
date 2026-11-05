@@ -3,7 +3,7 @@ const KeyboardInput = (() => {
   let context = '', generation = 0, inFlight = false, pendingCursor = null;
   let desiredCursor = null, pendingBack = '', lastNavigationAt = 0, message = '', actionList = false;
   let tabNavigation = false, explicitChoice = null;
-  let menuFocusScheduled = false;
+  let menuFocusScheduled = false, menuNavigationContext = '';
   const menuMemory = new Map();
   const held = new Set(), blocked = new Set();
   const enabled = () => typeof state !== 'undefined' && state?.input?.mode === 'keyboard';
@@ -24,12 +24,19 @@ const KeyboardInput = (() => {
     pendingBack = '';
     tabNavigation = false;
     explicitChoice = null;
+    menuNavigationContext = '';
     for (const key of held) blocked.add(key);
     actionList = false;
     message = '';
   }
   function refresh() {
     document.body.classList.toggle('keyboard-control-mode', enabled());
+    const setupMode = Boolean(enabled() && state.encounter_setup
+      && !state.combat && !state.encounter_initiative
+      && (state.encounter_setup.status !== 'completed' || !state.encounter_stealth || state.encounter_stealth.completed)
+      && !state.training_arena?.tutorial?.notice
+      && state.training_arena?.tutorial?.phase !== 'introduction');
+    document.body.classList.toggle('keyboard-setup-active', setupMode);
     const bar = document.getElementById('keyboard-control-bar');
     if (!bar) return;
     bar.hidden = !enabled();
@@ -40,7 +47,9 @@ const KeyboardInput = (() => {
     const point = cursor ? `Pole (${cursor[0]}, ${cursor[1]})` : '';
     const cost = input.valid !== false && input.preview?.path?.length && Number.isFinite(input.preview.cost)
       ? `Koszt ruchu: ${input.preview.cost}` : '';
-    const notice = message || input.notice || (input.kind === 'menu'
+    const notice = message || input.notice || (setupMode
+      ? input.kind === 'map' ? 'Strzałki wybierają pole · Enter wybiera i potwierdza ustawienie · Esc cofa.' : 'Enter przechodzi dalej · Esc wraca do poprzedniego elementu.'
+      : input.kind === 'menu'
       ? 'Strzałki wybierają opcję, Enter otwiera. PageUp/PageDown przewija opis.'
       : input.prompt || 'Wybierz dostępną opcję.');
     bar.querySelector('[data-keyboard-status]').textContent = [point, cost, notice].filter(Boolean).join(' · ');
@@ -133,10 +142,19 @@ const KeyboardInput = (() => {
     if (menuMemory.size > 32) menuMemory.delete(menuMemory.keys().next().value);
   }
   function rememberedChoice(choices) {
+    const primary = automaticSetupPrimary(choices);
+    if (primary) return primary;
     const remembered = menuMemory.get(menuKey());
     return choices.find(element => choiceKey(element) === remembered)
       || (state.encounter_initiative?.panel?.review
-        ? choices.find(element => element.matches('.panel-accept,[data-mana-primary]')) : null) || choices[0];
+        ? choices.find(element => element.matches('.panel-accept,[data-mana-primary]')) : null)
+      || choices.find(element => element.matches('[data-keyboard-primary="true"]')) || choices[0];
+  }
+  function automaticSetupPrimary(choices) {
+    if (contract().kind !== 'menu' || state.combat || !state.encounter_setup
+        || menuNavigationContext === contract().context
+        || (explicitChoice?.context === contract().context && nativeChoice())) return null;
+    return choices.find(element => element.matches('[data-keyboard-primary="true"]')) || null;
   }
   function clearChoiceHighlight() {
     document.querySelectorAll('.keyboard-choice-focused').forEach(item => {
@@ -152,7 +170,8 @@ const KeyboardInput = (() => {
     if (state.combat && !state.mission?.active && !state.exploration_mana?.active && !actionList) return;
     const choices = menuButtons();
     if (!choices.length) return;
-    const current = choices.includes(document.activeElement) ? document.activeElement : rememberedChoice(choices);
+    const current = automaticSetupPrimary(choices)
+      || (choices.includes(document.activeElement) ? document.activeElement : rememberedChoice(choices));
     if (current) focusChoice(current);
   }
   function scheduleMenuFocus() {
@@ -184,6 +203,7 @@ const KeyboardInput = (() => {
       return true;
     }
     const index = choices.indexOf(choices.includes(document.activeElement) ? document.activeElement : rememberedChoice(choices));
+    menuNavigationContext = contract().context;
     return focusChoice(choices[Math.max(0, Math.min(choices.length - 1, index + delta))]);
   }
   function nativeChoice(allowHeader = false) {
@@ -257,7 +277,12 @@ const KeyboardInput = (() => {
   }
   function scrollReading(direction) {
     const root = modal() || (sideOpen() ? document.getElementById('side-panel') : document);
-    const area = [...root.querySelectorAll('.session-navigation-content,.keyboard-journal-entries,.confrontation-detail-body,.confrontation-controls,.mission-narrative-text,.mission-tile-instruction,.side-panel-content')]
+    const equipmentSelector = '.equipment-picker,.equipment-stash-preview,.equipment-body-list,.equipment-pack-grid';
+    const activeEquipment = root === document ? document.activeElement?.closest(equipmentSelector) : null;
+    const equipmentArea = visible(activeEquipment) ? activeEquipment
+      : root === document ? [...root.querySelectorAll(equipmentSelector)].find(visible) : null;
+    const setupArea = root === document ? [...root.querySelectorAll('.keyboard-setup-description,.keyboard-setup-active .mission-tile-instruction .mission-prose')].find(visible) : null;
+    const area = equipmentArea || setupArea || [...root.querySelectorAll('.session-navigation-content,.keyboard-journal-entries,.confrontation-detail-body,.confrontation-controls,.mission-narrative-text,.mission-tile-instruction,.side-panel-content')]
       .find(visible);
     if (area) area.scrollBy({top:direction * Math.max(120, area.clientHeight * .7)});
     else window.scrollBy({top:direction * innerHeight * .7});
@@ -307,6 +332,10 @@ const KeyboardInput = (() => {
       return true;
     }
     const localMenu = modal() || sideOpen() || actionList;
+    if (command === 'accept' && !localMenu) {
+      const primary = automaticSetupPrimary(menuButtons());
+      if (primary) {focusChoice(primary); primary.click(); return true;}
+    }
     if (command === 'accept' && !localMenu && contract().kind === 'map'
         && explicitChoice?.element === document.activeElement
         && explicitChoice.context === contract().context && nativeChoice()) {

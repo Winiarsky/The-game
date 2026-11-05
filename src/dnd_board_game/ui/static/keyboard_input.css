@@ -84,3 +84,85 @@
   font-size: .75rem;
   line-height: 1.4;
 }
+
+/* Setup keeps its action footer on screen, including short laptop viewports. */
+body.keyboard-setup-active {
+  --shell-header-height: 52px;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+}
+.keyboard-setup-active > .app-shell-header {
+  position: relative;
+  flex: 0 0 52px;
+  min-height: 52px;
+  padding: 5px 18px;
+}
+.keyboard-setup-active > #keyboard-control-bar {
+  flex: 0 0 auto;
+  padding: .35rem .8rem;
+  gap: .25rem .7rem;
+  font-size: .72rem;
+}
+.keyboard-setup-active > main { flex: 1 1 auto; min-height: 0; overflow: hidden; }
+.keyboard-setup-active main > section { height: 100%; padding: 8px 14px; overflow: hidden; }
+.keyboard-setup-active main > section > :not(#encounter-panel) { display: none !important; }
+.keyboard-setup-active #encounter-panel {
+  height: 100%;
+  margin: 0 auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.keyboard-setup-active #encounter-title,
+.keyboard-setup-active .encounter-transition-head,
+.keyboard-setup-active .encounter-progress,
+.keyboard-setup-active .encounter-technical-details,
+.keyboard-setup-active .encounter-transition-current > [data-board-input-status] { display: none; }
+.keyboard-setup-active #encounter { height: 100%; }
+.keyboard-setup-active .encounter-transition-shell { display: flex; flex-direction: column; height: 100%; }
+.keyboard-setup-active .encounter-transition-current {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  height: 100%;
+  min-height: 0;
+  padding: 10px;
+  overflow: hidden;
+  animation: none;
+}
+.keyboard-setup-active .setup-current-command {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  padding: 10px;
+  scroll-margin-top: 0;
+  font-size: .9rem;
+  line-height: 1.4;
+}
+.keyboard-setup-active .keyboard-setup-description { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.keyboard-setup-active .keyboard-setup-description p { margin: 7px 0; }
+.keyboard-setup-active .setup-assignment-hero { gap: .8rem; margin: 9px 0; }
+.keyboard-setup-active .setup-assignment-hero img { width: 60px; height: 76px; }
+.keyboard-setup-active .encounter-setup-actions {
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border);
+}
+.keyboard-setup-active .encounter-setup-actions button { padding: 8px 12px; min-height: 38px; font-size: .86rem; }
+.keyboard-setup-active .encounter-position-fallback { flex: 0 0 auto; margin-top: 0; }
+.keyboard-setup-active .encounter-position-fallback[open] { max-height: 100px; overflow-y: auto; }
+.keyboard-setup-active .mission-tile-setup { flex: 1 1 auto; min-height: 0; height: 100%; gap: 20px; }
+.keyboard-setup-active .mission-tile-instruction { display: flex; flex-direction: column; min-height: 0; height: 100%; }
+.keyboard-setup-active .mission-tile-instruction h2 { margin: 5px 0 10px; font-size: 1.35rem; }
+.keyboard-setup-active .mission-tile-instruction .mission-prose { flex: 1 1 auto; min-height: 0; margin: 0 0 10px; overflow-y: auto; font-size: .95rem; line-height: 1.5; }
+.keyboard-setup-active .mission-tile-instruction .mana-decisions { flex: 0 0 auto; flex-wrap: wrap; gap: 8px; }
+.keyboard-setup-active .mission-tile-preview svg { max-height: min(35dvh, 240px); }
+.keyboard-setup-active .encounter-transition-current > .message:not(.setup-current-command) { margin: 0; overflow-y: auto; }

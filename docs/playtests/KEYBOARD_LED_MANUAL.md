@@ -101,7 +101,16 @@ wybrać przez Tab i Enter.
 
 Menu, wybór drużyny, sceny i ekwipunek obsługujesz strzałkami i Enterem.
 W rozstawianiu postaci strzałki wskazują pole na LED-ach; Enter przekazuje
-wybór do istniejącego setupu. Esc cofa tam, gdzie przewiduje to scena.
+wybór do istniejącego setupu, a kolejny Enter zatwierdza ustawienie figurki.
+Widoczny przycisk „Dalej” potwierdza bieżący element, a po ostatnim kroku
+„Rozpocznij inicjatywę” prowadzi do rzutów. „Poprzedni element” wybierz
+świadomie strzałkami/Tabem lub użyj Esc, aby poprawić rozstawienie.
+
+Wyposażenie i ponumerowane miejsca plecaka mają osobne przewijane listy.
+Strzałki przenoszą zaznaczenie i przewijają listę do wybranej pozycji;
+Enter otwiera zmianę przedmiotu. +/− przegląda pasujące przedmioty,
+Enter zatwierdza wybraną opcję, a Esc anuluje zmianę. Pasek akcji na dole
+pozwala zajrzeć do zapasu drużyny, otworzyć pomoc i zatwierdzić bohatera.
 
 Wyniki fizycznych kości wprowadza istniejący kreator: ustaw wartość,
 zatwierdź kość i na końcu podsumowanie. Przeciwników rozlicza aplikacja.

@@ -1,3 +1,22 @@
+## Klawiatura — ekwipunek i przejście przez setup, 05.11.2026
+
+- [x] Zastąpić ściskane miejsca wyposażenia czytelnymi listami postaci
+  i plecaka, przewijanymi do zaznaczenia. Pokazać broń/pancerz na początku,
+  zachować wysokość wierszy oraz kompaktowy pasek akcji na niskich ekranach.
+- [x] Usunąć z tego widoku instrukcje fizycznych run; w wyborze przedmiotu
+  domyślnie zaznaczać potwierdzenie, zachować +/− i anulowanie Esc.
+- [x] Pokazać jawne „Dalej”, „Potwierdź ustawienie” i rozpoczęcie inicjatywy.
+  Enter po zmianie kroku wybiera główną akcję, a świadomy wybór cofnięcia
+  strzałkami/Tabem nadal działa. Usunąć pętlę ostatni krok → krok 9.
+  W setupie klawiaturowym przewijać opis wewnątrz karty i zachować widoczną
+  stopkę potwierdzenia również na niskim ekranie.
+- [x] Dodać próby Chrome dla geometrii ekwipunku, zmiany/anulowania wyboru,
+  przejścia przez teren i ustawienie trzech bohaterów oraz pozostawionego
+  fokusu na cofnięciu przed końcem setupu i inicjatywą.
+  Walidacja: 31 celowanych testów w osobnych partiach z timeoutem, w tym
+  pięć nowych prób Chrome, Misja 0, walka, menu Nessy oraz dotychczasowe
+  wyposażenie i rozstawianie planszy. Podglądy sprawdzone przy 1221 × 569.
+
 ## Klawiatura — wygaszony panel i klasyczne menu, 05.11.2026
 
 - [x] Usunąć z ramek LED cały stary pasek przycisków/run w profilu

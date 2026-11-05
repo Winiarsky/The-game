@@ -2,7 +2,8 @@
 function missionChoiceButton(choice, className='', showRuneName=true) {
   const keyboard=state.input?.mode==='keyboard';
   const key=`${choice.action}:${JSON.stringify(choice.extra||{})}`;
-  return `<button type="button" class="${keyboard?'keyboard-mission-option':'mana-rune-choice'} ${className}" data-mission-slot="${choice.slot}" ${keyboard?`data-keyboard-choice="${esc(key)}"`:''} onclick="missionAction('${esc(choice.action)}',${esc(JSON.stringify(choice.extra))})">${keyboard?'':choice.icon}<span>${esc(choice.label)}${!keyboard&&showRuneName?`<small>${esc(choice.name)}</small>`:''}</span></button>`;
+  const primary=keyboard&&['equipment_confirm','equipment_sell_confirm'].includes(choice.action);
+  return `<button type="button" class="${keyboard?'keyboard-mission-option':'mana-rune-choice'} ${className}" data-mission-slot="${choice.slot}" ${keyboard?`data-keyboard-choice="${esc(key)}"`:''} ${primary?'data-keyboard-primary="true"':''} onclick="missionAction('${esc(choice.action)}',${esc(JSON.stringify(choice.extra))})">${keyboard?'':choice.icon}<span>${esc(choice.label)}${!keyboard&&showRuneName?`<small>${esc(choice.name)}</small>`:''}</span></button>`;
 }
 
 function missionSetupHtml(setup,title,body,controls) {
@@ -54,6 +55,7 @@ function renderMission() {
   panel.dataset.readingKey=readingKey;
   panel.classList.toggle('mission-reading',Boolean(p?.reading));
   panel.classList.toggle('mission-equipment',Boolean(p?.equipment));
+  panel.classList.toggle('keyboard-inventory',Boolean(p?.equipment && state.input?.mode==='keyboard'));
   panel.classList.toggle('has-multiple-choices',(p?.choices.length||0)>1);
   document.body.classList.toggle('mission-active',Boolean(p));
   document.body.classList.toggle('mission-story',Boolean(p?.active || (p && state.exploration_mana?.active)));
@@ -95,7 +97,8 @@ function missionRollSummary(wizard) {
 }
 
 function equipmentButton(c, className='') {
-  return missionChoiceButton(c, className, false);
+  const primary=state.input?.mode==='keyboard' && c.slot===28 ? ' equipment-primary-action' : '';
+  return missionChoiceButton(c, className+primary, false);
 }
 
 function equipmentSlot(row, p) {
@@ -115,11 +118,25 @@ function equipmentItemPreview(item, emptyText, handChange=false) {
 function renderPartyEquipment(p, panel) {
   const e=p.equipment;
   const keyboard=state.input?.mode==='keyboard';
-  const t=(key,params={})=>sessionUiText(`equipment.${key}`,params);
+  const keyboardCopy={
+    pack_hint:'Ponumerowane miejsca w plecaku',
+    available_hint:'Wróć do postaci i wybierz miejsce strzałkami. Enter otworzy wybór wyposażenia.',
+    picker_hint:'Zmiana nastąpi po zatwierdzeniu. Poprzedni przedmiot wróci do wspólnego zapasu.',
+    starter_hint:'Wyposażenie jest gotowe. Wybierz miejsce, aby coś zmienić, albo zatwierdź przygotowanie postaci.',
+    sheet_hint:'Strzałki wybierają miejsce, Enter otwiera jego zawartość. Gotowe kończy przygotowanie postaci.',
+    picker_controls:'+/− przegląda pasujące przedmioty. Enter wybiera zaznaczoną opcję, Esc anuluje zmianę.',
+    sale_hint:'Sprzedaż zabierze cały stos. Potwierdź sprzedaż albo wybierz Zachowaj przedmiot.',
+  };
+  const t=(key,params={})=>keyboard&&Object.hasOwn(keyboardCopy,key) ? keyboardCopy[key] : sessionUiText(`equipment.${key}`,params);
   const inStash=['equipment_stash','equipment_sell'].includes(e.view);
   const body=e.loadout.filter(row=>!row.id.startsWith('pack_'));
+  if(keyboard) {
+    const order=['main_hand','armor','off_hand','head','neck','ring','focus'];
+    body.sort((left,right)=>order.indexOf(left.id)-order.indexOf(right.id));
+  }
   const pack=e.loadout.filter(row=>row.id.startsWith('pack_'));
   const footerChoices=p.choices.filter(c=>!['equipment_slot','equipment_group','equipment_pack_previous','equipment_pack_next'].includes(c.action));
+  const actions=keyboard&&e.picker ? [...footerChoices.filter(c=>c.slot===28),...footerChoices.filter(c=>c.slot!==28)] : footerChoices;
   let aside;
   if(e.picker) {
     const pick=e.picker;
@@ -130,7 +147,10 @@ function renderPartyEquipment(p, panel) {
     aside=`<section class="equipment-pack"><div class="equipment-section-title"><h3>${esc(t('pack'))}</h3><small>${e.pack_pages>1?esc(t('page',{page:e.pack_page,pages:e.pack_pages})):esc(t('pack_hint'))}</small></div><div class="equipment-pack-grid">${pack.map(row=>equipmentSlot(row,p)).join('')}</div>
       ${e.pack_pages>1?`<div class="equipment-pack-pages">${p.choices.filter(c=>c.action.startsWith('equipment_pack_')).map(c=>equipmentButton(c)).join('')}</div>`:''}</section>`;
   }
-  let workspace=`<div class="equipment-workspace"><section class="equipment-body" aria-label="${esc(t('worn'))}">${body.map(row=>equipmentSlot(row,p)).join('')}</section>${aside}</div>`;
+  const worn=keyboard
+    ? `<section class="equipment-equipped-pane" aria-label="${esc(t('worn'))}"><div class="equipment-section-title"><h3>${esc(t('worn'))}</h3><small>Założone przedmioty</small></div><div class="equipment-body equipment-body-list">${body.map(row=>equipmentSlot(row,p)).join('')}</div></section>`
+    : `<section class="equipment-body" aria-label="${esc(t('worn'))}">${body.map(row=>equipmentSlot(row,p)).join('')}</section>`;
+  let workspace=`<div class="equipment-workspace">${worn}${aside}</div>`;
   if(inStash) {
     workspace=`<div class="equipment-stash"><nav class="equipment-stash-tabs" aria-label="${esc(t('shared'))}">${p.choices.filter(c=>c.action==='equipment_group').map(c=>equipmentButton({...c,label:`${c.label} · ${e.groups[c.extra.group]}`},c.extra.group===e.group?'selected':'')).join('')}</nav>
       <section class="equipment-stash-preview">${equipmentItemPreview(e.item,t(`${e.group}_empty`))}<p>${esc(t(`${e.group}_hint`))}</p>${e.group==='found'&&!e.can_identify?`<p>${esc(t('identify_at_base'))}</p>`:''}<small>${esc(t('item_count',{index:e.stash_index,count:e.groups[e.group]}))}</small></section></div>`;
@@ -138,10 +158,17 @@ function renderPartyEquipment(p, panel) {
   panel.innerHTML=`<div class="mission-toolbar"><span class="equipment-stage-label">${esc(t('title'))}</span><small>${esc(p.ui.autosave)}</small><span>${esc(t('treasury',{gold:e.gold}))}</span></div>
     <div class="equipment-heading"><div class="equipment-hero">${e.portrait_url?`<img class="equipment-hero-portrait" src="${esc(e.portrait_url)}" alt="${esc(e.hero)}">`:''}<div><small>${esc(t('hero_step',{index:e.hero_index,count:e.hero_count}))}</small><h2>${esc(e.hero)}</h2><span>${esc(sessionUiText('common.equipment_stats',{strength:e.strength,ac:e.ac}))}</span></div></div>
       <ol class="equipment-party" aria-label="${esc(t('order'))}">${e.party.map((hero,index)=>`<li ${index===e.hero_index-1?'aria-current="step"':''}>${index<e.hero_index-1?'✓ ':''}${esc(hero.name)}</li>`).join('')}</ol></div>
-    ${workspace}<p class="equipment-notice" role="status">${esc(e.notice||(keyboard?'Strzałki wybierają miejsce lub opcję. Enter otwiera i zatwierdza, Esc wraca. +/− przegląda pasujące przedmioty.':e.view==='equipment'?t(e.groups.available===0?'starter_hint':'sheet_hint'):e.view==='equipment_sell'?t('sale_hint'):e.picker?t('picker_controls'):''))}</p>
-    <div class="mana-decisions equipment-controls${keyboard?' keyboard-mission-menu':''}">${footerChoices.map(c=>equipmentButton(c)).join('')}</div>`;
+    ${workspace}<p class="equipment-notice" role="status">${esc(e.notice||(e.picker?t('picker_controls'):e.view==='equipment'?t(e.groups.available===0?'starter_hint':'sheet_hint'):e.view==='equipment_sell'?t('sale_hint'):''))}</p>
+    <div class="mana-decisions equipment-controls">${actions.map(c=>equipmentButton(c)).join('')}</div>`;
   sizeMissionReader();
   const candidates=panel.querySelector('.equipment-candidate-list');
   const selected=candidates?.querySelector('[aria-current]');
-  if(selected) candidates.scrollLeft+=selected.getBoundingClientRect().left-candidates.getBoundingClientRect().left-candidates.clientWidth/2+selected.clientWidth/2;
+  if(selected) {
+    if(keyboard) {
+      const listRect=candidates.getBoundingClientRect(), itemRect=selected.getBoundingClientRect();
+      if(itemRect.top<listRect.top) candidates.scrollTop+=itemRect.top-listRect.top;
+      else if(itemRect.bottom>listRect.bottom) candidates.scrollTop+=itemRect.bottom-listRect.bottom;
+    }
+    else candidates.scrollLeft+=selected.getBoundingClientRect().left-candidates.getBoundingClientRect().left-candidates.clientWidth/2+selected.clientWidth/2;
+  }
 }
