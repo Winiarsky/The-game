@@ -1,3 +1,17 @@
+## Plansza LED + klawiatura — plan 05.11.2026
+
+- [x] Przejrzeć obecne wejście klawiatury, aktualną walkę runiczną,
+  rozdzielenie USB/WLED i zależności launchera/setupu.
+- [x] Przygotować na branchu `feat/led-keyboard-control` osobny
+  [plan implementacji](docs/LED_KEYBOARD_CONTROL_PLAN.md), podzielony na
+  core, hardware, UI, gameplay, konfigurację i testy. Tylko dokumentacja.
+- [ ] Po akceptacji planu wdrożyć kontrakt wejścia i WLED bez seriala.
+- [ ] Dodać kursor strzałkami i podgląd/zatwierdzenie w arenie v0.3,
+  następnie pełną walkę, ekwipunek i menu run.
+- [ ] Objąć klawiaturą launcher, setup, Misję 0, eksplorację i wczytywanie.
+- [ ] Sprawdzić zgodność zasad oraz pełną sesję z LED-ami bez USB skanera.
+  Pada zostawić na kolejny etap; implementacji jeszcze nie rozpoczęto.
+
 ## Trasy, osłona i Żar odnowy — 02.10.2026
 
 - [x] Odtworzyć zgłoszenia z `exploration_ui_66707532c6.jsonl`:
@@ -1316,12 +1330,11 @@ najbliższy horyzont, a nie kopię całej roadmapy.
 - [x] Add passive board focus for physically placed initiative/Stealth actors and exploration objects, without treating exploration party members or NPCs as separate board pieces.
 - [x] Move prepared-spell selection to the final initial-setup step before first-location selection.
 - [ ] UI-5: Validate the complete board-first UI vertical slice with `abandoned_watchtower` and the manual hardware checklist.
-- [ ] [Post-scenario control experiment] After completing the first target
-  scenario, playtest an optional LED-only board mode without figurine detection:
-  keep LEDs as spatial output, use the numpad/UI for declared positions and
-  confirmations, provide fast position correction, and compare reliability,
-  pace and player experience against the scanner-driven mode before deciding
-  whether detection remains required or becomes an optional enhancement.
+- [ ] [LED-only control experiment] Scope updated on 2026-11-05: prepare an
+  optional keyboard + LED profile on `feat/led-keyboard-control`, preserving
+  gameplay and existing setup correction. See the approval-pending
+  [layered implementation plan](docs/LED_KEYBOARD_CONTROL_PLAN.md) and tasks
+  at the top of this file. Runtime work starts only after plan acceptance.
 - [ ] P1: After the first target scenario, add the physical player-interface vertical
   slice: a player-maintained A4/A5 character sheet updated through level-up, printable
   illustrated decision cards with stable QR ids, a scanner input adapter, shared
