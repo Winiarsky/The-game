@@ -75,7 +75,14 @@ def test_keyboard_preview_commit_panels_and_action_menu(tmp_path: Path) -> None:
         key('m');
         await wait(()=>state.input.kind==='map'&&!busy,'movement preview');
         const preview=await snapshot();
-        key('ArrowUp');await settle();
+        for(const [direction,expected] of [
+          ['ArrowRight',[3,4]], ['ArrowLeft',[3,3]],
+          ['ArrowDown',[2,3]], ['ArrowUp',[3,3]], ['ArrowUp',[4,3]],
+        ]){
+          key(direction);await settle();
+          check(JSON.stringify(state.input.cursor)===JSON.stringify(expected),
+            'board orientation incorrect for '+direction+': '+JSON.stringify(state.input.cursor));
+        }
         check(JSON.stringify(state.input.cursor)!==origin,'arrows did not move cursor');
         check(document.querySelector('[data-keyboard-status]').textContent.includes('Koszt ruchu:'),'movement preview cost missing');
         check(JSON.stringify(actor().position)===origin,'preview moved actor');

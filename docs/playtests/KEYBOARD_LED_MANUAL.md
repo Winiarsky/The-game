@@ -80,6 +80,11 @@ poczekaj na aktualizację podglądu przed Enterem.
 
 ## Ruch i cele
 
+Sterowanie polami jest dopasowane do planszy oglądanej w obrocie o 90° w lewo.
+Strzałka w prawo wskazuje kierunek, który wcześniej wybierała strzałka w dół;
+w górę — dawny kierunek w prawo; w lewo — dawny w górę; w dół — dawny w lewo.
+Menu, ekwipunek i wprowadzanie wyników kości zachowują zwykłe kierunki.
+
 `M` → strzałki → sprawdź podświetlenie i koszt → `Enter`.
 Strzałki przesuwają kursor, nie figurkę. Silnik liczy trasę od bieżącej
 pozycji postaci, więc dojście kursorem do pola po skosie nie narzuca

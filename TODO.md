@@ -1,3 +1,14 @@
+## Klawiatura — orientacja planszy, 06.11.2026
+
+- [x] Dopasować strzałki wyboru pól do planszy oglądanej o 90° w lewo:
+  prawo → wiersz +1, góra → kolumna +1, lewo → wiersz −1, dół → kolumna −1.
+  Zachować zwykłe kierunki menu i kości oraz dotychczasowe współrzędne
+  serwera i mapowanie WLED.
+- [x] Sprawdzić cztery kierunki prawdziwymi zdarzeniami klawiatury w Chrome,
+  brak zmiany stanu walki w podglądzie i zatwierdzenie ruchu.
+  Walidacja: 5 prób Chrome w osobnych partiach — walka, pełna Misja 0
+  i ręczny setup w trzech rozmiarach okna.
+
 ## Klawiatura — ekwipunek i przejście przez setup, 05.11.2026
 
 - [x] Zastąpić ściskane miejsca wyposażenia czytelnymi listami postaci
