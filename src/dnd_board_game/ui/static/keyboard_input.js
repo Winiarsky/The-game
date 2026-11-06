@@ -105,9 +105,9 @@ const KeyboardInput = (() => {
     if (!origin) { status('Nie ma teraz pola do wskazania.'); return true; }
     const bounds = input.bounds || {};
     const cols = Number(bounds.cols || input.cols || 19), rows = Number(bounds.rows || input.rows || 30);
-    // The board is viewed a quarter turn counterclockwise from its logical grid.
-    // Convert screen directions back to board coordinates before clamping.
-    const boardDx = -dy, boardDy = dx;
+    // Match the player's physical board orientation before clamping.
+    // Right decreases row; Up decreases column.
+    const boardDx = dy, boardDy = -dx;
     const position = [Math.max(0, Math.min(cols - 1, origin[0] + boardDx)),
       Math.max(0, Math.min(rows - 1, origin[1] + boardDy))];
     if (position[0] === 19) position[0] = 18;

@@ -76,8 +76,8 @@ def test_keyboard_preview_commit_panels_and_action_menu(tmp_path: Path) -> None:
         await wait(()=>state.input.kind==='map'&&!busy,'movement preview');
         const preview=await snapshot();
         for(const [direction,expected] of [
-          ['ArrowRight',[3,4]], ['ArrowLeft',[3,3]],
-          ['ArrowDown',[2,3]], ['ArrowUp',[3,3]], ['ArrowUp',[4,3]],
+          ['ArrowRight',[3,2]], ['ArrowLeft',[3,3]],
+          ['ArrowDown',[4,3]], ['ArrowUp',[3,3]], ['ArrowUp',[2,3]],
         ]){
           key(direction);await settle();
           check(JSON.stringify(state.input.cursor)===JSON.stringify(expected),

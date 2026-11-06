@@ -80,9 +80,9 @@ poczekaj na aktualizację podglądu przed Enterem.
 
 ## Ruch i cele
 
-Sterowanie polami jest dopasowane do planszy oglądanej w obrocie o 90° w lewo.
-Strzałka w prawo wskazuje kierunek, który wcześniej wybierała strzałka w dół;
-w górę — dawny kierunek w prawo; w lewo — dawny w górę; w dół — dawny w lewo.
+Sterowanie polami jest dopasowane do ustawienia fizycznej planszy gracza.
+W jej współrzędnych strzałka w prawo zmniejsza wiersz, w górę zmniejsza
+kolumnę, w lewo zwiększa wiersz, a w dół zwiększa kolumnę.
 Menu, ekwipunek i wprowadzanie wyników kości zachowują zwykłe kierunki.
 
 `M` → strzałki → sprawdź podświetlenie i koszt → `Enter`.
