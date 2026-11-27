@@ -306,6 +306,11 @@ def decision(e: ChargeEncounter) -> dict[str, Any]:
     elif s.phase == "end-preview":
         end_reason = "mocy runicznej" if _relations(e) else "mocy wzmocnionej"
         result.update(title="Zakończyć turę?", body="Niewykorzystane akcje przepadną." + (f" Rezonans zakończy się: w tej turze nie użyto {end_reason}." if e.active.hp > 0 and not e.fighter().continued and s.chain else ""))
+        result["unused_resources"] = [label for available, label in (
+            (e.movement(str(e.active.id)) > 0, f"ruch: {e.movement(str(e.active.id))} pól"),
+            (e.fighter().ordinary, "atak / przedmiot"),
+            (e.fighter().special, "akcja specjalna"),
+        ) if available]
     elif s.phase == "finished":
         result.update(title="Koniec walki", body="Zatwierdź, aby przejść do wyniku starcia.")
     elif e.active.faction == Faction.ENEMY:
@@ -358,6 +363,13 @@ def presentation(e: ChargeEncounter) -> tuple[dict[str, Any], ResonanceBoardView
                 illegal_positions=[list(e.actor(key).position) for key in illegal_ids],
                 rune_icons={name: panel_icon(rune_slot(name)) for name in (*e.catalog["rules"]["starter_runes"], *e.catalog["rules"].get("reserved_runes", []))},
                 reserved_runes=e.catalog["rules"].get("reserved_runes", []))
+    view["hero_details"] = {
+        key: dict(passive=hero.get("passive"), flaw=hero.get("flaw"),
+                  regeneration=hero.get("regeneration", []),
+                  powers=[dict(name=card.name, effect=card.effect, details=_card_details(e, card))
+                          for card in cards_for(e.catalog, key)])
+        for key in e.s.order if (hero := e.catalog["heroes"].get(key))
+    }
     selected_slot = None
     if p:
         selected_card = e.card(p["id"])

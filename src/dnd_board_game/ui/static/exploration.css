@@ -138,8 +138,25 @@ body.side-panel-open .side-panel-scrim { opacity: 1; pointer-events: auto; }
 .panel-info-card.inventory { border-left-color: #8b7040; }
 .panel-info-card.inventory.unavailable { opacity: .58; border-left-color: var(--color-red); }
 .panel-info-card.inventory p { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 0; }
-.panel-item-tags { display: flex !important; grid-auto-flow: column; justify-content: start; gap: 4px !important; }
+.panel-item-tags { display: flex !important; flex-wrap: wrap; justify-content: start; gap: 4px !important; min-width: 0; }
 .panel-item-tags small { padding: 2px 6px; border: 1px solid #4b4942; border-radius: 999px; color: #c5bda9; }
+#side-panel, #side-panel * { box-sizing: border-box; }
+.side-panel-content, .panel-card-list, .panel-info-card, .panel-info-card > div { min-width: 0; }
+.panel-info-card, .actor-panel-summary, .hands-summary { overflow-wrap: anywhere; }
+.actor-panel-summary { flex-wrap: wrap; }
+.panel-item-tags small { max-width: 100%; overflow-wrap: anywhere; font-size: 12px; }
+.panel-actor-selector > div { flex-wrap: wrap; }
+.panel-actor-selector button { flex: 1 1 100px; min-width: 0; }
+.inventory-metadata { margin-top: 5px; }
+.inventory-metadata summary, .panel-combat-section summary { color: #d6bd86; cursor: pointer; font-size: 13px; padding: 7px 0; }
+.inventory-metadata[open] > div { margin-top: 6px; }
+.panel-combat-summary { border: 1px solid #d6bd8655; padding: 12px; border-radius: 5px; font-size: 13px; line-height: 1.5; }
+.panel-combat-summary h3 { margin: 0 0 8px; font-size: 17px; }
+.panel-combat-summary p { margin: 7px 0; }
+.panel-combat-summary ul { padding-left: 18px; }
+.panel-combat-section { border-top: 1px solid #d6bd8633; }
+.panel-combat-section article + article { border-top: 1px solid #d6bd8633; }
+.panel-combat-section h4 { margin: 10px 0 5px; }
 .panel-empty-state { display: grid; gap: 4px; padding: 18px 12px; border: 1px dashed #44423d; border-radius: 9px; color: var(--color-text-muted); text-align: center; }
 .panel-empty-state b { color: #d7d0c3; }
 .panel-subsection { display: grid; gap: 7px; margin-top: 16px; }

@@ -1,0 +1,7 @@
+interface:
+  display_name: Design Quest Structure
+  short_description: Turn narrative premises into playable quest verbs, objectives,
+    and consequences
+  default_prompt: Use $design-quest-structure to turn this narrative premise into
+    a playable quest with clear verbs, objectives, complications, state changes, and
+    production scope.

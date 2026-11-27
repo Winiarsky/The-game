@@ -5,9 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ ui_text('navigation.new_game') }}</title>
   <link rel="stylesheet" href="{{ static_asset_url('launcher.css') }}">
+  {% include 'player_ui_assets.html' %}
 </head>
 <body class="launcher-page new-game-page">
-  <main class="flow-shell">
+<a class="skip-link" href="#main-content">Przejdź do treści</a>
+  <main id="main-content" tabindex="-1" class="flow-shell">
     <header class="flow-header">
       <a class="back-link" href="{{ url_for('index') }}">{{ ui_text('navigation.main_menu') }}</a>
       <span id="new-game-step-label" class="step-label">{{ ui_text('navigation.party_step') }}</span>
@@ -31,7 +33,7 @@
                   {{ panel_icon(5 + loop.index0)|safe }}
                   <input type="checkbox" name="character_ids" value="{{ actor_id }}" aria-labelledby="hero-name-{{ actor_id }}" {% if actor_id in selected_character_ids|default(()) %}checked{% endif %}>
                   {% set portrait_url = character_portrait_url(character.actor.portrait) %}
-                  <span class="roster-avatar" aria-hidden="true">{% if portrait_url %}<img src="{{ portrait_url }}" alt="">{% else %}{{ character.actor.name[:1]|upper }}{% endif %}</span>
+                  <span class="roster-avatar" aria-hidden="true">{% if portrait_url %}<img src="{{ portrait_url }}" alt="" width="88" height="88">{% else %}{{ character.actor.name[:1]|upper }}{% endif %}</span>
                   <span class="hero-identity"><b id="hero-name-{{ actor_id }}">{{ character.actor.name }}</b><small>Poziom {{ character.actor.level }} · {{ class_names.get(character.class_id, character.class_id) }}</small><em data-selection-state>{{ ui_text('navigation.choose_hero') }}</em></span>
                 </label>
                 {% if guide %}

@@ -10,8 +10,9 @@ Dłuższy opis przewijasz klawiszami − / +. LED-y pokazują pola, trasy, cele
 i pozostałe informacje przestrzenne na mapie.
 
 Ściągę sterowania otwierasz klawiszem `1`, w ekranowej karcie postaci.
-Zawiera przypisania i informację o bieżącym wyborze. Górny pasek skrótów
-został usunięty, aby zostawić więcej miejsca na rozgrywkę.
+Zawiera pełne przypisania. Krótka stopka przy bieżącej decyzji pokazuje tryb
+Mapa/Akcje/Rzut/Wybór, koszt ruchu, oczekiwanie na podgląd oraz działanie Entera.
+Górny pasek skrótów pozostaje usunięty, aby zostawić więcej miejsca na rozgrywkę.
 
 ## Szybki start
 
@@ -70,7 +71,7 @@ W panelu konfiguracji UI można osobno wybrać sterowanie klawiaturą i wyjście
 | 7 | Otwórz podgląd ruchu. |
 | 9 | Otwórz podgląd ataku bronią. |
 | 5 | Przejdź do dostępnych run i akcji lub przełącz kursor mapy na opcje bieżącego kroku; 8 / 2 wybiera, Enter otwiera podgląd lub opcję. |
-| 1 | Otwórz kartę postaci ze ściągą sterowania. |
+| 1 | Otwórz/przełącz na kartę postaci ze stanem walki, mocami i ściągą; ponowne 1 zamyka panel. |
 | 3 | Otwórz/zamknij ekwipunek. |
 | 0 | Otwórz istniejące potwierdzenie końca tury. |
 | + / − | Zmień wynik kości lub pozycję obsługiwanego pickera; podczas czytania przewiń opis w dół / w górę. |
@@ -81,10 +82,21 @@ W panelu konfiguracji UI można osobno wybrać sterowanie klawiaturą i wyjście
 
 Klawisze numpada działają przy włączonym i wyłączonym Num Lock. Klawisz 5
 otwiera akcje, a narożniki 7/9/1/3 mają skróty opisane powyżej; nie służą do
-przesuwania kursora po skosie. W menu można wybierać również przez 4 / 6.
+przesuwania kursora po skosie. W menu 8/2 zmienia wybór w pionie, a 4/6
+w poziomie. W wyposażeniu 4/6 przechodzi między założonymi przedmiotami
+a plecakiem, a 8/2 przegląda wybraną kolumnę. Naciśnięcie 1 lub 3 w otwartym
+panelu przełącza zakładkę; ponowny skrót bieżącej zakładki albo Backspace
+zamyka panel i przywraca wybór.
 Dotychczasowe strzałki, skróty literowe, Esc, Spacja i PageUp/PageDown
 pozostają dodatkowymi aliasami. Tab / Shift+Tab pozwala opcjonalnie przejść
 fokusem do konkretnej kontrolki ekranowej.
+
+Niebieska ramka wskazuje bieżący wybór klawiatury; złoty akcent oznacza
+aktywną turę. W otwartym panelu Tab / Shift+Tab pozostaje wewnątrz panelu,
+a zamknięcie przywraca wcześniejszy fokus. W walce zakładka **Moce** zawiera
+moce runiczne wybranego bohatera, a **Stany** jego bieżące efekty.
+Komunikat błędu pojawia się przy decyzji; po jego zamknięciu można poprawić
+wybór i spróbować ponownie.
 
 W polu tekstowym klawisze służą do pisania. Przytrzymanie Entera nie wykonuje
 następnej decyzji. Kierunki mogą się powtarzać; przy szybkiej zmianie celu

@@ -138,6 +138,12 @@ def test_keyboard_preview_commit_panels_and_action_menu(tmp_path: Path) -> None:
         for(const marker of ['status','sync','multiple']){
           check(controlsCard.querySelector(`[data-keyboard-${marker}]`),'character card missing keyboard '+marker);
         }
+        const unavailable=document.querySelector('.rc-basic[aria-disabled="true"]');
+        check(unavailable?.dataset.keyboardDisabled,'unavailable action has no keyboard explanation');
+        const beforeUnavailable=await snapshot();
+        key('Tab');unavailable.focus();numpad('Enter');
+        check(await snapshot()===beforeUnavailable,'unavailable action spent resources');
+        check(document.getElementById('keyboard-decision-hint').textContent.includes(unavailable.dataset.keyboardDisabled),'unavailable action explanation is hidden');
         state.board.led_output={pending:true,error:'Próba: WLED bez odpowiedzi'};
         renderBoardConnectionIndicator();
         const indicator=document.getElementById('board-connection-indicator');
@@ -162,6 +168,12 @@ def test_keyboard_preview_commit_panels_and_action_menu(tmp_path: Path) -> None:
         numpad('8');await settle();
         check(JSON.stringify(state.input.cursor)!==origin,'arrows did not move cursor');
         check(document.querySelector('[data-keyboard-status]').textContent.includes('Koszt ruchu:'),'movement preview cost missing');
+        const hint=document.getElementById('keyboard-decision-hint');
+        check(hint&&!hint.hidden&&hint.closest('.rc-main'),'decision hint missing from combat');
+        check(hint.innerText.includes('Koszt ruchu:')&&hint.innerText.includes('Enter'),'visible movement instructions missing');
+        const accept=document.querySelector('[data-keyboard-accept]');
+        check(accept&&!accept.disabled&&accept.textContent.includes('Wykonaj ruch'),'ready movement has no screen confirmation');
+        check(!document.querySelector('.rc-prompt').textContent.includes('Wybierz cel na planszy'),'movement prompt is stale');
         check(JSON.stringify(actor().position)===origin,'preview moved actor');
         check(await snapshot()===preview,'arrow changed authoritative combat state');
         key('Tab');
@@ -183,7 +195,33 @@ def test_keyboard_preview_commit_panels_and_action_menu(tmp_path: Path) -> None:
         check(await snapshot()===committed,'repeated Enter performed another action');
         check(state.combat.resonance.phase==='result','movement did not keep its existing result acknowledgement');
         numpad('Enter');await wait(()=>state.combat.resonance.phase==='idle'&&!busy,'acknowledge movement result');
+        numpad('7');await settle();numpad('8');await settle();
+        const screenDestination=JSON.stringify(state.input.cursor);
+        document.querySelector('[data-keyboard-accept]').click();
+        await wait(()=>JSON.stringify(actor().position)===screenDestination&&!busy,'screen movement confirmation');
+        check(state.combat.resonance.phase==='result','screen confirmation did not execute movement');
+        numpad('Enter');await wait(()=>state.combat.resonance.phase==='idle'&&!busy,'screen movement acknowledgement');
         const idle=await snapshot();
+        numpad('5');
+        const focused=document.activeElement.dataset.rcSlot;
+        numpad('1');numpad('3');
+        check(sidePanelOpen&&sidePanelTab==='inventory','1 → 3 did not switch panels');
+        const side=document.getElementById('side-panel');
+        for(const details of side.querySelectorAll('.inventory-metadata'))details.open=true;
+        check(side.scrollWidth<=side.clientWidth+1,'inventory overflows side panel');
+        check(!side.querySelector('[data-side-panel-content="inventory"]').innerText.includes('Two handed'),'untranslated weapon property');
+        numpad('1');
+        check(sidePanelOpen&&sidePanelTab==='party','3 → 1 did not switch panels');
+        check(side.querySelector('.panel-combat-summary'),'character panel lacks combat information');
+        check(side.querySelector('.panel-combat-summary').innerText.includes('Moce runiczne'),'character panel lacks rune powers');
+        numpad('1');
+        check(!sidePanelOpen,'second 1 did not close character panel');
+        check(document.activeElement.dataset.rcSlot===focused,'panel lost action focus');
+        check(await snapshot()===idle,'information panels changed combat state');
+        numpad('5');
+        document.querySelector('.rc-info').click();
+        check(sidePanelOpen&&sidePanelTab==='party','combat information button did not open the shared character panel');
+        key('Backspace');
         key('Tab');document.getElementById('side-panel-toggle').focus();
         key('Enter');
         check(document.getElementById('session-navigation')?.open,'Tab-focused header menu did not open');
@@ -216,6 +254,7 @@ def test_keyboard_preview_commit_panels_and_action_menu(tmp_path: Path) -> None:
           key('Backspace');await wait(()=>state.combat.resonance.phase==='idle'&&!busy,'cancel attack');
           numpad('0',numLock);
           await wait(()=>state.combat.resonance.phase==='end-preview'&&!busy,'end turn preview');
+          check(document.querySelector('.rc-unused')?.textContent.includes('atak / przedmiot'),'end turn lacks unused budgets');
           key('Backspace');await wait(()=>state.combat.resonance.phase==='idle'&&!busy,'cancel end turn');
         }
         const beforeSession=await snapshot();

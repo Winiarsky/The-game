@@ -103,6 +103,7 @@ def payload(session: ExplorationUiSession, selection: dict[str, Any] | None = No
     can_accept = panel_position(28).as_tuple() in positions
     can_back = panel_position(29).as_tuple() in positions
     can_adjust = any(panel_position(slot).as_tuple() in positions for slot in (26, 27))
+    accept_label = "Zatwierdź wybór"
     if e is not None:
         if e.s.inspected:
             kind = "menu"
@@ -122,14 +123,31 @@ def payload(session: ExplorationUiSession, selection: dict[str, Any] | None = No
         if task and task["type"] == "roll" and e.actor(task["actor"]).faction.value == "ally":
             kind = "dice"
         can_accept, can_back = 28 in real_controls, 29 in real_controls
-        if kind == "map" and cursor.touched:
+        accept_label = real_controls.get(28, {}).get("label", "Wybierz pole")
+        # A legal initial cursor is selectable too; an already prepared choice
+        # must keep its existing confirmation until the cursor actually moves.
+        if kind == "map" and (cursor.touched or (valid and real_controls.get(28, {}).get("command") != "accept")):
+            original_prompt = resonance.decision(e).get("prompt", "")
+            choosing_area = bool(e.s.preview and e.s.preview["id"] in {"force_wave", "flame_fan"}
+                                 and e.s.preview["center"] is None)
             candidate, valid, notice = _candidate(session, e)
             v, board = resonance.presentation(candidate)
             preview = dict(decision=v["decision"], path=[list(p) for p in board.path],
                            cost=sum(((candidate.s.preview or {}).get("path") or {}).get("costs", [])))
             can_accept = valid or (multiple and can_accept)
+            confirmation = resonance.controls(candidate).get(28, {})
+            accept_label = confirmation.get("label", "Wybierz pole")
+            if confirmation.get("command") != "accept":
+                accept_label = "Wybierz obszar" if choosing_area else "Wybierz pole"
+                preview["decision"]["prompt"] = original_prompt
+            if candidate.s.preview and candidate.s.preview["id"] == "move" and valid:
+                accept_label = "Wykonaj ruch"
         if multiple:
+            accept_label = "Zatwierdź cele" if real_controls.get(28, {}).get("command") == "accept" else "Dodaj cel"
             notice = notice or "Kropka (.) wybiera/dodaje cel. Enter zatwierdza wybrane cele; bez gotowego zestawu wskazuje cel."
+        elif kind == "map" and not cursor.touched and not valid and real_controls.get(28, {}).get("command") == "exclude":
+            can_accept = False
+            accept_label = "Wybierz pole"
     elif kind == "map":
         can_accept = valid
     if kind == "map" and cursor.touched and not valid:
@@ -142,7 +160,8 @@ def payload(session: ExplorationUiSession, selection: dict[str, Any] | None = No
                 origin=list(origin) if origin else None, fields=fields, controls=controls,
                 selected_id=None, selection_mode="multiple" if multiple else "single",
                 prompt=selection.get("prompt", ""), notice=notice, valid=valid,
-                can_accept=can_accept, can_back=can_back, can_adjust=can_adjust, preview=preview)
+                can_accept=can_accept, can_back=can_back, can_adjust=can_adjust,
+                accept_label=accept_label, preview=preview)
 
 
 def decorate(session: ExplorationUiSession, state: dict[str, Any]) -> None:
@@ -158,8 +177,10 @@ def decorate(session: ExplorationUiSession, state: dict[str, Any]) -> None:
             combat["decision"].pop("warning", None)
         combat["decision"] = dict(combat["decision"], **{
             key: value for key, value in decision.items()
-            if key in {"target_ids", "targets", "warning", "rejected_target", "cost", "resonance"}
+            if key in {"target_ids", "targets", "warning", "rejected_target", "cost", "resonance", "prompt"}
         })
+        if not view["valid"]:
+            combat["decision"]["prompt"] = view["notice"]
 
 
 def _map_feedback(base: LedFeedback) -> LedFeedback:
@@ -252,7 +273,7 @@ def command(session: ExplorationUiSession, data: dict[str, Any]) -> dict[str, An
                 raise ValueError(current["notice"])
             multiple = current["selection_mode"] == "multiple"
             ready_before = bool(available.get(28, {}).get("command") == "accept")
-            if action == "accept" and multiple and ready_before:
+            if action == "accept" and ready_before and (multiple or not cursor.touched):
                 cursor.revision += 1
                 return _resonance_send(session, "accept")
             if cursor.position is None or list(cursor.position) not in current["fields"]:

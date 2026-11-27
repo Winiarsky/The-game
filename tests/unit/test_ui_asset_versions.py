@@ -34,12 +34,18 @@ def test_play_page_versions_assets_and_changes_only_edited_asset(
         return {url.split("?")[0].rsplit("/", 1)[1]: url for url in urls}
 
     original = asset_urls()
-    assert {"exploration.js", "exploration.css", "board_panel.js", "shared_mana.js"} <= original.keys()
+    assert {
+        "exploration.js", "exploration.css", "board_panel.js", "shared_mana.js",
+        "player_ui.js", "player_ui.css",
+    } <= original.keys()
     assert asset_urls() == original
-    path = static / "exploration.js"
-    path.write_text(path.read_text() + "\n// Simulate a new UI release.\n")
-    updated = asset_urls()
-    assert updated["exploration.js"] != original["exploration.js"]
-    assert updated["exploration.css"] == original["exploration.css"]
-    assert updated["board_panel.js"] == original["board_panel.js"]
-    assert "Simulate a new UI release" in client.get(updated["exploration.js"]).text
+    for name in ("exploration.js", "player_ui.js", "player_ui.css"):
+        path = static / name
+        path.write_text(path.read_text() + "\n/* Simulate a new UI release. */\n")
+        updated = asset_urls()
+        assert updated[name] != original[name]
+        assert {key: value for key, value in updated.items() if key != name} == {
+            key: value for key, value in original.items() if key != name
+        }
+        assert "Simulate a new UI release" in client.get(updated[name]).text
+        original = updated

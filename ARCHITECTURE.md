@@ -2,6 +2,19 @@
 
 The rebuild should separate deterministic game logic from adapters.
 
+## Shared player presentation (2026-11-27)
+
+`ui/static/player_ui.js` supplies keypad normalization, spatial choice navigation,
+panel focus ownership and inline notices to both launcher and runtime adapters.
+`player_ui.css` supplies shared visual tokens, focus states and reduced motion;
+`templates/player_ui_assets.html` loads both with content-based asset versions.
+These primitives do not resolve game rules or issue transport commands. Side
+panels use inert backgrounds, semantic tabs and focus restoration. The command
+API keeps the last successful projection when an error contains only a message;
+an authoritative `state` attached to a rejection refreshes stale input revisions.
+Optional Python Playwright tests live in `tests/integration/`; the `ui-test`
+extra is development-only. Design and validation: `docs/UI_UX_REFACTOR.md`.
+
 ## Numpad input (2026-11-15)
 
 The existing `keyboard` profile now exposes numpad controls. Browser adapters
@@ -10,8 +23,13 @@ does not change navigation or shortcuts. The server command contract, board
 orientation, preview isolation and rule resolution remain unchanged. Numpad
 Enter/Backspace, decimal selection, menu access and contextual `+`/`−` handling
 reuse the existing input and modal ownership paths. Legacy keyboard aliases
-remain available. The control reference and current selection status are rendered
-inside the party side panel opened with `1`, replacing the persistent top bar.
+remain available. The full control reference is rendered inside the party side
+panel opened with `1`; a contextual decision footer exposes the current input
+mode, preview cost and confirmation without a persistent top bar. Spatial menu
+navigation uses screen geometry independently of physical map orientation.
+Keyboard combat confirmations use the revision-checked input command path,
+including clicks on a cursor preview. Character information uses the shared
+side panel; combat-only details are projected by `ui/resonance.py`.
 Usage: `docs/playtests/KEYBOARD_LED_MANUAL.md`.
 
 ## Keyboard and output-only WLED (2026-11-05)

@@ -1,0 +1,6 @@
+interface:
+  display_name: Audit Choice Quality
+  short_description: Diagnose fake agency, dominant options, and weak tradeoffs
+  default_prompt: Use $audit-choice-quality to evaluate these player choices for intention
+    clarity, differentiation, fairness, tradeoffs, feedback, consequences, and production
+    cost.

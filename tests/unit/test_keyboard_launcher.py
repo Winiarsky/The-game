@@ -99,11 +99,8 @@ def test_launcher_keyboard_events_select_real_controls(tmp_path: Path, page_path
     session.input_mode = 'keyboard'
     html = create_app(session).test_client().get(page_path).get_data(as_text=True)
     static = Path('src/dnd_board_game/ui/static')
-    html = re.sub(r'<link rel="stylesheet"[^>]+>',
-                  lambda _: '<style>' + (static / 'launcher.css').read_text() + '</style>', html)
-    for filename in ('launcher_board.js', 'session_copy.js'):
-        html = re.sub(r'<script src="[^"]*' + filename.replace('.', r'\.') + r'[^\"]*"[^>]*></script>',
-                      lambda _, name=filename: '<script>' + (static / name).read_text() + '</script>', html)
+    from tests.browser_static import inline_player_assets
+    html = inline_player_assets(html, static)
     harness = r'''
 let contract=null, scans=0, generation=0, navigation=null, submission=null;
 const scrolls=[];

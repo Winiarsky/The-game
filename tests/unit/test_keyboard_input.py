@@ -71,6 +71,36 @@ def test_enter_commits_selected_movement_once_and_rejects_stale_request(tmp_path
     assert resonance.engine(game).fighter().base_spent == spent
 
 
+def test_keyboard_preview_explains_confirmation_without_spending_movement(tmp_path: Path) -> None:
+    game, _, _, _ = combat(tmp_path)
+    game.configure_input_mode("keyboard")
+    send(game, "shortcut", id="move")
+    before = repr(game.combat_state)
+    result = send(game, "cursor", position=[3, 5])
+    assert result["input"]["can_accept"]
+    assert result["input"]["accept_label"] == "Wykonaj ruch"
+    assert result["input"]["preview"]["cost"] == 2
+    assert "potwierdza ruch" in result["combat"]["resonance"]["decision"]["prompt"]
+    assert repr(game.combat_state) == before
+    result = send(game, "cursor", position=[5, 3])
+    assert not result["input"]["can_accept"]
+    assert result["combat"]["resonance"]["decision"]["prompt"] == result["input"]["notice"]
+    assert repr(game.combat_state) == before
+
+
+def test_end_turn_lists_unspent_turn_budgets_without_expiring_reaction(tmp_path: Path) -> None:
+    game, _, _, _ = combat(tmp_path)
+    game.configure_input_mode("keyboard")
+    send(game, "shortcut", id="end")
+    resources = resonance.payload(game)["decision"]["unused_resources"]
+    assert "atak / przedmiot" in resources
+    assert "akcja specjalna" in resources
+    assert any(label.startswith("ruch:") for label in resources)
+    assert not any("reakcja" in label for label in resources)
+    send(game, "back")
+    assert resonance.engine(game).fighter().reaction
+
+
 def test_invalid_candidate_cannot_commit_previous_legal_destination(tmp_path: Path) -> None:
     game, board, _, _ = combat(tmp_path)
     game.configure_input_mode("keyboard")
@@ -129,16 +159,30 @@ def test_flame_area_selection_preserves_separate_exclusion_step(tmp_path: Path) 
     e.s.chain = ResonanceChain(1, [ResonanceEntry(r, "nimra", r) for r in ("Oko", "Węzeł")], ["nimra"])
     game.combat_state = e.combat_state()
     game.configure_input_mode("keyboard")
-    send(game, "activate", id="flame_fan")
+    initial = send(game, "activate", id="flame_fan")
+    assert initial["input"]["can_accept"]
+    assert initial["input"]["accept_label"] == "Wybierz obszar"
     fields = input_context.payload(game)["fields"]
     center = fields[0]
     before = repr(game.combat_state)
-    send(game, "cursor", position=center)
+    preview = send(game, "cursor", position=center)
+    assert preview["input"]["accept_label"] == "Wybierz obszar"
+    assert "Precyzyjny splot" not in preview["combat"]["resonance"]["decision"]["prompt"]
     assert repr(game.combat_state) == before
     result = send(game, "accept")
     assert result["combat"]["resonance"]["phase"] == "preview"
     assert resonance.engine(game).s.preview["center"] == center
     assert not resonance.engine(game).s.preview["exclude_chosen"]
+    assert any(control["command"] == "exclude" for control in result["combat"]["resonance"]["controls"])
+    # Skipping the exclusion remains a separate choice and does not spend the power.
+    before_skip = resonance.engine(game).fighter().charges
+    result = send(game, "activate", id="control:28")
+    assert resonance.engine(game).s.preview["exclude_chosen"]
+    assert resonance.engine(game).fighter().charges == before_skip
+    assert result["combat"]["resonance"]["phase"] == "preview"
+    send(game, "accept")
+    assert resonance.engine(game).s.phase != "preview"
+    assert resonance.engine(game).fighter().charges < before_skip
 
 
 def test_readonly_menu_owns_keyboard_and_cannot_confirm_combat_underneath(tmp_path: Path) -> None:

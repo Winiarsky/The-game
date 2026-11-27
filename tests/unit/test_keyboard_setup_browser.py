@@ -74,7 +74,7 @@ def test_keyboard_manual_setup_primary_advances_all_heroes_and_starts_initiative
             const back=document.querySelector('[data-setup-back]');
             check(visible(back),'back control missing');
             await wait(()=>document.activeElement===primary(),'primary setup focus');
-            key('2');check(document.activeElement===back,'numpad 2 did not deliberately select Back');
+            key('6');check(document.activeElement===back,'numpad 6 did not deliberately select Back');
             key('Enter');await wait(()=>!busy&&state.encounter_setup.current_index===index-1,'explicit previous element');
             await idle();key('Enter');
             await wait(()=>!busy&&state.encounter_setup.current_index===index,'return to corrected batch');

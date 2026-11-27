@@ -1,0 +1,4 @@
+interface:
+  display_name: "Headless Game Balance"
+  short_description: "Tune game progression with seeded simulations"
+  default_prompt: "Use $headless-game-balance to build a deterministic simulator and tune this game from reproducible run data."

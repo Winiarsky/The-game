@@ -7,6 +7,7 @@ const ChargeCombat = (() => {
   const icon = slot => view().icons[String(slot)] || '';
   const rune = name => `<span class="rc-rune" title="${esc(name)}">${view().rune_icons?.[name] || esc(name)}</span>`;
   const transitions = {start:'Rozpoczyna pamięć',continue:'Podtrzymuje',reset:'Zaczyna nową pamięć',finisher:'Wyładowanie'};
+  const keyboard = () => state.input?.mode === 'keyboard';
   function send(command, extra = {}) {
     if (busy || !enabled()) return false;
     api('/api/combat/resonance', {command, ...extra, revision:view().revision}, 'Zatwierdzam…', {quiet:command==='adjust'});
@@ -14,12 +15,19 @@ const ChargeCombat = (() => {
   }
   function handleSlot(slot) {
     if (!enabled()) return false;
+    if (keyboard() && slot === 25 && view().actors.find(a=>a.id===view().active)?.hero)
+      return KeyboardInput.dispatch('character');
+    if (keyboard() && slot === 28 && state.input.kind === 'map') return KeyboardInput.dispatch('accept');
     const control = view().controls.find(c => c.slot === slot);
     if (control) send(control.command, control);
     return true;
   }
   function button(c, className = '') {
-    return `<button class="rc-button ${className}" data-rc-slot="${c.slot}"${c.disabled ? ` disabled title="${esc(c.disabled)}"` : ''}>${icon(c.slot)}<span>${esc(c.label)}</span></button>`;
+    const hero = view().actors.find(a=>a.id===view().active)?.hero;
+    const shortcut = keyboard() ? ({move:'7',attack:'9',end:'0'})[c.id] || (c.command==='end'?'0':c.slot===25&&hero?'1':c.slot===28&&c.command!=='exclude'?'Enter':c.slot===29?'Backspace':'') : '';
+    const label = keyboard() && c.slot===25 && !hero ? 'Podgląd przeciwnika' : c.label;
+    const disabled = c.disabled ? keyboard() && c.id ? ` aria-disabled="true" data-keyboard-disabled="${esc(c.disabled)}"` : ' disabled' : '';
+    return `<button class="rc-button ${className}" data-rc-slot="${c.slot}"${c.command==='exclude'?' data-rc-exclude':''}${disabled}${keyboard() && c.slot===28 && state.input.kind==='map' && c.command!=='exclude'?' data-keyboard-accept':''}>${shortcut?`<kbd>${shortcut}</kbd>`:icon(c.slot)}<span>${esc(label)}${c.disabled?`<small class="rc-disabled-reason">${esc(c.disabled)}</small>`:''}</span></button>`;
   }
   function pages(kind, page, count) {
     if (count <= 1) return '';
@@ -90,6 +98,7 @@ const ChargeCombat = (() => {
     if (d.prompt && !(d.resonance && d.prompt==='Wybór gotowy do zatwierdzenia.')) content += `<p class="rc-prompt">${esc(d.prompt)}</p>`;
     if (d.targets && !target && !(d.resonance && d.targets.length===1 && d.targets[0]===a.name)) content += `<div class="rc-targets">${esc(d.targets.join(' · '))}</div>`;
     if (d.warning) content += `<p class="rc-warning">${esc(d.warning)}</p>`;
+    if (d.unused_resources?.length) content += `<p class="rc-unused">Pozostało w tej turze: <b>${d.unused_resources.map(esc).join(' · ')}</b>.</p>`;
     if (d.die) content += `<div class="rc-dice"><div><small>KOŚĆ ${d.die.index+1}/${d.die.total} · k${d.die.sides}</small><p>${esc(d.die.label)}</p></div><div class="rc-die-controls"><button data-rc-slot="27" aria-label="Zmniejsz wynik">−</button><output aria-live="polite" aria-label="Wynik kości">${d.die.value}</output><button data-rc-slot="26" aria-label="Zwiększ wynik">+</button></div></div>${d.die.accepted.length ? `<small class="rc-accepted">Zatwierdzone: ${d.die.accepted.join(', ')}</small>` : ''}`;
     if (d.dc != null) content += `<p class="rc-roll-summary">Modyfikator ${d.modifier >= 0 ? '+' : ''}${d.modifier} · ST / KP ${d.dc}${d.mode === 'advantage' ? ' · przewaga' : d.mode === 'disadvantage' ? ' · utrudnienie' : ''}</p>`;
     if (d.modifier_components?.length) content += `<p class="rc-modifier-breakdown">${d.modifier_components.map(m=>`<span title="${esc(m.label)}">${esc(m.label.replace(/:\s*[−+\-]\d.*$/, ''))} <b>${m.value>=0?'+':''}${m.value}</b></span>`).join(' · ')}</p>`;
@@ -104,12 +113,16 @@ const ChargeCombat = (() => {
       content += `<ul class="rc-results">${lines.slice(page*3,page*3+3).map(line => `<li>${esc(line)}</li>`).join('')}</ul>${pages('result',page,count)}`;
     }
     if (idle) {
-      content += `<div class="rc-powers">${v.powers.map(p => `<button data-rc-slot="${p.slot}" ${p.disabled ? 'disabled' : ''} title="${esc(p.disabled || p.target)}" ${v.relations?`data-transition="${p.disabled?'locked':p.resonance.transition}"`:''}>${icon(p.slot)}<span><b>${esc(p.name)}</b><small>${v.relations?`${p.cost} ładunków · ${esc(p.budget)}`:`${esc(p.rune)} · ${p.base_cost}/${p.enhanced_cost} · ${esc(p.budget)}`}</small>${v.relations?`<small class="rc-power-condition">${esc(p.disabled || transitions[p.resonance.transition])}</small>`:''}</span></button>`).join('')}</div>`;
+      content += `<div class="rc-powers">${v.powers.map(p => `<button data-rc-slot="${p.slot}" ${p.disabled ? keyboard()?`aria-disabled="true" data-keyboard-disabled="${esc(p.disabled)}"`:'disabled' : ''} title="${esc(p.disabled || p.target)}" ${v.relations?`data-transition="${p.disabled?'locked':p.resonance.transition}"`:''}>${icon(p.slot)}<span><b>${esc(p.name)}</b><small>${v.relations?`${p.cost} ładunków · ${esc(p.budget)}`:`${esc(p.rune)} · ${p.base_cost}/${p.enhanced_cost} · ${esc(p.budget)}`}</small>${v.relations?`<small class="rc-power-condition">${esc(p.disabled || transitions[p.resonance.transition])}</small>`:''}</span></button>`).join('')}</div>`;
       if(v.reserved_runes?.length) content+=`<details class="rc-reserved"><summary>Runy rozwoju · niedostępne</summary><div>${v.reserved_runes.map(name=>`<button disabled title="${esc(name)} · do zdobycia w dalszej grze">${rune(name)}</button>`).join('')}</div></details>`;
     }
     if (d.item_choices > 1) content += `<div class="rc-mode">${v.controls.filter(c=>[26,27].includes(c.slot)).map(c=>button(c)).join('')}</div>`;
     content += `</div>${target}</div></section>`;
-    const actions = v.controls.filter(c => ![25,26,27].includes(c.slot) && !(idle && (v.powers.some(p=>p.slot===c.slot) || ['move','attack','item','focus'].includes(c.id))));
+    let actions = v.controls.filter(c => ![25,26,27].includes(c.slot) && !(idle && (v.powers.some(p=>p.slot===c.slot) || ['move','attack','item','focus'].includes(c.id))));
+    if (keyboard() && state.input.kind === 'map' && !d.inspected) {
+      actions = actions.filter(c=>c.slot!==28 || c.command==='exclude');
+      actions.unshift({slot:28,label:state.input.accept_label,disabled:state.input.can_accept?'':'Wskaż dozwolone pole.'});
+    }
     content += `<div class="rc-board-error rc-warning" role="status" hidden><span></span><button data-rc-scan-retry>Spróbuj ponownie</button></div><footer class="rc-actions">${actions.map(c=>button(c,c.slot===28?'rc-primary':'')).join('')}${v.controls.filter(c=>c.slot===25).map(c=>button(c,'rc-info')).join('')}${d.inspected ? v.controls.filter(c=>[26,27].includes(c.slot)).map(c=>button(c)).join('') : ''}</footer>`;
     return content;
   }
@@ -166,9 +179,18 @@ const ChargeCombat = (() => {
     if (!enabled() || busy) return;
     if (event.target.closest('[data-rc-scan-retry]')) { scanBoard(); return; }
     const slot = event.target.closest('[data-rc-slot]');
-    if (slot) { handleSlot(Number(slot.dataset.rcSlot)); return; }
+    if (slot) {
+      if (slot.hasAttribute('data-rc-exclude')) send('exclude',{actor:null});
+      else handleSlot(Number(slot.dataset.rcSlot));
+      return;
+    }
     const actor = event.target.closest('[data-rc-inspect]');
-    if (actor) { send('inspect',{actor:actor.dataset.rcInspect}); return; }
+    if (actor) {
+      const id=actor.dataset.rcInspect;
+      if (keyboard() && view().actors.find(a=>a.id===id)?.hero) openActorPanel(id,'party');
+      else send('inspect',{actor:id});
+      return;
+    }
     const page = event.target.closest('[data-rc-page]');
     if (page) {
       const delta = Number(page.dataset.delta);

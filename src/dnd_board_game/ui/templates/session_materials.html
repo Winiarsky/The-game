@@ -1,8 +1,12 @@
 <!doctype html>
 <html lang="pl">
-<head><meta charset="utf-8"><title>{{ ui_text('common.session_materials') }}</title>
-<link rel="stylesheet" href="{{ static_asset_url('launcher.css') }}"></head>
-<body class="launcher-page"><main class="flow-shell">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{{ ui_text('common.session_materials') }}</title>
+<link rel="stylesheet" href="{{ static_asset_url('launcher.css') }}">
+{% include 'player_ui_assets.html' %}
+</head>
+<body class="launcher-page">
+<a class="skip-link" href="#main-content">Przejdź do treści</a>
+<main id="main-content" tabindex="-1" class="flow-shell">
   <header class="flow-header"><a class="back-link" data-board-back href="{{ url_for('index') }}">↩ {{ ui_text('navigation.main_menu') }}</a>
   <h1>{{ ui_text('common.session_materials') }}</h1><p>{{ ui_text('common.materials_hint') }}</p></header>
   {% for material in materials %}

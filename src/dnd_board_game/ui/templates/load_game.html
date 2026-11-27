@@ -5,9 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ ui_text('navigation.load_game') }}</title>
   <link rel="stylesheet" href="{{ static_asset_url('launcher.css') }}">
+  {% include 'player_ui_assets.html' %}
 </head>
 <body class="launcher-page">
-  <main class="flow-shell">
+<a class="skip-link" href="#main-content">Przejdź do treści</a>
+  <main id="main-content" tabindex="-1" class="flow-shell">
     <header class="flow-header">
       <a class="back-link" data-board-back href="{{ url_for('index') }}">↩ {{ ui_text('navigation.main_menu') }}</a>
       <span class="step-label">{{ ui_text('navigation.load_game') }}</span>

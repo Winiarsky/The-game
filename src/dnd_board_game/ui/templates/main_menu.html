@@ -5,9 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ ui_text('navigation.title') }}</title>
   <link rel="stylesheet" href="{{ static_asset_url('launcher.css') }}">
+  {% include 'player_ui_assets.html' %}
 </head>
 <body class="launcher-page main-menu-page">
-  <main class="launcher-shell">
+<a class="skip-link" href="#main-content">Przejdź do treści</a>
+  <main id="main-content" tabindex="-1" class="launcher-shell">
     <section class="title-block">
       <span class="eyebrow">{{ ui_text('navigation.tagline') }}</span>
       <h1>{{ ui_text('navigation.title') }}</h1>

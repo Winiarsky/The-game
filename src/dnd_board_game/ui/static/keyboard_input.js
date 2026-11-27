@@ -4,21 +4,15 @@ const KeyboardInput = (() => {
   let desiredCursor = null, pendingBack = '', lastNavigationAt = 0, message = '', actionList = false;
   let tabNavigation = false, explicitChoice = null;
   let menuFocusScheduled = false, menuNavigationContext = '';
+  let panelReturn = null;
   const menuMemory = new Map();
   const held = new Set(), blocked = new Set();
-  // Physical codes keep a standalone keypad usable with Num Lock on or off.
-  const numpadKeys = {
-    Numpad0:'0', Numpad1:'1', Numpad2:'2', Numpad3:'3', Numpad4:'4',
-    Numpad5:'5', Numpad6:'6', Numpad7:'7', Numpad8:'8', Numpad9:'9',
-    NumpadEnter:'enter', NumpadAdd:'+', NumpadSubtract:'-', NumpadMultiply:'*',
-    NumpadDivide:'/', NumpadDecimal:'.', NumpadComma:'.', NumpadEqual:'=',
-  };
   const enabled = () => typeof state !== 'undefined' && state?.input?.mode === 'keyboard';
   const contract = () => state?.input || {};
   const visible = element => Boolean(element && !element.disabled && !element.closest('[hidden]')
     && element.getClientRects().length && getComputedStyle(element).visibility !== 'hidden');
   const modal = () => [...document.querySelectorAll('dialog[open]')].at(-1);
-  const typing = target => Boolean(target?.closest('input,textarea,select,[contenteditable]:not([contenteditable="false"])'));
+  const typing = target => PlayerUi.isTyping(target) || Boolean(target?.closest?.('input'));
   const escape = value => String(value ?? '').replace(/[&<>"']/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[character]));
   const sideOpen = () => typeof sidePanelOpen !== 'undefined' && sidePanelOpen;
 
@@ -46,7 +40,9 @@ const KeyboardInput = (() => {
     document.body.classList.toggle('keyboard-setup-active', setupMode);
     const reference = document.getElementById('keyboard-controls-card');
     if (reference) reference.hidden = !enabled();
-    if (!enabled()) return;
+    const panelHint=document.querySelector('[data-side-panel-input-hint]');
+    if(panelHint)panelHint.textContent=enabled()?'1 — postać · 3 — ekwipunek · Backspace — wróć':'Wybierz zakładkę na ekranie · × zamyka panel';
+    if (!enabled()) { const hint=document.getElementById('keyboard-decision-hint'); if(hint)hint.hidden=true; return; }
     const nextContext = currentContext();
     if (nextContext !== context) { invalidate(); context = nextContext; }
     const input = contract(), cursor = desiredCursor || input.cursor;
@@ -56,18 +52,48 @@ const KeyboardInput = (() => {
     const notice = message || input.notice || (setupMode
       ? input.kind === 'map' ? '8/6/2/4 wybiera pole · Enter wybiera i potwierdza ustawienie · Backspace cofa.' : 'Enter przechodzi dalej · Backspace wraca do poprzedniego elementu.'
       : input.kind === 'menu'
-      ? '8/2 lub 4/6 wybiera opcję, Enter otwiera. − / + przewija opis.'
+      ? '8/2 wybiera w pionie, 4/6 w poziomie. Enter otwiera. − / + przewija opis.'
       : input.prompt || 'Wybierz dostępną opcję.');
     if (reference) {
       reference.querySelector('[data-keyboard-status]').textContent = [point, cost, notice].filter(Boolean).join(' · ');
       reference.querySelector('[data-keyboard-multiple]').hidden = input.selection_mode !== 'multiple';
       reference.querySelector('[data-keyboard-sync]').hidden = !inFlight && !pendingCursor;
     }
+    renderHint();
     const selector = document.getElementById('input-mode');
     if (selector && document.activeElement !== selector) selector.value = input.mode;
     scheduleMenuFocus();
   }
   function status(text) { message = text; refresh(); }
+
+  function renderHint() {
+    let hint = document.getElementById('keyboard-decision-hint');
+    if (!hint) {
+      hint=document.createElement('div'); hint.id='keyboard-decision-hint'; hint.className='keyboard-decision-hint';
+      hint.setAttribute('role','status'); hint.setAttribute('aria-live','polite');
+    }
+    hint.hidden = !enabled() || Boolean(modal()) || sideOpen();
+    if (!enabled()) return;
+    const input = contract(), syncing = inFlight || Boolean(pendingCursor);
+    const reason = document.activeElement?.dataset.keyboardDisabled;
+    const turnMenu = state.combat?.resonance?.phase==='idle' && !state.combat.resonance.decision.inspected
+      && state.combat.resonance.actors.find(actor=>actor.id===state.combat.resonance.active)?.hero;
+    const mode = actionList || turnMenu ? 'Akcje' : keyboardRollWizard || input.kind === 'dice' ? 'Rzut'
+      : input.kind === 'map' ? 'Mapa' : 'Wybór';
+    const cost = input.valid && input.preview?.path?.length ? `Koszt ruchu: ${input.preview.cost}` : '';
+    const instructions = actionList ? '8/2/4/6 — wybierz · Enter — otwórz · 5 — wróć do mapy'
+      : turnMenu ? '7 — ruch · 9 — atak · 5 — moce i akcje · 0 — koniec tury'
+      : input.kind === 'map' ? `${input.can_accept ? `Enter — ${input.accept_label.toLocaleLowerCase('pl')}` : 'Wskaż podświetlone pole'} · Backspace — wróć${input.selection_mode === 'multiple' ? ' · kropka — dodaj cel' : ' · 5 — opcje'}`
+      : input.kind === 'dice' ? '+/− — wynik kości · Enter — zatwierdź'
+      : '8/2/4/6 — wybierz · Enter — otwórz · Backspace — wróć';
+    const notice = reason || message || input.notice || '';
+    hint.innerHTML = `<b>${mode}</b>${cost ? `<span>${escape(cost)}</span>` : ''}<span>${escape(syncing ? 'Aktualizuję podgląd…' : notice || instructions)}</span>${notice && !syncing ? `<small>${escape(instructions)}</small>` : ''}`;
+    hint.classList.toggle('keyboard-hint-warning', Boolean(reason || input.notice && input.valid === false));
+    const footer = [...document.querySelectorAll('.rc-actions,.equipment-controls,.mission-story-controls,.encounter-setup-actions')].find(visible);
+    if (footer) footer.before(hint);
+    else document.getElementById('board-input-global')?.after(hint);
+    document.querySelectorAll('[data-keyboard-accept]').forEach(button => { button.disabled = syncing || !input.can_accept; });
+  }
 
   async function send(command, extra = {}) {
     if (!enabled() || inFlight || busy) return false;
@@ -130,7 +156,9 @@ const KeyboardInput = (() => {
     const open = modal();
     if (open) return [...open.querySelectorAll('button,a[href],summary,input[type="checkbox"]')].filter(visible);
     if (sideOpen()) return [...document.querySelectorAll('#side-panel button,#side-panel a[href],#side-panel summary')].filter(visible);
-    const selectors = actionList && state.combat?.resonance
+    const combatChoices = state.combat?.resonance && (actionList
+      || state.combat.resonance.phase==='idle' && !state.combat.resonance.decision.inspected);
+    const selectors = combatChoices
       ? '.rc-powers button,.rc-basic-actions button,.rc-actions button,.rc-decision .rc-pages button'
       : '#mission-panel button,#training-arena-panel button,#flow-panel button,#flow-panel a[href],'
         + '#encounter button,#interaction-goals button,#point-options button,#travel-options button,'
@@ -201,9 +229,11 @@ const KeyboardInput = (() => {
     rememberChoice(element);
     element.focus({preventScroll:true});
     element.scrollIntoView({block:'nearest'});
+    renderHint();
     return true;
   }
-  function navigateMenu(delta) {
+  function navigateMenu(dx, dy) {
+    const delta = dy || dx || 1;
     if (modal()?.id === 'session-navigation') return handleReadOnlyPanelSlot(delta > 0 ? 26 : 27);
     const choices = menuButtons();
     if (!choices.length) {
@@ -212,9 +242,10 @@ const KeyboardInput = (() => {
       container?.scrollBy({top:delta * 150});
       return true;
     }
-    const index = choices.indexOf(choices.includes(document.activeElement) ? document.activeElement : rememberedChoice(choices));
+    const current = choices.includes(document.activeElement) ? document.activeElement : rememberedChoice(choices);
+    const next = PlayerUi.nextChoice(choices,current,dx,dy);
     menuNavigationContext = contract().context;
-    return focusChoice(choices[Math.max(0, Math.min(choices.length - 1, index + delta))]);
+    return focusChoice(next || current);
   }
   function nativeChoice(allowHeader = false) {
     const focused = document.activeElement;
@@ -224,7 +255,10 @@ const KeyboardInput = (() => {
       && (!focused.closest('.app-shell-header') || deliberateHeader);
   }
   function activateMenu() {
-    if (modal()?.id === 'session-navigation') return handleReadOnlyPanelSlot(28);
+    if (modal()?.id === 'session-navigation') {
+      if(explicitChoice?.element===document.activeElement && nativeChoice()) {document.activeElement.click();return true;}
+      return handleReadOnlyPanelSlot(28);
+    }
     if (nativeChoice()) { document.activeElement.click(); return true; }
     const choices = menuButtons();
     if (choices.length) {
@@ -244,15 +278,37 @@ const KeyboardInput = (() => {
       refresh();
       return true;
     }
-    if (sideOpen()) { setSidePanelOpen(false); refresh(); return true; }
+    if (sideOpen()) { setSidePanelOpen(false); return true; }
     return false;
   }
   function openInfo(tab) {
     if (busy || inFlight || keyboardRollWizard || modal()) return false;
-    if (sideOpen() && sidePanelTab === tab) setSidePanelOpen(false);
-    else { setSidePanelTab(tab); setSidePanelOpen(true); }
+    if (sideOpen() && sidePanelTab === tab) {setSidePanelOpen(false); return true;}
+    else {
+      if (!sideOpen()) panelReturn = {context:contract().context, choice:choiceKey(document.activeElement), actions:actionList};
+      if (tab === 'party' && !sideOpen() && state.combat?.resonance?.active) selectPanelActor(state.combat.resonance.active);
+      setSidePanelTab(tab); setSidePanelOpen(true);
+    }
     refresh();
     return true;
+  }
+  function restorePanelFocus() {
+    const previous = panelReturn;
+    panelReturn = null;
+    if (!previous || previous.context !== contract().context) return;
+    actionList = previous.actions;
+    const choice = menuButtons().find(item => choiceKey(item) === previous.choice);
+    if (choice) focusChoice(choice);
+    renderHint();
+  }
+  function beforePanelChange(open) {
+    if (enabled() && open && !panelReturn)
+      panelReturn = {context:contract().context, choice:choiceKey(document.activeElement), actions:actionList};
+  }
+  function afterPanelChange(open) {
+    if (!enabled()) return;
+    refresh();
+    if (!open) restorePanelFocus();
   }
   function help() {
     if (busy || inFlight || keyboardRollWizard || modal()) return false;
@@ -321,7 +377,7 @@ const KeyboardInput = (() => {
     if (!choices.length) { actionList = false; status('Brak dodatkowych opcji w bieżącym kroku.'); return false; }
     focusChoice(choices.find(button => button.closest('.rc-powers'))
       || choices.find(button => button.closest('.rc-actions')) || choices[0]);
-    status('Opcje kroku: 8/2 wybiera, Enter zatwierdza; 5 wraca do kursora.');
+    status('Opcje kroku: 8/2/4/6 wybiera, Enter zatwierdza; 5 wraca do kursora.');
     return true;
   }
   function dispatch(command, extra = {}) {
@@ -331,7 +387,7 @@ const KeyboardInput = (() => {
       return true;
     }
     if (command === 'navigate') return contract().kind === 'map' && !modal() && !sideOpen() && !actionList
-      ? navigateMap(extra.dx || 0, extra.dy || 0) : navigateMenu(extra.dy || extra.dx || 1);
+      ? navigateMap(extra.dx || 0, extra.dy || 0) : navigateMenu(extra.dx || 0, extra.dy || 0);
     if (command === 'inventory') return openInfo('inventory');
     if (command === 'character') return openInfo('party');
     if (command === 'journal') return journal();
@@ -389,8 +445,8 @@ const KeyboardInput = (() => {
   function handleKeydown(event) {
     if (!enabled() || event.defaultPrevented || event.isComposing || event.ctrlKey || event.metaKey || event.altKey) return;
     if (event.key === 'Tab') {tabNavigation = true; return;}
-    const key = numpadKeys[event.code] || event.key.toLowerCase();
-    if (event.shiftKey && !numpadKeys[event.code] && !['+','*','='].includes(key)) return;
+    const key = PlayerUi.key(event).toLowerCase();
+    if (event.shiftKey && !event.code.startsWith('Numpad') && !['+','*','='].includes(key)) return;
     const wizard = typeof keyboardRollWizard !== 'undefined' && keyboardRollWizard;
     const wizardKeys = {enter:'Enter', escape:'Escape', backspace:'Escape',
       arrowup:'ArrowUp', arrowdown:'ArrowDown', '8':'ArrowUp', '2':'ArrowDown', '+':'+', '-':'-'};
@@ -429,6 +485,7 @@ const KeyboardInput = (() => {
     if (modal() || sideOpen()) {
       if (key === '+' || key === '-') scrollReading(key === '+' ? 1 : -1);
       else if (panels[key] === 'inventory' && sideOpen()) dispatch('inventory');
+      else if (panels[key] === 'character' && sideOpen()) dispatch('character');
       else if (panels[key] === 'menu') dispatch('menu');
       return;
     }
@@ -442,12 +499,20 @@ const KeyboardInput = (() => {
   document.addEventListener('focusin', event => {
     if (!enabled()) return;
     rememberChoice(event.target);
+    renderHint();
     if (!tabNavigation) return;
     tabNavigation = false;
     explicitChoice = nativeChoice(true) ? {element:event.target, context:contract().context} : null;
   }, {capture:true});
+  document.addEventListener('click', event => {
+    const blockedChoice = event.target.closest('[data-keyboard-disabled]');
+    if (!enabled() || !blockedChoice) return;
+    event.preventDefault(); event.stopImmediatePropagation();
+    focusChoice(blockedChoice);
+    status(blockedChoice.dataset.keyboardDisabled);
+  }, {capture:true});
   document.addEventListener('keyup', event => {held.delete(event.code || event.key.toLowerCase()); blocked.delete(event.code || event.key.toLowerCase());}, {capture:true});
   window.addEventListener('blur', () => {invalidate(); held.clear();});
   document.addEventListener('visibilitychange', () => {if (document.hidden) {invalidate(); held.clear();}});
-  return {enabled, refresh, dispatch, invalidate};
+  return {enabled, refresh, dispatch, invalidate, beforePanelChange, afterPanelChange};
 })();

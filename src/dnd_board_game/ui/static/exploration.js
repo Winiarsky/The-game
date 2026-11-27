@@ -154,14 +154,18 @@ function handleSlashCommandKeydown(event) {
   }
 }
 function setSidePanelOpen(open) {
+  const changed = sidePanelOpen !== Boolean(open);
+  if (changed && typeof KeyboardInput !== 'undefined') KeyboardInput.beforePanelChange(Boolean(open));
   sidePanelOpen = Boolean(open);
   localStorage.setItem('explorationSidePanelOpen', sidePanelOpen ? 'true' : 'false');
   document.body.classList.toggle('side-panel-open', sidePanelOpen);
   const panel = document.getElementById('side-panel');
   const toggle = document.getElementById('side-panel-toggle');
   if (panel) panel.setAttribute('aria-hidden', sidePanelOpen ? 'false' : 'true');
-  if (toggle) toggle.setAttribute('aria-expanded', sidePanelOpen ? 'true' : 'false');
-  if (sidePanelOpen && panel) window.requestAnimationFrame(() => panel.querySelector('[data-side-panel-tab].active')?.focus());
+  PlayerUi.setPanelOpen(panel,sidePanelOpen,[document.getElementById('game-content'),document.querySelector('.app-shell-header')]);
+  if (toggle?.getAttribute('aria-controls')==='side-panel') toggle.setAttribute('aria-expanded', sidePanelOpen ? 'true' : 'false');
+  if (sidePanelOpen && panel) window.requestAnimationFrame(() => {if(sidePanelOpen)panel.querySelector('[data-side-panel-tab].active')?.focus();});
+  if (changed && typeof KeyboardInput !== 'undefined') KeyboardInput.afterPanelChange(sidePanelOpen);
 }
 function toggleSidePanel() {
   setSidePanelOpen(!sidePanelOpen);
@@ -174,11 +178,14 @@ function setSidePanelTab(tab) {
     const active = button.dataset.sidePanelTab === sidePanelTab;
     button.classList.toggle('active', active);
     button.setAttribute('aria-selected', active ? 'true' : 'false');
+    button.tabIndex = active ? 0 : -1;
   });
   document.querySelectorAll('[data-side-panel-content]').forEach(panel => {
     panel.hidden = panel.dataset.sidePanelContent !== sidePanelTab;
   });
   renderPanelActorSelector();
+  if(sidePanelOpen && document.activeElement.closest('[hidden]'))
+    document.querySelector(`[data-side-panel-tab="${sidePanelTab}"]`)?.focus({preventScroll:true});
 }
 function handleSidePanelTabKeydown(event) {
   if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
@@ -384,12 +391,21 @@ async function api(path, body, busyMessage, {quiet = false} = {}) {
     const res = await fetch(path, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body || {})});
     const data = await res.json();
     if (!res.ok) {
+      // Rejected revisions can include the server's current projection. An
+      // error message alone must never replace the playable state.
+      if (data.state) {
+        state = data.state;
+        synchronizeBoardSelection();
+        render();
+      }
       if (retryRequest) {
         setChatRetry(retryRequest, 'MG nie zwrócił poprawnej odpowiedzi. Możecie bezpiecznie ponowić zapytanie.');
       } else {
-        alert(data.error || 'Błąd');
+        PlayerUi.notice(data.error || 'Nie udało się wykonać działania. Sprawdź bieżący wybór.');
       }
+      return {ok:false,data};
     }
+    PlayerUi.clearNotice();
     if (res.ok && data.redirect) { window.location.assign(data.redirect); return {ok:true}; }
     if (res.ok && data.panel_event) {
       if (data.input) state.input = data.input;
@@ -460,7 +476,7 @@ async function api(path, body, busyMessage, {quiet = false} = {}) {
       render();
       return {ok: false, error};
     }
-    alert('Nie udało się połączyć z aplikacją.');
+    PlayerUi.notice('Nie udało się połączyć z aplikacją. Sprawdź połączenie i ponów działanie.');
     return {ok: false, error};
   } finally {
     clearTimeout(gmSlowResponseTimer);
@@ -1273,7 +1289,10 @@ function renderPartyShell() {
   const actor = selectedPanelActor();
   details.innerHTML = actor ? partyDetailActorHtml(actor) : '<span class="muted">Brak danych postaci.</span>';
   document.getElementById('actor-states').innerHTML = actor ? actorStatesHtml(actor) : '<span class="muted">Brak danych postaci.</span>';
-  document.getElementById('actor-spells').innerHTML = actor ? actorSpellsHtml(actor) : '<span class="muted">Brak danych postaci.</span>';
+  const runeCombat=Boolean(state.combat?.resonance);
+  document.querySelector('[data-side-panel-tab="spells"]').textContent=runeCombat?'Moce':'Czary';
+  document.getElementById('actor-spells-label').textContent=runeCombat?'Moce runiczne':'Czary i sloty';
+  document.getElementById('actor-spells').innerHTML = actor ? runeCombat ? actorRunePowersHtml(actor) : actorSpellsHtml(actor) : '<span class="muted">Brak danych postaci.</span>';
   document.getElementById('actor-inventory').innerHTML = actor ? actorInventoryPanelHtml(actor) : '<span class="muted">Brak danych postaci.</span>';
   renderPanelActorSelector();
 }
@@ -1297,7 +1316,7 @@ function actorById(actorId) {
 function actorPortraitHtml(actor, variant = '') {
   if (!actor || !actor.portrait_url) return '';
   const modifier = variant ? ` actor-portrait-${variant}` : '';
-  return `<img class="actor-portrait${modifier}" src="${esc(actor.portrait_url)}" alt="Portret: ${esc(actor.name || 'postać')}" loading="lazy">`;
+  return `<img class="actor-portrait${modifier}" src="${esc(actor.portrait_url)}" alt="Portret: ${esc(actor.name || 'postać')}" width="48" height="48" loading="lazy">`;
 }
 function actorIdentityColor(actor) {
   const rgb = actor && actor.party_color_rgb;
@@ -1349,8 +1368,10 @@ function renderPanelActorSelector() {
   const actorTabs = new Set(['party', 'states', 'spells', 'inventory']);
   selector.hidden = !actorTabs.has(sidePanelTab);
   if (selector.hidden || !state) return;
+  const focusedActor=document.activeElement?.dataset.panelActor;
   const actors = state.actors || [];
-  selector.innerHTML = `<span>Wybierz bohatera</span><div role="listbox" aria-label="Bohater">${actors.map(actor => `<button class="${String(actor.id) === selectedPanelActorId ? 'active' : ''}" data-allow-busy="true" onclick="selectPanelActor('${esc(actor.id)}')" aria-selected="${String(actor.id) === selectedPanelActorId ? 'true' : 'false'}">${actorPortraitHtml(actor, 'tab')}<span>${esc(actor.name)}</span></button>`).join('')}</div>`;
+  selector.innerHTML = `<span>Wybierz bohatera</span><div role="group" aria-label="Bohaterowie">${actors.map(actor => `<button class="${String(actor.id) === selectedPanelActorId ? 'active' : ''}" data-panel-actor="${esc(actor.id)}" data-allow-busy="true" onclick="selectPanelActor('${esc(actor.id)}')" aria-pressed="${String(actor.id) === selectedPanelActorId ? 'true' : 'false'}">${actorPortraitHtml(actor, 'tab')}<span>${esc(actor.name)}</span></button>`).join('')}</div>`;
+  if(focusedActor&&sidePanelOpen)[...selector.querySelectorAll('[data-panel-actor]')].find(button=>button.dataset.panelActor===focusedActor)?.focus({preventScroll:true});
 }
 function actorHealthTone(actor) {
   const maximum = Math.max(1, Number(actor.max_hp || 1));
@@ -1392,6 +1413,7 @@ function partyDetailActorHtml(actor) {
   const hitDice = actor.hit_dice || [];
   const features = actor.features || [];
   return `
+    ${combatActorSummaryHtml(actor)}
     <article class="party-detail-card ${actorHealthTone(actor)}">
       <div class="party-detail-heading">${actorPortraitHtml(actor, 'detail')}<strong>${esc(actor.name)}</strong><span>${hp}/${maximum} PW</span></div>
       <div class="party-detail-hp" aria-label="${percentage}% punktów życia"><i style="width:${percentage}%"></i></div>
@@ -1405,6 +1427,26 @@ function partyDetailActorHtml(actor) {
       ${features.length ? `<div class="character-features"><span class="panel-section-label">Cechy</span>${features.map(feature => `<div class="panel-info-card"><b>${esc(feature.label)}</b><span>${esc(feature.description || '')}</span><small><b>Mechanika:</b> ${esc(feature.mechanics || 'Działa pasywnie lub kontekstowo.')}</small></div>`).join('')}</div>` : ''}
     </article>
   `;
+}
+function combatActorSummaryHtml(actor) {
+  const combat=state.combat?.resonance, current=combat?.actors.find(item=>item.id===String(actor.id));
+  if (!current) return '';
+  const info=combat.hero_details?.[actor.id];
+  const section=(name,body)=>`<details class="panel-combat-section"><summary>${esc(name)}</summary>${body}</details>`;
+  return `<section class="panel-combat-summary" aria-label="Stan walki">
+    <h3>Stan walki · ${esc(current.name)}</h3><p>${current.active?'Aktualna tura':'Poza własną turą'} · <b>Ładunki ${current.charges}/20</b> · KP ${current.ac}</p>
+    <p>Ruch: ${current.movement} pól · Atak / przedmiot: ${current.ordinary?'dostępny':'wykorzystany'} · Specjalna: ${current.special?'dostępna':'wykorzystana'} · Reakcja: ${current.reaction?'dostępna':'wykorzystana'}</p>
+    ${current.statuses.length?`<ul>${current.statuses.map(text=>`<li>${esc(text)}</li>`).join('')}</ul>`:'<p>Brak dodatkowych stanów.</p>'}
+    ${info ? '<button type="button" class="secondary" onclick="setSidePanelTab(\'spells\')">Moce runiczne</button>'
+      + [info.passive,info.flaw].filter(Boolean).map(feature=>section(feature.name,`<p>${esc(feature.description)}</p>`)).join('')
+      + section('Odzysk klasowy · 1k4',`<p>Raz na rundę, gdy:</p><ul>${info.regeneration.map(text=>`<li>${esc(text)}</li>`).join('')}</ul>`) : ''}
+  </section>`;
+}
+function actorRunePowersHtml(actor) {
+  const powers=state.combat?.resonance?.hero_details?.[actor.id]?.powers || [];
+  return `<div class="actor-panel-summary"><b>${esc(actor.name)}</b><span>Moce runiczne: ${powers.length}</span></div>`
+    +(powers.length?powers.map(power=>`<article class="panel-info-card"><b>${esc(power.name)}</b><p>${esc(power.effect)}</p><ul>${power.details.map(text=>`<li>${esc(text)}</li>`).join('')}</ul></article>`).join('')
+      :'<div class="panel-empty-state">Brak mocy runicznych dla tej postaci.</div>');
 }
 function abilityAbbreviation(ability) {
   return ({strength:'SIŁ', dexterity:'ZRĘ', constitution:'KON', intelligence:'INT', wisdom:'MĄD', charisma:'CHA'})[ability] || String(ability).slice(0, 3).toUpperCase();
@@ -1441,6 +1483,8 @@ function actorStatesHtml(actor) {
     if (cards.some(card => card.label === chip.label)) return;
     cards.push({tone: chip.tone || 'neutral', label: chip.label, body: chip.title || 'Aktywny stan postaci.', meta: ''});
   });
+  const runeStatuses=state.combat?.resonance?.actors.find(candidate=>candidate.id===String(actor.id))?.statuses || [];
+  runeStatuses.forEach(label=>{if(!cards.some(card=>card.label===label))cards.push({tone:'neutral',label,body:'',meta:''});});
   const globalEffects = state.active_effects || [];
   return `
     <div class="actor-panel-summary"><b>${esc(actor.name)}</b><span>${cards.length ? `${cards.length} aktywnych stanów i efektów` : 'Brak aktywnych stanów'}</span></div>
@@ -1497,6 +1541,16 @@ function identifierLabel(identifier) {
   const text = String(identifier || '').replaceAll('_', ' ').trim();
   return text ? text.charAt(0).toLocaleUpperCase('pl') + text.slice(1) : '-';
 }
+function inventoryLabel(identifier) {
+  return ({weapon:'Broń',armor:'Pancerz',ammunition:'Amunicja',equipment_pack:'Pakiet wyposażenia',
+    tool:'Narzędzie',container:'Pojemnik',clothing:'Ubranie',adventuring_gear:'Sprzęt podróżny',
+    ammunition_property:'Amunicja',heavy:'Ciężka',two_handed:'Dwuręczna',versatile:'Półtoraręczna',
+    light:'Lekka',finesse:'Finezyjna',loading:'Ładowanie',range:'Dystansowa',reach:'Zasięg',thrown:'Miotana',
+    special:'Specjalna',silvered:'Posrebrzana',metallic:'Metalowy',textile:'Tkanina',flexible:'Elastyczny',
+    artisans_tool:'Narzędzia rzemieślnicze',woodcarvers_tools:'Narzędzia snycerza',
+    arcane:'Mistyczny',druidic:'Druidyczny',holy_symbol:'Święty symbol',musical_instrument:'Instrument muzyczny',
+    arrow:'Strzały',bolt:'Bełty'})[identifier] || identifierLabel(identifier);
+}
 function actorSensesText(actor) {
   const senses = actor.senses || {};
   const labels = [
@@ -1540,7 +1594,7 @@ function actorInventoryPanelHtml(actor) {
     return `<article class="panel-info-card fixture${fixture.destroyed ? ' unavailable' : ''}"><div><b>${esc(fixture.name)}</b><span>${esc(stateLabel)}${hp}</span></div><p class="muted">${esc(fixture.description || identifierLabel(fixture.kind))}</p>${actions ? `<div class="panel-actions">${actions}</div>` : ''}</article>`;
   }).join('');
   const handLabel = hand => hand && hand.item_name ? hand.item_name : 'wolna';
-  const coinText = ['pp', 'gp', 'ep', 'sp', 'cp'].filter(key => Number(currency[key] || 0) > 0).map(key => `${esc(currency[key])} ${key}`).join(', ') || 'brak monet';
+  const coinText = ['pp', 'gp', 'ep', 'sp', 'cp'].filter(key => Number(currency[key] || 0) > 0).map(key => `${esc(currency[key])} ${{pp:'plat.',gp:'sz',ep:'elektr.',sp:'ss',cp:'sm'}[key]}`).join(', ') || 'brak monet';
   const carryingText = `${Number(carrying.weight_lb || 0).toFixed(1)} / ${Number(carrying.capacity_lb || 0).toFixed(1)} lb`;
   return `
     <div class="actor-panel-summary"><b>${esc(actor.name)}</b><span>${items.length} ${items.length === 1 ? 'przedmiot' : 'przedmiotów'} · ${esc(carryingText)}</span></div>
@@ -1575,9 +1629,9 @@ function actorInventoryPanelHtml(actor) {
         ? 'efekty nieaktywne'
         : '';
       const weaponCategory = ({simple: 'broń prosta', martial: 'broń żołnierska'})[item.weapon_category] || '';
-      const weaponProperties = (item.weapon_properties || []).map(identifierLabel);
-      const gearCategory = item.gear_category ? identifierLabel(item.gear_category) : '';
-      const focusKind = item.spellcasting_focus_kind ? `focus: ${identifierLabel(item.spellcasting_focus_kind)}` : '';
+      const weaponProperties = (item.weapon_properties || []).map(inventoryLabel);
+      const gearCategory = item.gear_category ? inventoryLabel(item.gear_category) : '';
+      const focusKind = item.spellcasting_focus_kind ? `przybory magiczne: ${inventoryLabel(item.spellcasting_focus_kind)}` : '';
       const capacity = item.container_capacity || null;
       const capacityLabel = capacity
         ? [
@@ -1594,7 +1648,9 @@ function actorInventoryPanelHtml(actor) {
       const bundleLabel = (item.bundle_contents || []).length
         ? `pakiet: ${(item.bundle_contents || []).reduce((sum, entry) => sum + Number(entry.quantity || 1), 0)} elementów`
         : '';
-      const tags = [item.equipped ? 'wyposażony' : '', held, weaponCategory, ...weaponProperties, gearCategory, focusKind, capacityLabel ? `pojemność ${capacityLabel}` : '', lightLabel, item.tool_proficiency_id ? `narzędzie: ${identifierLabel(item.tool_proficiency_id)}` : '', bundleLabel, armorCategory ? `pancerz ${armorCategory}` : '', armorFormula, item.armor_strength_requirement ? `Siła ${item.armor_strength_requirement}` : '', item.stealth_disadvantage ? 'utrudnienie Stealth' : '', chargeLabel, attunementLabel, ...effectLabels, magicInactive, item.broken ? 'uszkodzony' : '', item.available === false ? 'niedostępny' : '', `${Number(item.total_weight_lb || 0).toFixed(1)} lb`, Number(item.total_value_cp || 0) > 0 ? `${esc(item.total_value_cp)} cp` : ''].filter(Boolean);
+      const tags = [item.equipped ? 'wyposażony' : '', held, armorFormula, chargeLabel, attunementLabel, ...effectLabels, magicInactive, item.broken ? 'uszkodzony' : '', item.available === false ? 'niedostępny' : ''].filter(Boolean);
+      const metadata = [weaponCategory,...weaponProperties,gearCategory,focusKind,capacityLabel ? `pojemność ${capacityLabel}` : '',lightLabel,item.tool_proficiency_id ? `narzędzie: ${inventoryLabel(item.tool_proficiency_id)}` : '',bundleLabel,armorCategory ? `pancerz ${armorCategory}` : '',item.armor_strength_requirement ? `Siła ${item.armor_strength_requirement}` : '',item.stealth_disadvantage ? 'utrudnienie Skradania' : '',`${Number(item.total_weight_lb || 0).toFixed(1)} lb`,Number(item.total_value_cp || 0)>0 ? tradeMoneyLabel(item.total_value_cp) : '',
+        ...(item.properties || []).filter(property=>!property.startsWith('pack_slot:')&&!property.startsWith('party_loot:')).map(inventoryLabel)].filter(Boolean).map(label=>label.replace(/\b(pp|gp|sp|cp)\b/g,unit=>({pp:'plat.',gp:'sz',sp:'ss',cp:'sm'})[unit]));
       const canChangeArmor = item.kind === 'armor' && item.armor_category && item.available !== false && !item.broken && !state.combat && (state.flow || {}).stage === 'location_active';
       const armorButton = canChangeArmor
         ? `<button type="button" class="secondary" onclick="changeActorArmor('${esc(actor.id)}','${esc(item.id)}',${item.equipped ? 'false' : 'true'})">${item.equipped ? 'Zdejmij pancerz' : 'Załóż pancerz'}</button>`
@@ -1604,7 +1660,7 @@ function actorInventoryPanelHtml(actor) {
       const lightButtons = !canChangeLight ? '' : litHere
         ? `<button type="button" class="secondary" onclick="changeActorLight('${esc(actor.id)}','${esc(item.id)}','extinguish')">Zgaś</button>${item.light_source.hooded_dim_distance_feet !== null && item.light_source.hooded_dim_distance_feet !== undefined ? `<button type="button" class="secondary" onclick="changeActorLight('${esc(actor.id)}','${esc(item.id)}','toggle_hood')">Przełącz osłonę</button>` : ''}`
         : `<button type="button" class="secondary" onclick="changeActorLight('${esc(actor.id)}','${esc(item.id)}','ignite')">Zapal</button>`;
-      return `<article class="panel-info-card inventory${item.broken || item.available === false ? ' unavailable' : ''}"><div><b>${esc(item.name || identifierLabel(item.id))}${Number(item.quantity || 1) > 1 ? ` ×${esc(item.quantity)}` : ''}</b><span>${esc(item.description || identifierLabel(item.kind))}</span></div>${tags.length ? `<div class="panel-item-tags">${tags.map(tag => `<small>${esc(tag)}</small>`).join('')}</div>` : ''}${(item.properties || []).length ? `<p>${item.properties.map(property => `<span class="property-chip">${esc(identifierLabel(property))}</span>`).join('')}</p>` : ''}${armorButton}${lightButtons}</article>`;
+      return `<article class="panel-info-card inventory${item.broken || item.available === false ? ' unavailable' : ''}"><div><b>${esc(item.name || inventoryLabel(item.id))}${Number(item.quantity || 1) > 1 ? ` ×${esc(item.quantity)}` : ''}</b><span>${esc(item.description || inventoryLabel(item.kind))}</span></div>${tags.length ? `<div class="panel-item-tags">${tags.map(tag => `<small>${esc(tag)}</small>`).join('')}</div>` : ''}<details class="inventory-metadata"><summary>Właściwości, masa i wartość</summary><div class="panel-item-tags">${[...new Set(metadata)].map(tag=>`<small>${esc(tag)}</small>`).join('')}</div></details>${armorButton}${lightButtons}</article>`;
     }).join('') : '<div class="panel-empty-state"><b>Pusty ekwipunek</b><span>Postać nie niesie żadnych przedmiotów.</span></div>'}
   `;
 }
@@ -2695,13 +2751,13 @@ function submitZoneOption() {
   );
   if (!option) return;
   if (option.check && !selectedZoneOptionActorId) {
-    alert('Najpierw wybierz postać, która podejmuje działanie.');
+    PlayerUi.notice('Najpierw wybierz postać, która podejmuje działanie.');
     return;
   }
   const input = document.getElementById('zone-option-description');
   const description = input ? input.value.trim() : '';
   if (!description && option.description_mode === 'required') {
-    alert('Najpierw opiszcie, jak wykonujecie to działanie.');
+    PlayerUi.notice('Najpierw opiszcie, jak wykonujecie to działanie.');
     return;
   }
   api('/api/exploration/option', {
@@ -5152,12 +5208,12 @@ async function previewCombatAura(auraId) {
       body: JSON.stringify({aura_id: auraId || ''}),
     });
     const data = await res.json();
-    if (!res.ok) alert(data.error || 'Nie udało się włączyć podglądu aury.');
+    if (!res.ok) PlayerUi.notice(data.error || 'Nie udało się włączyć podglądu aury.');
     state = data.state || data;
     synchronizeBoardSelection({force: true});
     render();
   } catch (_error) {
-    alert('Nie udało się połączyć z aplikacją podczas podglądu aury.');
+    PlayerUi.notice('Nie udało się połączyć z aplikacją podczas podglądu aury.');
   }
 }
 
@@ -7572,7 +7628,7 @@ function submitGmChat(event) {
 }
 async function sendGoalAction() {
   if (state.pending) {
-    alert('Najpierw rozstrzygnij widoczną decyzję, pułapkę albo rzut.');
+    PlayerUi.notice('Najpierw rozstrzygnij widoczną decyzję, pułapkę albo rzut.');
     return;
   }
   const input = document.getElementById('goal-action');
@@ -7580,13 +7636,13 @@ async function sendGoalAction() {
   if (!selectedGoal) return;
   const enteredText = input ? input.value.trim() : interactionDescriptionDraft.trim();
   if (!enteredText && selectedGoal.description_mode === 'required') {
-    alert('Najpierw opiszcie sposób działania.');
+    PlayerUi.notice('Najpierw opiszcie sposób działania.');
     return;
   }
   const text = enteredText || selectedGoal.default_declaration || selectedGoal.label;
   const selectedCheckParticipants = selectedGoal ? selectedGoalCheckParticipants(selectedGoal) : null;
   if (selectedGoal && !selectedCheckParticipants) {
-    alert('Najpierw wybierz typ testu.');
+    PlayerUi.notice('Najpierw wybierz typ testu.');
     return;
   }
   if (
@@ -7594,11 +7650,11 @@ async function sendGoalAction() {
     && !['no_actor', 'whole_party'].includes(selectedCheckParticipants)
     && selectedInteractionActorIds.length < 1
   ) {
-    alert('Najpierw wybierz postać, która wykonuje test.');
+    PlayerUi.notice('Najpierw wybierz postać, która wykonuje test.');
     return;
   }
   if (selectedGoal.source_required && !selectedInteractionActionSourceId) {
-    alert('Najpierw wybierz czar, przedmiot albo narzędzie.');
+    PlayerUi.notice('Najpierw wybierz czar, przedmiot albo narzędzie.');
     return;
   }
   optimisticPlayerMessage = selectedGoal.description_mode === 'none'
@@ -8090,7 +8146,7 @@ async function performBoardScan({revision, automatic, token, previousInteraction
         boardCommandRetryAt = Date.now()+700;
       } else {
         boardCommandError = '';
-        if (!automatic) alert(boardScanError);
+        if (!automatic) PlayerUi.notice(boardScanError);
       }
     }
     state = data.state || data;
@@ -8121,7 +8177,7 @@ async function performBoardScan({revision, automatic, token, previousInteraction
     boardScanError = 'Połączenie z planszą zostało przerwane.';
     boardCommandError = '';
     updateBoardInputPresentation();
-    if (!automatic) alert(boardScanError);
+    if (!automatic) PlayerUi.notice(boardScanError);
   } finally {
     if (token === boardScanToken) {
       boardScanInFlight = false;
@@ -8319,7 +8375,7 @@ async function explorationSpellDetails(spellId, castLevel = null) {
     if (answer === null) return null;
     const selected = actors[Number(answer) - 1];
     if (!selected) {
-      window.alert('Wybierz numer postaci z listy.');
+      PlayerUi.notice('Wybierz numer postaci z listy.');
       return null;
     }
     return {target_id: selected.id};
@@ -8339,7 +8395,7 @@ async function explorationSpellDetails(spellId, castLevel = null) {
   }
   const activePoint = state.active_point || {};
   if (!activePoint.id) {
-    window.alert('Najpierw wejdź w interakcję z przedmiotem lub punktem, który chcesz zaczarować.');
+    PlayerUi.notice('Najpierw wejdź w interakcję z przedmiotem lub punktem, który chcesz zaczarować.');
     return null;
   }
   const message = await requestTextInput(
@@ -8384,7 +8440,7 @@ async function ropeTrickActor(effectId, mode) {
   if (answer === null) return;
   const actor = actors[Number(answer) - 1];
   if (!actor) {
-    window.alert('Wybierz numer postaci z listy.');
+    PlayerUi.notice('Wybierz numer postaci z listy.');
     return;
   }
   api(`/api/exploration/rope-trick/${mode}`, {effect_id: effectId, actor_id: actor.id}, mode === 'enter' ? 'Wchodzę do przestrzeni...' : 'Wychodzę z przestrzeni...');
@@ -8462,7 +8518,7 @@ async function flushCombatTurnActionMove() {
     });
     const data = await res.json();
     if (!res.ok) {
-      alert(data.error || 'Nie udało się zmienić podglądu akcji.');
+      PlayerUi.notice(data.error || 'Nie udało się zmienić podglądu akcji.');
     }
     state = data.state || data;
     if (combatTurnActionMoveDelta) {
@@ -8473,7 +8529,7 @@ async function flushCombatTurnActionMove() {
     updateBoardInputPresentation();
     refreshSessionLog();
   } catch (_error) {
-    alert('Nie udało się połączyć z aplikacją podczas zmiany akcji.');
+    PlayerUi.notice('Nie udało się połączyć z aplikacją podczas zmiany akcji.');
   } finally {
     combatTurnActionMoveInFlight = false;
     if (combatTurnActionMoveDelta) {
@@ -8527,7 +8583,7 @@ function triggerCombatActionShortcutKey(shortcut) {
     const isKnownShortcut = (menu.bindings || []).some(binding => binding.key === shortcut)
       || shortcut === 'SPACE';
     if (!isKnownShortcut) return false;
-    window.alert('Ta akcja nie jest teraz dostępna. Wybierz inną dostępną ikonę.');
+    PlayerUi.notice('Ta akcja nie jest teraz dostępna. Wybierz inną dostępną ikonę.');
     return true;
   }
   confirmCombatTurnAction(option.id);

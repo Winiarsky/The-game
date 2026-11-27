@@ -14,8 +14,10 @@
 <link rel="stylesheet" href="{{ static_asset_url('tabletop_shell.css') }}">
 <link rel="stylesheet" href="{{ static_asset_url('resonance_combat.css') }}">
 <link rel="stylesheet" href="{{ static_asset_url('keyboard_input.css') }}">
+  {% include 'player_ui_assets.html' %}
 </head>
 <body>
+<a class="skip-link" href="#game-content">Przejdź do bieżącej decyzji</a>
 <header class="app-shell-header">
   <div class="app-shell-context">
     <span id="app-mode-label" class="mode-badge">{{ ui_text('common.exploration') }}</span>
@@ -45,22 +47,22 @@
 </div>
 <div id="side-panel-scrim" class="side-panel-scrim" data-allow-busy="true" onclick="setSidePanelOpen(false)"></div>
 <main>
-  <aside id="side-panel" aria-hidden="true">
+  <aside id="side-panel" role="dialog" aria-modal="false" aria-labelledby="side-panel-title" aria-hidden="true" tabindex="-1" inert>
     <div class="side-panel-head">
-      <div><span class="panel-kicker">Panel gry</span><h2>Informacje</h2></div>
+      <div><span class="panel-kicker">Panel gry</span><h2 id="side-panel-title">Informacje</h2></div>
       <button class="side-panel-close" data-allow-busy="true" onclick="setSidePanelOpen(false)" aria-label="Zamknij panel">×</button>
     </div>
-    <nav class="side-panel-tabs" aria-label="Sekcje panelu" onkeydown="handleSidePanelTabKeydown(event)">
-      <button class="side-panel-tab active" data-side-panel-tab="game" onclick="setSidePanelTab('game')" aria-selected="true">Gra</button>
-      <button class="side-panel-tab" data-side-panel-tab="party" onclick="setSidePanelTab('party')" aria-selected="false">Postać</button>
-      <button class="side-panel-tab" data-side-panel-tab="states" onclick="setSidePanelTab('states')" aria-selected="false">Stany</button>
-      <button class="side-panel-tab" data-side-panel-tab="spells" onclick="setSidePanelTab('spells')" aria-selected="false">Czary</button>
-      <button class="side-panel-tab" data-side-panel-tab="inventory" onclick="setSidePanelTab('inventory')" aria-selected="false">Ekwipunek</button>
-      <button class="side-panel-tab" data-side-panel-tab="developer" onclick="setSidePanelTab('developer')" aria-selected="false">Narzędzia</button>
+    <nav class="side-panel-tabs" role="tablist" aria-label="Sekcje panelu" onkeydown="handleSidePanelTabKeydown(event)">
+      <button class="side-panel-tab active" role="tab" id="panel-tab-game" aria-controls="panel-content-game" tabindex="0" data-side-panel-tab="game" onclick="setSidePanelTab('game')" aria-selected="true">Gra</button>
+      <button class="side-panel-tab" role="tab" id="panel-tab-party" aria-controls="panel-content-party" tabindex="-1" data-side-panel-tab="party" onclick="setSidePanelTab('party')" aria-selected="false">Postać</button>
+      <button class="side-panel-tab" role="tab" id="panel-tab-states" aria-controls="panel-content-states" tabindex="-1" data-side-panel-tab="states" onclick="setSidePanelTab('states')" aria-selected="false">Stany</button>
+      <button class="side-panel-tab" role="tab" id="panel-tab-spells" aria-controls="panel-content-spells" tabindex="-1" data-side-panel-tab="spells" onclick="setSidePanelTab('spells')" aria-selected="false">Czary</button>
+      <button class="side-panel-tab" role="tab" id="panel-tab-inventory" aria-controls="panel-content-inventory" tabindex="-1" data-side-panel-tab="inventory" onclick="setSidePanelTab('inventory')" aria-selected="false">Ekwipunek</button>
+      <button class="side-panel-tab" role="tab" id="panel-tab-developer" aria-controls="panel-content-developer" tabindex="-1" data-side-panel-tab="developer" onclick="setSidePanelTab('developer')" aria-selected="false">Narzędzia</button>
     </nav>
     <div id="panel-actor-selector" class="panel-actor-selector" hidden></div>
 
-    <div class="side-panel-content" data-side-panel-content="game">
+    <div class="side-panel-content" role="tabpanel" id="panel-content-game" aria-labelledby="panel-tab-game" data-side-panel-content="game">
       <section class="panel-section">
         <span class="panel-section-label">Aktualna lokacja</span>
         <strong id="panel-zone-name">{{ ui_text('common.location') }}</strong>
@@ -102,7 +104,7 @@
       </div>
     </div>
 
-    <div class="side-panel-content" data-side-panel-content="party" hidden>
+    <div class="side-panel-content" role="tabpanel" id="panel-content-party" aria-labelledby="panel-tab-party" data-side-panel-content="party" hidden>
       <section class="panel-section">
         <span class="panel-section-label">Karta postaci</span>
         <div id="party-details" class="party-details"></div>
@@ -131,28 +133,28 @@
       </section>
     </div>
 
-    <div class="side-panel-content" data-side-panel-content="states" hidden>
+    <div class="side-panel-content" role="tabpanel" id="panel-content-states" aria-labelledby="panel-tab-states" data-side-panel-content="states" hidden>
       <section class="panel-section">
         <span class="panel-section-label">Stany i efekty</span>
         <div id="actor-states" class="panel-card-list"></div>
       </section>
     </div>
 
-    <div class="side-panel-content" data-side-panel-content="spells" hidden>
+    <div class="side-panel-content" role="tabpanel" id="panel-content-spells" aria-labelledby="panel-tab-spells" data-side-panel-content="spells" hidden>
       <section class="panel-section">
-        <span class="panel-section-label">Czary i sloty</span>
+        <span id="actor-spells-label" class="panel-section-label">Czary i sloty</span>
         <div id="actor-spells" class="panel-card-list"></div>
       </section>
     </div>
 
-    <div class="side-panel-content" data-side-panel-content="inventory" hidden>
+    <div class="side-panel-content" role="tabpanel" id="panel-content-inventory" aria-labelledby="panel-tab-inventory" data-side-panel-content="inventory" hidden>
       <section class="panel-section">
         <span class="panel-section-label">Ekwipunek</span>
         <div id="actor-inventory" class="panel-card-list"></div>
       </section>
     </div>
 
-    <div class="side-panel-content developer-panel" data-side-panel-content="developer" hidden>
+    <div class="side-panel-content developer-panel" role="tabpanel" id="panel-content-developer" aria-labelledby="panel-tab-developer" data-side-panel-content="developer" hidden>
       <div class="developer-warning">Tryb twórcy · dane techniczne nie są częścią widoku gracza.</div>
       <details class="card debug-panel">
         <summary>Dane wyzwania</summary>
@@ -285,12 +287,13 @@
       </details>
       <button class="danger developer-reset" onclick="resetSession()">Resetuj sesję</button>
     </div>
-    <div class="side-panel-keyboard-hint">Wybierz zakładkę na ekranie · × zamyka panel</div>
+    <div class="side-panel-keyboard-hint" data-side-panel-input-hint>Wybierz zakładkę na ekranie · × zamyka panel</div>
   </aside>
-  <section>
+  <section id="game-content" tabindex="-1">
     <div id="status" class="status" hidden></div>
     <div id="physical-card-status" class="physical-card-status" aria-live="polite" hidden></div>
     <div id="board-input-global" data-board-input-status></div>
+    <div id="keyboard-decision-hint" class="keyboard-decision-hint" role="status" aria-live="polite" hidden></div>
     <section class="card" id="mission-panel" hidden></section>
     <section class="card" id="training-arena-panel" hidden></section>
     <div class="card" id="flow-panel"></div>

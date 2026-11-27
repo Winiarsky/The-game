@@ -14,9 +14,9 @@ def test_party_choices_fit_viewport(tmp_path: Path,width: int,height: int) -> No
     chrome=shutil.which('google-chrome') or shutil.which('chromium')
     if not chrome:pytest.skip('Chrome required')
     page=create_app(_session(tmp_path)).test_client().get('/new-game').get_data(as_text=True)
-    css=Path('src/dnd_board_game/ui/static/launcher.css').read_text()
-    page=re.sub(r'<link rel="stylesheet"[^>]+>',lambda _: '<style>'+css+'</style>',page)
     page=re.sub(r'<script src="[^"]*launcher_board.js[^>]+></script>','',page)
+    from tests.browser_static import inline_player_assets
+    page=inline_player_assets(page,Path('src/dnd_board_game/ui/static'))
     harness=r'''<script>
 window.addEventListener('load',()=>{
  const check=(v,m)=>{if(!v)throw Error(m)};

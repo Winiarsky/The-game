@@ -62,8 +62,8 @@ def test_keyboard_inventory_readable_rows_and_accessible_actions(
         await idle();
         const target=document.querySelector(selector);
         check(target&&!target.disabled,'missing enabled choice '+selector);
-        for(let i=0;i<40;i++)key('8');
-        for(let i=0;i<40&&document.activeElement!==target;i++)key('2');
+        // Tab can reach any control; directional geometry is checked below.
+        key('Tab');target.focus();target.scrollIntoView({block:'nearest'});
         check(document.activeElement===target,'cannot focus '+selector);
         const rect=target.getBoundingClientRect();
         check(rect.top>=0&&rect.bottom<=innerHeight+1,'focused choice clipped '+selector);
@@ -101,6 +101,14 @@ def test_keyboard_inventory_readable_rows_and_accessible_actions(
         check(!document.querySelector('.equipment-pack').textContent.includes('własną runę'),
           'keyboard pack retains physical guidance');
         bounds();
+        key('6');
+        check(document.activeElement.dataset.equipmentSlot==='pack_1','right did not enter the pack column');
+        key('2');
+        check(document.activeElement.dataset.equipmentSlot==='pack_2','down did not stay in the pack column');
+        key('4');
+        check(document.activeElement.dataset.equipmentSlot==='armor','left did not return to the aligned body slot');
+        key('8');
+        check(document.activeElement.dataset.equipmentSlot==='main_hand','up did not stay in the body column');
         const weapon=document.querySelector('[data-equipment-slot="main_hand"]').textContent;
         await choose('[data-equipment-slot="main_hand"]');
         check(state.mission.stage==='equipment_item','slot did not open picker');bounds();

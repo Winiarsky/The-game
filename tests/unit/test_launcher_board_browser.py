@@ -21,11 +21,8 @@ def test_runes_click_real_controls_and_follow_menu_changes(tmp_path: Path, width
     session.configure_scenario(Path('content/scenarios/misja_0_dzwon/scenario.json'))
     html = create_app(session).test_client().get(page_path).get_data(as_text=True)
     static = Path('src/dnd_board_game/ui/static')
-    html = re.sub(r'<link rel="stylesheet"[^>]+>', '<style>' + (static/'launcher.css').read_text() + '</style>', html)
-    html = re.sub(r'<script src="[^"]*launcher_board.js[^"]*" defer></script>',
-                  lambda _: '<script>' + (static/'launcher_board.js').read_text() + '</script>', html)
-    html = re.sub(r'<script src="[^"]*session_copy.js[^"]*"[^>]*></script>',
-                  lambda _: '<script>' + (static/'session_copy.js').read_text() + '</script>', html)
+    from tests.browser_static import inline_player_assets
+    html = inline_player_assets(html, static)
     harness = r'''
 let contract=null, selection=null, pending=null, generation=0, submission=null, navigation=null, released=false, staleNext=false;
 const response=data=>Promise.resolve({ok:true,json:()=>Promise.resolve(data)});

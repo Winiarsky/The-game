@@ -19,7 +19,7 @@ const TabletopCombat = (() => {
       return `<span class="tt-portrait tt-atlas ${extra}" role="img" aria-label="${alt}" style="background-image:url('${esc(atlas.url)}');background-size:${columns * 100}% ${rows * 100}%;background-position:${x}% ${y}%"></span>`;
     }
     return actor.portrait_url
-      ? `<img class="tt-portrait ${extra}" src="${esc(actor.portrait_url)}" alt="${alt}">`
+      ? `<img class="tt-portrait ${extra}" src="${esc(actor.portrait_url)}" alt="${alt}" width="40" height="40" decoding="async">`
       : `<span class="tt-portrait tt-silhouette ${extra}" role="img" aria-label="${alt}"><svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="13" r="8"/><path d="M5 39v-5a15 15 0 0 1 30 0v5Z"/></svg></span>`;
   }
   function health(actor) {

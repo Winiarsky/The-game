@@ -9,8 +9,12 @@ const SessionNavigation = (() => {
   function highlight() {
     const all = choices();
     index = all.length ? (index + all.length) % all.length : 0;
-    all.forEach((item, i) => item.classList.toggle('session-focused', i === index));
+    all.forEach((item, i) => {
+      item.classList.toggle('session-focused', i === index);
+      if(i===index)item.setAttribute('aria-current','true');else item.removeAttribute('aria-current');
+    });
     all[index]?.scrollIntoView({block:'nearest'});
+    if(dialog()?.open)all[index]?.focus({preventScroll:true});
   }
   function choice(action, label) { return `<button class="secondary" data-session-choice="${esc(action)}">${esc(label)}</button>`; }
   function content() {
@@ -31,7 +35,8 @@ const SessionNavigation = (() => {
   }
   function renderDialog() {
     const titles = {menu:'menu',journal:'journal',help:'rules',party:'party',checkpoints:'checkpoints',confirm:'confirm'};
-    dialog().innerHTML = `<header><h2>${esc(t(titles[view]))}</h2><button aria-label="${esc(t('back'))}">↩</button></header><div class="session-navigation-content">${content()}</div><footer></footer>`;
+    dialog().setAttribute('aria-labelledby','session-navigation-title');
+    dialog().innerHTML = `<header><h2 id="session-navigation-title">${esc(t(titles[view]))}</h2><button aria-label="${esc(t('back'))}">↩</button></header><div class="session-navigation-content">${content()}</div><footer></footer>`;
     // The header back control is always available through decline, not part of the choice cursor.
     dialog().querySelector('header button').removeAttribute('data-session-choice');
     dialog().querySelector('footer').textContent=state.input?.mode === 'keyboard'
@@ -51,10 +56,14 @@ const SessionNavigation = (() => {
     if (!view && document.querySelector('dialog[open]')) return false;
     view=next;index=0;page=0;generation+=1;renderDialog();
     if (!dialog().open) dialog().showModal();
+    const toggle=document.getElementById('side-panel-toggle');
+    if(toggle){toggle.setAttribute('aria-controls','session-navigation');toggle.setAttribute('aria-expanded','true');}
+    highlight();
     scheduleAutomaticBoardScan();return true;
   }
   function close() {
     const old=context();view='';dialog()?.close();releaseBrowserBoardPanel(old);
+    document.getElementById('side-panel-toggle')?.setAttribute('aria-expanded','false');
   }
   function back() { if (view==='menu') close(); else open('menu'); }
   function activate(action) {
@@ -83,7 +92,10 @@ const SessionNavigation = (() => {
   function afterRender() {
     if (!state?.mission) return;
     const menu=document.querySelector('.side-panel-toggle');
-    if (menu) {menu.onclick=()=>open();menu.title=t('menu');}
+    if (menu) {
+      menu.onclick=()=>open();menu.title=t('menu');menu.setAttribute('aria-haspopup','dialog');menu.setAttribute('aria-expanded',String(Boolean(dialog()?.open)));
+      if(dialog())menu.setAttribute('aria-controls','session-navigation');else menu.removeAttribute('aria-controls');
+    }
     if (retryTimer) clearTimeout(retryTimer);
     const backend=state.board?.backend && state.board.backend!=='none' ? state.board.backend : state.board?.configured_backend;
     if (state.input?.mode !== 'keyboard' && backend && backend!=='none' && !state.board.connected && !busy && !boardFallbackEnabled)

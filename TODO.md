@@ -1,3 +1,76 @@
+## Spójny frontend i skille — 27.11.2026
+
+Projekt i zakres: [UI_UX_REFACTOR.md](docs/UI_UX_REFACTOR.md).
+
+- [x] Wprowadzić wspólne tokeny wyglądu oraz warstwę `PlayerUi` dla
+  launchera i rozgrywki: numpad, przestrzenny wybór opcji, fokus i komunikaty.
+- [x] Rozróżnić niebieski fokus klawiatury i złotą aktywną turę, ujednolicić
+  typografię, powierzchnie, czytelność podpisów i widoczny nagłówek sceny.
+- [x] Dodać semantyczne zakładki, nieaktywne tło panelu, zatrzymanie
+  Tab / Shift+Tab, powrót fokusu, skrót do treści i ograniczenie animacji.
+- [x] Pokazywać w panelu właściwe moce runiczne oraz aktualne stany walki;
+  zachować fokus podczas zmiany bohatera i zakładki.
+- [x] Zastąpić zwykłe alerty komunikatami przy decyzji. Zachować poprawny
+  stan przy błędzie bez projekcji; po odrzuceniu starej rewizji przyjąć
+  aktualny stan serwera i umożliwić następne działanie. Komunikat nie
+  zmienia układu kolumn rozmowy.
+- [x] Dodać izolowane próby Playwright w Pythonie jako opcjonalne `ui-test`,
+  bez nowej zależności runtime. Sprawdzać prawdziwe klawisze, fokus,
+  geometrię, błędy i zrzuty całych przepływów.
+- [x] Zainstalować `frontend-design`, `web-design-guidelines`,
+  `webapp-testing`, `python-testing-patterns` oraz `pdf`; zastosować
+  pierwsze cztery w refaktorze, zachować `pdf` do pracy z wydrukami.
+
+Walidacja: 58 różnych testów w celowanych, szeregowych partiach przez
+`safe_pytest.sh` z timeoutem. W tym 14 nowych prób Playwright, regresje
+launchera i fizycznego menu, dziewięć rozmiarów wyboru drużyny, Misja 0,
+ekwipunek, walka, setup oraz wersjonowanie wspólnych zasobów. Zrzuty
+sprawdzono w Chrome przy 1221 × 656, 883 × 687 i 1221 × 569.
+Pełna lista plików testowych i zakres w dokumencie refaktoru.
+Fizyczna próba numpada/WLED pozostaje na liście poniżej.
+
+## Przegląd UI/UX numpada — 27.11.2026
+
+Wdrożono poprawki po przeglądzie bieżącego `/play`, z zachowaniem zasad
+oraz orientacji fizycznej planszy.
+
+- [x] P1: Zgrać podgląd kursora z możliwością wykonania akcji. Legalny
+  ruch pokazuje koszt i przycisk „Enter — wykonaj ruch”; kliknięcie oraz
+  Enter używają tej samej ścieżki wejścia z kontrolą rewizji. Podgląd nadal
+  nie wydaje zasobów. Wybór obszaru, wyłączenie postaci i wykonanie mocy
+  pozostają osobnymi krokami; gotowe zatwierdzenie nie wybiera obszaru ponownie.
+- [x] P1: Pokazywać tryb wejścia i krótkie komunikaty przy bieżącej decyzji.
+  Stopka pokazuje Mapę/Akcje/Rzut/Wybór, oczekiwanie, koszt i działanie
+  Entera. Pełna ściąga pozostaje pod `1`, bez pełnego górnego paska.
+- [x] P1: Dopasować nawigację do położenia elementów. `8/2` wybiera
+  w pionie, `4/6` w poziomie; wyposażenie pozwala przejść między listą
+  założonych przedmiotów i plecakiem. Orientacja mapy jest niezależna.
+- [x] P2: Ujednolicić panele `1` i `3`: przełączanie zakładek, zamknięcie
+  tym samym skrótem lub Backspace i odtworzenie zaznaczonej akcji bez
+  zmiany wybranego celu ani stanu walki.
+- [x] P2: Usunąć poziome przewijanie bocznego ekwipunku, także po
+  rozwinięciu szczegółów. Zawijać etykiety i nazwy, tłumaczyć właściwości
+  i oddzielić najważniejsze informacje od masy, ceny oraz pozostałych danych.
+- [x] P2: Ujednolicić informacje o bohaterze z przycisku walki i `1`.
+  Wspólna karta zawiera bieżące zasoby i stany walki oraz rozwijane moce,
+  pasyw, skazę i odzysk. Osobny podgląd przeciwników pozostaje dostępny.
+- [x] P2: Powiększyć podpisy kosztów i budżetów, dodać oznaczenia skrótów
+  i czytelne powody blokad. Niedostępne akcje można zaznaczyć numpadem,
+  aby przeczytać wyjaśnienie; zatwierdzenie nie wykonuje takiej akcji.
+  Dłuższe decyzje i inicjatywa przewijają się wewnątrz paneli na niskim ekranie.
+- [x] P3: Pokazać konkretne niewykorzystane zasoby przed końcem tury,
+  zachowując ostrzeżenie o Rezonansie. Reakcja nie jest opisywana jako
+  zasób tracony po zakończeniu tury.
+
+Walidacja: 27 różnych testów w celowanych partiach przez `safe_pytest.sh`
+z timeoutem: `test_keyboard_input.py`, `test_keyboard_control_browser.py`,
+`test_keyboard_inventory_browser.py`, `test_keyboard_mission_browser.py`,
+setup przy 1221 × 656 oraz `test_ui_asset_versions.py`. Dodatkowa kontrola
+Chrome: 18 podglądów/przejść przy 1221 × 656, 883 × 687 i 1221 × 569,
+w tym rozwinięty boczny ekwipunek i pełna sekwencja mocy obszarowej.
+`git diff --check` bez uwag. Fizyczny test numpada i LED-ów pozostaje
+osobnym zadaniem poniżej.
+
 ## Numpad — 15.11.2026
 
 - [x] Ustalić mapowanie numpada i dostosować podpowiedzi ekranu, menu,

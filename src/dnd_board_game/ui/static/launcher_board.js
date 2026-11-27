@@ -10,7 +10,7 @@
   let stopped = false, syncing = false, scanning = false, scheduled = null;
   let selection = null, signature = '', epoch = 0, focused = null;
 
-  const visible = element => element && !element.closest('[hidden]') && element.getClientRects().length > 0;
+  const visible = PlayerUi.visible;
   function choices() {
     const selectedCount = document.querySelectorAll('input[name="character_ids"]:checked').length;
     return [...document.querySelectorAll('[data-board-rune]')].filter(element => {
@@ -135,14 +135,13 @@
   document.addEventListener('keydown', event => {
     if (!keyboardMode || stopped || event.defaultPrevented || event.isComposing
         || event.ctrlKey || event.altKey || event.metaKey) return;
-    const editable = event.target instanceof Element && event.target.closest('textarea,select,[contenteditable="true"],input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"])');
+    const editable = PlayerUi.isTyping(event.target);
     if (editable) return;
     // Physical numpad codes are stable when Num Lock changes the reported key.
-    const physical = {Numpad8:'ArrowUp', Numpad2:'ArrowDown', Numpad4:'ArrowLeft',
-      Numpad6:'ArrowRight', NumpadEnter:'Enter', NumpadAdd:'+', NumpadSubtract:'-'};
     const aliases = {'8':'ArrowUp', '2':'ArrowDown', '4':'ArrowLeft', '6':'ArrowRight',
       Backspace:'Escape'};
-    const key = physical[event.code] || aliases[event.key] || event.key;
+    const normalized = PlayerUi.key(event);
+    const key = aliases[normalized] || normalized;
     if (!['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Enter','Escape','+','-','PageUp','PageDown'].includes(key)) return;
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -160,9 +159,8 @@
       (entries[index < 0 ? 0 : index]).click();
       return;
     }
-    const delta = ['ArrowDown','ArrowRight'].includes(key) ? 1 : -1;
-    index = Math.max(0, Math.min(entries.length - 1, (index < 0 ? 0 : index) + delta));
-    const element = entries[index];
+    const [dx,dy] = {ArrowUp:[0,-1],ArrowDown:[0,1],ArrowLeft:[-1,0],ArrowRight:[1,0]}[key];
+    const element = PlayerUi.nextChoice(entries,entries[index<0?0:index],dx,dy);
     focused = Number(element.dataset.boardRune);
     element.tabIndex = 0;
     element.focus({preventScroll:true});

@@ -1,5 +1,18 @@
 # Kontekst Projektu
 
+## Spójny frontend gracza — 27.11.2026
+
+Launcher i rozgrywka korzystają ze wspólnej warstwy `player_ui.js/css`:
+normalizacji numpada, przestrzennego wyboru opcji, zarządzania fokusem
+i kolorów. Niebieskie zaznaczenie klawiatury odróżnia się od złotej aktywnej
+tury. Otwarcie panelu informacji wyłącza tło, zatrzymuje Tab w panelu,
+a zamknięcie przywraca wcześniejszy wybór. W walce zakładka **Moce** pokazuje
+runiczny katalog bohatera, a **Stany** aktualne efekty starcia. Odrzucone
+żądanie API pokazuje komunikat przy decyzji i zachowuje ostatni poprawny stan;
+jeżeli serwer zwróci bieżącą projekcję, odświeża ją przed ponowną próbą.
+Projekt, użyte skille i sposób uruchomienia opcjonalnych prób Playwright:
+[Refaktor UI/UX](docs/UI_UX_REFACTOR.md).
+
 ## Numpad + LED — 15.11.2026
 
 Bieżący profil `keyboard` obsługujemy klawiaturą numeryczną: 8/6/2/4 to
@@ -9,8 +22,11 @@ góra/prawo/dół/lewo, 7 ruch, 9 atak, 5 runy i akcje, 1 postać, 3 ekwipunek,
 kości lub pozycję pickera, a podczas czytania przewija opis.
 Adapter rozpoznaje fizyczne klawisze numpada także bez Num Lock i zachowuje
 dotychczasową orientację planszy. Poprzednie skróty są zgodnymi aliasami.
-Ściąga sterowania i informacja o bieżącym wyborze znajdują się w ekranowej
-karcie postaci pod `1`; stały górny pasek skrótów został usunięty.
+Pełna ściąga sterowania znajduje się w ekranowej karcie postaci pod `1`.
+Stopka bieżącej decyzji pokazuje tryb wejścia, koszt ruchu i działanie Entera;
+stały górny pasek skrótów pozostaje usunięty. `1` i `3` przełączają panele,
+a ponowne naciśnięcie zamyka aktualny panel i przywraca wybór akcji.
+W menu 8/2 wybiera w pionie, a 4/6 w poziomie, zgodnie z układem elementów.
 Instrukcja: [Numpad i LED](docs/playtests/KEYBOARD_LED_MANUAL.md).
 Poniższe datowane wpisy opisują wcześniejsze etapy sterowania.
 

@@ -5,6 +5,24 @@
 .keyboard-key-list { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 9px 12px; margin: 16px 0; font-size: .82rem; }
 .keyboard-key-list dt, .keyboard-key-list dd { margin: 0; }
 .keyboard-current-status { padding-top: 10px; border-top: 1px solid #47515c; font-size: .8rem; color: #c7d5e4; }
+.keyboard-decision-hint { display: flex; flex-wrap: wrap; align-items: center; flex: 0 0 auto; gap: 5px 14px; margin: 8px 0; padding: 8px 10px; border-left: 2px solid #d6bd86; background: #d6bd8609; color: #d8dfd1; font-size: 13px; line-height: 1.4; }
+.keyboard-decision-hint[hidden] { display: none; }
+.keyboard-decision-hint > b { color: #e8cf9e; }
+.keyboard-decision-hint small { flex-basis: 100%; color: #b8c7bc; font-size: 12px; }
+.keyboard-hint-warning { border-color: #efa686; }
+.keyboard-control-mode .rc-main > .keyboard-decision-hint { margin-top: auto; margin-bottom: 0; }
+.keyboard-control-mode .rc-main > .keyboard-decision-hint + .rc-actions { margin-top: 0; }
+.keyboard-control-mode .keyboard-reading-hint { display: none; }
+.keyboard-control-mode .rc-button kbd { border: 1px solid currentColor; border-radius: 3px; padding: 2px 5px; min-width: 1.1em; text-align: center; font: inherit; }
+.keyboard-control-mode .rc-button, .keyboard-control-mode .rc-powers b { font-size: 13px; }
+.keyboard-control-mode .rc-budget, .keyboard-control-mode .rc-powers small, .keyboard-control-mode .rc-power-condition { font-size: 12px; line-height: 1.35; }
+.keyboard-control-mode .rc-powers button[aria-disabled="true"], .keyboard-control-mode .rc-basic[aria-disabled="true"] { border-style: dashed; color: #b8c7bc; background: #ffffff04; }
+.keyboard-control-mode .rc-disabled-reason { display: block; font-size: 12px; margin-top: 4px; color: #d8bba5; }
+.keyboard-control-mode .rc-basic-actions .rc-basic { align-items: start; }
+.keyboard-control-mode .rc-basic[aria-disabled="true"] .rc-disabled-reason { max-width: 17ch; }
+.keyboard-control-mode .rc-decision-content { overflow-y: auto; padding: 3px; scrollbar-width: thin; }
+.keyboard-control-mode .rc-decision-text { padding-bottom: 4px; }
+.keyboard-control-mode .rc-roster { min-height: 0; overflow-y: auto; scrollbar-width: thin; }
 .keyboard-control-mode .board-connection-indicator.led-error .connection-dot { background: #e59474; box-shadow: 0 0 8px #e5947466; }
 .keyboard-control-mode .board-connection-indicator.led-pending .connection-dot { background: #d6bd86; }
 .keyboard-control-mode .rc-combat { height: calc(100dvh - 100px); min-height: 390px; }

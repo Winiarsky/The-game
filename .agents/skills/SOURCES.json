@@ -1,0 +1,100 @@
+[
+  {
+    "name": "game-design-review",
+    "source": "https://github.com/Yuki001/game-dev-skills",
+    "path": "skills/game-design-review",
+    "commit": "ef297c3b2e04c1000c9a1b9df88bc0296423abfb",
+    "license_files": [],
+    "license_note": "No repository-root license provided upstream; do not assume MIT.",
+    "adaptations": []
+  },
+  {
+    "name": "game-balance-analysis",
+    "source": "https://github.com/Yuki001/game-dev-skills",
+    "path": "skills/game-balance-analysis",
+    "commit": "ef297c3b2e04c1000c9a1b9df88bc0296423abfb",
+    "license_files": [],
+    "license_note": "No repository-root license provided upstream; do not assume MIT.",
+    "adaptations": []
+  },
+  {
+    "name": "game-architect",
+    "source": "https://github.com/Yuki001/game-dev-skills",
+    "path": "skills/game-architect",
+    "commit": "ef297c3b2e04c1000c9a1b9df88bc0296423abfb",
+    "license_files": [],
+    "license_note": "No repository-root license provided upstream; do not assume MIT.",
+    "adaptations": []
+  },
+  {
+    "name": "design-quest-structure",
+    "source": "https://github.com/Stanestane/narrative-design-skills",
+    "path": "skills/design-quest-structure",
+    "commit": "ca3c0f7f2854b59e9ffac6dc5674ca15f166aa57",
+    "license_files": [],
+    "license_note": "No repository-root license provided upstream; do not assume MIT.",
+    "adaptations": []
+  },
+  {
+    "name": "audit-narrative-state",
+    "source": "https://github.com/Stanestane/narrative-design-skills",
+    "path": "skills/audit-narrative-state",
+    "commit": "ca3c0f7f2854b59e9ffac6dc5674ca15f166aa57",
+    "license_files": [],
+    "license_note": "No repository-root license provided upstream; do not assume MIT.",
+    "adaptations": []
+  },
+  {
+    "name": "audit-choice-quality",
+    "source": "https://github.com/Stanestane/narrative-design-skills",
+    "path": "skills/audit-choice-quality",
+    "commit": "ca3c0f7f2854b59e9ffac6dc5674ca15f166aa57",
+    "license_files": [],
+    "license_note": "No repository-root license provided upstream; do not assume MIT.",
+    "adaptations": []
+  },
+  {
+    "name": "rpg-dev",
+    "source": "https://github.com/mburnamfink/rpg-dev-skills",
+    "path": "skills/rpg-dev",
+    "commit": "36ef29f6fa2ee7fda1f675b640a3cee0932acf4f",
+    "license_files": [
+      "LICENSE"
+    ],
+    "license_note": "",
+    "adaptations": []
+  },
+  {
+    "name": "rpg-critic",
+    "source": "https://github.com/mburnamfink/rpg-dev-skills",
+    "path": "skills/rpg-critic",
+    "commit": "36ef29f6fa2ee7fda1f675b640a3cee0932acf4f",
+    "license_files": [
+      "LICENSE"
+    ],
+    "license_note": "",
+    "adaptations": []
+  },
+  {
+    "name": "headless-game-balance",
+    "source": "https://github.com/nitzangames/headless-game-balance",
+    "path": ".",
+    "commit": "0b0a759c5ad446d5d677da52721d2ce6203b503d",
+    "license_files": [
+      "LICENSE"
+    ],
+    "license_note": "",
+    "adaptations": []
+  },
+  {
+    "name": "property-based-testing",
+    "source": "https://github.com/trailofbits/skills",
+    "path": "plugins/property-based-testing/skills/property-based-testing",
+    "commit": "149d7b21f4067765b82e67029730b42d228ef4b4",
+    "license_files": [
+      "LICENSE"
+    ],
+    "license_note": "",
+    "adaptations": []
+  }
+]

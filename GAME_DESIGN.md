@@ -1,5 +1,15 @@
 # Game Design
 
+## Spójny interfejs przy stole — 27.11.2026
+
+Menu, narracja i walka używają wspólnej palety i zasad nawigacji. Niebieska
+ramka wskazuje wybór klawiatury, a złoty akcent postać w aktywnej turze.
+Nagłówek zachowuje nazwę scenariusza i lokacji. Panel informacji zatrzymuje
+fokus, pozwala czytać moce i bieżące stany bohatera, a po zamknięciu oddaje
+sterowanie poprzedniej decyzji. Komunikaty błędów są przy decyzji, z możliwością
+zamknięcia i ponownej próby. Preferencja ograniczenia animacji jest respektowana.
+Szczegóły: [Refaktor UI/UX](docs/UI_UX_REFACTOR.md).
+
 ## Sterowanie numpadem — 15.11.2026
 
 Główne wejście klawiaturowe korzysta z układu numpada: 8/6/2/4 wybiera
@@ -11,6 +21,10 @@ tekst. Podgląd nadal nie wydaje zasobów; fizyczne kości, figurki i zasady
 walki pozostają częścią dotychczasowego przepływu.
 Pełna ściąga sterowania jest w ekranowej karcie postaci otwieranej przez `1`.
 Usunięcie stałego górnego paska skrótów daje więcej miejsca na rozgrywkę.
+Koszt, aktualny tryb wejścia i działanie Entera widać w stopce bieżącej decyzji.
+W menu 8/2 wybiera w pionie, a 4/6 w poziomie; orientacja planszy pozostaje
+osobnym ustawieniem. `1` i `3` przełączają panele postaci i ekwipunku,
+a ponowne naciśnięcie skrótu zamyka panel z powrotem do poprzedniego wyboru.
 
 ## Czytelność decyzji przy planszy — 02.10.2026
 
