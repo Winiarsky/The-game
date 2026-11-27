@@ -21,7 +21,7 @@ System-agnostic: critique the module against **its own** rules and source materi
    Files the user passes are authoritative. To find the ones they didn't mention, walk the
    module's context stack — the directories above it hold exactly these files:
    ```
-   ~/work/bin/python ../rpg-dev/scripts/context_stack.py <module-path>
+   .venv/bin/python .agents/skills/rpg-dev/scripts/context_stack.py <module-path>
    ```
    Confirm the shortlist with the user before starting rather than asking them to name files
    blind, and note which layer each came from — a campaign doc overrides the system book where

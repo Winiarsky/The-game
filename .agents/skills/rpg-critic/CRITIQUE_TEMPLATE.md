@@ -1,6 +1,6 @@
 # {Module Title} — Critique & Response Log
 
-*Critical read of [`{module-file}.md`](./{module-file}.md) by Claude, {YYYY-MM-DD}. Checked against: {reference files — setting/lore, campaign notes, system rules — or "none provided"}. Not a gloss — strengths are noted only where load-bearing to a finding. Each finding has a stable ID so responses can reference it. Fill the `→ Response:` line under any item; mark **status** as `accepted` / `rejected` / `deferred` / `discuss`.*
+*Critical read of [`{module-file}.md`](./{module-file}.md) by Codex, {YYYY-MM-DD}. Checked against: {reference files — setting/lore, campaign notes, system rules — or "none provided"}. Not a gloss — strengths are noted only where load-bearing to a finding. Each finding has a stable ID so responses can reference it. Fill the `→ Response:` line under any item; mark **status** as `accepted` / `rejected` / `deferred` / `discuss`.*
 
 **How to read this:** each finding is a GitHub admonition block; your reply goes on the `→ Response:` line beneath it. The block type is the severity — 🔴 `[!CAUTION]` will break at the table · 🟠 `[!WARNING]` design/pacing weakness · 🟡 `[!IMPORTANT]` unanswered question or canon/rules clash · 🔵 `[!TIP]` enhancement.
 

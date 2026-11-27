@@ -4,4 +4,4 @@ Współpraca: pierwsze uszkodzenie ładunku podczas przeszukiwania zostanie napr
 
 Zbierzcie figurki walki i przygotujcie eksplorację z jedną figurką drużyny oraz jednym punktem rozmowy z wieśniakami.
 
-Przyjęty rozejm przesunął postawę drużyny ku Solidarności. Przed następną konfrontacją przygotujcie skład many wskazany w panelu postawy. Jeśli wcześniej wymusiliście zamianę wozu, wskaźnik wraca na środkowe pole.
+Przyjęty rozejm przesunął postawę drużyny o jedno pole ku Solidarności. Wcześniejsze decyzje pozostają zapisane.

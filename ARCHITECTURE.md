@@ -1,5 +1,13 @@
 # Architecture
 
+## Shared progress confrontation builder (2026-11-27)
+
+`application/progress_confrontation.py` constructs the live `progress_v1`
+state from actors and scene data, including explicit difficulty adjustments.
+The UI re-exports the builder for compatibility; the balance CLI imports the
+application boundary directly. Resolution remains in pure rules. Persisted
+participants retain their saved DCs; no snapshot migration is needed.
+
 The rebuild should separate deterministic game logic from adapters.
 
 ## Shared player presentation (2026-11-27)

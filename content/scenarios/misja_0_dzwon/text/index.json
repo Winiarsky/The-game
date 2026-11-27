@@ -580,5 +580,11 @@
     "path": "text/equipment_intro.md",
     "speaker": "Przy stole",
     "image": ""
+  },
+  "dilemma_defeated": {
+    "title": "Dzwon zostaje u wieśniaków",
+    "path": "text/dilemma_defeated.md",
+    "speaker": "Narrator",
+    "image_layout": "landscape"
   }
 }

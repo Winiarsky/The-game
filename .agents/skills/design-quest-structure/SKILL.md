@@ -103,7 +103,7 @@ Where meaningful, define:
 - persistent state
 - later callback
 
-Use `$design-player-choice` for deep choice work.
+Use the installed `audit-choice-quality` skill for deep reviews of existing choices.
 
 ## Quest Resolution
 

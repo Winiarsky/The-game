@@ -4,4 +4,4 @@ Walka wygasa dopiero wtedy, gdy napastnicy nie są już w stanie jej prowadzić.
 
 Zbierzcie figurki walki. W eksploracji pozostaje jeden punkt rozmowy z wieśniakami.
 
-Odmowa rozejmu przesunęła postawę drużyny ku Bezwzględności. Przed kolejną konfrontacją przygotujcie nowy skład many wskazany przez aplikację.
+Odmowa rozejmu przesunęła postawę drużyny o jedno pole ku Bezwzględności. Wcześniejsze decyzje pozostają zapisane.

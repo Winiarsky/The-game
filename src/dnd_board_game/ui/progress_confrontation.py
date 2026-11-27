@@ -5,32 +5,18 @@ from dataclasses import replace
 from typing import Any, TYPE_CHECKING
 
 from dnd_board_game.application import reputation
-from dnd_board_game.core.player_labels_pl import ABILITY_LABELS_PL
-from dnd_board_game.inventory.magic_items import effective_ability_modifier
+from dnd_board_game.application.progress_confrontation import ENGINE, build
 from dnd_board_game.rules import progress_confrontation as rules
 from dnd_board_game.rules.reputation import BOOSTS
 from dnd_board_game.scenarios.mission_pack import asset_url
 
 if TYPE_CHECKING:
-    from dnd_board_game.actors import Actor
     from .exploration_app import ExplorationUiSession
 
-ENGINE = "progress_v1"
 TIER_LABELS = {"worsened": "Pogorszenie", "unchanged": "Bez dodatkowej korzyści", "complication": "Sukces z komplikacją",
                "success": "Sukces", "bonus": "Sukces +", "full": "Pełny sukces"}
 BOOST_LABELS = {"plus_one": "+1 do testu · 1 reputacji", "plus_five": "+5 do testu · 3 reputacji",
                 "extra_die": "Dodatkowa k20, zachowaj wyższą · 5 reputacji"}
-
-
-def build(actors: tuple[Actor, ...], scene: dict[str, Any]) -> rules.Confrontation:
-    participants = tuple(rules.Participant(str(actor.id), actor.name, tuple(
-        rules.Approach(option["id"], option["name"], option["description"], ABILITY_LABELS_PL[option["ability"]],
-                       effective_ability_modifier(actor, option["ability"]),
-                       option.get("progress_dc", scene.get("progress_dc", 14)), option.get("repeatable", False))
-        for option in scene["approaches"])) for actor in actors)
-    return rules.Confrontation(participants, social=scene["kind"] == "npc",
-                              first_test_bonus=scene.get("first_test_bonus", 0),
-                              first_test_label=scene.get("first_test_label", ""))
 
 
 def command(s: ExplorationUiSession, store: dict[str, Any], data: dict[str, Any]) -> dict[str, object]:

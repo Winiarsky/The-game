@@ -1,1 +1,1 @@
-Przeszukiwanie zostało rozpoczęte. Wznówcie tę samą konfrontację, zachowując ułożenie kart. Nie można teraz odebrać ładunku bez rozstrzygnięcia próby.
+Przeszukiwanie zostało rozpoczęte. Wznówcie tę samą konfrontację: aplikacja zachowuje postęp, wykonane działania i wykorzystane podejścia. Nie można teraz odebrać ładunku bez rozstrzygnięcia przeszukania.

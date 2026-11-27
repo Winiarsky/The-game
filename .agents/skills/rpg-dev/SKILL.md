@@ -15,7 +15,7 @@ An adventure inherits from the directories above it — a campaign's continuity,
 lore and rules — and how many layers there are varies by project. Before authoring, walk it:
 
 ```
-~/work/bin/python <skill>/scripts/context_stack.py <adventure-dir-or-.md>
+.venv/bin/python .agents/skills/rpg-dev/scripts/context_stack.py <adventure-dir-or-.md>
 ```
 
 It reports every ancestor's Markdown with line counts and resolves the named assets
@@ -79,7 +79,7 @@ Work top-down. Do not advance a layer until the user is satisfied with the curre
      and traits from them — `rolodex.py --from <adventure-dir> npc` — and write past what
      comes back. Picking "randomly" from a table you can read returns the attractor, which
      is the same failure the no-Elara rule is aimed at. If the project ships its own
-     generator (a `scripts/gen-names.py` documented in its `CLAUDE.md`), prefer that.
+     generator (a `scripts/gen-names.py` documented in its `AGENTS.md`), prefer that.
    Start with the 2–4 NPCs the premise can't exist without; add minor ones later.
    Portraits are a separate skill: [rpg-npc-cast](../rpg-npc-cast/SKILL.md) reads the
    Visual/Cast/Register fields above. Run it in a **fresh session** — don't cast here — so

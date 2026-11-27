@@ -1,5 +1,13 @@
 # Kontekst Projektu
 
+## Audyt Misji 0 — 27.11.2026
+
+Wskazówka Boruta działa w bieżącej konfrontacji: nowa kwatera ma ST 12
+zamiast 14. Gra i raport balansu używają wspólnego konstruktora `progress_v1`.
+Finał pokazuje skutki dzwonu przed wyborem; porażka ma zgodny z warunkami
+Boruta tekst. Usunięto stare instrukcje many. Rozpoczęte próby zachowują zapisane
+ST i silnik. [Wdrożenie i ograniczenia](docs/GAMEPLAY_AUDIT_2026-11-27.md).
+
 ## Spójny frontend gracza — 27.11.2026
 
 Launcher i rozgrywka korzystają ze wspólnej warstwy `player_ui.js/css`:

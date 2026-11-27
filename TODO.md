@@ -1,3 +1,27 @@
+## Audyt gry i skille — 27.11.2026
+
+Zakres, dowody, źródła i uruchomienie: [raport audytu](docs/GAMEPLAY_AUDIT_2026-11-27.md).
+
+- [x] Zweryfikować 94 pliki dziesięciu istniejących skillów z oryginalnymi
+  commitami, zachować licencje i dostosować ścieżki do środowiska projektu.
+- [x] Przywrócić rzeczywistą korzyść wskazówki Boruta: ST kwatery −2;
+  sprawdzić zatwierdzenie przez adapter, autozapis i wznowienie.
+- [x] Wyodrębnić wspólny konstruktor konfrontacji do warstwy aplikacji
+  i naprawić raport, który używał poprzedniego silnika talii.
+- [x] Odrzucać zmianę misji pod aktywną konfrontacją; usunąć możliwość
+  zakupu nieprzydatnej wskazówki po zakończeniu kwatery.
+- [x] Ujawnić ekonomiczne skutki dzwonu przed decyzją i dopasować finał
+  porażki do warunków Boruta. Zachować osobne zobowiązanie dotyczące długu.
+- [x] Usunąć instrukcje dawnej many i błędną obietnicę wyzerowania postawy.
+- [x] Sprawdzić ścieżki rozejmu, odmowy, pasera i porażki do ukończenia
+  oraz utrwalenie konsekwencji w zapisie. Zachować ST rozpoczętych prób.
+- [x] Wykonać 44 100 przebiegów balansu, 8820 par ze wskazówką i kontrolę
+  Chrome nowych scen; poprawić zastane testy odwołujące się do starego modelu.
+- [ ] Ograć dwie sceny przeszukania w drużynie 3- i 6-osobowej: czas,
+  rozumienie ryzyka i decyzja o bezpiecznym odbiorze.
+- [ ] Zmierzyć różnicę progów sukcesu 4/5 osób z udziałem graczy, zanim
+  zostanie wyznaczony docelowy poziom trudności i ewentualna korekta.
+
 ## Spójny frontend i skille — 27.11.2026
 
 Projekt i zakres: [UI_UX_REFACTOR.md](docs/UI_UX_REFACTOR.md).

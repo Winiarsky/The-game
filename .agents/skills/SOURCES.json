@@ -6,7 +6,9 @@
     "commit": "ef297c3b2e04c1000c9a1b9df88bc0296423abfb",
     "license_files": [],
     "license_note": "No repository-root license provided upstream; do not assume MIT.",
-    "adaptations": []
+    "adaptations": [],
+    "verified_on": "2026-11-27",
+    "verification": "Compared every installed source/reference/script/license file against the pinned upstream GitHub archive before local adaptation; all matched."
   },
   {
     "name": "game-balance-analysis",
@@ -15,7 +17,9 @@
     "commit": "ef297c3b2e04c1000c9a1b9df88bc0296423abfb",
     "license_files": [],
     "license_note": "No repository-root license provided upstream; do not assume MIT.",
-    "adaptations": []
+    "adaptations": [],
+    "verified_on": "2026-11-27",
+    "verification": "Compared every installed source/reference/script/license file against the pinned upstream GitHub archive before local adaptation; all matched."
   },
   {
     "name": "game-architect",
@@ -24,7 +28,9 @@
     "commit": "ef297c3b2e04c1000c9a1b9df88bc0296423abfb",
     "license_files": [],
     "license_note": "No repository-root license provided upstream; do not assume MIT.",
-    "adaptations": []
+    "adaptations": [],
+    "verified_on": "2026-11-27",
+    "verification": "Compared every installed source/reference/script/license file against the pinned upstream GitHub archive before local adaptation; all matched."
   },
   {
     "name": "design-quest-structure",
@@ -33,7 +39,11 @@
     "commit": "ca3c0f7f2854b59e9ffac6dc5674ca15f166aa57",
     "license_files": [],
     "license_note": "No repository-root license provided upstream; do not assume MIT.",
-    "adaptations": []
+    "adaptations": [
+      "Replace optional unavailable design-player-choice routing with installed audit-choice-quality for existing choices."
+    ],
+    "verified_on": "2026-11-27",
+    "verification": "Compared every installed source/reference/script/license file against the pinned upstream GitHub archive before local adaptation; all matched."
   },
   {
     "name": "audit-narrative-state",
@@ -42,7 +52,9 @@
     "commit": "ca3c0f7f2854b59e9ffac6dc5674ca15f166aa57",
     "license_files": [],
     "license_note": "No repository-root license provided upstream; do not assume MIT.",
-    "adaptations": []
+    "adaptations": [],
+    "verified_on": "2026-11-27",
+    "verification": "Compared every installed source/reference/script/license file against the pinned upstream GitHub archive before local adaptation; all matched."
   },
   {
     "name": "audit-choice-quality",
@@ -51,7 +63,9 @@
     "commit": "ca3c0f7f2854b59e9ffac6dc5674ca15f166aa57",
     "license_files": [],
     "license_note": "No repository-root license provided upstream; do not assume MIT.",
-    "adaptations": []
+    "adaptations": [],
+    "verified_on": "2026-11-27",
+    "verification": "Compared every installed source/reference/script/license file against the pinned upstream GitHub archive before local adaptation; all matched."
   },
   {
     "name": "rpg-dev",
@@ -62,7 +76,12 @@
       "LICENSE"
     ],
     "license_note": "",
-    "adaptations": []
+    "adaptations": [
+      "Replace ~/work/bin/python examples with repository-root .venv/bin/python and project skill paths.",
+      "Use AGENTS.md for repository-specific generator documentation instead of CLAUDE.md."
+    ],
+    "verified_on": "2026-11-27",
+    "verification": "Compared every installed source/reference/script/license file against the pinned upstream GitHub archive before local adaptation; all matched."
   },
   {
     "name": "rpg-critic",
@@ -73,7 +92,12 @@
       "LICENSE"
     ],
     "license_note": "",
-    "adaptations": []
+    "adaptations": [
+      "Replace ~/work/bin/python examples with repository-root .venv/bin/python and project skill paths.",
+      "Attribute generated critique templates to Codex rather than Claude."
+    ],
+    "verified_on": "2026-11-27",
+    "verification": "Compared every installed source/reference/script/license file against the pinned upstream GitHub archive before local adaptation; all matched."
   },
   {
     "name": "headless-game-balance",
@@ -84,7 +108,9 @@
       "LICENSE"
     ],
     "license_note": "",
-    "adaptations": []
+    "adaptations": [],
+    "verified_on": "2026-11-27",
+    "verification": "Compared every installed source/reference/script/license file against the pinned upstream GitHub archive before local adaptation; all matched."
   },
   {
     "name": "property-based-testing",
@@ -95,6 +121,8 @@
       "LICENSE"
     ],
     "license_note": "",
-    "adaptations": []
+    "adaptations": [],
+    "verified_on": "2026-11-27",
+    "verification": "Compared every installed source/reference/script/license file against the pinned upstream GitHub archive before local adaptation; all matched."
   }
 ]

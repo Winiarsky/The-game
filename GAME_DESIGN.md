@@ -1,5 +1,16 @@
 # Game Design
 
+## Konfrontacje i decyzje Misji 0 — audyt 27.11.2026
+
+Wskazówka Boruta obniża ST wszystkich podejść nowej kwatery z 14 do 12.
+Po rozstrzygnięciu pokoju nie można kupić tej wskazówki. Ekonomiczne skutki
+losu dzwonu są jawne przed decyzją: premia Gildii przy rozliczeniu, brak
+premii dla wsi albo opóźniona zapłata pasera. Po porażce dzwon pozostaje
+wieśniakom zgodnie z ustalonym warunkiem, a dostawa nadal może się powieść.
+Dług i wcześniejsze zmiany postawy pozostają osobnymi konsekwencjami.
+[Raport](docs/GAMEPLAY_AUDIT_2026-11-27.md) rozdziela poprawki od hipotez
+wymagających ogrania; progi sukcesu i parametry walki pozostają przyjęte.
+
 ## Spójny interfejs przy stole — 27.11.2026
 
 Menu, narracja i walka używają wspólnej palety i zasad nawigacji. Niebieska

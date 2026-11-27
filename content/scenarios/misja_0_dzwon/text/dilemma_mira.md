@@ -1,1 +1,1 @@
-Mira zna jeszcze jednego człowieka, który nie pyta o numer rubryki.
+Mira zna pośrednika, który nie pyta o numer rubryki. Może przekazać mu dzwon: obiecuje {bell_fence_gp} sz dla drużyny dopiero po znalezieniu kupca. Teraz nie dostaniecie pieniędzy i nie znacie terminu wypłaty. Wieśniacy stracą zabezpieczenie, a Gildia nie otrzyma dzwonu.

@@ -367,7 +367,10 @@ def test_guild_destinations_use_tile_fields_and_arena_is_informational(tmp_path)
     from dnd_board_game.hardware.board_panel import panel_position
     scan=m.scan_target(s)
     assert m.payload(s)['choices']==[]
-    assert set(scan.positions)=={nessa,arena,panel_position(26),panel_position(27)}
+    assert set(scan.positions)=={nessa,arena,panel_position(26),panel_position(27),panel_position(29)}
+    event=m.select_position(s,panel_position(29))
+    assert event['panel_event']['context'].startswith('session-open-menu:')
+    assert m.read(s)['stage']=='guild_hub'
     for slot in (6,7):
         with pytest.raises(ValueError):m.select_position(s,panel_position(slot))
     assert {nessa,arena} <= set(scan.positions)

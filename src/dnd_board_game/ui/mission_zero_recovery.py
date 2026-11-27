@@ -60,7 +60,7 @@ def choices(s: ExplorationUiSession, m: dict[str, Any]) -> list[dict[str, Any]] 
             add(5, 'debt_help')
             if has_hero(s, 'garran'): add(6, 'debt_garran')
             add(7, 'debt_decline')
-        if 'rumor_known' not in m['flags']: add(8, 'rumor')
+        if 'rumor_known' not in m['flags'] and 'quarters' not in m['cargo']: add(8, 'rumor')
         add(29, 'back')
     elif stage in ('debt_help', 'debt_garran', 'debt_decline'):
         add(28, 'back')
@@ -101,6 +101,7 @@ def negotiation_started(s: ExplorationUiSession) -> bool:
 
 
 def presentation(s: ExplorationUiSession, m: dict[str, Any], key: str | None) -> str | None:
+    if m['stage'] == 'dilemma' and m['outcome'] == 'defeated': return 'dilemma_defeated'
     if m['stage'] == 'return': return 'return_' + (m['bell'] or 'village')
     if m['stage'] == 'search_result': return m['search_result']
     if m['stage'] in ('armory', 'quarters') and m['stage'] in m['cargo']: return m['stage'] + '_done'

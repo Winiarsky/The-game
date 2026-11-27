@@ -96,30 +96,23 @@ def test_contract_gate_and_damage_penalty(tmp_path):
 
 
 def test_lorian_one_shot_bonus_and_hero_gates(tmp_path):
+    from dnd_board_game.rules import progress_confrontation as progress
     s=party(tmp_path);stage(s,'brief')
     send(s,'compliments');send(s,'compliment',option='wounded');send(s,'brief_back')
     with pytest.raises(ValueError):send(s,'compliments')
     send(s,'negotiate')
-    state=rules.Confrontation.from_data(c.read_store(s)['current']['state'])
+    state=progress.Confrontation.from_data(c.read_store(s)['current']['state'])
     assert state.first_test_bonus==2
-    state=rules.begin_preparation(state)
-    while state.stage=='approach':
-        available=rules.available_approaches(state)
-        chosen=next((p for p in available if '*' in p.supports),available[0])
-        state=rules.select_approach(state,chosen.approach_id)
-    state=rules.shuffle(state)
-    for color in ('C','B'):state=rules.report_color(state,color)
-    state=rules.take(state,0)
-    supported=rules.support(state,state.participants[1].id)
-    assert supported.first_test_bonus==2
-    declared=rules.declare(state,0)
-    assert declared.first_test_bonus==0 and declared.applied_first_test_bonus==2
-    ordinary=rules.declare(replace(state,first_test_bonus=0),0)
+    state=progress.begin(state)
+    option=progress.available_approaches(state)[0]
+    declared=progress.choose(state,option.id)
+    assert progress.cancel(declared).first_test_bonus==2
+    ordinary=progress.choose(replace(state,first_test_bonus=0),option.id)
     assert declared.check_modifier==ordinary.check_modifier+2
-    # Real roll tracking includes only check dice, not a 1 on the impact die.
-    hit=rules.roll_check(declared,19)
-    assert not rules.roll_impact(hit,1).natural_one_seen
-    assert rules.roll_check(declared,1).natural_one_seen
+    hit,_=progress.confirm(progress.roll(declared,19),0)
+    assert hit.first_test_bonus==0 and not hit.natural_one_seen
+    failed,_=progress.confirm(progress.roll(declared,1),0)
+    assert failed.natural_one_seen
     other=session(tmp_path/'other');stage(other,'brief')
     with pytest.raises(ValueError):send(other,'compliments')
     collect_all(other);send(other,'leader');send(other,'back');send(other,'dilemma')
@@ -128,11 +121,12 @@ def test_lorian_one_shot_bonus_and_hero_gates(tmp_path):
 
 def test_rumor_cost_and_dc_are_applied_once(tmp_path):
     s=session(tmp_path);stage(s,'explore',outcome='refused')
-    base=m.scene(s,'quarters')['approaches'][0]['dc']
+    base=m.scene(s,'quarters')['progress_dc']
     send(s,'leader');before=s.exploration.actors[0].currency.total_cp
     send(s,'rumor');send(s,'back');send(s,'leader')
     assert s.exploration.actors[0].currency.total_cp==before-100
-    assert m.scene(s,'quarters')['approaches'][0]['dc']==base-2
+    from dnd_board_game.application.progress_confrontation import build as build_progress
+    assert build_progress(s.exploration.actors,m.scene(s,'quarters')).participants[0].options[0].dc==base-2
     with pytest.raises(ValueError):send(s,'rumor')
 
 
@@ -167,10 +161,13 @@ def test_ring_changes_score_not_modifier_and_preserves_base(tmp_path):
         assert actor.ability_scores.strength==score
         assert effective_ability_modifier(actor,'strength')==modifier
         assert ability_roll_modifier(actor,'strength').value==modifier
-        assert saving_throw_modifier(actor,'strength')==modifier
+        assert saving_throw_modifier(actor,'strength')-saving_throw_modifier(base,'strength')==modifier-effective_ability_modifier(base,'strength')
         attack=attack_source_for_actor(unarmed_strike_source(actor),actor)
         assert attack.damage_modifier==modifier
-        assert sum(x.value for x in attack.attack_roll_request.modifiers)==modifier
+        base_attack=attack_source_for_actor(unarmed_strike_source(base),base)
+        assert (sum(x.value for x in attack.attack_roll_request.modifiers)
+                -sum(x.value for x in base_attack.attack_roll_request.modifiers)
+                ==modifier-effective_ability_modifier(base,'strength'))
         profile=m.scene(s,'cart')
         chosen=rules.select_approach(rules.begin_preparation(build((actor,),profile)),'lift')
         assert chosen.actor.impact_modifier==chosen.actor.test_modifier==modifier

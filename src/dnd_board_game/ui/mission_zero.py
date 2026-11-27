@@ -149,9 +149,12 @@ def narrative(s: ExplorationUiSession, key: str, **values: object) -> dict[str, 
         layout = road_placement(root(s))
         values['cart_fields'] = ', '.join(f'({col},{row})' for col,row in layout['positions'])
         values['party_field'] = '(' + ','.join(map(str, layout['party_position'])) + ')'
+    if key == 'dilemma':
+        rewards = read_json(root(s), 'mechanics/rewards.json')
+        values.update(bell_guild_gp=rewards['bell_guild_gp'], bell_fence_gp=rewards['bell_fence_gp'])
     for hero in ('mira', 'nimra'):
         fragment = key + '_' + hero
-        values[hero + '_option'] = (text_entry(root(s), fragment)['body']
+        values[hero + '_option'] = (text_entry(root(s), fragment, **values)['body']
             if fragment in entries and recovery.has_hero(s, hero) else '')
     return text_entry(root(s), key, **values)
 
@@ -163,6 +166,7 @@ def scene(s: ExplorationUiSession, name: str) -> dict[str, Any]:
     m = read(s)
     if name == 'quarters' and 'rumor_known' in m['flags']:
         for approach in data['approaches']: approach['dc'] -= 2
+        data['progress_dc_adjustment'] = -2
     if name == 'nessa':
         compliments = read_json(root(s), 'mechanics/compliments.json')
         if m['compliment'] == compliments['success']:
@@ -424,6 +428,9 @@ def command(s: ExplorationUiSession, data: dict[str, Any]) -> dict[str, object]:
         key=str(data.get('id',''))
         if key not in m['visited']:raise ValueError('Nieznany punkt kontrolny.')
         return s._load_snapshot_from_path(s.save_dir/(MISSION_ID+'.'+key+'.checkpoint.json'))
+    from .confrontation import active as confrontation_active
+    if confrontation_active(s):
+        raise ValueError('Najpierw zakończ lub opuść konfrontację.')
     allowed={c['action'] for c in payload(s)['choices']}
     if stage=='guild_hub':allowed.update(guild_points(s))
     if stage=='explore':allowed.update(('leader','armory','quarters','store'))

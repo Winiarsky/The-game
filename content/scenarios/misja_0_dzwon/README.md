@@ -333,15 +333,18 @@ Ponowny eksport, z głównego katalogu repozytorium:
 
 ```sh
 PYTHONPATH=src .venv/bin/python scripts/build_handouts.py --only maps
-python scripts/evaluate_mission_zero.py --trials 10
+.venv/bin/python scripts/evaluate_mission_zero.py --trials 30
 scripts/safe_pytest.sh --timeout 60 tests/unit/test_mission_zero.py
 scripts/safe_pytest.sh --timeout 60 tests/unit/test_mission_zero_browser.py
 ```
 
 Testy uruchamiaj pojedynczo. Przeglądarka i eksport PDF wymagają lokalnego Chrome.
-[Raport](BALANCE_REPORT.md) obejmuje wszystkie 98 składów 3–6 bohaterów, po trzy ziarna na skład:
-nowe przeszukania trwają w tej próbie średnio 2,5–3,0 rund. Dla większych
-drużyn są wyraźnie łatwiejsze; wynik nie uwzględnia wskazówki ani komplementu. To wartości startowe do ogrania, nie zamknięty balans.
+[Raport](BALANCE_REPORT.md) używa bieżącego silnika `progress_v1`: 98 składów
+3–6 bohaterów, po 30 ziaren, trzy strategie i porównanie kwatery ze wskazówką
+oraz bez niej. Łącznie 44 100 przebiegów i 8820 sparowanych porównań.
+Konfrontacja ma jedną kolejkę prób; raport podaje poziomy wyniku, liczbę testów
+i koszt reputacji. Zastępuje dawne wyliczenia rund i kart, które opisywały
+poprzedni silnik. Bonus komplementu Nessy nie jest uwzględniony.
 Symulacja nie ocenia taktyki walki. Przy stole sprawdź szczególnie cztery rundy
 zmęczenia, moment poddania i czy każdy gracz ma sensowny wybór.
 

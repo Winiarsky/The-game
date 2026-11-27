@@ -18,7 +18,7 @@ differs per user. Never hardcode a depth or a level's name — walk.
 ## The walk
 
 ```
-~/work/bin/python scripts/context_stack.py <adventure-file-or-dir>
+.venv/bin/python .agents/skills/rpg-dev/scripts/context_stack.py <adventure-file-or-dir>
 ```
 
 From the adventure directory, out to the first ancestor holding a `.git` (else `$HOME`),
@@ -78,9 +78,9 @@ but only if the sampling happens **outside** the model — asked to "pick random
 table it can see, it drifts to whatever matches the prose it just wrote.
 
 ```
-~/work/bin/python scripts/rolodex.py --from <adventure-dir> npc
-~/work/bin/python scripts/rolodex.py --from <adventure-dir> location casino
-~/work/bin/python scripts/rolodex.py --from <adventure-dir> list    # every list name
+.venv/bin/python .agents/skills/rpg-dev/scripts/rolodex.py --from <adventure-dir> npc
+.venv/bin/python .agents/skills/rpg-dev/scripts/rolodex.py --from <adventure-dir> location casino
+.venv/bin/python .agents/skills/rpg-dev/scripts/rolodex.py --from <adventure-dir> list    # every list name
 ```
 
 Each slot comes back with three candidates and sometimes a WILDCARD. Take the one that
@@ -89,4 +89,4 @@ detail, the scale, whose it is, why it's there. A drawn entry is an angle of att
 a line to reproduce. Drop any slot where nothing earns a place.
 
 If the project ships its own generator (a `scripts/gen-names.py` or similar, usually
-documented in its `CLAUDE.md`), prefer it over inventing unaided, the same way.
+documented in its `AGENTS.md`), prefer it over inventing unaided, the same way.
