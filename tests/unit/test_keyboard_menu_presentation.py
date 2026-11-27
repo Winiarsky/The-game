@@ -121,10 +121,11 @@ def test_keyboard_nessa_menu_is_textual_focused_and_operated_by_arrows(tmp_path:
         throw Error('timeout '+message);
       };
       const key=value=>{
+        const code=/^[0-9]$/.test(value)?'Numpad'+value:value==='Enter'?'NumpadEnter':value;
         (document.activeElement||document.body).dispatchEvent(new KeyboardEvent('keydown',{
-          key:value,code:value,bubbles:true,cancelable:true,
+          key:value,code,location:code.startsWith('Numpad')?3:0,bubbles:true,cancelable:true,
         }));
-        document.dispatchEvent(new KeyboardEvent('keyup',{key:value,code:value,bubbles:true}));
+        document.dispatchEvent(new KeyboardEvent('keyup',{key:value,code,bubbles:true}));
       };
       const options=()=>[...document.querySelectorAll('.keyboard-mission-menu .keyboard-mission-option')];
       const focused=()=>document.querySelector('.keyboard-mission-option.keyboard-choice-focused[aria-current="true"]');
@@ -138,15 +139,15 @@ def test_keyboard_nessa_menu_is_textual_focused_and_operated_by_arrows(tmp_path:
         check(entries.every(element=>!element.querySelector('svg')),'physical rune icons remain in choices');
         check(!document.querySelector('#mission-panel .mission-scroll-controls'),'old panel scroll controls remain');
         const reading=document.querySelector('#mission-panel .keyboard-reading-hint');
-        check(reading&&reading.textContent.includes('PageUp'),'missing keyboard reading guidance');
+        check(reading&&reading.textContent.includes('− / +'),'missing numpad reading guidance');
         check(entries[0].getBoundingClientRect().top<entries[1].getBoundingClientRect().top,
           'choices are not a vertical menu');
         const revision=state.mission.revision;
-        key('ArrowDown');await pause();
+        key('2');await pause();
         check(focused()===options()[1],'ArrowDown did not choose next option');
-        key('ArrowUp');await pause();
+        key('8');await pause();
         check(focused()===options()[0],'ArrowUp did not choose previous option');
-        key('ArrowDown');await pause();
+        key('2');await pause();
         check(state.mission.stage==='brief'&&state.mission.revision===revision,'arrows performed an action');
         const selectedKey=focused().dataset.keyboardChoice;
         render();await idle();

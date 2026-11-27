@@ -1,12 +1,12 @@
 # Plansza LED — klawiatura i plan rozbudowy o pada
 
 Status: **zakres klawiaturowy zaakceptowany i wdrożony; pad odłożony**.
-Aktualizacja: 05.11.2026.
+Aktualizacja: 15.11.2026.
 Branch: `feat/led-keyboard-control`.
 
-## Aktualne wdrożenie: klawiatura + LED
+## Aktualne wdrożenie: numpad + LED
 
-Zgodnie z najnowszą decyzją implementacja obejmuje najpierw klawiaturę.
+Zgodnie z najnowszą decyzją profil `keyboard` obsługujemy numpadem.
 Gotowy start: `.venv/bin/python scripts/keyboard_playtest.py`;
 szybka walka: `--arena --skip-setup`; prawdziwe światła: `--wled-url ADRES`.
 [Instrukcja i przypisania](playtests/KEYBOARD_LED_MANUAL.md).
@@ -14,13 +14,16 @@ szybka walka: `--arena --skip-setup`; prawdziwe światła: `--wled-url ADRES`.
 Zrealizowano WLED bez seriala, osobny profil wejścia, przejściowy kursor,
 podgląd na prywatnej kopii silnika, zabezpieczenie rewizji i modalów,
 klawiaturę w launcherze, setupie, Misji 0, rozmowach, ekwipunku i walce v0.3.
-Strzałki nie mutują wyboru celów. Enter korzysta z istniejącego zatwierdzenia;
-Spacja wybiera cele do zestawu. Zasady i format zapisu domenowego są zachowane.
+8/6/2/4 wskazuje górę/prawo/dół/lewo bez mutowania wyboru celów. Enter
+korzysta z istniejącego zatwierdzenia, Backspace cofa, kropka wybiera cele
+do zestawu, a 5 otwiera runy lub opcje bieżącego kroku i wraca do kursora.
+Pełne przypisania: [instrukcja numpada](playtests/KEYBOARD_LED_MANUAL.md).
+Zasady i format zapisu domenowego są zachowane.
 Sprawdzono atrapy hardware i rzeczywiste zdarzenia klawiatury w Chrome.
 Próba fizycznej planszy pozostaje osobnym punktem odbioru.
 
 Poniższy projekt pada i jego Gamepad API opisują dalszą rozbudowę, której
-obecne wdrożenie nie zawiera. Klawiatura jest teraz głównym wejściem.
+obecne wdrożenie nie zawiera. Numpad jest teraz głównym wejściem.
 
 ## Docelowa rozbudowa: pad
 

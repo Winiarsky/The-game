@@ -1,22 +1,15 @@
-.keyboard-control-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: .4rem 1rem;
-  padding: .45rem 1rem;
-  color: #e9e3d4;
-  background: #242b32;
-  border-bottom: 1px solid #617186;
-  font-size: .8rem;
-}
-.keyboard-control-bar[hidden] { display: none; }
+.keyboard-controls-card[hidden] { display: none; }
+.keyboard-controls-card h3 { margin: 0 0 12px; }
+.keyboard-numpad-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.keyboard-numpad-grid > span { display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 9px 3px; background: #242b32; border: 1px solid #47515c; border-radius: 5px; font-size: .78rem; }
+.keyboard-key-list { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 9px 12px; margin: 16px 0; font-size: .82rem; }
+.keyboard-key-list dt, .keyboard-key-list dd { margin: 0; }
+.keyboard-current-status { padding-top: 10px; border-top: 1px solid #47515c; font-size: .8rem; color: #c7d5e4; }
 .keyboard-control-mode .board-connection-indicator.led-error .connection-dot { background: #e59474; box-shadow: 0 0 8px #e5947466; }
 .keyboard-control-mode .board-connection-indicator.led-pending .connection-dot { background: #d6bd86; }
-.keyboard-control-mode .rc-combat { height: calc(100dvh - 100px - var(--keyboard-control-height, 0px)); min-height: 390px; }
-.keyboard-control-mode .tt-combat { height: calc(100dvh - 104px - var(--keyboard-control-height, 0px)); }
-.keyboard-control-keys { color: #c7d5e4; }
-.keyboard-control-bar [data-keyboard-status] { flex: 1 1 18rem; }
-.keyboard-control-bar kbd {
+.keyboard-control-mode .rc-combat { height: calc(100dvh - 100px); min-height: 390px; }
+.keyboard-control-mode .tt-combat { height: calc(100dvh - 104px); }
+.keyboard-controls-card kbd {
   display: inline-block;
   min-width: 1.2em;
   padding: .05rem .22rem;
@@ -98,12 +91,6 @@ body.keyboard-setup-active {
   flex: 0 0 52px;
   min-height: 52px;
   padding: 5px 18px;
-}
-.keyboard-setup-active > #keyboard-control-bar {
-  flex: 0 0 auto;
-  padding: .35rem .8rem;
-  gap: .25rem .7rem;
-  font-size: .72rem;
 }
 .keyboard-setup-active > main { flex: 1 1 auto; min-height: 0; overflow: hidden; }
 .keyboard-setup-active main > section { height: 100%; padding: 8px 14px; overflow: hidden; }

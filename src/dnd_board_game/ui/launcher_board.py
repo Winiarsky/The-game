@@ -115,7 +115,7 @@ def selection(s: ExplorationUiSession) -> dict[str, object]:
                 legal_positions=positions, legal_position_count=len(positions), connected=connected,
                 auto_arm=can_scan and bool(positions), allow_retry=can_scan,
                 confirmation_policy='immediate', prompt=(
-                    'Klawiatura: strzałki wybierają, Enter otwiera, Esc wraca.'
+                    'Numpad: 8/2 wybiera, Enter otwiera, Backspace wraca.'
                     if keyboard else target(s).empty_message))
 
 

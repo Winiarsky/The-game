@@ -49,9 +49,10 @@ def test_keyboard_mission_intro_map_confrontation_equipment_and_departure(tmp_pa
         throw Error('timeout '+message+' · '+state?.mission?.stage+' · '+state?.exploration_mana?.phase);
       };
       const key=(value,repeat=false)=>{
-        const code=value.length===1?'Key'+value.toUpperCase():value;
+        const code=/^[0-9]$/.test(value)?'Numpad'+value:
+          ({Enter:'NumpadEnter','+':'NumpadAdd','-':'NumpadSubtract'}[value]||value);
         (document.activeElement||document.body).dispatchEvent(new KeyboardEvent('keydown',{
-          key:value,code,repeat,bubbles:true,cancelable:true,
+          key:value,code,location:code.startsWith('Numpad')?3:0,repeat,bubbles:true,cancelable:true,
         }));
         document.dispatchEvent(new KeyboardEvent('keyup',{key:value,code,bubbles:true}));
       };
@@ -61,8 +62,8 @@ def test_keyboard_mission_intro_map_confrontation_equipment_and_departure(tmp_pa
         await idle();
         const target=document.querySelector(selector);
         check(target&&!target.disabled,'missing enabled choice '+selector);
-        for(let i=0;i<45;i++)key('ArrowUp');
-        for(let i=0;i<45&&document.activeElement!==target;i++)key('ArrowDown');
+        for(let i=0;i<45;i++)key('8');
+        for(let i=0;i<45&&document.activeElement!==target;i++)key('2');
         check(document.activeElement===target,'keyboard cannot focus '+selector);
         key('Enter');
         await idle();
@@ -92,9 +93,9 @@ def test_keyboard_mission_intro_map_confrontation_equipment_and_departure(tmp_pa
         check(state.mission.stage==='guild_hub','keyboard did not finish guild setup');
         check(state.input.kind==='map','guild destinations missing cursor');
         const field=[...state.input.cursor],stage=state.mission.stage;
-        key('ArrowRight');await idle();
+        key('6');await idle();
         check(state.mission.stage===stage,'cursor entered a destination without confirmation');
-        key('ArrowLeft');await idle();
+        key('4');await idle();
         check(JSON.stringify(state.input.cursor)===JSON.stringify(field),'cursor did not return to destination');
         key('Enter');await wait(()=>state.mission.stage==='brief'&&!busy,'Nessa destination');
         await missionChoice('negotiate');
@@ -105,7 +106,7 @@ def test_keyboard_mission_intro_map_confrontation_equipment_and_departure(tmp_pa
         await wait(()=>keyboardRollWizard&&!keyboardRollWizard.review&&!busy,'physical dice wizard');
         const input=document.getElementById('keyboard-roll-wizard-input');
         const before=Number(input.value);
-        key('ArrowUp');await idle();
+        key('+');await idle();
         check(Number(document.getElementById('keyboard-roll-wizard-input').value)===before+1,
           'keyboard did not adjust physical die');
         key('Enter');await wait(()=>keyboardRollWizard?.review&&!busy,'die review');
@@ -139,7 +140,7 @@ def test_keyboard_mission_intro_map_confrontation_equipment_and_departure(tmp_pa
           await missionChoice('equipment_next');
           check(state.mission.equipment.item?.id!==item,'equipment browse did not change preview');
         }
-        key('Escape');await wait(()=>state.mission.stage==='equipment'&&!busy,'cancel equipment');
+        key('Backspace');await wait(()=>state.mission.stage==='equipment'&&!busy,'cancel equipment');
         check(document.querySelector('[data-equipment-slot="main_hand"]').textContent===mainHand,
           'cancel changed equipped weapon');
         for(let i=0;i<3;i++)await missionChoice('equipment_accept');

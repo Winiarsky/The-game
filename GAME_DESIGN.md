@@ -1,5 +1,17 @@
 # Game Design
 
+## Sterowanie numpadem — 15.11.2026
+
+Główne wejście klawiaturowe korzysta z układu numpada: 8/6/2/4 wybiera
+górę/prawo/dół/lewo, 7 ruch, 9 atak, 5 runy i akcje, 1 postać, 3 ekwipunek,
+0 koniec tury. Enter zatwierdza jeden krok, Backspace cofa, a kropka
+zaznacza cel w zestawie. `*` otwiera dziennik, `/` menu sesji, `=` pomoc.
+`+`/`−` reguluje wynik kości lub wybór przedmiotu, a przy czytaniu przewija
+tekst. Podgląd nadal nie wydaje zasobów; fizyczne kości, figurki i zasady
+walki pozostają częścią dotychczasowego przepływu.
+Pełna ściąga sterowania jest w ekranowej karcie postaci otwieranej przez `1`.
+Usunięcie stałego górnego paska skrótów daje więcej miejsca na rozgrywkę.
+
 ## Czytelność decyzji przy planszy — 02.10.2026
 
 Przed inicjatywą można poprawić poprzednio rozłożony element lub ustawienie

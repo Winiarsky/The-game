@@ -72,7 +72,7 @@ function renderMission() {
   const options=p.choices.map(c=>missionChoiceButton(c)).join('');
   const rolling=p.rolling?`<form id="mission-roll" onsubmit="missionRoll(event)">${Array.from({length:p.roll_count||1},(_,i)=>`<label>${esc(p.stage==='potion_roll'?p.ui.potion_roll:p.stage==='identify_roll'?p.ui.identify_die:p.ui.fatigue_die)}<input id="mission-roll-${i}" type="number" min="1" max="${p.roll_sides||4}" required data-roll-dice="1k${p.roll_sides||4}" data-roll-source="${esc(p.text.title)}"></label>`).join('')}<button type="submit">${esc(p.ui.submit)}</button></form>`:'';
   const scrollControls=p.reading ? keyboard
-    ? '<p class="keyboard-reading-hint">PageUp / PageDown — przewijaj opis. Strzałki — wybierz opcję, Enter — zatwierdź.</p>'
+    ? '<p class="keyboard-reading-hint">− / + — przewijaj opis. 8 / 2 — wybierz opcję, Enter — zatwierdź.</p>'
     : `<div class="mission-scroll-controls"><button type="button" onclick="scrollMissionText(-1)" aria-label="${esc(p.ui.scroll_up)}">−</button><button type="button" onclick="scrollMissionText(1)" aria-label="${esc(p.ui.scroll_down)}">+</button><small>${esc(p.ui.scroll_hint)}</small></div>` : '';
   const cargo=['explore','search_result','guild_return','summary'].includes(p.stage)?`<div class="mission-cargo"><b>${esc(p.ui.contract_status)}</b><ul>${p.recovery.cargo.map(c=>`<li>${esc(c.name)} — ${esc(c.status)}</li>`).join('')}</ul></div>`:'';
   const pending=p.recovery.open_threads.map(t=>`<p class="mission-journal">${esc(t)}</p>`).join('');
@@ -120,11 +120,11 @@ function renderPartyEquipment(p, panel) {
   const keyboard=state.input?.mode==='keyboard';
   const keyboardCopy={
     pack_hint:'Ponumerowane miejsca w plecaku',
-    available_hint:'Wróć do postaci i wybierz miejsce strzałkami. Enter otworzy wybór wyposażenia.',
+    available_hint:'Wróć do postaci i wybierz miejsce klawiszami 8 / 2. Enter otworzy wybór wyposażenia.',
     picker_hint:'Zmiana nastąpi po zatwierdzeniu. Poprzedni przedmiot wróci do wspólnego zapasu.',
     starter_hint:'Wyposażenie jest gotowe. Wybierz miejsce, aby coś zmienić, albo zatwierdź przygotowanie postaci.',
-    sheet_hint:'Strzałki wybierają miejsce, Enter otwiera jego zawartość. Gotowe kończy przygotowanie postaci.',
-    picker_controls:'+/− przegląda pasujące przedmioty. Enter wybiera zaznaczoną opcję, Esc anuluje zmianę.',
+    sheet_hint:'8 / 2 wybiera miejsce, Enter otwiera jego zawartość. Gotowe kończy przygotowanie postaci.',
+    picker_controls:'+/− przegląda pasujące przedmioty. Enter wybiera zaznaczoną opcję, Backspace anuluje zmianę.',
     sale_hint:'Sprzedaż zabierze cały stos. Potwierdź sprzedaż albo wybierz Zachowaj przedmiot.',
   };
   const t=(key,params={})=>keyboard&&Object.hasOwn(keyboardCopy,key) ? keyboardCopy[key] : sessionUiText(`equipment.${key}`,params);

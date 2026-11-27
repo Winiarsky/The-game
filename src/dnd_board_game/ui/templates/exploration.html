@@ -36,11 +36,6 @@
     </button>
   </div>
 </header>
-<section id="keyboard-control-bar" class="keyboard-control-bar" aria-label="Sterowanie klawiaturą" hidden>
-  <span class="keyboard-control-keys"><kbd>↑↓←→</kbd> wybór · <kbd>Enter</kbd> zatwierdź · <kbd>Esc</kbd> wróć <span data-keyboard-multiple hidden>· <kbd>Spacja</kbd> zaznacz/dodaj cel</span> · <kbd>M</kbd> ruch · <kbd>A</kbd> atak · <kbd>I</kbd> ekwipunek · <kbd>R</kbd> runy · <kbd>H</kbd> pomoc</span>
-  <span data-keyboard-status role="status" aria-live="polite"></span>
-  <small data-keyboard-sync hidden>Aktualizuję podgląd…</small>
-</section>
 <div id="board-disconnected-banner" class="board-disconnected-banner" role="status" hidden>
   <div><b>{{ ui_text('common.disconnected') }}</b><span id="board-disconnected-copy">{{ ui_text('common.disconnected_hint') }}</span></div>
   <div class="row">
@@ -111,6 +106,28 @@
       <section class="panel-section">
         <span class="panel-section-label">Karta postaci</span>
         <div id="party-details" class="party-details"></div>
+      </section>
+      <section id="keyboard-controls-card" class="panel-section keyboard-controls-card" aria-labelledby="keyboard-controls-title" hidden>
+        <h3 id="keyboard-controls-title">Sterowanie numpadem</h3>
+        <div class="keyboard-numpad-grid" aria-label="Układ numpada">
+          <span><kbd>7</kbd> Ruch</span><span><kbd>8</kbd> Góra ↑</span><span><kbd>9</kbd> Atak</span>
+          <span><kbd>4</kbd> Lewo ←</span><span><kbd>5</kbd> Akcje</span><span><kbd>6</kbd> Prawo →</span>
+          <span><kbd>1</kbd> Postać</span><span><kbd>2</kbd> Dół ↓</span><span><kbd>3</kbd> Ekwipunek</span>
+        </div>
+        <dl class="keyboard-key-list">
+          <dt><kbd>Enter</kbd></dt><dd>Zatwierdź wybór lub podgląd.</dd>
+          <dt><kbd>Backspace</kbd></dt><dd>Cofnij krok lub zamknij panel.</dd>
+          <dt><kbd>0</kbd></dt><dd>Potwierdzenie końca tury.</dd>
+          <dt><kbd>+</kbd> / <kbd>−</kbd></dt><dd>Wynik kości, wybór przedmiotu lub przewijanie opisu.</dd>
+          <dt><kbd>.</kbd> / <kbd>,</kbd></dt><dd>Dodaj cel do zestawu.</dd>
+          <dt><kbd>*</kbd></dt><dd>Dziennik.</dd>
+          <dt><kbd>/</kbd></dt><dd>Menu sesji.</dd>
+          <dt><kbd>=</kbd></dt><dd>Pomoc.</dd>
+        </dl>
+        <p class="muted">5 wybiera runy, akcje lub opcje bieżącego kroku. Ponowne 5 wraca do kursora mapy. Podgląd nie wydaje zasobów.</p>
+        <p data-keyboard-multiple hidden>Kropką dodawaj cele; Enter zatwierdza gotowy zestaw.</p>
+        <p class="keyboard-current-status" data-keyboard-status role="status" aria-live="polite"></p>
+        <small data-keyboard-sync hidden>Aktualizuję podgląd…</small>
       </section>
     </div>
 

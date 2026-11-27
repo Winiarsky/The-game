@@ -2,6 +2,18 @@
 
 The rebuild should separate deterministic game logic from adapters.
 
+## Numpad input (2026-11-15)
+
+The existing `keyboard` profile now exposes numpad controls. Browser adapters
+normalize physical `Numpad*` codes before interpreting the key value, so Num Lock
+does not change navigation or shortcuts. The server command contract, board
+orientation, preview isolation and rule resolution remain unchanged. Numpad
+Enter/Backspace, decimal selection, menu access and contextual `+`/`−` handling
+reuse the existing input and modal ownership paths. Legacy keyboard aliases
+remain available. The control reference and current selection status are rendered
+inside the party side panel opened with `1`, replacing the persistent top bar.
+Usage: `docs/playtests/KEYBOARD_LED_MANUAL.md`.
+
 ## Keyboard and output-only WLED (2026-11-05)
 
 `ui/input_commands.py` holds transient cursor state and pure coordinate helpers;

@@ -49,10 +49,12 @@ def test_keyboard_inventory_readable_rows_and_accessible_actions(
         throw Error('timeout '+message);
       };
       const key=value=>{
+        const code=/^\d$/.test(value)?'Numpad'+value
+          :({Enter:'NumpadEnter','+':'NumpadAdd','-':'NumpadSubtract'})[value]||value;
         (document.activeElement||document.body).dispatchEvent(new KeyboardEvent('keydown',{
-          key:value,code:value,bubbles:true,cancelable:true,
+          key:value,code,bubbles:true,cancelable:true,
         }));
-        document.dispatchEvent(new KeyboardEvent('keyup',{key:value,code:value,bubbles:true}));
+        document.dispatchEvent(new KeyboardEvent('keyup',{key:value,code,bubbles:true}));
       };
       const idle=()=>wait(()=>!busy&&!boardPanelSyncPromise
         &&document.querySelector('[data-keyboard-sync]')?.hidden,'input idle');
@@ -60,8 +62,8 @@ def test_keyboard_inventory_readable_rows_and_accessible_actions(
         await idle();
         const target=document.querySelector(selector);
         check(target&&!target.disabled,'missing enabled choice '+selector);
-        for(let i=0;i<40;i++)key('ArrowUp');
-        for(let i=0;i<40&&document.activeElement!==target;i++)key('ArrowDown');
+        for(let i=0;i<40;i++)key('8');
+        for(let i=0;i<40&&document.activeElement!==target;i++)key('2');
         check(document.activeElement===target,'cannot focus '+selector);
         const rect=target.getBoundingClientRect();
         check(rect.top>=0&&rect.bottom<=innerHeight+1,'focused choice clipped '+selector);
@@ -115,16 +117,16 @@ def test_keyboard_inventory_readable_rows_and_accessible_actions(
           key('-');await idle();
           check(state.mission.equipment.item?.id===item,'reverse browse failed');
         }
-        key('Escape');await idle();
+        key('Backspace');await idle();
         await wait(()=>state.mission.stage==='equipment','cancel picker');bounds();
         check(document.querySelector('[data-equipment-slot="main_hand"]').textContent===weapon,
           'cancel modified equipment');
         await choose('[data-equipment-slot="pack_8"]');
         check(state.mission.equipment.picker.slot==='pack_8','last pack row inaccessible');
-        key('Escape');await idle();
+        key('Backspace');await idle();
         await choose(choice('equipment_stash'));
         check(state.mission.stage==='equipment_stash','stash inaccessible');bounds();
-        key('Escape');await idle();
+        key('Backspace');await idle();
         await choose(choice('equipment_accept'));
         check(state.mission.equipment.hero_id==='brakka','ready did not advance hero');bounds();
         check(!state.board_selection.auto_arm&&!boardScanInFlight,'inventory armed scanner');

@@ -64,11 +64,11 @@
       selection = data.board_selection;
       keyboardMode = selection.control_mode === 'keyboard' || data.input?.mode === 'keyboard';
       if (!selection.connected && !keyboardMode) throw new Error(sessionUiText('navigation.disconnected'));
-      report(keyboardMode ? 'Klawiatura: strzałki wybierają · Enter otwiera · Esc wraca.'
+      report(keyboardMode ? 'Klawiatura numeryczna: 8/2/4/6 wybór · Enter otwiera · Backspace wraca.'
         : sessionUiText(directRunes ? 'navigation.menu_board_hint' : 'navigation.board_hint') + (contract.back ? ' · ' + sessionUiText('navigation.back_hint') : ''));
       if (keyboardMode) {
         document.querySelectorAll('.menu-board-hint').forEach(element => {
-          element.textContent = 'Strzałki wybierają · Enter otwiera · Esc wraca';
+          element.textContent = '8/2/4/6 wybór · Enter otwiera · Backspace wraca';
         });
       }
     } catch (error) {
@@ -137,20 +137,30 @@
         || event.ctrlKey || event.altKey || event.metaKey) return;
     const editable = event.target instanceof Element && event.target.closest('textarea,select,[contenteditable="true"],input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"])');
     if (editable) return;
-    if (!['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Enter','Escape'].includes(event.key)) return;
+    // Physical numpad codes are stable when Num Lock changes the reported key.
+    const physical = {Numpad8:'ArrowUp', Numpad2:'ArrowDown', Numpad4:'ArrowLeft',
+      Numpad6:'ArrowRight', NumpadEnter:'Enter', NumpadAdd:'+', NumpadSubtract:'-'};
+    const aliases = {'8':'ArrowUp', '2':'ArrowDown', '4':'ArrowLeft', '6':'ArrowRight',
+      Backspace:'Escape'};
+    const key = physical[event.code] || aliases[event.key] || event.key;
+    if (!['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Enter','Escape','+','-','PageUp','PageDown'].includes(key)) return;
     event.preventDefault();
     event.stopImmediatePropagation();
-    if (event.repeat && ['Enter','Escape'].includes(event.key)) return;
-    if (event.key === 'Escape') {back()?.click(); return;}
+    if (event.repeat && ['Enter','Escape'].includes(key)) return;
+    if (key === 'Escape') {back()?.click(); return;}
+    if (['+','-','PageUp','PageDown'].includes(key)) {
+      window.scrollBy({top:(['-','PageUp'].includes(key) ? -1 : 1) * innerHeight * .7});
+      return;
+    }
     const entries = choices();
     if (!entries.length) return;
     let index = entries.findIndex(element => Number(element.dataset.boardRune) === focused);
-    if (event.key === 'Enter') {
+    if (key === 'Enter') {
       if (syncing) return;
       (entries[index < 0 ? 0 : index]).click();
       return;
     }
-    const delta = ['ArrowDown','ArrowRight'].includes(event.key) ? 1 : -1;
+    const delta = ['ArrowDown','ArrowRight'].includes(key) ? 1 : -1;
     index = Math.max(0, Math.min(entries.length - 1, (index < 0 ? 0 : index) + delta));
     const element = entries[index];
     focused = Number(element.dataset.boardRune);

@@ -1,5 +1,19 @@
 # Kontekst Projektu
 
+## Numpad + LED — 15.11.2026
+
+Bieżący profil `keyboard` obsługujemy klawiaturą numeryczną: 8/6/2/4 to
+góra/prawo/dół/lewo, 7 ruch, 9 atak, 5 runy i akcje, 1 postać, 3 ekwipunek,
+0 koniec tury. Enter zatwierdza, Backspace cofa, kropka zaznacza cele,
+`*` otwiera dziennik, `/` menu sesji, a `=` pomoc. `+`/`−` zmienia wynik
+kości lub pozycję pickera, a podczas czytania przewija opis.
+Adapter rozpoznaje fizyczne klawisze numpada także bez Num Lock i zachowuje
+dotychczasową orientację planszy. Poprzednie skróty są zgodnymi aliasami.
+Ściąga sterowania i informacja o bieżącym wyborze znajdują się w ekranowej
+karcie postaci pod `1`; stały górny pasek skrótów został usunięty.
+Instrukcja: [Numpad i LED](docs/playtests/KEYBOARD_LED_MANUAL.md).
+Poniższe datowane wpisy opisują wcześniejsze etapy sterowania.
+
 ## Klawiatura + LED — 05.11.2026
 
 Opcjonalny profil klawiatury zastępuje czujniki i przyciski planszy. Strzałki

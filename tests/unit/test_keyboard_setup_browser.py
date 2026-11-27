@@ -46,10 +46,11 @@ def test_keyboard_manual_setup_primary_advances_all_heroes_and_starts_initiative
         throw Error('timeout '+message+' · step '+state?.encounter_setup?.current_index);
       };
       const key=value=>{
+        const code=/^\d$/.test(value)?'Numpad'+value:({Enter:'NumpadEnter'})[value]||value;
         (document.activeElement||document.body).dispatchEvent(new KeyboardEvent('keydown',{
-          key:value,code:value,bubbles:true,cancelable:true,
+          key:value,code,bubbles:true,cancelable:true,
         }));
-        document.dispatchEvent(new KeyboardEvent('keyup',{key:value,code:value,bubbles:true}));
+        document.dispatchEvent(new KeyboardEvent('keyup',{key:value,code,bubbles:true}));
       };
       const visible=element=>Boolean(element&&!element.disabled&&element.getClientRects().length
         &&!element.closest('details:not([open])'));
@@ -73,7 +74,7 @@ def test_keyboard_manual_setup_primary_advances_all_heroes_and_starts_initiative
             const back=document.querySelector('[data-setup-back]');
             check(visible(back),'back control missing');
             await wait(()=>document.activeElement===primary(),'primary setup focus');
-            key('ArrowDown');check(document.activeElement===back,'arrow did not deliberately select Back');
+            key('2');check(document.activeElement===back,'numpad 2 did not deliberately select Back');
             key('Enter');await wait(()=>!busy&&state.encounter_setup.current_index===index-1,'explicit previous element');
             await idle();key('Enter');
             await wait(()=>!busy&&state.encounter_setup.current_index===index,'return to corrected batch');
@@ -90,8 +91,8 @@ def test_keyboard_manual_setup_primary_advances_all_heroes_and_starts_initiative
           await idle();
           const actor=state.encounter_setup.current_step.assignment_actor_id;
           const start=[...state.input.cursor];
-          const direction=start[0]<18?'ArrowRight':'ArrowLeft';
-          const opposite=direction==='ArrowRight'?'ArrowLeft':'ArrowRight';
+          const direction=start[0]<18?'6':'4';
+          const opposite=direction==='6'?'4':'6';
           key(direction);await idle();key(opposite);await idle();
           check(state.encounter_setup.current_step.assignment_actor_id===actor,'cursor prematurely assigned hero');
           key('Enter');
@@ -101,7 +102,7 @@ def test_keyboard_manual_setup_primary_advances_all_heroes_and_starts_initiative
           check(!primary().closest('details'),'hero confirmation is hidden in fallback');
           checkOnScreen(primary(),'hero placement confirm');
           const instruction=document.querySelector('.setup-current-command').textContent;
-          check(instruction.includes('strzałkami')||instruction.includes('Strzałkami'),'missing keyboard placement instruction');
+          check(instruction.includes('8/6/2/4'),'missing numpad placement instruction');
           check(!instruction.includes('Naciśnij niebieski przycisk'),'keyboard setup still asks for physical confirm');
           if(placed.length===1)primary().click();else key('Enter');
           await wait(()=>!busy&&state.encounter_setup.current_step?.assignment_actor_id!==actor,'confirm hero '+actor);

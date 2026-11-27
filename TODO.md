@@ -1,3 +1,23 @@
+## Numpad — 15.11.2026
+
+- [x] Ustalić mapowanie numpada i dostosować podpowiedzi ekranu, menu,
+  ekwipunku oraz instrukcję, zachowując profil `keyboard`.
+- [x] Sprawdzić w Chrome kierunki 8/6/2/4, pozostałe skróty, Num Lock,
+  kreator kości, menu, wybór wielu celów i ochronę podglądu przed wykonaniem.
+  Walidacja: 49 celowanych testów w osobnych partiach z timeoutem, w tym
+  20 prób Chrome: launcher, pełna Misja 0, setup w trzech rozmiarach okna,
+  wyposażenie, rozmowy i walka. Sprawdzono oba stany Num Lock, separator
+  dziesiętny, blokady modali/pisania oraz brak skanowania fizycznej planszy.
+- [x] Przenieść ściągę sterowania do ekranowej karty postaci pod `1`
+  i usunąć górny pasek skrótów, odzyskując miejsce na rozgrywkę.
+- [x] Sprawdzić po usunięciu paska kartę postaci ze ściągą, stan podglądu,
+  nawigację oraz układ walki i setupu na niskim ekranie.
+  Walidacja: 4 celowane próby Chrome uruchamiane osobno z timeoutem:
+  pełne sterowanie walką i karta pod `1`, pełna Misja 0 oraz setup
+  i wyposażenie w oknie 1221 × 656. `git diff --check` bez uwag.
+- [ ] Ograć fizyczny numpad z LED-ami: kierunki przy planszy, Num Lock,
+  separator dziesiętny i przekazywanie wejścia między kolejnymi ekranami.
+
 ## Klawiatura — orientacja planszy, 06.11.2026
 
 - [x] Dopasować strzałki wyboru pól do fizycznego ustawienia planszy gracza:

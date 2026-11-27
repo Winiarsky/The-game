@@ -99,8 +99,10 @@ def payload(session: ExplorationUiSession, selection: dict[str, Any] | None = No
     valid = list(cursor.position) in fields if cursor.position else False
     notice = ""
     multiple = False
-    can_accept = panel_position(28).as_tuple() in [tuple(p) for p in selection.get("legal_positions", [])]
-    can_back = panel_position(29).as_tuple() in [tuple(p) for p in selection.get("legal_positions", [])]
+    positions = {tuple(p) for p in selection.get("legal_positions", [])}
+    can_accept = panel_position(28).as_tuple() in positions
+    can_back = panel_position(29).as_tuple() in positions
+    can_adjust = any(panel_position(slot).as_tuple() in positions for slot in (26, 27))
     if e is not None:
         if e.s.inspected:
             kind = "menu"
@@ -127,7 +129,7 @@ def payload(session: ExplorationUiSession, selection: dict[str, Any] | None = No
                            cost=sum(((candidate.s.preview or {}).get("path") or {}).get("costs", [])))
             can_accept = valid or (multiple and can_accept)
         if multiple:
-            notice = notice or "Spacja wybiera/dodaje cel. Enter zatwierdza wybrane cele; bez gotowego zestawu wskazuje cel."
+            notice = notice or "Kropka (.) wybiera/dodaje cel. Enter zatwierdza wybrane cele; bez gotowego zestawu wskazuje cel."
     elif kind == "map":
         can_accept = valid
     if kind == "map" and cursor.touched and not valid:
@@ -140,7 +142,7 @@ def payload(session: ExplorationUiSession, selection: dict[str, Any] | None = No
                 origin=list(origin) if origin else None, fields=fields, controls=controls,
                 selected_id=None, selection_mode="multiple" if multiple else "single",
                 prompt=selection.get("prompt", ""), notice=notice, valid=valid,
-                can_accept=can_accept, can_back=can_back, preview=preview)
+                can_accept=can_accept, can_back=can_back, can_adjust=can_adjust, preview=preview)
 
 
 def decorate(session: ExplorationUiSession, state: dict[str, Any]) -> None:

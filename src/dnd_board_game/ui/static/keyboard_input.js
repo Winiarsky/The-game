@@ -6,6 +6,13 @@ const KeyboardInput = (() => {
   let menuFocusScheduled = false, menuNavigationContext = '';
   const menuMemory = new Map();
   const held = new Set(), blocked = new Set();
+  // Physical codes keep a standalone keypad usable with Num Lock on or off.
+  const numpadKeys = {
+    Numpad0:'0', Numpad1:'1', Numpad2:'2', Numpad3:'3', Numpad4:'4',
+    Numpad5:'5', Numpad6:'6', Numpad7:'7', Numpad8:'8', Numpad9:'9',
+    NumpadEnter:'enter', NumpadAdd:'+', NumpadSubtract:'-', NumpadMultiply:'*',
+    NumpadDivide:'/', NumpadDecimal:'.', NumpadComma:'.', NumpadEqual:'=',
+  };
   const enabled = () => typeof state !== 'undefined' && state?.input?.mode === 'keyboard';
   const contract = () => state?.input || {};
   const visible = element => Boolean(element && !element.disabled && !element.closest('[hidden]')
@@ -37,9 +44,8 @@ const KeyboardInput = (() => {
       && !state.training_arena?.tutorial?.notice
       && state.training_arena?.tutorial?.phase !== 'introduction');
     document.body.classList.toggle('keyboard-setup-active', setupMode);
-    const bar = document.getElementById('keyboard-control-bar');
-    if (!bar) return;
-    bar.hidden = !enabled();
+    const reference = document.getElementById('keyboard-controls-card');
+    if (reference) reference.hidden = !enabled();
     if (!enabled()) return;
     const nextContext = currentContext();
     if (nextContext !== context) { invalidate(); context = nextContext; }
@@ -48,14 +54,15 @@ const KeyboardInput = (() => {
     const cost = input.valid !== false && input.preview?.path?.length && Number.isFinite(input.preview.cost)
       ? `Koszt ruchu: ${input.preview.cost}` : '';
     const notice = message || input.notice || (setupMode
-      ? input.kind === 'map' ? 'Strzałki wybierają pole · Enter wybiera i potwierdza ustawienie · Esc cofa.' : 'Enter przechodzi dalej · Esc wraca do poprzedniego elementu.'
+      ? input.kind === 'map' ? '8/6/2/4 wybiera pole · Enter wybiera i potwierdza ustawienie · Backspace cofa.' : 'Enter przechodzi dalej · Backspace wraca do poprzedniego elementu.'
       : input.kind === 'menu'
-      ? 'Strzałki wybierają opcję, Enter otwiera. PageUp/PageDown przewija opis.'
+      ? '8/2 lub 4/6 wybiera opcję, Enter otwiera. − / + przewija opis.'
       : input.prompt || 'Wybierz dostępną opcję.');
-    bar.querySelector('[data-keyboard-status]').textContent = [point, cost, notice].filter(Boolean).join(' · ');
-    bar.querySelector('[data-keyboard-multiple]').hidden = input.selection_mode !== 'multiple';
-    bar.querySelector('[data-keyboard-sync]').hidden = !inFlight && !pendingCursor;
-    document.body.style.setProperty('--keyboard-control-height', `${bar.getBoundingClientRect().height}px`);
+    if (reference) {
+      reference.querySelector('[data-keyboard-status]').textContent = [point, cost, notice].filter(Boolean).join(' · ');
+      reference.querySelector('[data-keyboard-multiple]').hidden = input.selection_mode !== 'multiple';
+      reference.querySelector('[data-keyboard-sync]').hidden = !inFlight && !pendingCursor;
+    }
     const selector = document.getElementById('input-mode');
     if (selector && document.activeElement !== selector) selector.value = input.mode;
     scheduleMenuFocus();
@@ -123,8 +130,8 @@ const KeyboardInput = (() => {
     const open = modal();
     if (open) return [...open.querySelectorAll('button,a[href],summary,input[type="checkbox"]')].filter(visible);
     if (sideOpen()) return [...document.querySelectorAll('#side-panel button,#side-panel a[href],#side-panel summary')].filter(visible);
-    const selectors = actionList
-      ? '.rc-powers button,.rc-basic-actions button,.rc-actions button'
+    const selectors = actionList && state.combat?.resonance
+      ? '.rc-powers button,.rc-basic-actions button,.rc-actions button,.rc-decision .rc-pages button'
       : '#mission-panel button,#training-arena-panel button,#flow-panel button,#flow-panel a[href],'
         + '#encounter button,#interaction-goals button,#point-options button,#travel-options button,'
         + '#pending-panel button,#result-panel button,#roll-panel button';
@@ -214,7 +221,6 @@ const KeyboardInput = (() => {
     const deliberateHeader = allowHeader || (explicitChoice?.element === focused
       && explicitChoice.context === contract().context);
     return visible(focused) && focused.matches('button,a[href],summary,input[type="checkbox"]')
-      && !focused.closest('#keyboard-control-bar')
       && (!focused.closest('.app-shell-header') || deliberateHeader);
   }
   function activateMenu() {
@@ -255,10 +261,10 @@ const KeyboardInput = (() => {
     if (previous) previous.remove();
     const dialog = document.createElement('dialog');
     dialog.id = 'keyboard-shortcuts';
-    dialog.setAttribute('aria-label', 'Sterowanie klawiaturą');
-    dialog.innerHTML = '<h2>Sterowanie klawiaturą</h2><p>Strzałki wybierają opcję lub pole. Enter zatwierdza podgląd; Esc cofa.</p>'
-      + '<p>M — ruch · A — atak · I — ekwipunek · R — runy i akcje · C — postać · J — dziennik · H — pomoc · 0 — koniec tury.</p>'
-      + '<p>Zmiana celu pokazuje podgląd na LED-ach i nie wydaje zasobów. Spacja zaznacza cele wielokrotne; +/− zmienia wynik kości. PageUp/PageDown przewija tekst.</p><button autofocus>Zamknij</button>';
+    dialog.setAttribute('aria-label', 'Sterowanie numpadem');
+    dialog.innerHTML = '<h2>Sterowanie numpadem</h2><p>8/6/2/4: góra/prawo/dół/lewo. Enter zatwierdza podgląd; Backspace cofa.</p>'
+      + '<p>7 — ruch · 9 — atak · 5 — runy i opcje kroku · 1 — postać · 3 — ekwipunek · * — dziennik · / — menu · = — pomoc · 0 — koniec tury.</p>'
+      + '<p>Zmiana celu pokazuje podgląd na LED-ach i nie wydaje zasobów. Kropka zaznacza cele wielokrotne; +/− zmienia wynik kości lub przewija tekst. Ponowne 5 wraca z opcji do kursora mapy.</p><button autofocus>Zamknij</button>';
     dialog.querySelector('button').onclick = () => {dialog.close(); refresh();};
     dialog.addEventListener('close', () => {dialog.remove(); refresh();});
     document.body.append(dialog);
@@ -278,6 +284,15 @@ const KeyboardInput = (() => {
     dialog.addEventListener('close', () => {dialog.remove(); refresh();});
     document.body.append(dialog); dialog.showModal(); refresh(); return true;
   }
+  function sessionMenu() {
+    if (busy || inFlight || keyboardRollWizard) return false;
+    if (modal()?.id === 'session-navigation') return closePanel();
+    if (modal()) return false;
+    if (sideOpen() && sidePanelTab === 'game') {setSidePanelOpen(false); refresh(); return true;}
+    if (sideOpen()) setSidePanelOpen(false);
+    if (typeof SessionNavigation !== 'undefined' && SessionNavigation.open()) {refresh(); return true;}
+    return openInfo('game');
+  }
   function scrollReading(direction) {
     const root = modal() || (sideOpen() ? document.getElementById('side-panel') : document);
     const equipmentSelector = '.equipment-picker,.equipment-stash-preview,.equipment-body-list,.equipment-pack-grid';
@@ -285,7 +300,7 @@ const KeyboardInput = (() => {
     const equipmentArea = visible(activeEquipment) ? activeEquipment
       : root === document ? [...root.querySelectorAll(equipmentSelector)].find(visible) : null;
     const setupArea = root === document ? [...root.querySelectorAll('.keyboard-setup-description,.keyboard-setup-active .mission-tile-instruction .mission-prose')].find(visible) : null;
-    const area = equipmentArea || setupArea || [...root.querySelectorAll('.session-navigation-content,.keyboard-journal-entries,.confrontation-detail-body,.confrontation-controls,.mission-narrative-text,.mission-tile-instruction,.side-panel-content')]
+    const area = (!modal() && sideOpen() ? root : null) || equipmentArea || setupArea || [...root.querySelectorAll('.session-navigation-content,.keyboard-journal-entries,.confrontation-detail-body,.confrontation-controls,.mission-narrative-text,.mission-tile-instruction')]
       .find(visible);
     if (area) area.scrollBy({top:direction * Math.max(120, area.clientHeight * .7)});
     else window.scrollBy({top:direction * innerHeight * .7});
@@ -293,21 +308,25 @@ const KeyboardInput = (() => {
   }
   function showActions() {
     if (busy || inFlight || keyboardRollWizard || modal()) return false;
-    if (state.combat?.resonance && state.combat.resonance.phase !== 'idle') {
-      status('Najpierw zakończ albo cofnij bieżący podgląd.');
+    if (actionList) {
+      actionList = false;
+      document.activeElement?.blur();
+      clearChoiceHighlight();
+      status(contract().kind === 'map' ? '8/6/2/4 wybiera pole. 5 otwiera opcje kroku.' : 'Menu akcji zamknięte.');
       return true;
     }
     if (sideOpen()) setSidePanelOpen(false);
     actionList = true;
     const choices = menuButtons();
-    if (!choices.length) { actionList = false; status('Brak menu run w bieżącym kroku.'); return false; }
-    focusChoice(choices.find(button => button.closest('.rc-powers')) || choices[0]);
-    status('Runy i akcje: strzałki wybierają, Enter otwiera podgląd.');
+    if (!choices.length) { actionList = false; status('Brak dodatkowych opcji w bieżącym kroku.'); return false; }
+    focusChoice(choices.find(button => button.closest('.rc-powers'))
+      || choices.find(button => button.closest('.rc-actions')) || choices[0]);
+    status('Opcje kroku: 8/2 wybiera, Enter zatwierdza; 5 wraca do kursora.');
     return true;
   }
   function dispatch(command, extra = {}) {
     if (!enabled()) return false;
-    if (command === 'navigate' && contract().kind === 'dice' && !modal() && !sideOpen()) {
+    if (command === 'navigate' && contract().kind === 'dice' && !modal() && !sideOpen() && !actionList) {
       if (extra.dy) dispatch('adjust', {delta:extra.dy < 0 ? 1 : -1});
       return true;
     }
@@ -317,6 +336,7 @@ const KeyboardInput = (() => {
     if (command === 'character') return openInfo('party');
     if (command === 'journal') return journal();
     if (command === 'help') return help();
+    if (command === 'menu') return sessionMenu();
     if (command === 'actions') return showActions();
     if (command === 'back') {
       pendingCursor = desiredCursor = null;
@@ -369,21 +389,27 @@ const KeyboardInput = (() => {
   function handleKeydown(event) {
     if (!enabled() || event.defaultPrevented || event.isComposing || event.ctrlKey || event.metaKey || event.altKey) return;
     if (event.key === 'Tab') {tabNavigation = true; return;}
-    if (event.shiftKey && event.key !== '+') return;
+    const key = numpadKeys[event.code] || event.key.toLowerCase();
+    if (event.shiftKey && !numpadKeys[event.code] && !['+','*','='].includes(key)) return;
     const wizard = typeof keyboardRollWizard !== 'undefined' && keyboardRollWizard;
-    if (wizard && ['Enter','Escape','ArrowUp','ArrowDown','+','-'].includes(event.key)) {
+    const wizardKeys = {enter:'Enter', escape:'Escape', backspace:'Escape',
+      arrowup:'ArrowUp', arrowdown:'ArrowDown', '8':'ArrowUp', '2':'ArrowDown', '+':'+', '-':'-'};
+    if (wizard && key in wizardKeys) {
       event.preventDefault(); event.stopImmediatePropagation();
-      if (!event.repeat && !busy) handleKeyboardRollWizardKeydown(event);
+      if (!event.repeat && !busy) handleKeyboardRollWizardKeydown({
+        key:wizardKeys[key], preventDefault() {}, stopPropagation() {},
+      });
       return;
     }
     if (wizard) return;
     if (typing(event.target)) return;
-    const key = event.key.toLowerCase();
-    const directions = {arrowup:[0,-1], arrowdown:[0,1], arrowleft:[-1,0], arrowright:[1,0]};
-    const shortcuts = {m:'move', a:'attack', '0':'end'};
-    const panels = {i:'inventory', c:'character', j:'journal', h:'help', r:'actions'};
+    const directions = {arrowup:[0,-1], arrowdown:[0,1], arrowleft:[-1,0], arrowright:[1,0],
+      '8':[0,-1], '2':[0,1], '4':[-1,0], '6':[1,0]};
+    const shortcuts = {m:'move', a:'attack', '7':'move', '9':'attack', '0':'end'};
+    const panels = {i:'inventory', c:'character', j:'journal', h:'help', r:'actions',
+      '3':'inventory', '1':'character', '5':'actions', '*':'journal', '/':'menu', '=':'help'};
     if (!(key in directions) && !(key in shortcuts) && !(key in panels)
-        && !['enter','escape','backspace','+','=','-',' ','pageup','pagedown'].includes(key)) return;
+        && !['enter','escape','backspace','+','-',' ','.',',','pageup','pagedown'].includes(key)) return;
     event.preventDefault(); event.stopImmediatePropagation();
     held.add(event.code || key);
     if (blocked.has(event.code || key)) return;
@@ -396,17 +422,21 @@ const KeyboardInput = (() => {
     if (key === 'pageup' || key === 'pagedown') {scrollReading(key === 'pageup' ? -1 : 1); return;}
     if (key === 'escape' || key === 'backspace') { dispatch('back'); return; }
     if (key === 'enter') { dispatch('accept'); return; }
-    if (key === ' ') {
+    if (key === ' ' || key === '.' || key === ',') {
       if (!modal() && !sideOpen() && contract().kind === 'map' && contract().selection_mode === 'multiple') dispatch('select');
       return;
     }
     if (modal() || sideOpen()) {
-      if (key === 'i' && sideOpen()) dispatch('inventory');
+      if (key === '+' || key === '-') scrollReading(key === '+' ? 1 : -1);
+      else if (panels[key] === 'inventory' && sideOpen()) dispatch('inventory');
+      else if (panels[key] === 'menu') dispatch('menu');
       return;
     }
     if (key in panels) { dispatch(panels[key]); return; }
     if (key in shortcuts) { dispatch('shortcut', {id:shortcuts[key]}); return; }
-    dispatch('adjust', {delta:key === '-' ? -1 : 1});
+    if (contract().kind === 'dice' || contract().can_adjust)
+      dispatch('adjust', {delta:key === '-' ? -1 : 1});
+    else scrollReading(key === '-' ? -1 : 1);
   }
   document.addEventListener('keydown', handleKeydown, {capture:true});
   document.addEventListener('focusin', event => {
